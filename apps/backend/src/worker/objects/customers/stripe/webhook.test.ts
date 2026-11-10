@@ -111,8 +111,13 @@ describe("Stripe webhook verification", () => {
 	it("refuses an event from another connected Stripe account than the key opens", async () => {
 		const body = event("customer.updated", CUSTOMER_GLOBEX, { account: "acct_1Other0000000000" })
 		expect((await run(Effect.flip(deliver(body)))).message).toMatch(/another Stripe account/i)
-		// Unchecked only when the key may not read which account it opens.
-		expect(tags(await run(deliver(body, { accountId: null })))).toEqual(["account"])
+		// Refused with no account to compare against too: a stamp is only ever another account's.
+		expect((await run(Effect.flip(deliver(body, { accountId: null })))).message).toMatch(
+			/another Stripe account/i,
+		)
+		// The connection's own account's stamp is accepted.
+		const own = event("customer.updated", CUSTOMER_GLOBEX, { account: ACCOUNT.id })
+		expect(tags(await run(deliver(own)))).toEqual(["account"])
 		// The account's own events carry no `account` at all.
 		expect(tags(await run(deliver(event("customer.updated", CUSTOMER_GLOBEX))))).toEqual(["account"])
 	})
@@ -155,6 +160,8 @@ describe("Stripe webhook events", () => {
 				sameAs: [],
 				onNoMatch: "unmatched",
 				deleted: true,
+				// Dated by the event, so a late retry of an older update cannot revive it.
+				observedAt: "2026-11-10T12:00:00.000Z",
 			},
 		])
 	})

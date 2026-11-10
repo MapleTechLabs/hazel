@@ -3,17 +3,25 @@
  * `CustomerProviderError`:
  *
  * - 401/403 → `auth`: a rejected key, or a restricted key without one of the read permissions
- *   Hazel needs. The connection goes to `error` and scheduled pulls stop until the key changes;
- *   Stripe's own explanation ("does not have the required permissions…") reaches the UI.
- * - 429 → retried in place while the wait is short (cheaper than a whole alarm round trip), then
- *   `rate_limited` carrying the delay. Core keeps the run open at its cursor and resumes it after.
- * - 5xx → `provider`; unreachable → `network`. Both retryable: the run resumes after core's backoff.
+ *   Hazel needs. The connection goes to `error` and scheduled pulls stop until the key changes.
+ *   The message carries Stripe's own explanation ("does not have the required permissions…"),
+ *   truncated, with the masked key Stripe quotes in it removed.
+ * - 429 → for a pull, retried in place while the wait is short (cheaper than a whole alarm round
+ *   trip), then `rate_limited` carrying the delay. Core keeps the run open at its cursor and resumes
+ *   it after. A webhook's requests are never retried in place.
+ * - 5xx → `provider`; unreachable, or no answer within the request's timeout (30 s on a pull, 5 s on
+ *   the webhook path, which must answer Stripe) → `network`. Both retryable: the run resumes after
+ *   core's backoff.
+ * - Any other 4xx (a `starting_after` id Stripe no longer knows, say) → `provider`, not retryable:
+ *   the same request would be refused again, so the run fails and the next one starts over.
  * - A body Hazel cannot read (Stripe changed its API) → `provider`, not retryable: the run fails
  *   with a message saying so rather than retrying the same page forever. Only the decode's path and
  *   issue kind are logged, never the payload, which is customers' data.
  *
- * Every request pins `Stripe-Version` ({@link STRIPE_API_VERSION}); the key stays `Redacted` up to
- * the `Authorization` header, and no message or span repeats it.
+ * Messages reach every member of the organization (`CustomerProviderError`), so beyond a refused
+ * key's they carry only the route and status, never Stripe's text. Every request pins
+ * `Stripe-Version` ({@link STRIPE_API_VERSION}); the key stays `Redacted` up to the `Authorization`
+ * header, and no message or span repeats it.
  */
 import { Effect, Redacted, Result, Schema, type SchemaIssue } from "effect"
 import { HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
@@ -23,13 +31,24 @@ import { STRIPE_API_VERSION } from "./wire"
 export const STRIPE_API_URL = "https://api.stripe.com/v1"
 
 /** Retries inside one page while the wait is no longer than this; longer ones go to the alarm. */
-export const MAX_INLINE_RETRY_MS = 5_000
-export const MAX_INLINE_RETRIES = 2
+const MAX_INLINE_RETRY_MS = 5_000
+const MAX_INLINE_RETRIES = 2
 /** Stripe's 429s carry no `Retry-After` of their own as a rule; assume a second. */
 const DEFAULT_RETRY_AFTER_MS = 1_000
 
+/** How one GET behaves: 429s waited out in place, and how long one attempt may take. */
+interface StripeGetOptions {
+	readonly inlineRetries: number
+	readonly timeoutMs: number
+}
+
+const PULL_REQUESTS: StripeGetOptions = { inlineRetries: MAX_INLINE_RETRIES, timeoutMs: 30_000 }
+
+/** A delivery answers fast: no 429 waited out in place, and a short timeout. */
+export const WEBHOOK_REQUESTS: StripeGetOptions = { inlineRetries: 0, timeoutMs: 5_000 }
+
 /** The read endpoints this integration may call. */
-export type StripePath =
+type StripePath =
 	| "/account"
 	| "/customers"
 	| "/products"
@@ -40,7 +59,7 @@ export type StripePath =
 export type StripeQuery = ReadonlyArray<readonly [string, string]>
 
 /** The route a path belongs to, for messages, logs and spans: never an object id. */
-export const routeOf = (path: StripePath): string => (path.startsWith("/products/") ? "/products/{id}" : path)
+const routeOf = (path: StripePath): string => (path.startsWith("/products/") ? "/products/{id}" : path)
 
 const issuePaths = (issue: SchemaIssue.Issue, path: ReadonlyArray<PropertyKey>): Array<string> => {
 	switch (issue._tag) {
@@ -73,11 +92,20 @@ const StripeErrorBody = Schema.Struct({
 
 const decodeErrorBody = Schema.decodeUnknownEffect(StripeErrorBody)
 
-/** Stripe's own explanation of a refusal, when it sent one. */
+/** Stripe's explanation of a refused key is at most this long in a message. */
+const MAX_DETAIL_LENGTH = 200
+
+/** A key as Stripe quotes it in a refusal (masked, `'rk_live_****…1234'`): never repeated. */
+const QUOTED_KEY = /'?\b[a-z]{2}_(?:live|test)_[^\s']*'?/g
+
+/** Stripe's own explanation of a refused key, when it sent one: the key removed, truncated. */
 const detailOf = (response: HttpClientResponse.HttpClientResponse) =>
 	response.json.pipe(
 		Effect.flatMap(decodeErrorBody),
-		Effect.map((body) => body.error?.message ?? ""),
+		Effect.map((body) => {
+			const detail = (body.error?.message ?? "").replace(QUOTED_KEY, "").replace(/\s+/g, " ").trim()
+			return detail.length > MAX_DETAIL_LENGTH ? `${detail.slice(0, MAX_DETAIL_LENGTH - 1)}…` : detail
+		}),
 		Effect.orElseSucceed(() => ""),
 	)
 
@@ -86,44 +114,50 @@ const retryAfterMsOf = (response: HttpClientResponse.HttpClientResponse): number
 	return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : DEFAULT_RETRY_AFTER_MS
 }
 
-const failureOf = (route: string, response: HttpClientResponse.HttpClientResponse) =>
-	Effect.flatMap(detailOf(response), (detail) => {
-		const suffix = detail === "" ? "" : `: ${detail}`
-		if (response.status === 401 || response.status === 403) {
-			return Effect.fail(
+const failureOf = (route: string, response: HttpClientResponse.HttpClientResponse) => {
+	if (response.status === 401 || response.status === 403) {
+		return Effect.flatMap(detailOf(response), (detail) =>
+			Effect.fail(
 				new CustomerProviderError({
 					code: "auth",
-					message:
+					message: `${
 						response.status === 401
-							? `Stripe rejected the API key (401)${suffix}`
-							: `Stripe refused GET ${route} for this key (403)${suffix}`,
+							? "Stripe rejected the API key (401)"
+							: `Stripe refused GET ${route} for this key (403)`
+					}${detail === "" ? "" : `: ${detail}`}`,
 					httpStatus: response.status,
 					retryAfterMs: null,
 				}),
-			)
-		}
-		if (response.status === 429) {
-			return Effect.fail(
-				new CustomerProviderError({
-					code: "rate_limited",
-					message: "Stripe's rate limit for this account is reached",
-					httpStatus: 429,
-					retryAfterMs: retryAfterMsOf(response),
-				}),
-			)
-		}
+			),
+		)
+	}
+	if (response.status === 429) {
 		return Effect.fail(
 			new CustomerProviderError({
-				code: "provider",
-				message:
-					response.status >= 500
-						? `Stripe failed on GET ${route} (${response.status})`
-						: `Stripe refused GET ${route} (${response.status})${suffix}`,
-				httpStatus: response.status,
-				retryAfterMs: null,
+				code: "rate_limited",
+				message: "Stripe's rate limit for this account is reached",
+				httpStatus: 429,
+				retryAfterMs: retryAfterMsOf(response),
 			}),
 		)
-	})
+	}
+	return Effect.fail(
+		response.status >= 500
+			? new CustomerProviderError({
+					code: "provider",
+					message: `Stripe failed on GET ${route} (${response.status})`,
+					httpStatus: response.status,
+					retryAfterMs: null,
+				})
+			: new CustomerProviderError({
+					code: "provider",
+					message: `Stripe refused GET ${route} (${response.status})`,
+					httpStatus: response.status,
+					retryAfterMs: null,
+					retryable: false,
+				}),
+	)
+}
 
 /** A body Hazel cannot read: logged by path and kind only, and not retried. */
 const unreadable = (route: string, status: number, detail: string) =>
@@ -142,7 +176,11 @@ const unreadable = (route: string, status: number, detail: string) =>
 	)
 
 /** The caller holds the key; `stripeGet` is curried over the client so the adapter binds it once. */
-export const makeStripeGet = (client: HttpClient.HttpClient, apiKey: Redacted.Redacted<string>) => {
+export const makeStripeGet = (
+	client: HttpClient.HttpClient,
+	apiKey: Redacted.Redacted<string>,
+	{ inlineRetries, timeoutMs }: StripeGetOptions = PULL_REQUESTS,
+) => {
 	/** One request: its JSON body, or the failure Stripe's answer maps to. */
 	const once = Effect.fn("Stripe.request")(function* (path: StripePath, query: StripeQuery) {
 		const route = routeOf(path)
@@ -177,18 +215,29 @@ export const makeStripeGet = (client: HttpClient.HttpClient, apiKey: Redacted.Re
 	) {
 		yield* Effect.annotateCurrentSpan({ "peer.service": "stripe", "url.template": routeOf(path) })
 		for (let retries = 0; ; retries++) {
-			const result = yield* Effect.result(once(path, query))
+			const result = yield* Effect.result(
+				once(path, query).pipe(
+					Effect.timeoutOrElse({
+						duration: timeoutMs,
+						orElse: () =>
+							Effect.fail(
+								new CustomerProviderError({
+									code: "network",
+									message: `Stripe did not answer GET ${routeOf(path)} within ${timeoutMs / 1000} s`,
+									httpStatus: null,
+									retryAfterMs: null,
+								}),
+							),
+					}),
+				),
+			)
 			if (Result.isSuccess(result)) {
 				yield* Effect.annotateCurrentSpan("stripe.retries", retries)
 				return result.success
 			}
 			const error = result.failure
 			const wait = error.retryAfterMs ?? 0
-			if (
-				error.code !== "rate_limited" ||
-				retries >= MAX_INLINE_RETRIES ||
-				wait > MAX_INLINE_RETRY_MS
-			) {
+			if (error.code !== "rate_limited" || retries >= inlineRetries || wait > MAX_INLINE_RETRY_MS) {
 				yield* Effect.annotateCurrentSpan("stripe.retries", retries)
 				return yield* error
 			}

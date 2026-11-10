@@ -33,7 +33,7 @@ const Nullable = <S extends Schema.Top>(schema: S) => Schema.optionalKey(Schema.
 /** Stripe metadata is `string -> string`, but never trust a map's values. */
 const Metadata = Nullable(Schema.Record(Schema.String, Schema.Unknown))
 
-/** `GET /v1/account`: which Stripe account the key opens (needs the key's `Account` read permission). */
+/** `GET /v1/account`: the Stripe account the key opens (the connection's `externalAccountId`). */
 export const StripeAccount = Schema.Struct({
 	id: Schema.String,
 	email: Nullable(Schema.String),
@@ -44,7 +44,6 @@ export const StripeAccount = Schema.Struct({
 		}),
 	),
 })
-export type StripeAccount = typeof StripeAccount.Type
 
 export const StripeCustomer = Schema.Struct({
 	id: Schema.String,
@@ -233,8 +232,8 @@ export const StripeInvoicesPage = StripeList(StripeInvoice)
 export const StripeEvent = Schema.Struct({
 	id: Schema.String,
 	type: Schema.String,
-	/** Unix seconds. */
-	created: Nullable(Schema.Number),
+	/** Unix seconds: orders the event's ops against a deletion. */
+	created: Schema.Number,
 	livemode: Nullable(Schema.Boolean),
 	/** The connected account the event belongs to (Connect platforms only). */
 	account: Nullable(Schema.String),

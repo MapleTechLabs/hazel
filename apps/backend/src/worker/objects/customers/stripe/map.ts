@@ -123,13 +123,18 @@ export const accountOp = (
 	return op
 }
 
-export const accountDeletedOp = (customerId: string): UpsertAccount => ({
-	_tag: "account",
-	externalId: customerId,
-	sameAs: [],
-	onNoMatch: "unmatched",
-	deleted: true,
-})
+/** A deleted customer, dated by its event: ingest keeps an op observed at or before it from reviving it. */
+export const accountDeletedOp = (customerId: string, observedAt?: IsoTimestamp): UpsertAccount => {
+	const op: Types.Mutable<UpsertAccount> = {
+		_tag: "account",
+		externalId: customerId,
+		sameAs: [],
+		onNoMatch: "unmatched",
+		deleted: true,
+	}
+	if (observedAt !== undefined) op.observedAt = observedAt
+	return op
+}
 
 /**
  * The customer's billing contact, when Stripe has an email for it. Name and avatar stay the

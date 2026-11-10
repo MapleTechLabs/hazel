@@ -12,11 +12,18 @@
  *
  * Nothing here writes the store: `webhook` and `pull` produce `IngestOp`s and `CustomerIngest`
  * applies them.
+ *
+ * Only the connection's account (`credentials.externalAccountId`, what `validate` found): a
+ * delivery stamped with another account, or from the other mode, is refused (`./webhook.ts`). A
+ * key opens exactly one account and Hazel never sends `Stripe-Account`, so what a pull lists is
+ * always the connection's; a new key is validated again, and core drops the old account's data
+ * when it differs.
  */
-import { Effect, Option, Redacted } from "effect"
+import { Effect, Redacted } from "effect"
 import { HttpClient } from "effect/http"
+import { CustomerProviderError } from "../provider-errors"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../providers"
-import { makeStripeGet, type StripeGet } from "./http"
+import { makeStripeGet, type StripeGet, WEBHOOK_REQUESTS } from "./http"
 import { pullPage } from "./pull"
 import { receiveWebhook } from "./webhook"
 import {
@@ -46,9 +53,10 @@ export const livemodeOfKey = (apiKey: Redacted.Redacted<string>): boolean | null
 /**
  * Connecting proves the key can read everything a pull needs, one `limit=1` request per resource,
  * so a restricted key missing a permission says which one at connect time instead of failing the
- * first backfill. The account the key opens is a further, optional request (`Account` read is not
- * part of the permissions Hazel asks for), and its id is what webhook deliveries are checked
- * against.
+ * first backfill. Then the account the key opens: its id is required, since core tells a key of
+ * another account by it (dropping the old account's data) and webhooks are checked against it, and
+ * a key carries no account id of its own to fall back on. A key that may not read it fails with
+ * Stripe's explanation (which names the permission) and why Hazel asks.
  */
 const validateWith = Effect.fn("Stripe.validate")(function* (get: StripeGet) {
 	const one = [["limit", "1"]] as const
@@ -57,19 +65,27 @@ const validateWith = Effect.fn("Stripe.validate")(function* (get: StripeGet) {
 	yield* get("/invoices", one, StripeInvoicesPage)
 	yield* get("/products", one, StripeProductsPage)
 	const account = yield* get("/account", [], StripeAccount).pipe(
-		Effect.map(Option.some),
-		Effect.catchTag("CustomerProviderError", () => Effect.succeed(Option.none<StripeAccount>())),
+		Effect.catchTag("CustomerProviderError", (error) =>
+			Effect.fail(
+				error.httpStatus === 403
+					? new CustomerProviderError({
+							code: "auth",
+							message: `${error.message.replace(/\.$/, "")}. Hazel reads the account the key opens to keep Stripe accounts apart: give the key Read access to it`,
+							httpStatus: 403,
+							retryAfterMs: null,
+						})
+					: error,
+			),
+		),
 	)
+	yield* Effect.annotateCurrentSpan("stripe.account_id", account.id)
 	return {
-		externalAccountId: Option.match(account, { onNone: () => null, onSome: (value) => value.id }),
-		externalAccountName: Option.match(account, {
-			onNone: () => null,
-			onSome: (value) =>
-				value.settings?.dashboard?.display_name ??
-				value.business_profile?.name ??
-				value.email ??
-				"Stripe account",
-		}),
+		externalAccountId: account.id,
+		externalAccountName:
+			account.settings?.dashboard?.display_name ??
+			account.business_profile?.name ??
+			account.email ??
+			"Stripe account",
 	}
 })
 
@@ -86,7 +102,8 @@ export const makeStripeAdapter = Effect.gen(function* () {
 			credentials.webhookSecret === null
 				? Effect.die("Stripe webhook called without a signing secret")
 				: receiveWebhook({
-						get: getOf(credentials),
+						// A delivery answers fast (`./http.ts`, `./webhook.ts`).
+						get: makeStripeGet(client, credentials.apiKey, WEBHOOK_REQUESTS),
 						headers: request.headers,
 						body: request.body,
 						webhookSecret: credentials.webhookSecret,

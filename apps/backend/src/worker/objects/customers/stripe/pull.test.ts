@@ -24,9 +24,10 @@ import {
 	SUB_GLOBEX,
 	SUB_PERSONAL_CANCELED,
 } from "./fixtures"
-import { makeStripeGet } from "./http"
+import { makeStripeGet, WEBHOOK_REQUESTS } from "./http"
 import { decodeCursor, encodeCursor, PAGE_SIZE, pullPage } from "./pull"
 import { type FakeStripeState, fakeStripeHttpClient, makeFakeStripe } from "./testing"
+import { StripeCustomersPage } from "./wire"
 
 const API_KEY = "rk_test_fake000000000000000000"
 const CONFIG: ConnectionConfig = {
@@ -274,8 +275,10 @@ describe("when Stripe refuses", () => {
 		expect(error.code).toBe("auth")
 		expect(error.httpStatus).toBe(401)
 		// Stripe's own explanation reaches the UI; the key never does.
-		expect(error.message).toMatch(/Stripe rejected the API key \(401\)/)
+		expect(error.message).toMatch(/Stripe rejected the API key \(401\): Invalid API Key provided/)
 		expect(error.message).not.toContain("rk_test_wrong")
+		// Not even the masked key Stripe quotes back.
+		expect(error.message).not.toContain("rk_test_")
 	})
 
 	it("reports a restricted key missing a permission as `auth`, naming the route", async () => {
@@ -334,6 +337,91 @@ describe("when Stripe refuses", () => {
 		)
 		expect(error.code).toBe("rate_limited")
 		expect(fake.throttled).toBe(3)
+	})
+
+	it("fails the run on any other refusal, without Stripe's text: a retry would be refused again", async () => {
+		const error = await run(
+			Effect.flip(
+				pageOver(
+					answering(() =>
+						Response.json(
+							{ error: { message: "No such customer: 'cus_gone'", code: "resource_missing" } },
+							{ status: 400 },
+						),
+					),
+					encodeCursor({ phase: "customers", after: "cus_gone" }),
+				),
+			),
+		)
+		expect(error).toMatchObject({
+			code: "provider",
+			httpStatus: 400,
+			retryable: false,
+			message: "Stripe refused GET /customers (400)",
+		})
+	})
+
+	it("gives up on a request Stripe does not answer within 30 s, as a retryable `network` failure", async () => {
+		const silent = Layer.succeed(
+			HttpClient.HttpClient,
+			HttpClient.make(() => Effect.never),
+		)
+		const error = await run(
+			Effect.gen(function* () {
+				const fiber = yield* Effect.forkChild(Effect.flip(pageOver(silent, null)))
+				yield* TestClock.adjust(30_000)
+				return yield* Fiber.join(fiber)
+			}).pipe(Effect.provide(TestClock.layer())),
+		)
+		expect(error).toMatchObject({
+			code: "network",
+			httpStatus: null,
+			message: "Stripe did not answer GET /customers within 30 s",
+		})
+		expect(error.retryable).toBeUndefined()
+	})
+
+	it("on the webhook path, never waits out a 429 and gives up after 5 s", async () => {
+		const fake = account({ throttleAfter: 0, retryAfterSeconds: 1 })
+		const throttled = await run(
+			Effect.gen(function* () {
+				const get = makeStripeGet(
+					yield* HttpClient.HttpClient,
+					Redacted.make(API_KEY),
+					WEBHOOK_REQUESTS,
+				)
+				return yield* Effect.flip(get("/customers", [], StripeCustomersPage))
+			}).pipe(Effect.provide(fakeStripeHttpClient(fake))),
+		)
+		expect(throttled).toMatchObject({ code: "rate_limited", retryAfterMs: 1_000 })
+		expect(fake.throttled).toBe(1)
+
+		const slow = await run(
+			Effect.gen(function* () {
+				const get = makeStripeGet(
+					yield* HttpClient.HttpClient,
+					Redacted.make(API_KEY),
+					WEBHOOK_REQUESTS,
+				)
+				const fiber = yield* Effect.forkChild(Effect.flip(get("/customers", [], StripeCustomersPage)))
+				yield* TestClock.adjust(5_000)
+				return yield* Fiber.join(fiber)
+			}).pipe(
+				Effect.provide(
+					Layer.mergeAll(
+						TestClock.layer(),
+						Layer.succeed(
+							HttpClient.HttpClient,
+							HttpClient.make(() => Effect.never),
+						),
+					),
+				),
+			),
+		)
+		expect(slow).toMatchObject({
+			code: "network",
+			message: "Stripe did not answer GET /customers within 5 s",
+		})
 	})
 
 	it("maps a 5xx to a retryable `provider` failure", async () => {

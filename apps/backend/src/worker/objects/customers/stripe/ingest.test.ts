@@ -5,7 +5,7 @@
  * the account through the refs, the timeline entries ingest raises have to appear, and a
  * redelivery has to change nothing.
  */
-import type { IngestOp, UpsertAccount } from "@hazel/domain/customers"
+import type { IngestOp } from "@hazel/domain/customers"
 import { Effect, Schema, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { type CustomersWorld, makeCustomersWorld } from "../test-kit"
@@ -21,7 +21,7 @@ import {
 	SUB_ACME,
 	SUB_GLOBEX,
 } from "./fixtures"
-import { customerOps, invoiceOp, subscriptionOp } from "./map"
+import { accountDeletedOp, customerOps, invoiceOp, subscriptionOp } from "./map"
 import { StripeCustomer, StripeInvoice, StripeSubscription } from "./wire"
 
 const CONFIG = { _tag: "stripe", clerkOrgMetadataKey: "clerk_org_id", matchByDomain: true } as const
@@ -274,26 +274,26 @@ describe("Stripe ops through CustomerIngest", () => {
 				).toEqual([])
 				expect(events(world)).toHaveLength(3)
 
-				// The customer is deleted, then an older delivery of it arrives again.
+				// The customer is deleted (dated by its event), then an older delivery of it arrives again.
 				yield* world.ingest("stripe", [
-					{
-						_tag: "account",
-						externalId: CUSTOMER_ACME.id,
-						sameAs: [],
-						onNoMatch: "unmatched",
-						deleted: true,
-					} satisfies UpsertAccount,
+					accountDeletedOp(CUSTOMER_ACME.id, "2026-11-10T12:00:00.000Z"),
 				])
 				const late = yield* world.ingest("stripe", [
 					...customerOps(customer(CUSTOMER_ACME), CONFIG, "2026-11-10T11:00:00.000Z"),
 				])
 				expect(late.outcomes[0]!._tag).toBe("Unchanged")
 				// The Clerk ref keeps the account alive, with Stripe's own ref stale.
-				expect(
+				const staleRefs = () =>
 					world.rows<{ n: number }>(
 						`SELECT count(*) AS n FROM customer_external_refs WHERE provider = 'stripe' AND entityType = 'account' AND staleAt IS NOT NULL`,
-					),
-				).toEqual([{ n: 1 }])
+					)
+				expect(staleRefs()).toEqual([{ n: 1 }])
+				// A sighting after the deletion (the customer was restored) revives the ref.
+				yield* world.ingest(
+					"stripe",
+					customerOps(customer(CUSTOMER_ACME), CONFIG, "2026-11-10T13:00:00.000Z"),
+				)
+				expect(staleRefs()).toEqual([{ n: 0 }])
 			}),
 		))
 })

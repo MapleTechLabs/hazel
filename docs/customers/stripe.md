@@ -7,7 +7,8 @@ the payment state that the billing signals (`payment_failed`, `cancel_scheduled`
 `apps/backend/src/worker/objects/customers/stripe/`, registered in `customers/providers.ts`. It
 produces `IngestOp`s only — `CustomerIngest` does every write (`tech-design.md` §3).
 
-Stripe never creates a customer record on its own (`onNoMatch: "unmatched"`). It lands on one of
+Stripe never creates a customer record on its own (`onNoMatch: "unmatched"`), and its account ops
+set `matchByDomain` only while the connection's **Email domain** toggle is on. It lands on one of
 three ways, first hit wins (`tech-design.md` §3):
 
 1. its own external ref, from a previous sync;
@@ -22,21 +23,24 @@ links it.
 1. **Restricted key** — Stripe Dashboard → Developers → **API keys** → _Create restricted key_,
    with **Read** on:
 
-    | Resource        | Why                                                        |
-    | --------------- | ---------------------------------------------------------- |
-    | Customers       | the accounts and their billing contacts                    |
-    | Subscriptions   | MRR, plan, status, trial, scheduled cancellation           |
-    | Invoices        | amounts, due dates, failed payments, the hosted copy       |
-    | Products        | the plan names (a price only carries its product's id)     |
-    | Prices          | the amounts and intervals embedded in a subscription       |
-    | Payment methods | the card brand, last four and expiry on file               |
+    | Resource        | Why                                                    |
+    | --------------- | ------------------------------------------------------ |
+    | Customers       | the accounts and their billing contacts                |
+    | Subscriptions   | MRR, plan, status, trial, scheduled cancellation       |
+    | Invoices        | amounts, due dates, failed payments, the hosted copy   |
+    | Products        | the plan names (a price only carries its product's id) |
+    | Prices          | the amounts and intervals embedded in a subscription   |
+    | Payment methods | the card brand, last four and expiry on file           |
+    | Account         | which Stripe account the key opens (`GET /v1/account`) |
 
     Everything else can stay **None**; Hazel only ever issues GETs. A full secret key works too.
     Connecting reads one record of each resource, so a key missing a permission says which one at
-    connect time instead of failing the first backfill. The Stripe **account** itself
-    (`GET /v1/account`) is read best-effort: its id is stored as the connection's
-    `externalAccountId` and webhook deliveries are checked against it, and without that permission
-    the connection still works (deliveries are then only checked against the key's mode).
+    connect time instead of failing the first backfill. The account's id is **required**: it is
+    stored as the connection's `externalAccountId` (and re-read when the key changes: a key of
+    another account makes core drop the old account's data and import from scratch), and webhook
+    deliveries are checked against it. A Stripe key carries no account id of its own, so a key that
+    may not read the account fails to connect, with Stripe's explanation (which names the
+    permission it wants).
 
 2. **Webhook** — Stripe Dashboard → Developers → **Webhooks** → add an endpoint:
 
@@ -71,33 +75,33 @@ Stripe customer's `metadata` — and that id is the Clerk organization id. So be
 metadata key (`clerk_org_id` by default), Hazel reads **any** metadata value shaped like a Clerk
 organization id (`org_…`) as a shared id, whatever key it sits under. An Autumn-managed account
 therefore matches with no configuration, and a stray `org_…` value costs one lookup that finds
-nothing. Metadata naming two ids that resolve to two *different* customers is ambiguous: ingest
+nothing. Metadata naming two ids that resolve to two _different_ customers is ambiguous: ingest
 parks the record with the first as its suggestion rather than guessing (`tech-design.md` §3).
 
 ## Mapping
 
-| Stripe                                                     | Hazel                                                        |
-| ---------------------------------------------------------- | ------------------------------------------------------------ |
-| customer `id`                                              | account external ref `(stripe, cus_…)`                       |
-| customer `metadata[clerkOrgMetadataKey]`, any `org_…` value | `sameAs` → the Clerk account (`matchMethod: shared_id`)      |
-| customer `email` domain                                    | `account.domains`, and a domain match when the toggle is on  |
-| customer `name`                                            | `account.name` (Clerk's wins, `FIELD_PRECEDENCE`)            |
-| customer `created`                                         | `account.firstSeenAt` if earlier                             |
-| customer `email`                                           | a contact with `isBillingContact`, keyed on the customer id  |
-| customer deleted                                           | ref goes stale; account soft-deleted with no live ref left   |
-| subscription `items[].price × quantity`, per interval       | `subscription.mrrMinor` (see below)                          |
-| subscription coupons                                       | applied to `mrrMinor`; `listMrrMinor` keeps the list price   |
-| price's product `name` (else `nickname`, `lookup_key`)     | `subscription.planName`                                      |
-| subscription `status`                                      | `subscription.status`                                        |
-| subscription `start_date`, `trial_end`, period end         | `startedAt`, `trialEndsAt`, `currentPeriodEnd`               |
-| `cancel_at_period_end`, `canceled_at`                      | `cancelAtPeriodEnd`, `canceledAt`                            |
-| `cancellation_details.reason` (else `feedback`)            | `subscription.cancellationReason`                            |
-| `default_payment_method` (expanded)                        | card brand, last four, expiry month and year                 |
-| invoice `status`, `number`, `amount_due`, `amount_paid`    | the invoice row                                              |
-| invoice `due_date`, `next_payment_attempt`                 | `dueAt`, `nextRetryAt`                                       |
-| invoice `status_transitions.finalized_at` / `paid_at`      | `issuedAt`, `paidAt`                                         |
-| invoice `attempt_count`, `hosted_invoice_url`              | `attemptCount`, `hostedUrl`                                  |
-| invoice's subscription (`parent.subscription_details`)      | the invoice's subscription                                   |
+| Stripe                                                      | Hazel                                                       |
+| ----------------------------------------------------------- | ----------------------------------------------------------- |
+| customer `id`                                               | account external ref `(stripe, cus_…)`                      |
+| customer `metadata[clerkOrgMetadataKey]`, any `org_…` value | `sameAs` → the Clerk account (`matchMethod: shared_id`)     |
+| customer `email` domain                                     | `account.domains`, and a domain match when the toggle is on |
+| customer `name`                                             | `account.name` (Clerk's wins, `FIELD_PRECEDENCE`)           |
+| customer `created`                                          | `account.firstSeenAt` if earlier                            |
+| customer `email`                                            | a contact with `isBillingContact`, keyed on the customer id |
+| customer deleted                                            | ref goes stale; account soft-deleted with no live ref left  |
+| subscription `items[].price × quantity`, per interval       | `subscription.mrrMinor` (see below)                         |
+| subscription coupons                                        | applied to `mrrMinor`; `listMrrMinor` keeps the list price  |
+| price's product `name` (else `nickname`, `lookup_key`)      | `subscription.planName`                                     |
+| subscription `status`                                       | `subscription.status`                                       |
+| subscription `start_date`, `trial_end`, period end          | `startedAt`, `trialEndsAt`, `currentPeriodEnd`              |
+| `cancel_at_period_end`, `canceled_at`                       | `cancelAtPeriodEnd`, `canceledAt`                           |
+| `cancellation_details.reason` (else `feedback`)             | `subscription.cancellationReason`                           |
+| `default_payment_method` (expanded)                         | card brand, last four, expiry month and year                |
+| invoice `status`, `number`, `amount_due`, `amount_paid`     | the invoice row                                             |
+| invoice `due_date`, `next_payment_attempt`                  | `dueAt`, `nextRetryAt`                                      |
+| invoice `status_transitions.finalized_at` / `paid_at`       | `issuedAt`, `paidAt`                                        |
+| invoice `attempt_count`, `hosted_invoice_url`               | `attemptCount`, `hostedUrl`                                 |
+| invoice's subscription (`parent.subscription_details`)      | the invoice's subscription                                  |
 
 Ingest raises the timeline entries itself — `subscription.started`, `subscription.plan_changed`,
 `subscription.cancel_scheduled`, `subscription.canceled`, `invoice.paid`,
@@ -109,6 +113,12 @@ event ops of its own.
 (a first payment that never went through) is **skipped** until it goes `active`, so an abandoned
 checkout raises no `payment_failed` signal. A status Stripe adds later is skipped rather than
 guessed at, and the next pull picks it up once the mapping knows it.
+
+**Which billing source counts.** An account's MRR comes from **Autumn** once an Autumn connection
+finished its first import, else from Stripe (the other provider's subscriptions are ignored for
+MRR). Invoices always come from Stripe. While a Stripe
+backfill is importing, or its history rebuild is pending, compute writes no MRR movements: the
+rebuild after the backfill writes the year's history in one go (`tech-design.md` §4.2).
 
 **No contact sweep.** Stripe writes one contact per customer, and ingest merges it into the
 account's existing contact with that email — usually the Clerk member. Removing Stripe's contact ref
@@ -140,12 +150,12 @@ currency like JPY is right by construction.
 
 ## Syncing
 
-| Phase           | Request                                  | Writes                                     |
-| --------------- | ---------------------------------------- | ------------------------------------------ |
-| `customers`     | `/v1/customers`                          | accounts and their billing contacts        |
-| `products`      | `/v1/products`                           | nothing: it gathers the plan names         |
-| `subscriptions` | `/v1/subscriptions?status=all` (expanded) | subscriptions and MRR                      |
-| `invoices`      | `/v1/invoices`                           | invoices                                   |
+| Phase           | Request                                   | Writes                              |
+| --------------- | ----------------------------------------- | ----------------------------------- |
+| `customers`     | `/v1/customers`                           | accounts and their billing contacts |
+| `products`      | `/v1/products`                            | nothing: it gathers the plan names  |
+| `subscriptions` | `/v1/subscriptions?status=all` (expanded) | subscriptions and MRR               |
+| `invoices`      | `/v1/invoices`                            | invoices                            |
 
 Paging is Stripe's own `starting_after`, which is id-based, so a record deleted mid-walk cannot
 shift a page past another one and no page has to re-read the one before it. The phase, the cursor
@@ -171,21 +181,33 @@ Deliveries are verified with Stripe's scheme (`stripe/signature.ts`): HMAC-SHA25
 signatures appear while an endpoint's secret is being rolled and any one matching is enough; every
 other scheme is ignored (Stripe sends a deliberately wrong `v0` on test-mode events). A timestamp
 outside ±5 minutes is refused, so a captured delivery cannot be replayed, and the comparison is
-constant-time. An event from another connected account than the key opens, or from the other mode
-(the key's prefix says which), is refused too — so a test-mode endpoint's secret next to a live key
-cannot write test data into a production connection.
+constant-time. An event stamped with another account than the key opens (a Connect platform's endpoint
+relays its connected accounts' events with `account` set), or from the other mode (the key's prefix
+says which), is refused too — so a test-mode endpoint's secret next to a live key cannot write test
+data into a production connection. A pull reads only the key's own account: Hazel never sends
+`Stripe-Account`.
 
 Refused deliveries are answered 400. Stripe retries a non-2xx with backoff for up to three days, so
 the adapter refuses only what a retry cannot fix (signature, replay window, a payload that does not
 decode, the wrong account or mode) and acknowledges every event type it does not handle.
 
 Failures: 401 → `auth` (the run fails, the connection goes to `error`, pulls stop until the key
-changes); 403 → `auth` too, naming the route the restricted key may not read; 429 → waited out in
+changes); 403 → `auth` too, naming the route the restricted key may not read. Both carry Stripe's
+explanation, truncated and with the masked key Stripe quotes in it removed. 429 → waited out in
 place while the delay is ≤ 5 s, otherwise `rate_limited` with that delay; 5xx → `provider`;
-unreachable → `network`. Those are retryable: the run stays `running` at its cursor and the next
-attempt resumes from the failed page. A body that does not decode (Stripe changed its API) is a
-`provider` error that is **not** retried: the run fails with a message saying so, and the decode
-failure is logged by path and issue kind only, never with the payload.
+unreachable, or no answer within 30 s → `network`. Those are retryable: the run stays `running` at
+its cursor and the next attempt resumes from the failed page; after 8 failed attempts in a row at
+one cursor (rate limits aside) core fails the run, sweeping nothing, and the next pull starts over.
+Any other 4xx (a `starting_after` id Stripe no longer knows, say) is a `provider` error that is
+**not** retried, since the same request would be refused again; so is a body that does not decode
+(Stripe changed its API), whose failure is logged by path and issue kind only, never with the
+payload. Messages reach every member of the organization, so beyond a refused key's they name only
+the route and status, never Stripe's text.
+
+The requests a delivery makes (a product name, a customer's subscriptions) are never retried in
+place and give up after 5 s: a delivery must answer before Stripe times out. A delivery whose
+connection switched Stripe account (or was disconnected) while it ran is dropped by core and
+acknowledged, so Stripe does not retry it into the new account.
 
 ## Known gaps
 
@@ -200,13 +222,18 @@ failure is logged by path and issue kind only, never with the payload.
 - **The decline reason** Stripe shows lives on the invoice's payment intent, which Hazel does not
   read (it would need another permission). An `invoice.payment_failed` delivery therefore records
   "Stripe could not collect this payment" unless Stripe put a message on the invoice itself — which
-  is also what lets ingest raise `invoice.payment_failed` on the *first* attempt, where
+  is also what lets ingest raise `invoice.payment_failed` on the _first_ attempt, where
   `attempt_count` is still 1.
 - **`invoice.upcoming` is not handled.** Stripe's preview has no invoice id, and nothing in Hazel
   reads an `upcoming` invoice yet (the status exists in the model for a provider that does).
 - **Metered and tiered prices contribute no MRR** (see above), so an account billed purely by usage
   through Stripe shows an MRR of 0. Usage belongs to the Autumn and Maple sources.
 - **A customer has no `updated` timestamp** in Stripe, so account ops are ordered by the event's
-  own time (and by the request time on a pull). Two deliveries inside the same second order by
-  arrival.
+  own `created` (and by the request time on a pull); `customer.deleted` is dated by its event too,
+  so a late retry of an older `customer.updated` cannot revive it. Two deliveries inside the same
+  second order by arrival.
+- **An unstamped event is taken as the key's account's.** Stripe stamps `account` only on a
+  connected account's events, so a misrouted endpoint of another, unrelated account whose signing
+  secret was pasted here is told apart only by its mode. Core drops the stored signing secret when
+  the key moves to another account, so a stale secret cannot do it.
 - **Credit notes and refunds** are not read: an invoice's amounts are what Stripe reports on it.

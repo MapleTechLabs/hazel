@@ -229,6 +229,7 @@ export const PROVIDERS: Descriptors = {
 			{ resource: "Products", access: "Read" },
 			{ resource: "Prices", access: "Read" },
 			{ resource: "Payment methods", access: "Read" },
+			{ resource: "Account", access: "Read" },
 		],
 		webhook: {
 			instructions:

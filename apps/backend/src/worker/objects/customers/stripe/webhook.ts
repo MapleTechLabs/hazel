@@ -8,7 +8,7 @@
  * with backoff for up to three days, so only what a retry cannot fix is refused; an event type
  * Hazel does not handle is acknowledged. Everything else is applied by ingest, which is idempotent,
  * so Stripe's retries and redeliveries are safe, and account ops carry `observedAt` so a late retry
- * cannot revive a customer deleted since.
+ * cannot revive a customer deleted since (`customer.deleted` is dated by its event too).
  *
  * The events Hazel subscribes to, and what each one writes:
  *
@@ -27,9 +27,10 @@
  *
  * A subscription's plan name is the Stripe **product**'s, which is not on a subscription payload
  * (only the product's id), so every delivery that writes a subscription costs one
- * `GET /v1/products/{id}` per distinct plan, at most {@link MAX_PRODUCT_LOOKUPS}. If that request
- * fails the delivery is still acknowledged, with the price's nickname instead, rather than Stripe
- * retrying it for days. A `payment_method.*` delivery names no subscription, so it lists the
+ * `GET /v1/products/{id}` per distinct plan, at most {@link MAX_PRODUCT_LOOKUPS}. Those requests are
+ * never retried in place and give up after 5 s (`WEBHOOK_REQUESTS`): a delivery must answer before
+ * Stripe times out. If one fails the delivery is still acknowledged, with the price's nickname
+ * instead, rather than Stripe retrying it into an API that is already refusing. A `payment_method.*` delivery names no subscription, so it lists the
  * customer's (`GET /v1/subscriptions?customer=…`) to write the card against them.
  *
  * `invoice.upcoming` is not handled: Stripe's preview has no invoice id, and nothing in Hazel reads
@@ -149,9 +150,8 @@ export const opsOfEvent = Effect.fn("Stripe.opsOfEvent")(function* (
 ): Effect.fn.Return<ReadonlyArray<IngestOp>, RejectedError> {
 	const { type } = event
 	const data = event.data.object
-	/** Stripe customers carry no `updated`, so the event's own time orders them. */
-	const observedAt: IsoTimestamp | undefined =
-		isoOf(event.created) ?? new Date(yield* Clock.currentTimeMillis).toISOString()
+	/** Stripe customers carry no `updated`, so the event's own time orders them, deletions too. */
+	const observedAt: IsoTimestamp | undefined = isoOf(event.created) ?? undefined
 	switch (type) {
 		case "customer.created":
 		case "customer.updated": {
@@ -160,7 +160,7 @@ export const opsOfEvent = Effect.fn("Stripe.opsOfEvent")(function* (
 		}
 		case "customer.deleted": {
 			const customer = yield* decodeAs(StripeCustomer, data, type)
-			return [accountDeletedOp(customer.id)]
+			return [accountDeletedOp(customer.id, observedAt)]
 		}
 		case "customer.subscription.created":
 		case "customer.subscription.updated":
@@ -204,10 +204,12 @@ export const opsOfEvent = Effect.fn("Stripe.opsOfEvent")(function* (
 /**
  * Verify the delivery, then map it. Core refuses a connection with no signing secret before this.
  *
- * `accountId` is the Stripe account the key opens (null when the key may not read it) and
- * `livemode` the mode it is for (null for a key whose prefix does not say): an event from another
- * connected account, or from the other mode, is refused, so a test-mode endpoint's secret next to a
- * live key cannot write test data into a production connection.
+ * `accountId` is the Stripe account the key opens (`validate`'s `externalAccountId`) and `livemode`
+ * the mode it is for (null for a key whose prefix does not say): an event stamped with another
+ * account (a Connect platform's endpoint relays its connected accounts' events), or from the other
+ * mode, is refused, so a test-mode endpoint's secret next to a live key cannot write test data into
+ * a production connection. The account's own events carry no `account` stamp at all, so an
+ * unstamped event is the key's account as far as Stripe says.
  */
 export const receiveWebhook = Effect.fn("Stripe.receiveWebhook")(function* (input: {
 	readonly get: StripeGet
@@ -237,7 +239,7 @@ export const receiveWebhook = Effect.fn("Stripe.receiveWebhook")(function* (inpu
 		"stripe.event.api_version": event.api_version ?? "",
 	})
 	const account = event.account ?? null
-	if (input.accountId !== null && account !== null && account !== input.accountId) {
+	if (account !== null && account !== input.accountId) {
 		return yield* reject(
 			"account_mismatch",
 			"The event belongs to another Stripe account than the connection's key opens",

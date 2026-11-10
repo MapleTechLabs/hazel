@@ -97,20 +97,16 @@ describe("Customers RPCs", () => {
 				expect(
 					world.rows(`SELECT count(*) AS n FROM customer_saved_views WHERE builtInKey IS NOT NULL`),
 				).toEqual([{ n: 5 }])
-				// A provider with no adapter registered yet (Clerk has one) answers "unavailable".
+				// A provider with no adapter registered yet (Clerk and Stripe have one) answers "unavailable".
 				expect(
 					tagOf(
 						yield* world.call(
 							"customers.connection.connect",
 							{
-								provider: "stripe",
-								apiKey: "rk_test",
+								provider: "autumn",
+								apiKey: "am_sk_test",
 								webhookSecret: null,
-								config: {
-									_tag: "stripe",
-									clerkOrgMetadataKey: "clerk_org_id",
-									matchByDomain: true,
-								},
+								config: { _tag: "autumn", customerIdIsClerkOrgId: true },
 							},
 							world.owner,
 						),

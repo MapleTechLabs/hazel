@@ -48,11 +48,13 @@ describe("Stripe validate", () => {
 		])
 	})
 
-	it("still connects when the key may not read the account, with none to name", async () => {
-		expect(await validate(makeFakeStripe({ apiKey: API_KEY, account: null }))).toEqual({
-			externalAccountId: null,
-			externalAccountName: null,
-		})
+	it("refuses a key that may not read the account it opens, saying why Hazel needs it", async () => {
+		const error = await Effect.runPromise(
+			Effect.flip(validateWith(makeFakeStripe({ apiKey: API_KEY, account: null }), API_KEY)),
+		)
+		expect(error).toMatchObject({ code: "auth", httpStatus: 403 })
+		expect(error.message).toMatch(/GET \/account for this key \(403\): The provided key does not have/)
+		expect(error.message).toMatch(/keep Stripe accounts apart/)
 	})
 
 	it("falls back to the business name, then the account's email", async () => {
