@@ -819,6 +819,79 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("bills each account from its own source: Autumn's once imported, else Stripe's; a switch writes no movement", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest(
+					"clerk",
+					["org_1", "org_2"].map((externalId): IngestOp => ({
+						_tag: "account",
+						externalId,
+						name: externalId,
+						sameAs: [],
+						onNoMatch: "create",
+					})),
+				)
+				const sub = (externalId: string, org: string, mrrMinor: number): IngestOp => ({
+					_tag: "subscription",
+					externalId,
+					account: { provider: "clerk", externalId: org },
+					planName: "Team",
+					status: "active",
+					mrrMinor,
+					currency: "usd",
+					interval: "month",
+					quantity: 1,
+					startedAt: new Date(NOW.getTime() - 30 * DAY).toISOString(),
+					trialEndsAt: null,
+					currentPeriodEnd: null,
+					cancelAtPeriodEnd: false,
+					canceledAt: null,
+				})
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET backfilledAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
+					)
+					.run(world.connection("autumn"))
+				yield* world.ingest("stripe", [sub("sub_1", "org_1", 19_900), sub("sub_2", "org_2", 9_900)])
+				// Autumn bills org_1 only: org_2 (billed in Stripe outside Autumn) keeps Stripe's MRR.
+				yield* world.ingest("autumn", [sub("cus_1:team", "org_1", 20_000)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				const accounts = () =>
+					world.rows(
+						`SELECT name, mrrMinor, mrrSource, lifecycleStage FROM customer_accounts ORDER BY name`,
+					)
+				const movements = () =>
+					world.rows(
+						`SELECT a.name, m.type, m.toMrrMinor FROM customer_mrr_movements m
+						JOIN customer_accounts a ON a.id = m.accountId ORDER BY a.name`,
+					)
+				expect(accounts()).toEqual([
+					{ name: "org_1", mrrMinor: 20_000, mrrSource: "autumn", lifecycleStage: "active" },
+					{ name: "org_2", mrrMinor: 9_900, mrrSource: "stripe", lifecycleStage: "active" },
+				])
+				expect(movements()).toEqual([
+					{ name: "org_1", type: "new", toMrrMinor: 20_000 },
+					{ name: "org_2", type: "new", toMrrMinor: 9_900 },
+				])
+
+				// org_2 moves to Autumn: its MRR now comes from there, and the switch is no movement.
+				yield* world.ingest("autumn", [sub("cus_2:team", "org_2", 12_000)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(accounts()[1]).toEqual({
+					name: "org_2",
+					mrrMinor: 12_000,
+					mrrSource: "autumn",
+					lifecycleStage: "active",
+				})
+				expect(movements()).toEqual([
+					{ name: "org_1", type: "new", toMrrMinor: 20_000 },
+					{ name: "org_2", type: "new", toMrrMinor: 9_900 },
+				])
+			}),
+		))
+
 	it("counts a compute attempt at its lease, so a killed run backs off and ingest waits", () =>
 		run(
 			Effect.gen(function* () {
@@ -1193,7 +1266,7 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
-	it("starts a compute spread over turns over when its progress is stale, unreadable, or of another day or billing provider", () =>
+	it("starts a compute spread over turns over when its progress is stale, unreadable, or of another day or Autumn readiness", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
@@ -1207,10 +1280,9 @@ describe("Customers compute and sync loop", () => {
 				yield* world.object.run(runCompute(NOW, 0)).pipe(Effect.orDie)
 				const first = progress()
 				expect(first).toMatchObject({ day: day(0), startedAt: NOW.getTime() })
-				const other = first.billingProvider === "stripe" ? "autumn" : "stripe"
 				// Each starts over: the first chunk again, and the same progress after it.
 				for (const saved of [
-					JSON.stringify({ ...first, billingProvider: other }),
+					JSON.stringify({ ...first, autumnReady: !first.autumnReady }),
 					JSON.stringify({ ...first, day: day(-1) }),
 					JSON.stringify({ ...first, startedAt: NOW.getTime() - 2 * 60 * 60_000 }),
 					JSON.stringify({ ...first, after: 42 }),

@@ -124,21 +124,15 @@ describe("signal evaluation", () => {
 		expect(formatMoney(1_500, "jpy")).toBe("¥1,500")
 	})
 
-	it("bills from Autumn only once its first import finished; never zeroes MRR on a disconnect", () => {
-		const autumn = (status: "active" | "disconnected", backfilledAt: Date | null) => ({
-			provider: "autumn" as const,
-			status,
-			backfilledAt,
-		})
-		const both = new Map([
-			["stripe", 3],
-			["autumn", 2],
-		])
-		expect(billingProviderOf([autumn("active", null)], both)).toBe("stripe")
-		expect(billingProviderOf([autumn("active", NOW)], both)).toBe("autumn")
-		expect(billingProviderOf([autumn("disconnected", NOW)], both)).toBe("stripe")
-		expect(billingProviderOf([autumn("disconnected", NOW)], new Map([["autumn", 2]]))).toBe("autumn")
-		expect(billingProviderOf([], new Map())).toBe("stripe")
+	it("bills each account from Autumn once it is imported and bills the account; else from Stripe", () => {
+		const both = new Set(["stripe", "autumn"] as const)
+		expect(billingProviderOf(false, both)).toBe("stripe")
+		expect(billingProviderOf(true, both)).toBe("autumn")
+		// Unknown to Autumn, or billed in Stripe outside it.
+		expect(billingProviderOf(true, new Set(["stripe"]))).toBe("stripe")
+		// Autumn's only: kept while Autumn imports or after a disconnect, never zeroed.
+		expect(billingProviderOf(false, new Set(["autumn"]))).toBe("autumn")
+		expect(billingProviderOf(true, new Set())).toBe("stripe")
 	})
 
 	it("payment_failed: past due, or an invoice open 7+ days past due; escalates by age and unpaid", () => {

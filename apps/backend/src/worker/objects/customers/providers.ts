@@ -14,7 +14,8 @@
  * - `matchByDomain: true` on account ops only for billing sources (Stripe, Autumn); identity
  *   sources (Clerk) leave it unset so organizations sharing a domain never merge.
  * - Deletions as `deleted` / `removed` ops; a full listing also sets `PullPage.sweep` on its last
- *   page so records deleted without a webhook are removed.
+ *   page so records deleted without a webhook are removed (subscriptions only from a listing of
+ *   every status, see there).
  * - Links (`externalUrl`, `hostedUrl`) as `https:` URLs on the provider's own hosts; ingest stores
  *   any other as null.
  * - Only the connection's provider account: `validate` returns the account the credentials open
@@ -28,7 +29,7 @@ import type {
 	ConnectionConfig,
 	CustomerProvider,
 	IngestOp,
-	RefEntityType,
+	SweepEntityType,
 	SyncProgress,
 } from "@hazel/domain/customers"
 import { Context, type Effect, Layer, Option, type Redacted, Schema } from "effect"
@@ -74,8 +75,17 @@ export interface PullPage {
 	 * deleted ones excluded: core then removes the ones the run did not see
 	 * (`CustomerIngest.completeSweep`). Leave it unset for an incremental or partial pull, or one
 	 * whose listing can skip live records: anything not listed is removed.
+	 *
+	 * `subscription` only from a full walk that lists every subscription of every status (canceled,
+	 * expired, trialing included) with `observedAt` on each op: a subscription the run did not read
+	 * becomes `canceled` (its customer deleted at the provider, no webhook). A listing filtered by
+	 * status, or one that drops ended subscriptions, must not sweep them.
+	 *
+	 * A sweep that would remove more than 20% of the provider's live records of a type (and more than
+	 * 10) removes none of that type and records it on the run (`stats.sweepSkipped`): a listing that
+	 * ends early (a cursor dropped too soon) cannot wipe live records.
 	 */
-	readonly sweep?: ReadonlyArray<RefEntityType>
+	readonly sweep?: ReadonlyArray<SweepEntityType>
 }
 
 export interface CustomerProviderAdapter {

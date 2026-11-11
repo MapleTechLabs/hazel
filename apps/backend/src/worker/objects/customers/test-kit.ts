@@ -50,6 +50,7 @@ export const accountRow = (overrides: Partial<schema.CustomerAccount> = {}): sch
 	planName: "Team",
 	mrrMinor: 19_900,
 	currency: "usd",
+	mrrSource: null,
 	trialListMrrMinor: null,
 	trialEndsAt: null,
 	healthScore: null,

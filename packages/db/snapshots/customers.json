@@ -1,5 +1,5 @@
 {
-	"migration": "0004_customers_billing_observed_at",
+	"migration": "0005_customers_account_mrr_source",
 	"entities": [
 		{
 			"kind": "table",
@@ -264,8 +264,17 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "trialListMrrMinor",
+			"name": "mrrSource",
 			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "trialListMrrMinor",
+			"position": 12,
 			"type": "integer",
 			"notNull": false,
 			"default": null
@@ -274,7 +283,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "trialEndsAt",
-			"position": 12,
+			"position": 13,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -283,7 +292,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "healthScore",
-			"position": 13,
+			"position": 14,
 			"type": "integer",
 			"notNull": false,
 			"default": null
@@ -292,7 +301,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "healthStatus",
-			"position": 14,
+			"position": 15,
 			"type": "text",
 			"notNull": true,
 			"default": "'unknown'"
@@ -301,7 +310,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "healthUpdatedAt",
-			"position": 15,
+			"position": 16,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -310,15 +319,6 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "seatsUsed",
-			"position": 16,
-			"type": "integer",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_accounts",
-			"name": "seatsLimit",
 			"position": 17,
 			"type": "integer",
 			"notNull": false,
@@ -327,16 +327,16 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "contactCount",
+			"name": "seatsLimit",
 			"position": 18,
 			"type": "integer",
-			"notNull": true,
-			"default": "0"
+			"notNull": false,
+			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "activeUsers30d",
+			"name": "contactCount",
 			"position": 19,
 			"type": "integer",
 			"notNull": true,
@@ -345,8 +345,17 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "activeUsersTrendPct",
+			"name": "activeUsers30d",
 			"position": 20,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "activeUsersTrendPct",
+			"position": 21,
 			"type": "real",
 			"notNull": false,
 			"default": null
@@ -355,15 +364,6 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "openRiskHigh",
-			"position": 21,
-			"type": "integer",
-			"notNull": true,
-			"default": "0"
-		},
-		{
-			"kind": "column",
-			"table": "customer_accounts",
-			"name": "openRiskMedium",
 			"position": 22,
 			"type": "integer",
 			"notNull": true,
@@ -372,7 +372,7 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "openRiskLow",
+			"name": "openRiskMedium",
 			"position": 23,
 			"type": "integer",
 			"notNull": true,
@@ -381,7 +381,7 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "openOpportunities",
+			"name": "openRiskLow",
 			"position": 24,
 			"type": "integer",
 			"notNull": true,
@@ -390,16 +390,16 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "championContactId",
+			"name": "openOpportunities",
 			"position": 25,
-			"type": "text",
-			"notNull": false,
-			"default": null
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
 		},
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "championInactiveSince",
+			"name": "championContactId",
 			"position": 26,
 			"type": "text",
 			"notNull": false,
@@ -408,7 +408,7 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "lastActiveContactId",
+			"name": "championInactiveSince",
 			"position": 27,
 			"type": "text",
 			"notNull": false,
@@ -417,8 +417,17 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "firstSeenAt",
+			"name": "lastActiveContactId",
 			"position": 28,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "firstSeenAt",
+			"position": 29,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -427,15 +436,6 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "lastActiveAt",
-			"position": 29,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_accounts",
-			"name": "customerSince",
 			"position": 30,
 			"type": "text",
 			"notNull": false,
@@ -444,7 +444,7 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "churnedAt",
+			"name": "customerSince",
 			"position": 31,
 			"type": "text",
 			"notNull": false,
@@ -453,8 +453,17 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "tags",
+			"name": "churnedAt",
 			"position": 32,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "tags",
+			"position": 33,
 			"type": "text",
 			"notNull": true,
 			"default": "'[]'"
@@ -463,15 +472,6 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "attributes",
-			"position": 33,
-			"type": "text",
-			"notNull": true,
-			"default": "'{}'"
-		},
-		{
-			"kind": "column",
-			"table": "customer_accounts",
-			"name": "fieldSources",
 			"position": 34,
 			"type": "text",
 			"notNull": true,
@@ -480,16 +480,16 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "createdAt",
+			"name": "fieldSources",
 			"position": 35,
 			"type": "text",
 			"notNull": true,
-			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+			"default": "'{}'"
 		},
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "updatedAt",
+			"name": "createdAt",
 			"position": 36,
 			"type": "text",
 			"notNull": true,
@@ -498,8 +498,17 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "deletedAt",
+			"name": "updatedAt",
 			"position": 37,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "deletedAt",
+			"position": 38,
 			"type": "text",
 			"notNull": false,
 			"default": null

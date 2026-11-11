@@ -67,6 +67,10 @@ export type SignalTemplate = typeof SignalTemplate.Type
 export const RefEntityType = Schema.Literals(["account", "contact"])
 export type RefEntityType = typeof RefEntityType.Type
 
+/** What a full listing can sweep (`PullPage.sweep`): account and contact refs, and subscriptions. */
+export const SweepEntityType = Schema.Literals(["account", "contact", "subscription"])
+export type SweepEntityType = typeof SweepEntityType.Type
+
 /** What an unmatched record holds: a ref-able entity, or a billing row whose account is unknown. */
 export const UnmatchedEntityType = Schema.Literals(["account", "contact", "subscription", "invoice"])
 export type UnmatchedEntityType = typeof UnmatchedEntityType.Type

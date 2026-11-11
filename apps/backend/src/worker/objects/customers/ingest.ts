@@ -19,14 +19,15 @@
  * - Precedence: `FIELD_PRECEDENCE` per field, recorded in `fieldSources`.
  * - Ordering: an op's `observedAt` at or before its record's deletion leaves it deleted; a
  *   subscription or invoice op observed before the newest one applied to its row changes nothing.
- * - Removal: `deleted` / `removed` ops, or `completeSweep` after a full pull; a later sighting
- *   revives, unless the delete op was observed at or after it.
+ * - Removal: `deleted` / `removed` ops, or `completeSweep` after a full pull (capped: one that would
+ *   remove too many records of a type removes none of them); a later sighting revives, unless the
+ *   delete op was observed at or after it.
  * - It never computes: it marks compute due (`requestComputeAfterIngest`), which the alarm runs
  *   soon after (no sooner than the minimum gap since the last compute).
  */
 import type { DatabaseError, schema } from "@hazel/db"
 import type { IngestOp, IngestOutcome, IngestReport, SyncError, SyncProgress } from "@hazel/domain/customers"
-import type { CustomerProvider, RefEntityType, SyncTrigger } from "@hazel/domain/customers"
+import type { CustomerProvider, SweepEntityType, SyncTrigger } from "@hazel/domain/customers"
 import type {
 	CustomerAccountId,
 	CustomerConnectionId,
@@ -97,15 +98,20 @@ export interface CustomerIngestApi {
 	 * A pull that listed every record of `entityTypes` of the connection's provider finished: the
 	 * provider's refs not seen since `since` (the run's start) are gone. An account ref goes stale
 	 * (the account is soft-deleted once no live ref is left, as with `deleted`); a contact is
-	 * soft-deleted with a `contact.removed` event. Only for a complete listing: a partial or
-	 * incremental pull would remove what it did not ask for (the caller's responsibility). Refs a
-	 * person linked (`manual`) stay, unless `manual` (another provider account: they name the old
-	 * one's records).
+	 * soft-deleted with a `contact.removed` event; a subscription not read since (`observedAt`)
+	 * becomes `canceled` (`canceledAt` now, a `subscription.canceled` event). Only for a complete
+	 * listing: a partial or incremental pull would remove what it did not ask for (the caller's
+	 * responsibility). Refs a person linked stay, unless `manual` (another provider account: they
+	 * name the old one's records).
+	 *
+	 * Safety cap: a type whose removals would exceed 20% of the provider's live records of it and 10
+	 * records is not swept (a listing that ended early); the run (`runId`) records it in
+	 * `stats.sweepSkipped`, with a warning logged. Not applied with `manual`.
 	 */
 	readonly completeSweep: (
 		connectionId: CustomerConnectionId,
 		since: Date,
-		entityTypes: ReadonlyArray<RefEntityType>,
-		manual?: boolean,
+		entityTypes: ReadonlyArray<SweepEntityType>,
+		options?: { readonly runId?: CustomerSyncRunId; readonly manual?: boolean },
 	) => Effect.Effect<void, DatabaseError>
 }

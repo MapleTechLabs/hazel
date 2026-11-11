@@ -104,6 +104,12 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		planName: SQLite.nullable(SQLite.text),
 		mrrMinor: money(),
 		currency: SQLite.column(SQLite.text, { default: "usd" }),
+		/**
+		 * The billing provider whose subscriptions `mrrMinor` was last computed from; null before the
+		 * first compute, or without subscriptions. A change from one to the other is a switch of
+		 * source, not revenue: no MRR movement.
+		 */
+		mrrSource: SQLite.nullable(textEnum(CustomerProvider.literals)),
 		/** List price of the trial's plan per month: ranks trials in the queue (they have no MRR yet). */
 		trialListMrrMinor: SQLite.nullable(SQLite.integer),
 		trialEndsAt: SQLite.nullable(timestamptz),

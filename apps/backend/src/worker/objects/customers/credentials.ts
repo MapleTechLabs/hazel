@@ -7,7 +7,7 @@ import { Database, SQLite, schema } from "@hazel/db"
 import type { CustomerConnectionId } from "@hazel/schema"
 import { Clock, Effect, Option, Redacted } from "effect"
 import { IntegrationEncryption } from "../../../services/integration-encryption"
-import { HISTORY_DAYS, mrrSource } from "./compute"
+import { HISTORY_DAYS } from "./compute"
 import { CustomerIngest } from "./ingest"
 import type { ProviderCredentials } from "./providers"
 import { requestHistoryRebuild } from "./schedule"
@@ -133,9 +133,9 @@ export const otherProviderAccount = (
  * brought is not this one's. Its records are swept, linked ones included (an account or contact no
  * other source holds is deleted, with the activity only it placed), its billing rows, events,
  * metrics and parked records go, and the connection imports from scratch (its next run a backfill).
- * When it is the MRR source, the last year of MRR history (movements, the org's daily MRR) is
- * rebuilt once that import is done; older history, or another provider's, stays. The caller starts
- * that run.
+ * When it is an account's MRR source (or none was computed yet), the last year of MRR history
+ * (movements, the org's daily MRR) is rebuilt once that import is done; older history stays. The
+ * caller starts that run.
  */
 export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount")(function* (
 	connection: schema.CustomerConnection,
@@ -166,11 +166,15 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 				SELECT 1 FROM "customer_external_refs" AS "o" WHERE "o"."entityType" = 'contact'
 					AND "o"."entityId" = "r"."entityId" AND "o"."provider" <> ${provider} AND "o"."staleAt" IS NULL))`,
 	)
-	// No MRR computed yet: a rebuild's movements are this provider's.
-	if (
-		(provider === "stripe" || provider === "autumn") &&
-		Option.getOrElse(yield* mrrSource, () => provider) === provider
-	) {
+	// Some account's MRR came from it, or none was computed yet: a rebuild's movements are its.
+	const sources = new Set(
+		(
+			(yield* db.query(
+				Database.sql`SELECT DISTINCT "mrrSource" FROM "customer_accounts" WHERE "mrrSource" IS NOT NULL`,
+			)) as ReadonlyArray<{ mrrSource: string }>
+		).map((row) => row.mrrSource),
+	)
+	if ((provider === "stripe" || provider === "autumn") && (sources.size === 0 || sources.has(provider))) {
 		const first = addDays(dayOf(now), -HISTORY_DAYS)
 		yield* db.run(SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [$.day.gte(first)]))
 		yield* db.run(
@@ -180,7 +184,9 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 		)
 		yield* requestHistoryRebuild
 	}
-	yield* (yield* CustomerIngest).completeSweep(connection.id, now, ["account", "contact"], true)
+	yield* (yield* CustomerIngest).completeSweep(connection.id, now, ["account", "contact"], {
+		manual: true,
+	})
 	const [row] = yield* db.run(
 		SQLite.update(schema.customerConnectionsTable)
 			.set({ backfilledAt: null, lastSuccessAt: null, updatedAt: now })

@@ -18,14 +18,14 @@
  * memory holds one chunk's activity and signals; the org's distinct user counts come from SQL. A
  * compute past `COMPUTE_TURN_BUDGET_MS` or `MAX_CHUNKS_PER_TURN` stops after a chunk and continues
  * in the next alarm turn from where it stopped (`computeProgress`; started over when it is stale, or
- * the day or billing provider changed); step 4's rule counts, 5 and 6 run after the last chunk.
+ * the day or Autumn's readiness changed); step 4's rule counts, 5 and 6 run after the last chunk.
  *
  * Per-account built-in series are not stored daily: they derive from their sources at read time
  * (active users from activity, MRR from movements, health from `customer_health_daily`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
-	CustomerProvider,
+	type CustomerProvider,
 	Day,
 	type HealthBreakdown,
 	type HealthSettings,
@@ -59,6 +59,7 @@ import {
 	ACTIVE,
 	type AccountSnapshot,
 	accountChunks,
+	billingByAccount,
 	loadAccounts,
 	loadBase,
 	type Rollup,
@@ -90,15 +91,10 @@ const EVENT_RETENTION_MS = 730 * DAY_MS
 const CLOSED_SIGNAL_RETENTION_MS = 180 * DAY_MS
 const SYNC_RUN_RETENTION_MS = 30 * DAY_MS
 
-/** Meta: the billing provider MRR was last computed from (a switch writes no movements). */
-const MRR_SOURCE_KEY = "mrrSource"
 const PRUNED_KEY = "prunedOn"
 
 const meta = <A, R>(effect: Effect.Effect<A, SqlError, R>) =>
 	effect.pipe(Effect.mapError(Database.toDatabaseError))
-
-/** The billing provider MRR was last computed from; none before the first compute. */
-export const mrrSource = meta(readObjectMeta(MRR_SOURCE_KEY))
 
 const same = (a: unknown, b: unknown) =>
 	a instanceof Date || b instanceof Date
@@ -187,11 +183,15 @@ const writeMovement = (account: schema.CustomerAccount, rollup: Rollup, today: D
 		)
 	})
 
+/** The account's MRR now comes from another billing provider than last run (`mrrSource`). */
+const switchedSource = (stored: schema.CustomerAccount, rollup: Rollup) =>
+	stored.mrrSource !== null && rollup.mrrSource !== null && stored.mrrSource !== rollup.mrrSource
+
 /**
- * `holdMovements`: the MRR change is not revenue, so no movement is written: MRR now comes from
- * another billing provider than last run, a billing backfill is still importing (its accounts'
- * history comes from the rebuild after it), or that rebuild is pending. Neither does a change of
- * reporting currency.
+ * `holdMovements`: the MRR change is not revenue, so no movement is written: a billing backfill is
+ * still importing (its accounts' history comes from the rebuild after it), or that rebuild is
+ * pending. Neither does an account whose MRR now comes from another billing provider
+ * (`switchedSource`), nor a change of reporting currency. The number of accounts that switched.
  */
 const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 	snapshot: Snapshot,
@@ -199,12 +199,14 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 ) {
 	const db = yield* Database.Database
 	const { now, today } = snapshot.org
+	let switched = 0
 	yield* db.transaction(
 		Effect.forEach(
 			snapshot.accounts,
 			({ stored, rollup }) =>
 				Effect.gen(function* () {
-					if (!holdMovements && stored.currency === rollup.currency)
+					if (switchedSource(stored, rollup)) switched++
+					else if (!holdMovements && stored.currency === rollup.currency)
 						yield* writeMovement(stored, rollup, today)
 					const changes = diff(stored, rollup)
 					if (Object.keys(changes).length === 0) return
@@ -217,6 +219,7 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 			{ discard: true },
 		),
 	)
+	return switched
 })
 
 // ---------------------------------------------------------------------------
@@ -920,17 +923,10 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 			.select("id", "mrrMinor")
 			.where(($) => [$.deletedAt.isNull()]),
 	)).filter((account) => live.has(account.id))
-	const subscriptions = yield* db.run(
-		SQLite.from(schema.customerSubscriptionsTable)
-			.select()
-			.where(($) => [$.provider.eq(base.billingProvider)]),
+	const billingBy = billingByAccount(
+		base.autumnReady,
+		yield* db.run(SQLite.from(schema.customerSubscriptionsTable).select()),
 	)
-	const subsBy = new Map<CustomerAccountId, Array<schema.CustomerSubscription>>()
-	for (const sub of subscriptions) {
-		const list = subsBy.get(sub.accountId)
-		if (list === undefined) subsBy.set(sub.accountId, [sub])
-		else list.push(sub)
-	}
 	// Today's movement alone is not history: one a compute wrote while billing was still importing
 	// (a partial MRR's jump) is replaced by the rebuilt series.
 	const withMovements = new Set(
@@ -947,7 +943,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 	const movements: Array<Record<string, unknown>> = []
 	const mrrNow: Array<{ id: CustomerAccountId; mrrMinor: number }> = []
 	for (const account of accounts) {
-		const subs = subsBy.get(account.id) ?? []
+		const subs = billingBy.get(account.id)?.subscriptions ?? []
 		const series = mrrHistory(subs, currency, [before, ...days])
 		const trial = new Uint8Array(days.length)
 		for (const sub of subs) {
@@ -1111,10 +1107,10 @@ export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now:
 
 /** Where a compute spread over several alarm turns stopped, and what it has gathered so far. */
 const ComputeProgress = Schema.Struct({
-	/** When its first turn ran, its day and billing provider: another one starts over. */
+	/** When its first turn ran, its day and Autumn's readiness: another one starts over. */
 	startedAt: Schema.Number,
 	day: Day,
-	billingProvider: CustomerProvider,
+	autumnReady: Schema.Boolean,
 	/** The last account done (accounts go in id order). */
 	after: CustomerAccountId,
 	armed: Schema.Array(Schema.String),
@@ -1146,16 +1142,14 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	const started = yield* Clock.currentTimeMillis
 	const base = yield* loadBase(now)
 	const importing = yield* importingProviders(now)
-	const source = yield* mrrSource
-	const switched = Option.isSome(source) && source.value !== base.billingProvider
-	const holdMovements = switched || billingImporting(importing) || (yield* historyRebuildPending)
-	// The previous turn's, unless unreadable, stale, or from another day or billing provider.
+	const holdMovements = billingImporting(importing) || (yield* historyRebuildPending)
+	// The previous turn's, unless unreadable, stale, or from another day or Autumn readiness.
 	const progress = Option.getOrUndefined(
 		Option.filter(
 			Option.flatMap(yield* computeProgress, decodeComputeProgress),
 			(saved) =>
 				saved.day === base.org.today &&
-				saved.billingProvider === base.billingProvider &&
+				saved.autumnReady === base.autumnReady &&
 				now.getTime() - saved.startedAt < COMPUTE_PROGRESS_MAX_AGE_MS,
 		),
 	)
@@ -1180,9 +1174,10 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 		progress === undefined ? base.accountIds : base.accountIds.filter((id) => id > progress.after),
 	)
 	let done = 0
+	let switched = 0
 	for (const ids of chunks) {
 		const snapshot = yield* loadAccounts(base, ids)
-		yield* writeRollups(snapshot, holdMovements)
+		switched += yield* writeRollups(snapshot, holdMovements)
 		const scores = scoreAll(snapshot)
 		yield* writeHealth(snapshot, scores)
 		const live = yield* writeSignals(withTodayHealth(snapshot, scores), signals)
@@ -1198,8 +1193,8 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	yield* Effect.annotateCurrentSpan({
 		"customers.accounts": base.accountIds.length,
 		"customers.rules": base.rules.length,
-		"customers.billing_provider": base.billingProvider,
-		"customers.mrr_source_switched": switched,
+		"customers.autumn_ready": base.autumnReady,
+		"customers.mrr_source_switches": switched,
 		"customers.movements_held": holdMovements,
 		"customers.resumed": progress !== undefined,
 		"customers.chunks": done,
@@ -1212,7 +1207,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 			encodeComputeProgress({
 				startedAt: progress?.startedAt ?? now.getTime(),
 				day: base.org.today,
-				billingProvider: base.billingProvider,
+				autumnReady: base.autumnReady,
 				after: last[last.length - 1],
 				armed: signals.armed,
 				totals,
@@ -1231,7 +1226,6 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	}
 	yield* finishSignals(now, base.rules, signals)
 	yield* writeOrgDay(base, totals)
-	yield* meta(writeObjectMeta(MRR_SOURCE_KEY, base.billingProvider))
 	yield* prune(now)
 	yield* db.run(
 		SQLite.update(schema.customerSettingsTable)

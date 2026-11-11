@@ -253,7 +253,8 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 			)
 			cursor = nextCursor
 			if (nextCursor === null) {
-				if (sweep !== undefined) yield* ingest.completeSweep(connection.id, run.startedAt, sweep)
+				if (sweep !== undefined)
+					yield* ingest.completeSweep(connection.id, run.startedAt, sweep, { runId: run.id })
 				yield* ingest.finishRun(run.id, { _tag: "Succeeded", cursor: null })
 				return yield* setNextSync(
 					connection.id,

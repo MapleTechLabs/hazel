@@ -33,6 +33,8 @@ export const ACTIVE = Database.sql`("eventCount" > 0 OR "sessionCount" > 0 OR "s
 export interface Rollup {
 	readonly mrrMinor: number
 	readonly currency: string
+	/** Whose subscriptions `mrrMinor` counts (`billingProviderOf`); null without any. */
+	readonly mrrSource: CustomerProvider | null
 	readonly planName: string | null
 	readonly trialEndsAt: Date | null
 	readonly trialListMrrMinor: number | null
@@ -70,8 +72,8 @@ export interface SnapshotBase {
 	readonly hasActivityData: boolean
 	/** Billing data exists (a billing source, or subscriptions). */
 	readonly hasBillingData: boolean
-	/** Whose subscriptions count for MRR (`billingProviderOf`). */
-	readonly billingProvider: CustomerProvider
+	/** Autumn's subscriptions can count for MRR; each account's source is `billingProviderOf`'s. */
+	readonly autumnReady: boolean
 	/** The live accounts, loaded in chunks (`loadAccounts`). */
 	readonly accountIds: ReadonlyArray<CustomerAccountId>
 	/** The first day of activity loaded (the rules' window). */
@@ -96,7 +98,9 @@ const startOf = (day: Day) => new Date(`${day}T00:00:00.000Z`)
 /** The fields compute derives for one account (pure). */
 export const rollupAccount = (input: {
 	readonly account: schema.CustomerAccount
+	/** The billing provider's (`mrrSource`). */
 	readonly subscriptions: ReadonlyArray<schema.CustomerSubscription>
+	readonly mrrSource: CustomerProvider | null
 	readonly contacts: ReadonlyArray<ContactFacts>
 	readonly activity: AccountFacts["activity"]
 	readonly lastActiveDay: Day | null
@@ -170,6 +174,7 @@ export const rollupAccount = (input: {
 	return {
 		mrrMinor,
 		currency,
+		mrrSource: input.mrrSource,
 		planName: top?.planName ?? null,
 		trialEndsAt:
 			trialEnds.length === 0 ? null : new Date(Math.min(...trialEnds.map((date) => date.getTime()))),
@@ -216,25 +221,32 @@ const groupBy = <A, K>(items: ReadonlyArray<A>, key: (item: A) => K) => {
 
 const ACTIVITY_PROVIDERS: ReadonlySet<CustomerProvider> = new Set(["clerk", "maple"])
 
+const BILLING_PROVIDERS: ReadonlyArray<CustomerProvider> = ["stripe", "autumn"]
+
 /**
- * Whose subscriptions count for MRR: Autumn once its connection finished its first import (until
- * then its data is partial), else Stripe; with no subscriptions there (Autumn disconnected and no
- * Stripe), whichever provider still has some, so a disconnect does not zero every MRR.
+ * Whose subscriptions count for one account's MRR, from the providers it has subscriptions of (any
+ * status): Autumn once its connection finished its first import (until then its data is partial)
+ * and it bills the account, else Stripe (a customer Autumn does not know, or billed in Stripe
+ * outside it). An account with Autumn's and none of Stripe's keeps Autumn's either way, so a
+ * disconnect does not zero its MRR.
  */
 export const billingProviderOf = (
-	connections: ReadonlyArray<Pick<schema.CustomerConnection, "provider" | "status" | "backfilledAt">>,
-	subscriptionCounts: ReadonlyMap<string, number>,
-): CustomerProvider => {
-	const autumnReady = connections.some(
-		(connection) =>
-			connection.provider === "autumn" &&
-			connection.status !== "disconnected" &&
-			connection.backfilledAt !== null,
+	autumnReady: boolean,
+	providers: ReadonlySet<CustomerProvider>,
+): CustomerProvider =>
+	providers.has("autumn") && (autumnReady || !providers.has("stripe")) ? "autumn" : "stripe"
+
+/** Billing subscriptions by account: the account's source (`billingProviderOf`) and its subscriptions. */
+export const billingByAccount = (
+	autumnReady: boolean,
+	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
+) =>
+	new Map(
+		[...groupBy(subscriptions, (sub) => sub.accountId)].map(([accountId, subs]) => {
+			const source = billingProviderOf(autumnReady, new Set(subs.map((sub) => sub.provider)))
+			return [accountId, { source, subscriptions: subs.filter((sub) => sub.provider === source) }]
+		}),
 	)
-	if (autumnReady) return "autumn"
-	if ((subscriptionCounts.get("stripe") ?? 0) > 0) return "stripe"
-	return (subscriptionCounts.get("autumn") ?? 0) > 0 ? "autumn" : "stripe"
-}
 
 /** Accounts loaded (and their activity held in memory) at a time. */
 const ACCOUNT_CHUNK = 250
@@ -273,14 +285,12 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 			.filter((connection) => connection.status === "active")
 			.map((connection) => connection.provider),
 	)
-	const subscriptionCounts = new Map(
-		(
-			(yield* db.query(
-				Database.sql`SELECT "provider", count(*) AS "count" FROM "customer_subscriptions" GROUP BY "provider"`,
-			)) as ReadonlyArray<{ provider: CustomerProvider; count: number }>
-		).map((row) => [row.provider, Number(row.count)]),
+	const anySubscription = yield* db.first(
+		SQLite.from(schema.customerSubscriptionsTable)
+			.select("id")
+			.where(($) => [inList($.provider, BILLING_PROVIDERS)])
+			.limit(1),
 	)
-	const billingProvider = billingProviderOf(connections, subscriptionCounts)
 	const rules = yield* db.run(
 		SQLite.from(schema.customerSignalRulesTable)
 			.select()
@@ -324,11 +334,13 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 			activityConnections.length > 0
 				? activityConnections.some((connection) => connection.status === "active")
 				: Option.isSome(anyActivity),
-		hasBillingData:
-			connected.has("stripe") ||
-			connected.has("autumn") ||
-			(subscriptionCounts.get(billingProvider) ?? 0) > 0,
-		billingProvider,
+		hasBillingData: connected.has("stripe") || connected.has("autumn") || Option.isSome(anySubscription),
+		autumnReady: connections.some(
+			(connection) =>
+				connection.provider === "autumn" &&
+				connection.status !== "disconnected" &&
+				connection.backfilledAt !== null,
+		),
 		accountIds,
 		from: addDays(today, -(activityWindowDays(windowRules) - 1)),
 		priorWindows: [
@@ -416,7 +428,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	const subscriptions = yield* db.run(
 		SQLite.from(schema.customerSubscriptionsTable)
 			.select()
-			.where(($) => [inList($.accountId, ids), $.provider.eq(base.billingProvider)]),
+			.where(($) => [inList($.accountId, ids), inList($.provider, BILLING_PROVIDERS)]),
 	)
 	// Invoices come from Stripe only (Autumn bills through it).
 	const openInvoices = yield* db.run(
@@ -453,7 +465,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.where(($) => [inList($.accountId, ids), $.closedAt.isNull()]),
 	)
 
-	const subsBy = groupBy(subscriptions, (sub) => sub.accountId)
+	const billingBy = billingByAccount(base.autumnReady, subscriptions)
 	const invoicesBy = groupBy(openInvoices, (invoice) => invoice.accountId)
 	const metricsBy = groupBy(metrics, (row) => row.accountId)
 	const movementsBy = groupBy(movements, (row) => row.accountId)
@@ -476,10 +488,12 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			byDay.set(row.day, day)
 		}
 		const lastActiveDay = lastActiveDayBy.get(stored.id) ?? null
-		const accountSubs = subsBy.get(stored.id) ?? []
+		const billing = billingBy.get(stored.id)
+		const accountSubs = billing?.subscriptions ?? []
 		const rollup = rollupAccount({
 			account: stored,
 			subscriptions: accountSubs,
+			mrrSource: billing?.source ?? null,
 			contacts: accountContacts,
 			activity: byDay,
 			lastActiveDay,

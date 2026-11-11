@@ -4,7 +4,7 @@
  * `customer_connection_secrets`, which is not synced.
  */
 import { Schema } from "effect"
-import type { CustomerProvider } from "./enums"
+import { type CustomerProvider, SweepEntityType } from "./enums"
 
 /** Clerk: users' sign-ins and sessions drive activity. */
 export const ClerkConnectionConfig = Schema.TaggedStruct("clerk", {
@@ -12,7 +12,10 @@ export const ClerkConnectionConfig = Schema.TaggedStruct("clerk", {
 	createAccounts: Schema.Boolean,
 })
 
-/** Stripe: billing. Invoices always come from Stripe; subscriptions only when Autumn is not connected. */
+/**
+ * Stripe: billing. Invoices always come from Stripe; subscriptions count for the accounts Autumn
+ * does not bill (no Autumn subscription, or Autumn not imported yet).
+ */
 export const StripeConnectionConfig = Schema.TaggedStruct("stripe", {
 	/** The customer metadata key holding the Clerk organization id (shared-id matching). */
 	clerkOrgMetadataKey: Schema.String,
@@ -20,7 +23,10 @@ export const StripeConnectionConfig = Schema.TaggedStruct("stripe", {
 	matchByDomain: Schema.Boolean,
 })
 
-/** Autumn: products → subscriptions (the MRR source when connected), feature usage and limits → metrics. */
+/**
+ * Autumn: products → subscriptions (the MRR source of the accounts it bills, once imported), feature
+ * usage and limits → metrics.
+ */
 export const AutumnConnectionConfig = Schema.TaggedStruct("autumn", {
 	/** Autumn customer id = Clerk organization id. */
 	customerIdIsClerkOrgId: Schema.Boolean,
@@ -78,6 +84,11 @@ export const SyncStats = Schema.Struct({
 	unmatched: Schema.Int,
 	/** Ops the store refused (skipped); absent on stats recorded before it was counted. */
 	rejected: Schema.optionalKey(Schema.Int),
+	/**
+	 * A run's sweep that would have removed too many records of these types (a listing that ended
+	 * early, `CustomerIngest.completeSweep`), so it removed none of them.
+	 */
+	sweepSkipped: Schema.optionalKey(Schema.Array(SweepEntityType)),
 })
 export type SyncStats = typeof SyncStats.Type
 

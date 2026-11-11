@@ -20,9 +20,10 @@
  * provider's delete op that removed its record (the ref's `deletedObservedAt`) is late and changes
  * nothing; any other sighting revives the record. Contacts' `lastSeenAt` / `lastSignInAt` /
  * `lastActiveDay` only move forward. A successful full sweep (`completeSweep`) removes the records
- * it did not see (never a ref a person linked). A removed ref goes stale; its account or contact is
- * soft-deleted once no live ref of it is left. A subscription or invoice op read (`observedAt`)
- * before the newest one applied to its row is late too and changes nothing.
+ * it did not see (never a ref a person linked), and cancels the subscriptions it did not read,
+ * unless that would remove too many of one type (`SWEEP_CAP_SHARE`). A removed ref goes stale; its
+ * account or contact is soft-deleted once no live ref of it is left. A subscription or invoice op
+ * read (`observedAt`) before the newest one applied to its row is late too and changes nothing.
  *
  * Writes compare first, so an op that changes nothing writes nothing (`Unchanged`, no `_changes`
  * row; a billing op still advances its row's `observedAt`). Ingest also records timeline events for the state changes it sees (subscription started,
@@ -42,6 +43,7 @@ import {
 	type RecordActivity,
 	type RefEntityType,
 	type RecordEvent,
+	type SweepEntityType,
 	type RecordMetric,
 	type DefineMetric,
 	type SyncStats,
@@ -69,6 +71,12 @@ import { requestCompute, requestComputeAfterIngest, requestHistoryRebuild, setBa
 const INGEST_CHUNK = 500
 /** Domains an account op brings (they bind as parameters of the domain match). */
 const MAX_DOMAINS = 20
+/**
+ * A sweep removes at most this share of a provider's live records of one type, or at most
+ * `SWEEP_CAP_MIN` of them (`completeSweep`); past both, it removes none of that type.
+ */
+const SWEEP_CAP_SHARE = 0.2
+const SWEEP_CAP_MIN = 10
 
 /** An op the store cannot take (a built-in metric key, a negative amount). Not retried. */
 export class CustomerIngestRejectedError extends Schema.TaggedError<CustomerIngestRejectedError>()(
@@ -2169,12 +2177,34 @@ const make = Effect.gen(function* () {
 		return outcome.updated(accountId)
 	})
 
+	/** A subscription a full listing no longer reports (its customer deleted at the provider): canceled. */
+	const cancelSwept = (session: Session, sub: schema.CustomerSubscription) =>
+		Effect.gen(function* () {
+			yield* db.run(
+				SQLite.update(schema.customerSubscriptionsTable)
+					.set({ status: "canceled", canceledAt: session.now, updatedAt: session.now })
+					.where(($) => [$.id.eq(sub.id)]),
+			)
+			yield* recordEvent(session, {
+				accountId: sub.accountId,
+				type: "subscription.canceled",
+				title: `Canceled ${planLabel(sub.planName)}`,
+				data: { subscriptionId: sub.externalId, planName: sub.planName },
+				occurredAt: session.now,
+				externalId: `ingest:subscription.canceled:${sub.provider}:${sub.externalId}`,
+			})
+		})
+
+	const countOf = (rows: ReadonlyArray<unknown>) =>
+		Number((rows as ReadonlyArray<{ count: number }>)[0]?.count ?? 0)
+
 	const completeSweep = Effect.fn("CustomerIngest.completeSweep")(function* (
 		connectionId: CustomerConnectionId,
 		since: Date,
-		entityTypes: ReadonlyArray<RefEntityType>,
-		manual = false,
+		entityTypes: ReadonlyArray<SweepEntityType>,
+		options: { readonly runId?: CustomerSyncRunId; readonly manual?: boolean } = {},
 	) {
+		const manual = options.manual === true
 		yield* Effect.annotateCurrentSpan({
 			"ingest.connection_id": connectionId,
 			"ingest.entity_types": entityTypes.join(","),
@@ -2187,7 +2217,12 @@ const make = Effect.gen(function* () {
 		)
 		if (Option.isNone(connection)) return
 		const { provider } = connection.value
-		const session = yield* openSession({ connectionId, provider, runId: null, trigger: "schedule" })
+		const session = yield* openSession({
+			connectionId,
+			provider,
+			runId: options.runId ?? null,
+			trigger: "schedule",
+		})
 		// The provider's live refs not seen (touched or created) since the sweep started. By provider,
 		// not connection: a ref placed through another connection (usage of a Clerk user) is still
 		// this provider's record.
@@ -2204,24 +2239,92 @@ const make = Effect.gen(function* () {
 						SQLite.or($.lastSyncedAt.isNull(), $.lastSyncedAt.lt(since)),
 					]),
 			)
+		const liveRefs = (entityType: RefEntityType) =>
+			db
+				.query(
+					Database.sql`SELECT count(*) AS "count" FROM "customer_external_refs"
+					WHERE "provider" = ${provider} AND "entityType" = ${entityType} AND "staleAt" IS NULL`,
+				)
+				.pipe(Effect.map(countOf))
+		// Subscriptions not read (`observedAt`) since the sweep started.
+		const unseenSubscriptions = db.run(
+			SQLite.from(schema.customerSubscriptionsTable)
+				.select()
+				.where(($) => [
+					$.provider.eq(provider),
+					$.status.neq("canceled"),
+					SQLite.or($.observedAt.isNull(), $.observedAt.lt(since)),
+				]),
+		)
+		const liveSubscriptions = db
+			.query(
+				Database.sql`SELECT count(*) AS "count" FROM "customer_subscriptions"
+				WHERE "provider" = ${provider} AND "status" <> 'canceled'`,
+			)
+			.pipe(Effect.map(countOf))
+		const skipped: Array<SweepEntityType> = []
+		// Past the cap, a listing more likely ended early (a provider bug) than that many records went
+		// at once: that type's removals are skipped. Not for another provider account's sweep
+		// (`manual`), which removes everything by design.
+		const overCap = (entityType: SweepEntityType, unseenCount: number, live: number) =>
+			Effect.gen(function* () {
+				if (manual || unseenCount <= SWEEP_CAP_MIN || unseenCount <= live * SWEEP_CAP_SHARE)
+					return false
+				yield* Effect.logWarning("Customers sweep skipped: it would remove too many records", {
+					connectionId,
+					provider,
+					entityType,
+					unseen: unseenCount,
+					live,
+				})
+				skipped.push(entityType)
+				return true
+			})
 		const removed = yield* db.transaction(
 			Effect.gen(function* () {
 				let count = 0
-				if (entityTypes.includes("account")) {
-					const refs = yield* unseen("account")
-					for (const ref of refs) yield* staleAccountRef(session.now, ref)
-					count += refs.length
+				for (const entityType of ["account", "contact"] as const) {
+					if (!entityTypes.includes(entityType)) continue
+					const refs = yield* unseen(entityType)
+					if (yield* overCap(entityType, refs.length, yield* liveRefs(entityType))) continue
+					for (const ref of refs) {
+						if (entityType === "account") {
+							yield* staleAccountRef(session.now, ref)
+							count++
+						} else if (yield* removeContactRef(session, ref)) count++
+					}
 				}
-				if (entityTypes.includes("contact")) {
-					for (const ref of yield* unseen("contact")) {
-						if (yield* removeContactRef(session, ref)) count++
+				if (entityTypes.includes("subscription")) {
+					const subs = yield* unseenSubscriptions
+					if (!(yield* overCap("subscription", subs.length, yield* liveSubscriptions))) {
+						for (const sub of subs) yield* cancelSwept(session, sub)
+						count += subs.length
+					}
+				}
+				const { runId } = options
+				if (skipped.length > 0 && runId !== undefined) {
+					const run = yield* db.first(
+						SQLite.from(schema.customerSyncRunsTable)
+							.select("stats")
+							.where(($) => [$.id.eq(runId)])
+							.limit(1),
+					)
+					if (Option.isSome(run)) {
+						yield* db.run(
+							SQLite.update(schema.customerSyncRunsTable)
+								.set({ stats: { ...run.value.stats, sweepSkipped: skipped } })
+								.where(($) => [$.id.eq(runId)]),
+						)
 					}
 				}
 				if (count > 0) yield* withStore(requestComputeAfterIngest)
 				return count
 			}),
 		)
-		yield* Effect.annotateCurrentSpan({ "ingest.sweep_removed": removed })
+		yield* Effect.annotateCurrentSpan({
+			"ingest.sweep_removed": removed,
+			"ingest.sweep_skipped": skipped.join(","),
+		})
 	})
 
 	return {

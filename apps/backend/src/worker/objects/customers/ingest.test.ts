@@ -2,7 +2,13 @@
  * `CustomerIngest` in a `CustomersObject` on node SQLite: identity matching in order, idempotent
  * replays, field precedence, unmatched records and their replay, billing and usage writes.
  */
-import type { IngestOp, RefEntityType, UpsertAccount, UpsertContact } from "@hazel/domain/customers"
+import type {
+	IngestOp,
+	SweepEntityType,
+	UpsertAccount,
+	UpsertContact,
+	UpsertSubscription,
+} from "@hazel/domain/customers"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { CustomerIngest } from "./ingest"
@@ -60,14 +66,18 @@ const outcomeTags = (report: { outcomes: ReadonlyArray<{ _tag: string }> }) =>
 
 const sweep = (
 	world: CustomersWorld,
-	provider: "clerk" | "stripe",
+	provider: "clerk" | "stripe" | "autumn",
 	since: Date,
-	entityTypes: ReadonlyArray<RefEntityType>,
+	entityTypes: ReadonlyArray<SweepEntityType>,
+	withRun = false,
 ) =>
 	world.object.run(
 		Effect.gen(function* () {
 			const ingest = yield* CustomerIngest
-			yield* ingest.completeSweep(world.connection(provider), since, entityTypes)
+			const connectionId = world.connection(provider)
+			const run = withRun ? yield* ingest.startRun(connectionId, "schedule") : undefined
+			yield* ingest.completeSweep(connectionId, since, entityTypes, { runId: run?.id })
+			return run
 		}).pipe(Effect.provide(CustomerIngest.layer)),
 	)
 
@@ -525,6 +535,109 @@ describe("CustomerIngest", () => {
 				yield* world.ingest("clerk", [clerkOrg("org_1", "Acme"), member("bob", "org_1")])
 				expect(liveContacts(world)).toEqual(["ann", "bob"])
 				expect(accounts(world).map((account) => account.name)).toContain("Acme")
+			}),
+		))
+
+	it("cancels on a full sweep the subscriptions it did not read", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [clerkOrg("org_1", "Acme")])
+				const sub = (
+					externalId: string,
+					observedAt: string,
+					fields: Partial<UpsertSubscription> = {},
+				): UpsertSubscription => ({
+					_tag: "subscription",
+					externalId,
+					account: { provider: "clerk", externalId: "org_1" },
+					planName: "Team",
+					status: "active",
+					mrrMinor: 19_900,
+					currency: "usd",
+					interval: "month",
+					quantity: 1,
+					startedAt: null,
+					trialEndsAt: null,
+					currentPeriodEnd: null,
+					cancelAtPeriodEnd: false,
+					canceledAt: null,
+					observedAt,
+					...fields,
+				})
+				const ended = "2000-06-01T00:00:00.000Z"
+				yield* world.ingest("autumn", [
+					sub("cus_1:team", "2000-01-01T00:00:00.000Z"),
+					sub("cus_1:addon", "2000-01-01T00:00:00.000Z"),
+					sub("cus_1:old", "2000-01-01T00:00:00.000Z", { status: "canceled", canceledAt: ended }),
+				])
+				const since = new Date("2001-01-01T00:00:00.000Z")
+				// The full walk reads the plan again; the add-on is gone (its customer deleted, no webhook).
+				yield* world.ingest("autumn", [sub("cus_1:team", "2001-01-02T00:00:00.000Z")])
+				yield* sweep(world, "autumn", since, ["subscription"])
+
+				const subs = () =>
+					world.rows(
+						`SELECT externalId, status, canceledAt IS NOT NULL AS canceled FROM customer_subscriptions ORDER BY externalId`,
+					)
+				expect(subs()).toEqual([
+					{ externalId: "cus_1:addon", status: "canceled", canceled: 1 },
+					{ externalId: "cus_1:old", status: "canceled", canceled: 1 },
+					{ externalId: "cus_1:team", status: "active", canceled: 0 },
+				])
+				expect(
+					world.rows(
+						`SELECT canceledAt FROM customer_subscriptions WHERE externalId = 'cus_1:old'`,
+					),
+				).toEqual([{ canceledAt: "2000-06-01 00:00:00.000" }])
+				const canceledEvents = () =>
+					world.rows(
+						`SELECT json_extract(data, '$.subscriptionId') AS sub FROM customer_events WHERE type = 'subscription.canceled' ORDER BY sub`,
+					)
+				expect(canceledEvents()).toEqual([{ sub: "cus_1:addon" }, { sub: "cus_1:old" }])
+
+				// Read again later (restored at the provider): live again.
+				yield* world.ingest("autumn", [sub("cus_1:addon", "2001-02-01T00:00:00.000Z")])
+				expect(subs()[0]).toEqual({ externalId: "cus_1:addon", status: "active", canceled: 0 })
+			}),
+		))
+
+	it("skips a sweep that would remove too many records of a type, and records it on the run", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const orgs = Array.from({ length: 12 }, (_, index) => clerkOrg(`org_${index}`, `Co ${index}`))
+				yield* world.ingest("clerk", [...orgs, member("ann", "org_0"), member("bob", "org_0")])
+				world.object.storage.db
+					.prepare(`UPDATE customer_external_refs SET lastSyncedAt = '2000-01-01 00:00:00.000'`)
+					.run()
+				const since = new Date("2001-01-01T00:00:00.000Z")
+				// The listing ended after its first page: one organization, one member.
+				yield* world.ingest("clerk", [orgs[0]!, member("ann", "org_0")])
+				const runRow = yield* sweep(world, "clerk", since, ["account", "contact"], true)
+
+				// 11 of 12 accounts unseen: over the cap, none removed. One of two contacts: removed.
+				expect(accounts(world)).toHaveLength(12)
+				expect(liveContacts(world)).toEqual(["ann"])
+				const [stats] = world.rows<{ stats: string }>(
+					`SELECT stats FROM customer_sync_runs WHERE id = ?`,
+					runRow!.id,
+				)
+				expect(JSON.parse(stats!.stats).sweepSkipped).toEqual(["account"])
+
+				// Another provider account's sweep removes everything: no cap.
+				yield* world.object.run(
+					Effect.gen(function* () {
+						const ingest = yield* CustomerIngest
+						yield* ingest.completeSweep(
+							world.connection("clerk"),
+							new Date("2100-01-01T00:00:00.000Z"),
+							["account"],
+							{ manual: true },
+						)
+					}).pipe(Effect.provide(CustomerIngest.layer)),
+				)
+				expect(accounts(world)).toHaveLength(0)
 			}),
 		))
 

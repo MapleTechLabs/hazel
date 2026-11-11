@@ -173,7 +173,7 @@ interface CustomerIngestShape {
   progress(runId, progress: SyncProgress): Effect<void, DatabaseError, …>
   finishRun(runId, { _tag: "Succeeded"; cursor } | { _tag: "Failed"; error: SyncError }): Effect<void, …>
   link(recordId, accountId, by: UserId): Effect<IngestOutcome, …>   // manual match + replay
-  completeSweep(connectionId, since: Date, entityTypes: RefEntityType[]): Effect<void, DatabaseError>
+  completeSweep(connectionId, since: Date, entityTypes: SweepEntityType[], { runId?, manual? }): Effect<void, DatabaseError>
 }
 interface IngestContext { connectionId; provider; runId: CustomerSyncRunId | null; trigger: SyncTrigger }
 // IngestReport = { stats: SyncStats; outcomes: (Created|Updated|Unchanged|Unmatched|Ignored)[] }
@@ -204,12 +204,21 @@ Rules:
 - **Deletes:** `account.deleted` / `contact.removed` → ref `staleAt` (+ the op's `observedAt` as
   `deletedObservedAt`); the account or contact is soft-deleted (contacts with a `contact.removed`
   event) once it has no live ref.
-- **Full sweeps:** every account and contact op touches its ref (`lastSyncedAt`). A pull that listed
-  all of a provider's accounts / contacts sets `PullPage.sweep` on its last page; the pull loop then
-  calls `completeSweep(connectionId, run.startedAt, entityTypes)`, which treats the provider's live
-  refs not seen since the run started as deleted (accounts as `deleted`, contacts as `removed`),
-  except refs a person linked (`manual`). Only for complete listings: an incremental or partial pull
-  must not set it.
+- **Full sweeps:** every account and contact op touches its ref (`lastSyncedAt`); a subscription op
+  advances its row's `observedAt`. A pull that listed all of a provider's accounts / contacts /
+  subscriptions sets `PullPage.sweep` on its last page; the pull loop then calls
+  `completeSweep(connectionId, run.startedAt, entityTypes, { runId })`, which treats the provider's
+  live refs not seen since the run started as deleted (accounts as `deleted`, contacts as
+  `removed`), except refs a person linked (`manual`), and its non-canceled subscriptions not read
+  since (`observedAt`) as `canceled` (`canceledAt` now, a `subscription.canceled` event): a
+  customer deleted at the provider cascades to its plans without a webhook. Only for complete
+  listings: an incremental or partial pull must not set it, and only a walk listing every
+  subscription of every status may sweep subscriptions (Autumn's).
+- **Sweep safety cap:** a provider bug can end a listing early (a `next_cursor: null` too soon). When
+  a sweep would remove more than 20% of the provider's live records of a type and more than 10 of
+  them, it removes none of that type, logs a warning with the counts and records the type on the
+  run (`stats.sweepSkipped`); the other types still sweep. A new provider account's sweep (every
+  ref of the old one, linked ones included) is not capped.
 - **Ordering:** account and contact ops carry `observedAt` (the source's `updated_at`). A
   non-deleting op observed at or before the provider's delete op (the ref's `deletedObservedAt`)
   changes nothing, so a late delivery cannot revive it; any other sighting (a later listing after a
@@ -263,8 +272,12 @@ Rules:
   null when the baseline avg is 0.
 - `lastActiveAt` / `lastActiveContactId` = max over contacts; champion = most active contact by
   active days (tie: events) in 30 d; `championInactiveSince` = their last active day if ≥ 1 d ago.
-- Billing source: **Autumn when an active Autumn connection exists, else Stripe** (subscriptions of
-  the other provider are ignored for MRR). Invoices always from Stripe.
+- Billing source, **per account**: **Autumn when the org's Autumn connection finished its first
+  import (`backfilledAt`, not disconnected) and the account has at least one Autumn subscription
+  (any status); else Stripe** (a customer Autumn does not know, or billed in Stripe outside it).
+  An account with Autumn subscriptions and none in Stripe keeps Autumn's either way (a disconnect
+  does not zero its MRR). The other provider's subscriptions are ignored for that account's MRR;
+  the source is stored as `customer_accounts.mrrSource`. Invoices always from Stripe.
 - `mrrMinor` = Σ non-canceled subscription MRR (reporting currency only; other currencies counted
   in `attributes.foreignMrr`); `planName` = highest-MRR subscription's; `trialEndsAt`;
   `trialListMrrMinor` = Σ `listMrrMinor` of trialing subs.
@@ -273,7 +286,8 @@ Rules:
   else `lead`. `customerSince` = first day MRR > 0.
 - Built-in metrics for today: `active_users` (DAU), `active_users_30d`, `mrr`, later `health_score`.
 - MRR movements (yesterday's `mrr` vs today's): 0→>0 `new` (or `reactivation` if `churnedAt` set
-  before), >0→0 `churn`, up `expansion`, down `contraction`.
+  before), >0→0 `churn`, up `expansion`, down `contraction`. An account whose `mrrSource` changed
+  (Stripe ↔ Autumn) writes none that run: a switch of source is not revenue.
 - `customer_org_daily[today]` from the above (+ at-risk MRR = Σ MRR of accounts with an open high
   risk signal).
 - After a backfill: rebuild `active_users*`, `mrr` (from subscription start/cancel dates),
@@ -398,7 +412,8 @@ needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run
 - **Sync now** = a `manual` run scheduled immediately.
 - Adapter contract: `apps/backend/src/worker/objects/customers/providers.ts`
   (`validate`, which always returns the provider account id, `webhook`, `pull` (with `sweep` on a
-  full listing's last page), `pullIntervalMs`; ops carry `observedAt`, billing sources' accounts
+  full listing's last page; `subscription` only from a listing of every status, and every sweep
+  capped), `pullIntervalMs`; ops carry `observedAt`, billing sources' accounts
   `matchByDomain`; deliveries and records of another account than `credentials.externalAccountId`
   are refused); provider PRs register theirs in `CustomerProviders.layer`.
 - A webhook to an org with a live `org_index` row wakes its customers object even when Customers

@@ -434,5 +434,9 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "customer_subscriptions" ADD COLUMN "observedAt" text',
 			],
 		},
+		{
+			id: "0005_customers_account_mrr_source",
+			statements: ['ALTER TABLE "customer_accounts" ADD COLUMN "mrrSource" text'],
+		},
 	],
 }
