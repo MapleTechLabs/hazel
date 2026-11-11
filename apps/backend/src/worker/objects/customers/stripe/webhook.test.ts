@@ -216,7 +216,9 @@ describe("Stripe webhook events", () => {
 				params: [
 					["expand[]", "discounts"],
 					["expand[]", "default_payment_method"],
+					["expand[]", "default_source"],
 					["expand[]", "customer.invoice_settings.default_payment_method"],
+					["expand[]", "customer.default_source"],
 				],
 			},
 			{
@@ -245,7 +247,7 @@ describe("Stripe webhook events", () => {
 		expect(await run(deliver(event("customer.subscription.updated", SUB_ACME), { fake }))).toEqual([])
 	})
 
-	it("an invoice event writes the invoice, a failed payment with a reason ingest can raise", async () => {
+	it("an invoice event writes the invoice, only a failed payment with a reason ingest can raise", async () => {
 		const fake = makeFakeStripe({ ...stripe(), invoices: [INVOICE_GLOBEX_OPEN] })
 		const open = await run(deliver(event("invoice.finalized", INVOICE_GLOBEX_OPEN), { fake }))
 		expect(open[0]).toMatchObject({ _tag: "invoice", status: "open" })
@@ -260,7 +262,9 @@ describe("Stripe webhook events", () => {
 		const action = await run(
 			deliver(event("invoice.payment_action_required", INVOICE_GLOBEX_OPEN), { fake }),
 		)
-		expect(action[0]).toMatchObject({ declineReason: "Stripe could not collect this payment" })
+		// The customer has to confirm the payment: no decline.
+		expect(action[0]).toMatchObject({ _tag: "invoice", status: "open" })
+		expect(action[0]).not.toHaveProperty("declineReason")
 		// A failure event about an invoice paid since writes the paid invoice, no decline.
 		const paid = makeFakeStripe({ ...fake, invoices: [{ ...INVOICE_GLOBEX_OPEN, status: "paid" }] })
 		const late = await run(deliver(event("invoice.payment_failed", INVOICE_GLOBEX_OPEN), { fake: paid }))
@@ -286,8 +290,45 @@ describe("Stripe webhook events", () => {
 			["limit", "100"],
 			["expand[]", "data.discounts"],
 			["expand[]", "data.default_payment_method"],
+			["expand[]", "data.default_source"],
 			["expand[]", "data.customer.invoice_settings.default_payment_method"],
+			["expand[]", "data.customer.default_source"],
 		])
+	})
+
+	it("a customer's new default card refreshes its subscriptions too", async () => {
+		const fake = stripe()
+		const changed = event("customer.updated", CUSTOMER_ACME, {
+			data: {
+				object: CUSTOMER_ACME,
+				previous_attributes: { invoice_settings: { default_payment_method: null } },
+			},
+		})
+		const ops = await run(deliver(changed, { fake }))
+		expect(tags(ops)).toEqual(["account", "contact", "subscription"])
+		expect(paths(fake)).toEqual([`/customers/${CUSTOMER_ACME.id}`, "/subscriptions", "/products"])
+		// Any other change to the customer reads only the customer.
+		const renamed = stripe()
+		const other = event("customer.updated", CUSTOMER_ACME, {
+			data: { object: CUSTOMER_ACME, previous_attributes: { name: "Acme" } },
+		})
+		expect(tags(await run(deliver(other, { fake: renamed })))).toEqual(["account", "contact"])
+		expect(paths(renamed)).toEqual([`/customers/${CUSTOMER_ACME.id}`])
+	})
+
+	it("stamps every op with the time taken before its reads", async () => {
+		const before = Date.now()
+		const fake = makeFakeStripe({ ...stripe(), invoices: [INVOICE_GLOBEX_OPEN] })
+		const ops = [
+			...(await run(deliver(event("customer.subscription.updated", SUB_ACME), { fake }))),
+			...(await run(deliver(event("invoice.paid", INVOICE_GLOBEX_OPEN), { fake }))),
+		]
+		expect(tags(ops)).toEqual(["subscription", "invoice"])
+		for (const op of ops) {
+			const at = Date.parse((op as { observedAt?: string }).observedAt ?? "")
+			expect(at).toBeGreaterThanOrEqual(before - 1_000)
+			expect(at).toBeLessThanOrEqual(Date.now())
+		}
 	})
 
 	it("a detached card is cleared, through the customer the event names as its previous one", async () => {

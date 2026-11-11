@@ -124,7 +124,9 @@ describe("the Stripe pull's full walk", () => {
 			["status", "all"],
 			["expand[]", "data.discounts"],
 			["expand[]", "data.default_payment_method"],
+			["expand[]", "data.default_source"],
 			["expand[]", "data.customer.invoice_settings.default_payment_method"],
+			["expand[]", "data.customer.default_source"],
 		])
 	})
 
@@ -169,9 +171,12 @@ describe("the Stripe pull's full walk", () => {
 		})
 	})
 
-	it("stamps its account and contact ops with the time it asked Stripe", async () => {
-		const [customers] = await walk(account())
-		const observed = customers!.ops.map((op) => (op as { observedAt?: string }).observedAt)
+	it("stamps every op with the time it asked Stripe", async () => {
+		const pages = await walk(account())
+		const observed = pages.flatMap((entry) =>
+			entry.ops.map((op) => (op as { observedAt?: string }).observedAt),
+		)
+		expect(tags(pages.flatMap((entry) => entry.ops))).toContain("invoice")
 		expect(observed.every((at) => at !== undefined)).toBe(true)
 		for (const at of observed) expect(Date.now() - Date.parse(at!)).toBeLessThan(60_000)
 	})
@@ -304,6 +309,55 @@ describe("the Stripe pull's events", () => {
 		const error = await run(Effect.flip(page(fake, null, { since: SINCE })))
 		expect(error).toMatchObject({ code: "provider", httpStatus: 503 })
 		expect(error.retryable).toBeUndefined()
+	})
+
+	it("skips an object Stripe will never answer for, and writes the rest of the page", async () => {
+		const refused = await walk(
+			account({ events: EVENTS, invalid: [`/subscriptions/${SUB_ACME.id}`] }),
+			SINCE,
+		)
+		expect(tags(refused[0]!.ops)).toEqual(["account", "invoice"])
+		const garbled = await walk(
+			account({ events: EVENTS, garbled: [`/invoices/${INVOICE_ACME_PAID.id}`] }),
+			SINCE,
+		)
+		expect(tags(garbled[0]!.ops)).toEqual(["account", "subscription"])
+	})
+
+	it("still fails the page when the key may not read an object", async () => {
+		const fake = account({ events: EVENTS, forbidden: [`/subscriptions/${SUB_ACME.id}`] })
+		const error = await run(Effect.flip(page(fake, null, { since: SINCE })))
+		expect(error).toMatchObject({ code: "auth", httpStatus: 403 })
+	})
+
+	it("names a whole page's plans from one product lookup", async () => {
+		const fake = account({
+			events: [
+				stripeEvent("evt_6", "customer.subscription.updated", SUB_GLOBEX, at(1)),
+				stripeEvent("evt_5", "customer.subscription.updated", SUB_ACME, at(2)),
+			],
+		})
+		const [events] = await walk(fake, SINCE)
+		expect(
+			events!.ops
+				.filter((op): op is UpsertSubscription => op._tag === "subscription")
+				.map((op) => op.planName),
+		).toEqual(["Pro", "Extra seats"])
+		expect(fake.calls.filter((call) => call.path === "/products")).toHaveLength(1)
+	})
+
+	it("fails the page when its products lookup fails, rather than writing unnamed plans", async () => {
+		const fake = account({ events: EVENTS, failing: ["/products"] })
+		const error = await run(Effect.flip(page(fake, null, { since: SINCE })))
+		expect(error).toMatchObject({ code: "provider", httpStatus: 503 })
+		// Transient: core retries the page.
+		expect(error.retryable).toBeUndefined()
+	})
+
+	it("lists events a small page at a time, so a failed page re-reads few objects", async () => {
+		const fake = account({ events: EVENTS })
+		await walk(fake, SINCE)
+		expect(fake.calls[0]!.params[0]).toEqual(["limit", "25"])
 	})
 
 	it("walks everything instead once the last success is older than Stripe keeps events", async () => {

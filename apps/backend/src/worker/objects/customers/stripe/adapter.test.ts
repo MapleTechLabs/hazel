@@ -56,7 +56,9 @@ describe("Stripe validate", () => {
 			["status", "all"],
 			["expand[]", "data.discounts"],
 			["expand[]", "data.default_payment_method"],
+			["expand[]", "data.default_source"],
 			["expand[]", "data.customer.invoice_settings.default_payment_method"],
+			["expand[]", "data.customer.default_source"],
 		])
 	})
 
@@ -93,11 +95,43 @@ describe("Stripe validate", () => {
 		expect((await refusal(named, "acct_1Typo000000000000")).message).toBe(
 			`The key belongs to Stripe account ${ACCOUNT.id}, not acct_1Typo000000000000`,
 		)
-		// So does a hosted invoice's URL.
+		// Without that, a paid (else open) invoice's hosted URL does.
 		const invoiced = makeFakeStripe({ apiKey: API_KEY, account: null, invoices: [INVOICE_ACME_PAID] })
 		expect((await refusal(invoiced, "acct_1Typo000000000000")).message).toMatch(
 			/belongs to Stripe account acct_1Hazel/,
 		)
+		const open = makeFakeStripe({
+			apiKey: API_KEY,
+			account: null,
+			invoices: [{ ...INVOICE_ACME_PAID, status: "open" }],
+		})
+		expect((await refusal(open, "acct_1Typo000000000000")).message).toMatch(
+			/belongs to Stripe account acct_1Hazel/,
+		)
+		expect(
+			open.calls.filter((call) => call.path === "/invoices").map((call) => call.params.at(-1)),
+		).toEqual([
+			["limit", "1"],
+			["status", "paid"],
+			["status", "open"],
+		])
+	})
+
+	it("trusts the account a refusal names over any invoice's URL", async () => {
+		const fake = makeFakeStripe({
+			apiKey: API_KEY,
+			account: null,
+			refusedOnAccount: ACCOUNT.id,
+			invoices: [
+				{
+					...INVOICE_ACME_PAID,
+					hosted_invoice_url: "https://invoice.stripe.com/i/acct_1Other0000000/x",
+				},
+			],
+		})
+		expect((await validate(fake, ACCOUNT.id)).externalAccountId).toBe(ACCOUNT.id)
+		// The URL is not even looked for.
+		expect(fake.calls.filter((call) => call.path === "/invoices")).toHaveLength(1)
 	})
 
 	it("passes on a secret key's refusal to read the account", async () => {

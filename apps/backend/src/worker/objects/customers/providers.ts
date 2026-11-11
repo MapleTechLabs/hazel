@@ -112,7 +112,7 @@ export interface CustomerProviderAdapter {
 		readonly cursor: string | null
 		readonly since: Date | null
 	}) => Effect.Effect<PullPage, CustomerProviderError>
-	/** Scheduled pull period (webhooks cover the rest); e.g. Maple hourly, Stripe daily. */
+	/** Scheduled pull period (webhooks cover the rest); e.g. Maple hourly, Stripe every 6 hours. */
 	readonly pullIntervalMs: number
 }
 

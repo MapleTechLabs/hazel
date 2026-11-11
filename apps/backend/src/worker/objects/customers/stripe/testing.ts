@@ -3,8 +3,8 @@
  * endpoints with Stripe's own `starting_after` paging, `created[gte]`, `ids[]` and `types[]`
  * filtering and `expand[]` handling (a subscription's payment method, discounts and customer are
  * ids until a request asks for them, exactly as Stripe sends them), answers 404 for an object it
- * does not hold, refuses the wrong key with Stripe's error body, and can be told to answer 429 or
- * fail a path. It records every call, so a test can assert how many requests a page cost and that
+ * does not hold, refuses the wrong key with Stripe's error body, and can be told to answer 429,
+ * fail a path (503), refuse it (400) or garble its body. It records every call, so a test can assert how many requests a page cost and that
  * the key only ever travels in the `Authorization` header.
  */
 import { Effect, Layer } from "effect"
@@ -33,6 +33,10 @@ export interface FakeStripeState {
 	readonly forbidden: ReadonlyArray<string>
 	/** Paths answered 503: Stripe having a bad moment. */
 	readonly failing: ReadonlyArray<string>
+	/** Paths answered 400: a request Stripe will refuse however often it is sent. */
+	readonly invalid: ReadonlyArray<string>
+	/** Paths answered 200 with a body that is not the object (Stripe changed its API). */
+	readonly garbled: ReadonlyArray<string>
 	/** Calls served before every further call answers 429. */
 	throttleAfter: number | null
 	/** Seconds in the `Retry-After` header of those 429s. */
@@ -60,6 +64,8 @@ export const makeFakeStripe = (options: Partial<FakeStripeState> = {}): FakeStri
 	refusedOnAccount: null,
 	forbidden: [],
 	failing: [],
+	invalid: [],
+	garbled: [],
 	throttleAfter: null,
 	retryAfterSeconds: null,
 	throttled: 0,
@@ -156,6 +162,8 @@ const serve = (fake: FakeStripeState, path: string, params: UrlParams.UrlParams)
 		)
 	}
 	if (fake.failing.includes(path)) return stripeError(503, "Stripe is having a bad moment", "api_error")
+	if (fake.invalid.includes(path)) return stripeError(400, "Invalid request", "parameter_invalid")
+	if (fake.garbled.includes(path)) return json(200, { object: "garbled" })
 	const one = /^\/(customers|subscriptions|invoices)\/([^/]+)$/.exec(path)
 	if (one !== null) {
 		const kind = one[1] as "customers" | "subscriptions" | "invoices"
@@ -186,8 +194,13 @@ const serve = (fake: FakeStripeState, path: string, params: UrlParams.UrlParams)
 				.map((row) => expandSubscription(fake, row, expands, "data."))
 			return listOf(rows, params)
 		}
-		case "/invoices":
-			return listOf(fake.invoices, params)
+		case "/invoices": {
+			const status = first(params, "status")
+			return listOf(
+				fake.invoices.filter((row) => status === undefined || row["status"] === status),
+				params,
+			)
+		}
 		default:
 			return stripeError(404, `No fake for ${path}`, "resource_missing")
 	}

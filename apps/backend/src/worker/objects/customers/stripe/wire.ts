@@ -49,21 +49,35 @@ export const StripeAccount = Schema.Struct({
 const Expandable = <S extends Schema.Top>(schema: S) =>
 	Schema.optionalKey(Schema.NullOr(Schema.Union([Schema.String, schema])))
 
+const StripeCard = Schema.Struct({
+	brand: Nullable(Schema.String),
+	last4: Nullable(Schema.String),
+	exp_month: Nullable(Schema.Number),
+	exp_year: Nullable(Schema.Number),
+})
+
 export const StripePaymentMethod = Schema.Struct({
 	id: Nullable(Schema.String),
 	type: Nullable(Schema.String),
 	customer: Nullable(Schema.String),
-	card: Nullable(
-		Schema.Struct({
-			brand: Nullable(Schema.String),
-			last4: Nullable(Schema.String),
-			exp_month: Nullable(Schema.Number),
-			exp_year: Nullable(Schema.Number),
-		}),
-	),
+	card: Nullable(StripeCard),
 	livemode: Nullable(Schema.Boolean),
 })
 export type StripePaymentMethod = typeof StripePaymentMethod.Type
+
+/**
+ * A legacy `default_source`: a Card (`object: "card"`, the card's fields flat), a Source (its card
+ * under `card`), or a bank account (`last4` only). Older integrations charge these instead of a
+ * payment method.
+ */
+const StripeSource = Schema.Struct({
+	id: Nullable(Schema.String),
+	object: Nullable(Schema.String),
+	type: Nullable(Schema.String),
+	...StripeCard.fields,
+	card: Nullable(StripeCard),
+})
+export type StripeSource = typeof StripeSource.Type
 
 export const StripeCustomer = Schema.Struct({
 	id: Schema.String,
@@ -77,6 +91,8 @@ export const StripeCustomer = Schema.Struct({
 	metadata: Metadata,
 	/** The card a subscription without its own `default_payment_method` is charged on. */
 	invoice_settings: Nullable(Schema.Struct({ default_payment_method: Expandable(StripePaymentMethod) })),
+	/** The legacy card or source charged when no payment method is set. */
+	default_source: Expandable(StripeSource),
 	/** Only on a deleted customer (retrieved, or in an expanded reference). */
 	deleted: Nullable(Schema.Boolean),
 	livemode: Nullable(Schema.Boolean),
@@ -178,6 +194,7 @@ export const StripeSubscription = Schema.Struct({
 		}),
 	),
 	default_payment_method: Expandable(StripePaymentMethod),
+	default_source: Expandable(StripeSource),
 	discounts: Nullable(Schema.Array(Schema.Union([Schema.String, StripeDiscount]))),
 	metadata: Metadata,
 	livemode: Nullable(Schema.Boolean),
@@ -228,12 +245,15 @@ export const StripeInvoicesPage = StripeList(StripeInvoice)
 
 /**
  * What a subscription is read with, everywhere (validate, pull, webhook): the discounts' coupons
- * and the card on file, the customer's default card being the fallback. `data.`-prefixed on a list.
+ * and the card on file, its legacy source and the customer's defaults being the fallbacks.
+ * `data.`-prefixed on a list, the deepest path is four levels: Stripe's limit.
  */
 const SUBSCRIPTION_EXPANDS = [
 	"discounts",
 	"default_payment_method",
+	"default_source",
 	"customer.invoice_settings.default_payment_method",
+	"customer.default_source",
 ]
 
 export const subscriptionExpands = (prefix: "" | "data."): ReadonlyArray<readonly [string, string]> =>

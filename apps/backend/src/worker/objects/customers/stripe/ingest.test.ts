@@ -265,6 +265,30 @@ describe("Stripe ops through CustomerIngest", () => {
 			}),
 		))
 
+	it("keeps a newer read of a subscription or invoice over an older one applied after it", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", clerkBefore)
+				yield* world.ingest("stripe", backfill)
+				const newer = "2026-11-10T13:00:00.000Z"
+				const older = "2026-11-10T12:30:00.000Z"
+				// A webhook read the cancellation and the voided invoice...
+				yield* world.ingest("stripe", [
+					subscriptionOp(subscription({ ...SUB_ACME, status: "canceled" }), PRODUCTS, newer)!,
+					invoiceOp(invoice({ ...INVOICE_ACME_PAID, status: "void" }), { observedAt: newer })!,
+				])
+				// ...then a pull page that read both before them lands.
+				const late = yield* world.ingest("stripe", [
+					subscriptionOp(subscription(SUB_ACME), PRODUCTS, older)!,
+					invoiceOp(invoice(INVOICE_ACME_PAID), { observedAt: older })!,
+				])
+				expect(late.outcomes.map((outcome) => outcome._tag)).toEqual(["Unchanged", "Unchanged"])
+				expect(subscriptions(world).map((row) => row.status)).toContain("canceled")
+				expect(invoices(world).map((row) => row.status)).toEqual(["void"])
+			}),
+		))
+
 	it("changes nothing on a redelivery, and nothing at all for a late delete", () =>
 		run(
 			Effect.gen(function* () {

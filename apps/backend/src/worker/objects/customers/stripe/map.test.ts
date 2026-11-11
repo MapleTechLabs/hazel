@@ -440,6 +440,78 @@ describe("a Stripe subscription", () => {
 		})
 	})
 
+	it("falls back to a legacy `default_source`, in the order Stripe charges", () => {
+		const legacyCard = {
+			id: "card_1",
+			object: "card",
+			brand: "MasterCard",
+			last4: "4444",
+			exp_month: 1,
+			exp_year: 2031,
+		}
+		const card = { brand: "MasterCard", last4: "4444", expMonth: 1, expYear: 2031 }
+		const customerWith = (fields: Record<string, unknown>) => ({
+			...CUSTOMER_ACME,
+			invoice_settings: { default_payment_method: null },
+			default_source: null,
+			...fields,
+		})
+		// The subscription's own source comes before the customer's invoice default.
+		const own = subscription({
+			...SUB_ACME,
+			default_payment_method: null,
+			default_source: legacyCard,
+			customer: customerWith({ invoice_settings: { default_payment_method: PAYMENT_METHOD_ACME } }),
+		})
+		expect(subscriptionOp(own)?.paymentMethod).toEqual(card)
+		// The customer's source is the last resort; a Source carries its card under `card`.
+		const viaCustomer = subscription({
+			...SUB_ACME,
+			default_payment_method: null,
+			default_source: null,
+			customer: customerWith({
+				default_source: {
+					id: "src_1",
+					object: "source",
+					type: "card",
+					card: { brand: "amex", last4: "0005", exp_month: 2, exp_year: 2032 },
+				},
+			}),
+		})
+		expect(subscriptionOp(viaCustomer)?.paymentMethod).toEqual({
+			brand: "amex",
+			last4: "0005",
+			expMonth: 2,
+			expYear: 2032,
+		})
+		// A bank account: its last four.
+		const bank = subscription({
+			...SUB_ACME,
+			default_payment_method: null,
+			default_source: { id: "ba_1", object: "bank_account", last4: "6789" },
+		})
+		expect(subscriptionOp(bank)?.paymentMethod).toEqual({
+			brand: "bank_account",
+			last4: "6789",
+			expMonth: null,
+			expYear: null,
+		})
+		// An unexpanded source id says nothing.
+		const unexpanded = subscription({
+			...SUB_ACME,
+			default_payment_method: null,
+			default_source: "card_1",
+		})
+		expect(subscriptionOp(unexpanded)).not.toHaveProperty("paymentMethod")
+	})
+
+	it("carries the time it was read, which ingest orders reads by", () => {
+		const at = "2026-11-10T12:00:00.000Z"
+		expect(subscriptionOp(subscription(SUB_ACME), new Map(), at)?.observedAt).toBe(at)
+		expect(invoiceOp(invoice(INVOICE_ACME_PAID), { observedAt: at })?.observedAt).toBe(at)
+		expect(subscriptionOp(subscription(SUB_ACME))).not.toHaveProperty("observedAt")
+	})
+
 	it("counts a cancellation set for a date as scheduled", () => {
 		expect(subscriptionOp(subscription(SUB_ACME))?.cancelAtPeriodEnd).toBe(false)
 		expect(

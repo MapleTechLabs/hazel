@@ -64,6 +64,23 @@ const WHERE_TO_FIND = "Stripe Dashboard → Settings → Business → Account de
 const refused = (message: string) =>
 	new CustomerProviderError({ code: "auth", message, httpStatus: null, retryAfterMs: null })
 
+/** The account in a paid (else open) invoice's hosted URL, `invoice.stripe.com/i/acct_…/…`. */
+const hostedInvoiceAccounts = Effect.fnUntraced(function* (get: StripeGet) {
+	for (const status of ["paid", "open"]) {
+		const page = yield* get(
+			"/invoices",
+			[
+				["limit", "1"],
+				["status", status],
+			],
+			StripeInvoicesPage,
+		)
+		const url = page.data[0]?.hosted_invoice_url ?? null
+		if (url !== null) return url.match(ACCOUNT_ID_IN) ?? []
+	}
+	return []
+})
+
 /**
  * Connecting proves the key can read everything a pull needs, one `limit=1` request per resource
  * with the pull's own expansions, so a restricted key missing a permission says which one at
@@ -73,8 +90,8 @@ const refused = (message: string) =>
  * (dropping the old account's data), and webhooks are checked against it. A secret key reads it
  * (`GET /v1/account`), and an account id entered in the form must match. A restricted key may not
  * read its own account (Stripe answers 403), so it needs the account id entered: Hazel checks its
- * shape and, where Stripe gives the real one away (the 403's message, a hosted invoice's URL), that
- * it matches, so a typo cannot attach the connection to an account id no event will ever carry.
+ * shape and, where Stripe gives the real one away (the 403's message, else a paid or open
+ * invoice's hosted URL), that it matches, so a typo cannot attach the connection to an account id no event will ever carry.
  */
 const validateWith = Effect.fn("Stripe.validate")(function* (
 	get: StripeGet,
@@ -88,7 +105,7 @@ const validateWith = Effect.fn("Stripe.validate")(function* (
 		[...one, ["status", "all"], ...subscriptionExpands("data.")],
 		StripeSubscriptionsPage,
 	)
-	const invoices = yield* get("/invoices", one, StripeInvoicesPage)
+	yield* get("/invoices", one, StripeInvoicesPage)
 	yield* get("/products", one, StripeProductsPage)
 	yield* get("/events", one, StripeEventsPage)
 	const entered = config._tag === "stripe" ? config.accountId.trim() : ""
@@ -118,9 +135,10 @@ const validateWith = Effect.fn("Stripe.validate")(function* (
 			`A restricted key cannot read the Stripe account it belongs to: enter the account id (acct_…, ${WHERE_TO_FIND})`,
 		)
 	}
-	const seen = [error.message, invoices.data[0]?.hosted_invoice_url ?? ""].flatMap(
-		(text) => text.match(ACCOUNT_ID_IN) ?? [],
-	)
+	// Stripe's refusal names the account it refused on; only without that, a finalized invoice's
+	// hosted URL (a draft has none) does.
+	const named = error.message.match(ACCOUNT_ID_IN) ?? []
+	const seen = named.length > 0 ? named : yield* hostedInvoiceAccounts(get)
 	const other = seen.find((id) => id !== entered)
 	if (other !== undefined)
 		return yield* refused(`The key belongs to Stripe account ${other}, not ${entered}`)

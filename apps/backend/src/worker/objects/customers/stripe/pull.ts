@@ -23,10 +23,17 @@
  * time, only by `created`, so listing what was created since the last success misses every change
  * to an older subscription or invoice (a renewal, a cancellation, a failed payment). `/v1/events`
  * is the change feed: every event since `since` (core's overlap included) of the types the webhook
- * handles, each turned into ops exactly as a delivery is (`./webhook.ts`, `opsOfEvent`: the
+ * handles, each turned into ops exactly as a delivery is (`./webhook.ts`, `readEvent`: the
  * object's current state is read, so the order events are applied in does not matter). Objects are
  * read once per page however many of their events it holds, up to {@link EVENT_READ_CONCURRENCY}
- * at a time, so a pull costs one request per changed object. It needs the key's **Events: Read**
+ * at a time, and the page's plans are named in one `/products?ids[]=…` lookup (per 100 products),
+ * so a pull costs about one request per changed object. Events are listed {@link EVENTS_PAGE_SIZE}
+ * at a time: a page that fails (a 429 not waited out in place) is read again whole, so a small
+ * page bounds what a rate-limited account re-reads. Core never gives up on a page for rate limits
+ * (`rate_limited` is not "stuck"), so under constant throttling the pull advances at the pace
+ * Stripe's `Retry-After` allows. An object that cannot be read for good (a 4xx other than 404, a
+ * body that does not decode) is logged and skipped, as a delivery is acknowledged; a refused key
+ * and a transient failure fail the page. It needs the key's **Events: Read**
  * permission (`validate` checks it). Stripe keeps events for 30 days, so a `since` older than that
  * (a connection idle for a month) runs the full walk instead. This is what keeps a connection
  * without a webhook endpoint correct, if up to a pull interval late (`./adapter.ts`).
@@ -36,7 +43,7 @@ import { Clock, Effect, Option, Schema } from "effect"
 import type { PullPage } from "../providers"
 import type { StripeGet, StripeQuery } from "./http"
 import { customerOps, invoiceOp } from "./map"
-import { opsOfEvent, STRIPE_EVENT_TYPES, subscriptionOps } from "./webhook"
+import { isTransient, NOTHING_READ, opsOfReads, readEvent, STRIPE_EVENT_TYPES } from "./webhook"
 import {
 	StripeCustomersPage,
 	StripeEventsPage,
@@ -53,6 +60,8 @@ const INVOICE_BACKFILL_DAYS = 365
 const EVENTS_RETENTION_MS = 29 * 86_400_000
 /** Objects an events page reads at once: Stripe's test mode allows 25 requests a second. */
 const EVENT_READ_CONCURRENCY = 4
+/** Events per page: at most this many object reads are redone when a page fails. */
+const EVENTS_PAGE_SIZE = 25
 
 const StripePhase = Schema.Literals(["customers", "subscriptions", "invoices", "events"])
 type StripePhase = typeof StripePhase.Type
@@ -110,8 +119,8 @@ const pageOf = (
 /** Unix seconds, which is what Stripe's `created` filters take. */
 const secondsOf = (ms: number): string => String(Math.floor(ms / 1000))
 
-const query = (cursor: StripeCursor, extra: StripeQuery = []): StripeQuery => [
-	["limit", String(PAGE_SIZE)],
+const query = (cursor: StripeCursor, extra: StripeQuery = [], limit = PAGE_SIZE): StripeQuery => [
+	["limit", String(limit)],
 	...(cursor.after === null ? [] : [["starting_after", cursor.after] as const]),
 	...extra,
 ]
@@ -127,24 +136,34 @@ const customersPage = Effect.fnUntraced(function* (
 	return pageOf(cursor, ops, body.data, body.has_more)
 })
 
-const subscriptionsPage = Effect.fnUntraced(function* (get: StripeGet, cursor: StripeCursor) {
+const subscriptionsPage = Effect.fnUntraced(function* (
+	get: StripeGet,
+	cursor: StripeCursor,
+	at: IsoTimestamp,
+) {
 	const body = yield* get(
 		"/subscriptions",
 		// Canceled ones too: an account churns by its subscription's amount.
 		query(cursor, [["status", "all"], ...subscriptionExpands("data.")]),
 		StripeSubscriptionsPage,
 	)
-	return pageOf(cursor, yield* subscriptionOps(get, body.data), body.data, body.has_more)
+	const ops = yield* opsOfReads(get, [{ ops: [], subscriptions: body.data }], at)
+	return pageOf(cursor, ops, body.data, body.has_more)
 })
 
-const invoicesPage = Effect.fnUntraced(function* (get: StripeGet, cursor: StripeCursor, nowMs: number) {
+const invoicesPage = Effect.fnUntraced(function* (
+	get: StripeGet,
+	cursor: StripeCursor,
+	nowMs: number,
+	at: IsoTimestamp,
+) {
 	const body = yield* get(
 		"/invoices",
 		query(cursor, [["created[gte]", secondsOf(nowMs - INVOICE_BACKFILL_DAYS * 86_400_000)]]),
 		StripeInvoicesPage,
 	)
 	const ops = body.data.flatMap((invoice) => {
-		const op = invoiceOp(invoice)
+		const op = invoiceOp(invoice, { observedAt: at })
 		return op === null ? [] : [op]
 	})
 	return pageOf(cursor, ops, body.data, body.has_more)
@@ -162,10 +181,14 @@ const eventsPage = Effect.fnUntraced(function* (
 ) {
 	const body = yield* get(
 		"/events",
-		query(cursor, [
-			...(since === null ? [] : [["created[gte]", secondsOf(since.getTime())] as const]),
-			...STRIPE_EVENT_TYPES.map((type) => ["types[]", type] as const),
-		]),
+		query(
+			cursor,
+			[
+				...(since === null ? [] : [["created[gte]", secondsOf(since.getTime())] as const]),
+				...STRIPE_EVENT_TYPES.map((type) => ["types[]", type] as const),
+			],
+			EVENTS_PAGE_SIZE,
+		),
 		StripeEventsPage,
 	)
 	// One read per object: which of its events comes first does not matter, the read is current.
@@ -177,17 +200,29 @@ const eventsPage = Effect.fnUntraced(function* (
 		return true
 	})
 	// Oldest first (Stripe lists newest first), so a new customer lands before its subscription.
-	const ops = yield* Effect.forEach(
+	const reads = yield* Effect.forEach(
 		distinct.reverse(),
 		(event) =>
-			opsOfEvent(get, event, config, at).pipe(
+			readEvent(get, event, config, at).pipe(
 				// A payload with no usable id: logged, and the rest of the page goes on.
-				Effect.catchTag("CustomerWebhookRejectedError", () => Effect.succeed([])),
+				Effect.catchTag("CustomerWebhookRejectedError", () => Effect.succeed(NOTHING_READ)),
+				// One object Stripe will never answer for (a 4xx, a body that does not decode): skipped,
+				// as a delivery of it is acknowledged. A refused key or a transient failure fails the page.
+				Effect.catchTag("CustomerProviderError", (error) =>
+					error.code === "auth" || isTransient(error)
+						? Effect.fail(error)
+						: Effect.logWarning("Stripe event skipped: its object cannot be read", {
+								type: event.type,
+								code: error.code,
+								status: error.httpStatus,
+								message: error.message,
+							}).pipe(Effect.as(NOTHING_READ)),
+				),
 			),
 		{ concurrency: EVENT_READ_CONCURRENCY },
 	)
 	yield* Effect.annotateCurrentSpan("stripe.objects_read", distinct.length)
-	return pageOf(cursor, ops.flat(), body.data, body.has_more)
+	return pageOf(cursor, yield* opsOfReads(get, reads, at), body.data, body.has_more)
 })
 
 export const pullPage = Effect.fn("Stripe.pullPage")(function* (input: {
@@ -197,7 +232,8 @@ export const pullPage = Effect.fn("Stripe.pullPage")(function* (input: {
 	readonly config: ConnectionConfig
 }) {
 	const nowMs = yield* Clock.currentTimeMillis
-	// A listing proves its records live as of the request: the ops' `observedAt`.
+	// Taken before any request: the ops' `observedAt` (a listing proves its records live as of it,
+	// and ingest drops a subscription or invoice read older than one it applied).
 	const at = new Date(nowMs).toISOString()
 	const { get, since, config } = input
 	const events = since !== null && nowMs - since.getTime() < EVENTS_RETENTION_MS
@@ -213,9 +249,9 @@ export const pullPage = Effect.fn("Stripe.pullPage")(function* (input: {
 		cursor.phase === "customers"
 			? yield* customersPage(get, cursor, config, at)
 			: cursor.phase === "subscriptions"
-				? yield* subscriptionsPage(get, cursor)
+				? yield* subscriptionsPage(get, cursor, at)
 				: cursor.phase === "invoices"
-					? yield* invoicesPage(get, cursor, nowMs)
+					? yield* invoicesPage(get, cursor, nowMs, at)
 					: yield* eventsPage(get, cursor, since, config, at)
 	yield* Effect.annotateCurrentSpan({
 		"stripe.phase": cursor.phase,

@@ -20,9 +20,10 @@
  * - **Timeline events** are ingest's: it raises `subscription.started`, `subscription.plan_changed`,
  *   `subscription.canceled`, `subscription.cancel_scheduled`, `invoice.paid` and
  *   `invoice.payment_failed` from the state changes these ops describe, so the adapter adds none.
- * - **Ordering.** Account and contact ops carry `observedAt`, the time Hazel read the customer
- *   (every event re-reads its object, `./webhook.ts`; Stripe customers have no `updated` of their
- *   own), so a late delivery cannot revive a customer deleted since.
+ * - **Ordering.** Every op carries `observedAt`, the time Hazel read the object (taken before the
+ *   request; every event re-reads its object, `./webhook.ts`; Stripe objects have no `updated` of
+ *   their own), so a late delivery cannot revive a customer deleted since, and a slow read of a
+ *   subscription or invoice cannot overwrite a newer one.
  */
 import type {
 	ConnectionConfig,
@@ -49,7 +50,9 @@ import {
 	priceOf,
 	type StripeCustomer,
 	type StripeInvoice,
+	type StripePaymentMethod,
 	type StripePrice,
+	type StripeSource,
 	type StripeSubscription,
 	type StripeSubscriptionItem,
 } from "./wire"
@@ -326,39 +329,64 @@ const planNameOf = (price: StripePrice | null, productNames: ReadonlyMap<string,
 	return product ?? price.nickname ?? price.lookup_key ?? null
 }
 
+type Card = NonNullable<UpsertSubscription["paymentMethod"]>
+
+const cardOf = (card: NonNullable<StripePaymentMethod["card"]>): Card => ({
+	brand: card.brand ?? null,
+	last4: card.last4 ?? null,
+	expMonth: card.exp_month ?? null,
+	expYear: card.exp_year ?? null,
+})
+
+// A SEPA debit, a Link wallet, a bank account: the type (and a bank's last four) is all there is.
+const methodCardOf = (method: StripePaymentMethod): Card =>
+	method.card == null
+		? { brand: method.type ?? null, last4: null, expMonth: null, expYear: null }
+		: cardOf(method.card)
+
+const sourceCardOf = (source: StripeSource): Card => {
+	const card = source.card ?? (source.object === "card" ? source : null)
+	return card === null
+		? {
+				brand: source.type ?? source.object ?? null,
+				last4: source.last4 ?? null,
+				expMonth: null,
+				expYear: null,
+			}
+		: cardOf(card)
+}
+
+/** One place a card can be set: none, an id that was not expanded (says nothing), or the card. */
+const chargedOn = <A>(value: A | string | null | undefined, toCard: (value: A) => Card): Card | "id" | null =>
+	value == null ? null : typeof value === "string" ? "id" : toCard(value)
+
 /**
- * The card a subscription is charged on: its own default payment method, else its customer's
- * invoice default. Both are expanded wherever a subscription is read (`subscriptionExpands`), so
- * neither being set means there is no card (detached, say) and clears the stored one; an id that
- * was not expanded says nothing and leaves it.
+ * The card a subscription is charged on, in Stripe's order: its own default payment method, its
+ * legacy `default_source`, its customer's invoice default, then the customer's `default_source`.
+ * All are expanded wherever a subscription is read (`subscriptionExpands`), so none being set means
+ * there is no card (detached, say) and clears the stored one; an id that was not expanded says
+ * nothing and leaves it.
  */
 const paymentMethodOf = (subscription: StripeSubscription): UpsertSubscription["paymentMethod"] => {
 	const customer = objectOf(subscription.customer)
-	const method =
-		subscription.default_payment_method ??
-		(customer === null ? undefined : customer.invoice_settings?.default_payment_method)
-	if (method === undefined || typeof method === "string") return undefined
-	if (method === null) return customer === null ? undefined : null
-	const card = method.card ?? null
-	if (card !== null) {
-		return {
-			brand: card.brand ?? null,
-			last4: card.last4 ?? null,
-			expMonth: card.exp_month ?? null,
-			expYear: card.exp_year ?? null,
-		}
-	}
-	// A SEPA debit, a Link wallet, a bank account: the type is all there is to show.
-	return { brand: method.type ?? null, last4: null, expMonth: null, expYear: null }
+	const charged =
+		chargedOn(subscription.default_payment_method, methodCardOf) ??
+		chargedOn(subscription.default_source, sourceCardOf) ??
+		chargedOn(customer?.invoice_settings?.default_payment_method, methodCardOf) ??
+		chargedOn(customer?.default_source, sourceCardOf)
+	if (charged === null) return customer === null ? undefined : null
+	return charged === "id" ? undefined : charged
 }
 
 /**
- * A subscription. Null when its customer or its status is not one Hazel records (an `incomplete`
- * subscription, or a status Stripe added since).
+ * A subscription, read at `observedAt` (ingest drops a read older than one it applied). Null when
+ * its customer or its status is not one Hazel records (an `incomplete` subscription, or a status
+ * Stripe added since).
  */
 export const subscriptionOp = (
 	subscription: StripeSubscription,
 	productNames: ReadonlyMap<string, string> = new Map(),
+	observedAt?: IsoTimestamp,
 ): UpsertSubscription | null => {
 	const customerId = idOf(subscription.customer)
 	const status = statusOf(subscription.status)
@@ -387,6 +415,7 @@ export const subscriptionOp = (
 	}
 	const method = paymentMethodOf(subscription)
 	if (method !== undefined) op.paymentMethod = method
+	if (observedAt !== undefined) op.observedAt = observedAt
 	return op
 }
 
@@ -412,18 +441,20 @@ export const invoiceStatusOf = (status: string | null | undefined): UpsertInvoic
 const FAILED_REASON = "Stripe could not collect this payment"
 
 /**
- * An invoice. Null for one Hazel does not record: a preview with no id yet (`invoice.upcoming`), a
- * draft, an invoice with no customer, or a status Stripe added since.
+ * An invoice, read at `observedAt` (ingest drops a read older than one it applied). Null for one
+ * Hazel does not record: a preview with no id yet (`invoice.upcoming`), a draft, an invoice with no
+ * customer, or a status Stripe added since.
  *
  * `paymentFailed` marks the op as coming from an `invoice.payment_failed` event about an invoice
  * still open, which is what lets ingest raise the timeline event on the *first* attempt: Hazel does
  * not read the payment intent, so without a reason an `attempt_count` of 1 would look like an
  * ordinary open invoice. Otherwise the decline reason is left as stored, never cleared: a
- * `last_finalization_error` is a finalization problem, not a decline.
+ * `last_finalization_error` is a finalization problem, not a decline, and neither is
+ * `invoice.payment_action_required` (the customer has to confirm the payment, 3-D Secure say).
  */
 export const invoiceOp = (
 	invoice: StripeInvoice,
-	options: { readonly paymentFailed?: boolean } = {},
+	options: { readonly paymentFailed?: boolean; readonly observedAt?: IsoTimestamp } = {},
 ): UpsertInvoice | null => {
 	const externalId = invoice.id ?? null
 	const customerId = idOf(invoice.customer)
@@ -449,5 +480,6 @@ export const invoiceOp = (
 		hostedUrl: invoice.hosted_invoice_url ?? null,
 	}
 	if (options.paymentFailed === true && status === "open") op.declineReason = FAILED_REASON
+	if (options.observedAt !== undefined) op.observedAt = options.observedAt
 	return op
 }

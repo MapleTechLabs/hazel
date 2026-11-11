@@ -1,6 +1,7 @@
 /**
  * Stripe events → `IngestOp`s: one webhook delivery (`receiveWebhook`), and the events a scheduled
- * pull reads from `/v1/events` (`./pull.ts`), through the same {@link opsOfEvent}.
+ * pull reads from `/v1/events` (`./pull.ts`), through the same {@link readEvent} and
+ * {@link opsOfReads}.
  *
  * The connection's endpoint signing secret verifies the `Stripe-Signature` header over the raw body
  * (`./signature.ts`) before anything is parsed. A bad signature, a replayed delivery (its timestamp
@@ -17,12 +18,16 @@
  * | Event | Reads | Writes |
  * |---|---|---|
  * | `customer.created` / `updated` / `deleted` | `GET /v1/customers/{id}` | account + billing contact; a deleted customer → its deletion |
+ * | `customer.updated` changing `invoice_settings` or `default_source` | also `GET /v1/subscriptions?customer=…` | the customer's subscriptions, for the default card they fall back to |
  * | `customer.subscription.created` / `updated` / `deleted` / `paused` / `resumed` | `GET /v1/subscriptions/{id}` | the subscription |
  * | `invoice.finalized` / `paid` / `payment_failed` / `payment_action_required` / `voided` / `marked_uncollectible` | `GET /v1/invoices/{id}` | the invoice |
  * | `payment_method.attached` / `updated` / `automatically_updated` / `detached` | `GET /v1/subscriptions?customer=…` | the customer's subscriptions, for the card on file |
  *
- * Writing subscriptions also reads their plans' names, one `GET /v1/products?ids[]=…` for all of them
- * ({@link productNamesOf}, the pull's too).
+ * Writing subscriptions also reads their plans' names, one `GET /v1/products?ids[]=…` per 100
+ * products for a whole delivery or events page ({@link productNamesOf}).
+ *
+ * Every op is observed at the time taken before the reads, so ingest drops one older than a read it
+ * already applied: a slow delivery cannot overwrite a newer one.
  *
  * The read is also what keeps another account's events out: Stripe stamps `account` only on a
  * connected account's events, so an unstamped event could still come from an unrelated account whose
@@ -38,7 +43,7 @@
  * changes nothing).
  */
 import type { ConnectionConfig, IngestOp, IsoTimestamp } from "@hazel/domain/customers"
-import { Clock, Effect, Option, Redacted, Schema } from "effect"
+import { Array as Arr, Clock, Effect, Option, Redacted, Schema } from "effect"
 import {
 	type CustomerProviderError,
 	type CustomerWebhookRejectedError as RejectedError,
@@ -130,10 +135,13 @@ const current = <A>(read: Effect.Effect<A, CustomerProviderError>) =>
 		),
 	)
 
+/** Stripe's `/v1/products` takes at most 100 `ids[]` (its `limit`). */
+const PRODUCTS_PER_LOOKUP = 100
+
 /**
- * Product id → name for the subscriptions' plans, in one request (a page holds at most 100
- * subscriptions, so at most 100 products). A product Stripe does not return is left out; a failed
- * request fails the caller, so a plan is never named from a lookup that did not happen.
+ * Product id → name for the subscriptions' plans, one request per 100 products. A product Stripe
+ * does not return is left out; a failed request fails the caller, so a plan is never named from a
+ * lookup that did not happen.
  */
 const productNamesOf = Effect.fn("Stripe.productNames")(function* (
 	get: StripeGet,
@@ -147,69 +155,116 @@ const productNamesOf = Effect.fn("Stripe.productNames")(function* (
 			}),
 		),
 	]
-	if (ids.length === 0) return new Map<string, string>()
-	const page = yield* get(
-		"/products",
-		[["limit", "100"], ...ids.map((id) => ["ids[]", id] as const)],
-		StripeProductsPage,
+	const pages = yield* Effect.forEach(Arr.chunksOf(ids, PRODUCTS_PER_LOOKUP), (chunk) =>
+		get(
+			"/products",
+			[["limit", String(PRODUCTS_PER_LOOKUP)], ...chunk.map((id) => ["ids[]", id] as const)],
+			StripeProductsPage,
+		),
 	)
 	return new Map(
-		page.data.flatMap((product) =>
-			product.name == null || product.name.trim() === ""
-				? []
-				: [[product.id, product.name.trim()] as const],
+		pages.flatMap((page) =>
+			page.data.flatMap((product) =>
+				product.name == null || product.name.trim() === ""
+					? []
+					: [[product.id, product.name.trim()] as const],
+			),
 		),
 	)
 })
 
-/** Subscription ops with their plan names resolved: the one path every subscription write takes. */
-export const subscriptionOps = Effect.fn("Stripe.subscriptionOps")(function* (
-	get: StripeGet,
-	subscriptions: ReadonlyArray<StripeSubscription>,
-) {
-	const names = yield* productNamesOf(get, subscriptions)
-	return subscriptions.flatMap((subscription): Array<IngestOp> => {
-		const op = subscriptionOp(subscription, names)
-		return op === null ? [] : [op]
-	})
-})
+/**
+ * What reading an event's object found: ops ready to apply, and subscriptions whose plans are still
+ * to be named ({@link opsOfReads} names a whole batch's in one lookup).
+ */
+export interface EventRead {
+	readonly ops: ReadonlyArray<IngestOp>
+	readonly subscriptions: ReadonlyArray<StripeSubscription>
+}
+
+export const NOTHING_READ: EventRead = { ops: [], subscriptions: [] }
 
 /**
- * One event's ops, from its object's current state read at `observedAt`. `type` drives everything;
- * an unknown type is no op. Fails with the read's `CustomerProviderError` (404 aside) for the caller
- * to classify, and with `CustomerWebhookRejectedError` for a payload with no object id.
+ * The reads' ops, in order (each read's ops, then its subscriptions), every subscription read at
+ * `observedAt` and named from one product lookup for the whole batch: the path every subscription
+ * write takes.
  */
-export const opsOfEvent = Effect.fn("Stripe.opsOfEvent")(function* (
+export const opsOfReads = Effect.fn("Stripe.opsOfReads")(function* (
+	get: StripeGet,
+	reads: ReadonlyArray<EventRead>,
+	observedAt: IsoTimestamp,
+) {
+	const names = yield* productNamesOf(
+		get,
+		reads.flatMap((read) => read.subscriptions),
+	)
+	return reads.flatMap((read): Array<IngestOp> => [
+		...read.ops,
+		...read.subscriptions.flatMap((subscription) => {
+			const op = subscriptionOp(subscription, names, observedAt)
+			return op === null ? [] : [op]
+		}),
+	])
+})
+
+/** A customer's subscriptions, expanded, for the card on file; none for a customer the key cannot see. */
+const subscriptionsOf = (get: StripeGet, customerId: string) =>
+	current(
+		get(
+			"/subscriptions",
+			[["customer", customerId], ["status", "all"], ["limit", "100"], ...subscriptionExpands("data.")],
+			StripeSubscriptionsPage,
+		),
+	).pipe(Effect.map(Option.match({ onNone: () => [], onSome: (page) => page.data })))
+
+/** A `customer.updated` that changed the customer's default card, which its subscriptions fall back to. */
+const changedDefaultCard = (type: string, previous: unknown): boolean =>
+	type === "customer.updated" &&
+	typeof previous === "object" &&
+	previous !== null &&
+	("invoice_settings" in previous || "default_source" in previous)
+
+/**
+ * Read one event's object at `observedAt`. `type` drives everything; an unknown type reads nothing.
+ * Fails with the read's `CustomerProviderError` (404 aside) for the caller to classify, and with
+ * `CustomerWebhookRejectedError` for a payload with no object id.
+ */
+export const readEvent = Effect.fn("Stripe.readEvent")(function* (
 	get: StripeGet,
 	event: StripeEvent,
 	config: ConnectionConfig,
 	observedAt: IsoTimestamp,
-): Effect.fn.Return<ReadonlyArray<IngestOp>, CustomerProviderError | RejectedError> {
+): Effect.fn.Return<EventRead, CustomerProviderError | RejectedError> {
 	const { type } = event
 	const data = event.data.object
 	if (CUSTOMER_EVENTS.has(type)) {
 		const { id } = yield* decodeAs(ObjectId, data, type)
 		const customer = yield* current(get(`/customers/${encodeURIComponent(id)}`, [], StripeCustomer))
-		if (Option.isNone(customer)) return []
-		return customer.value.deleted === true
-			? [accountDeletedOp(id, observedAt)]
-			: customerOps(customer.value, config, observedAt)
+		if (Option.isNone(customer)) return NOTHING_READ
+		if (customer.value.deleted === true) {
+			return { ops: [accountDeletedOp(id, observedAt)], subscriptions: [] }
+		}
+		return {
+			ops: customerOps(customer.value, config, observedAt),
+			// A new default card is what its subscriptions without their own are charged on.
+			subscriptions: changedDefaultCard(type, event.data.previous_attributes)
+				? yield* subscriptionsOf(get, id)
+				: [],
+		}
 	}
 	if (SUBSCRIPTION_EVENTS.has(type)) {
 		const { id } = yield* decodeAs(ObjectId, data, type)
 		const subscription = yield* current(
 			get(`/subscriptions/${encodeURIComponent(id)}`, subscriptionExpands(""), StripeSubscription),
 		)
-		return Option.isNone(subscription) ? [] : yield* subscriptionOps(get, [subscription.value])
+		return { ops: [], subscriptions: Option.toArray(subscription) }
 	}
 	if (INVOICE_EVENTS.has(type)) {
 		const { id } = yield* decodeAs(ObjectId, data, type)
 		const invoice = yield* current(get(`/invoices/${encodeURIComponent(id)}`, [], StripeInvoice))
-		if (Option.isNone(invoice)) return []
-		const op = invoiceOp(invoice.value, {
-			paymentFailed: type === "invoice.payment_failed" || type === "invoice.payment_action_required",
-		})
-		return op === null ? [] : [op]
+		if (Option.isNone(invoice)) return NOTHING_READ
+		const op = invoiceOp(invoice.value, { paymentFailed: type === "invoice.payment_failed", observedAt })
+		return { ops: op === null ? [] : [op], subscriptions: [] }
 	}
 	if (PAYMENT_METHOD_EVENTS.has(type)) {
 		const method = yield* decodeAs(StripePaymentMethod, data, type)
@@ -218,26 +273,14 @@ export const opsOfEvent = Effect.fn("Stripe.opsOfEvent")(function* (
 			idOf(method.customer) ??
 			Option.getOrUndefined(decodePreviousCustomer(event.data.previous_attributes))?.customer ??
 			null
-		if (customerId === null) return []
-		const page = yield* current(
-			get(
-				"/subscriptions",
-				[
-					["customer", customerId],
-					["status", "all"],
-					["limit", "100"],
-					...subscriptionExpands("data."),
-				],
-				StripeSubscriptionsPage,
-			),
-		)
-		return Option.isNone(page) ? [] : yield* subscriptionOps(get, page.value.data)
+		if (customerId === null) return NOTHING_READ
+		return { ops: [], subscriptions: yield* subscriptionsOf(get, customerId) }
 	}
-	return []
+	return NOTHING_READ
 })
 
 /** A read a later attempt can get through: unreachable, timed out, rate limited, or a 5xx. */
-const isTransient = (error: CustomerProviderError): boolean =>
+export const isTransient = (error: CustomerProviderError): boolean =>
 	error.code !== "auth" && error.retryable !== false
 
 /**
@@ -294,7 +337,10 @@ export const receiveWebhook = Effect.fn("Stripe.receiveWebhook")(function* (inpu
 			{ type: event.type },
 		)
 	}
-	return yield* opsOfEvent(input.get, event, input.config, new Date(nowMs).toISOString()).pipe(
+	// Taken before the reads: the time the ops are observed at.
+	const observedAt = new Date(nowMs).toISOString()
+	return yield* readEvent(input.get, event, input.config, observedAt).pipe(
+		Effect.flatMap((read) => opsOfReads(input.get, [read], observedAt)),
 		Effect.catchTag("CustomerProviderError", (error) =>
 			isTransient(error)
 				? reject(
