@@ -999,8 +999,10 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 				currency,
 			})
 		}
+		// With `overageInMrr`, today's MRR is the invoices' (compute's), not the plans' series end.
 		const current = series[series.length - 1]
-		if (current !== account.mrrMinor) mrrNow.push({ id: account.id, mrrMinor: current })
+		if (!base.settings.overageInMrr && current !== account.mrrMinor)
+			mrrNow.push({ id: account.id, mrrMinor: current })
 	}
 	const users = yield* activeCounts(first, today)
 	const health = new Map(

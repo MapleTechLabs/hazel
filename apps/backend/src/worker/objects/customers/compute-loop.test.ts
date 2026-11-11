@@ -1204,6 +1204,12 @@ describe("Customers compute and sync loop", () => {
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
 				expect(mrr()).toEqual([{ mrrMinor: 24_350 }])
 
+				// A history rebuild leaves the invoices' MRR to compute, not the plans' series.
+				yield* world.object.run(requestHistoryRebuild).pipe(Effect.orDie)
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				expect(meta(world, "rebuildHistory")).toBeUndefined()
+				expect(mrr()).toEqual([{ mrrMinor: 24_350 }])
+
 				ok(yield* world.call("customers.settings.update", { overageInMrr: false }, world.owner))
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
 				expect(mrr()).toEqual([{ mrrMinor: 19_900 }])
