@@ -140,6 +140,8 @@ const usageDrop =
 		const last = addDays(org.today, -1)
 		const days = config.recentDays + config.baselineDays
 		if (!DERIVED_METRICS.has(config.metricKey) && !facts.metrics.has(config.metricKey)) return "No data"
+		// Its source stopped delivering: the drop would be the missing days, not the usage.
+		if (org.staleMetrics.has(config.metricKey)) return "Missing data source"
 		const series = seriesOf(
 			facts,
 			config.metricKey,

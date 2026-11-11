@@ -444,5 +444,11 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "customer_subscriptions" ADD COLUMN "billsByUsage" integer NOT NULL DEFAULT false',
 			],
 		},
+		{
+			id: "0007_customer_sync_run_attempts",
+			statements: [
+				'ALTER TABLE "customer_sync_runs" ADD COLUMN "failedAttempts" integer NOT NULL DEFAULT 0',
+			],
+		},
 	],
 }

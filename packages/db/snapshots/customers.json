@@ -1,5 +1,5 @@
 {
-	"migration": "0006_customers_subscription_bills_by_usage",
+	"migration": "0007_customer_sync_run_attempts",
 	"entities": [
 		{
 			"kind": "table",
@@ -2915,6 +2915,15 @@
 			"type": "text",
 			"notNull": false,
 			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "failedAttempts",
+			"position": 12,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
 		},
 		{
 			"kind": "column",

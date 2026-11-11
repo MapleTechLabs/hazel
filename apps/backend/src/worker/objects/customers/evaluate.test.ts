@@ -101,6 +101,29 @@ describe("signal evaluation", () => {
 		})
 	})
 
+	it("usage_drop on a metric whose source stopped delivering waits for it, not a 100% drop", () => {
+		const config = defaults("usage_drop")
+		if (config._tag !== "usage_drop") throw new Error("usage_drop defaults")
+		const rule = ruleOf({ ...config, metricKey: "requests" })
+		const facts = factsOf({
+			metrics: new Map([
+				[
+					"requests",
+					range(-35, -8).map((offset) => ({
+						day: addDays(TODAY, offset),
+						value: 100,
+						limitValue: null,
+					})),
+				],
+			]),
+		})
+		expect(evaluate(rule, facts, orgFacts())._tag).toBe("Match")
+		expect(evaluate(rule, facts, orgFacts({ staleMetrics: new Set(["requests"]) }))).toEqual({
+			_tag: "NoMatch",
+			reason: "Missing data source",
+		})
+	})
+
 	it("carries a level metric's last value over missing days; sums count them as 0", () => {
 		const facts = factsOf({
 			metrics: new Map([

@@ -67,8 +67,8 @@ export interface SnapshotBase {
 	readonly health: HealthSettings
 	readonly rules: ReadonlyArray<schema.CustomerSignalRule>
 	/**
-	 * Usage data is live: an activity source is connected (not in error or disconnected), or, with
-	 * no activity connection at all, some contact was ever active.
+	 * Usage data is live: an activity source is connected (not in error or disconnected) and
+	 * delivering, or, with no activity connection at all, some contact was ever active.
 	 */
 	readonly hasActivityData: boolean
 	/** Billing data exists (a billing source, or subscriptions). */
@@ -242,6 +242,18 @@ const groupBy = <A, K>(items: ReadonlyArray<A>, key: (item: A) => K) => {
 
 const ACTIVITY_PROVIDERS: ReadonlySet<CustomerProvider> = new Set(["clerk", "maple"])
 
+/** A day plus the longest pull interval (6 hours): a source silent for longer has stopped delivering. */
+const STALE_AFTER_MS = 30 * 60 * 60_000
+
+/**
+ * An active connection whose pulls have not succeeded for `STALE_AFTER_MS` (or not yet at all): its
+ * usage data is not live. One that never pulls (no `nextSyncAt`: the demo seed's, imported once)
+ * delivers what it has.
+ */
+const stoppedDelivering = (connection: schema.CustomerConnection, now: Date) =>
+	connection.nextSyncAt !== null &&
+	(connection.lastSuccessAt === null || connection.lastSuccessAt.getTime() < now.getTime() - STALE_AFTER_MS)
+
 const BILLING_PROVIDERS: ReadonlyArray<CustomerProvider> = ["stripe", "autumn"]
 
 /** Bills the account now: a live billed subscription that pays (not a trial, not a free plan). */
@@ -318,11 +330,19 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 	const currency = settings.reportingCurrency
 
 	const connections = yield* db.run(SQLite.from(schema.customerConnectionsTable).select())
-	// A connection in error (bad credentials) is not a source to rely on: its templates match nothing.
-	const connected = new Set(
-		connections
-			.filter((connection) => connection.status === "active")
+	const active = connections.filter((connection) => connection.status === "active")
+	const stale = new Set(
+		active
+			.filter((connection) => stoppedDelivering(connection, now))
 			.map((connection) => connection.provider),
+	)
+	// A connection in error (bad credentials) is not a source to rely on, nor an activity source that
+	// stopped delivering (its last activity would read as everyone going quiet): its templates match
+	// nothing.
+	const connected = new Set(
+		active
+			.map((connection) => connection.provider)
+			.filter((provider) => !(ACTIVITY_PROVIDERS.has(provider) && stale.has(provider))),
 	)
 	const anySubscription = yield* db.first(
 		SQLite.from(schema.customerSubscriptionsTable)
@@ -343,7 +363,7 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 			.orderBy(($) => [[$.id, "asc"]]),
 	)).map((row) => row.id)
 	const definitions = yield* db.run(
-		SQLite.from(schema.customerMetricDefinitionsTable).select("key", "name", "aggregation"),
+		SQLite.from(schema.customerMetricDefinitionsTable).select("key", "name", "aggregation", "provider"),
 	)
 	const activityConnections = connections.filter((connection) =>
 		ACTIVITY_PROVIDERS.has(connection.provider),
@@ -363,15 +383,20 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 			metricAggregations: new Map(
 				definitions.map((definition) => [definition.key, definition.aggregation]),
 			),
+			staleMetrics: new Set(
+				definitions
+					.filter((definition) => definition.provider !== null && stale.has(definition.provider))
+					.map((definition) => definition.key),
+			),
 			currency,
 		},
 		settings,
 		health: settings.health,
 		rules,
-		// Stale rows of a disconnected source must not keep decaying everyone's usage score.
+		// Stale rows of a disconnected (or silent) source must not keep decaying everyone's usage score.
 		hasActivityData:
 			activityConnections.length > 0
-				? activityConnections.some((connection) => connection.status === "active")
+				? activityConnections.some((connection) => connected.has(connection.provider))
 				: Option.isSome(anyActivity),
 		hasBillingData: connected.has("stripe") || connected.has("autumn") || Option.isSome(anySubscription),
 		// A reconnect keeps what Autumn imported before, stale meanwhile: it counts again once the run

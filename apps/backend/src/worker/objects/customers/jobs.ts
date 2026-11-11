@@ -15,8 +15,9 @@
  * `schedule`) pulls page by page, keeping the cursor on the run so an evicted object resumes.
  * Success schedules the next pull one adapter interval later; `auth` failures stop pulls until the
  * credentials change; others back off, the run staying open to resume from its cursor, until
- * `MAX_STUCK_ATTEMPTS` attempts in a row fail at one cursor: the run then fails and the next pull
- * starts over (a page that never loads, e.g. a provider timing out past a deep offset). Each pull
+ * `MAX_STUCK_ATTEMPTS` attempts in a row (the run's `failedAttempts`) fail at one cursor, the first
+ * page's included: the run then fails and the next pull starts over (a page that never loads, e.g.
+ * a provider timing out past a deep offset or failing on every first page). Each pull
  * (and each compute) first moves its own deadline a lease ahead, so one the runtime kills mid-way
  * retries after the lease instead of on every alarm. A pull stops when its connection is
  * disconnected or its run ended meanwhile.
@@ -185,8 +186,9 @@ const stillPulling = (connectionId: CustomerConnectionId, runId: schema.Customer
  * One due connection: resume its running run or start one (a `backfill` until the first one
  * succeeded, else a `schedule` run), pull up to the page budget. A retryable failure keeps the run
  * running, so the next attempt resumes from its cursor after a backoff; any other closes it, as
- * does the `MAX_STUCK_ATTEMPTS`th one in a row at the same cursor. A page that lands resets
- * `consecutiveFailures`: the streak (and its backoff) counts attempts that got nowhere.
+ * does the `MAX_STUCK_ATTEMPTS`th one in a row at the same cursor (rate limits aside). A page that
+ * lands resets the run's `failedAttempts` and the connection's `consecutiveFailures`: the streak
+ * (and its backoff) counts attempts that got nowhere.
  */
 const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 	connection: schema.CustomerConnection,
@@ -225,6 +227,7 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 	}
 	let pages = 0
 	let failures = connection.consecutiveFailures
+	let attempts = run.failedAttempts
 	const pull = Effect.gen(function* () {
 		const credentials = yield* loadCredentials(connection)
 		if (Option.isNone(credentials)) {
@@ -248,10 +251,11 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 			yield* ingest.progress(run.id, progress)
 			yield* db.run(
 				SQLite.update(schema.customerSyncRunsTable)
-					.set({ cursor: nextCursor })
+					.set({ cursor: nextCursor, failedAttempts: 0 })
 					.where(($) => [$.id.eq(run.id)]),
 			)
 			cursor = nextCursor
+			attempts = 0
 			if (nextCursor === null) {
 				if (sweep !== undefined)
 					yield* ingest.completeSweep(connection.id, run.startedAt, sweep, { runId: run.id })
@@ -284,13 +288,10 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 	yield* pull.pipe(
 		Effect.catchTag("PullFailure", (failure) =>
 			Effect.gen(function* () {
-				// Stuck at the run's cursor: give the run up. It never reaches its last page, so no
-				// sweep removes anything; the next pull starts a new run from the start.
-				const stuck =
-					failure.retryable &&
-					failure.error.code !== "rate_limited" &&
-					run.cursor !== null &&
-					failures + 1 >= MAX_STUCK_ATTEMPTS
+				// Stuck at the run's cursor (its first page included): give the run up. It never
+				// reaches its last page, so no sweep removes anything; the next pull starts a new run.
+				const counted = failure.retryable && failure.error.code !== "rate_limited"
+				const stuck = counted && attempts + 1 >= MAX_STUCK_ATTEMPTS
 				yield* Effect.logWarning("Customers pull failed", {
 					connectionId: connection.id,
 					provider: connection.provider,
@@ -303,6 +304,12 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 				})
 				// Replaced (new credentials) or disconnected meanwhile: the next pull is not this run's.
 				const current = yield* stillPulling(connection.id, run.id)
+				if (counted && !stuck)
+					yield* db.run(
+						SQLite.update(schema.customerSyncRunsTable)
+							.set({ failedAttempts: attempts + 1 })
+							.where(($) => [$.id.eq(run.id), $.status.eq("running")]),
+					)
 				yield* ingest.finishRun(
 					run.id,
 					stuck

@@ -219,6 +219,7 @@ export const orgFacts = (overrides: Partial<OrgFacts> = {}): OrgFacts => ({
 	connected: new Set(["clerk", "stripe", "autumn", "maple"]),
 	metricNames: new Map([["active_users", "Daily active users"]]),
 	metricAggregations: new Map(),
+	staleMetrics: new Set(),
 	currency: "usd",
 	...overrides,
 })

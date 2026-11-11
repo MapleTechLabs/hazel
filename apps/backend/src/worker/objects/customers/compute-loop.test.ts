@@ -340,6 +340,77 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("gives up a run whose first page keeps failing; rate limits do not count", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const connectionId = world.connection("clerk")
+				const timeout = Effect.fail(
+					new CustomerProviderError({
+						code: "provider",
+						message: "Clerk timed out",
+						httpStatus: 504,
+						retryAfterMs: null,
+					}),
+				)
+				const script: Array<Effect.Effect<PullPage, CustomerProviderError>> = [
+					...Array.from({ length: 4 }, () => timeout),
+					Effect.fail(
+						new CustomerProviderError({
+							code: "rate_limited",
+							message: "Slow down",
+							httpStatus: 429,
+							retryAfterMs: 30_000,
+						}),
+					),
+					timeout,
+				]
+				const services = Layer.mergeAll(
+					CustomerIngest.layer,
+					encryption,
+					Layer.succeed(
+						CustomerProviders,
+						CustomerProviders.of({ get: () => Option.some(scriptedAdapter(script)) }),
+					),
+				)
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							yield* storeSecrets(connectionId, yield* encryptSecrets("sk_test", null))
+						}).pipe(Effect.provide(encryption)),
+					)
+					.pipe(Effect.orDie)
+				const pull = () => {
+					world.object.storage.db
+						.prepare(
+							`UPDATE customer_connections SET nextSyncAt = '2000-01-01 00:00:00.000' WHERE id = ?`,
+						)
+						.run(connectionId)
+					return world.object.run(runDuePullsWith(services)(NOW)).pipe(Effect.orDie)
+				}
+				const runs = () =>
+					world.rows<{ status: string; failedAttempts: number; error: string | null }>(
+						`SELECT status, failedAttempts, error FROM customer_sync_runs ORDER BY startedAt, rowid`,
+					)
+
+				// 4 timeouts, a rate limit (not counted), 3 more timeouts: 7 counted, still open.
+				for (let attempt = 1; attempt <= 8; attempt++) yield* pull()
+				expect(runs()).toMatchObject([{ status: "running", failedAttempts: 7 }])
+
+				// The 8th counted failure gives it up with a message the members can read.
+				yield* pull()
+				expect(runs()).toMatchObject([{ status: "failed" }])
+				expect(JSON.parse(runs()[0]!.error!)).toMatchObject({
+					code: "provider",
+					message: expect.stringContaining("Stopped after 8 failed attempts"),
+				})
+
+				// The next pull starts a new run with its own count.
+				yield* pull()
+				expect(runs()[1]).toMatchObject({ status: "running", failedAttempts: 1 })
+			}),
+		))
+
 	it("a backfill whose last page sets sweep removes the refs it did not see; one without sweep keeps them", () =>
 		run(
 			Effect.gen(function* () {
@@ -674,6 +745,51 @@ describe("Customers compute and sync loop", () => {
 				const stale = yield* snapshot()
 				expect(stale.hasActivityData).toBe(false)
 				expect([...stale.org.connected].sort()).toEqual(["autumn", "stripe"])
+			}),
+		))
+
+	it("counts a pulling usage source silent for over a day as unavailable, keeping its signals", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				const stamp = (ms: number) => new Date(ms).toISOString().replace("T", " ").replace("Z", "")
+				const pulled = (provider: string, lastSuccessAt: number | null) =>
+					world.object.storage.db
+						.prepare(
+							`UPDATE customer_connections SET nextSyncAt = ?, lastSuccessAt = ? WHERE provider = ?`,
+						)
+						.run(
+							stamp(NOW.getTime()),
+							lastSuccessAt === null ? null : stamp(lastSuccessAt),
+							provider,
+						)
+				world.object.storage.db
+					.prepare(
+						`INSERT INTO customer_metric_definitions (id, organizationId, key, name, aggregation, provider) VALUES (?, ?, 'maple.requests', 'Requests', 'sum', 'maple')`,
+					)
+					.run(crypto.randomUUID(), world.orgId)
+				const inactive = () =>
+					world.rows(
+						`SELECT status, closedAt IS NULL AS unclosed FROM customer_signals WHERE template = 'inactive'`,
+					)
+				const snapshot = () => world.object.run(loadBase(NOW)).pipe(Effect.orDie)
+
+				// Never pulling (the demo seed's connections) or pulled within the day: live.
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(inactive()).toEqual([{ status: "open", unclosed: 1 }])
+				pulled("maple", NOW.getTime() - 60 * 60_000)
+				expect((yield* snapshot()).org.connected.has("maple")).toBe(true)
+
+				// Clerk's pulls failing for two days, Maple's never succeeding: no usage source.
+				pulled("clerk", NOW.getTime() - 2 * DAY)
+				pulled("maple", null)
+				const silent = yield* snapshot()
+				expect(silent.hasActivityData).toBe(false)
+				expect([...silent.org.connected].sort()).toEqual(["autumn", "stripe"])
+				expect([...silent.org.staleMetrics]).toEqual(["maple.requests"])
+				yield* world.object.run(runCompute(new Date(NOW.getTime() + DAY))).pipe(Effect.orDie)
+				expect(inactive()).toEqual([{ status: "open", unclosed: 1 }])
 			}),
 		))
 

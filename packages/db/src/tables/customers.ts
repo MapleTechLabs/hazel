@@ -699,6 +699,8 @@ export const customerSyncRunsTable = SQLite.table("customer_sync_runs", {
 		error: SQLite.nullable(jsonb<SyncError>()),
 		/** Pull cursor to resume from (provider-specific). */
 		cursor: SQLite.nullable(SQLite.text),
+		/** Failed attempts in a row at `cursor` (rate limits aside); a landed page resets it. */
+		failedAttempts: count(),
 	},
 	primaryKey: ["id"],
 	indexes: [SQLite.index("customer_sync_runs_connection_started_idx", ["connectionId", "startedAt"])],

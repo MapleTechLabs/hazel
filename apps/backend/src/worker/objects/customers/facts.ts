@@ -65,11 +65,13 @@ export interface AccountFacts {
 export interface OrgFacts {
 	readonly now: Date
 	readonly today: Day
-	/** Providers with a connection that is not disconnected. */
+	/** Providers with an active connection; an activity source's only while it delivers. */
 	readonly connected: ReadonlySet<CustomerProvider>
 	readonly metricNames: ReadonlyMap<string, string>
 	/** How each metric aggregates: `last`/`max` series carry a missing day's value forward. */
 	readonly metricAggregations: ReadonlyMap<string, MetricAggregation>
+	/** Metrics whose source is connected but has stopped delivering: their recent days read empty. */
+	readonly staleMetrics: ReadonlySet<string>
 	readonly currency: string
 }
 

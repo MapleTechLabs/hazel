@@ -146,7 +146,7 @@ filter), internal ones don't. Partial unique indexes in `tables/extra-indexes.ts
 | `customer_saved_views`        | `ownerUserId` null = shared, `builtInKey`, `filters`/`sort`/`columns`, `position`                                                                                                                                                                                                                                                                                                                                             | **synced** (shared + own)                                                    |
 | `customer_connections`        | One per provider (reconnect reuses: stable webhook URL). Status, config, `hasWebhookSecret`, last sync/success/error, `consecutiveFailures`, `nextSyncAt`, `backfilledAt`, `stats`, `disconnectedAt`. **No secrets**                                                                                                                                                                                                          | **synced**                                                                   |
 | `customer_connection_secrets` | Encrypted API key + webhook secret (`IntegrationEncryption`)                                                                                                                                                                                                                                                                                                                                                                  | internal, never synced                                                       |
-| `customer_sync_runs`          | Spec + `progress`, structured `error`, `cursor`                                                                                                                                                                                                                                                                                                                                                                               | **synced** (last 7 d)                                                        |
+| `customer_sync_runs`          | Spec + `progress`, structured `error`, `cursor`, `failedAttempts`                                                                                                                                                                                                                                                                                                                                                             | **synced** (last 7 d)                                                        |
 | `customer_unmatched_records`  | Spec + `email`, `domain`, `payload` (the op, replayed on link). Unique `(provider, entityType, externalId)`                                                                                                                                                                                                                                                                                                                   | RPC                                                                          |
 | `customer_ignore_rules`       | `provider?`, `entityType`, `field`, glob `pattern`                                                                                                                                                                                                                                                                                                                                                                            | RPC                                                                          |
 | `customer_members`            | Projection `(userId, role)`                                                                                                                                                                                                                                                                                                                                                                                                   | internal                                                                     |
@@ -322,7 +322,8 @@ Rules:
 
 - Components, each 0–100 or excluded (no data):
     - `usage` = 60% ratio step(activeUsers30d ÷ max(contactCount, 1)) + 40% trend step
-      (`activeUsersTrendPct`). Excluded without any activity source data for the org.
+      (`activeUsersTrendPct`). Excluded without any activity source data for the org (an activity
+      connection, none of them connected and delivering, §4.4).
     - `engagement` = step(days since `lastActiveAt`). Excluded like usage.
     - `billing` = min of applicable: past_due/unpaid 20, invoice > 7 d overdue 30, overdue 60,
       cancel scheduled 40, else 100. Excluded without a billing source or with no subscription.
@@ -338,6 +339,11 @@ Rules:
 
 Every enabled rule × every in-scope, non-churned account (silent accounts included). A template
 needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run reports it).
+Connected = `active`; an activity source (Clerk, Maple) also needs to be delivering: one that pulls
+(`nextSyncAt` set) and has not succeeded for 30 h (a day plus the longest pull interval), or not yet
+at all, is unavailable, as is a `usage_drop` on a metric whose definition's provider is. A
+connection that never pulls (the demo seed's: `nextSyncAt` null) delivers what it imported. Its
+signals stay as they are (nothing opens or auto-resolves), as with a source in error.
 
 | Template                      | Match (defaults)                                        | Evidence (`_tag` = viz) | Escalation `step` +1 / +2           |
 | ----------------------------- | ------------------------------------------------------- | ----------------------- | ----------------------------------- |
@@ -429,8 +435,9 @@ needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run
   cursor on the run so an evicted object resumes. Backfill = `since: null`. `auth` errors →
   connection `error`, pulls stop until credentials change; other errors back off
   (`consecutiveFailures`, exponential, cap 6 h; a page that lands resets it). 8 failed attempts in a
-  row at one cursor (rate limits aside) fail the run with a client-safe message, no sweep applied;
-  the next scheduled pull starts a new run from the start.
+  row at one cursor, the first page's included (the run's `failedAttempts`, reset when a page lands;
+  rate limits aside), fail the run with a client-safe message, no sweep applied; the next scheduled
+  pull starts a new run from the start.
 - **Sync now** = a `manual` run scheduled immediately.
 - Adapter contract: `apps/backend/src/worker/objects/customers/providers.ts`
   (`validate`, which always returns the provider account id, `webhook`, `pull` (with `sweep` on a
