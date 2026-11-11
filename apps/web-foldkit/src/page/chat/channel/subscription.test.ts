@@ -139,6 +139,7 @@ const STATELESS = [
 	"globalTyping",
 	"channelHotkeys",
 	"leftWindow",
+	"windowFocus",
 	"filesBreakpoint",
 	"filesInteractionModality",
 	"filesInteractionPointerRelease",

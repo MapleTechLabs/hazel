@@ -70,12 +70,13 @@ export const loadedModel = (): Model => {
 			parentChannelId: null,
 		},
 		members: [
-			{ id: adaMemberId, userId: ada, isHidden: false, createdAtMs: 0 },
+			{ id: adaMemberId, userId: ada, isHidden: false, createdAtMs: 0, notificationCount: 0 },
 			{
 				id: Schema.decodeSync(ChannelMemberId)(uuid(6)),
 				userId: grace,
 				isHidden: false,
 				createdAtMs: 0,
+				notificationCount: 0,
 			},
 		],
 		messages,
