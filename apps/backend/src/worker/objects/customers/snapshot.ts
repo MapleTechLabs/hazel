@@ -148,7 +148,8 @@ export const rollupAccount = (input: {
 	const foreign = paying.filter((sub) => sub.currency !== currency)
 	const trialing = live.filter((sub) => sub.status === "trialing")
 	const addOns = new Set(input.addOnPlans)
-	const top = topOf(live.filter((sub) => sub.planName === null || !addOns.has(sub.planName))) ?? topOf(live)
+	const named = live.filter((sub) => sub.planName !== null)
+	const top = topOf(named.filter((sub) => !addOns.has(sub.planName ?? ""))) ?? topOf(named) ?? topOf(live)
 	const trialEnds = trialing.map((sub) => sub.trialEndsAt).filter((date) => date !== null)
 	const derived: LifecycleStage = live.some((sub) => sub.status === "past_due" || sub.status === "unpaid")
 		? "past_due"

@@ -17,7 +17,7 @@ const fetched = (model: Model, shared: Shared): Return => {
 }
 
 export const init = (_route: unknown, shared: Shared): Return =>
-	fetched({ settings: null, plans: AsyncData.Idle() }, shared)
+	fetched({ settings: null, plans: AsyncData.Idle(), isSaving: false }, shared)
 
 /** The organization arrived after the page opened. */
 export const sharedChanged = (model: Model, shared: Shared): Return =>
@@ -29,12 +29,17 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ToggledAddOn: ({ plan, isAddOn }) => {
 			const organizationId = shared.organization?.id
 			const { settings } = model
-			if (settings === null || organizationId === undefined || !isCustomersAdmin(shared))
+			if (
+				settings === null ||
+				organizationId === undefined ||
+				model.isSaving ||
+				!isCustomersAdmin(shared)
+			)
 				return { model }
 			const others = settings.addOnPlans.filter((name) => name !== plan)
 			const addOnPlans = isAddOn ? [...others, plan] : others
 			return {
-				model: { ...model, settings: { ...settings, addOnPlans } },
+				model: { ...model, settings: { ...settings, addOnPlans }, isSaving: true },
 				commands: [SaveAddOnPlans({ organizationId, settingsId: settings.id, addOnPlans })],
 			}
 		},
@@ -46,10 +51,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		FailedFetchPlans: ({ reason }) => ({
 			model: { ...model, plans: AsyncData.Failure({ error: reason }) },
 		}),
-		SucceededSaveAddOnPlans: () => ({ model }),
+		SucceededSaveAddOnPlans: () => ({ model: { ...model, isSaving: false } }),
 		// The collection rolls the row back, and the settings stream with it.
 		FailedSaveAddOnPlans: ({ reason }) => ({
-			model,
+			model: { ...model, isSaving: false },
 			outMessage: PageOutMessage.RequestedToast({ toast: reasonToast(reason) }),
 		}),
 	})

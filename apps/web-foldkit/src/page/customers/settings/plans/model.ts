@@ -22,6 +22,8 @@ export const Model = Schema.Struct({
 	settings: Schema.NullOr(SavedSettings),
 	/** `customers.plans.list`. */
 	plans: Plans.schema,
+	/** A save is in flight: the switches wait for it, so saves cannot land out of order. */
+	isSaving: Schema.Boolean,
 })
 export type Model = typeof Model.Type
 

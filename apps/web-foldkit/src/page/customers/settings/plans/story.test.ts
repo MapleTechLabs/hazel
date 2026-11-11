@@ -63,11 +63,11 @@ describe("plans settings", () => {
 			name: SaveAddOnPlans.name,
 			args: { organizationId, settingsId, addOnPlans: ["Legacy add-on", "BYOK"] },
 		})
-		const unmarked = update(
-			marked.model,
-			Message.ToggledAddOn({ plan: "Legacy add-on", isAddOn: false }),
-			admin,
-		)
+		expect(
+			update(marked.model, Message.ToggledAddOn({ plan: "Pro", isAddOn: true }), admin).commands ?? [],
+		).toHaveLength(0)
+		const saved = update(marked.model, Message.SucceededSaveAddOnPlans(), admin).model
+		const unmarked = update(saved, Message.ToggledAddOn({ plan: "Legacy add-on", isAddOn: false }), admin)
 		expect(unmarked.commands?.[0]).toMatchObject({ args: { addOnPlans: ["BYOK"] } })
 	})
 

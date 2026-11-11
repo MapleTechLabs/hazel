@@ -49,7 +49,7 @@ const plansCard = (h: HtmlBuilder<Message>, model: Model, canEdit: boolean): Htm
 		})
 	return h.ul(
 		[h.Class(`${CARD} divide-y divide-border`)],
-		plans.map((plan) => planRow(h, plan, addOns.has(plan), canEdit)),
+		plans.map((plan) => planRow(h, plan, addOns.has(plan), canEdit && !model.isSaving)),
 	)
 }
 
@@ -76,10 +76,10 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	return settingsPage(h, [
 		settingsHeader(h, { title: "Plans", subtitle: SUBTITLE }),
 		...(canEdit ? [] : [readOnlyNotice(h, "plans")]),
-		model.settings === null || AsyncData.isIdle(model.plans) || AsyncData.isLoading(model.plans)
-			? h.div([h.Class("flex justify-center py-16")], [loader(h, { ariaLabel: "Loading plans" })])
-			: AsyncData.isFailure(model.plans)
-				? failure(h, model.plans.error)
+		AsyncData.isFailure(model.plans)
+			? failure(h, model.plans.error)
+			: model.settings === null || AsyncData.isIdle(model.plans) || AsyncData.isLoading(model.plans)
+				? h.div([h.Class("flex justify-center py-16")], [loader(h, { ariaLabel: "Loading plans" })])
 				: plansCard(h, model, canEdit),
 	])
 })

@@ -29,6 +29,17 @@ const rollupOf = (
 const BYOK = "Bring Your Own OpenRouter Key"
 
 describe("account rollup", () => {
+	it("names a named add-on over an unnamed subscription", () => {
+		const rollup = rollupOf(
+			[
+				{ planName: null, mrrMinor: 0 },
+				{ planName: BYOK, mrrMinor: 1_500 },
+			],
+			[BYOK],
+		)
+		expect(rollup.planName).toBe(BYOK)
+	})
+
 	it("names the plan after the paying subscription with the most MRR", () => {
 		const rollup = rollupOf([
 			{ planName: "Pro", mrrMinor: 3_900 },
