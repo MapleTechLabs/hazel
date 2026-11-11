@@ -1084,9 +1084,10 @@ fn grid_fill(st: &Style, children: &[Arc<Node>]) -> Option<Vec<Arc<Node>>> {
         return None;
     };
     let auto_block_margin = child.margin_auto.is_some_and(|m| m[0] || m[2]);
+    // `h-fit` is a size, never stretched.
     if matches!(
         child.h,
-        Some(wire::Len::Px(_) | wire::Len::Full | wire::Len::Frac(_))
+        Some(wire::Len::Px(_) | wire::Len::Full | wire::Len::Frac(_) | wire::Len::Fit)
     ) || child.grow.is_some()
         || !stretches(&child.align_self)
         || auto_block_margin
