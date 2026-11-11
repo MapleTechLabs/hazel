@@ -10,6 +10,8 @@ import { editorRegistry } from "../../web-foldkit/src/editor/registry"
 import { replaceFieldText } from "./text-edit"
 
 let dom: JSDOM | undefined
+/** Each editor element's Mount path: the host keys the editor's native field by it. */
+const editorPaths = new WeakMap<object, string>()
 
 /**
  * Loads the headless DOM off the boot path (it costs ~130 ms) and routes element creation and
@@ -18,6 +20,7 @@ let dom: JSDOM | undefined
 export const loadHeadlessDom = async (
 	globals: Readonly<{ document: object; shims: ReadonlyArray<unknown> }>,
 	onReady: () => void,
+	onEditorFocus: (path: string) => void,
 ) => {
 	const { JSDOM } = await import("jsdom")
 	const loaded = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true })
@@ -38,14 +41,27 @@ export const loadHeadlessDom = async (
 				Function.prototype[Symbol.hasInstance].call(shim, value) || value instanceof DomElement,
 		})
 	}
+	// An editor focusing itself (`view.focus()`: the composer opening, a key typed outside it) takes
+	// the keyboard as in a browser, so the native field drawn over it must. jsdom neither focuses a
+	// contenteditable nor fires an event for it, so the call itself is the signal.
+	const HTMLElement = loaded.window.HTMLElement
+	const focus = HTMLElement.prototype.focus
+	HTMLElement.prototype.focus = function (this: HTMLElement, options?: FocusOptions) {
+		focus.call(this, options)
+		for (let node: Node | null = this; node !== null; node = node.parentNode) {
+			const path = editorPaths.get(node)
+			if (path !== undefined) return onEditorFocus(path)
+		}
+	}
 	onReady()
 }
 
 /** The element the editor Mount attaches ProseMirror to, once the headless DOM has loaded. */
-export const makeEditorElement = () => {
+export const makeEditorElement = (path: string) => {
 	if (dom === undefined) return undefined
 	const element = dom.window.document.createElement("div")
 	dom.window.document.body.appendChild(element)
+	editorPaths.set(element, path)
 	return element
 }
 
