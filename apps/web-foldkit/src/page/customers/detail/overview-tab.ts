@@ -255,7 +255,10 @@ const usageCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Htm
 									net: point.value,
 								})),
 								formatValue: (value) => formatMetricValue(value, unit),
-								formatAxis: formatCompact,
+								formatAxis: (value) =>
+									Math.abs(value) < 1
+										? formatMetricValue(value, null)
+										: formatCompact(value),
 								integerTicks: values.every(Number.isInteger),
 								hoveredIndex: model.hoveredUsage,
 								onHover: (index) => Message.HoveredUsage({ index }),
