@@ -133,7 +133,7 @@ Built-in templates (seeded per org, editable):
 
 ### Sync bookkeeping
 
-- Providers `clerk | stripe | autumn | maple` are added to `integration_provider`. Stripe and Autumn need an **API-key connect flow** (new). Clerk: API key + webhook secret. Maple: API key / org id.
+- Providers `clerk | stripe | autumn | maple` are added to `integration_provider`. Stripe and Autumn need an **API-key connect flow** (new). Clerk: API key + webhook secret. Maple: API key + region (the org comes from the key).
 - **`customer_sync_runs`**: `connectionId`, `trigger`: `schedule | webhook | manual | backfill`, `status`: `running | succeeded | failed`, `startedAt`, `finishedAt`, `stats jsonb` (accounts/contacts/subs/invoices/events upserted), `error`.
 - Webhook URL per connection: `/webhooks/customers/{provider}/{connectionId}`, verified with that connection's secret.
 

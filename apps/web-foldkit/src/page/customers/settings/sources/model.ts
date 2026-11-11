@@ -155,17 +155,12 @@ export const settingsOf = (model: Model, connection: ConnectionRow): Customers.C
 export const isSettingsDirty = (model: Model, connection: ConnectionRow): boolean =>
 	model.settingsDraft !== null && !isSameConfig(model.settingsDraft, connection.config)
 
-/** Why the settings can't be saved yet: Maple needs its organization, and each metric row both halves. */
+/** Why the settings can't be saved yet: each Maple metric row needs both halves. */
 export const settingsProblemOf = (config: Customers.ConnectionConfig): string | null =>
-	config._tag !== "maple"
+	config._tag !== "maple" ||
+	config.metricMappings.every((mapping) => mapping.event.trim() !== "" && mapping.metricKey.trim() !== "")
 		? null
-		: config.mapleOrgId.trim() === ""
-			? "Name the Maple organization"
-			: config.metricMappings.every(
-						(mapping) => mapping.event.trim() !== "" && mapping.metricKey.trim() !== "",
-				  )
-				? null
-				: "Fill in or remove the empty metric rows"
+		: "Fill in or remove the empty metric rows"
 
 export const isSettingsValid = (config: Customers.ConnectionConfig): boolean =>
 	settingsProblemOf(config) === null

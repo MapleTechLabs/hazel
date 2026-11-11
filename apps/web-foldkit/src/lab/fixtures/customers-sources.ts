@@ -43,7 +43,6 @@ export const MAPLE_SETTINGS_CONNECTION: Connection = {
 	externalAccountName: "Northwind",
 	config: {
 		...DEFAULT_CONNECTION_CONFIG.maple,
-		mapleOrgId: "org_mpl_8HqZZe",
 		activityEvents: [
 			"query_run",
 			"dashboard_viewed",
