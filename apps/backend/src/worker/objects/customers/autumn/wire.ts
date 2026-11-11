@@ -123,6 +123,10 @@ const AutumnBalanceGrant = Schema.Struct({
 	plan_id: Nullable(Schema.String),
 	prepaid_grant: Nullable(Schema.Number),
 	source: Nullable(Schema.String),
+	/** How the grant resets (`month`, `week`, …, `interval_count` of them); null: it never does. */
+	reset: Nullable(
+		Schema.Struct({ interval: Nullable(Schema.String), interval_count: Nullable(Schema.Number) }),
+	),
 	price: Nullable(
 		Schema.Struct({
 			amount: Nullable(Schema.Number),
@@ -140,6 +144,8 @@ export const AutumnBalance = Schema.Struct({
 	granted: Nullable(Schema.Number),
 	usage: Nullable(Schema.Number),
 	unlimited: Nullable(Schema.Boolean),
+	/** Unix ms of the next reset; null for a balance that never resets (seats, lifetime units). */
+	next_reset_at: Nullable(Schema.Number),
 	breakdown: Nullable(Schema.Array(AutumnBalanceGrant)),
 })
 export type AutumnBalance = typeof AutumnBalance.Type
@@ -211,6 +217,20 @@ export const AutumnCustomer = Schema.Struct({
 	balances: Nullable(Schema.Record(Schema.String, AutumnBalance)),
 })
 export type AutumnCustomer = typeof AutumnCustomer.Type
+
+/**
+ * `POST /v1/events.aggregate` (API ≥ 2.1): one bin per period (epoch ms of its start), its
+ * `values` the sum of the events tracked per feature id in it.
+ */
+export const AutumnUsageAggregate = Schema.Struct({
+	list: Schema.Array(
+		Schema.Struct({
+			period: Schema.Number,
+			values: Nullable(Schema.Record(Schema.String, Schema.Number)),
+		}),
+	),
+})
+export type AutumnUsageAggregate = typeof AutumnUsageAggregate.Type
 
 export const AutumnCustomersPage = Schema.Struct({
 	list: Schema.Array(AutumnCustomer),

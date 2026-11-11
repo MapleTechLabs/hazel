@@ -48,6 +48,13 @@ import {
  */
 export const AUTUMN_PULL_INTERVAL_MS = 6 * 60 * 60_000
 
+/**
+ * Walks rebuild usage history (`./pull.ts`) on a backfill, and on a scheduled walk whose last
+ * success predates this: a connection imported before history was read gets it once, on its first
+ * walk after the deploy, as its success then moves past this time.
+ */
+export const AUTUMN_USAGE_HISTORY_FROM = Date.UTC(2026, 10, 14)
+
 const refused = (message: string) =>
 	new CustomerProviderError({ code: "auth", message, httpStatus: null, retryAfterMs: null })
 
@@ -153,7 +160,13 @@ export const makeAutumnAdapter = Effect.gen(function* () {
 			Option.match(connectionOf(input.credentials), {
 				onNone: () => Effect.fail(refused(UNVALIDATED)),
 				onSome: (connection) =>
-					pullPage({ ...connection, cursor: input.cursor, config: input.credentials.config }),
+					pullPage({
+						...connection,
+						cursor: input.cursor,
+						config: input.credentials.config,
+						usageHistory:
+							input.since === null || input.since.getTime() < AUTUMN_USAGE_HISTORY_FROM,
+					}),
 			}),
 
 		pullIntervalMs: AUTUMN_PULL_INTERVAL_MS,

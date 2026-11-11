@@ -217,11 +217,12 @@ year's history in one go.
 
 ## Syncing
 
-| Phase           | Request                                                              | Writes                                             | Requests |
-| --------------- | -------------------------------------------------------------------- | -------------------------------------------------- | -------- |
-| `features`      | `POST /v1/features.list`                                             | a metric definition per metered feature            | 1        |
-| `customers`     | `POST /v1/customers.list` (100 a page, oldest first, plans expanded) | accounts, seats, feature usage, live plans and MRR | 1 (+2)   |
-| `subscriptions` | `POST /v1/subscriptions.list` (200 a page, all states)               | ended plans                                        | 1 (+2)   |
+| Phase           | Request                                                              | Writes                                             | Requests       |
+| --------------- | -------------------------------------------------------------------- | -------------------------------------------------- | -------------- |
+| `features`      | `POST /v1/features.list`                                             | a metric definition per metered feature            | 1              |
+| `customers`     | `POST /v1/customers.list` (100 a page, oldest first, plans expanded) | accounts, seats, feature usage, live plans and MRR | 1 (+2)         |
+| `subscriptions` | `POST /v1/subscriptions.list` (200 a page, all states)               | ended plans                                        | 1 (+2)         |
+| `usage`         | `POST /v1/customers.list` (25 a page) + `POST /v1/events.aggregate`  | the last 90 days of feature usage (history walks)  | 1 + 1/customer |
 
 (+2: the pricing lookup, `plans.list` + `organization`, when the page has a plan to price and the
 connection's pricing is not cached.)
@@ -230,6 +231,18 @@ Every pull is a **full walk** of the organization's environment: no Autumn listi
 change time (`customers.list` filters by _creation_ time only), so `since` cannot narrow one. Ingest
 writes only what actually changed, so an unchanged row never reaches the change log. Webhooks carry
 the live signal; the walk is the reconciliation behind them, which is why its period is **6 hours**.
+
+**Usage history.** A balance is only today's level, so a walk alone would chart usage from the day
+the source was connected. A backfill walk (and, once, the first walk of a connection imported
+before history was read: `AUTUMN_USAGE_HISTORY_FROM`) ends with a `usage` phase: for each customer
+holding a balance, one `events.aggregate` request (every such feature, a bin per UTC day, from the
+start of the day the oldest balance period in the window began) rebuilds the last 90 days, today's
+excluded. A metric is the level of the feature's current period, so a past day's is too: in the
+current period (all of it for a balance that never resets) today's usage less what was used after
+that day; in an earlier period, what was used from the day it began (the next reset stepped back by
+its interval, by calendar in UTC) through that day. Days before the customer was created are left
+out, and so is the limit (a past day's plan is not known; the stored one stays). A key Autumn
+refuses events to (403, no analytics scope) ends the phase without failing the walk.
 
 **Live plans come with their customer.** The customer listing takes the same `expand` as
 `customers.get` (Autumn reads it off any request body), so each live plan arrives as the customer
@@ -335,6 +348,13 @@ Svix's `svix-id` — so a redelivery writes one entry.
   message and **no sweep**; the next scheduled pull starts a new run from the start.
 
 ## Known gaps
+
+- **Rebuilt usage is approximate.** It sums the events tracked through `track`; usage Autumn set
+  directly (a balance update, a rollover, a prepaid top-up) moves today's level but no event, so
+  the current period's past days absorb the difference and earlier periods miss it. The day an
+  earlier period began counts in full, its hours before the reset included. A balance whose grants
+  reset on different intervals, or more often than daily, is not rebuilt. A customer listing Autumn
+  cut short (an id-less customer) ends the phase there.
 
 - **Usage-based prices are not in the MRR.** A plan billed only per unit used (a `$0` base with a
   `usage_based` item) reports MRR 0: the amount is not knowable before the period's invoice. The
