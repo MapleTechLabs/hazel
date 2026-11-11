@@ -36,3 +36,7 @@ tauri-plugin-window-state = "2"
 tauri-plugin-decorum = "1"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSDictionary", "NSString", "NSUserDefaults", "NSValue"] }

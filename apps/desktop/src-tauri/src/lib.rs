@@ -43,8 +43,26 @@ fn auth_vault_write(record: String) -> Result<(), String> {
     }
 }
 
+/// Holding a key should open the macOS accent picker (e.g. hold "s" for "ß") instead of
+/// repeating it. The webview doesn't turn this on by itself, so register it as the app default.
+/// A user's own `defaults write` setting still wins over this.
+#[cfg(target_os = "macos")]
+fn enable_press_and_hold() {
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::{NSDictionary, NSNumber, NSString, NSUserDefaults};
+
+    let key = NSString::from_str("ApplePressAndHoldEnabled");
+    let value = NSNumber::new_bool(true);
+    let value: &AnyObject = &value;
+    let defaults = NSDictionary::from_slices(&[&*key], &[value]);
+    unsafe { NSUserDefaults::standardUserDefaults().registerDefaults(&defaults) };
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "macos")]
+    enable_press_and_hold();
+
     let builder = tauri::Builder::default();
 
     // Must be the first plugin: a second launch (a `com.hazel.app://` link on Windows and

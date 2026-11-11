@@ -76,6 +76,8 @@ version = "1.1.2"
 dependencies = [
  "keyring",
  "log",
+ "objc2",
+ "objc2-foundation",
  "serde",
  "serde_json",
  "tauri",
