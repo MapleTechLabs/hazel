@@ -36,8 +36,6 @@ export const PageOutMessage = defineMessageUnion({
 	RequestedSoundSettings: { settings: SoundSettings },
 	/** Re-run `user.me` (legacy `useAtomRefresh(userAtom)`), with the toast that goes with it. */
 	RequestedCurrentUserRefresh: { toast: Schema.optionalKey(ToastRequest) },
-	/** The mobile header's menu button: open the sidebar sheet (`setIsOpenOnMobile(true)`). */
-	RequestedMobileSidebar: {},
 	/** Desktop: check for an app update now; read the result back as `Shared.desktopUpdate`. */
 	RequestedUpdateCheck: {},
 	/** Desktop: download and install the available update, then relaunch. */

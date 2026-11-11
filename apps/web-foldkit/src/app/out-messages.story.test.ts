@@ -279,23 +279,6 @@ describe("RequestedDmCreation", () => {
 	})
 })
 
-describe("RequestedMobileSidebar", () => {
-	test("the channel header's menu button opens the shell's sidebar sheet", () => {
-		const channelId = "00000000-0000-4000-8000-0000000000c1"
-		story(
-			update,
-			given(signedIn(`/hazel/chat/${channelId}`)),
-			message(
-				Message.GotPageMessage({
-					message: { _tag: "ChatChannel", message: { _tag: "ClickedMobileMenu" } },
-				}),
-			),
-			Command.expectNone(),
-			model((m) => expect(m.shell.isSidebarOpen).toBe(true)),
-		)
-	})
-})
-
 describe("RequestedSoundSettings", () => {
 	test("the notifications page's sound toggle is stored by the root and shared back", () => {
 		const off = { ...DEFAULT_SOUND_SETTINGS, enabled: false }

@@ -30,8 +30,8 @@ export interface HeaderInputs {
 	readonly dmPresence: PresenceStatus | null
 	/** The pinned messages trigger (a popover trigger with its overlay). */
 	readonly pinnedTrigger: Html
-	/** The mobile menu button (`md:hidden`), with an extra className for the fallback header. */
-	readonly mobileMenu: (className?: string) => Html
+	/** A phone's back button (`md:hidden`) to the chat list, or a thread's channel; empty elsewhere. */
+	readonly mobileBack: Html
 }
 
 const ROW = "flex h-14 shrink-0 items-center justify-between border-border border-b bg-bg px-4"
@@ -50,15 +50,16 @@ export const pinnedButton = <M>(
 		[IconPin(h, { attributes: { "data-slot": "icon" } })],
 	)
 
+/** On a phone the back button leads to the parent channel, so the breadcrumb shows the thread alone. */
 const threadTitle = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs, channel: ChannelInfo): Html =>
 	h.div(
-		[h.Class("flex items-center gap-2")],
+		[h.Class("flex min-w-0 items-center gap-2")],
 		[
 			inputs.parentChannel && channel.parentChannelId && inputs.orgSlug !== null
 				? h.a(
 						[
 							h.Class(
-								"flex items-center gap-1.5 text-muted-fg transition-colors hover:text-fg",
+								"flex items-center gap-1.5 text-muted-fg transition-colors hover:text-fg max-md:hidden",
 							),
 							h.Href(
 								hrefOf(
@@ -75,9 +76,9 @@ const threadTitle = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs, channel: Channe
 						],
 					)
 				: h.empty,
-			IconChevronRight(h, { className: "size-4 shrink-0 text-muted-fg" }),
+			IconChevronRight(h, { className: "size-4 shrink-0 text-muted-fg max-md:hidden" }),
 			h.div(
-				[h.Class("flex items-center gap-1.5")],
+				[h.Class("flex min-w-0 items-center gap-1.5")],
 				[
 					IconThread(h, { className: "size-4 shrink-0 text-muted-fg" }),
 					h.h2([h.Class("truncate font-semibold text-fg text-sm")], [channel.name]),
@@ -137,7 +138,7 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 		return h.div(
 			[h.Class("flex h-14 shrink-0 items-center border-border border-b bg-bg px-4")],
 			[
-				inputs.mobileMenu("mr-3"),
+				inputs.mobileBack,
 				channel
 					? h.div(
 							[h.Class("flex items-center gap-3")],
@@ -154,9 +155,9 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 		[h.Class(ROW)],
 		[
 			h.div(
-				[h.Class("flex items-center gap-3")],
+				[h.Class("flex min-w-0 items-center gap-3")],
 				[
-					inputs.mobileMenu(),
+					inputs.mobileBack,
 					...(channel.type === "thread"
 						? [threadTitle(h, inputs, channel)]
 						: isDirectMessage
@@ -165,7 +166,12 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 									channelIcon(h, channel.icon, "size-5 text-muted-fg"),
 									h.div(
 										[h.Class("flex items-center gap-2")],
-										[h.h2([h.Class("font-semibold text-fg text-sm")], [channel.name])],
+										[
+											h.h2(
+												[h.Class("truncate font-semibold text-fg text-sm")],
+												[channel.name],
+											),
+										],
 									),
 								]),
 				],

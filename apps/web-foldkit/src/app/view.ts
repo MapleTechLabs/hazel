@@ -158,11 +158,29 @@ const loader = (h: HtmlBuilder<Message>, isStalled: boolean): Html =>
 const appRoot = (h: HtmlBuilder<Message>, model: Model, children: ReadonlyArray<Html>): Html =>
 	h.div([h.Id("app")], [toaster(h, model), ...children])
 
+/**
+ * On a phone, the chat list is the Chats tab's page (the channels sidebar, full screen) rather
+ * than a sheet behind a menu button: a channel opens from it, and its header leads back.
+ */
+const phoneChatList = (h: HtmlBuilder<Message>, sidebar: Html): Html =>
+	h.main(
+		[
+			h.Attribute("data-slot", "sidebar"),
+			h.Attribute("data-intent", "default"),
+			h.Class("flex h-full min-h-0 w-full flex-col bg-sidebar text-sidebar-fg [--sidebar-width:100%]"),
+		],
+		[sidebar],
+	)
+
 const orgShellView = (model: Model, h: HtmlBuilder<Message>, data: ShellData): Html => {
 	const context = shellContextOf(model, data)
+	const sidebar = secondarySidebar(model, h, context)
 	return orgShell(h, context, {
-		page: sectionBody(model, h),
-		secondarySidebar: secondarySidebar(model, h, context),
+		page:
+			model.isMobile && model.route._tag === "ChatIndex"
+				? phoneChatList(h, sidebar)
+				: sectionBody(model, h),
+		secondarySidebar: sidebar,
 		// The bell reads `useUnreadNotificationCount`, which has no optimistic layer.
 		unreadNotificationCount: model.shell.notifications.unreadIds.length,
 		toaster: toaster(h, model),

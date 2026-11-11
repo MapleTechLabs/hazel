@@ -478,7 +478,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 							replace: false,
 						}),
 					},
-		ClickedMobileMenu: () => ({ model, outMessage: PageOutMessage.RequestedMobileSidebar() }),
 		UpdatedParentChannel: ({ channel }) => ({
 			model: modifyFields(model, { parentChannel: () => channel }),
 		}),

@@ -461,11 +461,6 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 		RequestedCurrentUserRefresh: ({ toast }) => Update.combine([showToastIf(toast), refreshCurrentUser]),
 		RequestedUpdateCheck: () => stepUpdates(Updates.check),
 		RequestedUpdateInstall: () => stepUpdates(Updates.install),
-		// The shell owns its sheet: the root sends it the same Message as its header button.
-		RequestedMobileSidebar: () => (model) =>
-			foldShell(model, (shell) =>
-				Shell.update(shell, ShellMessage.ToggledSidebar({ isOpen: true }), shellContextOf(model)),
-			),
 	})
 
 // SESSION

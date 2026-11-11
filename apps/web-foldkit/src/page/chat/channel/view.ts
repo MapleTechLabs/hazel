@@ -11,7 +11,7 @@ import { dateDividerView, messageRowView, type RowContext } from "../../../chat/
 import type * as Draft from "../../../composer/draft"
 import { draftView } from "../../../composer/draft-view"
 import * as MessageList from "../../../mount/message-list"
-import { mobileMenuButton } from "../../../shell/mobile"
+import { mobileBackLink } from "../../../shell/mobile"
 import { joinBannerView, typingIndicatorView } from "../banners"
 import { attachmentInfoFrom, composerAreaView, replyPreviewOf } from "../composer-view"
 import { authorIdentity, toDeriveContext } from "../derive"
@@ -324,13 +324,17 @@ const headerView = (
 		}),
 		isHiddenDm: currentMember?.isHidden ?? false,
 		dmPresence,
-		// Legacy renders the menu button only on mobile (`isMobile` in `ChatHeader`).
-		mobileMenu: (className) =>
-			isMobile
-				? mobileMenuButton(h, {
-						onPress: h.OnClick(Message.ClickedMobileMenu()),
-						...(className === undefined ? {} : { className }),
-					})
+		// A phone opens a conversation from the chat list; a thread from its channel.
+		mobileBack:
+			isMobile && orgSlug !== null
+				? channel?.type === "thread" && channel.parentChannelId
+					? mobileBackLink(
+							h,
+							hrefOf(AppRoute.ChatChannel({ orgSlug, channelId: channel.parentChannelId })),
+							parentChannel?.name ?? "channel",
+							"-ml-3 -mr-1",
+						)
+					: mobileBackLink(h, hrefOf(AppRoute.ChatIndex({ orgSlug })), "Chats", "-ml-3 -mr-1")
 				: h.empty,
 		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, toPinnedMessage),
 	})
@@ -370,7 +374,8 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 			h.Class(
 				rootStyles({
 					className: cn(
-						"relative h-[calc(100dvh-4rem)] md:h-dvh",
+						// A phone's shell sizes the page; the desktop's is the window.
+						"relative h-full md:h-dvh",
 						// While the thread panel's edge is dragged: no text selection, and frames never take the pointer.
 						model.threadPanelDrag !== null &&
 							"cursor-col-resize select-none [&_iframe]:pointer-events-none",

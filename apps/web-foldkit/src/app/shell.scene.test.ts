@@ -20,6 +20,8 @@ import {
 } from "foldkit/scene"
 import { describe, test } from "vitest"
 import * as CommandPalette from "../overlay/command-palette"
+import { AutoFocusSearch } from "../page/home/commands"
+import { Message as HomeMessage } from "../page/home/message"
 import { CreateChannel, FocusInput } from "../overlay/command-palette/commands"
 import { ada, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
 import { drainToast } from "../test/toast-fixtures"
@@ -59,22 +61,49 @@ describe("nav rail", () => {
 
 describe("mobile", () => {
 	const mobile = Message.ChangedViewport({ isMobile: true })
+	const tabs = role("navigation", { name: "Tabs" })
 
-	test("the bottom nav's Menu button opens the sidebar sheet", () => {
+	test("a section's top bar opens its sidebar sheet; the tab bar has no Menu tab", () => {
 		scene(
 			rootScene,
 			given(signedIn("/hazel/settings/team")),
 			...menusMounted,
-			sceneExpect(role("button", { name: /Menu/ })).toBeAbsent(),
 			Subscription.emit(mobile),
 			// The desktop dock (and its two menus) leaves the tree.
 			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress),
+			sceneExpect(within(tabs, navItem("Settings"))).toHaveAttr("aria-current", "page"),
+			sceneExpect(within(tabs, role("button", { name: /Menu/ }))).toBeAbsent(),
 			sceneExpect(role("dialog", { name: "Sidebar" })).toBeAbsent(),
-			click(role("button", { name: /Menu/ })),
+			click(role("button", { name: "Settings menu" })),
 			sceneExpect(role("dialog", { name: "Sidebar" })).toExist(),
 			Mount.resolve(Modal.AcquireResources, Modal.Message.SucceededAcquireResources()),
 			...menusMounted,
 			sceneExpect(within(role("dialog", { name: "Sidebar" }), navItem("Settings"))).toExist(),
+		)
+	})
+
+	test("the Chats tab is the chat list, and Members opens from it with a way back", () => {
+		scene(
+			rootScene,
+			given(signedIn("/hazel/chat")),
+			...menusMounted,
+			// The channels sidebar moves from the dock into the page, its org switcher and user menu
+			// still mounted.
+			Subscription.emit(mobile),
+			sceneExpect(within(tabs, navItem("Chats"))).toHaveAttr("aria-current", "page"),
+			sceneExpect(navItem("Members")).toExist(),
+			sceneExpect(role("dialog", { name: "Sidebar" })).toBeAbsent(),
+		)
+		scene(
+			rootScene,
+			given(signedIn("/hazel")),
+			...menusMounted,
+			// The desktop focuses the member search; a phone leaves its keyboard down.
+			Mount.resolve(AutoFocusSearch, HomeMessage.CompletedFocusSearch()),
+			Subscription.emit(mobile),
+			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress, AutoFocusSearch),
+			sceneExpect(role("link", { name: "Back to Chats" })).toHaveAttr("href", "/hazel/chat"),
+			sceneExpect(within(tabs, navItem("Chats"))).toHaveAttr("aria-current", "page"),
 		)
 	})
 })
