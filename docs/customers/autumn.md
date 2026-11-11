@@ -4,7 +4,7 @@ The **MRR source of every account it bills**, once its first import finished: an
 lands on the account an identity source already created, the **plans** it holds become the MRR, the
 plan name, the trial and the payment state, and its **feature balances** become the daily usage
 metrics and plan limits the `near_limit` signal reads. Stripe keeps the invoices either way, and the
-MRR of an account Autumn holds no plan of (`tech-design.md` §4.2).
+MRR of an account Autumn bills nothing (no plan, or only a free one; `tech-design.md` §4.2).
 Adapter: `apps/backend/src/worker/objects/customers/autumn/`, registered in `customers/providers.ts`.
 It produces `IngestOp`s only — `CustomerIngest` does every write (`tech-design.md` §3).
 
@@ -111,7 +111,8 @@ colliding with a Maple event metric of the same name. The built-in keys (`active
 
 A `scheduled` plan is skipped: it bills nothing yet, Hazel's model has no scheduled status, and
 recording it as active would count a future plan's amount as MRR today. A **downgrade** is a
-scheduled paid base plan (not an add-on, not `auto_enable`, with MRR or a usage price) in the
+scheduled paid base plan (not an add-on, not `auto_enable`, with MRR, a usage price or a `prepaid`
+item at any price) in the
 current plan's `group`, which Autumn marks `canceled_at`: that is a plan change, not a cancellation,
 so the current plan keeps `cancelAtPeriodEnd` false (no `cancel_scheduled` entry, no false churn)
 and ingest sees the change when the new plan starts. Canceling a plan at the period's end also
@@ -155,10 +156,17 @@ currency table Autumn bills through.
   knowable in advance (Stripe's metered prices are left out the same way). A plan billed only that
   way, a `one_off` base price, or a plan with no price at all (Autumn's free tier) is **MRR 0**. See
   Known gaps.
-- An **ended plan no processor ever billed** (no `current_period_end`: a trial that lapsed
-  unconverted) is MRR 0 and never `billsByUsage`, so an account whose only plan was that trial reads
-  as a `lead`, not `churned` (compute calls an account churned when a canceled subscription had MRR
-  or billed by usage).
+- A **plan no processor ever billed** (no `current_period_end`) is MRR 0 and never `billsByUsage`:
+  an ended one (a trial that lapsed unconverted), or a live one past a card-less trial Autumn has
+  not converted yet (no `trial_ends_at` left, the plan has a `free_trial`). An account whose only
+  plan was that trial reads as a `lead`, not `active` or `churned` (compute calls an account churned
+  when a canceled subscription had MRR or billed by usage). A live plan without a trial and without
+  a billing period keeps its price: Autumn attaches a paid plan billed outside Stripe that way
+  (`no_billing_changes`).
+- A **`past_due` plan with prepaid items and no grant in the balances** sends no `mrrMinor` (nor
+  `listMrrMinor`, `billsByUsage`), and ingest keeps the stored MRR: Autumn's balances carry only
+  active plans' grants unless the organization counts past_due ones (`include_past_due`), so the
+  read cannot price its prepaid units. A plan first seen that way is stored at MRR 0.
 - Prices are the **customer's own**: both customer reads expand each live plan
   (`expand: ["subscriptions.plan"]`), which carries a custom price and the version the customer is
   on. An ended plan (from `subscriptions.list`, which cannot expand) is priced from
@@ -172,12 +180,15 @@ currency table Autumn bills through.
 - The plans and the currency (`GET /v1/organization`) are kept **5 minutes per connection** in the
   isolate's memory, so a walk or a burst of deliveries reads them about once.
 
-**Which billing source counts.** Per account (`billingProviderOf`): an account's MRR comes from
-**Autumn** once its connection finished its first import (`backfilledAt` set, not disconnected)
-**and** the account has at least one Autumn subscription (any status); else from Stripe — a customer
-Autumn does not know, or one billed in Stripe outside it. An account with Autumn subscriptions and
-none in Stripe keeps Autumn's either way, so a disconnect does not zero its MRR. The other provider's
-subscriptions are ignored for that account's MRR, and a switch of source writes no MRR movement.
+**Which billing source counts.** Per account (`billingProviderOf`): an account with Autumn
+subscriptions and none in Stripe takes Autumn's, whatever the connection's state, so a disconnect
+does not zero its MRR. An account with both takes **Autumn's** once its connection finished its
+first import (`backfilledAt` set, not disconnected) **and** one of its Autumn subscriptions pays or
+paid (MRR, or `billsByUsage`; a trial canceled unconverted does not), else Stripe's — an
+auto-enabled free Autumn plan does not take billing over from Stripe. An account with no Autumn
+subscription takes Stripe's. The other provider's subscriptions are ignored for that account's MRR.
+A switch of source between two non-zero MRRs writes no MRR movement (the same revenue, recounted);
+one from or to 0 (an upgrade from a free Autumn plan that Stripe reports first) writes its movement.
 Invoices always come from Stripe. While Autumn's backfill is importing, or its history rebuild is
 pending, compute writes no MRR movements: the rebuild after the backfill writes the year's history
 in one go.
@@ -221,10 +232,12 @@ walk. Core caps every sweep (a type whose removals would exceed 20% of the provi
 and 10 records is not swept). The walk itself leaves out what it could not list completely, with a
 warning logged:
 
-- **no sweep at all** when a customer page comes without `next_cursor` and its last customer has no
-  id of its own: Autumn drops the cursor then (`CusBatchService.getCursorPage`), ending the listing
-  early. Checked on any page, not only a full one (a page may be short, below), so an organization
-  whose newest customer has no id is never swept;
+- **no sweep at all** when a customer page comes without `next_cursor`, its last customer has no
+  id of its own and no `created_at`. Autumn drops the cursor on any page ending on an id-less
+  customer (`CusBatchService.getCursorPage`), more customers or not. It lists by creation time, then
+  id with the id-less last, so the walk goes on from the millisecond after that customer's
+  creation (`created_at_range.start`): every customer with an id up to it was read. A page without a
+  cursor whose last customer has an id, or that is empty, is the real end;
 - **no sweep at all** when a customer page has a `next_cursor` but fewer customers than asked for:
   Autumn logs and drops a customer it fails to serialize, and that customer must not be removed;
 - **no sweep of a listing** with a row Hazel cannot decode: the row is logged (phase and count only)
@@ -356,5 +369,13 @@ Svix's `svix-id` — so a redelivery writes one entry.
   looks complete, and the sweep cancels the plans it did not list.
 - **An unlimited feature has no `limitValue`**, so `near_limit` never fires on it — correctly, there
   is no limit to be near — and neither does a feature the plan grants nothing of.
+- **Id-less customers' rows are recognised by shape.** `subscriptions.list` names Autumn's internal
+  id for a customer without one of its own; a `customer_id` that looks like one (`cus_` and 27
+  base-62 characters) is skipped. An app whose own customer ids take that shape has those
+  customers' ended plans skipped too (their live plans are read with the customer).
+- **An upgrade can count twice within one walk.** A pull writes a customer's new plan in its
+  customer phase, and the plan it replaced ends only in the subscription phase pages later; a
+  compute in between counts both. The next compute settles it, and the same day's movements merge.
+  A `billing.updated` delivery reads both at once and does not have the gap.
 - **A feature's `next_reset_at` is not stored.** A metric is the day's level of the current period;
   the day a consumable feature resets looks like a drop in the series rather than a new period.

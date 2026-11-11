@@ -41,10 +41,11 @@
  * customers it did not see and cancels the plans it did not read (a customer deleted in Autumn,
  * which sends no webhook for it). Not when the walk could not see everything:
  *
- * - a customer page with no `next_cursor` whose last customer has no id: Autumn drops the cursor
- *   then (`CusBatchService.getCursorPage`), ending the listing early. A page may be short of
- *   customers (below), so this holds for any page, at the price of never sweeping an organization
- *   whose newest customer has no id;
+ * - a customer page with no `next_cursor` whose last customer has no id and no creation time.
+ *   Autumn drops the cursor on a page ending on an id-less customer (`CusBatchService.getCursorPage`),
+ *   more customers or not; the listing goes on from the millisecond after that customer's creation
+ *   (`created_at_range.start`, see `customersPage`), so only a page without a cursor whose last
+ *   customer has an id, or no customer at all, is the real end;
  * - a customer page with a `next_cursor` but fewer customers than asked for: Autumn drops a customer
  *   it fails to serialize from the page (`getCursorPage` logs and skips it);
  * - a customer listing as many plans as Autumn returns per customer by default
@@ -112,6 +113,11 @@ const AutumnCursor = Schema.Struct({
 	last: Schema.optionalKey(
 		Schema.Struct({ customerId: Schema.String, liveIds: Schema.Array(Schema.String) }),
 	),
+	/**
+	 * A customer listing Autumn cut goes on from this creation time (epoch ms, `created_at_range.start`):
+	 * the millisecond after the id-less customer it ended on.
+	 */
+	from: Schema.optionalKey(Schema.Number),
 })
 type AutumnCursor = typeof AutumnCursor.Type
 
@@ -146,6 +152,9 @@ const pageOf = (
 		readonly next: string | null
 		readonly unswept?: ReadonlyArray<SweepEntityType>
 		readonly last?: AutumnCursor["last"]
+		/** Where the phase's listing goes on from; `restart`: from there, without a cursor. */
+		readonly from?: AutumnCursor["from"]
+		readonly restart?: boolean
 	},
 ): PullPage => {
 	const done = doneOf(cursor) + page.rows
@@ -153,12 +162,15 @@ const pageOf = (
 	const carried = unswept.length === 0 ? {} : { unswept }
 	const after = NEXT_PHASE[cursor.phase]
 	const onward: Types.Mutable<AutumnCursor> | null =
-		page.next !== null
+		page.next !== null || page.restart === true
 			? { phase: cursor.phase, after: page.next, done, ...carried }
 			: after === null
 				? null
 				: { phase: after, after: null, done: 0, ...carried }
-	if (onward !== null && onward.phase === cursor.phase && page.last !== undefined) onward.last = page.last
+	if (onward !== null && onward.phase === cursor.phase) {
+		if (page.last !== undefined) onward.last = page.last
+		if (page.from !== undefined) onward.from = page.from
+	}
 	const nextCursor = onward === null ? null : encodeCursor(onward)
 	// Autumn's lists carry no total; only `next_cursor` / `has_more`.
 	const progress: SyncProgress = { step: cursor.phase, done, total: null }
@@ -223,6 +235,8 @@ const customersPage = Effect.fnUntraced(function* (input: PageInput, cursor: Aut
 			// Oldest first, so a customer created mid-walk lands past the cursor instead of before it.
 			sort_order: "asc",
 			expand: CUSTOMER_EXPAND,
+			// Absent from the JSON until Autumn cut the listing.
+			created_at_range: cursor.from === undefined ? undefined : { start: cursor.from },
 		},
 		RowsPage,
 	)
@@ -263,18 +277,23 @@ const customersPage = Effect.fnUntraced(function* (input: PageInput, cursor: Aut
 			PLANS_LISTED_PER_CUSTOMER,
 	)
 	// Autumn drops the cursor when a page ends on a customer with no id of its own (a page without a
-	// cursor and a last customer with an id is simply the end).
+	// cursor and a last customer with an id is simply the end). It lists by creation time, then id
+	// with the id-less last, so every customer with an id created up to that one's millisecond has
+	// been read: the listing goes on from the next millisecond, and ends on an empty page.
 	const last = decoded.rows.at(-1)
 	const cut = next === null && last !== undefined && (last.id ?? "") === ""
+	const cutAt = cut ? last.created_at : null
+	const restart = cutAt != null
+	const from = cutAt != null ? cutAt + 1 : cursor.from
 	// More customers remain, yet the page is short: Autumn dropped some it could not serialize.
 	const short = next !== null && body.list.length < PAGE_SIZE
 	const unswept = [
-		...(cut ? yield* listingCut("customers", "cursor_dropped", SWEPT) : []),
+		...(cut && !restart ? yield* listingCut("customers", "cursor_dropped", SWEPT) : []),
 		...(short ? yield* listingCut("customers", "customers_dropped", SWEPT) : []),
 		...(decoded.skipped ? yield* listingCut("customers", "rows_unreadable", SWEPT) : []),
 		...(capped ? yield* listingCut("customers", "plans_per_customer_cap", ["subscription"]) : []),
 	]
-	return pageOf(cursor, { ops, rows: body.list.length, next, unswept })
+	return pageOf(cursor, { ops, rows: body.list.length, next, unswept, from, restart })
 })
 
 const subscriptionsPage = Effect.fnUntraced(function* (input: PageInput, cursor: AutumnCursor) {

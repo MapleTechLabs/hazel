@@ -225,6 +225,14 @@ describe("billing.updated", () => {
 		expect(fake.calls.map((call) => call.path)).toEqual(["/v1/customers.get", "/v1/subscriptions.list"])
 	})
 
+	it("writes nothing for a customer without an id of its own", async () => {
+		// Autumn finds it by its internal id; a pull skips it, and so does a delivery.
+		const idless = { ...CUSTOMER_ACME, id: null, autumn_id: ORG_ACME }
+		expect(await ops(BILLING_UPDATED_UPGRADE, { fake: organization({ customers: [idless] }) })).toEqual(
+			[],
+		)
+	})
+
 	it("refuses a customer from the other environment than the key opens", async () => {
 		const sandbox = await refusal(BILLING_UPDATED_UPGRADE, { env: "sandbox" })
 		expect(sandbox.message).toBe(

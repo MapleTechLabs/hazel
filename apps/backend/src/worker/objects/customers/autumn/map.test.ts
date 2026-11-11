@@ -280,6 +280,15 @@ describe("Autumn plan → subscription", () => {
 		expect(canceling({ ...team, plan: { ...PLAN_TEAM, group: "storage" } })).toMatchObject({
 			cancelAtPeriodEnd: true,
 		})
+		// A plan billing only prepaid units (flat or tiered) is paid, though balances price them later.
+		const seatsOnly = { ...PLAN_TEAM, price: null }
+		const tiered = {
+			...seatsOnly,
+			items: PLAN_TEAM.items.map((item) => ({ ...item, price: { ...item.price, amount: null } })),
+		}
+		for (const target of [seatsOnly, tiered]) {
+			expect(canceling({ ...team, plan: target })).toMatchObject({ cancelAtPeriodEnd: false })
+		}
 	})
 
 	it("splits a plan's prepaid units over the customer's live plans on it, and gives an ended one none", () => {
@@ -301,6 +310,35 @@ describe("Autumn plan → subscription", () => {
 
 	it("bills a trial that lapsed unconverted nothing, so its account is no churned customer", () => {
 		expect(subOp(SUB_GLOBEX_LAPSED)).toMatchObject({ status: "canceled", mrrMinor: 0 })
+		// Still live past a card-less trial Autumn has not converted yet: no billing period, no trial left.
+		const lapsing = {
+			...SUB_GLOBEX_TRIAL,
+			trial_ends_at: null,
+			current_period_start: null,
+			current_period_end: null,
+		}
+		const trialPlan = { ...PLAN_ENTERPRISE, free_trial: { duration_length: 14, card_required: false } }
+		expect(subOp({ ...lapsing, plan: trialPlan })).toMatchObject({
+			status: "active",
+			mrrMinor: 0,
+			billsByUsage: false,
+		})
+		// A plan without a trial billed outside Stripe (`no_billing_changes`) keeps its price.
+		expect(subOp(lapsing)).toMatchObject({ status: "active", mrrMinor: 300_000 })
+	})
+
+	it("sends no MRR for a past_due plan whose prepaid units Autumn's balances leave out", () => {
+		const pastDue = { ...SUB_INITECH, past_due: true }
+		// Balances carry only active plans' grants unless the org counts past_due ones.
+		const [hidden] = subOps([pastDue], { customer: { ...CUSTOMER_INITECH, balances: {} } })
+		expect(hidden).toMatchObject({ status: "past_due" })
+		expect(hidden).not.toHaveProperty("mrrMinor")
+		expect(hidden).not.toHaveProperty("listMrrMinor")
+		expect(hidden).not.toHaveProperty("billsByUsage")
+		// The org counts them: priced as usual.
+		expect(subOps([pastDue], { customer: CUSTOMER_INITECH })).toMatchObject([{ mrrMinor: 7_000 }])
+		// No prepaid item to hide: Pro's base price is all there is.
+		expect(subOp(SUB_ACME_PAST_DUE)).toMatchObject({ status: "past_due", mrrMinor: 9_900 })
 	})
 
 	it("keys an id by its customer, and keeps the live plan when an ended one shares its id", () => {

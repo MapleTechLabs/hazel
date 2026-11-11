@@ -238,16 +238,37 @@ describe("Autumn pull", () => {
 		expect(only.sweep).toEqual(["account", "subscription"])
 	})
 
-	it("does not sweep after Autumn dropped the cursor on a full page", async () => {
+	it("goes on from the creation time after an id-less customer Autumn dropped the cursor on", async () => {
 		// The page's last customer has no id of its own, so Autumn sends no cursor however many remain.
-		const many = Array.from({ length: PAGE_SIZE + 2 }, (_, index) => ({
-			...CUSTOMER_ACME,
-			id: index === PAGE_SIZE - 1 ? null : `${ORG_ACME}${index}`,
-		}))
-		const pages = await run(walk(organization({ customers: many })))
-		expect(pages.filter((p) => p.progress.step === "customers")).toHaveLength(1)
-		expect(pages.at(-1)!.nextCursor).toBeNull()
-		expect(pages.every((p) => p.sweep === undefined)).toBe(true)
+		const created = CUSTOMER_ACME.created_at
+		const listing = (idless: number, total: number) =>
+			Array.from({ length: total }, (_, index) => ({
+				...CUSTOMER_ACME,
+				id: index === idless ? null : `${ORG_ACME}${index}`,
+				created_at: created + index,
+			}))
+		const fake = organization({ customers: listing(PAGE_SIZE - 1, PAGE_SIZE + 2) })
+		const pages = await run(walk(fake))
+		const customerPages = pages.filter((p) => p.progress.step === "customers")
+		expect(customerPages).toHaveLength(2)
+		expect(customerPages.flatMap(tags).filter((tag) => tag === "account")).toHaveLength(PAGE_SIZE + 1)
+		expect(
+			fake.calls
+				.filter((call) => call.path === "/v1/customers.list")
+				.map((call) => call.body["created_at_range"]),
+		).toEqual([undefined, { start: created + PAGE_SIZE }])
+		expect(pages.at(-1)!.sweep).toEqual(["account", "subscription"])
+		// The newest customer has no id: the listing after it is empty, the real end, and sweeps.
+		const newest = await run(walk(organization({ customers: listing(2, 3) })))
+		expect(newest.filter((p) => p.progress.step === "customers")).toHaveLength(2)
+		expect(newest.at(-1)!.sweep).toEqual(["account", "subscription"])
+		// Without a creation time to go on from, the listing stops there and nothing is swept.
+		const timeless = listing(PAGE_SIZE - 1, PAGE_SIZE + 2).map((customer) =>
+			customer.id === null ? { ...customer, created_at: null } : customer,
+		)
+		const cut = await run(walk(organization({ customers: timeless })))
+		expect(cut.filter((p) => p.progress.step === "customers")).toHaveLength(1)
+		expect(cut.every((p) => p.sweep === undefined)).toBe(true)
 		// A last page that is simply full, cursor or not, is the end of the listing.
 		const exact = Array.from({ length: PAGE_SIZE }, (_, index) => ({
 			...CUSTOMER_ACME,

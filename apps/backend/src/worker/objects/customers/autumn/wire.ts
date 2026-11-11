@@ -98,6 +98,8 @@ export const AutumnPlan = Schema.Struct({
 	auto_enable: Nullable(Schema.Boolean),
 	price: Nullable(Schema.Struct(AutumnPriceFields)),
 	items: Nullable(Schema.Array(AutumnPlanItem)),
+	/** Set when the plan comes with a free trial (its terms are not read). */
+	free_trial: Nullable(Schema.Struct({})),
 })
 export type AutumnPlan = typeof AutumnPlan.Type
 

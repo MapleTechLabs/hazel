@@ -99,7 +99,7 @@ export interface CustomerState {
 
 /**
  * One customer as Autumn has it now. `None` when Autumn does not know it under this key: another
- * organization's or environment's customer, or one deleted since. `expired` reads the customer's
+ * organization's or environment's customer, or one deleted since; or when it has no id of its own. `expired` reads the customer's
  * ended plans too (only those of `planId` when given), alongside the customer.
  *
  * The customer's `env` is checked against the environment the key opens, and a mismatch is refused
@@ -147,7 +147,9 @@ export const readCustomer = Effect.fn("Autumn.readCustomer")(function* (input: {
 					: "The customer is in Autumn's live environment, and the connection's key is a sandbox one",
 		})
 	}
-	const id = customer.id ?? input.customerId
+	// An id-less customer (Autumn keys it by its internal id) is none a pull imports either.
+	const id = customer.id
+	if (id == null || id === "") return Option.none()
 	const named = { ...customer, id }
 	const names = featureNamesOf(
 		Object.values(customer.balances ?? {}).map((balance) => ({

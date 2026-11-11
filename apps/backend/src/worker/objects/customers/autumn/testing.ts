@@ -1,7 +1,7 @@
 /**
  * A fake Autumn API for the adapter's tests: it serves the recorded fixtures from the real
- * endpoints with Autumn's own opaque cursor paging, its `statuses`, `customer_id` and `plan_id`
- * filtering and its `expand` handling (a balance's `feature` and a plan's `plan` are absent until a
+ * endpoints with Autumn's own opaque cursor paging, its `statuses`, `customer_id`, `plan_id` and
+ * `created_at_range` filtering and its `expand` handling (a balance's `feature` and a plan's `plan` are absent until a
  * request asks for them, exactly as Autumn sends them), answers 404 for a customer it does not hold, refuses the wrong key with
  * Autumn's error body, and can be told to answer 429, fail a path (503), refuse it (400), garble
  * its body or drop a customer it cannot serialize from its page. It records every call, so a test can assert how many requests a page cost, that the
@@ -162,7 +162,10 @@ const serve = (fake: FakeAutumnState, path: string, body: Row): Response => {
 		}
 		case "/v1/customers.get": {
 			const id = str(body, "customer_id")
-			const found = fake.customers.find((customer) => customer["id"] === id)
+			// Autumn finds a customer by its own id or its internal one (`autumn_id` here).
+			const found = fake.customers.find(
+				(customer) => customer["id"] === id || customer["autumn_id"] === id,
+			)
 			return found === undefined
 				? autumnError(404, "Customer not found", "customer_not_found")
 				: json(200, withExpands(fake, found, strings(body, "expand")))
@@ -170,7 +173,11 @@ const serve = (fake: FakeAutumnState, path: string, body: Row): Response => {
 		case "/v1/customers.list": {
 			const descending = str(body, "sort_order") === "desc"
 			const ordered = descending ? [...fake.customers].reverse() : fake.customers
-			const rows = ordered.map((customer) => withExpands(fake, customer, strings(body, "expand")))
+			// `created_at_range.start` (inclusive); the fixtures are listed in creation order.
+			const start = (body["created_at_range"] as { start?: number } | undefined)?.start
+			const rows = ordered
+				.filter((customer) => start === undefined || Number(customer["created_at"]) >= start)
+				.map((customer) => withExpands(fake, customer, strings(body, "expand")))
 			return listOf(
 				rows,
 				body,
