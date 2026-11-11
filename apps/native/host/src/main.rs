@@ -1513,7 +1513,7 @@ fn build_img(
         .get("src")
         .and_then(|src| ctx.s.images.get(src, picture_size(st)))
     {
-        if let Some([w, h]) = natural_box(st, &image) {
+        if let Some([w, h]) = natural_box(st, &image, path) {
             e = e.size(w, h);
         }
         e = match st.object_fit.as_deref() {
@@ -1532,7 +1532,11 @@ fn build_img(
 /// and `max-h` with its aspect ratio kept. Rune sizes a picture's box only from a side that is
 /// set, so without this the box is empty. `None` while the picture decodes (the row rebuilds
 /// once it has), or when the style sizes the box itself.
-fn natural_box(st: &Style, image: &rune::Image) -> Option<[f32; 2]> {
+///
+/// A percentage max (`max-w-full max-h-full`, the image viewer's) is a share of the parent's
+/// laid-out box, read so the view rebuilds when that box changes. Before the parent is laid out
+/// that side has no cap, as a percentage of a size that depends on the content has none in CSS.
+fn natural_box(st: &Style, image: &rune::Image, path: &str) -> Option<[f32; 2]> {
     let unset = |len: &Option<wire::Len>| matches!(len, None | Some(wire::Len::Auto));
     if !unset(&st.w) || !unset(&st.h) || st.aspect_ratio.is_some() {
         return None;
@@ -1541,13 +1545,30 @@ fn natural_box(st: &Style, image: &rune::Image) -> Option<[f32; 2]> {
         images::rebuild_when_ready(image);
         return None;
     };
-    let max = |len: &Option<wire::Len>| match len {
-        Some(wire::Len::Px(v)) if v.0 > 0.0 => v.0,
-        _ => f32::INFINITY,
+    let percent = st
+        .max_w
+        .iter()
+        .chain(&st.max_h)
+        .any(|len| matches!(len, wire::Len::Full | wire::Len::Frac(_)));
+    let parent = percent
+        .then(|| path.rsplit_once('/'))
+        .flatten()
+        .and_then(|(parent, _)| rune::memo::layout_size(parent));
+    let max = |len: &Option<wire::Len>, side: usize| {
+        let share = match len {
+            Some(wire::Len::Px(v)) if v.0 > 0.0 => return v.0,
+            Some(wire::Len::Full) => 1.0,
+            Some(wire::Len::Frac(f)) => f.0,
+            _ => return f32::INFINITY,
+        };
+        match parent {
+            Some(size) if size[side] > 0.0 => size[side] * share,
+            _ => f32::INFINITY,
+        }
     };
     Some(fit_within(
         [w as f32, h as f32],
-        [max(&st.max_w), max(&st.max_h)],
+        [max(&st.max_w, 0), max(&st.max_h, 1)],
     ))
 }
 
