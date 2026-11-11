@@ -1,5 +1,8 @@
 //! What sign-in needs from a shell: the vault's record in the keychain (macOS and iOS alike) and
 //! the callback link the system opens the app with (`com.hazel.native://auth/callback?...`).
+use std::sync::mpsc::{Sender, channel};
+use std::sync::{Mutex, OnceLock};
+
 use serde_json::{Value, json};
 
 use crate::outbox::write_line;
@@ -53,14 +56,24 @@ pub fn open_url_message(url: &str) -> Value {
     json!({ "t": "openUrl", "url": url })
 }
 
-/// Answers vault request `id`. Keychain calls can wait on a permission prompt, so each runs off
-/// the calling (reader or UI) thread.
+/// Answers vault request `id`. Keychain calls can wait on a permission prompt, so they run off
+/// the calling (reader or UI) thread, on one thread in the order they came: a later write wins.
 pub fn answer_vault(id: u64, op: &str, record: Option<String>) {
     let Some(op) = vault_op(op, record) else {
         write_line(vault_reply(id, Err(format!("unknown vault request {op}"))));
         return;
     };
-    std::thread::spawn(move || write_line(vault_reply(id, run_vault(VAULT_SERVICE, &op))));
+    static VAULT: OnceLock<Mutex<Sender<(u64, VaultOp)>>> = OnceLock::new();
+    let queue = VAULT.get_or_init(|| {
+        let (send, receive) = channel::<(u64, VaultOp)>();
+        std::thread::spawn(move || {
+            for (id, op) in receive {
+                write_line(vault_reply(id, run_vault(VAULT_SERVICE, &op)));
+            }
+        });
+        Mutex::new(send)
+    });
+    let _ = queue.lock().unwrap().send((id, op));
 }
 
 #[cfg(test)]

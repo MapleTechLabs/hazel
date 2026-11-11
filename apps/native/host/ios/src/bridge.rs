@@ -14,7 +14,7 @@ use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2::{MainThreadMarker, MainThreadOnly, define_class, extern_class, msg_send};
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::{
-    NSDictionary, NSError, NSObject, NSObjectProtocol, NSString, NSURL, ns_string,
+    NSDictionary, NSError, NSNumber, NSObject, NSObjectProtocol, NSString, NSURL, ns_string,
 };
 use objc2_ui_kit::{UIApplication, UIPasteboard, UIResponder, UIView, UIWindow, UIWindowScene};
 use objc2_web_kit::{
@@ -41,6 +41,8 @@ thread_local! {
     static STARTED: Cell<bool> = const { Cell::new(false) };
     /// The runtime's source and the bundle's environment, read once, for every page load.
     static BUNDLE: RefCell<Option<(String, Option<serde_json::Value>)>> = const { RefCell::new(None) };
+    /// The page loaded last (0 before the first): only its `ready` releases the held lines.
+    static PAGE: Cell<u64> = const { Cell::new(0) };
 }
 
 /// Where the runtime's trees go: the running app.
@@ -171,10 +173,14 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
             .and_then(|value| value.downcast::<NSString>().ok())
             .map(|value| value.to_string())
     };
-    if body.objectForKey(ns_string!("ready")).is_some() {
-        // The page can take lines now: the ones held until then go first.
-        for text in EARLY.take().unwrap_or_default() {
-            to_worker(&text);
+    if let Some(ready) = body.objectForKey(ns_string!("ready")) {
+        // The page can take lines now: the ones held until then go first. A page another load
+        // replaced since says so too late; its lines stay held for the new one.
+        let page = ready.downcast::<NSNumber>().ok().map(|n| n.as_u64());
+        if page == Some(PAGE.get()) {
+            for text in EARLY.take().unwrap_or_default() {
+                to_worker(&text);
+            }
         }
     } else if let Some(line) = field("log") {
         log(&line);
@@ -278,13 +284,14 @@ fn start() -> bool {
 }
 
 /// Loads the page, and with it a fresh runtime, at `path` (the bundle's start page for `None`).
-/// Lines for a runtime it replaces are dropped; the new one's wait until its page is ready.
+/// Lines held for a runtime it replaces are dropped; from now on they wait for the new page.
 fn load_page(mtm: MainThreadMarker, path: Option<&str>) {
-    let Some((source, bundled)) = BUNDLE.with_borrow(Clone::clone) else {
+    let Some(bundled) = BUNDLE.with_borrow(|bundle| bundle.as_ref().map(|(_, env)| env.clone()))
+    else {
         return;
     };
     let Some(window) = window(mtm) else {
-        return;
+        return log("[host] the page cannot load without a window");
     };
     // The viewport as last reported, else the window inside its safe area (the first report).
     let (bounds, insets) = (window.bounds(), window.safeAreaInsets());
@@ -296,11 +303,27 @@ fn load_page(mtm: MainThreadMarker, path: Option<&str>) {
         |(width, height, _)| (f64::from(width), f64::from(height)),
     );
     let env = page::environment(bundled, size, path);
-    let origin = format!("{}/", page::origin(&env));
-    if path.is_some() {
-        EARLY.set(Some(Vec::new()));
+    if let Some(problem) = page::origin_problem(&env) {
+        log(&format!("[host] {problem}"));
     }
-    let html = NSString::from_str(&page::html(&source, &env));
+    let origin = format!("{}/", page::origin(&env));
+    let id = PAGE.get() + 1;
+    if PAGE.replace(id) > 0 {
+        EARLY.set(Some(Vec::new()));
+        // A fresh runtime starts light at the bundle's size: it hears the window's as the
+        // first one did, once its page is ready.
+        if let Some((width, height, dark)) = hazel_native::last_env() {
+            outbox::write_line(
+                serde_json::json!({ "t": "env", "width": width, "height": height, "dark": dark }),
+            );
+        }
+    }
+    let Some(html) = BUNDLE.with_borrow(|bundle| {
+        let (source, _) = bundle.as_ref()?;
+        Some(NSString::from_str(&page::html(source, &env, id)))
+    }) else {
+        return;
+    };
     let base = NSURL::URLWithString(&NSString::from_str(&origin));
     WEB.with_borrow(|web| {
         if let Some(web) = web {

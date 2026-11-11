@@ -9,8 +9,11 @@ const BUNDLE_ID: &str = "sh.hazel.ios";
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    let target = std::env::var("TARGET").unwrap_or_default();
-    if !target.ends_with("-apple-ios-sim") {
+    // A simulator target: `aarch64-apple-ios-sim`, or the Intel one, `x86_64-apple-ios`.
+    let env = |name: &str| std::env::var(name).unwrap_or_default();
+    let simulator = env("CARGO_CFG_TARGET_OS") == "ios"
+        && (env("CARGO_CFG_TARGET_ABI") == "sim" || env("CARGO_CFG_TARGET_ARCH") == "x86_64");
+    if !simulator {
         return;
     }
     let id = format!("{TEAM}.{BUNDLE_ID}");

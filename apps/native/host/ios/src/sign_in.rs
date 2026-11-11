@@ -13,6 +13,7 @@ use objc2_authentication_services::{
     ASWebAuthenticationSession,
 };
 use objc2_foundation::{NSError, NSObjectProtocol, NSString, NSURL};
+use objc2_ui_kit::UIWindow;
 
 use crate::bridge::log;
 
@@ -46,7 +47,10 @@ define_class!(
     unsafe impl ASWebAuthenticationPresentationContextProviding for Anchor {
         #[unsafe(method_id(presentationAnchorForWebAuthenticationSession:))]
         fn anchor(&self, _session: &ASWebAuthenticationSession) -> Retained<ASPresentationAnchor> {
-            let window = crate::bridge::window(self.mtm()).expect("the app has a window");
+            // The app's window; a fresh one if the scene has none (a panic here would unwind
+            // through UIKit).
+            let mtm = self.mtm();
+            let window = crate::bridge::window(mtm).unwrap_or_else(|| UIWindow::new(mtm));
             // UIWindow → UIView → UIResponder → NSObject.
             Retained::into_super(Retained::into_super(Retained::into_super(window)))
         }
@@ -89,6 +93,8 @@ pub fn start(mtm: MainThreadMarker, url: &str, callback_scheme: &str) {
             &*done as *const _ as *mut _,
         )
     };
+    // SAFETY: the anchor outlives the session's use of it (`SHOWING` holds both); cancelling a
+    // replaced sheet and starting this one happen on the main thread, as UIKit requires.
     unsafe { session.setPresentationContextProvider(Some(ProtocolObject::from_ref(&*anchor))) };
     if let Some((_, previous, _)) = SHOWING.replace(Some((id, session.clone(), anchor))) {
         unsafe { previous.cancel() };

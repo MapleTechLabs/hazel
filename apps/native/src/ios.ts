@@ -74,14 +74,14 @@ const platform: NativePlatform = {
 		}
 	},
 	log,
-	// The app's browser sign-in (`/auth/desktop`) shows in the system's sign-in sheet, which hands
-	// its callback back (`com.hazel.native://auth/callback`); other links open in the browser.
-	openUrl: (href) =>
-		request(
-			URL.parse(href)?.pathname === "/auth/desktop"
-				? { signIn: href, callbackScheme: CALLBACK_SCHEME }
-				: { open: href },
-		),
+	// The app's own browser sign-in (`/auth/desktop` on the web app's origin, which the page
+	// has) shows in the system's sign-in sheet, which hands its callback back
+	// (`com.hazel.native://auth/callback`); every other link opens in the browser.
+	openUrl: (href) => {
+		const target = URL.parse(href)
+		const isSignIn = target?.pathname === "/auth/desktop" && target.origin === globalThis.location.origin
+		request(isSignIn ? { signIn: href, callbackScheme: CALLBACK_SCHEME } : { open: href })
+	},
 	copyText: (text) => request({ copy: text }),
 	// The bundle carries the sheet compiled for every class the app's sources use.
 	loadStyles: async () => {

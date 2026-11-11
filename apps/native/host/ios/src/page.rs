@@ -23,17 +23,29 @@ pub fn origin(env: &Value) -> String {
         .unwrap_or_else(|| APP_URL.to_string())
 }
 
-/// `scheme://host[:port]` of an absolute http(s) URL.
+/// `scheme://host[:port]` of an absolute http(s) URL (no user info).
 fn origin_of(url: &str) -> Option<String> {
     let (scheme, rest) = url.split_once("://")?;
-    if !matches!(scheme, "http" | "https") {
+    let scheme = scheme.to_ascii_lowercase();
+    if !matches!(scheme.as_str(), "http" | "https") {
         return None;
     }
-    let host = rest
-        .split(['/', '?', '#'])
-        .next()
-        .filter(|host| !host.is_empty())?;
-    Some(format!("{scheme}://{host}"))
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    (!host.is_empty()).then(|| format!("{scheme}://{host}"))
+}
+
+/// Why a live page could not take the web app's origin it was given, and uses production's.
+pub fn origin_problem(env: &Value) -> Option<String> {
+    let live = env.get("HAZEL_DATA").and_then(Value::as_str) == Some("live");
+    let app = env
+        .get("VITE_APP_URL")
+        .and_then(Value::as_str)
+        .filter(|url| !url.is_empty())?;
+    (live && origin_of(app).is_none())
+        .then(|| format!("VITE_APP_URL {app:?} is no http(s) URL: the page takes {APP_URL}"))
 }
 
 /// What the worker reads as `process.env`: the bundle's environment (`environment.json`) over the
@@ -57,10 +69,10 @@ pub fn environment(bundled: Option<Value>, size: (f64, f64), path: Option<&str>)
 
 /// The page: it runs the runtime's source in a module worker (from a Blob, after the host's
 /// environment) and relays between it and the host.
-pub fn html(source: &str, env: &Value) -> String {
+pub fn html(source: &str, env: &Value, id: u64) -> String {
     let start = format!("__hazel.start({}, {})", json!(source), env);
     // Nothing in the inline script may end it early (`</script>`, `<!--`): every `<` is inside a
-    // JSON string there, where `<` reads the same.
+    // JSON string there, where `\u003c` reads the same.
     let start = start.replace('<', "\\u003c");
     format!(
         r#"<!doctype html><meta charset="utf-8"><script>
@@ -82,7 +94,7 @@ window.__hazel = {{
             if (line !== "") worker === undefined ? early.push(line) : worker.postMessage(line)
     }},
 }}
-host.postMessage({{ ready: true }})
+host.postMessage({{ ready: {id} }})
 </script><script>{start}</script>"#
     )
 }
@@ -106,6 +118,12 @@ mod tests {
         assert_eq!(origin(&dev), "http://localhost:3100");
         let bad = json!({ "HAZEL_DATA": "live", "VITE_APP_URL": "tauri://localhost" });
         assert_eq!(origin(&bad), "https://app.hazel.sh");
+        assert!(origin_problem(&bad).is_some());
+        assert_eq!(origin_problem(&dev), None);
+        let odd = json!({ "HAZEL_DATA": "live", "VITE_APP_URL": "HTTPS://me@app.example.com/x" });
+        assert_eq!(origin(&odd), "https://app.example.com");
+        let v6 = json!({ "HAZEL_DATA": "live", "VITE_APP_URL": "http://[::1]:3100" });
+        assert_eq!(origin(&v6), "http://[::1]:3100");
     }
 
     #[test]
@@ -132,7 +150,7 @@ mod tests {
     fn nothing_in_the_source_or_environment_ends_the_inline_script() {
         let source = r#"const a = "</script><script>alert(1)</script>"; // <!-- -->"#;
         let env = json!({ "NATIVE_PATH": "/</script>" });
-        let page = html(source, &env);
+        let page = html(source, &env, 1);
         let (_, inline) = page.split_once("</script><script>").expect("two scripts");
         let inline = inline.strip_suffix("</script>").expect("one closing tag");
         assert!(!inline.contains('<'), "{inline}");
@@ -147,10 +165,9 @@ mod tests {
 
     #[test]
     fn the_page_says_it_is_ready_before_it_starts_the_worker() {
-        let page = html("", &json!({}));
-        let ready = page
-            .find("host.postMessage({ ready: true })")
-            .expect("ready");
+        let page = html("", &json!({}), 7);
+        // With its load's id: a page a later load replaced cannot release the new one's lines.
+        let ready = page.find("host.postMessage({ ready: 7 })").expect("ready");
         let start = page.find("__hazel.start(").expect("start");
         assert!(ready < start);
         // Lines that arrive before the worker exists wait for it, in order.
