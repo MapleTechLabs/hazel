@@ -6,6 +6,11 @@ import { makeKVCacheLayer } from "./cache"
 import { HttpAppLive, HttpLinkPreviewLive, HttpTweetLive } from "./handle"
 import { TwitterApi } from "./services/twitter"
 
+/** The Worker's bindings, as `alchemy.run.ts` declares them. */
+interface Env {
+	readonly LINK_CACHE: KVNamespace
+}
+
 const makeAppLayer = (env: Env) => {
 	const ServiceLayers = Layer.mergeAll(makeKVCacheLayer(env.LINK_CACHE), TwitterApi.layer)
 

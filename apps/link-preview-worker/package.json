@@ -4,9 +4,6 @@
 	"private": true,
 	"type": "module",
 	"main": "src/api.ts",
-	"scripts": {
-		"cf-typegen": "wrangler types"
-	},
 	"dependencies": {
 		"effect": "catalog:effect",
 		"metascraper": "^5.58.4",
@@ -18,7 +15,7 @@
 		"metascraper-url": "^5.58.4"
 	},
 	"devDependencies": {
-		"typescript": "catalog:tooling",
-		"wrangler": "^4.73.0"
+		"@cloudflare/workers-types": "catalog:alchemy",
+		"typescript": "catalog:tooling"
 	}
 }

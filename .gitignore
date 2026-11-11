@@ -30,3 +30,6 @@ apps/backend/exports/
 # Vitest browser mode artifacts
 __screenshots__/
 .vitest-attachments/
+
+# Vitest coverage reports
+coverage/
