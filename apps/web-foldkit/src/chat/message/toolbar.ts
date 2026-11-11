@@ -8,6 +8,7 @@ import { LIST_PORTAL_ATTRIBUTE } from "../image-viewer"
 import { button } from "../../ui/button"
 import { separator } from "../../ui/separator"
 import * as TooltipHost from "../tooltip-host"
+import { MOBILE_QUERY } from "../../ui/viewport"
 
 /** Port of `MessageToolbar` and the hover overlay around it (`useMessageToolbarOverlay`). */
 
@@ -197,6 +198,10 @@ const HOVER_AFTER_SCROLL_MS = 100
  * While the list scrolls under a resting pointer the hover holds still. Once scrolling pauses, the
  * element under the pointer's last position decides, since the browser may fire no `pointerover`
  * when the content moves under a still pointer.
+ *
+ * A phone has no hover: a finger down would flash the toolbar (and mobile Safari leaves a tapped
+ * row hovered, so it would stick). There a long-press opens the message's actions as a sheet
+ * (the `contextmenu` below), and the pointer never hovers a message.
  */
 export const TrackMessageHover = Mount.defineStream("TrackMessageHover", {
 	messages: [HoverEvent.PointerEnteredMessage, HoverEvent.PointerLeftList, HoverEvent.RightClickedMessage],
@@ -213,6 +218,7 @@ export const TrackMessageHover = Mount.defineStream("TrackMessageHover", {
 					/** Hovers the message `target` is in, or leaves when it is in none. */
 					const resolve = (target: Element | null) => {
 						if (target === null || !element.contains(target)) return
+						if (window.matchMedia(MOBILE_QUERY).matches) return
 						// The image viewer renders inside the list; it holds the hover while open.
 						if (target.closest(`[data-${LIST_PORTAL_ATTRIBUTE}]`)) return
 						const messageId = decodeMessageId(
