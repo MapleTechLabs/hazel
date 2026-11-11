@@ -450,5 +450,11 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "customer_sync_runs" ADD COLUMN "failedAttempts" integer NOT NULL DEFAULT 0',
 			],
 		},
+		{
+			id: "0008_customer_settings_add_on_plans",
+			statements: [
+				'ALTER TABLE "customer_settings" ADD COLUMN "addOnPlans" text NOT NULL DEFAULT \'[]\'',
+			],
+		},
 	],
 }

@@ -58,6 +58,7 @@ const PAYLOADS = {
 	"customers.health.dryRun": { draft: DEFAULT_HEALTH_SETTINGS },
 	"customers.unmatched.list": {},
 	"customers.ignoreRules.list": {},
+	"customers.plans.list": {},
 	"customers.signal.assign": { signalId: uuid(), assigneeUserId: null },
 	"customers.signal.snooze": { signalId: uuid(), until: new Date() },
 	"customers.signal.done": { signalId: uuid(), outcome: "fixed" },

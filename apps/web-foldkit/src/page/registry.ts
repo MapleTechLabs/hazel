@@ -17,6 +17,7 @@ import * as CustomerDetail from "./customers/detail"
 import * as CustomersList from "./customers/list"
 import * as CustomersOverview from "./customers/overview"
 import * as CustomersSettingsHealth from "./customers/settings/health"
+import * as CustomersSettingsPlans from "./customers/settings/plans"
 import * as CustomersSettingsSignals from "./customers/settings/signals"
 import * as CustomersSettingsSources from "./customers/settings/sources"
 import * as CustomersUnmatched from "./customers/settings/unmatched"
@@ -99,6 +100,7 @@ export const pages = [
 	CustomerDetail.page,
 	CustomersSettingsSignals.page,
 	CustomersSettingsHealth.page,
+	CustomersSettingsPlans.page,
 	CustomersSettingsSources.page,
 	CustomersUnmatched.page,
 ]

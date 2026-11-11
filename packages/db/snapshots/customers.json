@@ -1,5 +1,5 @@
 {
-	"migration": "0007_customer_sync_run_attempts",
+	"migration": "0008_customer_settings_add_on_plans",
 	"entities": [
 		{
 			"kind": "table",
@@ -2145,16 +2145,16 @@
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "lastComputedAt",
+			"name": "addOnPlans",
 			"position": 4,
 			"type": "text",
-			"notNull": false,
-			"default": null
+			"notNull": true,
+			"default": "'[]'"
 		},
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "updatedBy",
+			"name": "lastComputedAt",
 			"position": 5,
 			"type": "text",
 			"notNull": false,
@@ -2163,8 +2163,17 @@
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "createdAt",
+			"name": "updatedBy",
 			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "createdAt",
+			"position": 7,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2173,7 +2182,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "updatedAt",
-			"position": 7,
+			"position": 8,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

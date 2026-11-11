@@ -15,6 +15,7 @@ here is an ordinary page (`definePage`), registered in `src/page/registry.ts`.
 | `CustomersSettingsSignalNew`  | `/settings/signals/new?template=` | `template: Option<SignalTemplate>`      | `settings/signals/`   |
 | `CustomersSettingsSignalRule` | `/settings/signals/$ruleId`       | `ruleId`                                | `settings/signals/`   |
 | `CustomersSettingsHealth`     | `/settings/health`                |                                         | `settings/health/`    |
+| `CustomersSettingsPlans`      | `/settings/plans`                 |                                         | `settings/plans/`     |
 | `CustomersSettingsSources`    | `/settings/sources`               |                                         | `settings/sources/`   |
 | `CustomersSourceDetail`       | `/settings/sources/$provider`     | `provider: CustomerProvider`            | `settings/sources/`   |
 | `CustomersUnmatched`          | `/settings/sources/unmatched`     |                                         | `settings/unmatched/` |
