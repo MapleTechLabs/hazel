@@ -22,12 +22,14 @@ export type NativePlatform = {
 	readonly openUrl: (href: string) => void
 	/** Puts text on the system clipboard. */
 	readonly copyText: (text: string) => void
-	/** The resolver for `stylesheet`: the build's precompiled sheet when there is one, else compiled. */
-	readonly loadStyles: (stylesheet: string) => Promise<StyleResolver>
+	/** The app's stylesheet: the build's precompiled sheet when there is one, else compiled. */
+	readonly loadStyles: () => Promise<StyleResolver>
 	/** Appends a line to the file at `path` (`NATIVE_TREES_OUT`, `NATIVE_STATS`). Absent: no debug files. */
 	readonly appendLine?: (path: string, line: string) => void
 	/** The heap in use, in MB, for `NATIVE_STATS`. Absent: the stats leave it out. */
 	readonly memoryUsedMb?: () => number
+	/** jsdom, the headless DOM the composer's editor runs on. Absent: the composer takes no text. */
+	readonly jsdom?: () => Promise<typeof import("jsdom")>
 	/** Serves `HAZEL_FIXTURE_HTML`'s page for the offline fixture. Absent: the variable is ignored. */
 	readonly fixtureHtmlRender?: typeof makeFixtureHtmlRender
 }

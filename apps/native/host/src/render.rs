@@ -1894,8 +1894,13 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
         no_pointer: false,
     };
     let body = s.root.as_ref().and_then(|root| build(root, "r", inh, &ctx));
+    // The window's edges the system draws over (iOS's status bar and home indicator): the page's
+    // background goes under them, and the runtime's viewport stays inside.
+    let [top, right, bottom, left] = cx.safe_area();
+    let inset = [top, right, bottom, left].iter().any(|edge| *edge > 0.0);
     let mut page = col().w_full().h_full().on_layout(report_env);
-    if let Some(bg) = color(&s.page.bg) {
+    let bg = color(&s.page.bg);
+    if let Some(bg) = bg {
         page = page.fill(bg)
     }
     // The document scrolls when it is taller than the window, as a browser's viewport does.
@@ -1943,7 +1948,20 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
             page = page.child(l);
         }
     }
-    page
+    if !inset {
+        return page;
+    }
+    let mut window = col()
+        .w_full()
+        .h_full()
+        .pt(top)
+        .pb(bottom)
+        .pl(left)
+        .pr(right);
+    if let Some(bg) = bg {
+        window = window.fill(bg)
+    }
+    window.child(page)
 }
 
 /// Places an overlay next to its trigger and makes it modal, as the runtime's `ov` asks.

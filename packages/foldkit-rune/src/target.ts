@@ -1,6 +1,3 @@
-import { readFile } from "node:fs/promises"
-import { basename } from "node:path"
-
 import type { Document } from "foldkit/html"
 import type { RenderTarget } from "foldkit/runtime"
 
@@ -1068,8 +1065,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		if (message.type === "keydown" && !event.propagationStopped && dispatchDocumentKey(message))
 			event.preventDefault()
 		if (message.type === "keydown" && process.env.NATIVE_DEBUG)
-			process.stderr.write(
-				`[key] ${message.key} ${[message.id, ...(message.chain ?? [])].join(">")} prevented=${event.defaultPrevented}\n`,
+			console.error(
+				`[key] ${message.key} ${[message.id, ...(message.chain ?? [])].join(">")} prevented=${event.defaultPrevented}`,
 			)
 		if (message.type === "keydown" && message.key === "Escape" && !event.defaultPrevented)
 			options.overlays?.dismissTopmost()
@@ -1156,6 +1153,11 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 	/** The files picked for a file input: read, then its `change`, as a browser fires it. */
 	const filesPicked = async (path: string, paths: ReadonlyArray<string>) => {
 		if (paths.length === 0) return
+		// Only a host with a file system picks files by path: the runtime loads anywhere else.
+		const [{ readFile }, { basename }] = await Promise.all([
+			import("node:fs/promises"),
+			import("node:path"),
+		])
 		const files = await Promise.all(
 			paths.map(
 				async (file) => new File([await readFile(file)], basename(file), { type: mimeOf(file) }),

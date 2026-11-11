@@ -2,7 +2,7 @@
 
 Hazel's own Foldkit app (`apps/web-foldkit`: the same `init`, `update`, `view` and
 `subscriptions`) drawn natively by [Rune](https://github.com/anomalyco/rune), a GPU UI framework in
-Rust. The web build is untouched; this is a second renderer for the desktop.
+Rust. The web build is untouched; this is a second renderer for the desktop, and for iOS.
 
 ```
 Rune host (Rust, host/)                     Bun runtime (src/runtime.ts)
@@ -88,6 +88,26 @@ with the Tauri app installed routes each callback to the right app.
 A full page load in the app (`load("/")` after sign-in, `location.reload()`) sends `reload`: the
 host replaces the runtime with a fresh one at that path, as a browser reloads the page.
 
+## iOS (simulator)
+
+```sh
+bun run ios --install booted       # dist/ios/Hazel.app, installed on the running simulator
+```
+
+The same app on iOS: `host/ios` is a second shell on the `hazel_native` library, and the runtime
+runs in a Web Worker inside a hidden `WKWebView` (`host/ios/src/bridge.rs`), where it has every web
+API and WebKit's JIT; iOS lets an app neither spawn Bun nor JIT its own JavaScript. `src/ios.ts` is
+that worker's `NativePlatform`: lines cross worker → page → `WKScriptMessageHandler` one way and
+`evaluateJavaScript` → page → worker the other. `scripts/build-ios.ts` bundles it as one module with
+the compiled stylesheet inlined. The bundle's `environment.json` holds `HAZEL_DATA`,
+`VITE_BACKEND_URL`, `NATIVE_DEBUG` and `NATIVE_PATH` as set when building (offline by default);
+the runtime's log goes to `tmp/hazel.log` in the app's data container
+(`xcrun simctl get_app_container booted sh.hazel.ios data`).
+
+Not yet on iOS: the composer (its editor runs on jsdom, which a worker cannot load), live sign-in,
+the keychain, updates, HTML renders, the keyboard's delete key, keeping content above the keyboard,
+http(s) pictures (fetched with `curl`), and a device build (simulator only, ad-hoc signed).
+
 ## Releases
 
 The native app is what Hazel ships for macOS: `.github/workflows/tauri-release.yml` (on a `v*` tag)
@@ -146,6 +166,8 @@ synthetic utility page (`conformance:extract` records it).
 
 ## Not yet native
 
+- Narrow windows (the phone layout): a message's text runs past the edge instead of wrapping,
+  and the mobile drawer's channel list collapses to nothing.
 - Overlays beyond the modal popovers: tooltips (`AnchorTooltipPanel`), submenus
   (`PositionSubmenu`) and the image viewer.
 - Colours a `focus:` variant changes (Rune draws focus as a ring only), focus or press state on an

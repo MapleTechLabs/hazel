@@ -237,6 +237,8 @@ pub fn place(rect: Rect, opacity: f32, clips: &[Rect], covers: &[Cover]) -> Opti
 /// What the wrapper page tells the host (`wrapper_html`'s script).
 #[derive(serde::Deserialize)]
 #[serde(tag = "k", rename_all = "lowercase")]
+// Read by the macOS web views only.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 enum PageEvent {
     Load,
     Message {
@@ -247,6 +249,8 @@ enum PageEvent {
 }
 
 /// The line for the runtime, for what the wrapper page of the frame at `path` posted.
+// Read by the macOS web views only.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn runtime_message(path: &str, body: &str) -> Option<serde_json::Value> {
     match serde_json::from_str::<PageEvent>(body).ok()? {
         PageEvent::Load => Some(serde_json::json!({ "t": "frame", "path": path, "event": "load" })),
@@ -288,6 +292,8 @@ fn is_light(src: &str) -> bool {
 }
 
 /// A fullscreen frame scrolls its own page; an inline one leaves the wheel to the app's list.
+// Read by the macOS web views only.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn scrolls_itself(src: &str) -> bool {
     src.contains("hazel-display=fullscreen")
 }

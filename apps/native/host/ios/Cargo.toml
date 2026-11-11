@@ -1,0 +1,21 @@
+[package]
+name = "hazel-ios"
+version = "0.0.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+hazel-native = { path = ".." }
+# The same revision as `hazel-native`'s (`../Cargo.toml`).
+rune = { git = "https://github.com/Makisuo/rune", rev = "486028d40bfe61a7e7ef561f0f819e43ef19ee29" }
+serde_json = "1"
+
+# The hidden web view the runtime's worker runs in (`src/bridge.rs`).
+[target.'cfg(target_os = "ios")'.dependencies]
+block2 = "0.6"
+dispatch2 = "0.3"
+objc2 = "0.6"
+objc2-core-foundation = "0.3"
+objc2-foundation = "0.3"
+objc2-ui-kit = "0.3"
+objc2-web-kit = "0.3"

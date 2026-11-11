@@ -128,8 +128,7 @@ export const startRuntime = async (platform: NativePlatform) => {
 	const { NotificationSinks } = await import("../../web-foldkit/src/app/notification-sinks")
 	const PendingAnnouncement = await import("../../web-foldkit/src/ui/aria/pending-announcement")
 
-	const stylesheet = new URL("../../web-foldkit/src/styles.css", import.meta.url).pathname
-	const styles = await platform.loadStyles(stylesheet)
+	const styles = await platform.loadStyles()
 
 	/** A press on an `href` replays as the click Foldkit's link listener expects on `document`. */
 	const followLink = (href: string) => {
@@ -268,7 +267,9 @@ export const startRuntime = async (platform: NativePlatform) => {
 	let isHeadlessDomRequested = false
 	const bootedAt = performance.now()
 	const scheduleHeadlessDom = () => {
-		if (isHeadlessDomRequested) return
+		const { jsdom } = platform
+		// Without a headless DOM the editor never mounts: the composer shows, but takes no text.
+		if (isHeadlessDomRequested || jsdom === undefined) return
 		clearTimeout(headlessDomTimer)
 		const wait = Math.max(0, Math.min(250, 2000 - (performance.now() - bootedAt)))
 		headlessDomTimer = setTimeout(() => {
@@ -276,7 +277,7 @@ export const startRuntime = async (platform: NativePlatform) => {
 			const shims = ["Element", "HTMLElement", "Node"].map(
 				(name) => (globalThis as Record<string, unknown>)[name],
 			)
-			void composer.loadHeadlessDom({ document, shims }, () => rune.refreshObserved())
+			void composer.loadHeadlessDom(jsdom, { document, shims }, () => rune.refreshObserved())
 		}, wait)
 	}
 	/**

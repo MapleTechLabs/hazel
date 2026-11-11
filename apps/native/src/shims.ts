@@ -365,12 +365,13 @@ export const installShims = (env: ShimEnv) => {
 		fonts: { ready: Promise.resolve() },
 	})
 
+	// A worker's `self` and `location` are read-only accessors: defined, not assigned.
+	for (const [name, value] of Object.entries({ self: g, location }))
+		Object.defineProperty(globalThis, name, { configurable: true, writable: true, value })
 	Object.assign(g, {
 		window: g,
-		self: g,
 		top: g,
 		document,
-		location,
 		history,
 		matchMedia,
 		localStorage: new MemoryStorage(),

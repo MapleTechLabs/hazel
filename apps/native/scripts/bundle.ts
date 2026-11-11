@@ -19,6 +19,7 @@ import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { nativeClient } from "@hazel/auth/contract"
 
 import { overlayPlugin } from "../src/overlay-plugin"
+import { prismPlugin } from "./prism-plugin"
 
 const root = new URL("..", import.meta.url).pathname
 const release = process.env.HAZEL_RELEASE === "1"
@@ -67,17 +68,6 @@ run("cargo", ["build", "--release", "--target", rustTarget], {
 		: process.env,
 })
 cpSync(`${root}host/target/${rustTarget}/release/hazel-native`, `${contents}/MacOS/hazel-native`)
-
-/** Prism's language files use the global its core sets: import the core first, explicitly. */
-const prismPlugin: BunPlugin = {
-	name: "hazel-native-prism",
-	setup(build) {
-		build.onLoad({ filter: /prismjs\/components\/prism-[\w-]+\.js$/ }, ({ path }) => ({
-			contents: `import Prism from "prismjs";\n${readFileSync(path, "utf8")}`,
-			loader: "js",
-		}))
-	},
-}
 
 // ESM keeps the runtime's top-level awaits; bytecode skips parsing at launch.
 const runtime = await Bun.build({

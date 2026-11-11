@@ -6,6 +6,7 @@
 	"scripts": {
 		"build": "bun scripts/build.ts && bun scripts/precompile-styles.ts",
 		"bundle": "bun scripts/bundle.ts",
+		"ios": "bun scripts/ios.ts",
 		"host:build": "cd host && cargo build --release",
 		"start": "bun run host:build && host/target/release/hazel-native",
 		"typecheck": "tsc --noEmit",
