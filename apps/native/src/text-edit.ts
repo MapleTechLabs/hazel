@@ -45,11 +45,7 @@ export type FieldChange = { readonly from: number; readonly to: number; readonly
  * inline atom (a mention) has no text, so one text offset can be either side of it: text inserted
  * there goes where the editor's caret is, as typing in the editor would put it.
  */
-export const fieldTextChange = (
-	doc: Node,
-	value: string,
-	caret?: number,
-): FieldChange | undefined => {
+export const fieldTextChange = (doc: Node, value: string, caret?: number): FieldChange | undefined => {
 	const old = doc.textBetween(0, doc.content.size, "\n")
 	if (old === value) return undefined
 	let start = 0
@@ -68,8 +64,7 @@ export const fieldTextChange = (
 }
 
 /** The editor's caret, when its selection is one. */
-export const caretOf = (state: EditorState) =>
-	state.selection.empty ? state.selection.from : undefined
+export const caretOf = (state: EditorState) => (state.selection.empty ? state.selection.from : undefined)
 
 /** Typing: text inserted at one place, on one line, which the editor hears as `handleTextInput`. */
 export const isTyping = (change: FieldChange) =>
@@ -95,4 +90,35 @@ export const replaceFieldText = (state: EditorState, value: string): Transaction
 		at += line.length
 	}
 	return tr
+}
+
+/** The one span two texts differ in: where it starts, where it ends in `a`, and `b`'s text for it. */
+const textDiff = (a: string, b: string) => {
+	let start = 0
+	while (start < a.length && start < b.length && a[start] === b[start]) start++
+	let aEnd = a.length
+	let bEnd = b.length
+	while (aEnd > start && bEnd > start && a[aEnd - 1] === b[bEnd - 1]) {
+		aEnd--
+		bEnd--
+	}
+	return { start, end: aEnd, text: b.slice(start, bEnd) }
+}
+
+/**
+ * The field's edit from `before` to `after`, made on the editor's text instead: the field had not
+ * yet taken a change the editor made (a list marker it turned into a list, a picked mention) when
+ * the user typed on. `undefined` when the two changes touch the same text.
+ */
+export const rebaseFieldEdit = (before: string, after: string, editor: string): string | undefined => {
+	if (before === editor) return after
+	const typed = textDiff(before, after)
+	const made = textDiff(before, editor)
+	if (typed.end <= made.start && !(typed.end === made.start && typed.start === made.start))
+		return editor.slice(0, typed.start) + typed.text + editor.slice(typed.end)
+	if (typed.start >= made.end) {
+		const shift = made.text.length - (made.end - made.start)
+		return editor.slice(0, typed.start + shift) + typed.text + editor.slice(typed.end + shift)
+	}
+	return undefined
 }

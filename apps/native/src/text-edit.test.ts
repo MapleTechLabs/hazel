@@ -2,7 +2,7 @@ import { EditorState, TextSelection } from "prosemirror-state"
 import { describe, expect, it } from "vitest"
 
 import { type ProseMirrorNode, schema } from "../../web-foldkit/src/editor/schema"
-import { replaceFieldText } from "./text-edit"
+import { rebaseFieldEdit, replaceFieldText } from "./text-edit"
 
 const { paragraph, blockquote, mention } = schema.nodes
 const listItem = schema.nodes["list-item"]
@@ -79,5 +79,21 @@ describe("replaceFieldText", () => {
 	it("changes nothing when the text is the same", () => {
 		const state = stateOf(paragraph.create(null, schema.text("same")))
 		expect(replaceFieldText(state, "same")).toBeUndefined()
+	})
+})
+
+describe("rebaseFieldEdit", () => {
+	it("types on after a list marker the editor turned into a list, before the field took it", () => {
+		expect(rebaseFieldEdit("1. ", "1. x", "")).toBe("x")
+		expect(rebaseFieldEdit("intro\n- ", "intro\n- a", "intro\n")).toBe("intro\na")
+	})
+
+	it("keeps an edit before the editor's change, and passes through when nothing is owed", () => {
+		expect(rebaseFieldEdit("hi 1. ", "hey 1. ", "hi ")).toBe("hey ")
+		expect(rebaseFieldEdit("same", "same!", "same")).toBe("same!")
+	})
+
+	it("gives up when both touched the same text", () => {
+		expect(rebaseFieldEdit("abc", "aXc", "aYc")).toBeUndefined()
 	})
 })

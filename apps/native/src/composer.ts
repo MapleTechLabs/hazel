@@ -8,7 +8,15 @@ import { TextSelection } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 import { editorRegistry } from "../../web-foldkit/src/editor/registry"
 import { type HeadlessDom, makeHeadlessDom } from "./headless-dom"
-import { caretOf, type FieldChange, fieldTextChange, isTyping, replaceFieldText } from "./text-edit"
+import type { EditableEvent } from "./pending-edits"
+import {
+	caretOf,
+	type FieldChange,
+	fieldTextChange,
+	isTyping,
+	rebaseFieldEdit,
+	replaceFieldText,
+} from "./text-edit"
 
 let dom: HeadlessDom | undefined
 /** Each editor element's Mount path: the host keys the editor's native field by it. */
@@ -72,10 +80,19 @@ const editorAt = (editorId: unknown): Option.Option<EditorView> => {
 	return exit._tag === "Success" ? Option.some(exit.value) : Option.none()
 }
 
+const textOf = (view: EditorView) => view.state.doc.textBetween(0, view.state.doc.content.size, "\n")
+
 export const editorText = (args: Record<string, unknown>): string | undefined =>
+	Option.match(editorAt(args.editorId), { onNone: () => undefined, onSome: textOf })
+
+/** The editor's caret as an offset in `editorText` (UTF-16 code units), when its selection is one. */
+export const editorCaret = (args: Record<string, unknown>): number | undefined =>
 	Option.match(editorAt(args.editorId), {
 		onNone: () => undefined,
-		onSome: (view) => view.state.doc.textBetween(0, view.state.doc.content.size, "\n"),
+		onSome: (view) => {
+			const caret = caretOf(view.state)
+			return caret === undefined ? undefined : view.state.doc.textBetween(0, caret, "\n").length
+		},
 	})
 
 /**
@@ -95,16 +112,19 @@ const typeIntoEditor = (view: EditorView, change: FieldChange) => {
 	)
 }
 
-export const applyEditorEvent = (
-	args: Record<string, unknown>,
-	event: { readonly value?: string | null; readonly key?: string | null },
-) =>
+export const applyEditorEvent = (args: Record<string, unknown>, event: EditableEvent) =>
 	Option.map(editorAt(args.editorId), (view) => {
 		const before = view.state.doc
 		if (event.value != null) {
-			const change = fieldTextChange(view.state.doc, event.value, caretOf(view.state))
+			// The field's own change, made on the editor's text when the editor moved on from what
+			// the field showed (it had not taken a list or a mention yet when the user typed on).
+			const value =
+				event.before == null
+					? event.value
+					: (rebaseFieldEdit(event.before, event.value, textOf(view)) ?? event.value)
+			const change = fieldTextChange(view.state.doc, value, caretOf(view.state))
 			if (change !== undefined && !typeIntoEditor(view, change)) {
-				const edit = replaceFieldText(view.state, event.value)
+				const edit = replaceFieldText(view.state, value)
 				if (edit !== undefined) view.dispatch(edit)
 			}
 		}
@@ -116,6 +136,7 @@ export const applyEditorEvent = (
 		 * Whether the native field must take the editor's text again: a key changed it, or the
 		 * editor's input path made it other than the field's (a list marker it turned into a list).
 		 */
-		const text = view.state.doc.textBetween(0, view.state.doc.content.size, "\n")
-		return event.key != null ? !view.state.doc.eq(before) : event.value != null && text !== event.value
+		return event.key != null
+			? !view.state.doc.eq(before)
+			: event.value != null && textOf(view) !== event.value
 	})

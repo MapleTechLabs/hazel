@@ -269,7 +269,16 @@ describe("StyleResolver", () => {
 	})
 
 	it("leaves a percentage inset of a content-sized parent to the host, as a fraction", () => {
-		styles.ensure(["relative", "flex", "flex-col", "absolute", "right-0", "bottom-full", "left-0", "mb-2"])
+		styles.ensure([
+			"relative",
+			"flex",
+			"flex-col",
+			"absolute",
+			"right-0",
+			"bottom-full",
+			"left-0",
+			"mb-2",
+		])
 		// The composer: as tall as its content, which only the host's layout knows.
 		const composer = resolve("relative flex flex-col")
 		const { style } = resolve("absolute right-0 bottom-full left-0 mb-2", { scope: composer.scope })
