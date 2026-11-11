@@ -32,8 +32,8 @@ export const Grouping = Schema.Literals(["signals", "accounts"])
 export type Grouping = typeof Grouping.Type
 export const Sort = Schema.Literals(["priority", "severity", "age", "mrr"])
 export type Sort = typeof Sort.Type
-/** Whose accounts: "Mine" (the default) is accounts I own. */
-export const OwnerFilter = Schema.Literals(["mine", "anyone", "unowned"])
+/** Whose accounts: the default, "Mine or unowned", is accounts I own plus ones nobody owns yet. */
+export const OwnerFilter = Schema.Literals(["mine_or_unowned", "mine", "anyone", "unowned"])
 export type OwnerFilter = typeof OwnerFilter.Type
 
 export const Filters = Schema.Struct({
@@ -46,7 +46,7 @@ export const Filters = Schema.Struct({
 export type Filters = typeof Filters.Type
 
 export const DEFAULT_FILTERS: Filters = {
-	owner: "mine",
+	owner: "mine_or_unowned",
 	kind: null,
 	template: null,
 	severity: null,
@@ -138,6 +138,20 @@ const byResolved = Order.mapInput(
 export const accountsByIdOfModel = (model: Model): ReadonlyMap<string, AccountRowType> =>
 	new Map((model.accounts ?? []).map((account) => [account.id, account]))
 
+const matchesOwner = (owner: OwnerFilter, viewer: Viewer, ownerUserId: UserId | null): boolean => {
+	const mine = viewer.userId !== null && ownerUserId === viewer.userId
+	switch (owner) {
+		case "anyone":
+			return true
+		case "mine":
+			return mine
+		case "unowned":
+			return ownerUserId === null
+		case "mine_or_unowned":
+			return mine || ownerUserId === null
+	}
+}
+
 /** Every filter but the tab: the tab counts read this too. */
 const matchesFilters = (
 	model: Model,
@@ -150,10 +164,7 @@ const matchesFilters = (
 	const { filters } = model
 	const query = model.search.trim().toLowerCase()
 	return (
-		(filters.owner === "anyone" ||
-			(filters.owner === "mine"
-				? viewer.userId !== null && account.ownerUserId === viewer.userId
-				: account.ownerUserId === null)) &&
+		matchesOwner(filters.owner, viewer, account.ownerUserId) &&
 		(filters.kind === null || signal.kind === filters.kind) &&
 		(filters.template === null || signal.template === filters.template) &&
 		(filters.severity === null || signal.severity === filters.severity) &&

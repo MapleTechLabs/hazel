@@ -70,7 +70,20 @@ const toFilterMenuMessage = (message: Menu.Message) => Message.GotFilterMenuMess
 const toSortMenuMessage = (message: Menu.Message) => Message.GotSortMenuMessage({ message })
 
 const SORT_LABEL = { priority: "Priority", severity: "Severity", age: "Oldest first", mrr: "MRR" } as const
-const OWNER_LABEL = { mine: "Mine", anyone: "Anyone", unowned: "Unowned" } as const
+const OWNER_LABEL = {
+	mine_or_unowned: "Mine or unowned",
+	mine: "Mine",
+	anyone: "Anyone",
+	unowned: "Unowned",
+} as const
+
+/** The owner scope as a subtitle suffix, e.g. " on your accounts". */
+const OWNER_SCOPE = {
+	mine_or_unowned: " on your or unowned accounts",
+	mine: " on your accounts",
+	anyone: "",
+	unowned: "",
+} as const
 
 // MENUS
 
@@ -217,7 +230,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: 
 		),
 	].reduce((sum, accountId) => sum + (accountsById.get(accountId)?.mrrMinor ?? 0), 0)
 	const currency = model.accounts?.[0]?.currency ?? "USD"
-	const whose = model.filters.owner === "mine" ? " on your accounts" : ""
+	const whose = OWNER_SCOPE[model.filters.owner]
 	const subtitle =
 		model.signals === null || model.accounts === null
 			? "Loading…"
@@ -464,7 +477,7 @@ const allClear = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =
 					h.p(
 						[h.Class("max-w-sm text-muted-fg text-sm")],
 						[
-							`No open signals${model.filters.owner === "mine" ? " on your accounts" : ""}. Hazel checks again every hour${counts.snoozed > 0 ? `, and ${counts.snoozed} snoozed signal${counts.snoozed === 1 ? "" : "s"} will wake up` : ""}.`,
+							`No open signals${OWNER_SCOPE[model.filters.owner]}. Hazel checks again every hour${counts.snoozed > 0 ? `, and ${counts.snoozed} snoozed signal${counts.snoozed === 1 ? "" : "s"} will wake up` : ""}.`,
 						],
 					),
 				],

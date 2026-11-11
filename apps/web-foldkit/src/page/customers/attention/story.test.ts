@@ -222,10 +222,20 @@ const statusOf = (current: Model, id: SignalRow["id"]) =>
 const ids = (rows: ReadonlyArray<SignalRow>) => rows.map((row) => row.id)
 
 describe("needs attention: what shows", () => {
-	test("Open, Mine by default, by priority", () => {
+	test("Open, Mine or unowned by default, by priority", () => {
 		const current = loaded()
+		expect(current.filters.owner).toBe("mine_or_unowned")
 		expect(ids(visibleSignals(current, viewer))).toEqual(ids([paymentFailed, stoppedLogging, usageDown]))
 		expect(tabCounts(current, viewer)).toEqual({ open: 3, snoozed: 1, done: 1 })
+	})
+
+	test("an unowned account's signals show by default, but not under Mine", () => {
+		const unowned = { ...loaded(), accounts: [acme, kestrel, { ...northwind, ownerUserId: null }] }
+		expect(ids(visibleSignals(unowned, viewer))).toEqual(
+			ids([paymentFailed, stoppedLogging, nearLimit, usageDown]),
+		)
+		const mine = { ...unowned, filters: { ...unowned.filters, owner: "mine" as const } }
+		expect(ids(visibleSignals(mine, viewer))).toEqual(ids([paymentFailed, stoppedLogging, usageDown]))
 	})
 
 	test("Done keeps the last week only", () => {
