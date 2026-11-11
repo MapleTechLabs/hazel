@@ -4,8 +4,8 @@
  * `IngestOp`s; it never writes the store. A provider with no adapter here answers
  * `CustomerProviderUnavailableError` on connect (the UI shows "coming soon").
  *
- * Registered: **clerk** (`./clerk/adapter.ts`), **stripe** (`./stripe/adapter.ts`). Autumn and Maple
- * are still to come.
+ * Registered: **clerk** (`./clerk/adapter.ts`), **stripe** (`./stripe/adapter.ts`), **autumn**
+ * (`./autumn/adapter.ts`). Maple is still to come.
  *
  * What an adapter's ops must carry:
  *
@@ -42,6 +42,7 @@ import type {
 } from "@hazel/domain/customers"
 import { Context, Effect, Layer, Option, type Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
+import { makeAutumnAdapter } from "./autumn/adapter"
 import { makeClerkAdapter } from "./clerk/adapter"
 import { makeStripeAdapter } from "./stripe/adapter"
 import { CustomerProviderError, CustomerWebhookRejectedError } from "./provider-errors"
@@ -134,6 +135,7 @@ export class CustomerProviders extends Context.Service<CustomerProviders, Custom
 			const adapters = new Map<CustomerProvider, CustomerProviderAdapter>([
 				["clerk", yield* makeClerkAdapter],
 				["stripe", yield* makeStripeAdapter],
+				["autumn", yield* makeAutumnAdapter],
 			])
 			return CustomerProviders.of({ get: (provider) => Option.fromNullishOr(adapters.get(provider)) })
 		}),

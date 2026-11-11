@@ -189,12 +189,12 @@ describe("data sources: connect", () => {
 		story(
 			pageUpdate,
 			given(loaded()),
-			message(Message.PressedConnect({ provider: "autumn" })),
-			message(Message.ChangedApiKey({ value: "am_sk_1" })),
+			message(Message.PressedConnect({ provider: "maple" })),
+			message(Message.ChangedApiKey({ value: "mpl_live_1" })),
 			message(Message.SubmittedConnect()),
 			Command.resolve(
 				ConnectCustomerSource,
-				Message.FailedConnect({ provider: "autumn", reason: "ComingSoon" }),
+				Message.FailedConnect({ provider: "maple", reason: "ComingSoon" }),
 			),
 			model((current) => expect(current.connectForm?.failure).toBe("ComingSoon")),
 		)

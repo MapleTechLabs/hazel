@@ -15,7 +15,7 @@
  */
 import { type Redacted, Schema } from "effect"
 import type { HttpClient } from "effect/http"
-import { makeProviderGet, type ProviderGetOptions, type ProviderQuery } from "../provider-http"
+import { makeProviderGet, type ProviderRequestOptions, type ProviderQuery } from "../provider-http"
 import { STRIPE_API_VERSION } from "./wire"
 
 export const STRIPE_API_URL = "https://api.stripe.com/v1"
@@ -63,7 +63,7 @@ const STRIPE = {
 export const makeStripeGet = (
 	client: HttpClient.HttpClient,
 	apiKey: Redacted.Redacted<string>,
-	options?: ProviderGetOptions,
+	options?: ProviderRequestOptions,
 ) => makeProviderGet(STRIPE, client, apiKey, options)
 
 export type StripeGet = ReturnType<typeof makeStripeGet>
