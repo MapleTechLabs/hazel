@@ -113,9 +113,18 @@ fn json_string(text: &str) -> String {
 }
 
 fn evaluate(web: &WebView, script: &str) {
-    let handler: Option<&block2::DynBlock<dyn Fn(*mut AnyObject, *mut NSError)>> = None;
+    // A page that cannot take the line (its script failed, `new Worker` refused) says so in the log.
+    let handler = block2::RcBlock::new(|_result: *mut AnyObject, error: *mut NSError| {
+        // SAFETY: WebKit passes a valid error, or null when the script ran.
+        if let Some(error) = unsafe { error.as_ref() } {
+            log(&format!(
+                "[host] the page refused a line: {}",
+                error.localizedDescription()
+            ));
+        }
+    });
     unsafe {
-        let _: () = msg_send![web, evaluateJavaScript: &*NSString::from_str(script), completionHandler: handler];
+        let _: () = msg_send![web, evaluateJavaScript: &*NSString::from_str(script), completionHandler: &*handler];
     }
 }
 
