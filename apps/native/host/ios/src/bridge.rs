@@ -45,6 +45,11 @@ thread_local! {
     static PAGE: Cell<u64> = const { Cell::new(0) };
     /// Hears the page's process end (the web view holds it weakly).
     static NAVIGATION: RefCell<Option<Retained<PageNavigation>>> = const { RefCell::new(None) };
+    /// A page replacing a runtime is loading: until it is ready, it is held only the window.
+    static REPLACING: Cell<bool> = const { Cell::new(false) };
+    /// Where the last full page load went; a restart goes back there.
+    static LAST_PATH: RefCell<Option<String>> = const { RefCell::new(None) };
+    static RESTARTS: RefCell<page::Restarts> = RefCell::new(page::Restarts::default());
 }
 
 /// Where the runtime's trees go: the running app.
@@ -87,7 +92,11 @@ impl Write for ToWorker {
             // Held while the page is not ready yet; otherwise handed back to send now.
             let ready = EARLY.with_borrow_mut(|early| match early {
                 Some(early) => {
-                    early.push(text);
+                    if REPLACING.get() {
+                        early.push(page::for_replacement(&text));
+                    } else {
+                        early.push(text);
+                    }
                     None
                 }
                 None => Some(text),
@@ -155,6 +164,7 @@ fn receive(line: &str) {
         RuntimeMsg::Reload { path } => {
             if let Some(mtm) = MainThreadMarker::new() {
                 load_page(mtm, Some(&path));
+                LAST_PATH.set(Some(path));
             }
         }
         RuntimeMsg::Update { .. } | RuntimeMsg::Relaunch { .. } => {
@@ -180,6 +190,7 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
         // replaced since says so too late; its lines stay held for the new one.
         let page = ready.downcast::<NSNumber>().ok().map(|n| n.as_u64());
         if page == Some(PAGE.get()) {
+            REPLACING.set(false);
             for text in EARLY.take().unwrap_or_default() {
                 to_worker(&text);
             }
@@ -240,8 +251,12 @@ define_class!(
         /// runtime in it are gone, so a fresh page starts another, as a browser reloads a tab.
         #[unsafe(method(webViewWebContentProcessDidTerminate:))]
         fn content_process_ended(&self, _web: &AnyObject) {
+            if !RESTARTS.with_borrow_mut(|restarts| restarts.allow(std::time::Instant::now())) {
+                return log("[host] the page's process keeps ending; not starting it again");
+            }
             log("[host] the page's process ended; starting the runtime again");
-            load_page(self.mtm(), None);
+            let path = LAST_PATH.with_borrow(Clone::clone);
+            load_page(self.mtm(), path.as_deref());
         }
     }
 );
@@ -341,6 +356,7 @@ fn load_page(mtm: MainThreadMarker, path: Option<&str>) {
     let id = PAGE.get() + 1;
     if PAGE.replace(id) > 0 {
         EARLY.set(Some(Vec::new()));
+        REPLACING.set(true);
         // A fresh runtime starts light at the bundle's size: it hears the window's as the
         // first one did, once its page is ready.
         if let Some((width, height, dark)) = hazel_native::last_env() {
