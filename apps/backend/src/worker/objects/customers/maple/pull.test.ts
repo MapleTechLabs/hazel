@@ -32,12 +32,9 @@ const NOW = new Date("2026-06-15T12:00:00.000Z")
 const config = (overrides: Partial<Extract<ConnectionConfig, { _tag: "maple" }>> = {}) =>
 	({
 		_tag: "maple",
-		mapleOrgId: "org_39lDNgEjuXrOi0obeLpFSfyVSDo",
 		region: "us",
 		activityEvents: [],
 		metricMappings: [],
-		accountKey: "GroupId",
-		userKey: "UserId",
 		lookbackDays: 2,
 		...overrides,
 	}) satisfies Extract<ConnectionConfig, { _tag: "maple" }>

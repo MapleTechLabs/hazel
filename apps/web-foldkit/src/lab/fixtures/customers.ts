@@ -1151,7 +1151,7 @@ export const MAPLE_CONNECTION = connection(4, "maple", {
 	lastErrorAt: MAPLE_ERROR_AT,
 	lastError: { code: "auth", message: "API key was revoked.", httpStatus: 401 },
 	consecutiveFailures: 3,
-	config: { ...DEFAULT_CONNECTION_CONFIG.maple, mapleOrgId: "org_hazel" },
+	config: DEFAULT_CONNECTION_CONFIG.maple,
 })
 export const CONNECTIONS: ReadonlyArray<Connection> = [CLERK_CONNECTION, STRIPE_CONNECTION, MAPLE_CONNECTION]
 

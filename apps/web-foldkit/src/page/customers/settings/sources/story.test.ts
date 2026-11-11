@@ -75,7 +75,7 @@ const maple = connection(2, {
 	provider: "maple",
 	status: "error",
 	lastError: { code: "auth", message: "revoked", httpStatus: 401 },
-	config: { ...DEFAULT_CONNECTION_CONFIG.maple, mapleOrgId: "org_1", activityEvents: ["query_run"] },
+	config: { ...DEFAULT_CONNECTION_CONFIG.maple, activityEvents: ["query_run"] },
 })
 const stripe = connection(3, { provider: "stripe", status: "disconnected", disconnectedAtMs: NOW - 1_000 })
 
@@ -323,7 +323,6 @@ describe("data sources: Maple settings", () => {
 			message(
 				Message.ChangedMetricMapping({ index: 0, field: "metricKey", value: "dashboards_created" }),
 			),
-			message(Message.ChangedConfigText({ target: "settings", key: "accountKey", value: "OrgId" })),
 			message(Message.ChangedConfigText({ target: "settings", key: "region", value: "eu" })),
 			// The config's schema refuses a region of its own: the field keeps what it had.
 			message(Message.ChangedConfigText({ target: "settings", key: "region", value: "apac" })),
@@ -337,12 +336,9 @@ describe("data sources: Maple settings", () => {
 					config: {
 						...maple.config,
 						_tag: "maple",
-						mapleOrgId: "org_1",
 						region: "eu",
 						activityEvents: ["trace_explored"],
 						metricMappings: [{ event: "dashboard_created", metricKey: "dashboards_created" }],
-						accountKey: "OrgId",
-						userKey: "UserId",
 						lookbackDays: 180,
 					},
 				}),
@@ -374,7 +370,7 @@ describe("data sources: Maple settings", () => {
 	test("a field value that does not fit the config is ignored", () => {
 		const next = pageUpdate(
 			detail(),
-			Message.ToggledConfigField({ target: "settings", key: "accountKey", isSelected: true }),
+			Message.ToggledConfigField({ target: "settings", key: "region", isSelected: true }),
 		).model
 		expect(next.settingsDraft).toEqual(maple.config)
 	})

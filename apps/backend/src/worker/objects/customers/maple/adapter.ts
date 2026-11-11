@@ -11,9 +11,9 @@
  *
  * Connecting needs a Maple **API key** (`maple_ak_…`, the MCP key under Settings → MCP is the
  * narrowest one that works) and the key's **region**: Maple runs one instance per region and a key
- * of one is refused by the other. The key is stored encrypted (`../credentials.ts`) and only ever
- * decrypted to call Maple. There are no webhooks — Maple sends none for product events — so the
- * schedule is the whole signal, hourly.
+ * of one is refused by the other. The organization is the key's own, so it is never asked for. The
+ * key is stored encrypted (`../credentials.ts`) and only ever decrypted to call Maple. There are no
+ * webhooks — Maple sends none for product events — so the schedule is the whole signal, hourly.
  *
  * Nothing here writes the store: `pull` produces `IngestOp`s and `CustomerIngest` applies them.
  *
@@ -30,7 +30,7 @@ import { HttpClient } from "effect/http"
 import { CustomerProviderError, CustomerWebhookRejectedError } from "../provider-errors"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../providers"
 import { makeMapleApi } from "./http"
-import { ACCOUNT_COLUMN, CONTACT_COLUMN, MAPLE_PULL_INTERVAL_MS, pullPage } from "./pull"
+import { MAPLE_PULL_INTERVAL_MS, pullPage } from "./pull"
 import { MapleProbeRow, orgIdOf } from "./wire"
 
 export { MAPLE_PULL_INTERVAL_MS }
@@ -76,11 +76,6 @@ WHERE $__orgFilter
  * names the organization it opens, both from a single counting query over a day far in the past:
  * it matches nothing, so it costs Maple almost nothing, and `show_sql` brings back the statement
  * with `$__orgFilter` expanded, which is the only place the key's organization is named.
- *
- * A configured Maple organization id is checked against it rather than trusted: a key of another
- * organization would otherwise import that organization's usage under this one's name. The
- * identity columns are checked here too, so a config naming something Maple does not key identity
- * on says so at connect time instead of reading nothing for a day.
  */
 const validateWith = Effect.fn("Maple.validate")(function* (
 	credentials: ProviderCredentials,
@@ -88,17 +83,7 @@ const validateWith = Effect.fn("Maple.validate")(function* (
 ) {
 	const config = mapleConfig(credentials.config)
 	if (Option.isNone(config)) return yield* refused(UNCONFIGURED)
-	const { accountKey, userKey, mapleOrgId, region } = config.value
-	if (accountKey.trim() !== "" && accountKey.trim() !== ACCOUNT_COLUMN) {
-		return yield* refused(
-			`Maple stamps the account on its events as "${ACCOUNT_COLUMN}"; leave the account key at that`,
-		)
-	}
-	if (userKey.trim() !== "" && userKey.trim() !== CONTACT_COLUMN) {
-		return yield* refused(
-			`Maple stamps the user on its events as "${CONTACT_COLUMN}"; leave the user key at that`,
-		)
-	}
+	const { region } = config.value
 	if (!Redacted.value(credentials.apiKey).startsWith(KEY_PREFIX)) {
 		return yield* refused(`"${KEY_PREFIX}…" is what a Maple API key looks like (${WHERE_TO_FIND})`)
 	}
@@ -114,19 +99,10 @@ const validateWith = Effect.fn("Maple.validate")(function* (
 	if (organizationId === null) {
 		return yield* refused("Maple did not say which organization the key opens; reconnect it")
 	}
-	const configured = mapleOrgId.trim()
-	if (configured !== "" && configured !== organizationId) {
-		// The ids go to the log only: the message is synced to every member of the organization.
-		yield* Effect.logWarning("Maple key opens another organization", {
-			opens: organizationId,
-			configured,
-		})
-		return yield* refused("The key opens another Maple organization than the one this source is set to")
-	}
 	yield* Effect.annotateCurrentSpan({ "maple.organization_id": organizationId, "maple.region": region })
 	return {
 		externalAccountId: accountIdOf(organizationId, region),
-		externalAccountName: `Maple (${region.toUpperCase()})`,
+		externalAccountName: `Maple (${region.toUpperCase()}) · ${organizationId}`,
 	}
 })
 

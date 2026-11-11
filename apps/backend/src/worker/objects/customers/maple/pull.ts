@@ -43,8 +43,8 @@ import { activityOps, type MetricMap, metricDefinitionOps, metricMapOf, metricOp
 import { isEventName, isMetricKey, MapleActivityRow, MapleMetricRow, RUN_SQL_ROW_CAP } from "./wire"
 
 /** The two Maple columns that carry identity (`maple/docs/product-events-catalog.md`). */
-export const ACCOUNT_COLUMN = "GroupId"
-export const CONTACT_COLUMN = "UserId"
+const ACCOUNT_COLUMN = "GroupId"
+const CONTACT_COLUMN = "UserId"
 
 /**
  * Maple's webhooks do not exist for product events, so the walk is the only signal; a day's counts

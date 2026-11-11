@@ -108,7 +108,7 @@ describe("Customers RPCs", () => {
 								provider: "maple",
 								apiKey: "mpl_live_test",
 								webhookSecret: null,
-								config: { ...DEFAULT_CONNECTION_CONFIG.maple, mapleOrgId: "org_maple" },
+								config: DEFAULT_CONNECTION_CONFIG.maple,
 							},
 							world.owner,
 						),

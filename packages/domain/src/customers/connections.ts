@@ -44,9 +44,12 @@ export const AutumnConnectionConfig = Schema.TaggedStruct("autumn", {
 export const MapleRegion = Schema.Literals(["us", "eu"])
 export type MapleRegion = typeof MapleRegion.Type
 
-/** Maple: product events by GroupId/UserId → activity and per-event metrics, pulled on a schedule. */
+/**
+ * Maple: product events by GroupId/UserId → activity and per-event metrics, pulled on a schedule.
+ * The organization is the one the key opens (read at connect). Configs stored before carry
+ * `mapleOrgId`, `accountKey` and `userKey` too; decoding drops them.
+ */
 export const MapleConnectionConfig = Schema.TaggedStruct("maple", {
-	mapleOrgId: Schema.String,
 	/** Added after the first connections were stored, so an older config decodes as `us`. */
 	region: MapleRegion.pipe(Schema.withDecodingDefaultKey(Effect.succeed("us" as const))),
 	/** Event names that count as activity; empty = every event. Spelled out in each pull's query. */
@@ -55,9 +58,6 @@ export const MapleConnectionConfig = Schema.TaggedStruct("maple", {
 	metricMappings: Schema.Array(Schema.Struct({ event: Schema.String, metricKey: Schema.String })).check(
 		Schema.isMaxLength(50),
 	),
-	/** Which event attribute names the account and the user (default `GroupId` / `UserId`). */
-	accountKey: Schema.String,
-	userKey: Schema.String,
 	/** 1–365. */
 	lookbackDays: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })),
 })
@@ -79,12 +79,9 @@ export const DEFAULT_CONNECTION_CONFIG: ConnectionConfigTable = {
 	autumn: { _tag: "autumn", customerIdIsClerkOrgId: true },
 	maple: {
 		_tag: "maple",
-		mapleOrgId: "",
 		region: "us",
 		activityEvents: [],
 		metricMappings: [],
-		accountKey: "GroupId",
-		userKey: "UserId",
 		lookbackDays: 90,
 	},
 }

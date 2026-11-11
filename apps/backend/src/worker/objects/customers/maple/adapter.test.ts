@@ -16,12 +16,9 @@ const API_KEY = "maple_ak_fake0000000000000000"
 const config = (overrides: Partial<Extract<ConnectionConfig, { _tag: "maple" }>> = {}) =>
 	({
 		_tag: "maple",
-		mapleOrgId: MAPLE_ORG,
 		region: "us",
 		activityEvents: [],
 		metricMappings: [],
-		accountKey: "GroupId",
-		userKey: "UserId",
 		lookbackDays: 90,
 		...overrides,
 	}) satisfies Extract<ConnectionConfig, { _tag: "maple" }>
@@ -54,7 +51,7 @@ describe("Maple validate", () => {
 		const fake = organization()
 		expect(await validate(fake)).toEqual({
 			externalAccountId: `${MAPLE_ORG}:us`,
-			externalAccountName: "Maple (US)",
+			externalAccountName: `Maple (US) · ${MAPLE_ORG}`,
 		})
 		expect(fake.calls).toHaveLength(1)
 		// A window far in the past: the probe proves the access, not the data.
@@ -71,7 +68,7 @@ describe("Maple validate", () => {
 		const account = await validate(fake, { config: config({ region: "eu" }) })
 		expect(account).toEqual({
 			externalAccountId: `${MAPLE_ORG}:eu`,
-			externalAccountName: "Maple (EU)",
+			externalAccountName: `Maple (EU) · ${MAPLE_ORG}`,
 		})
 		expect(fake.paths).toEqual([originOf("eu")])
 	})
@@ -84,12 +81,9 @@ describe("Maple validate", () => {
 		expect(fake.calls).toHaveLength(0)
 	})
 
-	it("refuses a key that opens another Maple organization than the source is set to", async () => {
-		const error = await refusal(organization({ organizationId: "org_someoneelse" }))
-		expect(error.code).toBe("auth")
-		expect(error.message).toBe(
-			"The key opens another Maple organization than the one this source is set to",
-		)
+	it("takes the organization from the key, whatever it is", async () => {
+		const account = await validate(organization({ organizationId: "org_someoneelse" }))
+		expect(account.externalAccountId).toBe("org_someoneelse:us")
 	})
 
 	it("refuses a key Maple rejects, and one without the MCP tools", async () => {
@@ -98,13 +92,6 @@ describe("Maple validate", () => {
 		const forbidden = await refusal(organization({ forbidden: true }))
 		expect(forbidden).toMatchObject({ code: "auth", httpStatus: 403 })
 		expect(forbidden.message).toMatch(/MCP tools \(403\)/)
-	})
-
-	it("names the identity columns Maple actually stamps its events with", async () => {
-		const account = await refusal(organization(), { config: config({ accountKey: "OrgSlug" }) })
-		expect(account.message).toMatch(/Maple stamps the account on its events as "GroupId"/)
-		const user = await refusal(organization(), { config: config({ userKey: "Email" }) })
-		expect(user.message).toMatch(/Maple stamps the user on its events as "UserId"/)
 	})
 
 	it("refuses a config that is not Maple's", async () => {

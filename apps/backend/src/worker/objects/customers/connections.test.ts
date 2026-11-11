@@ -153,7 +153,7 @@ describe("Customers connection credentials", () => {
 							provider: "maple",
 							apiKey: "maple_ak_x",
 							webhookSecret: null,
-							config: { ...DEFAULT_CONNECTION_CONFIG.maple, mapleOrgId: "org_a", ...config },
+							config: { ...DEFAULT_CONNECTION_CONFIG.maple, ...config },
 						},
 						world.owner,
 					)
@@ -181,6 +181,12 @@ describe("Customers connection credentials", () => {
 				const decode = Schema.decodeUnknownExit(MapleConnectionConfig)
 				const base = { ...DEFAULT_CONNECTION_CONFIG.maple, ...longest }
 				expect(Exit.isSuccess(decode(base))).toBe(true)
+				// Configs stored before the organization came from the key still decode.
+				expect(
+					Exit.isSuccess(
+						decode({ ...base, mapleOrgId: "org_a", accountKey: "GroupId", userKey: "UserId" }),
+					),
+				).toBe(true)
 				expect(Exit.isSuccess(decode({ ...base, activityEvents: [...events, "one_more"] }))).toBe(
 					false,
 				)
@@ -198,7 +204,7 @@ describe("Customers connection credentials", () => {
 			}),
 		))
 
-	it("refuses a Maple organization or region change without a key: nothing would check it", () =>
+	it("refuses a Maple region change without a key: nothing would check it", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
@@ -211,11 +217,10 @@ describe("Customers connection credentials", () => {
 						"customers.connection.update",
 						{
 							connectionId,
-							config: { ...DEFAULT_CONNECTION_CONFIG.maple, mapleOrgId: "org_a", ...config },
+							config: { ...DEFAULT_CONNECTION_CONFIG.maple, ...config },
 						},
 						world.owner,
 					)
-				expect(tagOf(yield* update({ mapleOrgId: "org_b" }))).toBe("CustomersInvalidRequestError")
 				expect(tagOf(yield* update({ region: "eu" }))).toBe("CustomersInvalidRequestError")
 				expect(tagOf(yield* update({ lookbackDays: 30 }))).toBe("Success")
 			}),

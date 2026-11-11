@@ -441,8 +441,8 @@ export const PROVIDERS: Descriptors = {
 		apiKey: {
 			label: "API key",
 			placeholder: "maple_ak_…",
-			createHref: "https://app.maple.dev/settings/mcp",
-			help: "Maple → Settings → MCP creates the narrowest key that works (it opens the MCP tools and nothing else); a key from Settings → Keys works too. Copy the key of the region your Maple organization is in.",
+			createHref: "https://app.maple.dev/settings?tab=mcp",
+			help: "Maple → Settings → MCP creates the narrowest key that works (it opens the MCP tools and nothing else); a key from Settings → Keys works too. An EU organization creates its key on app.eu.maple.dev. Hazel reads the organization from the key.",
 		},
 		// A Maple key is scoped per resource family; Hazel reads the product events through the MCP
 		// tools, which is the only key-authenticated way into them.
@@ -450,15 +450,6 @@ export const PROVIDERS: Descriptors = {
 		webhook: null,
 		syncMode: "Scheduled pull · hourly",
 		configFields: [
-			{
-				_tag: "Text",
-				key: "mapleOrgId",
-				label: "Maple organization",
-				description:
-					"The organization whose product events Hazel reads. Connecting refuses a key that opens another one.",
-				placeholder: "org_…",
-				isCode: true,
-			},
 			{
 				_tag: "Select",
 				key: "region",
@@ -469,22 +460,6 @@ export const PROVIDERS: Descriptors = {
 					{ value: "us", label: "US" },
 					{ value: "eu", label: "EU" },
 				],
-			},
-			{
-				_tag: "Text",
-				key: "accountKey",
-				label: "Account column",
-				description: "How Maple stamps the account on an event. GroupId is a Clerk organization id.",
-				placeholder: "GroupId",
-				isCode: true,
-			},
-			{
-				_tag: "Text",
-				key: "userKey",
-				label: "User column",
-				description: "How Maple stamps the person on an event. UserId is a Clerk user id.",
-				placeholder: "UserId",
-				isCode: true,
 			},
 		],
 		mapping: [

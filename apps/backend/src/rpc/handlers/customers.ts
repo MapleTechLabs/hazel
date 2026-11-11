@@ -51,7 +51,7 @@ import { seedDemo } from "../../worker/objects/customers/demo"
 import { healthDryRun, ruleDryRun } from "../../worker/objects/customers/dry-run"
 import { CustomerIngest } from "../../worker/objects/customers/ingest"
 import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/customers/ingest-live"
-import { accountIdOf as mapleAccountIdOf } from "../../worker/objects/customers/maple/adapter"
+import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
 import { configProblem as mapleConfigProblem } from "../../worker/objects/customers/maple/pull"
 import { CustomerProviders } from "../../worker/objects/customers/providers"
 import { CustomersServicesLive } from "../../worker/objects/customers/services"
@@ -892,12 +892,11 @@ const storeFailed = (cause: { readonly _tag: string }) =>
 	new InternalServerError({ message: "Could not store the credentials", detail: cause._tag, cause })
 
 /**
- * What the config schema cannot say: Maple needs the org to read from, and names it can be asked
- * for in a query that fits (`maple/pull.ts`).
+ * What the config schema cannot say: Maple needs names it can ask for in a query that fits
+ * (`maple/pull.ts`).
  */
 const checkConfig = (config: ConnectionConfig) => {
 	if (config._tag !== "maple") return Effect.void
-	if (config.mapleOrgId.trim() === "") return Effect.fail(invalid("Enter the Maple organization id"))
 	const problem = mapleConfigProblem(config)
 	return problem === null ? Effect.void : Effect.fail(invalid(problem))
 }
@@ -1184,16 +1183,15 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 						return yield* invalid(`The config is for ${config._tag}, not ${connection.provider}`)
 					}
 					if (config !== undefined) yield* checkConfig(config)
-					// Without a new key nothing is validated: Maple's organization and region must stay
-					// the ones the stored key was checked against.
+					// Without a new key nothing is validated: Maple's region must stay the one the stored
+					// key was checked against.
 					if (
 						config?._tag === "maple" &&
 						apiKey === undefined &&
-						mapleAccountIdOf(config.mapleOrgId.trim(), config.region) !==
-							connection.externalAccountId
+						config.region !== mapleRegionOf(connection.externalAccountId)
 					) {
 						return yield* invalid(
-							"The stored key was checked against another Maple organization or region: enter a key with the change",
+							"The stored key was checked against another Maple region: enter a key with the change",
 						)
 					}
 					const nextConfig = config ?? connection.config

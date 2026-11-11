@@ -19,13 +19,15 @@ Implementation: `apps/backend/src/worker/objects/customers/maple/` — `adapter.
 
 ## Setting it up
 
-1. **Create a key.** Maple → **Settings → MCP** gives a key (`maple_ak_…`) that opens the MCP tools
-   and nothing else, which is the narrowest credential that can read product events; a key from
-   **Settings → Keys** works too. Copy the key of the region the Maple organization is in — a key of
-   one region is rejected by the other.
-2. **Name the Maple organization** (`org_…`) and pick its **region** (US or EU) in the connect form.
-   Connecting refuses a key that opens a different organization than the one named, so a key pasted
-   from the wrong place cannot import someone else's usage under this name.
+1. **Create a key.** Maple → **Settings → MCP**
+   ([app.maple.dev/settings?tab=mcp](https://app.maple.dev/settings?tab=mcp)) gives a key
+   (`maple_ak_…`) that opens the MCP tools and nothing else, which is the narrowest credential that
+   can read product events; a key from **Settings → Keys** (`?tab=keys`) works too. An EU
+   organization creates its key on `app.eu.maple.dev`, same path.
+2. **Paste the key and pick its region** (US or EU) in the connect form. A key of one region is
+   rejected by the other. There is no organization to name: connecting reads the organization the
+   key opens (`$__orgFilter`, expanded in the probe's `show_sql`), and every query is scoped to it
+   server-side.
 3. **Map the events you care about** under the source's settings: an activity allowlist (empty =
    every identified event counts), event → metric key mappings, and the lookback a backfill
    imports (default 90 days, 1–365). Saving refuses, naming them, the event names and metric keys
@@ -150,8 +152,7 @@ documents as an estimate rather than a ledger.
   the run fails and the next scheduled pull starts over.
 - None of these repeats Maple's own text in the message, because a run's message is synced to every
   member of the organization; the detail goes to a log line, and a decode failure is logged by path
-  and issue kind only. A key of another organization than the configured one is refused without
-  either id in the message (they go to the log).
+  and issue kind only.
 - A row the mapping cannot use (another day than the page asked for, no group, no user, an
   unreadable count, a key nothing maps to) is skipped rather than failing the page. The count goes
   to a warning log line and the page's span (`maple.skipped`), not to the run's stats.
@@ -167,7 +168,8 @@ documents as an estimate rather than a ledger.
   whole toolset, so there is no key that reads _only_ product events. The MCP key (Settings → MCP)
   is the narrowest option and cannot touch the REST API.
 - **No organization name.** Nothing on the MCP surface reports it, so the source is shown as
-  "Maple (US)" / "Maple (EU)" rather than the Maple organization's name.
+  "Maple (US) · org_…" / "Maple (EU) · org_…" (region and organization id) rather than the Maple
+  organization's name.
 - **Events Maple ingests late are missed.** A scheduled pull re-reads only from the day of the
   previous success (minus 10 minutes), so events that reach `product_events` after the last pull
   that read their day (a client flushing a day-old buffer) are never read. Only a backfill would.
@@ -175,8 +177,8 @@ documents as an estimate rather than a ledger.
   between pages. The next pull re-reads the day and fixes it; past days are immutable, so a backfill
   is exact.
 - **Identity columns are fixed.** `GroupId` / `UserId` are the only columns Maple stamps identity
-  on, so the account and user config fields accept nothing else (connecting says so). Reading an
-  identity out of `Attributes` is the generalization this PR deliberately skips.
+  on, so they are not configurable. Reading an identity out of `Attributes` is the generalization
+  deliberately skipped.
 - **A key of another Maple organization keeps the old one's activity.** Core's account switch drops
   Maple's metrics and parked records and re-imports, but Maple's activity sits on Clerk's contacts,
   which the switch does not touch (it only clears activity on contacts the switched provider alone
@@ -190,8 +192,8 @@ documents as an estimate rather than a ledger.
   that lands on it, and the hourly pull re-reads today (and around midnight yesterday), so a parked
   group's count grows with each re-read: up to roughly 24× the day's real events. It is shown on,
   and orders, the unmatched list; no metric, score or signal reads it.
-- **An organization or region change needs the key.** Core only validates when a key is given, so
-  a settings update that changes either without one is refused until the key is entered with it.
+- **A region change needs the key.** Core only validates when a key is given, so a settings update
+  that changes the region without one is refused until the key is entered with it.
 - **`mcp_tool_called` is unidentified today**, so AI usage does not count yet even though the
   catalog says it carries user and organization. Nothing here changes when it starts to.
 - **Clerk must be connected.** Without it there are no accounts or contacts for Maple's ids to land
