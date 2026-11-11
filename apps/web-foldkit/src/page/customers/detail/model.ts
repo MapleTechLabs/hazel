@@ -31,11 +31,12 @@ export const NoteRow = Schema.Struct({
 })
 export type NoteRow = typeof NoteRow.Type
 
-/** A metric the usage chart can show. */
+/** A metric the usage chart can show; `unit` is the one set by hand, else the source's. */
 export const MetricRow = Schema.Struct({
 	key: Schema.String,
 	name: Schema.String,
 	unit: Schema.NullOr(Schema.String),
+	provider: Schema.NullOr(Customers.CustomerProvider),
 })
 export type MetricRow = typeof MetricRow.Type
 
@@ -280,9 +281,10 @@ export const actionEntries: ReadonlyArray<Menu.Entry> = [
 ]
 
 export const metricEntries = (metrics: ReadonlyArray<MetricRow>): ReadonlyArray<Menu.Entry> =>
-	(metrics.length === 0 ? [{ key: "active_users", name: "Active users", unit: null }] : metrics).map(
-		(metric) => Menu.item(metric.key, { textValue: metric.name }),
-	)
+	(metrics.length === 0
+		? [{ key: "active_users", name: "Active users", unit: null, provider: null }]
+		: metrics
+	).map((metric) => Menu.item(metric.key, { textValue: metric.name }))
 
 export const eventTypeEntries: ReadonlyArray<Menu.Entry> = EventType.literals.map((type) => Menu.item(type))
 

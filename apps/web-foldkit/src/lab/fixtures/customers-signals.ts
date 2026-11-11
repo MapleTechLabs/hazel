@@ -27,6 +27,7 @@ const metric = (
 ): MetricDefinition => ({
 	id: metricId(n),
 	organizationId: ORGANIZATION_ID,
+	customUnit: null,
 	aggregation: fields.builtIn ? "max" : "sum",
 	createdAt: new Date(NOW.getTime() - 120 * DAY),
 	updatedAt: new Date(NOW.getTime() - 120 * DAY),

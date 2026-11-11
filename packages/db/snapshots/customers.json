@@ -1,5 +1,5 @@
 {
-	"migration": "0007_customer_sync_run_attempts",
+	"migration": "0008_customers_metric_custom_unit",
 	"entities": [
 		{
 			"kind": "table",
@@ -1650,8 +1650,17 @@
 		{
 			"kind": "column",
 			"table": "customer_metric_definitions",
-			"name": "aggregation",
+			"name": "customUnit",
 			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "aggregation",
+			"position": 6,
 			"type": "text",
 			"notNull": true,
 			"default": null
@@ -1660,15 +1669,6 @@
 			"kind": "column",
 			"table": "customer_metric_definitions",
 			"name": "provider",
-			"position": 6,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_metric_definitions",
-			"name": "description",
 			"position": 7,
 			"type": "text",
 			"notNull": false,
@@ -1677,8 +1677,17 @@
 		{
 			"kind": "column",
 			"table": "customer_metric_definitions",
-			"name": "builtIn",
+			"name": "description",
 			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "builtIn",
+			"position": 9,
 			"type": "integer",
 			"notNull": true,
 			"default": "false"
@@ -1687,7 +1696,7 @@
 			"kind": "column",
 			"table": "customer_metric_definitions",
 			"name": "createdAt",
-			"position": 9,
+			"position": 10,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1696,7 +1705,7 @@
 			"kind": "column",
 			"table": "customer_metric_definitions",
 			"name": "updatedAt",
-			"position": 10,
+			"position": 11,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

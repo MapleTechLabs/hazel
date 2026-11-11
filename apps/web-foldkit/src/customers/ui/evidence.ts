@@ -10,6 +10,7 @@ import {
 	formatDays,
 	formatDaysLeft,
 	formatDeltaPct,
+	formatMetricValue,
 	formatMoney,
 	formatPct,
 	type Instant,
@@ -220,7 +221,7 @@ export const evidenceDetail = <M>(
 					fact(
 						h,
 						evidence.metricName,
-						`${formatCount(evidence.value)} / ${formatCount(evidence.limit)}`,
+						`${formatMetricValue(evidence.value, null)} / ${formatMetricValue(evidence.limit, null)}`,
 					),
 					fact(h, "Of limit", formatPct(evidence.pct, { digits: 0 })),
 				],

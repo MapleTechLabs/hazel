@@ -1,6 +1,6 @@
 import type * as Customers from "@hazel/domain/customers"
 import type { CustomerConnectionId } from "@hazel/schema"
-import { Redacted, Result } from "effect"
+import { Record, Redacted, Result } from "effect"
 import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { failureMessage } from "~/lib/error-messages"
@@ -17,12 +17,13 @@ import {
 	DisconnectCustomerSource,
 	FetchUnmatchedCount,
 	SaveCustomerSourceSettings,
+	SaveMetricUnit,
 	SaveCustomerWebhookSecret,
 	SeedCustomersDemo,
 	SyncCustomerSource,
 	UpdateCustomerSourceKeys,
 } from "./commands"
-import type { ConfigTarget, DisconnectFailure, SeedFailure, SyncFailure } from "./message"
+import type { ConfigTarget, DisconnectFailure, SeedFailure, SyncFailure, UnitFailure } from "./message"
 import { Message } from "./message"
 import {
 	CONNECT_MODAL_ID,
@@ -67,6 +68,11 @@ const seedFailureMessage = (reason: SeedFailure) =>
 		Refused: { title: "Demo data is off here", description: "It is only available in dev and preview." },
 	})
 
+const unitFailureMessage = (reason: UnitFailure) =>
+	failureMessage(reason, {
+		NotFound: { title: "This metric is gone", description: "Its source no longer defines it." },
+	})
+
 // INIT
 
 /** The unmatched count is admins' (the RPC refuses members), so only they ask for it. */
@@ -101,6 +107,8 @@ export const init = (route: Route, shared: Shared): Return =>
 			settingsDraft: null,
 			activityEventInput: "",
 			isSavingSettings: false,
+			unitMetrics: null,
+			unitDrafts: {},
 		},
 		shared,
 	)
@@ -241,6 +249,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		UpdatedSyncRuns: ({ runs }) => ({ model: { ...model, syncRuns: runs } }),
 		UpdatedAccountCount: ({ count }) => ({ model: { ...model, accountCount: count } }),
 		UpdatedMembers: ({ members }) => ({ model: { ...model, members } }),
+		UpdatedUnitMetrics: ({ metrics }) => ({ model: { ...model, unitMetrics: metrics } }),
 		SucceededFetchUnmatchedCount: ({ count }) => ({
 			model: { ...model, unmatched: AsyncData.settle(model.unmatched, Result.succeed(count)) },
 		}),
@@ -584,4 +593,30 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						outMessage: toast(errorToastOf(connectFailureMessage(reason, model.provider))),
 					}
 		},
+
+		// USAGE UNITS
+
+		ChangedUnit: ({ metricKey, value }) => ({
+			model: { ...model, unitDrafts: { ...model.unitDrafts, [metricKey]: value } },
+		}),
+		// The draft goes: the metric row takes the unit at once (rolled back if the save fails).
+		SubmittedUnit: ({ metricKey }) => {
+			const draft = model.unitDrafts[metricKey]
+			const metric = model.unitMetrics?.find((row) => row.key === metricKey)
+			const organizationId = shared.organization?.id
+			if (draft === undefined || metric === undefined || organizationId === undefined) return { model }
+			const next = { ...model, unitDrafts: Record.remove(model.unitDrafts, metricKey) }
+			const unit = draft.trim() === "" ? null : draft.trim()
+			return unit === metric.customUnit
+				? { model: next }
+				: {
+						model: next,
+						commands: [SaveMetricUnit({ organizationId, metricId: metric.id, metricKey, unit })],
+					}
+		},
+		SucceededSaveUnit: () => ({ model }),
+		FailedSaveUnit: ({ reason }) => ({
+			model,
+			outMessage: toast(errorToastOf(unitFailureMessage(reason))),
+		}),
 	})

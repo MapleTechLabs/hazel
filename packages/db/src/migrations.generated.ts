@@ -450,5 +450,9 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "customer_sync_runs" ADD COLUMN "failedAttempts" integer NOT NULL DEFAULT 0',
 			],
 		},
+		{
+			id: "0008_customers_metric_custom_unit",
+			statements: ['ALTER TABLE "customer_metric_definitions" ADD COLUMN "customUnit" text'],
+		},
 	],
 }

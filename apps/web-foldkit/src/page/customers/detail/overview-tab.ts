@@ -8,11 +8,13 @@ import { meter } from "../../../customers/charts/sparkline"
 import { chartCard } from "../../../customers/charts/frame"
 import { stackedBarChart } from "../../../customers/charts/stacked-bar-chart"
 import {
+	formatCompact,
 	formatCount,
 	formatDate,
 	formatDay,
 	formatDayLong,
 	formatDeltaPct,
+	formatMetricValue,
 	formatMoney,
 	formatRelative,
 } from "../../../customers/format"
@@ -158,13 +160,14 @@ const kpiTile = (
 
 // USAGE
 
-const usageCard = (h: HtmlBuilder<Message>, model: Model): Html => {
+const usageCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
 	const series = Option.getOrUndefined(AsyncData.getData(model.usage))?.[0]
 	const failed = AsyncData.getError(model.usage)
-	const metricName =
-		series?.name ??
-		model.metrics.find((metric) => metric.key === model.usageMetric)?.name ??
-		"Active users"
+	const metric = model.metrics.find((row) => row.key === model.usageMetric)
+	const metricName = series?.name ?? metric?.name ?? "Active users"
+	// Built-ins read plainly by name ("Daily active users"); a source's metric needs its unit.
+	const unit = metric?.provider == null ? null : metric.unit
+	const isUnitMissing = metric?.provider === "autumn" && unit === null
 	const points = series?.points ?? []
 	const values = points.map((point) => point.value)
 	const recent = values.slice(-7)
@@ -192,6 +195,7 @@ const usageCard = (h: HtmlBuilder<Message>, model: Model): Html => {
 							button(h, { intent: "outline", size: "sm", attributes }, [
 								h.span([h.Class("text-muted-fg")], ["Metric"]),
 								metricName,
+								...(unit === null ? [] : [h.span([h.Class("text-muted-fg")], [unit])]),
 								IconChevronDown(h, { className: "size-3" }),
 								overlay,
 							]),
@@ -205,6 +209,24 @@ const usageCard = (h: HtmlBuilder<Message>, model: Model): Html => {
 						],
 						toMessage: (message) => Message.GotMetricMenuMessage({ message }),
 					}),
+					...(isUnitMissing
+						? [
+								h.a(
+									[
+										h.Href(
+											hrefOf(
+												AppRoute.CustomersSourceDetail({
+													orgSlug: context.orgSlug,
+													provider: "autumn",
+												}),
+											),
+										),
+										h.Class("text-primary text-sm hover:underline"),
+									],
+									["Set unit"],
+								),
+							]
+						: []),
 					rangePicker(h, {
 						selected: model.usageRange,
 						onSelect: (range) => Message.ClickedUsageRange({ range }),
@@ -224,7 +246,7 @@ const usageCard = (h: HtmlBuilder<Message>, model: Model): Html => {
 								["No usage recorded in this range."],
 							)
 						: stackedBarChart(h, {
-								ariaLabel: `${metricName}, daily`,
+								ariaLabel: `${metricName}${unit === null ? "" : ` (${unit})`}, daily`,
 								stacks: [{ key: "value", label: metricName, color: "series-1" }],
 								bars: points.map((point) => ({
 									tick: formatDay(point.day),
@@ -232,8 +254,9 @@ const usageCard = (h: HtmlBuilder<Message>, model: Model): Html => {
 									values: { value: point.value },
 									net: point.value,
 								})),
-								formatValue: (value) => formatCount(value),
-								integerTicks: true,
+								formatValue: (value) => formatMetricValue(value, unit),
+								formatAxis: formatCompact,
+								integerTicks: values.every(Number.isInteger),
 								hoveredIndex: model.hoveredUsage,
 								onHover: (index) => Message.HoveredUsage({ index }),
 								maxXTicks: 6,
@@ -640,7 +663,7 @@ export const overviewTab = (
 	bands: Customers.HealthBands,
 ): ReadonlyArray<Html> => [
 	kpis(h, context),
-	usageCard(h, model),
+	usageCard(h, model, context),
 	healthCard(h, model, context, bands),
 	signalsCard(h, model, context),
 	h.div(

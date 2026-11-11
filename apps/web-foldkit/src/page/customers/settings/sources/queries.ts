@@ -1,8 +1,18 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerConnectionId, CustomerSyncRunId, type OrganizationId, UserId } from "@hazel/schema"
-import { eq } from "@tanstack/db"
+import {
+	CustomerConnectionId,
+	CustomerMetricDefinitionId,
+	CustomerSyncRunId,
+	type OrganizationId,
+	UserId,
+} from "@hazel/schema"
+import { and, eq } from "@tanstack/db"
 import { Schema, type Stream } from "effect"
-import { customerConnectionCollection, customerSyncRunCollection } from "~/db/collections"
+import {
+	customerConnectionCollection,
+	customerMetricDefinitionCollection,
+	customerSyncRunCollection,
+} from "~/db/collections"
 import { msOf, withCustomersSource } from "../../../../customers/queries"
 import { liveQueryStream } from "../../../../data/live-query"
 
@@ -43,6 +53,17 @@ export const SyncRunRow = Schema.Struct({
 	error: Schema.NullOr(Customers.SyncError),
 })
 export type SyncRunRow = typeof SyncRunRow.Type
+
+/** A source's metric, for its unit: the one the source gives, and the one set by hand. */
+export const UnitMetricRow = Schema.Struct({
+	id: CustomerMetricDefinitionId,
+	key: Schema.String,
+	name: Schema.String,
+	provider: Customers.CustomerProvider,
+	unit: Schema.NullOr(Schema.String),
+	customUnit: Schema.NullOr(Schema.String),
+})
+export type UnitMetricRow = typeof UnitMetricRow.Type
 
 type JsonDate = Customers.Connection["connectedAt"]
 const msOrNull = (date: JsonDate | null): number | null => (date === null ? null : msOf(date))
@@ -107,5 +128,40 @@ export const syncRunsStream = <Message>(
 					.where(({ run }) => eq(run.organizationId, organizationId))
 					.orderBy(({ run }) => run.startedAt, "desc"),
 			(rows) => toMessage(rows.map(toSyncRunRow)),
+		),
+	)
+
+/** The sources' own metrics (not Hazel's built-ins), by name. */
+export const unitMetricsStream = <Message>(
+	organizationId: OrganizationId,
+	toMessage: (metrics: ReadonlyArray<UnitMetricRow>) => Message,
+): Stream.Stream<Message> =>
+	withCustomersSource(
+		organizationId,
+		liveQueryStream<Customers.MetricDefinition, Message>(
+			(q) =>
+				q
+					.from({ metric: customerMetricDefinitionCollection })
+					.where(({ metric }) =>
+						and(eq(metric.organizationId, organizationId), eq(metric.builtIn, false)),
+					)
+					.orderBy(({ metric }) => metric.name, "asc"),
+			(rows) =>
+				toMessage(
+					rows.flatMap((row) =>
+						row.provider === null
+							? []
+							: [
+									{
+										id: row.id,
+										key: row.key,
+										name: row.name,
+										provider: row.provider,
+										unit: row.unit,
+										customUnit: row.customUnit,
+									},
+								],
+					),
+				),
 		),
 	)

@@ -419,7 +419,7 @@ export const accountSeries = Effect.fn("Customers.accountSeries")(function* (
 		return {
 			metricKey: key,
 			name: definition?.name ?? key,
-			unit: definition?.unit ?? null,
+			unit: definition?.customUnit ?? definition?.unit ?? null,
 			points: seriesOf(facts, key, today, days, definition?.aggregation),
 			limit: limits[limits.length - 1]?.limitValue ?? null,
 		}

@@ -218,6 +218,8 @@ class MetricDefinitionModel extends M.Class<MetricDefinitionModel>("CustomerMetr
 	key: S.String,
 	name: S.String,
 	unit: S.NullOr(S.String),
+	/** Set by a user; shown over `unit`. */
+	customUnit: S.NullOr(S.String),
 	aggregation: MetricAggregation,
 	provider: S.NullOr(CustomerProvider),
 	description: S.NullOr(S.String),
