@@ -404,71 +404,6 @@ export class CraftApiClient extends Context.Service<CraftApiClient>()("CraftApiC
 				Effect.withSpan("CraftApiClient.insertBlocks", { attributes: { documentId } }),
 			)
 
-		const updateBlocks = (
-			baseUrl: string,
-			accessToken: string,
-			documentId: string,
-			blocks: ReadonlyArray<{ id: string; content?: string; style?: unknown }>,
-		) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				const transformedBlocks = blocks.map((block) => ({
-					id: block.id,
-					...(block.content !== undefined ? { markdown: block.content } : {}),
-					...(block.style !== undefined ? { style: block.style } : {}),
-				}))
-				return yield* executeRequest(client, "PUT", "/blocks", { blocks: transformedBlocks })
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.updateBlocks", { attributes: { documentId } }),
-			)
-
-		const deleteBlocks = (
-			baseUrl: string,
-			accessToken: string,
-			documentId: string,
-			blockIds: ReadonlyArray<string>,
-		) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "DELETE", "/blocks", {
-					blockIds,
-				})
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.deleteBlocks", { attributes: { documentId } }),
-			)
-
-		const moveBlocks = (
-			baseUrl: string,
-			accessToken: string,
-			documentId: string,
-			blockIds: ReadonlyArray<string>,
-			targetBlockId: string,
-			position?: "before" | "after" | "inside",
-		) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				const destinationPosition =
-					position === "inside"
-						? {
-								position: "end" as const,
-								pageId: targetBlockId,
-							}
-						: {
-								position: (position ?? "after") as "before" | "after",
-								siblingId: targetBlockId,
-							}
-
-				return yield* executeRequest(client, "PUT", "/blocks/move", {
-					blockIds,
-					position: destinationPosition,
-				})
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.moveBlocks", { attributes: { documentId } }),
-			)
-
 		const searchBlocks = (baseUrl: string, accessToken: string, documentId: string, query: string) =>
 			Effect.gen(function* () {
 				const client = makeClient(baseUrl, accessToken)
@@ -483,20 +418,6 @@ export class CraftApiClient extends Context.Service<CraftApiClient>()("CraftApiC
 		// ====================================================================
 		// Documents
 		// ====================================================================
-
-		const listDocuments = (baseUrl: string, accessToken: string, folderId?: string) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				const path = folderId ? `/documents?folderId=${encodeURIComponent(folderId)}` : "/documents"
-				const raw = yield* executeRequest(client, "GET", path)
-				const normalizedDocuments = normalizeCraftItemsResponse(raw)
-				return yield* Schema.decodeUnknownEffect(Schema.Array(CraftDocument))(
-					normalizedDocuments,
-				).pipe(Effect.catchTag("SchemaError", decodeFailed("/documents")))
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.listDocuments"),
-			)
 
 		const searchDocuments = (baseUrl: string, accessToken: string, query: string) =>
 			Effect.gen(function* () {
@@ -555,34 +476,6 @@ export class CraftApiClient extends Context.Service<CraftApiClient>()("CraftApiC
 				Effect.withSpan("CraftApiClient.createDocuments"),
 			)
 
-		const deleteDocuments = (baseUrl: string, accessToken: string, documentIds: ReadonlyArray<string>) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "DELETE", "/documents", { documentIds })
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.deleteDocuments"),
-			)
-
-		const moveDocuments = (
-			baseUrl: string,
-			accessToken: string,
-			documentIds: ReadonlyArray<string>,
-			targetFolderId: string,
-		) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "PUT", "/documents/move", {
-					documentIds,
-					destination: {
-						folderId: targetFolderId,
-					},
-				})
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.moveDocuments"),
-			)
-
 		// ====================================================================
 		// Folders
 		// ====================================================================
@@ -598,52 +491,6 @@ export class CraftApiClient extends Context.Service<CraftApiClient>()("CraftApiC
 			}).pipe(
 				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
 				Effect.withSpan("CraftApiClient.listFolders"),
-			)
-
-		const createFolders = (
-			baseUrl: string,
-			accessToken: string,
-			folders: ReadonlyArray<{ title: string; parentId?: string }>,
-		) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "POST", "/folders", {
-					folders: folders.map((folder) => ({
-						name: folder.title,
-						...(folder.parentId ? { parentFolderId: folder.parentId } : {}),
-					})),
-				})
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.createFolders"),
-			)
-
-		const deleteFolders = (baseUrl: string, accessToken: string, folderIds: ReadonlyArray<string>) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "DELETE", "/folders", { folderIds })
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.deleteFolders"),
-			)
-
-		const moveFolders = (
-			baseUrl: string,
-			accessToken: string,
-			folderIds: ReadonlyArray<string>,
-			targetParentId: string,
-		) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "PUT", "/folders/move", {
-					folderIds,
-					destination: {
-						parentFolderId: targetParentId,
-					},
-				})
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.moveFolders"),
 			)
 
 		// ====================================================================
@@ -692,177 +539,21 @@ export class CraftApiClient extends Context.Service<CraftApiClient>()("CraftApiC
 				Effect.withSpan("CraftApiClient.createTasks"),
 			)
 
-		const updateTasks = (
-			baseUrl: string,
-			accessToken: string,
-			tasks: ReadonlyArray<{ id: string; content?: string; isDone?: boolean }>,
-		) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "PUT", "/tasks", {
-					tasksToUpdate: tasks.map((task) => ({
-						id: task.id,
-						...(task.content !== undefined ? { markdown: task.content } : {}),
-						...(task.isDone !== undefined
-							? { taskInfo: { state: task.isDone ? "done" : "todo" } }
-							: {}),
-					})),
-				})
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.updateTasks"),
-			)
-
-		const deleteTasks = (baseUrl: string, accessToken: string, taskIds: ReadonlyArray<string>) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "DELETE", "/tasks", { idsToDelete: taskIds })
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.deleteTasks"),
-			)
-
-		// ====================================================================
-		// Collections
-		// ====================================================================
-
-		const listCollections = (baseUrl: string, accessToken: string) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				const raw = yield* executeRequest(client, "GET", "/collections")
-				const normalizedCollections = normalizeCraftItemsResponse(raw)
-				return yield* Schema.decodeUnknownEffect(Schema.Array(CraftCollection))(
-					normalizedCollections,
-				).pipe(Effect.catchTag("SchemaError", decodeFailed("/collections")))
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.listCollections"),
-			)
-
-		const getCollectionSchema = (baseUrl: string, accessToken: string, collectionId: string) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "GET", `/collections/${collectionId}/schema`)
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.getCollectionSchema", { attributes: { collectionId } }),
-			)
-
-		const getCollectionItems = (baseUrl: string, accessToken: string, collectionId: string) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				const raw = yield* executeRequest(client, "GET", `/collections/${collectionId}/items`)
-				return normalizeCraftItemsResponse(raw)
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.getCollectionItems", { attributes: { collectionId } }),
-			)
-
-		const addCollectionItems = (
-			baseUrl: string,
-			accessToken: string,
-			collectionId: string,
-			items: ReadonlyArray<Record<string, unknown>>,
-		) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "POST", `/collections/${collectionId}/items`, { items })
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.addCollectionItems", { attributes: { collectionId } }),
-			)
-
-		const updateCollectionItems = (
-			baseUrl: string,
-			accessToken: string,
-			collectionId: string,
-			items: ReadonlyArray<Record<string, unknown>>,
-		) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "PUT", `/collections/${collectionId}/items`, {
-					itemsToUpdate: items,
-				})
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.updateCollectionItems", { attributes: { collectionId } }),
-			)
-
-		const deleteCollectionItems = (
-			baseUrl: string,
-			accessToken: string,
-			collectionId: string,
-			itemIds: ReadonlyArray<string>,
-		) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "DELETE", `/collections/${collectionId}/items`, {
-					idsToDelete: itemIds,
-				})
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.deleteCollectionItems", { attributes: { collectionId } }),
-			)
-
-		// ====================================================================
-		// Comments
-		// ====================================================================
-
-		const addComments = (
-			baseUrl: string,
-			accessToken: string,
-			documentId: string,
-			blockId: string,
-			comments: ReadonlyArray<{ content: string }>,
-		) =>
-			Effect.gen(function* () {
-				const client = makeClient(baseUrl, accessToken)
-				return yield* executeRequest(client, "POST", "/comments", {
-					comments: comments.map((comment) => ({
-						blockId,
-						content: comment.content,
-					})),
-				})
-			}).pipe(
-				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
-				Effect.withSpan("CraftApiClient.addComments", { attributes: { documentId, blockId } }),
-			)
-
 		return {
 			// Connection
 			getSpaceInfo,
 			// Blocks
 			getBlocks,
 			insertBlocks,
-			updateBlocks,
-			deleteBlocks,
-			moveBlocks,
 			searchBlocks,
 			// Documents
-			listDocuments,
 			searchDocuments,
 			createDocuments,
-			deleteDocuments,
-			moveDocuments,
 			// Folders
 			listFolders,
-			createFolders,
-			deleteFolders,
-			moveFolders,
 			// Tasks
 			getTasks,
 			createTasks,
-			updateTasks,
-			deleteTasks,
-			// Collections
-			listCollections,
-			getCollectionSchema,
-			getCollectionItems,
-			addCollectionItems,
-			updateCollectionItems,
-			deleteCollectionItems,
-			// Comments
-			addComments,
 		}
 	}),
 }) {
