@@ -295,7 +295,12 @@ const scheduleHeadlessDom = () => {
 		const shims = ["Element", "HTMLElement", "Node"].map(
 			(name) => (globalThis as Record<string, unknown>)[name],
 		)
-		void composer.loadHeadlessDom({ document, shims }, () => rune.refreshObserved())
+		void composer.loadHeadlessDom(
+			{ document, shims },
+			() => rune.refreshObserved(),
+			// The host keys an editor's native field `<path>/field` (`build_editable`).
+			(path) => transport.send({ t: "focus", key: `${path}/field` }),
+		)
 	}, wait)
 }
 /**

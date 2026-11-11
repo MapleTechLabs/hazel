@@ -161,9 +161,10 @@ export const makeElementBridge = (options: {
 	readonly pointerTargets?: ReadonlyMap<string, string>
 	/**
 	 * Mounts that need a real DOM (a rich-text editor) get an element from here, typically a
-	 * headless DOM's, or `undefined` while it loads. The host draws a native text field in their place.
+	 * headless DOM's, or `undefined` while it loads. The host draws a native text field in their place,
+	 * keyed by the Mount's `path`.
 	 */
-	readonly domMounts?: ReadonlyMap<string, () => object | undefined>
+	readonly domMounts?: ReadonlyMap<string, (path: string) => object | undefined>
 	readonly send: (command: HostElementCommand) => void
 	/** A new element became observed: the host must start reporting its layout. */
 	readonly onObserve?: () => void
@@ -407,7 +408,7 @@ export const makeElementBridge = (options: {
 			if (makeDomElement === undefined && !options.mounts.has(name)) continue
 			if (makeDomElement !== undefined && !domElements.has(path)) {
 				// The factory answers `undefined` until its DOM has loaded: the Mount waits a commit.
-				const element = makeDomElement()
+				const element = makeDomElement(path)
 				if (element === undefined) continue
 				domElements.set(path, element)
 			}
