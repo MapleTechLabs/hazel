@@ -1272,11 +1272,15 @@ fn add_children(
                         && st.absolute.is_none()
                         && st.w.is_none() =>
                 {
-                    match inh.align {
-                        rune::Align::Center => b.self_center(),
-                        rune::Align::End => b.self_end(),
-                        _ => b.self_start(),
-                    }
+                    // A line across the block: the inline box keeps its own width but shrinks to
+                    // the line, so its text wraps instead of running past the block's edge.
+                    let line = row().items_start();
+                    let line = match inh.align {
+                        rune::Align::Center => line.justify_center(),
+                        rune::Align::End => line.justify_end(),
+                        _ => line,
+                    };
+                    line.child(b)
                 }
                 _ => b,
             };

@@ -2880,3 +2880,30 @@ fn text_pasted_into_the_composer_stays_the_fields_own_edit() {
         "the page does not hear it too"
     );
 }
+
+#[test]
+fn a_lone_inline_span_in_a_block_wraps_its_text_to_the_block() {
+    // A message's markdown: `p > span > span > span > text` in the content column of a row.
+    let long =
+        "a lot of stuff can be done later but stuff like the monitor design cannot be done later";
+    let text = e(
+        "span",
+        json!({}),
+        vec![e(
+            "span",
+            json!({}),
+            vec![e("span", json!({}), vec![t(long)])],
+        )],
+    );
+    let paragraph = e("p", json!({ "whiteSpacePre": true }), vec![text]);
+    let content = e("div", json!({ "grow": 1, "minW": 0 }), vec![paragraph]);
+    let message = e(
+        "div",
+        json!({ "display": "flex", "gapCol": 16 }),
+        vec![e("div", json!({ "w": 40, "h": 40 }), vec![]), content],
+    );
+    let rt = runtime(message, (300.0, 400.0));
+    let [_, _, w, h] = rect(&rt, "r/1/0/0");
+    assert!(w <= 244.0, "the span stays inside its 244 column: {w}");
+    assert!(h > 30.0, "its text wraps onto more lines: {h}");
+}
