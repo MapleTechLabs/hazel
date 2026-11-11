@@ -32,6 +32,7 @@ import { Message as ActionMessage } from "../message-actions"
 import * as Overlays from "../overlays"
 import { ChannelInfo, ParentChannelInfo } from "../queries"
 import { ChatMessage, ChatReaction, DisplayRow } from "../rows"
+import * as NotificationClear from "./notification-clear"
 
 /** The channel page's Model and Message (`page.ts` holds init and update, `write.ts` the write path). */
 
@@ -141,8 +142,8 @@ export const Model = Schema.Struct({
 	/** The thread panel's width in px, the same for every thread; null until read from storage. */
 	threadPanelWidth: Schema.NullOr(Schema.Number),
 	threadPanelDrag: Schema.NullOr(ThreadPanelDrag),
-	/** `channelMember.clearNotifications` for this visit: not sent yet (or failed), in flight, done. */
-	notificationsClear: Schema.Literals(["NotSent", "Sending", "Cleared"]),
+	/** When the channel's notifications are cleared (`notification-clear.ts`). */
+	notifications: NotificationClear.Model,
 	/** The non-member's "Join #channel" is running. */
 	isJoining: Schema.Boolean,
 	/**
@@ -253,8 +254,10 @@ export const Message = defineMessageUnion({
 	FailedDeleteMessageNow: { reason: DeleteMessageNowFailure },
 	/** The window lost focus or the tab was hidden: typing stops. */
 	LeftWindow: {},
+	ChangedWindowFocus: { isFocused: Schema.Boolean },
 	SucceededClearNotifications: { channelId: ChannelId },
 	FailedClearNotifications: { channelId: ChannelId, reason: ClearNotificationsFailure },
+	ElapsedClearNotificationsRetry: { channelId: ChannelId },
 })
 export type Message = typeof Message.Type
 

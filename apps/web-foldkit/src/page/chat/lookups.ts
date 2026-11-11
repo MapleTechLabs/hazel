@@ -32,6 +32,8 @@ export const ChannelMemberInfo = Schema.Struct({
 	userId: UserId,
 	isHidden: Schema.Boolean,
 	createdAtMs: Schema.Number,
+	/** The member's unread notifications in this channel (the sidebar's badge). */
+	notificationCount: Schema.Number,
 })
 export type ChannelMemberInfo = typeof ChannelMemberInfo.Type
 
@@ -151,6 +153,7 @@ export interface ChannelMemberRow {
 	readonly userId: UserId
 	readonly isHidden: boolean
 	readonly createdAt: Date
+	readonly notificationCount?: number | null
 }
 
 export const toChannelMemberInfo = (row: ChannelMemberRow): ChannelMemberInfo => ({
@@ -158,6 +161,7 @@ export const toChannelMemberInfo = (row: ChannelMemberRow): ChannelMemberInfo =>
 	userId: row.userId,
 	isHidden: row.isHidden,
 	createdAtMs: new Date(row.createdAt).getTime(),
+	notificationCount: row.notificationCount ?? 0,
 })
 
 /** Index helpers for derivation (built once per data change, not per row). */
