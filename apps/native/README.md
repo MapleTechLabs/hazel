@@ -20,8 +20,8 @@ log, browser, clipboard, stylesheet); `src/entry.ts` is the Bun platform the hos
   resolved with Tailwind's own compiler and `src/styles.css` (custom properties, variants, `:has`,
   descendant rules), handler ids are stable per element, and unchanged subtrees go as references.
 - **Mounts** that measure geometry (the message list) run against element proxies backed by the
-  host's layout; the composer's ProseMirror editor runs on a headless DOM with a native text field
-  drawn over it.
+  host's layout; the composer's ProseMirror editor runs on a headless DOM (`src/headless-dom.ts`,
+  linkedom, which loads in Bun and in iOS's worker alike) with a native text field drawn over it.
 - **HTML renders** (`<iframe>`s): the host shows each page in a `WKWebView` laid over the box
   Rune draws for it (`host/src/frames.rs`), in the same sandboxed frame and over the same
   `postMessage` bridge as the web app; `src/frames.ts` turns what the page posts into the events
@@ -104,9 +104,13 @@ the compiled stylesheet inlined. The bundle's `environment.json` holds `HAZEL_DA
 the runtime's log goes to `tmp/hazel.log` in the app's data container
 (`xcrun simctl get_app_container booted sh.hazel.ios data`).
 
-Not yet on iOS: the composer (its editor runs on jsdom, which a worker cannot load), live sign-in,
-the keychain, updates, HTML renders, the keyboard's delete key, keeping content above the keyboard,
-http(s) pictures (fetched with `curl`), and a device build (simulator only, ad-hoc signed).
+The page is a secure context (`https://app.hazel.test`, never fetched), as the web app's
+`crypto.randomUUID` needs. When the on-screen keyboard shows, the page's viewport ends above it
+(`State::set_keyboard`, from `host/ios/src/keyboard.rs`), as a browser's does, so the composer
+and the end of the list stay visible; its return key sends, as Enter does.
+
+Not yet on iOS: live sign-in, the keychain, updates, HTML renders, http(s) pictures (fetched with
+`curl`), and a device build (simulator only, ad-hoc signed).
 
 ## Releases
 

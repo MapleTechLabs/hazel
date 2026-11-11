@@ -2999,3 +2999,33 @@ fn a_centring_grid_does_not_stretch_its_one_child() {
     );
     assert!(rect(&rt, "r/0/0")[3] < 100.0, "{:?}", rect(&rt, "r/0/0"));
 }
+
+/// The on-screen keyboard (iOS) ends the page's viewport above it, as a browser's does: a
+/// full-height page, and the composer at its bottom, stay visible over the keyboard.
+#[test]
+fn the_page_ends_above_the_on_screen_keyboard() {
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "dir": "col", "h": "full" }),
+            vec![
+                e("div", json!({ "grow": 1 }), vec![]),
+                e("div", json!({ "h": 40 }), vec![t("Composer")]),
+            ],
+        ),
+        (400.0, 800.0),
+    );
+    assert_eq!(rect(&rt, "r/1"), [0.0, 760.0, 400.0, 40.0]);
+    assert!(rt.state.set_keyboard(300.0));
+    rt.invalidate();
+    rt.frame(0.0);
+    rt.settle_all();
+    rt.frame(0.0);
+    assert_eq!(rect(&rt, "r/1"), [0.0, 460.0, 400.0, 40.0]);
+    assert!(rt.state.set_keyboard(0.0));
+    rt.invalidate();
+    rt.frame(0.0);
+    rt.settle_all();
+    rt.frame(0.0);
+    assert_eq!(rect(&rt, "r/1"), [0.0, 760.0, 400.0, 40.0]);
+}

@@ -22,8 +22,9 @@ use objc2_web_kit::{
 };
 use rune::AppHandle;
 
-/// The page's origin: the one the runtime's shims give the app (`http://app.hazel.test`).
-const ORIGIN: &str = "http://app.hazel.test/";
+/// The page's origin. HTTPS makes it a secure context, where the web APIs the app needs exist
+/// (`crypto.randomUUID`, `crypto.subtle`); nothing is fetched from it.
+const ORIGIN: &str = "https://app.hazel.test/";
 
 extern_class!(
     /// WebKit's web view, a `UIView` on iOS (objc2-web-kit declares it for macOS only).
@@ -308,6 +309,9 @@ fn start() -> bool {
             msg_send![&*web, loadHTMLString: &*html, baseURL: origin.as_deref()];
     }
     WEB.set(Some(web));
+    if let Some(handle) = HANDLE.get().map(|h| h.lock().unwrap().clone()) {
+        crate::keyboard::observe(mtm, handle);
+    }
     log("[host] runtime started");
     true
 }

@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 hazel-native = { path = ".." }
 # The same revision as `hazel-native`'s (`../Cargo.toml`).
-rune = { git = "https://github.com/Makisuo/rune", rev = "037014a3d791e057466c4401ccb7fb3841219000" }
+rune = { git = "https://github.com/Makisuo/rune", rev = "ac6daced41db259e8d01e819ae77916b880f0c27" }
 serde_json = "1"
 
 # The hidden web view the runtime's worker runs in (`src/bridge.rs`).

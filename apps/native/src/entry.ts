@@ -49,7 +49,6 @@ const platform: NativePlatform = {
 	},
 	appendLine: (path, line) => appendFileSync(path, `${line}\n`),
 	memoryUsedMb: () => process.memoryUsage().heapUsed / 1048576,
-	jsdom: () => import("jsdom"),
 	fixtureHtmlRender: async (file) => (await import("./fixture/html-render")).makeFixtureHtmlRender(file),
 }
 

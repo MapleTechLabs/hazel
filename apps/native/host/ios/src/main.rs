@@ -2,6 +2,8 @@
 //! Rune draws the tree it renders with `hazel_native`, as the macOS app draws its Bun child's.
 #[cfg(target_os = "ios")]
 mod bridge;
+#[cfg(target_os = "ios")]
+mod keyboard;
 
 #[cfg(target_os = "ios")]
 fn main() {

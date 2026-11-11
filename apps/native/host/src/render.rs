@@ -44,6 +44,8 @@ pub struct State {
     pub(crate) frames: Vec<frames::FrameSpec>,
     /// What the overlays among `portals` draw over the page, and so over those web views.
     pub(crate) covers: Vec<frames::CoverSpec>,
+    /// How far the on-screen keyboard covers the window's bottom edge, in points (iOS).
+    pub(crate) keyboard: f32,
 }
 
 /// The window size and theme last sent, for a runtime that replaces the first.
@@ -543,6 +545,14 @@ impl State {
 
     pub fn dark(&self) -> bool {
         self.dark
+    }
+
+    /// The on-screen keyboard now covers this much of the window's bottom edge: the page's
+    /// viewport ends above it, as a browser's does. Whether that changed anything.
+    pub fn set_keyboard(&mut self, covered: f32) -> bool {
+        let changed = self.keyboard != covered;
+        self.keyboard = covered;
+        changed
     }
 
     /// Takes the runtime's tree. Whether anything the view reads changed: a tree that is the
@@ -2037,9 +2047,10 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
         no_pointer: false,
     };
     let body = s.root.as_ref().and_then(|root| build(root, "r", inh, &ctx));
-    // The window's edges the system draws over (iOS's status bar and home indicator): the page's
-    // background goes under them, and the runtime's viewport stays inside.
+    // The window's edges the system draws over (iOS's status bar, home indicator and keyboard):
+    // the page's background goes under them, and the runtime's viewport stays inside.
     let [top, right, bottom, left] = cx.safe_area();
+    let bottom = bottom.max(s.keyboard);
     let inset = [top, right, bottom, left].iter().any(|edge| *edge > 0.0);
     // A paste with no field focused goes to the page, which hands it to the composer.
     let mut page = col()
