@@ -33,6 +33,7 @@
  */
 import type {
 	ConnectionConfig,
+	Day,
 	DefineMetric,
 	IngestOp,
 	IsoTimestamp,
@@ -44,7 +45,7 @@ import type {
 	UpsertSubscription,
 } from "@hazel/domain/customers"
 import type { Types } from "effect"
-import { dayOf } from "../time"
+import { addDays, DAY_MS, dayOf, startOfDay } from "../time"
 import {
 	type AutumnBalance,
 	type AutumnBalanceEvent,
@@ -558,6 +559,159 @@ export const customerOps = (
 	accountOp(customer, options.config, options.env, options.observedAt),
 	...balanceOps(customer, { names: options.names, at: options.at }),
 ]
+
+// ---------------------------------------------------------------------------
+// Usage history
+// ---------------------------------------------------------------------------
+
+/** A reset period: calendar months, or a fixed number of days. */
+type Period = { readonly months: number } | { readonly days: number }
+
+const PERIODS: ReadonlyMap<string, Period> = new Map<string, Period>([
+	["day", { days: 1 }],
+	["week", { days: 7 }],
+	["month", { months: 1 }],
+	["quarter", { months: 3 }],
+	["semi_annual", { months: 6 }],
+	["year", { months: 12 }],
+])
+
+/** Resets of a balance stepped back from, at most this many (a daily one across the window). */
+const MAX_RESETS = 400
+
+/**
+ * How a balance resets: `"none"` for a level that only moves with use (seats, lifetime units),
+ * else its next reset and the period every grant behind it shares. Null when Hazel cannot step it
+ * back: grants on different periods, a sub-day one, or a reset Autumn does not describe.
+ */
+const resetOf = (
+	balance: AutumnBalance,
+): "none" | { readonly next: number; readonly period: Period } | null => {
+	const next = balance.next_reset_at ?? null
+	if (next === null) return "none"
+	const periods = new Set(
+		(balance.breakdown ?? []).flatMap((grant) =>
+			grant.reset?.interval == null
+				? []
+				: [`${grant.reset.interval}:${grant.reset.interval_count ?? 1}`],
+		),
+	)
+	const [only] = periods
+	if (periods.size !== 1 || only === undefined) return null
+	const [interval = "", count = "1"] = only.split(":")
+	const base = PERIODS.get(interval)
+	const times = Number(count)
+	if (base === undefined || !Number.isInteger(times) || times < 1) return null
+	return { next, period: "months" in base ? { months: base.months * times } : { days: base.days * times } }
+}
+
+const stepBack = (at: number, period: Period, times: number): number =>
+	"months" in period ? addMonths(at, -period.months * times) : at - period.days * times * DAY_MS
+
+/** A balance's resets from the last one at or before `from` up to its current period's start, oldest first. */
+const resetsSince = (
+	reset: { readonly next: number; readonly period: Period },
+	from: number,
+): Array<number> => {
+	const resets: Array<number> = []
+	for (let times = 1; times <= MAX_RESETS; times++) {
+		const at = stepBack(reset.next, reset.period, times)
+		resets.unshift(at)
+		if (at <= from) break
+	}
+	return resets
+}
+
+/** A customer's balances whose past Hazel can rebuild. */
+export const historyBalancesOf = (customer: AutumnCustomer): Array<AutumnBalance> =>
+	Object.values(customer.balances ?? {}).filter(
+		(balance) =>
+			balance.feature_id.trim() !== "" &&
+			balance.usage != null &&
+			Number.isFinite(balance.usage) &&
+			resetOf(balance) !== null,
+	)
+
+/**
+ * Where a customer's events have to be read from to rebuild its usage from `from` on: the start of
+ * the day the oldest balance period `from` falls in began, so that period is summed in full.
+ */
+export const historyStartOf = (customer: AutumnCustomer, from: Day): number =>
+	Math.min(
+		startOfDay(from).getTime(),
+		...historyBalancesOf(customer).map((balance) => {
+			const reset = resetOf(balance)
+			if (reset === null || reset === "none") return Number.POSITIVE_INFINITY
+			const [oldest] = resetsSince(reset, startOfDay(from).getTime())
+			return oldest === undefined
+				? Number.POSITIVE_INFINITY
+				: startOfDay(dayOf(new Date(oldest))).getTime()
+		}),
+	)
+
+/**
+ * A customer's metric for each day from `from` to yesterday, rebuilt from `used` (the events it
+ * tracked per feature id and UTC day, from {@link historyStartOf} through now). Today's value is
+ * the balance itself ({@link balanceOps}), never rebuilt.
+ *
+ * A metric is the level of the feature's current period, so a past day's is too:
+ *
+ * - in the current period (all of it for a balance that never resets), today's usage less what was
+ *   used after that day;
+ * - in an earlier period, what was used from the day it started (the reset stepped back by its
+ *   period, by calendar in UTC) through that day. The day a period started counts in full, its
+ *   hours before the reset included.
+ *
+ * Days before the customer was created are left out, and so is the limit: the plan of a past day
+ * is not known, and `near_limit` reads only the last days.
+ */
+export const usageHistoryOps = (
+	customer: AutumnCustomer & { readonly id: string },
+	used: ReadonlyMap<string, ReadonlyMap<Day, number>>,
+	window: { readonly from: Day; readonly today: Day },
+): Array<IngestOp> => {
+	const created = customer.created_at == null ? null : dayOf(new Date(customer.created_at))
+	const from = created !== null && created > window.from ? created : window.from
+	const ops: Array<IngestOp> = []
+	for (const balance of historyBalancesOf(customer)) {
+		const reset = resetOf(balance)
+		if (reset === null) continue
+		const days = used.get(balance.feature_id) ?? new Map<Day, number>()
+		const on = (day: Day) => days.get(day) ?? 0
+		const resets =
+			reset === "none"
+				? []
+				: resetsSince(reset, startOfDay(window.from).getTime()).map((at) => dayOf(new Date(at)))
+		const current = resets.at(-1) ?? null
+		const values = new Map<Day, number>()
+		// The current period, back from today's usage.
+		let after = [...days].reduce((sum, [day, value]) => (day >= window.today ? sum + value : sum), 0)
+		for (let day = addDays(window.today, -1); day >= from && (current === null || day >= current);) {
+			values.set(day, (balance.usage ?? 0) - after)
+			after += on(day)
+			day = addDays(day, -1)
+		}
+		// Earlier periods, forward from the reset before each.
+		const starts = new Set(resets)
+		let level = 0
+		for (let day = resets[0] ?? window.today; current !== null && day < current; day = addDays(day, 1)) {
+			if (starts.has(day)) level = 0
+			level += on(day)
+			if (day >= from) values.set(day, level)
+		}
+		const key = metricKeyOf(balance.feature_id)
+		for (const [day, value] of [...values].sort(([a], [b]) => (a < b ? -1 : 1))) {
+			ops.push({
+				_tag: "metric",
+				account: autumnRef(customer.id),
+				metricKey: key,
+				day,
+				value: Math.max(0, value),
+			})
+		}
+	}
+	return ops
+}
 
 // ---------------------------------------------------------------------------
 // Usage events

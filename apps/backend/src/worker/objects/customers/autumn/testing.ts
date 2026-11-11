@@ -23,6 +23,10 @@ export interface FakeAutumnState {
 	readonly customers: ReadonlyArray<Row>
 	/** `subscriptions.list` rows, across every customer, oldest first. */
 	readonly subscriptions: ReadonlyArray<Row>
+	/** `events.aggregate` bins (`{ period, values }`) per customer id, over every feature. */
+	readonly events: Readonly<
+		Record<string, ReadonlyArray<{ period: number; values: Record<string, number> }>>
+	>
 	/** Paths answered 403, the way a key without the scope is. */
 	readonly forbidden: ReadonlyArray<string>
 	/** Paths answered 503: Autumn having a bad moment. */
@@ -55,6 +59,7 @@ export const makeFakeAutumn = (options: Partial<FakeAutumnState> = {}): FakeAutu
 	plans: [],
 	customers: [],
 	subscriptions: [],
+	events: {},
 	forbidden: [],
 	failing: [],
 	invalid: [],
@@ -194,6 +199,23 @@ const serve = (fake: FakeAutumnState, path: string, body: Row): Response => {
 				.filter((row) => customer === undefined || row["customer_id"] === customer)
 				.filter((row) => plan === undefined || row["plan_id"] === plan)
 			return listOf(rows, body, (row) => String(row["id"]))
+		}
+		case "/v1/events.aggregate": {
+			const id = str(body, "customer_id") ?? ""
+			if (!fake.customers.some((customer) => customer["id"] === id))
+				return autumnError(404, "Customer not found", "customer_not_found")
+			const features = strings(body, "feature_id")
+			const range = body["custom_range"] as { start: number; end: number }
+			return json(200, {
+				list: (fake.events[id] ?? [])
+					.filter((bin) => bin.period >= range.start && bin.period < range.end)
+					.map((bin) => ({
+						period: bin.period,
+						values: Object.fromEntries(
+							Object.entries(bin.values).filter(([feature]) => features.includes(feature)),
+						),
+					})),
+			})
 		}
 		default:
 			return autumnError(404, `No fake for ${path}`, "not_found")

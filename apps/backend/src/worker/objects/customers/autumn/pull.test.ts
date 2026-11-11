@@ -51,24 +51,36 @@ const organization = (options: Partial<FakeAutumnState> = {}) =>
 		...options,
 	})
 
-const pageOver = (client: Layer.Layer<HttpClient.HttpClient>, cursor: string | null, apiKey = API_KEY) =>
+const pageOver = (
+	client: Layer.Layer<HttpClient.HttpClient>,
+	cursor: string | null,
+	apiKey = API_KEY,
+	usageHistory = false,
+) =>
 	Effect.gen(function* () {
 		const api = makeAutumnApi(yield* HttpClient.HttpClient, Redacted.make(apiKey))
-		return yield* pullPage({ api, pricing: readPricing(api), cursor, config: CONFIG, env: "live" })
+		return yield* pullPage({
+			api,
+			pricing: readPricing(api),
+			cursor,
+			config: CONFIG,
+			env: "live",
+			usageHistory,
+		})
 	}).pipe(Effect.provide(client))
 
-const page = (fake: FakeAutumnState, cursor: string | null, apiKey = API_KEY) =>
-	pageOver(fakeAutumnHttpClient(fake), cursor, apiKey)
+const page = (fake: FakeAutumnState, cursor: string | null, apiKey = API_KEY, usageHistory = false) =>
+	pageOver(fakeAutumnHttpClient(fake), cursor, apiKey, usageHistory)
 
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect)
 
 /** Every page of a whole walk, in order. */
-const walk = (fake: FakeAutumnState) =>
+const walk = (fake: FakeAutumnState, usageHistory = false) =>
 	Effect.gen(function* () {
 		const pages: Array<PullPage> = []
 		let cursor: string | null = null
 		do {
-			const next: PullPage = yield* page(fake, cursor)
+			const next: PullPage = yield* page(fake, cursor, API_KEY, usageHistory)
 			pages.push(next)
 			cursor = next.nextCursor
 		} while (cursor !== null && pages.length < 20)
@@ -467,5 +479,53 @@ describe("Autumn pull", () => {
 			message: "Could not reach Autumn (TransportError)",
 		})
 		expect(error.retryable).toBeUndefined()
+	})
+})
+
+describe("Autumn pull: usage history", () => {
+	const yesterday = () => Date.now() - 86_400_000
+
+	it("ends a history walk with the usage phase, a request per customer with usage, and sweeps after it", async () => {
+		const fake = organization({
+			events: { [ORG_ACME]: [{ period: yesterday(), values: { messages: 40 } }] },
+		})
+		const pages = await run(walk(fake, true))
+		expect(pages.map((p) => p.progress.step)).toEqual([
+			"features",
+			"customers",
+			"customers",
+			"subscriptions",
+			"usage",
+		])
+		const usage = pages.at(-1)!
+		expect(pages.slice(0, -1).every((p) => p.sweep === undefined)).toBe(true)
+		expect(usage.sweep).toEqual(["account", "subscription"])
+		// Acme and Globex hold balances; the personal signup none, so it costs no request.
+		const asked = fake.calls.filter((call) => call.path === "/v1/events.aggregate")
+		expect(asked.map((call) => call.body["customer_id"])).toEqual([ORG_ACME, CUSTOMER_GLOBEX.id])
+		expect(asked[0]!.body["feature_id"]).toEqual(["messages", "seats"])
+		// Past days only, without a limit: today's level and limit are the customer phase's.
+		const today = new Date().toISOString().slice(0, 10)
+		expect(usage.ops.length).toBeGreaterThan(0)
+		expect(
+			usage.ops.every((op) => op._tag === "metric" && op.day < today && op.limitValue === undefined),
+		).toBe(true)
+	})
+
+	it("leaves the usage phase out of a scheduled walk", async () => {
+		const fake = organization()
+		const pages = await run(walk(fake))
+		expect(pages.some((p) => p.progress.step === "usage")).toBe(false)
+		expect(fake.calls.some((call) => call.path === "/v1/events.aggregate")).toBe(false)
+	})
+
+	it("ends the phase, not the walk, when the key cannot read events", async () => {
+		const fake = organization({ forbidden: ["/v1/events.aggregate"] })
+		const pages = await run(walk(fake, true))
+		const usage = pages.at(-1)!
+		expect(usage.progress.step).toBe("usage")
+		expect(usage.ops).toEqual([])
+		expect(usage.nextCursor).toBeNull()
+		expect(usage.sweep).toEqual(["account", "subscription"])
 	})
 })

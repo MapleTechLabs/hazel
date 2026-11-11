@@ -32,6 +32,7 @@ type AutumnPath =
 	| "/v1/subscriptions.list"
 	| "/v1/plans.list"
 	| "/v1/features.list"
+	| "/v1/events.aggregate"
 
 const AutumnErrorBody = Schema.Struct({
 	message: Schema.optionalKey(Schema.String),

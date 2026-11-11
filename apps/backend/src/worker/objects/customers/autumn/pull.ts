@@ -7,6 +7,7 @@
  * | `features` | `POST /v1/features.list` | a metric definition per metered feature | 1 |
  * | `customers` | `POST /v1/customers.list` (+ pricing) | accounts, seats, feature usage, live plans and MRR | 1 (+2) |
  * | `subscriptions` | `POST /v1/subscriptions.list` (+ pricing) | ended plans | 1 (+2) |
+ * | `usage` (history walks only) | `POST /v1/customers.list` + `POST /v1/events.aggregate` per customer | the last {@link USAGE_HISTORY_DAYS} days of feature usage | 1 + 1 per customer |
  *
  * Pricing is `plans.list` + `organization`, kept a few minutes per connection (`./read.ts`), so a
  * walk pays for it about once.
@@ -57,15 +58,24 @@
  * - a row Hazel cannot decode (Autumn changed its shape): logged and skipped, not failing the page.
  *
  * Contacts are never swept: Autumn holds none of its own.
+ *
+ * **Usage history** is a phase of its own, run by a walk started with `usageHistory` (a backfill):
+ * a balance is only today's level, so the walk reads each customer's tracked events of the last
+ * {@link USAGE_HISTORY_DAYS} days, a day per bin, and rebuilds each past day's level from them
+ * (`usageHistoryOps`). Later walks write today's balance, so history is read once. A key without
+ * Autumn's analytics scope (403) ends the phase without failing the walk.
  */
-import type { ConnectionConfig, IngestOp, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
+import type { ConnectionConfig, Day, IngestOp, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
 import { SweepEntityType } from "@hazel/domain/customers"
 import { Clock, Effect, Option, Schema, type Types } from "effect"
 import type { CustomerProviderError } from "../provider-errors"
 import type { PullPage } from "../providers"
+import { addDays, dayOf } from "../time"
 import type { AutumnApi } from "./http"
 import {
 	balanceOps,
+	historyBalancesOf,
+	historyStartOf,
 	accountOp,
 	featureDefinitionOps,
 	featureNamesOf,
@@ -73,14 +83,30 @@ import {
 	type Pricing,
 	statusOf,
 	subscriptionOps,
+	usageHistoryOps,
 } from "./map"
 import { CUSTOMER_EXPAND, SUBSCRIPTIONS_PAGE_SIZE } from "./read"
-import { AutumnCustomer, type AutumnEnv, AutumnFeaturesPage, AutumnSubscription } from "./wire"
+import {
+	AutumnCustomer,
+	type AutumnEnv,
+	AutumnFeaturesPage,
+	AutumnSubscription,
+	AutumnUsageAggregate,
+} from "./wire"
 
 /** Customers per page. Autumn's ceiling is 5000; a hundred keeps a page's work (and its retry) small. */
 export const PAGE_SIZE = 100
 
-const AutumnPhase = Schema.Literals(["features", "customers", "subscriptions"])
+/** Days of usage a history walk rebuilds, today's excluded. */
+export const USAGE_HISTORY_DAYS = 90
+
+/** Customers per usage page: each costs a request of its own. */
+export const USAGE_PAGE_SIZE = 25
+
+/** `events.aggregate` requests in flight at once. */
+const USAGE_CONCURRENCY = 5
+
+const AutumnPhase = Schema.Literals(["features", "customers", "subscriptions", "usage"])
 type AutumnPhase = typeof AutumnPhase.Type
 
 /**
@@ -124,10 +150,13 @@ const AutumnCursor = Schema.Struct({
 	 * more follow it, Autumn dropped one it failed to serialize from it.
 	 */
 	short: Schema.optionalKey(Schema.Boolean),
+	/** The walk ends with the usage history phase. */
+	history: Schema.optionalKey(Schema.Boolean),
 })
 type AutumnCursor = typeof AutumnCursor.Type
 
-const START: AutumnCursor = { phase: "features", after: null }
+const startOf = (usageHistory: boolean): AutumnCursor =>
+	usageHistory ? { phase: "features", after: null, history: true } : { phase: "features", after: null }
 
 const decodeDocument = Schema.decodeUnknownOption(Schema.fromJsonString(AutumnCursor))
 
@@ -136,11 +165,14 @@ export const decodeCursor = (cursor: string): Option.Option<AutumnCursor> => dec
 
 export const encodeCursor = (cursor: AutumnCursor): string => JSON.stringify(cursor)
 
-const NEXT_PHASE = {
-	features: "customers",
-	customers: "subscriptions",
-	subscriptions: null,
-} satisfies Readonly<Record<AutumnPhase, AutumnPhase | null>>
+const nextPhaseOf = (cursor: AutumnCursor): AutumnPhase | null =>
+	cursor.phase === "features"
+		? "customers"
+		: cursor.phase === "customers"
+			? "subscriptions"
+			: cursor.phase === "subscriptions" && cursor.history === true
+				? "usage"
+				: null
 
 const doneOf = (cursor: AutumnCursor): number => cursor.done ?? 0
 
@@ -166,14 +198,17 @@ const pageOf = (
 ): PullPage => {
 	const done = doneOf(cursor) + page.rows
 	const unswept = [...new Set([...(cursor.unswept ?? []), ...(page.unswept ?? [])])]
-	const carried = unswept.length === 0 ? {} : { unswept }
-	const after = NEXT_PHASE[cursor.phase]
+	const after = nextPhaseOf(cursor)
 	const onward: Types.Mutable<AutumnCursor> | null =
 		page.next !== null || page.restart === true
-			? { phase: cursor.phase, after: page.next, done, ...carried }
+			? { phase: cursor.phase, after: page.next, done }
 			: after === null
 				? null
-				: { phase: after, after: null, done: 0, ...carried }
+				: { phase: after, after: null, done: 0 }
+	if (onward !== null) {
+		if (unswept.length > 0) onward.unswept = unswept
+		if (cursor.history === true) onward.history = true
+	}
 	if (onward !== null && onward.phase === cursor.phase) {
 		if (page.last !== undefined) onward.last = page.last
 		if (page.from !== undefined) onward.from = page.from
@@ -234,6 +269,15 @@ interface PageInput {
 	readonly observedAt: IsoTimestamp
 }
 
+/** A key opens one organization and one environment; anything else is not this connection's. */
+const ownCustomers = (rows: ReadonlyArray<AutumnCustomer>, env: AutumnEnv) =>
+	rows.flatMap((customer) => {
+		const id = customer.id ?? null
+		return id === null || id.trim() === "" || (customer.env != null && customer.env !== env)
+			? []
+			: [{ ...customer, id }]
+	})
+
 const customersPage = Effect.fnUntraced(function* (input: PageInput, cursor: AutumnCursor) {
 	const body = yield* input.api.post(
 		"/v1/customers.list",
@@ -249,13 +293,7 @@ const customersPage = Effect.fnUntraced(function* (input: PageInput, cursor: Aut
 		RowsPage,
 	)
 	const decoded = yield* decodeRows(AutumnCustomer, body.list, "customers")
-	// A key opens one organization and one environment; anything else is not this connection's.
-	const customers = decoded.rows.flatMap((customer) => {
-		const id = customer.id ?? null
-		return id === null || id.trim() === "" || (customer.env != null && customer.env !== input.env)
-			? []
-			: [{ ...customer, id }]
-	})
+	const customers = ownCustomers(decoded.rows, input.env)
 	// Priced only when a plan is there to price.
 	const pricing = customers.some((customer) => (customer.subscriptions ?? []).length > 0)
 		? yield* input.pricing
@@ -362,31 +400,105 @@ const subscriptionsPage = Effect.fnUntraced(function* (input: PageInput, cursor:
 	return pageOf(cursor, { ops, rows: body.list.length, next, unswept, last })
 })
 
+/** One customer's past usage: its events since {@link historyStartOf}, a bin a day, rebuilt. */
+const customerHistory = Effect.fnUntraced(function* (
+	input: PageInput,
+	customer: AutumnCustomer & { readonly id: string },
+	window: { readonly from: Day; readonly today: Day },
+) {
+	const features = historyBalancesOf(customer).map((balance) => balance.feature_id)
+	if (features.length === 0) return []
+	const body = yield* input.api.post(
+		"/v1/events.aggregate",
+		{
+			customer_id: customer.id,
+			feature_id: features,
+			custom_range: { start: historyStartOf(customer, window.from), end: input.at.getTime() },
+			bin_size: "day",
+		},
+		AutumnUsageAggregate,
+	)
+	const used = new Map<string, Map<Day, number>>()
+	for (const bin of body.list) {
+		const day = dayOf(new Date(bin.period))
+		for (const [feature, value] of Object.entries(bin.values ?? {})) {
+			const days = used.get(feature) ?? new Map<Day, number>()
+			days.set(day, (days.get(day) ?? 0) + value)
+			used.set(feature, days)
+		}
+	}
+	return usageHistoryOps(customer, used, window)
+})
+
+const usagePage = Effect.fnUntraced(function* (input: PageInput, cursor: AutumnCursor) {
+	const body = yield* input.api.post(
+		"/v1/customers.list",
+		{ start_cursor: cursor.after ?? "", limit: USAGE_PAGE_SIZE, sort_order: "asc" },
+		RowsPage,
+	)
+	const decoded = yield* decodeRows(AutumnCustomer, body.list, "usage")
+	const today = dayOf(input.at)
+	const window = { from: addDays(today, -USAGE_HISTORY_DAYS), today }
+	const ops = yield* Effect.forEach(
+		ownCustomers(decoded.rows, input.env),
+		(customer) =>
+			customerHistory(input, customer, window).pipe(
+				// Deleted since the listing: nothing to rebuild.
+				Effect.catchIf(
+					(error) => error.httpStatus === 404,
+					() => Effect.succeed([]),
+				),
+			),
+		{ concurrency: USAGE_CONCURRENCY },
+	).pipe(
+		Effect.map((perCustomer) => perCustomer.flat()),
+		// A key without Autumn's analytics scope: history is extra, the walk goes on without it.
+		Effect.catchIf(
+			(error) => error.httpStatus === 403,
+			() =>
+				Effect.logWarning("Autumn usage history skipped: the key cannot read events").pipe(
+					Effect.as(null),
+				),
+		),
+	)
+	// The listing's end, or one Autumn cut (an id-less customer): history is best effort, it stops.
+	return pageOf(cursor, {
+		ops: ops ?? [],
+		rows: body.list.length,
+		next: ops === null ? null : (body.next_cursor ?? null),
+	})
+})
+
 export const pullPage = Effect.fn("Autumn.pullPage")(function* (input: {
 	readonly api: AutumnApi
 	readonly pricing: Effect.Effect<Pricing, CustomerProviderError>
 	readonly cursor: string | null
 	readonly config: ConnectionConfig
 	readonly env: AutumnEnv
+	/** Rebuild the last {@link USAGE_HISTORY_DAYS} days of usage at the walk's end (a fresh walk only). */
+	readonly usageHistory?: boolean
 }) {
 	const nowMs = yield* Clock.currentTimeMillis
 	// Taken before any request: the ops' `observedAt` (a listing proves its records live as of it,
 	// and ingest drops a subscription read older than one it applied).
 	const at = new Date(nowMs)
-	const decoded = input.cursor === null ? Option.some(START) : decodeCursor(input.cursor)
+	const start = startOf(input.usageHistory === true)
+	const decoded = input.cursor === null ? Option.some(start) : decodeCursor(input.cursor)
 	if (Option.isNone(decoded)) {
 		yield* Effect.logWarning("Autumn pull cursor unreadable: the pull starts over", {
-			phase: START.phase,
+			phase: start.phase,
 		})
 	}
-	const cursor = Option.getOrElse(decoded, () => START)
+	const cursor = Option.getOrElse(decoded, () => start)
 	const pageInput: PageInput = { ...input, at, observedAt: at.toISOString() }
 	const page: PullPage =
 		cursor.phase === "features"
 			? yield* featuresPage(input.api, cursor)
 			: cursor.phase === "customers"
 				? yield* customersPage(pageInput, cursor)
-				: yield* subscriptionsPage(pageInput, cursor)
+				: cursor.phase === "subscriptions"
+					? yield* subscriptionsPage(pageInput, cursor)
+					: yield* usagePage(pageInput, cursor)
 	yield* Effect.annotateCurrentSpan({
 		"autumn.phase": cursor.phase,
 		"autumn.received": page.progress.done - doneOf(cursor),

@@ -12,6 +12,7 @@ import {
 	billingIntervalOf,
 	customerOps,
 	featureDefinitionOps,
+	historyStartOf,
 	isEntityScoped,
 	metricKeyOf,
 	plansById,
@@ -19,6 +20,7 @@ import {
 	subscriptionMrr,
 	subscriptionOps,
 	usageEventOp,
+	usageHistoryOps,
 } from "./map"
 import {
 	CUSTOMER_ACME,
@@ -27,6 +29,7 @@ import {
 	CUSTOMER_PERSONAL,
 	FEATURES,
 	LIMIT_REACHED_MESSAGES,
+	MS,
 	ORG_ACME,
 	PLAN_ENTERPRISE,
 	PLAN_FREE,
@@ -564,6 +567,74 @@ describe("Autumn usage events", () => {
 			type: "usage.limit_approaching",
 			title: "messages crossed the 80% usage alert",
 			data: { threshold: 80, thresholdType: "usage_percentage" },
+		})
+	})
+})
+
+describe("Autumn usage history", () => {
+	const acme = { ...Schema.decodeUnknownSync(AutumnCustomer)(CUSTOMER_ACME), id: ORG_ACME }
+	const window = { from: "2026-10-25", today: "2026-11-11" }
+	const used = new Map([
+		[
+			"messages",
+			new Map([
+				// The period before (from Oct 1, the reset stepped back a month from Nov 1).
+				["2026-10-01", 100],
+				["2026-10-26", 50],
+				["2026-10-31", 30],
+				// The current one, from the Nov 1 reset: today's usage is 8,200.
+				["2026-11-01", 200],
+				["2026-11-10", 300],
+				["2026-11-11", 400],
+			]),
+		],
+		["seats", new Map([["2026-11-05", 2]])],
+	])
+	const series = (key: string, ops: ReturnType<typeof usageHistoryOps>) =>
+		Object.fromEntries(
+			ops.flatMap((op) => (op._tag === "metric" && op.metricKey === key ? [[op.day, op.value]] : [])),
+		)
+
+	it("reads events from the start of the day the oldest period in the window began", () => {
+		expect(historyStartOf(acme, window.from)).toBe(MS("2026-10-01T00:00:00.000Z"))
+	})
+
+	it("rebuilds each past day's level: back from today's usage, then forward from earlier resets", () => {
+		const ops = usageHistoryOps(acme, used, window)
+		const messages = series(metricKeyOf("messages"), ops)
+		expect(messages).toMatchObject({
+			"2026-10-25": 100,
+			"2026-10-26": 150,
+			"2026-10-30": 150,
+			"2026-10-31": 180,
+			"2026-11-01": 7_500,
+			"2026-11-09": 7_500,
+			"2026-11-10": 7_800,
+		})
+		// Today is the balance's own, never rebuilt; nothing before the window.
+		expect(messages["2026-11-11"]).toBeUndefined()
+		expect(Object.keys(messages)).toHaveLength(17)
+		// A balance that never resets is today's level less what came after.
+		expect(series(metricKeyOf("seats"), ops)).toMatchObject({
+			"2026-10-25": 10,
+			"2026-11-04": 10,
+			"2026-11-05": 12,
+			"2026-11-10": 12,
+		})
+		// A past day's plan is not known: no limit, so the stored one stays.
+		expect(ops.every((op) => op._tag === "metric" && op.limitValue === undefined)).toBe(true)
+	})
+
+	it("starts at the customer's creation, and never goes below zero", () => {
+		const globex = { ...Schema.decodeUnknownSync(AutumnCustomer)(CUSTOMER_GLOBEX), id: "org_globex" }
+		const ops = usageHistoryOps(globex, new Map([["messages", new Map([["2026-11-08", 5_000]])]]), window)
+		expect(series(metricKeyOf("messages"), ops)).toEqual({
+			"2026-11-05": 0,
+			"2026-11-06": 0,
+			"2026-11-07": 0,
+			"2026-11-08": 1_000,
+			"2026-11-09": 1_000,
+			"2026-11-10": 1_000,
 		})
 	})
 })
