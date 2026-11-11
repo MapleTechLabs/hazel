@@ -36,6 +36,9 @@ export type ViewerAction = typeof ViewerAction.Type
 /** The kit Popover's id (and DOM slot) of a message's author popover. */
 export const avatarPopoverKey = (messageId: MessageId) => `${messageId}:avatar`
 
+/** The kit Popover's id of the profile popover opened from the author a message replies to. */
+export const replyAuthorPopoverKey = (messageId: MessageId) => `${messageId}:reply-author`
+
 /** The kit Popover's id of the profile popover opened from a message's `index`th mention. */
 export const mentionPopoverKey = (messageId: MessageId, index: number) => `${messageId}:mention:${index}`
 

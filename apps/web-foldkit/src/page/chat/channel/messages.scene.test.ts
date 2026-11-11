@@ -18,7 +18,9 @@ import * as Menu from "../../../ui/menu"
 import * as Draft from "../../../composer/draft"
 import { DragState, DropEvent, TrackFileDrop } from "../../../composer/drop"
 import { MountEditor } from "../../../composer/composer"
+import { AwaitJumpTarget, HighlightMessage } from "./jump"
 import { Message } from "./model"
+import * as Popover from "../../../ui/popover"
 import { LoadThreadPanelWidth } from "./thread-width"
 import * as Picker from "../../../emoji-picker/picker"
 import * as EmojiDialog from "../../../emoji-picker/dialog"
@@ -40,6 +42,7 @@ import {
 	ada,
 	adaMessageId,
 	channelId,
+	grace,
 	graceMessageId,
 	loadedModel,
 	updateWithShared,
@@ -82,6 +85,57 @@ describe("reading", () => {
 			mountedChannel(),
 			Scene.expect(Scene.text("Ada Lovelace")).toExist(),
 			Scene.expect(Scene.text("Shipped the onboarding copy")).toExist(),
+		)
+	})
+
+	// Ada's message replies to Grace's: the quote above it names Grace and her first line.
+	const replying = () => {
+		const base = loadedModel()
+		const user = (id: typeof ada, firstName: string, lastName: string) => ({
+			id,
+			firstName,
+			lastName,
+			email: `${firstName.toLowerCase()}@hazel.sh`,
+			avatarUrl: null,
+			userType: "user",
+			timezone: null,
+		})
+		const [adaMessage, graceMessage] = base.messages
+		return derivedModel({
+			...base,
+			messages: [{ ...adaMessage!, replyToMessageId: graceMessageId }, graceMessage!],
+			lookups: {
+				...base.lookups,
+				users: [user(ada, "Ada", "Lovelace"), user(grace, "Grace", "Hopper")],
+				replyTargets: [{ id: graceMessageId, authorId: grace, content: graceMessage!.content }],
+			},
+		})
+	}
+
+	test("a reply's quoted text jumps to the message it quotes", () => {
+		Scene.scene(
+			channelScene,
+			Scene.given(replying()),
+			mountedChannel(),
+			Scene.click(Scene.role("button", { name: "Jump to message" })),
+			Scene.Command.expectExact(AwaitJumpTarget({ messageId: graceMessageId })),
+			Scene.Command.resolve(AwaitJumpTarget, Message.RenderedJumpTarget({ messageId: graceMessageId })),
+			Scene.Command.resolve(HighlightMessage, Message.CompletedHighlightMessage()),
+		)
+	})
+
+	test("a reply's quoted author is their profile's trigger, apart from the jump", () => {
+		Scene.scene(
+			channelScene,
+			Scene.given(replying()),
+			mountedChannel(),
+			// The avatar's initial, then the name.
+			Scene.expect(
+				Scene.selector(`[id="${Popover.triggerId(Overlays.replyAuthorPopoverKey(adaMessageId))}"]`),
+			).toHaveText("GGrace Hopper"),
+			Scene.expect(Scene.role("button", { name: "Jump to message" })).toHaveText(
+				"Launch window confirmed",
+			),
 		)
 	})
 

@@ -56,6 +56,7 @@ const context = (h: HtmlBuilder<M>): RowContext<M> => ({
 	toOpenImage: never,
 	toOpenEmbedImage: never,
 	toOpenThread: never,
+	reply: () => ({ toAuthor: (toTrigger) => toTrigger([]), onJump: never() }),
 	toReact: never,
 	contextMenu: (_row, render) => render([], h.empty),
 	avatar: (row) => avatarButton(h, row, []),

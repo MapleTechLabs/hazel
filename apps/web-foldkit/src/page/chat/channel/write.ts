@@ -128,7 +128,8 @@ export const liftDraft = (model: Model, which: Which, result: DraftUpdate.Return
 		// `onMessageSent`: the channel's list scrolls to the bottom.
 		SentMessage: () => {
 			if (which === "thread") return { model: next, commands }
-			const present = resetWindow(next)
+			// A jump still on its way would pull the list back off the message just sent.
+			const present = resetWindow(modifyFields(next, { pendingJump: () => null }))
 			const scrolled = MessageList.scrollToEnd(present.list)
 			return {
 				model: modifyFields(present, { list: () => scrolled.model }),
