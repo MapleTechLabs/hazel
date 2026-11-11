@@ -21,7 +21,7 @@ const TITLEBAR: rune::Titlebar = rune::Titlebar::new(40.0).traffic_lights(16.0, 
 
 /// A link the system opened with the app (the sign-in callback): to the runtime as it came.
 fn open_url(_: &mut State, url: &str, _: &mut rune::Tx) {
-    write_line(platform::open_url_message(url));
+    write_line(hazel_native::sign_in::open_url_message(url));
 }
 
 fn window_size() -> (f32, f32) {

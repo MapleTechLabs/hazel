@@ -18,13 +18,13 @@ const result = await Bun.build({
 	format: "esm",
 	minify: true,
 	// Only the Bun platform and Tailwind's compiler use these; the worker never loads them.
-	external: ["node:*", "jsdom", "@tailwindcss/oxide", "@tailwindcss/node", "lightningcss"],
+	external: ["node:*", "@tailwindcss/oxide", "@tailwindcss/node", "lightningcss"],
 	define: {
 		// Under Bun `import.meta.env` is `process.env`; the worker's `process` is `src/ios.ts`'s.
 		"import.meta.env": "globalThis.process.env",
 		// The worker runs from a Blob URL, which no relative URL resolves against; modules that
 		// locate their assets (`new URL("x.wasm", import.meta.url)`) get the page's origin instead.
-		"import.meta.url": JSON.stringify("http://app.hazel.test/runtime.js"),
+		"import.meta.url": JSON.stringify("https://app.hazel.test/runtime.js"),
 		__HAZEL_STYLES__: readFileSync(stylesPath, "utf8"),
 	},
 	plugins: [overlayPlugin, prismPlugin],

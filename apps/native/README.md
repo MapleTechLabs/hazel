@@ -20,8 +20,8 @@ log, browser, clipboard, stylesheet); `src/entry.ts` is the Bun platform the hos
   resolved with Tailwind's own compiler and `src/styles.css` (custom properties, variants, `:has`,
   descendant rules), handler ids are stable per element, and unchanged subtrees go as references.
 - **Mounts** that measure geometry (the message list) run against element proxies backed by the
-  host's layout; the composer's ProseMirror editor runs on a headless DOM with a native text field
-  drawn over it.
+  host's layout; the composer's ProseMirror editor runs on a headless DOM (`src/headless-dom.ts`,
+  linkedom, which loads in Bun and in iOS's worker alike) with a native text field drawn over it.
 - **HTML renders** (`<iframe>`s): the host shows each page in a `WKWebView` laid over the box
   Rune draws for it (`host/src/frames.rs`), in the same sandboxed frame and over the same
   `postMessage` bridge as the web app; `src/frames.ts` turns what the page posts into the events
@@ -100,13 +100,33 @@ API and WebKit's JIT; iOS lets an app neither spawn Bun nor JIT its own JavaScri
 that worker's `NativePlatform`: lines cross worker → page → `WKScriptMessageHandler` one way and
 `evaluateJavaScript` → page → worker the other. `scripts/build-ios.ts` bundles it as one module with
 the compiled stylesheet inlined. The bundle's `environment.json` holds `HAZEL_DATA`,
-`VITE_BACKEND_URL`, `NATIVE_DEBUG` and `NATIVE_PATH` as set when building (offline by default);
+`VITE_BACKEND_URL`, `VITE_APP_URL`, `NATIVE_DEBUG` and `NATIVE_PATH` as set when building
+(offline by default);
 the runtime's log goes to `tmp/hazel.log` in the app's data container
 (`xcrun simctl get_app_container booted sh.hazel.ios data`).
 
-Not yet on iOS: the composer (its editor runs on jsdom, which a worker cannot load), live sign-in,
-the keychain, updates, HTML renders, the keyboard's delete key, keeping content above the keyboard,
-http(s) pictures (fetched with `curl`), and a device build (simulator only, ad-hoc signed).
+The page (`host/ios/src/page.rs`) is a secure context, as the web app's `crypto.randomUUID`
+needs. Live, its origin is the web app's (`VITE_APP_URL`, `https://app.hazel.sh` by default), so
+the API's CORS answers, which WebKit checks, allow it; offline it is `https://app.hazel.test`,
+never fetched. When the on-screen keyboard shows, the page's viewport ends above it
+(`State::set_keyboard`, from `host/ios/src/keyboard.rs`), as a browser's does, so the composer
+and the end of the list stay visible (a floating iPad keyboard leaves the page as it is). The
+keyboard's return key is Enter, so it sends, as it does in the web app on a phone.
+
+**Live data** (`HAZEL_DATA=live bun run ios`, with `VITE_APP_URL`/`VITE_BACKEND_URL` for a dev
+stack on this Mac) signs in as the Mac app does: the sign-in link opens in the system's sign-in
+sheet (`ASWebAuthenticationSession`, `host/ios/src/sign_in.rs`), whose callback goes to the
+runtime as an opened link, and the session lives in the keychain (`hazel_native::sign_in`). The
+simulator's keychain serves only an app with an identifier and access group, which the
+executable carries (`host/ios/build.rs`). A full page load (after sign-in) loads a fresh page and
+runtime at that path. Pictures over http(s) download with `NSURLSession` (`host/src/fetch.rs`), on
+macOS too.
+
+Motion runs on Rune's display link (`CADisplayLink`), at the screen's rate: 120 Hz on a
+ProMotion iPhone (`CADisableMinimumFrameDurationOnPhone`). When WebKit ends the page's process
+(memory pressure, a crash), the bridge loads a fresh page and runtime, as a browser reloads a tab.
+
+Not yet on iOS: updates, HTML renders, and a device build (simulator only, ad-hoc signed).
 
 ## Releases
 
@@ -159,14 +179,14 @@ bun run conformance                # native vs Chromium: element rects and pixel
 bun run --cwd ../../packages/foldkit-rune test   # resolved styles vs Chromium's computed styles
 ```
 
-`bench/conformance` renders the same scenarios natively and in Chromium, matches elements and
-compares their rects and the pixels; `--check` holds the results to `thresholds.json`. The style
+`bench/conformance` renders the same scenarios natively and in Chromium (`mobile` and `drawer`
+at a phone's 402x874, the rest at 1280x800), matches elements and compares their rects and the
+pixels; `--check` holds the results to `thresholds.json`. The style
 suite in `packages/foldkit-rune` replays what Chromium computed for every element of the app and a
 synthetic utility page (`conformance:extract` records it).
 
 ## Not yet native
 
-- Narrow windows (the phone layout): the mobile drawer's channel list collapses to nothing.
 - Overlays beyond the modal popovers: tooltips (`AnchorTooltipPanel`), submenus
   (`PositionSubmenu`) and the image viewer.
 - Colours a `focus:` variant changes (Rune draws focus as a ring only), focus or press state on an

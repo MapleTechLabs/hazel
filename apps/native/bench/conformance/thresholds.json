@@ -508,5 +508,65 @@
 			"posP95": 1.08,
 			"textPosP95": 2.25
 		}
+	},
+	"mobile-light": {
+		"min": {
+			"matchedWebPct": 96.89,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 93.65,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 91.62,
+			"pixelScore": 94.43
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 4.75
+		}
+	},
+	"mobile-dark": {
+		"min": {
+			"matchedWebPct": 96.89,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 93.65,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 91.62,
+			"pixelScore": 94.29
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 4.75
+		}
+	},
+	"drawer-light": {
+		"min": {
+			"matchedWebPct": 96.89,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 93.65,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 91.62,
+			"pixelScore": 93.94
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 4.75
+		}
+	},
+	"drawer-dark": {
+		"min": {
+			"matchedWebPct": 96.89,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 93.65,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 91.62,
+			"pixelScore": 93.42
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 4.75
+		}
 	}
 }

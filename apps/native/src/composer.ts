@@ -3,30 +3,28 @@
  * runs on a headless DOM inside the runtime, and the host draws a native text field over it.
  * Edits arrive as whole-text replacements and keys go through the editor's own key handlers.
  */
-import type { JSDOM } from "jsdom"
 import { Effect, Option } from "effect"
 import type { EditorView } from "prosemirror-view"
 import { editorRegistry } from "../../web-foldkit/src/editor/registry"
+import { type HeadlessDom, makeHeadlessDom } from "./headless-dom"
 import { replaceFieldText } from "./text-edit"
 
-let dom: JSDOM | undefined
+let dom: HeadlessDom | undefined
 /** Each editor element's Mount path: the host keys the editor's native field by it. */
 const editorPaths = new WeakMap<object, string>()
 
 /**
- * Loads the headless DOM off the boot path (it costs ~130 ms) and routes element creation and
- * `instanceof Element` to it; `onReady` re-commits so the editor Mount can start.
+ * Starts the headless DOM and routes element creation and `instanceof Element` to it; `onReady`
+ * re-commits so the editor Mount can start.
  */
-export const loadHeadlessDom = async (
-	jsdom: () => Promise<typeof import("jsdom")>,
+export const loadHeadlessDom = (
 	globals: Readonly<{ document: object; shims: ReadonlyArray<unknown> }>,
 	onReady: () => void,
 	onEditorFocus: (path: string) => void,
 ) => {
-	const { JSDOM } = await jsdom()
-	const loaded = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true })
+	const loaded = makeHeadlessDom()
 	dom = loaded
-	const headless = loaded.window.document
+	const headless = loaded.document
 	Object.assign(globals.document, {
 		createElement: headless.createElement.bind(headless),
 		createElementNS: headless.createElementNS.bind(headless),
@@ -34,7 +32,7 @@ export const loadHeadlessDom = async (
 		createDocumentFragment: headless.createDocumentFragment.bind(headless),
 	})
 	// Foldkit's Mount hooks check `instanceof Element`: accept the headless DOM's elements too.
-	const DomElement = loaded.window.Element
+	const DomElement = loaded.Element
 	for (const shim of new Set(globals.shims)) {
 		if (typeof shim !== "function") continue
 		Object.defineProperty(shim, Symbol.hasInstance, {
@@ -43,9 +41,9 @@ export const loadHeadlessDom = async (
 		})
 	}
 	// An editor focusing itself (`view.focus()`: the composer opening, a key typed outside it) takes
-	// the keyboard as in a browser, so the native field drawn over it must. jsdom neither focuses a
-	// contenteditable nor fires an event for it, so the call itself is the signal.
-	const HTMLElement = loaded.window.HTMLElement
+	// the keyboard as in a browser, so the native field drawn over it must. The headless DOM neither
+	// focuses a contenteditable nor fires an event for it, so the call itself is the signal.
+	const HTMLElement = loaded.HTMLElement
 	const focus = HTMLElement.prototype.focus
 	HTMLElement.prototype.focus = function (this: HTMLElement, options?: FocusOptions) {
 		focus.call(this, options)
@@ -60,8 +58,8 @@ export const loadHeadlessDom = async (
 /** The element the editor Mount attaches ProseMirror to, once the headless DOM has loaded. */
 export const makeEditorElement = (path: string) => {
 	if (dom === undefined) return undefined
-	const element = dom.window.document.createElement("div")
-	dom.window.document.body.appendChild(element)
+	const element = dom.document.createElement("div")
+	dom.document.body.appendChild(element)
 	editorPaths.set(element, path)
 	return element
 }
@@ -91,11 +89,7 @@ export const applyEditorEvent = (
 			if (edit !== undefined) view.dispatch(edit)
 		}
 		if (event.key != null && dom !== undefined) {
-			const keydown = new dom.window.KeyboardEvent("keydown", {
-				key: event.key,
-				bubbles: true,
-				cancelable: true,
-			})
+			const keydown = dom.keydown(event.key)
 			view.someProp("handleKeyDown", (handle) => handle(view, keydown))
 		}
 		/** Whether the editor's document changed, so the native field must take its text again. */

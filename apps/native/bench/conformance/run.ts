@@ -1,6 +1,6 @@
 /**
  * Layout and visual conformance: Hazel's native renderer against Chromium on the same Foldkit view.
- *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|focus|menu|palette|dialog|context|all|routes|route-<name>]
+ *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|focus|menu|palette|dialog|context|mobile|drawer|all|routes|route-<name>]
  *     [--theme light|dark|both]
  *     [--check] [--update-thresholds] [--skip-build]
  * Writes out/<scenario>-<theme>/ (report.md, report.json, heatmap.png, crops/) and out/summary.md.
@@ -42,7 +42,17 @@ const option = (name: string, fallback: string) => {
 	const at = args.indexOf(name)
 	return at === -1 ? fallback : (args[at + 1] ?? fallback)
 }
-const SCENARIOS = ["boot", "sent", "focus", "menu", "palette", "dialog", "context"] as const
+const SCENARIOS = [
+	"boot",
+	"sent",
+	"focus",
+	"menu",
+	"palette",
+	"dialog",
+	"context",
+	"mobile",
+	"drawer",
+] as const
 /** Whole pages as they load: each route's layout and pixels against Chromium's. */
 const ROUTES = new Map<`route-${string}`, string>([
 	["route-files", "/hazel/chat/00000005-0000-4000-8000-000000000001/files"],
@@ -63,6 +73,11 @@ const routeOf = (scenario: Scenario) => (isRoute(scenario) ? ROUTES.get(scenario
 /** Tabs from boot to the logo link, which draws a `focus-visible` outline. */
 const FOCUS_TABS = 1
 type Theme = "light" | "dark"
+/** The window both sides render at: a phone's (the mobile layout) for the phone scenarios. */
+const DESKTOP: Rect = { x: 0, y: 0, w: 1280, h: 800 }
+const PHONE: Rect = { x: 0, y: 0, w: 402, h: 874 }
+const viewportOf = (scenario: Scenario): Rect =>
+	scenario === "mobile" || scenario === "drawer" ? PHONE : DESKTOP
 const scenarioArg = option("--scenario", "all")
 const themeArg = option("--theme", "both")
 const everyScenario: Array<Scenario> = [...SCENARIOS, ...ROUTES.keys()]
@@ -114,7 +129,11 @@ const nativeSteps = (scenario: Scenario, layout: string, snap: string) => {
 	]
 	// A message's context menu, opened at the pointer.
 	const context = [{ rightClickText: CONTENT_TEXT }, { settle: 800 }]
-	const steps = { boot: [], sent: send, focus, menu, palette, dialog, context }[scenario]
+	// The phone layout's sidebar: a sheet from the left, opened from the bottom nav.
+	const drawer = [{ clickText: "Menu" }, { settle: 1500 }]
+	const steps = { boot: [], sent: send, focus, menu, palette, dialog, context, mobile: [], drawer }[
+		scenario
+	]
 	return [...boot, ...steps, { exportLayout: layout }, { snap }]
 }
 
@@ -130,6 +149,8 @@ const captureNative = async (scenario: Scenario, theme: Theme, dir: string) => {
 		NATIVE_BENCH_OUT: join(dir, "native-bench.json"),
 		// The page to open: the app's own start page unless the scenario is a route.
 		NATIVE_PATH: routeOf(scenario) ?? process.env.NATIVE_PATH,
+		NATIVE_WIDTH: String(viewportOf(scenario).w),
+		NATIVE_HEIGHT: String(viewportOf(scenario).h),
 	}
 	// The host binary may be mid-rebuild by someone else, so retry a failed run.
 	for (let attempt = 1; ; attempt++) {
@@ -289,7 +310,7 @@ const extractDom = (idAttrs: ReadonlyArray<string>) => {
 
 const captureWeb = async (browser: Browser, url: string, scenario: Scenario, theme: Theme, dir: string) => {
 	const context = await browser.newContext({
-		viewport: { width: 1280, height: 800 },
+		viewport: { width: viewportOf(scenario).w, height: viewportOf(scenario).h },
 		deviceScaleFactor: SCALE,
 		colorScheme: theme,
 	})
@@ -339,6 +360,11 @@ const captureWeb = async (browser: Browser, url: string, scenario: Scenario, the
 		if (scenario === "context") {
 			await page.getByText(CONTENT_TEXT).first().click({ button: "right" })
 			await waitQuiet(page, 800)
+		}
+		if (scenario === "drawer") {
+			// The bottom nav's Menu, as the native step presses it.
+			await page.getByText("Menu", { exact: true }).first().click()
+			await waitQuiet(page, 1500)
 		}
 		if (scenario === "menu") {
 			await page.locator("#org-switcher-trigger").click()
@@ -395,17 +421,18 @@ const runOne = async (browser: Browser, url: string, scenario: Scenario, theme: 
 	const web = await captureWeb(browser, url, scenario, theme, dir)
 
 	const matching = matchElements(web.els, native.els)
-	const all = deltas(web.els, native.els, matching)
+	const viewport = viewportOf(scenario)
+	const all = deltas(web.els, native.els, matching, viewport)
 	const textual = all.filter((d) => d.web.text !== "")
 	const layout = summarize(all)
 	const text = summarize(textual)
 	const missingOnNative = web.els.filter((w) => {
-		if (!onScreen(w.rect)) return false
+		if (!onScreen(w.rect, viewport)) return false
 		const n = native.els[matching.webToNative.get(w.index) ?? -1]
 		return n === undefined || n.rect === null
 	})
 	const extraOnNative = native.els.filter((n) => {
-		if (!onScreen(n.rect)) return false
+		if (!onScreen(n.rect, viewport)) return false
 		const w = web.els[matching.nativeToWeb.get(n.index) ?? -1]
 		return w === undefined || w.rect === null || w.rect.w <= 0 || w.rect.h <= 0
 	})
@@ -449,7 +476,7 @@ const runOne = async (browser: Browser, url: string, scenario: Scenario, theme: 
 		return `${d.web.tag}|${d.web.className || `in:${parent?.className ?? ""}`}`
 	}
 	const inViewport = (r: Rect | null) =>
-		onScreen(r) && r.x >= 0 && r.y >= 0 && r.x + r.w <= 1280 && r.y + r.h <= 800
+		onScreen(r, viewport) && r.x >= 0 && r.y >= 0 && r.x + r.w <= viewport.w && r.y + r.h <= viewport.h
 	const picked: Array<(typeof all)[number]> = []
 	const isAncestor = (a: El, b: El) => b.path.startsWith(`${a.path}/`)
 	for (const d of byOwn) {
@@ -489,8 +516,8 @@ const runOne = async (browser: Browser, url: string, scenario: Scenario, theme: 
 		const pad = 24
 		const x0 = Math.max(0, Math.min(n.x, w.x) - pad)
 		const y0 = Math.max(0, Math.min(n.y, w.y) - pad)
-		const x1 = Math.min(1280, Math.max(n.x + n.w, w.x + w.w) + pad, x0 + 640)
-		const y1 = Math.min(800, Math.max(n.y + n.h, w.y + w.h) + pad, y0 + 400)
+		const x1 = Math.min(viewport.w, Math.max(n.x + n.w, w.x + w.w) + pad, x0 + 640)
+		const y1 = Math.min(viewport.h, Math.max(n.y + n.h, w.y + w.h) + pad, y0 + 400)
 		const region = {
 			x: Math.round(x0 * SCALE),
 			y: Math.round(y0 * SCALE),
@@ -589,7 +616,7 @@ const runOne = async (browser: Browser, url: string, scenario: Scenario, theme: 
 	const md = [
 		`# Conformance: ${scenario}, ${theme}`,
 		"",
-		"Native (Rune host) against Chromium, 1280x800 points at 2x. Deltas are native minus web, in points.",
+		`Native (Rune host) against Chromium, ${viewport.w}x${viewport.h} points at 2x. Deltas are native minus web, in points.`,
 		"",
 		`Elements: web ${metrics.webElements}, native ${metrics.nativeElements}, matched ${metrics.matched} (${metrics.matchedWebPct}% of web; by text ${phases.text}, attributes ${phases.attrs}, structure ${phases.structure}). Unmatched: web ${metrics.unmatchedWeb}, native ${metrics.unmatchedNative}. Drawn on web but not native: ${metrics.missingOnNative}. Drawn natively but not on web: ${metrics.extraOnNative}.`,
 		"",

@@ -6,7 +6,7 @@ const result = await Bun.build({
 	outdir: new URL("../dist", import.meta.url).pathname,
 	target: "bun",
 	minify: true,
-	external: ["jsdom", "@tailwindcss/oxide", "@tailwindcss/node", "lightningcss", "postcss", "prismjs"],
+	external: ["@tailwindcss/oxide", "@tailwindcss/node", "lightningcss", "postcss", "prismjs"],
 	plugins: [overlayPlugin],
 })
 if (!result.success) {

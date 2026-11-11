@@ -9,6 +9,7 @@ import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 const root = new URL("..", import.meta.url).pathname
 const target = "aarch64-apple-ios-sim"
 const app = `${root}dist/ios/Hazel.app`
+// The executable carries its entitlements for the simulator (`host/ios/build.rs`).
 const bundleId = "sh.hazel.ios"
 
 const run = (command: string, args: Array<string>, cwd = root) =>
@@ -23,7 +24,7 @@ cpSync(`${root}host/target/${target}/release/hazel-ios`, `${app}/hazel-ios`)
 cpSync(`${root}dist/ios/runtime.js`, `${app}/runtime.js`)
 // What the runtime reads from `process.env`: offline unless `HAZEL_DATA=live` was set when building.
 const environment = Object.fromEntries(
-	["HAZEL_DATA", "VITE_BACKEND_URL", "NATIVE_DEBUG", "NATIVE_PATH"].flatMap((name) => {
+	["HAZEL_DATA", "VITE_BACKEND_URL", "VITE_APP_URL", "NATIVE_DEBUG", "NATIVE_PATH"].flatMap((name) => {
 		const value = process.env[name]
 		return value === undefined ? [] : [[name, value]]
 	}),
@@ -63,6 +64,15 @@ writeFileSync(
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<!-- Motion may run above 60 Hz on a ProMotion iPhone (Rune's display link asks for 120). -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- A dev stack on this Mac (http://localhost); everything else is HTTPS. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>arm64</string>

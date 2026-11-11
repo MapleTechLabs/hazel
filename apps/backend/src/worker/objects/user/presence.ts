@@ -25,8 +25,6 @@ import { orgTarget } from "../kinds"
 import type { PresenceProjection } from "../org/projections"
 import { HEARTBEAT_TIMEOUT_MS, PRESENCE_RENEW_MS } from "./presence-timing"
 
-export { HEARTBEAT_TIMEOUT_MS } from "./presence-timing"
-
 export type PresenceRow = schema.UserPresenceStatus
 export type PresenceFields = Omit<PresenceRow, "id" | "userId">
 
