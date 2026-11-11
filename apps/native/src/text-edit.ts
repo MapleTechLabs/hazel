@@ -37,13 +37,19 @@ const positionAt = (doc: Node, target: number): number => {
 	return found ?? Math.max(0, doc.content.size - 1)
 }
 
+/** What the native field's new text changed: the document span it replaces, and the new text. */
+export type FieldChange = { readonly from: number; readonly to: number; readonly text: string }
+
 /**
- * The native field's new text applied as the smallest edit: only the changed span is replaced,
- * typed text takes the marks around it, and a "\n" splits its block. Lists, quotes and
- * formatting the editor made elsewhere are kept. `undefined` when the text did not change.
+ * The smallest change from the editor's text to `value`; `undefined` when it is the same. An
+ * inline atom (a mention) has no text, so one text offset can be either side of it: text inserted
+ * there goes where the editor's caret is, as typing in the editor would put it.
  */
-export const replaceFieldText = (state: EditorState, value: string): Transaction | undefined => {
-	const doc = state.doc
+export const fieldTextChange = (
+	doc: Node,
+	value: string,
+	caret?: number,
+): FieldChange | undefined => {
 	const old = doc.textBetween(0, doc.content.size, "\n")
 	if (old === value) return undefined
 	let start = 0
@@ -54,9 +60,32 @@ export const replaceFieldText = (state: EditorState, value: string): Transaction
 		oldEnd--
 		newEnd--
 	}
-	const [first = "", ...rest] = value.slice(start, newEnd).split("\n")
-	const from = positionAt(doc, start)
-	const tr = state.tr.insertText(first, from, positionAt(doc, oldEnd))
+	const text = value.slice(start, newEnd)
+	const atCaret =
+		caret !== undefined && start === oldEnd && doc.textBetween(0, caret, "\n").length === start
+	if (atCaret) return { from: caret, to: caret, text }
+	return { from: positionAt(doc, start), to: positionAt(doc, oldEnd), text }
+}
+
+/** The editor's caret, when its selection is one. */
+export const caretOf = (state: EditorState) =>
+	state.selection.empty ? state.selection.from : undefined
+
+/** Typing: text inserted at one place, on one line, which the editor hears as `handleTextInput`. */
+export const isTyping = (change: FieldChange) =>
+	change.from === change.to && change.text !== "" && !change.text.includes("\n")
+
+/**
+ * The native field's new text applied as the smallest edit: only the changed span is replaced,
+ * typed text takes the marks around it, and a "\n" splits its block. Lists, quotes and
+ * formatting the editor made elsewhere are kept. `undefined` when the text did not change.
+ */
+export const replaceFieldText = (state: EditorState, value: string): Transaction | undefined => {
+	const change = fieldTextChange(state.doc, value, caretOf(state))
+	if (change === undefined) return undefined
+	const [first = "", ...rest] = change.text.split("\n")
+	const { from } = change
+	const tr = state.tr.insertText(first, from, change.to)
 	let at = from + first.length
 	for (const line of rest) {
 		tr.split(at)

@@ -1,4 +1,4 @@
-import { EditorState } from "prosemirror-state"
+import { EditorState, TextSelection } from "prosemirror-state"
 import { describe, expect, it } from "vitest"
 
 import { type ProseMirrorNode, schema } from "../../web-foldkit/src/editor/schema"
@@ -45,6 +45,23 @@ describe("replaceFieldText", () => {
 		)
 		expect(blocksOf(edited(state, "ab"))).toEqual(["paragraph:ab"])
 		expect(blocksOf(edited(state, ""))).toEqual(["paragraph:"])
+	})
+
+	it("types after a mention when the caret is after it, where one text offset is either side", () => {
+		const grace = mention.create({ userId: "u2", displayName: "Grace" })
+		const doc = schema.node("doc", null, [paragraph.create(null, [schema.text("Thanks "), grace])])
+		const afterMention = doc.content.size - 1
+		const state = EditorState.create({ doc, selection: TextSelection.create(doc, afterMention) })
+		const next = edited(state, "Thanks  for the review")
+		const order: Array<string> = []
+		next.doc.descendants((node) => {
+			if (node.type === mention) order.push("@Grace")
+			else if (node.isText) order.push(node.text ?? "")
+		})
+		expect(order).toEqual(["Thanks ", "@Grace", " for the review"])
+		// Without a caret there, the earliest place wins, as before.
+		const before = edited(stateOf(paragraph.create(null, [schema.text("Thanks "), grace])), "Thanks !")
+		expect(before.doc.textBetween(0, before.doc.content.size, "\n")).toBe("Thanks !")
 	})
 
 	it("leaves a mention in place when text after it changes", () => {

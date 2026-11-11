@@ -4,10 +4,11 @@
  * Edits arrive as whole-text replacements and keys go through the editor's own key handlers.
  */
 import { Effect, Option } from "effect"
+import { TextSelection } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 import { editorRegistry } from "../../web-foldkit/src/editor/registry"
 import { type HeadlessDom, makeHeadlessDom } from "./headless-dom"
-import { replaceFieldText } from "./text-edit"
+import { caretOf, type FieldChange, fieldTextChange, isTyping, replaceFieldText } from "./text-edit"
 
 let dom: HeadlessDom | undefined
 /** Each editor element's Mount path: the host keys the editor's native field by it. */
@@ -77,21 +78,44 @@ export const editorText = (args: Record<string, unknown>): string | undefined =>
 		onSome: (view) => view.state.doc.textBetween(0, view.state.doc.content.size, "\n"),
 	})
 
+/**
+ * Typing goes through the editor's own input path first, as a browser's does: `@`, `#` and `:`
+ * open their autocomplete there, and `1. ` or `> ` turn the line into a list or a quote.
+ * Whether the editor took it.
+ */
+const typeIntoEditor = (view: EditorView, change: FieldChange) => {
+	if (!isTyping(change)) return false
+	const { selection } = view.state
+	if (!selection.empty || selection.from !== change.from)
+		view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, change.from)))
+	return (
+		view.someProp("handleTextInput", (handle) =>
+			handle(view, change.from, change.to, change.text, () => view.state.tr),
+		) ?? false
+	)
+}
+
 export const applyEditorEvent = (
 	args: Record<string, unknown>,
 	event: { readonly value?: string | null; readonly key?: string | null },
 ) =>
 	Option.map(editorAt(args.editorId), (view) => {
-		const { state } = view
-		const before = state.doc
+		const before = view.state.doc
 		if (event.value != null) {
-			const edit = replaceFieldText(state, event.value)
-			if (edit !== undefined) view.dispatch(edit)
+			const change = fieldTextChange(view.state.doc, event.value, caretOf(view.state))
+			if (change !== undefined && !typeIntoEditor(view, change)) {
+				const edit = replaceFieldText(view.state, event.value)
+				if (edit !== undefined) view.dispatch(edit)
+			}
 		}
 		if (event.key != null && dom !== undefined) {
 			const keydown = dom.keydown(event.key)
 			view.someProp("handleKeyDown", (handle) => handle(view, keydown))
 		}
-		/** Whether the editor's document changed, so the native field must take its text again. */
-		return event.key != null && !view.state.doc.eq(before)
+		/**
+		 * Whether the native field must take the editor's text again: a key changed it, or the
+		 * editor's input path made it other than the field's (a list marker it turned into a list).
+		 */
+		const text = view.state.doc.textBetween(0, view.state.doc.content.size, "\n")
+		return event.key != null ? !view.state.doc.eq(before) : event.value != null && text !== event.value
 	})

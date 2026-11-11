@@ -192,8 +192,9 @@ synthetic utility page (`conformance:extract` records it).
 - Colours a `focus:` variant changes (Rune draws focus as a ring only), focus or press state on an
   ancestor (`group-focus-visible:`), and spinners drawn as rotating CSS border rings.
 - Subgrid: Taffy has none, so a subgrid row lays its children out on its own copy of the tracks.
-- Vertical margin collapsing (spacing is the same, a block's own box is not), fractions of the
-  parent's height, and percentage insets (`left-1/2`).
+- Vertical margin collapsing (spacing is the same, a block's own box is not), and fractions of
+  the parent's height.
+- The composer's native field is plain text: a mention shows as a chip only once sent.
 - Masks other than an edge that fades to nothing and one centred mask picture on an `<img>`:
   radial gradients (the app loader's), repeated or offset mask pictures, and a fading edge on
   the box's own fill (Rune fades what is inside the box).

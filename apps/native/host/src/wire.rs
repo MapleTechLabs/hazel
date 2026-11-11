@@ -118,6 +118,10 @@ pub struct Style {
     /// `left-1/2 -translate-x-1/2`: centred horizontally in its containing block.
     #[serde(default, deserialize_with = "lenient")]
     pub center_x: Option<bool>,
+    /// Insets as fractions of the parent's size where the runtime could not know it
+    /// (`bottom-full`), left, top, right, bottom; an edge here is free in `absolute`.
+    #[serde(default, deserialize_with = "lenient")]
+    pub inset_frac: Option<[Option<F>; 4]>,
     /// The fill while a press is held (`:active`).
     #[serde(default, deserialize_with = "lenient")]
     pub press_bg: Option<String>,

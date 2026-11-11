@@ -3074,3 +3074,26 @@ fn a_lone_inline_span_in_a_block_wraps_its_text_to_the_block() {
     assert!(w <= 244.0, "the span stays inside its 244 column: {w}");
     assert!(h > 30.0, "its text wraps onto more lines: {h}");
 }
+
+/// A popover placed `bottom-full` over a content-sized box: its bottom edge sits on the box's
+/// top, whatever height the box's content gives it (the runtime cannot know it).
+#[test]
+fn a_bottom_full_inset_places_a_popover_above_its_content_sized_parent() {
+    let mut popover = e("div", json!({ "h": 40, "bg": "#ff0000ff" }), vec![]);
+    popover["st"]["absolute"] = json!([0, null, 0, null]);
+    popover["st"]["insetFrac"] = json!([null, null, null, 1.0]);
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300, "h": 400, "pad": [200, 0, 0, 0] }),
+            vec![e(
+                "div",
+                json!({ "display": "flex", "dir": "col" }),
+                vec![e("div", json!({ "h": 64 }), vec![t("Composer")]), popover],
+            )],
+        ),
+        (300.0, 400.0),
+    );
+    assert_eq!(rect(&rt, "r/0"), [0.0, 200.0, 300.0, 64.0]);
+    assert_eq!(rect(&rt, "r/0/1"), [0.0, 160.0, 300.0, 40.0]);
+}

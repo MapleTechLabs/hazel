@@ -268,6 +268,25 @@ describe("StyleResolver", () => {
 		expect(resolve("absolute inset-y-0 left-0").style.absolute).toEqual([0, 0, null, 0])
 	})
 
+	it("leaves a percentage inset of a content-sized parent to the host, as a fraction", () => {
+		styles.ensure(["relative", "flex", "flex-col", "absolute", "right-0", "bottom-full", "left-0", "mb-2"])
+		// The composer: as tall as its content, which only the host's layout knows.
+		const composer = resolve("relative flex flex-col")
+		const { style } = resolve("absolute right-0 bottom-full left-0 mb-2", { scope: composer.scope })
+		expect(style.absolute).toEqual([0, null, 0, null])
+		expect(style.insetFrac).toEqual([null, null, null, 1])
+		// Against a box of known height it is pixels, as before.
+		const known = resolve("absolute bottom-full").style
+		expect(typeof known.absolute?.[3]).toBe("number")
+		expect(known.insetFrac).toBeUndefined()
+		// A later pixel value for the edge replaces the fraction; none left, none sent.
+		expect(
+			resolve("absolute bottom-full", { scope: composer.scope, extra: { inline: { bottom: "0px" } } })
+				.style.insetFrac,
+		).toBeUndefined()
+		expect(resolve("absolute top-0").style.insetFrac).toBeUndefined()
+	})
+
 	it("hides screen-reader-only text and reads inline styles last", () => {
 		expect(resolve("sr-only").style.display).toBe("none")
 		// A screen-reader-only control (a keyboard drag handle) stays a Tab stop.

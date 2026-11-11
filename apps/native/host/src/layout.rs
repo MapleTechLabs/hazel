@@ -403,7 +403,18 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
         && st.center_y != Some(true)
         && st.center_x != Some(true)
     {
-        e = e.pin(f(l), f(t), f(r), f(b))
+        e = match st.inset_frac {
+            // A fraction of the parent's size on some edge: Rune resolves it as laid out.
+            Some(fractions) => {
+                let edge = |px: Option<F>, frac: Option<F>| match (frac, px) {
+                    (Some(frac), _) => Some(rune::Inset::Frac(frac.0)),
+                    (None, px) => f(px).map(rune::Inset::Px),
+                };
+                let [fl, ft, fr, fb] = fractions;
+                e.pin_insets(edge(l, fl), edge(t, ft), edge(r, fr), edge(b, fb))
+            }
+            None => e.pin(f(l), f(t), f(r), f(b)),
+        }
     }
     if let Some([x, y]) = st.translate
         && (x.0 != 0.0 || y.0 != 0.0)

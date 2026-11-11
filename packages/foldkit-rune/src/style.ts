@@ -177,6 +177,12 @@ export type Style = {
 	/** `inline`, `inline-flex`, `inline-block`: flows within its line rather than starting one. */
 	inline?: boolean
 	absolute?: [number | null, number | null, number | null, number | null]
+	/**
+	 * Insets as a fraction of the containing block, where its size is its content's and so
+	 * unknown here (`bottom-full` on a popover over a content-sized composer): the host's layout
+	 * resolves them. Left, top, right, bottom, as `absolute`; an edge here is null there.
+	 */
+	insetFrac?: [number | null, number | null, number | null, number | null]
 	gridCols?: Array<string>
 	/** `position: fixed`: placed against the window, not its parent (with `absolute`'s insets). */
 	fixed?: boolean
@@ -1154,10 +1160,20 @@ export class StyleResolver {
 						? acc.parentBox.w
 						: acc.parentBox.h
 			const n = value === "auto" ? null : evalLength(value, units, basis)
-			if (n === null && value !== "auto") return unsupported()
 			const a = s.absolute ?? [null, null, null, null]
-			a[i] = n
 			s.absolute = a
+			if (n === null && value !== "auto") {
+				// A percentage of a size known only once laid out: the host resolves it.
+				const percent = basis === undefined ? percentage(value, units) : null
+				if (percent === null) return unsupported()
+				a[i] = null
+				const fractions = s.insetFrac ?? [null, null, null, null]
+				fractions[i] = percent / 100
+				s.insetFrac = fractions
+				return
+			}
+			a[i] = n
+			if (s.insetFrac !== undefined) s.insetFrac[i] = null
 		}
 		switch (d.prop) {
 			case "display":
@@ -1793,9 +1809,11 @@ export class StyleResolver {
 		if (s.position === "sticky" && top !== null && top !== undefined) s.stickyTop = top
 		if (s.position !== "absolute") {
 			delete s.absolute
+			delete s.insetFrac
 			delete s.centerY
 			delete s.centerX
 		}
+		if (s.insetFrac?.every((edge) => edge === null)) delete s.insetFrac
 		delete s.position
 		// A unitless line height multiplies the final font size (an inline `font-size` comes last).
 		if (acc.line !== undefined && acc.line !== "normal" && "mult" in acc.line)
