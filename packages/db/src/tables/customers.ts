@@ -260,6 +260,8 @@ export const customerSubscriptionsTable = SQLite.table("customer_subscriptions",
 		canceledAt: SQLite.nullable(timestamptz),
 		cancellationReason: SQLite.nullable(SQLite.text),
 		paymentMethod: SQLite.nullable(jsonb<PaymentMethodDoc>()),
+		/** The newest applied op's `observedAt` (the provider read time): an older op changes nothing. */
+		observedAt: SQLite.nullable(timestamptz),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},
@@ -293,6 +295,8 @@ export const customerInvoicesTable = SQLite.table("customer_invoices", {
 		nextRetryAt: SQLite.nullable(timestamptz),
 		declineReason: SQLite.nullable(SQLite.text),
 		hostedUrl: SQLite.nullable(SQLite.text),
+		/** The newest applied op's `observedAt` (the provider read time): an older op changes nothing. */
+		observedAt: SQLite.nullable(timestamptz),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},

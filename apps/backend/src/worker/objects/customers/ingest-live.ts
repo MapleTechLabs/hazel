@@ -21,10 +21,11 @@
  * nothing; any other sighting revives the record. Contacts' `lastSeenAt` / `lastSignInAt` /
  * `lastActiveDay` only move forward. A successful full sweep (`completeSweep`) removes the records
  * it did not see (never a ref a person linked). A removed ref goes stale; its account or contact is
- * soft-deleted once no live ref of it is left.
+ * soft-deleted once no live ref of it is left. A subscription or invoice op read (`observedAt`)
+ * before the newest one applied to its row is late too and changes nothing.
  *
  * Writes compare first, so an op that changes nothing writes nothing (`Unchanged`, no `_changes`
- * row). Ingest also records timeline events for the state changes it sees (subscription started,
+ * row; a billing op still advances its row's `observedAt`). Ingest also records timeline events for the state changes it sees (subscription started,
  * plan changed, cancellation, invoice paid or failed, contact joined, left, first active), keyed so
  * a replay adds none.
  */
@@ -194,6 +195,10 @@ const observedBefore = (observedAt: string | undefined, ref: schema.CustomerExte
 	new Date(observedAt) <= ref.deletedObservedAt
 
 /** A delete op that changes nothing: the ref is already removed by one observed as late or later. */
+/** A billing op read before the newest one applied to its row arrived late: it changes nothing. */
+const readBefore = (observedAt: string | undefined, row: { readonly observedAt: Date | null }) =>
+	observedAt !== undefined && row.observedAt !== null && new Date(observedAt) < row.observedAt
+
 const alreadyRemoved = (observedAt: string | undefined, ref: schema.CustomerExternalRef) =>
 	ref.staleAt !== null &&
 	(observedAt === undefined ||
@@ -1304,10 +1309,11 @@ const make = Effect.gen(function* () {
 					occurredAt,
 					externalId: `ingest:${type}:${provider}:${op.externalId}${type === "subscription.plan_changed" ? `:${op.planName}:${op.mrrMinor}` : ""}`,
 				})
+			const observedAt = toDate(op.observedAt)
 			if (Option.isNone(existing)) {
 				const [row] = yield* db.run(
 					SQLite.insertInto(schema.customerSubscriptionsTable)
-						.values({ provider, externalId: op.externalId, ...values })
+						.values({ provider, externalId: op.externalId, ...values, observedAt })
 						.returning("id"),
 				)
 				yield* event("subscription.started", `Started ${planLabel(op.planName)}`, values.startedAt, {
@@ -1330,13 +1336,27 @@ const make = Effect.gen(function* () {
 				return outcome.created(row.id)
 			}
 			const sub = existing.value
+			if (readBefore(op.observedAt, sub)) return outcome.unchanged(sub.id)
 			const patch = makePatch(sub, {}, provider)
 			for (const [field, value] of Object.entries(values)) patch.set(field, value)
 			const changes = patch.result()
-			if (changes === undefined) return outcome.unchanged(sub.id)
+			if (changes === undefined) {
+				if (observedAt !== null && !same(observedAt, sub.observedAt)) {
+					yield* db.run(
+						SQLite.update(schema.customerSubscriptionsTable)
+							.set({ observedAt })
+							.where(($) => [$.id.eq(sub.id)]),
+					)
+				}
+				return outcome.unchanged(sub.id)
+			}
 			yield* db.run(
 				SQLite.update(schema.customerSubscriptionsTable)
-					.set({ ...changes, updatedAt: session.now } as never)
+					.set({
+						...changes,
+						observedAt: observedAt ?? sub.observedAt,
+						updatedAt: session.now,
+					} as never)
 					.where(($) => [$.id.eq(sub.id)]),
 			)
 			if (sub.planName !== op.planName || sub.mrrMinor !== op.mrrMinor) {
@@ -1428,6 +1448,7 @@ const make = Effect.gen(function* () {
 					.where(($) => [$.provider.eq(provider), $.externalId.eq(op.externalId)])
 					.limit(1),
 			)
+			const observedAt = toDate(op.observedAt)
 			const label = op.number ?? "Invoice"
 			const events = Effect.gen(function* () {
 				if (op.status === "paid") {
@@ -1464,20 +1485,34 @@ const make = Effect.gen(function* () {
 			if (Option.isNone(existing)) {
 				const [row] = yield* db.run(
 					SQLite.insertInto(schema.customerInvoicesTable)
-						.values({ provider, externalId: op.externalId, ...values })
+						.values({ provider, externalId: op.externalId, ...values, observedAt })
 						.returning("id"),
 				)
 				yield* events
 				return outcome.created(row.id)
 			}
 			const invoice = existing.value
+			if (readBefore(op.observedAt, invoice)) return outcome.unchanged(invoice.id)
 			const patch = makePatch(invoice, {}, provider)
 			for (const [field, value] of Object.entries(values)) patch.set(field, value)
 			const changes = patch.result()
-			if (changes === undefined) return outcome.unchanged(invoice.id)
+			if (changes === undefined) {
+				if (observedAt !== null && !same(observedAt, invoice.observedAt)) {
+					yield* db.run(
+						SQLite.update(schema.customerInvoicesTable)
+							.set({ observedAt })
+							.where(($) => [$.id.eq(invoice.id)]),
+					)
+				}
+				return outcome.unchanged(invoice.id)
+			}
 			yield* db.run(
 				SQLite.update(schema.customerInvoicesTable)
-					.set({ ...changes, updatedAt: session.now } as never)
+					.set({
+						...changes,
+						observedAt: observedAt ?? invoice.observedAt,
+						updatedAt: session.now,
+					} as never)
 					.where(($) => [$.id.eq(invoice.id)]),
 			)
 			yield* events

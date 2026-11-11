@@ -9,6 +9,8 @@
  *
  * - `observedAt` on account and contact ops: the record's source-side `updated_at` (or the webhook
  *   event's time), so a late delivery cannot revive a record deleted since.
+ * - `observedAt` on subscription and invoice ops: when the adapter read the record (taken before
+ *   the request), so a slower read of older state applied after a newer one changes nothing.
  * - `matchByDomain: true` on account ops only for billing sources (Stripe, Autumn); identity
  *   sources (Clerk) leave it unset so organizations sharing a domain never merge.
  * - Deletions as `deleted` / `removed` ops; a full listing also sets `PullPage.sweep` on its last

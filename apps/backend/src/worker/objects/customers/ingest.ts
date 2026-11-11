@@ -17,7 +17,8 @@
  * - Contacts: ref → same email within the account → create. Billing rows and metrics whose
  *   account does not resolve become unmatched records holding the op (replayed once linked).
  * - Precedence: `FIELD_PRECEDENCE` per field, recorded in `fieldSources`.
- * - Ordering: an op's `observedAt` at or before its record's deletion leaves it deleted.
+ * - Ordering: an op's `observedAt` at or before its record's deletion leaves it deleted; a
+ *   subscription or invoice op observed before the newest one applied to its row changes nothing.
  * - Removal: `deleted` / `removed` ops, or `completeSweep` after a full pull; a later sighting
  *   revives, unless the delete op was observed at or after it.
  * - It never computes: it marks compute due (`requestComputeAfterIngest`), which the alarm runs

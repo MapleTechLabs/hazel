@@ -1,5 +1,5 @@
 {
-	"migration": "0003_customers_unmatched_blocked_by",
+	"migration": "0004_customers_billing_observed_at",
 	"entities": [
 		{
 			"kind": "table",
@@ -1506,8 +1506,17 @@
 		{
 			"kind": "column",
 			"table": "customer_invoices",
-			"name": "createdAt",
+			"name": "observedAt",
 			"position": 17,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "createdAt",
+			"position": 18,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1516,7 +1525,7 @@
 			"kind": "column",
 			"table": "customer_invoices",
 			"name": "updatedAt",
-			"position": 18,
+			"position": 19,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2757,8 +2766,17 @@
 		{
 			"kind": "column",
 			"table": "customer_subscriptions",
-			"name": "createdAt",
+			"name": "observedAt",
 			"position": 18,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "createdAt",
+			"position": 19,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2767,7 +2785,7 @@
 			"kind": "column",
 			"table": "customer_subscriptions",
 			"name": "updatedAt",
-			"position": 19,
+			"position": 20,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

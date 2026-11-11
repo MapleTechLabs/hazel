@@ -427,5 +427,12 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "customer_unmatched_blocked_by_idx" ON "customer_unmatched_records" ("blockedBy")',
 			],
 		},
+		{
+			id: "0004_customers_billing_observed_at",
+			statements: [
+				'ALTER TABLE "customer_invoices" ADD COLUMN "observedAt" text',
+				'ALTER TABLE "customer_subscriptions" ADD COLUMN "observedAt" text',
+			],
+		},
 	],
 }

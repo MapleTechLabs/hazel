@@ -569,6 +569,75 @@ describe("CustomerIngest", () => {
 			}),
 		))
 
+	it("does not let an older billing read overwrite a newer one", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [clerkOrg("org_1", "Acme")])
+				const account = { provider: "clerk" as const, externalId: "org_1" }
+				const sub: IngestOp = {
+					_tag: "subscription",
+					externalId: "sub_1",
+					account,
+					planName: "Team",
+					status: "active",
+					mrrMinor: 19_900,
+					currency: "usd",
+					interval: "month",
+					quantity: 1,
+					startedAt: null,
+					trialEndsAt: null,
+					currentPeriodEnd: null,
+					cancelAtPeriodEnd: false,
+					canceledAt: null,
+				}
+				const invoice: IngestOp = {
+					_tag: "invoice",
+					externalId: "in_1",
+					account,
+					subscriptionExternalId: "sub_1",
+					number: "INV-1",
+					status: "paid",
+					amountDueMinor: 19_900,
+					amountPaidMinor: 19_900,
+					currency: "usd",
+					issuedAt: null,
+					dueAt: null,
+					paidAt: null,
+					attemptCount: 1,
+				}
+				const at = (offsetMs: number) => ({ observedAt: isoAt(offsetMs) })
+				yield* world.ingest("stripe", [
+					{ ...sub, ...at(0) },
+					{ ...invoice, ...at(0) },
+				])
+				// The same state read later: unchanged, but the newer read time is kept.
+				const reread = yield* world.ingest("stripe", [
+					{ ...sub, ...at(60_000) },
+					{ ...invoice, ...at(60_000) },
+				])
+				expect(outcomeTags(reread)).toEqual(["Unchanged", "Unchanged"])
+
+				// Read between the two (older than the newest applied): nothing changes.
+				const late = yield* world.ingest("stripe", [
+					{ ...sub, status: "past_due", ...at(30_000) },
+					{ ...invoice, status: "open", ...at(30_000) },
+				])
+				expect(outcomeTags(late)).toEqual(["Unchanged", "Unchanged"])
+				expect(world.rows(`SELECT status FROM customer_subscriptions`)).toEqual([
+					{ status: "active" },
+				])
+				expect(world.rows(`SELECT status FROM customer_invoices`)).toEqual([{ status: "paid" }])
+
+				// A newer read applies; one without `observedAt` applies whatever the order.
+				const newer = yield* world.ingest("stripe", [{ ...sub, status: "canceled", ...at(90_000) }])
+				expect(outcomeTags(newer)).toEqual(["Updated"])
+				const undated = yield* world.ingest("stripe", [{ ...invoice, status: "void" }])
+				expect(outcomeTags(undated)).toEqual(["Updated"])
+				expect(world.rows(`SELECT status FROM customer_invoices`)).toEqual([{ status: "void" }])
+			}),
+		))
+
 	it("matches by domain only when the op opts in, and merges a parked account's ops", () =>
 		run(
 			Effect.gen(function* () {

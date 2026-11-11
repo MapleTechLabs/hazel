@@ -35,6 +35,13 @@ const When = Schema.NullOr(IsoTimestamp)
 const ObservedAt = optional(IsoTimestamp)
 
 /**
+ * When the adapter read the record (taken before the request), so two reads applied out of order
+ * cannot regress it: an op observed before the newest one applied to its subscription or invoice
+ * changes nothing. Absent: the op is applied whatever the order.
+ */
+const BillingObservedAt = optional(IsoTimestamp)
+
+/**
  * A provider's account record (Clerk organization, Stripe customer, Autumn customer). Absent
  * fields are left as they are; `null` clears.
  */
@@ -116,6 +123,7 @@ export const UpsertSubscription = Schema.TaggedStruct("subscription", {
 			}),
 		),
 	),
+	observedAt: BillingObservedAt,
 })
 export type UpsertSubscription = typeof UpsertSubscription.Type
 
@@ -135,6 +143,7 @@ export const UpsertInvoice = Schema.TaggedStruct("invoice", {
 	nextRetryAt: optional(When),
 	declineReason: optional(NullableText),
 	hostedUrl: optional(NullableText),
+	observedAt: BillingObservedAt,
 })
 export type UpsertInvoice = typeof UpsertInvoice.Type
 
