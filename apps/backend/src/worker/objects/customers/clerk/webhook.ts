@@ -52,8 +52,10 @@ import {
 	type CustomerWebhookRejectedError as RejectedError,
 	CustomerWebhookRejectedError,
 } from "../provider-errors"
-import { headerOf, verifySvix } from "../svix"
-import { type ClerkGet, issueSummary } from "./http"
+import { issueSummary } from "../provider-http"
+import { verifySvix } from "../svix"
+import { headerOf } from "../webhook-crypto"
+import type { ClerkGet } from "./http"
 import {
 	accountCreatedEvent,
 	accountDeletedOp,

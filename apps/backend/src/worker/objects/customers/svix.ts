@@ -7,9 +7,10 @@
  * the base64-decoded secret after its `whsec_` prefix. `svix-timestamp` is Unix *seconds* and is
  * refused outside a ±5 minute window, so a captured delivery cannot be replayed later.
  *
- * WebCrypto only (no `svix` dependency): `crypto.subtle` is present on workerd, Node and vitest.
+ * WebCrypto only (no `svix` dependency, `./webhook-crypto.ts`).
  */
 import { Effect, Schema } from "effect"
+import { constantTimeEqual, headerOf, hmacSha256 } from "./webhook-crypto"
 
 export const SVIX_TOLERANCE_SECONDS = 5 * 60
 
@@ -27,18 +28,6 @@ export class SvixVerificationError extends Schema.TaggedError<SvixVerificationEr
 	},
 ) {}
 
-/** Header lookup that does not care how the runtime cased the names. */
-export const headerOf = (
-	headers: Readonly<Record<string, string | undefined>>,
-	name: string,
-): string | undefined => {
-	const direct = headers[name]
-	if (direct !== undefined) return direct
-	const lower = name.toLowerCase()
-	for (const [key, value] of Object.entries(headers)) if (key.toLowerCase() === lower) return value
-	return undefined
-}
-
 const decodeBase64 = (value: string): Uint8Array<ArrayBuffer> | undefined => {
 	try {
 		const binary = atob(value)
@@ -54,13 +43,6 @@ const encodeBase64 = (bytes: ArrayBuffer): string => {
 	let binary = ""
 	for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte)
 	return btoa(binary)
-}
-
-const constantTimeEqual = (a: string, b: string): boolean => {
-	if (a.length !== b.length) return false
-	let diff = 0
-	for (let index = 0; index < a.length; index++) diff |= a.charCodeAt(index) ^ b.charCodeAt(index)
-	return diff === 0
 }
 
 const secretBytes = (secret: string): Uint8Array<ArrayBuffer> | undefined => {
@@ -84,13 +66,7 @@ export const signSvix = Effect.fnUntraced(function* (
 			reason: "bad_secret",
 		})
 	}
-	const key = yield* Effect.promise(() =>
-		crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]),
-	)
-	const mac = yield* Effect.promise(() =>
-		crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${id}.${timestamp}.${body}`)),
-	)
-	return encodeBase64(mac)
+	return encodeBase64(yield* hmacSha256(keyBytes, `${id}.${timestamp}.${body}`))
 })
 
 /** Verify one Svix delivery: headers present, timestamp fresh, a signature that matches the body. */

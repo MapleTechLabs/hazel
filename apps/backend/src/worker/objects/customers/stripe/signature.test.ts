@@ -6,7 +6,8 @@
  */
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-import { headerOf, parseSignatureHeader, signStripe, verifyStripeSignature } from "./signature"
+import { headerOf } from "../webhook-crypto"
+import { parseSignatureHeader, signStripe, verifyStripeSignature } from "./signature"
 
 const SECRET = "whsec_hazeltest00000000000000000000"
 const TIMESTAMP = "1762732800"

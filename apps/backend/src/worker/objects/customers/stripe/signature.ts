@@ -13,9 +13,10 @@
  * unknown scheme would be a downgrade. `t` outside ±5 minutes is refused, so a captured delivery
  * cannot be replayed later, and the comparison is constant-time.
  *
- * WebCrypto only (no `stripe` dependency): `crypto.subtle` is present on workerd, Node and vitest.
+ * WebCrypto only (no `stripe` dependency, `../webhook-crypto.ts`).
  */
 import { Effect, Schema } from "effect"
+import { constantTimeEqual, headerOf, hmacSha256 } from "../webhook-crypto"
 
 export const STRIPE_TOLERANCE_SECONDS = 5 * 60
 
@@ -30,18 +31,6 @@ export class StripeSignatureError extends Schema.TaggedError<StripeSignatureErro
 		"signature_mismatch",
 	]),
 }) {}
-
-/** Header lookup that does not care how the runtime cased the names. */
-export const headerOf = (
-	headers: Readonly<Record<string, string | undefined>>,
-	name: string,
-): string | undefined => {
-	const direct = headers[name]
-	if (direct !== undefined) return direct
-	const lower = name.toLowerCase()
-	for (const [key, value] of Object.entries(headers)) if (key.toLowerCase() === lower) return value
-	return undefined
-}
 
 /** The `t` and every `v1` of a `Stripe-Signature` header; other schemes are dropped. */
 export const parseSignatureHeader = (
@@ -63,13 +52,6 @@ export const parseSignatureHeader = (
 const hex = (bytes: ArrayBuffer): string =>
 	[...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
 
-const constantTimeEqual = (a: string, b: string): boolean => {
-	if (a.length !== b.length) return false
-	let diff = 0
-	for (let index = 0; index < a.length; index++) diff |= a.charCodeAt(index) ^ b.charCodeAt(index)
-	return diff === 0
-}
-
 /** The hex `v1` signature of one delivery. Exported so tests (and fixtures) can sign a body. */
 export const signStripe = Effect.fnUntraced(function* (
 	secret: string,
@@ -83,19 +65,7 @@ export const signStripe = Effect.fnUntraced(function* (
 			reason: "bad_secret",
 		})
 	}
-	const key = yield* Effect.promise(() =>
-		crypto.subtle.importKey(
-			"raw",
-			new TextEncoder().encode(trimmed),
-			{ name: "HMAC", hash: "SHA-256" },
-			false,
-			["sign"],
-		),
-	)
-	const mac = yield* Effect.promise(() =>
-		crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${timestamp}.${body}`)),
-	)
-	return hex(mac)
+	return hex(yield* hmacSha256(new TextEncoder().encode(trimmed), `${timestamp}.${body}`))
 })
 
 /** Verify one delivery: the header parses, its timestamp is fresh, and a `v1` matches the body. */

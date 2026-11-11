@@ -19,7 +19,8 @@ import {
 	SESSION_ADA_NO_ORG,
 	USER_ADA,
 } from "./fixtures"
-import { makeClerkGet, WEBHOOK_REQUESTS } from "./http"
+import { WEBHOOK_REQUESTS } from "../provider-http"
+import { makeClerkGet } from "./http"
 import { type FakeClerkState, fakeClerkHttpClient, makeFakeClerk } from "./testing"
 import { receiveWebhook } from "./webhook"
 import { signSvix } from "../svix"
