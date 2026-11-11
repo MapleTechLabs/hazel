@@ -28,6 +28,7 @@ import { popoverContentBase, popoverInnerClassName } from "~/components/ui/popov
 import { IconCheck, IconChevronRight } from "../icons"
 import { dismissButton, focusScopeSentinel, openModalPopover, positionOverlay } from "./aria/overlay"
 import { Placement } from "./aria/placement"
+import { MOBILE_QUERY } from "./viewport"
 import {
 	descriptionId,
 	type Entry,
@@ -61,11 +62,23 @@ const PortalMenu = Mount.defineStream("PortalMenu", {
 		crossOffset: Schema.Number,
 		isTriggerWidthSet: Schema.Boolean,
 		initialFocusId: Schema.String,
+		/** A context menu: an action sheet on a phone, which its classes place instead. */
+		isSheetOnPhone: Schema.Boolean,
 	},
 	messages: [Message.CompletedPortalMenu, Message.PressedOutside],
-	execute: ({ element, id, placement, offset, crossOffset, isTriggerWidthSet, initialFocusId }) =>
+	execute: ({
+		element,
+		id,
+		placement,
+		offset,
+		crossOffset,
+		isTriggerWidthSet,
+		initialFocusId,
+		isSheetOnPhone,
+	}) =>
 		Stream.callback<PortalMenuMessage>((queue) =>
 			openModalPopover(element, {
+				isPositioned: !(isSheetOnPhone && window.matchMedia(MOBILE_QUERY).matches),
 				triggerId: triggerId(id),
 				placement,
 				offset,
@@ -226,6 +239,21 @@ export type ViewInputs = Readonly<{
 	itemClassName?: (key: string) => string | undefined
 }>
 
+/**
+ * A context menu on a phone is an action sheet: a long-press opens it along the bottom edge,
+ * over a dimmed page, clear of the home indicator, with rows a thumb can hit.
+ */
+const PHONE_SHEET_SCRIM =
+	"max-md:fixed max-md:inset-0 max-md:bg-black/40 max-md:transition-opacity max-md:duration-200 max-md:starting:opacity-0"
+const PHONE_SHEET_PANEL = [
+	"max-md:fixed max-md:inset-x-2 max-md:top-auto max-md:bottom-[max(0.5rem,env(safe-area-inset-bottom))]",
+	"max-md:w-auto max-md:max-w-none max-md:rounded-2xl max-md:text-base",
+	"max-md:transition-[opacity,translate] max-md:duration-200 max-md:starting:translate-y-4",
+	"max-md:**:[[role=menuitem]]:min-h-11 max-md:**:[[role=menuitem]]:text-base",
+	// Its scrollers fit an anchored panel's height; a sheet takes its content's.
+	"max-md:*:data-[slot=popover-inner]:flex-none max-md:*:data-[slot=popover-inner]:overflow-visible max-md:**:[[role=menu]]:overflow-visible",
+].join(" ")
+
 const popoverClassName = (className?: string) =>
 	twMerge(twMerge(...popoverContentBase), twMerge(twMerge(menuPopoverBase), className))
 
@@ -300,6 +328,7 @@ const overlay = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilde
 					crossOffset: pointerOffset?.crossOffset ?? 0,
 					isTriggerWidthSet: !isAtPointer,
 					initialFocusId,
+					isSheetOnPhone: isAtPointer,
 				}),
 			),
 		],
@@ -313,6 +342,7 @@ const overlay = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilde
 				h.Attribute("inert", ""),
 				h.Attribute("data-testid", "underlay"),
 				h.Attribute("style", "position: fixed; inset: 0px;"),
+				...(isAtPointer ? [h.Class(PHONE_SHEET_SCRIM)] : []),
 			]),
 			h.div(
 				[h.Attribute("style", "display: contents;")],
@@ -320,7 +350,12 @@ const overlay = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilde
 					h.div(
 						[
 							...(isAtPointer ? [] : [h.Attribute("aria-labelledby", triggerId(model.id))]),
-							h.Class(popoverClassName(viewInputs.popoverClassName)),
+							h.Class(
+								twMerge(
+									popoverClassName(viewInputs.popoverClassName),
+									isAtPointer && PHONE_SHEET_PANEL,
+								),
+							),
 							...(isAtPointer ? [] : [h.Attribute("data-trigger", "MenuTrigger")]),
 							h.Attribute("data-menu-popover", model.id),
 							h.Attribute("data-popover", ""),

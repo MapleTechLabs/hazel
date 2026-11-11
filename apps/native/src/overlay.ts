@@ -84,7 +84,12 @@ export const containFocus = (_root: unknown): (() => void) => nothing
 export const openModalPopover = (
 	root: unknown,
 	config: PositionConfig &
-		Readonly<{ initialFocusId: string; insideSelector: string; onInteractOutside: () => void }>,
+		Readonly<{
+			initialFocusId: string
+			insideSelector: string
+			onInteractOutside: () => void
+			isPositioned?: boolean
+		}>,
 ): Effect.Effect<void, never, Scope.Scope> => {
 	const path = pathOf(root)
 	if (path === undefined) return Effect.void
@@ -97,7 +102,8 @@ export const openModalPopover = (
 		const panel = pathOf(querySelector(root, "[data-popover]"))
 		yield* Effect.acquireRelease(
 			Effect.sync(() => {
-				const releasePosition = panel === undefined ? nothing : anchorPath(panel, config)
+				const releasePosition =
+					panel === undefined || config.isPositioned === false ? nothing : anchorPath(panel, config)
 				const releaseOutside = watchInteractOutside(
 					root,
 					config.insideSelector,
