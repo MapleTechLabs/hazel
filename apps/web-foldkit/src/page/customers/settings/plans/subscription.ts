@@ -10,7 +10,7 @@ import type { PageSubscriptionInput } from "../../../contract"
 import { Message } from "./message"
 import type { Model } from "./model"
 
-/** The org's add-on plans; null until the object has seeded its settings row. */
+/** The org's add-on plans and overage setting; null until the object has seeded its settings row. */
 export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) => ({
 	settings: entry(
 		{ organizationId: Schema.NullOr(OrganizationId) },
@@ -33,7 +33,11 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 										settings:
 											row === undefined
 												? null
-												: { id: row.id, addOnPlans: row.addOnPlans },
+												: {
+														id: row.id,
+														addOnPlans: row.addOnPlans,
+														overageInMrr: row.overageInMrr,
+													},
 									})
 								},
 							),

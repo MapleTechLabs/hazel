@@ -1091,7 +1091,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.settings.update": ({ health, reportingCurrency, addOnPlans }) =>
+			"customers.settings.update": ({ health, reportingCurrency, addOnPlans, overageInMrr }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireAdmin
 					const now = yield* currentTime
@@ -1104,6 +1104,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 										health,
 										reportingCurrency: reportingCurrency?.toLowerCase(),
 										addOnPlans,
+										overageInMrr,
 										updatedBy: actor.userId,
 										updatedAt: now,
 									})

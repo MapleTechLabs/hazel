@@ -1170,6 +1170,46 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("counts a subscription's last paid Stripe invoice, overage included, while overage counts in MRR", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				yield* world.ingest("stripe", [
+					subscription(60),
+					...[
+						{ id: "in_1", amount: 21_000, daysAgo: 35 },
+						{ id: "in_2", amount: 24_350, daysAgo: 5 },
+					].map(({ id, amount, daysAgo }): IngestOp => ({
+						_tag: "invoice",
+						externalId: id,
+						account: { provider: "clerk", externalId: "org_1" },
+						subscriptionExternalId: "sub_1",
+						number: id,
+						status: "paid",
+						amountDueMinor: amount,
+						amountPaidMinor: amount,
+						currency: "usd",
+						issuedAt: new Date(NOW.getTime() - daysAgo * DAY).toISOString(),
+						dueAt: null,
+						paidAt: new Date(NOW.getTime() - daysAgo * DAY).toISOString(),
+						attemptCount: 1,
+					})),
+				])
+				const mrr = () => world.rows(`SELECT mrrMinor FROM customer_accounts`)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(mrr()).toEqual([{ mrrMinor: 19_900 }])
+
+				ok(yield* world.call("customers.settings.update", { overageInMrr: true }, world.owner))
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(mrr()).toEqual([{ mrrMinor: 24_350 }])
+
+				ok(yield* world.call("customers.settings.update", { overageInMrr: false }, world.owner))
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(mrr()).toEqual([{ mrrMinor: 19_900 }])
+			}),
+		))
+
 	it("keeps a Stripe payer on Stripe through an Autumn trial; its conversion is a switch, not revenue", () =>
 		run(
 			Effect.gen(function* () {

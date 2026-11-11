@@ -26,7 +26,7 @@ import {
 	type OrgFacts,
 } from "./facts"
 import { inList } from "./sql"
-import { addDays, dayOf, dayRange, daysBetween } from "./time"
+import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
 
 export const ACTIVE = Database.sql`("eventCount" > 0 OR "sessionCount" > 0 OR "signedIn" = 1)`
 
@@ -123,6 +123,47 @@ const topOf = (subs: ReadonlyArray<schema.CustomerSubscription>) =>
 	subs.find((sub) => sub.status === "trialing") ??
 	subs[0]
 
+/** Days a paid invoice keeps counting, by its subscription's interval: the period plus a week's grace. */
+const INVOICE_COVERS_DAYS = { month: 31 + 7, year: 366 + 7 } as const
+
+/** How far back paid invoices load for `invoiceMrrOf`: past a yearly one's `INVOICE_COVERS_DAYS`. */
+const PAID_INVOICE_DAYS = 400
+
+/** One counted paid invoice, per month. */
+export interface InvoiceMrr {
+	readonly mrrMinor: number
+	readonly currency: string
+}
+
+/**
+ * The MRR Stripe collects (settings' `overageInMrr`): each live, non-trialing Stripe subscription's
+ * last paid invoice while its interval still covers it, per month, so usage overage and discounts
+ * count. Any provider's account: Autumn bills through Stripe subscriptions.
+ */
+export const invoiceMrrOf = (
+	/** The account's, any provider. */
+	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
+	/** The account's paid Stripe invoices. */
+	paidInvoices: ReadonlyArray<schema.CustomerInvoice>,
+	now: Date,
+): ReadonlyArray<InvoiceMrr> =>
+	subscriptions.flatMap((sub) => {
+		const { interval } = sub
+		if (sub.provider !== "stripe" || sub.status === "canceled" || sub.status === "trialing") return []
+		if (interval === "other") return []
+		const last = paidInvoices
+			.filter((invoice) => invoice.subscriptionId === sub.id)
+			.sort((a, b) => Number(b.paidAt) - Number(a.paidAt))[0]
+		if (last === undefined || last.paidAt === null) return []
+		if (now.getTime() - last.paidAt.getTime() > INVOICE_COVERS_DAYS[interval] * DAY_MS) return []
+		return [
+			{
+				mrrMinor: interval === "year" ? Math.round(last.amountPaidMinor / 12) : last.amountPaidMinor,
+				currency: last.currency,
+			},
+		]
+	})
+
 /** The fields compute derives for one account (pure). */
 export const rollupAccount = (input: {
 	readonly account: schema.CustomerAccount
@@ -131,6 +172,11 @@ export const rollupAccount = (input: {
 	readonly mrrSource: CustomerProvider | null
 	/** Add-on plan names (settings' `addOnPlans`): `planName` is a base plan's while there is one. */
 	readonly addOnPlans: ReadonlyArray<string>
+	/**
+	 * Its counted paid invoices (`invoiceMrrOf`), empty with `overageInMrr` off: with any, `mrrMinor`
+	 * is theirs, else its plans'.
+	 */
+	readonly invoiceMrr: ReadonlyArray<InvoiceMrr>
 	readonly contacts: ReadonlyArray<ContactFacts>
 	readonly activity: AccountFacts["activity"]
 	readonly lastActiveDay: Day | null
@@ -141,7 +187,10 @@ export const rollupAccount = (input: {
 	const { account, subscriptions, now, today, currency } = input
 	const live = subscriptions.filter((sub) => sub.status !== "canceled")
 	const paying = live.filter(billed)
-	const mrrMinor = sum(paying.filter((sub) => sub.currency === currency).map((sub) => sub.mrrMinor))
+	const mrrMinor =
+		input.invoiceMrr.length > 0
+			? sum(input.invoiceMrr.filter((row) => row.currency === currency).map((row) => row.mrrMinor))
+			: sum(paying.filter((sub) => sub.currency === currency).map((sub) => sub.mrrMinor))
 	// Paying in any currency (MRR counts only the reporting currency's; `attributes.foreignMrr` the rest),
 	// or on usage at MRR 0: never `churned` or `lead` for want of MRR.
 	const paid = paying.some(pays)
@@ -513,6 +562,19 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.select()
 			.where(($) => [inList($.accountId, ids), $.status.eq("open"), $.provider.eq("stripe")]),
 	)
+	const paidInvoices = base.settings.overageInMrr
+		? yield* db.run(
+				SQLite.from(schema.customerInvoicesTable)
+					.select()
+					.where(($) => [
+						inList($.accountId, ids),
+						$.status.eq("paid"),
+						$.provider.eq("stripe"),
+						$.subscriptionId.isNotNull(),
+						$.paidAt.gte(new Date(now.getTime() - PAID_INVOICE_DAYS * DAY_MS)),
+					]),
+			)
+		: []
 	const metrics = yield* db.run(
 		SQLite.from(schema.customerMetricDailyTable)
 			.select()
@@ -548,6 +610,8 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
 	const invoicesBy = groupBy(openInvoices, (invoice) => invoice.accountId)
+	const subscriptionsBy = groupBy(subscriptions, (sub) => sub.accountId)
+	const paidInvoicesBy = groupBy(paidInvoices, (invoice) => invoice.accountId)
 	const metricsBy = groupBy(metrics, (row) => row.accountId)
 	const movementsBy = groupBy(movements, (row) => row.accountId)
 	const healthBy = groupBy(health, (row) => row.accountId)
@@ -576,6 +640,11 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			subscriptions: accountSubs,
 			mrrSource: billing?.source ?? null,
 			addOnPlans: base.settings.addOnPlans,
+			invoiceMrr: invoiceMrrOf(
+				subscriptionsBy.get(stored.id) ?? [],
+				paidInvoicesBy.get(stored.id) ?? [],
+				now,
+			),
 			contacts: accountContacts,
 			activity: byDay,
 			lastActiveDay,

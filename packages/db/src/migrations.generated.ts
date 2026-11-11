@@ -460,5 +460,11 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "customer_settings" ADD COLUMN "addOnPlans" text NOT NULL DEFAULT \'[]\'',
 			],
 		},
+		{
+			id: "0010_customer_settings_overage_in_mrr",
+			statements: [
+				'ALTER TABLE "customer_settings" ADD COLUMN "overageInMrr" integer NOT NULL DEFAULT false',
+			],
+		},
 	],
 }
