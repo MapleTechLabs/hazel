@@ -5,16 +5,21 @@ import type {
 	CustomersInvalidRequestError,
 	CustomersNotFoundError,
 } from "@hazel/domain/rpc"
-import { CustomerConnectionId, OrganizationId } from "@hazel/schema"
+import { CustomerConnectionId, CustomerMetricDefinitionId, OrganizationId } from "@hazel/schema"
+import { optimisticAction } from "@hazel/effect-db-collection"
 import { Effect, Redacted, Schema } from "effect"
 import { Command } from "foldkit"
+import { customerMetricDefinitionCollection } from "~/db/collections"
 import type { CommonError } from "~/lib/error-messages"
 import { catchCommon } from "../../../../data/actions"
 import { HazelRpc } from "../../../../rpc"
 import { Message } from "./message"
 import type { ConnectFailure } from "./model"
 
-/** The Data sources Commands: connect, rotate keys, save settings, sync, disconnect, demo data. */
+/**
+ * The Data sources Commands: connect, rotate keys, save settings, sync, disconnect, demo data, a
+ * metric's unit.
+ */
 
 const org = { organizationId: OrganizationId }
 
@@ -223,5 +228,51 @@ export const CopyCustomerWebhookUrl = Command.define("CopyCustomerWebhookUrl", {
 				onSuccess: () => Message.SucceededCopyWebhookUrl(),
 				onFailure: () => Message.FailedCopyWebhookUrl(),
 			}),
+		),
+})
+
+interface UnitProps {
+	readonly organizationId: OrganizationId
+	readonly metricId: CustomerMetricDefinitionId
+	readonly metricKey: string
+	readonly unit: string | null
+}
+
+/** The metric row takes the unit at once. */
+const saveMetricUnitAction = optimisticAction({
+	collections: [customerMetricDefinitionCollection],
+	onMutate: (props: UnitProps) => {
+		customerMetricDefinitionCollection.update(props.metricId, (row) => {
+			row.customUnit = props.unit
+		})
+		return { metricId: props.metricId }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.metric.setUnit", {
+				organizationId: props.organizationId,
+				metricKey: props.metricKey,
+				unit: props.unit,
+			})
+			return { data: result, transactionId: result.transactionId }
+		}),
+})
+
+export const SaveMetricUnit = Command.define("SaveMetricUnit", {
+	args: {
+		...org,
+		metricId: CustomerMetricDefinitionId,
+		metricKey: Schema.String,
+		unit: Schema.NullOr(Schema.String),
+	},
+	messages: [Message.SucceededSaveUnit, Message.FailedSaveUnit],
+	execute: (args) =>
+		saveMetricUnitAction(args).pipe(
+			Effect.as(Message.SucceededSaveUnit()),
+			Effect.catchTag("CustomersNotFoundError", () =>
+				Effect.succeed(Message.FailedSaveUnit({ reason: "NotFound" })),
+			),
+			catchCommon((reason) => Message.FailedSaveUnit({ reason })),
 		),
 })

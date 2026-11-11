@@ -1,5 +1,11 @@
 import { DEFAULT_CONNECTION_CONFIG, EMPTY_SYNC_STATS } from "@hazel/domain/customers"
-import { CustomerConnectionId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
+import {
+	CustomerConnectionId,
+	CustomerMetricDefinitionId,
+	OrganizationId,
+	OrganizationMemberId,
+	UserId,
+} from "@hazel/schema"
 import { Redacted, Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
@@ -373,5 +379,39 @@ describe("data sources: Maple settings", () => {
 			Message.ToggledConfigField({ target: "settings", key: "region", isSelected: true }),
 		).model
 		expect(next.settingsDraft).toEqual(maple.config)
+	})
+})
+
+describe("data sources: usage units", () => {
+	const traces = {
+		id: Schema.decodeSync(CustomerMetricDefinitionId)(uuid(200)),
+		key: "autumn.traces",
+		name: "Traces",
+		provider: "autumn" as const,
+		unit: null,
+		customUnit: "GB",
+	}
+	const withMetrics = () => pageUpdate(loaded(), Message.UpdatedUnitMetrics({ metrics: [traces] })).model
+	/** What submitting `value` sends: each Command's name and args. */
+	const submit = (value: string) => {
+		const result = pageUpdate(
+			pageUpdate(withMetrics(), Message.ChangedUnit({ metricKey: traces.key, value })).model,
+			Message.SubmittedUnit({ metricKey: traces.key }),
+		)
+		expect(result.model.unitDrafts).toEqual({})
+		return (result.commands ?? []).map((command) => [command.name, command.args])
+	}
+	const saves = (unit: string | null) => [
+		["SaveMetricUnit", { organizationId, metricId: traces.id, metricKey: traces.key, unit }],
+	]
+
+	test("Enter or blur saves the trimmed unit, blank clears it, the same one sends nothing", () => {
+		expect(submit(" MB ")).toEqual(saves("MB"))
+		expect(submit("  ")).toEqual(saves(null))
+		expect(submit("GB")).toEqual([])
+		// A blur after Enter finds no draft.
+		expect(
+			pageUpdate(withMetrics(), Message.SubmittedUnit({ metricKey: traces.key })).commands ?? [],
+		).toEqual([])
 	})
 })

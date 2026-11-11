@@ -514,6 +514,28 @@ describe("Autumn balance → metric", () => {
 		])
 	})
 
+	it("takes the unit from the feature's plural display name", () => {
+		const display = { singular: "GB", plural: " GB " }
+		expect(
+			featureDefinitionOps([
+				{ id: "traces", name: "Traces", type: "metered", display },
+				{ id: "seats", name: "Seats", type: "metered", display: { plural: "  " } },
+			]).map((op) => [op.key, op.unit]),
+		).toEqual([
+			["autumn.traces", "GB"],
+			["autumn.seats", null],
+		])
+		const balances = Object.values(named(CUSTOMER_ACME).balances ?? {})
+		const traces = named({
+			...CUSTOMER_ACME,
+			balances: { messages: { ...balances[0], feature: { name: "Messages", display } } },
+		})
+		expect(balanceOps(traces, { at: AT })).toMatchObject([
+			{ _tag: "metric_definition", key: "autumn.messages", unit: "GB" },
+			{ _tag: "metric", value: 8_200 },
+		])
+	})
+
 	it("namespaces every key, so no other provider's metric collides", () => {
 		expect(metricKeyOf("messages")).toBe("autumn.messages")
 		expect(featureDefinitionOps(FEATURES).map((op) => [op.key, op.name])).toEqual([

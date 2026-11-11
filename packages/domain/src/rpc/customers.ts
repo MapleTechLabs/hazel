@@ -92,6 +92,7 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"connection",
 			"unmatched_record",
 			"ignore_rule",
+			"metric",
 		]),
 		id: Schema.String,
 	},
@@ -503,6 +504,14 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	),
 
 	write("customers.ignoreRule.delete", { ruleId: CustomerIgnoreRuleId }, Tx, CustomersNotFoundError),
+
+	/** The unit a source's metric is shown in (`8.27 GB`); null: the source's own. Not for built-ins. */
+	write(
+		"customers.metric.setUnit",
+		{ metricKey: NonEmptyText(200), unit: Schema.NullOr(NonEmptyText(40)) },
+		Tx,
+		CustomersNotFoundError,
+	),
 
 	/**
 	 * Dev and preview stages only: fill the org with realistic fake customers through the ingest

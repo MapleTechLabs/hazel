@@ -51,12 +51,18 @@ export const AutumnOrganization = Schema.Struct({
 // Features
 // ---------------------------------------------------------------------------
 
+/** How a feature's units read ("API call" / "API calls"); often unset. */
+const AutumnFeatureDisplay = Nullable(
+	Schema.Struct({ singular: Nullable(Schema.String), plural: Nullable(Schema.String) }),
+)
+
 /** `POST /v1/features.list` → the organization's features, which name the usage metrics. */
 const AutumnFeature = Schema.Struct({
 	id: Schema.String,
 	name: Nullable(Schema.String),
 	/** `boolean` | `metered` | `credit_system` | `ai_credit_system`. */
 	type: Nullable(Schema.String),
+	display: AutumnFeatureDisplay,
 })
 
 export const AutumnFeaturesPage = Schema.Struct({ list: Schema.Array(AutumnFeature) })
@@ -139,7 +145,7 @@ const AutumnBalanceGrant = Schema.Struct({
 /** One feature's balance on a customer: what the plan grants, and what is used. */
 export const AutumnBalance = Schema.Struct({
 	feature_id: Schema.String,
-	feature: Nullable(Schema.Struct({ name: Nullable(Schema.String) })),
+	feature: Nullable(Schema.Struct({ name: Nullable(Schema.String), display: AutumnFeatureDisplay })),
 	/** Included + prepaid units for the period. */
 	granted: Nullable(Schema.Number),
 	usage: Nullable(Schema.Number),

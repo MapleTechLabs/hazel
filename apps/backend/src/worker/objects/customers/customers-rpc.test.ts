@@ -117,6 +117,37 @@ describe("Customers RPCs", () => {
 			}),
 		))
 
+	it("keeps a metric's unit set by hand when the source defines the metric again", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const define = (unit: string | null): IngestOp => ({
+					_tag: "metric_definition",
+					key: "autumn.traces",
+					name: "Traces",
+					unit,
+					aggregation: "max",
+					description: null,
+				})
+				yield* world.ingest("autumn", [define(null)])
+				const setUnit = (metricKey: string, unit: string | null, user = world.owner) =>
+					world.call("customers.metric.setUnit", { metricKey, unit }, user)
+				expect(tagOf(yield* setUnit("autumn.traces", "GB", world.member))).toBe("UnauthorizedError")
+				expect(tagOf(yield* setUnit("mrr", "USD"))).toBe("CustomersNotFoundError")
+				expect(tagOf(yield* setUnit("autumn.nope", "GB"))).toBe("CustomersNotFoundError")
+				ok(yield* setUnit("autumn.traces", " GB "))
+				yield* world.ingest("autumn", [define("spans")])
+				const unitRow = () =>
+					world.rows(
+						`SELECT unit, customUnit FROM customer_metric_definitions WHERE key = ?`,
+						"autumn.traces",
+					)
+				expect(unitRow()).toEqual([{ unit: "spans", customUnit: "GB" }])
+				ok(yield* setUnit("autumn.traces", null))
+				expect(unitRow()).toEqual([{ unit: "spans", customUnit: null }])
+			}),
+		))
+
 	it("pulls its members from the org on first use, then takes the org's pushes", () =>
 		run(
 			Effect.gen(function* () {

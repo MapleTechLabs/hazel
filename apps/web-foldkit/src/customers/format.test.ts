@@ -18,6 +18,7 @@ import {
 	formatRelative,
 	currencySymbol,
 	formatMajor,
+	formatMetricValue,
 	toMajor,
 	toMinor,
 } from "./format"
@@ -74,6 +75,13 @@ describe("numbers", () => {
 		expect(formatCompact(461_000)).toBe("461K")
 		expect(formatCompact(500_000)).toBe("500K")
 		expect(formatCompact(980)).toBe("980")
+	})
+
+	it("formats a metric's exact value, up to two decimals, with its unit", () => {
+		expect(formatMetricValue(8.2749, "GB")).toBe("8.27 GB")
+		expect(formatMetricValue(1204.5, null)).toBe("1,204.5")
+		expect(formatMetricValue(3, "seats")).toBe("3 seats")
+		expect(formatMetricValue(0.004, "GB")).toBe("0 GB")
 	})
 
 	it("formats percents and deltas", () => {

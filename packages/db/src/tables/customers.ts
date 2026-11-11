@@ -352,6 +352,8 @@ export const customerMetricDefinitionsTable = SQLite.table("customer_metric_defi
 		name: SQLite.text,
 		/** E.g. "users", "requests", "minor" (money). */
 		unit: SQLite.nullable(SQLite.text),
+		/** The unit a user set for a source's metric; shown over `unit`, never written by ingest. */
+		customUnit: SQLite.nullable(SQLite.text),
 		aggregation: textEnum(MetricAggregation.literals),
 		/** Null for a built-in. */
 		provider: SQLite.nullable(textEnum(CustomerProvider.literals)),

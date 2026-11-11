@@ -30,7 +30,7 @@ import {
 	webhookUrlField,
 } from "./parts"
 import type { ConnectionRow, SyncRunRow } from "./queries"
-import { settingsCard } from "./settings-view"
+import { settingsCard, unitsCard } from "./settings-view"
 
 /** One source (Wonder `loy`, `one`): its runs, connection, mapping, settings and the way out. */
 
@@ -492,6 +492,9 @@ export const detailView = (h: H, model: Model, provider: CustomerProvider, conte
 											: []),
 										historyCard(h, model, live),
 										settingsCard(h, model, live, context.isAdmin),
+										...(provider === "autumn"
+											? [unitsCard(h, model, live, context.isAdmin)]
+											: []),
 										mappingCard(h, provider),
 									],
 								),

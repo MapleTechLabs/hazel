@@ -6,7 +6,7 @@ import { CommonReason } from "~/lib/error-messages"
 import { MemberRow } from "../../../../customers/queries"
 import * as Modal from "../../../../ui/modal"
 import { ConnectFailure, HistoryFilter } from "./model"
-import { ConnectionRow, SyncRunRow } from "./queries"
+import { ConnectionRow, SyncRunRow, UnitMetricRow } from "./queries"
 
 /** Which form a config field edits: the connect modal's, or the detail's provider settings. */
 export const ConfigTarget = Schema.Literals(["connect", "settings"])
@@ -19,6 +19,10 @@ export type SyncFailure = typeof SyncFailure.Type
 export const DisconnectFailure = Schema.Union([Schema.Literals(["NotFound"]), CommonReason])
 export type DisconnectFailure = typeof DisconnectFailure.Type
 
+/** `NotFound`: the metric is gone (or is a built-in). */
+export const UnitFailure = Schema.Union([Schema.Literals(["NotFound"]), CommonReason])
+export type UnitFailure = typeof UnitFailure.Type
+
 /** Demo data is refused outside dev and preview stages. */
 export const SeedFailure = Schema.Union([Schema.Literals(["Refused"]), CommonReason])
 export type SeedFailure = typeof SeedFailure.Type
@@ -28,6 +32,7 @@ export const Message = defineMessageUnion({
 	UpdatedSyncRuns: { runs: Schema.Array(SyncRunRow) },
 	UpdatedAccountCount: { count: Schema.Int },
 	UpdatedMembers: { members: Schema.Array(MemberRow) },
+	UpdatedUnitMetrics: { metrics: Schema.Array(UnitMetricRow) },
 	SucceededFetchUnmatchedCount: { count: Schema.Int },
 	FailedFetchUnmatchedCount: { reason: CommonReason },
 
@@ -95,5 +100,11 @@ export const Message = defineMessageUnion({
 	PressedSaveSettings: {},
 	SucceededSaveSettings: {},
 	FailedSaveSettings: { reason: ConnectFailure },
+
+	// Usage units
+	ChangedUnit: { metricKey: Schema.String, value: Schema.String },
+	SubmittedUnit: { metricKey: Schema.String },
+	SucceededSaveUnit: {},
+	FailedSaveUnit: { reason: UnitFailure },
 })
 export type Message = typeof Message.Type

@@ -492,11 +492,15 @@ const nameOf = (balance: AutumnBalance, names: ReadonlyMap<string, string>): str
 	return name === "" ? null : name
 }
 
-const definitionOf = (key: string, name: string): DefineMetric => ({
+/** A feature's unit: Autumn's plural display name ("API calls"), when it has one. */
+const unitOf = (display: { readonly plural?: string | null } | null | undefined): string | null =>
+	display?.plural?.trim() || null
+
+const definitionOf = (key: string, name: string, unit: string | null): DefineMetric => ({
 	_tag: "metric_definition",
 	key,
 	name,
-	unit: null,
+	unit,
 	// A balance is the period's level, not a daily increment: a span of days takes the highest.
 	aggregation: "max",
 	description: null,
@@ -531,7 +535,7 @@ export const balanceOps = (
 		if (usage === null || !Number.isFinite(usage)) continue
 		const key = metricKeyOf(balance.feature_id)
 		const name = nameOf(balance, names)
-		if (name !== null) ops.push(definitionOf(key, name))
+		if (name !== null) ops.push(definitionOf(key, name, unitOf(balance.feature?.display)))
 		const metric: Types.Mutable<RecordMetric> = {
 			_tag: "metric",
 			account: autumnRef(customer.id),
@@ -798,6 +802,7 @@ export const featureDefinitionOps = (
 		readonly id: string
 		readonly name?: string | null
 		readonly type?: string | null
+		readonly display?: { readonly plural?: string | null } | null
 	}>,
 ): Array<DefineMetric> =>
 	features.flatMap((feature) =>
@@ -808,7 +813,7 @@ export const featureDefinitionOps = (
 						_tag: "metric_definition" as const,
 						key: metricKeyOf(feature.id),
 						name: feature.name?.trim() || feature.id,
-						unit: null,
+						unit: unitOf(feature.display),
 						aggregation: "max" as const,
 						description: null,
 					},

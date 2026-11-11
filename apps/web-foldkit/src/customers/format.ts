@@ -117,6 +117,12 @@ export const formatMoneyCompact = (
 /** `1,611`. */
 export const formatCount = (value: number): string => numberFormat({ maximumFractionDigits: 0 }).format(value)
 
+/** A metric's exact value, up to two decimals, then its unit: `8.27 GB`, `1,204.5`, `3 seats`. */
+export const formatMetricValue = (value: number, unit: string | null): string => {
+	const text = numberFormat({ maximumFractionDigits: 2 }).format(value)
+	return unit === null ? text : `${text} ${unit}`
+}
+
 /** `461K`, `1.2M`, `980`. */
 export const formatCompact = (value: number): string =>
 	withSign(

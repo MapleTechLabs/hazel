@@ -60,7 +60,12 @@ export const metricsStream = <Message>(
 					rows
 						// The 30-day rollup reads like a duplicate of daily actives on a daily chart.
 						.filter((row) => row.key !== "active_users_30d")
-						.map((row) => ({ key: row.key, name: row.name, unit: row.unit })),
+						.map((row) => ({
+							key: row.key,
+							name: row.name,
+							unit: row.customUnit ?? row.unit,
+							provider: row.provider,
+						})),
 				),
 		),
 	)
