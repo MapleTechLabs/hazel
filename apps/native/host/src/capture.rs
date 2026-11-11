@@ -10,8 +10,13 @@ use rune::{Env, Runtime};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::wire::{Node, RuntimeMsg};
-use crate::{State, initial_state, spawn_runtime, view, window_size};
+use hazel_native::wire::{Node, RuntimeMsg};
+use hazel_native::{
+    PRESS_EVENTS, State, TEXT_SMOOTHING, images, note_scroll, outbox, view, window_key,
+};
+
+use crate::runtime::{RuntimeChild, spawn_runtime};
+use crate::{initial_state, window_size};
 
 const FRAME: Duration = Duration::from_micros(16_667);
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -179,7 +184,7 @@ impl Session {
                     self.rt.update_if(move |s, _| s.apply(tree));
                 }
                 RuntimeMsg::Scroll { path, top, seq } => {
-                    crate::note_scroll(&path, seq);
+                    note_scroll(&path, seq);
                     if std::env::var("NATIVE_DEBUG").is_ok() {
                         eprintln!("[host] scroll_to {top}")
                     }
@@ -193,7 +198,7 @@ impl Session {
                 }
             }
         }
-        let arrived = crate::images::take_arrived();
+        let arrived = images::take_arrived();
         if arrived {
             self.rt.update(|_, tx| tx.invalidate_memos_by_prefix("r"));
         }
@@ -237,7 +242,7 @@ impl Session {
         let sent = Instant::now();
         self.rt.frame(0.0);
         // Every event the host sends takes the next sequence number; the runtime acks it.
-        let want = crate::SEQ.load(std::sync::atomic::Ordering::SeqCst);
+        let want = outbox::last_seq();
         while sent.elapsed() < Duration::from_secs(5) {
             if let Ok(msg) = self.messages.try_recv() {
                 let ack = match &msg {
@@ -266,8 +271,7 @@ impl Session {
     fn shows_text(&self, needle: &str) -> bool {
         self.rt
             .state
-            .root
-            .as_ref()
+            .root()
             .is_some_and(|root| text_of(root).contains(needle))
     }
 
@@ -278,7 +282,7 @@ impl Session {
                 self.rt.update_if(move |s, _| s.apply(tree));
             }
             RuntimeMsg::Scroll { path, top, seq } => {
-                crate::note_scroll(&path, seq);
+                note_scroll(&path, seq);
                 self.rt
                     .update(move |_, tx| tx.scroll_to_instant(path, 0.0, top))
             }
@@ -292,7 +296,7 @@ impl Session {
 
     fn click_text(&mut self, label: &str) -> Option<f64> {
         let mut candidates = Vec::new();
-        if let Some(root) = self.rt.state.root.clone() {
+        if let Some(root) = self.rt.state.root().cloned() {
             find_pressables(&root, "r", label, &mut candidates);
         }
         // The first match that is drawn: a narrow layout hides the desktop copy of a link.
@@ -423,7 +427,7 @@ fn find_pressables(node: &Arc<Node>, path: &str, label: &str, out: &mut Vec<Stri
         };
         find_pressables(child, &child_path, label, out);
     }
-    let is_pressable = crate::PRESS_EVENTS.iter().any(|k| on.contains_key(*k))
+    let is_pressable = PRESS_EVENTS.iter().any(|k| on.contains_key(*k))
         || (tag == "a" && attrs.contains_key("href"));
     // An ancestor is a fallback only when nothing inside it matched.
     if out.len() == before && is_pressable && text_of(node).contains(label) {
@@ -470,7 +474,7 @@ fn find_labelled(node: &Arc<Node>, path: &str, label: &str, out: &mut Vec<String
         .iter()
         .any(|a| attrs.get(*a).is_some_and(|v| v.contains(label)));
     let pressable =
-        crate::PRESS_EVENTS.iter().any(|k| on.contains_key(*k)) || tag == "a" || tag == "button";
+        PRESS_EVENTS.iter().any(|k| on.contains_key(*k)) || tag == "a" || tag == "button";
     if named && pressable {
         out.push(path.to_string());
     }
@@ -512,11 +516,11 @@ pub fn run(script_path: &str) {
         .and_then(|v| v.parse().ok())
         .unwrap_or(2.0);
     let state = initial_state();
-    let dark = state.dark;
+    let dark = state.dark();
     let mut rt = Runtime::new(state, view, window_size(), Env::new(dark, scale));
-    rt.on_key = Some(crate::window_key);
+    rt.on_key = Some(window_key);
     rt.set_srgb_blend(true);
-    rt.set_font_smoothing(crate::TEXT_SMOOTHING);
+    rt.set_font_smoothing(TEXT_SMOOTHING);
     let mut session = Session {
         rt,
         messages,
@@ -610,7 +614,7 @@ pub fn run(script_path: &str) {
             }
             Step::HoverText(label) => {
                 let mut candidates = Vec::new();
-                if let Some(root) = session.rt.state.root.clone() {
+                if let Some(root) = session.rt.state.root().cloned() {
                     find_hoverables(&root, "r", &label, &mut candidates);
                 }
                 let Some((x, y)) = candidates.iter().find_map(|path| session.rt.find(path)) else {
@@ -682,8 +686,7 @@ pub fn run(script_path: &str) {
                 let path = session
                     .rt
                     .state
-                    .root
-                    .as_ref()
+                    .root()
                     .and_then(|root| find_editable(root, "r"));
                 if let Some((x, y)) = path.and_then(|p| session.rt.find(&p)) {
                     session.rt.pointer_move(x, y);
@@ -698,7 +701,7 @@ pub fn run(script_path: &str) {
                 session.rt.settle_all();
                 session.rt.frame(0.0);
                 let mut out = Vec::new();
-                if let Some(root) = session.rt.state.root.clone() {
+                if let Some(root) = session.rt.state.root().cloned() {
                     export_layout(&session.rt, &root, "r", &mut out);
                 }
                 let doc = json!({ "scale": session.scale, "elements": out });
@@ -736,7 +739,7 @@ pub fn run(script_path: &str) {
             }
             Step::RightClickText(label) => {
                 let mut found = Vec::new();
-                if let Some(root) = session.rt.state.root.clone() {
+                if let Some(root) = session.rt.state.root().cloned() {
                     find_texts(&root, "r", &label, &mut found);
                 }
                 match found.iter().find_map(|p| session.rt.find(p)) {
@@ -754,7 +757,7 @@ pub fn run(script_path: &str) {
             }
             Step::ClickLabel(label) => {
                 let mut found = Vec::new();
-                if let Some(root) = session.rt.state.root.clone() {
+                if let Some(root) = session.rt.state.root().cloned() {
                     find_labelled(&root, "r", &label, &mut found);
                 }
                 match found.iter().find_map(|p| session.rt.find(p)) {
@@ -911,7 +914,7 @@ pub fn run(script_path: &str) {
                 );
             }
             Step::Dump => {
-                let root = session.rt.state.root.clone();
+                let root = session.rt.state.root().cloned();
                 if let Some(root) = root {
                     dump(&session.rt, &root, "r", 0, false)
                 }
@@ -943,7 +946,7 @@ pub fn run(script_path: &str) {
 }
 
 /// A script step that cannot complete fails the run, so a benchmark never reports a partial one.
-fn fail(child: &mut crate::RuntimeChild, message: &str) -> ! {
+fn fail(child: &mut RuntimeChild, message: &str) -> ! {
     eprintln!("[capture] {message}");
     child.kill();
     std::process::exit(1)

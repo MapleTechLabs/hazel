@@ -17,6 +17,15 @@ pub enum VaultOp {
     Write(String),
 }
 
+/// A `vault` request's operation; `None` for an unknown one or a write without a record.
+pub fn vault_op(op: &str, record: Option<String>) -> Option<VaultOp> {
+    match (op, record) {
+        ("read", _) => Some(VaultOp::Read),
+        ("write", Some(record)) => Some(VaultOp::Write(record)),
+        _ => None,
+    }
+}
+
 /// The record (`None` when there is none yet), or why the keychain refused.
 pub fn run_vault(service: &str, op: &VaultOp) -> Result<Option<String>, String> {
     let entry = keyring::Entry::new(service, VAULT_ACCOUNT).map_err(|e| e.to_string())?;
@@ -132,7 +141,7 @@ fn bun() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wire::{RuntimeMsg, vault_op};
+    use hazel_native::wire::RuntimeMsg;
 
     #[cfg(target_os = "macos")]
     #[test]

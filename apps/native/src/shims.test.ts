@@ -10,6 +10,7 @@ describe("installShims", () => {
 			dark: false,
 			url: "http://app.hazel.test/",
 			openUrl: () => {},
+			copyText: () => {},
 		})
 		expect(document.createElement("canvas").getContext("2d")).toBeNull()
 	})
@@ -21,6 +22,7 @@ describe("installShims", () => {
 			dark: false,
 			url: "http://app.hazel.test/",
 			openUrl: () => {},
+			copyText: () => {},
 		})
 		expect(__APP_VERSION__).toMatch(/^\d+\.\d+\.\d+$/)
 	})
@@ -32,6 +34,7 @@ describe("installShims", () => {
 			dark: false,
 			url: "http://app.hazel.test/",
 			openUrl: () => {},
+			copyText: () => {},
 		})
 		const remaining = await new Promise<number>((done) =>
 			requestIdleCallback((deadline) => done(deadline.timeRemaining())),
@@ -46,6 +49,7 @@ describe("installShims", () => {
 			dark: false,
 			url: "http://app.hazel.test/",
 			openUrl: () => {},
+			copyText: () => {},
 		})
 		const { announce } = await import("../../web-foldkit/src/ui/aria/announcer")
 		announce("Berlin selected")
@@ -62,6 +66,7 @@ describe("installShims", () => {
 			dark: false,
 			url: "http://app.hazel.test/sign-in",
 			openUrl: (href) => opened.push(href),
+			copyText: () => {},
 			loadDocument: (href) => loaded.push(href),
 		})
 		location.assign("/")
@@ -80,6 +85,7 @@ describe("installShims", () => {
 			dark: false,
 			url: "http://app.hazel.test/a",
 			openUrl: (href) => opened.push(href),
+			copyText: () => {},
 		})
 		location.assign("/b")
 		expect(location.pathname).toBe("/b")
@@ -98,6 +104,7 @@ describe("installShims", () => {
 			dark: false,
 			url: "http://app.hazel.test/",
 			openUrl: () => {},
+			copyText: () => {},
 		})
 		const heard: Array<string> = []
 		const capturing = () => heard.push("capturing")
@@ -118,6 +125,8 @@ describe("installShims", () => {
 			height: 600,
 			dark: false,
 			url: "http://app.hazel.test/",
+			openUrl: () => {},
+			copyText: () => {},
 		})
 		let changes = 0
 		onRootStyle(() => changes++)
@@ -130,7 +139,14 @@ describe("installShims", () => {
 	})
 
 	it("keeps the attributes the app sets on <html>, as it marks the pointer outside a frame", () => {
-		installShims({ width: 800, height: 600, dark: false, url: "http://app.hazel.test/" })
+		installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/",
+			openUrl: () => {},
+			copyText: () => {},
+		})
 		const root = document.documentElement
 		expect(root.hasAttribute("data-html-render-pointer-outside")).toBe(false)
 		root.setAttribute("data-html-render-pointer-outside", "")
@@ -146,6 +162,8 @@ describe("installShims", () => {
 			height: 600,
 			dark: false,
 			url: "http://app.hazel.test/",
+			openUrl: () => {},
+			copyText: () => {},
 		})
 		const observed: Array<unknown> = []
 		class Elements {

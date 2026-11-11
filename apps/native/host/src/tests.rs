@@ -740,7 +740,7 @@ impl std::io::Write for Capture {
 }
 
 fn sent_events(id: u32) -> Vec<Value> {
-    let _ = crate::OUT.set(std::sync::Mutex::new(Box::new(Capture)));
+    crate::outbox::set_writer(Box::new(Capture));
     String::from_utf8_lossy(&SENT.lock().unwrap())
         .lines()
         .filter_map(|line| serde_json::from_str::<Value>(line).ok())
@@ -1268,7 +1268,7 @@ fn a_runtime_focus_request_focuses_the_element_and_a_field_by_key() {
 }
 
 fn sent_lines() -> Vec<Value> {
-    let _ = crate::OUT.set(std::sync::Mutex::new(Box::new(Capture)));
+    crate::outbox::set_writer(Box::new(Capture));
     String::from_utf8_lossy(&SENT.lock().unwrap())
         .lines()
         .filter_map(|line| serde_json::from_str::<Value>(line).ok())

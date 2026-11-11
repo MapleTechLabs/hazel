@@ -88,7 +88,7 @@ const nativeRun = (index: number): NativeRun => {
 	if (!hostSample || !runtimeSample)
 		throw new Error(`native run ${index} is missing an RSS sample: ${JSON.stringify(run.rssKb)}`)
 	const lastStats = readFileSync(stats, "utf8").trim().split("\n").at(-1) ?? "{}"
-	// SAFETY: entry.ts writes each NATIVE_STATS line with a numeric `heapUsedMb`.
+	// SAFETY: under the Bun platform (entry.ts) each NATIVE_STATS line has a numeric `heapUsedMb`.
 	const { heapUsedMb } = JSON.parse(lastStats) as { heapUsedMb?: number }
 	return { ...run, heapUsedMb: heapUsedMb ?? Number.NaN }
 }
