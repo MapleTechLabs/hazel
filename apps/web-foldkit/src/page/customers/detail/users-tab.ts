@@ -101,7 +101,9 @@ const summary = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 								h.span(
 									[h.Class("font-medium text-fg tabular-nums")],
 									[
-										`${formatCount(account.seatsUsed ?? 0)} of ${formatCount(account.seatsLimit)} used`,
+										account.seatsUsed === null
+											? `${formatCount(account.seatsLimit)} seats`
+											: `${formatCount(account.seatsUsed)} of ${formatCount(account.seatsLimit)} used`,
 									],
 								),
 							],

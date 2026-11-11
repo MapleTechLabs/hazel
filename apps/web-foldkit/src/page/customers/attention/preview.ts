@@ -62,7 +62,9 @@ const summary = (h: HtmlBuilder<Message>, account: AccountRow, owner: string | n
 				`${formatCount(account.activeUsers30d)} of ${formatCount(account.contactCount)}`,
 				account.seatsLimit === null
 					? null
-					: `${account.seatsUsed ?? 0} / ${account.seatsLimit} seats`,
+					: account.seatsUsed === null
+						? `${account.seatsLimit} seats`
+						: `${account.seatsUsed} / ${account.seatsLimit} seats`,
 			),
 			stat(h, "Owner", owner ?? "Unowned", `${STAGE_LABEL[account.lifecycleStage]} stage`),
 		],

@@ -17,7 +17,15 @@ import {
 import { snoozeMenuContent } from "../../../customers/ui/menus"
 import { queueAction, queueList } from "../../../customers/ui/queue-row"
 import { kbd, shortcutBar, type Shortcut } from "../../../customers/ui/shortcuts"
-import { IconArrowPath, IconCheck, IconClock, IconDots, IconLightbulb, IconUser } from "../../../icons"
+import {
+	IconArrowPath,
+	IconCheck,
+	IconClock,
+	IconDots,
+	IconLightbulb,
+	IconMagnifier3,
+	IconUser,
+} from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
 import { buttonClassName } from "../../../ui/button"
 import type * as Menu from "../../../ui/menu"
@@ -34,6 +42,7 @@ import {
 	canReopen,
 	filterEntries,
 	type Filters,
+	isNarrowed,
 	moreEntries,
 	type Model,
 	SEARCH_ID,
@@ -212,19 +221,21 @@ const header = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: 
 	const subtitle =
 		model.signals === null || model.accounts === null
 			? "Loading…"
-			: model.tab === "open"
-				? signals.length === 0
-					? `Nothing${whose} needs you right now`
-					: [
-							`${signals.length} open signal${signals.length === 1 ? "" : "s"}${whose}`,
-							`${signals.filter((signal) => signal.kind === "risk").length} risk, ${signals.filter((signal) => signal.kind === "opportunity").length} opportunity`,
-							...(highRiskMrr > 0
-								? [`${formatMoney(highRiskMrr, currency)} MRR with a high-severity risk`]
-								: []),
-						].join(" · ")
-				: model.tab === "snoozed"
-					? `${signals.length} snoozed signal${signals.length === 1 ? "" : "s"}${whose}`
-					: `${signals.length} signal${signals.length === 1 ? "" : "s"} resolved in the last 7 days · ${signals.filter((signal) => signal.status === "auto_resolved").length} cleared on their own`
+			: signals.length === 0 && isNarrowed(model)
+				? "No signals match your search and filters"
+				: model.tab === "open"
+					? signals.length === 0
+						? `Nothing${whose} needs you right now`
+						: [
+								`${signals.length} open signal${signals.length === 1 ? "" : "s"}${whose}`,
+								`${signals.filter((signal) => signal.kind === "risk").length} risk, ${signals.filter((signal) => signal.kind === "opportunity").length} opportunity`,
+								...(highRiskMrr > 0
+									? [`${formatMoney(highRiskMrr, currency)} MRR with a high-severity risk`]
+									: []),
+							].join(" · ")
+					: model.tab === "snoozed"
+						? `${signals.length} snoozed signal${signals.length === 1 ? "" : "s"}${whose}`
+						: `${signals.length} signal${signals.length === 1 ? "" : "s"} resolved in the last 7 days · ${signals.filter((signal) => signal.status === "auto_resolved").length} cleared on their own`
 	return h.div(
 		[h.Class("flex items-start justify-between gap-4")],
 		[
@@ -527,6 +538,28 @@ const allClear = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =
 	)
 }
 
+const noMatches = (h: HtmlBuilder<Message>): Html =>
+	h.div(
+		[h.Class("flex flex-col items-center gap-4 rounded-xl border border-border px-6 py-14 text-center")],
+		[
+			h.div(
+				[h.Class("flex size-11 items-center justify-center rounded-xl bg-secondary text-muted-fg")],
+				[IconMagnifier3(h, { className: "size-5" })],
+			),
+			h.div(
+				[h.Class("flex flex-col gap-1")],
+				[
+					h.h2([h.Class("font-semibold text-fg")], ["No matches"]),
+					h.p(
+						[h.Class("max-w-sm text-muted-fg text-sm")],
+						["No signals in this tab match your search and filters."],
+					),
+				],
+			),
+			queueAction(h, { label: "Clear search and filters", onPress: Message.PressedClearNarrowing() }),
+		],
+	)
+
 const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 	if (model.signals === null || model.accounts === null)
 		return queueList(
@@ -543,6 +576,7 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 			),
 		)
 	const signals = visibleSignals(model, viewer)
+	if (signals.length === 0 && isNarrowed(model)) return noMatches(h)
 	if (signals.length === 0)
 		return model.tab === "open"
 			? allClear(h, model, viewer)

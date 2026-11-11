@@ -28,6 +28,8 @@ export const Message = defineMessageUnion({
 	/** A filter chip's remove button: `owner` resets to anyone, the rest to none. */
 	ClearedFilter: { field: Schema.Literals(["owner", "kind", "template", "severity", "plan"]) },
 	PressedShowAllOwners: {},
+	/** The no-matches state's button: clears the search and the narrowing filters. */
+	PressedClearNarrowing: {},
 
 	ClickedRow: { signalId: CustomerSignalId },
 	/** A click inside a row's inline actions, stopped there so it does not also open the row. */

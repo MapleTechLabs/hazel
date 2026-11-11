@@ -21,6 +21,7 @@ import {
 	accountGroups,
 	assignEntries,
 	filterEntries,
+	isNarrowed,
 	type Model,
 	rowIds,
 	snoozeEntries,
@@ -269,6 +270,30 @@ describe("needs attention: what shows", () => {
 	test("search matches account names and signal titles", () => {
 		const current = pageUpdate(loaded(), Message.ChangedSearch({ value: "usage" })).model
 		expect(ids(visibleSignals(current, viewer))).toEqual(ids([usageDown]))
+	})
+
+	test("a search or filter that hides every signal is a no-match, not all clear, until cleared", () => {
+		const searched = pageUpdate(loaded(), Message.ChangedSearch({ value: "zzz" })).model
+		expect(visibleSignals(searched, viewer)).toEqual([])
+		expect(isNarrowed(searched)).toBe(true)
+		const filtered = {
+			...loaded(),
+			tab: "snoozed" as const,
+			filters: { ...loaded().filters, plan: "Scale" },
+		}
+		expect(visibleSignals(filtered, viewer)).toEqual([])
+		expect(isNarrowed(filtered)).toBe(true)
+		expect(isNarrowed({ ...loaded(), filters: { ...loaded().filters, owner: "unowned" } })).toBe(true)
+		expect(isNarrowed({ ...loaded(), filters: { ...loaded().filters, owner: "anyone" } })).toBe(false)
+		expect(isNarrowed(loaded())).toBe(false)
+
+		const cleared = pageUpdate(
+			{ ...searched, filters: { ...searched.filters, severity: "low" } },
+			Message.PressedClearNarrowing(),
+		).model
+		expect(cleared.search).toBe("")
+		expect(cleared.filters).toEqual(loaded().filters)
+		expect(ids(visibleSignals(cleared, viewer))).toEqual(ids([paymentFailed, stoppedLogging, usageDown]))
 	})
 
 	test("sorting by MRR puts the biggest account first", () => {

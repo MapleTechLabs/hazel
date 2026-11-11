@@ -340,6 +340,104 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("a backfill whose last page sets sweep removes the refs it did not see; one without sweep keeps them", () =>
+		run(
+			Effect.gen(function* () {
+				/** One full backfill over a seeded org, ending on `lastPage` (with `sweep` or without). */
+				const backfill = (lastPage: PullPage) =>
+					Effect.gen(function* () {
+						const world = yield* makeCustomersWorld
+						const connectionId = world.connection("clerk")
+						const org = (externalId: string): IngestOp => ({
+							_tag: "account",
+							externalId,
+							name: externalId,
+							sameAs: [],
+							onNoMatch: "create",
+						})
+						const user = (externalId: string, orgId: string): IngestOp => ({
+							_tag: "contact",
+							externalId,
+							account: { provider: "clerk", externalId: orgId },
+							email: `${externalId}@example.com`,
+						})
+						yield* world.ingest("clerk", [
+							org("org_keep"),
+							org("org_old"),
+							user("user_keep", "org_keep"),
+							user("user_old", "org_keep"),
+						])
+						// Last seen long before the run starts.
+						world.object.storage.db
+							.prepare(
+								`UPDATE customer_external_refs SET lastSyncedAt = '2000-01-01 00:00:00.000'`,
+							)
+							.run()
+						const services = Layer.mergeAll(
+							CustomerIngest.layer,
+							encryption,
+							Layer.succeed(
+								CustomerProviders,
+								CustomerProviders.of({
+									get: () =>
+										Option.some(
+											scriptedAdapter([
+												Effect.succeed(
+													page(
+														[org("org_keep"), user("user_keep", "org_keep")],
+														"page-2",
+													),
+												),
+												Effect.succeed(lastPage),
+											]),
+										),
+								}),
+							),
+						)
+						yield* world.object
+							.run(
+								Effect.gen(function* () {
+									yield* storeSecrets(connectionId, yield* encryptSecrets("sk_test", null))
+								}).pipe(Effect.provide(encryption)),
+							)
+							.pipe(Effect.orDie)
+						world.object.storage.db
+							.prepare(
+								`UPDATE customer_connections SET nextSyncAt = '2000-01-01 00:00:00.000' WHERE id = ?`,
+							)
+							.run(connectionId)
+						yield* world.object.run(runDuePullsWith(services)(NOW)).pipe(Effect.orDie)
+						expect(
+							world.rows(
+								`SELECT trigger, status FROM customer_sync_runs WHERE connectionId = ?`,
+								connectionId,
+							),
+						).toEqual([{ trigger: "backfill", status: "succeeded" }])
+						return {
+							liveRefs: world
+								.rows<{ externalId: string }>(
+									`SELECT externalId FROM customer_external_refs WHERE staleAt IS NULL ORDER BY externalId`,
+								)
+								.map((row) => row.externalId),
+							liveContacts: world
+								.rows<{ email: string }>(
+									`SELECT email FROM customer_contacts WHERE deletedAt IS NULL ORDER BY email`,
+								)
+								.map((row) => row.email),
+						}
+					})
+
+				expect(yield* backfill({ ...page([], null), sweep: ["account", "contact"] })).toEqual({
+					liveRefs: ["org_keep", "user_keep"],
+					liveContacts: ["user_keep@example.com"],
+				})
+				expect(yield* backfill(page([], null))).toEqual({
+					liveRefs: ["org_keep", "org_old", "user_keep", "user_old"],
+					liveContacts: ["user_keep@example.com", "user_old@example.com"],
+				})
+			}),
+		))
+
 	it("pulls incrementally from the previous run's start, not its finish", () =>
 		run(
 			Effect.gen(function* () {

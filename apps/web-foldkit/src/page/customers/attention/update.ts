@@ -30,6 +30,7 @@ import {
 	assignEntries,
 	canReopen,
 	clearFilter,
+	clearNarrowing,
 	DEFAULT_FILTERS,
 	DONE_MODAL_ID,
 	FILTER_MENU_ID,
@@ -505,6 +506,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 		PressedShowAllOwners: () => ({
 			model: modifyFields(model, { filters: (filters) => clearFilter(filters, "owner") }),
+		}),
+		PressedClearNarrowing: () => ({
+			model: modifyFields(model, { search: () => "", filters: clearNarrowing }),
 		}),
 
 		ClickedRow: ({ signalId }) =>

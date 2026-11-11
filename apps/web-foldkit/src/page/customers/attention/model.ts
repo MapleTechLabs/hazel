@@ -383,6 +383,24 @@ export const filterEntries = (model: Model): ReadonlyArray<Menu.Entry> => [
 export const clearFilter = (filters: Filters, field: keyof Filters): Filters =>
 	field === "owner" ? { ...filters, owner: "anyone" } : { ...filters, [field]: null }
 
+/** Whether the search or a filter narrower than the owner scope is set, so an empty tab may be hiding signals. */
+export const isNarrowed = (model: Model): boolean =>
+	model.search.trim() !== "" ||
+	model.filters.owner === "unowned" ||
+	model.filters.kind !== null ||
+	model.filters.template !== null ||
+	model.filters.severity !== null ||
+	model.filters.plan !== null
+
+/** Clears the search and every narrowing filter; the owner scope stays unless it was `unowned`. */
+export const clearNarrowing = (filters: Filters): Filters => ({
+	owner: filters.owner === "unowned" ? "anyone" : filters.owner,
+	kind: null,
+	template: null,
+	severity: null,
+	plan: null,
+})
+
 /** Applies a filter key: picking the active value clears it (owner falls back to anyone). */
 export const toggleFilter = (filters: Filters, key: string): Filters => {
 	const separator = key.indexOf(":")
