@@ -32,7 +32,7 @@ import {
 } from "./fixtures"
 import { makeAutumnApi } from "./http"
 import { decodeCursor, encodeCursor, PAGE_SIZE, PLANS_LISTED_PER_CUSTOMER, pullPage } from "./pull"
-import { readPricing } from "./read"
+import { readPricing, SUBSCRIPTIONS_PAGE_SIZE } from "./read"
 import { type FakeAutumnState, fakeAutumnHttpClient, makeFakeAutumn } from "./testing"
 import { AutumnCustomersPage } from "./wire"
 
@@ -143,6 +143,54 @@ describe("Autumn pull", () => {
 		const ended = { ...SUB_ACME_EXPIRED, id: SUB_ACME.id }
 		const pages = await run(walk(organization({ subscriptions: [SUB_ACME, ended] })))
 		expect(pages.at(-1)!.ops).toEqual([])
+	})
+
+	it("leaves an ended plan alone when the live one reusing its id was on the page before", async () => {
+		const others = Array.from({ length: SUBSCRIPTIONS_PAGE_SIZE - 1 }, (_, index) => ({
+			...SUB_INITECH,
+			id: `other_${index}`,
+			customer_id: `org_other${index}`,
+		}))
+		const ended = { ...SUB_ACME_EXPIRED, id: SUB_ACME.id }
+		const pages = await run(walk(organization({ subscriptions: [...others, SUB_ACME, ended] })))
+		const listings = pages.filter((p) => p.progress.step === "subscriptions")
+		expect(listings.map((p) => p.progress.done)).toEqual([
+			SUBSCRIPTIONS_PAGE_SIZE,
+			SUBSCRIPTIONS_PAGE_SIZE + 1,
+		])
+		expect(plansOf(listings)).toEqual([])
+	})
+
+	it("skips an ended plan of a customer without an id of its own (Autumn names its internal id)", async () => {
+		const internal = { ...SUB_ACME_EXPIRED, customer_id: "cus_2Pq7Yx3ZbN1kLmVwRtS8uHgJdEf" }
+		const pages = await run(walk(organization({ subscriptions: [internal] })))
+		expect(plansOf([pages.at(-1)!])).toEqual([])
+	})
+
+	it("skips a row it cannot read and does not sweep what that listing holds", async () => {
+		const unreadable = { ...CUSTOMER_GLOBEX, created_at: "yesterday" }
+		const customers = await run(walk(organization({ customers: [CUSTOMER_ACME, unreadable] })))
+		expect(customers[1]!.ops.filter((op) => op._tag === "account")).toHaveLength(1)
+		expect(customers.every((p) => p.sweep === undefined)).toBe(true)
+		const plans = await run(
+			walk(
+				organization({
+					subscriptions: [SUB_ACME_EXPIRED, { ...SUB_ACME_EXPIRED, id: "bad", plan_id: 5 }],
+				}),
+			),
+		)
+		expect(plansOf([plans.at(-1)!])).toEqual([[`${ORG_ACME}:${SUB_ACME_EXPIRED.id}`, "canceled", 0]])
+		expect(plans.at(-1)!.sweep).toEqual(["account"])
+	})
+
+	it("does not sweep after Autumn dropped a customer it could not serialize from a page", async () => {
+		const many = Array.from({ length: PAGE_SIZE + 2 }, (_, index) => ({
+			...CUSTOMER_ACME,
+			id: `${ORG_ACME}${index}`,
+		}))
+		const pages = await run(walk(organization({ customers: many, unserializable: [`${ORG_ACME}3`] })))
+		expect(pages.filter((p) => p.progress.step === "customers")).toHaveLength(2)
+		expect(pages.every((p) => p.sweep === undefined)).toBe(true)
 	})
 
 	it("resumes a phase from the cursor it carried", async () => {

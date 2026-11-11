@@ -92,6 +92,10 @@ export const AutumnPlan = Schema.Struct({
 	name: Nullable(Schema.String),
 	/** At most one version of a plan is active; Hazel prices from that one. */
 	active: Nullable(Schema.Boolean),
+	/** Plans of one group are mutually exclusive: a scheduled one replaces the current one. */
+	group: Nullable(Schema.String),
+	/** Attached to every new customer, and scheduled when a plan of its group is canceled (free tiers). */
+	auto_enable: Nullable(Schema.Boolean),
 	price: Nullable(Schema.Struct(AutumnPriceFields)),
 	items: Nullable(Schema.Array(AutumnPlanItem)),
 })
@@ -158,6 +162,8 @@ export const AutumnSubscription = Schema.Struct({
 	status: Nullable(Schema.String),
 	past_due: Nullable(Schema.Boolean),
 	add_on: Nullable(Schema.Boolean),
+	/** The plan's `auto_enable`. */
+	auto_enable: Nullable(Schema.Boolean),
 	/** Unix ms. */
 	started_at: Nullable(Schema.Number),
 	canceled_at: Nullable(Schema.Number),

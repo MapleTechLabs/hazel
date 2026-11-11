@@ -28,8 +28,8 @@
  *   a customer deleted since, and a slow read of a subscription cannot overwrite a newer one.
  * - **Not mapped.** Invoices (Stripe owns them, `tech-design.md` §4.2), one-off purchases (no
  *   recurring amount), entity-scoped plans and balances (a sub-customer's, not the account's), and
- *   `scheduled` plans (not billing yet, and Hazel's model has no scheduled status; a scheduled base
- *   plan only marks the current one's cancellation as a downgrade).
+ *   `scheduled` plans (not billing yet, and Hazel's model has no scheduled status; a scheduled paid
+ *   base plan only marks the current one's cancellation as a downgrade).
  */
 import type {
 	ConnectionConfig,
@@ -178,12 +178,15 @@ const quantityOf = (subscription: AutumnSubscription) => Math.max(1, Math.round(
  * ones (a `prepaid` item: seats, credit packs). Autumn reports them on the customer's balances, not
  * on the subscription: each grant names its plan, the units bought (`prepaid_grant`) and the price
  * per `billing_units` of them; the plan's item says how often that price is billed. A tiered price
- * (no flat `amount`) counts as nothing.
+ * (no flat `amount`) counts as nothing. A grant names no subscription, so the plan's grants are
+ * split evenly over the customer's live subscriptions to it (`holders`): their sum is right, each
+ * one's share an estimate.
  */
 const prepaidMonthly = (
 	planId: string,
 	plan: AutumnPlan | undefined,
 	balances: ReadonlyArray<AutumnBalance>,
+	holders: number,
 ): number =>
 	balances.reduce((total, balance) => {
 		const item = plan?.items?.find((entry) => entry.feature_id === balance.feature_id)
@@ -199,7 +202,7 @@ const prepaidMonthly = (
 				price?.billing_method === "prepaid" &&
 				price.amount != null &&
 				bought > 0
-			return counts ? sum + (bought / units) * (price.amount ?? 0) * factor : sum
+			return counts ? sum + ((bought / units) * (price.amount ?? 0) * factor) / holders : sum
 		}, total)
 	}, 0)
 
@@ -217,12 +220,13 @@ export const subscriptionMrr = (
 	plan: AutumnPlan | undefined,
 	currency: string,
 	balances: ReadonlyArray<AutumnBalance> = [],
+	holders = 1,
 ): number => {
 	const price = plan?.price ?? null
 	const factor = price === null ? null : monthlyFactorOf(price)
 	const base =
 		price?.amount == null || factor === null ? 0 : price.amount * factor * quantityOf(subscription)
-	const monthly = base + prepaidMonthly(subscription.plan_id, plan, balances)
+	const monthly = base + prepaidMonthly(subscription.plan_id, plan, balances, holders)
 	return Math.max(0, Math.round(monthly * minorUnitsOf(currency)))
 }
 
@@ -259,10 +263,12 @@ const subscriptionIdOf = (customerId: string, id: string): string => `${customer
  *
  * - **Prices**: the customer's own version of the plan when the read expanded it (custom prices,
  *   grandfathered versions), else the plan's active version; `balances` add the customer's prepaid
- *   units (the customer's own balances: pass them only for a batch of one customer's plans).
- * - **Downgrades**: a base plan Autumn has scheduled replaces the current one at its period end, and
- *   Autumn marks that one canceled. It is a plan change, not a cancellation, so the current plan
- *   keeps `cancelAtPeriodEnd` false.
+ *   units to its live plans (the customer's own balances: pass them only for a batch of one
+ *   customer's plans; an ended plan's grants are gone from them).
+ * - **Downgrades**: a paid base plan Autumn has scheduled in the current one's group replaces it at
+ *   its period end, and Autumn marks the current one canceled. It is a plan change, not a
+ *   cancellation, so the current plan keeps `cancelAtPeriodEnd` false. The free plan Autumn
+ *   schedules on a cancel (its group's `auto_enable` one) is no downgrade: the plan is canceling.
  * - **Never billed**: an ended plan no processor ever billed (no billing period: a trial that
  *   lapsed unconverted) is MRR 0, so its account reads as a lead rather than a churned customer.
  * - **Billed by usage**: a plan at MRR 0 that still bills ({@link billsOutsideMrr}) sets
@@ -278,32 +284,59 @@ export const subscriptionOps = (
 		readonly observedAt: IsoTimestamp
 	},
 ): Array<UpsertSubscription> => {
+	const { currency } = options.pricing
 	const customerOf = (subscription: AutumnSubscription) =>
 		subscription.customer_id ?? options.customerId ?? null
+	const planOf = (subscription: AutumnSubscription) =>
+		subscription.plan ?? options.pricing.plans.get(subscription.plan_id)
+	/** A customer's base plans in one group: one replaces another. */
+	const slotOf = (customerId: string | null, plan: AutumnPlan | undefined) =>
+		JSON.stringify([customerId, plan?.group ?? null])
+	const base = (subscription: AutumnSubscription) =>
+		subscription.add_on !== true && !isEntityScoped(subscription)
 	const downgrading = new Set(
-		subscriptions.flatMap((subscription) =>
-			subscription.status === "scheduled" &&
-			subscription.add_on !== true &&
-			!isEntityScoped(subscription)
-				? [customerOf(subscription)]
-				: [],
-		),
+		subscriptions.flatMap((subscription) => {
+			const plan = planOf(subscription)
+			const paid =
+				subscriptionMrr(subscription, plan, currency) > 0 ||
+				billsOutsideMrr(subscription.plan_id, plan, [])
+			return subscription.status === "scheduled" &&
+				base(subscription) &&
+				(subscription.auto_enable ?? plan?.auto_enable) !== true &&
+				paid
+				? [slotOf(customerOf(subscription), plan)]
+				: []
+		}),
 	)
+	const holders = new Map<string, number>()
+	for (const subscription of subscriptions) {
+		const status = statusOf(subscription)
+		if (status === null || status === "canceled" || isEntityScoped(subscription)) continue
+		const key = JSON.stringify([customerOf(subscription), subscription.plan_id])
+		holders.set(key, (holders.get(key) ?? 0) + 1)
+	}
 	const byId = new Map<string, UpsertSubscription>()
 	for (const subscription of subscriptions) {
 		const customerId = customerOf(subscription)
 		const status = statusOf(subscription)
 		if (customerId === null || status === null || isEntityScoped(subscription)) continue
-		const plan = subscription.plan ?? options.pricing.plans.get(subscription.plan_id)
+		const plan = planOf(subscription)
 		const expired = status === "canceled"
 		const neverBilled = expired && subscription.current_period_end == null
+		const balances = expired ? [] : (options.balances ?? [])
 		const mrrMinor = neverBilled
 			? 0
-			: subscriptionMrr(subscription, plan, options.pricing.currency, options.balances)
+			: subscriptionMrr(
+					subscription,
+					plan,
+					currency,
+					balances,
+					holders.get(JSON.stringify([customerId, subscription.plan_id])) ?? 1,
+				)
 		const canceling =
 			!expired &&
 			subscription.canceled_at != null &&
-			!(subscription.add_on !== true && downgrading.has(customerId))
+			!(base(subscription) && downgrading.has(slotOf(customerId, plan)))
 		const op: UpsertSubscription = {
 			_tag: "subscription",
 			externalId: subscriptionIdOf(customerId, subscription.id),
@@ -314,10 +347,8 @@ export const subscriptionOps = (
 			// The customer's own plan carries any custom price, so the list price is the price.
 			listMrrMinor: mrrMinor,
 			billsByUsage:
-				!neverBilled &&
-				mrrMinor === 0 &&
-				billsOutsideMrr(subscription.plan_id, plan, options.balances ?? []),
-			currency: options.pricing.currency,
+				!neverBilled && mrrMinor === 0 && billsOutsideMrr(subscription.plan_id, plan, balances),
+			currency,
 			interval: billingIntervalOf(plan),
 			quantity: quantityOf(subscription),
 			startedAt: isoOf(subscription.started_at),

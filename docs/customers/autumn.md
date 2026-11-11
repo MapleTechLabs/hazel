@@ -111,9 +111,12 @@ colliding with a Maple event metric of the same name. The built-in keys (`active
 
 A `scheduled` plan is skipped: it bills nothing yet, Hazel's model has no scheduled status, and
 recording it as active would count a future plan's amount as MRR today. A **downgrade** is a
-scheduled base plan (not an add-on) beside the current one, which Autumn marks `canceled_at`: that
-is a plan change, not a cancellation, so the current plan keeps `cancelAtPeriodEnd` false (no
-`cancel_scheduled` entry, no false churn) and ingest sees the change when the new plan starts.
+scheduled paid base plan (not an add-on, not `auto_enable`, with MRR or a usage price) in the
+current plan's `group`, which Autumn marks `canceled_at`: that is a plan change, not a cancellation,
+so the current plan keeps `cancelAtPeriodEnd` false (no `cancel_scheduled` entry, no false churn)
+and ingest sees the change when the new plan starts. Canceling a plan at the period's end also
+schedules a plan — its group's free `auto_enable` one (`scheduleDefaultProduct`) — and that is a
+cancellation: the current plan gets `cancelAtPeriodEnd`.
 Hazel's `unpaid` and `paused` have no Autumn equivalent and are never written by this source.
 
 **Subscription ids.** Autumn's id is the app's own `subscription_id` (else Autumn's), unique only
@@ -145,7 +148,9 @@ currency table Autumn bills through.
   the customer's balances, not the subscription. Each `balances[].breakdown[]` grant of the plan
   with a `prepaid` price adds `prepaid_grant ÷ billing_units × amount`, at the cadence of the plan
   item's price. A sub-customer's grant (`source: "entity"`) and a tiered price (no flat `amount`)
-  add nothing.
+  add nothing. A grant names its plan, not its subscription: a customer holding one plan twice has
+  the plan's grants split evenly between the two (their sum is right), and an ended plan gets none
+  (its grants are gone from the balances).
 - A **`usage_based`** item adds nothing: it bills after the period for what was used and is not
   knowable in advance (Stripe's metered prices are left out the same way). A plan billed only that
   way, a `one_off` base price, or a plan with no price at all (Autumn's free tier) is **MRR 0**. See
@@ -202,8 +207,12 @@ so a pull never undoes a delivery's MRR.
 `active`, `past_due` and `scheduled` (`RELEVANT_STATUSES` in Autumn's server). A plan that ended is
 invisible there, so a Hazel row left `active` would keep its MRR for ever.
 `POST /v1/subscriptions.list` reports `expired` rows too, across every customer, each customer's
-rows together. It is asked for every state so that an ended plan whose id a live one reuses is
-recognised on the page and left alone; only ended plans are written from it.
+rows together, newest first. It is asked for every state so that an ended plan whose id a live one
+reuses is recognised and left alone; only ended plans are written from it. A customer's rows may
+straddle a page boundary, so the cursor carries the page's last customer and its live plan ids into
+the next page. A row whose `customer_id` is Autumn's internal id (`cus_` and a KSUID: the listing
+names it for a customer without an id of its own) is skipped, as the customer phase skipped that
+customer.
 
 **Sweep.** The walk's last page sets `sweep: ["account", "subscription"]`: core removes the
 customers the walk did not see and cancels the plans it did not read (`observedAt` older than the
@@ -212,11 +221,16 @@ walk. Core caps every sweep (a type whose removals would exceed 20% of the provi
 and 10 records is not swept). The walk itself leaves out what it could not list completely, with a
 warning logged:
 
-- **no sweep at all** when a full customer page comes without `next_cursor` and its last customer
-  has no id of its own: Autumn drops the cursor then (`CusBatchService.getCursorPage`), ending the
-  listing early;
+- **no sweep at all** when a customer page comes without `next_cursor` and its last customer has no
+  id of its own: Autumn drops the cursor then (`CusBatchService.getCursorPage`), ending the listing
+  early. Checked on any page, not only a full one (a page may be short, below), so an organization
+  whose newest customer has no id is never swept;
+- **no sweep at all** when a customer page has a `next_cursor` but fewer customers than asked for:
+  Autumn logs and drops a customer it fails to serialize, and that customer must not be removed;
+- **no sweep of a listing** with a row Hazel cannot decode: the row is logged (phase and count only)
+  and skipped rather than failing the page, the same row failing every retry;
 - **no plan sweep** when a customer lists 15 plans (subscriptions and purchases): that is how many a
-  listing returns per customer (`DEFAULT_CUS_PRODUCT_LIMIT`), so more may exist; or when a
+  listing returns per customer by default (`DEFAULT_CUS_PRODUCT_LIMIT`), so more may exist; or when a
   subscriptions page says `has_more` without a cursor.
 
 **Paging** is Autumn's own opaque cursor (`start_cursor` → `next_cursor`), and the customer listing
@@ -336,7 +350,10 @@ Svix's `svix-id` — so a redelivery writes one entry.
 - **A customer's expired plans are read one page deep** on a delivery (200 rows, of the plan that
   ended when the delivery names one). The rest are reconciled by the next full walk.
 - **A customer listing more than 15 plans** has the rest cut by Autumn's listing, so their plans keep
-  their last state until a delivery, and that walk does not sweep plans.
+  their last state until a delivery, and that walk does not sweep plans. Autumn can override the cap
+  per organization (`maxCusProducts`, an admin setting no API exposes). A higher one only makes Hazel
+  skip plan sweeps it could have run. A lower one goes unnoticed: a customer cut below 15 plans
+  looks complete, and the sweep cancels the plans it did not list.
 - **An unlimited feature has no `limitValue`**, so `near_limit` never fires on it — correctly, there
   is no limit to be near — and neither does a feature the plan grants nothing of.
 - **A feature's `next_reset_at` is not stored.** A metric is the day's level of the current period;

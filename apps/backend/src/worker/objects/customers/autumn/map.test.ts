@@ -264,12 +264,39 @@ describe("Autumn plan → subscription", () => {
 		])
 	})
 
-	it("reads a cancellation beside a scheduled base plan as a downgrade, not a cancel", () => {
-		const [current] = subOps([SUB_ACME_CANCELING, SUB_ACME_SCHEDULED])
+	it("reads a cancellation beside a scheduled paid base plan of its group as a downgrade, not a cancel", () => {
+		const team = { ...SUB_ACME_SCHEDULED, plan_id: "team", auto_enable: false }
+		const [current] = subOps([SUB_ACME_CANCELING, team])
 		expect(current).toMatchObject({ status: "active", cancelAtPeriodEnd: false, canceledAt: null })
-		// A scheduled add-on replaces nothing.
-		const [canceling] = subOps([SUB_ACME_CANCELING, { ...SUB_ACME_SCHEDULED, add_on: true }])
-		expect(canceling).toMatchObject({ cancelAtPeriodEnd: true })
+		const canceling = (scheduled: unknown) => subOps([SUB_ACME_CANCELING, scheduled])[0]
+		// The free plan Autumn schedules when a plan is canceled (its group's `auto_enable` one).
+		expect(canceling(SUB_ACME_SCHEDULED)).toMatchObject({ cancelAtPeriodEnd: true })
+		// A free plan is no downgrade target even when not auto-enabled.
+		expect(canceling({ ...SUB_ACME_SCHEDULED, auto_enable: false })).toMatchObject({
+			cancelAtPeriodEnd: true,
+		})
+		// A scheduled add-on replaces nothing, nor does a plan of another group.
+		expect(canceling({ ...team, add_on: true })).toMatchObject({ cancelAtPeriodEnd: true })
+		expect(canceling({ ...team, plan: { ...PLAN_TEAM, group: "storage" } })).toMatchObject({
+			cancelAtPeriodEnd: true,
+		})
+	})
+
+	it("splits a plan's prepaid units over the customer's live plans on it, and gives an ended one none", () => {
+		const second = { ...SUB_INITECH, id: "second" }
+		// $20 base each, the 5 seats × $10 split between the two.
+		expect(
+			subOps([SUB_INITECH, second], { customer: CUSTOMER_INITECH }).map((op) => op.mrrMinor),
+		).toEqual([4_500, 4_500])
+		const ended = {
+			...SUB_INITECH,
+			id: "old",
+			status: "expired",
+			canceled_at: SUB_ACME_EXPIRED.canceled_at,
+		}
+		expect(subOps([SUB_INITECH, ended], { customer: CUSTOMER_INITECH }).map((op) => op.mrrMinor)).toEqual(
+			[7_000, 2_000],
+		)
 	})
 
 	it("bills a trial that lapsed unconverted nothing, so its account is no churned customer", () => {

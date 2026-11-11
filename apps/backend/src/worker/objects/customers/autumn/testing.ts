@@ -3,8 +3,8 @@
  * endpoints with Autumn's own opaque cursor paging, its `statuses`, `customer_id` and `plan_id`
  * filtering and its `expand` handling (a balance's `feature` and a plan's `plan` are absent until a
  * request asks for them, exactly as Autumn sends them), answers 404 for a customer it does not hold, refuses the wrong key with
- * Autumn's error body, and can be told to answer 429, fail a path (503), refuse it (400) or garble
- * its body. It records every call, so a test can assert how many requests a page cost, that the
+ * Autumn's error body, and can be told to answer 429, fail a path (503), refuse it (400), garble
+ * its body or drop a customer it cannot serialize from its page. It records every call, so a test can assert how many requests a page cost, that the
  * version is pinned, and that the key only ever travels in the `Authorization` header.
  */
 import { Effect, Layer } from "effect"
@@ -31,6 +31,11 @@ export interface FakeAutumnState {
 	readonly invalid: ReadonlyArray<string>
 	/** Paths answered 200 with a body that is not the object (Autumn changed its API). */
 	readonly garbled: ReadonlyArray<string>
+	/**
+	 * Customer ids `customers.list` fails to serialize: dropped from their page after it is cut and
+	 * its cursor taken, as `CusBatchService.getCursorPage` logs and skips them.
+	 */
+	readonly unserializable: ReadonlyArray<string>
 	/** Calls served before every further call answers 429. */
 	throttleAfter: number | null
 	/** Seconds in the `Retry-After` header of those 429s. */
@@ -54,6 +59,7 @@ export const makeFakeAutumn = (options: Partial<FakeAutumnState> = {}): FakeAutu
 	failing: [],
 	invalid: [],
 	garbled: [],
+	unserializable: [],
 	throttleAfter: null,
 	retryAfterSeconds: null,
 	throttled: 0,
@@ -83,7 +89,12 @@ const strings = (body: Row, key: string): Array<string> => {
  * `{ list, next_cursor, has_more }` paged the way Autumn does: an opaque cursor over the rows, and
  * none when the page's last row has no id (`CusBatchService.getCursorPage`), more rows or not.
  */
-const listOf = (rows: ReadonlyArray<Row>, body: Row, idOf: (row: Row) => string) => {
+const listOf = (
+	rows: ReadonlyArray<Row>,
+	body: Row,
+	idOf: (row: Row) => string,
+	served: (row: Row) => boolean = () => true,
+) => {
 	const limit = Math.max(1, Number(body["limit"] ?? 50))
 	const after = str(body, "start_cursor")
 	const start = after === undefined ? 0 : rows.findIndex((row) => idOf(row) === after) + 1
@@ -91,7 +102,7 @@ const listOf = (rows: ReadonlyArray<Row>, body: Row, idOf: (row: Row) => string)
 	const hasMore = start + page.length < rows.length
 	const last = page.at(-1)
 	return json(200, {
-		list: page,
+		list: page.filter(served),
 		has_more: hasMore,
 		next_cursor: hasMore && last !== undefined && idOf(last) !== "" ? idOf(last) : null,
 	})
@@ -160,7 +171,12 @@ const serve = (fake: FakeAutumnState, path: string, body: Row): Response => {
 			const descending = str(body, "sort_order") === "desc"
 			const ordered = descending ? [...fake.customers].reverse() : fake.customers
 			const rows = ordered.map((customer) => withExpands(fake, customer, strings(body, "expand")))
-			return listOf(rows, body, (row) => (row["id"] == null ? "" : String(row["id"])))
+			return listOf(
+				rows,
+				body,
+				(row) => (row["id"] == null ? "" : String(row["id"])),
+				(row) => !fake.unserializable.includes(String(row["id"])),
+			)
 		}
 		case "/v1/subscriptions.list": {
 			const statuses = strings(body, "statuses")

@@ -20,8 +20,11 @@
  * `active`, `past_due` and `scheduled` (`RELEVANT_STATUSES` in Autumn's server) — so a plan that
  * ended is invisible there and its Hazel row would keep its MRR for ever. `POST
  * /v1/subscriptions.list` reports `expired` rows too, across every customer. It is asked for every
- * state, each customer's rows together, so an ended plan whose id a live one reuses is recognised on
- * the page and left alone; only the ended ones are written.
+ * state, each customer's rows together (newest first), so an ended plan whose id a live one reuses
+ * is recognised and left alone; only the ended ones are written. A customer's rows may straddle two
+ * pages, so the cursor carries the page's last customer and its live ids into the next one
+ * ({@link AutumnCursor}'s `last`). A row of a customer without an id of its own (Autumn names its
+ * internal id then) is skipped: the customer phase skipped that customer too.
  *
  * **Paging is Autumn's own opaque cursor** (`start_cursor` → `next_cursor`), and the customer
  * listing asks for its oldest rows first (`sort_order: "asc"`), so a customer created mid-walk lands
@@ -38,17 +41,24 @@
  * customers it did not see and cancels the plans it did not read (a customer deleted in Autumn,
  * which sends no webhook for it). Not when the walk could not see everything:
  *
- * - a full customer page with no `next_cursor` whose last customer has no id: Autumn drops the cursor
- *   then (`CusBatchService.getCursorPage`), ending the listing early;
- * - a customer listing as many plans as Autumn returns per customer
- *   ({@link PLANS_LISTED_PER_CUSTOMER}): any beyond were cut, so plans are not swept;
- * - `has_more` with no cursor on a subscriptions page.
+ * - a customer page with no `next_cursor` whose last customer has no id: Autumn drops the cursor
+ *   then (`CusBatchService.getCursorPage`), ending the listing early. A page may be short of
+ *   customers (below), so this holds for any page, at the price of never sweeping an organization
+ *   whose newest customer has no id;
+ * - a customer page with a `next_cursor` but fewer customers than asked for: Autumn drops a customer
+ *   it fails to serialize from the page (`getCursorPage` logs and skips it);
+ * - a customer listing as many plans as Autumn returns per customer by default
+ *   ({@link PLANS_LISTED_PER_CUSTOMER}): any beyond were cut, so plans are not swept. Autumn can
+ *   lower that cap per organization (`maxCusProducts`, an admin override Hazel cannot read); a
+ *   customer cut below 15 goes unnoticed, and the sweep would cancel its unlisted plans;
+ * - `has_more` with no cursor on a subscriptions page;
+ * - a row Hazel cannot decode (Autumn changed its shape): logged and skipped, not failing the page.
  *
  * Contacts are never swept: Autumn holds none of its own.
  */
 import type { ConnectionConfig, IngestOp, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
 import { SweepEntityType } from "@hazel/domain/customers"
-import { Clock, Effect, Option, Schema } from "effect"
+import { Clock, Effect, Option, Schema, type Types } from "effect"
 import type { CustomerProviderError } from "../provider-errors"
 import type { PullPage } from "../providers"
 import type { AutumnApi } from "./http"
@@ -57,11 +67,13 @@ import {
 	accountOp,
 	featureDefinitionOps,
 	featureNamesOf,
+	isEntityScoped,
 	type Pricing,
+	statusOf,
 	subscriptionOps,
 } from "./map"
 import { CUSTOMER_EXPAND, SUBSCRIPTIONS_PAGE_SIZE } from "./read"
-import { type AutumnEnv, AutumnCustomersPage, AutumnFeaturesPage, AutumnSubscriptionsPage } from "./wire"
+import { AutumnCustomer, type AutumnEnv, AutumnFeaturesPage, AutumnSubscription } from "./wire"
 
 /** Customers per page. Autumn's ceiling is 5000; a hundred keeps a page's work (and its retry) small. */
 export const PAGE_SIZE = 100
@@ -75,6 +87,12 @@ type AutumnPhase = typeof AutumnPhase.Type
  */
 export const PLANS_LISTED_PER_CUSTOMER = 15
 
+/**
+ * Autumn's internal customer id (`cus_` and a KSUID), which `subscriptions.list` names in
+ * `customer_id` for a customer without an id of its own (`customerProductToListRow`).
+ */
+const INTERNAL_CUSTOMER_ID = /^cus_[0-9A-Za-z]{27}$/
+
 /** Every plan state a subscription row can be in. */
 const ALL_SUBSCRIPTION_STATUSES = ["active", "past_due", "scheduled", "expired"]
 
@@ -87,6 +105,13 @@ const AutumnCursor = Schema.Struct({
 	done: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
 	/** What the walk so far could not list completely, so its last page must not sweep. */
 	unswept: Schema.optionalKey(Schema.Array(SweepEntityType)),
+	/**
+	 * The subscriptions page before's last customer and the ids of its live plans: its rows may go on
+	 * on this page, and an ended plan whose id a live one holds is left alone.
+	 */
+	last: Schema.optionalKey(
+		Schema.Struct({ customerId: Schema.String, liveIds: Schema.Array(Schema.String) }),
+	),
 })
 type AutumnCursor = typeof AutumnCursor.Type
 
@@ -120,18 +145,21 @@ const pageOf = (
 		readonly rows: number
 		readonly next: string | null
 		readonly unswept?: ReadonlyArray<SweepEntityType>
+		readonly last?: AutumnCursor["last"]
 	},
 ): PullPage => {
 	const done = doneOf(cursor) + page.rows
 	const unswept = [...new Set([...(cursor.unswept ?? []), ...(page.unswept ?? [])])]
 	const carried = unswept.length === 0 ? {} : { unswept }
 	const after = NEXT_PHASE[cursor.phase]
-	const nextCursor =
+	const onward: Types.Mutable<AutumnCursor> | null =
 		page.next !== null
-			? encodeCursor({ phase: cursor.phase, after: page.next, done, ...carried })
+			? { phase: cursor.phase, after: page.next, done, ...carried }
 			: after === null
 				? null
-				: encodeCursor({ phase: after, after: null, done: 0, ...carried })
+				: { phase: after, after: null, done: 0, ...carried }
+	if (onward !== null && onward.phase === cursor.phase && page.last !== undefined) onward.last = page.last
+	const nextCursor = onward === null ? null : encodeCursor(onward)
 	// Autumn's lists carry no total; only `next_cursor` / `has_more`.
 	const progress: SyncProgress = { step: cursor.phase, done, total: null }
 	const sweep = SWEPT.filter((type) => !unswept.includes(type))
@@ -145,6 +173,31 @@ const listingCut = (phase: AutumnPhase, reason: string, unswept: ReadonlyArray<S
 	Effect.logWarning("Autumn listing incomplete: the walk will not sweep", { phase, reason, unswept }).pipe(
 		Effect.as(unswept),
 	)
+
+/** A page whose rows are decoded one by one ({@link decodeRows}). */
+const RowsPage = Schema.Struct({
+	list: Schema.Array(Schema.Unknown),
+	has_more: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+	next_cursor: Schema.optionalKey(Schema.NullOr(Schema.String)),
+})
+
+/**
+ * A page's rows as `schema` reads them. A row it cannot read is logged and skipped rather than
+ * failing the page (and the walk with it, the same row failing every retry); `skipped` tells the
+ * caller its listing is incomplete.
+ */
+const decodeRows = <S extends Schema.ConstraintDecoder<unknown>>(
+	schema: S,
+	rows: ReadonlyArray<unknown>,
+	phase: AutumnPhase,
+) =>
+	Effect.gen(function* () {
+		const decode = Schema.decodeUnknownOption(schema)
+		const decoded = rows.flatMap((row) => Option.toArray(decode(row)))
+		const skipped = rows.length - decoded.length
+		if (skipped > 0) yield* Effect.logWarning("Autumn rows Hazel cannot read skipped", { phase, skipped })
+		return { rows: decoded, skipped: skipped > 0 }
+	})
 
 /** Every metered feature becomes a metric definition, so a chart is named after the feature. */
 const featuresPage = Effect.fnUntraced(function* (api: AutumnApi, cursor: AutumnCursor) {
@@ -171,10 +224,11 @@ const customersPage = Effect.fnUntraced(function* (input: PageInput, cursor: Aut
 			sort_order: "asc",
 			expand: CUSTOMER_EXPAND,
 		},
-		AutumnCustomersPage,
+		RowsPage,
 	)
+	const decoded = yield* decodeRows(AutumnCustomer, body.list, "customers")
 	// A key opens one organization and one environment; anything else is not this connection's.
-	const customers = body.list.flatMap((customer) => {
+	const customers = decoded.rows.flatMap((customer) => {
 		const id = customer.id ?? null
 		return id === null || id.trim() === "" || (customer.env != null && customer.env !== input.env)
 			? []
@@ -203,17 +257,21 @@ const customersPage = Effect.fnUntraced(function* (input: PageInput, cursor: Aut
 		]
 	})
 	const next = body.next_cursor ?? null
-	const capped = body.list.some(
+	const capped = decoded.rows.some(
 		(customer) =>
 			(customer.subscriptions ?? []).length + (customer.purchases ?? []).length >=
 			PLANS_LISTED_PER_CUSTOMER,
 	)
-	// Autumn drops the cursor when a full page ends on a customer with no id of its own (a full page
-	// without a cursor and a last customer with an id is simply the end).
-	const last = body.list.at(-1)
-	const cut = next === null && body.list.length >= PAGE_SIZE && (last?.id ?? "") === ""
+	// Autumn drops the cursor when a page ends on a customer with no id of its own (a page without a
+	// cursor and a last customer with an id is simply the end).
+	const last = decoded.rows.at(-1)
+	const cut = next === null && last !== undefined && (last.id ?? "") === ""
+	// More customers remain, yet the page is short: Autumn dropped some it could not serialize.
+	const short = next !== null && body.list.length < PAGE_SIZE
 	const unswept = [
 		...(cut ? yield* listingCut("customers", "cursor_dropped", SWEPT) : []),
+		...(short ? yield* listingCut("customers", "customers_dropped", SWEPT) : []),
+		...(decoded.skipped ? yield* listingCut("customers", "rows_unreadable", SWEPT) : []),
 		...(capped ? yield* listingCut("customers", "plans_per_customer_cap", ["subscription"]) : []),
 	]
 	return pageOf(cursor, { ops, rows: body.list.length, next, unswept })
@@ -228,22 +286,44 @@ const subscriptionsPage = Effect.fnUntraced(function* (input: PageInput, cursor:
 			// Every state: an ended plan is recognised beside a live one reusing its id.
 			statuses: ALL_SUBSCRIPTION_STATUSES,
 		},
-		AutumnSubscriptionsPage,
+		RowsPage,
 	)
-	const expired = body.list.some((subscription) => subscription.status === "expired")
-	// Live plans were written with their customer; only the ended ones are this phase's.
-	const ops = expired
-		? subscriptionOps(body.list, { pricing: yield* input.pricing, observedAt: input.observedAt }).filter(
-				(op) => op.status === "canceled",
-			)
-		: []
+	const decoded = yield* decodeRows(AutumnSubscription, body.list, "subscriptions")
+	const rows = decoded.rows.filter(
+		(row) => row.customer_id == null || !INTERNAL_CUSTOMER_ID.test(row.customer_id),
+	)
+	// The live plans of each customer on the page, and of the page before's last customer.
+	const live = new Map<string, Set<string>>()
+	if (cursor.last !== undefined) live.set(cursor.last.customerId, new Set(cursor.last.liveIds))
+	for (const row of rows) {
+		const status = statusOf(row)
+		if (row.customer_id == null || status === null || status === "canceled" || isEntityScoped(row))
+			continue
+		live.set(row.customer_id, (live.get(row.customer_id) ?? new Set()).add(row.id))
+	}
+	// Live plans were written with their customer; only the ended ones are this phase's, and not one
+	// whose id a live plan of its customer holds.
+	const ended = rows.filter(
+		(row) => row.status === "expired" && !(live.get(row.customer_id ?? "")?.has(row.id) ?? false),
+	)
+	const ops =
+		ended.length > 0
+			? subscriptionOps(ended, { pricing: yield* input.pricing, observedAt: input.observedAt })
+			: []
 	// A page may hold fewer rows than asked for — even none — while more remain.
 	const next = body.has_more === true ? (body.next_cursor ?? null) : null
-	const unswept =
-		body.has_more === true && next === null
+	const unswept = [
+		...(body.has_more === true && next === null
 			? yield* listingCut("subscriptions", "has_more_without_cursor", ["subscription"])
-			: []
-	return pageOf(cursor, { ops, rows: body.list.length, next, unswept })
+			: []),
+		...(decoded.skipped ? yield* listingCut("subscriptions", "rows_unreadable", ["subscription"]) : []),
+	]
+	const lastCustomer = rows.at(-1)?.customer_id ?? cursor.last?.customerId
+	const last =
+		lastCustomer == null
+			? undefined
+			: { customerId: lastCustomer, liveIds: [...(live.get(lastCustomer) ?? [])] }
+	return pageOf(cursor, { ops, rows: body.list.length, next, unswept, last })
 })
 
 export const pullPage = Effect.fn("Autumn.pullPage")(function* (input: {
