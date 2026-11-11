@@ -172,6 +172,11 @@ currency table Autumn bills through.
   from the 31st ends on the next month's last day), plus the ten minutes Autumn adds and an hour's
   slack. A customer Autumn gave no trial (one it already used) whose plan ends within the trial's
   length reads as never billed as well; see Known gaps for a trial as long as the billing interval.
+- A **live plan whose trial converted** sends the trial's end as `trialEndsAt`, so its account's
+  `customerSince` and MRR history leave the trial days out: Autumn clears `trial_ends_at` on
+  conversion and reports no conversion date. A plan with a `free_trial` whose billing period
+  (`current_period_start`) starts at or after the trial's end (from the terms, as above) converted;
+  the end is that period's start while it is the first paid one, else the terms' end.
 - A **`past_due` plan with prepaid items and no grant in the balances**, or held twice by the
   customer, sends no `mrrMinor` (nor `listMrrMinor`, `billsByUsage`) for any live holding of it, and
   ingest keeps the stored MRR: Autumn's balances carry only active plans' grants unless the
@@ -194,18 +199,21 @@ currency table Autumn bills through.
 **Which billing source counts.** Per account (`billingProviderOf`): an account with Autumn
 subscriptions and none in Stripe takes Autumn's, whatever the connection's state, so a disconnect
 does not zero its MRR. An account with both takes **Autumn's** once its connection finished its
-first import (`backfilledAt` set, not disconnected) **and** Autumn bills it now (an `active`,
+first import (`backfilledAt` set, not disconnected, and after a reconnect a run started since
+succeeded: what it imported before is stale until then) **and** Autumn bills it now (an `active`,
 `past_due` or `unpaid` subscription with MRR or `billsByUsage`), else Stripe's when Stripe does — an
 auto-enabled free Autumn plan or an Autumn trial does not take billing over from Stripe. With
 neither billing now, the source the account had (so a payer whose billing ends in one provider
 churns there instead of switching); an account with none yet takes the one that paid, Stripe's
 first. An account with no Autumn subscription takes Stripe's. The other provider's subscriptions
 are ignored for that account's MRR. A switch of source writes no MRR movement (a migration, not
-revenue) only when the new source bills the account now and its MRR was above 0; a switch from MRR
+revenue) only when the new source bills the account now in the reporting currency and its MRR was
+above 0; a switch from MRR
 0 (an upgrade from a free Autumn plan that Stripe reports first) writes its movement.
-Invoices always come from Stripe. While Autumn's backfill is importing, or its history rebuild is
-pending, compute writes no MRR movements: the rebuild after the backfill writes the year's history
-in one go.
+Invoices always come from Stripe. While Autumn's backfill is importing, compute writes no MRR
+movement for an account whose source is, or was last run, Autumn (Stripe's accounts keep theirs),
+and none at all while its history rebuild is pending: the rebuild after the backfill writes the
+year's history in one go.
 
 ## Syncing
 
@@ -382,9 +390,15 @@ Svix's `svix-id` — so a redelivery writes one entry.
   customer created in between lands on that confirmation page, which then looks like a dropped
   customer (a short page with more after it), so that walk sweeps nothing. Deleted customers wait for
   the next walk.
-- **A converted trial's customer-since is the trial's start.** Autumn clears `trial_ends_at` when a
-  trial converts and reports no conversion date, so compute's first paid day falls back to the
-  plan's `started_at`.
+- **A plan with a trial renewed by a customer given no trial reads as a converted trial.** Autumn's
+  API does not say whether the customer was given the trial (one already used is not), so once such
+  a plan's billing period starts past the trial's length, its first trial-length of days drop out of
+  `customerSince` and the MRR history.
+- **The rebuilt history takes each account's current billing source only.** The year of MRR history
+  rebuilt after a backfill reads the subscriptions of the source the account bills from now: an
+  account that moved from Stripe to Autumn gets its history from Autumn's plans alone, so its
+  Stripe-billed months before the move are missing (its history starts at the Autumn plan). Movements
+  computed before the rebuild are kept, and an account with any is not rebuilt.
 - **Usage entries are dated by receipt.** `balances.*` deliveries carry no event time (Autumn sends
   them without `occurred_at`, and `svix-timestamp` is each attempt's), so a redelivered entry is
   dated when it finally arrived.

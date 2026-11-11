@@ -287,7 +287,7 @@ const addMonths = (at: number, months: number): number => {
 }
 
 /**
- * When an ended plan's trial ended: Autumn reports `trial_ends_at` only while the trial runs, so it
+ * When a plan's trial ended: Autumn reports `trial_ends_at` only while the trial runs, so it
  * comes from the plan's trial terms and the plan's start, by calendar (UTC days, months, years),
  * plus the ten minutes Autumn adds and an hour's slack. Null without a trial or a start. A plan
  * whose trial is as long as its billing interval cannot be told apart from Autumn's API: one never
@@ -327,6 +327,10 @@ const trialEndOf = (subscription: AutumnSubscription, plan: AutumnPlan | undefin
  *   billing period, the trial's), is MRR 0, so its account reads as a lead rather than a paying or
  *   churned customer. A customer Autumn gave no trial (one already used) that ends within the
  *   trial's length reads so too.
+ * - **Converted trials**: Autumn clears a converted trial's `trial_ends_at`; a live plan whose
+ *   billing period starts at or after the trial's end ({@link trialEndOf}) sends that end as
+ *   `trialEndsAt`, so the account's `customerSince` and MRR history leave the trial days out. A
+ *   customer given no trial (one already used) reads so too once its plan renewed.
  * - **Billed by usage**: a plan at MRR 0 that still bills ({@link billsOutsideMrr}) sets
  *   `billsByUsage`, so core counts its account as paying (or, once it ended, as churned).
  * - **Unpriced**: Autumn's balances carry only active plans' grants unless the org counts past_due
@@ -401,9 +405,19 @@ export const subscriptionOps = (
 		if (customerId === null || status === null || isEntityScoped(subscription)) continue
 		const plan = planOf(subscription)
 		const expired = status === "canceled"
-		const trialEnd = expired && subscription.trial_ends_at == null ? trialEndOf(subscription, plan) : null
+		const trialEnd = subscription.trial_ends_at == null ? trialEndOf(subscription, plan) : null
 		const endedAt = subscription.expires_at ?? subscription.canceled_at
-		const endedInTrial = trialEnd !== null && endedAt != null && endedAt <= trialEnd
+		const endedInTrial = expired && trialEnd !== null && endedAt != null && endedAt <= trialEnd
+		// Live and billed for a period from its trial's end on: the trial converted (Autumn cleared
+		// `trial_ends_at`). The first paid period's start is the exact end, a later one's the terms'.
+		const periodStart = subscription.current_period_start
+		const convertedAt =
+			!expired &&
+			trialEnd !== null &&
+			periodStart != null &&
+			periodStart >= trialEnd - TRIAL_END_SLACK_MS
+				? Math.min(trialEnd, periodStart)
+				: null
 		// No billing period: ended that way, or live past a trial no processor took over (Autumn's
 		// card-less trial awaiting conversion). A live plan without a trial may be billed outside
 		// Stripe (`no_billing_changes`), so it keeps its price. The period is Autumn's mirror of the
@@ -437,7 +451,7 @@ export const subscriptionOps = (
 			interval: billingIntervalOf(plan),
 			quantity: quantityOf(subscription),
 			startedAt: isoOf(subscription.started_at),
-			trialEndsAt: isoOf(endedInTrial ? trialEnd : subscription.trial_ends_at),
+			trialEndsAt: isoOf(endedInTrial ? trialEnd : (convertedAt ?? subscription.trial_ends_at)),
 			currentPeriodEnd: isoOf(subscription.current_period_end ?? subscription.expires_at),
 			// A cancellation Autumn has recorded but not yet carried out: the plan runs to `expires_at`.
 			cancelAtPeriodEnd: canceling,

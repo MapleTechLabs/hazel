@@ -381,6 +381,36 @@ describe("Autumn plan → subscription", () => {
 		expect(subOp(converted)).toMatchObject({ status: "canceled", mrrMinor: 300_000, trialEndsAt: null })
 	})
 
+	it("keeps a converted trial's end, which Autumn cleared, from its billing period or trial terms", () => {
+		const trialPlan = { ...PLAN_ENTERPRISE, free_trial: { duration_length: 14, duration_type: "day" } }
+		const started = SUB_GLOBEX_TRIAL.started_at
+		const converted = {
+			...SUB_GLOBEX_TRIAL,
+			plan: trialPlan,
+			trial_ends_at: null,
+			current_period_start: started + 14 * DAY + 10 * 60_000,
+			current_period_end: started + 44 * DAY + 10 * 60_000,
+		}
+		// Its first paid period starts at the trial's end.
+		expect(subOp(converted)).toMatchObject({
+			status: "active",
+			mrrMinor: 300_000,
+			trialEndsAt: new Date(started + 14 * DAY + 10 * 60_000).toISOString(),
+		})
+		// Renewed since: the end from the trial terms.
+		const renewed = {
+			...converted,
+			current_period_start: started + 44 * DAY,
+			current_period_end: started + 74 * DAY,
+		}
+		expect(subOp(renewed)).toMatchObject({
+			trialEndsAt: new Date(started + 14 * DAY + 70 * 60_000).toISOString(),
+		})
+		// Still in its first period (no trial given), or a plan without a trial: none.
+		expect(subOp({ ...converted, current_period_start: started })).toMatchObject({ trialEndsAt: null })
+		expect(subOp({ ...converted, plan: PLAN_ENTERPRISE })).toMatchObject({ trialEndsAt: null })
+	})
+
 	it("sends no MRR for a past_due plan whose prepaid units Autumn's balances leave out", () => {
 		const pastDue = { ...SUB_INITECH, past_due: true }
 		// Balances carry only active plans' grants unless the org counts past_due ones.

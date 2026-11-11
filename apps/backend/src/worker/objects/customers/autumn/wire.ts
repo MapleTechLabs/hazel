@@ -178,6 +178,7 @@ export const AutumnSubscription = Schema.Struct({
 	/** Only set while the plan is actually trialing (`getApiSubscriptionV2`). */
 	trial_ends_at: Nullable(Schema.Number),
 	/** The processor's billing period (Stripe, RevenueCat); unset for a plan nothing ever billed. */
+	current_period_start: Nullable(Schema.Number),
 	current_period_end: Nullable(Schema.Number),
 	quantity: Nullable(Schema.Number),
 	/** `entity`: a sub-customer's plan (a seat, a project), not the account's. */
