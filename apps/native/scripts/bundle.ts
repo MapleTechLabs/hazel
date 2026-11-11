@@ -99,7 +99,7 @@ const jsdomFilesPlugin: BunPlugin = {
 			patch(
 				path,
 				/fs\.readFileSync\(\s*path\.resolve\(__dirname, "([^"]+)"\),?\s*\{\s*encoding: "utf-8"\s*\}\s*\)/,
-				(match) => JSON.stringify(readFileSync(resolve(dirname(path), match[1]!), "utf8")),
+				(match) => JSON.stringify(readFileSync(resolve(dirname(path), match[1] ?? ""), "utf8")),
 			),
 		)
 		build.onLoad({ filter: /jsdom\/lib\/jsdom\/living\/xhr\/XMLHttpRequest-impl\.js$/ }, ({ path }) =>
