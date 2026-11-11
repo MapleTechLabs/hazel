@@ -277,7 +277,7 @@ export const healthInputsOf = (
 	)
 	const weekAgo = now.getTime() - 7 * 86_400_000
 	return {
-		churned: rollup.lifecycleStage === "churned",
+		customer: rollup.lifecycleStage !== "lead" && rollup.lifecycleStage !== "churned",
 		hasActivityData: snapshot.hasActivityData,
 		contactCount: rollup.contactCount,
 		activeUsers30d: rollup.activeUsers30d,

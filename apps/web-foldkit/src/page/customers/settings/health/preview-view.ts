@@ -159,7 +159,7 @@ export const bandsCard = (h: H, model: Model, context: Context): Html => {
 					`${textOf(atRiskMin)}–${textOf(healthyMin - 1)}`,
 				),
 				bandRow("critical", [`Everything below ${textOf(atRiskMin)}`], `0–${textOf(atRiskMin - 1)}`),
-				bandRow("unknown", ["Churned, or no part has data yet"], ""),
+				bandRow("unknown", ["Leads, churned, or no part has data yet"], ""),
 			],
 		),
 		...(context.invalid.has("healthyMin") || context.invalid.has("atRiskMin")

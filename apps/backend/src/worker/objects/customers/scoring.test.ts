@@ -10,7 +10,7 @@ import { priorityScore, transition, valueOf } from "./lifecycle"
 import { accountRow, NOW, signalRow } from "./test-kit"
 
 const inputs = (overrides: Partial<HealthInputs> = {}): HealthInputs => ({
-	churned: false,
+	customer: true,
 	hasActivityData: true,
 	contactCount: 10,
 	activeUsers30d: 7,
@@ -101,8 +101,8 @@ describe("health score", () => {
 		expect(result.score).toBe(Math.round((35 / 75) * 100 + (25 / 75) * 50 + (15 / 75) * 100))
 	})
 
-	it("has no score for churned accounts, or with only signals to go on", () => {
-		expect(scoreHealth(inputs({ churned: true }), DEFAULT_HEALTH_SETTINGS)).toMatchObject({
+	it("has no score for leads and churned accounts, or with only signals to go on", () => {
+		expect(scoreHealth(inputs({ customer: false }), DEFAULT_HEALTH_SETTINGS)).toMatchObject({
 			score: null,
 			status: "unknown",
 		})
