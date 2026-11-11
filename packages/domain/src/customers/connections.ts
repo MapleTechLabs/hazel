@@ -37,9 +37,18 @@ export const AutumnConnectionConfig = Schema.TaggedStruct("autumn", {
 	customerIdIsClerkOrgId: Schema.Boolean,
 })
 
+/**
+ * Which Maple region the key belongs to: its API lives on another host per region, and a key of one
+ * region is refused by the other.
+ */
+export const MapleRegion = Schema.Literals(["us", "eu"])
+export type MapleRegion = typeof MapleRegion.Type
+
 /** Maple: product events by GroupId/UserId → activity and per-event metrics, pulled on a schedule. */
 export const MapleConnectionConfig = Schema.TaggedStruct("maple", {
 	mapleOrgId: Schema.String,
+	/** Added after the first connections were stored, so an older config decodes as `us`. */
+	region: MapleRegion.pipe(Schema.withDecodingDefaultKey(Effect.succeed("us" as const))),
 	/** Event names that count as activity; empty = every event. */
 	activityEvents: Schema.Array(Schema.String),
 	/** Event name → metric key written per account per day. */
@@ -69,6 +78,7 @@ export const DEFAULT_CONNECTION_CONFIG: ConnectionConfigTable = {
 	maple: {
 		_tag: "maple",
 		mapleOrgId: "",
+		region: "us",
 		activityEvents: [],
 		metricMappings: [],
 		accountKey: "GroupId",

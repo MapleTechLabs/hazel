@@ -61,6 +61,26 @@ export const configFieldView = (
 				),
 			],
 		)
+	if (field._tag === "Select")
+		return h.div(
+			[h.Class("flex items-start justify-between gap-4")],
+			[
+				h.div(
+					[h.Class("flex min-w-0 flex-col gap-0.5")],
+					[
+						h.span([h.Class("font-medium text-fg text-sm")], [field.label]),
+						h.p([h.Class("text-muted-fg text-xs")], [field.description]),
+					],
+				),
+				segmented(h, {
+					ariaLabel: field.label,
+					segments: field.options.map((option) => ({ key: option.value, label: option.label })),
+					selected: configText(config, field.key),
+					onSelect: (value: string) => Message.ChangedConfigText({ target, key: field.key, value }),
+					className: isDisabled ? "pointer-events-none opacity-60" : undefined,
+				}),
+			],
+		)
 	return formField(h, {
 		id,
 		label: field.label,

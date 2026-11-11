@@ -98,8 +98,8 @@ describe("Customers RPCs", () => {
 				expect(
 					world.rows(`SELECT count(*) AS n FROM customer_saved_views WHERE builtInKey IS NOT NULL`),
 				).toEqual([{ n: 5 }])
-				// A provider with no adapter registered yet (Clerk, Stripe and Autumn have one)
-				// answers "unavailable".
+				// Every provider has an adapter now, so connecting goes to it: this key is not one
+				// Maple issues, which its `validate` says before it calls anything.
 				expect(
 					tagOf(
 						yield* world.call(
@@ -113,7 +113,7 @@ describe("Customers RPCs", () => {
 							world.owner,
 						),
 					),
-				).toBe("CustomerProviderUnavailableError")
+				).toBe("CustomerConnectionCredentialsError")
 			}),
 		))
 

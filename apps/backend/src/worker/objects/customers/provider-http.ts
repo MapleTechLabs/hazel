@@ -66,7 +66,7 @@ interface ProviderApi<Path extends string, Refusal> {
 	readonly baseUrl: string
 	/** The path's route template, for messages, logs and spans: never an object id. */
 	readonly routeOf: (path: Path) => string
-	/** Sent with every request besides the key (Stripe's version pin). */
+	/** Sent with every request besides the key (Stripe's version pin); overrides `accept`. */
 	readonly headers?: Readonly<Record<string, string>>
 	/** The provider's error body; one that does not decode explains nothing. */
 	readonly refusal: Schema.Decoder<Refusal>
@@ -204,8 +204,10 @@ const makeProviderCall = <Path extends string, Refusal>(
 					)
 		).pipe(
 			HttpClientRequest.bearerToken(apiKey),
-			HttpClientRequest.setHeaders(api.headers ?? {}),
 			HttpClientRequest.acceptJson,
+			// Last, so a provider's own headers win: Maple's MCP endpoint answers 406 unless `accept`
+			// offers `text/event-stream` beside JSON.
+			HttpClientRequest.setHeaders(api.headers ?? {}),
 		)
 		const response = yield* client.execute(request).pipe(
 			Effect.mapError(

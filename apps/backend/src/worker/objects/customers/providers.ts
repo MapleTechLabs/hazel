@@ -5,7 +5,7 @@
  * `CustomerProviderUnavailableError` on connect (the UI shows "coming soon").
  *
  * Registered: **clerk** (`./clerk/adapter.ts`), **stripe** (`./stripe/adapter.ts`), **autumn**
- * (`./autumn/adapter.ts`). Maple is still to come.
+ * (`./autumn/adapter.ts`), **maple** (`./maple/adapter.ts`).
  *
  * What an adapter's ops must carry:
  *
@@ -44,6 +44,7 @@ import { Context, Effect, Layer, Option, type Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { makeAutumnAdapter } from "./autumn/adapter"
 import { makeClerkAdapter } from "./clerk/adapter"
+import { makeMapleAdapter } from "./maple/adapter"
 import { makeStripeAdapter } from "./stripe/adapter"
 import { CustomerProviderError, CustomerWebhookRejectedError } from "./provider-errors"
 
@@ -136,6 +137,7 @@ export class CustomerProviders extends Context.Service<CustomerProviders, Custom
 				["clerk", yield* makeClerkAdapter],
 				["stripe", yield* makeStripeAdapter],
 				["autumn", yield* makeAutumnAdapter],
+				["maple", yield* makeMapleAdapter],
 			])
 			return CustomerProviders.of({ get: (provider) => Option.fromNullishOr(adapters.get(provider)) })
 		}),
