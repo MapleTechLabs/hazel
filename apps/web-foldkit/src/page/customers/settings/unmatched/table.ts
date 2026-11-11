@@ -346,7 +346,7 @@ const rowMenu = (h: HtmlBuilder<Message>, model: Model, record: RecordRow): Html
 
 const rowActions = (h: HtmlBuilder<Message>, model: Model, record: RecordRow): Html =>
 	h.div(
-		[h.Class("flex items-center justify-end gap-1.5")],
+		[h.Class("flex items-center justify-end gap-1.5 whitespace-nowrap")],
 		[
 			...(record.suggestedAccountId !== null
 				? [
@@ -389,6 +389,8 @@ export interface TableContext {
 }
 
 const cell = "px-3 first:pl-4 last:pr-4"
+/** Fits Create or Link, Link to… and ⋯ on one line; the source column takes the rest and truncates. */
+const actionsWidth = "w-60"
 
 /** One total per currency, never summed across them: `$1,840 + €200`. */
 const moneyTotal = (records: RecordGroup["records"]): string | null => {
@@ -470,13 +472,13 @@ export const recordsTable = (
 					[suggestionCell(h, record, context.accountsById.get(record.suggestedAccountId ?? ""))],
 				),
 				...(context.isAdmin
-					? [h.td([h.Class(twMerge("py-3", cell))], [rowActions(h, model, record)])]
+					? [h.td([h.Class(twMerge("py-3", cell, actionsWidth))], [rowActions(h, model, record)])]
 					: []),
 			],
 		)
 	}
 	return h.table(
-		[h.AriaLabel(context.ariaLabel), h.Class("w-full border-separate border-spacing-0")],
+		[h.AriaLabel(context.ariaLabel), h.Class("w-full table-fixed border-separate border-spacing-0")],
 		[
 			h.thead(
 				[],
@@ -512,7 +514,7 @@ export const recordsTable = (
 							header("Source record", "text-left"),
 							header("Value", "w-32 text-right"),
 							header("Suggested account", "w-[34%] text-left max-md:hidden"),
-							...(context.isAdmin ? [header("", "")] : []),
+							...(context.isAdmin ? [header("", actionsWidth)] : []),
 						],
 					),
 				],
