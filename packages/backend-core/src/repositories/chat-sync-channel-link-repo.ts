@@ -115,17 +115,6 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 						.returning(),
 				)
 
-			const updateSettings = (id: SyncChannelLinkId, settings: Record<string, unknown> | null) =>
-				db.run(
-					SQLite.update(schema.chatSyncChannelLinksTable)
-						.set({
-							settings,
-							updatedAt: new Date(),
-						})
-						.where(($) => [$.id.eq(id)])
-						.returning(),
-				)
-
 			return {
 				...baseRepo,
 				insert,
@@ -135,7 +124,6 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 				findByExternalChannel,
 				setActive,
 				updateDirection,
-				updateSettings,
 				softDelete,
 			}
 		}),

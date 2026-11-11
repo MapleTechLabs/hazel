@@ -23,29 +23,13 @@ export class OrganizationPolicy extends Context.Service<OrganizationPolicy>()("O
 				),
 			)
 
-		const isMember = (id: OrganizationId) =>
-			ErrorUtils.refailUnauthorized(
-				policyEntity,
-				"isMember",
-			)(withAnnotatedScope((scope) => orgResolver.requireScope(id, scope, policyEntity, "isMember")))
-
 		const canDelete = (id: OrganizationId) =>
 			ErrorUtils.refailUnauthorized(
 				policyEntity,
 				"delete",
 			)(withAnnotatedScope((scope) => orgResolver.requireOwner(id, scope, policyEntity, "delete")))
 
-		const canManagePublicInvite = (id: OrganizationId) =>
-			ErrorUtils.refailUnauthorized(
-				policyEntity,
-				"managePublicInvite",
-			)(
-				withAnnotatedScope((scope) =>
-					orgResolver.requireAdminOrOwner(id, scope, policyEntity, "managePublicInvite"),
-				),
-			)
-
-		return { canUpdate, canDelete, canCreate, isMember, canManagePublicInvite } as const
+		return { canUpdate, canDelete, canCreate } as const
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(OrgResolver.layer))

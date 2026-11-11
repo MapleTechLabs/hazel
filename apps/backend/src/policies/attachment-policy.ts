@@ -62,20 +62,7 @@ export class AttachmentPolicy extends Context.Service<AttachmentPolicy>()("Attac
 				}),
 			)
 
-		const canView = (id: AttachmentId) =>
-			ErrorUtils.refailUnauthorized(
-				policyEntity,
-				"view",
-			)(
-				attachmentRepo.with(id, (attachment) => {
-					if (!attachment.messageId) return uploaderOnly("view", attachment.uploadedBy)
-					return policy(policyEntity, "view", (actor) =>
-						Effect.map(channelViewers.viewerOf(actor.id), Option.isSome),
-					)
-				}),
-			)
-
-		return { canCreate, canUpdate, canDelete, canView } as const
+		return { canCreate, canUpdate, canDelete } as const
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make).pipe(

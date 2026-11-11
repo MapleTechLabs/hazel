@@ -78,18 +78,10 @@ export class ChannelMemberRepo extends Context.Service<ChannelMemberRepo>()("Cha
 					.limit(1),
 			)
 
-		const listByChannel = (channelId: ChannelId) =>
-			db.run(
-				SQLite.from(schema.channelMembersTable)
-					.select()
-					.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()]),
-			)
-
 		return {
 			...baseRepo,
 			findByChannelAndUser,
 			findExistingSingleDmChannel,
-			listByChannel,
 		}
 	}),
 }) {

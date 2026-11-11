@@ -1,8 +1,8 @@
 /**
  * Authorization inside a `ChannelObject`: the channel's readers are its `channel_viewers` (the
  * `OrgObject`'s computed `channel_access`, projected by `channel.setViewers`), with the viewer's org
- * role. Replaces `OrgResolver.fromChannelWithAccess` for handlers that run in the channel's object,
- * which holds no `channels` or `organization_members` rows.
+ * role. It is what handlers that run in the channel's object check, since that object holds no
+ * `channels` or `organization_members` rows.
  *
  * Also the channel's own facts from that delivery: its organization and Connect conversation. A
  * Connect host channel's object also serves its guest mounts' ids (the api Worker routes them

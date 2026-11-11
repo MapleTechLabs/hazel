@@ -88,45 +88,6 @@ const makePolicyLayer = (opts: {
 	)
 
 describe("ChannelMemberPolicy", () => {
-	it("isOwner allows matching user", async () => {
-		const actor = makeActor()
-		const layer = makePolicyLayer({
-			members: {},
-			channels: {},
-			channelMembers: {
-				[CHANNEL_MEMBER_ID]: { userId: actor.id, channelId: CHANNEL_ID },
-			},
-		})
-
-		const result = await runWithActorEither(
-			ChannelMemberPolicy.use((policy) => policy.isOwner(CHANNEL_MEMBER_ID)),
-			layer,
-			actor,
-		)
-		expect(Result.isSuccess(result)).toBe(true)
-	})
-
-	it("isOwner denies different user", async () => {
-		const actor = makeActor()
-		const layer = makePolicyLayer({
-			members: {},
-			channels: {},
-			channelMembers: {
-				[CHANNEL_MEMBER_ID]: { userId: ADMIN_USER_ID, channelId: CHANNEL_ID },
-			},
-		})
-
-		const result = await runWithActorEither(
-			ChannelMemberPolicy.use((policy) => policy.isOwner(CHANNEL_MEMBER_ID)),
-			layer,
-			actor,
-		)
-		expect(Result.isFailure(result)).toBe(true)
-		if (Result.isFailure(result)) {
-			expect(UnauthorizedError.is(result.failure)).toBe(true)
-		}
-	})
-
 	it("canCreate allows admin-or-owner for any channel type", async () => {
 		const admin = makeActor({ id: ADMIN_USER_ID })
 		const owner = makeActor({ id: OWNER_USER_ID })

@@ -9,7 +9,6 @@ const UPLOADER = "00000000-0000-4000-8000-000000000941" as UserId
 const AUTHOR = "00000000-0000-4000-8000-000000000942" as UserId
 const ADMIN = "00000000-0000-4000-8000-000000000943" as UserId
 const MEMBER = "00000000-0000-4000-8000-000000000944" as UserId
-const OUTSIDER = "00000000-0000-4000-8000-000000000945" as UserId
 const PENDING_ID = "00000000-0000-4000-8000-000000000946" as AttachmentId
 const ATTACHED_ID = "00000000-0000-4000-8000-000000000947" as AttachmentId
 const MESSAGE_ID = "00000000-0000-4000-8000-000000000948"
@@ -44,11 +43,5 @@ describe("AttachmentPolicy (ChannelObject)", () => {
 		expect(Result.isSuccess(await run(ADMIN, (policy) => policy.canDelete(ATTACHED_ID)))).toBe(true)
 		expect(Result.isFailure(await run(MEMBER, (policy) => policy.canDelete(ATTACHED_ID)))).toBe(true)
 		expect(Result.isFailure(await run(MEMBER, (policy) => policy.canDelete(PENDING_ID)))).toBe(true)
-	})
-
-	it("viewers see attached files, outsiders do not", async () => {
-		expect(Result.isSuccess(await run(MEMBER, (policy) => policy.canView(ATTACHED_ID)))).toBe(true)
-		expect(Result.isFailure(await run(OUTSIDER, (policy) => policy.canView(ATTACHED_ID)))).toBe(true)
-		expect(Result.isFailure(await run(MEMBER, (policy) => policy.canView(PENDING_ID)))).toBe(true)
 	})
 })

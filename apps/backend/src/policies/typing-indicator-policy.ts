@@ -1,7 +1,7 @@
 import { TypingIndicatorRepo } from "@hazel/backend-core"
 import type { ChannelId, TypingIndicatorId } from "@hazel/schema"
 import { Context, Effect, Layer } from "effect"
-import { makePolicy, withAnnotatedScope, withPolicyUnauthorized } from "../lib/policy-utils"
+import { withAnnotatedScope, withPolicyUnauthorized } from "../lib/policy-utils"
 import { ChannelViewers } from "../services/channel-viewers"
 
 /**
@@ -14,8 +14,6 @@ export class TypingIndicatorPolicy extends Context.Service<TypingIndicatorPolicy
 	{
 		make: Effect.gen(function* () {
 			const policyEntity = "TypingIndicator" as const
-			const authorize = makePolicy(policyEntity)
-
 			const channelViewers = yield* ChannelViewers
 			const typingIndicatorRepo = yield* TypingIndicatorRepo
 
@@ -25,8 +23,6 @@ export class TypingIndicatorPolicy extends Context.Service<TypingIndicatorPolicy
 					action,
 					withAnnotatedScope((scope) => Effect.asVoid(channelViewers.require(channelId, scope))),
 				)
-
-			const canRead = (_id: TypingIndicatorId) => authorize("select", () => Effect.succeed(true))
 
 			const canCreate = (channelId: ChannelId) => viewerOf("create", channelId)
 
@@ -44,7 +40,7 @@ export class TypingIndicatorPolicy extends Context.Service<TypingIndicatorPolicy
 					typingIndicatorRepo.with(id, (indicator) => viewerOf("delete", indicator.channelId)),
 				)
 
-			return { canCreate, canUpdate, canDelete, canRead } as const
+			return { canCreate, canUpdate, canDelete } as const
 		}),
 	},
 ) {
