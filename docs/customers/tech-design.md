@@ -295,7 +295,8 @@ Rules:
   in `attributes.foreignMrr`). With the settings' `overageInMrr`, an account with a counted paid
   invoice takes Σ those instead (`invoiceMrrOf`): each live, non-trialing Stripe subscription's
   (any `mrrSource`: Autumn bills through Stripe) last paid invoice, paid within its interval plus
-  7 days (`other` never), `/12` for a yearly one, reporting currency only. So overage, discounts
+  7 days (`other` never, incl. every-N-months prices), `/12` for a yearly one, reporting currency
+  only (none in it: the plan MRR stays). So overage, discounts
   and coupons count, and a month's usage moves MRR (expansion / contraction). `planName` =
   highest-MRR subscription's, skipping the settings' `addOnPlans` while the account has another
   plan; `trialEndsAt`;

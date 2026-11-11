@@ -201,6 +201,14 @@ describe("MRR from paid Stripe invoices", () => {
 		expect(rollup.attributes.foreignMrr).toEqual({ eur: 5_000 })
 	})
 
+	it("keeps the plan MRR when only another currency's invoice counts", () => {
+		const rollup = invoiceRollupOf(
+			[team],
+			[{ subscriptionId: team.id, amountPaidMinor: 7_000, currency: "eur", paidAt: paidDaysAgo(5) }],
+		)
+		expect(rollup.mrrMinor).toBe(team.mrrMinor)
+	})
+
 	it("counts an Autumn-sourced account's Stripe subscriptions' invoices", () => {
 		const rollup = invoiceRollupOf(
 			[

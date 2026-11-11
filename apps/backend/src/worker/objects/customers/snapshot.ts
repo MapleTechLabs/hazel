@@ -187,9 +187,10 @@ export const rollupAccount = (input: {
 	const { account, subscriptions, now, today, currency } = input
 	const live = subscriptions.filter((sub) => sub.status !== "canceled")
 	const paying = live.filter(billed)
+	const invoiced = input.invoiceMrr.filter((row) => row.currency === currency)
 	const mrrMinor =
-		input.invoiceMrr.length > 0
-			? sum(input.invoiceMrr.filter((row) => row.currency === currency).map((row) => row.mrrMinor))
+		invoiced.length > 0
+			? sum(invoiced.map((row) => row.mrrMinor))
 			: sum(paying.filter((sub) => sub.currency === currency).map((sub) => sub.mrrMinor))
 	// Paying in any currency (MRR counts only the reporting currency's; `attributes.foreignMrr` the rest),
 	// or on usage at MRR 0: never `churned` or `lead` for want of MRR.
