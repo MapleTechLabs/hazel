@@ -451,7 +451,11 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			],
 		},
 		{
-			id: "0008_customer_settings_add_on_plans",
+			id: "0008_customers_metric_custom_unit",
+			statements: ['ALTER TABLE "customer_metric_definitions" ADD COLUMN "customUnit" text'],
+		},
+		{
+			id: "0009_customer_settings_add_on_plans",
 			statements: [
 				'ALTER TABLE "customer_settings" ADD COLUMN "addOnPlans" text NOT NULL DEFAULT \'[]\'',
 			],

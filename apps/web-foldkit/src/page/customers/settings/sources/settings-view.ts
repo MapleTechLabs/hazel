@@ -1,4 +1,5 @@
 import type * as Customers from "@hazel/domain/customers"
+import { Option } from "effect"
 import type { Html } from "foldkit/html"
 import { type ConfigField, providerOf } from "../../../../customers/providers"
 import { segmented } from "../../../../customers/ui/filter-bar"
@@ -17,12 +18,13 @@ import {
 	settingsProblemOf,
 } from "./model"
 import { card, cardHeader, eyebrow, formField, type H } from "./parts"
-import type { ConnectionRow } from "./queries"
+import type { ConnectionRow, UnitMetricRow } from "./queries"
 
 /**
  * A source's provider settings (Wonder `one` for Maple): the descriptor's config fields for any
  * provider, plus Maple's activity events, metric mappings and lookback. Saved with
- * `customers.connection.update({ config })`.
+ * `customers.connection.update({ config })`. Autumn's metric units are saved one by one
+ * (`customers.metric.setUnit`).
  */
 
 /** One descriptor field: a switch for a boolean, an input for text. Shared with the connect modal. */
@@ -296,6 +298,64 @@ const lookback = (h: H, config: MapleConfig, isDisabled: boolean): Html =>
 					className: "self-start",
 				}),
 	])
+
+const unitRow = (h: H, model: Model, metric: UnitMetricRow, isDisabled: boolean): ReadonlyArray<Html> => {
+	const toSubmit = Message.SubmittedUnit({ metricKey: metric.key })
+	return [
+		h.div(
+			[h.Class("flex min-w-0 flex-col")],
+			[
+				h.span([h.Class("truncate text-fg text-sm")], [metric.name]),
+				(metric.customUnit ?? metric.unit) === null
+					? h.span([h.Class("text-warning-subtle-fg text-xs")], ["No unit yet"])
+					: h.code([h.Class("truncate font-mono text-muted-fg text-xs")], [metric.key]),
+			],
+		),
+		input(h, {
+			placeholder: metric.unit ?? "GB, requests, credits",
+			className: "text-sm",
+			isDisabled,
+			attributes: [
+				h.AriaLabel(`Unit of ${metric.name}`),
+				h.Attribute("maxlength", "40"),
+				h.Value(model.unitDrafts[metric.key] ?? metric.customUnit ?? ""),
+				h.OnInput((value) => Message.ChangedUnit({ metricKey: metric.key, value })),
+				h.OnBlur(toSubmit),
+				h.OnKeyDownPreventDefault((key) => (key === "Enter" ? Option.some(toSubmit) : Option.none())),
+			],
+		}),
+	]
+}
+
+/** What one unit of each metered feature is: Autumn rarely says, and "8 traces" means nothing. */
+export const unitsCard = (h: H, model: Model, connection: ConnectionRow, isAdmin: boolean): Html => {
+	const name = providerOf(connection.provider).name
+	const metrics = (model.unitMetrics ?? []).filter((metric) => metric.provider === connection.provider)
+	return card(h, [
+		cardHeader(
+			h,
+			"Usage units",
+			`What one unit of each metered feature is, e.g. GB or requests. Charts show values in it. Blank uses ${name}'s own, when it has one.`,
+		),
+		metrics.length === 0
+			? h.p(
+					[h.Class("text-muted-fg text-sm")],
+					[
+						model.unitMetrics === null
+							? "Loading…"
+							: "No metered features yet. They show here after the next sync.",
+					],
+				)
+			: h.div(
+					[h.Class("grid grid-cols-[minmax(0,1fr)_minmax(0,14rem)] items-center gap-x-4 gap-y-3")],
+					[
+						eyebrow(h, "Feature"),
+						eyebrow(h, "Unit"),
+						...metrics.flatMap((metric) => unitRow(h, model, metric, !isAdmin)),
+					],
+				),
+	])
+}
 
 export const settingsCard = (h: H, model: Model, connection: ConnectionRow, isAdmin: boolean): Html => {
 	const descriptor = providerOf(connection.provider)

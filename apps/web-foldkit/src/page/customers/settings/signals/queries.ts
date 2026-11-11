@@ -60,7 +60,7 @@ export const metricsStream = <Message>(
 						.map((row) => ({
 							key: row.key,
 							name: row.name,
-							unit: row.unit,
+							unit: row.customUnit ?? row.unit,
 							provider: row.provider,
 							description: row.description,
 						})),

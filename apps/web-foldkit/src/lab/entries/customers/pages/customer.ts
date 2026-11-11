@@ -485,9 +485,9 @@ const initial = (flags: typeof Flags.Type) => {
 		notes: NOTES,
 		members: TEAM,
 		metrics: [
-			{ key: "active_users", name: "Active users", unit: null },
-			{ key: "mrr", name: "MRR", unit: "minor" },
-			{ key: "api_requests", name: "API requests", unit: null },
+			{ key: "active_users", name: "Active users", unit: null, provider: null },
+			{ key: "mrr", name: "MRR", unit: "minor", provider: null },
+			{ key: "api_requests", name: "API requests", unit: null, provider: "autumn" },
 		],
 		connectedProviders: CONNECTIONS.map((connection) => connection.provider),
 	}

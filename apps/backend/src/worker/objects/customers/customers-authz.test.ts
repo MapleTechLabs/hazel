@@ -90,6 +90,7 @@ const PAYLOADS = {
 	"customers.unmatched.createAccount": { recordId: uuid() },
 	"customers.unmatched.ignore": { recordId: uuid() },
 	"customers.ignoreRule.delete": { ruleId: uuid() },
+	"customers.metric.setUnit": { metricKey: "autumn.traces", unit: "GB" },
 	"customers.demo.seed": { accounts: 1 },
 } satisfies Record<HazelRpcTag & `customers.${string}`, Record<string, unknown>>
 
@@ -112,6 +113,7 @@ const ADMIN_ONLY = new Set([
 	"customers.unmatched.createAccount",
 	"customers.unmatched.ignore",
 	"customers.ignoreRule.delete",
+	"customers.metric.setUnit",
 	"customers.demo.seed",
 ])
 

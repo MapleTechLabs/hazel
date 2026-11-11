@@ -1481,6 +1481,23 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
+			"customers.metric.setUnit": ({ metricKey, unit }) =>
+				Effect.gen(function* () {
+					yield* requireAdmin
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.gen(function* () {
+							const [row] = yield* db.run(
+								SQLite.update(schema.customerMetricDefinitionsTable)
+									.set({ customUnit: unit?.trim() || null, updatedAt: now })
+									.where(($) => [$.key.eq(metricKey), $.builtIn.eq(false)])
+									.returning("id"),
+							)
+							if (row === undefined) return yield* notFound("metric", metricKey)
+						}),
+					)
+				}).pipe(remap),
+
 			"customers.demo.seed": ({ accounts, seed, organizationId: payloadOrg }) =>
 				Effect.gen(function* () {
 					const organizationId = yield* requireOwnOrganization(payloadOrg)

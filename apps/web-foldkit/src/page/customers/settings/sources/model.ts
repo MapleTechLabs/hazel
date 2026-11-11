@@ -6,7 +6,7 @@ import { CommonReason, failureMessage, type UserErrorMessage } from "~/lib/error
 import { providerOf } from "../../../../customers/providers"
 import { MemberRow } from "../../../../customers/queries"
 import * as Modal from "../../../../ui/modal"
-import { ConnectionRow, SyncRunRow } from "./queries"
+import { ConnectionRow, SyncRunRow, UnitMetricRow } from "./queries"
 
 /**
  * Data sources (`docs/customers/spec.md` §5): every provider's connection, its sync runs and
@@ -110,6 +110,10 @@ export const Model = Schema.Struct({
 	/** Maple's "add an activity event" field. */
 	activityEventInput: Schema.String,
 	isSavingSettings: Schema.Boolean,
+	/** The sources' own metrics; null until the query answers. */
+	unitMetrics: Schema.NullOr(Schema.Array(UnitMetricRow)),
+	/** A metric's unit while typed, by key; saved on Enter or blur. */
+	unitDrafts: Schema.Record(Schema.String, Schema.String),
 })
 export type Model = typeof Model.Type
 
