@@ -943,6 +943,75 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("reads a trial canceled before converting as a lead, even when the cancel no longer reports the trial", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					{
+						_tag: "account",
+						externalId: "org_1",
+						name: "Trial Co",
+						sameAs: [],
+						onNoMatch: "create",
+					},
+				])
+				const trialEndsAt = new Date(NOW.getTime() + 4 * DAY).toISOString()
+				yield* world.ingest("stripe", [{ ...subscription(10), status: "trialing", trialEndsAt }])
+				const stage = () =>
+					world.rows<{ lifecycleStage: string; churnedAt: string | null }>(
+						`SELECT lifecycleStage, churnedAt FROM customer_accounts`,
+					)[0]
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(stage()).toEqual({ lifecycleStage: "trialing", churnedAt: null })
+
+				yield* world.ingest("stripe", [
+					{
+						...subscription(10),
+						status: "canceled",
+						canceledAt: new Date(NOW.getTime() - DAY).toISOString(),
+					},
+				])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				const [stored] = world.rows<{ trialEndsAt: string }>(
+					`SELECT trialEndsAt FROM customer_subscriptions`,
+				)
+				expect(epoch(stored!.trialEndsAt)).toBe(Date.parse(trialEndsAt))
+				expect(stage()).toEqual({ lifecycleStage: "lead", churnedAt: null })
+			}),
+		))
+
+	it("keeps Stripe's billing for an account on an auto-enabled free Autumn plan", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					{
+						_tag: "account",
+						externalId: "org_1",
+						name: "Free Co",
+						sameAs: [],
+						onNoMatch: "create",
+					},
+				])
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET backfilledAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
+					)
+					.run(world.connection("autumn"))
+				yield* world.ingest("stripe", [subscription(30)])
+				yield* world.ingest("autumn", [
+					{ ...subscription(30), externalId: "cus_1:free", planName: "Free", mrrMinor: 0 },
+				])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(
+					world.rows(`SELECT mrrMinor, mrrSource, planName, lifecycleStage FROM customer_accounts`),
+				).toEqual([
+					{ mrrMinor: 19_900, mrrSource: "stripe", planName: "Team", lifecycleStage: "active" },
+				])
+			}),
+		))
+
 	it("counts a compute attempt at its lease, so a killed run backs off and ingest waits", () =>
 		run(
 			Effect.gen(function* () {

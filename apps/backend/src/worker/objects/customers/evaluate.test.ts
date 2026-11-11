@@ -125,14 +125,26 @@ describe("signal evaluation", () => {
 	})
 
 	it("bills each account from Autumn once it is imported and bills the account; else from Stripe", () => {
-		const both = new Set(["stripe", "autumn"] as const)
+		const subs = (...subscriptions: NonNullable<FactsInput["subscriptions"]>) =>
+			factsOf({ subscriptions }).subscriptions
+		const both = subs({ provider: "stripe" }, { provider: "autumn" })
 		expect(billingProviderOf(false, both)).toBe("stripe")
 		expect(billingProviderOf(true, both)).toBe("autumn")
 		// Unknown to Autumn, or billed in Stripe outside it.
-		expect(billingProviderOf(true, new Set(["stripe"]))).toBe("stripe")
+		expect(billingProviderOf(true, subs({ provider: "stripe" }))).toBe("stripe")
+		// On an auto-enabled free plan in Autumn, billed in Stripe: Stripe's; once paid in Autumn, Autumn's.
+		const free = { provider: "autumn", mrrMinor: 0 } as const
+		expect(billingProviderOf(true, subs({ provider: "stripe" }, free))).toBe("stripe")
+		expect(
+			billingProviderOf(
+				true,
+				subs({ provider: "stripe" }, free, { provider: "autumn", status: "canceled" }),
+			),
+		).toBe("autumn")
 		// Autumn's only: kept while Autumn imports or after a disconnect, never zeroed.
-		expect(billingProviderOf(false, new Set(["autumn"]))).toBe("autumn")
-		expect(billingProviderOf(true, new Set())).toBe("stripe")
+		expect(billingProviderOf(false, subs({ provider: "autumn" }))).toBe("autumn")
+		expect(billingProviderOf(true, subs(free))).toBe("autumn")
+		expect(billingProviderOf(true, [])).toBe("stripe")
 	})
 
 	it("payment_failed: past due, or an invoice open 7+ days past due; escalates by age and unpaid", () => {

@@ -96,8 +96,18 @@ const sum = (values: ReadonlyArray<number>) => values.reduce((total, value) => t
 
 const startOf = (day: Day) => new Date(`${day}T00:00:00.000Z`)
 
-/** A paid subscription: it has MRR, or bills on usage MRR cannot capture (`billsByUsage`). */
-const pays = (sub: schema.CustomerSubscription) => sub.mrrMinor > 0 || sub.billsByUsage
+/** Canceled before its trial ended: it never converted, so never paid. */
+const unconverted = (sub: schema.CustomerSubscription) =>
+	sub.status === "canceled" &&
+	sub.trialEndsAt !== null &&
+	sub.canceledAt !== null &&
+	sub.canceledAt <= sub.trialEndsAt
+
+/**
+ * A paid subscription: it has MRR, or bills on usage MRR cannot capture (`billsByUsage`); not a
+ * trial canceled before converting (a card-backed one carries its plan's MRR).
+ */
+const pays = (sub: schema.CustomerSubscription) => (sub.mrrMinor > 0 || sub.billsByUsage) && !unconverted(sub)
 
 /** The fields compute derives for one account (pure). */
 export const rollupAccount = (input: {
@@ -227,17 +237,21 @@ const ACTIVITY_PROVIDERS: ReadonlySet<CustomerProvider> = new Set(["clerk", "map
 const BILLING_PROVIDERS: ReadonlyArray<CustomerProvider> = ["stripe", "autumn"]
 
 /**
- * Whose subscriptions count for one account's MRR, from the providers it has subscriptions of (any
- * status): Autumn once its connection finished its first import (until then its data is partial)
- * and it bills the account, else Stripe (a customer Autumn does not know, or billed in Stripe
- * outside it). An account with Autumn's and none of Stripe's keeps Autumn's either way, so a
- * disconnect does not zero its MRR.
+ * Whose subscriptions count for one account's MRR, from its subscriptions (any status): Autumn once
+ * its connection finished its first import (until then its data is partial) and it bills the
+ * account (a subscription of Autumn's pays or paid: an auto-enabled free plan does not), else
+ * Stripe (a customer Autumn does not know, or billed in Stripe outside it). An account with
+ * Autumn's and none of Stripe's keeps Autumn's either way, so a disconnect does not zero its MRR.
  */
 export const billingProviderOf = (
 	autumnReady: boolean,
-	providers: ReadonlySet<CustomerProvider>,
-): CustomerProvider =>
-	providers.has("autumn") && (autumnReady || !providers.has("stripe")) ? "autumn" : "stripe"
+	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
+): CustomerProvider => {
+	const autumn = subscriptions.filter((sub) => sub.provider === "autumn")
+	if (autumn.length === 0) return "stripe"
+	if (!subscriptions.some((sub) => sub.provider === "stripe")) return "autumn"
+	return autumnReady && autumn.some(pays) ? "autumn" : "stripe"
+}
 
 /** Billing subscriptions by account: the account's source (`billingProviderOf`) and its subscriptions. */
 export const billingByAccount = (
@@ -246,7 +260,7 @@ export const billingByAccount = (
 ) =>
 	new Map(
 		[...groupBy(subscriptions, (sub) => sub.accountId)].map(([accountId, subs]) => {
-			const source = billingProviderOf(autumnReady, new Set(subs.map((sub) => sub.provider)))
+			const source = billingProviderOf(autumnReady, subs)
 			return [accountId, { source, subscriptions: subs.filter((sub) => sub.provider === source) }]
 		}),
 	)

@@ -1288,7 +1288,10 @@ const make = Effect.gen(function* () {
 				interval: op.interval,
 				quantity: op.quantity,
 				startedAt: toDate(op.startedAt),
-				trialEndsAt: toDate(op.trialEndsAt),
+				// A canceled subscription may not report its trial any more: the stored end tells
+				// whether it converted.
+				trialEndsAt:
+					op.status === "canceled" && op.trialEndsAt === null ? undefined : toDate(op.trialEndsAt),
 				currentPeriodEnd: toDate(op.currentPeriodEnd),
 				cancelAtPeriodEnd: op.cancelAtPeriodEnd,
 				canceledAt: toDate(op.canceledAt),
