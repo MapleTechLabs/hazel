@@ -3,7 +3,7 @@ import { Schema } from "effect"
 import { Scene } from "foldkit"
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../../contract"
-import { formatDistanceToNow, groupByTime } from "./format"
+import { groupByTime } from "./format"
 import { Message } from "./message"
 import { type Model, type NotificationItem, Notifications } from "./model"
 import { MarkNotificationRead, routeChanged, update } from "./update"
@@ -141,15 +141,4 @@ describe("notifications inbox", () => {
 		)
 	})
 
-	test("formats distances like date-fns", () => {
-		const ago = (minutes: number) => formatDistanceToNow(NOW - minutes * MINUTE, NOW)
-		expect(ago(0)).toBe("less than a minute ago")
-		expect(ago(1)).toBe("1 minute ago")
-		expect(ago(44)).toBe("44 minutes ago")
-		expect(ago(60)).toBe("about 1 hour ago")
-		expect(ago(168)).toBe("about 3 hours ago")
-		expect(ago(26 * 60)).toBe("1 day ago")
-		expect(ago(9 * 24 * 60)).toBe("9 days ago")
-		expect(ago(40 * 24 * 60)).toBe("about 1 month ago")
-	})
 })

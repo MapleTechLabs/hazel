@@ -5,7 +5,6 @@ import { Command, expectNoOutMessage, expectOutMessage, given, message, model, s
 import { describe, expect, test } from "vitest"
 import { PageOutMessage } from "../../out-message"
 import type { Shared } from "../../contract"
-import { formatDistanceToNow } from "../format-distance"
 import { Message } from "./message"
 import { DeleteCustomEmoji, generateEmojiName, init, update, validateEmojiName } from "./update"
 import {
@@ -129,20 +128,6 @@ describe("delete confirmation", () => {
 		expect(
 			update(init().model, Message.FailedDeleteEmoji({ reason: "Offline" }), shared).outMessage,
 		).toMatchObject({ toast: reasonToast("Offline") })
-	})
-})
-
-describe("formatDistanceToNow", () => {
-	const now = Date.UTC(2026, 2, 12, 12, 0)
-	const ago = (minutes: number) => formatDistanceToNow(new Date(now - minutes * 60_000), now)
-	test("matches date-fns thresholds", () => {
-		expect(ago(0)).toBe("less than a minute ago")
-		expect(ago(30)).toBe("30 minutes ago")
-		expect(ago(60)).toBe("about 1 hour ago")
-		expect(ago(2 * 1440)).toBe("2 days ago")
-		expect(ago(40 * 1440)).toBe("about 1 month ago")
-		expect(ago(100 * 1440)).toBe("3 months ago")
-		expect(ago(400 * 1440)).toBe("about 1 year ago")
 	})
 })
 

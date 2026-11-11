@@ -6,7 +6,7 @@ import type { Shared } from "../../contract"
 import { PROVIDER_LOGOS } from "./command"
 import { Message } from "./message"
 import { INTEGRATION_CONFIG, type Model, type Provider } from "./model"
-import { formatDistanceToNow } from "./relative-time"
+import { formatDistanceToNow } from "~/lib/format-distance"
 import { providerWebhook } from "./update-cards"
 
 /** Port of `components/channel-settings/integration-card.tsx` (OpenStatus and Railway). */

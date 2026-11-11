@@ -1,5 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { formatDistanceToNow } from "../../page/notifications/inbox/format"
+import { formatDistanceToNow } from "~/lib/format-distance"
 import { cn } from "~/lib/utils"
 import { IconHashtag, IconPaperclip2 } from "../../icons"
 import { avatar } from "../../ui/avatar"
