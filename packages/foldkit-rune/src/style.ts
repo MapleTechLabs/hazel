@@ -1956,7 +1956,7 @@ const parseSlideTransform = (v: string): [number, number] | null => {
 	return x === null || y === null ? null : [x, y]
 }
 
-const EASE_KEYWORDS = new Set(["linear", "ease", "ease-in", "ease-out", "ease-in-out"])
+const EASE_KEYWORDS = new Set(EASINGS.keys())
 
 /** CSS lists pair by index, a shorter list repeating; each property lands on its channel. */
 const composeTransition = (t: Accumulator["transition"]): Style["transition"] => {
