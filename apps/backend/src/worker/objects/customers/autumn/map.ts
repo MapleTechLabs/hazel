@@ -272,24 +272,41 @@ const sellsPrepaid = (plan: AutumnPlan | undefined): boolean =>
 /** A customer's holdings of one plan: their prepaid units are one pool in the balances. */
 const poolOf = (customerId: string | null, planId: string): string => JSON.stringify([customerId, planId])
 
-const TRIAL_DAYS = new Map([
-	["day", 1],
-	["month", 31],
-	["year", 366],
-])
+/** The ten minutes Autumn adds to a trial's end (`freeTrialToStripeTimestamp`), and an hour's slack. */
+const TRIAL_END_SLACK_MS = 70 * 60_000
+
+/** `at` plus `months` calendar months in UTC, a day past the target month's end clamped to it. */
+const addMonths = (at: number, months: number): number => {
+	const date = new Date(at)
+	const day = date.getUTCDate()
+	date.setUTCDate(1)
+	date.setUTCMonth(date.getUTCMonth() + months)
+	const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate()
+	date.setUTCDate(Math.min(day, lastDay))
+	return date.getTime()
+}
 
 /**
- * The latest an ended plan's trial could have ended: Autumn reports `trial_ends_at` only while the
- * trial runs, so it comes from the plan's trial terms and the plan's start, as an upper bound (a
- * month counts 31 days, a year 366, plus an hour for the ten minutes Autumn adds,
- * `freeTrialToStripeTimestamp`). Null without a trial or a start.
+ * When an ended plan's trial ended: Autumn reports `trial_ends_at` only while the trial runs, so it
+ * comes from the plan's trial terms and the plan's start, by calendar (UTC days, months, years),
+ * plus the ten minutes Autumn adds and an hour's slack. Null without a trial or a start. A plan
+ * whose trial is as long as its billing interval cannot be told apart from Autumn's API: one never
+ * given the trial (already used) and canceled after its first paid period ends at the same time.
  */
 const trialEndOf = (subscription: AutumnSubscription, plan: AutumnPlan | undefined): number | null => {
-	const days = TRIAL_DAYS.get(plan?.free_trial?.duration_type ?? "day")
 	const length = plan?.free_trial?.duration_length
-	return days === undefined || length == null || subscription.started_at == null
-		? null
-		: subscription.started_at + length * days * 86_400_000 + 3_600_000
+	const start = subscription.started_at
+	if (length == null || start == null) return null
+	switch (plan?.free_trial?.duration_type ?? "day") {
+		case "day":
+			return start + length * 86_400_000 + TRIAL_END_SLACK_MS
+		case "month":
+			return addMonths(start, length) + TRIAL_END_SLACK_MS
+		case "year":
+			return addMonths(start, length * 12) + TRIAL_END_SLACK_MS
+		default:
+			return null
+	}
 }
 
 /**
@@ -361,9 +378,10 @@ export const subscriptionOps = (
 		const key = poolOf(customerOf(subscription), subscription.plan_id)
 		holders.set(key, (holders.get(key) ?? 0) + 1)
 	}
+	/** The customer's own grants of the plan: a sub-customer's (`source: "entity"`) are not its. */
 	const granted = (planId: string) =>
 		(options.balances ?? []).some((balance) =>
-			(balance.breakdown ?? []).some((grant) => grant.plan_id === planId),
+			(balance.breakdown ?? []).some((grant) => grant.plan_id === planId && grant.source !== "entity"),
 		)
 	const unpriced = new Set(
 		subscriptions.flatMap((subscription) => {

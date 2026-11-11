@@ -354,8 +354,24 @@ describe("Autumn plan → subscription", () => {
 			status: "canceled",
 			mrrMinor: 0,
 			billsByUsage: false,
-			trialEndsAt: new Date(started + 14 * DAY + 3_600_000).toISOString(),
+			trialEndsAt: new Date(started + 14 * DAY + 70 * 60_000).toISOString(),
 		})
+		// A month's trial ends on the calendar: Jan 31 + 1 month is Feb 28, not 31 days later.
+		const monthStart = Date.UTC(2026, 0, 31, 12)
+		const monthTrial = {
+			...canceled,
+			plan: { ...PLAN_ENTERPRISE, free_trial: { duration_length: 1, duration_type: "month" } },
+			started_at: monthStart,
+			canceled_at: monthStart + DAY,
+			current_period_end: Date.UTC(2026, 1, 28, 12, 10),
+			expires_at: Date.UTC(2026, 1, 28, 12, 10),
+		}
+		expect(subOp(monthTrial)).toMatchObject({
+			mrrMinor: 0,
+			trialEndsAt: new Date(Date.UTC(2026, 1, 28, 13, 10)).toISOString(),
+		})
+		const pastTrial = { ...monthTrial, expires_at: Date.UTC(2026, 2, 2, 12) }
+		expect(subOp(pastTrial)).toMatchObject({ mrrMinor: 300_000, trialEndsAt: null })
 		// Billed past its trial, then canceled: a paid plan that ended.
 		const converted = {
 			...canceled,
@@ -375,6 +391,18 @@ describe("Autumn plan → subscription", () => {
 		expect(hidden).not.toHaveProperty("billsByUsage")
 		// The org counts them: priced as usual.
 		expect(subOps([pastDue], { customer: CUSTOMER_INITECH })).toMatchObject([{ mrrMinor: 7_000 }])
+		// A sub-customer's grant of the plan is not the customer's own.
+		const { seats } = CUSTOMER_INITECH.balances
+		const entityOnly = {
+			...CUSTOMER_INITECH,
+			balances: {
+				seats: {
+					...seats,
+					breakdown: seats.breakdown.map((grant) => ({ ...grant, source: "entity" })),
+				},
+			},
+		}
+		expect(subOps([pastDue], { customer: entityOnly })[0]).not.toHaveProperty("mrrMinor")
 		// No prepaid item to hide: Pro's base price is all there is.
 		expect(subOp(SUB_ACME_PAST_DUE)).toMatchObject({ status: "past_due", mrrMinor: 9_900 })
 		// Held twice, one past_due: the shared pool may lack its grants, so neither holding is priced.
