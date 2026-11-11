@@ -64,6 +64,9 @@ writeFileSync(
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<!-- Motion may run above 60 Hz on a ProMotion iPhone (Rune's display link asks for 120). -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- A dev stack on this Mac (http://localhost); everything else is HTTPS. -->

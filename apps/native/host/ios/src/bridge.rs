@@ -43,6 +43,8 @@ thread_local! {
     static BUNDLE: RefCell<Option<(String, Option<serde_json::Value>)>> = const { RefCell::new(None) };
     /// The page loaded last (0 before the first): only its `ready` releases the held lines.
     static PAGE: Cell<u64> = const { Cell::new(0) };
+    /// Hears the page's process end (the web view holds it weakly).
+    static NAVIGATION: RefCell<Option<Retained<PageNavigation>>> = const { RefCell::new(None) };
 }
 
 /// Where the runtime's trees go: the running app.
@@ -223,6 +225,27 @@ define_class!(
     }
 );
 
+define_class!(
+    // SAFETY: NSObject has no subclassing requirements; the class does not implement `Drop`.
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "HazelPageNavigation"]
+    /// The page's navigation delegate, for the one event the host acts on.
+    struct PageNavigation;
+
+    unsafe impl NSObjectProtocol for PageNavigation {}
+
+    impl PageNavigation {
+        /// WebKit ended the page's process (memory pressure, a crash): the worker and the
+        /// runtime in it are gone, so a fresh page starts another, as a browser reloads a tab.
+        #[unsafe(method(webViewWebContentProcessDidTerminate:))]
+        fn content_process_ended(&self, _web: &AnyObject) {
+            log("[host] the page's process ended; starting the runtime again");
+            load_page(self.mtm(), None);
+        }
+    }
+);
+
 /// The app's window, once the scene has one.
 pub(crate) fn window(mtm: MainThreadMarker) -> Option<Retained<UIWindow>> {
     let scenes = UIApplication::sharedApplication(mtm).connectedScenes();
@@ -275,6 +298,14 @@ fn start() -> bool {
         msg_send![WebView::alloc(mtm), initWithFrame: frame, configuration: &*configuration]
     };
     window.insertSubview_atIndex(&web, 0);
+    let navigation: Retained<PageNavigation> = {
+        let this = PageNavigation::alloc(mtm).set_ivars(());
+        unsafe { msg_send![super(this), init] }
+    };
+    unsafe {
+        let _: () = msg_send![&*web, setNavigationDelegate: &*navigation];
+    }
+    NAVIGATION.set(Some(navigation));
     WEB.set(Some(web));
     load_page(mtm, None);
     if let Some(handle) = HANDLE.get().map(|h| h.lock().unwrap().clone()) {

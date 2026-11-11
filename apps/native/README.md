@@ -122,6 +122,10 @@ executable carries (`host/ios/build.rs`). A full page load (after sign-in) loads
 runtime at that path. Pictures over http(s) download with `NSURLSession` (`host/src/fetch.rs`), on
 macOS too.
 
+Motion runs on Rune's display link (`CADisplayLink`), at the screen's rate: 120 Hz on a
+ProMotion iPhone (`CADisableMinimumFrameDurationOnPhone`). When WebKit ends the page's process
+(memory pressure, a crash), the bridge loads a fresh page and runtime, as a browser reloads a tab.
+
 Not yet on iOS: updates, HTML renders, and a device build (simulator only, ad-hoc signed).
 
 ## Releases

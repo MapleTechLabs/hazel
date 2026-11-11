@@ -11,9 +11,10 @@ publish = false
 # Rune is pre-release: pin a revision. This is anomalyco/rune bca4713 plus grid tracks
 # (El::grid_columns, grid_row_start), Tx::focus, Tx::drawn_rects, set_default_transition,
 # El::focusable_by_script and El::clip_fade_linear_frac (Makisuo/rune's `hazel-grid` branch), plus
-# iOS's full-screen window, safe area and motion frames (`hazel-ios`), plus El::max_w_frac and
-# a soft keyboard's return as Enter (`hazel-ios-followups`), until they land upstream.
-rune = { git = "https://github.com/Makisuo/rune", rev = "ac6daced41db259e8d01e819ae77916b880f0c27", features = [
+# iOS's full-screen window, safe area and motion frames (`hazel-ios`), plus El::max_w_frac, a
+# soft keyboard's return as Enter and iOS's display link (`hazel-ios-followups`), until they land
+# upstream.
+rune = { git = "https://github.com/Makisuo/rune", rev = "bb583d09ea5faeb6254e698a3cb7cb5d19b431de", features = [
 	"native-file-dialog",
 ] }
 base64 = "0.22"
@@ -43,3 +44,4 @@ objc2-core-foundation = "0.3"
 
 [profile.release]
 debug = false
+
