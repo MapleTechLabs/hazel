@@ -494,6 +494,19 @@ fn apply_motion(e: El, st: &Style) -> El {
                 to.0,
             ))
             .transition(Transition::none()),
+        Some(Animation::Slide {
+            period,
+            delay,
+            from,
+            to,
+            ease: [x1, y1, x2, y2],
+        }) => {
+            let mut spec =
+                LoopSpec::slide(f64::from(period.0), from.map(|F(v)| v), to.map(|F(v)| v))
+                    .easing(Easing::cubic(x1.0, y1.0, x2.0, y2.0));
+            spec.delay = f64::from(delay.0).max(0.0);
+            e.looping(spec).transition(Transition::none())
+        }
         Some(Animation::Enter {
             duration,
             delay,

@@ -38,3 +38,11 @@
 			rotate(var(--tw-enter-rotate, 0));
 	}
 }
+@keyframes progress-slide {
+	from {
+		transform: translateX(-100%);
+	}
+	to {
+		transform: translateX(250%);
+	}
+}

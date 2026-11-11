@@ -1109,6 +1109,45 @@ fn animate_pulse_dips_to_its_mid_opacity() {
 }
 
 #[test]
+fn animate_slide_sweeps_a_segment_across_its_track() {
+    // An indeterminate progress segment: 40px of a 100px track, from -100% to 250% of its width.
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 100, "h": 20 }),
+            vec![child(
+                "seg",
+                json!({ "w": 40, "h": 20, "bg": "#ff0000ff",
+                "animation": { "kind": "slide", "period": 2, "delay": 0,
+                    "from": [-1, 0], "to": [2.5, 0], "ease": [0, 0, 1, 1] } }),
+            )],
+        ),
+        (100.0, 20.0),
+    );
+    // The span the segment covers after the clock steps `dt` further.
+    let covered = |rt: &mut Runtime<State>, dt: f64| {
+        rt.frame(dt);
+        let frame = draw(rt, (100, 20));
+        let xs: Vec<u32> = (0..100).filter(|&x| frame.is(x, 10, RED)).collect();
+        (xs.first().copied(), xs.last().copied())
+    };
+    // Halfway through a period: 0.75 of its width along, over 30..70.
+    let (first, last) = covered(&mut rt, 1.0);
+    assert!(
+        first.is_some_and(|x| (29..=31).contains(&x)),
+        "{first:?}..{last:?}"
+    );
+    assert!(
+        last.is_some_and(|x| (68..=70).contains(&x)),
+        "{first:?}..{last:?}"
+    );
+    // Three quarters: 1.625 widths along, running off the right edge.
+    assert_eq!(covered(&mut rt, 0.5).1, Some(99));
+    // The period ends where it began, off the left edge, and wraps to sweep again.
+    assert_eq!(covered(&mut rt, 0.5), (None, None));
+}
+
+#[test]
 fn animate_in_plays_its_entrance_on_mount() {
     let entering = json!({ "w": 40, "h": 40, "bg": "#ff0000ff",
         "animation": { "kind": "enter", "duration": 0.2, "delay": 0, "opacity": 0, "x": 0, "y": 8, "scale": 1 } });

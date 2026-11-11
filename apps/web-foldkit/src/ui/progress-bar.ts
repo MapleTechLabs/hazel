@@ -42,7 +42,6 @@ export const progressBarTrack = <Message>(
 	h.span(
 		[h.Attribute("data-slot", "progress-bar-track"), h.Class(progressBarStyles.track)],
 		[
-			h.style([], [progressBarStyles.keyframes]),
 			h.div(
 				[h.Class(progressBarStyles.trackInner)],
 				[
@@ -53,7 +52,6 @@ export const progressBarTrack = <Message>(
 								? h.div([
 										h.Attribute("data-slot", "progress-content"),
 										h.Class(progressBarStyles.fillIndeterminate),
-										h.Attribute("style", "width: 40%;"),
 									])
 								: h.div([
 										h.Attribute("data-slot", "progress-content"),

@@ -179,6 +179,15 @@ pub enum Animation {
         y: F,
         scale: F,
     },
+    /// A one-way sweep that wraps each period, `from` to `to` in fractions of the element's own
+    /// size, along the `cubic-bezier` points in `ease` (an indeterminate progress segment).
+    Slide {
+        period: F,
+        delay: F,
+        from: [F; 2],
+        to: [F; 2],
+        ease: [F; 4],
+    },
 }
 
 #[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]

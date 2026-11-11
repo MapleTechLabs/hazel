@@ -120,6 +120,15 @@ export type Animation =
 	| { kind: "pulse"; period: number; delay: number; from: number; to: number }
 	/** Plays once on mount, from these values to the element's own (px, and a scale factor). */
 	| { kind: "enter"; duration: number; delay: number; opacity: number; x: number; y: number; scale: number }
+	/** A one-way sweep that wraps, `from` to `to` in fractions of the element's own size (`translate(%)`). */
+	| {
+			kind: "slide"
+			period: number
+			delay: number
+			from: [number, number]
+			to: [number, number]
+			ease: [number, number, number, number]
+	  }
 export type TransitionChannel = "colors" | "opacity" | "layout" | "transform"
 /** Seconds, and the `cubic-bezier` control points (`linear` is `[0, 0, 1, 1]`). */
 export type Timing = { duration: number; delay: number; ease: [number, number, number, number] }
@@ -1689,9 +1698,11 @@ export class StyleResolver {
 		let name = "none"
 		const times: Array<number> = []
 		let infinite = false
+		let ease = "ease"
 		for (const token of splitTop(first, /\s/)) {
 			if (/^-?[\d.]+m?s$/.test(token)) times.push(parseSeconds(token))
 			else if (token === "infinite") infinite = true
+			else if (EASE_KEYWORDS.has(token) || token.startsWith("cubic-bezier(")) ease = token
 			else if (/^[a-z][\w-]*$/i.test(token) && !ANIMATION_KEYWORDS.has(token)) name = token
 		}
 		const frames = this.keyframes.get(name)
@@ -1711,6 +1722,16 @@ export class StyleResolver {
 			frames.some((f) => f.decls.some((d) => d.value.includes("rotate(")))
 		)
 			return { kind: "spin", period: duration }
+		if (
+			infinite &&
+			[...props].every((p) => p === "transform") &&
+			frames.every((f) => f.at.every((at) => at === 0 || at === 1))
+		) {
+			const from = parseSlideTransform(valueAt("transform", 0) ?? "none")
+			const to = parseSlideTransform(valueAt("transform", 1) ?? "none")
+			if (from !== null && to !== null)
+				return { kind: "slide", period: duration, delay, from, to, ease: parseEase(ease) }
+		}
 		if (infinite && [...props].every((p) => p === "opacity")) {
 			const rest = acc.style.opacity ?? 1
 			const opacityAt = (at: number) => {
@@ -1914,6 +1935,28 @@ const parseEnterTransform = (v: string, units: Units): { x: number; y: number; s
 	if (x === null || y === null || !Number.isFinite(scale)) return null
 	return { x, y, scale }
 }
+
+/** A pure `translate` by percentages of the element's own size, as fractions; null for anything else. */
+const parseSlideTransform = (v: string): [number, number] | null => {
+	const t = v.trim()
+	if (t === "none") return [0, 0]
+	const m = /^(translate3d|translate|translateX|translateY)\(([^()]*)\)$/.exec(t)
+	if (m === null) return null
+	const args = splitTop(m[2] ?? "", /,/).map((a) => a.trim())
+	const fraction = (a: string | undefined) => {
+		if (a === undefined || a === "0" || a === "0px") return 0
+		return /^-?[\d.]+%$/.test(a) ? Number.parseFloat(a) / 100 : null
+	}
+	const [x, y] =
+		m[1] === "translateX"
+			? [fraction(args[0]), 0]
+			: m[1] === "translateY"
+				? [0, fraction(args[0])]
+				: [fraction(args[0]), fraction(args[1])]
+	return x === null || y === null ? null : [x, y]
+}
+
+const EASE_KEYWORDS = new Set(["linear", "ease", "ease-in", "ease-out", "ease-in-out"])
 
 /** CSS lists pair by index, a shorter list repeating; each property lands on its channel. */
 const composeTransition = (t: Accumulator["transition"]): Style["transition"] => {
