@@ -40,6 +40,8 @@ export type LineChartOptions<M> = Readonly<{
 	headings: ReadonlyArray<string>
 	formatValue: (value: number) => string
 	formatAxis?: (value: number) => string
+	/** Whole-number y ticks, for counts. */
+	integerTicks?: boolean
 	hoveredIndex: number | null
 	onHover: (index: number | null) => M
 	/** `MAU 1,611` right of each line's end. */
@@ -53,7 +55,9 @@ export type LineChartOptions<M> = Readonly<{
 export const lineChart = <M>(h: HtmlBuilder<M>, options: LineChartOptions<M>): Html => {
 	const count = options.xLabels.length
 	const all = options.series.flatMap((series) => series.values)
-	const domain = niceTicks(Math.min(0, ...all), Math.max(0, ...all), 4)
+	const domain = niceTicks(Math.min(0, ...all), Math.max(0, ...all), 4, {
+		integer: options.integerTicks,
+	})
 	const y = scaleLinear([domain.min, domain.max], [100, 0])
 	const formatAxis = options.formatAxis ?? options.formatValue
 	const xAt = (index: number) => pointX(index, count)
@@ -219,6 +223,7 @@ export const activeUsersChart = <M>(
 		headings: labels.map((label) => label.heading),
 		formatValue: formatCount,
 		formatAxis: formatCompact,
+		integerTicks: true,
 		hoveredIndex: options.hoveredIndex,
 		onHover: options.onHover,
 		endLabels: true,

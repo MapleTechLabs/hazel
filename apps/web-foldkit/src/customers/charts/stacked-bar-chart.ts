@@ -50,6 +50,8 @@ export type StackedBarChartOptions<M> = Readonly<{
 	netLabel?: string
 	formatValue: (value: number) => string
 	formatAxis?: (value: number) => string
+	/** Whole-number y ticks, for counts. */
+	integerTicks?: boolean
 	hoveredIndex: number | null
 	onHover: (index: number | null) => M
 	maxXTicks?: number
@@ -61,7 +63,7 @@ export const stackedBarChart = <M>(h: HtmlBuilder<M>, options: StackedBarChartOp
 	const count = options.bars.length
 	const values = options.bars.map((bar) => options.stacks.map((stack) => bar.values[stack.key] ?? 0))
 	const [lo, hi] = stackExtent(values, options.netLabel ? options.bars.map((bar) => bar.net) : [])
-	const domain = niceTicks(lo, hi, 5)
+	const domain = niceTicks(lo, hi, 5, { integer: options.integerTicks })
 	const y = scaleLinear([domain.min, domain.max], [100, 0])
 	const formatAxis = options.formatAxis ?? options.formatValue
 	const xAt = (index: number) => bandX(index, count)
