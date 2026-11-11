@@ -137,7 +137,7 @@ export interface InvoiceMrr {
 }
 
 /**
- * The MRR Stripe collects (settings' `overageInMrr`): each live, non-trialing Stripe subscription's
+ * The MRR Stripe collects (settings' `overageInMrr`): each billed (`billed`) Stripe subscription's
  * last paid invoice while its interval still covers it, per month, so usage overage and discounts
  * count. Any provider's account: Autumn bills through Stripe subscriptions.
  */
@@ -150,7 +150,7 @@ export const invoiceMrrOf = (
 ): ReadonlyArray<InvoiceMrr> =>
 	subscriptions.flatMap((sub) => {
 		const { interval } = sub
-		if (sub.provider !== "stripe" || sub.status === "canceled" || sub.status === "trialing") return []
+		if (sub.provider !== "stripe" || !billed(sub)) return []
 		if (interval === "other") return []
 		const last = paidInvoices
 			.filter((invoice) => invoice.subscriptionId === sub.id)

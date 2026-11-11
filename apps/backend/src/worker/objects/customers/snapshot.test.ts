@@ -188,6 +188,16 @@ describe("MRR from paid Stripe invoices", () => {
 		).toBe(20_500)
 	})
 
+	it("ignores a paused subscription's invoices, as its plan MRR is", () => {
+		const paused = { id: subId("paused"), status: "paused" as const, mrrMinor: 10_000 }
+		expect(
+			invoiceRollupOf(
+				[{ id: subId("plan"), mrrMinor: 10_000 }, paused],
+				[{ subscriptionId: paused.id, amountPaidMinor: 20_000, paidAt: paidDaysAgo(5) }],
+			).mrrMinor,
+		).toBe(10_000)
+	})
+
 	it("adds only reporting-currency invoices", () => {
 		const euro = { id: subId("euro"), currency: "eur", mrrMinor: 5_000 }
 		const rollup = invoiceRollupOf(

@@ -293,7 +293,7 @@ Rules:
 
 - `mrrMinor` = Σ non-canceled subscription MRR (reporting currency only; other currencies counted
   in `attributes.foreignMrr`). With the settings' `overageInMrr`, an account with a counted paid
-  invoice takes Σ those instead (`invoiceMrrOf`): each live, non-trialing Stripe subscription's
+  invoice takes Σ those instead (`invoiceMrrOf`): each billed (active, past due, unpaid) Stripe subscription's
   (any `mrrSource`: Autumn bills through Stripe) last paid invoice, paid within its interval plus
   7 days (`other` never, incl. every-N-months prices), `/12` for a yearly one, reporting currency
   only (none in it: the plan MRR stays). Billed by Stripe, an uninvoiced subscription still adds
