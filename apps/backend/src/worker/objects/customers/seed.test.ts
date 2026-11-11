@@ -30,7 +30,8 @@ const subsOf = (org: string) =>
 		.map(({ op }) => op)
 		.filter((op) => op.account.externalId === org)
 
-describe("generateDemoSeed", () => {
+// Each test generates ~48k ops; shared CI runners need more than the 5 s default.
+describe("generateDemoSeed", { timeout: 30_000 }, () => {
 	it("is deterministic per seed", () => {
 		expect(generateDemoSeed({ now: NOW })).toEqual(seed)
 		expect(generateDemoSeed({ now: NOW, seed: 2 })).not.toEqual(seed)
