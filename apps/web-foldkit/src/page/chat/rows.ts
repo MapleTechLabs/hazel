@@ -88,7 +88,7 @@ export const ThreadPreview = Schema.Struct({
 	threadChannelId: ChannelId,
 	name: Schema.String,
 	count: Schema.Number,
-	lastMessage: Schema.NullOr(ThreadLastMessage),
+	lastMessage: ThreadLastMessage,
 })
 export type ThreadPreview = typeof ThreadPreview.Type
 
