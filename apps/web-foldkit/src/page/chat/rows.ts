@@ -70,6 +70,10 @@ export const StatusEmoji = Schema.Struct({
 export type StatusEmoji = typeof StatusEmoji.Type
 
 export const ReplyPreview = Schema.Struct({
+	/** The message replied to. */
+	messageId: MessageId,
+	/** Its author; null while the message is not loaded (or is gone). */
+	authorId: Schema.NullOr(UserId),
 	author: Schema.NullOr(AuthorIdentity),
 	firstLine: Schema.String,
 })
@@ -88,7 +92,7 @@ export const ThreadPreview = Schema.Struct({
 	threadChannelId: ChannelId,
 	name: Schema.String,
 	count: Schema.Number,
-	lastMessage: Schema.NullOr(ThreadLastMessage),
+	lastMessage: ThreadLastMessage,
 })
 export type ThreadPreview = typeof ThreadPreview.Type
 

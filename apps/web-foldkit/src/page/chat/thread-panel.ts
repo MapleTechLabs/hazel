@@ -277,7 +277,11 @@ const dividerView = <M>(h: HtmlBuilder<M>, count: number): Html =>
 const scrollView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html => {
 	const starterName = inputs.original === null ? null : starterNameOf(inputs.context, inputs.original)
 	return h.div(
-		[h.Class("flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-bg")],
+		[
+			h.Class("flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-bg"),
+			// `HighlightMessage` scrolls a quoted reply into view inside it.
+			h.Attribute("data-jump-scroll", ""),
+		],
 		[
 			h.div(
 				[h.Class("flex flex-col px-2 pb-2")],

@@ -38,10 +38,12 @@ import {
 	shareStickyKeys,
 } from "../rows"
 import type { ChannelHotkey } from "./hotkeys"
-import { ClearChannelNotifications } from "./clear-notifications"
+import { stepNotifications, syncUnread } from "./clear-notifications"
+import * as NotificationClear from "./notification-clear"
 import { DeleteMessageNow, FocusMessage } from "./message-keys"
 import { type ChatTab, Message, type MessageKey, type Model, type PageReturn, Tab } from "./model"
-import { loadWhenNearEdge } from "./window"
+import * as Jump from "./jump"
+import { liftList, loadWhenNearEdge } from "./window"
 import * as ThreadWidth from "./thread-width"
 import * as Write from "./write"
 
@@ -61,6 +63,7 @@ export interface InitOptions {
 		readonly viewportHeight: number
 		readonly heightsByChannel: Model["heightsByChannel"]
 		readonly threadPanelWidth: Model["threadPanelWidth"]
+		readonly isWindowFocused: boolean
 	}
 }
 
@@ -101,12 +104,13 @@ export const init = (
 		measuredHeights: options.carry?.heightsByChannel[channelId] ?? {},
 	}),
 	focusedMessageId: null,
+	pendingJump: null,
 	overlays: Overlays.init(),
 	draft: Draft.init(channelId, composerEditorId(channelId)),
 	threadPanel: null,
 	threadPanelWidth: options.carry?.threadPanelWidth ?? null,
 	threadPanelDrag: null,
-	notificationsClear: "NotSent",
+	notifications: NotificationClear.init({ isFocused: options.carry?.isWindowFocused ?? true }),
 	isJoining: false,
 	heightsByChannel: Record.remove(options.carry?.heightsByChannel ?? {}, channelId),
 })
@@ -134,6 +138,7 @@ export const switchChannel = (
 			viewportHeight: model.list.viewportHeight,
 			heightsByChannel: Object.fromEntries(remembered),
 			threadPanelWidth: model.threadPanelWidth,
+			isWindowFocused: model.notifications.isFocused,
 		},
 	})
 	// The theme, users, presence and bots streams are not keyed by channel, so they keep running
@@ -185,12 +190,6 @@ export const tabRoute = (orgSlug: string, channelId: ChannelId, tab: ChatTab): A
 	tabRoutes[tab]({ orgSlug, channelId })
 
 // UPDATE
-
-const liftList = (model: Model, result: MessageList.ListReturn): PageReturn => ({
-	// An unchanged list keeps the page reference, so ignored events cost no render.
-	model: result.model === model.list ? model : modifyFields(model, { list: () => result.model }),
-	commands: Command.mapMessages(result.commands, (message) => Message.GotListMessage({ message })),
-})
 
 /** The derive context with the page's unfurls, live states and HTML render frames. */
 export const deriveContextOf = (
@@ -392,7 +391,7 @@ const pressedChannelHotkey = (model: Model, action: ChannelHotkey, shared: Share
 		case "ScrollDown":
 			return loadWhenNearEdge(liftList(model, MessageList.scrollByPage(model.list, "Down")))
 		case "MarkRead":
-			return { model, commands: [ClearChannelNotifications({ channelId: model.channelId })] }
+			return stepNotifications(model, { _tag: "MarkedRead" })
 	}
 }
 
@@ -486,12 +485,14 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		ChangedMessages: ({ channelId, order, upserts }) =>
 			channelId !== model.channelId
 				? { model }
-				: deriveRows(
-						withLiveReplies(
-							modifyFields(model, {
-								hasLoadedMessages: () => true,
-								messages: (previous) => applyMessageChanges(previous, order, upserts),
-							}),
+				: Jump.resume(
+						deriveRows(
+							withLiveReplies(
+								modifyFields(model, {
+									hasLoadedMessages: () => true,
+									messages: (previous) => applyMessageChanges(previous, order, upserts),
+								}),
+							),
 						),
 					),
 		UpdatedReactions: ({ channelId, reactions }) =>
@@ -522,9 +523,9 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		UpdatedThreadChannels: ({ channels }) => withLookup(model, "threadChannels", channels),
 		UpdatedThreadMessages: ({ messages }) => withLookup(model, "threadMessages", messages),
 		UpdatedReplyTargets: ({ targets }) => withLookup(model, "replyTargets", targets),
-		UpdatedMembers: ({ members }) => ({
-			model: withTypingNames(modifyFields(model, { members: () => members })),
-		}),
+		UpdatedMembers: ({ members }) =>
+			syncUnread(withTypingNames(modifyFields(model, { members: () => members }))),
+		ChangedWindowFocus: ({ isFocused }) => stepNotifications(model, { _tag: "ChangedFocus", isFocused }),
 		UpdatedPinned: ({ pins }) => ({ model: modifyFields(model, { pinned: () => pins }) }),
 		// A result for a thread the panel no longer shows is dropped.
 		UpdatedThreadPanelMessages: ({ threadChannelId, messages }) => {
@@ -589,6 +590,18 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				: { model },
 		ClickedThreadPreview: ({ threadChannelId, messageId }) =>
 			Write.openThread(model, threadChannelId, messageId, "Created"),
+		ClickedReplyPreview: ({ fromMessageId, messageId }) =>
+			Jump.toMessage(model, fromMessageId, messageId),
+		LocatedJumpTarget: ({ messageId, newerCount }) => Jump.located(model, messageId, newerCount),
+		FailedLocateJumpTarget: ({ messageId }) =>
+			model.pendingJump?.messageId === messageId
+				? Write.withToast(
+						modifyFields(model, { pendingJump: () => null }),
+						Write.messageNotFoundToast("MessageNotFound"),
+					)
+				: { model },
+		RenderedJumpTarget: ({ messageId }) => Jump.rendered(model, messageId),
+		CompletedHighlightMessage: () => ({ model }),
 		ClickedEmbedAction: ({ channelId, messageId, actionId }) =>
 			Write.pressEmbedAction(model, { channelId, messageId, actionId }),
 		ClickedCloseThread: () => Write.closeThread(model),
@@ -629,14 +642,14 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			),
 		// A result for the channel the page has since switched away from is dropped.
 		SucceededClearNotifications: ({ channelId }) =>
+			channelId === model.channelId ? stepNotifications(model, { _tag: "Succeeded" }) : { model },
+		// Best effort, like legacy: no toast; the machine retries after a backoff.
+		FailedClearNotifications: ({ channelId, reason }) =>
 			channelId === model.channelId
-				? { model: modifyFields(model, { notificationsClear: () => "Cleared" }) }
+				? stepNotifications(model, { _tag: "Failed", isChannelGone: reason === "ChannelNotFound" })
 				: { model },
-		// Best effort, like legacy: no toast, and the next shared change sends it again.
-		FailedClearNotifications: ({ channelId }) =>
-			channelId === model.channelId
-				? { model: modifyFields(model, { notificationsClear: () => "NotSent" }) }
-				: { model },
+		ElapsedClearNotificationsRetry: ({ channelId }) =>
+			channelId === model.channelId ? stepNotifications(model, { _tag: "ElapsedRetry" }) : { model },
 		GotFilesMessage: ({ message: filesMessage }) =>
 			model.tab._tag === "Files"
 				? liftFiles(model, FilesPage.update(model.tab.files, filesMessage))
