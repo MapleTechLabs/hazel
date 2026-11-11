@@ -978,6 +978,18 @@ describe("Customers compute and sync loop", () => {
 				)
 				expect(epoch(stored!.trialEndsAt)).toBe(Date.parse(trialEndsAt))
 				expect(stage()).toEqual({ lifecycleStage: "lead", churnedAt: null })
+
+				// A billing period past the trial was paid for: a churned customer, whenever it asked to cancel.
+				yield* world.ingest("stripe", [
+					{
+						...subscription(10),
+						status: "canceled",
+						canceledAt: new Date(NOW.getTime() - DAY).toISOString(),
+						currentPeriodEnd: new Date(Date.parse(trialEndsAt) + 30 * DAY).toISOString(),
+					},
+				])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(stage()!.lifecycleStage).toBe("churned")
 			}),
 		))
 
@@ -1009,6 +1021,60 @@ describe("Customers compute and sync loop", () => {
 				).toEqual([
 					{ mrrMinor: 19_900, mrrSource: "stripe", planName: "Team", lifecycleStage: "active" },
 				])
+			}),
+		))
+
+	it("keeps the movement of an upgrade from a free Autumn plan that Stripe reports first", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					{
+						_tag: "account",
+						externalId: "org_1",
+						name: "Free Co",
+						sameAs: [],
+						onNoMatch: "create",
+					},
+				])
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET backfilledAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
+					)
+					.run(world.connection("autumn"))
+				const autumn = (planName: string, mrrMinor: number): UpsertSubscription => ({
+					...subscription(30),
+					externalId: "cus_1:plan",
+					planName,
+					mrrMinor,
+				})
+				yield* world.ingest("autumn", [autumn("Free", 0)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				const state = () => ({
+					account: world.rows(`SELECT mrrMinor, mrrSource FROM customer_accounts`),
+					movements: world.rows(
+						`SELECT type, fromMrrMinor, toMrrMinor FROM customer_mrr_movements`,
+					),
+				})
+				expect(state()).toEqual({ account: [{ mrrMinor: 0, mrrSource: "autumn" }], movements: [] })
+
+				// The Stripe subscription lands before Autumn's plan change: the source moves to Stripe,
+				// and the upgrade from 0 is still new MRR.
+				const upgraded = [{ type: "new", fromMrrMinor: 0, toMrrMinor: 19_900 }]
+				yield* world.ingest("stripe", [subscription(0)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 19_900, mrrSource: "stripe" }],
+					movements: upgraded,
+				})
+
+				// Autumn catches up: billing moves back to it at the same MRR, no second movement.
+				yield* world.ingest("autumn", [autumn("Team", 19_900)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 19_900, mrrSource: "autumn" }],
+					movements: upgraded,
+				})
 			}),
 		))
 

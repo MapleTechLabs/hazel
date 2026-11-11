@@ -183,9 +183,16 @@ const writeMovement = (account: schema.CustomerAccount, rollup: Rollup, today: D
 		)
 	})
 
-/** The account's MRR now comes from another billing provider than last run (`mrrSource`). */
+/**
+ * A payer's MRR now comes from another billing provider than last run (`mrrSource`). Either side at
+ * 0 (an upgrade from a free plan, a cancel) is a real change and keeps its movement.
+ */
 const switchedSource = (stored: schema.CustomerAccount, rollup: Rollup) =>
-	stored.mrrSource !== null && rollup.mrrSource !== null && stored.mrrSource !== rollup.mrrSource
+	stored.mrrSource !== null &&
+	rollup.mrrSource !== null &&
+	stored.mrrSource !== rollup.mrrSource &&
+	stored.mrrMinor !== 0 &&
+	rollup.mrrMinor !== 0
 
 /**
  * `holdMovements`: the MRR change is not revenue, so no movement is written: a billing backfill is

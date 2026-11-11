@@ -102,7 +102,8 @@ export const UpsertSubscription = Schema.TaggedStruct("subscription", {
 	account: ProviderRef,
 	planName: NullableText,
 	status: SubscriptionStatus,
-	mrrMinor: Schema.Int,
+	/** Absent keeps the stored MRR (0 on insert): for a provider that cannot price it right now. */
+	mrrMinor: optional(Schema.Int),
 	listMrrMinor: optional(Schema.NullOr(Schema.Int)),
 	/**
 	 * Billed on usage (in arrears) with no fixed price MRR can capture: a live one makes its account

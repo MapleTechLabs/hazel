@@ -169,7 +169,7 @@ describe("generateDemoSeed", { timeout: 30_000 }, () => {
 		}
 		for (const org of orgsOf("downgraded")) {
 			const [before, after] = subsOf(org)
-			expect(after!.mrrMinor).toBeLessThan(before!.mrrMinor)
+			expect(after!.mrrMinor).toBeLessThan(before!.mrrMinor!)
 			expect(Date.parse(before!.canceledAt!)).toBeGreaterThan(NOW.getTime() - 14 * DAY_MS)
 		}
 		for (const org of orgsOf("churned")) {

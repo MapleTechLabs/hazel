@@ -784,6 +784,39 @@ describe("CustomerIngest", () => {
 			}),
 		))
 
+	it("keeps the stored MRR when an op omits mrrMinor (0 on insert)", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [clerkOrg("org_1", "Acme")])
+				const { mrrMinor: _, ...unpriced } = {
+					_tag: "subscription",
+					externalId: "sub_1",
+					account: { provider: "clerk", externalId: "org_1" },
+					planName: "Team",
+					status: "active",
+					mrrMinor: 0,
+					currency: "usd",
+					interval: "month",
+					quantity: 1,
+					startedAt: null,
+					trialEndsAt: null,
+					currentPeriodEnd: null,
+					cancelAtPeriodEnd: false,
+					canceledAt: null,
+				} satisfies IngestOp
+				const mrr = () => world.rows(`SELECT mrrMinor, status FROM customer_subscriptions`)
+				yield* world.ingest("autumn", [unpriced])
+				expect(mrr()).toEqual([{ mrrMinor: 0, status: "active" }])
+				yield* world.ingest("autumn", [{ ...unpriced, mrrMinor: 4_900 }])
+				yield* world.ingest("autumn", [{ ...unpriced, status: "past_due" }])
+				expect(mrr()).toEqual([{ mrrMinor: 4_900, status: "past_due" }])
+				expect(
+					world.rows(`SELECT type FROM customer_events WHERE type LIKE 'subscription.%'`),
+				).toEqual([{ type: "subscription.started" }, { type: "subscription.plan_changed" }])
+			}),
+		))
+
 	it("matches by domain only when the op opts in, and merges a parked account's ops", () =>
 		run(
 			Effect.gen(function* () {

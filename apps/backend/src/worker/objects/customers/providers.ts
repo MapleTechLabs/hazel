@@ -15,6 +15,8 @@
  *   capture (no fixed price, or MRR can't express its billing): live, it makes its account paying
  *   (stage `active`, `customerSince`) at `mrrMinor: 0`. MRR and its movements still come from
  *   `mrrMinor` alone; leave it unset for a subscription with a fixed price.
+ * - `mrrMinor` on a subscription only when the adapter can price it; omit it when the provider
+ *   temporarily hides the pricing inputs, and the stored MRR is kept (0 on insert).
  * - `matchByDomain: true` on account ops only for billing sources (Stripe, Autumn); identity
  *   sources (Clerk) leave it unset so organizations sharing a domain never merge.
  * - Deletions as `deleted` / `removed` ops; a full listing also sets `PullPage.sweep` on its last

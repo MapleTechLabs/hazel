@@ -1262,7 +1262,9 @@ const make = Effect.gen(function* () {
 
 	const applySubscription = (session: Session, op: UpsertSubscription, index: number) =>
 		Effect.gen(function* () {
-			if (op.mrrMinor < 0) return yield* reject(index, op, "mrrMinor must not be negative")
+			if (op.mrrMinor !== undefined && op.mrrMinor < 0) {
+				return yield* reject(index, op, "mrrMinor must not be negative")
+			}
 			const { provider } = session.context
 			const accountId = yield* resolveAccount(session, op.account)
 			if (Option.isNone(accountId)) {
@@ -1273,7 +1275,7 @@ const make = Effect.gen(function* () {
 					entityType: "subscription",
 					externalId: op.externalId,
 					label: op.planName ?? op.externalId,
-					valueMinor: op.mrrMinor,
+					valueMinor: op.mrrMinor ?? null,
 					currency: op.currency.toLowerCase(),
 					op,
 					reason: `Its customer (${op.account.provider} ${op.account.externalId}) is not linked`,
@@ -1307,6 +1309,8 @@ const make = Effect.gen(function* () {
 					.where(($) => [$.provider.eq(provider), $.externalId.eq(op.externalId)])
 					.limit(1),
 			)
+			// Absent keeps the stored MRR (0 on insert).
+			const mrrMinor = op.mrrMinor ?? (Option.isSome(existing) ? existing.value.mrrMinor : 0)
 			const event = (
 				type: string,
 				title: string,
@@ -1319,7 +1323,7 @@ const make = Effect.gen(function* () {
 					title,
 					data: { subscriptionId: op.externalId, planName: op.planName, ...data },
 					occurredAt,
-					externalId: `ingest:${type}:${provider}:${op.externalId}${type === "subscription.plan_changed" ? `:${op.planName}:${op.mrrMinor}` : ""}`,
+					externalId: `ingest:${type}:${provider}:${op.externalId}${type === "subscription.plan_changed" ? `:${op.planName}:${mrrMinor}` : ""}`,
 				})
 			const observedAt = toDate(op.observedAt)
 			if (Option.isNone(existing)) {
@@ -1329,7 +1333,7 @@ const make = Effect.gen(function* () {
 						.returning("id"),
 				)
 				yield* event("subscription.started", `Started ${planLabel(op.planName)}`, values.startedAt, {
-					mrrMinor: op.mrrMinor,
+					mrrMinor,
 					status: op.status,
 				})
 				if (op.status === "canceled") {
@@ -1371,7 +1375,7 @@ const make = Effect.gen(function* () {
 					} as never)
 					.where(($) => [$.id.eq(sub.id)]),
 			)
-			if (sub.planName !== op.planName || sub.mrrMinor !== op.mrrMinor) {
+			if (sub.planName !== op.planName || sub.mrrMinor !== mrrMinor) {
 				if (op.status !== "canceled" && sub.status !== "trialing") {
 					yield* event(
 						"subscription.plan_changed",
@@ -1383,7 +1387,7 @@ const make = Effect.gen(function* () {
 							fromPlan: sub.planName,
 							toPlan: op.planName,
 							fromMrrMinor: sub.mrrMinor,
-							toMrrMinor: op.mrrMinor,
+							toMrrMinor: mrrMinor,
 						},
 					)
 				}
