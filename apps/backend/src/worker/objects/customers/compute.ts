@@ -60,6 +60,7 @@ import {
 	type AccountSnapshot,
 	accountChunks,
 	billingByAccount,
+	billsNow,
 	loadAccounts,
 	loadBase,
 	type Rollup,
@@ -184,19 +185,20 @@ const writeMovement = (account: schema.CustomerAccount, rollup: Rollup, today: D
 	})
 
 /**
- * A payer's MRR now comes from another billing provider than last run (`mrrSource`): a migration,
- * not revenue. Only an upgrade from MRR 0 (a free plan) is a real change and keeps its movement.
+ * A payer moved to another billing provider than last run (`mrrSource`) that bills it now: a
+ * migration, not revenue, so its MRR change writes no movement. A move to a source that does not
+ * bill (a churn), or from MRR 0 (an upgrade from a free plan), keeps its movement.
  */
-const switchedSource = (stored: schema.CustomerAccount, rollup: Rollup) =>
+const switchedSource = ({ stored, rollup, facts }: AccountSnapshot) =>
 	stored.mrrSource !== null &&
-	rollup.mrrSource !== null &&
-	stored.mrrSource !== rollup.mrrSource &&
-	stored.mrrMinor !== 0
+	rollup.mrrSource !== stored.mrrSource &&
+	stored.mrrMinor > 0 &&
+	facts.subscriptions.some(billsNow)
 
 /**
  * `holdMovements`: the MRR change is not revenue, so no movement is written: a billing backfill is
  * still importing (its accounts' history comes from the rebuild after it), or that rebuild is
- * pending. Neither does an account whose MRR now comes from another billing provider
+ * pending. Neither does a payer whose MRR now comes from another billing provider that bills it
  * (`switchedSource`), nor a change of reporting currency. The number of accounts that switched.
  */
 const writeRollups = Effect.fn("Customers.writeRollups")(function* (
@@ -209,9 +211,10 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 	yield* db.transaction(
 		Effect.forEach(
 			snapshot.accounts,
-			({ stored, rollup }) =>
+			(account) =>
 				Effect.gen(function* () {
-					if (switchedSource(stored, rollup)) switched++
+					const { stored, rollup } = account
+					if (switchedSource(account)) switched++
 					else if (!holdMovements && stored.currency === rollup.currency)
 						yield* writeMovement(stored, rollup, today)
 					const changes = diff(stored, rollup)
@@ -926,12 +929,13 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 	const live = new Set(base.accountIds)
 	const accounts = (yield* db.run(
 		SQLite.from(schema.customerAccountsTable)
-			.select("id", "mrrMinor")
+			.select("id", "mrrMinor", "mrrSource")
 			.where(($) => [$.deletedAt.isNull()]),
 	)).filter((account) => live.has(account.id))
 	const billingBy = billingByAccount(
 		base.autumnReady,
 		yield* db.run(SQLite.from(schema.customerSubscriptionsTable).select()),
+		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
 	// Today's movement alone is not history: one a compute wrote while billing was still importing
 	// (a partial MRR's jump) is replaced by the rebuilt series.

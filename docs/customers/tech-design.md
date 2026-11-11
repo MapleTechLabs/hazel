@@ -275,13 +275,22 @@ Rules:
   null when the baseline avg is 0.
 - `lastActiveAt` / `lastActiveContactId` = max over contacts; champion = most active contact by
   active days (tie: events) in 30 d; `championInactiveSince` = their last active day if ≥ 1 d ago.
-- Billing source, **per account**: **Autumn when the org's Autumn connection finished its first
-  import (`backfilledAt`, not disconnected) and Autumn bills the account now (an `active`,
-  `past_due` or `unpaid` subscription that pays: not a trial, not a free plan); else Stripe when
-  it does** (a customer Autumn does not know, or billed in Stripe outside it). With neither billing
-  now, Autumn's when one of its subscriptions paid, else Stripe's. An account with Autumn subscriptions and none in Stripe keeps Autumn's either way (a disconnect
-  does not zero its MRR). The other provider's subscriptions are ignored for that account's MRR;
-  the source is stored as `customer_accounts.mrrSource`. Invoices always from Stripe.
+- Billing source, **per account** (stored as `customer_accounts.mrrSource`). "Bills now" = an
+  `active`, `past_due` or `unpaid` subscription that pays (MRR > 0 or `billsByUsage`; not a trial,
+  not a free plan, not ended). An account with only one provider's subscriptions uses that one (an
+  Autumn disconnect does not zero its MRR). With both:
+    1. **Autumn** when the org's Autumn connection finished its first import (`backfilledAt`, not
+       disconnected) and Autumn bills the account now;
+    2. else **Stripe** when Stripe bills it now (a customer Autumn does not know, or billed in
+       Stripe outside it);
+    3. else (neither bills now) the **stored source**, when there is one: a payer whose billing
+       ends in one provider churns there instead of switching to the other;
+    4. else (no stored source) the one that ever paid, Stripe's first (Autumn's only once imported);
+       else Stripe.
+
+    The other provider's subscriptions are ignored for that account's MRR. Invoices always from
+    Stripe.
+
 - `mrrMinor` = Σ non-canceled subscription MRR (reporting currency only; other currencies counted
   in `attributes.foreignMrr`); `planName` = highest-MRR subscription's; `trialEndsAt`;
   `trialListMrrMinor` = Σ `listMrrMinor` of trialing subs.
@@ -293,9 +302,11 @@ Rules:
   count MRR > 0 only. A `payingOnly` rule scope covers a usage-billed account.
 - Built-in metrics for today: `active_users` (DAU), `active_users_30d`, `mrr`, later `health_score`.
 - MRR movements (yesterday's `mrr` vs today's): 0→>0 `new` (or `reactivation` if `churnedAt` set
-  before), >0→0 `churn`, up `expansion`, down `contraction`. An account whose `mrrSource` changed
-  (Stripe ↔ Autumn) writes none that run: a switch of source is not revenue. Only a switch from
-  MRR 0 (an upgrade from a free plan) keeps its movement.
+  before), >0→0 `churn`, up `expansion`, down `contraction`. A source switch holds the movement (none is written
+  that run: a migration, not revenue) only when `mrrSource` changed **and** the new source bills
+  now **and** the stored MRR was > 0. Every other change writes its movement: a change to a source
+  that does not bill is a churn when MRR goes to 0, and a switch from MRR 0 (an upgrade from a free
+  plan) is `new` or `reactivation`.
 - `customer_org_daily[today]` from the above (+ at-risk MRR = Σ MRR of accounts with an open high
   risk signal).
 - After a backfill: rebuild `active_users*`, `mrr` (from subscription start/cancel dates),

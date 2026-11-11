@@ -241,37 +241,45 @@ const ACTIVITY_PROVIDERS: ReadonlySet<CustomerProvider> = new Set(["clerk", "map
 
 const BILLING_PROVIDERS: ReadonlyArray<CustomerProvider> = ["stripe", "autumn"]
 
+/** Bills the account now: a live billed subscription that pays (not a trial, not a free plan). */
+export const billsNow = (sub: schema.CustomerSubscription) => billed(sub) && pays(sub)
+
 /**
  * Whose subscriptions count for one account's MRR, from its subscriptions (any status): Autumn once
  * its connection finished its first import (until then its data is partial) and it bills the
- * account now (a billed subscription that pays: not a trial, not an auto-enabled free plan), else
- * Stripe when it does (a customer Autumn does not know, or billed in Stripe outside it). With
- * neither billing now, the one that paid: Autumn's when it did, else Stripe's. An account with
- * Autumn's and none of Stripe's keeps Autumn's either way, so a disconnect does not zero its MRR.
+ * account now (`billsNow`), else Stripe when it does (a customer Autumn does not know, or billed in
+ * Stripe outside it). With neither billing now, the source stored last run (`stored`), so a payer
+ * ending in one provider churns there rather than switching; without one, the one that paid
+ * (Stripe's first), else Stripe's. An account with only one provider's subscriptions keeps that
+ * one either way, so an Autumn disconnect does not zero its MRR.
  */
 export const billingProviderOf = (
 	autumnReady: boolean,
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
+	stored: CustomerProvider | null,
 ): CustomerProvider => {
 	const autumn = subscriptions.filter((sub) => sub.provider === "autumn")
 	if (autumn.length === 0) return "stripe"
 	const stripe = subscriptions.filter((sub) => sub.provider === "stripe")
 	if (stripe.length === 0) return "autumn"
-	if (!autumnReady) return "stripe"
-	const billsNow = (sub: schema.CustomerSubscription) => billed(sub) && pays(sub)
-	if (autumn.some(billsNow)) return "autumn"
+	if (autumnReady && autumn.some(billsNow)) return "autumn"
 	if (stripe.some(billsNow)) return "stripe"
-	return autumn.some(pays) ? "autumn" : "stripe"
+	if (stored !== null) return stored
+	return autumnReady && autumn.some(pays) && !stripe.some(pays) ? "autumn" : "stripe"
 }
 
-/** Billing subscriptions by account: the account's source (`billingProviderOf`) and its subscriptions. */
+/**
+ * Billing subscriptions by account: the account's source (`billingProviderOf`, given its stored
+ * `mrrSource`) and its subscriptions.
+ */
 export const billingByAccount = (
 	autumnReady: boolean,
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
+	storedSources: ReadonlyMap<CustomerAccountId, CustomerProvider | null>,
 ) =>
 	new Map(
 		[...groupBy(subscriptions, (sub) => sub.accountId)].map(([accountId, subs]) => {
-			const source = billingProviderOf(autumnReady, subs)
+			const source = billingProviderOf(autumnReady, subs, storedSources.get(accountId) ?? null)
 			return [accountId, { source, subscriptions: subs.filter((sub) => sub.provider === source) }]
 		}),
 	)
@@ -493,7 +501,11 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.where(($) => [inList($.accountId, ids), $.closedAt.isNull()]),
 	)
 
-	const billingBy = billingByAccount(base.autumnReady, subscriptions)
+	const billingBy = billingByAccount(
+		base.autumnReady,
+		subscriptions,
+		new Map(accounts.map((account) => [account.id, account.mrrSource])),
+	)
 	const invoicesBy = groupBy(openInvoices, (invoice) => invoice.accountId)
 	const metricsBy = groupBy(metrics, (row) => row.accountId)
 	const movementsBy = groupBy(movements, (row) => row.accountId)

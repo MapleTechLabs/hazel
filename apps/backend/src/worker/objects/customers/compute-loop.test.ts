@@ -1137,6 +1137,133 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	/** One Clerk organization with an imported Autumn connection; computes run `days` after NOW. */
+	const billingWorld = Effect.gen(function* () {
+		const world = yield* makeCustomersWorld
+		yield* world.ingest("clerk", [
+			{ _tag: "account", externalId: "org_1", name: "Co", sameAs: [], onNoMatch: "create" },
+		])
+		world.object.storage.db
+			.prepare(`UPDATE customer_connections SET backfilledAt = '2026-01-01 00:00:00.000' WHERE id = ?`)
+			.run(world.connection("autumn"))
+		const compute = (days: number) =>
+			world.object.run(runCompute(new Date(NOW.getTime() + days * DAY))).pipe(Effect.orDie)
+		const state = () => ({
+			account: world.rows(`SELECT mrrMinor, mrrSource FROM customer_accounts`),
+			movements: world.rows(
+				`SELECT day, type, fromMrrMinor, toMrrMinor FROM customer_mrr_movements ORDER BY day`,
+			),
+		})
+		return { world, compute, state }
+	})
+	const at = (days: number) => new Date(NOW.getTime() + days * DAY).toISOString()
+	const paid = { day: day(0), type: "new", fromMrrMinor: 0, toMrrMinor: 19_900 }
+
+	it("churns a Stripe payer whose Stripe subscription ends during an Autumn trial; the conversion reactivates", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, compute, state } = yield* billingWorld
+				yield* world.ingest("stripe", [subscription(60)])
+				yield* compute(0)
+				const trial: UpsertSubscription = {
+					...subscription(2),
+					externalId: "cus_1:pro",
+					planName: "Pro",
+					status: "trialing",
+					mrrMinor: 29_900,
+					trialEndsAt: at(5),
+				}
+				yield* world.ingest("autumn", [trial])
+				yield* compute(1)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 19_900, mrrSource: "stripe" }],
+					movements: [paid],
+				})
+
+				// Stripe's ends with nothing billing: the source stays Stripe's, and it churns.
+				yield* world.ingest("stripe", [
+					{ ...subscription(60), status: "canceled", canceledAt: at(2) },
+				])
+				yield* compute(2)
+				const churn = { day: day(2), type: "churn", fromMrrMinor: 19_900, toMrrMinor: 0 }
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 0, mrrSource: "stripe" }],
+					movements: [paid, churn],
+				})
+				expect(world.rows(`SELECT churnedAt FROM customer_accounts`)).not.toEqual([
+					{ churnedAt: null },
+				])
+
+				// The trial converts: Autumn bills from 0, a reactivation.
+				yield* world.ingest("autumn", [{ ...trial, status: "active" }])
+				yield* compute(6)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 29_900, mrrSource: "autumn" }],
+					movements: [
+						paid,
+						churn,
+						{ day: day(6), type: "reactivation", fromMrrMinor: 0, toMrrMinor: 29_900 },
+					],
+				})
+			}),
+		))
+
+	it("holds a plan Autumn ends first while Stripe's copy bills; Stripe's cancel then churns it once", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, compute, state } = yield* billingWorld
+				const copy: UpsertSubscription = { ...subscription(60), externalId: "cus_1:team" }
+				yield* world.ingest("stripe", [subscription(60)])
+				yield* world.ingest("autumn", [copy])
+				yield* compute(0)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 19_900, mrrSource: "autumn" }],
+					movements: [paid],
+				})
+
+				// Autumn's copy expires: Stripe's still bills it, a switch and no movement.
+				yield* world.ingest("autumn", [{ ...copy, status: "canceled", canceledAt: at(1) }])
+				yield* compute(1)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 19_900, mrrSource: "stripe" }],
+					movements: [paid],
+				})
+
+				yield* world.ingest("stripe", [
+					{ ...subscription(60), status: "canceled", canceledAt: at(2) },
+				])
+				yield* compute(2)
+				yield* compute(3)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 0, mrrSource: "stripe" }],
+					movements: [paid, { day: day(2), type: "churn", fromMrrMinor: 19_900, toMrrMinor: 0 }],
+				})
+			}),
+		))
+
+	it("holds a Stripe payer's move to a usage-billed Autumn plan: no churn", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, compute, state } = yield* billingWorld
+				yield* world.ingest("stripe", [subscription(60)])
+				yield* compute(0)
+				yield* world.ingest("autumn", [
+					{ ...subscription(1), externalId: "cus_1:usage", mrrMinor: 0, billsByUsage: true },
+				])
+				yield* world.ingest("stripe", [
+					{ ...subscription(60), status: "canceled", canceledAt: at(1) },
+				])
+				yield* compute(1)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 0, mrrSource: "autumn" }],
+					movements: [paid],
+				})
+				expect(world.rows(`SELECT lifecycleStage FROM customer_accounts`)).toEqual([
+					{ lifecycleStage: "active" },
+				])
+			}),
+		))
+
 	it("counts a compute attempt at its lease, so a killed run backs off and ingest waits", () =>
 		run(
 			Effect.gen(function* () {
