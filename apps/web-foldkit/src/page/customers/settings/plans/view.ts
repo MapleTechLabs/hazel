@@ -22,7 +22,7 @@ const planRow = (h: HtmlBuilder<Message>, plan: string, isAddOn: boolean, canEdi
 	return h.li(
 		[h.Class("flex items-center justify-between gap-4 px-4 py-3 sm:px-5")],
 		[
-			h.label([h.For(id), h.Class("min-w-0 truncate font-medium text-fg text-sm")], [plan]),
+			h.label([h.For(id), h.Class("min-w-0 break-words font-medium text-fg text-sm")], [plan]),
 			switchControl(
 				h,
 				{
