@@ -13,7 +13,7 @@ import {
 	type LifecycleStage,
 	MAX_WINDOW_DAYS,
 } from "@hazel/domain/customers"
-import type { CustomerAccountId, CustomerContactId } from "@hazel/schema"
+import type { CustomerAccountId, CustomerContactId, CustomerSubscriptionId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { type RuleInput, activityWindowDays } from "./evaluate"
 import {
@@ -131,6 +131,7 @@ const PAID_INVOICE_DAYS = 400
 
 /** One counted paid invoice, per month. */
 export interface InvoiceMrr {
+	readonly subscriptionId: CustomerSubscriptionId
 	readonly mrrMinor: number
 	readonly currency: string
 }
@@ -158,6 +159,7 @@ export const invoiceMrrOf = (
 		if (now.getTime() - last.paidAt.getTime() > INVOICE_COVERS_DAYS[interval] * DAY_MS) return []
 		return [
 			{
+				subscriptionId: sub.id,
 				mrrMinor: interval === "year" ? Math.round(last.amountPaidMinor / 12) : last.amountPaidMinor,
 				currency: last.currency,
 			},
@@ -173,8 +175,9 @@ export const rollupAccount = (input: {
 	/** Add-on plan names (settings' `addOnPlans`): `planName` is a base plan's while there is one. */
 	readonly addOnPlans: ReadonlyArray<string>
 	/**
-	 * Its counted paid invoices (`invoiceMrrOf`), empty with `overageInMrr` off: with any, `mrrMinor`
-	 * is theirs, else its plans'.
+	 * Its counted paid invoices (`invoiceMrrOf`), empty with `overageInMrr` off. Billed by Stripe, an
+	 * invoiced subscription counts its invoice and the rest their plans; billed by Autumn (whose plans
+	 * name no Stripe subscription), any invoice replaces the plans.
 	 */
 	readonly invoiceMrr: ReadonlyArray<InvoiceMrr>
 	readonly contacts: ReadonlyArray<ContactFacts>
@@ -188,10 +191,14 @@ export const rollupAccount = (input: {
 	const live = subscriptions.filter((sub) => sub.status !== "canceled")
 	const paying = live.filter(billed)
 	const invoiced = input.invoiceMrr.filter((row) => row.currency === currency)
+	const invoicedIds = new Set(invoiced.map((row) => row.subscriptionId))
+	const planMrr = (subs: ReadonlyArray<schema.CustomerSubscription>) =>
+		sum(subs.filter((sub) => sub.currency === currency).map((sub) => sub.mrrMinor))
 	const mrrMinor =
-		invoiced.length > 0
-			? sum(invoiced.map((row) => row.mrrMinor))
-			: sum(paying.filter((sub) => sub.currency === currency).map((sub) => sub.mrrMinor))
+		invoiced.length === 0
+			? planMrr(paying)
+			: sum(invoiced.map((row) => row.mrrMinor)) +
+				(input.mrrSource === "stripe" ? planMrr(paying.filter((sub) => !invoicedIds.has(sub.id))) : 0)
 	// Paying in any currency (MRR counts only the reporting currency's; `attributes.foreignMrr` the rest),
 	// or on usage at MRR 0: never `churned` or `lead` for want of MRR.
 	const paid = paying.some(pays)

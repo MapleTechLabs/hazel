@@ -209,6 +209,16 @@ describe("MRR from paid Stripe invoices", () => {
 		expect(rollup.mrrMinor).toBe(team.mrrMinor)
 	})
 
+	it("keeps an uninvoiced subscription's plan MRR next to an invoiced one", () => {
+		const addOn = { id: subId("addon"), mrrMinor: 5_000 }
+		expect(
+			invoiceRollupOf(
+				[team, addOn],
+				[{ subscriptionId: team.id, amountPaidMinor: 24_350, paidAt: paidDaysAgo(5) }],
+			).mrrMinor,
+		).toBe(29_350)
+	})
+
 	it("counts an Autumn-sourced account's Stripe subscriptions' invoices", () => {
 		const rollup = invoiceRollupOf(
 			[

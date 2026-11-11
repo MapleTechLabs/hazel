@@ -296,7 +296,9 @@ Rules:
   invoice takes Σ those instead (`invoiceMrrOf`): each live, non-trialing Stripe subscription's
   (any `mrrSource`: Autumn bills through Stripe) last paid invoice, paid within its interval plus
   7 days (`other` never, incl. every-N-months prices), `/12` for a yearly one, reporting currency
-  only (none in it: the plan MRR stays). So overage, discounts
+  only (none in it: the plan MRR stays). Billed by Stripe, an uninvoiced subscription still adds
+  its plan MRR; billed by Autumn (plans name no Stripe subscription), the invoices replace all
+  plans. So overage, discounts
   and coupons count, and a month's usage moves MRR (expansion / contraction). `planName` =
   highest-MRR subscription's, skipping the settings' `addOnPlans` while the account has another
   plan; `trialEndsAt`;
