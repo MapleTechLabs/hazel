@@ -4,7 +4,8 @@
  * `IngestOp`s; it never writes the store. A provider with no adapter here answers
  * `CustomerProviderUnavailableError` on connect (the UI shows "coming soon").
  *
- * Registered: **clerk** (`./clerk/adapter.ts`). Stripe, Autumn and Maple are still to come.
+ * Registered: **clerk** (`./clerk/adapter.ts`), **stripe** (`./stripe/adapter.ts`). Autumn and Maple
+ * are still to come.
  *
  * What an adapter's ops must carry:
  *
@@ -42,6 +43,7 @@ import type {
 import { Context, Effect, Layer, Option, type Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { makeClerkAdapter } from "./clerk/adapter"
+import { makeStripeAdapter } from "./stripe/adapter"
 import { CustomerProviderError, CustomerWebhookRejectedError } from "./provider-errors"
 
 export { CustomerProviderError, CustomerWebhookRejectedError }
@@ -110,7 +112,7 @@ export interface CustomerProviderAdapter {
 		readonly cursor: string | null
 		readonly since: Date | null
 	}) => Effect.Effect<PullPage, CustomerProviderError>
-	/** Scheduled pull period (webhooks cover the rest); e.g. Maple hourly, Stripe daily. */
+	/** Scheduled pull period (webhooks cover the rest); e.g. Maple hourly, Stripe every 6 hours. */
 	readonly pullIntervalMs: number
 }
 
@@ -131,6 +133,7 @@ export class CustomerProviders extends Context.Service<CustomerProviders, Custom
 		Effect.gen(function* () {
 			const adapters = new Map<CustomerProvider, CustomerProviderAdapter>([
 				["clerk", yield* makeClerkAdapter],
+				["stripe", yield* makeStripeAdapter],
 			])
 			return CustomerProviders.of({ get: (provider) => Option.fromNullishOr(adapters.get(provider)) })
 		}),

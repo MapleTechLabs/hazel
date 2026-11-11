@@ -1,7 +1,8 @@
 /** Svix signature verification against the vector the official Svix libraries test themselves on. */
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-import { headerOf, signSvix, verifySvix } from "./svix"
+import { signSvix, verifySvix } from "./svix"
+import { headerOf } from "./webhook-crypto"
 
 const SECRET = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
 const MSG_ID = "msg_p5jXN8AQM9LWM0D4loKWxJek"
