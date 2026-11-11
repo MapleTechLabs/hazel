@@ -15,7 +15,7 @@ const nativeAuth = new URL("./native-auth.ts", import.meta.url).pathname
 const WEB_AUTH_CLIENT =
 	"export const desktopAuthClient: BrowserLoginClient | null = isDesktop ? desktopClient : null"
 /** The line in `platform/desktop.ts` that says the window controls sit over the content. */
-const WEB_TITLEBAR =
+export const WEB_TITLEBAR =
 	'export const hasDesktopTitlebar: boolean = typeof window !== "undefined" && isTauriMacOS()'
 /** The host draws the traffic lights over the content on macOS, as the Tauri app does. */
 const NATIVE_TITLEBAR = 'export const hasDesktopTitlebar: boolean = process.platform === "darwin"'

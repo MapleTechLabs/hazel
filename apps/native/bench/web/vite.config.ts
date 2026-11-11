@@ -7,11 +7,27 @@ import { resolve } from "node:path"
 // Plugins resolve from web-foldkit (they are its devDependencies), by file since a folder import skips `exports`.
 import { foldkit } from "../../../web-foldkit/node_modules/@foldkit/vite-plugin/dist/index.js"
 import tailwindcss from "../../../web-foldkit/node_modules/@tailwindcss/vite/dist/index.mjs"
+import { WEB_TITLEBAR } from "../../src/overlay-plugin"
 
 const webDir = resolve(import.meta.dirname, "../../../web-foldkit")
 const appVersion: string = JSON.parse(
 	readFileSync(resolve(webDir, "../desktop/src-tauri/tauri.conf.json"), "utf-8"),
 ).version
+
+/**
+ * The native Mac app is held to the Tauri app on a Mac, whose headers leave room for the window
+ * controls; the native host reports the same (`hasDesktopTitlebar`), so the page here does too.
+ */
+const desktopTitlebar = {
+	name: "hazel-bench-desktop-titlebar",
+	enforce: "pre" as const,
+	transform(code: string, id: string) {
+		if (!id.endsWith("/platform/desktop.ts")) return undefined
+		// A changed line must fail loudly, not compare against the titlebar-less layout.
+		if (!code.includes(WEB_TITLEBAR)) throw new Error(`${id}: hasDesktopTitlebar not found`)
+		return code.replace(WEB_TITLEBAR, "export const hasDesktopTitlebar: boolean = true")
+	},
+}
 
 // Untyped on purpose: the plugins carry web-foldkit's Vite types, not this package's older Vite.
 const config = {
@@ -20,7 +36,7 @@ const config = {
 	envDir: resolve(import.meta.dirname, "env-none"),
 	publicDir: resolve(webDir, "public"),
 	build: { outDir: resolve(import.meta.dirname, "dist"), emptyOutDir: true, target: "es2022" },
-	plugins: [tailwindcss(), foldkit({ devToolsMcpPort: false })],
+	plugins: [desktopTitlebar, tailwindcss(), foldkit({ devToolsMcpPort: false })],
 	optimizeDeps: { exclude: ["@tanstack/browser-db-sqlite-persistence"] },
 	resolve: {
 		alias: { "~": resolve(webDir, "src/core") },

@@ -180,8 +180,9 @@ bun run --cwd ../../packages/foldkit-rune test   # resolved styles vs Chromium's
 ```
 
 `bench/conformance` renders the same scenarios natively and in Chromium (`mobile` and `drawer`
-at a phone's 402x874, the rest at 1280x800), matches elements and compares their rects and the
-pixels; `--check` holds the results to `thresholds.json`. The style
+at a phone's 402x874, the rest at 1280x800; Chromium's page leaves room for the window controls,
+as the Tauri app does on a Mac and the native one does), matches elements and compares their rects
+and the pixels; `--check` holds the results to `thresholds.json`. The style
 suite in `packages/foldkit-rune` replays what Chromium computed for every element of the app and a
 synthetic utility page (`conformance:extract` records it).
 
