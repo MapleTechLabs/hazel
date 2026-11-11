@@ -100,10 +100,9 @@ export const transition = (
 				}
 			}
 			const renew = current.updatedAt.getTime() + PRESENCE_RENEW_MS <= nowMs
-			return {
-				fields: { ...current, lastSeenAt: now, ...(renew ? { updatedAt: now } : {}) },
-				project: renew,
-			}
+			const fields = { ...current, lastSeenAt: now }
+			if (renew) fields.updatedAt = now
+			return { fields, project: renew }
 		}
 		case "Disconnected": {
 			if (current === undefined || current.status === "offline") return undefined
@@ -115,17 +114,14 @@ export const transition = (
 				current.statusExpiresAt !== null && current.statusExpiresAt.getTime() <= nowMs
 			const goesOffline = current.status !== "offline" && isStale(current, nowMs)
 			if (!isStatusExpired && !goesOffline) return undefined
-			return {
-				fields: {
-					...current,
-					...(isStatusExpired
-						? { statusEmoji: null, customMessage: null, statusExpiresAt: null }
-						: {}),
-					...(goesOffline ? { status: "offline" as const } : {}),
-					updatedAt: now,
-				},
-				project: true,
+			const fields = { ...current, updatedAt: now }
+			if (isStatusExpired) {
+				fields.statusEmoji = null
+				fields.customMessage = null
+				fields.statusExpiresAt = null
 			}
+			if (goesOffline) fields.status = "offline"
+			return { fields, project: true }
 		}
 	}
 }
