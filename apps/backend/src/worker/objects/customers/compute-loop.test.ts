@@ -1204,11 +1204,19 @@ describe("Customers compute and sync loop", () => {
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
 				expect(mrr()).toEqual([{ mrrMinor: 24_350 }])
 
-				// A history rebuild leaves the invoices' MRR to compute, not the plans' series.
+				// A history rebuild leaves the invoices' MRR to compute; today's movement ends the plans' series there.
 				yield* world.object.run(requestHistoryRebuild).pipe(Effect.orDie)
 				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
 				expect(meta(world, "rebuildHistory")).toBeUndefined()
 				expect(mrr()).toEqual([{ mrrMinor: 24_350 }])
+				expect(
+					world.rows(
+						`SELECT day, type, fromMrrMinor, toMrrMinor FROM customer_mrr_movements ORDER BY day`,
+					),
+				).toEqual([
+					{ day: day(-60), type: "new", fromMrrMinor: 0, toMrrMinor: 19_900 },
+					{ day: day(0), type: "expansion", fromMrrMinor: 19_900, toMrrMinor: 24_350 },
+				])
 
 				ok(yield* world.call("customers.settings.update", { overageInMrr: false }, world.owner))
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)

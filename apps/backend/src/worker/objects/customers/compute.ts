@@ -999,10 +999,27 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 				currency,
 			})
 		}
-		// With `overageInMrr`, today's MRR is the invoices' (compute's), not the plans' series end.
 		const current = series[series.length - 1]
-		if (!base.settings.overageInMrr && current !== account.mrrMinor)
+		if (current === account.mrrMinor) continue
+		if (!base.settings.overageInMrr) {
 			mrrNow.push({ id: account.id, mrrMinor: current })
+			continue
+		}
+		// With `overageInMrr`, today's MRR is the invoices' (compute's): today's movement (one per day)
+		// ends there instead of at the plans' series end.
+		const last = movements.at(-1)
+		const own = last?.accountId === account.id && last.day === today ? movements.pop() : undefined
+		const from = own === undefined ? current : (own.fromMrrMinor as number)
+		if (from !== account.mrrMinor)
+			movements.push({
+				accountId: account.id,
+				day: today,
+				type: movementType(from, account.mrrMinor, everPaid),
+				deltaMinor: account.mrrMinor - from,
+				fromMrrMinor: from,
+				toMrrMinor: account.mrrMinor,
+				currency,
+			})
 	}
 	const users = yield* activeCounts(first, today)
 	const health = new Map(
