@@ -117,6 +117,15 @@ describe("StyleResolver", () => {
 			y: -8,
 			scale: 1,
 		})
+		// An indeterminate progress segment: a translate by its own width, looped one way.
+		expect(resolve("[animation:progress-slide_1.6s_ease-in-out_infinite]").style.animation).toEqual({
+			kind: "slide",
+			period: 1.6,
+			delay: 0,
+			from: [-1, 0],
+			to: [2.5, 0],
+			ease: [0.42, 0, 0.58, 1],
+		})
 		expect(resolve("animate-bounce").style.animation).toBeUndefined()
 		expect(styles.unsupportedProps.has("animation: bounce")).toBe(true)
 	})

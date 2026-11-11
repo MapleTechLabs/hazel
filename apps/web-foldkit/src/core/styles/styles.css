@@ -114,6 +114,18 @@ If you want to use the typography plugin, uncomment the line below.
 	--animate-shake: shake 0.5s ease-in-out;
 	/* Only a load slower than 300ms shows its placeholder: a fast one never flashes it. */
 	--animate-skeleton-in: skeleton-in 150ms ease-out 300ms both;
+	/* An indeterminate progress segment (40% of its track) sweeping in from the left edge and out the right. */
+	--animate-progress-slide: progress-slide 1.6s ease-in-out infinite;
+
+	@keyframes progress-slide {
+		from {
+			transform: translateX(-100%);
+		}
+
+		to {
+			transform: translateX(250%);
+		}
+	}
 
 	@keyframes skeleton-in {
 		from {
