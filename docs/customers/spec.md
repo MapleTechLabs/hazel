@@ -178,7 +178,7 @@ Routes: `/$orgSlug/customers` (overview), `/customers/attention`, `/customers/li
 
 ### 2. Needs attention (queue)
 
-- Tabs: Open · Snoozed · Done. Filters: kind (risk / opportunity), signal type, severity, owner (default "Mine"), plan.
+- Tabs: Open · Snoozed · Done. Filters: kind (risk / opportunity), signal type, severity, owner (default "Mine or unowned", so a new account shows to everyone), plan.
 - Rows: rank, account (logo, name, plan, MRR), signal title + plain reason, evidence mini-viz (sparkline or invoice amount), severity, age, assignee, health badge.
 - Grouping toggle: one row per signal, or one row per account with its stacked signals.
 - Row actions: assign, snooze (tomorrow / 3 days / next week / date), mark done (outcome + note), dismiss (not useful), open customer.
