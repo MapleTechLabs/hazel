@@ -56,9 +56,14 @@ static AWAITED: Mutex<Option<std::collections::HashSet<rune::ImageId>>> = Mutex:
 
 /// Rebuilds the memoised subtrees once `image` has decoded, for a box sized from the picture's
 /// own size. A decode wakes the window to redraw, but a memoised row is not rebuilt by a
-/// redraw, so a row built while its picture decoded would keep its empty box.
+/// redraw, so a row built while its picture decoded would keep its empty box. A picture that
+/// failed to decode stays empty and asks for nothing.
 pub fn rebuild_when_ready(image: &Image) {
     if image.is_ready() {
+        // The decode finished after the caller found no size: that build drew the empty box.
+        if image.error().is_none() {
+            arrived();
+        }
         return;
     }
     let mut awaited = AWAITED.lock().unwrap();
@@ -71,13 +76,20 @@ pub fn rebuild_when_ready(image: &Image) {
     drop(awaited);
     let image = image.clone();
     std::thread::spawn(move || {
-        let _ = image.wait();
+        let decoded = image.wait().is_ok();
         if let Some(set) = AWAITED.lock().unwrap().as_mut() {
             set.remove(&image.id());
         }
-        ARRIVED.store(true, Ordering::SeqCst);
-        wake();
+        if decoded {
+            arrived();
+        }
     });
+}
+
+/// A picture landed: the next frame rebuilds the memoised subtrees.
+fn arrived() {
+    ARRIVED.store(true, Ordering::SeqCst);
+    wake();
 }
 
 /// A picture composited with its mask, by what was asked for: the size it was last asked at,
