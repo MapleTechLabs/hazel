@@ -304,16 +304,19 @@ Rules:
 - MRR movements (yesterday's `mrr` vs today's): 0→>0 `new` (or `reactivation` if `churnedAt` set
   before), >0→0 `churn`, up `expansion`, down `contraction`. A source switch holds the movement (none is written
   that run: a migration, not revenue) only when `mrrSource` changed **and** the new source bills
-  now **and** the stored MRR was > 0. Every other change writes its movement: a change to a source
+  now in the reporting currency **and** the stored MRR was > 0. Every other change writes its movement: a change to a source
   that does not bill is a churn when MRR goes to 0, and a switch from MRR 0 (an upgrade from a free
   plan) is `new` or `reactivation`.
 - `customer_org_daily[today]` from the above (+ at-risk MRR = Σ MRR of accounts with an open high
   risk signal).
 - After a backfill: rebuild `active_users*`, `mrr` (from subscription start/cancel dates),
   movements and `customer_org_daily` for the last 365 days, so charts have history on day one.
-  While a billing backfill is importing, or its rebuild is pending, compute writes no movements
-  (the accounts' history comes from the rebuild, which waits for billing imports to finish, and
-  replaces a movement of today on an account with none before).
+  While a billing backfill is importing, compute writes no movement for an account whose stored or
+  new `mrrSource` is that provider (its history comes from the rebuild, which waits for billing
+  imports to finish, and replaces a movement of today on an account with none before); other
+  accounts' changes are revenue. While the rebuild is pending, compute writes none.
+- Autumn counts for MRR once its first backfill finished and, after a reconnect, once a run started
+  since (`lastSuccessAt` ≥ `connectedAt`) succeeded: what it imported before the disconnect is stale.
 
 ### 4.3 Health (`packages/domain/src/customers/health.ts`)
 

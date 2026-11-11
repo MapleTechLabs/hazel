@@ -1264,6 +1264,131 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("keeps the movement of a payer's move to an Autumn plan billed in another currency", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, compute, state } = yield* billingWorld
+				yield* world.ingest("stripe", [subscription(60)])
+				yield* compute(0)
+				yield* world.ingest("autumn", [
+					{ ...subscription(1), externalId: "cus_1:team", currency: "eur" },
+				])
+				yield* compute(1)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 0, mrrSource: "autumn" }],
+					movements: [paid, { day: day(1), type: "churn", fromMrrMinor: 19_900, toMrrMinor: 0 }],
+				})
+			}),
+		))
+
+	it("holds only the importing source's accounts: a Stripe churn during an Autumn backfill is one", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest(
+					"clerk",
+					["org_1", "org_2"].map((externalId): IngestOp => ({
+						_tag: "account",
+						externalId,
+						name: externalId,
+						sameAs: [],
+						onNoMatch: "create",
+					})),
+				)
+				const movements = () =>
+					world.rows(
+						`SELECT a.name, m.type FROM customer_mrr_movements m
+						JOIN customer_accounts a ON a.id = m.accountId ORDER BY a.name, m.day`,
+					)
+				yield* world.ingest("stripe", [subscription(60)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(movements()).toEqual([{ name: "org_1", type: "new" }])
+
+				yield* world.object
+					.run(
+						Effect.flatMap(CustomerIngest, (ingest) =>
+							ingest.startRun(world.connection("autumn"), "backfill"),
+						).pipe(Effect.provide(CustomerIngest.layer)),
+					)
+					.pipe(Effect.orDie)
+				// Autumn's partial import bills org_2: held. Stripe's org_1 churns meanwhile: a movement.
+				yield* world.ingest("autumn", [
+					{
+						...subscription(30, { provider: "clerk", externalId: "org_2" }),
+						externalId: "cus_2:team",
+					},
+				])
+				yield* world.ingest("stripe", [
+					{ ...subscription(60), status: "canceled", canceledAt: NOW.toISOString() },
+				])
+				yield* world.object.run(runCompute(new Date(NOW.getTime() + DAY))).pipe(Effect.orDie)
+				expect(movements()).toEqual([
+					{ name: "org_1", type: "new" },
+					{ name: "org_1", type: "churn" },
+				])
+				expect(
+					world.rows(`SELECT name, mrrMinor, mrrSource FROM customer_accounts ORDER BY name`),
+				).toEqual([
+					{ name: "org_1", mrrMinor: 0, mrrSource: "stripe" },
+					{ name: "org_2", mrrMinor: 19_900, mrrSource: "autumn" },
+				])
+			}),
+		))
+
+	it("counts a reconnected Autumn's stale subscriptions only once the reconnect's run succeeded", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, compute, state } = yield* billingWorld
+				const autumnId = world.connection("autumn")
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET lastSuccessAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
+					)
+					.run(autumnId)
+				yield* world.ingest("stripe", [subscription(60)])
+				// Imported before a disconnect, canceled in Autumn since.
+				const stale: UpsertSubscription = {
+					...subscription(1),
+					externalId: "cus_1:pro",
+					planName: "Pro",
+					mrrMinor: 29_900,
+				}
+				yield* world.ingest("autumn", [stale])
+				// Reconnected: the run it started has not succeeded yet, so Stripe's still bills.
+				world.object.storage.db
+					.prepare(`UPDATE customer_connections SET connectedAt = ? WHERE id = ?`)
+					.run(
+						new Date(NOW.getTime() + DAY).toISOString().replace("T", " ").replace("Z", ""),
+						autumnId,
+					)
+				const autumnReady = () =>
+					world.object.run(Effect.map(loadBase(NOW), (base) => base.autumnReady)).pipe(Effect.orDie)
+				expect(yield* autumnReady()).toBe(false)
+				yield* compute(1)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 19_900, mrrSource: "stripe" }],
+					movements: [{ ...paid, day: day(1) }],
+				})
+
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							const ingest = yield* CustomerIngest
+							const reconnect = yield* ingest.startRun(autumnId, "manual")
+							yield* ingest.finishRun(reconnect.id, { _tag: "Succeeded", cursor: null })
+						}).pipe(Effect.provide(CustomerIngest.layer)),
+					)
+					.pipe(Effect.orDie)
+				yield* world.ingest("autumn", [{ ...stale, status: "canceled", canceledAt: at(1) }])
+				expect(yield* autumnReady()).toBe(true)
+				yield* compute(2)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 19_900, mrrSource: "stripe" }],
+					movements: [{ ...paid, day: day(1) }],
+				})
+			}),
+		))
+
 	it("counts a compute attempt at its lease, so a killed run backs off and ingest waits", () =>
 		run(
 			Effect.gen(function* () {

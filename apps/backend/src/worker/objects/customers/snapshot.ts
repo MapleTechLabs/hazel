@@ -73,7 +73,10 @@ export interface SnapshotBase {
 	readonly hasActivityData: boolean
 	/** Billing data exists (a billing source, or subscriptions). */
 	readonly hasBillingData: boolean
-	/** Autumn's subscriptions can count for MRR; each account's source is `billingProviderOf`'s. */
+	/**
+	 * Autumn's subscriptions can count for MRR (its first import done, and a run succeeded since it
+	 * was last connected); each account's source is `billingProviderOf`'s.
+	 */
 	readonly autumnReady: boolean
 	/** The live accounts, loaded in chunks (`loadAccounts`). */
 	readonly accountIds: ReadonlyArray<CustomerAccountId>
@@ -371,11 +374,14 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 				? activityConnections.some((connection) => connection.status === "active")
 				: Option.isSome(anyActivity),
 		hasBillingData: connected.has("stripe") || connected.has("autumn") || Option.isSome(anySubscription),
+		// A reconnect keeps what Autumn imported before, stale meanwhile: it counts again once the run
+		// the reconnect started succeeds (`lastSuccessAt`, that run's start, not before `connectedAt`).
 		autumnReady: connections.some(
 			(connection) =>
 				connection.provider === "autumn" &&
 				connection.status !== "disconnected" &&
-				connection.backfilledAt !== null,
+				connection.backfilledAt !== null &&
+				(connection.lastSuccessAt === null || connection.lastSuccessAt >= connection.connectedAt),
 		),
 		accountIds,
 		from: addDays(today, -(activityWindowDays(windowRules) - 1)),

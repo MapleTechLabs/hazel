@@ -185,25 +185,34 @@ const writeMovement = (account: schema.CustomerAccount, rollup: Rollup, today: D
 	})
 
 /**
- * A payer moved to another billing provider than last run (`mrrSource`) that bills it now: a
- * migration, not revenue, so its MRR change writes no movement. A move to a source that does not
- * bill (a churn), or from MRR 0 (an upgrade from a free plan), keeps its movement.
+ * A payer moved to another billing provider than last run (`mrrSource`) that bills it now in the
+ * reporting currency: a migration, not revenue, so its MRR change writes no movement. A move to a
+ * source that does not bill (a churn), bills only in another currency (its MRR 0 here), or from
+ * MRR 0 (an upgrade from a free plan), keeps its movement.
  */
 const switchedSource = ({ stored, rollup, facts }: AccountSnapshot) =>
 	stored.mrrSource !== null &&
 	rollup.mrrSource !== stored.mrrSource &&
 	stored.mrrMinor > 0 &&
-	facts.subscriptions.some(billsNow)
+	facts.subscriptions.some((sub) => billsNow(sub) && sub.currency === rollup.currency)
+
+/** Its MRR comes, or came last run, from a billing provider still importing its backfill. */
+const fromImporting = ({ stored, rollup }: AccountSnapshot, importing: ReadonlySet<CustomerProvider>) =>
+	(stored.mrrSource !== null && importing.has(stored.mrrSource)) ||
+	(rollup.mrrSource !== null && importing.has(rollup.mrrSource))
 
 /**
- * `holdMovements`: the MRR change is not revenue, so no movement is written: a billing backfill is
- * still importing (its accounts' history comes from the rebuild after it), or that rebuild is
- * pending. Neither does a payer whose MRR now comes from another billing provider that bills it
+ * An account's MRR change is not revenue, so no movement is written, when its MRR comes (or came)
+ * from a billing backfill still importing (`fromImporting`: partial data, its history the rebuild's
+ * after it), or while that rebuild is pending (`rebuildPending`: a movement would keep it from an
+ * account without history). Other accounts' changes are revenue during another provider's import.
+ * Neither does a payer whose MRR now comes from another billing provider that bills it
  * (`switchedSource`), nor a change of reporting currency. The number of accounts that switched.
  */
 const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 	snapshot: Snapshot,
-	holdMovements: boolean,
+	importing: ReadonlySet<CustomerProvider>,
+	rebuildPending: boolean,
 ) {
 	const db = yield* Database.Database
 	const { now, today } = snapshot.org
@@ -215,7 +224,11 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 				Effect.gen(function* () {
 					const { stored, rollup } = account
 					if (switchedSource(account)) switched++
-					else if (!holdMovements && stored.currency === rollup.currency)
+					else if (
+						!rebuildPending &&
+						!fromImporting(account, importing) &&
+						stored.currency === rollup.currency
+					)
 						yield* writeMovement(stored, rollup, today)
 					const changes = diff(stored, rollup)
 					if (Object.keys(changes).length === 0) return
@@ -1152,7 +1165,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	const started = yield* Clock.currentTimeMillis
 	const base = yield* loadBase(now)
 	const importing = yield* importingProviders(now)
-	const holdMovements = billingImporting(importing) || (yield* historyRebuildPending)
+	const rebuildPending = yield* historyRebuildPending
 	// The previous turn's, unless unreadable, stale, or from another day or Autumn readiness.
 	const progress = Option.getOrUndefined(
 		Option.filter(
@@ -1187,7 +1200,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	let switched = 0
 	for (const ids of chunks) {
 		const snapshot = yield* loadAccounts(base, ids)
-		switched += yield* writeRollups(snapshot, holdMovements)
+		switched += yield* writeRollups(snapshot, importing, rebuildPending)
 		const scores = scoreAll(snapshot)
 		yield* writeHealth(snapshot, scores)
 		const live = yield* writeSignals(withTodayHealth(snapshot, scores), signals)
@@ -1205,7 +1218,8 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 		"customers.rules": base.rules.length,
 		"customers.autumn_ready": base.autumnReady,
 		"customers.mrr_source_switches": switched,
-		"customers.movements_held": holdMovements,
+		"customers.billing_importing": billingImporting(importing),
+		"customers.history_rebuild_pending": rebuildPending,
 		"customers.resumed": progress !== undefined,
 		"customers.chunks": done,
 		"customers.chunks_left": chunks.length - done,
