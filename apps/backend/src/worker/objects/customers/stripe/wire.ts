@@ -3,7 +3,7 @@
  *
  * Verified against Stripe's API reference for `2025-08-27.basil` (the version every request pins,
  * {@link STRIPE_API_VERSION}): `/v1/account`, `/v1/customers`, `/v1/products`, `/v1/subscriptions`,
- * `/v1/invoices`, `/v1/payment_methods`.
+ * `/v1/invoices`, `/v1/payment_methods`, `/v1/events`.
  *
  * Every field Hazel does not need is left out, and nearly everything is optional and nullable: a
  * webhook endpoint delivers events in *its own* pinned version, which is rarely the one Hazel asks
@@ -45,6 +45,26 @@ export const StripeAccount = Schema.Struct({
 	),
 })
 
+/** An id, or the object it expands into: `customer`, `default_payment_method`, `discounts[]`. */
+const Expandable = <S extends Schema.Top>(schema: S) =>
+	Schema.optionalKey(Schema.NullOr(Schema.Union([Schema.String, schema])))
+
+export const StripePaymentMethod = Schema.Struct({
+	id: Nullable(Schema.String),
+	type: Nullable(Schema.String),
+	customer: Nullable(Schema.String),
+	card: Nullable(
+		Schema.Struct({
+			brand: Nullable(Schema.String),
+			last4: Nullable(Schema.String),
+			exp_month: Nullable(Schema.Number),
+			exp_year: Nullable(Schema.Number),
+		}),
+	),
+	livemode: Nullable(Schema.Boolean),
+})
+export type StripePaymentMethod = typeof StripePaymentMethod.Type
+
 export const StripeCustomer = Schema.Struct({
 	id: Schema.String,
 	name: Nullable(Schema.String),
@@ -55,7 +75,9 @@ export const StripeCustomer = Schema.Struct({
 	/** Unix seconds. */
 	created: Nullable(Schema.Number),
 	metadata: Metadata,
-	/** Only on a `customer.deleted` payload and in an expanded, deleted reference. */
+	/** The card a subscription without its own `default_payment_method` is charged on. */
+	invoice_settings: Nullable(Schema.Struct({ default_payment_method: Expandable(StripePaymentMethod) })),
+	/** Only on a deleted customer (retrieved, or in an expanded reference). */
 	deleted: Nullable(Schema.Boolean),
 	livemode: Nullable(Schema.Boolean),
 })
@@ -133,26 +155,6 @@ export const StripeDiscount = Schema.Struct({
 })
 export type StripeDiscount = typeof StripeDiscount.Type
 
-export const StripePaymentMethod = Schema.Struct({
-	id: Nullable(Schema.String),
-	type: Nullable(Schema.String),
-	customer: Nullable(Schema.String),
-	card: Nullable(
-		Schema.Struct({
-			brand: Nullable(Schema.String),
-			last4: Nullable(Schema.String),
-			exp_month: Nullable(Schema.Number),
-			exp_year: Nullable(Schema.Number),
-		}),
-	),
-	livemode: Nullable(Schema.Boolean),
-})
-export type StripePaymentMethod = typeof StripePaymentMethod.Type
-
-/** An id, or the object it expands into: `customer`, `default_payment_method`, `discounts[]`. */
-const Expandable = <S extends Schema.Top>(schema: S) =>
-	Schema.optionalKey(Schema.NullOr(Schema.Union([Schema.String, schema])))
-
 export const StripeSubscription = Schema.Struct({
 	id: Schema.String,
 	customer: Expandable(StripeCustomer),
@@ -166,6 +168,8 @@ export const StripeSubscription = Schema.Struct({
 	created: Nullable(Schema.Number),
 	canceled_at: Nullable(Schema.Number),
 	cancel_at_period_end: Nullable(Schema.Boolean),
+	/** A cancellation scheduled for a set time rather than the period's end. */
+	cancel_at: Nullable(Schema.Number),
 	cancellation_details: Nullable(
 		Schema.Struct({
 			reason: Nullable(Schema.String),
@@ -209,9 +213,6 @@ export const StripeInvoice = Schema.Struct({
 			marked_uncollectible_at: Nullable(Schema.Number),
 		}),
 	),
-	last_finalization_error: Nullable(
-		Schema.Struct({ message: Nullable(Schema.String), code: Nullable(Schema.String) }),
-	),
 	livemode: Nullable(Schema.Boolean),
 })
 export type StripeInvoice = typeof StripeInvoice.Type
@@ -226,6 +227,19 @@ export const StripeSubscriptionsPage = StripeList(StripeSubscription)
 export const StripeInvoicesPage = StripeList(StripeInvoice)
 
 /**
+ * What a subscription is read with, everywhere (validate, pull, webhook): the discounts' coupons
+ * and the card on file, the customer's default card being the fallback. `data.`-prefixed on a list.
+ */
+const SUBSCRIPTION_EXPANDS = [
+	"discounts",
+	"default_payment_method",
+	"customer.invoice_settings.default_payment_method",
+]
+
+export const subscriptionExpands = (prefix: "" | "data."): ReadonlyArray<readonly [string, string]> =>
+	SUBSCRIPTION_EXPANDS.map((path) => ["expand[]", `${prefix}${path}`] as const)
+
+/**
  * Every delivery: `{ id, type, data: { object }, created, livemode, account }`. `account` is set
  * only on an event from a connected account; `livemode` says which mode it happened in.
  */
@@ -238,9 +252,15 @@ export const StripeEvent = Schema.Struct({
 	/** The connected account the event belongs to (Connect platforms only). */
 	account: Nullable(Schema.String),
 	api_version: Nullable(Schema.String),
-	data: Schema.Struct({ object: Schema.Unknown }),
+	data: Schema.Struct({
+		object: Schema.Unknown,
+		/** What an `*.updated` / `*.detached` event changed, with the old values. */
+		previous_attributes: Nullable(Schema.Unknown),
+	}),
 })
 export type StripeEvent = typeof StripeEvent.Type
+
+export const StripeEventsPage = StripeList(StripeEvent)
 
 // ---------------------------------------------------------------------------
 // Accessors
@@ -274,7 +294,7 @@ export const metadataOf = (
 		typeof value === "string" && value.trim() !== "" ? [[key, value.trim()] as const] : [],
 	)
 
-/** Clerk organization ids are `org_` + an id; nothing else in Stripe metadata looks like one. */
+/** Clerk organization ids are `org_` + an id. */
 const CLERK_ORG_ID = /^org_[A-Za-z0-9]{6,}$/
 
 export const isClerkOrgId = (value: string): boolean => CLERK_ORG_ID.test(value)

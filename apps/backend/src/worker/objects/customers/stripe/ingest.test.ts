@@ -24,7 +24,12 @@ import {
 import { accountDeletedOp, customerOps, invoiceOp, subscriptionOp } from "./map"
 import { StripeCustomer, StripeInvoice, StripeSubscription } from "./wire"
 
-const CONFIG = { _tag: "stripe", clerkOrgMetadataKey: "clerk_org_id", matchByDomain: true } as const
+const CONFIG = {
+	_tag: "stripe",
+	clerkOrgMetadataKey: "clerk_org_id",
+	matchByDomain: true,
+	accountId: "",
+} as const
 
 const customer = Schema.decodeUnknownSync(StripeCustomer)
 const subscription = Schema.decodeUnknownSync(StripeSubscription)

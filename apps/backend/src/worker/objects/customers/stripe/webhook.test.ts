@@ -11,6 +11,7 @@ import {
 	ACCOUNT,
 	CUSTOMER_ACME,
 	CUSTOMER_GLOBEX,
+	DISCOUNT_20_PERCENT,
 	event,
 	INVOICE_GLOBEX_OPEN,
 	ORG_ACME,
@@ -31,6 +32,7 @@ const CONFIG: ConnectionConfig = {
 	_tag: "stripe",
 	clerkOrgMetadataKey: "clerk_org_id",
 	matchByDomain: true,
+	accountId: "",
 }
 
 const stripe = () =>
@@ -142,95 +144,128 @@ describe("Stripe webhook verification", () => {
 })
 
 describe("Stripe webhook events", () => {
-	it("customer.created writes the account and its billing contact", async () => {
-		const ops = await run(deliver(event("customer.created", CUSTOMER_ACME)))
+	const paths = (fake: FakeStripeState) => fake.calls.map((call) => call.path)
+
+	it("customer.created writes the account and its billing contact, as Stripe has it now", async () => {
+		const fake = stripe()
+		const before = new Date().toISOString()
+		const ops = await run(deliver(event("customer.created", CUSTOMER_ACME), { fake }))
 		expect(tags(ops)).toEqual(["account", "contact"])
 		const account = ops[0] as UpsertAccount
 		expect(account.sameAs).toEqual([{ provider: "clerk", externalId: ORG_ACME }])
-		// Stripe customers have no `updated` of their own: the event's time orders them.
-		expect(account.observedAt).toBe("2026-11-10T12:00:00.000Z")
+		// Observed when it was read, not when the event happened: the read is the current state.
+		expect(account.observedAt! >= before).toBe(true)
+		expect(paths(fake)).toEqual([`/customers/${CUSTOMER_ACME.id}`])
 	})
 
-	it("customer.deleted stales the ref and writes nothing else", async () => {
-		const ops = await run(deliver(event("customer.deleted", { ...CUSTOMER_ACME, deleted: true })))
-		expect(ops).toEqual([
-			{
-				_tag: "account",
-				externalId: CUSTOMER_ACME.id,
-				sameAs: [],
-				onNoMatch: "unmatched",
-				deleted: true,
-				// Dated by the event, so a late retry of an older update cannot revive it.
-				observedAt: "2026-11-10T12:00:00.000Z",
-			},
-		])
-	})
-
-	it("a subscription event writes the subscription, with the product's name fetched once", async () => {
+	it("a deleted customer is a deletion, whichever customer event arrives late", async () => {
 		const fake = stripe()
+		const gone = makeFakeStripe({
+			...fake,
+			customers: [{ id: CUSTOMER_ACME.id, object: "customer", deleted: true }],
+		})
+		for (const type of ["customer.deleted", "customer.updated"]) {
+			const ops = await run(deliver(event(type, CUSTOMER_ACME), { fake: gone }))
+			expect(ops).toEqual([
+				{
+					_tag: "account",
+					externalId: CUSTOMER_ACME.id,
+					sameAs: [],
+					onNoMatch: "unmatched",
+					deleted: true,
+					observedAt: expect.any(String),
+				},
+			])
+		}
+	})
+
+	it("skips an object the key cannot see: another account's event, whatever its stamp", async () => {
+		const stranger = { ...CUSTOMER_ACME, id: "cus_2stranger00001" }
+		expect(await run(deliver(event("customer.updated", stranger)))).toEqual([])
+		expect(
+			await run(
+				deliver(event("customer.subscription.updated", { ...SUB_ACME, id: "sub_2stranger001" })),
+			),
+		).toEqual([])
+		expect(
+			await run(deliver(event("invoice.paid", { ...INVOICE_GLOBEX_OPEN, id: "in_2stranger001" }))),
+		).toEqual([])
+	})
+
+	it("a subscription event writes the subscription's current state, discounts and plan included", async () => {
+		const fake = makeFakeStripe({
+			...stripe(),
+			// Since the event: a failed renewal, and a coupon the payload carries as an id only.
+			subscriptions: [{ ...SUB_ACME, status: "past_due", discounts: [DISCOUNT_20_PERCENT.id] }],
+			discounts: [DISCOUNT_20_PERCENT],
+		})
 		const ops = await run(deliver(event("customer.subscription.updated", SUB_ACME), { fake }))
 		expect(ops).toHaveLength(1)
 		expect(ops[0]).toMatchObject({
 			_tag: "subscription",
 			externalId: SUB_ACME.id,
 			planName: "Pro",
-			status: "active",
-			mrrMinor: 120_000,
+			status: "past_due",
+			mrrMinor: 96_000,
+			listMrrMinor: 120_000,
+			paymentMethod: { brand: "visa", last4: "4242", expMonth: 4, expYear: 2030 },
 		})
-		expect(fake.calls.map((call) => call.path)).toEqual([`/products/${PRODUCT_PRO.id}`])
-	})
-
-	it("acknowledges a subscription event whose product cannot be read, with what it knows", async () => {
-		const fake = stripe()
-		const withNickname = {
-			...SUB_ACME,
-			items: {
-				data: [
-					{
-						quantity: 1,
-						price: {
-							unit_amount: 10_000,
-							currency: "usd",
-							nickname: "Pro monthly",
-							product: "prod_missing00001",
-							recurring: { interval: "month", interval_count: 1 },
-						},
-					},
+		expect(fake.calls).toEqual([
+			{
+				path: `/subscriptions/${SUB_ACME.id}`,
+				params: [
+					["expand[]", "discounts"],
+					["expand[]", "default_payment_method"],
+					["expand[]", "customer.invoice_settings.default_payment_method"],
 				],
 			},
-		}
-		const ops = await run(deliver(event("customer.subscription.updated", withNickname), { fake }))
-		expect(ops[0]).toMatchObject({ planName: "Pro monthly", mrrMinor: 10_000 })
-		expect(fake.calls.map((call) => call.path)).toEqual(["/products/prod_missing00001"])
+			{
+				path: "/products",
+				params: [
+					["limit", "100"],
+					["ids[]", PRODUCT_PRO.id],
+				],
+			},
+		])
 	})
 
-	it("a trial_will_end or a deletion is the same write: the subscription's new state", async () => {
-		const trial = await run(deliver(event("customer.subscription.trial_will_end", SUB_GLOBEX)))
-		expect(trial[0]).toMatchObject({ status: "trialing", planName: "Extra seats" })
-		const deleted = await run(
-			deliver(
-				event("customer.subscription.deleted", {
-					...SUB_ACME,
-					status: "canceled",
-					canceled_at: SUB_ACME.created,
-				}),
-			),
-		)
-		expect(deleted[0]).toMatchObject({ status: "canceled", mrrMinor: 120_000 })
+	it("refuses the delivery when Stripe cannot be read now, so Stripe sends it again", async () => {
+		for (const failing of [`/subscriptions/${SUB_ACME.id}`, "/products"]) {
+			const fake = makeFakeStripe({ ...stripe(), failing: [failing] })
+			const error = await run(
+				Effect.flip(deliver(event("customer.subscription.updated", SUB_ACME), { fake })),
+			)
+			// The plan is never named from a lookup that did not happen.
+			expect(error.message).toMatch(/retry later/i)
+		}
+	})
+
+	it("acknowledges an event the key may no longer read, which the next pull reports", async () => {
+		const fake = makeFakeStripe({ ...stripe(), forbidden: ["/products"] })
+		expect(await run(deliver(event("customer.subscription.updated", SUB_ACME), { fake }))).toEqual([])
 	})
 
 	it("an invoice event writes the invoice, a failed payment with a reason ingest can raise", async () => {
-		const open = await run(deliver(event("invoice.finalized", INVOICE_GLOBEX_OPEN)))
-		expect(open[0]).toMatchObject({ _tag: "invoice", status: "open", declineReason: null })
-		const failed = await run(deliver(event("invoice.payment_failed", INVOICE_GLOBEX_OPEN)))
+		const fake = makeFakeStripe({ ...stripe(), invoices: [INVOICE_GLOBEX_OPEN] })
+		const open = await run(deliver(event("invoice.finalized", INVOICE_GLOBEX_OPEN), { fake }))
+		expect(open[0]).toMatchObject({ _tag: "invoice", status: "open" })
+		expect(open[0]).not.toHaveProperty("declineReason")
+		const failed = await run(deliver(event("invoice.payment_failed", INVOICE_GLOBEX_OPEN), { fake }))
 		expect(failed[0]).toMatchObject({
 			_tag: "invoice",
 			status: "open",
 			attemptCount: 1,
 			declineReason: "Stripe could not collect this payment",
 		})
-		const action = await run(deliver(event("invoice.payment_action_required", INVOICE_GLOBEX_OPEN)))
+		const action = await run(
+			deliver(event("invoice.payment_action_required", INVOICE_GLOBEX_OPEN), { fake }),
+		)
 		expect(action[0]).toMatchObject({ declineReason: "Stripe could not collect this payment" })
+		// A failure event about an invoice paid since writes the paid invoice, no decline.
+		const paid = makeFakeStripe({ ...fake, invoices: [{ ...INVOICE_GLOBEX_OPEN, status: "paid" }] })
+		const late = await run(deliver(event("invoice.payment_failed", INVOICE_GLOBEX_OPEN), { fake: paid }))
+		expect(late[0]).toMatchObject({ status: "paid" })
+		expect(late[0]).not.toHaveProperty("declineReason")
 	})
 
 	it("a payment method event refreshes the card on the customer's subscriptions", async () => {
@@ -243,15 +278,36 @@ describe("Stripe webhook events", () => {
 			expMonth: 4,
 			expYear: 2030,
 		})
-		expect(fake.calls.map((call) => call.path)).toEqual(["/subscriptions", `/products/${PRODUCT_PRO.id}`])
-		// Only that customer's subscriptions, canceled ones included.
+		expect(paths(fake)).toEqual(["/subscriptions", "/products"])
+		// Only that customer's subscriptions, canceled ones included, read the way a pull reads them.
 		expect(fake.calls[0]!.params).toEqual([
 			["customer", CUSTOMER_ACME.id],
 			["status", "all"],
 			["limit", "100"],
-			["expand[]", "data.default_payment_method"],
 			["expand[]", "data.discounts"],
+			["expand[]", "data.default_payment_method"],
+			["expand[]", "data.customer.invoice_settings.default_payment_method"],
 		])
+	})
+
+	it("a detached card is cleared, through the customer the event names as its previous one", async () => {
+		const fake = makeFakeStripe({
+			...stripe(),
+			customers: [{ ...CUSTOMER_ACME, invoice_settings: { default_payment_method: null } }],
+			subscriptions: [{ ...SUB_ACME, default_payment_method: null }],
+		})
+		const detached = event(
+			"payment_method.detached",
+			{ ...PAYMENT_METHOD_ACME, customer: null },
+			{
+				data: {
+					object: { ...PAYMENT_METHOD_ACME, customer: null },
+					previous_attributes: { customer: CUSTOMER_ACME.id },
+				},
+			},
+		)
+		const ops = await run(deliver(detached, { fake }))
+		expect((ops[0] as UpsertSubscription).paymentMethod).toBeNull()
 	})
 
 	it("acknowledges a payment method with no customer, and an event type it does not handle", async () => {
@@ -259,6 +315,8 @@ describe("Stripe webhook events", () => {
 			await run(deliver(event("payment_method.updated", { ...PAYMENT_METHOD_ACME, customer: null }))),
 		).toEqual([])
 		expect(await run(deliver(event("charge.succeeded", { id: "ch_1" })))).toEqual([])
+		// Drafts are not recorded, and a preview has no id.
+		expect(await run(deliver(event("invoice.created", INVOICE_GLOBEX_OPEN)))).toEqual([])
 		expect(await run(deliver(event("invoice.upcoming", { ...INVOICE_GLOBEX_OPEN, id: null })))).toEqual(
 			[],
 		)

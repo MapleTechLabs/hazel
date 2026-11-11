@@ -290,7 +290,7 @@ export const INVOICE_ACME_OLD_VERSION = {
 	id: "in_2legacy000001",
 	object: "invoice",
 	number: "HAZEL-0003",
-	status: "draft",
+	status: "open",
 	customer: CUSTOMER_ACME.id,
 	subscription: SUB_ACME.id,
 	amount_due: 10_000,
@@ -301,17 +301,20 @@ export const INVOICE_ACME_OLD_VERSION = {
 	livemode: true,
 }
 
+/** One event, as `/v1/events` lists it. */
+export const eventObject = (type: string, object: unknown, overrides: Record<string, unknown> = {}) => ({
+	id: "evt_2hazel00000001",
+	object: "event",
+	api_version: "2025-08-27.basil",
+	created: SEC("2026-11-10T12:00:00.000Z"),
+	livemode: true,
+	pending_webhooks: 1,
+	request: { id: null, idempotency_key: null },
+	type,
+	data: { object },
+	...overrides,
+})
+
 /** One delivery's body, as Stripe posts it. */
 export const event = (type: string, object: unknown, overrides: Record<string, unknown> = {}): string =>
-	JSON.stringify({
-		id: "evt_2hazel00000001",
-		object: "event",
-		api_version: "2025-08-27.basil",
-		created: SEC("2026-11-10T12:00:00.000Z"),
-		livemode: true,
-		pending_webhooks: 1,
-		request: { id: null, idempotency_key: null },
-		type,
-		data: { object },
-		...overrides,
-	})
+	JSON.stringify(eventObject(type, object, overrides))

@@ -569,6 +569,7 @@ describe("Customers data-source handlers", () => {
 								_tag: "stripe",
 								clerkOrgMetadataKey: "clerk_org_id",
 								matchByDomain: true,
+								accountId: "",
 							},
 							externalAccountId: null,
 						}).pipe(Effect.provide(encryption)),

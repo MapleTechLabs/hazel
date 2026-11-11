@@ -4,8 +4,9 @@
  * subscriptions and invoices become the MRR, the plan, the trial and the payment state every
  * billing signal and the health score's billing component read.
  *
- * Connecting needs a Stripe **restricted key** (`rk_live_…` / `rk_test_…`, or a secret key) with
- * read access to customers, products, subscriptions and invoices, and, for live updates, the
+ * Connecting needs a Stripe **restricted key** (`rk_live_…` / `rk_test_…`, with the account id
+ * entered next to it, or a secret key) with read access to customers, products, prices,
+ * subscriptions, invoices, payment methods and events, and, for live updates, the
  * signing secret of a Stripe webhook endpoint pointed at
  * `/webhooks/customers/stripe/:organizationId/:connectionId`. Both are stored encrypted
  * (`../credentials.ts`) and only ever decrypted to call Stripe or verify a delivery.
@@ -14,33 +15,37 @@
  * applies them.
  *
  * Only the connection's account (`credentials.externalAccountId`, what `validate` found): a
- * delivery stamped with another account, or from the other mode, is refused (`./webhook.ts`). A
- * key opens exactly one account and Hazel never sends `Stripe-Account`, so what a pull lists is
- * always the connection's; a new key is validated again, and core drops the old account's data
- * when it differs.
+ * delivery stamped with another account, or from the other mode, is refused, and one whose object
+ * the key cannot read is skipped (`./webhook.ts`). A key opens exactly one account and Hazel never
+ * sends `Stripe-Account`, so what a pull lists is always the connection's; a new key is validated
+ * again, and core drops the old account's data when it differs. The account id entered in the form
+ * is read only then: changing it alone moves nothing.
  */
-import { Effect, Redacted } from "effect"
+import type { ConnectionConfig } from "@hazel/domain/customers"
+import { Effect, Redacted, Result } from "effect"
 import { HttpClient } from "effect/http"
 import { CustomerProviderError } from "../provider-errors"
+import { WEBHOOK_REQUESTS } from "../provider-http"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../providers"
-import { makeStripeGet, type StripeGet, WEBHOOK_REQUESTS } from "./http"
+import { makeStripeGet, type StripeGet } from "./http"
 import { pullPage } from "./pull"
 import { receiveWebhook } from "./webhook"
 import {
 	StripeAccount,
 	StripeCustomersPage,
+	StripeEventsPage,
 	StripeInvoicesPage,
 	StripeProductsPage,
 	StripeSubscriptionsPage,
+	subscriptionExpands,
 } from "./wire"
 
 /**
- * Webhooks carry every change as it happens; the pull behind them reconciles what a delivery
- * missed, and none of Stripe's list endpoints filter by a change time, so it runs every six hours
- * rather than every minute. A scheduled pull is incremental (`created` since the last success), so
- * it is a handful of requests; the complete walk is the connect-time backfill.
+ * Scheduled pulls read the events since the last one (`./pull.ts`): they catch up on what webhooks
+ * missed, and carry every change for a connection with no webhook endpoint. Each costs one request
+ * per changed object, so six hours is cheap and still keeps that connection within a working day.
  */
-export const STRIPE_PULL_INTERVAL_MS = 6 * 60 * 60_000
+const STRIPE_PULL_INTERVAL_MS = 6 * 60 * 60_000
 
 /** Which mode a key is for, from its prefix; null for one that does not say (a legacy `sk_…`). */
 export const livemodeOfKey = (apiKey: Redacted.Redacted<string>): boolean | null => {
@@ -50,43 +55,80 @@ export const livemodeOfKey = (apiKey: Redacted.Redacted<string>): boolean | null
 	return null
 }
 
+const ACCOUNT_ID = /^acct_[A-Za-z0-9]+$/
+/** An account id inside text Stripe wrote: a refusal's message, a hosted invoice's URL. */
+const ACCOUNT_ID_IN = /\bacct_[A-Za-z0-9]+/g
+
+const WHERE_TO_FIND = "Stripe Dashboard → Settings → Business → Account details"
+
+const refused = (message: string) =>
+	new CustomerProviderError({ code: "auth", message, httpStatus: null, retryAfterMs: null })
+
 /**
- * Connecting proves the key can read everything a pull needs, one `limit=1` request per resource,
- * so a restricted key missing a permission says which one at connect time instead of failing the
- * first backfill. Then the account the key opens: its id is required, since core tells a key of
- * another account by it (dropping the old account's data) and webhooks are checked against it, and
- * a key carries no account id of its own to fall back on. A key that may not read it fails with
- * Stripe's explanation (which names the permission) and why Hazel asks.
+ * Connecting proves the key can read everything a pull needs, one `limit=1` request per resource
+ * with the pull's own expansions, so a restricted key missing a permission says which one at
+ * connect time instead of failing the first backfill.
+ *
+ * Then the account the key opens, which is required: core tells a key of another account by it
+ * (dropping the old account's data), and webhooks are checked against it. A secret key reads it
+ * (`GET /v1/account`), and an account id entered in the form must match. A restricted key may not
+ * read its own account (Stripe answers 403), so it needs the account id entered: Hazel checks its
+ * shape and, where Stripe gives the real one away (the 403's message, a hosted invoice's URL), that
+ * it matches, so a typo cannot attach the connection to an account id no event will ever carry.
  */
-const validateWith = Effect.fn("Stripe.validate")(function* (get: StripeGet) {
+const validateWith = Effect.fn("Stripe.validate")(function* (
+	get: StripeGet,
+	apiKey: Redacted.Redacted<string>,
+	config: ConnectionConfig,
+) {
 	const one = [["limit", "1"]] as const
 	yield* get("/customers", one, StripeCustomersPage)
-	yield* get("/subscriptions", [...one, ["status", "all"]], StripeSubscriptionsPage)
-	yield* get("/invoices", one, StripeInvoicesPage)
-	yield* get("/products", one, StripeProductsPage)
-	const account = yield* get("/account", [], StripeAccount).pipe(
-		Effect.catchTag("CustomerProviderError", (error) =>
-			Effect.fail(
-				error.httpStatus === 403
-					? new CustomerProviderError({
-							code: "auth",
-							message: `${error.message.replace(/\.$/, "")}. Hazel reads the account the key opens to keep Stripe accounts apart: give the key Read access to it`,
-							httpStatus: 403,
-							retryAfterMs: null,
-						})
-					: error,
-			),
-		),
+	yield* get(
+		"/subscriptions",
+		[...one, ["status", "all"], ...subscriptionExpands("data.")],
+		StripeSubscriptionsPage,
 	)
-	yield* Effect.annotateCurrentSpan("stripe.account_id", account.id)
-	return {
-		externalAccountId: account.id,
-		externalAccountName:
-			account.settings?.dashboard?.display_name ??
-			account.business_profile?.name ??
-			account.email ??
-			"Stripe account",
+	const invoices = yield* get("/invoices", one, StripeInvoicesPage)
+	yield* get("/products", one, StripeProductsPage)
+	yield* get("/events", one, StripeEventsPage)
+	const entered = config._tag === "stripe" ? config.accountId.trim() : ""
+	if (entered !== "" && !ACCOUNT_ID.test(entered)) {
+		return yield* refused(`"${entered}" is not a Stripe account id (acct_…, ${WHERE_TO_FIND})`)
 	}
+	const account = yield* Effect.result(get("/account", [], StripeAccount))
+	if (Result.isSuccess(account)) {
+		const { id } = account.success
+		if (entered !== "" && entered !== id) {
+			return yield* refused(`The key opens Stripe account ${id}, not ${entered}`)
+		}
+		yield* Effect.annotateCurrentSpan("stripe.account_id", id)
+		return {
+			externalAccountId: id,
+			externalAccountName:
+				account.success.settings?.dashboard?.display_name ??
+				account.success.business_profile?.name ??
+				account.success.email ??
+				"Stripe account",
+		}
+	}
+	const error = account.failure
+	if (error.httpStatus !== 403 || !Redacted.value(apiKey).startsWith("rk_")) return yield* error
+	if (entered === "") {
+		return yield* refused(
+			`A restricted key cannot read the Stripe account it belongs to: enter the account id (acct_…, ${WHERE_TO_FIND})`,
+		)
+	}
+	const seen = [error.message, invoices.data[0]?.hosted_invoice_url ?? ""].flatMap(
+		(text) => text.match(ACCOUNT_ID_IN) ?? [],
+	)
+	const other = seen.find((id) => id !== entered)
+	if (other !== undefined)
+		return yield* refused(`The key belongs to Stripe account ${other}, not ${entered}`)
+	yield* Effect.annotateCurrentSpan({
+		"stripe.account_id": entered,
+		"stripe.account_confirmed": seen.length > 0,
+	})
+	return { externalAccountId: entered, externalAccountName: null }
 })
 
 export const makeStripeAdapter = Effect.gen(function* () {
@@ -95,14 +137,14 @@ export const makeStripeAdapter = Effect.gen(function* () {
 
 	const adapter: CustomerProviderAdapter = {
 		provider: "stripe",
-		validate: (credentials) => validateWith(getOf(credentials)),
+		validate: (credentials) => validateWith(getOf(credentials), credentials.apiKey, credentials.config),
 
 		// Core calls `webhook` only for a connection with a signing secret.
 		webhook: (request, credentials) =>
 			credentials.webhookSecret === null
 				? Effect.die("Stripe webhook called without a signing secret")
 				: receiveWebhook({
-						// A delivery answers fast (`./http.ts`, `./webhook.ts`).
+						// A delivery answers fast (`../provider-http.ts`, `./webhook.ts`).
 						get: makeStripeGet(client, credentials.apiKey, WEBHOOK_REQUESTS),
 						headers: request.headers,
 						body: request.body,

@@ -13,7 +13,6 @@ import {
 	customerOps,
 	invoiceOp,
 	monthlyMrrOf,
-	planNameOf,
 	primaryProductIdOf,
 	statusOf,
 	subscriptionOp,
@@ -42,6 +41,7 @@ const CONFIG: ConnectionConfig = {
 	_tag: "stripe",
 	clerkOrgMetadataKey: "clerk_org_id",
 	matchByDomain: true,
+	accountId: "",
 }
 const NO_DOMAINS: ConnectionConfig = { ...CONFIG, matchByDomain: false }
 
@@ -76,33 +76,41 @@ describe("a Stripe customer's account", () => {
 		expect(clerkOrgIdsOf(customer(CUSTOMER_GLOBEX), CONFIG)).toEqual([ORG_GLOBEX])
 	})
 
-	it("also takes any metadata value shaped like one, which is how Autumn's key works unchanged", () => {
+	it("falls back to Autumn's `autumn_id` without the configured key, when it is a Clerk org id", () => {
 		// Autumn writes the Autumn customer id (the Clerk org id) under its own key.
 		expect(clerkOrgIdsOf(customer(CUSTOMER_ACME), CONFIG)).toEqual([ORG_ACME])
-		// The configured key's value counts whatever it looks like, and duplicates collapse.
+		// An Autumn id that is not a Clerk organization id names nothing.
+		expect(
+			clerkOrgIdsOf(customer({ ...CUSTOMER_ACME, metadata: { autumn_id: "acme-team" } }), CONFIG),
+		).toEqual([])
+	})
+
+	it("prefers the configured key, and reads no other `org_…` value", () => {
 		expect(
 			clerkOrgIdsOf(
 				customer({
 					...CUSTOMER_ACME,
-					metadata: { clerk_org_id: ORG_ACME, autumn_id: ORG_ACME, tenant: "acme-eu" },
+					metadata: { clerk_org_id: ORG_GLOBEX, autumn_id: ORG_ACME, tenant: "acme-eu" },
 				}),
 				CONFIG,
 			),
-		).toEqual([ORG_ACME])
+		).toEqual([ORG_GLOBEX])
+		// Another tool's `org_…` under a key nobody configured is not a shared id.
+		expect(
+			clerkOrgIdsOf(customer({ ...CUSTOMER_ACME, metadata: { crm_org: ORG_ACME } }), CONFIG),
+		).toEqual([])
 	})
 
 	it("names no organization when the metadata holds none", () => {
 		expect(clerkOrgIdsOf(customer(CUSTOMER_PERSONAL), CONFIG)).toEqual([])
 	})
 
-	it("is a shared-id and domain match that never creates a customer on its own", () => {
+	it("is a shared-id match that never creates a customer on its own, nor teaches it a domain", () => {
 		expect(accountOp(customer(CUSTOMER_ACME), CONFIG, "2026-11-10T12:00:00.000Z")).toEqual({
 			_tag: "account",
 			externalId: CUSTOMER_ACME.id,
 			externalUrl: `https://dashboard.stripe.com/customers/${CUSTOMER_ACME.id}`,
 			name: "Acme Analytics",
-			domains: ["acme.com"],
-			matchByDomain: true,
 			sameAs: [{ provider: "clerk", externalId: ORG_ACME }],
 			onNoMatch: "unmatched",
 			createdAt: new Date(CUSTOMER_ACME.created * 1000).toISOString(),
@@ -119,11 +127,13 @@ describe("a Stripe customer's account", () => {
 		expect(op).not.toHaveProperty("matchByDomain")
 	})
 
-	it("stops offering the email's domain when the connection does not match by domain", () => {
-		const op = accountOp(customer(CUSTOMER_ACME), NO_DOMAINS)
+	it("offers the email's domain as a match key only without a shared id", () => {
+		const noSharedId = customer({ ...CUSTOMER_ACME, metadata: {} })
+		expect(accountOp(noSharedId, CONFIG)).toMatchObject({ domains: ["acme.com"], matchByDomain: true })
+		// Nor when the connection does not match by domain.
+		const op = accountOp(noSharedId, NO_DOMAINS)
 		expect(op).not.toHaveProperty("domains")
 		expect(op).not.toHaveProperty("matchByDomain")
-		expect(op.sameAs).toEqual([{ provider: "clerk", externalId: ORG_ACME }])
 	})
 
 	it("offers a free-mail domain too, which ingest is the one to drop", () => {
@@ -268,18 +278,22 @@ describe("MRR, normalized to a month in minor units", () => {
 			},
 		})
 		expect(primaryProductIdOf(mixed)).toBe(PRODUCT_PRO.id)
-		expect(planNameOf(mixed, new Map([[PRODUCT_PRO.id, "Pro"]]))).toBe("Pro")
-		expect(subscriptionOp(mixed)).toMatchObject({ interval: "year", quantity: 4 })
+		expect(subscriptionOp(mixed, new Map([[PRODUCT_PRO.id, "Pro"]]))).toMatchObject({
+			planName: "Pro",
+			interval: "year",
+			quantity: 4,
+		})
 	})
 
-	it("falls back to the price's nickname when the product's name is not at hand", () => {
+	it("falls back to the price's nickname only for a product Stripe did not return", () => {
 		const nicknamed = oneItem({
 			...monthly(10_000, { interval: "month", interval_count: 1 }),
 			nickname: "Pro monthly",
 		})
-		expect(planNameOf(nicknamed, new Map())).toBe("Pro monthly")
+		expect(subscriptionOp(nicknamed, new Map())?.planName).toBe("Pro monthly")
 		expect(
-			planNameOf(oneItem(monthly(10_000, { interval: "month", interval_count: 1 })), new Map()),
+			subscriptionOp(oneItem(monthly(10_000, { interval: "month", interval_count: 1 })), new Map())
+				?.planName,
 		).toBe(null)
 	})
 
@@ -320,10 +334,7 @@ describe("MRR, normalized to a month in minor units", () => {
 		expect(monthlyMrrOf(clover).mrrMinor).toBe(60_000)
 	})
 
-	it("says nothing about an unexpanded discount, and never goes below zero", () => {
-		expect(monthlyMrrOf(subscription({ ...SUB_ACME, discounts: ["di_2acme00000001"] })).mrrMinor).toBe(
-			120_000,
-		)
+	it("never goes below zero", () => {
 		const overDiscounted = subscription({
 			...SUB_ACME,
 			discounts: [
@@ -401,15 +412,21 @@ describe("a Stripe subscription", () => {
 	})
 
 	it("records the card when the payment method is expanded, and leaves it alone when it is an id", () => {
+		const card = { brand: "visa", last4: "4242", expMonth: 4, expYear: 2030 }
 		const expanded = subscription({ ...SUB_ACME, default_payment_method: PAYMENT_METHOD_ACME })
-		expect(subscriptionOp(expanded)?.paymentMethod).toEqual({
-			brand: "visa",
-			last4: "4242",
-			expMonth: 4,
-			expYear: 2030,
-		})
-		// A webhook payload carries the id: the stored card must not be cleared.
+		expect(subscriptionOp(expanded)?.paymentMethod).toEqual(card)
+		// An id that was not expanded says nothing: the stored card must not be cleared.
 		expect(subscriptionOp(subscription(SUB_ACME))).not.toHaveProperty("paymentMethod")
+		// None of its own: the customer's invoice default is what Stripe charges.
+		const viaCustomer = (method: unknown) =>
+			subscription({
+				...SUB_ACME,
+				default_payment_method: null,
+				customer: { ...CUSTOMER_ACME, invoice_settings: { default_payment_method: method } },
+			})
+		expect(subscriptionOp(viaCustomer(PAYMENT_METHOD_ACME))?.paymentMethod).toEqual(card)
+		// Neither has one (the card was detached): no card on file.
+		expect(subscriptionOp(viaCustomer(null))?.paymentMethod).toBeNull()
 		// A wallet or a bank debit has no card: its type is what there is to show.
 		const sepa = subscription({
 			...SUB_ACME,
@@ -423,10 +440,19 @@ describe("a Stripe subscription", () => {
 		})
 	})
 
-	it("skips a subscription whose first payment never went through, and maps an expired one as canceled", () => {
+	it("counts a cancellation set for a date as scheduled", () => {
+		expect(subscriptionOp(subscription(SUB_ACME))?.cancelAtPeriodEnd).toBe(false)
+		expect(
+			subscriptionOp(subscription({ ...SUB_ACME, cancel_at: SEC("2027-01-01T00:00:00.000Z") }))
+				?.cancelAtPeriodEnd,
+		).toBe(true)
+	})
+
+	it("skips a subscription whose first payment never went through, and where that one ends", () => {
 		expect(statusOf("incomplete")).toBeNull()
 		expect(subscriptionOp(subscription({ ...SUB_ACME, status: "incomplete" }))).toBeNull()
-		expect(statusOf("incomplete_expired")).toBe("canceled")
+		// Never recorded while incomplete, so its expiry is no churn either.
+		expect(statusOf("incomplete_expired")).toBeNull()
 		expect(statusOf("paused")).toBe("paused")
 		// A status Stripe adds later is skipped rather than guessed at.
 		expect(statusOf("quantum")).toBeNull()
@@ -451,7 +477,6 @@ describe("a Stripe invoice", () => {
 			paidAt: new Date(SEC("2026-11-01T09:27:00.000Z") * 1000).toISOString(),
 			attemptCount: 1,
 			nextRetryAt: null,
-			declineReason: null,
 			hostedUrl: INVOICE_ACME_PAID.hosted_invoice_url,
 		})
 	})
@@ -470,7 +495,6 @@ describe("a Stripe invoice", () => {
 			amountPaidMinor: 0,
 			dueAt: new Date(INVOICE_GLOBEX_OPEN.due_date * 1000).toISOString(),
 			nextRetryAt: new Date(INVOICE_GLOBEX_OPEN.next_payment_attempt * 1000).toISOString(),
-			declineReason: null,
 		})
 	})
 
@@ -479,20 +503,17 @@ describe("a Stripe invoice", () => {
 		expect(invoiceOp(invoice(INVOICE_GLOBEX_OPEN), { paymentFailed: true })?.declineReason).toBe(
 			"Stripe could not collect this payment",
 		)
-		// Stripe's own words win when it has any.
-		expect(
-			invoiceOp(
-				invoice({
-					...INVOICE_GLOBEX_OPEN,
-					last_finalization_error: { message: "Your card was declined." },
-				}),
-				{ paymentFailed: true },
-			)?.declineReason,
-		).toBe("Your card was declined.")
+		// Anything else leaves the stored reason alone: no other field of an invoice is a decline.
+		expect(invoiceOp(invoice(INVOICE_GLOBEX_OPEN))).not.toHaveProperty("declineReason")
+		// Nor does a failure event about an invoice paid since.
+		expect(invoiceOp(invoice(INVOICE_ACME_PAID), { paymentFailed: true })).not.toHaveProperty(
+			"declineReason",
+		)
 	})
 
-	it("skips a preview, a customerless invoice and a status Hazel does not record", () => {
+	it("skips a preview, a draft, a customerless invoice and a status Hazel does not record", () => {
 		expect(invoiceOp(invoice({ ...INVOICE_ACME_PAID, id: null }))).toBeNull()
+		expect(invoiceOp(invoice({ ...INVOICE_ACME_PAID, status: "draft" }))).toBeNull()
 		expect(invoiceOp(invoice({ ...INVOICE_ACME_PAID, customer: null }))).toBeNull()
 		expect(invoiceOp(invoice({ ...INVOICE_ACME_PAID, status: "deleted" }))).toBeNull()
 	})

@@ -121,7 +121,12 @@ describe("data sources: connect", () => {
 					provider: "stripe",
 					reconnectId: null,
 					apiKey: Redacted.make("rk_live_1"),
-					config: { _tag: "stripe", clerkOrgMetadataKey: "org_id", matchByDomain: false },
+					config: {
+						_tag: "stripe",
+						clerkOrgMetadataKey: "org_id",
+						matchByDomain: false,
+						accountId: "",
+					},
 				}),
 			),
 			Command.resolve(

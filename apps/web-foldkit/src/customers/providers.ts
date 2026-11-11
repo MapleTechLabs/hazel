@@ -214,13 +214,13 @@ export const PROVIDERS: Descriptors = {
 			{ title: "Billing signals", detail: "payment failing, cancellation scheduled" },
 		],
 		accessNote:
-			"Read-only. Hazel reads customers, products, subscriptions and invoices and never writes to Stripe.",
+			"Read-only. Hazel reads customers, products, subscriptions, invoices and events and never writes to Stripe.",
 		isAvailable: true,
 		apiKey: {
 			label: "Restricted API key",
 			placeholder: "rk_live_…",
 			createHref: "https://dashboard.stripe.com/apikeys/create",
-			help: "Stripe Dashboard → Developers → API keys → Create restricted key. Give it Read access to the resources below and leave everything else None. A secret key works too; a restricted one is safer. Connecting reads one record of each resource, so a missing permission is named right away.",
+			help: "Stripe Dashboard → Developers → API keys → Create restricted key. Give it Read access to the resources below and leave everything else None, and enter your account id below. A secret key works too; a restricted one is safer. Connecting reads one record of each resource, so a missing permission is named right away.",
 		},
 		permissions: [
 			{ resource: "Customers", access: "Read" },
@@ -229,11 +229,11 @@ export const PROVIDERS: Descriptors = {
 			{ resource: "Products", access: "Read" },
 			{ resource: "Prices", access: "Read" },
 			{ resource: "Payment methods", access: "Read" },
-			{ resource: "Account", access: "Read" },
+			{ resource: "Events", access: "Read" },
 		],
 		webhook: {
 			instructions:
-				"In Stripe Dashboard → Developers → Webhooks, add an endpoint with this URL, subscribe the events below, then copy its signing secret here. Without it Hazel still syncs, but only every few hours.",
+				"In Stripe Dashboard → Developers → Webhooks, add an endpoint with this URL, subscribe the events below, then copy its signing secret here. Without it every change still arrives, but up to 6 hours late: a failed payment or a cancellation shows on the next sync.",
 			events: [
 				"customer.created",
 				"customer.updated",
@@ -243,8 +243,6 @@ export const PROVIDERS: Descriptors = {
 				"customer.subscription.deleted",
 				"customer.subscription.paused",
 				"customer.subscription.resumed",
-				"customer.subscription.trial_will_end",
-				"invoice.created",
 				"invoice.finalized",
 				"invoice.paid",
 				"invoice.payment_failed",
@@ -253,18 +251,29 @@ export const PROVIDERS: Descriptors = {
 				"invoice.marked_uncollectible",
 				"payment_method.attached",
 				"payment_method.updated",
+				"payment_method.automatically_updated",
+				"payment_method.detached",
 			],
 			secretLabel: "Signing secret",
 			secretPlaceholder: "whsec_…",
 		},
-		syncMode: "Webhooks + sync every 6 hours",
+		syncMode: "Webhooks, plus every change since the last sync every 6 hours",
 		configFields: [
+			{
+				_tag: "Text",
+				key: "accountId",
+				label: "Account id",
+				description:
+					"Stripe Dashboard → Settings → Business → Account details. Required with a restricted key, which cannot read its own account.",
+				placeholder: "acct_…",
+				isCode: true,
+			},
 			{
 				_tag: "Text",
 				key: "clerkOrgMetadataKey",
 				label: "Metadata key",
 				description:
-					"The customer metadata key whose value is the Clerk organization id. Any metadata value that looks like one (org_…) is used as well, so an Autumn-managed account needs no setting.",
+					"The customer metadata key whose value is the Clerk organization id. A customer with no value under it falls back to Autumn's autumn_id when that is one (org_…), so an Autumn-managed account needs no setting.",
 				placeholder: "clerk_org_id",
 				isCode: true,
 			},
@@ -281,10 +290,10 @@ export const PROVIDERS: Descriptors = {
 				group: "Customer → Account link",
 				fields: [
 					{
-						from: "metadata.clerk_org_id (or any org_… value)",
+						from: "metadata.clerk_org_id (else an org_… autumn_id)",
 						to: "shared id → the Clerk account",
 					},
-					{ from: "email domain", to: "account.domains (match)" },
+					{ from: "email domain", to: "domain match, without a shared id" },
 					{ from: "name", to: "account.name (after Clerk's)" },
 					{ from: "email", to: "contact.isBillingContact" },
 				],
@@ -299,9 +308,15 @@ export const PROVIDERS: Descriptors = {
 					{ from: "coupons", to: "mrr after discount (list price kept)" },
 					{ from: "product name", to: "subscription.planName" },
 					{ from: "status", to: "subscription.status" },
-					{ from: "cancel_at_period_end / cancellation_details", to: "cancelAtPeriodEnd / reason" },
+					{
+						from: "cancel_at_period_end, cancel_at / cancellation_details",
+						to: "cancelAtPeriodEnd / reason",
+					},
 					{ from: "trial_end", to: "subscription.trialEndsAt" },
-					{ from: "default payment method", to: "card brand, last 4, expiry" },
+					{
+						from: "default payment method (else the customer's)",
+						to: "card brand, last 4, expiry",
+					},
 				],
 			},
 			{

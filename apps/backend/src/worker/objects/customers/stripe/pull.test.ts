@@ -1,11 +1,11 @@
 /**
- * The pull: its four phases, the cursor that resumes them, the product names it carries between
- * them, the `sweep` flag on a backfill's last page (and never on an incremental pull), and how
+ * The pull: the full walk's three phases, the cursor that resumes them and the `sweep` flag on its
+ * last page; the scheduled pull's events (never swept), each object read once; and how
  * Stripe's refusals come back (`auth` stops pulls, a short 429 is waited out, a long one is handed
  * to the alarm, a body Hazel cannot read fails the run).
  */
 import type { ConnectionConfig, IngestOp, UpsertSubscription } from "@hazel/domain/customers"
-import { Effect, Fiber, Layer, Redacted } from "effect"
+import { Effect, Fiber, Layer, Option, Redacted } from "effect"
 import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http"
 import { TestClock } from "effect/testing"
 import { describe, expect, it } from "vitest"
@@ -14,6 +14,8 @@ import {
 	CUSTOMER_ACME,
 	CUSTOMER_GLOBEX,
 	CUSTOMER_PERSONAL,
+	DISCOUNT_20_PERCENT,
+	eventObject,
 	INVOICE_ACME_PAID,
 	INVOICE_GLOBEX_OPEN,
 	PAYMENT_METHOD_ACME,
@@ -24,7 +26,8 @@ import {
 	SUB_GLOBEX,
 	SUB_PERSONAL_CANCELED,
 } from "./fixtures"
-import { makeStripeGet, WEBHOOK_REQUESTS } from "./http"
+import { WEBHOOK_REQUESTS } from "../provider-http"
+import { makeStripeGet } from "./http"
 import { decodeCursor, encodeCursor, PAGE_SIZE, pullPage } from "./pull"
 import { type FakeStripeState, fakeStripeHttpClient, makeFakeStripe } from "./testing"
 import { StripeCustomersPage } from "./wire"
@@ -34,6 +37,7 @@ const CONFIG: ConnectionConfig = {
 	_tag: "stripe",
 	clerkOrgMetadataKey: "clerk_org_id",
 	matchByDomain: true,
+	accountId: "",
 }
 
 /** Invoices dated relative to now, so the backfill's one-year window always holds them. */
@@ -98,48 +102,43 @@ const walk = async (fake: FakeStripeState, since: Date | null = null) => {
 	throw new Error("the pull did not finish")
 }
 
-describe("the Stripe pull", () => {
-	it("walks customers, products, subscriptions and invoices, and stops", async () => {
+describe("the Stripe pull's full walk", () => {
+	it("walks customers, subscriptions and invoices, and stops", async () => {
 		const fake = account()
 		const pages = await walk(fake)
-		expect(pages.map((entry) => entry.step)).toEqual([
-			"customers",
-			"products",
-			"subscriptions",
-			"invoices",
-		])
+		expect(pages.map((entry) => entry.step)).toEqual(["customers", "subscriptions", "invoices"])
 		expect(fake.calls.map((call) => call.path)).toEqual([
 			"/customers",
-			"/products",
 			"/subscriptions",
+			"/products",
 			"/invoices",
 		])
 	})
 
-	it("asks for canceled subscriptions too, with their discounts and card expanded", async () => {
+	it("asks for canceled subscriptions too, read the way every path reads them", async () => {
 		const fake = account()
 		await walk(fake)
 		const params = fake.calls.find((call) => call.path === "/subscriptions")!.params
 		expect(params).toEqual([
 			["limit", "100"],
 			["status", "all"],
-			["expand[]", "data.default_payment_method"],
 			["expand[]", "data.discounts"],
+			["expand[]", "data.default_payment_method"],
+			["expand[]", "data.customer.invoice_settings.default_payment_method"],
 		])
 	})
 
 	it("writes the accounts with their billing contacts, then the subscriptions, then the invoices", async () => {
-		const [customers, products, subscriptions, invoices] = await walk(account())
+		const [customers, subscriptions, invoices] = await walk(account())
 		// Three customers, two of which have an email to bill.
 		expect(tags(customers!.ops)).toEqual(["account", "contact", "account", "account", "contact"])
-		// The products phase only gathers names.
-		expect(products!.ops).toEqual([])
 		expect(tags(subscriptions!.ops)).toEqual(["subscription", "subscription", "subscription"])
 		expect(tags(invoices!.ops)).toEqual(["invoice", "invoice"])
 	})
 
-	it("names the plans from the products it listed one phase earlier", async () => {
-		const [, , subscriptions] = await walk(account())
+	it("names the plans from one product lookup per page, however many products there are", async () => {
+		const fake = account()
+		const [, subscriptions] = await walk(fake)
 		expect(
 			subscriptions!.ops
 				.filter((op): op is UpsertSubscription => op._tag === "subscription")
@@ -149,18 +148,24 @@ describe("the Stripe pull", () => {
 			["Extra seats", 14_700],
 			["Pro", 10_000],
 		])
+		expect(fake.calls.find((call) => call.path === "/products")!.params).toEqual([
+			["limit", "100"],
+			["ids[]", PRODUCT_PRO.id],
+			["ids[]", PRODUCT_SEATS.id],
+		])
 	})
 
-	it("carries the card Stripe only sends when asked", async () => {
-		const [, , subscriptions] = await walk(account())
-		const acme = subscriptions!.ops.find(
-			(op): op is UpsertSubscription => op._tag === "subscription" && op.externalId === SUB_ACME.id,
+	it("carries the card and the discounts Stripe only sends when asked", async () => {
+		const [, subscriptions] = await walk(
+			account({
+				subscriptions: [{ ...SUB_ACME, discounts: [DISCOUNT_20_PERCENT.id] }],
+				discounts: [DISCOUNT_20_PERCENT],
+			}),
 		)
-		expect(acme?.paymentMethod).toEqual({
-			brand: "visa",
-			last4: "4242",
-			expMonth: 4,
-			expYear: 2030,
+		expect(subscriptions!.ops[0]).toMatchObject({
+			mrrMinor: 96_000,
+			listMrrMinor: 120_000,
+			paymentMethod: { brand: "visa", last4: "4242", expMonth: 4, expYear: 2030 },
 		})
 	})
 
@@ -171,33 +176,15 @@ describe("the Stripe pull", () => {
 		for (const at of observed) expect(Date.now() - Date.parse(at!)).toBeLessThan(60_000)
 	})
 
-	it("asks core to remove what it did not see only on the last page of a backfill", async () => {
+	it("asks core to remove what it did not see on its last page", async () => {
 		expect((await walk(account())).map((entry) => entry.sweep)).toEqual([
-			undefined,
 			undefined,
 			undefined,
 			["account"],
 		])
 	})
 
-	it("never sweeps an incremental pull, and asks Stripe only for what is new", async () => {
-		const since = new Date(Date.now() - 3 * 86_400_000)
-		const fake = account()
-		const pages = await walk(fake, since)
-		expect(pages.map((entry) => entry.sweep)).toEqual([undefined, undefined, undefined, undefined])
-		const gte = String(Math.floor(since.getTime() / 1000))
-		expect(fake.calls.map((call) => call.params.find(([key]) => key === "created[gte]")?.[1])).toEqual([
-			gte,
-			// Products are never narrowed: a new subscription can name an old product.
-			undefined,
-			gte,
-			gte,
-		])
-		// The customers created before `since` are not listed, so nothing of theirs is written.
-		expect(pages[0]!.ops).toEqual([])
-	})
-
-	it("bounds a backfill's invoices to the last year", async () => {
+	it("bounds the invoices to the last year", async () => {
 		const fake = account()
 		await walk(fake)
 		const gte = Number(
@@ -227,45 +214,102 @@ describe("the Stripe pull", () => {
 			undefined,
 			many[PAGE_SIZE - 1]!.id,
 		])
-		// The next page starts the products phase, with its own counter.
-		expect(decodeCursor(second.nextCursor)).toEqual({
-			phase: "products",
-			after: null,
-			done: 0,
-			products: {},
-		})
+		// The next page starts the subscriptions phase, with its own counter.
+		expect(decodeCursor(second.nextCursor!)).toEqual(
+			Option.some({ phase: "subscriptions", after: null, done: 0 }),
+		)
 	})
 
-	it("resumes a phase from its cursor, product names included", async () => {
-		const cursor = encodeCursor({
-			phase: "subscriptions",
-			after: null,
-			done: 0,
-			products: { [PRODUCT_PRO.id]: "Pro renamed" },
-		})
-		const result = await run(page(account(), cursor))
+	it("resumes a phase from its cursor", async () => {
+		const fake = account()
+		const result = await run(page(fake, encodeCursor({ phase: "subscriptions", after: SUB_ACME.id })))
+		expect(result.ops.map((op) => (op as UpsertSubscription).externalId)).toEqual([
+			SUB_GLOBEX.id,
+			SUB_PERSONAL_CANCELED.id,
+		])
+	})
+
+	it("starts over from a cursor it cannot read, rather than failing the run", async () => {
+		for (const cursor of [
+			"{",
+			'{"phase":"charges","after":null}',
+			// The products phase of an earlier deploy.
+			'{"phase":"products","after":null,"products":{}}',
+			'{"phase":"invoices","after":"in_1","done":-1}',
+		]) {
+			expect(decodeCursor(cursor)).toEqual(Option.none())
+		}
+		expect(decodeCursor('{"phase":"invoices","after":"in_1"}')).toEqual(
+			Option.some({ phase: "invoices", after: "in_1" }),
+		)
+		expect((await run(page(account(), "{"))).progress.step).toBe("customers")
+	})
+})
+
+describe("the Stripe pull's events", () => {
+	const SINCE = new Date(Date.now() - 6 * 3_600_000)
+	const at = (hoursAgo: number) => Math.floor(Date.now() / 1000) - hoursAgo * 3_600
+	const stripeEvent = (id: string, type: string, object: unknown, created: number) => ({
+		...eventObject(type, object, { created }),
+		id,
+	})
+
+	/** Newest first, as Stripe lists them: a renewal that failed, a paid invoice, a new customer. */
+	const EVENTS = [
+		stripeEvent("evt_4", "customer.subscription.updated", SUB_ACME, at(1)),
+		stripeEvent("evt_3", "invoice.paid", INVOICE_ACME_PAID, at(2)),
+		stripeEvent("evt_2", "customer.subscription.created", SUB_ACME, at(3)),
+		stripeEvent("evt_1", "customer.created", CUSTOMER_GLOBEX, at(4)),
+	]
+
+	it("reads the events since the last success, and each changed object's current state once", async () => {
+		const fake = account({ events: EVENTS })
+		const pages = await walk(fake, SINCE)
+		expect(pages.map((entry) => [entry.step, entry.sweep])).toEqual([["events", undefined]])
+		const [events] = fake.calls
+		expect(events!.path).toBe("/events")
+		expect(events!.params.find(([key]) => key === "created[gte]")?.[1]).toBe(
+			String(Math.floor(SINCE.getTime() / 1000)),
+		)
+		expect(events!.params.filter(([key]) => key === "types[]").map(([, type]) => type)).toContain(
+			"customer.subscription.updated",
+		)
+		// Two events of one subscription: one read.
 		expect(
-			result.ops
-				.filter((op): op is UpsertSubscription => op._tag === "subscription")
-				.map((op) => op.planName),
-		).toEqual(["Pro renamed", null, "Pro renamed"])
+			fake.calls
+				.slice(1)
+				.map((call) => call.path)
+				.sort(),
+		).toEqual([
+			`/customers/${CUSTOMER_GLOBEX.id}`,
+			`/invoices/${INVOICE_ACME_PAID.id}`,
+			"/products",
+			`/subscriptions/${SUB_ACME.id}`,
+		])
+		// Oldest first: the new customer lands before anything that names it.
+		expect(tags(pages[0]!.ops)).toEqual(["account", "invoice", "subscription"])
 	})
 
-	it("restarts the pull from a cursor it cannot read, rather than failing the run", () => {
-		expect(decodeCursor(null)).toEqual({ phase: "customers", after: null })
-		expect(decodeCursor("{")).toEqual({ phase: "customers", after: null })
-		expect(decodeCursor('{"phase":"charges","after":null}')).toEqual({
-			phase: "customers",
-			after: null,
+	it("writes what Stripe has now, not what the event carried", async () => {
+		const fake = account({
+			events: EVENTS,
+			subscriptions: [{ ...SUB_ACME, status: "canceled", canceled_at: at(1) }],
 		})
-		expect(decodeCursor('{"phase":"invoices","after":"in_1","done":-1}')).toEqual({
-			phase: "customers",
-			after: null,
-		})
-		expect(decodeCursor('{"phase":"invoices","after":"in_1"}')).toEqual({
-			phase: "invoices",
-			after: "in_1",
-		})
+		const [events] = await walk(fake, SINCE)
+		expect(events!.ops.find((op) => op._tag === "subscription")).toMatchObject({ status: "canceled" })
+	})
+
+	it("fails the page, to be retried, when an object cannot be read now", async () => {
+		const fake = account({ events: EVENTS, failing: [`/subscriptions/${SUB_ACME.id}`] })
+		const error = await run(Effect.flip(page(fake, null, { since: SINCE })))
+		expect(error).toMatchObject({ code: "provider", httpStatus: 503 })
+		expect(error.retryable).toBeUndefined()
+	})
+
+	it("walks everything instead once the last success is older than Stripe keeps events", async () => {
+		const pages = await walk(account({ events: EVENTS }), new Date(Date.now() - 40 * 86_400_000))
+		expect(pages.map((entry) => entry.step)).toEqual(["customers", "subscriptions", "invoices"])
+		expect(pages.at(-1)!.sweep).toEqual(["account"])
 	})
 })
 

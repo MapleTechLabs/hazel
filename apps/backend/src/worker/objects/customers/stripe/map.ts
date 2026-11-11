@@ -7,7 +7,7 @@
  * - **Customer → account.** Stripe is a billing source, not an identity one: a customer never
  *   creates a customer record on its own (`onNoMatch: "unmatched"`). It lands on an account through
  *   a shared id — the Clerk organization id in the customer's metadata — or, when the connection
- *   allows it, through the domain of the customer's email. Everything else waits in the unmatched
+ *   allows it and there is no shared id, through the domain of the customer's email. Everything else waits in the unmatched
  *   list for a human to link, and ingest replays it then.
  * - **Customer email → billing contact.** One contact per customer, keyed on the customer id, with
  *   `isBillingContact`. Ingest matches it to the account's existing contact with that email (the
@@ -20,9 +20,9 @@
  * - **Timeline events** are ingest's: it raises `subscription.started`, `subscription.plan_changed`,
  *   `subscription.canceled`, `subscription.cancel_scheduled`, `invoice.paid` and
  *   `invoice.payment_failed` from the state changes these ops describe, so the adapter adds none.
- * - **Ordering.** Account and contact ops carry `observedAt` — a webhook's is the event's time
- *   (Stripe customers have no `updated` of their own), a pull's the time it asked Stripe — so a
- *   late delivery cannot revive a customer deleted since.
+ * - **Ordering.** Account and contact ops carry `observedAt`, the time Hazel read the customer
+ *   (every event re-reads its object, `./webhook.ts`; Stripe customers have no `updated` of their
+ *   own), so a late delivery cannot revive a customer deleted since.
  */
 import type {
 	ConnectionConfig,
@@ -63,19 +63,26 @@ export const matchesByDomain = (config: ConnectionConfig): boolean =>
 	config._tag !== "stripe" || config.matchByDomain
 
 /**
- * The Clerk organization ids a customer's metadata names: the value under the configured key
- * (`clerk_org_id` by default), and any value shaped like a Clerk organization id under any key.
- * The second rule is what makes an Autumn-managed Stripe account work with no configuration:
- * Autumn writes the Autumn customer id into the Stripe customer's metadata under its own key, and
- * that id is the Clerk organization id (`connections.ts`, `AutumnConnectionConfig`). A value that
- * names no account resolves to nothing, so a stray `org_…` costs only a lookup.
+ * The metadata key Autumn writes the Autumn customer id under on the Stripe customers it creates
+ * (Autumn's `createStripeCustomer`). That id is the Clerk organization id when Autumn is keyed by
+ * it (`connections.ts`, `AutumnConnectionConfig`), which is what makes an Autumn-managed Stripe
+ * account match with no configuration.
+ */
+const AUTUMN_ID_KEY = "autumn_id"
+
+/**
+ * The Clerk organization id a customer's metadata names: the value under the configured key
+ * (`clerk_org_id` by default); without one, Autumn's `autumn_id` when it is shaped like a Clerk
+ * organization id. Nothing else in the metadata is read, so an `org_…` value some other tool wrote
+ * cannot link the customer to the wrong account.
  */
 export const clerkOrgIdsOf = (customer: StripeCustomer, config: ConnectionConfig): ReadonlyArray<string> => {
-	const entries = metadataOf(customer.metadata)
+	const entries = new Map(metadataOf(customer.metadata))
 	const key = config._tag === "stripe" ? config.clerkOrgMetadataKey.trim() : ""
-	const configured = key === "" ? [] : entries.flatMap(([name, value]) => (name === key ? [value] : []))
-	const orgIdLike = entries.flatMap(([, value]) => (isClerkOrgId(value) ? [value] : []))
-	return [...new Set([...configured, ...orgIdLike])]
+	const configured = key === "" ? undefined : entries.get(key)
+	if (configured !== undefined) return [configured]
+	const autumn = entries.get(AUTUMN_ID_KEY)
+	return autumn !== undefined && isClerkOrgId(autumn) ? [autumn] : []
 }
 
 const emailDomainOf = (email: string | null | undefined): string | null => {
@@ -93,9 +100,11 @@ const emailDomainOf = (email: string | null | undefined): string | null => {
 }
 
 /**
- * A customer. `observedAt` orders it against a deletion; `matchByDomain` and the email domain are
- * only there while the connection matches by domain, so turning that off also stops Stripe from
- * teaching the account a domain the other sources would then match on.
+ * A customer. `observedAt` orders it against a deletion. The email's domain is a match key, not a
+ * fact about the account (a billing email is often an accountant's or a founder's own): it is sent
+ * only while the connection matches by domain and the customer names no shared id, so a customer
+ * placed by its Clerk organization id never teaches the account a domain. One matched by domain
+ * already has it.
  */
 export const accountOp = (
 	customer: StripeCustomer,
@@ -112,7 +121,7 @@ export const accountOp = (
 	}
 	// Absent must not clear what another source established.
 	if (customer.name != null && customer.name.trim() !== "") op.name = customer.name.trim()
-	const domain = matchesByDomain(config) ? emailDomainOf(customer.email) : null
+	const domain = matchesByDomain(config) && op.sameAs.length === 0 ? emailDomainOf(customer.email) : null
 	if (domain !== null) {
 		op.domains = [domain]
 		op.matchByDomain = true
@@ -173,8 +182,12 @@ export const customerOps = (
 // Subscriptions
 // ---------------------------------------------------------------------------
 
-/** Stripe's statuses onto Hazel's. `incomplete` (a first payment that never went through) has no
- * equivalent and is not a customer yet: those subscriptions are skipped until they go `active`. */
+/**
+ * Stripe's statuses onto Hazel's. `incomplete` (a first payment that never went through) has no
+ * equivalent and is not a customer yet: those subscriptions are skipped until they go `active`.
+ * `incomplete_expired` is where an `incomplete` one ends, so it was never recorded and is skipped
+ * too: recording it would be churn that never was.
+ */
 const SUBSCRIPTION_STATUS = new Map<string, SubscriptionStatus>([
 	["trialing", "trialing"],
 	["active", "active"],
@@ -182,8 +195,6 @@ const SUBSCRIPTION_STATUS = new Map<string, SubscriptionStatus>([
 	["unpaid", "unpaid"],
 	["paused", "paused"],
 	["canceled", "canceled"],
-	// The customer walked away from the first payment: Stripe will never bill it.
-	["incomplete_expired", "canceled"],
 ])
 
 export const statusOf = (status: string | null | undefined): SubscriptionStatus | null =>
@@ -305,26 +316,29 @@ export const primaryProductIdOf = (subscription: StripeSubscription): string | n
 }
 
 /**
- * The plan's name: the Stripe product's when the caller resolved it (Stripe's four-level expansion
- * limit keeps it off a subscription list, so it is fetched separately), else the price's own
- * nickname or lookup key, else nothing — the UI then says "Subscription".
+ * The plan's name: the Stripe product's, which the caller looked up (Stripe's four-level expansion
+ * limit keeps it off a subscription list). The price's nickname or lookup key only for a product
+ * Stripe did not return at all; a lookup that failed never gets here (`./webhook.ts`, `./pull.ts`).
  */
-export const planNameOf = (
-	subscription: StripeSubscription,
-	productNames: ReadonlyMap<string, string>,
-): string | null => {
-	const primary = monthlyMrrOf(subscription).primary
-	const price = primary === null ? null : priceOf(primary)
+const planNameOf = (price: StripePrice | null, productNames: ReadonlyMap<string, string>): string | null => {
 	if (price === null) return null
-	const productId = price.product ?? null
-	const product = productId === null ? null : (productNames.get(productId) ?? null)
+	const product = price.product == null ? undefined : productNames.get(price.product)
 	return product ?? price.nickname ?? price.lookup_key ?? null
 }
 
+/**
+ * The card a subscription is charged on: its own default payment method, else its customer's
+ * invoice default. Both are expanded wherever a subscription is read (`subscriptionExpands`), so
+ * neither being set means there is no card (detached, say) and clears the stored one; an id that
+ * was not expanded says nothing and leaves it.
+ */
 const paymentMethodOf = (subscription: StripeSubscription): UpsertSubscription["paymentMethod"] => {
-	const method = objectOf(subscription.default_payment_method)
-	// A bare id (every webhook payload) says nothing about the card: leave what is stored.
-	if (method === null) return undefined
+	const customer = objectOf(subscription.customer)
+	const method =
+		subscription.default_payment_method ??
+		(customer === null ? undefined : customer.invoice_settings?.default_payment_method)
+	if (method === undefined || typeof method === "string") return undefined
+	if (method === null) return customer === null ? undefined : null
 	const card = method.card ?? null
 	if (card !== null) {
 		return {
@@ -356,7 +370,7 @@ export const subscriptionOp = (
 		_tag: "subscription",
 		externalId: subscription.id,
 		account: stripeRef(customerId),
-		planName: planNameOf(subscription, productNames),
+		planName: planNameOf(price, productNames),
 		status,
 		mrrMinor: mrr.mrrMinor,
 		listMrrMinor: mrr.listMrrMinor,
@@ -366,7 +380,8 @@ export const subscriptionOp = (
 		startedAt: isoOf(subscription.start_date ?? subscription.created),
 		trialEndsAt: isoOf(subscription.trial_end),
 		currentPeriodEnd: isoOf(periodEndOf(subscription)),
-		cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+		// A cancellation set for a date (`cancel_at`) is as scheduled as one at the period's end.
+		cancelAtPeriodEnd: subscription.cancel_at_period_end === true || subscription.cancel_at != null,
 		canceledAt: isoOf(subscription.canceled_at),
 		cancellationReason: details?.reason ?? details?.feedback ?? null,
 	}
@@ -379,8 +394,11 @@ export const subscriptionOp = (
 // Invoices
 // ---------------------------------------------------------------------------
 
+/**
+ * A `draft` is not recorded: it is not billed yet, nothing reads one, and Stripe deletes drafts
+ * (`invoice.deleted`) without a trace a sync could follow. It is recorded once finalized.
+ */
 const INVOICE_STATUS = new Map<string, UpsertInvoice["status"]>([
-	["draft", "draft"],
 	["open", "open"],
 	["paid", "paid"],
 	["uncollectible", "uncollectible"],
@@ -390,17 +408,18 @@ const INVOICE_STATUS = new Map<string, UpsertInvoice["status"]>([
 export const invoiceStatusOf = (status: string | null | undefined): UpsertInvoice["status"] | null =>
 	status == null ? null : (INVOICE_STATUS.get(status) ?? null)
 
-/** Stripe's own words for why a collection failed, when it has any. */
-const FAILED_FALLBACK = "Stripe could not collect this payment"
+/** What a failed collection records: Stripe keeps its own decline message on the payment intent. */
+const FAILED_REASON = "Stripe could not collect this payment"
 
 /**
- * An invoice. Null for one Hazel does not record: a preview with no id yet (`invoice.upcoming`), an
- * invoice with no customer, or a status Stripe added since.
+ * An invoice. Null for one Hazel does not record: a preview with no id yet (`invoice.upcoming`), a
+ * draft, an invoice with no customer, or a status Stripe added since.
  *
- * `paymentFailed` marks the op as coming from an `invoice.payment_failed` delivery, which is what
- * lets ingest raise the timeline event on the *first* attempt: Stripe keeps the decline message on
- * the payment intent, which Hazel does not read, so without a reason an `attempt_count` of 1 would
- * look like an ordinary open invoice.
+ * `paymentFailed` marks the op as coming from an `invoice.payment_failed` event about an invoice
+ * still open, which is what lets ingest raise the timeline event on the *first* attempt: Hazel does
+ * not read the payment intent, so without a reason an `attempt_count` of 1 would look like an
+ * ordinary open invoice. Otherwise the decline reason is left as stored, never cleared: a
+ * `last_finalization_error` is a finalization problem, not a decline.
  */
 export const invoiceOp = (
 	invoice: StripeInvoice,
@@ -411,9 +430,7 @@ export const invoiceOp = (
 	const status = invoiceStatusOf(invoice.status)
 	if (externalId === null || customerId === null || status === null) return null
 	const transitions = invoice.status_transitions
-	const declineReason =
-		invoice.last_finalization_error?.message ?? (options.paymentFailed === true ? FAILED_FALLBACK : null)
-	return {
+	const op: Types.Mutable<UpsertInvoice> = {
 		_tag: "invoice",
 		externalId,
 		account: stripeRef(customerId),
@@ -429,7 +446,8 @@ export const invoiceOp = (
 		paidAt: isoOf(transitions?.paid_at),
 		attemptCount: Math.max(0, Math.round(invoice.attempt_count ?? 0)),
 		nextRetryAt: isoOf(invoice.next_payment_attempt),
-		declineReason,
 		hostedUrl: invoice.hosted_invoice_url ?? null,
 	}
+	if (options.paymentFailed === true && status === "open") op.declineReason = FAILED_REASON
+	return op
 }

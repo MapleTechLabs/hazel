@@ -3,7 +3,7 @@
  * (`docs/customers/tech-design.md` §5). Credentials never appear here: they live encrypted in
  * `customer_connection_secrets`, which is not synced.
  */
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { type CustomerProvider, SweepEntityType } from "./enums"
 
 /** Clerk: users' sign-ins and sessions drive activity. */
@@ -21,6 +21,11 @@ export const StripeConnectionConfig = Schema.TaggedStruct("stripe", {
 	clerkOrgMetadataKey: Schema.String,
 	/** Match unknown customers to accounts by their email domain. */
 	matchByDomain: Schema.Boolean,
+	/**
+	 * The Stripe account id (`acct_…`), `""` when not given. Required with a restricted key, which may
+	 * not read its own account; checked against the account a secret key opens.
+	 */
+	accountId: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed(""))),
 })
 
 /**
@@ -59,7 +64,7 @@ type ConnectionConfigTable = { readonly [P in CustomerProvider]: ConnectionConfi
 
 export const DEFAULT_CONNECTION_CONFIG: ConnectionConfigTable = {
 	clerk: { _tag: "clerk", createAccounts: true },
-	stripe: { _tag: "stripe", clerkOrgMetadataKey: "clerk_org_id", matchByDomain: true },
+	stripe: { _tag: "stripe", clerkOrgMetadataKey: "clerk_org_id", matchByDomain: true, accountId: "" },
 	autumn: { _tag: "autumn", customerIdIsClerkOrgId: true },
 	maple: {
 		_tag: "maple",
