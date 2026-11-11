@@ -54,8 +54,8 @@ pub struct State {
     pub(crate) root: Option<Arc<Node>>,
     pub(crate) subtrees: Subtrees,
     pub(crate) fields: HashMap<String, Field>,
-    /// Last window size and theme reported to the runtime.
-    pub(crate) reported: Option<(u32, u32, bool)>,
+    /// Last window size, theme and safe area reported to the runtime.
+    pub(crate) reported: Option<Env>,
     /// The appearance a headless capture runs with (`NATIVE_THEME`); a window follows macOS's.
     pub(crate) dark: bool,
     /// The document's own background and text colour (`body` in the app's stylesheet).
@@ -73,11 +73,35 @@ pub struct State {
     pub(crate) keyboard: f32,
 }
 
-/// The window size and theme last sent, for a runtime that replaces the first.
-static REPORTED: Mutex<Option<(u32, u32, bool)>> = Mutex::new(None);
+/// What the runtime's viewport is: its size, the system appearance, and the safe area (the
+/// edges of the page the system draws over, `env(safe-area-inset-*)`), in points.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Env {
+    pub width: u32,
+    pub height: u32,
+    pub dark: bool,
+    /// Top, right, bottom, left.
+    pub inset: [u32; 4],
+}
 
-/// The window size and theme last reported to the runtime.
-pub fn last_env() -> Option<(u32, u32, bool)> {
+impl Env {
+    /// The `env` line the runtime reads.
+    pub fn line(&self) -> serde_json::Value {
+        json!({
+            "t": "env",
+            "width": self.width,
+            "height": self.height,
+            "dark": self.dark,
+            "inset": self.inset,
+        })
+    }
+}
+
+/// The env last sent, for a runtime that replaces the first.
+static REPORTED: Mutex<Option<Env>> = Mutex::new(None);
+
+/// The window size, theme and safe area last reported to the runtime.
+pub fn last_env() -> Option<Env> {
     *REPORTED.lock().unwrap()
 }
 
@@ -1401,16 +1425,21 @@ fn add_children(
                 }
                 _ => b,
             };
-            // A `w-full` item beside others in a row: CSS's default `flex-shrink: 1` gives the
-            // others their room. Rune boxes keep their size unless told to shrink.
+            // CSS's default `flex-shrink: 1` in a row, where Rune boxes keep their size unless
+            // told to shrink: a `w-full` item beside others gives them their room, and a
+            // `min-w-0` one (the idiom for "may shrink below its content") shrinks to the row, so
+            // its text wraps or truncates instead of running past the row's edge.
             let b = match style_of(child) {
                 Some(st)
                     if parent.is_row
                         && kids.len() > 1
-                        && st.w == Some(wire::Len::Full)
                         && st.shrink.is_none()
-                        && st.min_w.is_none()
-                        && st.absolute.is_none() =>
+                        && st.absolute.is_none()
+                        && match &st.min_w {
+                            None => st.w == Some(wire::Len::Full),
+                            Some(wire::Len::Px(min)) => min.0 == 0.0,
+                            Some(_) => false,
+                        } =>
                 {
                     b.shrink()
                 }
@@ -2031,24 +2060,26 @@ fn note_appearance(dark: bool) {
         return;
     }
     let mut reported = REPORTED.lock().unwrap();
-    if let Some((width, height, _)) = *reported {
-        *reported = Some((width, height, dark));
-        write_line(json!({ "t": "env", "width": width, "height": height, "dark": dark }));
+    if let Some(env) = reported.as_mut() {
+        env.dark = dark;
+        write_line(env.line());
     }
 }
 
-fn report_env(s: &mut State, rect: [f32; 4]) {
-    let next = (
-        rect[2].round() as u32,
-        rect[3].round() as u32,
-        DARK.load(Ordering::Relaxed),
-    );
-    if s.reported == Some(next) || next.0 == 0 {
+/// Tells the runtime the page's size and safe area when either changed.
+fn report_env(s: &mut State, rect: [f32; 4], inset: [f32; 4]) {
+    let next = Env {
+        width: rect[2].round() as u32,
+        height: rect[3].round() as u32,
+        dark: DARK.load(Ordering::Relaxed),
+        inset: inset.map(|edge| edge.max(0.0).round() as u32),
+    };
+    if s.reported == Some(next) || next.width == 0 {
         return;
     }
     s.reported = Some(next);
     *REPORTED.lock().unwrap() = Some(next);
-    write_line(json!({ "t": "env", "width": next.0, "height": next.1, "dark": next.2 }));
+    write_line(next.line());
 }
 
 pub fn view(s: &State, cx: &mut Cx<State>) -> El {
@@ -2073,16 +2104,19 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
         no_pointer: false,
     };
     let body = s.root.as_ref().and_then(|root| build(root, "r", inh, &ctx));
-    // The window's edges the system draws over (iOS's status bar, home indicator and keyboard):
-    // the page's background goes under them, and the runtime's viewport stays inside.
+    // The window's edges the system draws over (iOS's status bar and home indicator): the page
+    // runs under them, edge to edge, as a web page with `viewport-fit=cover` does, and reads
+    // them as `env(safe-area-inset-*)` to keep its content clear. The on-screen keyboard is
+    // different: the page's viewport ends above it, as a browser's does, and the home
+    // indicator's inset is then the keyboard's to cover.
     let [top, right, bottom, left] = cx.safe_area();
-    let bottom = bottom.max(s.keyboard);
-    let inset = [top, right, bottom, left].iter().any(|edge| *edge > 0.0);
+    let keyboard = s.keyboard;
+    let inset = [top, right, if keyboard > 0.0 { 0.0 } else { bottom }, left];
     // A paste with no field focused goes to the page, which hands it to the composer.
     let mut page = col()
         .w_full()
         .h_full()
-        .on_layout(report_env)
+        .on_layout(move |s: &mut State, rect| report_env(s, rect, inset))
         .on_paste_content(|_: &mut State, content, _| send_paste(content));
     let bg = color(&s.page.bg);
     if let Some(bg) = bg {
@@ -2133,16 +2167,10 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
             page = page.child(l);
         }
     }
-    if !inset {
+    if keyboard <= 0.0 {
         return page;
     }
-    let mut window = col()
-        .w_full()
-        .h_full()
-        .pt(top)
-        .pb(bottom)
-        .pl(left)
-        .pr(right);
+    let mut window = col().w_full().h_full().pb(keyboard);
     if let Some(bg) = bg {
         window = window.fill(bg)
     }

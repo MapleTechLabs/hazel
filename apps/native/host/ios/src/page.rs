@@ -51,11 +51,18 @@ pub fn origin_problem(env: &Value) -> Option<String> {
 }
 
 /// What the worker reads as `process.env`: the bundle's environment (`environment.json`) over the
-/// viewport's size, the page's origin (for the app's `location`), and the path to open.
-pub fn environment(bundled: Option<Value>, size: (f64, f64), path: Option<&str>) -> Value {
+/// viewport's size and safe area (top, right, bottom, left), the page's origin (for the app's
+/// `location`), and the path to open.
+pub fn environment(
+    bundled: Option<Value>,
+    size: (f64, f64),
+    inset: [f64; 4],
+    path: Option<&str>,
+) -> Value {
     let mut env = json!({
         "NATIVE_WIDTH": size.0.round().to_string(),
         "NATIVE_HEIGHT": size.1.round().to_string(),
+        "NATIVE_INSET": inset.map(|edge| edge.max(0.0).round().to_string()).join(" "),
     });
     let fields = env.as_object_mut().expect("an object");
     if let Some(Value::Object(bundled)) = bundled {
@@ -122,8 +129,8 @@ impl Restarts {
     }
 }
 
-/// The lines of a batch a replacing page's runtime should still hear: the window's size and
-/// theme. Events and layout reports name the replaced runtime's tree, not the new one's.
+/// The lines of a batch a replacing page's runtime should still hear: the window's size, theme
+/// and safe area. Events and layout reports name the replaced runtime's tree, not the new one's.
 pub fn for_replacement(text: &str) -> String {
     text.lines()
         .filter(|line| serde_json::from_str::<Value>(line).is_ok_and(|v| v["t"] == "env"))
@@ -188,19 +195,25 @@ mod tests {
     #[test]
     fn the_environment_carries_size_bundle_path_and_origin() {
         let bundled = json!({ "HAZEL_DATA": "live", "NATIVE_DEBUG": "1" });
-        let env = environment(Some(bundled), (402.4, 778.6), Some("/hazel/chat"));
+        let inset = [62.0, 0.0, 34.4, 0.0];
+        let env = environment(Some(bundled), (402.4, 778.6), inset, Some("/hazel/chat"));
         assert_eq!(
             env,
             json!({
-                "NATIVE_WIDTH": "402", "NATIVE_HEIGHT": "779", "HAZEL_DATA": "live",
+                "NATIVE_WIDTH": "402", "NATIVE_HEIGHT": "779", "NATIVE_INSET": "62 0 34 0", "HAZEL_DATA": "live",
                 "NATIVE_DEBUG": "1", "NATIVE_PATH": "/hazel/chat", "NATIVE_ORIGIN": "https://app.hazel.sh",
             })
         );
         // A path the bundle names gives way to the one a reload asks for.
-        let reload = environment(Some(json!({ "NATIVE_PATH": "/" })), (1.0, 1.0), Some("/b"));
+        let reload = environment(
+            Some(json!({ "NATIVE_PATH": "/" })),
+            (1.0, 1.0),
+            [0.0; 4],
+            Some("/b"),
+        );
         assert_eq!(reload["NATIVE_PATH"], "/b");
         assert_eq!(
-            environment(None, (1.0, 1.0), None)["NATIVE_ORIGIN"],
+            environment(None, (1.0, 1.0), [0.0; 4], None)["NATIVE_ORIGIN"],
             OFFLINE_ORIGIN
         );
     }

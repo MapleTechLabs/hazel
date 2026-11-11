@@ -339,16 +339,22 @@ fn load_page(mtm: MainThreadMarker, path: Option<&str>) {
     let Some(window) = window(mtm) else {
         return log("[host] the page cannot load without a window");
     };
-    // The viewport as last reported, else the window inside its safe area (the first report).
+    // The viewport as last reported, else the whole window and its safe area (the first report):
+    // the page draws edge to edge.
     let (bounds, insets) = (window.bounds(), window.safeAreaInsets());
-    let size = hazel_native::last_env().map_or(
+    let (size, inset) = hazel_native::last_env().map_or(
         (
-            bounds.size.width - insets.left - insets.right,
-            bounds.size.height - insets.top - insets.bottom,
+            (bounds.size.width, bounds.size.height),
+            [insets.top, insets.right, insets.bottom, insets.left],
         ),
-        |(width, height, _)| (f64::from(width), f64::from(height)),
+        |env| {
+            (
+                (f64::from(env.width), f64::from(env.height)),
+                env.inset.map(f64::from),
+            )
+        },
     );
-    let env = page::environment(bundled, size, path);
+    let env = page::environment(bundled, size, inset, path);
     if let Some(problem) = page::origin_problem(&env) {
         log(&format!("[host] {problem}"));
     }
@@ -359,10 +365,8 @@ fn load_page(mtm: MainThreadMarker, path: Option<&str>) {
         REPLACING.set(true);
         // A fresh runtime starts light at the bundle's size: it hears the window's as the
         // first one did, once its page is ready.
-        if let Some((width, height, dark)) = hazel_native::last_env() {
-            outbox::write_line(
-                serde_json::json!({ "t": "env", "width": width, "height": height, "dark": dark }),
-            );
+        if let Some(env) = hazel_native::last_env() {
+            outbox::write_line(env.line());
         }
     }
     let Some(html) = BUNDLE.with_borrow(|bundle| {

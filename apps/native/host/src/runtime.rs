@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 
 use hazel_native::outbox::{self, write_line};
 use hazel_native::wire::RuntimeMsg;
-use serde_json::json;
 
 use crate::{platform, updater};
 
@@ -120,8 +119,8 @@ pub fn spawn_runtime() -> (RuntimeChild, std::sync::mpsc::Receiver<RuntimeMsg>) 
             supervised.kill();
             stdout = start_runtime(&supervised, Some(&path));
             // The new runtime starts at the default size: tell it the window's.
-            if let Some((width, height, dark)) = hazel_native::last_env() {
-                write_line(json!({ "t": "env", "width": width, "height": height, "dark": dark }));
+            if let Some(env) = hazel_native::last_env() {
+                write_line(env.line());
             }
         }
     });

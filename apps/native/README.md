@@ -108,7 +108,11 @@ the runtime's log goes to `tmp/hazel.log` in the app's data container
 The page (`host/ios/src/page.rs`) is a secure context, as the web app's `crypto.randomUUID`
 needs. Live, its origin is the web app's (`VITE_APP_URL`, `https://app.hazel.sh` by default), so
 the API's CORS answers, which WebKit checks, allow it; offline it is `https://app.hazel.test`,
-never fetched. When the on-screen keyboard shows, the page's viewport ends above it
+never fetched. The page draws edge to edge, as a web page with `viewport-fit=cover` does: the
+host reports the safe area (the status bar, the home indicator) with the window's size, and the
+app keeps its content clear of it with `env(safe-area-inset-*)`, which the style resolver reads
+(the phone shell pads its column, the tab bar and the drawers pad themselves). When the
+on-screen keyboard shows, the page's viewport ends above it
 (`State::set_keyboard`, from `host/ios/src/keyboard.rs`), as a browser's does, so the composer
 and the end of the list stay visible (a floating iPad keyboard leaves the page as it is). The
 keyboard's return key is Enter, so it sends, as it does in the web app on a phone.

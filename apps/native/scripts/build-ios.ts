@@ -2,13 +2,15 @@
  * Bundles the runtime for iOS (dist/ios/runtime.js): `src/ios.ts` as one module for a Web Worker,
  * with the native overlay helpers swapped in and the compiled stylesheet inlined.
  */
-import { existsSync, readFileSync } from "node:fs"
+import { readFileSync } from "node:fs"
 
 import { overlayPlugin } from "../src/overlay-plugin"
 import { prismPlugin } from "./prism-plugin"
 
 const stylesPath = new URL("../dist/styles.json", import.meta.url).pathname
-if (!existsSync(stylesPath)) await import("./precompile-styles")
+// Compiled on every build: the worker cannot compile a class the sheet missed, and one left from
+// an earlier build lacks every class added since.
+await import("./precompile-styles")
 
 const result = await Bun.build({
 	entrypoints: [new URL("../src/ios.ts", import.meta.url).pathname],

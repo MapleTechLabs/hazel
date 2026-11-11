@@ -449,6 +449,16 @@ describe("StyleResolver", () => {
 		expect([...styles.unsupportedSelectors.keys()]).toContain("@media (orientation:portrait)")
 	})
 
+	it("reads the safe area as env(safe-area-inset-*), as a viewport-fit=cover page does", () => {
+		const padded = "pt-[env(safe-area-inset-top)] pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
+		expect(resolve(padded).style.pad).toEqual([0, 0, 16, 0])
+		styles.setSafeArea({ top: 62, right: 0, bottom: 34, left: 0 })
+		expect(resolve(padded).style.pad).toEqual([62, 0, 50, 0])
+		// Any other env() takes its fallback.
+		expect(resolve("pt-[env(titlebar-area-height,12px)]").style.pad?.[0]).toBe(12)
+		styles.setSafeArea({ top: 0, right: 0, bottom: 0, left: 0 })
+	})
+
 	it("keeps percentages it cannot place out of the style instead of zeroing them", () => {
 		expect(resolve("min-w-full").style.minW).toBe("full")
 		expect(resolve("text-sm leading-[150%]").style.lineHeight).toBeCloseTo(21)
