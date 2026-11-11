@@ -14,22 +14,6 @@ export class ChannelMemberPolicy extends Context.Service<ChannelMemberPolicy>()(
 			const channelRepo = yield* ChannelRepo
 			const organizationMemberRepo = yield* OrganizationMemberRepo
 
-			const isOwner = (id: ChannelMemberId) =>
-				ErrorUtils.refailUnauthorized(
-					policyEntity,
-					"isOwner",
-				)(
-					channelMemberRepo.with(id, (member) =>
-						policy(
-							policyEntity,
-							"isOwner",
-							Effect.fn(`${policyEntity}.isOwner`)(function* (actor) {
-								return yield* Effect.succeed(actor.id === member.userId)
-							}),
-						),
-					),
-				)
-
 			const canCreate = (channelId: ChannelId) =>
 				ErrorUtils.refailUnauthorized(
 					policyEntity,
@@ -162,7 +146,7 @@ export class ChannelMemberPolicy extends Context.Service<ChannelMemberPolicy>()(
 					),
 				)
 
-			return { canCreate, canRead, canUpdate, canDelete, isOwner } as const
+			return { canCreate, canRead, canUpdate, canDelete } as const
 		}),
 	},
 ) {

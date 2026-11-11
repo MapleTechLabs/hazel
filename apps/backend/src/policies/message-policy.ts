@@ -8,8 +8,8 @@ import { ChannelViewers } from "../services/channel-viewers"
 /**
  * Message authorization, run inside the message's `ChannelObject`: access is the channel's
  * `channel_viewers` row for the actor (its org role, or a bot's scopes), not the org tables the
- * object does not hold. Ported from `OrgResolver.fromChannelWithAccess`; one difference: an org
- * admin reads a private channel only when it is in their `channel_access` (a member of it).
+ * object does not hold. An org admin reads a private channel only when it is in their
+ * `channel_access` (a member of it).
  */
 export class MessagePolicy extends Context.Service<MessagePolicy>()("MessagePolicy/Policy", {
 	make: Effect.gen(function* () {

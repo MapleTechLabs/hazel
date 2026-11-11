@@ -8,7 +8,6 @@ import {
 	makeOrgResolverLayer,
 	makeOrganizationMemberRepoLayer,
 	runWithActorEither,
-	TEST_ALT_ORG_ID,
 	TEST_ORG_ID,
 } from "./policy-test-helpers.ts"
 
@@ -82,36 +81,5 @@ describe("OrganizationPolicy", () => {
 
 		expect(Result.isSuccess(ownerResult)).toBe(true)
 		expect(Result.isFailure(adminResult)).toBe(true)
-	})
-
-	it("isMember denies users without membership in target org", async () => {
-		const actor = makeActor()
-		const layer = makePolicyLayer({
-			[`${TEST_ALT_ORG_ID}:${actor.id}`]: "member",
-		})
-
-		const result = await runWithActorEither(
-			OrganizationPolicy.use((policy) => policy.isMember(TEST_ORG_ID)),
-			layer,
-			actor,
-		)
-		expect(Result.isFailure(result)).toBe(true)
-		if (Result.isFailure(result)) {
-			expect(UnauthorizedError.is(result.failure)).toBe(true)
-		}
-	})
-
-	it("canManagePublicInvite allows admin-or-owner", async () => {
-		const actor = makeActor()
-		const layer = makePolicyLayer({
-			[`${TEST_ORG_ID}:${actor.id}`]: "owner",
-		})
-
-		const result = await runWithActorEither(
-			OrganizationPolicy.use((policy) => policy.canManagePublicInvite(TEST_ORG_ID)),
-			layer,
-			actor,
-		)
-		expect(Result.isSuccess(result)).toBe(true)
 	})
 })

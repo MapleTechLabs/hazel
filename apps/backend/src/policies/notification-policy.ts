@@ -36,10 +36,8 @@ export class NotificationPolicy extends Context.Service<NotificationPolicy>()("N
 
 		return {
 			canCreate: () => ownObject("create"),
-			canView: ownNotification("view"),
 			canUpdate: ownNotification("update"),
 			canDelete: ownNotification("delete"),
-			canMarkAsRead: ownNotification("markAsRead"),
 			canMarkAllAsRead: () => ownObject("markAllAsRead"),
 		} as const
 	}),

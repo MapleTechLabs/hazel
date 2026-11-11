@@ -1,4 +1,4 @@
-import { formatDistanceToNow } from "../../page/notifications/inbox/format"
+import { formatDistanceToNow } from "~/lib/format-distance"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { getFilterTypeLabel } from "~/lib/search-filter-parser"
 import { cn } from "~/lib/utils"

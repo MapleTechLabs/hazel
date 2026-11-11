@@ -54,185 +54,87 @@ export const BOT_UPDATE_RATE_LIMIT = {
 	windowMs: 60 * 60 * 1000,
 }
 
+interface RateLimitCheck {
+	/** The span and log name: `RateLimitHelpers.<name>`. */
+	readonly name: string
+	/** What is being limited, as the logs say it ("Message", "Avatar"). */
+	readonly label: string
+	readonly keyPrefix: string
+	readonly config: { readonly limit: number; readonly windowMs: number }
+	/** What the caller is told when the limit is hit. */
+	readonly message: string
+}
+
 /**
- * Check rate limit for message operations.
- * Call this at the start of message handlers.
- *
- * @param userId - The user ID to rate limit
+ * A per-user rate limit check, to call at the start of a handler. It fails open: when the limiter
+ * cannot be reached the request goes through.
  */
-export const checkMessageRateLimit = Effect.fn("RateLimitHelpers.checkMessageRateLimit")(function* (
-	userId: string,
-) {
-	const rateLimiter = yield* RateLimiter
+const makeRateLimitCheck = ({ name, label, keyPrefix, config, message }: RateLimitCheck) =>
+	Effect.fn(`RateLimitHelpers.${name}`)(function* (userId: string) {
+		const rateLimiter = yield* RateLimiter
 
-	const result = yield* rateLimiter
-		.consume(
-			`${MESSAGE_RATE_LIMIT_KEY_PREFIX}${userId}`,
-			MESSAGE_RATE_LIMIT.limit,
-			MESSAGE_RATE_LIMIT.windowMs,
-		)
-		.pipe(
-			Effect.catchTag("RateLimiterError", (error) =>
-				Effect.gen(function* () {
-					// Log the error but allow the request through (fail open)
-					yield* Effect.logWarning("Rate limiter unavailable, allowing request", error)
-					return {
-						allowed: true,
-						remaining: MESSAGE_RATE_LIMIT.limit,
-						resetAfterMs: MESSAGE_RATE_LIMIT.windowMs,
-						limit: MESSAGE_RATE_LIMIT.limit,
-					}
+		const result = yield* rateLimiter
+			.consume(`${keyPrefix}${userId}`, config.limit, config.windowMs)
+			.pipe(
+				Effect.catchTag("RateLimiterError", (error) =>
+					Effect.gen(function* () {
+						yield* Effect.logWarning("Rate limiter unavailable, allowing request", error)
+						return {
+							allowed: true,
+							remaining: config.limit,
+							resetAfterMs: config.windowMs,
+							limit: config.limit,
+						}
+					}),
+				),
+			)
+
+		if (!result.allowed) {
+			return yield* Effect.fail(
+				new RateLimitExceededError({
+					message,
+					// At most this: the message binding does not say when the window ends.
+					retryAfterMs: result.resetAfterMs,
+					limit: result.limit,
+					remaining: 0,
 				}),
-			),
-		)
+			)
+		}
 
-	if (!result.allowed) {
-		return yield* Effect.fail(
-			new RateLimitExceededError({
-				message: "Message rate limit exceeded. Please wait before sending more messages.",
-				// At most this: the binding does not say when the window ends.
-				retryAfterMs: result.resetAfterMs,
-				limit: result.limit,
-				remaining: 0,
-			}),
+		yield* Effect.logDebug(
+			`${label} rate limit check passed for user ${userId}: ${result.remaining}/${result.limit} remaining`,
 		)
-	}
+	})
 
-	yield* Effect.logDebug(`Message rate limit check passed for user ${userId}`)
+export const checkMessageRateLimit = makeRateLimitCheck({
+	name: "checkMessageRateLimit",
+	label: "Message",
+	keyPrefix: MESSAGE_RATE_LIMIT_KEY_PREFIX,
+	config: MESSAGE_RATE_LIMIT,
+	message: "Message rate limit exceeded. Please wait before sending more messages.",
 })
 
-/**
- * Check rate limit for avatar upload operations.
- * Call this at the start of avatar upload handlers.
- *
- * @param userId - The user ID to rate limit
- */
-export const checkAvatarRateLimit = Effect.fn("RateLimitHelpers.checkAvatarRateLimit")(function* (
-	userId: string,
-) {
-	const rateLimiter = yield* RateLimiter
-
-	const result = yield* rateLimiter
-		.consume(`avatars:${userId}`, AVATAR_RATE_LIMIT.limit, AVATAR_RATE_LIMIT.windowMs)
-		.pipe(
-			Effect.catchTag("RateLimiterError", (error) =>
-				Effect.gen(function* () {
-					// Log the error but allow the request through (fail open)
-					yield* Effect.logWarning("Rate limiter unavailable, allowing request", error)
-					return {
-						allowed: true,
-						remaining: AVATAR_RATE_LIMIT.limit,
-						resetAfterMs: AVATAR_RATE_LIMIT.windowMs,
-						limit: AVATAR_RATE_LIMIT.limit,
-					}
-				}),
-			),
-		)
-
-	if (!result.allowed) {
-		return yield* Effect.fail(
-			new RateLimitExceededError({
-				message: "Avatar upload rate limit exceeded. Please wait before uploading again.",
-				retryAfterMs: result.resetAfterMs,
-				limit: result.limit,
-				remaining: 0,
-			}),
-		)
-	}
-
-	yield* Effect.logDebug(
-		`Avatar rate limit check passed for user ${userId}: ${result.remaining}/${result.limit} remaining`,
-	)
+export const checkAvatarRateLimit = makeRateLimitCheck({
+	name: "checkAvatarRateLimit",
+	label: "Avatar",
+	keyPrefix: "avatars:",
+	config: AVATAR_RATE_LIMIT,
+	message: "Avatar upload rate limit exceeded. Please wait before uploading again.",
 })
 
-/**
- * Check rate limit for bot operations (create, install, uninstall, regenerateToken).
- * Call this at the start of bot operation handlers.
- *
- * @param userId - The user ID to rate limit
- */
-export const checkBotOperationRateLimit = Effect.fn("RateLimitHelpers.checkBotOperationRateLimit")(function* (
-	userId: string,
-) {
-	const rateLimiter = yield* RateLimiter
-
-	const result = yield* rateLimiter
-		.consume(
-			`bot-operations:${userId}`,
-			BOT_OPERATION_RATE_LIMIT.limit,
-			BOT_OPERATION_RATE_LIMIT.windowMs,
-		)
-		.pipe(
-			Effect.catchTag("RateLimiterError", (error) =>
-				Effect.gen(function* () {
-					// Log the error but allow the request through (fail open)
-					yield* Effect.logWarning("Rate limiter unavailable, allowing request", error)
-					return {
-						allowed: true,
-						remaining: BOT_OPERATION_RATE_LIMIT.limit,
-						resetAfterMs: BOT_OPERATION_RATE_LIMIT.windowMs,
-						limit: BOT_OPERATION_RATE_LIMIT.limit,
-					}
-				}),
-			),
-		)
-
-	if (!result.allowed) {
-		return yield* Effect.fail(
-			new RateLimitExceededError({
-				message: "Bot operation rate limit exceeded. Please wait before trying again.",
-				retryAfterMs: result.resetAfterMs,
-				limit: result.limit,
-				remaining: 0,
-			}),
-		)
-	}
-
-	yield* Effect.logDebug(
-		`Bot operation rate limit check passed for user ${userId}: ${result.remaining}/${result.limit} remaining`,
-	)
+/** Create, install, uninstall and regenerateToken. */
+export const checkBotOperationRateLimit = makeRateLimitCheck({
+	name: "checkBotOperationRateLimit",
+	label: "Bot operation",
+	keyPrefix: "bot-operations:",
+	config: BOT_OPERATION_RATE_LIMIT,
+	message: "Bot operation rate limit exceeded. Please wait before trying again.",
 })
 
-/**
- * Check rate limit for bot update operations.
- * Call this at the start of bot update handlers.
- *
- * @param userId - The user ID to rate limit
- */
-export const checkBotUpdateRateLimit = Effect.fn("RateLimitHelpers.checkBotUpdateRateLimit")(function* (
-	userId: string,
-) {
-	const rateLimiter = yield* RateLimiter
-
-	const result = yield* rateLimiter
-		.consume(`bot-updates:${userId}`, BOT_UPDATE_RATE_LIMIT.limit, BOT_UPDATE_RATE_LIMIT.windowMs)
-		.pipe(
-			Effect.catchTag("RateLimiterError", (error) =>
-				Effect.gen(function* () {
-					// Log the error but allow the request through (fail open)
-					yield* Effect.logWarning("Rate limiter unavailable, allowing request", error)
-					return {
-						allowed: true,
-						remaining: BOT_UPDATE_RATE_LIMIT.limit,
-						resetAfterMs: BOT_UPDATE_RATE_LIMIT.windowMs,
-						limit: BOT_UPDATE_RATE_LIMIT.limit,
-					}
-				}),
-			),
-		)
-
-	if (!result.allowed) {
-		return yield* Effect.fail(
-			new RateLimitExceededError({
-				message: "Bot update rate limit exceeded. Please wait before trying again.",
-				retryAfterMs: result.resetAfterMs,
-				limit: result.limit,
-				remaining: 0,
-			}),
-		)
-	}
-
-	yield* Effect.logDebug(
-		`Bot update rate limit check passed for user ${userId}: ${result.remaining}/${result.limit} remaining`,
-	)
+export const checkBotUpdateRateLimit = makeRateLimitCheck({
+	name: "checkBotUpdateRateLimit",
+	label: "Bot update",
+	keyPrefix: "bot-updates:",
+	config: BOT_UPDATE_RATE_LIMIT,
+	message: "Bot update rate limit exceeded. Please wait before trying again.",
 })

@@ -78,7 +78,6 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalSecret("GITHUB_APP_PRIVATE_KEY"),
 		optionalSecret("GITHUB_WEBHOOK_SECRET"),
 		optionalPlain("GITHUB_WEBHOOK_SKIP_SIGNATURE"),
-		optionalSecret("INTERNAL_SECRET"),
 		optionalSecret("KLIPY_API_KEY"),
 		// Thread naming (services/thread-namer.ts); unset disables it.
 		optionalSecret("OPENROUTER_API_KEY"),

@@ -104,14 +104,7 @@ If you want to use the typography plugin, uncomment the line below.
 	--color-selection-fg: var(--selection-fg);
 	--color-overlay-backdrop: var(--overlay-backdrop);
 
-	--animate-marquee: marquee var(--duration) infinite linear;
-	--animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
-
-	--animate-disclosure-collapsed: disclosure-collapsed 0.2s ease-out;
-	--animate-disclosure-expanded: disclosure-expanded 0.2s ease-out;
-
 	--animate-field-error-enter: field-error-enter 0.2s ease-out;
-	--animate-shake: shake 0.5s ease-in-out;
 	/* Only a load slower than 300ms shows its placeholder: a fast one never flashes it. */
 	--animate-skeleton-in: skeleton-in 150ms ease-out 300ms both;
 	/* An indeterminate progress segment (40% of its track) sweeping in from the left edge and out the right. */
@@ -137,46 +130,6 @@ If you want to use the typography plugin, uncomment the line below.
 		}
 	}
 
-	@keyframes marquee {
-		from {
-			transform: translateX(0);
-		}
-
-		to {
-			transform: translateX(calc(-100% - var(--gap)));
-		}
-	}
-
-	@keyframes marquee-vertical {
-		from {
-			transform: translateY(0);
-		}
-
-		to {
-			transform: translateY(calc(-100% - var(--gap)));
-		}
-	}
-
-	@keyframes disclosure-collapsed {
-		from {
-			height: var(--disclosure-height);
-		}
-
-		to {
-			height: 0;
-		}
-	}
-
-	@keyframes disclosure-expanded {
-		from {
-			height: 0;
-		}
-
-		to {
-			height: var(--disclosure-height);
-		}
-	}
-
 	@keyframes field-error-enter {
 		from {
 			opacity: 0;
@@ -186,28 +139,6 @@ If you want to use the typography plugin, uncomment the line below.
 		to {
 			opacity: 1;
 			transform: translateY(0);
-		}
-	}
-
-	@keyframes shake {
-		0%,
-		100% {
-			transform: translateX(0);
-		}
-
-		10%,
-		30%,
-		50%,
-		70%,
-		90% {
-			transform: translateX(-4px);
-		}
-
-		20%,
-		40%,
-		60%,
-		80% {
-			transform: translateX(4px);
 		}
 	}
 
@@ -238,21 +169,6 @@ If you want to use the typography plugin, uncomment the line below.
 		}
 	}
 
-	/* Step Completion - subtle scale pulse */
-	@keyframes step-complete {
-		0% {
-			transform: scale(1);
-		}
-
-		50% {
-			transform: scale(1.02);
-		}
-
-		100% {
-			transform: scale(1);
-		}
-	}
-
 	/* Progress Bar Shimmer - traveling highlight */
 	@keyframes progress-shimmer {
 		0% {
@@ -261,18 +177,6 @@ If you want to use the typography plugin, uncomment the line below.
 
 		100% {
 			transform: translateX(100%);
-		}
-	}
-
-	/* Icon Throb - subtle pulsing glow for icons */
-	@keyframes icon-throb {
-		0%,
-		100% {
-			opacity: 0.6;
-		}
-
-		50% {
-			opacity: 1;
 		}
 	}
 
@@ -517,28 +421,6 @@ If you want to use the typography plugin, uncomment the line below.
 /* Tabular numbers for dynamic content (counters, timestamps, prices) */
 @utility tabular-nums {
 	font-variant-numeric: tabular-nums;
-}
-
-@utility touch-hitbox {
-	position: relative;
-
-	&::before {
-		content: "";
-		position: absolute;
-		display: block;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		width: 100%;
-		height: 100%;
-		min-height: 44px;
-		min-width: 44px;
-		z-index: 9999;
-	}
-
-	@media (pointer: fine) {
-		display: none;
-	}
 }
 
 @layer base {

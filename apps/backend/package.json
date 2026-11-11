@@ -24,7 +24,6 @@
 		"@hazel/bot-gateway": "workspace:*",
 		"@hazel/db": "workspace:*",
 		"@hazel/domain": "workspace:*",
-		"@hazel/effect-cloudflare": "workspace:*",
 		"@hazel/infra": "workspace:*",
 		"@hazel/integrations": "workspace:*",
 		"@hazel/schema": "workspace:*",

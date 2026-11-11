@@ -18,9 +18,7 @@ export const Highlight = ({ children, className }: { children: React.ReactNode; 
 export const siteConfig = {
 	name: "Hazel",
 	description: "The Open Source Slack Alternative Your Team Will Actually Love",
-	cta: "Get Started",
 	url: "https://hazel.sh",
-	keywords: ["Team Communication", "Collaboration", "Open Source", "Chat"],
 	links: {
 		email: "support@hazel.sh",
 		twitter: "https://twitter.com/hazelchat",
@@ -322,28 +320,6 @@ export const siteConfig = {
 			},
 		],
 	},
-	benefits: [
-		{
-			id: 1,
-			text: "Save hours each week with AI-optimized scheduling.",
-			image: "/Device-6.png",
-		},
-		{
-			id: 2,
-			text: "Reduce scheduling conflicts and double-bookings.",
-			image: "/Device-7.png",
-		},
-		{
-			id: 3,
-			text: "Improve work-life balance with smart time allocation.",
-			image: "/Device-8.png",
-		},
-		{
-			id: 4,
-			text: "Increase productivity with AI-driven time management insights.",
-			image: "/Device-1.png",
-		},
-	],
 	growthSection: {
 		title: "Built for Secure Growth",
 		description:

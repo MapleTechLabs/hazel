@@ -48,17 +48,10 @@ export class MessageReactionPolicy extends Context.Service<MessageReactionPolicy
 					),
 				)
 
-			/** Listing is gated by the route that reads (the channel's socket or its viewer check). */
-			const canList = (_id: MessageId) =>
-				ErrorUtils.refailUnauthorized(
-					policyEntity,
-					"select",
-				)(policy(policyEntity, "select", () => Effect.succeed(true)))
-
 			const canUpdate = ownReaction("update")
 			const canDelete = ownReaction("delete")
 
-			return { canCreate, canDelete, canUpdate, canList } as const
+			return { canCreate, canDelete, canUpdate } as const
 		}),
 	},
 ) {

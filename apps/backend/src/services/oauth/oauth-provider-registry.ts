@@ -16,12 +16,6 @@ import { createSlackOAuthProvider } from "./providers/slack-oauth-provider"
 type ProviderFactory = (config: OAuthProviderConfig) => OAuthProvider
 
 /**
- * Providers that use GitHub App flow (not standard OAuth).
- * These providers get their config from dedicated services, not loadProviderConfig.
- */
-const _APP_BASED_PROVIDERS: readonly OAuthIntegrationProvider[] = ["github"] as const
-
-/**
  * Registry of provider factory functions for standard OAuth providers.
  * Add new providers here when implementing them.
  */
@@ -154,21 +148,8 @@ export class OAuthProviderRegistry extends Context.Service<OAuthProviderRegistry
 				return oauthProvider
 			})
 
-		/**
-		 * List all supported/implemented providers.
-		 */
-		const listSupportedProviders = (): readonly OAuthIntegrationProvider[] => SUPPORTED_PROVIDERS
-
-		/**
-		 * Check if a provider is supported.
-		 */
-		const isProviderSupported = (provider: string): provider is OAuthIntegrationProvider =>
-			(SUPPORTED_PROVIDERS as readonly string[]).includes(provider)
-
 		return {
 			getProvider,
-			listSupportedProviders,
-			isProviderSupported,
 		}
 	}),
 }) {

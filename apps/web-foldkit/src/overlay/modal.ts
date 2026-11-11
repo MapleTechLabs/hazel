@@ -14,7 +14,6 @@ import * as CreateSection from "./modal/create-section"
 import * as DeleteChannel from "./modal/delete-channel"
 import * as DeleteMessage from "./modal/delete-message"
 import * as DeleteBot from "./modal/delete-bot"
-import * as DeleteWorkspace from "./modal/delete-workspace"
 import * as EditBot from "./modal/edit-bot"
 import * as EmailInvite from "./modal/email-invite"
 import * as Feedback from "./modal/feedback"
@@ -47,7 +46,6 @@ const modals = [
 	RenameChannel.modal,
 	RenameThread.modal,
 	ChangeRole.modal,
-	DeleteWorkspace.modal,
 	RequestIntegration.modal,
 	CreateBot.modal,
 	EditBot.modal,

@@ -15,7 +15,8 @@ import {
 	sectionHeaderSubheading,
 } from "../../../ui/section-header"
 import type { PageViewInputs } from "../../contract"
-import { contextOf, filterByCategory, formatDistanceToNow, groupByTime, previewOf } from "./format"
+import { formatDistanceToNow } from "~/lib/format-distance"
+import { contextOf, filterByCategory, groupByTime, previewOf } from "./format"
 import { Message } from "./message"
 import type { Category, Model, NotificationItem } from "./model"
 

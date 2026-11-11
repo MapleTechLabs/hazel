@@ -71,10 +71,6 @@
 		},
 		"packages/integrations": {
 			"entry": ["scripts/**/*.ts"]
-		},
-		"packages/ui": {
-			// The JSX in its .tsx files needs React's types; nothing imports them by name.
-			"ignoreDependencies": ["@types/react"]
 		}
 	},
 	"rules": {

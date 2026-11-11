@@ -17,9 +17,8 @@ const kvTtl = (ttl: Duration.Duration | undefined): { expirationTtl: number } | 
 /**
  * `BackingPersistence` over a Workers KV namespace. KV is eventually consistent (writes take up
  * to ~60s to reach other locations), which suits caches whose entries are TTL-bounded anyway.
- * Replaces the Redis backing on Workers.
  */
-export const makeKvBackingPersistence = (kv: KVNamespace) =>
+const makeKvBackingPersistence = (kv: KVNamespace) =>
 	Persistence.BackingPersistence.of({
 		make: (prefix) =>
 			Effect.sync(() => {
@@ -78,7 +77,7 @@ export const makeKvBackingPersistence = (kv: KVNamespace) =>
 			}),
 	})
 
-export const layerKvBackingPersistence = (kv: KVNamespace): Layer.Layer<Persistence.BackingPersistence> =>
+const layerKvBackingPersistence = (kv: KVNamespace): Layer.Layer<Persistence.BackingPersistence> =>
 	Layer.succeed(Persistence.BackingPersistence, makeKvBackingPersistence(kv))
 
 /** `Persistence` (result persistence) backed by Workers KV. */

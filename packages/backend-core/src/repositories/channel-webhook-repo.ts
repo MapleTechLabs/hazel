@@ -24,15 +24,6 @@ export class ChannelWebhookRepo extends Context.Service<ChannelWebhookRepo>()("C
 					.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()]),
 			)
 
-		// Find webhook by token hash (for authentication)
-		const findByTokenHash = (tokenHash: string) =>
-			db.first(
-				SQLite.from(schema.channelWebhooksTable)
-					.select()
-					.where(($) => [$.tokenHash.eq(tokenHash), $.deletedAt.isNull()])
-					.limit(1),
-			)
-
 		// Update token hash (for token regeneration)
 		const updateToken = (id: ChannelWebhookId, tokenHash: string, tokenSuffix: string) =>
 			db.run(
@@ -69,7 +60,6 @@ export class ChannelWebhookRepo extends Context.Service<ChannelWebhookRepo>()("C
 		return {
 			...baseRepo,
 			findByChannel,
-			findByTokenHash,
 			updateToken,
 			softDelete,
 			findByOrganization,
