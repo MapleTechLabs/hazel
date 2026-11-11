@@ -49,10 +49,12 @@ export const MapleConnectionConfig = Schema.TaggedStruct("maple", {
 	mapleOrgId: Schema.String,
 	/** Added after the first connections were stored, so an older config decodes as `us`. */
 	region: MapleRegion.pipe(Schema.withDecodingDefaultKey(Effect.succeed("us" as const))),
-	/** Event names that count as activity; empty = every event. */
-	activityEvents: Schema.Array(Schema.String),
-	/** Event name → metric key written per account per day. */
-	metricMappings: Schema.Array(Schema.Struct({ event: Schema.String, metricKey: Schema.String })),
+	/** Event names that count as activity; empty = every event. Spelled out in each pull's query. */
+	activityEvents: Schema.Array(Schema.String).check(Schema.isMaxLength(100)),
+	/** Event name → metric key written per account per day. Spelled out in each pull's query. */
+	metricMappings: Schema.Array(Schema.Struct({ event: Schema.String, metricKey: Schema.String })).check(
+		Schema.isMaxLength(50),
+	),
 	/** Which event attribute names the account and the user (default `GroupId` / `UserId`). */
 	accountKey: Schema.String,
 	userKey: Schema.String,

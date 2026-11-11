@@ -40,7 +40,7 @@ import type { PullPage } from "../providers"
 import { addDays, dayOf } from "../time"
 import type { MapleApi } from "./http"
 import { activityOps, type MetricMap, metricDefinitionOps, metricMapOf, metricOps } from "./map"
-import { isEventName, MapleActivityRow, MapleMetricRow, RUN_SQL_ROW_CAP } from "./wire"
+import { isEventName, isMetricKey, MapleActivityRow, MapleMetricRow, RUN_SQL_ROW_CAP } from "./wire"
 
 /** The two Maple columns that carry identity (`maple/docs/product-events-catalog.md`). */
 export const ACCOUNT_COLUMN = "GroupId"
@@ -113,14 +113,42 @@ GROUP BY day, account, metric
 ORDER BY account, metric
 LIMIT ${PAGE_LIMIT} OFFSET ${offset}`
 
+/** The longest statement Maple's `run_sql` takes. */
+const MAX_SQL_LENGTH = 32_768
+
+/**
+ * Why the config cannot be saved, or `null`. A pull drops an event name or metric key it may not
+ * put in a query, so one is refused here instead of silently left out; and the queries spell out
+ * the allowlist and the mappings, so they must fit `run_sql` (measured at an offset longer than any
+ * page reaches).
+ */
+export const configProblem = (config: Extract<ConnectionConfig, { _tag: "maple" }>): string | null => {
+	const listed = (values: ReadonlyArray<string>) => values.map((value) => JSON.stringify(value)).join(", ")
+	const events = config.activityEvents.filter((event) => !isEventName(event.trim()))
+	if (events.length > 0) {
+		return `Maple event names are 1–120 letters, digits or _ $ . : / -; fix or remove ${listed(events)}`
+	}
+	const mappings = config.metricMappings.filter(
+		(mapping) => !isEventName(mapping.event.trim()) || !isMetricKey(mapping.metricKey.trim()),
+	)
+	if (mappings.length > 0) {
+		return `Mapped events are 1–120 letters, digits or _ $ . : / -, metric keys 1–80 letters, digits or _ . -; fix or remove ${listed(mappings.map((mapping) => `${mapping.event} → ${mapping.metricKey}`))}`
+	}
+	const offset = Number.MAX_SAFE_INTEGER
+	const fits =
+		activitySql(activityEventsOf(config), offset).length < MAX_SQL_LENGTH &&
+		metricsSql(metricMapOf(config.metricMappings), offset).length < MAX_SQL_LENGTH
+	return fits ? null : "The activity events and metric mappings are too long for a Maple query; remove some"
+}
+
 /** One UTC day, half-open, as Maple takes a window. */
 const windowOf = (day: Day) => ({ start: `${day} 00:00:00`, end: `${addDays(day, 1)} 00:00:00` })
 
 /**
  * The configured activity allowlist Hazel can act on; empty means every identified event counts, so
- * a config whose every name is unusable is refused when it is saved rather than read as "all".
+ * a config naming an unusable event is refused when it is saved rather than read with it dropped.
  */
-export const activityEventsOf = (config: Extract<ConnectionConfig, { _tag: "maple" }>) =>
+const activityEventsOf = (config: Extract<ConnectionConfig, { _tag: "maple" }>) =>
 	config.activityEvents.map((event) => event.trim()).filter(isEventName)
 
 /**
@@ -166,7 +194,7 @@ const activityPage = Effect.fnUntraced(function* (input: PageInput, cursor: Mapl
 	})
 	return {
 		rows: result.rows.length,
-		more: result.truncated,
+		more: result.truncated || result.rows.length >= PAGE_LIMIT,
 		...activityOps(result.rows, cursor.day, input.observedAt),
 	}
 })
@@ -182,7 +210,12 @@ const metricsPage = Effect.fnUntraced(function* (input: PageInput, cursor: Maple
 	// The definitions are idempotent and cheap, and the first page of a walk is the only place a
 	// newly mapped key would otherwise go unnamed until a chart asked for it.
 	const ops = (cursor.offset ?? 0) === 0 ? [...metricDefinitionOps(map), ...mapped.ops] : mapped.ops
-	return { rows: result.rows.length, more: result.truncated, ops, skipped: mapped.skipped }
+	return {
+		rows: result.rows.length,
+		more: result.truncated || result.rows.length >= PAGE_LIMIT,
+		ops,
+		skipped: mapped.skipped,
+	}
 })
 
 /** A metric phase with nothing (left) to map: the mappings were cleared since the walk started. */

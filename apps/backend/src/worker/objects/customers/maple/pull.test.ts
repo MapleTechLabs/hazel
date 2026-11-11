@@ -288,6 +288,11 @@ describe("Maple pull", () => {
 		const exact = organization({ events: crowd(RUN_SQL_ROW_CAP) })
 		await at(walk(exact, { config: config({ lookbackDays: 1 }) }))
 		expect(exact.calls).toHaveLength(1)
+		// Maple renders the whole page without `truncated` (a raised cap): a full page is followed.
+		const uncapped = organization({ events: crowd(250), renderedRows: 1_000 })
+		const all = await at(walk(uncapped, { config: config({ lookbackDays: 1 }) }))
+		expect(uncapped.calls.map((call) => /OFFSET (\d+)/.exec(call.sql)?.[1])).toEqual(["0", "101", "202"])
+		expect(activityOf(all)).toHaveLength(250)
 	})
 
 	it("re-reads the overlap of a scheduled pull without counting a day twice", async () => {

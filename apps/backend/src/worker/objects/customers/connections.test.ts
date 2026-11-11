@@ -3,8 +3,8 @@
  * an API key of another provider account drops the old account's webhook secret, and an update
  * refuses a connection that changed while the provider checked the key.
  */
-import { DEFAULT_CONNECTION_CONFIG } from "@hazel/domain/customers"
-import { Effect, type Scope } from "effect"
+import { DEFAULT_CONNECTION_CONFIG, MapleConnectionConfig } from "@hazel/domain/customers"
+import { Cause, Effect, Exit, Schema, type Scope } from "effect"
 import { describe, expect, it, vi } from "vitest"
 import { makeCustomersWorld, ok, tagOf } from "./test-kit"
 
@@ -42,6 +42,9 @@ vi.mock("./providers", async (importOriginal) => {
 	})
 	return actual
 })
+
+const messageOf = (exit: Exit.Exit<unknown, unknown>) =>
+	Exit.isFailure(exit) ? String((Cause.squash(exit.cause) as { message?: string }).message) : ""
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
@@ -139,32 +142,82 @@ describe("Customers connection credentials", () => {
 			}),
 		))
 
-	it("refuses a Maple activity allowlist none of whose names can be sent, which would read as every event", () =>
+	it("refuses Maple names it cannot send, naming them, and a query too long for Maple", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
-				const connect = (activityEvents: ReadonlyArray<string>) =>
+				const connect = (config: Partial<typeof DEFAULT_CONNECTION_CONFIG.maple>) =>
 					world.call(
 						"customers.connection.connect",
 						{
 							provider: "maple",
 							apiKey: "maple_ak_x",
 							webhookSecret: null,
-							config: {
-								...DEFAULT_CONNECTION_CONFIG.maple,
-								mapleOrgId: "org_a",
-								activityEvents,
-							},
+							config: { ...DEFAULT_CONNECTION_CONFIG.maple, mapleOrgId: "org_a", ...config },
 						},
 						world.owner,
 					)
-				expect(tagOf(yield* connect(["$__orgFilter", "has space"]))).toBe(
-					"CustomersInvalidRequestError",
+				const refusal = yield* connect({ activityEvents: ["$__orgFilter", "dashboard_created"] })
+				expect(tagOf(refusal)).toBe("CustomersInvalidRequestError")
+				expect(messageOf(refusal)).toContain(`"$__orgFilter"`)
+				expect(messageOf(refusal)).not.toContain("dashboard_created")
+				const mapping = yield* connect({
+					metricMappings: [
+						{ event: "query_run", metricKey: "queries" },
+						{ event: "has space", metricKey: "spaces" },
+					],
+				})
+				expect(messageOf(mapping)).toContain(`"has space → spaces"`)
+				// The longest names, as many as the schema takes, still fit one `run_sql` statement: the
+				// check passes them on (to the adapter, which this test has none of).
+				const events = Array.from({ length: 100 }, (_, index) => `${index}`.padEnd(120, "e"))
+				const longest = {
+					activityEvents: events,
+					metricMappings: events
+						.slice(0, 50)
+						.map((event, index) => ({ event, metricKey: `${index}`.padEnd(80, "k") })),
+				}
+				expect(tagOf(yield* connect(longest))).toBe("CustomerProviderUnavailableError")
+				const decode = Schema.decodeUnknownExit(MapleConnectionConfig)
+				const base = { ...DEFAULT_CONNECTION_CONFIG.maple, ...longest }
+				expect(Exit.isSuccess(decode(base))).toBe(true)
+				expect(Exit.isSuccess(decode({ ...base, activityEvents: [...events, "one_more"] }))).toBe(
+					false,
 				)
-				// One usable name passes the check (and reaches the adapter, which this test has none of).
-				expect(tagOf(yield* connect(["$__orgFilter", "dashboard_created"]))).toBe(
-					"CustomerProviderUnavailableError",
-				)
+				expect(
+					Exit.isSuccess(
+						decode({
+							...base,
+							metricMappings: [
+								...base.metricMappings,
+								{ event: "one_more", metricKey: "more" },
+							],
+						}),
+					),
+				).toBe(false)
+			}),
+		))
+
+	it("refuses a Maple organization or region change without a key: nothing would check it", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const connectionId = world.connection("maple")
+				world.object.storage.db
+					.prepare(`UPDATE customer_connections SET externalAccountId = 'org_a:us' WHERE id = ?`)
+					.run(connectionId)
+				const update = (config: Partial<typeof DEFAULT_CONNECTION_CONFIG.maple>) =>
+					world.call(
+						"customers.connection.update",
+						{
+							connectionId,
+							config: { ...DEFAULT_CONNECTION_CONFIG.maple, mapleOrgId: "org_a", ...config },
+						},
+						world.owner,
+					)
+				expect(tagOf(yield* update({ mapleOrgId: "org_b" }))).toBe("CustomersInvalidRequestError")
+				expect(tagOf(yield* update({ region: "eu" }))).toBe("CustomersInvalidRequestError")
+				expect(tagOf(yield* update({ lookbackDays: 30 }))).toBe("Success")
 			}),
 		))
 })

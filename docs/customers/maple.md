@@ -28,9 +28,11 @@ Implementation: `apps/backend/src/worker/objects/customers/maple/` — `adapter.
    from the wrong place cannot import someone else's usage under this name.
 3. **Map the events you care about** under the source's settings: an activity allowlist (empty =
    every identified event counts), event → metric key mappings, and the lookback a backfill
-   imports (default 90 days, 1–365). A name Hazel cannot put in a query (quotes, spaces, or `$__`,
-   which Maple would expand as a macro) is skipped; an allowlist where _every_ name is skipped is
-   refused when it is saved, since sending none would mean "every event counts".
+   imports (default 90 days, 1–365). Saving refuses, naming them, the event names and metric keys
+   Hazel cannot put in a query (quotes, spaces, or `$__`, which Maple would expand as a macro)
+   rather than dropping them. Both lists are spelled out in each query, so they are capped (100
+   activity events, 50 mappings) and a config whose queries would pass `run_sql`'s 32,768 characters
+   is refused too.
 
 There is **no webhook**: Maple sends none for a product event. The schedule is the whole signal, and
 it runs **hourly**.
@@ -140,8 +142,10 @@ documents as an estimate rather than a ledger.
 - Any other 4xx → `provider`, not retried.
 - A tool failure (`result.isError`) or a JSON-RPC `error` → `provider`, **retried**: Maple reports
   its warehouse's failures inside a 200 this way (a ClickHouse or gateway error, a query over its
-  120 s budget). The run resumes at its cursor, and core gives a run up after a few failed attempts
-  at the same page, so one Maple will never answer cannot loop for good.
+  120 s budget). The run resumes at its cursor, and core gives a run up after 8 failed attempts in
+  a row at the same page, the first one included (rate limits aside); the next scheduled pull starts
+  a new run, which retries the same way. A source whose pulls have not succeeded for 30 hours counts
+  as unavailable: no activity signal opens on its silence, and the open ones stay as they are.
 - A body Hazel cannot read, or a 200 with neither a result nor an error → `provider`, not retried:
   the run fails and the next scheduled pull starts over.
 - None of these repeats Maple's own text in the message, because a run's message is synced to every
@@ -149,8 +153,8 @@ documents as an estimate rather than a ledger.
   and issue kind only. A key of another organization than the configured one is refused without
   either id in the message (they go to the log).
 - A row the mapping cannot use (another day than the page asked for, no group, no user, an
-  unreadable count, a key nothing maps to) is skipped and counted on the run rather than failing
-  the page.
+  unreadable count, a key nothing maps to) is skipped rather than failing the page. The count goes
+  to a warning log line and the page's span (`maple.skipped`), not to the run's stats.
 
 ## Known gaps
 
@@ -164,6 +168,9 @@ documents as an estimate rather than a ledger.
   is the narrowest option and cannot touch the REST API.
 - **No organization name.** Nothing on the MCP surface reports it, so the source is shown as
   "Maple (US)" / "Maple (EU)" rather than the Maple organization's name.
+- **Events Maple ingests late are missed.** A scheduled pull re-reads only from the day of the
+  previous success (minus 10 minutes), so events that reach `product_events` after the last pull
+  that read their day (a client flushing a day-old buffer) are never read. Only a backfill would.
 - **Offset paging on today.** Paging a day that is still receiving events can miss or repeat a row
   between pages. The next pull re-reads the day and fixes it; past days are immutable, so a backfill
   is exact.
@@ -183,8 +190,8 @@ documents as an estimate rather than a ledger.
   that lands on it, and the hourly pull re-reads today (and around midnight yesterday), so a parked
   group's count grows with each re-read: up to roughly 24× the day's real events. It is shown on,
   and orders, the unmatched list; no metric, score or signal reads it.
-- **A region change needs a reconnect.** Changing the region in settings does not re-check the key
-  (core only validates when a key is given), so the pull refuses until the key is re-entered.
+- **An organization or region change needs the key.** Core only validates when a key is given, so
+  a settings update that changes either without one is refused until the key is entered with it.
 - **`mcp_tool_called` is unidentified today**, so AI usage does not count yet even though the
   catalog says it carries user and organization. Nothing here changes when it starts to.
 - **Clerk must be connected.** Without it there are no accounts or contacts for Maple's ids to land

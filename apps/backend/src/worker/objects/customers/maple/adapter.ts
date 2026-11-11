@@ -148,9 +148,8 @@ export const makeMapleAdapter = Effect.gen(function* () {
 				onSome: (config) => {
 					const validated = regionOfAccountId(input.credentials.externalAccountId)
 					if (validated === null) return Effect.fail(refused(UNVALIDATED))
-					// A config-only update does not re-validate, so the region could have been changed
-					// under a key of the other one: reading that region would answer 401 for no stated
-					// reason.
+					// The update refuses a region change without a key; a config stored otherwise would
+					// read a region the key is not of, which answers 401 for no stated reason.
 					if (validated !== config.region) return Effect.fail(refused(REGION_CHANGED))
 					return pullPage({
 						api: makeMapleApi(client, input.credentials.apiKey, config.region),
