@@ -60,6 +60,8 @@ const PLANS = plansById(
 const AT = new Date("2026-11-10T12:00:00.000Z")
 const OBSERVED = "2026-11-10T12:00:00.000Z"
 
+const DAY = 86_400_000
+
 const named = (row: unknown) => {
 	const decoded = customer(row)
 	return { ...decoded, id: decoded.id ?? "" }
@@ -289,6 +291,15 @@ describe("Autumn plan → subscription", () => {
 		for (const target of [seatsOnly, tiered]) {
 			expect(canceling({ ...team, plan: target })).toMatchObject({ cancelAtPeriodEnd: false })
 		}
+		// One-off packs on a free plan are no recurring price: the plan is canceling.
+		const packs = {
+			...seatsOnly,
+			items: PLAN_TEAM.items.map((item) => ({
+				...item,
+				price: { ...item.price, interval: "one_off" },
+			})),
+		}
+		expect(canceling({ ...team, plan: packs })).toMatchObject({ cancelAtPeriodEnd: true })
 	})
 
 	it("splits a plan's prepaid units over the customer's live plans on it, and gives an ended one none", () => {
@@ -327,6 +338,33 @@ describe("Autumn plan → subscription", () => {
 		expect(subOp(lapsing)).toMatchObject({ status: "active", mrrMinor: 300_000 })
 	})
 
+	it("bills a card trial canceled before it converted nothing, from the plan's trial terms", () => {
+		// Autumn clears `trial_ends_at` once the trial is over; the billing period was the trial's.
+		const trialPlan = { ...PLAN_ENTERPRISE, free_trial: { duration_length: 14, duration_type: "day" } }
+		const started = SUB_GLOBEX_TRIAL.started_at
+		const canceled = {
+			...SUB_GLOBEX_TRIAL,
+			plan: trialPlan,
+			status: "expired",
+			trial_ends_at: null,
+			canceled_at: started + 3 * DAY,
+			expires_at: SUB_GLOBEX_TRIAL.current_period_end + 10 * 60_000,
+		}
+		expect(subOp(canceled)).toMatchObject({
+			status: "canceled",
+			mrrMinor: 0,
+			billsByUsage: false,
+			trialEndsAt: new Date(started + 14 * DAY + 3_600_000).toISOString(),
+		})
+		// Billed past its trial, then canceled: a paid plan that ended.
+		const converted = {
+			...canceled,
+			current_period_end: started + 44 * DAY,
+			expires_at: started + 44 * DAY,
+		}
+		expect(subOp(converted)).toMatchObject({ status: "canceled", mrrMinor: 300_000, trialEndsAt: null })
+	})
+
 	it("sends no MRR for a past_due plan whose prepaid units Autumn's balances leave out", () => {
 		const pastDue = { ...SUB_INITECH, past_due: true }
 		// Balances carry only active plans' grants unless the org counts past_due ones.
@@ -339,6 +377,12 @@ describe("Autumn plan → subscription", () => {
 		expect(subOps([pastDue], { customer: CUSTOMER_INITECH })).toMatchObject([{ mrrMinor: 7_000 }])
 		// No prepaid item to hide: Pro's base price is all there is.
 		expect(subOp(SUB_ACME_PAST_DUE)).toMatchObject({ status: "past_due", mrrMinor: 9_900 })
+		// Held twice, one past_due: the shared pool may lack its grants, so neither holding is priced.
+		const pool = subOps([SUB_INITECH, { ...pastDue, id: "second" }], { customer: CUSTOMER_INITECH })
+		expect(pool.map((op) => [op.status, "mrrMinor" in op])).toEqual([
+			["active", false],
+			["past_due", false],
+		])
 	})
 
 	it("keys an id by its customer, and keeps the live plan when an ended one shares its id", () => {

@@ -41,13 +41,14 @@
  * customers it did not see and cancels the plans it did not read (a customer deleted in Autumn,
  * which sends no webhook for it). Not when the walk could not see everything:
  *
- * - a customer page with no `next_cursor` whose last customer has no id and no creation time.
- *   Autumn drops the cursor on a page ending on an id-less customer (`CusBatchService.getCursorPage`),
- *   more customers or not; the listing goes on from the millisecond after that customer's creation
- *   (`created_at_range.start`, see `customersPage`), so only a page without a cursor whose last
- *   customer has an id, or no customer at all, is the real end;
- * - a customer page with a `next_cursor` but fewer customers than asked for: Autumn drops a customer
- *   it fails to serialize from the page (`getCursorPage` logs and skips it);
+ * - a customer page with no `next_cursor` whose last customer has no creation time. Autumn drops the
+ *   cursor on a page ending on an id-less customer (`CusBatchService.getCursorPage`), more customers
+ *   or not, and takes it before it drops the customers it fails to serialize (it logs and skips
+ *   them), so the last customer listed need not be the page's. Every page without a cursor is
+ *   confirmed: the listing goes on from the millisecond after its last customer's creation
+ *   (`created_at_range.start`, see `customersPage`), and only an empty page is the real end;
+ * - a customer page with fewer customers than asked for, and more after it (a `next_cursor`, or a
+ *   page without one followed by customers): Autumn dropped one it failed to serialize;
  * - a customer listing as many plans as Autumn returns per customer by default
  *   ({@link PLANS_LISTED_PER_CUSTOMER}): any beyond were cut, so plans are not swept. Autumn can
  *   lower that cap per organization (`maxCusProducts`, an admin override Hazel cannot read); a
@@ -114,10 +115,15 @@ const AutumnCursor = Schema.Struct({
 		Schema.Struct({ customerId: Schema.String, liveIds: Schema.Array(Schema.String) }),
 	),
 	/**
-	 * A customer listing Autumn cut goes on from this creation time (epoch ms, `created_at_range.start`):
-	 * the millisecond after the id-less customer it ended on.
+	 * A customer listing past a page without a cursor goes on from this creation time (epoch ms,
+	 * `created_at_range.start`): the millisecond after that page's last customer.
 	 */
 	from: Schema.optionalKey(Schema.Number),
+	/**
+	 * The customer page before ended without a cursor and listed fewer customers than asked for: if
+	 * more follow it, Autumn dropped one it failed to serialize from it.
+	 */
+	short: Schema.optionalKey(Schema.Boolean),
 })
 type AutumnCursor = typeof AutumnCursor.Type
 
@@ -155,6 +161,7 @@ const pageOf = (
 		/** Where the phase's listing goes on from; `restart`: from there, without a cursor. */
 		readonly from?: AutumnCursor["from"]
 		readonly restart?: boolean
+		readonly short?: boolean
 	},
 ): PullPage => {
 	const done = doneOf(cursor) + page.rows
@@ -170,6 +177,7 @@ const pageOf = (
 	if (onward !== null && onward.phase === cursor.phase) {
 		if (page.last !== undefined) onward.last = page.last
 		if (page.from !== undefined) onward.from = page.from
+		if (page.short === true) onward.short = true
 	}
 	const nextCursor = onward === null ? null : encodeCursor(onward)
 	// Autumn's lists carry no total; only `next_cursor` / `has_more`.
@@ -276,24 +284,33 @@ const customersPage = Effect.fnUntraced(function* (input: PageInput, cursor: Aut
 			(customer.subscriptions ?? []).length + (customer.purchases ?? []).length >=
 			PLANS_LISTED_PER_CUSTOMER,
 	)
-	// Autumn drops the cursor when a page ends on a customer with no id of its own (a page without a
-	// cursor and a last customer with an id is simply the end). It lists by creation time, then id
-	// with the id-less last, so every customer with an id created up to that one's millisecond has
-	// been read: the listing goes on from the next millisecond, and ends on an empty page.
+	// No cursor: the end, or a page Autumn cut (its last customer, listed or dropped, had no id of its
+	// own). It lists by creation time, then id with the id-less last, so every customer with an id
+	// created up to the last listed one's millisecond has been read: the listing goes on from the
+	// next millisecond, and ends on an empty page.
 	const last = decoded.rows.at(-1)
-	const cut = next === null && last !== undefined && (last.id ?? "") === ""
-	const cutAt = cut ? last.created_at : null
+	const ended = next === null && last !== undefined
+	const cutAt = ended ? last.created_at : null
 	const restart = cutAt != null
 	const from = cutAt != null ? cutAt + 1 : cursor.from
-	// More customers remain, yet the page is short: Autumn dropped some it could not serialize.
-	const short = next !== null && body.list.length < PAGE_SIZE
+	// A short page with more customers after it: Autumn dropped some it could not serialize.
+	const short = body.list.length < PAGE_SIZE
+	const dropped = (next !== null && short) || (cursor.short === true && body.list.length > 0)
 	const unswept = [
-		...(cut && !restart ? yield* listingCut("customers", "cursor_dropped", SWEPT) : []),
-		...(short ? yield* listingCut("customers", "customers_dropped", SWEPT) : []),
+		...(ended && !restart ? yield* listingCut("customers", "end_unconfirmed", SWEPT) : []),
+		...(dropped ? yield* listingCut("customers", "customers_dropped", SWEPT) : []),
 		...(decoded.skipped ? yield* listingCut("customers", "rows_unreadable", SWEPT) : []),
 		...(capped ? yield* listingCut("customers", "plans_per_customer_cap", ["subscription"]) : []),
 	]
-	return pageOf(cursor, { ops, rows: body.list.length, next, unswept, from, restart })
+	return pageOf(cursor, {
+		ops,
+		rows: body.list.length,
+		next,
+		unswept,
+		from,
+		restart,
+		short: restart && short,
+	})
 })
 
 const subscriptionsPage = Effect.fnUntraced(function* (input: PageInput, cursor: AutumnCursor) {

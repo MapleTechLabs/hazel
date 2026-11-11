@@ -257,25 +257,40 @@ const billsOutsideMrr = (
  */
 const subscriptionIdOf = (customerId: string, id: string): string => `${customerId}:${id}`
 
-/** Whether a plan bills prepaid units (seats, credit packs) at any price, flat or tiered. */
+/**
+ * Whether a plan bills prepaid units (seats, credit packs) every period, at any price, flat or
+ * tiered. A one-off pack (`one_off` interval) is no recurring revenue.
+ */
 const sellsPrepaid = (plan: AutumnPlan | undefined): boolean =>
-	(plan?.items ?? []).some((item) => item.price?.billing_method === "prepaid")
+	(plan?.items ?? []).some(
+		(item) =>
+			item.price != null &&
+			item.price.billing_method === "prepaid" &&
+			monthlyFactorOf(item.price) !== null,
+	)
+
+/** A customer's holdings of one plan: their prepaid units are one pool in the balances. */
+const poolOf = (customerId: string | null, planId: string): string => JSON.stringify([customerId, planId])
+
+const TRIAL_DAYS = new Map([
+	["day", 1],
+	["month", 31],
+	["year", 366],
+])
 
 /**
- * Whether a read hides a `past_due` plan's prepaid units: Autumn's balances carry only active plans'
- * grants unless the org counts past_due ones too (`include_past_due`), so a past_due plan selling
- * prepaid units with no grant there cannot be priced.
+ * The latest an ended plan's trial could have ended: Autumn reports `trial_ends_at` only while the
+ * trial runs, so it comes from the plan's trial terms and the plan's start, as an upper bound (a
+ * month counts 31 days, a year 366, plus an hour for the ten minutes Autumn adds,
+ * `freeTrialToStripeTimestamp`). Null without a trial or a start.
  */
-const hidesPrepaid = (
-	subscription: AutumnSubscription,
-	plan: AutumnPlan | undefined,
-	balances: ReadonlyArray<AutumnBalance>,
-): boolean =>
-	statusOf(subscription) === "past_due" &&
-	sellsPrepaid(plan) &&
-	!balances.some((balance) =>
-		(balance.breakdown ?? []).some((grant) => grant.plan_id === subscription.plan_id),
-	)
+const trialEndOf = (subscription: AutumnSubscription, plan: AutumnPlan | undefined): number | null => {
+	const days = TRIAL_DAYS.get(plan?.free_trial?.duration_type ?? "day")
+	const length = plan?.free_trial?.duration_length
+	return days === undefined || length == null || subscription.started_at == null
+		? null
+		: subscription.started_at + length * days * 86_400_000 + 3_600_000
+}
 
 /**
  * A batch of plans, read at `observedAt` (ingest drops a read older than one it applied). Skipped:
@@ -290,12 +305,18 @@ const hidesPrepaid = (
  *   cancellation, so the current plan keeps `cancelAtPeriodEnd` false. The free plan Autumn
  *   schedules on a cancel (its group's `auto_enable` one) is no downgrade: the plan is canceling.
  * - **Never billed**: a plan no processor ever billed (no billing period: a trial that lapsed
- *   unconverted, ended or still live until Autumn converts it) is MRR 0, so its account reads as a
- *   lead rather than a paying or churned customer.
+ *   unconverted, ended or still live until Autumn converts it), or one that ended within its trial
+ *   ({@link trialEndOf}, sent as `trialEndsAt`: a card trial canceled before it converted has a
+ *   billing period, the trial's), is MRR 0, so its account reads as a lead rather than a paying or
+ *   churned customer. A customer Autumn gave no trial (one already used) that ends within the
+ *   trial's length reads so too.
  * - **Billed by usage**: a plan at MRR 0 that still bills ({@link billsOutsideMrr}) sets
  *   `billsByUsage`, so core counts its account as paying (or, once it ended, as churned).
- * - **Unpriced**: a `past_due` plan whose prepaid units the balances hide ({@link hidesPrepaid})
- *   sends no `mrrMinor` (nor `listMrrMinor`, `billsByUsage`): ingest keeps the stored MRR.
+ * - **Unpriced**: Autumn's balances carry only active plans' grants unless the org counts past_due
+ *   ones too (`include_past_due`). A plan selling prepaid units held `past_due` with no grant there,
+ *   or held twice (a grant names no holding, so the pool may lack the past_due one's), cannot be
+ *   priced: every live holding of it sends no `mrrMinor` (nor `listMrrMinor`, `billsByUsage`), and
+ *   ingest keeps the stored MRR.
  * - **One id twice** (an ended plan whose `subscription_id` a live one reuses): the live one wins.
  */
 export const subscriptionOps = (
@@ -337,9 +358,24 @@ export const subscriptionOps = (
 	for (const subscription of subscriptions) {
 		const status = statusOf(subscription)
 		if (status === null || status === "canceled" || isEntityScoped(subscription)) continue
-		const key = JSON.stringify([customerOf(subscription), subscription.plan_id])
+		const key = poolOf(customerOf(subscription), subscription.plan_id)
 		holders.set(key, (holders.get(key) ?? 0) + 1)
 	}
+	const granted = (planId: string) =>
+		(options.balances ?? []).some((balance) =>
+			(balance.breakdown ?? []).some((grant) => grant.plan_id === planId),
+		)
+	const unpriced = new Set(
+		subscriptions.flatMap((subscription) => {
+			const key = poolOf(customerOf(subscription), subscription.plan_id)
+			return statusOf(subscription) === "past_due" &&
+				!isEntityScoped(subscription) &&
+				sellsPrepaid(planOf(subscription)) &&
+				((holders.get(key) ?? 1) > 1 || !granted(subscription.plan_id))
+				? [key]
+				: []
+		}),
+	)
 	const byId = new Map<string, UpsertSubscription>()
 	for (const subscription of subscriptions) {
 		const customerId = customerOf(subscription)
@@ -347,12 +383,18 @@ export const subscriptionOps = (
 		if (customerId === null || status === null || isEntityScoped(subscription)) continue
 		const plan = planOf(subscription)
 		const expired = status === "canceled"
+		const trialEnd = expired && subscription.trial_ends_at == null ? trialEndOf(subscription, plan) : null
+		const endedAt = subscription.expires_at ?? subscription.canceled_at
+		const endedInTrial = trialEnd !== null && endedAt != null && endedAt <= trialEnd
 		// No billing period: ended that way, or live past a trial no processor took over (Autumn's
 		// card-less trial awaiting conversion). A live plan without a trial may be billed outside
-		// Stripe (`no_billing_changes`), so it keeps its price.
+		// Stripe (`no_billing_changes`), so it keeps its price. The period is Autumn's mirror of the
+		// processor's subscription (its `subscriptions` row, `getApiSubscription`): a billed plan whose
+		// mirror row is missing reads as never billed too.
 		const neverBilled =
-			subscription.current_period_end == null &&
-			(expired || (status === "active" && plan?.free_trial != null))
+			endedInTrial ||
+			(subscription.current_period_end == null &&
+				(expired || (status === "active" && plan?.free_trial != null)))
 		const balances = expired ? [] : (options.balances ?? [])
 		const mrrMinor = neverBilled
 			? 0
@@ -361,7 +403,7 @@ export const subscriptionOps = (
 					plan,
 					currency,
 					balances,
-					holders.get(JSON.stringify([customerId, subscription.plan_id])) ?? 1,
+					holders.get(poolOf(customerId, subscription.plan_id)) ?? 1,
 				)
 		const canceling =
 			!expired &&
@@ -377,7 +419,7 @@ export const subscriptionOps = (
 			interval: billingIntervalOf(plan),
 			quantity: quantityOf(subscription),
 			startedAt: isoOf(subscription.started_at),
-			trialEndsAt: isoOf(subscription.trial_ends_at),
+			trialEndsAt: isoOf(endedInTrial ? trialEnd : subscription.trial_ends_at),
 			currentPeriodEnd: isoOf(subscription.current_period_end ?? subscription.expires_at),
 			// A cancellation Autumn has recorded but not yet carried out: the plan runs to `expires_at`.
 			cancelAtPeriodEnd: canceling,
@@ -389,7 +431,7 @@ export const subscriptionOps = (
 			observedAt: options.observedAt,
 		}
 		// Unpriced, the op leaves the stored MRR as it is.
-		if (!hidesPrepaid(subscription, plan, balances)) {
+		if (expired || !unpriced.has(poolOf(customerId, subscription.plan_id))) {
 			op.mrrMinor = mrrMinor
 			// The customer's own plan carries any custom price, so the list price is the price.
 			op.listMrrMinor = mrrMinor

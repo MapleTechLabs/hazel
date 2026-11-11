@@ -388,7 +388,7 @@ export const CUSTOMER_INITECH = {
 	},
 }
 
-export const CUSTOMERS = [CUSTOMER_ACME, CUSTOMER_GLOBEX, CUSTOMER_PERSONAL]
+export const CUSTOMERS = [CUSTOMER_ACME, CUSTOMER_PERSONAL, CUSTOMER_GLOBEX]
 
 // ---------------------------------------------------------------------------
 // Webhook payloads

@@ -46,7 +46,7 @@ const organization = (options: Partial<FakeAutumnState> = {}) =>
 		organization: ORGANIZATION,
 		features: FEATURES,
 		plans: PLANS,
-		customers: [CUSTOMER_ACME, CUSTOMER_GLOBEX, CUSTOMER_PERSONAL],
+		customers: [CUSTOMER_ACME, CUSTOMER_PERSONAL, CUSTOMER_GLOBEX],
 		subscriptions: [SUB_ACME_EXPIRED, SUB_ACME, SUB_GLOBEX_TRIAL, SUB_ACME_SCHEDULED, SUB_ACME_ENTITY],
 		...options,
 	})
@@ -75,6 +75,14 @@ const walk = (fake: FakeAutumnState) =>
 		return pages
 	})
 
+/** `total` customers created a millisecond apart, the one at `idless` without an id of its own. */
+const listing = (idless: number, total: number) =>
+	Array.from({ length: total }, (_, index) => ({
+		...CUSTOMER_ACME,
+		id: index === idless ? null : `${ORG_ACME}${index}`,
+		created_at: CUSTOMER_ACME.created_at + index,
+	}))
+
 const tags = (page: PullPage) => page.ops.map((op) => op._tag)
 
 const plansOf = (pages: ReadonlyArray<PullPage>) =>
@@ -87,7 +95,13 @@ describe("Autumn pull", () => {
 	it("walks features, then customers, then subscriptions, and sweeps only at the very end", async () => {
 		const fake = organization()
 		const pages = await run(walk(fake))
-		expect(pages.map((p) => p.progress.step)).toEqual(["features", "customers", "subscriptions"])
+		// The customer listing ends on an empty page: one without a cursor is confirmed by the next.
+		expect(pages.map((p) => p.progress.step)).toEqual([
+			"features",
+			"customers",
+			"customers",
+			"subscriptions",
+		])
 		// A metric definition per metered feature; the boolean flag is none.
 		expect(tags(pages[0]!)).toEqual(["metric_definition", "metric_definition"])
 		// Each customer: the account, then its usage and its live plans.
@@ -102,6 +116,7 @@ describe("Autumn pull", () => {
 			// One pricing lookup per page with a plan to price (the adapter keeps it a few minutes).
 			"/v1/plans.list",
 			"/v1/organization",
+			"/v1/customers.list",
 			"/v1/subscriptions.list",
 			"/v1/plans.list",
 			"/v1/organization",
@@ -115,7 +130,7 @@ describe("Autumn pull", () => {
 			[`${ORG_ACME}:${SUB_ACME.id}`, "active", 9_900],
 			[`${CUSTOMER_GLOBEX.id}:${SUB_GLOBEX_TRIAL.id}`, "trialing", 300_000],
 		])
-		expect(plansOf([pages[2]!])).toEqual([[`${ORG_ACME}:${SUB_ACME_EXPIRED.id}`, "canceled", 0]])
+		expect(plansOf([pages.at(-1)!])).toEqual([[`${ORG_ACME}:${SUB_ACME_EXPIRED.id}`, "canceled", 0]])
 	})
 
 	it("prices a customer's prepaid units and its own plan, as a delivery does", async () => {
@@ -189,12 +204,39 @@ describe("Autumn pull", () => {
 			id: `${ORG_ACME}${index}`,
 		}))
 		const pages = await run(walk(organization({ customers: many, unserializable: [`${ORG_ACME}3`] })))
-		expect(pages.filter((p) => p.progress.step === "customers")).toHaveLength(2)
+		expect(pages.filter((p) => p.progress.step === "customers")).toHaveLength(3)
 		expect(pages.every((p) => p.sweep === undefined)).toBe(true)
 	})
 
+	it("does not sweep after Autumn dropped a customer from a page it sent no cursor for", async () => {
+		const accounts = (pages: ReadonlyArray<PullPage>) =>
+			pages.flatMap(tags).filter((tag) => tag === "account").length
+		// The page ends on an id-less customer, and lost another one it could not serialize.
+		const lossy = await run(
+			walk(
+				organization({
+					customers: listing(PAGE_SIZE - 1, PAGE_SIZE + 2),
+					unserializable: [`${ORG_ACME}3`],
+				}),
+			),
+		)
+		expect(lossy.filter((p) => p.progress.step === "customers")).toHaveLength(3)
+		expect(accounts(lossy)).toBe(PAGE_SIZE)
+		expect(lossy.every((p) => p.sweep === undefined)).toBe(true)
+		// The id-less customer Autumn dropped the cursor on failed to serialize: the page looks like the
+		// end, and the customers after it are read from the next one.
+		const hidden = await run(
+			walk(
+				organization({ customers: listing(PAGE_SIZE - 1, PAGE_SIZE + 2), unserializable: ["null"] }),
+			),
+		)
+		expect(hidden.filter((p) => p.progress.step === "customers")).toHaveLength(3)
+		expect(accounts(hidden)).toBe(PAGE_SIZE + 1)
+		expect(hidden.every((p) => p.sweep === undefined)).toBe(true)
+	})
+
 	it("resumes a phase from the cursor it carried", async () => {
-		const fake = organization({ customers: [CUSTOMER_ACME, CUSTOMER_GLOBEX, CUSTOMER_PERSONAL] })
+		const fake = organization({ customers: [CUSTOMER_ACME, CUSTOMER_PERSONAL, CUSTOMER_GLOBEX] })
 		// One customer a page: three pages, each starting after the one before.
 		const small = encodeCursor({ phase: "customers", after: null, done: 0 })
 		expect(Option.getOrThrow(decodeCursor(small))).toEqual({
@@ -204,11 +246,20 @@ describe("Autumn pull", () => {
 		})
 		const first = await run(page(fake, small))
 		expect(first.nextCursor).not.toBeNull()
-		const resumed = Option.getOrThrow(decodeCursor(first.nextCursor!))
-		// A full page of customers is one page here, so the walk moves straight on to the plans.
-		expect(resumed.phase).toBe("subscriptions")
+		// Every customer on one page, without a cursor: the listing goes on after the newest one's
+		// creation to confirm the end, then the walk moves on to the plans.
+		expect(Option.getOrThrow(decodeCursor(first.nextCursor!))).toEqual({
+			phase: "customers",
+			after: null,
+			done: 3,
+			from: CUSTOMER_GLOBEX.created_at + 1,
+			short: true,
+		})
 		const second = await run(page(fake, first.nextCursor))
-		expect(second.progress.step).toBe("subscriptions")
+		expect(second.ops).toEqual([])
+		expect(Option.getOrThrow(decodeCursor(second.nextCursor!)).phase).toBe("subscriptions")
+		const third = await run(page(fake, second.nextCursor))
+		expect(third.progress.step).toBe("subscriptions")
 	})
 
 	it("pages the customers when Autumn has more than one page of them", async () => {
@@ -219,14 +270,14 @@ describe("Autumn pull", () => {
 		const fake = organization({ customers: many })
 		const pages = await run(walk(fake))
 		const customerPages = pages.filter((p) => p.progress.step === "customers")
-		expect(customerPages).toHaveLength(2)
-		expect(customerPages.map((p) => p.progress.done)).toEqual([PAGE_SIZE, PAGE_SIZE + 2])
+		expect(customerPages).toHaveLength(3)
+		expect(customerPages.map((p) => p.progress.done)).toEqual([PAGE_SIZE, PAGE_SIZE + 2, PAGE_SIZE + 2])
 		expect(customerPages[0]!.sweep).toBeUndefined()
 		expect(
 			fake.calls
 				.filter((call) => call.path === "/v1/customers.list")
 				.map((call) => call.body["start_cursor"]),
-		).toEqual(["", `${ORG_ACME}${PAGE_SIZE - 1}`])
+		).toEqual(["", `${ORG_ACME}${PAGE_SIZE - 1}`, ""])
 	})
 
 	it("follows `has_more` rather than the row count on the subscriptions page", async () => {
@@ -241,22 +292,16 @@ describe("Autumn pull", () => {
 	it("goes on from the creation time after an id-less customer Autumn dropped the cursor on", async () => {
 		// The page's last customer has no id of its own, so Autumn sends no cursor however many remain.
 		const created = CUSTOMER_ACME.created_at
-		const listing = (idless: number, total: number) =>
-			Array.from({ length: total }, (_, index) => ({
-				...CUSTOMER_ACME,
-				id: index === idless ? null : `${ORG_ACME}${index}`,
-				created_at: created + index,
-			}))
 		const fake = organization({ customers: listing(PAGE_SIZE - 1, PAGE_SIZE + 2) })
 		const pages = await run(walk(fake))
 		const customerPages = pages.filter((p) => p.progress.step === "customers")
-		expect(customerPages).toHaveLength(2)
+		expect(customerPages).toHaveLength(3)
 		expect(customerPages.flatMap(tags).filter((tag) => tag === "account")).toHaveLength(PAGE_SIZE + 1)
 		expect(
 			fake.calls
 				.filter((call) => call.path === "/v1/customers.list")
 				.map((call) => call.body["created_at_range"]),
-		).toEqual([undefined, { start: created + PAGE_SIZE }])
+		).toEqual([undefined, { start: created + PAGE_SIZE }, { start: created + PAGE_SIZE + 2 }])
 		expect(pages.at(-1)!.sweep).toEqual(["account", "subscription"])
 		// The newest customer has no id: the listing after it is empty, the real end, and sweeps.
 		const newest = await run(walk(organization({ customers: listing(2, 3) })))
