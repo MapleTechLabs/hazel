@@ -12,6 +12,8 @@ serde_json = "1"
 
 # The hidden web view the runtime's worker runs in (`src/bridge.rs`).
 [target.'cfg(target_os = "ios")'.dependencies]
+# Sign-in through the system's web authentication sheet (`src/sign_in.rs`).
+objc2-authentication-services = "0.3"
 block2 = "0.6"
 dispatch2 = "0.3"
 objc2 = "0.6"

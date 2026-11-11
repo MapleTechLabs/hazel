@@ -3,6 +3,7 @@
  * WebKit's JIT), and its page relays between the worker and the Rune host (`host/ios`). Protocol
  * messages cross as JSON lines (strings); the platform's own requests as objects.
  */
+import { nativeClient } from "@hazel/auth/contract"
 import type { PrecompiledStyles } from "@hazel/foldkit-rune"
 import { parseHostLine } from "@hazel/foldkit-rune"
 import type { NativePlatform } from "./platform"
@@ -13,7 +14,14 @@ declare const __HAZEL_ENV__: Record<string, string>
 declare const __HAZEL_STYLES__: PrecompiledStyles
 
 /** A request to the host that is not render protocol. */
-export type IosRequest = { readonly log: string } | { readonly open: string } | { readonly copy: string }
+export type IosRequest =
+	| { readonly log: string }
+	| { readonly open: string }
+	| { readonly copy: string }
+	| { readonly signIn: string; readonly callbackScheme: string }
+
+/** The scheme of the link sign-in hands back to the native app (`com.hazel.native`). */
+const CALLBACK_SCHEME = new URL(nativeClient.returnUrl).protocol.slice(0, -1)
 
 // Captured before the shims put the window they fake over the worker's globals.
 const post = globalThis.postMessage.bind(globalThis)
@@ -66,7 +74,14 @@ const platform: NativePlatform = {
 		}
 	},
 	log,
-	openUrl: (href) => request({ open: href }),
+	// The app's browser sign-in (`/auth/desktop`) shows in the system's sign-in sheet, which hands
+	// its callback back (`com.hazel.native://auth/callback`); other links open in the browser.
+	openUrl: (href) =>
+		request(
+			URL.parse(href)?.pathname === "/auth/desktop"
+				? { signIn: href, callbackScheme: CALLBACK_SCHEME }
+				: { open: href },
+		),
 	copyText: (text) => request({ copy: text }),
 	// The bundle carries the sheet compiled for every class the app's sources use.
 	loadStyles: async () => {

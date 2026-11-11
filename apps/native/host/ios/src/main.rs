@@ -4,6 +4,10 @@
 mod bridge;
 #[cfg(target_os = "ios")]
 mod keyboard;
+#[cfg(any(test, target_os = "ios"))]
+mod page;
+#[cfg(target_os = "ios")]
+mod sign_in;
 
 #[cfg(target_os = "ios")]
 fn main() {

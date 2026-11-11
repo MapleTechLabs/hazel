@@ -1,6 +1,6 @@
 //! Pictures: `<img src>`, CSS `background-image: url(..)` and multi-colour inline SVGs, decoded
 //! off the main thread by Rune's `ImageCache`. Rune has no HTTP client on native, so http(s)
-//! sources are fetched by `curl` on a worker thread and redrawn when they land.
+//! sources are fetched with the system's (`fetch`) on a worker thread and redrawn when they land.
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -341,15 +341,12 @@ fn remote(url: &str, size_pt: f32) -> Option<Image> {
     map.insert(url.to_string(), Fetched::Pending);
     let url = url.to_string();
     std::thread::spawn(move || {
-        let output = std::process::Command::new("curl")
-            .args(["-sfL", "--max-time", "15", "--", &url])
-            .output();
-        let fetched = match output {
-            Ok(out) if out.status.success() && !out.stdout.is_empty() => {
-                if url.ends_with(".svg") || out.stdout.starts_with(b"<svg") {
-                    Fetched::Svg(Arc::new(out.stdout))
+        let fetched = match crate::fetch::get(&url, std::time::Duration::from_secs(15)) {
+            Ok(body) if !body.is_empty() => {
+                if url.ends_with(".svg") || body.starts_with(b"<svg") {
+                    Fetched::Svg(Arc::new(body))
                 } else {
-                    Fetched::Picture(cache().load(out.stdout))
+                    Fetched::Picture(cache().load(body))
                 }
             }
             _ => Fetched::Failed,

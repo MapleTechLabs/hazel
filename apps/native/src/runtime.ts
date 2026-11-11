@@ -37,7 +37,8 @@ export const startRuntime = async (platform: NativePlatform) => {
 		width,
 		height,
 		dark,
-		url: `http://app.hazel.test${startPath}`,
+		// The origin the page it runs in has (iOS: the web app's when live), else a made-up one.
+		url: `${process.env.NATIVE_ORIGIN ?? "http://app.hazel.test"}${startPath}`,
 		openUrl: platform.openUrl,
 		copyText: platform.copyText,
 		// Live, a full page load (after sign-in or sign-out) boots a fresh runtime, as a browser does.

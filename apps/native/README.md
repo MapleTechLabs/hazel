@@ -100,18 +100,29 @@ API and WebKit's JIT; iOS lets an app neither spawn Bun nor JIT its own JavaScri
 that worker's `NativePlatform`: lines cross worker → page → `WKScriptMessageHandler` one way and
 `evaluateJavaScript` → page → worker the other. `scripts/build-ios.ts` bundles it as one module with
 the compiled stylesheet inlined. The bundle's `environment.json` holds `HAZEL_DATA`,
-`VITE_BACKEND_URL`, `NATIVE_DEBUG` and `NATIVE_PATH` as set when building (offline by default);
+`VITE_BACKEND_URL`, `VITE_APP_URL`, `NATIVE_DEBUG` and `NATIVE_PATH` as set when building
+(offline by default);
 the runtime's log goes to `tmp/hazel.log` in the app's data container
 (`xcrun simctl get_app_container booted sh.hazel.ios data`).
 
-The page is a secure context (`https://app.hazel.test`, never fetched), as the web app's
-`crypto.randomUUID` needs. When the on-screen keyboard shows, the page's viewport ends above it
+The page (`host/ios/src/page.rs`) is a secure context, as the web app's `crypto.randomUUID`
+needs. Live, its origin is the web app's (`VITE_APP_URL`, `https://app.hazel.sh` by default), so
+the API's CORS answers, which WebKit checks, allow it; offline it is `https://app.hazel.test`,
+never fetched. When the on-screen keyboard shows, the page's viewport ends above it
 (`State::set_keyboard`, from `host/ios/src/keyboard.rs`), as a browser's does, so the composer
 and the end of the list stay visible (a floating iPad keyboard leaves the page as it is). The
 keyboard's return key is Enter, so it sends, as it does in the web app on a phone.
 
-Not yet on iOS: live sign-in, the keychain, updates, HTML renders, http(s) pictures (fetched with
-`curl`), and a device build (simulator only, ad-hoc signed).
+**Live data** (`HAZEL_DATA=live bun run ios`, with `VITE_APP_URL`/`VITE_BACKEND_URL` for a dev
+stack on this Mac) signs in as the Mac app does: the sign-in link opens in the system's sign-in
+sheet (`ASWebAuthenticationSession`, `host/ios/src/sign_in.rs`), whose callback goes to the
+runtime as an opened link, and the session lives in the keychain (`hazel_native::sign_in`). The
+simulator's keychain serves only an app with an identifier and access group, which the
+executable carries (`host/ios/build.rs`). A full page load (after sign-in) loads a fresh page and
+runtime at that path. Pictures over http(s) download with `NSURLSession` (`host/src/fetch.rs`), on
+macOS too.
+
+Not yet on iOS: updates, HTML renders, and a device build (simulator only, ad-hoc signed).
 
 ## Releases
 
