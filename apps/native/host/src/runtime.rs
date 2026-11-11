@@ -90,7 +90,9 @@ pub fn spawn_runtime() -> (RuntimeChild, std::sync::mpsc::Receiver<RuntimeMsg>) 
             let mut reload = None;
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
                 match serde_json::from_str::<RuntimeMsg>(&line) {
-                    Ok(RuntimeMsg::Vault { id, op, record }) => answer_vault(id, &op, record),
+                    Ok(RuntimeMsg::Vault { id, op, record }) => {
+                        hazel_native::sign_in::answer_vault(id, &op, record)
+                    }
                     Ok(RuntimeMsg::Update { id, op }) => answer_update(id, op),
                     Ok(RuntimeMsg::Relaunch { id }) => match updater::relaunch_after_exit() {
                         Ok(()) => {
@@ -124,23 +126,6 @@ pub fn spawn_runtime() -> (RuntimeChild, std::sync::mpsc::Receiver<RuntimeMsg>) 
         }
     });
     (current, receive)
-}
-
-/// Keychain calls can wait on a permission prompt: each runs off the reader and UI threads.
-fn answer_vault(id: u64, op: &str, record: Option<String>) {
-    let Some(op) = platform::vault_op(op, record) else {
-        write_line(platform::vault_reply(
-            id,
-            Err(format!("unknown vault request {op}")),
-        ));
-        return;
-    };
-    std::thread::spawn(move || {
-        write_line(platform::vault_reply(
-            id,
-            platform::run_vault(platform::VAULT_SERVICE, &op),
-        ));
-    });
 }
 
 /// Updater steps fetch, verify and move files: each runs off the reader and UI threads.

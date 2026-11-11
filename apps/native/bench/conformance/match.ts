@@ -243,22 +243,27 @@ export interface Delta {
 export const drawn = (rect: Rect | null): rect is Rect =>
 	rect !== null && rect.w > 0 && rect.h > 0 && (rect.w > 1 || rect.h > 1)
 
-/** The 1280x800 viewport; elements scrolled fully outside it on both sides are not compared. */
+/** The desktop viewport; elements scrolled fully outside it on both sides are not compared. */
 export const VIEWPORT: Rect = { x: 0, y: 0, w: 1280, h: 800 }
-export const onScreen = (rect: Rect | null): rect is Rect =>
+export const onScreen = (rect: Rect | null, viewport: Rect = VIEWPORT): rect is Rect =>
 	drawn(rect) &&
-	rect.x < VIEWPORT.x + VIEWPORT.w &&
-	rect.x + rect.w > VIEWPORT.x &&
-	rect.y < VIEWPORT.y + VIEWPORT.h &&
-	rect.y + rect.h > VIEWPORT.y
+	rect.x < viewport.x + viewport.w &&
+	rect.x + rect.w > viewport.x &&
+	rect.y < viewport.y + viewport.h &&
+	rect.y + rect.h > viewport.y
 
-export const deltas = (web: ReadonlyArray<El>, native: ReadonlyArray<El>, matching: Matching) => {
+export const deltas = (
+	web: ReadonlyArray<El>,
+	native: ReadonlyArray<El>,
+	matching: Matching,
+	viewport: Rect = VIEWPORT,
+) => {
 	const raw = new Map<number, { dx: number; dy: number; dw: number; dh: number }>()
 	const out: Array<Delta> = []
 	for (const w of web) {
 		const n = native[matching.webToNative.get(w.index) ?? -1]
 		if (n === undefined || !drawn(w.rect) || n.rect === null) continue
-		if (!onScreen(w.rect) && !onScreen(n.rect)) continue
+		if (!onScreen(w.rect, viewport) && !onScreen(n.rect, viewport)) continue
 		const d = {
 			dx: n.rect.x - w.rect.x,
 			dy: n.rect.y - w.rect.y,

@@ -7,11 +7,13 @@ publish = false
 [dependencies]
 hazel-native = { path = ".." }
 # The same revision as `hazel-native`'s (`../Cargo.toml`).
-rune = { git = "https://github.com/Makisuo/rune", rev = "486028d40bfe61a7e7ef561f0f819e43ef19ee29" }
+rune = { git = "https://github.com/Makisuo/rune", rev = "6a528752fe5d37df202036dd693740eb993f6330" }
 serde_json = "1"
 
 # The hidden web view the runtime's worker runs in (`src/bridge.rs`).
 [target.'cfg(target_os = "ios")'.dependencies]
+# Sign-in through the system's web authentication sheet (`src/sign_in.rs`).
+objc2-authentication-services = "0.3"
 block2 = "0.6"
 dispatch2 = "0.3"
 objc2 = "0.6"

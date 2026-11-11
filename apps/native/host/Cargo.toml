@@ -11,8 +11,9 @@ publish = false
 # Rune is pre-release: pin a revision. This is anomalyco/rune bca4713 plus grid tracks
 # (El::grid_columns, grid_row_start), Tx::focus, Tx::drawn_rects, set_default_transition,
 # El::focusable_by_script and El::clip_fade_linear_frac (Makisuo/rune's `hazel-grid` branch), plus
-# iOS's full-screen window, safe area and motion frames (`hazel-ios`), until they land upstream.
-rune = { git = "https://github.com/Makisuo/rune", rev = "486028d40bfe61a7e7ef561f0f819e43ef19ee29", features = [
+# iOS's full-screen window, safe area and motion frames (`hazel-ios`), plus a soft keyboard's
+# return as Enter and iOS's display link (`hazel-ios-followups`), until they land upstream.
+rune = { git = "https://github.com/Makisuo/rune", rev = "6a528752fe5d37df202036dd693740eb993f6330", features = [
 	"native-file-dialog",
 ] }
 base64 = "0.22"
@@ -26,10 +27,14 @@ keyring = { version = "3", features = ["apple-native"] }
 minisign-verify = "0.2"
 wgpu = { version = "~30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "wgsl"] }
 
+# Downloads through the system's URL loading on macOS and iOS (`src/fetch.rs`).
+[target.'cfg(target_vendor = "apple")'.dependencies]
+block2 = "0.6"
+objc2-foundation = "0.3"
+
 # The web views HTML render frames show their pages in (`src/frames.rs`).
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-foundation = "0.3"
 objc2-app-kit = "0.3"
 objc2-web-kit = "0.3"
 objc2-quartz-core = "0.3"
@@ -38,3 +43,4 @@ objc2-core-foundation = "0.3"
 
 [profile.release]
 debug = false
+

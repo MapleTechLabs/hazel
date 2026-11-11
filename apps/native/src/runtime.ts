@@ -37,7 +37,8 @@ export const startRuntime = async (platform: NativePlatform) => {
 		width,
 		height,
 		dark,
-		url: `http://app.hazel.test${startPath}`,
+		// The origin the page it runs in has (iOS: the web app's when live), else a made-up one.
+		url: `${process.env.NATIVE_ORIGIN ?? "http://app.hazel.test"}${startPath}`,
 		openUrl: platform.openUrl,
 		copyText: platform.copyText,
 		// Live, a full page load (after sign-in or sign-out) boots a fresh runtime, as a browser does.
@@ -267,9 +268,7 @@ export const startRuntime = async (platform: NativePlatform) => {
 	let isHeadlessDomRequested = false
 	const bootedAt = performance.now()
 	const scheduleHeadlessDom = () => {
-		const { jsdom } = platform
-		// Without a headless DOM the editor never mounts: the composer shows, but takes no text.
-		if (isHeadlessDomRequested || jsdom === undefined) return
+		if (isHeadlessDomRequested) return
 		clearTimeout(headlessDomTimer)
 		const wait = Math.max(0, Math.min(250, 2000 - (performance.now() - bootedAt)))
 		headlessDomTimer = setTimeout(() => {
@@ -277,8 +276,7 @@ export const startRuntime = async (platform: NativePlatform) => {
 			const shims = ["Element", "HTMLElement", "Node"].map(
 				(name) => (globalThis as Record<string, unknown>)[name],
 			)
-			void composer.loadHeadlessDom(
-				jsdom,
+			composer.loadHeadlessDom(
 				{ document, shims },
 				() => rune.refreshObserved(),
 				// The host keys an editor's native field `<path>/field` (`build_editable`).

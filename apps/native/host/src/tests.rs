@@ -2920,6 +2920,173 @@ fn text_pasted_into_the_composer_stays_the_fields_own_edit() {
     );
 }
 
+/// A message on a phone: the avatar beside a column whose paragraph holds one inline span of
+/// text. The span sits on the paragraph's line and wraps there, as a CSS line box does, rather
+/// than running past the column at its one-line width.
+#[test]
+fn an_inline_span_in_a_narrow_block_wraps_at_its_edge() {
+    let text = "Shipping it. Thanks everyone for a smooth week and see you all on Monday.";
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "w": 240, "gapCol": 8 }),
+            vec![
+                e("div", json!({ "w": 40, "h": 40, "shrink": 0 }), vec![]),
+                e(
+                    "div",
+                    json!({ "display": "flex", "dir": "col", "grow": 1, "minW": 0 }),
+                    vec![e(
+                        "p",
+                        json!({ "fontSize": 16, "lineHeight": 24 }),
+                        vec![e("span", json!({}), vec![t(text)])],
+                    )],
+                ),
+            ],
+        ),
+        (240.0, 400.0),
+    );
+    let [column_x, _, column_w, _] = rect(&rt, "r/1");
+    let [span_x, _, span_w, span_h] = rect(&rt, "r/1/0/0");
+    assert!(
+        span_x + span_w <= column_x + column_w + 0.5,
+        "the span ends at {} past the column's {}",
+        span_x + span_w,
+        column_x + column_w
+    );
+    assert!(span_h >= 48.0, "the span did not wrap: {span_h} tall");
+}
+
+/// The phone layout's sidebar sheet: a grid with no tracks, placed by its insets, holding one
+/// section; the section's full-height column has a header, a growing scroller (the channel
+/// list) and a footer. CSS stretches the section over the grid's one implicit row, so the
+/// scroller gets the height between header and footer instead of collapsing to nothing.
+#[test]
+fn a_track_less_grid_stretches_its_one_child_so_a_growing_scroller_inside_gets_the_height() {
+    let item = |n: usize| e("div", json!({ "h": 30 }), vec![t(&format!("Channel {n}"))]);
+    let column = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "h": "full", "grow": 1 }),
+        vec![
+            e("div", json!({ "h": 40 }), vec![t("Header")]),
+            e(
+                "div",
+                json!({ "display": "flex", "dir": "col", "grow": 1, "minH": 0, "scrollY": true }),
+                vec![e(
+                    "section",
+                    json!({ "display": "flex", "dir": "col" }),
+                    (1..=20).map(item).collect(),
+                )],
+            ),
+            e("div", json!({ "h": 40 }), vec![t("Footer")]),
+        ],
+    );
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300, "h": 400 }),
+            vec![e(
+                "div",
+                json!({ "display": "grid", "absolute": [8, 8, null, 8], "w": 200, "h": "auto", "scrollY": true }),
+                vec![e(
+                    "section",
+                    json!({ "display": "flex", "dir": "col", "clip": true }),
+                    vec![column],
+                )],
+            )],
+        ),
+        (300.0, 400.0),
+    );
+    assert_eq!(rect(&rt, "r/0"), [8.0, 8.0, 200.0, 384.0]);
+    assert_eq!(rect(&rt, "r/0/0"), [8.0, 8.0, 200.0, 384.0]);
+    // The scroller takes what header and footer leave: 384 - 40 - 40.
+    assert_eq!(rect(&rt, "r/0/0/0/1"), [8.0, 48.0, 200.0, 304.0]);
+    assert_eq!(rect(&rt, "r/0/0/0/2"), [8.0, 352.0, 200.0, 40.0]);
+}
+
+/// An inline box with its own `max-w` keeps it: the line's width only caps one without.
+#[test]
+fn an_inline_block_keeps_its_own_max_width_in_a_block() {
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 400 }),
+            vec![e(
+                "div",
+                json!({ "inline": true, "maxW": 120 }),
+                vec![e("div", json!({ "w": "full", "h": 20 }), vec![])],
+            )],
+        ),
+        (400.0, 200.0),
+    );
+    assert!(rect(&rt, "r/0")[2] <= 120.0, "{:?}", rect(&rt, "r/0"));
+}
+
+/// A track-less grid leaves an `h-fit` child at its content's height: fit-content is a size.
+#[test]
+fn a_track_less_grid_does_not_stretch_a_fit_content_child() {
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300, "h": 400 }),
+            vec![e(
+                "div",
+                json!({ "display": "grid", "h": 200 }),
+                vec![e("div", json!({ "h": "fit" }), vec![t("Fit")])],
+            )],
+        ),
+        (300.0, 400.0),
+    );
+    assert!(rect(&rt, "r/0/0")[3] < 100.0, "{:?}", rect(&rt, "r/0/0"));
+}
+
+/// A track-less grid that centres its items (`items-center`) leaves the child at its height.
+#[test]
+fn a_centring_grid_does_not_stretch_its_one_child() {
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300, "h": 400 }),
+            vec![e(
+                "div",
+                json!({ "display": "grid", "h": 200, "items": "center" }),
+                vec![e("div", json!({ "h": "auto" }), vec![t("Centred")])],
+            )],
+        ),
+        (300.0, 400.0),
+    );
+    assert!(rect(&rt, "r/0/0")[3] < 100.0, "{:?}", rect(&rt, "r/0/0"));
+}
+
+/// The on-screen keyboard (iOS) ends the page's viewport above it, as a browser's does: a
+/// full-height page, and the composer at its bottom, stay visible over the keyboard.
+#[test]
+fn the_page_ends_above_the_on_screen_keyboard() {
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "dir": "col", "h": "full" }),
+            vec![
+                e("div", json!({ "grow": 1 }), vec![]),
+                e("div", json!({ "h": 40 }), vec![t("Composer")]),
+            ],
+        ),
+        (400.0, 800.0),
+    );
+    assert_eq!(rect(&rt, "r/1"), [0.0, 760.0, 400.0, 40.0]);
+    assert!(rt.state.set_keyboard(300.0));
+    rt.invalidate();
+    rt.frame(0.0);
+    rt.settle_all();
+    rt.frame(0.0);
+    assert_eq!(rect(&rt, "r/1"), [0.0, 460.0, 400.0, 40.0]);
+    assert!(rt.state.set_keyboard(0.0));
+    rt.invalidate();
+    rt.frame(0.0);
+    rt.settle_all();
+    rt.frame(0.0);
+    assert_eq!(rect(&rt, "r/1"), [0.0, 760.0, 400.0, 40.0]);
+}
+
 #[test]
 fn a_lone_inline_span_in_a_block_wraps_its_text_to_the_block() {
     // A message's markdown: `p > span > span > span > text` in the content column of a row.

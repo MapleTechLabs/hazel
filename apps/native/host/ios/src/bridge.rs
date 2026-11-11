@@ -14,7 +14,7 @@ use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2::{MainThreadMarker, MainThreadOnly, define_class, extern_class, msg_send};
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::{
-    NSDictionary, NSError, NSObject, NSObjectProtocol, NSString, NSURL, ns_string,
+    NSDictionary, NSError, NSNumber, NSObject, NSObjectProtocol, NSString, NSURL, ns_string,
 };
 use objc2_ui_kit::{UIApplication, UIPasteboard, UIResponder, UIView, UIWindow, UIWindowScene};
 use objc2_web_kit::{
@@ -22,8 +22,7 @@ use objc2_web_kit::{
 };
 use rune::AppHandle;
 
-/// The page's origin: the one the runtime's shims give the app (`http://app.hazel.test`).
-const ORIGIN: &str = "http://app.hazel.test/";
+use crate::page;
 
 extern_class!(
     /// WebKit's web view, a `UIView` on iOS (objc2-web-kit declares it for macOS only).
@@ -40,6 +39,17 @@ thread_local! {
     /// The host's lines from before the page could take them (`None` once it said it is ready).
     static EARLY: RefCell<Option<Vec<String>>> = const { RefCell::new(Some(Vec::new())) };
     static STARTED: Cell<bool> = const { Cell::new(false) };
+    /// The runtime's source and the bundle's environment, read once, for every page load.
+    static BUNDLE: RefCell<Option<(String, Option<serde_json::Value>)>> = const { RefCell::new(None) };
+    /// The page loaded last (0 before the first): only its `ready` releases the held lines.
+    static PAGE: Cell<u64> = const { Cell::new(0) };
+    /// Hears the page's process end (the web view holds it weakly).
+    static NAVIGATION: RefCell<Option<Retained<PageNavigation>>> = const { RefCell::new(None) };
+    /// A page replacing a runtime is loading: until it is ready, it is held only the window.
+    static REPLACING: Cell<bool> = const { Cell::new(false) };
+    /// Where the last full page load went; a restart goes back there.
+    static LAST_PATH: RefCell<Option<String>> = const { RefCell::new(None) };
+    static RESTARTS: RefCell<page::Restarts> = RefCell::new(page::Restarts::default());
 }
 
 /// Where the runtime's trees go: the running app.
@@ -82,7 +92,11 @@ impl Write for ToWorker {
             // Held while the page is not ready yet; otherwise handed back to send now.
             let ready = EARLY.with_borrow_mut(|early| match early {
                 Some(early) => {
-                    early.push(text);
+                    if REPLACING.get() {
+                        early.push(page::for_replacement(&text));
+                    } else {
+                        early.push(text);
+                    }
                     None
                 }
                 None => Some(text),
@@ -143,11 +157,18 @@ fn receive(line: &str) {
             note_scroll(&path, seq);
             handle.update(move |_: &mut State, tx| tx.scroll_to_instant(path, 0.0, top));
         }
-        RuntimeMsg::Reload { .. }
-        | RuntimeMsg::Vault { .. }
-        | RuntimeMsg::Update { .. }
-        | RuntimeMsg::Relaunch { .. } => {
-            log("[host] reload, keychain and updates are not on iOS yet");
+        RuntimeMsg::Vault { id, op, record } => {
+            hazel_native::sign_in::answer_vault(id, &op, record)
+        }
+        // A full page load (after sign-in or sign-out): a fresh runtime at that path.
+        RuntimeMsg::Reload { path } => {
+            if let Some(mtm) = MainThreadMarker::new() {
+                load_page(mtm, Some(&path));
+                LAST_PATH.set(Some(path));
+            }
+        }
+        RuntimeMsg::Update { .. } | RuntimeMsg::Relaunch { .. } => {
+            log("[host] updates are not on iOS");
         }
         request => {
             if let Some(run) = request.request() {
@@ -164,13 +185,20 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
             .and_then(|value| value.downcast::<NSString>().ok())
             .map(|value| value.to_string())
     };
-    if body.objectForKey(ns_string!("ready")).is_some() {
-        // The page can take lines now: the ones held until then go first.
-        for text in EARLY.take().unwrap_or_default() {
-            to_worker(&text);
+    if let Some(ready) = body.objectForKey(ns_string!("ready")) {
+        // The page can take lines now: the ones held until then go first. A page another load
+        // replaced since says so too late; its lines stay held for the new one.
+        let page = ready.downcast::<NSNumber>().ok().map(|n| n.as_u64());
+        if page == Some(PAGE.get()) {
+            REPLACING.set(false);
+            for text in EARLY.take().unwrap_or_default() {
+                to_worker(&text);
+            }
         }
     } else if let Some(line) = field("log") {
         log(&line);
+    } else if let (Some(url), Some(scheme)) = (field("signIn"), field("callbackScheme")) {
+        crate::sign_in::start(mtm, &url, &scheme);
     } else if let Some(href) = field("open") {
         if let Some(url) = NSURL::URLWithString(&NSString::from_str(&href)) {
             let app = UIApplication::sharedApplication(mtm);
@@ -208,45 +236,38 @@ define_class!(
     }
 );
 
+define_class!(
+    // SAFETY: NSObject has no subclassing requirements; the class does not implement `Drop`.
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "HazelPageNavigation"]
+    /// The page's navigation delegate, for the one event the host acts on.
+    struct PageNavigation;
+
+    unsafe impl NSObjectProtocol for PageNavigation {}
+
+    impl PageNavigation {
+        /// WebKit ended the page's process (memory pressure, a crash): the worker and the
+        /// runtime in it are gone, so a fresh page starts another, as a browser reloads a tab.
+        #[unsafe(method(webViewWebContentProcessDidTerminate:))]
+        fn content_process_ended(&self, _web: &AnyObject) {
+            if !RESTARTS.with_borrow_mut(|restarts| restarts.allow(std::time::Instant::now())) {
+                return log("[host] the page's process keeps ending; not starting it again");
+            }
+            log("[host] the page's process ended; starting the runtime again");
+            let path = LAST_PATH.with_borrow(Clone::clone);
+            load_page(self.mtm(), path.as_deref());
+        }
+    }
+);
+
 /// The app's window, once the scene has one.
-fn window(mtm: MainThreadMarker) -> Option<Retained<UIWindow>> {
+pub(crate) fn window(mtm: MainThreadMarker) -> Option<Retained<UIWindow>> {
     let scenes = UIApplication::sharedApplication(mtm).connectedScenes();
     scenes.iter().find_map(|scene| {
         let scene = scene.downcast::<UIWindowScene>().ok()?;
         scene.windows().firstObject()
     })
-}
-
-/// The page: it runs the runtime's source in a module worker (from a Blob, after the host's
-/// environment) and relays between it and the host.
-fn page(source: &str, env: &serde_json::Value) -> String {
-    let start = format!("__hazel.start({}, {})", json_string(source), env);
-    // Nothing in the inline script may end it early (`</script>`, `<!--`): every `<` is inside a
-    // JSON string there, where `\u003c` reads the same.
-    let start = start.replace('<', "\\u003c");
-    format!(
-        r#"<!doctype html><meta charset="utf-8"><script>
-const host = window.webkit.messageHandlers.hazel
-let worker
-const early = []
-window.__hazel = {{
-    start(source, env) {{
-        const head = `globalThis.__HAZEL_ENV__ = ${{JSON.stringify(env)}};\n`
-        const url = URL.createObjectURL(new Blob([head, source], {{ type: "text/javascript" }}))
-        worker = new Worker(url, {{ type: "module" }})
-        worker.onmessage = (event) => host.postMessage(event.data)
-        worker.onerror = (event) =>
-            host.postMessage({{ log: `[worker] ${{event.message}} ${{event.filename}}:${{event.lineno}}` }})
-        for (const line of early.splice(0)) worker.postMessage(line)
-    }},
-    toWorker(text) {{
-        for (const line of text.split("\n"))
-            if (line !== "") worker === undefined ? early.push(line) : worker.postMessage(line)
-    }},
-}}
-host.postMessage({{ ready: true }})
-</script><script>{start}</script>"#
-    )
 }
 
 /// Builds the hidden web view in the window and loads the runtime; false until the window exists.
@@ -269,18 +290,9 @@ fn start() -> bool {
         log("[host] runtime.js is missing from the bundle");
         return true;
     };
-    // The bundle's environment (`scripts/ios.ts` writes it), over the window's size.
-    // The page's first size: the window inside its safe area, as the host's first report says.
-    let (bounds, insets) = (window.bounds(), window.safeAreaInsets());
-    let mut env = serde_json::json!({
-        "NATIVE_WIDTH": (bounds.size.width - insets.left - insets.right).round().to_string(),
-        "NATIVE_HEIGHT": (bounds.size.height - insets.top - insets.bottom).round().to_string(),
-    });
-    if let Some(serde_json::Value::Object(bundled)) =
-        read("environment.json").and_then(|text| serde_json::from_str(&text).ok())
-    {
-        env.as_object_mut().expect("an object").extend(bundled);
-    }
+    // The bundle's environment (`scripts/ios.ts` writes it).
+    let bundled = read("environment.json").and_then(|text| serde_json::from_str(&text).ok());
+    BUNDLE.set(Some((source, bundled)));
 
     let configuration = unsafe { WKWebViewConfiguration::new(mtm) };
     let messages: Retained<RuntimeMessages> = {
@@ -301,13 +313,72 @@ fn start() -> bool {
         msg_send![WebView::alloc(mtm), initWithFrame: frame, configuration: &*configuration]
     };
     window.insertSubview_atIndex(&web, 0);
-    let html = NSString::from_str(&page(&source, &env));
-    let origin = NSURL::URLWithString(ns_string!(ORIGIN));
+    let navigation: Retained<PageNavigation> = {
+        let this = PageNavigation::alloc(mtm).set_ivars(());
+        unsafe { msg_send![super(this), init] }
+    };
     unsafe {
-        let _: Option<Retained<AnyObject>> =
-            msg_send![&*web, loadHTMLString: &*html, baseURL: origin.as_deref()];
+        let _: () = msg_send![&*web, setNavigationDelegate: &*navigation];
     }
+    NAVIGATION.set(Some(navigation));
     WEB.set(Some(web));
-    log("[host] runtime started");
+    load_page(mtm, None);
+    if let Some(handle) = HANDLE.get().map(|h| h.lock().unwrap().clone()) {
+        crate::keyboard::observe(mtm, handle);
+    }
     true
+}
+
+/// Loads the page, and with it a fresh runtime, at `path` (the bundle's start page for `None`).
+/// Lines held for a runtime it replaces are dropped; from now on they wait for the new page.
+fn load_page(mtm: MainThreadMarker, path: Option<&str>) {
+    let Some(bundled) = BUNDLE.with_borrow(|bundle| bundle.as_ref().map(|(_, env)| env.clone()))
+    else {
+        return;
+    };
+    let Some(window) = window(mtm) else {
+        return log("[host] the page cannot load without a window");
+    };
+    // The viewport as last reported, else the window inside its safe area (the first report).
+    let (bounds, insets) = (window.bounds(), window.safeAreaInsets());
+    let size = hazel_native::last_env().map_or(
+        (
+            bounds.size.width - insets.left - insets.right,
+            bounds.size.height - insets.top - insets.bottom,
+        ),
+        |(width, height, _)| (f64::from(width), f64::from(height)),
+    );
+    let env = page::environment(bundled, size, path);
+    if let Some(problem) = page::origin_problem(&env) {
+        log(&format!("[host] {problem}"));
+    }
+    let origin = format!("{}/", page::origin(&env));
+    let id = PAGE.get() + 1;
+    if PAGE.replace(id) > 0 {
+        EARLY.set(Some(Vec::new()));
+        REPLACING.set(true);
+        // A fresh runtime starts light at the bundle's size: it hears the window's as the
+        // first one did, once its page is ready.
+        if let Some((width, height, dark)) = hazel_native::last_env() {
+            outbox::write_line(
+                serde_json::json!({ "t": "env", "width": width, "height": height, "dark": dark }),
+            );
+        }
+    }
+    let Some(html) = BUNDLE.with_borrow(|bundle| {
+        let (source, _) = bundle.as_ref()?;
+        Some(NSString::from_str(&page::html(source, &env, id)))
+    }) else {
+        return;
+    };
+    let base = NSURL::URLWithString(&NSString::from_str(&origin));
+    WEB.with_borrow(|web| {
+        if let Some(web) = web {
+            unsafe {
+                let _: Option<Retained<AnyObject>> =
+                    msg_send![&**web, loadHTMLString: &*html, baseURL: base.as_deref()];
+            }
+        }
+    });
+    log(&format!("[host] runtime started at {origin}"));
 }

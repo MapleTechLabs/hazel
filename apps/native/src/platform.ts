@@ -28,8 +28,6 @@ export type NativePlatform = {
 	readonly appendLine?: (path: string, line: string) => void
 	/** The heap in use, in MB, for `NATIVE_STATS`. Absent: the stats leave it out. */
 	readonly memoryUsedMb?: () => number
-	/** jsdom, the headless DOM the composer's editor runs on. Absent: the composer takes no text. */
-	readonly jsdom?: () => Promise<typeof import("jsdom")>
 	/** Serves `HAZEL_FIXTURE_HTML`'s page for the offline fixture. Absent: the variable is ignored. */
 	readonly fixtureHtmlRender?: typeof makeFixtureHtmlRender
 }

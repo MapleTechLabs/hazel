@@ -51,10 +51,3 @@ export const RPC_SCOPE_MAP: ScopeMap = mergeScopeMaps(
 	scopeMapFromRpcGroup(IntegrationRequestRpcs.requests),
 	scopeMapFromRpcGroup(ChatSyncRpcs.requests),
 )
-
-/**
- * Alias — currently identical to RPC_SCOPE_MAP.
- * When HTTP API annotations are added, this can be extended
- * to include HTTP endpoint scopes as well.
- */
-export const ALL_SCOPE_MAP: ScopeMap = RPC_SCOPE_MAP
