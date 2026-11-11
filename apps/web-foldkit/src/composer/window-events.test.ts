@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
+import { Effect, Fiber, Stream } from "effect"
 import { describe, expect, test } from "vitest"
 import { collectKeyStream } from "../test/key-stream"
-import { globalTypingStream } from "./window-events"
+import { type GlobalPaste, globalPasteStream, globalTypingStream } from "./window-events"
 
 /** Typing anywhere goes to the composer (Discord, Slack), but never steals keys from a field or a shortcut. */
 
@@ -54,5 +55,70 @@ describe("typing outside the composer", () => {
 
 	test.each(["Enter", "Escape", "ArrowUp", "Tab", "PageDown", "Shift"])("%s is not typing", async (key) => {
 		expect(await run((press) => press({ key }))).toEqual([])
+	})
+})
+
+/** Pasting anywhere goes to the composer too: the editor need not have the caret first. */
+
+const pasteEvent = (text: string, files: ReadonlyArray<File> = []) =>
+	Object.assign(new Event("paste", { bubbles: true, cancelable: true }), {
+		clipboardData: {
+			files,
+			items: files.map((file) => ({ kind: "file", type: file.type, getAsFile: () => file })),
+			getData: (format: string) => (format === "text/plain" ? text : ""),
+		},
+	})
+
+const collectPastes = async (act: (paste: (event: Event, target?: EventTarget) => Event) => void) => {
+	const emitted: Array<GlobalPaste> = []
+	const fiber = Effect.runFork(
+		Stream.runForEach(
+			globalPasteStream((paste) => paste),
+			(paste) => Effect.sync(() => emitted.push(paste)),
+		),
+	)
+	await new Promise((resolve) => setTimeout(resolve, 0))
+	act((event, target = document.body) => {
+		target.dispatchEvent(event)
+		return event
+	})
+	await new Promise((resolve) => setTimeout(resolve, 0))
+	await Effect.runPromise(Fiber.interrupt(fiber))
+	return emitted
+}
+
+describe("pasting outside the composer", () => {
+	const png = new File(["x"], "shot.png", { type: "image/png" })
+
+	test("a file pasted on the page goes to the composer, and the browser does nothing with it", async () => {
+		const prevented: Array<boolean> = []
+		const pastes = await collectPastes((paste) => {
+			prevented.push(paste(pasteEvent("", [png])).defaultPrevented)
+		})
+		expect(pastes).toEqual([{ _tag: "Files", files: [png] }])
+		expect(prevented).toEqual([true])
+	})
+
+	test("text pasted on the page goes to the composer", async () => {
+		expect(await collectPastes((paste) => paste(pasteEvent("hello\nworld")))).toEqual([
+			{ _tag: "Text", text: "hello\nworld" },
+		])
+	})
+
+	test("a file type a message cannot carry, or an empty clipboard, is left alone", async () => {
+		const binary = new File(["x"], "tool.exe", { type: "application/x-msdownload" })
+		expect(await collectPastes((paste) => paste(pasteEvent("", [binary])))).toEqual([])
+		expect(await collectPastes((paste) => paste(pasteEvent("")))).toEqual([])
+	})
+
+	test.each([
+		["an input", () => document.createElement("input")],
+		["an editable", () => Object.assign(document.createElement("div"), { contentEditable: "true" })],
+	])("a paste into %s stays there", async (_name, make) => {
+		const field = make()
+		document.body.append(field)
+		const pastes = await collectPastes((paste) => paste(pasteEvent("hi", [png]), field))
+		field.remove()
+		expect(pastes).toEqual([])
 	})
 })
