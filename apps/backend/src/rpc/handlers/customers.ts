@@ -364,6 +364,16 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 					yield* requireAdmin
 					return { items: yield* db.run(SQLite.from(schema.customerIgnoreRulesTable).select()) }
 				}).pipe(remap),
+
+			"customers.plans.list": () =>
+				Effect.gen(function* () {
+					yield* requireMember
+					const rows = yield* db.query(
+						Database.sql`SELECT DISTINCT "planName" FROM "customer_subscriptions"
+							WHERE "planName" IS NOT NULL ORDER BY "planName"`,
+					)
+					return { plans: rows.map((row) => String(row.planName)) }
+				}).pipe(remap),
 		}
 	}),
 )
@@ -1081,7 +1091,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.settings.update": ({ health, reportingCurrency }) =>
+			"customers.settings.update": ({ health, reportingCurrency, addOnPlans }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireAdmin
 					const now = yield* currentTime
@@ -1093,6 +1103,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 									.set({
 										health,
 										reportingCurrency: reportingCurrency?.toLowerCase(),
+										addOnPlans,
 										updatedBy: actor.userId,
 										updatedAt: now,
 									})

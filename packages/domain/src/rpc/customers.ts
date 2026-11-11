@@ -239,6 +239,9 @@ export class CustomerReadRpcs extends RpcGroup.make(
 	),
 
 	read("customers.ignoreRules.list", {}, Schema.Struct({ items: Schema.Array(IgnoreRule.Schema) })),
+
+	/** Every plan name the org's subscriptions carry, any status, by name. */
+	read("customers.plans.list", {}, Schema.Struct({ plans: Schema.Array(Schema.String) })),
 ) {}
 
 // ---------------------------------------------------------------------------
@@ -407,13 +410,15 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	/** Its open signals close (`auto_resolved`). */
 	write("customers.rule.delete", { ruleId: CustomerSignalRuleId }, Tx, CustomersNotFoundError),
 
-	/** Health weights, bands, steps; the reporting currency. Rescores on the next compute (soon). */
+	/** Health weights, bands, steps; the reporting currency; add-on plans. Recomputes soon. */
 	write(
 		"customers.settings.update",
 		{
 			health: Schema.optionalKey(HealthSettings),
 			/** An ISO 4217 code, e.g. `usd`. */
 			reportingCurrency: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[A-Za-z]{3}$/))),
+			/** The whole list of add-on plan names. */
+			addOnPlans: Schema.optionalKey(Schema.Array(Schema.String)),
 		},
 		Tx,
 	),

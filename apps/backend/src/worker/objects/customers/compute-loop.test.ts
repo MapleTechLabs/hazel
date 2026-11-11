@@ -28,7 +28,7 @@ import {
 	takeComputeLease,
 } from "./schedule"
 import { loadBase } from "./snapshot"
-import { type CustomersWorld, makeCustomersWorld, NOW } from "./test-kit"
+import { type CustomersWorld, makeCustomersWorld, NOW, ok } from "./test-kit"
 import { addDays, dayOf } from "./time"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
@@ -1145,6 +1145,28 @@ describe("Customers compute and sync loop", () => {
 				).toEqual([
 					{ mrrMinor: 19_900, mrrSource: "stripe", planName: "Team", lifecycleStage: "active" },
 				])
+			}),
+		))
+
+	it("names an account's plan after its base plan once the pricier one is marked an add-on", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				yield* world.ingest("stripe", [
+					{ ...subscription(30), planName: "Starter", mrrMinor: 1_900 },
+					{ ...subscription(30), externalId: "sub_2", planName: "BYOK", mrrMinor: 4_500 },
+				])
+				const account = () => world.rows(`SELECT planName, mrrMinor FROM customer_accounts`)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(account()).toEqual([{ planName: "BYOK", mrrMinor: 6_400 }])
+				expect(ok(yield* world.call("customers.plans.list", {}, world.member))).toEqual({
+					plans: ["BYOK", "Starter"],
+				})
+
+				ok(yield* world.call("customers.settings.update", { addOnPlans: ["BYOK"] }, world.owner))
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(account()).toEqual([{ planName: "Starter", mrrMinor: 6_400 }])
 			}),
 		))
 

@@ -1093,6 +1093,7 @@ export const SETTINGS: Settings = {
 	organizationId: ORGANIZATION_ID,
 	health: DEFAULT_HEALTH_SETTINGS,
 	reportingCurrency: CURRENCY,
+	addOnPlans: [],
 	lastComputedAt: ago(HOUR),
 	updatedBy: null,
 	createdAt: daysAgo(120),

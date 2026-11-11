@@ -164,6 +164,7 @@ describe("customers routes", () => {
 		["/hazel/customers/settings/signals/new", "CustomersSettingsSignalNew"],
 		[`/hazel/customers/settings/signals/${ruleId}`, "CustomersSettingsSignalRule"],
 		["/hazel/customers/settings/health", "CustomersSettingsHealth"],
+		["/hazel/customers/settings/plans", "CustomersSettingsPlans"],
 		["/hazel/customers/settings/sources", "CustomersSettingsSources"],
 		["/hazel/customers/settings/sources/stripe", "CustomersSourceDetail"],
 		["/hazel/customers/settings/sources/unmatched", "CustomersUnmatched"],
@@ -477,6 +478,9 @@ describe("hrefOf", () => {
 		],
 		CustomersSettingsHealth: [
 			[AppRoute.CustomersSettingsHealth({ orgSlug }), "/hazel/customers/settings/health"],
+		],
+		CustomersSettingsPlans: [
+			[AppRoute.CustomersSettingsPlans({ orgSlug }), "/hazel/customers/settings/plans"],
 		],
 		CustomersSettingsSources: [
 			[AppRoute.CustomersSettingsSources({ orgSlug }), "/hazel/customers/settings/sources"],

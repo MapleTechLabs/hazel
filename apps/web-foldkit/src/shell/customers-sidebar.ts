@@ -8,6 +8,7 @@ import { modifyFields } from "foldkit/struct"
 import { twMerge } from "tailwind-merge"
 import { myOpenSignalCountStream, SavedViewRow, savedViewsStream } from "../customers/queries"
 import {
+	IconCube,
 	IconHeart,
 	IconLightbulb,
 	IconOffice,
@@ -258,6 +259,12 @@ export const view = <ParentMessage>(
 						hrefOf(AppRoute.CustomersSettingsHealth({ orgSlug })),
 						on("CustomersSettingsHealth"),
 						icon(IconHeart),
+					),
+					item(
+						"Plans",
+						hrefOf(AppRoute.CustomersSettingsPlans({ orgSlug })),
+						on("CustomersSettingsPlans"),
+						icon(IconCube),
 					),
 					item(
 						"Data sources",

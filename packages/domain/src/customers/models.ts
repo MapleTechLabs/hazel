@@ -205,6 +205,8 @@ class SettingsModel extends M.Class<SettingsModel>("CustomerSettings")({
 	organizationId: OrganizationId,
 	health: HealthSettings,
 	reportingCurrency: S.String,
+	/** Plan names billed on top of a base plan, never shown as an account's plan while it has one. */
+	addOnPlans: S.Array(S.String),
 	lastComputedAt: NullDate,
 	updatedBy: S.NullOr(UserId),
 	...timestamps,

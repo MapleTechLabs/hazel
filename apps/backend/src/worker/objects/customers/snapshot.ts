@@ -117,12 +117,20 @@ const unconverted = (sub: schema.CustomerSubscription) =>
  */
 const pays = (sub: schema.CustomerSubscription) => (sub.mrrMinor > 0 || sub.billsByUsage) && !unconverted(sub)
 
+/** The plan to show among `subs` (live): the billed one with the most MRR, else a trial, else any. */
+const topOf = (subs: ReadonlyArray<schema.CustomerSubscription>) =>
+	subs.filter(billed).sort((a, b) => b.mrrMinor - a.mrrMinor)[0] ??
+	subs.find((sub) => sub.status === "trialing") ??
+	subs[0]
+
 /** The fields compute derives for one account (pure). */
 export const rollupAccount = (input: {
 	readonly account: schema.CustomerAccount
 	/** The billing provider's (`mrrSource`). */
 	readonly subscriptions: ReadonlyArray<schema.CustomerSubscription>
 	readonly mrrSource: CustomerProvider | null
+	/** Add-on plan names (settings' `addOnPlans`): `planName` is a base plan's while there is one. */
+	readonly addOnPlans: ReadonlyArray<string>
 	readonly contacts: ReadonlyArray<ContactFacts>
 	readonly activity: AccountFacts["activity"]
 	readonly lastActiveDay: Day | null
@@ -139,7 +147,9 @@ export const rollupAccount = (input: {
 	const paid = paying.some(pays)
 	const foreign = paying.filter((sub) => sub.currency !== currency)
 	const trialing = live.filter((sub) => sub.status === "trialing")
-	const top = [...paying].sort((a, b) => b.mrrMinor - a.mrrMinor)[0] ?? trialing[0] ?? live[0]
+	const addOns = new Set(input.addOnPlans)
+	const named = live.filter((sub) => sub.planName !== null)
+	const top = topOf(named.filter((sub) => !addOns.has(sub.planName ?? ""))) ?? topOf(named) ?? topOf(live)
 	const trialEnds = trialing.map((sub) => sub.trialEndsAt).filter((date) => date !== null)
 	const derived: LifecycleStage = live.some((sub) => sub.status === "past_due" || sub.status === "unpaid")
 		? "past_due"
@@ -565,6 +575,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			account: stored,
 			subscriptions: accountSubs,
 			mrrSource: billing?.source ?? null,
+			addOnPlans: base.settings.addOnPlans,
 			contacts: accountContacts,
 			activity: byDay,
 			lastActiveDay,
