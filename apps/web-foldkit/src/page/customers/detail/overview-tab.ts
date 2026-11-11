@@ -233,6 +233,7 @@ const usageCard = (h: HtmlBuilder<Message>, model: Model): Html => {
 									net: point.value,
 								})),
 								formatValue: (value) => formatCount(value),
+								integerTicks: true,
 								hoveredIndex: model.hoveredUsage,
 								onHover: (index) => Message.HoveredUsage({ index }),
 								maxXTicks: 6,

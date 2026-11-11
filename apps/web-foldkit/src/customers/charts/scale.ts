@@ -30,17 +30,20 @@ export const niceStep = (span: number, count: number): number => {
 
 /**
  * A domain covering `[min, max]` widened to whole steps, with its ticks. Always includes 0 for data
- * that crosses or touches it; an all-zero (or empty) range gets `[0, 1]`.
+ * that crosses or touches it; an all-zero (or empty) range gets `[0, 1]`. `integer` keeps steps whole
+ * for counts, so small ranges don't get `0.5` ticks.
  */
 export const niceTicks = (
 	min: number,
 	max: number,
 	count = 4,
+	options?: Readonly<{ integer?: boolean }>,
 ): Readonly<{ min: number; max: number; ticks: ReadonlyArray<number> }> => {
 	const lo = Math.min(min, 0)
 	const hi = Math.max(max, 0)
 	if (lo === hi) return { min: 0, max: 1, ticks: [0, 1] }
-	const step = niceStep(hi - lo, count)
+	const nice = niceStep(hi - lo, count)
+	const step = options?.integer ? Math.max(1, Math.floor(nice)) : nice
 	const niceMin = Math.floor(lo / step) * step
 	const niceMax = Math.ceil(hi / step) * step
 	const ticks: Array<number> = []

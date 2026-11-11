@@ -49,6 +49,12 @@ describe("niceTicks", () => {
 		expect(ticks).toEqual([-5_000, 0, 5_000, 10_000, 15_000])
 	})
 
+	it("keeps whole steps for counts", () => {
+		expect(niceTicks(0, 2, 5, { integer: true }).ticks).toEqual([0, 1, 2])
+		expect(niceTicks(0, 10, 4, { integer: true }).ticks).toEqual([0, 2, 4, 6, 8, 10])
+		expect(niceTicks(0, 2000, 4, { integer: true }).ticks).toEqual([0, 500, 1000, 1500, 2000])
+	})
+
 	it("survives an empty or flat series and float drift", () => {
 		expect(niceTicks(0, 0)).toEqual({ min: 0, max: 1, ticks: [0, 1] })
 		expect(niceTicks(0, 0.3, 3).ticks).toEqual([0, 0.1, 0.2, 0.3])
