@@ -216,7 +216,7 @@ const content = <M>(h: HtmlBuilder<M>, model: Model, toMessage: (message: Messag
 	h.div(
 		[
 			h.Class(
-				"flex h-[420px] w-[400px] flex-col overflow-hidden rounded-lg border border-fg/15 bg-overlay shadow-lg",
+				"flex h-[420px] w-[400px] flex-col overflow-hidden rounded-lg border border-fg/15 bg-overlay shadow-lg max-md:h-[min(420px,60dvh)] max-md:w-[calc(100vw-1rem)] max-md:max-w-[400px]",
 			),
 		],
 		[

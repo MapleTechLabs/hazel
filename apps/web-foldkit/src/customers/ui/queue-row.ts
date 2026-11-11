@@ -53,6 +53,8 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 			h.Class(
 				twMerge(
 					"group/queue relative flex min-h-16 items-center gap-4 border-border border-t px-4 py-3 first:border-t-0",
+					// A phone: account and health on the first line, the signal under them.
+					"max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-1.5",
 					"transition-colors hover:bg-wash data-focused:bg-wash",
 					"before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary before:opacity-0 data-focused:before:opacity-100",
 					options.isSelected && "bg-primary-subtle/40 hover:bg-primary-subtle/50",
@@ -64,11 +66,19 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 		],
 		[
 			h.span(
-				[h.Role("cell"), h.Class("w-5 shrink-0 text-right text-muted-fg text-sm tabular-nums")],
+				[
+					h.Role("cell"),
+					h.Class("w-5 shrink-0 text-right text-muted-fg text-sm tabular-nums max-md:hidden"),
+				],
 				[String(options.rank)],
 			),
 			h.div(
-				[h.Role("cell"), h.Class("flex w-52 shrink-0 items-center gap-3 max-md:w-40")],
+				[
+					h.Role("cell"),
+					h.Class(
+						"flex w-52 shrink-0 items-center gap-3 max-md:w-auto max-md:min-w-0 max-md:flex-1 max-md:shrink",
+					),
+				],
 				[
 					companyLogo(h, {
 						name: options.account.name,
@@ -88,7 +98,12 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 				],
 			),
 			h.div(
-				[h.Role("cell"), h.Class("flex min-w-0 flex-1 flex-col gap-0.5")],
+				[
+					h.Role("cell"),
+					h.Class(
+						"flex min-w-0 flex-1 flex-col gap-0.5 max-md:order-last max-md:basis-full max-md:pl-10",
+					),
+				],
 				[
 					h.div(
 						[h.Class("flex min-w-0 items-center gap-2")],
@@ -104,7 +119,7 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 				[
 					h.Class(
 						twMerge(
-							"flex shrink-0 items-center gap-4",
+							"flex shrink-0 items-center gap-4 max-md:hidden",
 							options.actions &&
 								"group-focus-within/queue:hidden group-hover/queue:hidden group-data-focused/queue:hidden",
 						),
@@ -131,7 +146,7 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 						h.div(
 							[
 								h.Class(
-									"hidden shrink-0 items-center gap-1.5 group-focus-within/queue:flex group-hover/queue:flex group-data-focused/queue:flex",
+									"hidden shrink-0 items-center gap-1.5 group-focus-within/queue:flex group-hover/queue:flex group-data-focused/queue:flex max-md:order-last max-md:basis-full max-md:flex-wrap max-md:pl-10",
 								),
 							],
 							[...options.actions],
@@ -139,7 +154,7 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 					]
 				: []),
 			h.div(
-				[h.Role("cell"), h.Class("flex w-28 shrink-0 justify-end")],
+				[h.Role("cell"), h.Class("flex w-28 shrink-0 justify-end max-md:w-auto")],
 				[healthBadge(h, { status: options.health.status, score: options.health.score })],
 			),
 		],

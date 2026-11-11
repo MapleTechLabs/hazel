@@ -105,10 +105,10 @@ const dmTitle = <M>(
 ): ReadonlyArray<Html> => [
 	members[0] ? dmAvatar(h, members[0], presence) : h.empty,
 	h.div(
-		[],
+		[h.Class("max-md:min-w-0")],
 		[
 			h.h2(
-				[h.Class("font-semibold text-fg text-sm")],
+				[h.Class("font-semibold text-fg text-sm max-md:truncate")],
 				[
 					...(members.length > 0
 						? members
@@ -141,10 +141,13 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 				inputs.mobileBack,
 				channel
 					? h.div(
-							[h.Class("flex items-center gap-3")],
+							[h.Class("flex items-center gap-3 max-md:min-w-0")],
 							[
-								channelIcon(h, channel.icon, "size-5 text-muted-fg"),
-								h.h2([h.Class("font-semibold text-fg text-sm")], [channel.name]),
+								channelIcon(h, channel.icon, "size-5 text-muted-fg max-md:shrink-0"),
+								h.h2(
+									[h.Class("font-semibold text-fg text-sm max-md:truncate")],
+									[channel.name],
+								),
 							],
 						)
 					: h.div([h.Class("h-4 w-32 animate-pulse rounded-sm bg-secondary")]),
@@ -163,9 +166,9 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 						: isDirectMessage
 							? dmTitle(h, inputs.otherMembers, inputs.dmPresence)
 							: [
-									channelIcon(h, channel.icon, "size-5 text-muted-fg"),
+									channelIcon(h, channel.icon, "size-5 text-muted-fg max-md:shrink-0"),
 									h.div(
-										[h.Class("flex items-center gap-2")],
+										[h.Class("flex items-center gap-2 max-md:min-w-0")],
 										[
 											h.h2(
 												[h.Class("truncate font-semibold text-fg text-sm")],
@@ -177,7 +180,7 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 				],
 			),
 			h.div(
-				[h.Class("flex items-center gap-2")],
+				[h.Class("flex items-center gap-2 max-md:shrink-0")],
 				[
 					isDirectMessage && inputs.isHiddenDm
 						? button(

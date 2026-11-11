@@ -437,7 +437,9 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 						? [
 								h.div(
 									[
-										h.Class("absolute top-5 left-5 flex items-center gap-2"),
+										h.Class(
+											"absolute top-5 left-5 flex items-center gap-2 max-md:top-[calc(env(safe-area-inset-top)+4rem)] max-md:left-3",
+										),
 										h.DataAttribute("viewer-chrome", ""),
 										// Has no backing of its own, so a zoomed image would run under its text.
 										h.DataAttribute("viewer-author", ""),
@@ -468,7 +470,7 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 								h.div(
 									[
 										h.Class(
-											"absolute top-5 left-1/2 -translate-x-1/2 rounded-md bg-black/50 px-3 py-1.5 text-sm text-white tabular-nums",
+											"absolute top-5 left-1/2 -translate-x-1/2 rounded-md bg-black/50 px-3 py-1.5 text-sm text-white tabular-nums max-md:top-[calc(env(safe-area-inset-top)+4rem)] max-md:right-3 max-md:left-auto max-md:translate-x-0",
 										),
 										h.DataAttribute("viewer-chrome", ""),
 										h.AriaHidden(true),
@@ -492,7 +494,7 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 					h.div(
 						[
 							h.Class(
-								"absolute top-5 right-5 flex gap-1 rounded-md border border-white/10 bg-black/50 p-1",
+								"absolute top-5 right-5 flex gap-1 rounded-md border border-white/10 bg-black/50 p-1 max-md:top-[calc(env(safe-area-inset-top)+0.75rem)] max-md:right-3",
 							),
 							h.DataAttribute("viewer-chrome", ""),
 						],
@@ -505,7 +507,7 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 								h.div(
 									[
 										h.Class(
-											"pointer-events-none absolute inset-x-0 bottom-5 flex justify-center px-8",
+											"pointer-events-none absolute inset-x-0 bottom-5 flex justify-center px-8 max-md:bottom-[calc(env(safe-area-inset-bottom)+1rem)] max-md:px-3",
 										),
 										h.DataAttribute("viewer-thumbs", ""),
 										h.DataAttribute("viewer-chrome", ""),

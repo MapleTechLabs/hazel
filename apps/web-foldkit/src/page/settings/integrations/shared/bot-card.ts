@@ -137,7 +137,7 @@ const actionsMenu = <Message>(
 							{
 								size: "sm",
 								intent: "plain",
-								className: "size-8 p-0 hover:bg-secondary",
+								className: "size-8 p-0 hover:bg-secondary max-md:size-10",
 								attributes: [
 									h.AriaLabel("Bot actions"),
 									h.Attribute("aria-haspopup", "true"),

@@ -93,7 +93,35 @@ const header = (h: HtmlBuilder<Message>, model: Model, shared: Shared): Html => 
 
 // CONTROLS
 
-const controls = (h: HtmlBuilder<Message>, model: Model): Html =>
+const searchAndSort = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	searchClassName: string,
+): ReadonlyArray<Html> => [
+	searchBox(h, {
+		id: SEARCH_ID,
+		value: model.search,
+		placeholder: "Search records…",
+		onInput: toSearch,
+		onClear: Message.ClearedSearch(),
+		className: searchClassName,
+	}),
+	h.submodel({
+		slotId: model.sortMenu.id,
+		model: model.sortMenu,
+		view: menuView,
+		viewInputs: {
+			entries: sortEntries,
+			toTrigger: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) =>
+				sortTrigger(h, { label: SORT_LABEL[model.sort], attributes, overlay }),
+			content: (key: string) => [menuLabel(h, model.sortMenu.id, key, SORT_LABEL[key as Sort])],
+		},
+		toParentMessage: toSortMenuMessage,
+	}),
+]
+
+/** The tabs; search and sort trail them, or on a phone sit in a row of their own under them. */
+const controls = (h: HtmlBuilder<Message>, model: Model, isMobile: boolean): ReadonlyArray<Html> => [
 	viewTabs(h, {
 		ariaLabel: "Records",
 		tabs: [
@@ -107,34 +135,17 @@ const controls = (h: HtmlBuilder<Message>, model: Model): Html =>
 		],
 		selected: model.tab,
 		onSelect: toTab,
-		trailing: h.div(
-			[h.Class("ml-auto flex items-center gap-2 pb-1 max-sm:hidden")],
-			[
-				searchBox(h, {
-					id: SEARCH_ID,
-					value: model.search,
-					placeholder: "Search records…",
-					onInput: toSearch,
-					onClear: Message.ClearedSearch(),
-					className: "w-56",
-				}),
-				h.submodel({
-					slotId: model.sortMenu.id,
-					model: model.sortMenu,
-					view: menuView,
-					viewInputs: {
-						entries: sortEntries,
-						toTrigger: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) =>
-							sortTrigger(h, { label: SORT_LABEL[model.sort], attributes, overlay }),
-						content: (key: string) => [
-							menuLabel(h, model.sortMenu.id, key, SORT_LABEL[key as Sort]),
-						],
-					},
-					toParentMessage: toSortMenuMessage,
-				}),
-			],
-		),
-	})
+		trailing: isMobile
+			? undefined
+			: h.div(
+					[h.Class("ml-auto flex items-center gap-2 pb-1 max-sm:hidden")],
+					searchAndSort(h, model, "w-56"),
+				),
+	}),
+	...(isMobile
+		? [h.div([h.Class("flex items-center gap-2")], searchAndSort(h, model, "min-w-0 flex-1"))]
+		: []),
+]
 
 /** Shown while rows are checked: link the suggested ones, or ignore them all. */
 const bulkBar = (h: HtmlBuilder<Message>, model: Model): Html => {
@@ -280,7 +291,8 @@ const openTab = (h: HtmlBuilder<Message>, model: Model, shared: Shared): Readonl
 		const ignored = itemsOf(model.ignored).length
 		return [
 			h.div(
-				[h.Class(card)],
+				// A phone scrolls the table sideways inside the card.
+				[h.Class(`${card} max-md:overflow-x-auto`)],
 				[
 					recordsTable(h, model, groupsOf(records), {
 						id: "unmatched-open",
@@ -419,7 +431,8 @@ const ignoredTab = (h: HtmlBuilder<Message>, model: Model, shared: Shared): Read
 			]
 		return [
 			h.div(
-				[h.Class(card)],
+				// A phone scrolls the table sideways inside the card.
+				[h.Class(`${card} max-md:overflow-x-auto`)],
 				[
 					recordsTable(h, model, groupsOf(records), {
 						id: "unmatched-ignored",
@@ -444,7 +457,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	return settingsPage(h, [
 		header(h, model, shared),
 		...(isAdmin ? [] : [readOnlyNotice(h, "unmatched records")]),
-		controls(h, model),
+		...controls(h, model, shared.isMobile),
 		...(isAdmin && model.selected.length > 0 && model.tab !== "ignored" ? [bulkBar(h, model)] : []),
 		...(model.tab === "ignored" ? ignoredTab(h, model, shared) : openTab(h, model, shared)),
 	])

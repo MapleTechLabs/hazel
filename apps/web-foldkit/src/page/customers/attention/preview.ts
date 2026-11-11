@@ -43,7 +43,7 @@ const stat = (h: HtmlBuilder<Message>, label: string, value: Html | string, deta
 
 const summary = (h: HtmlBuilder<Message>, account: AccountRow, owner: string | null): Html =>
 	h.div(
-		[h.Class("grid grid-cols-4 gap-3 px-5 py-4")],
+		[h.Class("grid grid-cols-2 gap-3 px-5 py-4 md:grid-cols-4")],
 		[
 			stat(h, "MRR", formatMoney(account.mrrMinor, account.currency), account.planName),
 			stat(
@@ -224,8 +224,9 @@ export const previewPanel = (
 		[
 			h.AriaLabel(`${account.name}: ${signal.title}`),
 			h.Class(
-				// Below lg it slides over the queue (a row press opens it there too).
-				"flex w-[440px] shrink-0 flex-col overflow-y-auto border-border border-l bg-bg max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:max-w-full max-lg:shadow-lg",
+				// Below lg it slides over the queue (a row press opens it there too); a phone's fills the
+				// screen, clear of the notch and the home indicator.
+				"flex w-[440px] shrink-0 flex-col overflow-y-auto border-border border-l bg-bg max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:max-w-full max-lg:shadow-lg max-md:w-full max-md:border-l-0 max-md:pt-[env(safe-area-inset-top)] max-md:pb-[env(safe-area-inset-bottom)]",
 			),
 		],
 		[
@@ -245,6 +246,7 @@ export const previewPanel = (
 						{
 							intent: "plain",
 							size: "sq-xs",
+							className: "max-md:size-10",
 							onPress: Message.ClosedPreview(),
 							attributes: [h.AriaLabel("Close preview")],
 						},

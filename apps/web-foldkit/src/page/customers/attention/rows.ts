@@ -42,7 +42,12 @@ const personOf = (context: RowContext, userId: string | null) => {
 	return member === undefined ? null : { name: member.name, avatarUrl: member.avatarUrl }
 }
 
-const accountCell = <M>(h: HtmlBuilder<M>, account: AccountRow, className = "w-52"): Html =>
+/** A phone's row wraps: the account takes the first line's room, the signal goes under it. */
+const PHONE_ACCOUNT = "max-md:w-auto max-md:min-w-0 max-md:flex-1 max-md:shrink"
+/** Under the account on a phone, in line with its name (past the size-7 logo and its gap). */
+const PHONE_SECOND_LINE = "max-md:order-last max-md:basis-full max-md:pl-10"
+
+const accountCell = <M>(h: HtmlBuilder<M>, account: AccountRow, className = `w-52 ${PHONE_ACCOUNT}`): Html =>
 	h.div(
 		[h.Role("cell"), h.Class(twMerge("flex shrink-0 items-center gap-3", className))],
 		[
@@ -75,6 +80,7 @@ const rowShell = (
 			h.Class(
 				twMerge(
 					"group/queue relative flex min-h-16 cursor-pointer items-center gap-4 border-border border-t px-4 py-3 first:border-t-0",
+					"max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-1.5",
 					"transition-colors hover:bg-wash data-focused:bg-wash",
 					"before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary before:opacity-0 data-focused:before:opacity-100",
 				),
@@ -174,11 +180,14 @@ export const accountGroupRow = (
 	const assignees = [...new Set(group.signals.map((signal) => signal.assigneeUserId))]
 	return rowShell(h, lead, context, [
 		h.span(
-			[h.Role("cell"), h.Class("w-5 shrink-0 text-right text-muted-fg text-sm tabular-nums")],
+			[
+				h.Role("cell"),
+				h.Class("w-5 shrink-0 text-right text-muted-fg text-sm tabular-nums max-md:hidden"),
+			],
 			[String(rank)],
 		),
 		h.div(
-			[h.Role("cell"), h.Class("flex w-52 shrink-0 items-center gap-3")],
+			[h.Role("cell"), h.Class(twMerge("flex w-52 shrink-0 items-center gap-3", PHONE_ACCOUNT))],
 			[
 				companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "sm" }),
 				h.div(
@@ -208,7 +217,7 @@ export const accountGroupRow = (
 			],
 		),
 		h.div(
-			[h.Role("cell"), h.Class("flex min-w-0 flex-1 flex-col gap-1.5")],
+			[h.Role("cell"), h.Class(twMerge("flex min-w-0 flex-1 flex-col gap-1.5", PHONE_SECOND_LINE))],
 			group.signals.map((signal) =>
 				h.div(
 					[h.Class("flex min-w-0 items-center gap-2 text-sm")],
@@ -228,15 +237,15 @@ export const accountGroupRow = (
 			),
 		),
 		h.span(
-			[h.Role("cell"), h.Class("w-8 text-right text-muted-fg text-sm tabular-nums")],
+			[h.Role("cell"), h.Class("w-8 text-right text-muted-fg text-sm tabular-nums max-md:hidden")],
 			[ageText(oldest, context.nowMs)],
 		),
 		h.span(
-			[h.Role("cell"), h.Class("flex w-10 justify-center -space-x-1.5")],
+			[h.Role("cell"), h.Class("flex w-10 justify-center -space-x-1.5 max-md:hidden")],
 			assignees.map((userId) => personAvatar(h, personOf(context, userId), { ring: true })),
 		),
 		h.div(
-			[h.Role("cell"), h.Class("flex w-28 shrink-0 justify-end")],
+			[h.Role("cell"), h.Class("flex w-28 shrink-0 justify-end max-md:w-auto")],
 			[healthBadge(h, { status: account.healthStatus, score: account.healthScore })],
 		),
 	])
@@ -247,7 +256,10 @@ const wakeCell = (h: HtmlBuilder<Message>, signal: SignalRow, nowMs: number): Ht
 	const untilMs = signal.snoozedUntilMs
 	const isDue = untilMs !== null && untilMs <= nowMs
 	return h.div(
-		[h.Role("cell"), h.Class("flex w-44 shrink-0 items-start gap-2")],
+		[
+			h.Role("cell"),
+			h.Class(twMerge("flex w-44 shrink-0 items-start gap-2", PHONE_SECOND_LINE, "max-md:w-auto")),
+		],
 		[
 			IconClock(h, { className: twMerge("mt-0.5 size-3.5", isDue ? "text-warning" : "text-muted-fg") }),
 			h.div(
@@ -280,7 +292,7 @@ export const snoozedRow = (h: HtmlBuilder<Message>, signal: SignalRow, context: 
 	return rowShell(h, signal, context, [
 		accountCell(h, account),
 		h.div(
-			[h.Role("cell"), h.Class("flex min-w-0 flex-1 flex-col gap-0.5")],
+			[h.Role("cell"), h.Class(twMerge("flex min-w-0 flex-1 flex-col gap-0.5", PHONE_SECOND_LINE))],
 			[
 				h.div(
 					[h.Class("flex min-w-0 items-center gap-2")],
@@ -314,7 +326,7 @@ export const snoozedRow = (h: HtmlBuilder<Message>, signal: SignalRow, context: 
 		),
 		...(signal.id === context.selectedId ? context.actions : []),
 		h.div(
-			[h.Role("cell"), h.Class("flex w-28 shrink-0 justify-end")],
+			[h.Role("cell"), h.Class("flex w-28 shrink-0 justify-end max-md:w-auto")],
 			[healthBadge(h, { status: account.healthStatus, score: account.healthScore })],
 		),
 	])
@@ -368,7 +380,7 @@ export const doneRow = (h: HtmlBuilder<Message>, signal: SignalRow, context: Row
 	return rowShell(h, signal, context, [
 		accountCell(h, account),
 		h.div(
-			[h.Role("cell"), h.Class("flex min-w-0 flex-1 flex-col gap-0.5")],
+			[h.Role("cell"), h.Class(twMerge("flex min-w-0 flex-1 flex-col gap-0.5", PHONE_SECOND_LINE))],
 			[
 				h.div(
 					[h.Class("flex min-w-0 items-center gap-2")],
@@ -385,7 +397,7 @@ export const doneRow = (h: HtmlBuilder<Message>, signal: SignalRow, context: Row
 				h.span([h.Class("truncate text-muted-fg text-xs")], [note]),
 			],
 		),
-		h.div([h.Role("cell"), h.Class("w-28 shrink-0")], [outcomeChip(h, signal)]),
+		h.div([h.Role("cell"), h.Class("w-28 shrink-0 max-md:w-auto")], [outcomeChip(h, signal)]),
 		h.div(
 			[h.Role("cell"), h.Class("w-36 shrink-0 max-lg:hidden")],
 			[
@@ -395,7 +407,7 @@ export const doneRow = (h: HtmlBuilder<Message>, signal: SignalRow, context: Row
 			],
 		),
 		h.span(
-			[h.Role("cell"), h.Class("w-16 text-right text-muted-fg text-sm tabular-nums")],
+			[h.Role("cell"), h.Class("w-16 text-right text-muted-fg text-sm tabular-nums max-md:hidden")],
 			[ageText(signal.openedAtMs, resolvedMs)],
 		),
 		h.span(

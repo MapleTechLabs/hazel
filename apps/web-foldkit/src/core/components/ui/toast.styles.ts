@@ -12,6 +12,9 @@ export const toastEntryClassName = [
 	"data-[swipe=settling]:duration-150 data-[swipe=end]:duration-200",
 ].join(" ")
 
+/** A stack dropped from the top (a phone's) enters from above rather than below. */
+export const toastEntryFromTopClassName = "mx-auto data-closed:-translate-y-2"
+
 /** The card inside an entry: the overlay surface, tinted per kind like sonner's `richColors`. */
 export const toastStyles = tv({
 	slots: {

@@ -2,14 +2,15 @@ import { Option, Schema } from "effect"
 import { Command, Subscription, type Update } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
-import { toastEntryClassName } from "~/components/ui/toast.styles"
+import { toastEntryClassName, toastEntryFromTopClassName } from "~/components/ui/toast.styles"
 import * as Toast from "../ui/toast"
 import * as ToastView from "../ui/toast-view"
 import { ToastAction, ToastRequest } from "./toasts"
 
 /**
  * The root's toaster: every page, modal and palette toast lands here through `push`. The stack is
- * the `@foldkit/ui` Toast, pinned bottom-right; an action button reports its `ToastAction` from
+ * the `@foldkit/ui` Toast, pinned bottom-right; on a phone it drops from the top, under the status
+ * bar, since the bottom holds the tab bar and the composer. An action button reports its `ToastAction` from
  * `update` for the root to carry out.
  */
 
@@ -76,14 +77,19 @@ export const view = <ParentMessage>(
 	h: HtmlBuilder<ParentMessage>,
 	model: Model,
 	toParentMessage: (message: Message) => ParentMessage,
+	isMobile: boolean,
 ): Html =>
 	h.submodel({
 		slotId: model.id,
 		model,
 		view: Toast.Toast.view,
 		viewInputs: {
-			position: "BottomRight",
-			entryClassName: toastEntryClassName,
+			position: isMobile ? "TopCenter" : "BottomRight",
+			// The kit pads the container inline; a phone's keeps clear of the status bar.
+			...(isMobile ? { containerClassName: "w-full pt-[calc(env(safe-area-inset-top)+0.5rem)]!" } : {}),
+			entryClassName: isMobile
+				? `${toastEntryClassName} ${toastEntryFromTopClassName}`
+				: toastEntryClassName,
 			entryToView: (entry, handlers) =>
 				ToastView.entryView(h, entry, handlers, (entryId, action) =>
 					toParentMessage(Message.ClickedAction({ entryId, action: action.key })),

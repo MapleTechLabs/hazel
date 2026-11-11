@@ -466,7 +466,7 @@ export const recordsTable = (
 						]
 					: []),
 				h.td([h.Class(twMerge("py-3", cell))], [sourceCell(h, record)]),
-				h.td([h.Class(twMerge("w-32 py-3 text-right", cell))], [valueCell(h, record)]),
+				h.td([h.Class(twMerge("w-32 py-3 text-right max-md:hidden", cell))], [valueCell(h, record)]),
 				h.td(
 					[h.Class(twMerge("w-[34%] py-3 max-md:hidden", cell))],
 					[suggestionCell(h, record, context.accountsById.get(record.suggestedAccountId ?? ""))],
@@ -478,7 +478,11 @@ export const recordsTable = (
 		)
 	}
 	return h.table(
-		[h.AriaLabel(context.ariaLabel), h.Class("w-full table-fixed border-separate border-spacing-0")],
+		[
+			h.AriaLabel(context.ariaLabel),
+			// A phone keeps the record and its actions, at a width its card scrolls sideways to.
+			h.Class("w-full table-fixed border-separate border-spacing-0 max-md:min-w-[28rem]"),
+		],
 		[
 			h.thead(
 				[],
@@ -512,7 +516,7 @@ export const recordsTable = (
 									]
 								: []),
 							header("Source record", "text-left"),
-							header("Value", "w-32 text-right"),
+							header("Value", "w-32 text-right max-md:hidden"),
 							header("Suggested account", "w-[34%] text-left max-md:hidden"),
 							...(context.isAdmin ? [header("", actionsWidth)] : []),
 						],

@@ -190,7 +190,7 @@ const listView = (model: Model, nowMs: number, h: H): Html => {
 		"message-list-container",
 		[
 			h.Class(
-				"isolate flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-2 transition-opacity duration-200",
+				"isolate flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-2 transition-opacity duration-200 max-md:overflow-x-hidden",
 			),
 			h.Attribute("style", "overflow-anchor: auto; scroll-behavior: auto; opacity: 1;"),
 			trackHoverAttribute(h),

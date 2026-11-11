@@ -54,16 +54,21 @@ const organizationButton = (h: HtmlBuilder<Message>, organization: UserOrganizat
 				className: "size-12",
 			}),
 			h.div(
-				[h.Class("flex flex-1 flex-col")],
+				[h.Class("flex flex-1 flex-col max-md:min-w-0")],
 				[
-					h.span([h.Class("font-medium text-fg text-sm")], [organization.name]),
+					h.span([h.Class("font-medium text-fg text-sm max-md:truncate")], [organization.name]),
 					...(organization.slug
-						? [h.span([h.Class("text-muted-fg text-xs")], ["@", organization.slug])]
+						? [
+								h.span(
+									[h.Class("text-muted-fg text-xs max-md:truncate")],
+									["@", organization.slug],
+								),
+							]
 						: []),
 				],
 			),
 			h.div(
-				[h.Class("flex items-center gap-2")],
+				[h.Class("flex items-center gap-2 max-md:shrink-0")],
 				[
 					h.span(
 						[

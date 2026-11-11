@@ -18,7 +18,13 @@ export interface NavigationOptions {
 export const onboardingNavigation = (h: HtmlBuilder<Message>, options: NavigationOptions): Html => {
 	const isLoading = options.isLoading ?? false
 	return h.div(
-		[h.Class("sticky bottom-0 flex flex-wrap justify-between gap-2 pt-4 pb-2")],
+		// On a phone the sticky bar floats over the scrolled step: give it the page behind it and
+		// keep it clear of the home indicator.
+		[
+			h.Class(
+				"sticky bottom-0 flex flex-wrap justify-between gap-2 pt-4 pb-2 max-md:bg-bg max-md:pb-[max(0.5rem,env(safe-area-inset-bottom))]",
+			),
+		],
 		[
 			options.showBack === false
 				? h.div([])

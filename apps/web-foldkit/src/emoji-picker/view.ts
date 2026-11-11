@@ -28,7 +28,9 @@ import {
 const VISUALLY_HIDDEN =
 	"border: 0px; clip: rect(0px, 0px, 0px, 0px); height: 1px; margin: -1px; overflow: hidden; padding: 0px; position: absolute; white-space: nowrap; width: 1px; overflow-wrap: normal;"
 
-const EMOJI_CLASS = "flex size-10 items-center justify-center rounded-md text-2xl data-[active]:bg-accent"
+/** 9 columns of 40px overflow a 375px phone; 36px cells fit with the sheet's gutters. */
+const EMOJI_CLASS =
+	"flex size-10 items-center justify-center rounded-md text-2xl data-[active]:bg-accent max-md:size-9"
 const ROW_CLASS = "scroll-my-1.5 px-2"
 export const CATEGORY_HEADER_CLASS =
 	"bg-bg px-3 pt-4 pb-2.5 font-medium text-secondary-fg text-sm leading-none"

@@ -54,7 +54,7 @@ const cardContent = (h: HtmlBuilder<Message>, integration: Integration, status: 
 				: [
 						strokeIcon(h, {
 							className:
-								"size-4 shrink-0 text-muted-fg opacity-0 transition duration-150 group-hover:translate-x-0.5 group-hover:opacity-100 group-focus-visible:opacity-100",
+								"size-4 shrink-0 text-muted-fg opacity-0 transition duration-150 group-hover:translate-x-0.5 group-hover:opacity-100 group-focus-visible:opacity-100 max-md:opacity-100",
 							strokeWidth: "2",
 							d: CHEVRON_RIGHT,
 						}),

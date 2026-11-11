@@ -110,7 +110,9 @@ const customSection = <M>(
 								),
 							),
 							h.Class(
-								cn("flex size-10 items-center justify-center rounded-md hover:bg-accent"),
+								cn(
+									"flex size-10 items-center justify-center rounded-md hover:bg-accent max-md:size-9",
+								),
 							),
 							h.Attribute("title", `:${emoji.name}:`),
 						],
@@ -148,7 +150,8 @@ export const view = <M>(h: HtmlBuilder<M>, model: Model, inputs: DialogViewInput
 				[
 					pickerView(h, model.picker, {
 						toMessage: toPicker,
-						className: "h-[420px]",
+						// A phone keeps room for the keyboard under the popover.
+						className: "h-[420px] max-md:h-[min(420px,60dvh)]",
 						customSection: customSection(h, model.picker, inputs.customEmojis, toPicker),
 					}),
 				],

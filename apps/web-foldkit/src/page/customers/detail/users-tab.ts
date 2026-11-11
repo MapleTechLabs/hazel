@@ -321,6 +321,8 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 							key: "status",
 							label: "Status",
 							widthClass: "w-32",
+							// A phone keeps the user and when they were last seen.
+							hideClass: "max-md:hidden",
 							cell: (row) =>
 								badge(h, { intent: STATUS[row.status][1] }, [STATUS[row.status][0]]),
 						},
@@ -335,6 +337,7 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 							label: "Sign-ins 30d",
 							align: "right",
 							widthClass: "w-28",
+							hideClass: "max-md:hidden",
 							cell: (row) => formatCount(row.contact.signInCount30d),
 						},
 						{

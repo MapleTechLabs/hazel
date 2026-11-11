@@ -52,7 +52,7 @@ const memberMenuTrigger =
 				h.Class(
 					menuTriggerClassName(
 						cn(
-							"inline-flex size-8 items-center justify-center rounded-lg border border-transparent hover:border-border hover:bg-secondary",
+							"inline-flex size-8 items-center justify-center rounded-lg border border-transparent hover:border-border hover:bg-secondary max-md:size-10",
 							"data-pressed:bg-secondary group-hover:border-border",
 						),
 					),
@@ -99,7 +99,7 @@ const memberRow = (
 		],
 		[
 			h.div(
-				[h.Class("flex items-center gap-2 sm:gap-2.5")],
+				[h.Class("flex items-center gap-2 sm:gap-2.5 max-md:min-w-0")],
 				[
 					h.div(
 						[h.Class("relative")],
@@ -122,7 +122,7 @@ const memberRow = (
 						],
 					),
 					h.div(
-						[],
+						[h.Class("max-md:min-w-0")],
 						[
 							h.div(
 								[h.Class("flex items-center font-semibold text-sm/6")],
@@ -141,7 +141,7 @@ const memberRow = (
 									),
 								],
 							),
-							h.p([h.Class("text-muted-fg text-xs")], [member.email]),
+							h.p([h.Class("text-muted-fg text-xs max-md:truncate")], [member.email]),
 						],
 					),
 				],

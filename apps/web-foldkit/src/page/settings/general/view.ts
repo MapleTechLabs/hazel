@@ -112,7 +112,7 @@ const profileCard = (h: HtmlBuilder<Message>, model: Model, shared: Shared, orga
 														h.div(
 															[
 																h.Class(
-																	"absolute inset-0 flex items-center justify-center rounded-xl bg-black/50 opacity-0 transition-opacity group-hover:opacity-100",
+																	"absolute inset-0 flex items-center justify-center rounded-xl bg-black/50 opacity-0 transition-opacity group-hover:opacity-100 max-md:bg-black/35 max-md:opacity-100",
 																),
 															],
 															[IconEdit(h, { className: "size-6 text-white" })],

@@ -105,7 +105,7 @@ export const connectedState = (
 	const showConfigureButton =
 		options.canConfigure && integration.id === "github" && connection?.hasInstallationId
 	return h.div(
-		[h.Class("flex items-center justify-between gap-4")],
+		[h.Class("flex items-center justify-between gap-4 max-md:flex-wrap")],
 		[
 			h.div(
 				[h.Class("flex items-center gap-3")],
@@ -245,7 +245,7 @@ export const apiKeyConnectionForm = (h: H, integration: Integration, model: Mode
 export const configOptionRow = (h: H, option: ConfigOption, isEnabled: boolean): Html =>
 	h.keyed("div")(
 		option.id,
-		[h.Class("flex items-center justify-between gap-4 px-5 py-4")],
+		[h.Class("flex items-center justify-between gap-4 px-5 py-4 max-md:flex-wrap")],
 		[
 			sectionLabelRoot(h, { size: "sm", title: option.label, description: option.description }),
 			option.type === "toggle"
@@ -261,7 +261,7 @@ export const configOptionRow = (h: H, option: ConfigOption, isEnabled: boolean):
 							[],
 						),
 					])
-				: inputGroup(h, { className: "w-48" }, [
+				: inputGroup(h, { className: "w-48 max-md:w-full" }, [
 						input(h, { placeholder: option.placeholder, className: "text-sm", isDisabled: true }),
 					]),
 		],

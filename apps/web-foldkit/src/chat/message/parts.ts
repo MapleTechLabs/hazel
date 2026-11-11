@@ -23,9 +23,12 @@ export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: H
 	const time = formatTime(message.createdAtMs)
 	const isMachine = author.isBot
 	return h.div(
-		[h.Class("flex items-baseline gap-2")],
+		[h.Class("flex items-baseline gap-2 max-md:flex-wrap max-md:gap-y-0")],
 		[
-			h.span([h.Class("font-semibold text-fg")], [author.displayName]),
+			h.span(
+				[h.Class("font-semibold text-fg max-md:min-w-0 max-md:break-words")],
+				[author.displayName],
+			),
 			statusEmoji,
 			isMachine && row.isDiscordSynced
 				? h.span(
