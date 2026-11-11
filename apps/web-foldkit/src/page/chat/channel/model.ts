@@ -223,7 +223,6 @@ export const Message = defineMessageUnion({
 	GotHtmlRenderMessage: { message: HtmlRender.Message },
 	GotOverlaysMessage: { message: Overlays.Message },
 	GotFilesMessage: { message: FilesPage.Message },
-	ClickedMobileMenu: {},
 	GotDraftMessage: { message: Draft.Message },
 	GotThreadDraftMessage: { message: Draft.Message },
 	GotActionMessage: { message: ActionMessage },

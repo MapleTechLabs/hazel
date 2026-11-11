@@ -17,10 +17,22 @@ import { nativeOverlays, pathOf } from "./overlay"
 import type { NativePlatform } from "./platform"
 import { installShims, makeRootAwareMutationObserver, openExternal } from "./shims"
 
+/** `NATIVE_INSET` ("62 0 34 0") as the four edges; anything else is no safe area. */
+export const parseInset = (
+	value: string | undefined,
+): readonly [number, number, number, number] | undefined => {
+	const edges = (value ?? "").trim().split(/\s+/).map(Number)
+	if (edges.length !== 4 || edges.some((edge) => !Number.isFinite(edge) || edge < 0)) return undefined
+	const [top = 0, right = 0, bottom = 0, left = 0] = edges
+	return [top, right, bottom, left]
+}
+
 export const startRuntime = async (platform: NativePlatform) => {
 	const width = Number(process.env.NATIVE_WIDTH ?? 1280)
 	const height = Number(process.env.NATIVE_HEIGHT ?? 800)
 	const dark = process.env.NATIVE_THEME === "dark"
+	// The safe area (`env(safe-area-inset-*)`), top right bottom left: iOS's page runs edge to edge.
+	const inset = parseInset(process.env.NATIVE_INSET)
 	const dataMode = process.env.HAZEL_DATA === "live" ? "live" : "offline"
 	const statsPath = process.env.NATIVE_STATS
 
@@ -348,7 +360,7 @@ export const startRuntime = async (platform: NativePlatform) => {
 			pendingEdits.push(path, event)
 		},
 
-		env: { width, height, dark },
+		env: { width, height, dark, inset },
 		send: (message) => {
 			if (treesPath) platform.appendLine?.(treesPath, JSON.stringify(message))
 			return transport.send(message)

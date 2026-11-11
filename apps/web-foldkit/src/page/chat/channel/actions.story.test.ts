@@ -525,8 +525,6 @@ describe("navigation", () => {
 					replace: false,
 				}),
 			),
-			message(Message.ClickedMobileMenu()),
-			expectOutMessage(PageOutMessage.RequestedMobileSidebar()),
 		)
 	})
 })

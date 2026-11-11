@@ -2765,7 +2765,7 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 [[package]]
 name = "rune"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=b6cc638175ae39732db079a9fd54bda68a0f181c#b6cc638175ae39732db079a9fd54bda68a0f181c"
+source = "git+https://github.com/Makisuo/rune?rev=3b676200f9ab1923059651c4e81c0b77cb8699a2#3b676200f9ab1923059651c4e81c0b77cb8699a2"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -2842,12 +2842,12 @@ dependencies = [
 [[package]]
 name = "rune-motion"
 version = "0.1.0"
-source = "git+https://github.com/Makisuo/rune?rev=b6cc638175ae39732db079a9fd54bda68a0f181c#b6cc638175ae39732db079a9fd54bda68a0f181c"
+source = "git+https://github.com/Makisuo/rune?rev=3b676200f9ab1923059651c4e81c0b77cb8699a2#3b676200f9ab1923059651c4e81c0b77cb8699a2"
 
 [[package]]
 name = "rune-staging"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=b6cc638175ae39732db079a9fd54bda68a0f181c#b6cc638175ae39732db079a9fd54bda68a0f181c"
+source = "git+https://github.com/Makisuo/rune?rev=3b676200f9ab1923059651c4e81c0b77cb8699a2#3b676200f9ab1923059651c4e81c0b77cb8699a2"
 dependencies = [
  "wgpu",
 ]
@@ -2855,7 +2855,7 @@ dependencies = [
 [[package]]
 name = "rune-taffy"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=b6cc638175ae39732db079a9fd54bda68a0f181c#b6cc638175ae39732db079a9fd54bda68a0f181c"
+source = "git+https://github.com/Makisuo/rune?rev=3b676200f9ab1923059651c4e81c0b77cb8699a2#3b676200f9ab1923059651c4e81c0b77cb8699a2"
 dependencies = [
  "taffy",
 ]

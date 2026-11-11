@@ -63,7 +63,14 @@ export type HostToRuntime =
 			readonly ctrl?: boolean
 			readonly alt?: boolean
 	  }
-	| { readonly t: "env"; readonly width: number; readonly height: number; readonly dark: boolean }
+	| {
+			readonly t: "env"
+			readonly width: number
+			readonly height: number
+			readonly dark: boolean
+			/** The safe area, top, right, bottom, left (`env(safe-area-inset-*)`); none: all 0. */
+			readonly inset?: readonly [number, number, number, number]
+	  }
 	| {
 			readonly t: "layout"
 			readonly path: string

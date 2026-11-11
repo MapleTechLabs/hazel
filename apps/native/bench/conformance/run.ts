@@ -129,8 +129,16 @@ const nativeSteps = (scenario: Scenario, layout: string, snap: string) => {
 	]
 	// A message's context menu, opened at the pointer.
 	const context = [{ rightClickText: CONTENT_TEXT }, { settle: 800 }]
-	// The phone layout's sidebar: a sheet from the left, opened from the bottom nav.
-	const drawer = [{ clickText: "Menu" }, { settle: 1500 }]
+	// The phone layout's sidebar: a drawer from the left. From #general: back to the chat list,
+	// the Settings tab, and its top bar's menu.
+	const drawer = [
+		{ clickLabel: "Back to Chats" },
+		{ settle: 1000 },
+		{ clickText: "Settings" },
+		{ settle: 1500 },
+		{ clickLabel: "Settings menu" },
+		{ settle: 1500 },
+	]
 	const steps = { boot: [], sent: send, focus, menu, palette, dialog, context, mobile: [], drawer }[
 		scenario
 	]
@@ -362,8 +370,15 @@ const captureWeb = async (browser: Browser, url: string, scenario: Scenario, the
 			await waitQuiet(page, 800)
 		}
 		if (scenario === "drawer") {
-			// The bottom nav's Menu, as the native step presses it.
-			await page.getByText("Menu", { exact: true }).first().click()
+			// As the native steps press them: the chat list, the Settings tab, its menu.
+			await page.getByRole("link", { name: "Back to Chats" }).click()
+			await waitQuiet(page, 1000)
+			await page
+				.getByRole("navigation", { name: "Tabs" })
+				.getByText("Settings", { exact: true })
+				.click()
+			await waitQuiet(page, 1500)
+			await page.getByRole("button", { name: "Settings menu" }).click()
 			await waitQuiet(page, 1500)
 		}
 		if (scenario === "menu") {

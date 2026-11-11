@@ -257,6 +257,12 @@ export type Style = {
 const REM = 16
 /** The window, for viewport units and media queries: set by the resolver before each resolution. */
 const viewportSize = { width: 1280, height: 800 }
+/**
+ * The edges of the viewport the system draws over (iOS's status bar and home indicator), px:
+ * what `env(safe-area-inset-*)` reads, as in a page with `viewport-fit=cover`.
+ */
+const safeArea = { top: 0, right: 0, bottom: 0, left: 0 }
+export type SafeArea = typeof safeArea
 
 /** The page's own background and text colour. */
 type PageStyle = { bg?: string; color?: string }
@@ -761,6 +767,21 @@ export class StyleResolver {
 	setViewport(width: number, height: number) {
 		viewportSize.width = width
 		viewportSize.height = height
+	}
+
+	/** The safe area `env(safe-area-inset-*)` reads; a change re-resolves every style. */
+	setSafeArea(next: Readonly<SafeArea>) {
+		if (
+			next.top === safeArea.top &&
+			next.right === safeArea.right &&
+			next.bottom === safeArea.bottom &&
+			next.left === safeArea.left
+		)
+			return
+		Object.assign(safeArea, next)
+		this.cores.clear()
+		this.scopes.clear()
+		this.resolved.clear()
 	}
 
 	/** Computes one element's style in its scope and the scope its children inherit. */
@@ -2713,7 +2734,22 @@ function substituteStrict(value: string, vars: Map<string, string>, depth = 0): 
 		out += chosen
 		i = end + 1
 	}
-	return out + value.slice(i)
+	return environment(out + value.slice(i))
+}
+
+/** `env(safe-area-inset-*, fallback)` as the safe area's px; any other `env()` takes its fallback. */
+function environment(value: string): string {
+	if (!value.includes("env(")) return value
+	return value.replace(
+		/env\(\s*([a-z-]+)\s*(?:,\s*([^()]*?))?\s*\)/g,
+		(whole, name: string, fallback?: string) => {
+			const edge = /^safe-area-inset-(top|right|bottom|left)$/.exec(name)?.[1] as
+				| keyof SafeArea
+				| undefined
+			if (edge !== undefined) return `${safeArea[edge]}px`
+			return fallback ?? whole
+		},
+	)
 }
 
 /** Splits on `sep` outside parentheses. */

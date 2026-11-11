@@ -24,7 +24,7 @@ import {
 } from "../ui/sidebar"
 import type * as Modal from "../ui/modal"
 import type { ShellContext } from "./context"
-import { mobileNav, mobileSidebarPlaceholder, mobileSidebarSheet } from "./mobile"
+import { mobileChromeOf, mobileNav, mobileSidebarSheet, mobileTopBar } from "./mobile"
 import { hasDesktopTitlebar } from "../platform/desktop"
 
 /**
@@ -149,7 +149,7 @@ export interface MobileShell<Message> {
 	/** Desktop only: the sidebar docked to its nav rail. */
 	readonly isSidebarCollapsed: boolean
 	readonly isSidebarOpen: boolean
-	/** Opens the sidebar sheet (the bottom nav's Menu button). */
+	/** Opens the sidebar sheet (a section's top bar menu button, a header's). */
 	readonly onMenu: Attribute<Message>
 	readonly toSheetMessage: (message: Modal.Message) => Message
 }
@@ -172,36 +172,78 @@ export const orgShell = <Message>(
 ): Html => {
 	const sidebarChildren = [navRail(h, context, parts.unreadNotificationCount), parts.secondarySidebar]
 	const { mobile } = parts
+	if (mobile.isMobile) return phoneShell(h, context, parts, sidebarChildren)
 	return h.div(
 		[h.Id("app")],
 		[
 			parts.toaster,
 			sidebarProvider(h, { width: "350px" }, [
-				mobile.isMobile
-					? mobileSidebarPlaceholder(h)
-					: sidebarDock(
-							h,
-							{
-								state: mobile.isSidebarCollapsed ? "collapsed" : "expanded",
-								className: "overflow-hidden *:data-[sidebar=default]:flex-row",
-							},
-							sidebarChildren,
-						),
+				sidebarDock(
+					h,
+					{
+						state: mobile.isSidebarCollapsed ? "collapsed" : "expanded",
+						className: "overflow-hidden *:data-[sidebar=default]:flex-row",
+					},
+					sidebarChildren,
+				),
 				// NOTE: legacy also renders the command palette inside the inset; it lives in `overlays`.
-				sidebarInset(h, "pb-16 md:pb-0", [
-					parts.page,
-					...(mobile.isMobile ? [mobileNav(h, context, mobile.onMenu)] : []),
-				]),
+				sidebarInset(h, "", [parts.page]),
 			]),
-			...(mobile.isMobile
-				? [
-						mobileSidebarSheet(h, {
-							isOpen: mobile.isSidebarOpen,
-							children: sidebarChildren,
-							toMessage: mobile.toSheetMessage,
-						}),
-					]
-				: []),
+			...parts.overlays,
+		],
+	)
+}
+
+/**
+ * A phone's shell, laid out as an app rather than a scrolling page: one screen-high column with
+ * an optional top bar, the page (which scrolls inside itself), and the tab bar. The page runs
+ * edge to edge (`viewport-fit=cover`, and the native app always): the column keeps its content
+ * out of the status bar, and the tab bar, or the page without one, out of the home indicator.
+ */
+const phoneShell = <Message>(
+	h: HtmlBuilder<Message>,
+	context: ShellContext,
+	parts: Parameters<typeof orgShell<Message>>[2],
+	sidebarChildren: Array<Html>,
+): Html => {
+	const { mobile } = parts
+	const chrome = mobileChromeOf(context.route)
+	return h.div(
+		[h.Id("app")],
+		[
+			parts.toaster,
+			sidebarProvider(
+				h,
+				{
+					width: "350px",
+					className:
+						"h-dvh flex-col overflow-hidden pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]",
+				},
+				[
+					sidebarInset(
+						h,
+						chrome.hasTabBar ? "min-h-0" : "min-h-0 pb-[env(safe-area-inset-bottom)]",
+						[
+							...(chrome.topBar === null
+								? []
+								: [mobileTopBar(h, chrome.topBar, mobile.onMenu)]),
+							// Pages that fill the screen (`h-full`) scroll inside themselves; the rest scroll here.
+							h.div(
+								[h.Class("relative min-h-0 flex-1 overflow-y-auto overscroll-contain")],
+								[parts.page],
+							),
+							...(chrome.hasTabBar
+								? [mobileNav(h, context, parts.unreadNotificationCount)]
+								: []),
+						],
+					),
+				],
+			),
+			mobileSidebarSheet(h, {
+				isOpen: mobile.isSidebarOpen,
+				children: sidebarChildren,
+				toMessage: mobile.toSheetMessage,
+			}),
 			...parts.overlays,
 		],
 	)

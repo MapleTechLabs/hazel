@@ -233,6 +233,8 @@ export const openModalPopover = (
 			initialFocusId: string
 			insideSelector: string
 			onInteractOutside: () => void
+			/** False for a panel its own classes place (a phone's action sheet): no anchoring. */
+			isPositioned?: boolean
 		}>,
 ): Effect.Effect<void, never, Scope.Scope> =>
 	Effect.gen(function* () {
@@ -251,7 +253,10 @@ export const openModalPopover = (
 		yield* Effect.acquireRelease(
 			Effect.sync(() => {
 				const popover = root.querySelector<HTMLElement>("[data-popover]")
-				const releasePosition = popover ? positionOverlay(popover, config) : () => undefined
+				const releasePosition =
+					popover && config.isPositioned !== false
+						? positionOverlay(popover, config)
+						: () => undefined
 				document.getElementById(config.initialFocusId)?.focus({ preventScroll: true })
 				const releaseOutside = watchInteractOutside(
 					root,

@@ -530,6 +530,13 @@ fn shrink_zero_keeps_an_inline_box_at_its_size() {
         70.0,
         "a positive min-w is the floor"
     );
+    // CSS's default `flex-shrink: 1` with `min-w-0`: the text column beside an icon (a card's
+    // title and description) shrinks to the row instead of running past its edge.
+    assert_eq!(
+        width("div", json!({ "minW": 0 })),
+        40.0,
+        "min-w-0 shrinks without an explicit shrink"
+    );
 }
 
 #[test]

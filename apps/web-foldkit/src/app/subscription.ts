@@ -24,11 +24,11 @@ import { desktopMenuItems } from "../platform/desktop-menu"
 import { backgroundToasts } from "../overlay/background-toasts"
 import * as Updates from "../platform/updates"
 import * as Toasts from "../overlay/toaster"
+import { MOBILE_QUERY } from "../ui/viewport"
 import { Message } from "./message"
 import { authOf, currentUserOf, loadedOrgOf, memberOf, type Model, pageHostOf, sharedOf } from "./model"
 
-/** `useSidebar().isMobile`: the viewport the mobile layout is for. */
-export const MOBILE_QUERY = "(max-width: 767px)"
+export { MOBILE_QUERY } from "../ui/viewport"
 
 /** How often the root clock ticks (legacy `presenceNowSignal` and the sidebar's presence dots). */
 const CLOCK_INTERVAL = Duration.seconds(30)

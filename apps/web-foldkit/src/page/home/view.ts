@@ -233,7 +233,8 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 						(parts) => [
 							parts.searchInput({
 								placeholder: "Search members...",
-								attributes: [h.OnMount(AutoFocusSearch())],
+								// A phone would raise its keyboard over the list on every visit.
+								attributes: shared.isMobile ? [] : [h.OnMount(AutoFocusSearch())],
 							}),
 						],
 					),

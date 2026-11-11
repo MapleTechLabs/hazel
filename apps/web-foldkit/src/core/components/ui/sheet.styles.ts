@@ -1,19 +1,38 @@
 import { tv } from "tailwind-variants"
 
 export type Sides = "top" | "bottom" | "left" | "right"
+/**
+ * A floating panel keeps 0.5rem from the screen's edges, more where the system draws over them
+ * (the status bar, the home indicator: `env(safe-area-inset-*)`, 0 unless the page runs edge to
+ * edge). An edge panel runs under them and pads its content clear instead.
+ */
 const generateCompoundVariants = (sides: Array<Sides>) => {
-	return sides.map((side) => ({
-		side,
-		isFloat: true,
-		className:
-			side === "top"
-				? "top-2 inset-x-2 rounded-lg ring-1 border-b-0"
-				: side === "bottom"
-					? "bottom-2 inset-x-2 rounded-lg ring-1 border-t-0"
-					: side === "left"
-						? "left-2 inset-y-2 rounded-lg ring-1 border-r-0"
-						: "right-2 inset-y-2 rounded-lg ring-1 border-l-0",
-	}))
+	return sides.flatMap((side) => [
+		{
+			side,
+			isFloat: true,
+			className:
+				side === "top"
+					? "top-[max(0.5rem,env(safe-area-inset-top))] inset-x-2 rounded-lg ring-1 border-b-0"
+					: side === "bottom"
+						? "bottom-[max(0.5rem,env(safe-area-inset-bottom))] inset-x-2 rounded-lg ring-1 border-t-0"
+						: side === "left"
+							? "left-2 top-[max(0.5rem,env(safe-area-inset-top))] bottom-[max(0.5rem,env(safe-area-inset-bottom))] rounded-lg ring-1 border-r-0"
+							: "right-2 top-[max(0.5rem,env(safe-area-inset-top))] bottom-[max(0.5rem,env(safe-area-inset-bottom))] rounded-lg ring-1 border-l-0",
+		},
+		{
+			side,
+			isFloat: false,
+			className:
+				side === "top"
+					? "pt-[env(safe-area-inset-top)]"
+					: side === "bottom"
+						? "pb-[env(safe-area-inset-bottom)]"
+						: side === "left"
+							? "pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
+							: "pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pr-[env(safe-area-inset-right)]",
+		},
+	])
 }
 
 /** The panel slides in from its side and the backdrop fades, both from `@starting-style` (200ms). */

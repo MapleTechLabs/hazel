@@ -157,7 +157,18 @@ type AnyVNode = {
 	}
 }
 
-export type Env = { width: number; height: number; dark: boolean }
+export type Env = {
+	width: number
+	height: number
+	dark: boolean
+	/** The safe area, top, right, bottom, left: what `env(safe-area-inset-*)` reads. */
+	inset?: readonly [number, number, number, number]
+}
+
+const safeAreaOf = (inset: Env["inset"]) => {
+	const [top = 0, right = 0, bottom = 0, left = 0] = inset ?? []
+	return { top, right, bottom, left }
+}
 
 export type RuneTargetOptions = {
 	readonly styles: StyleResolver
@@ -512,6 +523,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			}, 0)
 		else styles.ensure(classes)
 		styles.setViewport(env.width, env.height)
+		styles.setSafeArea(safeAreaOf(env.inset))
 		const classesDone = performance.now()
 
 		/**
@@ -1008,8 +1020,13 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 
 	const handleHostMessage = (message: HostToRuntime) => {
 		if (message.t === "env") {
-			Object.assign(env, { width: message.width, height: message.height, dark: message.dark })
-			// Styles depend on the window and theme, not the Model: re-resolve what is on screen.
+			Object.assign(env, {
+				width: message.width,
+				height: message.height,
+				dark: message.dark,
+				inset: message.inset ?? env.inset,
+			})
+			// Styles depend on the window, its safe area and theme, not the Model: re-resolve what is on screen.
 			if (lastDocument) {
 				sentHashes = new Set()
 				subtreeCache = new Map()
