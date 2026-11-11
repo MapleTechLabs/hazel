@@ -151,8 +151,9 @@ currency table Autumn bills through.
   way, a `one_off` base price, or a plan with no price at all (Autumn's free tier) is **MRR 0**. See
   Known gaps.
 - An **ended plan no processor ever billed** (no `current_period_end`: a trial that lapsed
-  unconverted) is MRR 0, so an account whose only plan was that trial reads as a `lead`, not
-  `churned` (compute calls an account churned when a canceled subscription had MRR).
+  unconverted) is MRR 0 and never `billsByUsage`, so an account whose only plan was that trial reads
+  as a `lead`, not `churned` (compute calls an account churned when a canceled subscription had MRR
+  or billed by usage).
 - Prices are the **customer's own**: both customer reads expand each live plan
   (`expand: ["subscriptions.plan"]`), which carries a custom price and the version the customer is
   on. An ended plan (from `subscriptions.list`, which cannot expand) is priced from
@@ -285,12 +286,14 @@ Svix's `svix-id` — so a redelivery writes one entry.
 ## Known gaps
 
 - **Usage-based prices are not in the MRR.** A plan billed only per unit used (a `$0` base with a
-  `usage_based` item) reports MRR 0, and its account reads as a `lead` or `trialing` rather than
-  `active`: compute calls an account paying when a subscription has MRR above 0, and the amount is
-  not knowable before the period's invoice. The usage _is_ synced, as `autumn.<feature>` metrics.
-  Fixing the stage needs a core signal (a subscription marked as billing by usage, which `paid`
-  would count), not an estimate here.
-- **Tiered prepaid prices** (graduated / volume, no flat `amount`) add nothing to the MRR.
+  `usage_based` item) reports MRR 0: the amount is not knowable before the period's invoice. The
+  subscription is marked `billsByUsage`, so its account still reads as paying (`active`, with
+  `customerSince`; `churned` once the plan ends), but it adds nothing to the MRR, its movements or
+  the paying-accounts count. The usage _is_ synced, as `autumn.<feature>` metrics. A plan with a
+  base price or flat prepaid units is not marked: its MRR already makes it paying, and its usage
+  overage is left out.
+- **Tiered prepaid prices** (graduated / volume, no flat `amount`) add nothing to the MRR. Units
+  bought at one on a plan with no other MRR mark the subscription `billsByUsage` like a usage price.
 - **Ended plans are priced from the plan's active version**: `subscriptions.list` cannot expand a
   row's own plan. It only feeds the churn check (a canceled plan with MRR), never the MRR itself.
 - **The reporting currency is the organization's `default_currency`.** A customer billed in another

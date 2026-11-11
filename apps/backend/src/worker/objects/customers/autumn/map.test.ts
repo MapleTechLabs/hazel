@@ -129,6 +129,8 @@ describe("Autumn plan → subscription", () => {
 			status: "active",
 			mrrMinor: 9_900,
 			listMrrMinor: 9_900,
+			// The base price is in the MRR: its usage overage does not make it usage-billed.
+			billsByUsage: false,
 			currency: "usd",
 			interval: "month",
 			quantity: 1,
@@ -220,6 +222,46 @@ describe("Autumn plan → subscription", () => {
 			{ ...seats!, breakdown: seats!.breakdown!.map((grant) => ({ ...grant, source: "entity" })) },
 		]
 		expect(subscriptionMrr(subscription(SUB_INITECH), PLANS.get("team"), "usd", elsewhere)).toBe(2_000)
+	})
+
+	it("marks a plan billed only by usage, or by tiered prepaid units, as billsByUsage", () => {
+		// No base price: only Pro's `usage_based` messages bill.
+		const usageOnly = { ...PLAN_PRO, price: null }
+		expect(subOp({ ...SUB_ACME, plan: usageOnly })).toMatchObject({ mrrMinor: 0, billsByUsage: true })
+		// Once ended, it was billed: still marked (its account churned rather than a lead).
+		const ended = {
+			...SUB_ACME_EXPIRED,
+			current_period_end: SUB_ACME.current_period_end,
+			plan: usageOnly,
+		}
+		expect(subOp(ended)).toMatchObject({
+			status: "canceled",
+			billsByUsage: true,
+		})
+		// A trial that lapsed unconverted was never billed.
+		expect(subOp({ ...SUB_GLOBEX_LAPSED, plan: usageOnly })).toMatchObject({ billsByUsage: false })
+		// A free plan bills nothing.
+		expect(subOp({ ...SUB_ACME, plan: PLAN_FREE })).toMatchObject({ mrrMinor: 0, billsByUsage: false })
+		// Seats bought at a tiered price (no flat amount) on a plan with no base price.
+		const seats = named(CUSTOMER_INITECH).balances?.["seats"]
+		const tiered = {
+			...CUSTOMER_INITECH,
+			balances: {
+				seats: {
+					...seats!,
+					breakdown: seats!.breakdown!.map((grant) => ({
+						...grant,
+						price: { ...grant.price, amount: null },
+					})),
+				},
+			},
+		}
+		expect(
+			subOps([{ ...SUB_INITECH, plan: { ...PLAN_TEAM, price: null } }], { customer: tiered }),
+		).toMatchObject([{ mrrMinor: 0, billsByUsage: true }])
+		expect(subOps([{ ...SUB_INITECH, plan: { ...PLAN_TEAM, price: null } }])).toMatchObject([
+			{ mrrMinor: 0, billsByUsage: false },
+		])
 	})
 
 	it("reads a cancellation beside a scheduled base plan as a downgrade, not a cancel", () => {

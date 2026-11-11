@@ -210,7 +210,7 @@ const prepaidMonthly = (
  *
  * What is *not* in it: a `usage_based` item, billed after the period for what was used and not
  * knowable in advance (Stripe's metered prices are left out the same way). A plan billed only that
- * way, or a free one, is MRR 0.
+ * way, or a free one, is MRR 0; the former is marked `billsByUsage` ({@link subscriptionOps}).
  */
 export const subscriptionMrr = (
 	subscription: AutumnSubscription,
@@ -225,6 +225,27 @@ export const subscriptionMrr = (
 	const monthly = base + prepaidMonthly(subscription.plan_id, plan, balances)
 	return Math.max(0, Math.round(monthly * minorUnitsOf(currency)))
 }
+
+/**
+ * Whether a plan bills what MRR leaves out ({@link subscriptionMrr}): a `usage_based` item (billed
+ * after the period), or prepaid units the customer bought at a tiered price (no flat `amount`).
+ */
+const billsOutsideMrr = (
+	planId: string,
+	plan: AutumnPlan | undefined,
+	balances: ReadonlyArray<AutumnBalance>,
+): boolean =>
+	(plan?.items ?? []).some((item) => item.price?.billing_method === "usage_based") ||
+	balances.some((balance) =>
+		(balance.breakdown ?? []).some(
+			(grant) =>
+				grant.plan_id === planId &&
+				grant.source !== "entity" &&
+				grant.price?.billing_method === "prepaid" &&
+				grant.price.amount == null &&
+				(grant.prepaid_grant ?? 0) > 0,
+		),
+	)
 
 /**
  * A subscription's external id. Autumn's `id` is unique among one customer's live plans only (the
@@ -244,6 +265,8 @@ const subscriptionIdOf = (customerId: string, id: string): string => `${customer
  *   keeps `cancelAtPeriodEnd` false.
  * - **Never billed**: an ended plan no processor ever billed (no billing period: a trial that
  *   lapsed unconverted) is MRR 0, so its account reads as a lead rather than a churned customer.
+ * - **Billed by usage**: a plan at MRR 0 that still bills ({@link billsOutsideMrr}) sets
+ *   `billsByUsage`, so core counts its account as paying (or, once it ended, as churned).
  * - **One id twice** (an ended plan whose `subscription_id` a live one reuses): the live one wins.
  */
 export const subscriptionOps = (
@@ -290,6 +313,10 @@ export const subscriptionOps = (
 			mrrMinor,
 			// The customer's own plan carries any custom price, so the list price is the price.
 			listMrrMinor: mrrMinor,
+			billsByUsage:
+				!neverBilled &&
+				mrrMinor === 0 &&
+				billsOutsideMrr(subscription.plan_id, plan, options.balances ?? []),
 			currency: options.pricing.currency,
 			interval: billingIntervalOf(plan),
 			quantity: quantityOf(subscription),
