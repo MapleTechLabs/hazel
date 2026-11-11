@@ -144,36 +144,31 @@ export const threadPreviewView = <M>(h: HtmlBuilder<M>, thread: ThreadPreview, o
 					),
 				],
 			),
-			last === null
-				? h.span([h.Class("truncate text-muted-fg")], ["No recent messages"])
-				: h.div(
-						[h.Class("flex min-w-0 items-center gap-1.5")],
-						[
-							last.author === null
-								? h.div([h.Class("size-4 shrink-0 rounded-full bg-muted")])
-								: avatar(h, {
-										src: last.author.avatarUrl,
-										seed: last.author.displayName || undefined,
-										alt: last.author.displayName,
-										size: "xxs",
-										className: "size-4 shrink-0",
-									}),
-							last.author === null
-								? h.empty
-								: h.span(
-										[h.Class("shrink-0 font-medium text-fg/85")],
-										[last.author.displayName],
-									),
-							h.span(
-								[h.Class("min-w-0 truncate text-muted-fg")],
-								[last.text === "" ? "Click to see attachment" : last.text],
-							),
-							h.span(
-								[h.Class("ml-1 shrink-0 text-muted-fg text-xs")],
-								[formatDistanceToNowStrict(new Date(last.createdAtMs), { addSuffix: true })],
-							),
-						],
+			h.div(
+				[h.Class("flex min-w-0 items-center gap-1.5")],
+				[
+					last.author === null
+						? h.div([h.Class("size-4 shrink-0 rounded-full bg-muted")])
+						: avatar(h, {
+								src: last.author.avatarUrl,
+								seed: last.author.displayName || undefined,
+								alt: last.author.displayName,
+								size: "xxs",
+								className: "size-4 shrink-0",
+							}),
+					last.author === null
+						? h.empty
+						: h.span([h.Class("shrink-0 font-medium text-fg/85")], [last.author.displayName]),
+					h.span(
+						[h.Class("min-w-0 truncate text-muted-fg")],
+						[last.text === "" ? "Click to see attachment" : last.text],
 					),
+					h.span(
+						[h.Class("ml-1 shrink-0 text-muted-fg text-xs")],
+						[formatDistanceToNowStrict(new Date(last.createdAtMs), { addSuffix: true })],
+					),
+				],
+			),
 		],
 	)
 }

@@ -177,22 +177,19 @@ const replyOf = (context: DeriveContext, replyToMessageId: MessageId | null): Re
 const threadOf = (context: DeriveContext, threadChannelId: ChannelId | null): ThreadPreview | null => {
 	if (threadChannelId === null) return null
 	const messages = context.threadMessages.get(threadChannelId) ?? []
-	const name = context.threadNames.get(threadChannelId)
-	// Neither synced yet: no card rather than an empty one.
-	if (messages.length === 0 && name === undefined) return null
 	const last = messages[0]
+	// An empty thread (or one whose messages have not synced yet) gets no card; "Reply in thread"
+	// still opens it, since its id is derived from the message.
+	if (last === undefined) return null
 	return {
 		threadChannelId,
-		name: name || "Thread",
+		name: context.threadNames.get(threadChannelId) || "Thread",
 		count: messages.length,
-		lastMessage:
-			last === undefined
-				? null
-				: {
-						author: identityOf(context, last.authorId),
-						text: plainLineOf(context, last.content),
-						createdAtMs: last.createdAtMs,
-					},
+		lastMessage: {
+			author: identityOf(context, last.authorId),
+			text: plainLineOf(context, last.content),
+			createdAtMs: last.createdAtMs,
+		},
 	}
 }
 
