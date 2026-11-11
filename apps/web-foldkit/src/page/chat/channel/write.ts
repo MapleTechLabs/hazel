@@ -8,6 +8,7 @@ import * as Draft from "../../../composer/draft"
 import * as DraftUpdate from "../../../composer/draft-update"
 import * as EditorCommands from "../../../composer/editor-commands"
 import * as Typing from "../../../composer/typing"
+import type { EditorRegistry } from "../../../editor/registry"
 import { errorToast, errorToastOf, successToast } from "../../../data/actions"
 import * as MessageList from "../../../mount/message-list"
 import type { ToastRequest } from "../../../overlay/toasts"
@@ -694,18 +695,38 @@ export const focusComposer = (model: Model): PageReturn => ({
 	),
 })
 
-export const insertGlobalKey = (model: Model, key: string): PageReturn => {
+const intoFocusedEditor = (
+	model: Model,
+	command: (editorId: string) => Command.Command<Composer.Message, never, EditorRegistry>,
+): PageReturn => {
 	const which = focusedDraft(model)
 	const draft = draftOf(model, which)
 	if (draft === null || draft.composer.commandInput !== null) return { model }
 	return {
 		model,
 		commands: Command.mapMessages(
-			Command.mapMessages(
-				[EditorCommands.InsertEditorText({ editorId: draft.composer.editorId, text: key })],
-				(message) => Draft.Message.GotComposerMessage({ message }),
+			Command.mapMessages([command(draft.composer.editorId)], (message) =>
+				Draft.Message.GotComposerMessage({ message }),
 			),
 			wrapDraft(which),
 		),
 	}
+}
+
+export const insertGlobalKey = (model: Model, key: string): PageReturn =>
+	intoFocusedEditor(model, (editorId) => EditorCommands.InsertEditorText({ editorId, text: key }))
+
+/** `useGlobalKeyboardFocus` for pastes: text pastes into the focused draft's editor. */
+export const pasteGlobalText = (model: Model, text: string): PageReturn =>
+	intoFocusedEditor(model, (editorId) => EditorCommands.PasteEditorText({ editorId, text }))
+
+/** Files pasted anywhere on the page attach to the focused draft, as a paste in its editor does. */
+export const pasteGlobalFiles = (
+	model: Model,
+	files: ReadonlyArray<File>,
+	shared: Shared | null,
+): PageReturn => {
+	const which = focusedDraft(model)
+	if (draftOf(model, which) === null) return { model }
+	return updateDraft(model, which, Draft.Message.SelectedFiles({ files }), shared)
 }

@@ -5,6 +5,7 @@ import * as Render from "foldkit/render"
 import {
 	clearContent,
 	focusAndInsertText,
+	focusAndPasteText,
 	focusAtEnd,
 	insertCustomEmoji,
 	insertEmojiResult,
@@ -70,6 +71,19 @@ export const InsertEditorText = Command.define("InsertEditorText", {
 					Message.FailedInsertEditorText,
 				),
 			),
+		),
+})
+
+/** Text pasted outside the editor (the global paste redirect), pasted as it would be inside. */
+export const PasteEditorText = Command.define("PasteEditorText", {
+	args: { editorId: Schema.String, text: Schema.String },
+	messages: [Message.CompletedInsertEditorText, Message.FailedInsertEditorText],
+	execute: ({ editorId, text }) =>
+		onEditor(
+			editorId,
+			(view) => focusAndPasteText(view, text),
+			Message.CompletedInsertEditorText(),
+			Message.FailedInsertEditorText,
 		),
 })
 

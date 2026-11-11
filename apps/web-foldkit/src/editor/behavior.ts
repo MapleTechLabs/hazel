@@ -4,7 +4,7 @@ import { redo, undo } from "prosemirror-history"
 import type { Node as ProseMirrorNode } from "prosemirror-model"
 import { type EditorState, Plugin, Selection, TextSelection, type Transaction } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
-import { isAcceptedFile, isAcceptedMimeType } from "./file-types"
+import { clipboardFiles } from "./file-types"
 import { blocksOf, isValueEmpty, serializeToMarkdown } from "./markdown"
 import { autocompleteKey, canActivateTrigger, DEFAULT_TRIGGERS, isAutocompleteOpen } from "./plugins"
 import { schema } from "./schema"
@@ -117,14 +117,20 @@ const isAtStart = (state: EditorState) => state.selection.empty && state.selecti
 const isAtEnd = (state: EditorState) =>
 	state.selection.empty && state.selection.$from.parentOffset === state.selection.$from.parent.content.size
 
-/** `withFilePaste`: copied files first, else image items (screenshots). */
-const pastedFiles = (data: DataTransfer): ReadonlyArray<File> => {
-	const files = Array.from(data.files).filter(isAcceptedFile)
-	if (files.length > 0) return files
-	return Array.from(data.items).flatMap((item) => {
-		const file = item.kind === "file" && isAcceptedMimeType(item.type) ? item.getAsFile() : null
-		return file ? [file] : []
+/** Legacy pastes plain text: inside code blocks verbatim, elsewhere one block per line. */
+export const pastePlainText = (view: EditorView, text: string) => {
+	const normalized = text.replace(/\r\n?/g, "\n")
+	const lines = normalized.split("\n")
+	if (currentBlock(view.state).node.type.name === "code-block" || lines.length === 1) {
+		view.dispatch(view.state.tr.insertText(normalized).scrollIntoView())
+		return
+	}
+	const tr = view.state.tr
+	lines.forEach((line, index) => {
+		if (index > 0) splitKeepingType(tr)
+		if (line) tr.insertText(line)
 	})
+	view.dispatch(tr.scrollIntoView())
 }
 
 /** Deleting everything leaves an empty paragraph, not an empty quote or list item, so the placeholder returns. */
@@ -321,26 +327,15 @@ export const behaviorPlugin = (emit: (event: BehaviorEvent) => void) => {
 		props: {
 			handleKeyDown,
 			handleTextInput,
-			// Legacy pastes plain text: inside code blocks verbatim, elsewhere one block per line.
 			handlePaste: (view, event) => {
-				const files = event.clipboardData ? pastedFiles(event.clipboardData) : []
+				const files = event.clipboardData ? clipboardFiles(event.clipboardData) : []
 				if (files.length > 0) {
 					emit({ _tag: "PastedFiles", files })
 					return true
 				}
 				const text = event.clipboardData?.getData("text/plain")
 				if (!text) return false
-				const lines = text.replace(/\r\n?/g, "\n").split("\n")
-				if (currentBlock(view.state).node.type.name === "code-block" || lines.length === 1) {
-					view.dispatch(view.state.tr.insertText(text.replace(/\r\n?/g, "\n")).scrollIntoView())
-					return true
-				}
-				const tr = view.state.tr
-				lines.forEach((line, index) => {
-					if (index > 0) splitKeepingType(tr)
-					if (line) tr.insertText(line)
-				})
-				view.dispatch(tr.scrollIntoView())
+				pastePlainText(view, text)
 				return true
 			},
 		},

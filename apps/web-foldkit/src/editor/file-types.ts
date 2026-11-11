@@ -33,3 +33,13 @@ export const isAcceptedFile = (file: { readonly name: string; readonly type: str
 	file.type === ""
 		? ACCEPTED_EXTENSIONS.some((extension) => file.name.toLowerCase().endsWith(extension))
 		: isAcceptedMimeType(file.type)
+
+/** `withFilePaste`: the copied files a message can carry first, else image items (screenshots). */
+export const clipboardFiles = (data: DataTransfer): ReadonlyArray<File> => {
+	const files = Array.from(data.files).filter(isAcceptedFile)
+	if (files.length > 0) return files
+	return Array.from(data.items).flatMap((item) => {
+		const file = item.kind === "file" && isAcceptedMimeType(item.type) ? item.getAsFile() : null
+		return file ? [file] : []
+	})
+}
