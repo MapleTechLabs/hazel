@@ -15,7 +15,8 @@
  * - **Subscription → subscription**, with MRR normalized to a monthly amount in the currency's
  *   minor units ({@link monthlyMrrOf}). `mrrMinor` is what the subscription bills (or would bill)
  *   whatever its status: compute decides which statuses count towards an account's MRR, and reads a
- *   canceled subscription's amount to recognise churn.
+ *   canceled subscription's amount to recognise churn. One billed purely on usage (MRR 0, metered
+ *   or tiered prices) is flagged `billsByUsage`, so its account still counts as paying.
  * - **Invoice → invoice**, with the amounts, the dates and the hosted copy's URL.
  * - **Timeline events** are ingest's: it raises `subscription.started`, `subscription.plan_changed`,
  *   `subscription.canceled`, `subscription.cancel_scheduled`, `invoice.paid` and
@@ -242,16 +243,20 @@ const amountMinorOf = (price: StripePrice): number | null => {
 }
 
 /**
- * One item's monthly amount in minor units, or null when Stripe does not say what it costs: a
- * metered price bills by usage, and a tiered one keeps its amounts on the tiers, not the price.
- * Minor units are passed through untouched, so a zero-decimal currency (¥5000 = `5000`) is right.
+ * A price MRR can't capture: a metered one bills by usage, and a tiered one keeps its amounts on
+ * the tiers, not the price. Either way, what it bills is not knowable before the invoice.
+ */
+const isUsagePriced = (price: StripePrice): boolean =>
+	(price.recurring?.usage_type ?? price.usage_type) === "metered" || price.billing_scheme === "tiered"
+
+/**
+ * One item's monthly amount in minor units, or null when Stripe does not say what it costs
+ * ({@link isUsagePriced}). Minor units are passed through untouched, so a zero-decimal currency
+ * (¥5000 = `5000`) is right.
  */
 export const itemMonthlyMinor = (item: StripeSubscriptionItem): number | null => {
 	const price = priceOf(item)
-	if (price === null) return null
-	const usage = price.recurring?.usage_type ?? price.usage_type ?? null
-	if (usage === "metered") return null
-	if (price.billing_scheme === "tiered") return null
+	if (price === null || isUsagePriced(price)) return null
 	const amount = amountMinorOf(price)
 	const factor = monthlyFactorOf(price)
 	if (amount === null || factor === null) return null
@@ -379,7 +384,9 @@ const paymentMethodOf = (subscription: StripeSubscription): UpsertSubscription["
 }
 
 /**
- * A subscription, read at `observedAt` (ingest drops a read older than one it applied). Null when
+ * A subscription, read at `observedAt` (ingest drops a read older than one it applied).
+ * `billsByUsage` when its MRR is 0 but it has metered or tiered prices ({@link isUsagePriced}): a
+ * customer billed purely on usage is paying all the same (`providers.ts`). Null when
  * its customer or its status is not one Hazel records (an `incomplete` subscription, or a status
  * Stripe added since).
  */
@@ -412,6 +419,13 @@ export const subscriptionOp = (
 		cancelAtPeriodEnd: subscription.cancel_at_period_end === true || subscription.cancel_at != null,
 		canceledAt: isoOf(subscription.canceled_at),
 		cancellationReason: details?.reason ?? details?.feedback ?? null,
+		// Billed purely on usage, it pays at an MRR of 0. Always sent, so a fixed price added later clears it.
+		billsByUsage:
+			mrr.mrrMinor === 0 &&
+			(subscription.items?.data ?? []).some((item) => {
+				const itemPrice = priceOf(item)
+				return itemPrice !== null && isUsagePriced(itemPrice)
+			}),
 	}
 	const method = paymentMethodOf(subscription)
 	if (method !== undefined) op.paymentMethod = method

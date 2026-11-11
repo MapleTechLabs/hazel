@@ -108,6 +108,7 @@ is not a shared id, and the configured key always wins over `autumn_id`.
 | customer deleted                                                | ref goes stale; account soft-deleted with no live ref left  |
 | subscription `items[].price × quantity`, per interval           | `subscription.mrrMinor` (see below)                         |
 | subscription coupons                                            | applied to `mrrMinor`; `listMrrMinor` keeps the list price  |
+| MRR 0 with metered or tiered prices                             | `subscription.billsByUsage` (the account counts as paying)  |
 | price's product `name`                                          | `subscription.planName`                                     |
 | subscription `status`                                           | `subscription.status`                                       |
 | subscription `start_date`, `trial_end`, period end              | `startedAt`, `trialEndsAt`, `currentPeriodEnd`              |
@@ -176,6 +177,9 @@ currency like JPY is right by construction.
 - Items Stripe states no amount for — a **metered** price, a **tiered** one — count as nothing:
   what they will bill is not knowable before the invoice. Autumn's usage-based features are read as
   metrics by the Autumn source, not guessed at here.
+- A subscription whose MRR comes to 0 but which has such prices bills purely on usage: it is sent
+  with `billsByUsage: true`, which makes its account paying (stage `active`, `customerSince`) at an
+  MRR of 0. The flag is always sent, `false` otherwise, so a fixed price added later clears it.
 - Items are summed, then the subscription's coupons are applied: a `percent_off` always, an
   `amount_off` only in the subscription's own currency, spread over the primary item's cadence
   (1 200.00 off a yearly subscription is 100.00 a month). The sum before discounts stays as
@@ -300,7 +304,8 @@ acknowledged, so Stripe does not retry it into the new account.
 - **`invoice.upcoming` is not handled.** Stripe's preview has no invoice id, and nothing in Hazel
   reads an `upcoming` invoice yet (the status exists in the model for a provider that does).
 - **Metered and tiered prices contribute no MRR** (see above), so an account billed purely by usage
-  through Stripe shows an MRR of 0. Usage belongs to the Autumn and Maple sources.
+  through Stripe shows an MRR of 0, though `billsByUsage` still counts it as paying. Usage belongs
+  to the Autumn and Maple sources.
 - **A customer's domain can still reach its account** when it was matched by domain (the account
   already has it) or linked by hand: ingest merges an op's match domains into the account it lands
   on. One placed by its shared id never sends a domain.

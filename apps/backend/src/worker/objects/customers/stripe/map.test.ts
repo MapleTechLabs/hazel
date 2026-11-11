@@ -368,6 +368,7 @@ describe("a Stripe subscription", () => {
 			cancelAtPeriodEnd: false,
 			canceledAt: null,
 			cancellationReason: null,
+			billsByUsage: false,
 		})
 	})
 
@@ -389,6 +390,38 @@ describe("a Stripe subscription", () => {
 			listMrrMinor: 14_700,
 			trialEndsAt: new Date(SUB_GLOBEX.trial_end * 1000).toISOString(),
 		})
+	})
+
+	it("flags one billed purely on usage, which pays at an MRR of 0", () => {
+		const [seats, meter] = SUB_GLOBEX.items.data
+		const usageOnly = (items: ReadonlyArray<unknown>) =>
+			subscriptionOp(subscription({ ...SUB_GLOBEX, status: "active", items: { data: items } }))
+		expect(usageOnly([meter])).toMatchObject({ mrrMinor: 0, billsByUsage: true })
+		// A tiered price billed per seat states no amount either.
+		const tieredSeats = {
+			...meter,
+			price: {
+				...meter!.price,
+				recurring: { interval: "month", interval_count: 1, usage_type: "licensed" },
+			},
+		}
+		expect(usageOnly([tieredSeats])).toMatchObject({ mrrMinor: 0, billsByUsage: true })
+		// A fixed price beside the meter carries the MRR: sent as false, so it clears a stored flag.
+		expect(usageOnly([seats, meter])).toMatchObject({ mrrMinor: 14_700, billsByUsage: false })
+	})
+
+	it("does not flag a free subscription, nor a fixed one a coupon takes to zero", () => {
+		expect(subscriptionOp(oneItem(monthly(0, { interval: "month" })))).toMatchObject({
+			mrrMinor: 0,
+			billsByUsage: false,
+		})
+		const waived = subscription({
+			...SUB_ACME,
+			discounts: [
+				{ ...DISCOUNT_20_PERCENT, coupon: { ...DISCOUNT_20_PERCENT.coupon, percent_off: 100 } },
+			],
+		})
+		expect(subscriptionOp(waived)).toMatchObject({ mrrMinor: 0, billsByUsage: false })
 	})
 
 	it("keeps a canceled subscription's amount, so compute can see the churn", () => {

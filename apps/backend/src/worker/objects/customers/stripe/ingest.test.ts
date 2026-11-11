@@ -8,6 +8,7 @@
 import type { IngestOp } from "@hazel/domain/customers"
 import { Effect, Schema, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
+import { runCompute } from "../compute"
 import { type CustomersWorld, makeCustomersWorld } from "../test-kit"
 import {
 	CUSTOMER_ACME,
@@ -159,6 +160,34 @@ describe("Stripe ops through CustomerIngest", () => {
 				])
 				// Globex, the personal customer and its contact, and the two billing rows behind Globex.
 				expect(report.outcomes.filter((outcome) => outcome._tag === "Unmatched")).toHaveLength(5)
+			}),
+		))
+
+	it("makes a customer billed purely on usage a paying one, at an MRR of 0", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", clerkBefore)
+				// Acme on the events meter alone: no price MRR can capture.
+				const meterOnly = subscription({
+					...SUB_ACME,
+					items: { data: [SUB_GLOBEX.items.data[1]] },
+				})
+				yield* world.ingest("stripe", [
+					...customerOps(customer(CUSTOMER_ACME), CONFIG),
+					subscriptionOp(meterOnly, PRODUCTS)!,
+				])
+				yield* world.object.run(runCompute(new Date("2026-11-11T12:00:00.000Z"))).pipe(Effect.orDie)
+				expect(
+					world.rows(`SELECT mrrMinor, lifecycleStage, customerSince FROM customer_accounts`),
+				).toEqual([
+					{
+						mrrMinor: 0,
+						lifecycleStage: "active",
+						// SUB_ACME's start_date, as the store keeps it.
+						customerSince: "2026-01-14 09:25:00.000",
+					},
+				])
 			}),
 		))
 
