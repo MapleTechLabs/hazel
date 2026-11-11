@@ -3,7 +3,6 @@
 // class name: it gets px numbers, colours and a handful of enums.
 import type { compile } from "@tailwindcss/node"
 import postcss, { type AtRule, type ChildNode, type Container, type Document } from "postcss"
-import { readFile } from "node:fs/promises"
 
 import { color } from "./css-color"
 import { type AttrTest, type Compound, type Context, Unsupported, parseSelectorList } from "./selector"
@@ -428,8 +427,9 @@ export class StyleResolver {
 				if (this.rebuild(compiler)) for (const listener of this.recompiledListeners) listener()
 			},
 			(cause: unknown) => {
-				this.compiling = false
-				process.stderr.write(`[styles] the stylesheet did not compile: ${String(cause)}\n`)
+				// Left `compiling`: a runtime that cannot load the compiler (iOS) keeps the precompiled
+				// sheet instead of trying again on every commit.
+				console.error(`[styles] the stylesheet did not compile: ${String(cause)}`)
 			},
 		)
 	}
@@ -1946,7 +1946,10 @@ export type PrecompiledStyles = { css: string; classes: Array<string> }
 
 /** Tailwind's compiler for `stylesheet`, loaded on demand: a precompiled boot never imports it. */
 const compileSheet = async (stylesheet: string): Promise<Compiler> => {
-	const { compile } = await import("@tailwindcss/node")
+	const [{ compile }, { readFile }] = await Promise.all([
+		import("@tailwindcss/node"),
+		import("node:fs/promises"),
+	])
 	const base = stylesheet.slice(0, stylesheet.lastIndexOf("/") + 1)
 	const css = await readFile(stylesheet, "utf8")
 	return compile(css, { base, from: stylesheet, onDependency() {} })

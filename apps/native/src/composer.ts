@@ -18,11 +18,12 @@ const editorPaths = new WeakMap<object, string>()
  * `instanceof Element` to it; `onReady` re-commits so the editor Mount can start.
  */
 export const loadHeadlessDom = async (
+	jsdom: () => Promise<typeof import("jsdom")>,
 	globals: Readonly<{ document: object; shims: ReadonlyArray<unknown> }>,
 	onReady: () => void,
 	onEditorFocus: (path: string) => void,
 ) => {
-	const { JSDOM } = await import("jsdom")
+	const { JSDOM } = await jsdom()
 	const loaded = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true })
 	dom = loaded
 	const headless = loaded.window.document

@@ -39,7 +39,8 @@ const platform: NativePlatform = {
 		copy.stdin.end(text)
 	},
 	// The bundled runtime ships its sheet compiled (`bun run build`); from source it compiles here.
-	loadStyles: async (stylesheet) => {
+	loadStyles: async () => {
+		const stylesheet = new URL("../../web-foldkit/src/styles.css", import.meta.url).pathname
 		const precompiledPath =
 			process.env.HAZEL_NATIVE_STYLES ?? new URL("./styles.json", import.meta.url).pathname
 		return existsSync(precompiledPath)
@@ -48,6 +49,7 @@ const platform: NativePlatform = {
 	},
 	appendLine: (path, line) => appendFileSync(path, `${line}\n`),
 	memoryUsedMb: () => process.memoryUsage().heapUsed / 1048576,
+	jsdom: () => import("jsdom"),
 	fixtureHtmlRender: async (file) => (await import("./fixture/html-render")).makeFixtureHtmlRender(file),
 }
 

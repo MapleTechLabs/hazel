@@ -13,12 +13,17 @@ declare const Bun: {
 	build(options: {
 		entrypoints: Array<string>
 		outdir?: string
-		target?: "bun"
+		/** The output file's name in `outdir`. */
+		naming?: string
+		/** `browser`: the iOS worker (scripts/build-ios.ts). */
+		target?: "bun" | "browser"
 		/** One executable with Bun inside (scripts/bundle.ts). */
 		compile?: { outfile: string; target?: string }
 		format?: "esm"
 		bytecode?: boolean
 		minify: boolean
+		/** Expressions replaced at build time, each by the code given. */
+		define?: Record<string, string>
 		external: Array<string>
 		plugins: Array<BunPlugin>
 	}): Promise<{ success: boolean; logs: Array<unknown> }>

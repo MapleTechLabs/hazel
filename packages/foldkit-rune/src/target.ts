@@ -1,6 +1,3 @@
-import { readFile } from "node:fs/promises"
-import { basename } from "node:path"
-
 import type { Document } from "foldkit/html"
 import type { RenderTarget } from "foldkit/runtime"
 
@@ -1087,8 +1084,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		if (message.type === "keydown" && !event.propagationStopped && dispatchDocumentKey(message))
 			event.preventDefault()
 		if (message.type === "keydown" && process.env.NATIVE_DEBUG)
-			process.stderr.write(
-				`[key] ${message.key} ${[message.id, ...(message.chain ?? [])].join(">")} prevented=${event.defaultPrevented}\n`,
+			console.error(
+				`[key] ${message.key} ${[message.id, ...(message.chain ?? [])].join(">")} prevented=${event.defaultPrevented}`,
 			)
 		if (message.type === "keydown" && message.key === "Escape" && !event.defaultPrevented)
 			options.overlays?.dismissTopmost()
@@ -1172,14 +1169,27 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		send({ t: "focus", key: hostFocusKey(next, "input", { type: "radio" }) })
 	}
 
-	/** The files picked for a file input: read, then its `change`, as a browser fires it. */
-	const filesPicked = async (path: string, paths: ReadonlyArray<string>) => {
-		if (paths.length === 0) return
-		const files = await Promise.all(
+	/**
+	 * Files the host names by path, read. Only a host with a file system sends paths, so the runtime
+	 * loads anywhere else.
+	 */
+	const readFiles = async (paths: ReadonlyArray<string>) => {
+		if (paths.length === 0) return []
+		const [{ readFile }, { basename }] = await Promise.all([
+			import("node:fs/promises"),
+			import("node:path"),
+		])
+		return Promise.all(
 			paths.map(
 				async (file) => new File([await readFile(file)], basename(file), { type: mimeOf(file) }),
 			),
 		)
+	}
+
+	/** The files picked for a file input: read, then its `change`, as a browser fires it. */
+	const filesPicked = async (path: string, paths: ReadonlyArray<string>) => {
+		if (paths.length === 0) return
+		const files = await readFiles(paths)
 		const target = { files, value: "", scrollTop: 0, open: false }
 		fire(path, {
 			...fakeEvent({ t: "event", seq: ack, id: 0, type: "change" }),
@@ -1190,15 +1200,15 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 
 	/** A paste replays as the DOM's `paste` on `document`, with the clipboard as `clipboardData`. */
 	const pasted = async (paste: Extract<HostToRuntime, { t: "paste" }>) => {
-		const picked = await Promise.all(
-			paste.files.map(
-				async (file) => new File([await readFile(file)], basename(file), { type: mimeOf(file) }),
-			),
-		)
+		const picked = await readFiles(paste.files)
 		const image =
 			paste.image == null
 				? []
-				: [new File([Buffer.from(paste.image, "base64")], "image.png", { type: "image/png" })]
+				: [
+						new File([Uint8Array.from(atob(paste.image), (c) => c.charCodeAt(0))], "image.png", {
+							type: "image/png",
+						}),
+					]
 		dispatchPaste(paste.text, picked.length > 0 ? picked : image)
 	}
 
