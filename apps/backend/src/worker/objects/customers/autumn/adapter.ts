@@ -1,10 +1,10 @@
 /**
- * The Autumn data source (`docs/customers/tech-design.md` §5), Hazel's **MRR source once it is
- * connected**: Autumn customers land on the accounts the identity source created, their plans
- * become the MRR, the plan name, the trial and the payment state, and their feature balances become
- * the usage metrics and plan limits the `near_limit` signal reads. Stripe keeps the invoices
- * either way (`tech-design.md` §4.2); its subscriptions step aside while Autumn is connected,
- * because Autumn is what the app actually bills through.
+ * The Autumn data source (`docs/customers/tech-design.md` §5), the **MRR source of every account it
+ * bills once its first import finished**: Autumn customers land on the accounts the identity source
+ * created, their plans become the MRR, the plan name, the trial and the payment state, and their
+ * feature balances become the usage metrics and plan limits the `near_limit` signal reads. Stripe
+ * keeps the invoices either way (`tech-design.md` §4.2), and the MRR of an account Autumn holds no
+ * plan of.
  *
  * Connecting needs an Autumn **secret key** (`am_sk_live_…` / `am_sk_test_…`) and, for live
  * updates, the signing secret of an Autumn webhook endpoint pointed at
@@ -21,13 +21,14 @@
  * account's data when it differs, so moving a connection from sandbox to live re-imports from
  * scratch instead of mixing the two.
  */
-import { Effect, Redacted } from "effect"
+import { Effect, Option, Redacted } from "effect"
 import { HttpClient } from "effect/http"
-import { CustomerProviderError } from "../provider-errors"
-import { WEBHOOK_REQUESTS } from "../provider-http"
+import { CustomerProviderError, CustomerWebhookRejectedError } from "../provider-errors"
+import { type ProviderRequestOptions, WEBHOOK_REQUESTS } from "../provider-http"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../providers"
 import { type AutumnApi, makeAutumnApi } from "./http"
 import { pullPage } from "./pull"
+import { cachedPricing, readPricing } from "./read"
 import { receiveWebhook } from "./webhook"
 import {
 	accountIdOf,
@@ -35,7 +36,6 @@ import {
 	AutumnCustomersPage,
 	AutumnFeaturesPage,
 	AutumnOrganizationMe,
-	AutumnPlansPage,
 	AutumnSubscriptionsPage,
 	envOfKey,
 } from "./wire"
@@ -68,20 +68,21 @@ export const envOfAccountId = (externalAccountId: string | null): AutumnEnv | nu
  * Then the organization *and* environment the key opens, which is required: core tells a key of
  * another one by it (dropping the old data and importing from scratch), and a delivery's customer is
  * checked against the environment. `GET /v1/organization/me` answers both. The key's own prefix
- * says which environment it is for, and a key whose prefix contradicts Autumn's answer is refused
- * rather than guessed at: that pairing is how a sandbox key ends up wired to live data.
+ * says which environment it is for — checked before any request — and a key whose prefix
+ * contradicts Autumn's answer is refused rather than guessed at: that pairing is how a sandbox key
+ * ends up wired to live data.
  */
 const validateWith = Effect.fn("Autumn.validate")(function* (
 	api: AutumnApi,
 	apiKey: Redacted.Redacted<string>,
 ) {
-	const me = yield* api.get("/v1/organization/me", [], AutumnOrganizationMe)
 	const fromKey = envOfKey(Redacted.value(apiKey))
 	if (fromKey === null) {
 		return yield* refused(
 			`"am_sk_live_…" or "am_sk_test_…" is what an Autumn secret key looks like (${WHERE_TO_FIND})`,
 		)
 	}
+	const me = yield* api.get("/v1/organization/me", [], AutumnOrganizationMe)
 	if (fromKey !== me.env) {
 		return yield* refused(
 			fromKey === "live"
@@ -89,8 +90,8 @@ const validateWith = Effect.fn("Autumn.validate")(function* (
 				: "The key looks like a sandbox key (am_sk_test_…) but Autumn answers for the live environment",
 		)
 	}
+	yield* readPricing(api)
 	yield* api.post("/v1/features.list", {}, AutumnFeaturesPage)
-	yield* api.post("/v1/plans.list", { include_archived: true }, AutumnPlansPage)
 	yield* api.post("/v1/customers.list", { start_cursor: "", limit: 1 }, AutumnCustomersPage)
 	yield* api.post(
 		"/v1/subscriptions.list",
@@ -107,40 +108,52 @@ const validateWith = Effect.fn("Autumn.validate")(function* (
 	}
 })
 
+/** Why a connection's environment is unknown: it never finished validating. */
+const UNVALIDATED = "The Autumn connection has no validated account; reconnect it"
+
 export const makeAutumnAdapter = Effect.gen(function* () {
 	const client = yield* HttpClient.HttpClient
-	const apiOf = (credentials: ProviderCredentials) => makeAutumnApi(client, credentials.apiKey)
 
-	/** The environment the credentials opened; a connection still validating has none yet. */
-	const envOf = (credentials: ProviderCredentials): AutumnEnv =>
-		envOfAccountId(credentials.externalAccountId) ??
-		envOfKey(Redacted.value(credentials.apiKey)) ??
-		"live"
+	/** The key's API, the connection's pricing (kept a few minutes) and its environment. */
+	const connectionOf = (credentials: ProviderCredentials, options?: ProviderRequestOptions) => {
+		const api = makeAutumnApi(client, credentials.apiKey, options)
+		const env = envOfAccountId(credentials.externalAccountId)
+		return env === null || credentials.externalAccountId === null
+			? Option.none()
+			: Option.some({
+					api,
+					env,
+					pricing: cachedPricing(credentials.externalAccountId, readPricing(api)),
+				})
+	}
 
 	const adapter: CustomerProviderAdapter = {
 		provider: "autumn",
-		validate: (credentials) => validateWith(apiOf(credentials), credentials.apiKey),
+		validate: (credentials) =>
+			validateWith(makeAutumnApi(client, credentials.apiKey), credentials.apiKey),
 
 		// Core calls `webhook` only for a connection with a signing secret.
 		webhook: (request, credentials) =>
-			credentials.webhookSecret === null
-				? Effect.die("Autumn webhook called without a signing secret")
-				: receiveWebhook({
-						// A delivery answers fast (`../provider-http.ts`, `./webhook.ts`).
-						api: makeAutumnApi(client, credentials.apiKey, WEBHOOK_REQUESTS),
-						headers: request.headers,
-						body: request.body,
-						webhookSecret: credentials.webhookSecret,
-						env: envOf(credentials),
-						config: credentials.config,
-					}),
+			Option.match(connectionOf(credentials, WEBHOOK_REQUESTS), {
+				onNone: () => Effect.fail(new CustomerWebhookRejectedError({ message: UNVALIDATED })),
+				onSome: (connection) =>
+					credentials.webhookSecret === null
+						? Effect.die("Autumn webhook called without a signing secret")
+						: receiveWebhook({
+								// A delivery answers fast (`../provider-http.ts`, `./webhook.ts`).
+								...connection,
+								headers: request.headers,
+								body: request.body,
+								webhookSecret: credentials.webhookSecret,
+								config: credentials.config,
+							}),
+			}),
 
 		pull: (input) =>
-			pullPage({
-				api: apiOf(input.credentials),
-				cursor: input.cursor,
-				config: input.credentials.config,
-				env: envOf(input.credentials),
+			Option.match(connectionOf(input.credentials), {
+				onNone: () => Effect.fail(refused(UNVALIDATED)),
+				onSome: (connection) =>
+					pullPage({ ...connection, cursor: input.cursor, config: input.credentials.config }),
 			}),
 
 		pullIntervalMs: AUTUMN_PULL_INTERVAL_MS,

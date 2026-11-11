@@ -21,7 +21,7 @@
  */
 import { type Redacted, Schema } from "effect"
 import type { HttpClient } from "effect/http"
-import { makeProviderGet, type ProviderGetOptions } from "../provider-http"
+import { makeProviderGet, type ProviderRequestOptions } from "../provider-http"
 
 export const CLERK_API_URL = "https://api.clerk.com/v1"
 
@@ -62,7 +62,7 @@ const CLERK = {
 export const makeClerkGet = (
 	client: HttpClient.HttpClient,
 	apiKey: Redacted.Redacted<string>,
-	options?: ProviderGetOptions,
+	options?: ProviderRequestOptions,
 ) => makeProviderGet(CLERK, client, apiKey, options)
 
 export type ClerkGet = ReturnType<typeof makeClerkGet>

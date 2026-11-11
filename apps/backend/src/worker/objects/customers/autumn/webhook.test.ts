@@ -23,12 +23,14 @@ import {
 	ORG_ACME,
 	ORGANIZATION,
 	ORG_ME,
+	PLAN_PRO,
 	PLANS,
 	SUB_ACME,
 	SUB_ACME_EXPIRED,
 	USAGE_ALERT_MESSAGES,
 } from "./fixtures"
 import { makeAutumnApi } from "./http"
+import { readPricing } from "./read"
 import { type FakeAutumnState, fakeAutumnHttpClient, makeFakeAutumn } from "./testing"
 import { receiveWebhook } from "./webhook"
 
@@ -68,9 +70,11 @@ const deliver = (
 	return Effect.gen(function* () {
 		const timestamp = String(Math.floor((options.timestampMs ?? nowMs()) / 1000))
 		const signature = yield* signSvix(SECRET, MSG_ID, timestamp, body)
+		// A delivery answers fast: no 429 is waited out in place.
+		const api = makeAutumnApi(yield* HttpClient.HttpClient, Redacted.make(API_KEY), WEBHOOK_REQUESTS)
 		return yield* receiveWebhook({
-			// A delivery answers fast: no 429 is waited out in place.
-			api: makeAutumnApi(yield* HttpClient.HttpClient, Redacted.make(API_KEY), WEBHOOK_REQUESTS),
+			api,
+			pricing: readPricing(api),
 			headers: {
 				"svix-id": MSG_ID,
 				"svix-timestamp": timestamp,
@@ -119,8 +123,10 @@ describe("Autumn webhook verification", () => {
 		const noHeaders = await run(
 			Effect.flip(
 				Effect.gen(function* () {
+					const api = makeAutumnApi(yield* HttpClient.HttpClient, Redacted.make(API_KEY))
 					return yield* receiveWebhook({
-						api: makeAutumnApi(yield* HttpClient.HttpClient, Redacted.make(API_KEY)),
+						api,
+						pricing: readPricing(api),
 						headers: {},
 						body: "{}",
 						webhookSecret: Redacted.make(SECRET),
@@ -156,21 +162,36 @@ describe("billing.updated", () => {
 		])
 		// The live plan, and the one that ended — which only `subscriptions.list` reports.
 		expect(subscriptions(written).map((op) => [op.externalId, op.status])).toEqual([
-			[SUB_ACME.id, "active"],
-			[SUB_ACME_EXPIRED.id, "canceled"],
+			[`${ORG_ACME}:${SUB_ACME.id}`, "active"],
+			[`${ORG_ACME}:${SUB_ACME_EXPIRED.id}`, "canceled"],
 		])
+		// The customer and its ended plans side by side, then the pricing.
 		expect(fake.calls.map((call) => call.path)).toEqual([
 			"/v1/customers.get",
 			"/v1/subscriptions.list",
 			"/v1/plans.list",
 			"/v1/organization",
 		])
-		// The features are expanded, so a metric is named after its feature with no extra request.
+		// The features are expanded, so a metric is named after its feature with no extra request,
+		// and each plan as the customer holds it.
 		expect(fake.calls[0]!.body).toEqual({
 			customer_id: ORG_ACME,
-			expand: ["balances.feature"],
+			expand: ["balances.feature", "subscriptions.plan"],
 		})
-		expect(fake.calls[1]!.body).toMatchObject({ customer_id: ORG_ACME, statuses: ["expired"] })
+		// Only the plan the delivery says ended.
+		expect(fake.calls[1]!.body).toEqual({
+			customer_id: ORG_ACME,
+			statuses: ["expired"],
+			limit: 200,
+			plan_id: "free",
+		})
+	})
+
+	it("prices the customer's own version of its plan", async () => {
+		const custom = { ...SUB_ACME, plan: { ...PLAN_PRO, price: { amount: 49, interval: "month" } } }
+		const fake = organization({ customers: [{ ...CUSTOMER_ACME, subscriptions: [custom] }] })
+		const written = await ops(BILLING_UPDATED_UPGRADE, { fake })
+		expect(subscriptions(written).map((op) => op.mrrMinor)).toEqual([4_900, 0])
 	})
 
 	it("skips the expired lookup when nothing ended", async () => {
@@ -183,7 +204,7 @@ describe("billing.updated", () => {
 			},
 		}
 		const written = await ops(activated, { fake })
-		expect(subscriptions(written).map((op) => op.externalId)).toEqual([SUB_ACME.id])
+		expect(subscriptions(written).map((op) => op.externalId)).toEqual([`${ORG_ACME}:${SUB_ACME.id}`])
 		expect(fake.calls.map((call) => call.path)).toEqual([
 			"/v1/customers.get",
 			"/v1/plans.list",
@@ -198,9 +219,10 @@ describe("billing.updated", () => {
 	})
 
 	it("acknowledges a customer Autumn does not know under this key", async () => {
+		// Deleted since, or not this key's: the walk's sweep removes a deleted one and its plans.
 		const fake = organization({ customers: [] })
 		expect(await ops(BILLING_UPDATED_UPGRADE, { fake })).toEqual([])
-		expect(fake.calls.map((call) => call.path)).toEqual(["/v1/customers.get"])
+		expect(fake.calls.map((call) => call.path)).toEqual(["/v1/customers.get", "/v1/subscriptions.list"])
 	})
 
 	it("refuses a customer from the other environment than the key opens", async () => {
@@ -276,14 +298,17 @@ describe("balance events", () => {
 		})
 	})
 
-	it("ignores an entity's limit", async () => {
-		const written = await ops({
-			...LIMIT_REACHED_MESSAGES,
-			data: { ...LIMIT_REACHED_MESSAGES.data, entity_id: "workspace_abc" },
-		})
-		expect(events(written)).toEqual([])
-		// The customer's state is still refreshed: the delivery proves it changed.
-		expect(written.some((op) => op._tag === "metric")).toBe(true)
+	it("ignores an entity's limit, with no request at all", async () => {
+		const fake = organization()
+		const written = await ops(
+			{
+				...LIMIT_REACHED_MESSAGES,
+				data: { ...LIMIT_REACHED_MESSAGES.data, entity_id: "workspace_abc" },
+			},
+			{ fake },
+		)
+		expect(written).toEqual([])
+		expect(fake.calls).toHaveLength(0)
 	})
 
 	it("refuses a payload that is not the shape Autumn documents", async () => {

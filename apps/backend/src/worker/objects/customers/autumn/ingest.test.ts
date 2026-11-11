@@ -23,9 +23,10 @@ import {
 	PLAN_PRO,
 	SUB_ACME,
 	SUB_ACME_EXPIRED,
+	SUB_GLOBEX_LAPSED,
 	SUB_GLOBEX_TRIAL,
 } from "./fixtures"
-import { customerOps, featureDefinitionOps, plansById, subscriptionOp } from "./map"
+import { customerOps, featureDefinitionOps, plansById, subscriptionOps } from "./map"
 import { AutumnCustomer, AutumnPlan, AutumnSubscription } from "./wire"
 
 const CONFIG = { _tag: "autumn", customerIdIsClerkOrgId: true } as const
@@ -73,14 +74,10 @@ const backfill: ReadonlyArray<IngestOp> = [
 	...[CUSTOMER_ACME, CUSTOMER_GLOBEX, CUSTOMER_PERSONAL].flatMap((row) =>
 		customerOps(named(row), { config: CONFIG, env: "live", at: NOW, observedAt: OBSERVED }),
 	),
-	...[SUB_ACME_EXPIRED, SUB_ACME, SUB_GLOBEX_TRIAL].flatMap((row) => {
-		const op = subscriptionOp(subscription(row), {
-			plans: PLANS,
-			currency: "usd",
-			observedAt: OBSERVED,
-		})
-		return op === null ? [] : [op]
-	}),
+	...subscriptionOps(
+		[SUB_ACME_EXPIRED, SUB_ACME, SUB_GLOBEX_TRIAL].map((row) => subscription(row)),
+		{ pricing: { plans: PLANS, currency: "usd" }, observedAt: OBSERVED },
+	),
 ]
 
 const accounts = (world: CustomersWorld) =>
@@ -305,6 +302,32 @@ describe("Autumn ops through CustomerIngest", () => {
 					planName: "Pro",
 					mrrMinor: 9_900,
 					lifecycleStage: "active",
+				})
+			}),
+		))
+
+	it("reads an account whose only plan was a trial that lapsed unconverted as a lead, not churned", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", clerkBefore)
+				yield* world.ingest("autumn", [
+					...customerOps(named({ ...CUSTOMER_GLOBEX, subscriptions: [] }), {
+						config: CONFIG,
+						env: "live",
+						at: NOW,
+						observedAt: OBSERVED,
+					}),
+					...subscriptionOps([subscription(SUB_GLOBEX_LAPSED)], {
+						pricing: { plans: PLANS, currency: "usd" },
+						observedAt: OBSERVED,
+					}),
+				])
+				markBackfilled(world, "autumn")
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(accounts(world).find((row) => row.name === "Globex")).toMatchObject({
+					mrrMinor: 0,
+					lifecycleStage: "lead",
 				})
 			}),
 		))

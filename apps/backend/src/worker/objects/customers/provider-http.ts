@@ -35,16 +35,16 @@ const DEFAULT_RETRY_AFTER_MS = 1_000
 /** The provider's explanation of a refused key is at most this long in a message. */
 const MAX_DETAIL_LENGTH = 200
 
-/** How one GET behaves: 429s waited out in place, and how long one attempt may take. */
-export interface ProviderGetOptions {
+/** How one request behaves: 429s waited out in place, and how long one attempt may take. */
+export interface ProviderRequestOptions {
 	readonly inlineRetries: number
 	readonly timeoutMs: number
 }
 
-const PULL_REQUESTS: ProviderGetOptions = { inlineRetries: 2, timeoutMs: 30_000 }
+const PULL_REQUESTS: ProviderRequestOptions = { inlineRetries: 2, timeoutMs: 30_000 }
 
 /** A delivery answers fast: no 429 waited out in place, and a short timeout. */
-export const WEBHOOK_REQUESTS: ProviderGetOptions = { inlineRetries: 0, timeoutMs: 5_000 }
+export const WEBHOOK_REQUESTS: ProviderRequestOptions = { inlineRetries: 0, timeoutMs: 5_000 }
 
 export type ProviderQuery = ReadonlyArray<readonly [string, string]>
 
@@ -109,7 +109,7 @@ const makeProviderCall = <Path extends string, Refusal>(
 	api: ProviderApi<Path, Refusal>,
 	client: HttpClient.HttpClient,
 	apiKey: Redacted.Redacted<string>,
-	{ inlineRetries, timeoutMs }: ProviderGetOptions = PULL_REQUESTS,
+	{ inlineRetries, timeoutMs }: ProviderRequestOptions = PULL_REQUESTS,
 ) => {
 	const service = api.name.toLowerCase()
 
@@ -288,7 +288,7 @@ export const makeProviderGet = <Path extends string, Refusal>(
 	api: ProviderApi<Path, Refusal>,
 	client: HttpClient.HttpClient,
 	apiKey: Redacted.Redacted<string>,
-	options?: ProviderGetOptions,
+	options?: ProviderRequestOptions,
 ) => {
 	const call = makeProviderCall(api, client, apiKey, options)
 	return <A>(path: Path, query: ProviderQuery, schema: Schema.Decoder<A>) =>
@@ -300,7 +300,7 @@ export const makeProviderPost = <Path extends string, Refusal>(
 	api: ProviderApi<Path, Refusal>,
 	client: HttpClient.HttpClient,
 	apiKey: Redacted.Redacted<string>,
-	options?: ProviderGetOptions,
+	options?: ProviderRequestOptions,
 ) => {
 	const call = makeProviderCall(api, client, apiKey, options)
 	return <A>(path: Path, body: unknown, schema: Schema.Decoder<A>) =>

@@ -12,9 +12,10 @@
  *   for a human to link, and ingest replays it then.
  * - **License seats → `seatsUsed` / `seatsLimit`.** Autumn outranks Clerk's member count for these
  *   (`FIELD_PRECEDENCE`): a plan's seat pool is what the customer pays for.
- * - **Recurring plan → subscription**, with MRR normalized to a monthly amount in the currency's
- *   minor units ({@link subscriptionMrr}). Autumn quotes plan amounts in *major* units of the
- *   organization's default currency, so the amount is scaled by that currency's minor-unit factor.
+ * - **Recurring plan → subscription**, keyed `<customer id>:<subscription id>`, with MRR (base
+ *   price plus prepaid units) normalized to a monthly amount in the currency's minor units
+ *   ({@link subscriptionMrr}). Autumn quotes amounts in *major* units of the organization's default
+ *   currency, so the amount is scaled by that currency's minor-unit factor.
  * - **Feature balance → metric.** One metric per feature (`autumn.<feature_id>`, namespaced because
  *   ingest refuses a key another provider owns), its value the period's usage and its `limitValue`
  *   the granted amount — which is what the `near_limit` signal reads.
@@ -27,7 +28,8 @@
  *   a customer deleted since, and a slow read of a subscription cannot overwrite a newer one.
  * - **Not mapped.** Invoices (Stripe owns them, `tech-design.md` §4.2), one-off purchases (no
  *   recurring amount), entity-scoped plans and balances (a sub-customer's, not the account's), and
- *   `scheduled` plans (not billing yet, and Hazel's model has no scheduled status).
+ *   `scheduled` plans (not billing yet, and Hazel's model has no scheduled status; a scheduled base
+ *   plan only marks the current one's cancellation as a downgrade).
  */
 import type {
 	ConnectionConfig,
@@ -134,19 +136,6 @@ export const accountOp = (
 	return op
 }
 
-/** A deleted customer, dated by the read: ingest keeps an op observed at or before it from reviving it. */
-export const accountDeletedOp = (customerId: string, observedAt?: IsoTimestamp): UpsertAccount => {
-	const op: Types.Mutable<UpsertAccount> = {
-		_tag: "account",
-		externalId: customerId,
-		sameAs: [],
-		onNoMatch: "unmatched",
-		deleted: true,
-	}
-	if (observedAt !== undefined) op.observedAt = observedAt
-	return op
-}
-
 // ---------------------------------------------------------------------------
 // Subscriptions
 // ---------------------------------------------------------------------------
@@ -157,8 +146,7 @@ export const accountDeletedOp = (customerId: string, observedAt?: IsoTimestamp):
  * still set (Autumn clears it when the trial converts).
  *
  * `scheduled` is skipped: it bills nothing yet, Hazel's model has no scheduled status, and
- * recording it as active would count a future plan's amount as MRR today. The downgrade it
- * usually belongs to is already visible as `cancelAtPeriodEnd` on the plan it replaces.
+ * recording it as active would count a future plan's amount as MRR today.
  */
 export const statusOf = (subscription: AutumnSubscription): SubscriptionStatus | null => {
 	if (subscription.status === "expired") return "canceled"
@@ -177,82 +165,150 @@ export const billingIntervalOf = (plan: AutumnPlan | undefined): UpsertSubscript
 	return interval === "month" || interval === "year" ? interval : "other"
 }
 
-export interface SubscriptionMrr {
-	/** Monthly recurring amount in minor units of `currency`. */
-	readonly monthlyMinor: number
-	/** Plan items Autumn prices by usage or by prepaid units: counted as nothing (see the docs). */
-	readonly unpricedItems: number
+/** What prices a plan: each plan's active version, and the currency Autumn quotes amounts in. */
+export interface Pricing {
+	readonly plans: ReadonlyMap<string, AutumnPlan>
+	readonly currency: string
 }
 
+const quantityOf = (subscription: AutumnSubscription) => Math.max(1, Math.round(subscription.quantity ?? 1))
+
 /**
- * A subscription's MRR: the plan's base price × the subscription's quantity, normalized to a month
- * and converted from Autumn's major units to the currency's minor ones. Rounded once, at the end,
- * and never below zero (ingest refuses a negative amount).
+ * The monthly amount, in major units, of the units a customer bought on top of a plan's included
+ * ones (a `prepaid` item: seats, credit packs). Autumn reports them on the customer's balances, not
+ * on the subscription: each grant names its plan, the units bought (`prepaid_grant`) and the price
+ * per `billing_units` of them; the plan's item says how often that price is billed. A tiered price
+ * (no flat `amount`) counts as nothing.
+ */
+const prepaidMonthly = (
+	planId: string,
+	plan: AutumnPlan | undefined,
+	balances: ReadonlyArray<AutumnBalance>,
+): number =>
+	balances.reduce((total, balance) => {
+		const item = plan?.items?.find((entry) => entry.feature_id === balance.feature_id)
+		const factor = item?.price == null ? null : monthlyFactorOf(item.price)
+		if (factor === null) return total
+		return (balance.breakdown ?? []).reduce((sum, grant) => {
+			const price = grant.price ?? null
+			const bought = grant.prepaid_grant ?? 0
+			const units = price?.billing_units != null && price.billing_units > 0 ? price.billing_units : 1
+			const counts =
+				grant.plan_id === planId &&
+				grant.source !== "entity" &&
+				price?.billing_method === "prepaid" &&
+				price.amount != null &&
+				bought > 0
+			return counts ? sum + (bought / units) * (price.amount ?? 0) * factor : sum
+		}, total)
+	}, 0)
+
+/**
+ * A subscription's MRR in minor units: the plan's base price × the quantity, plus the prepaid units
+ * bought on top of it ({@link prepaidMonthly}), each normalized to a month and converted from
+ * Autumn's major units to the currency's minor ones. Rounded once, at the end, and never below zero.
  *
- * What is *not* in it: a plan's per-feature item prices. A `usage_based` one bills after the
- * included units and its amount is not knowable in advance (Stripe's metered prices are left out
- * the same way), and a `prepaid` one bills for units Autumn reports on the customer's balances
- * rather than on the subscription. A plan with no base price at all (a free plan, a usage-only
- * one) is MRR 0, which is what it bills today.
+ * What is *not* in it: a `usage_based` item, billed after the period for what was used and not
+ * knowable in advance (Stripe's metered prices are left out the same way). A plan billed only that
+ * way, or a free one, is MRR 0.
  */
 export const subscriptionMrr = (
 	subscription: AutumnSubscription,
 	plan: AutumnPlan | undefined,
 	currency: string,
-): SubscriptionMrr => {
+	balances: ReadonlyArray<AutumnBalance> = [],
+): number => {
 	const price = plan?.price ?? null
 	const factor = price === null ? null : monthlyFactorOf(price)
-	const amount = price?.amount ?? null
-	const quantity = Math.max(1, Math.round(subscription.quantity ?? 1))
-	const monthly =
-		amount === null || factor === null ? 0 : amount * factor * quantity * minorUnitsOf(currency)
-	return {
-		monthlyMinor: Math.max(0, Math.round(monthly)),
-		unpricedItems: (plan?.items ?? []).filter((item) => item.price != null).length,
-	}
+	const base =
+		price?.amount == null || factor === null ? 0 : price.amount * factor * quantityOf(subscription)
+	const monthly = base + prepaidMonthly(subscription.plan_id, plan, balances)
+	return Math.max(0, Math.round(monthly * minorUnitsOf(currency)))
 }
 
 /**
- * A recurring plan, read at `observedAt` (ingest drops a read older than one it applied). Null for
- * one Hazel does not record: an entity-scoped plan, a `scheduled` one, or a row whose customer
- * Autumn did not name.
+ * A subscription's external id. Autumn's `id` is unique among one customer's live plans only (the
+ * app's own `subscription_id`), so the customer id keys it.
  */
-export const subscriptionOp = (
-	subscription: AutumnSubscription,
+const subscriptionIdOf = (customerId: string, id: string): string => `${customerId}:${id}`
+
+/**
+ * A batch of plans, read at `observedAt` (ingest drops a read older than one it applied). Skipped:
+ * an entity-scoped plan, a `scheduled` one, and a row whose customer Autumn did not name.
+ *
+ * - **Prices**: the customer's own version of the plan when the read expanded it (custom prices,
+ *   grandfathered versions), else the plan's active version; `balances` add the customer's prepaid
+ *   units (the customer's own balances: pass them only for a batch of one customer's plans).
+ * - **Downgrades**: a base plan Autumn has scheduled replaces the current one at its period end, and
+ *   Autumn marks that one canceled. It is a plan change, not a cancellation, so the current plan
+ *   keeps `cancelAtPeriodEnd` false.
+ * - **Never billed**: an ended plan no processor ever billed (no billing period: a trial that
+ *   lapsed unconverted) is MRR 0, so its account reads as a lead rather than a churned customer.
+ * - **One id twice** (an ended plan whose `subscription_id` a live one reuses): the live one wins.
+ */
+export const subscriptionOps = (
+	subscriptions: ReadonlyArray<AutumnSubscription>,
 	options: {
 		readonly customerId?: string
-		readonly plans?: ReadonlyMap<string, AutumnPlan>
-		readonly currency: string
-		readonly observedAt?: IsoTimestamp
+		readonly pricing: Pricing
+		readonly balances?: ReadonlyArray<AutumnBalance>
+		readonly observedAt: IsoTimestamp
 	},
-): UpsertSubscription | null => {
-	const customerId = subscription.customer_id ?? options.customerId ?? null
-	const status = statusOf(subscription)
-	if (customerId === null || status === null || isEntityScoped(subscription)) return null
-	const plan = options.plans?.get(subscription.plan_id)
-	const mrr = subscriptionMrr(subscription, plan, options.currency)
-	const expired = status === "canceled"
-	const op: Types.Mutable<UpsertSubscription> = {
-		_tag: "subscription",
-		externalId: subscription.id,
-		account: autumnRef(customerId),
-		planName: plan?.name ?? subscription.plan_id,
-		status,
-		mrrMinor: mrr.monthlyMinor,
-		// Autumn exposes no per-customer discount on a subscription, so the list price is the price.
-		listMrrMinor: mrr.monthlyMinor,
-		currency: options.currency.toLowerCase(),
-		interval: billingIntervalOf(plan),
-		quantity: Math.max(1, Math.round(subscription.quantity ?? 1)),
-		startedAt: isoOf(subscription.started_at),
-		trialEndsAt: isoOf(subscription.trial_ends_at),
-		currentPeriodEnd: isoOf(subscription.current_period_end ?? subscription.expires_at),
-		// A cancellation Autumn has recorded but not yet carried out: the plan runs to `expires_at`.
-		cancelAtPeriodEnd: !expired && subscription.canceled_at != null,
-		canceledAt: isoOf(subscription.canceled_at ?? (expired ? subscription.expires_at : null)),
+): Array<UpsertSubscription> => {
+	const customerOf = (subscription: AutumnSubscription) =>
+		subscription.customer_id ?? options.customerId ?? null
+	const downgrading = new Set(
+		subscriptions.flatMap((subscription) =>
+			subscription.status === "scheduled" &&
+			subscription.add_on !== true &&
+			!isEntityScoped(subscription)
+				? [customerOf(subscription)]
+				: [],
+		),
+	)
+	const byId = new Map<string, UpsertSubscription>()
+	for (const subscription of subscriptions) {
+		const customerId = customerOf(subscription)
+		const status = statusOf(subscription)
+		if (customerId === null || status === null || isEntityScoped(subscription)) continue
+		const plan = subscription.plan ?? options.pricing.plans.get(subscription.plan_id)
+		const expired = status === "canceled"
+		const neverBilled = expired && subscription.current_period_end == null
+		const mrrMinor = neverBilled
+			? 0
+			: subscriptionMrr(subscription, plan, options.pricing.currency, options.balances)
+		const canceling =
+			!expired &&
+			subscription.canceled_at != null &&
+			!(subscription.add_on !== true && downgrading.has(customerId))
+		const op: UpsertSubscription = {
+			_tag: "subscription",
+			externalId: subscriptionIdOf(customerId, subscription.id),
+			account: autumnRef(customerId),
+			planName: plan?.name ?? subscription.plan_id,
+			status,
+			mrrMinor,
+			// The customer's own plan carries any custom price, so the list price is the price.
+			listMrrMinor: mrrMinor,
+			currency: options.pricing.currency,
+			interval: billingIntervalOf(plan),
+			quantity: quantityOf(subscription),
+			startedAt: isoOf(subscription.started_at),
+			trialEndsAt: isoOf(subscription.trial_ends_at),
+			currentPeriodEnd: isoOf(subscription.current_period_end ?? subscription.expires_at),
+			// A cancellation Autumn has recorded but not yet carried out: the plan runs to `expires_at`.
+			cancelAtPeriodEnd: canceling,
+			canceledAt: expired
+				? isoOf(subscription.canceled_at ?? subscription.expires_at)
+				: canceling
+					? isoOf(subscription.canceled_at)
+					: null,
+			observedAt: options.observedAt,
+		}
+		const held = byId.get(op.externalId)
+		if (held === undefined || (held.status === "canceled" && !expired)) byId.set(op.externalId, op)
 	}
-	if (options.observedAt !== undefined) op.observedAt = options.observedAt
-	return op
+	return [...byId.values()]
 }
 
 // ---------------------------------------------------------------------------
@@ -260,10 +316,10 @@ export const subscriptionOp = (
 // ---------------------------------------------------------------------------
 
 /**
- * The feature's own name, when this read carries one. `customers.list` takes no `expand`, so a
- * pulled balance has none and the definition is left to the walk's feature phase (or, for a feature
- * added since, to ingest, which names it after the key until that phase runs again). A definition is
- * never written from a name Hazel had to guess: it would overwrite the real one.
+ * The feature's own name, when this read carries one (both customer reads expand it). Without one
+ * the definition is left to the walk's feature phase (or, for a feature added since, to ingest,
+ * which names it after the key until that phase runs again). A definition is never written from a
+ * name Hazel had to guess: it would overwrite the real one.
  */
 const nameOf = (balance: AutumnBalance, names: ReadonlyMap<string, string>): string | null => {
 	const name = balance.feature?.name?.trim() ?? names.get(balance.feature_id)?.trim() ?? ""
@@ -370,9 +426,7 @@ export const usageEventOp = (
 		readonly occurredAt: IsoTimestamp
 		readonly names?: ReadonlyMap<string, string>
 	},
-): RecordEvent | null => {
-	// An entity's limit is a sub-customer's, not the account's.
-	if (event.entity_id != null && event.entity_id !== "") return null
+): RecordEvent => {
 	const feature = options.names?.get(event.feature_id) ?? event.feature_id
 	const alert = event.usage_alert ?? null
 	const threshold = alert?.threshold ?? null

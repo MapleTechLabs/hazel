@@ -1,7 +1,7 @@
 /**
  * The pure mapping: which account an Autumn customer lands on, the MRR normalization (a month, a
- * year, a quantity, a free plan, a zero-decimal currency), the plan states Hazel records and the
- * ones it skips, and what a feature balance becomes as a metric and a plan limit.
+ * year, a quantity, prepaid units, a free plan, a zero-decimal currency), the plan states Hazel
+ * records and the ones it skips, and what a feature balance becomes as a metric and a plan limit.
  */
 import type { ConnectionConfig } from "@hazel/domain/customers"
 import { Schema } from "effect"
@@ -17,12 +17,13 @@ import {
 	plansById,
 	statusOf,
 	subscriptionMrr,
-	subscriptionOp,
+	subscriptionOps,
 	usageEventOp,
 } from "./map"
 import {
 	CUSTOMER_ACME,
 	CUSTOMER_GLOBEX,
+	CUSTOMER_INITECH,
 	CUSTOMER_PERSONAL,
 	FEATURES,
 	LIMIT_REACHED_MESSAGES,
@@ -31,13 +32,16 @@ import {
 	PLAN_FREE,
 	PLAN_PRO,
 	PLAN_PRO_V1,
+	PLAN_TEAM,
 	SUB_ACME,
 	SUB_ACME_CANCELING,
 	SUB_ACME_ENTITY,
 	SUB_ACME_EXPIRED,
 	SUB_ACME_PAST_DUE,
 	SUB_ACME_SCHEDULED,
+	SUB_GLOBEX_LAPSED,
 	SUB_GLOBEX_TRIAL,
+	SUB_INITECH,
 	USAGE_ALERT_MESSAGES,
 } from "./fixtures"
 import { AutumnBalanceEvent, AutumnCustomer, AutumnPlan, AutumnSubscription } from "./wire"
@@ -50,7 +54,9 @@ const subscription = Schema.decodeUnknownSync(AutumnSubscription)
 const plan = Schema.decodeUnknownSync(AutumnPlan)
 const balanceEvent = Schema.decodeUnknownSync(AutumnBalanceEvent)
 
-const PLANS = plansById([PLAN_PRO, PLAN_PRO_V1, PLAN_ENTERPRISE, PLAN_FREE].map((row) => plan(row)))
+const PLANS = plansById(
+	[PLAN_PRO, PLAN_PRO_V1, PLAN_ENTERPRISE, PLAN_FREE, PLAN_TEAM].map((row) => plan(row)),
+)
 const AT = new Date("2026-11-10T12:00:00.000Z")
 const OBSERVED = "2026-11-10T12:00:00.000Z"
 
@@ -59,8 +65,20 @@ const named = (row: unknown) => {
 	return { ...decoded, id: decoded.id ?? "" }
 }
 
-const subOp = (row: unknown, currency = "usd") =>
-	subscriptionOp(subscription(row), { plans: PLANS, currency, observedAt: OBSERVED })
+const subOps = (rows: ReadonlyArray<unknown>, options: { currency?: string; customer?: unknown } = {}) =>
+	subscriptionOps(
+		rows.map((row) => subscription(row)),
+		{
+			pricing: { plans: PLANS, currency: options.currency ?? "usd" },
+			balances:
+				options.customer === undefined ? [] : Object.values(named(options.customer).balances ?? {}),
+			observedAt: OBSERVED,
+		},
+	)
+
+const subOp = (row: unknown, currency = "usd") => subOps([row], { currency })[0] ?? null
+
+const ACME_SUB = `${ORG_ACME}:${SUB_ACME.id}`
 
 describe("Autumn customer → account", () => {
 	it("places a customer by the Clerk organization id its own id is", () => {
@@ -104,7 +122,8 @@ describe("Autumn plan → subscription", () => {
 	it("normalizes a monthly plan's amount to minor units", () => {
 		expect(subOp(SUB_ACME)).toEqual({
 			_tag: "subscription",
-			externalId: SUB_ACME.id,
+			// Autumn's id is unique per customer only.
+			externalId: ACME_SUB,
 			account: { provider: "autumn", externalId: ORG_ACME },
 			planName: "Pro",
 			status: "active",
@@ -165,9 +184,8 @@ describe("Autumn plan → subscription", () => {
 	})
 
 	it("names a plan Autumn did not return by its id, and bills it nothing", () => {
-		const unknownPlan = subscriptionOp(subscription(SUB_ACME), {
-			plans: new Map(),
-			currency: "usd",
+		const [unknownPlan] = subscriptionOps([subscription(SUB_ACME)], {
+			pricing: { plans: new Map(), currency: "usd" },
 			observedAt: OBSERVED,
 		})
 		expect(unknownPlan).toMatchObject({ planName: "pro", mrrMinor: 0, interval: "other" })
@@ -175,27 +193,67 @@ describe("Autumn plan → subscription", () => {
 
 	it("prefers the plan's active version, and prices a one-off cadence as nothing", () => {
 		// The archived v1 is $79; the active v2 is $99.
-		expect(PLANS.get("pro")?.version).toBe(2)
-		expect(plansById([plan(PLAN_PRO_V1)]).get("pro")?.version).toBe(1)
+		expect(PLANS.get("pro")?.price?.amount).toBe(99)
+		expect(plansById([plan(PLAN_PRO_V1)]).get("pro")?.price?.amount).toBe(79)
 		const oneOff = plan({ ...PLAN_PRO, price: { amount: 500, interval: "one_off" } })
-		expect(subscriptionMrr(subscription(SUB_ACME), oneOff, "usd").monthlyMinor).toBe(0)
+		expect(subscriptionMrr(subscription(SUB_ACME), oneOff, "usd")).toBe(0)
 		expect(billingIntervalOf(oneOff)).toBe("other")
 	})
 
-	it("counts a plan's per-feature prices as nothing, and says how many it skipped", () => {
+	it("prices the customer's own version of the plan when the read expanded it", () => {
+		// A custom price: $49 for this customer, whatever the catalog says.
+		const custom = { ...SUB_ACME, plan: { ...PLAN_PRO, price: { amount: 49, interval: "month" } } }
+		expect(subOp(custom)).toMatchObject({ mrrMinor: 4_900, listMrrMinor: 4_900, planName: "Pro" })
+	})
+
+	it("adds the prepaid units bought on top of a plan, never the usage billed after it", () => {
+		// $20 base + 5 seats × $10.
+		expect(subOps([SUB_INITECH], { customer: CUSTOMER_INITECH })).toMatchObject([
+			{ externalId: `${SUB_INITECH.customer_id}:main`, planName: "Team", mrrMinor: 7_000 },
+		])
 		// Pro's messages overage is `usage_based`: not knowable in advance.
-		expect(subscriptionMrr(subscription(SUB_ACME), PLANS.get("pro"), "usd")).toEqual({
-			monthlyMinor: 9_900,
-			unpricedItems: 1,
-		})
+		expect(subOps([SUB_ACME], { customer: CUSTOMER_ACME })).toMatchObject([{ mrrMinor: 9_900 }])
+		// A grant of another plan, or a sub-customer's, is not this plan's.
+		const seats = named(CUSTOMER_INITECH).balances?.["seats"]
+		const elsewhere = [
+			{ ...seats!, breakdown: seats!.breakdown!.map((grant) => ({ ...grant, plan_id: "pro" })) },
+			{ ...seats!, breakdown: seats!.breakdown!.map((grant) => ({ ...grant, source: "entity" })) },
+		]
+		expect(subscriptionMrr(subscription(SUB_INITECH), PLANS.get("team"), "usd", elsewhere)).toBe(2_000)
+	})
+
+	it("reads a cancellation beside a scheduled base plan as a downgrade, not a cancel", () => {
+		const [current] = subOps([SUB_ACME_CANCELING, SUB_ACME_SCHEDULED])
+		expect(current).toMatchObject({ status: "active", cancelAtPeriodEnd: false, canceledAt: null })
+		// A scheduled add-on replaces nothing.
+		const [canceling] = subOps([SUB_ACME_CANCELING, { ...SUB_ACME_SCHEDULED, add_on: true }])
+		expect(canceling).toMatchObject({ cancelAtPeriodEnd: true })
+	})
+
+	it("bills a trial that lapsed unconverted nothing, so its account is no churned customer", () => {
+		expect(subOp(SUB_GLOBEX_LAPSED)).toMatchObject({ status: "canceled", mrrMinor: 0 })
+	})
+
+	it("keys an id by its customer, and keeps the live plan when an ended one shares its id", () => {
+		const other = { ...SUB_ACME, customer_id: "org_2other" }
+		expect(subOps([SUB_ACME, other]).map((op) => op.externalId)).toEqual([
+			ACME_SUB,
+			`org_2other:${SUB_ACME.id}`,
+		])
+		const ended = { ...SUB_ACME_EXPIRED, id: SUB_ACME.id }
+		expect(subOps([ended, SUB_ACME]).map((op) => [op.externalId, op.status])).toEqual([
+			[ACME_SUB, "active"],
+		])
+		expect(subOps([SUB_ACME, ended]).map((op) => op.status)).toEqual(["active"])
 	})
 
 	it("takes the customer id from the row, else from the caller", () => {
 		const inline = subscription({ ...SUB_ACME, customer_id: null })
-		expect(subscriptionOp(inline, { plans: PLANS, currency: "usd", customerId: ORG_ACME })).toMatchObject(
-			{ account: { provider: "autumn", externalId: ORG_ACME } },
-		)
-		expect(subscriptionOp(inline, { plans: PLANS, currency: "usd" })).toBeNull()
+		const pricing = { plans: PLANS, currency: "usd" }
+		expect(
+			subscriptionOps([inline], { pricing, customerId: ORG_ACME, observedAt: OBSERVED }),
+		).toMatchObject([{ account: { provider: "autumn", externalId: ORG_ACME } }])
+		expect(subscriptionOps([inline], { pricing, observedAt: OBSERVED })).toEqual([])
 	})
 })
 
@@ -298,15 +356,5 @@ describe("Autumn usage events", () => {
 			title: "messages crossed the 80% usage alert",
 			data: { threshold: 80, thresholdType: "usage_percentage" },
 		})
-	})
-
-	it("ignores an entity's limit: it is a sub-customer's, not the account's", () => {
-		expect(
-			usageEventOp(balanceEvent({ ...LIMIT_REACHED_MESSAGES.data, entity_id: "workspace_abc" }), {
-				kind: "limit_reached",
-				deliveryId: "msg_2abc",
-				occurredAt: OBSERVED,
-			}),
-		).toBeNull()
 	})
 })

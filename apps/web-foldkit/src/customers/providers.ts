@@ -337,10 +337,13 @@ export const PROVIDERS: Descriptors = {
 		name: "Autumn",
 		domain: "useautumn.com",
 		linkHosts: ["*.useautumn.com"],
-		blurb: "Plans, metered features and limits. Customers match by Autumn customer id = Clerk org id. Owns the MRR while connected.",
+		blurb: "Plans, metered features and limits. Customers match by Autumn customer id = Clerk org id. Owns the MRR of the accounts it bills.",
 		provides: ["Billing", "Usage", "Limits"],
 		adds: [
-			{ title: "MRR", detail: "from the plans customers hold, normalized to monthly" },
+			{
+				title: "MRR",
+				detail: "from the plans customers hold and the units they prepay, normalized to monthly",
+			},
 			{ title: "Feature usage", detail: "daily usage per feature as account metrics" },
 			{ title: "Plan limits", detail: "seats and metered limits, for the near-limit signal" },
 		],
@@ -387,12 +390,15 @@ export const PROVIDERS: Descriptors = {
 				group: "Plan → Billing",
 				fields: [
 					{
-						from: "plan price × quantity ÷ interval",
+						from: "plan price × quantity + prepaid units, per interval",
 						to: "subscription.mrr (monthly, minor units)",
 					},
 					{ from: "plan name", to: "subscription.planName" },
 					{ from: "past_due / trial_ends_at / expired", to: "subscription.status" },
-					{ from: "canceled_at", to: "cancelAtPeriodEnd, canceledAt" },
+					{
+						from: "canceled_at (not on a scheduled downgrade)",
+						to: "cancelAtPeriodEnd, canceledAt",
+					},
 					{ from: "current_period_end (else expires_at)", to: "subscription.currentPeriodEnd" },
 				],
 			},

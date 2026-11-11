@@ -18,7 +18,7 @@
  */
 import { type Redacted, Schema } from "effect"
 import type { HttpClient } from "effect/http"
-import { makeProviderGet, makeProviderPost, type ProviderGetOptions } from "../provider-http"
+import { makeProviderGet, makeProviderPost, type ProviderRequestOptions } from "../provider-http"
 import { AUTUMN_API_VERSION } from "./wire"
 
 export const AUTUMN_API_URL = "https://api.useautumn.com"
@@ -57,33 +57,14 @@ const AUTUMN = {
 	rateLimitedMessage: "Autumn's rate limit for this organization is reached",
 }
 
-/** The caller holds the key; both are curried over the client so the adapter binds them once. */
-export const makeAutumnGet = (
-	client: HttpClient.HttpClient,
-	apiKey: Redacted.Redacted<string>,
-	options?: ProviderGetOptions,
-) => makeProviderGet(AUTUMN, client, apiKey, options)
-
-export const makeAutumnPost = (
-	client: HttpClient.HttpClient,
-	apiKey: Redacted.Redacted<string>,
-	options?: ProviderGetOptions,
-) => makeProviderPost(AUTUMN, client, apiKey, options)
-
-export type AutumnGet = ReturnType<typeof makeAutumnGet>
-export type AutumnPost = ReturnType<typeof makeAutumnPost>
-
 /** Both verbs bound to one key, which is what every module below the adapter takes. */
-export interface AutumnApi {
-	readonly get: AutumnGet
-	readonly post: AutumnPost
-}
-
 export const makeAutumnApi = (
 	client: HttpClient.HttpClient,
 	apiKey: Redacted.Redacted<string>,
-	options?: ProviderGetOptions,
-): AutumnApi => ({
-	get: makeAutumnGet(client, apiKey, options),
-	post: makeAutumnPost(client, apiKey, options),
+	options?: ProviderRequestOptions,
+) => ({
+	get: makeProviderGet(AUTUMN, client, apiKey, options),
+	post: makeProviderPost(AUTUMN, client, apiKey, options),
 })
+
+export type AutumnApi = ReturnType<typeof makeAutumnApi>

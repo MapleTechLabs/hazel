@@ -15,16 +15,23 @@
  *
  * | Event | Reads | Writes |
  * |---|---|---|
- * | `billing.updated` | `customers.get`, then `plans.list` + `organization` (+ `subscriptions.list` when a plan expired) | the account, its plans and its feature usage |
- * | `balances.limit_reached` | `customers.get` | a `usage.limit_reached` entry and the feature usage |
- * | `balances.usage_alert_triggered` | `customers.get` | a `usage.limit_approaching` entry and the feature usage |
+ * | `billing.updated` | `customers.get` (+ `subscriptions.list` when a plan expired, alongside) | the account, its plans and its feature usage |
+ * | `balances.limit_reached` | `customers.get` | a `usage.limit_reached` entry, the account, its plans and usage |
+ * | `balances.usage_alert_triggered` | `customers.get` | a `usage.limit_approaching` entry, the account, its plans and usage |
+ *
+ * Pricing a plan the read did not expand (an ended one) or the currency takes `plans.list` +
+ * `organization`, which the adapter keeps a few minutes per connection.
  *
  * **Keeping another organization's — and another environment's — data out.** Autumn stamps a
- * delivery with neither: the envelope is `{ type, data }`. The customer read is what checks it. A
+ * delivery with neither: the envelope is `{ type, data }`. The customer read is what checks it: a
  * secret key opens exactly one organization *and* one environment, so a customer the key cannot see
- * answers a 4xx and is skipped (nothing written, acknowledged), and one it can see carries `env`,
- * which must be the environment the key is for — a sandbox endpoint's signing secret pasted next to
- * a live key writes nothing.
+ * answers 404 and is skipped (nothing written, acknowledged). What is written always comes from the
+ * read, never the payload — except a usage entry's feature and limit, which a sandbox endpoint's
+ * signing secret pasted next to a live key could attach to a live customer of the same id
+ * (`docs/customers/autumn.md`, Known gaps).
+ *
+ * A customer deleted in Autumn answers 404 too, so its delivery writes nothing; the next walk's
+ * sweep removes the customer and cancels its plans.
  *
  * Any other failure of the read depends on whether a retry can fix it: a transient one
  * (unreachable, timed out, 429, 5xx) refuses the delivery, nothing written, so Autumn delivers it
@@ -35,7 +42,7 @@
  * Not handled: `billing.auto_topup_succeeded` / `billing.auto_topup_failed` (a prepaid balance
  * recharge, whose invoice is Stripe's to report) and the `vercel.*` marketplace events.
  */
-import type { IngestOp, IsoTimestamp } from "@hazel/domain/customers"
+import type { ConnectionConfig, IngestOp, IsoTimestamp } from "@hazel/domain/customers"
 import { Clock, Effect, Option, Redacted, Schema } from "effect"
 import {
 	type CustomerProviderError,
@@ -46,7 +53,7 @@ import { issueSummary } from "../provider-http"
 import { verifySvix } from "../svix"
 import { headerOf } from "../webhook-crypto"
 import type { AutumnApi } from "./http"
-import { customerOps, usageEventOp } from "./map"
+import { type Pricing, usageEventOp } from "./map"
 import { readCustomer } from "./read"
 import {
 	AutumnBalanceEvent,
@@ -93,11 +100,12 @@ export const isTransient = (error: CustomerProviderError): boolean =>
  */
 export const receiveWebhook = Effect.fn("Autumn.receiveWebhook")(function* (input: {
 	readonly api: AutumnApi
+	readonly pricing: Effect.Effect<Pricing, CustomerProviderError>
 	readonly headers: Readonly<Record<string, string>>
 	readonly body: string
 	readonly webhookSecret: Redacted.Redacted<string>
 	readonly env: AutumnEnv
-	readonly config: Parameters<typeof customerOps>[1]["config"]
+	readonly config: ConnectionConfig
 }): Effect.fn.Return<ReadonlyArray<IngestOp>, RejectedError> {
 	const svixId = headerOf(input.headers, "svix-id")
 	if (svixId !== undefined) yield* Effect.annotateCurrentSpan("svix.id", svixId)
@@ -143,15 +151,21 @@ interface Timing {
  * The customer's state as a delivery writes it; `None` when Autumn does not know the customer under
  * this key (another organization's, or deleted since). A read that fails classifies the delivery.
  */
-const stateOf = (input: Input, customerId: string, timing: Timing, expired: boolean) =>
+const stateOf = (
+	input: Input,
+	customerId: string,
+	timing: Timing,
+	expired: Option.Option<{ readonly planId: string | null }>,
+) =>
 	readCustomer({
 		api: input.api,
+		pricing: input.pricing,
 		customerId,
 		env: input.env,
 		config: input.config,
 		at: timing.at,
 		observedAt: timing.observedAt,
-		withExpired: expired,
+		expired,
 	})
 
 /** Either the read's ops, or the right answer for a read that failed. */
@@ -179,11 +193,22 @@ const billingUpdatedOps = Effect.fnUntraced(function* (input: Input, data: unkno
 	const payload = yield* decodeAs(AutumnBillingUpdated, data, BILLING_UPDATED)
 	// An entity's plans are a sub-customer's, not the account's.
 	if (payload.entity_id != null && payload.entity_id !== "") return []
-	// Only `subscriptions.list` names an expired plan's subscription, so read it when one ended.
-	const expired = payload.plan_changes.some((change) => change.action === "expired")
+	// Only `subscriptions.list` names an expired plan's subscription, so read it when one ended:
+	// that plan's rows only, when the delivery names one.
+	const ended = [
+		...new Set(
+			payload.plan_changes.flatMap((change) =>
+				change.action === "expired" ? [change.subscription?.plan_id ?? null] : [],
+			),
+		),
+	]
+	const expired =
+		ended.length === 0
+			? Option.none()
+			: Option.some({ planId: ended.length === 1 ? (ended[0] ?? null) : null })
 	yield* Effect.annotateCurrentSpan({
 		"autumn.customer_changes": payload.plan_changes.length,
-		"autumn.read_expired": expired,
+		"autumn.read_expired": ended.length > 0,
 	})
 	return yield* applied(
 		BILLING_UPDATED,
@@ -199,10 +224,12 @@ const balanceEventOps = Effect.fnUntraced(function* (
 	timing: Timing & { readonly occurredAt: IsoTimestamp; readonly deliveryId: string },
 ) {
 	const payload = yield* decodeAs(AutumnBalanceEvent, envelope.data, envelope.type)
+	// An entity's limit is a sub-customer's, not the account's: nothing to read or write.
+	if (payload.entity_id != null && payload.entity_id !== "") return []
 	const kind = envelope.type === LIMIT_REACHED ? "limit_reached" : "usage_alert"
 	return yield* applied(
 		envelope.type,
-		stateOf(input, payload.customer_id, timing, false).pipe(
+		stateOf(input, payload.customer_id, timing, Option.none()).pipe(
 			Effect.map((state): ReadonlyArray<IngestOp> => {
 				if (Option.isNone(state)) return []
 				const event = usageEventOp(payload, {
@@ -212,7 +239,7 @@ const balanceEventOps = Effect.fnUntraced(function* (
 					names: state.value.names,
 				})
 				// The account and its fresh balances first: the entry names the account they create.
-				return event === null ? state.value.ops : [...state.value.ops, event]
+				return [...state.value.ops, event]
 			}),
 		),
 	)

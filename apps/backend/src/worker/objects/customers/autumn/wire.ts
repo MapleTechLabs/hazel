@@ -36,36 +36,28 @@ export type AutumnEnv = typeof AutumnEnv.Type
 export const AutumnOrganizationMe = Schema.Struct({
 	id: Schema.String,
 	name: Nullable(Schema.String),
-	slug: Nullable(Schema.String),
 	env: AutumnEnv,
 })
-export type AutumnOrganizationMe = typeof AutumnOrganizationMe.Type
 
 /**
  * `GET /v1/organization`: the same organization, with the currency its plan amounts are quoted in
  * (`createOrgResponse`, `default_currency`). `/me` does not carry it and a customer never does.
  */
 export const AutumnOrganization = Schema.Struct({
-	id: Nullable(Schema.String),
-	name: Nullable(Schema.String),
 	default_currency: Nullable(Schema.String),
 })
-export type AutumnOrganization = typeof AutumnOrganization.Type
 
 // ---------------------------------------------------------------------------
 // Features
 // ---------------------------------------------------------------------------
 
 /** `POST /v1/features.list` → the organization's features, which name the usage metrics. */
-export const AutumnFeature = Schema.Struct({
+const AutumnFeature = Schema.Struct({
 	id: Schema.String,
 	name: Nullable(Schema.String),
 	/** `boolean` | `metered` | `credit_system` | `ai_credit_system`. */
 	type: Nullable(Schema.String),
-	/** Metered features only: usage resets each period (API calls) or persists (seats). */
-	consumable: Nullable(Schema.Boolean),
 })
-export type AutumnFeature = typeof AutumnFeature.Type
 
 export const AutumnFeaturesPage = Schema.Struct({ list: Schema.Array(AutumnFeature) })
 
@@ -74,49 +66,33 @@ export const AutumnFeaturesPage = Schema.Struct({ list: Schema.Array(AutumnFeatu
 // ---------------------------------------------------------------------------
 
 /**
- * A plan's base price, or a plan item's overage price. Amounts are in **major** units of the
- * organization's `default_currency`; `interval` is `one_off` | `week` | `month` | `quarter` |
- * `semi_annual` | `year`, and `one_off` is not recurring at all.
+ * A plan's base price, or a plan item's price. Amounts are in **major** units of the organization's
+ * `default_currency`; `interval` is `one_off` | `week` | `month` | `quarter` | `semi_annual` |
+ * `year`, and `one_off` is not recurring at all.
  */
 const AutumnPriceFields = {
 	amount: Nullable(Schema.Number),
-	additional_currencies: Nullable(
-		Schema.Array(Schema.Struct({ currency: Nullable(Schema.String), amount: Nullable(Schema.Number) })),
-	),
 	interval: Nullable(Schema.String),
 	interval_count: Nullable(Schema.Number),
 }
 
-export const AutumnBasePrice = Schema.Struct(AutumnPriceFields)
-export type AutumnBasePrice = typeof AutumnBasePrice.Type
-
-export const AutumnItemPrice = Schema.Struct({
-	...AutumnPriceFields,
-	/** Set instead of `amount` for graduated or volume pricing: the amount lives on the tiers. */
-	tiers: Nullable(Schema.Array(Schema.Unknown)),
-	/** `prepaid` (paid upfront, e.g. seats) or `usage_based` (billed after the included units). */
-	billing_method: Nullable(Schema.String),
-	billing_units: Nullable(Schema.Number),
-})
-export type AutumnItemPrice = typeof AutumnItemPrice.Type
-
-export const AutumnPlanItem = Schema.Struct({
+const AutumnPlanItem = Schema.Struct({
 	feature_id: Nullable(Schema.String),
-	included: Nullable(Schema.Number),
-	unlimited: Nullable(Schema.Boolean),
-	price: Nullable(AutumnItemPrice),
+	price: Nullable(
+		Schema.Struct({
+			...AutumnPriceFields,
+			/** `prepaid` (units bought upfront, e.g. seats) or `usage_based` (billed after the period). */
+			billing_method: Nullable(Schema.String),
+		}),
+	),
 })
-export type AutumnPlanItem = typeof AutumnPlanItem.Type
 
 export const AutumnPlan = Schema.Struct({
 	id: Schema.String,
 	name: Nullable(Schema.String),
-	version: Nullable(Schema.Number),
 	/** At most one version of a plan is active; Hazel prices from that one. */
 	active: Nullable(Schema.Boolean),
-	add_on: Nullable(Schema.Boolean),
-	auto_enable: Nullable(Schema.Boolean),
-	price: Nullable(AutumnBasePrice),
+	price: Nullable(Schema.Struct(AutumnPriceFields)),
 	items: Nullable(Schema.Array(AutumnPlanItem)),
 })
 export type AutumnPlan = typeof AutumnPlan.Type
@@ -127,48 +103,68 @@ export const AutumnPlansPage = Schema.Struct({ list: Schema.Array(AutumnPlan) })
 // Customers
 // ---------------------------------------------------------------------------
 
-/** One feature's balance on a customer: what the plan grants, what is used, what is left. */
+/**
+ * One grant behind a balance (`breakdown[]`): the plan it comes from, the units bought on top of
+ * the plan's included ones (`prepaid_grant`), and the price those units are billed at — `amount`
+ * per `billing_units` units, unset for a tiered price. `source: "entity"` is a sub-customer's.
+ */
+const AutumnBalanceGrant = Schema.Struct({
+	plan_id: Nullable(Schema.String),
+	prepaid_grant: Nullable(Schema.Number),
+	source: Nullable(Schema.String),
+	price: Nullable(
+		Schema.Struct({
+			amount: Nullable(Schema.Number),
+			billing_units: Nullable(Schema.Number),
+			billing_method: Nullable(Schema.String),
+		}),
+	),
+})
+
+/** One feature's balance on a customer: what the plan grants, and what is used. */
 export const AutumnBalance = Schema.Struct({
 	feature_id: Schema.String,
-	feature: Nullable(Schema.Struct({ id: Nullable(Schema.String), name: Nullable(Schema.String) })),
+	feature: Nullable(Schema.Struct({ name: Nullable(Schema.String) })),
 	/** Included + prepaid units for the period. */
 	granted: Nullable(Schema.Number),
-	remaining: Nullable(Schema.Number),
 	usage: Nullable(Schema.Number),
 	unlimited: Nullable(Schema.Boolean),
-	overage_allowed: Nullable(Schema.Boolean),
-	next_reset_at: Nullable(Schema.Number),
+	breakdown: Nullable(Schema.Array(AutumnBalanceGrant)),
 })
 export type AutumnBalance = typeof AutumnBalance.Type
 
 /** A license seat pool a plan grants: `granted` seats, `usage` assigned. */
 export const AutumnLicense = Schema.Struct({
-	license_plan_id: Nullable(Schema.String),
 	granted: Nullable(Schema.Number),
 	usage: Nullable(Schema.Number),
 })
 export type AutumnLicense = typeof AutumnLicense.Type
 
 /**
- * A customer's recurring plan. The same shape comes inline on a customer (`subscriptions[]`) and
- * from `POST /v1/subscriptions.list`, which adds `customer_id` and an `expired` status — the only
- * place an ended plan is visible, since a customer only ever lists its `active`, `past_due` and
- * `scheduled` ones (`RELEVANT_STATUSES`).
+ * A customer's recurring plan. The same shape comes inline on a customer (`subscriptions[]`, with
+ * the customer's own `plan` when `expand` asks for it) and from `POST /v1/subscriptions.list`,
+ * which adds `customer_id` and an `expired` status — the only place an ended plan is visible, since
+ * a customer only ever lists its `active`, `past_due` and `scheduled` ones (`RELEVANT_STATUSES`).
+ *
+ * `id` is the `subscription_id` the app chose at attach time, else Autumn's own: unique among a
+ * customer's live plans only, so another customer — or this one's ended plan — may hold it too.
  */
 export const AutumnSubscription = Schema.Struct({
 	id: Schema.String,
 	plan_id: Schema.String,
+	/** The customer's own version of the plan (custom prices included); `expand` only. */
+	plan: Nullable(AutumnPlan),
 	/** `active` | `scheduled` | `expired`. */
 	status: Nullable(Schema.String),
 	past_due: Nullable(Schema.Boolean),
 	add_on: Nullable(Schema.Boolean),
-	auto_enable: Nullable(Schema.Boolean),
 	/** Unix ms. */
 	started_at: Nullable(Schema.Number),
 	canceled_at: Nullable(Schema.Number),
 	expires_at: Nullable(Schema.Number),
 	/** Only set while the plan is actually trialing (`getApiSubscriptionV2`). */
 	trial_ends_at: Nullable(Schema.Number),
+	/** The processor's billing period (Stripe, RevenueCat); unset for a plan nothing ever billed. */
 	current_period_end: Nullable(Schema.Number),
 	quantity: Nullable(Schema.Number),
 	/** `entity`: a sub-customer's plan (a seat, a project), not the account's. */
@@ -192,10 +188,10 @@ export const AutumnCustomer = Schema.Struct({
 	email: Nullable(Schema.String),
 	/** Unix ms. */
 	created_at: Nullable(Schema.Number),
-	stripe_id: Nullable(Schema.String),
 	env: Nullable(AutumnEnv),
-	metadata: Nullable(Schema.Record(Schema.String, Schema.Unknown)),
 	subscriptions: Nullable(Schema.Array(AutumnSubscription)),
+	/** One-off plans: only counted, against the plans a listing returns per customer. */
+	purchases: Nullable(Schema.Array(Schema.Unknown)),
 	licenses: Nullable(Schema.Array(AutumnLicense)),
 	/** Keyed by feature id. */
 	balances: Nullable(Schema.Record(Schema.String, AutumnBalance)),
@@ -248,7 +244,6 @@ export const AutumnBalanceEvent = Schema.Struct({
 	/** `usage_alert_triggered` only. */
 	usage_alert: Nullable(
 		Schema.Struct({
-			name: Nullable(Schema.String),
 			threshold: Nullable(Schema.Number),
 			threshold_type: Nullable(Schema.String),
 		}),

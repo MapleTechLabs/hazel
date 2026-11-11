@@ -117,7 +117,33 @@ export const PLAN_FREE = {
 	items: [{ feature_id: "messages", included: 100, unlimited: false, price: null }],
 }
 
-export const PLANS = [PLAN_PRO, PLAN_PRO_V1, PLAN_ENTERPRISE, PLAN_FREE]
+/** $20 a month, plus seats bought upfront at $10 a seat each month (a `prepaid` item). */
+export const PLAN_TEAM = {
+	id: "team",
+	name: "Team",
+	version: 1,
+	active: true,
+	add_on: false,
+	auto_enable: false,
+	price: { amount: 20, interval: "month", interval_count: 1 },
+	items: [
+		{
+			feature_id: "seats",
+			included: 0,
+			unlimited: false,
+			price: {
+				amount: 10,
+				interval: "month",
+				interval_count: 1,
+				billing_units: 1,
+				billing_method: "prepaid",
+				max_purchase: null,
+			},
+		},
+	],
+}
+
+export const PLANS = [PLAN_PRO, PLAN_PRO_V1, PLAN_ENTERPRISE, PLAN_FREE, PLAN_TEAM]
 
 // ---------------------------------------------------------------------------
 // Subscriptions
@@ -198,6 +224,24 @@ export const SUB_ACME_SCHEDULED = {
 	current_period_end: null,
 }
 
+/** A trial that lapsed unconverted: ended, and no processor ever billed it (no billing period). */
+export const SUB_GLOBEX_LAPSED = {
+	...SUB_GLOBEX_TRIAL,
+	status: "expired",
+	trial_ends_at: null,
+	expires_at: null,
+	current_period_start: null,
+	current_period_end: null,
+}
+
+/** The Team plan, with five seats bought on top of it. */
+export const SUB_INITECH = {
+	...SUB_ACME,
+	id: "main",
+	plan_id: "team",
+	customer_id: "org_2initech0000000000000000",
+}
+
 /** A sub-customer's plan: Autumn scopes it to an entity, and it is not the account's. */
 export const SUB_ACME_ENTITY = {
 	...SUB_ACME,
@@ -220,6 +264,21 @@ const BALANCE_MESSAGES = {
 	overage_allowed: true,
 	max_purchase: null,
 	next_reset_at: MS("2026-12-01T09:20:00.000Z"),
+	// The overage is billed after the period for what was used: no part of the MRR.
+	breakdown: [
+		{
+			id: "cus_ent_2acme_messages",
+			plan_id: "pro",
+			included_grant: 10_000,
+			prepaid_grant: 0,
+			remaining: 1_800,
+			usage: 8_200,
+			unlimited: false,
+			reset: { interval: "month", resets_at: MS("2026-12-01T09:20:00.000Z") },
+			price: { amount: 0.002, billing_units: 1, billing_method: "usage_based", max_purchase: null },
+			expires_at: null,
+		},
+	],
 }
 
 const BALANCE_SEATS = {
@@ -289,6 +348,44 @@ export const CUSTOMER_PERSONAL = {
 	subscriptions: [],
 	licenses: [],
 	balances: {},
+}
+
+/** On the Team plan with five seats bought: $20 + 5 × $10 a month. */
+export const CUSTOMER_INITECH = {
+	id: SUB_INITECH.customer_id,
+	name: "Initech",
+	email: null,
+	created_at: MS("2026-03-02T10:00:00.000Z"),
+	env: "live",
+	subscriptions: [SUB_INITECH],
+	licenses: [],
+	balances: {
+		seats: {
+			feature_id: "seats",
+			feature: { id: "seats", name: "Seats" },
+			granted: 5,
+			remaining: 1,
+			usage: 4,
+			unlimited: false,
+			overage_allowed: false,
+			max_purchase: null,
+			next_reset_at: null,
+			breakdown: [
+				{
+					id: "cus_ent_2initech_seats",
+					plan_id: "team",
+					included_grant: 0,
+					prepaid_grant: 5,
+					remaining: 1,
+					usage: 4,
+					unlimited: false,
+					reset: null,
+					price: { amount: 10, billing_units: 1, billing_method: "prepaid", max_purchase: null },
+					expires_at: null,
+				},
+			],
+		},
+	},
 }
 
 export const CUSTOMERS = [CUSTOMER_ACME, CUSTOMER_GLOBEX, CUSTOMER_PERSONAL]

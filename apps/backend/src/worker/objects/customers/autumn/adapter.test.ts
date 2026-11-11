@@ -6,7 +6,8 @@
 import { Effect, Redacted } from "effect"
 import { describe, expect, it } from "vitest"
 import { makeAutumnAdapter, envOfAccountId } from "./adapter"
-import { CUSTOMERS, FEATURES, ORGANIZATION, ORG_ME, PLANS, SUB_ACME } from "./fixtures"
+import { CUSTOMERS, FEATURES, ORGANIZATION, ORG_ME, PLANS, SUB_ACME, SUB_ACME_EXPIRED } from "./fixtures"
+import { encodeCursor } from "./pull"
 import { type FakeAutumnState, fakeAutumnHttpClient, makeFakeAutumn } from "./testing"
 import { envOfKey } from "./wire"
 
@@ -49,15 +50,17 @@ describe("Autumn validate", () => {
 		})
 		expect(fake.calls.map((call) => call.path)).toEqual([
 			"/v1/organization/me",
-			"/v1/features.list",
+			// The pricing every pull and delivery needs: the plans and the currency they are quoted in.
 			"/v1/plans.list",
+			"/v1/organization",
+			"/v1/features.list",
 			"/v1/customers.list",
 			"/v1/subscriptions.list",
 		])
 		// One record of each is all it takes, read the way the pull reads it.
-		expect(fake.calls[2]!.body).toEqual({ include_archived: true })
-		expect(fake.calls[3]!.body).toEqual({ start_cursor: "", limit: 1 })
-		expect(fake.calls[4]!.body).toEqual({
+		expect(fake.calls[1]!.body).toEqual({ include_archived: true })
+		expect(fake.calls[4]!.body).toEqual({ start_cursor: "", limit: 1 })
+		expect(fake.calls[5]!.body).toEqual({
 			start_cursor: "",
 			limit: 1,
 			statuses: ["active", "past_due", "scheduled", "expired"],
@@ -87,12 +90,19 @@ describe("Autumn validate", () => {
 		).toBe(`${ORG_ME.id}:sandbox`)
 	})
 
-	it("refuses a key whose prefix says nothing about its environment", async () => {
+	it("refuses a key whose prefix says nothing about its environment, before any request", async () => {
 		const odd = "am_sk_fake0000000000000000"
-		const error = await refusal(organization({ apiKey: odd }), odd)
+		const fake = organization({ apiKey: odd })
+		const error = await refusal(fake, odd)
 		expect(error.code).toBe("auth")
 		expect(error.message).toMatch(/is what an Autumn secret key looks like \(Autumn → Developer → Keys\)/)
 		expect(envOfKey(odd)).toBeNull()
+		expect(fake.calls).toHaveLength(0)
+	})
+
+	it("names the currency endpoint when the key cannot read it", async () => {
+		const error = await refusal(organization({ forbidden: ["/v1/organization"] }))
+		expect(error.message).toMatch(/Autumn refused GET \/v1\/organization for this key \(403\)/)
 	})
 
 	it("falls back to the environment when the organization has no name", async () => {
@@ -119,6 +129,32 @@ describe("Autumn validate", () => {
 		const error = await refusal(organization({ me: null }))
 		expect(error).toMatchObject({ code: "auth", httpStatus: 403 })
 		expect(error.message).toMatch(/GET \/v1\/organization\/me for this key \(403\)/)
+	})
+
+	it("pulls only for a validated connection, and reuses its pricing for a few minutes", async () => {
+		const fake = organization({ subscriptions: [SUB_ACME_EXPIRED] })
+		const pullAt = (externalAccountId: string | null) =>
+			Effect.gen(function* () {
+				const adapter = yield* makeAutumnAdapter
+				return yield* adapter.pull({
+					credentials: {
+						apiKey: Redacted.make(API_KEY),
+						webhookSecret: null,
+						config: { _tag: "autumn", customerIdIsClerkOrgId: true },
+						externalAccountId,
+					},
+					cursor: encodeCursor({ phase: "subscriptions", after: null }),
+					since: null,
+				})
+			}).pipe(Effect.provide(fakeAutumnHttpClient(fake)))
+		const unvalidated = await Effect.runPromise(Effect.flip(pullAt(null)))
+		expect(unvalidated).toMatchObject({ code: "auth" })
+		expect(fake.calls).toHaveLength(0)
+		const account = `${ORG_ME.id}:live`
+		await Effect.runPromise(pullAt(account))
+		await Effect.runPromise(pullAt(account))
+		expect(fake.calls.filter((call) => call.path === "/v1/plans.list")).toHaveLength(1)
+		expect(fake.calls.filter((call) => call.path === "/v1/subscriptions.list")).toHaveLength(2)
 	})
 
 	it("reads the environment back off a stored account id", () => {

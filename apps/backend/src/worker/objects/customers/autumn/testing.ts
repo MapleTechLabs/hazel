@@ -1,8 +1,8 @@
 /**
  * A fake Autumn API for the adapter's tests: it serves the recorded fixtures from the real
- * endpoints with Autumn's own opaque cursor paging, its `statuses` and `customer_id` filtering and
- * its `expand` handling (a balance's `feature` is absent until a request asks for it, exactly as
- * Autumn sends it), answers 404 for a customer it does not hold, refuses the wrong key with
+ * endpoints with Autumn's own opaque cursor paging, its `statuses`, `customer_id` and `plan_id`
+ * filtering and its `expand` handling (a balance's `feature` and a plan's `plan` are absent until a
+ * request asks for them, exactly as Autumn sends them), answers 404 for a customer it does not hold, refuses the wrong key with
  * Autumn's error body, and can be told to answer 429, fail a path (503), refuse it (400) or garble
  * its body. It records every call, so a test can assert how many requests a page cost, that the
  * version is pinned, and that the key only ever travels in the `Authorization` header.
@@ -79,7 +79,10 @@ const strings = (body: Row, key: string): Array<string> => {
 	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []
 }
 
-/** `{ list, next_cursor, has_more }` paged the way Autumn does: an opaque cursor over the rows. */
+/**
+ * `{ list, next_cursor, has_more }` paged the way Autumn does: an opaque cursor over the rows, and
+ * none when the page's last row has no id (`CusBatchService.getCursorPage`), more rows or not.
+ */
 const listOf = (rows: ReadonlyArray<Row>, body: Row, idOf: (row: Row) => string) => {
 	const limit = Math.max(1, Number(body["limit"] ?? 50))
 	const after = str(body, "start_cursor")
@@ -90,25 +93,36 @@ const listOf = (rows: ReadonlyArray<Row>, body: Row, idOf: (row: Row) => string)
 	return json(200, {
 		list: page,
 		has_more: hasMore,
-		next_cursor: hasMore && last !== undefined ? idOf(last) : null,
+		next_cursor: hasMore && last !== undefined && idOf(last) !== "" ? idOf(last) : null,
 	})
 }
 
 /**
- * What Autumn returns for a customer: its balances carry `feature` only when `expand` asks for it,
- * which only `customers.get` can — the listing takes no `expand` at all.
+ * What Autumn returns for a customer: its balances carry `feature`, and its plans `plan` (the
+ * customer's own version, else the catalog's active one), only when `expand` asks for them. Both
+ * customer reads take `expand` in the body (Autumn's `expandMiddleware`).
  */
-const withExpands = (customer: Row, expand: ReadonlyArray<string>): Row => {
+const withExpands = (fake: FakeAutumnState, customer: Row, expand: ReadonlyArray<string>): Row => {
 	const balances = (customer["balances"] ?? {}) as Record<string, Row>
-	if (expand.includes("balances.feature")) return customer
+	const subscriptions = (customer["subscriptions"] ?? []) as ReadonlyArray<Row>
 	return {
 		...customer,
-		balances: Object.fromEntries(
-			Object.entries(balances).map(([key, balance]) => {
-				const { feature: _dropped, ...rest } = balance
-				return [key, rest]
-			}),
-		),
+		balances: expand.includes("balances.feature")
+			? balances
+			: Object.fromEntries(
+					Object.entries(balances).map(([key, balance]) => {
+						const { feature: _dropped, ...rest } = balance
+						return [key, rest]
+					}),
+				),
+		subscriptions: subscriptions.map((subscription) => {
+			const { plan, ...rest } = subscription
+			if (!expand.includes("subscriptions.plan")) return rest
+			const catalog = fake.plans.find(
+				(row) => row["id"] === subscription["plan_id"] && row["active"] !== false,
+			)
+			return { ...rest, plan: plan ?? catalog }
+		}),
 	}
 }
 
@@ -140,21 +154,22 @@ const serve = (fake: FakeAutumnState, path: string, body: Row): Response => {
 			const found = fake.customers.find((customer) => customer["id"] === id)
 			return found === undefined
 				? autumnError(404, "Customer not found", "customer_not_found")
-				: json(200, withExpands(found, strings(body, "expand")))
+				: json(200, withExpands(fake, found, strings(body, "expand")))
 		}
 		case "/v1/customers.list": {
 			const descending = str(body, "sort_order") === "desc"
 			const ordered = descending ? [...fake.customers].reverse() : fake.customers
-			// The listing takes no `expand`, so a balance never carries its feature.
-			const rows = ordered.map((customer) => withExpands(customer, []))
-			return listOf(rows, body, (row) => String(row["id"]))
+			const rows = ordered.map((customer) => withExpands(fake, customer, strings(body, "expand")))
+			return listOf(rows, body, (row) => (row["id"] == null ? "" : String(row["id"])))
 		}
 		case "/v1/subscriptions.list": {
 			const statuses = strings(body, "statuses")
 			const customer = str(body, "customer_id")
+			const plan = str(body, "plan_id")
 			const rows = fake.subscriptions
 				.filter((row) => statuses.length === 0 || statuses.includes(statusOf(row)))
 				.filter((row) => customer === undefined || row["customer_id"] === customer)
+				.filter((row) => plan === undefined || row["plan_id"] === plan)
 			return listOf(rows, body, (row) => String(row["id"]))
 		}
 		default:

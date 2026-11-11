@@ -1,8 +1,9 @@
 /**
  * The pull: the walk's three phases, the opaque cursor that resumes them, and the `sweep` flag on
- * the last page only; the subscription phase being the only place an ended plan appears; and how
- * Autumn's refusals come back (`auth` stops pulls, a short 429 is waited out, a long one is handed
- * to the alarm, a body Hazel cannot read fails the run).
+ * the last page only (and not after a listing Autumn cut short); live plans priced with their
+ * customer, the subscription phase being the only place an ended plan appears; and how Autumn's
+ * refusals come back (`auth` stops pulls, a short 429 is waited out, a long one is handed to the
+ * alarm, a body Hazel cannot read fails the run).
  */
 import type { ConnectionConfig, UpsertSubscription } from "@hazel/domain/customers"
 import { Effect, Fiber, Layer, Option, Redacted } from "effect"
@@ -14,20 +15,24 @@ import type { PullPage } from "../providers"
 import {
 	CUSTOMER_ACME,
 	CUSTOMER_GLOBEX,
+	CUSTOMER_INITECH,
 	CUSTOMER_PERSONAL,
 	FEATURES,
 	ORG_ACME,
 	ORGANIZATION,
 	ORG_ME,
+	PLAN_PRO,
 	PLANS,
 	SUB_ACME,
 	SUB_ACME_ENTITY,
 	SUB_ACME_EXPIRED,
 	SUB_ACME_SCHEDULED,
 	SUB_GLOBEX_TRIAL,
+	SUB_INITECH,
 } from "./fixtures"
 import { makeAutumnApi } from "./http"
-import { decodeCursor, encodeCursor, PAGE_SIZE, pullPage } from "./pull"
+import { decodeCursor, encodeCursor, PAGE_SIZE, PLANS_LISTED_PER_CUSTOMER, pullPage } from "./pull"
+import { readPricing } from "./read"
 import { type FakeAutumnState, fakeAutumnHttpClient, makeFakeAutumn } from "./testing"
 import { AutumnCustomersPage } from "./wire"
 
@@ -49,7 +54,7 @@ const organization = (options: Partial<FakeAutumnState> = {}) =>
 const pageOver = (client: Layer.Layer<HttpClient.HttpClient>, cursor: string | null, apiKey = API_KEY) =>
 	Effect.gen(function* () {
 		const api = makeAutumnApi(yield* HttpClient.HttpClient, Redacted.make(apiKey))
-		return yield* pullPage({ api, cursor, config: CONFIG, env: "live" })
+		return yield* pullPage({ api, pricing: readPricing(api), cursor, config: CONFIG, env: "live" })
 	}).pipe(Effect.provide(client))
 
 const page = (fake: FakeAutumnState, cursor: string | null, apiKey = API_KEY) =>
@@ -72,6 +77,12 @@ const walk = (fake: FakeAutumnState) =>
 
 const tags = (page: PullPage) => page.ops.map((op) => op._tag)
 
+const plansOf = (pages: ReadonlyArray<PullPage>) =>
+	pages
+		.flatMap((p) => p.ops)
+		.filter((op): op is UpsertSubscription => op._tag === "subscription")
+		.map((op) => [op.externalId, op.status, op.mrrMinor])
+
 describe("Autumn pull", () => {
 	it("walks features, then customers, then subscriptions, and sweeps only at the very end", async () => {
 		const fake = organization()
@@ -79,40 +90,59 @@ describe("Autumn pull", () => {
 		expect(pages.map((p) => p.progress.step)).toEqual(["features", "customers", "subscriptions"])
 		// A metric definition per metered feature; the boolean flag is none.
 		expect(tags(pages[0]!)).toEqual(["metric_definition", "metric_definition"])
-		// Each customer: the account, then its usage.
+		// Each customer: the account, then its usage and its live plans.
 		expect(tags(pages[1]!).filter((tag) => tag === "account")).toHaveLength(3)
 		expect(pages[1]!.progress.done).toBe(3)
 		// The sweep rides the last page of the walk, and nothing before it.
 		expect(pages.slice(0, -1).every((p) => p.sweep === undefined)).toBe(true)
-		expect(pages.at(-1)!.sweep).toEqual(["account"])
+		expect(pages.at(-1)!.sweep).toEqual(["account", "subscription"])
 		expect(fake.calls.map((call) => call.path)).toEqual([
 			"/v1/features.list",
 			"/v1/customers.list",
+			// One pricing lookup per page with a plan to price (the adapter keeps it a few minutes).
+			"/v1/plans.list",
+			"/v1/organization",
 			"/v1/subscriptions.list",
-			// One pricing lookup for the whole page: the plans and the currency they are quoted in.
 			"/v1/plans.list",
 			"/v1/organization",
 		])
 	})
 
-	it("asks for every plan state, so an ended plan is the churn a pull can see", async () => {
+	it("writes live plans with their customer, and only the ended ones from the subscription listing", async () => {
 		const pages = await run(walk(organization()))
-		const subscriptions = pages
-			.at(-1)!
-			.ops.filter((op): op is UpsertSubscription => op._tag === "subscription")
-		// The expired and the two live ones; the scheduled and the entity-scoped one are skipped.
-		expect(subscriptions.map((op) => [op.externalId, op.status, op.mrrMinor])).toEqual([
-			[SUB_ACME_EXPIRED.id, "canceled", 0],
-			[SUB_ACME.id, "active", 9_900],
-			[SUB_GLOBEX_TRIAL.id, "trialing", 300_000],
+		// The scheduled and the entity-scoped plans are skipped.
+		expect(plansOf([pages[1]!])).toEqual([
+			[`${ORG_ACME}:${SUB_ACME.id}`, "active", 9_900],
+			[`${CUSTOMER_GLOBEX.id}:${SUB_GLOBEX_TRIAL.id}`, "trialing", 300_000],
 		])
+		expect(plansOf([pages[2]!])).toEqual([[`${ORG_ACME}:${SUB_ACME_EXPIRED.id}`, "canceled", 0]])
 	})
 
-	it("lists oldest first and follows Autumn's own cursor", async () => {
-		const fake = organization()
-		await run(walk(fake))
+	it("prices a customer's prepaid units and its own plan, as a delivery does", async () => {
+		const custom = { ...SUB_ACME, plan: { ...PLAN_PRO, price: { amount: 49, interval: "month" } } }
+		const fake = organization({
+			customers: [{ ...CUSTOMER_ACME, subscriptions: [custom] }, CUSTOMER_INITECH],
+			subscriptions: [SUB_ACME, SUB_INITECH],
+		})
+		const pages = await run(walk(fake))
+		expect(plansOf(pages)).toEqual([
+			[`${ORG_ACME}:${SUB_ACME.id}`, "active", 4_900],
+			[`${CUSTOMER_INITECH.id}:main`, "active", 7_000],
+		])
 		const customers = fake.calls.find((call) => call.path === "/v1/customers.list")!
-		expect(customers.body).toEqual({ start_cursor: "", limit: PAGE_SIZE, sort_order: "asc" })
+		expect(customers.body).toEqual({
+			start_cursor: "",
+			limit: PAGE_SIZE,
+			// Oldest first, and each plan as the customer holds it.
+			sort_order: "asc",
+			expand: ["balances.feature", "subscriptions.plan"],
+		})
+	})
+
+	it("leaves an ended plan alone when a live one of the same customer reuses its id", async () => {
+		const ended = { ...SUB_ACME_EXPIRED, id: SUB_ACME.id }
+		const pages = await run(walk(organization({ subscriptions: [SUB_ACME, ended] })))
+		expect(pages.at(-1)!.ops).toEqual([])
 	})
 
 	it("resumes a phase from the cursor it carried", async () => {
@@ -157,24 +187,52 @@ describe("Autumn pull", () => {
 		const atSubscriptions = encodeCursor({ phase: "subscriptions", after: null, done: 0 })
 		const only = await run(page(fake, atSubscriptions))
 		expect(only.nextCursor).toBeNull()
-		expect(only.sweep).toEqual(["account"])
+		expect(only.sweep).toEqual(["account", "subscription"])
 	})
 
-	it("leaves the feature phase's metric names alone: a listed balance carries none", async () => {
+	it("does not sweep after Autumn dropped the cursor on a full page", async () => {
+		// The page's last customer has no id of its own, so Autumn sends no cursor however many remain.
+		const many = Array.from({ length: PAGE_SIZE + 2 }, (_, index) => ({
+			...CUSTOMER_ACME,
+			id: index === PAGE_SIZE - 1 ? null : `${ORG_ACME}${index}`,
+		}))
+		const pages = await run(walk(organization({ customers: many })))
+		expect(pages.filter((p) => p.progress.step === "customers")).toHaveLength(1)
+		expect(pages.at(-1)!.nextCursor).toBeNull()
+		expect(pages.every((p) => p.sweep === undefined)).toBe(true)
+		// A last page that is simply full, cursor or not, is the end of the listing.
+		const exact = Array.from({ length: PAGE_SIZE }, (_, index) => ({
+			...CUSTOMER_ACME,
+			id: `${ORG_ACME}${index}`,
+		}))
+		expect((await run(walk(organization({ customers: exact })))).at(-1)!.sweep).toEqual([
+			"account",
+			"subscription",
+		])
+	})
+
+	it("sweeps no plans when a customer lists as many as Autumn returns per customer", async () => {
+		const crowded = {
+			...CUSTOMER_ACME,
+			purchases: Array.from({ length: PLANS_LISTED_PER_CUSTOMER - 1 }, (_, index) => ({
+				plan_id: `pack_${index}`,
+			})),
+		}
+		const pages = await run(walk(organization({ customers: [crowded, CUSTOMER_GLOBEX] })))
+		expect(pages.at(-1)!.sweep).toEqual(["account"])
+	})
+
+	it("names a listed metric after its feature, never after its id", async () => {
 		const fake = organization()
 		const atCustomers = encodeCursor({ phase: "customers", after: null, done: 0 })
 		const customers = await run(page(fake, atCustomers))
-		// `customers.list` takes no `expand`, so the balances come without their features. Writing a
-		// definition from the feature *id* here would overwrite "Messages" with "autumn.messages".
-		expect(customers.ops.some((op) => op._tag === "metric_definition")).toBe(false)
-		expect(customers.ops.filter((op) => op._tag === "metric").map((op) => op.metricKey)).toContain(
-			"autumn.messages",
-		)
-		// The feature phase, which does name them, runs first in every walk.
-		const features = await run(page(fake, null))
-		expect(features.ops).toMatchObject([
-			{ _tag: "metric_definition", key: "autumn.messages", name: "Messages" },
-			{ _tag: "metric_definition", key: "autumn.seats", name: "Seats" },
+		// The listing expands the balances' features, as `customers.get` does.
+		expect(
+			customers.ops.flatMap((op) => (op._tag === "metric_definition" ? [[op.key, op.name]] : [])),
+		).toEqual([
+			["autumn.messages", "Messages"],
+			["autumn.seats", "Seats"],
+			["autumn.messages", "Messages"],
 		])
 	})
 
@@ -234,6 +292,20 @@ describe("Autumn pull", () => {
 		expect(fake.throttled).toBe(1)
 		expect(fake.calls).toHaveLength(2)
 		expect(result.ops).toHaveLength(2)
+	})
+
+	it("gives up after its own retries when Autumn keeps throttling", async () => {
+		const fake = organization({ throttleAfter: 0, retryAfterSeconds: 1 })
+		const error = await run(
+			Effect.gen(function* () {
+				const fiber = yield* Effect.forkChild(Effect.flip(page(fake, null)))
+				yield* TestClock.adjust(10_000)
+				return yield* Fiber.join(fiber)
+			}).pipe(Effect.provide(TestClock.layer())),
+		)
+		expect(error.code).toBe("rate_limited")
+		// The first attempt and its two retries.
+		expect(fake.throttled).toBe(3)
 	})
 
 	it("hands a long Retry-After to the alarm as `rate_limited`, without waiting", async () => {
