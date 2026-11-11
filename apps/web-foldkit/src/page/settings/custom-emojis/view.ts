@@ -199,8 +199,18 @@ const draftForm = (h: HtmlBuilder<Message>, model: Model, draft: Draft): Html =>
 	)
 }
 
-const headerCell = (h: HtmlBuilder<Message>, label: string, align: "left" | "right") =>
-	h.th([h.Class(`px-4 py-3 text-${align} font-medium text-muted-fg text-xs`)], [label])
+/** A low-priority column a phone leaves out (its cells carry the same class). */
+const PHONE_HIDDEN = "max-md:hidden"
+
+const headerCell = (h: HtmlBuilder<Message>, label: string, align: "left" | "right", className?: string) =>
+	h.th(
+		[
+			h.Class(
+				`px-4 py-3 text-${align} font-medium text-muted-fg text-xs${className ? ` ${className}` : ""}`,
+			),
+		],
+		[label],
+	)
 
 const table = (h: HtmlBuilder<Message>, rows: ReadonlyArray<Html>): Html =>
 	h.div(
@@ -217,8 +227,8 @@ const table = (h: HtmlBuilder<Message>, rows: ReadonlyArray<Html>): Html =>
 								[
 									headerCell(h, "Emoji", "left"),
 									headerCell(h, "Shortcode", "left"),
-									headerCell(h, "Added by", "left"),
-									headerCell(h, "Added", "left"),
+									headerCell(h, "Added by", "left", PHONE_HIDDEN),
+									headerCell(h, "Added", "left", PHONE_HIDDEN),
 									headerCell(h, "Actions", "right"),
 								],
 							),
@@ -230,8 +240,11 @@ const table = (h: HtmlBuilder<Message>, rows: ReadonlyArray<Html>): Html =>
 		],
 	)
 
-const pulse = (h: HtmlBuilder<Message>, className: string) =>
-	h.td([h.Class("px-4 py-4")], [h.div([h.Class(`${className} animate-pulse rounded-sm bg-secondary`)])])
+const pulse = (h: HtmlBuilder<Message>, className: string, cellClassName?: string) =>
+	h.td(
+		[h.Class(`px-4 py-4${cellClassName ? ` ${cellClassName}` : ""}`)],
+		[h.div([h.Class(`${className} animate-pulse rounded-sm bg-secondary`)])],
+	)
 
 const skeletonRow = (h: HtmlBuilder<Message>, index: number): Html =>
 	h.keyed("tr")(
@@ -240,8 +253,8 @@ const skeletonRow = (h: HtmlBuilder<Message>, index: number): Html =>
 		[
 			pulse(h, "size-8"),
 			pulse(h, "h-4 w-24"),
-			pulse(h, "h-4 w-28"),
-			pulse(h, "h-4 w-20"),
+			pulse(h, "h-4 w-28", PHONE_HIDDEN),
+			pulse(h, "h-4 w-20", PHONE_HIDDEN),
 			h.td(
 				[h.Class("px-4 py-4 text-right")],
 				[h.div([h.Class("size-8 animate-pulse rounded-sm bg-secondary")])],
@@ -263,7 +276,7 @@ const emojiRow = (h: HtmlBuilder<Message>, emoji: Emoji, isAdmin: boolean, nowMs
 				[h.span([h.Class("font-medium text-fg text-sm")], [":", emoji.name, ":"])],
 			),
 			h.td(
-				[h.Class("px-4 py-4")],
+				[h.Class(`px-4 py-4 ${PHONE_HIDDEN}`)],
 				[
 					h.span(
 						[h.Class("text-muted-fg text-sm")],
@@ -272,7 +285,7 @@ const emojiRow = (h: HtmlBuilder<Message>, emoji: Emoji, isAdmin: boolean, nowMs
 				],
 			),
 			h.td(
-				[h.Class("px-4 py-4")],
+				[h.Class(`px-4 py-4 ${PHONE_HIDDEN}`)],
 				[
 					h.span(
 						[h.Class("text-muted-fg text-sm")],

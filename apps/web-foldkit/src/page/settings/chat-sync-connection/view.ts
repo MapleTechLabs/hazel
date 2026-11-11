@@ -40,7 +40,7 @@ const backLink = (h: HtmlBuilder<Message>): Html =>
 			h.Type("button"),
 			h.OnClick(Message.ClickedBack()),
 			h.Class(
-				"-ml-1 flex w-fit items-center gap-1 text-muted-fg text-sm transition-colors hover:text-fg",
+				"-ml-1 flex w-fit items-center gap-1 text-muted-fg text-sm transition-colors hover:text-fg max-md:min-h-10",
 			),
 		],
 		[outlineIcon(h, { className: "size-4", d: "M15 19l-7-7 7-7" }), h.span([], ["Back to Chat Sync"])],

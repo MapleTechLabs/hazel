@@ -49,7 +49,8 @@ export const rowMenu = (
 					{
 						intent: "plain",
 						size: "sq-xs",
-						className: options.triggerClassName,
+						// A finger-sized target on a phone.
+						className: `${options.triggerClassName} max-md:size-10`,
 						attributes: [h.AriaLabel("Subscription actions"), ...attributes],
 					},
 					[IconDotsVertical(h, { className: "size-4" }), overlay],

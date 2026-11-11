@@ -65,8 +65,11 @@ export const definedLabel = <M>(
 						[
 							h.Id(`${options.id}-definition`),
 							h.Role("tooltip"),
+							// A phone: out of the layout until the label is tapped (an invisible card still widens the
+							// page), then a card across the screen above the tab bar, wherever the tile sits.
 							h.Class(
-								"pointer-events-none invisible absolute top-full left-0 z-20 mt-2 w-64 rounded-lg border border-fg/10 bg-overlay px-3 py-2 text-overlay-fg text-xs/5 opacity-0 shadow-md transition-opacity duration-150 group-focus-within/definition:visible group-focus-within/definition:opacity-100 group-hover/definition:visible group-hover/definition:opacity-100",
+								"pointer-events-none invisible absolute top-full left-0 z-20 mt-2 w-64 rounded-lg border border-fg/10 bg-overlay px-3 py-2 text-overlay-fg text-xs/5 opacity-0 shadow-md transition-opacity duration-150 group-focus-within/definition:visible group-focus-within/definition:opacity-100 group-hover/definition:visible group-hover/definition:opacity-100 " +
+									"max-md:fixed max-md:inset-x-4 max-md:top-auto max-md:bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] max-md:mt-0 max-md:hidden max-md:w-auto max-md:text-sm/5 max-md:group-focus-within/definition:block max-md:group-hover/definition:block",
 							),
 						],
 						[options.definition],

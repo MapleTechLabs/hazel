@@ -448,7 +448,8 @@ const columnHeader = (h: HtmlBuilder<Message>, cells: ReadonlyArray<readonly [st
 		[
 			h.Role("row"),
 			h.Class(
-				"flex items-center gap-4 border-border border-b bg-secondary/30 px-4 py-2 font-medium text-[11px] text-muted-fg uppercase tracking-wider",
+				// A phone's rows wrap into lines that no longer sit under these columns.
+				"flex items-center gap-4 border-border border-b bg-secondary/30 px-4 py-2 font-medium text-[11px] text-muted-fg uppercase tracking-wider max-md:hidden",
 			),
 		],
 		cells.map(([label, className]) => h.span([h.Role("columnheader"), h.Class(className)], [label])),

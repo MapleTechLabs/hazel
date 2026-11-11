@@ -107,14 +107,16 @@ export const gifView = <M>(h: HtmlBuilder<M>, mediaUrl: string, isKlipy: boolean
 			h.button(
 				[
 					h.Attribute("type", "button"),
-					h.Class("cursor-pointer"),
+					h.Class("cursor-pointer max-md:max-w-full"),
 					...(onOpen === null ? [] : [h.OnClick(onOpen)]),
 				],
 				[
 					h.img([
 						h.Attribute("src", mediaUrl),
 						h.Attribute("alt", "GIF"),
-						h.Class("max-h-[300px] max-w-sm rounded-md transition-opacity hover:opacity-90"),
+						h.Class(
+							"max-h-[300px] max-w-sm rounded-md transition-opacity hover:opacity-90 max-md:max-w-full",
+						),
 						h.Attribute("loading", "lazy"),
 						h.Attribute("draggable", "false"),
 					]),

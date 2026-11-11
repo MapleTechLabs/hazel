@@ -104,7 +104,7 @@ export const providerCard = (
 								readonlyInput(
 									h,
 									fullUrl,
-									"flex-1 rounded-lg border border-border bg-bg px-3 py-2 font-mono text-xs",
+									"flex-1 rounded-lg border border-border bg-bg px-3 py-2 font-mono text-xs max-md:min-w-0",
 								),
 								button(
 									h,
@@ -157,7 +157,7 @@ export const providerCard = (
 			[h.Class("rounded-xl border border-border bg-bg p-4")],
 			[
 				h.div(
-					[h.Class("flex items-center justify-between")],
+					[h.Class("flex items-center justify-between max-md:gap-3")],
 					[
 						h.div(
 							[h.Class("flex items-center gap-3")],
@@ -258,7 +258,7 @@ export const providerCard = (
 					readonlyInput(
 						h,
 						`${webhookUrl}****${webhook.tokenSuffix}/${config.urlSuffix}`,
-						"flex-1 rounded-lg border border-border bg-secondary/30 px-3 py-2 font-mono text-muted-fg text-xs",
+						"flex-1 rounded-lg border border-border bg-secondary/30 px-3 py-2 font-mono text-muted-fg text-xs max-md:min-w-0",
 					),
 					button(
 						h,

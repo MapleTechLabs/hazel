@@ -106,7 +106,7 @@ export const rssCard = (h: HtmlBuilder<Message>, model: Model): Html => {
 		[h.Class("rounded-xl border border-border bg-bg")],
 		[
 			h.div(
-				[h.Class("flex items-center justify-between border-border border-b p-4")],
+				[h.Class("flex items-center justify-between border-border border-b p-4 max-md:gap-3")],
 				[
 					h.div(
 						[h.Class("flex items-center gap-3")],

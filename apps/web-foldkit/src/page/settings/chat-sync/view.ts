@@ -180,7 +180,7 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 					h.span(
 						[
 							h.Class(
-								"font-medium text-fg text-xs opacity-0 transition-opacity group-hover:opacity-100",
+								"font-medium text-fg text-xs opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-100",
 							),
 						],
 						["Manage"],
@@ -191,7 +191,7 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 							h.button(
 								[
 									h.Class(
-										"rounded-sm p-1 text-muted-fg opacity-0 transition-all hover:bg-danger/10 hover:text-danger group-hover:opacity-100",
+										"rounded-sm p-1 text-muted-fg opacity-0 transition-all hover:bg-danger/10 hover:text-danger group-hover:opacity-100 max-md:-my-2.5 max-md:p-3.5 max-md:opacity-100",
 									),
 									h.Title("Delete connection"),
 									h.AriaLabel("Delete connection"),

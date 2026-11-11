@@ -17,7 +17,7 @@ import { type Message, type Model, MountEditor } from "./composer"
 /** Port of `SlateMessageComposer`: DropZone > (previews, indicators) > Frame > (Editor, Actions). */
 
 const PICKER_BUTTON_CLASS =
-	"inline-flex items-center gap-1.5 rounded-xs p-0 font-semibold text-muted-fg text-xs outline-none transition-colors hover:text-fg"
+	"inline-flex items-center gap-1.5 rounded-xs p-0 font-semibold text-muted-fg text-xs outline-none transition-colors hover:text-fg max-md:-my-2 max-md:min-h-10"
 
 /** What a draft adds around the bare editor. */
 export interface BoxExtras<M> {
@@ -86,7 +86,7 @@ const actions = <M>(h: HtmlBuilder<M>, extras: BoxExtras<M>): Array<Html> => [
 						[
 							h.Attribute("type", "button"),
 							h.Class(
-								"inline-flex items-center gap-1.5 rounded-xs p-0 font-semibold text-muted-fg text-xs transition-colors hover:text-fg disabled:opacity-50",
+								"inline-flex items-center gap-1.5 rounded-xs p-0 font-semibold text-muted-fg text-xs transition-colors hover:text-fg disabled:opacity-50 max-md:-my-2 max-md:min-h-10",
 							),
 							...(extras.attachAttributes ?? []),
 						],

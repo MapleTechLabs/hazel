@@ -143,7 +143,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 									h.Attribute("aria-roledescription", "color swatch"),
 									h.Class(
 										twMerge(
-											"size-7 cursor-pointer rounded-full outline-1 outline-black/10 -outline-offset-1",
+											"size-7 cursor-pointer rounded-full outline-1 outline-black/10 -outline-offset-1 max-md:size-8",
 											(isSelected || isFocused) &&
 												"ring-2 ring-ring ring-offset-2 ring-offset-bg",
 										),
@@ -202,7 +202,8 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					value: mode,
 					onChange: toModeMessage,
 					ariaLabel: "Display preference",
-					className: "flex flex-wrap gap-5",
+					// A phone fits the three side by side, scaled to the column.
+					className: "flex flex-wrap gap-5 max-md:grid max-md:grid-cols-3 max-md:gap-3",
 					interaction: wiring,
 				},
 				(radio) =>
@@ -215,7 +216,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 									[
 										h.Class(
 											twMerge(
-												"relative h-33 w-50 rounded-[10px] bg-secondary",
+												"relative h-33 w-50 rounded-[10px] bg-secondary max-md:aspect-[200/132] max-md:h-auto max-md:w-full",
 												isSelected && "outline-2 outline-ring outline-offset-2",
 											),
 										),

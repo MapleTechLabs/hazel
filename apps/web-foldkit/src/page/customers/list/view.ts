@@ -461,8 +461,10 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 		[
 			h.Role("toolbar"),
 			h.AriaLabel("Bulk actions"),
+			// A phone: the screen's width, wrapping, above the tab bar.
 			h.Class(
-				"fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-overlay p-1.5 text-sm shadow-lg",
+				"fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-overlay p-1.5 text-sm shadow-lg " +
+					"max-md:inset-x-2 max-md:bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] max-md:translate-none max-md:flex-wrap max-md:justify-center",
 			),
 		],
 		[
@@ -589,7 +591,7 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 					h.AriaLabel("Clear selection"),
 					h.OnClick(Message.ClearedSelection()),
 					h.Class(
-						"inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-fg hover:bg-secondary hover:text-fg",
+						"inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-fg hover:bg-secondary hover:text-fg max-md:size-9",
 					),
 				],
 				[IconClose(h, { className: "size-3.5" })],
@@ -898,7 +900,8 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				],
 			),
 			...(model.selected.length > 0 ? [bulkBar(h, model, viewer, rows.length)] : []),
-			...(hovered === undefined ? [] : [hoverCard(h, model, hovered, viewer)]),
+			// A tap fires mouseenter too; a phone has no hover to preview with.
+			...(hovered === undefined || shared.isMobile ? [] : [hoverCard(h, model, hovered, viewer)]),
 			saveDialog(h, model, viewer),
 		],
 	)

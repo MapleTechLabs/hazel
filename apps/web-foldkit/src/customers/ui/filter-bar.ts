@@ -35,13 +35,22 @@ export const viewTabs = <M, K extends string>(
 	}>,
 ): Html =>
 	h.div(
-		[h.Class(twMerge("flex items-center gap-1 border-border border-b", options.className))],
+		[
+			h.Class(
+				twMerge(
+					// A phone scrolls the tabs sideways rather than the page; the pixel of padding keeps the
+					// selected tab's underline (1px past the tab list) inside the scroller.
+					"flex items-center gap-1 border-border border-b max-md:overflow-x-auto max-md:pb-px max-md:[scrollbar-width:none]",
+					options.className,
+				),
+			),
+		],
 		[
 			h.div(
 				[
 					h.Role("tablist"),
 					h.AriaLabel(options.ariaLabel),
-					h.Class("flex items-center gap-x-1 py-1"),
+					h.Class("flex items-center gap-x-1 py-1 max-md:shrink-0"),
 				],
 				options.tabs.map((tab) => {
 					const isSelected = tab.key === options.selected
@@ -184,7 +193,7 @@ export const searchBox = <M>(
 	}>,
 ): Html =>
 	h.div(
-		[h.Class(twMerge("relative w-64", options.className))],
+		[h.Class(twMerge("relative w-64 max-md:w-full", options.className))],
 		[
 			searchField(
 				h,
@@ -226,7 +235,7 @@ export const filterChip = <M>(
 	h.span(
 		[
 			h.Class(
-				"inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-border bg-secondary/50 text-sm",
+				"inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-border bg-secondary/50 text-sm max-md:h-10",
 			),
 		],
 		[
@@ -249,7 +258,7 @@ export const filterChip = <M>(
 					h.Type("button"),
 					h.AriaLabel(`Remove filter: ${options.field} ${options.operator} ${options.value}`),
 					h.Class(
-						"inline-flex w-7 cursor-pointer items-center justify-center border-border border-l text-muted-fg outline-hidden hover:bg-secondary hover:text-fg focus-visible:bg-secondary",
+						"inline-flex w-7 cursor-pointer items-center justify-center border-border border-l text-muted-fg outline-hidden hover:bg-secondary hover:text-fg focus-visible:bg-secondary max-md:w-10",
 					),
 					h.OnClick(options.onRemove),
 				],
@@ -272,7 +281,7 @@ export const addFilterButton = <M>(
 		{
 			intent: "plain",
 			size: "xs",
-			className: "h-8 border-border border-dashed text-fg-3 hover:text-fg",
+			className: "h-8 border-border border-dashed text-fg-3 hover:text-fg max-md:h-10",
 			onPress: options.onPress,
 			attributes: options.attributes ?? [],
 		},
@@ -288,12 +297,21 @@ export const sortTrigger = <M>(
 		overlay?: Html
 	}>,
 ): Html =>
-	button(h, { intent: "plain", size: "xs", className: "h-8 gap-1", attributes: options.attributes ?? [] }, [
-		h.span([h.Class("text-muted-fg")], ["Sort"]),
-		h.span([h.Class("font-medium text-fg")], [options.label]),
-		IconChevronDown(h, { className: "size-3" }),
-		...(options.overlay ? [options.overlay] : []),
-	])
+	button(
+		h,
+		{
+			intent: "plain",
+			size: "xs",
+			className: "h-8 gap-1 max-md:h-10",
+			attributes: options.attributes ?? [],
+		},
+		[
+			h.span([h.Class("text-muted-fg")], ["Sort"]),
+			h.span([h.Class("font-medium text-fg")], [options.label]),
+			IconChevronDown(h, { className: "size-3" }),
+			...(options.overlay ? [options.overlay] : []),
+		],
+	)
 
 /** The row the controls sit in: filters left, the rest right. */
 export const filterBar = <M>(
@@ -303,7 +321,7 @@ export const filterBar = <M>(
 	h.div(
 		[h.Class(twMerge("flex flex-wrap items-center justify-between gap-2", options.className))],
 		[
-			h.div([h.Class("flex min-w-0 flex-wrap items-center gap-2")], [...options.start]),
+			h.div([h.Class("flex min-w-0 flex-wrap items-center gap-2 max-md:w-full")], [...options.start]),
 			...(options.end ? [h.div([h.Class("flex items-center gap-3")], [...options.end])] : []),
 		],
 	)

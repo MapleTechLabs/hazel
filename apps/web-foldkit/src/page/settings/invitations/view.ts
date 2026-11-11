@@ -27,8 +27,18 @@ const roleLabel = (role: string) =>
 			? "Member"
 			: role
 
-const headerCell = (h: HtmlBuilder<Message>, label: string, align: "left" | "right") =>
-	h.th([h.Class(`px-4 py-3 text-${align} font-medium text-muted-fg text-xs`)], [label])
+/** A low-priority column a phone leaves out (its cells carry the same class). */
+const PHONE_HIDDEN = "max-md:hidden"
+
+const headerCell = (h: HtmlBuilder<Message>, label: string, align: "left" | "right", className?: string) =>
+	h.th(
+		[
+			h.Class(
+				`px-4 py-3 text-${align} font-medium text-muted-fg text-xs${className ? ` ${className}` : ""}`,
+			),
+		],
+		[label],
+	)
 
 const plusIcon = (h: HtmlBuilder<Message>) => IconPlus(h, { attributes: { "data-slot": "icon" } })
 
@@ -45,6 +55,7 @@ const rowActions = (h: HtmlBuilder<Message>, row: RowMenu, isRevoking: boolean):
 					{
 						intent: "plain",
 						size: "sq-xs",
+						className: "max-md:size-10",
 						isPending: isRevoking,
 						isDisabled: isRevoking,
 						attributes: [h.AriaLabel("Invitation actions"), ...attributes],
@@ -68,14 +79,14 @@ const invitationRow = (h: HtmlBuilder<Message>, model: Model, invitation: Invita
 		[
 			h.td(
 				[h.Class("px-4 py-4")],
-				[h.p([h.Class("font-medium text-fg text-sm")], [invitation.emailAddress])],
+				[h.p([h.Class("font-medium text-fg text-sm max-md:break-all")], [invitation.emailAddress])],
 			),
 			h.td(
 				[h.Class("px-4 py-4")],
 				[h.p([h.Class("text-muted-fg text-sm")], [roleLabel(invitation.role)])],
 			),
 			h.td(
-				[h.Class("px-4 py-4")],
+				[h.Class(`px-4 py-4 ${PHONE_HIDDEN}`)],
 				[
 					badge(h, { intent: "warning" }, [
 						h.span([h.Class("size-1.5 rounded-full bg-current")]),
@@ -84,7 +95,7 @@ const invitationRow = (h: HtmlBuilder<Message>, model: Model, invitation: Invita
 				],
 			),
 			h.td(
-				[h.Class("px-4 py-4")],
+				[h.Class(`px-4 py-4 ${PHONE_HIDDEN}`)],
 				[h.p([h.Class("text-muted-fg text-sm")], [formatSent(invitation.createdAtMs)])],
 			),
 			h.td(
@@ -114,8 +125,8 @@ const invitationsTable = (
 								[
 									headerCell(h, "Email", "left"),
 									headerCell(h, "Role", "left"),
-									headerCell(h, "Status", "left"),
-									headerCell(h, "Sent", "left"),
+									headerCell(h, "Status", "left", PHONE_HIDDEN),
+									headerCell(h, "Sent", "left", PHONE_HIDDEN),
 									headerCell(h, "Actions", "right"),
 								],
 							),

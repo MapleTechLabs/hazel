@@ -182,7 +182,7 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 				h.Disabled(isDisabled),
 				h.OnClick(Message.PressedNeighbour({ step })),
 				h.Class(
-					"inline-flex size-7 cursor-pointer items-center justify-center rounded-md border border-border text-fg-2 hover:bg-secondary disabled:cursor-default disabled:opacity-40",
+					"inline-flex size-7 cursor-pointer items-center justify-center rounded-md border border-border text-fg-2 hover:bg-secondary disabled:cursor-default disabled:opacity-40 max-md:size-10",
 				),
 			],
 			[IconChevronDown(h, { className: twMerge("size-3.5", step === -1 && "rotate-180") })],
@@ -215,7 +215,7 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 						? []
 						: [
 								h.span(
-									[h.Class("text-muted-fg text-xs tabular-nums")],
+									[h.Class("text-muted-fg text-xs tabular-nums max-md:hidden")],
 									[`${formatCount(position.index + 1)} of ${formatCount(position.total)}`],
 								),
 								navButton(-1, "Previous customer", position.previous === null),
@@ -229,7 +229,8 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 							h.OnClick(Message.ToggledSidebar()),
 							h.Class(
 								twMerge(
-									"ml-2 inline-flex h-7 cursor-pointer items-center rounded-md border border-border px-2 text-fg-2 text-xs hover:bg-secondary",
+									// A phone has no side panel to toggle: its details sit under the overview.
+									"ml-2 inline-flex h-7 cursor-pointer items-center rounded-md border border-border px-2 text-fg-2 text-xs hover:bg-secondary max-md:hidden",
 									model.isSidebarOpen && "bg-secondary text-fg",
 								),
 							),
@@ -259,7 +260,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 		[h.Class("flex flex-col gap-4 px-4 pt-5 lg:px-6")],
 		[
 			h.div(
-				[h.Class("flex items-start justify-between gap-4")],
+				[h.Class("flex items-start justify-between gap-4 max-md:flex-col max-md:gap-3")],
 				[
 					h.div(
 						[h.Class("flex min-w-0 gap-4")],
@@ -271,7 +272,10 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-2")],
 										[
-											h.h1([h.Class("font-semibold text-2xl text-fg")], [account.name]),
+											h.h1(
+												[h.Class("font-semibold text-2xl text-fg max-md:text-xl")],
+												[account.name],
+											),
 											stageBadge(h, account.lifecycleStage),
 											healthBadge(h, {
 												status: account.healthStatus,
@@ -434,7 +438,7 @@ const sidebarSection = (
 	children: ReadonlyArray<Html>,
 ) =>
 	h.section(
-		[h.Class("flex flex-col gap-1 border-border border-b px-5 py-4 last:border-b-0")],
+		[h.Class("flex flex-col gap-1 border-border border-b px-5 py-4 last:border-b-0 max-md:px-4")],
 		[
 			h.div(
 				[h.Class("flex items-center justify-between pb-1")],
@@ -466,7 +470,9 @@ const tags = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =>
 								h.Type("button"),
 								h.AriaLabel(`Remove tag ${tag}`),
 								h.OnClick(Message.RemovedTag({ tag })),
-								h.Class("inline-flex cursor-pointer rounded text-muted-fg hover:text-fg"),
+								h.Class(
+									"inline-flex cursor-pointer rounded text-muted-fg hover:text-fg max-md:p-1.5",
+								),
 							],
 							[IconClose(h, { className: "size-2.5" })],
 						),
@@ -484,7 +490,7 @@ const tags = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =>
 								...attributes,
 								h.AriaLabel("Add tag"),
 								h.Class(
-									"inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border text-muted-fg hover:text-fg",
+									"inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border text-muted-fg hover:text-fg max-md:size-8",
 								),
 							],
 							[IconPlus(h, { className: "size-3" })],
@@ -528,7 +534,8 @@ const attributeValue = (value: unknown): string =>
 const sourceLabelOf = (source: Customers.CustomerSource | undefined): ReadonlyArray<Html | string> =>
 	source === undefined ? [] : [SOURCE_LABEL[source]]
 
-const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+/** Beside the tab on a desktop (hidden below lg); under the overview on a phone (`isStacked`). */
+const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStacked = false): Html => {
 	const { account, detail } = context
 	const now = new Date(context.nowMs)
 	const fieldSources = detail?.account.fieldSources ?? {}
@@ -544,7 +551,11 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 	return h.aside(
 		[
 			h.AriaLabel("Customer details"),
-			h.Class("flex w-80 shrink-0 flex-col overflow-y-auto border-border border-l max-lg:hidden"),
+			h.Class(
+				isStacked
+					? "flex flex-col rounded-xl border border-border"
+					: "flex w-80 shrink-0 flex-col overflow-y-auto border-border border-l max-lg:hidden",
+			),
 		],
 		[
 			sidebarSection(h, "Properties", null, [
@@ -872,7 +883,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					: model.tab === "notes"
 						? notesTab(h, model, context, shared.organization?.name ?? "your workspace")
 						: overviewTab(h, model, context, model.bands)
-	const hasSidebar = model.isSidebarOpen && model.tab !== "users"
+	const hasSidebar = model.isSidebarOpen && model.tab !== "users" && !shared.isMobile
 	return h.div(
 		[h.Class("flex h-full min-h-0 flex-col")],
 		[
@@ -911,7 +922,15 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 										),
 									]
 								: []),
-							h.div([h.Class("flex flex-col gap-4 px-4 py-5 lg:px-6")], [...body]),
+							h.div(
+								[h.Class("flex flex-col gap-4 px-4 py-5 lg:px-6")],
+								[
+									...body,
+									...(shared.isMobile && model.tab === "overview"
+										? [sidebar(h, model, context, true)]
+										: []),
+								],
+							),
 						],
 					),
 					...(hasSidebar ? [sidebar(h, model, context)] : []),

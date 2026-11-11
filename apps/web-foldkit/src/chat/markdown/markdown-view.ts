@@ -106,6 +106,10 @@ const codeBlockView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode): Html => 
 					h.Class(
 						cx(
 							"overflow-x-auto whitespace-pre-wrap rounded-lg bg-muted p-4 pr-24 font-mono text-sm",
+							// A phone never shows the hover-only copy control: no right gutter for it, and the
+							// code starts under the language badge.
+							"max-md:pr-4",
+							language !== "plaintext" && "max-md:pt-10",
 							isCollapsible && "max-h-80 overflow-hidden",
 						),
 					),

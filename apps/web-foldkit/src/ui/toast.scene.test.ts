@@ -16,7 +16,7 @@ const config = {
 		const result = Toaster.update(model, message)
 		return { model: result.model, commands: result.commands ?? [], outMessage: result.action }
 	},
-	view: (model: Model, h: HtmlBuilder<Message>) => Toaster.view(h, model, (message) => message),
+	view: (model: Model, h: HtmlBuilder<Message>) => Toaster.view(h, model, (message) => message, false),
 }
 
 const region = Scene.role("region", { name: "Notifications" })

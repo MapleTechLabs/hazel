@@ -273,16 +273,17 @@ const cellOf = <M>(
 	}
 }
 
+/** A phone keeps name, MRR and health (and whatever wide-only column was picked scrolls sideways). */
 const COLUMN_LAYOUT = {
-	name: { widthClass: "min-w-44" },
+	name: { widthClass: "min-w-44 max-md:min-w-36" },
 	owner: { widthClass: "w-28", hideClass: "max-lg:hidden" },
-	stage: { widthClass: "w-24" },
+	stage: { widthClass: "w-24", hideClass: "max-md:hidden" },
 	plan: { widthClass: "w-18", hideClass: "max-md:hidden" },
 	mrr: { align: "right", widthClass: "w-20" },
 	health: { widthClass: "w-28" },
 	active_users_30d: { align: "right", widthClass: "w-28", hideClass: "max-xl:hidden" },
 	usage_trend: { align: "right", widthClass: "w-16", hideClass: "max-lg:hidden" },
-	last_active: { align: "right", widthClass: "w-22" },
+	last_active: { align: "right", widthClass: "w-22", hideClass: "max-md:hidden" },
 	open_signals: { widthClass: "w-22", hideClass: "max-lg:hidden" },
 	customer_since: { align: "right", widthClass: "w-22", hideClass: "max-xl:hidden" },
 	tags: { widthClass: "w-40", hideClass: "max-xl:hidden" },

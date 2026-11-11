@@ -17,14 +17,14 @@ import type { FileAttachment } from "./queries"
 const headerView = <M>(context: FilesContext<M>, fileCount: number): Html => {
 	const { h, model, toParentMessage } = context
 	return h.div(
-		[h.Class("flex shrink-0 items-center gap-3 px-4 py-3")],
+		[h.Class("flex shrink-0 items-center gap-3 px-4 py-3 max-md:flex-wrap")],
 		[
 			searchField(
 				h,
 				{
 					id: SEARCH_FIELD_ID,
 					value: model.searchQuery,
-					className: "w-64",
+					className: "w-64 max-md:w-full",
 					onInput: (value) => toParentMessage(Message.UpdatedSearch({ value })),
 					onClear: toParentMessage(Message.ClearedSearch()),
 					onClearPressStart: toParentMessage(Message.PressedSearchClear()),
@@ -94,7 +94,8 @@ const documentItem = <M>(context: FilesContext<M>, attachment: FileAttachment): 
 				{
 					intent: "plain",
 					size: "sq-sm",
-					className: "shrink-0 opacity-0 transition-opacity group-hover:opacity-100",
+					className:
+						"shrink-0 opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-100",
 					onPress: toParentMessage(Message.ClickedDownload({ attachmentId: attachment.id })),
 					interaction: {
 						wiring: context.wiring,

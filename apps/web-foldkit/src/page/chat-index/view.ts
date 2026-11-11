@@ -42,10 +42,16 @@ const countOf = (groups: ChannelGroups, tab: ChatIndexTab) =>
 			: groups.dmChannels
 	).length
 
-const tabLabel = (h: HtmlBuilder<Message>, label: string, count: number): Html =>
+/** "Direct messages" with three counts overflows a phone's tab list; there it reads "DMs". */
+const tabText = (h: HtmlBuilder<Message>, tab: ChatIndexTab): ReadonlyArray<Html | string> =>
+	tab === "dms"
+		? [h.span([h.Class("max-md:hidden")], [TAB_LABELS.dms]), h.span([h.Class("md:hidden")], ["DMs"])]
+		: [TAB_LABELS[tab]]
+
+const tabLabel = (h: HtmlBuilder<Message>, tab: ChatIndexTab, count: number): Html =>
 	h.span(
 		[h.Class("flex items-center gap-2")],
-		[label, count > 0 ? badge(h, { intent: "secondary" }, [`${count}`]) : h.empty],
+		[...tabText(h, tab), count > 0 ? badge(h, { intent: "secondary" }, [`${count}`]) : h.empty],
 	)
 
 const channelList = (h: HtmlBuilder<Message>, heading: string, rows: ReadonlyArray<Html>): Html =>
@@ -188,7 +194,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					toView: (render) =>
 						Tabs.layout(h, render, {
 							listClassName: "w-full",
-							tab: (tab) => [tabLabel(h, TAB_LABELS[tab], countOf(groups, tab))],
+							tab: (tab) => [tabLabel(h, tab, countOf(groups, tab))],
 							// The cards link into the org, so the panels wait for its slug.
 							panel: (tab) =>
 								shared.orgSlug === null

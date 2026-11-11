@@ -35,7 +35,10 @@ const editOverlay = <M>(h: HtmlBuilder<M>, isUploading: boolean) =>
 			h.Class(
 				cx(
 					"absolute inset-0 flex items-center justify-center rounded-xl bg-black/50 transition-opacity duration-200",
-					isUploading ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+					// No hover on a phone: the Edit affordance stays shown, over a lighter scrim.
+					isUploading
+						? "opacity-100"
+						: "opacity-0 group-hover:opacity-100 max-md:bg-black/35 max-md:opacity-100",
 				),
 			),
 			squircle(h),

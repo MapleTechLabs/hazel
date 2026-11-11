@@ -33,10 +33,10 @@ const connectionRow = (h: HtmlBuilder<Message>, model: Model, mount: Mount, shar
 	const busyLabel = roles.isGuestLeavingConversation ? "Leaving..." : "Disconnecting..."
 	return h.keyed("div")(
 		mount.id,
-		[h.Class("flex items-center justify-between px-4 py-3 md:px-6")],
+		[h.Class("flex items-center justify-between px-4 py-3 max-md:gap-3 md:px-6")],
 		[
 			h.div(
-				[h.Class("flex items-center gap-3")],
+				[h.Class("flex items-center gap-3 max-md:min-w-0")],
 				[
 					avatar(h, {
 						size: "sm",
@@ -46,10 +46,10 @@ const connectionRow = (h: HtmlBuilder<Message>, model: Model, mount: Mount, shar
 						fallbackIcon: true,
 					}),
 					h.div(
-						[h.Class("flex flex-col")],
+						[h.Class("flex flex-col max-md:min-w-0")],
 						[
 							h.span(
-								[h.Class("font-medium text-fg text-sm")],
+								[h.Class("font-medium text-fg text-sm max-md:truncate")],
 								[org?.name ?? mount.organizationId],
 							),
 							...(org?.slug ? [h.span([h.Class("text-muted-fg text-xs")], [org.slug])] : []),
@@ -98,8 +98,18 @@ const activeConnections = (h: HtmlBuilder<Message>, model: Model, shared: Shared
 		],
 	)
 
-const headerCell = (h: HtmlBuilder<Message>, label: string, align: "left" | "right") =>
-	h.th([h.Class(`px-4 py-3 text-${align} font-medium text-muted-fg text-xs`)], [label])
+/** A low-priority column a phone leaves out (its cells carry the same class). */
+const PHONE_HIDDEN = "max-md:hidden"
+
+const headerCell = (h: HtmlBuilder<Message>, label: string, align: "left" | "right", className?: string) =>
+	h.th(
+		[
+			h.Class(
+				`px-4 py-3 text-${align} font-medium text-muted-fg text-xs${className ? ` ${className}` : ""}`,
+			),
+		],
+		[label],
+	)
 
 const inviteRow = (h: HtmlBuilder<Message>, model: Model, invite: Invite): Html => {
 	const statusBadge = getConnectInviteStatusBadge(invite.status)
@@ -125,7 +135,7 @@ const inviteRow = (h: HtmlBuilder<Message>, model: Model, invite: Invite): Html 
 				[badge(h, { intent: statusBadge.intent, size: "sm" }, [statusBadge.label])],
 			),
 			h.td(
-				[h.Class("px-4 py-4")],
+				[h.Class(`px-4 py-4 ${PHONE_HIDDEN}`)],
 				[
 					h.span(
 						[h.Class("text-muted-fg text-sm")],
@@ -180,7 +190,7 @@ const invitations = (h: HtmlBuilder<Message>, model: Model, invites: ReadonlyArr
 										[
 											headerCell(h, "Target", "left"),
 											headerCell(h, "Status", "left"),
-											headerCell(h, "Sent", "left"),
+											headerCell(h, "Sent", "left", PHONE_HIDDEN),
 											headerCell(h, "Actions", "right"),
 										],
 									),

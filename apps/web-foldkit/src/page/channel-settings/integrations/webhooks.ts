@@ -81,7 +81,7 @@ const compactWebhookItem = (
 						{
 							intent: "plain",
 							size: "sq-xs",
-							className: "text-muted-fg",
+							className: "text-muted-fg max-md:size-10",
 							onPress: Message.ClickedCopy({
 								id: webhook.id,
 								value: url,
@@ -198,7 +198,7 @@ export const customWebhooksCard = (
 		[h.Class("rounded-xl border border-border bg-bg")],
 		[
 			h.div(
-				[h.Class("flex items-center justify-between border-border border-b p-4")],
+				[h.Class("flex items-center justify-between border-border border-b p-4 max-md:gap-3")],
 				[
 					h.div(
 						[h.Class("flex items-center gap-3")],

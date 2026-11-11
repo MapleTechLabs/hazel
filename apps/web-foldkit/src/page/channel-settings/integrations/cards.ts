@@ -201,7 +201,7 @@ export const gitHubCard = (h: HtmlBuilder<Message>, model: Model, resolved: Reso
 			[h.Class("rounded-xl border border-border bg-bg p-4")],
 			[
 				h.div(
-					[h.Class("flex items-center justify-between")],
+					[h.Class("flex items-center justify-between max-md:gap-3")],
 					[
 						h.div(
 							[h.Class("flex items-center gap-3")],
@@ -221,7 +221,7 @@ export const gitHubCard = (h: HtmlBuilder<Message>, model: Model, resolved: Reso
 		[h.Class("rounded-xl border border-border bg-bg")],
 		[
 			h.div(
-				[h.Class("flex items-center justify-between border-border border-b p-4")],
+				[h.Class("flex items-center justify-between border-border border-b p-4 max-md:gap-3")],
 				[
 					h.div(
 						[h.Class("flex items-center gap-3")],

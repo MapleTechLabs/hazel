@@ -213,7 +213,7 @@ const linked = (h: H, link: T3CodeLink, model: Model, nowMs: number): Html => {
 		[h.Class("flex flex-col gap-4")],
 		[
 			h.div(
-				[h.Class("flex items-center justify-between gap-4")],
+				[h.Class("flex items-center justify-between gap-4 max-md:flex-wrap")],
 				[
 					environmentSummary(h, link, isActive),
 					h.div(

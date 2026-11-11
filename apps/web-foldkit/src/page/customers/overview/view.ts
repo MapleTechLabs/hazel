@@ -214,7 +214,7 @@ const kpiRow = (
 			h.div(
 				[
 					h.Class(
-						"col-span-2 flex items-center justify-between gap-4 rounded-xl border border-border p-4 md:col-span-3 xl:col-span-4",
+						"col-span-2 flex items-center justify-between gap-4 rounded-xl border border-border p-4 max-md:flex-col max-md:items-start max-md:gap-3 md:col-span-3 xl:col-span-4",
 					),
 				],
 				[
@@ -389,7 +389,8 @@ const activeUsersCard = (h: HtmlBuilder<Message>, model: Model, result: Result):
 			[
 				h.span([h.Class("text-muted-fg text-xs")], [label]),
 				h.span(
-					[h.Class("flex items-baseline gap-2")],
+					// A phone's third of the card is narrow: the delta drops under the count.
+					[h.Class("flex items-baseline gap-2 max-md:flex-wrap max-md:gap-x-1.5 max-md:gap-y-0")],
 					[
 						h.span([h.Class("font-semibold text-fg tabular-nums")], [formatCount(value)]),
 						...(delta === null ? [] : [deltaPill(h, delta, "text-xs")]),
@@ -400,7 +401,7 @@ const activeUsersCard = (h: HtmlBuilder<Message>, model: Model, result: Result):
 	return card(h, "", [
 		cardHeader(h, "Active users", "Distinct contacts with a sign-in or product event"),
 		h.div(
-			[h.Class("grid grid-cols-3 gap-3")],
+			[h.Class("grid grid-cols-3 gap-3 max-md:gap-2")],
 			[
 				stat("MAU", result.kpis.mau.value, pctDelta(model, result.kpis.mau), "border-chart-series-3"),
 				stat("WAU", result.kpis.wau.value, pctDelta(model, result.kpis.wau), "border-chart-series-2"),

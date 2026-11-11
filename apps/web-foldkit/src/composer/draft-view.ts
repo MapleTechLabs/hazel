@@ -141,10 +141,10 @@ const replyIndicator = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewInp
 		[h.Class(cn(indicatorClass, hasFiles ? "rounded-t-none border-t-0" : ""))],
 		[
 			h.div(
-				[h.Class("flex items-center gap-2 text-sm")],
+				[h.Class("flex items-center gap-2 text-sm max-md:min-w-0")],
 				[
-					h.span([h.Class("text-muted-fg")], ["Replying to"]),
-					h.span([h.Class("font-semibold text-fg")], [reply.authorName]),
+					h.span([h.Class("text-muted-fg max-md:shrink-0")], ["Replying to"]),
+					h.span([h.Class("font-semibold text-fg max-md:truncate")], [reply.authorName]),
 					h.span([h.Class("max-w-xs truncate text-muted-fg")], [reply.firstLine]),
 				],
 			),

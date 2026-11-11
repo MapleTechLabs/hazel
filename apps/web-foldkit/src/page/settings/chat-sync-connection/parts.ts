@@ -89,10 +89,16 @@ export const channelLinkRow = (
 	const { logo, hasWebhookIdentity } = PROVIDERS[provider]
 	return h.keyed("div")(
 		link.id,
-		[h.Class("flex items-center gap-4 px-5 py-3")],
+		// A phone gives the row two lines: the Hazel channel with its status and menu, then the
+		// direction and the external channel.
+		[
+			h.Class(
+				"flex items-center gap-4 px-5 py-3 max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-1 max-md:px-4",
+			),
+		],
 		[
 			h.div(
-				[h.Class("flex min-w-0 flex-1 items-center gap-2")],
+				[h.Class("flex min-w-0 flex-1 items-center gap-2 max-md:order-1")],
 				[
 					IconHashtag(h, { className: "size-4 shrink-0 text-muted-fg" }),
 					h.span(
@@ -104,21 +110,23 @@ export const channelLinkRow = (
 			h.div(
 				[
 					h.Class(
-						"flex shrink-0 items-center gap-1.5 rounded-sm bg-bg-muted/50 px-2.5 py-1 text-muted-fg",
+						"flex shrink-0 items-center gap-1.5 rounded-sm bg-bg-muted/50 px-2.5 py-1 text-muted-fg max-md:order-4",
 					),
 					h.Title(direction),
 				],
 				[directionIcon(h, link.direction), h.span([h.Class("text-xs")], [direction])],
 			),
 			h.div(
-				[h.Class("flex min-w-0 flex-1 items-center gap-2")],
+				[h.Class("flex min-w-0 flex-1 items-center gap-2 max-md:order-5")],
 				[
 					logo(h, "size-4 shrink-0"),
 					h.span([h.Class("truncate text-fg text-sm")], [link.externalName]),
 				],
 			),
+			// The phone's line break (`display: none` from `md` up, so the desktop row is untouched).
+			h.div([h.Class("hidden max-md:order-3 max-md:block max-md:basis-full"), h.AriaHidden(true)]),
 			h.div(
-				[h.Class("flex shrink-0 items-center gap-2")],
+				[h.Class("flex shrink-0 items-center gap-2 max-md:order-2")],
 				[
 					// How Discord posts for this link; Slack always posts as the author.
 					...(hasWebhookIdentity
@@ -164,7 +172,7 @@ export const channelLinkRow = (
 													h.AriaLabel("Channel link actions"),
 													h.Class(
 														menuTriggerClassName(
-															"inline-flex size-7 items-center justify-center rounded-lg text-muted-fg hover:bg-secondary hover:text-fg",
+															"inline-flex size-7 items-center justify-center rounded-lg text-muted-fg hover:bg-secondary hover:text-fg max-md:-my-1.5 max-md:size-10",
 														),
 													),
 													h.Attribute("data-react-aria-pressable", "true"),

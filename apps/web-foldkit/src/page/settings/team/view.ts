@@ -24,8 +24,23 @@ const canManageUser = (
 	return current.role === "admin" && targetRole === "member"
 }
 
-const headerCell = <Message>(h: HtmlBuilder<Message>, label: string, align: "left" | "right") =>
-	h.th([h.Class(`px-4 py-3 text-${align} font-medium text-muted-fg text-xs`)], [label])
+/** A low-priority column a phone leaves out (its cells carry the same class). */
+const PHONE_HIDDEN = "max-md:hidden"
+
+const headerCell = <Message>(
+	h: HtmlBuilder<Message>,
+	label: string,
+	align: "left" | "right",
+	className?: string,
+) =>
+	h.th(
+		[
+			h.Class(
+				`px-4 py-3 text-${align} font-medium text-muted-fg text-xs${className ? ` ${className}` : ""}`,
+			),
+		],
+		[label],
+	)
 
 const memberRow = <Message>(
 	h: HtmlBuilder<Message>,
@@ -66,7 +81,10 @@ const memberRow = <Message>(
 								[h.Class("flex flex-col")],
 								[
 									h.span([h.Class("font-medium text-fg text-sm")], [fullName]),
-									h.span([h.Class("text-muted-fg text-xs")], [member.email]),
+									h.span(
+										[h.Class("text-muted-fg text-xs max-md:break-all")],
+										[member.email],
+									),
 								],
 							),
 						],
@@ -74,7 +92,7 @@ const memberRow = <Message>(
 				],
 			),
 			h.td(
-				[h.Class("px-4 py-4")],
+				[h.Class(`px-4 py-4 ${PHONE_HIDDEN}`)],
 				[
 					badge(h, { intent: getStatusBadgeIntent(status) }, [
 						h.span([h.Class("size-1.5 rounded-full bg-current")]),
@@ -107,6 +125,7 @@ const memberRow = <Message>(
 										{
 											intent: "plain",
 											size: "sq-xs",
+											className: "max-md:size-10",
 											attributes: [
 												h.Attribute("aria-haspopup", "true"),
 												h.Attribute("aria-expanded", "false"),
@@ -182,7 +201,7 @@ export const teamPage = <Message>(
 											[],
 											[
 												headerCell(h, "Name", "left"),
-												headerCell(h, "Status", "left"),
+												headerCell(h, "Status", "left", PHONE_HIDDEN),
 												headerCell(h, "Role", "left"),
 												headerCell(h, "Actions", "right"),
 											],

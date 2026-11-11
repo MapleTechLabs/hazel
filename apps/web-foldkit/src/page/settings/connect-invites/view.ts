@@ -16,8 +16,18 @@ import type { Invite, Model } from "./model"
 
 /** Port of `routes/_app/$orgSlug/settings/connect-invites.tsx`. */
 
-const headerCell = (h: HtmlBuilder<Message>, label: string, align: "left" | "right") =>
-	h.th([h.Class(`px-4 py-3 text-${align} font-medium text-muted-fg text-xs`)], [label])
+/** A low-priority column a phone leaves out (its cells carry the same class). */
+const PHONE_HIDDEN = "max-md:hidden"
+
+const headerCell = (h: HtmlBuilder<Message>, label: string, align: "left" | "right", className?: string) =>
+	h.th(
+		[
+			h.Class(
+				`px-4 py-3 text-${align} font-medium text-muted-fg text-xs${className ? ` ${className}` : ""}`,
+			),
+		],
+		[label],
+	)
 
 const inviteRow = (h: HtmlBuilder<Message>, model: Model, invite: Invite): Html => {
 	const statusBadge = getConnectInviteStatusBadge(invite.status)
@@ -37,7 +47,7 @@ const inviteRow = (h: HtmlBuilder<Message>, model: Model, invite: Invite): Html 
 				[badge(h, { intent: statusBadge.intent, size: "sm" }, [statusBadge.label])],
 			),
 			h.td(
-				[h.Class("px-4 py-4")],
+				[h.Class(`px-4 py-4 ${PHONE_HIDDEN}`)],
 				[
 					h.span(
 						[h.Class("text-muted-fg text-sm")],
@@ -144,7 +154,7 @@ const invitesTable = (h: HtmlBuilder<Message>, model: Model, invites: ReadonlyAr
 								[
 									headerCell(h, "From", "left"),
 									headerCell(h, "Status", "left"),
-									headerCell(h, "Received", "left"),
+									headerCell(h, "Received", "left", PHONE_HIDDEN),
 									headerCell(h, "Actions", "right"),
 								],
 							),
