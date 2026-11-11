@@ -3159,3 +3159,99 @@ fn a_field_takes_the_apps_text_with_its_caret() {
     ));
     assert_eq!(s.fields["r"].edit.focus, 3);
 }
+
+/// The channel beside an open thread panel: the channel column (`flex-1 min-w-0`, scrolling)
+/// takes what the fixed-width panel leaves, so its messages wrap there and the panel stays on
+/// screen, as CSS lays out `SplitPanelRoot`.
+#[test]
+fn a_shrinkable_channel_column_leaves_room_for_a_fixed_thread_panel() {
+    let long = "but ist das acc wirklich connected mit how you want to use a status page, i agree we need it aber verstehe nicht ganz wie";
+    let message = e(
+        "div",
+        json!({ "display": "flex", "gapCol": 16, "pad": [8, 16, 8, 16] }),
+        vec![
+            e("div", json!({ "w": 40, "h": 40, "shrink": 0 }), vec![]),
+            e(
+                "div",
+                json!({ "display": "flex", "dir": "col", "grow": 1, "minW": 0 }),
+                vec![e(
+                    "div",
+                    json!({ "whiteSpacePre": true }),
+                    vec![e("p", json!({}), vec![t(long)])],
+                )],
+            ),
+        ],
+    );
+    let content = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "grow": 1, "shrink": 1, "minW": 0, "minH": 0, "scrollY": true }),
+        vec![message],
+    );
+    let panel = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "w": 500, "h": "full", "shrink": 0, "clip": true }),
+        vec![t("thread")],
+    );
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "w": "full", "h": "full", "clip": true }),
+            vec![content, panel],
+        ),
+        (800.0, 600.0),
+    );
+    let [cx, _, cw, _] = rect(&rt, "r/0");
+    let [px, _, pw, _] = rect(&rt, "r/1");
+    let [tx, _, tw, th] = rect(&rt, "r/0/0/1/0/0");
+    assert!(
+        px + pw <= 800.5,
+        "the panel runs past the window: {px} + {pw}"
+    );
+    assert!(tx + tw <= cx + cw + 0.5, "the text runs past its column");
+    assert!(th > 30.0, "the text did not wrap: {th} tall");
+}
+
+/// Narrowing the window rewraps a message: its text follows the column down, not the width it
+/// was first laid out at.
+#[test]
+fn narrowing_the_window_rewraps_a_message() {
+    let long = "but ist das acc wirklich connected mit how you want to use a status page, i agree we need it aber verstehe nicht ganz wie";
+    let text = e("span", json!({}), vec![e("span", json!({}), vec![t(long)])]);
+    let paragraph = e("p", json!({}), vec![text]);
+    let body = e(
+        "div",
+        json!({ "whiteSpacePre": true, "w": "full" }),
+        vec![paragraph],
+    );
+    let content = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "grow": 1, "minW": 0 }),
+        vec![body],
+    );
+    let message = e(
+        "div",
+        json!({ "display": "flex", "gapCol": 16 }),
+        vec![
+            e("div", json!({ "w": 40, "h": 40, "shrink": 0 }), vec![]),
+            content,
+        ],
+    );
+    let root = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "w": "full", "h": "full", "scrollY": true }),
+        vec![message],
+    );
+    let mut rt = runtime(root, (1400.0, 400.0));
+    rt.viewport = (400.0, 400.0);
+    rt.invalidate();
+    rt.frame(0.0);
+    rt.settle_all();
+    rt.frame(0.0);
+    let [x, _, w, h] = rect(&rt, "r/0/1/0/0/0");
+    assert!(
+        x + w <= 400.5,
+        "the text runs to {} past the 400 window",
+        x + w
+    );
+    assert!(h > 30.0, "the text did not rewrap: {h} tall");
+}
