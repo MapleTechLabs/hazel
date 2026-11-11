@@ -611,6 +611,8 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		CompletedSaveThreadPanelWidth: () => ({ model }),
 		ClickedJoinChannel: () => joinChannel(model),
 		PressedGlobalKey: ({ key }) => Write.insertGlobalKey(model, key),
+		PastedGlobalFiles: ({ files }) => Write.pasteGlobalFiles(model, files, shared),
+		PastedGlobalText: ({ text }) => Write.pasteGlobalText(model, text),
 		PressedChannelHotkey: ({ action }) => pressedChannelHotkey(model, action, shared),
 		PressedMessageKey: ({ messageId, key }) => pressedMessageKey(model, messageId, key),
 		FocusedMessage: ({ messageId }) =>

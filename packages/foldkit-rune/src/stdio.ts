@@ -15,6 +15,7 @@ const HOST_MESSAGE_TAGS = {
 	contextmenu: true,
 	key: true,
 	files: true,
+	paste: true,
 	radio: true,
 	label: true,
 	openUrl: true,

@@ -74,6 +74,16 @@ export type HostToRuntime =
 	| { readonly t: "scrolled"; readonly path: string; readonly top: number; readonly seq?: number }
 	/** The files picked for the file input at `path` (paths on disk); none when cancelled. */
 	| { readonly t: "files"; readonly path: string; readonly files: ReadonlyArray<string> }
+	/**
+	 * A paste the page hears (no field focused) or a file paste into the composer's field: the
+	 * clipboard's text, its files (paths on disk) and its image (PNG, base64), as a DOM `paste`.
+	 */
+	| {
+			readonly t: "paste"
+			readonly text: string
+			readonly files: ReadonlyArray<string>
+			readonly image?: string | null
+	  }
 	/** A press on the label at `path` that handles none itself: its control's activation. */
 	| { readonly t: "label"; readonly path: string }
 	/** An arrow key on the radio at `path`: the next (`1`) or previous (`-1`) in its group. */

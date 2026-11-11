@@ -38,6 +38,21 @@ const dispatchDocumentKey = (key: {
 	return event.defaultPrevented
 }
 
+/** A paste on `document`, as a browser fires one where no field has focus. */
+const dispatchPaste = (text: string, files: ReadonlyArray<File>): boolean => {
+	const target: EventTarget | undefined = globalThis.document
+	if (target === undefined) return false
+	const clipboardData = {
+		files,
+		items: files.map((file) => ({ kind: "file", type: file.type, getAsFile: () => file })),
+		types: [...(text === "" ? [] : ["text/plain"]), ...(files.length > 0 ? ["Files"] : [])],
+		getData: (format: string) => (format === "text/plain" || format === "text" ? text : ""),
+	}
+	const event = Object.assign(new Event("paste", { bubbles: true, cancelable: true }), { clipboardData })
+	target.dispatchEvent(event)
+	return event.defaultPrevented
+}
+
 const MIME_TYPES = new Map([
 	["png", "image/png"],
 	["jpg", "image/jpeg"],
@@ -1020,6 +1035,10 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			void filesPicked(message.path, message.files)
 			return
 		}
+		if (message.t === "paste") {
+			void pasted(message)
+			return
+		}
 		if (message.t === "label") {
 			activateLabel(message.path)
 			return
@@ -1150,25 +1169,47 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		send({ t: "focus", key: hostFocusKey(next, "input", { type: "radio" }) })
 	}
 
-	/** The files picked for a file input: read, then its `change`, as a browser fires it. */
-	const filesPicked = async (path: string, paths: ReadonlyArray<string>) => {
-		if (paths.length === 0) return
-		// Only a host with a file system picks files by path: the runtime loads anywhere else.
+	/**
+	 * Files the host names by path, read. Only a host with a file system sends paths, so the runtime
+	 * loads anywhere else.
+	 */
+	const readFiles = async (paths: ReadonlyArray<string>) => {
+		if (paths.length === 0) return []
 		const [{ readFile }, { basename }] = await Promise.all([
 			import("node:fs/promises"),
 			import("node:path"),
 		])
-		const files = await Promise.all(
+		return Promise.all(
 			paths.map(
 				async (file) => new File([await readFile(file)], basename(file), { type: mimeOf(file) }),
 			),
 		)
+	}
+
+	/** The files picked for a file input: read, then its `change`, as a browser fires it. */
+	const filesPicked = async (path: string, paths: ReadonlyArray<string>) => {
+		if (paths.length === 0) return
+		const files = await readFiles(paths)
 		const target = { files, value: "", scrollTop: 0, open: false }
 		fire(path, {
 			...fakeEvent({ t: "event", seq: ack, id: 0, type: "change" }),
 			target,
 			currentTarget: target,
 		})
+	}
+
+	/** A paste replays as the DOM's `paste` on `document`, with the clipboard as `clipboardData`. */
+	const pasted = async (paste: Extract<HostToRuntime, { t: "paste" }>) => {
+		const picked = await readFiles(paste.files)
+		const image =
+			paste.image == null
+				? []
+				: [
+						new File([Uint8Array.from(atob(paste.image), (c) => c.charCodeAt(0))], "image.png", {
+							type: "image/png",
+						}),
+					]
+		dispatchPaste(paste.text, picked.length > 0 ? picked : image)
 	}
 
 	return { target, handleHostMessage, env, refreshObserved, click: clickElement, filesPicked, fire }

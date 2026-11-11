@@ -350,6 +350,95 @@ fn an_img_with_a_data_png_draws_its_pixels() {
 }
 
 #[test]
+fn an_unsized_img_takes_its_pictures_size_within_its_max_height() {
+    // A chat message's lone image: `h-auto w-auto max-h-[300px]` in a content-sized wrapper.
+    let src = png_data_url(80, 40, &[255, 0, 0, 255].repeat(80 * 40));
+    let img = |max_h: f32| {
+        e(
+            "div",
+            json!({ "w": 400, "h": 200 }),
+            vec![e(
+                "div",
+                json!({ "w": "fit" }),
+                vec![with_attrs(
+                    e(
+                        "img",
+                        json!({ "w": "auto", "h": "auto", "maxH": max_h }),
+                        vec![],
+                    ),
+                    json!({ "src": src }),
+                )],
+            )],
+        )
+    };
+    // The decode lands off the main thread. `poll` rebuilds the row in the app; tests run side by
+    // side and share its flag, so each rebuilds its own rows until the picture shows.
+    let settled = |max_h: f32| {
+        let mut rt = runtime(img(max_h), (400.0, 200.0));
+        let started = std::time::Instant::now();
+        loop {
+            rt.update(|_: &mut State, tx| {
+                tx.invalidate_memos_by_prefix("r");
+            });
+            rt.frame(0.016);
+            let drawn = rt.presented("r/0/0").map(|p| p.0);
+            if drawn.is_some_and(|r| r[2] > 0.0) || started.elapsed().as_secs() > 10 {
+                break rect(&rt, "r/0/0");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    };
+    assert_eq!(
+        settled(300.0)[2..],
+        [80.0, 40.0],
+        "its own size, never scaled up"
+    );
+    assert_eq!(
+        settled(20.0)[2..],
+        [40.0, 20.0],
+        "scaled down to its max height"
+    );
+}
+
+#[test]
+fn an_unsized_img_fits_a_percentage_max_of_its_parent() {
+    // The image viewer: `h-auto w-auto max-h-full max-w-full` in a box smaller than the photo.
+    let src = png_data_url(400, 100, &[255, 0, 0, 255].repeat(400 * 100));
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 100, "h": 50 }),
+            vec![with_attrs(
+                e(
+                    "img",
+                    json!({ "w": "auto", "h": "auto", "maxW": "full", "maxH": "full" }),
+                    vec![],
+                ),
+                json!({ "src": src }),
+            )],
+        ),
+        (200.0, 200.0),
+    );
+    let started = std::time::Instant::now();
+    let drawn = loop {
+        rt.update(|_: &mut State, tx| {
+            tx.invalidate_memos_by_prefix("r");
+        });
+        rt.frame(0.016);
+        let drawn = rt.presented("r/0").map(|p| p.0);
+        if drawn.is_some_and(|r| r[3] > 0.0) || started.elapsed().as_secs() > 10 {
+            break rect(&rt, "r/0");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    assert_eq!(
+        drawn[2..],
+        [100.0, 25.0],
+        "the whole photo, fitted to the box"
+    );
+}
+
+#[test]
 fn a_multicolour_svg_draws_its_own_oklch_fill_filling_its_box() {
     let body = r#"<path d="M0 0h16v16h-16z" fill="oklch(0.628 0.2577 29.23)"/>"#;
     let s = state(e(
@@ -2720,4 +2809,74 @@ fn a_dialog_covers_the_frames_behind_it_and_not_its_own() {
     let paths: Vec<&str> = s.frames.iter().map(|frame| frame.path.as_str()).collect();
     assert_eq!(paths, ["r/0", "r/1/0/0"]);
     assert!(!inside("r/0") && inside("r/1/0/0"));
+}
+
+fn composer_page() -> Runtime<State> {
+    let editor = with_attrs(
+        e(
+            "div",
+            json!({ "w": 400 }),
+            vec![e("div", json!({ "minH": 40 }), vec![])],
+        ),
+        json!({ "data-editable": "1" }),
+    );
+    runtime(e("div", json!({ "w": 400 }), vec![editor]), (400.0, 100.0))
+}
+
+#[test]
+fn a_paste_with_no_field_focused_reaches_the_page() {
+    sent_lines();
+    let mut rt = composer_page();
+    rt.paste("pasted-on-the-page");
+    rt.frame(0.1);
+    let reported = sent_lines()
+        .into_iter()
+        .any(|m| m["t"] == "paste" && m["text"] == "pasted-on-the-page");
+    assert!(reported, "the page's paste reaches the runtime");
+}
+
+#[test]
+fn a_file_pasted_into_the_composer_goes_to_the_runtime_instead_of_the_field() {
+    sent_lines();
+    let mut rt = composer_page();
+    rt.update(|_, tx| tx.focus("r/0/field".to_string()));
+    rt.frame(0.1);
+    rt.paste_content(
+        rune::ClipboardContent::new("").with_files(["/tmp/composer-paste/report.pdf".into()]),
+    );
+    rt.frame(0.1);
+    let reported = sent_lines()
+        .into_iter()
+        .any(|m| m["t"] == "paste" && m["files"] == json!(["/tmp/composer-paste/report.pdf"]));
+    assert!(reported, "the pasted file reaches the runtime");
+    assert_eq!(
+        rt.state
+            .fields
+            .get("r/0")
+            .map_or("", |f| f.edit.text.as_str()),
+        ""
+    );
+}
+
+#[test]
+fn text_pasted_into_the_composer_stays_the_fields_own_edit() {
+    sent_lines();
+    let mut rt = composer_page();
+    rt.update(|_, tx| tx.focus("r/0/field".to_string()));
+    rt.frame(0.1);
+    rt.paste("typed-by-paste");
+    rt.frame(0.1);
+    let lines = sent_lines();
+    assert!(
+        lines
+            .iter()
+            .any(|m| m["type"] == "editable" && m["value"] == "typed-by-paste"),
+        "the field sends the edit"
+    );
+    assert!(
+        !lines
+            .iter()
+            .any(|m| m["t"] == "paste" && m["text"] == "typed-by-paste"),
+        "the page does not hear it too"
+    );
 }

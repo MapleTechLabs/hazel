@@ -65,6 +65,27 @@ fn send_editable(path: &str, value: Option<&str>, key: Option<&str>) -> u64 {
     seq
 }
 
+/// A paste the composer's editor or the page should hear as a DOM `paste` on `document`: the
+/// clipboard's files (paths on disk), its image (PNG, base64; a screenshot has no file) and its
+/// text. The web app attaches the files to the composer, or pastes the text into it.
+fn send_paste(content: &rune::ClipboardContent) {
+    use base64::Engine;
+    let files: Vec<String> = content
+        .files()
+        .iter()
+        .filter_map(|f| f.to_str().map(str::to_string))
+        .collect();
+    let image = content
+        .image()
+        .map(|i| base64::engine::general_purpose::STANDARD.encode(i.png()));
+    write_line(json!({ "t": "paste", "text": content.text(), "files": files, "image": image }));
+}
+
+/// Whether a paste carries something a text field cannot hold: files or an image.
+fn pastes_files(content: &rune::ClipboardContent) -> bool {
+    content.image().is_some() || !content.files().is_empty()
+}
+
 /// The DOM `key` of the keys a field's own keydown handler (a combo box, a picker) acts on.
 fn dom_key(key: &rune::edit::Key) -> Option<&'static str> {
     use rune::edit::Key;
@@ -1479,6 +1500,9 @@ fn build_img(
         .get("src")
         .and_then(|src| ctx.s.images.get(src, picture_size(st)))
     {
+        if let Some([w, h]) = natural_box(st, &image, path) {
+            e = e.size(w, h);
+        }
         e = match st.object_fit.as_deref() {
             Some("cover") => e.pixels_fit(image.pixels(), SurfaceFit::Fill),
             Some("contain" | "scale-down" | "none") => {
@@ -1488,6 +1512,60 @@ fn build_img(
         };
     }
     press_handlers(apply_box(e, st), on, None)
+}
+
+/// The box of an `<img>` that sets neither its width nor its height (`w-auto h-auto`, a chat
+/// message's lone image): CSS gives it the picture's own size, scaled down to fit its `max-w`
+/// and `max-h` with its aspect ratio kept. Rune sizes a picture's box only from a side that is
+/// set, so without this the box is empty. `None` while the picture decodes (the row rebuilds
+/// once it has), or when the style sizes the box itself.
+///
+/// A percentage max (`max-w-full max-h-full`, the image viewer's) is a share of the parent's
+/// laid-out box, read so the view rebuilds when that box changes. Before the parent is laid out
+/// that side has no cap, as a percentage of a size that depends on the content has none in CSS.
+fn natural_box(st: &Style, image: &rune::Image, path: &str) -> Option<[f32; 2]> {
+    let unset = |len: &Option<wire::Len>| matches!(len, None | Some(wire::Len::Auto));
+    if !unset(&st.w) || !unset(&st.h) || st.aspect_ratio.is_some() {
+        return None;
+    }
+    let Some([w, h]) = image.size() else {
+        images::rebuild_when_ready(image);
+        return None;
+    };
+    let percent = st
+        .max_w
+        .iter()
+        .chain(&st.max_h)
+        .any(|len| matches!(len, wire::Len::Full | wire::Len::Frac(_)));
+    let parent = percent
+        .then(|| path.rsplit_once('/'))
+        .flatten()
+        .and_then(|(parent, _)| rune::memo::layout_size(parent));
+    let max = |len: &Option<wire::Len>, side: usize| {
+        let share = match len {
+            Some(wire::Len::Px(v)) if v.0 > 0.0 => return v.0,
+            Some(wire::Len::Full) => 1.0,
+            Some(wire::Len::Frac(f)) => f.0,
+            _ => return f32::INFINITY,
+        };
+        match parent {
+            Some(size) if size[side] > 0.0 => size[side] * share,
+            _ => f32::INFINITY,
+        }
+    };
+    Some(fit_within(
+        [w as f32, h as f32],
+        [max(&st.max_w, 0), max(&st.max_h, 1)],
+    ))
+}
+
+/// `size` scaled down (never up) to fit inside `max`, keeping its aspect ratio.
+fn fit_within([w, h]: [f32; 2], [max_w, max_h]: [f32; 2]) -> [f32; 2] {
+    if w <= 0.0 || h <= 0.0 {
+        return [w.max(0.0), h.max(0.0)];
+    }
+    let scale = (max_w / w).min(max_h / h).min(1.0);
+    [w * scale, h * scale]
 }
 
 /// CSS grid on Rune's grid tracks. `display: contents` children are grid items through their own
@@ -1803,6 +1881,14 @@ fn build_editable(
         })
         .on_submit(move |_: &mut State, _| {
             send_editable(&submit_key, None, Some("Enter"));
+        })
+        // Files and images attach to the composer, as a paste into the web editor does; text
+        // stays the field's own paste.
+        .on_input_paste(|_: &mut State, content, _| {
+            pastes_files(content) && {
+                send_paste(content);
+                true
+            }
         });
     let field = match field_st {
         Some(fst) => apply_box(
@@ -1898,7 +1984,12 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
     // background goes under them, and the runtime's viewport stays inside.
     let [top, right, bottom, left] = cx.safe_area();
     let inset = [top, right, bottom, left].iter().any(|edge| *edge > 0.0);
-    let mut page = col().w_full().h_full().on_layout(report_env);
+    // A paste with no field focused goes to the page, which hands it to the composer.
+    let mut page = col()
+        .w_full()
+        .h_full()
+        .on_layout(report_env)
+        .on_paste_content(|_: &mut State, content, _| send_paste(content));
     let bg = color(&s.page.bg);
     if let Some(bg) = bg {
         page = page.fill(bg)

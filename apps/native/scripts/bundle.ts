@@ -15,6 +15,7 @@
  */
 import { execFileSync } from "node:child_process"
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 
 import { nativeClient } from "@hazel/auth/contract"
 
@@ -69,6 +70,36 @@ run("cargo", ["build", "--release", "--target", rustTarget], {
 })
 cpSync(`${root}host/target/${rustTarget}/release/hazel-native`, `${contents}/MacOS/hazel-native`)
 
+/**
+ * jsdom finds two files beside its own source when it loads, by paths a compiled executable bakes
+ * in from the build machine, so on any other Mac loading jsdom throws and the composer's editor
+ * never mounts. The default stylesheet is inlined; the sync XHR worker (nothing here makes a
+ * synchronous request) keeps a placeholder name instead of a resolved path.
+ */
+const jsdomFilesPlugin: BunPlugin = {
+	name: "hazel-native-jsdom-files",
+	setup(build) {
+		const patch = (path: string, pattern: RegExp, replace: (match: RegExpExecArray) => string) => {
+			const source = readFileSync(path, "utf8")
+			const match = pattern.exec(source)
+			if (match === null) throw new Error(`jsdom changed, update the bundle's patch: ${path}`)
+			return { contents: source.replace(match[0], replace(match)), loader: "js" as const }
+		}
+		build.onLoad({ filter: /jsdom\/lib\/jsdom\/living\/css\/helpers\/computed-style\.js$/ }, ({ path }) =>
+			patch(
+				path,
+				/fs\.readFileSync\(\s*path\.resolve\(__dirname, "([^"]+)"\),?\s*\{\s*encoding: "utf-8"\s*\}\s*\)/,
+				(match) => JSON.stringify(readFileSync(resolve(dirname(path), match[1] ?? ""), "utf8")),
+			),
+		)
+		build.onLoad({ filter: /jsdom\/lib\/jsdom\/living\/xhr\/XMLHttpRequest-impl\.js$/ }, ({ path }) =>
+			patch(path, /require\.resolve\("\.\/xhr-sync-worker\.js"\)/, () =>
+				JSON.stringify("xhr-sync-worker.js"),
+			),
+		)
+	},
+}
+
 // ESM keeps the runtime's top-level awaits; bytecode skips parsing at launch.
 const runtime = await Bun.build({
 	entrypoints: [`${root}src/entry.ts`],
@@ -78,7 +109,7 @@ const runtime = await Bun.build({
 	minify: true,
 	// Tailwind's compiler (native addons) runs only for a class the precompiled sheet missed.
 	external: ["@tailwindcss/oxide", "@tailwindcss/node", "lightningcss"],
-	plugins: [overlayPlugin, prismPlugin],
+	plugins: [overlayPlugin, prismPlugin, jsdomFilesPlugin],
 })
 if (!runtime.success) {
 	for (const log of runtime.logs) process.stderr.write(`${String(log)}\n`)

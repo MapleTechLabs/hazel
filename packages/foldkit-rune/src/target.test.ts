@@ -282,6 +282,29 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("replays a host paste as the DOM's paste on document, a pasted image as a file", async () => {
+		const { rune, handle } = boot()
+		const document = new EventTarget()
+		const heard: Array<{ text: string; files: ReadonlyArray<File> }> = []
+		document.addEventListener("paste", (event) => {
+			const data = (event as ClipboardEvent).clipboardData
+			if (data !== null) heard.push({ text: data.getData("text/plain"), files: Array.from(data.files) })
+		})
+		vi.stubGlobal("document", document)
+		try {
+			const png = Buffer.from("89504e470d0a1a0a", "hex").toString("base64")
+			rune.handleHostMessage({ t: "paste", text: "hello", files: [], image: null })
+			rune.handleHostMessage({ t: "paste", text: "", files: [], image: png })
+			await settle()
+		} finally {
+			vi.unstubAllGlobals()
+		}
+		expect(heard.map((paste) => paste.text)).toEqual(["hello", ""])
+		expect(heard[0]?.files).toEqual([])
+		expect(heard[1]?.files.map((file) => [file.name, file.type])).toEqual([["image.png", "image/png"]])
+		handle.dispose()
+	})
+
 	it("activates a pressed label's control: focuses a field, toggles a checkbox", async () => {
 		const Toggled = defineMessageUnion({ Toggled: {} })
 		const sent: Array<RuntimeToHost> = []

@@ -1,7 +1,7 @@
 import { ChannelHotkey } from "./hotkeys"
 import { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
-import type { Update } from "foldkit"
+import { File, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { defineTaggedUnion } from "foldkit/schema"
 import { CommonReason } from "~/lib/error-messages"
@@ -236,6 +236,10 @@ export const Message = defineMessageUnion({
 	ClickedJoinChannel: {},
 	/** A printable key typed outside any input (`useGlobalKeyboardFocus`). */
 	PressedGlobalKey: { key: Schema.String },
+	/** Files pasted outside any input: they attach to the focused composer. */
+	PastedGlobalFiles: { files: Schema.Array(File.File) },
+	/** Text pasted outside any input: it pastes into the focused composer. */
+	PastedGlobalText: { text: Schema.String },
 	/** One of Discord's channel shortcuts (`hotkeys.ts`). */
 	PressedChannelHotkey: { action: ChannelHotkey },
 	/** A key on a focused message (`message-keys.ts`). */

@@ -215,6 +215,31 @@ describe("uploads", () => {
 	const attachmentId = Schema.decodeSync(AttachmentId)("00000000-0000-4000-8000-000000007777")
 	const file = new File(["png"], "diagram.png", { type: "image/png" })
 
+	test("a file pasted anywhere on the page attaches to the composer", () => {
+		story(
+			updateWithShared,
+			given(loadedModel()),
+			message(Message.PastedGlobalFiles({ files: [file] })),
+			Command.resolve(
+				Draft.GenerateUploadFileId,
+				Draft.Message.CompletedGenerateUploadFileId({ fileId: "f1" }),
+			),
+			model((current) =>
+				expect(current.draft.currentUpload).toEqual({ fileId: "f1", file, progress: 0 }),
+			),
+		)
+	})
+
+	test("text pasted anywhere on the page pastes into the composer", () => {
+		story(
+			updateWithShared,
+			given(loadedModel()),
+			message(Message.PastedGlobalText({ text: "one\ntwo" })),
+			Command.expectHas(EditorCommands.PasteEditorText({ editorId, text: "one\ntwo" })),
+			Command.resolve(EditorCommands.PasteEditorText, Composer.Message.CompletedInsertEditorText()),
+		)
+	})
+
 	test("a selected file uploads with progress, then sends as an attachment", () => {
 		story(
 			updateWithShared,
