@@ -4,6 +4,7 @@
  * dry runs, and baseline mode after a backfill.
  */
 import {
+	DEFAULT_CONNECTION_CONFIG,
 	DEFAULT_HEALTH_SETTINGS,
 	type IngestOp,
 	type RuleDraft,
@@ -97,16 +98,17 @@ describe("Customers RPCs", () => {
 				expect(
 					world.rows(`SELECT count(*) AS n FROM customer_saved_views WHERE builtInKey IS NOT NULL`),
 				).toEqual([{ n: 5 }])
-				// A provider with no adapter registered yet (Clerk and Stripe have one) answers "unavailable".
+				// A provider with no adapter registered yet (Clerk, Stripe and Autumn have one)
+				// answers "unavailable".
 				expect(
 					tagOf(
 						yield* world.call(
 							"customers.connection.connect",
 							{
-								provider: "autumn",
-								apiKey: "am_sk_test",
+								provider: "maple",
+								apiKey: "mpl_live_test",
 								webhookSecret: null,
-								config: { _tag: "autumn", customerIdIsClerkOrgId: true },
+								config: { ...DEFAULT_CONNECTION_CONFIG.maple, mapleOrgId: "org_maple" },
 							},
 							world.owner,
 						),
