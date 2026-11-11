@@ -33,9 +33,13 @@
 			"entry": ["alchemy.run.ts"]
 		},
 		"apps/native": {
-			// The runtime the Rune host spawns, the benchmark runners and the browser bench page.
+			// The runtime the Rune host spawns, the benchmark runners and the browser bench page,
+			// plus the iOS pair `scripts/ios.ts` only names by path: the bundler it spawns
+			// (`bun scripts/build-ios.ts`) and the worker runtime that bundler builds.
 			"entry": [
 				"src/entry.ts",
+				"src/ios.ts",
+				"scripts/build-ios.ts",
 				"bench/web/run.ts",
 				"bench/interaction/run.ts",
 				"bench/parity/run.ts",
