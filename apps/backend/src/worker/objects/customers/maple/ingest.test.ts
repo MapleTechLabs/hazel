@@ -265,6 +265,25 @@ describe("Maple ingest", () => {
 							).ops,
 					),
 				)
+				// A paying customer: leads get no health score.
+				yield* world.ingest("stripe", [
+					{
+						_tag: "subscription",
+						externalId: "sub_1",
+						account: { provider: "clerk", externalId: ORG_ACME },
+						planName: "Team",
+						status: "active",
+						mrrMinor: 19_900,
+						currency: "usd",
+						interval: "month",
+						quantity: 1,
+						startedAt: new Date(NOW.getTime() - 90 * 86_400_000).toISOString(),
+						trialEndsAt: null,
+						currentPeriodEnd: null,
+						cancelAtPeriodEnd: false,
+						canceledAt: null,
+					},
+				])
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
 
 				const [account] = accounts(world)
