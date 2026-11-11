@@ -140,5 +140,4 @@ describe("notifications inbox", () => {
 			Scene.expect(Scene.text("No notifications")).toBeAbsent(),
 		)
 	})
-
 })

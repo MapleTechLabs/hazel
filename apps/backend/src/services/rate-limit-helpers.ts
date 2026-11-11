@@ -73,19 +73,21 @@ const makeRateLimitCheck = ({ name, label, keyPrefix, config, message }: RateLim
 	Effect.fn(`RateLimitHelpers.${name}`)(function* (userId: string) {
 		const rateLimiter = yield* RateLimiter
 
-		const result = yield* rateLimiter.consume(`${keyPrefix}${userId}`, config.limit, config.windowMs).pipe(
-			Effect.catchTag("RateLimiterError", (error) =>
-				Effect.gen(function* () {
-					yield* Effect.logWarning("Rate limiter unavailable, allowing request", error)
-					return {
-						allowed: true,
-						remaining: config.limit,
-						resetAfterMs: config.windowMs,
-						limit: config.limit,
-					}
-				}),
-			),
-		)
+		const result = yield* rateLimiter
+			.consume(`${keyPrefix}${userId}`, config.limit, config.windowMs)
+			.pipe(
+				Effect.catchTag("RateLimiterError", (error) =>
+					Effect.gen(function* () {
+						yield* Effect.logWarning("Rate limiter unavailable, allowing request", error)
+						return {
+							allowed: true,
+							remaining: config.limit,
+							resetAfterMs: config.windowMs,
+							limit: config.limit,
+						}
+					}),
+				),
+			)
 
 		if (!result.allowed) {
 			return yield* Effect.fail(

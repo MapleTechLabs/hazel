@@ -420,4 +420,5 @@ export const fileIcon = <Message>(
 	h: HtmlBuilder<Message>,
 	type: string,
 	options: { readonly className?: string } = {},
-): Html => renderTree(h, (Object.hasOwn(icons, type) ? icons[type] : undefined) ?? icons.empty!, options.className)
+): Html =>
+	renderTree(h, (Object.hasOwn(icons, type) ? icons[type] : undefined) ?? icons.empty!, options.className)
