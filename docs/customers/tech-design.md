@@ -330,7 +330,8 @@ Rules:
     - `signals` = 100 − Σ deduction per open risk signal (high 30 / medium 15 / low 5), floor 0;
       templates in `excludedTemplates` ignored (default `health_drop`, `near_limit`, `seat_growth`).
 - Redistribution: `effectiveWeight_i = w_i / Σ w_available × 100`. Score = round(Σ eff × score).
-  No score (status `unknown`) when only `signals` is available, or the account is **churned**.
+  No score (status `unknown`) when only `signals` is available, or the account is not a customer
+  (stage **lead** or **churned**: nothing to retain).
 - Bands: `healthy ≥ healthyMin (70)`, `at_risk ≥ atRiskMin (40)`, else `critical`.
 - Writes `customer_health_daily[today]` (breakdown with `why`), account health fields, and a
   `health.status_changed` event on band change.

@@ -1036,13 +1036,21 @@ describe("Customers compute and sync loop", () => {
 						mrrMinor: number
 						lifecycleStage: string
 						customerSince: string | null
+						healthStatus: string
 					}>(
-						`SELECT name, mrrMinor, lifecycleStage, customerSince FROM customer_accounts ORDER BY name`,
+						`SELECT name, mrrMinor, lifecycleStage, customerSince, healthStatus FROM customer_accounts ORDER BY name`,
 					)
 				const [usageBilled, free] = accounts()
 				expect(usageBilled).toMatchObject({ mrrMinor: 0, lifecycleStage: "active" })
+				expect(usageBilled!.healthStatus).not.toBe("unknown")
 				expect(epoch(usageBilled!.customerSince!)).toBe(NOW.getTime() - 30 * DAY)
-				expect(free).toMatchObject({ mrrMinor: 0, lifecycleStage: "lead", customerSince: null })
+				// A lead (a free plan) is not a customer yet: no health score, so never "at risk".
+				expect(free).toMatchObject({
+					mrrMinor: 0,
+					lifecycleStage: "lead",
+					customerSince: null,
+					healthStatus: "unknown",
+				})
 				expect(world.rows(`SELECT * FROM customer_mrr_movements`)).toEqual([])
 
 				// Canceled, it was a paying customer: churned, still without a movement.

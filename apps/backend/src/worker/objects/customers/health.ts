@@ -4,8 +4,8 @@
  *
  * Each component scores 0–100 through its threshold steps or drops out without data; the excluded
  * components' weight is shared by the rest (`effectiveWeight = w / Σ w available × 100`); the score
- * is the weighted sum, banded. No score (`unknown`) for a churned account, or when only `signals`
- * is left.
+ * is the weighted sum, banded. No score (`unknown`) for an account that is not a customer (a lead or
+ * churned: nothing to retain), or when only `signals` is left.
  */
 import type {
 	HealthBreakdown,
@@ -26,7 +26,8 @@ export interface BillingHealthInputs {
 }
 
 export interface HealthInputs {
-	readonly churned: boolean
+	/** Paying, trialing or past due. Leads and churned accounts get no score. */
+	readonly customer: boolean
 	/** The org has usage data (an activity source): without it usage and engagement drop out. */
 	readonly hasActivityData: boolean
 	readonly contactCount: number
@@ -149,7 +150,7 @@ export const scoreHealth = (inputs: HealthInputs, settings: HealthSettings): Hea
 		why: part.why,
 	}))
 	const onlySignals = available.every((part) => part.key === "signals")
-	if (inputs.churned || onlySignals || totalWeight === 0) {
+	if (!inputs.customer || onlySignals || totalWeight === 0) {
 		return { score: null, status: "unknown", components }
 	}
 	const score = Math.round(
