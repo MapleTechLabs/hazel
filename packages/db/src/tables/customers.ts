@@ -256,6 +256,8 @@ export const customerSubscriptionsTable = SQLite.table("customer_subscriptions",
 		mrrMinor: money(),
 		/** What the plan costs per month at list price (trials, discounts). */
 		listMrrMinor: SQLite.nullable(SQLite.integer),
+		/** Billed on usage with no fixed price (`UpsertSubscription.billsByUsage`): paying at MRR 0. */
+		billsByUsage: SQLite.column(SQLite.boolean, { default: false }),
 		currency: SQLite.text,
 		interval: textEnum(BillingInterval.literals),
 		quantity: SQLite.column(SQLite.integer, { default: 1 }),

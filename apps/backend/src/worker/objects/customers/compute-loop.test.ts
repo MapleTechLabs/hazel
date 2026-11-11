@@ -4,7 +4,7 @@
  * and usage data that stops counting once its source is gone.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import type { IngestOp, ProviderRef } from "@hazel/domain/customers"
+import type { IngestOp, ProviderRef, UpsertSubscription } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerSignalRuleId, OrganizationId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
@@ -763,7 +763,7 @@ describe("Customers compute and sync loop", () => {
 	const subscription = (
 		startedDaysAgo: number,
 		account: ProviderRef = { provider: "clerk", externalId: "org_1" },
-	): IngestOp => ({
+	): UpsertSubscription => ({
 		_tag: "subscription",
 		externalId: "sub_1",
 		account,
@@ -889,6 +889,57 @@ describe("Customers compute and sync loop", () => {
 					{ name: "org_1", type: "new", toMrrMinor: 20_000 },
 					{ name: "org_2", type: "new", toMrrMinor: 9_900 },
 				])
+			}),
+		))
+
+	it("counts a usage-billed subscription at MRR 0 as paying, without an MRR movement", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest(
+					"clerk",
+					["org_1", "org_2"].map((externalId): IngestOp => ({
+						_tag: "account",
+						externalId,
+						name: externalId,
+						sameAs: [],
+						onNoMatch: "create",
+					})),
+				)
+				const usage = (org: string, billsByUsage: boolean): UpsertSubscription => ({
+					...subscription(30, { provider: "clerk", externalId: org }),
+					externalId: `sub_${org}`,
+					mrrMinor: 0,
+					billsByUsage,
+				})
+				yield* world.ingest("stripe", [usage("org_1", true), usage("org_2", false)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				const accounts = () =>
+					world.rows<{
+						name: string
+						mrrMinor: number
+						lifecycleStage: string
+						customerSince: string | null
+					}>(
+						`SELECT name, mrrMinor, lifecycleStage, customerSince FROM customer_accounts ORDER BY name`,
+					)
+				const [usageBilled, free] = accounts()
+				expect(usageBilled).toMatchObject({ mrrMinor: 0, lifecycleStage: "active" })
+				expect(epoch(usageBilled!.customerSince!)).toBe(NOW.getTime() - 30 * DAY)
+				expect(free).toMatchObject({ mrrMinor: 0, lifecycleStage: "lead", customerSince: null })
+				expect(world.rows(`SELECT * FROM customer_mrr_movements`)).toEqual([])
+
+				// Canceled, it was a paying customer: churned, still without a movement.
+				yield* world.ingest("stripe", [
+					{
+						...usage("org_1", true),
+						status: "canceled",
+						canceledAt: new Date(NOW.getTime() - DAY).toISOString(),
+					},
+				])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(accounts()[0]!.lifecycleStage).toBe("churned")
+				expect(world.rows(`SELECT * FROM customer_mrr_movements`)).toEqual([])
 			}),
 		))
 

@@ -157,6 +157,7 @@ export const factsOf = (input: FactsInput = {}): AccountFacts => {
 			status: "active",
 			mrrMinor: 19_900,
 			listMrrMinor: null,
+			billsByUsage: false,
 			currency: "usd",
 			interval: "month",
 			quantity: 1,

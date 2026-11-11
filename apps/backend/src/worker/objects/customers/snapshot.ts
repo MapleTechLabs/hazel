@@ -19,6 +19,7 @@ import { type RuleInput, activityWindowDays } from "./evaluate"
 import {
 	type AccountFacts,
 	activeUsersIn,
+	billed,
 	type ContactFacts,
 	type HealthPoint,
 	type MetricPoint,
@@ -95,6 +96,9 @@ const sum = (values: ReadonlyArray<number>) => values.reduce((total, value) => t
 
 const startOf = (day: Day) => new Date(`${day}T00:00:00.000Z`)
 
+/** A paid subscription: it has MRR, or bills on usage MRR cannot capture (`billsByUsage`). */
+const pays = (sub: schema.CustomerSubscription) => sub.mrrMinor > 0 || sub.billsByUsage
+
 /** The fields compute derives for one account (pure). */
 export const rollupAccount = (input: {
 	readonly account: schema.CustomerAccount
@@ -110,12 +114,11 @@ export const rollupAccount = (input: {
 }): Rollup => {
 	const { account, subscriptions, now, today, currency } = input
 	const live = subscriptions.filter((sub) => sub.status !== "canceled")
-	const paying = live.filter(
-		(sub) => sub.status === "active" || sub.status === "past_due" || sub.status === "unpaid",
-	)
+	const paying = live.filter(billed)
 	const mrrMinor = sum(paying.filter((sub) => sub.currency === currency).map((sub) => sub.mrrMinor))
-	// Paying in any currency (MRR counts only the reporting currency's; `attributes.foreignMrr` the rest).
-	const paid = paying.some((sub) => sub.mrrMinor > 0)
+	// Paying in any currency (MRR counts only the reporting currency's; `attributes.foreignMrr` the rest),
+	// or on usage at MRR 0: never `churned` or `lead` for want of MRR.
+	const paid = paying.some(pays)
 	const foreign = paying.filter((sub) => sub.currency !== currency)
 	const trialing = live.filter((sub) => sub.status === "trialing")
 	const top = [...paying].sort((a, b) => b.mrrMinor - a.mrrMinor)[0] ?? trialing[0] ?? live[0]
@@ -127,11 +130,11 @@ export const rollupAccount = (input: {
 			: trialing.length > 0
 				? "trialing"
 				: account.customerSince !== null ||
-					  subscriptions.some((sub) => sub.mrrMinor > 0 && sub.status === "canceled")
+					  subscriptions.some((sub) => pays(sub) && sub.status === "canceled")
 					? "churned"
 					: "lead"
 	const paidStarts = subscriptions
-		.filter((sub) => sub.mrrMinor > 0 && sub.status !== "trialing")
+		.filter((sub) => pays(sub) && sub.status !== "trialing")
 		.map((sub) => sub.trialEndsAt ?? sub.startedAt)
 		.filter((date) => date !== null)
 		.map((date) => date.getTime())

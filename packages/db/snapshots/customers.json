@@ -1,5 +1,5 @@
 {
-	"migration": "0005_customers_account_mrr_source",
+	"migration": "0006_customers_subscription_bills_by_usage",
 	"entities": [
 		{
 			"kind": "table",
@@ -2685,16 +2685,16 @@
 		{
 			"kind": "column",
 			"table": "customer_subscriptions",
-			"name": "currency",
+			"name": "billsByUsage",
 			"position": 8,
-			"type": "text",
+			"type": "integer",
 			"notNull": true,
-			"default": null
+			"default": "false"
 		},
 		{
 			"kind": "column",
 			"table": "customer_subscriptions",
-			"name": "interval",
+			"name": "currency",
 			"position": 9,
 			"type": "text",
 			"notNull": true,
@@ -2703,8 +2703,17 @@
 		{
 			"kind": "column",
 			"table": "customer_subscriptions",
-			"name": "quantity",
+			"name": "interval",
 			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "quantity",
+			"position": 11,
 			"type": "integer",
 			"notNull": true,
 			"default": "1"
@@ -2713,15 +2722,6 @@
 			"kind": "column",
 			"table": "customer_subscriptions",
 			"name": "startedAt",
-			"position": 11,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_subscriptions",
-			"name": "trialEndsAt",
 			"position": 12,
 			"type": "text",
 			"notNull": false,
@@ -2730,7 +2730,7 @@
 		{
 			"kind": "column",
 			"table": "customer_subscriptions",
-			"name": "currentPeriodEnd",
+			"name": "trialEndsAt",
 			"position": 13,
 			"type": "text",
 			"notNull": false,
@@ -2739,8 +2739,17 @@
 		{
 			"kind": "column",
 			"table": "customer_subscriptions",
-			"name": "cancelAtPeriodEnd",
+			"name": "currentPeriodEnd",
 			"position": 14,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "cancelAtPeriodEnd",
+			"position": 15,
 			"type": "integer",
 			"notNull": true,
 			"default": "false"
@@ -2749,15 +2758,6 @@
 			"kind": "column",
 			"table": "customer_subscriptions",
 			"name": "canceledAt",
-			"position": 15,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_subscriptions",
-			"name": "cancellationReason",
 			"position": 16,
 			"type": "text",
 			"notNull": false,
@@ -2766,7 +2766,7 @@
 		{
 			"kind": "column",
 			"table": "customer_subscriptions",
-			"name": "paymentMethod",
+			"name": "cancellationReason",
 			"position": 17,
 			"type": "text",
 			"notNull": false,
@@ -2775,7 +2775,7 @@
 		{
 			"kind": "column",
 			"table": "customer_subscriptions",
-			"name": "observedAt",
+			"name": "paymentMethod",
 			"position": 18,
 			"type": "text",
 			"notNull": false,
@@ -2784,8 +2784,17 @@
 		{
 			"kind": "column",
 			"table": "customer_subscriptions",
-			"name": "createdAt",
+			"name": "observedAt",
 			"position": 19,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "createdAt",
+			"position": 20,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2794,7 +2803,7 @@
 			"kind": "column",
 			"table": "customer_subscriptions",
 			"name": "updatedAt",
-			"position": 20,
+			"position": 21,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

@@ -104,6 +104,11 @@ export const UpsertSubscription = Schema.TaggedStruct("subscription", {
 	status: SubscriptionStatus,
 	mrrMinor: Schema.Int,
 	listMrrMinor: optional(Schema.NullOr(Schema.Int)),
+	/**
+	 * Billed on usage (in arrears) with no fixed price MRR can capture: a live one makes its account
+	 * paying even at `mrrMinor: 0`. MRR (and its movements) still come from `mrrMinor` alone.
+	 */
+	billsByUsage: optional(Schema.Boolean),
 	currency: Schema.String,
 	interval: BillingInterval,
 	quantity: Schema.Int,

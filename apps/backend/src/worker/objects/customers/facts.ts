@@ -176,3 +176,7 @@ export const formatMoney = (minor: number, currency: string) => {
 		return `${(minor / 100).toFixed(2)} ${currency.toUpperCase()}`
 	}
 }
+
+/** Billed now: active, or owing (past due, unpaid). */
+export const billed = (sub: schema.CustomerSubscription) =>
+	sub.status === "active" || sub.status === "past_due" || sub.status === "unpaid"

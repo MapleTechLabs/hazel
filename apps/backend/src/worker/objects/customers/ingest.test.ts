@@ -751,6 +751,39 @@ describe("CustomerIngest", () => {
 			}),
 		))
 
+	it("stores billsByUsage; an op without it keeps the stored value", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [clerkOrg("org_1", "Acme")])
+				const sub: IngestOp = {
+					_tag: "subscription",
+					externalId: "sub_1",
+					account: { provider: "clerk", externalId: "org_1" },
+					planName: "API",
+					status: "active",
+					mrrMinor: 0,
+					currency: "usd",
+					interval: "month",
+					quantity: 1,
+					startedAt: null,
+					trialEndsAt: null,
+					currentPeriodEnd: null,
+					cancelAtPeriodEnd: false,
+					canceledAt: null,
+				}
+				const billsByUsage = () =>
+					world.rows<{ billsByUsage: number }>(`SELECT billsByUsage FROM customer_subscriptions`)
+				yield* world.ingest("autumn", [sub])
+				expect(billsByUsage()).toEqual([{ billsByUsage: 0 }])
+				yield* world.ingest("autumn", [{ ...sub, billsByUsage: true }])
+				expect(billsByUsage()).toEqual([{ billsByUsage: 1 }])
+				const omitted = yield* world.ingest("autumn", [sub])
+				expect(outcomeTags(omitted)).toEqual(["Unchanged"])
+				expect(billsByUsage()).toEqual([{ billsByUsage: 1 }])
+			}),
+		))
+
 	it("matches by domain only when the op opts in, and merges a parked account's ops", () =>
 		run(
 			Effect.gen(function* () {

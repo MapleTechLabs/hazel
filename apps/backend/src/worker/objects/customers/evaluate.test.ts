@@ -358,6 +358,18 @@ describe("signal evaluation", () => {
 				orgFacts(),
 			),
 		).toEqual({ _tag: "NoMatch", reason: "Out of scope" })
+		// Billed on usage at MRR 0: paying.
+		expect(
+			evaluate(
+				ruleOf(defaults("inactive"), { scope: { payingOnly: true } }),
+				factsOf({
+					...quiet,
+					account: { mrrMinor: 0, lifecycleStage: "active" },
+					subscriptions: [{ mrrMinor: 0, billsByUsage: true }],
+				}),
+				orgFacts(),
+			)._tag,
+		).toBe("Match")
 		expect(run("inactive", quiet, orgFacts({ connected: new Set(["stripe"]) }))).toEqual({
 			_tag: "NoMatch",
 			reason: "Missing data source",

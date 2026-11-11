@@ -11,6 +11,10 @@
  *   event's time), so a late delivery cannot revive a record deleted since.
  * - `observedAt` on subscription and invoice ops: when the adapter read the record (taken before
  *   the request), so a slower read of older state applied after a newer one changes nothing.
+ * - `billsByUsage: true` on a subscription billed on usage (in arrears) that `mrrMinor` cannot
+ *   capture (no fixed price, or MRR can't express its billing): live, it makes its account paying
+ *   (stage `active`, `customerSince`) at `mrrMinor: 0`. MRR and its movements still come from
+ *   `mrrMinor` alone; leave it unset for a subscription with a fixed price.
  * - `matchByDomain: true` on account ops only for billing sources (Stripe, Autumn); identity
  *   sources (Clerk) leave it unset so organizations sharing a domain never merge.
  * - Deletions as `deleted` / `removed` ops; a full listing also sets `PullPage.sweep` on its last

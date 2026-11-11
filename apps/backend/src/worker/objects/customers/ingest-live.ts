@@ -1294,6 +1294,7 @@ const make = Effect.gen(function* () {
 				canceledAt: toDate(op.canceledAt),
 				// `undefined` leaves a column as it is (and its default on insert).
 				listMrrMinor: op.listMrrMinor,
+				billsByUsage: op.billsByUsage,
 				cancellationReason: op.cancellationReason,
 				paymentMethod: op.paymentMethod,
 			}

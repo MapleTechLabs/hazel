@@ -227,6 +227,9 @@ Rules:
   newest applied one, and an op observed before it changes nothing (`Unchanged`), so a slow read
   of older state cannot overwrite a newer one. `lastSeenAt` / `lastSignInAt` only move forward; a
   day's `sessionCount` keeps the highest value and `signedIn` stays true once set.
+- **Usage billing:** a subscription op may set `billsByUsage` (billed on usage in arrears, with no
+  fixed price MRR can capture). Stored on the row (default false; an op without it keeps the
+  stored value); compute counts a live one as paying at MRR 0 (§4.2).
 - **Events** are emitted by ingest for state changes it observes (subscription started / plan
   changed / canceled, invoice paid / payment_failed, contact joined / removed), deduped by
   `externalId`.
@@ -281,9 +284,12 @@ Rules:
 - `mrrMinor` = Σ non-canceled subscription MRR (reporting currency only; other currencies counted
   in `attributes.foreignMrr`); `planName` = highest-MRR subscription's; `trialEndsAt`;
   `trialListMrrMinor` = Σ `listMrrMinor` of trialing subs.
-- Stage (unless overridden): any `past_due|unpaid` → `past_due`; any `active` with MRR > 0 →
-  `active`; any `trialing` → `trialing`; had MRR before and none now → `churned` (`churnedAt` set);
-  else `lead`. `customerSince` = first day MRR > 0.
+- Stage (unless overridden): any `past_due|unpaid` → `past_due`; any `active` with MRR > 0 or
+  `billsByUsage` → `active`; any `trialing` → `trialing`; paid before (MRR or `billsByUsage`) and
+  not now → `churned` (`churnedAt` set); else `lead`. `customerSince` = the earliest paid
+  subscription's start (after its trial), a usage-billed one at MRR 0 included. `billsByUsage`
+  changes no MRR, so it writes no movement; the paying-accounts count and the MRR history still
+  count MRR > 0 only. A `payingOnly` rule scope covers a usage-billed account.
 - Built-in metrics for today: `active_users` (DAU), `active_users_30d`, `mrr`, later `health_score`.
 - MRR movements (yesterday's `mrr` vs today's): 0→>0 `new` (or `reactivation` if `churnedAt` set
   before), >0→0 `churn`, up `expansion`, down `contraction`. An account whose `mrrSource` changed

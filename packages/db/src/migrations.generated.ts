@@ -438,5 +438,11 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0005_customers_account_mrr_source",
 			statements: ['ALTER TABLE "customer_accounts" ADD COLUMN "mrrSource" text'],
 		},
+		{
+			id: "0006_customers_subscription_bills_by_usage",
+			statements: [
+				'ALTER TABLE "customer_subscriptions" ADD COLUMN "billsByUsage" integer NOT NULL DEFAULT false',
+			],
+		},
 	],
 }

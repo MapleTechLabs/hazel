@@ -21,6 +21,7 @@ import {
 import {
 	type AccountFacts,
 	activeUsersIn,
+	billed,
 	DERIVED_METRICS,
 	formatMoney,
 	mrrSeries,
@@ -72,7 +73,13 @@ const round1 = (value: number) => Math.round(value * 10) / 10
 /** Whether the rule's scope covers the account. */
 export const inScope = (scope: RuleScope, facts: AccountFacts): boolean => {
 	const { account } = facts
-	if (scope.payingOnly === true && account.mrrMinor <= 0 && facts.stage !== "trialing") return false
+	if (
+		scope.payingOnly === true &&
+		account.mrrMinor <= 0 &&
+		facts.stage !== "trialing" &&
+		!facts.subscriptions.some((sub) => billed(sub) && sub.billsByUsage)
+	)
+		return false
 	if (
 		scope.lifecycleStages !== undefined &&
 		scope.lifecycleStages.length > 0 &&
