@@ -166,8 +166,7 @@ synthetic utility page (`conformance:extract` records it).
 
 ## Not yet native
 
-- Narrow windows (the phone layout): a message's text runs past the edge instead of wrapping,
-  and the mobile drawer's channel list collapses to nothing.
+- Narrow windows (the phone layout): the mobile drawer's channel list collapses to nothing.
 - Overlays beyond the modal popovers: tooltips (`AnchorTooltipPanel`), submenus
   (`PositionSubmenu`) and the image viewer.
 - Colours a `focus:` variant changes (Rune draws focus as a ring only), focus or press state on an
