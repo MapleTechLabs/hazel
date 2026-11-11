@@ -1,0 +1,3400 @@
+{
+	"migration": "0007_customer_sync_run_attempts",
+	"entities": [
+		{
+			"kind": "table",
+			"name": "customer_accounts",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_activity_daily",
+			"primaryKey": {
+				"columns": ["contactId", "day"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_connection_secrets",
+			"primaryKey": {
+				"columns": ["connectionId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_connections",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_contacts",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_events",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_external_refs",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_health_daily",
+			"primaryKey": {
+				"columns": ["accountId", "day"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_ignore_rules",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_invoices",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_members",
+			"primaryKey": {
+				"columns": ["userId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_metric_daily",
+			"primaryKey": {
+				"columns": ["accountId", "metricKey", "day"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_metric_definitions",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_mrr_movements",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_notes",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_org_daily",
+			"primaryKey": {
+				"columns": ["day"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_saved_views",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_settings",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_signal_rules",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_signals",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_subscriptions",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_sync_runs",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_unmatched_records",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "name",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "domains",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "logoUrl",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "ownerUserId",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "lifecycleStage",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "'lead'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "lifecycleStageOverride",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "planName",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "mrrMinor",
+			"position": 9,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "currency",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "'usd'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "mrrSource",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "trialListMrrMinor",
+			"position": 12,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "trialEndsAt",
+			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "healthScore",
+			"position": 14,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "healthStatus",
+			"position": 15,
+			"type": "text",
+			"notNull": true,
+			"default": "'unknown'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "healthUpdatedAt",
+			"position": 16,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "seatsUsed",
+			"position": 17,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "seatsLimit",
+			"position": 18,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "contactCount",
+			"position": 19,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "activeUsers30d",
+			"position": 20,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "activeUsersTrendPct",
+			"position": 21,
+			"type": "real",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "openRiskHigh",
+			"position": 22,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "openRiskMedium",
+			"position": 23,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "openRiskLow",
+			"position": 24,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "openOpportunities",
+			"position": 25,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "championContactId",
+			"position": 26,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "championInactiveSince",
+			"position": 27,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "lastActiveContactId",
+			"position": 28,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "firstSeenAt",
+			"position": 29,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "lastActiveAt",
+			"position": 30,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "customerSince",
+			"position": 31,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "churnedAt",
+			"position": 32,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "tags",
+			"position": 33,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "attributes",
+			"position": 34,
+			"type": "text",
+			"notNull": true,
+			"default": "'{}'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "fieldSources",
+			"position": 35,
+			"type": "text",
+			"notNull": true,
+			"default": "'{}'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "createdAt",
+			"position": 36,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "updatedAt",
+			"position": 37,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "deletedAt",
+			"position": 38,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_activity_daily",
+			"name": "contactId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_activity_daily",
+			"name": "day",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_activity_daily",
+			"name": "accountId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_activity_daily",
+			"name": "eventCount",
+			"position": 3,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_activity_daily",
+			"name": "sessionCount",
+			"position": 4,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_activity_daily",
+			"name": "signedIn",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "customer_connection_secrets",
+			"name": "connectionId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connection_secrets",
+			"name": "encryptedApiKey",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connection_secrets",
+			"name": "apiKeyIv",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connection_secrets",
+			"name": "encryptedWebhookSecret",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connection_secrets",
+			"name": "webhookSecretIv",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connection_secrets",
+			"name": "encryptionKeyVersion",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": "1"
+		},
+		{
+			"kind": "column",
+			"table": "customer_connection_secrets",
+			"name": "createdAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_connection_secrets",
+			"name": "updatedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "provider",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "status",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "'active'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "externalAccountId",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "externalAccountName",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "config",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "connectedBy",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "connectedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "hasWebhookSecret",
+			"position": 9,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "lastSyncAt",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "lastSuccessAt",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "lastErrorAt",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "lastError",
+			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "consecutiveFailures",
+			"position": 14,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "nextSyncAt",
+			"position": 15,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "backfilledAt",
+			"position": 16,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "stats",
+			"position": 17,
+			"type": "text",
+			"notNull": true,
+			"default": "'{\"accounts\":0,\"contacts\":0,\"subscriptions\":0,\"invoices\":0,\"events\":0,\"activityDays\":0,\"metricDays\":0,\"unmatched\":0}'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "disconnectedAt",
+			"position": 18,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "createdAt",
+			"position": 19,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_connections",
+			"name": "updatedAt",
+			"position": 20,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "accountId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "email",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "name",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "avatarUrl",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "title",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "role",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "isBillingContact",
+			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "joinedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "firstActiveAt",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "lastSeenAt",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "lastSignInAt",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "signInCount30d",
+			"position": 12,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "eventCount30d",
+			"position": 13,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "lastActiveDay",
+			"position": 14,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "attributes",
+			"position": 15,
+			"type": "text",
+			"notNull": true,
+			"default": "'{}'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "fieldSources",
+			"position": 16,
+			"type": "text",
+			"notNull": true,
+			"default": "'{}'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "createdAt",
+			"position": 17,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "updatedAt",
+			"position": 18,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "deletedAt",
+			"position": 19,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_events",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_events",
+			"name": "accountId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_events",
+			"name": "contactId",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_events",
+			"name": "provider",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_events",
+			"name": "type",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_events",
+			"name": "title",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_events",
+			"name": "data",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "'{}'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_events",
+			"name": "occurredAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_events",
+			"name": "externalId",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_events",
+			"name": "actorUserId",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_events",
+			"name": "createdAt",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "connectionId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "provider",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "entityType",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "entityId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "accountId",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "externalId",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "externalUrl",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "matchMethod",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "matchedByUserId",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "matchedAt",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "lastSyncedAt",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "staleAt",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "deletedObservedAt",
+			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "createdAt",
+			"position": 14,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "updatedAt",
+			"position": 15,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_health_daily",
+			"name": "accountId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_health_daily",
+			"name": "day",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_health_daily",
+			"name": "score",
+			"position": 2,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_health_daily",
+			"name": "status",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_health_daily",
+			"name": "breakdown",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_ignore_rules",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_ignore_rules",
+			"name": "provider",
+			"position": 1,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_ignore_rules",
+			"name": "entityType",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_ignore_rules",
+			"name": "field",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_ignore_rules",
+			"name": "pattern",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_ignore_rules",
+			"name": "createdBy",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_ignore_rules",
+			"name": "createdAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "accountId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "subscriptionId",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "provider",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "externalId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "number",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "status",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "amountDueMinor",
+			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "amountPaidMinor",
+			"position": 8,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "currency",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "issuedAt",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "dueAt",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "paidAt",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "attemptCount",
+			"position": 13,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "nextRetryAt",
+			"position": 14,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "declineReason",
+			"position": 15,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "hostedUrl",
+			"position": 16,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "observedAt",
+			"position": 17,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "createdAt",
+			"position": 18,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_invoices",
+			"name": "updatedAt",
+			"position": 19,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_members",
+			"name": "userId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_members",
+			"name": "role",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_daily",
+			"name": "accountId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_daily",
+			"name": "metricKey",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_daily",
+			"name": "day",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_daily",
+			"name": "value",
+			"position": 3,
+			"type": "real",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_daily",
+			"name": "limitValue",
+			"position": 4,
+			"type": "real",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "key",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "name",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "unit",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "aggregation",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "provider",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "description",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "builtIn",
+			"position": 8,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "createdAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "updatedAt",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_mrr_movements",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_mrr_movements",
+			"name": "accountId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_mrr_movements",
+			"name": "day",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_mrr_movements",
+			"name": "type",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_mrr_movements",
+			"name": "deltaMinor",
+			"position": 4,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_mrr_movements",
+			"name": "fromMrrMinor",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_mrr_movements",
+			"name": "toMrrMinor",
+			"position": 6,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_mrr_movements",
+			"name": "currency",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_mrr_movements",
+			"name": "createdAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_notes",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_notes",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_notes",
+			"name": "accountId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_notes",
+			"name": "authorUserId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_notes",
+			"name": "body",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_notes",
+			"name": "pinned",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "customer_notes",
+			"name": "signalId",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_notes",
+			"name": "editedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_notes",
+			"name": "createdAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_notes",
+			"name": "updatedAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_notes",
+			"name": "deletedAt",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_org_daily",
+			"name": "day",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_org_daily",
+			"name": "mrrMinor",
+			"position": 1,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_org_daily",
+			"name": "payingAccounts",
+			"position": 2,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_org_daily",
+			"name": "trialingAccounts",
+			"position": 3,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_org_daily",
+			"name": "activeAccounts",
+			"position": 4,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_org_daily",
+			"name": "dau",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_org_daily",
+			"name": "wau",
+			"position": 6,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_org_daily",
+			"name": "mau",
+			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_org_daily",
+			"name": "healthy",
+			"position": 8,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_org_daily",
+			"name": "atRisk",
+			"position": 9,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_org_daily",
+			"name": "critical",
+			"position": 10,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_org_daily",
+			"name": "atRiskMrrMinor",
+			"position": 11,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "name",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "ownerUserId",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "builtInKey",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "filters",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "'{}'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "sort",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "columns",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "position",
+			"position": 8,
+			"type": "real",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "createdBy",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "createdAt",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "updatedAt",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "deletedAt",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "health",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "reportingCurrency",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "'usd'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "lastComputedAt",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "updatedBy",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "createdAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "updatedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "name",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "template",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "kind",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "severity",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "config",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "scope",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "'{}'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "enabled",
+			"position": 8,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "createdBy",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "updatedBy",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "lastTriggeredAt",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "matchingCount",
+			"position": 12,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "createdAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "updatedAt",
+			"position": 14,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signal_rules",
+			"name": "deletedAt",
+			"position": 15,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "accountId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "ruleId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "template",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "kind",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "severity",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "status",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "'open'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "title",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "reason",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "evidence",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "openingEvidence",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "actionEvidence",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "priorityScore",
+			"position": 13,
+			"type": "real",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "firstDetectedAt",
+			"position": 14,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "openedAt",
+			"position": 15,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "lastEvaluatedAt",
+			"position": 16,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "assigneeUserId",
+			"position": 17,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "snoozedUntil",
+			"position": 18,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "snoozedByUserId",
+			"position": 19,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "snoozedAt",
+			"position": 20,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "snoozeNote",
+			"position": 21,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "resolvedAt",
+			"position": 22,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "resolvedByUserId",
+			"position": 23,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "outcome",
+			"position": 24,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "resolutionNote",
+			"position": 25,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "dismissReason",
+			"position": 26,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "reopenAfter",
+			"position": 27,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "reopenCount",
+			"position": 28,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "closedAt",
+			"position": 29,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "createdAt",
+			"position": 30,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_signals",
+			"name": "updatedAt",
+			"position": 31,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "accountId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "provider",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "externalId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "planName",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "status",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "mrrMinor",
+			"position": 6,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "listMrrMinor",
+			"position": 7,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "billsByUsage",
+			"position": 8,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "currency",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "interval",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "quantity",
+			"position": 11,
+			"type": "integer",
+			"notNull": true,
+			"default": "1"
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "startedAt",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "trialEndsAt",
+			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "currentPeriodEnd",
+			"position": 14,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "cancelAtPeriodEnd",
+			"position": 15,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "canceledAt",
+			"position": 16,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "cancellationReason",
+			"position": 17,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "paymentMethod",
+			"position": 18,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "observedAt",
+			"position": 19,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "createdAt",
+			"position": 20,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_subscriptions",
+			"name": "updatedAt",
+			"position": 21,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "connectionId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "provider",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "trigger",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "status",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "'running'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "startedAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "finishedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "progress",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "stats",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "'{\"accounts\":0,\"contacts\":0,\"subscriptions\":0,\"invoices\":0,\"events\":0,\"activityDays\":0,\"metricDays\":0,\"unmatched\":0}'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "error",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "cursor",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sync_runs",
+			"name": "failedAttempts",
+			"position": 12,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "connectionId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "provider",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "entityType",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "externalId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "label",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "email",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "domain",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "valueMinor",
+			"position": 8,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "currency",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "eventCount30d",
+			"position": 10,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "payload",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "blockedBy",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "suggestedAccountId",
+			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "confidence",
+			"position": 14,
+			"type": "real",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "reason",
+			"position": 15,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "status",
+			"position": 16,
+			"type": "text",
+			"notNull": true,
+			"default": "'open'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "resolvedByUserId",
+			"position": 17,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "resolvedAt",
+			"position": 18,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "createdAt",
+			"position": 19,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "updatedAt",
+			"position": 20,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "index",
+			"table": "customer_accounts",
+			"name": "customer_accounts_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_accounts",
+			"name": "customer_accounts_health_idx",
+			"unique": false,
+			"columns": ["\"healthStatus\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_accounts",
+			"name": "customer_accounts_owner_idx",
+			"unique": false,
+			"columns": ["\"ownerUserId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_accounts",
+			"name": "customer_accounts_stage_idx",
+			"unique": false,
+			"columns": ["\"lifecycleStage\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_activity_daily",
+			"name": "customer_activity_account_day_idx",
+			"unique": false,
+			"columns": ["\"accountId\"", "\"day\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_activity_daily",
+			"name": "customer_activity_day_idx",
+			"unique": false,
+			"columns": ["\"day\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_connections",
+			"name": "customer_connections_provider_unique",
+			"unique": true,
+			"columns": ["\"provider\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_contacts",
+			"name": "customer_contacts_account_idx",
+			"unique": false,
+			"columns": ["\"accountId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_contacts",
+			"name": "customer_contacts_email_idx",
+			"unique": false,
+			"columns": ["\"email\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_events",
+			"name": "customer_events_account_time_idx",
+			"unique": false,
+			"columns": ["\"accountId\"", "\"occurredAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_events",
+			"name": "customer_events_time_idx",
+			"unique": false,
+			"columns": ["\"occurredAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_external_refs",
+			"name": "customer_refs_account_idx",
+			"unique": false,
+			"columns": ["\"accountId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_external_refs",
+			"name": "customer_refs_connection_idx",
+			"unique": false,
+			"columns": ["\"connectionId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_external_refs",
+			"name": "customer_refs_entity_idx",
+			"unique": false,
+			"columns": ["\"entityType\"", "\"entityId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_health_daily",
+			"name": "customer_health_daily_day_idx",
+			"unique": false,
+			"columns": ["\"day\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_invoices",
+			"name": "customer_invoices_account_issued_idx",
+			"unique": false,
+			"columns": ["\"accountId\"", "\"issuedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_invoices",
+			"name": "customer_invoices_external_unique",
+			"unique": true,
+			"columns": ["\"provider\"", "\"externalId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_invoices",
+			"name": "customer_invoices_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_metric_daily",
+			"name": "customer_metric_daily_key_day_idx",
+			"unique": false,
+			"columns": ["\"metricKey\"", "\"day\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_metric_definitions",
+			"name": "customer_metric_definitions_key_unique",
+			"unique": true,
+			"columns": ["\"key\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_mrr_movements",
+			"name": "customer_mrr_movements_account_day_unique",
+			"unique": true,
+			"columns": ["\"accountId\"", "\"day\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_mrr_movements",
+			"name": "customer_mrr_movements_day_idx",
+			"unique": false,
+			"columns": ["\"day\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_notes",
+			"name": "customer_notes_account_idx",
+			"unique": false,
+			"columns": ["\"accountId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_saved_views",
+			"name": "customer_saved_views_owner_idx",
+			"unique": false,
+			"columns": ["\"ownerUserId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_signal_rules",
+			"name": "customer_signal_rules_template_idx",
+			"unique": false,
+			"columns": ["\"template\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_signals",
+			"name": "customer_signals_account_idx",
+			"unique": false,
+			"columns": ["\"accountId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_signals",
+			"name": "customer_signals_closed_at_idx",
+			"unique": false,
+			"columns": ["\"closedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_signals",
+			"name": "customer_signals_rule_idx",
+			"unique": false,
+			"columns": ["\"ruleId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_signals",
+			"name": "customer_signals_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_subscriptions",
+			"name": "customer_subscriptions_account_idx",
+			"unique": false,
+			"columns": ["\"accountId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_subscriptions",
+			"name": "customer_subscriptions_external_unique",
+			"unique": true,
+			"columns": ["\"provider\"", "\"externalId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_subscriptions",
+			"name": "customer_subscriptions_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_sync_runs",
+			"name": "customer_sync_runs_connection_started_idx",
+			"unique": false,
+			"columns": ["\"connectionId\"", "\"startedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_unmatched_records",
+			"name": "customer_unmatched_blocked_by_idx",
+			"unique": false,
+			"columns": ["\"blockedBy\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_unmatched_records",
+			"name": "customer_unmatched_external_unique",
+			"unique": true,
+			"columns": ["\"provider\"", "\"entityType\"", "\"externalId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_unmatched_records",
+			"name": "customer_unmatched_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
+		}
+	],
+	"extraIndexes": [
+		{
+			"name": "customer_events_external_unique",
+			"table": "customer_events",
+			"unique": true,
+			"on": ["provider", "externalId"],
+			"where": "\"externalId\" IS NOT NULL"
+		},
+		{
+			"name": "customer_refs_account_external_unique",
+			"table": "customer_external_refs",
+			"unique": true,
+			"on": ["provider", "externalId"],
+			"where": "\"entityType\" = 'account'"
+		},
+		{
+			"name": "customer_refs_contact_external_unique",
+			"table": "customer_external_refs",
+			"unique": true,
+			"on": ["provider", "externalId", "accountId"],
+			"where": "\"entityType\" = 'contact'"
+		},
+		{
+			"name": "customer_signals_episode_unique",
+			"table": "customer_signals",
+			"unique": true,
+			"on": ["ruleId", "accountId"],
+			"where": "\"closedAt\" IS NULL"
+		}
+	]
+}

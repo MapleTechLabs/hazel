@@ -1,11 +1,12 @@
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { IconBell, IconDashboard, IconGear, IconMenu, IconMsgs } from "../icons"
+import { IconBell, IconDashboard, IconGear, IconMenu, IconMsgs, IconOffice } from "../icons"
 import {
 	AppRoute,
 	hrefOf,
 	isChannelChatRoute,
 	isChatRoute,
+	isCustomersRoute,
 	isNotificationsRoute,
 	isSettingsRoute,
 } from "../route"
@@ -29,6 +30,7 @@ export const mobileNav = <Message>(
 	const { orgSlug } = context
 	const home = hrefOf(AppRoute.OrgHome({ orgSlug }))
 	const chat = hrefOf(AppRoute.ChatIndex({ orgSlug }))
+	const customers = hrefOf(AppRoute.CustomersOverview({ orgSlug }))
 	const notifications = hrefOf(AppRoute.NotificationsAll({ orgSlug }))
 	const settings = hrefOf(AppRoute.SettingsGeneral({ orgSlug }))
 	const { route } = context
@@ -84,6 +86,13 @@ export const mobileNav = <Message>(
 						isChannelChatRoute(route),
 						isChatRoute(route),
 						IconMsgs(h, { className: "size-6" }),
+					),
+					link(
+						"Customers",
+						customers,
+						isCustomersRoute(route),
+						isCustomersRoute(route),
+						IconOffice(h, { className: "size-6" }),
 					),
 					link(
 						"Activity",

@@ -8,6 +8,7 @@ import { commonMessage, type CommonReason, failureMessage, isRetryableReason } f
 import {
 	ApplyTheme,
 	CheckSession,
+	ClearNoteDrafts,
 	CreateDm,
 	DeliverNotifications,
 	FetchCurrentUser,
@@ -277,8 +278,13 @@ const foldPage = Update.foldChild({
 
 const informPage: Step = (model) => foldPage(model, (page) => informShared(page, sharedOf(model)))
 
-const enteredRoute: Step = (model) =>
-	foldPage(model, (page) => enterRoute(page, model.route, sharedOf(model)))
+/** Numbered, a page built for the route drops what its previous instance's Commands answer. */
+const enteredRoute: Step = (model) => {
+	const instance = model.pageInstances + 1
+	return foldPage(modifyFields(model, { pageInstances: () => instance }), (page) =>
+		enterRoute(page, model.route, sharedOf(model), instance),
+	)
+}
 
 /** Discord's Alt+ArrowUp/Down: the sidebar's channel above or below the open one (Shift: unread only). */
 const goToAdjacentChannel =
@@ -504,6 +510,8 @@ const changedAuth =
 		return Update.combine(modifyFields(model, { session: () => signedInSession }), [
 			sessionChanged,
 			isFetchingUser ? unchanged : command(FetchCurrentUser()),
+			// Signed out and in again without a reload: maybe someone else.
+			model.session._tag === "SignedOut" ? command(ClearNoteDrafts()) : unchanged,
 		])
 	}
 
@@ -681,6 +689,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 			soundSettings: flags.soundSettings,
 			sessionStartMs: flags.sessionStartMs,
 			page: null,
+			pageInstances: 0,
 			shell: Shell.init({ isCreateChannelHintDismissed: flags.isCreateChannelHintDismissed }),
 			modal: Modal.initialModel,
 			commandPalette: CommandPalette.init(),
@@ -717,6 +726,7 @@ export const update = (model: Model, message: Message): Return =>
 		CompletedNavigateHistory: () => ({ model }),
 		CompletedReplaceUrl: () => ({ model }),
 		CompletedLoadExternal: () => ({ model }),
+		CompletedClearNoteDrafts: () => ({ model }),
 		ChangedSystemTheme: ({ theme }) =>
 			transitionTheme((current) => modifyFields(current, { systemTheme: () => theme }), false)(model),
 		ChangedViewport: ({ isMobile }) =>
@@ -794,6 +804,7 @@ export const update = (model: Model, message: Message): Return =>
 			foldCommandPalette(model, (palette) => CommandPalette.update(palette, message, sharedOf(model))),
 		PressedHotkey: ({ actionId }) => pressedHotkey(actionId)(model),
 		GotToastsMessage: ({ message }) => foldToastsWithAction(model, message),
+		ReceivedBackgroundToast: ({ toast }) => showToast(toast)(model),
 		GotUpdatesMessage: ({ message }) => stepUpdates((updates) => Updates.update(updates, message))(model),
 		PressedDesktopMenuItem: ({ item }) => pressedDesktopMenuItem(item)(model),
 		GotPlatformMessage: ({ message }) =>

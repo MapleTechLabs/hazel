@@ -86,6 +86,35 @@ export const extraIndexes: ReadonlyArray<ExtraIndex> = [
 		where: notDeleted,
 	},
 	{
+		name: "customer_refs_account_external_unique",
+		table: "customer_external_refs",
+		unique: true,
+		on: ["provider", "externalId"],
+		where: `"entityType" = 'account'`,
+	},
+	{
+		// One provider user is a contact of each account (org) it belongs to.
+		name: "customer_refs_contact_external_unique",
+		table: "customer_external_refs",
+		unique: true,
+		on: ["provider", "externalId", "accountId"],
+		where: `"entityType" = 'contact'`,
+	},
+	{
+		name: "customer_events_external_unique",
+		table: "customer_events",
+		unique: true,
+		on: ["provider", "externalId"],
+		where: `"externalId" IS NOT NULL`,
+	},
+	{
+		name: "customer_signals_episode_unique",
+		table: "customer_signals",
+		unique: true,
+		on: ["ruleId", "accountId"],
+		where: `"closedAt" IS NULL`,
+	},
+	{
 		name: "custom_emojis_org_name_unique_idx",
 		table: "custom_emojis",
 		unique: true,

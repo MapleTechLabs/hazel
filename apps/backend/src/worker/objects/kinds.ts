@@ -1,12 +1,13 @@
 /**
  * The objects an RPC can run in (`infra/durable-object-sync-plan.md` §2, §4): one Durable Object
- * per organization, channel and user, or `directory` (the api Worker itself, over D1).
+ * per organization, channel and user, one `CustomersObject` per organization (its Customers
+ * area, `docs/customers/tech-design.md`), or `directory` (the api Worker itself, over D1).
  */
 import type { SyncSourceKind } from "@hazel/domain/sync"
 
 export type ObjectKind = SyncSourceKind
 
-/** An object instance: its kind and its DO name (the organization, channel or user id). */
+/** An object instance: its kind and its DO name (the organization, channel or user id; the organization id for `customers`). */
 export interface ObjectTarget {
 	readonly kind: ObjectKind
 	readonly id: string
@@ -20,10 +21,11 @@ export const OBJECT_NAMESPACES = {
 	org: "OrgObject",
 	channel: "ChannelObject",
 	user: "UserObject",
+	customers: "CustomersObject",
 } as const satisfies Record<ObjectKind, string>
 
 export const isObjectKind = (value: string): value is ObjectKind =>
-	value === "org" || value === "channel" || value === "user"
+	value === "org" || value === "channel" || value === "user" || value === "customers"
 
 /** `org:<id>`: an outbox row's `target`, and a span attribute. */
 export const formatTarget = (target: RpcTarget): string =>
@@ -33,3 +35,7 @@ export const directoryTarget: RpcTarget = { kind: "directory" }
 export const orgTarget = (id: string): ObjectTarget => ({ kind: "org", id })
 export const channelTarget = (id: string): ObjectTarget => ({ kind: "channel", id })
 export const userTarget = (id: string): ObjectTarget => ({ kind: "user", id })
+export const customersTarget = (organizationId: string): ObjectTarget => ({
+	kind: "customers",
+	id: organizationId,
+})

@@ -1,6 +1,6 @@
 import type { RpcActionName } from "@hazel/domain/scopes"
 import { canPerform, RPC_SCOPE_MAP } from "@hazel/domain/scopes"
-import { Array, Option, Schema } from "effect"
+import { Array, Option, Schema, Stream } from "effect"
 import { Command, Submodel, Subscription, type Update } from "foldkit"
 import type { Resources } from "../rpc"
 import type { AppRoute, RouteOf, RouteTag } from "../route"
@@ -103,12 +103,15 @@ type PageEntry<Message> = Subscription.Subscriptions<PageHost, Message, Resource
 /**
  * Binds a lifted entry to the page instance (its key), like React's unmount: a new instance builds a
  * fresh Model, so every Stream restarts and sends its rows again, even one whose own dependencies
- * did not change (a `{}` entry would otherwise keep running and never refill the new Model).
+ * did not change (a `{}` entry would otherwise keep running and never refill the new Model). Its
+ * Messages carry the key: a row the previous instance's Stream sent late never reaches the new one.
  */
-export const perInstance = <Message>(
+export const perInstance = <Message extends { readonly key?: string | undefined }>(
 	entry: PageEntry<Message>,
 	keyOf: (host: PageHost) => string | null,
 ): PageEntry<Message> => {
+	const stamped = <E, R>(pageKey: string | null, stream: Stream.Stream<Message, E, R>) =>
+		pageKey === null ? stream : Stream.map(stream, (message): Message => ({ ...message, key: pageKey }))
 	const fields = { pageKey: Schema.NullOr(Schema.String), dependencies: entry.dependenciesSchema }
 	const modelToDependencies = (host: PageHost) => ({
 		pageKey: keyOf(host),
@@ -120,7 +123,8 @@ export const perInstance = <Message>(
 			keepAlive === undefined
 				? define(fields, {
 						modelToDependencies,
-						dependenciesToStream: (gated) => entry.dependenciesToStream(gated.dependencies),
+						dependenciesToStream: (gated) =>
+							stamped(gated.pageKey, entry.dependenciesToStream(gated.dependencies)),
 					})
 				: define(fields, {
 						modelToDependencies,
@@ -128,12 +132,20 @@ export const perInstance = <Message>(
 							left.pageKey === right.pageKey &&
 							keepAlive(left.dependencies, right.dependencies),
 						dependenciesToStream: (gated, read) =>
-							entry.dependenciesToStream(gated.dependencies, () => read().dependencies),
+							stamped(
+								gated.pageKey,
+								entry.dependenciesToStream(gated.dependencies, () => read().dependencies),
+							),
 					}),
 	})).bound
 }
 
-/** The page lives in the root Model as `{ _tag: id, key, model }`; its Messages as `{ _tag: id, message }`. */
+/**
+ * The page lives in the root Model as `{ _tag: id, key, instance, model }`; its Messages as
+ * `{ _tag: id, message }`, plus the instance's key (`key#instance`) on a Command's answer and a
+ * Subscription's Message: one for an instance that is gone (another org, account or provider, or the
+ * same one left and come back to) is dropped, so pages need no per-answer org check.
+ */
 export const definePage = <
 	const Id extends string,
 	Tags extends RouteTag,
@@ -146,22 +158,37 @@ export const definePage = <
 ) => {
 	type Model = ModelSchema["Type"]
 	type Message = MessageSchema["Type"]
-	const Slot = Schema.TaggedStruct(id, { key: Schema.String, model: schemas.Model })
-	const Wrapped = Schema.TaggedStruct(id, { message: schemas.Message })
-	type SlotType = { readonly _tag: Id; readonly key: string; readonly model: Model }
-	type WrappedType = { readonly _tag: Id; readonly message: Message }
+	const Slot = Schema.TaggedStruct(id, { key: Schema.String, instance: Schema.Int, model: schemas.Model })
+	const Wrapped = Schema.TaggedStruct(id, { message: schemas.Message, key: Schema.optional(Schema.String) })
+	type SlotType = {
+		readonly _tag: Id
+		readonly key: string
+		readonly instance: number
+		readonly model: Model
+	}
+	type WrappedType = { readonly _tag: Id; readonly message: Message; readonly key?: string }
 
 	// The tags are unique across the registry, so a matching tag is this page's slot or Message.
 	const isOwnSlot = (slot: PageSlotBase): slot is SlotType => slot._tag === id
 	const isOwnMessage = (message: PageMessageBase): message is WrappedType => message._tag === id
+	const instanceKeyOf = (slot: Pick<SlotType, "key" | "instance">) => `${slot.key}#${slot.instance}`
+	const isForInstance = (slot: SlotType, message: WrappedType) =>
+		message.key === undefined || message.key === instanceKeyOf(slot)
 	const ownsRoute = (route: AppRoute): route is RouteOf<Tags> =>
 		Array.some(spec.routes, (tag) => tag === route._tag)
 	const wrap = (message: Message): WrappedType => ({ _tag: id, message })
 	const keyOf = (route: RouteOf<Tags>) => (spec.key ? spec.key(route) : JSON.stringify(route))
 
-	const step = (key: string, result: PageReturn<Model, Message>): PageStep<SlotType, WrappedType> => ({
-		slot: { _tag: id, key, model: result.model },
-		commands: Command.mapMessages(result.commands, wrap),
+	const step = (
+		slot: Pick<SlotType, "key" | "instance">,
+		result: PageReturn<Model, Message>,
+	): PageStep<SlotType, WrappedType> => ({
+		slot: { _tag: id, key: slot.key, instance: slot.instance, model: result.model },
+		commands: Command.mapMessages(result.commands, (message): WrappedType => ({
+			_tag: id,
+			key: instanceKeyOf(slot),
+			message,
+		})),
 		outMessage: Option.fromNullishOr(result.outMessage),
 	})
 
@@ -180,19 +207,26 @@ export const definePage = <
 		ownsRoute,
 		keyOf: (route: AppRoute): Option.Option<string> =>
 			ownsRoute(route) ? Option.some(keyOf(route)) : Option.none(),
-		init: (route: AppRoute, shared: Shared): Option.Option<PageStep<SlotType, WrappedType>> =>
-			ownsRoute(route) ? Option.some(step(keyOf(route), spec.init(route, shared))) : Option.none(),
+		/** `instance` numbers it (the root counts them): leaving a key and coming back is another one. */
+		init: (
+			route: AppRoute,
+			shared: Shared,
+			instance: number,
+		): Option.Option<PageStep<SlotType, WrappedType>> =>
+			ownsRoute(route)
+				? Option.some(step({ key: keyOf(route), instance }, spec.init(route, shared)))
+				: Option.none(),
 		update: (slot: PageSlotBase, message: PageMessageBase, shared: Shared) =>
-			isOwnSlot(slot) && isOwnMessage(message)
-				? Option.some(step(slot.key, spec.update(slot.model, message.message, shared)))
+			isOwnSlot(slot) && isOwnMessage(message) && isForInstance(slot, message)
+				? Option.some(step(slot, spec.update(slot.model, message.message, shared)))
 				: Option.none<PageStep<SlotType, WrappedType>>(),
 		routeChanged: (slot: PageSlotBase, route: AppRoute, shared: Shared) =>
 			isOwnSlot(slot) && ownsRoute(route) && spec.routeChanged
-				? Option.some(step(slot.key, spec.routeChanged(slot.model, route, shared)))
+				? Option.some(step(slot, spec.routeChanged(slot.model, route, shared)))
 				: Option.none<PageStep<SlotType, WrappedType>>(),
 		sharedChanged: (slot: PageSlotBase, shared: Shared) =>
 			isOwnSlot(slot) && spec.sharedChanged
-				? Option.some(step(slot.key, spec.sharedChanged(slot.model, shared)))
+				? Option.some(step(slot, spec.sharedChanged(slot.model, shared)))
 				: Option.none<PageStep<SlotType, WrappedType>>(),
 		/** The root embeds this; it renders the page's own view under its own boundary. */
 		hostView: Submodel.defineView<PageSlotBase, WrappedType, PageViewInputs>((slot, inputs, h) =>
@@ -211,7 +245,7 @@ export const definePage = <
 			Object.entries(lifted).map(([key, entry]) => [
 				`${id}.${key}`,
 				perInstance(entry, (host) =>
-					host.page !== null && isOwnSlot(host.page) ? host.page.key : null,
+					host.page !== null && isOwnSlot(host.page) ? instanceKeyOf(host.page) : null,
 				),
 			]),
 		),

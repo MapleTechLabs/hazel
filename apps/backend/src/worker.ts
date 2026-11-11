@@ -21,6 +21,7 @@ import { apiEnv } from "./worker/env"
 import { buildApp, makeFetch } from "./worker/http"
 import { MessageLiveObject, MessageLiveObjectLive } from "./worker/live/message-live-object"
 import { ChannelObject, ChannelObjectLive } from "./worker/objects/channel-object"
+import { CustomersObject, CustomersObjectLive } from "./worker/objects/customers-object"
 import { OrgObject, OrgObjectLive } from "./worker/objects/org-object"
 import { UserObject, UserObjectLive } from "./worker/objects/user-object"
 import { CACHE_BINDING, DIRECTORY_DB_BINDING, EMAIL_BINDING, HTML_RENDERS_BINDING } from "./worker/platform"
@@ -92,7 +93,13 @@ const props = Effect.gen(function* () {
 export class Api extends Cloudflare.Worker<
 	Api,
 	Cloudflare.WorkerShape,
-	RateLimiterObject | DiscordGatewayObject | OrgObject | ChannelObject | UserObject | MessageLiveObject
+	| RateLimiterObject
+	| DiscordGatewayObject
+	| OrgObject
+	| ChannelObject
+	| UserObject
+	| CustomersObject
+	| MessageLiveObject
 >()("api") {}
 
 export default Api.make(
@@ -110,6 +117,7 @@ export default Api.make(
 		yield* OrgObject
 		yield* ChannelObject
 		yield* UserObject
+		yield* CustomersObject
 		// Live state of streamed replies (`worker/live/`), one per message.
 		yield* MessageLiveObject
 		// Hosted by the bot-gateway Worker; BotGatewayService publishes bot events into it.
@@ -137,6 +145,7 @@ export default Api.make(
 				OrgObjectLive,
 				ChannelObjectLive,
 				UserObjectLive,
+				CustomersObjectLive,
 				MessageLiveObjectLive,
 				Cloudflare.Workers.CronEventSourceLive,
 				Cloudflare.Workers.RateLimitBinding,

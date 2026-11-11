@@ -10,6 +10,7 @@ import { DirectoryEffects } from "../effects/directory-effects"
 import { enqueueEffect } from "../effects/registry"
 import { UserEffects } from "../effects/user-effects"
 import { userTarget } from "../kinds"
+import { publishCustomersOrganizationDeleted } from "./customer-members"
 
 /** Project the organization's row to `org_index` (routing, slug lookups, public joins). */
 export const publishOrgIndex = Effect.fn("OrgObject.publishOrgIndex")(function* (
@@ -31,7 +32,10 @@ export const publishOrgIndex = Effect.fn("OrgObject.publishOrgIndex")(function* 
 	)
 })
 
-/** The organization is gone: every member leaves it in the directory and their `UserObject`. */
+/**
+ * The organization is gone: every member leaves it in the directory and their `UserObject`, and its
+ * customers object shuts down.
+ */
 export const publishOrgRemoval = Effect.fn("OrgObject.publishOrgRemoval")(function* (
 	organizationId: OrganizationId,
 ) {
@@ -56,6 +60,7 @@ export const publishOrgRemoval = Effect.fn("OrgObject.publishOrgRemoval")(functi
 		{ discard: true },
 	)
 	yield* publishOrgIndex(organizationId)
+	yield* publishCustomersOrganizationDeleted(organizationId)
 	yield* Effect.annotateCurrentSpan({ "org.members_removed": members.length })
 })
 

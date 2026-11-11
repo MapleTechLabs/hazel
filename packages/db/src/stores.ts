@@ -5,7 +5,7 @@
  */
 import * as schema from "./tables"
 
-export type StoreName = "directory" | "org" | "channel" | "user"
+export type StoreName = "directory" | "org" | "channel" | "user" | "customers"
 
 /** D1, global: identities, auth, bots, invitations and the routing indexes. */
 export const directoryTables = [
@@ -85,11 +85,43 @@ export const userTables = [
 	schema.userOrganizationsTable,
 ] as const
 
+/**
+ * `CustomersObject`, one per organization (`docs/customers/tech-design.md`): customer accounts,
+ * their billing and usage, signals, health and data sources.
+ */
+export const customersTables = [
+	schema.customerAccountsTable,
+	schema.customerContactsTable,
+	schema.customerExternalRefsTable,
+	schema.customerSubscriptionsTable,
+	schema.customerInvoicesTable,
+	schema.customerActivityDailyTable,
+	schema.customerMetricDefinitionsTable,
+	schema.customerMetricDailyTable,
+	schema.customerOrgDailyTable,
+	schema.customerEventsTable,
+	schema.customerMrrMovementsTable,
+	schema.customerSignalRulesTable,
+	schema.customerSignalsTable,
+	schema.customerSettingsTable,
+	schema.customerHealthDailyTable,
+	schema.customerNotesTable,
+	schema.customerSavedViewsTable,
+	schema.customerConnectionsTable,
+	schema.customerConnectionSecretsTable,
+	schema.customerSyncRunsTable,
+	schema.customerUnmatchedRecordsTable,
+	schema.customerIgnoreRulesTable,
+	// Projection from the `OrgObject`.
+	schema.customerMembersTable,
+] as const
+
 export const storeTables = {
 	directory: directoryTables,
 	org: orgTables,
 	channel: channelTables,
 	user: userTables,
+	customers: customersTables,
 } as const satisfies Record<StoreName, ReadonlyArray<unknown>>
 
-export const storeNames: ReadonlyArray<StoreName> = ["directory", "org", "channel", "user"]
+export const storeNames: ReadonlyArray<StoreName> = ["directory", "org", "channel", "user", "customers"]

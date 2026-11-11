@@ -8,6 +8,7 @@
 		".": "./src/index.ts",
 		"./errors": "./src/errors.ts",
 		"./current-user": "./src/current-user.ts",
+		"./customers": "./src/customers/index.ts",
 		"./rpc": "./src/rpc/index.ts",
 		"./http": "./src/http/index.ts",
 		"./policy": "./src/policy/index.ts",

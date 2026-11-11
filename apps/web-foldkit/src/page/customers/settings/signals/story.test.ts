@@ -1,0 +1,500 @@
+import type { RuleDryRunResult } from "@hazel/domain/customers"
+import { CustomerSignalRuleId, OrganizationId, OrganizationMemberId } from "@hazel/schema"
+import { Option, Schema } from "effect"
+import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
+import { describe, expect, test, vi } from "vitest"
+import { AppRoute } from "../../../../route"
+import type { Shared } from "../../../contract"
+import { PageOutMessage } from "../../../out-message"
+import { sharedDefaults } from "../../../test-shared"
+import {
+	CreateSignalRule,
+	FetchRuleDryRun,
+	ToggleSignalRule,
+	UpdateSignalRule,
+	WaitForRuleDryRunDelay,
+} from "./commands"
+import { draftOf, editorStatus } from "./draft"
+import { Message } from "./message"
+import type { Model, RuleRow } from "./model"
+import { init, routeChanged, type SignalsRoute, update } from "./update"
+
+// `ui/aria/*` names `document` when its modules load; the update loop never touches it.
+vi.hoisted(() => {
+	Object.assign(globalThis, { document: globalThis.document ?? {} })
+})
+
+/** Update-loop tests for signals settings: the form, the debounced preview, saving, the list's switch. */
+
+const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
+const organizationId = Schema.decodeSync(OrganizationId)(uuid(1))
+const ruleId = Schema.decodeSync(CustomerSignalRuleId)(uuid(2))
+const newRuleId = Schema.decodeSync(CustomerSignalRuleId)(uuid(3))
+
+const shared: Shared = {
+	auth: "SignedIn",
+	orgSlug: "hazel",
+	currentUser: null,
+	organization: { id: organizationId, name: "Hazel", slug: "hazel", logoUrl: null },
+	member: { id: Schema.decodeSync(OrganizationMemberId)(uuid(4)), role: "admin" },
+	nowMs: Date.UTC(2026, 10, 10, 12),
+	...sharedDefaults,
+}
+
+const inactiveRule: RuleRow = {
+	id: ruleId,
+	name: "Stopped logging in",
+	template: "inactive",
+	kind: "risk",
+	severity: "medium",
+	config: { _tag: "inactive", inactiveDays: 14, priorWindowDays: 30, minPriorActiveUsers: 1 },
+	scope: { lifecycleStages: ["active"] },
+	enabled: true,
+	lastTriggeredAtMs: null,
+	matchingCount: 5,
+	updatedAtMs: shared.nowMs,
+}
+
+const result: RuleDryRunResult = {
+	matchCount: 7,
+	mrrMinor: 804_000,
+	currency: "USD",
+	topMatches: [],
+	nonMatches: [{ reason: "Below threshold", count: 200 }],
+	queueDelta: { opens: 2, resolves: 0, stays: 5 },
+	missingSources: [],
+	evaluatedAccounts: 207,
+	totalAccounts: 207,
+}
+
+const pageUpdate = (current: Model, next: Message) => update(current, next, shared)
+
+const listRoute = AppRoute.CustomersSettingsSignals({ orgSlug: "hazel" }) as SignalsRoute
+const ruleRoute = AppRoute.CustomersSettingsSignalRule({ orgSlug: "hazel", ruleId }) as SignalsRoute
+const newRoute = (template: RuleRow["template"]) =>
+	AppRoute.CustomersSettingsSignalNew({ orgSlug: "hazel", template: Option.some(template) }) as SignalsRoute
+
+const settings = { lastComputedAtMs: null, bands: { healthyMin: 70, atRiskMin: 40 } }
+const usd = Message.UpdatedSettings({ settings: { ...settings, reportingCurrency: "USD" } })
+const yen = Message.UpdatedSettings({ settings: { ...settings, reportingCurrency: "JPY" } })
+
+const withRules = (route: SignalsRoute): Model => {
+	const opened = pageUpdate(init(route, shared).model, usd).model
+	return pageUpdate(opened, Message.UpdatedRules({ rules: [inactiveRule] })).model
+}
+
+const formOf = (current: Model) => {
+	const form = current.editor?.form
+	if (form === undefined || form === null) throw new Error("no form")
+	return form
+}
+const draftOfModel = (current: Model) => Option.getOrThrow(draftOf(formOf(current), "USD"))
+const names = (commands: ReadonlyArray<{ readonly name: string }> | undefined) =>
+	(commands ?? []).map((command) => command.name)
+
+const edits = (current: Model, messages: ReadonlyArray<Message>): Model =>
+	messages.reduce((next, step) => pageUpdate(next, step).model, current)
+
+describe("signals: the form builds the draft", () => {
+	test("inactive thresholds and the scope", () => {
+		const current = edits(withRules(ruleRoute), [
+			Message.ChangedConfigNumber({ key: "inactiveDays", value: "21" }),
+			Message.ToggledScopeStage({ stage: "past_due" }),
+			Message.AddedScopeCondition({ condition: "mrr" }),
+			Message.ChangedScopeMrr({ value: "100" }),
+			Message.ClickedSeverity({ severity: "high" }),
+		])
+		expect(draftOfModel(current)).toEqual({
+			name: "Stopped logging in",
+			severity: "high",
+			config: { _tag: "inactive", inactiveDays: 21, priorWindowDays: 30, minPriorActiveUsers: 1 },
+			scope: { lifecycleStages: ["active", "past_due"], minMrrMinor: 10_000 },
+			enabled: true,
+		})
+		const editor = current.editor!
+		expect(editorStatus(current, editor, formOf(current)).changes).toBe(4)
+	})
+
+	test("a new usage rule: metric, windows, drop", () => {
+		const current = edits(init(newRoute("usage_drop"), shared).model, [
+			Message.ClickedMetric({ metricKey: "product_events" }),
+			Message.ChangedConfigNumber({ key: "recentDays", value: "14" }),
+			Message.ChangedConfigNumber({ key: "dropPct", value: "45" }),
+		])
+		expect(draftOfModel(current).config).toEqual({
+			_tag: "usage_drop",
+			metricKey: "product_events",
+			recentDays: 14,
+			baselineDays: 28,
+			dropPct: 45,
+		})
+	})
+
+	test("flags and metric lists", () => {
+		const cancel = edits(init(newRoute("cancel_scheduled"), shared).model, [
+			Message.ToggledConfigFlag({ key: "includeDowngrades", isOn: false }),
+		])
+		expect(draftOfModel(cancel).config).toEqual({
+			_tag: "cancel_scheduled",
+			includeDowngrades: false,
+			downgradeWindowDays: 14,
+		})
+		const limit = edits(init(newRoute("near_limit"), shared).model, [
+			Message.ToggledLimitMetric({ metricKey: "seats" }),
+			Message.ToggledLimitMetric({ metricKey: "credits" }),
+			Message.ToggledLimitMetric({ metricKey: "seats" }),
+		])
+		expect(draftOfModel(limit).config).toEqual({
+			_tag: "near_limit",
+			thresholdPct: 90,
+			metricKeys: ["credits"],
+		})
+	})
+
+	test("a value outside the schema's bounds is a field error: no dry run, no save", () => {
+		const opened = withRules(ruleRoute)
+		const invalid = pageUpdate(opened, Message.ChangedConfigNumber({ key: "inactiveDays", value: "0" }))
+		expect(invalid.commands ?? []).toHaveLength(0)
+		const editor = invalid.model.editor!
+		const status = editorStatus(invalid.model, editor, formOf(invalid.model))
+		expect(status.errors).toEqual({ "config.inactiveDays": "Whole days, 1 to 90" })
+		expect(status.canSave).toBe(false)
+		expect(pageUpdate(invalid.model, Message.PressedSave()).commands ?? []).toHaveLength(0)
+		expect(
+			pageUpdate(invalid.model, Message.ElapsedRuleDryRunDelay({ version: editor.version })).commands ??
+				[],
+		).toHaveLength(0)
+		const blank = pageUpdate(opened, Message.ChangedName({ value: "  " })).model
+		expect(Object.keys(editorStatus(blank, blank.editor!, formOf(blank)).errors)).toEqual(["name"])
+	})
+	test("windows stop at 90 days, ages at 365", () => {
+		const long = pageUpdate(
+			withRules(ruleRoute),
+			Message.ChangedConfigNumber({ key: "inactiveDays", value: "120" }),
+		).model
+		expect(editorStatus(long, long.editor!, formOf(long)).errors).toEqual({
+			"config.inactiveDays": "Whole days, 1 to 90",
+		})
+		const old = edits(init(newRoute("onboarding_stalled"), shared).model, [
+			Message.ChangedConfigNumber({ key: "maxAgeDays", value: "400" }),
+		])
+		expect(editorStatus(old, old.editor!, formOf(old)).errors).toEqual({
+			"config.maxAgeDays": "Whole days, 1 to 365",
+		})
+	})
+
+	test("with downgrades off, a bad downgrade window submits the default and does not block the save", () => {
+		const current = edits(init(newRoute("cancel_scheduled"), shared).model, [
+			Message.ChangedConfigNumber({ key: "downgradeWindowDays", value: "120" }),
+		])
+		expect(editorStatus(current, current.editor!, formOf(current)).canSave).toBe(false)
+		const off = pageUpdate(
+			current,
+			Message.ToggledConfigFlag({ key: "includeDowngrades", isOn: false }),
+		).model
+		expect(editorStatus(off, off.editor!, formOf(off)).errors).toEqual({})
+		expect(draftOfModel(off).config).toEqual({
+			_tag: "cancel_scheduled",
+			includeDowngrades: false,
+			downgradeWindowDays: 14,
+		})
+		const valid = pageUpdate(
+			off,
+			Message.ChangedConfigNumber({ key: "downgradeWindowDays", value: "30" }),
+		).model
+		expect(draftOfModel(valid).config).toMatchObject({ downgradeWindowDays: 30 })
+	})
+
+	test("an onboarding minimum age above the maximum marks the maximum", () => {
+		const opened = init(newRoute("onboarding_stalled"), shared).model
+		const crossed = pageUpdate(
+			opened,
+			Message.ChangedConfigNumber({ key: "minAgeDays", value: "40" }),
+		).model
+		const status = editorStatus(crossed, crossed.editor!, formOf(crossed))
+		expect(status.errors).toEqual({ "config.maxAgeDays": "At least the minimum age" })
+		expect(status.canSave).toBe(false)
+	})
+})
+
+describe("signals: the live preview", () => {
+	test("opening a rule dry-runs it at once, with its id", () => {
+		const opened = init(ruleRoute, shared)
+		expect(names(opened.commands)).toEqual([])
+		const withSettings = pageUpdate(opened.model, usd)
+		expect(names(withSettings.commands)).toEqual([])
+		const loaded = pageUpdate(withSettings.model, Message.UpdatedRules({ rules: [inactiveRule] }))
+		expect(loaded.model.editor?.preview._tag).toBe("Loading")
+		const [command] = loaded.commands ?? []
+		expect(command?.name).toBe(FetchRuleDryRun.name)
+		expect(command && "args" in command ? command.args : null).toEqual({
+			organizationId,
+			version: 1,
+			draft: {
+				name: "Stopped logging in",
+				severity: "medium",
+				config: inactiveRule.config,
+				scope: inactiveRule.scope,
+				enabled: true,
+			},
+			ruleId,
+		})
+	})
+
+	test("an answer for the rule left before is dropped, though both editors start fresh", () => {
+		const first = withRules(ruleRoute)
+		const firstVersion = first.editor?.version ?? -1
+		const listed = routeChanged(first, listRoute, shared).model
+		const second = routeChanged(listed, ruleRoute, shared).model
+		expect(second.editor?.version).toBeGreaterThan(firstVersion)
+		const stale = pageUpdate(second, Message.SucceededFetchDryRun({ version: firstVersion, result }))
+		expect(stale.model.editor?.preview._tag).not.toBe("Success")
+	})
+
+	test("a rule's form waits for the settings, then reads its min MRR in the reporting currency", () => {
+		const yenRule: RuleRow = { ...inactiveRule, scope: { minMrrMinor: 100_000 } }
+		const opened = pageUpdate(init(ruleRoute, shared).model, Message.UpdatedRules({ rules: [yenRule] }))
+		expect(opened.model.editor?.form).toBeNull()
+		expect(names(opened.commands)).toEqual([])
+		const inYen = pageUpdate(opened.model, yen)
+		expect(formOf(inYen.model).scope.minMrr).toBe("100000")
+		expect(Option.getOrThrow(draftOf(formOf(inYen.model), "JPY")).scope.minMrrMinor).toBe(100_000)
+		expect(names(inYen.commands)).toEqual([FetchRuleDryRun.name])
+
+		// No settings row yet: USD, the server's default.
+		const noRow = edits(init(ruleRoute, shared).model, [
+			Message.UpdatedRules({ rules: [yenRule] }),
+			Message.UpdatedSettings({ settings: null }),
+		])
+		expect(formOf(noRow).scope.minMrr).toBe("1000")
+	})
+
+	test("the reporting currency changing re-reads an unedited form, never an edited one", () => {
+		const yenRule: RuleRow = { ...inactiveRule, scope: { minMrrMinor: 100_000 } }
+		const opened = edits(init(ruleRoute, shared).model, [usd, Message.UpdatedRules({ rules: [yenRule] })])
+		expect(formOf(opened).scope.minMrr).toBe("1000")
+		expect(formOf(pageUpdate(opened, yen).model).scope.minMrr).toBe("100000")
+		const edited = pageUpdate(opened, Message.ChangedScopeMrr({ value: "50" })).model
+		expect(formOf(pageUpdate(edited, yen).model).scope.minMrr).toBe("50")
+	})
+
+	test("edits debounce; only the latest version's answer lands", () => {
+		const opened = pageUpdate(
+			withRules(ruleRoute),
+			Message.SucceededFetchDryRun({ version: 1, result }),
+		).model
+		const first = pageUpdate(opened, Message.ChangedConfigNumber({ key: "inactiveDays", value: "20" }))
+		expect(first.commands?.map((command) => ("args" in command ? command.args : null))).toEqual([
+			{ version: 2 },
+		])
+		expect(names(first.commands)).toEqual([WaitForRuleDryRunDelay.name])
+		const second = pageUpdate(
+			first.model,
+			Message.ChangedConfigNumber({ key: "inactiveDays", value: "21" }),
+		)
+		// The first pause ends after a newer edit: nothing runs.
+		expect(
+			pageUpdate(second.model, Message.ElapsedRuleDryRunDelay({ version: 2 })).commands ?? [],
+		).toHaveLength(0)
+		story(
+			pageUpdate,
+			given(second.model),
+			message(Message.ElapsedRuleDryRunDelay({ version: 3 })),
+			model((current) => expect(current.editor?.preview._tag).toBe("Refreshing")),
+			Command.expectExact(
+				FetchRuleDryRun({
+					organizationId,
+					version: 3,
+					draft: { ...draftOfModel(second.model) },
+					ruleId,
+				}),
+			),
+			Command.resolve(
+				FetchRuleDryRun,
+				Message.SucceededFetchDryRun({ version: 3, result: { ...result, matchCount: 9 } }),
+			),
+			// A slow answer for version 2 arrives late: dropped.
+			message(Message.SucceededFetchDryRun({ version: 2, result: { ...result, matchCount: 3 } })),
+			model((current) => {
+				const preview = current.editor?.preview
+				expect(preview?._tag).toBe("Success")
+				expect(preview?._tag === "Success" ? preview.data.matchCount : null).toBe(9)
+			}),
+		)
+	})
+})
+
+describe("signals: saving", () => {
+	test("a new rule is created and opened by its id", () => {
+		const opened = init(newRoute("seat_growth"), shared).model
+		story(
+			pageUpdate,
+			given(opened),
+			message(Message.PressedSave()),
+			model((current) => expect(current.editor?.isSaving).toBe(true)),
+			Command.expectExact(
+				CreateSignalRule({
+					organizationId,
+					rule: {
+						name: "Seats growing",
+						severity: "low",
+						config: { _tag: "seat_growth", growthPct: 50, windowDays: 30, minActiveUsers: 3 },
+						scope: {},
+						enabled: true,
+					},
+				}),
+			),
+			Command.resolve(CreateSignalRule, Message.SucceededCreateRule({ ruleId: newRuleId })),
+			expectOutMessage(
+				PageOutMessage.RequestedNavigation({
+					route: AppRoute.CustomersSettingsSignalRule({ orgSlug: "hazel", ruleId: newRuleId }),
+					replace: true,
+					toast: {
+						intent: "success",
+						title: "Rule created",
+						description: "It runs on the next hourly check.",
+					},
+				}),
+			),
+		)
+	})
+
+	test("a rule created after the editor was left does not open it", () => {
+		const saving = pageUpdate(init(newRoute("seat_growth"), shared).model, Message.PressedSave()).model
+		const left = routeChanged(saving, listRoute, shared).model
+		const done = pageUpdate(left, Message.SucceededCreateRule({ ruleId: newRuleId }))
+		expect(done.outMessage?._tag).toBe("RequestedToast")
+	})
+
+	test("an unchanged rule can't be saved; a changed one updates", () => {
+		const opened = withRules(ruleRoute)
+		expect(pageUpdate(opened, Message.PressedSave()).commands ?? []).toHaveLength(0)
+		const turnedOff = pageUpdate(opened, Message.PressedToggleEnabled()).model
+		story(
+			pageUpdate,
+			given(turnedOff),
+			message(Message.PressedSave()),
+			Command.expectExact(
+				UpdateSignalRule({
+					organizationId,
+					ruleId,
+					rule: {
+						name: inactiveRule.name,
+						severity: inactiveRule.severity,
+						config: inactiveRule.config,
+						scope: inactiveRule.scope,
+						enabled: false,
+					},
+				}),
+			),
+			Command.resolve(UpdateSignalRule, Message.FailedUpdateRule({ ruleId, reason: "NotFound" })),
+			model((current) => expect(current.editor?.isSaving).toBe(false)),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "Couldn't save the rule",
+						description: "The rule was deleted in the meantime.",
+					},
+				}),
+			),
+		)
+	})
+
+	test("an answer for a rule whose editor was left touches the open editor only by toast", () => {
+		const otherId = Schema.decodeSync(CustomerSignalRuleId)(uuid(5))
+		const deleting = edits(withRules(ruleRoute), [
+			Message.PressedDelete(),
+			Message.PressedConfirmDelete(),
+		])
+		expect(deleting.editor?.isDeleting).toBe(true)
+		// The editor's own rule: back to the list.
+		expect(pageUpdate(deleting, Message.SucceededDeleteRule({ ruleId })).outMessage?._tag).toBe(
+			"RequestedNavigation",
+		)
+		// Another rule (deleted from an editor left before): a toast, the open editor stays.
+		const other = pageUpdate(deleting, Message.SucceededDeleteRule({ ruleId: otherId }))
+		expect(other.outMessage?._tag).toBe("RequestedToast")
+		const failedOther = pageUpdate(
+			deleting,
+			Message.FailedDeleteRule({ ruleId: otherId, reason: "Offline" }),
+		).model
+		expect(failedOther.editor?.isDeleting).toBe(true)
+		// The list is open: a toast, no navigation.
+		const listed = routeChanged(deleting, listRoute, shared).model
+		expect(pageUpdate(listed, Message.SucceededDeleteRule({ ruleId })).outMessage?._tag).toBe(
+			"RequestedToast",
+		)
+
+		const saving = pageUpdate(
+			pageUpdate(withRules(ruleRoute), Message.PressedToggleEnabled()).model,
+			Message.PressedSave(),
+		).model
+		expect(saving.editor?.isSaving).toBe(true)
+		const savedOther = pageUpdate(saving, Message.SucceededUpdateRule({ ruleId: otherId }))
+		expect(savedOther.model.editor?.isSaving).toBe(true)
+		expect(savedOther.outMessage?._tag).toBe("RequestedToast")
+		expect(
+			pageUpdate(saving, Message.FailedUpdateRule({ ruleId: otherId, reason: "Offline" })).model.editor
+				?.isSaving,
+		).toBe(true)
+	})
+
+	test("closing with changes asks first; discarding goes back to the list", () => {
+		const opened = withRules(ruleRoute)
+		const clean = pageUpdate(opened, Message.PressedClose())
+		expect(clean.outMessage).toEqual(
+			PageOutMessage.RequestedNavigation({ route: listRoute, replace: false }),
+		)
+		const edited = pageUpdate(opened, Message.ChangedName({ value: "Gone quiet" })).model
+		const asking = pageUpdate(edited, Message.PressedClose())
+		expect(asking.outMessage).toBeUndefined()
+		expect(asking.model.discardModal.isOpen).toBe(true)
+		const discarded = pageUpdate(asking.model, Message.PressedDiscard())
+		expect(discarded.model.discardModal.isOpen).toBe(false)
+		expect(discarded.outMessage).toEqual(
+			PageOutMessage.RequestedNavigation({ route: listRoute, replace: false }),
+		)
+	})
+})
+
+describe("signals: the list", () => {
+	test("the switch flips at once and rolls back when the save fails", () => {
+		const listed = withRules(listRoute)
+		story(
+			pageUpdate,
+			given(listed),
+			message(Message.ToggledRule({ ruleId, enabled: false })),
+			model((current) => expect(current.rules?.[0]?.enabled).toBe(false)),
+			Command.expectExact(
+				ToggleSignalRule({
+					organizationId,
+					ruleId,
+					rule: {
+						name: inactiveRule.name,
+						severity: inactiveRule.severity,
+						config: inactiveRule.config,
+						scope: inactiveRule.scope,
+						enabled: false,
+					},
+				}),
+			),
+			Command.resolve(
+				ToggleSignalRule,
+				Message.FailedToggleRule({ ruleId, enabled: false, reason: "Offline" }),
+			),
+			model((current) => expect(current.rules?.[0]?.enabled).toBe(true)),
+		)
+	})
+
+	test("Set up opens the editor for the picked template", () => {
+		const picking = edits(withRules(listRoute), [
+			Message.PressedNewSignal(),
+			Message.ClickedTemplate({ template: "health_drop" }),
+		])
+		expect(picking.pickerModal.isOpen).toBe(true)
+		expect(pageUpdate(picking, Message.PressedSetUpTemplate()).outMessage).toEqual(
+			PageOutMessage.RequestedNavigation({ route: newRoute("health_drop"), replace: false }),
+		)
+	})
+})

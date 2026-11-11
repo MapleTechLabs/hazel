@@ -18,7 +18,7 @@
 import { Database, type StoreMigration, type StoreName, applyMigrations } from "@hazel/db"
 import { makeSyncedObject, type SyncObjectState, type SyncSocket, type SyncSource } from "@hazel/sync-do"
 import type { AlarmStorageLike, SqlStorageLike } from "@hazel/sync-do"
-import { Context, Effect, Exit, FiberSet, Layer, Option, Result } from "effect"
+import { Context, Effect, Exit, FiberSet, Layer, Option, Result, Schema } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import { CurrentObject } from "../../lib/current-object"
 import {
@@ -34,8 +34,11 @@ import type { HtmlRenders } from "../../services/html-renders"
 import type { ThreadNamer } from "../../services/thread-namer"
 import type { ChatSyncProviders } from "../../services/chat-sync/chat-sync-providers"
 import { ObjectCalls } from "./call-receivers"
-import type { CallRequest, CallResponse } from "./calls"
+import { type AnyObjectCall, type CallRequest, type CallResponse, exitCodec, payloadCodec } from "./calls"
+import { CustomersBootstrapCall, CustomersTickCall, CustomersWebhookCall } from "./customers/jobs"
+import { customersDeadlines } from "./customers/schedule"
 import { ChannelEffects } from "./effects/channel-effects"
+import { CustomersEffects } from "./effects/customers-effects"
 import { applyReceivedEffect, deliverOutboxRowFrom } from "./effects/deliver"
 import type { ApplyEffectRequest, ApplyEffectResult } from "./effects/registry"
 import type { ObjectKind } from "./kinds"
@@ -51,6 +54,7 @@ import type { InvokeRequest, InvokeResponse, ObjectStubs } from "./protocol"
 import { makeChannelSource } from "./sources/channel-source"
 import { makeOrgSource } from "./sources/org-source"
 import { makeUserSource } from "./sources/user-source"
+import { makeCustomersSource } from "./sources/customers-source"
 import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
 import { prepareMessageSearch, SEARCH_MIGRATION_ID } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
@@ -92,7 +96,12 @@ export interface ObjectRuntimeOptions {
 	readonly migrations?: ReadonlyArray<StoreMigration>
 }
 
-const storeOf: Record<ObjectKind, StoreName> = { org: "org", channel: "channel", user: "user" }
+const storeOf: Record<ObjectKind, StoreName> = {
+	org: "org",
+	channel: "channel",
+	user: "user",
+	customers: "customers",
+}
 
 const sourceOf = (
 	kind: ObjectKind,
@@ -106,6 +115,8 @@ const sourceOf = (
 			return makeChannelSource()
 		case "user":
 			return makeUserSource(ownerId)
+		case "customers":
+			return makeCustomersSource()
 	}
 }
 
@@ -187,8 +198,11 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			...(kind === "channel" ? { deadlines: channelDeadlines } : {}),
 			...(kind === "org" ? { deadlines: orgDeadlines } : {}),
 			...(presence === undefined ? {} : { deadlines: presence.deadlines }),
+			...(kind === "customers" ? { deadlines: customersDeadlines } : {}),
 			// Revocations land before the org answers (versioned, so out of order is safe).
-			...(kind === "org" ? { urgentKinds: [ChannelEffects.setViewers.name] } : {}),
+			...(kind === "org"
+				? { urgentKinds: [ChannelEffects.setViewers.name, CustomersEffects.setMembers.name] }
+				: {}),
 		})
 
 		const handlers = yield* Layer.build(options.handlers.pipe(Layer.provide(Layer.succeedContext(base))))
@@ -212,9 +226,44 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		/** The deliveries started after answering that are still running (tests). */
 		const deliveriesInFlight = FiberSet.size(deliveries)
 
+		/** One of the object's own calls (`./customers/jobs.ts`), run in process; `None` before it knows its id. */
+		const ownCall = <C extends AnyObjectCall>(call: C, payload: C["payload"]["Type"]) =>
+			Effect.gen(function* () {
+				const id = identity.current()
+				if (id === undefined) return Option.none<Exit.Exit<C["success"]["Type"], unknown>>()
+				const encoded = yield* Schema.encodeEffect(payloadCodec(call))(payload).pipe(Effect.orDie)
+				const response = yield* calls
+					.run(kind, { objectId: id, name: call.name, payload: encoded })
+					.pipe(Effect.provideService(CurrentObject, { kind, id }))
+				const exit = yield* Schema.decodeUnknownEffect(exitCodec(call))(response.exit).pipe(
+					Effect.orDie,
+				)
+				return Option.some(exit as Exit.Exit<C["success"]["Type"], unknown>)
+			})
+
+		/**
+		 * CustomersObject: before its first request, install its defaults and pull its members from
+		 * the org (once per instance; retried while the org is unreachable).
+		 */
+		let customersReady = kind !== "customers"
+		const prepare = Effect.suspend(() =>
+			customersReady
+				? Effect.void
+				: Effect.gen(function* () {
+						const exit = yield* ownCall(CustomersBootstrapCall, {
+							organizationId: identity.current() as never,
+						})
+						if (Option.isSome(exit) && Exit.isSuccess(exit.value) && exit.value.value.ready) {
+							customersReady = true
+						}
+						yield* afterCommit
+					}),
+		)
+
 		const invoke = (request: InvokeRequest): Effect.Effect<InvokeResponse> =>
 			Effect.gen(function* () {
 				const id = yield* remember(request.objectId)
+				yield* prepare
 				const rpc = yield* rpcFor(request.tag).pipe(Effect.orDie)
 				const decoded = yield* Effect.all([
 					decodeInvokePrincipal(request.principal),
@@ -249,6 +298,9 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		const call = (request: CallRequest): Effect.Effect<CallResponse> =>
 			Effect.gen(function* () {
 				const id = yield* remember(request.objectId)
+				// A webhook is unauthenticated until its signature checks out: it never sets Customers up
+				// (no connection on an object that is not set up, so it answers 404).
+				if (request.name !== CustomersWebhookCall.name) yield* prepare
 				const response = yield* calls
 					.run(kind, request)
 					.pipe(Effect.provideService(CurrentObject, { kind, id }))
@@ -296,7 +348,8 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 
 		/** Adopt a sync socket (tests, and `connect` below). */
 		const adopt = (socket: SyncSocket, principal: SyncPrincipal) =>
-			run(synced.sync.adoptSocket(socket, principal)).pipe(
+			prepare.pipe(
+				Effect.andThen(run(synced.sync.adoptSocket(socket, principal))),
 				Effect.tap((decision) => (decision === "accepted" ? presenceOpened(principal) : Effect.void)),
 			)
 
@@ -312,6 +365,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 					return new Response("Missing sync principal", { status: 400 })
 				}
 				yield* remember(objectId)
+				yield* prepare
 				return yield* run(synced.sync.upgradeSocket(request, principal.value)).pipe(
 					// A refused socket (closed with 4003/4004) must not mark the user online.
 					Effect.tap(({ result }) =>
@@ -349,6 +403,12 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			if (kind === "org" && (yield* run(pollDueRssFeeds)) > 0) yield* afterCommit
 			// OrgObject: presence copies nobody renewed in time go offline.
 			if (kind === "org" && (yield* run(expirePresenceLeases)) > 0) yield* afterCommit
+			// CustomersObject: compute, snooze wake-ups and pulls that are due.
+			if (kind === "customers") {
+				yield* prepare
+				yield* ownCall(CustomersTickCall, {})
+				yield* afterCommit
+			}
 			yield* run(synced.alarm)
 		}).pipe(Effect.withSpan("ObjectRpc.alarm", { attributes: { "object.kind": kind } }))
 

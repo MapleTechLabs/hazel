@@ -9,6 +9,7 @@ import { AppRoute } from "../route"
 import { ada, after, boot, bootReturn, hazelOrg, owner, signedIn, urlOf } from "../test/root-fixtures"
 import {
 	CheckSession,
+	ClearNoteDrafts,
 	FetchCurrentUser,
 	LoadExternal,
 	NavigateInternal,
@@ -137,6 +138,19 @@ describe("redirects", () => {
 			given(boot("/sign-in")),
 			message(Message.ChangedAuth({ auth: "SignedIn" })),
 			Command.expectHas(FetchCurrentUser()),
+			Command.resolve(FetchCurrentUser, Message.SucceededFetchCurrentUser({ user: ada })),
+		)
+	})
+
+	test("signing in again after a sign-out drops the previous user's unsent customer notes", () => {
+		story(
+			update,
+			given(boot("/sign-in")),
+			message(Message.ChangedAuth({ auth: "SignedOut" })),
+			Command.expectNone(),
+			message(Message.ChangedAuth({ auth: "SignedIn" })),
+			Command.expectHas(FetchCurrentUser(), ClearNoteDrafts()),
+			Command.resolve(ClearNoteDrafts, Message.CompletedClearNoteDrafts()),
 			Command.resolve(FetchCurrentUser, Message.SucceededFetchCurrentUser({ user: ada })),
 		)
 	})

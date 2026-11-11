@@ -10,6 +10,9 @@
  *   with only an org row id carries `organizationId` (`@hazel/domain/rpc/routing-fields`); a call
  *   missing it fails here with `RoutingError`.
  * - User-scoped calls → the caller's `UserObject`.
+ * - `customers.*` → the org's `CustomersObject` (its `organizationId`), for its members only
+ *   (`membership_index`): any other caller is refused here, so no request wakes (or creates) a
+ *   customers object for an org it does not belong to.
  *
  * `routes` is total: a method added to HazelRpc without an entry fails to compile.
  *
@@ -18,6 +21,7 @@
  */
 import { type DatabaseError, SQLite, schema } from "@hazel/db"
 import type { CurrentUser, RateLimitExceededError } from "@hazel/domain"
+import { CustomerRpcs } from "@hazel/domain/rpc"
 import type { ChannelId, ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import type { Rpc } from "effect/rpc"
@@ -30,6 +34,7 @@ import {
 import type { RateLimiter } from "../services/rate-limiter"
 import {
 	channelTarget,
+	customersTarget,
 	directoryTarget,
 	formatTarget,
 	orgTarget,
@@ -44,12 +49,18 @@ export class RoutingError extends Schema.TaggedError<RoutingError>()("RoutingErr
 	message: Schema.String,
 }) {}
 
+/** The caller may not reach the object the call is for (answered as `UnauthorizedError`). */
+export class RouteRefusedError extends Schema.TaggedError<RouteRefusedError>()("RouteRefusedError", {
+	method: Schema.String,
+	message: Schema.String,
+}) {}
+
 type User = CurrentUser.Schema
 
 export type RouteFn<R extends Rpc.Any> = (
 	payload: Rpc.Payload<R>,
 	user: User,
-) => Effect.Effect<RpcTarget, RoutingError | DatabaseError, Directory>
+) => Effect.Effect<RpcTarget, RoutingError | RouteRefusedError | DatabaseError, Directory>
 
 /** One entry per HazelRpc method. */
 export type RouteTable = { readonly [R in HazelRpc as R["_tag"]]: RouteFn<R> }
@@ -151,7 +162,32 @@ const connectDisconnect = (
 		return orgTarget(inGuest ? payload.organizationId : host.value) as RpcTarget
 	})
 
+/** Every `customers.*` method: the `CustomersObject` of the payload's organization, for its members. */
+const byCustomers = (payload: { readonly organizationId: OrganizationId }, current: User) =>
+	Effect.gen(function* () {
+		const membership = yield* (yield* Directory).membership(current.id, payload.organizationId)
+		if (Option.isNone(membership) || membership.value.deletedAt !== null) {
+			return yield* new RouteRefusedError({
+				method: "customers",
+				message: "Not a member of the organization",
+			})
+		}
+		return customersTarget(payload.organizationId) as RpcTarget
+	})
+
+type CustomersRouteTable = {
+	readonly [R in HazelRpc as R["_tag"] extends `customers.${string}` ? R["_tag"] : never]: RouteFn<R>
+}
+// SAFETY: the keys are exactly `CustomerRpcs`' tags (every `customers.*` method), and each payload
+// carries `organizationId`, all `byCustomers` reads.
+const customersRoutes = Object.fromEntries(
+	[...CustomerRpcs.requests.keys()].map((tag) => [tag, byCustomers]),
+) as unknown as CustomersRouteTable
+
 export const routes: RouteTable = {
+	// CustomersObject
+	...customersRoutes,
+
 	// ChannelObject
 	"message.create": byChannel,
 	"message.update": channelHint("message.update"),
@@ -330,7 +366,7 @@ export const resolveTarget = (
 	tag: HazelRpcTag,
 	payload: unknown,
 	current: User,
-): Effect.Effect<RpcTarget, RoutingError | DatabaseError, Directory> => {
+): Effect.Effect<RpcTarget, RoutingError | RouteRefusedError | DatabaseError, Directory> => {
 	const route = routes[tag] as RouteFn<Rpc.Any> | undefined
 	if (route === undefined) return Effect.fail(new RoutingError({ method: tag, message: "No route" }))
 	return route(payload as never, current).pipe(

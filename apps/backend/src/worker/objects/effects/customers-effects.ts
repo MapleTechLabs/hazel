@@ -1,0 +1,144 @@
+/**
+ * Effects a `CustomersObject` receives (`docs/customers/tech-design.md` §1): its org's members,
+ * projected by the `OrgObject` whenever a membership or role changes, and pulled once by the
+ * customers object itself when it has none (`org.customerMembers`); and the org's deletion (an empty
+ * snapshot with `organizationDeleted`), which shuts the customers object down.
+ */
+import { Database, SQLite, schema } from "@hazel/db"
+import { DEFAULT_CONNECTION_CONFIG } from "@hazel/domain/customers"
+import { OrganizationMember } from "@hazel/domain/models"
+import { OrganizationId, UserId } from "@hazel/schema"
+import { Clock, Effect, Option, Schema } from "effect"
+import type { SqlClient } from "effect/sql/SqlClient"
+import { disconnectConnections } from "../customers/credentials"
+import { inList } from "../customers/sql"
+import { stopComputing } from "../customers/schedule"
+import { readObjectMeta, writeObjectMeta } from "../meta"
+import { defineEffect, type EffectReceivers, type EffectSender, isOrgSender } from "./registry"
+
+export const CustomerMember = Schema.Struct({
+	userId: UserId,
+	role: OrganizationMember.OrganizationRole,
+})
+export type CustomerMember = typeof CustomerMember.Type
+
+/** Every current member: a full snapshot, so a missed one is repaired by the next. */
+export const SetMembersPayload = Schema.Struct({
+	organizationId: OrganizationId,
+	members: Schema.Array(CustomerMember),
+	/** Increases with every snapshot the org sends (out-of-order deliveries drop the older one). */
+	version: Schema.Number,
+	/** The org was deleted (`members` is empty): disconnect every data source, stop computing. */
+	organizationDeleted: Schema.optionalKey(Schema.Boolean),
+})
+export type SetMembersPayload = typeof SetMembersPayload.Type
+
+export const CustomersEffects = {
+	setMembers: defineEffect("customers.setMembers", "customers", SetMembersPayload),
+}
+
+/** The `version` of the last applied `setMembers`. */
+export const CUSTOMERS_MEMBERS_VERSION_KEY = "membersVersion"
+
+/** Replace `customer_members` with `members`, writing only what changed. */
+export const applyMembers = Effect.fn("CustomersEffects.applyMembers")(function* (
+	members: ReadonlyArray<CustomerMember>,
+) {
+	const db = yield* Database.Database
+	const current = yield* db.run(SQLite.from(schema.customerMembersTable).select())
+	const next = new Map(members.map((member) => [member.userId, member.role]))
+	const gone = current.filter((row) => !next.has(row.userId)).map((row) => row.userId)
+	if (gone.length > 0) {
+		yield* db.run(SQLite.deleteFrom(schema.customerMembersTable).where(($) => [inList($.userId, gone)]))
+	}
+	const roles = new Map(current.map((row) => [row.userId, row.role]))
+	for (const member of members) {
+		if (roles.get(member.userId) === member.role) continue
+		yield* db.run(
+			SQLite.insertInto(schema.customerMembersTable)
+				.values(member)
+				.onConflictDoUpdate({ target: ["userId"], set: { role: member.role } }),
+		)
+	}
+})
+
+/**
+ * What the org's customers are, and what names them (ignore rules): purged with the org (its
+ * configuration stays, inert).
+ */
+const CUSTOMER_DATA: ReadonlyArray<Parameters<typeof SQLite.deleteFrom>[0]> = [
+	schema.customerAccountsTable,
+	schema.customerContactsTable,
+	schema.customerExternalRefsTable,
+	schema.customerSubscriptionsTable,
+	schema.customerInvoicesTable,
+	schema.customerActivityDailyTable,
+	schema.customerMetricDailyTable,
+	schema.customerOrgDailyTable,
+	schema.customerEventsTable,
+	schema.customerMrrMovementsTable,
+	schema.customerSignalsTable,
+	schema.customerHealthDailyTable,
+	schema.customerNotesTable,
+	schema.customerSyncRunsTable,
+	schema.customerUnmatchedRecordsTable,
+	schema.customerIgnoreRulesTable,
+]
+
+/**
+ * The org is gone: its data sources disconnect (credentials dropped, provider account names,
+ * settings and errors cleared), nothing is scheduled, and its customer data is deleted, saved
+ * views' filters too (no member can read it any more, and an org is not restored).
+ */
+const shutDown = Effect.gen(function* () {
+	const db = yield* Database.Database
+	const now = new Date(yield* Clock.currentTimeMillis)
+	const connections = yield* db.run(
+		SQLite.from(schema.customerConnectionsTable).select("id", "provider", "status"),
+	)
+	yield* disconnectConnections(
+		connections
+			.filter((connection) => connection.status !== "disconnected")
+			.map((connection) => connection.id),
+		now,
+	)
+	for (const connection of connections) {
+		yield* db.run(
+			SQLite.update(schema.customerConnectionsTable)
+				.set({
+					externalAccountName: null,
+					config: DEFAULT_CONNECTION_CONFIG[connection.provider],
+					lastError: null,
+					updatedAt: now,
+				})
+				.where(($) => [$.id.eq(connection.id)]),
+		)
+	}
+	yield* db.run(
+		SQLite.update(schema.customerSavedViewsTable).set({ filters: {}, updatedAt: now }).allRows(),
+	)
+	yield* stopComputing
+	for (const table of CUSTOMER_DATA) yield* db.run(SQLite.deleteFrom(table).allRows())
+})
+
+export const customersReceivers = {
+	"customers.setMembers": (payload) =>
+		Effect.gen(function* () {
+			const applied = Option.map(yield* readObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY), Number)
+			if (Option.isSome(applied) && payload.version < applied.value) return
+			yield* writeObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY, String(payload.version))
+			yield* applyMembers(payload.members)
+			if (payload.organizationDeleted === true) yield* shutDown
+		}),
+} satisfies EffectReceivers<typeof CustomersEffects, Database.Database | SqlClient>
+
+/** Only this org's `OrgObject` sends members, and only to its own customers object. */
+export const customersSenderRefusal = (kind: string, payload: unknown, sender: EffectSender) =>
+	Effect.gen(function* () {
+		if (kind !== CustomersEffects.setMembers.name) return Option.none<string>()
+		const { organizationId } = payload as SetMembersPayload
+		const self = yield* readObjectMeta("id").pipe(Effect.orDie)
+		return isOrgSender(sender, organizationId) && Option.getOrUndefined(self) === organizationId
+			? Option.none<string>()
+			: Option.some(`${kind} for org ${organizationId} from ${sender.kind}`)
+	})

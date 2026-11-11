@@ -21,6 +21,7 @@ import { layoutHotkeys } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
 import * as Platform from "../platform"
 import { desktopMenuItems } from "../platform/desktop-menu"
+import { backgroundToasts } from "../overlay/background-toasts"
 import * as Updates from "../platform/updates"
 import * as Toasts from "../overlay/toaster"
 import { Message } from "./message"
@@ -37,6 +38,10 @@ const isShellReady = (model: Model): boolean =>
 	currentUserOf(model) !== null && Option.isSome(loadedOrgOf(model))
 
 const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
+	// Toasts from Commands that outlive the page that sent them.
+	backgroundToasts: Subscription.persistentEntry(
+		backgroundToasts.pipe(Stream.map((toast) => Message.ReceivedBackgroundToast({ toast }))),
+	),
 	systemTheme: Subscription.persistentEntry(
 		Dom.streamFromMediaQuery({
 			query: "(prefers-color-scheme: dark)",

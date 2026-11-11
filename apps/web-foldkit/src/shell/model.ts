@@ -4,6 +4,7 @@ import { defineMessageUnion } from "foldkit/message"
 import * as Menu from "../ui/menu"
 import * as Modal from "../ui/modal"
 import * as ChannelsSidebar from "./channels-sidebar"
+import * as CustomersSidebar from "./customers-sidebar"
 import * as Notifications from "./notifications"
 
 /** The shell around every org page; it lives at the root, so it survives navigation. */
@@ -49,6 +50,8 @@ export const Model = Schema.Struct({
 	userStatus: Schema.NullOr(UserStatus),
 	/** Unread notification ids and the optimistic "Mark all as read" state. */
 	notifications: Notifications.Model,
+	/** The Customers sidebar's badge count and saved views. */
+	customersSidebar: CustomersSidebar.Model,
 	/** `channels/$channelId/settings/layout.tsx` header (name and icon). */
 	settingsChannel: Schema.NullOr(ChannelSummary),
 	/** `isOpenOnMobile`: the sidebar sheet opened from the header or the bottom nav. */
@@ -67,6 +70,7 @@ export const Message = defineMessageUnion({
 	UpdatedUserOrganizations: { organizations: Schema.Array(SwitcherOrg) },
 	UpdatedUserStatus: { status: Schema.NullOr(UserStatus) },
 	GotNotificationsMessage: { message: Notifications.Message },
+	GotCustomersSidebarMessage: { message: CustomersSidebar.Message },
 	UpdatedSettingsChannel: { channel: Schema.NullOr(ChannelSummary) },
 	ToggledSidebar: { isOpen: Schema.Boolean },
 	/** Desktop: dock the sidebar to its nav rail, or expand it again (Mod+Shift+D). */

@@ -31,7 +31,7 @@ import { type MuxOpenResult, refuseMuxStream, startMuxSession, toHttpServerRespo
 import { type Context, Effect, Option, Schema } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { HazelSession } from "../services/hazel-session"
-import { ChannelId, type UserId } from "@hazel/schema"
+import { ChannelId, OrganizationId, type UserId } from "@hazel/schema"
 import type { Socket } from "effect/socket"
 import { Directory } from "../services/directory"
 import { isObjectKind, OBJECT_NAMESPACES, type ObjectKind } from "./objects/kinds"
@@ -47,6 +47,7 @@ interface Namespace {
 }
 
 const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
+const decodeOrganizationId = Schema.decodeUnknownOption(OrganizationId)
 
 /** Closed with this when the route cannot serve the socket right now; the client retries. */
 export const UNAVAILABLE = 1011
@@ -57,7 +58,7 @@ class SyncForwardError extends Schema.TaggedError<SyncForwardError>()("SyncForwa
 	cause: Schema.Unknown,
 }) {}
 
-const SYNC_PATH = /^\/sync\/(org|channel|user)\/([^/?]+)/
+const SYNC_PATH = /^\/sync\/(org|channel|user|customers)\/([^/?]+)/
 
 /** `<protocol>, <token>` (`hazel.v1`, or `hazel.mux.v1` on `/sync/mux`) → the token. */
 export const tokenFromProtocols = (
@@ -201,6 +202,21 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 				}).pipe(Effect.withSpan("SyncRoute.warm")),
 			)
 
+			/** Whether `userId` is an active member of the org `id` names (`membership_index`). */
+			const customersMembership = (userId: UserId, id: string) =>
+				Option.match(decodeOrganizationId(id), {
+					onNone: () => Effect.succeed(false),
+					onSome: (organizationId) =>
+						directory.membership(userId, organizationId).pipe(
+							Effect.map((row) => Option.isSome(row) && row.value.deletedAt === null),
+							Effect.catchTag("DatabaseError", (error) =>
+								Effect.logError("Sync route could not check the membership", {
+									error: error.message,
+								}).pipe(Effect.as("unavailable" as const)),
+							),
+						),
+				})
+
 			/**
 			 * The object a socket for `kind`/`id` opens with `token`, and the principal headers it gets;
 			 * or the close code the client gets instead.
@@ -225,6 +241,13 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 						),
 					)
 					if (Option.isNone(objectId)) return refusedTarget(UNAVAILABLE, "unavailable")
+					// A customers object exists per org: only its members may wake it (an unknown id
+					// must not create one).
+					if (kind === "customers") {
+						const member = yield* customersMembership(user.id, id)
+						if (member === "unavailable") return refusedTarget(UNAVAILABLE, "unavailable")
+						if (!member) return refusedTarget(SyncCloseCode.Forbidden, "not_a_member")
+					}
 
 					const namespace = namespaceOf(kind)
 					if (namespace === undefined) {

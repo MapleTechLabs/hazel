@@ -12,6 +12,14 @@ import * as ChannelSettingsOverview from "./channel-settings/overview"
 import * as ChannelSettingsRedirect from "./channel-settings/redirect"
 import * as ChatChannel from "./chat/channel"
 import * as ChatIndex from "./chat-index"
+import * as CustomersAttention from "./customers/attention"
+import * as CustomerDetail from "./customers/detail"
+import * as CustomersList from "./customers/list"
+import * as CustomersOverview from "./customers/overview"
+import * as CustomersSettingsHealth from "./customers/settings/health"
+import * as CustomersSettingsSignals from "./customers/settings/signals"
+import * as CustomersSettingsSources from "./customers/settings/sources"
+import * as CustomersUnmatched from "./customers/settings/unmatched"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import type { PageOutMessage } from "./out-message"
 import * as NotificationsInbox from "./notifications/inbox"
@@ -85,6 +93,14 @@ export const pages = [
 	MySettingsLinkedAccounts.page,
 	MySettingsNotifications.page,
 	MySettingsProfile.page,
+	CustomersOverview.page,
+	CustomersAttention.page,
+	CustomersList.page,
+	CustomerDetail.page,
+	CustomersSettingsSignals.page,
+	CustomersSettingsHealth.page,
+	CustomersSettingsSources.page,
+	CustomersUnmatched.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
@@ -116,7 +132,12 @@ const pageById = (id: string) => Array.findFirst(pages, (page) => page.id === id
  * Navigation: keep the page when its key is unchanged (informing it of the new route), otherwise
  * build the route's page and drop the previous one (React's unmount semantics).
  */
-export const enterRoute = (current: PageSlot | null, route: AppRoute, shared: Shared): PageTransition =>
+export const enterRoute = (
+	current: PageSlot | null,
+	route: AppRoute,
+	shared: Shared,
+	instance: number,
+): PageTransition =>
 	Option.match(
 		Array.findFirst(pages, (page) => page.ownsRoute(route)),
 		{
@@ -128,7 +149,7 @@ export const enterRoute = (current: PageSlot | null, route: AppRoute, shared: Sh
 					Option.contains(page.keyOf(route), current.key)
 				return isSameInstance
 					? toTransition(page.routeChanged(current, route, shared), current)
-					: toTransition(page.init(route, shared), null)
+					: toTransition(page.init(route, shared, instance), null)
 			},
 		},
 	)

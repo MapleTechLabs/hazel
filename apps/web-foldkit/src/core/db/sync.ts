@@ -27,6 +27,18 @@ export const userSources = sourceSet()
 /** `org:<id>` for every org of the user and every Connect host org it is a guest of. */
 export const orgSources = sourceSet()
 
+/**
+ * `customers:<organizationId>`: the org whose Customers area the user opened. Set when the area is
+ * first entered (`openCustomersSource`) and kept for the session, so going back is instant; unknown
+ * (its collections load) until then.
+ */
+export const customersSources = sourceSet()
+
+export const openCustomersSource = (organizationId: string) => {
+	const key: SourceKey = `customers:${organizationId}`
+	if (customersSources.get()?.[0] !== key) customersSources.set([key])
+}
+
 /** Every source in `sets`; unknown while any of them is. */
 export const unionSources = (...sets: ReadonlyArray<SourceSet>): SourceSet => ({
 	get: () => {

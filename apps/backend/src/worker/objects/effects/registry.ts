@@ -70,7 +70,7 @@ export const parseEffectTarget = (
 	if (separator === -1) return undefined
 	const kind = value.slice(0, separator)
 	const id = value.slice(separator + 1)
-	if (kind !== "org" && kind !== "channel" && kind !== "user") return undefined
+	if (kind !== "org" && kind !== "channel" && kind !== "user" && kind !== "customers") return undefined
 	return id.length > 0 ? { kind, id } : undefined
 }
 

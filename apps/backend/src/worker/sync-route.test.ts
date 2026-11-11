@@ -56,6 +56,7 @@ type Verify = (token: string) => Effect.Effect<Option.Option<VerifiedUser>, unkn
 const build = (options: {
 	readonly verify: Verify
 	readonly channel?: Directory["Service"]["channel"]
+	readonly membership?: Directory["Service"]["membership"]
 	readonly env: Record<string, unknown>
 }) => {
 	const session = Layer.succeed(HazelSession, {
@@ -64,6 +65,7 @@ const build = (options: {
 	} as never)
 	const directory = Layer.succeed(Directory, {
 		channel: options.channel ?? (() => Effect.succeed(Option.none())),
+		membership: options.membership ?? (() => Effect.succeed(Option.none())),
 	} as never)
 	const web = HttpRouter.toWebHandler(
 		makeSyncRoute(options.env).pipe(Layer.provide(Layer.mergeAll(session, directory))),
@@ -218,6 +220,52 @@ describe("sync route", () => {
 			{ code: 1011, reason: "unavailable" },
 			{ code: 1011, reason: "unavailable" },
 		])
+	})
+})
+
+describe("customers sync", () => {
+	const verify: Verify = () => Effect.succeed(Option.some({ user, expiresAt: Date.now() + 60_000 }))
+	const orgId = crypto.randomUUID()
+
+	it("opens a member's socket, and refuses a stranger, a former member or an invalid id unwoken", async () => {
+		const member = recordingNamespace()
+		await build({
+			verify,
+			membership: () => Effect.succeed(Option.some({ deletedAt: null } as never)),
+			env: { CustomersObject: member.namespace },
+		})(`/sync/customers/${orgId}`)
+		expect(member.forwarded).toHaveLength(1)
+
+		const { forwarded, namespace } = recordingNamespace()
+		await build({ verify, env: { CustomersObject: namespace } })(`/sync/customers/${orgId}`)
+		await build({
+			verify,
+			membership: () => Effect.succeed(Option.some({ deletedAt: new Date() } as never)),
+			env: { CustomersObject: namespace },
+		})(`/sync/customers/${orgId}`)
+		await build({
+			verify,
+			membership: () => Effect.succeed(Option.some({ deletedAt: null } as never)),
+			env: { CustomersObject: namespace },
+		})("/sync/customers/not-an-org")
+		expect(forwarded).toEqual([])
+		expect(closed).toEqual([
+			{ code: SyncCloseCode.Forbidden, reason: "not_a_member" },
+			{ code: SyncCloseCode.Forbidden, reason: "not_a_member" },
+			{ code: SyncCloseCode.Forbidden, reason: "not_a_member" },
+		])
+	})
+
+	it("closes with 1011 when the membership cannot be checked", async () => {
+		await build({
+			verify,
+			membership: () =>
+				Effect.fail(
+					new Database.DatabaseError({ type: "connection_error", message: "D1 down", cause: null }),
+				),
+			env: {},
+		})(`/sync/customers/${orgId}`)
+		expect(closed).toEqual([{ code: 1011, reason: "unavailable" }])
 	})
 })
 

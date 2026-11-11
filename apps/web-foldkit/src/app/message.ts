@@ -53,6 +53,7 @@ export const Message = defineMessageUnion({
 	FailedFetchCurrentUser: { reason: CommonReason },
 	PressedRetryCurrentUser: {},
 	CompletedWarmAccessToken: {},
+	CompletedClearNoteDrafts: {},
 	SucceededSignOut: {},
 	FailedSignOut: { reason: CommonReason },
 	SucceededCreateDm: {
@@ -78,6 +79,8 @@ export const Message = defineMessageUnion({
 	GotModalMessage: { message: Modal.Message },
 	GotCommandPaletteMessage: { message: CommandPalette.Message },
 	GotToastsMessage: { message: Toasts.Message },
+	/** A Command's own toast (`overlay/background-toasts.ts`). */
+	ReceivedBackgroundToast: { toast: Toasts.ToastRequest },
 	GotPlatformMessage: { message: Platform.Message },
 	GotUpdatesMessage: { message: Updates.Message },
 	/** A desktop app menu item (`menu-*` events from the Tauri host). */

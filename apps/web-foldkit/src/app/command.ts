@@ -6,6 +6,7 @@ import { readAccessToken } from "~/lib/access-token"
 import { isRetryableError } from "~/lib/error-messages"
 import { catchCommon } from "../data/actions"
 import { saveSoundSettings, SoundSettings } from "../notification-sound"
+import { clearNoteDrafts } from "../page/customers/detail/note-drafts"
 import { HazelRpc } from "../rpc"
 import { applyTheme, ResolvedTheme, saveThemePreference, ThemeCustomization, ThemePreference } from "../theme"
 import { readSession, signOut } from "./auth"
@@ -31,6 +32,12 @@ export const ReplaceUrl = Command.define("ReplaceUrl", {
 	args: { url: Schema.String },
 	messages: [Message.CompletedReplaceUrl],
 	execute: ({ url }) => replaceUrl(url).pipe(Effect.as(Message.CompletedReplaceUrl())),
+})
+
+/** A new sign-in: the previous user's unsent customer notes go. */
+export const ClearNoteDrafts = Command.define("ClearNoteDrafts", {
+	messages: [Message.CompletedClearNoteDrafts],
+	execute: clearNoteDrafts.pipe(Effect.as(Message.CompletedClearNoteDrafts())),
 })
 
 /** A full page load of `href`: another site, or the app itself after sign-out so every cache starts over. */

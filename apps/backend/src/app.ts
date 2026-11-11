@@ -71,6 +71,7 @@ import { ObjectStorage } from "./services/object-storage"
 import { HtmlRenders } from "./services/html-renders"
 import { OAuthProviderRegistry } from "./services/oauth"
 import { HazelAuthInstance, HazelAuthRoutes, HazelAuthServicesLive } from "./services/hazel-auth"
+import { CustomersWebhookRoutes } from "./routes/customers-webhooks.http"
 import { DevSignInRoutes } from "./routes/dev-sign-in.http"
 import { HazelSession } from "./services/hazel-session"
 import { WebhookBotService } from "./services/webhook-bot-service"
@@ -109,6 +110,7 @@ export const makeRoutes = <E, R, EX = never, RX = never>(
 		),
 		HazelAuthRoutes,
 		DevSignInRoutes,
+		CustomersWebhookRoutes,
 		extra,
 	).pipe(
 		Layer.provide(
