@@ -202,5 +202,5 @@ synthetic utility page (`conformance:extract` records it).
   (the fade is a mask Rune applies to its own drawing), and a headless capture shows the frame's
   box empty. Frames show on macOS only; other platforms have no web view yet.
 
-Rune is pinned to `Makisuo/rune` (anomalyco/rune `bca4713` plus grid tracks,
-`El::clip_fade_linear_frac` and `El::max_w_frac`) until they land upstream; see `host/Cargo.toml`.
+Rune is pinned to `Makisuo/rune` (anomalyco/rune `bca4713` plus grid tracks and
+`El::clip_fade_linear_frac`) until they land upstream; see `host/Cargo.toml`.
