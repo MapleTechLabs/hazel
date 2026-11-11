@@ -42,6 +42,7 @@ import type { HazelApiClient, HazelRpc } from "../../../rpc"
 import { globalPasteStream, globalTypingStream, leftWindowStream } from "../../../composer/window-events"
 import { channelHotkeysStream } from "./hotkeys"
 import { isMemberOf, Message, type Model } from "./page"
+import { windowFocus } from "../../../platform/presence/activity"
 
 type Input = PageSubscriptionInput<Model>
 
@@ -487,6 +488,15 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 							isDialogOpen,
 						})
 					: Stream.empty,
+		},
+	),
+	// Back in the window: messages counted while it was in the background are cleared.
+	windowFocus: entry(
+		{},
+		{
+			modelToDependencies: () => ({}),
+			dependenciesToStream: () =>
+				windowFocus.pipe(Stream.map((isFocused) => Message.ChangedWindowFocus({ isFocused }))),
 		},
 	),
 	leftWindow: entry(

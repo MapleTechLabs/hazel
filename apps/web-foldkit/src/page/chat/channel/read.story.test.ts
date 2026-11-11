@@ -440,14 +440,8 @@ describe("threads", () => {
 			message(
 				Message.UpdatedThreadChannels({ channels: [{ id: threadChannelId, name: "Launch plan" }] }),
 			),
-			model((current) =>
-				expect(rowOf(current, graceMessageId)?.thread).toEqual({
-					threadChannelId,
-					name: "Launch plan",
-					count: 0,
-					lastMessage: null,
-				}),
-			),
+			// Named but no messages yet: still no "0 Messages" card.
+			model((current) => expect(rowOf(current, graceMessageId)?.thread).toBeNull()),
 			// Newest first, as the lookup returns them.
 			message(
 				Message.UpdatedThreadMessages({

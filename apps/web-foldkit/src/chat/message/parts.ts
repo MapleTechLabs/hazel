@@ -1,4 +1,4 @@
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { formatDistanceToNowStrict } from "date-fns"
 import { cx } from "~/utils/cx"
 import { IconChevronRight, IconDiscord, IconPin } from "../../icons"
@@ -58,8 +58,23 @@ export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: H
 	)
 }
 
-/** `MessageReplySection`: the curve, then the quoted author and first line. */
-export const replySectionView = <M>(h: HtmlBuilder<M>, reply: ReplyPreview, onClick: M | null): Html =>
+/** What the quoted message of a reply does when pressed. */
+export interface ReplyActions<M> {
+	/** Wraps the quoted author's button in an overlay trigger (their profile popover). */
+	readonly toAuthor: (toTrigger: (attributes: ReadonlyArray<ChildAttribute>) => Html) => Html
+	/** The quoted text's press: jump to that message. */
+	readonly onJump: M
+}
+
+// Each control draws its own ring, tight around what it holds.
+const REPLY_CONTROL =
+	"cursor-pointer rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40"
+
+/**
+ * `MessageReplySection`: the curve, then the quoted author (opens their profile) and the first line
+ * (jumps to the message).
+ */
+export const replySectionView = <M>(h: HtmlBuilder<M>, reply: ReplyPreview, actions: ReplyActions<M>): Html =>
 	h.div(
 		[h.Class("relative mb-1")],
 		[
@@ -82,33 +97,62 @@ export const replySectionView = <M>(h: HtmlBuilder<M>, reply: ReplyPreview, onCl
 					]),
 				],
 			),
-			h.button(
-				[
-					h.Attribute("type", "button"),
-					h.Class("flex w-fit items-center gap-1 pl-12 text-left hover:bg-transparent"),
-					...(onClick === null ? [] : [h.OnClick(onClick)]),
-				],
-				reply.author === null
+			h.div(
+				[h.Class("flex min-w-0 items-center gap-1.5 pl-12")],
+				reply.authorId === null
 					? [h.span([h.Class("text-muted-fg text-sm")], ["Message not found"])]
 					: [
-							avatar(h, {
-								size: "xs",
-								src: reply.author.avatarUrl,
-								seed: reply.author.displayName || undefined,
-								alt: reply.author.displayName,
-							}),
-							h.span(
-								[h.Class("font-medium text-fg text-sm hover:underline")],
-								[reply.author.displayName],
-							),
-							h.span(
-								[h.Class("max-w-xs truncate text-ellipsis text-muted-fg text-sm")],
-								[reply.firstLine],
+							replyAuthorView(h, reply.author, actions),
+							h.button(
+								[
+									h.Type("button"),
+									h.Attribute("aria-label", "Jump to message"),
+									h.OnClick(actions.onJump),
+									h.Class(
+										cx(
+											REPLY_CONTROL,
+											"min-w-0 max-w-xs truncate text-left text-muted-fg text-sm hover:text-fg",
+										),
+									),
+								],
+								[reply.firstLine === "" ? "Click to see attachment" : reply.firstLine],
 							),
 						],
 			),
 		],
 	)
+
+/** The quoted author's avatar and name, a profile popover trigger; nothing until the users lookup has them. */
+const replyAuthorView = <M>(
+	h: HtmlBuilder<M>,
+	author: ReplyPreview["author"],
+	actions: ReplyActions<M>,
+): Html =>
+	author === null
+		? h.empty
+		: actions.toAuthor((attributes) =>
+				h.button(
+					[
+						// The trigger's attributes carry its own `aria-expanded` and `type`.
+						...(attributes.length === 0
+							? [h.Attribute("aria-expanded", "false"), h.Type("button")]
+							: attributes),
+						h.Class(cx(REPLY_CONTROL, "group/author flex shrink-0 items-center gap-1")),
+					],
+					[
+						avatar(h, {
+							size: "xs",
+							src: author.avatarUrl,
+							seed: author.displayName || undefined,
+							alt: author.displayName,
+						}),
+						h.span(
+							[h.Class("font-medium text-fg text-sm group-hover/author:underline")],
+							[author.displayName],
+						),
+					],
+				),
+			)
 
 /** Discord's thread card under its starter message: the name, the message count and the last message. */
 export const threadPreviewView = <M>(h: HtmlBuilder<M>, thread: ThreadPreview, onClick: M | null): Html => {
@@ -144,36 +188,31 @@ export const threadPreviewView = <M>(h: HtmlBuilder<M>, thread: ThreadPreview, o
 					),
 				],
 			),
-			last === null
-				? h.span([h.Class("truncate text-muted-fg")], ["No recent messages"])
-				: h.div(
-						[h.Class("flex min-w-0 items-center gap-1.5")],
-						[
-							last.author === null
-								? h.div([h.Class("size-4 shrink-0 rounded-full bg-muted")])
-								: avatar(h, {
-										src: last.author.avatarUrl,
-										seed: last.author.displayName || undefined,
-										alt: last.author.displayName,
-										size: "xxs",
-										className: "size-4 shrink-0",
-									}),
-							last.author === null
-								? h.empty
-								: h.span(
-										[h.Class("shrink-0 font-medium text-fg/85")],
-										[last.author.displayName],
-									),
-							h.span(
-								[h.Class("min-w-0 truncate text-muted-fg")],
-								[last.text === "" ? "Click to see attachment" : last.text],
-							),
-							h.span(
-								[h.Class("ml-1 shrink-0 text-muted-fg text-xs")],
-								[formatDistanceToNowStrict(new Date(last.createdAtMs), { addSuffix: true })],
-							),
-						],
+			h.div(
+				[h.Class("flex min-w-0 items-center gap-1.5")],
+				[
+					last.author === null
+						? h.div([h.Class("size-4 shrink-0 rounded-full bg-muted")])
+						: avatar(h, {
+								src: last.author.avatarUrl,
+								seed: last.author.displayName || undefined,
+								alt: last.author.displayName,
+								size: "xxs",
+								className: "size-4 shrink-0",
+							}),
+					last.author === null
+						? h.empty
+						: h.span([h.Class("shrink-0 font-medium text-fg/85")], [last.author.displayName]),
+					h.span(
+						[h.Class("min-w-0 truncate text-muted-fg")],
+						[last.text === "" ? "Click to see attachment" : last.text],
 					),
+					h.span(
+						[h.Class("ml-1 shrink-0 text-muted-fg text-xs")],
+						[formatDistanceToNowStrict(new Date(last.createdAtMs), { addSuffix: true })],
+					),
+				],
+			),
 		],
 	)
 }

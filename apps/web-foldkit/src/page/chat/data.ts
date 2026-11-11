@@ -1,6 +1,6 @@
 import type { ChannelId, MessageId } from "@hazel/schema"
 import { BasicIndex, coalesce, eq } from "@tanstack/db"
-import { Effect, PubSub, Stream } from "effect"
+import { DateTime, Effect, PubSub, Stream } from "effect"
 import {
 	channelCollection,
 	messageCollection,
@@ -132,6 +132,42 @@ const historyDemandStream = (channelId: ChannelId, count: number): Stream.Stream
 			(demand) => Effect.sync(() => demand.release()),
 		).pipe(Effect.flatMap(() => Effect.never)),
 	)
+
+const msOf = (value: Date | DateTime.Utc) =>
+	value instanceof Date ? value.getTime() : DateTime.toEpochMillis(value)
+
+/** The most `LoadOlder` asks for at once, and how many of them a locate makes before giving up. */
+const LOCATE_PAGE_SIZE = 200
+const LOCATE_MAX_PAGES = 50
+
+/**
+ * How many of the channel's messages are newer than `messageId`, once the history is held back to
+ * it: a reply target loaded by id sits alone, older than the held history, so pages are loaded until
+ * they reach it. Null when the message is not held, or the history cannot be paged that far now.
+ */
+export const locateMessage = (channelId: ChannelId, messageId: MessageId): Effect.Effect<number | null> =>
+	Effect.gen(function* () {
+		for (let page = 0; page <= LOCATE_MAX_PAGES; page++) {
+			const target = messageCollection.get(messageId)
+			if (target === undefined || target.channelId !== channelId) return null
+			const createdAtMs = msOf(target.createdAt)
+			let newerCount = 0
+			for (const key of messagesByChannel.equalityLookup(channelId)) {
+				const row = messageCollection.get(key)
+				if (row !== undefined && msOf(row.createdAt) > createdAtMs) newerCount++
+			}
+			const history = messageCollection.utils.historyOf(channelId)
+			// Held from the newest message down past the target, or there is nothing older to load.
+			if (history === undefined || history.loaded > newerCount || !history.hasMore) return newerCount
+			yield* Effect.tryPromise(() =>
+				messageCollection.utils.loadOlder(channelId, LOCATE_PAGE_SIZE),
+			).pipe(Effect.orElseSucceed(() => false))
+			// No page came (offline, rate limited): asking again at once would only spin.
+			const loaded = messageCollection.utils.historyOf(channelId)?.loaded ?? 0
+			if (loaded <= history.loaded) return null
+		}
+		return null
+	})
 
 export const reactionsStream = <Message>(
 	channelId: ChannelId,
