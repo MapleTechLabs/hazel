@@ -4,13 +4,13 @@
  */
 import type { D1Database, KVNamespace, R2Bucket } from "@cloudflare/workers-types"
 import { Database } from "@hazel/db"
-import { layerKvResultPersistence } from "@hazel/effect-cloudflare"
 import { DIRECTORY_DB_BINDING } from "@hazel/infra/cloudflare"
 import { workerEnvLayer } from "@hazel/infra/worker-runtime"
 import { Layer } from "effect"
 import { type BotGatewayNamespace, BotGatewayTransport } from "../services/bot-gateway-transport"
 import { HtmlRenderStore } from "../services/html-renders"
 import { InviteMailer, isEmailBinding } from "../services/invite-mailer"
+import { layerKvResultPersistence } from "./kv-persistence"
 
 /** KV namespace backing the session/user-lookup caches. */
 export const CACHE_BINDING = "CACHE"

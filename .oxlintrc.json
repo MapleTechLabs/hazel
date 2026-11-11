@@ -427,14 +427,14 @@
 		},
 		{
 			"files": [
+				"apps/backend/src/worker/kv-persistence.ts",
 				"apps/backend/src/worker/objects/html-renders.test.ts",
 				"apps/bot-gateway/src/gateway/object-live.ts",
 				"apps/bot-gateway/src/gateway/relay.test.ts",
 				"apps/bot-gateway/src/gateway/relay.ts",
 				"apps/web-foldkit/src/page/my-settings/notifications/story.test.ts",
 				"libs/bot-sdk/src/hazel-bot-sdk.messages.test.ts",
-				"packages/db/src/services/database.ts",
-				"packages/effect-cloudflare/src/KvPersistence.ts"
+				"packages/db/src/services/database.ts"
 			],
 			"rules": { "anti-slop/no-object-parameters": "off" }
 		},

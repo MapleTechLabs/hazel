@@ -10,7 +10,6 @@
 		"postinstall": "fumadocs-mdx"
 	},
 	"dependencies": {
-		"@hazel/ui": "workspace:*",
 		"@tanstack/react-router": "1.166.6",
 		"@tanstack/react-start": "1.145.3",
 		"class-variance-authority": "^0.7.1",

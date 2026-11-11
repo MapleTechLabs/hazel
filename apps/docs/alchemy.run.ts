@@ -11,7 +11,7 @@ const props = Effect.gen(function* () {
 	return {
 		name: resolveWorkerName("docs", stage),
 		rootDir: new URL(".", import.meta.url).pathname,
-		memo: { include: ["**/*", "../../packages/ui/src/**"], lockfile: true },
+		memo: { include: ["**/*"], lockfile: true },
 		compatibility: { date: "2026-09-25" },
 		// docs.hazel.sh still points at Vercel: serve on workers.dev until the hostname moves here.
 		workersDev: true,

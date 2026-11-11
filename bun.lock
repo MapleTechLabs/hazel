@@ -35,7 +35,6 @@
         "@hazel/bot-gateway": "workspace:*",
         "@hazel/db": "workspace:*",
         "@hazel/domain": "workspace:*",
-        "@hazel/effect-cloudflare": "workspace:*",
         "@hazel/infra": "workspace:*",
         "@hazel/integrations": "workspace:*",
         "@hazel/schema": "workspace:*",
@@ -93,7 +92,6 @@
     "apps/docs": {
       "name": "docs",
       "dependencies": {
-        "@hazel/ui": "workspace:*",
         "@tanstack/react-router": "1.166.6",
         "@tanstack/react-start": "1.145.3",
         "class-variance-authority": "^0.7.1",
@@ -402,17 +400,6 @@
         "typescript": "catalog:tooling",
       },
     },
-    "packages/effect-cloudflare": {
-      "name": "@hazel/effect-cloudflare",
-      "version": "0.0.0",
-      "dependencies": {
-        "effect": "catalog:effect",
-      },
-      "devDependencies": {
-        "@cloudflare/workers-types": "catalog:alchemy",
-        "typescript": "catalog:tooling",
-      },
-    },
     "packages/foldkit-rune": {
       "name": "@hazel/foldkit-rune",
       "version": "0.0.0",
@@ -505,17 +492,6 @@
         "@types/node": "^24.19.2",
         "typescript": "catalog:tooling",
         "vitest": "^5.0.5",
-      },
-    },
-    "packages/ui": {
-      "name": "@hazel/ui",
-      "version": "0.0.0",
-      "devDependencies": {
-        "@types/react": "^19.3.0",
-        "typescript": "catalog:tooling",
-      },
-      "peerDependencies": {
-        "react": "^19.0.0",
       },
     },
   },
@@ -867,8 +843,6 @@
 
     "@hazel/domain": ["@hazel/domain@workspace:packages/domain"],
 
-    "@hazel/effect-cloudflare": ["@hazel/effect-cloudflare@workspace:packages/effect-cloudflare"],
-
     "@hazel/effect-db-collection": ["@hazel/effect-db-collection@workspace:libs/effect-db-collection"],
 
     "@hazel/foldkit-rune": ["@hazel/foldkit-rune@workspace:packages/foldkit-rune"],
@@ -886,8 +860,6 @@
     "@hazel/setup": ["@hazel/setup@workspace:packages/setup"],
 
     "@hazel/sync-do": ["@hazel/sync-do@workspace:packages/sync-do"],
-
-    "@hazel/ui": ["@hazel/ui@workspace:packages/ui"],
 
     "@hexagon/base64": ["@hexagon/base64@1.1.28", "", {}, "sha512-lhqDEAvWixy3bZ+UOYbPwUbBkwBq5C1LAJ/xPC8Oi+lL54oyakv/npbA0aU2hgCsx/1NUd4IBvV03+aUBWxerw=="],
 
@@ -2455,7 +2427,7 @@
 
     "re2": ["re2@1.27.0", "", { "dependencies": { "install-artifact-from-github": "^1.8.1", "nan": "^2.29.0", "node-gyp": "^13.0.2" } }, "sha512-z5Vascmj7lQbU3YdfYJUDkBGGTnoAObcVW/CSbpI3WbVb1vZQsSzSWcGkfKU0JKrrGfPZwPr8EVHwYXKQKLVXw=="],
 
-    "react": ["react@19.3.1", "", {}, "sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw=="],
+    "react": ["react@19.2.4", "", {}, "sha512-9nfp2hYpCwOjAN+8TZFGhtWEwgvWHXqESH8qT89AT/lWklpLON22Lc8pEtnpsZz7VmawabSU0gCjnj8aC0euHQ=="],
 
     "react-dom": ["react-dom@19.2.4", "", { "dependencies": { "scheduler": "^0.27.0" }, "peerDependencies": { "react": "^19.2.4" } }, "sha512-AXJdLo8kgMbimY95O2aKQqsz2iWi9jMgKJhRBAxECE4IFxfcazB2LmzloIoibJI3C12IlY20+KFaLv+71bUJeQ=="],
 
@@ -3091,8 +3063,6 @@
 
     "csso/css-tree": ["css-tree@2.2.1", "", { "dependencies": { "mdn-data": "2.0.28", "source-map-js": "^1.0.1" } }, "sha512-OA0mILzGc1kCOCSJerOeqDxDQ4HOh+G8NbOJFOTgOCzpw7fCBubk0fEyxp8AgOL/jvLgYA/uV0cMbe43ElF1JA=="],
 
-    "docs/react": ["react@19.2.4", "", {}, "sha512-9nfp2hYpCwOjAN+8TZFGhtWEwgvWHXqESH8qT89AT/lWklpLON22Lc8pEtnpsZz7VmawabSU0gCjnj8aC0euHQ=="],
-
     "dom-serializer/entities": ["entities@4.5.0", "", {}, "sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw=="],
 
     "effect-oxlint/@oxlint/plugins": ["@oxlint/plugins@1.87.0", "", {}, "sha512-OtSZ6NxNkS7bkVy7zk9zGnajz2hVIu0uRPP/dJvJesGRaXtimpA4lpxap7FaIJndG2UIoKhnBU4DxyDQIWv6yg=="],
@@ -3128,6 +3098,8 @@
     "jsdom/tough-cookie": ["tough-cookie@6.0.2", "", { "dependencies": { "tldts": "^7.0.5" } }, "sha512-exgYmnmL/sJpR3upZfXG5PoatXQii55xAiXGXzY+sROLZ/Y+SLcp9PgJNI9Vz37HpQ74WvDcLT8eqm+kV3FzrA=="],
 
     "landing/lucide-react": ["lucide-react@1.66.0", "", { "peerDependencies": { "@types/react": "*", "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" }, "optionalPeers": ["@types/react"] }, "sha512-8zjbi/Us+ETXqfBwmXF/FHrWGIqOdE6zT1yUdRJLQVoptomSkB0zdFWVIM667t9K8djWDaXdkBkqi2qVTuDNiw=="],
+
+    "landing/react": ["react@19.3.1", "", {}, "sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw=="],
 
     "landing/react-dom": ["react-dom@19.3.1", "", { "dependencies": { "scheduler": "^0.28.0" }, "peerDependencies": { "react": "^19.3.1" } }, "sha512-Y0bARz53lhEC1NMCASs0/j+faB/zqt3R8hpvg1e8+61ZVJ4UL0UdC4cBbXfZMcIuhrfgeILTLe+ZeBCavQPtKQ=="],
 
