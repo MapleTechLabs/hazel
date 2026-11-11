@@ -88,6 +88,13 @@ export const ThreadPanel = Schema.Struct({
 })
 export type ThreadPanel = typeof ThreadPanel.Type
 
+/**
+ * A jump to a message outside the window (a reply's quote): first the channel's history is paged in
+ * back to it (`isLocated` false), then the window moves over it and the list scrolls once its row is in.
+ */
+export const PendingJump = Schema.Struct({ messageId: MessageId, isLocated: Schema.Boolean })
+export type PendingJump = typeof PendingJump.Type
+
 /** A drag of the thread panel's edge: where it started, and the widest the channel leaves room for. */
 export const ThreadPanelDrag = Schema.Struct({
 	startX: Schema.Number,
@@ -134,6 +141,7 @@ export const Model = Schema.Struct({
 	list: MessageList.Model,
 	/** The message the keyboard is on (Discord's message navigation); Shift+Tab returns to it. */
 	focusedMessageId: Schema.NullOr(MessageId),
+	pendingJump: Schema.NullOr(PendingJump),
 	overlays: Overlays.Model,
 	/** The channel composer's draft (`ChatProvider` + `ComposerEditor` state). */
 	draft: Draft.Model,
@@ -220,6 +228,14 @@ export const Message = defineMessageUnion({
 	GotActionMessage: { message: ActionMessage },
 	UpdatedThreadMember: { threadChannelId: ChannelId, memberId: Schema.NullOr(ChannelMemberId) },
 	ClickedThreadPreview: { threadChannelId: ChannelId, messageId: MessageId },
+	/** The quoted text of a reply (on message `fromMessageId`): jump to the message it quotes. */
+	ClickedReplyPreview: { fromMessageId: MessageId, messageId: MessageId },
+	/** The history reaches back to the jump's target, which has `newerCount` newer messages. */
+	LocatedJumpTarget: { messageId: MessageId, newerCount: Schema.Number },
+	FailedLocateJumpTarget: { messageId: MessageId },
+	/** The list scrolled to the jump's target and has (most likely) rendered and measured its row. */
+	RenderedJumpTarget: { messageId: MessageId },
+	CompletedHighlightMessage: {},
 	/** A button on a bot's message (`MessageEmbed.actions`). */
 	ClickedEmbedAction: { channelId: ChannelId, messageId: MessageId, actionId: Schema.String },
 	ClickedCloseThread: {},

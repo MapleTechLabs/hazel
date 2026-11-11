@@ -33,6 +33,23 @@ describe("revealRow", () => {
 	})
 })
 
+describe("centerRow", () => {
+	test("a row out of view lands in the middle of the viewport", () => {
+		expect(MessageList.centerRow(list(1000), "row-3").model.scrollTop).toBe(300 - 150)
+		expect(MessageList.centerRow(list(0), "row-15").model.scrollTop).toBe(1500 - 150)
+	})
+
+	test("a row already in view does not scroll", () => {
+		const model = list(1000)
+		expect(MessageList.centerRow(model, "row-12").model).toBe(model)
+	})
+
+	test("it stops at the ends", () => {
+		expect(MessageList.centerRow(list(1000), "row-0").model.scrollTop).toBe(0)
+		expect(MessageList.centerRow(list(0), "row-19").model.scrollTop).toBe(2000 - 400)
+	})
+})
+
 describe("scrollByPage", () => {
 	test("PageUp and PageDown move most of a viewport", () => {
 		expect(MessageList.scrollByPage(list(1000), "Up").model.scrollTop).toBe(1000 - 336)

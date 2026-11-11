@@ -41,7 +41,8 @@ import type { ChannelHotkey } from "./hotkeys"
 import { ClearChannelNotifications } from "./clear-notifications"
 import { DeleteMessageNow, FocusMessage } from "./message-keys"
 import { type ChatTab, Message, type MessageKey, type Model, type PageReturn, Tab } from "./model"
-import { loadWhenNearEdge } from "./window"
+import * as Jump from "./jump"
+import { liftList, loadWhenNearEdge } from "./window"
 import * as ThreadWidth from "./thread-width"
 import * as Write from "./write"
 
@@ -101,6 +102,7 @@ export const init = (
 		measuredHeights: options.carry?.heightsByChannel[channelId] ?? {},
 	}),
 	focusedMessageId: null,
+	pendingJump: null,
 	overlays: Overlays.init(),
 	draft: Draft.init(channelId, composerEditorId(channelId)),
 	threadPanel: null,
@@ -185,12 +187,6 @@ export const tabRoute = (orgSlug: string, channelId: ChannelId, tab: ChatTab): A
 	tabRoutes[tab]({ orgSlug, channelId })
 
 // UPDATE
-
-const liftList = (model: Model, result: MessageList.ListReturn): PageReturn => ({
-	// An unchanged list keeps the page reference, so ignored events cost no render.
-	model: result.model === model.list ? model : modifyFields(model, { list: () => result.model }),
-	commands: Command.mapMessages(result.commands, (message) => Message.GotListMessage({ message })),
-})
 
 /** The derive context with the page's unfurls, live states and HTML render frames. */
 export const deriveContextOf = (
@@ -486,12 +482,14 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		ChangedMessages: ({ channelId, order, upserts }) =>
 			channelId !== model.channelId
 				? { model }
-				: deriveRows(
-						withLiveReplies(
-							modifyFields(model, {
-								hasLoadedMessages: () => true,
-								messages: (previous) => applyMessageChanges(previous, order, upserts),
-							}),
+				: Jump.resume(
+						deriveRows(
+							withLiveReplies(
+								modifyFields(model, {
+									hasLoadedMessages: () => true,
+									messages: (previous) => applyMessageChanges(previous, order, upserts),
+								}),
+							),
 						),
 					),
 		UpdatedReactions: ({ channelId, reactions }) =>
@@ -589,6 +587,18 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				: { model },
 		ClickedThreadPreview: ({ threadChannelId, messageId }) =>
 			Write.openThread(model, threadChannelId, messageId, "Created"),
+		ClickedReplyPreview: ({ fromMessageId, messageId }) =>
+			Jump.toMessage(model, fromMessageId, messageId),
+		LocatedJumpTarget: ({ messageId, newerCount }) => Jump.located(model, messageId, newerCount),
+		FailedLocateJumpTarget: ({ messageId }) =>
+			model.pendingJump?.messageId === messageId
+				? Write.withToast(
+						modifyFields(model, { pendingJump: () => null }),
+						Write.messageNotFoundToast("MessageNotFound"),
+					)
+				: { model },
+		RenderedJumpTarget: ({ messageId }) => Jump.rendered(model, messageId),
+		CompletedHighlightMessage: () => ({ model }),
 		ClickedEmbedAction: ({ channelId, messageId, actionId }) =>
 			Write.pressEmbedAction(model, { channelId, messageId, actionId }),
 		ClickedCloseThread: () => Write.closeThread(model),

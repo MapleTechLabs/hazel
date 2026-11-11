@@ -26,7 +26,7 @@ import type * as Popover from "../../ui/popover"
 import * as Overlays from "./overlays"
 import { factsOf, Message, type Model } from "./channel/page"
 import { authorIdentity } from "./derive"
-import type { MessageRow } from "./rows"
+import type { MessageRow, ReplyPreview } from "./rows"
 
 /**
  * The context message rows render with. Rows are memoized by argument identity, so every row
@@ -65,8 +65,28 @@ const toPressEmbedAction = (channelId: ChannelId, messageId: MessageId, actionId
 const toPopoverMessage = (messageId: MessageId) => (key: string, message: Popover.Message) =>
 	toOverlays(Overlays.Message.GotPopoverMessage({ messageId, key, message }))
 
-/** A mention's profile popover opens below the mention. */
+/** A mention's (or a quoted author's) profile popover opens below it. */
 const MENTION_POPOVER = { placement: "bottom start", className: "w-72 p-0 lg:w-80" } as const
+
+/** A reply's quote: the author's profile popover (closed unless `active` is it) and the jump. */
+const replyActions = (
+	h: H,
+	row: MessageRow,
+	reply: ReplyPreview,
+	active: ReturnType<typeof Overlays.activePopoverOf>,
+	toContent: () => ReadonlyArray<Html>,
+): ReturnType<RowContext<Message>["reply"]> => ({
+	onJump: Message.ClickedReplyPreview({ fromMessageId: row.message.id, messageId: reply.messageId }),
+	toAuthor: (toTrigger) =>
+		popoverTrigger(h, {
+			key: Overlays.replyAuthorPopoverKey(row.message.id),
+			active,
+			toMessage: toPopoverMessage(row.message.id),
+			...MENTION_POPOVER,
+			toTrigger,
+			toContent,
+		}),
+})
 
 const toContextMenuMessage = (message: Menu.Message) =>
 	toOverlays(Overlays.Message.GotContextMenuMessage({ message }))
@@ -138,6 +158,7 @@ const buildIdleContext = (
 		toOpenEmbedImage,
 		toReact,
 		toOpenThread,
+		reply: (row, reply) => replyActions(h, row, reply, null, () => []),
 		toHtmlRenderMessage,
 		toPressEmbedAction,
 		contextMenu: (_row, render) => render([], h.empty),
@@ -193,6 +214,10 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 		toOpenEmbedImage,
 		toReact,
 		toOpenThread,
+		reply: (row, reply) =>
+			replyActions(h, row, reply, Overlays.activePopoverOf(overlays), () =>
+				reply.authorId === null ? [] : profileOf(reply.authorId),
+			),
 		toHtmlRenderMessage,
 		toPressEmbedAction,
 		contextMenu: (row, render) =>

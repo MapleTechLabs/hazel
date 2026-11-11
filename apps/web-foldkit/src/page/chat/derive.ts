@@ -170,8 +170,14 @@ const statusOf = (context: DeriveContext, userId: string): StatusEmoji | null =>
 const replyOf = (context: DeriveContext, replyToMessageId: MessageId | null): ReplyPreview | null => {
 	if (replyToMessageId === null) return null
 	const target = context.replyTargets.get(replyToMessageId)
-	if (target === undefined) return { author: null, firstLine: "" }
-	return { author: identityOf(context, target.authorId), firstLine: target.content.split("\n")[0] ?? "" }
+	if (target === undefined)
+		return { messageId: replyToMessageId, authorId: null, author: null, firstLine: "" }
+	return {
+		messageId: replyToMessageId,
+		authorId: target.authorId,
+		author: identityOf(context, target.authorId),
+		firstLine: target.content.split("\n")[0] ?? "",
+	}
 }
 
 const threadOf = (context: DeriveContext, threadChannelId: ChannelId | null): ThreadPreview | null => {

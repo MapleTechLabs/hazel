@@ -4,7 +4,7 @@ import type * as HtmlRender from "../html-render"
 import { twMerge } from "tailwind-merge"
 import { cn } from "~/lib/utils"
 import type { ViewerUrlImage } from "../../page/chat/overlays"
-import { type MessageRow, UrlEmbed } from "../../page/chat/rows"
+import { type MessageRow, type ReplyPreview, UrlEmbed } from "../../page/chat/rows"
 import { avatar } from "../../ui/avatar"
 import { attachmentsView } from "../attachments"
 import { messageEmbedsView } from "../embeds"
@@ -13,7 +13,7 @@ import { gifView, linkPreviewView, tweetView, youtubeView } from "../embeds/url-
 import { type MentionTrigger, markdownView } from "../markdown/markdown-view"
 import { tweetOf } from "../unfurl"
 import { processMessageUrls } from "./content"
-import { formatTime, headerView, replySectionView, threadPreviewView } from "./parts"
+import { formatTime, headerView, type ReplyActions, replySectionView, threadPreviewView } from "./parts"
 import { reactionButton, statusEmojiView, type TooltipContext } from "./tooltips"
 
 /** Port of `MessageItem` (`components/chat/message-item.tsx` + `message.tsx`) and `DateDivider`. */
@@ -28,6 +28,8 @@ export interface RowContext<M> {
 		index: number,
 	) => M
 	readonly toOpenThread: (threadChannelId: ChannelId, messageId: MessageId) => M
+	/** The quoted message of a reply: its author opens their profile, its text jumps to the message. */
+	readonly reply: (row: MessageRow, reply: ReplyPreview) => ReplyActions<M>
 	/** A reaction pill's press: toggle that emoji (legacy `handleReaction`). */
 	readonly toReact: (messageId: MessageId, emoji: string) => M
 	/** The row's ContextMenuTrigger: `render` with no extra attributes, or inside the open menu. */
@@ -205,7 +207,9 @@ export const messageRowView = <M>(
 						h.Attribute("data-message-row", ""),
 					],
 					[
-						row.reply === null ? h.empty : replySectionView(h, row.reply, null),
+						row.reply === null
+							? h.empty
+							: replySectionView(h, row.reply, context.reply(row, row.reply)),
 						h.div(
 							[h.Class("relative flex gap-4")],
 							[

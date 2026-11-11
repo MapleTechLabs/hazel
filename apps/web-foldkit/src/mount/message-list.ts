@@ -517,6 +517,26 @@ export const revealRow = (model: Model, key: string): ListReturn => {
 	return scrollTo(model, layout, target)
 }
 
+/**
+ * Scrolls row `key` to the middle of the viewport (a jump to that message); nothing when all of it
+ * is in view already. The anchor is the row itself until the scroll lands, so rows measured on the
+ * way do not move it. A row taller than the viewport shows its top.
+ */
+export const centerRow = (model: Model, key: string): ListReturn => {
+	const layout = layoutOf(model)
+	const index = layout.indexByKey.get(key)
+	if (index === undefined || model.viewportHeight === 0) return { model }
+	const top = layout.offsets[index]!
+	const bottom = layout.offsets[index + 1]!
+	if (top >= model.scrollTop && bottom <= model.scrollTop + model.viewportHeight) return { model }
+	const height = bottom - top
+	const viewportOffset = Math.max(REVEAL_MARGIN_PX, (model.viewportHeight - height) / 2)
+	return withPool(
+		reconcile(modifyFields(model, { anchor: () => ViewportAnchor.Row({ key, viewportOffset }) })),
+		"Layout",
+	)
+}
+
 /** PageUp / PageDown: most of a viewport, keeping a little of the previous page in sight. */
 export const scrollByPage = (model: Model, direction: "Up" | "Down"): ListReturn => {
 	if (model.viewportHeight === 0) return { model }
