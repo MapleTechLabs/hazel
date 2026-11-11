@@ -324,6 +324,9 @@ describe("data sources: Maple settings", () => {
 				Message.ChangedMetricMapping({ index: 0, field: "metricKey", value: "dashboards_created" }),
 			),
 			message(Message.ChangedConfigText({ target: "settings", key: "accountKey", value: "OrgId" })),
+			message(Message.ChangedConfigText({ target: "settings", key: "region", value: "eu" })),
+			// The config's schema refuses a region of its own: the field keeps what it had.
+			message(Message.ChangedConfigText({ target: "settings", key: "region", value: "apac" })),
 			message(Message.ClickedLookback({ days: 180 })),
 			model((current) => expect(current.activityEventInput).toBe("")),
 			message(Message.PressedSaveSettings()),
@@ -335,6 +338,7 @@ describe("data sources: Maple settings", () => {
 						...maple.config,
 						_tag: "maple",
 						mapleOrgId: "org_1",
+						region: "eu",
 						activityEvents: ["trace_explored"],
 						metricMappings: [{ event: "dashboard_created", metricKey: "dashboards_created" }],
 						accountKey: "OrgId",

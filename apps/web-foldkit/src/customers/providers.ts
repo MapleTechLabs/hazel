@@ -15,7 +15,7 @@ import {
 } from "@hazel/domain/customers"
 import type { CustomerConnectionId, OrganizationId } from "@hazel/schema"
 
-/** A boolean or text field of the provider's `ConnectionConfig`, shown in the connect form. */
+/** A boolean, text or one-of field of the provider's `ConnectionConfig`, shown in the connect form. */
 export type ConfigField<P extends CustomerProvider> =
 	| Readonly<{
 			_tag: "Toggle"
@@ -31,6 +31,14 @@ export type ConfigField<P extends CustomerProvider> =
 			placeholder: string
 			/** Shown in a monospace input (ids, keys). */
 			isCode: boolean
+	  }>
+	| Readonly<{
+			_tag: "Select"
+			key: StringKeys<ConfigOf<P>>
+			label: string
+			description: string
+			/** The field's own values; the config's schema refuses anything else. */
+			options: ReadonlyArray<Readonly<{ value: string; label: string }>>
 	  }>
 
 export type ConfigOf<P extends CustomerProvider> = Extract<ConnectionConfig, { readonly _tag: P }>
@@ -427,15 +435,18 @@ export const PROVIDERS: Descriptors = {
 			{ title: "Usage metrics", detail: "event counts per account per day" },
 			{ title: "Usage signals", detail: "usage dropped, champion went quiet" },
 		],
-		accessNote: "Read-only key with the events:read scope. Hazel queries Maple; Maple never calls Hazel.",
-		isAvailable: false,
+		accessNote:
+			"Read-only. Hazel runs one counting query per day of product events and never writes to Maple.",
+		isAvailable: true,
 		apiKey: {
 			label: "API key",
-			placeholder: "mpl_live_…",
-			createHref: "https://app.maple.dev/settings/api-keys",
-			help: "Settings → API keys in Maple, with the events:read scope.",
+			placeholder: "maple_ak_…",
+			createHref: "https://app.maple.dev/settings/mcp",
+			help: "Maple → Settings → MCP creates the narrowest key that works (it opens the MCP tools and nothing else); a key from Settings → Keys works too. Copy the key of the region your Maple organization is in.",
 		},
-		permissions: [{ resource: "Events", access: "Read" }],
+		// A Maple key is scoped per resource family; Hazel reads the product events through the MCP
+		// tools, which is the only key-authenticated way into them.
+		permissions: [{ resource: "MCP tools", access: "Read" }],
 		webhook: null,
 		syncMode: "Scheduled pull · hourly",
 		configFields: [
@@ -443,42 +454,65 @@ export const PROVIDERS: Descriptors = {
 				_tag: "Text",
 				key: "mapleOrgId",
 				label: "Maple organization",
-				description: "The organization whose product events Hazel reads.",
+				description:
+					"The organization whose product events Hazel reads. Connecting refuses a key that opens another one.",
 				placeholder: "org_…",
 				isCode: true,
 			},
 			{
+				_tag: "Select",
+				key: "region",
+				label: "Region",
+				description:
+					"Where the Maple organization lives. A key of one region is rejected by the other.",
+				options: [
+					{ value: "us", label: "US" },
+					{ value: "eu", label: "EU" },
+				],
+			},
+			{
 				_tag: "Text",
 				key: "accountKey",
-				label: "Account key",
-				description: "The event property that names the account (a Clerk org id).",
+				label: "Account column",
+				description: "How Maple stamps the account on an event. GroupId is a Clerk organization id.",
 				placeholder: "GroupId",
 				isCode: true,
 			},
 			{
 				_tag: "Text",
 				key: "userKey",
-				label: "User key",
-				description: "The event property that names the user (a Clerk user id).",
+				label: "User column",
+				description: "How Maple stamps the person on an event. UserId is a Clerk user id.",
 				placeholder: "UserId",
 				isCode: true,
 			},
 		],
 		mapping: [
 			{
-				group: "Event → Activity",
+				group: "Event → Account and contact",
 				fields: [
-					{ from: "GroupId", to: "account (Clerk org id)" },
-					{ from: "UserId", to: "contact (Clerk user id)" },
-					{ from: "timestamp (day)", to: "activity_daily.eventCount" },
+					{ from: "GroupId", to: "shared id → the Clerk account (never created here)" },
+					{ from: "UserId", to: "shared id → the Clerk contact (never created here)" },
+					{ from: "an unknown GroupId", to: "unmatched record, with its event count" },
 				],
 			},
 			{
-				group: "Event → Metric",
-				fields: [{ from: "mapped event count", to: "metric_daily.value" }],
+				group: "Event → Activity",
+				fields: [
+					{ from: "events per day, per user", to: "activity_daily.eventCount" },
+					{ from: "distinct SessionId per day", to: "activity_daily.sessionCount" },
+					{ from: "a day with any event", to: "active users, usage trend, last active" },
+				],
+			},
+			{
+				group: "Event → Metrics",
+				fields: [
+					{ from: "mapped event count per day", to: "metric_daily.value (maple.<key>)" },
+					{ from: "events sharing a key", to: "summed into it" },
+				],
 			},
 		],
-		docsHref: "https://maple.dev/docs",
+		docsHref: "https://maple.dev/docs/reference/mcp",
 		dashboardHref: "https://app.maple.dev",
 	},
 }
