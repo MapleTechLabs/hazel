@@ -1,4 +1,4 @@
-import { BotId, ChannelId, MessageId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
+import { BotId, ChannelId, MessageId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 
 /**
@@ -26,10 +26,6 @@ export const ChangeRole = Schema.TaggedStruct("ChangeRole", {
 	name: Schema.String,
 	role: Schema.String,
 	currentUserRole: Schema.String,
-})
-export const DeleteWorkspace = Schema.TaggedStruct("DeleteWorkspace", {
-	organizationId: OrganizationId,
-	organizationName: Schema.String,
 })
 export const RequestIntegration = Schema.TaggedStruct("RequestIntegration", {})
 export const CreateBot = Schema.TaggedStruct("CreateBot", {})
@@ -66,7 +62,6 @@ export const ModalRequest = Schema.Union([
 	RenameChannel,
 	RenameThread,
 	ChangeRole,
-	DeleteWorkspace,
 	RequestIntegration,
 	CreateBot,
 	EditBot,
