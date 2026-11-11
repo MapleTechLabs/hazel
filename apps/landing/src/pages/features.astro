@@ -1,0 +1,284 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import FooterSection from "@/components/sections/FooterSection.astro";
+import CTASection from "@/components/sections/CTASection.astro";
+---
+
+<Layout
+  title="Features | Hazel - Real-Time Messaging, GitHub Integration & More"
+  description="Explore Hazel's features: real-time messaging, native GitHub and Linear integrations, keyboard-first navigation, desktop app, AI-powered search, and more. Built for developer teams."
+>
+  <main class="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full">
+    <!-- Hero -->
+    <section class="w-full py-20 md:py-32 px-6">
+      <div class="max-w-3xl mx-auto text-center">
+        <h1 class="text-4xl md:text-6xl font-medium tracking-tighter text-primary">
+          Everything your team needs to ship faster
+        </h1>
+        <p class="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
+          Hazel combines real-time messaging with deep developer tool integrations. No plugins, no workarounds — just a chat platform built for how engineers actually work.
+        </p>
+        <div class="mt-8 flex items-center justify-center gap-4">
+          <a
+            href="https://app.hazel.sh"
+            class="bg-secondary text-white font-semibold text-sm h-10 px-6 rounded-full flex items-center justify-center"
+          >
+            Try for free
+          </a>
+          <a
+            href="https://github.com/hazelchat/hazel"
+            class="border border-border text-primary font-semibold text-sm h-10 px-6 rounded-full flex items-center justify-center"
+          >
+            View on GitHub
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Real-Time Messaging -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-4xl mx-auto">
+        <div class="grid md:grid-cols-2 gap-12 items-center">
+          <div>
+            <span class="text-sm font-semibold text-secondary uppercase tracking-wider">Messaging</span>
+            <h2 class="mt-3 text-3xl md:text-4xl font-medium tracking-tight text-primary">
+              Real-time messaging that keeps up with your team
+            </h2>
+            <p class="mt-4 text-muted-foreground text-lg">
+              Organized channels, direct messages, and threads with instant delivery. See who's online, who's typing, and never miss a beat. Full markdown support with inline code highlighting.
+            </p>
+            <ul class="mt-6 space-y-3 text-muted-foreground">
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Organized channels and direct messages</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Threaded conversations to keep discussions focused</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Rich markdown with syntax-highlighted code blocks</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Real-time typing indicators and presence</span>
+              </li>
+            </ul>
+          </div>
+          <div class="rounded-xl border border-border overflow-hidden bg-card">
+            <img src="/features/chatting.webp" alt="Real-time messaging in Hazel" class="w-full" loading="lazy" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Integrations -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-4xl mx-auto">
+        <div class="grid md:grid-cols-2 gap-12 items-center">
+          <div class="order-2 md:order-1 rounded-xl border border-border overflow-hidden bg-card">
+            <img src="/features/integrations.webp" alt="GitHub and Linear integrations" class="w-full" loading="lazy" />
+          </div>
+          <div class="order-1 md:order-2">
+            <span class="text-sm font-semibold text-secondary uppercase tracking-wider">Integrations</span>
+            <h2 class="mt-3 text-3xl md:text-4xl font-medium tracking-tight text-primary">
+              Your tools, connected natively
+            </h2>
+            <p class="mt-4 text-muted-foreground text-lg">
+              GitHub PRs, Linear issues, Railway deployments — all surfaced right in your conversations. No more tab-switching between tools.
+            </p>
+            <ul class="mt-6 space-y-3 text-muted-foreground">
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>GitHub: PRs, issues, and deployment notifications</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Linear: Rich issue previews and status updates</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Railway: Build and deploy status in real-time</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Custom webhooks for any service</span>
+              </li>
+            </ul>
+            <div class="mt-6">
+              <a href="/integrations" class="text-secondary hover:underline font-medium text-sm">Browse all integrations &rarr;</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Desktop App -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-4xl mx-auto">
+        <div class="grid md:grid-cols-2 gap-12 items-center">
+          <div>
+            <span class="text-sm font-semibold text-secondary uppercase tracking-wider">Desktop App</span>
+            <h2 class="mt-3 text-3xl md:text-4xl font-medium tracking-tight text-primary">
+              Native apps that feel right at home
+            </h2>
+            <p class="mt-4 text-muted-foreground text-lg">
+              Download Hazel for macOS, Windows, or Linux. Native notifications, auto-updates, and the performance you expect from a desktop app. Plus a PWA for offline access.
+            </p>
+            <ul class="mt-6 space-y-3 text-muted-foreground">
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>macOS, Windows, and Linux support</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Automatic updates with zero downtime</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>System notifications and menu bar integration</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Progressive Web App (PWA) for offline use</span>
+              </li>
+            </ul>
+            <div class="mt-8">
+              <a
+                href="/desktop"
+                class="bg-secondary text-white font-semibold text-sm h-10 px-6 rounded-full inline-flex items-center justify-center"
+              >
+                Download Desktop App
+              </a>
+            </div>
+          </div>
+          <div class="rounded-xl border border-border overflow-hidden bg-card">
+            <img src="/features/cmd-k.webp" alt="Hazel desktop app with command palette" class="w-full" loading="lazy" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Search & AI -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-4xl mx-auto">
+        <div class="grid md:grid-cols-2 gap-12 items-center">
+          <div class="order-2 md:order-1 rounded-xl border border-border overflow-hidden bg-card">
+            <img src="/features/media-tab.webp" alt="Search and media in Hazel" class="w-full" loading="lazy" />
+          </div>
+          <div class="order-1 md:order-2">
+            <span class="text-sm font-semibold text-secondary uppercase tracking-wider">Search & AI</span>
+            <h2 class="mt-3 text-3xl md:text-4xl font-medium tracking-tight text-primary">
+              Find anything, instantly
+            </h2>
+            <p class="mt-4 text-muted-foreground text-lg">
+              Full-text search across all messages, files, and channels. AI-powered summaries help you catch up on what you missed. The command palette (&#8984;K) lets you navigate anywhere in seconds.
+            </p>
+            <ul class="mt-6 space-y-3 text-muted-foreground">
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Full-text search with keyword, user, and channel filters</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>AI-powered conversation summaries</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Command palette for instant navigation</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Media gallery for shared files and images</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Security -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-4xl mx-auto">
+        <div class="grid md:grid-cols-2 gap-12 items-center">
+          <div>
+            <span class="text-sm font-semibold text-secondary uppercase tracking-wider">Security</span>
+            <h2 class="mt-3 text-3xl md:text-4xl font-medium tracking-tight text-primary">
+              Enterprise-grade security, open source transparency
+            </h2>
+            <p class="mt-4 text-muted-foreground text-lg">
+              Sign in with GitHub, Google or a passkey, fine-grained permissions, and audit logs. Self-host for full data control. Being open source means anyone can verify the security of the code.
+            </p>
+            <ul class="mt-6 space-y-3 text-muted-foreground">
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>GitHub, Google and passkey sign-in</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Role-based access control</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Encryption in transit and at rest</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>Self-hosted option for full data sovereignty</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-secondary mt-1">&#10003;</span>
+                <span>GDPR compliant</span>
+              </li>
+            </ul>
+          </div>
+          <div class="flex items-center justify-center rounded-xl border border-border bg-card p-12">
+            <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="text-secondary">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              <path d="m9 12 2 2 4-4"></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Open Source -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-3xl mx-auto text-center">
+        <span class="text-sm font-semibold text-secondary uppercase tracking-wider">Open Source</span>
+        <h2 class="mt-3 text-3xl md:text-4xl font-medium tracking-tight text-primary">
+          Built in the open, by the community
+        </h2>
+        <p class="mt-4 text-muted-foreground text-lg max-w-2xl mx-auto">
+          Hazel is fully open source. Inspect the code, contribute features, or self-host on your own infrastructure. No vendor lock-in, ever.
+        </p>
+        <div class="mt-8">
+          <a
+            href="https://github.com/hazelchat/hazel"
+            class="border border-border text-primary font-semibold text-sm h-10 px-6 rounded-full inline-flex items-center justify-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+            Star on GitHub
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Compare & Pricing -->
+    <section class="w-full py-12 px-6">
+      <div class="max-w-3xl mx-auto text-center">
+        <p class="text-muted-foreground">
+          <a href="/pricing" class="text-secondary hover:underline font-medium">View pricing</a>
+          &middot; <a href="/vs/slack" class="text-secondary hover:underline font-medium">Compare with Slack</a>
+          &middot; <a href="/vs/discord" class="text-secondary hover:underline font-medium">Compare with Discord</a>
+        </p>
+      </div>
+    </section>
+
+    <CTASection />
+    <FooterSection />
+  </main>
+</Layout>

@@ -1,8 +1,9 @@
 import * as NodeSdk from "@effect/opentelemetry/NodeSdk"
-import * as it from "@effect/vitest"
+import { assert, describe, it } from "@effect/vitest"
 import { InMemoryLogRecordExporter, SimpleLogRecordProcessor } from "@opentelemetry/sdk-logs"
+import { InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base"
+import * as Clock from "effect/Clock"
 import * as Effect from "effect/Effect"
-import { describe, expect } from "vitest"
 
 describe("Logger", () => {
   describe("provided", () => {
@@ -16,16 +17,59 @@ describe("Logger", () => {
     })))
 
     it.effect("emits log records", () =>
-      Effect.provide(
-        Effect.gen(function*() {
-          yield* Effect.log("test").pipe(
-            Effect.repeatN(9)
-          )
+      Effect.gen(function*() {
+        yield* Effect.log("test").pipe(
+          Effect.repeat({ times: 9 })
+        )
+        assert.lengthOf(exporter.getFinishedLogRecords(), 10)
+      }).pipe(Effect.provide(TracingLive)))
 
-          expect(exporter.getFinishedLogRecords()).toHaveLength(10)
-        }),
-        TracingLive
-      ))
+    it.effect("uses monotonic clock timestamps and keeps them aligned with spans", () => {
+      const logExporter = new InMemoryLogRecordExporter()
+      const spanExporter = new InMemorySpanExporter()
+      const timeNanos = 1_735_689_600_123_456_789n
+      const expectedTime: readonly [number, number] = [
+        Number(timeNanos / BigInt(1_000_000_000)),
+        Number(timeNanos % BigInt(1_000_000_000))
+      ]
+      const skewedClock: Clock.Clock = {
+        currentTimeMillisUnsafe: () => 1,
+        currentTimeMillis: Effect.succeed(1),
+        currentTimeNanosUnsafe: () => timeNanos,
+        currentTimeNanos: Effect.succeed(timeNanos),
+        sleep: () => Effect.void
+      }
+
+      const TracingLive = NodeSdk.layer(Effect.sync(() => ({
+        resource: {
+          serviceName: "test"
+        },
+        spanProcessor: [new SimpleSpanProcessor(spanExporter)],
+        logRecordProcessor: [new SimpleLogRecordProcessor(logExporter)]
+      })))
+
+      return Effect.gen(function*() {
+        yield* Effect.log("test").pipe(
+          Effect.withSpan("parent")
+        )
+
+        const logs = logExporter.getFinishedLogRecords()
+        const spans = spanExporter.getFinishedSpans()
+        assert.lengthOf(logs, 1)
+        assert.lengthOf(spans, 1)
+        const log = logs[0]!
+        const span = spans[0]!
+
+        assert.deepStrictEqual(log.hrTime, expectedTime)
+        assert.deepStrictEqual(log.hrTimeObserved, expectedTime)
+        assert.deepStrictEqual(log.hrTime, span.startTime)
+        assert.strictEqual(log.attributes.spanId, span.spanContext().spanId)
+        assert.strictEqual(log.attributes.traceId, span.spanContext().traceId)
+      }).pipe(
+        Effect.provide(TracingLive),
+        Effect.provideService(Clock.Clock, skewedClock)
+      )
+    })
   })
 
   describe("not provided", () => {
@@ -38,13 +82,9 @@ describe("Logger", () => {
     })))
 
     it.effect("withSpan", () =>
-      Effect.provide(
-        Effect.gen(function*() {
-          yield* Effect.log("test")
-
-          expect(exporter.getFinishedLogRecords()).toHaveLength(0)
-        }),
-        TracingLive
-      ))
+      Effect.gen(function*() {
+        yield* Effect.log("test")
+        assert.lengthOf(exporter.getFinishedLogRecords(), 0)
+      }).pipe(Effect.provide(TracingLive)))
   })
 })

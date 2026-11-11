@@ -1,28 +1,28 @@
 import { ChannelId, OrganizationId, RssSubscriptionId, UserId } from "@hazel/schema"
-import { Schema } from "effect"
+import { Schema as S } from "effect"
 import * as M from "./utils"
 import { JsonDate } from "./utils"
 
-export class Model extends M.Class<Model>("RssSubscription")({
+class Model extends M.Class<Model>("RssSubscription")({
 	id: M.Generated(RssSubscriptionId),
 	channelId: ChannelId,
 	organizationId: OrganizationId,
-	feedUrl: Schema.String,
-	feedTitle: Schema.NullOr(Schema.String),
-	feedIconUrl: Schema.NullOr(Schema.String),
-	lastFetchedAt: M.Generated(Schema.NullOr(JsonDate)),
-	lastItemPublishedAt: M.Generated(Schema.NullOr(JsonDate)),
-	lastItemGuid: M.Generated(Schema.NullOr(Schema.String)),
-	consecutiveErrors: M.Generated(Schema.Number),
-	lastErrorMessage: M.Generated(Schema.NullOr(Schema.String)),
-	lastErrorAt: M.Generated(Schema.NullOr(JsonDate)),
-	isEnabled: Schema.Boolean,
-	pollingIntervalMinutes: Schema.Number,
+	feedUrl: S.String,
+	feedTitle: S.NullOr(S.String),
+	feedIconUrl: S.NullOr(S.String),
+	lastFetchedAt: M.Generated(S.NullOr(JsonDate)),
+	lastItemPublishedAt: M.Generated(S.NullOr(JsonDate)),
+	lastItemGuid: M.Generated(S.NullOr(S.String)),
+	consecutiveErrors: M.Generated(S.Number),
+	lastErrorMessage: M.Generated(S.NullOr(S.String)),
+	lastErrorAt: M.Generated(S.NullOr(JsonDate)),
+	isEnabled: S.Boolean,
+	pollingIntervalMinutes: S.Number,
 	createdBy: UserId,
 	createdAt: M.Generated(JsonDate),
-	updatedAt: M.Generated(Schema.NullOr(JsonDate)),
-	deletedAt: M.GeneratedByApp(Schema.NullOr(JsonDate)),
+	updatedAt: M.Generated(S.NullOr(JsonDate)),
+	deletedAt: M.GeneratedByApp(S.NullOr(JsonDate)),
 }) {}
 
-export const Insert = Model.insert
-export const Update = Model.update
+export const { Insert, Update, Schema, Create, Patch } = M.expose(Model)
+export type Type = typeof Schema.Type

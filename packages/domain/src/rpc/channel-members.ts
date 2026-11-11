@@ -1,19 +1,20 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { ChannelId, ChannelMemberId } from "../ids"
+import { ChannelId, ChannelMemberId } from "@hazel/schema"
 import { ChannelMember } from "../models"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteOrganizationId } from "./routing-fields"
 
 /**
  * Response schema for successful channel member operations.
  * Contains the channel member data and a transaction ID for optimistic updates.
  */
 export class ChannelMemberResponse extends Schema.Class<ChannelMemberResponse>("ChannelMemberResponse")({
-	data: ChannelMember.Model.json,
+	data: ChannelMember.Schema,
 	transactionId: TransactionId,
 }) {}
 
@@ -76,13 +77,15 @@ export class ChannelMemberRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channelMember.create", {
+	Rpc.make("channelMember.create", {
 		payload: Schema.Struct({
 			channelId: ChannelId,
 		}),
 		success: ChannelMemberResponse,
-		error: Schema.Union(ChannelNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([ChannelNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channel-members:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * ChannelMemberUpdate
@@ -97,13 +100,16 @@ export class ChannelMemberRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channelMember.update", {
+	Rpc.make("channelMember.update", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: ChannelMemberId,
-		}).pipe(Schema.extend(Schema.partial(ChannelMember.Model.jsonUpdate))),
+		}).pipe(Schema.fieldsAssign(ChannelMember.PatchPartial.fields)),
 		success: ChannelMemberResponse,
-		error: Schema.Union(ChannelMemberNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([ChannelMemberNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channel-members:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * ChannelMemberDelete
@@ -118,11 +124,13 @@ export class ChannelMemberRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channelMember.delete", {
-		payload: Schema.Struct({ id: ChannelMemberId }),
+	Rpc.make("channelMember.delete", {
+		payload: Schema.Struct({ id: ChannelMemberId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(ChannelMemberNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([ChannelMemberNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channel-members:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * ChannelMemberClearNotifications
@@ -136,9 +144,11 @@ export class ChannelMemberRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not a member
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channelMember.clearNotifications", {
+	Rpc.make("channelMember.clearNotifications", {
 		payload: Schema.Struct({ channelId: ChannelId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(ChannelNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([ChannelNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channel-members:write"])
+		.middleware(AuthMiddleware),
 ) {}

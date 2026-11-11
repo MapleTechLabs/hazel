@@ -1,20 +1,20 @@
 /**
  * @since 1.0.0
  */
-import type * as ServerRequest from "@effect/platform/HttpServerRequest"
+import type { HttpServerRequest } from "effect/unstable/http/HttpServerRequest"
 import type * as Http from "node:http"
-import * as internal from "./internal/httpServer.js"
 
 /**
- * @category conversions
  * @since 1.0.0
+ * @category Accessors
  */
-export const toIncomingMessage: (self: ServerRequest.HttpServerRequest) => Http.IncomingMessage =
-  internal.toIncomingMessage
+export const toIncomingMessage = (self: HttpServerRequest): Http.IncomingMessage => self.source as any
 
 /**
- * @category conversions
  * @since 1.0.0
+ * @category Accessors
  */
-export const toServerResponse: (self: ServerRequest.HttpServerRequest) => Http.ServerResponse =
-  internal.toServerResponse
+export const toServerResponse = (self: HttpServerRequest): Http.ServerResponse => {
+  const res = (self as any).response
+  return typeof res === "function" ? res() : res
+}

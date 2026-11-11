@@ -1,13 +1,22 @@
+import { OrganizationMemberRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
-import { CurrentUser, InternalServerError, policyUse, withRemapDbErrors } from "@hazel/domain"
-import { OrganizationMemberNotFoundError, OrganizationMemberRpcs } from "@hazel/domain/rpc"
+import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
+import {
+	OrganizationMemberNotFoundError,
+	OrganizationMemberResponse,
+	OrganizationMemberRpcs,
+} from "@hazel/domain/rpc"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { OrganizationMemberPolicy } from "../../policies/organization-member-policy"
-import { OrganizationMemberRepo } from "../../repositories/organization-member-repo"
+import { syncMemberAccess } from "../../worker/objects/org/channel-access"
+import { projectUsers } from "../../worker/objects/org/projections"
 
 /**
- * Organization Member RPC Handlers
+ * Organization Member RPC Handlers. Run in the `OrgObject` (`rpc/routing.ts`); every membership
+ * change recomputes the member's channel access and projects it (`syncMemberAccess`: viewers,
+ * `membership_index`, `user_organizations`). A role change republishes the member's channels
+ * (viewer roles).
  *
  * Implements the business logic for all organization member-related RPC methods.
  * Each handler receives the payload and has access to CurrentUser via Effect context
@@ -22,6 +31,8 @@ import { OrganizationMemberRepo } from "../../repositories/organization-member-r
 export const OrganizationMemberRpcLive = OrganizationMemberRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
+		const organizationMemberPolicy = yield* OrganizationMemberPolicy
+		const organizationMemberRepo = yield* OrganizationMemberRepo
 
 		return {
 			"organizationMember.create": (payload) =>
@@ -30,40 +41,54 @@ export const OrganizationMemberRpcLive = OrganizationMemberRpcs.toLayer(
 						Effect.gen(function* () {
 							const user = yield* CurrentUser.Context
 
-							const createdOrganizationMember = yield* OrganizationMemberRepo.insert({
-								...payload,
-								userId: user.id,
-								deletedAt: null,
-							}).pipe(
-								Effect.map((res) => res[0]!),
-								policyUse(OrganizationMemberPolicy.canCreate(payload.organizationId)),
+							yield* organizationMemberPolicy.canCreate(payload.organizationId)
+							yield* projectUsers([user.id])
+							const createdOrganizationMember = yield* organizationMemberRepo
+								.insert({
+									...payload,
+									userId: user.id,
+									deletedAt: null,
+								})
+								.pipe(Effect.map((res) => res[0]!))
+
+							yield* syncMemberAccess(
+								createdOrganizationMember.userId,
+								createdOrganizationMember.organizationId,
 							)
 
 							const txid = yield* generateTransactionId()
 
-							return {
+							return new OrganizationMemberResponse({
 								data: createdOrganizationMember,
 								transactionId: txid,
-							}
+							})
 						}),
 					)
 					.pipe(withRemapDbErrors("OrganizationMember", "create")),
 
-			"organizationMember.update": ({ id, ...payload }) =>
+			"organizationMember.update": ({ id, organizationId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
-							const updatedOrganizationMember = yield* OrganizationMemberRepo.update({
+							yield* organizationMemberPolicy.canUpdate(id, { role: payload.role })
+							const updatedOrganizationMember = yield* organizationMemberRepo.update({
 								id,
 								...payload,
-							}).pipe(policyUse(OrganizationMemberPolicy.canUpdate(id)))
+							})
+							if (payload.role !== undefined) {
+								yield* syncMemberAccess(
+									updatedOrganizationMember.userId,
+									updatedOrganizationMember.organizationId,
+									{ republish: true, membership: false },
+								)
+							}
 
 							const txid = yield* generateTransactionId()
 
-							return {
+							return new OrganizationMemberResponse({
 								data: updatedOrganizationMember,
 								transactionId: txid,
-							}
+							})
 						}),
 					)
 					.pipe(withRemapDbErrors("OrganizationMember", "update")),
@@ -72,10 +97,9 @@ export const OrganizationMemberRpcLive = OrganizationMemberRpcs.toLayer(
 				db
 					.transaction(
 						Effect.gen(function* () {
+							yield* organizationMemberPolicy.canUpdate(id)
 							const updatedOrganizationMemberOption =
-								yield* OrganizationMemberRepo.updateMetadata(id, metadata).pipe(
-									policyUse(OrganizationMemberPolicy.canUpdate(id)),
-								)
+								yield* organizationMemberRepo.updateMetadata(id, metadata)
 
 							const updatedOrganizationMember = yield* Option.match(
 								updatedOrganizationMemberOption,
@@ -92,10 +116,10 @@ export const OrganizationMemberRpcLive = OrganizationMemberRpcs.toLayer(
 
 							const txid = yield* generateTransactionId()
 
-							return {
+							return new OrganizationMemberResponse({
 								data: updatedOrganizationMember,
 								transactionId: txid,
-							}
+							})
 						}),
 					)
 					.pipe(withRemapDbErrors("OrganizationMember", "update")),
@@ -104,26 +128,24 @@ export const OrganizationMemberRpcLive = OrganizationMemberRpcs.toLayer(
 				db
 					.transaction(
 						Effect.gen(function* () {
-							yield* OrganizationMemberRepo.deleteById(id).pipe(
-								policyUse(OrganizationMemberPolicy.canDelete(id)),
-							)
+							yield* organizationMemberPolicy.canDelete(id)
+							const deletedMemberOption = yield* organizationMemberRepo.findById(id)
+
+							yield* organizationMemberRepo.deleteById(id)
+
+							if (Option.isSome(deletedMemberOption)) {
+								yield* syncMemberAccess(
+									deletedMemberOption.value.userId,
+									deletedMemberOption.value.organizationId,
+								)
+							}
 
 							const txid = yield* generateTransactionId()
 
 							return { transactionId: txid }
 						}),
 					)
-					.pipe(
-						Effect.catchTags({
-							DatabaseError: (err) =>
-								Effect.fail(
-									new InternalServerError({
-										message: "Error Deleting Organization Member",
-										cause: err,
-									}),
-								),
-						}),
-					),
+					.pipe(withRemapDbErrors("OrganizationMember", "delete")),
 		}
 	}),
 )

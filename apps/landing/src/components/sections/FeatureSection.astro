@@ -1,0 +1,30 @@
+---
+import SectionHeader from "@/components/SectionHeader.astro";
+import { Feature as FeatureComponent } from "@/components/react/FeatureSlideshow";
+import { siteConfig } from "@/lib/config";
+
+const { title, description, items } = siteConfig.featureSection;
+---
+
+<section
+  id="features"
+  class="flex flex-col items-center justify-center gap-5 w-full relative"
+>
+  <SectionHeader>
+    <h2 class="text-3xl md:text-4xl font-medium tracking-tighter text-center text-balance">
+      {title}
+    </h2>
+    <p class="text-muted-foreground text-center text-balance font-medium">
+      {description}
+    </p>
+  </SectionHeader>
+  <div class="w-full h-full lg:h-[450px] flex items-center justify-center">
+    <FeatureComponent
+      collapseDelay={8000}
+      linePosition="bottom"
+      featureItems={items}
+      lineColor="bg-secondary"
+      client:visible
+    />
+  </div>
+</section>

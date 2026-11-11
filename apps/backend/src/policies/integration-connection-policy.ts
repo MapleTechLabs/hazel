@@ -1,107 +1,60 @@
-import { ErrorUtils, type OrganizationId, policy, withSystemActor } from "@hazel/domain"
-import { Effect, Option } from "effect"
-import { isAdminOrOwner } from "../lib/policy-utils"
-import { OrganizationMemberRepo } from "../repositories/organization-member-repo"
+import { ErrorUtils } from "@hazel/domain"
+import type { OrganizationId } from "@hazel/schema"
+import { Context, Effect, Layer } from "effect"
+import { withAnnotatedScope } from "../lib/policy-utils"
+import { OrgResolver } from "../services/org-resolver"
 
-export class IntegrationConnectionPolicy extends Effect.Service<IntegrationConnectionPolicy>()(
+export class IntegrationConnectionPolicy extends Context.Service<IntegrationConnectionPolicy>()(
 	"IntegrationConnectionPolicy/Policy",
 	{
-		effect: Effect.gen(function* () {
+		make: Effect.gen(function* () {
 			const policyEntity = "IntegrationConnection" as const
 
-			const orgMemberRepo = yield* OrganizationMemberRepo
+			const orgResolver = yield* OrgResolver
 
-			// For select, any org member can view integrations
 			const canSelect = (organizationId: OrganizationId) =>
 				ErrorUtils.refailUnauthorized(
 					policyEntity,
 					"select",
 				)(
-					policy(
-						policyEntity,
-						"select",
-						Effect.fn(`${policyEntity}.select`)(function* (actor) {
-							const currentMember = yield* orgMemberRepo
-								.findByOrgAndUser(organizationId, actor.id)
-								.pipe(withSystemActor)
-
-							return yield* Effect.succeed(Option.isSome(currentMember))
-						}),
+					withAnnotatedScope((scope) =>
+						orgResolver.requireScope(organizationId, scope, policyEntity, "select"),
 					),
 				)
 
-			// For insert, only admins and owners can connect integrations
 			const canInsert = (organizationId: OrganizationId) =>
 				ErrorUtils.refailUnauthorized(
 					policyEntity,
 					"insert",
 				)(
-					policy(
-						policyEntity,
-						"insert",
-						Effect.fn(`${policyEntity}.insert`)(function* (actor) {
-							const currentMember = yield* orgMemberRepo
-								.findByOrgAndUser(organizationId, actor.id)
-								.pipe(withSystemActor)
-
-							if (Option.isNone(currentMember)) {
-								return yield* Effect.succeed(false)
-							}
-
-							return yield* Effect.succeed(isAdminOrOwner(currentMember.value.role))
-						}),
+					withAnnotatedScope((scope) =>
+						orgResolver.requireAdminOrOwner(organizationId, scope, policyEntity, "insert"),
 					),
 				)
 
-			// For update, only admins and owners can modify integrations
 			const canUpdate = (organizationId: OrganizationId) =>
 				ErrorUtils.refailUnauthorized(
 					policyEntity,
 					"update",
 				)(
-					policy(
-						policyEntity,
-						"update",
-						Effect.fn(`${policyEntity}.update`)(function* (actor) {
-							const currentMember = yield* orgMemberRepo
-								.findByOrgAndUser(organizationId, actor.id)
-								.pipe(withSystemActor)
-
-							if (Option.isNone(currentMember)) {
-								return yield* Effect.succeed(false)
-							}
-
-							return yield* Effect.succeed(isAdminOrOwner(currentMember.value.role))
-						}),
+					withAnnotatedScope((scope) =>
+						orgResolver.requireAdminOrOwner(organizationId, scope, policyEntity, "update"),
 					),
 				)
 
-			// For delete, only admins and owners can disconnect integrations
 			const canDelete = (organizationId: OrganizationId) =>
 				ErrorUtils.refailUnauthorized(
 					policyEntity,
 					"delete",
 				)(
-					policy(
-						policyEntity,
-						"delete",
-						Effect.fn(`${policyEntity}.delete`)(function* (actor) {
-							const currentMember = yield* orgMemberRepo
-								.findByOrgAndUser(organizationId, actor.id)
-								.pipe(withSystemActor)
-
-							if (Option.isNone(currentMember)) {
-								return yield* Effect.succeed(false)
-							}
-
-							return yield* Effect.succeed(isAdminOrOwner(currentMember.value.role))
-						}),
+					withAnnotatedScope((scope) =>
+						orgResolver.requireAdminOrOwner(organizationId, scope, policyEntity, "delete"),
 					),
 				)
 
 			return { canSelect, canInsert, canUpdate, canDelete } as const
 		}),
-		dependencies: [OrganizationMemberRepo.Default],
-		accessors: true,
 	},
-) {}
+) {
+	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(OrgResolver.layer))
+}

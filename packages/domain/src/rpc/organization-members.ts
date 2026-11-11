@@ -1,12 +1,13 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { OrganizationMemberId } from "../ids"
+import { OrganizationMemberId } from "@hazel/schema"
 import { OrganizationMember } from "../models"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
 import { OrganizationNotFoundError } from "./organizations"
+import { RouteOrganizationId } from "./routing-fields"
 
 /**
  * Response schema for successful organization member operations.
@@ -15,7 +16,7 @@ import { OrganizationNotFoundError } from "./organizations"
 export class OrganizationMemberResponse extends Schema.Class<OrganizationMemberResponse>(
 	"OrganizationMemberResponse",
 )({
-	data: OrganizationMember.Model.json,
+	data: OrganizationMember.Schema,
 	transactionId: TransactionId,
 }) {}
 
@@ -74,11 +75,13 @@ export class OrganizationMemberRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("organizationMember.create", {
-		payload: OrganizationMember.Model.jsonCreate,
+	Rpc.make("organizationMember.create", {
+		payload: OrganizationMember.Create,
 		success: OrganizationMemberResponse,
-		error: Schema.Union(OrganizationNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([OrganizationNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["organization-members:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * OrganizationMemberUpdate
@@ -92,14 +95,16 @@ export class OrganizationMemberRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("organizationMember.update", {
+	Rpc.make("organizationMember.update", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: OrganizationMemberId,
-			...OrganizationMember.Model.jsonUpdate.fields,
-		}),
+		}).pipe(Schema.fieldsAssign(OrganizationMember.PatchPartial.fields)),
 		success: OrganizationMemberResponse,
-		error: Schema.Union(OrganizationMemberNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([OrganizationMemberNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["organization-members:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * OrganizationMemberUpdateMetadata
@@ -113,8 +118,9 @@ export class OrganizationMemberRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("organizationMember.updateMetadata", {
+	Rpc.make("organizationMember.updateMetadata", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: OrganizationMemberId,
 			metadata: Schema.Struct({
 				role: Schema.optional(Schema.String),
@@ -122,8 +128,10 @@ export class OrganizationMemberRpcs extends RpcGroup.make(
 			}),
 		}),
 		success: OrganizationMemberResponse,
-		error: Schema.Union(OrganizationMemberNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([OrganizationMemberNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["organization-members:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * OrganizationMemberDelete
@@ -137,9 +145,11 @@ export class OrganizationMemberRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("organizationMember.delete", {
-		payload: Schema.Struct({ id: OrganizationMemberId }),
+	Rpc.make("organizationMember.delete", {
+		payload: Schema.Struct({ id: OrganizationMemberId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(OrganizationMemberNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([OrganizationMemberNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["organization-members:write"])
+		.middleware(AuthMiddleware),
 ) {}

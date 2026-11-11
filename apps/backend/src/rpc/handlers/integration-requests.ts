@@ -1,18 +1,20 @@
-import { Database, schema } from "@hazel/db"
-import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
-import { IntegrationRequestRpcs } from "@hazel/domain/rpc"
+import { Database, SQLite, schema } from "@hazel/db"
+import { CurrentUser, ErrorUtils, withRemapDbErrors } from "@hazel/domain"
+import { IntegrationRequestResponse, IntegrationRequestRpcs } from "@hazel/domain/rpc"
 import { Effect } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
+import { withAnnotatedScope } from "../../lib/policy-utils"
+import { OrgResolver } from "../../services/org-resolver"
 
 /**
  * Integration Request RPC Handlers
  *
- * Simple handler for creating integration requests.
- * Uses direct database access (no repository/policies needed for this one-off feature).
+ * Simple handler for creating integration requests. Runs in the `OrgObject` (`rpc/routing.ts`).
  */
 export const IntegrationRequestRpcLive = IntegrationRequestRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
+		const orgResolver = yield* OrgResolver
 
 		return {
 			"integrationRequest.create": (payload) =>
@@ -21,10 +23,23 @@ export const IntegrationRequestRpcLive = IntegrationRequestRpcs.toLayer(
 						Effect.gen(function* () {
 							const currentUser = yield* CurrentUser.Context
 
+							yield* ErrorUtils.refailUnauthorized(
+								"IntegrationRequest",
+								"create",
+							)(
+								withAnnotatedScope((scope) =>
+									orgResolver.requireScope(
+										payload.organizationId,
+										scope,
+										"IntegrationRequest",
+										"create",
+									),
+								),
+							)
+
 							// Direct database insert
-							const [result] = yield* db.execute((client) =>
-								client
-									.insert(schema.integrationRequestsTable)
+							const [result] = yield* db.run(
+								SQLite.insertInto(schema.integrationRequestsTable)
 									.values({
 										organizationId: payload.organizationId,
 										requestedBy: currentUser.id,
@@ -38,10 +53,10 @@ export const IntegrationRequestRpcLive = IntegrationRequestRpcs.toLayer(
 
 							const txid = yield* generateTransactionId()
 
-							return {
+							return new IntegrationRequestResponse({
 								data: result,
 								transactionId: txid,
-							}
+							})
 						}),
 					)
 					.pipe(withRemapDbErrors("IntegrationRequest", "create")),

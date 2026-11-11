@@ -1,12 +1,13 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { MessageReactionId } from "../ids"
+import { MessageReactionId } from "@hazel/schema"
 import { MessageReaction } from "../models"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { MessageNotFoundError } from "./messages"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteChannelId } from "./routing-fields"
 
 /**
  * Response schema for successful message reaction operations.
@@ -14,7 +15,7 @@ import { AuthMiddleware } from "./middleware"
  */
 export class MessageReactionResponse extends Schema.Class<MessageReactionResponse>("MessageReactionResponse")(
 	{
-		data: MessageReaction.Model.json,
+		data: MessageReaction.Schema,
 		transactionId: TransactionId,
 	},
 ) {}
@@ -44,7 +45,7 @@ export class MessageReactionRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("messageReaction.toggle", {
+	Rpc.make("messageReaction.toggle", {
 		payload: Schema.Struct({
 			messageId: MessageReaction.Insert.fields.messageId,
 			channelId: MessageReaction.Insert.fields.channelId,
@@ -52,11 +53,13 @@ export class MessageReactionRpcs extends RpcGroup.make(
 		}),
 		success: Schema.Struct({
 			wasCreated: Schema.Boolean,
-			data: Schema.optional(MessageReaction.Model.json),
+			data: Schema.optional(MessageReaction.Schema),
 			transactionId: TransactionId,
 		}),
-		error: Schema.Union(MessageNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([MessageNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["message-reactions:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * MessageReactionCreate
@@ -70,11 +73,13 @@ export class MessageReactionRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("messageReaction.create", {
+	Rpc.make("messageReaction.create", {
 		payload: MessageReaction.Insert,
 		success: MessageReactionResponse,
-		error: Schema.Union(MessageNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([MessageNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["message-reactions:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * MessageReactionUpdate
@@ -88,14 +93,16 @@ export class MessageReactionRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("messageReaction.update", {
+	Rpc.make("messageReaction.update", {
 		payload: Schema.Struct({
+			channelId: RouteChannelId,
 			id: MessageReactionId,
-			...MessageReaction.Model.jsonUpdate.fields,
-		}),
+		}).pipe(Schema.fieldsAssign(MessageReaction.PatchPartial.fields)),
 		success: MessageReactionResponse,
-		error: Schema.Union(MessageReactionNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([MessageReactionNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["message-reactions:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * MessageReactionDelete
@@ -109,9 +116,11 @@ export class MessageReactionRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("messageReaction.delete", {
-		payload: Schema.Struct({ id: MessageReactionId }),
+	Rpc.make("messageReaction.delete", {
+		payload: Schema.Struct({ id: MessageReactionId, channelId: RouteChannelId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(MessageReactionNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([MessageReactionNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["message-reactions:write"])
+		.middleware(AuthMiddleware),
 ) {}

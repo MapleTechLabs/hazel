@@ -4,30 +4,31 @@
 import * as Otel from "@opentelemetry/sdk-logs"
 import type { NonEmptyReadonlyArray } from "effect/Array"
 import * as Arr from "effect/Array"
+import * as Clock from "effect/Clock"
 import * as Context from "effect/Context"
-import type { DurationInput } from "effect/Duration"
+import type * as Duration from "effect/Duration"
 import * as Effect from "effect/Effect"
-import * as FiberId from "effect/FiberId"
-import * as FiberRef from "effect/FiberRef"
-import * as FiberRefs from "effect/FiberRefs"
 import * as Layer from "effect/Layer"
 import * as Logger from "effect/Logger"
+import * as LogLevel from "effect/LogLevel"
+import * as Predicate from "effect/Predicate"
+import * as References from "effect/References"
 import * as Tracer from "effect/Tracer"
-import { unknownToAttributeValue } from "./internal/utils.js"
-import { Resource } from "./Resource.js"
+import { nanosToHrTime, unknownToAttributeValue } from "./internal/attributes.ts"
+import { Resource } from "./Resource.ts"
 
 /**
  * @since 1.0.0
- * @category tags
+ * @category Services
  */
-export class OtelLoggerProvider extends Context.Tag("@effect/opentelemetry/Logger/OtelLoggerProvider")<
+export class OtelLoggerProvider extends Context.Service<
   OtelLoggerProvider,
   Otel.LoggerProvider
->() {}
+>()("@effect/opentelemetry/Logger/OtelLoggerProvider") {}
 
 /**
  * @since 1.0.0
- * @category constructors
+ * @category Constructors
  */
 export const make: Effect.Effect<
   Logger.Logger<unknown, void>,
@@ -35,40 +36,37 @@ export const make: Effect.Effect<
   OtelLoggerProvider
 > = Effect.gen(function*() {
   const loggerProvider = yield* OtelLoggerProvider
-  const clock = yield* Effect.clock
+  const clock = yield* Clock.Clock
   const otelLogger = loggerProvider.getLogger("@effect/opentelemetry")
 
   return Logger.make((options) => {
-    const now = options.date.getTime()
-
     const attributes: Record<string, any> = {
-      fiberId: FiberId.threadName(options.fiberId)
+      fiberId: options.fiber.id
     }
 
-    const maybeSpan = Context.getOption(
-      FiberRefs.getOrDefault(options.context, FiberRef.currentContext),
-      Tracer.ParentSpan
-    )
+    const span = Context.getOrUndefined(options.fiber.context, Tracer.ParentSpan)
 
-    if (maybeSpan._tag === "Some") {
-      attributes.spanId = maybeSpan.value.spanId
-      attributes.traceId = maybeSpan.value.traceId
+    if (Predicate.isNotUndefined(span)) {
+      attributes.spanId = span.spanId
+      attributes.traceId = span.traceId
     }
 
-    for (const [key, value] of options.annotations) {
+    for (const [key, value] of Object.entries(options.fiber.getRef(References.CurrentLogAnnotations))) {
       attributes[key] = unknownToAttributeValue(value)
     }
-    for (const span of options.spans) {
-      attributes[`logSpan.${span.label}`] = `${now - span.startTime}ms`
+    const now = options.date.getTime()
+    for (const [label, startTime] of options.fiber.getRef(References.CurrentLogSpans)) {
+      attributes[`logSpan.${label}`] = `${now - startTime}ms`
     }
 
     const message = Arr.ensure(options.message).map(unknownToAttributeValue)
+    const hrTime = nanosToHrTime(clock.currentTimeNanosUnsafe())
     otelLogger.emit({
       body: message.length === 1 ? message[0] : message,
-      severityText: options.logLevel.label,
-      severityNumber: options.logLevel.ordinal,
-      timestamp: options.date,
-      observedTimestamp: clock.unsafeCurrentTimeMillis(),
+      severityText: options.logLevel,
+      severityNumber: LogLevel.getOrdinal(options.logLevel),
+      timestamp: hrTime,
+      observedTimestamp: hrTime,
       attributes
     })
   })
@@ -76,38 +74,39 @@ export const make: Effect.Effect<
 
 /**
  * @since 1.0.0
- * @category layers
+ * @category Layers
  */
-export const layerLoggerAdd: Layer.Layer<
-  never,
-  never,
-  OtelLoggerProvider
-> = Logger.addEffect(make)
+export const layer = (options: {
+  /**
+   * If set to `true`, the OpenTelemetry logger will be merged with existing
+   * loggers in the application.
+   *
+   * If set to `false`, the OpenTelemetry logger will replace all existing
+   * loggers in the application.
+   *
+   * Defaults to `true`.
+   */
+  readonly mergeWithExisting?: boolean | undefined
+}): Layer.Layer<never, never, OtelLoggerProvider> =>
+  Logger.layer([make], {
+    mergeWithExisting: options.mergeWithExisting ?? true
+  })
 
 /**
  * @since 1.0.0
- * @category layers
- */
-export const layerLoggerReplace: Layer.Layer<
-  never,
-  never,
-  OtelLoggerProvider
-> = Logger.replaceEffect(Logger.defaultLogger, make)
-
-/**
- * @since 1.0.0
- * @category layers
+ * @category Layers
  */
 export const layerLoggerProvider = (
   processor: Otel.LogRecordProcessor | NonEmptyReadonlyArray<Otel.LogRecordProcessor>,
   config?: Omit<Otel.LoggerProviderConfig, "resource"> & {
-    readonly shutdownTimeout?: DurationInput | undefined
+    readonly shutdownTimeout?: Duration.Input | undefined
   }
 ): Layer.Layer<OtelLoggerProvider, never, Resource> =>
-  Layer.scoped(
+  Layer.effect(
     OtelLoggerProvider,
-    Effect.flatMap(Resource, (resource) =>
-      Effect.acquireRelease(
+    Effect.gen(function*() {
+      const resource = yield* Resource
+      return yield* Effect.acquireRelease(
         Effect.sync(() =>
           new Otel.LoggerProvider({
             ...(config ?? undefined),
@@ -116,12 +115,11 @@ export const layerLoggerProvider = (
           })
         ),
         (provider) =>
-          Effect.promise(
-            () => provider.forceFlush().then(() => provider.shutdown())
-          ).pipe(
-            Effect.ignoreLogged,
+          Effect.promise(() => provider.forceFlush().then(() => provider.shutdown())).pipe(
+            Effect.ignore,
             Effect.interruptible,
             Effect.timeoutOption(config?.shutdownTimeout ?? 3000)
           )
-      ))
+      )
+    })
   )

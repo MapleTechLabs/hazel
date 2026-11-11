@@ -5,4 +5,3 @@
 
 export * from "./embed-builder.ts"
 export * from "./payloads.ts"
-export * from "./__fixtures__/payloads.ts"

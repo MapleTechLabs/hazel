@@ -1,6 +1,7 @@
-import type { Effect } from "../Effect.js"
-import type { Concurrency } from "../Types.js"
-import * as core from "./core.js"
+import type { Effect } from "../Effect.ts"
+import { CurrentConcurrency } from "../References.ts"
+import type { Concurrency } from "../Types.ts"
+import * as effect from "./effect.ts"
 
 /** @internal */
 export const match = <A, E, R>(
@@ -15,15 +16,12 @@ export const match = <A, E, R>(
     case "unbounded":
       return unbounded()
     case "inherit":
-      return core.fiberRefGetWith(
-        core.currentConcurrency,
-        (concurrency) =>
-          concurrency === "unbounded" ?
-            unbounded() :
-            concurrency > 1 ?
-            bounded(concurrency) :
-            sequential()
-      )
+      return effect.flatMap(CurrentConcurrency.asEffect(), (concurrency) =>
+        concurrency === "unbounded"
+          ? unbounded()
+          : concurrency > 1
+          ? bounded(concurrency)
+          : sequential())
     default:
       return concurrency > 1 ? bounded(concurrency) : sequential()
   }
@@ -41,12 +39,12 @@ export const matchSimple = <A, E, R>(
     case "unbounded":
       return concurrent()
     case "inherit":
-      return core.fiberRefGetWith(
-        core.currentConcurrency,
+      return effect.flatMap(
+        CurrentConcurrency.asEffect(),
         (concurrency) =>
-          concurrency === "unbounded" || concurrency > 1 ?
-            concurrent() :
-            sequential()
+          concurrency === "unbounded" || concurrency > 1
+            ? concurrent()
+            : sequential()
       )
     default:
       return concurrency > 1 ? concurrent() : sequential()

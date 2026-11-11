@@ -1,4 +1,4 @@
-import { Config, Effect, Option, Redacted, Schema } from "effect"
+import { Context, Config, Effect, Layer, Option, Redacted, Schema } from "effect"
 
 export interface EncryptedToken {
 	ciphertext: string // Base64 encoded
@@ -6,7 +6,7 @@ export interface EncryptedToken {
 	keyVersion: number
 }
 
-const EncryptionOperation = Schema.Literal("encrypt", "decrypt", "importKey")
+const EncryptionOperation = Schema.Literals(["encrypt", "decrypt", "importKey"])
 
 export class IntegrationEncryptionError extends Schema.TaggedError<IntegrationEncryptionError>()(
 	"IntegrationEncryptionError",
@@ -23,21 +23,20 @@ export class KeyVersionNotFoundError extends Schema.TaggedError<KeyVersionNotFou
 	},
 ) {}
 
-export class IntegrationEncryption extends Effect.Service<IntegrationEncryption>()("IntegrationEncryption", {
-	accessors: true,
-	effect: Effect.gen(function* () {
+export class IntegrationEncryption extends Context.Service<IntegrationEncryption>()("IntegrationEncryption", {
+	make: Effect.gen(function* () {
 		// Load encryption keys from config (support key rotation)
-		const currentKey = yield* Config.redacted("INTEGRATION_ENCRYPTION_KEY")
-		const currentKeyVersion = yield* Config.number("INTEGRATION_ENCRYPTION_KEY_VERSION").pipe(
+		const currentKey = yield* Config.Redacted("INTEGRATION_ENCRYPTION_KEY")
+		const currentKeyVersion = yield* Config.Number("INTEGRATION_ENCRYPTION_KEY_VERSION").pipe(
 			Config.withDefault(1),
 		)
 
 		// Optional: Previous key for decryption during rotation
-		const previousKey = yield* Config.redacted("INTEGRATION_ENCRYPTION_KEY_PREV").pipe(
+		const previousKeyOption = yield* Config.Redacted("INTEGRATION_ENCRYPTION_KEY_PREV").pipe(
 			Config.option,
-			Effect.map(Option.getOrUndefined),
 		)
-		const previousKeyVersion = yield* Config.number("INTEGRATION_ENCRYPTION_KEY_VERSION_PREV").pipe(
+		const previousKey = Option.getOrUndefined(previousKeyOption)
+		const previousKeyVersion = yield* Config.Number("INTEGRATION_ENCRYPTION_KEY_VERSION_PREV").pipe(
 			Config.withDefault(0),
 		)
 
@@ -146,4 +145,6 @@ export class IntegrationEncryption extends Effect.Service<IntegrationEncryption>
 			currentKeyVersion,
 		}
 	}),
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make)
+}

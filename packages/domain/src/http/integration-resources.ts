@@ -1,9 +1,10 @@
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "@effect/platform"
-import { Schema } from "effect"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
+import { Effect, Schema } from "effect"
 import * as CurrentUser from "../current-user"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { OrganizationId } from "../ids"
+import { ExternalChannelId, OrganizationId } from "@hazel/schema"
 import { IntegrationConnection } from "../models"
+import { RequiredScopes } from "../scopes/required-scopes"
 
 // Provider type from the model
 const IntegrationProvider = IntegrationConnection.IntegrationProvider
@@ -67,7 +68,7 @@ export class GitHubPRResourceResponse extends Schema.Class<GitHubPRResourceRespo
 	number: Schema.Number,
 	title: Schema.String,
 	body: Schema.NullOr(Schema.String),
-	state: Schema.Literal("open", "closed"),
+	state: Schema.Literals(["open", "closed"]),
 	draft: Schema.Boolean,
 	merged: Schema.Boolean,
 	author: Schema.NullOr(GitHubPRAuthorResponse),
@@ -104,12 +105,53 @@ export class GitHubRepositoriesResponse extends Schema.Class<GitHubRepositoriesR
 	perPage: Schema.Number,
 }) {}
 
+const DiscordGuild = Schema.Struct({
+	id: Schema.String,
+	name: Schema.String,
+	icon: Schema.NullOr(Schema.String),
+	owner: Schema.Boolean,
+})
+
+const DiscordGuildChannel = Schema.Struct({
+	id: ExternalChannelId,
+	guildId: Schema.String,
+	name: Schema.String,
+	type: Schema.Number,
+	parentId: Schema.NullOr(Schema.String),
+})
+
+export class DiscordGuildsResponse extends Schema.Class<DiscordGuildsResponse>("DiscordGuildsResponse")({
+	guilds: Schema.Array(DiscordGuild),
+}) {}
+
+export class DiscordGuildChannelsResponse extends Schema.Class<DiscordGuildChannelsResponse>(
+	"DiscordGuildChannelsResponse",
+)({
+	channels: Schema.Array(DiscordGuildChannel),
+}) {}
+
+const SlackChannel = Schema.Struct({
+	id: ExternalChannelId,
+	name: Schema.String,
+	isPrivate: Schema.Boolean,
+	/** Whether Hazel's bot is in it already (linking joins a public one). */
+	isMember: Schema.Boolean,
+})
+
+/** The Slack workspace the org installed Hazel in, and its channels the bot can see. */
+export class SlackChannelsResponse extends Schema.Class<SlackChannelsResponse>("SlackChannelsResponse")({
+	workspace: Schema.Struct({ id: Schema.String, name: Schema.NullOr(Schema.String) }),
+	channels: Schema.Array(SlackChannel),
+}) {}
+
 // Error when organization doesn't have the integration connected
 export class IntegrationNotConnectedForPreviewError extends Schema.TaggedError<IntegrationNotConnectedForPreviewError>()(
 	"IntegrationNotConnectedForPreviewError",
 	{
 		provider: IntegrationProvider,
 	},
+	// The organization has no connection to the provider: a client state, not a server fault.
+	{ httpApiStatus: 404 },
 ) {}
 
 // Error when resource cannot be found
@@ -134,81 +176,135 @@ export class IntegrationResourceError extends Schema.TaggedError<IntegrationReso
 // API Group for integration resources
 export class IntegrationResourceGroup extends HttpApiGroup.make("integration-resources")
 	.add(
-		HttpApiEndpoint.get("fetchLinearIssue", `/:orgId/linear/issue`)
-			.addSuccess(LinearIssueResourceResponse)
-			.addError(IntegrationNotConnectedForPreviewError)
-			.addError(IntegrationResourceError)
-			.addError(ResourceNotFoundError)
-			.addError(UnauthorizedError)
-			.addError(InternalServerError)
-			.setPath(
-				Schema.Struct({
-					orgId: OrganizationId,
-				}),
-			)
-			.setUrlParams(
-				Schema.Struct({
-					url: Schema.String,
-				}),
-			)
-			.annotateContext(
+		HttpApiEndpoint.get("fetchLinearIssue", `/:orgId/linear/issue`, {
+			params: { orgId: OrganizationId },
+			query: { url: Schema.String },
+			success: LinearIssueResourceResponse,
+			error: [
+				IntegrationNotConnectedForPreviewError,
+				IntegrationResourceError,
+				ResourceNotFoundError,
+				UnauthorizedError,
+				InternalServerError,
+			],
+		})
+			.annotateMerge(
 				OpenApi.annotations({
 					title: "Fetch Linear Issue",
 					description: "Fetch Linear issue details for embedding in chat messages",
 					summary: "Get Linear issue preview data",
 				}),
-			),
+			)
+			.annotate(RequiredScopes, ["integration-connections:read"]),
 	)
 	.add(
-		HttpApiEndpoint.get("fetchGitHubPR", `/:orgId/github/pr`)
-			.addSuccess(GitHubPRResourceResponse)
-			.addError(IntegrationNotConnectedForPreviewError)
-			.addError(IntegrationResourceError)
-			.addError(ResourceNotFoundError)
-			.addError(UnauthorizedError)
-			.addError(InternalServerError)
-			.setPath(
-				Schema.Struct({
-					orgId: OrganizationId,
-				}),
-			)
-			.setUrlParams(
-				Schema.Struct({
-					url: Schema.String,
-				}),
-			)
-			.annotateContext(
+		HttpApiEndpoint.get("fetchGitHubPR", `/:orgId/github/pr`, {
+			params: { orgId: OrganizationId },
+			query: { url: Schema.String },
+			success: GitHubPRResourceResponse,
+			error: [
+				IntegrationNotConnectedForPreviewError,
+				IntegrationResourceError,
+				ResourceNotFoundError,
+				UnauthorizedError,
+				InternalServerError,
+			],
+		})
+			.annotateMerge(
 				OpenApi.annotations({
 					title: "Fetch GitHub PR",
 					description: "Fetch GitHub pull request details for embedding in chat messages",
 					summary: "Get GitHub PR preview data",
 				}),
-			),
+			)
+			.annotate(RequiredScopes, ["integration-connections:read"]),
 	)
 	.add(
-		HttpApiEndpoint.get("getGitHubRepositories", `/:orgId/github/repositories`)
-			.addSuccess(GitHubRepositoriesResponse)
-			.addError(IntegrationNotConnectedForPreviewError)
-			.addError(UnauthorizedError)
-			.addError(InternalServerError)
-			.setPath(
-				Schema.Struct({
-					orgId: OrganizationId,
-				}),
-			)
-			.setUrlParams(
-				Schema.Struct({
-					page: Schema.optionalWith(Schema.NumberFromString, { default: () => 1 }),
-					perPage: Schema.optionalWith(Schema.NumberFromString, { default: () => 30 }),
-				}),
-			)
-			.annotateContext(
+		HttpApiEndpoint.get("getGitHubRepositories", `/:orgId/github/repositories`, {
+			params: { orgId: OrganizationId },
+			query: {
+				page: Schema.optional(Schema.NumberFromString).pipe(
+					Schema.withDecodingDefault(Effect.succeed("1")),
+				),
+				perPage: Schema.optional(Schema.NumberFromString).pipe(
+					Schema.withDecodingDefault(Effect.succeed("30")),
+				),
+			},
+			success: GitHubRepositoriesResponse,
+			error: [IntegrationNotConnectedForPreviewError, UnauthorizedError, InternalServerError],
+		})
+			.annotateMerge(
 				OpenApi.annotations({
 					title: "Get GitHub Repositories",
 					description: "List repositories accessible to the GitHub App installation",
 					summary: "List GitHub repositories",
 				}),
-			),
+			)
+			.annotate(RequiredScopes, ["integration-connections:read"]),
+	)
+	.add(
+		HttpApiEndpoint.get("getDiscordGuilds", `/:orgId/discord/guilds`, {
+			params: { orgId: OrganizationId },
+			success: DiscordGuildsResponse,
+			error: [
+				IntegrationNotConnectedForPreviewError,
+				IntegrationResourceError,
+				UnauthorizedError,
+				InternalServerError,
+			],
+		})
+			.annotateMerge(
+				OpenApi.annotations({
+					title: "Get Discord Guilds",
+					description: "List Discord guilds visible to the connected Discord account",
+					summary: "List Discord guilds",
+				}),
+			)
+			.annotate(RequiredScopes, ["integration-connections:read"]),
+	)
+	.add(
+		HttpApiEndpoint.get("getDiscordGuildChannels", `/:orgId/discord/guilds/:guildId/channels`, {
+			params: {
+				orgId: OrganizationId,
+				guildId: Schema.String,
+			},
+			success: DiscordGuildChannelsResponse,
+			error: [
+				IntegrationNotConnectedForPreviewError,
+				IntegrationResourceError,
+				UnauthorizedError,
+				InternalServerError,
+			],
+		})
+			.annotateMerge(
+				OpenApi.annotations({
+					title: "Get Discord Guild Channels",
+					description: "List message-capable channels in a Discord guild using the bot token",
+					summary: "List Discord guild channels",
+				}),
+			)
+			.annotate(RequiredScopes, ["integration-connections:read"]),
+	)
+	.add(
+		HttpApiEndpoint.get("getSlackChannels", `/:orgId/slack/channels`, {
+			params: { orgId: OrganizationId },
+			success: SlackChannelsResponse,
+			error: [
+				IntegrationNotConnectedForPreviewError,
+				IntegrationResourceError,
+				UnauthorizedError,
+				InternalServerError,
+			],
+		})
+			.annotateMerge(
+				OpenApi.annotations({
+					title: "Get Slack Channels",
+					description:
+						"List the channels of the Slack workspace the organization installed Hazel in",
+					summary: "List Slack channels",
+				}),
+			)
+			.annotate(RequiredScopes, ["integration-connections:read"]),
 	)
 	.prefix("/integrations/resources")
 	.middleware(CurrentUser.Authorization) {}

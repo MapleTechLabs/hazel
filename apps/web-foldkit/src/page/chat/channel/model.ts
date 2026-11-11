@@ -1,0 +1,285 @@
+import { ChannelHotkey } from "./hotkeys"
+import { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
+import { Schema } from "effect"
+import { File, type Update } from "foldkit"
+import { defineMessageUnion } from "foldkit/message"
+import { defineTaggedUnion } from "foldkit/schema"
+import { CommonReason } from "~/lib/error-messages"
+import * as HtmlRender from "../../../chat/html-render"
+import * as Live from "../../../chat/live-state"
+import * as Unfurl from "../../../chat/unfurl"
+import * as Draft from "../../../composer/draft"
+import * as MessageList from "../../../mount/message-list"
+import type { EditorRegistry } from "../../../editor/registry"
+import type { HazelApiClient, HazelRpc } from "../../../rpc"
+import type { PageOutMessage } from "../../out-message"
+import {
+	AttachmentInfo,
+	BotInfo,
+	ChannelMemberInfo,
+	CustomEmojiInfo,
+	Lookups,
+	PinnedInfo,
+	PresenceInfo,
+	ReplyTarget,
+	ThreadChannelInfo,
+	ThreadMessageInfo,
+	TypingInfo,
+	UserInfo,
+} from "../lookups"
+import * as FilesPage from "../files/page"
+import { Message as ActionMessage } from "../message-actions"
+import * as Overlays from "../overlays"
+import { ChannelInfo, ParentChannelInfo } from "../queries"
+import { ChatMessage, ChatReaction, DisplayRow } from "../rows"
+import * as NotificationClear from "./notification-clear"
+
+/** The channel page's Model and Message (`page.ts` holds init and update, `write.ts` the write path). */
+
+/** The tab a route names (`$id`, `$id/files`, `$id/files/media`); the tab bar and links speak it. */
+export const ChatTab = Schema.Literals(["messages", "files", "media"])
+export type ChatTab = typeof ChatTab.Type
+
+// MODEL
+
+/** The tab shown: the message list, or the Files Submodel (which knows whether it shows files or media). */
+export const Tab = defineTaggedUnion({
+	Messages: {},
+	Files: { files: FilesPage.Model },
+})
+export type Tab = typeof Tab.Type
+
+/** `isThreadCreating`: the panel opens on the optimistic id while `channel.createThread` runs. */
+export const ThreadCreation = Schema.Literals(["Creating", "Created"])
+export type ThreadCreation = typeof ThreadCreation.Type
+
+/** `useChatThread`: the thread panel beside the channel, with everything that lives and dies with it. */
+/**
+ * A composer action held while its thread is created. A bot command keeps what was submitted (the
+ * command and its arguments): it runs only if the command field still holds exactly that.
+ */
+export const HeldThreadMessage = Schema.Struct({
+	message: Draft.Message,
+	command: Schema.NullOr(
+		Schema.Struct({ id: Schema.String, values: Schema.Record(Schema.String, Schema.String) }),
+	),
+})
+export type HeldThreadMessage = typeof HeldThreadMessage.Type
+
+export const ThreadPanel = Schema.Struct({
+	threadChannelId: ChannelId,
+	/** The message the thread hangs off. */
+	messageId: MessageId,
+	/** The panel's own composer draft. */
+	draft: Draft.Model,
+	/** The signed-in user's membership of the thread (its typing indicator). */
+	memberId: Schema.NullOr(ChannelMemberId),
+	creation: ThreadCreation,
+	/**
+	 * What the composer did while the thread was still being created (a send, files picked, pasted
+	 * or dropped), in order: played back once it exists.
+	 */
+	held: Schema.Array(HeldThreadMessage),
+	/** "Generate thread name" is running for this thread. */
+	isNaming: Schema.Boolean,
+	/** The thread's messages, oldest first. */
+	messages: Schema.Array(ChatMessage),
+	/** Their rows, derived in `update` like the channel's. */
+	rows: Schema.Array(DisplayRow.MessageRow),
+})
+export type ThreadPanel = typeof ThreadPanel.Type
+
+/**
+ * A jump to a message outside the window (a reply's quote): first the channel's history is paged in
+ * back to it (`isLocated` false), then the window moves over it and the list scrolls once its row is in.
+ */
+export const PendingJump = Schema.Struct({ messageId: MessageId, isLocated: Schema.Boolean })
+export type PendingJump = typeof PendingJump.Type
+
+/** A drag of the thread panel's edge: where it started, and the widest the channel leaves room for. */
+export const ThreadPanelDrag = Schema.Struct({
+	startX: Schema.Number,
+	startWidth: Schema.Number,
+	maxWidth: Schema.Number,
+})
+export type ThreadPanelDrag = typeof ThreadPanelDrag.Type
+
+export const Model = Schema.Struct({
+	channelId: ChannelId,
+	tab: Tab,
+	orgSlug: Schema.String,
+	currentUserId: Schema.NullOr(UserId),
+	channel: Schema.NullOr(ChannelInfo),
+	parentChannel: Schema.NullOr(ParentChannelInfo),
+	hasLoadedMessages: Schema.Boolean,
+	/** Newest first, as the query returns them. */
+	messages: Schema.Array(ChatMessage),
+	reactions: Schema.Array(ChatReaction),
+	lookups: Lookups,
+	members: Schema.NullOr(Schema.Array(ChannelMemberInfo)),
+	/** `PinnedMessagesModal`'s pins, oldest pin first. */
+	pinned: Schema.Array(PinnedInfo),
+	typing: Schema.Array(TypingInfo),
+	typingNowMs: Schema.Number,
+	/** First names of the other members typing now (`useTypingIndicators`), derived in `update`. */
+	typingNames: Schema.Array(Schema.String),
+	/** Ids the reply and thread lookups select, kept stable while the window does not change them. */
+	replyIds: Schema.Array(MessageId),
+	threadIds: Schema.Array(ChannelId),
+	/** Link previews and tweets fetched for the loaded messages, by `linkPreviewKey` / `tweetKey`. */
+	unfurls: Unfurl.Unfurls,
+	/** Streamed state of the AI replies with an open actor connection, by message id. */
+	liveStates: Live.LiveStates,
+	/** AI replies that hold a live socket, in the window or the open thread panel. */
+	liveReplies: Schema.Array(Live.LiveReply),
+	/** HTML render frames by render id, the app theme they get, and the fullscreen dialog. */
+	htmlRender: HtmlRender.Model,
+	/** Oldest first, with date headers; what the list renders. */
+	rows: Schema.Array(DisplayRow),
+	limit: Schema.Number,
+	/** Newest messages skipped: the window slides older once it holds `MAX_WINDOW` messages. */
+	offset: Schema.Number,
+	list: MessageList.Model,
+	/** The message the keyboard is on (Discord's message navigation); Shift+Tab returns to it. */
+	focusedMessageId: Schema.NullOr(MessageId),
+	pendingJump: Schema.NullOr(PendingJump),
+	overlays: Overlays.Model,
+	/** The channel composer's draft (`ChatProvider` + `ComposerEditor` state). */
+	draft: Draft.Model,
+	threadPanel: Schema.NullOr(ThreadPanel),
+	/** The thread panel's width in px, the same for every thread; null until read from storage. */
+	threadPanelWidth: Schema.NullOr(Schema.Number),
+	threadPanelDrag: Schema.NullOr(ThreadPanelDrag),
+	/** When the channel's notifications are cleared (`notification-clear.ts`). */
+	notifications: NotificationClear.Model,
+	/** The non-member's "Join #channel" is running. */
+	isJoining: Schema.Boolean,
+	/**
+	 * Row heights measured in channels visited earlier, by channel, least recent first. A revisit
+	 * lays its rows out at their real heights on the switch frame; rows re-measure as they render.
+	 */
+	heightsByChannel: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Number)),
+})
+export type Model = typeof Model.Type
+
+/** What can go wrong clearing the channel's notifications, beyond the shared reasons. */
+export const ClearNotificationsFailure = Schema.Union([Schema.Literals(["ChannelNotFound"]), CommonReason])
+export type ClearNotificationsFailure = typeof ClearNotificationsFailure.Type
+
+// MESSAGE
+
+/** What a key does on a focused message, as Discord binds it. */
+export const MessageKey = Schema.Literals([
+	"Previous",
+	"Next",
+	"BackToComposer",
+	"Edit",
+	"Reply",
+	"Thread",
+	"Pin",
+	"Delete",
+	"DeleteNow",
+	"React",
+	"Copy",
+])
+export type MessageKey = typeof MessageKey.Type
+
+export const DeleteMessageNowFailure = Schema.Union([Schema.Literals(["MessageNotFound"]), CommonReason])
+export type DeleteMessageNowFailure = typeof DeleteMessageNowFailure.Type
+
+export const Message = defineMessageUnion({
+	/**
+	 * The channel's own streams are tagged with the channel they were queried for: a stream of the
+	 * channel left behind can still deliver after `switchChannel` reset the page, and is dropped.
+	 */
+	UpdatedChannel: { channelId: ChannelId, channel: Schema.NullOr(ChannelInfo) },
+	ClickedTab: { tab: ChatTab },
+	UpdatedParentChannel: { channel: Schema.NullOr(ParentChannelInfo) },
+	/** The window as a change set: the ids in order, plus inserted and updated rows. */
+	ChangedMessages: {
+		channelId: ChannelId,
+		order: Schema.Array(MessageId),
+		upserts: Schema.Array(ChatMessage),
+	},
+	UpdatedReactions: { channelId: ChannelId, reactions: Schema.Array(ChatReaction) },
+	UpdatedUsers: { users: Schema.Array(UserInfo) },
+	UpdatedPresence: { presence: Schema.Array(PresenceInfo) },
+	UpdatedBots: { bots: Schema.Array(BotInfo) },
+	UpdatedCustomEmojis: { customEmojis: Schema.Array(CustomEmojiInfo) },
+	UpdatedAttachments: { attachments: Schema.Array(AttachmentInfo) },
+	UpdatedDiscordSynced: { messageIds: Schema.Array(MessageId) },
+	UpdatedThreadChannels: { channels: Schema.Array(ThreadChannelInfo) },
+	UpdatedThreadMessages: { messages: Schema.Array(ThreadMessageInfo) },
+	UpdatedReplyTargets: { targets: Schema.Array(ReplyTarget) },
+	UpdatedMembers: { members: Schema.Array(ChannelMemberInfo) },
+	UpdatedPinned: { pins: Schema.Array(PinnedInfo) },
+	/** The open thread's messages, oldest first; tagged with the thread they were queried for. */
+	UpdatedThreadPanelMessages: { threadChannelId: ChannelId, messages: Schema.Array(ChatMessage) },
+	UpdatedTyping: { typing: Schema.Array(TypingInfo) },
+	TickedTypingClock: { nowMs: Schema.Number },
+	GotListMessage: { message: MessageList.Message },
+	GotUnfurlMessage: { message: Unfurl.Message },
+	GotLiveMessage: { message: Live.Message },
+	GotHtmlRenderMessage: { message: HtmlRender.Message },
+	GotOverlaysMessage: { message: Overlays.Message },
+	GotFilesMessage: { message: FilesPage.Message },
+	ClickedMobileMenu: {},
+	GotDraftMessage: { message: Draft.Message },
+	GotThreadDraftMessage: { message: Draft.Message },
+	GotActionMessage: { message: ActionMessage },
+	UpdatedThreadMember: { threadChannelId: ChannelId, memberId: Schema.NullOr(ChannelMemberId) },
+	ClickedThreadPreview: { threadChannelId: ChannelId, messageId: MessageId },
+	/** The quoted text of a reply (on message `fromMessageId`): jump to the message it quotes. */
+	ClickedReplyPreview: { fromMessageId: MessageId, messageId: MessageId },
+	/** The history reaches back to the jump's target, which has `newerCount` newer messages. */
+	LocatedJumpTarget: { messageId: MessageId, newerCount: Schema.Number },
+	FailedLocateJumpTarget: { messageId: MessageId },
+	/** The list scrolled to the jump's target and has (most likely) rendered and measured its row. */
+	RenderedJumpTarget: { messageId: MessageId },
+	CompletedHighlightMessage: {},
+	/** A button on a bot's message (`MessageEmbed.actions`). */
+	ClickedEmbedAction: { channelId: ChannelId, messageId: MessageId, actionId: Schema.String },
+	ClickedCloseThread: {},
+	ClickedGenerateThreadName: {},
+	ClickedRenameThread: {},
+	/** The panel's edge was grabbed: its rendered width and the widest it may grow. */
+	PressedThreadPanelEdge: { clientX: Schema.Number, startWidth: Schema.Number, maxWidth: Schema.Number },
+	MovedThreadPanelEdge: { clientX: Schema.Number },
+	ReleasedThreadPanelEdge: {},
+	/** An arrow key on the focused edge, by the px it moves the edge (left grows the panel). */
+	PressedThreadPanelEdgeKey: { delta: Schema.Number },
+	LoadedThreadPanelWidth: { width: Schema.NullOr(Schema.Number) },
+	CompletedSaveThreadPanelWidth: {},
+	ClickedJoinChannel: {},
+	/** A printable key typed outside any input (`useGlobalKeyboardFocus`). */
+	PressedGlobalKey: { key: Schema.String },
+	/** Files pasted outside any input: they attach to the focused composer. */
+	PastedGlobalFiles: { files: Schema.Array(File.File) },
+	/** Text pasted outside any input: it pastes into the focused composer. */
+	PastedGlobalText: { text: Schema.String },
+	/** One of Discord's channel shortcuts (`hotkeys.ts`). */
+	PressedChannelHotkey: { action: ChannelHotkey },
+	/** A key on a focused message (`message-keys.ts`). */
+	PressedMessageKey: { messageId: MessageId, key: MessageKey },
+	/** A message took the focus (a click, Tab, or our own `FocusMessage`). */
+	FocusedMessage: { messageId: MessageId },
+	/** The message keyboard listens on the list (`TrackMessageKeys`). */
+	StartedMessageKeys: {},
+	CompletedFocusMessage: {},
+	SucceededDeleteMessageNow: {},
+	FailedDeleteMessageNow: { reason: DeleteMessageNowFailure },
+	/** The window lost focus or the tab was hidden: typing stops. */
+	LeftWindow: {},
+	ChangedWindowFocus: { isFocused: Schema.Boolean },
+	SucceededClearNotifications: { channelId: ChannelId },
+	FailedClearNotifications: { channelId: ChannelId, reason: ClearNotificationsFailure },
+	ElapsedClearNotificationsRetry: { channelId: ChannelId },
+})
+export type Message = typeof Message.Type
+
+export type PageReturn = Update.ReturnWithOutMessage<
+	Model,
+	Message,
+	PageOutMessage,
+	HazelRpc | HazelApiClient | EditorRegistry
+>

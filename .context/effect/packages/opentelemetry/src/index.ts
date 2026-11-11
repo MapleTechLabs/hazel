@@ -1,54 +1,35 @@
 /**
  * @since 1.0.0
  */
-export * as Logger from "./Logger.js"
+
+// @barrel: Auto-generated exports. Do not edit manually.
 
 /**
  * @since 1.0.0
  */
-export * as Metrics from "./Metrics.js"
+export * as Logger from "./Logger.ts"
 
 /**
  * @since 1.0.0
  */
-export * as NodeSdk from "./NodeSdk.js"
+export * as Metrics from "./Metrics.ts"
 
 /**
  * @since 1.0.0
  */
-export * as Otlp from "./Otlp.js"
+export * as NodeSdk from "./NodeSdk.ts"
 
 /**
  * @since 1.0.0
  */
-export * as OtlpLogger from "./OtlpLogger.js"
+export * as Resource from "./Resource.ts"
 
 /**
  * @since 1.0.0
  */
-export * as OtlpMetrics from "./OtlpMetrics.js"
+export * as Tracer from "./Tracer.ts"
 
 /**
  * @since 1.0.0
  */
-export * as OtlpResource from "./OtlpResource.js"
-
-/**
- * @since 1.0.0
- */
-export * as OtlpTracer from "./OtlpTracer.js"
-
-/**
- * @since 1.0.0
- */
-export * as Resource from "./Resource.js"
-
-/**
- * @since 1.0.0
- */
-export * as Tracer from "./Tracer.js"
-
-/**
- * @since 1.0.0
- */
-export * as WebSdk from "./WebSdk.js"
+export * as WebSdk from "./WebSdk.ts"

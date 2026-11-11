@@ -5,9 +5,11 @@
  * Uses FiberRef for fiber-local context propagation across Effect operations.
  */
 
-import type { ChannelId, OrganizationId, UserId } from "@hazel/domain/ids"
-import { Effect, FiberRef } from "effect"
-import type { EventOperation, EventType } from "./types/events.ts"
+import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
+import { Effect, Context, type Tracer } from "effect"
+
+type GatewayEventType = string
+type GatewayEventOperation = string
 
 /**
  * Unique identifier for correlating logs across a single request/event flow
@@ -29,14 +31,14 @@ export interface LogContext {
 	readonly botId: string
 	/** Human-readable bot name */
 	readonly botName: string
-	/** Unique event identifier (for Electric events) */
+	/** Unique event identifier for traced inbound events */
 	readonly eventId?: EventId
-	/** Event type (e.g., "messages.insert", "channels.update") */
-	readonly eventType?: EventType
-	/** Table name for Electric events */
+	/** Event type */
+	readonly eventType?: GatewayEventType
+	/** Optional event source grouping */
 	readonly table?: string
-	/** Operation type (insert, update, delete) */
-	readonly operation?: EventOperation
+	/** Optional operation name */
+	readonly operation?: GatewayEventOperation
 	/** Command name (for slash commands) */
 	readonly commandName?: string
 	/** Channel where event/command originated */
@@ -50,12 +52,12 @@ export interface LogContext {
 }
 
 /**
- * FiberRef for fiber-local context propagation
+ * Reference for fiber-local context propagation
  * Allows context to flow through Effect operations without explicit passing
  */
-export const currentLogContext: FiberRef.FiberRef<LogContext | null> = FiberRef.unsafeMake<LogContext | null>(
-	null,
-)
+export const currentLogContext = Context.Reference<LogContext | null>("@hazel/bot-sdk/CurrentLogContext", {
+	defaultValue: () => null,
+})
 
 /**
  * Generate a unique correlation ID
@@ -98,13 +100,13 @@ export const createBaseLogContext = (identity: BotIdentity): LogContext => ({
  */
 export interface EventLogContextOptions extends BotIdentity {
 	readonly eventId?: EventId
-	readonly eventType: EventType
+	readonly eventType: GatewayEventType
 	readonly table: string
-	readonly operation: EventOperation
+	readonly operation: GatewayEventOperation
 }
 
 /**
- * Create a log context for Electric events
+ * Create a log context for a generic inbound event.
  */
 export const createEventLogContext = (options: EventLogContextOptions): LogContext => ({
 	correlationId: generateCorrelationId(),
@@ -196,23 +198,27 @@ const contextToSpanAttributes = (ctx: LogContext): Record<string, unknown> => {
  * @param ctx - The log context to use
  * @param spanName - Name for the parent span
  * @param effect - The effect to run with context
+ * @param options - Optional span options (e.g., parent span for trace propagation)
  */
 export const withLogContext = <A, E, R>(
 	ctx: LogContext,
 	spanName: string,
-	effect: Effect.Effect<A, E, R>,
+	make: Effect.Effect<A, E, R>,
+	options?: { readonly parent?: Tracer.AnySpan },
 ): Effect.Effect<A, E, R> =>
-	effect.pipe(
+	make.pipe(
 		Effect.annotateLogs(contextToAnnotations(ctx)),
-		Effect.withSpan(spanName, { attributes: contextToSpanAttributes(ctx) }),
-		(eff) => Effect.locally(eff, currentLogContext, ctx),
+		Effect.withSpan(spanName, { attributes: contextToSpanAttributes(ctx), ...options }),
+		Effect.provideService(currentLogContext, ctx),
 	)
 
 /**
  * Get the current log context from the FiberRef
  * Returns null if no context is set
  */
-export const getLogContext: Effect.Effect<LogContext | null> = FiberRef.get(currentLogContext)
+export const getLogContext: Effect.Effect<LogContext | null> = Effect.gen(function* () {
+	return yield* currentLogContext
+})
 
 /**
  * Get the current correlation ID from context

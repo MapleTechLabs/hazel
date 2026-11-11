@@ -1,21 +1,19 @@
 /**
- * @since 3.19.0
- * @experimental
+ * @since 4.0.0
  */
-import { dual } from "./Function.js"
-import * as Hash from "./Hash.js"
-import * as Inspectable from "./Inspectable.js"
-import * as Iterable from "./Iterable.js"
-import { type Pipeable, pipeArguments } from "./Pipeable.js"
-import { hasProperty } from "./Predicate.js"
-import * as PrimaryKey from "./PrimaryKey.js"
+import { dual } from "./Function.ts"
+import * as Hash from "./Hash.ts"
+import { PipeInspectableProto } from "./internal/core.ts"
+import * as Iterable from "./Iterable.ts"
+import type { Pipeable } from "./Pipeable.ts"
+import { hasProperty } from "./Predicate.ts"
+import * as PrimaryKey from "./PrimaryKey.ts"
 
 const TypeId = "~effect/cluster/HashRing" as const
 
 /**
- * @since 3.19.0
+ * @since 4.0.0
  * @category Models
- * @experimental
  */
 export interface HashRing<A extends PrimaryKey.PrimaryKey> extends Pipeable, Iterable<A> {
   readonly [TypeId]: typeof TypeId
@@ -26,16 +24,14 @@ export interface HashRing<A extends PrimaryKey.PrimaryKey> extends Pipeable, Ite
 }
 
 /**
- * @since 3.19.0
+ * @since 4.0.0
  * @category Guards
- * @experimental
  */
 export const isHashRing = (u: unknown): u is HashRing<any> => hasProperty(u, TypeId)
 
 /**
- * @since 3.19.0
+ * @since 4.0.0
  * @category Constructors
- * @experimental
  */
 export const make = <A extends PrimaryKey.PrimaryKey>(options?: {
   readonly baseWeight?: number | undefined
@@ -49,14 +45,11 @@ export const make = <A extends PrimaryKey.PrimaryKey>(options?: {
 }
 
 const Proto = {
+  ...PipeInspectableProto,
   [TypeId]: TypeId,
   [Symbol.iterator]<A extends PrimaryKey.PrimaryKey>(this: HashRing<A>): Iterator<A> {
     return Iterable.map(this.nodes.values(), ([n]) => n)[Symbol.iterator]()
   },
-  pipe() {
-    return pipeArguments(this, arguments)
-  },
-  ...Inspectable.BaseProto,
   toJSON(this: HashRing<any>) {
     return {
       _id: "HashRing",
@@ -70,9 +63,8 @@ const Proto = {
  * Add new nodes to the ring. If a node already exists in the ring, it
  * will be updated. For example, you can use this to update the node's weight.
  *
- * @since 3.19.0
+ * @since 4.0.0
  * @category Combinators
- * @experimental
  */
 export const addMany: {
   <A extends PrimaryKey.PrimaryKey>(nodes: Iterable<A>, options?: {
@@ -130,9 +122,8 @@ function addNodesToRing<A extends PrimaryKey.PrimaryKey>(self: HashRing<A>, keys
  * Add a new node to the ring. If the node already exists in the ring, it
  * will be updated. For example, you can use this to update the node's weight.
  *
- * @since 3.19.0
+ * @since 4.0.0
  * @category Combinators
- * @experimental
  */
 export const add: {
   <A extends PrimaryKey.PrimaryKey>(node: A, options?: {
@@ -148,9 +139,8 @@ export const add: {
 /**
  * Removes the node from the ring. No-op's if the node does not exist.
  *
- * @since 3.19.0
+ * @since 4.0.0
  * @category Combinators
- * @experimental
  */
 export const remove: {
   <A extends PrimaryKey.PrimaryKey>(node: A): (self: HashRing<A>) => HashRing<A>
@@ -167,9 +157,8 @@ export const remove: {
 })
 
 /**
- * @since 3.19.0
+ * @since 4.0.0
  * @category Combinators
- * @experimental
  */
 export const has: {
   <A extends PrimaryKey.PrimaryKey>(node: A): (self: HashRing<A>) => boolean
@@ -183,9 +172,8 @@ export const has: {
  * Gets the node which should handle the given input. Returns undefined if
  * the hashring has no elements with weight.
  *
- * @since 3.19.0
+ * @since 4.0.0
  * @category Combinators
- * @experimental
  */
 export const get = <A extends PrimaryKey.PrimaryKey>(self: HashRing<A>, input: string): A | undefined => {
   if (self.ring.length === 0) {
@@ -201,9 +189,8 @@ export const get = <A extends PrimaryKey.PrimaryKey>(self: HashRing<A>, input: s
  * balance the number of shards allocated to each node. Returns undefined if
  * the hashring has no elements with weight.
  *
- * @since 3.19.0
+ * @since 4.0.0
  * @category Combinators
- * @experimental
  */
 export const getShards = <A extends PrimaryKey.PrimaryKey>(self: HashRing<A>, count: number): Array<A> | undefined => {
   if (self.ring.length === 0) {

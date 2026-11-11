@@ -11,8 +11,8 @@
 		"./theme": "./src/theme/colors.ts"
 	},
 	"devDependencies": {
-		"@types/react": "^19.2.10",
-		"typescript": "^5.9.3"
+		"@types/react": "^19.3.0",
+		"typescript": "catalog:tooling"
 	},
 	"peerDependencies": {
 		"react": "^19.0.0"

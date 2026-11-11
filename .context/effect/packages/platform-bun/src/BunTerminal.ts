@@ -2,10 +2,10 @@
  * @since 1.0.0
  */
 import * as NodeTerminal from "@effect/platform-node-shared/NodeTerminal"
-import type { Terminal, UserInput } from "@effect/platform/Terminal"
 import type { Effect } from "effect/Effect"
 import type { Layer } from "effect/Layer"
 import type { Scope } from "effect/Scope"
+import type { Terminal, UserInput } from "effect/Terminal"
 
 /**
  * @since 1.0.0
@@ -15,6 +15,6 @@ export const make: (shouldQuit?: (input: UserInput) => boolean) => Effect<Termin
 
 /**
  * @since 1.0.0
- * @category layer
+ * @category layers
  */
 export const layer: Layer<Terminal> = NodeTerminal.layer

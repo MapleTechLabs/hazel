@@ -1,5 +1,145 @@
 # @tanstack/trailbase-db-collection
 
+## 0.1.69
+
+### Patch Changes
+
+- Updated dependencies [[`43c7c9d`](https://github.com/TanStack/db/commit/43c7c9d5f2b47366a58f87470ac5dca95020ac57), [`284ebcc`](https://github.com/TanStack/db/commit/284ebcc8346bd237c3381de766995b8bda35009a)]:
+  - @tanstack/db@0.5.25
+
+## 0.1.68
+
+### Patch Changes
+
+- Updated dependencies [[`7099459`](https://github.com/TanStack/db/commit/7099459291810b237a9fb24bbfe6e543852a2ab2)]:
+  - @tanstack/db@0.5.24
+
+## 0.1.67
+
+### Patch Changes
+
+- Updated dependencies [[`05130f2`](https://github.com/TanStack/db/commit/05130f2420eb682f11f099310a0af87afa3f35fe)]:
+  - @tanstack/db@0.5.23
+
+## 0.1.66
+
+### Patch Changes
+
+- Updated dependencies [[`f9b741e`](https://github.com/TanStack/db/commit/f9b741e9fb636be1c9f1502b7e28fe691bae2480)]:
+  - @tanstack/db@0.5.22
+
+## 0.1.65
+
+### Patch Changes
+
+- Updated dependencies [[`6745ed0`](https://github.com/TanStack/db/commit/6745ed003dc25cfd6fa0f7e60f708205a6069ff2), [`1b22e40`](https://github.com/TanStack/db/commit/1b22e40c56323cfa5e7f759272fed53320aa32f7), [`7a2cacd`](https://github.com/TanStack/db/commit/7a2cacd7a426530cb77844a8c2680f6b06e9ce2f), [`bdf9405`](https://github.com/TanStack/db/commit/bdf94059e7ab98b5181e0df7d8d25cd1dbb5ae58)]:
+  - @tanstack/db@0.5.21
+
+## 0.1.64
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @tanstack/db@0.5.20
+
+## 0.1.63
+
+### Patch Changes
+
+- Updated dependencies [[`29033b8`](https://github.com/TanStack/db/commit/29033b8f55b0ba5721371ad761037ec813440aa7), [`888ad6a`](https://github.com/TanStack/db/commit/888ad6afe5932b0467320c04fbd4583469cb9c47)]:
+  - @tanstack/db@0.5.19
+
+## 0.1.62
+
+### Patch Changes
+
+- Updated dependencies [[`c1247e8`](https://github.com/TanStack/db/commit/c1247e816950314da6d201613481577834c1d97a)]:
+  - @tanstack/db@0.5.18
+
+## 0.1.61
+
+### Patch Changes
+
+- Updated dependencies [[`f795a67`](https://github.com/TanStack/db/commit/f795a674f21659ef46ff370d4f3b9903a596bcaf), [`d542667`](https://github.com/TanStack/db/commit/d542667a3440415d8e6cbb449b20abd3cbd6855c), [`6503c09`](https://github.com/TanStack/db/commit/6503c091a259208331f471dca29abf086e881147), [`b1cc4a7`](https://github.com/TanStack/db/commit/b1cc4a7e018ffb6804ae7f1c99e9c6eb4bb22812)]:
+  - @tanstack/db@0.5.17
+
+## 0.1.60
+
+### Patch Changes
+
+- Updated dependencies [[`41308b8`](https://github.com/TanStack/db/commit/41308b8ee914aa467e22842cd454f06d1a60032e)]:
+  - @tanstack/db@0.5.16
+
+## 0.1.59
+
+### Patch Changes
+
+- Updated dependencies [[`32ec4d8`](https://github.com/TanStack/db/commit/32ec4d8478cca96f76f3a49efc259c95b85baa40)]:
+  - @tanstack/db@0.5.15
+
+## 0.1.58
+
+### Patch Changes
+
+- Updated dependencies [[`26ed0aa`](https://github.com/TanStack/db/commit/26ed0aad2def60e652508a99b2e980e73f70148e)]:
+  - @tanstack/db@0.5.14
+
+## 0.1.57
+
+### Patch Changes
+
+- Updated dependencies [[`8ed7725`](https://github.com/TanStack/db/commit/8ed7725514a6a501482a391162f7792aa8b371e5), [`01452bf`](https://github.com/TanStack/db/commit/01452bfd0d00da8bd52941a4954af73749473651)]:
+  - @tanstack/db@0.5.13
+
+## 0.1.56
+
+### Patch Changes
+
+- Updated dependencies [[`b3b1940`](https://github.com/TanStack/db/commit/b3b194000d8efcc2c6cc45a663029dadc26f13f0), [`09da081`](https://github.com/TanStack/db/commit/09da081b420fc915d7f0dc566c6cdbbc78582435), [`86ad40c`](https://github.com/TanStack/db/commit/86ad40c6bc37b2f5d4ad24d06f72168ca4b96161)]:
+  - @tanstack/db@0.5.12
+
+## 0.1.55
+
+### Patch Changes
+
+- Updated dependencies [[`c4b9399`](https://github.com/TanStack/db/commit/c4b93997432743d974749683059bf68a082d3e5b), [`a1a484e`](https://github.com/TanStack/db/commit/a1a484ec4d2331d702ab9c4b7e5b02622c76b3dd)]:
+  - @tanstack/db@0.5.11
+
+## 0.1.54
+
+### Patch Changes
+
+- Updated dependencies [[`1d19d22`](https://github.com/TanStack/db/commit/1d19d2219cbbaef6483845df1c3b078077e4e3bd), [`b3e4e80`](https://github.com/TanStack/db/commit/b3e4e80c4b73d96c15391ac25efb518c7ae7ccbb)]:
+  - @tanstack/db@0.5.10
+
+## 0.1.53
+
+### Patch Changes
+
+- Updated dependencies [[`5f474f1`](https://github.com/TanStack/db/commit/5f474f1eabd57e144ba05b0f33d848f7efc8fb07)]:
+  - @tanstack/db@0.5.9
+
+## 0.1.52
+
+### Patch Changes
+
+- Updated dependencies [[`954c8fe`](https://github.com/TanStack/db/commit/954c8fed5ed92a348ac8b6d8333bc69c955f4f60), [`51c73aa`](https://github.com/TanStack/db/commit/51c73aaa2b27b27966edb98fb6664beb44eac1ac)]:
+  - @tanstack/db@0.5.8
+
+## 0.1.51
+
+### Patch Changes
+
+- Updated dependencies [[`295cb45`](https://github.com/TanStack/db/commit/295cb45797572b232650eddd3d62ffa937fa2fd7)]:
+  - @tanstack/db@0.5.7
+
+## 0.1.50
+
+### Patch Changes
+
+- Updated dependencies [[`c8a2c16`](https://github.com/TanStack/db/commit/c8a2c16aa528427d5ddd55cda4ee59a5cb369b5f)]:
+  - @tanstack/db@0.5.6
+
 ## 0.1.49
 
 ### Patch Changes
@@ -432,7 +572,7 @@
   try {
     collection.insert(data)
   } catch (error) {
-    if (error.message.includes("already exists")) {
+    if (error.message.includes('already exists')) {
       // Handle duplicate key error
     }
   }
@@ -441,7 +581,7 @@
   **After:**
 
   ```ts
-  import { DuplicateKeyError } from "@tanstack/db"
+  import { DuplicateKeyError } from '@tanstack/db'
 
   try {
     collection.insert(data)
@@ -458,14 +598,14 @@
 
   ```ts
   // Electric collection errors were imported from @tanstack/db
-  import { ElectricInsertHandlerMustReturnTxIdError } from "@tanstack/db"
+  import { ElectricInsertHandlerMustReturnTxIdError } from '@tanstack/db'
   ```
 
   **After:**
 
   ```ts
   // Now import from the specific adapter package
-  import { ElectricInsertHandlerMustReturnTxIdError } from "@tanstack/electric-db-collection"
+  import { ElectricInsertHandlerMustReturnTxIdError } from '@tanstack/electric-db-collection'
   ```
 
   ### Unified Error Handling
@@ -473,14 +613,14 @@
   **New:**
 
   ```ts
-  import { TanStackDBError } from "@tanstack/db"
+  import { TanStackDBError } from '@tanstack/db'
 
   try {
     // Any TanStack DB operation
   } catch (error) {
     if (error instanceof TanStackDBError) {
       // Handle all TanStack DB errors uniformly
-      console.log("TanStack DB error:", error.message)
+      console.log('TanStack DB error:', error.message)
     }
   }
   ```

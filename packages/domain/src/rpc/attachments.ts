@@ -1,11 +1,12 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { AttachmentId } from "../ids"
+import { AttachmentId } from "@hazel/schema"
 import { Attachment } from "../models"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteChannelId } from "./routing-fields"
 
 /**
  * Error thrown when an attachment is not found.
@@ -47,11 +48,13 @@ export class AttachmentRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("attachment.delete", {
-		payload: Schema.Struct({ id: AttachmentId }),
+	Rpc.make("attachment.delete", {
+		payload: Schema.Struct({ id: AttachmentId, channelId: RouteChannelId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(AttachmentNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([AttachmentNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["attachments:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * AttachmentComplete
@@ -65,11 +68,13 @@ export class AttachmentRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not the uploader
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("attachment.complete", {
-		payload: Schema.Struct({ id: AttachmentId }),
-		success: Attachment.Model,
-		error: Schema.Union(AttachmentNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+	Rpc.make("attachment.complete", {
+		payload: Schema.Struct({ id: AttachmentId, channelId: RouteChannelId }),
+		success: Attachment.Schema,
+		error: Schema.Union([AttachmentNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["attachments:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * AttachmentFail
@@ -83,12 +88,15 @@ export class AttachmentRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not the uploader
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("attachment.fail", {
+	Rpc.make("attachment.fail", {
 		payload: Schema.Struct({
+			channelId: RouteChannelId,
 			id: AttachmentId,
 			reason: Schema.optional(Schema.String),
 		}),
 		success: Schema.Void,
-		error: Schema.Union(AttachmentNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([AttachmentNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["attachments:write"])
+		.middleware(AuthMiddleware),
 ) {}

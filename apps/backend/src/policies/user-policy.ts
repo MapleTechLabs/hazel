@@ -1,36 +1,20 @@
-import { ErrorUtils, policy, type UserId } from "@hazel/domain"
-import { Effect } from "effect"
+import type { UserId } from "@hazel/schema"
+import { Context, Effect, Layer } from "effect"
+import { makePolicy } from "../lib/policy-utils"
 
-export class UserPolicy extends Effect.Service<UserPolicy>()("UserPolicy/Policy", {
-	effect: Effect.gen(function* () {
+export class UserPolicy extends Context.Service<UserPolicy>()("UserPolicy/Policy", {
+	make: Effect.gen(function* () {
 		const policyEntity = "User" as const
+		const authorize = makePolicy(policyEntity)
 
-		const canRead = (_id: UserId) =>
-			ErrorUtils.refailUnauthorized(
-				policyEntity,
-				"select",
-			)(policy(policyEntity, "select", (_actor) => Effect.succeed(true)))
+		const canRead = (_id: UserId) => authorize("select", (_actor) => Effect.succeed(true))
 
-		const canCreate = () =>
-			ErrorUtils.refailUnauthorized(
-				policyEntity,
-				"create",
-			)(policy(policyEntity, "create", (_actor) => Effect.succeed(true)))
+		const canCreate = () => authorize("create", (_actor) => Effect.succeed(true))
 
-		const canUpdate = (id: UserId) =>
-			ErrorUtils.refailUnauthorized(
-				policyEntity,
-				"update",
-			)(policy(policyEntity, "update", (actor) => Effect.succeed(actor.id === id)))
+		const canUpdate = (id: UserId) => authorize("update", (actor) => Effect.succeed(actor.id === id))
 
-		const canDelete = (id: UserId) =>
-			ErrorUtils.refailUnauthorized(
-				policyEntity,
-				"delete",
-			)(policy(policyEntity, "delete", (actor) => Effect.succeed(actor.id === id)))
-
-		return { canCreate, canUpdate, canDelete, canRead } as const
+		return { canCreate, canUpdate, canRead } as const
 	}),
-	dependencies: [],
-	accessors: true,
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make)
+}

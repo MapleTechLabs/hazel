@@ -1,7 +1,7 @@
-# `@effect/platform-node-shared`
+# `@effect/platform-node`
 
-Provides shared utilities and abstractions used by the [`@effect/platform-node`](https://github.com/Effect-TS/effect/tree/main/packages/platform-node) package.
+Provides Node.js-specific implementations for the abstractions defined in [`@effect/platform`](https://github.com/Effect-TS/effect/tree/main/packages/platform), allowing you to write platform-independent code that integrates smoothly with Node.js.
 
 ## Documentation
 
-- **API Reference**: [View the full documentation](https://effect-ts.github.io/effect/docs/platform-node-shared).
+- **API Reference**: [View the full documentation](https://effect-ts.github.io/effect/docs/platform-node).

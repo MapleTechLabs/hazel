@@ -1,6 +1,6 @@
 import { createPrivateKey } from "node:crypto"
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "@effect/platform"
-import { Config, Effect, Redacted, Schema } from "effect"
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
+import { Context, Config, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { SignJWT } from "jose"
 
 // ============================================================================
@@ -61,7 +61,7 @@ const InstallationTokenApiResponse = Schema.Struct({
 
 // GitHub API error response schema
 const GitHubErrorApiResponse = Schema.Struct({
-	message: Schema.optionalWith(Schema.String, { default: () => "Unknown error" }),
+	message: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed("Unknown error"))),
 })
 
 // ============================================================================
@@ -76,11 +76,13 @@ const GitHubErrorApiResponse = Schema.Struct({
  * - GITHUB_APP_SLUG: The app slug (from URL)
  * - GITHUB_APP_PRIVATE_KEY: Base64-encoded PEM private key
  */
+const GITHUB_APP_KEYS = ["GITHUB_APP_ID", "GITHUB_APP_SLUG", "GITHUB_APP_PRIVATE_KEY"] as const
+
 export const loadGitHubAppConfig = Effect.withSpan("GitHubAppJWTService.loadConfig")(
 	Effect.gen(function* () {
-		const appId = yield* Config.string("GITHUB_APP_ID")
-		const appSlug = yield* Config.string("GITHUB_APP_SLUG")
-		const privateKeyBase64 = yield* Config.redacted("GITHUB_APP_PRIVATE_KEY")
+		const appId = yield* Config.String("GITHUB_APP_ID")
+		const appSlug = yield* Config.String("GITHUB_APP_SLUG")
+		const privateKeyBase64 = yield* Config.Redacted("GITHUB_APP_PRIVATE_KEY")
 
 		// Decode the base64 private key
 		const privateKey = Buffer.from(Redacted.value(privateKeyBase64), "base64").toString("utf-8")
@@ -157,28 +159,40 @@ const GITHUB_API_BASE_URL = "https://api.github.com"
  * // token.expiresAt is when it expires (1 hour from now)
  * ```
  */
-export class GitHubAppJWTService extends Effect.Service<GitHubAppJWTService>()("GitHubAppJWTService", {
-	accessors: true,
-	effect: Effect.gen(function* () {
-		// Load config once at service initialization
-		// Use orDie since missing config is a fatal startup error
-		const config = yield* loadGitHubAppConfig.pipe(Effect.orDie)
+export class GitHubAppJWTService extends Context.Service<GitHubAppJWTService>()("GitHubAppJWTService", {
+	make: Effect.gen(function* () {
+		// Optional: a stage without a GitHub App (none of the three keys: previews, local dev) still
+		// serves everything else, and only the GitHub integration fails, with `GitHubAppJWTError`.
+		// A partial config is still a fatal startup error.
+		const present = yield* Config.all(
+			GITHUB_APP_KEYS.map((key) => Config.option(Config.String(key)).pipe(Config.map(Option.isSome))),
+		)
+		const config = present.includes(true)
+			? Option.some(yield* loadGitHubAppConfig.pipe(Effect.orDie))
+			: Option.none<GitHubAppConfig>()
 		const httpClient = yield* HttpClient.HttpClient
 
-		/**
-		 * Get the app slug for building installation URLs.
-		 */
-		const getAppSlug = (): string => config.appSlug
+		const requireConfig = Option.match(config, {
+			onNone: () =>
+				Effect.fail(
+					new GitHubAppJWTError({
+						message:
+							"GitHub App is not configured (GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_PRIVATE_KEY)",
+					}),
+				),
+			onSome: Effect.succeed,
+		})
 
 		/**
 		 * Build the installation URL for redirecting users.
 		 */
-		const buildInstallationUrl = (state: string): URL => {
-			// Use select_target to let users choose which org/account to install on
-			const url = new URL(`https://github.com/apps/${config.appSlug}/installations/select_target`)
-			url.searchParams.set("state", state)
-			return url
-		}
+		const buildInstallationUrl = (state: string): Effect.Effect<URL, GitHubAppJWTError> =>
+			Effect.map(requireConfig, ({ appSlug }) => {
+				// Use select_target to let users choose which org/account to install on
+				const url = new URL(`https://github.com/apps/${appSlug}/installations/select_target`)
+				url.searchParams.set("state", state)
+				return url
+			})
 
 		/**
 		 * Generate an installation access token using the App JWT.
@@ -209,8 +223,8 @@ export class GitHubAppJWTService extends Effect.Service<GitHubAppJWTService>()("
 				// Handle error status codes
 				if (response.status >= 400) {
 					const errorBody = yield* response.json.pipe(
-						Effect.flatMap(Schema.decodeUnknown(GitHubErrorApiResponse)),
-						Effect.catchAll((error) =>
+						Effect.flatMap(Schema.decodeUnknownEffect(GitHubErrorApiResponse)),
+						Effect.catch((error) =>
 							Effect.logDebug(`Failed to parse GitHub error response: ${String(error)}`).pipe(
 								Effect.as({ message: "Unknown error" }),
 							),
@@ -227,7 +241,7 @@ export class GitHubAppJWTService extends Effect.Service<GitHubAppJWTService>()("
 
 				// Parse successful response
 				const data = yield* response.json.pipe(
-					Effect.flatMap(Schema.decodeUnknown(InstallationTokenApiResponse)),
+					Effect.flatMap(Schema.decodeUnknownEffect(InstallationTokenApiResponse)),
 					Effect.mapError(
 						(error) =>
 							new GitHubInstallationTokenError({
@@ -243,21 +257,14 @@ export class GitHubAppJWTService extends Effect.Service<GitHubAppJWTService>()("
 					expiresAt: new Date(data.expires_at),
 				} satisfies InstallationToken
 			}).pipe(
-				Effect.catchTag("RequestError", (error) =>
+				Effect.catchTag("HttpClientError", (error) =>
 					Effect.fail(
 						new GitHubInstallationTokenError({
 							installationId,
-							message: `Network error: ${String(error)}`,
-							cause: error,
-						}),
-					),
-				),
-				Effect.catchTag("ResponseError", (error) =>
-					Effect.fail(
-						new GitHubInstallationTokenError({
-							installationId,
-							message: `Response error: ${String(error)}`,
-							status: error.response.status,
+							message: error.response
+								? `Response error: ${String(error)}`
+								: `Network error: ${String(error)}`,
+							status: error.response?.status,
 							cause: error,
 						}),
 					),
@@ -273,8 +280,9 @@ export class GitHubAppJWTService extends Effect.Service<GitHubAppJWTService>()("
 		const getInstallationToken = Effect.fn("GitHubAppJWTService.getInstallationToken")(function* (
 			installationId: string,
 		) {
+			const { appId, privateKey } = yield* requireConfig
 			// Generate a fresh JWT for this request
-			const jwt = yield* generateAppJWT(config.appId, config.privateKey)
+			const jwt = yield* generateAppJWT(appId, privateKey)
 
 			// Exchange JWT for installation token
 			const token = yield* generateInstallationToken(installationId, jwt)
@@ -283,10 +291,11 @@ export class GitHubAppJWTService extends Effect.Service<GitHubAppJWTService>()("
 		})
 
 		return {
-			getAppSlug,
+			isConfigured: Option.isSome(config),
 			buildInstallationUrl,
 			getInstallationToken,
 		}
 	}),
-	dependencies: [FetchHttpClient.layer],
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(FetchHttpClient.layer))
+}

@@ -1,171 +1,103 @@
-import { Database } from "@hazel/db"
-import { CurrentUser, InternalServerError, policyUse, withRemapDbErrors } from "@hazel/domain"
-import { UserNotFoundError, UserRpcs } from "@hazel/domain/rpc"
-import { Effect, Option } from "effect"
-import { generateTransactionId } from "../../lib/create-transactionId"
+/**
+ * Runs in the api Worker over the directory (D1): the `users` row is the directory's. D1 has no
+ * transactions, so each write is one statement; the changed row is then projected to every org in
+ * the user's `membership_index` (`org.upsertUserProjection`, applied right away, best effort) and
+ * the response's transactionId is one of those orgs' write positions, so the client can await the
+ * projection its collections read.
+ */
+import { UserRepo } from "@hazel/backend-core"
+import { SQLite, schema } from "@hazel/db"
+import { CurrentUser, UnauthorizedError, withRemapDbErrors } from "@hazel/domain"
+import { UserResponse, UserRpcs } from "@hazel/domain/rpc"
+import type { UserId } from "@hazel/schema"
+import { Config, Effect, Option } from "effect"
 import { UserPolicy } from "../../policies/user-policy"
-import { UserRepo } from "../../repositories/user-repo"
-import { WorkOS } from "../../services/workos"
+import { Directory } from "../../services/directory"
+import { OrgEffects } from "../../worker/objects/effects/org-effects"
+import { fanOut, transactionIdOf } from "../../worker/objects/fanout"
+import { orgTarget } from "../../worker/objects/kinds"
+import { toUserProjection } from "../../worker/objects/org/projections"
+
+/** Copy `userId`'s directory row to each of their orgs; returns the transactionId to await. */
+export const projectUserToOrgs = Effect.fn("User.projectToOrgs")(function* (userId: UserId) {
+	const directory = yield* Directory
+	const row = yield* directory.db.first(
+		SQLite.from(schema.usersTable)
+			.select()
+			.where(($) => [$.id.eq(userId)])
+			.limit(1),
+	)
+	if (Option.isNone(row)) return transactionIdOf([])
+	const organizations = yield* directory.organizationsOf(userId)
+	const applied = yield* fanOut(
+		OrgEffects.upsertUserProjection,
+		organizations.map(orgTarget),
+		toUserProjection(row.value),
+		crypto.randomUUID(),
+	)
+	return transactionIdOf(applied)
+})
 
 export const UserRpcLive = UserRpcs.toLayer(
 	Effect.gen(function* () {
-		const db = yield* Database.Database
-		const workos = yield* WorkOS
+		const userPolicy = yield* UserPolicy
+		const userRepo = yield* UserRepo
+		const publicUrl = yield* Config.option(Config.String("S3_PUBLIC_URL"))
 
 		return {
 			"user.me": () => CurrentUser.Context,
 
 			"user.update": ({ id, ...payload }) =>
-				db
-					.transaction(
-						Effect.gen(function* () {
-							const updatedUser = yield* UserRepo.update({
-								id,
-								...payload,
-							}).pipe(policyUse(UserPolicy.canUpdate(id)))
-
-							yield* workos
-								.call((client) =>
-									client.userManagement.updateUser({
-										userId: updatedUser.externalId,
-										firstName: payload.firstName,
-										lastName: payload.lastName,
-									}),
-								)
-								.pipe(
-									Effect.mapError(
-										(error) =>
-											new InternalServerError({
-												message: "Failed to update user in WorkOS",
-												detail: String(error.cause),
-												cause: String(error),
-											}),
-									),
-								)
-
-							const txid = yield* generateTransactionId()
-
-							return {
-								data: updatedUser,
-								transactionId: txid,
-							}
-						}),
-					)
-					.pipe(withRemapDbErrors("User", "update")),
-
-			"user.delete": ({ id }) =>
-				db
-					.transaction(
-						Effect.gen(function* () {
-							const userOption = yield* UserRepo.findById(id).pipe(
-								policyUse(UserPolicy.canRead(id)),
-							)
-
-							const user = yield* Option.match(userOption, {
-								onNone: () => Effect.fail(new UserNotFoundError({ userId: id })),
-								onSome: (user) => Effect.succeed(user),
-							})
-
-							yield* UserRepo.deleteById(id).pipe(policyUse(UserPolicy.canDelete(id)))
-
-							yield* workos
-								.call((client) => client.userManagement.deleteUser(user.externalId))
-								.pipe(
-									Effect.mapError(
-										(error) =>
-											new InternalServerError({
-												message: "Failed to delete user in WorkOS",
-												detail: String(error.cause),
-												cause: String(error),
-											}),
-									),
-								)
-
-							const txid = yield* generateTransactionId()
-
-							return { transactionId: txid }
-						}),
-					)
-					.pipe(withRemapDbErrors("User", "delete")),
+				Effect.gen(function* () {
+					yield* userPolicy.canUpdate(id)
+					if (
+						payload.avatarUrl != null &&
+						!isAllowedAvatarUrl(payload.avatarUrl, Option.getOrUndefined(publicUrl), id)
+					) {
+						return yield* Effect.fail(
+							new UnauthorizedError({
+								message: "Invalid avatar URL",
+								detail: "Use an avatar uploaded for this user",
+							}),
+						)
+					}
+					const updatedUser = yield* userRepo.update({ id, ...payload, updatedAt: new Date() })
+					const transactionId = yield* projectUserToOrgs(id)
+					return new UserResponse({ data: updatedUser, transactionId })
+				}).pipe(withRemapDbErrors("User", "update")),
 
 			"user.finalizeOnboarding": () =>
-				db
-					.transaction(
-						Effect.gen(function* () {
-							const currentUser = yield* CurrentUser.Context
-
-							// Update the current user's isOnboarded flag
-							const updatedUser = yield* UserRepo.update({
-								id: currentUser.id,
-								isOnboarded: true,
-							}).pipe(policyUse(UserPolicy.canUpdate(currentUser.id)))
-
-							const txid = yield* generateTransactionId()
-
-							return {
-								data: updatedUser,
-								transactionId: txid,
-							}
-						}),
-					)
-					.pipe(withRemapDbErrors("User", "update")),
-
-			"user.resetAvatar": () =>
-				db
-					.transaction(
-						Effect.gen(function* () {
-							const currentUser = yield* CurrentUser.Context
-
-							// Fetch user from database to get externalId
-							const userOption = yield* UserRepo.findById(currentUser.id).pipe(
-								policyUse(UserPolicy.canRead(currentUser.id)),
-							)
-
-							const user = yield* Option.match(userOption, {
-								onNone: () =>
-									Effect.fail(
-										new InternalServerError({
-											message: "User not found",
-											detail: `User ${currentUser.id} not found in database`,
-										}),
-									),
-								onSome: (user) => Effect.succeed(user),
-							})
-
-							// Fetch user from WorkOS to get their original profile picture
-							const workosUser = yield* workos
-								.call((client) => client.userManagement.getUser(user.externalId))
-								.pipe(
-									Effect.mapError(
-										(error) =>
-											new InternalServerError({
-												message: "Failed to fetch user from WorkOS",
-												detail: String(error.cause),
-												cause: String(error),
-											}),
-									),
-								)
-
-							// Use WorkOS profile picture, fallback to Vercel avatar if not available
-							const avatarUrl =
-								workosUser.profilePictureUrl ||
-								`https://avatar.vercel.sh/${user.externalId}.svg`
-
-							// Update user's avatar in our database
-							const updatedUser = yield* UserRepo.update({
-								id: currentUser.id,
-								avatarUrl,
-							}).pipe(policyUse(UserPolicy.canUpdate(currentUser.id)))
-
-							const txid = yield* generateTransactionId()
-
-							return {
-								data: updatedUser,
-								transactionId: txid,
-							}
-						}),
-					)
-					.pipe(withRemapDbErrors("User", "update")),
+				Effect.gen(function* () {
+					const currentUser = yield* CurrentUser.Context
+					yield* userPolicy.canUpdate(currentUser.id)
+					const updatedUser = yield* userRepo.update({
+						id: currentUser.id,
+						isOnboarded: true,
+						updatedAt: new Date(),
+					})
+					const transactionId = yield* projectUserToOrgs(currentUser.id)
+					return new UserResponse({ data: updatedUser, transactionId })
+				}).pipe(withRemapDbErrors("User", "update")),
 		}
 	}),
 )
+
+/** Profile avatars must come from this user's upload prefix on the configured CDN. */
+export const isAllowedAvatarUrl = (value: string, publicUrl: string | undefined, userId: string): boolean => {
+	if (publicUrl === undefined) return false
+	try {
+		const base = new URL(publicUrl)
+		const avatar = new URL(value)
+		const prefix = `${base.pathname.replace(/\/$/, "")}/avatars/${userId}/`
+		return (
+			(avatar.protocol === "https:" || avatar.protocol === "http:") &&
+			avatar.origin === base.origin &&
+			avatar.username === "" &&
+			avatar.password === "" &&
+			avatar.pathname.startsWith(prefix) &&
+			avatar.pathname.length > prefix.length
+		)
+	} catch {
+		return false
+	}
+}

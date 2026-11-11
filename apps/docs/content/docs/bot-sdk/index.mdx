@@ -8,9 +8,10 @@ The Hazel Bot SDK lets you build bots that respond to messages, handle slash com
 
 ## Features
 
-- **Real-time events** - React to messages, channels, and members instantly via Electric SQL
+- **Real-time events** - React to messages, channels, and members instantly via the bot gateway websocket
 - **Type-safe commands** - Define slash commands with Schema-validated arguments
 - **Message operations** - Send, reply, update, delete, and react to messages
+- **AI streaming** - Stream AI responses in real-time with tool call visualization and extended thinking display
 - **Built-in rate limiting** - Automatic throttling to prevent API limits
 - **Error recovery** - Retries with exponential backoff for transient failures
 
@@ -18,7 +19,7 @@ The Hazel Bot SDK lets you build bots that respond to messages, handle slash com
 
 ```typescript
 import { Effect, Schema } from "effect"
-import { Command, CommandGroup, runHazelBot } from "@hazel/bot-sdk"
+import { Command, CommandGroup, runHazelBot } from "@hazel-chat/bot-sdk"
 
 // Define a slash command with typed arguments
 const GreetCommand = Command.make("greet", {

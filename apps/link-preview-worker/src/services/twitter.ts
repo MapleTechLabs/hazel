@@ -1,8 +1,11 @@
-import { FetchHttpClient, HttpClient } from "@effect/platform"
-import { Effect, Schema } from "effect"
+import { FetchHttpClient, HttpClient } from "effect/http"
+import { Context, Effect, Layer, Option, Schema } from "effect"
 
 const SYNDICATION_URL = "https://cdn.syndication.twimg.com"
 const TWEET_ID_REGEX = /^[0-9]+$/
+
+/** The body the syndication API answers a failed request with. */
+const SyndicationErrorBody = Schema.Struct({ error: Schema.String })
 
 export class TwitterApiError extends Schema.TaggedError<TwitterApiError>("TwitterApiError")(
 	"TwitterApiError",
@@ -72,8 +75,8 @@ function buildTweetUrl(id: string): string {
  * Twitter API Service
  * Provides methods to interact with Twitter's syndication API
  */
-export class TwitterApi extends Effect.Service<TwitterApi>()("TwitterApi", {
-	effect: Effect.gen(function* () {
+export class TwitterApi extends Context.Service<TwitterApi>()("TwitterApi", {
+	make: Effect.gen(function* () {
 		const httpClient = yield* HttpClient.HttpClient
 
 		return {
@@ -108,9 +111,7 @@ export class TwitterApi extends Effect.Service<TwitterApi>()("TwitterApi", {
 						)
 
 					// Parse JSON response
-					const data: any = yield* response.json.pipe(
-						Effect.catchAll(() => Effect.succeed(undefined)),
-					)
+					const data: any = yield* response.json.pipe(Effect.catch(() => Effect.succeed(undefined)))
 
 					// Handle successful response
 					if (response.status >= 200 && response.status < 300) {
@@ -152,10 +153,13 @@ export class TwitterApi extends Effect.Service<TwitterApi>()("TwitterApi", {
 					}
 
 					// Handle other errors
-					const errorMessage =
-						data && typeof data.error === "string"
-							? data.error
-							: `Failed to fetch tweet from "${url}" with status ${response.status}`
+					const errorMessage = Schema.decodeUnknownOption(SyndicationErrorBody)(data).pipe(
+						Option.match({
+							onNone: () =>
+								`Failed to fetch tweet from "${url}" with status ${response.status}`,
+							onSome: (body) => body.error,
+						}),
+					)
 
 					return yield* Effect.fail(
 						new TwitterApiError({
@@ -167,5 +171,6 @@ export class TwitterApi extends Effect.Service<TwitterApi>()("TwitterApi", {
 				}),
 		}
 	}),
-	dependencies: [FetchHttpClient.layer],
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(FetchHttpClient.layer))
+}

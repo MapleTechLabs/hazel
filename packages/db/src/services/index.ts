@@ -1,5 +1,3 @@
-export type { DatabaseError, TransactionClient } from "./database"
+export type { DatabaseError, DatabaseShape } from "./database"
 export * as Database from "./database"
-export * as DrizzleEffect from "./drizzle-effect"
-export * as Model from "./model"
-export * as ModelRepository from "./model-repository"
+export * as Repository from "./repository"

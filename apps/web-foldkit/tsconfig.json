@@ -1,0 +1,21 @@
+{
+	"include": ["src/**/*.ts", "vite.config.ts"],
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"jsx": "preserve",
+		"exactOptionalPropertyTypes": false,
+		"types": ["vite/client"],
+		"paths": {
+			"~/*": ["./src/core/*"],
+			"foldkit-internal/*": ["./node_modules/foldkit/dist/*"]
+		}
+	}
+}

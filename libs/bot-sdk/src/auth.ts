@@ -1,6 +1,7 @@
-import { FetchHttpClient, HttpApiClient, HttpClient, HttpClientRequest } from "@effect/platform"
+import { HttpApiClient } from "effect/http-api"
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { HazelApi } from "@hazel/domain/http"
-import { Duration, Effect, Schedule } from "effect"
+import { Layer, Context, Duration, Effect, Schedule } from "effect"
 import { AuthenticationError } from "./errors.ts"
 
 /**
@@ -36,9 +37,8 @@ export interface BotAuthContext {
 /**
  * Service for bot authentication
  */
-export class BotAuth extends Effect.Service<BotAuth>()("BotAuth", {
-	accessors: true,
-	effect: Effect.fn(function* (context: BotAuthContext) {
+export class BotAuth extends Context.Service<BotAuth>()("BotAuth", {
+	make: Effect.fn(function* (context: BotAuthContext) {
 		return {
 			getContext: Effect.succeed(context),
 
@@ -56,7 +56,9 @@ export class BotAuth extends Effect.Service<BotAuth>()("BotAuth", {
 				}),
 		}
 	}),
-}) {}
+}) {
+	static readonly layer = (context: BotAuthContext) => Layer.effect(this, this.make(context))
+}
 
 /**
  * Helper to create auth context from bot token by calling the backend API
@@ -83,8 +85,8 @@ export const createAuthContextFromToken = (
 			Effect.retry(
 				Schedule.exponential("1 second", 2).pipe(
 					Schedule.jittered,
-					Schedule.whileOutput((duration) =>
-						Duration.lessThanOrEqualTo(duration, Duration.seconds(30)),
+					Schedule.while((metadata) =>
+						Duration.isLessThanOrEqualTo(metadata.output, Duration.seconds(30)),
 					),
 				),
 			),

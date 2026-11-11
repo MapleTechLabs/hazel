@@ -1,107 +1,47 @@
 /**
- * @since 2.0.0
+ * @since 4.0.0
  */
-import type * as Channel from "./Channel.js"
-import type * as Effect from "./Effect.js"
-import * as internal from "./internal/effectable.js"
-import type * as Sink from "./Sink.js"
-import type * as Stream from "./Stream.js"
+import type * as Effect from "./Effect.ts"
+import type * as Fiber from "./Fiber.ts"
+import { evaluate, makePrimitiveProto } from "./internal/core.ts"
 
 /**
- * @since 2.0.0
- * @category type ids
+ * Create a low-level `Effect` prototype.
+ *
+ * When the effect is evaluated, it will call `evaluate` with the current fiber.
+ *
+ * @since 4.0.0
+ * @category Prototypes
  */
-export const EffectTypeId: Effect.EffectTypeId = internal.EffectTypeId
+export const Prototype = <A extends Effect.Effect<any, any, any>>(options: {
+  readonly label: string
+  readonly evaluate: (
+    this: A,
+    fiber: Fiber.Fiber<any, any>
+  ) => Effect.Effect<Effect.Success<A>, Effect.Error<A>, Effect.Services<A>>
+}): Effect.Effect<Effect.Success<A>, Effect.Error<A>, Effect.Services<A>> =>
+  makePrimitiveProto({
+    op: options.label,
+    [evaluate]: options.evaluate
+  }) as any
+
+const Base: new<A, E, R>() => Effect.Effect<A, E, R> = (() => {
+  const Base = function() {}
+  Base.prototype = Prototype({
+    label: "Effectable",
+    evaluate(_) {
+      return this.asEffect()
+    }
+  })
+  return Base as any
+})()
 
 /**
- * @since 2.0.0
- * @category type ids
- */
-export type EffectTypeId = Effect.EffectTypeId
-
-/**
- * @since 2.0.0
- * @category type ids
- */
-export const StreamTypeId: Stream.StreamTypeId = internal.StreamTypeId
-
-/**
- * @since 2.0.0
- * @category type ids
- */
-export type StreamTypeId = Stream.StreamTypeId
-
-/**
- * @since 2.0.0
- * @category type ids
- */
-export const SinkTypeId: Sink.SinkTypeId = internal.SinkTypeId
-
-/**
- * @since 2.0.0
- * @category type ids
- */
-export type SinkTypeId = Sink.SinkTypeId
-
-/**
- * @since 2.0.0
- * @category type ids
- */
-export const ChannelTypeId: Channel.ChannelTypeId = internal.ChannelTypeId
-
-/**
- * @since 2.0.0
- * @category type ids
- */
-export type ChannelTypeId = Channel.ChannelTypeId
-
-/**
- * @since 2.0.0
- * @category models
- */
-export interface CommitPrimitive {
-  new<A, E = never, R = never>(): Effect.Effect<A, E, R>
-}
-
-/**
- * @since 2.0.0
- * @category prototypes
- */
-export const EffectPrototype: Effect.Effect<never> = internal.EffectPrototype
-
-/**
- * @since 2.0.0
- * @category prototypes
- */
-export const CommitPrototype: Effect.Effect<never> = internal.CommitPrototype
-
-/**
- * @since 2.0.0
- * @category prototypes
- */
-export const StructuralCommitPrototype: Effect.Effect<never> = internal.StructuralCommitPrototype
-
-const Base: CommitPrimitive = internal.Base
-const StructuralBase: CommitPrimitive = internal.StructuralBase
-
-/**
- * @since 2.0.0
- * @category constructors
+ * An abstract class that can be extended to create an `Effect`.
+ *
+ * @since 4.0.0
+ * @category Constructors
  */
 export abstract class Class<A, E = never, R = never> extends Base<A, E, R> {
-  /**
-   * @since 2.0.0
-   */
-  abstract commit(): Effect.Effect<A, E, R>
-}
-
-/**
- * @since 2.0.0
- * @category constructors
- */
-export abstract class StructuralClass<A, E = never, R = never> extends StructuralBase<A, E, R> {
-  /**
-   * @since 2.0.0
-   */
-  abstract commit(): Effect.Effect<A, E, R>
+  abstract override asEffect(): Effect.Effect<A, E, R>
 }

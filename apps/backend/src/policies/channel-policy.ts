@@ -1,14 +1,15 @@
-import { type ChannelId, ErrorUtils, type OrganizationId, policy, policyCompose } from "@hazel/domain"
-import { Effect, pipe } from "effect"
-import { ChannelRepo } from "../repositories/channel-repo"
-import { OrganizationPolicy } from "./organization-policy"
+import { ChannelRepo } from "@hazel/backend-core"
+import { ErrorUtils } from "@hazel/domain"
+import type { ChannelId, OrganizationId } from "@hazel/schema"
+import { Context, Effect, Layer } from "effect"
+import { withAnnotatedScope } from "../lib/policy-utils"
+import { OrgResolver } from "../services/org-resolver"
 
-export class ChannelPolicy extends Effect.Service<ChannelPolicy>()("ChannelPolicy/Policy", {
-	effect: Effect.gen(function* () {
+export class ChannelPolicy extends Context.Service<ChannelPolicy>()("ChannelPolicy/Policy", {
+	make: Effect.gen(function* () {
 		const policyEntity = "Channel" as const
 
-		const organizationPolicy = yield* OrganizationPolicy
-
+		const orgResolver = yield* OrgResolver
 		const channelRepo = yield* ChannelRepo
 
 		const canCreate = (organizationId: OrganizationId) =>
@@ -16,9 +17,8 @@ export class ChannelPolicy extends Effect.Service<ChannelPolicy>()("ChannelPolic
 				policyEntity,
 				"create",
 			)(
-				pipe(
-					organizationPolicy.isMember(organizationId),
-					policyCompose(policy(policyEntity, "create", (_actor) => Effect.succeed(true))),
+				withAnnotatedScope((scope) =>
+					orgResolver.requireScope(organizationId, scope, policyEntity, "create"),
 				),
 			)
 
@@ -28,9 +28,13 @@ export class ChannelPolicy extends Effect.Service<ChannelPolicy>()("ChannelPolic
 				"update",
 			)(
 				channelRepo.with(id, (channel) =>
-					pipe(
-						organizationPolicy.canUpdate(channel.organizationId),
-						policyCompose(policy(policyEntity, "update", (_actor) => Effect.succeed(true))),
+					withAnnotatedScope((scope) =>
+						orgResolver.requireAdminOrOwner(
+							channel.organizationId,
+							scope,
+							policyEntity,
+							"update",
+						),
 					),
 				),
 			)
@@ -41,15 +45,22 @@ export class ChannelPolicy extends Effect.Service<ChannelPolicy>()("ChannelPolic
 				"delete",
 			)(
 				channelRepo.with(id, (channel) =>
-					pipe(
-						organizationPolicy.canUpdate(channel.organizationId),
-						policyCompose(policy(policyEntity, "delete", (_actor) => Effect.succeed(true))),
+					withAnnotatedScope((scope) =>
+						orgResolver.requireAdminOrOwner(
+							channel.organizationId,
+							scope,
+							policyEntity,
+							"delete",
+						),
 					),
 				),
 			)
 
 		return { canUpdate, canDelete, canCreate } as const
 	}),
-	dependencies: [ChannelRepo.Default, OrganizationPolicy.Default],
-	accessors: true,
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make).pipe(
+		Layer.provide(ChannelRepo.layer),
+		Layer.provide(OrgResolver.layer),
+	)
+}

@@ -8,8 +8,7 @@ import type { AppProviderConfig, OAuthTokens } from "../provider-config"
  * This type matches the service returned by GitHubAppJWTService.
  */
 interface GitHubAppJWTServiceInterface {
-	readonly getAppSlug: () => string
-	readonly buildInstallationUrl: (state: string) => URL
+	readonly buildInstallationUrl: (state: string) => Effect.Effect<URL, GitHub.GitHubAppJWTError>
 	readonly getInstallationToken: (
 		installationId: string,
 	) => Effect.Effect<
@@ -56,7 +55,8 @@ export const createGitHubAppProvider = (
 	 * Build the GitHub App installation URL.
 	 * This redirects users to install the app on their account/org.
 	 */
-	buildAuthorizationUrl: (state: string) => Effect.succeed(jwtService.buildInstallationUrl(state)),
+	// The registry builds this provider only when the app is configured, so the error is a defect.
+	buildAuthorizationUrl: (state: string) => jwtService.buildInstallationUrl(state).pipe(Effect.orDie),
 
 	/**
 	 * Exchange installation ID for tokens.

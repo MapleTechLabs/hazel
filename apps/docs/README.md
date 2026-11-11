@@ -8,8 +8,8 @@ See the [root README](../../README.md) for development setup instructions.
 
 ## Development
 
-Once setup is complete, start all services from the monorepo root:
+Once setup is complete, start the docs site (port 3012). The root `bun run dev` does not start it:
 
 ```bash
-bun run dev
+cd apps/docs && bun run dev
 ```

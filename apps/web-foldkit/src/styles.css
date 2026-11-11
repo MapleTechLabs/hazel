@@ -1,0 +1,22 @@
+@import "./core/styles/styles.css";
+@import "./core/styles/code-syntax.css";
+@import "./chat/viewer/image-viewer.css";
+
+@source "./";
+
+/*
+ * From prosemirror-view's stylesheet: the separator ProseMirror puts after an inline atom (a mention)
+ * that ends a line must stay inline, or preflight's `img { display: block }` moves the caret to a new line.
+ */
+img.ProseMirror-separator {
+	display: inline !important;
+	border: none !important;
+	margin: 0 !important;
+}
+
+/* React Aria injects this at runtime for every pressable; the ported controls carry the same attribute. */
+@layer {
+	[data-react-aria-pressable] {
+		touch-action: pan-x pan-y pinch-zoom;
+	}
+}

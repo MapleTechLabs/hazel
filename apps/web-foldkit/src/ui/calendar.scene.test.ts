@@ -1,0 +1,124 @@
+// @vitest-environment jsdom
+import * as Scene from "foldkit/scene"
+import { describe, test } from "vitest"
+import { AnnounceCalendar, FocusCalendarCell, init, Message, OutMessage, update } from "./calendar"
+import { view } from "./calendar-view"
+import * as Select from "./select"
+
+/** Calendar through the view: grid roles, selection state, paging and clicks. */
+
+// Fixed dates: March 2026, today the 5th, nothing reads the clock.
+const today = "2026-03-05"
+const sceneView = Scene.withViewInputs(view, { ariaLabel: "Event date" })
+const config = { update, view: sceneView() }
+const day = (name: string) => Scene.role("button", { name })
+const selectedCell = Scene.role("gridcell", { selected: true })
+const disabledCells = Scene.all.role("gridcell", { disabled: true })
+// The month and year Selects each mount their trigger's press focus helper (not exported, so by name).
+const triggerMount = { name: "FocusSelectTriggerOnPress" }
+const mounted = [
+	Scene.Mount.resolve(triggerMount, Select.Message.CompletedPortalSelect()),
+	Scene.Mount.resolve(triggerMount, Select.Message.CompletedPortalSelect()),
+]
+const resolveAnnounce = Scene.Command.resolve(AnnounceCalendar, Message.CompletedAnnounce())
+
+describe("calendar scene", () => {
+	test("renders a labelled grid with a month heading and the selected day", () => {
+		Scene.scene(
+			config,
+			Scene.given(init({ id: "event", today, value: "2026-03-18" })),
+			...mounted,
+			Scene.expect(Scene.role("application", { name: "Event date, March 2026" })).toExist(),
+			Scene.expect(Scene.role("heading", { name: "Event date, March 2026" })).toExist(),
+			Scene.expect(Scene.role("grid", { name: "Event date, March 2026" })).toExist(),
+			Scene.expectAll(Scene.all.role("gridcell")).toHaveCount(35),
+			Scene.expect(selectedCell).toHaveText("18"),
+			Scene.expect(day("Wednesday, March 18, 2026 selected")).toHaveAttr("data-selected", "true"),
+			Scene.expect(day("Today, Thursday, March 5, 2026")).toHaveAttr("data-today", "true"),
+		)
+	})
+
+	test("days of the adjacent months are shown disabled", () => {
+		Scene.scene(
+			config,
+			Scene.given(init({ id: "event", today, value: "2026-03-18" })),
+			...mounted,
+			Scene.expectAll(disabledCells).toHaveCount(4),
+			Scene.expect(day("Wednesday, April 1, 2026")).toHaveAttr("aria-disabled", "true"),
+			Scene.expect(day("Wednesday, April 1, 2026")).toHaveAttr("data-outside-month", "true"),
+			Scene.expect(day("Sunday, March 1, 2026")).not.toHaveAttr("aria-disabled"),
+		)
+	})
+
+	test("clicking a day selects it and tells the parent", () => {
+		Scene.scene(
+			config,
+			Scene.given(init({ id: "event", today, value: "2026-03-18" })),
+			...mounted,
+			Scene.click(day("Friday, March 20, 2026")),
+			Scene.expectOutMessage(OutMessage.ChangedValue({ date: "2026-03-20" })),
+			resolveAnnounce,
+			Scene.expect(selectedCell).toHaveText("20"),
+			Scene.expect(day("Friday, March 20, 2026 selected")).toExist(),
+			Scene.expect(day("Wednesday, March 18, 2026")).not.toHaveAttr("aria-selected"),
+		)
+	})
+
+	test("the Next button shows the following month and announces it", () => {
+		Scene.scene(
+			config,
+			Scene.given(init({ id: "event", today, value: "2026-03-18" })),
+			...mounted,
+			Scene.click(Scene.role("button", { name: "Next" })),
+			Scene.Command.expectExact(
+				AnnounceCalendar({ message: "April 2026", timeout: 7000, assertiveness: "assertive" }),
+			),
+			resolveAnnounce,
+			Scene.expect(Scene.role("grid", { name: "Event date, April 2026" })).toExist(),
+			Scene.click(Scene.role("button", { name: "Previous" })),
+			resolveAnnounce,
+			Scene.expect(Scene.role("heading", { name: "Event date, March 2026" })).toExist(),
+		)
+	})
+
+	test("days before the minimum are disabled and so is the Previous button", () => {
+		Scene.scene(
+			config,
+			Scene.given(init({ id: "deadline", today, minValue: "2026-03-10" })),
+			...mounted,
+			Scene.expectAll(disabledCells).toHaveCount(13),
+			Scene.expect(day("Monday, March 9, 2026")).toHaveAttr("aria-disabled", "true"),
+			Scene.expect(day("Tuesday, March 10, 2026, First available date")).not.toHaveAttr(
+				"aria-disabled",
+			),
+			Scene.expect(Scene.role("button", { name: "Previous" })).toBeDisabled(),
+		)
+	})
+
+	test("arrow keys on the grid move focus to the next day", () => {
+		Scene.scene(
+			config,
+			Scene.given(init({ id: "event", today, value: "2026-03-18" })),
+			...mounted,
+			Scene.keydown(Scene.role("grid"), "ArrowRight"),
+			Scene.Command.expectExact(
+				FocusCalendarCell({ gridId: "event-grid", label: "Thursday, March 19, 2026" }),
+			),
+			Scene.Command.resolve(FocusCalendarCell, Message.CompletedFocusCell()),
+			Scene.expect(selectedCell).toHaveText("18"),
+		)
+	})
+	test("Enter on the grid selects the focused day", () => {
+		Scene.scene(
+			config,
+			Scene.given(init({ id: "event", today, value: "2026-03-18" })),
+			...mounted,
+			Scene.keydown(Scene.role("grid"), "ArrowRight"),
+			Scene.Command.resolve(FocusCalendarCell, Message.CompletedFocusCell()),
+			Scene.keydown(Scene.role("grid"), "Enter"),
+			Scene.expectOutMessage(OutMessage.ChangedValue({ date: "2026-03-19" })),
+			resolveAnnounce,
+			Scene.expect(selectedCell).toHaveText("19"),
+		)
+	})
+})

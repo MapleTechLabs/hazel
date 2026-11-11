@@ -82,7 +82,7 @@ const clientLoader = browserCollections.docs.createClientLoader({
 					<LLMCopyButton markdownUrl={`${data.url}.mdx`} />
 					<ViewOptions
 						markdownUrl={`${data.url}.mdx`}
-						githubUrl={`https://github.com/hazelchat/hazel/blob/dev/apps/docs/content/docs/${data.path}`}
+						githubUrl={`https://github.com/MapleTechLabs/hazel/blob/main/apps/docs/content/docs/${data.path}`}
 					/>
 				</div>
 				<DocsBody>
@@ -114,7 +114,7 @@ function Page() {
 	const Content = clientLoader.getComponent(data.path)
 
 	return (
-		<DocsLayout {...baseOptions()} tree={pageTree} githubUrl="https://github.com/hazelchat/hazel">
+		<DocsLayout {...baseOptions()} tree={pageTree} githubUrl="https://github.com/MapleTechLabs/hazel">
 			<Content />
 		</DocsLayout>
 	)

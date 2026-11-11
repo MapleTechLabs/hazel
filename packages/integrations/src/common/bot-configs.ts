@@ -1,7 +1,7 @@
 /**
  * Integration provider types for OAuth-based integrations.
  */
-export type IntegrationProvider = "linear" | "github" | "figma" | "notion"
+export type IntegrationProvider = "linear" | "github" | "figma" | "notion" | "discord" | "craft" | "t3code"
 
 /**
  * Bot configuration for integration providers.
@@ -41,12 +41,28 @@ export const INTEGRATION_BOT_CONFIGS: Record<IntegrationProvider, IntegrationBot
 		avatarUrl: "https://cdn.brandfetch.io/notion.so/w/64/h/64/theme/dark/icon?token=1id0IQ-4i8Z46-n-DfQ",
 		botId: "bot-notion",
 	},
+	discord: {
+		name: "Discord",
+		avatarUrl:
+			"https://cdn.brandfetch.io/discord.com/w/64/h/64/theme/dark/icon?token=1id0IQ-4i8Z46-n-DfQ",
+		botId: "bot-discord",
+	},
+	craft: {
+		name: "Craft",
+		avatarUrl: "https://cdn.brandfetch.io/craft.do/w/64/h/64/theme/dark/icon?token=1id0IQ-4i8Z46-n-DfQ",
+		botId: "bot-craft",
+	},
+	t3code: {
+		name: "T3 Code",
+		avatarUrl: "https://cdn.brandfetch.io/t3.chat/w/64/h/64/theme/dark/icon?token=1id0IQ-4i8Z46-n-DfQ",
+		botId: "bot-t3code",
+	},
 }
 
 /**
  * Webhook provider types (non-OAuth integrations)
  */
-export type WebhookProvider = "openstatus" | "railway" | "rss"
+export type WebhookProvider = "openstatus" | "railway" | "rss" | "maple"
 
 /**
  * Bot configurations for webhook-based integrations.
@@ -69,6 +85,11 @@ export const WEBHOOK_BOT_CONFIGS: Record<WebhookProvider, IntegrationBotConfig> 
 		name: "RSS",
 		avatarUrl: "https://cdn.brandfetch.io/rss.com/w/64/h/64/theme/dark/icon?token=1id0IQ-4i8Z46-n-DfQ",
 		botId: "bot-rss",
+	},
+	maple: {
+		name: "Maple",
+		avatarUrl: "https://cdn.brandfetch.io/maple.dev/w/64/h/64/theme/dark/icon?token=1id0IQ-4i8Z46-n-DfQ",
+		botId: "bot-maple",
 	},
 }
 

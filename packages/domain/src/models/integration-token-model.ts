@@ -1,24 +1,24 @@
 import { IntegrationConnectionId, IntegrationTokenId } from "@hazel/schema"
-import { Schema } from "effect"
+import { Schema as S } from "effect"
 import * as M from "./utils"
 import { JsonDate } from "./utils"
 
-export class Model extends M.Class<Model>("IntegrationToken")({
+class Model extends M.Class<Model>("IntegrationToken")({
 	id: M.Generated(IntegrationTokenId),
-	connectionId: IntegrationConnectionId,
-	encryptedAccessToken: Schema.String,
-	encryptedRefreshToken: Schema.NullOr(Schema.String),
-	iv: Schema.String,
-	refreshTokenIv: Schema.NullOr(Schema.String),
-	encryptionKeyVersion: Schema.Number,
-	tokenType: Schema.NullOr(Schema.String),
-	scope: Schema.NullOr(Schema.String),
-	expiresAt: Schema.NullOr(JsonDate),
-	refreshTokenExpiresAt: Schema.NullOr(JsonDate),
-	lastRefreshedAt: Schema.NullOr(JsonDate),
+	connectionId: M.Immutable(IntegrationConnectionId),
+	encryptedAccessToken: M.Sensitive(S.String),
+	encryptedRefreshToken: M.Sensitive(S.NullOr(S.String)),
+	iv: M.Sensitive(S.String),
+	refreshTokenIv: M.Sensitive(S.NullOr(S.String)),
+	encryptionKeyVersion: M.GeneratedByApp(S.Number),
+	tokenType: M.GeneratedByApp(S.NullOr(S.String)),
+	scope: M.GeneratedByApp(S.NullOr(S.String)),
+	expiresAt: M.GeneratedByApp(S.NullOr(JsonDate)),
+	refreshTokenExpiresAt: M.GeneratedByApp(S.NullOr(JsonDate)),
+	lastRefreshedAt: M.GeneratedByApp(S.NullOr(JsonDate)),
 	createdAt: M.Generated(JsonDate),
 	updatedAt: M.Generated(JsonDate),
 }) {}
 
-export const Insert = Model.insert
-export const Update = Model.update
+export const { Insert, Update, Schema, Create, Patch } = M.expose(Model)
+export type Type = typeof Schema.Type

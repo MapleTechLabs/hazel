@@ -1,0 +1,90 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import ChangelogHeroSection from "@/components/sections/ChangelogHeroSection.astro";
+import { ChangelogTimeline } from "@/components/react/ChangelogTimeline";
+import FooterSection from "@/components/sections/FooterSection.astro";
+import { getCollection, type CollectionEntry } from "astro:content";
+import { type ChangeType } from "@/content.config";
+import { siteConfig } from "@/lib/site";
+
+const changelogEntries = await getCollection("changelog", ({ data }: CollectionEntry<"changelog">) => {
+  return import.meta.env.PROD ? !data.draft : true;
+});
+
+const sortedEntries = changelogEntries.sort(
+  (a: CollectionEntry<"changelog">, b: CollectionEntry<"changelog">) => b.data.date.getTime() - a.data.date.getTime()
+);
+
+const allChangeTypes = [
+  ...new Set<ChangeType>(sortedEntries.flatMap((entry: CollectionEntry<"changelog">) => entry.data.changes.map((c: { type: ChangeType }) => c.type))),
+];
+
+// Generate BlogPosting schema for changelog entries
+const blogPostingSchema = sortedEntries.map((entry: CollectionEntry<"changelog">) => ({
+  "@type": "BlogPosting",
+  "headline": entry.data.title || `Hazel Changelog - ${entry.data.week}`,
+  "description": entry.data.summary,
+  "datePublished": entry.data.date.toISOString(),
+  "dateModified": entry.data.date.toISOString(),
+  "author": {
+    "@type": "Organization",
+    "name": entry.data.author || "Hazel Team",
+    "url": siteConfig.url
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": siteConfig.name,
+    "url": siteConfig.url,
+    "logo": {
+      "@type": "ImageObject",
+      "url": `${siteConfig.url}/icon.svg`
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": `${siteConfig.url}/changelog#${entry.id}`
+  }
+}));
+---
+
+<Layout
+  title="Changelog | Hazel - Open Source Team Chat Updates"
+  description="Hazel changelog - latest features, bug fixes, and improvements for the open source Slack alternative. See what's new in our team chat platform."
+>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Blog",
+      "name": "Hazel Changelog",
+      "description": "Latest features, bug fixes, and improvements for Hazel",
+      "url": `${siteConfig.url}/changelog`,
+      "publisher": {
+        "@type": "Organization",
+        "name": siteConfig.name,
+        "url": siteConfig.url
+      },
+      "blogPost": blogPostingSchema
+    })} />
+  </Fragment>
+  <main
+    class="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full"
+  >
+    <ChangelogHeroSection />
+
+    <section class="w-full py-16 px-6">
+      <div class="max-w-3xl mx-auto">
+        <ChangelogTimeline
+          entries={sortedEntries.map((entry: CollectionEntry<"changelog">) => ({
+            slug: entry.id,
+            ...entry.data,
+            date: entry.data.date.toISOString(),
+          }))}
+          availableTypes={allChangeTypes}
+          client:load
+        />
+      </div>
+    </section>
+
+    <FooterSection />
+  </main>
+</Layout>

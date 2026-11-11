@@ -1,21 +1,16 @@
-import {
-	ErrorUtils,
-	type OrganizationId,
-	type OrganizationMemberId,
-	policy,
-	policyCompose,
-	type UserId,
-	withSystemActor,
-} from "@hazel/domain"
-import { Effect, Option, pipe } from "effect"
-import { OrganizationMemberRepo } from "../repositories/organization-member-repo"
+import { OrganizationMemberRepo } from "@hazel/backend-core"
+import { ErrorUtils, policy } from "@hazel/domain"
+import type { OrganizationMember } from "@hazel/domain/models"
+import type { OrganizationId, OrganizationMemberId } from "@hazel/schema"
+import { Context, Effect, Layer, Option } from "effect"
 
-export class OrganizationMemberPolicy extends Effect.Service<OrganizationMemberPolicy>()(
+export class OrganizationMemberPolicy extends Context.Service<OrganizationMemberPolicy>()(
 	"OrganizationMemberPolicy/Policy",
 	{
-		effect: Effect.gen(function* () {
-			const organizationMemberRepo = yield* OrganizationMemberRepo
+		make: Effect.gen(function* () {
 			const policyEntity = "OrganizationMember" as const
+
+			const organizationMemberRepo = yield* OrganizationMemberRepo
 
 			const canCreate = (organizationId: OrganizationId) =>
 				ErrorUtils.refailUnauthorized(
@@ -26,24 +21,32 @@ export class OrganizationMemberPolicy extends Effect.Service<OrganizationMemberP
 						policyEntity,
 						"create",
 						Effect.fn(`${policyEntity}.create`)(function* (actor) {
-							// Check if user is already a member or admin of the organization
-							const currentMember = yield* organizationMemberRepo
-								.findByOrgAndUser(organizationId, actor.id)
-								.pipe(withSystemActor)
+							// Check if user is already a member
+							const currentMember = yield* organizationMemberRepo.findByOrgAndUser(
+								organizationId,
+								actor.id,
+							)
 
-							// If user is already a member, they can't create another membership
+							// If already a member, can't create another membership
 							if (Option.isSome(currentMember)) {
 								return yield* Effect.succeed(false)
 							}
 
-							// For now, allow users to join organizations
-							// This might be restricted to invitation-based flow later
+							// Allow users to join organizations
 							return yield* Effect.succeed(true)
 						}),
 					),
 				)
 
-			const canUpdate = (id: OrganizationMemberId) =>
+			/**
+			 * A member may edit their own membership, admins and owners anyone's. A `role` change is
+			 * only for admins and owners: owners may set any role; admins may neither grant `owner`
+			 * nor change an owner's role. Pass the requested `role` (or none for other fields).
+			 */
+			const canUpdate = (
+				id: OrganizationMemberId,
+				change?: { readonly role?: OrganizationMember.OrganizationRole },
+			) =>
 				ErrorUtils.refailUnauthorized(
 					policyEntity,
 					"update",
@@ -53,21 +56,24 @@ export class OrganizationMemberPolicy extends Effect.Service<OrganizationMemberP
 							policyEntity,
 							"update",
 							Effect.fn(`${policyEntity}.update`)(function* (actor) {
-								if (actor.id === member.userId) {
-									return yield* Effect.succeed(true)
+								const currentMember = yield* organizationMemberRepo.findByOrgAndUser(
+									member.organizationId,
+									actor.id,
+								)
+								const actorRole = Option.map(currentMember, (row) => row.role)
+								const isOwner = Option.contains(actorRole, "owner")
+								const isAdmin = Option.contains(actorRole, "admin")
+
+								const role = change?.role
+								if (role !== undefined && role !== member.role) {
+									if (isOwner) return true
+									if (isAdmin) return role !== "owner" && member.role !== "owner"
+									// Members (and outsiders) may not change roles, their own included.
+									return false
 								}
 
-								const currentMember = yield* organizationMemberRepo
-									.findByOrgAndUser(member.organizationId, actor.id)
-									.pipe(withSystemActor)
-
-								if (Option.isNone(currentMember)) {
-									return yield* Effect.succeed(false)
-								}
-
-								const currentMemberValue = currentMember.value
-
-								return yield* Effect.succeed(currentMemberValue.role === "admin")
+								if (actor.id === member.userId) return true
+								return isOwner || isAdmin
 							}),
 						),
 					),
@@ -83,21 +89,22 @@ export class OrganizationMemberPolicy extends Effect.Service<OrganizationMemberP
 							policyEntity,
 							"delete",
 							Effect.fn(`${policyEntity}.delete`)(function* (actor) {
+								// Self-removal always allowed
 								if (actor.id === member.userId) {
 									return yield* Effect.succeed(true)
 								}
 
-								const currentMember = yield* organizationMemberRepo
-									.findByOrgAndUser(member.organizationId, actor.id)
-									.pipe(withSystemActor)
+								// Admins can remove members
+								const currentMember = yield* organizationMemberRepo.findByOrgAndUser(
+									member.organizationId,
+									actor.id,
+								)
 
 								if (Option.isNone(currentMember)) {
 									return yield* Effect.succeed(false)
 								}
 
-								const currentMemberValue = currentMember.value
-
-								return yield* Effect.succeed(currentMemberValue.role === "admin")
+								return yield* Effect.succeed(currentMember.value.role === "admin")
 							}),
 						),
 					),
@@ -105,7 +112,7 @@ export class OrganizationMemberPolicy extends Effect.Service<OrganizationMemberP
 
 			return { canCreate, canUpdate, canDelete } as const
 		}),
-		dependencies: [OrganizationMemberRepo.Default],
-		accessors: true,
 	},
-) {}
+) {
+	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(OrganizationMemberRepo.layer))
+}

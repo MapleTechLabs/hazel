@@ -6,30 +6,28 @@
 	"main": "src/index.ts",
 	"exports": {
 		".": "./src/index.ts",
-		"./ids": "./src/ids.ts",
 		"./errors": "./src/errors.ts",
 		"./current-user": "./src/current-user.ts",
-		"./transaction-id": "./src/transaction-id.ts",
+		"./customers": "./src/customers/index.ts",
 		"./rpc": "./src/rpc/index.ts",
 		"./http": "./src/http/index.ts",
 		"./policy": "./src/policy/index.ts",
-		"./models": "./src/models/index.ts"
+		"./models": "./src/models/index.ts",
+		"./scopes": "./src/scopes/index.ts",
+		"./sync": "./src/sync/index.ts",
+		"./live": "./src/live/index.ts",
+		"./html-render": "./src/html-render.ts",
+		"./bot-install": "./src/bot-install.ts",
+		"./thread-id": "./src/thread-id.ts"
 	},
 	"dependencies": {
-		"@effect/cluster": "catalog:effect",
-		"@effect/experimental": "catalog:effect",
-		"@effect/platform": "catalog:effect",
-		"@effect/rpc": "catalog:effect",
-		"@effect/workflow": "catalog:effect",
 		"@hazel/integrations": "workspace:*",
 		"@hazel/schema": "workspace:*",
-		"drizzle-orm": "^0.45.1",
 		"effect": "catalog:effect",
-		"effect-rpc-tanstack-devtools": "0.1.1"
+		"uuid": "^14.0.3"
 	},
 	"devDependencies": {
-		"@effect/language-service": "catalog:effect",
-		"@types/bun": "1.3.8",
-		"typescript": "^5.9.3"
+		"@types/bun": "1.4.3",
+		"typescript": "catalog:tooling"
 	}
 }

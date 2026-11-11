@@ -1,0 +1,47 @@
+[workspace]
+members = [".", "ios"]
+
+[package]
+name = "hazel-native"
+version = "0.0.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+# Rune is pre-release: pin a revision. This is anomalyco/rune bca4713 plus grid tracks
+# (El::grid_columns, grid_row_start), Tx::focus, Tx::drawn_rects, set_default_transition,
+# El::focusable_by_script and El::clip_fade_linear_frac (Makisuo/rune's `hazel-grid` branch), plus
+# iOS's full-screen window, safe area and motion frames (`hazel-ios`), plus a soft keyboard's
+# return as Enter, iOS's display link and El::pin_insets (`hazel-ios-followups`), until they land
+# upstream.
+rune = { git = "https://github.com/Makisuo/rune", rev = "b6cc638175ae39732db079a9fd54bda68a0f181c", features = [
+	"native-file-dialog",
+] }
+base64 = "0.22"
+# Decodes a picture and its mask picture to composite them (Rune's own decoder, same features).
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# The sign-in vault in the macOS keychain, as the Tauri app keeps its own (apps/desktop).
+keyring = { version = "3", features = ["apple-native"] }
+# Verifies an update's signature as the Tauri updater does (apps/desktop), with the same key.
+minisign-verify = "0.2"
+wgpu = { version = "~30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "wgsl"] }
+
+# Downloads through the system's URL loading on macOS and iOS (`src/fetch.rs`).
+[target.'cfg(target_vendor = "apple")'.dependencies]
+block2 = "0.6"
+objc2-foundation = "0.3"
+
+# The web views HTML render frames show their pages in (`src/frames.rs`).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = "0.3"
+objc2-web-kit = "0.3"
+objc2-quartz-core = "0.3"
+objc2-core-graphics = "0.3"
+objc2-core-foundation = "0.3"
+
+[profile.release]
+debug = false
+

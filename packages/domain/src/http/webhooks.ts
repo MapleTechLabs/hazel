@@ -1,89 +1,7 @@
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "@effect/platform"
-import { ChannelId, MessageId, UserId } from "@hazel/schema"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { Schema } from "effect"
-import { InternalServerError, WorkflowInitializationError } from "../errors"
-
-// WorkOS Webhook Types
-export class WorkOSWebhookPayload extends Schema.Class<WorkOSWebhookPayload>("WorkOSWebhookPayload")({
-	event: Schema.String,
-	data: Schema.Unknown,
-	id: Schema.String,
-	created_at: Schema.String,
-}) {}
-
-export class WebhookResponse extends Schema.Class<WebhookResponse>("WebhookResponse")({
-	success: Schema.Boolean,
-	message: Schema.optional(Schema.String),
-}) {}
-
-export class InvalidWebhookSignature extends Schema.TaggedError<InvalidWebhookSignature>(
-	"InvalidWebhookSignature",
-)(
-	"InvalidWebhookSignature",
-	{
-		message: Schema.String,
-	},
-	HttpApiSchema.annotations({
-		status: 401,
-	}),
-) {}
-
-// Sequin Stream Webhook Types
-export class SequinMessageRecord extends Schema.Class<SequinMessageRecord>("SequinMessageRecord")({
-	id: MessageId,
-	channelId: ChannelId,
-	authorId: UserId,
-	content: Schema.String,
-	replyToMessageId: Schema.NullOr(MessageId),
-	threadChannelId: Schema.NullOr(ChannelId),
-	createdAt: Schema.String, // ISO timestamp from Sequin
-	updatedAt: Schema.NullOr(Schema.String),
-	deletedAt: Schema.NullOr(Schema.String),
-}) {}
-
-export class SequinConsumer extends Schema.Class<SequinConsumer>("SequinConsumer")({
-	id: Schema.String,
-	name: Schema.String,
-	annotations: Schema.Record({ key: Schema.String, value: Schema.Unknown }),
-}) {}
-
-export class SequinDatabase extends Schema.Class<SequinDatabase>("SequinDatabase")({
-	id: Schema.String,
-	name: Schema.String,
-	hostname: Schema.String,
-	database: Schema.String,
-	annotations: Schema.Record({ key: Schema.String, value: Schema.Unknown }),
-}) {}
-
-export class SequinMetadata extends Schema.Class<SequinMetadata>("SequinMetadata")({
-	idempotency_key: Schema.String,
-	commit_lsn: Schema.Number,
-	commit_idx: Schema.Number,
-	record_pks: Schema.Array(Schema.String),
-	commit_timestamp: Schema.String,
-	table_name: Schema.String,
-	table_schema: Schema.String,
-	database_name: Schema.String,
-	transaction_annotations: Schema.NullOr(Schema.Unknown),
-	enrichment: Schema.NullOr(Schema.Unknown),
-	consumer: SequinConsumer,
-	database: SequinDatabase,
-}) {}
-
-export const SequinAction = Schema.Literal("insert", "update", "delete")
-
-// Individual event in the webhook data array
-export class SequinWebhookEvent extends Schema.Class<SequinWebhookEvent>("SequinWebhookEvent")({
-	record: SequinMessageRecord,
-	metadata: SequinMetadata,
-	action: SequinAction,
-	changes: Schema.NullOr(Schema.Unknown),
-}) {}
-
-// Sequin webhook payload wraps events in a data array
-export class SequinWebhookPayload extends Schema.Class<SequinWebhookPayload>("SequinWebhookPayload")({
-	data: Schema.Array(SequinWebhookEvent),
-}) {}
+import { InternalServerError } from "../errors"
+import { RequiredScopes } from "../scopes/required-scopes"
 
 // GitHub Webhook Types
 export class GitHubWebhookResponse extends Schema.Class<GitHubWebhookResponse>("GitHubWebhookResponse")({
@@ -98,54 +16,59 @@ export class InvalidGitHubWebhookSignature extends Schema.TaggedError<InvalidGit
 	{
 		message: Schema.String,
 	},
-	HttpApiSchema.annotations({
-		status: 401,
-	}),
+	{ httpApiStatus: 401 },
 ) {}
+
+/** The delivery is not JSON, or a supported event lacks the fields it must carry. */
+export class InvalidGitHubWebhookPayload extends Schema.TaggedError<InvalidGitHubWebhookPayload>(
+	"InvalidGitHubWebhookPayload",
+)(
+	"InvalidGitHubWebhookPayload",
+	{
+		message: Schema.String,
+	},
+	{ httpApiStatus: 400 },
+) {}
+
+/** Slack's Events API: the URL check's challenge, or an acknowledgement. */
+export class SlackWebhookResponse extends Schema.Class<SlackWebhookResponse>("SlackWebhookResponse")({
+	ok: Schema.Boolean,
+	challenge: Schema.optional(Schema.String),
+}) {}
+
+export class InvalidSlackWebhookSignature extends Schema.TaggedError<InvalidSlackWebhookSignature>(
+	"InvalidSlackWebhookSignature",
+)("InvalidSlackWebhookSignature", { message: Schema.String }, { httpApiStatus: 401 }) {}
 
 export class WebhookGroup extends HttpApiGroup.make("webhooks")
 	.add(
-		HttpApiEndpoint.post("workos")`/workos`
-			.setPayload(Schema.Unknown)
-			.addSuccess(WebhookResponse)
-			.addError(InvalidWebhookSignature)
-			.addError(InternalServerError)
-			.annotateContext(
-				OpenApi.annotations({
-					title: "WorkOS Webhook",
-					description: "Receive and process WorkOS webhook events",
-					summary: "Process WorkOS webhook events",
-				}),
-			),
-	)
-	.add(
-		HttpApiEndpoint.post("sequinWebhook")`/sequin/message-notification`
-			.setPayload(SequinWebhookPayload)
-			.addSuccess(Schema.Void, { status: 204 })
-			.addError(InternalServerError)
-			.addError(WorkflowInitializationError)
-			.annotateContext(
-				OpenApi.annotations({
-					title: "Sequin Stream Webhook - Message Notifications",
-					description:
-						"Receive message insert events from Sequin Stream to trigger notification workflows",
-					summary: "Process Sequin message insert events",
-				}),
-			),
-	)
-	.add(
-		HttpApiEndpoint.post("github")`/github`
-			.setPayload(Schema.Unknown)
-			.addSuccess(GitHubWebhookResponse)
-			.addError(InvalidGitHubWebhookSignature)
-			.addError(InternalServerError)
-			.addError(WorkflowInitializationError)
-			.annotateContext(
+		HttpApiEndpoint.post("github", "/github", {
+			payload: Schema.Unknown,
+			success: GitHubWebhookResponse,
+			error: [InvalidGitHubWebhookSignature, InvalidGitHubWebhookPayload, InternalServerError],
+		})
+			.annotateMerge(
 				OpenApi.annotations({
 					title: "GitHub App Webhook",
 					description: "Receive and process GitHub App webhook events",
 					summary: "Process GitHub App webhook events",
 				}),
-			),
+			)
+			.annotate(RequiredScopes, []),
+	)
+	.add(
+		HttpApiEndpoint.post("slack", "/slack", {
+			payload: Schema.Unknown,
+			success: SlackWebhookResponse,
+			error: [InvalidSlackWebhookSignature, InternalServerError],
+		})
+			.annotateMerge(
+				OpenApi.annotations({
+					title: "Slack Events",
+					description: "Receive Slack Events API deliveries for chat sync",
+					summary: "Process Slack events",
+				}),
+			)
+			.annotate(RequiredScopes, []),
 	)
 	.prefix("/webhooks") {}

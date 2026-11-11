@@ -6,7 +6,7 @@
  */
 
 import { Duration, Effect, Schedule } from "effect"
-import { isRetryable } from "./errors.ts"
+import { isRetryableError, retryPolicyForTag } from "./errors.ts"
 
 /**
  * Pre-configured retry strategies for common bot SDK operations
@@ -21,8 +21,17 @@ export const RetryStrategy = {
 	 */
 	transientErrors: Schedule.exponential(Duration.millis(100), 2).pipe(
 		Schedule.jittered,
-		Schedule.whileInput(isRetryable),
-		Schedule.intersect(Schedule.recurs(5)),
+		Schedule.while((metadata) => {
+			const error = metadata.input
+			const tag =
+				typeof error === "object" && error !== null && "_tag" in error
+					? String((error as Record<string, unknown>)["_tag"])
+					: ""
+			return tag.length > 0
+				? retryPolicyForTag(tag) === "transient" || retryPolicyForTag(tag) === "connection"
+				: isRetryableError(error)
+		}),
+		(schedule) => Schedule.max([schedule, Schedule.recurs(5)]),
 	),
 
 	/**
@@ -34,7 +43,15 @@ export const RetryStrategy = {
 	 */
 	connectionErrors: Schedule.exponential(Duration.seconds(1), 2).pipe(
 		Schedule.jittered,
-		Schedule.intersect(Schedule.recurs(10)),
+		Schedule.while((metadata) => {
+			const error = metadata.input
+			const tag =
+				typeof error === "object" && error !== null && "_tag" in error
+					? String((error as Record<string, unknown>)["_tag"])
+					: ""
+			return tag.length > 0 ? retryPolicyForTag(tag) === "connection" : isRetryableError(error)
+		}),
+		(schedule) => Schedule.max([schedule, Schedule.recurs(10)]),
 	),
 
 	/**
@@ -45,7 +62,15 @@ export const RetryStrategy = {
 	 */
 	quickRetry: Schedule.exponential(Duration.millis(50), 2).pipe(
 		Schedule.jittered,
-		Schedule.intersect(Schedule.recurs(3)),
+		Schedule.while((metadata) => {
+			const error = metadata.input
+			const tag =
+				typeof error === "object" && error !== null && "_tag" in error
+					? String((error as Record<string, unknown>)["_tag"])
+					: ""
+			return tag.length > 0 ? retryPolicyForTag(tag) === "quick" : isRetryableError(error)
+		}),
+		(schedule) => Schedule.max([schedule, Schedule.recurs(3)]),
 	),
 
 	/**
@@ -56,15 +81,16 @@ export const RetryStrategy = {
 		schedule: Schedule.Schedule<A, E, R>,
 		options: {
 			readonly threshold?: number
-			readonly resetAfter?: Duration.DurationInput
+			readonly resetAfter?: Duration.Input
 		} = {},
 	) => {
 		const threshold = options.threshold ?? 5
-		const resetAfter = options.resetAfter ?? Duration.seconds(30)
 
 		return schedule.pipe(
-			Schedule.resetAfter(resetAfter),
-			Schedule.whileOutput((attempt) => (typeof attempt === "number" ? attempt < threshold : true)),
+			Schedule.while((metadata) => {
+				const attempt = metadata.output
+				return typeof attempt === "number" ? attempt < threshold : true
+			}),
 		)
 	},
 
@@ -73,7 +99,7 @@ export const RetryStrategy = {
 	 */
 	withLogging: <A, E, R>(schedule: Schedule.Schedule<A, E, R>, operationName: string) =>
 		schedule.pipe(
-			Schedule.tapOutput((attempt) =>
+			Schedule.tap(({ attempt }) =>
 				Effect.logWarning(`${operationName}: retry attempt`, {
 					attempt,
 					operation: operationName,
@@ -89,4 +115,4 @@ export const RetryStrategy = {
 export const composeRetryStrategies = <A1, E1, R1, A2, E2, R2>(
 	first: Schedule.Schedule<A1, E1, R1>,
 	second: Schedule.Schedule<A2, E2, R2>,
-) => Schedule.intersect(first, second)
+) => Schedule.max([first, second])

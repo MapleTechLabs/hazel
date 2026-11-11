@@ -1,0 +1,40 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import HeroSection from "@/components/sections/HeroSection.astro";
+import CompanyShowcase from "@/components/sections/CompanyShowcase.astro";
+import BentoSection from "@/components/sections/BentoSection.astro";
+import FeatureSection from "@/components/sections/FeatureSection.astro";
+import SyncSection from "@/components/sections/SyncSection.astro";
+import GrowthSection from "@/components/sections/GrowthSection.astro";
+import CTASection from "@/components/sections/CTASection.astro";
+import FooterSection from "@/components/sections/FooterSection.astro";
+import FAQSection from "@/components/sections/FAQSection.astro";
+import CEOTestimonialSection from "@/components/sections/CEOTestimonialSection.astro";
+// React components (need client directives)
+import { PricingSection } from "@/components/react/PricingSection";
+import { TestimonialSection } from "@/components/react/TestimonialSection";
+---
+
+<Layout
+  title="Hazel - Open Source Team Chat & Collaboration Platform"
+  description="The open source Slack alternative built for developers. Real-time messaging, GitHub integration, and AI-powered collaboration. Free for open source projects."
+  includeFaqSchema={true}
+>
+  <main
+    class="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full"
+  >
+    <HeroSection />
+    <CompanyShowcase />
+    <BentoSection />
+    {/* <QuoteSection /> */}
+    <FeatureSection />
+    <SyncSection />
+    <GrowthSection />
+    <CEOTestimonialSection />
+    <PricingSection client:visible />
+    <TestimonialSection client:visible />
+    <FAQSection />
+    <CTASection />
+    <FooterSection />
+  </main>
+</Layout>

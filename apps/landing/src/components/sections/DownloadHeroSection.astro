@@ -1,0 +1,82 @@
+---
+import { FlickeringGrid } from "@/components/react/FlickeringGrid";
+import { BetaBadge } from "@/components/react/BetaBadge";
+import { HeroDownloadButton } from "@/components/react/HeroDownloadButton";
+import type { ReleaseData } from "@/lib/download-config";
+
+interface Props {
+  release: ReleaseData | null;
+}
+
+const { release } = Astro.props;
+---
+
+<section id="download-hero" class="w-full relative overflow-hidden">
+  <div class="relative flex flex-col items-center w-full px-6">
+    <!-- Background gradient -->
+    <div class="absolute inset-0">
+      <div
+        class="absolute inset-0 -z-10 h-[600px] md:h-[700px] w-full [background:radial-gradient(125%_125%_at_50%_10%,var(--background)_40%,var(--secondary)_100%)] rounded-b-xl"
+      >
+      </div>
+    </div>
+
+    <!-- Flickering grid background -->
+    <div class="absolute inset-0 -z-5 h-[600px] md:h-[700px] overflow-hidden opacity-30">
+      <FlickeringGrid
+        client:visible
+        squareSize={4}
+        gridGap={6}
+        flickerChance={0.1}
+        color="var(--secondary)"
+        maxOpacity={0.15}
+        className="absolute inset-0"
+      />
+    </div>
+
+    <!-- Content -->
+    <div
+      class="relative z-10 pt-32 pb-16 max-w-3xl mx-auto h-full w-full flex flex-col gap-8 items-center justify-center"
+    >
+      <BetaBadge client:visible />
+
+      <div class="flex flex-col items-center justify-center gap-5">
+        <h1
+          class="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-medium tracking-tighter text-balance text-center text-primary"
+        >
+          Hazel Desktop
+        </h1>
+        <p
+          class="text-base md:text-lg text-center text-muted-foreground font-medium text-balance leading-relaxed tracking-tight max-w-xl"
+        >
+          The native desktop experience for Hazel. Faster performance, system notifications, keyboard shortcuts, and seamless integration with your workflow.
+        </p>
+      </div>
+
+      <!-- Big primary download button -->
+      <HeroDownloadButton client:load release={release} />
+
+      <!-- Feature badges -->
+      <div class="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
+        <div class="flex items-center gap-2">
+          <svg class="size-4 text-secondary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>Native notifications</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <svg class="size-4 text-secondary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>Keyboard shortcuts</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <svg class="size-4 text-secondary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>Menu bar access</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

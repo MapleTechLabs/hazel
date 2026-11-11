@@ -1,0 +1,50 @@
+---
+import SectionHeader from "@/components/SectionHeader.astro";
+import { FirstBentoAnimation } from "@/components/react/FirstBentoAnimation";
+import { SecondBentoAnimation } from "@/components/react/SecondBentoAnimation";
+import { ThirdBentoAnimation } from "@/components/react/ThirdBentoAnimation";
+import { FourthBentoAnimation } from "@/components/react/FourthBentoAnimation";
+import { siteConfig } from "@/lib/config";
+
+const { title, description, items } = siteConfig.bentoSection;
+---
+
+<section
+  id="bento"
+  class="flex flex-col items-center justify-center w-full relative px-5 md:px-10"
+>
+  <div class="border-x mx-5 md:mx-10 relative">
+    <div class="absolute top-0 -left-4 md:-left-14 h-full w-4 md:w-14 text-primary/5 bg-[size:10px_10px] [background-image:repeating-linear-gradient(315deg,currentColor_0_1px,#0000_0_50%)]"></div>
+    <div class="absolute top-0 -right-4 md:-right-14 h-full w-4 md:w-14 text-primary/5 bg-[size:10px_10px] [background-image:repeating-linear-gradient(315deg,currentColor_0_1px,#0000_0_50%)]"></div>
+
+    <SectionHeader>
+      <h2 class="text-3xl md:text-4xl font-medium tracking-tighter text-center text-balance pb-1">
+        {title}
+      </h2>
+      <p class="text-muted-foreground text-center text-balance font-medium">
+        {description}
+      </p>
+    </SectionHeader>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 overflow-hidden">
+      {items.map((item) => (
+        <div
+          class="flex flex-col items-start justify-end min-h-[600px] md:min-h-[500px] p-0.5 relative before:absolute before:-left-0.5 before:top-0 before:z-10 before:h-screen before:w-px before:bg-border before:content-[''] after:absolute after:-top-0.5 after:left-0 after:z-10 after:h-px after:w-screen after:bg-border after:content-[''] group cursor-pointer max-h-[400px] group"
+        >
+          <div class="relative flex size-full items-center justify-center h-full overflow-hidden">
+            {item.id === 1 && <FirstBentoAnimation client:visible />}
+            {item.id === 2 && <SecondBentoAnimation client:visible />}
+            {item.id === 3 && <ThirdBentoAnimation data={[20, 30, 25, 45, 40, 55, 75]} toolTipValues={[1234, 1678, 2101, 2534, 2967, 3400, 3833, 4266, 4700, 5133]} client:visible />}
+            {item.id === 4 && <FourthBentoAnimation once={false} client:visible />}
+          </div>
+          <div class="flex-1 flex-col gap-2 p-6">
+            <h3 class="text-lg tracking-tighter font-semibold">
+              {item.title}
+            </h3>
+            <p class="text-muted-foreground">{item.description}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

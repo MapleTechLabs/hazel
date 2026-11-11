@@ -1,25 +1,49 @@
-import { HttpApiBuilder, HttpServerRequest, HttpServerResponse } from "@effect/platform"
+import { HttpApiBuilder } from "effect/http-api"
+import { ChatSyncInstallations } from "../services/chat-sync/chat-sync-installations"
+import { isChatSyncProviderId } from "../services/chat-sync/provider"
+import { chatSyncProviders } from "../services/chat-sync/providers"
+import { HttpServerRequest, HttpServerResponse, Cookies } from "effect/http"
+import { CurrentUser, InternalServerError, UnauthorizedError } from "@hazel/domain"
+import type { OrganizationId, UserId } from "@hazel/schema"
 import {
-	CurrentUser,
-	InternalServerError,
-	type OrganizationId,
-	UnauthorizedError,
-	type UserId,
-	withSystemActor,
-} from "@hazel/domain"
-import {
+	ConnectApiKeyResponse,
 	ConnectionStatusResponse,
-	IntegrationNotConnectedError,
+	IntegrationUnavailableError,
+	InvalidApiKeyError,
 	InvalidOAuthStateError,
+	UnsupportedProviderError,
 } from "@hazel/domain/http"
+import {
+	CraftApiClient,
+	CraftApiError,
+	CraftNotFoundError,
+	CraftRateLimitError,
+} from "@hazel/integrations/craft"
 import type { IntegrationConnection } from "@hazel/domain/models"
-import { Config, Effect, Option, Schedule, Schema } from "effect"
+import {
+	Cause,
+	Config,
+	DateTime,
+	Effect,
+	Layer,
+	Option,
+	Redacted,
+	Schedule,
+	Schema,
+	SchemaGetter,
+} from "effect"
+import * as Duration from "effect/Duration"
 import { HazelApi } from "../api"
-import { IntegrationConnectionRepo } from "../repositories/integration-connection-repo"
-import { OrganizationRepo } from "../repositories/organization-repo"
-import { IntegrationTokenService } from "../services/integration-token-service"
-import { IntegrationBotService } from "../services/integrations/integration-bot-service"
+import { Directory } from "../services/directory"
+import { requireMember } from "./integration-resources.http"
 import { OAuthProviderRegistry } from "../services/oauth"
+import { callObject } from "../worker/objects/calls"
+import { orgTarget } from "../worker/objects/kinds"
+import {
+	ConnectIntegrationCall,
+	DisconnectIntegrationCall,
+	IntegrationConnectionCall,
+} from "../worker/objects/org/integrations"
 
 /**
  * OAuth state schema - encoded in the state parameter during OAuth flow.
@@ -28,17 +52,106 @@ import { OAuthProviderRegistry } from "../services/oauth"
 const OAuthState = Schema.Struct({
 	organizationId: Schema.String,
 	userId: Schema.String,
+	level: Schema.optional(Schema.Literals(["organization", "user"])).pipe(
+		Schema.decodeTo(Schema.toType(Schema.Literals(["organization", "user"])), {
+			decode: SchemaGetter.withDefault(Effect.succeed<"organization" | "user">("organization")),
+			encode: SchemaGetter.required(),
+		}),
+	),
 	/** Full URL to redirect after OAuth completes (e.g., http://localhost:3000/org/settings/integrations/github) */
 	returnTo: Schema.String,
 	/** Environment that initiated the OAuth flow. Used to redirect back to localhost for local dev. */
-	environment: Schema.optional(Schema.Literal("local", "production")),
+	environment: Schema.optionalKey(Schema.Literals(["local", "production"])),
 })
 
 /**
  * Retry schedule for OAuth operations.
  * Retries up to 3 times with exponential backoff (100ms, 200ms, 400ms)
  */
-const oauthRetrySchedule = Schedule.exponential("100 millis").pipe(Schedule.intersect(Schedule.recurs(3)))
+const oauthRetrySchedule = Schedule.max([Schedule.exponential("100 millis"), Schedule.recurs(3)])
+
+const CRAFT_ALLOWED_HOST = "connect.craft.do"
+const CRAFT_BASE_URL_PATH_PATTERN = /^\/links\/[^/]+\/api\/v1$/
+
+const invalidCraftBaseUrlError = () =>
+	new InvalidApiKeyError({
+		message: "Invalid Craft base URL. Use the link URL from Craft Connect.",
+	})
+
+const invalidCraftCredentialsError = () =>
+	new InvalidApiKeyError({
+		message: "Invalid Craft API token or base URL",
+	})
+
+export const validateCraftBaseUrl = (rawBaseUrl: string) =>
+	Effect.gen(function* () {
+		const parsed = yield* Effect.try({
+			try: () => new URL(rawBaseUrl),
+			catch: () => invalidCraftBaseUrlError(),
+		})
+
+		const normalizedPath = parsed.pathname.replace(/\/+$/, "")
+		const isValid =
+			parsed.protocol === "https:" &&
+			parsed.hostname.toLowerCase() === CRAFT_ALLOWED_HOST &&
+			CRAFT_BASE_URL_PATH_PATTERN.test(normalizedPath) &&
+			parsed.username.length === 0 &&
+			parsed.password.length === 0 &&
+			parsed.port.length === 0 &&
+			parsed.search.length === 0 &&
+			parsed.hash.length === 0
+
+		if (!isValid) {
+			return yield* Effect.fail(invalidCraftBaseUrlError())
+		}
+
+		return `${parsed.origin}${normalizedPath}`
+	})
+
+type CraftConnectApiKeyError = CraftApiError | CraftNotFoundError | CraftRateLimitError
+
+/** Rate limits, 5xx and transport failures are Craft being unavailable; other 4xx mean a bad key. */
+export const mapCraftConnectApiKeyError = (
+	error: CraftConnectApiKeyError,
+): InvalidApiKeyError | IntegrationUnavailableError => {
+	const unavailable = () =>
+		new IntegrationUnavailableError({ message: "Craft API is temporarily unavailable" })
+	switch (error._tag) {
+		case "CraftNotFoundError":
+			return invalidCraftCredentialsError()
+		case "CraftRateLimitError":
+			return unavailable()
+		case "CraftApiError": {
+			const status = error.status
+			return status !== undefined && status >= 400 && status < 500 && status !== 429
+				? invalidCraftCredentialsError()
+				: unavailable()
+		}
+	}
+}
+
+const craftConnectApiKeyErrorLogFields = (error: CraftConnectApiKeyError): Record<string, unknown> => {
+	switch (error._tag) {
+		case "CraftApiError":
+			return {
+				errorTag: error._tag,
+				errorMessage: error.message,
+				errorStatus: error.status ?? null,
+			}
+		case "CraftNotFoundError":
+			return {
+				errorTag: error._tag,
+				resourceType: error.resourceType,
+				resourceId: error.resourceId,
+			}
+		case "CraftRateLimitError":
+			return {
+				errorTag: error._tag,
+				errorMessage: error.message,
+				retryAfter: error.retryAfter ?? null,
+			}
+	}
+}
 
 /**
  * Error codes for OAuth callback failures (used in redirect URL params)
@@ -94,16 +207,85 @@ const OAUTH_SESSION_COOKIE_PREFIX = "oauth_session_"
  */
 const OAUTH_SESSION_COOKIE_MAX_AGE = 15 * 60
 
+const getOAuthStateCandidates = (rawState: string): ReadonlyArray<string> => {
+	const candidates: Array<string> = [rawState]
+	let current = rawState
+	for (let i = 0; i < 2; i++) {
+		try {
+			const decoded = decodeURIComponent(current)
+			if (decoded === current) {
+				break
+			}
+			candidates.push(decoded)
+			current = decoded
+		} catch {
+			break
+		}
+	}
+	return candidates
+}
+
+const decodeOAuthState = Schema.decodeUnknownOption(Schema.fromJsonString(OAuthState))
+const decodeUriComponent = Option.liftThrowable(decodeURIComponent)
+
+/**
+ * Parse OAuth state from callback query param.
+ * Supports raw JSON, single-encoded JSON, and legacy double-encoded JSON.
+ */
+export const parseOAuthStateParam = (rawState: string): Option.Option<typeof OAuthState.Type> =>
+	Option.firstSomeOf(getOAuthStateCandidates(rawState).map((candidate) => decodeOAuthState(candidate)))
+
+const makeOAuthSessionCookie = (
+	name: string,
+	value: string,
+	options: {
+		cookieDomain: string
+		secure: boolean
+		maxAgeSeconds: number
+	},
+) =>
+	Effect.try({
+		try: () =>
+			Cookies.makeCookieUnsafe(name, value, {
+				domain: options.cookieDomain,
+				path: "/",
+				httpOnly: true,
+				secure: options.secure,
+				sameSite: "lax",
+				maxAge: Duration.seconds(options.maxAgeSeconds),
+			}),
+		catch: (error) =>
+			new InternalServerError({
+				message: "Failed to create OAuth session cookie",
+				cause: error,
+			}),
+	})
+
+const expireOAuthSessionCookie = (name: string, options: { cookieDomain: string; secure: boolean }) =>
+	HttpServerResponse.expireCookieUnsafe(name, {
+		domain: options.cookieDomain,
+		path: "/",
+		httpOnly: true,
+		secure: options.secure,
+		sameSite: "lax",
+	})
+
 /**
  * Initiate OAuth flow for a provider.
  * Sets a session cookie with context and redirects to the provider's OAuth consent page.
  */
-const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (path: {
-	orgId: OrganizationId
-	provider: IntegrationConnection.IntegrationProvider
-}) {
+const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
+	path: {
+		orgId: OrganizationId
+		provider: IntegrationConnection.IntegrationProvider
+	},
+	query: { level?: IntegrationConnection.ConnectionLevel },
+) {
 	const currentUser = yield* CurrentUser.Context
 	const { orgId, provider } = path
+	const level = query.level ?? "organization"
+
+	yield* requireMember(orgId)
 
 	// Get the OAuth provider from registry
 	const registry = yield* OAuthProviderRegistry
@@ -112,23 +294,21 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (path:
 			(error) =>
 				new InternalServerError({
 					message: `Provider not available: ${error._tag}`,
-					detail: String(error),
+					cause: error,
 				}),
 		),
 	)
 
-	const frontendUrl = yield* Config.string("FRONTEND_URL").pipe(Effect.orDie)
-	const cookieDomain = yield* Config.string("WORKOS_COOKIE_DOMAIN").pipe(Effect.orDie)
+	const frontendUrl = yield* Config.String("FRONTEND_URL")
+	const cookieDomain = yield* Config.String("COOKIE_DOMAIN")
 
-	// Get org slug for redirect URL
-	const orgRepo = yield* OrganizationRepo
-	const orgOption = yield* orgRepo.findById(orgId).pipe(
-		withSystemActor,
+	// Get org slug for redirect URL (the directory's `org_index`)
+	const orgOption = yield* (yield* Directory).org(orgId).pipe(
 		Effect.mapError(
 			(error) =>
 				new InternalServerError({
 					message: "Failed to fetch organization",
-					detail: String(error),
+					cause: error,
 				}),
 		),
 	)
@@ -145,28 +325,34 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (path:
 
 	// Determine environment from NODE_ENV config
 	// Local dev uses "local" so production can redirect callbacks back to localhost
-	const nodeEnv = yield* Config.string("NODE_ENV").pipe(Config.withDefault("production"), Effect.orDie)
+	const nodeEnv = yield* Config.String("NODE_ENV").pipe(Config.withDefault("production"))
 	const environment = nodeEnv === "development" ? "local" : "production"
+	const cookieSecure = nodeEnv !== "development"
 
 	// Build state object for OAuth flow
 	const stateData = {
 		organizationId: orgId,
 		userId: currentUser.id,
-		returnTo: `${frontendUrl}/${org.slug}/settings/integrations/${provider}`,
+		level,
+		returnTo:
+			level === "user"
+				? `${frontendUrl}/${org.slug}/my-settings/linked-accounts`
+				: `${frontendUrl}/${org.slug}/settings/integrations/${provider}`,
 		environment,
 	}
 
-	// Encode state with return URL, context, and environment
-	const state = encodeURIComponent(JSON.stringify(stateData))
+	// Keep state as raw JSON; URLSearchParams will apply encoding.
+	const state = JSON.stringify(stateData)
 
 	// Build authorization URL using the provider
-	const authorizationUrl = yield* oauthProvider.buildAuthorizationUrl(state)
+	const authorizationUrl = yield* oauthProvider.buildAuthorizationUrl(state, level)
 
 	yield* Effect.logInfo("OAuth flow initiated", {
 		event: "oauth_flow_initiated",
 		provider,
 		organizationId: orgId,
 		userId: currentUser.id,
+		level,
 	})
 
 	// Build session cookie with OAuth context
@@ -180,23 +366,22 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (path:
 	)
 	const sessionCookieName = `${OAUTH_SESSION_COOKIE_PREFIX}${provider}`
 
-	// Build Set-Cookie header value for session cookie
-	// This cookie is used for state recovery during callback
-	const cookieHeader = `${sessionCookieName}=${sessionCookieValue}; Path=/; Domain=${cookieDomain}; HttpOnly; Secure; SameSite=Lax; Max-Age=${OAUTH_SESSION_COOKIE_MAX_AGE}`
+	// Build cookie for session state recovery during callback (e.g. when GitHub drops state)
+	const sessionCookie = yield* makeOAuthSessionCookie(sessionCookieName, sessionCookieValue, {
+		cookieDomain,
+		secure: cookieSecure,
+		maxAgeSeconds: OAUTH_SESSION_COOKIE_MAX_AGE,
+	})
 
 	// Return JSON response with authorization URL and session cookie
 	return yield* HttpServerResponse.json(
 		{ authorizationUrl: authorizationUrl.toString() },
 		{
-			headers: {
-				"Set-Cookie": cookieHeader,
-			},
+			cookies: Cookies.fromIterable([sessionCookie]),
 		},
 	).pipe(
 		Effect.catchTag("HttpBodyError", (e) =>
-			Effect.fail(
-				new InternalServerError({ message: "Failed to serialize response", detail: String(e) }),
-			),
+			Effect.fail(new InternalServerError({ message: "Failed to serialize response", cause: e })),
 		),
 	)
 })
@@ -208,8 +393,14 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (path:
 const OAuthSessionState = Schema.Struct({
 	organizationId: Schema.String,
 	userId: Schema.String,
+	level: Schema.optional(Schema.Literals(["organization", "user"])).pipe(
+		Schema.decodeTo(Schema.toType(Schema.Literals(["organization", "user"])), {
+			decode: SchemaGetter.withDefault(Effect.succeed<"organization" | "user">("organization")),
+			encode: SchemaGetter.required(),
+		}),
+	),
 	returnTo: Schema.String,
-	environment: Schema.optional(Schema.Literal("local", "production")),
+	environment: Schema.optionalKey(Schema.Literals(["local", "production"])),
 	createdAt: Schema.Number,
 })
 
@@ -227,21 +418,25 @@ const OAuthSessionState = Schema.Struct({
  */
 const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 	path: { provider: IntegrationConnection.IntegrationProvider },
-	urlParams: {
+	query: {
 		code?: string
 		state?: string
+		guild_id?: string
+		permissions?: string
 		installation_id?: string
 		setup_action?: string
 	},
 ) {
 	const { provider } = path
-	const { code, state: encodedState, installation_id, setup_action } = urlParams
+	const { code, state: encodedState, installation_id, setup_action, guild_id, permissions } = query
 
 	// Get request to read cookies
 	const request = yield* HttpServerRequest.HttpServerRequest
 	const sessionCookieName = `${OAUTH_SESSION_COOKIE_PREFIX}${provider}`
 	const sessionCookie = request.cookies[sessionCookieName]
-	const cookieDomain = yield* Config.string("WORKOS_COOKIE_DOMAIN").pipe(Effect.orDie)
+	const cookieDomain = yield* Config.String("COOKIE_DOMAIN")
+	const nodeEnv = yield* Config.String("NODE_ENV").pipe(Config.withDefault("production"))
+	const cookieSecure = nodeEnv !== "development"
 
 	yield* Effect.logInfo("OAuth callback received", {
 		event: "integration_callback_start",
@@ -250,19 +445,15 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 		hasSessionCookie: !!sessionCookie,
 		hasInstallationId: !!installation_id,
 		hasCode: !!code,
+		hasGuildId: !!guild_id,
 		setupAction: setup_action,
 	})
 
 	// Helper to build redirect with cookie clearing
 	const buildRedirectWithCookieClear = (url: string) =>
-		HttpServerResponse.empty({
-			status: 302,
-			headers: {
-				Location: url,
-				// Clear the session cookie after processing
-				"Set-Cookie": `${sessionCookieName}=; Path=/; Domain=${cookieDomain}; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
-			},
-		})
+		HttpServerResponse.redirect(url, { status: 302 }).pipe(
+			expireOAuthSessionCookie(sessionCookieName, { cookieDomain, secure: cookieSecure }),
+		)
 
 	// Try to get state from URL parameter first
 	let parsedState: typeof OAuthState.Type | null = null
@@ -270,10 +461,7 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 
 	if (encodedState) {
 		// Priority 1: State from URL parameter
-		const stateResult = yield* Effect.try({
-			try: () => Schema.decodeUnknownSync(OAuthState)(JSON.parse(decodeURIComponent(encodedState))),
-			catch: (e) => new InvalidOAuthStateError({ message: `Invalid state: ${e}` }),
-		}).pipe(Effect.option)
+		const stateResult = parseOAuthStateParam(encodedState)
 
 		if (Option.isSome(stateResult)) {
 			parsedState = stateResult.value
@@ -288,11 +476,9 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 			provider,
 		})
 
-		const sessionResult = yield* Effect.try({
-			try: () =>
-				Schema.decodeUnknownSync(OAuthSessionState)(JSON.parse(decodeURIComponent(sessionCookie))),
-			catch: (e) => new InvalidOAuthStateError({ message: `Invalid session cookie: ${e}` }),
-		}).pipe(Effect.option)
+		const sessionResult = Option.flatMap(decodeUriComponent(sessionCookie), (json) =>
+			Schema.decodeUnknownOption(Schema.fromJsonString(OAuthSessionState))(json),
+		)
 
 		if (Option.isSome(sessionResult)) {
 			const session = sessionResult.value
@@ -304,6 +490,7 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 				parsedState = {
 					organizationId: session.organizationId,
 					userId: session.userId,
+					level: session.level,
 					returnTo: session.returnTo,
 					environment: session.environment,
 				}
@@ -328,22 +515,27 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 	// Priority 3: For GitHub update callbacks without state or cookie,
 	// fall back to installation ID lookup (GitHub-initiated, not user-initiated)
 	if (!parsedState && installation_id && setup_action === "update") {
-		const connectionRepo = yield* IntegrationConnectionRepo
-		const orgRepo = yield* OrganizationRepo
-		const frontendUrl = yield* Config.string("FRONTEND_URL").pipe(Effect.orDie)
+		const directory = yield* Directory
+		const frontendUrl = yield* Config.String("FRONTEND_URL")
 
 		yield* Effect.logInfo("GitHub update callback - looking up by installation ID", {
 			event: "integration_callback_installation_lookup",
 			installationId: installation_id,
 		})
 
-		// Look up the connection by installation ID
-		const connectionOption = yield* connectionRepo
-			.findByGitHubInstallationId(installation_id)
-			.pipe(withSystemActor)
+		// The installation's org, from the directory's `integration_index`.
+		const indexed = yield* directory
+			.integration("github", installation_id)
+			.pipe(
+				Effect.catchTag("DatabaseError", (error) =>
+					Effect.logWarning(
+						"GitHub update callback: installation lookup failed",
+						Cause.fail(error),
+					).pipe(Effect.as(Option.none())),
+				),
+			)
 
-		if (Option.isNone(connectionOption)) {
-			// No connection found - redirect to root
+		if (Option.isNone(indexed)) {
 			yield* Effect.logWarning("GitHub update callback for unknown installation", {
 				event: "integration_callback_update_unknown",
 				installationId: installation_id,
@@ -351,13 +543,19 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 			return buildRedirectWithCookieClear(frontendUrl)
 		}
 
-		const connection = connectionOption.value
+		const connection = indexed.value
 
-		// Get the organization to find its slug
-		const orgOption = yield* orgRepo.findById(connection.organizationId).pipe(
-			withSystemActor,
-			Effect.catchTag("DatabaseError", () => Effect.succeed(Option.none())),
-		)
+		// The redirect below still works without the slug; don't fail the callback over it.
+		const orgOption = yield* directory
+			.org(connection.organizationId)
+			.pipe(
+				Effect.catchTag("DatabaseError", (error) =>
+					Effect.logWarning(
+						"GitHub update callback: organization lookup failed",
+						Cause.fail(error),
+					).pipe(Effect.as(Option.none())),
+				),
+			)
 
 		if (Option.isNone(orgOption)) {
 			yield* Effect.logWarning("GitHub update callback: organization not found", {
@@ -396,6 +594,7 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 		provider,
 		stateSource,
 		organizationId: parsedState.organizationId,
+		level: parsedState.level,
 	})
 
 	yield* Effect.logDebug("OAuth callback state parsed", {
@@ -411,7 +610,6 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 
 	// Check if we need to redirect to local environment
 	// This happens when production receives a callback for a local dev flow
-	const nodeEnv = yield* Config.string("NODE_ENV").pipe(Config.withDefault("production"), Effect.orDie)
 	const isProduction = nodeEnv !== "development"
 
 	if (isProduction && parsedState.environment === "local") {
@@ -425,19 +623,14 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 		if (installation_id) localUrl.searchParams.set("installation_id", installation_id)
 		if (code) localUrl.searchParams.set("code", code)
 
-		// If we recovered state from cookie, encode it and pass as state parameter
-		// This ensures the local callback has the state even if GitHub dropped it
-		const stateToPass =
-			stateSource === "cookie"
-				? encodeURIComponent(
-						JSON.stringify({
-							organizationId: parsedState.organizationId,
-							userId: parsedState.userId,
-							returnTo: parsedState.returnTo,
-							environment: parsedState.environment,
-						}),
-					)
-				: encodedState
+		// Always pass normalized JSON state so local callback parsing is consistent.
+		const stateToPass = JSON.stringify({
+			organizationId: parsedState.organizationId,
+			userId: parsedState.userId,
+			level: parsedState.level,
+			returnTo: parsedState.returnTo,
+			environment: parsedState.environment,
+		})
 		if (stateToPass) {
 			localUrl.searchParams.set("state", stateToPass)
 		}
@@ -463,9 +656,6 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 				}),
 		),
 	)
-
-	const connectionRepo = yield* IntegrationConnectionRepo
-	const tokenService = yield* IntegrationTokenService
 
 	// Determine if this is a GitHub App installation callback
 	// GitHub App callbacks have `installation_id` instead of `code`
@@ -495,11 +685,11 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 			schedule: oauthRetrySchedule,
 			while: isRetryableError,
 		}),
-		Effect.either,
+		Effect.result,
 	)
 
-	if (tokensResult._tag === "Left") {
-		const error = tokensResult.left
+	if (tokensResult._tag === "Failure") {
+		const error = tokensResult.failure
 		yield* Effect.logError("OAuth token exchange failed", {
 			event: "integration_token_exchange_failed",
 			provider,
@@ -509,7 +699,7 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 		return redirectWithError("token_exchange_failed")
 	}
 
-	const tokens = tokensResult.right
+	const tokens = tokensResult.success
 	yield* Effect.logInfo("OAuth token exchange succeeded", {
 		event: "integration_token_exchange_success",
 		provider,
@@ -528,11 +718,11 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 			schedule: oauthRetrySchedule,
 			while: isRetryableError,
 		}),
-		Effect.either,
+		Effect.result,
 	)
 
-	if (accountInfoResult._tag === "Left") {
-		const error = accountInfoResult.left
+	if (accountInfoResult._tag === "Failure") {
+		const error = accountInfoResult.failure
 		yield* Effect.logError("OAuth account info fetch failed", {
 			event: "integration_account_info_failed",
 			provider,
@@ -541,7 +731,7 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 		return redirectWithError("account_info_failed")
 	}
 
-	const accountInfo = accountInfoResult.right
+	const accountInfo = accountInfoResult.success
 	yield* Effect.logDebug("OAuth account info fetch succeeded", {
 		event: "integration_account_info_success",
 		provider,
@@ -551,122 +741,95 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 
 	// Prepare connection metadata
 	// For GitHub App, store the installation ID for token regeneration
-	const metadata = isGitHubAppCallback ? { installationId: installation_id } : null
+	const metadata = isGitHubAppCallback
+		? { installationId: installation_id }
+		: provider === "discord" && parsedState.level === "organization"
+			? {
+					guildId: guild_id ?? null,
+					permissions: permissions ?? null,
+				}
+			: null
 
-	// Create or update connection
-	yield* Effect.logDebug("OAuth database upsert starting", {
-		event: "integration_db_upsert_attempt",
-		provider,
-		organizationId: parsedState.organizationId,
-	})
-
-	const connectionResult = yield* connectionRepo
-		.upsertByOrgAndProvider({
-			provider,
-			organizationId: parsedState.organizationId as OrganizationId,
-			userId: null, // org-level connection
-			level: "organization",
-			status: "active",
-			externalAccountId: accountInfo.externalAccountId,
-			externalAccountName: accountInfo.externalAccountName,
-			connectedBy: parsedState.userId as UserId,
-			settings: null,
-			metadata,
-			errorMessage: null,
-			lastUsedAt: null,
-			deletedAt: null,
-		})
-		.pipe(withSystemActor, Effect.either)
-
-	if (connectionResult._tag === "Left") {
-		yield* Effect.logError("OAuth database upsert failed", {
-			event: "integration_db_upsert_failed",
-			provider,
-			error: String(connectionResult.left),
-		})
-		return redirectWithError("db_error")
+	// A per-workspace install must have granted the bot: an authorize URL stripped of its bot
+	// scopes answers with a user token only, which is no install.
+	if (
+		parsedState.level === "organization" &&
+		isChatSyncProviderId(provider) &&
+		chatSyncProviders[provider].workspaceIsInstall &&
+		tokens.tokenType !== "bot"
+	) {
+		return redirectWithError("token_exchange_failed")
 	}
 
-	const connection = connectionResult.right
-	yield* Effect.logDebug("OAuth database upsert succeeded", {
-		event: "integration_db_upsert_success",
-		provider,
-		connectionId: connection.id,
-	})
+	// Save the connection, its tokens and the org's integration bot in the org's `OrgObject`.
+	const organizationId = parsedState.organizationId as OrganizationId
+	const userId = parsedState.userId as UserId
+	// A provider that installs Hazel per workspace: its bot token is the workspace's, for every
+	// org synced with it (`chat_sync_installations`). Saved before the connection: an install
+	// without a connection is harmless, a connection without its install syncs nothing.
+	if (
+		parsedState.level === "organization" &&
+		isChatSyncProviderId(provider) &&
+		chatSyncProviders[provider].workspaceIsInstall
+	) {
+		const saved = yield* Effect.flatMap(ChatSyncInstallations, (installations) =>
+			installations.save({
+				provider,
+				externalWorkspaceId: accountInfo.externalAccountId,
+				externalWorkspaceName: accountInfo.externalAccountName,
+				token: Redacted.make(tokens.accessToken),
+				scope: tokens.scope ?? null,
+				installedBy: userId,
+			}),
+		).pipe(Effect.result)
+		if (saved._tag === "Failure") {
+			yield* Effect.logError("Chat sync install save failed", {
+				event: "integration_install_save_failed",
+				provider,
+				error: String(saved.failure),
+			})
+			return redirectWithError("db_error")
+		}
+	}
 
-	// Store encrypted tokens
-	yield* Effect.logDebug("OAuth token storage starting", {
-		event: "integration_token_storage_attempt",
+	const connectResult = yield* callObject(ConnectIntegrationCall, orgTarget(organizationId), {
 		provider,
-		connectionId: connection.id,
-	})
-
-	const storeResult = yield* tokenService
-		.storeTokens(connection.id, {
+		userId: parsedState.level === "user" ? userId : null,
+		connectedBy: userId,
+		externalAccountId: accountInfo.externalAccountId,
+		externalAccountName: accountInfo.externalAccountName,
+		settings: null,
+		metadata,
+		tokens: {
 			accessToken: tokens.accessToken,
-			refreshToken: tokens.refreshToken,
-			expiresAt: tokens.expiresAt,
-			scope: tokens.scope,
-		})
-		.pipe(Effect.either)
+			refreshToken: tokens.refreshToken ?? null,
+			expiresAt: tokens.expiresAt ?? null,
+			scope: tokens.scope ?? null,
+		},
+	}).pipe(Effect.result)
 
-	if (storeResult._tag === "Left") {
-		yield* Effect.logError("OAuth token storage failed", {
-			event: "integration_token_storage_failed",
+	if (connectResult._tag === "Failure") {
+		const error = connectResult.failure
+		yield* Effect.logError("OAuth connection save failed", {
+			event: "integration_connect_failed",
 			provider,
-			connectionId: connection.id,
-			error: String(storeResult.left),
+			error: error.message,
 		})
-		return redirectWithError("encryption_error")
+		return redirectWithError(error._tag === "IntegrationConnectFailedError" ? error.stage : "db_error")
 	}
-
-	yield* Effect.logDebug("OAuth token storage succeeded", {
-		event: "integration_token_storage_success",
-		provider,
-		connectionId: connection.id,
-	})
 
 	yield* Effect.logInfo("AUDIT: Integration connected", {
 		event: "integration_connected",
 		provider,
 		organizationId: parsedState.organizationId,
 		userId: parsedState.userId,
-		level: "organization",
+		level: parsedState.level,
 		externalAccountId: accountInfo.externalAccountId,
 		externalAccountName: accountInfo.externalAccountName,
 		isGitHubApp: isGitHubAppCallback,
-		connectionId: connection.id,
+		connectionId: connectResult.success.connectionId,
+		botInstalled: connectResult.success.botInstalled,
 	})
-
-	// Add seeded bot to org for all OAuth integration providers
-	// Bot user should already exist from seed script - this just adds org membership
-	// This is best-effort - OAuth has already succeeded, so we just log and continue on error
-	yield* IntegrationBotService.addBotToOrg(provider, parsedState.organizationId as OrganizationId).pipe(
-		Effect.provide(IntegrationBotService.Default),
-		Effect.tap((result) =>
-			Option.isSome(result)
-				? Effect.logInfo("Integration bot added to organization", {
-						event: "integration_bot_added_to_org",
-						provider,
-						organizationId: parsedState.organizationId,
-					})
-				: Effect.logWarning("Integration bot not found - run seed script", {
-						event: "integration_bot_not_seeded",
-						provider,
-						organizationId: parsedState.organizationId,
-					}),
-		),
-		// Note: catchAll is intentional here - this is a best-effort operation
-		// after OAuth success. We catch all errors to prevent disrupting the flow.
-		Effect.catchAll((error) =>
-			Effect.logWarning("Failed to add integration bot to org (non-critical)", {
-				event: "integration_bot_add_failed",
-				provider,
-				organizationId: parsedState.organizationId,
-				error: String(error),
-			}),
-		),
-	)
 
 	// Redirect back to the settings page with success status (clears session cookie)
 	const successUrl = buildRedirectUrl(parsedState.returnTo, provider, "success")
@@ -682,16 +845,120 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 })
 
 /**
+ * Connect an integration using an API key (non-OAuth providers like Craft).
+ * Validates the token by calling the provider's API, then stores the connection.
+ */
+const handleConnectApiKey = Effect.fn("integrations.connectApiKey")(function* (
+	path: {
+		orgId: OrganizationId
+		provider: IntegrationConnection.IntegrationProvider
+	},
+	payload: { token: string; baseUrl: string },
+) {
+	const currentUser = yield* CurrentUser.Context
+	const { orgId, provider } = path
+	const { token, baseUrl } = payload
+
+	// Validate credentials by calling the provider's API
+	let externalAccountName: string | null = null
+	let validatedBaseUrl = baseUrl
+
+	if (provider === "craft") {
+		validatedBaseUrl = yield* validateCraftBaseUrl(baseUrl)
+		const parsedBaseUrl = new URL(validatedBaseUrl)
+		const craftApiClient = yield* CraftApiClient
+		const spaceInfo = yield* craftApiClient.getSpaceInfo(validatedBaseUrl, token).pipe(
+			Effect.catchTags({
+				CraftApiError: (error: CraftApiError) =>
+					Effect.logWarning("Craft API key validation failed", {
+						event: "craft_api_key_validation_failed",
+						provider,
+						organizationId: orgId,
+						baseUrlHost: parsedBaseUrl.hostname,
+						baseUrlPath: parsedBaseUrl.pathname,
+						...craftConnectApiKeyErrorLogFields(error),
+					}).pipe(Effect.andThen(Effect.fail(mapCraftConnectApiKeyError(error)))),
+				CraftNotFoundError: (error: CraftNotFoundError) =>
+					Effect.logWarning("Craft API key validation failed", {
+						event: "craft_api_key_validation_failed",
+						provider,
+						organizationId: orgId,
+						baseUrlHost: parsedBaseUrl.hostname,
+						baseUrlPath: parsedBaseUrl.pathname,
+						...craftConnectApiKeyErrorLogFields(error),
+					}).pipe(Effect.andThen(Effect.fail(mapCraftConnectApiKeyError(error)))),
+				CraftRateLimitError: (error: CraftRateLimitError) =>
+					Effect.logWarning("Craft API key validation failed", {
+						event: "craft_api_key_validation_failed",
+						provider,
+						organizationId: orgId,
+						baseUrlHost: parsedBaseUrl.hostname,
+						baseUrlPath: parsedBaseUrl.pathname,
+						...craftConnectApiKeyErrorLogFields(error),
+					}).pipe(Effect.andThen(Effect.fail(mapCraftConnectApiKeyError(error)))),
+			}),
+		)
+		externalAccountName = spaceInfo.name ?? "Craft Space"
+	} else {
+		return yield* Effect.fail(new UnsupportedProviderError({ provider }))
+	}
+
+	// Save the connection (settings carry the base URL) and the API key in the org's object.
+	const connected = yield* callObject(ConnectIntegrationCall, orgTarget(orgId), {
+		provider,
+		userId: null,
+		connectedBy: currentUser.id,
+		externalAccountId: null,
+		externalAccountName,
+		settings: { baseUrl: validatedBaseUrl },
+		metadata: null,
+		tokens: { accessToken: token, refreshToken: null, expiresAt: null, scope: null },
+	})
+
+	yield* Effect.logInfo("AUDIT: Integration connected via API key", {
+		event: "integration_api_key_connected",
+		provider,
+		organizationId: orgId,
+		userId: currentUser.id,
+		level: "organization",
+		externalAccountName,
+		connectionId: connected.connectionId,
+	})
+
+	return new ConnectApiKeyResponse({
+		connected: true,
+		provider,
+		externalAccountName,
+	})
+})
+
+const toDateTime = (value: Date | DateTime.Utc) =>
+	DateTime.isDateTime(value) ? value : DateTime.fromDateUnsafe(value)
+
+/**
  * Get connection status for a provider.
  */
-const handleGetConnectionStatus = Effect.fn("integrations.getConnectionStatus")(function* (path: {
-	orgId: OrganizationId
-	provider: IntegrationConnection.IntegrationProvider
-}) {
+const handleGetConnectionStatus = Effect.fn("integrations.getConnectionStatus")(function* (
+	path: {
+		orgId: OrganizationId
+		provider: IntegrationConnection.IntegrationProvider
+	},
+	query: { level?: IntegrationConnection.ConnectionLevel },
+) {
 	const { orgId, provider } = path
-	const connectionRepo = yield* IntegrationConnectionRepo
+	const currentUser = yield* CurrentUser.Context
+	const level = query.level ?? "organization"
+	// A T3 Code link is a member's own, with its own routes (`./t3code.http.ts`).
+	if (provider === "t3code") return yield* Effect.fail(new UnsupportedProviderError({ provider }))
 
-	const connectionOption = yield* connectionRepo.findByOrgAndProvider(orgId, provider).pipe(withSystemActor)
+	yield* requireMember(orgId)
+
+	const connectionOption = Option.fromNullishOr(
+		yield* callObject(IntegrationConnectionCall, orgTarget(orgId), {
+			provider,
+			userId: level === "user" ? currentUser.id : null,
+		}),
+	)
 
 	if (Option.isNone(connectionOption)) {
 		return new ConnectionStatusResponse({
@@ -710,83 +977,85 @@ const handleGetConnectionStatus = Effect.fn("integrations.getConnectionStatus")(
 		provider,
 		externalAccountName: connection.externalAccountName,
 		status: connection.status,
-		connectedAt: connection.createdAt ?? null,
-		lastUsedAt: connection.lastUsedAt ?? null,
+		connectedAt: connection.createdAt ? toDateTime(connection.createdAt) : null,
+		lastUsedAt: connection.lastUsedAt ? toDateTime(connection.lastUsedAt) : null,
 	})
 })
 
 /**
  * Disconnect an integration and revoke tokens.
  */
-const handleDisconnect = Effect.fn("integrations.disconnect")(function* (path: {
-	orgId: OrganizationId
-	provider: IntegrationConnection.IntegrationProvider
-}) {
+const handleDisconnect = Effect.fn("integrations.disconnect")(function* (
+	path: {
+		orgId: OrganizationId
+		provider: IntegrationConnection.IntegrationProvider
+	},
+	query: { level?: IntegrationConnection.ConnectionLevel },
+) {
 	const { orgId, provider } = path
-	const connectionRepo = yield* IntegrationConnectionRepo
-	const tokenService = yield* IntegrationTokenService
+	const currentUser = yield* CurrentUser.Context
+	const level = query.level ?? "organization"
+	// A T3 Code link is a member's own, with its own routes (`./t3code.http.ts`).
+	if (provider === "t3code") return yield* Effect.fail(new UnsupportedProviderError({ provider }))
 
-	const connectionOption = yield* connectionRepo.findByOrgAndProvider(orgId, provider).pipe(withSystemActor)
+	yield* requireMember(orgId)
 
-	if (Option.isNone(connectionOption)) {
-		return yield* Effect.fail(new IntegrationNotConnectedError({ provider }))
-	}
-
-	const connection = connectionOption.value
-
-	// Delete tokens first
-	yield* tokenService.deleteTokens(connection.id)
-
-	// Soft delete the connection
-	yield* connectionRepo.softDelete(connection.id).pipe(withSystemActor)
+	// Tokens, the connection and (for a user link) re-attribution, in the org's object.
+	const connection = yield* callObject(DisconnectIntegrationCall, orgTarget(orgId), {
+		provider,
+		userId: level === "user" ? currentUser.id : null,
+	})
 
 	yield* Effect.logInfo("AUDIT: Integration disconnected", {
 		event: "integration_disconnected",
 		provider,
 		organizationId: orgId,
+		level,
+		userId: level === "user" ? currentUser.id : null,
 		connectionId: connection.id,
 		externalAccountId: connection.externalAccountId,
 		externalAccountName: connection.externalAccountName,
 	})
 })
 
+const objectErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+	effect.pipe(
+		Effect.catchTags({
+			ObjectCallError: (error: unknown) =>
+				Effect.fail(
+					new InternalServerError({ message: "The organization is unavailable", cause: error }),
+				),
+		}),
+	)
+
 export const HttpIntegrationLive = HttpApiBuilder.group(HazelApi, "integrations", (handlers) =>
 	handlers
-		.handle("getOAuthUrl", ({ path }) => handleGetOAuthUrl(path))
-		.handle("oauthCallback", ({ path, urlParams }) =>
-			handleOAuthCallback(path, urlParams).pipe(
-				Effect.catchTag("DatabaseError", (error) =>
+		.handle("getOAuthUrl", ({ params, query }) =>
+			handleGetOAuthUrl(params, query).pipe(
+				Effect.catchTag("ConfigError", (err) =>
+					Effect.fail(new InternalServerError({ message: "Missing configuration", cause: err })),
+				),
+			),
+		)
+		.handle("oauthCallback", ({ params, query }) =>
+			handleOAuthCallback(params, query).pipe(
+				Effect.catchTag("ConfigError", (err) =>
+					Effect.fail(new InternalServerError({ message: "Missing configuration", cause: err })),
+				),
+			),
+		)
+		.handle("connectApiKey", ({ params, payload }) =>
+			handleConnectApiKey(params, payload).pipe(
+				objectErrors,
+				Effect.catchTag("IntegrationConnectFailedError", (error) =>
 					Effect.fail(
-						new InternalServerError({
-							message: "Database error during OAuth callback",
-							detail: String(error),
-						}),
+						new InternalServerError({ message: "Failed to save the connection", cause: error }),
 					),
 				),
 			),
 		)
-		.handle("getConnectionStatus", ({ path }) =>
-			handleGetConnectionStatus(path).pipe(
-				Effect.catchTag("DatabaseError", (error) =>
-					Effect.fail(
-						new InternalServerError({
-							message: "Failed to get connection status",
-							detail: String(error),
-						}),
-					),
-				),
-			),
+		.handle("getConnectionStatus", ({ params, query }) =>
+			handleGetConnectionStatus(params, query).pipe(objectErrors),
 		)
-		.handle("disconnect", ({ path }) =>
-			handleDisconnect(path).pipe(
-				Effect.catchTag("DatabaseError", (error) =>
-					Effect.fail(
-						new InternalServerError({
-							message: "Failed to disconnect integration",
-							detail: String(error),
-						}),
-					),
-				),
-			),
-		),
-)
+		.handle("disconnect", ({ params, query }) => handleDisconnect(params, query).pipe(objectErrors)),
+).pipe(Layer.provide(CraftApiClient.layer))

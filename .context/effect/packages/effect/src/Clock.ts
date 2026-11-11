@@ -1,111 +1,182 @@
 /**
+ * The `Clock` module provides functionality for time-based operations in Effect applications.
+ * It offers precise time measurements, scheduling capabilities, and controlled time management
+ * for testing scenarios.
+ *
+ * The Clock service is a core component of the Effect runtime, providing:
+ * - Current time access in milliseconds and nanoseconds
+ * - Sleep operations for delaying execution
+ * - Time-based scheduling primitives
+ * - Testable time control through `TestClock`
+ *
+ * ## Key Features
+ *
+ * - **Precise timing**: Access to both millisecond and nanosecond precision
+ * - **Sleep operations**: Non-blocking sleep with proper interruption handling
+ * - **Service integration**: Seamless integration with Effect's dependency injection
+ * - **Testable**: Mock time control for deterministic testing
+ * - **Resource-safe**: Automatic cleanup of time-based resources
+ *
+ * @example
+ * ```ts
+ * import { Clock, Effect } from "effect"
+ *
+ * // Get current time in milliseconds
+ * const getCurrentTime = Clock.currentTimeMillis
+ *
+ * // Sleep for 1 second
+ * const sleep1Second = Effect.sleep("1 seconds")
+ *
+ * // Measure execution time
+ * const measureTime = Effect.gen(function*() {
+ *   const start = yield* Clock.currentTimeMillis
+ *   yield* Effect.sleep("100 millis")
+ *   const end = yield* Clock.currentTimeMillis
+ *   return end - start
+ * })
+ * ```
+ *
+ * @example
+ * ```ts
+ * import { Clock, Effect } from "effect"
+ *
+ * // Using Clock service directly
+ * const program = Effect.gen(function*() {
+ *   const clock = yield* Clock.Clock
+ *   const currentTime = yield* clock.currentTimeMillis
+ *   console.log(`Current time: ${currentTime}`)
+ *
+ *   // Sleep for 500ms
+ *   yield* Effect.sleep("500 millis")
+ *
+ *   const afterSleep = yield* clock.currentTimeMillis
+ *   console.log(`After sleep: ${afterSleep}`)
+ * })
+ * ```
+ *
  * @since 2.0.0
  */
-import type * as Context from "./Context.js"
-import type * as Duration from "./Duration.js"
-import type * as Effect from "./Effect.js"
-import * as internal from "./internal/clock.js"
-import * as defaultServices from "./internal/defaultServices.js"
-
-/**
- * @since 2.0.0
- * @category symbols
- */
-export const ClockTypeId: unique symbol = internal.ClockTypeId
-
-/**
- * @since 2.0.0
- * @category symbols
- */
-export type ClockTypeId = typeof ClockTypeId
+import type * as Context from "./Context.ts"
+import type * as Duration from "./Duration.ts"
+import type { Effect } from "./Effect.ts"
+import * as effect from "./internal/effect.ts"
 
 /**
  * Represents a time-based clock which provides functionality related to time
  * and scheduling.
  *
+ * @example
+ * ```ts
+ * import { Clock, Effect } from "effect"
+ *
+ * const clockOperations = Effect.gen(function*() {
+ *   const currentTime = yield* Clock.currentTimeMillis
+ *   const currentTimeNanos = yield* Clock.currentTimeNanos
+ *
+ *   console.log(`Current time (ms): ${currentTime}`)
+ *   console.log(`Current time (ns): ${currentTimeNanos}`)
+ * })
+ * ```
+ *
  * @since 2.0.0
  * @category models
  */
 export interface Clock {
-  readonly [ClockTypeId]: ClockTypeId
   /**
    * Unsafely returns the current time in milliseconds.
    */
-  unsafeCurrentTimeMillis(): number
+  currentTimeMillisUnsafe(): number
   /**
    * Returns the current time in milliseconds.
    */
-  readonly currentTimeMillis: Effect.Effect<number>
+  readonly currentTimeMillis: Effect<number>
   /**
    * Unsafely returns the current time in nanoseconds.
    */
-  unsafeCurrentTimeNanos(): bigint
+  currentTimeNanosUnsafe(): bigint
   /**
    * Returns the current time in nanoseconds.
    */
-  readonly currentTimeNanos: Effect.Effect<bigint>
+  readonly currentTimeNanos: Effect<bigint>
   /**
    * Asynchronously sleeps for the specified duration.
    */
-  sleep(duration: Duration.Duration): Effect.Effect<void>
+  sleep(duration: Duration.Duration): Effect<void>
 }
 
 /**
- * @since 2.0.0
- * @category models
+ * A reference to the current Clock service in the environment.
+ *
+ * @example
+ * ```ts
+ * import { Clock, Effect } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   const clock = yield* Clock.Clock
+ *   return clock.currentTimeMillisUnsafe()
+ * })
+ * ```
+ *
+ * @category references
+ * @since 4.0.0
  */
-export type CancelToken = () => boolean
+export const Clock: Context.Reference<Clock> = effect.ClockRef
 
 /**
- * @since 2.0.0
- * @category models
- */
-export type Task = () => void
-
-/**
- * @since 2.0.0
- * @category models
- */
-export interface ClockScheduler {
-  /**
-   * Unsafely schedules the specified task for the specified duration.
-   */
-  unsafeSchedule(task: Task, duration: Duration.Duration): CancelToken
-}
-
-/**
- * @since 2.0.0
+ * Accesses the current Clock service and uses it to run the provided function.
+ *
+ * @example
+ * ```ts
+ * import { Clock, Effect } from "effect"
+ *
+ * const program = Clock.clockWith((clock) =>
+ *   Effect.sync(() => {
+ *     const currentTime = clock.currentTimeMillisUnsafe()
+ *     console.log(`Current time: ${currentTime}`)
+ *     return currentTime
+ *   })
+ * )
+ * ```
+ *
  * @category constructors
+ * @since 2.0.0
  */
-export const make: (_: void) => Clock = internal.make
+export const clockWith: <A, E, R>(f: (clock: Clock) => Effect<A, E, R>) => Effect<A, E, R> = effect.clockWith
 
 /**
- * @since 2.0.0
+ * Returns an Effect that succeeds with the current time in milliseconds.
+ *
+ * @example
+ * ```ts
+ * import { Clock, Effect } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   const currentTime = yield* Clock.currentTimeMillis
+ *   console.log(`Current time: ${currentTime}ms`)
+ *   return currentTime
+ * })
+ * ```
+ *
  * @category constructors
+ * @since 2.0.0
  */
-export const sleep: (duration: Duration.DurationInput) => Effect.Effect<void> = defaultServices.sleep
+export const currentTimeMillis: Effect<number> = effect.currentTimeMillis
 
 /**
- * @since 2.0.0
+ * Returns an Effect that succeeds with the current time in nanoseconds.
+ *
+ * @example
+ * ```ts
+ * import { Clock, Effect } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   const currentTime = yield* Clock.currentTimeNanos
+ *   console.log(`Current time: ${currentTime}ns`)
+ *   return currentTime
+ * })
+ * ```
+ *
  * @category constructors
- */
-export const currentTimeMillis: Effect.Effect<number> = defaultServices.currentTimeMillis
-
-/**
  * @since 2.0.0
- * @category constructors
  */
-export const currentTimeNanos: Effect.Effect<bigint> = defaultServices.currentTimeNanos
-
-/**
- * @since 2.0.0
- * @category constructors
- */
-export const clockWith: <A, E, R>(f: (clock: Clock) => Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> =
-  defaultServices.clockWith
-
-/**
- * @since 2.0.0
- * @category context
- */
-export const Clock: Context.Tag<Clock, Clock> = internal.clockTag
+export const currentTimeNanos: Effect<bigint> = effect.currentTimeNanos

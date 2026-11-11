@@ -1,52 +1,49 @@
-import { HttpApiBuilder } from "@effect/platform"
-import { CurrentUser } from "@hazel/domain"
-import { Config, Effect, Layer, Redacted } from "effect"
-import { SessionManager } from "./session-manager"
+import { CurrentUser, InvalidBearerTokenError } from "@hazel/domain"
+import { Effect, Layer, Option, Redacted } from "effect"
+import { HttpServerRequest } from "effect/http"
+import { HazelSession } from "./hazel-session"
 
 export const AuthorizationLive = Layer.effect(
 	CurrentUser.Authorization,
 	Effect.gen(function* () {
 		yield* Effect.logDebug("Initializing Authorization middleware...")
 
-		const sessionManager = yield* SessionManager
+		const hazelSession = yield* HazelSession
 
-		const workOsCookiePassword = yield* Config.string("WORKOS_COOKIE_PASSWORD").pipe(Effect.orDie)
-		const cookieDomain = yield* Config.string("WORKOS_COOKIE_DOMAIN").pipe(Effect.orDie)
-
-		return {
-			cookie: (cookie) =>
+		return CurrentUser.Authorization.of({
+			bearer: (httpEffect, { credential: bearerToken }) =>
 				Effect.gen(function* () {
-					yield* Effect.logDebug("checking cookie")
+					// Hazel session cookie (browser)
+					const request = yield* HttpServerRequest.HttpServerRequest
+					const token = Redacted.value(bearerToken)
+					const cookieUser = yield* hazelSession
+						.fromCookie(request.headers, request.method)
+						.pipe(
+							Effect.catchTag("InvalidBearerTokenError", (error) =>
+								token !== "" ? Effect.succeedNone : Effect.fail(error),
+							),
+						)
+					if (Option.isSome(cookieUser)) {
+						return yield* Effect.provideService(httpEffect, CurrentUser.Context, cookieUser.value)
+					}
 
-					// Use SessionManager to handle authentication and refresh logic
-					const result = yield* sessionManager.authenticateWithCookie(
-						Redacted.value(cookie),
-						workOsCookiePassword,
-					)
-
-					// If a new session was created via refresh, update the cookie
-					if (result.refreshedSession) {
-						yield* HttpApiBuilder.securitySetCookie(
-							CurrentUser.Cookie,
-							Redacted.make(result.refreshedSession),
-							{
-								secure: true, // Always use secure cookies with HTTPS proxy
-								sameSite: "none", // Allow cross-port cookies for localhost dev
-								domain: cookieDomain,
-								path: "/",
-							},
+					// Hazel session credential (native clients)
+					const sessionUser = token === "" ? Option.none() : yield* hazelSession.verify(token)
+					if (Option.isSome(sessionUser)) {
+						return yield* Effect.provideService(
+							httpEffect,
+							CurrentUser.Context,
+							sessionUser.value,
 						)
 					}
 
-					return result.currentUser
+					return yield* Effect.fail(
+						new InvalidBearerTokenError({
+							message: "Invalid session",
+							detail: token === "" ? "No credential provided" : "Session expired or revoked",
+						}),
+					)
 				}),
-			bearer: (bearerToken) =>
-				Effect.gen(function* () {
-					yield* Effect.logDebug("checking bearer token")
-
-					// Use SessionManager to handle bearer token authentication
-					return yield* sessionManager.authenticateWithBearer(Redacted.value(bearerToken))
-				}),
-		}
+		})
 	}),
 )

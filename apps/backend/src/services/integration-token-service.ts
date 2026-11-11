@@ -1,14 +1,12 @@
-import { type IntegrationConnectionId, type IntegrationTokenId, withSystemActor } from "@hazel/domain"
+import { IntegrationConnectionRepo, IntegrationTokenRepo } from "@hazel/backend-core"
+import type { IntegrationConnectionId, IntegrationTokenId } from "@hazel/schema"
 import { IntegrationConnection } from "@hazel/domain/models"
 import { GitHub } from "@hazel/integrations"
 import { IntegrationConnectionId as IntegrationConnectionIdSchema } from "@hazel/schema"
-import { Effect, Option, PartitionedSemaphore, Redacted, Schema } from "effect"
-import { IntegrationConnectionRepo } from "../repositories/integration-connection-repo"
-import { IntegrationTokenRepo } from "../repositories/integration-token-repo"
-import { DatabaseLive } from "./database"
-import { type EncryptedToken, IntegrationEncryption } from "./integration-encryption"
+import { Context, Effect, Layer, Option, PartitionedSemaphore, Redacted, Schema } from "effect"
+import { IntegrationEncryption } from "./integration-encryption"
 import { OAuthHttpClient } from "./oauth/oauth-http-client"
-import { loadProviderConfig } from "./oauth/provider-config"
+import { type OAuthIntegrationProvider, loadProviderConfig } from "./oauth/provider-config"
 
 export class TokenNotFoundError extends Schema.TaggedError<TokenNotFoundError>()("TokenNotFoundError", {
 	connectionId: IntegrationConnectionIdSchema,
@@ -41,7 +39,7 @@ interface OAuthTokenResponse {
 
 // Helper to refresh OAuth tokens for each provider using Effect HttpClient
 const refreshOAuthToken = (
-	provider: IntegrationConnection.IntegrationProvider,
+	provider: OAuthIntegrationProvider,
 	refreshToken: string,
 	clientId: string,
 	clientSecret: string,
@@ -61,15 +59,14 @@ const refreshOAuthToken = (
 			scope: result.scope,
 		}
 	}).pipe(
-		Effect.provide(OAuthHttpClient.Default),
+		Effect.provide(OAuthHttpClient.layer),
 		Effect.mapError((cause) => new TokenRefreshError({ provider, cause })),
 	)
 
-export class IntegrationTokenService extends Effect.Service<IntegrationTokenService>()(
+export class IntegrationTokenService extends Context.Service<IntegrationTokenService>()(
 	"IntegrationTokenService",
 	{
-		accessors: true,
-		effect: Effect.gen(function* () {
+		make: Effect.gen(function* () {
 			const encryption = yield* IntegrationEncryption
 			const tokenRepo = yield* IntegrationTokenRepo
 			const connectionRepo = yield* IntegrationConnectionRepo
@@ -84,7 +81,7 @@ export class IntegrationTokenService extends Effect.Service<IntegrationTokenServ
 			const getValidAccessToken = Effect.fn("IntegrationTokenService.getValidAccessToken")(function* (
 				connectionId: IntegrationConnectionId,
 			) {
-				const tokenOption = yield* tokenRepo.findByConnectionId(connectionId).pipe(withSystemActor)
+				const tokenOption = yield* tokenRepo.findByConnectionId(connectionId)
 				const token = yield* Option.match(tokenOption, {
 					onNone: () => Effect.fail(new TokenNotFoundError({ connectionId })),
 					onSome: Effect.succeed,
@@ -97,16 +94,17 @@ export class IntegrationTokenService extends Effect.Service<IntegrationTokenServ
 
 				if (needsRefresh) {
 					// Get connection to determine provider
-					const connectionOption = yield* connectionRepo
-						.findById(connectionId)
-						.pipe(withSystemActor)
+					const connectionOption = yield* connectionRepo.findById(connectionId)
+
 					const connection = yield* Option.match(connectionOption, {
 						onNone: () => Effect.fail(new ConnectionNotFoundError({ connectionId })),
 						onSome: Effect.succeed,
 					})
 
 					// Check if this is an app-based provider (uses JWT regeneration)
-					const isAppBased = APP_BASED_PROVIDERS.includes(connection.provider)
+					const isAppBased = (APP_BASED_PROVIDERS as readonly string[]).includes(
+						connection.provider,
+					)
 
 					if (isAppBased) {
 						// App-based providers (like GitHub App) regenerate tokens via JWT
@@ -116,9 +114,8 @@ export class IntegrationTokenService extends Effect.Service<IntegrationTokenServ
 						)(
 							Effect.gen(function* () {
 								// Re-fetch token to check if it was already refreshed while waiting
-								const freshTokenOption = yield* tokenRepo
-									.findByConnectionId(connectionId)
-									.pipe(withSystemActor)
+								const freshTokenOption = yield* tokenRepo.findByConnectionId(connectionId)
+
 								const freshToken = yield* Option.match(freshTokenOption, {
 									onNone: () => Effect.fail(new TokenNotFoundError({ connectionId })),
 									onSome: Effect.succeed,
@@ -154,9 +151,8 @@ export class IntegrationTokenService extends Effect.Service<IntegrationTokenServ
 						)(
 							Effect.gen(function* () {
 								// Re-fetch token to check if it was already refreshed while waiting
-								const freshTokenOption = yield* tokenRepo
-									.findByConnectionId(connectionId)
-									.pipe(withSystemActor)
+								const freshTokenOption = yield* tokenRepo.findByConnectionId(connectionId)
+
 								const freshToken = yield* Option.match(freshTokenOption, {
 									onNone: () => Effect.fail(new TokenNotFoundError({ connectionId })),
 									onSome: Effect.succeed,
@@ -203,7 +199,7 @@ export class IntegrationTokenService extends Effect.Service<IntegrationTokenServ
 				},
 			) {
 				// Get connection to determine provider
-				const connectionOption = yield* connectionRepo.findById(connectionId).pipe(withSystemActor)
+				const connectionOption = yield* connectionRepo.findById(connectionId)
 				const connection = yield* Option.match(connectionOption, {
 					onNone: () => Effect.fail(new ConnectionNotFoundError({ connectionId })),
 					onSome: Effect.succeed,
@@ -226,7 +222,9 @@ export class IntegrationTokenService extends Effect.Service<IntegrationTokenServ
 				})
 
 				// Load provider config to get client credentials
-				const providerConfig = yield* loadProviderConfig(connection.provider).pipe(
+				const providerConfig = yield* loadProviderConfig(
+					connection.provider as OAuthIntegrationProvider,
+				).pipe(
 					Effect.mapError(
 						(cause) =>
 							new TokenRefreshError({
@@ -240,7 +238,7 @@ export class IntegrationTokenService extends Effect.Service<IntegrationTokenServ
 
 				// Call provider's token refresh endpoint
 				const newTokens = yield* refreshOAuthToken(
-					connection.provider,
+					connection.provider as OAuthIntegrationProvider,
 					decryptedRefreshToken,
 					providerConfig.clientId,
 					Redacted.value(providerConfig.clientSecret),
@@ -256,17 +254,15 @@ export class IntegrationTokenService extends Effect.Service<IntegrationTokenServ
 				const encryptedRefresh = yield* encryption.encrypt(refreshTokenToStore)
 
 				// Update the token in the database
-				yield* tokenRepo
-					.updateToken(token.id, {
-						encryptedAccessToken: encryptedAccess.ciphertext,
-						encryptedRefreshToken: encryptedRefresh.ciphertext,
-						iv: encryptedAccess.iv,
-						refreshTokenIv: encryptedRefresh.iv,
-						encryptionKeyVersion: encryptedAccess.keyVersion,
-						expiresAt: newTokens.expiresAt ?? null,
-						scope: newTokens.scope ?? null,
-					})
-					.pipe(withSystemActor)
+				yield* tokenRepo.updateToken(token.id, {
+					encryptedAccessToken: encryptedAccess.ciphertext,
+					encryptedRefreshToken: encryptedRefresh.ciphertext,
+					iv: encryptedAccess.iv,
+					refreshTokenIv: encryptedRefresh.iv,
+					encryptionKeyVersion: encryptedAccess.keyVersion,
+					expiresAt: newTokens.expiresAt ?? null,
+					scope: newTokens.scope ?? null,
+				})
 
 				yield* Effect.logInfo("AUDIT: OAuth token refreshed", {
 					event: "token_refresh",
@@ -348,14 +344,12 @@ export class IntegrationTokenService extends Effect.Service<IntegrationTokenServ
 					const encryptedAccess = yield* encryption.encrypt(installationToken.token)
 
 					// Update the token in the database (no refresh token for GitHub App)
-					yield* tokenRepo
-						.updateToken(tokenId, {
-							encryptedAccessToken: encryptedAccess.ciphertext,
-							iv: encryptedAccess.iv,
-							encryptionKeyVersion: encryptedAccess.keyVersion,
-							expiresAt: installationToken.expiresAt,
-						})
-						.pipe(withSystemActor)
+					yield* tokenRepo.updateToken(tokenId, {
+						encryptedAccessToken: encryptedAccess.ciphertext,
+						iv: encryptedAccess.iv,
+						encryptionKeyVersion: encryptedAccess.keyVersion,
+						expiresAt: installationToken.expiresAt,
+					})
 
 					yield* Effect.logInfo("AUDIT: GitHub App token regenerated", {
 						event: "app_token_regenerate",
@@ -396,38 +390,34 @@ export class IntegrationTokenService extends Effect.Service<IntegrationTokenServ
 					: null
 
 				// Check if token already exists for this connection
-				const existingToken = yield* tokenRepo.findByConnectionId(connectionId).pipe(withSystemActor)
+				const existingToken = yield* tokenRepo.findByConnectionId(connectionId)
 
 				if (Option.isSome(existingToken)) {
 					// Update existing token
-					yield* tokenRepo
-						.updateToken(existingToken.value.id, {
-							encryptedAccessToken: encryptedAccess.ciphertext,
-							encryptedRefreshToken: encryptedRefresh?.ciphertext ?? null,
-							iv: encryptedAccess.iv,
-							refreshTokenIv: encryptedRefresh?.iv ?? null,
-							encryptionKeyVersion: encryptedAccess.keyVersion,
-							expiresAt: tokens.expiresAt ?? null,
-							scope: tokens.scope ?? null,
-						})
-						.pipe(withSystemActor)
+					yield* tokenRepo.updateToken(existingToken.value.id, {
+						encryptedAccessToken: encryptedAccess.ciphertext,
+						encryptedRefreshToken: encryptedRefresh?.ciphertext ?? null,
+						iv: encryptedAccess.iv,
+						refreshTokenIv: encryptedRefresh?.iv ?? null,
+						encryptionKeyVersion: encryptedAccess.keyVersion,
+						expiresAt: tokens.expiresAt ?? null,
+						scope: tokens.scope ?? null,
+					})
 				} else {
 					// Create new token
-					yield* tokenRepo
-						.insert({
-							connectionId,
-							encryptedAccessToken: encryptedAccess.ciphertext,
-							encryptedRefreshToken: encryptedRefresh?.ciphertext ?? null,
-							iv: encryptedAccess.iv,
-							refreshTokenIv: encryptedRefresh?.iv ?? null,
-							encryptionKeyVersion: encryptedAccess.keyVersion,
-							tokenType: "Bearer",
-							expiresAt: tokens.expiresAt ?? null,
-							refreshTokenExpiresAt: null,
-							scope: tokens.scope ?? null,
-							lastRefreshedAt: null,
-						})
-						.pipe(withSystemActor)
+					yield* tokenRepo.insert({
+						connectionId,
+						encryptedAccessToken: encryptedAccess.ciphertext,
+						encryptedRefreshToken: encryptedRefresh?.ciphertext ?? null,
+						iv: encryptedAccess.iv,
+						refreshTokenIv: encryptedRefresh?.iv ?? null,
+						encryptionKeyVersion: encryptedAccess.keyVersion,
+						tokenType: "Bearer",
+						expiresAt: tokens.expiresAt ?? null,
+						refreshTokenExpiresAt: null,
+						scope: tokens.scope ?? null,
+						lastRefreshedAt: null,
+					})
 				}
 			})
 
@@ -437,7 +427,7 @@ export class IntegrationTokenService extends Effect.Service<IntegrationTokenServ
 			const deleteTokens = Effect.fn("IntegrationTokenService.deleteTokens")(function* (
 				connectionId: IntegrationConnectionId,
 			) {
-				yield* tokenRepo.deleteByConnectionId(connectionId).pipe(withSystemActor)
+				yield* tokenRepo.deleteByConnectionId(connectionId)
 			})
 
 			return {
@@ -446,12 +436,12 @@ export class IntegrationTokenService extends Effect.Service<IntegrationTokenServ
 				deleteTokens,
 			}
 		}),
-		dependencies: [
-			DatabaseLive,
-			IntegrationEncryption.Default,
-			IntegrationTokenRepo.Default,
-			IntegrationConnectionRepo.Default,
-			GitHub.GitHubAppJWTService.Default,
-		],
 	},
-) {}
+) {
+	static readonly layer = Layer.effect(this, this.make).pipe(
+		Layer.provide(IntegrationEncryption.layer),
+		Layer.provide(IntegrationTokenRepo.layer),
+		Layer.provide(IntegrationConnectionRepo.layer),
+		Layer.provide(GitHub.GitHubAppJWTService.layer),
+	)
+}

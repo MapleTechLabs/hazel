@@ -1,4 +1,4 @@
-import { Effect } from "effect"
+import { Context, Effect, Layer } from "effect"
 
 export interface CheckResult {
 	name: string
@@ -29,14 +29,13 @@ const checkContainer = (containerName: string, displayName: string): Effect.Effe
 		},
 		catch: () => new Error("Check failed"),
 	}).pipe(
-		Effect.catchAll(() =>
+		Effect.catch(() =>
 			Effect.succeed({ name: displayName, status: "fail" as const, message: "Not running" }),
 		),
 	)
 
-export class Doctor extends Effect.Service<Doctor>()("Doctor", {
-	accessors: true,
-	effect: Effect.succeed({
+export class Doctor extends Context.Service<Doctor>()("Doctor", {
+	make: Effect.succeed({
 		checkBun: (): Effect.Effect<CheckResult> =>
 			Effect.tryPromise({
 				try: async () => {
@@ -47,7 +46,7 @@ export class Doctor extends Effect.Service<Doctor>()("Doctor", {
 				},
 				catch: () => new Error("Bun not found"),
 			}).pipe(
-				Effect.catchAll(() =>
+				Effect.catch(() =>
 					Effect.succeed({
 						name: "Bun",
 						status: "fail" as const,
@@ -66,7 +65,7 @@ export class Doctor extends Effect.Service<Doctor>()("Doctor", {
 				},
 				catch: () => new Error("Docker not running"),
 			}).pipe(
-				Effect.catchAll(() =>
+				Effect.catch(() =>
 					Effect.succeed({
 						name: "Docker",
 						status: "fail" as const,
@@ -97,7 +96,7 @@ export class Doctor extends Effect.Service<Doctor>()("Doctor", {
 				},
 				catch: () => new Error("Could not check containers"),
 			}).pipe(
-				Effect.catchAll(() =>
+				Effect.catch(() =>
 					Effect.succeed({
 						name: "Docker Compose",
 						status: "warn" as const,
@@ -106,11 +105,18 @@ export class Doctor extends Effect.Service<Doctor>()("Doctor", {
 				),
 			),
 
-		checkPostgres: (): Effect.Effect<CheckResult> => checkContainer("hazel-postgres-1", "PostgreSQL"),
-		checkRedis: (): Effect.Effect<CheckResult> => checkContainer("hazel-cache_redis-1", "Redis"),
-		checkElectric: (): Effect.Effect<CheckResult> => checkContainer("hazel-electric-1", "Electric"),
-		checkSequin: (): Effect.Effect<CheckResult> => checkContainer("hazel-sequin-1", "Sequin"),
-		checkCaddy: (): Effect.Effect<CheckResult> => checkContainer("hazel-caddy-1", "Caddy"),
+		/** `.env.local` is what `bun run alchemy:dev` reads. */
+		checkEnvLocal: (): Effect.Effect<CheckResult> =>
+			Effect.promise(() => Bun.file(".env.local").exists()).pipe(
+				Effect.map((exists): CheckResult =>
+					exists
+						? { name: ".env.local", status: "ok", message: "Found" }
+						: { name: ".env.local", status: "warn", message: "Missing. Run `bun run setup`" },
+				),
+			),
+
+		/** Local S3 for uploads; the database and sync objects run inside `alchemy dev`. */
+		checkMinio: (): Effect.Effect<CheckResult> => checkContainer("hazel-minio-1", "MinIO"),
 
 		runAllChecks: (): Effect.Effect<
 			{ environment: CheckResult[]; services: CheckResult[] },
@@ -120,16 +126,17 @@ export class Doctor extends Effect.Service<Doctor>()("Doctor", {
 			Effect.gen(function* () {
 				const doctor = yield* Doctor
 				const [environment, services] = yield* Effect.all([
-					Effect.all([doctor.checkBun(), doctor.checkDocker(), doctor.checkDockerCompose()]),
 					Effect.all([
-						doctor.checkPostgres(),
-						doctor.checkRedis(),
-						doctor.checkElectric(),
-						doctor.checkSequin(),
-						doctor.checkCaddy(),
+						doctor.checkBun(),
+						doctor.checkDocker(),
+						doctor.checkDockerCompose(),
+						doctor.checkEnvLocal(),
 					]),
+					Effect.all([doctor.checkMinio()]),
 				])
 				return { environment, services }
 			}),
 	}),
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make)
+}

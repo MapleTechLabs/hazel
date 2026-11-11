@@ -1,483 +1,271 @@
-import { GeneratePortalLinkIntent } from "@workos-inc/node"
-import { Database } from "@hazel/db"
-import {
-	CurrentUser,
-	InternalServerError,
-	policyUse,
-	withRemapDbErrors,
-	withSystemActor,
-} from "@hazel/domain"
+import { ChannelMemberRepo, ChannelRepo, OrganizationMemberRepo, OrganizationRepo } from "@hazel/backend-core"
+import { Database, SQLite, schema } from "@hazel/db"
+import { CurrentUser, InternalServerError, withRemapDbErrors } from "@hazel/domain"
 import {
 	AlreadyMemberError,
 	OrganizationNotFoundError,
+	OrganizationResponse,
 	OrganizationRpcs,
 	OrganizationSlugAlreadyExistsError,
 	PublicInviteDisabledError,
+	PublicOrganizationInfo,
 } from "@hazel/domain/rpc"
+import { OrganizationId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
+import { currentObject } from "../../lib/current-object"
 import { OrganizationPolicy } from "../../policies/organization-policy"
-import { ChannelMemberRepo } from "../../repositories/channel-member-repo"
-import { ChannelRepo } from "../../repositories/channel-repo"
-import { OrganizationMemberRepo } from "../../repositories/organization-member-repo"
-import { OrganizationRepo } from "../../repositories/organization-repo"
-import { UserRepo } from "../../repositories/user-repo"
-import { WorkOS } from "../../services/workos"
+import { Directory } from "../../services/directory"
+import { forwardRpc } from "../../worker/objects/forward"
+import { orgTarget } from "../../worker/objects/kinds"
+import { publishOrgChannelsRemoval, syncMemberAccess } from "../../worker/objects/org/channel-access"
+import { publishOrgIndex, publishOrgRemoval } from "../../worker/objects/org/organization"
+import { projectUsers } from "../../worker/objects/org/projections"
+
+const UNKNOWN_ORGANIZATION_ID = "00000000-0000-4000-8000-000000000000" as OrganizationId
+
+const slugTaken = (slug: string) =>
+	new OrganizationSlugAlreadyExistsError({
+		message: `Organization slug '${slug}' is already taken`,
+		slug,
+	})
+
+const toResponse = (
+	organization: schema.Organization,
+	transactionId: OrganizationResponse["transactionId"],
+) =>
+	new OrganizationResponse({
+		data: {
+			...organization,
+			settings: organization.settings as { readonly [x: string]: unknown } | null,
+		},
+		transactionId,
+	})
+
+/** The object's own organization id; `None` on the directory path. */
+const objectOrganizationId = Effect.map(currentObject, (object) =>
+	Option.isSome(object) && object.value.kind === "org"
+		? Option.some(OrganizationId.make(object.value.id))
+		: Option.none<OrganizationId>(),
+)
 
 /**
- * Custom error handler for organization database operations that provides
- * specific error handling for duplicate slug violations
- */
-const handleOrganizationDbErrors = <R, E extends { _tag: string }, A>(
-	entityType: string,
-	action: "update" | "create",
-) => {
-	return (
-		effect: Effect.Effect<R, E, A>,
-	): Effect.Effect<
-		R,
-		| Exclude<E, { _tag: "DatabaseError" | "ParseError" }>
-		| InternalServerError
-		| OrganizationSlugAlreadyExistsError,
-		A
-	> => {
-		return effect.pipe(
-			Effect.catchTags({
-				DatabaseError: (err: any) => {
-					// Check if it's a unique violation on the slug column
-					if (
-						err.type === "unique_violation" &&
-						err.cause.constraint_name === "organizations_slug_unique"
-					) {
-						// Extract slug from error detail if possible
-						const slugMatch = err.cause.detail?.match(/Key \(slug\)=\(([^)]+)\)/)
-						const slug = slugMatch?.[1] || "unknown"
-						return Effect.fail(
-							new OrganizationSlugAlreadyExistsError({
-								message: `Organization slug '${slug}' is already taken`,
-								slug,
-							}),
-						)
-					}
-					// For other database errors, return a generic internal server error
-					return Effect.fail(
-						new InternalServerError({
-							message: `Error ${action}ing ${entityType}`,
-							detail: `There was a database error when ${action}ing the ${entityType}`,
-							cause: String(err),
-						}),
-					)
-				},
-				ParseError: (err: any) =>
-					Effect.fail(
-						new InternalServerError({
-							message: `Error ${action}ing ${entityType}`,
-							detail: `There was an error in parsing when ${action}ing the ${entityType}`,
-							cause: String(err),
-						}),
-					),
-			}),
-		)
-	}
-}
-
-/**
- * Organization RPC Handlers
+ * Organization RPC handlers.
  *
- * Implements the business logic for all organization-related RPC methods.
- * Each handler receives the payload and has access to CurrentUser via Effect context
- * (provided by AuthMiddleware).
+ * - `organization.create` / `organization.joinViaPublicInvite` arrive on the directory path
+ *   (`rpc/routing.ts`): the slug is resolved in `org_index` (D1), then the same RPC is forwarded
+ *   to the `OrgObject` (`forwardRpc`), which writes its rows and projects them (membership,
+ *   channel access, `org_index`, `user_organizations`) through its outbox.
+ * - `organization.getBySlugPublic` answers from `org_index` and `membership_index` alone.
+ * - update / delete / setSlug / setPublicMode run in the `OrgObject` and reproject `org_index`.
  *
- * All handlers use:
- * - Database transactions for atomicity
- * - Policy checks for authorization
- * - Transaction IDs for optimistic updates
- * - Error remapping for consistent error handling including slug uniqueness violations
+ * Slugs are unique across objects only through `org_index`: a write checks it, so two orgs racing
+ * for one slug can both win (accepted; the index keeps the last).
  */
 export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
-		const workos = yield* WorkOS
+		const directory = yield* Directory
+		const organizationRepo = yield* OrganizationRepo
+		const organizationPolicy = yield* OrganizationPolicy
+		const channelRepo = yield* ChannelRepo
+		const channelMemberRepo = yield* ChannelMemberRepo
+		const organizationMemberRepo = yield* OrganizationMemberRepo
+
+		/** `slug` belongs to another live organization than `self`. */
+		const requireFreeSlug = (slug: string | null | undefined, self?: OrganizationId) =>
+			Effect.gen(function* () {
+				if (!slug) return
+				const owner = yield* directory.orgBySlug(slug)
+				if (Option.isSome(owner) && owner.value.id !== self) return yield* slugTaken(slug)
+			})
+
+		const localOrganization = (id: OrganizationId) =>
+			db.first(
+				SQLite.from(schema.organizationsTable)
+					.select()
+					.where(($) => [$.id.eq(id), $.deletedAt.isNull()])
+					.limit(1),
+			)
+
+		/** Join the org as `role` (its `general` channel too) and project the membership. */
+		const join = Effect.fn("Organization.join")(function* (
+			organizationId: OrganizationId,
+			role: "owner" | "member",
+		) {
+			const currentUser = yield* CurrentUser.Context
+			yield* projectUsers([currentUser.id])
+			yield* organizationMemberRepo.upsertByOrgAndUser({
+				organizationId,
+				userId: currentUser.id,
+				role,
+				nickname: undefined,
+				joinedAt: new Date(),
+				invitedBy: null,
+				deletedAt: null,
+			})
+			return currentUser
+		})
+
+		/** Update the org row (after `check`) and reproject `org_index`. */
+		const update = <E, R>(
+			id: OrganizationId,
+			patch: Parameters<typeof organizationRepo.update>[0],
+			check: Effect.Effect<void, E, R>,
+		) =>
+			db.transaction(
+				Effect.gen(function* () {
+					yield* organizationPolicy.canUpdate(id)
+					yield* check
+					const updated = yield* organizationRepo.update(patch)
+					yield* publishOrgIndex(id)
+					return toResponse(updated, yield* generateTransactionId())
+				}),
+			)
 
 		return {
 			"organization.create": (payload) =>
-				db
-					.transaction(
+				Effect.gen(function* () {
+					const self = yield* objectOrganizationId
+					if (Option.isNone(self)) {
+						// Directory path: claim an id, then let the new OrgObject create itself.
+						yield* requireFreeSlug(payload.slug)
+						yield* organizationPolicy.canCreate()
+						const id = OrganizationId.make(crypto.randomUUID())
+						return yield* forwardRpc<
+							OrganizationResponse,
+							OrganizationSlugAlreadyExistsError | InternalServerError
+						>(orgTarget(id), "organization.create", payload)
+					}
+
+					const id = self.value
+					return yield* db.transaction(
 						Effect.gen(function* () {
-							// Get current user from context
-							const currentUser = yield* CurrentUser.Context
-
-							// Get the user's external ID (WorkOS user ID)
-							const userOption = yield* UserRepo.findById(currentUser.id).pipe(
-								Effect.catchTags({
-									DatabaseError: (err) =>
-										Effect.fail(
-											new InternalServerError({
-												message: "Failed to query user",
-												detail: String(err),
-											}),
-										),
-								}),
-								withSystemActor,
-							)
-							if (userOption._tag === "None") {
-								return yield* Effect.fail(
-									new InternalServerError({
-										message: "User not found",
-										detail: `Could not find user with ID ${currentUser.id}`,
-									}),
-								)
+							const existing = yield* localOrganization(id)
+							if (Option.isSome(existing)) {
+								return yield* new InternalServerError({
+									message: `Organization ${id} already exists`,
+								})
 							}
-
-							const user = userOption.value
-
-							// Check if slug already exists
-							if (payload.slug) {
-								const existingOrganization = yield* OrganizationRepo.findBySlug(
-									payload.slug,
-								).pipe(withSystemActor)
-
-								if (Option.isSome(existingOrganization)) {
-									return yield* Effect.fail(
-										new OrganizationSlugAlreadyExistsError({
-											message: `Organization slug '${payload.slug}' is already taken`,
-											slug: payload.slug,
-										}),
-									)
-								}
-							}
-
-							// Create organization in local database first
-							const createdOrganization = yield* OrganizationRepo.insert({
-								name: payload.name,
-								slug: payload.slug,
-								logoUrl: payload.logoUrl,
-								settings: payload.settings,
-								isPublic: false,
-								deletedAt: null,
-							}).pipe(
-								Effect.map((res) => res[0]!),
-								policyUse(OrganizationPolicy.canCreate()),
-							)
-
-							// Create organization in WorkOS using our DB ID as externalId
-							const workosOrg = yield* workos
-								.call((client) =>
-									client.organizations.createOrganization({
+							yield* organizationPolicy.canCreate()
+							const [created] = yield* db.run(
+								SQLite.insertInto(schema.organizationsTable)
+									.values({
+										id,
 										name: payload.name,
-										externalId: createdOrganization.id,
-									}),
-								)
-								.pipe(
-									Effect.mapError(
-										(error) =>
-											new InternalServerError({
-												message: "Failed to create organization in WorkOS",
-												detail: String(error.cause),
-												cause: String(error),
-											}),
-									),
-								)
-
-							yield* workos
-								.call((client) =>
-									client.userManagement.createOrganizationMembership({
-										userId: user.externalId,
-										organizationId: workosOrg.id,
-										roleSlug: "owner",
-									}),
-								)
-								.pipe(
-									Effect.mapError(
-										(error) =>
-											new InternalServerError({
-												message: "Failed to add user to organization in WorkOS",
-												detail: String(error.cause),
-												cause: String(error),
-											}),
-									),
-								)
-
-							yield* OrganizationMemberRepo.upsertByOrgAndUser({
-								organizationId: createdOrganization.id,
-								userId: currentUser.id,
-								role: "owner",
-								nickname: undefined,
-								joinedAt: new Date(),
-								invitedBy: null,
-								deletedAt: null,
-							}).pipe(withSystemActor)
-
-							// Setup default channels for the organization
-							yield* OrganizationRepo.setupDefaultChannels(
-								createdOrganization.id,
-								currentUser.id,
+										slug: payload.slug,
+										logoUrl: payload.logoUrl,
+										settings: (payload.settings ?? null) as Record<
+											string,
+											unknown
+										> | null,
+										isPublic: false,
+										deletedAt: null,
+									})
+									.returning(),
 							)
-
-							const txid = yield* generateTransactionId()
-
-							return {
-								data: {
-									...createdOrganization,
-									settings: createdOrganization.settings as {
-										readonly [x: string]: unknown
-									} | null,
-								},
-								transactionId: txid,
-							}
+							const owner = yield* join(id, "owner")
+							yield* organizationRepo.setupDefaultChannels(id, owner.id)
+							yield* syncMemberAccess(owner.id, id)
+							yield* publishOrgIndex(id)
+							return toResponse(created!, yield* generateTransactionId())
 						}),
 					)
-					.pipe(handleOrganizationDbErrors("Organization", "create")),
+				}).pipe(withRemapDbErrors("Organization", "create")),
 
 			"organization.update": ({ id, ...payload }) =>
-				db
-					.transaction(
-						Effect.gen(function* () {
-							yield* Effect.logInfo("OrganizationRepo.update", payload)
-							const updatedOrganization = yield* OrganizationRepo.update({
-								id,
-								...payload,
-							}).pipe(policyUse(OrganizationPolicy.canUpdate(id)))
-
-							const txid = yield* generateTransactionId()
-
-							return {
-								data: {
-									...updatedOrganization,
-									settings: updatedOrganization.settings as {
-										readonly [x: string]: unknown
-									} | null,
-								},
-								transactionId: txid,
-							}
-						}),
-					)
-					.pipe(handleOrganizationDbErrors("Organization", "update")),
+				update(id, { id, ...payload }, requireFreeSlug(payload.slug, id)).pipe(
+					withRemapDbErrors("Organization", "update"),
+				),
 
 			"organization.delete": ({ id }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
-							yield* OrganizationRepo.deleteById(id).pipe(
-								policyUse(OrganizationPolicy.canDelete(id)),
-							)
-
-							const txid = yield* generateTransactionId()
-
-							return { transactionId: txid }
+							yield* organizationPolicy.canDelete(id)
+							yield* organizationRepo.softDelete(id)
+							yield* publishOrgRemoval(id)
+							yield* publishOrgChannelsRemoval(id)
+							return { transactionId: yield* generateTransactionId() }
 						}),
 					)
 					.pipe(withRemapDbErrors("Organization", "delete")),
 
 			"organization.setSlug": ({ id, slug }) =>
-				db
-					.transaction(
-						Effect.gen(function* () {
-							const updatedOrganization = yield* OrganizationRepo.update({
-								id,
-								slug,
-							}).pipe(policyUse(OrganizationPolicy.canUpdate(id)))
-
-							const txid = yield* generateTransactionId()
-
-							return {
-								data: {
-									...updatedOrganization,
-									settings: updatedOrganization.settings as {
-										readonly [x: string]: unknown
-									} | null,
-								},
-								transactionId: txid,
-							}
-						}),
-					)
-					.pipe(handleOrganizationDbErrors("Organization", "update")),
+				update(id, { id, slug }, requireFreeSlug(slug, id)).pipe(
+					withRemapDbErrors("Organization", "update"),
+				),
 
 			"organization.setPublicMode": ({ id, isPublic }) =>
-				db
-					.transaction(
-						Effect.gen(function* () {
-							const updatedOrganization = yield* OrganizationRepo.update({
-								id,
-								isPublic,
-							}).pipe(policyUse(OrganizationPolicy.canUpdate(id)))
-
-							const txid = yield* generateTransactionId()
-
-							return {
-								data: {
-									...updatedOrganization,
-									settings: updatedOrganization.settings as {
-										readonly [x: string]: unknown
-									} | null,
-								},
-								transactionId: txid,
-							}
-						}),
-					)
-					.pipe(withRemapDbErrors("Organization", "update")),
+				update(id, { id, isPublic }, Effect.void).pipe(withRemapDbErrors("Organization", "update")),
 
 			"organization.getBySlugPublic": ({ slug }) =>
 				Effect.gen(function* () {
-					const orgOption = yield* OrganizationRepo.findBySlugIfPublic(slug).pipe(withSystemActor)
-
-					if (Option.isNone(orgOption)) {
-						return null
-					}
-
-					const org = orgOption.value
-
-					// Count members for this organization
-					const memberCount = yield* OrganizationMemberRepo.countByOrganization(org.id).pipe(
-						withSystemActor,
-					)
-
-					return {
-						id: org.id,
-						name: org.name,
-						slug: org.slug,
-						logoUrl: org.logoUrl,
+					const org = yield* directory.orgBySlug(slug)
+					if (Option.isNone(org) || !org.value.isPublic) return null
+					const memberCount = yield* directory.memberCount(org.value.id)
+					// The logo lives with the org; the join page shows the initial without it.
+					return new PublicOrganizationInfo({
+						id: org.value.id,
+						name: org.value.name,
+						slug: org.value.slug,
+						logoUrl: null,
 						memberCount,
-					}
+					})
 				}).pipe(
-					Effect.catchTags({
-						DatabaseError: (err) =>
-							Effect.fail(
-								new InternalServerError({
-									message: "Error fetching organization",
-									detail: String(err),
-								}),
-							),
-					}),
+					Effect.catchTag("DatabaseError", (cause) =>
+						Effect.fail(
+							new InternalServerError({ message: "Error fetching organization", cause }),
+						),
+					),
+					Effect.withSpan("Organization.getBySlugPublic"),
 				),
 
 			"organization.joinViaPublicInvite": ({ slug }) =>
-				db
-					.transaction(
+				Effect.gen(function* () {
+					const self = yield* objectOrganizationId
+					if (Option.isNone(self)) {
+						const indexed = yield* directory.orgBySlug(slug)
+						if (Option.isNone(indexed)) {
+							return yield* new OrganizationNotFoundError({
+								organizationId: UNKNOWN_ORGANIZATION_ID,
+							})
+						}
+						return yield* forwardRpc<
+							OrganizationResponse,
+							OrganizationNotFoundError | PublicInviteDisabledError | AlreadyMemberError
+						>(orgTarget(indexed.value.id), "organization.joinViaPublicInvite", { slug })
+					}
+
+					return yield* db.transaction(
 						Effect.gen(function* () {
 							const currentUser = yield* CurrentUser.Context
-
-							// Find the organization by slug
-							const orgOption = yield* OrganizationRepo.findBySlug(slug).pipe(withSystemActor)
-
-							if (Option.isNone(orgOption)) {
+							const orgOption = yield* localOrganization(self.value)
+							if (Option.isNone(orgOption) || orgOption.value.slug !== slug) {
 								return yield* new OrganizationNotFoundError({
-									organizationId: "unknown" as any,
+									organizationId: UNKNOWN_ORGANIZATION_ID,
 								})
 							}
-
 							const org = orgOption.value
-
-							// Check if organization has public invites enabled
 							if (!org.isPublic) {
-								return yield* new PublicInviteDisabledError({
-									organizationId: org.id,
-								})
+								return yield* new PublicInviteDisabledError({ organizationId: org.id })
 							}
-
-							// Get the user's external ID for WorkOS sync
-							const userOption = yield* UserRepo.findById(currentUser.id).pipe(
-								Effect.catchTags({
-									DatabaseError: (err) =>
-										Effect.fail(
-											new InternalServerError({
-												message: "Failed to query user",
-												detail: String(err),
-											}),
-										),
-								}),
-								withSystemActor,
-							)
-
-							if (Option.isNone(userOption)) {
-								return yield* new InternalServerError({
-									message: "User not found",
-									detail: `Could not find user with ID ${currentUser.id}`,
-								})
-							}
-
-							const user = userOption.value
-
-							// Get WorkOS org first - fail early if not found
-							const workosOrg = yield* workos
-								.call((client) => client.organizations.getOrganizationByExternalId(org.id))
-								.pipe(
-									Effect.mapError(
-										(error) =>
-											new InternalServerError({
-												message: "Failed to get WorkOS organization",
-												detail: String(error),
-											}),
-									),
-								)
-
-							// Check if user is already a member in local DB
-							const existingMember = yield* OrganizationMemberRepo.findByOrgAndUser(
+							const existingMember = yield* organizationMemberRepo.findByOrgAndUser(
 								org.id,
 								currentUser.id,
-							).pipe(withSystemActor)
-
-							// Check WorkOS membership
-							const workosMembers = yield* workos
-								.call((client) =>
-									client.userManagement.listOrganizationMemberships({
-										organizationId: workosOrg.id,
-										userId: user.externalId,
-									}),
-								)
-								.pipe(Effect.catchTag("WorkOSApiError", () => Effect.succeed({ data: [] })))
-
-							const hasWorkosMembership = workosMembers.data.length > 0
-
-							if (Option.isSome(existingMember) && hasWorkosMembership) {
-								// Truly already a member in both systems
+							)
+							if (Option.isSome(existingMember)) {
 								return yield* new AlreadyMemberError({
 									organizationId: org.id,
 									organizationSlug: org.slug,
 								})
 							}
 
-							// Create/ensure membership in local database
-							yield* OrganizationMemberRepo.upsertByOrgAndUser({
-								organizationId: org.id,
-								userId: currentUser.id,
-								role: "member",
-								nickname: undefined,
-								joinedAt: new Date(),
-								invitedBy: null,
-								deletedAt: null,
-							}).pipe(withSystemActor)
-
-							// Sync to WorkOS - REQUIRED, fails the transaction if it fails
-							if (!hasWorkosMembership) {
-								yield* workos
-									.call((client) =>
-										client.userManagement.createOrganizationMembership({
-											userId: user.externalId,
-											organizationId: workosOrg.id,
-											roleSlug: "member",
-										}),
-									)
-									.pipe(
-										Effect.mapError(
-											(error) =>
-												new InternalServerError({
-													message: "Failed to create WorkOS membership",
-													detail: String(error),
-												}),
-										),
-									)
-							}
-
-							// Add user to the default "general" channel
-							const generalChannel = yield* ChannelRepo.findByOrgAndName(
-								org.id,
-								"general",
-							).pipe(withSystemActor)
-
-							if (Option.isSome(generalChannel)) {
-								yield* ChannelMemberRepo.insert({
-									channelId: generalChannel.value.id,
+							yield* join(org.id, "member")
+							const general = yield* channelRepo.findByOrgAndName(org.id, "general")
+							if (Option.isSome(general)) {
+								yield* channelMemberRepo.insert({
+									channelId: general.value.id,
 									userId: currentUser.id,
 									isHidden: false,
 									isMuted: false,
@@ -486,166 +274,13 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 									notificationCount: 0,
 									joinedAt: new Date(),
 									deletedAt: null,
-								}).pipe(withSystemActor)
+								})
 							}
-
-							const txid = yield* generateTransactionId()
-
-							return {
-								data: {
-									...org,
-									settings: org.settings as {
-										readonly [x: string]: unknown
-									} | null,
-								},
-								transactionId: txid,
-							}
+							yield* syncMemberAccess(currentUser.id, org.id)
+							return toResponse(org, yield* generateTransactionId())
 						}),
 					)
-					.pipe(withRemapDbErrors("Organization", "update")),
-
-			"organization.getAdminPortalLink": ({ id, intent }) =>
-				Effect.gen(function* () {
-					// Policy check - only admins/owners can access admin portal
-					yield* policyUse(OrganizationPolicy.canUpdate(id))(Effect.void)
-
-					// Get the WorkOS organization by our local org ID
-					const workosOrg = yield* workos
-						.call((client) => client.organizations.getOrganizationByExternalId(id))
-						.pipe(
-							Effect.catchTag("WorkOSApiError", () =>
-								Effect.fail(
-									new OrganizationNotFoundError({
-										organizationId: id,
-									}),
-								),
-							),
-						)
-
-					// Map intent string to WorkOS enum
-					const intentMap = {
-						sso: GeneratePortalLinkIntent.SSO,
-						domain_verification: GeneratePortalLinkIntent.DomainVerification,
-						dsync: GeneratePortalLinkIntent.DSync,
-						audit_logs: GeneratePortalLinkIntent.AuditLogs,
-						log_streams: GeneratePortalLinkIntent.LogStreams,
-					} as const
-
-					// Generate portal link
-					const portalLink = yield* workos
-						.call((client) =>
-							client.portal.generateLink({
-								organization: workosOrg.id,
-								intent: intentMap[intent],
-							}),
-						)
-						.pipe(
-							Effect.mapError(
-								(error) =>
-									new InternalServerError({
-										message: "Failed to generate admin portal link",
-										detail: String(error.cause),
-										cause: String(error),
-									}),
-							),
-						)
-
-					return { link: portalLink.link }
-				}),
-
-			"organization.listDomains": ({ id }) =>
-				Effect.gen(function* () {
-					// Policy check - only admins/owners can list domains
-					yield* policyUse(OrganizationPolicy.canUpdate(id))(Effect.void)
-
-					// Get the WorkOS organization by our local org ID
-					const workosOrg = yield* workos
-						.call((client) => client.organizations.getOrganizationByExternalId(id))
-						.pipe(
-							Effect.catchTag("WorkOSApiError", () =>
-								Effect.fail(
-									new OrganizationNotFoundError({
-										organizationId: id,
-									}),
-								),
-							),
-						)
-
-					// The domains are included in the organization response
-					return workosOrg.domains.map((d) => ({
-						id: d.id,
-						domain: d.domain,
-						state: d.state as "pending" | "verified" | "failed" | "legacy_verified",
-						verificationToken: d.verificationToken ?? null,
-					}))
-				}),
-
-			"organization.addDomain": ({ id, domain }) =>
-				Effect.gen(function* () {
-					// Policy check - only admins/owners can add domains
-					yield* policyUse(OrganizationPolicy.canUpdate(id))(Effect.void)
-
-					// Get the WorkOS organization by our local org ID
-					const workosOrg = yield* workos
-						.call((client) => client.organizations.getOrganizationByExternalId(id))
-						.pipe(
-							Effect.catchTag("WorkOSApiError", () =>
-								Effect.fail(
-									new OrganizationNotFoundError({
-										organizationId: id,
-									}),
-								),
-							),
-						)
-
-					// Create domain in WorkOS
-					const newDomain = yield* workos
-						.call((client) =>
-							client.organizationDomains.create({
-								domain,
-								organizationId: workosOrg.id,
-							}),
-						)
-						.pipe(
-							Effect.mapError(
-								(error) =>
-									new InternalServerError({
-										message: "Failed to add domain",
-										detail: String(error.cause),
-										cause: String(error),
-									}),
-							),
-						)
-
-					return {
-						id: newDomain.id,
-						domain: newDomain.domain,
-						state: newDomain.state,
-						verificationToken: newDomain.verificationToken ?? null,
-					}
-				}),
-
-			"organization.removeDomain": ({ id, domainId }) =>
-				Effect.gen(function* () {
-					// Policy check - only admins/owners can remove domains
-					yield* policyUse(OrganizationPolicy.canUpdate(id))(Effect.void)
-
-					// Delete domain from WorkOS
-					yield* workos
-						.call((client) => client.organizationDomains.delete(domainId))
-						.pipe(
-							Effect.mapError(
-								(error) =>
-									new InternalServerError({
-										message: "Failed to remove domain",
-										detail: String(error.cause),
-										cause: String(error),
-									}),
-							),
-						)
-
-					return { success: true }
-				}),
+				}).pipe(withRemapDbErrors("Organization", "update")),
 		}
 	}),
 )

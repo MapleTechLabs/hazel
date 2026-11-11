@@ -1,33 +1,33 @@
 import { GitHubEventType, GitHubEventTypes } from "@hazel/integrations/github/schema"
 import { ChannelId, GitHubSubscriptionId, OrganizationId, UserId } from "@hazel/schema"
-import { Schema } from "effect"
+import { Schema as S } from "effect"
 import * as M from "./utils"
 import { JsonDate } from "./utils"
 
 // Re-export from integrations for backwards compatibility
 export { GitHubEventType, GitHubEventTypes }
 
-export class Model extends M.Class<Model>("GitHubSubscription")({
+class Model extends M.Class<Model>("GitHubSubscription")({
 	id: M.Generated(GitHubSubscriptionId),
 	channelId: ChannelId,
 	organizationId: OrganizationId,
 	// Repository identification - GitHub's numeric ID is stable across renames
-	repositoryId: Schema.Number,
-	repositoryFullName: Schema.String, // "owner/repo" for display
-	repositoryOwner: Schema.String,
-	repositoryName: Schema.String,
+	repositoryId: S.Number,
+	repositoryFullName: S.String, // "owner/repo" for display
+	repositoryOwner: S.String,
+	repositoryName: S.String,
 	// Event type filters
 	enabledEvents: GitHubEventTypes,
 	// Optional branch filter for push events (null = all branches)
-	branchFilter: Schema.NullOr(Schema.String),
+	branchFilter: S.NullOr(S.String),
 	// Whether the subscription is active
-	isEnabled: Schema.Boolean,
+	isEnabled: S.Boolean,
 	// Audit fields
 	createdBy: UserId,
 	createdAt: M.Generated(JsonDate),
-	updatedAt: M.Generated(Schema.NullOr(JsonDate)),
-	deletedAt: M.GeneratedByApp(Schema.NullOr(JsonDate)),
+	updatedAt: M.Generated(S.NullOr(JsonDate)),
+	deletedAt: M.GeneratedByApp(S.NullOr(JsonDate)),
 }) {}
 
-export const Insert = Model.insert
-export const Update = Model.update
+export const { Insert, Update, Schema, Create, Patch } = M.expose(Model)
+export type Type = typeof Schema.Type

@@ -1,343 +1,195 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
-import { HttpApiBuilder, HttpApiClient, HttpServerRequest } from "@effect/platform"
-import { and, Database, eq, isNull, schema, sql } from "@hazel/db"
-import { Cluster, WorkflowInitializationError, withSystemActor } from "@hazel/domain"
-import { GitHubWebhookResponse, InvalidGitHubWebhookSignature } from "@hazel/domain/http"
-import type { Event } from "@workos-inc/node"
-import { Config, Effect, pipe, Redacted } from "effect"
-import { TreeFormatter } from "effect/ParseResult"
-import { HazelApi, InvalidWebhookSignature, WebhookResponse } from "../api"
-import { WorkOSSync } from "@hazel/backend-core/services"
-import { WorkOSWebhookVerifier } from "../services/workos-webhook"
+import { HttpApiBuilder } from "effect/http-api"
+import { HttpServerRequest } from "effect/http"
+import { InternalServerError } from "@hazel/domain"
+import {
+	GitHubWebhookResponse,
+	InvalidGitHubWebhookPayload,
+	InvalidGitHubWebhookSignature,
+	InvalidSlackWebhookSignature,
+	SlackWebhookResponse,
+} from "@hazel/domain/http"
+import { Slack } from "@hazel/integrations"
+import { Cause, Config, Effect, Option, pipe, Redacted, Schema } from "effect"
+import { HazelApi } from "../api"
+import { dispatchSlackEvent } from "../services/chat-sync/providers/slack/events"
+import { Directory } from "../services/directory"
+import { callObject } from "../worker/objects/calls"
+import { orgTarget } from "../worker/objects/kinds"
+import { GitHubEventCall, GitHubInstallationCall } from "../worker/objects/org/github-webhooks"
+
+/** Installation lifecycle actions the org handles; others are acknowledged and skipped. */
+const InstallationAction = Schema.Literals(["created", "deleted", "suspend", "unsuspend"])
+
+const InstallationEvent = Schema.Struct({
+	action: InstallationAction,
+	installation: Schema.Struct({
+		id: Schema.Number,
+		account: Schema.Struct({
+			login: Schema.String,
+			type: Schema.Literals(["User", "Organization"]),
+		}),
+	}),
+	sender: Schema.optional(Schema.Struct({ login: Schema.String })),
+})
+
+/** The fields every repository event the org handles carries. */
+const RepositoryEvent = Schema.Struct({
+	installation: Schema.Struct({ id: Schema.Number }),
+	repository: Schema.Struct({ id: Schema.Number, full_name: Schema.String }),
+})
+
+const LoggedFields = Schema.Struct({
+	action: Schema.optional(Schema.String),
+	repository: Schema.optional(Schema.Struct({ full_name: Schema.optional(Schema.String) })),
+})
+
+const decodeJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))
+const decodeInstallationAction = Schema.decodeUnknownOption(Schema.Struct({ action: InstallationAction }))
+const decodeInstallationEvent = Schema.decodeUnknownEffect(InstallationEvent)
+const decodeRepositoryEvent = Schema.decodeUnknownOption(RepositoryEvent)
+const decodeLoggedFields = Schema.decodeUnknownOption(LoggedFields)
+
+const skipped = new GitHubWebhookResponse({ processed: false, messagesCreated: 0 })
+
+/**
+ * A verified delivery: find the installation's org in the directory (`integration_index`) and
+ * hand the event to its `OrgObject` (`worker/objects/org/github-webhooks.ts`).
+ */
+export const dispatchGitHubEvent = Effect.fn("GitHubWebhook.dispatch")(
+	function* (input: {
+		readonly eventType: string
+		readonly deliveryId: string
+		readonly payload: unknown
+	}) {
+		const { eventType, deliveryId, payload } = input
+		const directory = yield* Directory
+		const orgOf = (installationId: number) =>
+			directory.integration("github", String(installationId)).pipe(
+				Effect.tap((row) =>
+					Option.isNone(row)
+						? Effect.logInfo("GitHub webhook for an unknown installation", {
+								deliveryId,
+								installationId,
+							})
+						: Effect.annotateCurrentSpan({ "organization.id": row.value.organizationId }),
+				),
+			)
+		yield* Effect.annotateCurrentSpan({
+			"github.event_type": eventType,
+			"github.delivery_id": deliveryId,
+		})
+
+		if (eventType === "installation") {
+			if (Option.isNone(decodeInstallationAction(payload))) {
+				yield* Effect.logDebug("Skipping installation webhook - unsupported action", { deliveryId })
+				return skipped
+			}
+			const event = yield* decodeInstallationEvent(payload).pipe(
+				Effect.mapError(
+					() =>
+						new InvalidGitHubWebhookPayload({
+							message: "Installation event is missing its installation or account",
+						}),
+				),
+			)
+			const org = yield* orgOf(event.installation.id)
+			if (Option.isNone(org)) return skipped
+			yield* callObject(GitHubInstallationCall, orgTarget(org.value.organizationId), {
+				action: event.action,
+				installationId: String(event.installation.id),
+			})
+			return new GitHubWebhookResponse({ processed: true, messagesCreated: 0 })
+		}
+
+		const repositoryEvent = decodeRepositoryEvent(payload)
+		if (Option.isNone(repositoryEvent)) {
+			yield* Effect.logDebug("Skipping GitHub webhook - no installation or repository", {
+				deliveryId,
+				eventType,
+			})
+			return skipped
+		}
+		const { installation, repository } = repositoryEvent.value
+		const org = yield* orgOf(installation.id)
+		if (Option.isNone(org)) return skipped
+		const result = yield* callObject(GitHubEventCall, orgTarget(org.value.organizationId), {
+			deliveryId,
+			eventType,
+			repositoryId: repository.id,
+			eventPayload: payload,
+		})
+		return new GitHubWebhookResponse({ processed: true, messagesCreated: result.messagesCreated })
+	},
+	Effect.catchTags({
+		DatabaseError: (cause) =>
+			Effect.fail(new InternalServerError({ message: "Directory lookup failed", cause })),
+		ObjectCallError: (cause) =>
+			Effect.fail(new InternalServerError({ message: "The organization is unavailable", cause })),
+	}),
+)
+
+/**
+ * Slack's Events API: verify the delivery against `SLACK_SIGNING_SECRET` (on the raw body),
+ * answer the URL check, then apply the event (`providers/slack/events.ts`). A failure answers 500,
+ * and Slack redelivers the same `event_id`, which chat sync applies once.
+ */
+export const handleSlackDelivery = Effect.gen(function* () {
+	const request = yield* HttpServerRequest.HttpServerRequest
+	const invalid = (message: string) => new InvalidSlackWebhookSignature({ message })
+	const rawBody = yield* request.text.pipe(Effect.mapError(() => invalid("Invalid request body")))
+	const signingSecret = yield* Config.Redacted("SLACK_SIGNING_SECRET").pipe(
+		Effect.tapError(() => Effect.logError("SLACK_SIGNING_SECRET is not configured")),
+		Effect.mapError(
+			(cause) => new InternalServerError({ message: "Slack events are not configured", cause }),
+		),
+	)
+	const verified = Slack.verifySlackSignature({
+		signingSecret: Redacted.value(signingSecret),
+		timestamp: request.headers["x-slack-request-timestamp"],
+		signature: request.headers["x-slack-signature"],
+		rawBody,
+		nowSeconds: Math.floor(Date.now() / 1000),
+	})
+	if (!verified) {
+		yield* Effect.logWarning("Invalid Slack request signature")
+		return yield* invalid("Invalid request signature")
+	}
+	const body = yield* decodeJson(rawBody).pipe(Effect.mapError(() => invalid("Body is not JSON")))
+	const envelope = Slack.decodeSlackEnvelope(body)
+	if (Option.isNone(envelope)) return new SlackWebhookResponse({ ok: true })
+	switch (envelope.value._tag) {
+		case "UrlVerification":
+			return new SlackWebhookResponse({ ok: true, challenge: envelope.value.challenge })
+		case "Other":
+			yield* Effect.logInfo("Slack delivery skipped", { type: envelope.value.type })
+			return new SlackWebhookResponse({ ok: true })
+		case "EventCallback":
+			yield* dispatchSlackEvent(envelope.value).pipe(
+				Effect.catchCause((cause) =>
+					Cause.hasInterruptsOnly(cause)
+						? Effect.interrupt
+						: Effect.logError("Slack event failed", cause).pipe(
+								Effect.andThen(
+									Effect.fail(new InternalServerError({ message: "Slack event failed" })),
+								),
+							),
+				),
+			)
+			return new SlackWebhookResponse({ ok: true })
+	}
+}).pipe(Effect.withSpan("SlackWebhook.delivery"))
 
 export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handlers) =>
 	handlers
-		.handle("workos", (_args) =>
-			Effect.gen(function* () {
-				// Get the raw request to access headers and body
-				const request = yield* HttpServerRequest.HttpServerRequest
-
-				// Get the signature header
-				const signatureHeader = request.headers["workos-signature"]
-				if (!signatureHeader) {
-					return yield* Effect.fail(
-						new InvalidWebhookSignature({
-							message: "Missing workos-signature header",
-						}),
-					)
-				}
-
-				// Get the raw body as string for signature verification
-				// The body should be the raw JSON string
-				const rawBody = yield* pipe(
-					request.text,
-					Effect.orElseFail(
-						() =>
-							new InvalidWebhookSignature({
-								message: "Invalid request body",
-							}),
-					),
-				)
-
-				// Verify the webhook signature
-				const verifier = yield* WorkOSWebhookVerifier
-				yield* pipe(
-					verifier.verifyWebhook(signatureHeader, rawBody),
-					Effect.mapError((error) => {
-						if (
-							error._tag === "WebhookVerificationError" ||
-							error._tag === "WebhookTimestampError"
-						) {
-							return new InvalidWebhookSignature({
-								message: error.message,
-							})
-						}
-						return error
-					}),
-				)
-
-				// Parse the webhook payload
-				const payload = JSON.parse(rawBody) as Event
-
-				// Log the incoming webhook event
-				yield* Effect.logInfo(`Processing WorkOS webhook event: ${payload.event}`, {
-					eventId: payload.id,
-					eventType: payload.event,
-				})
-
-				// Process the webhook event using the sync service
-				const syncService = yield* WorkOSSync
-				const result = yield* syncService.processWebhookEvent(payload)
-
-				if (!result.success) {
-					const errorMessage = "error" in result ? result.error : "Unknown error"
-					yield* Effect.logError(`Failed to process webhook event: ${errorMessage}`, {
-						eventId: payload.id,
-						eventType: payload.event,
-						error: errorMessage,
-					})
-				} else {
-					yield* Effect.logDebug(`Successfully processed webhook event`, {
-						eventId: payload.id,
-						eventType: payload.event,
-					})
-				}
-
-				// Return success response quickly (WorkOS expects 200 OK)
-				return new WebhookResponse({
-					success: result.success,
-					message: result.success
-						? "Event processed successfully"
-						: "error" in result
-							? result.error
-							: "Unknown error",
-				})
-			}).pipe(withSystemActor),
-		)
-		.handle("sequinWebhook", ({ payload }) =>
-			Effect.gen(function* () {
-				// Log the incoming webhook batch
-				yield* Effect.logInfo("Received Sequin webhook batch", {
-					eventCount: payload.data.length,
-				})
-
-				// Get cluster URL from config
-				const clusterUrl = yield* Config.string("CLUSTER_URL").pipe(Effect.orDie)
-
-				// Get database for channel type lookup
-				const db = yield* Database.Database
-
-				// Get the Cluster API client once for all events
-				const client = yield* HttpApiClient.make(Cluster.WorkflowApi, {
-					baseUrl: clusterUrl,
-				})
-
-				// Process each event in the batch
-				yield* Effect.forEach(
-					payload.data,
-					(event) =>
-						Effect.gen(function* () {
-							// Log each event
-							yield* Effect.logDebug("Processing Sequin event", {
-								action: event.action,
-								tableName: event.metadata.table_name,
-								messageId: event.record.id,
-								channelId: event.record.channelId,
-							})
-
-							// Only process 'insert' actions (new messages)
-							if (event.action !== "insert") {
-								yield* Effect.logDebug("Ignoring non-insert action", {
-									action: event.action,
-									messageId: event.record.id,
-								})
-								return
-							}
-
-							// Fetch channel type for smart notifications
-							const channelResult = yield* db
-								.execute((client) =>
-									client
-										.select({
-											type: schema.channelsTable.type,
-											name: schema.channelsTable.name,
-										})
-										.from(schema.channelsTable)
-										.where(eq(schema.channelsTable.id, event.record.channelId))
-										.limit(1),
-								)
-								.pipe(
-									Effect.catchTags({
-										DatabaseError: (err) =>
-											Effect.fail(
-												new WorkflowInitializationError({
-													message: "Failed to query channel type",
-													cause: err.message,
-												}),
-											),
-									}),
-								)
-
-							const channelType = channelResult[0]?.type ?? "public"
-
-							// Execute the MessageNotificationWorkflow via HTTP
-							// The WorkflowProxy creates an endpoint named after the workflow
-							yield* client.workflows
-								.MessageNotificationWorkflow({
-									payload: {
-										messageId: event.record.id,
-										channelId: event.record.channelId,
-										authorId: event.record.authorId,
-										channelType,
-										content: event.record.content ?? "",
-										replyToMessageId: event.record.replyToMessageId ?? null,
-									},
-								})
-								.pipe(
-									Effect.tapError((err) =>
-										Effect.logError("Failed to execute notification workflow", {
-											error: err.message,
-											messageId: event.record.id,
-											channelId: event.record.channelId,
-											authorId: event.record.authorId,
-										}),
-									),
-									Effect.catchTags({
-										HttpApiDecodeError: (err) =>
-											Effect.fail(
-												new WorkflowInitializationError({
-													message: "Failed to execute notification workflow",
-													cause: err.message,
-												}),
-											),
-										ParseError: (err) =>
-											Effect.fail(
-												new WorkflowInitializationError({
-													message: "Failed to execute notification workflow",
-													cause: TreeFormatter.formatErrorSync(err),
-												}),
-											),
-										RequestError: (err) =>
-											Effect.fail(
-												new WorkflowInitializationError({
-													message: "Failed to execute notification workflow",
-													cause: err.message,
-												}),
-											),
-										ResponseError: (err) =>
-											Effect.fail(
-												new WorkflowInitializationError({
-													message: "Failed to execute notification workflow",
-													cause: err.message,
-												}),
-											),
-										// Workflow activity errors
-										GetChannelMembersError: (err) =>
-											Effect.fail(
-												new WorkflowInitializationError({
-													message: "Notification workflow failed",
-													cause: err.message,
-												}),
-											),
-										CreateNotificationError: (err) =>
-											Effect.fail(
-												new WorkflowInitializationError({
-													message: "Notification workflow failed",
-													cause: err.message,
-												}),
-											),
-									}),
-								)
-
-							// Check if this message is in a thread and should trigger auto-naming
-							if (channelType === "thread") {
-								// Count messages in thread
-								const messageCountResult = yield* db
-									.execute((client) =>
-										client
-											.select({ count: sql<number>`count(*)::int` })
-											.from(schema.messagesTable)
-											.where(
-												and(
-													eq(
-														schema.messagesTable.channelId,
-														event.record.channelId,
-													),
-													isNull(schema.messagesTable.deletedAt),
-												),
-											),
-									)
-									.pipe(
-										Effect.catchTags({
-											DatabaseError: () => Effect.succeed([{ count: 0 }]),
-										}),
-									)
-
-								const count = messageCountResult[0]?.count ?? 0
-
-								if (count > 3 && channelResult[0]?.name === "Thread") {
-									const originalMessageResult = yield* db
-										.execute((client) =>
-											client
-												.select({ id: schema.messagesTable.id })
-												.from(schema.messagesTable)
-												.where(
-													eq(
-														schema.messagesTable.threadChannelId,
-														event.record.channelId,
-													),
-												)
-												.limit(1),
-										)
-										.pipe(
-											Effect.catchTags({
-												DatabaseError: () => Effect.succeed([]),
-											}),
-										)
-
-									if (originalMessageResult.length > 0) {
-										yield* client.workflows
-											.ThreadNamingWorkflow({
-												payload: {
-													threadChannelId: event.record.channelId,
-													originalMessageId: originalMessageResult[0]!.id,
-												},
-											})
-											.pipe(
-												Effect.tapError((err) =>
-													Effect.logError(
-														"Failed to execute thread naming workflow",
-														{
-															error: err.message,
-															threadChannelId: event.record.channelId,
-														},
-													),
-												),
-												// Don't fail the main flow - catch all workflow errors
-												Effect.catchTags({
-													HttpApiDecodeError: () => Effect.void,
-													ParseError: () => Effect.void,
-													RequestError: () => Effect.void,
-													ResponseError: () => Effect.void,
-													ThreadChannelNotFoundError: () => Effect.void,
-													OriginalMessageNotFoundError: () => Effect.void,
-													ThreadContextQueryError: () => Effect.void,
-													AIProviderUnavailableError: () => Effect.void,
-													AIRateLimitError: () => Effect.void,
-													AIResponseParseError: () => Effect.void,
-													ThreadNameUpdateError: () => Effect.void,
-												}),
-											)
-
-										yield* Effect.logDebug("Triggered thread naming workflow", {
-											threadChannelId: event.record.channelId,
-											originalMessageId: originalMessageResult[0]!.id,
-										})
-									}
-								}
-							}
-
-							yield* Effect.logDebug("Event processed successfully", {
-								messageId: event.record.id,
-							})
-						}),
-					{ concurrency: "unbounded" },
-				)
-
-				yield* Effect.logDebug("Sequin webhook batch processed successfully", {
-					eventCount: payload.data.length,
-				})
-			}),
-		)
+		.handle("slack", () => handleSlackDelivery)
 		.handle("github", (_args) =>
 			Effect.gen(function* () {
-				// Get the raw request to access headers and body
 				const request = yield* HttpServerRequest.HttpServerRequest
 
-				// Get GitHub webhook headers
-				const eventType = request.headers["x-github-event"] as string | undefined
-				const signature = request.headers["x-hub-signature-256"] as string | undefined
-				const deliveryId = request.headers["x-github-delivery"] as string | undefined
+				const eventType = request.headers["x-github-event"]
+				const signature = request.headers["x-hub-signature-256"]
+				const deliveryId = request.headers["x-github-delivery"]
 
 				if (!eventType || !deliveryId) {
 					return yield* Effect.fail(
@@ -347,10 +199,9 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 					)
 				}
 
-				// Get the raw body as string for signature verification
 				const rawBody = yield* pipe(
 					request.text,
-					Effect.orElseFail(
+					Effect.mapError(
 						() =>
 							new InvalidGitHubWebhookSignature({
 								message: "Invalid request body",
@@ -358,13 +209,13 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 					),
 				)
 
-				// Verify the webhook signature
-				// SECURITY: Require GITHUB_WEBHOOK_SECRET in production
-				const skipSignatureVerification = yield* Config.boolean("GITHUB_WEBHOOK_SKIP_SIGNATURE").pipe(
-					Effect.orElseSucceed(() => false),
+				const skipSignatureVerification = yield* Config.Boolean("GITHUB_WEBHOOK_SKIP_SIGNATURE").pipe(
+					Config.withDefault(false),
 				)
 
-				const webhookSecret = yield* Config.redacted("GITHUB_WEBHOOK_SECRET").pipe(
+				const webhookSecret = yield* Effect.gen(function* () {
+					return yield* Config.Redacted("GITHUB_WEBHOOK_SECRET")
+				}).pipe(
 					Effect.catchTag("ConfigError", () =>
 						skipSignatureVerification
 							? Effect.succeed(Redacted.make(""))
@@ -379,7 +230,6 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 
 				const secretValue = Redacted.value(webhookSecret)
 				if (secretValue) {
-					// Secret is configured, verify signature
 					if (!signature) {
 						yield* Effect.logWarning("Missing GitHub webhook signature header")
 						return yield* Effect.fail(
@@ -389,249 +239,48 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 						)
 					}
 
-					const expected = `sha256=${createHmac("sha256", secretValue).update(rawBody).digest("hex")}`
-					const sig = Buffer.from(signature)
-					const exp = Buffer.from(expected)
+					const bodyHmac = createHmac("sha256", secretValue)
+					bodyHmac.update(rawBody)
+					const expectedSignature = `sha256=${bodyHmac.digest("hex")}`
 
-					if (sig.length !== exp.length || !timingSafeEqual(sig, exp)) {
-						yield* Effect.logWarning("Invalid GitHub webhook signature")
+					const signatureBuffer = Buffer.from(signature)
+					const expectedBuffer = Buffer.from(expectedSignature)
+
+					if (
+						signatureBuffer.length !== expectedBuffer.length ||
+						!timingSafeEqual(signatureBuffer, expectedBuffer)
+					) {
+						yield* Effect.logWarning("Invalid GitHub webhook signature", {
+							eventType,
+							deliveryId,
+						})
 						return yield* Effect.fail(
 							new InvalidGitHubWebhookSignature({
 								message: "Invalid webhook signature",
 							}),
 						)
 					}
-				} else {
-					// No secret configured and skip is enabled (dev mode)
-					yield* Effect.logWarning(
-						"GitHub webhook signature verification skipped (GITHUB_WEBHOOK_SKIP_SIGNATURE=true)",
-					)
 				}
 
-				// Parse the webhook payload
-				const payload = JSON.parse(rawBody)
+				const payload = yield* decodeJson(rawBody).pipe(
+					Effect.mapError(
+						() => new InvalidGitHubWebhookPayload({ message: "Webhook body is not valid JSON" }),
+					),
+				)
 
-				// Log the incoming webhook event
+				const logged = decodeLoggedFields(payload)
 				yield* Effect.logInfo("Received GitHub webhook", {
 					eventType,
 					deliveryId,
-					repository: payload.repository?.full_name,
-					action: payload.action,
+					repository: Option.getOrUndefined(logged)?.repository?.full_name,
+					action: Option.getOrUndefined(logged)?.action,
 				})
 
-				// Get cluster URL and create client once
-				const clusterUrl = yield* Config.string("CLUSTER_URL").pipe(Effect.orDie)
-				const client = yield* HttpApiClient.make(Cluster.WorkflowApi, {
-					baseUrl: clusterUrl,
-				})
-
-				// Handle installation lifecycle events (uninstall, suspend, unsuspend)
-				if (eventType === "installation") {
-					const installation = payload.installation as
-						| { id: number; account: { login: string; type: string } }
-						| undefined
-					const action = payload.action as string | undefined
-					const sender = payload.sender as { login: string } | undefined
-
-					// Validate required fields for installation events
-					if (
-						!installation?.id ||
-						!installation?.account ||
-						!action ||
-						!["created", "deleted", "suspend", "unsuspend"].includes(action)
-					) {
-						yield* Effect.logDebug(
-							"Skipping installation webhook - missing fields or unsupported action",
-							{
-								hasInstallation: !!installation?.id,
-								hasAccount: !!installation?.account,
-								action,
-							},
-						)
-						return new GitHubWebhookResponse({ processed: false })
-					}
-
-					yield* Effect.logDebug("Processing GitHub installation event", {
-						deliveryId,
-						action,
-						installationId: installation.id,
-						accountLogin: installation.account.login,
-						accountType: installation.account.type,
-						senderLogin: sender?.login,
-					})
-
-					yield* client.workflows
-						.GitHubInstallationWorkflow({
-							payload: {
-								deliveryId,
-								action: action as "created" | "deleted" | "suspend" | "unsuspend",
-								installationId: installation.id,
-								accountLogin: installation.account.login,
-								accountType: installation.account.type as "User" | "Organization",
-								senderLogin: sender?.login ?? "unknown",
-							},
-						})
-						.pipe(
-							Effect.tapError((err) =>
-								Effect.logError("Failed to execute GitHub installation workflow", {
-									error: err.message,
-									deliveryId,
-									action,
-									installationId: installation.id,
-								}),
-							),
-							Effect.catchTags({
-								HttpApiDecodeError: (err) =>
-									Effect.fail(
-										new WorkflowInitializationError({
-											message: "Failed to execute GitHub installation workflow",
-											cause: err.message,
-										}),
-									),
-								ParseError: (err) =>
-									Effect.fail(
-										new WorkflowInitializationError({
-											message: "Failed to execute GitHub installation workflow",
-											cause: String(err),
-										}),
-									),
-								RequestError: (err) =>
-									Effect.fail(
-										new WorkflowInitializationError({
-											message: "Failed to execute GitHub installation workflow",
-											cause: err.message,
-										}),
-									),
-								ResponseError: (err) =>
-									Effect.fail(
-										new WorkflowInitializationError({
-											message: "Failed to execute GitHub installation workflow",
-											cause: err.message,
-										}),
-									),
-								// Workflow activity errors
-								FindConnectionByInstallationError: (err) =>
-									Effect.fail(
-										new WorkflowInitializationError({
-											message: "GitHub installation workflow failed",
-											cause: err.message,
-										}),
-									),
-								UpdateConnectionStatusError: (err) =>
-									Effect.fail(
-										new WorkflowInitializationError({
-											message: "GitHub installation workflow failed",
-											cause: err.message,
-										}),
-									),
-							}),
-						)
-
-					yield* Effect.logDebug("GitHub installation event processed successfully", {
-						deliveryId,
-						action,
-						installationId: installation.id,
-					})
-
-					return new GitHubWebhookResponse({ processed: true })
-				}
-
-				// Handle repository-based events (push, pull_request, issues, etc.)
-				// Extract required info from payload
-				const installationId = payload.installation?.id as number | undefined
-				const repositoryId = payload.repository?.id as number | undefined
-				const repositoryFullName = payload.repository?.full_name as string | undefined
-
-				// Skip if missing required fields
-				if (!installationId || !repositoryId || !repositoryFullName) {
-					yield* Effect.logDebug("Skipping GitHub webhook - missing required fields", {
-						hasInstallation: !!installationId,
-						hasRepository: !!repositoryId,
-					})
-					return new GitHubWebhookResponse({ processed: false })
-				}
-
-				yield* client.workflows
-					.GitHubWebhookWorkflow({
-						payload: {
-							deliveryId,
-							eventType,
-							installationId,
-							repositoryId,
-							repositoryFullName,
-							eventPayload: payload,
-						},
-					})
-					.pipe(
-						Effect.tapError((err) =>
-							Effect.logError("Failed to execute GitHub webhook workflow", {
-								error: err.message,
-								deliveryId,
-								eventType,
-								repository: repositoryFullName,
-							}),
-						),
-						Effect.catchTags({
-							HttpApiDecodeError: (err) =>
-								Effect.fail(
-									new WorkflowInitializationError({
-										message: "Failed to execute GitHub webhook workflow",
-										cause: err.message,
-									}),
-								),
-							ParseError: (err) =>
-								Effect.fail(
-									new WorkflowInitializationError({
-										message: "Failed to execute GitHub webhook workflow",
-										cause: String(err),
-									}),
-								),
-							RequestError: (err) =>
-								Effect.fail(
-									new WorkflowInitializationError({
-										message: "Failed to execute GitHub webhook workflow",
-										cause: err.message,
-									}),
-								),
-							ResponseError: (err) =>
-								Effect.fail(
-									new WorkflowInitializationError({
-										message: "Failed to execute GitHub webhook workflow",
-										cause: err.message,
-									}),
-								),
-							// Workflow activity errors
-							GetGitHubSubscriptionsError: (err) =>
-								Effect.fail(
-									new WorkflowInitializationError({
-										message: "GitHub webhook workflow failed",
-										cause: err.message,
-									}),
-								),
-							CreateGitHubMessageError: (err) =>
-								Effect.fail(
-									new WorkflowInitializationError({
-										message: "GitHub webhook workflow failed",
-										cause: err.message,
-									}),
-								),
-							BotUserQueryError: (err) =>
-								Effect.fail(
-									new WorkflowInitializationError({
-										message: "GitHub webhook workflow failed",
-										cause: err.message,
-									}),
-								),
-						}),
-					)
-
-				yield* Effect.logDebug("GitHub webhook processed successfully", {
-					deliveryId,
-					eventType,
-					repository: repositoryFullName,
-				})
-
-				return new GitHubWebhookResponse({ processed: true })
-			}),
+				return yield* dispatchGitHubEvent({ eventType, deliveryId, payload })
+			}).pipe(
+				Effect.catchTag("ConfigError", (cause) =>
+					Effect.fail(new InternalServerError({ message: "Missing configuration", cause })),
+				),
+			),
 		),
 )

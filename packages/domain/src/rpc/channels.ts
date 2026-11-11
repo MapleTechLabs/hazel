@@ -1,36 +1,35 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import {
 	AIProviderUnavailableError,
 	AIRateLimitError,
 	AIResponseParseError,
+	DmChannelAlreadyExistsError,
+	InternalServerError,
+	InvalidChannelRequestError,
+	MessageNotFoundError,
+	NestedThreadError,
 	OriginalMessageNotFoundError,
 	ThreadChannelNotFoundError,
 	ThreadContextQueryError,
 	ThreadNameUpdateError,
-} from "../cluster/activities/thread-naming-activities"
-import {
-	DmChannelAlreadyExistsError,
-	InternalServerError,
-	MessageNotFoundError,
-	NestedThreadError,
 	UnauthorizedError,
-	WorkflowServiceUnavailableError,
 } from "../errors"
 
 export { NestedThreadError } from "../errors"
-import { ChannelId, MessageId, OrganizationId, UserId } from "../ids"
+import { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Channel } from "../models"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteChannelId } from "./routing-fields"
 
 /**
  * Response schema for successful channel operations.
  * Contains the channel data and a transaction ID for optimistic updates.
  */
 export class ChannelResponse extends Schema.Class<ChannelResponse>("ChannelResponse")({
-	data: Channel.Model.json,
+	data: Channel.Schema,
 	transactionId: TransactionId,
 }) {}
 
@@ -48,19 +47,23 @@ export class ChannelNotFoundError extends Schema.TaggedError<ChannelNotFoundErro
  */
 export class CreateDmChannelRequest extends Schema.Class<CreateDmChannelRequest>("CreateDmChannelRequest")({
 	participantIds: Schema.Array(UserId),
-	type: Schema.Literal("direct", "single"),
+	type: Schema.Literals(["direct", "single"]),
 	name: Schema.optional(Schema.String),
-	organizationId: Schema.UUID,
+	organizationId: OrganizationId,
 }) {}
 
 /**
- * Request schema for creating a thread channel from a message.
- * Creates the thread, adds creator as member, and links the message to the thread.
+ * Request schema for ensuring a thread channel exists for a message.
+ * If a thread already exists, it is returned as-is.
+ * If no thread exists, it is created, the creator is added as a member,
+ * and the message is linked to the thread.
  */
 export class CreateThreadRequest extends Schema.Class<CreateThreadRequest>("CreateThreadRequest")({
 	id: Schema.optional(ChannelId),
 	messageId: MessageId,
-	organizationId: OrganizationId,
+	organizationId: Schema.optional(OrganizationId),
+	/** The message's channel: the thread's parent, whose `ChannelObject` links the message. */
+	channelId: RouteChannelId,
 }) {}
 
 /**
@@ -68,11 +71,8 @@ export class CreateThreadRequest extends Schema.Class<CreateThreadRequest>("Crea
  * Uses jsonCreate which includes optional id for optimistic updates.
  * Extended with addAllMembers option to auto-add all organization members.
  */
-export const CreateChannelRequest = Schema.extend(
-	Channel.Model.jsonCreate,
-	Schema.Struct({
-		addAllMembers: Schema.optional(Schema.Boolean),
-	}),
+export const CreateChannelRequest = Channel.Create.pipe(
+	Schema.fieldsAssign({ addAllMembers: Schema.optional(Schema.Boolean) }),
 )
 
 export class ChannelRpcs extends RpcGroup.make(
@@ -86,13 +86,16 @@ export class ChannelRpcs extends RpcGroup.make(
 	 * @param payload - Channel data (name, type, organizationId, etc.) with optional id for optimistic updates
 	 * @returns Channel data and transaction ID
 	 * @throws UnauthorizedError if user lacks permission
+	 * @throws InvalidChannelRequestError if the client-chosen id is already taken
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channel.create", {
+	Rpc.make("channel.create", {
 		payload: CreateChannelRequest,
 		success: ChannelResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InvalidChannelRequestError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channels:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * ChannelUpdate
@@ -106,13 +109,15 @@ export class ChannelRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channel.update", {
+	Rpc.make("channel.update", {
 		payload: Schema.Struct({
 			id: ChannelId,
-		}).pipe(Schema.extend(Schema.partial(Channel.Model.jsonUpdate))),
+		}).pipe(Schema.fieldsAssign(Channel.PatchPartial.fields)),
 		success: ChannelResponse,
-		error: Schema.Union(ChannelNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([ChannelNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channels:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * ChannelDelete
@@ -126,11 +131,13 @@ export class ChannelRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channel.delete", {
+	Rpc.make("channel.delete", {
 		payload: Schema.Struct({ id: ChannelId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(ChannelNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([ChannelNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channels:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * ChannelCreateDm
@@ -145,30 +152,46 @@ export class ChannelRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channel.createDm", {
+	Rpc.make("channel.createDm", {
 		payload: CreateDmChannelRequest,
 		success: ChannelResponse,
-		error: Schema.Union(DmChannelAlreadyExistsError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([
+			DmChannelAlreadyExistsError,
+			InvalidChannelRequestError,
+			UnauthorizedError,
+			InternalServerError,
+		]),
+	})
+		.annotate(RequiredScopes, ["channels:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * ChannelCreateThread
 	 *
-	 * Creates a thread channel from a message.
-	 * Atomically creates the thread channel, adds the creator as a member,
-	 * and links the original message to the thread.
+	 * Ensures a thread channel exists for a message and returns it.
+	 * If a thread already exists, it is returned.
+	 * Otherwise this atomically creates the thread channel, adds the creator
+	 * as a member, and links the original message to the thread.
 	 *
-	 * @param payload - Message ID, organization ID, and optional channel ID for optimistic updates
+	 * @param payload - Message ID, optional organization ID, and optional channel ID for optimistic updates
 	 * @returns Channel data and transaction ID
 	 * @throws MessageNotFoundError if the message doesn't exist
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channel.createThread", {
+	Rpc.make("channel.createThread", {
 		payload: CreateThreadRequest,
 		success: ChannelResponse,
-		error: Schema.Union(MessageNotFoundError, NestedThreadError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([
+			MessageNotFoundError,
+			NestedThreadError,
+			InvalidChannelRequestError,
+			UnauthorizedError,
+			InternalServerError,
+		]),
+	})
+		.annotate(RequiredScopes, ["channels:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * ChannelGenerateName
@@ -179,8 +202,8 @@ export class ChannelRpcs extends RpcGroup.make(
 	 *
 	 * @param payload - Thread channel ID
 	 * @returns Transaction ID
-	 * @throws ChannelNotFoundError if channel doesn't exist or is not a thread
-	 * @throws MessageNotFoundError if original message is not found
+	 * @throws ChannelNotFoundError if channel doesn't exist
+	 * @throws InvalidChannelRequestError if the channel is not a thread or has no original message
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 * @throws ThreadChannelNotFoundError if thread channel not found in workflow
@@ -191,15 +214,14 @@ export class ChannelRpcs extends RpcGroup.make(
 	 * @throws AIResponseParseError if AI response cannot be parsed
 	 * @throws ThreadNameUpdateError if database update fails in workflow
 	 */
-	Rpc.mutation("channel.generateName", {
+	Rpc.make("channel.generateName", {
 		payload: Schema.Struct({ channelId: ChannelId }),
 		success: Schema.Struct({ success: Schema.Boolean }),
-		error: Schema.Union(
+		error: Schema.Union([
 			ChannelNotFoundError,
-			MessageNotFoundError,
+			InvalidChannelRequestError,
 			UnauthorizedError,
 			InternalServerError,
-			WorkflowServiceUnavailableError,
 			// Workflow errors - exposed to client for granular error handling
 			ThreadChannelNotFoundError,
 			OriginalMessageNotFoundError,
@@ -208,6 +230,8 @@ export class ChannelRpcs extends RpcGroup.make(
 			AIRateLimitError,
 			AIResponseParseError,
 			ThreadNameUpdateError,
-		),
-	}).middleware(AuthMiddleware),
+		]),
+	})
+		.annotate(RequiredScopes, ["channels:write"])
+		.middleware(AuthMiddleware),
 ) {}

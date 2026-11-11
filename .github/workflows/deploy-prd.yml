@@ -1,0 +1,69 @@
+name: Deploy PRD (Cloudflare via Alchemy)
+
+# Gated on CI passing on main (not `push: main`); `workflow_dispatch` skips the gate.
+on:
+    workflow_run:
+        workflows: ["Test"]
+        types: [completed]
+        branches: [main]
+    workflow_dispatch:
+
+concurrency:
+    group: deploy-prd
+    cancel-in-progress: false
+
+permissions:
+    contents: read
+    # The Infisical step signs in with this job's GitHub OIDC token.
+    id-token: write
+
+jobs:
+    deploy:
+        # Only CI runs for pushes to this repo's main deploy; a PR's Test run must never reach prd.
+        if: >-
+            ${{ github.event_name == 'workflow_dispatch'
+            || (github.event.workflow_run.conclusion == 'success'
+                && github.event.workflow_run.event == 'push'
+                && github.event.workflow_run.head_repository.full_name == github.repository) }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        environment:
+            name: production
+            url: https://app.hazel.sh
+        env:
+            # On workflow_run, `github.sha` is the branch head, not the commit CI tested.
+            COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+            # Every deploy secret (Cloudflare, the api Worker's env, bots, Maple) comes from
+            # Infisical's `prod` environment, the same source `alchemy:deploy:prd:local` reads.
+            # Don't list them here: a job-level `env:` entry shadows what the Infisical step exports.
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ env.COMMIT_SHA }}
+
+            - name: Load secrets from Infisical
+              uses: Infisical/secrets-action@v1.0.18
+              with:
+                  # A machine identity with OIDC Auth (issuer https://token.actions.githubusercontent.com)
+                  # and read access to `prod`. The repo uses immutable OIDC subjects, so it is bound to
+                  # repo:MapleTechLabs@282671153/hazel@972339714:environment:production.
+                  method: oidc
+                  identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+                  project-id: 9e94bb4d-0348-440c-b0f3-073b6f1977f3
+                  env-slug: prod
+
+            - name: Deploy setup
+              uses: ./.github/actions/deploy-env
+
+            - name: Deploy with Alchemy
+              run: bun run alchemy:deploy:prd
+
+            - name: Check the api serves this revision
+              run: |
+                  for attempt in 1 2 3 4 5 6; do
+                    if curl -fsS https://api.hazel.sh/health >/dev/null; then exit 0; fi
+                    sleep 10
+                  done
+                  echo "::error::api.hazel.sh/health did not answer after the deploy"
+                  exit 1

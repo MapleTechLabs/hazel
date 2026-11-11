@@ -1,0 +1,193 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import FooterSection from "@/components/sections/FooterSection.astro";
+import CTASection from "@/components/sections/CTASection.astro";
+import { getCollection, type CollectionEntry } from "astro:content";
+import { integrationCategories, type IntegrationCategory, type IntegrationStatus } from "@/content.config";
+
+const integrations = await getCollection("integrations", ({ data }: CollectionEntry<"integrations">) => {
+	return import.meta.env.PROD ? !data.draft : true;
+});
+
+const integrationsByCategory = integrationCategories.reduce(
+	(acc, category) => {
+		acc[category] = integrations.filter((i: CollectionEntry<"integrations">) => i.data.category === category);
+		return acc;
+	},
+	{} as Record<IntegrationCategory, typeof integrations>
+);
+
+const categoryLabels: Record<IntegrationCategory, string> = {
+	communication: "Communication",
+	devops: "DevOps",
+	analytics: "Analytics",
+	productivity: "Productivity",
+	storage: "Storage",
+	ai: "AI & ML",
+	"project-management": "Project Management",
+	crm: "CRM",
+	other: "Other",
+};
+
+const statusStyles: Record<IntegrationStatus, string> = {
+	available: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+	beta: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+	"coming-soon": "bg-sky-500/10 text-sky-400 border-sky-500/20",
+};
+
+const statusLabels: Record<IntegrationStatus, string> = {
+	available: "Available",
+	beta: "Beta",
+	"coming-soon": "Coming Soon",
+};
+---
+
+<Layout
+	title="Integrations | Hazel - GitHub, Linear, Figma & More"
+	description="Integrate Hazel with GitHub, Linear, Figma, and 10+ developer tools. Automate workflows and bring notifications into your open source team chat platform."
+>
+	<main
+		class="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full"
+	>
+		<!-- Hero Section -->
+		<section class="w-full relative overflow-hidden">
+			<div class="absolute inset-0 -z-10">
+				<div
+					class="absolute inset-0 h-[500px] w-full [background:radial-gradient(125%_125%_at_50%_10%,var(--background)_40%,var(--secondary)_100%)]"
+				>
+				</div>
+				<div
+					class="absolute inset-0 h-[500px] opacity-[0.015] [background-image:linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] [background-size:64px_64px]"
+				>
+				</div>
+			</div>
+
+			<div class="relative z-10 py-28 px-6 max-w-4xl mx-auto text-center">
+				<div
+					class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/50 border border-border/50 mb-6"
+				>
+					<span class="size-1.5 rounded-full bg-secondary animate-pulse"></span>
+					<span class="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+						Ecosystem
+					</span>
+				</div>
+
+				<h1
+					class="text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight text-primary mb-6"
+				>
+					Integrations
+				</h1>
+				<p class="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+					Connect Hazel with the tools your team already uses. Streamline workflows and keep
+					everything in sync.
+				</p>
+			</div>
+		</section>
+
+		<!-- Integrations Grid by Category -->
+		<section class="w-full py-16 md:py-24 px-6">
+			<div class="max-w-6xl mx-auto">
+				{
+					Object.entries(integrationsByCategory)
+						.filter(([_, items]) => items.length > 0)
+						.map(([category, items]) => (
+							<div class="mb-16 last:mb-0">
+								<div class="flex items-center gap-4 mb-8">
+									<h2 class="text-2xl font-semibold tracking-tight text-primary">
+										{categoryLabels[category as IntegrationCategory]}
+									</h2>
+									<div class="h-px flex-1 bg-gradient-to-r from-border to-transparent" />
+									<span class="text-sm text-muted-foreground font-medium">
+										{items.length} {items.length === 1 ? "integration" : "integrations"}
+									</span>
+								</div>
+
+								<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+									{items.map((integration: CollectionEntry<"integrations">) => (
+										<a
+											href={`/integrations/${integration.id.replace(/\.md$/, "")}`}
+											class="group relative flex items-start gap-5 p-6 rounded-2xl border border-border/50 bg-gradient-to-b from-accent/30 to-transparent hover:border-border hover:shadow-lg hover:shadow-secondary/5 transition-all duration-300"
+										>
+											{/* Logo */}
+											<div class="shrink-0">
+												<div class="size-14 rounded-xl bg-background shadow-sm ring-1 ring-border/50 flex items-center justify-center p-2.5 group-hover:scale-105 transition-transform duration-300">
+													<img
+														src={integration.data.logo}
+														alt={`${integration.data.name} logo`}
+														class="size-full object-contain"
+													/>
+												</div>
+											</div>
+
+											{/* Content */}
+											<div class="flex-1 min-w-0">
+												<div class="flex items-center gap-2 mb-1.5">
+													<h3 class="font-semibold text-primary group-hover:text-secondary transition-colors duration-200">
+														{integration.data.name}
+													</h3>
+													{integration.data.status !== "available" && (
+														<span
+															class={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${statusStyles[integration.data.status as IntegrationStatus]}`}
+														>
+															{statusLabels[integration.data.status as IntegrationStatus]}
+														</span>
+													)}
+												</div>
+												<p class="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+													{integration.data.tagline}
+												</p>
+											</div>
+
+											{/* Arrow */}
+											<svg
+												class="size-5 text-muted-foreground/50 group-hover:text-secondary group-hover:translate-x-0.5 transition-all duration-200 shrink-0 mt-1"
+												fill="none"
+												viewBox="0 0 24 24"
+												stroke="currentColor"
+												stroke-width="1.5"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													d="M4.5 12h15m0 0l-6.75-6.75M19.5 12l-6.75 6.75"
+												/>
+											</svg>
+										</a>
+									))}
+								</div>
+							</div>
+						))
+				}
+
+				{
+					integrations.length === 0 && (
+						<div class="text-center py-20">
+							<div class="size-16 rounded-2xl bg-accent mx-auto mb-6 flex items-center justify-center">
+								<svg
+									class="size-8 text-muted-foreground"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="1.5"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 002.25-2.25V6a2.25 2.25 0 00-2.25-2.25H6A2.25 2.25 0 003.75 6v2.25A2.25 2.25 0 006 10.5zm0 9.75h2.25A2.25 2.25 0 0010.5 18v-2.25a2.25 2.25 0 00-2.25-2.25H6a2.25 2.25 0 00-2.25 2.25V18A2.25 2.25 0 006 20.25zm9.75-9.75H18a2.25 2.25 0 002.25-2.25V6A2.25 2.25 0 0018 3.75h-2.25A2.25 2.25 0 0013.5 6v2.25a2.25 2.25 0 002.25 2.25z"
+									/>
+								</svg>
+							</div>
+							<h3 class="text-xl font-semibold text-primary mb-2">No integrations yet</h3>
+							<p class="text-muted-foreground">
+								Check back soon — we're adding new integrations regularly.
+							</p>
+						</div>
+					)
+				}
+			</div>
+		</section>
+
+		<CTASection />
+		<FooterSection />
+	</main>
+</Layout>

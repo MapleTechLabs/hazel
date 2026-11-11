@@ -1,26 +1,15 @@
 /**
  * @since 2.0.0
  */
-import type * as Effect from "./Effect.js"
-import type { LazyArg } from "./Function.js"
-import * as internal from "./internal/scopedRef.js"
-import type { Pipeable } from "./Pipeable.js"
-import type * as Scope from "./Scope.js"
-import type * as Synchronized from "./SynchronizedRef.js"
-import type * as Types from "./Types.js"
-import type * as Unify from "./Unify.js"
+import * as Effect from "./Effect.ts"
+import * as Exit from "./Exit.ts"
+import { dual, type LazyArg } from "./Function.ts"
+import { PipeInspectableProto } from "./internal/core.ts"
+import type { Pipeable } from "./Pipeable.ts"
+import * as Scope from "./Scope.ts"
+import * as Synchronized from "./SynchronizedRef.ts"
 
-/**
- * @since 2.0.0
- * @category symbols
- */
-export const ScopedRefTypeId: unique symbol = internal.ScopedRefTypeId
-
-/**
- * @since 2.0.0
- * @category symbols
- */
-export type ScopedRefTypeId = typeof ScopedRefTypeId
+const TypeId = "~effect/ScopedRef"
 
 /**
  * A `ScopedRef` is a reference whose value is associated with resources,
@@ -32,44 +21,29 @@ export type ScopedRefTypeId = typeof ScopedRefTypeId
  * @since 2.0.0
  * @category models
  */
-export interface ScopedRef<in out A> extends Effect.Effect<A>, ScopedRef.Variance<A>, Pipeable {
-  /** @internal */
-  readonly ref: Synchronized.SynchronizedRef<readonly [Scope.Scope.Closeable, A]>
-
-  readonly [Unify.typeSymbol]?: unknown
-  readonly [Unify.unifySymbol]?: ScopedRefUnify<this>
-  readonly [Unify.ignoreSymbol]?: ScopedRefUnifyIgnore
+export interface ScopedRef<in out A> extends Pipeable {
+  readonly [TypeId]: typeof TypeId
+  readonly backing: Synchronized.SynchronizedRef<readonly [Scope.Closeable, A]>
 }
 
-/**
- * @category models
- * @since 3.9.0
- */
-export interface ScopedRefUnify<A extends { [Unify.typeSymbol]?: any }> extends Effect.EffectUnify<A> {
-  ScopedRef?: () => Extract<A[Unify.typeSymbol], ScopedRef<any>>
-}
-
-/**
- * @category models
- * @since 3.9.0
- */
-export interface ScopedRefUnifyIgnore extends Effect.EffectUnifyIgnore {
-  Effect?: true
-}
-
-/**
- * @since 2.0.0
- */
-export declare namespace ScopedRef {
-  /**
-   * @since 2.0.0
-   * @category models
-   */
-  export interface Variance<in out A> {
-    readonly [ScopedRefTypeId]: {
-      readonly _A: Types.Invariant<A>
+const Proto = {
+  ...PipeInspectableProto,
+  [TypeId]: TypeId,
+  toJSON(this: ScopedRef<any>) {
+    return {
+      _id: "ScopedRef",
+      value: this.backing.backing.ref.current[1]
     }
   }
+}
+
+const makeUnsafe = <A>(
+  scope: Scope.Closeable,
+  value: A
+): ScopedRef<A> => {
+  const self = Object.create(Proto)
+  self.backing = Synchronized.makeUnsafe([scope, value] as const)
+  return self
 }
 
 /**
@@ -81,7 +55,26 @@ export declare namespace ScopedRef {
  */
 export const fromAcquire: <A, E, R>(
   acquire: Effect.Effect<A, E, R>
-) => Effect.Effect<ScopedRef<A>, E, Scope.Scope | R> = internal.fromAcquire
+) => Effect.Effect<ScopedRef<A>, E, Scope.Scope | R> = Effect.fnUntraced(function*<A, E, R>(
+  acquire: Effect.Effect<A, E, R>
+) {
+  const scope = Scope.makeUnsafe()
+  const value = yield* acquire.pipe(
+    Scope.provide(scope),
+    Effect.tapCause((cause) => Scope.close(scope, Exit.failCause(cause)))
+  )
+  const self = makeUnsafe(scope, value)
+  yield* Effect.addFinalizer((exit) => Scope.close(self.backing.backing.ref.current[0], exit))
+  return self
+}, Effect.uninterruptible)
+
+/**
+ * Retrieves the current value of the scoped reference.
+ *
+ * @since 4.0.0
+ * @category getters
+ */
+export const getUnsafe = <A>(self: ScopedRef<A>): A => self.backing.backing.ref.current[1]
 
 /**
  * Retrieves the current value of the scoped reference.
@@ -89,7 +82,7 @@ export const fromAcquire: <A, E, R>(
  * @since 2.0.0
  * @category getters
  */
-export const get: <A>(self: ScopedRef<A>) => Effect.Effect<A> = internal.get
+export const get = <A>(self: ScopedRef<A>): Effect.Effect<A> => Effect.sync(() => getUnsafe(self))
 
 /**
  * Creates a new `ScopedRef` from the specified value. This method should
@@ -98,7 +91,13 @@ export const get: <A>(self: ScopedRef<A>) => Effect.Effect<A> = internal.get
  * @since 2.0.0
  * @category constructors
  */
-export const make: <A>(evaluate: LazyArg<A>) => Effect.Effect<ScopedRef<A>, never, Scope.Scope> = internal.make
+export const make = <A>(evaluate: LazyArg<A>): Effect.Effect<ScopedRef<A>, never, Scope.Scope> =>
+  Effect.suspend(() => {
+    const scope = Scope.makeUnsafe()
+    const value = evaluate()
+    const self = makeUnsafe(scope, value)
+    return Effect.as(Effect.addFinalizer((exit) => Scope.close(self.backing.backing.ref.current[0], exit)), self)
+  })
 
 /**
  * Sets the value of this reference to the specified resourcefully-created
@@ -114,4 +113,22 @@ export const make: <A>(evaluate: LazyArg<A>) => Effect.Effect<ScopedRef<A>, neve
 export const set: {
   <A, R, E>(acquire: Effect.Effect<A, E, R>): (self: ScopedRef<A>) => Effect.Effect<void, E, Exclude<R, Scope.Scope>>
   <A, R, E>(self: ScopedRef<A>, acquire: Effect.Effect<A, E, R>): Effect.Effect<void, E, Exclude<R, Scope.Scope>>
-} = internal.set
+} = dual(
+  2,
+  Effect.fnUntraced(
+    function*<A, R, E>(
+      self: ScopedRef<A>,
+      acquire: Effect.Effect<A, E, R>
+    ) {
+      yield* Scope.close(self.backing.backing.ref.current[0], Exit.void)
+      const scope = Scope.makeUnsafe()
+      const value = yield* acquire.pipe(
+        Scope.provide(scope),
+        Effect.tapCause((cause) => Scope.close(scope, Exit.failCause(cause)))
+      )
+      self.backing.backing.ref.current = [scope, value]
+    },
+    Effect.uninterruptible,
+    (effect, self) => self.backing.semaphore.withPermit(effect)
+  )
+)

@@ -1,5 +1,193 @@
 # @tanstack/query-db-collection
 
+## 1.0.22
+
+### Patch Changes
+
+- Fix `isReady` tracking for on-demand live queries without orderBy. Previously, non-ordered live queries using `syncMode: 'on-demand'` were incorrectly marked as ready before data finished loading. Also fix `preload()` promises hanging when cleanup occurs before the collection becomes ready. Additionally, fix concurrent live queries subscribing to the same source collection - each now independently tracks loading state. ([#1192](https://github.com/TanStack/db/pull/1192))
+
+- Updated dependencies [[`43c7c9d`](https://github.com/TanStack/db/commit/43c7c9d5f2b47366a58f87470ac5dca95020ac57), [`284ebcc`](https://github.com/TanStack/db/commit/284ebcc8346bd237c3381de766995b8bda35009a)]:
+  - @tanstack/db@0.5.25
+
+## 1.0.21
+
+### Patch Changes
+
+- Updated dependencies [[`7099459`](https://github.com/TanStack/db/commit/7099459291810b237a9fb24bbfe6e543852a2ab2)]:
+  - @tanstack/db@0.5.24
+
+## 1.0.20
+
+### Patch Changes
+
+- Updated dependencies [[`05130f2`](https://github.com/TanStack/db/commit/05130f2420eb682f11f099310a0af87afa3f35fe)]:
+  - @tanstack/db@0.5.23
+
+## 1.0.19
+
+### Patch Changes
+
+- Fix updating all active query caches on directWrite for on-demand collections.Previously directWrite operations (e.g. writeUpdate/writeInsert) only updated the cache at the base query key for on-demand collections, leading to stale data when components remounted. This change ensures all active query cache keys are updated so data persists correctly. ([#1155](https://github.com/TanStack/db/pull/1155))
+
+- Updated dependencies [[`f9b741e`](https://github.com/TanStack/db/commit/f9b741e9fb636be1c9f1502b7e28fe691bae2480)]:
+  - @tanstack/db@0.5.22
+
+## 1.0.18
+
+### Patch Changes
+
+- Fix syncedData not updating when manual write operations (writeUpsert, writeInsert, etc.) are called after async operations in mutation handlers. Previously, the sync transaction would be blocked by the persisting user transaction, leaving syncedData stale until the next sync cycle. ([#1130](https://github.com/TanStack/db/pull/1130))
+
+- Updated dependencies [[`6745ed0`](https://github.com/TanStack/db/commit/6745ed003dc25cfd6fa0f7e60f708205a6069ff2), [`1b22e40`](https://github.com/TanStack/db/commit/1b22e40c56323cfa5e7f759272fed53320aa32f7), [`7a2cacd`](https://github.com/TanStack/db/commit/7a2cacd7a426530cb77844a8c2680f6b06e9ce2f), [`bdf9405`](https://github.com/TanStack/db/commit/bdf94059e7ab98b5181e0df7d8d25cd1dbb5ae58)]:
+  - @tanstack/db@0.5.21
+
+## 1.0.17
+
+### Patch Changes
+
+- Fix refetch such that it returns the query observer results instead of undefined. ([#1132](https://github.com/TanStack/db/pull/1132))
+
+## 1.0.16
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @tanstack/db@0.5.20
+
+## 1.0.15
+
+### Patch Changes
+
+- Updated dependencies [[`29033b8`](https://github.com/TanStack/db/commit/29033b8f55b0ba5721371ad761037ec813440aa7), [`888ad6a`](https://github.com/TanStack/db/commit/888ad6afe5932b0467320c04fbd4583469cb9c47)]:
+  - @tanstack/db@0.5.19
+
+## 1.0.14
+
+### Patch Changes
+
+- Updated dependencies [[`c1247e8`](https://github.com/TanStack/db/commit/c1247e816950314da6d201613481577834c1d97a)]:
+  - @tanstack/db@0.5.18
+
+## 1.0.13
+
+### Patch Changes
+
+- Fix on-demand sync behavior so the full TanStack Query lifecycle is respected. ([#1007](https://github.com/TanStack/db/pull/1007))
+
+  This patch resolves an issue where using on-demand synchronization could break the query lifecycle, including the error reported in https://github.com/TanStack/db/issues/998.
+
+- Updated dependencies [[`f795a67`](https://github.com/TanStack/db/commit/f795a674f21659ef46ff370d4f3b9903a596bcaf), [`d542667`](https://github.com/TanStack/db/commit/d542667a3440415d8e6cbb449b20abd3cbd6855c), [`6503c09`](https://github.com/TanStack/db/commit/6503c091a259208331f471dca29abf086e881147), [`b1cc4a7`](https://github.com/TanStack/db/commit/b1cc4a7e018ffb6804ae7f1c99e9c6eb4bb22812)]:
+  - @tanstack/db@0.5.17
+
+## 1.0.12
+
+### Patch Changes
+
+- Updated dependencies [[`41308b8`](https://github.com/TanStack/db/commit/41308b8ee914aa467e22842cd454f06d1a60032e)]:
+  - @tanstack/db@0.5.16
+
+## 1.0.11
+
+### Patch Changes
+
+- Updated dependencies [[`32ec4d8`](https://github.com/TanStack/db/commit/32ec4d8478cca96f76f3a49efc259c95b85baa40)]:
+  - @tanstack/db@0.5.15
+
+## 1.0.10
+
+### Patch Changes
+
+- Updated dependencies [[`26ed0aa`](https://github.com/TanStack/db/commit/26ed0aad2def60e652508a99b2e980e73f70148e)]:
+  - @tanstack/db@0.5.14
+
+## 1.0.9
+
+### Patch Changes
+
+- Updated dependencies [[`8ed7725`](https://github.com/TanStack/db/commit/8ed7725514a6a501482a391162f7792aa8b371e5), [`01452bf`](https://github.com/TanStack/db/commit/01452bfd0d00da8bd52941a4954af73749473651)]:
+  - @tanstack/db@0.5.13
+
+## 1.0.8
+
+### Patch Changes
+
+- Fix writeInsert/writeUpsert throwing error when collection uses select option ([#1023](https://github.com/TanStack/db/pull/1023))
+
+  When a Query Collection was configured with a `select` option to extract items from a wrapped API response (e.g., `{ data: [...], meta: {...} }`), calling `writeInsert()` or `writeUpsert()` would corrupt the query cache and trigger the error: "select() must return an array of objects".
+
+  The fix routes cache updates through a new `updateCacheData` function that preserves the wrapper structure by using the `select` function to identify which property contains the items array (via reference equality), then updates only that property while keeping metadata intact.
+
+## 1.0.7
+
+### Patch Changes
+
+- Enhanced LoadSubsetOptions with separate cursor expressions and offset for flexible pagination. ([#960](https://github.com/TanStack/db/pull/960))
+
+  **⚠️ Breaking Change for Custom Sync Layers / Query Collections:**
+
+  `LoadSubsetOptions.where` no longer includes cursor expressions for pagination. If you have a custom sync layer or query collection that implements `loadSubset`, you must now handle pagination separately:
+  - **Cursor-based pagination:** Use the new `cursor` property (`cursor.whereFrom` and `cursor.whereCurrent`) and combine them with `where` yourself
+  - **Offset-based pagination:** Use the new `offset` property
+
+  Previously, cursor expressions were baked into the `where` clause. Now they are passed separately so sync layers can choose their preferred pagination strategy.
+
+  **Changes:**
+  - Added `CursorExpressions` type with `whereFrom`, `whereCurrent`, and optional `lastKey` properties
+  - Added `cursor` to `LoadSubsetOptions` for cursor-based pagination (separate from `where`)
+  - Added `offset` to `LoadSubsetOptions` for offset-based pagination support
+  - Electric sync layer now makes two parallel `requestSnapshot` calls when cursor is present:
+    - One for `whereCurrent` (all ties at boundary, no limit)
+    - One for `whereFrom` (rows after cursor, with limit)
+  - Query collection serialization now includes `offset` for query key generation
+  - Added `truncate` event to collections, emitted when synced data is truncated (e.g., after `must-refetch`)
+  - Fixed `setWindow` pagination: cursor expressions are now correctly built when paging through results
+  - Fixed offset tracking: `loadNextItems` now passes the correct window offset to prevent incorrect deduplication
+  - `CollectionSubscriber` now listens for `truncate` events to reset cursor tracking state
+
+  **Benefits:**
+  - Sync layers can choose between cursor-based or offset-based pagination strategies
+  - Electric can efficiently handle tie-breaking with two targeted requests
+  - Better separation of concerns between filtering (`where`) and pagination (`cursor`/`offset`)
+  - `setWindow` correctly triggers backend loading for subsequent pages in multi-column orderBy queries
+  - Cursor state is properly reset after truncation, preventing stale cursor data from being used
+
+- Updated dependencies [[`b3b1940`](https://github.com/TanStack/db/commit/b3b194000d8efcc2c6cc45a663029dadc26f13f0), [`09da081`](https://github.com/TanStack/db/commit/09da081b420fc915d7f0dc566c6cdbbc78582435), [`86ad40c`](https://github.com/TanStack/db/commit/86ad40c6bc37b2f5d4ad24d06f72168ca4b96161)]:
+  - @tanstack/db@0.5.12
+
+## 1.0.6
+
+### Patch Changes
+
+- fix(query-db-collection): use deep equality for object field comparison in query observer ([#967](https://github.com/TanStack/db/pull/967))
+
+  Fixed an issue where updating object fields (non-primitives) with `refetch: false` in `onUpdate` handlers would cause the value to rollback to the previous state every other update. The query observer was using shallow equality (`===`) to compare items, which compares object properties by reference rather than by value. This caused the observer to incorrectly detect differences and write stale data back to syncedData. Now uses `deepEquals` for proper value comparison.
+
+- Use regular dependency for @tanstack/db instead of peerDependency to match the standard pattern used by other TanStack DB packages and prevent duplicate installations ([#952](https://github.com/TanStack/db/pull/952))
+
+- Updated dependencies [[`c4b9399`](https://github.com/TanStack/db/commit/c4b93997432743d974749683059bf68a082d3e5b), [`a1a484e`](https://github.com/TanStack/db/commit/a1a484ec4d2331d702ab9c4b7e5b02622c76b3dd)]:
+  - @tanstack/db@0.5.11
+
+## 1.0.5
+
+### Patch Changes
+
+- fix: ensure ctx.meta.loadSubsetOptions type-safety works automatically ([#869](https://github.com/TanStack/db/pull/869))
+
+  The module augmentation for ctx.meta.loadSubsetOptions is now guaranteed to load automatically when importing from @tanstack/query-db-collection. Previously, users needed to explicitly import QueryCollectionMeta or use @ts-ignore to pass ctx.meta?.loadSubsetOptions to parseLoadSubsetOptions.
+
+  Additionally, QueryCollectionMeta is now an interface (instead of a type alias), enabling users to safely extend meta with custom properties via declaration merging:
+
+  ```typescript
+  declare module '@tanstack/query-db-collection' {
+    interface QueryCollectionMeta {
+      myCustomProperty: string
+    }
+  }
+  ```
+
+- Updated dependencies [[`c8a2c16`](https://github.com/TanStack/db/commit/c8a2c16aa528427d5ddd55cda4ee59a5cb369b5f)]:
+  - @tanstack/db@0.5.6
+
 ## 1.0.4
 
 ### Patch Changes
@@ -52,8 +240,8 @@
   ```typescript
   // This would cause conflicts between different queries
   queryCollectionOptions({
-    queryKey: ["products"], // Static key
-    syncMode: "on-demand",
+    queryKey: ['products'], // Static key
+    syncMode: 'on-demand',
     queryFn: async (ctx) => {
       const { where, limit } = ctx.meta.loadSubsetOptions
       return fetch(`/api/products?...`).then((r) => r.json())
@@ -104,7 +292,7 @@
   **Example:**
 
   ```typescript
-  import { parseLoadSubsetOptions } from "@tanstack/db"
+  import { parseLoadSubsetOptions } from '@tanstack/db'
   // or from "@tanstack/query-db-collection" (re-exported for convenience)
 
   queryFn: async (ctx) => {
@@ -115,8 +303,8 @@
     // Build API request from parsed filters
     const params = new URLSearchParams()
     parsed.filters.forEach(({ field, operator, value }) => {
-      if (operator === "eq") {
-        params.set(field.join("."), String(value))
+      if (operator === 'eq') {
+        params.set(field.join('.'), String(value))
       }
     })
 
@@ -165,11 +353,11 @@
 
   // Check sync status
   if (collection.utils.isFetching) {
-    console.log("Syncing with server...")
+    console.log('Syncing with server...')
   }
 
   if (collection.utils.isRefetching) {
-    console.log("Background refresh in progress")
+    console.log('Background refresh in progress')
   }
 
   // Show last update time
@@ -178,7 +366,7 @@
 
   // Check error state (now using getters)
   if (collection.utils.isError) {
-    console.error("Sync failed:", collection.utils.lastError)
+    console.error('Sync failed:', collection.utils.lastError)
     console.log(`Failed ${collection.utils.errorCount} times`)
   }
   ```
@@ -286,8 +474,8 @@
   })
 
   queryCollectionOptions({
-    id: "wallet-accounts",
-    queryKey: ["wallet-accounts"],
+    id: 'wallet-accounts',
+    queryKey: ['wallet-accounts'],
     queryClient: dbQueryClient,
     // staleTime: Infinity is now inherited from defaultOptions
   })
@@ -680,7 +868,7 @@
   try {
     collection.insert(data)
   } catch (error) {
-    if (error.message.includes("already exists")) {
+    if (error.message.includes('already exists')) {
       // Handle duplicate key error
     }
   }
@@ -689,7 +877,7 @@
   **After:**
 
   ```ts
-  import { DuplicateKeyError } from "@tanstack/db"
+  import { DuplicateKeyError } from '@tanstack/db'
 
   try {
     collection.insert(data)
@@ -706,14 +894,14 @@
 
   ```ts
   // Electric collection errors were imported from @tanstack/db
-  import { ElectricInsertHandlerMustReturnTxIdError } from "@tanstack/db"
+  import { ElectricInsertHandlerMustReturnTxIdError } from '@tanstack/db'
   ```
 
   **After:**
 
   ```ts
   // Now import from the specific adapter package
-  import { ElectricInsertHandlerMustReturnTxIdError } from "@tanstack/electric-db-collection"
+  import { ElectricInsertHandlerMustReturnTxIdError } from '@tanstack/electric-db-collection'
   ```
 
   ### Unified Error Handling
@@ -721,14 +909,14 @@
   **New:**
 
   ```ts
-  import { TanStackDBError } from "@tanstack/db"
+  import { TanStackDBError } from '@tanstack/db'
 
   try {
     // Any TanStack DB operation
   } catch (error) {
     if (error instanceof TanStackDBError) {
       // Handle all TanStack DB errors uniformly
-      console.log("TanStack DB error:", error.message)
+      console.log('TanStack DB error:', error.message)
     }
   }
   ```

@@ -1,0 +1,69 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import IntegrationHeroSection from "@/components/sections/IntegrationHeroSection.astro";
+import IntegrationFeaturesSection from "@/components/sections/IntegrationFeaturesSection.astro";
+import IntegrationUseCasesSection from "@/components/sections/IntegrationUseCasesSection.astro";
+import IntegrationFAQSection from "@/components/sections/IntegrationFAQSection.astro";
+import CTASection from "@/components/sections/CTASection.astro";
+import FooterSection from "@/components/sections/FooterSection.astro";
+import { getCollection, type CollectionEntry } from "astro:content";
+
+export async function getStaticPaths() {
+	const integrations = await getCollection("integrations", ({ data }: CollectionEntry<"integrations">) => {
+		return import.meta.env.PROD ? !data.draft : true;
+	});
+
+	return integrations.map((integration: CollectionEntry<"integrations">) => ({
+		params: { slug: integration.id.replace(/\.md$/, "") },
+		props: { integration },
+	}));
+}
+
+const { integration } = Astro.props as { integration: CollectionEntry<"integrations"> };
+
+const {
+	name,
+	logo,
+	tagline,
+	description,
+	category,
+	status,
+	features,
+	useCases,
+	faqs,
+	primaryCta,
+	secondaryCta,
+	metaTitle,
+	metaDescription,
+} = integration.data;
+
+const pageTitle = metaTitle || `${name} Integration | Hazel`;
+const pageDescription = metaDescription || description;
+---
+
+<Layout title={pageTitle} description={pageDescription} includeFaqSchema={true} faqData={faqs}>
+	<main
+		class="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full"
+	>
+		<IntegrationHeroSection
+			name={name}
+			logo={logo}
+			tagline={tagline}
+			description={description}
+			category={category}
+			status={status}
+			primaryCta={primaryCta}
+			secondaryCta={secondaryCta}
+		/>
+
+		<IntegrationFeaturesSection features={features} integrationName={name} />
+
+		<IntegrationUseCasesSection useCases={useCases} integrationName={name} />
+
+		<IntegrationFAQSection faqs={faqs} integrationName={name} />
+
+		<CTASection />
+
+		<FooterSection />
+	</main>
+</Layout>

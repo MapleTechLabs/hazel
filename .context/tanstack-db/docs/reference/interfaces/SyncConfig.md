@@ -5,7 +5,7 @@ title: SyncConfig
 
 # Interface: SyncConfig\<T, TKey\>
 
-Defined in: [packages/db/src/types.ts:285](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L285)
+Defined in: [packages/db/src/types.ts:325](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L325)
 
 ## Type Parameters
 
@@ -25,7 +25,7 @@ Defined in: [packages/db/src/types.ts:285](https://github.com/TanStack/db/blob/m
 optional getSyncMetadata: () => Record<string, unknown>;
 ```
 
-Defined in: [packages/db/src/types.ts:302](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L302)
+Defined in: [packages/db/src/types.ts:347](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L347)
 
 Get the sync metadata for insert operations
 
@@ -43,7 +43,7 @@ Record containing relation information
 optional rowUpdateMode: "full" | "partial";
 ```
 
-Defined in: [packages/db/src/types.ts:311](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L311)
+Defined in: [packages/db/src/types.ts:356](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L356)
 
 The row update mode used to sync to the collection.
 
@@ -67,7 +67,7 @@ sync: (params) =>
   | SyncConfigRes;
 ```
 
-Defined in: [packages/db/src/types.ts:289](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L289)
+Defined in: [packages/db/src/types.ts:329](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L329)
 
 #### Parameters
 
@@ -75,11 +75,13 @@ Defined in: [packages/db/src/types.ts:289](https://github.com/TanStack/db/blob/m
 
 ###### begin
 
-() => `void`
+(`options?`) => `void`
+
+Begin a new sync transaction.
 
 ###### collection
 
-[`Collection`](../Collection.md)\<`T`, `TKey`, `any`, `any`, `any`\>
+[`Collection`](Collection.md)\<`T`, `TKey`, `any`, `any`, `any`\>
 
 ###### commit
 
@@ -100,5 +102,5 @@ Defined in: [packages/db/src/types.ts:289](https://github.com/TanStack/db/blob/m
 #### Returns
 
   \| `void`
-  \| [`CleanupFn`](../../type-aliases/CleanupFn.md)
-  \| [`SyncConfigRes`](../../type-aliases/SyncConfigRes.md)
+  \| [`CleanupFn`](../type-aliases/CleanupFn.md)
+  \| [`SyncConfigRes`](../type-aliases/SyncConfigRes.md)

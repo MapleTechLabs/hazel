@@ -36,13 +36,7 @@
 
 		/* Skip type checking all .d.ts files. */
 		"skipLibCheck": true,
-		"types": ["./worker-configuration.d.ts"],
-		"plugins": [
-			{
-				"name": "@effect/language-service",
-				"reportSuggestionsAsWarningsInTsc": true
-			}
-		]
+		"types": ["./worker-configuration.d.ts"]
 	},
 	"exclude": ["test"],
 	"include": ["worker-configuration.d.ts", "src/**/*.ts"]

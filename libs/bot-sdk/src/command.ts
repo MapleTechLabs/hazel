@@ -5,7 +5,7 @@
  * full type safety for command names and arguments.
  */
 
-import type { ChannelId, OrganizationId, UserId } from "@hazel/domain/ids"
+import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 
 /**
@@ -93,7 +93,7 @@ export type CommandArgsFields<G, N extends string> =
  */
 export type CommandArgs<G, N extends string> =
 	G extends CommandGroup<infer C>
-		? Extract<C[number], { name: N }> extends { argsSchema: Schema.Schema<infer A, any, any> }
+		? Extract<C[number], { name: N }> extends { argsSchema: Schema.Schema<infer A> }
 			? A
 			: {}
 		: never

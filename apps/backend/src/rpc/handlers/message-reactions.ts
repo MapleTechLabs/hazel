@@ -1,60 +1,58 @@
+import { MessageReactionRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
-import { CurrentUser, policyUse, withRemapDbErrors } from "@hazel/domain"
-import { MessageReactionRpcs } from "@hazel/domain/rpc"
+import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
+import { MessageReactionResponse, MessageReactionRpcs } from "@hazel/domain/rpc"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { MessageReactionPolicy } from "../../policies/message-reaction-policy"
-import { MessageReactionRepo } from "../../repositories/message-reaction-repo"
+import { ChannelViewers } from "../../services/channel-viewers"
+import { emitMessageEvent } from "../../worker/objects/channel/message-events"
 
+/**
+ * Message reaction RPC handlers. Run in the message's `ChannelObject` (`rpc/routing.ts`):
+ * authorized against its `channel_viewers` (`MessageReactionPolicy`), the Connect conversation
+ * from the channel's own facts, and chat-sync told through `emitMessageEvent`.
+ */
 export const MessageReactionRpcLive = MessageReactionRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
+		const channelViewers = yield* ChannelViewers
+		const messageReactionPolicy = yield* MessageReactionPolicy
+		const messageReactionRepo = yield* MessageReactionRepo
 
 		return {
-			"messageReaction.toggle": (payload) =>
+			"messageReaction.toggle": ({ messageId, channelId, emoji }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
 							const user = yield* CurrentUser.Context
-							const { messageId, channelId, emoji } = payload
-
-							const existingReaction = yield* MessageReactionRepo.findByMessageUserEmoji(
+							const existing = yield* messageReactionRepo.findByMessageUserEmoji(
 								messageId,
 								user.id,
 								emoji,
-							).pipe(policyUse(MessageReactionPolicy.canList(messageId)))
-
-							const txid = yield* generateTransactionId()
-
-							// If reaction exists, delete it
-							if (Option.isSome(existingReaction)) {
-								yield* MessageReactionRepo.deleteById(existingReaction.value.id).pipe(
-									policyUse(MessageReactionPolicy.canDelete(existingReaction.value.id)),
-								)
-
-								return {
-									wasCreated: false,
-									data: undefined,
-									transactionId: txid,
-								}
-							}
-
-							// Otherwise, create a new reaction
-							const createdMessageReaction = yield* MessageReactionRepo.insert({
-								messageId,
-								channelId,
-								emoji,
-								userId: user.id,
-							}).pipe(
-								Effect.map((res) => res[0]!),
-								policyUse(MessageReactionPolicy.canCreate(messageId)),
 							)
 
-							return {
-								wasCreated: true,
-								data: createdMessageReaction,
-								transactionId: txid,
+							if (Option.isSome(existing)) {
+								yield* messageReactionPolicy.canDelete(existing.value.id)
+								yield* messageReactionRepo.deleteById(existing.value.id)
+								yield* emitMessageEvent({ _tag: "ReactionDeleted", reaction: existing.value })
+								const txid = yield* generateTransactionId()
+								return { wasCreated: false, data: undefined, transactionId: txid }
 							}
+
+							yield* messageReactionPolicy.canCreate(messageId)
+							const created = yield* messageReactionRepo
+								.insert({
+									messageId,
+									channelId,
+									conversationId: yield* channelViewers.conversationId,
+									emoji,
+									userId: user.id,
+								})
+								.pipe(Effect.map((res) => res[0]!))
+							yield* emitMessageEvent({ _tag: "ReactionCreated", reaction: created })
+							const txid = yield* generateTransactionId()
+							return { wasCreated: true, data: created, transactionId: txid }
 						}),
 					)
 					.pipe(withRemapDbErrors("MessageReaction", "create")),
@@ -64,40 +62,29 @@ export const MessageReactionRpcLive = MessageReactionRpcs.toLayer(
 					.transaction(
 						Effect.gen(function* () {
 							const user = yield* CurrentUser.Context
-
-							const createdMessageReaction = yield* MessageReactionRepo.insert({
-								...payload,
-								userId: user.id,
-							}).pipe(
-								Effect.map((res) => res[0]!),
-								policyUse(MessageReactionPolicy.canCreate(payload.messageId)),
-							)
-
+							yield* messageReactionPolicy.canCreate(payload.messageId)
+							const created = yield* messageReactionRepo
+								.insert({
+									...payload,
+									conversationId: yield* channelViewers.conversationId,
+									userId: user.id,
+								})
+								.pipe(Effect.map((res) => res[0]!))
+							yield* emitMessageEvent({ _tag: "ReactionCreated", reaction: created })
 							const txid = yield* generateTransactionId()
-
-							return {
-								data: createdMessageReaction,
-								transactionId: txid,
-							}
+							return new MessageReactionResponse({ data: created, transactionId: txid })
 						}),
 					)
 					.pipe(withRemapDbErrors("MessageReaction", "create")),
 
-			"messageReaction.update": ({ id, ...payload }) =>
+			"messageReaction.update": ({ id, channelId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
-							const updatedMessageReaction = yield* MessageReactionRepo.update({
-								id,
-								...payload,
-							}).pipe(policyUse(MessageReactionPolicy.canUpdate(id)))
-
+							yield* messageReactionPolicy.canUpdate(id)
+							const updated = yield* messageReactionRepo.update({ id, ...payload })
 							const txid = yield* generateTransactionId()
-
-							return {
-								data: updatedMessageReaction,
-								transactionId: txid,
-							}
+							return new MessageReactionResponse({ data: updated, transactionId: txid })
 						}),
 					)
 					.pipe(withRemapDbErrors("MessageReaction", "update")),
@@ -106,12 +93,13 @@ export const MessageReactionRpcLive = MessageReactionRpcs.toLayer(
 				db
 					.transaction(
 						Effect.gen(function* () {
-							yield* MessageReactionRepo.deleteById(id).pipe(
-								policyUse(MessageReactionPolicy.canDelete(id)),
-							)
-
+							yield* messageReactionPolicy.canDelete(id)
+							const existing = yield* messageReactionRepo.findById(id)
+							yield* messageReactionRepo.deleteById(id)
+							if (Option.isSome(existing)) {
+								yield* emitMessageEvent({ _tag: "ReactionDeleted", reaction: existing.value })
+							}
 							const txid = yield* generateTransactionId()
-
 							return { transactionId: txid }
 						}),
 					)

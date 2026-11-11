@@ -8,20 +8,20 @@ This guide walks you through installing the Bot SDK and creating a simple bot th
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) v1.0 or later (or Node.js 20+)
+- [Bun](https://bun.sh) v1.2 or later, or Node.js 22+ (the optional `/health` server only runs on Bun). To run a bot on Cloudflare, see [Running on Cloudflare](/bot-sdk/reference/cloudflare)
 - A Hazel bot token (get one from your organization settings)
 - Basic familiarity with TypeScript and async/await
 
 ## Installation
 
 ```bash
-bun add @hazel/bot-sdk effect
+bun add @hazel-chat/bot-sdk effect
 ```
 
 Or with npm:
 
 ```bash
-npm install @hazel/bot-sdk effect
+npm install @hazel-chat/bot-sdk effect
 ```
 
 ## Environment Setup
@@ -36,9 +36,8 @@ For local development, you may also need:
 
 ```bash
 # Optional: Override for local development
-ELECTRIC_URL=http://localhost:8787/v1/shape
 BACKEND_URL=http://localhost:3003
-REDIS_URL=redis://localhost:6379
+GATEWAY_URL=http://localhost:3004
 ```
 
 ## Your First Bot
@@ -47,7 +46,7 @@ Create an `index.ts` file:
 
 ```typescript
 import { Effect } from "effect"
-import { runHazelBot } from "@hazel/bot-sdk"
+import { runHazelBot } from "@hazel-chat/bot-sdk"
 
 runHazelBot({
 	setup: (bot) =>
@@ -91,7 +90,7 @@ Send a message in any channel the bot has access to, and it will echo it back!
 The main entry point for creating bots. It handles:
 
 - Loading configuration from environment variables
-- Connecting to the Hazel real-time event stream
+- Connecting to the Hazel bot gateway websocket
 - Graceful shutdown on SIGINT/SIGTERM
 - Error logging and recovery
 
@@ -109,11 +108,12 @@ Registers a handler for new messages. The handler receives the full message obje
 
 Sends a reply to a message. The SDK provides several message operations:
 
-- `bot.message.send(channelId, content)` - Send a new message
-- `bot.message.reply(message, content)` - Reply to a message
-- `bot.message.update(message, newContent)` - Edit a message
-- `bot.message.delete(messageId)` - Delete a message
+- `bot.message.send(channelId, content, options?)` - Send a new message (options: reply, thread, attachments, embeds, `html`)
+- `bot.message.reply(message, content, options?)` - Reply to a message
+- `bot.message.update(message, newContent, options?)` - Edit a message (options: embeds, `html`)
+- `bot.message.delete(messageId, channelId?)` - Delete a message
 - `bot.message.react(message, emoji)` - React with an emoji
+- `bot.message.list(channelId, options?)` - List a channel's messages, newest first
 
 ## Next Steps
 

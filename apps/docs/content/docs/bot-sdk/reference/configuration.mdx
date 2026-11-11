@@ -1,49 +1,48 @@
 ---
 title: Configuration
-description: Environment variables and configuration options
+description: Environment variables and runtime options for websocket-based bots
 icon: Settings
 ---
 
-Configure your bot using environment variables or explicit options.
+Configure your bot with a backend URL for short request/response APIs and a
+gateway URL for inbound websocket delivery.
 
-## Environment Variables
+## Environment variables
 
-| Variable       | Required | Default                              | Description              |
-| -------------- | -------- | ------------------------------------ | ------------------------ |
-| `BOT_TOKEN`    | Yes      | -                                    | Bot authentication token |
-| `ELECTRIC_URL` | No       | `https://electric.hazel.sh/v1/shape` | Electric SQL proxy URL   |
-| `BACKEND_URL`  | No       | `https://api.hazel.sh`               | Backend API URL          |
-| `REDIS_URL`    | No       | `redis://localhost:6379`             | Redis URL for commands   |
+| Variable      | Required | Default                        | Description                                               |
+| ------------- | -------- | ------------------------------ | --------------------------------------------------------- |
+| `BOT_TOKEN`   | Yes      | -                              | Bot authentication token                                  |
+| `BACKEND_URL` | No       | `https://api.hazel.sh`         | Backend API URL for message sends, command sync, and auth |
+| `GATEWAY_URL` | No       | `https://bot-gateway.hazel.sh` | Bot gateway URL for inbound websocket delivery            |
+| `PORT`        | No       | `0` (OS-assigned)              | Health server port (Bun only)                             |
+| `COMMIT_SHA`  | No       | `unknown`                      | Service version reported in traces                        |
+
+`runHazelBot` and `createHazelBot` also export traces. Locally they go to Effect DevTools; set
+`OTEL_ENVIRONMENT` (`local`, `staging` or `production`), `OTEL_BASE_URL` (the OTLP endpoint, required
+outside `local`) and optionally `MAPLE_INGEST_KEY` to send them elsewhere. A bot on
+[Cloudflare](/bot-sdk/reference/cloudflare) uses its host's tracer instead.
 
 ### Example `.env`
 
 ```bash
-# Required
 BOT_TOKEN=your-bot-token-here
-
-# Optional: For local development
-ELECTRIC_URL=http://localhost:8787/v1/shape
 BACKEND_URL=http://localhost:3003
-REDIS_URL=redis://localhost:6379
+GATEWAY_URL=http://localhost:3004
 ```
 
-## `runHazelBot` Options
+## `runHazelBot` options
+
+`runHazelBot` reads environment variables by default and lets you override them
+in code.
 
 ```typescript
 interface RunBotConfig<Commands> {
-	// Slash commands
 	commands?: Commands
-
-	// Additional Effect layers
+	mentionable?: boolean
+	healthPort?: number | false
 	layers?: readonly Layer[]
-
-	// Setup function
 	setup: (bot: HazelBotClient) => Effect<void>
-
-	// Override config (optional)
-	config?: Partial<HazelBotConfig>
-
-	// Service name for tracing
+	config?: Partial<HazelBotConfig<Commands>>
 	serviceName?: string
 }
 ```
@@ -53,177 +52,71 @@ interface RunBotConfig<Commands> {
 ```typescript
 runHazelBot({
 	commands: myCommands,
-	layers: [MyDatabaseLayer, MyApiLayer],
 	setup: (bot) =>
 		Effect.gen(function* () {
 			// Register handlers
 		}),
 	config: {
-		// Override defaults if needed
-		electricUrl: "http://localhost:8787/v1/shape",
+		backendUrl: "http://localhost:3003",
+		gatewayUrl: "http://localhost:3004",
 	},
 	serviceName: "my-task-bot",
 })
 ```
 
-## `createHazelBot` Options
+## `createHazelBot` options
 
-For full control, use `createHazelBot`:
+Use `createHazelBot` when you want to build and manage the runtime directly.
 
 ```typescript
 interface HazelBotConfig<Commands> {
-	// Required
 	botToken: string
-
-	// URLs (with defaults)
-	electricUrl?: string // Default: https://electric.hazel.sh/v1/shape
-	backendUrl?: string // Default: https://api.hazel.sh
-	redisUrl?: string // Default: redis://localhost:6379
-
-	// Slash commands
+	backendUrl?: string
+	gatewayUrl?: string
 	commands?: Commands
-
-	// Queue configuration
-	queueConfig?: EventQueueConfig
-
-	// Dispatcher configuration
-	dispatcherConfig?: EventDispatcherConfig
-
-	// Tracing service name
+	mentionable?: boolean
+	resumeOffset?: string
+	sessionStore?: GatewaySessionStore
+	stateStore?: BotStateStore
+	maxConcurrentPartitions?: number
+	heartbeatIntervalMs?: number
 	serviceName?: string
+	healthPort?: number | false
+	logging?: { level?: LogLevel; format?: LogFormat }
 }
 ```
+
+`backendUrl` and `gatewayUrl` default to `https://api.hazel.sh` and `https://bot-gateway.hazel.sh`,
+`maxConcurrentPartitions` to `8`, and `resumeOffset` to `"now"` (when no `sessionStore` has a saved offset).
 
 ### Example
 
 ```typescript
 const runtime = createHazelBot({
 	botToken: process.env.BOT_TOKEN!,
-	electricUrl: "http://localhost:8787/v1/shape",
 	backendUrl: "http://localhost:3003",
-	redisUrl: "redis://localhost:6379",
+	gatewayUrl: "http://localhost:3004",
 	commands: myCommands,
-	serviceName: "my-bot",
+	maxConcurrentPartitions: 8,
 })
 ```
 
-## Queue Configuration
+## Resume and state
 
-Configure the event queue behavior:
+The websocket runtime uses two optional stores:
 
-```typescript
-interface EventQueueConfig {
-	// Max events in queue
-	capacity: number // Default: 1000
+- `sessionStore` persists the last acknowledged gateway offset.
+- `stateStore` persists small bot-local state, such as thread mappings.
 
-	// What to do when queue is full
-	backpressureStrategy: "sliding" | "dropping" // Default: "sliding"
-}
-```
+If you do not provide either store, the SDK uses in-memory defaults. On Cloudflare,
+`makeBotSupervisor` keeps both in the Durable Object's storage, see [Running on Cloudflare](/bot-sdk/reference/cloudflare).
 
-| Strategy   | Behavior                      |
-| ---------- | ----------------------------- |
-| `sliding`  | Drops oldest events when full |
-| `dropping` | Drops new events when full    |
+## Local development
 
-### Example
-
-```typescript
-runHazelBot({
-	config: {
-		queueConfig: {
-			capacity: 5000,
-			backpressureStrategy: "sliding",
-		},
-	},
-	// ...
-})
-```
-
-## Dispatcher Configuration
-
-Configure event handler execution:
-
-```typescript
-interface EventDispatcherConfig {
-	// Max retry attempts
-	maxRetries: number // Default: 3
-
-	// Base delay for exponential backoff (ms)
-	retryBaseDelay: number // Default: 100
-
-	// Max concurrent handlers per event type
-	maxConcurrentHandlers?: number | "unbounded" // Default: 10
-}
-```
-
-### Example
-
-```typescript
-runHazelBot({
-	config: {
-		dispatcherConfig: {
-			maxRetries: 5,
-			retryBaseDelay: 200,
-			maxConcurrentHandlers: 20,
-		},
-	},
-	// ...
-})
-```
-
-## Adding Custom Layers
-
-Provide additional Effect layers for dependency injection:
-
-```typescript
-import { Effect, Layer } from "effect"
-import { runHazelBot } from "@hazel/bot-sdk"
-
-// Your custom service
-class DatabaseService extends Effect.Service<DatabaseService>()("DatabaseService", {
-	effect: Effect.succeed({
-		query: (sql: string) => Effect.succeed([]),
-	}),
-}) {}
-
-runHazelBot({
-	layers: [DatabaseService.Default],
-	setup: (bot) =>
-		Effect.gen(function* () {
-			const db = yield* DatabaseService
-
-			yield* bot.onCommand(MyCommand, (ctx) =>
-				Effect.gen(function* () {
-					const results = yield* db.query("SELECT * FROM tasks")
-					// ...
-				}),
-			)
-		}),
-})
-```
-
-## Local Development
-
-For local development, override the URLs:
+For local development, point the bot at your local backend and gateway:
 
 ```bash
-# .env
 BOT_TOKEN=dev-bot-token
-ELECTRIC_URL=http://localhost:8787/v1/shape
 BACKEND_URL=http://localhost:3003
-REDIS_URL=redis://localhost:6379
-```
-
-Or in code:
-
-```typescript
-runHazelBot({
-	config: {
-		electricUrl: "http://localhost:8787/v1/shape",
-		backendUrl: "http://localhost:3003",
-		redisUrl: "redis://localhost:6379",
-	},
-	// ...
-})
+GATEWAY_URL=http://localhost:3004
 ```

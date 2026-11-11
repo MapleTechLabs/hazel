@@ -1,12 +1,14 @@
 import { UnsupportedProviderError } from "@hazel/domain/http"
 import { GitHub } from "@hazel/integrations"
-import { Effect } from "effect"
+import { Context, Effect, Layer } from "effect"
 import type { OAuthProvider } from "./oauth-provider"
 import { ProviderNotConfiguredError } from "./oauth-provider"
-import type { IntegrationProvider, OAuthProviderConfig } from "./provider-config"
+import type { IntegrationProvider, OAuthIntegrationProvider, OAuthProviderConfig } from "./provider-config"
 import { loadProviderConfig } from "./provider-config"
 import { createGitHubAppProvider } from "./providers/github-app-provider"
 import { createLinearOAuthProvider } from "./providers/linear-oauth-provider"
+import { createDiscordOAuthProvider } from "./providers/discord-oauth-provider"
+import { createSlackOAuthProvider } from "./providers/slack-oauth-provider"
 
 /**
  * Factory function type for creating OAuth providers.
@@ -17,14 +19,16 @@ type ProviderFactory = (config: OAuthProviderConfig) => OAuthProvider
  * Providers that use GitHub App flow (not standard OAuth).
  * These providers get their config from dedicated services, not loadProviderConfig.
  */
-const _APP_BASED_PROVIDERS: readonly IntegrationProvider[] = ["github"] as const
+const _APP_BASED_PROVIDERS: readonly OAuthIntegrationProvider[] = ["github"] as const
 
 /**
  * Registry of provider factory functions for standard OAuth providers.
  * Add new providers here when implementing them.
  */
-const PROVIDER_FACTORIES: Partial<Record<IntegrationProvider, ProviderFactory>> = {
+const PROVIDER_FACTORIES: Partial<Record<OAuthIntegrationProvider, ProviderFactory>> = {
 	linear: createLinearOAuthProvider,
+	discord: createDiscordOAuthProvider,
+	slack: createSlackOAuthProvider,
 	// Future providers:
 	// figma: createFigmaOAuthProvider,
 	// notion: createNotionOAuthProvider,
@@ -33,7 +37,12 @@ const PROVIDER_FACTORIES: Partial<Record<IntegrationProvider, ProviderFactory>> 
 /**
  * Providers that are fully implemented and available for use.
  */
-const SUPPORTED_PROVIDERS: readonly IntegrationProvider[] = ["linear", "github"] as const
+const SUPPORTED_PROVIDERS: readonly OAuthIntegrationProvider[] = [
+	"linear",
+	"github",
+	"discord",
+	"slack",
+] as const
 
 /**
  * OAuth Provider Registry Service.
@@ -62,11 +71,10 @@ const SUPPORTED_PROVIDERS: readonly IntegrationProvider[] = ["linear", "github"]
  * 3. Add provider to SUPPORTED_PROVIDERS array
  * 4. Set environment variables: {PROVIDER}_CLIENT_ID, {PROVIDER}_CLIENT_SECRET, {PROVIDER}_REDIRECT_URI
  */
-export class OAuthProviderRegistry extends Effect.Service<OAuthProviderRegistry>()("OAuthProviderRegistry", {
-	accessors: true,
-	effect: Effect.gen(function* () {
+export class OAuthProviderRegistry extends Context.Service<OAuthProviderRegistry>()("OAuthProviderRegistry", {
+	make: Effect.gen(function* () {
 		// Cache for loaded providers
-		const providerCache = new Map<IntegrationProvider, OAuthProvider>()
+		const providerCache = new Map<OAuthIntegrationProvider, OAuthProvider>()
 
 		// Get the GitHub services for creating GitHub provider
 		const gitHubJwtService = yield* GitHub.GitHubAppJWTService
@@ -81,13 +89,13 @@ export class OAuthProviderRegistry extends Effect.Service<OAuthProviderRegistry>
 		): Effect.Effect<OAuthProvider, UnsupportedProviderError | ProviderNotConfiguredError> =>
 			Effect.gen(function* () {
 				// Check cache first
-				const cached = providerCache.get(provider)
+				const cached = providerCache.get(provider as OAuthIntegrationProvider)
 				if (cached) {
 					return cached
 				}
 
-				// Check if provider is supported
-				if (!SUPPORTED_PROVIDERS.includes(provider)) {
+				// Check if provider is supported (cast needed since provider may include non-OAuth providers like "craft")
+				if (!(SUPPORTED_PROVIDERS as readonly string[]).includes(provider)) {
 					return yield* Effect.fail(
 						new UnsupportedProviderError({
 							provider,
@@ -95,8 +103,18 @@ export class OAuthProviderRegistry extends Effect.Service<OAuthProviderRegistry>
 					)
 				}
 
+				// After the check above, we know the provider is a valid OAuth provider
+				const oauthProvider_ = provider as OAuthIntegrationProvider
+
 				// Handle GitHub App separately (uses JWT service, not standard OAuth)
-				if (provider === "github") {
+				if (oauthProvider_ === "github") {
+					if (!gitHubJwtService.isConfigured) {
+						return yield* new ProviderNotConfiguredError({
+							provider: oauthProvider_,
+							message:
+								"Missing configuration for github: GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_PRIVATE_KEY",
+						})
+					}
 					// Create provider with JWT service and API client
 					// Uses minimal AppProviderConfig since GitHub Apps manage their own auth via JWT
 					const oauthProvider = createGitHubAppProvider(
@@ -104,12 +122,12 @@ export class OAuthProviderRegistry extends Effect.Service<OAuthProviderRegistry>
 						gitHubJwtService,
 						gitHubApiClient,
 					)
-					providerCache.set(provider, oauthProvider)
+					providerCache.set(oauthProvider_, oauthProvider)
 					return oauthProvider
 				}
 
 				// Get factory function for standard OAuth providers
-				const factory = PROVIDER_FACTORIES[provider]
+				const factory = PROVIDER_FACTORIES[oauthProvider_]
 				if (!factory) {
 					return yield* Effect.fail(
 						new UnsupportedProviderError({
@@ -119,11 +137,11 @@ export class OAuthProviderRegistry extends Effect.Service<OAuthProviderRegistry>
 				}
 
 				// Load configuration from environment for standard OAuth providers
-				const config = yield* loadProviderConfig(provider).pipe(
+				const config = yield* loadProviderConfig(oauthProvider_).pipe(
 					Effect.mapError(
 						(error) =>
 							new ProviderNotConfiguredError({
-								provider,
+								provider: oauthProvider_,
 								message: `Missing configuration for ${provider}: ${String(error)}`,
 							}),
 					),
@@ -131,7 +149,7 @@ export class OAuthProviderRegistry extends Effect.Service<OAuthProviderRegistry>
 
 				// Create and cache provider
 				const oauthProvider = factory(config)
-				providerCache.set(provider, oauthProvider)
+				providerCache.set(oauthProvider_, oauthProvider)
 
 				return oauthProvider
 			})
@@ -139,13 +157,13 @@ export class OAuthProviderRegistry extends Effect.Service<OAuthProviderRegistry>
 		/**
 		 * List all supported/implemented providers.
 		 */
-		const listSupportedProviders = (): readonly IntegrationProvider[] => SUPPORTED_PROVIDERS
+		const listSupportedProviders = (): readonly OAuthIntegrationProvider[] => SUPPORTED_PROVIDERS
 
 		/**
 		 * Check if a provider is supported.
 		 */
-		const isProviderSupported = (provider: string): provider is IntegrationProvider =>
-			SUPPORTED_PROVIDERS.includes(provider as IntegrationProvider)
+		const isProviderSupported = (provider: string): provider is OAuthIntegrationProvider =>
+			(SUPPORTED_PROVIDERS as readonly string[]).includes(provider)
 
 		return {
 			getProvider,
@@ -153,5 +171,9 @@ export class OAuthProviderRegistry extends Effect.Service<OAuthProviderRegistry>
 			isProviderSupported,
 		}
 	}),
-	dependencies: [GitHub.GitHubAppJWTService.Default, GitHub.GitHubApiClient.Default],
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make).pipe(
+		Layer.provide(GitHub.GitHubAppJWTService.layer),
+		Layer.provide(GitHub.GitHubApiClient.layer),
+	)
+}

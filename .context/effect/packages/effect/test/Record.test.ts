@@ -1,6 +1,26 @@
-import { describe, it } from "@effect/vitest"
 import { assertFalse, assertNone, assertSome, assertTrue, deepStrictEqual } from "@effect/vitest/utils"
-import { Either, Number as Num, Option, pipe, Record } from "effect"
+import { Equivalence, Number as Num, Option, Record, Result } from "effect"
+import { pipe } from "effect/Function"
+import { describe, it } from "vitest"
+
+describe("Record", () => {
+  it("singleton", () => {
+    deepStrictEqual(Record.singleton("a", 1), { a: 1 })
+    deepStrictEqual(Record.singleton("__proto__", 1), { ["__proto__"]: 1 })
+  })
+
+  it("makeReducerUnion", () => {
+    const R = Record.makeReducerUnion(Num.ReducerSum)
+
+    deepStrictEqual(R.combine({ a: 1, b: 2 }, { a: 3, b: 4, c: 5 }), { a: 4, b: 6, c: 5 })
+  })
+
+  it("makeReducerIntersection", () => {
+    const R = Record.makeReducerIntersection(Num.ReducerSum)
+
+    deepStrictEqual(R.combine({ a: 1, b: 2 }, { a: 3, b: 4, c: 5 }), { a: 4, b: 6 })
+  })
+})
 
 const symA = Symbol.for("a")
 const symB = Symbol.for("b")
@@ -77,39 +97,26 @@ describe("Record", () => {
     })
 
     it("modify", () => {
-      deepStrictEqual(pipe(Record.empty<string>(), Record.modify("a", (n: number) => n + 1)), {})
-      deepStrictEqual(pipe(stringRecord, Record.modify("a", (n: number) => n + 1)), { a: 2, [symA]: null })
-      deepStrictEqual(pipe(stringRecord, Record.modify("a", (n: number) => String(n))), { a: "1", [symA]: null })
+      assertNone(pipe(Record.empty<string>(), Record.modify("a", (n) => n + 1)))
+      assertSome(pipe(stringRecord, Record.modify("a", (n: number) => n + 1)), { a: 2, [symA]: null })
+      assertSome(pipe(stringRecord, Record.modify("a", (n: number) => String(n))), { a: "1", [symA]: null })
 
-      deepStrictEqual(pipe(Record.empty<symbol>(), Record.modify(symA, (n: number) => n + 1)), {})
-      deepStrictEqual(pipe(symbolRecord, Record.modify(symA, (n: number) => n + 1)), {
-        [symA]: 2,
-        [symB]: 2
-      })
-      deepStrictEqual(pipe(symbolRecord, Record.modify(symA, (n: number) => String(n))), { [symA]: "1", [symB]: 2 })
-    })
-
-    it("modifyOption", () => {
-      assertNone(pipe(Record.empty<string>(), Record.modifyOption("a", (n) => n + 1)))
-      assertSome(pipe(stringRecord, Record.modifyOption("a", (n: number) => n + 1)), { a: 2, [symA]: null })
-      assertSome(pipe(stringRecord, Record.modifyOption("a", (n: number) => String(n))), { a: "1", [symA]: null })
-
-      assertNone(pipe(Record.empty<symbol>(), Record.modifyOption(symA, (n) => n + 1)))
-      assertSome(pipe(symbolRecord, Record.modifyOption(symA, (n: number) => n + 1)), { [symA]: 2, [symB]: 2 })
+      assertNone(pipe(Record.empty<symbol>(), Record.modify(symA, (n) => n + 1)))
+      assertSome(pipe(symbolRecord, Record.modify(symA, (n: number) => n + 1)), { [symA]: 2, [symB]: 2 })
       assertSome(
-        pipe(symbolRecord, Record.modifyOption(symA, (n: number) => String(n))),
+        pipe(symbolRecord, Record.modify(symA, (n: number) => String(n))),
         { [symA]: "1", [symB]: 2 }
       )
     })
 
-    it("replaceOption", () => {
-      assertNone(pipe(Record.empty<string>(), Record.replaceOption("a", 2)))
-      assertSome(pipe(stringRecord, Record.replaceOption("a", 2)), { a: 2, [symA]: null })
-      assertSome(pipe(stringRecord, Record.replaceOption("a", true)), { a: true, [symA]: null })
+    it("replace", () => {
+      assertNone(pipe(Record.empty<string>(), Record.replace("a", 2)))
+      assertSome(pipe(stringRecord, Record.replace("a", 2)), { a: 2, [symA]: null })
+      assertSome(pipe(stringRecord, Record.replace("a", true)), { a: true, [symA]: null })
 
-      assertNone(pipe(Record.empty<symbol>(), Record.replaceOption(symA, 2)))
-      assertSome(pipe(symbolRecord, Record.replaceOption(symA, 2)), { [symA]: 2, [symB]: 2 })
-      assertSome(pipe(symbolRecord, Record.replaceOption(symA, true)), { [symA]: true, [symB]: 2 })
+      assertNone(pipe(Record.empty<symbol>(), Record.replace(symA, 2)))
+      assertSome(pipe(symbolRecord, Record.replace(symA, 2)), { [symA]: 2, [symB]: 2 })
+      assertSome(pipe(symbolRecord, Record.replace(symA, true)), { [symA]: true, [symB]: 2 })
     })
 
     it("remove", () => {
@@ -152,14 +159,6 @@ describe("Record", () => {
       })
     })
 
-    it("replace", () => {
-      deepStrictEqual(Record.replace(stringRecord, "c", 3), stringRecord)
-      deepStrictEqual(Record.replace(stringRecord, "a", 2), { a: 2, [symA]: null })
-
-      deepStrictEqual(Record.replace(symbolRecord, symC, 3), symbolRecord)
-      deepStrictEqual(Record.replace(symbolRecord, symA, 2), { [symA]: 2, [symB]: 2 })
-    })
-
     it("singleton", () => {
       deepStrictEqual(Record.singleton("a", 1), { a: 1 })
 
@@ -185,7 +184,7 @@ describe("Record", () => {
 
     it("filterMap", () => {
       const x: Record<string, number> = { a: 1, b: 2, c: 3, [symA]: null }
-      const filtered = Record.filterMap(x, (value, key) => (value > 2 ? Option.some(key) : Option.none()))
+      const filtered = Record.filterMap(x, (value, key) => (value > 2 ? Result.succeed(key) : Result.failVoid))
       deepStrictEqual(filtered, { c: "c" })
     })
 
@@ -199,25 +198,19 @@ describe("Record", () => {
       deepStrictEqual(Record.filter(x, (value) => value > 2), { c: 3, d: 4 })
     })
 
-    it("partitionMap", () => {
-      const f = (n: number) => (n > 2 ? Either.right(n + 1) : Either.left(n - 1))
-      deepStrictEqual(Record.partitionMap({}, f), [{}, {}])
-      deepStrictEqual(Record.partitionMap({ a: 1, b: 3, [symA]: null }, f), [{ a: 0 }, { b: 4 }])
-    })
-
     it("partition", () => {
-      const f = (n: number) => n > 2
+      const f = (n: number) => (n > 2 ? Result.succeed(n + 1) : Result.fail(n - 1))
       deepStrictEqual(Record.partition({}, f), [{}, {}])
-      deepStrictEqual(Record.partition({ a: 1, b: 3, [symA]: null }, f), [{ a: 1 }, { b: 3 }])
+      deepStrictEqual(Record.partition({ a: 1, b: 3, [symA]: null }, f), [{ a: 0 }, { b: 4 }])
     })
 
     it("separate", () => {
       deepStrictEqual(
-        Record.separate({ a: Either.left("e"), b: Either.right(1), [symA]: null }),
+        Record.separate({ a: Result.fail("e"), b: Result.succeed(1), [symA]: null }),
         [{ a: "e" }, { b: 1 }]
       )
       // should ignore non own properties
-      const o: Record.ReadonlyRecord<"a", Either.Either<number, string>> = Object.create({ a: 1 })
+      const o: Record.ReadonlyRecord<"a", Result.Result<number, string>> = Object.create({ a: 1 })
       deepStrictEqual(pipe(o, Record.separate), [{}, {}])
     })
 
@@ -354,13 +347,13 @@ describe("Record", () => {
       })
     })
 
-    it("getEquivalence", () => {
-      deepStrictEqual(Record.getEquivalence(Num.Equivalence)({ a: 1 }, { a: 1 }), true)
-      deepStrictEqual(Record.getEquivalence(Num.Equivalence)({ a: 1 }, stringRecord), true)
-      deepStrictEqual(Record.getEquivalence(Num.Equivalence)({ a: 1 }, { a: 2 }), false)
-      deepStrictEqual(Record.getEquivalence(Num.Equivalence)({ a: 1 }, { b: 1 }), false)
-      const noPrototype = Object.create(null)
-      deepStrictEqual(Record.getEquivalence(Num.Equivalence)(noPrototype, { b: 1 }), false)
+    it("makeEquivalence", () => {
+      deepStrictEqual(Record.makeEquivalence(Equivalence.strictEqual<number>())({ a: 1 }, { a: 1 }), true)
+      deepStrictEqual(Record.makeEquivalence(Equivalence.strictEqual<number>())({ a: 1 }, stringRecord), true)
+      deepStrictEqual(Record.makeEquivalence(Equivalence.strictEqual<number>())({ a: 1 }, { a: 2 }), false)
+      deepStrictEqual(Record.makeEquivalence(Equivalence.strictEqual<number>())({ a: 1 }, { b: 1 }), false)
+      const noPrototypeObject = Object.create(null)
+      deepStrictEqual(Record.makeEquivalence(Equivalence.strictEqual<number>())(noPrototypeObject, { b: 1 }), false)
     })
 
     it("mapKeys", () => {
@@ -389,9 +382,8 @@ describe("Record", () => {
           pipe(record, Record.findFirst((v, k) => v < 2 && k !== "a")),
           Option.some(["c", 1])
         )
-        deepStrictEqual(
-          pipe(record, Record.findFirst((v) => v > 2)),
-          Option.none()
+        assertNone(
+          pipe(record, Record.findFirst((v) => v > 2))
         )
         deepStrictEqual(
           Record.findFirst(record, (v) => v < 2),

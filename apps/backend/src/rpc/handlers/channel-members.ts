@@ -1,17 +1,43 @@
+import { ChannelMemberRepo, ChannelRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
-import { CurrentUser, policyUse, withRemapDbErrors, withSystemActor } from "@hazel/domain"
-import { ChannelMemberRpcs } from "@hazel/domain/rpc"
-import { Effect, Option } from "effect"
+import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
+import { ChannelMemberResponse, ChannelMemberRpcs } from "@hazel/domain/rpc"
+import { DateTime, Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { ChannelMemberPolicy } from "../../policies/channel-member-policy"
-import { ChannelMemberRepo } from "../../repositories/channel-member-repo"
-import { ChannelRepo } from "../../repositories/channel-repo"
-import { NotificationRepo } from "../../repositories/notification-repo"
-import { OrganizationMemberRepo } from "../../repositories/organization-member-repo"
+import { BotGatewayEffects } from "../../worker/objects/effects/bot-gateway-effects"
+import { enqueueEffect } from "../../worker/objects/effects/registry"
+import { UserEffects } from "../../worker/objects/effects/user-effects"
+import { userTarget } from "../../worker/objects/kinds"
+import { syncMemberAccess } from "../../worker/objects/org/channel-access"
 
+/**
+ * Channel member RPC handlers. Run in the channel's `OrgObject` (`rpc/routing.ts`): membership
+ * changes recompute the member's access and project it (`syncMemberAccess`); bots get
+ * `channel_member.*` events from the outbox; clearing notifications resets the org-local unread
+ * count and tells the user's `UserObject`, which holds the notifications.
+ */
 export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
+		const channelMemberPolicy = yield* ChannelMemberPolicy
+		const channelMemberRepo = yield* ChannelMemberRepo
+		const channelRepo = yield* ChannelRepo
+
+		const memberEvent = (
+			eventType: "channel_member.add" | "channel_member.remove",
+			member: Parameters<typeof channelMemberRepo.update>[0] & ChannelMemberResponse["data"],
+		) =>
+			Effect.gen(function* () {
+				const channel = yield* channelRepo.findById(member.channelId)
+				if (Option.isNone(channel)) return
+				yield* enqueueEffect(
+					BotGatewayEffects.channelMemberEvent,
+					{ kind: "bot-gateway" },
+					{ organizationId: channel.value.organizationId, eventType, member },
+				)
+				yield* syncMemberAccess(member.userId, channel.value.organizationId, { membership: false })
+			})
 
 		return {
 			"channelMember.create": (payload) =>
@@ -20,46 +46,58 @@ export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
 						Effect.gen(function* () {
 							const user = yield* CurrentUser.Context
 
-							const createdChannelMember = yield* ChannelMemberRepo.insert({
-								channelId: payload.channelId,
-								userId: user.id,
-								isHidden: false,
-								isMuted: false,
-								isFavorite: false,
-								lastSeenMessageId: null,
-								notificationCount: 0,
-								joinedAt: new Date(),
-								deletedAt: null,
-							}).pipe(
-								Effect.map((res) => res[0]!),
-								policyUse(ChannelMemberPolicy.canCreate(payload.channelId)),
-							)
+							yield* channelMemberPolicy.canCreate(payload.channelId)
+							const createdChannelMember = yield* channelMemberRepo
+								.insert({
+									channelId: payload.channelId,
+									userId: user.id,
+									isHidden: false,
+									isMuted: false,
+									isFavorite: false,
+									lastSeenMessageId: null,
+									notificationCount: 0,
+									joinedAt: new Date(),
+									deletedAt: null,
+								})
+								.pipe(Effect.map((res) => res[0]!))
+
+							yield* memberEvent("channel_member.add", createdChannelMember)
 
 							const txid = yield* generateTransactionId()
 
-							return {
+							return new ChannelMemberResponse({
 								data: createdChannelMember,
 								transactionId: txid,
-							}
+							})
 						}),
 					)
 					.pipe(withRemapDbErrors("ChannelMember", "create")),
 
-			"channelMember.update": ({ id, ...payload }) =>
+			"channelMember.update": ({ id, organizationId: _route, mutedUntil, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
-							const updatedChannelMember = yield* ChannelMemberRepo.update({
+							yield* channelMemberPolicy.canUpdate(id)
+							// The repo's codec takes a `Date`, not the decoded `DateTime`.
+							const updatedChannelMember = yield* channelMemberRepo.update({
 								id,
 								...payload,
-							}).pipe(policyUse(ChannelMemberPolicy.canUpdate(id)))
+								...(mutedUntil === undefined
+									? {}
+									: {
+											mutedUntil:
+												mutedUntil === null || mutedUntil instanceof Date
+													? mutedUntil
+													: DateTime.toDateUtc(mutedUntil),
+										}),
+							})
 
 							const txid = yield* generateTransactionId()
 
-							return {
+							return new ChannelMemberResponse({
 								data: updatedChannelMember,
 								transactionId: txid,
-							}
+							})
 						}),
 					)
 					.pipe(withRemapDbErrors("ChannelMember", "update")),
@@ -68,9 +106,12 @@ export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
 				db
 					.transaction(
 						Effect.gen(function* () {
-							yield* ChannelMemberRepo.deleteById(id).pipe(
-								policyUse(ChannelMemberPolicy.canDelete(id)),
-							)
+							yield* channelMemberPolicy.canDelete(id)
+							const deleted = yield* channelMemberRepo.findById(id)
+							yield* channelMemberRepo.deleteById(id)
+							if (Option.isSome(deleted)) {
+								yield* memberEvent("channel_member.remove", deleted.value)
+							}
 
 							const txid = yield* generateTransactionId()
 
@@ -80,61 +121,32 @@ export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
 					.pipe(withRemapDbErrors("ChannelMember", "delete")),
 
 			"channelMember.clearNotifications": ({ channelId }) =>
-				Effect.gen(function* () {
-					const user = yield* CurrentUser.Context
+				db
+					.transaction(
+						Effect.gen(function* () {
+							const user = yield* CurrentUser.Context
 
-					// Find the channel member record for this user and channel
-					const memberOption = yield* ChannelMemberRepo.findByChannelAndUser(
-						channelId,
-						user.id,
-					).pipe(
-						policyUse(ChannelMemberPolicy.canRead(channelId)),
-						withRemapDbErrors("ChannelMember", "select"),
+							yield* channelMemberPolicy.canRead(channelId)
+							const member = yield* channelMemberRepo.findByChannelAndUser(channelId, user.id)
+							if (Option.isSome(member)) {
+								yield* channelMemberPolicy.canUpdate(member.value.id)
+								yield* channelMemberRepo.update({
+									id: member.value.id,
+									notificationCount: 0,
+								})
+							}
+
+							// The notifications themselves live in the user's UserObject.
+							yield* enqueueEffect(UserEffects.clearChannelNotifications, userTarget(user.id), {
+								channelId,
+							})
+
+							const txid = yield* generateTransactionId()
+
+							return { transactionId: txid }
+						}),
 					)
-
-					// Get channel to find organizationId
-					const channelOption = yield* ChannelRepo.findById(channelId).pipe(
-						withSystemActor,
-						withRemapDbErrors("Channel", "select"),
-					)
-
-					// Get organization member for notification deletion
-					const orgMemberOption = Option.isSome(channelOption)
-						? yield* OrganizationMemberRepo.findByOrgAndUser(
-								channelOption.value.organizationId,
-								user.id,
-							).pipe(withSystemActor, withRemapDbErrors("OrganizationMember", "select"))
-						: Option.none()
-
-					// Wrap the update and transaction ID generation in a single transaction
-					const result = yield* db
-						.transaction(
-							Effect.gen(function* () {
-								// If member exists, clear the notification count
-								if (Option.isSome(memberOption)) {
-									yield* ChannelMemberRepo.update({
-										id: memberOption.value.id,
-										notificationCount: 0,
-									}).pipe(policyUse(ChannelMemberPolicy.canUpdate(memberOption.value.id)))
-								}
-
-								// Delete all notifications for this channel
-								if (Option.isSome(orgMemberOption)) {
-									yield* NotificationRepo.deleteByChannelId(
-										channelId,
-										orgMemberOption.value.id,
-									).pipe(withSystemActor)
-								}
-
-								const txid = yield* generateTransactionId()
-
-								return { transactionId: txid }
-							}),
-						)
-						.pipe(withRemapDbErrors("ChannelMember", "update"))
-
-					return result
-				}),
+					.pipe(withRemapDbErrors("ChannelMember", "update")),
 		}
 	}),
 )

@@ -1,19 +1,20 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { ChannelId, MessageId, PinnedMessageId } from "../ids"
+import { ChannelId, MessageId, PinnedMessageId } from "@hazel/schema"
 import { PinnedMessage } from "../models"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { MessageNotFoundError } from "./messages"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteChannelId } from "./routing-fields"
 
 /**
  * Response schema for successful pinned message operations.
  * Contains the pinned message data and a transaction ID for optimistic updates.
  */
 export class PinnedMessageResponse extends Schema.Class<PinnedMessageResponse>("PinnedMessageResponse")({
-	data: PinnedMessage.Model.json,
+	data: PinnedMessage.Schema,
 	transactionId: TransactionId,
 }) {}
 
@@ -71,14 +72,16 @@ export class PinnedMessageRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("pinnedMessage.create", {
+	Rpc.make("pinnedMessage.create", {
 		payload: Schema.Struct({
 			channelId: ChannelId,
 			messageId: MessageId,
 		}),
 		success: PinnedMessageResponse,
-		error: Schema.Union(MessageNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([MessageNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["pinned-messages:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * PinnedMessageUpdate
@@ -92,14 +95,16 @@ export class PinnedMessageRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("pinnedMessage.update", {
+	Rpc.make("pinnedMessage.update", {
 		payload: Schema.Struct({
+			channelId: RouteChannelId,
 			id: PinnedMessageId,
-			...PinnedMessage.Model.jsonUpdate.fields,
-		}),
+		}).pipe(Schema.fieldsAssign(PinnedMessage.Patch.fields)),
 		success: PinnedMessageResponse,
-		error: Schema.Union(PinnedMessageNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([PinnedMessageNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["pinned-messages:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * PinnedMessageDelete
@@ -113,9 +118,11 @@ export class PinnedMessageRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("pinnedMessage.delete", {
-		payload: Schema.Struct({ id: PinnedMessageId }),
+	Rpc.make("pinnedMessage.delete", {
+		payload: Schema.Struct({ id: PinnedMessageId, channelId: RouteChannelId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(PinnedMessageNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([PinnedMessageNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["pinned-messages:write"])
+		.middleware(AuthMiddleware),
 ) {}

@@ -1,4 +1,5 @@
-import { FetchHttpClient, HttpApiBuilder, HttpClient } from "@effect/platform"
+import { HttpApiBuilder } from "effect/http-api"
+import { FetchHttpClient, HttpClient } from "effect/http"
 import { Effect } from "effect"
 import metascraper from "metascraper"
 import metascraperDescription from "metascraper-description"
@@ -22,14 +23,14 @@ const scraper = metascraper([
 ])
 
 // Validate if an image URL is accessible using HttpClient
-function validateImageUrl(url: string): Effect.Effect<boolean> {
+function validateImageUrl(url: string) {
 	return HttpClient.head(url).pipe(
-		Effect.andThen((response) => {
+		Effect.map((response) => {
 			const contentType = response.headers["content-type"]
 			return contentType ? contentType.startsWith("image/") : false
 		}),
 		Effect.timeout("1 seconds"),
-		Effect.catchAll(() => Effect.succeed(false)),
+		Effect.orElseSucceed(() => false as boolean),
 		Effect.provide(FetchHttpClient.layer),
 	)
 }
@@ -71,8 +72,8 @@ function extractMetaTag(html: string, property: string): string | null {
 export const HttpLinkPreviewLive = HttpApiBuilder.group(LinkPreviewApi, "linkPreview", (handlers) =>
 	handlers.handle(
 		"get",
-		Effect.fn(function* ({ urlParams }) {
-			const targetUrl = urlParams.url
+		Effect.fn(function* ({ payload }) {
+			const targetUrl = payload.url
 			const cacheKey = `link-preview:${targetUrl}`
 			const cache = yield* KVCache
 
@@ -86,7 +87,7 @@ export const HttpLinkPreviewLive = HttpApiBuilder.group(LinkPreviewApi, "linkPre
 					logo?: { url: string }
 					publisher?: string
 				}>(cacheKey)
-				.pipe(Effect.catchAll(() => Effect.succeed(null)))
+				.pipe(Effect.orElseSucceed(() => null))
 
 			if (cachedData) {
 				yield* Effect.logDebug(`Cache hit for: ${targetUrl}`)
@@ -166,15 +167,7 @@ export const HttpLinkPreviewLive = HttpApiBuilder.group(LinkPreviewApi, "linkPre
 			}
 
 			// Store in cache (don't fail request if caching fails)
-			yield* cache
-				.set(cacheKey, result)
-				.pipe(
-					Effect.catchAll((error) =>
-						Effect.logDebug(`Failed to cache result: ${error.message}`).pipe(
-							Effect.andThen(Effect.succeed(undefined)),
-						),
-					),
-				)
+			yield* cache.set(cacheKey, result).pipe(Effect.orElseSucceed(() => undefined))
 
 			return result
 		}),

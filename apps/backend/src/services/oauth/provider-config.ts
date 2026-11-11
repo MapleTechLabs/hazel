@@ -1,7 +1,10 @@
 import type { IntegrationConnection } from "@hazel/domain/models"
-import { Config, Effect, type Redacted } from "effect"
+import { Config, type Redacted } from "effect"
 
 export type IntegrationProvider = IntegrationConnection.IntegrationProvider
+
+/** Providers with a static OAuth app: Craft connects with an API key, T3 Code with per-environment MCP OAuth (`services/t3code`). */
+export type OAuthIntegrationProvider = Exclude<IntegrationProvider, "craft" | "t3code">
 
 /**
  * Configuration for an OAuth provider.
@@ -52,7 +55,7 @@ export interface OAuthAccountInfo {
  * These define the OAuth endpoints and settings for each provider.
  */
 export const PROVIDER_CONFIGS: Record<
-	IntegrationProvider,
+	OAuthIntegrationProvider,
 	Omit<OAuthProviderConfig, "clientId" | "clientSecret" | "redirectUri">
 > = {
 	linear: {
@@ -89,6 +92,35 @@ export const PROVIDER_CONFIGS: Record<
 			owner: "user",
 		},
 	},
+	discord: {
+		provider: "discord",
+		authorizationUrl: "https://discord.com/oauth2/authorize",
+		tokenUrl: "https://discord.com/api/oauth2/token",
+		scopes: ["identify", "guilds", "bot"],
+		scopeDelimiter: " ",
+		additionalAuthParams: {
+			permissions: "536947712",
+		},
+	},
+	slack: {
+		provider: "slack",
+		authorizationUrl: "https://slack.com/oauth/v2/authorize",
+		tokenUrl: "https://slack.com/api/oauth.v2.access",
+		// Bot scopes for chat sync: read and post in linked channels (as each author), react, join.
+		scopes: [
+			"channels:history",
+			"channels:read",
+			"channels:join",
+			"groups:history",
+			"groups:read",
+			"chat:write",
+			"chat:write.customize",
+			"reactions:read",
+			"reactions:write",
+			"users:read",
+		],
+		scopeDelimiter: ",",
+	},
 }
 
 /**
@@ -107,22 +139,20 @@ export const PROVIDER_CONFIGS: Record<
  * - LINEAR_CLIENT_SECRET=xxx
  * → Redirect URI: https://api.hazel.sh/integrations/linear/callback
  */
-export const loadProviderConfig = (provider: IntegrationProvider) => {
+export const loadProviderConfig = (provider: OAuthIntegrationProvider) => {
 	const prefix = provider.toUpperCase()
 	const staticConfig = PROVIDER_CONFIGS[provider]
 
-	return Effect.all({
-		apiBaseUrl: Config.string("API_BASE_URL"),
-		clientId: Config.string(`${prefix}_CLIENT_ID`),
-		clientSecret: Config.redacted(`${prefix}_CLIENT_SECRET`),
+	return Config.all({
+		apiBaseUrl: Config.String("API_BASE_URL"),
+		clientId: Config.String(`${prefix}_CLIENT_ID`),
+		clientSecret: Config.Redacted(`${prefix}_CLIENT_SECRET`),
 	}).pipe(
-		Effect.map(
-			(envConfig): OAuthProviderConfig => ({
-				...staticConfig,
-				clientId: envConfig.clientId,
-				clientSecret: envConfig.clientSecret,
-				redirectUri: `${envConfig.apiBaseUrl}/integrations/${provider}/callback`,
-			}),
-		),
+		Config.map((envConfig): OAuthProviderConfig => ({
+			...staticConfig,
+			clientId: envConfig.clientId,
+			clientSecret: envConfig.clientSecret,
+			redirectUri: `${envConfig.apiBaseUrl}/integrations/${provider}/callback`,
+		})),
 	)
 }

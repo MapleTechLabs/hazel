@@ -34,7 +34,7 @@ export const createLinearOAuthProvider = (config: OAuthProviderConfig): OAuthPro
 			const client = yield* Linear.LinearApiClient
 			return yield* client.getAccountInfo(accessToken)
 		}).pipe(
-			Effect.provide(Linear.LinearApiClient.Default),
+			Effect.provide(Linear.LinearApiClient.layer),
 			Effect.mapError(
 				(error) =>
 					new AccountInfoError({

@@ -1,0 +1,130 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import FooterSection from "@/components/sections/FooterSection.astro";
+import CTASection from "@/components/sections/CTASection.astro";
+---
+
+<Layout
+  title="About Hazel - Open Source Team Chat for Developers"
+  description="Hazel is an open source team chat platform built for developers. Learn about our mission to create a faster, more integrated, and transparent communication tool for modern teams."
+>
+  <main class="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full">
+    <!-- Hero -->
+    <section class="w-full py-20 md:py-32 px-6">
+      <div class="max-w-3xl mx-auto text-center">
+        <h1 class="text-4xl md:text-6xl font-medium tracking-tighter text-primary">
+          Team chat, rebuilt for developers
+        </h1>
+        <p class="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
+          We started Hazel because we believed developer teams deserved a communication tool that understood their workflows — not one that bolted on integrations as an afterthought.
+        </p>
+      </div>
+    </section>
+
+    <!-- Mission -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-3xl mx-auto">
+        <h2 class="text-3xl md:text-4xl font-medium tracking-tight text-primary">
+          Our mission
+        </h2>
+        <div class="mt-8 space-y-6 text-lg text-muted-foreground">
+          <p>
+            Modern developer teams are spread across time zones, juggling dozens of tools, and drowning in notifications. Existing chat platforms were designed for general business use, not for the unique way engineering teams work.
+          </p>
+          <p>
+            Hazel is different. We built a communication platform that natively understands developer workflows — GitHub PRs, Linear issues, deployment pipelines, and code. No plugins, no third-party bots, no configuration headaches.
+          </p>
+          <p>
+            We believe the best tools are open source. That's why Hazel's code is fully public, auditable, and community-driven. You can self-host it, fork it, or contribute to it. No vendor lock-in, ever.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Values -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-4xl mx-auto">
+        <h2 class="text-3xl md:text-4xl font-medium tracking-tight text-primary text-center mb-12">
+          What we stand for
+        </h2>
+        <div class="grid md:grid-cols-3 gap-8">
+          <div class="border border-border rounded-xl p-8">
+            <div class="text-secondary text-2xl mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+              </svg>
+            </div>
+            <h3 class="text-xl font-medium text-primary">Open Source First</h3>
+            <p class="mt-3 text-muted-foreground">
+              Our code is public. Our roadmap is public. We build in the open because transparency creates trust, and trust creates better software.
+            </p>
+          </div>
+          <div class="border border-border rounded-xl p-8">
+            <div class="text-secondary text-2xl mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+            </div>
+            <h3 class="text-xl font-medium text-primary">Speed Matters</h3>
+            <p class="mt-3 text-muted-foreground">
+              Every millisecond counts. Hazel is engineered to be fast — fast to load, fast to navigate, fast to message. No loading spinners, no lag.
+            </p>
+          </div>
+          <div class="border border-border rounded-xl p-8">
+            <div class="text-secondary text-2xl mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+            </div>
+            <h3 class="text-xl font-medium text-primary">Developer Experience</h3>
+            <p class="mt-3 text-muted-foreground">
+              Keyboard-first navigation, inline code highlighting, native integrations. We design for the way developers actually work, not for slideware demos.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Open Source -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-3xl mx-auto text-center">
+        <h2 class="text-3xl md:text-4xl font-medium tracking-tight text-primary">
+          Join the community
+        </h2>
+        <p class="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
+          Hazel is built by a growing community of developers who believe team communication can be better. Whether you're a user, contributor, or just curious — you're welcome here.
+        </p>
+        <div class="mt-8 flex items-center justify-center gap-4 flex-wrap">
+          <a
+            href="https://github.com/hazelchat/hazel"
+            class="border border-border text-primary font-semibold text-sm h-10 px-6 rounded-full inline-flex items-center justify-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+            View on GitHub
+          </a>
+          <a
+            href="https://twitter.com/hazelchat"
+            class="border border-border text-primary font-semibold text-sm h-10 px-6 rounded-full inline-flex items-center justify-center"
+          >
+            Follow on X
+          </a>
+          <a
+            href="mailto:support@hazel.sh"
+            class="border border-border text-primary font-semibold text-sm h-10 px-6 rounded-full inline-flex items-center justify-center"
+          >
+            Get in touch
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <CTASection />
+    <FooterSection />
+  </main>
+</Layout>

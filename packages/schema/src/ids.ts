@@ -1,179 +1,435 @@
 import { Schema } from "effect"
 
-export const ChannelId = Schema.UUID.pipe(Schema.brand("@HazelChat/ChannelId")).annotations({
-	description: "The ID of the channel where the message is posted",
-	title: "Channel ID",
-})
+export const ChannelId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/ChannelId"))
+	.annotate({
+		description: "The ID of the channel where the message is posted",
+		title: "Channel ID",
+	})
 export type ChannelId = Schema.Schema.Type<typeof ChannelId>
 
-export const UserId = Schema.UUID.pipe(Schema.brand("@HazelChat/UserId")).annotations({
+export const ConnectConversationId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/ConnectConversationId"))
+	.annotate({
+		description: "The ID of a Hazel Connect conversation",
+		title: "Connect Conversation ID",
+	})
+export type ConnectConversationId = Schema.Schema.Type<typeof ConnectConversationId>
+
+export const ConnectConversationChannelId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/ConnectConversationChannelId"))
+	.annotate({
+		description: "The ID of a Hazel Connect conversation channel mount",
+		title: "Connect Conversation Channel ID",
+	})
+export type ConnectConversationChannelId = Schema.Schema.Type<typeof ConnectConversationChannelId>
+
+export const ConnectInviteId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/ConnectInviteId"))
+	.annotate({
+		description: "The ID of a Hazel Connect invite",
+		title: "Connect Invite ID",
+	})
+export type ConnectInviteId = Schema.Schema.Type<typeof ConnectInviteId>
+
+export const ConnectParticipantId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/ConnectParticipantId"))
+	.annotate({
+		description: "The ID of a Hazel Connect participant projection",
+		title: "Connect Participant ID",
+	})
+export type ConnectParticipantId = Schema.Schema.Type<typeof ConnectParticipantId>
+
+export const UserId = Schema.String.check(Schema.isUUID()).pipe(Schema.brand("@HazelChat/UserId")).annotate({
 	description: "The ID of a user",
 	title: "UserId ID",
 })
 export type UserId = Schema.Schema.Type<typeof UserId>
 
-export const BotId = Schema.UUID.pipe(Schema.brand("@HazelChat/BotId")).annotations({
+export const BotId = Schema.String.check(Schema.isUUID()).pipe(Schema.brand("@HazelChat/BotId")).annotate({
 	description: "The ID of a bot",
 	title: "Bot ID",
 })
 export type BotId = Schema.Schema.Type<typeof BotId>
 
-export const MessageId = Schema.UUID.pipe(Schema.brand("@HazelChat/MessageId")).annotations({
-	description: "The ID of the message being replied to",
-	title: "Reply To Message ID",
-})
+export const MessageId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/MessageId"))
+	.annotate({
+		description: "The ID of the message being replied to",
+		title: "Reply To Message ID",
+	})
 export type MessageId = Schema.Schema.Type<typeof MessageId>
 
-export const MessageReactionId = Schema.UUID.pipe(Schema.brand("@HazelChat/MessageReactionId")).annotations({
-	description: "The ID of the message reaction",
-	title: "Message Reaction ID",
-})
+export const MessageReactionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/MessageReactionId"))
+	.annotate({
+		description: "The ID of the message reaction",
+		title: "Message Reaction ID",
+	})
 export type MessageReactionId = Schema.Schema.Type<typeof MessageReactionId>
 
-export const MessageAttachmentId = Schema.UUID.pipe(
-	Schema.brand("@HazelChat/MessageAttachmentId"),
-).annotations({
-	description: "The ID of the message attachment",
-	title: "Message Attachment ID",
-})
-export type MessageAttachmentId = Schema.Schema.Type<typeof MessageAttachmentId>
-
-export const AttachmentId = Schema.UUID.pipe(Schema.brand("@HazelChat/AttachmentId")).annotations({
-	description: "The ID of the attachment being replied to",
-	title: "Attachment ID",
-})
+export const AttachmentId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/AttachmentId"))
+	.annotate({
+		description: "The ID of the attachment being replied to",
+		title: "Attachment ID",
+	})
 export type AttachmentId = Schema.Schema.Type<typeof AttachmentId>
 
-export const OrganizationId = Schema.UUID.pipe(Schema.brand("@HazelChat/OrganizationId")).annotations({
-	description: "The ID of the organization",
-	title: "Organization ID",
-})
+export const HtmlRenderId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/HtmlRenderId"))
+	.annotate({
+		description: "The ID of an HTML page a bot published (`POST /api/v1/html-renders`)",
+		title: "HTML Render ID",
+	})
+export type HtmlRenderId = Schema.Schema.Type<typeof HtmlRenderId>
+
+export const OrganizationId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/OrganizationId"))
+	.annotate({
+		description: "The ID of the organization",
+		title: "Organization ID",
+	})
 export type OrganizationId = Schema.Schema.Type<typeof OrganizationId>
 
-export const InvitationId = Schema.UUID.pipe(Schema.brand("@HazelChat/InvitationId")).annotations({
-	description: "The ID of the invitation",
-	title: "Invitation ID",
-})
-export type InvitationId = Schema.Schema.Type<typeof InvitationId>
-
-export const PinnedMessageId = Schema.UUID.pipe(Schema.brand("@HazelChat/PinnedMessageId")).annotations({
-	description: "The ID of the pinned message",
-	title: "Pinned Message ID",
-})
+export const PinnedMessageId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/PinnedMessageId"))
+	.annotate({
+		description: "The ID of the pinned message",
+		title: "Pinned Message ID",
+	})
 export type PinnedMessageId = Schema.Schema.Type<typeof PinnedMessageId>
 
-export const NotificationId = Schema.UUID.pipe(Schema.brand("@HazelChat/NotificationId")).annotations({
-	description: "The ID of the notification",
-	title: "Notification ID",
-})
+export const NotificationId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/NotificationId"))
+	.annotate({
+		description: "The ID of the notification",
+		title: "Notification ID",
+	})
 export type NotificationId = Schema.Schema.Type<typeof NotificationId>
 
-export const ChannelMemberId = Schema.UUID.pipe(Schema.brand("@HazelChat/ChannelMemberId")).annotations({
-	description: "The ID of the channel member",
-	title: "Channel Member ID",
-})
+export const ChannelMemberId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/ChannelMemberId"))
+	.annotate({
+		description: "The ID of the channel member",
+		title: "Channel Member ID",
+	})
 export type ChannelMemberId = Schema.Schema.Type<typeof ChannelMemberId>
 
-export const OrganizationMemberId = Schema.UUID.pipe(
-	Schema.brand("@HazelChat/OrganizationMemberId"),
-).annotations({
-	description: "The ID of the organization member",
-	title: "Organization Member ID",
-})
+export const OrganizationMemberId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/OrganizationMemberId"))
+	.annotate({
+		description: "The ID of the organization member",
+		title: "Organization Member ID",
+	})
 export type OrganizationMemberId = Schema.Schema.Type<typeof OrganizationMemberId>
 
-export const TypingIndicatorId = Schema.UUID.pipe(Schema.brand("@HazelChat/TypingIndicatorId")).annotations({
-	description: "The ID of the typing indicator",
-	title: "Typing Indicator ID",
-})
+export const TypingIndicatorId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/TypingIndicatorId"))
+	.annotate({
+		description: "The ID of the typing indicator",
+		title: "Typing Indicator ID",
+	})
 export type TypingIndicatorId = Schema.Schema.Type<typeof TypingIndicatorId>
 
-export const UserPresenceStatusId = Schema.UUID.pipe(
-	Schema.brand("@HazelChat/UserPresenceStatusId"),
-).annotations({
-	description: "The ID of the user presence status",
-	title: "User Presence Status ID",
-})
+export const UserPresenceStatusId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/UserPresenceStatusId"))
+	.annotate({
+		description: "The ID of the user presence status",
+		title: "User Presence Status ID",
+	})
 export type UserPresenceStatusId = Schema.Schema.Type<typeof UserPresenceStatusId>
 
-export const IntegrationConnectionId = Schema.UUID.pipe(
-	Schema.brand("@HazelChat/IntegrationConnectionId"),
-).annotations({
-	description: "The ID of an integration connection",
-	title: "Integration Connection ID",
-})
+export const IntegrationConnectionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/IntegrationConnectionId"))
+	.annotate({
+		description: "The ID of an integration connection",
+		title: "Integration Connection ID",
+	})
 export type IntegrationConnectionId = Schema.Schema.Type<typeof IntegrationConnectionId>
 
-export const IntegrationTokenId = Schema.UUID.pipe(Schema.brand("@HazelChat/IntegrationTokenId")).annotations(
-	{
+export const SyncConnectionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/SyncConnectionId"))
+	.annotate({
+		description: "The ID of a chat sync connection",
+		title: "Sync Connection ID",
+	})
+export type SyncConnectionId = Schema.Schema.Type<typeof SyncConnectionId>
+
+export const ExternalChannelId = Schema.String.pipe(Schema.brand("@HazelChat/ExternalChannelId")).annotate({
+	description: "The external channel identifier from a synced provider",
+	title: "External Channel ID",
+})
+export type ExternalChannelId = Schema.Schema.Type<typeof ExternalChannelId>
+
+export const ExternalMessageId = Schema.String.pipe(Schema.brand("@HazelChat/ExternalMessageId")).annotate({
+	description: "The external message identifier from a synced provider",
+	title: "External Message ID",
+})
+export type ExternalMessageId = Schema.Schema.Type<typeof ExternalMessageId>
+
+export const ExternalWebhookId = Schema.String.pipe(Schema.brand("@HazelChat/ExternalWebhookId")).annotate({
+	description: "The external webhook identifier from a synced provider",
+	title: "External Webhook ID",
+})
+export type ExternalWebhookId = Schema.Schema.Type<typeof ExternalWebhookId>
+
+export const ExternalUserId = Schema.String.pipe(Schema.brand("@HazelChat/ExternalUserId")).annotate({
+	description: "The external user identifier from a synced provider",
+	title: "External User ID",
+})
+export type ExternalUserId = Schema.Schema.Type<typeof ExternalUserId>
+
+export const ExternalThreadId = Schema.String.pipe(Schema.brand("@HazelChat/ExternalThreadId")).annotate({
+	description: "The external thread identifier from a synced provider",
+	title: "External Thread ID",
+})
+export type ExternalThreadId = Schema.Schema.Type<typeof ExternalThreadId>
+
+export const SyncChannelLinkId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/SyncChannelLinkId"))
+	.annotate({
+		description: "The ID of a chat sync channel link",
+		title: "Sync Channel Link ID",
+	})
+export type SyncChannelLinkId = Schema.Schema.Type<typeof SyncChannelLinkId>
+
+export const SyncMessageLinkId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/SyncMessageLinkId"))
+	.annotate({
+		description: "The ID of a chat sync message link",
+		title: "Sync Message Link ID",
+	})
+export type SyncMessageLinkId = Schema.Schema.Type<typeof SyncMessageLinkId>
+
+export const SyncEventReceiptId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/SyncEventReceiptId"))
+	.annotate({
+		description: "The ID of a chat sync event receipt",
+		title: "Sync Event Receipt ID",
+	})
+export type SyncEventReceiptId = Schema.Schema.Type<typeof SyncEventReceiptId>
+
+export const IntegrationTokenId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/IntegrationTokenId"))
+	.annotate({
 		description: "The ID of an integration token record",
 		title: "Integration Token ID",
-	},
-)
+	})
 export type IntegrationTokenId = Schema.Schema.Type<typeof IntegrationTokenId>
 
-export const MessageIntegrationLinkId = Schema.UUID.pipe(
-	Schema.brand("@HazelChat/MessageIntegrationLinkId"),
-).annotations({
-	description: "The ID of a message-integration link",
-	title: "Message Integration Link ID",
-})
-export type MessageIntegrationLinkId = Schema.Schema.Type<typeof MessageIntegrationLinkId>
-
-export const ChannelWebhookId = Schema.UUID.pipe(Schema.brand("@HazelChat/ChannelWebhookId")).annotations({
-	description: "The ID of a channel webhook",
-	title: "Channel Webhook ID",
-})
+export const ChannelWebhookId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/ChannelWebhookId"))
+	.annotate({
+		description: "The ID of a channel webhook",
+		title: "Channel Webhook ID",
+	})
 export type ChannelWebhookId = Schema.Schema.Type<typeof ChannelWebhookId>
 
-export const ChannelIcon = Schema.String.pipe(Schema.brand("@HazelChat/ChannelIcon")).annotations({
+export const ChannelIcon = Schema.String.pipe(Schema.brand("@HazelChat/ChannelIcon")).annotate({
 	description: "An emoji icon for a channel",
 	title: "Channel Icon",
 })
 export type ChannelIcon = Schema.Schema.Type<typeof ChannelIcon>
 
-export const GitHubSubscriptionId = Schema.UUID.pipe(
-	Schema.brand("@HazelChat/GitHubSubscriptionId"),
-).annotations({
-	description: "The ID of a GitHub subscription",
-	title: "GitHub Subscription ID",
-})
+export const GitHubSubscriptionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/GitHubSubscriptionId"))
+	.annotate({
+		description: "The ID of a GitHub subscription",
+		title: "GitHub Subscription ID",
+	})
 export type GitHubSubscriptionId = Schema.Schema.Type<typeof GitHubSubscriptionId>
 
-export const BotCommandId = Schema.UUID.pipe(Schema.brand("@HazelChat/BotCommandId")).annotations({
-	description: "The ID of a bot command",
-	title: "Bot Command ID",
-})
+export const BotCommandId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/BotCommandId"))
+	.annotate({
+		description: "The ID of a bot command",
+		title: "Bot Command ID",
+	})
 export type BotCommandId = Schema.Schema.Type<typeof BotCommandId>
 
-export const BotInstallationId = Schema.UUID.pipe(Schema.brand("@HazelChat/BotInstallationId")).annotations({
-	description: "The ID of a bot installation",
-	title: "Bot Installation ID",
-})
+export const BotInstallationId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/BotInstallationId"))
+	.annotate({
+		description: "The ID of a bot installation",
+		title: "Bot Installation ID",
+	})
 export type BotInstallationId = Schema.Schema.Type<typeof BotInstallationId>
 
-export const ChannelSectionId = Schema.UUID.pipe(Schema.brand("@HazelChat/ChannelSectionId")).annotations({
-	description: "The ID of a channel section",
-	title: "Channel Section ID",
-})
+export const ChannelSectionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/ChannelSectionId"))
+	.annotate({
+		description: "The ID of a channel section",
+		title: "Channel Section ID",
+	})
 export type ChannelSectionId = Schema.Schema.Type<typeof ChannelSectionId>
 
-export const RssSubscriptionId = Schema.UUID.pipe(Schema.brand("@HazelChat/RssSubscriptionId")).annotations({
-	description: "The ID of an RSS subscription",
-	title: "RSS Subscription ID",
-})
+export const RssSubscriptionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/RssSubscriptionId"))
+	.annotate({
+		description: "The ID of an RSS subscription",
+		title: "RSS Subscription ID",
+	})
 export type RssSubscriptionId = Schema.Schema.Type<typeof RssSubscriptionId>
 
-export const RssPostedItemId = Schema.UUID.pipe(Schema.brand("@HazelChat/RssPostedItemId")).annotations({
-	description: "The ID of an RSS posted item",
-	title: "RSS Posted Item ID",
-})
-export type RssPostedItemId = Schema.Schema.Type<typeof RssPostedItemId>
-
-export const IntegrationRequestId = Schema.UUID.pipe(
-	Schema.brand("@HazelChat/IntegrationRequestId"),
-).annotations({
-	description: "The ID of an integration request",
-	title: "Integration Request ID",
-})
+export const IntegrationRequestId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/IntegrationRequestId"))
+	.annotate({
+		description: "The ID of an integration request",
+		title: "Integration Request ID",
+	})
 export type IntegrationRequestId = Schema.Schema.Type<typeof IntegrationRequestId>
+
+export const CustomEmojiId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomEmojiId"))
+	.annotate({
+		description: "The ID of a custom emoji",
+		title: "Custom Emoji ID",
+	})
+export type CustomEmojiId = Schema.Schema.Type<typeof CustomEmojiId>
+
+export const InvitationId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/InvitationId"))
+	.annotate({
+		description: "The ID of an email invitation to an organization",
+		title: "Invitation ID",
+	})
+export type InvitationId = Schema.Schema.Type<typeof InvitationId>
+
+// Customers (`docs/customers/tech-design.md`): rows of the per-organization `CustomersObject`.
+
+export const CustomerAccountId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerAccountId"))
+	.annotate({
+		description: "The ID of a customer account (a B2B customer company)",
+		title: "Customer Account ID",
+	})
+export type CustomerAccountId = Schema.Schema.Type<typeof CustomerAccountId>
+
+export const CustomerContactId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerContactId"))
+	.annotate({
+		description: "The ID of a customer contact (an end user of a customer account)",
+		title: "Customer Contact ID",
+	})
+export type CustomerContactId = Schema.Schema.Type<typeof CustomerContactId>
+
+export const CustomerExternalRefId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerExternalRefId"))
+	.annotate({
+		description: "The ID of a provider record linked to a customer account or contact",
+		title: "Customer External Ref ID",
+	})
+export type CustomerExternalRefId = Schema.Schema.Type<typeof CustomerExternalRefId>
+
+export const CustomerSubscriptionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSubscriptionId"))
+	.annotate({
+		description: "The ID of a customer subscription",
+		title: "Customer Subscription ID",
+	})
+export type CustomerSubscriptionId = Schema.Schema.Type<typeof CustomerSubscriptionId>
+
+export const CustomerInvoiceId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerInvoiceId"))
+	.annotate({
+		description: "The ID of a customer invoice",
+		title: "Customer Invoice ID",
+	})
+export type CustomerInvoiceId = Schema.Schema.Type<typeof CustomerInvoiceId>
+
+export const CustomerEventId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerEventId"))
+	.annotate({
+		description: "The ID of a customer timeline event",
+		title: "Customer Event ID",
+	})
+export type CustomerEventId = Schema.Schema.Type<typeof CustomerEventId>
+
+export const CustomerMrrMovementId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerMrrMovementId"))
+	.annotate({
+		description: "The ID of a customer MRR movement",
+		title: "Customer MRR Movement ID",
+	})
+export type CustomerMrrMovementId = Schema.Schema.Type<typeof CustomerMrrMovementId>
+
+export const CustomerSignalRuleId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSignalRuleId"))
+	.annotate({
+		description: "The ID of a customer signal rule",
+		title: "Customer Signal Rule ID",
+	})
+export type CustomerSignalRuleId = Schema.Schema.Type<typeof CustomerSignalRuleId>
+
+export const CustomerSignalId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSignalId"))
+	.annotate({
+		description: "The ID of a customer signal (a needs-attention queue item)",
+		title: "Customer Signal ID",
+	})
+export type CustomerSignalId = Schema.Schema.Type<typeof CustomerSignalId>
+
+export const CustomerNoteId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerNoteId"))
+	.annotate({
+		description: "The ID of a note on a customer account",
+		title: "Customer Note ID",
+	})
+export type CustomerNoteId = Schema.Schema.Type<typeof CustomerNoteId>
+
+export const CustomerSavedViewId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSavedViewId"))
+	.annotate({
+		description: "The ID of a saved customers list view",
+		title: "Customer Saved View ID",
+	})
+export type CustomerSavedViewId = Schema.Schema.Type<typeof CustomerSavedViewId>
+
+export const CustomerSettingsId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSettingsId"))
+	.annotate({
+		description: "The ID of an organization's customers settings",
+		title: "Customer Settings ID",
+	})
+export type CustomerSettingsId = Schema.Schema.Type<typeof CustomerSettingsId>
+
+export const CustomerConnectionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerConnectionId"))
+	.annotate({
+		description: "The ID of a customers data source connection (Clerk, Stripe, Autumn, Maple)",
+		title: "Customer Connection ID",
+	})
+export type CustomerConnectionId = Schema.Schema.Type<typeof CustomerConnectionId>
+
+export const CustomerSyncRunId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSyncRunId"))
+	.annotate({
+		description: "The ID of a customers data source sync run",
+		title: "Customer Sync Run ID",
+	})
+export type CustomerSyncRunId = Schema.Schema.Type<typeof CustomerSyncRunId>
+
+export const CustomerUnmatchedRecordId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerUnmatchedRecordId"))
+	.annotate({
+		description: "The ID of a provider record not yet matched to a customer",
+		title: "Customer Unmatched Record ID",
+	})
+export type CustomerUnmatchedRecordId = Schema.Schema.Type<typeof CustomerUnmatchedRecordId>
+
+export const CustomerIgnoreRuleId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerIgnoreRuleId"))
+	.annotate({
+		description: "The ID of a rule ignoring provider records during matching",
+		title: "Customer Ignore Rule ID",
+	})
+export type CustomerIgnoreRuleId = Schema.Schema.Type<typeof CustomerIgnoreRuleId>
+
+export const CustomerMetricDefinitionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerMetricDefinitionId"))
+	.annotate({
+		description: "The ID of a customer metric definition",
+		title: "Customer Metric Definition ID",
+	})
+export type CustomerMetricDefinitionId = Schema.Schema.Type<typeof CustomerMetricDefinitionId>

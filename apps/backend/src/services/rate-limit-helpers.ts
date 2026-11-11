@@ -11,13 +11,21 @@ import { Effect } from "effect"
 import { RateLimiter } from "./rate-limiter"
 
 /**
- * Rate limit configuration for messages
- * 60 requests per minute per user
+ * Rate limit configuration for messages: 120 a minute per user, per Cloudflare location. Counted
+ * by Cloudflare's rate limit binding (`MESSAGE_RATE_LIMIT_BINDING` in `worker.ts`, configured
+ * from this), which counts in each location on its own: a user whose requests reach two locations
+ * within a minute gets up to the limit in each. That bounds abuse well enough for messages, and
+ * costs no round trip; the strict, global hourly limits below stay on a Durable Object. The
+ * binding's period is 10 or 60 s, so the window must stay one of those.
  */
 export const MESSAGE_RATE_LIMIT = {
 	limit: 120,
+	periodSeconds: 60,
 	windowMs: 60 * 1000,
-}
+} as const
+
+/** The keys `checkMessageRateLimit` counts; the Worker sends them to the rate limit binding. */
+export const MESSAGE_RATE_LIMIT_KEY_PREFIX = "messages:"
 
 /**
  * Rate limit configuration for avatar uploads
@@ -58,7 +66,11 @@ export const checkMessageRateLimit = Effect.fn("RateLimitHelpers.checkMessageRat
 	const rateLimiter = yield* RateLimiter
 
 	const result = yield* rateLimiter
-		.consume(`messages:${userId}`, MESSAGE_RATE_LIMIT.limit, MESSAGE_RATE_LIMIT.windowMs)
+		.consume(
+			`${MESSAGE_RATE_LIMIT_KEY_PREFIX}${userId}`,
+			MESSAGE_RATE_LIMIT.limit,
+			MESSAGE_RATE_LIMIT.windowMs,
+		)
 		.pipe(
 			Effect.catchTag("RateLimiterError", (error) =>
 				Effect.gen(function* () {
@@ -78,16 +90,15 @@ export const checkMessageRateLimit = Effect.fn("RateLimitHelpers.checkMessageRat
 		return yield* Effect.fail(
 			new RateLimitExceededError({
 				message: "Message rate limit exceeded. Please wait before sending more messages.",
+				// At most this: the binding does not say when the window ends.
 				retryAfterMs: result.resetAfterMs,
 				limit: result.limit,
-				remaining: result.remaining,
+				remaining: 0,
 			}),
 		)
 	}
 
-	yield* Effect.logDebug(
-		`Rate limit check passed for user ${userId}: ${result.remaining}/${result.limit} remaining`,
-	)
+	yield* Effect.logDebug(`Message rate limit check passed for user ${userId}`)
 })
 
 /**
@@ -124,7 +135,7 @@ export const checkAvatarRateLimit = Effect.fn("RateLimitHelpers.checkAvatarRateL
 				message: "Avatar upload rate limit exceeded. Please wait before uploading again.",
 				retryAfterMs: result.resetAfterMs,
 				limit: result.limit,
-				remaining: result.remaining,
+				remaining: 0,
 			}),
 		)
 	}
@@ -172,7 +183,7 @@ export const checkBotOperationRateLimit = Effect.fn("RateLimitHelpers.checkBotOp
 				message: "Bot operation rate limit exceeded. Please wait before trying again.",
 				retryAfterMs: result.resetAfterMs,
 				limit: result.limit,
-				remaining: result.remaining,
+				remaining: 0,
 			}),
 		)
 	}
@@ -216,7 +227,7 @@ export const checkBotUpdateRateLimit = Effect.fn("RateLimitHelpers.checkBotUpdat
 				message: "Bot update rate limit exceeded. Please wait before trying again.",
 				retryAfterMs: result.resetAfterMs,
 				limit: result.limit,
-				remaining: result.remaining,
+				remaining: 0,
 			}),
 		)
 	}

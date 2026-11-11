@@ -1,71 +1,57 @@
+import { TypingIndicatorRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
-import { policyUse, withRemapDbErrors } from "@hazel/domain"
-import { TypingIndicatorNotFoundError, TypingIndicatorRpcs } from "@hazel/domain/rpc"
-import { Effect, Option } from "effect"
+import { withRemapDbErrors } from "@hazel/domain"
+import { TypingIndicatorNotFoundError, TypingIndicatorResponse, TypingIndicatorRpcs } from "@hazel/domain/rpc"
+import { Clock, Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { TypingIndicatorPolicy } from "../../policies/typing-indicator-policy"
-import { TypingIndicatorRepo } from "../../repositories/typing-indicator-repo"
 
 /**
- * Typing Indicator RPC Handlers
- *
- * Implements the business logic for all typing indicator-related RPC methods.
- * Each handler receives the payload and has access to CurrentUser via Effect context
- * (provided by AuthMiddleware).
- *
- * All handlers use:
- * - Database transactions for atomicity
- * - Policy checks for authorization
- * - Transaction IDs for optimistic updates
- * - Error remapping for consistent error handling
- *
- * Note: Typing indicators use upsert logic for creation to handle concurrent
- * typing events from the same user in the same channel.
+ * Typing indicator RPC handlers. Run in the channel's `ChannelObject` (`rpc/routing.ts`),
+ * authorized against its `channel_viewers`. Creation upserts on (channel, member), so concurrent
+ * typing events from one member keep one row. `lastTyped` is the object's clock (a client's could
+ * keep a row alive); the object's alarm deletes rows 10 s after it (`worker/objects/channel/typing.ts`).
  */
 export const TypingIndicatorRpcLive = TypingIndicatorRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
+		const typingIndicatorPolicy = yield* TypingIndicatorPolicy
+		const typingIndicatorRepo = yield* TypingIndicatorRepo
 
 		return {
 			"typingIndicator.create": (payload) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
-							// Use upsert to create or update typing indicator
-							const result = yield* TypingIndicatorRepo.upsertByChannelAndMember({
+							yield* typingIndicatorPolicy.canCreate(payload.channelId)
+							const result = yield* typingIndicatorRepo.upsertByChannelAndMember({
 								channelId: payload.channelId,
 								memberId: payload.memberId,
-								lastTyped: payload.lastTyped ?? Date.now(),
-							}).pipe(policyUse(TypingIndicatorPolicy.canCreate(payload.channelId)))
-
-							const typingIndicator = result[0]!
-
+								lastTyped: yield* Clock.currentTimeMillis,
+							})
 							const txid = yield* generateTransactionId()
-
-							return {
-								data: typingIndicator,
-								transactionId: txid,
-							}
+							return new TypingIndicatorResponse({ data: result[0]!, transactionId: txid })
 						}),
 					)
-					.pipe(withRemapDbErrors("TypingIndicator", "create")),
+					.pipe(
+						withRemapDbErrors("TypingIndicator", "create"),
+						Effect.withSpan("TypingIndicator.create", {
+							attributes: { "channel.id": payload.channelId },
+						}),
+					),
 
-			"typingIndicator.update": ({ id, ...payload }) =>
+			"typingIndicator.update": ({ id, channelId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
-							const typingIndicator = yield* TypingIndicatorRepo.update({
+							yield* typingIndicatorPolicy.canUpdate(id)
+							const typingIndicator = yield* typingIndicatorRepo.update({
 								...payload,
 								id,
-								lastTyped: Date.now(),
-							}).pipe(policyUse(TypingIndicatorPolicy.canUpdate(id)))
-
+								lastTyped: yield* Clock.currentTimeMillis,
+							})
 							const txid = yield* generateTransactionId()
-
-							return {
-								data: typingIndicator,
-								transactionId: txid,
-							}
+							return new TypingIndicatorResponse({ data: typingIndicator, transactionId: txid })
 						}),
 					)
 					.pipe(withRemapDbErrors("TypingIndicator", "update")),
@@ -74,26 +60,14 @@ export const TypingIndicatorRpcLive = TypingIndicatorRpcs.toLayer(
 				db
 					.transaction(
 						Effect.gen(function* () {
-							// First find the typing indicator to return it
-							const existingOption = yield* TypingIndicatorRepo.findById(id).pipe(
-								policyUse(TypingIndicatorPolicy.canRead(id)),
-							)
-
-							if (Option.isNone(existingOption)) {
-								return yield* Effect.fail(
-									new TypingIndicatorNotFoundError({ typingIndicatorId: id }),
-								)
+							const existing = yield* typingIndicatorRepo.findById(id)
+							if (Option.isNone(existing)) {
+								return yield* new TypingIndicatorNotFoundError({ typingIndicatorId: id })
 							}
-
-							const existing = existingOption.value
-
-							yield* TypingIndicatorRepo.deleteById(id).pipe(
-								policyUse(TypingIndicatorPolicy.canDelete({ id })),
-							)
-
+							yield* typingIndicatorPolicy.canDelete(id)
+							yield* typingIndicatorRepo.deleteById(id)
 							const txid = yield* generateTransactionId()
-
-							return { data: existing, transactionId: txid }
+							return new TypingIndicatorResponse({ data: existing.value, transactionId: txid })
 						}),
 					)
 					.pipe(withRemapDbErrors("TypingIndicator", "delete")),

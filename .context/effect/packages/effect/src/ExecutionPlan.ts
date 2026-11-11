@@ -1,44 +1,42 @@
 /**
  * @since 3.16.0
- * @experimental
  */
-import type { NonEmptyReadonlyArray } from "./Array.js"
-import type * as Context from "./Context.js"
-import * as Effect from "./Effect.js"
-import * as internal from "./internal/executionPlan.js"
-import * as Layer from "./Layer.js"
-import type { Pipeable } from "./Pipeable.js"
-import { pipeArguments } from "./Pipeable.js"
-import type * as Schedule from "./Schedule.js"
+import type { NonEmptyReadonlyArray } from "./Array.ts"
+import * as Context from "./Context.ts"
+import type * as Effect from "./Effect.ts"
+import { constant } from "./Function.ts"
+import * as effect from "./internal/effect.ts"
+import * as Layer from "./Layer.ts"
+import type { Pipeable } from "./Pipeable.ts"
+import { pipeArguments } from "./Pipeable.ts"
+import * as Predicate from "./Predicate.ts"
+import type * as Schedule from "./Schedule.ts"
 
 /**
  * @since 3.16.0
- * @category Symbols
- * @experimental
+ * @category Type IDs
  */
-export const TypeId: unique symbol = internal.TypeId
+export type TypeId = "~effect/ExecutionPlan"
 
 /**
  * @since 3.16.0
- * @category Symbols
- * @experimental
+ * @category Type IDs
  */
-export type TypeId = typeof TypeId
+export const TypeId: TypeId = "~effect/ExecutionPlan"
 
 /**
  * @since 3.16.0
  * @category Guards
- * @experimental
  */
-export const isExecutionPlan: (u: unknown) => u is ExecutionPlan<any> = internal.isExecutionPlan
+export const isExecutionPlan = (u: unknown): u is ExecutionPlan<any> => Predicate.hasProperty(u, TypeId)
 
 /**
  * A `ExecutionPlan` can be used with `Effect.withExecutionPlan` or `Stream.withExecutionPlan`, allowing you to provide different resources for each step of execution until the effect succeeds or the plan is exhausted.
  *
  * ```ts
- * import type { LanguageModel } from "@effect/ai"
  * import type { Layer } from "effect"
  * import { Effect, ExecutionPlan, Schedule } from "effect"
+ * import type { LanguageModel } from "effect/unstable/ai"
  *
  * declare const layerBad: Layer.Layer<LanguageModel.LanguageModel>
  * declare const layerGood: Layer.Layer<LanguageModel.LanguageModel>
@@ -74,10 +72,9 @@ export const isExecutionPlan: (u: unknown) => u is ExecutionPlan<any> = internal
  *
  * @since 3.16.0
  * @category Models
- * @experimental
  */
 export interface ExecutionPlan<
-  Types extends {
+  Config extends {
     provides: any
     input: any
     error: any
@@ -87,13 +84,13 @@ export interface ExecutionPlan<
   readonly [TypeId]: TypeId
   readonly steps: NonEmptyReadonlyArray<{
     readonly provide:
-      | Context.Context<Types["provides"]>
-      | Layer.Layer<Types["provides"], Types["error"], Types["requirements"]>
+      | Context.Context<Config["provides"]>
+      | Layer.Layer<Config["provides"], Config["error"], Config["requirements"]>
     readonly attempts?: number | undefined
     readonly while?:
-      | ((input: Types["input"]) => Effect.Effect<boolean, Types["error"], Types["requirements"]>)
+      | ((input: Config["input"]) => Effect.Effect<boolean, Config["error"], Config["requirements"]>)
       | undefined
-    readonly schedule?: Schedule.Schedule<any, Types["input"], Types["requirements"]> | undefined
+    readonly schedule?: Schedule.Schedule<any, Config["input"], Config["requirements"]> | undefined
   }>
 
   /**
@@ -102,21 +99,21 @@ export interface ExecutionPlan<
    */
   readonly withRequirements: Effect.Effect<
     ExecutionPlan<{
-      provides: Types["provides"]
-      input: Types["input"]
-      error: Types["error"]
+      provides: Config["provides"]
+      input: Config["input"]
+      error: Config["error"]
       requirements: never
     }>,
     never,
-    Types["requirements"]
+    Config["requirements"]
   >
 }
 
 /**
  * @since 3.16.0
- * @experimental
+ * @category Models
  */
-export type TypesBase = {
+export type ConfigBase = {
   provides: any
   input: any
   error: any
@@ -127,9 +124,9 @@ export type TypesBase = {
  * Create an `ExecutionPlan`, which can be used with `Effect.withExecutionPlan` or `Stream.withExecutionPlan`, allowing you to provide different resources for each step of execution until the effect succeeds or the plan is exhausted.
  *
  * ```ts
- * import type { LanguageModel } from "@effect/ai"
  * import type { Layer } from "effect"
  * import { Effect, ExecutionPlan, Schedule } from "effect"
+ * import type { LanguageModel } from "effect/unstable/ai"
  *
  * declare const layerBad: Layer.Layer<LanguageModel.LanguageModel>
  * declare const layerGood: Layer.Layer<LanguageModel.LanguageModel>
@@ -165,7 +162,6 @@ export type TypesBase = {
  *
  * @since 3.16.0
  * @category Constructors
- * @experimental
  */
 export const make = <const Steps extends NonEmptyReadonlyArray<make.Step>>(
   ...steps: Steps & { [K in keyof Steps]: make.Step }
@@ -190,9 +186,9 @@ export const make = <const Steps extends NonEmptyReadonlyArray<make.Step>>(
       attempts: options.attempts,
       while: options.while
         ? (input: any) =>
-          Effect.suspend(() => {
+          effect.suspend(() => {
             const result = options.while!(input)
-            return typeof result === "boolean" ? Effect.succeed(result) : result
+            return typeof result === "boolean" ? effect.succeed(result) : result
           })
         : undefined,
       provide: options.provide
@@ -201,15 +197,13 @@ export const make = <const Steps extends NonEmptyReadonlyArray<make.Step>>(
 
 /**
  * @since 3.16.0
- * @experimental
  */
 export declare namespace make {
   /**
    * @since 3.16.0
-   * @experimental
    */
   export type Step = {
-    readonly provide: Context.Context<any> | Context.Context<never> | Layer.Layer.Any
+    readonly provide: Context.Context<any> | Context.Context<never> | Layer.Any
     readonly attempts?: number | undefined
     readonly while?: ((input: any) => boolean | Effect.Effect<boolean, any, any>) | undefined
     readonly schedule?: Schedule.Schedule<any, any, any> | undefined
@@ -217,7 +211,6 @@ export declare namespace make {
 
   /**
    * @since 3.16.1
-   * @experimental
    */
   export type StepProvides<Steps extends ReadonlyArray<any>, Out = unknown> = Steps extends
     readonly [infer Step, ...infer Rest] ? StepProvides<
@@ -232,7 +225,6 @@ export declare namespace make {
 
   /**
    * @since 3.16.1
-   * @experimental
    */
   export type PlanProvides<Plans extends ReadonlyArray<any>, Out = unknown> = Plans extends
     readonly [infer Plan, ...infer Rest] ?
@@ -241,7 +233,6 @@ export declare namespace make {
 
   /**
    * @since 3.16.0
-   * @experimental
    */
   export type StepInput<Steps extends ReadonlyArray<any>, Out = unknown> = Steps extends
     readonly [infer Step, ...infer Rest] ? StepInput<
@@ -256,7 +247,6 @@ export declare namespace make {
 
   /**
    * @since 3.16.0
-   * @experimental
    */
   export type PlanInput<Plans extends ReadonlyArray<any>, Out = unknown> = Plans extends
     readonly [infer Plan, ...infer Rest] ?
@@ -268,11 +258,13 @@ const Proto: Omit<ExecutionPlan<any>, "steps"> = {
   [TypeId]: TypeId,
   get withRequirements() {
     const self = this as any as ExecutionPlan<any>
-    return Effect.contextWith((context: Context.Context<any>) =>
-      makeProto(self.steps.map((step) => ({
+    return effect.contextWith((context: Context.Context<any>) =>
+      effect.succeed(makeProto(self.steps.map((step) => ({
         ...step,
-        provide: Layer.isLayer(step.provide) ? Layer.provide(step.provide, Layer.succeedContext(context)) : step.provide
-      })) as any)
+        provide: Layer.isLayer(step.provide)
+          ? Layer.provide(step.provide, Layer.succeedContext(context))
+          : step.provide
+      })) as any))
     )
   },
   pipe() {
@@ -296,7 +288,6 @@ const makeProto = <Provides, In, PlanE, PlanR>(
 /**
  * @since 3.16.0
  * @category Combining
- * @experimental
  */
 export const merge = <const Plans extends NonEmptyReadonlyArray<ExecutionPlan<any>>>(
   ...plans: Plans
@@ -306,3 +297,23 @@ export const merge = <const Plans extends NonEmptyReadonlyArray<ExecutionPlan<an
   error: Plans[number] extends ExecutionPlan<infer T> ? T["error"] : never
   requirements: Plans[number] extends ExecutionPlan<infer T> ? T["requirements"] : never
 }> => makeProto(plans.flatMap((plan) => plan.steps) as any)
+
+/**
+ * @since 4.0.0
+ * @category Metadata
+ */
+export interface Metadata {
+  readonly attempt: number
+  readonly stepIndex: number
+}
+
+/**
+ * @since 4.0.0
+ * @category Metadata
+ */
+export const CurrentMetadata = Context.Reference<Metadata>("effect/ExecutionPlan/CurrentMetadata", {
+  defaultValue: constant({
+    attempt: 0,
+    stepIndex: 0
+  })
+})

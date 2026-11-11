@@ -1,3 +1,4 @@
+// Local `wrangler dev` / `wrangler types` only. Deploys go through alchemy: apps/link-preview-worker/alchemy.run.ts
 /**
  * For more details on how to configure Wrangler, refer to:
  * https://developers.cloudflare.com/workers/wrangler/configuration/

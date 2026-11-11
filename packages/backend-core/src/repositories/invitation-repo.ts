@@ -1,136 +1,112 @@
-import { and, Database, eq, lte, ModelRepository, schema, type TransactionClient } from "@hazel/db"
-import { type InvitationId, type OrganizationId, policyRequire } from "@hazel/domain"
-import { Invitation } from "@hazel/domain/models"
-import { Effect, Option, type Schema } from "effect"
+import { Database, SQLite, schema } from "@hazel/db"
+import type { InvitationId, OrganizationId, UserId } from "@hazel/schema"
+import { Context, Effect, Layer } from "effect"
 
-type TxFn = <T>(fn: (client: TransactionClient) => Promise<T>) => Effect.Effect<T, any, never>
+const table = schema.organizationInvitationsTable
+export interface NewInvitation {
+	readonly organizationId: OrganizationId
+	readonly email: string
+	readonly role: "admin" | "member"
+	readonly tokenHash: string
+	readonly invitedBy: UserId
+	readonly expiresAt: Date
+}
 
-export class InvitationRepo extends Effect.Service<InvitationRepo>()("InvitationRepo", {
-	accessors: true,
-	effect: Effect.gen(function* () {
-		const baseRepo = yield* ModelRepository.makeRepository(schema.invitationsTable, Invitation.Model, {
-			idColumn: "id",
-			name: "Invitation",
-		})
+export class InvitationRepo extends Context.Service<InvitationRepo>()("InvitationRepo", {
+	make: Effect.gen(function* () {
 		const db = yield* Database.Database
-
-		const findByWorkosId = (workosInvitationId: string, tx?: TxFn) =>
+		const upsertPending = (data: NewInvitation) =>
 			db
-				.makeQuery(
-					(execute, id: string) =>
-						execute((client) =>
-							client
-								.select()
-								.from(schema.invitationsTable)
-								.where(eq(schema.invitationsTable.workosInvitationId, id))
-								.limit(1),
-						),
-					policyRequire("Invitation", "select"),
-				)(workosInvitationId, tx)
-				.pipe(Effect.map((results) => Option.fromNullable(results[0])))
-
-		const upsertByWorkosId = (data: Schema.Schema.Type<typeof Invitation.Insert>, tx?: TxFn) =>
+				.run(
+					SQLite.insertInto(table)
+						.values({ ...data, status: "pending" })
+						.onConflictDoUpdate({
+							target: ["organizationId", "email"],
+							targetWhere: ($) => $.status.eq("pending"),
+							set: {
+								role: data.role,
+								tokenHash: data.tokenHash,
+								invitedBy: data.invitedBy,
+								expiresAt: data.expiresAt,
+								updatedAt: new Date(),
+							},
+						})
+						.returning(),
+				)
+				.pipe(Effect.map((rows) => rows[0]!))
+		const listPending = (organizationId: OrganizationId, now: Date) =>
+			db.run(
+				SQLite.from(table)
+					.select()
+					.where(($) => [
+						$.organizationId.eq(organizationId),
+						$.status.eq("pending"),
+						$.expiresAt.gt(now),
+					])
+					.orderBy(["createdAt", "desc"]),
+			)
+		const findById = (id: InvitationId) =>
+			db.first(
+				SQLite.from(table)
+					.select()
+					.where(($) => [$.id.eq(id)])
+					.limit(1),
+			)
+		const findByTokenHash = (hash: string) =>
+			db.first(
+				SQLite.from(table)
+					.select()
+					.where(($) => [$.tokenHash.eq(hash)])
+					.limit(1),
+			)
+		const revoke = (id: InvitationId, expectedTokenHash?: string) =>
+			db.first(
+				SQLite.update(table)
+					.set({ status: "revoked", updatedAt: new Date() })
+					.where(($) => [
+						$.id.eq(id),
+						$.status.eq("pending"),
+						expectedTokenHash === undefined ? undefined : $.tokenHash.eq(expectedTokenHash),
+					])
+					.returning(),
+			)
+		const markAccepted = (id: InvitationId, userId: UserId, expectedTokenHash: string) =>
+			db.first(
+				SQLite.update(table)
+					.set({
+						status: "accepted",
+						acceptedBy: userId,
+						acceptedAt: new Date(),
+						updatedAt: new Date(),
+					})
+					.where(($) => [$.id.eq(id), $.status.eq("pending"), $.tokenHash.eq(expectedTokenHash)])
+					.returning(),
+			)
+		const findMemberEmails = (organizationId: OrganizationId, emails: ReadonlyArray<string>) =>
 			db
-				.makeQuery(
-					(execute, input: typeof data) =>
-						execute((client) =>
-							client
-								.insert(schema.invitationsTable)
-								.values(input)
-								.onConflictDoUpdate({
-									target: schema.invitationsTable.workosInvitationId,
-									set: {
-										status: input.status,
-										acceptedAt: input.acceptedAt,
-										acceptedBy: input.acceptedBy,
-									},
-								})
-								.returning(),
-						),
-					policyRequire("Invitation", "create"),
-				)(data, tx)
-				.pipe(Effect.map((results) => results[0]))
-
-		const findAllByOrganization = (organizationId: OrganizationId, tx?: TxFn) =>
-			db.makeQuery(
-				(execute, id: OrganizationId) =>
-					execute((client) =>
-						client
-							.select()
-							.from(schema.invitationsTable)
-							.where(eq(schema.invitationsTable.organizationId, id)),
-					),
-				policyRequire("Invitation", "select"),
-			)(organizationId, tx)
-
-		const findPendingByOrganization = (organizationId: OrganizationId, tx?: TxFn) =>
-			db.makeQuery(
-				(execute, id: OrganizationId) =>
-					execute((client) =>
-						client
-							.select()
-							.from(schema.invitationsTable)
-							.where(
-								and(
-									eq(schema.invitationsTable.organizationId, id),
-									eq(schema.invitationsTable.status, "pending"),
-								),
-							),
-					),
-				policyRequire("Invitation", "select"),
-			)(organizationId, tx)
-
-		const updateStatus = (
-			id: InvitationId,
-			status: "pending" | "accepted" | "expired" | "revoked",
-			tx?: TxFn,
-		) =>
-			db
-				.makeQuery(
-					(execute, data: { id: InvitationId; status: typeof status }) =>
-						execute((client) =>
-							client
-								.update(schema.invitationsTable)
-								.set({ status: data.status })
-								.where(eq(schema.invitationsTable.id, data.id))
-								.returning(),
-						),
-					policyRequire("Invitation", "update"),
-				)({ id, status }, tx)
-				.pipe(Effect.map((results) => results[0]))
-
-		const markExpired = (tx?: TxFn) => {
-			const now = new Date()
-			return db.makeQuery(
-				(execute, _data) =>
-					execute((client) =>
-						client
-							.update(schema.invitationsTable)
-							.set({ status: "expired" })
-							.where(
-								and(
-									eq(schema.invitationsTable.status, "pending"),
-									lte(schema.invitationsTable.expiresAt, now),
-								),
-							)
-							.returning(),
-					),
-				policyRequire("Invitation", "update"),
-			)({}, tx)
-		}
-
-		const bulkUpsertByWorkosId = (invitations: Schema.Schema.Type<typeof Invitation.Insert>[]) =>
-			Effect.forEach(invitations, (data) => upsertByWorkosId(data), { concurrency: 10 })
-
+				.run(
+					SQLite.from(schema.organizationMembersTable, "members")
+						.innerJoin(schema.usersTable, "users", (members, users) =>
+							users.id.eq(members.userId),
+						)
+						.select(($) => ({ email: SQLite.lower($.users.email) }))
+						.where(($) => [
+							$.organizationId.eq(organizationId),
+							$.deletedAt.isNull(),
+							SQLite.inList(SQLite.lower($.users.email) as SQLite.Expr<string>, [...emails]),
+						]),
+				)
+				.pipe(Effect.map((rows) => new Set(rows.map((row) => row.email))))
 		return {
-			...baseRepo,
-			findByWorkosId,
-			upsertByWorkosId,
-			findAllByOrganization,
-			findPendingByOrganization,
-			updateStatus,
-			markExpired,
-			bulkUpsertByWorkosId,
+			upsertPending,
+			listPending,
+			findById,
+			findByTokenHash,
+			revoke,
+			markAccepted,
+			findMemberEmails,
 		}
 	}),
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make)
+}

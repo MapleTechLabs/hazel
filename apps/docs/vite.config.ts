@@ -5,17 +5,9 @@ import tsConfigPaths from "vite-tsconfig-paths"
 import tailwindcss from "@tailwindcss/vite"
 import mdx from "fumadocs-mdx/vite"
 
-import { nitro } from "nitro/vite"
-
 export default defineConfig({
 	server: {
 		port: 3000,
-	},
-	ssr: {
-		external: ["@takumi-rs/core", "@takumi-rs/image-response", "@takumi-rs/helpers"],
-	},
-	optimizeDeps: {
-		exclude: ["@takumi-rs/core", "@takumi-rs/image-response", "@takumi-rs/helpers"],
 	},
 	plugins: [
 		mdx(await import("./source.config")),
@@ -24,11 +16,10 @@ export default defineConfig({
 			projects: ["./tsconfig.json"],
 		}),
 		tanstackStart({
-			prerender: {
-				enabled: true,
-			},
+			// prerender: {
+			// 	enabled: true,
+			// },
 		}),
-		// nitro({ preset: "bun" }),
 		react(),
 	],
 })

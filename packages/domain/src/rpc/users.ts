@@ -1,25 +1,25 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import * as CurrentUser from "../current-user"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { UserId } from "../ids"
+import { UserId } from "@hazel/schema"
 import { User } from "../models"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
 
 /**
  * Response schema for successful user operations.
  * Contains the user data and a transaction ID for optimistic updates.
  */
 export class UserResponse extends Schema.Class<UserResponse>("UserResponse")({
-	data: User.Model.json,
+	data: User.Schema,
 	transactionId: TransactionId,
 }) {}
 
 /**
  * Error thrown when a user is not found.
- * Used in update and delete operations.
+ * Used in update operations.
  */
 export class UserNotFoundError extends Schema.TaggedError<UserNotFoundError>()("UserNotFoundError", {
 	userId: UserId,
@@ -35,49 +35,41 @@ export class UserRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not authenticated
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.query("user.me", {
+	Rpc.make("user.me", {
 		payload: Schema.Void,
 		success: CurrentUser.Schema,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["users:read"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * UserUpdate
 	 *
-	 * Updates an existing user.
-	 * Only users with appropriate permissions can update user data.
+	 * Updates the user's profile (name, avatar) and preferences (timezone, settings).
+	 * The email comes from the sign-in provider and is not editable here. The avatar is
+	 * uploaded first (`type: "user-avatar"`), then its public URL is set; `null` removes it.
 	 *
-	 * @param payload - User ID and fields to update
+	 * @param payload - User ID and the fields to update
 	 * @returns Updated user data and transaction ID
 	 * @throws UserNotFoundError if user doesn't exist
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("user.update", {
+	Rpc.make("user.update", {
 		payload: Schema.Struct({
 			id: UserId,
-		}).pipe(Schema.extend(Schema.partial(User.Model.jsonUpdate))),
+			firstName: Schema.optional(Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(100))),
+			lastName: Schema.optional(Schema.Trim.check(Schema.isMaxLength(100))),
+			avatarUrl: Schema.optional(Schema.NullOr(Schema.NonEmptyString)),
+			timezone: Schema.optional(User.PatchPartial.fields.timezone),
+			settings: Schema.optional(User.PatchPartial.fields.settings),
+		}),
 		success: UserResponse,
-		error: Schema.Union(UserNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
-
-	/**
-	 * UserDelete
-	 *
-	 * Deletes a user (soft delete).
-	 * Only users with appropriate permissions can delete users.
-	 *
-	 * @param payload - User ID to delete
-	 * @returns Transaction ID
-	 * @throws UserNotFoundError if user doesn't exist
-	 * @throws UnauthorizedError if user lacks permission
-	 * @throws InternalServerError for unexpected errors
-	 */
-	Rpc.mutation("user.delete", {
-		payload: Schema.Struct({ id: UserId }),
-		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(UserNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UserNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["users:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * UserFinalizeOnboarding
@@ -89,26 +81,11 @@ export class UserRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not authenticated
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("user.finalizeOnboarding", {
+	Rpc.make("user.finalizeOnboarding", {
 		payload: Schema.Void,
 		success: UserResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
-
-	/**
-	 * UserResetAvatar
-	 *
-	 * Resets the current user's avatar to their original WorkOS profile picture
-	 * (e.g., Google/GitHub OAuth avatar). Falls back to Vercel avatar if
-	 * WorkOS doesn't have a profile picture.
-	 *
-	 * @returns Updated user data and transaction ID
-	 * @throws UnauthorizedError if user is not authenticated
-	 * @throws InternalServerError for unexpected errors
-	 */
-	Rpc.mutation("user.resetAvatar", {
-		payload: Schema.Void,
-		success: UserResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["users:write"])
+		.middleware(AuthMiddleware),
 ) {}

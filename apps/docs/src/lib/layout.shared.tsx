@@ -1,6 +1,5 @@
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared"
 import { HazelLogoOrange } from "@hazel/ui/logo"
-import { GithubInfo } from "fumadocs-ui/components/github-info"
 
 export function baseOptions(): BaseLayoutProps {
 	return {

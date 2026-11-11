@@ -1,0 +1,21 @@
+/**
+ * The docs site (TanStack Start + fumadocs). `Website.Vite` injects the Cloudflare Vite plugin,
+ * which builds the SSR Worker and client assets in one `vite build`.
+ */
+import { HazelStack, resolveWorkerName } from "@hazel/infra/cloudflare"
+import * as Cloudflare from "@alchemy.run/cloudflare"
+import { Effect } from "effect"
+
+const props = Effect.gen(function* () {
+	const { stage } = yield* HazelStack
+	return {
+		name: resolveWorkerName("docs", stage),
+		rootDir: new URL(".", import.meta.url).pathname,
+		memo: { include: ["**/*", "../../packages/ui/src/**"], lockfile: true },
+		compatibility: { date: "2026-09-25" },
+		// docs.hazel.sh still points at Vercel: serve on workers.dev until the hostname moves here.
+		workersDev: true,
+	}
+})
+
+export default class Docs extends Cloudflare.Website.Vite<Docs>()("docs", props) {}

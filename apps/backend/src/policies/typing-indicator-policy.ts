@@ -1,87 +1,55 @@
-import {
-	type ChannelId,
-	type ChannelMemberId,
-	ErrorUtils,
-	policy,
-	type TypingIndicatorId,
-	withSystemActor,
-} from "@hazel/domain"
-import { Effect, Option, pipe } from "effect"
-import { ChannelMemberRepo } from "../repositories/channel-member-repo"
-import { TypingIndicatorRepo } from "../repositories/typing-indicator-repo"
+import { TypingIndicatorRepo } from "@hazel/backend-core"
+import type { ChannelId, TypingIndicatorId } from "@hazel/schema"
+import { Context, Effect, Layer } from "effect"
+import { makePolicy, withAnnotatedScope, withPolicyUnauthorized } from "../lib/policy-utils"
+import { ChannelViewers } from "../services/channel-viewers"
 
-export class TypingIndicatorPolicy extends Effect.Service<TypingIndicatorPolicy>()(
+/**
+ * Typing authorization, run inside the channel's `ChannelObject`: any viewer of the channel.
+ * An indicator's `memberId` is a `channel_members` row of the `OrgObject`, which this object
+ * cannot resolve to a user, so the viewer is trusted with it (indicators expire in 10 s).
+ */
+export class TypingIndicatorPolicy extends Context.Service<TypingIndicatorPolicy>()(
 	"TypingIndicatorPolicy/Policy",
 	{
-		effect: Effect.gen(function* () {
+		make: Effect.gen(function* () {
 			const policyEntity = "TypingIndicator" as const
+			const authorize = makePolicy(policyEntity)
 
-			const channelMemberRepo = yield* ChannelMemberRepo
+			const channelViewers = yield* ChannelViewers
 			const typingIndicatorRepo = yield* TypingIndicatorRepo
 
-			const canRead = (_id: TypingIndicatorId) =>
-				ErrorUtils.refailUnauthorized(
+			const viewerOf = (action: string, channelId: ChannelId) =>
+				withPolicyUnauthorized(
 					policyEntity,
-					"select",
-				)(policy(policyEntity, "select", () => Effect.succeed(true)))
-
-			const canCreate = (channelId: ChannelId) =>
-				ErrorUtils.refailUnauthorized(
-					policyEntity,
-					"create",
-				)(
-					policy(
-						policyEntity,
-						"create",
-						Effect.fn(`${policyEntity}.create`)(function* (actor) {
-							const member = yield* channelMemberRepo
-								.findByChannelAndUser(channelId, actor.id)
-								.pipe(withSystemActor)
-							return yield* Effect.succeed(Option.isSome(member))
-						}),
-					),
+					action,
+					withAnnotatedScope((scope) => Effect.asVoid(channelViewers.require(channelId, scope))),
 				)
+
+			const canRead = (_id: TypingIndicatorId) => authorize("select", () => Effect.succeed(true))
+
+			const canCreate = (channelId: ChannelId) => viewerOf("create", channelId)
 
 			const canUpdate = (id: TypingIndicatorId) =>
-				ErrorUtils.refailUnauthorized(
+				withPolicyUnauthorized(
 					policyEntity,
 					"update",
-				)(
-					typingIndicatorRepo.with(id, (indicator) =>
-						channelMemberRepo.with(indicator.memberId, (member) =>
-							policy(
-								policyEntity,
-								"update",
-								// User can only update their own typing indicator
-								(actor) => Effect.succeed(actor.id === member.userId),
-							),
-						),
-					),
+					typingIndicatorRepo.with(id, (indicator) => viewerOf("update", indicator.channelId)),
 				)
 
-			const canDelete = (data: { memberId: ChannelMemberId } | { id: TypingIndicatorId }) =>
-				ErrorUtils.refailUnauthorized(
+			const canDelete = (id: TypingIndicatorId) =>
+				withPolicyUnauthorized(
 					policyEntity,
 					"delete",
-				)(
-					"memberId" in data
-						? channelMemberRepo.with(data.memberId, (member) =>
-								policy(policyEntity, "delete", (actor) =>
-									Effect.succeed(member.userId === actor.id),
-								),
-							)
-						: typingIndicatorRepo.with(data.id, (indicator) =>
-								channelMemberRepo.with(indicator.memberId, (member) =>
-									policy(policyEntity, "delete", (actor) =>
-										Effect.succeed(member.userId === actor.id),
-									),
-								),
-							),
+					typingIndicatorRepo.with(id, (indicator) => viewerOf("delete", indicator.channelId)),
 				)
 
 			return { canCreate, canUpdate, canDelete, canRead } as const
 		}),
-		dependencies: [ChannelMemberRepo.Default, TypingIndicatorRepo.Default],
-		accessors: true,
 	},
-) {}
+) {
+	static readonly layer = Layer.effect(this, this.make).pipe(
+		Layer.provide(ChannelViewers.layer),
+		Layer.provide(TypingIndicatorRepo.layer),
+	)
+}

@@ -1,6 +1,13 @@
-import { HttpApiBuilder, HttpServerRequest, HttpServerResponse } from "@effect/platform"
-import { Sse } from "@effect/experimental"
-import { CurrentUser, InternalServerError, UnauthorizedError, withSystemActor } from "@hazel/domain"
+/**
+ * Bot command routes in the api Worker, over the directory (D1): `bots` and `bot_commands` are its
+ * rows, so the SDK's command sync and settings write there and fan out to the orgs' copies.
+ * Integration tokens and connections are the `OrgObject`'s (`worker/objects/org/integrations.ts`).
+ */
+import { HttpApiBuilder } from "effect/http-api"
+import { SQLite, schema } from "@hazel/db"
+import { HttpServerRequest, HttpServerResponse } from "effect/http"
+import { BotCommandRepo, BotRepo } from "@hazel/backend-core"
+import { CurrentUser, InternalServerError, UnauthorizedError } from "@hazel/domain"
 import {
 	BotCommandExecutionAccepted,
 	BotCommandExecutionError,
@@ -8,19 +15,25 @@ import {
 	BotMeResponse,
 	BotNotFoundError,
 	BotNotInstalledError,
+	EnabledIntegrationsResponse,
 	IntegrationNotAllowedError,
 	IntegrationNotConnectedError,
 	IntegrationTokenResponse,
 	SyncBotCommandsResponse,
+	UpdateBotSettingsResponse,
 } from "@hazel/domain/http"
-import { Redis } from "@hazel/effect-bun"
-import { Effect, Option, Stream } from "effect"
+import type { BotId, OrganizationId, UserId } from "@hazel/schema"
+import { DateTime, Effect, Option, Stream } from "effect"
 import { HazelApi } from "../api.ts"
-import { BotCommandRepo } from "../repositories/bot-command-repo.ts"
-import { BotInstallationRepo } from "../repositories/bot-installation-repo.ts"
-import { BotRepo } from "../repositories/bot-repo.ts"
-import { IntegrationConnectionRepo } from "../repositories/integration-connection-repo.ts"
-import { IntegrationTokenService } from "../services/integration-token-service.ts"
+import { Directory } from "../services/directory.ts"
+import { botProjection, DirectoryWireOrgEffects } from "../worker/objects/directory-wire.ts"
+import { fanOut } from "../worker/objects/fanout.ts"
+import { orgTarget } from "../worker/objects/kinds.ts"
+import { BotGatewayService } from "../services/bot-gateway-service.ts"
+import { callObject } from "../worker/objects/calls.ts"
+import { ActiveIntegrationsCall, IntegrationAccessTokenCall } from "../worker/objects/org/integrations.ts"
+import { BotInstallRegionCall } from "../worker/objects/org/bot-install-grants.ts"
+import { createSseHeartbeatStream } from "./bot-commands.sse.ts"
 
 /**
  * Hash a token using SHA-256 (Web Crypto API)
@@ -33,10 +46,48 @@ async function hashToken(token: string): Promise<string> {
 	return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
 }
 
+const toIso = (value: Date | DateTime.Utc | null) =>
+	value === null ? null : DateTime.isDateTime(value) ? DateTime.formatIso(value) : value.toISOString()
+
+/**
+ * The bot's installation is the bot user's active membership in the directory's
+ * `membership_index` (the `OrgObject` owns `bot_installations` and keeps the index current).
+ */
+const isInstalled = (botUserId: UserId, orgId: OrganizationId) =>
+	Effect.flatMap(Directory, (directory) => directory.membership(botUserId, orgId)).pipe(
+		Effect.map((row) => Option.isSome(row) && row.value.deletedAt === null),
+	)
+
+/** Copy the directory's bot (and its commands) to the orgs it is installed in. */
+const projectBot = Effect.fn("BotCommands.projectBot")(function* (botId: BotId, withCommands: boolean) {
+	const directory = yield* Directory
+	const bot = yield* directory.db.first(
+		SQLite.from(schema.botsTable)
+			.select()
+			.where(($) => [$.id.eq(botId)])
+			.limit(1),
+	)
+	if (Option.isNone(bot)) return
+	const commands = withCommands
+		? yield* directory.db.run(
+				SQLite.from(schema.botCommandsTable)
+					.select()
+					.where(($) => [$.botId.eq(botId)]),
+			)
+		: null
+	const organizations = yield* directory.organizationsOf(bot.value.userId)
+	yield* fanOut(
+		DirectoryWireOrgEffects.upsertBotProjection,
+		organizations.map(orgTarget),
+		botProjection(bot.value, commands),
+		crypto.randomUUID(),
+	)
+})
+
 /**
  * Validate bot token from Authorization header and return the bot
  */
-const validateBotToken = Effect.gen(function* () {
+export const validateBotToken = Effect.gen(function* () {
 	const request = yield* HttpServerRequest.HttpServerRequest
 	const authHeader = request.headers.authorization
 
@@ -53,7 +104,7 @@ const validateBotToken = Effect.gen(function* () {
 	const tokenHash = yield* Effect.promise(() => hashToken(token))
 
 	const botRepo = yield* BotRepo
-	const botOption = yield* botRepo.findByTokenHash(tokenHash).pipe(withSystemActor)
+	const botOption = yield* botRepo.findByTokenHash(tokenHash)
 
 	if (Option.isNone(botOption)) {
 		return yield* Effect.fail(
@@ -75,59 +126,19 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 				// Validate bot token
 				const bot = yield* validateBotToken
 
-				const redis = yield* Redis
-				const channel = `bot:${bot.id}:commands`
-
 				yield* Effect.logInfo(`Bot ${bot.id} (${bot.name}) connecting to SSE stream`)
 
-				// Create SSE stream from Redis subscription
-				// The stream will never error - Redis errors are logged but the stream continues
-				const sseStream = Stream.async<string>((emit) => {
-					Effect.gen(function* () {
-						const { unsubscribe } = yield* redis.subscribe(channel, (message) => {
-							// Encode the message as an SSE event
-							const sseEvent = Sse.encoder.write({
-								_tag: "Event",
-								event: "command",
-								id: undefined,
-								data: message, // Already JSON string from publisher
-							})
-							emit.single(sseEvent)
-						})
-
-						// Add finalizer to unsubscribe when stream closes
-						yield* Effect.addFinalizer(() =>
-							unsubscribe.pipe(
-								Effect.tap(() =>
-									Effect.logDebug(`Bot ${bot.id} disconnected from SSE stream`),
-								),
-								Effect.catchAll(() => Effect.void),
-							),
-						)
-
-						// Keep the subscription alive until the stream is closed
-						yield* Effect.never
-					}).pipe(
-						Effect.scoped,
-						Effect.catchAll((error) => {
-							// Log the error but don't fail the stream - end it gracefully
-							Effect.runFork(Effect.logError("Redis subscription error", { error }))
-							emit.end()
-							return Effect.void
-						}),
-						Effect.runFork,
-					)
-				}).pipe(
-					Stream.tap(() => Effect.logDebug("Sending SSE event")),
-					Stream.encodeText,
-				)
+				// Commands are delivered through the bot gateway (`BotGatewayService.publishCommand`);
+				// this stream only keeps legacy SSE clients' connections alive.
+				const sseStream = createSseHeartbeatStream().pipe(Stream.encodeText)
 
 				// Return SSE response
 				return HttpServerResponse.stream(sseStream, {
 					contentType: "text/event-stream",
 					headers: {
-						"Cache-Control": "no-cache",
+						"Cache-Control": "no-cache, no-transform",
 						Connection: "keep-alive",
+						"X-Accel-Buffering": "no",
 					},
 				})
 			}).pipe(
@@ -173,26 +184,25 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 				// Upsert each command (updates updatedAt to now)
 				let syncedCount = 0
 				for (const cmd of payload.commands) {
-					yield* commandRepo
-						.upsert({
-							botId: bot.id,
-							name: cmd.name,
-							description: cmd.description,
-							arguments: cmd.arguments.map((arg) => ({
-								name: arg.name,
-								description: arg.description ?? null,
-								required: arg.required,
-								placeholder: arg.placeholder ?? null,
-								type: arg.type,
-							})),
-							usageExample: cmd.usageExample ?? null,
-						})
-						.pipe(withSystemActor)
+					yield* commandRepo.upsert({
+						botId: bot.id,
+						name: cmd.name,
+						description: cmd.description,
+						arguments: cmd.arguments.map((arg) => ({
+							name: arg.name,
+							description: arg.description ?? null,
+							required: arg.required,
+							placeholder: arg.placeholder ?? null,
+							type: arg.type,
+						})),
+						usageExample: cmd.usageExample ?? null,
+					})
 					syncedCount++
 				}
 
 				// Delete commands not touched by this sync (stale commands)
-				yield* commandRepo.deleteStaleCommands(bot.id, syncStartTime).pipe(withSystemActor)
+				yield* commandRepo.deleteStaleCommands(bot.id, syncStartTime)
+				yield* projectBot(bot.id, true)
 
 				return new SyncBotCommandsResponse({ syncedCount })
 			}).pipe(
@@ -200,26 +210,25 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 					Effect.fail(
 						new InternalServerError({
 							message: "Database error while syncing commands",
-							detail: String(error),
+							cause: error,
 						}),
 					),
 				),
 			),
 		)
 		// Execute a bot command (user auth)
-		.handle("executeBotCommand", ({ path, payload }) =>
+		.handle("executeBotCommand", ({ params, payload }) =>
 			Effect.gen(function* () {
 				const currentUser = yield* CurrentUser.Context
-				const { orgId, botId, commandName } = path
+				const { orgId, botId, commandName } = params
 				const { channelId, arguments: args } = payload
 
 				const botRepo = yield* BotRepo
 				const commandRepo = yield* BotCommandRepo
-				const installationRepo = yield* BotInstallationRepo
-				const redis = yield* Redis
+				const botGateway = yield* BotGatewayService
 
 				// Verify bot exists
-				const botOption = yield* botRepo.findById(botId).pipe(withSystemActor)
+				const botOption = yield* botRepo.findById(botId)
 				if (Option.isNone(botOption)) {
 					return yield* Effect.fail(new BotNotFoundError({ botId }))
 				}
@@ -227,15 +236,12 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 				const bot = botOption.value
 
 				// Verify bot is installed in this org
-				const isInstalled = yield* installationRepo.isInstalled(botId, orgId).pipe(withSystemActor)
-				if (!isInstalled) {
+				if (!(yield* isInstalled(bot.userId, orgId))) {
 					return yield* Effect.fail(new BotNotInstalledError({ botId, orgId }))
 				}
 
 				// Find the command
-				const commandOption = yield* commandRepo
-					.findByBotAndName(botId, commandName)
-					.pipe(withSystemActor)
+				const commandOption = yield* commandRepo.findByBotAndName(botId, commandName)
 				if (Option.isNone(commandOption)) {
 					return yield* Effect.fail(new BotCommandNotFoundError({ botId, commandName }))
 				}
@@ -253,7 +259,7 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 					argsMap[arg.name] = arg.value
 				}
 
-				// Publish command event to Redis pub/sub
+				// Append command event to the durable bot gateway stream
 				const commandEvent = {
 					type: "command" as const,
 					commandName,
@@ -264,10 +270,26 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 					timestamp: Date.now(),
 				}
 
-				const channel = `bot:${botId}:commands`
-				yield* redis.publish(channel, JSON.stringify(commandEvent))
+				// To the session of the region the bot is installed for here; the org's own install
+				// row decides, since the directory's membership can still lag an uninstall.
+				const installation = yield* callObject(BotInstallRegionCall, orgTarget(orgId), { botId })
+				if (installation === null) {
+					return yield* Effect.fail(new BotNotInstalledError({ botId, orgId }))
+				}
+				yield* botGateway.publishCommand(
+					botId,
+					{
+						commandName: commandEvent.commandName,
+						channelId: commandEvent.channelId,
+						userId: commandEvent.userId,
+						orgId: commandEvent.orgId,
+						arguments: commandEvent.arguments,
+						timestamp: commandEvent.timestamp,
+					},
+					installation.region,
+				)
 
-				yield* Effect.logDebug(`Published command ${commandName} to Redis for bot ${botId}`)
+				yield* Effect.logDebug(`Appended command ${commandName} to durable gateway for bot ${botId}`)
 
 				return new BotCommandExecutionAccepted({
 					message: "Command sent to bot",
@@ -277,42 +299,20 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 					Effect.fail(
 						new InternalServerError({
 							message: "Database error while executing command",
-							detail: String(error),
+							cause: error,
 						}),
 					),
 				),
-				Effect.catchTag("RedisError", (error) =>
+				Effect.catchTag("ObjectCallError", (error) =>
 					Effect.fail(
-						new BotCommandExecutionError({
-							commandName: path.commandName,
-							message: "Failed to publish command to bot",
-							details: String(error.message),
-						}),
+						new InternalServerError({ message: "The organization is unavailable", cause: error }),
 					),
 				),
-				Effect.catchTag("RedisConnectionClosedError", (error) =>
+				Effect.catchTag("DurableStreamRequestError", (error) =>
 					Effect.fail(
 						new BotCommandExecutionError({
-							commandName: path.commandName,
-							message: "Failed to publish command to bot",
-							details: String(error.message),
-						}),
-					),
-				),
-				Effect.catchTag("RedisAuthenticationError", (error) =>
-					Effect.fail(
-						new BotCommandExecutionError({
-							commandName: path.commandName,
-							message: "Failed to publish command to bot",
-							details: String(error.message),
-						}),
-					),
-				),
-				Effect.catchTag("RedisInvalidResponseError", (error) =>
-					Effect.fail(
-						new BotCommandExecutionError({
-							commandName: path.commandName,
-							message: "Failed to publish command to bot",
+							commandName: params.commandName,
+							message: "Failed to append command to bot gateway",
 							details: String(error.message),
 						}),
 					),
@@ -320,10 +320,10 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 			),
 		)
 		// Get integration token (bot token auth)
-		.handle("getIntegrationToken", ({ path }) =>
+		.handle("getIntegrationToken", ({ params }) =>
 			Effect.gen(function* () {
 				const bot = yield* validateBotToken
-				const { orgId, provider } = path
+				const { orgId, provider } = params
 
 				// Check provider is in bot's allowedIntegrations
 				const allowed = bot.allowedIntegrations ?? []
@@ -332,32 +332,16 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 				}
 
 				// Verify bot is installed in this org
-				const installationRepo = yield* BotInstallationRepo
-				const isInstalled = yield* installationRepo.isInstalled(bot.id, orgId).pipe(withSystemActor)
-				if (!isInstalled) {
+				if (!(yield* isInstalled(bot.userId, orgId))) {
 					return yield* Effect.fail(new BotNotInstalledError({ botId: bot.id, orgId }))
 				}
 
-				// Find active integration connection for the org
-				const connectionRepo = yield* IntegrationConnectionRepo
-				const connectionOption = yield* connectionRepo
-					.findOrgConnection(orgId, provider)
-					.pipe(withSystemActor)
-
-				if (Option.isNone(connectionOption)) {
+				// The org's active connection and a valid (auto-refreshed) token, from its object.
+				const token = yield* callObject(IntegrationAccessTokenCall, orgTarget(orgId), { provider })
+				if (token === null) {
 					return yield* Effect.fail(new IntegrationNotConnectedError({ provider }))
 				}
-
-				const connection = connectionOption.value
-
-				// Verify connection is active
-				if (connection.status !== "active") {
-					return yield* Effect.fail(new IntegrationNotConnectedError({ provider }))
-				}
-
-				// Get valid (auto-refreshed) access token
-				const tokenService = yield* IntegrationTokenService
-				const accessToken = yield* tokenService.getValidAccessToken(connection.id)
+				const { accessToken, connection } = token
 
 				yield* Effect.logInfo("AUDIT: Bot accessed integration token", {
 					event: "bot_integration_token_access",
@@ -369,44 +353,102 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 				return new IntegrationTokenResponse({
 					accessToken,
 					provider,
-					expiresAt: connection.lastUsedAt?.toISOString() ?? null,
+					expiresAt: toIso(connection.lastUsedAt),
+					settings: connection.settings as Record<string, unknown> | null,
 				})
+			}).pipe(
+				Effect.catchTags({
+					DatabaseError: () =>
+						Effect.fail(
+							new InternalServerError({
+								message: "Database error while fetching integration token",
+								detail: "Database error",
+							}),
+						),
+					IntegrationTokenUnavailableError: (error) =>
+						Effect.fail(new InternalServerError({ message: error.message, cause: error })),
+					ObjectCallError: (error) =>
+						Effect.fail(
+							new InternalServerError({
+								message: "The organization is unavailable",
+								cause: error,
+							}),
+						),
+				}),
+			),
+		)
+		// Get enabled integrations (bot token auth)
+		.handle("getEnabledIntegrations", ({ params }) =>
+			Effect.gen(function* () {
+				const bot = yield* validateBotToken
+				const { orgId } = params
+
+				// Verify bot is installed in this org
+				if (!(yield* isInstalled(bot.userId, orgId))) {
+					return yield* Effect.fail(new BotNotInstalledError({ botId: bot.id, orgId }))
+				}
+
+				// Get bot's allowed integrations
+				const allowedIntegrations = bot.allowedIntegrations ?? []
+				if (allowedIntegrations.length === 0) {
+					return new EnabledIntegrationsResponse({ providers: [] })
+				}
+
+				// Providers that are both allowed AND connected (the org's active connections)
+				const activeProviders = new Set(
+					yield* callObject(ActiveIntegrationsCall, orgTarget(orgId), {}),
+				)
+				const enabledProviders = allowedIntegrations.filter((provider) =>
+					activeProviders.has(provider),
+				)
+
+				return new EnabledIntegrationsResponse({ providers: enabledProviders })
+			}).pipe(
+				Effect.catchTags({
+					DatabaseError: () =>
+						Effect.fail(
+							new InternalServerError({
+								message: "Database error while fetching enabled integrations",
+								detail: "Database error",
+							}),
+						),
+					ObjectCallError: (error) =>
+						Effect.fail(
+							new InternalServerError({
+								message: "The organization is unavailable",
+								cause: error,
+							}),
+						),
+				}),
+			),
+		)
+		// Update bot settings (bot token auth)
+		.handle("updateBotSettings", ({ payload }) =>
+			Effect.gen(function* () {
+				const bot = yield* validateBotToken
+				const botRepo = yield* BotRepo
+
+				// Build update object with only provided fields
+				const updates: { id: typeof bot.id; mentionable?: boolean } = { id: bot.id }
+
+				if (payload.mentionable !== undefined) {
+					updates.mentionable = payload.mentionable
+				}
+
+				// Only update if there are fields to update
+				if (Object.keys(updates).length > 1) {
+					yield* botRepo.update(updates)
+					yield* projectBot(bot.id, false)
+					yield* Effect.logDebug(`Updated bot ${bot.id} settings`, { updates })
+				}
+
+				return new UpdateBotSettingsResponse({ success: true })
 			}).pipe(
 				Effect.catchTag("DatabaseError", () =>
 					Effect.fail(
 						new InternalServerError({
-							message: "Database error while fetching integration token",
+							message: "Database error while updating bot settings",
 							detail: "Database error",
-						}),
-					),
-				),
-				Effect.catchTag("TokenNotFoundError", () =>
-					Effect.fail(new IntegrationNotConnectedError({ provider: path.provider })),
-				),
-				Effect.catchTag("TokenRefreshError", (error) =>
-					Effect.fail(
-						new InternalServerError({
-							message: `Failed to refresh ${path.provider} token`,
-							detail: String(error.cause),
-						}),
-					),
-				),
-				Effect.catchTag("ConnectionNotFoundError", () =>
-					Effect.fail(new IntegrationNotConnectedError({ provider: path.provider })),
-				),
-				Effect.catchTag("IntegrationEncryptionError", (error) =>
-					Effect.fail(
-						new InternalServerError({
-							message: `Failed to decrypt ${path.provider} token`,
-							detail: String(error),
-						}),
-					),
-				),
-				Effect.catchTag("KeyVersionNotFoundError", (error) =>
-					Effect.fail(
-						new InternalServerError({
-							message: `Encryption key version not found for ${path.provider} token`,
-							detail: String(error),
 						}),
 					),
 				),

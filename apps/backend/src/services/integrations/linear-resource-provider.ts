@@ -11,19 +11,12 @@ import { Effect } from "effect"
 // ============ Re-export from shared package ============
 
 export {
-	// Domain Types
-	LinearIssue,
-	LinearIssueState,
-	LinearIssueAssignee,
-	LinearIssueLabel,
-	LinearTeam,
 	// Error Types
 	LinearApiError,
 	LinearIssueNotFoundError,
 	LinearRateLimitError,
 	// URL Utilities
 	parseLinearIssueUrl,
-	isLinearIssueUrl,
 } from "@hazel/integrations/linear"
 
 // ============ Convenience Function ============
@@ -35,4 +28,4 @@ export const fetchLinearIssue = (issueKey: string, accessToken: string) =>
 	Effect.gen(function* () {
 		const client = yield* Linear.LinearApiClient
 		return yield* client.fetchIssue(issueKey, accessToken)
-	}).pipe(Effect.provide(Linear.LinearApiClient.Default))
+	}).pipe(Effect.provide(Linear.LinearApiClient.layer))

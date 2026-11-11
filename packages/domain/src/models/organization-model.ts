@@ -1,22 +1,17 @@
 import { OrganizationId } from "@hazel/schema"
-import { Schema } from "effect"
+import { Schema as S } from "effect"
 import * as M from "./utils"
 import { baseFields } from "./utils"
 
-export class Model extends M.Class<Model>("Organization")({
+class Model extends M.Class<Model>("Organization")({
 	id: M.Generated(OrganizationId),
-	name: Schema.String,
-	slug: Schema.NullOr(Schema.String),
-	logoUrl: Schema.NullOr(Schema.String),
-	settings: Schema.NullOr(
-		Schema.Record({
-			key: Schema.String,
-			value: Schema.Unknown,
-		}),
-	),
-	isPublic: Schema.Boolean,
+	name: S.String,
+	slug: S.NullOr(S.String),
+	logoUrl: S.NullOr(S.String),
+	settings: S.NullOr(S.Record(S.String, S.Unknown)),
+	isPublic: S.Boolean,
 	...baseFields,
 }) {}
 
-export const Insert = Model.insert
-export const Update = Model.update
+export const { Insert, Update, Schema, Create, Patch, PatchPartial } = M.expose(Model)
+export type Type = typeof Schema.Type

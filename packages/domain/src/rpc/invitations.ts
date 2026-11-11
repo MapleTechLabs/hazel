@@ -1,154 +1,134 @@
-import { RpcGroup } from "@effect/rpc"
+import { InvitationId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { InvitationId, OrganizationId } from "../ids"
-import { Invitation } from "../models"
-import { TransactionId } from "../transaction-id"
+import { RequiredScopes } from "../scopes/required-scopes"
 import { AuthMiddleware } from "./middleware"
+import { OrganizationNotFoundError } from "./organizations"
 
-/**
- * Response schema for successful invitation operations.
- * Contains the invitation data and a transaction ID for optimistic updates.
- */
-export class InvitationResponse extends Schema.Class<InvitationResponse>("InvitationResponse")({
-	data: Invitation.Model.json,
-	transactionId: TransactionId,
-}) {}
+/** Roles an invitation can grant; ownership is never handed out by email. */
+export const InvitationRole = Schema.Literals(["admin", "member"])
+export type InvitationRole = typeof InvitationRole.Type
 
-/**
- * Response schema for a single invitation in a batch operation.
- * Contains success status, optional invitation data, and optional error message.
- */
-export class InvitationBatchResult extends Schema.Class<InvitationBatchResult>("InvitationBatchResult")({
+export const InvitationEmail = Schema.Trim.check(
+	Schema.isMaxLength(320),
+	Schema.isPattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/),
+)
+
+/** A pending invitation as admins see it. */
+export class Invitation extends Schema.Class<Invitation>("Invitation")({
+	id: InvitationId,
+	organizationId: OrganizationId,
 	email: Schema.String,
-	success: Schema.Boolean,
-	data: Schema.optional(Invitation.Model.json),
-	error: Schema.optional(Schema.String),
-	transactionId: Schema.optional(TransactionId),
+	role: InvitationRole,
+	invitedBy: UserId,
+	createdAt: Schema.DateTimeUtcFromString,
+	expiresAt: Schema.DateTimeUtcFromString,
 }) {}
 
-/**
- * Response schema for batch invitation operations.
- * Contains results for each invite and aggregate counts.
- */
-export class InvitationBatchResponse extends Schema.Class<InvitationBatchResponse>("InvitationBatchResponse")(
-	{
-		results: Schema.Array(InvitationBatchResult),
-		successCount: Schema.Number,
-		errorCount: Schema.Number,
-	},
-) {}
+/** One address `invitation.create` could not invite, and why. */
+export const InvitationSkip = Schema.Struct({
+	email: Schema.String,
+	reason: Schema.Literals(["AlreadyMember", "EmailFailed"]),
+})
+export type InvitationSkip = typeof InvitationSkip.Type
 
-/**
- * Error thrown when an invitation is not found.
- * Used in update and delete operations.
- */
+export class InvitationCreateResult extends Schema.Class<InvitationCreateResult>("InvitationCreateResult")({
+	invited: Schema.Array(Invitation),
+	skipped: Schema.Array(InvitationSkip),
+}) {}
+
+/** What the invite link shows before it is accepted. Public: the token is the secret. */
+export class InvitationPreview extends Schema.Class<InvitationPreview>("InvitationPreview")({
+	organizationName: Schema.String,
+	organizationLogoUrl: Schema.NullOr(Schema.String),
+	email: Schema.String,
+	status: Schema.Literals(["Pending", "Accepted", "Revoked", "Expired"]),
+}) {}
+
+export class InvitationAccepted extends Schema.Class<InvitationAccepted>("InvitationAccepted")({
+	organizationId: OrganizationId,
+	slug: Schema.NullOr(Schema.String),
+}) {}
+
 export class InvitationNotFoundError extends Schema.TaggedError<InvitationNotFoundError>()(
 	"InvitationNotFoundError",
-	{
-		invitationId: InvitationId,
-	},
+	{},
 ) {}
+
+/** The invitation was revoked, has expired, or was already used. */
+export class InvitationUnavailableError extends Schema.TaggedError<InvitationUnavailableError>()(
+	"InvitationUnavailableError",
+	{ status: Schema.Literals(["Accepted", "Revoked", "Expired"]) },
+) {}
+
+/** The signed-in account's email is not the invited one. */
+export class InvitationEmailMismatchError extends Schema.TaggedError<InvitationEmailMismatchError>()(
+	"InvitationEmailMismatchError",
+	{ invitedEmail: Schema.String },
+) {}
+
+const Token = Schema.String.check(Schema.isMinLength(16), Schema.isMaxLength(128))
 
 export class InvitationRpcs extends RpcGroup.make(
 	/**
-	 * InvitationCreate
-	 *
-	 * Creates one or more invitations to an organization via WorkOS.
-	 * The inviter must have permission to invite users to the organization.
-	 *
-	 * @param payload - Invitation data (organizationId, array of invites)
-	 * @returns Batch results with success/failure status per invite
-	 * @throws UnauthorizedError if user lacks permission
-	 * @throws InternalServerError for unexpected errors
+	 * Invites each address to the organization by email. Addresses that already belong to a
+	 * member are skipped; an address with a pending invitation gets a fresh link instead.
+	 * Admins and owners only.
 	 */
-	Rpc.mutation("invitation.create", {
+	Rpc.make("invitation.create", {
 		payload: Schema.Struct({
 			organizationId: OrganizationId,
-			invites: Schema.Array(
-				Schema.Struct({
-					email: Schema.String,
-					role: Schema.Literal("member", "admin"),
-				}),
-			),
+			emails: Schema.Array(InvitationEmail).check(Schema.isMinLength(1), Schema.isMaxLength(20)),
+			role: InvitationRole,
 		}),
-		success: InvitationBatchResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		success: InvitationCreateResult,
+		error: Schema.Union([OrganizationNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["organization-members:write"])
+		.middleware(AuthMiddleware),
 
-	/**
-	 * InvitationResend
-	 *
-	 * Resends an existing invitation via WorkOS.
-	 * Only the invitation creator or organization admins can resend.
-	 *
-	 * @param payload - Invitation ID to resend
-	 * @returns Invitation data and transaction ID
-	 * @throws InvitationNotFoundError if invitation doesn't exist
-	 * @throws UnauthorizedError if user lacks permission
-	 * @throws InternalServerError for unexpected errors
-	 */
-	Rpc.mutation("invitation.resend", {
-		payload: Schema.Struct({ invitationId: InvitationId }),
-		success: InvitationResponse,
-		error: Schema.Union(InvitationNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+	/** The organization's pending, unexpired invitations, newest first. Admins and owners only. */
+	Rpc.make("invitation.list", {
+		payload: Schema.Struct({ organizationId: OrganizationId }),
+		success: Schema.Array(Invitation),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["organization-members:read"])
+		.middleware(AuthMiddleware),
 
-	/**
-	 * InvitationRevoke
-	 *
-	 * Revokes an existing invitation via WorkOS.
-	 * Only the invitation creator or organization admins can revoke.
-	 *
-	 * @param payload - Invitation ID to revoke
-	 * @returns Transaction ID
-	 * @throws InvitationNotFoundError if invitation doesn't exist
-	 * @throws UnauthorizedError if user lacks permission
-	 * @throws InternalServerError for unexpected errors
-	 */
-	Rpc.mutation("invitation.revoke", {
-		payload: Schema.Struct({ invitationId: InvitationId }),
-		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(InvitationNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
-
-	/**
-	 * InvitationUpdate
-	 *
-	 * Updates an existing invitation.
-	 * Can be used to change invitation status, role, or other properties.
-	 *
-	 * @param payload - Invitation ID and fields to update
-	 * @returns Updated invitation data and transaction ID
-	 * @throws InvitationNotFoundError if invitation doesn't exist
-	 * @throws UnauthorizedError if user lacks permission
-	 * @throws InternalServerError for unexpected errors
-	 */
-	Rpc.mutation("invitation.update", {
-		payload: Schema.Struct({
-			id: InvitationId,
-			...Invitation.Model.jsonUpdate.fields,
-		}),
-		success: InvitationResponse,
-		error: Schema.Union(InvitationNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
-
-	/**
-	 * InvitationDelete
-	 *
-	 * Deletes an invitation.
-	 * Only the invitation creator or users with appropriate permissions can delete.
-	 *
-	 * @param payload - Invitation ID to delete
-	 * @returns Transaction ID
-	 * @throws InvitationNotFoundError if invitation doesn't exist
-	 * @throws UnauthorizedError if user lacks permission
-	 * @throws InternalServerError for unexpected errors
-	 */
-	Rpc.mutation("invitation.delete", {
+	/** Revokes a pending invitation; its link stops working. Admins and owners only. */
+	Rpc.make("invitation.revoke", {
 		payload: Schema.Struct({ id: InvitationId }),
-		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(InvitationNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		success: Schema.Void,
+		error: Schema.Union([InvitationNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["organization-members:write"])
+		.middleware(AuthMiddleware),
+
+	/** The invite link's organization and status. No authentication: the token is the secret. */
+	Rpc.make("invitation.preview", {
+		payload: Schema.Struct({ token: Token }),
+		success: InvitationPreview,
+		error: Schema.Union([InvitationNotFoundError, InternalServerError]),
+	}).annotate(RequiredScopes, []),
+
+	/**
+	 * Joins the organization with the invited role. The signed-in user's email must be the
+	 * invited address (case-insensitive). A user who is already a member just uses it up.
+	 */
+	Rpc.make("invitation.accept", {
+		payload: Schema.Struct({ token: Token }),
+		success: InvitationAccepted,
+		error: Schema.Union([
+			InvitationNotFoundError,
+			InvitationUnavailableError,
+			InvitationEmailMismatchError,
+			OrganizationNotFoundError,
+			UnauthorizedError,
+			InternalServerError,
+		]),
+	})
+		.annotate(RequiredScopes, ["organizations:write"])
+		.middleware(AuthMiddleware),
 ) {}

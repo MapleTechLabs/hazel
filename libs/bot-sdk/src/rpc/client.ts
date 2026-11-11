@@ -5,10 +5,10 @@
  * Uses FetchHttpClient for HTTP transport and NDJSON serialization.
  */
 
-import { FetchHttpClient } from "@effect/platform"
-import { RpcClient, RpcSerialization } from "@effect/rpc"
+import { FetchHttpClient } from "effect/http"
+import { RpcClient, RpcSerialization } from "effect/rpc"
 import { ChannelRpcs, MessageReactionRpcs, MessageRpcs, TypingIndicatorRpcs } from "@hazel/domain/rpc"
-import { Context, Effect, Layer } from "effect"
+import { Effect, Layer, Context } from "effect"
 import { createBotAuthMiddleware } from "./auth-middleware.ts"
 
 /**
@@ -36,24 +36,23 @@ export interface BotRpcClientConfig {
 /**
  * Internal context tag for the RPC client configuration
  */
-export class BotRpcClientConfigTag extends Context.Tag("@hazel/bot-sdk/BotRpcClientConfig")<
-	BotRpcClientConfigTag,
-	BotRpcClientConfig
->() {}
+export class BotRpcClientConfigTag extends Context.Service<BotRpcClientConfigTag, BotRpcClientConfig>()(
+	"@hazel/bot-sdk/BotRpcClientConfig",
+) {}
 
 /**
  * Context tag for the RPC client instance
  * Type is inferred from the actual RpcClient.make result
  */
-export class BotRpcClient extends Context.Tag("@hazel/bot-sdk/BotRpcClient")<
+export class BotRpcClient extends Context.Service<
 	BotRpcClient,
-	Effect.Effect.Success<ReturnType<typeof makeBotRpcClient>>
->() {}
+	Effect.Success<ReturnType<typeof makeBotRpcClient>>
+>()("@hazel/bot-sdk/BotRpcClient") {}
 
 /**
  * Create a scoped layer that provides the RPC client
  */
-export const BotRpcClientLive = Layer.scoped(
+export const BotRpcClientLive = Layer.effect(
 	BotRpcClient,
 	Effect.gen(function* () {
 		const config = yield* BotRpcClientConfigTag
@@ -72,7 +71,7 @@ export const makeBotRpcClient = Effect.fn("BotRpcClient.makeBotRpcClient")(funct
 	config: BotRpcClientConfig,
 ) {
 	// Use HTTP endpoint for bots (simpler, more reliable than WebSocket)
-	const rpcUrl = `${config.backendUrl}/rpc-http`
+	const rpcUrl = `${config.backendUrl}/rpc`
 
 	// Create HTTP protocol layer
 	const ProtocolLayer = RpcClient.layerProtocolHttp({

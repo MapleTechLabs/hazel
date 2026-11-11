@@ -5,8 +5,8 @@
  * retries, and proper error handling.
  */
 
-import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "@effect/platform"
-import { Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
+import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "effect/http"
+import { Context, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
 
 // ============================================================================
 // Configuration
@@ -235,7 +235,7 @@ const GraphQLError = Schema.Struct({
 })
 
 const GetDefaultTeamResponse = Schema.Struct({
-	data: Schema.optionalWith(
+	data: Schema.OptionFromOptional(
 		Schema.Struct({
 			teams: Schema.Struct({
 				nodes: Schema.Array(
@@ -246,36 +246,32 @@ const GetDefaultTeamResponse = Schema.Struct({
 				),
 			}),
 		}),
-		{ as: "Option" },
 	),
-	errors: Schema.optionalWith(Schema.Array(GraphQLError), { as: "Option" }),
+	errors: Schema.OptionFromOptional(Schema.Array(GraphQLError)),
 })
 
 const CreateIssueResponse = Schema.Struct({
-	data: Schema.optionalWith(
+	data: Schema.OptionFromOptional(
 		Schema.Struct({
 			issueCreate: Schema.Struct({
 				success: Schema.Boolean,
-				issue: Schema.optionalWith(
+				issue: Schema.OptionFromOptional(
 					Schema.Struct({
 						id: Schema.String,
 						identifier: Schema.String,
 						title: Schema.String,
 						url: Schema.String,
-						team: Schema.optionalWith(
+						team: Schema.OptionFromOptional(
 							Schema.Struct({
 								name: Schema.String,
 							}),
-							{ as: "Option" },
 						),
 					}),
-					{ as: "Option" },
 				),
 			}),
 		}),
-		{ as: "Option" },
 	),
-	errors: Schema.optionalWith(Schema.Array(GraphQLError), { as: "Option" }),
+	errors: Schema.OptionFromOptional(Schema.Array(GraphQLError)),
 })
 
 const GetIssueResponse = Schema.Struct({
@@ -322,13 +318,13 @@ const GetIssueResponse = Schema.Struct({
 				}),
 			),
 		}),
-		null,
+		{ onNoneEncoding: null },
 	),
-	errors: Schema.OptionFromNullishOr(Schema.Array(GraphQLError), null),
+	errors: Schema.OptionFromNullishOr(Schema.Array(GraphQLError), { onNoneEncoding: null }),
 })
 
 const ViewerResponse = Schema.Struct({
-	data: Schema.optionalWith(
+	data: Schema.OptionFromOptional(
 		Schema.Struct({
 			viewer: Schema.Struct({
 				id: Schema.String,
@@ -342,9 +338,8 @@ const ViewerResponse = Schema.Struct({
 				),
 			}),
 		}),
-		{ as: "Option" },
 	),
-	errors: Schema.optionalWith(Schema.Array(GraphQLError), { as: "Option" }),
+	errors: Schema.OptionFromOptional(Schema.Array(GraphQLError)),
 })
 
 // ============================================================================
@@ -380,7 +375,7 @@ const parseLinearErrorMessage = (errorMessage: string): string => {
  * Retry schedule for transient Linear API errors.
  * Retries up to 3 times with exponential backoff (100ms, 200ms, 400ms)
  */
-const makeRetrySchedule = Schedule.exponential("100 millis").pipe(Schedule.intersect(Schedule.recurs(3)))
+const makeRetrySchedule = Schedule.max([Schedule.exponential("100 millis"), Schedule.recurs(3)])
 
 /**
  * Check if an error is retryable (rate limit or server error)
@@ -418,9 +413,8 @@ const isRetryableError = (
  * const issue = yield* client.fetchIssue("ENG-123", accessToken)
  * ```
  */
-export class LinearApiClient extends Effect.Service<LinearApiClient>()("LinearApiClient", {
-	accessors: true,
-	effect: Effect.gen(function* () {
+export class LinearApiClient extends Context.Service<LinearApiClient>()("LinearApiClient", {
+	make: Effect.gen(function* () {
 		const httpClient = yield* HttpClient.HttpClient
 
 		/**
@@ -485,22 +479,16 @@ export class LinearApiClient extends Effect.Service<LinearApiClient>()("LinearAp
 				return yield* response.json as Effect.Effect<R>
 			}).pipe(
 				// Map HTTP client errors to LinearApiError
-				Effect.catchTag("TimeoutException", () =>
+				Effect.catchTag("TimeoutError", () =>
 					Effect.fail(new LinearApiError({ message: "Request timed out" })),
 				),
-				Effect.catchTag("RequestError", (error) =>
+				Effect.catchTag("HttpClientError", (error) =>
 					Effect.fail(
 						new LinearApiError({
-							message: `Network error: ${String(error)}`,
-							cause: error,
-						}),
-					),
-				),
-				Effect.catchTag("ResponseError", (error) =>
-					Effect.fail(
-						new LinearApiError({
-							message: `Response error: ${String(error)}`,
-							status: error.response.status,
+							message: error.response
+								? `Response error: ${String(error)}`
+								: `Network error: ${String(error)}`,
+							status: error.response?.status,
 							cause: error,
 						}),
 					),
@@ -515,7 +503,7 @@ export class LinearApiClient extends Effect.Service<LinearApiClient>()("LinearAp
 				const client = makeAuthenticatedClient(accessToken)
 				const rawResponse = yield* executeGraphQL(client, GET_DEFAULT_TEAM_QUERY)
 
-				const response = yield* Schema.decodeUnknown(GetDefaultTeamResponse)(rawResponse).pipe(
+				const response = yield* Schema.decodeUnknownEffect(GetDefaultTeamResponse)(rawResponse).pipe(
 					Effect.mapError(
 						(parseError) =>
 							new LinearApiError({
@@ -572,7 +560,7 @@ export class LinearApiClient extends Effect.Service<LinearApiClient>()("LinearAp
 					description: params.description || null,
 				})
 
-				const response = yield* Schema.decodeUnknown(CreateIssueResponse)(rawResponse).pipe(
+				const response = yield* Schema.decodeUnknownEffect(CreateIssueResponse)(rawResponse).pipe(
 					Effect.mapError(
 						(parseError) =>
 							new LinearApiError({
@@ -627,7 +615,7 @@ export class LinearApiClient extends Effect.Service<LinearApiClient>()("LinearAp
 					Effect.annotateLogs("rawResponse", JSON.stringify(rawResponse, null, 2)),
 				)
 
-				const response = yield* Schema.decodeUnknown(GetIssueResponse)(rawResponse).pipe(
+				const response = yield* Schema.decodeUnknownEffect(GetIssueResponse)(rawResponse).pipe(
 					Effect.tapError((parseError) =>
 						Effect.logError("Linear API parse error").pipe(
 							Effect.annotateLogs("parseError", String(parseError)),
@@ -697,7 +685,7 @@ export class LinearApiClient extends Effect.Service<LinearApiClient>()("LinearAp
 				const client = makeAuthenticatedClient(accessToken)
 				const rawResponse = yield* executeGraphQL(client, VIEWER_QUERY)
 
-				const response = yield* Schema.decodeUnknown(ViewerResponse)(rawResponse).pipe(
+				const response = yield* Schema.decodeUnknownEffect(ViewerResponse)(rawResponse).pipe(
 					Effect.mapError(
 						(parseError) =>
 							new LinearApiError({
@@ -743,5 +731,6 @@ export class LinearApiClient extends Effect.Service<LinearApiClient>()("LinearAp
 			getAccountInfo,
 		}
 	}),
-	dependencies: [FetchHttpClient.layer],
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(FetchHttpClient.layer))
+}

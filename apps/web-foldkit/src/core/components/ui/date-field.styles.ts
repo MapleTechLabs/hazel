@@ -1,0 +1,24 @@
+export const dateInputStyles = [
+	"relative block appearance-none rounded-lg px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] sm:px-[calc(--spacing(3)-1px)] sm:py-[calc(--spacing(1.5)-1px)]",
+	"text-base/6 text-fg placeholder:text-muted-fg sm:text-sm/6",
+	"border border-transparent bg-field enabled:hover:bg-field-hover",
+	"focus-within:border-ring/70 focus-within:outline-hidden focus-within:ring-3 focus-within:ring-ring/20 focus-within:hover:border-ring/80",
+	"group-data-open:border-ring/70 group-data-open:outline-hidden group-data-open:ring-3 group-data-open:ring-ring/20 group-data-open:enabled:hover:border-ring/80",
+	"data-invalid:border-danger-subtle-fg/70 focus-within:data-invalid:border-danger-subtle-fg/70 focus-within:data-invalid:ring-danger-subtle-fg/20 focus-within:data-invalid:hover:border-danger-subtle-fg/80 data-invalid:enabled:hover:border-danger-subtle-fg/80",
+	"in-data-disabled:bg-muted data-disabled:bg-muted forced-colors:in-data-disabled:text-[GrayText] forced-colors:data-disabled:text-[GrayText]",
+	"dark:scheme-dark",
+]
+
+/** DateInput's wrapper span. */
+export const dateInputControlStyles = "relative block"
+
+/** Each DateSegment: `twJoin(...dateSegmentStyles)`. */
+export const dateSegmentStyles = [
+	"inline shrink-0 rounded px-1 data-[type=literal]:px-0 py-0.5 text-fg tracking-wider caret-transparent outline-0 data-placeholder:not-data-focused:text-muted-fg sm:text-sm",
+	"focus:bg-primary-subtle focus:text-primary-subtle-fg focus:data-invalid:bg-danger-subtle focus:data-invalid:text-danger-subtle-fg forced-colors:focus:bg-[Highlight] forced-colors:focus:text-[HighlightText]",
+	"forced-color-adjust-none forced-colors:text-[ButtonText]",
+	"in-data-disabled:bg-muted data-disabled:bg-muted forced-colors:data-disabled:text-[GrayText]",
+]
+
+/** DateField and TimeField roots add this to `fieldStyles`. */
+export const dateFieldClassName = "w-fit"

@@ -1,0 +1,173 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import FooterSection from "@/components/sections/FooterSection.astro";
+import CTASection from "@/components/sections/CTASection.astro";
+
+const features = [
+  { feature: "Real-time messaging", hazel: true, competitor: true },
+  { feature: "Channels & DMs", hazel: true, competitor: true },
+  { feature: "Threaded conversations", hazel: true, competitor: true },
+  { feature: "File sharing & media", hazel: true, competitor: true },
+  { feature: "Full-text search", hazel: true, competitor: true },
+  { feature: "Voice channels", hazel: false, competitor: true },
+  { feature: "Screen sharing", hazel: false, competitor: true },
+  { feature: "Native GitHub integration", hazel: true, competitor: false },
+  { feature: "Native Linear integration", hazel: true, competitor: false },
+  { feature: "Inline code syntax highlighting", hazel: true, competitor: false },
+  { feature: "Keyboard-first interface (⌘K)", hazel: true, competitor: false },
+  { feature: "Professional workspace management", hazel: true, competitor: false },
+  { feature: "SSO / SAML authentication", hazel: true, competitor: false },
+  { feature: "Deployment notifications", hazel: true, competitor: false },
+  { feature: "Self-hosted option", hazel: true, competitor: false },
+  { feature: "Open source", hazel: true, competitor: false },
+  { feature: "Designed for teams (not gaming)", hazel: true, competitor: false },
+  { feature: "Admin controls & permissions", hazel: true, competitor: true },
+  { feature: "Custom bots & webhooks", hazel: true, competitor: true },
+  { feature: "GDPR compliant", hazel: true, competitor: true },
+];
+
+const comparisonFaqs = [
+  {
+    question: "Can I use Discord for my dev team instead of Hazel?",
+    answer: "You can, but Discord was built for gaming communities — not professional teams. Hazel offers native developer integrations, professional workspace management, SSO, audit logs, and a UI designed for focused work rather than social interaction."
+  },
+  {
+    question: "Does Hazel have voice or video calls?",
+    answer: "Hazel currently focuses on text-based communication and integrations. For voice and video, we recommend pairing Hazel with dedicated tools like Zoom, Google Meet, or Around."
+  },
+  {
+    question: "Is Hazel better for open source communities?",
+    answer: "Hazel is ideal for development teams within open source projects. For large public communities with hundreds of casual members, Discord's community features may be more suitable. Many projects use both: Discord for community and Hazel for core team collaboration."
+  },
+  {
+    question: "Can I migrate from Discord to Hazel?",
+    answer: "We offer migration support to help move your team channels and key conversations from Discord to Hazel. Contact us at support@hazel.sh for assistance with your migration."
+  },
+];
+---
+
+<Layout
+  title="Hazel vs Discord - Professional Team Chat Alternative to Discord"
+  description="Compare Hazel vs Discord for team communication: native GitHub integration, professional workspace, SSO, self-hosted option. See why developer teams choose Hazel over Discord."
+  includeFaqSchema={true}
+  faqData={comparisonFaqs}
+>
+  <main class="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full">
+    <!-- Hero -->
+    <section class="w-full py-20 md:py-28 px-6">
+      <div class="max-w-3xl mx-auto text-center">
+        <span class="text-sm font-semibold text-secondary uppercase tracking-wider">Comparison</span>
+        <h1 class="mt-4 text-4xl md:text-6xl font-medium tracking-tighter text-primary">
+          Hazel vs Discord
+        </h1>
+        <p class="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
+          Discord is great for communities. Hazel is built for professional developer teams — with native GitHub and Linear integrations, SSO, audit logs, and workspace management designed for focused work.
+        </p>
+      </div>
+    </section>
+
+    <!-- Comparison Table -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-3xl mx-auto">
+        <div class="border border-border rounded-xl overflow-hidden">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-border bg-card">
+                <th class="text-left p-4 text-primary font-medium">Feature</th>
+                <th class="text-center p-4 text-primary font-medium w-28">Hazel</th>
+                <th class="text-center p-4 text-primary font-medium w-28">Discord</th>
+              </tr>
+            </thead>
+            <tbody>
+              {features.map((row, i) => (
+                <tr class={`border-b border-border last:border-b-0 ${i % 2 === 0 ? '' : 'bg-card/50'}`}>
+                  <td class="p-4 text-muted-foreground">{row.feature}</td>
+                  <td class="p-4 text-center">
+                    {row.hazel ? (
+                      <span class="text-green-500 text-lg">&#10003;</span>
+                    ) : (
+                      <span class="text-muted-foreground text-lg">&#10007;</span>
+                    )}
+                  </td>
+                  <td class="p-4 text-center">
+                    {row.competitor ? (
+                      <span class="text-green-500 text-lg">&#10003;</span>
+                    ) : (
+                      <span class="text-muted-foreground text-lg">&#10007;</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Key Differentiators -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-4xl mx-auto">
+        <h2 class="text-3xl font-medium tracking-tight text-primary text-center mb-12">
+          Why teams move from Discord to Hazel
+        </h2>
+        <div class="grid md:grid-cols-2 gap-8">
+          <div class="border border-border rounded-xl p-8">
+            <h3 class="text-xl font-medium text-primary">Built for work, not gaming</h3>
+            <p class="mt-3 text-muted-foreground">
+              Discord was designed for gaming communities. Hazel is designed for professional teams with workspace management, admin controls, and a distraction-free UI built for productivity.
+            </p>
+          </div>
+          <div class="border border-border rounded-xl p-8">
+            <h3 class="text-xl font-medium text-primary">Native developer integrations</h3>
+            <p class="mt-3 text-muted-foreground">
+              Discord's developer integrations are community-built bots. Hazel provides first-class, native integrations with GitHub, Linear, and Railway — showing rich previews and real-time status updates.
+            </p>
+          </div>
+          <div class="border border-border rounded-xl p-8">
+            <h3 class="text-xl font-medium text-primary">Enterprise-ready security</h3>
+            <p class="mt-3 text-muted-foreground">
+              Discord lacks SSO, SAML, and audit logging. Hazel provides GitHub, Google and passkey sign-in, role-based access control, and self-hosted deployment for full data sovereignty.
+            </p>
+          </div>
+          <div class="border border-border rounded-xl p-8">
+            <h3 class="text-xl font-medium text-primary">Professional appearance</h3>
+            <p class="mt-3 text-muted-foreground">
+              Using Discord for work can feel unprofessional. Hazel provides a clean, business-appropriate interface that you can share with clients, stakeholders, and new hires without hesitation.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-3xl mx-auto">
+        <h2 class="text-3xl font-medium tracking-tight text-primary text-center mb-12">
+          Frequently asked questions
+        </h2>
+        <div class="space-y-6">
+          {comparisonFaqs.map((faq) => (
+            <div class="border border-border rounded-xl p-6">
+              <h3 class="text-lg font-medium text-primary">{faq.question}</h3>
+              <p class="mt-2 text-muted-foreground">{faq.answer}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- Also Compare -->
+    <section class="w-full py-12 px-6">
+      <div class="max-w-3xl mx-auto text-center">
+        <p class="text-muted-foreground">
+          Also compare: <a href="/vs/slack" class="text-secondary hover:underline font-medium">Hazel vs Slack</a>
+          &middot; <a href="/features" class="text-secondary hover:underline font-medium">See all features</a>
+          &middot; <a href="/pricing" class="text-secondary hover:underline font-medium">View pricing</a>
+        </p>
+      </div>
+    </section>
+
+    <CTASection />
+    <FooterSection />
+  </main>
+</Layout>

@@ -54,12 +54,13 @@ export function buildRailwayEmbed(payload: RailwayPayload): MessageEmbed {
 	// Commit info (if available)
 	if (details.commitHash) {
 		const shortHash = details.commitHash.slice(0, 7)
+		const prefix = `\`${shortHash}\``
 		const commitValue = details.commitMessage
-			? `\`${shortHash}\` - ${details.commitMessage}`
-			: `\`${shortHash}\``
+			? `${prefix} - ${details.commitMessage.split("\n")[0]}`
+			: prefix
 		fields.push({
 			name: "Commit",
-			value: commitValue,
+			value: commitValue.length > 1024 ? `${commitValue.slice(0, 1021)}...` : commitValue,
 			inline: false,
 		})
 	}

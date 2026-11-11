@@ -6,28 +6,22 @@ import * as Resources from "@opentelemetry/resources"
 import * as OtelSemConv from "@opentelemetry/semantic-conventions"
 import * as Arr from "effect/Array"
 import * as Config from "effect/Config"
-import { GenericTag } from "effect/Context"
+import * as Context from "effect/Context"
 import * as Effect from "effect/Effect"
-import { pipe } from "effect/Function"
 import * as Layer from "effect/Layer"
 
 /**
  * @since 1.0.0
- * @category identifier
+ * @category Services
  */
-export interface Resource {
-  readonly _: unique symbol
-}
+export class Resource extends Context.Service<
+  Resource,
+  Resources.Resource
+>()("@effect/opentelemetry/Resource") {}
 
 /**
  * @since 1.0.0
- * @category tag
- */
-export const Resource = GenericTag<Resource, Resources.Resource>("@effect/opentelemetry/Resource")
-
-/**
- * @since 1.0.0
- * @category layer
+ * @category Layers
  */
 export const layer = (config: {
   readonly serviceName: string
@@ -41,7 +35,7 @@ export const layer = (config: {
 
 /**
  * @since 1.0.0
- * @category config
+ * @category Configuration
  */
 export const configToAttributes = (options: {
   readonly serviceName: string
@@ -64,7 +58,7 @@ export const configToAttributes = (options: {
 
 /**
  * @since 1.0.0
- * @category layer
+ * @category Layers
  */
 export const layerFromEnv = (
   additionalAttributes?:
@@ -74,9 +68,8 @@ export const layerFromEnv = (
   Layer.effect(
     Resource,
     Effect.gen(function*() {
-      const serviceName = yield* pipe(Config.string("OTEL_SERVICE_NAME"), Config.option, Effect.orDie)
-      const attributes = yield* pipe(
-        Config.string("OTEL_RESOURCE_ATTRIBUTES"),
+      const serviceName = yield* Config.option(Config.string("OTEL_SERVICE_NAME"))
+      const attributes = yield* Config.string("OTEL_RESOURCE_ATTRIBUTES").pipe(
         Config.withDefault(""),
         Config.map((s) => {
           const attrs = s.split(",")
@@ -88,8 +81,7 @@ export const layerFromEnv = (
             acc[parts[0].trim()] = parts[1].trim()
             return acc
           })
-        }),
-        Effect.orDie
+        })
       )
       if (serviceName._tag === "Some") {
         attributes[OtelSemConv.ATTR_SERVICE_NAME] = serviceName.value
@@ -98,12 +90,12 @@ export const layerFromEnv = (
         Object.assign(attributes, additionalAttributes)
       }
       return Resources.resourceFromAttributes(attributes)
-    })
+    }).pipe(Effect.orDie)
   )
 
 /**
- * @since 2.0.0
- * @category layer
+ * @since 1.0.0
+ * @category Layers
  */
 export const layerEmpty = Layer.succeed(
   Resource,

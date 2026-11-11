@@ -1,23 +1,23 @@
 import { ChannelId, UserId, UserPresenceStatusId } from "@hazel/schema"
-import { Schema } from "effect"
+import { Schema as S } from "effect"
 import * as M from "./utils"
 import { JsonDate } from "./utils"
 
-export const UserPresenceStatusEnum = Schema.Literal("online", "away", "busy", "dnd", "offline")
-export type UserPresenceStatusEnum = Schema.Schema.Type<typeof UserPresenceStatusEnum>
+export const UserPresenceStatusEnum = S.Literals(["online", "away", "busy", "dnd", "offline"])
+export type UserPresenceStatusEnum = S.Schema.Type<typeof UserPresenceStatusEnum>
 
-export class Model extends M.Class<Model>("UserPresenceStatus")({
+class Model extends M.Class<Model>("UserPresenceStatus")({
 	id: M.Generated(UserPresenceStatusId),
-	userId: UserId,
+	userId: M.Immutable(UserId),
 	status: UserPresenceStatusEnum,
-	customMessage: Schema.NullOr(Schema.String),
-	statusEmoji: Schema.NullOr(Schema.String),
-	statusExpiresAt: Schema.NullOr(JsonDate),
-	activeChannelId: Schema.NullOr(ChannelId),
-	suppressNotifications: Schema.Boolean,
-	updatedAt: JsonDate,
-	lastSeenAt: JsonDate,
+	customMessage: S.NullOr(S.String),
+	statusEmoji: S.NullOr(S.String),
+	statusExpiresAt: S.NullOr(JsonDate),
+	activeChannelId: M.GeneratedByApp(S.NullOr(ChannelId)),
+	suppressNotifications: S.Boolean,
+	updatedAt: M.GeneratedByApp(JsonDate),
+	lastSeenAt: M.GeneratedByApp(JsonDate),
 }) {}
 
-export const Insert = Model.insert
-export const Update = Model.update
+export const { Insert, Update, Schema, Create, Patch } = M.expose(Model)
+export type Type = typeof Schema.Type

@@ -1,8 +1,9 @@
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "@effect/platform"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { Schema } from "effect"
 import * as CurrentUser from "../current-user"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { OrganizationId } from "../ids"
+import { OrganizationId } from "@hazel/schema"
+import { RequiredScopes } from "../scopes/required-scopes"
 
 // Provider type for bot commands
 export const CommandProvider = Schema.Literal("bot")
@@ -24,7 +25,7 @@ export const CommandArgumentSchema = Schema.Struct({
 	description: Schema.NullishOr(Schema.String),
 	required: Schema.Boolean,
 	placeholder: Schema.NullishOr(Schema.String),
-	type: Schema.Literal("string", "number", "user", "channel"),
+	type: Schema.Literals(["string", "number", "user", "channel"]),
 })
 export type CommandArgumentSchema = typeof CommandArgumentSchema.Type
 
@@ -59,22 +60,19 @@ export class AvailableCommandsResponse extends Schema.Class<AvailableCommandsRes
 export class IntegrationCommandGroup extends HttpApiGroup.make("integration-commands")
 	// Get available commands for the current organization
 	.add(
-		HttpApiEndpoint.get("getAvailableCommands", `/:orgId/commands`)
-			.addSuccess(AvailableCommandsResponse)
-			.addError(UnauthorizedError)
-			.addError(InternalServerError)
-			.setPath(
-				Schema.Struct({
-					orgId: OrganizationId,
-				}),
-			)
-			.annotateContext(
+		HttpApiEndpoint.get("getAvailableCommands", `/:orgId/commands`, {
+			params: { orgId: OrganizationId },
+			success: AvailableCommandsResponse,
+			error: [UnauthorizedError, InternalServerError],
+		})
+			.annotateMerge(
 				OpenApi.annotations({
 					title: "Get Available Commands",
 					description: "Get all slash commands available from installed bots",
 					summary: "List bot commands",
 				}),
-			),
+			)
+			.annotate(RequiredScopes, ["bots:read"]),
 	)
 	.prefix("/integrations")
 	.middleware(CurrentUser.Authorization) {}

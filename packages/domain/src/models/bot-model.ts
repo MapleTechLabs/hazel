@@ -1,30 +1,29 @@
 import { BotId, UserId } from "@hazel/schema"
-import { Schema } from "effect"
+import { Schema as S } from "effect"
 import { IntegrationProvider } from "./integration-connection-model"
 import * as M from "./utils"
-import { baseFields, JsonDate } from "./utils"
+import { baseFields } from "./utils"
 
-export class Model extends M.Class<Model>("Bot")({
+class Model extends M.Class<Model>("Bot")({
 	id: M.Generated(BotId),
-	userId: UserId,
-	createdBy: UserId,
-	name: Schema.String,
-	description: Schema.NullOr(Schema.String),
-	webhookUrl: Schema.NullOr(Schema.String),
-	apiTokenHash: Schema.String,
-	scopes: Schema.NullOr(Schema.Array(Schema.String)),
-	metadata: Schema.NullOr(
-		Schema.Record({
-			key: Schema.String,
-			value: Schema.Unknown,
-		}),
-	),
-	isPublic: Schema.Boolean,
-	installCount: Schema.Number,
+	userId: M.Immutable(UserId),
+	createdBy: M.Immutable(UserId),
+	name: S.String,
+	description: S.NullOr(S.String),
+	webhookUrl: S.NullOr(S.String),
+	apiTokenHash: M.Sensitive(S.String),
+	scopes: S.NullOr(S.Array(S.String)),
+	metadata: S.NullOr(S.Record(S.String, S.Unknown)),
+	isPublic: S.Boolean,
+	installCount: M.GeneratedByApp(S.Number),
 	// List of integration providers this bot is allowed to use (e.g., ["linear", "github"])
-	allowedIntegrations: Schema.NullOr(Schema.Array(IntegrationProvider)),
+	allowedIntegrations: S.NullOr(S.Array(IntegrationProvider)),
+	// Whether this bot can be @mentioned in messages
+	mentionable: S.Boolean,
+	// Where the bot-install consent page (`/oauth/bot-install`) may send an install grant
+	installRedirectUris: S.NullOr(S.Array(S.String)),
 	...baseFields,
 }) {}
 
-export const Insert = Model.insert
-export const Update = Model.update
+export const { Insert, Update, Schema, Create, Patch } = M.expose(Model)
+export type Type = typeof Schema.Type

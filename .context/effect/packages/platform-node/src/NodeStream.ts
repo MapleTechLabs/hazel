@@ -3,6 +3,6 @@
  */
 
 /**
- * @category models
+ * @since 1.0.0
  */
 export * from "@effect/platform-node-shared/NodeStream"

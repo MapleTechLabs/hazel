@@ -1,54 +1,38 @@
-import { type AttachmentId, ErrorUtils, policy, withSystemActor } from "@hazel/domain"
-import { Effect, Option } from "effect"
+import { AttachmentRepo, MessageRepo } from "@hazel/backend-core"
+import { ErrorUtils, policy } from "@hazel/domain"
+import type { AttachmentId } from "@hazel/schema"
+import { Context, Effect, Layer, Option } from "effect"
 import { isAdminOrOwner } from "../lib/policy-utils"
-import { AttachmentRepo } from "../repositories/attachment-repo"
-import { ChannelMemberRepo } from "../repositories/channel-member-repo"
-import { ChannelRepo } from "../repositories/channel-repo"
-import { MessageRepo } from "../repositories/message-repo"
-import { OrganizationMemberRepo } from "../repositories/organization-member-repo"
+import { ChannelViewers } from "../services/channel-viewers"
 
-export class AttachmentPolicy extends Effect.Service<AttachmentPolicy>()("AttachmentPolicy/Policy", {
-	effect: Effect.gen(function* () {
+/**
+ * Attachment authorization, run inside the attachment's `ChannelObject`: the uploader manages an
+ * upload; once it is on a message, the message's author and an org admin or owner viewing the
+ * channel (`channel_viewers`) may delete it, and any viewer may see it.
+ */
+export class AttachmentPolicy extends Context.Service<AttachmentPolicy>()("AttachmentPolicy/Policy", {
+	make: Effect.gen(function* () {
 		const policyEntity = "Attachment" as const
 
 		const attachmentRepo = yield* AttachmentRepo
 		const messageRepo = yield* MessageRepo
-		const channelRepo = yield* ChannelRepo
-		const organizationMemberRepo = yield* OrganizationMemberRepo
-		const channelMemberRepo = yield* ChannelMemberRepo
+		const channelViewers = yield* ChannelViewers
 
+		const uploaderOnly = (action: string, uploadedBy: string) =>
+			policy(policyEntity, action, (actor) => Effect.succeed(actor.id === uploadedBy))
+
+		/** Uploads are admitted where they are created (the channel's object checks the viewer). */
 		const canCreate = () =>
 			ErrorUtils.refailUnauthorized(
 				policyEntity,
 				"create",
-			)(
-				policy(
-					policyEntity,
-					"create",
-					Effect.fn(`${policyEntity}.create`)(function* (_actor) {
-						// Any authenticated user can upload attachments initially
-						// The actual association with messages is controlled by message policies
-						return yield* Effect.succeed(true)
-					}),
-				),
-			)
+			)(policy(policyEntity, "create", () => Effect.succeed(true)))
 
 		const canUpdate = (id: AttachmentId) =>
 			ErrorUtils.refailUnauthorized(
 				policyEntity,
 				"update",
-			)(
-				attachmentRepo.with(id, (attachment) =>
-					policy(
-						policyEntity,
-						"update",
-						Effect.fn(`${policyEntity}.update`)(function* (actor) {
-							// Only the uploader can update their attachment metadata
-							return yield* Effect.succeed(actor.id === attachment.uploadedBy)
-						}),
-					),
-				),
-			)
+			)(attachmentRepo.with(id, (attachment) => uploaderOnly("update", attachment.uploadedBy)))
 
 		const canDelete = (id: AttachmentId) =>
 			ErrorUtils.refailUnauthorized(
@@ -56,47 +40,23 @@ export class AttachmentPolicy extends Effect.Service<AttachmentPolicy>()("Attach
 				"delete",
 			)(
 				attachmentRepo.with(id, (attachment) => {
-					// If attachment is not yet associated with a message
-					if (!attachment.messageId) {
-						return policy(
+					const messageId = attachment.messageId
+					if (!messageId) return uploaderOnly("delete", attachment.uploadedBy)
+					return messageRepo.with(messageId, (message) =>
+						policy(
 							policyEntity,
 							"delete",
 							Effect.fn(`${policyEntity}.delete`)(function* (actor) {
-								// Only uploader can delete unattached files
-								return yield* Effect.succeed(actor.id === attachment.uploadedBy)
+								if (actor.id === attachment.uploadedBy || actor.id === message.authorId) {
+									return true
+								}
+								const viewer = yield* channelViewers.viewerOf(actor.id)
+								return (
+									Option.isSome(viewer) &&
+									viewer.value.role !== "guest" &&
+									isAdminOrOwner(viewer.value.role)
+								)
 							}),
-						)
-					}
-
-					// If attachment is associated with a message
-					return messageRepo.with(attachment.messageId, (message) =>
-						channelRepo.with(message.channelId, (channel) =>
-							policy(
-								policyEntity,
-								"delete",
-								Effect.fn(`${policyEntity}.delete`)(function* (actor) {
-									// Uploader can delete their own attachment
-									if (actor.id === attachment.uploadedBy) {
-										return yield* Effect.succeed(true)
-									}
-
-									// Message author can delete attachments on their message
-									if (actor.id === message.authorId) {
-										return yield* Effect.succeed(true)
-									}
-
-									// Organization admins/owners can delete any attachment
-									const orgMember = yield* organizationMemberRepo
-										.findByOrgAndUser(channel.organizationId, actor.id)
-										.pipe(withSystemActor)
-
-									if (Option.isSome(orgMember) && isAdminOrOwner(orgMember.value.role)) {
-										return yield* Effect.succeed(true)
-									}
-
-									return yield* Effect.succeed(false)
-								}),
-							),
 						),
 					)
 				}),
@@ -108,72 +68,19 @@ export class AttachmentPolicy extends Effect.Service<AttachmentPolicy>()("Attach
 				"view",
 			)(
 				attachmentRepo.with(id, (attachment) => {
-					// If attachment is not yet associated with a message
-					if (!attachment.messageId) {
-						return policy(
-							policyEntity,
-							"view",
-							Effect.fn(`${policyEntity}.view`)(function* (actor) {
-								// Only uploader can view unattached files
-								return yield* Effect.succeed(actor.id === attachment.uploadedBy)
-							}),
-						)
-					}
-
-					// If attachment is associated with a message
-					return messageRepo.with(attachment.messageId, (message) =>
-						channelRepo.with(message.channelId, (channel) =>
-							policy(
-								policyEntity,
-								"view",
-								Effect.fn(`${policyEntity}.view`)(function* (actor) {
-									// For public channels, org members can view
-									if (channel.type === "public") {
-										const orgMember = yield* organizationMemberRepo.findByOrgAndUser(
-											channel.organizationId,
-											actor.id,
-										)
-
-										if (Option.isSome(orgMember)) {
-											return yield* Effect.succeed(true)
-										}
-									}
-
-									// For private channels, check if user is a channel member or org admin
-									const orgMember = yield* organizationMemberRepo
-										.findByOrgAndUser(channel.organizationId, actor.id)
-										.pipe(withSystemActor)
-
-									// Organization admins/owners can view all attachments
-									if (Option.isSome(orgMember) && isAdminOrOwner(orgMember.value.role)) {
-										return yield* Effect.succeed(true)
-									}
-
-									// Check if user is a member of the private channel
-									const channelMembership = yield* channelMemberRepo
-										.findByChannelAndUser(channel.id, actor.id)
-										.pipe(withSystemActor)
-
-									if (Option.isSome(channelMembership)) {
-										return yield* Effect.succeed(true)
-									}
-
-									return yield* Effect.succeed(false)
-								}),
-							),
-						),
+					if (!attachment.messageId) return uploaderOnly("view", attachment.uploadedBy)
+					return policy(policyEntity, "view", (actor) =>
+						Effect.map(channelViewers.viewerOf(actor.id), Option.isSome),
 					)
 				}),
 			)
 
 		return { canCreate, canUpdate, canDelete, canView } as const
 	}),
-	dependencies: [
-		AttachmentRepo.Default,
-		MessageRepo.Default,
-		ChannelRepo.Default,
-		OrganizationMemberRepo.Default,
-		ChannelMemberRepo.Default,
-	],
-	accessors: true,
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make).pipe(
+		Layer.provide(AttachmentRepo.layer),
+		Layer.provide(MessageRepo.layer),
+		Layer.provide(ChannelViewers.layer),
+	)
+}

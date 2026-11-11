@@ -1,11 +1,12 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { TypingIndicatorId } from "../ids"
+import { TypingIndicatorId } from "@hazel/schema"
 import { TypingIndicator } from "../models"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteChannelId } from "./routing-fields"
 
 /**
  * Response schema for successful typing indicator operations.
@@ -13,7 +14,7 @@ import { AuthMiddleware } from "./middleware"
  */
 export class TypingIndicatorResponse extends Schema.Class<TypingIndicatorResponse>("TypingIndicatorResponse")(
 	{
-		data: TypingIndicator.Model.json,
+		data: TypingIndicator.Schema,
 		transactionId: TransactionId,
 	},
 ) {}
@@ -36,8 +37,8 @@ export class TypingIndicatorNotFoundError extends Schema.TaggedError<TypingIndic
 export class CreateTypingIndicatorPayload extends Schema.Class<CreateTypingIndicatorPayload>(
 	"CreateTypingIndicatorPayload",
 )({
-	channelId: Schema.UUID.pipe(Schema.brand("@HazelChat/ChannelId")),
-	memberId: Schema.UUID.pipe(Schema.brand("@HazelChat/ChannelMemberId")),
+	channelId: Schema.String.check(Schema.isUUID()).pipe(Schema.brand("@HazelChat/ChannelId")),
+	memberId: Schema.String.check(Schema.isUUID()).pipe(Schema.brand("@HazelChat/ChannelMemberId")),
 	lastTyped: Schema.optional(Schema.Number),
 }) {}
 
@@ -85,11 +86,13 @@ export class TypingIndicatorRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("typingIndicator.create", {
+	Rpc.make("typingIndicator.create", {
 		payload: CreateTypingIndicatorPayload,
 		success: TypingIndicatorResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["typing-indicators:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * TypingIndicatorUpdate
@@ -103,14 +106,17 @@ export class TypingIndicatorRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("typingIndicator.update", {
+	Rpc.make("typingIndicator.update", {
 		payload: Schema.Struct({
+			channelId: RouteChannelId,
 			id: TypingIndicatorId,
 			lastTyped: Schema.optional(Schema.Number),
 		}),
 		success: TypingIndicatorResponse,
-		error: Schema.Union(TypingIndicatorNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([TypingIndicatorNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["typing-indicators:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * TypingIndicatorDelete
@@ -124,9 +130,11 @@ export class TypingIndicatorRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("typingIndicator.delete", {
-		payload: Schema.Struct({ id: TypingIndicatorId }),
+	Rpc.make("typingIndicator.delete", {
+		payload: Schema.Struct({ id: TypingIndicatorId, channelId: RouteChannelId }),
 		success: TypingIndicatorResponse,
-		error: Schema.Union(TypingIndicatorNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([TypingIndicatorNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["typing-indicators:write"])
+		.middleware(AuthMiddleware),
 ) {}

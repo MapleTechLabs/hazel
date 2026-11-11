@@ -1,33 +1,22 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { BotId } from "@hazel/schema"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
-import { InternalServerError, UnauthorizedError } from "../errors"
+import { ActiveOrganizationRequiredError, InternalServerError, UnauthorizedError } from "../errors"
 import { Bot, BotCommand } from "../models"
 import { RateLimitExceededError } from "../rate-limit-errors"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
-
-/**
- * Bot Scopes - what the bot is allowed to do
- */
-export const BotScope = Schema.Literal(
-	"messages:read",
-	"messages:write",
-	"channels:read",
-	"channels:write",
-	"users:read",
-	"reactions:write",
-	"commands:register",
-)
-export type BotScope = typeof BotScope.Type
+import { RouteOrganizationId } from "./routing-fields"
+import { RequiredScopes } from "../scopes/required-scopes"
+import { ApiScope } from "../scopes/api-scope"
+import { InstallRedirectUris } from "../bot-install"
 
 /**
  * Response schema for bot operations.
  * Contains the bot data and a transaction ID for optimistic updates.
  */
 export class BotResponse extends Schema.Class<BotResponse>("BotResponse")({
-	data: Bot.Model.json,
+	data: Bot.Schema,
 	transactionId: TransactionId,
 }) {}
 
@@ -35,7 +24,7 @@ export class BotResponse extends Schema.Class<BotResponse>("BotResponse")({
  * Response for bot creation - includes the plain token (only shown once).
  */
 export class BotCreatedResponse extends Schema.Class<BotCreatedResponse>("BotCreatedResponse")({
-	data: Bot.Model.json,
+	data: Bot.Schema,
 	token: Schema.String, // Plain token, only returned once on creation
 	transactionId: TransactionId,
 }) {}
@@ -44,21 +33,21 @@ export class BotCreatedResponse extends Schema.Class<BotCreatedResponse>("BotCre
  * Response for listing bots.
  */
 export class BotListResponse extends Schema.Class<BotListResponse>("BotListResponse")({
-	data: Schema.Array(Bot.Model.json),
+	data: Schema.Array(Bot.Schema),
 }) {}
 
 /**
  * Response for listing bot commands.
  */
 export class BotCommandListResponse extends Schema.Class<BotCommandListResponse>("BotCommandListResponse")({
-	data: Schema.Array(BotCommand.Model.json),
+	data: Schema.Array(BotCommand.Schema),
 }) {}
 
 /**
  * Public bot info for marketplace - includes install status and creator name.
  */
 export const PublicBotInfo = Schema.Struct({
-	...Bot.Model.json.fields,
+	...Bot.Schema.fields,
 	isInstalled: Schema.Boolean,
 	creatorName: Schema.String,
 })
@@ -87,6 +76,46 @@ export class BotAlreadyInstalledError extends Schema.TaggedError<BotAlreadyInsta
 		botId: BotId,
 	},
 ) {}
+
+/** The redirect URI is not one the bot's owner registered (`installRedirectUris`). */
+export class BotInstallRedirectMismatchError extends Schema.TaggedError<BotInstallRedirectMismatchError>()(
+	"BotInstallRedirectMismatchError",
+	{
+		botId: BotId,
+	},
+) {}
+
+/**
+ * The bot is already installed in this organization for another region of its service: the
+ * install has to be removed first, or the earlier region's link would silently stop receiving.
+ */
+export class BotInstallRegionConflictError extends Schema.TaggedError<BotInstallRegionConflictError>()(
+	"BotInstallRegionConflictError",
+	{
+		botId: BotId,
+		/** The region the existing install belongs to; `null` for the default one. */
+		installedRegion: Schema.NullOr(Schema.String),
+	},
+) {}
+
+/** What the bot-install consent page shows about the bot asking to be installed. */
+export class BotInstallRequestResponse extends Schema.Class<BotInstallRequestResponse>(
+	"BotInstallRequestResponse",
+)({
+	id: BotId,
+	name: Schema.String,
+	description: Schema.NullOr(Schema.String),
+	avatarUrl: Schema.NullOr(Schema.String),
+	creatorName: Schema.String,
+}) {}
+
+/** An approved install: the one-time `code` the consent page hands the bot's redirect URI. */
+export class BotInstallAuthorizedResponse extends Schema.Class<BotInstallAuthorizedResponse>(
+	"BotInstallAuthorizedResponse",
+)({
+	code: Schema.String,
+	transactionId: TransactionId,
+}) {}
 
 /**
  * Bot RPC Group
@@ -124,17 +153,26 @@ export class BotRpcs extends RpcGroup.make(
 	 * @returns Bot data, plain token, and transaction ID
 	 * @throws UnauthorizedError if user is not authenticated
 	 */
-	Rpc.mutation("bot.create", {
+	Rpc.make("bot.create", {
 		payload: Schema.Struct({
-			name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
-			description: Schema.optional(Schema.String.pipe(Schema.maxLength(500))),
+			name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100)),
+			description: Schema.optional(Schema.String.check(Schema.isMaxLength(500))),
 			webhookUrl: Schema.optional(Schema.String),
-			scopes: Schema.Array(BotScope),
+			scopes: Schema.Array(ApiScope),
 			isPublic: Schema.optional(Schema.Boolean),
+			/** The org to install it in; defaults to the caller's active org. */
+			organizationId: RouteOrganizationId,
 		}),
 		success: BotCreatedResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError, RateLimitExceededError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([
+			ActiveOrganizationRequiredError,
+			UnauthorizedError,
+			InternalServerError,
+			RateLimitExceededError,
+		]),
+	})
+		.annotate(RequiredScopes, ["bots:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * bot.list
@@ -144,11 +182,13 @@ export class BotRpcs extends RpcGroup.make(
 	 * @returns Array of bots
 	 * @throws UnauthorizedError if user is not authenticated
 	 */
-	Rpc.query("bot.list", {
+	Rpc.make("bot.list", {
 		payload: Schema.Struct({}),
 		success: BotListResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["bots:read"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * bot.get
@@ -160,11 +200,13 @@ export class BotRpcs extends RpcGroup.make(
 	 * @throws BotNotFoundError if bot doesn't exist
 	 * @throws UnauthorizedError if user is not org admin or bot creator
 	 */
-	Rpc.query("bot.get", {
+	Rpc.make("bot.get", {
 		payload: Schema.Struct({ id: BotId }),
 		success: BotResponse,
-		error: Schema.Union(BotNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([BotNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["bots:read"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * bot.update
@@ -176,18 +218,26 @@ export class BotRpcs extends RpcGroup.make(
 	 * @throws BotNotFoundError if bot doesn't exist
 	 * @throws UnauthorizedError if user is not org admin or bot creator
 	 */
-	Rpc.mutation("bot.update", {
+	Rpc.make("bot.update", {
 		payload: Schema.Struct({
 			id: BotId,
-			name: Schema.optional(Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))),
-			description: Schema.optional(Schema.NullOr(Schema.String.pipe(Schema.maxLength(500)))),
+			name: Schema.optional(Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100))),
+			description: Schema.optional(Schema.NullOr(Schema.String.check(Schema.isMaxLength(500)))),
 			webhookUrl: Schema.optional(Schema.NullOr(Schema.String)),
-			scopes: Schema.optional(Schema.Array(BotScope)),
+			scopes: Schema.optional(Schema.Array(ApiScope)),
 			isPublic: Schema.optional(Schema.Boolean),
+			installRedirectUris: Schema.optional(Schema.NullOr(InstallRedirectUris)),
 		}),
 		success: BotResponse,
-		error: Schema.Union(BotNotFoundError, UnauthorizedError, InternalServerError, RateLimitExceededError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([
+			BotNotFoundError,
+			UnauthorizedError,
+			InternalServerError,
+			RateLimitExceededError,
+		]),
+	})
+		.annotate(RequiredScopes, ["bots:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * bot.delete
@@ -199,11 +249,13 @@ export class BotRpcs extends RpcGroup.make(
 	 * @throws BotNotFoundError if bot doesn't exist
 	 * @throws UnauthorizedError if user is not org admin or bot creator
 	 */
-	Rpc.mutation("bot.delete", {
+	Rpc.make("bot.delete", {
 		payload: Schema.Struct({ id: BotId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(BotNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([BotNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["bots:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * bot.regenerateToken
@@ -216,11 +268,18 @@ export class BotRpcs extends RpcGroup.make(
 	 * @throws BotNotFoundError if bot doesn't exist
 	 * @throws UnauthorizedError if user is not org admin or bot creator
 	 */
-	Rpc.mutation("bot.regenerateToken", {
+	Rpc.make("bot.regenerateToken", {
 		payload: Schema.Struct({ id: BotId }),
 		success: BotCreatedResponse,
-		error: Schema.Union(BotNotFoundError, UnauthorizedError, InternalServerError, RateLimitExceededError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([
+			BotNotFoundError,
+			UnauthorizedError,
+			InternalServerError,
+			RateLimitExceededError,
+		]),
+	})
+		.annotate(RequiredScopes, ["bots:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * bot.getCommands
@@ -232,11 +291,13 @@ export class BotRpcs extends RpcGroup.make(
 	 * @throws BotNotFoundError if bot doesn't exist
 	 * @throws UnauthorizedError if user is not org admin
 	 */
-	Rpc.query("bot.getCommands", {
+	Rpc.make("bot.getCommands", {
 		payload: Schema.Struct({ botId: BotId }),
 		success: BotCommandListResponse,
-		error: Schema.Union(BotNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([BotNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["bots:read"])
+		.middleware(AuthMiddleware),
 
 	// === Bot Marketplace (for bot users) ===
 
@@ -250,13 +311,16 @@ export class BotRpcs extends RpcGroup.make(
 	 * @returns Array of public bots with install status
 	 * @throws UnauthorizedError if user is not authenticated
 	 */
-	Rpc.query("bot.listPublic", {
+	Rpc.make("bot.listPublic", {
 		payload: Schema.Struct({
 			search: Schema.optional(Schema.String),
+			organizationId: RouteOrganizationId,
 		}),
 		success: PublicBotListResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["bots:read"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * bot.listInstalled
@@ -266,11 +330,13 @@ export class BotRpcs extends RpcGroup.make(
 	 * @returns Array of installed bots
 	 * @throws UnauthorizedError if user is not authenticated
 	 */
-	Rpc.query("bot.listInstalled", {
-		payload: Schema.Struct({}),
+	Rpc.make("bot.listInstalled", {
+		payload: Schema.Struct({ organizationId: RouteOrganizationId }),
 		success: BotListResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["bots:read"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * bot.install
@@ -283,17 +349,20 @@ export class BotRpcs extends RpcGroup.make(
 	 * @throws BotAlreadyInstalledError if bot is already installed
 	 * @throws UnauthorizedError if user is not org admin
 	 */
-	Rpc.mutation("bot.install", {
-		payload: Schema.Struct({ botId: BotId }),
+	Rpc.make("bot.install", {
+		payload: Schema.Struct({ botId: BotId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(
+		error: Schema.Union([
+			ActiveOrganizationRequiredError,
 			BotNotFoundError,
 			BotAlreadyInstalledError,
 			UnauthorizedError,
 			InternalServerError,
 			RateLimitExceededError,
-		),
-	}).middleware(AuthMiddleware),
+		]),
+	})
+		.annotate(RequiredScopes, ["bots:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * bot.uninstall
@@ -305,11 +374,99 @@ export class BotRpcs extends RpcGroup.make(
 	 * @throws BotNotFoundError if bot is not installed
 	 * @throws UnauthorizedError if user is not org admin
 	 */
-	Rpc.mutation("bot.uninstall", {
-		payload: Schema.Struct({ botId: BotId }),
+	Rpc.make("bot.uninstall", {
+		payload: Schema.Struct({ botId: BotId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(BotNotFoundError, UnauthorizedError, InternalServerError, RateLimitExceededError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([
+			ActiveOrganizationRequiredError,
+			BotNotFoundError,
+			UnauthorizedError,
+			InternalServerError,
+			RateLimitExceededError,
+		]),
+	})
+		.annotate(RequiredScopes, ["bots:write"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * bot.installById
+	 *
+	 * Installs a bot by ID, regardless of whether it's public or private.
+	 * This allows users to install apps by sharing their bot ID.
+	 *
+	 * @param payload - Bot ID
+	 * @returns Transaction ID
+	 * @throws BotNotFoundError if bot doesn't exist
+	 * @throws BotAlreadyInstalledError if bot is already installed
+	 * @throws UnauthorizedError if user is not org admin
+	 */
+	Rpc.make("bot.installById", {
+		payload: Schema.Struct({ botId: BotId, organizationId: RouteOrganizationId }),
+		success: Schema.Struct({ transactionId: TransactionId }),
+		error: Schema.Union([
+			ActiveOrganizationRequiredError,
+			BotNotFoundError,
+			BotAlreadyInstalledError,
+			UnauthorizedError,
+			InternalServerError,
+			RateLimitExceededError,
+		]),
+	})
+		.annotate(RequiredScopes, ["bots:write"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * bot.getInstallRequest
+	 *
+	 * The bot-install consent page's lookup (`/oauth/bot-install`, see `@hazel/domain/bot-install`):
+	 * the bot asking to be installed, once its redirect URI checks out.
+	 *
+	 * @throws BotNotFoundError if the bot doesn't exist
+	 * @throws BotInstallRedirectMismatchError if the redirect URI is not registered on the bot
+	 */
+	Rpc.make("bot.getInstallRequest", {
+		payload: Schema.Struct({ botId: BotId, redirectUri: Schema.String }),
+		success: BotInstallRequestResponse,
+		error: Schema.Union([
+			BotNotFoundError,
+			BotInstallRedirectMismatchError,
+			UnauthorizedError,
+			InternalServerError,
+		]),
+	})
+		.annotate(RequiredScopes, ["bots:read"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * bot.authorizeInstall
+	 *
+	 * Approve a bot-install request: installs the bot in the organization (when it is not already)
+	 * and mints the one-time code the bot redeems with its token for that organization.
+	 *
+	 * @throws BotNotFoundError if the bot doesn't exist
+	 * @throws BotInstallRedirectMismatchError if the redirect URI is not registered on the bot
+	 * @throws BotInstallRegionConflictError if it is installed here for another region
+	 * @throws UnauthorizedError if user is not org admin
+	 */
+	Rpc.make("bot.authorizeInstall", {
+		payload: Schema.Struct({
+			botId: BotId,
+			organizationId: RouteOrganizationId,
+			redirectUri: Schema.String,
+		}),
+		success: BotInstallAuthorizedResponse,
+		error: Schema.Union([
+			ActiveOrganizationRequiredError,
+			BotNotFoundError,
+			BotInstallRedirectMismatchError,
+			BotInstallRegionConflictError,
+			UnauthorizedError,
+			InternalServerError,
+			RateLimitExceededError,
+		]),
+	})
+		.annotate(RequiredScopes, ["bots:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * bot.updateAvatar
@@ -322,12 +479,14 @@ export class BotRpcs extends RpcGroup.make(
 	 * @throws BotNotFoundError if bot doesn't exist
 	 * @throws UnauthorizedError if user is not bot creator
 	 */
-	Rpc.mutation("bot.updateAvatar", {
+	Rpc.make("bot.updateAvatar", {
 		payload: Schema.Struct({
 			id: BotId,
 			avatarUrl: Schema.String,
 		}),
 		success: BotResponse,
-		error: Schema.Union(BotNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([BotNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["bots:write"])
+		.middleware(AuthMiddleware),
 ) {}

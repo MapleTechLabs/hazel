@@ -1,0 +1,25 @@
+{
+	"name": "@hazel/effect-db-collection",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"sideEffects": false,
+	"main": "src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./testing": "./src/testing/fake-websocket.ts"
+	},
+	"scripts": {
+		"test": "npx vitest --run",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@hazel/domain": "workspace:*",
+		"@tanstack/db": "1.0.0-rc.1.1",
+		"effect": "catalog:effect"
+	},
+	"devDependencies": {
+		"@tanstack/browser-db-sqlite-persistence": "1.0.0-rc.1.1",
+		"typescript": "catalog:tooling"
+	}
+}

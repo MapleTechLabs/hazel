@@ -1,6 +1,7 @@
 import { describe, it } from "@effect/vitest"
 import { assertFalse, assertNone, assertSome, assertTrue, deepStrictEqual, strictEqual } from "@effect/vitest/utils"
-import { Iterable as Iter, Number, Option, pipe } from "effect"
+import { Equivalence, Iterable as Iter, Option, Result } from "effect"
+import { pipe } from "effect/Function"
 import type { Predicate } from "effect/Predicate"
 
 const symA = Symbol.for("a")
@@ -231,7 +232,7 @@ describe("Iterable", () => {
     })
 
     it("containsWith", () => {
-      const contains = Iter.containsWith(Number.Equivalence)
+      const contains = Iter.containsWith(Equivalence.strictEqual<number>())
       assertTrue(pipe([1, 2, 3], contains(2)))
       assertFalse(pipe([1, 2, 3], contains(0)))
 
@@ -249,15 +250,15 @@ describe("Iterable", () => {
     })
 
     it("dedupeAdjacentWith", () => {
-      const dedupeAdjacent = Iter.dedupeAdjacentWith(Number.Equivalence)
+      const dedupeAdjacent = Iter.dedupeAdjacentWith(Equivalence.strictEqual<number>())
       deepStrictEqual(toArray(dedupeAdjacent([])), [])
       deepStrictEqual(toArray(dedupeAdjacent([1, 2, 3])), [1, 2, 3])
       deepStrictEqual(toArray(dedupeAdjacent([1, 2, 2, 3, 3])), [1, 2, 3])
     })
   })
 
-  it("flatMapNullable", () => {
-    const f = Iter.flatMapNullable((n: number) => (n > 0 ? n : null))
+  it("flatMapNullishOr", () => {
+    const f = Iter.flatMapNullishOr((n: number) => (n > 0 ? n : null))
     deepStrictEqual(pipe([], f, toArray), [])
     deepStrictEqual(pipe([1], f, toArray), [1])
     deepStrictEqual(pipe([-1], f, toArray), [])
@@ -317,12 +318,36 @@ describe("Iterable", () => {
   })
 
   it("filterMap", () => {
-    const f = (n: number) => (n % 2 === 0 ? Option.none() : Option.some(n))
+    const f = (n: number) => (n % 2 === 0 ? Result.failVoid : Result.succeed(n))
     deepStrictEqual(pipe([1, 2, 3], Iter.filterMap(f), toArray), [1, 3])
     deepStrictEqual(pipe([], Iter.filterMap(f), toArray), [])
-    const g = (n: number, i: number) => ((i + n) % 2 === 0 ? Option.none() : Option.some(n))
+    const g = (n: number, i: number) => ((i + n) % 2 === 0 ? Result.failVoid : Result.succeed(n))
     deepStrictEqual(pipe([1, 2, 4], Iter.filterMap(g), toArray), [1, 2])
     deepStrictEqual(pipe([], Iter.filterMap(g), toArray), [])
+  })
+
+  it("filterMapWhile", () => {
+    deepStrictEqual(
+      pipe([1, 3, 4, 5], Iter.filterMapWhile((n) => n % 2 === 1 ? Result.succeed(n) : Result.failVoid), toArray),
+      [1, 3]
+    )
+    deepStrictEqual(
+      pipe([1, 2, 4], Iter.filterMapWhile((n, i) => n === i + 1 ? Result.succeed(n + i) : Result.failVoid), toArray),
+      [1, 3]
+    )
+  })
+
+  it("getFailures", () => {
+    deepStrictEqual(toArray(Iter.getFailures([])), [])
+    deepStrictEqual(toArray(Iter.getFailures([Result.succeed(1), Result.fail("err"), Result.fail("nope")])), [
+      "err",
+      "nope"
+    ])
+  })
+
+  it("getSuccesses", () => {
+    deepStrictEqual(toArray(Iter.getSuccesses([])), [])
+    deepStrictEqual(toArray(Iter.getSuccesses([Result.fail("err"), Result.succeed(1), Result.succeed(2)])), [1, 2])
   })
 
   it("isEmpty", () => {
@@ -372,7 +397,7 @@ describe("Iterable", () => {
   })
 
   it("groupWith", () => {
-    const groupWith = Iter.groupWith(Number.Equivalence)
+    const groupWith = Iter.groupWith(Equivalence.strictEqual<number>())
     deepStrictEqual(toArray(groupWith([1, 2, 1, 1])), [[1], [2], [1, 1]])
     deepStrictEqual(toArray(groupWith([1, 2, 1, 1, 3])), [[1], [2], [1, 1], [3]])
   })

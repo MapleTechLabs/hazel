@@ -1,0 +1,239 @@
+import type { AttachmentId } from "@hazel/schema"
+import { Mount } from "foldkit"
+import type { Html, HtmlBuilder } from "foldkit/html"
+import { cn } from "~/lib/utils"
+import { formatFileSize, getFileTypeFromName } from "~/utils/file-utils"
+import { fileIcon } from "../chat/file-icons"
+import { IconClose, IconEdit } from "../icons"
+import { button } from "../ui/button"
+import { loader } from "../ui/loader"
+import { fileInputId, hasTopContent, isUploading, Message, type Model } from "./draft"
+import * as EmojiDialog from "../emoji-picker/dialog"
+import * as GifPickerView from "../gif-picker/view"
+import { DragState, TrackFileDrop } from "./drop"
+import { composerBoxView } from "./view"
+
+/** A draft's composer: `SlateMessageComposer` with previews, indicators, the drop zone and the actions. */
+
+/** What `ReplyIndicator` shows: the replied-to author and first line. */
+export interface ReplyPreview {
+	readonly authorName: string
+	readonly firstLine: string
+}
+
+export interface DraftViewInputs<M> {
+	readonly toMessage: (message: Message) => M
+	readonly replyPreview: ReplyPreview | null
+	readonly attachmentInfo: (
+		id: AttachmentId,
+	) => { readonly fileName: string; readonly fileSize: number } | null
+}
+
+const removeButton = <M>(h: HtmlBuilder<M>, onPress: M, label: string, isCompact = false) =>
+	button(
+		h,
+		{
+			intent: "plain",
+			size: "sq-xs",
+			...(isCompact ? { className: "!p-1" } : {}),
+			onPress,
+			attributes: [h.AriaLabel(label)],
+		},
+		[
+			IconClose(h, {
+				...(isCompact ? { className: "size-3.5" } : {}),
+				attributes: { "data-slot": "icon" },
+			}),
+		],
+	)
+
+/** `ComposerAttachmentPreviews`. */
+const attachmentPreviews = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewInputs<M>): Html => {
+	const uploading = model.currentUpload === null ? [] : [model.currentUpload]
+	if (model.attachmentIds.length === 0 && uploading.length === 0) return h.empty
+	const card = (key: string, className: string, children: ReadonlyArray<Html>) =>
+		h.keyed("div")(key, [h.Class(className)], children)
+	const fileText = (name: string, detail: string) =>
+		h.div(
+			[h.Class("min-w-0 flex-1")],
+			[
+				h.div([h.Class("truncate font-medium text-fg text-sm")], [name]),
+				h.div([h.Class("text-muted-fg text-xs")], [detail]),
+			],
+		)
+	return h.keyed("div")(
+		"attachment-previews",
+		[
+			h.Class(
+				cn(
+					"border border-border border-b-0 bg-secondary px-2 py-1",
+					uploading.length > 0 ? "rounded-t-none border-t-0" : "rounded-t-lg",
+					model.composeMode._tag === "Replying" && "border-b-0",
+				),
+			),
+		],
+		[
+			h.div(
+				[h.Class("grid grid-cols-2 gap-1 md:grid-cols-3 lg:grid-cols-4")],
+				[
+					...model.attachmentIds.map((attachmentId) => {
+						const info = inputs.attachmentInfo(attachmentId)
+						const fileName = info?.fileName || "File"
+						return card(
+							attachmentId,
+							"group flex items-center gap-2 rounded-lg bg-bg p-2 transition-colors hover:bg-secondary",
+							[
+								fileIcon(h, getFileTypeFromName(fileName), {
+									className: "size-8 shrink-0 text-muted-fg",
+								}),
+								fileText(fileName, formatFileSize(info?.fileSize || 0)),
+								removeButton(
+									h,
+									inputs.toMessage(Message.ClickedRemoveAttachment({ attachmentId })),
+									`Remove ${fileName}`,
+								),
+							],
+						)
+					}),
+					...uploading.map((upload) =>
+						card(
+							upload.fileId,
+							"group relative flex items-center gap-2 overflow-hidden rounded-lg bg-bg p-2 transition-colors hover:bg-secondary",
+							[
+								fileIcon(h, getFileTypeFromName(upload.file.name), {
+									className: "size-8 shrink-0 text-muted-fg",
+								}),
+								fileText(
+									upload.file.name,
+									upload.progress < 100
+										? `${upload.progress}% of ${formatFileSize(upload.file.size)}`
+										: formatFileSize(upload.file.size),
+								),
+								loader(h, { className: "size-4" }),
+								h.div(
+									[h.Class("absolute inset-x-0 -bottom-px h-1 bg-muted")],
+									[
+										h.div([
+											h.Class("h-full bg-primary transition-all duration-200"),
+											h.Attribute("style", `width: ${upload.progress}%;`),
+										]),
+									],
+								),
+							],
+						),
+					),
+				],
+			),
+		],
+	)
+}
+
+const indicatorClass =
+	"flex items-center justify-between gap-2 rounded-t-lg border border-border border-b-0 bg-secondary px-3 py-2"
+
+/** `ComposerReplyIndicator` (`ReplyIndicator`). */
+const replyIndicator = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewInputs<M>): Html => {
+	const reply = inputs.replyPreview
+	if (model.composeMode._tag !== "Replying" || reply === null) return h.empty
+	const hasFiles = model.currentUpload !== null || model.attachmentIds.length > 0
+	return h.keyed("div")(
+		"reply-indicator",
+		[h.Class(cn(indicatorClass, hasFiles ? "rounded-t-none border-t-0" : ""))],
+		[
+			h.div(
+				[h.Class("flex items-center gap-2 text-sm")],
+				[
+					h.span([h.Class("text-muted-fg")], ["Replying to"]),
+					h.span([h.Class("font-semibold text-fg")], [reply.authorName]),
+					h.span([h.Class("max-w-xs truncate text-muted-fg")], [reply.firstLine]),
+				],
+			),
+			removeButton(h, inputs.toMessage(Message.ClickedCancelReply()), "Cancel reply", true),
+		],
+	)
+}
+
+/** `ComposerEditIndicator`. */
+const editIndicator = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewInputs<M>): Html => {
+	if (model.composeMode._tag !== "Editing") return h.empty
+	const hasFiles = model.currentUpload !== null || model.attachmentIds.length > 0
+	return h.keyed("div")(
+		"edit-indicator",
+		[h.Class(cn(indicatorClass, hasFiles ? "rounded-t-none border-t-0" : ""))],
+		[
+			h.div(
+				[h.Class("flex items-center gap-2 text-sm")],
+				[
+					IconEdit(h, { className: "size-3.5 text-primary" }),
+					h.span([h.Class("font-semibold text-primary")], ["Editing message"]),
+				],
+			),
+			removeButton(h, inputs.toMessage(Message.ClickedCancelEdit()), "Cancel editing", true),
+		],
+	)
+}
+
+/** The drop zone's overlays: strong over the zone, subtle while dragging anywhere; none while a file uploads. */
+const dropOverlay = <M>(h: HtmlBuilder<M>, model: Model): Html =>
+	isUploading(model)
+		? h.empty
+		: DragState.match(model.drag, {
+				Idle: () => h.empty,
+				OverDropZone: () =>
+					h.div(
+						[
+							h.Class(
+								"absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-primary border-dashed bg-primary/10",
+							),
+						],
+						[h.span([h.Class("font-medium text-primary")], ["Drop files here"])],
+					),
+				DraggingOnPage: () =>
+					h.div(
+						[
+							h.Class(
+								"absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-primary/50 border-dashed bg-primary/5",
+							),
+						],
+						[h.span([h.Class("font-medium text-primary/70")], ["Drop files here"])],
+					),
+			})
+
+export const draftView = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewInputs<M>): Html => {
+	const { toMessage } = inputs
+	const uploading = isUploading(model)
+	return composerBoxView(h, model.composer, {
+		toMessage: (message) => toMessage(Message.GotComposerMessage({ message })),
+		topContent: [
+			attachmentPreviews(h, model, inputs),
+			replyIndicator(h, model, inputs),
+			editIndicator(h, model, inputs),
+		],
+		hasTopContent: hasTopContent(model),
+		dropOverlay: dropOverlay(h, model),
+		dropZoneAttributes: [
+			h.OnMount(
+				Mount.mapMessage(TrackFileDrop(), (event) => toMessage(Message.ReceivedDropEvent({ event }))),
+			),
+		],
+		fileInputAttributes: [
+			h.Id(fileInputId(model)),
+			h.OnFileChange((files) => toMessage(Message.SelectedFiles({ files }))),
+		],
+		attachAttributes: [
+			h.OnClick(toMessage(Message.ClickedAttach())),
+			...(uploading ? [h.Attribute("disabled", "")] : []),
+		],
+		gifTrigger: (render) =>
+			GifPickerView.view(h, model.gifPicker, {
+				toMessage: (message) => toMessage(Message.GotGifPickerMessage({ message })),
+				toTrigger: render,
+			}),
+		emojiTrigger: (render) =>
+			EmojiDialog.view(h, model.emojiPicker, {
+				toMessage: (message) => toMessage(Message.GotEmojiPickerMessage({ message })),
+				toTrigger: render,
+				customEmojis: model.composer.customEmojis,
+			}),
+	})
+}

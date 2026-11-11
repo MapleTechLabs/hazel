@@ -1,0 +1,27 @@
+{
+	"name": "hazel-bot",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Hazel's AI bot, on a Cloudflare Worker",
+	"type": "module",
+	"module": "src/worker.ts",
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@alchemy.run/cloudflare": "catalog:alchemy",
+		"@effect/ai-openrouter": "catalog:effect",
+		"@hazel-chat/bot-sdk": "workspace:*",
+		"@hazel/domain": "workspace:*",
+		"@hazel/infra": "workspace:*",
+		"@hazel/integrations": "workspace:*",
+		"@hazel/schema": "workspace:*",
+		"alchemy": "catalog:alchemy",
+		"effect": "catalog:effect"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "catalog:alchemy",
+		"@types/node": "^24.19.2",
+		"typescript": "catalog:tooling"
+	}
+}

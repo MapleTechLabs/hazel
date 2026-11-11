@@ -1,0 +1,172 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import FooterSection from "@/components/sections/FooterSection.astro";
+import CTASection from "@/components/sections/CTASection.astro";
+
+const features = [
+  { feature: "Real-time messaging", hazel: true, competitor: true },
+  { feature: "Channels & DMs", hazel: true, competitor: true },
+  { feature: "Threaded conversations", hazel: true, competitor: true },
+  { feature: "File sharing & media", hazel: true, competitor: true },
+  { feature: "Full-text search", hazel: true, competitor: true },
+  { feature: "Desktop app (macOS, Windows, Linux)", hazel: true, competitor: true },
+  { feature: "Native GitHub integration", hazel: true, competitor: false },
+  { feature: "Native Linear integration", hazel: true, competitor: false },
+  { feature: "Inline code syntax highlighting", hazel: true, competitor: false },
+  { feature: "Keyboard-first interface (⌘K)", hazel: true, competitor: false },
+  { feature: "Open source", hazel: true, competitor: false },
+  { feature: "Self-hosted option", hazel: true, competitor: false },
+  { feature: "Free for small teams (up to 10)", hazel: true, competitor: false },
+  { feature: "No message history limits", hazel: true, competitor: false },
+  { feature: "Deployment notifications (Railway)", hazel: true, competitor: false },
+  { feature: "Custom bots & webhooks", hazel: true, competitor: true },
+  { feature: "SSO / SAML", hazel: true, competitor: true },
+  { feature: "GDPR compliant", hazel: true, competitor: true },
+  { feature: "AI-powered search & summaries", hazel: true, competitor: true },
+];
+
+const comparisonFaqs = [
+  {
+    question: "Can I migrate from Slack to Hazel?",
+    answer: "Yes! We provide migration tools to help you move your channels, message history, and team members from Slack to Hazel. The process is straightforward and we offer support for larger migrations."
+  },
+  {
+    question: "Does Hazel work with the same apps as Slack?",
+    answer: "Hazel focuses on deep, native integrations for developer tools like GitHub, Linear, and Railway rather than a broad app marketplace. For custom integrations, Hazel supports webhooks and a bot API that can connect to any service."
+  },
+  {
+    question: "Is Hazel as reliable as Slack?",
+    answer: "Hazel is built on a modern, scalable architecture. For cloud-hosted plans, we offer high availability with 99.9% uptime SLA on Enterprise plans. Self-hosted deployments give you full control over your infrastructure and uptime guarantees."
+  },
+  {
+    question: "Why choose Hazel over Slack?",
+    answer: "If you're a developer team, Hazel offers native developer tool integrations, no message history limits on free plans, open source transparency, and the option to self-host. You also avoid Slack's per-user pricing that scales unpredictably."
+  },
+];
+---
+
+<Layout
+  title="Hazel vs Slack - Open Source Slack Alternative for Developer Teams"
+  description="Compare Hazel vs Slack: native GitHub integration, no message limits, open source, self-hosted option, and keyboard-first design. See why developer teams choose Hazel over Slack."
+  includeFaqSchema={true}
+  faqData={comparisonFaqs}
+>
+  <main class="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full">
+    <!-- Hero -->
+    <section class="w-full py-20 md:py-28 px-6">
+      <div class="max-w-3xl mx-auto text-center">
+        <span class="text-sm font-semibold text-secondary uppercase tracking-wider">Comparison</span>
+        <h1 class="mt-4 text-4xl md:text-6xl font-medium tracking-tighter text-primary">
+          Hazel vs Slack
+        </h1>
+        <p class="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
+          Slack is great for general business communication. Hazel is purpose-built for developer teams — with native GitHub and Linear integrations, open source code, and no message history limits.
+        </p>
+      </div>
+    </section>
+
+    <!-- Comparison Table -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-3xl mx-auto">
+        <div class="border border-border rounded-xl overflow-hidden">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-border bg-card">
+                <th class="text-left p-4 text-primary font-medium">Feature</th>
+                <th class="text-center p-4 text-primary font-medium w-28">Hazel</th>
+                <th class="text-center p-4 text-primary font-medium w-28">Slack</th>
+              </tr>
+            </thead>
+            <tbody>
+              {features.map((row, i) => (
+                <tr class={`border-b border-border last:border-b-0 ${i % 2 === 0 ? '' : 'bg-card/50'}`}>
+                  <td class="p-4 text-muted-foreground">{row.feature}</td>
+                  <td class="p-4 text-center">
+                    {row.hazel ? (
+                      <span class="text-green-500 text-lg">&#10003;</span>
+                    ) : (
+                      <span class="text-muted-foreground text-lg">&#10007;</span>
+                    )}
+                  </td>
+                  <td class="p-4 text-center">
+                    {row.competitor ? (
+                      <span class="text-green-500 text-lg">&#10003;</span>
+                    ) : (
+                      <span class="text-muted-foreground text-lg">&#10007;</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Key Differentiators -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-4xl mx-auto">
+        <h2 class="text-3xl font-medium tracking-tight text-primary text-center mb-12">
+          Why developer teams switch to Hazel
+        </h2>
+        <div class="grid md:grid-cols-2 gap-8">
+          <div class="border border-border rounded-xl p-8">
+            <h3 class="text-xl font-medium text-primary">No message limits</h3>
+            <p class="mt-3 text-muted-foreground">
+              Slack's free plan hides messages after 90 days. Hazel gives you full message history on every plan — your team's knowledge base should never disappear.
+            </p>
+          </div>
+          <div class="border border-border rounded-xl p-8">
+            <h3 class="text-xl font-medium text-primary">Native dev tool integrations</h3>
+            <p class="mt-3 text-muted-foreground">
+              Slack requires third-party bots for GitHub and Linear. Hazel has native, first-class integrations that show rich previews of PRs, issues, and deployments right in your chat.
+            </p>
+          </div>
+          <div class="border border-border rounded-xl p-8">
+            <h3 class="text-xl font-medium text-primary">Open source & self-hostable</h3>
+            <p class="mt-3 text-muted-foreground">
+              Slack is a closed-source SaaS product. Hazel is fully open source — audit the code, contribute features, or deploy on your own infrastructure for complete data control.
+            </p>
+          </div>
+          <div class="border border-border rounded-xl p-8">
+            <h3 class="text-xl font-medium text-primary">Predictable pricing</h3>
+            <p class="mt-3 text-muted-foreground">
+              Slack's per-user pricing can get expensive fast. Hazel is free for teams up to 10 members, and Pro pricing is significantly lower per seat than Slack's comparable plan.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-3xl mx-auto">
+        <h2 class="text-3xl font-medium tracking-tight text-primary text-center mb-12">
+          Frequently asked questions
+        </h2>
+        <div class="space-y-6">
+          {comparisonFaqs.map((faq) => (
+            <div class="border border-border rounded-xl p-6">
+              <h3 class="text-lg font-medium text-primary">{faq.question}</h3>
+              <p class="mt-2 text-muted-foreground">{faq.answer}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- Also Compare -->
+    <section class="w-full py-12 px-6">
+      <div class="max-w-3xl mx-auto text-center">
+        <p class="text-muted-foreground">
+          Also compare: <a href="/vs/discord" class="text-secondary hover:underline font-medium">Hazel vs Discord</a>
+          &middot; <a href="/features" class="text-secondary hover:underline font-medium">See all features</a>
+          &middot; <a href="/pricing" class="text-secondary hover:underline font-medium">View pricing</a>
+        </p>
+      </div>
+    </section>
+
+    <CTASection />
+    <FooterSection />
+  </main>
+</Layout>

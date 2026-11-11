@@ -1,119 +1,110 @@
 /**
  * @since 2.0.0
  */
-import type * as Effect from "./Effect.js"
-import type * as Exit from "./Exit.js"
-import * as internal from "./internal/resource.js"
-import type * as Schedule from "./Schedule.js"
-import type * as Scope from "./Scope.js"
-import type * as ScopedRef from "./ScopedRef.js"
-import type * as Types from "./Types.js"
-import type * as Unify from "./Unify.js"
+import * as Context from "./Context.ts"
+import * as Effect from "./Effect.ts"
+import * as Exit from "./Exit.ts"
+import { identity } from "./Function.ts"
+import { PipeInspectableProto } from "./internal/core.ts"
+import type { Pipeable } from "./Pipeable.ts"
+import { hasProperty } from "./Predicate.ts"
+import type * as Schedule from "./Schedule.ts"
+import type * as Scope from "./Scope.ts"
+import * as ScopedRef from "./ScopedRef.ts"
+
+const TypeId = "~effect/Resource" as const
 
 /**
- * @since 2.0.0
- * @category symbols
- */
-export const ResourceTypeId: unique symbol = internal.ResourceTypeId
-
-/**
- * @since 2.0.0
- * @category symbols
- */
-export type ResourceTypeId = typeof ResourceTypeId
-
-/**
- * A `Resource` is a possibly resourceful value that is loaded into memory, and
- * which can be refreshed either manually or automatically.
+ * A `Resource` is a value loaded into memory that can be refreshed manually or
+ * automatically according to a schedule.
  *
  * @since 2.0.0
  * @category models
  */
-export interface Resource<in out A, in out E = never> extends Effect.Effect<A, E>, Resource.Variance<A, E> {
-  /** @internal */
+export interface Resource<in out A, in out E = never> extends Pipeable {
+  readonly [TypeId]: typeof TypeId
   readonly scopedRef: ScopedRef.ScopedRef<Exit.Exit<A, E>>
-  /** @internal */
-  readonly acquire: Effect.Effect<A, E, Scope.Scope>
-
-  readonly [Unify.typeSymbol]?: unknown
-  readonly [Unify.unifySymbol]?: ResourceUnify<this>
-  readonly [Unify.ignoreSymbol]?: ResourceUnifyIgnore
-}
-
-/**
- * @category models
- * @since 3.9.0
- */
-export interface ResourceUnify<A extends { [Unify.typeSymbol]?: any }> extends Effect.EffectUnify<A> {
-  Resource?: () => Extract<A[Unify.typeSymbol], Resource<any, any>>
-}
-
-/**
- * @category models
- * @since 3.9.0
- */
-export interface ResourceUnifyIgnore extends Effect.EffectUnifyIgnore {
-  Effect?: true
+  readonly acquire: Effect.Effect<A, E>
 }
 
 /**
  * @since 2.0.0
+ * @category guards
  */
-export declare namespace Resource {
-  /**
-   * @since 2.0.0
-   * @category models
-   */
-  export interface Variance<in out A, in out E> {
-    readonly [ResourceTypeId]: {
-      _A: Types.Invariant<A>
-      _E: Types.Invariant<E>
+export const isResource: (u: unknown) => u is Resource<unknown, unknown> = (
+  u: unknown
+): u is Resource<unknown, unknown> => hasProperty(u, TypeId)
+
+const Proto = {
+  ...PipeInspectableProto,
+  [TypeId]: TypeId,
+  toJSON() {
+    return {
+      _id: "Resource"
     }
   }
 }
 
+const makeUnsafe = <A, E>(
+  scopedRef: ScopedRef.ScopedRef<Exit.Exit<A, E>>,
+  acquire: Effect.Effect<A, E>
+): Resource<A, E> => {
+  const self = Object.create(Proto)
+  self.scopedRef = scopedRef
+  self.acquire = acquire
+  return self
+}
+
 /**
- * Creates a new `Resource` value that is automatically refreshed according to
- * the specified policy. Note that error retrying is not performed
- * automatically, so if you want to retry on errors, you should first apply
- * retry policies to the acquisition effect before passing it to this
- * constructor.
+ * Creates a `Resource` that must be refreshed manually.
  *
  * @since 2.0.0
  * @category constructors
  */
-export const auto: <A, E, R, Out, R2>(
-  acquire: Effect.Effect<A, E, R>,
-  policy: Schedule.Schedule<Out, unknown, R2>
-) => Effect.Effect<Resource<A, E>, never, R | R2 | Scope.Scope> = internal.auto
+export const manual = <A, E, R>(
+  acquire: Effect.Effect<A, E, R>
+): Effect.Effect<Resource<A, E>, never, Scope.Scope | R> =>
+  Effect.contextWith((context: Context.Context<R>) => {
+    const providedAcquire = Effect.updateContext(
+      acquire,
+      (input: Context.Context<never>) => Context.merge(context, input)
+    )
+    return Effect.map(
+      ScopedRef.fromAcquire(Effect.exit(providedAcquire)),
+      (scopedRef) => makeUnsafe(scopedRef, providedAcquire)
+    )
+  })
 
 /**
- * Retrieves the current value stored in the cache.
+ * Creates a `Resource` that refreshes automatically according to the supplied
+ * schedule.
+ *
+ * @since 2.0.0
+ * @category constructors
+ */
+export const auto = <A, E, R, Out, E2, R2>(
+  acquire: Effect.Effect<A, E, R>,
+  policy: Schedule.Schedule<Out, unknown, E2, R2>
+): Effect.Effect<Resource<A, E>, never, R | R2 | Scope.Scope> =>
+  Effect.tap(
+    manual(acquire),
+    (self) => Effect.forkScoped(Effect.repeat(refresh(self), policy))
+  )
+
+/**
+ * Retrieves the current value stored in this resource.
  *
  * @since 2.0.0
  * @category getters
  */
-export const get: <A, E>(self: Resource<A, E>) => Effect.Effect<A, E> = internal.get
+export const get = <A, E>(self: Resource<A, E>): Effect.Effect<A, E> =>
+  Effect.flatMap(ScopedRef.get(self.scopedRef), identity)
 
 /**
- * Creates a new `Resource` value that must be manually refreshed by calling
- * the refresh method. Note that error retrying is not performed
- * automatically, so if you want to retry on errors, you should first apply
- * retry policies to the acquisition effect before passing it to this
- * constructor.
- *
- * @since 2.0.0
- * @category constructors
- */
-export const manual: <A, E, R>(
-  acquire: Effect.Effect<A, E, R>
-) => Effect.Effect<Resource<A, E>, never, Scope.Scope | R> = internal.manual
-
-/**
- * Refreshes the cache. This method will not return until either the refresh
- * is successful, or the refresh operation fails.
+ * Refreshes this resource.
  *
  * @since 2.0.0
  * @category utils
  */
-export const refresh: <A, E>(self: Resource<A, E>) => Effect.Effect<void, E> = internal.refresh
+export const refresh = <A, E>(self: Resource<A, E>): Effect.Effect<void, E> =>
+  ScopedRef.set(self.scopedRef, Effect.map(self.acquire, Exit.succeed))

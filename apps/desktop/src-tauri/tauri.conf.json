@@ -1,0 +1,58 @@
+{
+	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+	"productName": "Hazel",
+	"version": "1.1.2",
+	"identifier": "com.hazel.app",
+	"plugins": {
+		"deep-link": {
+			"desktop": {
+				"schemes": ["hazel", "com.hazel.app"]
+			}
+		},
+		"updater": {
+			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY2N0NEMDNBMkU3RjVGMjEKUldRaFgzOHVPdEI4WmkyanJkRVNBaWdydytxbTd5UmRjdkV1cHhVenRsOEdPRzM2dUhYSUMxaHYK",
+			"endpoints": ["https://github.com/HazelChat/hazel/releases/latest/download/latest.json"],
+			"windows": {
+				"installMode": "passive"
+			}
+		}
+	},
+	"build": {
+		"frontendDist": "../../web-foldkit/dist",
+		"devUrl": "http://localhost:3100",
+		"beforeBuildCommand": "bun run build:web"
+	},
+	"app": {
+		"withGlobalTauri": true,
+		"windows": [
+			{
+				"title": "Hazel",
+				"width": 1200,
+				"height": 800,
+				"minWidth": 940,
+				"minHeight": 500,
+				"resizable": true,
+				"fullscreen": false,
+				"devtools": true,
+				"backgroundColor": "#27272a",
+				"hiddenTitle": true,
+				"titleBarStyle": "Overlay"
+			}
+		],
+		"security": {
+			"csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: tauri: http://localhost:* ws://localhost:* https: wss:; img-src * data: blob:; media-src * data: blob:; font-src 'self' data:; frame-src 'self' https:"
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": "all",
+		"createUpdaterArtifacts": true,
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		]
+	}
+}

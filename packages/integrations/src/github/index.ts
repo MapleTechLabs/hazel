@@ -2,7 +2,6 @@
 
 // api-client exports are more specific to avoid conflicts with payloads.ts
 export {
-	fetchGitHubPR,
 	GitHubAccountInfo,
 	GitHubApiClient,
 	GitHubApiError,
@@ -19,7 +18,6 @@ export {
 } from "./api-client.ts"
 export * from "./colors.ts"
 export * from "./embed-builder.ts"
-export * from "./__fixtures__/payloads.ts"
 
 // Server-only exports (use node:crypto)
 // These are re-exported but will cause build errors if used in browser context

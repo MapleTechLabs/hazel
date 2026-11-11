@@ -1,9 +1,8 @@
-import { Command, Options, Prompt } from "@effect/cli"
+import { Command, Flag, Prompt } from "effect/cli"
 import { Console, Effect, Redacted } from "effect"
 import pc from "picocolors"
 import { SecretGenerator } from "../services/secrets.ts"
-import { CredentialValidator } from "../services/validators.ts"
-import { EnvWriter, type EnvReadResult } from "../services/env-writer.ts"
+import { EnvWriter } from "../services/env-writer.ts"
 import { Doctor } from "../services/doctor.ts"
 import {
 	ENV_TEMPLATES,
@@ -13,42 +12,33 @@ import {
 	type Config,
 } from "../templates.ts"
 import { promptWithExisting, getExistingValue } from "../prompts.ts"
-import { certsCommand } from "./certs.ts"
 
 // CLI Options
-const skipValidation = Options.boolean("skip-validation").pipe(
-	Options.withDescription("Skip credential validation (API calls)"),
-	Options.withDefault(false),
+const force = Flag.Boolean("force").pipe(
+	Flag.withAlias("f"),
+	Flag.withDescription("Overwrite existing .env files without prompting"),
+	Flag.withDefault(false),
 )
 
-const force = Options.boolean("force").pipe(
-	Options.withAlias("f"),
-	Options.withDescription("Overwrite existing .env files without prompting"),
-	Options.withDefault(false),
+const dryRun = Flag.Boolean("dry-run").pipe(
+	Flag.withAlias("n"),
+	Flag.withDescription("Show what would be done without writing files"),
+	Flag.withDefault(false),
 )
 
-const dryRun = Options.boolean("dry-run").pipe(
-	Options.withAlias("n"),
-	Options.withDescription("Show what would be done without writing files"),
-	Options.withDefault(false),
-)
-
-const skipDoctor = Options.boolean("skip-doctor").pipe(
-	Options.withDescription("Skip environment checks"),
-	Options.withDefault(false),
+const skipDoctor = Flag.Boolean("skip-doctor").pipe(
+	Flag.withDescription("Skip environment checks"),
+	Flag.withDefault(false),
 )
 
 export const setupCommand = Command.make(
 	"setup",
-	{ skipValidation, force, dryRun, skipDoctor },
-	({ skipValidation, force, dryRun, skipDoctor }) =>
+	{ force, dryRun, skipDoctor },
+	({ force, dryRun, skipDoctor }) =>
 		Effect.gen(function* () {
 			yield* Console.log(`\n${pc.bold("\u{1F33F} Hazel Local Development Setup")}\n`)
 
-			// Run the certs setup
-			yield* certsCommand.handler({})
-
-			// Start Docker Compose after that
+			// Docker Compose runs MinIO (local S3)
 			yield* Console.log(pc.cyan("\u2500\u2500\u2500 Starting Docker Compose \u2500\u2500\u2500"))
 			yield* Console.log(pc.dim("Running `docker compose up -d`...\n"))
 
@@ -70,7 +60,7 @@ export const setupCommand = Command.make(
 					error: undefined,
 				}
 			}).pipe(
-				Effect.catchAll((error) =>
+				Effect.catch((error) =>
 					Effect.succeed({
 						ok: false,
 						exitCode: null,
@@ -93,7 +83,7 @@ export const setupCommand = Command.make(
 				if (errorLines.length > 0) {
 					yield* Console.log(pc.red(errorLines.join("\n")))
 				}
-				const continueAnyway = yield* Prompt.confirm({
+				const continueAnyway = yield* Prompt.Confirm({
 					message: "Continue anyway?",
 					initial: false,
 				})
@@ -138,7 +128,7 @@ export const setupCommand = Command.make(
 					yield* Console.log(
 						`\n${pc.yellow("\u26A0 Some checks failed.")} Run ${pc.cyan("`hazel-setup doctor`")} for details.`,
 					)
-					const continueAnyway = yield* Prompt.confirm({
+					const continueAnyway = yield* Prompt.Confirm({
 						message: "Continue anyway?",
 						initial: false,
 					})
@@ -157,14 +147,14 @@ export const setupCommand = Command.make(
 			const hasExistingValues = Object.keys(envResult.values).length > 0
 
 			// Check for existing .env files
-			const hasExisting = yield* envWriter.envFileExists("apps/backend/.env")
+			const hasExisting = yield* envWriter.envFileExists(".env.local")
 
 			if (hasExisting && !force) {
 				if (hasExistingValues) {
 					yield* Console.log(pc.cyan("Found existing configuration - values will be prefilled"))
 				}
-				const overwrite = yield* Prompt.confirm({
-					message: "Existing .env files found. Overwrite?",
+				const overwrite = yield* Prompt.Confirm({
+					message: "Existing .env.local found. Overwrite?",
 					initial: hasExistingValues, // Default to yes if we found existing values to prefill
 				})
 				if (!overwrite) {
@@ -174,102 +164,34 @@ export const setupCommand = Command.make(
 			}
 
 			// Step 1: Local services info
+			yield* Console.log(pc.cyan("\u2500\u2500\u2500 Step 1: Local Services \u2500\u2500\u2500"))
 			yield* Console.log(
-				pc.cyan("\u2500\u2500\u2500 Step 1: Database & Local Services \u2500\u2500\u2500"),
+				pc.dim(
+					"  \u2022 The api Worker, its Durable Objects and the directory D1 run under `bun run alchemy:dev`",
+				),
 			)
-			yield* Console.log("Using Docker Compose defaults:")
-			yield* Console.log(pc.dim("  \u2022 PostgreSQL: postgresql://user:password@localhost:5432/app"))
-			yield* Console.log(pc.dim("  \u2022 Redis: redis://localhost:6380"))
-			yield* Console.log(pc.dim("  \u2022 Electric: http://localhost:3333\n"))
+			yield* Console.log(pc.dim("  \u2022 MinIO (Docker Compose) stands in for R2 uploads\n"))
 
-			// Validate database connection
-			if (!skipValidation) {
-				const validator = yield* CredentialValidator
-				const dbResult = yield* validator
-					.validateDatabase("postgresql://user:password@localhost:5432/app")
-					.pipe(Effect.either)
-
-				if (dbResult._tag === "Left") {
-					yield* Console.log(
-						pc.yellow("\u26A0\uFE0F  Database not reachable.") +
-							` Run ${pc.cyan("`docker compose up -d`")} first.`,
-					)
-					const continueAnyway = yield* Prompt.confirm({
-						message: "Continue anyway?",
-						initial: true,
-					})
-					if (!continueAnyway) return
-				} else {
-					yield* Console.log(pc.green("\u2713") + " Database connected\n")
-				}
-			}
-
-			// Step 2: WorkOS setup
-			yield* Console.log(pc.cyan("\u2500\u2500\u2500 Step 2: WorkOS Authentication \u2500\u2500\u2500"))
-			yield* Console.log("WorkOS provides user authentication.")
-			if (!existingConfig.workosApiKey) {
-				yield* Console.log(`Create a free account at ${pc.cyan("https://dashboard.workos.com")}\n`)
-				yield* Console.log(pc.dim("1. Create a new project"))
-				yield* Console.log(pc.dim("2. Go to API Keys \u2192 copy your API key (sk_test_...)"))
-				yield* Console.log(pc.dim("3. Go to Configuration \u2192 copy Client ID (client_...)"))
-				yield* Console.log(pc.dim("4. Add redirect URI: http://localhost:3003/auth/callback\n"))
-			} else {
-				yield* Console.log(
-					pc.dim("(Using existing credentials - press Enter to keep or type new value)\n"),
-				)
-			}
-
-			const workosApiKey = yield* promptWithExisting({
-				key: "WORKOS_API_KEY",
-				message: "Enter your WorkOS API Key",
-				envResult,
-				validate: (s) =>
-					s.startsWith("sk_") ? Effect.succeed(s) : Effect.fail("Must start with sk_"),
-				isSecret: true,
-			})
-
-			const workosClientId = yield* promptWithExisting({
-				key: "WORKOS_CLIENT_ID",
-				message: "Enter your WorkOS Client ID",
-				envResult,
-				validate: (s) =>
-					s.startsWith("client_") ? Effect.succeed(s) : Effect.fail("Must start with client_"),
-			})
-
-			// Validate WorkOS credentials
-			if (!skipValidation) {
-				yield* Console.log(pc.dim("\nValidating WorkOS credentials..."))
-				const validator = yield* CredentialValidator
-				const result = yield* validator
-					.validateWorkOS(workosApiKey, workosClientId)
-					.pipe(Effect.either)
-
-				if (result._tag === "Left") {
-					yield* Console.log(pc.red(`\u274C WorkOS validation failed: ${result.left.message}`))
-					yield* Console.log(pc.dim("Please check your credentials and try again."))
-					return
-				}
-				yield* Console.log(pc.green("\u2713") + " WorkOS credentials valid\n")
-			}
+			// Step 2: Sign-in
+			yield* Console.log(pc.cyan("\u2500\u2500\u2500 Step 2: Sign-in \u2500\u2500\u2500"))
+			yield* Console.log(
+				pc.dim(
+					"Hazel sign-in is off until AUTH_GITHUB_CLIENT_ID / AUTH_GITHUB_CLIENT_SECRET are set in .env.local.",
+				),
+			)
+			yield* Console.log(
+				pc.dim(
+					`Generate its keys with ${pc.cyan("bun run --cwd packages/auth generate-keys")} and add them there too.\n`,
+				),
+			)
 
 			// Step 3: Secrets - reuse existing or generate new
 			yield* Console.log(pc.cyan("\u2500\u2500\u2500 Step 3: Secrets \u2500\u2500\u2500"))
 
-			const existingCookiePassword = getExistingValue(envResult, "WORKOS_COOKIE_PASSWORD")
 			const existingEncryptionKey = getExistingValue(envResult, "INTEGRATION_ENCRYPTION_KEY")
 
 			const generatedSecrets = {
-				cookiePassword: existingCookiePassword?.value ?? secrets.generatePassword(32),
 				encryptionKey: existingEncryptionKey?.value ?? secrets.generateEncryptionKey(),
-			}
-
-			if (existingCookiePassword) {
-				yield* Console.log(
-					pc.green("\u2713") +
-						` Reusing WORKOS_COOKIE_PASSWORD (from ${existingCookiePassword.source})`,
-				)
-			} else {
-				yield* Console.log(pc.green("\u2713") + " Generated WORKOS_COOKIE_PASSWORD")
 			}
 
 			if (existingEncryptionKey) {
@@ -298,7 +220,7 @@ export const setupCommand = Command.make(
 			if (existingConfig.linear) {
 				yield* Console.log(pc.green("\u2713") + " Found existing Linear configuration")
 				yield* Console.log(pc.dim(`  CLIENT_ID: ${maskSecret(existingConfig.linear.clientId.value)}`))
-				const keepLinear = yield* Prompt.confirm({
+				const keepLinear = yield* Prompt.Confirm({
 					message: "Keep existing Linear configuration?",
 					initial: true,
 				})
@@ -311,7 +233,7 @@ export const setupCommand = Command.make(
 			}
 
 			if (!linearConfig) {
-				const setupLinear = yield* Prompt.confirm({
+				const setupLinear = yield* Prompt.Confirm({
 					message: "Set up Linear OAuth? (for Linear integration)",
 					initial: false,
 				})
@@ -320,9 +242,7 @@ export const setupCommand = Command.make(
 					yield* Console.log(
 						`Create a Linear OAuth app at ${pc.cyan("https://linear.app/settings/api")}`,
 					)
-					yield* Console.log(
-						pc.dim("Set redirect URI: http://localhost:3003/integrations/linear/callback\n"),
-					)
+					yield* Console.log(pc.dim("Set redirect URI: <api url>/integrations/linear/callback\n"))
 
 					const clientId = yield* promptWithExisting({
 						key: "LINEAR_CLIENT_ID",
@@ -351,7 +271,7 @@ export const setupCommand = Command.make(
 			if (existingConfig.githubApp) {
 				yield* Console.log(pc.green("\u2713") + " Found existing GitHub App configuration")
 				yield* Console.log(pc.dim(`  App ID: ${existingConfig.githubApp.appId.value}`))
-				const keepGithubApp = yield* Prompt.confirm({
+				const keepGithubApp = yield* Prompt.Confirm({
 					message: "Keep existing GitHub App configuration?",
 					initial: true,
 				})
@@ -365,7 +285,7 @@ export const setupCommand = Command.make(
 			}
 
 			if (!githubAppConfig) {
-				const setupGithubApp = yield* Prompt.confirm({
+				const setupGithubApp = yield* Prompt.Confirm({
 					message: "Set up GitHub App? (for GitHub integration)",
 					initial: false,
 				})
@@ -405,7 +325,7 @@ export const setupCommand = Command.make(
 			// Check if GitHub webhook secret is already configured
 			if (existingConfig.githubWebhookSecret) {
 				yield* Console.log(pc.green("\u2713") + " Found existing GitHub webhook secret")
-				const keepGithub = yield* Prompt.confirm({
+				const keepGithub = yield* Prompt.Confirm({
 					message: "Keep existing GitHub webhook secret?",
 					initial: true,
 				})
@@ -415,14 +335,14 @@ export const setupCommand = Command.make(
 			}
 
 			if (!githubWebhookSecret) {
-				const setupGithub = yield* Prompt.confirm({
+				const setupGithub = yield* Prompt.Confirm({
 					message: "Set up GitHub webhook secret?",
 					initial: false,
 				})
 
 				if (setupGithub) {
 					yield* Console.log(pc.dim("Generate a random secret for GitHub webhook verification\n"))
-					const useGenerated = yield* Prompt.confirm({
+					const useGenerated = yield* Prompt.Confirm({
 						message: "Auto-generate a secure secret?",
 						initial: true,
 					})
@@ -432,7 +352,7 @@ export const setupCommand = Command.make(
 						yield* Console.log(`Generated: ${pc.cyan(githubWebhookSecret)}`)
 						yield* Console.log(pc.dim("Save this for your GitHub webhook configuration\n"))
 					} else {
-						const secretRedacted = yield* Prompt.password({ message: "GitHub Webhook Secret" })
+						const secretRedacted = yield* Prompt.Password({ message: "GitHub Webhook Secret" })
 						githubWebhookSecret = Redacted.value(secretRedacted)
 					}
 				}
@@ -446,7 +366,7 @@ export const setupCommand = Command.make(
 			// Check if OpenRouter is already configured
 			if (existingConfig.openrouterApiKey) {
 				yield* Console.log(pc.green("\u2713") + " Found existing OpenRouter API key")
-				const keepOpenRouter = yield* Prompt.confirm({
+				const keepOpenRouter = yield* Prompt.Confirm({
 					message: "Keep existing OpenRouter API key?",
 					initial: true,
 				})
@@ -456,7 +376,7 @@ export const setupCommand = Command.make(
 			}
 
 			if (!openrouterApiKey) {
-				const setupOpenRouter = yield* Prompt.confirm({
+				const setupOpenRouter = yield* Prompt.Confirm({
 					message: "Set up OpenRouter API? (for AI thread naming)",
 					initial: false,
 				})
@@ -472,20 +392,52 @@ export const setupCommand = Command.make(
 				}
 			}
 
+			// Optional: Klipy GIF API
+			yield* Console.log(pc.cyan("\n——— Optional: Klipy GIF Search ———"))
+
+			let klipyApiKey: string | undefined
+
+			// Check if Klipy is already configured
+			if (existingConfig.klipyApiKey) {
+				yield* Console.log(pc.green("✓") + " Found existing Klipy API key")
+				const keepKlipy = yield* Prompt.Confirm({
+					message: "Keep existing Klipy API key?",
+					initial: true,
+				})
+				if (keepKlipy) {
+					klipyApiKey = existingConfig.klipyApiKey.value
+				}
+			}
+
+			if (!klipyApiKey) {
+				const setupKlipy = yield* Prompt.Confirm({
+					message: "Set up Klipy API key? (GIF search is off without one)",
+					initial: false,
+				})
+
+				if (setupKlipy) {
+					yield* Console.log(`Get your API key at ${pc.cyan("https://klipy.com")}\n`)
+					klipyApiKey = yield* promptWithExisting({
+						key: "KLIPY_API_KEY",
+						message: "Klipy API Key",
+						envResult,
+						isSecret: true,
+					})
+				}
+			}
+
 			// Step 5: Write .env files
 			if (dryRun) {
 				yield* Console.log(
-					pc.cyan("\n\u2500\u2500\u2500 Step 5: Preview .env files (dry-run) \u2500\u2500\u2500"),
+					pc.cyan("\n\u2500\u2500\u2500 Step 5: Preview .env.local (dry-run) \u2500\u2500\u2500"),
 				)
 			} else {
 				yield* Console.log(
-					pc.cyan("\n\u2500\u2500\u2500 Step 5: Writing .env files \u2500\u2500\u2500"),
+					pc.cyan("\n\u2500\u2500\u2500 Step 5: Writing .env.local \u2500\u2500\u2500"),
 				)
 			}
 
 			const config: Config = {
-				workosApiKey,
-				workosClientId,
 				secrets: generatedSecrets,
 				s3: s3Config,
 				s3PublicUrl: s3Config.publicUrl,
@@ -493,52 +445,25 @@ export const setupCommand = Command.make(
 				githubApp: githubAppConfig,
 				githubWebhookSecret,
 				openrouterApiKey,
+				klipyApiKey,
+				botTokens: yield* envWriter.readBotTokens(),
 			}
 
-			yield* envWriter.writeEnvFile("apps/web/.env", ENV_TEMPLATES.web(config), dryRun)
-			yield* envWriter.writeEnvFile("apps/backend/.env", ENV_TEMPLATES.backend(config), dryRun)
-			yield* envWriter.writeEnvFile("apps/cluster/.env", ENV_TEMPLATES.cluster(config), dryRun)
-			yield* envWriter.writeEnvFile(
-				"apps/electric-proxy/.env",
-				ENV_TEMPLATES.electricProxy(config),
-				dryRun,
-			)
-			yield* envWriter.writeEnvFile("packages/db/.env", ENV_TEMPLATES.db(), dryRun)
+			yield* envWriter.writeEnvFile(".env.local", ENV_TEMPLATES.local(config), dryRun)
 
 			if (dryRun) {
 				yield* Console.log(pc.dim("\nDry-run complete! No files were written."))
 				yield* Console.log(`Run without ${pc.cyan("--dry-run")} to apply these changes.\n`)
 			} else {
-				// Run db:push to initialize database schema
-				yield* Console.log(
-					pc.cyan("\n\u2500\u2500\u2500 Step 6: Initialize Database \u2500\u2500\u2500"),
-				)
-				yield* Console.log(pc.dim("Running `bun run db:push`...\n"))
-
-				const dbPushResult = yield* Effect.tryPromise({
-					try: async () => {
-						const proc = Bun.spawn(["bun", "run", "db:push"], {
-							cwd: process.cwd() + "/packages/db",
-							stdout: "inherit",
-							stderr: "inherit",
-						})
-						await proc.exited
-						return proc.exitCode === 0
-					},
-					catch: () => false,
-				}).pipe(Effect.catchAll(() => Effect.succeed(false)))
-
-				if (dbPushResult) {
-					yield* Console.log(pc.green("\n\u2713") + " Database schema pushed")
-				} else {
-					yield* Console.log(
-						pc.yellow("\n\u26A0") + " Database push failed. You may need to run it manually.",
-					)
-				}
-
+				// alchemy dev creates and migrates the directory D1 and the objects' SQLite on first start.
 				yield* Console.log(pc.green("\n\u2705 Setup complete!"))
-				yield* Console.log(pc.bold("Next step:"))
-				yield* Console.log(`  Run ${pc.cyan("`bun run dev`")} to start developing\n`)
+				yield* Console.log(pc.bold("Next steps:"))
+				yield* Console.log(
+					`  1. Run ${pc.cyan("`bun run dev`")} (\`alchemy:dev\`) to start the Workers and the web app`,
+				)
+				yield* Console.log(
+					`  2. Optional: set ${pc.cyan("HAZEL_BOT_TOKEN")} / ${pc.cyan("LINEAR_BOT_TOKEN")} in .env.local to run the bots too\n`,
+				)
 			}
 		}),
 )

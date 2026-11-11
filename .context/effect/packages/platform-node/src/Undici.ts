@@ -1,16 +1,16 @@
 /**
  * @since 1.0.0
  */
+import Undici from "undici"
 
-export {
-  /**
-   * @since 1.0.0
-   * @category undici
-   */
-  default
-} from "undici"
 /**
  * @since 1.0.0
  * @category undici
  */
 export * from "undici"
+
+/**
+ * @since 1.0.0
+ * @category undici
+ */
+export default Undici

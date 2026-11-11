@@ -3,12 +3,12 @@
 /**
  * Simple Echo Bot Example
  *
- * This example demonstrates the basic usage of the @hazel/bot-sdk.
+ * This example demonstrates the basic usage of the @hazel-chat/bot-sdk.
  * It listens for new messages and responds with an echo.
  *
  * Features demonstrated:
  * - Bot authentication
- * - Connecting to Electric SQL for real-time events
+ * - Connecting to the Hazel bot gateway for real-time events
  * - Listening for message events
  * - Sending messages via RPC
  * - Typesafe slash commands with /echo
@@ -52,19 +52,19 @@ const commands = CommandGroup.make(EchoCommand, PingCommand)
 /**
  * Create a Hazel bot runtime
  * All Hazel domain schemas are pre-configured automatically!
- * No need to define subscriptions - they're baked into HazelBotSDK
+ * No need to define subscriptions - inbound events arrive over the gateway websocket.
  *
  * Configuration options:
- * - electricUrl: Electric SQL proxy URL (defaults to https://electric.hazel.sh/v1/shape)
- * - backendUrl: Backend API URL for RPC calls and SSE command streaming (defaults to https://api.hazel.sh)
+ * - backendUrl: Backend API URL for short request/response bot APIs (defaults to https://api.hazel.sh)
+ * - gatewayUrl: Gateway URL for inbound websocket delivery (defaults to backendUrl)
  * - botToken: Your bot's authentication token (required)
  * - commands: Typesafe CommandGroup for slash commands (optional)
  */
 const runtime = createHazelBot({
 	botToken,
 	// For local development, override the URLs:
-	electricUrl: process.env.ELECTRIC_URL ?? "http://localhost:8787/v1/shape",
 	backendUrl: process.env.BACKEND_URL ?? "http://localhost:3003",
+	gatewayUrl: process.env.GATEWAY_URL ?? "http://localhost:3004",
 	// Pass the typesafe command group
 	commands,
 })
@@ -94,7 +94,7 @@ const program = Effect.gen(function* () {
 			// ctx.args.text is typed as string!
 			yield* bot.message.send(ctx.channelId, `Echo: ${ctx.args.text}`).pipe(
 				Effect.tap((msg) => Effect.log(`✅ Sent echo response: ${msg.id}`)),
-				Effect.catchAll((error) => Effect.logError(`Failed to send echo: ${error}`)),
+				Effect.catch((error) => Effect.logError(`Failed to send echo: ${error}`)),
 			)
 		}),
 	)
@@ -105,7 +105,7 @@ const program = Effect.gen(function* () {
 			// ctx.args is typed as {} (empty object) since PingCommand has no args
 			yield* bot.message.send(ctx.channelId, "Pong! 🏓").pipe(
 				Effect.tap(() => Effect.log("✅ Sent pong response")),
-				Effect.catchAll((error) => Effect.logError(`Failed to send pong: ${error}`)),
+				Effect.catch((error) => Effect.logError(`Failed to send pong: ${error}`)),
 			)
 		}),
 	)
@@ -130,7 +130,7 @@ const program = Effect.gen(function* () {
 			// Echo the message back using bot.message.reply
 			yield* bot.message.reply(message, `Echo: ${message.content}`).pipe(
 				Effect.tap((sentMessage) => Effect.log(`✅ Echoed message: ${sentMessage.id}`)),
-				Effect.catchAll((error) => Effect.logError(`Failed to send echo: ${error}`)),
+				Effect.catch((error) => Effect.logError(`Failed to send echo: ${error}`)),
 			)
 		}),
 	)
@@ -141,7 +141,7 @@ const program = Effect.gen(function* () {
 			if (message.content.toLowerCase().includes("hello")) {
 				yield* bot.message.react(message, "👋").pipe(
 					Effect.tap(() => Effect.log("👋 Waved at hello message")),
-					Effect.catchAll((error) => Effect.logError(`Failed to react: ${error}`)),
+					Effect.catch((error) => Effect.logError(`Failed to react: ${error}`)),
 				)
 			}
 		}),

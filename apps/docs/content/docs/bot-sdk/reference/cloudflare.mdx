@@ -1,0 +1,103 @@
+---
+title: Running on Cloudflare
+description: Host a bot in a Durable Object with makeBotSupervisor
+icon: Cloud
+---
+
+A bot holds an open WebSocket to the Hazel bot gateway, so on Cloudflare it runs inside a Durable Object: the object keeps the socket and the bot's fibers alive between requests. `@hazel-chat/bot-sdk/cloudflare` has what the object needs. Hazel's own bots run this way.
+
+## Define the bot
+
+Write the bot with `defineBot`. It takes the same options as `runHazelBot`, without the config overrides:
+
+```typescript
+// bot.ts
+import { Effect } from "effect"
+import { defineBot } from "@hazel-chat/bot-sdk"
+
+export const bot = defineBot({
+	serviceName: "my-bot",
+	setup: (bot) =>
+		Effect.gen(function* () {
+			yield* bot.onMessage((message) =>
+				message.content === "ping" ? bot.message.reply(message, "pong") : Effect.void,
+			)
+		}),
+})
+```
+
+## Host it in a Durable Object
+
+`makeBotSupervisor(bot, { storage })` runs the bot in the object. Its `ensureRunning` starts the bot unless it is already running, and arms a watchdog alarm. Call it from the object's `alarm()` and from a per-minute cron on the Worker, which brings the bot back after a deploy or an eviction.
+
+The bot reads its config (`BOT_TOKEN`, `BACKEND_URL`, `GATEWAY_URL`, plus whatever your bot reads) through Effect's `ConfigProvider`, so provide the Worker env as one:
+
+```typescript
+// worker.ts
+import { makeBotSupervisor } from "@hazel-chat/bot-sdk/cloudflare"
+import { ConfigProvider, Effect, Scope } from "effect"
+import { bot } from "./bot"
+
+export class BotRunner {
+	private readonly supervisor
+	constructor(
+		readonly ctx: DurableObjectState,
+		readonly env: Record<string, unknown>,
+	) {
+		const scope = Effect.runSync(Scope.make())
+		this.supervisor = Effect.runSync(
+			Scope.provide(makeBotSupervisor(bot, { storage: ctx.storage }), scope),
+		)
+	}
+	ensureRunning() {
+		return Effect.runPromise(
+			this.supervisor.ensureRunning.pipe(
+				Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(this.env))),
+			),
+		)
+	}
+	async alarm() {
+		await this.ensureRunning()
+	}
+}
+
+export default {
+	// wrangler.jsonc: "triggers": { "crons": ["* * * * *"] }
+	async scheduled(_event: ScheduledController, env: { BOT_RUNNER: DurableObjectNamespace<BotRunner> }) {
+		await env.BOT_RUNNER.getByName("bot").ensureRunning()
+	},
+}
+```
+
+Use a single object (one fixed name): the gateway admits one session per bot.
+
+`ensureRunning` returns `{ wasRunning }`. `false` means the bot had stopped (or never started) and was just started, so a health check calling it should report the bot as down.
+
+### Options
+
+| Option               | Type                       | Description                                                    |
+| -------------------- | -------------------------- | -------------------------------------------------------------- |
+| `storage`            | `DurableObjectStorageLike` | The object's `ctx.storage`: the stores, and the watchdog alarm |
+| `watchdogIntervalMs` | `number`                   | How often the alarm checks on the bot (default 30 seconds)     |
+
+## Resume and state
+
+The supervisor keeps the gateway resume offset and `bot.state` in the object's storage, so a restarted bot resumes where it stopped instead of tailing from "now". To use the same stores elsewhere, `durableObjectStores(storage)` returns the `sessionStore` and `stateStore` pair.
+
+## Logging and tracing
+
+On Cloudflare the bot runs in the caller's Effect context: it logs and traces through whatever logger and tracer you provide alongside the `ConfigProvider`. It does not start its own exporter or the `/health` server.
+
+## `launchBot`
+
+`launchBot(options)` runs a bot inside the current Effect context, which supplies logging, tracing and the `ConfigProvider` its env is read from. It is what `makeBotSupervisor` uses; reach for it when your host is not a Durable Object but still owns those services. It never returns; interrupt it to stop the bot.
+
+```typescript
+import { Effect } from "effect"
+import { launchBot } from "@hazel-chat/bot-sdk"
+import { bot } from "./bot"
+
+const fiber = Effect.runFork(launchBot(bot))
+```
+
+`makeHazelBotLayer(config)` is the layer under both: the `HazelBotClient` and the services it needs, without logging, tracing or a health server.

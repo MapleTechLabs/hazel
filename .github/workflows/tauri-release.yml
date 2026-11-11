@@ -1,4 +1,4 @@
-name: Tauri Release
+name: Desktop Release
 
 on:
     push:
@@ -13,11 +13,8 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
+                # macOS ships the native (Rune) app, built by `macos` below.
                 include:
-                    - platform: macos-latest
-                      args: "--target aarch64-apple-darwin"
-                    - platform: macos-latest
-                      args: "--target x86_64-apple-darwin"
                     - platform: ubuntu-22.04
                       args: ""
                     - platform: windows-latest
@@ -34,13 +31,11 @@ jobs:
 
             - name: Install Rust stable
               uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
             - name: Rust cache
               uses: swatinem/rust-cache@v2
               with:
-                  workspaces: "./apps/web/src-tauri -> target"
+                  workspaces: "./apps/desktop/src-tauri -> target"
 
             - name: Install dependencies (Ubuntu)
               if: matrix.platform == 'ubuntu-22.04'
@@ -64,15 +59,120 @@ jobs:
                   APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
                   APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
                   VITE_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
-                  VITE_CLUSTER_URL: ${{ vars.VITE_CLUSTER_URL }}
-                  VITE_ELECTRIC_URL: ${{ vars.VITE_ELECTRIC_URL }}
-                  VITE_WORKOS_CLIENT_ID: ${{ vars.VITE_WORKOS_CLIENT_ID }}
                   VITE_R2_PUBLIC_URL: ${{ vars.VITE_R2_PUBLIC_URL }}
               with:
-                  projectPath: apps/web
+                  projectPath: apps/desktop
                   tagName: v__VERSION__
                   releaseName: "Hazel v__VERSION__"
                   releaseBody: "See the assets to download this version and install."
                   releaseDraft: true
                   prerelease: false
                   args: ${{ matrix.args }}
+
+    # The Mac app: the native (Rune) build, as `Hazel.app` (com.hazel.app) at the Tauri app's
+    # version. Its update archive is signed with the Tauri updater key, so Macs on the Tauri app
+    # update into it from the same `latest.json` (apps/native/README.md, "Releases").
+    macos:
+        strategy:
+            fail-fast: false
+            matrix:
+                arch: [aarch64, x86_64]
+        runs-on: macos-latest
+        timeout-minutes: 60
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v1
+              with:
+                  bun-version: latest
+
+            # The host's toolchain is pinned (apps/native/host/rust-toolchain.toml); add the target.
+            - name: Rust target
+              working-directory: apps/native/host
+              run: rustup target add ${{ matrix.arch }}-apple-darwin
+
+            - name: Rust cache
+              uses: swatinem/rust-cache@v2
+              with:
+                  workspaces: "./apps/native/host -> target"
+                  key: ${{ matrix.arch }}
+
+            - name: Install dependencies
+              run: bun install --frozen-lockfile
+
+            - name: Import signing certificate
+              uses: apple-actions/import-codesign-certs@v3
+              with:
+                  p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+                  p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
+            - name: Bundle
+              working-directory: apps/native
+              env:
+                  HAZEL_RELEASE: "1"
+                  HAZEL_BUNDLE_ARCH: ${{ matrix.arch }}
+                  APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+                  HAZEL_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
+                  HAZEL_R2_PUBLIC_URL: ${{ vars.VITE_R2_PUBLIC_URL }}
+              run: bun scripts/bundle.ts
+
+            - name: Notarize and package
+              working-directory: apps/native
+              env:
+                  HAZEL_BUNDLE_ARCH: ${{ matrix.arch }}
+                  APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+                  APPLE_ID: ${{ secrets.APPLE_ID }}
+                  APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+                  APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+                  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+                  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+              run: bun scripts/release.ts
+
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: macos-${{ matrix.arch }}
+                  path: apps/native/dist/release/Hazel_*
+                  if-no-files-found: error
+
+    # Adds the Mac downloads to the draft release `build` made, and the Mac entries to its
+    # `latest.json` (Tauri's updater format, read by both apps). Publishing the draft ships it.
+    publish-macos:
+        needs: [build, macos]
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        env:
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            GH_REPO: ${{ github.repository }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/download-artifact@v4
+              with:
+                  pattern: macos-*
+                  path: macos
+                  merge-multiple: true
+
+            - name: Upload and add to latest.json
+              run: |
+                  set -euo pipefail
+                  version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
+                  tag="v$version"
+                  base="https://github.com/$GH_REPO/releases/download/$tag"
+                  gh release upload "$tag" macos/Hazel_* --clobber
+                  gh release download "$tag" --pattern latest.json --dir . --clobber
+                  entry() {
+                      jq -n --arg url "$base/Hazel_${version}_$1.app.tar.gz" \
+                          --arg signature "$(cat "macos/Hazel_${version}_$1.app.tar.gz.sig")" \
+                          '{signature: $signature, url: $url}'
+                  }
+                  arm=$(entry aarch64)
+                  intel=$(entry x64)
+                  jq --argjson arm "$arm" --argjson intel "$intel" '.platforms += {
+                      "darwin-aarch64": $arm, "darwin-aarch64-app": $arm,
+                      "darwin-x86_64": $intel, "darwin-x86_64-app": $intel
+                  }' latest.json > latest.next.json
+                  mv latest.next.json latest.json
+                  jq . latest.json
+                  gh release upload "$tag" latest.json --clobber

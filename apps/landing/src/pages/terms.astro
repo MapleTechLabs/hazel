@@ -1,0 +1,695 @@
+---
+import Layout from "@/layouts/Layout.astro"
+import FooterSection from "@/components/sections/FooterSection.astro"
+import { siteConfig } from "@/lib/site"
+---
+
+<Layout
+	title="Terms of Service | Hazel"
+	description="Read the terms and conditions that govern your use of Hazel's communication platform and services."
+>
+	<main class="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full">
+		<!-- Hero Section -->
+		<section class="w-full relative overflow-hidden">
+			<div class="absolute inset-0 -z-10">
+				<div
+					class="absolute inset-0 h-[500px] w-full [background:radial-gradient(125%_125%_at_50%_10%,var(--background)_40%,var(--secondary)_100%)]"
+				>
+				</div>
+				<div
+					class="absolute inset-0 h-[500px] opacity-[0.015] [background-image:linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] [background-size:64px_64px]"
+				>
+				</div>
+			</div>
+
+			<div class="relative z-10 pt-32 pb-16 px-6 max-w-4xl mx-auto">
+				<nav class="flex items-center gap-2.5 text-sm text-muted-foreground font-medium mb-8">
+					<a href="/" class="hover:text-foreground transition-colors duration-200 flex items-center gap-1.5">
+						<svg
+							class="size-3.5"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+							<polyline points="9 22 9 12 15 12 15 22"></polyline>
+						</svg>
+						Home
+					</a>
+					<span class="text-border">/</span>
+					<span class="text-foreground">Terms of Service</span>
+				</nav>
+
+				<div class="space-y-4">
+					<div
+						class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/10 border border-secondary/20"
+					>
+						<svg
+							class="size-4 text-secondary"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+							<polyline points="14 2 14 8 20 8"></polyline>
+							<line x1="16" y1="13" x2="8" y2="13"></line>
+							<line x1="16" y1="17" x2="8" y2="17"></line>
+							<polyline points="10 9 9 9 8 9"></polyline>
+						</svg>
+						<span class="text-sm font-medium text-secondary">Legal Agreement</span>
+					</div>
+					<h1 class="text-4xl md:text-5xl font-semibold tracking-tight text-primary">Terms of Service</h1>
+					<p class="text-lg text-muted-foreground max-w-2xl">
+						These terms govern your use of Hazel. By using our platform, you agree to these terms.
+					</p>
+					<p class="text-sm text-muted-foreground/70">Last updated: December 14, 2024</p>
+				</div>
+			</div>
+		</section>
+
+		<!-- Content Section -->
+		<section class="w-full py-16 px-6">
+			<div class="max-w-4xl mx-auto">
+				<div class="grid md:grid-cols-[240px_1fr] gap-12">
+					<!-- Table of Contents -->
+					<aside class="hidden md:block">
+						<nav class="sticky top-24 space-y-1">
+							<p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+								On this page
+							</p>
+							<a href="#acceptance" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Acceptance
+							</a>
+							<a href="#services" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Our Services
+							</a>
+							<a href="#accounts" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								User Accounts
+							</a>
+							<a href="#acceptable-use" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Acceptable Use
+							</a>
+							<a href="#content" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								User Content
+							</a>
+							<a href="#intellectual-property" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Intellectual Property
+							</a>
+							<a href="#payment" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Payment Terms
+							</a>
+							<a href="#termination" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Termination
+							</a>
+							<a href="#disclaimers" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Disclaimers
+							</a>
+							<a href="#liability" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Limitation of Liability
+							</a>
+							<a href="#governing-law" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Governing Law
+							</a>
+							<a href="#changes" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Changes to Terms
+							</a>
+							<a href="#contact" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Contact
+							</a>
+						</nav>
+					</aside>
+
+					<!-- Main Content -->
+					<article class="prose prose-neutral dark:prose-invert max-w-none">
+						<section id="acceptance" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>1</span
+								>
+								Acceptance of Terms
+							</h2>
+							<p class="text-muted-foreground leading-relaxed">
+								By accessing or using Hazel ("Service"), you agree to be bound by these Terms of Service
+								("Terms"). If you disagree with any part of these terms, you may not access the Service.
+							</p>
+							<p class="text-muted-foreground leading-relaxed">
+								These Terms apply to all visitors, users, and others who access or use the Service. By
+								using the Service, you represent that you are at least 16 years old, or the age of
+								majority in your jurisdiction, whichever is greater.
+							</p>
+						</section>
+
+						<section id="services" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>2</span
+								>
+								Our Services
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								Hazel provides a team communication platform that includes:
+							</p>
+							<div class="grid gap-3">
+								<div class="flex items-start gap-3 p-4 rounded-xl bg-accent/50 border border-border">
+									<svg
+										class="size-5 text-secondary mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+									</svg>
+									<div>
+										<h4 class="font-medium text-foreground">Real-time messaging</h4>
+										<p class="text-sm text-muted-foreground">
+											Instant communication with team members
+										</p>
+									</div>
+								</div>
+								<div class="flex items-start gap-3 p-4 rounded-xl bg-accent/50 border border-border">
+									<svg
+										class="size-5 text-secondary mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+										<polyline points="14 2 14 8 20 8"></polyline>
+									</svg>
+									<div>
+										<h4 class="font-medium text-foreground">File sharing</h4>
+										<p class="text-sm text-muted-foreground">Share documents and media securely</p>
+									</div>
+								</div>
+								<div class="flex items-start gap-3 p-4 rounded-xl bg-accent/50 border border-border">
+									<svg
+										class="size-5 text-secondary mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+										<line x1="3" y1="9" x2="21" y2="9"></line>
+										<line x1="9" y1="21" x2="9" y2="9"></line>
+									</svg>
+									<div>
+										<h4 class="font-medium text-foreground">Third-party integrations</h4>
+										<p class="text-sm text-muted-foreground">
+											Connect with tools like GitHub, Linear, and more
+										</p>
+									</div>
+								</div>
+							</div>
+							<p class="text-muted-foreground leading-relaxed mt-4">
+								We reserve the right to modify, suspend, or discontinue any aspect of the Service at any
+								time.
+							</p>
+						</section>
+
+						<section id="accounts" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>3</span
+								>
+								User Accounts
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								When you create an account with us, you must provide accurate, complete, and current
+								information. You are responsible for:
+							</p>
+							<ul class="space-y-2 text-muted-foreground">
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span>Safeguarding the password used to access the Service</span>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span>All activities that occur under your account</span>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span>Notifying us immediately of any unauthorized use</span>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span>Keeping your account information up to date</span>
+								</li>
+							</ul>
+							<div
+								class="mt-4 p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 flex items-start gap-3"
+							>
+								<svg
+									class="size-5 text-amber-500 shrink-0 mt-0.5"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path
+										d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+									></path>
+									<line x1="12" y1="9" x2="12" y2="13"></line>
+									<line x1="12" y1="17" x2="12.01" y2="17"></line>
+								</svg>
+								<div>
+									<p class="font-medium text-amber-500">Important</p>
+									<p class="text-sm text-muted-foreground">
+										You may not use another person's account without permission. Account sharing between
+										multiple users is prohibited unless explicitly allowed by your subscription plan.
+									</p>
+								</div>
+							</div>
+						</section>
+
+						<section id="acceptable-use" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>4</span
+								>
+								Acceptable Use Policy
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								You agree not to use the Service in any way that:
+							</p>
+							<div class="space-y-3">
+								<div class="flex items-start gap-2 text-muted-foreground">
+									<svg
+										class="size-5 text-red-500 mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<circle cx="12" cy="12" r="10"></circle>
+										<line x1="15" y1="9" x2="9" y2="15"></line>
+										<line x1="9" y1="9" x2="15" y2="15"></line>
+									</svg>
+									<span>Violates any applicable law or regulation</span>
+								</div>
+								<div class="flex items-start gap-2 text-muted-foreground">
+									<svg
+										class="size-5 text-red-500 mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<circle cx="12" cy="12" r="10"></circle>
+										<line x1="15" y1="9" x2="9" y2="15"></line>
+										<line x1="9" y1="9" x2="15" y2="15"></line>
+									</svg>
+									<span>Infringes on intellectual property rights of others</span>
+								</div>
+								<div class="flex items-start gap-2 text-muted-foreground">
+									<svg
+										class="size-5 text-red-500 mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<circle cx="12" cy="12" r="10"></circle>
+										<line x1="15" y1="9" x2="9" y2="15"></line>
+										<line x1="9" y1="9" x2="15" y2="15"></line>
+									</svg>
+									<span>Transmits malware, viruses, or harmful code</span>
+								</div>
+								<div class="flex items-start gap-2 text-muted-foreground">
+									<svg
+										class="size-5 text-red-500 mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<circle cx="12" cy="12" r="10"></circle>
+										<line x1="15" y1="9" x2="9" y2="15"></line>
+										<line x1="9" y1="9" x2="15" y2="15"></line>
+									</svg>
+									<span>Harasses, abuses, or threatens others</span>
+								</div>
+								<div class="flex items-start gap-2 text-muted-foreground">
+									<svg
+										class="size-5 text-red-500 mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<circle cx="12" cy="12" r="10"></circle>
+										<line x1="15" y1="9" x2="9" y2="15"></line>
+										<line x1="9" y1="9" x2="15" y2="15"></line>
+									</svg>
+									<span>Sends spam or unsolicited communications</span>
+								</div>
+								<div class="flex items-start gap-2 text-muted-foreground">
+									<svg
+										class="size-5 text-red-500 mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<circle cx="12" cy="12" r="10"></circle>
+										<line x1="15" y1="9" x2="9" y2="15"></line>
+										<line x1="9" y1="9" x2="15" y2="15"></line>
+									</svg>
+									<span>Attempts to gain unauthorized access to the Service</span>
+								</div>
+								<div class="flex items-start gap-2 text-muted-foreground">
+									<svg
+										class="size-5 text-red-500 mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<circle cx="12" cy="12" r="10"></circle>
+										<line x1="15" y1="9" x2="9" y2="15"></line>
+										<line x1="9" y1="9" x2="15" y2="15"></line>
+									</svg>
+									<span>Interferes with the proper operation of the Service</span>
+								</div>
+							</div>
+						</section>
+
+						<section id="content" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>5</span
+								>
+								User Content
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								Our Service allows you to post, link, store, share and otherwise make available certain
+								information, text, graphics, or other material ("Content"). You are responsible for the
+								Content that you post.
+							</p>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								By posting Content, you grant us the right to use, modify, publicly perform, publicly
+								display, reproduce, and distribute such Content on and through the Service. You retain
+								your rights to any Content you submit.
+							</p>
+							<p class="text-muted-foreground leading-relaxed">
+								You represent and warrant that: (i) the Content is yours or you have the right to use it;
+								and (ii) the posting of Content does not violate the privacy rights, publicity rights,
+								copyrights, contract rights, or any other rights of any person.
+							</p>
+						</section>
+
+						<section id="intellectual-property" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>6</span
+								>
+								Intellectual Property
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								The Service and its original content (excluding Content provided by users), features, and
+								functionality are and will remain the exclusive property of Hazel and its licensors.
+							</p>
+							<div class="p-4 rounded-xl bg-accent/50 border border-border">
+								<p class="text-muted-foreground">
+									The Service is protected by copyright, trademark, and other laws of both the United
+									States and foreign countries. Our trademarks and trade dress may not be used in
+									connection with any product or service without our prior written consent.
+								</p>
+							</div>
+						</section>
+
+						<section id="payment" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>7</span
+								>
+								Payment Terms
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								For paid subscriptions:
+							</p>
+							<ul class="space-y-2 text-muted-foreground">
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Billing:</strong> Subscriptions are billed in advance
+										on a monthly or annual basis</span
+									>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Renewal:</strong> Subscriptions automatically renew
+										unless cancelled before the renewal date</span
+									>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Refunds:</strong> Refunds are handled on a case-by-case
+										basis. Contact support for refund requests</span
+									>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Price Changes:</strong> We may change subscription
+										prices with 30 days notice</span
+									>
+								</li>
+							</ul>
+						</section>
+
+						<section id="termination" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>8</span
+								>
+								Termination
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								We may terminate or suspend your account immediately, without prior notice or liability,
+								for any reason whatsoever, including without limitation if you breach the Terms.
+							</p>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								Upon termination, your right to use the Service will immediately cease. If you wish to
+								terminate your account, you may simply discontinue using the Service or delete your
+								account through the settings.
+							</p>
+							<p class="text-muted-foreground leading-relaxed">
+								All provisions of the Terms which by their nature should survive termination shall
+								survive, including ownership provisions, warranty disclaimers, indemnity, and limitations
+								of liability.
+							</p>
+						</section>
+
+						<section id="disclaimers" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>9</span
+								>
+								Disclaimers
+							</h2>
+							<div class="p-4 rounded-xl border border-border bg-background">
+								<p class="text-muted-foreground leading-relaxed uppercase text-sm">
+									THE SERVICE IS PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS. THE SERVICE IS PROVIDED
+									WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED
+									TO, IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+									NON-INFRINGEMENT OR COURSE OF PERFORMANCE.
+								</p>
+							</div>
+							<p class="text-muted-foreground leading-relaxed mt-4">
+								Hazel does not warrant that (a) the Service will function uninterrupted, secure, or
+								available at any particular time or location; (b) any errors or defects will be
+								corrected; (c) the Service is free of viruses or other harmful components; or (d) the
+								results of using the Service will meet your requirements.
+							</p>
+						</section>
+
+						<section id="liability" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>10</span
+								>
+								Limitation of Liability
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								In no event shall Hazel, nor its directors, employees, partners, agents, suppliers, or
+								affiliates, be liable for any indirect, incidental, special, consequential, or punitive
+								damages, including without limitation, loss of profits, data, use, goodwill, or other
+								intangible losses, resulting from:
+							</p>
+							<ul class="space-y-2 text-muted-foreground">
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span>Your access to or use of or inability to access or use the Service</span>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span>Any conduct or content of any third party on the Service</span>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span>Any content obtained from the Service</span>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										>Unauthorized access, use, or alteration of your transmissions or content</span
+									>
+								</li>
+							</ul>
+						</section>
+
+						<section id="governing-law" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>11</span
+								>
+								Governing Law
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								These Terms shall be governed and construed in accordance with the laws of the State of
+								Delaware, United States, without regard to its conflict of law provisions.
+							</p>
+							<p class="text-muted-foreground leading-relaxed">
+								Our failure to enforce any right or provision of these Terms will not be considered a
+								waiver of those rights. If any provision of these Terms is held to be invalid or
+								unenforceable by a court, the remaining provisions will remain in effect.
+							</p>
+						</section>
+
+						<section id="changes" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>12</span
+								>
+								Changes to Terms
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								We reserve the right to modify or replace these Terms at any time. If a revision is
+								material, we will try to provide at least 30 days notice prior to any new terms taking
+								effect.
+							</p>
+							<p class="text-muted-foreground leading-relaxed">
+								By continuing to access or use our Service after revisions become effective, you agree to
+								be bound by the revised terms. If you do not agree to the new terms, please stop using
+								the Service.
+							</p>
+						</section>
+
+						<section id="contact" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>13</span
+								>
+								Contact Us
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								If you have any questions about these Terms, please contact us:
+							</p>
+							<div class="p-6 rounded-xl border border-border bg-accent/30">
+								<div class="space-y-3">
+									<div class="flex items-center gap-3">
+										<svg
+											class="size-5 text-secondary"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path
+												d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
+											></path>
+											<polyline points="22,6 12,13 2,6"></polyline>
+										</svg>
+										<a href="mailto:legal@hazel.sh" class="text-foreground hover:text-secondary transition-colors"
+											>legal@hazel.sh</a
+										>
+									</div>
+									<div class="flex items-center gap-3">
+										<svg
+											class="size-5 text-secondary"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+											<circle cx="12" cy="10" r="3"></circle>
+										</svg>
+										<span class="text-foreground">Hazel Technologies Inc.</span>
+									</div>
+								</div>
+							</div>
+						</section>
+
+						<!-- Agreement Section -->
+						<section
+							class="mt-16 p-6 rounded-2xl border border-secondary/30 bg-gradient-to-br from-secondary/5 to-secondary/10"
+						>
+							<div class="flex items-start gap-4">
+								<div class="size-12 rounded-xl bg-secondary/20 flex items-center justify-center shrink-0">
+									<svg
+										class="size-6 text-secondary"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>
+								</div>
+								<div>
+									<h3 class="text-lg font-semibold text-foreground mb-2">
+										By using Hazel, you agree to these terms
+									</h3>
+									<p class="text-muted-foreground text-sm">
+										If you have any questions or concerns about these Terms of Service, please don't
+										hesitate to reach out to our team. We're here to help clarify any points and ensure
+										you have a great experience with Hazel.
+									</p>
+									<div class="flex gap-3 mt-4">
+										<a
+											href="mailto:legal@hazel.sh"
+											class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/90 transition-colors"
+										>
+											Contact Legal Team
+										</a>
+										<a
+											href="/privacy"
+											class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-foreground text-sm font-medium hover:bg-accent transition-colors"
+										>
+											View Privacy Policy
+										</a>
+									</div>
+								</div>
+							</div>
+						</section>
+					</article>
+				</div>
+			</div>
+		</section>
+
+		<FooterSection />
+	</main>
+</Layout>

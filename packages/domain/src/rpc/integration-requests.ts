@@ -1,11 +1,11 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { IntegrationRequestId, OrganizationId } from "../ids"
+import { OrganizationId } from "@hazel/schema"
 import { IntegrationRequest } from "../models"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
 
 /**
  * Response schema for successful integration request creation.
@@ -13,7 +13,7 @@ import { AuthMiddleware } from "./middleware"
 export class IntegrationRequestResponse extends Schema.Class<IntegrationRequestResponse>(
 	"IntegrationRequestResponse",
 )({
-	data: IntegrationRequest.Model.json,
+	data: IntegrationRequest.Schema,
 	transactionId: TransactionId,
 }) {}
 
@@ -24,7 +24,7 @@ export class CreateIntegrationRequestPayload extends Schema.Class<CreateIntegrat
 	"CreateIntegrationRequestPayload",
 )({
 	organizationId: OrganizationId,
-	integrationName: Schema.NonEmptyTrimmedString,
+	integrationName: Schema.NonEmptyString,
 	integrationUrl: Schema.optional(Schema.String),
 	description: Schema.optional(Schema.String),
 }) {}
@@ -35,9 +35,11 @@ export class CreateIntegrationRequestPayload extends Schema.Class<CreateIntegrat
  * Simple RPC for submitting integration requests.
  */
 export class IntegrationRequestRpcs extends RpcGroup.make(
-	Rpc.mutation("integrationRequest.create", {
+	Rpc.make("integrationRequest.create", {
 		payload: CreateIntegrationRequestPayload,
 		success: IntegrationRequestResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["integration-connections:write"])
+		.middleware(AuthMiddleware),
 ) {}

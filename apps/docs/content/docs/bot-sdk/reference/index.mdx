@@ -8,12 +8,14 @@ This reference documents all public APIs in the Hazel Bot SDK.
 
 ## Entry Points
 
-The SDK provides two ways to create a bot:
+The SDK provides these ways to create a bot:
 
-| Function                            | Use Case                                       |
-| ----------------------------------- | ---------------------------------------------- |
-| [`runHazelBot`](#runhazelbot)       | Simplified setup with automatic config loading |
-| [`createHazelBot`](#createhazelbot) | Full control for advanced use cases            |
+| Function                                               | Use Case                                                   |
+| ------------------------------------------------------ | ---------------------------------------------------------- |
+| [`runHazelBot`](#runhazelbot)                          | Simplified setup with automatic config loading (Bun, Node) |
+| [`createHazelBot`](#createhazelbot)                    | Full control for advanced use cases                        |
+| [`makeBotSupervisor`](/bot-sdk/reference/cloudflare)   | Run a `defineBot` bot in a Cloudflare Durable Object       |
+| [`launchBot`](/bot-sdk/reference/cloudflare#launchbot) | Run a bot in an Effect context your host provides          |
 
 ### `runHazelBot`
 
@@ -21,7 +23,7 @@ The recommended way to create a bot. Handles configuration, signal handling, and
 
 ```typescript
 import { Effect } from "effect"
-import { runHazelBot } from "@hazel/bot-sdk"
+import { runHazelBot } from "@hazel-chat/bot-sdk"
 
 runHazelBot({
 	commands, // Optional: CommandGroup
@@ -39,7 +41,7 @@ For advanced use cases where you need full control over the runtime:
 
 ```typescript
 import { Effect } from "effect"
-import { createHazelBot, HazelBotClient } from "@hazel/bot-sdk"
+import { createHazelBot, HazelBotClient } from "@hazel-chat/bot-sdk"
 
 const runtime = createHazelBot({
 	botToken: process.env.BOT_TOKEN!,
@@ -62,6 +64,9 @@ runtime.runPromise(program.pipe(Effect.scoped))
 	<Card title="HazelBotClient" href="/bot-sdk/reference/hazel-bot-client">
 		Event handlers and message operations
 	</Card>
+	<Card title="AI Streaming" href="/bot-sdk/reference/ai-streaming">
+		Real-time AI response streaming
+	</Card>
 	<Card title="Commands" href="/bot-sdk/reference/commands">
 		Command.make and CommandGroup
 	</Card>
@@ -71,41 +76,59 @@ runtime.runPromise(program.pipe(Effect.scoped))
 	<Card title="Errors" href="/bot-sdk/reference/errors">
 		Error types and handling
 	</Card>
+	<Card title="HTML Renders" href="/bot-sdk/reference/html-renders">
+		Sandboxed HTML pages in messages
+	</Card>
+	<Card title="Running on Cloudflare" href="/bot-sdk/reference/cloudflare">
+		Host a bot in a Durable Object
+	</Card>
 </Cards>
 
 ## Quick Reference
 
 ### Event Handlers
 
-| Method                                | Description       |
-| ------------------------------------- | ----------------- |
-| `bot.onMessage(handler)`              | New messages      |
-| `bot.onMessageUpdate(handler)`        | Message edits     |
-| `bot.onMessageDelete(handler)`        | Message deletions |
-| `bot.onChannelCreated(handler)`       | New channels      |
-| `bot.onChannelUpdated(handler)`       | Channel updates   |
-| `bot.onChannelDeleted(handler)`       | Channel deletions |
-| `bot.onChannelMemberAdded(handler)`   | Member joins      |
-| `bot.onChannelMemberRemoved(handler)` | Member leaves     |
-| `bot.onCommand(command, handler)`     | Slash commands    |
+| Method                                | Description                                      |
+| ------------------------------------- | ------------------------------------------------ |
+| `bot.onMessage(handler)`              | New messages                                     |
+| `bot.onMessageUpdate(handler)`        | Message edits                                    |
+| `bot.onMessageDelete(handler)`        | Message deletions                                |
+| `bot.onChannelCreated(handler)`       | New channels                                     |
+| `bot.onChannelUpdated(handler)`       | Channel updates                                  |
+| `bot.onChannelDeleted(handler)`       | Channel deletions                                |
+| `bot.onChannelMemberAdded(handler)`   | Member joins                                     |
+| `bot.onChannelMemberRemoved(handler)` | Member leaves                                    |
+| `bot.onMention(handler)`              | @mentions of the bot (needs `mentionable: true`) |
+| `bot.onCommand(command, handler)`     | Slash commands                                   |
 
 ### Message Operations
 
-| Method                                 | Description        |
-| -------------------------------------- | ------------------ |
-| `bot.message.send(channelId, content)` | Send a message     |
-| `bot.message.reply(message, content)`  | Reply to a message |
-| `bot.message.update(message, content)` | Edit a message     |
-| `bot.message.delete(messageId)`        | Delete a message   |
-| `bot.message.react(message, emoji)`    | React with emoji   |
+| Method                                           | Description        |
+| ------------------------------------------------ | ------------------ |
+| `bot.message.send(channelId, content, options?)` | Send a message     |
+| `bot.message.reply(message, content, options?)`  | Reply to a message |
+| `bot.message.update(message, content, options?)` | Edit a message     |
+| `bot.message.delete(messageId, channelId?)`      | Delete a message   |
+| `bot.message.react(message, emoji)`              | React with emoji   |
+| `bot.message.list(channelId, options?)`          | List messages      |
+
+### Streaming Operations
+
+| Method                                  | Description                        |
+| --------------------------------------- | ---------------------------------- |
+| `bot.ai.stream(channelId, options)`     | Create AI streaming session        |
+| `bot.stream.create(channelId)`          | Create low-level streaming session |
+| `bot.ai.withErrorHandler(ctx, session)` | Wrap with AI-aware error handling  |
 
 ### Other Operations
 
-| Method                                  | Description                      |
-| --------------------------------------- | -------------------------------- |
-| `bot.typing.start(channelId, memberId)` | Show typing indicator            |
-| `bot.typing.stop(typingIndicatorId)`    | Hide typing indicator            |
-| `bot.channel.update(channel, updates)`  | Update channel                   |
-| `bot.withErrorHandler(ctx)`             | Wrap handler with error handling |
-| `bot.start`                             | Start the bot                    |
-| `bot.getAuthContext`                    | Get bot auth context             |
+| Method                                             | Description                      |
+| -------------------------------------------------- | -------------------------------- |
+| `bot.typing.start(channelId, memberId)`            | Show typing indicator            |
+| `bot.typing.stop(typingIndicatorId)`               | Hide typing indicator            |
+| `bot.channel.update(channel, updates)`             | Update channel                   |
+| `bot.channel.createThread(messageId, channelId)`   | Create or get a message's thread |
+| `bot.state.get(key)` / `bot.state.set(key, value)` | Bot-local key-value state        |
+| `bot.withErrorHandler(ctx)`                        | Wrap handler with error handling |
+| `bot.start`                                        | Start the bot                    |
+| `bot.getAuthContext`                               | Get bot auth context             |

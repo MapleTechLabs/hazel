@@ -1,16 +1,13 @@
 ---
 title: Errors
-description: Error types and handling in the Bot SDK
+description: Tagged error types exposed by the websocket-based bot SDK
 icon: AlertTriangle
 ---
 
-The Bot SDK uses Effect's error model with typed, tagged errors.
+The Bot SDK uses specific Effect tagged errors for authentication, gateway
+delivery, command handling, message APIs, and AI streaming.
 
-## Error Types
-
-### `AuthenticationError`
-
-Thrown when bot authentication fails.
+## Core errors
 
 ```typescript
 class AuthenticationError {
@@ -18,273 +15,144 @@ class AuthenticationError {
 	readonly message: string
 	readonly cause: unknown
 }
-```
 
-**Common causes:**
+class GatewayReadError {
+	readonly _tag = "GatewayReadError"
+	readonly message: string
+	readonly cause: unknown
+}
 
-- Invalid or expired bot token
-- Network issues connecting to auth server
+class GatewayDecodeError {
+	readonly _tag = "GatewayDecodeError"
+	readonly message: string
+	readonly payload: string
+	readonly cause: unknown
+}
 
-### `BotStartError`
-
-Thrown when the bot fails to start.
-
-```typescript
-class BotStartError {
-	readonly _tag = "BotStartError"
+class GatewaySessionStoreError {
+	readonly _tag = "GatewaySessionStoreError"
 	readonly message: string
 	readonly cause: unknown
 }
 ```
 
-**Common causes:**
-
-- Missing configuration
-- Failed to connect to services
-
-### `HandlerError`
-
-Thrown when an event handler fails.
+## Command and event errors
 
 ```typescript
-class HandlerError {
-	readonly _tag = "HandlerError"
+class CommandArgsDecodeError {
+	readonly _tag = "CommandArgsDecodeError"
 	readonly message: string
-	readonly eventType: string
+	readonly commandName: string
 	readonly cause: unknown
 }
-```
 
-### `MessageOperationError`
-
-Thrown when message operations fail.
-
-```typescript
-class MessageOperationError {
-	readonly _tag = "MessageOperationError"
+class CommandHandlerError {
+	readonly _tag = "CommandHandlerError"
 	readonly message: string
-	readonly operation: string // "send" | "reply" | "update" | "delete" | "react"
+	readonly commandName: string
 	readonly cause: unknown
 }
-```
 
-### `QueueError`
-
-Thrown when event queue operations fail.
-
-```typescript
-class QueueError {
-	readonly _tag = "QueueError"
+class CommandSyncError {
+	readonly _tag = "CommandSyncError"
 	readonly message: string
 	readonly cause: unknown
 }
-```
 
-### `ShapeStreamError`
-
-Thrown when Electric SQL subscription fails.
-
-```typescript
-class ShapeStreamError {
-	readonly _tag = "ShapeStreamError"
+class MentionableSyncError {
+	readonly _tag = "MentionableSyncError"
 	readonly message: string
-	readonly table: string
 	readonly cause: unknown
 }
-```
 
-### `DispatchError`
-
-Thrown when event dispatch fails.
-
-```typescript
-class DispatchError {
-	readonly _tag = "DispatchError"
+class EventHandlerError {
+	readonly _tag = "EventHandlerError"
 	readonly message: string
 	readonly eventType: string
 	readonly cause: unknown
 }
 ```
 
-### `ConnectionError`
-
-Thrown when connecting to external services fails.
+## Message errors
 
 ```typescript
-class ConnectionError {
-	readonly _tag = "ConnectionError"
+class MessageSendError {
+	readonly _tag = "MessageSendError"
 	readonly message: string
-	readonly service: "redis" | "electric" | "backend"
+	readonly channelId: string
 	readonly cause: unknown
-	readonly retryable = true
+}
+
+class MessageReplyError {
+	readonly _tag = "MessageReplyError"
+	readonly message: string
+	readonly channelId: string
+	readonly replyToMessageId: string
+	readonly cause: unknown
+}
+
+class MessageUpdateError {
+	readonly _tag = "MessageUpdateError"
+	readonly message: string
+	readonly messageId: string
+	readonly cause: unknown
+}
+
+class MessageDeleteError {
+	readonly _tag = "MessageDeleteError"
+	readonly message: string
+	readonly messageId: string
+	readonly cause: unknown
+}
+
+class MessageReactError {
+	readonly _tag = "MessageReactError"
+	readonly message: string
+	readonly messageId: string
+	readonly emoji: string
+	readonly cause: unknown
+}
+
+class MessageListError {
+	readonly _tag = "MessageListError"
+	readonly message: string
+	readonly channelId: string
+	readonly cause: unknown
 }
 ```
 
-### `RedisSubscriptionError`
+## Streaming errors
 
-Thrown when Redis subscription fails.
+Streaming and AI helpers may also fail with:
 
-```typescript
-class RedisSubscriptionError {
-	readonly _tag = "RedisSubscriptionError"
-	readonly message: string
-	readonly cause: unknown
-	readonly retryable = true
-}
-```
+- `ActorConnectionError`
+- `MessageCreateError`
+- `ActorOperationError`
+- `StreamProcessingError`
+- `MessagePersistError`
+- `BotNotConfiguredError`
 
-### `TransientError`
+## Handling patterns
 
-Thrown for temporary failures that can be retried.
-
-```typescript
-class TransientError {
-	readonly _tag = "TransientError"
-	readonly message: string
-	readonly cause: unknown
-	readonly retryable = true
-}
-```
-
-### `ValidationError`
-
-Thrown when schema validation fails.
-
-```typescript
-class ValidationError {
-	readonly _tag = "ValidationError"
-	readonly message: string
-	readonly table: string
-	readonly cause: unknown
-	readonly retryable = false
-}
-```
-
-## Error Handling
-
-### Using `withErrorHandler`
-
-The simplest way to handle errors in command handlers:
+Catch specific tags when you want tailored recovery:
 
 ```typescript
 yield *
-	bot.onCommand(MyCommand, (ctx) =>
-		Effect.gen(function* () {
-			// Handler logic
-		}).pipe(bot.withErrorHandler(ctx)),
+	bot.start.pipe(
+		Effect.catchTags({
+			AuthenticationError: (error) => Effect.logError("Auth failed", { error }),
+			GatewayReadError: (error) => Effect.logError("Gateway failed", { error }),
+		}),
 	)
 ```
 
-This:
-
-1. Catches any error
-2. Logs the error with context
-3. Sends "An unexpected error occurred. Please try again." to the channel
-
-### Manual Error Handling
-
-Use Effect's error handling for more control:
+For retry classification, use the exported helpers:
 
 ```typescript
-yield *
-	bot.message.send(channelId, content).pipe(
-		Effect.catchAll((error) =>
-			Effect.gen(function* () {
-				yield* Effect.logError("Failed to send message", { error })
-				// Handle the error
-			}),
-		),
-	)
-```
+import { getErrorTag, retryPolicyForTag } from "@hazel-chat/bot-sdk"
 
-### Catching Specific Errors
-
-Use `Effect.catchTag` to handle specific error types:
-
-```typescript
-yield *
-	bot.message.send(channelId, content).pipe(
-		Effect.catchTag("MessageOperationError", (error) =>
-			Effect.gen(function* () {
-				yield* Effect.logError(`Message ${error.operation} failed: ${error.message}`)
-				// Retry or notify user
-			}),
-		),
-	)
-```
-
-### Checking Retryability
-
-Use `isRetryable` to check if an error can be retried:
-
-```typescript
-import { isRetryable } from "@hazel/bot-sdk"
-
-Effect.catchAll((error) =>
-	Effect.gen(function* () {
-		if (isRetryable(error)) {
-			yield* Effect.logWarning("Retryable error, will retry...")
-			// The SDK handles retries automatically
-		} else {
-			yield* Effect.logError("Non-retryable error", { error })
-			// Handle permanently failed operation
-		}
-	}),
-)
-```
-
-## Automatic Retries
-
-The SDK automatically retries transient errors with exponential backoff:
-
-- Default max retries: 3
-- Default base delay: 100ms
-- Backoff: exponential with jitter
-
-Configure via `dispatcherConfig`:
-
-```typescript
-runHazelBot({
-	config: {
-		dispatcherConfig: {
-			maxRetries: 5,
-			retryBaseDelay: 200,
-		},
-	},
-	// ...
-})
-```
-
-## Error Isolation
-
-Handler errors are isolated - one handler failing doesn't affect others:
-
-```typescript
-// Handler 1 throws an error
-yield * bot.onMessage((message) => Effect.fail(new Error("Handler 1 failed")))
-
-// Handler 2 still runs normally
-yield * bot.onMessage((message) => Effect.log("Handler 2 still works!"))
-```
-
-## Logging Errors
-
-Use Effect's structured logging:
-
-```typescript
-yield *
-	Effect.logError("Operation failed", {
-		error,
-		context: {
-			channelId,
-			userId,
-			operation: "send",
-		},
-	})
-```
-
-For warnings:
-
-```typescript
-yield * Effect.logWarning("Retrying operation", { attempt: 2 })
+const tag = getErrorTag(error)
+if (tag && retryPolicyForTag(tag) === "transient") {
+	// retry
+}
 ```

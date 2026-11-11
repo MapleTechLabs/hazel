@@ -1,8 +1,7 @@
-import { Effect } from "effect"
+import { Context, Effect, Layer } from "effect"
 
-export class SecretGenerator extends Effect.Service<SecretGenerator>()("SecretGenerator", {
-	accessors: true,
-	effect: Effect.succeed({
+export class SecretGenerator extends Context.Service<SecretGenerator>()("SecretGenerator", {
+	make: Effect.succeed({
 		generatePassword: (length: number): string => {
 			const bytes = new Uint8Array(length)
 			crypto.getRandomValues(bytes)
@@ -15,4 +14,6 @@ export class SecretGenerator extends Effect.Service<SecretGenerator>()("SecretGe
 			return Buffer.from(bytes).toString("base64")
 		},
 	}),
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make)
+}

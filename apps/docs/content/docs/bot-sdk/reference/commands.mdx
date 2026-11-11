@@ -12,7 +12,7 @@ Create a command definition.
 
 ```typescript
 import { Schema } from "effect"
-import { Command } from "@hazel/bot-sdk"
+import { Command } from "@hazel-chat/bot-sdk"
 
 const GreetCommand = Command.make("greet", {
 	description: "Greet someone",
@@ -62,7 +62,7 @@ const MyCommand = Command.make("example", {
 Group multiple commands together.
 
 ```typescript
-import { Command, CommandGroup } from "@hazel/bot-sdk"
+import { Command, CommandGroup } from "@hazel-chat/bot-sdk"
 
 const AddCommand = Command.make("task-add", {
 	description: "Add a task",
@@ -184,7 +184,7 @@ Complete example with multiple commands:
 
 ```typescript
 import { Effect, Schema } from "effect"
-import { Command, CommandGroup, runHazelBot } from "@hazel/bot-sdk"
+import { Command, CommandGroup, runHazelBot } from "@hazel-chat/bot-sdk"
 
 const EchoCommand = Command.make("echo", {
 	description: "Echo text back",

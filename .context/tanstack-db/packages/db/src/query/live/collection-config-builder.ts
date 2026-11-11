@@ -1,22 +1,22 @@
-import { D2, output } from "@tanstack/db-ivm"
-import { compileQuery } from "../compiler/index.js"
-import { buildQuery, getQueryIR } from "../builder/index.js"
+import { D2, output } from '@tanstack/db-ivm'
+import { compileQuery } from '../compiler/index.js'
+import { buildQuery, getQueryIR } from '../builder/index.js'
 import {
   MissingAliasInputsError,
   SetWindowRequiresOrderByError,
-} from "../../errors.js"
-import { transactionScopedScheduler } from "../../scheduler.js"
-import { getActiveTransaction } from "../../transactions.js"
-import { CollectionSubscriber } from "./collection-subscriber.js"
-import { getCollectionBuilder } from "./collection-registry.js"
-import { LIVE_QUERY_INTERNAL } from "./internal.js"
-import type { LiveQueryInternalUtils } from "./internal.js"
-import type { WindowOptions } from "../compiler/index.js"
-import type { SchedulerContextId } from "../../scheduler.js"
-import type { CollectionSubscription } from "../../collection/subscription.js"
-import type { RootStreamBuilder } from "@tanstack/db-ivm"
-import type { OrderByOptimizationInfo } from "../compiler/order-by.js"
-import type { Collection } from "../../collection/index.js"
+} from '../../errors.js'
+import { transactionScopedScheduler } from '../../scheduler.js'
+import { getActiveTransaction } from '../../transactions.js'
+import { CollectionSubscriber } from './collection-subscriber.js'
+import { getCollectionBuilder } from './collection-registry.js'
+import { LIVE_QUERY_INTERNAL } from './internal.js'
+import type { LiveQueryInternalUtils } from './internal.js'
+import type { WindowOptions } from '../compiler/index.js'
+import type { SchedulerContextId } from '../../scheduler.js'
+import type { CollectionSubscription } from '../../collection/subscription.js'
+import type { RootStreamBuilder } from '@tanstack/db-ivm'
+import type { OrderByOptimizationInfo } from '../compiler/order-by.js'
+import type { Collection } from '../../collection/index.js'
 import type {
   CollectionConfigSingleRowOption,
   KeyedStream,
@@ -24,17 +24,17 @@ import type {
   StringCollationConfig,
   SyncConfig,
   UtilsRecord,
-} from "../../types.js"
-import type { Context, GetResult } from "../builder/types.js"
-import type { BasicExpression, QueryIR } from "../ir.js"
-import type { LazyCollectionCallbacks } from "../compiler/joins.js"
+} from '../../types.js'
+import type { Context, GetResult } from '../builder/types.js'
+import type { BasicExpression, QueryIR } from '../ir.js'
+import type { LazyCollectionCallbacks } from '../compiler/joins.js'
 import type {
   Changes,
   FullSyncState,
   LiveQueryCollectionConfig,
   SyncState,
-} from "./types.js"
-import type { AllCollectionEvents } from "../../collection/events.js"
+} from './types.js'
+import type { AllCollectionEvents } from '../../collection/events.js'
 
 export type LiveQueryCollectionUtils = UtilsRecord & {
   getRunCount: () => number
@@ -146,7 +146,7 @@ export class CollectionConfigBuilder<
   optimizableOrderByCollections: Record<string, OrderByOptimizationInfo> = {}
 
   constructor(
-    private readonly config: LiveQueryCollectionConfig<TContext, TResult>
+    private readonly config: LiveQueryCollectionConfig<TContext, TResult>,
   ) {
     // Generate a unique ID if not provided
     this.id = config.id || `live-query-${++liveQueryCollectionCounter}`
@@ -227,6 +227,7 @@ export class CollectionConfigBuilder<
           getBuilder: () => this,
           hasCustomGetKey: !!this.config.getKey,
           hasJoins: this.hasJoins(this.query),
+          hasDistinct: !!this.query.distinct,
         },
       },
     }
@@ -252,7 +253,7 @@ export class CollectionConfigBuilder<
               unsubscribe()
               resolve()
             }
-          }
+          },
         )
       })
     }
@@ -318,7 +319,7 @@ export class CollectionConfigBuilder<
     // Should only be called when sync is active
     if (!this.currentSyncConfig || !this.currentSyncState) {
       throw new Error(
-        `maybeRunGraph called without active sync session. This should not happen.`
+        `maybeRunGraph called without active sync session. This should not happen.`,
       )
     }
 
@@ -337,6 +338,10 @@ export class CollectionConfigBuilder<
       if (syncState.subscribedToAllCollections) {
         while (syncState.graph.pendingWork()) {
           syncState.graph.run()
+          // Flush accumulated changes after each graph step to commit them as one transaction.
+          // This ensures intermediate join states (like null on one side) don't cause
+          // duplicate key errors when the full join result arrives in the same step.
+          syncState.flushPendingChanges?.()
           callback?.()
         }
 
@@ -345,10 +350,14 @@ export class CollectionConfigBuilder<
         if (syncState.messagesCount === 0) {
           begin()
           commit()
-          // After initial commit, check if we should mark ready
-          // (in case all sources were already ready before we subscribed)
-          this.updateLiveQueryStatus(this.currentSyncConfig)
         }
+
+        // After graph processing completes, check if we should mark ready.
+        // This is the canonical place to transition to ready state because:
+        // 1. All data has been processed through the graph
+        // 2. All source collections have had a chance to send their initial data
+        // This prevents marking ready before data is processed (fixes isReady=true with empty data)
+        this.updateLiveQueryStatus(this.currentSyncConfig)
       }
     } finally {
       this.isGraphRunning = false
@@ -380,7 +389,7 @@ export class CollectionConfigBuilder<
       jobId?: unknown
       alias?: string
       dependencies?: Array<CollectionConfigBuilder<any, any>>
-    }
+    },
   ) {
     const contextId = options?.contextId ?? getActiveTransaction()?.id
     // Use the builder instance as the job ID for deduplication. This is memory-safe
@@ -406,13 +415,23 @@ export class CollectionConfigBuilder<
       return Array.from(deps)
     })()
 
+    // Ensure dependent builders are actually scheduled in this context so that
+    // dependency edges always point to a real job (or a deduped no-op if already scheduled).
+    if (contextId) {
+      for (const dep of dependentBuilders) {
+        if (typeof dep.scheduleGraphRun === `function`) {
+          dep.scheduleGraphRun(undefined, { contextId })
+        }
+      }
+    }
+
     // We intentionally scope deduplication to the builder instance. Each instance
     // owns caches and compiled pipelines, so sharing work across instances that
     // merely reuse the same string id would execute the wrong builder's graph.
 
     if (!this.currentSyncConfig || !this.currentSyncState) {
       throw new Error(
-        `scheduleGraphRun called without active sync session. This should not happen.`
+        `scheduleGraphRun called without active sync session. This should not happen.`,
       )
     }
 
@@ -452,6 +471,13 @@ export class CollectionConfigBuilder<
   }
 
   /**
+   * Returns true if this builder has a pending graph run for the given context.
+   */
+  hasPendingGraphRun(contextId: SchedulerContextId): boolean {
+    return this.pendingGraphRuns.has(contextId)
+  }
+
+  /**
    * Executes a pending graph run. Called by the scheduler when dependencies are satisfied.
    * Clears the pending state BEFORE execution so that any re-schedules during the run
    * create fresh state and don't interfere with the current execution.
@@ -462,7 +488,7 @@ export class CollectionConfigBuilder<
    */
   private executeGraphRun(
     contextId?: SchedulerContextId,
-    pendingParam?: PendingGraphRun
+    pendingParam?: PendingGraphRun,
   ): void {
     // Get pending state: either from parameter (no context) or from map (with context)
     // Remove from map BEFORE checking sync state to prevent leaking entries when sync ends
@@ -537,7 +563,7 @@ export class CollectionConfigBuilder<
     // Extend the pipeline such that it applies the incoming changes to the collection
     const fullSyncState = this.extendPipelineWithChangeProcessing(
       config,
-      syncState
+      syncState,
     )
     this.currentSyncState = fullSyncState
 
@@ -546,12 +572,27 @@ export class CollectionConfigBuilder<
     this.unsubscribeFromSchedulerClears = transactionScopedScheduler.onClear(
       (contextId) => {
         this.clearPendingGraphRun(contextId)
-      }
+      },
     )
+
+    // Listen for loadingSubset changes on the live query collection BEFORE subscribing.
+    // This ensures we don't miss the event if subset loading completes synchronously.
+    // When isLoadingSubset becomes false, we may need to mark the collection as ready
+    // (if all source collections are already ready but we were waiting for subset load to complete)
+    const loadingSubsetUnsubscribe = config.collection.on(
+      `loadingSubset:change`,
+      (event) => {
+        if (!event.isLoadingSubset) {
+          // Subset loading finished, check if we can now mark ready
+          this.updateLiveQueryStatus(config)
+        }
+      },
+    )
+    syncState.unsubscribeCallbacks.add(loadingSubsetUnsubscribe)
 
     const loadSubsetDataCallbacks = this.subscribeToAllCollections(
       config,
-      fullSyncState
+      fullSyncState,
     )
 
     this.maybeRunGraphFn = () => this.scheduleGraphRun(loadSubsetDataCallbacks)
@@ -586,7 +627,7 @@ export class CollectionConfigBuilder<
       // Clear subscription references to prevent memory leaks
       // Note: Individual subscriptions are already unsubscribed via unsubscribeCallbacks
       Object.keys(this.subscriptions).forEach(
-        (key) => delete this.subscriptions[key]
+        (key) => delete this.subscriptions[key],
       )
       this.compiledAliasToCollectionId = {}
 
@@ -606,7 +647,7 @@ export class CollectionConfigBuilder<
       Object.keys(this.collectionByAlias).map((alias) => [
         alias,
         this.graphCache!.newInput<any>(),
-      ])
+      ]),
     )
 
     const compilation = compileQuery(
@@ -619,7 +660,7 @@ export class CollectionConfigBuilder<
       this.optimizableOrderByCollections,
       (windowFn: (options: WindowOptions) => void) => {
         this.windowFn = windowFn
-      }
+      },
     )
 
     this.pipelineCache = compilation.pipeline
@@ -630,7 +671,7 @@ export class CollectionConfigBuilder<
     // This should never happen since all aliases come from user declarations,
     // but catch it early if the assumption is violated in the future.
     const missingAliases = Object.keys(this.compiledAliasToCollectionId).filter(
-      (alias) => !Object.hasOwn(this.inputsCache!, alias)
+      (alias) => !Object.hasOwn(this.inputsCache!, alias),
     )
     if (missingAliases.length > 0) {
       throw new MissingAliasInputsError(missingAliases)
@@ -650,26 +691,39 @@ export class CollectionConfigBuilder<
 
   private extendPipelineWithChangeProcessing(
     config: SyncMethods<TResult>,
-    syncState: SyncState
+    syncState: SyncState,
   ): FullSyncState {
     const { begin, commit } = config
     const { graph, inputs, pipeline } = this.maybeCompileBasePipeline()
+
+    // Accumulator for changes across all output callbacks within a single graph run.
+    // This allows us to batch all changes from intermediate join states into a single
+    // transaction, avoiding duplicate key errors when joins produce multiple outputs
+    // for the same key (e.g., first output with null, then output with joined data).
+    let pendingChanges: Map<unknown, Changes<TResult>> = new Map()
 
     pipeline.pipe(
       output((data) => {
         const messages = data.getInner()
         syncState.messagesCount += messages.length
 
-        begin()
-        messages
-          .reduce(
-            accumulateChanges<TResult>,
-            new Map<unknown, Changes<TResult>>()
-          )
-          .forEach(this.applyChanges.bind(this, config))
-        commit()
-      })
+        // Accumulate changes from this output callback into the pending changes map.
+        // Changes for the same key are merged (inserts/deletes are added together).
+        messages.reduce(accumulateChanges<TResult>, pendingChanges)
+      }),
     )
+
+    // Flush pending changes and reset the accumulator.
+    // Called at the end of each graph run to commit all accumulated changes.
+    syncState.flushPendingChanges = () => {
+      if (pendingChanges.size === 0) {
+        return
+      }
+      begin()
+      pendingChanges.forEach(this.applyChanges.bind(this, config))
+      commit()
+      pendingChanges = new Map()
+    }
 
     graph.finalize()
 
@@ -689,7 +743,7 @@ export class CollectionConfigBuilder<
       value: TResult
       orderByIndex: string | undefined
     },
-    key: unknown
+    key: unknown,
   ) {
     const { write, collection } = config
     const { deletes, inserts, value, orderByIndex } = changes
@@ -728,7 +782,7 @@ export class CollectionConfigBuilder<
       })
     } else {
       throw new Error(
-        `Could not apply changes: ${JSON.stringify(changes)}. This should never happen.`
+        `Could not apply changes: ${JSON.stringify(changes)}. This should never happen.`,
       )
     }
   }
@@ -739,14 +793,14 @@ export class CollectionConfigBuilder<
   private handleSourceStatusChange(
     config: SyncMethods<TResult>,
     collectionId: string,
-    event: AllCollectionEvents[`status:change`]
+    event: AllCollectionEvents[`status:change`],
   ) {
     const { status } = event
 
     // Handle error state - any source collection in error puts live query in error
     if (status === `error`) {
       this.transitionToError(
-        `Source collection '${collectionId}' entered error state`
+        `Source collection '${collectionId}' entered error state`,
       )
       return
     }
@@ -756,7 +810,7 @@ export class CollectionConfigBuilder<
     if (status === `cleaned-up`) {
       this.transitionToError(
         `Source collection '${collectionId}' was manually cleaned up while live query '${this.id}' depends on it. ` +
-          `Live queries prevent automatic GC, so this was likely a manual cleanup() call.`
+          `Live queries prevent automatic GC, so this was likely a manual cleanup() call.`,
       )
       return
     }
@@ -776,8 +830,16 @@ export class CollectionConfigBuilder<
       return
     }
 
-    // Mark ready when all source collections are ready
-    if (this.allCollectionsReady()) {
+    const subscribedToAll = this.currentSyncState?.subscribedToAllCollections
+    const allReady = this.allCollectionsReady()
+    const isLoading = this.liveQueryCollection?.isLoadingSubset
+    // Mark ready when:
+    // 1. All subscriptions are set up (subscribedToAllCollections)
+    // 2. All source collections are ready
+    // 3. The live query collection is not loading subset data
+    // This prevents marking the live query ready before its data is processed
+    // (fixes issue where useLiveQuery returns isReady=true with empty data)
+    if (subscribedToAll && allReady && !isLoading) {
       markReady()
     }
   }
@@ -797,7 +859,7 @@ export class CollectionConfigBuilder<
 
   private allCollectionsReady() {
     return Object.values(this.collections).every((collection) =>
-      collection.isReady()
+      collection.isReady(),
     )
   }
 
@@ -808,14 +870,14 @@ export class CollectionConfigBuilder<
    */
   private subscribeToAllCollections(
     config: SyncMethods<TResult>,
-    syncState: FullSyncState
+    syncState: FullSyncState,
   ) {
     // Use compiled aliases as the source of truth - these include all aliases from the query
     // including those from subqueries, which may not be in collectionByAlias
     const compiledAliases = Object.entries(this.compiledAliasToCollectionId)
     if (compiledAliases.length === 0) {
       throw new Error(
-        `Compiler returned no alias metadata for query '${this.id}'. This should not happen; please report.`
+        `Compiler returned no alias metadata for query '${this.id}'. This should not happen; please report.`,
       )
     }
 
@@ -840,7 +902,7 @@ export class CollectionConfigBuilder<
         alias,
         collectionId,
         collection,
-        this
+        this,
       )
 
       // Subscribe to status changes for status flow
@@ -857,7 +919,7 @@ export class CollectionConfigBuilder<
       // Create a callback for loading more data if needed (used by OrderBy optimization)
       const loadMore = collectionSubscriber.loadMoreIfNeeded.bind(
         collectionSubscriber,
-        subscription
+        subscription,
       )
 
       return loadMore
@@ -875,15 +937,17 @@ export class CollectionConfigBuilder<
     // (graph only runs when all collections are subscribed)
     syncState.subscribedToAllCollections = true
 
-    // Initial status check after all subscriptions are set up
-    this.updateLiveQueryStatus(config)
+    // Note: We intentionally don't call updateLiveQueryStatus() here.
+    // The graph hasn't run yet, so marking ready would be premature.
+    // The canonical place to mark ready is after the graph processes data
+    // in maybeRunGraph(), which ensures data has been processed first.
 
     return loadSubsetDataCallbacks
   }
 }
 
 function buildQueryFromConfig<TContext extends Context>(
-  config: LiveQueryCollectionConfig<any, any>
+  config: LiveQueryCollectionConfig<any, any>,
 ) {
   // Build the query using the provided query builder function or instance
   if (typeof config.query === `function`) {
@@ -893,7 +957,7 @@ function buildQueryFromConfig<TContext extends Context>(
 }
 
 function createOrderByComparator<T extends object>(
-  orderByIndices: WeakMap<object, string>
+  orderByIndices: WeakMap<object, string>,
 ) {
   return (val1: T, val2: T): number => {
     // Use the orderBy index stored in the WeakMap
@@ -922,7 +986,7 @@ function createOrderByComparator<T extends object>(
  * Maps collections by their ID (not alias) as expected by the compiler
  */
 function extractCollectionsFromQuery(
-  query: any
+  query: any,
 ): Record<string, Collection<any, any, any>> {
   const collections: Record<string, any> = {}
 
@@ -974,7 +1038,7 @@ function extractCollectionFromSource(query: any): Collection<any, any, any> {
   }
 
   throw new Error(
-    `Failed to extract collection. Invalid FROM clause: ${JSON.stringify(query)}`
+    `Failed to extract collection. Invalid FROM clause: ${JSON.stringify(query)}`,
   )
 }
 
@@ -1042,7 +1106,7 @@ function accumulateChanges<T>(
   [[key, tupleData], multiplicity]: [
     [unknown, [any, string | undefined]],
     number,
-  ]
+  ],
 ) {
   // All queries now consistently return [value, orderByIndex] format
   // where orderByIndex is undefined for queries without ORDER BY
@@ -1058,8 +1122,11 @@ function accumulateChanges<T>(
     changes.deletes += Math.abs(multiplicity)
   } else if (multiplicity > 0) {
     changes.inserts += multiplicity
+    // Update value to the latest version for this key
     changes.value = value
-    changes.orderByIndex = orderByIndex
+    if (orderByIndex !== undefined) {
+      changes.orderByIndex = orderByIndex
+    }
   }
   acc.set(key, changes)
   return acc

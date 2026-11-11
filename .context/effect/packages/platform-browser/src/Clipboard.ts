@@ -1,30 +1,20 @@
 /**
  * @since 1.0.0
  */
-import { TypeIdError } from "@effect/platform/Error"
 import * as Context from "effect/Context"
+import * as Data from "effect/Data"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 
-/**
- * @since 1.0.0
- * @category type ids
- */
-export const TypeId: unique symbol = Symbol.for("@effect/platform-browser/Clipboard")
+const TypeId = "~@effect/platform-browser/Clipboard"
+const ErrorTypeId = "~@effect/platform-browser/Clipboard/ClipboardError"
 
 /**
  * @since 1.0.0
- * @category type ids
- */
-export type TypeId = typeof TypeId
-
-/**
- * @since 1.0.0
- * @category interface
+ * @category Models
  */
 export interface Clipboard {
-  readonly [TypeId]: TypeId
-
+  readonly [TypeId]: typeof TypeId
   readonly read: Effect.Effect<ClipboardItems, ClipboardError>
   readonly readString: Effect.Effect<string, ClipboardError>
   readonly write: (items: ClipboardItems) => Effect.Effect<void, ClipboardError>
@@ -35,39 +25,27 @@ export interface Clipboard {
 
 /**
  * @since 1.0.0
- * @category type ids
+ * @category Errors
  */
-export const ErrorTypeId: unique symbol = Symbol.for("@effect/platform-browser/Clipboard/ClipboardError")
-
-/**
- * @since 1.0.0
- * @category type ids
- */
-export type ErrorTypeId = typeof ErrorTypeId
-
-/**
- * @since 1.0.0
- * @category errors
- */
-export class ClipboardError extends TypeIdError(ErrorTypeId, "ClipboardError")<{
+export class ClipboardError extends Data.TaggedError("ClipboardError")<{
   readonly message: string
   readonly cause: unknown
-}> {}
+}> {
+  readonly [ErrorTypeId] = ErrorTypeId
+}
 
 /**
  * @since 1.0.0
- * @category tag
+ * @category Service
  */
-export const Clipboard: Context.Tag<Clipboard, Clipboard> = Context.GenericTag<Clipboard>(
-  "@effect/platform-browser/Clipboard"
-)
+export const Clipboard: Context.Service<Clipboard, Clipboard> = Context.Service<Clipboard>(TypeId)
 
 /**
  * @since 1.0.0
- * @category constructor
+ * @category Constructors
  */
 export const make = (
-  impl: Omit<Clipboard, "clear" | "writeBlob" | TypeId>
+  impl: Omit<Clipboard, "clear" | "writeBlob" | typeof TypeId>
 ): Clipboard =>
   Clipboard.of({
     ...impl,
@@ -80,7 +58,7 @@ export const make = (
  * A layer that directly interfaces with the navigator.clipboard api
  *
  * @since 1.0.0
- * @category layers
+ * @category Layers
  */
 export const layer: Layer.Layer<Clipboard> = Layer.succeed(
   Clipboard,

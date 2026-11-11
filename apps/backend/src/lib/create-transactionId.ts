@@ -1,38 +1,36 @@
 import { Database } from "@hazel/db"
-import { TransactionIdFromString } from "@hazel/domain"
+import { formatWritePosition, type SyncSeq } from "@hazel/domain/sync"
+import { TransactionId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
+import { currentObject } from "./current-object"
 
-export const generateTransactionId = Effect.fn("generateTransactionId")(function* (
-	tx?: <T>(
-		fn: (client: Database.TransactionClient) => Promise<T>,
-	) => Effect.Effect<T, Database.DatabaseError, never>,
-) {
-	// 1. Check explicit tx parameter (highest priority)
-	let txExecutor: Database.TxFn | undefined = tx
+const HeadRow = Schema.Struct({ head: Schema.Number })
 
-	// 2. Check TransactionContext from Effect Context (auto-propagated)
-	if (!txExecutor) {
-		const maybeCtx = yield* Effect.serviceOption(Database.TransactionContext)
-		if (Option.isSome(maybeCtx)) {
-			txExecutor = maybeCtx.value.execute
-		}
-	}
-
-	// 3. Fail if no transaction context found
-	if (!txExecutor) {
-		return yield* Effect.die("generateTransactionId must be called within a transaction")
-	}
-
-	const result = yield* txExecutor((client) =>
-		client.execute(`SELECT pg_current_xact_id()::xid::text as txid`),
-	).pipe(
-		Effect.map((rows) => rows[0]?.txid as string),
-		Effect.flatMap((txid) => Schema.decode(TransactionIdFromString)(txid)),
-		Effect.catchTags({
-			DatabaseError: (err) => Effect.die(`Database error generating transaction ID: ${err}`),
-			ParseError: (err) => Effect.die(`Failed to parse transaction ID: ${err}`),
-		}),
+/**
+ * The write position the client confirms its optimistic write against: `<kind>:<id>:<seq>`.
+ *
+ * Inside the transaction the change triggers have already appended this write's rows to
+ * `_changes`, so its head is this write's seq. The object's invoke wrapper flushes (`afterCommit`)
+ * before it answers, so the client never waits for a seq that was not broadcast. Call it last in
+ * the transaction: a write after it would land past the returned seq.
+ *
+ * Off an object (the directory path, tests) the kind and id are unknown and the
+ * position is `local:<seq>`, which no source confirms. Fails with the typed DatabaseError /
+ * SchemaError, which callers remap with `withRemapDbErrors`.
+ */
+export const generateTransactionId = Effect.fn("generateTransactionId")(function* () {
+	const db = yield* Database.Database
+	const tables = yield* db.query(
+		Database.sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_changes'`,
 	)
-
-	return result
-})
+	const head =
+		tables.length === 0
+			? 0
+			: ((yield* db.query(Database.sql`SELECT coalesce(max(seq), 0) AS head FROM _changes`, HeadRow))[0]
+					?.head ?? 0)
+	const object = yield* currentObject
+	const position = Option.isSome(object)
+		? formatWritePosition({ kind: object.value.kind, id: object.value.id, seq: head as SyncSeq })
+		: `local:${head}`
+	return yield* Schema.decodeEffect(TransactionId)(position)
+}, Database.requireTransaction)

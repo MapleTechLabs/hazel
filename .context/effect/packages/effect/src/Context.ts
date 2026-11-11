@@ -1,585 +1,1026 @@
 /**
- * This module provides a data structure called `Context` that can be used for dependency injection in effectful
- * programs. It is essentially a table mapping `Tag`s to their implementations (called `Service`s), and can be used to
- * manage dependencies in a type-safe way. The `Context` data structure is essentially a way of providing access to a set
- * of related services that can be passed around as a single unit. This module provides functions to create, modify, and
- * query the contents of a `Context`, as well as a number of utility types for working with tags and services.
+ * This module provides a data structure called `Context` that can be used
+ * for dependency injection in effectful programs. It is essentially a table
+ * mapping `Service`s identifiers to their implementations, and can be used to
+ * manage dependencies in a type-safe way. The `Context` data structure is
+ * essentially a way of providing access to a set of related services that can
+ * be passed around as a single unit. This module provides functions to create,
+ * modify, and query the contents of a `Context`, as well as a number of
+ * utility types for working with a `Context`.
  *
- * @since 2.0.0
+ * @since 4.0.0
  */
-import type * as Effect from "./Effect.js"
-import type { Equal } from "./Equal.js"
-import type { LazyArg } from "./Function.js"
-import type { Inspectable } from "./Inspectable.js"
-import * as internal from "./internal/context.js"
-import type { Option } from "./Option.js"
-import type { Pipeable } from "./Pipeable.js"
-import type * as Types from "./Types.js"
-import type * as Unify from "./Unify.js"
+import type { Effect, EffectIterator, Yieldable } from "./Effect.ts"
+import * as Equal from "./Equal.ts"
+import { constant, dual, type LazyArg } from "./Function.ts"
+import * as Hash from "./Hash.ts"
+import type { Inspectable } from "./Inspectable.ts"
+import { exitSucceed, PipeInspectableProto, withFiber, YieldableProto } from "./internal/core.ts"
+import type { ErrorWithStackTraceLimit } from "./internal/tracer.ts"
+import * as Option from "./Option.ts"
+import type { Pipeable } from "./Pipeable.ts"
+import { hasProperty } from "./Predicate.ts"
+import type * as Types from "./Types.ts"
 
 /**
- * @since 2.0.0
- * @category symbol
+ * @since 4.0.0
+ * @category Type Identifiers
  */
-export const TagTypeId: unique symbol = internal.TagTypeId
+export type ServiceTypeId = "~effect/Context/Service"
 
 /**
- * @since 2.0.0
- * @category symbol
+ * @since 4.0.0
+ * @category Type Identifiers
  */
-export type TagTypeId = typeof TagTypeId
+export const ServiceTypeId: ServiceTypeId = "~effect/Context/Service"
 
 /**
- * @since 3.5.9
- * @category models
- */
-export interface Tag<in out Id, in out Value> extends Pipeable, Inspectable, ReadonlyTag<Id, Value> {
-  readonly _op: "Tag"
-  readonly Service: Value
-  readonly Identifier: Id
-  readonly [TagTypeId]: {
-    readonly _Service: Types.Invariant<Value>
-    readonly _Identifier: Types.Invariant<Id>
-  }
-  of(self: Value): Value
-  context(self: Value): Context<Id>
-  readonly stack?: string | undefined
-  readonly key: string
-  [Unify.typeSymbol]?: unknown
-  [Unify.unifySymbol]?: TagUnify<this>
-  [Unify.ignoreSymbol]?: TagUnifyIgnore
-}
-
-/**
- * @since 3.5.9
- * @category models
- */
-export interface ReadonlyTag<in out Id, out Value> extends Pipeable, Inspectable, Effect.Effect<Value, never, Id> {
-  readonly _op: "Tag"
-  readonly Service: Value
-  readonly Identifier: Id
-  readonly [TagTypeId]: {
-    readonly _Service: Types.Covariant<Value>
-    readonly _Identifier: Types.Invariant<Id>
-  }
-  readonly stack?: string | undefined
-  readonly key: string
-}
-
-/**
- * @since 3.11.0
- * @category symbol
- */
-export const ReferenceTypeId: unique symbol = internal.ReferenceTypeId
-
-/**
- * @since 3.11.0
- * @category symbol
- */
-export type ReferenceTypeId = typeof ReferenceTypeId
-
-/**
- * @since 3.11.0
- * @category models
- */
-export interface Reference<in out Id, in out Value> extends Pipeable, Inspectable {
-  readonly [ReferenceTypeId]: ReferenceTypeId
-  readonly defaultValue: () => Value
-
-  readonly _op: "Tag"
-  readonly Service: Value
-  readonly Identifier: Id
-  readonly [TagTypeId]: {
-    readonly _Service: Types.Invariant<Value>
-    readonly _Identifier: Types.Invariant<Id>
-  }
-  of(self: Value): Value
-  context(self: Value): Context<Id>
-  readonly stack?: string | undefined
-  readonly key: string
-  [Unify.typeSymbol]?: unknown
-  [Unify.unifySymbol]?: TagUnify<this>
-  [Unify.ignoreSymbol]?: TagUnifyIgnore
-}
-
-/**
- * @since 2.0.0
- * @category models
- */
-export interface TagClassShape<Id, Shape> {
-  readonly [TagTypeId]: TagTypeId
-  readonly Type: Shape
-  readonly Id: Id
-}
-
-// TODO(4.0): move key narrowing to the Tag interface
-/**
- * @since 2.0.0
- * @category models
- */
-export interface TagClass<Self, Id extends string, Type> extends Tag<Self, Type> {
-  new(_: never): TagClassShape<Id, Type>
-  readonly key: Id
-}
-
-// TODO(4.0): move key narrowing to the Reference interface
-/**
- * @since 3.11.0
- * @category models
- */
-export interface ReferenceClass<Self, Id extends string, Type> extends Reference<Self, Type> {
-  new(_: never): TagClassShape<Id, Type>
-  readonly key: Id
-}
-
-/**
- * @category models
- * @since 2.0.0
- */
-export interface TagUnify<A extends { [Unify.typeSymbol]?: any }> {
-  Tag?: () => Extract<A[Unify.typeSymbol], Tag<any, any>>
-}
-
-/**
- * @category models
- * @since 2.0.0
- */
-export interface TagUnifyIgnore {}
-
-/**
- * @since 2.0.0
- */
-export declare namespace Tag {
-  /**
-   * @since 2.0.0
-   */
-  export type Service<T extends Tag<any, any> | TagClassShape<any, any>> = T extends Tag<any, any> ? T["Service"]
-    : T extends TagClassShape<any, infer A> ? A
-    : never
-  /**
-   * @since 2.0.0
-   */
-  export type Identifier<T extends Tag<any, any> | TagClassShape<any, any>> = T extends Tag<any, any> ? T["Identifier"]
-    : T extends TagClassShape<any, any> ? T
-    : never
-}
-
-/**
- * Creates a new `Tag` instance with an optional key parameter.
+ * The base type used for all Context keys.
  *
+ * @since 4.0.0
+ * @category Models
+ */
+export interface Key<out Identifier, out Shape> extends Pipeable, Inspectable {
+  readonly [ServiceTypeId]: ServiceTypeId
+  readonly Service: Shape
+  readonly Identifier: Identifier
+  readonly key: string
+  readonly stack?: string | undefined
+  asEffect(): Effect<Shape, never, Identifier>
+}
+
+/**
  * @example
  * ```ts
- * import * as assert from "node:assert"
  * import { Context } from "effect"
  *
- * assert.strictEqual(Context.GenericTag("PORT").key === Context.GenericTag("PORT").key, true)
+ * // Define an identifier for a database service
+ * const Database = Context.Service<{ query: (sql: string) => string }>(
+ *   "Database"
+ * )
+ *
+ * // The key can be used to store and retrieve services
+ * const context = Context.make(Database, { query: (sql) => `Result: ${sql}` })
  * ```
  *
- * @since 2.0.0
- * @category constructors
+ * @since 4.0.0
+ * @category Models
  */
-export const GenericTag: <Identifier, Service = Identifier>(key: string) => Tag<Identifier, Service> =
-  internal.makeGenericTag
-
-const TypeId: unique symbol = internal.TypeId as TypeId
-
-/**
- * @since 2.0.0
- * @category symbol
- */
-export type TypeId = typeof TypeId
+export interface Service<in out Identifier, in out Shape>
+  extends Key<Identifier, Shape>, Yieldable<Service<Identifier, Shape>, Shape, never, Identifier>
+{
+  of(this: void, self: Shape): Shape
+  context(self: Shape): Context<Identifier>
+  use<A, E, R>(f: (service: Shape) => Effect<A, E, R>): Effect<A, E, R | Identifier>
+  useSync<A>(f: (service: Shape) => A): Effect<A, never, Identifier>
+}
 
 /**
- * @since 2.0.0
- * @category models
+ * @since 4.0.0
+ * @category Models
  */
-export type ValidTagsById<R> = R extends infer S ? Tag<S, any> : never
+export interface ServiceClass<in out Self, in out Identifier extends string, in out Shape>
+  extends Service<Self, Shape>
+{
+  new(_: never): ServiceClass.Shape<Identifier, Shape>
+  readonly key: Identifier
+}
 
 /**
- * @since 2.0.0
- * @category models
+ * @since 4.0.0
+ * @category Models
  */
-export interface Context<in Services> extends Equal, Pipeable, Inspectable {
+export declare namespace ServiceClass {
+  /**
+   * @since 4.0.0
+   * @category Models
+   */
+  export interface Shape<Identifier extends string, Service> {
+    readonly [ServiceTypeId]: typeof ServiceTypeId
+    readonly key: Identifier
+    readonly Service: Service
+  }
+}
+
+/**
+ * @example
+ * ```ts
+ * import { Context } from "effect"
+ *
+ * // Create a simple service
+ * const Database = Context.Service<{
+ *   query: (sql: string) => string
+ * }>("Database")
+ *
+ * // Create a service class
+ * class Config extends Context.Service<Config, {
+ *   port: number
+ * }>()("Config") {}
+ *
+ * // Use the services to create contexts
+ * const db = Context.make(Database, {
+ *   query: (sql) => `Result: ${sql}`
+ * })
+ * const config = Context.make(Config, { port: 8080 })
+ * ```
+ *
+ * @since 4.0.0
+ * @category Constructors
+ */
+export const Service: {
+  <Identifier, Shape = Identifier>(key: string): Service<Identifier, Shape>
+  <Self, Shape>(): <
+    const Identifier extends string,
+    E,
+    R = Types.unassigned,
+    Args extends ReadonlyArray<any> = never
+  >(
+    id: Identifier,
+    options?: {
+      readonly make: ((...args: Args) => Effect<Shape, E, R>) | Effect<Shape, E, R> | undefined
+    } | undefined
+  ) =>
+    & ServiceClass<Self, Identifier, Shape>
+    & ([Types.unassigned] extends [R] ? unknown
+      : { readonly make: [Args] extends [never] ? Effect<Shape, E, R> : (...args: Args) => Effect<Shape, E, R> })
+  <Self>(): <
+    const Identifier extends string,
+    Make extends Effect<any, any, any> | ((...args: any) => Effect<any, any, any>)
+  >(
+    id: Identifier,
+    options: {
+      readonly make: Make
+    }
+  ) =>
+    & ServiceClass<
+      Self,
+      Identifier,
+      Make extends
+        Effect<infer _A, infer _E, infer _R> | ((...args: infer _Args) => Effect<infer _A, infer _E, infer _R>) ? _A
+        : never
+    >
+    & { readonly make: Make }
+} = function() {
+  const prevLimit = (Error as ErrorWithStackTraceLimit).stackTraceLimit
+  ;(Error as ErrorWithStackTraceLimit)
+    .stackTraceLimit = 2
+  const err = new Error()
+  ;(Error as ErrorWithStackTraceLimit).stackTraceLimit = prevLimit
+  function KeyClass() {}
+  const self = KeyClass as any as Types.Mutable<Reference<any>>
+  Object.setPrototypeOf(self, ServiceProto)
+  Object.defineProperty(self, "stack", {
+    get() {
+      return err.stack
+    }
+  })
+  if (arguments.length > 0) {
+    self.key = arguments[0]
+    if (arguments[1]?.defaultValue) {
+      self[ReferenceTypeId] = ReferenceTypeId
+      self.defaultValue = arguments[1].defaultValue
+    }
+    return self
+  }
+  return function(key: string, options?: {
+    readonly make?: any
+  }) {
+    self.key = key
+    if (options?.make) {
+      ;(self as any).make = options.make
+    }
+    return self
+  }
+} as any
+
+const ServiceProto: any = {
+  [ServiceTypeId]: ServiceTypeId,
+  ...PipeInspectableProto,
+  ...YieldableProto,
+  toJSON<I, A>(this: Service<I, A>) {
+    return {
+      _id: "Service",
+      key: this.key,
+      stack: this.stack
+    }
+  },
+  asEffect(this: any) {
+    const fn = this.asEffect = constant(withFiber((fiber) => exitSucceed(get(fiber.context, this))))
+    return fn()
+  },
+  of<Service>(this: void, self: Service): Service {
+    return self
+  },
+  context<Identifier, Shape>(
+    this: Service<Identifier, Shape>,
+    self: Shape
+  ): Context<Identifier> {
+    return make(this, self)
+  },
+  use<A, E, R>(this: Service<never, any>, f: (service: any) => Effect<A, E, R>): Effect<A, E, R> {
+    return withFiber((fiber) => f(get(fiber.context, this)))
+  },
+  useSync<A>(this: Service<never, any>, f: (service: any) => A): Effect<A, never, never> {
+    return withFiber((fiber) => exitSucceed(f(get(fiber.context, this))))
+  }
+}
+
+const ReferenceTypeId = "~effect/Context/Reference" as const
+
+/**
+ * @example
+ * ```ts
+ * import { Context } from "effect"
+ *
+ * // Define a reference with a default value
+ * const LoggerRef: Context.Reference<{ log: (msg: string) => void }> =
+ *   Context.Reference("Logger", {
+ *     defaultValue: () => ({ log: (msg: string) => console.log(msg) })
+ *   })
+ *
+ * // The reference can be used without explicit provision
+ * const context = Context.empty()
+ * const logger = Context.get(context, LoggerRef) // Uses default value
+ * ```
+ *
+ * @since 4.0.0
+ * @category Models
+ */
+export interface Reference<in out Shape> extends Service<never, Shape> {
+  readonly [ReferenceTypeId]: typeof ReferenceTypeId
+  readonly defaultValue: () => Shape
+  [Symbol.iterator](): EffectIterator<Reference<Shape>>
+  new(_: never): {}
+}
+
+/**
+ * @example
+ * ```ts
+ * import { Context } from "effect"
+ *
+ * const Database = Context.Service<{
+ *   query: (sql: string) => string
+ * }>("Database")
+ *
+ * // Extract service type from a key
+ * type DatabaseService = Context.Service.Shape<typeof Database>
+ *
+ * // Extract identifier type from a key
+ * type DatabaseId = Context.Service.Identifier<typeof Database>
+ * ```
+ *
+ * @since 4.0.0
+ * @category Models
+ */
+export declare namespace Service {
+  /**
+   * @example
+   * ```ts
+   * import { Context } from "effect"
+   *
+   * // Any represents any possible service type
+   * const services: Array<Context.Service.Any> = [
+   *   Context.Service<{ log: (msg: string) => void }>("Logger"),
+   *   Context.Service<{ query: (sql: string) => string }>("Database")
+   * ]
+   * ```
+   *
+   * @since 4.0.0
+   * @category Models
+   */
+  export type Any = Key<never, any> | Key<any, any>
+
+  /**
+   * @example
+   * ```ts
+   * import { Context } from "effect"
+   *
+   * const Database = Context.Service<{ query: (sql: string) => string }>(
+   *   "Database"
+   * )
+   *
+   * // Extract the service shape from the service
+   * type DatabaseService = Context.Service.Shape<typeof Database>
+   * // DatabaseService is { query: (sql: string) => string }
+   * ```
+   *
+   * @since 4.0.0
+   * @category Models
+   */
+  export type Shape<T> = T extends Key<infer _I, infer S> ? S : never
+
+  /**
+   * @example
+   * ```ts
+   * import { Context } from "effect"
+   *
+   * const Database = Context.Service<{ query: (sql: string) => string }>(
+   *   "Database"
+   * )
+   *
+   * // Extract the identifier type from a key
+   * type DatabaseId = Context.Service.Identifier<typeof Database>
+   * // DatabaseId is the identifier type
+   * ```
+   *
+   * @since 4.0.0
+   * @category Models
+   */
+  export type Identifier<T> = T extends Key<infer I, infer _S> ? I : never
+}
+
+const TypeId = "~effect/Context" as const
+
+/**
+ * @example
+ * ```ts
+ * import { Context } from "effect"
+ *
+ * // Create a context with multiple services
+ * const Logger = Context.Service<{ log: (msg: string) => void }>("Logger")
+ * const Database = Context.Service<{ query: (sql: string) => string }>(
+ *   "Database"
+ * )
+ *
+ * const context = Context.make(Logger, {
+ *   log: (msg: string) => console.log(msg)
+ * })
+ *   .pipe(Context.add(Database, { query: (sql) => `Result: ${sql}` }))
+ * ```
+ *
+ * @since 4.0.0
+ * @category Models
+ */
+export interface Context<in Services> extends Equal.Equal, Pipeable, Inspectable {
   readonly [TypeId]: {
     readonly _Services: Types.Contravariant<Services>
   }
-  readonly unsafeMap: Map<string, any>
+  readonly mapUnsafe: ReadonlyMap<string, any>
+  mutable: boolean
 }
 
 /**
- * @since 2.0.0
- * @category constructors
+ * @example
+ * ```ts
+ * import { Context } from "effect"
+ *
+ * // Create a context from a Map (unsafe)
+ * const map = new Map([
+ *   ["Logger", { log: (msg: string) => console.log(msg) }]
+ * ])
+ *
+ * const context = Context.makeUnsafe(map)
+ * ```
+ *
+ * @since 4.0.0
+ * @category Constructors
  */
-export const unsafeMake: <Services>(unsafeMap: Map<string, any>) => Context<Services> = internal.makeContext
+export const makeUnsafe = <Services = never>(mapUnsafe: ReadonlyMap<string, any>): Context<Services> => {
+  const self = Object.create(Proto)
+  self.mapUnsafe = mapUnsafe
+  self.mutable = false
+  return self
+}
+
+const Proto: Omit<Context<never>, "mapUnsafe" | "mutable"> = {
+  ...PipeInspectableProto,
+  [TypeId]: {
+    _Services: (_: never) => _
+  },
+  toJSON(this: Context<never>) {
+    return {
+      _id: "Context",
+      services: Array.from(this.mapUnsafe).map(([key, value]) => ({ key, value }))
+    }
+  },
+  [Equal.symbol]<A>(this: Context<A>, that: unknown): boolean {
+    if (
+      !isContext(that)
+      || this.mapUnsafe.size !== that.mapUnsafe.size
+    ) return false
+    for (const k of this.mapUnsafe.keys()) {
+      if (
+        !that.mapUnsafe.has(k) ||
+        !Equal.equals(this.mapUnsafe.get(k), that.mapUnsafe.get(k))
+      ) {
+        return false
+      }
+    }
+    return true
+  },
+  [Hash.symbol]<A>(this: Context<A>): number {
+    return Hash.number(this.mapUnsafe.size)
+  }
+}
 
 /**
  * Checks if the provided argument is a `Context`.
  *
  * @example
  * ```ts
- * import * as assert from "node:assert"
  * import { Context } from "effect"
+ * import * as assert from "node:assert"
  *
  * assert.strictEqual(Context.isContext(Context.empty()), true)
  * ```
  *
- * @since 2.0.0
- * @category guards
+ * @since 4.0.0
+ * @category Guards
  */
-export const isContext: (input: unknown) => input is Context<never> = internal.isContext
+export const isContext = (u: unknown): u is Context<never> => hasProperty(u, TypeId)
 
 /**
- * Checks if the provided argument is a `Tag`.
+ * Checks if the provided argument is a `Key`.
  *
  * @example
  * ```ts
- * import * as assert from "node:assert"
  * import { Context } from "effect"
+ * import * as assert from "node:assert"
  *
- * assert.strictEqual(Context.isTag(Context.GenericTag("Tag")), true)
+ * assert.strictEqual(Context.isKey(Context.Service("Service")), true)
  * ```
  *
- * @since 2.0.0
- * @category guards
+ * @since 4.0.0
+ * @category Guards
  */
-export const isTag: (input: unknown) => input is Tag<any, any> = internal.isTag
+export const isKey = (u: unknown): u is Key<any, any> => hasProperty(u, ServiceTypeId)
 
 /**
  * Checks if the provided argument is a `Reference`.
  *
- * @since 3.11.0
- * @category guards
- * @experimental
+ * @example
+ * ```ts
+ * import { Context } from "effect"
+ * import * as assert from "node:assert"
+ *
+ * const LoggerRef = Context.Reference("Logger", {
+ *   defaultValue: () => ({ log: (msg: string) => console.log(msg) })
+ * })
+ *
+ * assert.strictEqual(Context.isReference(LoggerRef), true)
+ * assert.strictEqual(Context.isReference(Context.Service("Key")), false)
+ * ```
+ *
+ * @since 4.0.0
+ * @category Guards
  */
-export const isReference: (u: unknown) => u is Reference<any, any> = internal.isReference
+export const isReference = (u: unknown): u is Reference<any> => hasProperty(u, ReferenceTypeId)
 
 /**
  * Returns an empty `Context`.
  *
  * @example
  * ```ts
- * import * as assert from "node:assert"
  * import { Context } from "effect"
+ * import * as assert from "node:assert"
  *
  * assert.strictEqual(Context.isContext(Context.empty()), true)
  * ```
  *
- * @since 2.0.0
- * @category constructors
+ * @since 4.0.0
+ * @category Constructors
  */
-export const empty: () => Context<never> = internal.empty
+export const empty = (): Context<never> => emptyContext
+const emptyContext = makeUnsafe(new Map())
 
 /**
- * Creates a new `Context` with a single service associated to the tag.
+ * Creates a new `Context` with a single service associated to the key.
  *
  * @example
  * ```ts
- * import * as assert from "node:assert"
  * import { Context } from "effect"
+ * import * as assert from "node:assert"
  *
- * const Port = Context.GenericTag<{ PORT: number }>("Port")
+ * const Port = Context.Service<{ PORT: number }>("Port")
  *
- * const Services = Context.make(Port, { PORT: 8080 })
+ * const context = Context.make(Port, { PORT: 8080 })
  *
- * assert.deepStrictEqual(Context.get(Services, Port), { PORT: 8080 })
+ * assert.deepStrictEqual(Context.get(context, Port), { PORT: 8080 })
  * ```
  *
- * @since 2.0.0
- * @category constructors
+ * @since 4.0.0
+ * @category Constructors
  */
-export const make: <I, S>(tag: Tag<I, S>, service: Types.NoInfer<S>) => Context<I> = internal.make
+export const make = <I, S>(
+  key: Key<I, S>,
+  service: Types.NoInfer<S>
+): Context<I> => makeUnsafe(new Map([[key.key, service]]))
 
 /**
  * Adds a service to a given `Context`.
  *
  * @example
  * ```ts
+ * import { pipe, Context } from "effect"
  * import * as assert from "node:assert"
- * import { Context, pipe } from "effect"
  *
- * const Port = Context.GenericTag<{ PORT: number }>("Port")
- * const Timeout = Context.GenericTag<{ TIMEOUT: number }>("Timeout")
+ * const Port = Context.Service<{ PORT: number }>("Port")
+ * const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
  *
  * const someContext = Context.make(Port, { PORT: 8080 })
  *
- * const Services = pipe(
+ * const context = pipe(
  *   someContext,
  *   Context.add(Timeout, { TIMEOUT: 5000 })
  * )
  *
- * assert.deepStrictEqual(Context.get(Services, Port), { PORT: 8080 })
- * assert.deepStrictEqual(Context.get(Services, Timeout), { TIMEOUT: 5000 })
+ * assert.deepStrictEqual(Context.get(context, Port), { PORT: 8080 })
+ * assert.deepStrictEqual(Context.get(context, Timeout), { TIMEOUT: 5000 })
  * ```
  *
- * @since 2.0.0
+ * @since 4.0.0
+ * @category Adders
  */
 export const add: {
-  <I, S>(tag: Tag<I, S>, service: Types.NoInfer<S>): <Services>(self: Context<Services>) => Context<Services | I>
-  <Services, I, S>(self: Context<Services>, tag: Tag<I, S>, service: Types.NoInfer<S>): Context<Services | I>
-} = internal.add
+  <I, S>(
+    key: Key<I, S>,
+    service: Types.NoInfer<S>
+  ): <Services>(self: Context<Services>) => Context<Services | I>
+  <Services, I, S>(
+    self: Context<Services>,
+    key: Key<I, S>,
+    service: Types.NoInfer<S>
+  ): Context<Services | I>
+} = dual(3, <Services, I, S>(
+  self: Context<Services>,
+  key: Key<I, S>,
+  service: Types.NoInfer<S>
+): Context<Services | I> =>
+  withMapUnsafe(self, (map) => {
+    map.set(key.key, service)
+  }))
 
 /**
- * Get a service from the context that corresponds to the given tag.
+ * @since 4.0.0
+ * @category Adders
+ */
+export const addOrOmit: {
+  <I, S>(
+    key: Key<I, S>,
+    service: Option.Option<Types.NoInfer<S>>
+  ): <Services>(self: Context<Services>) => Context<Services | I>
+  <Services, I, S>(
+    self: Context<Services>,
+    key: Key<I, S>,
+    service: Option.Option<Types.NoInfer<S>>
+  ): Context<Services | I>
+} = dual(3, <Services, I, S>(
+  self: Context<Services>,
+  key: Key<I, S>,
+  service: Option.Option<Types.NoInfer<S>>
+): Context<Services | I> =>
+  withMapUnsafe(self, (map) => {
+    if (service._tag === "None") {
+      map.delete(key.key)
+    } else {
+      map.set(key.key, service.value)
+    }
+  }))
+
+/**
+ * Get a service from the context that corresponds to the given key, or
+ * use the fallback value.
  *
  * @example
  * ```ts
+ * import { Context } from "effect"
  * import * as assert from "node:assert"
+ *
+ * const Logger = Context.Service<{ log: (msg: string) => void }>("Logger")
+ * const Database = Context.Service<{ query: (sql: string) => string }>(
+ *   "Database"
+ * )
+ *
+ * const context = Context.make(Logger, {
+ *   log: (msg: string) => console.log(msg)
+ * })
+ *
+ * const logger = Context.getOrElse(context, Logger, () => ({ log: () => {} }))
+ * const database = Context.getOrElse(
+ *   context,
+ *   Database,
+ *   () => ({ query: () => "fallback" })
+ * )
+ *
+ * assert.deepStrictEqual(logger, { log: (msg: string) => console.log(msg) })
+ * assert.deepStrictEqual(database, { query: () => "fallback" })
+ * ```
+ *
+ * @since 4.0.0
+ * @category Getters
+ */
+export const getOrElse: {
+  <S, I, B>(key: Key<I, S>, orElse: LazyArg<B>): <Services>(self: Context<Services>) => S | B
+  <Services, S, I, B>(self: Context<Services>, key: Key<I, S>, orElse: LazyArg<B>): S | B
+} = dual(3, <Services, S, I, B>(self: Context<Services>, key: Key<I, S>, orElse: LazyArg<B>): S | B => {
+  if (self.mapUnsafe.has(key.key)) {
+    return self.mapUnsafe.get(key.key)! as any
+  }
+  return isReference(key) ? getDefaultValue(key) : orElse()
+})
+
+/**
+ * @since 4.0.0
+ * @category Getters
+ */
+export const getOrUndefined: {
+  <S, I>(key: Key<I, S>): <Services>(self: Context<Services>) => S | undefined
+  <Services, S, I>(self: Context<Services>, key: Key<I, S>): S | undefined
+} = dual(
+  2,
+  <Services, S, I>(self: Context<Services>, key: Key<I, S>): S | undefined => self.mapUnsafe.get(key.key)
+)
+
+/**
+ * Get a service from the context that corresponds to the given key.
+ *
+ * This function is unsafe because if the key is not present in the context, a
+ * runtime error will be thrown.
+ *
+ * For a safer version see {@link getOption}.
+ *
+ * @param self - The `Context` to search for the service.
+ * @param service - The `Service` of the service to retrieve.
+ *
+ * @example
+ * ```ts
+ * import { Context } from "effect"
+ * import * as assert from "node:assert"
+ *
+ * const Port = Context.Service<{ PORT: number }>("Port")
+ * const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
+ *
+ * const context = Context.make(Port, { PORT: 8080 })
+ *
+ * assert.deepStrictEqual(Context.getUnsafe(context, Port), { PORT: 8080 })
+ * assert.throws(() => Context.getUnsafe(context, Timeout))
+ * ```
+ *
+ * @since 4.0.0
+ * @category unsafe
+ */
+export const getUnsafe: {
+  <S, I>(service: Key<I, S>): <Services>(self: Context<Services>) => S
+  <Services, S, I>(self: Context<Services>, services: Key<I, S>): S
+} = dual(
+  2,
+  <Services, I extends Services, S>(self: Context<Services>, service: Key<I, S>): S => {
+    if (!self.mapUnsafe.has(service.key)) {
+      if (ReferenceTypeId in service) return getDefaultValue(service as any)
+      throw serviceNotFoundError(service)
+    }
+    return self.mapUnsafe.get(service.key)! as any
+  }
+)
+
+/**
+ * Get a service from the context that corresponds to the given key.
+ *
+ * @param self - The `Context` to search for the service.
+ * @param service - The `Service` of the service to retrieve.
+ *
+ * @example
+ * ```ts
  * import { pipe, Context } from "effect"
+ * import * as assert from "node:assert"
  *
- * const Port = Context.GenericTag<{ PORT: number }>("Port")
- * const Timeout = Context.GenericTag<{ TIMEOUT: number }>("Timeout")
+ * const Port = Context.Service<{ PORT: number }>("Port")
+ * const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
  *
- * const Services = pipe(
+ * const context = pipe(
  *   Context.make(Port, { PORT: 8080 }),
  *   Context.add(Timeout, { TIMEOUT: 5000 })
  * )
  *
- * assert.deepStrictEqual(Context.get(Services, Timeout), { TIMEOUT: 5000 })
+ * assert.deepStrictEqual(Context.get(context, Timeout), { TIMEOUT: 5000 })
  * ```
  *
- * @since 2.0.0
- * @category getters
+ * @since 4.0.0
+ * @category Getters
  */
 export const get: {
-  <I, S>(tag: Reference<I, S>): <Services>(self: Context<Services>) => S
-  <Services, I extends Services, S>(tag: Tag<I, S>): (self: Context<Services>) => S
-  <Services, I, S>(self: Context<Services>, tag: Reference<I, S>): S
-  <Services, I extends Services, S>(self: Context<Services>, tag: Tag<I, S>): S
-} = internal.get
+  <Services, I extends Services, S>(service: Key<I, S>): (self: Context<Services>) => S
+  <Services, I extends Services, S>(self: Context<Services>, service: Key<I, S>): S
+} = getUnsafe
 
 /**
- * Get a service from the context that corresponds to the given tag, or
- * use the fallback value.
- *
- * @since 3.7.0
- * @category getters
- */
-export const getOrElse: {
-  <S, I, B>(tag: Tag<I, S>, orElse: LazyArg<B>): <Services>(self: Context<Services>) => S | B
-  <Services, S, I, B>(self: Context<Services>, tag: Tag<I, S>, orElse: LazyArg<B>): S | B
-} = internal.getOrElse
-
-/**
- * Get a service from the context that corresponds to the given tag.
- * This function is unsafe because if the tag is not present in the context, a runtime error will be thrown.
- *
- * For a safer version see {@link getOption}.
- *
  * @example
  * ```ts
- * import * as assert from "node:assert"
  * import { Context } from "effect"
+ * import * as assert from "node:assert"
  *
- * const Port = Context.GenericTag<{ PORT: number }>("Port")
- * const Timeout = Context.GenericTag<{ TIMEOUT: number }>("Timeout")
+ * const LoggerRef = Context.Reference("Logger", {
+ *   defaultValue: () => ({ log: (msg: string) => console.log(msg) })
+ * })
  *
- * const Services = Context.make(Port, { PORT: 8080 })
+ * const context = Context.empty()
+ * const logger = Context.getReferenceUnsafe(context, LoggerRef)
  *
- * assert.deepStrictEqual(Context.unsafeGet(Services, Port), { PORT: 8080 })
- * assert.throws(() => Context.unsafeGet(Services, Timeout))
+ * assert.deepStrictEqual(logger, { log: (msg: string) => console.log(msg) })
  * ```
  *
- * @since 2.0.0
+ * @since 4.0.0
  * @category unsafe
  */
-export const unsafeGet: {
-  <S, I>(tag: Tag<I, S>): <Services>(self: Context<Services>) => S
-  <Services, S, I>(self: Context<Services>, tag: Tag<I, S>): S
-} = internal.unsafeGet
+export const getReferenceUnsafe = <Services, S>(self: Context<Services>, service: Reference<S>): S => {
+  if (!self.mapUnsafe.has(service.key)) {
+    return getDefaultValue(service as any)
+  }
+  return self.mapUnsafe.get(service.key)! as any
+}
+
+const defaultValueCacheKey = "~effect/Context/defaultValue" as const
+
+const getDefaultValue = (ref: Reference<any>) => {
+  if (defaultValueCacheKey in ref) {
+    return ref[defaultValueCacheKey] as any
+  }
+  return (ref as any)[defaultValueCacheKey] = ref.defaultValue()
+}
+
+const serviceNotFoundError = (service: Key<any, any>) => {
+  const error = new Error(
+    `Service not found${service.key ? `: ${String(service.key)}` : ""}`
+  )
+  if (service.stack) {
+    const lines = service.stack.split("\n")
+    if (lines.length > 2) {
+      const afterAt = lines[2].match(/at (.*)/)
+      if (afterAt) {
+        error.message = error.message + ` (defined at ${afterAt[1]})`
+      }
+    }
+  }
+  if (error.stack) {
+    const lines = error.stack.split("\n")
+    lines.splice(1, 3)
+    error.stack = lines.join("\n")
+  }
+  return error
+}
 
 /**
- * Get the value associated with the specified tag from the context wrapped in an `Option` object. If the tag is not
- * found, the `Option` object will be `None`.
+ * Get the value associated with the specified key from the context wrapped in
+ * an `Option` object. If the key is not found, the `Option` object will be
+ * `None`.
+ *
+ * @param self - The `Context` to search for the service.
+ * @param service - The `Service` of the service to retrieve.
  *
  * @example
  * ```ts
+ * import { Option, Context } from "effect"
  * import * as assert from "node:assert"
- * import { Context, Option } from "effect"
  *
- * const Port = Context.GenericTag<{ PORT: number }>("Port")
- * const Timeout = Context.GenericTag<{ TIMEOUT: number }>("Timeout")
+ * const Port = Context.Service<{ PORT: number }>("Port")
+ * const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
  *
- * const Services = Context.make(Port, { PORT: 8080 })
+ * const context = Context.make(Port, { PORT: 8080 })
  *
- * assert.deepStrictEqual(Context.getOption(Services, Port), Option.some({ PORT: 8080 }))
- * assert.deepStrictEqual(Context.getOption(Services, Timeout), Option.none())
+ * assert.deepStrictEqual(
+ *   Context.getOption(context, Port),
+ *   Option.some({ PORT: 8080 })
+ * )
+ * assert.deepStrictEqual(Context.getOption(context, Timeout), Option.none())
  * ```
  *
- * @since 2.0.0
- * @category getters
+ * @since 4.0.0
+ * @category Getters
  */
 export const getOption: {
-  <S, I>(tag: Tag<I, S>): <Services>(self: Context<Services>) => Option<S>
-  <Services, S, I>(self: Context<Services>, tag: Tag<I, S>): Option<S>
-} = internal.getOption
+  <S, I>(service: Key<I, S>): <Services>(self: Context<Services>) => Option.Option<S>
+  <Services, S, I>(self: Context<Services>, service: Key<I, S>): Option.Option<S>
+} = dual(2, <Services, I extends Services, S>(self: Context<Services>, service: Key<I, S>): Option.Option<S> => {
+  if (self.mapUnsafe.has(service.key)) {
+    return Option.some(self.mapUnsafe.get(service.key)! as any)
+  }
+  return isReference(service) ? Option.some(getDefaultValue(service as any)) : Option.none()
+})
 
 /**
  * Merges two `Context`s, returning a new `Context` containing the services of both.
  *
+ * @param self - The first `Context` to merge.
+ * @param that - The second `Context` to merge.
+ *
  * @example
  * ```ts
- * import * as assert from "node:assert"
  * import { Context } from "effect"
+ * import * as assert from "node:assert"
  *
- * const Port = Context.GenericTag<{ PORT: number }>("Port")
- * const Timeout = Context.GenericTag<{ TIMEOUT: number }>("Timeout")
+ * const Port = Context.Service<{ PORT: number }>("Port")
+ * const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
  *
  * const firstContext = Context.make(Port, { PORT: 8080 })
  * const secondContext = Context.make(Timeout, { TIMEOUT: 5000 })
  *
- * const Services = Context.merge(firstContext, secondContext)
+ * const context = Context.merge(firstContext, secondContext)
  *
- * assert.deepStrictEqual(Context.get(Services, Port), { PORT: 8080 })
- * assert.deepStrictEqual(Context.get(Services, Timeout), { TIMEOUT: 5000 })
+ * assert.deepStrictEqual(Context.get(context, Port), { PORT: 8080 })
+ * assert.deepStrictEqual(Context.get(context, Timeout), { TIMEOUT: 5000 })
  * ```
  *
- * @since 2.0.0
+ * @since 4.0.0
+ * @category Utils
  */
 export const merge: {
   <R1>(that: Context<R1>): <Services>(self: Context<Services>) => Context<R1 | Services>
   <Services, R1>(self: Context<Services>, that: Context<R1>): Context<Services | R1>
-} = internal.merge
+} = dual(2, <Services, R1>(self: Context<Services>, that: Context<R1>): Context<Services | R1> => {
+  if (self.mapUnsafe.size === 0) return that as any
+  if (that.mapUnsafe.size === 0) return self as any
+  return withMapUnsafe(self, (map) => {
+    that.mapUnsafe.forEach((value, key) => map.set(key, value))
+  })
+})
 
 /**
  * Merges any number of `Context`s, returning a new `Context` containing the services of all.
  *
  * @example
  * ```ts
- * import * as assert from "node:assert"
  * import { Context } from "effect"
+ * import * as assert from "node:assert"
  *
- * const Port = Context.GenericTag<{ PORT: number }>("Port")
- * const Timeout = Context.GenericTag<{ TIMEOUT: number }>("Timeout")
- * const Host = Context.GenericTag<{ HOST: string }>("Host")
+ * const Port = Context.Service<{ PORT: number }>("Port")
+ * const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
+ * const Host = Context.Service<{ HOST: string }>("Host")
  *
  * const firstContext = Context.make(Port, { PORT: 8080 })
  * const secondContext = Context.make(Timeout, { TIMEOUT: 5000 })
  * const thirdContext = Context.make(Host, { HOST: "localhost" })
  *
- * const Services = Context.mergeAll(firstContext, secondContext, thirdContext)
+ * const context = Context.mergeAll(
+ *   firstContext,
+ *   secondContext,
+ *   thirdContext
+ * )
  *
- * assert.deepStrictEqual(Context.get(Services, Port), { PORT: 8080 })
- * assert.deepStrictEqual(Context.get(Services, Timeout), { TIMEOUT: 5000 })
- * assert.deepStrictEqual(Context.get(Services, Host), { HOST: "localhost" })
+ * assert.deepStrictEqual(Context.get(context, Port), { PORT: 8080 })
+ * assert.deepStrictEqual(Context.get(context, Timeout), { TIMEOUT: 5000 })
+ * assert.deepStrictEqual(Context.get(context, Host), { HOST: "localhost" })
  * ```
  *
  * @since 3.12.0
  */
-export const mergeAll: <T extends Array<unknown>>(
+export const mergeAll = <T extends Array<unknown>>(
   ...ctxs: [...{ [K in keyof T]: Context<T[K]> }]
-) => Context<T[number]> = internal.mergeAll
+): Context<T[number]> => {
+  const map = new Map()
+  for (let i = 0; i < ctxs.length; i++) {
+    ctxs[i].mapUnsafe.forEach((value, key) => {
+      map.set(key, value)
+    })
+  }
+  return makeUnsafe(map)
+}
 
 /**
  * Returns a new `Context` that contains only the specified services.
  *
+ * @param self - The `Context` to prune services from.
+ * @param services - The list of `Service`s to be included in the new `Context`.
+ *
  * @example
  * ```ts
+ * import { Option, pipe, Context } from "effect"
  * import * as assert from "node:assert"
- * import { pipe, Context, Option } from "effect"
  *
- * const Port = Context.GenericTag<{ PORT: number }>("Port")
- * const Timeout = Context.GenericTag<{ TIMEOUT: number }>("Timeout")
+ * const Port = Context.Service<{ PORT: number }>("Port")
+ * const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
  *
  * const someContext = pipe(
  *   Context.make(Port, { PORT: 8080 }),
  *   Context.add(Timeout, { TIMEOUT: 5000 })
  * )
  *
- * const Services = pipe(someContext, Context.pick(Port))
+ * const context = pipe(someContext, Context.pick(Port))
  *
- * assert.deepStrictEqual(Context.getOption(Services, Port), Option.some({ PORT: 8080 }))
- * assert.deepStrictEqual(Context.getOption(Services, Timeout), Option.none())
+ * assert.deepStrictEqual(
+ *   Context.getOption(context, Port),
+ *   Option.some({ PORT: 8080 })
+ * )
+ * assert.deepStrictEqual(Context.getOption(context, Timeout), Option.none())
  * ```
  *
- * @since 2.0.0
+ * @since 4.0.0
+ * @category Utils
  */
-export const pick: <Tags extends ReadonlyArray<Tag<any, any>>>(
-  ...tags: Tags
-) => <Services>(self: Context<Services>) => Context<Services & Tag.Identifier<Tags[number]>> = internal.pick
-
-/**
- * @since 2.0.0
- */
-export const omit: <Tags extends ReadonlyArray<Tag<any, any>>>(
-  ...tags: Tags
-) => <Services>(self: Context<Services>) => Context<Exclude<Services, Tag.Identifier<Tags[number]>>> = internal.omit
+export const pick = <S extends ReadonlyArray<Key<any, any>>>(
+  ...services: S
+) =>
+<Services>(self: Context<Services>): Context<Services & Service.Identifier<S[number]>> =>
+  withMapUnsafe(self, (map) => {
+    const keySet = new Set(services.map((key) => key.key))
+    map.forEach((_, key) => {
+      if (keySet.has(key)) return
+      map.delete(key)
+    })
+  })
 
 /**
  * @example
  * ```ts
+ * import { Option, pipe, Context } from "effect"
  * import * as assert from "node:assert"
- * import { Context, Layer } from "effect"
  *
- * class MyTag extends Context.Tag("MyTag")<
- *  MyTag,
- *  { readonly myNum: number }
- * >() {
- *  static Live = Layer.succeed(this, { myNum: 108 })
- * }
+ * const Port = Context.Service<{ PORT: number }>("Port")
+ * const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
+ *
+ * const someContext = pipe(
+ *   Context.make(Port, { PORT: 8080 }),
+ *   Context.add(Timeout, { TIMEOUT: 5000 })
+ * )
+ *
+ * const context = pipe(someContext, Context.omit(Timeout))
+ *
+ * assert.deepStrictEqual(
+ *   Context.getOption(context, Port),
+ *   Option.some({ PORT: 8080 })
+ * )
+ * assert.deepStrictEqual(Context.getOption(context, Timeout), Option.none())
  * ```
  *
- * @since 2.0.0
- * @category constructors
+ * @since 4.0.0
+ * @category Utils
  */
-export const Tag: <const Id extends string>(id: Id) => <Self, Shape>() => TagClass<Self, Id, Shape> = internal.Tag
+export const omit = <S extends ReadonlyArray<Key<any, any>>>(
+  ...keys: S
+) =>
+<Services>(self: Context<Services>): Context<Exclude<Services, Service.Identifier<S[number]>>> =>
+  withMapUnsafe(self, (map) => {
+    for (let i = 0; i < keys.length; i++) {
+      map.delete(keys[i].key)
+    }
+  })
 
 /**
- * Creates a context tag with a default value.
+ * Perform a series of mutations on a `Context`. Prevents unnecessary copying
+ * of the underlying map when multiple mutations are needed.
+ *
+ * @since 4.0.0
+ * @category Utils
+ */
+export const mutate: {
+  <Services, B>(
+    f: (context: Context<Services>) => Context<B>
+  ): <Services>(self: Context<Services>) => Context<B>
+  <Services, B>(self: Context<Services>, f: (context: Context<Services>) => Context<B>): Context<B>
+} = dual(
+  2,
+  <Services, B>(self: Context<Services>, f: (context: Context<Services>) => Context<B>): Context<B> => {
+    const next = makeUnsafe<Services>(new Map(self.mapUnsafe))
+    next.mutable = true
+    const result = f(next)
+    result.mutable = false
+    return result
+  }
+)
+
+const withMapUnsafe = <Services, B>(self: Context<Services>, f: (map: Map<string, any>) => void): Context<B> => {
+  if (self.mutable) {
+    f(self.mapUnsafe as any)
+    return self as any
+  }
+  const map = new Map(self.mapUnsafe)
+  f(map)
+  return makeUnsafe(map)
+}
+
+/**
+ * Creates a context key with a default value.
  *
  * **Details**
  *
- * `Context.Reference` allows you to create a tag that can hold a value. You can
- * provide a default value for the service, which will automatically be used
+ * `Context.Reference` allows you to create a key that can hold a value. You
+ * can provide a default value for the service, which will automatically be used
  * when the context is accessed, or override it with a custom implementation
  * when needed.
  *
- * **Example** (Declaring a Tag with a default value)
- *
+ * @example
  * ```ts
- * import * as assert from "node:assert"
- * import { Context, Effect } from "effect"
+ * import { Context } from "effect"
  *
- * class SpecialNumber extends Context.Reference<SpecialNumber>()(
- *   "SpecialNumber",
- *   { defaultValue: () => 2048 }
- * ) {}
- *
- * //      ┌─── Effect<void, never, never>
- * //      ▼
- * const program = Effect.gen(function* () {
- *   const specialNumber = yield* SpecialNumber
- *   console.log(`The special number is ${specialNumber}`)
+ * // Create a reference with a default value
+ * const LoggerRef = Context.Reference("Logger", {
+ *   defaultValue: () => ({ log: (msg: string) => console.log(msg) })
  * })
  *
- * // No need to provide the SpecialNumber implementation
- * Effect.runPromise(program)
- * // Output: The special number is 2048
- * ```
+ * // The reference provides the default value when accessed from an empty context
+ * const context = Context.empty()
+ * const logger = Context.get(context, LoggerRef)
  *
- * **Example** (Overriding the default value)
- *
- * ```ts
- * import { Context, Effect } from "effect"
- *
- * class SpecialNumber extends Context.Reference<SpecialNumber>()(
- *   "SpecialNumber",
- *   { defaultValue: () => 2048 }
- * ) {}
- *
- * const program = Effect.gen(function* () {
- *   const specialNumber = yield* SpecialNumber
- *   console.log(`The special number is ${specialNumber}`)
+ * // You can also override the default value
+ * const customContext = Context.make(LoggerRef, {
+ *   log: (msg: string) => `Custom: ${msg}`
  * })
- *
- * Effect.runPromise(program.pipe(Effect.provideService(SpecialNumber, -1)))
- * // Output: The special number is -1
+ * const customLogger = Context.get(customContext, LoggerRef)
  * ```
  *
- * @since 3.11.0
- * @category constructors
- * @experimental
+ * @since 4.0.0
+ * @category References
  */
-export const Reference: <Self>() => <const Id extends string, Service>(
-  id: Id,
+export const Reference: <Service>(
+  key: string,
   options: { readonly defaultValue: () => Service }
-) => ReferenceClass<Self, Id, Service> = internal.Reference
+) => Reference<Service> = Service as any

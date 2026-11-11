@@ -1,4 +1,4 @@
-import { Console, Effect } from "effect"
+import { Context, Console, Effect, Layer } from "effect"
 import { dirname } from "node:path"
 import { mkdir } from "node:fs/promises"
 
@@ -12,13 +12,12 @@ export interface EnvReadResult {
 	valueSources: Record<string, string>
 }
 
-/** Files to scan for existing env values */
+/** Files to scan for existing env values (`apps/backend/.env` and the bots' `.env` predate `.env.local`) */
 const ENV_FILE_PATHS = [
+	".env.local",
 	"apps/backend/.env",
-	"apps/web/.env",
-	"apps/cluster/.env",
-	"apps/electric-proxy/.env",
-	"packages/db/.env",
+	"bots/hazel-bot/.env",
+	"bots/linear-bot/.env",
 ] as const
 
 /** Parse a .env file content into key-value pairs */
@@ -44,9 +43,8 @@ const parseEnvContent = (content: string): Record<string, string> => {
 	return result
 }
 
-export class EnvWriter extends Effect.Service<EnvWriter>()("EnvWriter", {
-	accessors: true,
-	effect: Effect.succeed({
+export class EnvWriter extends Context.Service<EnvWriter>()("EnvWriter", {
+	make: Effect.succeed({
 		writeEnvFile: (filePath: string, vars: Record<string, string>, dryRun: boolean = false) =>
 			Effect.gen(function* () {
 				const content = Object.entries(vars)
@@ -58,7 +56,10 @@ export class EnvWriter extends Effect.Service<EnvWriter>()("EnvWriter", {
 					yield* Console.log("  " + "-".repeat(40))
 					for (const [key, value] of Object.entries(vars)) {
 						const masked =
-							key.includes("SECRET") || key.includes("PASSWORD") || key.includes("KEY")
+							key.includes("SECRET") ||
+							key.includes("PASSWORD") ||
+							key.includes("KEY") ||
+							key.includes("TOKEN")
 								? value.slice(0, 4) + "..." + value.slice(-4)
 								: value
 						yield* Console.log(`  ${key}=${masked}`)
@@ -92,6 +93,26 @@ export class EnvWriter extends Effect.Service<EnvWriter>()("EnvWriter", {
 				if (!exists) return {}
 				const content = yield* Effect.promise(() => file.text())
 				return parseEnvContent(content)
+			}),
+
+		/**
+		 * The bots' tokens from an earlier setup: `.env.local`, else the `BOT_TOKEN` of the
+		 * bots' own `.env` files, from when they ran as Bun processes.
+		 */
+		readBotTokens: () =>
+			Effect.gen(function* () {
+				const read = (filePath: string) =>
+					Effect.promise(async () => {
+						const file = Bun.file(filePath)
+						return (await file.exists()) ? parseEnvContent(await file.text()) : {}
+					})
+				const local = yield* read(".env.local")
+				const hazelBot = local.HAZEL_BOT_TOKEN || (yield* read("bots/hazel-bot/.env")).BOT_TOKEN
+				const linearBot = local.LINEAR_BOT_TOKEN || (yield* read("bots/linear-bot/.env")).BOT_TOKEN
+				return {
+					...(hazelBot ? { hazelBot } : {}),
+					...(linearBot ? { linearBot } : {}),
+				}
 			}),
 
 		/** Read all known .env files and aggregate values with their sources */
@@ -133,4 +154,6 @@ export class EnvWriter extends Effect.Service<EnvWriter>()("EnvWriter", {
 				return result
 			}),
 	}),
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make)
+}

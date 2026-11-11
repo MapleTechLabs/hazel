@@ -2,7 +2,7 @@ import type {
   Collection,
   MutationFnParams,
   PendingMutation,
-} from "@tanstack/db"
+} from '@tanstack/db'
 
 // Extended mutation function that includes idempotency key
 export type OfflineMutationFnParams<
@@ -12,7 +12,7 @@ export type OfflineMutationFnParams<
 }
 
 export type OfflineMutationFn<T extends object = Record<string, unknown>> = (
-  params: OfflineMutationFnParams<T>
+  params: OfflineMutationFnParams<T>,
 ) => Promise<any>
 
 // Simplified mutation structure for serialization
@@ -21,6 +21,7 @@ export interface SerializedMutation {
   type: string
   modified: any
   original: any
+  changes: any
   collectionId: string
 }
 
@@ -60,7 +61,7 @@ export interface SerializedOfflineTransaction {
   mutations: Array<SerializedMutation>
   keys: Array<string>
   idempotencyKey: string
-  createdAt: Date
+  createdAt: string
   retryCount: number
   nextAttemptAt: number
   lastError?: SerializedError
@@ -88,19 +89,24 @@ export interface StorageDiagnostic {
 }
 
 export interface OfflineConfig {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   collections: Record<string, Collection<any, any, any, any, any>>
   mutationFns: Record<string, OfflineMutationFn>
   storage?: StorageAdapter
   maxConcurrency?: number
   jitter?: boolean
   beforeRetry?: (
-    transactions: Array<OfflineTransaction>
+    transactions: Array<OfflineTransaction>,
   ) => Array<OfflineTransaction>
   onUnknownMutationFn?: (name: string, tx: OfflineTransaction) => void
   onLeadershipChange?: (isLeader: boolean) => void
   onStorageFailure?: (diagnostic: StorageDiagnostic) => void
   leaderElection?: LeaderElection
+  /**
+   * Custom online detector implementation.
+   * Defaults to WebOnlineDetector for browser environments.
+   * Use ReactNativeOnlineDetector from '@tanstack/offline-transactions/react-native' for RN/Expo.
+   */
+  onlineDetector?: OnlineDetector
 }
 
 export interface StorageAdapter {
@@ -126,6 +132,7 @@ export interface LeaderElection {
 export interface OnlineDetector {
   subscribe: (callback: () => void) => () => void
   notifyOnline: () => void
+  dispose: () => void
 }
 
 export interface CreateOfflineTransactionOptions {

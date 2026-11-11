@@ -1,6 +1,7 @@
 node_modules
 .DS_Store
 dist
+.astro
 dist-ssr
 *.local
 .turbo
@@ -14,10 +15,18 @@ version.json
 
 # Local SSL certificates (mkcert)
 certs/
-docker/caddy/certs/*.pem
 
 # opensrc - source code for packages
 opensrc/
 
 # Tauri/Rust build artifacts
 **/target/
+/.artifacts
+
+# Migration exports (contain PII — user emails, IDs, avatars)
+apps/backend/exports/
+.alchemy/
+
+# Vitest browser mode artifacts
+__screenshots__/
+.vitest-attachments/

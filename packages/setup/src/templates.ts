@@ -16,9 +16,6 @@ export interface EnvValue {
 
 /** Existing configuration extracted from .env files */
 export interface ExistingConfig {
-	workosApiKey?: EnvValue
-	workosClientId?: EnvValue
-	cookiePassword?: EnvValue
 	encryptionKey?: EnvValue
 	linear?: {
 		clientId: EnvValue
@@ -31,6 +28,7 @@ export interface ExistingConfig {
 	}
 	githubWebhookSecret?: EnvValue
 	openrouterApiKey?: EnvValue
+	klipyApiKey?: EnvValue
 }
 
 /** Get a single value from env result (picks first if multiple) */
@@ -45,16 +43,6 @@ const getEnvValue = (result: EnvReadResult, key: string): EnvValue | undefined =
 /** Extract existing configuration from env read result */
 export const extractExistingConfig = (result: EnvReadResult): ExistingConfig => {
 	const config: ExistingConfig = {}
-
-	// WorkOS
-	const workosApiKey = getEnvValue(result, "WORKOS_API_KEY")
-	if (workosApiKey) config.workosApiKey = workosApiKey
-
-	const workosClientId = getEnvValue(result, "WORKOS_CLIENT_ID")
-	if (workosClientId) config.workosClientId = workosClientId
-
-	const cookiePassword = getEnvValue(result, "WORKOS_COOKIE_PASSWORD")
-	if (cookiePassword) config.cookiePassword = cookiePassword
 
 	const encryptionKey = getEnvValue(result, "INTEGRATION_ENCRYPTION_KEY")
 	if (encryptionKey) config.encryptionKey = encryptionKey
@@ -89,6 +77,10 @@ export const extractExistingConfig = (result: EnvReadResult): ExistingConfig => 
 	const openrouterApiKey = getEnvValue(result, "OPENROUTER_API_KEY")
 	if (openrouterApiKey) config.openrouterApiKey = openrouterApiKey
 
+	// Klipy
+	const klipyApiKey = getEnvValue(result, "KLIPY_API_KEY")
+	if (klipyApiKey) config.klipyApiKey = klipyApiKey
+
 	return config
 }
 
@@ -117,10 +109,7 @@ export const getLocalMinioConfig = (): S3Config => ({
 })
 
 export interface Config {
-	workosApiKey: string
-	workosClientId: string
 	secrets: {
-		cookiePassword: string
 		encryptionKey: string
 	}
 	s3?: S3Config
@@ -136,63 +125,43 @@ export interface Config {
 	}
 	githubWebhookSecret?: string
 	openrouterApiKey?: string
+	klipyApiKey?: string
+	/** Tokens of the first-party bots, kept from an earlier setup: alchemy dev runs a bot with one. */
+	botTokens?: BotTokens
 }
 
+export interface BotTokens {
+	hazelBot?: string
+	linearBot?: string
+}
+
+/**
+ * The env file setup writes. `.env.local` (repo root) is everything `bun run alchemy:dev` reads:
+ * alchemy hands it to the Workers it runs locally (the api and its Durable Objects, the bot
+ * gateway, the bots) and to the web build; the directory D1 and the objects' SQLite live under
+ * `.alchemy/`.
+ */
 export const ENV_TEMPLATES = {
-	web: (config: Config) => ({
-		VITE_BACKEND_URL: "https://localhost:3004",
-		VITE_CLUSTER_URL: "http://localhost:3020",
-		VITE_ELECTRIC_URL: "https://localhost:5133/v1/shape",
-		VITE_WORKOS_CLIENT_ID: config.workosClientId,
-		VITE_WORKOS_REDIRECT_URI: "http://localhost:3000/auth/callback",
-		VITE_R2_PUBLIC_URL: config.s3PublicUrl ?? "",
-	}),
-
-	backend: (config: Config) => {
+	local: (config: Config) => {
 		const base: Record<string, string> = {
-			// Database
-			DATABASE_URL: "postgresql://user:password@localhost:5432/app",
-
-			// Server
-			PORT: "3003",
-			IS_DEV: "true",
-
-			// URLs
-			FRONTEND_URL: "http://localhost:3000",
-			API_BASE_URL: "http://localhost:3003",
-			CLUSTER_URL: "http://localhost:3020",
-
-			// Redis
-			REDIS_URL: "redis://localhost:6380",
-
-			// Electric
-			ELECTRIC_URL: "http://localhost:3333",
-
-			// WorkOS
-			WORKOS_API_KEY: config.workosApiKey,
-			WORKOS_CLIENT_ID: config.workosClientId,
-			WORKOS_COOKIE_PASSWORD: config.secrets.cookiePassword,
-			WORKOS_COOKIE_DOMAIN: "localhost",
-			WORKOS_REDIRECT_URI: "http://localhost:3003/auth/callback",
-			WORKOS_WEBHOOK_SECRET: "whsec_" + config.secrets.cookiePassword.slice(0, 20),
-
 			// Encryption
 			INTEGRATION_ENCRYPTION_KEY: config.secrets.encryptionKey,
 			INTEGRATION_ENCRYPTION_KEY_VERSION: "1",
 		}
 
-		// Add S3 config if provided
+		// Uploads (required by the api Worker)
 		if (config.s3) {
 			base.S3_BUCKET = config.s3.bucket
 			base.S3_ENDPOINT = config.s3.endpoint
 			base.S3_ACCESS_KEY_ID = config.s3.accessKeyId
 			base.S3_SECRET_ACCESS_KEY = config.s3.secretAccessKey
+			base.S3_PUBLIC_URL = config.s3.publicUrl
 		}
+		if (config.s3PublicUrl) base.VITE_R2_PUBLIC_URL = config.s3PublicUrl
 
 		// Linear config (always present, empty if not configured)
 		base.LINEAR_CLIENT_ID = config.linear?.clientId ?? ""
 		base.LINEAR_CLIENT_SECRET = config.linear?.clientSecret ?? ""
-		base.LINEAR_REDIRECT_URI = "http://localhost:3003/integrations/linear/callback"
 
 		// GitHub App config (always present, empty if not configured)
 		base.GITHUB_APP_ID = config.githubApp?.appId ?? ""
@@ -200,31 +169,16 @@ export const ENV_TEMPLATES = {
 		base.GITHUB_APP_PRIVATE_KEY = config.githubApp?.privateKey ?? ""
 		base.GITHUB_WEBHOOK_SECRET = config.githubWebhookSecret ?? ""
 
+		// Thread naming
+		base.OPENROUTER_API_KEY = config.openrouterApiKey ?? ""
+
+		// Klipy GIF search
+		base.KLIPY_API_KEY = config.klipyApiKey ?? ""
+
+		// First-party bots (bots/*): alchemy dev runs each one whose token is set
+		if (config.botTokens?.hazelBot) base.HAZEL_BOT_TOKEN = config.botTokens.hazelBot
+		if (config.botTokens?.linearBot) base.LINEAR_BOT_TOKEN = config.botTokens.linearBot
+
 		return base
 	},
-
-	cluster: (config: Config) => ({
-		DATABASE_URL: "postgresql://user:password@localhost:5432/app",
-		EFFECT_DATABASE_URL: "postgresql://user:password@localhost:5432/cluster",
-		IS_DEV: "true",
-		OPENROUTER_API_KEY: config.openrouterApiKey ?? "",
-		// WorkOS - required for WorkOS sync cron
-		WORKOS_API_KEY: config.workosApiKey,
-		WORKOS_CLIENT_ID: config.workosClientId,
-	}),
-
-	electricProxy: (config: Config) => ({
-		PORT: "8184",
-		DATABASE_URL: "postgresql://user:password@localhost:5432/app",
-		IS_DEV: "true",
-		ELECTRIC_URL: "http://localhost:3333",
-		WORKOS_API_KEY: config.workosApiKey,
-		WORKOS_CLIENT_ID: config.workosClientId,
-		WORKOS_COOKIE_PASSWORD: config.secrets.cookiePassword,
-		ALLOWED_ORIGIN: "http://localhost:3000",
-	}),
-
-	db: () => ({
-		DATABASE_URL: "postgresql://user:password@localhost:5432/app",
-	}),
 }

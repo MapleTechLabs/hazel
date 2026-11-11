@@ -1,8 +1,9 @@
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "@effect/platform"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { ChannelWebhookId } from "@hazel/schema"
 import { Schema } from "effect"
 import { InternalServerError } from "../errors"
 import { MessageEmbed } from "../models/message-embed-schema"
+import { RequiredScopes } from "../scopes/required-scopes"
 
 // Incoming webhook payload (Discord-style)
 export class IncomingWebhookPayload extends Schema.Class<IncomingWebhookPayload>("IncomingWebhookPayload")({
@@ -19,7 +20,7 @@ export const OpenStatusMonitor = Schema.Struct({
 export type OpenStatusMonitor = Schema.Schema.Type<typeof OpenStatusMonitor>
 
 // OpenStatus status type
-export const OpenStatusStatus = Schema.Literal("degraded", "error", "recovered")
+export const OpenStatusStatus = Schema.Literals(["degraded", "error", "recovered"])
 export type OpenStatusStatus = Schema.Schema.Type<typeof OpenStatusStatus>
 
 // OpenStatus webhook payload
@@ -92,6 +93,70 @@ export class RailwayPayload extends Schema.Class<RailwayPayload>("RailwayPayload
 	timestamp: Schema.String, // ISO 8601 timestamp
 }) {}
 
+// Maple alert webhook schemas (mirror Maple's buildPayload output)
+export const MapleEventType = Schema.Literals(["trigger", "resolve", "renotify", "test"])
+export type MapleEventType = Schema.Schema.Type<typeof MapleEventType>
+
+export const MapleIncidentStatus = Schema.Literals(["open", "resolved"])
+export type MapleIncidentStatus = Schema.Schema.Type<typeof MapleIncidentStatus>
+
+export const MapleSeverity = Schema.Literals(["warning", "critical"])
+export type MapleSeverity = Schema.Schema.Type<typeof MapleSeverity>
+
+/**
+ * Open strings, not literals: Maple adds comparators and signal types (`between`, `uptime`,
+ * `builder_query`...) on its own schedule, and an alert Hazel cannot name yet must still arrive.
+ * The embed shows a value it does not know as it came.
+ */
+export const MapleComparator = Schema.String
+export const MapleSignalType = Schema.String
+
+export const MapleAlertRule = Schema.Struct({
+	id: Schema.String,
+	name: Schema.String,
+	signalType: MapleSignalType,
+	severity: MapleSeverity,
+	groupKey: Schema.NullOr(Schema.String),
+	comparator: MapleComparator,
+	threshold: Schema.Number,
+	/** The upper bound of a `between` / `not_between` rule. */
+	thresholdUpper: Schema.optional(Schema.NullOr(Schema.Number)),
+	windowMinutes: Schema.Number,
+})
+export type MapleAlertRule = Schema.Schema.Type<typeof MapleAlertRule>
+
+export const MapleObserved = Schema.Struct({
+	value: Schema.NullOr(Schema.Number),
+	sampleCount: Schema.NullOr(Schema.Number),
+	/** Uptime rules: the failing check's error, e.g. `Status 503, expected 2xx`. */
+	detail: Schema.optional(Schema.NullOr(Schema.String)),
+})
+export type MapleObserved = Schema.Schema.Type<typeof MapleObserved>
+
+/** What the alert saw, snapshotted when Maple queued it. */
+export const MapleChart = Schema.Struct({
+	/** Unicode sparkline of the recent values. */
+	sparkline: Schema.optional(Schema.String),
+	/** Signed, public URL of the chart image. */
+	url: Schema.optional(Schema.String),
+})
+export type MapleChart = Schema.Schema.Type<typeof MapleChart>
+
+export class MaplePayload extends Schema.Class<MaplePayload>("MaplePayload")({
+	eventType: MapleEventType,
+	incidentId: Schema.NullOr(Schema.String),
+	incidentStatus: MapleIncidentStatus,
+	dedupeKey: Schema.String,
+	rule: MapleAlertRule,
+	/** The highest severity the incident reached. */
+	peakSeverity: Schema.optional(Schema.NullOr(MapleSeverity)),
+	observed: MapleObserved,
+	chart: Schema.optional(Schema.NullOr(MapleChart)),
+	linkUrl: Schema.String,
+	chatUrl: Schema.String,
+	sentAt: Schema.String,
+}) {}
+
 // Response after successful webhook execution
 export class WebhookMessageResponse extends Schema.Class<WebhookMessageResponse>("WebhookMessageResponse")({
 	messageId: Schema.String,
@@ -104,7 +169,7 @@ export class WebhookNotFoundError extends Schema.TaggedError<WebhookNotFoundErro
 	{
 		message: Schema.String,
 	},
-	HttpApiSchema.annotations({ status: 404 }),
+	{ httpApiStatus: 404 },
 ) {}
 
 // Error: Webhook is disabled
@@ -113,7 +178,7 @@ export class WebhookDisabledError extends Schema.TaggedError<WebhookDisabledErro
 	{
 		message: Schema.String,
 	},
-	HttpApiSchema.annotations({ status: 403 }),
+	{ httpApiStatus: 403 },
 ) {}
 
 // Error: Invalid webhook token
@@ -122,78 +187,122 @@ export class InvalidWebhookTokenError extends Schema.TaggedError<InvalidWebhookT
 	{
 		message: Schema.String,
 	},
-	HttpApiSchema.annotations({ status: 401 }),
+	{ httpApiStatus: 401 },
+) {}
+
+// Error: the payload is valid JSON for the endpoint but cannot become a message
+export class InvalidWebhookPayloadError extends Schema.TaggedError<InvalidWebhookPayloadError>()(
+	"InvalidWebhookPayloadError",
+	{
+		message: Schema.String,
+	},
+	{ httpApiStatus: 400 },
 ) {}
 
 // Public endpoint - no auth middleware, uses webhook token in URL
 export class IncomingWebhookGroup extends HttpApiGroup.make("incoming-webhooks")
 	.add(
-		HttpApiEndpoint.post("execute", `/:webhookId/:token`)
-			.setPayload(IncomingWebhookPayload)
-			.addSuccess(WebhookMessageResponse)
-			.addError(WebhookNotFoundError)
-			.addError(WebhookDisabledError)
-			.addError(InvalidWebhookTokenError)
-			.addError(InternalServerError)
-			.setPath(
-				Schema.Struct({
-					webhookId: ChannelWebhookId,
-					token: Schema.String,
-				}),
-			)
-			.annotateContext(
+		HttpApiEndpoint.post("execute", `/:webhookId/:token`, {
+			params: {
+				webhookId: ChannelWebhookId,
+				token: Schema.String,
+			},
+			payload: IncomingWebhookPayload,
+			success: WebhookMessageResponse,
+			error: [
+				WebhookNotFoundError,
+				WebhookDisabledError,
+				InvalidWebhookTokenError,
+				InvalidWebhookPayloadError,
+				InternalServerError,
+			],
+		})
+			.annotateMerge(
 				OpenApi.annotations({
 					title: "Execute Incoming Webhook",
 					description:
 						"Post a message to a channel via webhook. Supports plain text content and Discord-style embeds.",
 					summary: "Execute webhook to create message",
 				}),
-			),
+			)
+			.annotate(RequiredScopes, []),
 	)
 	.add(
-		HttpApiEndpoint.post("executeOpenStatus", `/:webhookId/:token/openstatus`)
-			.setPayload(OpenStatusPayload)
-			.addSuccess(WebhookMessageResponse)
-			.addError(WebhookNotFoundError)
-			.addError(WebhookDisabledError)
-			.addError(InvalidWebhookTokenError)
-			.addError(InternalServerError)
-			.setPath(
-				Schema.Struct({
-					webhookId: ChannelWebhookId,
-					token: Schema.String,
-				}),
-			)
-			.annotateContext(
+		HttpApiEndpoint.post("executeOpenStatus", `/:webhookId/:token/openstatus`, {
+			params: {
+				webhookId: ChannelWebhookId,
+				token: Schema.String,
+			},
+			payload: OpenStatusPayload,
+			success: WebhookMessageResponse,
+			error: [
+				WebhookNotFoundError,
+				WebhookDisabledError,
+				InvalidWebhookTokenError,
+				InvalidWebhookPayloadError,
+				InternalServerError,
+			],
+		})
+			.annotateMerge(
 				OpenApi.annotations({
 					title: "Execute OpenStatus Webhook",
 					description:
 						"Receive status alerts from OpenStatus and post them as rich embeds to a channel.",
 					summary: "Process OpenStatus alert",
 				}),
-			),
+			)
+			.annotate(RequiredScopes, []),
 	)
 	.add(
-		HttpApiEndpoint.post("executeRailway", `/:webhookId/:token/railway`)
-			.setPayload(RailwayPayload)
-			.addSuccess(WebhookMessageResponse)
-			.addError(WebhookNotFoundError)
-			.addError(WebhookDisabledError)
-			.addError(InvalidWebhookTokenError)
-			.addError(InternalServerError)
-			.setPath(
-				Schema.Struct({
-					webhookId: ChannelWebhookId,
-					token: Schema.String,
-				}),
-			)
-			.annotateContext(
+		HttpApiEndpoint.post("executeRailway", `/:webhookId/:token/railway`, {
+			params: {
+				webhookId: ChannelWebhookId,
+				token: Schema.String,
+			},
+			payload: RailwayPayload,
+			success: WebhookMessageResponse,
+			error: [
+				WebhookNotFoundError,
+				WebhookDisabledError,
+				InvalidWebhookTokenError,
+				InvalidWebhookPayloadError,
+				InternalServerError,
+			],
+		})
+			.annotateMerge(
 				OpenApi.annotations({
 					title: "Execute Railway Webhook",
 					description:
 						"Receive deployment and alert events from Railway and post them as rich embeds to a channel.",
 					summary: "Process Railway event",
 				}),
-			),
+			)
+			.annotate(RequiredScopes, []),
+	)
+	.add(
+		HttpApiEndpoint.post("executeMaple", `/:webhookId/:token/maple`, {
+			params: {
+				webhookId: ChannelWebhookId,
+				token: Schema.String,
+			},
+			payload: MaplePayload,
+			success: WebhookMessageResponse,
+			error: [
+				WebhookNotFoundError,
+				WebhookDisabledError,
+				InvalidWebhookTokenError,
+				InvalidWebhookPayloadError,
+				InternalServerError,
+			],
+		})
+			.annotateMerge(
+				OpenApi.annotations({
+					title: "Execute Maple Webhook",
+					description:
+						"Receive alert trigger, resolve, renotify, and test events from Maple and post them as rich embeds to a channel.",
+					summary: "Process Maple alert",
+				}),
+			)
+			.annotate(RequiredScopes, []),
 	)
 	.prefix("/webhooks/incoming") {}

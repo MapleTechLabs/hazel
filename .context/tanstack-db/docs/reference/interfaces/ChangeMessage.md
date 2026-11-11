@@ -5,11 +5,7 @@ title: ChangeMessage
 
 # Interface: ChangeMessage\<T, TKey\>
 
-Defined in: [packages/db/src/types.ts:314](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L314)
-
-## Extended by
-
-- [`OptimisticChangeMessage`](../OptimisticChangeMessage.md)
+Defined in: [packages/db/src/types.ts:359](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L359)
 
 ## Type Parameters
 
@@ -29,7 +25,7 @@ Defined in: [packages/db/src/types.ts:314](https://github.com/TanStack/db/blob/m
 key: TKey;
 ```
 
-Defined in: [packages/db/src/types.ts:318](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L318)
+Defined in: [packages/db/src/types.ts:363](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L363)
 
 ***
 
@@ -39,7 +35,7 @@ Defined in: [packages/db/src/types.ts:318](https://github.com/TanStack/db/blob/m
 optional metadata: Record<string, unknown>;
 ```
 
-Defined in: [packages/db/src/types.ts:322](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L322)
+Defined in: [packages/db/src/types.ts:367](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L367)
 
 ***
 
@@ -49,7 +45,7 @@ Defined in: [packages/db/src/types.ts:322](https://github.com/TanStack/db/blob/m
 optional previousValue: T;
 ```
 
-Defined in: [packages/db/src/types.ts:320](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L320)
+Defined in: [packages/db/src/types.ts:365](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L365)
 
 ***
 
@@ -59,7 +55,7 @@ Defined in: [packages/db/src/types.ts:320](https://github.com/TanStack/db/blob/m
 type: OperationType;
 ```
 
-Defined in: [packages/db/src/types.ts:321](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L321)
+Defined in: [packages/db/src/types.ts:366](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L366)
 
 ***
 
@@ -69,4 +65,4 @@ Defined in: [packages/db/src/types.ts:321](https://github.com/TanStack/db/blob/m
 value: T;
 ```
 
-Defined in: [packages/db/src/types.ts:319](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L319)
+Defined in: [packages/db/src/types.ts:364](https://github.com/TanStack/db/blob/main/packages/db/src/types.ts#L364)

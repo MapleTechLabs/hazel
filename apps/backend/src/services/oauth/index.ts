@@ -114,4 +114,5 @@
 export * from "./oauth-provider"
 export * from "./oauth-provider-registry"
 export * from "./provider-config"
+export * from "./providers/discord-oauth-provider"
 export * from "./providers/linear-oauth-provider"

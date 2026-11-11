@@ -1,35 +1,35 @@
 /**
  * @since 1.0.0
  */
-import * as Socket from "@effect/platform/Socket"
+import type { Array } from "effect"
 import * as Channel from "effect/Channel"
-import type * as Chunk from "effect/Chunk"
 import * as Context from "effect/Context"
 import * as Deferred from "effect/Deferred"
 import type * as Duration from "effect/Duration"
 import * as Effect from "effect/Effect"
 import * as FiberSet from "effect/FiberSet"
+import * as Function from "effect/Function"
 import { identity } from "effect/Function"
+import * as Latch from "effect/Latch"
 import * as Layer from "effect/Layer"
 import * as Scope from "effect/Scope"
+import * as Socket from "effect/unstable/socket/Socket"
 import * as Net from "node:net"
 import type { Duplex } from "node:stream"
 
 /**
  * @since 1.0.0
- * @category tags
+ * @category re-exports
  */
-export interface NetSocket {
-  readonly _: unique symbol
-}
+export * as NodeWS from "ws"
 
 /**
  * @since 1.0.0
  * @category tags
  */
-export const NetSocket: Context.Tag<NetSocket, Net.Socket> = Context.GenericTag(
+export class NetSocket extends Context.Service<NetSocket, Net.Socket>()(
   "@effect/platform-node/NodeSocket/NetSocket"
-)
+) {}
 
 /**
  * @since 1.0.0
@@ -37,15 +37,15 @@ export const NetSocket: Context.Tag<NetSocket, Net.Socket> = Context.GenericTag(
  */
 export const makeNet = (
   options: Net.NetConnectOpts & {
-    readonly openTimeout?: Duration.DurationInput | undefined
+    readonly openTimeout?: Duration.Input | undefined
   }
-): Effect.Effect<Socket.Socket, Socket.SocketError> =>
+): Effect.Effect<Socket.Socket> =>
   fromDuplex(
-    Effect.scopeWith((scope) => {
+    Effect.contextWith((context: Context.Context<Scope.Scope>) => {
       let conn: Net.Socket | undefined
       return Effect.flatMap(
         Scope.addFinalizer(
-          scope,
+          Context.get(context, Scope.Scope),
           Effect.sync(() => {
             if (!conn) return
             if (conn.closed === false) {
@@ -58,13 +58,17 @@ export const makeNet = (
           })
         ),
         () =>
-          Effect.async<Net.Socket, Socket.SocketError, never>((resume) => {
+          Effect.callback<Net.Socket, Socket.SocketError, never>((resume) => {
             conn = Net.createConnection(options)
             conn.once("connect", () => {
               resume(Effect.succeed(conn!))
             })
-            conn.on("error", (cause) => {
-              resume(Effect.fail(new Socket.SocketGenericError({ reason: "Open", cause })))
+            conn.on("error", (cause: Error) => {
+              resume(Effect.fail(
+                new Socket.SocketError({
+                  reason: new Socket.SocketOpenError({ kind: "Unknown", cause })
+                })
+              ))
             })
           })
       )
@@ -79,21 +83,21 @@ export const makeNet = (
 export const fromDuplex = <RO>(
   open: Effect.Effect<Duplex, Socket.SocketError, RO>,
   options?: {
-    readonly openTimeout?: Duration.DurationInput | undefined
+    readonly openTimeout?: Duration.Input | undefined
   }
 ): Effect.Effect<Socket.Socket, never, Exclude<RO, Scope.Scope>> =>
-  Effect.withFiberRuntime<Socket.Socket, never, Exclude<RO, Scope.Scope>>((fiber) => {
+  Effect.withFiber<Socket.Socket, never, Exclude<RO, Scope.Scope>>((fiber) => {
     let currentSocket: Duplex | undefined
-    const latch = Effect.unsafeMakeLatch(false)
-    const openContext = fiber.currentContext as Context.Context<RO>
+    const latch = Latch.makeUnsafe(false)
+    const openServices = fiber.context as Context.Context<RO>
+
     const run = <R, E, _>(handler: (_: Uint8Array) => Effect.Effect<_, E, R> | void, opts?: {
       readonly onOpen?: Effect.Effect<void> | undefined
     }) =>
       Effect.scopedWith(Effect.fnUntraced(function*(scope) {
         const fiberSet = yield* FiberSet.make<any, E | Socket.SocketError>().pipe(
-          Scope.extend(scope)
+          Scope.provide(scope)
         )
-
         let conn: Duplex | undefined = undefined
         yield* Scope.addFinalizer(
           scope,
@@ -105,26 +109,30 @@ export const fromDuplex = <RO>(
             conn.off("close", onClose)
           })
         )
-
-        conn = yield* Scope.extend(open, scope).pipe(
+        conn = yield* Scope.provide(open, scope).pipe(
           options?.openTimeout ?
-            Effect.timeoutFail({
+            Effect.timeoutOrElse({
               duration: options.openTimeout,
-              onTimeout: () =>
-                new Socket.SocketGenericError({ reason: "Open", cause: new Error("Connection timed out") })
+              orElse: () =>
+                Effect.fail(
+                  new Socket.SocketError({
+                    reason: new Socket.SocketOpenError({ kind: "Timeout", cause: new Error("Connection timed out") })
+                  })
+                )
             }) :
             identity
         )
         conn.on("end", onEnd)
         conn.on("error", onError)
         conn.on("close", onClose)
-
         const run = yield* Effect.provideService(FiberSet.runtime(fiberSet)<R>(), NetSocket, conn as Net.Socket)
         conn.on("data", onData)
 
         currentSocket = conn
-        yield* latch.open
-        if (opts?.onOpen) yield* opts.onOpen
+        latch.openUnsafe()
+        if (opts?.onOpen) {
+          yield* opts.onOpen
+        }
 
         return yield* FiberSet.join(fiberSet)
 
@@ -135,36 +143,40 @@ export const fromDuplex = <RO>(
           }
         }
         function onEnd() {
-          Deferred.unsafeDone(fiberSet.deferred, Effect.void)
+          Deferred.doneUnsafe(fiberSet.deferred, Effect.void)
         }
         function onError(cause: Error) {
-          Deferred.unsafeDone(
+          Deferred.doneUnsafe(
             fiberSet.deferred,
-            Effect.fail(new Socket.SocketGenericError({ reason: "Read", cause }))
+            Effect.fail(
+              new Socket.SocketError({
+                reason: new Socket.SocketReadError({ cause })
+              })
+            )
           )
         }
         function onClose(hadError: boolean) {
-          Deferred.unsafeDone(
+          Deferred.doneUnsafe(
             fiberSet.deferred,
             Effect.fail(
-              new Socket.SocketCloseError({
-                reason: "Close",
-                code: hadError ? 1006 : 1000
+              new Socket.SocketError({
+                reason: new Socket.SocketCloseError({ code: hadError ? 1006 : 1000 })
               })
             )
           )
         }
       })).pipe(
-        Effect.mapInputContext((input: Context.Context<R>) => Context.merge(openContext, input)),
-        Effect.ensuring(Effect.sync(() => {
-          latch.unsafeClose()
-          currentSocket = undefined
-        })),
-        Effect.interruptible
+        Effect.updateContext((input: Context.Context<R>) => Context.merge(openServices, input)),
+        Effect.onExit(() =>
+          Effect.sync(() => {
+            latch.closeUnsafe()
+            currentSocket = undefined
+          })
+        )
       )
 
     const write = (chunk: Uint8Array | string | Socket.CloseEvent) =>
-      latch.whenOpen(Effect.async<void, Socket.SocketError>((resume) => {
+      latch.whenOpen(Effect.callback<void, Socket.SocketError>((resume) => {
         const conn = currentSocket!
         if (Socket.isCloseEvent(chunk)) {
           conn.destroy(chunk.code > 1000 ? new Error(`closed with code ${chunk.code}`) : undefined)
@@ -173,7 +185,11 @@ export const fromDuplex = <RO>(
         currentSocket!.write(chunk, (cause) => {
           resume(
             cause
-              ? Effect.fail(new Socket.SocketGenericError({ reason: "Write", cause }))
+              ? Effect.fail(
+                new Socket.SocketError({
+                  reason: new Socket.SocketWriteError({ cause: cause! })
+                })
+              )
               : Effect.void
           )
         })
@@ -188,8 +204,7 @@ export const fromDuplex = <RO>(
         })
     )
 
-    return Effect.succeed(Socket.Socket.of({
-      [Socket.TypeId]: Socket.TypeId,
+    return Effect.succeed(Socket.make({
       run,
       runRaw: run,
       writer
@@ -203,14 +218,13 @@ export const fromDuplex = <RO>(
 export const makeNetChannel = <IE = never>(
   options: Net.NetConnectOpts
 ): Channel.Channel<
-  Chunk.Chunk<Uint8Array>,
-  Chunk.Chunk<Uint8Array | string | Socket.CloseEvent>,
+  Array.NonEmptyReadonlyArray<Uint8Array>,
   Socket.SocketError | IE,
-  IE,
   void,
-  unknown
+  Array.NonEmptyReadonlyArray<Uint8Array | string | Socket.CloseEvent>,
+  IE
 > =>
-  Channel.unwrapScoped(
+  Channel.unwrap(
     Effect.map(makeNet(options), Socket.toChannelWith<IE>())
   )
 
@@ -218,5 +232,7 @@ export const makeNetChannel = <IE = never>(
  * @since 1.0.0
  * @category layers
  */
-export const layerNet = (options: Net.NetConnectOpts): Layer.Layer<Socket.Socket, Socket.SocketError> =>
-  Layer.effect(Socket.Socket, makeNet(options))
+export const layerNet: (options: Net.NetConnectOpts) => Layer.Layer<
+  Socket.Socket,
+  Socket.SocketError
+> = Function.flow(makeNet, Layer.effect(Socket.Socket))

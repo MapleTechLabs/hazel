@@ -1,0 +1,216 @@
+---
+import type { IntegrationCategory, IntegrationStatus, CTAButton } from "@/content.config";
+
+interface Props {
+	name: string;
+	logo: string;
+	tagline: string;
+	description: string;
+	category: IntegrationCategory;
+	status: IntegrationStatus;
+	primaryCta: CTAButton;
+	secondaryCta?: CTAButton;
+}
+
+const { name, logo, tagline, description, category, status, primaryCta, secondaryCta } = Astro.props;
+
+const statusStyles: Record<IntegrationStatus, string> = {
+	available: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+	beta: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+	"coming-soon": "bg-sky-500/10 text-sky-400 border-sky-500/20",
+};
+
+const statusLabels: Record<IntegrationStatus, string> = {
+	available: "Available",
+	beta: "Beta",
+	"coming-soon": "Coming Soon",
+};
+
+const categoryLabels: Record<IntegrationCategory, string> = {
+	communication: "Communication",
+	devops: "DevOps",
+	analytics: "Analytics",
+	productivity: "Productivity",
+	storage: "Storage",
+	ai: "AI & ML",
+	"project-management": "Project Management",
+	crm: "CRM",
+	other: "Other",
+};
+---
+
+<section id="integration-hero" class="w-full relative overflow-hidden">
+	<!-- Ambient background with mesh gradient -->
+	<div class="absolute inset-0 -z-10">
+		<div
+			class="absolute inset-0 h-[700px] w-full [background:radial-gradient(125%_125%_at_50%_10%,var(--background)_40%,var(--secondary)_100%)]"
+		>
+		</div>
+		<!-- Subtle grid pattern overlay -->
+		<div
+			class="absolute inset-0 h-[700px] opacity-[0.015] [background-image:linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] [background-size:64px_64px]"
+		>
+		</div>
+	</div>
+
+	<div class="relative z-10 flex flex-col items-center w-full px-6">
+		<div class="pt-28 pb-20 max-w-4xl mx-auto w-full flex flex-col gap-10 items-center">
+			<!-- Breadcrumb navigation -->
+			<nav class="flex items-center gap-2.5 text-sm text-muted-foreground font-medium">
+				<a
+					href="/"
+					class="hover:text-foreground transition-colors duration-200 flex items-center gap-1.5"
+				>
+					<svg
+						class="size-3.5"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+						<polyline points="9 22 9 12 15 12 15 22"></polyline>
+					</svg>
+					Home
+				</a>
+				<span class="text-border">/</span>
+				<a href="/integrations" class="hover:text-foreground transition-colors duration-200">
+					Integrations
+				</a>
+				<span class="text-border">/</span>
+				<span class="text-foreground">{name}</span>
+			</nav>
+
+			<!-- Logo + Badge cluster -->
+			<div class="flex flex-col items-center gap-5">
+				<div class="relative group">
+					<!-- Glow effect behind logo -->
+					<div
+						class="absolute -inset-3 bg-secondary/20 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+					>
+					</div>
+					<div
+						class="relative size-24 rounded-2xl bg-background shadow-xl ring-1 ring-border/50 flex items-center justify-center p-4 transition-transform duration-300 group-hover:scale-105"
+					>
+						<img src={logo} alt={`${name} logo`} class="size-full object-contain" />
+					</div>
+					{
+						status === "beta" && (
+							<span
+								class={`absolute -top-2 -right-2 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full border backdrop-blur-sm ${statusStyles[status]}`}
+							>
+								{statusLabels[status]}
+							</span>
+						)
+					}
+				</div>
+
+				<!-- Category pill -->
+				<div
+					class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/50 border border-border/50"
+				>
+					<span class="size-1.5 rounded-full bg-secondary animate-pulse"></span>
+					<span class="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+						{categoryLabels[category]}
+					</span>
+				</div>
+
+				{
+					status === "coming-soon" && (
+						<div class="flex flex-col items-center gap-3 mt-2">
+							<div class="inline-flex items-center gap-3 px-5 py-3 rounded-2xl bg-sky-500/10 border border-sky-500/20 backdrop-blur-sm">
+								<div class="flex items-center gap-2">
+									<span class="relative flex size-2">
+										<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+										<span class="relative inline-flex rounded-full size-2 bg-sky-500"></span>
+									</span>
+									<svg
+										class="size-4 text-sky-400"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<circle cx="12" cy="12" r="10"></circle>
+										<polyline points="12 6 12 12 16 14"></polyline>
+									</svg>
+								</div>
+								<span class="text-sm font-semibold text-sky-400 uppercase tracking-wide">
+									Coming Soon
+								</span>
+							</div>
+							<p class="text-sm text-muted-foreground">
+								Join the waitlist to get early access
+							</p>
+						</div>
+					)
+				}
+			</div>
+
+			<!-- Title + Description -->
+			<div class="flex flex-col items-center gap-6 text-center max-w-2xl">
+				<h1
+					class="text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight text-primary leading-[1.1]"
+				>
+					<span class="text-secondary">{name}</span>
+					<span class="text-muted-foreground font-normal"> + </span>
+					Hazel
+				</h1>
+
+				<p class="text-lg md:text-xl text-secondary font-medium leading-relaxed">
+					{tagline}
+				</p>
+
+				<p class="text-base text-muted-foreground leading-relaxed max-w-xl">
+					{description}
+				</p>
+			</div>
+
+			<!-- CTA Buttons -->
+			<div class="flex items-center gap-4 flex-wrap justify-center pt-2">
+				<a
+					href={primaryCta.href}
+					class="group relative bg-secondary h-11 flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-primary-foreground dark:text-secondary-foreground px-7 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-white/[0.12] hover:bg-secondary/90 transition-all duration-300 ease-out active:scale-95 overflow-hidden"
+				>
+					<span class="relative z-10">{primaryCta.text}</span>
+					<div
+						class="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"
+					>
+					</div>
+				</a>
+				{
+					secondaryCta && (
+						<a
+							href={secondaryCta.href}
+							class="h-11 flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-primary px-7 border border-border bg-background/50 backdrop-blur-sm hover:bg-accent hover:border-border/80 transition-all duration-300 ease-out active:scale-95"
+						>
+							{secondaryCta.text}
+							<svg
+								class="ml-2 size-4 transition-transform group-hover:translate-x-0.5"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M5 12h14" />
+								<path d="m12 5 7 7-7 7" />
+							</svg>
+						</a>
+					)
+				}
+			</div>
+		</div>
+	</div>
+
+	<!-- Decorative bottom fade -->
+	<div
+		class="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent pointer-events-none"
+	>
+	</div>
+</section>

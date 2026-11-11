@@ -1,122 +1,34 @@
-import { type ChannelId, ErrorUtils, type MessageId, policy, withSystemActor } from "@hazel/domain"
-import { Effect, Option } from "effect"
-import { isAdminOrOwner } from "../lib/policy-utils"
-import { ChannelMemberRepo } from "../repositories/channel-member-repo"
-import { ChannelRepo } from "../repositories/channel-repo"
-import { MessageRepo } from "../repositories/message-repo"
-import { OrganizationMemberRepo } from "../repositories/organization-member-repo"
+import { MessageRepo } from "@hazel/backend-core"
+import { ErrorUtils, policy } from "@hazel/domain"
+import type { ChannelId, MessageId } from "@hazel/schema"
+import { Context, Effect, Layer, Option } from "effect"
+import { isAdminOrOwner, withAnnotatedScope } from "../lib/policy-utils"
+import { ChannelViewers } from "../services/channel-viewers"
 
-export class MessagePolicy extends Effect.Service<MessagePolicy>()("MessagePolicy/Policy", {
-	effect: Effect.gen(function* () {
+/**
+ * Message authorization, run inside the message's `ChannelObject`: access is the channel's
+ * `channel_viewers` row for the actor (its org role, or a bot's scopes), not the org tables the
+ * object does not hold. Ported from `OrgResolver.fromChannelWithAccess`; one difference: an org
+ * admin reads a private channel only when it is in their `channel_access` (a member of it).
+ */
+export class MessagePolicy extends Context.Service<MessagePolicy>()("MessagePolicy/Policy", {
+	make: Effect.gen(function* () {
 		const policyEntity = "Message" as const
 
 		const messageRepo = yield* MessageRepo
-		const channelMemberRepo = yield* ChannelMemberRepo
-		const channelRepo = yield* ChannelRepo
-		const organizationMemberRepo = yield* OrganizationMemberRepo
+		const channelViewers = yield* ChannelViewers
 
 		const canCreate = (channelId: ChannelId) =>
 			ErrorUtils.refailUnauthorized(
 				policyEntity,
 				"create",
-			)(
-				channelRepo.with(channelId, (channel) =>
-					policy(
-						policyEntity,
-						"create",
-						Effect.fn(`${policyEntity}.create`)(function* (actor) {
-							// Check if user is a member of the organization
-							const orgMember = yield* organizationMemberRepo
-								.findByOrgAndUser(channel.organizationId, actor.id)
-								.pipe(withSystemActor)
+			)(withAnnotatedScope((scope) => Effect.asVoid(channelViewers.require(channelId, scope))))
 
-							// Handle based on channel type
-							if (channel.type === "public") {
-								// Org members can post in public channels
-								return Option.isSome(orgMember)
-							}
-
-							if (channel.type === "private") {
-								// Check if user is a channel member or org admin
-								if (Option.isSome(orgMember) && isAdminOrOwner(orgMember.value.role)) {
-									return true
-								}
-
-								const channelMembership = yield* channelMemberRepo
-									.findByChannelAndUser(channelId, actor.id)
-									.pipe(withSystemActor)
-
-								return Option.isSome(channelMembership)
-							}
-
-							if (channel.type === "direct" || channel.type === "single") {
-								// Check if user is a channel member
-								const channelMembership = yield* channelMemberRepo
-									.findByChannelAndUser(channelId, actor.id)
-									.pipe(withSystemActor)
-
-								return Option.isSome(channelMembership)
-							}
-
-							if (channel.type === "thread") {
-								// Threads inherit permissions from parent channel
-								if (channel.parentChannelId) {
-									// Check parent channel - get parent channel and check its type
-									const parentChannel = yield* channelRepo
-										.findById(channel.parentChannelId)
-										.pipe(withSystemActor)
-
-									if (Option.isNone(parentChannel)) {
-										return false
-									}
-
-									const parent = parentChannel.value
-
-									// Check parent channel permissions based on its type
-									if (parent.type === "public") {
-										return Option.isSome(orgMember)
-									}
-
-									if (parent.type === "private") {
-										if (
-											Option.isSome(orgMember) &&
-											isAdminOrOwner(orgMember.value.role)
-										) {
-											return true
-										}
-
-										const parentMembership = yield* channelMemberRepo
-											.findByChannelAndUser(parent.id, actor.id)
-											.pipe(withSystemActor)
-
-										return Option.isSome(parentMembership)
-									}
-
-									if (parent.type === "direct" || parent.type === "single") {
-										const parentMembership = yield* channelMemberRepo
-											.findByChannelAndUser(parent.id, actor.id)
-											.pipe(withSystemActor)
-
-										return Option.isSome(parentMembership)
-									}
-
-									if (parent.type === "thread") {
-										// Nested threads not supported - deny
-										return false
-									}
-
-									// Unknown parent type - deny
-									return false
-								}
-								// Thread without parent - deny
-								return false
-							}
-
-							return false
-						}),
-					),
-				),
-			)
+		const canRead = (channelId: ChannelId) =>
+			ErrorUtils.refailUnauthorized(
+				policyEntity,
+				"read",
+			)(withAnnotatedScope((scope) => Effect.asVoid(channelViewers.require(channelId, scope))))
 
 		const canUpdate = (id: MessageId) =>
 			ErrorUtils.refailUnauthorized(
@@ -141,39 +53,29 @@ export class MessagePolicy extends Effect.Service<MessagePolicy>()("MessagePolic
 				"delete",
 			)(
 				messageRepo.with(id, (message) =>
-					channelRepo.with(message.channelId, (channel) =>
-						policy(
-							policyEntity,
-							"delete",
-							Effect.fn(`${policyEntity}.delete`)(function* (actor) {
-								// Author can delete their own message
-								if (actor.id === message.authorId) {
-									return yield* Effect.succeed(true)
-								}
-
-								// Organization admin can delete any message
-								const orgMember = yield* organizationMemberRepo
-									.findByOrgAndUser(channel.organizationId, actor.id)
-									.pipe(withSystemActor)
-
-								if (Option.isSome(orgMember) && isAdminOrOwner(orgMember.value.role)) {
-									return yield* Effect.succeed(true)
-								}
-
-								return yield* Effect.succeed(false)
-							}),
-						),
+					policy(
+						policyEntity,
+						"delete",
+						Effect.fn(`${policyEntity}.delete`)(function* (actor) {
+							// Author can delete their own message
+							if (actor.id === message.authorId) return true
+							// An admin or owner of the channel's organization can delete any message
+							const viewer = yield* channelViewers.viewerOf(actor.id)
+							return (
+								Option.isSome(viewer) &&
+								viewer.value.role !== "guest" &&
+								isAdminOrOwner(viewer.value.role)
+							)
+						}),
 					),
 				),
 			)
 
-		return { canCreate, canUpdate, canDelete } as const
+		return { canCreate, canRead, canUpdate, canDelete } as const
 	}),
-	dependencies: [
-		MessageRepo.Default,
-		ChannelMemberRepo.Default,
-		ChannelRepo.Default,
-		OrganizationMemberRepo.Default,
-	],
-	accessors: true,
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make).pipe(
+		Layer.provide(MessageRepo.layer),
+		Layer.provide(ChannelViewers.layer),
+	)
+}

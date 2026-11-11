@@ -1,19 +1,20 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { ChannelId, ChannelSectionId, OrganizationId } from "../ids"
+import { ChannelId, ChannelSectionId, OrganizationId } from "@hazel/schema"
 import { ChannelSection } from "../models"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteOrganizationId } from "./routing-fields"
 
 /**
  * Response schema for successful channel section operations.
  * Contains the section data and a transaction ID for optimistic updates.
  */
 export class ChannelSectionResponse extends Schema.Class<ChannelSectionResponse>("ChannelSectionResponse")({
-	data: ChannelSection.Model.json,
+	data: ChannelSection.Schema,
 	transactionId: TransactionId,
 }) {}
 
@@ -32,7 +33,7 @@ export class ChannelSectionNotFoundError extends Schema.TaggedError<ChannelSecti
  * Request schema for creating channel sections.
  * Uses jsonCreate which includes optional id for optimistic updates.
  */
-export const CreateChannelSectionRequest = ChannelSection.Model.jsonCreate
+export const CreateChannelSectionRequest = ChannelSection.Create
 
 export class ChannelSectionRpcs extends RpcGroup.make(
 	/**
@@ -47,11 +48,13 @@ export class ChannelSectionRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks admin permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channelSection.create", {
+	Rpc.make("channelSection.create", {
 		payload: CreateChannelSectionRequest,
 		success: ChannelSectionResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channel-sections:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * ChannelSectionUpdate
@@ -65,13 +68,16 @@ export class ChannelSectionRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks admin permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channelSection.update", {
+	Rpc.make("channelSection.update", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: ChannelSectionId,
-		}).pipe(Schema.extend(Schema.partial(ChannelSection.Model.jsonUpdate))),
+		}).pipe(Schema.fieldsAssign(ChannelSection.PatchPartial.fields)),
 		success: ChannelSectionResponse,
-		error: Schema.Union(ChannelSectionNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([ChannelSectionNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channel-sections:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * ChannelSectionDelete
@@ -86,11 +92,13 @@ export class ChannelSectionRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks admin permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channelSection.delete", {
-		payload: Schema.Struct({ id: ChannelSectionId }),
+	Rpc.make("channelSection.delete", {
+		payload: Schema.Struct({ id: ChannelSectionId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(ChannelSectionNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([ChannelSectionNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channel-sections:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * ChannelSectionReorder
@@ -104,14 +112,16 @@ export class ChannelSectionRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks admin permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channelSection.reorder", {
+	Rpc.make("channelSection.reorder", {
 		payload: Schema.Struct({
 			organizationId: OrganizationId,
 			sectionIds: Schema.Array(ChannelSectionId),
 		}),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channel-sections:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * ChannelSectionMoveChannel
@@ -127,17 +137,19 @@ export class ChannelSectionRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks admin permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("channelSection.moveChannel", {
+	Rpc.make("channelSection.moveChannel", {
 		payload: Schema.Struct({
 			channelId: ChannelId,
 			sectionId: Schema.NullOr(ChannelSectionId),
 		}),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(
+		error: Schema.Union([
 			ChannelNotFoundError,
 			ChannelSectionNotFoundError,
 			UnauthorizedError,
 			InternalServerError,
-		),
-	}).middleware(AuthMiddleware),
+		]),
+	})
+		.annotate(RequiredScopes, ["channel-sections:write"])
+		.middleware(AuthMiddleware),
 ) {}

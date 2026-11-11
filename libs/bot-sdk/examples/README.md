@@ -1,6 +1,6 @@
-# @hazel/bot-sdk Examples
+# @hazel-chat/bot-sdk Examples
 
-This directory contains example bots demonstrating how to use the `@hazel/bot-sdk` package.
+This directory contains example bots demonstrating how to use the `@hazel-chat/bot-sdk` package.
 
 ## Available Examples
 
@@ -13,7 +13,7 @@ A basic bot that listens for new messages and logs them to the console. This is 
 **Features:**
 
 - Bot authentication
-- Connecting to Electric SQL
+- Connecting to the bot gateway websocket
 - Listening for message events
 - Error handling
 - Graceful shutdown
@@ -33,14 +33,14 @@ Before running any example, you need:
 
 1. **Bot Token**: Create a bot in your organization and get its authentication token
 2. **Organization ID**: The ID of the organization where your bot will operate
-3. **Electric SQL Endpoint**: The URL of your Electric SQL service (defaults to `http://localhost:8787/v1/shape`)
+3. **Gateway URL**: The URL of your bot gateway service (defaults to `http://localhost:3004`)
 
 ### Running an Example
 
 1. **Navigate to the example directory:**
 
     ```bash
-    cd packages/bot-sdk/examples/simple-echo-bot
+    cd libs/bot-sdk/examples/simple-echo-bot
     ```
 
 2. **Set up environment variables:**
@@ -53,7 +53,8 @@ Before running any example, you need:
 
     ```
     BOT_TOKEN=your_bot_token_here
-    ELECTRIC_URL=http://localhost:8787/v1/shape
+    BACKEND_URL=http://localhost:3003
+    GATEWAY_URL=http://localhost:3004
     ```
 
 4. **Install dependencies** (if not already installed from the workspace root):
@@ -116,7 +117,8 @@ example-name/
 All examples use these environment variables:
 
 - `BOT_TOKEN` - Required. Your bot's authentication token
-- `ELECTRIC_URL` - Optional. Electric SQL endpoint (defaults to localhost)
+- `BACKEND_URL` - Optional. Backend API URL for short request/response bot APIs
+- `GATEWAY_URL` - Optional. Gateway URL for inbound websocket delivery
 
 ### Error Handling
 
@@ -157,14 +159,14 @@ Make sure you've:
 2. Filled in your bot token in the `.env` file
 3. Created a bot in your organization to get a token
 
-### "Cannot connect to Electric SQL"
+### "Cannot connect to the bot gateway"
 
 Check that:
 
-1. Your Electric SQL service is running
-2. The `ELECTRIC_URL` is correct
+1. Your bot gateway service is running
+2. The `GATEWAY_URL` is correct
 3. Your bot token is valid
-4. Your network can reach the Electric SQL endpoint
+4. Your network can reach the gateway endpoint
 
 ### "No events are being received"
 
@@ -172,7 +174,7 @@ Verify that:
 
 1. Your bot has access to the organization
 2. There are actually messages being created in channels
-3. The Electric SQL subscriptions are set up correctly
+3. The gateway is connected to the backend event stream
 4. Your bot has the necessary permissions
 
 ## Contributing
@@ -181,4 +183,4 @@ Found a bug or have an idea for a new example? Please open an issue or submit a 
 
 ## License
 
-These examples are part of the @hazel/bot-sdk package and follow the same license.
+These examples are part of the @hazel-chat/bot-sdk package and follow the same license.

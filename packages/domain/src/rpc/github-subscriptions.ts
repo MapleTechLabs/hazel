@@ -1,12 +1,13 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { ChannelId, GitHubSubscriptionId } from "@hazel/schema"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { GitHubSubscription } from "../models"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteOrganizationId } from "./routing-fields"
 
 /**
  * Response schema for GitHub subscription operations.
@@ -15,7 +16,7 @@ import { AuthMiddleware } from "./middleware"
 export class GitHubSubscriptionResponse extends Schema.Class<GitHubSubscriptionResponse>(
 	"GitHubSubscriptionResponse",
 )({
-	data: GitHubSubscription.Model.json,
+	data: GitHubSubscription.Schema,
 	transactionId: TransactionId,
 }) {}
 
@@ -25,7 +26,7 @@ export class GitHubSubscriptionResponse extends Schema.Class<GitHubSubscriptionR
 export class GitHubSubscriptionListResponse extends Schema.Class<GitHubSubscriptionListResponse>(
 	"GitHubSubscriptionListResponse",
 )({
-	data: Schema.Array(GitHubSubscription.Model.json),
+	data: Schema.Array(GitHubSubscription.Schema),
 }) {}
 
 /**
@@ -82,7 +83,7 @@ export class GitHubSubscriptionRpcs extends RpcGroup.make(
 	 * @throws GitHubSubscriptionExistsError if already subscribed
 	 * @throws UnauthorizedError if user is not authorized
 	 */
-	Rpc.mutation("githubSubscription.create", {
+	Rpc.make("githubSubscription.create", {
 		payload: Schema.Struct({
 			channelId: ChannelId,
 			repositoryId: Schema.Number,
@@ -93,14 +94,16 @@ export class GitHubSubscriptionRpcs extends RpcGroup.make(
 			branchFilter: Schema.optional(Schema.NullOr(Schema.String)),
 		}),
 		success: GitHubSubscriptionResponse,
-		error: Schema.Union(
+		error: Schema.Union([
 			ChannelNotFoundError,
 			GitHubNotConnectedError,
 			GitHubSubscriptionExistsError,
 			UnauthorizedError,
 			InternalServerError,
-		),
-	}).middleware(AuthMiddleware),
+		]),
+	})
+		.annotate(RequiredScopes, ["github-subscriptions:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * githubSubscription.list
@@ -112,11 +115,13 @@ export class GitHubSubscriptionRpcs extends RpcGroup.make(
 	 * @throws ChannelNotFoundError if channel doesn't exist
 	 * @throws UnauthorizedError if user is not authorized
 	 */
-	Rpc.query("githubSubscription.list", {
+	Rpc.make("githubSubscription.list", {
 		payload: Schema.Struct({ channelId: ChannelId }),
 		success: GitHubSubscriptionListResponse,
-		error: Schema.Union(ChannelNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([ChannelNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["github-subscriptions:read"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * githubSubscription.listByOrganization
@@ -127,11 +132,13 @@ export class GitHubSubscriptionRpcs extends RpcGroup.make(
 	 * @returns Array of subscriptions across all channels in the organization
 	 * @throws UnauthorizedError if user is not authenticated
 	 */
-	Rpc.query("githubSubscription.listByOrganization", {
-		payload: Schema.Struct({}),
+	Rpc.make("githubSubscription.listByOrganization", {
+		payload: Schema.Struct({ organizationId: RouteOrganizationId }),
 		success: GitHubSubscriptionListResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["github-subscriptions:read"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * githubSubscription.update
@@ -143,16 +150,19 @@ export class GitHubSubscriptionRpcs extends RpcGroup.make(
 	 * @throws GitHubSubscriptionNotFoundError if subscription doesn't exist
 	 * @throws UnauthorizedError if user is not authorized
 	 */
-	Rpc.mutation("githubSubscription.update", {
+	Rpc.make("githubSubscription.update", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: GitHubSubscriptionId,
 			enabledEvents: Schema.optional(GitHubSubscription.GitHubEventTypes),
 			branchFilter: Schema.optional(Schema.NullOr(Schema.String)),
 			isEnabled: Schema.optional(Schema.Boolean),
 		}),
 		success: GitHubSubscriptionResponse,
-		error: Schema.Union(GitHubSubscriptionNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([GitHubSubscriptionNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["github-subscriptions:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * githubSubscription.delete
@@ -164,9 +174,11 @@ export class GitHubSubscriptionRpcs extends RpcGroup.make(
 	 * @throws GitHubSubscriptionNotFoundError if subscription doesn't exist
 	 * @throws UnauthorizedError if user is not authorized
 	 */
-	Rpc.mutation("githubSubscription.delete", {
-		payload: Schema.Struct({ id: GitHubSubscriptionId }),
+	Rpc.make("githubSubscription.delete", {
+		payload: Schema.Struct({ id: GitHubSubscriptionId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(GitHubSubscriptionNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([GitHubSubscriptionNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["github-subscriptions:write"])
+		.middleware(AuthMiddleware),
 ) {}

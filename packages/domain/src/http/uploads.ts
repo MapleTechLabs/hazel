@@ -1,116 +1,63 @@
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "@effect/platform"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 import { Schema } from "effect"
 import { CurrentUser, InternalServerError, UnauthorizedError } from "../"
-import { AttachmentId, BotId, ChannelId, OrganizationId } from "../ids"
+import { attachCause } from "../errors"
+import { AttachmentId, BotId, ChannelId, OrganizationId } from "@hazel/schema"
 import { RateLimitExceededError } from "../rate-limit-errors"
+import { RequiredScopes } from "../scopes/required-scopes"
 
 // ============ Constants ============
 
 export const MAX_AVATAR_SIZE = 5 * 1024 * 1024 // 5MB
 export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024 // 10MB
+export const MAX_EMOJI_SIZE = 256 * 1024 // 256KB
 
 export const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"] as const
+export const ALLOWED_EMOJI_TYPES = ["image/png", "image/gif", "image/webp"] as const
 
 // ============ Upload Type Schema ============
 
-export const UploadType = Schema.Literal("user-avatar", "bot-avatar", "organization-avatar", "attachment")
+export const UploadType = Schema.Literals([
+	"user-avatar",
+	"bot-avatar",
+	"organization-avatar",
+	"attachment",
+	"custom-emoji",
+])
 export type UploadType = typeof UploadType.Type
 
 // ============ Request Schemas ============
 
 /**
- * Base fields shared by all upload types
+ * Unified presign upload request.
+ *
+ * Flat struct with optional per-type fields, discriminated by `type`. We use a
+ * single `Schema.Struct` (instead of a `Schema.Union` of `Schema.Class`) because
+ * `HttpApiClient` encodes payloads via `Schema.encodeUnknown`, and class schemas
+ * require actual class instances — plain JSON payloads fail the encode step
+ * client-side with "Expected X, got {...}" before any network request is made.
+ *
+ * Per-type required fields (e.g. `botId` for bot-avatar, `channelId` +
+ * `organizationId` + `fileName` for attachment) are validated in the backend
+ * handler branches in `apps/backend/src/routes/uploads.http.ts`.
  */
-const BaseUploadFields = {
+export const PresignUploadRequest = Schema.Struct({
+	type: UploadType,
 	contentType: Schema.String,
-	fileSize: Schema.Number,
-}
-
-/**
- * User avatar upload request
- */
-export class UserAvatarUploadRequest extends Schema.Class<UserAvatarUploadRequest>("UserAvatarUploadRequest")(
-	{
-		type: Schema.Literal("user-avatar"),
-		contentType: Schema.String.pipe(
-			Schema.filter((s) => ALLOWED_AVATAR_TYPES.includes(s as (typeof ALLOWED_AVATAR_TYPES)[number]), {
-				message: () => "Content type must be image/jpeg, image/png, or image/webp",
-			}),
+	fileSize: Schema.Number.check(
+		Schema.isBetween(
+			{ minimum: 1, maximum: MAX_ATTACHMENT_SIZE },
+			{ message: "File size must be between 1 byte and 10MB" },
 		),
-		fileSize: Schema.Number.pipe(
-			Schema.between(1, MAX_AVATAR_SIZE, {
-				message: () => "File size must be between 1 byte and 5MB",
-			}),
-		),
-	},
-) {}
-
-/**
- * Bot avatar upload request
- */
-export class BotAvatarUploadRequest extends Schema.Class<BotAvatarUploadRequest>("BotAvatarUploadRequest")({
-	type: Schema.Literal("bot-avatar"),
-	botId: BotId,
-	contentType: Schema.String.pipe(
-		Schema.filter((s) => ALLOWED_AVATAR_TYPES.includes(s as (typeof ALLOWED_AVATAR_TYPES)[number]), {
-			message: () => "Content type must be image/jpeg, image/png, or image/webp",
-		}),
 	),
-	fileSize: Schema.Number.pipe(
-		Schema.between(1, MAX_AVATAR_SIZE, {
-			message: () => "File size must be between 1 byte and 5MB",
-		}),
-	),
-}) {}
-
-/**
- * Organization avatar upload request
- */
-export class OrganizationAvatarUploadRequest extends Schema.Class<OrganizationAvatarUploadRequest>(
-	"OrganizationAvatarUploadRequest",
-)({
-	type: Schema.Literal("organization-avatar"),
-	organizationId: OrganizationId,
-	contentType: Schema.String.pipe(
-		Schema.filter((s) => ALLOWED_AVATAR_TYPES.includes(s as (typeof ALLOWED_AVATAR_TYPES)[number]), {
-			message: () => "Content type must be image/jpeg, image/png, or image/webp",
-		}),
-	),
-	fileSize: Schema.Number.pipe(
-		Schema.between(1, MAX_AVATAR_SIZE, {
-			message: () => "File size must be between 1 byte and 5MB",
-		}),
-	),
-}) {}
-
-/**
- * Attachment upload request
- */
-export class AttachmentUploadRequest extends Schema.Class<AttachmentUploadRequest>("AttachmentUploadRequest")(
-	{
-		type: Schema.Literal("attachment"),
-		fileName: Schema.String,
-		contentType: Schema.String,
-		fileSize: Schema.Number.pipe(
-			Schema.between(1, MAX_ATTACHMENT_SIZE, {
-				message: () => "File size must be between 1 byte and 10MB",
-			}),
-		),
-		organizationId: OrganizationId,
-		channelId: ChannelId,
-	},
-) {}
-
-/**
- * Unified presign upload request - discriminated union of all upload types
- */
-export const PresignUploadRequest = Schema.Union(
-	UserAvatarUploadRequest,
-	BotAvatarUploadRequest,
-	OrganizationAvatarUploadRequest,
-	AttachmentUploadRequest,
-)
+	botId: Schema.optional(BotId),
+	organizationId: Schema.optional(OrganizationId),
+	channelId: Schema.optional(ChannelId),
+	fileName: Schema.optional(Schema.String),
+})
 export type PresignUploadRequest = typeof PresignUploadRequest.Type
+
+export { isActiveContentType } from "../content-type"
 
 // ============ Response Schema ============
 
@@ -131,15 +78,20 @@ export class PresignUploadResponse extends Schema.Class<PresignUploadResponse>("
 
 // ============ Error Schemas ============
 
+/** The upload could not be prepared. `cause` stays server-side, as on `InternalServerError`. */
 export class UploadError extends Schema.TaggedError<UploadError>("UploadError")(
 	"UploadError",
 	{
 		message: Schema.String,
 	},
-	HttpApiSchema.annotations({
-		status: 500,
-	}),
-) {}
+	{ httpApiStatus: 500 },
+) {
+	constructor(props: { readonly message: string; readonly cause?: unknown }, options?: Schema.MakeOptions) {
+		const { cause, ...fields } = props
+		super(fields, options)
+		attachCause(this, cause)
+	}
+}
 
 export class BotNotFoundForUploadError extends Schema.TaggedError<BotNotFoundForUploadError>(
 	"BotNotFoundForUploadError",
@@ -148,9 +100,7 @@ export class BotNotFoundForUploadError extends Schema.TaggedError<BotNotFoundFor
 	{
 		botId: BotId,
 	},
-	HttpApiSchema.annotations({
-		status: 404,
-	}),
+	{ httpApiStatus: 404 },
 ) {}
 
 export class OrganizationNotFoundForUploadError extends Schema.TaggedError<OrganizationNotFoundForUploadError>(
@@ -160,9 +110,7 @@ export class OrganizationNotFoundForUploadError extends Schema.TaggedError<Organ
 	{
 		organizationId: OrganizationId,
 	},
-	HttpApiSchema.annotations({
-		status: 404,
-	}),
+	{ httpApiStatus: 404 },
 ) {}
 
 // ============ API Group ============
@@ -175,15 +123,18 @@ export class OrganizationNotFoundForUploadError extends Schema.TaggedError<Organ
  */
 export class UploadsGroup extends HttpApiGroup.make("uploads")
 	.add(
-		HttpApiEndpoint.post("presign", "/presign")
-			.setPayload(PresignUploadRequest)
-			.addSuccess(PresignUploadResponse)
-			.addError(UploadError)
-			.addError(BotNotFoundForUploadError)
-			.addError(OrganizationNotFoundForUploadError)
-			.addError(UnauthorizedError)
-			.addError(InternalServerError)
-			.addError(RateLimitExceededError),
+		HttpApiEndpoint.post("presign", "/presign", {
+			payload: PresignUploadRequest,
+			success: PresignUploadResponse,
+			error: [
+				UploadError,
+				BotNotFoundForUploadError,
+				OrganizationNotFoundForUploadError,
+				UnauthorizedError,
+				InternalServerError,
+				RateLimitExceededError,
+			],
+		}).annotate(RequiredScopes, ["attachments:write"]),
 	)
 	.prefix("/uploads")
 	.middleware(CurrentUser.Authorization) {}

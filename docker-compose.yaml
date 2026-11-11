@@ -1,96 +1,7 @@
+# Local services for `bun run alchemy:dev`. The api Worker, its Durable Objects and the directory D1
+# run inside alchemy dev; only S3 (uploads) needs a stand-in.
 name: hazel
 services:
-    # PostgreSQL Database
-    postgres:
-        image: postgres:17-alpine
-        shm_size: 1g
-        user: postgres
-        restart: always
-        healthcheck:
-            test: "pg_isready -U user --dbname=app"
-            interval: 10s
-            timeout: 5s
-            retries: 5
-        ports:
-            - "5432:5432"
-        environment:
-            POSTGRES_USER: user
-            POSTGRES_DB: app
-            POSTGRES_PASSWORD: password
-        command: |
-            postgres 
-            -c wal_level=logical
-            -c max_wal_senders=10 
-            -c max_replication_slots=5 
-            -c hot_standby=on 
-            -c hot_standby_feedback=on
-            -c max_connections=200
-        volumes:
-            - postgres_data:/var/lib/postgresql/data
-            - ./docker/postgres/init:/docker-entrypoint-initdb.d
-
-    # Sequin - Change Data Capture Platform
-    sequin:
-        image: sequin/sequin:latest
-        pull_policy: always
-        ports:
-            - "7376:7376"
-        environment:
-            - PG_HOSTNAME=postgres
-            - PG_DATABASE=sequin
-            - PG_PORT=5432
-            - PG_USERNAME=user
-            - PG_PASSWORD=password
-            - PG_POOL_SIZE=20
-            - SECRET_KEY_BASE=wDPLYus0pvD6qJhKJICO4dauYPXfO/Yl782Zjtpew5qRBDp7CZvbWtQmY0eB13If
-            - VAULT_KEY=2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY=
-            - REDIS_URL=redis://sequin_redis:6379
-            - CONFIG_FILE_PATH=/config/playground.yml
-        volumes:
-            - ./docker/sequin/playground.yml:/config/playground.yml
-        depends_on:
-            sequin_redis:
-                condition: service_started
-            postgres:
-                condition: service_healthy
-        restart: always
-
-    # Redis for Sequin
-    sequin_redis:
-        image: redis:7
-        ports:
-            - "7378:6379"
-        command: ["redis-server", "--port", "6379"]
-        volumes:
-            - sequin_redis_data:/data
-        restart: always
-
-    # Electric - Real-time sync for Postgres
-    electric:
-        image: electricsql/electric:canary
-        ports:
-            - "3333:3000"
-        environment:
-            DATABASE_URL: "postgresql://user:password@postgres:5432/app?sslmode=disable"
-            # IMPORTANT: Only use insecure mode in development
-            # See https://electric-sql.com/docs/guides/security
-            ELECTRIC_INSECURE: "true"
-            ELECTRIC_FEATURE_FLAGS: "allow_subqueries,tagged_subqueries"
-        depends_on:
-            postgres:
-                condition: service_healthy
-        restart: always
-
-    # Redis for electric-proxy caching
-    cache_redis:
-        image: redis:7
-        ports:
-            - "6380:6379"
-        command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
-        volumes:
-            - cache_redis_data:/data
-        restart: always
-
     # MinIO - S3-compatible object storage
     minio:
         image: minio/minio:latest
@@ -124,31 +35,6 @@ services:
             exit 0;
             "
 
-    # Caddy - Reverse proxy for local development
-    caddy:
-        image: caddy:2-alpine
-        ports:
-            - "5133:5133" # SSE proxy (electric-proxy)
-            - "3004:3004" # WebSocket proxy (backend)
-        volumes:
-            - ./Caddyfile.docker:/etc/caddy/Caddyfile
-            - ./certs:/etc/caddy/certs:ro
-            - caddy_data:/data
-            - caddy_config:/config
-        extra_hosts:
-            - "host.docker.internal:host-gateway"
-        restart: always
-
 volumes:
-    postgres_data:
-        driver: local
-    sequin_redis_data:
-        driver: local
-    cache_redis_data:
-        driver: local
     minio_data:
-        driver: local
-    caddy_data:
-        driver: local
-    caddy_config:
         driver: local

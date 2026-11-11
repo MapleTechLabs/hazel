@@ -1,4 +1,4 @@
-import { HttpApiBuilder } from "@effect/platform"
+import { HttpApiBuilder } from "effect/http-api"
 import { Effect } from "effect"
 import { HazelApi } from "../api"
 

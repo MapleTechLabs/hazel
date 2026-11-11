@@ -1,18 +1,18 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { ChannelId, MessageId, NotificationId } from "../ids"
+import { ChannelId, MessageId, NotificationId } from "@hazel/schema"
 import { Notification } from "../models"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
 
 /**
  * Response schema for successful notification operations.
  * Contains the notification data and a transaction ID for optimistic updates.
  */
 export class NotificationResponse extends Schema.Class<NotificationResponse>("NotificationResponse")({
-	data: Notification.Model.json,
+	data: Notification.Schema,
 	transactionId: TransactionId,
 }) {}
 
@@ -39,11 +39,13 @@ export class NotificationRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("notification.create", {
-		payload: Notification.Model.jsonCreate,
+	Rpc.make("notification.create", {
+		payload: Notification.Create,
 		success: NotificationResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["notifications:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * NotificationUpdate
@@ -57,14 +59,15 @@ export class NotificationRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("notification.update", {
+	Rpc.make("notification.update", {
 		payload: Schema.Struct({
 			id: NotificationId,
-			...Notification.Model.jsonUpdate.fields,
-		}),
+		}).pipe(Schema.fieldsAssign(Notification.PatchPartial.fields)),
 		success: NotificationResponse,
-		error: Schema.Union(NotificationNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([NotificationNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["notifications:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * NotificationDelete
@@ -78,11 +81,13 @@ export class NotificationRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("notification.delete", {
+	Rpc.make("notification.delete", {
 		payload: Schema.Struct({ id: NotificationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(NotificationNotFoundError, UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([NotificationNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["notifications:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * NotificationDeleteByMessageIds
@@ -95,7 +100,7 @@ export class NotificationRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("notification.deleteByMessageIds", {
+	Rpc.make("notification.deleteByMessageIds", {
 		payload: Schema.Struct({
 			messageIds: Schema.Array(MessageId),
 			channelId: ChannelId,
@@ -104,6 +109,8 @@ export class NotificationRpcs extends RpcGroup.make(
 			deletedCount: Schema.Number,
 			transactionId: TransactionId,
 		}),
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["notifications:write"])
+		.middleware(AuthMiddleware),
 ) {}

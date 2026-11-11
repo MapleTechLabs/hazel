@@ -1,0 +1,25 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import DownloadHeroSection from "@/components/sections/DownloadHeroSection.astro";
+import AppPreviewSection from "@/components/sections/AppPreviewSection.astro";
+import SystemRequirementsSection from "@/components/sections/SystemRequirementsSection.astro";
+import FooterSection from "@/components/sections/FooterSection.astro";
+import { PlatformDownloadSection } from "@/components/react/PlatformDownloadSection";
+import { fetchLatestRelease } from "@/lib/download-config";
+
+// Fetch latest release from GitHub at build time
+const release = await fetchLatestRelease();
+---
+
+<Layout
+  title="Download Hazel Desktop Beta - Native App for macOS, Windows & Linux"
+  description="Download the Hazel Desktop beta for macOS, Windows, and Linux. Native performance, system notifications, keyboard shortcuts, and seamless integration with your workflow."
+>
+  <main class="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full">
+    <DownloadHeroSection release={release} />
+    <PlatformDownloadSection client:load release={release} />
+    <AppPreviewSection />
+    <SystemRequirementsSection />
+    <FooterSection />
+  </main>
+</Layout>

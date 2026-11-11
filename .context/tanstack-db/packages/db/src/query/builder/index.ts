@@ -1,4 +1,4 @@
-import { CollectionImpl } from "../../collection/index.js"
+import { CollectionImpl } from '../../collection/index.js'
 import {
   Aggregate as AggregateExpr,
   CollectionRef,
@@ -7,17 +7,22 @@ import {
   QueryRef,
   Value as ValueExpr,
   isExpressionLike,
-} from "../ir.js"
+} from '../ir.js'
 import {
   InvalidSourceError,
   InvalidSourceTypeError,
+  InvalidWhereExpressionError,
   JoinConditionMustBeEqualityError,
   OnlyOneSourceAllowedError,
   QueryMustHaveFromClauseError,
   SubQueryMustHaveFromClauseError,
-} from "../../errors.js"
-import { createRefProxy, toExpression } from "./ref-proxy.js"
-import type { NamespacedRow, SingleResult } from "../../types.js"
+} from '../../errors.js'
+import {
+  createRefProxy,
+  createRefProxyWithSelected,
+  toExpression,
+} from './ref-proxy.js'
+import type { NamespacedRow, SingleResult } from '../../types.js'
 import type {
   Aggregate,
   BasicExpression,
@@ -25,10 +30,12 @@ import type {
   OrderBy,
   OrderByDirection,
   QueryIR,
-} from "../ir.js"
+} from '../ir.js'
 import type {
   CompareOptions,
   Context,
+  FunctionalHavingRow,
+  GetResult,
   GroupByCallback,
   JoinOnCallback,
   MergeContextForJoinCallback,
@@ -42,7 +49,7 @@ import type {
   Source,
   WhereCallback,
   WithResult,
-} from "./types.js"
+} from './types.js'
 
 export class BaseQueryBuilder<TContext extends Context = Context> {
   private readonly query: Partial<QueryIR> = {}
@@ -59,7 +66,7 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
    */
   private _createRefForSource<TSource extends Source>(
     source: TSource,
-    context: string
+    context: string,
   ): [string, CollectionRef | QueryRef] {
     // Validate source is a plain object (not null, array, string, etc.)
     // We use try-catch to handle null/undefined gracefully
@@ -127,7 +134,7 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
    * ```
    */
   from<TSource extends Source>(
-    source: TSource
+    source: TSource,
   ): QueryBuilder<{
     baseSchema: SchemaFromSource<TSource>
     schema: SchemaFromSource<TSource>
@@ -177,7 +184,7 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
     onCallback: JoinOnCallback<
       MergeContextForJoinCallback<TContext, SchemaFromSource<TSource>>
     >,
-    type: TJoinType = `left` as TJoinType
+    type: TJoinType = `left` as TJoinType,
   ): QueryBuilder<
     MergeContextWithJoinType<TContext, SchemaFromSource<TSource>, TJoinType>
   > {
@@ -243,7 +250,7 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
     source: TSource,
     onCallback: JoinOnCallback<
       MergeContextForJoinCallback<TContext, SchemaFromSource<TSource>>
-    >
+    >,
   ): QueryBuilder<
     MergeContextWithJoinType<TContext, SchemaFromSource<TSource>, `left`>
   > {
@@ -269,7 +276,7 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
     source: TSource,
     onCallback: JoinOnCallback<
       MergeContextForJoinCallback<TContext, SchemaFromSource<TSource>>
-    >
+    >,
   ): QueryBuilder<
     MergeContextWithJoinType<TContext, SchemaFromSource<TSource>, `right`>
   > {
@@ -295,7 +302,7 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
     source: TSource,
     onCallback: JoinOnCallback<
       MergeContextForJoinCallback<TContext, SchemaFromSource<TSource>>
-    >
+    >,
   ): QueryBuilder<
     MergeContextWithJoinType<TContext, SchemaFromSource<TSource>, `inner`>
   > {
@@ -321,7 +328,7 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
     source: TSource,
     onCallback: JoinOnCallback<
       MergeContextForJoinCallback<TContext, SchemaFromSource<TSource>>
-    >
+    >,
   ): QueryBuilder<
     MergeContextWithJoinType<TContext, SchemaFromSource<TSource>, `full`>
   > {
@@ -361,6 +368,13 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
     const refProxy = createRefProxy(aliases) as RefsForContext<TContext>
     const expression = callback(refProxy)
 
+    // Validate that the callback returned a valid expression
+    // This catches common mistakes like using JavaScript comparison operators (===, !==, etc.)
+    // which return boolean primitives instead of expression objects
+    if (!isExpressionLike(expression)) {
+      throw new InvalidWhereExpressionError(getValueTypeName(expression))
+    }
+
     const existingWhere = this.query.where || []
 
     return new BaseQueryBuilder({
@@ -399,8 +413,20 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
    */
   having(callback: WhereCallback<TContext>): QueryBuilder<TContext> {
     const aliases = this._getCurrentAliases()
-    const refProxy = createRefProxy(aliases) as RefsForContext<TContext>
+    // Add $selected namespace if SELECT clause exists (either regular or functional)
+    const refProxy = (
+      this.query.select || this.query.fnSelect
+        ? createRefProxyWithSelected(aliases)
+        : createRefProxy(aliases)
+    ) as RefsForContext<TContext>
     const expression = callback(refProxy)
+
+    // Validate that the callback returned a valid expression
+    // This catches common mistakes like using JavaScript comparison operators (===, !==, etc.)
+    // which return boolean primitives instead of expression objects
+    if (!isExpressionLike(expression)) {
+      throw new InvalidWhereExpressionError(getValueTypeName(expression))
+    }
 
     const existingHaving = this.query.having || []
 
@@ -445,7 +471,7 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
    * ```
    */
   select<TSelectObject extends SelectObject>(
-    callback: (refs: RefsForContext<TContext>) => TSelectObject
+    callback: (refs: RefsForContext<TContext>) => TSelectObject,
   ): QueryBuilder<WithResult<TContext, ResultTypeFromSelect<TSelectObject>>> {
     const aliases = this._getCurrentAliases()
     const refProxy = createRefProxy(aliases) as RefsForContext<TContext>
@@ -487,10 +513,15 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
    */
   orderBy(
     callback: OrderByCallback<TContext>,
-    options: OrderByDirection | OrderByOptions = `asc`
+    options: OrderByDirection | OrderByOptions = `asc`,
   ): QueryBuilder<TContext> {
     const aliases = this._getCurrentAliases()
-    const refProxy = createRefProxy(aliases) as RefsForContext<TContext>
+    // Add $selected namespace if SELECT clause exists (either regular or functional)
+    const refProxy = (
+      this.query.select || this.query.fnSelect
+        ? createRefProxyWithSelected(aliases)
+        : createRefProxy(aliases)
+    ) as RefsForContext<TContext>
     const result = callback(refProxy)
 
     const opts: CompareOptions =
@@ -717,7 +748,7 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
        * ```
        */
       select<TFuncSelectResult>(
-        callback: (row: TContext[`schema`]) => TFuncSelectResult
+        callback: (row: TContext[`schema`]) => TFuncSelectResult,
       ): QueryBuilder<WithResult<TContext, TFuncSelectResult>> {
         return new BaseQueryBuilder({
           ...builder.query,
@@ -741,7 +772,7 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
        * ```
        */
       where(
-        callback: (row: TContext[`schema`]) => any
+        callback: (row: TContext[`schema`]) => any,
       ): QueryBuilder<TContext> {
         return new BaseQueryBuilder({
           ...builder.query,
@@ -755,7 +786,7 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
        * Filter grouped rows using a function that operates on each aggregated row
        * Warning: This cannot be optimized by the query compiler
        *
-       * @param callback - A function that receives an aggregated row and returns a boolean
+       * @param callback - A function that receives an aggregated row (with $selected when select() was called) and returns a boolean
        * @returns A QueryBuilder with functional having filter applied
        *
        * @example
@@ -764,11 +795,12 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
        * query
        *   .from({ posts: postsCollection })
        *   .groupBy(({posts}) => posts.userId)
-       *   .fn.having(row => row.count > 5)
+       *   .select(({posts}) => ({ userId: posts.userId, count: count(posts.id) }))
+       *   .fn.having(({ $selected }) => $selected.count > 5)
        * ```
        */
       having(
-        callback: (row: TContext[`schema`]) => any
+        callback: (row: FunctionalHavingRow<TContext>) => any,
       ): QueryBuilder<TContext> {
         return new BaseQueryBuilder({
           ...builder.query,
@@ -787,6 +819,14 @@ export class BaseQueryBuilder<TContext extends Context = Context> {
     }
     return this.query as QueryIR
   }
+}
+
+// Helper to get a descriptive type name for error messages
+function getValueTypeName(value: unknown): string {
+  if (value === null) return `null`
+  if (value === undefined) return `undefined`
+  if (typeof value === `object`) return `object`
+  return typeof value
 }
 
 // Helper to ensure we have a BasicExpression/Aggregate for a value
@@ -829,7 +869,7 @@ function buildNestedSelect(obj: any): any {
 // Internal function to build a query from a callback
 // used by liveQueryCollectionOptions.query
 export function buildQuery<TContext extends Context>(
-  fn: (builder: InitialQueryBuilder) => QueryBuilder<TContext>
+  fn: (builder: InitialQueryBuilder) => QueryBuilder<TContext>,
 ): QueryIR {
   const result = fn(new BaseQueryBuilder())
   return getQueryIR(result)
@@ -837,7 +877,7 @@ export function buildQuery<TContext extends Context>(
 
 // Internal function to get the QueryIR from a builder
 export function getQueryIR(
-  builder: BaseQueryBuilder | QueryBuilder<any> | InitialQueryBuilder
+  builder: BaseQueryBuilder | QueryBuilder<any> | InitialQueryBuilder,
 ): QueryIR {
   return (builder as unknown as BaseQueryBuilder)._getQuery()
 }
@@ -864,6 +904,9 @@ export type ExtractContext<T> =
       ? TContext
       : never
 
+// Helper type to extract the result type from a QueryBuilder (similar to Zod's z.infer)
+export type QueryResult<T> = GetResult<ExtractContext<T>>
+
 // Export the types from types.ts for convenience
 export type {
   Context,
@@ -871,4 +914,4 @@ export type {
   GetResult,
   RefLeaf as Ref,
   InferResultType,
-} from "./types.js"
+} from './types.js'

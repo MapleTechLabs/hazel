@@ -6,36 +6,31 @@
 	"scripts": {
 		"dev": "vite dev --port 3012",
 		"build": "vite build",
-		"start": "bun run ./server.ts",
 		"types:check": "fumadocs-mdx && tsc --noEmit",
 		"postinstall": "fumadocs-mdx"
 	},
 	"dependencies": {
 		"@hazel/ui": "workspace:*",
-		"@takumi-rs/image-response": "^0.62.5",
-		"@tanstack/react-router": "1.157.16",
-		"@tanstack/react-router-devtools": "1.157.16",
+		"@tanstack/react-router": "1.166.6",
 		"@tanstack/react-start": "1.145.3",
 		"class-variance-authority": "^0.7.1",
-		"fumadocs-core": "16.4.3",
-		"fumadocs-mdx": "14.2.4",
-		"fumadocs-ui": "16.4.3",
-		"lucide-react": "^0.562.0",
-		"nitro": "^3.0.1-alpha.1",
+		"fumadocs-core": "16.5.0",
+		"fumadocs-mdx": "14.2.6",
+		"fumadocs-ui": "16.5.0",
+		"lucide-react": "^0.577.0",
 		"react": "19.2.4",
 		"react-dom": "19.2.4",
-		"tailwind-merge": "^3.4.0",
-		"vite": "7.3.1"
+		"tailwind-merge": "^3.5.0",
+		"vite": "8.0.0"
 	},
 	"devDependencies": {
-		"@tailwindcss/vite": "^4.1.18",
-		"@types/mdx": "^2.0.13",
+		"@tailwindcss/vite": "^4.2.1",
 		"@types/node": "^24.10.2",
-		"@types/react": "^19.2.10",
+		"@types/react": "^19.2.14",
 		"@types/react-dom": "^19.2.3",
-		"@vitejs/plugin-react": "5.1.2",
-		"tailwindcss": "^4.1.18",
-		"typescript": "^5.9.3",
+		"@vitejs/plugin-react": "6.0.1",
+		"tailwindcss": "^4.2.1",
+		"typescript": "catalog:tooling",
 		"vite-tsconfig-paths": "^6.0.3"
 	}
 }

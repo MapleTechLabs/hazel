@@ -1,33 +1,23 @@
 /**
  * @since 1.0.0
  */
-import { TypeIdError } from "@effect/platform/Error"
+import * as Cause from "effect/Cause"
 import * as Context from "effect/Context"
+import * as Data from "effect/Data"
 import * as Effect from "effect/Effect"
-import * as Either from "effect/Either"
-import { identity } from "effect/Function"
 import * as Layer from "effect/Layer"
 import * as Queue from "effect/Queue"
 import * as Stream from "effect/Stream"
 
-/**
- * @since 1.0.0
- * @category type ids
- */
-export const TypeId: unique symbol = Symbol.for("@effect/platform-browser/Geolocation")
+const TypeId = "~@effect/platform-browser/Geolocation"
+const ErrorTypeId = "~@effect/platform-browser/Geolocation/GeolocationError"
 
 /**
  * @since 1.0.0
- * @category type ids
- */
-export type TypeId = typeof TypeId
-
-/**
- * @since 1.0.0
- * @category models
+ * @category Models
  */
 export interface Geolocation {
-  readonly [TypeId]: TypeId
+  readonly [TypeId]: typeof TypeId
   readonly getCurrentPosition: (
     options?: PositionOptions | undefined
   ) => Effect.Effect<GeolocationPosition, GeolocationError>
@@ -42,36 +32,74 @@ export interface Geolocation {
 
 /**
  * @since 1.0.0
- * @category tags
+ * @category Service
  */
-export const Geolocation: Context.Tag<Geolocation, Geolocation> = Context.GenericTag<Geolocation>(
-  "@effect/platform-browser/Geolocation"
-)
+export const Geolocation: Context.Service<Geolocation, Geolocation> = Context.Service<Geolocation>(TypeId)
 
 /**
  * @since 1.0.0
- * @category type ids
+ * @category Errors
  */
-export const ErrorTypeId: unique symbol = Symbol.for("@effect/platform-browser/Geolocation/GeolocationError")
-
-/**
- * @since 1.0.0
- * @category type ids
- */
-export type ErrorTypeId = typeof ErrorTypeId
-
-/**
- * @since 1.0.0
- * @category errors
- */
-export class GeolocationError extends TypeIdError(ErrorTypeId, "GeolocationError")<{
-  readonly reason: "PositionUnavailable" | "PermissionDenied" | "Timeout"
-  readonly cause: unknown
+export class GeolocationError extends Data.TaggedError("GeolocationError")<{
+  readonly reason: GeolocationErrorReason
 }> {
-  get message() {
-    return this.reason
+  constructor(props: {
+    readonly reason: GeolocationErrorReason
+  }) {
+    super({
+      ...props,
+      cause: props.reason.cause
+    } as any)
+  }
+
+  readonly [ErrorTypeId] = ErrorTypeId
+
+  override get message(): string {
+    return this.reason.message
   }
 }
+
+/**
+ * @since 1.0.0
+ * @category Errors
+ */
+export class PositionUnavailable extends Data.TaggedError("PositionUnavailable")<{
+  readonly cause: unknown
+}> {
+  override get message(): string {
+    return this._tag
+  }
+}
+
+/**
+ * @since 1.0.0
+ * @category Errors
+ */
+export class PermissionDenied extends Data.TaggedError("PermissionDenied")<{
+  readonly cause: unknown
+}> {
+  override get message(): string {
+    return this._tag
+  }
+}
+
+/**
+ * @since 1.0.0
+ * @category Errors
+ */
+export class Timeout extends Data.TaggedError("Timeout")<{
+  readonly cause: unknown
+}> {
+  override get message(): string {
+    return this._tag
+  }
+}
+
+/**
+ * @since 1.0.0
+ * @category Errors
+ */
+export type GeolocationErrorReason = PositionUnavailable | PermissionDenied | Timeout
 
 const makeQueue = (
   options:
@@ -80,17 +108,28 @@ const makeQueue = (
     }
     | undefined
 ) =>
-  Queue.sliding<Either.Either<GeolocationPosition, GeolocationError>>(options?.bufferSize ?? 16).pipe(
+  Queue.sliding<GeolocationPosition, GeolocationError>(options?.bufferSize ?? 16).pipe(
     Effect.tap((queue) =>
       Effect.acquireRelease(
         Effect.sync(() =>
           navigator.geolocation.watchPosition(
-            (position) => queue.unsafeOffer(Either.right(position)),
+            (position) => Queue.offerUnsafe(queue, position),
             (cause) => {
               if (cause.code === cause.PERMISSION_DENIED) {
-                queue.unsafeOffer(Either.left(new GeolocationError({ reason: "PermissionDenied", cause })))
+                const error = new GeolocationError({
+                  reason: new PermissionDenied({ cause })
+                })
+                Queue.failCauseUnsafe(queue, Cause.fail(error))
               } else if (cause.code === cause.TIMEOUT) {
-                queue.unsafeOffer(Either.left(new GeolocationError({ reason: "Timeout", cause })))
+                const error = new GeolocationError({
+                  reason: new Timeout({ cause })
+                })
+                Queue.failCauseUnsafe(queue, Cause.fail(error))
+              } else if (cause.code === cause.POSITION_UNAVAILABLE) {
+                const error = new GeolocationError({
+                  reason: new PositionUnavailable({ cause })
+                })
+                Queue.failCauseUnsafe(queue, Cause.fail(error))
               }
             },
             options
@@ -103,7 +142,7 @@ const makeQueue = (
 
 /**
  * @since 1.0.0
- * @category layers
+ * @category Layers
  */
 export const layer: Layer.Layer<Geolocation> = Layer.succeed(
   Geolocation,
@@ -112,21 +151,19 @@ export const layer: Layer.Layer<Geolocation> = Layer.succeed(
     getCurrentPosition: (options) =>
       makeQueue(options).pipe(
         Effect.flatMap(Queue.take),
-        Effect.flatten,
         Effect.scoped
       ),
     watchPosition: (options) =>
       makeQueue(options).pipe(
         Effect.map(Stream.fromQueue),
-        Stream.unwrapScoped,
-        Stream.mapEffect(identity)
+        Stream.unwrap
       )
   })
 )
 
 /**
  * @since 1.0.0
- * @category accessors
+ * @category Accessors
  */
 export const watchPosition = (
   options?:
@@ -135,4 +172,7 @@ export const watchPosition = (
     }
     | undefined
 ): Stream.Stream<GeolocationPosition, GeolocationError, Geolocation> =>
-  Stream.unwrap(Effect.map(Geolocation, (geolocation) => geolocation.watchPosition(options)))
+  Stream.unwrap(Effect.map(
+    Effect.service(Geolocation),
+    (geolocation) => geolocation.watchPosition(options)
+  ))

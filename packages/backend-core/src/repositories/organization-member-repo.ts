@@ -1,18 +1,22 @@
-import { and, Database, eq, isNull, ModelRepository, schema, type TransactionClient } from "@hazel/db"
-import { type OrganizationId, type OrganizationMemberId, policyRequire, type UserId } from "@hazel/domain"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
+
+import type { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { OrganizationMember } from "@hazel/domain/models"
-import { Effect, Option, type Schema } from "effect"
+import { Context, DateTime, Effect, Layer, type Schema } from "effect"
 
-type TxFn = <T>(fn: (client: TransactionClient) => Promise<T>) => Effect.Effect<T, any, never>
+/** Timestamp columns take a `Date`; domain models carry `Date | DateTime.Utc`. */
+const toDate = (value: Date | DateTime.Utc): Date =>
+	DateTime.isDateTime(value) ? DateTime.toDate(value) : value
+const toNullableDate = (value: Date | DateTime.Utc | null): Date | null =>
+	value === null ? null : toDate(value)
 
-export class OrganizationMemberRepo extends Effect.Service<OrganizationMemberRepo>()(
+export class OrganizationMemberRepo extends Context.Service<OrganizationMemberRepo>()(
 	"OrganizationMemberRepo",
 	{
-		accessors: true,
-		effect: Effect.gen(function* () {
-			const baseRepo = yield* ModelRepository.makeRepository(
+		make: Effect.gen(function* () {
+			const baseRepo = yield* Repository.makeRepository(
 				schema.organizationMembersTable,
-				OrganizationMember.Model,
+				{ insert: OrganizationMember.Insert, update: OrganizationMember.Update },
 				{
 					idColumn: "id",
 					name: "OrganizationMember",
@@ -20,178 +24,75 @@ export class OrganizationMemberRepo extends Effect.Service<OrganizationMemberRep
 			)
 			const db = yield* Database.Database
 
-			// Extended methods for WorkOS sync
-			const findByOrgAndUser = (organizationId: OrganizationId, userId: UserId, tx?: TxFn) =>
+			const findByOrgAndUser = (organizationId: OrganizationId, userId: UserId) =>
+				db.first(
+					SQLite.from(schema.organizationMembersTable)
+						.select()
+						.where(($) => [
+							$.organizationId.eq(organizationId),
+							$.userId.eq(userId),
+							$.deletedAt.isNull(),
+						])
+						.limit(1),
+				)
+
+			const upsertByOrgAndUser = (data: Schema.Schema.Type<typeof OrganizationMember.Insert>) =>
+				// Atomic upsert using onConflictDoUpdate to avoid race conditions
 				db
-					.makeQuery(
-						(execute, data: { organizationId: OrganizationId; userId: UserId }) =>
-							execute((client) =>
-								client
-									.select()
-									.from(schema.organizationMembersTable)
-									.where(
-										and(
-											eq(
-												schema.organizationMembersTable.organizationId,
-												data.organizationId,
-											),
-											eq(schema.organizationMembersTable.userId, data.userId),
-											isNull(schema.organizationMembersTable.deletedAt),
-										),
-									)
-									.limit(1),
-							),
-						policyRequire("OrganizationMember", "select"),
-					)({ organizationId, userId }, tx)
-					.pipe(Effect.map((results) => Option.fromNullable(results[0])))
+					.run(
+						SQLite.insertInto(schema.organizationMembersTable)
+							.values({
+								organizationId: data.organizationId,
+								userId: data.userId,
+								role: data.role,
+								nickname: data.nickname,
+								joinedAt: toDate(data.joinedAt),
+								invitedBy: data.invitedBy,
+								deletedAt: toNullableDate(data.deletedAt),
+							})
+							.onConflictDoUpdate({
+								target: ["organizationId", "userId"],
+								set: {
+									role: data.role,
+									deletedAt: null,
+								},
+							})
+							.returning(),
+					)
+					.pipe(Effect.map((results) => results[0]))
 
-			const upsertByOrgAndUser = (
-				data: Schema.Schema.Type<typeof OrganizationMember.Insert>,
-				tx?: TxFn,
-			) =>
-				db.makeQuery(
-					(execute, input: typeof data) =>
-						execute(async (client) => {
-							// First check if exists
-							const existing = await client
-								.select()
-								.from(schema.organizationMembersTable)
-								.where(
-									and(
-										eq(
-											schema.organizationMembersTable.organizationId,
-											input.organizationId,
-										),
-										eq(schema.organizationMembersTable.userId, input.userId),
-									),
-								)
-								.limit(1)
+			const findAllByOrganization = (organizationId: OrganizationId) =>
+				db.run(
+					SQLite.from(schema.organizationMembersTable)
+						.select()
+						.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
+				)
 
-							if (existing.length > 0) {
-								// Update existing
-								const result = await client
-									.update(schema.organizationMembersTable)
-									.set({
-										role: input.role,
-										deletedAt: null,
-									})
-									.where(eq(schema.organizationMembersTable.id, existing[0]!.id))
-									.returning()
-								return result[0]!
-							} else {
-								// Insert new
-								const result = await client
-									.insert(schema.organizationMembersTable)
-									.values(input)
-									.returning()
-								return result[0]!
-							}
-						}),
-					policyRequire("OrganizationMember", "create"),
-				)(data, tx)
+			const softDelete = (id: OrganizationMemberId) =>
+				db.run(
+					SQLite.update(schema.organizationMembersTable)
+						.set({ deletedAt: new Date() })
+						.where(($) => [$.id.eq(id), $.deletedAt.isNull()]),
+				)
 
-			const findAllByOrganization = (organizationId: OrganizationId, tx?: TxFn) =>
-				db.makeQuery(
-					(execute, orgId: OrganizationId) =>
-						execute((client) =>
-							client
-								.select()
-								.from(schema.organizationMembersTable)
-								.where(
-									and(
-										eq(schema.organizationMembersTable.organizationId, orgId),
-										isNull(schema.organizationMembersTable.deletedAt),
-									),
-								),
-						),
-					policyRequire("OrganizationMember", "select"),
-				)(organizationId, tx)
-
-			const findAllActive = (tx?: TxFn) =>
-				db.makeQuery(
-					(execute, _data: {}) =>
-						execute((client) =>
-							client
-								.select()
-								.from(schema.organizationMembersTable)
-								.where(isNull(schema.organizationMembersTable.deletedAt)),
-						),
-					policyRequire("OrganizationMember", "select"),
-				)({}, tx)
-
-			const softDelete = (id: OrganizationMemberId, tx?: TxFn) =>
-				db.makeQuery(
-					(execute, memberId: OrganizationMemberId) =>
-						execute((client) =>
-							client
-								.update(schema.organizationMembersTable)
-								.set({ deletedAt: new Date() })
-								.where(
-									and(
-										eq(schema.organizationMembersTable.id, memberId),
-										isNull(schema.organizationMembersTable.deletedAt),
-									),
-								),
-						),
-					policyRequire("OrganizationMember", "delete"),
-				)(id, tx)
-
-			const softDeleteByOrgAndUser = (organizationId: OrganizationId, userId: UserId, tx?: TxFn) =>
-				db.makeQuery(
-					(execute, data: { organizationId: OrganizationId; userId: UserId }) =>
-						execute((client) =>
-							client
-								.update(schema.organizationMembersTable)
-								.set({ deletedAt: new Date() })
-								.where(
-									and(
-										eq(
-											schema.organizationMembersTable.organizationId,
-											data.organizationId,
-										),
-										eq(schema.organizationMembersTable.userId, data.userId),
-										isNull(schema.organizationMembersTable.deletedAt),
-									),
-								),
-						),
-					policyRequire("OrganizationMember", "delete"),
-				)({ organizationId, userId }, tx)
-
-			const updateMetadata = (id: OrganizationMemberId, metadata: Record<string, any>, tx?: TxFn) =>
-				db
-					.makeQuery(
-						(execute, data: { id: OrganizationMemberId; metadata: Record<string, any> }) =>
-							execute((client) =>
-								client
-									.update(schema.organizationMembersTable)
-									.set({ metadata: data.metadata })
-									.where(
-										and(
-											eq(schema.organizationMembersTable.id, data.id),
-											isNull(schema.organizationMembersTable.deletedAt),
-										),
-									)
-									.returning(),
-							),
-						policyRequire("OrganizationMember", "update"),
-					)({ id, metadata }, tx)
-					.pipe(Effect.map((results) => Option.fromNullable(results[0])))
-
-			const bulkUpsertByOrgAndUser = (
-				members: Schema.Schema.Type<typeof OrganizationMember.Insert>[],
-			) => Effect.forEach(members, (data) => upsertByOrgAndUser(data), { concurrency: 10 })
+			const updateMetadata = (id: OrganizationMemberId, metadata: Record<string, any>) =>
+				db.first(
+					SQLite.update(schema.organizationMembersTable)
+						.set({ metadata })
+						.where(($) => [$.id.eq(id), $.deletedAt.isNull()])
+						.returning(),
+				)
 
 			return {
 				...baseRepo,
 				findByOrgAndUser,
 				upsertByOrgAndUser,
 				findAllByOrganization,
-				findAllActive,
 				softDelete,
-				softDeleteByOrgAndUser,
 				updateMetadata,
-				bulkUpsertByOrgAndUser,
 			}
 		}),
 	},
-) {}
+) {
+	static readonly layer = Layer.effect(this, this.make)
+}

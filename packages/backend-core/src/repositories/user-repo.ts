@@ -1,109 +1,42 @@
-import { and, Database, eq, isNull, ModelRepository, schema, type TransactionClient } from "@hazel/db"
-import { policyRequire, type UserId } from "@hazel/domain"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
+
+import type { UserId } from "@hazel/schema"
 import { User } from "@hazel/domain/models"
-import { Effect, Option, type Schema } from "effect"
+import { Context, Effect, Layer } from "effect"
 
-type TxFn = <T>(fn: (client: TransactionClient) => Promise<T>) => Effect.Effect<T, any, never>
-
-export class UserRepo extends Effect.Service<UserRepo>()("UserRepo", {
-	accessors: true,
-	effect: Effect.gen(function* () {
-		const baseRepo = yield* ModelRepository.makeRepository(schema.usersTable, User.Model, {
-			idColumn: "id",
-			name: "User",
-		})
+export class UserRepo extends Context.Service<UserRepo>()("UserRepo", {
+	make: Effect.gen(function* () {
+		const baseRepo = yield* Repository.makeRepository(
+			schema.usersTable,
+			{ insert: User.Insert, update: User.Update },
+			{
+				idColumn: "id",
+				name: "User",
+			},
+		)
 		const db = yield* Database.Database
 
-		const findByExternalId = (externalId: string, tx?: TxFn) =>
-			db
-				.makeQuery(
-					(execute, id: string) =>
-						execute((client) =>
-							client
-								.select()
-								.from(schema.usersTable)
-								.where(eq(schema.usersTable.externalId, id))
-								.limit(1),
-						),
-					policyRequire("User", "select"),
-				)(externalId, tx)
-				.pipe(Effect.map((results) => Option.fromNullable(results[0])))
+		const findByExternalId = (externalId: string) =>
+			db.first(
+				SQLite.from(schema.usersTable)
+					.select()
+					.where(($) => [$.externalId.eq(externalId)])
+					.limit(1),
+			)
 
-		const upsertByExternalId = (data: Schema.Schema.Type<typeof User.Insert>, tx?: TxFn) =>
-			db
-				.makeQuery(
-					(execute, input: typeof data) =>
-						execute((client) =>
-							client
-								.insert(schema.usersTable)
-								.values(input)
-								.onConflictDoUpdate({
-									target: schema.usersTable.externalId,
-									set: {
-										firstName: input.firstName,
-										lastName: input.lastName,
-										avatarUrl: input.avatarUrl,
-										email: input.email,
-										updatedAt: new Date(),
-									},
-								})
-								.returning(),
-						),
-					policyRequire("User", "create"),
-				)(data, tx)
-				.pipe(Effect.map((results) => results[0]))
-
-		const findAllActive = (tx?: TxFn) =>
-			db.makeQuery(
-				(execute, _data: {}) =>
-					execute((client) =>
-						client.select().from(schema.usersTable).where(isNull(schema.usersTable.deletedAt)),
-					),
-				policyRequire("User", "select"),
-			)({}, tx)
-
-		const softDelete = (id: UserId, tx?: TxFn) =>
-			db.makeQuery(
-				(execute, userId: UserId) =>
-					execute((client) =>
-						client
-							.update(schema.usersTable)
-							.set({ deletedAt: new Date() })
-							.where(
-								and(eq(schema.usersTable.id, userId), isNull(schema.usersTable.deletedAt)),
-							),
-					),
-				policyRequire("User", "delete"),
-			)(id, tx)
-
-		const softDeleteByExternalId = (externalId: string, tx?: TxFn) =>
-			db.makeQuery(
-				(execute, id: string) =>
-					execute((client) =>
-						client
-							.update(schema.usersTable)
-							.set({ deletedAt: new Date() })
-							.where(
-								and(
-									eq(schema.usersTable.externalId, id),
-									isNull(schema.usersTable.deletedAt),
-								),
-							),
-					),
-				policyRequire("User", "delete"),
-			)(externalId, tx)
-
-		const bulkUpsertByExternalId = (users: Schema.Schema.Type<typeof User.Insert>[]) =>
-			Effect.forEach(users, (data) => upsertByExternalId(data), { concurrency: 10 })
+		const softDelete = (id: UserId) =>
+			db.run(
+				SQLite.update(schema.usersTable)
+					.set({ deletedAt: new Date() })
+					.where(($) => [$.id.eq(id), $.deletedAt.isNull()]),
+			)
 
 		return {
 			...baseRepo,
 			findByExternalId,
-			upsertByExternalId,
-			findAllActive,
 			softDelete,
-			softDeleteByExternalId,
-			bulkUpsertByExternalId,
 		}
 	}),
-}) {}
+}) {
+	static readonly layer = Layer.effect(this, this.make)
+}

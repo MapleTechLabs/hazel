@@ -1,29 +1,25 @@
-import { HttpApiBuilder, HttpServer } from "@effect/platform"
-import { Layer, Logger, pipe } from "effect"
+import { HttpApiBuilder } from "effect/http-api"
+import { HttpRouter, HttpServer } from "effect/http"
+import { Layer, Logger } from "effect"
 import { LinkPreviewApi } from "./api"
 import { makeKVCacheLayer } from "./cache"
 import { HttpAppLive, HttpLinkPreviewLive, HttpTweetLive } from "./handle"
 import { TwitterApi } from "./services/twitter"
 
-const HttpLive = HttpApiBuilder.api(LinkPreviewApi).pipe(
-	Layer.provide([HttpAppLive, HttpLinkPreviewLive, HttpTweetLive]),
-)
+const makeAppLayer = (env: Env) => {
+	const ServiceLayers = Layer.mergeAll(makeKVCacheLayer(env.LINK_CACHE), TwitterApi.layer)
 
-const makeHttpLiveWithKV = (env: Env) =>
-	pipe(
-		HttpApiBuilder.Router.Live,
-		Layer.provideMerge(HttpLive),
-		Layer.provideMerge(
-			HttpApiBuilder.middlewareCors({
-				allowedOrigins: ["http://localhost:3000", "https://app.hazel.sh", "tauri://localhost"],
-				credentials: true,
-			}),
-		),
-		Layer.provideMerge(HttpServer.layerContext),
-		Layer.provide(makeKVCacheLayer(env.LINK_CACHE)),
-		Layer.provide(TwitterApi.Default),
-		Layer.provide(Logger.pretty),
+	const HandlerLayers = Layer.mergeAll(HttpAppLive, HttpLinkPreviewLive, HttpTweetLive)
+
+	return HttpApiBuilder.layer(LinkPreviewApi).pipe(
+		Layer.provide(HandlerLayers),
+		// The web app fetches previews straight from the browser; public and cookieless, so any origin.
+		Layer.provide(HttpRouter.cors({ allowedMethods: ["GET"], maxAge: 7200 })),
+		HttpRouter.provideRequest(ServiceLayers),
+		Layer.provide(HttpServer.layerServices),
+		Layer.provide(Logger.layer([Logger.consolePretty()])),
 	)
+}
 
 export default {
 	async fetch(request, env, _ctx): Promise<Response> {
@@ -31,9 +27,13 @@ export default {
 			env,
 		})
 
-		const Live = makeHttpLiveWithKV(env)
-		const handler = HttpApiBuilder.toWebHandler(Live, {})
+		const Live = makeAppLayer(env)
+		const { handler, dispose } = HttpRouter.toWebHandler(Live)
 
-		return handler.handler(request)
+		try {
+			return await handler(request)
+		} finally {
+			await dispose()
+		}
 	},
 } satisfies ExportedHandler<Env>

@@ -1,0 +1,42 @@
+import type { AttachmentId } from "@hazel/schema"
+import type { Html, HtmlBuilder } from "foldkit/html"
+import * as Draft from "../../composer/draft"
+import { draftView, type DraftViewInputs, type ReplyPreview } from "../../composer/draft-view"
+import { identityOf, toDeriveContext } from "./derive"
+import type { AttachmentInfo } from "./lookups"
+import type { Model } from "./channel/model"
+
+/** The channel's composer area (`$id/index.tsx` > `SlateMessageComposer`) and its reply preview. */
+
+/** The reply a draft is composing. A fresh object each call: memoized views compare its fields. */
+export const replyPreviewOf = (
+	model: Pick<Model, "messages" | "threadPanel" | "lookups" | "currentUserId">,
+	draft: Draft.Model,
+): ReplyPreview | null => {
+	const replyTo = Draft.replyToMessageIdOf(draft)
+	const message =
+		replyTo === null
+			? undefined
+			: (model.messages.find((candidate) => candidate.id === replyTo) ??
+				model.threadPanel?.messages.find((candidate) => candidate.id === replyTo))
+	if (message === undefined) return null
+	const author = identityOf(
+		toDeriveContext(model.lookups, model.currentUserId ?? undefined),
+		message.authorId,
+	)
+	return { authorName: author?.displayName ?? "", firstLine: message.content.split("\n")[0] ?? "" }
+}
+
+/** `useLiveQuery(attachmentCollection, inArray(id, attachmentIds))`, from the channel's attachments. */
+export const attachmentInfoFrom =
+	(attachments: ReadonlyArray<AttachmentInfo>) =>
+	(id: AttachmentId): { readonly fileName: string; readonly fileSize: number } | null =>
+		attachments.find((attachment) => attachment.id === id) ?? null
+
+/** The padded composer area: the typing indicator above the draft's composer. */
+export const composerAreaView = <M>(
+	h: HtmlBuilder<M>,
+	typing: Html,
+	draft: Draft.Model,
+	inputs: DraftViewInputs<M>,
+): Html => h.div([h.Class("relative shrink-0 px-4 pb-4 pt-2.5")], [typing, draftView(h, draft, inputs)])

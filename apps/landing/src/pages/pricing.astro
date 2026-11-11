@@ -1,0 +1,97 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import FooterSection from "@/components/sections/FooterSection.astro";
+import { PricingSection } from "@/components/react/PricingSection";
+
+const pricingFaqs = [
+  {
+    question: "Is Hazel really free?",
+    answer: "Yes! Hazel is completely free during the beta with unlimited channels, messages, and team members. No credit card required."
+  },
+  {
+    question: "Will there be paid plans?",
+    answer: "Yes, we'll introduce paid plans in the future with advanced features like SSO, audit logs, and priority support. We'll give plenty of notice before any changes."
+  },
+  {
+    question: "Do you offer discounts for open source projects?",
+    answer: "Yes! Open source projects and non-profits will always have a generous free tier. Contact us at support@hazel.sh to get set up."
+  },
+  {
+    question: "Can I self-host Hazel for free?",
+    answer: "Hazel is open source and can be self-hosted at no cost."
+  },
+];
+---
+
+<Layout
+  title="Pricing | Hazel - Free While in Beta"
+  description="Hazel is free for everyone during the beta. Unlimited channels, messages, and team members. Paid plans coming soon."
+  includeFaqSchema={true}
+  faqData={pricingFaqs}
+>
+  <main class="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full">
+    <!-- Hero -->
+    <section class="w-full py-20 md:py-28 px-6">
+      <div class="max-w-3xl mx-auto text-center">
+        <h1 class="text-4xl md:text-6xl font-medium tracking-tighter text-primary">
+          Free while in beta
+        </h1>
+        <p class="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
+          Hazel is completely free during the beta. Paid plans with advanced features are coming soon.
+        </p>
+      </div>
+    </section>
+
+    <PricingSection client:visible />
+
+    <!-- FAQ Section -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-3xl mx-auto">
+        <h2 class="text-3xl font-medium tracking-tight text-primary text-center mb-12">
+          Pricing FAQ
+        </h2>
+        <div class="space-y-6">
+          {pricingFaqs.map((faq) => (
+            <div class="border border-border rounded-xl p-6">
+              <h3 class="text-lg font-medium text-primary">{faq.question}</h3>
+              <p class="mt-2 text-muted-foreground">{faq.answer}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="w-full py-20 px-6">
+      <div class="max-w-2xl mx-auto text-center">
+        <h2 class="text-3xl font-medium tracking-tight text-primary">
+          Ready to get started?
+        </h2>
+        <p class="mt-4 text-muted-foreground text-lg">
+          Create your workspace in seconds. No credit card required.
+        </p>
+        <div class="mt-8 flex items-center justify-center gap-4">
+          <a
+            href="https://app.hazel.sh"
+            class="bg-secondary text-white font-semibold text-sm h-10 px-6 rounded-full flex items-center justify-center"
+          >
+            Start for free
+          </a>
+          <a
+            href="mailto:sales@hazel.sh"
+            class="border border-border text-primary font-semibold text-sm h-10 px-6 rounded-full flex items-center justify-center"
+          >
+            Contact sales
+          </a>
+        </div>
+        <p class="mt-6 text-muted-foreground text-sm">
+          <a href="/features" class="text-secondary hover:underline font-medium">See all features</a>
+          &middot; <a href="/vs/slack" class="text-secondary hover:underline font-medium">Compare with Slack</a>
+          &middot; <a href="/vs/discord" class="text-secondary hover:underline font-medium">Compare with Discord</a>
+        </p>
+      </div>
+    </section>
+
+    <FooterSection />
+  </main>
+</Layout>

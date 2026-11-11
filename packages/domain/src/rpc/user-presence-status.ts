@@ -1,12 +1,12 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { UserPresenceStatusId } from "../ids"
+import { UserPresenceStatusId } from "@hazel/schema"
 import { UserPresenceStatus } from "../models"
 import { JsonDate } from "../models/utils"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
+import { RequiredScopes } from "../scopes/required-scopes"
 
 /**
  * Response schema for successful user presence status operations.
@@ -15,7 +15,7 @@ import { AuthMiddleware } from "./middleware"
 export class UserPresenceStatusResponse extends Schema.Class<UserPresenceStatusResponse>(
 	"UserPresenceStatusResponse",
 )({
-	data: UserPresenceStatus.Model.json,
+	data: UserPresenceStatus.Schema,
 	transactionId: TransactionId,
 }) {}
 
@@ -61,39 +61,40 @@ export class UserPresenceStatusRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user lacks permission
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("userPresenceStatus.update", {
+	Rpc.make("userPresenceStatus.update", {
 		payload: Schema.Struct({
-			status: Schema.optional(UserPresenceStatus.Model.json.fields.status),
+			status: Schema.optional(UserPresenceStatus.Schema.fields.status),
 			customMessage: Schema.optional(Schema.NullOr(Schema.String)),
 			statusEmoji: Schema.optional(Schema.NullOr(Schema.String)),
 			statusExpiresAt: Schema.optional(Schema.NullOr(JsonDate)),
-			activeChannelId: Schema.optional(
-				Schema.NullOr(UserPresenceStatus.Model.json.fields.activeChannelId),
-			),
+			activeChannelId: Schema.optional(Schema.NullOr(UserPresenceStatus.Schema.fields.activeChannelId)),
 			suppressNotifications: Schema.optional(Schema.Boolean),
 		}),
 		success: UserPresenceStatusResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["user-presence-status:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * UserPresenceStatusHeartbeat
 	 *
-	 * Lightweight heartbeat to update lastSeenAt timestamp.
-	 * Used for reliable offline detection - if no heartbeat received
-	 * within timeout period, user is marked offline by server-side cron job.
+	 * Lightweight heartbeat: marks the user online and moves lastSeenAt. With no heartbeat for
+	 * the timeout, the user's object marks them offline on its alarm.
 	 *
 	 * @returns Updated lastSeenAt timestamp
 	 * @throws UnauthorizedError if not authenticated
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("userPresenceStatus.heartbeat", {
+	Rpc.make("userPresenceStatus.heartbeat", {
 		payload: Schema.Struct({}),
 		success: Schema.Struct({
 			lastSeenAt: JsonDate,
 		}),
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["user-presence-status:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * UserPresenceStatusClearStatus
@@ -105,9 +106,11 @@ export class UserPresenceStatusRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if not authenticated
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("userPresenceStatus.clearStatus", {
+	Rpc.make("userPresenceStatus.clearStatus", {
 		payload: Schema.Struct({}),
 		success: UserPresenceStatusResponse,
-		error: Schema.Union(UnauthorizedError, InternalServerError),
-	}).middleware(AuthMiddleware),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["user-presence-status:write"])
+		.middleware(AuthMiddleware),
 ) {}

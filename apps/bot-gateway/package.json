@@ -1,0 +1,29 @@
+{
+	"name": "@hazel/bot-gateway",
+	"private": true,
+	"type": "module",
+	"module": "src/worker.ts",
+	"exports": {
+		".": "./src/worker.ts",
+		"./object": "./src/object.ts"
+	},
+	"scripts": {
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@alchemy.run/cloudflare": "catalog:alchemy",
+		"@hazel/backend-core": "workspace:*",
+		"@hazel/db": "workspace:*",
+		"@hazel/domain": "workspace:*",
+		"@hazel/infra": "workspace:*",
+		"alchemy": "catalog:alchemy",
+		"effect": "catalog:effect"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "catalog:alchemy",
+		"@types/node": "^24.19.2",
+		"typescript": "catalog:tooling",
+		"vitest": "^5.0.5"
+	}
+}

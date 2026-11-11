@@ -1,0 +1,32 @@
+---
+import { siteConfig } from "@/lib/config";
+
+const { quoteSection } = siteConfig;
+---
+
+<section
+  id="quote"
+  class="flex flex-col items-center justify-center gap-8 w-full p-14 bg-accent z-20"
+>
+  <blockquote class="max-w-3xl text-left px-4">
+    <p class="text-xl md:text-2xl text-primary leading-relaxed tracking-tighter font-medium mb-6">
+      {quoteSection.quote}
+    </p>
+
+    <div class="flex gap-4">
+      <div class="size-10 rounded-full bg-primary border border-border">
+        <img
+          src={quoteSection.author.image}
+          alt={quoteSection.author.name}
+          class="size-full rounded-full object-contain"
+        />
+      </div>
+      <div class="text-left">
+        <cite class="text-lg font-medium text-primary not-italic">
+          {quoteSection.author.name}
+        </cite>
+        <p class="text-sm text-primary">{quoteSection.author.role}</p>
+      </div>
+    </div>
+  </blockquote>
+</section>

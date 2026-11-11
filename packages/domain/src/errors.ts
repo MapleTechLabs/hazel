@@ -1,6 +1,5 @@
-import { HttpApiSchema } from "@effect/platform"
 import { Effect, Predicate, Schema } from "effect"
-import { ChannelId, MessageId } from "./ids"
+import { ChannelId, MessageId } from "@hazel/schema"
 
 export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>("UnauthorizedError")(
 	"UnauthorizedError",
@@ -8,9 +7,7 @@ export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>("Un
 		message: Schema.String,
 		detail: Schema.String,
 	},
-	HttpApiSchema.annotations({
-		status: 401,
-	}),
+	{ httpApiStatus: 401 },
 ) {
 	static is(u: unknown): u is UnauthorizedError {
 		return Predicate.isTagged(u, "UnauthorizedError")
@@ -18,46 +15,70 @@ export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>("Un
 }
 
 /**
- * Error thrown when an OAuth authorization code has expired or has already been used.
- * This is a specific 401 error that indicates the user must restart the OAuth flow.
+ * Keeps the underlying failure on an error for server-side logs and traces without making it
+ * part of the error's schema: `cause` is the native, non-enumerable `Error.cause`, so it is never
+ * encoded into RPC or HTTP responses.
  */
-export class OAuthCodeExpiredError extends Schema.TaggedError<OAuthCodeExpiredError>("OAuthCodeExpiredError")(
-	"OAuthCodeExpiredError",
-	{
-		message: Schema.String,
-	},
-	HttpApiSchema.annotations({
-		status: 401,
-	}),
-) {
-	static is(u: unknown): u is OAuthCodeExpiredError {
-		return Predicate.isTagged(u, "OAuthCodeExpiredError")
-	}
+export const attachCause = (error: Error, cause: unknown) => {
+	if (cause === undefined) return
+	Object.defineProperty(error, "cause", {
+		value: cause,
+		enumerable: false,
+		writable: true,
+		configurable: true,
+	})
 }
 
+/**
+ * An unexpected server failure. Clients see only the stable `message` (and `detail`, which must
+ * be client-safe: never `String(error)` or driver text). Pass the underlying failure as `cause`:
+ * it stays on the server, where the error reporter logs it with the full `Cause`.
+ */
 export class InternalServerError extends Schema.TaggedError<InternalServerError>("InternalServerError")(
 	"InternalServerError",
 	{
 		message: Schema.String,
 		detail: Schema.optional(Schema.String),
-		cause: Schema.optional(Schema.Any),
 	},
-	HttpApiSchema.annotations({
-		status: 500,
-	}),
-) {}
+	{ httpApiStatus: 500 },
+) {
+	static is(u: unknown): u is InternalServerError {
+		return Predicate.isTagged(u, "InternalServerError")
+	}
 
-export class WorkflowInitializationError extends Schema.TaggedError<WorkflowInitializationError>(
-	"WorkflowInitializationError",
+	constructor(
+		props: { readonly message: string; readonly detail?: string | undefined; readonly cause?: unknown },
+		options?: Schema.MakeOptions,
+	) {
+		const { cause, ...fields } = props
+		super(fields, options)
+		attachCause(this, cause)
+	}
+}
+
+/** The request does not fit the channel or is malformed (e.g. naming a channel that is not a thread). */
+export class InvalidChannelRequestError extends Schema.TaggedError<InvalidChannelRequestError>(
+	"InvalidChannelRequestError",
 )(
-	"WorkflowInitializationError",
+	"InvalidChannelRequestError",
 	{
 		message: Schema.String,
-		cause: Schema.optional(Schema.Any),
 	},
-	HttpApiSchema.annotations({
-		status: 500,
-	}),
+	{ httpApiStatus: 400 },
+) {}
+
+/**
+ * The operation acts on the caller's active organization, and the session has none
+ * (`CurrentUser.organizationId` is unset).
+ */
+export class ActiveOrganizationRequiredError extends Schema.TaggedError<ActiveOrganizationRequiredError>(
+	"ActiveOrganizationRequiredError",
+)(
+	"ActiveOrganizationRequiredError",
+	{
+		message: Schema.String,
+	},
+	{ httpApiStatus: 400 },
 ) {}
 
 export class DmChannelAlreadyExistsError extends Schema.TaggedError<DmChannelAlreadyExistsError>(
@@ -68,9 +89,7 @@ export class DmChannelAlreadyExistsError extends Schema.TaggedError<DmChannelAlr
 		message: Schema.String,
 		detail: Schema.optional(Schema.String),
 	},
-	HttpApiSchema.annotations({
-		status: 409,
-	}),
+	{ httpApiStatus: 409 },
 ) {}
 
 /**
@@ -82,9 +101,22 @@ export class MessageNotFoundError extends Schema.TaggedError<MessageNotFoundErro
 	{
 		messageId: MessageId,
 	},
-	HttpApiSchema.annotations({
-		status: 404,
-	}),
+	{ httpApiStatus: 404 },
+) {}
+
+/**
+ * A live-state write would grow the message's live state past what one reply may hold. Nothing was
+ * applied; finish the reply (or replace its text) instead of appending more.
+ */
+export class LiveStateTooLargeError extends Schema.TaggedError<LiveStateTooLargeError>(
+	"LiveStateTooLargeError",
+)(
+	"LiveStateTooLargeError",
+	{
+		messageId: MessageId,
+		limitBytes: Schema.Number,
+	},
+	{ httpApiStatus: 413 },
 ) {}
 
 /**
@@ -96,71 +128,50 @@ export class NestedThreadError extends Schema.TaggedError<NestedThreadError>("Ne
 	{
 		channelId: ChannelId,
 	},
-	HttpApiSchema.annotations({
-		status: 400,
-	}),
+	{ httpApiStatus: 400 },
 ) {}
 
 /**
- * Error thrown when the workflow service is unreachable or unavailable.
- * Used when the cluster service cannot be contacted.
+ * Turns the repository layer's `DatabaseError` / `SchemaError` into a client-safe
+ * `InternalServerError`, keeping the original failure as its server-side `cause`.
  */
-export class WorkflowServiceUnavailableError extends Schema.TaggedError<WorkflowServiceUnavailableError>(
-	"WorkflowServiceUnavailableError",
-)(
-	"WorkflowServiceUnavailableError",
-	{
-		message: Schema.String,
-		cause: Schema.optionalWith(Schema.String, { nullable: true }),
-	},
-	HttpApiSchema.annotations({
-		status: 503,
-	}),
-) {}
-
-export function withRemapDbErrors<R, E extends { _tag: string }, A>(
+export function withRemapDbErrors(
 	entityType: string,
 	action: "update" | "create" | "delete" | "select",
-	entityId?: any | { value: any; key: string }[],
+	entityId?: unknown | { value: unknown; key: string }[],
 ) {
-	return (
-		effect: Effect.Effect<R, E, A>,
-	): Effect.Effect<R, Exclude<E, { _tag: "DatabaseError" | "ParseError" }> | InternalServerError, A> => {
+	return <A, E, R>(
+		effect: Effect.Effect<A, E, R>,
+	): Effect.Effect<A, Exclude<E, { _tag: "DatabaseError" | "SchemaError" }> | InternalServerError, R> => {
+		const toInternalError = (cause: unknown, detailPrefix: string) =>
+			Effect.fail(
+				new InternalServerError({
+					message: `Error ${action}ing ${entityType}`,
+					detail: constructDetailMessage(detailPrefix, entityType, entityId),
+					cause,
+				}),
+			)
+
 		return effect.pipe(
-			Effect.catchTags({
-				DatabaseError: (err: any) =>
-					Effect.fail(
-						new InternalServerError({
-							message: `Error ${action}ing ${entityType}`,
-							detail: constructDetailMessage(
-								"There was an error in parsing when",
-								entityType,
-								entityId,
-							),
-							cause: String(err),
-						}),
+			Effect.catchIf(
+				(e): e is Extract<E, { _tag: "DatabaseError" | "SchemaError" }> =>
+					Predicate.isTagged(e, "DatabaseError") || Predicate.isTagged(e, "SchemaError"),
+				(err) =>
+					toInternalError(
+						err,
+						Predicate.isTagged(err, "DatabaseError")
+							? "There was a database error when"
+							: "There was an error in parsing when",
 					),
-				ParseError: (err: any) =>
-					Effect.fail(
-						new InternalServerError({
-							message: `Error ${action}ing ${entityType}`,
-							detail: constructDetailMessage(
-								"There was an error in parsing when",
-								entityType,
-								entityId,
-							),
-							cause: String(err),
-						}),
-					),
-			}),
-		)
+			),
+		) as Effect.Effect<A, Exclude<E, { _tag: "DatabaseError" | "SchemaError" }> | InternalServerError, R>
 	}
 }
 
 const constructDetailMessage = (
 	title: string,
 	entityType: string,
-	entityId?: any | { value: any; key: string }[],
+	entityId?: unknown | { value: unknown; key: string }[],
 ) => {
 	if (entityId) {
 		if (Array.isArray(entityId)) {
@@ -173,3 +184,21 @@ const constructDetailMessage = (
 
 	return `${title} the ${entityType}`
 }
+
+// Re-export permission error for scope-based authorization
+export { PermissionError } from "./scopes/permission-error"
+
+// Re-export session errors for frontend convenience
+export * from "./session-errors"
+
+// Thread naming errors, for frontend error handling
+export {
+	AIProviderUnavailableError,
+	AIRateLimitError,
+	AIResponseParseError,
+	OriginalMessageNotFoundError,
+	ThreadChannelNotFoundError,
+	ThreadContextQueryError,
+	ThreadNameUpdateError,
+	ThreadNamingWorkflowError,
+} from "./thread-naming-errors"

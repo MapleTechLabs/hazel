@@ -1,31 +1,31 @@
 import { BotCommandId, BotId } from "@hazel/schema"
-import { Schema } from "effect"
+import { Schema as S } from "effect"
 import * as M from "./utils"
 import { Generated, JsonDate } from "./utils"
 
 /**
  * Argument definition for a bot command
  */
-export const BotCommandArgument = Schema.Struct({
-	name: Schema.String,
-	description: Schema.NullOr(Schema.String),
-	required: Schema.Boolean,
-	placeholder: Schema.NullOr(Schema.String),
-	type: Schema.Literal("string", "number", "user", "channel"),
+export const BotCommandArgument = S.Struct({
+	name: S.String,
+	description: S.NullOr(S.String),
+	required: S.Boolean,
+	placeholder: S.NullOr(S.String),
+	type: S.Literals(["string", "number", "user", "channel"]),
 })
 export type BotCommandArgument = typeof BotCommandArgument.Type
 
-export class Model extends M.Class<Model>("BotCommand")({
+class Model extends M.Class<Model>("BotCommand")({
 	id: M.Generated(BotCommandId),
 	botId: BotId,
-	name: Schema.String,
-	description: Schema.String,
-	arguments: Schema.NullOr(Schema.Array(BotCommandArgument)),
-	usageExample: Schema.NullOr(Schema.String),
-	isEnabled: Schema.Boolean,
+	name: S.String,
+	description: S.String,
+	arguments: S.NullOr(S.Array(BotCommandArgument)),
+	usageExample: S.NullOr(S.String),
+	isEnabled: S.Boolean,
 	createdAt: Generated(JsonDate),
-	updatedAt: Generated(Schema.NullOr(JsonDate)),
+	updatedAt: Generated(S.NullOr(JsonDate)),
 }) {}
 
-export const Insert = Model.insert
-export const Update = Model.update
+export const { Insert, Update, Schema, Create, Patch } = M.expose(Model)
+export type Type = typeof Schema.Type

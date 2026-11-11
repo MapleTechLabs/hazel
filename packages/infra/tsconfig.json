@@ -1,0 +1,16 @@
+{
+	"include": ["src/**/*.ts"],
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "preserve",
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"noFallthroughCasesInSwitch": true,
+		"types": ["node", "@cloudflare/workers-types"]
+	}
+}

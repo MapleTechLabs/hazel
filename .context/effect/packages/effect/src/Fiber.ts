@@ -1,744 +1,491 @@
 /**
- * @since 2.0.0
- */
-import type * as Cause from "./Cause.js"
-import type { Context } from "./Context.js"
-import type { DefaultServices } from "./DefaultServices.js"
-import type * as Effect from "./Effect.js"
-import type * as Either from "./Either.js"
-import type * as Exit from "./Exit.js"
-import type * as FiberId from "./FiberId.js"
-import type { FiberRef } from "./FiberRef.js"
-import type * as FiberRefs from "./FiberRefs.js"
-import type * as FiberStatus from "./FiberStatus.js"
-import type * as HashSet from "./HashSet.js"
-import * as core from "./internal/core.js"
-import * as circular from "./internal/effect/circular.js"
-import * as internal from "./internal/fiber.js"
-import * as fiberRuntime from "./internal/fiberRuntime.js"
-import type * as Option from "./Option.js"
-import type * as order from "./Order.js"
-import type * as RuntimeFlags from "./RuntimeFlags.js"
-import type { Scheduler } from "./Scheduler.js"
-import type * as Scope from "./Scope.js"
-import type { Supervisor } from "./Supervisor.js"
-import type { AnySpan, Tracer } from "./Tracer.js"
-import type * as Types from "./Types.js"
-import type * as Unify from "./Unify.js"
-
-/**
- * @since 2.0.0
- * @category symbols
- */
-export const FiberTypeId: unique symbol = internal.FiberTypeId
-
-/**
- * @since 2.0.0
- * @category symbols
- */
-export type FiberTypeId = typeof FiberTypeId
-
-/**
- * @since 2.0.0
- * @category symbols
- */
-export const RuntimeFiberTypeId: unique symbol = internal.RuntimeFiberTypeId
-
-/**
- * @since 2.0.0
- * @category symbols
- */
-export type RuntimeFiberTypeId = typeof RuntimeFiberTypeId
-
-/**
- * A fiber is a lightweight thread of execution that never consumes more than a
- * whole thread (but may consume much less, depending on contention and
- * asynchronicity). Fibers are spawned by forking effects, which run
- * concurrently with the parent effect.
+ * This module provides utilities for working with `Fiber`, the fundamental unit of
+ * concurrency in Effect. Fibers are lightweight, user-space threads that allow
+ * multiple Effects to run concurrently with structured concurrency guarantees.
  *
- * Fibers can be joined, yielding their result to other fibers, or interrupted,
- * which terminates the fiber, safely releasing all resources.
+ * Key characteristics of Fibers:
+ * - **Lightweight**: Much lighter than OS threads, you can create millions
+ * - **Structured concurrency**: Parent fibers manage child fiber lifecycles
+ * - **Cancellation safety**: Proper resource cleanup when interrupted
+ * - **Cooperative**: Fibers yield control at effect boundaries
+ * - **Traceable**: Each fiber has an ID for debugging and monitoring
+ *
+ * Common patterns:
+ * - **Fork and join**: Start concurrent work and wait for results
+ * - **Race conditions**: Run multiple effects, take the first to complete
+ * - **Supervision**: Monitor and restart failed fibers
+ * - **Resource management**: Ensure proper cleanup on interruption
+ *
+ * @example
+ * ```ts
+ * import { Console, Effect, Fiber } from "effect"
+ *
+ * // Basic fiber operations
+ * const basicExample = Effect.gen(function*() {
+ *   // Fork an effect to run concurrently
+ *   const fiber = yield* Effect.forkChild(
+ *     Effect.gen(function*() {
+ *       yield* Effect.sleep("2 seconds")
+ *       yield* Console.log("Background task completed")
+ *       return "background result"
+ *     })
+ *   )
+ *
+ *   // Do other work while the fiber runs
+ *   yield* Console.log("Doing other work...")
+ *   yield* Effect.sleep("1 second")
+ *
+ *   // Wait for the fiber to complete
+ *   const result = yield* Fiber.join(fiber)
+ *   yield* Console.log(`Fiber result: ${result}`)
+ * })
+ *
+ * // Joining multiple fibers
+ * const joinExample = Effect.gen(function*() {
+ *   const task1 = Effect.delay(Effect.succeed("task1"), "1 second")
+ *   const task2 = Effect.delay(Effect.succeed("task2"), "2 seconds")
+ *
+ *   // Start both effects as fibers
+ *   const fiber1 = yield* Effect.forkChild(task1)
+ *   const fiber2 = yield* Effect.forkChild(task2)
+ *
+ *   // Wait for both to complete
+ *   const result1 = yield* Fiber.join(fiber1)
+ *   const result2 = yield* Fiber.join(fiber2)
+ *   return [result1, result2] // ["task1", "task2"]
+ * })
+ *
+ * // Parallel execution with structured concurrency
+ * const parallelExample = Effect.gen(function*() {
+ *   const tasks = [1, 2, 3, 4, 5].map((n) =>
+ *     Effect.gen(function*() {
+ *       yield* Effect.sleep(`${n * 100} millis`)
+ *       return n * n
+ *     })
+ *   )
+ *
+ *   // Run all tasks in parallel, wait for all to complete
+ *   const results = yield* Effect.all(tasks, { concurrency: "unbounded" })
+ *   return results // [1, 4, 9, 16, 25]
+ * })
+ * ```
  *
  * @since 2.0.0
- * @category models
  */
-export interface Fiber<out A, out E = never> extends Effect.Effect<A, E>, Fiber.Variance<A, E> {
-  /**
-   * The identity of the fiber.
-   */
-  id(): FiberId.FiberId
+import type * as Arr from "./Array.ts"
+import type * as Context from "./Context.ts"
+import type { Effect } from "./Effect.ts"
+import type { Exit } from "./Exit.ts"
+import * as effect from "./internal/effect.ts"
+import { version } from "./internal/version.ts"
+import type { LogLevel } from "./LogLevel.ts"
+import type { Pipeable } from "./Pipeable.ts"
+import { hasProperty } from "./Predicate.ts"
+import type { StackFrame } from "./References.ts"
+import type { Scheduler, SchedulerDispatcher } from "./Scheduler.ts"
+import type { Scope } from "./Scope.ts"
+import type { AnySpan } from "./Tracer.ts"
+import type { Covariant } from "./Types.ts"
 
-  /**
-   * Awaits the fiber, which suspends the awaiting fiber until the result of the
-   * fiber has been determined.
-   */
-  readonly await: Effect.Effect<Exit.Exit<A, E>>
-
-  /**
-   * Retrieves the immediate children of the fiber.
-   */
-  readonly children: Effect.Effect<Array<Fiber.Runtime<any, any>>>
-
-  /**
-   * Inherits values from all `FiberRef` instances into current fiber. This
-   * will resume immediately.
-   */
-  readonly inheritAll: Effect.Effect<void>
-
-  /**
-   * Tentatively observes the fiber, but returns immediately if it is not
-   * already done.
-   */
-  readonly poll: Effect.Effect<Option.Option<Exit.Exit<A, E>>>
-
-  /**
-   * In the background, interrupts the fiber as if interrupted from the
-   * specified fiber. If the fiber has already exited, the returned effect will
-   * resume immediately. Otherwise, the effect will resume when the fiber exits.
-   */
-  interruptAsFork(fiberId: FiberId.FiberId): Effect.Effect<void>
-
-  readonly [Unify.typeSymbol]?: unknown
-  readonly [Unify.unifySymbol]?: FiberUnify<this>
-  readonly [Unify.ignoreSymbol]?: FiberUnifyIgnore
-}
+const TypeId = `~effect/Fiber/${version}`
 
 /**
- * @category models
- * @since 3.8.0
- */
-export interface FiberUnify<A extends { [Unify.typeSymbol]?: any }> extends Effect.EffectUnify<A> {
-  Fiber?: () => A[Unify.typeSymbol] extends Fiber<infer A0, infer E0> | infer _ ? Fiber<A0, E0> : never
-}
-
-/**
- * @category models
- * @since 3.8.0
- */
-export interface FiberUnifyIgnore extends Effect.EffectUnifyIgnore {
-  Effect?: true
-}
-
-/**
- * A runtime fiber that is executing an effect. Runtime fibers have an
- * identity and a trace.
+ * A runtime fiber is a lightweight thread that executes Effects. Fibers are
+ * the unit of concurrency in Effect. They provide a way to run multiple
+ * Effects concurrently while maintaining structured concurrency and
+ * cancellation safety.
+ *
+ * @example
+ * ```ts
+ * import { Effect, Fiber } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   // Fork an effect to run in a new fiber
+ *   const fiber = yield* Effect.forkChild(Effect.succeed(42))
+ *
+ *   // Wait for the fiber to complete and get its result
+ *   const result = yield* Fiber.await(fiber)
+ *   console.log(result) // Exit.succeed(42)
+ *
+ *   return result
+ * })
+ * ```
  *
  * @since 2.0.0
  * @category models
  */
-export interface RuntimeFiber<out A, out E = never> extends Fiber<A, E>, Fiber.RuntimeVariance<A, E> {
-  /**
-   * Reads the current number of ops that have occurred since the last yield
-   */
-  get currentOpCount(): number
+export interface Fiber<out A, out E = never> extends Pipeable {
+  readonly [TypeId]: Fiber.Variance<A, E>
 
-  /**
-   * Reads the current value of a fiber ref
-   */
-  getFiberRef<X>(fiberRef: FiberRef<X>): X
-
-  /**
-   * The identity of the fiber.
-   */
-  id(): FiberId.Runtime
-
-  /**
-   * The status of the fiber.
-   */
-  readonly status: Effect.Effect<FiberStatus.FiberStatus>
-
-  /**
-   * Returns the current `RuntimeFlags` the fiber is running with.
-   */
-  readonly runtimeFlags: Effect.Effect<RuntimeFlags.RuntimeFlags>
-
-  /**
-   * Adds an observer to the list of observers.
-   */
-  addObserver(observer: (exit: Exit.Exit<A, E>) => void): void
-
-  /**
-   * Removes the specified observer from the list of observers that will be
-   * notified when the fiber exits.
-   */
-  removeObserver(observer: (exit: Exit.Exit<A, E>) => void): void
-
-  /**
-   * Retrieves all fiber refs of the fiber.
-   */
-  getFiberRefs(): FiberRefs.FiberRefs
-
-  /**
-   * Unsafely observes the fiber, but returns immediately if it is not
-   * already done.
-   */
-  unsafePoll(): Exit.Exit<A, E> | null
-
-  /**
-   * In the background, interrupts the fiber as if interrupted from the
-   * specified fiber. If the fiber has already exited, the returned effect will
-   * resume immediately. Otherwise, the effect will resume when the fiber exits.
-   */
-  unsafeInterruptAsFork(fiberId: FiberId.FiberId): void
-
-  /**
-   * Gets the current context
-   */
-  get currentContext(): Context<never>
-
-  /**
-   * Gets the current context
-   */
-  get currentDefaultServices(): Context<DefaultServices>
-
-  /**
-   * Gets the current scheduler
-   */
-  get currentScheduler(): Scheduler
-
-  /**
-   * Gets the current tracer
-   */
-  get currentTracer(): Tracer
-
-  /**
-   * Gets the current span
-   */
-  get currentSpan(): AnySpan | undefined
-
-  /**
-   * Gets the current supervisor
-   */
-  get currentSupervisor(): Supervisor<unknown>
-
-  readonly [Unify.typeSymbol]?: unknown
-  readonly [Unify.unifySymbol]?: RuntimeFiberUnify<this>
-  readonly [Unify.ignoreSymbol]?: RuntimeFiberUnifyIgnore
+  readonly id: number
+  readonly currentOpCount: number
+  readonly getRef: <A>(ref: Context.Reference<A>) => A
+  readonly context: Context.Context<never>
+  setContext(context: Context.Context<never>): void
+  readonly currentScheduler: Scheduler
+  readonly currentDispatcher: SchedulerDispatcher
+  readonly currentSpan?: AnySpan | undefined
+  readonly currentLogLevel: LogLevel
+  readonly minimumLogLevel: LogLevel
+  readonly currentStackFrame?: StackFrame | undefined
+  readonly maxOpsBeforeYield: number
+  readonly currentPreventYield: boolean
+  readonly addObserver: (cb: (exit: Exit<A, E>) => void) => () => void
+  readonly interruptUnsafe: (
+    fiberId?: number | undefined,
+    annotations?: Context.Context<never> | undefined
+  ) => void
+  readonly pollUnsafe: () => Exit<A, E> | undefined
 }
 
 /**
- * @category models
- * @since 3.8.0
- */
-export interface RuntimeFiberUnify<A extends { [Unify.typeSymbol]?: any }> extends FiberUnify<A> {
-  RuntimeFiber?: () => A[Unify.typeSymbol] extends RuntimeFiber<infer A0, infer E0> | infer _ ? RuntimeFiber<A0, E0>
-    : never
-}
-
-/**
- * @category models
- * @since 3.8.0
- */
-export interface RuntimeFiberUnifyIgnore extends FiberUnifyIgnore {
-  Fiber?: true
-}
-
-/**
+ * The Fiber namespace contains utility types and functions for working with fibers.
+ * It provides type-level utilities for fiber operations and variance encoding.
+ *
+ * @example
+ * ```ts
+ * import { Effect, Fiber } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   // Create a fiber
+ *   const fiber = yield* Effect.forkChild(Effect.succeed(42))
+ *
+ *   // Use namespace types for variance
+ *   const typedFiber: Fiber.Fiber<number, never> = fiber
+ *
+ *   // Access fiber properties
+ *   console.log(`Fiber ID: ${fiber.id}`)
+ *
+ *   // Join the fiber
+ *   const result = yield* Fiber.join(fiber)
+ *   return result // 42
+ * })
+ * ```
+ *
  * @since 2.0.0
+ * @category models
  */
 export declare namespace Fiber {
   /**
-   * @since 2.0.0
-   * @category models
-   */
-  export type Runtime<A, E = never> = RuntimeFiber<A, E>
-
-  /**
-   * @since 2.0.0
-   * @category models
-   */
-  export interface Variance<out A, out E> {
-    readonly [FiberTypeId]: {
-      readonly _A: Types.Covariant<A>
-      readonly _E: Types.Covariant<E>
-    }
-  }
-
-  /**
-   * @since 2.0.0
-   */
-  export interface RuntimeVariance<out A, out E> {
-    readonly [RuntimeFiberTypeId]: {
-      readonly _A: Types.Covariant<A>
-      readonly _E: Types.Covariant<E>
-    }
-  }
-
-  /**
-   * @since 2.0.0
-   * @category models
-   */
-  export interface Dump {
-    /**
-     * The fiber's unique identifier.
-     */
-    readonly id: FiberId.Runtime
-    /**
-     * The status of the fiber.
-     */
-    readonly status: FiberStatus.FiberStatus
-  }
-
-  /**
-   * A record containing information about a `Fiber`.
+   * Variance encoding for the Fiber type, specifying covariance in both the
+   * success type `A` and the error type `E`.
+   *
+   * @example
+   * ```ts
+   * import type { Fiber } from "effect"
+   *
+   * // Variance allows safe subtyping
+   * declare const fiber: Fiber.Fiber<number, Error>
+   * const upcast: Fiber.Fiber<unknown, unknown> = fiber
+   * ```
    *
    * @since 2.0.0
    * @category models
    */
-  export interface Descriptor {
-    /**
-     * The fiber's unique identifier.
-     */
-    readonly id: FiberId.FiberId
-    /**
-     * The status of the fiber.
-     */
-    readonly status: FiberStatus.FiberStatus
-    /**
-     * The set of fibers attempting to interrupt the fiber or its ancestors.
-     */
-    readonly interruptors: HashSet.HashSet<FiberId.FiberId>
+  export interface Variance<out A, out E = never> {
+    readonly _A: Covariant<A>
+    readonly _E: Covariant<E>
   }
 }
 
-/**
- * @since 2.0.0
- * @category instances
- */
-export const Order: order.Order<RuntimeFiber<unknown, unknown>> = internal.Order
-
-/**
- * Returns `true` if the specified value is a `Fiber`, `false` otherwise.
- *
- * @since 2.0.0
- * @category refinements
- */
-export const isFiber: (u: unknown) => u is Fiber<unknown, unknown> = internal.isFiber
-
-/**
- * Returns `true` if the specified `Fiber` is a `RuntimeFiber`, `false`
- * otherwise.
- *
- * @since 2.0.0
- * @category refinements
- */
-export const isRuntimeFiber: <A, E>(self: Fiber<A, E>) => self is RuntimeFiber<A, E> = internal.isRuntimeFiber
-
-/**
- * The identity of the fiber.
- *
- * @since 2.0.0
- * @category getters
- */
-export const id: <A, E>(self: Fiber<A, E>) => FiberId.FiberId = internal.id
-
-const _await: <A, E>(self: Fiber<A, E>) => Effect.Effect<Exit.Exit<A, E>> = internal._await
-
+const await_: <A, E>(self: Fiber<A, E>) => Effect<Exit<A, E>> = effect.fiberAwait
 export {
   /**
-   * Awaits the fiber, which suspends the awaiting fiber until the result of the
-   * fiber has been determined.
+   * Waits for a fiber to complete and returns its exit value.
+   *
+   * @example
+   * ```ts
+   * import { Effect, Fiber } from "effect"
+   *
+   * const program = Effect.gen(function*() {
+   *   const fiber = yield* Effect.forkChild(Effect.succeed(42))
+   *   const exit = yield* Fiber.await(fiber)
+   *   console.log(exit) // Exit.succeed(42)
+   * })
+   * ```
    *
    * @since 2.0.0
-   * @category getters
+   * @category combinators
    */
-  _await as await
+  await_ as await
 }
-
 /**
- * Awaits on all fibers to be completed, successfully or not.
+ * Waits for all fibers in the provided iterable to complete and returns
+ * an array of their exit values.
+ *
+ * @example
+ * ```ts
+ * import { Effect, Fiber } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   const fiber1 = yield* Effect.forkChild(Effect.succeed(1))
+ *   const fiber2 = yield* Effect.forkChild(Effect.succeed(2))
+ *   const exits = yield* Fiber.awaitAll([fiber1, fiber2])
+ *   console.log(exits) // [Exit.succeed(1), Exit.succeed(2)]
+ * })
+ * ```
  *
  * @since 2.0.0
- * @category destructors
+ * @category combinators
  */
-export const awaitAll: <const T extends Iterable<Fiber<any, any>>>(
-  fibers: T
-) => Effect.Effect<
-  [T] extends [ReadonlyArray<infer U>]
-    ? number extends T["length"] ? Array<U extends Fiber<infer A, infer E> ? Exit.Exit<A, E> : never>
-    : { -readonly [K in keyof T]: T[K] extends Fiber<infer A, infer E> ? Exit.Exit<A, E> : never }
-    : Array<T extends Iterable<infer U> ? U extends Fiber<infer A, infer E> ? Exit.Exit<A, E> : never : never>
-> = fiberRuntime.fiberAwaitAll
+export const awaitAll: <A extends Fiber<any, any>>(
+  self: Iterable<A>
+) => Effect<
+  Array<
+    Exit<
+      A extends Fiber<infer _A, infer _E> ? _A : never,
+      A extends Fiber<infer _A, infer _E> ? _E : never
+    >
+  >
+> = effect.fiberAwaitAll
 
 /**
- * Retrieves the immediate children of the fiber.
+ * Joins a fiber, blocking until it completes. If the fiber succeeds,
+ * returns its value. If it fails, the error is propagated.
+ *
+ * @example
+ * ```ts
+ * import { Effect, Fiber } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   const fiber = yield* Effect.forkChild(Effect.succeed(42))
+ *   const result = yield* Fiber.join(fiber)
+ *   console.log(result) // 42
+ * })
+ * ```
  *
  * @since 2.0.0
- * @category getters
+ * @category combinators
  */
-export const children: <A, E>(self: Fiber<A, E>) => Effect.Effect<Array<RuntimeFiber<any, any>>> = internal.children
+export const join: <A, E>(self: Fiber<A, E>) => Effect<A, E> = effect.fiberJoin
 
 /**
- * Collects all fibers into a single fiber producing an in-order list of the
- * results.
+ * @since 2.0.0
+ * @category combinators
+ */
+export const joinAll: <A extends Iterable<Fiber<any, any>>>(
+  self: A
+) => Effect<
+  Arr.ReadonlyArray.With<
+    A,
+    A extends Iterable<Fiber<infer _A, infer _E>> ? _A : never
+  >,
+  A extends Fiber<infer _A, infer _E> ? _E : never
+> = effect.fiberJoinAll
+
+/**
+ * Interrupts a fiber, causing it to stop executing and clean up any
+ * acquired resources.
  *
- * @since 2.0.0
- * @category constructors
- */
-export const all: <A, E>(fibers: Iterable<Fiber<A, E>>) => Fiber<ReadonlyArray<A>, E> = fiberRuntime.fiberAll
-
-/**
- * A fiber that is done with the specified `Exit` value.
+ * @example
+ * ```ts
+ * import { Effect, Fiber } from "effect"
  *
- * @since 2.0.0
- * @category constructors
- */
-export const done: <A, E>(exit: Exit.Exit<A, E>) => Fiber<A, E> = internal.done
-
-/**
- * @since 2.0.0
- * @category destructors
- */
-export const dump: <A, E>(self: RuntimeFiber<A, E>) => Effect.Effect<Fiber.Dump> = internal.dump
-
-/**
- * @since 2.0.0
- * @category destructors
- */
-export const dumpAll: (
-  fibers: Iterable<RuntimeFiber<unknown, unknown>>
-) => Effect.Effect<Array<Fiber.Dump>> = internal.dumpAll
-
-/**
- * A fiber that has already failed with the specified value.
- *
- * @since 2.0.0
- * @category constructors
- */
-export const fail: <E>(error: E) => Fiber<never, E> = internal.fail
-
-/**
- * Creates a `Fiber` that has already failed with the specified cause.
- *
- * @since 2.0.0
- * @category constructors
- */
-export const failCause: <E>(cause: Cause.Cause<E>) => Fiber<never, E> = internal.failCause
-
-/**
- * Lifts an `Effect` into a `Fiber`.
- *
- * @since 2.0.0
- * @category conversions
- */
-export const fromEffect: <A, E>(effect: Effect.Effect<A, E>) => Effect.Effect<Fiber<A, E>> = internal.fromEffect
-
-/**
- * Gets the current fiber if one is running.
- *
- * @since 2.0.0
- * @category utilities
- */
-export const getCurrentFiber: () => Option.Option<RuntimeFiber<any, any>> = internal.getCurrentFiber
-
-/**
- * Inherits values from all `FiberRef` instances into current fiber. This
- * will resume immediately.
- *
- * @since 2.0.0
- * @category destructors
- */
-export const inheritAll: <A, E>(self: Fiber<A, E>) => Effect.Effect<void> = internal.inheritAll
-
-/**
- * Interrupts the fiber from whichever fiber is calling this method. If the
- * fiber has already exited, the returned effect will resume immediately.
- * Otherwise, the effect will resume when the fiber exits.
+ * const program = Effect.gen(function*() {
+ *   const fiber = yield* Effect.forkChild(
+ *     Effect.delay("1 second")(Effect.succeed(42))
+ *   )
+ *   yield* Fiber.interrupt(fiber)
+ *   console.log("Fiber interrupted")
+ * })
+ * ```
  *
  * @since 2.0.0
  * @category interruption
  */
-export const interrupt: <A, E>(self: Fiber<A, E>) => Effect.Effect<Exit.Exit<A, E>> = core.interruptFiber
+export const interrupt: <A, E>(self: Fiber<A, E>) => Effect<void> = effect.fiberInterrupt
 
 /**
- * Constructrs a `Fiber` that is already interrupted.
+ * Interrupts a fiber with a specific fiber ID as the interruptor. This allows
+ * tracking which fiber initiated the interruption.
  *
- * @since 2.0.0
- * @category constructors
- */
-export const interrupted: (fiberId: FiberId.FiberId) => Fiber<never> = internal.interrupted
-
-/**
- * Interrupts the fiber as if interrupted from the specified fiber. If the
- * fiber has already exited, the returned effect will resume immediately.
- * Otherwise, the effect will resume when the fiber exits.
+ * @example
+ * ```ts
+ * import { Effect, Fiber } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   const targetFiber = yield* Effect.forkChild(
+ *     Effect.delay("5 seconds")(Effect.succeed("task completed"))
+ *   )
+ *
+ *   // Interrupt the fiber, specifying fiber ID 123 as the interruptor
+ *   yield* Fiber.interruptAs(targetFiber, 123)
+ *   console.log("Fiber interrupted by fiber #123")
+ * })
+ * ```
  *
  * @since 2.0.0
  * @category interruption
  */
 export const interruptAs: {
-  (fiberId: FiberId.FiberId): <A, E>(self: Fiber<A, E>) => Effect.Effect<Exit.Exit<A, E>>
-  <A, E>(self: Fiber<A, E>, fiberId: FiberId.FiberId): Effect.Effect<Exit.Exit<A, E>>
-} = core.interruptAsFiber
+  (
+    fiberId: number | undefined,
+    annotations?: Context.Context<never> | undefined
+  ): <A, E>(self: Fiber<A, E>) => Effect<void>
+  <A, E>(
+    self: Fiber<A, E>,
+    fiberId: number | undefined,
+    annotations?: Context.Context<never> | undefined
+  ): Effect<void>
+} = effect.fiberInterruptAs
 
 /**
- * Interrupts the fiber as if interrupted from the specified fiber. If the
- * fiber has already exited, the returned effect will resume immediately.
- * Otherwise, the effect will resume when the fiber exits.
+ * Interrupts all fibers in the provided iterable, causing them to stop executing
+ * and clean up any acquired resources.
+ *
+ * @example
+ * ```ts
+ * import { Console, Effect, Fiber } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   // Create multiple long-running fibers
+ *   const fiber1 = yield* Effect.forkChild(
+ *     Effect.gen(function*() {
+ *       yield* Effect.sleep("5 seconds")
+ *       yield* Console.log("Task 1 completed")
+ *       return "result1"
+ *     })
+ *   )
+ *
+ *   const fiber2 = yield* Effect.forkChild(
+ *     Effect.gen(function*() {
+ *       yield* Effect.sleep("3 seconds")
+ *       yield* Console.log("Task 2 completed")
+ *       return "result2"
+ *     })
+ *   )
+ *
+ *   const fiber3 = yield* Effect.forkChild(
+ *     Effect.gen(function*() {
+ *       yield* Effect.sleep("4 seconds")
+ *       yield* Console.log("Task 3 completed")
+ *       return "result3"
+ *     })
+ *   )
+ *
+ *   // Wait a bit, then interrupt all fibers
+ *   yield* Effect.sleep("1 second")
+ *   yield* Console.log("Interrupting all fibers...")
+ *   yield* Fiber.interruptAll([fiber1, fiber2, fiber3])
+ *   yield* Console.log("All fibers have been interrupted")
+ * })
+ * ```
  *
  * @since 2.0.0
  * @category interruption
  */
-export const interruptAsFork: {
-  (fiberId: FiberId.FiberId): <A, E>(self: Fiber<A, E>) => Effect.Effect<void>
-  <A, E>(self: Fiber<A, E>, fiberId: FiberId.FiberId): Effect.Effect<void>
-} = internal.interruptAsFork
+export const interruptAll: <A extends Iterable<Fiber<any, any>>>(
+  fibers: A
+) => Effect<void> = effect.fiberInterruptAll
 
 /**
- * Interrupts all fibers, awaiting their interruption.
+ * Interrupts all fibers in the provided iterable using the specified fiber ID as the
+ * interrupting fiber. This allows you to control which fiber is considered the source
+ * of the interruption, which can be useful for debugging and tracing.
  *
- * @since 2.0.0
- * @category interruption
- */
-export const interruptAll: (fibers: Iterable<Fiber<any, any>>) => Effect.Effect<void> = internal.interruptAll
-
-/**
- * Interrupts all fibers as by the specified fiber, awaiting their
- * interruption.
+ * @example
+ * ```ts
+ * import { Console, Effect, Fiber } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   // Create a controlling fiber
+ *   const controllerFiber = yield* Effect.forkChild(Effect.succeed("controller"))
+ *
+ *   // Create multiple worker fibers
+ *   const worker1 = yield* Effect.forkChild(
+ *     Effect.gen(function*() {
+ *       yield* Effect.sleep("5 seconds")
+ *       yield* Console.log("Worker 1 completed")
+ *       return "worker1"
+ *     })
+ *   )
+ *
+ *   const worker2 = yield* Effect.forkChild(
+ *     Effect.gen(function*() {
+ *       yield* Effect.sleep("3 seconds")
+ *       yield* Console.log("Worker 2 completed")
+ *       return "worker2"
+ *     })
+ *   )
+ *
+ *   // Interrupt all workers using the controller fiber's ID
+ *   yield* Effect.sleep("1 second")
+ *   yield* Console.log("Interrupting workers from controller...")
+ *   yield* Fiber.interruptAllAs([worker1, worker2], controllerFiber.id)
+ *   yield* Console.log("All workers interrupted by controller")
+ * })
+ * ```
  *
  * @since 2.0.0
  * @category interruption
  */
 export const interruptAllAs: {
-  (fiberId: FiberId.FiberId): (fibers: Iterable<Fiber<any, any>>) => Effect.Effect<void>
-  (fibers: Iterable<Fiber<any, any>>, fiberId: FiberId.FiberId): Effect.Effect<void>
-} = internal.interruptAllAs
+  (fiberId: number): <A extends Iterable<Fiber<any, any>>>(fibers: A) => Effect<void>
+  <A extends Iterable<Fiber<any, any>>>(fibers: A, fiberId: number): Effect<void>
+} = effect.fiberInterruptAllAs
 
 /**
- * Interrupts the fiber from whichever fiber is calling this method. The
- * interruption will happen in a separate daemon fiber, and the returned
- * effect will always resume immediately without waiting.
+ * Tests if a value is a Fiber. This is a type guard that can be used to
+ * determine if an unknown value is a Fiber instance.
+ *
+ * @example
+ * ```ts
+ * import { Effect, Fiber } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   // Create a fiber
+ *   const fiber = yield* Effect.forkChild(Effect.succeed(42))
+ *
+ *   // Test if values are fibers
+ *   console.log(Fiber.isFiber(fiber)) // true
+ *   console.log(Fiber.isFiber("hello")) // false
+ *   console.log(Fiber.isFiber(42)) // false
+ *   console.log(Fiber.isFiber(null)) // false
+ *
+ *   // Use as a type guard
+ *   const maybeValue: unknown = fiber
+ *   if (Fiber.isFiber(maybeValue)) {
+ *     // TypeScript knows maybeValue is a Fiber here
+ *     console.log(`Fiber ID: ${maybeValue.id}`)
+ *   }
+ * })
+ * ```
  *
  * @since 2.0.0
- * @category interruption
+ * @category guards
  */
-export const interruptFork: <A, E>(self: Fiber<A, E>) => Effect.Effect<void> = fiberRuntime.fiberInterruptFork
+export const isFiber = (
+  u: unknown
+): u is Fiber<unknown, unknown> => hasProperty(u, effect.FiberTypeId)
 
 /**
- * Joins the fiber, which suspends the joining fiber until the result of the
- * fiber has been determined. Attempting to join a fiber that has erred will
- * result in a catchable error. Joining an interrupted fiber will result in an
- * "inner interruption" of this fiber, unlike interruption triggered by
- * another fiber, "inner interruption" can be caught and recovered.
+ * Returns the current fiber if called from within a fiber context,
+ * otherwise returns `undefined`.
+ *
+ * @example
+ * ```ts
+ * import { Effect, Fiber } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   const current = Fiber.getCurrent()
+ *   if (current) {
+ *     console.log(`Current fiber ID: ${current.id}`)
+ *   }
+ * })
+ * ```
  *
  * @since 2.0.0
- * @category destructors
+ * @category accessors
  */
-export const join: <A, E>(self: Fiber<A, E>) => Effect.Effect<A, E> = internal.join
+export const getCurrent: () => Fiber<any, any> | undefined = effect.getCurrentFiber
 
 /**
- * Joins all fibers, awaiting their _successful_ completion. Attempting to
- * join a fiber that has erred will result in a catchable error, _if_ that
- * error does not result from interruption.
+ * Links the lifetime of a fiber to the provided scope.
  *
- * @since 2.0.0
- * @category destructors
+ * @since 4.0.0
+ * @category Scope
  */
-export const joinAll: <A, E>(fibers: Iterable<Fiber<A, E>>) => Effect.Effect<Array<A>, E> = fiberRuntime.fiberJoinAll
-
-/**
- * Maps over the value the Fiber computes.
- *
- * @since 2.0.0
- * @category mapping
- */
-export const map: {
-  <A, B>(f: (a: A) => B): <E>(self: Fiber<A, E>) => Fiber<B, E>
-  <A, E, B>(self: Fiber<A, E>, f: (a: A) => B): Fiber<B, E>
-} = internal.map
-
-/**
- * Effectually maps over the value the fiber computes.
- *
- * @since 2.0.0
- * @category mapping
- */
-export const mapEffect: {
-  <A, A2, E2>(f: (a: A) => Effect.Effect<A2, E2>): <E>(self: Fiber<A, E>) => Fiber<A2, E2 | E>
-  <A, E, A2, E2>(self: Fiber<A, E>, f: (a: A) => Effect.Effect<A2, E2>): Fiber<A2, E | E2>
-} = internal.mapEffect
-
-/**
- * Passes the success of this fiber to the specified callback, and continues
- * with the fiber that it returns.
- *
- * @since 2.0.0
- * @category mapping
- */
-export const mapFiber: {
-  <E, E2, A, B>(f: (a: A) => Fiber<B, E2>): (self: Fiber<A, E>) => Effect.Effect<Fiber<B, E | E2>>
-  <A, E, E2, B>(self: Fiber<A, E>, f: (a: A) => Fiber<B, E2>): Effect.Effect<Fiber<B, E | E2>>
-} = internal.mapFiber
-
-/**
- * Folds over the `Fiber` or `RuntimeFiber`.
- *
- * @since 2.0.0
- * @category folding
- */
-export const match: {
-  <A, E, Z>(
-    options: {
-      readonly onFiber: (fiber: Fiber<A, E>) => Z
-      readonly onRuntimeFiber: (fiber: RuntimeFiber<A, E>) => Z
-    }
-  ): (self: Fiber<A, E>) => Z
-  <A, E, Z>(
-    self: Fiber<A, E>,
-    options: {
-      readonly onFiber: (fiber: Fiber<A, E>) => Z
-      readonly onRuntimeFiber: (fiber: RuntimeFiber<A, E>) => Z
-    }
-  ): Z
-} = internal.match
-
-/**
- * A fiber that never fails or succeeds.
- *
- * @since 2.0.0
- * @category constructors
- */
-export const never: Fiber<never> = internal.never
-
-/**
- * Returns a fiber that prefers `this` fiber, but falls back to the `that` one
- * when `this` one fails. Interrupting the returned fiber will interrupt both
- * fibers, sequentially, from left to right.
- *
- * @since 2.0.0
- * @category alternatives
- */
-export const orElse: {
-  <A2, E2>(that: Fiber<A2, E2>): <A, E>(self: Fiber<A, E>) => Fiber<A2 | A, E2 | E>
-  <A, E, A2, E2>(self: Fiber<A, E>, that: Fiber<A2, E2>): Fiber<A | A2, E | E2>
-} = internal.orElse
-
-/**
- * Returns a fiber that prefers `this` fiber, but falls back to the `that` one
- * when `this` one fails. Interrupting the returned fiber will interrupt both
- * fibers, sequentially, from left to right.
- *
- * @since 2.0.0
- * @category alternatives
- */
-export const orElseEither: {
-  <A2, E2>(that: Fiber<A2, E2>): <A, E>(self: Fiber<A, E>) => Fiber<Either.Either<A2, A>, E2 | E>
-  <A, E, A2, E2>(self: Fiber<A, E>, that: Fiber<A2, E2>): Fiber<Either.Either<A2, A>, E | E2>
-} = internal.orElseEither
-
-/**
- * Tentatively observes the fiber, but returns immediately if it is not
- * already done.
- *
- * @since 2.0.0
- * @category getters
- */
-export const poll: <A, E>(self: Fiber<A, E>) => Effect.Effect<Option.Option<Exit.Exit<A, E>>> = internal.poll
-
-/**
- * Pretty-prints a `RuntimeFiber`.
- *
- * @since 2.0.0
- * @category destructors
- */
-export const pretty: <A, E>(self: RuntimeFiber<A, E>) => Effect.Effect<string> = internal.pretty
-
-/**
- * Returns a chunk containing all root fibers.
- *
- * @since 2.0.0
- * @category constructors
- */
-export const roots: Effect.Effect<Array<RuntimeFiber<any, any>>> = internal.roots
-
-/**
- * Returns a chunk containing all root fibers.
- *
- * @since 2.0.0
- * @category constructors
- */
-export const unsafeRoots: (_: void) => Array<RuntimeFiber<any, any>> = internal.unsafeRoots
-
-/**
- * Converts this fiber into a scoped effect. The fiber is interrupted when the
- * scope is closed.
- *
- * @since 2.0.0
- * @category destructors
- */
-export const scoped: <A, E>(self: Fiber<A, E>) => Effect.Effect<Fiber<A, E>, never, Scope.Scope> =
-  fiberRuntime.fiberScoped
-
-/**
- * Returns the `FiberStatus` of a `RuntimeFiber`.
- *
- * @since 2.0.0
- * @category getters
- */
-export const status: <A, E>(self: RuntimeFiber<A, E>) => Effect.Effect<FiberStatus.FiberStatus> = internal.status
-
-/**
- * Returns a fiber that has already succeeded with the specified value.
- *
- * @since 2.0.0
- * @category constructors
- */
-export const succeed: <A>(value: A) => Fiber<A> = internal.succeed
-
-const void_: Fiber<void> = internal.void
-export {
-  /**
-   * A fiber that has already succeeded with unit.
-   *
-   * @since 2.0.0
-   * @category constructors
-   */
-  void_ as void
-}
-
-/**
- * Zips this fiber and the specified fiber together, producing a tuple of
- * their output.
- *
- * @since 2.0.0
- * @category zipping
- */
-export const zip: {
-  <A2, E2>(that: Fiber<A2, E2>): <A, E>(self: Fiber<A, E>) => Fiber<[A, A2], E2 | E>
-  <A, E, A2, E2>(self: Fiber<A, E>, that: Fiber<A2, E2>): Fiber<[A, A2], E | E2>
-} = circular.zipFiber
-
-/**
- * Same as `zip` but discards the output of that `Fiber`.
- *
- * @since 2.0.0
- * @category zipping
- */
-export const zipLeft: {
-  <A2, E2>(that: Fiber<A2, E2>): <A, E>(self: Fiber<A, E>) => Fiber<A, E2 | E>
-  <A, E, A2, E2>(self: Fiber<A, E>, that: Fiber<A2, E2>): Fiber<A, E | E2>
-} = circular.zipLeftFiber
-
-/**
- * Same as `zip` but discards the output of this `Fiber`.
- *
- * @since 2.0.0
- * @category zipping
- */
-export const zipRight: {
-  <A2, E2>(that: Fiber<A2, E2>): <A, E>(self: Fiber<A, E>) => Fiber<A2, E2 | E>
-  <A, E, A2, E2>(self: Fiber<A, E>, that: Fiber<A2, E2>): Fiber<A2, E | E2>
-} = circular.zipRightFiber
-
-/**
- * Zips this fiber with the specified fiber, combining their results using the
- * specified combiner function. Both joins and interruptions are performed in
- * sequential order from left to right.
- *
- * @since 2.0.0
- * @category zipping
- */
-export const zipWith: {
-  <B, E2, A, C>(that: Fiber<B, E2>, f: (a: A, b: B) => C): <E>(self: Fiber<A, E>) => Fiber<C, E2 | E>
-  <A, E, B, E2, C>(self: Fiber<A, E>, that: Fiber<B, E2>, f: (a: A, b: B) => C): Fiber<C, E | E2>
-} = circular.zipWithFiber
+export const runIn: {
+  (scope: Scope): <A, E>(self: Fiber<A, E>) => Fiber<A, E>
+  <A, E>(self: Fiber<A, E>, scope: Scope): Fiber<A, E>
+} = effect.fiberRunIn

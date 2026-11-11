@@ -1,0 +1,196 @@
+---
+import "@fontsource/geist-sans/400.css";
+import "@fontsource/geist-sans/500.css";
+import "@fontsource/geist-sans/600.css";
+import "@fontsource/geist-sans/700.css";
+import "@fontsource/geist-mono/400.css";
+import "../styles/global.css";
+import { Navbar } from "@/components/react/Navbar";
+import { siteConfig } from "@/lib/site";
+import { siteConfig as contentConfig } from "@/lib/config";
+
+interface FaqItem {
+  question: string;
+  answer: string;
+}
+
+interface Props {
+  title?: string;
+  description?: string;
+  ogImage?: string;
+  includeFaqSchema?: boolean;
+  faqData?: FaqItem[];
+}
+
+const { title = siteConfig.name, description = siteConfig.description, ogImage, includeFaqSchema = false, faqData } =
+  Astro.props;
+
+const resolvedOgImage = `${siteConfig.url}${ogImage || siteConfig.ogImage}`;
+
+// Generate breadcrumb based on current path
+const pathname = Astro.url.pathname;
+const pathSegments = pathname.split('/').filter(Boolean);
+const breadcrumbItems = [
+  { name: "Home", url: siteConfig.url }
+];
+if (pathSegments.length > 0) {
+  let currentPath = '';
+  for (const segment of pathSegments) {
+    currentPath += `/${segment}`;
+    const name = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
+    breadcrumbItems.push({ name, url: `${siteConfig.url}${currentPath}` });
+  }
+}
+
+// Use custom FAQ data if provided, otherwise use defaults from config
+const faqSchemaData = faqData || contentConfig.faqSection.faQitems;
+
+// Generate canonical URL from current page
+const canonicalURL = new URL(Astro.url.pathname, siteConfig.url).href;
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+
+    <meta name="author" content={siteConfig.name} />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#000000" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="canonical" href={canonicalURL} />
+    <link rel="alternate" type="application/rss+xml" title="Hazel Changelog" href="/rss/changelog.xml" />
+    <title>{title}</title>
+
+    <!-- Open Graph -->
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:site_name" content={siteConfig.name} />
+    <meta
+      property="og:image"
+      content={resolvedOgImage}
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Hazel - Open source team chat platform for developers" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@hazelchat" />
+    <meta name="twitter:creator" content="@hazelchat" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta
+      name="twitter:image"
+      content={resolvedOgImage}
+    />
+    <script
+      is:inline
+      src="https://analytics.ahrefs.com/analytics.js"
+      data-key="UQqIOREoDz1Qfh+ObTeJaw"
+      async></script>
+
+    <!-- Additional head content from pages -->
+    <slot name="head" />
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": `${siteConfig.url}/#organization`,
+          "name": siteConfig.name,
+          "url": siteConfig.url,
+          "logo": {
+            "@type": "ImageObject",
+            "url": `${siteConfig.url}/icon.svg`
+          },
+          "sameAs": [
+            siteConfig.links.twitter,
+            siteConfig.links.github
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": `${siteConfig.url}/#website`,
+          "url": siteConfig.url,
+          "name": siteConfig.name,
+          "description": siteConfig.description,
+          "publisher": {
+            "@id": `${siteConfig.url}/#organization`
+          }
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": siteConfig.name,
+          "description": siteConfig.description,
+          "url": siteConfig.url,
+          "applicationCategory": "CommunicationApplication",
+          "operatingSystem": "macOS, Windows, Linux, Web",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        },
+        // Breadcrumb schema for better navigation in search results
+        {
+          "@type": "BreadcrumbList",
+          "itemListElement": breadcrumbItems.map((item, index) => ({
+            "@type": "ListItem",
+            "position": index + 1,
+            "name": item.name,
+            "item": item.url
+          }))
+        },
+        // FAQ schema - only included on homepage
+        ...(includeFaqSchema ? [{
+          "@type": "FAQPage",
+          "mainEntity": faqSchemaData.map(faq => ({
+            "@type": "Question",
+            "name": faq.question,
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": faq.answer
+            }
+          }))
+        }] : [])
+      ]
+    })} />
+  </head>
+  <body class="antialiased font-sans bg-background">
+    <div class="max-w-7xl mx-auto border-x relative">
+      <div
+        class="block w-px h-full border-l border-border absolute top-0 left-6 z-10"
+      >
+      </div>
+      <div
+        class="block w-px h-full border-r border-border absolute top-0 right-6 z-10"
+      >
+      </div>
+      <Navbar client:load currentPath={Astro.url.pathname} />
+      <slot />
+    </div>
+  </body>
+</html>
+
+<!--
+  TODO: Theme Toggle Support (commented out for future use)
+
+  To enable light/dark mode toggle:
+  1. Install theme toggle script in <head>:
+     <script is:inline>
+       const theme = localStorage.getItem('theme') || 'dark';
+       document.documentElement.classList.toggle('dark', theme === 'dark');
+     </script>
+
+  2. Create ThemeToggle component that toggles 'dark' class on <html>
+
+  3. Remove class="dark" from <html> tag above
+-->

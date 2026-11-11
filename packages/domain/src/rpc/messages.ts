@@ -1,13 +1,14 @@
-import { RpcGroup } from "@effect/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
-import { Rpc } from "effect-rpc-tanstack-devtools"
 import { InternalServerError, MessageNotFoundError, UnauthorizedError } from "../errors"
-import { MessageId } from "../ids"
+import { ChannelId, HtmlRenderId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Message } from "../models"
 import { RateLimitExceededError } from "../rate-limit-errors"
-import { TransactionId } from "../transaction-id"
+import { TransactionId } from "@hazel/schema"
+import { RequiredScopes } from "../scopes/required-scopes"
 import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"
+import { RouteChannelId } from "./routing-fields"
 
 // Re-export for backwards compatibility
 export { MessageNotFoundError } from "../errors"
@@ -17,8 +18,69 @@ export { MessageNotFoundError } from "../errors"
  * Contains the message data and a transaction ID for optimistic updates.
  */
 export class MessageResponse extends Schema.Class<MessageResponse>("MessageResponse")({
-	data: Message.Model.json,
+	data: Message.Schema,
 	transactionId: TransactionId,
+}) {}
+
+export class MessageInteractionResponse extends Schema.Class<MessageInteractionResponse>(
+	"MessageInteractionResponse",
+)({
+	/** The id the bot's `interaction.create` event carries. */
+	interactionId: Schema.String,
+}) {}
+
+/** The message has no enabled action with that id, or was not posted by a bot. */
+export class MessageActionUnavailableError extends Schema.TaggedError<MessageActionUnavailableError>()(
+	"MessageActionUnavailableError",
+	{
+		messageId: MessageId,
+		actionId: Schema.String,
+	},
+) {}
+
+export class HtmlRenderUrlResponse extends Schema.Class<HtmlRenderUrlResponse>("HtmlRenderUrlResponse")({
+	url: Schema.String,
+	/** Epoch milliseconds. */
+	expiresAt: Schema.Number,
+}) {}
+
+/** `message.search`: the org's messages the caller can read, newest first. */
+export const MessageSearchPayload = Schema.Struct({
+	organizationId: OrganizationId,
+	/** Words to match (prefix match, all must appear); empty searches by the filters alone. */
+	query: Schema.String.check(Schema.isMaxLength(500)),
+	channelId: Schema.optional(ChannelId),
+	authorId: Schema.optional(UserId),
+	/** Only messages created before / after this instant. */
+	before: Schema.optional(Schema.Date),
+	after: Schema.optional(Schema.Date),
+	limit: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }))),
+	/** `nextCursor` of the previous page. */
+	cursor: Schema.optional(Schema.String),
+})
+export type MessageSearchPayload = typeof MessageSearchPayload.Type
+
+/** A matched range in `snippet`, `[start, end)` in UTF-16 code units. */
+export const MessageSearchHighlight = Schema.Struct({ start: Schema.Number, end: Schema.Number })
+
+export const MessageSearchHit = Schema.Struct({
+	messageId: MessageId,
+	channelId: ChannelId,
+	authorId: UserId,
+	createdAt: Schema.Date,
+	/** The message as plain text, cut around the match. */
+	snippet: Schema.String,
+	highlights: Schema.Array(MessageSearchHighlight),
+})
+export type MessageSearchHit = typeof MessageSearchHit.Type
+
+export class MessageSearchResponse extends Schema.Class<MessageSearchResponse>("MessageSearchResponse")({
+	results: Schema.Array(MessageSearchHit),
+	nextCursor: Schema.NullOr(Schema.String),
+	/** The org's index is still being built from existing messages: results may be incomplete. */
+	indexing: Schema.Boolean,
+	/** Search is down for this org (its index could not be created): no results, try later. */
+	unavailable: Schema.optionalKey(Schema.Boolean),
 }) {}
 
 /**
@@ -68,16 +130,18 @@ export class MessageRpcs extends RpcGroup.make(
 	 * @throws RateLimitExceededError if rate limit exceeded (60/min)
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("message.create", {
+	Rpc.make("message.create", {
 		payload: Message.Insert,
 		success: MessageResponse,
-		error: Schema.Union(
+		error: Schema.Union([
 			ChannelNotFoundError,
 			UnauthorizedError,
 			InternalServerError,
 			RateLimitExceededError,
-		),
-	}).middleware(AuthMiddleware),
+		]),
+	})
+		.annotate(RequiredScopes, ["messages:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * MessageUpdate
@@ -92,18 +156,21 @@ export class MessageRpcs extends RpcGroup.make(
 	 * @throws RateLimitExceededError if rate limit exceeded (60/min)
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("message.update", {
+	Rpc.make("message.update", {
 		payload: Schema.Struct({
+			channelId: RouteChannelId,
 			id: MessageId,
-		}).pipe(Schema.extend(Message.JsonUpdate)),
+		}).pipe(Schema.fieldsAssign(Message.Patch.fields)),
 		success: MessageResponse,
-		error: Schema.Union(
+		error: Schema.Union([
 			MessageNotFoundError,
 			UnauthorizedError,
 			InternalServerError,
 			RateLimitExceededError,
-		),
-	}).middleware(AuthMiddleware),
+		]),
+	})
+		.annotate(RequiredScopes, ["messages:write"])
+		.middleware(AuthMiddleware),
 
 	/**
 	 * MessageDelete
@@ -118,14 +185,73 @@ export class MessageRpcs extends RpcGroup.make(
 	 * @throws RateLimitExceededError if rate limit exceeded (60/min)
 	 * @throws InternalServerError for unexpected errors
 	 */
-	Rpc.mutation("message.delete", {
-		payload: Schema.Struct({ id: MessageId }),
+	Rpc.make("message.delete", {
+		payload: Schema.Struct({ id: MessageId, channelId: RouteChannelId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
-		error: Schema.Union(
+		error: Schema.Union([
 			MessageNotFoundError,
 			UnauthorizedError,
 			InternalServerError,
 			RateLimitExceededError,
-		),
-	}).middleware(AuthMiddleware),
+		]),
+	})
+		.annotate(RequiredScopes, ["messages:write"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * MessageHtmlRenderUrl
+	 *
+	 * A short-lived signed URL for an HTML render a message shows (`MessageEmbed.html`), for a
+	 * viewer of its channel. The page is served sandboxed (`@hazel/domain/html-render`).
+	 *
+	 * @throws MessageNotFoundError if the message is gone or does not show the render
+	 */
+	Rpc.make("message.htmlRenderUrl", {
+		payload: Schema.Struct({ channelId: ChannelId, messageId: MessageId, renderId: HtmlRenderId }),
+		success: HtmlRenderUrlResponse,
+		error: Schema.Union([MessageNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["messages:read"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * MessageInteract
+	 *
+	 * Press a button on a bot's message (`MessageEmbed.actions`): the bot that posted it gets an
+	 * `interaction.create` gateway event. For a viewer of the channel.
+	 *
+	 * @throws MessageNotFoundError if the message is gone
+	 * @throws MessageActionUnavailableError if it has no enabled action with that id
+	 */
+	Rpc.make("message.interact", {
+		payload: Schema.Struct({
+			channelId: ChannelId,
+			messageId: MessageId,
+			actionId: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100)),
+		}),
+		success: MessageInteractionResponse,
+		error: Schema.Union([
+			MessageNotFoundError,
+			MessageActionUnavailableError,
+			UnauthorizedError,
+			InternalServerError,
+			RateLimitExceededError,
+		]),
+	})
+		.annotate(RequiredScopes, ["messages:read"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * MessageSearch
+	 *
+	 * Full-text search over the organization's messages (its `OrgObject`'s index), limited to the
+	 * channels the caller can read.
+	 */
+	Rpc.make("message.search", {
+		payload: MessageSearchPayload,
+		success: MessageSearchResponse,
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["messages:read"])
+		.middleware(AuthMiddleware),
 ) {}

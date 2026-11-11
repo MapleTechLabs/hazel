@@ -1,0 +1,39 @@
+---
+import { siteConfig } from "@/lib/config";
+
+const { faqSection } = siteConfig;
+---
+
+<section id="faq" class="flex flex-col items-center justify-center gap-10 py-20 px-6 md:px-0 w-full">
+  <div class="flex flex-col items-center gap-3">
+    <h2 class="text-3xl md:text-4xl font-medium tracking-tighter text-center text-primary">
+      {faqSection.title}
+    </h2>
+    <p class="text-muted-foreground text-center max-w-xl">
+      {faqSection.description}
+    </p>
+  </div>
+
+  <div class="w-full max-w-3xl space-y-4">
+    {faqSection.faQitems.map((item) => (
+      <details class="group border border-border rounded-lg bg-background">
+        <summary class="flex cursor-pointer items-center justify-between p-4 text-left font-medium text-primary hover:bg-accent/50 rounded-lg transition-colors">
+          <span>{item.question}</span>
+          <svg
+            class="size-5 shrink-0 transition-transform duration-200 group-open:rotate-180"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </summary>
+        <div class="px-4 pb-4 text-muted-foreground leading-relaxed">
+          {item.answer}
+        </div>
+      </details>
+    ))}
+  </div>
+</section>

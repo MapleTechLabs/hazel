@@ -1,0 +1,575 @@
+---
+import Layout from "@/layouts/Layout.astro"
+import FooterSection from "@/components/sections/FooterSection.astro"
+import { siteConfig } from "@/lib/site"
+---
+
+<Layout
+	title="Privacy Policy | Hazel"
+	description="Learn how Hazel protects your privacy and handles your personal data in compliance with GDPR and other privacy regulations."
+>
+	<main class="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full">
+		<!-- Hero Section -->
+		<section class="w-full relative overflow-hidden">
+			<div class="absolute inset-0 -z-10">
+				<div
+					class="absolute inset-0 h-[500px] w-full [background:radial-gradient(125%_125%_at_50%_10%,var(--background)_40%,var(--secondary)_100%)]"
+				>
+				</div>
+				<div
+					class="absolute inset-0 h-[500px] opacity-[0.015] [background-image:linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] [background-size:64px_64px]"
+				>
+				</div>
+			</div>
+
+			<div class="relative z-10 pt-32 pb-16 px-6 max-w-4xl mx-auto">
+				<nav class="flex items-center gap-2.5 text-sm text-muted-foreground font-medium mb-8">
+					<a href="/" class="hover:text-foreground transition-colors duration-200 flex items-center gap-1.5">
+						<svg
+							class="size-3.5"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+							<polyline points="9 22 9 12 15 12 15 22"></polyline>
+						</svg>
+						Home
+					</a>
+					<span class="text-border">/</span>
+					<span class="text-foreground">Privacy Policy</span>
+				</nav>
+
+				<div class="space-y-4">
+					<div
+						class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/10 border border-secondary/20"
+					>
+						<svg
+							class="size-4 text-secondary"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+						</svg>
+						<span class="text-sm font-medium text-secondary">GDPR Compliant</span>
+					</div>
+					<h1 class="text-4xl md:text-5xl font-semibold tracking-tight text-primary">Privacy Policy</h1>
+					<p class="text-lg text-muted-foreground max-w-2xl">
+						Your privacy matters to us. This policy explains how we collect, use, and protect your personal
+						data.
+					</p>
+					<p class="text-sm text-muted-foreground/70">Last updated: December 14, 2024</p>
+				</div>
+			</div>
+		</section>
+
+		<!-- Content Section -->
+		<section class="w-full py-16 px-6">
+			<div class="max-w-4xl mx-auto">
+				<div class="grid md:grid-cols-[240px_1fr] gap-12">
+					<!-- Table of Contents -->
+					<aside class="hidden md:block">
+						<nav class="sticky top-24 space-y-1">
+							<p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+								On this page
+							</p>
+							<a href="#overview" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Overview
+							</a>
+							<a href="#data-collection" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Data Collection
+							</a>
+							<a href="#data-usage" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								How We Use Data
+							</a>
+							<a href="#data-sharing" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Data Sharing
+							</a>
+							<a href="#your-rights" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Your Rights
+							</a>
+							<a href="#cookies" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Cookies
+							</a>
+							<a href="#security" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Security
+							</a>
+							<a href="#contact" class="block text-sm text-muted-foreground hover:text-foreground py-1.5 transition-colors border-l-2 border-transparent hover:border-secondary pl-3 -ml-px">
+								Contact Us
+							</a>
+						</nav>
+					</aside>
+
+					<!-- Main Content -->
+					<article class="prose prose-neutral dark:prose-invert max-w-none">
+						<section id="overview" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>1</span
+								>
+								Overview
+							</h2>
+							<p class="text-muted-foreground leading-relaxed">
+								Hazel ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy
+								explains how we collect, use, disclose, and safeguard your information when you use our
+								communication platform and services.
+							</p>
+							<p class="text-muted-foreground leading-relaxed">
+								We comply with the General Data Protection Regulation (GDPR), the California Consumer
+								Privacy Act (CCPA), and other applicable privacy laws. By using Hazel, you agree to the
+								collection and use of information in accordance with this policy.
+							</p>
+						</section>
+
+						<section id="data-collection" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>2</span
+								>
+								Data Collection
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								We collect information that you provide directly to us, as well as information collected
+								automatically when you use our services.
+							</p>
+
+							<h3 class="text-lg font-medium text-primary mt-6 mb-3">Information You Provide</h3>
+							<ul class="space-y-2 text-muted-foreground">
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Account Information:</strong> Name, email address,
+										password, and profile picture</span
+									>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Communications:</strong> Messages, files, and content
+										you share through the platform</span
+									>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Payment Information:</strong> Billing details processed
+										securely through our payment providers</span
+									>
+								</li>
+							</ul>
+
+							<h3 class="text-lg font-medium text-primary mt-6 mb-3">Automatically Collected Information</h3>
+							<ul class="space-y-2 text-muted-foreground">
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Device Information:</strong> Browser type, operating
+										system, and device identifiers</span
+									>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Usage Data:</strong> Features used, time spent, and
+										interaction patterns</span
+									>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Log Data:</strong> IP addresses, access times, and
+										referring URLs</span
+									>
+								</li>
+							</ul>
+						</section>
+
+						<section id="data-usage" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>3</span
+								>
+								How We Use Your Data
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								We use the collected data for various purposes:
+							</p>
+							<div class="grid gap-4">
+								<div class="p-4 rounded-xl bg-accent/50 border border-border">
+									<h4 class="font-medium text-foreground mb-1">Service Delivery</h4>
+									<p class="text-sm text-muted-foreground">
+										To provide, maintain, and improve our communication platform
+									</p>
+								</div>
+								<div class="p-4 rounded-xl bg-accent/50 border border-border">
+									<h4 class="font-medium text-foreground mb-1">Communication</h4>
+									<p class="text-sm text-muted-foreground">
+										To send you updates, security alerts, and support messages
+									</p>
+								</div>
+								<div class="p-4 rounded-xl bg-accent/50 border border-border">
+									<h4 class="font-medium text-foreground mb-1">Analytics</h4>
+									<p class="text-sm text-muted-foreground">
+										To understand usage patterns and improve user experience
+									</p>
+								</div>
+								<div class="p-4 rounded-xl bg-accent/50 border border-border">
+									<h4 class="font-medium text-foreground mb-1">Legal Compliance</h4>
+									<p class="text-sm text-muted-foreground">
+										To comply with legal obligations and protect our rights
+									</p>
+								</div>
+							</div>
+						</section>
+
+						<section id="data-sharing" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>4</span
+								>
+								Data Sharing
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								We do not sell your personal data. We may share your information only in the following
+								circumstances:
+							</p>
+							<ul class="space-y-2 text-muted-foreground">
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Service Providers:</strong> Trusted third parties who
+										assist in operating our platform</span
+									>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Legal Requirements:</strong> When required by law or to
+										protect our legal rights</span
+									>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">Business Transfers:</strong> In connection with a
+										merger, acquisition, or sale of assets</span
+									>
+								</li>
+								<li class="flex items-start gap-2">
+									<span class="size-1.5 rounded-full bg-secondary mt-2 shrink-0"></span>
+									<span
+										><strong class="text-foreground">With Your Consent:</strong> When you explicitly agree
+										to the sharing</span
+									>
+								</li>
+							</ul>
+						</section>
+
+						<section id="your-rights" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>5</span
+								>
+								Your Rights (GDPR)
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								Under GDPR and other privacy regulations, you have the following rights:
+							</p>
+							<div class="grid sm:grid-cols-2 gap-4">
+								<div class="p-4 rounded-xl border border-border bg-background">
+									<div class="flex items-center gap-2 mb-2">
+										<svg
+											class="size-5 text-secondary"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+											<polyline points="14 2 14 8 20 8"></polyline>
+											<line x1="16" y1="13" x2="8" y2="13"></line>
+											<line x1="16" y1="17" x2="8" y2="17"></line>
+										</svg>
+										<h4 class="font-medium text-foreground">Right to Access</h4>
+									</div>
+									<p class="text-sm text-muted-foreground">Request a copy of your personal data</p>
+								</div>
+								<div class="p-4 rounded-xl border border-border bg-background">
+									<div class="flex items-center gap-2 mb-2">
+										<svg
+											class="size-5 text-secondary"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+											<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+										</svg>
+										<h4 class="font-medium text-foreground">Right to Rectification</h4>
+									</div>
+									<p class="text-sm text-muted-foreground">Correct inaccurate personal data</p>
+								</div>
+								<div class="p-4 rounded-xl border border-border bg-background">
+									<div class="flex items-center gap-2 mb-2">
+										<svg
+											class="size-5 text-secondary"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<polyline points="3 6 5 6 21 6"></polyline>
+											<path
+												d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+											></path>
+										</svg>
+										<h4 class="font-medium text-foreground">Right to Erasure</h4>
+									</div>
+									<p class="text-sm text-muted-foreground">Request deletion of your data</p>
+								</div>
+								<div class="p-4 rounded-xl border border-border bg-background">
+									<div class="flex items-center gap-2 mb-2">
+										<svg
+											class="size-5 text-secondary"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+											<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+										</svg>
+										<h4 class="font-medium text-foreground">Right to Restrict</h4>
+									</div>
+									<p class="text-sm text-muted-foreground">Limit how we process your data</p>
+								</div>
+								<div class="p-4 rounded-xl border border-border bg-background">
+									<div class="flex items-center gap-2 mb-2">
+										<svg
+											class="size-5 text-secondary"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+											<polyline points="7 10 12 15 17 10"></polyline>
+											<line x1="12" y1="15" x2="12" y2="3"></line>
+										</svg>
+										<h4 class="font-medium text-foreground">Right to Portability</h4>
+									</div>
+									<p class="text-sm text-muted-foreground">Export your data in a portable format</p>
+								</div>
+								<div class="p-4 rounded-xl border border-border bg-background">
+									<div class="flex items-center gap-2 mb-2">
+										<svg
+											class="size-5 text-secondary"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<circle cx="12" cy="12" r="10"></circle>
+											<line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+										</svg>
+										<h4 class="font-medium text-foreground">Right to Object</h4>
+									</div>
+									<p class="text-sm text-muted-foreground">Object to certain processing activities</p>
+								</div>
+							</div>
+							<p class="text-muted-foreground leading-relaxed mt-4">
+								To exercise any of these rights, please contact us at{" "}
+								<a href="mailto:privacy@hazel.sh" class="text-secondary hover:underline">privacy@hazel.sh</a
+								>.
+							</p>
+						</section>
+
+						<section id="cookies" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>6</span
+								>
+								Cookies
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								We use cookies and similar tracking technologies to enhance your experience:
+							</p>
+							<div class="overflow-hidden rounded-xl border border-border">
+								<table class="w-full text-sm">
+									<thead class="bg-accent/50">
+										<tr>
+											<th class="text-left p-4 font-medium text-foreground">Type</th>
+											<th class="text-left p-4 font-medium text-foreground">Purpose</th>
+											<th class="text-left p-4 font-medium text-foreground">Duration</th>
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-border">
+										<tr>
+											<td class="p-4 text-foreground font-medium">Essential</td>
+											<td class="p-4 text-muted-foreground">Required for basic functionality</td>
+											<td class="p-4 text-muted-foreground">Session</td>
+										</tr>
+										<tr>
+											<td class="p-4 text-foreground font-medium">Analytics</td>
+											<td class="p-4 text-muted-foreground">Help us understand usage patterns</td>
+											<td class="p-4 text-muted-foreground">1 year</td>
+										</tr>
+										<tr>
+											<td class="p-4 text-foreground font-medium">Preferences</td>
+											<td class="p-4 text-muted-foreground">Remember your settings and preferences</td>
+											<td class="p-4 text-muted-foreground">1 year</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+							<p class="text-muted-foreground leading-relaxed mt-4">
+								You can manage cookie preferences through your browser settings.
+							</p>
+						</section>
+
+						<section id="security" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>7</span
+								>
+								Security
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								We implement industry-standard security measures to protect your data:
+							</p>
+							<ul class="space-y-2 text-muted-foreground">
+								<li class="flex items-start gap-2">
+									<svg
+										class="size-5 text-green-500 mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>
+									<span>End-to-end encryption for messages</span>
+								</li>
+								<li class="flex items-start gap-2">
+									<svg
+										class="size-5 text-green-500 mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>
+									<span>TLS 1.3 encryption for data in transit</span>
+								</li>
+								<li class="flex items-start gap-2">
+									<svg
+										class="size-5 text-green-500 mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>
+									<span>AES-256 encryption for data at rest</span>
+								</li>
+								<li class="flex items-start gap-2">
+									<svg
+										class="size-5 text-green-500 mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>
+									<span>Regular security audits and penetration testing</span>
+								</li>
+								<li class="flex items-start gap-2">
+									<svg
+										class="size-5 text-green-500 mt-0.5 shrink-0"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>
+									<span>SOC 2 Type II compliance (in progress)</span>
+								</li>
+							</ul>
+						</section>
+
+						<section id="contact" class="scroll-mt-24 mb-12">
+							<h2 class="text-2xl font-semibold text-primary mb-4 flex items-center gap-3">
+								<span
+									class="flex items-center justify-center size-8 rounded-lg bg-secondary/10 text-secondary text-sm font-bold"
+									>8</span
+								>
+								Contact Us
+							</h2>
+							<p class="text-muted-foreground leading-relaxed mb-4">
+								If you have any questions about this Privacy Policy or our data practices, please contact
+								us:
+							</p>
+							<div class="p-6 rounded-xl border border-border bg-accent/30">
+								<div class="space-y-3">
+									<div class="flex items-center gap-3">
+										<svg
+											class="size-5 text-secondary"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path
+												d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
+											></path>
+											<polyline points="22,6 12,13 2,6"></polyline>
+										</svg>
+										<a href="mailto:privacy@hazel.sh" class="text-foreground hover:text-secondary transition-colors"
+											>privacy@hazel.sh</a
+										>
+									</div>
+									<div class="flex items-center gap-3">
+										<svg
+											class="size-5 text-secondary"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+											<circle cx="12" cy="10" r="3"></circle>
+										</svg>
+										<span class="text-foreground">Hazel Technologies Inc.</span>
+									</div>
+								</div>
+							</div>
+							<p class="text-sm text-muted-foreground mt-4">
+								For EU residents, you also have the right to lodge a complaint with your local data
+								protection authority.
+							</p>
+						</section>
+					</article>
+				</div>
+			</div>
+		</section>
+
+		<FooterSection />
+	</main>
+</Layout>

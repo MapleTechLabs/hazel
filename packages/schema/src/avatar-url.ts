@@ -1,5 +1,5 @@
-import { HttpClient } from "@effect/platform"
-import { Duration, Effect, Option, Schema } from "effect"
+import { HttpClient } from "effect/http"
+import { Duration, Effect, Option, Schema, SchemaGetter } from "effect"
 
 export class InvalidAvatarUrlError extends Schema.TaggedError<InvalidAvatarUrlError>()(
 	"InvalidAvatarUrlError",
@@ -19,67 +19,69 @@ export const validateImageUrl = Effect.fn("validateImageUrl")(function* (url: st
 		.head(url)
 		.pipe(Effect.scoped, Effect.timeout(Duration.seconds(5)))
 		.pipe(
-			Effect.catchTag(
-				"TimeoutException",
-				() =>
+			Effect.catchTag("TimeoutError", () =>
+				Effect.fail(
 					new InvalidAvatarUrlError({
 						message: "Avatar URL took too long to respond",
 						url,
 					}),
+				),
 			),
-			Effect.catchTag(
-				"RequestError",
-				() =>
+			Effect.catchTag("HttpClientError", (e) =>
+				Effect.fail(
 					new InvalidAvatarUrlError({
-						message: "Avatar URL could not be reached",
+						message: `Avatar URL request failed: ${e.message}`,
 						url,
 					}),
-			),
-			Effect.catchTag(
-				"ResponseError",
-				(e) =>
-					new InvalidAvatarUrlError({
-						message: `Avatar URL returned ${e.response.status} error`,
-						url,
-					}),
+				),
 			),
 		)
 
 	if (response.status >= 400) {
-		return yield* new InvalidAvatarUrlError({
-			message: `Avatar URL returned ${response.status} error`,
-			url,
-		})
+		return yield* Effect.fail(
+			new InvalidAvatarUrlError({
+				message: `Avatar URL returned ${response.status} error`,
+				url,
+			}),
+		)
 	}
 
-	const contentType = Option.fromNullable(response.headers["content-type"])
+	const contentType = Option.fromNullishOr(response.headers["content-type"])
 	const isImage = Option.match(contentType, {
 		onNone: () => false,
-		onSome: (ct) => ct.startsWith("image/"),
+		onSome: (ct: string) => ct.startsWith("image/"),
 	})
 
 	if (!isImage) {
-		return yield* new InvalidAvatarUrlError({
-			message: "Avatar URL must point to an image",
-			url,
-		})
+		return yield* Effect.fail(
+			new InvalidAvatarUrlError({
+				message: "Avatar URL must point to an image",
+				url,
+			}),
+		)
 	}
 })
 
-export const AvatarUrl = Schema.String.pipe(
-	Schema.pattern(/^https?:\/\/.+/i, {
-		message: () => "Avatar URL must be a valid URL",
+export const AvatarUrl = Schema.String.check(
+	Schema.isPattern(/^https?:\/\/.+/i, {
+		message: "Avatar URL must be a valid URL",
 	}),
-	Schema.maxLength(2048),
-	Schema.filterEffect((url) =>
-		validateImageUrl(url).pipe(
-			Effect.map(() => true),
-			Effect.catchAll((e) => Effect.succeed(e.message)),
-		),
-	),
-).annotations({
-	description: "A validated URL to an avatar image",
-	title: "Avatar URL",
-})
+)
+	.check(Schema.isMaxLength(2048))
+	.pipe(
+		Schema.decode({
+			decode: SchemaGetter.checkEffect((url: string) =>
+				validateImageUrl(url).pipe(
+					Effect.map(() => true as const),
+					Effect.catch((e: InvalidAvatarUrlError) => Effect.succeed(e.message)),
+				),
+			),
+			encode: SchemaGetter.passthrough(),
+		}),
+	)
+	.annotate({
+		description: "A validated URL to an avatar image",
+		title: "Avatar URL",
+	})
 
 export type AvatarUrl = Schema.Schema.Type<typeof AvatarUrl>

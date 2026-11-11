@@ -1,0 +1,104 @@
+---
+import type { IntegrationFAQ } from "@/content.config";
+
+interface Props {
+	faqs: IntegrationFAQ[];
+	integrationName: string;
+}
+
+const { faqs, integrationName } = Astro.props;
+---
+
+<section id="faq" class="w-full relative">
+	<div class="flex flex-col items-center justify-center gap-12 py-20 md:py-28 px-6">
+		<!-- Section header -->
+		<div class="flex flex-col items-center gap-4 text-center max-w-2xl">
+			<div
+				class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent border border-border"
+			>
+				<svg
+					class="size-3.5 text-secondary"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="2"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+					></path>
+				</svg>
+				<span class="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+					FAQ
+				</span>
+			</div>
+
+			<h2 class="text-3xl md:text-4xl font-semibold tracking-tight text-primary">
+				Common Questions
+			</h2>
+			<p class="text-muted-foreground">
+				Everything you need to know about the {integrationName} integration
+			</p>
+		</div>
+
+		<!-- FAQ Accordion -->
+		<div class="w-full max-w-3xl space-y-3">
+			{
+				faqs.map((item, index) => (
+					<details class="group border border-border/50 rounded-xl bg-background/50 backdrop-blur-sm hover:border-border transition-colors duration-200 overflow-hidden">
+						<summary class="flex cursor-pointer items-center justify-between p-5 text-left font-medium text-primary hover:bg-accent/30 transition-colors duration-200 select-none">
+							<span class="flex items-center gap-4">
+								<span class="flex items-center justify-center size-7 rounded-lg bg-accent text-xs font-semibold text-muted-foreground group-open:bg-secondary/10 group-open:text-secondary transition-colors duration-200">
+									{(index + 1).toString().padStart(2, "0")}
+								</span>
+								<span class="text-[15px]">{item.question}</span>
+							</span>
+							<div class="ml-4 flex items-center justify-center size-8 rounded-full bg-accent group-hover:bg-accent/80 transition-colors duration-200">
+								<svg
+									class="size-4 shrink-0 text-muted-foreground transition-transform duration-300 group-open:rotate-180"
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M19 9l-7 7-7-7"
+									/>
+								</svg>
+							</div>
+						</summary>
+						<div class="px-5 pb-5 pt-1">
+							<div class="pl-11 text-muted-foreground leading-relaxed text-[15px]">
+								{item.answer}
+							</div>
+						</div>
+					</details>
+				))
+			}
+		</div>
+
+		<!-- Help CTA -->
+		<div
+			class="flex flex-col sm:flex-row items-center gap-4 pt-4 text-sm text-muted-foreground"
+		>
+			<span>Still have questions?</span>
+			<a
+				href="mailto:support@hazel.sh"
+				class="inline-flex items-center gap-2 text-secondary hover:text-secondary/80 font-medium transition-colors duration-200"
+			>
+				<svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+					></path>
+				</svg>
+				Contact our team
+			</a>
+		</div>
+	</div>
+</section>

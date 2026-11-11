@@ -1,33 +1,7 @@
 import { Schema } from "effect"
 
 /**
- * Error thrown when queue operations fail
- */
-export class QueueError extends Schema.TaggedError<QueueError>()("QueueError", {
-	message: Schema.String,
-	cause: Schema.Unknown,
-}) {}
-
-/**
- * Error thrown when shape stream subscription fails
- */
-export class ShapeStreamError extends Schema.TaggedError<ShapeStreamError>()("ShapeStreamError", {
-	message: Schema.String,
-	table: Schema.String,
-	cause: Schema.Unknown,
-}) {}
-
-/**
- * Error thrown when event handler execution fails
- */
-export class HandlerError extends Schema.TaggedError<HandlerError>()("HandlerError", {
-	message: Schema.String,
-	eventType: Schema.String,
-	cause: Schema.Unknown,
-}) {}
-
-/**
- * Error thrown when bot authentication fails
+ * Error thrown when bot authentication fails.
  */
 export class AuthenticationError extends Schema.TaggedError<AuthenticationError>()("AuthenticationError", {
 	message: Schema.String,
@@ -35,72 +9,186 @@ export class AuthenticationError extends Schema.TaggedError<AuthenticationError>
 }) {}
 
 /**
- * Error thrown when bot client fails to start
+ * Error thrown when a command payload cannot be decoded.
  */
-export class BotStartError extends Schema.TaggedError<BotStartError>()("BotStartError", {
-	message: Schema.String,
-	cause: Schema.Unknown,
-}) {}
-
-/**
- * Error thrown when message operations fail
- */
-export class MessageOperationError extends Schema.TaggedError<MessageOperationError>()(
-	"MessageOperationError",
+export class CommandArgsDecodeError extends Schema.TaggedError<CommandArgsDecodeError>()(
+	"CommandArgsDecodeError",
 	{
 		message: Schema.String,
-		operation: Schema.String,
+		commandName: Schema.String,
 		cause: Schema.Unknown,
 	},
 ) {}
 
 /**
- * Error thrown when event dispatcher operations fail
+ * Error thrown when a command handler fails.
  */
-export class DispatchError extends Schema.TaggedError<DispatchError>()("DispatchError", {
+export class CommandHandlerError extends Schema.TaggedError<CommandHandlerError>()("CommandHandlerError", {
+	message: Schema.String,
+	commandName: Schema.String,
+	cause: Schema.Unknown,
+}) {}
+
+/**
+ * Error thrown when syncing slash commands with the backend fails.
+ */
+export class CommandSyncError extends Schema.TaggedError<CommandSyncError>()("CommandSyncError", {
+	message: Schema.String,
+	cause: Schema.Unknown,
+}) {}
+
+/**
+ * Error thrown when syncing mentionable settings fails.
+ */
+export class MentionableSyncError extends Schema.TaggedError<MentionableSyncError>()("MentionableSyncError", {
+	message: Schema.String,
+	cause: Schema.Unknown,
+}) {}
+
+export class GatewayReadError extends Schema.TaggedError<GatewayReadError>()("GatewayReadError", {
+	message: Schema.String,
+	cause: Schema.Unknown,
+}) {}
+
+export class GatewayDecodeError extends Schema.TaggedError<GatewayDecodeError>()("GatewayDecodeError", {
+	message: Schema.String,
+	payload: Schema.String,
+	cause: Schema.Unknown,
+}) {}
+
+export class GatewaySessionStoreError extends Schema.TaggedError<GatewaySessionStoreError>()(
+	"GatewaySessionStoreError",
+	{
+		message: Schema.String,
+		cause: Schema.Unknown,
+	},
+) {}
+
+/**
+ * Error thrown when sending a message fails.
+ */
+export class MessageSendError extends Schema.TaggedError<MessageSendError>()("MessageSendError", {
+	message: Schema.String,
+	channelId: Schema.String,
+	cause: Schema.Unknown,
+}) {}
+
+/**
+ * Error thrown when replying to a message fails.
+ */
+export class MessageReplyError extends Schema.TaggedError<MessageReplyError>()("MessageReplyError", {
+	message: Schema.String,
+	channelId: Schema.String,
+	replyToMessageId: Schema.String,
+	cause: Schema.Unknown,
+}) {}
+
+/**
+ * Error thrown when updating a message fails.
+ */
+export class MessageUpdateError extends Schema.TaggedError<MessageUpdateError>()("MessageUpdateError", {
+	message: Schema.String,
+	messageId: Schema.String,
+	cause: Schema.Unknown,
+}) {}
+
+/**
+ * Error thrown when publishing an HTML render fails (rejected page, storage, network).
+ */
+export class HtmlRenderPublishError extends Schema.TaggedError<HtmlRenderPublishError>()(
+	"HtmlRenderPublishError",
+	{
+		message: Schema.String,
+		channelId: Schema.String,
+		cause: Schema.Unknown,
+	},
+) {}
+
+/**
+ * Error thrown when deleting a message fails.
+ */
+export class MessageDeleteError extends Schema.TaggedError<MessageDeleteError>()("MessageDeleteError", {
+	message: Schema.String,
+	messageId: Schema.String,
+	cause: Schema.Unknown,
+}) {}
+
+/**
+ * Error thrown when toggling a reaction fails.
+ */
+export class MessageReactError extends Schema.TaggedError<MessageReactError>()("MessageReactError", {
+	message: Schema.String,
+	messageId: Schema.String,
+	emoji: Schema.String,
+	cause: Schema.Unknown,
+}) {}
+
+/**
+ * Error thrown when listing messages fails.
+ */
+export class MessageListError extends Schema.TaggedError<MessageListError>()("MessageListError", {
+	message: Schema.String,
+	channelId: Schema.String,
+	cause: Schema.Unknown,
+}) {}
+
+/**
+ * Error thrown when an event handler execution fails.
+ */
+export class EventHandlerError extends Schema.TaggedError<EventHandlerError>()("EventHandlerError", {
 	message: Schema.String,
 	eventType: Schema.String,
 	cause: Schema.Unknown,
 }) {}
 
 /**
- * Error thrown for transient failures that can be retried
+ * Retry policy classification for tagged SDK errors.
  */
-export class TransientError extends Schema.TaggedError<TransientError>()("TransientError", {
-	message: Schema.String,
-	cause: Schema.Unknown,
-}) {
-	readonly retryable = true
-}
+export type RetryPolicyClass = "none" | "quick" | "transient" | "connection"
 
 /**
- * Error thrown when connection to external service fails
+ * Get a retry policy class for a specific tagged error.
  */
-export class ConnectionError extends Schema.TaggedError<ConnectionError>()("ConnectionError", {
-	message: Schema.String,
-	service: Schema.Literal("electric", "backend", "durable-stream"),
-	cause: Schema.Unknown,
-}) {
-	readonly retryable = true
-}
-
-/**
- * Error thrown when schema validation fails
- */
-export class ValidationError extends Schema.TaggedError<ValidationError>()("ValidationError", {
-	message: Schema.String,
-	table: Schema.String,
-	cause: Schema.Unknown,
-}) {
-	readonly retryable = false
-}
-
-/**
- * Check if an error is retryable
- */
-export const isRetryable = (error: unknown): boolean => {
-	if (typeof error === "object" && error !== null && "retryable" in error) {
-		return Boolean(error.retryable)
+export const retryPolicyForTag = (tag: string): RetryPolicyClass => {
+	switch (tag) {
+		case "AuthenticationError":
+			return "connection"
+		case "CommandSyncError":
+		case "MentionableSyncError":
+		case "GatewayReadError":
+		case "GatewaySessionStoreError":
+		case "MessageSendError":
+		case "MessageReplyError":
+		case "MessageUpdateError":
+		case "MessageDeleteError":
+		case "MessageReactError":
+		case "MessageListError":
+			return "transient"
+		case "GatewayDecodeError":
+			return "none"
+		default:
+			return "none"
 	}
-	return false
+}
+
+/**
+ * Extract `_tag` from unknown Effect error values.
+ */
+export const getErrorTag = (error: unknown): string | null => {
+	if (typeof error === "object" && error !== null && "_tag" in error) {
+		const tag = (error as Record<string, unknown>)["_tag"]
+		return typeof tag === "string" ? tag : null
+	}
+	return null
+}
+
+/**
+ * Check if an unknown error should be retried based on its tag.
+ */
+export const isRetryableError = (error: unknown): boolean => {
+	const tag = getErrorTag(error)
+	if (!tag) {
+		return false
+	}
+	return retryPolicyForTag(tag) !== "none"
 }
