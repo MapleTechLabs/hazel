@@ -244,8 +244,9 @@ const BILLING_PROVIDERS: ReadonlyArray<CustomerProvider> = ["stripe", "autumn"]
 /**
  * Whose subscriptions count for one account's MRR, from its subscriptions (any status): Autumn once
  * its connection finished its first import (until then its data is partial) and it bills the
- * account (a subscription of Autumn's pays or paid: an auto-enabled free plan does not), else
- * Stripe (a customer Autumn does not know, or billed in Stripe outside it). An account with
+ * account now (a billed subscription that pays: not a trial, not an auto-enabled free plan), else
+ * Stripe when it does (a customer Autumn does not know, or billed in Stripe outside it). With
+ * neither billing now, the one that paid: Autumn's when it did, else Stripe's. An account with
  * Autumn's and none of Stripe's keeps Autumn's either way, so a disconnect does not zero its MRR.
  */
 export const billingProviderOf = (
@@ -254,8 +255,13 @@ export const billingProviderOf = (
 ): CustomerProvider => {
 	const autumn = subscriptions.filter((sub) => sub.provider === "autumn")
 	if (autumn.length === 0) return "stripe"
-	if (!subscriptions.some((sub) => sub.provider === "stripe")) return "autumn"
-	return autumnReady && autumn.some(pays) ? "autumn" : "stripe"
+	const stripe = subscriptions.filter((sub) => sub.provider === "stripe")
+	if (stripe.length === 0) return "autumn"
+	if (!autumnReady) return "stripe"
+	const billsNow = (sub: schema.CustomerSubscription) => billed(sub) && pays(sub)
+	if (autumn.some(billsNow)) return "autumn"
+	if (stripe.some(billsNow)) return "stripe"
+	return autumn.some(pays) ? "autumn" : "stripe"
 }
 
 /** Billing subscriptions by account: the account's source (`billingProviderOf`) and its subscriptions. */

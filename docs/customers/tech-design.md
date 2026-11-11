@@ -276,9 +276,10 @@ Rules:
 - `lastActiveAt` / `lastActiveContactId` = max over contacts; champion = most active contact by
   active days (tie: events) in 30 d; `championInactiveSince` = their last active day if ≥ 1 d ago.
 - Billing source, **per account**: **Autumn when the org's Autumn connection finished its first
-  import (`backfilledAt`, not disconnected) and the account has at least one Autumn subscription
-  (any status); else Stripe** (a customer Autumn does not know, or billed in Stripe outside it).
-  An account with Autumn subscriptions and none in Stripe keeps Autumn's either way (a disconnect
+  import (`backfilledAt`, not disconnected) and Autumn bills the account now (an `active`,
+  `past_due` or `unpaid` subscription that pays: not a trial, not a free plan); else Stripe when
+  it does** (a customer Autumn does not know, or billed in Stripe outside it). With neither billing
+  now, Autumn's when one of its subscriptions paid, else Stripe's. An account with Autumn subscriptions and none in Stripe keeps Autumn's either way (a disconnect
   does not zero its MRR). The other provider's subscriptions are ignored for that account's MRR;
   the source is stored as `customer_accounts.mrrSource`. Invoices always from Stripe.
 - `mrrMinor` = Σ non-canceled subscription MRR (reporting currency only; other currencies counted
@@ -293,7 +294,8 @@ Rules:
 - Built-in metrics for today: `active_users` (DAU), `active_users_30d`, `mrr`, later `health_score`.
 - MRR movements (yesterday's `mrr` vs today's): 0→>0 `new` (or `reactivation` if `churnedAt` set
   before), >0→0 `churn`, up `expansion`, down `contraction`. An account whose `mrrSource` changed
-  (Stripe ↔ Autumn) writes none that run: a switch of source is not revenue.
+  (Stripe ↔ Autumn) writes none that run: a switch of source is not revenue. Only a switch from
+  MRR 0 (an upgrade from a free plan) keeps its movement.
 - `customer_org_daily[today]` from the above (+ at-risk MRR = Σ MRR of accounts with an open high
   risk signal).
 - After a backfill: rebuild `active_users*`, `mrr` (from subscription start/cancel dates),

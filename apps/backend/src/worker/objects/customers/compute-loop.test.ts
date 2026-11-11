@@ -1024,6 +1024,65 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("keeps a Stripe payer on Stripe through an Autumn trial; its conversion is a switch, not revenue", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					{
+						_tag: "account",
+						externalId: "org_1",
+						name: "Trial Co",
+						sameAs: [],
+						onNoMatch: "create",
+					},
+				])
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET backfilledAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
+					)
+					.run(world.connection("autumn"))
+				yield* world.ingest("stripe", [subscription(60)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				const state = () => ({
+					account: world.rows(`SELECT mrrMinor, mrrSource, lifecycleStage FROM customer_accounts`),
+					movements: world.rows(`SELECT type, toMrrMinor FROM customer_mrr_movements`),
+				})
+				const paid = [{ type: "new", toMrrMinor: 19_900 }]
+
+				// A card trial in Autumn carries its plan's MRR but bills nothing yet: still Stripe's.
+				const trial: UpsertSubscription = {
+					...subscription(2),
+					externalId: "cus_1:pro",
+					planName: "Pro",
+					status: "trialing",
+					mrrMinor: 29_900,
+					trialEndsAt: new Date(NOW.getTime() + 5 * DAY).toISOString(),
+				}
+				yield* world.ingest("autumn", [trial])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 19_900, mrrSource: "stripe", lifecycleStage: "active" }],
+					movements: paid,
+				})
+
+				// It converts and Stripe's ends: billing moves to Autumn, no new MRR and no churn.
+				yield* world.ingest("autumn", [{ ...trial, status: "active" }])
+				yield* world.ingest("stripe", [
+					{
+						...subscription(60),
+						status: "canceled",
+						canceledAt: new Date(NOW.getTime() - DAY).toISOString(),
+					},
+				])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 29_900, mrrSource: "autumn", lifecycleStage: "active" }],
+					movements: paid,
+				})
+			}),
+		))
+
 	it("keeps the movement of an upgrade from a free Autumn plan that Stripe reports first", () =>
 		run(
 			Effect.gen(function* () {

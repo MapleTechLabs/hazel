@@ -132,15 +132,20 @@ describe("signal evaluation", () => {
 		expect(billingProviderOf(true, both)).toBe("autumn")
 		// Unknown to Autumn, or billed in Stripe outside it.
 		expect(billingProviderOf(true, subs({ provider: "stripe" }))).toBe("stripe")
-		// On an auto-enabled free plan in Autumn, billed in Stripe: Stripe's; once paid in Autumn, Autumn's.
+		// Autumn bills only on a billed paying subscription: a free plan or a trial leaves Stripe's.
 		const free = { provider: "autumn", mrrMinor: 0 } as const
+		const trial = { provider: "autumn", status: "trialing" } as const
+		const ended = { provider: "autumn", status: "canceled" } as const
 		expect(billingProviderOf(true, subs({ provider: "stripe" }, free))).toBe("stripe")
+		expect(billingProviderOf(true, subs({ provider: "stripe" }, trial))).toBe("stripe")
+		expect(billingProviderOf(true, subs({ provider: "stripe" }, free, ended))).toBe("stripe")
 		expect(
-			billingProviderOf(
-				true,
-				subs({ provider: "stripe" }, free, { provider: "autumn", status: "canceled" }),
-			),
+			billingProviderOf(true, subs({ provider: "stripe" }, { provider: "autumn", status: "past_due" })),
 		).toBe("autumn")
+		// Neither billing now: the one that paid, Autumn's first.
+		const stripeEnded = { provider: "stripe", status: "canceled" } as const
+		expect(billingProviderOf(true, subs(stripeEnded, free, ended))).toBe("autumn")
+		expect(billingProviderOf(true, subs(stripeEnded, free))).toBe("stripe")
 		// Autumn's only: kept while Autumn imports or after a disconnect, never zeroed.
 		expect(billingProviderOf(false, subs({ provider: "autumn" }))).toBe("autumn")
 		expect(billingProviderOf(true, subs(free))).toBe("autumn")
