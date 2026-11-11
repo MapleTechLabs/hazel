@@ -9,6 +9,8 @@ import { ORG_ACME, ORG_GLOBEX, USER_ADA, USER_LIN } from "./fixtures"
 import type { MapleActivityRow, MapleMetricRow } from "./wire"
 
 const OBSERVED = "2026-06-15T12:00:00.000Z"
+/** The day the page asked Maple for. */
+const DAY = "2026-06-14"
 
 const activityRow = (overrides: Partial<MapleActivityRow> = {}): MapleActivityRow => ({
 	day: "2026-06-14",
@@ -22,7 +24,7 @@ const activityRow = (overrides: Partial<MapleActivityRow> = {}): MapleActivityRo
 const metricRow = (overrides: Partial<MapleMetricRow> = {}): MapleMetricRow => ({
 	day: "2026-06-14",
 	account: ORG_ACME,
-	event: "dashboard_created",
+	metric: "maple.dashboards",
 	events: 2,
 	...overrides,
 })
@@ -37,7 +39,7 @@ const metrics = (ops: ReadonlyArray<IngestOp>) => ops.filter((op): op is RecordM
 
 describe("Maple activity mapping", () => {
 	it("names the Clerk contact and the Maple account, with the day's events and sessions", () => {
-		const { ops, skipped } = activityOps([activityRow()], OBSERVED)
+		const { ops, skipped } = activityOps([activityRow()], DAY, OBSERVED)
 		expect(skipped).toBe(0)
 		expect(activity(ops)).toEqual([
 			{
@@ -54,6 +56,7 @@ describe("Maple activity mapping", () => {
 	it("declares an account once per page, as a reference that creates nothing", () => {
 		const { ops } = activityOps(
 			[activityRow(), activityRow({ contact: USER_LIN }), activityRow({ account: ORG_GLOBEX })],
+			DAY,
 			OBSERVED,
 		)
 		expect(accounts(ops)).toEqual([accountRefOp(ORG_ACME, OBSERVED), accountRefOp(ORG_GLOBEX, OBSERVED)])
@@ -76,26 +79,28 @@ describe("Maple activity mapping", () => {
 	})
 
 	it("puts the account before the activity that names it", () => {
-		const { ops } = activityOps([activityRow()], OBSERVED)
+		const { ops } = activityOps([activityRow()], DAY, OBSERVED)
 		expect(ops.map((op) => op._tag)).toEqual(["account", "activity"])
 	})
 
 	it("emits no contact op: Maple knows no email and would duplicate the Clerk contact", () => {
-		const { ops } = activityOps([activityRow()], OBSERVED)
+		const { ops } = activityOps([activityRow()], DAY, OBSERVED)
 		expect(ops.some((op) => op._tag === "contact")).toBe(false)
 	})
 
-	it("skips and counts a row with no day, group, user or readable count", () => {
+	it("skips and counts a row of another day, or with no group, user or readable count", () => {
 		const rows = [
 			activityRow({ day: "not-a-day" }),
+			// A day the page did not ask for: written under its own day, it would skip the next page's.
+			activityRow({ day: "2026-06-15" }),
 			activityRow({ account: "" }),
 			activityRow({ contact: " " }),
 			activityRow({ events: "nonsense" }),
 			activityRow({ sessions: -1 }),
 			activityRow(),
 		]
-		const { ops, skipped } = activityOps(rows, OBSERVED)
-		expect(skipped).toBe(5)
+		const { ops, skipped } = activityOps(rows, DAY, OBSERVED)
+		expect(skipped).toBe(6)
 		expect(activity(ops)).toHaveLength(1)
 	})
 
@@ -126,6 +131,9 @@ describe("Maple metric mapping", () => {
 		const unusable = metricMapOf([
 			{ event: "ok'; DROP", metricKey: "x" },
 			{ event: "ok", metricKey: "has space" },
+			// Maple expands its macros anywhere in the statement, string literals included.
+			{ event: "$__orgFilter", metricKey: "x" },
+			{ event: "ok$__startTime", metricKey: "x" },
 			{ event: "", metricKey: "y" },
 			{ event: "dashboard_created", metricKey: "dashboards" },
 			// The same event twice keeps its first key.
@@ -155,60 +163,56 @@ describe("Maple metric mapping", () => {
 		])
 	})
 
-	it("adds up the events that share a key, and keeps days and accounts apart", () => {
+	it("writes one op per (day, account, key) row Maple summed", () => {
 		const { ops, skipped } = metricOps(
 			[
-				metricRow({ events: 2 }),
-				metricRow({ event: "alert_rule_created", events: 3 }),
+				metricRow({ events: 5 }),
+				metricRow({ metric: "maple.upgrades", events: 1 }),
 				metricRow({ account: ORG_GLOBEX, events: 1 }),
-				metricRow({ day: "2026-06-15", events: 5 }),
-				metricRow({ event: "plan_started", events: 1 }),
 			],
 			map,
+			DAY,
 			OBSERVED,
 		)
 		expect(skipped).toBe(0)
-		// Sorted by account, key and day, so the row order Maple listed cannot change the ops.
 		expect(metrics(ops)).toEqual([
 			{
 				_tag: "metric",
-				account: { provider: "maple", externalId: ORG_GLOBEX },
-				metricKey: "maple.dashboards",
-				day: "2026-06-14",
-				value: 1,
-			},
-			{
-				_tag: "metric",
 				account: { provider: "maple", externalId: ORG_ACME },
 				metricKey: "maple.dashboards",
-				day: "2026-06-14",
-				value: 5,
-			},
-			{
-				_tag: "metric",
-				account: { provider: "maple", externalId: ORG_ACME },
-				metricKey: "maple.dashboards",
-				day: "2026-06-15",
+				day: DAY,
 				value: 5,
 			},
 			{
 				_tag: "metric",
 				account: { provider: "maple", externalId: ORG_ACME },
 				metricKey: "maple.upgrades",
-				day: "2026-06-14",
+				day: DAY,
+				value: 1,
+			},
+			{
+				_tag: "metric",
+				account: { provider: "maple", externalId: ORG_GLOBEX },
+				metricKey: "maple.dashboards",
+				day: DAY,
 				value: 1,
 			},
 		])
-		expect(accounts(ops).map((op) => op.externalId)).toEqual([ORG_GLOBEX, ORG_ACME])
+		expect(accounts(ops).map((op) => op.externalId)).toEqual([ORG_ACME, ORG_GLOBEX])
 	})
 
-	it("skips and counts a row whose event is not mapped", () => {
-		const { ops, skipped } = metricOps([metricRow({ event: "$pageview" })], map, OBSERVED)
-		expect(skipped).toBe(1)
+	it("skips and counts a row of a key nothing maps to, or of another day", () => {
+		const { ops, skipped } = metricOps(
+			[metricRow({ metric: "maple.other" }), metricRow({ day: "2026-06-15" })],
+			map,
+			DAY,
+			OBSERVED,
+		)
+		expect(skipped).toBe(2)
 		expect(ops).toEqual([])
 	})
 
 	it("writes no metric op without a mapping", () => {
-		expect(metricOps([metricRow()], metricMapOf([]), OBSERVED)).toEqual({ ops: [], skipped: 1 })
+		expect(metricOps([metricRow()], metricMapOf([]), DAY, OBSERVED)).toEqual({ ops: [], skipped: 1 })
 	})
 })

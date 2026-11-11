@@ -12,10 +12,13 @@
  *
  * On top of that, two failures MCP reports inside a 200, which this module turns into the same
  * error type: a JSON-RPC `error` member (the protocol refused the call) and `result.isError` (the
- * tool refused the query — SQL Maple will not run, or a query over its budget). Neither can be
- * fixed by sending the same request again, so both are `provider` and not retryable, and the run
- * fails with a message naming the step rather than Maple's own text: a run's message is synced to
- * every member of the organization, and a warehouse message is Maple's internals.
+ * tool could not run the query). Maple reports its warehouse's failures this way too — a ClickHouse
+ * or gateway error, a query over its 120 s budget — so both are `provider` and **retryable**: the
+ * run resumes at its cursor, and core gives a run up after a few failed attempts at the same page,
+ * which bounds one Maple will never answer. A 200 with neither and no `structuredContent` is a
+ * shape Hazel does not know, which no retry fixes. Messages name the step rather than repeating
+ * Maple's own text: a run's message is synced to every member of the organization, and a warehouse
+ * message is Maple's internals.
  */
 import { Effect, type Redacted, Schema } from "effect"
 import type { HttpClient } from "effect/http"
@@ -47,14 +50,8 @@ export interface SqlWindow {
 	readonly end: string
 }
 
-const refused = (message: string, detail: string) =>
-	new CustomerProviderError({
-		code: "provider",
-		message: detail === "" ? message : `${message}: ${detail}`,
-		httpStatus: null,
-		retryAfterMs: null,
-		retryable: false,
-	})
+const refused = (message: string, retryable: boolean) =>
+	new CustomerProviderError({ code: "provider", message, httpStatus: null, retryAfterMs: null, retryable })
 
 const clipped = (text: string) =>
 	text.length > MAX_DETAIL_LENGTH ? `${text.slice(0, MAX_DETAIL_LENGTH - 1)}…` : text
@@ -96,18 +93,29 @@ export const makeMapleApi = (
 					step: input.step,
 					detail: clipped(answer.error.message ?? ""),
 				})
-				return yield* refused(`Maple refused Hazel's ${input.step} query`, "")
+				return yield* refused(
+					`Maple refused Hazel's ${input.step} query; the next attempt retries it`,
+					true,
+				)
 			}
 			const result = answer.result
-			if (result == null || result.isError === true || result.structuredContent == null) {
-				const detail = clipped(result?.content?.[0]?.text ?? "")
+			if (result?.isError === true) {
 				yield* Effect.logWarning("Maple could not run the usage query", {
 					step: input.step,
-					detail,
+					detail: clipped(result.content?.[0]?.text ?? ""),
 				})
 				return yield* refused(
-					`Maple could not run Hazel's ${input.step} query (has Maple's API changed?)`,
-					"",
+					`Maple could not run Hazel's ${input.step} query; the next attempt retries it`,
+					true,
+				)
+			}
+			if (result?.structuredContent == null) {
+				yield* Effect.logWarning("Maple answered the usage query without its result", {
+					step: input.step,
+				})
+				return yield* refused(
+					`Maple answered Hazel's ${input.step} query without a result (has Maple's API changed?)`,
+					false,
 				)
 			}
 			return result.structuredContent

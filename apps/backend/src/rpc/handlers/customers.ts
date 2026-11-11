@@ -51,6 +51,7 @@ import { seedDemo } from "../../worker/objects/customers/demo"
 import { healthDryRun, ruleDryRun } from "../../worker/objects/customers/dry-run"
 import { CustomerIngest } from "../../worker/objects/customers/ingest"
 import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/customers/ingest-live"
+import { activityEventsOf } from "../../worker/objects/customers/maple/pull"
 import { CustomerProviders } from "../../worker/objects/customers/providers"
 import { CustomersServicesLive } from "../../worker/objects/customers/services"
 import {
@@ -889,11 +890,22 @@ const closeRuleSignals = (ruleId: CustomerSignalRuleId, now: Date) =>
 const storeFailed = (cause: { readonly _tag: string }) =>
 	new InternalServerError({ message: "Could not store the credentials", detail: cause._tag, cause })
 
-/** What the config schema cannot say: Maple needs the org to read from. */
-const checkConfig = (config: ConnectionConfig) =>
-	config._tag === "maple" && config.mapleOrgId.trim() === ""
-		? Effect.fail(invalid("Enter the Maple organization id"))
-		: Effect.void
+/**
+ * What the config schema cannot say: Maple needs the org to read from, and an activity allowlist
+ * none of whose names Hazel can send would read as "every event counts" (an empty list's meaning).
+ */
+const checkConfig = (config: ConnectionConfig) => {
+	if (config._tag !== "maple") return Effect.void
+	if (config.mapleOrgId.trim() === "") return Effect.fail(invalid("Enter the Maple organization id"))
+	if (config.activityEvents.length > 0 && activityEventsOf(config).length === 0) {
+		return Effect.fail(
+			invalid(
+				"None of the activity events is an event name Maple can be asked for; fix or remove them",
+			),
+		)
+	}
+	return Effect.void
+}
 
 const credentialsError =
 	(provider: CustomerProvider) => (error: { readonly code: string; readonly message: string }) =>

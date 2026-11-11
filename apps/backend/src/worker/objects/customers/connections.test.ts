@@ -138,4 +138,33 @@ describe("Customers connection credentials", () => {
 				expect(secrets()).toEqual(before)
 			}),
 		))
+
+	it("refuses a Maple activity allowlist none of whose names can be sent, which would read as every event", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const connect = (activityEvents: ReadonlyArray<string>) =>
+					world.call(
+						"customers.connection.connect",
+						{
+							provider: "maple",
+							apiKey: "maple_ak_x",
+							webhookSecret: null,
+							config: {
+								...DEFAULT_CONNECTION_CONFIG.maple,
+								mapleOrgId: "org_a",
+								activityEvents,
+							},
+						},
+						world.owner,
+					)
+				expect(tagOf(yield* connect(["$__orgFilter", "has space"]))).toBe(
+					"CustomersInvalidRequestError",
+				)
+				// One usable name passes the check (and reaches the adapter, which this test has none of).
+				expect(tagOf(yield* connect(["$__orgFilter", "dashboard_created"]))).toBe(
+					"CustomerProviderUnavailableError",
+				)
+			}),
+		))
 })

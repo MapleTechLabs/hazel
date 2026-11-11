@@ -3,8 +3,9 @@
  * stateless Streamable HTTP transport does — one JSON-RPC answer per request, `structuredContent`
  * beside the text blocks, a tool failure inside a 200 — and it **runs the queries** rather than
  * replaying canned rows: it holds raw product events and aggregates them the way the SQL asks
- * (the window, the identity filter, the event allowlist, the grouping, the row cap and the
- * offset), so a test exercises the mapping *and* the paging the real warehouse would produce.
+ * (the window, the identity filter, the event allowlist, the event → metric key `transform`, the
+ * grouping, the limit and offset, and the rendered-row cap with `rowCount` / `truncated`), so a test
+ * exercises the mapping *and* the paging the real warehouse would produce.
  *
  * It can also refuse the wrong key with Maple's body, answer 403, 429 (with or without
  * `Retry-After`), 503 and 400, garble its body, report a tool error, or answer a JSON-RPC error. It
@@ -44,6 +45,8 @@ export interface FakeMapleState {
 	toolError: boolean
 	/** `true`: a JSON-RPC `error` member instead of a result. */
 	protocolError: boolean
+	/** Rows `run_sql` renders of what it fetched (Maple's `MAX_RENDERED_ROWS`). */
+	renderedRows: number
 	/** Calls served before every further call answers 429. */
 	throttleAfter: number | null
 	/** Seconds in the `Retry-After` header of those 429s. */
@@ -67,6 +70,7 @@ export const makeFakeMaple = (options: Partial<FakeMapleState> = {}): FakeMapleS
 	badRows: false,
 	toolError: false,
 	protocolError: false,
+	renderedRows: RUN_SQL_ROW_CAP,
 	throttleAfter: null,
 	retryAfterSeconds: null,
 	throttled: 0,
@@ -91,12 +95,22 @@ const allowlistOf = (sql: string): ReadonlyArray<string> | null => {
 	return list.split(",").map((entry) => entry.trim().replace(/^'|'$/g, ""))
 }
 
+/** Event name → metric key, from a `transform(EventName, [events], [keys])`; `null` without one. */
+const metricKeysOf = (sql: string): ReadonlyMap<string, string> | null => {
+	const match = /transform\(EventName, \[([^\]]*)\], \[([^\]]*)\]\)/.exec(sql)
+	if (match === null) return null
+	const listed = (list: string) => list.split(",").map((entry) => entry.trim().replace(/^'|'$/g, ""))
+	const keys = listed(match[2] ?? "")
+	return new Map(listed(match[1] ?? "").map((event, index) => [event, keys[index] ?? event]))
+}
+
 const numberAfter = (sql: string, keyword: string): number =>
 	Number(new RegExp(`${keyword} (\\d+)`).exec(sql)?.[1] ?? 0)
 
-/** The rows the query asks for, aggregated as ClickHouse would. */
+/** The rows the query asks for, aggregated as ClickHouse would (before Maple's own caps). */
 const rowsOf = (fake: FakeMapleState, sql: string, start: string, end: string) => {
 	const allowlist = allowlistOf(sql)
+	const metricKeys = metricKeysOf(sql)
 	const from = start.slice(0, 10)
 	const to = end.slice(0, 10)
 	const matched = fake.events.filter(
@@ -106,20 +120,21 @@ const rowsOf = (fake: FakeMapleState, sql: string, start: string, end: string) =
 			event.groupId !== "" &&
 			(allowlist === null || allowlist.includes(event.eventName)),
 	)
-	const byMetric = sql.includes("EventName AS event")
+	const byMetric = metricKeys !== null
 	const grouped = new Map<string, Record<string, unknown>>()
 	const sessions = new Map<string, Set<string>>()
 	for (const event of matched) {
 		if (!byMetric && event.userId === "") continue
+		const metric = metricKeys?.get(event.eventName) ?? event.eventName
 		const key = byMetric
-			? `${event.day}\u0000${event.groupId}\u0000${event.eventName}`
+			? `${event.day}\u0000${event.groupId}\u0000${metric}`
 			: `${event.day}\u0000${event.groupId}\u0000${event.userId}`
 		const held = grouped.get(key)
 		if (held === undefined) {
 			grouped.set(
 				key,
 				byMetric
-					? { day: event.day, account: event.groupId, event: event.eventName, events: 1 }
+					? { day: event.day, account: event.groupId, metric, events: 1 }
 					: {
 							day: event.day,
 							account: event.groupId,
@@ -144,7 +159,8 @@ const rowsOf = (fake: FakeMapleState, sql: string, start: string, end: string) =
 		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
 		.map(([, row]) => row)
 	const offset = numberAfter(sql, "OFFSET")
-	const limit = numberAfter(sql, "LIMIT") || RUN_SQL_ROW_CAP
+	// Maple wraps the statement in `LIMIT 1000` whatever it asked for.
+	const limit = Math.min(numberAfter(sql, "LIMIT") || 1000, 1000)
 	return ordered.slice(offset, offset + limit)
 }
 
@@ -194,11 +210,12 @@ const answer = (fake: FakeMapleState, body: Record<string, unknown>) => {
 	// The connect probe counts; everything else lists.
 	const counting = sql.includes("count() AS rows")
 	const data = counting ? [{ rows: rows.length }] : rows
+	const rendered = data.slice(0, fake.renderedRows)
 	const result = {
 		rowCount: data.length,
 		columns: Object.keys(data[0] ?? {}),
-		rows: data,
-		truncated: false,
+		rows: rendered,
+		truncated: data.length > rendered.length,
 		timeRange: { start, end },
 		maxCellChars: 120,
 		windowApplied: true,

@@ -76,11 +76,14 @@ export const MapleActivityRow = Schema.Struct({
 })
 export type MapleActivityRow = typeof MapleActivityRow.Type
 
-/** One row of the metric query: how often one event fired for one account on one day. */
+/**
+ * One row of the metric query: how often the events mapped to one metric key fired for one account
+ * on one day. `metric` is the namespaced key, so each (day, account, key) is exactly one row.
+ */
 export const MapleMetricRow = Schema.Struct({
 	day: WireDay,
 	account: Schema.String,
-	event: Schema.String,
+	metric: Schema.String,
 	events: WireCount,
 })
 export type MapleMetricRow = typeof MapleMetricRow.Type
@@ -134,11 +137,13 @@ export const orgIdOf = (expandedSql: string): string | null => ORG_FILTER.exec(e
 /**
  * Event names Hazel will put in a `WHERE EventName IN (…)` list. They come from the connection's
  * config, so a name is only ever sent when it cannot change the statement around it; the rest is
- * skipped and counted. Maple's own names are `object_action` plus the `$pageview` family.
+ * skipped and counted. Maple's own names are `object_action` plus the `$pageview` family. A name
+ * holding `$__` is refused: Maple expands its macros (`$__orgFilter`, `$__startTime`) by plain
+ * text replacement anywhere in the statement, string literals included.
  */
 const EVENT_NAME = /^[A-Za-z0-9_$.:/-]{1,120}$/
 
-export const isEventName = (name: string): boolean => EVENT_NAME.test(name)
+export const isEventName = (name: string): boolean => EVENT_NAME.test(name) && !name.includes("$__")
 
 /** A metric key Hazel will namespace and write; same reasoning as {@link isEventName}. */
 const METRIC_KEY = /^[A-Za-z0-9_.-]{1,80}$/

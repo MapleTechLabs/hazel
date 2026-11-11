@@ -19,8 +19,10 @@
  *   for a day, so re-reading a day — which every overlapping pull does — cannot double count, and
  *   a day read while it was still filling in is corrected by the next pull.
  * - **A mapped event → a per-account daily metric** under `maple.<key>` (namespaced: ingest
- *   refuses a key another provider owns). Several events mapped to one key are summed into it.
- *   Ingest replaces a day's metric value, so a re-read is idempotent there too.
+ *   refuses a key another provider owns). Several events mapped to one key are summed by the query
+ *   itself, so a (day, account, key) is one row and never split across pages: ingest replaces a
+ *   day's metric value, which makes a re-read idempotent but would let a later page's partial sum
+ *   overwrite an earlier one's.
  * - **No events, no sweeps.** Maple is authoritative for nothing: no account, contact or
  *   subscription is ever removed from what a Maple pull did or did not see.
  */
@@ -46,8 +48,6 @@ import {
 export const mapleRef = (externalId: string): ProviderRef => ({ provider: "maple", externalId })
 
 const clerkRef = (externalId: string): ProviderRef => ({ provider: "clerk", externalId })
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/
 
 /** A count as a non-negative integer; `null` for one Hazel cannot read as a number. */
 export const countOf = (value: WireCount): number | null => {
@@ -75,25 +75,31 @@ export interface Mapped {
 	readonly skipped: number
 }
 
-const usable = (row: { readonly day: string; readonly account: string }): boolean =>
-	DAY.test(row.day) && row.account.trim() !== ""
+/** A row of the day the page asked for, with a group: anything else is a Maple change. */
+const usable = (row: { readonly day: string; readonly account: string }, day: string): boolean =>
+	row.day === day && row.account.trim() !== ""
 
 /**
  * A page of activity rows: each account declared once, then a day of activity per contact. The
  * account comes first because ingest resolves a metric's or an activity's account through the refs
  * an earlier op in the same apply established.
  *
- * A row without a day, a group or a user is skipped: the query asks for identified rows only, so
- * one is a Maple change, not a customer with no account.
+ * A row of another day than `day` (the one the page read), or without a group or a user, is skipped:
+ * the query asks for that day's identified rows only, so one is a Maple change, not a customer with
+ * no account.
  */
-export const activityOps = (rows: ReadonlyArray<MapleActivityRow>, observedAt: IsoTimestamp): Mapped => {
+export const activityOps = (
+	rows: ReadonlyArray<MapleActivityRow>,
+	day: string,
+	observedAt: IsoTimestamp,
+): Mapped => {
 	const accounts = new Set<string>()
 	const ops: Array<IngestOp> = []
 	let skipped = 0
 	for (const row of rows) {
 		const events = countOf(row.events)
 		const sessions = countOf(row.sessions)
-		if (!usable(row) || row.contact.trim() === "" || events === null || sessions === null) {
+		if (!usable(row, day) || row.contact.trim() === "" || events === null || sessions === null) {
 			skipped += 1
 			continue
 		}
@@ -147,43 +153,36 @@ export const metricDefinitionOps = (map: MetricMap): Array<DefineMetric> =>
 	}))
 
 /**
- * A page of metric rows: each account declared once, then one op per (account, key, day) holding
- * the summed count of every mapped event that landed in that key.
+ * A page of metric rows: each account declared once, then one op per row. The query already summed
+ * every mapped event of a key, so a row is the whole (day, account, key) count; a row of another
+ * day or of a key nothing maps to is skipped.
  */
 export const metricOps = (
 	rows: ReadonlyArray<MapleMetricRow>,
 	map: MetricMap,
+	day: string,
 	observedAt: IsoTimestamp,
 ): Mapped => {
-	const totals = new Map<string, { account: string; key: string; day: string; value: number }>()
+	const keys = new Set(map.values())
+	const accounts = new Set<string>()
+	const ops: Array<IngestOp> = []
 	let skipped = 0
 	for (const row of rows) {
 		const events = countOf(row.events)
-		const key = map.get(row.event.trim())
-		if (!usable(row) || key === undefined || events === null) {
+		if (!usable(row, day) || !keys.has(row.metric) || events === null) {
 			skipped += 1
 			continue
 		}
-		const id = `${row.account}\u0000${key}\u0000${row.day}`
-		const held = totals.get(id)
-		if (held === undefined) totals.set(id, { account: row.account, key, day: row.day, value: events })
-		else held.value += events
-	}
-	const accounts = new Set<string>()
-	const ops: Array<IngestOp> = []
-	// Sorted, so the ops a page produces do not depend on the order Maple listed its rows in.
-	const sorted = [...totals.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-	for (const [, total] of sorted) {
-		if (!accounts.has(total.account)) {
-			accounts.add(total.account)
-			ops.push(accountRefOp(total.account, observedAt))
+		if (!accounts.has(row.account)) {
+			accounts.add(row.account)
+			ops.push(accountRefOp(row.account, observedAt))
 		}
 		ops.push({
 			_tag: "metric",
-			account: mapleRef(total.account),
-			metricKey: total.key,
-			day: total.day,
-			value: total.value,
+			account: mapleRef(row.account),
+			metricKey: row.metric,
+			day: row.day,
+			value: events,
 		} satisfies RecordMetric)
 	}
 	return { ops, skipped }

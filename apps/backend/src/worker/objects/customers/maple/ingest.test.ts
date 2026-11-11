@@ -110,6 +110,7 @@ describe("Maple ingest", () => {
 				yield* world.ingest("clerk", clerkBefore)
 				const mapped = activityOps(
 					[activityRow(TODAY, USER_ADA, 26), activityRow(TODAY, USER_LIN, 21)],
+					TODAY,
 					OBSERVED,
 				)
 				const report = yield* world.ingest("maple", mapped.ops)
@@ -140,8 +141,8 @@ describe("Maple ingest", () => {
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
 				yield* world.ingest("clerk", clerkBefore)
-				const half = activityOps([activityRow(TODAY, USER_ADA, 12)], OBSERVED)
-				const whole = activityOps([activityRow(TODAY, USER_ADA, 26)], OBSERVED)
+				const half = activityOps([activityRow(TODAY, USER_ADA, 12)], TODAY, OBSERVED)
+				const whole = activityOps([activityRow(TODAY, USER_ADA, 26)], TODAY, OBSERVED)
 				yield* world.ingest("maple", half.ops)
 				yield* world.ingest("maple", whole.ops)
 				// The day's own re-read, as an hourly pull sends it again.
@@ -162,6 +163,7 @@ describe("Maple ingest", () => {
 				yield* world.ingest("clerk", clerkBefore)
 				const mapped = activityOps(
 					[{ day: TODAY, account: ORG_UNKNOWN, contact: "user_stranger", events: 4, sessions: 2 }],
+					TODAY,
 					OBSERVED,
 				)
 				yield* world.ingest("maple", mapped.ops)
@@ -185,7 +187,7 @@ describe("Maple ingest", () => {
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
 				yield* world.ingest("clerk", clerkBefore)
-				const mapped = activityOps([activityRow(TODAY, "user_notamember", 9)], OBSERVED)
+				const mapped = activityOps([activityRow(TODAY, "user_notamember", 9)], TODAY, OBSERVED)
 				yield* world.ingest("maple", mapped.ops)
 
 				expect(unmatched(world)).toEqual([
@@ -207,11 +209,11 @@ describe("Maple ingest", () => {
 				yield* world.ingest("clerk", clerkBefore)
 				const map = metricMapOf([{ event: "dashboard_created", metricKey: "dashboards" }])
 				const rows: ReadonlyArray<MapleMetricRow> = [
-					{ day: TODAY, account: ORG_ACME, event: "dashboard_created", events: 3 },
+					{ day: TODAY, account: ORG_ACME, metric: "maple.dashboards", events: 3 },
 				]
 				yield* world.ingest("maple", [
 					...metricDefinitionOps(map),
-					...metricOps(rows, map, OBSERVED).ops,
+					...metricOps(rows, map, TODAY, OBSERVED).ops,
 				])
 				expect(metricRows(world)).toEqual([{ metricKey: "maple.dashboards", day: TODAY, value: 3 }])
 
@@ -219,8 +221,9 @@ describe("Maple ingest", () => {
 				yield* world.ingest(
 					"maple",
 					metricOps(
-						[{ day: TODAY, account: ORG_ACME, event: "dashboard_created", events: 5 }],
+						[{ day: TODAY, account: ORG_ACME, metric: "maple.dashboards", events: 5 }],
 						map,
+						TODAY,
 						OBSERVED,
 					).ops,
 				)
@@ -249,7 +252,19 @@ describe("Maple ingest", () => {
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
 				yield* world.ingest("clerk", clerkBefore)
-				yield* world.ingest("maple", activityOps(DROPPING, OBSERVED).ops)
+				// One page per day, as the pull reads them.
+				const days = [...new Set(DROPPING.map((row) => row.day))]
+				yield* world.ingest(
+					"maple",
+					days.flatMap(
+						(day) =>
+							activityOps(
+								DROPPING.filter((row) => row.day === day),
+								day,
+								OBSERVED,
+							).ops,
+					),
+				)
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
 
 				const [account] = accounts(world)

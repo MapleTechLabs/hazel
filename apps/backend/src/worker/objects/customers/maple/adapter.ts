@@ -20,8 +20,9 @@
  * Only the connection's organization: `validate` reads the organization the key opens out of the
  * one thing that names it (`$__orgFilter` expands to `OrgId = '…'`), and every query is scoped by
  * that same filter server-side, so a pull can only ever read the key's own organization. A key of
- * another organization than the connection's changes `externalAccountId`, and core drops the old
- * one's data and imports from scratch.
+ * another organization than the connection's changes `externalAccountId`: core drops Maple's
+ * metrics and parked records and imports from scratch, but not the activity, which sits on Clerk's
+ * contacts (`docs/customers/maple.md`, "Known gaps").
  */
 import type { ConnectionConfig, MapleRegion } from "@hazel/domain/customers"
 import { Effect, Option, Redacted } from "effect"
@@ -115,9 +116,12 @@ const validateWith = Effect.fn("Maple.validate")(function* (
 	}
 	const configured = mapleOrgId.trim()
 	if (configured !== "" && configured !== organizationId) {
-		return yield* refused(
-			`The key opens Maple organization ${organizationId}, not the ${configured} this source is set to`,
-		)
+		// The ids go to the log only: the message is synced to every member of the organization.
+		yield* Effect.logWarning("Maple key opens another organization", {
+			opens: organizationId,
+			configured,
+		})
+		return yield* refused("The key opens another Maple organization than the one this source is set to")
 	}
 	yield* Effect.annotateCurrentSpan({ "maple.organization_id": organizationId, "maple.region": region })
 	return {

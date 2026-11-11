@@ -88,7 +88,7 @@ describe("Maple validate", () => {
 		const error = await refusal(organization({ organizationId: "org_someoneelse" }))
 		expect(error.code).toBe("auth")
 		expect(error.message).toBe(
-			`The key opens Maple organization org_someoneelse, not the ${MAPLE_ORG} this source is set to`,
+			"The key opens another Maple organization than the one this source is set to",
 		)
 	})
 

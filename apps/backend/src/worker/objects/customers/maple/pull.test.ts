@@ -2,7 +2,8 @@
  * The pull: the day-by-day walk and its two phases, the cursor that resumes them, the row cap that
  * makes a busy day take several pages, the window a backfill and a scheduled pull each ask for, and
  * how Maple's refusals come back — `auth` stops pulls, a short 429 is waited out, a long one goes
- * to the alarm, and a body or a tool Hazel cannot read fails the run without a retry.
+ * to the alarm, a body Hazel cannot read fails the run without a retry, and a tool or protocol
+ * failure (Maple's warehouse having a bad moment) is retried.
  */
 import type { ConnectionConfig } from "@hazel/domain/customers"
 import { Effect, Fiber, Redacted, Schema } from "effect"
@@ -192,9 +193,55 @@ describe("Maple pull", () => {
 		expect(opsOf(pages).filter((op) => op._tag === "metric_definition")).toHaveLength(2)
 	})
 
+	it("sums the events that share a key in the query, so a page boundary cannot split a key", async () => {
+		// 101 accounts, each with two events mapped to one key: grouped by event, the 202 rows would
+		// put one account's two counts on two pages, and the second would overwrite the first.
+		const events: Array<MapleEvent> = Array.from({ length: RUN_SQL_ROW_CAP + 1 }, (_, index) =>
+			["dashboard_created", "alert_rule_created"].map((eventName) => ({
+				day: "2026-06-15",
+				groupId: `org_${String(index).padStart(4, "0")}`,
+				userId: "",
+				sessionId: "",
+				eventName,
+			})),
+		).flat()
+		const fake = organization({ events })
+		const pages = await at(
+			walk(fake, {
+				config: config({
+					lookbackDays: 1,
+					metricMappings: [
+						{ event: "dashboard_created", metricKey: "made" },
+						{ event: "alert_rule_created", metricKey: "made" },
+					],
+				}),
+			}),
+		)
+		expect(fake.calls[1]?.sql).toContain(
+			"transform(EventName, ['dashboard_created', 'alert_rule_created'], ['maple.made', 'maple.made']) AS metric",
+		)
+		expect(pages.map((page) => page.progress.step)).toEqual(["activity", "metrics", "metrics"])
+		const metrics = metricsOf(pages)
+		expect(metrics).toHaveLength(RUN_SQL_ROW_CAP + 1)
+		expect(new Set(metrics.map((metric) => metric.account)).size).toBe(RUN_SQL_ROW_CAP + 1)
+		expect(metrics.every((metric) => metric.value === 2)).toBe(true)
+	})
+
 	it("skips the metric phase with nothing mapped", async () => {
 		const pages = await at(walk(organization(), { config: config({ lookbackDays: 1 }) }))
 		expect(pages.map((page) => page.progress.step)).toEqual(["activity"])
+	})
+
+	it("skips the metric phase when the mappings were cleared mid-walk, without an empty `IN ()`", async () => {
+		const fake = organization()
+		const cursor = encodeCursor({ day: "2026-06-14", phase: "metrics", until: "2026-06-15" })
+		const page = await at(pageOf(fake, { cursor }))
+		expect(fake.calls).toEqual([])
+		expect(page.ops).toEqual([])
+		expect(decodeCursor(page.nextCursor ?? "")).toMatchObject({
+			_tag: "Some",
+			value: { day: "2026-06-15", phase: "activity" },
+		})
 	})
 
 	it("narrows activity to the allowlist when one is set", async () => {
@@ -221,6 +268,26 @@ describe("Maple pull", () => {
 		// One account reference per page, not one per row.
 		expect(opsOf(pages).filter((op) => op._tag === "account")).toHaveLength(2)
 		expect(pages.map((page) => page.progress.done)).toEqual([100, 103])
+	})
+
+	it("follows Maple's `truncated`, not the page size, to the end of a day", async () => {
+		const crowd = (count: number): Array<MapleEvent> =>
+			Array.from({ length: count }, (_, index) => ({
+				day: "2026-06-15",
+				groupId: ORG_ACME,
+				userId: `user_${String(index).padStart(4, "0")}`,
+				sessionId: `ses_${index}`,
+				eventName: "$pageview",
+			}))
+		// Maple renders fewer rows than Hazel's cap: each short page is still followed.
+		const short = organization({ events: crowd(RUN_SQL_ROW_CAP + 3), renderedRows: 40 })
+		const pages = await at(walk(short, { config: config({ lookbackDays: 1 }) }))
+		expect(short.calls.map((call) => /OFFSET (\d+)/.exec(call.sql)?.[1])).toEqual(["0", "40", "80"])
+		expect(activityOf(pages)).toHaveLength(RUN_SQL_ROW_CAP + 3)
+		// Exactly a page of rows: nothing more fetched, so no empty page follows.
+		const exact = organization({ events: crowd(RUN_SQL_ROW_CAP) })
+		await at(walk(exact, { config: config({ lookbackDays: 1 }) }))
+		expect(exact.calls).toHaveLength(1)
 	})
 
 	it("re-reads the overlap of a scheduled pull without counting a day twice", async () => {
@@ -333,13 +400,13 @@ describe("Maple pull failures", () => {
 		expect(rows.message).toMatch(/body Hazel cannot read/)
 	})
 
-	it("fails the run, without a retry, when the tool or the protocol refuses", async () => {
+	it("retries a tool or protocol failure: Maple reports its warehouse's failures that way", async () => {
 		const tool = await at(Effect.flip(pageOf(organization({ toolError: true }))))
-		expect(tool).toMatchObject({ code: "provider", retryable: false })
-		expect(tool.message).toBe("Maple could not run Hazel's activity query (has Maple's API changed?)")
+		expect(tool).toMatchObject({ code: "provider", retryable: true })
+		expect(tool.message).toBe("Maple could not run Hazel's activity query; the next attempt retries it")
 		const protocol = await at(Effect.flip(pageOf(organization({ protocolError: true }))))
-		expect(protocol).toMatchObject({ code: "provider", retryable: false })
-		expect(protocol.message).toBe("Maple refused Hazel's activity query")
+		expect(protocol).toMatchObject({ code: "provider", retryable: true })
+		expect(protocol.message).toBe("Maple refused Hazel's activity query; the next attempt retries it")
 		// Neither repeats Maple's own text: a run's message is synced to every member.
 		expect(`${tool.message}${protocol.message}`).not.toMatch(/MissingOrgFilter|Unknown tool/)
 	})

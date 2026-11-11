@@ -5,20 +5,25 @@
  * | Phase | Groups by | Writes |
  * |---|---|---|
  * | `activity` | day × `GroupId` × `UserId` | an account reference and a contact's day of activity |
- * | `metrics` | day × `GroupId` × `EventName` | an account reference and a day's count per mapped metric |
+ * | `metrics` | day × `GroupId` × metric key | an account reference and a day's count per mapped metric |
  *
  * **Why a day at a time.** Maple's `run_sql` hands back at most {@link RUN_SQL_ROW_CAP} rows of a
  * result whatever the query matched (`../maple/wire.ts`), so a page has to be small enough to fit
  * and the walk has to be able to ask for the rest. A day is the natural unit: it is what the ops
  * are keyed by, and its rows stop changing once it is over. Within a day the page is
- * `LIMIT <cap> OFFSET <rows read>` over a total order (`account, contact` / `account, event`), so
- * an organization with more than a page of active users a day is read over several pages instead
- * of being cut.
+ * `LIMIT <cap + 1> OFFSET <rows read>` over a total order (`account, contact` / `account, metric`):
+ * Maple renders the first {@link RUN_SQL_ROW_CAP} and says `truncated` when it fetched more, which
+ * is what tells the walk another page follows. So an organization with more than a page of active
+ * users a day is read over several pages instead of being cut, and a page cut shorter than the cap
+ * is still followed.
  *
  * **Why Maple aggregates and Hazel does not.** Both phases are `GROUP BY` queries: a page reads
  * one day's counts, never its events. The busiest Maple event alone is about 12k rows a day, and
  * `product_events` is the whole organization's; pulling rows to count them in a Durable Object
- * would read thousands of times more data for the same two numbers.
+ * would read thousands of times more data for the same two numbers. The metric phase groups by the
+ * metric key rather than the event (`transform` maps each event to its key in the query), so two
+ * events mapped to one key are one row: ingest replaces a day's value, and a key split across two
+ * pages would otherwise land as the second page's part only.
  *
  * **Window.** A backfill (`since: null`) starts `lookbackDays` back, a scheduled pull at the day
  * `since` falls in — core passes `lastSuccessAt` minus an overlap, so an hourly pull re-reads today
@@ -29,7 +34,7 @@
  *
  * **No sweeps.** Maple is authoritative for nothing: what it did not see is not gone.
  */
-import type { ConnectionConfig, Day, IngestOp, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
+import type { ConnectionConfig, Day, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
 import { Clock, Effect, Option, Schema } from "effect"
 import type { PullPage } from "../providers"
 import { addDays, dayOf } from "../time"
@@ -74,6 +79,9 @@ export const encodeCursor = (cursor: MapleCursor): string => JSON.stringify(curs
 /** A SQL string literal: the only values Hazel interpolates are names its config checked. */
 const quoted = (values: Iterable<string>) => [...values].map((value) => `'${value}'`).join(", ")
 
+/** One past the rendered cap, so Maple's `truncated` says whether another page follows. */
+const PAGE_LIMIT = RUN_SQL_ROW_CAP + 1
+
 const activitySql = (events: ReadonlyArray<string>, offset: number) => `
 SELECT toDate(Timestamp) AS day,
        ${ACCOUNT_COLUMN} AS account,
@@ -88,27 +96,31 @@ WHERE $__orgFilter
   }
 GROUP BY day, account, contact
 ORDER BY account, contact
-LIMIT ${RUN_SQL_ROW_CAP} OFFSET ${offset}`
+LIMIT ${PAGE_LIMIT} OFFSET ${offset}`
 
-const metricsSql = (events: Iterable<string>, offset: number) => `
+/** Counts per metric key: `transform` maps each mapped event to its (namespaced) key. */
+const metricsSql = (map: MetricMap, offset: number) => `
 SELECT toDate(Timestamp) AS day,
        ${ACCOUNT_COLUMN} AS account,
-       EventName AS event,
+       transform(EventName, [${quoted(map.keys())}], [${quoted(map.values())}]) AS metric,
        count() AS events
 FROM product_events
 WHERE $__orgFilter
   AND Timestamp >= $__startTime AND Timestamp < $__endTime
   AND ${ACCOUNT_COLUMN} != ''
-  AND EventName IN (${quoted(events)})
-GROUP BY day, account, event
-ORDER BY account, event
-LIMIT ${RUN_SQL_ROW_CAP} OFFSET ${offset}`
+  AND EventName IN (${quoted(map.keys())})
+GROUP BY day, account, metric
+ORDER BY account, metric
+LIMIT ${PAGE_LIMIT} OFFSET ${offset}`
 
 /** One UTC day, half-open, as Maple takes a window. */
 const windowOf = (day: Day) => ({ start: `${day} 00:00:00`, end: `${addDays(day, 1)} 00:00:00` })
 
-/** The configured activity allowlist Hazel can act on; empty means every identified event counts. */
-const activityEventsOf = (config: Extract<ConnectionConfig, { _tag: "maple" }>) =>
+/**
+ * The configured activity allowlist Hazel can act on; empty means every identified event counts, so
+ * a config whose every name is unusable is refused when it is saved rather than read as "all".
+ */
+export const activityEventsOf = (config: Extract<ConnectionConfig, { _tag: "maple" }>) =>
 	config.activityEvents.map((event) => event.trim()).filter(isEventName)
 
 /**
@@ -127,12 +139,12 @@ export const firstDayOf = (input: {
 /** Where the walk goes after this page: on in this day, into the next phase, the next day, or done. */
 const nextCursor = (
 	cursor: MapleCursor,
-	page: { readonly rows: number; readonly done: number },
+	page: { readonly rows: number; readonly more: boolean; readonly done: number },
 	hasMetrics: boolean,
 ): MapleCursor | null => {
 	const carried = { until: cursor.until, done: page.done }
-	// A full page may have more rows behind it; a short one is the end of this day and phase.
-	if (page.rows >= RUN_SQL_ROW_CAP)
+	// Maple fetched more than it rendered: the rest of this day and phase is behind this page.
+	if (page.more)
 		return { ...carried, day: cursor.day, phase: cursor.phase, offset: (cursor.offset ?? 0) + page.rows }
 	if (cursor.phase === "activity" && hasMetrics) return { ...carried, day: cursor.day, phase: "metrics" }
 	if (cursor.day >= cursor.until) return null
@@ -152,22 +164,29 @@ const activityPage = Effect.fnUntraced(function* (input: PageInput, cursor: Mapl
 		window: windowOf(cursor.day),
 		row: MapleActivityRow,
 	})
-	return { rows: result.rows.length, ...activityOps(result.rows, input.observedAt) }
+	return {
+		rows: result.rows.length,
+		more: result.truncated,
+		...activityOps(result.rows, cursor.day, input.observedAt),
+	}
 })
 
 const metricsPage = Effect.fnUntraced(function* (input: PageInput, cursor: MapleCursor, map: MetricMap) {
 	const result = yield* input.api.runSql({
 		step: "metrics",
-		sql: metricsSql(map.keys(), cursor.offset ?? 0),
+		sql: metricsSql(map, cursor.offset ?? 0),
 		window: windowOf(cursor.day),
 		row: MapleMetricRow,
 	})
-	const mapped = metricOps(result.rows, map, input.observedAt)
+	const mapped = metricOps(result.rows, map, cursor.day, input.observedAt)
 	// The definitions are idempotent and cheap, and the first page of a walk is the only place a
 	// newly mapped key would otherwise go unnamed until a chart asked for it.
 	const ops = (cursor.offset ?? 0) === 0 ? [...metricDefinitionOps(map), ...mapped.ops] : mapped.ops
-	return { rows: result.rows.length, ops, skipped: mapped.skipped }
+	return { rows: result.rows.length, more: result.truncated, ops, skipped: mapped.skipped }
 })
+
+/** A metric phase with nothing (left) to map: the mappings were cleared since the walk started. */
+const NO_METRICS = { rows: 0, more: false, ops: [], skipped: 0 }
 
 export const pullPage = Effect.fn("Maple.pullPage")(function* (input: {
 	readonly api: MapleApi
@@ -197,9 +216,11 @@ export const pullPage = Effect.fn("Maple.pullPage")(function* (input: {
 	const page =
 		cursor.phase === "activity"
 			? yield* activityPage(pageInput, cursor)
-			: yield* metricsPage(pageInput, cursor, map)
+			: map.size === 0
+				? NO_METRICS
+				: yield* metricsPage(pageInput, cursor, map)
 	const done = (cursor.done ?? 0) + page.rows
-	const onward = nextCursor(cursor, { rows: page.rows, done }, map.size > 0)
+	const onward = nextCursor(cursor, { rows: page.rows, more: page.more, done }, map.size > 0)
 	const progress: SyncProgress = { step: cursor.phase, done, total: null }
 	yield* Effect.annotateCurrentSpan({
 		"maple.phase": cursor.phase,
