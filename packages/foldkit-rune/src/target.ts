@@ -172,6 +172,8 @@ export type RuneTargetOptions = {
 	readonly bridge?: ElementBridge
 	/** The text a DOM-backed Mount (an editor) currently holds, drawn as a native text field. */
 	readonly editableText?: (path: string) => string | undefined
+	/** Where the editor's caret is in that text (UTF-16 code units): the field takes it with the text. */
+	readonly editableCaret?: (path: string) => number | undefined
 	/** The class of the element a DOM-backed Mount edits in (the editor's root), styled onto the field. */
 	readonly editableClass?: (path: string) => string | undefined
 	/** A native text field over a DOM-backed Mount was edited, or a key was pressed in it. */
@@ -183,7 +185,10 @@ export type RuneTargetOptions = {
 	 * the host's appearance (`env.dark`).
 	 */
 	readonly theme?: () => "dark" | "light" | undefined
-	readonly onEditable?: (path: string, event: { readonly value?: string; readonly key?: string }) => void
+	readonly onEditable?: (
+		path: string,
+		event: { readonly value?: string; readonly key?: string; readonly before?: string },
+	) => void
 }
 
 const NON_VISUAL_TAGS = new Set(["style", "script", "template", "noscript", "link", "meta"])
@@ -749,6 +754,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			if (mount !== undefined && options.bridge?.isDomMount(mount)) {
 				keep["data-editable"] = "1"
 				keep.value = options.editableText?.(path) ?? ""
+				const caret = options.editableCaret?.(path)
+				if (caret !== undefined) keep["data-caret"] = String(caret)
 				keep.placeholder = String(vnode.data?.foldkitMount?.args?.placeholder ?? "")
 				// The editor's own box (padding, text size, minimum height) lives in the headless DOM:
 				// its resolved style rides along as the field's one child.
@@ -1067,7 +1074,11 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		if (message.t !== "event") return
 		ack = Math.max(ack, message.seq)
 		if (message.type === "editable" && message.path !== undefined) {
-			options.onEditable?.(message.path, { value: message.value, key: message.key })
+			options.onEditable?.(message.path, {
+				value: message.value,
+				key: message.key,
+				before: message.before,
+			})
 			return
 		}
 		// A press on a tree no longer kept is dropped: the newest handler may be a different action.

@@ -399,11 +399,11 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
         Some("stretch") => e = e.self_stretch(),
         _ => {}
     }
-    if let Some([l, t, r, b]) = st.absolute
+    if let Some([l, t, r, b]) = insets(st)
         && st.center_y != Some(true)
         && st.center_x != Some(true)
     {
-        e = e.pin(f(l), f(t), f(r), f(b))
+        e = e.pin_insets(l, t, r, b)
     }
     if let Some([x, y]) = st.translate
         && (x.0 != 0.0 || y.0 != 0.0)
@@ -662,32 +662,43 @@ fn apply_shadows(mut e: El, st: &Style) -> El {
     e
 }
 
-/// `inset-y-1/2 -translate-y-1/2`: Rune has no percentage insets, so centre in a full-height slot.
+/// `inset-y-1/2 -translate-y-1/2`: a shift by half its own size, which Rune has no inset for, so
+/// centre in a full-height slot.
 pub fn center_vertically(e: El, st: &Style) -> El {
-    match (st.absolute, st.center_y) {
+    let zero = Some(rune::Inset::Px(0.0));
+    match (insets(st), st.center_y) {
         // `left-1/2 -translate-x-1/2` (and both axes): centred in a full-width slot at its insets.
         (Some([_, t, _, b]), centre_y) if st.center_x == Some(true) => {
             let both = centre_y == Some(true);
             let slot = if both {
-                row()
-                    .pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0))
-                    .items_center()
+                row().pin_insets(zero, zero, zero, zero).items_center()
             } else {
-                row().pin(Some(0.0), f(t), Some(0.0), f(b)).items_start()
+                row().pin_insets(zero, t, zero, b).items_start()
             };
             slot.justify_center().child(e)
         }
         (Some([l, _, r, _]), Some(true)) => {
             // Pinned on both sides with no width of its own, CSS stretches it between them
             // (`inset-x-0 top-1/2`: a full-width divider or overlay).
-            let spans = f(l).is_some() && f(r).is_some() && st.w.is_none();
+            let spans = l.is_some() && r.is_some() && st.w.is_none();
             row()
-                .pin(f(l), Some(0.0), f(r), Some(0.0))
+                .pin_insets(l, zero, r, zero)
                 .items_center()
                 .child(if spans { e.grow(1.0) } else { e })
         }
         _ => e,
     }
+}
+
+/// An out-of-flow element's edges, left, top, right, bottom: points, or a fraction of the parent
+/// where the runtime could not know its size (`inset_frac`); `None` for one left free.
+fn insets(st: &Style) -> Option<[Option<rune::Inset>; 4]> {
+    let px = st.absolute?;
+    let frac = st.inset_frac.unwrap_or_default();
+    Some(std::array::from_fn(|i| match (frac[i], px[i]) {
+        (Some(frac), _) => Some(rune::Inset::Frac(frac.0)),
+        (None, px) => f(px).map(rune::Inset::Px),
+    }))
 }
 
 pub fn apply_flex(mut e: El, st: &Style) -> El {

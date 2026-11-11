@@ -22,6 +22,31 @@ pub(crate) struct Field {
     pub(crate) edit: TextEdit,
     /// Seq of the last edit sent; the app's `value` wins once the runtime has seen it.
     pub(crate) last_sent: u64,
+    /// The text as last sent or taken from the app: the next edit's `before`, against which the
+    /// runtime rebases it when the app's text has moved on (an editor reshaped what was typed).
+    pub(crate) shown: String,
+}
+
+impl Field {
+    fn new(text: String) -> Self {
+        Field {
+            edit: TextEdit::new(text.clone()),
+            last_sent: 0,
+            shown: text,
+        }
+    }
+}
+
+/// The byte offset in `text` of `units` UTF-16 code units (a JavaScript string offset), clamped.
+fn byte_offset(text: &str, units: usize) -> usize {
+    let mut seen = 0;
+    for (at, c) in text.char_indices() {
+        if seen >= units {
+            return at;
+        }
+        seen += c.len_utf16();
+    }
+    text.len()
 }
 
 #[derive(Default)]
@@ -58,12 +83,14 @@ pub fn last_env() -> Option<(u32, u32, bool)> {
 
 static ICONS: Mutex<Option<HashMap<String, &'static Icon>>> = Mutex::new(None);
 
-/// An edit or key in a native field drawn over a DOM-backed Mount (the composer's editor).
-fn send_editable(path: &str, value: Option<&str>, key: Option<&str>) -> u64 {
+/// An edit (with the text before it) or key in a native field drawn over a DOM-backed Mount (the
+/// composer's editor).
+fn send_editable(path: &str, value: Option<&str>, key: Option<&str>, before: Option<&str>) -> u64 {
     let seq = next_seq();
-    write_line(
-        json!({ "t": "event", "seq": seq, "gen": generation(), "id": 0, "type": "editable", "path": path, "value": value, "key": key }),
-    );
+    write_line(json!({
+        "t": "event", "seq": seq, "gen": generation(), "id": 0, "type": "editable",
+        "path": path, "value": value, "key": key, "before": before,
+    }));
     seq
 }
 
@@ -628,14 +655,19 @@ fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, F
     let mut changed = false;
     if is_text_field(tag, attrs) || attrs.contains_key("data-editable") {
         let value = attrs.get("value").cloned().unwrap_or_default();
-        let field = fields.entry(path.to_string()).or_insert_with(|| Field {
-            edit: TextEdit::new(value.clone()),
-            last_sent: 0,
-        });
+        // A new field takes the app's text below, caret and all, as a changed one does.
+        let field = fields
+            .entry(path.to_string())
+            .or_insert_with(|| Field::new(String::new()));
         if ack >= field.last_sent && field.edit.text != value {
-            field.edit.text = value;
-            let end = field.edit.text.len();
-            (field.edit.anchor, field.edit.focus) = (end, end);
+            // The caret where the app's says (an editor's), else at the end.
+            let caret = attrs
+                .get("data-caret")
+                .and_then(|units| units.parse().ok())
+                .map_or(value.len(), |units| byte_offset(&value, units));
+            field.edit.text = value.clone();
+            field.shown = value;
+            (field.edit.anchor, field.edit.focus) = (caret, caret);
             changed = true;
         }
     }
@@ -1772,10 +1804,7 @@ fn build_input(
         &mut s
             .fields
             .entry(key.clone())
-            .or_insert_with(|| Field {
-                edit: TextEdit::new(""),
-                last_sent: 0,
-            })
+            .or_insert_with(|| Field::new(String::new()))
             .edit
     }));
     if let Some(&id) = on.get("input") {
@@ -1934,19 +1963,17 @@ fn build_editable(
             &mut s
                 .fields
                 .entry(edit_key.clone())
-                .or_insert_with(|| Field {
-                    edit: TextEdit::new(""),
-                    last_sent: 0,
-                })
+                .or_insert_with(|| Field::new(String::new()))
                 .edit
         }))
         .on_input_change(move |s: &mut State, _| {
             if let Some(f) = s.fields.get_mut(&change_key) {
-                f.last_sent = send_editable(&change_key, Some(&f.edit.text), None)
+                let before = std::mem::replace(&mut f.shown, f.edit.text.clone());
+                f.last_sent = send_editable(&change_key, Some(&f.edit.text), None, Some(&before))
             }
         })
         .on_submit(move |_: &mut State, _| {
-            send_editable(&submit_key, None, Some("Enter"));
+            send_editable(&submit_key, None, Some("Enter"), None);
         })
         // Files and images attach to the composer, as a paste into the web editor does; text
         // stays the field's own paste.

@@ -308,9 +308,10 @@ export const startRuntime = async (platform: NativePlatform) => {
 		if (mount === undefined) return false
 		return Option.match(composer.applyEditorEvent(mount.args, event), {
 			onNone: () => false,
-			onSome: (isChangedByKey) => {
-				// A key the editor handled (undo, a markdown shortcut) changed the text under the field.
-				if (isChangedByKey) rune.refreshObserved()
+			onSome: (isFieldBehind) => {
+				// The editor's text is other than the field's: a key it handled (undo), or typing it
+				// reshaped (a list marker, a picked mention). The field takes it, caret and all.
+				if (isFieldBehind) rune.refreshObserved()
 				return true
 			},
 		})
@@ -327,6 +328,12 @@ export const startRuntime = async (platform: NativePlatform) => {
 			if (queued !== undefined) return queued
 			const mount = bridge.domMountAt(path)
 			return mount === undefined ? undefined : composer.editorText(mount.args)
+		},
+		// Queued edits keep the field's own caret; otherwise it follows the editor's.
+		editableCaret: (path) => {
+			if (pendingEdits.queuedText(path) !== undefined) return undefined
+			const mount = bridge.domMountAt(path)
+			return mount === undefined ? undefined : composer.editorCaret(mount.args)
 		},
 		onLink: followLink,
 		// The app's resolved theme (its Light/Dark/System setting) on `<html>`, over the host's appearance.

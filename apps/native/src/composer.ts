@@ -4,10 +4,19 @@
  * Edits arrive as whole-text replacements and keys go through the editor's own key handlers.
  */
 import { Effect, Option } from "effect"
+import { TextSelection } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 import { editorRegistry } from "../../web-foldkit/src/editor/registry"
 import { type HeadlessDom, makeHeadlessDom } from "./headless-dom"
-import { replaceFieldText } from "./text-edit"
+import type { EditableEvent } from "./pending-edits"
+import {
+	caretOf,
+	type FieldChange,
+	fieldTextChange,
+	isTyping,
+	rebaseFieldEdit,
+	replaceFieldText,
+} from "./text-edit"
 
 let dom: HeadlessDom | undefined
 /** Each editor element's Mount path: the host keys the editor's native field by it. */
@@ -71,27 +80,63 @@ const editorAt = (editorId: unknown): Option.Option<EditorView> => {
 	return exit._tag === "Success" ? Option.some(exit.value) : Option.none()
 }
 
+const textOf = (view: EditorView) => view.state.doc.textBetween(0, view.state.doc.content.size, "\n")
+
 export const editorText = (args: Record<string, unknown>): string | undefined =>
+	Option.match(editorAt(args.editorId), { onNone: () => undefined, onSome: textOf })
+
+/** The editor's caret as an offset in `editorText` (UTF-16 code units), when its selection is one. */
+export const editorCaret = (args: Record<string, unknown>): number | undefined =>
 	Option.match(editorAt(args.editorId), {
 		onNone: () => undefined,
-		onSome: (view) => view.state.doc.textBetween(0, view.state.doc.content.size, "\n"),
+		onSome: (view) => {
+			const caret = caretOf(view.state)
+			return caret === undefined ? undefined : view.state.doc.textBetween(0, caret, "\n").length
+		},
 	})
 
-export const applyEditorEvent = (
-	args: Record<string, unknown>,
-	event: { readonly value?: string | null; readonly key?: string | null },
-) =>
+/**
+ * Typing goes through the editor's own input path first, as a browser's does: `@`, `#` and `:`
+ * open their autocomplete there, and `1. ` or `> ` turn the line into a list or a quote.
+ * Whether the editor took it.
+ */
+const typeIntoEditor = (view: EditorView, change: FieldChange) => {
+	if (!isTyping(change)) return false
+	const { selection } = view.state
+	if (!selection.empty || selection.from !== change.from)
+		view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, change.from)))
+	return (
+		view.someProp("handleTextInput", (handle) =>
+			handle(view, change.from, change.to, change.text, () => view.state.tr),
+		) ?? false
+	)
+}
+
+export const applyEditorEvent = (args: Record<string, unknown>, event: EditableEvent) =>
 	Option.map(editorAt(args.editorId), (view) => {
-		const { state } = view
-		const before = state.doc
+		const before = view.state.doc
 		if (event.value != null) {
-			const edit = replaceFieldText(state, event.value)
-			if (edit !== undefined) view.dispatch(edit)
+			// The field's own change, made on the editor's text when the editor moved on from what
+			// the field showed (it had not taken a list or a mention yet when the user typed on).
+			const value =
+				event.before == null
+					? event.value
+					: (rebaseFieldEdit(event.before, event.value, textOf(view)) ?? event.value)
+			const change = fieldTextChange(view.state.doc, value, caretOf(view.state))
+			if (change !== undefined && !typeIntoEditor(view, change)) {
+				const edit = replaceFieldText(view.state, value)
+				if (edit !== undefined) view.dispatch(edit)
+			}
 		}
 		if (event.key != null && dom !== undefined) {
 			const keydown = dom.keydown(event.key)
 			view.someProp("handleKeyDown", (handle) => handle(view, keydown))
 		}
-		/** Whether the editor's document changed, so the native field must take its text again. */
-		return event.key != null && !view.state.doc.eq(before)
+		/**
+		 * Whether the native field must take the editor's text again: a key changed it, or the
+		 * editor's input path made it other than the field's (a list marker it turned into a list).
+		 */
+		return event.key != null
+			? !view.state.doc.eq(before)
+			: event.value != null && textOf(view) !== event.value
 	})

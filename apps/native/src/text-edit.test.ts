@@ -1,8 +1,8 @@
-import { EditorState } from "prosemirror-state"
+import { EditorState, TextSelection } from "prosemirror-state"
 import { describe, expect, it } from "vitest"
 
 import { type ProseMirrorNode, schema } from "../../web-foldkit/src/editor/schema"
-import { replaceFieldText } from "./text-edit"
+import { rebaseFieldEdit, replaceFieldText } from "./text-edit"
 
 const { paragraph, blockquote, mention } = schema.nodes
 const listItem = schema.nodes["list-item"]
@@ -47,6 +47,23 @@ describe("replaceFieldText", () => {
 		expect(blocksOf(edited(state, ""))).toEqual(["paragraph:"])
 	})
 
+	it("types after a mention when the caret is after it, where one text offset is either side", () => {
+		const grace = mention.create({ userId: "u2", displayName: "Grace" })
+		const doc = schema.node("doc", null, [paragraph.create(null, [schema.text("Thanks "), grace])])
+		const afterMention = doc.content.size - 1
+		const state = EditorState.create({ doc, selection: TextSelection.create(doc, afterMention) })
+		const next = edited(state, "Thanks  for the review")
+		const order: Array<string> = []
+		next.doc.descendants((node) => {
+			if (node.type === mention) order.push("@Grace")
+			else if (node.isText) order.push(node.text ?? "")
+		})
+		expect(order).toEqual(["Thanks ", "@Grace", " for the review"])
+		// Without a caret there, the earliest place wins, as before.
+		const before = edited(stateOf(paragraph.create(null, [schema.text("Thanks "), grace])), "Thanks !")
+		expect(before.doc.textBetween(0, before.doc.content.size, "\n")).toBe("Thanks !")
+	})
+
 	it("leaves a mention in place when text after it changes", () => {
 		const ada = mention.create({ userId: "u1", displayName: "Ada" })
 		const state = stateOf(paragraph.create(null, [schema.text("hi "), ada, schema.text(" there")]))
@@ -62,5 +79,21 @@ describe("replaceFieldText", () => {
 	it("changes nothing when the text is the same", () => {
 		const state = stateOf(paragraph.create(null, schema.text("same")))
 		expect(replaceFieldText(state, "same")).toBeUndefined()
+	})
+})
+
+describe("rebaseFieldEdit", () => {
+	it("types on after a list marker the editor turned into a list, before the field took it", () => {
+		expect(rebaseFieldEdit("1. ", "1. x", "")).toBe("x")
+		expect(rebaseFieldEdit("intro\n- ", "intro\n- a", "intro\n")).toBe("intro\na")
+	})
+
+	it("keeps an edit before the editor's change, and passes through when nothing is owed", () => {
+		expect(rebaseFieldEdit("hi 1. ", "hey 1. ", "hi ")).toBe("hey ")
+		expect(rebaseFieldEdit("same", "same!", "same")).toBe("same!")
+	})
+
+	it("gives up when both touched the same text", () => {
+		expect(rebaseFieldEdit("abc", "aXc", "aYc")).toBeUndefined()
 	})
 })

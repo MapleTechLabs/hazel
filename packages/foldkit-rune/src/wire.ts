@@ -51,6 +51,8 @@ export type HostToRuntime =
 			/** The generation of the tree the event was pressed on. */
 			readonly gen?: number
 			readonly value?: string
+			/** For an `editable` edit: the field's text before it, which the editor may have moved on from. */
+			readonly before?: string
 			/** For a keydown: the handlers of the elements around the target, innermost first. */
 			readonly chain?: ReadonlyArray<number>
 			/** A click on a link: its `href`, followed unless the handler calls `preventDefault()`. */

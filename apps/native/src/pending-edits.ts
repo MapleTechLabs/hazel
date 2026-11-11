@@ -1,4 +1,9 @@
-export type EditableEvent = { readonly value?: string | null; readonly key?: string | null }
+export type EditableEvent = {
+	readonly value?: string | null
+	readonly key?: string | null
+	/** The field's text before this edit: the editor may have changed it since. */
+	readonly before?: string | null
+}
 
 /**
  * Native field edits for an editor that has not mounted yet (the headless DOM loads after boot):

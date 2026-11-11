@@ -3113,3 +3113,49 @@ fn a_lone_inline_span_in_a_block_wraps_its_text_to_the_block() {
     assert!(w <= 244.0, "the span stays inside its 244 column: {w}");
     assert!(h > 30.0, "its text wraps onto more lines: {h}");
 }
+
+/// A popover placed `bottom-full` over a content-sized box: its bottom edge sits on the box's
+/// top, whatever height the box's content gives it (the runtime cannot know it).
+#[test]
+fn a_bottom_full_inset_places_a_popover_above_its_content_sized_parent() {
+    let mut popover = e("div", json!({ "h": 40, "bg": "#ff0000ff" }), vec![]);
+    popover["st"]["absolute"] = json!([0, null, 0, null]);
+    popover["st"]["insetFrac"] = json!([null, null, null, 1.0]);
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300, "h": 400, "pad": [200, 0, 0, 0] }),
+            vec![e(
+                "div",
+                json!({ "display": "flex", "dir": "col" }),
+                vec![e("div", json!({ "h": 64 }), vec![t("Composer")]), popover],
+            )],
+        ),
+        (300.0, 400.0),
+    );
+    assert_eq!(rect(&rt, "r/0"), [0.0, 200.0, 300.0, 64.0]);
+    assert_eq!(rect(&rt, "r/0/1"), [0.0, 160.0, 300.0, 40.0]);
+}
+
+/// A composer's field takes the editor's text with the editor's caret (a JavaScript offset, in
+/// UTF-16 code units), not at the end: after a mention picked mid-sentence, typing goes on there.
+#[test]
+fn a_field_takes_the_apps_text_with_its_caret() {
+    let field = |caret: &str| {
+        with_attrs(
+            e("div", json!({}), vec![]),
+            json!({ "data-editable": "1", "value": "🎉 Hi  there", "data-caret": caret }),
+        )
+    };
+    let s = state(field("5"));
+    let edit = &s.fields["r"].edit;
+    // "🎉" is two UTF-16 units and four bytes: offset 5 is after "🎉 Hi", byte 7.
+    assert_eq!((edit.anchor, edit.focus), (7, 7));
+    assert_eq!(s.fields["r"].shown, "🎉 Hi  there");
+    // Without one, the caret goes to the end.
+    let s = state(with_attrs(
+        e("div", json!({}), vec![]),
+        json!({ "data-editable": "1", "value": "end" }),
+    ));
+    assert_eq!(s.fields["r"].edit.focus, 3);
+}
