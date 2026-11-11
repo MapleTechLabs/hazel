@@ -210,7 +210,7 @@ define_class!(
 );
 
 /// The app's window, once the scene has one.
-fn window(mtm: MainThreadMarker) -> Option<Retained<UIWindow>> {
+pub(crate) fn window(mtm: MainThreadMarker) -> Option<Retained<UIWindow>> {
     let scenes = UIApplication::sharedApplication(mtm).connectedScenes();
     scenes.iter().find_map(|scene| {
         let scene = scene.downcast::<UIWindowScene>().ok()?;

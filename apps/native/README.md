@@ -107,7 +107,8 @@ the runtime's log goes to `tmp/hazel.log` in the app's data container
 The page is a secure context (`https://app.hazel.test`, never fetched), as the web app's
 `crypto.randomUUID` needs. When the on-screen keyboard shows, the page's viewport ends above it
 (`State::set_keyboard`, from `host/ios/src/keyboard.rs`), as a browser's does, so the composer
-and the end of the list stay visible; its return key sends, as Enter does.
+and the end of the list stay visible (a floating iPad keyboard leaves the page as it is). The
+keyboard's return key is Enter, so it sends, as it does in the web app on a phone.
 
 Not yet on iOS: live sign-in, the keychain, updates, HTML renders, http(s) pictures (fetched with
 `curl`), and a device build (simulator only, ad-hoc signed).

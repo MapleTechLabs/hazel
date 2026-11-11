@@ -40,7 +40,6 @@ export const makeHeadlessDom = (): HeadlessDom => {
 	// ProseMirror reads the selection from the document it is attached to (`view.root`).
 	const selection = emptySelection()
 	Object.assign(document, { getSelection: () => selection })
-	Object.assign(window, { getSelection: () => selection })
 	const { Event } = window
 	// SAFETY: linkedom implements the DOM interfaces ProseMirror and the editor Mount use.
 	const dom = { document, Element: window.Element, HTMLElement: window.HTMLElement } as unknown as Pick<
