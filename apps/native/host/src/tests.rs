@@ -350,6 +350,56 @@ fn an_img_with_a_data_png_draws_its_pixels() {
 }
 
 #[test]
+fn an_unsized_img_takes_its_pictures_size_within_its_max_height() {
+    // A chat message's lone image: `h-auto w-auto max-h-[300px]` in a content-sized wrapper.
+    let src = png_data_url(80, 40, &[255, 0, 0, 255].repeat(80 * 40));
+    let img = |max_h: f32| {
+        e(
+            "div",
+            json!({ "w": 400, "h": 200 }),
+            vec![e(
+                "div",
+                json!({ "w": "fit" }),
+                vec![with_attrs(
+                    e(
+                        "img",
+                        json!({ "w": "auto", "h": "auto", "maxH": max_h }),
+                        vec![],
+                    ),
+                    json!({ "src": src }),
+                )],
+            )],
+        )
+    };
+    // The decode lands off the main thread; `poll` rebuilds the row that drew the empty box.
+    let settled = |max_h: f32| {
+        let mut rt = runtime(img(max_h), (400.0, 200.0));
+        let started = std::time::Instant::now();
+        loop {
+            rt.update(|s: &mut State, tx| {
+                crate::poll(s, 0.0, tx);
+            });
+            rt.frame(0.016);
+            let drawn = rt.presented("r/0/0").map(|p| p.0);
+            if drawn.is_some_and(|r| r[2] > 0.0) || started.elapsed().as_secs() > 10 {
+                break rect(&rt, "r/0/0");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    };
+    assert_eq!(
+        settled(300.0)[2..],
+        [80.0, 40.0],
+        "its own size, never scaled up"
+    );
+    assert_eq!(
+        settled(20.0)[2..],
+        [40.0, 20.0],
+        "scaled down to its max height"
+    );
+}
+
+#[test]
 fn a_multicolour_svg_draws_its_own_oklch_fill_filling_its_box() {
     let body = r#"<path d="M0 0h16v16h-16z" fill="oklch(0.628 0.2577 29.23)"/>"#;
     let s = state(e(

@@ -1513,6 +1513,9 @@ fn build_img(
         .get("src")
         .and_then(|src| ctx.s.images.get(src, picture_size(st)))
     {
+        if let Some([w, h]) = natural_box(st, &image) {
+            e = e.size(w, h);
+        }
         e = match st.object_fit.as_deref() {
             Some("cover") => e.pixels_fit(image.pixels(), SurfaceFit::Fill),
             Some("contain" | "scale-down" | "none") => {
@@ -1522,6 +1525,39 @@ fn build_img(
         };
     }
     press_handlers(apply_box(e, st), on, None)
+}
+
+/// The box of an `<img>` that sets neither its width nor its height (`w-auto h-auto`, a chat
+/// message's lone image): CSS gives it the picture's own size, scaled down to fit its `max-w`
+/// and `max-h` with its aspect ratio kept. Rune sizes a picture's box only from a side that is
+/// set, so without this the box is empty. `None` while the picture decodes (the row rebuilds
+/// once it has), or when the style sizes the box itself.
+fn natural_box(st: &Style, image: &rune::Image) -> Option<[f32; 2]> {
+    let unset = |len: &Option<wire::Len>| matches!(len, None | Some(wire::Len::Auto));
+    if !unset(&st.w) || !unset(&st.h) || st.aspect_ratio.is_some() {
+        return None;
+    }
+    let Some([w, h]) = image.size() else {
+        images::rebuild_when_ready(image);
+        return None;
+    };
+    let max = |len: &Option<wire::Len>| match len {
+        Some(wire::Len::Px(v)) if v.0 > 0.0 => v.0,
+        _ => f32::INFINITY,
+    };
+    Some(fit_within(
+        [w as f32, h as f32],
+        [max(&st.max_w), max(&st.max_h)],
+    ))
+}
+
+/// `size` scaled down (never up) to fit inside `max`, keeping its aspect ratio.
+fn fit_within([w, h]: [f32; 2], [max_w, max_h]: [f32; 2]) -> [f32; 2] {
+    if w <= 0.0 || h <= 0.0 {
+        return [w.max(0.0), h.max(0.0)];
+    }
+    let scale = (max_w / w).min(max_h / h).min(1.0);
+    [w * scale, h * scale]
 }
 
 /// CSS grid on Rune's grid tracks. `display: contents` children are grid items through their own
