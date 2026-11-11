@@ -34,9 +34,10 @@ const CONFIG_FIELDS = {
 	seat_growth: Customers.SeatGrowthConfig.fields,
 } satisfies Record<Customers.SignalTemplate, Schema.Struct.Fields>
 
-/** How a numeric config field reads in its error (the bounds of `rules.ts`'s `Days`, `Pct`, `Count`). */
+/** How a numeric config field reads in its error (the bounds of `rules.ts`'s `Days`, `AgeDays`, `Pct`, `Count`). */
 const FIELD_ERROR = {
-	days: "Whole days, 1 to 365",
+	days: `Whole days, 1 to ${Customers.MAX_WINDOW_DAYS}`,
+	ageDays: "Whole days, 1 to 365",
 	pct: "A percentage, 0 to 1,000",
 	count: "A whole number, 0 to 100,000",
 } as const
@@ -53,8 +54,8 @@ const FIELD_KIND = new Map<string, keyof typeof FIELD_ERROR>([
 	["daysBeforeEnd", "days"],
 	["minActiveUsers", "count"],
 	["activeWindowDays", "days"],
-	["minAgeDays", "days"],
-	["maxAgeDays", "days"],
+	["minAgeDays", "ageDays"],
+	["maxAgeDays", "ageDays"],
 	["minActiveContacts", "count"],
 	["dropPoints", "count"],
 	["windowDays", "days"],
@@ -112,21 +113,36 @@ export const formOfTemplate = (template: Customers.SignalTemplate): RuleForm => 
 
 // FORM → DRAFT
 
-/** The config the form describes, typed fields parsed (NaN where a number does not parse). */
-const configCandidateOf = (form: RuleForm): Record<string, unknown> => ({
-	_tag: form.template,
-	...Object.fromEntries(
-		Object.entries(Customers.TEMPLATES[form.template].defaultConfig)
-			.filter(([key]) => key !== "_tag")
-			.map(([key, fallback]) => {
-				const value = form.config[key] ?? fallback
-				return [
-					key,
-					typeof fallback === "number" && typeof value === "string" ? numberOf(value) : value,
-				]
-			}),
-	),
-})
+/** A field the form shows disabled: the downgrade window while downgrades are off. */
+const isIdle = (form: RuleForm, key: string): boolean =>
+	key === "downgradeWindowDays" && form.config.includeDowngrades !== true
+
+/**
+ * The config the form describes, typed fields parsed (NaN where a number does not parse). A
+ * disabled field that does not hold submits its template default, so it cannot block the save.
+ */
+const configCandidateOf = (form: RuleForm): Record<string, unknown> => {
+	const fields: Schema.Struct.Fields = CONFIG_FIELDS[form.template]
+	return {
+		_tag: form.template,
+		...Object.fromEntries(
+			Object.entries(Customers.TEMPLATES[form.template].defaultConfig)
+				.filter(([key]) => key !== "_tag")
+				.map(([key, fallback]) => {
+					const value = form.config[key] ?? fallback
+					const parsed =
+						typeof fallback === "number" && typeof value === "string" ? numberOf(value) : value
+					const schema = fields[key]
+					return [
+						key,
+						isIdle(form, key) && schema !== undefined && !Schema.is(schema)(parsed)
+							? fallback
+							: parsed,
+					]
+				}),
+		),
+	}
+}
 
 const isMrr = (text: string): boolean => {
 	const value = numberOf(text)

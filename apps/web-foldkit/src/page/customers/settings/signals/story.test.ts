@@ -157,7 +157,7 @@ describe("signals: the form builds the draft", () => {
 		expect(invalid.commands ?? []).toHaveLength(0)
 		const editor = invalid.model.editor!
 		const status = editorStatus(invalid.model, editor, formOf(invalid.model))
-		expect(status.errors).toEqual({ "config.inactiveDays": "Whole days, 1 to 365" })
+		expect(status.errors).toEqual({ "config.inactiveDays": "Whole days, 1 to 90" })
 		expect(status.canSave).toBe(false)
 		expect(pageUpdate(invalid.model, Message.PressedSave()).commands ?? []).toHaveLength(0)
 		expect(
@@ -167,6 +167,44 @@ describe("signals: the form builds the draft", () => {
 		const blank = pageUpdate(opened, Message.ChangedName({ value: "  " })).model
 		expect(Object.keys(editorStatus(blank, blank.editor!, formOf(blank)).errors)).toEqual(["name"])
 	})
+	test("windows stop at 90 days, ages at 365", () => {
+		const long = pageUpdate(
+			withRules(ruleRoute),
+			Message.ChangedConfigNumber({ key: "inactiveDays", value: "120" }),
+		).model
+		expect(editorStatus(long, long.editor!, formOf(long)).errors).toEqual({
+			"config.inactiveDays": "Whole days, 1 to 90",
+		})
+		const old = edits(init(newRoute("onboarding_stalled"), shared).model, [
+			Message.ChangedConfigNumber({ key: "maxAgeDays", value: "400" }),
+		])
+		expect(editorStatus(old, old.editor!, formOf(old)).errors).toEqual({
+			"config.maxAgeDays": "Whole days, 1 to 365",
+		})
+	})
+
+	test("with downgrades off, a bad downgrade window submits the default and does not block the save", () => {
+		const current = edits(init(newRoute("cancel_scheduled"), shared).model, [
+			Message.ChangedConfigNumber({ key: "downgradeWindowDays", value: "120" }),
+		])
+		expect(editorStatus(current, current.editor!, formOf(current)).canSave).toBe(false)
+		const off = pageUpdate(
+			current,
+			Message.ToggledConfigFlag({ key: "includeDowngrades", isOn: false }),
+		).model
+		expect(editorStatus(off, off.editor!, formOf(off)).errors).toEqual({})
+		expect(draftOfModel(off).config).toEqual({
+			_tag: "cancel_scheduled",
+			includeDowngrades: false,
+			downgradeWindowDays: 14,
+		})
+		const valid = pageUpdate(
+			off,
+			Message.ChangedConfigNumber({ key: "downgradeWindowDays", value: "30" }),
+		).model
+		expect(draftOfModel(valid).config).toMatchObject({ downgradeWindowDays: 30 })
+	})
+
 	test("an onboarding minimum age above the maximum marks the maximum", () => {
 		const opened = init(newRoute("onboarding_stalled"), shared).model
 		const crossed = pageUpdate(

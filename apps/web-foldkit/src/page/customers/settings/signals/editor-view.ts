@@ -16,7 +16,7 @@ import { plainWords, renderParts } from "./describe"
 import { editorStatus, type EditorStatus, scopeOf } from "./draft"
 import { metricNameOf } from "./list-view"
 import { Message } from "./message"
-import { currencyOf, type Editor, type Model, type RuleForm } from "./model"
+import { currencyOf, type Editor, type Model, type RuleForm, ruleById } from "./model"
 import { card, errorIdOf, fieldError, severityPicker, templateTile } from "./parts"
 import { previewCard } from "./preview-view"
 import { scopeCard } from "./scope-view"
@@ -304,20 +304,17 @@ const placeholder = (h: H, shared: Shared, title: string, text: string, withLink
 
 export const editorView = (h: H, model: Model, editor: Editor, shared: Shared): Html => {
 	const form = editor.form
-	if (form === null) {
-		const isGone = model.rules !== null && !editor.isDeleting
-		return isGone
-			? placeholder(h, shared, "Rule not found", "This rule was deleted, or the link is wrong.", true)
-			: placeholder(h, shared, "Loading rule…", "Loading the rule…", false)
-	}
-	if (
+	const isGone =
 		editor.ruleId !== null &&
 		model.rules !== null &&
 		!editor.isDeleting &&
-		!model.rules.some((rule) => rule.id === editor.ruleId)
-	) {
-		return placeholder(h, shared, "Rule not found", "This rule was deleted in the meantime.", true)
+		ruleById(model, editor.ruleId) === undefined
+	if (isGone) {
+		return form === null
+			? placeholder(h, shared, "Rule not found", "This rule was deleted, or the link is wrong.", true)
+			: placeholder(h, shared, "Rule not found", "This rule was deleted in the meantime.", true)
 	}
+	if (form === null) return placeholder(h, shared, "Loading rule…", "Loading the rule…", false)
 	const isAdmin = isCustomersAdmin(shared)
 	const status = editorStatus(model, editor, form)
 	const context = {

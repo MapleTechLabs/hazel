@@ -208,7 +208,7 @@ const ruleRow = (h: H, model: Model, rule: RuleRow, shared: Shared): Html => {
 							[h.Class("text-right text-muted-fg text-sm tabular-nums")],
 							[
 								!rule.enabled
-									? `Off since ${formatDate(new Date(rule.updatedAtMs), { now: new Date(shared.nowMs) })}`
+									? `Off · updated ${formatDate(new Date(rule.updatedAtMs), { now: new Date(shared.nowMs) })}`
 									: rule.lastTriggeredAtMs === null
 										? "Never"
 										: formatRelative(

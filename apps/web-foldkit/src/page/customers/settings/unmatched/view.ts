@@ -261,12 +261,21 @@ const openTab = (h: HtmlBuilder<Message>, model: Model, shared: Shared): Readonl
 		if (list.items.length === 0 && list.nextCursor === null) return [allLinked(h)]
 		if (records.length === 0)
 			return [
-				noResultsState(h, {
-					title: "No records match",
-					description: "Search by name, email, domain or source id.",
-					onClear: model.search === "" ? undefined : Message.ClearedSearch(),
-					clearLabel: "Clear search",
-				}),
+				model.search === ""
+					? framed(
+							h,
+							emptyState(h, {
+								title: "Nothing left in this source",
+								icon: (className) => IconCheck(h, { className }),
+								description: "Every record from this source is linked or ignored.",
+							}),
+						)
+					: noResultsState(h, {
+							title: "No records match",
+							description: "Search by name, email, domain or source id.",
+							onClear: Message.ClearedSearch(),
+							clearLabel: "Clear search",
+						}),
 			]
 		const ignored = itemsOf(model.ignored).length
 		return [
