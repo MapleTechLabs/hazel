@@ -41,6 +41,21 @@ const dispatchDocumentKey = (key: {
 	return event.defaultPrevented
 }
 
+/** A paste on `document`, as a browser fires one where no field has focus. */
+const dispatchPaste = (text: string, files: ReadonlyArray<File>): boolean => {
+	const target: EventTarget | undefined = globalThis.document
+	if (target === undefined) return false
+	const clipboardData = {
+		files,
+		items: files.map((file) => ({ kind: "file", type: file.type, getAsFile: () => file })),
+		types: [...(text === "" ? [] : ["text/plain"]), ...(files.length > 0 ? ["Files"] : [])],
+		getData: (format: string) => (format === "text/plain" || format === "text" ? text : ""),
+	}
+	const event = Object.assign(new Event("paste", { bubbles: true, cancelable: true }), { clipboardData })
+	target.dispatchEvent(event)
+	return event.defaultPrevented
+}
+
 const MIME_TYPES = new Map([
 	["png", "image/png"],
 	["jpg", "image/jpeg"],
@@ -1023,6 +1038,10 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			void filesPicked(message.path, message.files)
 			return
 		}
+		if (message.t === "paste") {
+			void pasted(message)
+			return
+		}
 		if (message.t === "label") {
 			activateLabel(message.path)
 			return
@@ -1167,6 +1186,20 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			target,
 			currentTarget: target,
 		})
+	}
+
+	/** A paste replays as the DOM's `paste` on `document`, with the clipboard as `clipboardData`. */
+	const pasted = async (paste: Extract<HostToRuntime, { t: "paste" }>) => {
+		const picked = await Promise.all(
+			paste.files.map(
+				async (file) => new File([await readFile(file)], basename(file), { type: mimeOf(file) }),
+			),
+		)
+		const image =
+			paste.image == null
+				? []
+				: [new File([Buffer.from(paste.image, "base64")], "image.png", { type: "image/png" })]
+		dispatchPaste(paste.text, picked.length > 0 ? picked : image)
 	}
 
 	return { target, handleHostMessage, env, refreshObserved, click: clickElement, filesPicked, fire }

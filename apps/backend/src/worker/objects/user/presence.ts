@@ -101,7 +101,7 @@ export const transition = (
 			}
 			const renew = current.updatedAt.getTime() + PRESENCE_RENEW_MS <= nowMs
 			return {
-				fields: { ...current, lastSeenAt: now, ...(renew ? { updatedAt: now } : {}) },
+				fields: { ...current, lastSeenAt: now, updatedAt: renew ? now : current.updatedAt },
 				project: renew,
 			}
 		}
@@ -118,10 +118,10 @@ export const transition = (
 			return {
 				fields: {
 					...current,
-					...(isStatusExpired
-						? { statusEmoji: null, customMessage: null, statusExpiresAt: null }
-						: {}),
-					...(goesOffline ? { status: "offline" as const } : {}),
+					statusEmoji: isStatusExpired ? null : current.statusEmoji,
+					customMessage: isStatusExpired ? null : current.customMessage,
+					statusExpiresAt: isStatusExpired ? null : current.statusExpiresAt,
+					status: goesOffline ? "offline" : current.status,
 					updatedAt: now,
 				},
 				project: true,

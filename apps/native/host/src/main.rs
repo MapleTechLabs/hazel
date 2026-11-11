@@ -112,6 +112,27 @@ fn send_editable(path: &str, value: Option<&str>, key: Option<&str>) -> u64 {
     seq
 }
 
+/// A paste the composer's editor or the page should hear as a DOM `paste` on `document`: the
+/// clipboard's files (paths on disk), its image (PNG, base64; a screenshot has no file) and its
+/// text. The web app attaches the files to the composer, or pastes the text into it.
+fn send_paste(content: &rune::ClipboardContent) {
+    use base64::Engine;
+    let files: Vec<String> = content
+        .files()
+        .iter()
+        .filter_map(|f| f.to_str().map(str::to_string))
+        .collect();
+    let image = content
+        .image()
+        .map(|i| base64::engine::general_purpose::STANDARD.encode(i.png()));
+    write_line(json!({ "t": "paste", "text": content.text(), "files": files, "image": image }));
+}
+
+/// Whether a paste carries something a text field cannot hold: files or an image.
+fn pastes_files(content: &rune::ClipboardContent) -> bool {
+    content.image().is_some() || !content.files().is_empty()
+}
+
 /// The DOM `key` of the keys a field's own keydown handler (a combo box, a picker) acts on.
 fn dom_key(key: &rune::edit::Key) -> Option<&'static str> {
     use rune::edit::Key;
@@ -1837,6 +1858,14 @@ fn build_editable(
         })
         .on_submit(move |_: &mut State, _| {
             send_editable(&submit_key, None, Some("Enter"));
+        })
+        // Files and images attach to the composer, as a paste into the web editor does; text
+        // stays the field's own paste.
+        .on_input_paste(|_: &mut State, content, _| {
+            pastes_files(content) && {
+                send_paste(content);
+                true
+            }
         });
     let field = match field_st {
         Some(fst) => apply_box(
@@ -1928,7 +1957,12 @@ pub(crate) fn view(s: &State, cx: &mut Cx<State>) -> El {
         no_pointer: false,
     };
     let body = s.root.as_ref().and_then(|root| build(root, "r", inh, &ctx));
-    let mut page = col().w_full().h_full().on_layout(report_env);
+    // A paste with no field focused goes to the page, which hands it to the composer.
+    let mut page = col()
+        .w_full()
+        .h_full()
+        .on_layout(report_env)
+        .on_paste_content(|_: &mut State, content, _| send_paste(content));
     if let Some(bg) = color(&s.page.bg) {
         page = page.fill(bg)
     }

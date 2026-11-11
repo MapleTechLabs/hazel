@@ -39,7 +39,7 @@ import * as Typing from "../../../composer/typing"
 import { uploadStream } from "../../../composer/upload"
 import { MessageWindows } from "../../../data/message-windows"
 import type { HazelApiClient, HazelRpc } from "../../../rpc"
-import { globalTypingStream, leftWindowStream } from "../../../composer/window-events"
+import { globalPasteStream, globalTypingStream, leftWindowStream } from "../../../composer/window-events"
 import { channelHotkeysStream } from "./hotkeys"
 import { isMemberOf, Message, type Model } from "./page"
 
@@ -460,7 +460,16 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 					!hasOpenDialog(model),
 			}),
 			dependenciesToStream: ({ isActive }) =>
-				isActive ? globalTypingStream((key) => Message.PressedGlobalKey({ key })) : Stream.empty,
+				isActive
+					? Stream.merge(
+							globalTypingStream((key) => Message.PressedGlobalKey({ key })),
+							globalPasteStream((paste) =>
+								paste._tag === "Files"
+									? Message.PastedGlobalFiles({ files: paste.files })
+									: Message.PastedGlobalText({ text: paste.text }),
+							),
+						)
+					: Stream.empty,
 		},
 	),
 	// Discord's channel shortcuts (`hotkeys.ts`), while the page (not a root overlay) holds the keyboard.

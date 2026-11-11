@@ -397,6 +397,15 @@ describe("a thread still being created", () => {
 		expect(failed.model.threadPanel?.draft.composer.markdown).toBe("see attached")
 	})
 
+	test("a file pasted anywhere on the page goes to the open thread's composer", () => {
+		const file = new File(["x"], "shot.png", { type: "image/png" })
+		const held = run(creating(), [Message.PastedGlobalFiles({ files: [file] })])
+		expect(held.model.threadPanel?.held).toHaveLength(1)
+		expect(held.model.draft.currentUpload).toBeNull()
+		const done = run(held.model, [created])
+		expect(done.commands.map((command) => command.name)).toContain("GenerateUploadFileId")
+	})
+
 	test("a file picked meanwhile uploads once the thread exists", () => {
 		const file = new File(["x"], "notes.txt", { type: "text/plain" })
 		const held = run(creating(), [thread(Draft.Message.SelectedFiles({ files: [file] }))])

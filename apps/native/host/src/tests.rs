@@ -2721,3 +2721,73 @@ fn a_dialog_covers_the_frames_behind_it_and_not_its_own() {
     assert_eq!(paths, ["r/0", "r/1/0/0"]);
     assert!(!inside("r/0") && inside("r/1/0/0"));
 }
+
+fn composer_page() -> Runtime<State> {
+    let editor = with_attrs(
+        e(
+            "div",
+            json!({ "w": 400 }),
+            vec![e("div", json!({ "minH": 40 }), vec![])],
+        ),
+        json!({ "data-editable": "1" }),
+    );
+    runtime(e("div", json!({ "w": 400 }), vec![editor]), (400.0, 100.0))
+}
+
+#[test]
+fn a_paste_with_no_field_focused_reaches_the_page() {
+    sent_lines();
+    let mut rt = composer_page();
+    rt.paste("pasted-on-the-page");
+    rt.frame(0.1);
+    let reported = sent_lines()
+        .into_iter()
+        .any(|m| m["t"] == "paste" && m["text"] == "pasted-on-the-page");
+    assert!(reported, "the page's paste reaches the runtime");
+}
+
+#[test]
+fn a_file_pasted_into_the_composer_goes_to_the_runtime_instead_of_the_field() {
+    sent_lines();
+    let mut rt = composer_page();
+    rt.update(|_, tx| tx.focus("r/0/field".to_string()));
+    rt.frame(0.1);
+    rt.paste_content(
+        rune::ClipboardContent::new("").with_files(["/tmp/composer-paste/report.pdf".into()]),
+    );
+    rt.frame(0.1);
+    let reported = sent_lines()
+        .into_iter()
+        .any(|m| m["t"] == "paste" && m["files"] == json!(["/tmp/composer-paste/report.pdf"]));
+    assert!(reported, "the pasted file reaches the runtime");
+    assert_eq!(
+        rt.state
+            .fields
+            .get("r/0")
+            .map_or("", |f| f.edit.text.as_str()),
+        ""
+    );
+}
+
+#[test]
+fn text_pasted_into_the_composer_stays_the_fields_own_edit() {
+    sent_lines();
+    let mut rt = composer_page();
+    rt.update(|_, tx| tx.focus("r/0/field".to_string()));
+    rt.frame(0.1);
+    rt.paste("typed-by-paste");
+    rt.frame(0.1);
+    let lines = sent_lines();
+    assert!(
+        lines
+            .iter()
+            .any(|m| m["type"] == "editable" && m["value"] == "typed-by-paste"),
+        "the field sends the edit"
+    );
+    assert!(
+        !lines
+            .iter()
+            .any(|m| m["t"] == "paste" && m["text"] == "typed-by-paste"),
+        "the page does not hear it too"
+    );
+}

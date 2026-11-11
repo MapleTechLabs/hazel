@@ -1,6 +1,7 @@
 import type { Node as ProseMirrorNode } from "prosemirror-model"
 import { Selection, TextSelection } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
+import { pastePlainText } from "./behavior"
 import { createEmptyValue, deserializeFromMarkdown } from "./markdown"
 import { autocompleteKey, closedAutocomplete, insertAutocompleteResult } from "./plugins"
 import { schema } from "./schema"
@@ -49,6 +50,12 @@ export const focusAndInsertText = (view: EditorView, text: string) => {
 		handle(view, from, to, text, () => view.state.tr),
 	)
 	if (!handled) view.dispatch(view.state.tr.insertText(text, from, to).scrollIntoView())
+}
+
+/** A paste made outside the editor: the caret goes to the end and the text pastes as it would inside. */
+export const focusAndPasteText = (view: EditorView, text: string) => {
+	focusAtEnd(view)
+	pastePlainText(view, text)
 }
 
 /** `insertCustomEmoji`: an inline emoji atom at the end, caret after it. */
