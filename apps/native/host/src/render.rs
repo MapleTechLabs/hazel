@@ -285,18 +285,7 @@ fn build_table<'a>(
     for row in &rows {
         let row_inh = inh.from(&row.st);
         for (cell_path, cell) in &row.cells {
-            let Node::Elem {
-                hash,
-                tag,
-                key,
-                st: cst,
-                attrs,
-                on,
-                observed,
-                ov,
-                children,
-            } = cell.as_ref()
-            else {
+            let Node::Elem { st: cst, .. } = cell.as_ref() else {
                 continue;
             };
             let border_bottom = row.st.border.map_or(0.0, |b| b[2].0);
@@ -316,17 +305,9 @@ fn build_table<'a>(
                 col_span: Some(span(cell)),
                 ..cst.clone()
             };
-            let decorated = Arc::new(Node::Elem {
-                hash: format!("{hash}~row"),
-                tag: tag.clone(),
-                key: key.clone(),
-                st: decorated,
-                attrs: attrs.clone(),
-                on: on.clone(),
-                observed: *observed,
-                ov: ov.clone(),
-                children: children.clone(),
-            });
+            let Some(decorated) = restyle(cell, "row", decorated) else {
+                continue;
+            };
             if let Some(cell) = build(&decorated, cell_path, row_inh, ctx) {
                 // A cell's content sits in the middle of its row (`vertical-align: middle`).
                 let block = matches!(cst.display.as_deref(), None | Some("block" | "table-cell"));
@@ -837,6 +818,8 @@ fn build_elem(
     inh: Inherit,
     ctx: &Ctx,
 ) -> El {
+    let filled = grid_fill(st, children);
+    let children = filled.as_deref().unwrap_or(children);
     // A scroll viewport's content sizes to itself (CSS `flex-1 min-h-full` there grows with the
     // content); Rune's `grow` would pin it to the viewport and leave nothing to scroll.
     let content_sized: Vec<Arc<Node>>;
@@ -1057,6 +1040,91 @@ fn is_inline(node: &Arc<Node>) -> bool {
     }
 }
 
+/// A track-less grid of definite height (a sheet's panel, placed by its insets) stretches its
+/// one in-flow child over its one implicit row; Rune lays it out as a block, so grow the child.
+fn grid_fill(st: &Style, children: &[Arc<Node>]) -> Option<Vec<Arc<Node>>> {
+    let stretches = |v: &Option<String>| {
+        v.as_deref()
+            .is_none_or(|v| matches!(v, "stretch" | "normal"))
+    };
+    let definite = matches!(st.h, Some(wire::Len::Px(_) | wire::Len::Full))
+        || matches!(st.absolute, Some([_, Some(_), _, Some(_)]));
+    if st.display.as_deref() != Some("grid")
+        || st.grid_cols.is_some()
+        || st.grid_rows.is_some()
+        || !definite
+        || !stretches(&st.justify)
+        || !stretches(&st.items)
+    {
+        return None;
+    }
+    let in_flow = |node: &Arc<Node>| match node.as_ref() {
+        Node::Elem { st, .. } => {
+            st.display.as_deref() != Some("none") && st.absolute.is_none() && !is_portal(node)
+        }
+        Node::Svg { .. } => true,
+        Node::Text(text) => !text.trim().is_empty(),
+    };
+    let mut flow = children.iter().enumerate().filter(|(_, c)| in_flow(c));
+    let (at, only) = flow.next()?;
+    if flow.next().is_some() {
+        return None;
+    }
+    let Node::Elem { st: child, .. } = only.as_ref() else {
+        return None;
+    };
+    let auto_block_margin = child.margin_auto.is_some_and(|m| m[0] || m[2]);
+    if matches!(
+        child.h,
+        Some(wire::Len::Px(_) | wire::Len::Full | wire::Len::Frac(_))
+    ) || child.grow.is_some()
+        || !stretches(&child.align_self)
+        || auto_block_margin
+    {
+        return None;
+    }
+    let mut out = children.to_vec();
+    out[at] = restyle(
+        only,
+        "fill",
+        Style {
+            grow: Some(F(1.0)),
+            ..child.clone()
+        },
+    )?;
+    Some(out)
+}
+
+/// `node` with the style `st`, under its own memo key: the same wire node styled otherwise is a
+/// different El.
+fn restyle(node: &Node, suffix: &str, st: Style) -> Option<Arc<Node>> {
+    let Node::Elem {
+        hash,
+        tag,
+        key,
+        attrs,
+        on,
+        observed,
+        ov,
+        children,
+        ..
+    } = node
+    else {
+        return None;
+    };
+    Some(Arc::new(Node::Elem {
+        hash: format!("{hash}~{suffix}"),
+        tag: tag.clone(),
+        key: key.clone(),
+        st,
+        attrs: attrs.clone(),
+        on: on.clone(),
+        observed: *observed,
+        ov: ov.clone(),
+        children: children.clone(),
+    }))
+}
+
 fn size_to_content(node: &Arc<Node>) -> Arc<Node> {
     drop_grow(node, true)
 }
@@ -1064,32 +1132,15 @@ fn size_to_content(node: &Arc<Node>) -> Arc<Node> {
 /// `node` without its `grow` (and its `min-h`, with `min_h_too`), under its own memo key.
 fn drop_grow(node: &Arc<Node>, min_h_too: bool) -> Arc<Node> {
     match node.as_ref() {
-        Node::Elem {
-            hash,
-            tag,
-            key,
-            st,
-            attrs,
-            on,
-            observed,
-            ov,
-            children,
-        } if st.grow.is_some() && st.absolute.is_none() => Arc::new(Node::Elem {
-            // Its own memo key: the same wire node sized to the viewport is a different El.
-            hash: format!("{hash}~{}", if min_h_too { "content" } else { "basis" }),
-            tag: tag.clone(),
-            key: key.clone(),
-            st: Style {
+        Node::Elem { st, .. } if st.grow.is_some() && st.absolute.is_none() => {
+            let st = Style {
                 grow: None,
                 min_h: if min_h_too { None } else { st.min_h.clone() },
                 ..st.clone()
-            },
-            attrs: attrs.clone(),
-            on: on.clone(),
-            observed: *observed,
-            ov: ov.clone(),
-            children: children.clone(),
-        }),
+            };
+            restyle(node, if min_h_too { "content" } else { "basis" }, st)
+                .unwrap_or_else(|| node.clone())
+        }
         _ => node.clone(),
     }
 }
@@ -1272,6 +1323,12 @@ fn add_children(
                         && st.absolute.is_none()
                         && st.w.is_none() =>
                 {
+                    // It sits on a line no wider than the block: its text wraps there.
+                    let b = if st.max_w.is_none() {
+                        b.max_w_frac(1.0)
+                    } else {
+                        b
+                    };
                     match inh.align {
                         rune::Align::Center => b.self_center(),
                         rune::Align::End => b.self_end(),

@@ -159,15 +159,14 @@ bun run conformance                # native vs Chromium: element rects and pixel
 bun run --cwd ../../packages/foldkit-rune test   # resolved styles vs Chromium's computed styles
 ```
 
-`bench/conformance` renders the same scenarios natively and in Chromium, matches elements and
-compares their rects and the pixels; `--check` holds the results to `thresholds.json`. The style
+`bench/conformance` renders the same scenarios natively and in Chromium (`mobile` and `drawer`
+at a phone's 402x874, the rest at 1280x800), matches elements and compares their rects and the
+pixels; `--check` holds the results to `thresholds.json`. The style
 suite in `packages/foldkit-rune` replays what Chromium computed for every element of the app and a
 synthetic utility page (`conformance:extract` records it).
 
 ## Not yet native
 
-- Narrow windows (the phone layout): a message's text runs past the edge instead of wrapping,
-  and the mobile drawer's channel list collapses to nothing.
 - Overlays beyond the modal popovers: tooltips (`AnchorTooltipPanel`), submenus
   (`PositionSubmenu`) and the image viewer.
 - Colours a `focus:` variant changes (Rune draws focus as a ring only), focus or press state on an
@@ -183,5 +182,5 @@ synthetic utility page (`conformance:extract` records it).
   (the fade is a mask Rune applies to its own drawing), and a headless capture shows the frame's
   box empty. Frames show on macOS only; other platforms have no web view yet.
 
-Rune is pinned to `Makisuo/rune` (anomalyco/rune `bca4713` plus grid tracks and
-`El::clip_fade_linear_frac`) until they land upstream; see `host/Cargo.toml`.
+Rune is pinned to `Makisuo/rune` (anomalyco/rune `bca4713` plus grid tracks,
+`El::clip_fade_linear_frac` and `El::max_w_frac`) until they land upstream; see `host/Cargo.toml`.
