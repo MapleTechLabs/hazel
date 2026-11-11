@@ -477,7 +477,8 @@ const seatGrowth =
 			addDays(org.today, -(2 * config.windowDays - 1)),
 			addDays(org.today, -config.windowDays),
 		)
-		if (before < config.minActiveUsers) return before === 0 && now === 0 ? "No data" : "Below threshold"
+		if (before < Math.max(1, config.minActiveUsers))
+			return before === 0 && now === 0 ? "No data" : "Below threshold"
 		const growth = ((now - before) / before) * 100
 		if (growth < config.growthPct) return "Below threshold"
 		const step = stepOf(growth >= 200, growth >= 100)

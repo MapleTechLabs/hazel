@@ -367,8 +367,16 @@ const pullAll = (due: ReadonlyArray<schema.CustomerConnection>, now: Date) =>
 			due,
 			(connection) =>
 				Option.match(providers.get(connection.provider), {
-					// No integration for it (core): nothing to pull until one is registered.
-					onNone: () => setNextSync(connection.id, null, now),
+					// No adapter deployed for it: look again later rather than stop syncing for good.
+					onNone: () =>
+						Effect.logWarning("Customers pull has no adapter", {
+							connectionId: connection.id,
+							provider: connection.provider,
+						}).pipe(
+							Effect.andThen(
+								setNextSync(connection.id, new Date(now.getTime() + MAX_BACKOFF_MS), now),
+							),
+						),
 					onSome: (adapter) =>
 						pullConnection(connection, adapter, now).pipe(
 							// Recording the failure itself failed (or a defect): back off all the same, so a

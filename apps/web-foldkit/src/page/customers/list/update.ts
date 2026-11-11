@@ -29,6 +29,7 @@ import {
 import { Message, type ViewAction } from "./message"
 import {
 	activeFields,
+	builtInDefaultOf,
 	canUpdateView,
 	clearField,
 	COLUMNS_POPOVER_ID,
@@ -229,6 +230,22 @@ const onViewMenu = (model: Model, shared: Shared, key: string): Return => {
 			return openSaveModal(model, "rename")
 		case "reset":
 			return withDraft(model, shared, () => tab.draft)
+		case "restore_default": {
+			const fallback = builtInDefaultOf(tab)
+			if (tab.row === null || fallback === undefined || organizationId === undefined) return { model }
+			const restored = withDraft(model, shared, () => fallback.draft)
+			return {
+				...restored,
+				commands: [
+					...(restored.commands ?? []),
+					UpdateSavedView({
+						organizationId,
+						viewId: tab.row.id,
+						view: viewDraftOf(fallback.name, fallback.draft),
+					}),
+				],
+			}
+		}
 		case "delete":
 			return tab.row === null || organizationId === undefined
 				? { model }

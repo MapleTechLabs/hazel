@@ -168,11 +168,46 @@ describe("Customers RPCs", () => {
 		))
 
 	it(
+		"never seeds demo data into a real connection",
+		() =>
+			run(
+				Effect.gen(function* () {
+					const world = yield* makeCustomersWorld
+					world.object.storage.db
+						.prepare(
+							`UPDATE customer_connections SET externalAccountId = 'demo', status = 'disconnected' WHERE provider != 'stripe'`,
+						)
+						.run()
+					expect(
+						tagOf(
+							yield* world.call("customers.demo.seed", { accounts: 5, seed: 7 }, world.owner),
+						),
+					).toBe("Success")
+					const runsOf = (provider: "clerk" | "stripe") =>
+						world.rows<{ n: number }>(
+							`SELECT count(*) AS n FROM customer_sync_runs WHERE connectionId = ?`,
+							world.connection(provider),
+						)[0]!.n
+					expect(runsOf("stripe")).toBe(0)
+					expect(runsOf("clerk")).toBe(1)
+					expect(
+						world.rows(`SELECT status FROM customer_connections WHERE provider = 'clerk'`),
+					).toEqual([{ status: "active" }])
+				}),
+			),
+		30_000,
+	)
+
+	it(
 		"seeds demo data through ingest and computes signals for every template",
 		() =>
 			run(
 				Effect.gen(function* () {
 					const world = yield* makeCustomersWorld
+					// The world's connections stand in for the demo ones.
+					world.object.storage.db
+						.prepare(`UPDATE customer_connections SET externalAccountId = 'demo'`)
+						.run()
 					const seeded = yield* world.call(
 						"customers.demo.seed",
 						{ accounts: 60, seed: 7 },

@@ -14,16 +14,33 @@ import { loadBase } from "./snapshot"
 import { clearComputeProgress } from "./schedule"
 import { generateDemoSeed } from "./seed"
 
+const DEMO_ACCOUNT_ID = "demo"
+
+/**
+ * The provider's demo connection (re-activated if it was disconnected), or none when a real one
+ * holds the provider (one connection per provider): demo data never goes into a real connection.
+ */
 const connectionFor = (provider: CustomerProvider, organizationId: OrganizationId, by: UserId, now: Date) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
 		const existing = yield* db.first(
 			SQLite.from(schema.customerConnectionsTable)
-				.select("id")
+				.select("id", "externalAccountId", "status")
 				.where(($) => [$.provider.eq(provider)])
 				.limit(1),
 		)
-		if (Option.isSome(existing)) return existing.value.id
+		if (Option.isSome(existing)) {
+			const connection = existing.value
+			if (connection.externalAccountId !== DEMO_ACCOUNT_ID) return Option.none<CustomerConnectionId>()
+			if (connection.status !== "active") {
+				yield* db.run(
+					SQLite.update(schema.customerConnectionsTable)
+						.set({ status: "active", disconnectedAt: null, updatedAt: now })
+						.where(($) => [$.id.eq(connection.id)]),
+				)
+			}
+			return Option.some(connection.id)
+		}
 		const [row] = yield* db.run(
 			SQLite.insertInto(schema.customerConnectionsTable)
 				.values({
@@ -31,7 +48,7 @@ const connectionFor = (provider: CustomerProvider, organizationId: OrganizationI
 					provider,
 					status: "active",
 					// Not a real account: connecting one replaces the demo data.
-					externalAccountId: "demo",
+					externalAccountId: DEMO_ACCOUNT_ID,
 					externalAccountName: `Demo ${provider}`,
 					config: DEFAULT_CONNECTION_CONFIG[provider],
 					connectedBy: by,
@@ -40,7 +57,7 @@ const connectionFor = (provider: CustomerProvider, organizationId: OrganizationI
 				})
 				.returning("id"),
 		)
-		return row.id
+		return Option.some(row.id)
 	})
 
 export const seedDemo = Effect.fn("Customers.seedDemo")(function* (input: {
@@ -54,9 +71,16 @@ export const seedDemo = Effect.fn("Customers.seedDemo")(function* (input: {
 	const ingest = yield* CustomerIngest
 	const seed = generateDemoSeed({ now: input.now, accounts: input.accounts, seed: input.seed })
 	for (const batch of seed.batches) {
-		const connectionId: CustomerConnectionId = yield* db.transaction(
+		const connection = yield* db.transaction(
 			connectionFor(batch.provider, input.organizationId, input.by, input.now),
 		)
+		if (Option.isNone(connection)) {
+			yield* Effect.logWarning("Customers demo seed skips a provider with a real connection", {
+				provider: batch.provider,
+			})
+			continue
+		}
+		const connectionId = connection.value
 		const run = yield* ingest.startRun(connectionId, "manual")
 		yield* ingest.apply(
 			{ connectionId, provider: batch.provider, runId: run.id, trigger: "manual" },

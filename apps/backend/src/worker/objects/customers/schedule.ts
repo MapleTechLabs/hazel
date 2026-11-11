@@ -210,9 +210,11 @@ export const customersDeadlines = Effect.gen(function* () {
 	]
 }).pipe(
 	Effect.catchTags({
+		// Retry the lookup soon: an empty set would leave the alarm disarmed.
 		DatabaseError: (error) =>
 			Effect.logWarning("Customers deadline lookup failed", { error: error.message }).pipe(
-				Effect.as([]),
+				Effect.andThen(Clock.currentTimeMillis),
+				Effect.map((now) => [now + LEASE_MS]),
 			),
 	}),
 )

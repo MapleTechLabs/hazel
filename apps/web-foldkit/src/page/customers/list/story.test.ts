@@ -17,6 +17,7 @@ import {
 	ownerEntries,
 	toggleColumn,
 	type ViewRow,
+	viewMenuEntries,
 	visibleAccounts,
 } from "./model"
 import { listKeyOf } from "./subscription"
@@ -302,6 +303,32 @@ describe("customers list: saving views", () => {
 		const deleted = pick(edited, toViewMenu, "delete", entries)
 		expect(commandNames(deleted)).toContain("DeleteSavedView")
 		expect(deleted.outMessage?._tag).toBe("RequestedNavigation")
+	})
+})
+
+describe("customers list: built-in view defaults", () => {
+	test("an admin resets an edited built-in view to its shipped name and draft", () => {
+		const model = loaded("at_risk")
+		const admin = { ...viewer, isAdmin: true }
+		const items = (entries: ReadonlyArray<Menu.Entry>) =>
+			entries.flatMap((entry) => (entry._tag === "Item" ? [entry.item] : []))
+		expect(
+			items(viewMenuEntries(model, admin)).find((item) => item.key === "restore_default"),
+		).toMatchObject({ isDisabled: false })
+		expect(items(viewMenuEntries(loaded(mine.id), admin)).map((item) => item.key)).not.toContain(
+			"restore_default",
+		)
+		const restored = pick(
+			model,
+			(message) => Message.GotViewMenuMessage({ message }),
+			"restore_default",
+			[Menu.item("restore_default")],
+		)
+		expect(commandNames(restored)).toContain("UpdateSavedView")
+		expect(restored.commands?.find((command) => command.name === "UpdateSavedView")?.args).toMatchObject({
+			viewId: atRisk.id,
+			view: { name: "At risk", filters: { healthStatuses: ["at_risk", "critical"] } },
+		})
 	})
 })
 

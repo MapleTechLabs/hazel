@@ -210,6 +210,20 @@ export interface Viewer {
 export const canUpdateView = (tab: ViewTab, viewer: Viewer): boolean =>
 	tab.row !== null && (tab.row.ownerUserId === viewer.userId || viewer.isAdmin)
 
+/** The shipped name and draft of a built-in view (`BUILT_IN_FALLBACK`); none for other views. */
+export const builtInDefaultOf = (tab: ViewTab): ViewTab | undefined =>
+	builtInFallbackTabs.find((fallback) => fallback.key === tab.row?.builtInKey)
+
+/** An admin-edited built-in view can go back to its shipped name and draft. */
+const canRestoreDefault = (tab: ViewTab, viewer: Viewer): boolean => {
+	const fallback = builtInDefaultOf(tab)
+	return (
+		fallback !== undefined &&
+		canUpdateView(tab, viewer) &&
+		(fallback.name !== tab.name || !sameDraft(fallback.draft, tab.draft))
+	)
+}
+
 /** Built-in views stay; one's own personal view (or, for admins, a shared one) can go. */
 export const canDeleteView = (tab: ViewTab, viewer: Viewer): boolean =>
 	tab.row !== null && tab.row.builtInKey === null && canUpdateView(tab, viewer)
@@ -617,7 +631,14 @@ export const ownerEntries = (
 	Menu.item(OWNER_NONE, { textValue: "Remove owner" }),
 ]
 
-export const ViewMenuKey = Schema.Literals(["save", "save_as", "rename", "reset", "delete"])
+export const ViewMenuKey = Schema.Literals([
+	"save",
+	"save_as",
+	"rename",
+	"reset",
+	"restore_default",
+	"delete",
+])
 export type ViewMenuKey = typeof ViewMenuKey.Type
 
 export const viewMenuEntries = (model: Model, viewer: Viewer): ReadonlyArray<Menu.Entry> => {
@@ -628,6 +649,9 @@ export const viewMenuEntries = (model: Model, viewer: Viewer): ReadonlyArray<Men
 		Menu.item("save_as"),
 		Menu.item("rename", { isDisabled: !canUpdateView(tab, viewer) || tab.row?.builtInKey !== null }),
 		Menu.item("reset", { isDisabled: !edited }),
+		...(builtInDefaultOf(tab) === undefined
+			? []
+			: [Menu.item("restore_default", { isDisabled: !canRestoreDefault(tab, viewer) })]),
 		Menu.separator,
 		Menu.item("delete", { intent: "Danger", isDisabled: !canDeleteView(tab, viewer) }),
 	]

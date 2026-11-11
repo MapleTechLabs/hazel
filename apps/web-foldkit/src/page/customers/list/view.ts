@@ -183,6 +183,7 @@ const VIEW_MENU_LABEL = {
 	save_as: "Save as a new view…",
 	rename: "Rename…",
 	reset: "Discard changes",
+	restore_default: "Reset to default",
 	delete: "Delete view",
 } as const
 

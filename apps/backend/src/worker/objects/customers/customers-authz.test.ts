@@ -155,6 +155,30 @@ describe("Customers authorization", () => {
 			}),
 		))
 
+	it("refuses a write labelled with another organization than the object's", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const other = uuid() as OrganizationId
+				for (const tag of [
+					"customers.view.create",
+					"customers.rule.create",
+					"customers.connection.connect",
+					"customers.unmatched.createAccount",
+					"customers.demo.seed",
+				] as const) {
+					const exit = yield* world.call(
+						tag,
+						{ ...PAYLOADS[tag], organizationId: other },
+						world.owner,
+					)
+					expect([tag, tagOf(exit)]).toEqual([tag, "UnauthorizedError"])
+				}
+				for (const table of ["customer_saved_views", "customer_signal_rules", "customer_connections"])
+					expect(world.rows(`SELECT id FROM ${table} WHERE organizationId = ?`, other)).toEqual([])
+			}),
+		))
+
 	it("lets members set an account's owner and tags, and only admins its name and stage", () =>
 		run(
 			Effect.gen(function* () {

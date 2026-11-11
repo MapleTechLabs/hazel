@@ -333,6 +333,16 @@ describe("signal evaluation", () => {
 			"NoMatch",
 		)
 		expect(run("seat_growth", { activity: { a: [-40], b: [-1], c: [-1], d: [-1] } })._tag).toBe("NoMatch")
+		// A zero baseline never grows by a percentage, even with no minimum.
+		const config = defaults("seat_growth")
+		if (config._tag !== "seat_growth") throw new Error("seat_growth defaults")
+		const growth = (input: FactsInput) =>
+			evaluate(ruleOf({ ...config, minActiveUsers: 0 }), factsOf(input), orgFacts())
+		expect(growth({})).toEqual({ _tag: "NoMatch", reason: "No data" })
+		expect(growth({ activity: { a: [-1], b: [-2] } })).toEqual({
+			_tag: "NoMatch",
+			reason: "Below threshold",
+		})
 	})
 
 	it("skips churned accounts, out-of-scope accounts and missing sources", () => {

@@ -33,7 +33,12 @@ import { Clock, DateTime, Effect, Layer, Option, Predicate, Redacted } from "eff
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { NonProductionStage } from "../../lib/stage"
 import { IntegrationEncryption } from "../../services/integration-encryption"
-import { type CustomersActor, requireAdmin, requireMember } from "../../worker/objects/customers/access"
+import {
+	type CustomersActor,
+	requireAdmin,
+	requireMember,
+	requireOwnOrganization,
+} from "../../worker/objects/customers/access"
 import {
 	disconnectConnections,
 	encryptSecrets,
@@ -732,8 +737,9 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					return { updated: result.data, transactionId: result.transactionId }
 				}).pipe(remap),
 
-			"customers.view.create": ({ id, view, shared, organizationId }) =>
+			"customers.view.create": ({ id, view, shared, organizationId: payloadOrg }) =>
 				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
 					const actor = shared ? yield* requireAdmin : yield* requireMember
 					const owner = shared ? null : actor.userId
 					return yield* withTx(
@@ -983,8 +989,9 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 			switchProviderAccount(connection, now).pipe(Effect.provideService(CustomerIngest, ingest))
 
 		return {
-			"customers.rule.create": ({ rule, organizationId }) =>
+			"customers.rule.create": ({ rule, organizationId: payloadOrg }) =>
 				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
 					const actor = yield* requireAdmin
 					return yield* withTx(
 						Effect.gen(function* () {
@@ -1095,9 +1102,10 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 				apiKey,
 				webhookSecret: given,
 				config,
-				organizationId,
+				organizationId: payloadOrg,
 			}) =>
 				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
 					const actor = yield* requireAdmin
 					const webhookSecret = secretOf(given)
 					if (config._tag !== provider)
@@ -1332,8 +1340,9 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.unmatched.createAccount": ({ recordId, organizationId }) =>
+			"customers.unmatched.createAccount": ({ recordId, organizationId: payloadOrg }) =>
 				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
 					const actor = yield* requireAdmin
 					const result = yield* withTx(
 						Effect.gen(function* () {
@@ -1444,8 +1453,9 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.demo.seed": ({ accounts, seed, organizationId }) =>
+			"customers.demo.seed": ({ accounts, seed, organizationId: payloadOrg }) =>
 				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
 					const actor = yield* requireAdmin
 					const enabled = yield* NonProductionStage.pipe(Effect.orElseSucceed(() => false))
 					if (!enabled) return yield* invalid("Demo data is disabled on this stage")

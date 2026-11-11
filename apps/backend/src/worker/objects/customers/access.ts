@@ -8,8 +8,9 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser, UnauthorizedError } from "@hazel/domain"
 import { CurrentBotScopes } from "@hazel/domain/scopes"
-import type { UserId } from "@hazel/schema"
+import type { OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option } from "effect"
+import { CurrentObject } from "../../../lib/current-object"
 
 export interface CustomersActor {
 	readonly userId: UserId
@@ -44,3 +45,14 @@ export const requireAdmin = Effect.gen(function* () {
 	if (!actor.isAdmin) return yield* refuse("Only admins and owners can change Customers settings")
 	return actor
 })
+
+/**
+ * The payload's organization, refused unless it is this object's own: routing picks the object by
+ * it, so a mismatch is a forged request, and rows are never written labelled with another org.
+ */
+export const requireOwnOrganization = (organizationId: OrganizationId) =>
+	Effect.gen(function* () {
+		const object = yield* CurrentObject
+		if (object.id !== organizationId) return yield* refuse("The organization does not match")
+		return organizationId
+	})

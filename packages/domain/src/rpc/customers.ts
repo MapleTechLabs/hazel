@@ -174,11 +174,9 @@ export class CustomerReadRpcs extends RpcGroup.make(
 	read(
 		"customers.sparklines",
 		{
-			/** ≤ 200. */
-			accountIds: Schema.Array(CustomerAccountId),
+			accountIds: Schema.Array(CustomerAccountId).check(Schema.isMaxLength(200)),
 			metricKey: Schema.String,
-			/** ≤ 90. */
-			days: Schema.Int,
+			days: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 90 })),
 		},
 		Schema.Struct({ sparklines: Schema.Array(Sparkline) }),
 	),
