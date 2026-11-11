@@ -2982,6 +2982,24 @@ fn an_inline_block_keeps_its_own_max_width_in_a_block() {
     assert!(rect(&rt, "r/0")[2] <= 120.0, "{:?}", rect(&rt, "r/0"));
 }
 
+/// A track-less grid leaves an `h-fit` child at its content's height: fit-content is a size.
+#[test]
+fn a_track_less_grid_does_not_stretch_a_fit_content_child() {
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300, "h": 400 }),
+            vec![e(
+                "div",
+                json!({ "display": "grid", "h": 200 }),
+                vec![e("div", json!({ "h": "fit" }), vec![t("Fit")])],
+            )],
+        ),
+        (300.0, 400.0),
+    );
+    assert!(rect(&rt, "r/0/0")[3] < 100.0, "{:?}", rect(&rt, "r/0/0"));
+}
+
 /// A track-less grid that centres its items (`items-center`) leaves the child at its height.
 #[test]
 fn a_centring_grid_does_not_stretch_its_one_child() {
