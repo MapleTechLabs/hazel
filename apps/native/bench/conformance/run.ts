@@ -373,7 +373,10 @@ const captureWeb = async (browser: Browser, url: string, scenario: Scenario, the
 			// As the native steps press them: the chat list, the Settings tab, its menu.
 			await page.getByRole("link", { name: "Back to Chats" }).click()
 			await waitQuiet(page, 1000)
-			await page.getByRole("navigation", { name: "Tabs" }).getByText("Settings", { exact: true }).click()
+			await page
+				.getByRole("navigation", { name: "Tabs" })
+				.getByText("Settings", { exact: true })
+				.click()
 			await waitQuiet(page, 1500)
 			await page.getByRole("button", { name: "Settings menu" }).click()
 			await waitQuiet(page, 1500)
