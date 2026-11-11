@@ -13,6 +13,13 @@ use rune::{Image, ImageCache, Waker};
 const SCALE: f32 = 2.0;
 
 static CACHE: OnceLock<Arc<ImageCache>> = OnceLock::new();
+/// The app's public assets, where a root-relative `src` is found (the shell's bundle).
+static ASSETS: OnceLock<std::path::PathBuf> = OnceLock::new();
+
+/// Where root-relative sources (`/logo.svg`) are found unless `HAZEL_ASSET_ROOT` says otherwise.
+pub fn set_assets_root(root: std::path::PathBuf) {
+    let _ = ASSETS.set(root);
+}
 static WAKER: OnceLock<Waker> = OnceLock::new();
 /// A downloaded http(s) source, by URL: fetched once, whatever sizes draw it.
 enum Fetched {
@@ -75,7 +82,7 @@ fn local_bytes(src: &str) -> Option<Vec<u8>> {
 }
 
 /// `src` as a file: a path, else one relative to the app's public assets (`HAZEL_ASSET_ROOT`, or
-/// the bundle's).
+/// the shell's `set_assets_root`).
 fn local_path(src: &str) -> Option<std::path::PathBuf> {
     if !is_local(src) {
         return None;
@@ -83,7 +90,7 @@ fn local_path(src: &str) -> Option<std::path::PathBuf> {
     let path = std::path::PathBuf::from(src.strip_prefix("file://").unwrap_or(src));
     let root = std::env::var_os("HAZEL_ASSET_ROOT")
         .map(std::path::PathBuf::from)
-        .or_else(crate::platform::bundled_assets);
+        .or_else(|| ASSETS.get().cloned());
     let path = match root {
         Some(root) if !path.exists() => root.join(src.trim_start_matches('/')),
         _ => path,

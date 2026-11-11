@@ -513,7 +513,7 @@ mod native {
                     return;
                 };
                 if let Some(line) = super::runtime_message(&self.ivars().path, &body.to_string()) {
-                    crate::write_line(line);
+                    crate::outbox::write_line(line);
                 }
             }
         }

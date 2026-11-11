@@ -1,8 +1,7 @@
-import { spawn } from "node:child_process"
 import desktopApp from "../../desktop/src-tauri/tauri.conf.json" with { type: "json" }
 
 /**
- * The browser surface Hazel's app touches outside rendering, for a Bun process with no DOM:
+ * The browser surface Hazel's app touches outside rendering, for a runtime with no DOM:
  * window and document as event targets, an in-memory history, storage, matchMedia, and the
  * observers and media classes some modules construct. Import before the app.
  */
@@ -11,8 +10,10 @@ export type ShimEnv = {
 	height: number
 	dark: boolean
 	url: string
-	/** Opens a link outside the app. @default the system browser or mail app */
-	openUrl?: (href: string) => void
+	/** Opens a web or mail link outside the app, in the system browser or mail app. */
+	openUrl: (href: string) => void
+	/** Puts text on the system clipboard (`navigator.clipboard.writeText`). */
+	copyText: (text: string) => void
 	/**
 	 * A full page load on the app's own origin (`location.assign`, `reload()`), as a browser
 	 * reboots the page. @default the in-memory history moves, the app keeps running
@@ -434,7 +435,7 @@ export const installShims = (env: ShimEnv) => {
 			onLine: true,
 			language: "en-US",
 			languages: ["en-US"],
-			clipboard: { writeText: async (text: string) => copyToClipboard(text) },
+			clipboard: { writeText: async (text: string) => env.copyText(text) },
 		},
 	})
 
@@ -506,21 +507,6 @@ export const makeRootAwareMutationObserver = (
 	}
 
 /** Web and mail links open in the user's browser or mail app; any other scheme is dropped. */
-export const openExternal = (target: URL, openUrl = systemOpen) => {
+export const openExternal = (target: URL, openUrl: (href: string) => void) => {
 	if (["http:", "https:", "mailto:"].includes(target.protocol)) openUrl(target.href)
-}
-
-const systemOpen = (href: string) => {
-	const opener = spawn(process.platform === "darwin" ? "open" : "xdg-open", [href], {
-		stdio: "ignore",
-	})
-	opener.on("error", () => {})
-}
-
-const copyToClipboard = (text: string) => {
-	const copy = spawn("pbcopy", { stdio: ["pipe", "ignore", "ignore"] })
-	// Without pbcopy (Linux, a stripped PATH) the copy is dropped instead of taking the runtime down.
-	copy.on("error", () => {})
-	copy.stdin.on("error", () => {})
-	copy.stdin.end(text)
 }

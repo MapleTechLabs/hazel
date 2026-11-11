@@ -5,11 +5,14 @@ Hazel's own Foldkit app (`apps/web-foldkit`: the same `init`, `update`, `view` a
 Rust. The web build is untouched; this is a second renderer for the desktop.
 
 ```
-Rune host (Rust, host/)                     Bun runtime (src/entry.ts)
+Rune host (Rust, host/)                     Bun runtime (src/runtime.ts)
   window, layout, text, GPU                   Foldkit runtime with a RenderTarget
   draws the wire tree        <── trees ───    view -> VNodes -> styles resolved -> wire tree
   presses, edits, layout     ─── events ──>   events -> the VNodes' own handlers -> Messages
 ```
+
+`src/runtime.ts` boots the app against a `NativePlatform` (`src/platform.ts`: the host connection,
+log, browser, clipboard, stylesheet); `src/entry.ts` is the Bun platform the host spawns.
 
 - **Foldkit** renders into a `RenderTarget` instead of a DOM container (patched in via
   `patches/foldkit@0.170.0.patch` until a release ships it).

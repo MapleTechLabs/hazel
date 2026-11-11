@@ -415,15 +415,6 @@ pub enum RuntimeMsg {
     Relaunch { id: u64 },
 }
 
-/// A `vault` request's operation; `None` for an unknown one or a write without a record.
-pub fn vault_op(op: &str, record: Option<String>) -> Option<crate::platform::VaultOp> {
-    match (op, record) {
-        ("read", _) => Some(crate::platform::VaultOp::Read),
-        ("write", Some(record)) => Some(crate::platform::VaultOp::Write(record)),
-        _ => None,
-    }
-}
-
 /// What a runtime request does to the host's Rune runtime, sent to its update thread.
 pub type HostRequest = Box<dyn FnOnce(&mut rune::Tx) + Send>;
 
@@ -441,7 +432,7 @@ impl RuntimeMsg {
                         .map(|p| p.display().to_string())
                         .into_iter()
                         .collect();
-                    crate::write_line(
+                    crate::outbox::write_line(
                         serde_json::json!({ "t": "files", "path": path, "files": files }),
                     );
                 });
@@ -458,7 +449,7 @@ impl RuntimeMsg {
             RuntimeMsg::Measure { path } => Some(Box::new(move |tx: &mut rune::Tx| {
                 tx.drawn_rects(vec![path.clone()], move |_: &mut crate::State, rects, _| {
                     if let Some(Some([x, y, w, h])) = rects.first().copied() {
-                        crate::write_line(serde_json::json!({
+                        crate::outbox::write_line(serde_json::json!({
                             "t": "layout", "path": path, "x": x, "y": y, "w": w, "h": h,
                         }));
                     }

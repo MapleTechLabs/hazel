@@ -1,0 +1,15 @@
+//! Hazel's Foldkit app drawn with Rune: the runtime's wire tree as Rune elements, and the events,
+//! layout and edits sent back to it. A shell (the macOS app in `main.rs`) runs the runtime and
+//! installs where the messages go (`outbox::set_writer`).
+pub mod frames;
+pub mod images;
+pub mod layout;
+mod margins;
+pub mod outbox;
+mod render;
+mod svg_text;
+#[cfg(test)]
+mod tests;
+pub mod wire;
+
+pub use render::*;

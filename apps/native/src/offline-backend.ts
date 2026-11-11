@@ -25,6 +25,8 @@ export const makeOfflineFetch = (options: {
 	readonly backendUrl: string
 	readonly user: CurrentUser.Schema
 	readonly onUnknownRpc?: (tag: string) => void
+	/** Hears every request, for the debug log. */
+	readonly onRequest?: (method: string, path: string) => void
 	/** Where writes go: a sent message streams back to the channel's subscribers. */
 	readonly server?: FixtureServer
 	/** `message.htmlRenderUrl`'s answer, when the fixture shows an HTML render. */
@@ -181,7 +183,7 @@ export const makeOfflineFetch = (options: {
 	const offlineFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		const request = new Request(input, init)
 		const url = new URL(request.url)
-		if (process.env.NATIVE_DEBUG) process.stderr.write(`[offline] ${request.method} ${url.pathname}\n`)
+		options.onRequest?.(request.method, url.pathname)
 		if (!isBackendUrl(request.url, options.backendUrl)) return new Response(null, { status: 404 })
 		switch (url.pathname.replace(/\/$/, "")) {
 			case "/auth/getSession":
