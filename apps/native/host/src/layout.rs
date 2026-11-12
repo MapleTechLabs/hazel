@@ -7,9 +7,10 @@ use rune::{
     ScrollSpec, Shadow, Span, Spring, SpringPair, TextCase, Transition, Vec2, el, row, text,
 };
 
-use std::collections::HashMap;
-
 use crate::wire::{Animation, BgImage, F, FocusRing, Len, OutlineSpec, Style, TextBox, Timing};
+
+/// HTML's own semantics, which lived here first: `crate::html` has them now.
+pub use crate::html::{focusable, is_checkable, is_text_field, script_focusable};
 
 pub fn color(hex: &Option<String>) -> Option<Color> {
     let h = hex.as_deref()?;
@@ -559,63 +560,6 @@ pub fn focus_styles(mut e: El, st: &Style, field: bool) -> El {
         e = e.no_focus_ring()
     }
     e
-}
-
-/// Elements HTML puts in the Tab order (or `tabindex` adds), unless disabled. A negative
-/// `tabindex` takes them out: in Rune a focusable element keeps the presses on it, where a
-/// browser lets the click bubble, and the host has no script focus that would need it.
-/// `tabindex="-1"`: focusable by script (`element.focus()`, a menu moving its highlight) and
-/// by a press, but no Tab stop.
-pub fn script_focusable(attrs: &HashMap<String, String>) -> bool {
-    !attrs.contains_key("disabled")
-        && attrs
-            .get("tabindex")
-            .and_then(|t| t.trim().parse::<i32>().ok())
-            .is_some_and(|order| order < 0)
-}
-
-/// A checkbox or radio: a control a press or Space checks, not a text field.
-pub fn is_checkable(tag: &str, attrs: &HashMap<String, String>) -> bool {
-    tag == "input"
-        && attrs
-            .get("type")
-            .is_some_and(|t| t == "checkbox" || t == "radio")
-}
-
-/// An element Rune edits as text: a textarea, or an `<input>` of a typing type.
-pub fn is_text_field(tag: &str, attrs: &HashMap<String, String>) -> bool {
-    tag == "textarea"
-        || (tag == "input"
-            && !attrs.get("type").is_some_and(|t| {
-                matches!(
-                    t.as_str(),
-                    "checkbox"
-                        | "radio"
-                        | "button"
-                        | "submit"
-                        | "reset"
-                        | "image"
-                        | "range"
-                        | "color"
-                )
-            }))
-}
-
-pub fn focusable(tag: &str, attrs: &HashMap<String, String>) -> Option<i32> {
-    if attrs.contains_key("disabled") {
-        return None;
-    }
-    let native = matches!(tag, "button" | "select" | "summary")
-        || (tag == "a" && attrs.contains_key("href"))
-        || is_checkable(tag, attrs);
-    match attrs
-        .get("tabindex")
-        .and_then(|t| t.trim().parse::<i32>().ok())
-    {
-        Some(order) if order < 0 => None,
-        Some(order) => Some(order),
-        None => native.then_some(0),
-    }
 }
 
 /// `box-shadow` layers. The outermost spread-only ring (Tailwind `ring-*`, with any

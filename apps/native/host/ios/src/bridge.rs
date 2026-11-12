@@ -7,8 +7,9 @@ use std::io::Write;
 use std::sync::{Mutex, OnceLock};
 
 use dispatch2::DispatchQueue;
+use hazel_native::shell::{self, Restarts, Routed, ShellRequest};
 use hazel_native::wire::RuntimeMsg;
-use hazel_native::{State, note_scroll, outbox};
+use hazel_native::{State, outbox};
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2::{MainThreadMarker, MainThreadOnly, define_class, extern_class, msg_send};
@@ -49,7 +50,7 @@ thread_local! {
     static REPLACING: Cell<bool> = const { Cell::new(false) };
     /// Where the last full page load went; a restart goes back there.
     static LAST_PATH: RefCell<Option<String>> = const { RefCell::new(None) };
-    static RESTARTS: RefCell<page::Restarts> = RefCell::new(page::Restarts::default());
+    static RESTARTS: RefCell<Restarts> = RefCell::new(Restarts::default());
 }
 
 /// Where the runtime's trees go: the running app.
@@ -151,30 +152,24 @@ fn receive(line: &str) {
     let Some(handle) = HANDLE.get().map(|h| h.lock().unwrap().clone()) else {
         return;
     };
-    match message {
-        RuntimeMsg::Tree(tree) => handle.update_if(move |s: &mut State, _| s.apply(tree)),
-        RuntimeMsg::Scroll { path, top, seq } => {
-            note_scroll(&path, seq);
-            handle.update(move |_: &mut State, tx| tx.scroll_to_instant(path, 0.0, top));
-        }
-        RuntimeMsg::Vault { id, op, record } => {
-            hazel_native::sign_in::answer_vault(id, &op, record)
-        }
+    match shell::route(message) {
+        Routed::Done => {}
+        Routed::Window(message) => shell::apply(message, &handle),
         // A full page load (after sign-in or sign-out): a fresh runtime at that path.
-        RuntimeMsg::Reload { path } => {
+        Routed::Shell(ShellRequest::Reload { path }) => {
             if let Some(mtm) = MainThreadMarker::new() {
                 load_page(mtm, Some(&path));
                 LAST_PATH.set(Some(path));
             }
         }
-        RuntimeMsg::Update { .. } | RuntimeMsg::Relaunch { .. } => {
+        Routed::Shell(ShellRequest::Update { .. } | ShellRequest::Relaunch { .. }) => {
             log("[host] updates are not on iOS");
         }
-        request => {
-            if let Some(run) = request.request() {
-                handle.update(move |_: &mut State, tx| run(tx));
-            }
+        // Not offered on iOS (no `HAZEL_NOTIFICATIONS`); a request still gets its answer.
+        Routed::Shell(ShellRequest::NotifyPermission { id, .. }) => {
+            outbox::write_line(shell::permission_reply(id, false));
         }
+        Routed::Shell(ShellRequest::Notify { .. }) => {}
     }
 }
 
@@ -200,6 +195,14 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
     } else if let (Some(url), Some(scheme)) = (field("signIn"), field("callbackScheme")) {
         crate::sign_in::start(mtm, &url, &scheme);
     } else if let Some(href) = field("open") {
+        // As the runtime filters them: the system opens web and mail links, nothing else.
+        let is_external = ["http:", "https:", "mailto:"].iter().any(|scheme| {
+            href.get(..scheme.len())
+                .is_some_and(|s| s.eq_ignore_ascii_case(scheme))
+        });
+        if !is_external {
+            return log("[host] not opening a link that is not web or mail");
+        }
         if let Some(url) = NSURL::URLWithString(&NSString::from_str(&href)) {
             let app = UIApplication::sharedApplication(mtm);
             unsafe { app.openURL_options_completionHandler(&url, &NSDictionary::new(), None) };
@@ -364,10 +367,9 @@ fn load_page(mtm: MainThreadMarker, path: Option<&str>) {
         EARLY.set(Some(Vec::new()));
         REPLACING.set(true);
         // A fresh runtime starts light at the bundle's size: it hears the window's as the
-        // first one did, once its page is ready.
-        if let Some(env) = hazel_native::last_env() {
-            outbox::write_line(env.line());
-        }
+        // first one did, once its page is ready, and the window forgets the old one's trees.
+        let handle = HANDLE.get().map(|h| h.lock().unwrap().clone());
+        shell::runtime_replaced(handle.as_ref());
     }
     let Some(html) = BUNDLE.with_borrow(|bundle| {
         let (source, _) = bundle.as_ref()?;

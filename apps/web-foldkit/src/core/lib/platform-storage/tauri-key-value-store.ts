@@ -4,12 +4,12 @@
  * @description Effect KeyValueStore implementation using Tauri's plugin-store
  *
  * Uses @tauri-apps/plugin-store for persistent key-value storage on desktop.
- * Store file: settings.json (separate from auth.json used for tokens)
+ * Store file: settings.json (the session lives in the OS keychain, not here)
  */
 
 import * as KeyValueStore from "effect/persistence/KeyValueStore"
 import { KeyValueStoreError } from "effect/persistence/KeyValueStore"
-import { getTauriStore, type TauriStoreApi } from "@hazel/desktop/bridge"
+import { getTauriStore, type TauriStoreApi } from "../../../platform/tauri"
 import { Effect, Layer } from "effect"
 
 const STORE_NAME = "settings.json"

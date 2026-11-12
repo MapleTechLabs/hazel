@@ -1,6 +1,5 @@
 //! The hidden page the runtime's worker runs in: its HTML, its origin and the environment it hands
 //! the worker. Plain data, so it is tested on the host (`cargo test -p hazel-ios`).
-use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
@@ -108,27 +107,6 @@ host.postMessage({{ ready: {id} }})
     )
 }
 
-/// How often the page may restart after its process ends: a page that crashes on every load
-/// would otherwise restart for as long as the app is open.
-const RESTARTS: usize = 3;
-const RESTART_WINDOW: Duration = Duration::from_secs(60);
-
-/// The restarts after the page's process ended, recent ones only.
-#[derive(Default)]
-pub struct Restarts(Vec<Instant>);
-
-impl Restarts {
-    /// Whether the page may restart now, counting this one if so.
-    pub fn allow(&mut self, now: Instant) -> bool {
-        self.0.retain(|at| now.duration_since(*at) < RESTART_WINDOW);
-        let allowed = self.0.len() < RESTARTS;
-        if allowed {
-            self.0.push(now);
-        }
-        allowed
-    }
-}
-
 /// The lines of a batch a replacing page's runtime should still hear: the window's size, theme
 /// and safe area. Events and layout reports name the replaced runtime's tree, not the new one's.
 pub fn for_replacement(text: &str) -> String {
@@ -141,16 +119,6 @@ pub fn for_replacement(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_page_restarts_three_times_a_minute_at_most() {
-        let mut restarts = Restarts::default();
-        let start = Instant::now();
-        assert!((0..3).all(|i| restarts.allow(start + Duration::from_secs(i))));
-        assert!(!restarts.allow(start + Duration::from_secs(10)));
-        // Once the first has aged out, one more may.
-        assert!(restarts.allow(start + Duration::from_secs(61)));
-    }
 
     #[test]
     fn a_replacing_page_hears_only_the_window() {

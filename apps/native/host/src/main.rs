@@ -1,6 +1,7 @@
 //! Hazel's native window on macOS: runs Hazel's Foldkit app in a Bun child process and draws the
 //! tree it renders (`hazel_native`), sending presses, edits and the window's size and theme back.
 mod capture;
+mod notify;
 mod platform;
 mod runtime;
 mod updater;
@@ -8,11 +9,11 @@ mod updater;
 use hazel_native::outbox::write_line;
 use hazel_native::wire::RuntimeMsg;
 use hazel_native::{
-    State, TEXT_SMOOTHING, dom_motion, frames, images, note_scroll, poll, view, window_key,
+    State, TEXT_SMOOTHING, dom_motion, frames, images, poll, shell, view, window_key,
 };
 use rune::{App, AppSpec};
 
-use runtime::spawn_runtime;
+use runtime::{FromRuntime, spawn_runtime};
 
 /// The band the window's controls sit in, as the Tauri app's (`set_traffic_lights_inset(16, 20)`):
 /// 40 points tall, the traffic lights 16 points in and centred. The web layout leaves this room
@@ -22,6 +23,14 @@ const TITLEBAR: rune::Titlebar = rune::Titlebar::new(40.0).traffic_lights(16.0, 
 /// A link the system opened with the app (the sign-in callback): to the runtime as it came.
 fn open_url(_: &mut State, url: &str, _: &mut rune::Tx) {
     write_line(hazel_native::sign_in::open_url_message(url));
+}
+
+/// The app's view, telling the runtime when the window gains or loses key status
+/// (`document.hasFocus()`, which notifications wait on).
+fn window_view(s: &State, cx: &mut rune::Cx<State>) -> rune::El {
+    view(s, cx).on_window_focus(|_: &mut State, focused, _| {
+        write_line(hazel_native::shell::window_focus_message(focused))
+    })
 }
 
 fn window_size() -> (f32, f32) {
@@ -51,20 +60,32 @@ fn main() {
         capture::run(script);
         return;
     }
-    let (mut child, messages) = spawn_runtime();
-    // Block on the first tree so the window opens with the app in it.
+    let (mut child, messages) = spawn_runtime().unwrap_or_else(|error| {
+        eprintln!("[host] {error}");
+        std::process::exit(1)
+    });
+    // Block on the first tree so the window opens with the app in it; what came before it
+    // (a focus, a scroll) applies once the window exists.
     let mut initial = initial_state();
+    let mut early = Vec::new();
     for msg in messages.iter() {
-        if let RuntimeMsg::Tree(tree) = msg {
-            initial.apply(tree);
-            break;
+        match msg {
+            FromRuntime::Message(RuntimeMsg::Tree(tree)) => {
+                initial.apply(tree);
+                break;
+            }
+            FromRuntime::Message(msg) => early.push(msg),
+            FromRuntime::Replaced => {
+                early.clear();
+                initial.runtime_replaced();
+            }
         }
     }
     let spec = AppSpec {
         setup: Some(|_: &mut State, waker| images::set_waker(waker)),
         poll: Some(poll),
         on_key: Some(window_key),
-        ..AppSpec::new("Hazel", window_size(), State::default, view)
+        ..AppSpec::new("Hazel", window_size(), State::default, window_view)
     };
     let app = App::new(spec)
         .font_smoothing(TEXT_SMOOTHING)
@@ -74,21 +95,17 @@ fn main() {
         .on_frame_drawn(frames::sync);
     let handle = app.handle();
     std::thread::spawn(move || {
+        for msg in early {
+            shell::apply(msg, &handle);
+        }
         for msg in messages.iter() {
             match msg {
-                RuntimeMsg::Tree(tree) => handle.update_if(move |s: &mut State, _| s.apply(tree)),
-                RuntimeMsg::Scroll { path, top, seq } => {
-                    note_scroll(&path, seq);
-                    handle.update(move |_: &mut State, tx| tx.scroll_to_instant(path, 0.0, top))
-                }
-                request => {
-                    if let Some(run) = request.request() {
-                        handle.update(move |_: &mut State, tx| run(tx))
-                    }
-                }
+                FromRuntime::Message(msg) => shell::apply(msg, &handle),
+                FromRuntime::Replaced => handle.update(|s: &mut State, _| s.runtime_replaced()),
             }
         }
     });
     app.run();
-    child.kill();
+    // Asked, not killed: the runtime saves what it stored before it goes.
+    child.stop();
 }

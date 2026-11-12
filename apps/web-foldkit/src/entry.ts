@@ -7,7 +7,7 @@ import "./styles.css"
 import { Layer } from "effect"
 import { Runtime } from "foldkit"
 import { setSessionBearerProvider } from "~/lib/session-bearer"
-import { initTauri } from "~/lib/tauri"
+import { initNativeNotifications } from "~/lib/native-notifications"
 import { desktopAuthClient } from "./platform/desktop"
 import { desktopSessionBearer } from "./platform/desktop-auth"
 import { Flags, flags, init, Message, Model, subscriptions, update, view } from "./main"
@@ -56,5 +56,7 @@ else {
 	startApplication()
 	installChannelPrefetch()
 	// Desktop only: native notification permission (a no-op in the browser).
-	void initTauri()
+	initNativeNotifications().catch((error: unknown) =>
+		console.error("[desktop] native notifications did not start:", error),
+	)
 }

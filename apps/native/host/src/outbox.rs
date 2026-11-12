@@ -8,14 +8,24 @@ static OUT: OnceLock<Mutex<Box<dyn Write + Send>>> = OnceLock::new();
 static SEQ: AtomicU64 = AtomicU64::new(0);
 /// The generation of the tree on screen: an event runs the handler of the tree it was pressed on.
 static GEN: AtomicU64 = AtomicU64::new(0);
+/// Which runtime the lines are for: a fresh one (`new_runtime`) never hears what the window
+/// queued for the one it replaced, an event or a request id meaning nothing to it.
+static RUNTIME: AtomicU64 = AtomicU64::new(0);
 
 /// Lines on their way to the runtime, in order. One thread writes them, so the UI thread never
 /// waits on the pipe (the runtime may be mid-render), and what a frame reports (every observed
 /// row's rect, while a list scrolls) goes out in one write.
-static LINES: OnceLock<std::sync::mpsc::Sender<String>> = OnceLock::new();
+static LINES: OnceLock<std::sync::mpsc::Sender<(u64, String)>> = OnceLock::new();
 
-/// Sends everything from now on to `out`; a reloaded runtime replaces the first one's.
+/// Lines from now on are for a fresh runtime; any still queued for the last one are dropped.
+pub fn new_runtime() {
+    RUNTIME.fetch_add(1, Ordering::SeqCst);
+}
+
+/// Sends everything from now on to `out`, a fresh runtime; a reloaded runtime replaces the
+/// first one's, and nothing queued for that one reaches it.
 pub fn set_writer(out: Box<dyn Write + Send>) {
+    new_runtime();
     *OUT.get_or_init(|| Mutex::new(Box::new(std::io::sink())))
         .lock()
         .unwrap() = out;
@@ -29,18 +39,25 @@ pub fn write_line(message: serde_json::Value) {
         return;
     }
     let lines = LINES.get_or_init(|| {
-        let (send, receive) = std::sync::mpsc::channel::<String>();
+        let (send, receive) = std::sync::mpsc::channel::<(u64, String)>();
         std::thread::spawn(move || {
-            for mut batch in receive.iter() {
-                while let Ok(more) = receive.try_recv() {
-                    batch.push_str(&more);
+            let mut batch = String::new();
+            for first in receive.iter() {
+                batch.clear();
+                let current = RUNTIME.load(Ordering::SeqCst);
+                for (runtime, line) in std::iter::once(first).chain(receive.try_iter()) {
+                    if runtime == current {
+                        batch.push_str(&line);
+                    }
                 }
-                write_now(&batch);
+                if !batch.is_empty() {
+                    write_now(&batch);
+                }
             }
         });
         send
     });
-    let _ = lines.send(line);
+    let _ = lines.send((RUNTIME.load(Ordering::SeqCst), line));
 }
 
 fn write_now(text: &str) {
