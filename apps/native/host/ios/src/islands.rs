@@ -119,6 +119,9 @@ struct Island {
     spec: IslandSpec,
     /// The size of the part that shows and the holes in it, when anything covers the view.
     mask: Option<([f32; 2], Vec<Rect>)>,
+    /// A tab bar's height for a width, as `sizeThatFits` last said: asked once per width, not
+    /// in every frame (it lays the bar out).
+    fitted: Option<(f32, f32)>,
 }
 
 thread_local! {
@@ -478,6 +481,7 @@ fn create(mtm: MainThreadMarker, parent: &UIView, spec: &IslandSpec) -> Option<I
         native,
         spec: spec.clone(),
         mask: None,
+        fitted: None,
     })
 }
 
@@ -502,6 +506,7 @@ fn update(mtm: MainThreadMarker, island: &mut Island, spec: &IslandSpec) {
             };
             if titles(spec) != titles(&island.spec) {
                 bar.setItems(Some(&tab_items(mtm, spec)));
+                island.fitted = None;
             }
             *delegate.ivars().items.borrow_mut() = spec.items.clone();
             tint_tab_bar(bar, spec);
@@ -520,7 +525,14 @@ fn put(island: &mut Island, placement: &Placement, bottom_inset: f32) {
         // box it spreads its icons and titles apart. The nav pads itself down to that edge.
         Native::TabBar { bar, .. } => {
             let bottom = y + h;
-            let fitted = bar.sizeThatFits(CGSize::new(w as f64, 0.0)).height as f32;
+            let fitted = match island.fitted {
+                Some((width, height)) if width == w => height,
+                _ => {
+                    let height = bar.sizeThatFits(CGSize::new(w as f64, 0.0)).height as f32;
+                    island.fitted = Some((w, height));
+                    height
+                }
+            };
             // The bar adds the home indicator's inset itself once it is in the window.
             let height = if fitted > bottom_inset + 1.0 {
                 fitted
