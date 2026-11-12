@@ -729,6 +729,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			}
 			const keep: Record<string, string> = {}
 			for (const name of HOST_ATTRS) if (name in attrs) keep[name] = attrs[name] as string
+			// Native islands (`data-native`, its props and items): the host reads them all.
+			for (const name in attrs) if (name.startsWith("data-native")) keep[name] = attrs[name] as string
 			// A Mount that delegates pointer events: its element and the ones it looks for report them.
 			const watchSelector = options.bridge?.pointerSelector(vnode.data?.foldkitMount?.name ?? "")
 			const watch = watchSelector === undefined ? pointer : { mount: path, selector: watchSelector }

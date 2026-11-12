@@ -131,6 +131,12 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             if attrs.contains_key("data-editable") {
                 return Some(build_editable(path, st, attrs, children, inh, ctx));
             }
+            // A native view draws this element: Rune keeps its box and paints none of it.
+            if attrs.get(crate::islands::ATTR).is_some_and(|name| {
+                crate::islands::draws(name) == Some(crate::islands::Draws::Native)
+            }) {
+                return build(&crate::islands::ghost(node), path, inh, ctx);
+            }
             let form = if tag == "form" {
                 on.get("submit").copied().or(ctx.form)
             } else {

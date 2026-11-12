@@ -57,6 +57,7 @@ export const startRuntime = async (platform: NativePlatform) => {
 				: undefined,
 		// Only live data keeps what the app stores; the offline fixture starts the same every time.
 		storage: config.dataMode === "live" ? platform.storage : undefined,
+		onNavigate: platform.onNavigate,
 	})
 	platform.onExit?.(shims.flushStorage)
 

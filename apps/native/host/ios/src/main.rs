@@ -3,13 +3,21 @@
 #[cfg(target_os = "ios")]
 mod bridge;
 #[cfg(target_os = "ios")]
+mod context_menu;
+#[cfg(target_os = "ios")]
 mod http;
 #[cfg(target_os = "ios")]
+mod islands;
+#[cfg(target_os = "ios")]
 mod keyboard;
+#[cfg(target_os = "ios")]
+mod menu_sheet;
 #[cfg(any(test, target_os = "ios"))]
 mod page;
 #[cfg(target_os = "ios")]
 mod sign_in;
+#[cfg(target_os = "ios")]
+mod system;
 
 #[cfg(target_os = "ios")]
 fn main() {
@@ -31,7 +39,11 @@ fn main() {
         // iOS gives the window the whole screen whatever size is asked for.
         ..AppSpec::new("Hazel", (402.0, 874.0), State::default, view)
     };
-    let app = App::new(spec).font_smoothing(TEXT_SMOOTHING);
+    // The UIKit views the app's `data-native` elements get, placed after every frame.
+    islands::install();
+    let app = App::new(spec)
+        .font_smoothing(TEXT_SMOOTHING)
+        .on_frame_drawn(hazel_native::islands::sync);
     bridge::set_handle(app.handle());
     app.run();
 }

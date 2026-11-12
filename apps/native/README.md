@@ -134,6 +134,13 @@ on-screen keyboard shows, the page's viewport ends above it
 and the end of the list stay visible (a floating iPad keyboard leaves the page as it is). The
 keyboard's return key is Enter, so it sends, as it does in the web app on a phone.
 
+**Navigation moves as a navigation stack's** (`host/ios/src/system.rs`). Rune draws the page in
+one view, so the runtime tells the host before every in-app navigation (`navigate`, from the
+history shim), and the host keeps a picture of the page it leaves. A page that leads back to the
+one left (its back chevron mounts `SwipeBack`, `web-foldkit/src/platform/system-ui.ts`) slides in
+over it from the right; going back slides the page off over the picture of where it goes; a drag
+from the left edge does that under the finger. Tabs change at once.
+
 **Live data** (`HAZEL_DATA=live bun run ios`, with `VITE_APP_URL`/`VITE_BACKEND_URL` for a dev
 stack on this Mac) signs in as the Mac app does: the sign-in link opens in the system's sign-in
 sheet (`ASWebAuthenticationSession`, `host/ios/src/sign_in.rs`), whose callback goes to the
@@ -161,6 +168,36 @@ uploads it with the `asc` CLI; the Internal TestFlight group gets every build. T
 the commit count (`HAZEL_IOS_BUILD` overrides it), the version `HAZEL_IOS_VERSION` (0.1.0). The icon
 is `host/ios/assets/AppIcon.png` (opaque, 1024px), compiled into `Assets.car`; the privacy manifest
 `host/ios/PrivacyInfo.xcprivacy` declares the required-reason APIs the executable links.
+
+### Native islands
+
+An element the web app marks `data-native="<component>"` (`web-foldkit/src/platform/native-island.ts`)
+gets a real UIKit view on iOS, laid over the box Rune draws for it. The element's children stay its
+fallback: what the browser, the Mac app and a build with `HAZEL_ISLANDS=off` draw.
+
+```
+Foldkit view                 hazel_native (host/src/islands.rs)        iOS shell (host/ios/src/islands.rs)
+  data-native="tab-bar"  ->   collect: islands of the tree         ->   create the UIKit view
+  data-native-item (tabs)     sync, after every frame: where the        put it at the box: clipped, cut
+  data-native-props (JSON)    box was drawn (frames' placement)         out under overlays, hidden
+  h.OnChange / the items'  <- press / change: the fallback's own   <-   under dialogs
+  own links and clicks        DOM events, on the existing wire          delegate callbacks
+```
+
+| Component      | Where                                                                                     | Native view                                                                          | Who draws | Comes back as                                             |
+| -------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------- | --------------------------------------------------------- |
+| `tab-bar`      | the mobile nav (`shell/mobile`)                                                           | `UITabBar`, with the items' counts as badges                                         | UIKit     | the `click` of the item's own link or button              |
+| `menu`         | every Select's trigger, and every menu whose items are all words (`Menu.nativeMenuItems`) | a clear `UIButton` with a `UIMenu`                                                   | Rune      | `change` on the trigger, with the item's key              |
+| `date-picker`  | every DatePicker's field                                                                  | a clear `UIButton` that presents a calendar sheet                                    | Rune      | `change` on the field, `yyyy-MM-dd`                       |
+| `context-menu` | every message row                                                                         | none: one `UIContextMenuInteraction` on Rune's view finds the row under a held press | Rune      | `change` on the row: the action's key, or `react:<emoji>` |
+
+Nothing new crosses the wire: the host replays DOM events on handlers the tree already carries,
+so a component needs no Message of its own beyond what its `change` maps to.
+A view is only covered by what Rune paints above its own layer (`frames::layer_of`): a dialog hides
+the tab bar, and a Select inside that dialog still gets its menu. A shell with `context-menu` sends no hover reports, so the message toolbar (a pointer's) stays away under a finger. Not solved yet: a view inside a
+scrolling list follows the scroll one frame late (it is placed after the frame is drawn), a
+translucent overlay cuts a view out instead of dimming it, and VoiceOver reads the native view
+only (the fallback has no accessibility node of its own to hide).
 
 ## Releases
 

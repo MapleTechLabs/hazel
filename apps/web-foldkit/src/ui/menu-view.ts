@@ -26,6 +26,8 @@ import {
 } from "~/components/ui/menu.styles"
 import { popoverContentBase, popoverInnerClassName } from "~/components/ui/popover.styles"
 import { IconCheck, IconChevronRight } from "../icons"
+import { type NativeMenuLook, nativeIsland } from "../platform/native-island"
+import { systemUi } from "../platform/system-ui"
 import { dismissButton, focusScopeSentinel, openModalPopover, positionOverlay } from "./aria/overlay"
 import { Placement } from "./aria/placement"
 import { MOBILE_QUERY } from "./viewport"
@@ -41,6 +43,7 @@ import {
 	menuId,
 	popoverId,
 	rootItems,
+	nativeMenuItems,
 	submenuId,
 	triggerId,
 } from "./menu"
@@ -91,6 +94,8 @@ const PortalMenu = Mount.defineStream("PortalMenu", {
 				Effect.andThen(
 					Effect.acquireRelease(
 						Effect.sync(() => {
+							// A long-press's menu taps the finger as it opens, where the shell can.
+							if (isSheetOnPhone) systemUi()?.haptic()
 							// useMenuItem focuses an item in onHoverStart, synchronously, so the click that follows
 							// lands on a focused item and never focuses it with the mouse (Chrome keeps :focus-visible).
 							const onPointerOver = (event: Event) => {
@@ -237,6 +242,8 @@ export type ViewInputs = Readonly<{
 	header?: Html | (() => Html)
 	/** A `MenuItem`'s own className, by key. */
 	itemClassName?: (key: string) => string | undefined
+	/** How a native shell shows the menu (`platform/native-island.ts`); a pull-down by default. */
+	native?: NativeMenuLook
 }>
 
 /**
@@ -277,6 +284,20 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 				? Option.some(Message.PressedTriggerKey({ key, entries: viewInputs.entries }))
 				: Option.none(),
 		),
+		// A system menu on iOS, opened from this trigger as drawn, where its entries are all words;
+		// its choice is a `change` here.
+		...Option.match(nativeMenuItems(model, viewInputs.entries, viewInputs.native), {
+			onNone: () => [],
+			onSome: (items) => [
+				...nativeIsland(h, "menu", {
+					items,
+					presentation: viewInputs.native?.presentation,
+					title: viewInputs.native?.title,
+					subtitle: viewInputs.native?.subtitle,
+				}),
+				h.OnChange((key) => Message.ChoseFromNativeMenu({ key, entries: viewInputs.entries })),
+			],
+		}),
 	])
 	return viewInputs.toTrigger(
 		triggerAttributes,

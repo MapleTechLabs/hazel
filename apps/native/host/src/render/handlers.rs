@@ -120,8 +120,11 @@ fn key_and_hover_handlers(
         });
     }
     let (enter, leave) = (on.get("mouseenter").copied(), on.get("mouseleave").copied());
+    // A shell that opens the system's menu on a held press has a finger, not a pointer: a touch
+    // must not report as hovering, or the message toolbar opens under every press.
     let report = attrs
         .get("data-hover-report")
+        .filter(|_| crate::islands::draws("context-menu").is_none())
         .map(|mount| (path.to_string(), mount.clone()));
     let right_click = report.clone();
     if enter.is_some() || leave.is_some() || report.is_some() {

@@ -55,12 +55,17 @@ const environment: Record<string, string> = release
 			VITE_R2_PUBLIC_URL: process.env.HAZEL_R2_PUBLIC_URL || "https://cdn.hazel.sh",
 		}
 	: Object.fromEntries(
-			["HAZEL_DATA", "VITE_BACKEND_URL", "VITE_APP_URL", "NATIVE_DEBUG", "NATIVE_PATH"].flatMap(
-				(name) => {
-					const value = process.env[name]
-					return value === undefined ? [] : [[name, value]]
-				},
-			),
+			[
+				"HAZEL_DATA",
+				"VITE_BACKEND_URL",
+				"VITE_APP_URL",
+				"NATIVE_DEBUG",
+				"NATIVE_PATH",
+				"HAZEL_ISLANDS",
+			].flatMap((name) => {
+				const value = process.env[name]
+				return value === undefined ? [] : [[name, value]]
+			}),
 		)
 writeFileSync(`${app}/environment.json`, JSON.stringify(environment))
 cpSync(`${root}../web-foldkit/public`, `${app}/public`, { recursive: true })

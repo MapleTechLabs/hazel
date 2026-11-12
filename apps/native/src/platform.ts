@@ -33,6 +33,11 @@ export type NativePlatform = {
 	readonly appendLine?: (path: string, line: string) => void
 	/** The heap in use, in MB, for `NATIVE_STATS`. Absent: the stats leave it out. */
 	readonly memoryUsedMb?: () => number
+	/**
+	 * The page is about to move from `from` to `to` (both full URLs) within the app, before it draws
+	 * the new one: the iOS shell takes a picture of the page it leaves, for its transitions.
+	 */
+	readonly onNavigate?: (from: string, to: string) => void
 	/** Serves `HAZEL_FIXTURE_HTML`'s page for the offline fixture. Absent: the variable is ignored. */
 	readonly fixtureHtmlRender?: typeof makeFixtureHtmlRender
 }

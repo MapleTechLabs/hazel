@@ -69,6 +69,8 @@ export const Message = defineMessageUnion({
 	ClickedDismiss: {},
 	GotSegmentsMessage: { message: Segments.Message },
 	GotCalendarMessage: { message: Calendar.Message },
+	/** A day from the system date picker a native shell shows for the field (`platform/native-island.ts`). */
+	PickedNativeDate: { date: Schema.String },
 	CompletedPortalPicker: {},
 })
 export type Message = typeof Message.Type
@@ -187,6 +189,21 @@ export const update = (model: Model, message: Message): UpdateReturn =>
 				outMessage: OutMessage.ChangedValue({ date }),
 			}
 		},
+		PickedNativeDate: ({ date }) =>
+			!/^\d{4}-\d{2}-\d{2}$/.test(date) || date === model.segments.committed
+				? { model }
+				: {
+						model: modifyFields(closed(model), {
+							segments: (segments) =>
+								Segments.init({
+									id: segments.id,
+									kind: "date",
+									today: model.calendar.today,
+									value: date,
+								}),
+						}),
+						outMessage: OutMessage.ChangedValue({ date }),
+					},
 		CompletedPortalPicker: () => ({ model }),
 	})
 
