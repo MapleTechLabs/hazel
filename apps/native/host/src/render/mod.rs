@@ -35,7 +35,7 @@ use flow::{
 use handlers::{behaviour, observe, presses};
 use media::{build_img, build_svg, picture_size};
 use state::{note_appearance, report_env, theme_override};
-use table_grid::{build_grid, build_table};
+use table_grid::{build_grid, build_table, grid_height_estimate, grid_scroll_bound};
 
 /// The web app sets `-webkit-font-smoothing: antialiased` on `html`: text without CoreText's
 /// smoothing dilation, lighter than macOS's default.
@@ -273,6 +273,21 @@ fn build_elem(
         .as_deref()
         .or(st.grid_rows.as_ref().map(|_| &one_column[..]));
     let mut e = match (st.display.as_deref(), grid_cols) {
+        // `overflow-y: auto` on a grid (the command palette's list). A Rune viewport scrolls only
+        // in a bounded height, so a grid taller than its `max-h` becomes a viewport exactly that
+        // tall; a shorter one stays a plain grid at its own height.
+        (Some("grid"), Some(cols))
+            if st.scroll_y == Some(true)
+                && let Some(max_h) = grid_scroll_bound(st)
+                && grid_height_estimate(&kids) > max_h =>
+        {
+            col()
+                .h(max_h)
+                .scroll(rune::ScrollSpec {
+                    stick_bottom: false,
+                })
+                .child(build_grid(&kids, cols, path, inh, ctx, st).key(format!("{path}/grid")))
+        }
         (Some("grid"), Some(cols)) => build_grid(&kids, cols, path, inh, ctx, st),
         (Some("flex"), _) => {
             let is_row = st.dir.as_deref() != Some("col");
@@ -282,7 +297,14 @@ fn build_elem(
                 items,
                 block: false,
             };
-            add_children(apply_flex(base, st), &kids, path, inh, ctx, parent)
+            add_children(
+                crate::fx::under(apply_flex(base, st), attrs, st, path),
+                &kids,
+                path,
+                inh,
+                ctx,
+                parent,
+            )
         }
         (Some("inline") | None, _) if lays_out_inline(tag) => {
             // Inline boxes may shrink below their text, so the text inside can wrap.
@@ -292,7 +314,7 @@ fn build_elem(
                 block: false,
             };
             add_children(
-                apply_flex(inline_row(), st),
+                crate::fx::under(apply_flex(inline_row(), st), attrs, st, path),
                 &kids,
                 path,
                 inh,
@@ -309,7 +331,7 @@ fn build_elem(
                 block: false,
             };
             add_children(
-                apply_flex(inline_row(), st),
+                crate::fx::under(apply_flex(inline_row(), st), attrs, st, path),
                 &kids,
                 path,
                 inh,
@@ -324,7 +346,14 @@ fn build_elem(
                 items,
                 block: true,
             };
-            add_children(apply_flex(col(), st), &kids, path, inh, ctx, parent)
+            add_children(
+                crate::fx::under(apply_flex(col(), st), attrs, st, path),
+                &kids,
+                path,
+                inh,
+                ctx,
+                parent,
+            )
         }
     };
     if let Some(wire::BgImage { url: Some(url), .. }) = &st.bg_image
@@ -333,7 +362,7 @@ fn build_elem(
         // `background-size: cover`, the common case for avatars and banners.
         e = e.pixels_fit(image.pixels(), SurfaceFit::Fill)
     }
-    e = apply_box(e.key(path), st);
+    e = crate::fx::glass_fill(apply_box(e.key(path), st), attrs, st);
     // A checkbox or radio is a 13px box unless styled, as a browser draws one; Tab skips a 0x0 one.
     if is_checkable(tag, attrs) {
         if st.w.is_none() {

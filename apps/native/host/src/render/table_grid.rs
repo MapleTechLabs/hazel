@@ -285,3 +285,38 @@ pub(super) fn build_grid(
     }
     grid
 }
+
+/// A rough height for a scrolling grid's rows: a menu item per row, and a header and gap more
+/// for each `role="group"` section of rows (the command palette's). Only decides whether the
+/// grid overflows its `max-h`.
+pub(super) fn grid_height_estimate(kids: &[(usize, &Arc<Node>)]) -> f32 {
+    const ROW: f32 = 34.0;
+    const SECTION: f32 = 24.0;
+    kids.iter()
+        .map(|(_, node)| match node.as_ref() {
+            Node::Elem {
+                children, attrs, ..
+            } if attrs.get("role").is_some_and(|r| r == "group") && !children.is_empty() => {
+                SECTION + children.len() as f32 * ROW
+            }
+            _ => ROW,
+        })
+        .sum()
+}
+
+/// The height a scrolling grid may take: its pixel `max-h`, or for `max-h-full` (the command
+/// palette's list in a narrow window, whose panel is `max-h-[80dvh]` under a search row) that
+/// panel's share of the window less the row. Rune can't resolve a percentage max height, and a
+/// viewport needs a bounded one to scroll.
+pub(super) fn grid_scroll_bound(st: &Style) -> Option<f32> {
+    /// The panel's `80dvh` and its search row, which the list sits under.
+    const PANEL: f32 = 0.8;
+    const ABOVE: f32 = 48.0;
+    match st.max_h {
+        Some(wire::Len::Px(F(max_h))) => Some(max_h),
+        Some(wire::Len::Full) => {
+            super::state::reported_height().map(|h| (h * PANEL - ABOVE).max(ABOVE))
+        }
+        _ => None,
+    }
+}

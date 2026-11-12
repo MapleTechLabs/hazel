@@ -286,6 +286,11 @@ pub(super) fn note_appearance(dark: bool) {
     }
 }
 
+/// The page height last reported to the runtime, in points.
+pub(super) fn reported_height() -> Option<f32> {
+    REPORTED.lock().unwrap().map(|env| env.height as f32)
+}
+
 /// Tells the runtime the page's size and safe area when either changed.
 pub(super) fn report_env(rect: [f32; 4], inset: [f32; 4]) {
     let next = Env {
