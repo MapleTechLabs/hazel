@@ -3,8 +3,7 @@ import { NotificationId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { HOTKEY_DEFINITIONS_BY_ID } from "~/lib/hotkeys/hotkey-registry"
-import { SHORTCUT_SECTIONS } from "~/lib/hotkeys/shortcut-catalog"
+import { appKeymap } from "~/lib/keybindings/app-keymap"
 import { update } from "../main"
 import { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as ShellModel from "../shell/model"
@@ -165,12 +164,11 @@ describe("Mod+[ / Mod+] (Slack)", () => {
 	})
 })
 
-describe("the Mod+/ dialog lists every bound layout hotkey", () => {
-	test("each layout action appears in the catalog with its default keys", () => {
-		const listed = new Set(SHORTCUT_SECTIONS.flatMap((section) => section.shortcuts.map((s) => s.label)))
-		// Mod+Alt+Shift+Arrows run the unread-channel step until there is mention data: not listed twice.
-		const aliases: ReadonlyArray<LayoutHotkeyActionId> = ["mention.previous", "mention.next"]
-		for (const actionId of LayoutHotkeyActionId.literals.filter((id) => !aliases.includes(id)))
-			expect(listed, actionId).toContain(HOTKEY_DEFINITIONS_BY_ID[actionId].label)
+describe("the layout hotkeys are keymap actions", () => {
+	test("each layout action is rebindable and has a default key", () => {
+		for (const actionId of LayoutHotkeyActionId.literals) {
+			expect(appKeymap.byId[actionId].rebindable, actionId).toBe(true)
+			expect(appKeymap.byId[actionId].defaultKey, actionId).not.toBeNull()
+		}
 	})
 })

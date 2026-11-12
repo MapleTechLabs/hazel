@@ -1,3 +1,4 @@
+import type { Overrides } from "~/lib/keybindings/keymap"
 import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import type { HtmlBuilder } from "foldkit/html"
@@ -47,6 +48,7 @@ export interface BootOptions {
 	readonly themePreference?: ThemePreference
 	readonly systemTheme?: "light" | "dark"
 	readonly isMobile?: boolean
+	readonly keybindingOverrides?: Overrides
 }
 
 /** `init` at `path` with default flags (the Model and its Commands). */
@@ -56,6 +58,8 @@ export const bootReturn = (path: string, options: BootOptions = {}) =>
 			themePreference: options.themePreference ?? defaultThemePreference(),
 			systemTheme: options.systemTheme ?? "light",
 			soundSettings: DEFAULT_SOUND_SETTINGS,
+			keybindingOverrides: options.keybindingOverrides ?? {},
+			keyboardPlatform: "linux",
 			sessionStartMs: 0,
 			isMobile: options.isMobile ?? false,
 			isCreateChannelHintDismissed: false,

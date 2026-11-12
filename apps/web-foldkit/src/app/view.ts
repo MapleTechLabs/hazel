@@ -78,6 +78,8 @@ const shellContextOf = (model: Model, data: ShellData): ShellContext => ({
 		avatarUrl: data.user.avatarUrl,
 	},
 	appVersion: __APP_VERSION__,
+	paletteKey: sharedOf(model).keys["commandPalette.open"],
+	createChannelKey: sharedOf(model).keys["channel.create"],
 })
 
 /** The routed page, or an empty placeholder until its page is ported. */

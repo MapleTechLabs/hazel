@@ -40,7 +40,7 @@ import { uploadStream } from "../../../composer/upload"
 import { MessageWindows } from "../../../data/message-windows"
 import type { HazelApiClient, HazelRpc } from "../../../rpc"
 import { globalPasteStream, globalTypingStream, leftWindowStream } from "../../../composer/window-events"
-import { channelHotkeysStream } from "./hotkeys"
+import { ChannelKeys, channelHotkeysStream, channelKeysOf } from "./hotkeys"
 import { isMemberOf, Message, type Model } from "./page"
 import { windowFocus } from "../../../platform/presence/activity"
 
@@ -475,17 +475,19 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 	),
 	// Discord's channel shortcuts (`hotkeys.ts`), while the page (not a root overlay) holds the keyboard.
 	channelHotkeys: entry(
-		{ isActive: Schema.Boolean, isDialogOpen: Schema.Boolean },
+		{ isActive: Schema.Boolean, isDialogOpen: Schema.Boolean, keys: ChannelKeys },
 		{
 			modelToDependencies: ({ model, shared }) => ({
 				isActive:
 					model.tab._tag === "Messages" && isMemberOf(model) !== false && !shared.isOverlayOpen,
 				isDialogOpen: hasOpenDialog(model),
+				keys: channelKeysOf(shared.keys),
 			}),
-			dependenciesToStream: ({ isActive, isDialogOpen }) =>
+			dependenciesToStream: ({ isActive, isDialogOpen, keys }) =>
 				isActive
 					? channelHotkeysStream((action) => Message.PressedChannelHotkey({ action }), {
 							isDialogOpen,
+							keys,
 						})
 					: Stream.empty,
 		},

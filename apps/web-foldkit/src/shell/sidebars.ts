@@ -2,6 +2,7 @@ import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import {
 	IconArrowPath,
 	IconBell,
+	IconKeyboard,
 	IconCube,
 	IconCode,
 	IconEmojiAdd,
@@ -174,6 +175,7 @@ export const mySettingsSidebar = <Message>(
 	const linkedAccounts = linkedAccountsHref(orgSlug)
 	const notifications = hrefOf(AppRoute.MySettingsNotifications({ orgSlug }))
 	const desktop = hrefOf(AppRoute.MySettingsDesktop({ orgSlug }))
+	const keybinds = hrefOf(AppRoute.MySettingsKeybinds({ orgSlug }))
 	const { route } = context
 	const item = navList(h)
 	return sidebarStatic(h, "flex flex-1", [
@@ -203,6 +205,7 @@ export const mySettingsSidebar = <Message>(
 						onRoutes(route, "MySettingsNotifications"),
 						IconBell,
 					),
+					item("Keybinds", keybinds, onRoutes(route, "MySettingsKeybinds"), IconKeyboard),
 					// Desktop settings: the Tauri app's, and the native app's update section.
 					...(isDesktop || hasUpdater
 						? [item("Desktop", desktop, onRoutes(route, "MySettingsDesktop"), IconCube)]

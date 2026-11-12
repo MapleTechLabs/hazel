@@ -28,6 +28,7 @@ import * as OrgHome from "./home"
 import * as Profile from "./profile"
 import * as MySettingsAppearance from "./my-settings/appearance"
 import * as MySettingsDesktop from "./my-settings/desktop"
+import * as MySettingsKeybinds from "./my-settings/keybinds"
 import * as MySettingsLinkedAccounts from "./my-settings/linked-accounts"
 import * as MySettingsNotifications from "./my-settings/notifications"
 import * as MySettingsProfile from "./my-settings/profile"
@@ -91,6 +92,7 @@ export const pages = [
 	SettingsChatSyncConnection.page,
 	MySettingsAppearance.page,
 	MySettingsDesktop.page,
+	MySettingsKeybinds.page,
 	MySettingsLinkedAccounts.page,
 	MySettingsNotifications.page,
 	MySettingsProfile.page,

@@ -91,6 +91,10 @@ describe("urlToAppRoute", () => {
 		expect(parse(path)._tag).toBe(tag)
 	})
 
+	it("resolves the routes added since the port", () => {
+		expect(parse("/hazel/my-settings/keybinds")._tag).toBe("MySettingsKeybinds")
+	})
+
 	it("decodes branded and query segments", () => {
 		expect(parse(`/hazel/chat/${channelId}`)).toMatchObject({ orgSlug: "hazel", channelId })
 		expect(parse(`/hazel/profile/${userId}`)).toMatchObject({ userId })
@@ -385,6 +389,7 @@ describe("hrefOf", () => {
 			[AppRoute.MySettingsNotifications({ orgSlug }), "/hazel/my-settings/notifications"],
 		],
 		MySettingsDesktop: [[AppRoute.MySettingsDesktop({ orgSlug }), "/hazel/my-settings/desktop"]],
+		MySettingsKeybinds: [[AppRoute.MySettingsKeybinds({ orgSlug }), "/hazel/my-settings/keybinds"]],
 		NotificationsAll: [[AppRoute.NotificationsAll({ orgSlug }), "/hazel/notifications"]],
 		NotificationsGeneral: [[AppRoute.NotificationsGeneral({ orgSlug }), "/hazel/notifications/general"]],
 		NotificationsThreads: [[AppRoute.NotificationsThreads({ orgSlug }), "/hazel/notifications/threads"]],

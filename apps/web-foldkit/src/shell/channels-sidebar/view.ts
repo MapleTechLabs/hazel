@@ -41,6 +41,7 @@ interface SectionsContext<M> extends ItemContext {
 	readonly isMembersActive: boolean
 	readonly onActiveMount: Attribute<M>
 	readonly onBrowseChannels: Attribute<M>
+	readonly paletteKey: string | null
 	/** The row menus' inputs; each row builds its own menu inside its memo. */
 	readonly openMenu: Model["openMenu"]
 	readonly sections: Model["sections"]
@@ -301,19 +302,23 @@ const gotoSection = <M>(h: HtmlBuilder<M>, context: SectionsContext<M>): Html =>
 					sidebarItem(h, { attributes: [context.onBrowseChannels] }, [
 						IconMagnifier3(h),
 						label(h, ["Browse channels"]),
-						h.kbd(
-							[
-								h.Attribute("data-slot", "keyboard"),
-								h.Attribute("dir", "ltr"),
-								h.Class(
-									twMerge(
-										"hidden font-mono text-[0.80rem]/6 text-current/60 group-hover:text-fg group-focus:text-fg group-focus:opacity-90 group-disabled:opacity-50 lg:inline forced-colors:group-focus:text-[HighlightText]",
-										"absolute top-1/2 right-2 -translate-y-1/2 font-mono text-muted-fg text-xs",
+						...(context.paletteKey === null
+							? []
+							: [
+									h.kbd(
+										[
+											h.Attribute("data-slot", "keyboard"),
+											h.Attribute("dir", "ltr"),
+											h.Class(
+												twMerge(
+													"hidden font-mono text-[0.80rem]/6 text-current/60 group-hover:text-fg group-focus:text-fg group-focus:opacity-90 group-disabled:opacity-50 lg:inline forced-colors:group-focus:text-[HighlightText]",
+													"absolute top-1/2 right-2 -translate-y-1/2 font-mono text-muted-fg text-xs",
+												),
+											),
+										],
+										[hotkeyLabel(context.paletteKey)],
 									),
-								),
-							],
-							[hotkeyLabel("Mod+K")],
-						),
+								]),
 					]),
 					sidebarItem(h, {}, [
 						sidebarLink(
@@ -451,6 +456,8 @@ export const sectionGroupContent = <M>(
 		readonly onActiveMount: Attribute<M>
 		readonly onBrowseChannels: Attribute<M>
 		readonly onDismissCreateChannelHint: Attribute<M>
+		readonly paletteKey: string | null
+		readonly createChannelKey: string | null
 		readonly toParentMessage: (message: Message) => M
 		readonly sectionAction: (sectionKey: string) => Html
 	},
@@ -487,7 +494,13 @@ export const sectionGroupContent = <M>(
 					),
 					...discoverSection(h, model, context),
 					...(defaultEntries.length === 0 && canCreateChannel && !model.isCreateChannelHintDismissed
-						? [createChannelHint(h, itemContext.onDismissCreateChannelHint)]
+						? [
+								createChannelHint(
+									h,
+									itemContext.onDismissCreateChannelHint,
+									itemContext.createChannelKey,
+								),
+							]
 						: []),
 					...model.sections.map((section) =>
 						channelSection(

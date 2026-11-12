@@ -10,4 +10,7 @@ export interface ShellContext {
 		| { readonly displayName: string; readonly email: string; readonly avatarUrl: string | null }
 		| undefined
 	readonly appVersion: string
+	/** The user's keys for the sidebar's hints (`null`: unbound, no hint). */
+	readonly paletteKey: string | null
+	readonly createChannelKey: string | null
 }
