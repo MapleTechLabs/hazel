@@ -201,7 +201,6 @@
         "@simplewebauthn/browser": "^14.0.0",
         "@tanstack/browser-db-sqlite-persistence": "1.0.0-rc.1.1",
         "@tanstack/db": "1.0.0-rc.1.1",
-        "@tanstack/hotkeys": "0.22.0",
         "@yielded/auth": "0.1.0-beta.47",
         "@yielded/auth-simplewebauthn": "0.1.0-beta.47",
         "clsx": "^2.1.1",
@@ -1362,8 +1361,6 @@
     "@tanstack/db-sqlite-persistence-core": ["@tanstack/db-sqlite-persistence-core@1.0.0-rc.1.1", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "@tanstack/db": "1.0.0-rc.1.1" }, "peerDependencies": { "typescript": ">=4.7" } }, "sha512-OrvklxE69h5Z3b9G6YFpHzmHG1OBoCFVimiQbZaOk9ZaRQSmDO9xj/V5Gce7vEN5Kf3bqZvwwFvIRqXwIMhX/Q=="],
 
     "@tanstack/history": ["@tanstack/history@1.161.4", "", {}, "sha512-Kp/WSt411ZWYvgXy6uiv5RmhHrz9cAml05AQPrtdAp7eUqvIDbMGPnML25OKbzR3RJ1q4wgENxDTvlGPa9+Mww=="],
-
-    "@tanstack/hotkeys": ["@tanstack/hotkeys@0.22.0", "", {}, "sha512-gncuZunCZKjB8AqZGydvs1OBTc9ut4PHWc42ovdJJpjjxnhyswnSy7fNKpGv0PKuosnzDtNmwAnGcLcFy0e6zg=="],
 
     "@tanstack/pacer-lite": ["@tanstack/pacer-lite@0.2.1", "", {}, "sha512-3PouiFjR4B6x1c969/Pl4ZIJleof1M0n6fNX8NRiC9Sqv1g06CVDlEaXUR4212ycGFyfq4q+t8Gi37Xy+z34iQ=="],
 

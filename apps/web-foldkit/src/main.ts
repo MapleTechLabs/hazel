@@ -19,6 +19,7 @@ import {
 	ReplaceUrl,
 	RetryCheckSession,
 	RetryFetchCurrentUser,
+	SaveKeybindings,
 	SaveSoundSettings,
 	SaveThemePreference,
 	SignOut,
@@ -41,6 +42,9 @@ import { MOBILE_QUERY } from "./app/subscription"
 import { toPageMessage } from "./app/view"
 import { errorToast, errorToastOf, loadingToast, successToast } from "./data/actions"
 import { loadSoundSettings, SoundSettings } from "./notification-sound"
+import { loadKeybindingOverrides } from "./keybindings"
+import { detectPlatform, Platform as KeyboardPlatform } from "~/lib/keybindings/key-combo"
+import { Overrides } from "~/lib/keybindings/keymap"
 import * as CommandPalette from "./overlay/command-palette"
 import type { LayoutHotkeyActionId } from "./overlay/hotkeys"
 import * as Modal from "./overlay/modal"
@@ -88,6 +92,8 @@ export const Flags = Schema.Struct({
 	themePreference: ThemePreference,
 	systemTheme: ResolvedTheme,
 	soundSettings: SoundSettings,
+	keybindingOverrides: Overrides,
+	keyboardPlatform: KeyboardPlatform,
 	/** `sessionStartTimeAtom`: notifications from before this load never play; also the clock's first value. */
 	sessionStartMs: Schema.Number,
 	/** `useSidebar().isMobile` at load: the mobile layout renders from the first frame. */
@@ -101,6 +107,8 @@ export const flags: Effect.Effect<Flags> = Effect.all({
 	themePreference: loadThemePreference,
 	systemTheme: Effect.sync(resolveSystemTheme),
 	soundSettings: loadSoundSettings,
+	keybindingOverrides: loadKeybindingOverrides,
+	keyboardPlatform: Effect.sync(detectPlatform),
 	sessionStartMs: Clock.currentTimeMillis,
 	isMobile: Effect.sync(() => globalThis.matchMedia?.(MOBILE_QUERY).matches ?? false),
 	isCreateChannelHintDismissed: loadIsCreateChannelHintDismissed,
@@ -458,6 +466,12 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 				command(SaveSoundSettings({ settings })),
 				informPage,
 			]),
+		RequestedKeybindings: ({ overrides }) =>
+			Update.combine([
+				setModel((model) => modifyFields(model, { keybindingOverrides: () => overrides })),
+				command(SaveKeybindings({ overrides })),
+				informPage,
+			]),
 		RequestedCurrentUserRefresh: ({ toast }) => Update.combine([showToastIf(toast), refreshCurrentUser]),
 		RequestedUpdateCheck: () => stepUpdates(Updates.check),
 		RequestedUpdateInstall: () => stepUpdates(Updates.install),
@@ -682,6 +696,8 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 			themePreference: flags.themePreference,
 			systemTheme: flags.systemTheme,
 			soundSettings: flags.soundSettings,
+			keybindingOverrides: flags.keybindingOverrides,
+			keyboardPlatform: flags.keyboardPlatform,
 			sessionStartMs: flags.sessionStartMs,
 			page: null,
 			pageInstances: 0,
@@ -731,6 +747,8 @@ export const update = (model: Model, message: Message): Return =>
 		FailedSaveThemePreference: () => savingFailed("Couldn't save your theme")(model),
 		CompletedSaveSoundSettings: () => ({ model }),
 		FailedSaveSoundSettings: () => savingFailed("Couldn't save your sound settings")(model),
+		CompletedSaveKeybindings: () => ({ model }),
+		FailedSaveKeybindings: () => savingFailed("Couldn't save your keybinds")(model),
 		UpdatedRecentNotifications: ({ ids }) => ({
 			model,
 			commands: ids.length === 0 ? [] : [DeliverNotifications({ ids })],

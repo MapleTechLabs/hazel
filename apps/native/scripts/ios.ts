@@ -65,7 +65,8 @@ const environment: Record<string, string> = release
 writeFileSync(`${app}/environment.json`, JSON.stringify(environment))
 cpSync(`${root}../web-foldkit/public`, `${app}/public`, { recursive: true })
 
-const info: Record<string, unknown> = {
+/** The app's Info.plist, as JSON for `plutil`: Apple's keys, and what the asset catalog adds. */
+const info = {
 	CFBundleExecutable: "hazel-ios",
 	CFBundleIdentifier: bundleId,
 	CFBundleName: "Hazel",
@@ -81,10 +82,10 @@ const info: Record<string, unknown> = {
 	// Motion may run above 60 Hz on a ProMotion iPhone (Rune's display link asks for 120).
 	CADisableMinimumFrameDurationOnPhone: true,
 	UIRequiredDeviceCapabilities: ["arm64"],
-}
+} satisfies Record<string, unknown>
 // A dev stack on this Mac (http://localhost); everything else is HTTPS.
 if ((environment.VITE_BACKEND_URL ?? "http://").startsWith("http://"))
-	info.NSAppTransportSecurity = { NSAllowsLocalNetworking: true }
+	Object.assign(info, { NSAppTransportSecurity: { NSAllowsLocalNetworking: true } })
 
 if (release) {
 	const version = process.env.HAZEL_IOS_VERSION || "0.1.0"
@@ -165,10 +166,11 @@ if (!release) {
 
 // Signed for the App Store with what the profile grants: its team's identifier for this app, and
 // the app's own keychain group (the sign-in vault, `hazel_native::sign_in`).
-// SAFETY: `release` checked `profile` above.
-cpSync(profile!, `${app}/embedded.mobileprovision`)
+if (profile === undefined)
+	throw new Error("--release needs HAZEL_IOS_PROFILE (an App Store .mobileprovision)")
+cpSync(profile, `${app}/embedded.mobileprovision`)
 const decoded = `${out}/build/profile.plist`
-writeFileSync(decoded, execFileSync("security", ["cms", "-D", "-i", profile!]))
+writeFileSync(decoded, execFileSync("security", ["cms", "-D", "-i", profile]))
 const team = read("plutil", ["-extract", "TeamIdentifier.0", "raw", "-o", "-", decoded])
 const granted = read("plutil", ["-extract", "Entitlements.application-identifier", "raw", "-o", "-", decoded])
 const appId = `${team}.${bundleId}`

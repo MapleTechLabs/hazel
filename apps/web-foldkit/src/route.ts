@@ -60,6 +60,7 @@ export const AppRoute = defineRouteUnion({
 	},
 	MySettingsNotifications: { orgSlug: Schema.String },
 	MySettingsDesktop: { orgSlug: Schema.String },
+	MySettingsKeybinds: { orgSlug: Schema.String },
 	NotificationsAll: { orgSlug: Schema.String },
 	NotificationsGeneral: { orgSlug: Schema.String },
 	NotificationsThreads: { orgSlug: Schema.String },
@@ -227,6 +228,7 @@ const routers = {
 		Route.mapTo(AppRoute.MySettingsNotifications),
 	),
 	MySettingsDesktop: pipe(orgPath("my-settings", "desktop"), Route.mapTo(AppRoute.MySettingsDesktop)),
+	MySettingsKeybinds: pipe(orgPath("my-settings", "keybinds"), Route.mapTo(AppRoute.MySettingsKeybinds)),
 	NotificationsAll: pipe(orgPath("notifications"), Route.mapTo(AppRoute.NotificationsAll)),
 	NotificationsGeneral: pipe(
 		orgPath("notifications", "general"),
@@ -357,6 +359,7 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.MySettingsLinkedAccounts,
 		routers.MySettingsNotifications,
 		routers.MySettingsDesktop,
+		routers.MySettingsKeybinds,
 		routers.NotificationsAll,
 		routers.NotificationsGeneral,
 		routers.NotificationsThreads,
@@ -452,6 +455,7 @@ export const isMySettingsRoute = AppRoute.isAnyOf([
 	"MySettingsLinkedAccounts",
 	"MySettingsNotifications",
 	"MySettingsDesktop",
+	"MySettingsKeybinds",
 ])
 
 /** `/$orgSlug/notifications/*`. */

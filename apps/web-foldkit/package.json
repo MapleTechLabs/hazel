@@ -23,7 +23,6 @@
 		"@simplewebauthn/browser": "^14.0.0",
 		"@tanstack/browser-db-sqlite-persistence": "1.0.0-rc.1.1",
 		"@tanstack/db": "1.0.0-rc.1.1",
-		"@tanstack/hotkeys": "0.22.0",
 		"@yielded/auth": "0.1.0-beta.47",
 		"@yielded/auth-simplewebauthn": "0.1.0-beta.47",
 		"clsx": "^2.1.1",

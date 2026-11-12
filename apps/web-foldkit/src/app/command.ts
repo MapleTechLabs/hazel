@@ -6,6 +6,8 @@ import { readAccessToken } from "~/lib/access-token"
 import { isRetryableError } from "~/lib/error-messages"
 import { catchCommon } from "../data/actions"
 import { saveSoundSettings, SoundSettings } from "../notification-sound"
+import { saveKeybindingOverrides } from "../keybindings"
+import { Overrides } from "~/lib/keybindings/keymap"
 import { clearNoteDrafts } from "../page/customers/detail/note-drafts"
 import { HazelRpc } from "../rpc"
 import { applyTheme, ResolvedTheme, saveThemePreference, ThemeCustomization, ThemePreference } from "../theme"
@@ -71,6 +73,16 @@ export const SaveSoundSettings = Command.define("SaveSoundSettings", {
 		saveSoundSettings(settings).pipe(
 			Effect.as(Message.CompletedSaveSoundSettings()),
 			Effect.catchTag("StorageWriteError", () => Effect.succeed(Message.FailedSaveSoundSettings())),
+		),
+})
+
+export const SaveKeybindings = Command.define("SaveKeybindings", {
+	args: { overrides: Overrides },
+	messages: [Message.CompletedSaveKeybindings, Message.FailedSaveKeybindings],
+	execute: ({ overrides }) =>
+		saveKeybindingOverrides(overrides).pipe(
+			Effect.as(Message.CompletedSaveKeybindings()),
+			Effect.catchTag("StorageWriteError", () => Effect.succeed(Message.FailedSaveKeybindings())),
 		),
 })
 

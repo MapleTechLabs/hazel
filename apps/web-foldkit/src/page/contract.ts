@@ -6,6 +6,9 @@ import type { Resources } from "../rpc"
 import type { AppRoute, RouteOf, RouteTag } from "../route"
 import type { Auth, CurrentUser, Member, Organization } from "../session"
 import type { SoundSettings } from "../notification-sound"
+import type { AppKeys } from "~/lib/keybindings/app-keymap"
+import type { Platform } from "~/lib/keybindings/key-combo"
+import type { Overrides } from "~/lib/keybindings/keymap"
 import type { ThemeState } from "../theme"
 import type * as Updates from "../platform/updates"
 import type { PageOutMessage } from "./out-message"
@@ -29,6 +32,11 @@ export interface Shared {
 	readonly theme: ThemeState
 	/** `notificationSoundSettingsAtom`: what the sound sink and "Test sound" use. */
 	readonly soundSettings: SoundSettings
+	/** The key of every action in `appKeymap`, with the user's overrides applied. */
+	readonly keys: AppKeys
+	/** The overrides themselves (Keybinds settings): which actions the user changed. */
+	readonly keybindingOverrides: Overrides
+	readonly keyboardPlatform: Platform
 	/** The desktop app's update check and install (always `Idle` on the web). */
 	readonly desktopUpdate: Updates.Model
 	/** A root modal or the command palette is open (it holds the keyboard; the composer's global typing waits). */

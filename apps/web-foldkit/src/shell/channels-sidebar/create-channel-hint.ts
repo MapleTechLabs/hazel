@@ -6,7 +6,11 @@ import { button } from "../../ui/button"
 import { hotkeyLabel } from "./hotkey-label"
 
 /** `CreateChannelHint`: under the Channels section while it is empty, until dismissed. */
-export const createChannelHint = <M>(h: HtmlBuilder<M>, onDismiss: Attribute<M>): Html =>
+export const createChannelHint = <M>(
+	h: HtmlBuilder<M>,
+	onDismiss: Attribute<M>,
+	createChannelKey: string | null,
+): Html =>
 	h.div(
 		[
 			h.Class(
@@ -17,17 +21,19 @@ export const createChannelHint = <M>(h: HtmlBuilder<M>, onDismiss: Attribute<M>)
 			IconLightbulb(h, { className: "size-3.5 shrink-0" }),
 			h.span(
 				[h.Class("flex-1")],
-				[
-					"Create your first channel with ",
-					h.kbd(
-						[
-							h.Attribute("data-slot", "keyboard"),
-							h.Attribute("dir", "ltr"),
-							h.Class(twMerge(keyboardStyles, "text-[10px]")),
+				createChannelKey === null
+					? ["Create your first channel with the + next to Channels."]
+					: [
+							"Create your first channel with ",
+							h.kbd(
+								[
+									h.Attribute("data-slot", "keyboard"),
+									h.Attribute("dir", "ltr"),
+									h.Class(twMerge(keyboardStyles, "text-[10px]")),
+								],
+								[hotkeyLabel(createChannelKey)],
+							),
 						],
-						[hotkeyLabel("Mod+Alt+N")],
-					),
-				],
 			),
 			button(
 				h,

@@ -17,7 +17,7 @@ import { chatChannelIdOf, isChatRoute, orgSlugOf } from "../route"
 import type { Member, Organization } from "../session"
 import * as ShellSubscription from "../shell/subscription"
 import * as CommandPalette from "../overlay/command-palette"
-import { layoutHotkeys } from "../overlay/hotkeys"
+import { LayoutKeys, layoutHotkeys, layoutKeysOf } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
 import * as Platform from "../platform"
 import { desktopMenuItems } from "../platform/desktop-menu"
@@ -218,6 +218,7 @@ const overlaySubscriptions = Subscription.make<Model, Message>()((entry) => ({
 			isEnabled: Schema.Boolean,
 			isChannelNavigationEnabled: Schema.Boolean,
 			isOverlayOpen: Schema.Boolean,
+			keys: LayoutKeys,
 		},
 		{
 			modelToDependencies: (model) => {
@@ -226,11 +227,12 @@ const overlaySubscriptions = Subscription.make<Model, Message>()((entry) => ({
 					isEnabled: authOf(model.session) === "SignedIn" && orgSlugOf(model.route) !== undefined,
 					isChannelNavigationEnabled: isChatRoute(model.route) && !isOverlayOpen,
 					isOverlayOpen,
+					keys: layoutKeysOf(sharedOf(model).keys),
 				}
 			},
-			dependenciesToStream: ({ isEnabled, isChannelNavigationEnabled, isOverlayOpen }) =>
+			dependenciesToStream: ({ isEnabled, isChannelNavigationEnabled, isOverlayOpen, keys }) =>
 				isEnabled
-					? layoutHotkeys((actionId) => Message.PressedHotkey({ actionId }), {
+					? layoutHotkeys((actionId) => Message.PressedHotkey({ actionId }), keys, {
 							isChannelNavigationEnabled,
 							isOverlayOpen,
 						})

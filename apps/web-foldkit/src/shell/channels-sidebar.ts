@@ -217,6 +217,8 @@ type ShellArgs = readonly [
 	email: string | undefined,
 	avatarUrl: string | null | undefined,
 	appVersion: string,
+	paletteKey: string | null,
+	createChannelKey: string | null,
 ]
 
 const sidebarBody = <ParentMessage>(
@@ -234,7 +236,18 @@ const sidebarBody = <ParentMessage>(
 	statusExpiration: string | null,
 	toUserMenuMessage: (message: Menu.Message) => ParentMessage,
 	toOrgSwitcherMessage: (message: Menu.Message) => ParentMessage,
-	...[orgSlug, route, orgName, orgLogoUrl, displayName, email, avatarUrl, appVersion]: ShellArgs
+	...[
+		orgSlug,
+		route,
+		orgName,
+		orgLogoUrl,
+		displayName,
+		email,
+		avatarUrl,
+		appVersion,
+		paletteKey,
+		createChannelKey,
+	]: ShellArgs
 ): Html => {
 	const shell: ShellContext = {
 		orgSlug,
@@ -245,6 +258,8 @@ const sidebarBody = <ParentMessage>(
 				? undefined
 				: { displayName, email, avatarUrl: avatarUrl ?? null },
 		appVersion,
+		paletteKey,
+		createChannelKey,
 	}
 	return sidebarStatic(h, "flex flex-1", [
 		orgSwitcherHeader(h, orgSwitcher, orgSwitcherEntries, shell, organizations, toOrgSwitcherMessage),
@@ -256,6 +271,8 @@ const sidebarBody = <ParentMessage>(
 					route,
 					activeChannelId,
 					nowMs,
+					paletteKey,
+					createChannelKey,
 					onActiveMount: h.OnMount(Mount.mapMessage(ScrollActiveIntoView(), toParentMessage)),
 					onBrowseChannels: h.OnClick(toParentMessage(Message.ClickedBrowseChannels())),
 					onDismissCreateChannelHint: h.OnClick(
@@ -328,5 +345,7 @@ export const view = <ParentMessage>(
 		shell.currentUser?.email,
 		shell.currentUser?.avatarUrl,
 		shell.appVersion,
+		shell.paletteKey,
+		shell.createChannelKey,
 	])
 }

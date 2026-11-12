@@ -2013,6 +2013,41 @@ export const IconLoader = <Message>(h: HtmlBuilder<Message>, options: IconOption
 		],
 	)
 
+export const IconKeyboard = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
+	icon(
+		h,
+		{
+			height: "18",
+			width: "18",
+			"data-slot": "icon",
+			viewBox: "0 0 18 18",
+			xmlns: "http://www.w3.org/2000/svg",
+		},
+		options,
+		[
+			h.g(
+				[h.Attribute("fill", "currentColor")],
+				[
+					h.path([
+						h.Attribute(
+							"d",
+							"M1 6.25C1 4.73122 2.23122 3.5 3.75 3.5H14.25C15.7688 3.5 17 4.73122 17 6.25V11.75C17 13.2688 15.7688 14.5 14.25 14.5H3.75C2.23122 14.5 1 13.2688 1 11.75V6.25Z",
+						),
+						h.Attribute("fill", "currentColor"),
+						h.Attribute("fill-opacity", "0.4"),
+					]),
+					h.path([
+						h.Attribute(
+							"d",
+							"M4.5 6.25C4.91421 6.25 5.25 6.58579 5.25 7C5.25 7.41421 4.91421 7.75 4.5 7.75C4.08579 7.75 3.75 7.41421 3.75 7C3.75 6.58579 4.08579 6.25 4.5 6.25ZM7.5 6.25C7.91421 6.25 8.25 6.58579 8.25 7C8.25 7.41421 7.91421 7.75 7.5 7.75C7.08579 7.75 6.75 7.41421 6.75 7C6.75 6.58579 7.08579 6.25 7.5 6.25ZM10.5 6.25C10.9142 6.25 11.25 6.58579 11.25 7C11.25 7.41421 10.9142 7.75 10.5 7.75C10.0858 7.75 9.75 7.41421 9.75 7C9.75 6.58579 10.0858 6.25 10.5 6.25ZM13.5 6.25C13.9142 6.25 14.25 6.58579 14.25 7C14.25 7.41421 13.9142 7.75 13.5 7.75C13.0858 7.75 12.75 7.41421 12.75 7C12.75 6.58579 13.0858 6.25 13.5 6.25ZM6 10.25H12C12.4142 10.25 12.75 10.5858 12.75 11C12.75 11.4142 12.4142 11.75 12 11.75H6C5.58579 11.75 5.25 11.4142 5.25 11C5.25 10.5858 5.58579 10.25 6 10.25Z",
+						),
+						h.Attribute("fill", "currentColor"),
+					]),
+				],
+			),
+		],
+	)
+
 export const IconLock = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
 	icon(
 		h,
