@@ -3100,6 +3100,30 @@ fn the_page_ends_above_the_on_screen_keyboard() {
     assert_eq!(rect(&rt, "r/1"), [0.0, 760.0, 400.0, 40.0]);
 }
 
+/// Focusing the composer raises the keyboard, and the keyboard must leave the composer focused:
+/// a page whose element ids change under it would drop focus, which lowers the keyboard, which
+/// changes them back, over and over.
+#[test]
+fn the_on_screen_keyboard_leaves_the_composer_focused() {
+    let mut rt = composer_page();
+    rt.update(|_, tx| tx.focus("r/0/field".to_string()));
+    rt.frame(0.1);
+    let focused = rt.focused_path().map(|p| p.to_string());
+    assert!(focused.is_some(), "the composer took focus");
+    for covered in [300.0, 0.0, 300.0] {
+        assert!(rt.state.set_keyboard(covered));
+        rt.invalidate();
+        rt.frame(0.1);
+        rt.settle_all();
+        rt.frame(0.1);
+        assert_eq!(
+            rt.focused_path().map(|p| p.to_string()),
+            focused,
+            "keyboard covering {covered}"
+        );
+    }
+}
+
 #[test]
 fn a_lone_inline_span_in_a_block_wraps_its_text_to_the_block() {
     // A message's markdown: `p > span > span > span > text` in the content column of a row.
