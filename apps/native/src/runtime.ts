@@ -33,6 +33,10 @@ export const startRuntime = async (platform: NativePlatform) => {
 	if (!config.dev) process.env.PROD = "true"
 	process.env.VITE_BACKEND_URL = config.backendUrl
 
+	// The platform's own (iOS's), else the host's: Rune opens links and copies on every desktop.
+	const openUrl = platform.openUrl ?? ((url: string) => transport.send({ t: "open", url }))
+	const copyText = platform.copyText ?? ((text: string) => transport.send({ t: "copy", text }))
+
 	// Live mode opens the app's own landing route; the fixture's channel exists only offline.
 	const offline = config.dataMode === "offline" ? await import("./offline-session") : undefined
 	const startPath = config.path ?? offline?.startPath ?? "/"
@@ -41,8 +45,8 @@ export const startRuntime = async (platform: NativePlatform) => {
 		height: config.height,
 		dark: config.dark,
 		url: `${config.origin}${startPath}`,
-		openUrl: platform.openUrl,
-		copyText: platform.copyText,
+		openUrl,
+		copyText,
 		// Live, a full page load (after sign-in or sign-out) boots a fresh runtime, as a browser does.
 		loadDocument:
 			config.dataMode === "live"
@@ -64,7 +68,7 @@ export const startRuntime = async (platform: NativePlatform) => {
 		notifications: config.notifications,
 		openUrl: (url) => {
 			const target = URL.parse(url)
-			if (target !== null) openExternal(target, platform.openUrl)
+			if (target !== null) openExternal(target, openUrl)
 		},
 	})
 	if (config.keychainSession || config.updates || config.notifications)

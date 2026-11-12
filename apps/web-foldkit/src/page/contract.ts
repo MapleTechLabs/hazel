@@ -37,8 +37,6 @@ export interface Shared {
 	/** The overrides themselves (Keybinds settings): which actions the user changed. */
 	readonly keybindingOverrides: Overrides
 	readonly keyboardPlatform: Platform
-	/** Running in the Tauri desktop app (`platform/desktop`), where the desktop-only settings apply. */
-	readonly isDesktop: boolean
 	/** The desktop app's update check and install (always `Idle` on the web). */
 	readonly desktopUpdate: Updates.Model
 	/** A root modal or the command palette is open (it holds the keyboard; the composer's global typing waits). */

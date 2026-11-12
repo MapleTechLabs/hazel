@@ -43,6 +43,15 @@ impl RuntimeChild {
     /// storage, a CPU profile), and kills it if it has not gone within 3 s.
     pub fn stop(&mut self) {
         if let Some(mut child) = self.0.lock().unwrap().take() {
+            // Windows has no SIGTERM to ask with: it ends at once, as `kill` does (what it
+            // stored was saved within the last 200 ms).
+            #[cfg(not(unix))]
+            {
+                let _ = child.kill();
+                let _ = child.wait();
+                return;
+            }
+            #[cfg(unix)]
             let _ = std::process::Command::new("/bin/kill")
                 .args(["-TERM", &child.id().to_string()])
                 .status();

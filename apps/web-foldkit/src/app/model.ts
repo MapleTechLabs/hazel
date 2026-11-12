@@ -16,7 +16,6 @@ import { appKeymap } from "~/lib/keybindings/app-keymap"
 import { Platform as KeyboardPlatform } from "~/lib/keybindings/key-combo"
 import { Overrides } from "~/lib/keybindings/keymap"
 import * as Platform from "../platform"
-import { isDesktop } from "../platform/desktop"
 import * as Updates from "../platform/updates"
 import * as Shell from "../shell/model"
 import type { Context as ShellUpdateContext } from "../shell/update"
@@ -162,7 +161,6 @@ export const sharedOf = (model: Model): Shared => ({
 	keys: appKeymap.resolve(model.keybindingOverrides, model.keyboardPlatform),
 	keybindingOverrides: model.keybindingOverrides,
 	keyboardPlatform: model.keyboardPlatform,
-	isDesktop,
 	desktopUpdate: model.desktopUpdate,
 	isOverlayOpen: model.modal.current !== null || model.commandPalette.isOpen,
 })

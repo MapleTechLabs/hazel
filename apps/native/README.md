@@ -147,7 +147,20 @@ Motion runs on Rune's display link (`CADisplayLink`), at the screen's rate: 120 
 ProMotion iPhone (`CADisableMinimumFrameDurationOnPhone`). When WebKit ends the page's process
 (memory pressure, a crash), the bridge loads a fresh page and runtime, as a browser reloads a tab.
 
-Not yet on iOS: updates, HTML renders, and a device build (simulator only, ad-hoc signed).
+Not yet on iOS: updates and HTML renders.
+
+### TestFlight
+
+```sh
+HAZEL_IOS_PROFILE=~/.asc/signing/hazel_appstore.mobileprovision bun run ios --release --upload
+```
+
+builds `dist/ios/Hazel.ipa` for iPhones (iPhone only, portrait), live against production, signed
+with the Apple Distribution certificate for App Store Connect's HazelChat (`hazel.app`), and
+uploads it with the `asc` CLI; the Internal TestFlight group gets every build. The build number is
+the commit count (`HAZEL_IOS_BUILD` overrides it), the version `HAZEL_IOS_VERSION` (0.1.0). The icon
+is `host/ios/assets/AppIcon.png` (opaque, 1024px), compiled into `Assets.car`; the privacy manifest
+`host/ios/PrivacyInfo.xcprivacy` declares the required-reason APIs the executable links.
 
 ## Releases
 

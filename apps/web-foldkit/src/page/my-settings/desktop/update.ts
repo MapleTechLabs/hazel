@@ -61,11 +61,27 @@ export const ReadVersion = Command.define("ReadVersion", {
 	),
 })
 
-export const init = (): PageReturn<Model, Message> => ({
-	model: { autostartEnabled: null, isUpdating: false, version: null, interaction: Interaction.init() },
-	// The version shows wherever updates do: the Tauri app, and the native app (its host answers).
-	commands: isDesktop || hasUpdater ? [CheckAutostart(), ReadVersion()] : [CheckAutostart()],
+/** What the app this page runs in offers. */
+export type DesktopPlatform = Pick<Model, "hasAutostart" | "hasUpdates">
+
+/** The page on a given platform: it reads the autostart state and the version only where they exist. */
+export const initOn = (platform: DesktopPlatform): PageReturn<Model, Message> => ({
+	model: {
+		autostartEnabled: null,
+		isUpdating: false,
+		version: null,
+		interaction: Interaction.init(),
+		...platform,
+	},
+	commands: [
+		...(platform.hasAutostart ? [CheckAutostart()] : []),
+		// The version shows wherever the desktop app's settings do.
+		...(platform.hasAutostart || platform.hasUpdates ? [ReadVersion()] : []),
+	],
 })
+
+export const init = (): PageReturn<Model, Message> =>
+	initOn({ hasAutostart: isDesktop, hasUpdates: hasUpdater })
 
 const settleAutostart = (model: Model, isEnabled: boolean): Model =>
 	modifyFields(model, { autostartEnabled: () => isEnabled, isUpdating: () => false })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { cssEscape, installShims, makeRootAwareMutationObserver } from "./shims"
+import { cssEscape, installShims, makeRootAwareMutationObserver, navigatorPlatform } from "./shims"
 
 describe("installShims", () => {
 	it("answers a 2D canvas probe with no context, as a browser without canvas does", () => {
@@ -214,5 +214,12 @@ describe("installShims", () => {
 		expect(document.hasFocus()).toBe(false)
 		setWindowFocus(true)
 		expect(heard).toEqual(["blur", "focus"])
+	})
+
+	it("tells the app which system it runs on, so shortcuts read ⌘ only on Apple's", () => {
+		expect(navigatorPlatform("darwin").platform).toContain("Mac")
+		expect(navigatorPlatform("ios").platform).toBe("iPhone")
+		expect(navigatorPlatform("win32").platform).toBe("Win32")
+		expect(navigatorPlatform("linux").platform).not.toContain("Mac")
 	})
 })

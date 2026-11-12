@@ -156,4 +156,30 @@ mod tests {
             Routed::Window(RuntimeMsg::Focus { .. })
         ));
     }
+
+    #[test]
+    fn the_window_copies_and_opens_only_web_and_mail_links() {
+        let parse = |line: &str| serde_json::from_str::<RuntimeMsg>(line).expect("message");
+        assert!(parse(r#"{"t":"copy","text":"hi"}"#).request().is_some());
+        assert!(
+            parse(r#"{"t":"open","url":"https://hazel.sh"}"#)
+                .request()
+                .is_some()
+        );
+        assert!(
+            parse(r#"{"t":"open","url":"MAILTO:ada@hazel.test"}"#)
+                .request()
+                .is_some()
+        );
+        assert!(
+            parse(r#"{"t":"open","url":"file:///etc/passwd"}"#)
+                .request()
+                .is_none()
+        );
+        assert!(
+            parse(r#"{"t":"open","url":"javascript:alert(1)"}"#)
+                .request()
+                .is_none()
+        );
+    }
 }

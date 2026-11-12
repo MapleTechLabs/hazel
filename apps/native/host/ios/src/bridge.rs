@@ -196,11 +196,7 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
         crate::sign_in::start(mtm, &url, &scheme);
     } else if let Some(href) = field("open") {
         // As the runtime filters them: the system opens web and mail links, nothing else.
-        let is_external = ["http:", "https:", "mailto:"].iter().any(|scheme| {
-            href.get(..scheme.len())
-                .is_some_and(|s| s.eq_ignore_ascii_case(scheme))
-        });
-        if !is_external {
+        if !hazel_native::wire::is_external_link(&href) {
             return log("[host] not opening a link that is not web or mail");
         }
         if let Some(url) = NSURL::URLWithString(&NSString::from_str(&href)) {
