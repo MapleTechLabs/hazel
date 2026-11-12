@@ -195,4 +195,24 @@ describe("installShims", () => {
 		expect(cssEscape("-")).toBe("\\-")
 		expect(cssEscape("a b")).toBe("a\\ b")
 	})
+
+	it("reports the window's focus as document.hasFocus, with focus and blur on window", () => {
+		const { setWindowFocus } = installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/",
+			openUrl: () => {},
+			copyText: () => {},
+		})
+		const heard: Array<string> = []
+		window.addEventListener("blur", () => heard.push("blur"))
+		window.addEventListener("focus", () => heard.push("focus"))
+		expect(document.hasFocus()).toBe(true)
+		setWindowFocus(false)
+		setWindowFocus(false)
+		expect(document.hasFocus()).toBe(false)
+		setWindowFocus(true)
+		expect(heard).toEqual(["blur", "focus"])
+	})
 })

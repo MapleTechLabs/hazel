@@ -25,6 +25,8 @@ export type RuntimeConfig = {
 	readonly updates: boolean
 	/** This build's version, from the host (Settings > Desktop). */
 	readonly version: string | undefined
+	/** The host can show system notifications (a bundle the system knows by its identifier). */
+	readonly notifications: boolean
 	/** `HAZEL_DEV=1` keeps the web app's dev build (its debug pages). */
 	readonly dev: boolean
 	/** `NATIVE_DEBUG`: log every Message, link, edit and offline request. */
@@ -71,6 +73,7 @@ export const readConfig = (env: Env): RuntimeConfig => {
 		origin: env.NATIVE_ORIGIN ?? "http://app.hazel.test",
 		updates: env.HAZEL_UPDATES === "1",
 		version: env.HAZEL_APP_VERSION || undefined,
+		notifications: env.HAZEL_NOTIFICATIONS === "1",
 		dev: env.HAZEL_DEV === "1",
 		debug: Boolean(env.NATIVE_DEBUG),
 		statsPath: env.NATIVE_STATS || undefined,

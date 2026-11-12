@@ -165,6 +165,11 @@ fn receive(line: &str) {
         Routed::Shell(ShellRequest::Update { .. } | ShellRequest::Relaunch { .. }) => {
             log("[host] updates are not on iOS");
         }
+        // Not offered on iOS (no `HAZEL_NOTIFICATIONS`); a request still gets its answer.
+        Routed::Shell(ShellRequest::NotifyPermission { id, .. }) => {
+            outbox::write_line(shell::permission_reply(id, false));
+        }
+        Routed::Shell(ShellRequest::Notify { .. }) => {}
     }
 }
 

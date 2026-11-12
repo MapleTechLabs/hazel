@@ -384,6 +384,8 @@ export const installShims = (env: ShimEnv) => {
 			getPropertyValue: (name: string) => rootStyle.get(name) ?? "",
 		},
 	})
+	// Whether the window is the key window: notifications wait until it is not.
+	let isWindowFocused = true
 	const document = Object.assign(new DomNode(), {
 		documentElement,
 		body: element(),
@@ -392,7 +394,7 @@ export const installShims = (env: ShimEnv) => {
 		visibilityState: "visible",
 		hidden: false,
 		readyState: "complete",
-		hasFocus: () => true,
+		hasFocus: () => isWindowFocused,
 		createElement: () => element(),
 		createElementNS: () => element(),
 		createTextNode: () => element(),
@@ -493,6 +495,12 @@ export const installShims = (env: ShimEnv) => {
 		}
 		windowTarget.dispatchEvent(new Event("resize"))
 	}
+	/** The window became the key window, or stopped being it: `focus` / `blur` on `window`. */
+	const setWindowFocus = (focused: boolean) => {
+		if (focused === isWindowFocused) return
+		isWindowFocused = focused
+		windowTarget.dispatchEvent(new Event(focused ? "focus" : "blur"))
+	}
 	/** Hears every change to `<html>`'s class or inline custom properties; returns how to stop. */
 	const onRootStyle = (listener: () => void) => {
 		rootStyleListeners.add(listener)
@@ -502,6 +510,7 @@ export const installShims = (env: ShimEnv) => {
 	}
 	return {
 		updateEnv,
+		setWindowFocus,
 		/** Saves `localStorage` now: the runtime is about to end. */
 		flushStorage: () => localStorage.flush(),
 		history,

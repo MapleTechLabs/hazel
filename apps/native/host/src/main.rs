@@ -1,6 +1,7 @@
 //! Hazel's native window on macOS: runs Hazel's Foldkit app in a Bun child process and draws the
 //! tree it renders (`hazel_native`), sending presses, edits and the window's size and theme back.
 mod capture;
+mod notify;
 mod platform;
 mod runtime;
 mod updater;
@@ -22,6 +23,14 @@ const TITLEBAR: rune::Titlebar = rune::Titlebar::new(40.0).traffic_lights(16.0, 
 /// A link the system opened with the app (the sign-in callback): to the runtime as it came.
 fn open_url(_: &mut State, url: &str, _: &mut rune::Tx) {
     write_line(hazel_native::sign_in::open_url_message(url));
+}
+
+/// The app's view, telling the runtime when the window gains or loses key status
+/// (`document.hasFocus()`, which notifications wait on).
+fn window_view(s: &State, cx: &mut rune::Cx<State>) -> rune::El {
+    view(s, cx).on_window_focus(|_: &mut State, focused, _| {
+        write_line(hazel_native::shell::window_focus_message(focused))
+    })
 }
 
 fn window_size() -> (f32, f32) {
@@ -76,7 +85,7 @@ fn main() {
         setup: Some(|_: &mut State, waker| images::set_waker(waker)),
         poll: Some(poll),
         on_key: Some(window_key),
-        ..AppSpec::new("Hazel", window_size(), State::default, view)
+        ..AppSpec::new("Hazel", window_size(), State::default, window_view)
     };
     let app = App::new(spec)
         .font_smoothing(TEXT_SMOOTHING)

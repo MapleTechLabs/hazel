@@ -61,12 +61,14 @@ export const startRuntime = async (platform: NativePlatform) => {
 		send: (request) => transport.send(request),
 		updates: config.updates,
 		version: config.version,
+		notifications: config.notifications,
 		openUrl: (url) => {
 			const target = URL.parse(url)
 			if (target !== null) openExternal(target, platform.openUrl)
 		},
 	})
-	if (config.keychainSession || config.updates) Object.assign(window, { __TAURI__: desktopBridge.tauri })
+	if (config.keychainSession || config.updates || config.notifications)
+		Object.assign(window, { __TAURI__: desktopBridge.tauri })
 
 	await installDataSource(config, platform, offline)
 
@@ -212,10 +214,14 @@ export const startRuntime = async (platform: NativePlatform) => {
 			case "vault":
 			case "update":
 			case "updateProgress":
+			case "notifyPermission":
 				desktopBridge.answer(message)
 				return
 			case "frame":
 				frameEvents(message)
+				return
+			case "windowFocus":
+				shims.setWindowFocus(message.focused)
 				return
 			case "env":
 				shims.updateEnv({ width: message.width, height: message.height, dark: message.dark })
@@ -255,4 +261,12 @@ export const startRuntime = async (platform: NativePlatform) => {
 		}),
 		{ flags: app.flags },
 	)
+
+	// As the web app's entry does: ask once for notifications (the system remembers the answer).
+	// Live only: the offline fixture never notifies, and must not put up the system's prompt.
+	if (config.notifications && config.dataMode === "live") {
+		const { initNativeNotifications } =
+			await import("../../web-foldkit/src/core/lib/native-notifications")
+		initNativeNotifications().catch((error: unknown) => platform.log(`[notifications] ${String(error)}`))
+	}
 }

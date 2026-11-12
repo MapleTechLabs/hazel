@@ -17,6 +17,26 @@ pub enum ShellRequest {
     Update { id: u64, op: String },
     /// Quit and open the app again (after an update); answered only when that fails.
     Relaunch { id: u64 },
+    /// May the app show notifications (asking first with `request`)? Answered by
+    /// `permission_reply`.
+    NotifyPermission { id: u64, request: bool },
+    /// A system notification.
+    Notify {
+        title: String,
+        body: String,
+        group: Option<String>,
+    },
+}
+
+/// The answer to notification permission request `id`.
+pub fn permission_reply(id: u64, granted: bool) -> serde_json::Value {
+    serde_json::json!({ "t": "notifyPermission", "id": id, "granted": granted })
+}
+
+/// The window became the key window or stopped being it: the runtime's `document.hasFocus()`,
+/// which notifications wait on.
+pub fn window_focus_message(focused: bool) -> serde_json::Value {
+    serde_json::json!({ "t": "windowFocus", "focused": focused })
 }
 
 /// Where a runtime message goes.
@@ -42,6 +62,12 @@ pub fn route(message: RuntimeMsg) -> Routed {
         RuntimeMsg::Reload { path } => Routed::Shell(ShellRequest::Reload { path }),
         RuntimeMsg::Update { id, op } => Routed::Shell(ShellRequest::Update { id, op }),
         RuntimeMsg::Relaunch { id } => Routed::Shell(ShellRequest::Relaunch { id }),
+        RuntimeMsg::NotifyPermission { id, request } => {
+            Routed::Shell(ShellRequest::NotifyPermission { id, request })
+        }
+        RuntimeMsg::Notify { title, body, group } => {
+            Routed::Shell(ShellRequest::Notify { title, body, group })
+        }
         message => Routed::Window(message),
     }
 }

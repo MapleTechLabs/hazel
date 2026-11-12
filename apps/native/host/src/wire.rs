@@ -426,6 +426,18 @@ pub enum RuntimeMsg {
     /// a relaunch that cannot start is answered as `update` with `id`.
     #[serde(rename = "relaunch")]
     Relaunch { id: u64 },
+    /// Whether the app may show system notifications, asking the user first with `request`;
+    /// answered as `notifyPermission` with `id`.
+    #[serde(rename = "notifyPermission")]
+    NotifyPermission { id: u64, request: bool },
+    /// Show a system notification; `group` gathers a channel's together.
+    #[serde(rename = "notify")]
+    Notify {
+        title: String,
+        body: String,
+        #[serde(default)]
+        group: Option<String>,
+    },
 }
 
 /// What a runtime request does to the host's Rune runtime, sent to its update thread.
