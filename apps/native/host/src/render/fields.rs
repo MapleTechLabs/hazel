@@ -27,43 +27,24 @@ pub(super) fn build_input(
     inh: Inherit,
     ctx: &Ctx,
 ) -> El {
-    let edit = ctx
-        .s
-        .fields
-        .get(path)
-        .map(|f| f.edit.clone())
-        .unwrap_or_else(|| TextEdit::new(""));
-    let key = path.to_string();
-    let mut field = text_input(&edit, inh.style())
-        .key(format!("{path}/field"))
-        .grow(1.0)
-        .shrink()
-        .color(inh.color)
-        .placeholder(
-            attrs.get("placeholder").cloned().unwrap_or_default(),
-            inh.color.alpha(0.45),
-        );
+    let single_line = tag == "input";
+    let mut field = text_field(path, attrs, inh, ctx, 0.45);
+    // An `<input>` is one line; a `<textarea>` keeps Rune's multi-line field.
+    if single_line {
+        field = field.single_line();
+    }
+    // A one-line field sits in the middle of its box, a textarea's text at its top.
+    let wrapper = if single_line {
+        row().items_center()
+    } else {
+        row().items_start()
+    };
+    let wrapper = apply_box(wrapper.key(path), st);
     // A disabled field shows its value but takes no edits, keys or submits, as in a browser.
     if attrs.contains_key("disabled") {
-        let wrapper = if tag == "input" {
-            row().items_center()
-        } else {
-            row().items_start()
-        };
-        let field = if tag == "input" {
-            field.single_line()
-        } else {
-            field
-        };
-        return apply_box(wrapper.key(path), st).child(field.opacity(0.6));
+        return wrapper.child(field.opacity(0.6));
     }
-    field = field.on_edit(rune::edit_access(move |s: &mut State| {
-        &mut s
-            .fields
-            .entry(key.clone())
-            .or_insert_with(|| Field::new(String::new()))
-            .edit
-    }));
+    field = takes_edits(field, path);
     if let Some(&id) = on.get("input") {
         let key = path.to_string();
         field = field.on_input_change(move |s: &mut State, _| {
@@ -72,15 +53,12 @@ pub(super) fn build_input(
             }
         });
     }
-    // An `<input>` is one line and Return submits its form; a `<textarea>` keeps Rune's
-    // multi-line field, where Return types a newline as it does in a browser.
-    if tag == "input" {
-        field = field.single_line();
-        if let Some(form_id) = ctx.form {
-            field = field.on_submit(move |_: &mut State, _| {
-                send(form_id, "submit", None);
-            });
-        }
+    // Return in an `<input>` submits its form; in a `<textarea>` it types a newline, as it does
+    // in a browser.
+    if single_line && let Some(form_id) = ctx.form {
+        field = field.on_submit(move |_: &mut State, _| {
+            send(form_id, "submit", None);
+        });
     }
     // A field with its own keydown handler (a combo box) gets its navigation keys, and claims
     // the ones a browser listbox prevents: Return picks rather than submits, arrows move the
@@ -88,7 +66,7 @@ pub(super) fn build_input(
     // composer); a textarea breaks the line instead, so insert it here and report the edit as
     // typing would.
     let keydown = on.get("keydown").copied();
-    let (key, input, is_textarea) = (path.to_string(), on.get("input").copied(), tag != "input");
+    let (key, input, is_textarea) = (path.to_string(), on.get("input").copied(), !single_line);
     let outer = ctx.keys.to_vec();
     if keydown.is_some() || is_textarea || !outer.is_empty() {
         field = field.on_input_key(move |s: &mut State, ev, _| {
@@ -125,17 +103,7 @@ pub(super) fn build_input(
             true
         });
     }
-    let wrapper = if tag == "input" {
-        row().items_center()
-    } else {
-        row().items_start()
-    };
-    focus_styles(
-        focus_field_on_press(apply_box(wrapper.key(path), st), path),
-        st,
-        true,
-    )
-    .child(field)
+    focus_styles(focus_field_on_press(wrapper, path), st, true).child(field)
 }
 
 /// A multi-line native field over a DOM-backed editor: Return submits, Shift+Return breaks a line.
@@ -150,30 +118,9 @@ pub(super) fn build_editable(
     // The editor root's own style (padding, text size, minimum height), sent as the one child.
     let field_st = children.first().and_then(|c| style_of(c));
     let inh = field_st.map_or(inh, |fst| inh.from(fst));
-    let edit = ctx
-        .s
-        .fields
-        .get(path)
-        .map(|f| f.edit.clone())
-        .unwrap_or_else(|| TextEdit::new(""));
-    let (edit_key, change_key, submit_key) = (path.to_string(), path.to_string(), path.to_string());
-    let field = text_input(&edit, inh.style())
-        .key(format!("{path}/field"))
-        .grow(1.0)
-        .shrink()
-        .color(inh.color)
-        .placeholder(
-            attrs.get("placeholder").cloned().unwrap_or_default(),
-            // The editor's placeholder widget: the text colour at `opacity: 0.333`.
-            inh.color.alpha(0.333),
-        )
-        .on_edit(rune::edit_access(move |s: &mut State| {
-            &mut s
-                .fields
-                .entry(edit_key.clone())
-                .or_insert_with(|| Field::new(String::new()))
-                .edit
-        }))
+    let (change_key, submit_key) = (path.to_string(), path.to_string());
+    // The editor's placeholder widget: the text colour at `opacity: 0.333`.
+    let field = takes_edits(text_field(path, attrs, inh, ctx, 0.333), path)
         .on_input_change(move |s: &mut State, _| {
             if let Some(f) = s.fields.get_mut(&change_key) {
                 let before = std::mem::replace(&mut f.shown, f.edit.text.clone());
@@ -204,4 +151,42 @@ pub(super) fn build_editable(
         None => field,
     };
     focus_field_on_press(apply_box(row().items_center().key(path), st), path).child(field)
+}
+
+/// The Rune field drawing `path`'s editor as last edited, in the inherited text style, filling
+/// its box; its placeholder is the text colour at `placeholder_alpha`.
+fn text_field(
+    path: &str,
+    attrs: &HashMap<String, String>,
+    inh: Inherit,
+    ctx: &Ctx,
+    placeholder_alpha: f32,
+) -> El {
+    let edit = ctx
+        .s
+        .fields
+        .get(path)
+        .map(|f| f.edit.clone())
+        .unwrap_or_else(|| TextEdit::new(""));
+    text_input(&edit, inh.style())
+        .key(format!("{path}/field"))
+        .grow(1.0)
+        .shrink()
+        .color(inh.color)
+        .placeholder(
+            attrs.get("placeholder").cloned().unwrap_or_default(),
+            inh.color.alpha(placeholder_alpha),
+        )
+}
+
+/// `field`'s edits change `path`'s editor in the host's state (created by the first one).
+fn takes_edits(field: El, path: &str) -> El {
+    let key = path.to_string();
+    field.on_edit(rune::edit_access(move |s: &mut State| {
+        &mut s
+            .fields
+            .entry(key.clone())
+            .or_insert_with(|| Field::new(String::new()))
+            .edit
+    }))
 }
