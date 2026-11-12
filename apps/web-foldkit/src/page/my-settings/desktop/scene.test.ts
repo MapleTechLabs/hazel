@@ -21,6 +21,15 @@ describe("launch at startup", () => {
 		expect(commands.map((command) => command.name)).not.toContain(CheckAutostart.name)
 	})
 
+	test("the native app, which updates itself but has no autostart, shows updates and no switch", () => {
+		Scene.scene(
+			pageScene(update, view, shared),
+			Scene.given(initOn({ hasAutostart: false, hasUpdates: true }).model),
+			Scene.expect(openAtLogin).toBeAbsent(),
+			Scene.expect(Scene.text("App Updates")).toExist(),
+		)
+	})
+
 	test("the switch is disabled until the state is known, then reflects it", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
