@@ -1,8 +1,4 @@
-import { Result, Schema } from "effect"
-
 import type { HostToRuntime, RuntimeToHost } from "./wire"
-
-const decodeJson = Schema.decodeUnknownResult(Schema.fromJsonString(Schema.Unknown))
 
 /** Every host message's tag, keyed by the wire type: a new kind of message cannot be left out. */
 const HOST_MESSAGE_TAGS = {
@@ -37,9 +33,15 @@ const isHostMessage = (value: unknown): value is HostToRuntime =>
 
 /** One line from the host as a message, or the reason it is not one. */
 export const parseHostLine = (line: string): { message: HostToRuntime } | { error: string } => {
-	const decoded = decodeJson(line)
-	if (Result.isFailure(decoded)) return { error: decoded.failure.message }
-	return isHostMessage(decoded.success) ? { message: decoded.success } : { error: "not a host message" }
+	// `JSON.parse`, not a Schema decode: the host sends a line per observed row each frame of a
+	// scroll, and a decoder of `Unknown` checks nothing JSON.parse does not.
+	let value: unknown
+	try {
+		value = JSON.parse(line)
+	} catch (error) {
+		return { error: error instanceof Error ? error.message : String(error) }
+	}
+	return isHostMessage(value) ? { message: value } : { error: "not a host message" }
 }
 
 /** Splits a stream into lines; a malformed one is reported and skipped, never fatal. */

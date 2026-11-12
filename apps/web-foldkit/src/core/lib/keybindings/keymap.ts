@@ -128,7 +128,19 @@ export const defineKeymap = <const Specs extends Readonly<Record<string, ActionS
 	 * took is dropped, so no two rebindable actions ever share a key (Foldkit rejects a table with
 	 * duplicates, and both actions would fire).
 	 */
+	// Every subscription reads the keys on every Message (`app/model.ts` `sharedOf`): one table
+	// per overrides object and platform, and the same table each time, so its readers see no change.
+	const resolved = new WeakMap<Overrides, Map<Platform, Keys<Id>>>()
 	const resolve = (overrides: Overrides, platform: Platform): Keys<Id> => {
+		const byPlatform = resolved.get(overrides) ?? new Map<Platform, Keys<Id>>()
+		const cached = byPlatform.get(platform)
+		if (cached !== undefined) return cached
+		const keys = resolveFresh(overrides, platform)
+		byPlatform.set(platform, keys)
+		resolved.set(overrides, byPlatform)
+		return keys
+	}
+	const resolveFresh = (overrides: Overrides, platform: Platform): Keys<Id> => {
 		// Overrides first, in keymap order: a later one that repeats a claimed key is unbound.
 		const claimed = new Set<string>()
 		const overridden = new Map<string, KeyCombo | null>()
