@@ -38,8 +38,9 @@ use objc2_ui_kit::{
 };
 
 /// How long a tab the reader pressed stays selected before the app's own selection wins: the
-/// app answers a press with a tree that selects it, or (the Menu item) one that does not.
-const OPTIMISTIC: Duration = Duration::from_millis(350);
+/// app answers a press with a tree that selects it, or (the Menu item) one that does not. A tree
+/// that selects it ends the wait sooner, so a slow tab never flicks back to the one it left.
+const OPTIMISTIC: Duration = Duration::from_millis(800);
 
 type Rect = [f32; 4];
 
@@ -88,6 +89,8 @@ define_class!(
         #[unsafe(method(tabBar:didSelectItem:))]
         fn did_select(&self, _bar: &UITabBar, item: &UITabBarItem) {
             self.ivars().pressed.set(Some(Instant::now()));
+            // Its navigation changes at once: nothing freezes the bar while the tab is drawn.
+            crate::system::tab_pressed();
             if let Some(item) = self.ivars().items.borrow().get(item.tag() as usize) {
                 islands::press(item);
             }
@@ -548,6 +551,11 @@ fn put(island: &mut Island, placement: &Placement, bottom_inset: f32) {
     }
     island.host.setHidden(false);
     if let Native::TabBar { bar, delegate } = &island.native {
+        let wanted = island.spec.items.iter().position(|item| item.selected);
+        let shown = bar.selectedItem().map(|item| item.tag() as usize);
+        if wanted == shown {
+            delegate.ivars().pressed.set(None);
+        }
         let settled = delegate
             .ivars()
             .pressed

@@ -8,9 +8,10 @@
 //! - a page that leads back to the one left (it has a back chevron to it) slides in from the right
 //!   over it, the old page drifting left and dimming (a push);
 //! - going back slides the page off to the right, over the picture of the page it goes to (a pop);
-//! - the swipe from the left edge does the same under the finger, and goes back when let go far
-//!   or fast enough;
-//! - anything else (a tab) changes at once.
+//! - a swipe to the right, starting anywhere on the page as in Slack, does the same under the
+//!   finger, and goes back when let go far or fast enough (where the flick would carry it);
+//! - anything else changes at once, and a press on the tab bar never waits: the bar and the page
+//!   stay live while the runtime draws the tab.
 use std::cell::{Cell, RefCell};
 use std::time::{Duration, Instant};
 
@@ -62,15 +63,47 @@ thread_local! {
     static BACK: RefCell<Option<String>> = const { RefCell::new(None) };
     /// A navigation waiting for its page to be drawn.
     static PENDING: RefCell<Option<Pending>> = const { RefCell::new(None) };
-    /// A swipe went back: the picture covers the page until the runtime has drawn it.
-    static SWIPED: RefCell<Option<Retained<UIView>>> = const { RefCell::new(None) };
+    /// A swipe went back: the picture of where it goes covers the page until the runtime has
+    /// drawn it there.
+    static RETURNING: RefCell<Option<Returning>> = const { RefCell::new(None) };
+    /// When the tab bar was last pressed: the navigation it makes changes at once.
+    static TAB_PRESSED: Cell<Option<Instant>> = const { Cell::new(None) };
     /// A slide is moving: a navigation in the middle of one changes at once.
     static MOVING: Cell<bool> = const { Cell::new(false) };
     static SWIPE: RefCell<Option<(Retained<UIPanGestureRecognizer>, Retained<SwipeBack>)>> =
         const { RefCell::new(None) };
-    /// What the swipe moving now slides over: the picture, and the dim over it.
-    static UNDER: RefCell<Option<(Retained<UIView>, Retained<UIView>)>> = const { RefCell::new(None) };
+    /// The swipe under the finger now.
+    static DRAG: RefCell<Option<Drag>> = const { RefCell::new(None) };
 }
+
+/// A swipe going back, until the page it goes to is drawn under its picture.
+struct Returning {
+    cover: Retained<UIView>,
+    /// The runtime has said it moves (`navigate`): the next tree it draws is that page.
+    navigated: bool,
+    /// That page is drawn under the cover.
+    drawn: bool,
+    /// The slide has come to rest.
+    settled: bool,
+}
+
+/// A swipe under the finger. Pictures move, not the page: the page stays where it is underneath,
+/// so the runtime can draw where the swipe goes while the slide finishes.
+struct Drag {
+    /// The page being left, pictured: follows the finger.
+    leaving: Retained<UIView>,
+    /// The page it goes back to, pictured (or a blank page), drifting in from the left.
+    under: Retained<UIView>,
+    dim: Retained<UIView>,
+}
+
+/// The tab bar was pressed (`islands`): the navigation it makes changes at once.
+pub fn tab_pressed() {
+    TAB_PRESSED.set(Some(Instant::now()));
+}
+
+/// How long after a press on the tab bar its navigation still counts as the tab's.
+const TAB_NAVIGATES: Duration = Duration::from_millis(600);
 
 struct Pending {
     /// The page left, frozen over the page while the next one is drawn.
@@ -122,13 +155,32 @@ pub fn navigate(mtm: MainThreadMarker, json: &str) {
     ) else {
         return;
     };
-    // A swipe already moved the page; a slide still moving lets this one change at once.
-    if SWIPED.with_borrow(Option::is_some) || MOVING.get() {
+    // A swipe already moved the page: the tree this navigation draws uncovers it.
+    let swiped = RETURNING.with_borrow_mut(|returning| {
+        returning
+            .as_mut()
+            .map(|returning| returning.navigated = true)
+            .is_some()
+    });
+    // A slide still moving lets this one change at once.
+    if swiped || MOVING.get() {
         return;
     }
     let (Some(window), Some(page)) = (window(mtm), page(mtm)) else {
         return;
     };
+    // A tab changes at once: nothing covers the page (or the bar, whose selection moves under the
+    // finger) while the runtime draws the tab. Its picture is kept for a page that leads back.
+    if TAB_PRESSED
+        .take()
+        .is_some_and(|at| at.elapsed() < TAB_NAVIGATES)
+    {
+        finish_pending();
+        if let Some(kept) = picture(&page) {
+            keep(from, kept);
+        }
+        return;
+    }
     let (Some(kept), Some(cover)) = (picture(&page), picture(&page)) else {
         return;
     };
@@ -152,13 +204,22 @@ pub fn navigate(mtm: MainThreadMarker, json: &str) {
 
 /// A tree from the runtime was applied: once Rune has drawn it, a waiting navigation moves.
 pub fn tree_applied() {
-    if SWIPED.with_borrow(Option::is_some) {
-        later(DRAWN, || {
-            if let Some(cover) = SWIPED.take() {
-                fade_out(cover);
-            }
-        });
-        return;
+    let returning = RETURNING.with_borrow(|returning| returning.as_ref().map(|r| r.navigated));
+    match returning {
+        Some(true) => {
+            later(DRAWN, || {
+                RETURNING.with_borrow_mut(|returning| {
+                    if let Some(returning) = returning {
+                        returning.drawn = true;
+                    }
+                });
+                finish_return(false);
+            });
+            return;
+        }
+        // A tree from before the runtime moved: not yet the page the swipe goes to.
+        Some(false) => return,
+        None => {}
     }
     if PENDING.with_borrow(Option::is_none) {
         return;
@@ -310,14 +371,17 @@ fn fade_out(cover: Retained<UIView>) {
 
 // SWIPE BACK
 
-/// A swipe starts this close (points) to the left edge, as a navigation stack's does.
-const EDGE: CGFloat = 24.0;
-/// A swipe let go past this share of the width goes back; short of it, the page returns.
-const COMMIT_SHARE: CGFloat = 0.35;
+/// A swipe let go where its flick would carry it past this share of the width goes back; short of
+/// it, the page returns.
+const COMMIT_SHARE: CGFloat = 0.5;
+/// How far (seconds of its speed) a flick is projected when it is let go, as UIKit decelerates one.
+const PROJECTION: CGFloat = 0.2;
 /// A flick this fast (points per second) goes back however short.
-const COMMIT_VELOCITY: CGFloat = 500.0;
+const COMMIT_VELOCITY: CGFloat = 700.0;
+/// How long the page takes to finish the slide after it is let go.
+const RELEASE: f64 = 0.32;
 
-/// Where the back chevron on screen leads (a path); empty when there is none. The edge swipe is
+/// Where the back chevron on screen leads (a path); empty when there is none. The swipe back is
 /// on while there is one.
 pub fn set_swipe_back(mtm: MainThreadMarker, path: &str) {
     BACK.set((!path.is_empty()).then(|| path.to_string()));
@@ -333,8 +397,10 @@ pub fn set_swipe_back(mtm: MainThreadMarker, path: &str) {
             let this = SwipeBack::alloc(mtm).set_ivars(());
             unsafe { msg_send![super(this), init] }
         };
-        // A pan that only begins at the edge (`gestureRecognizerShouldBegin:`), rather than
-        // UIKit's edge recognizer, which ignores the touches XCTest makes up.
+        // A pan that only begins heading right (`gestureRecognizerShouldBegin:`), from anywhere on
+        // the page as Slack's does, rather than UIKit's edge recognizer, which also ignores the
+        // touches XCTest makes up. Once it begins, the page's own touches are cancelled, so the
+        // list stops scrolling under it.
         // SAFETY: the target is kept alive beside the recognizer, and answers `pan:`.
         let swipe = unsafe {
             UIPanGestureRecognizer::initWithTarget_action(
@@ -345,8 +411,6 @@ pub fn set_swipe_back(mtm: MainThreadMarker, path: &str) {
         };
         swipe.setDelegate(Some(ProtocolObject::from_ref(&*target)));
         window.addGestureRecognizer(&swipe);
-        // Behind a page with nothing pictured under it.
-        window.setBackgroundColor(Some(&UIColor::blackColor()));
         SWIPE.set(Some((swipe, target)));
     }
     SWIPE.with_borrow(|swipe| {
@@ -356,108 +420,176 @@ pub fn set_swipe_back(mtm: MainThreadMarker, path: &str) {
     });
 }
 
-/// The swipe began: the page it goes back to, pictured, slides in underneath.
-fn begin_swipe(mtm: MainThreadMarker, page: &UIView) {
+/// The swipe began: the page is pictured and that picture follows the finger, over the picture of
+/// the page it goes back to.
+fn begin_swipe(mtm: MainThreadMarker, window: &UIView, page: &UIView) {
     finish_pending();
-    let Some(parent) = page.superview() else {
+    let Some(leaving) = picture(page) else {
         return;
     };
+    let frame = page.frame();
     let under = BACK
         .with_borrow(Clone::clone)
-        .and_then(|path| picture_of(&path));
-    if let Some(under) = under {
-        under.setFrame(page.frame());
-        under.setAlpha(1.0);
-        parent.insertSubview_belowSubview(&under, page);
-        let dim = dim_over(mtm, &under, DIM);
-        UNDER.set(Some((under, dim)));
-    }
-    shadow(page, true);
+        .and_then(|path| picture_of(&path))
+        .unwrap_or_else(|| {
+            // Nothing pictured (the app opened on this page): a blank page, not a black hole.
+            let blank = UIView::initWithFrame(UIView::alloc(mtm), frame);
+            blank.setBackgroundColor(Some(&UIColor::systemBackgroundColor()));
+            blank
+        });
+    under.setFrame(frame);
+    under.setAlpha(1.0);
+    under.setTransform(shifted(0.0));
+    window.addSubview(&under);
+    let dim = dim_over(mtm, &under, DIM);
+    leaving.setFrame(frame);
+    window.addSubview(&leaving);
+    shadow(&leaving, true);
+    DRAG.set(Some(Drag {
+        leaving,
+        under,
+        dim,
+    }));
 }
 
-/// The swipe moved the page `progress` of the way across.
-fn follow(page: &UIView, moved: CGFloat, width: CGFloat) {
-    page.setTransform(shifted(moved));
+/// The finger moved the page `moved` points across.
+fn follow(moved: CGFloat, width: CGFloat) {
     let progress = moved / width;
-    UNDER.with_borrow(|under| {
-        if let Some((under, dim)) = under {
+    DRAG.with_borrow(|drag| {
+        if let Some(Drag {
+            leaving,
+            under,
+            dim,
+        }) = drag
+        {
+            leaving.setTransform(shifted(moved));
             under.setTransform(shifted(-width * PARALLAX * (1.0 - progress)));
             dim.setAlpha(DIM * (1.0 - progress));
         }
     });
 }
 
-/// Let go short: the page returns, and what was under it goes.
-fn settle(mtm: MainThreadMarker, page: Retained<UIView>, width: CGFloat) {
-    let moving = page.clone();
-    let under = UNDER.with_borrow(Clone::clone);
-    let moved_under = under.clone();
-    animate(
+/// A spring with no bounce that starts at the finger's own speed: `speed` points per second over
+/// the `distance` still to go.
+fn release(
+    mtm: MainThreadMarker,
+    speed: CGFloat,
+    distance: CGFloat,
+    moves: impl Fn() + 'static,
+    done: impl Fn() + 'static,
+) {
+    MOVING.set(true);
+    let moves = RcBlock::new(moves);
+    let done = RcBlock::new(move |_: Bool| {
+        MOVING.set(false);
+        done();
+    });
+    let initial = if distance.abs() < 1.0 {
+        0.0
+    } else {
+        (speed / distance).clamp(0.0, 30.0)
+    };
+    UIView::animateWithDuration_delay_usingSpringWithDamping_initialSpringVelocity_options_animations_completion(
+        RELEASE,
+        0.0,
+        1.0,
+        initial,
+        UIViewAnimationOptions::AllowUserInteraction | UIViewAnimationOptions::BeginFromCurrentState,
+        &moves,
+        Some(&done),
         mtm,
-        0.3,
+    );
+}
+
+/// Let go short: the page returns, and the pictures go.
+fn settle(mtm: MainThreadMarker, moved: CGFloat, velocity: CGFloat, width: CGFloat) {
+    let Some(drag) = DRAG.take() else {
+        return;
+    };
+    let Drag {
+        leaving,
+        under,
+        dim,
+    } = drag;
+    let (moving, behind, dimming) = (leaving.clone(), under.clone(), dim.clone());
+    release(
+        mtm,
+        -velocity,
+        moved,
         move || {
             moving.setTransform(shifted(0.0));
-            if let Some((under, dim)) = &moved_under {
-                under.setTransform(shifted(-width * PARALLAX));
-                dim.setAlpha(DIM);
-            }
+            behind.setTransform(shifted(-width * PARALLAX));
+            dimming.setAlpha(DIM);
         },
         move || {
-            shadow(&page, false);
-            if let Some((under, dim)) = &under {
-                dim.removeFromSuperview();
-                under.removeFromSuperview();
-            }
-            UNDER.set(None);
+            leaving.removeFromSuperview();
+            dim.removeFromSuperview();
+            under.removeFromSuperview();
         },
     );
 }
 
-/// Let go far or fast: the page slides off, and the app goes back. The picture of the page it
-/// goes to covers the screen until the runtime has drawn it (`tree_applied`).
-fn slide_off(mtm: MainThreadMarker, page: Retained<UIView>, width: CGFloat) {
-    let moving = page.clone();
-    let under = UNDER.take();
-    let moved_under = under.clone();
-    animate(
+/// Let go far or fast: the app goes back at once, so the runtime draws where it goes while the
+/// page slides off; the picture of that page covers the screen until it has (`tree_applied`).
+fn slide_off(
+    mtm: MainThreadMarker,
+    window: &UIView,
+    moved: CGFloat,
+    velocity: CGFloat,
+    width: CGFloat,
+) {
+    let Some(drag) = DRAG.take() else {
+        return;
+    };
+    let Drag {
+        leaving,
+        under,
+        dim,
+    } = drag;
+    // The keyboard goes with the page it was typing in.
+    window.endEditing(true);
+    RETURNING.set(Some(Returning {
+        cover: under.clone(),
+        navigated: false,
+        drawn: false,
+        settled: false,
+    }));
+    reply(&serde_json::json!({ "back": true }));
+    let (moving, behind, dimming) = (leaving.clone(), under.clone(), dim.clone());
+    release(
         mtm,
-        0.25,
+        velocity,
+        width - moved,
         move || {
             moving.setTransform(shifted(width));
-            if let Some((under, dim)) = &moved_under {
-                under.setTransform(shifted(0.0));
-                dim.setAlpha(0.0);
-            }
+            behind.setTransform(shifted(0.0));
+            dimming.setAlpha(0.0);
         },
         move || {
-            shadow(&page, false);
-            if let Some((under, dim)) = &under {
-                dim.removeFromSuperview();
-                if let Some(parent) = under.superview() {
-                    parent.bringSubviewToFront(under);
+            leaving.removeFromSuperview();
+            dim.removeFromSuperview();
+            RETURNING.with_borrow_mut(|returning| {
+                if let Some(returning) = returning {
+                    returning.settled = true;
                 }
-                SWIPED.set(Some(under.clone()));
-            }
-            page.setTransform(shifted(0.0));
-            reply(&serde_json::json!({ "back": true }));
-            // Nothing pictured: the page comes back as soon as it moved.
-            if under.is_none() {
-                page.setAlpha(0.0);
-                let shown = page.clone();
-                let fade_in = RcBlock::new(move || shown.setAlpha(1.0));
-                if let Some(mtm) = MainThreadMarker::new() {
-                    UIView::animateWithDuration_delay_options_animations_completion(
-                        0.18,
-                        0.06,
-                        UIViewAnimationOptions::CurveEaseOut,
-                        &fade_in,
-                        None,
-                        mtm,
-                    );
-                }
-            }
+            });
+            finish_return(false);
+            // A runtime that draws nothing new still lets the screen go.
+            later(WAIT, || finish_return(true));
         },
     );
+}
+
+/// The swipe's cover goes once the slide is at rest and the page under it drawn (or `anyway`).
+fn finish_return(anyway: bool) {
+    let done = RETURNING.with_borrow(|returning| {
+        returning
+            .as_ref()
+            .is_some_and(|r| r.settled && (r.drawn || anyway))
+    });
+    if done && let Some(returning) = RETURNING.take() {
+        fade_out(returning.cover);
+    }
 }
 
 define_class!(
@@ -465,14 +597,13 @@ define_class!(
     #[unsafe(super(NSObject))]
     #[thread_kind = MainThreadOnly]
     #[name = "HazelSwipeBack"]
-    /// Moves the page with the edge swipe, and goes back when it is let go far or fast enough.
+    /// Moves the page with the swipe, and goes back when it is let go far or fast enough.
     struct SwipeBack;
 
     unsafe impl NSObjectProtocol for SwipeBack {}
 
     unsafe impl UIGestureRecognizerDelegate for SwipeBack {
-        /// Only a drag from the left edge that heads right more than it climbs or falls, while
-        /// no slide is moving.
+        /// Only a drag that heads right more than it climbs or falls, while nothing slides.
         #[unsafe(method(gestureRecognizerShouldBegin:))]
         fn should_begin(&self, recognizer: &UIGestureRecognizer) -> Bool {
             let Some(swipe) = recognizer.downcast_ref::<UIPanGestureRecognizer>() else {
@@ -481,16 +612,14 @@ define_class!(
             let Some(window) = window(self.mtm()) else {
                 return Bool::NO;
             };
-            let (at, moved) = (
-                swipe.locationInView(Some(&window)),
-                swipe.translationInView(Some(&window)),
-            );
+            let moved = swipe.translationInView(Some(&window));
             let velocity = swipe.velocityInView(Some(&window));
+            let rightward = |x: CGFloat, y: CGFloat| x > 0.0 && x > y.abs() * 1.2;
             Bool::new(
                 !MOVING.get()
-                    && at.x - moved.x <= EDGE
-                    && velocity.x > 0.0
-                    && velocity.x > velocity.y.abs(),
+                    && RETURNING.with_borrow(Option::is_none)
+                    && DRAG.with_borrow(Option::is_none)
+                    && (rightward(velocity.x, velocity.y) || rightward(moved.x, moved.y)),
             )
         }
     }
@@ -504,25 +633,26 @@ define_class!(
             };
             let width = window.bounds().size.width;
             let moved = swipe.translationInView(Some(&window)).x.clamp(0.0, width);
+            let velocity = swipe.velocityInView(Some(&window)).x;
             // UIGestureRecognizerState: 1 began, 2 changed, 3 ended, 4 cancelled, 5 failed.
             let state: isize = unsafe { msg_send![swipe, state] };
             match state {
                 1 => {
-                    begin_swipe(mtm, &page);
-                    follow(&page, moved, width);
+                    begin_swipe(mtm, &window, &page);
+                    follow(moved, width);
                 }
-                2 => follow(&page, moved, width),
+                2 => follow(moved, width),
                 3 => {
-                    let velocity = swipe.velocityInView(Some(&window)).x;
+                    let projected = moved + velocity * PROJECTION;
                     let back = velocity > COMMIT_VELOCITY
-                        || (moved > width * COMMIT_SHARE && velocity > -COMMIT_VELOCITY);
+                        || (projected > width * COMMIT_SHARE && velocity > -COMMIT_VELOCITY / 2.0);
                     if back {
-                        slide_off(mtm, page, width);
+                        slide_off(mtm, &window, moved, velocity, width);
                     } else {
-                        settle(mtm, page, width);
+                        settle(mtm, moved, velocity, width);
                     }
                 }
-                _ => settle(mtm, page, width),
+                _ => settle(mtm, moved, 0.0, width),
             }
         }
     }
