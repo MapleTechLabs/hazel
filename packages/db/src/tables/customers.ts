@@ -561,6 +561,8 @@ export const customerSettingsTable = SQLite.table("customer_settings", {
 		reportingCurrency: SQLite.column(SQLite.text, { default: "usd" }),
 		/** Plan names billed on top of a base plan: not an account's `planName` while it has one. */
 		addOnPlans: SQLite.column(jsonb<ReadonlyArray<string>>(), { default: [] }),
+		/** MRR from each Stripe subscription's last paid invoice (usage overage, discounts) once one exists. */
+		overageInMrr: SQLite.column(SQLite.boolean, { default: false }),
 		lastComputedAt: SQLite.nullable(timestamptz),
 		updatedBy: SQLite.nullable(uuid(UserId)),
 		createdAt: createdAt(),

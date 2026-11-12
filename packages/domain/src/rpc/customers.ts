@@ -410,7 +410,7 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	/** Its open signals close (`auto_resolved`). */
 	write("customers.rule.delete", { ruleId: CustomerSignalRuleId }, Tx, CustomersNotFoundError),
 
-	/** Health weights, bands, steps; the reporting currency; add-on plans. Recomputes soon. */
+	/** Health weights, bands, steps; the reporting currency; add-on plans; overage in MRR. Recomputes soon. */
 	write(
 		"customers.settings.update",
 		{
@@ -419,6 +419,8 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 			reportingCurrency: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[A-Za-z]{3}$/))),
 			/** The whole list of add-on plan names. */
 			addOnPlans: Schema.optionalKey(Schema.Array(Schema.String)),
+			/** MRR from paid Stripe invoices (`Settings.overageInMrr`). */
+			overageInMrr: Schema.optionalKey(Schema.Boolean),
 		},
 		Tx,
 	),

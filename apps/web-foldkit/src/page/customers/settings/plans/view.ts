@@ -10,10 +10,12 @@ import { switchControl } from "../../../../ui/switch"
 import type { PageViewInputs } from "../../../contract"
 import { isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
 import { Message } from "./message"
-import { type Model, planNamesOf } from "./model"
+import { type Model, planNamesOf, type SavedSettings } from "./model"
 
 const SUBTITLE =
-	"Mark the plans billed on top of a base plan. A customer’s plan is its base plan; add-ons still count toward its MRR."
+	"Whether usage overage counts toward MRR, and which plans are add-ons billed on top of a base plan. A customer’s plan is its base plan; add-ons still count toward its MRR."
+
+const OVERAGE_ID = "customers-overage-in-mrr"
 
 const CARD = "flex flex-col rounded-xl border border-border bg-bg"
 
@@ -36,6 +38,42 @@ const planRow = (h: HtmlBuilder<Message>, plan: string, isAddOn: boolean, canEdi
 		],
 	)
 }
+
+const overageCard = (h: HtmlBuilder<Message>, settings: SavedSettings, canEdit: boolean): Html =>
+	h.div(
+		[
+			h.Class(
+				"flex items-start justify-between gap-4 rounded-xl border border-border bg-bg px-4 py-3 sm:px-5",
+			),
+		],
+		[
+			h.div(
+				[h.Class("flex min-w-0 flex-col gap-0.5")],
+				[
+					h.label(
+						[h.For(OVERAGE_ID), h.Class("font-medium text-fg text-sm")],
+						["Count overage in MRR"],
+					),
+					h.p(
+						[h.Class("text-muted-fg text-xs")],
+						[
+							"MRR is each subscription’s last paid Stripe invoice, per month, so usage overage and discounts count. Customers without a paid invoice keep their plan price.",
+						],
+					),
+				],
+			),
+			switchControl(
+				h,
+				{
+					id: OVERAGE_ID,
+					isSelected: settings.overageInMrr,
+					isDisabled: !canEdit,
+					onChange: (isOn) => Message.ToggledOverageInMrr({ isOn }),
+				},
+				[],
+			),
+		],
+	)
 
 const plansCard = (h: HtmlBuilder<Message>, model: Model, canEdit: boolean): Html => {
 	const plans = planNamesOf(model)
@@ -70,12 +108,13 @@ const failure = (h: HtmlBuilder<Message>, reason: CommonReason): Html => {
 	)
 }
 
-/** Plans settings: a switch per plan name marks it an add-on. */
+/** Plans settings: a switch for overage in MRR, and one per plan name marks it an add-on. */
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
 	const canEdit = isCustomersAdmin(shared)
 	return settingsPage(h, [
 		settingsHeader(h, { title: "Plans", subtitle: SUBTITLE }),
 		...(canEdit ? [] : [readOnlyNotice(h, "plans")]),
+		...(model.settings === null ? [] : [overageCard(h, model.settings, canEdit && !model.isSaving)]),
 		AsyncData.isFailure(model.plans)
 			? failure(h, model.plans.error)
 			: model.settings === null || AsyncData.isIdle(model.plans) || AsyncData.isLoading(model.plans)

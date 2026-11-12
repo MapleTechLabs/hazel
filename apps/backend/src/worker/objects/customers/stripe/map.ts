@@ -227,10 +227,10 @@ const monthlyFactorOf = (price: StripePrice | null): number | null => {
 	return factor === undefined ? null : factor / intervalCountOf(price)
 }
 
-/** `month` and `year` as they are; a weekly, daily or unknown cadence is `other`. */
+/** A single `month` or `year` as it is; every three months, weekly, daily or unknown is `other`. */
 export const billingIntervalOf = (price: StripePrice | null): UpsertSubscription["interval"] => {
 	const interval = intervalOf(price)
-	return interval === "month" || interval === "year" ? interval : "other"
+	return (interval === "month" || interval === "year") && intervalCountOf(price) === 1 ? interval : "other"
 }
 
 const amountMinorOf = (price: StripePrice): number | null => {

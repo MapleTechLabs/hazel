@@ -305,7 +305,9 @@ acknowledged, so Stripe does not retry it into the new account.
   reads an `upcoming` invoice yet (the status exists in the model for a provider that does).
 - **Metered and tiered prices contribute no MRR** (see above), so an account billed purely by usage
   through Stripe shows an MRR of 0, though `billsByUsage` still counts it as paying. Usage belongs
-  to the Autumn and Maple sources.
+  to the Autumn and Maple sources. **Count overage in MRR** (Customers › Settings › Plans) instead
+  takes each live subscription's last paid invoice, per month, once it has one: overage, discounts
+  and coupons included (`tech-design.md` §4.2).
 - **A customer's domain can still reach its account** when it was matched by domain (the account
   already has it) or linked by hand: ingest merges an op's match domains into the account it lands
   on. One placed by its shared id never sends a domain.
