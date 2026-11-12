@@ -176,6 +176,21 @@ describe("reset and remove", () => {
 		})
 	})
 
+	test("a row whose default another override took can still be reset on its own", () => {
+		// No override of its own: the default was dropped in resolve, as stored overrides can leave it.
+		Scene.scene(
+			pageScene(update, view, sharedWith({ "search.open": combo("Mod+I") })),
+			Scene.given(init().model),
+			Scene.expect(keyButton("Open Inbox")).toHaveAccessibleName(
+				"Open Inbox: not set. Press to change.",
+			),
+			Scene.click(Scene.role("button", { name: "Reset to default (Ctrl+I)" })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedKeybindings({ overrides: { "search.open": null } }),
+			),
+		)
+	})
+
 	test("Remove keybind leaves the action unbound", () => {
 		expect(
 			update(init().model, Message.ClickedUnbind({ actionId: "channel.pins" }), sharedWith({}))

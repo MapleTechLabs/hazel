@@ -145,14 +145,17 @@ const iconButton = (h: H, label: string, onPress: Message, icon: Html, className
 
 /** Reset and unbind, in fixed slots so the key buttons line up whichever show. */
 const rowActions = (h: H, action: AppAction, shared: Shared): Html => {
-	const isOverridden = appKeymap.isOverridden(shared.keybindingOverrides, action.id)
+	// Changed: overridden, or its default lost to another action's override (Reset takes it back).
+	const isChanged =
+		appKeymap.isOverridden(shared.keybindingOverrides, action.id) ||
+		shared.keys[action.id] !== action.defaultKey
 	const isBound = shared.keys[action.id] !== null
 	const defaultLabel =
 		action.defaultKey === null ? "none" : comboLabel(action.defaultKey, shared.keyboardPlatform)
 	return h.div(
 		[h.Class("flex w-16 shrink-0 items-center justify-end gap-0.5")],
 		[
-			isOverridden
+			isChanged
 				? iconButton(
 						h,
 						`Reset to default (${defaultLabel})`,
