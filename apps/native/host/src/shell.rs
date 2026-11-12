@@ -76,9 +76,9 @@ pub fn route(message: RuntimeMsg) -> Routed {
 pub fn apply(message: RuntimeMsg, handle: &AppHandle<State>) {
     match message {
         RuntimeMsg::Tree(tree) => handle.update_if(move |s: &mut State, _| s.apply(tree)),
-        RuntimeMsg::Scroll { path, top, seq } => {
+        RuntimeMsg::Scroll { path, top, seq, by } => {
             crate::note_scroll(&path, seq);
-            handle.update(move |_: &mut State, tx| tx.scroll_to_instant(path, 0.0, top));
+            handle.update(move |_: &mut State, tx| crate::apply_scroll(tx, path, top, by));
         }
         request => {
             if let Some(run) = request.request() {

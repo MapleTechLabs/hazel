@@ -390,6 +390,11 @@ pub enum RuntimeMsg {
         /// Echoed in the next offset report, so the runtime can tell reports from before it.
         #[serde(default)]
         seq: Option<u64>,
+        /// An `element.scrollBy()`: shift the offset by this much from wherever the viewport is
+        /// now (`top` is where the runtime expects it to land), keeping a finger's drag and a
+        /// fling's momentum. The runtime's idea of the offset is a report behind the host's.
+        #[serde(default)]
+        by: Option<f32>,
     },
     /// Focus the element keyed `key` (an `element.focus()` in the runtime).
     #[serde(rename = "focus")]

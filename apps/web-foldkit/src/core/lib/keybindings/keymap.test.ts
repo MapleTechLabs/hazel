@@ -20,6 +20,13 @@ describe("defineKeymap", () => {
 		})
 	})
 
+	test("the same overrides resolve to the same table, per platform", () => {
+		const overrides = { open: combo("Mod+P") }
+		expect(keymap.resolve(overrides, "mac")).toBe(keymap.resolve(overrides, "mac"))
+		expect(keymap.resolve(overrides, "windows")).not.toBe(keymap.resolve(overrides, "mac"))
+		expect(keymap.resolve({ ...overrides }, "mac")).toEqual(keymap.resolve(overrides, "mac"))
+	})
+
 	test("an override replaces the default; null unbinds", () => {
 		expect(keymap.resolve({ open: combo("Mod+P"), inbox: null }, "mac")).toMatchObject({
 			open: "Mod+P",

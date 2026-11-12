@@ -61,3 +61,84 @@ describe("scrollByPage", () => {
 		expect(MessageList.scrollByPage(list(1500), "Down").model.scrollTop).toBe(2000 - 400)
 	})
 })
+
+describe("the overscan window while scrolling", () => {
+	test("a steady scroll moves it every few rows, not at every row boundary", () => {
+		const rows = 400
+		let model: MessageList.Model = {
+			...MessageList.init({ id: "list", estimatedRowHeightPx: 50, viewportHeight: 800 }),
+			keys: Array.from({ length: rows }, (_, index) => `row-${index}`),
+			scrollTop: 0,
+		}
+		const windowOf = (current: MessageList.Model) => {
+			const phase = current.scrollPhase
+			return phase._tag === "Scrolling" ? `${phase.renderedFromKey}..${phase.renderedToKey}` : "settled"
+		}
+		let changes = 0
+		let last = windowOf(model)
+		// 10px a frame through 6000px: 120 rows cross each edge of the window.
+		for (let top = 10; top <= 6000; top += 10) {
+			model = MessageList.update(model, MessageList.Message.ScrolledList({ scrollTop: top })).model
+			const now = windowOf(model)
+			if (now !== last) changes++
+			last = now
+		}
+		expect(changes).toBeLessThan(60)
+		// The viewport is always inside what renders.
+		const phase = model.scrollPhase
+		if (phase._tag !== "Scrolling") throw new Error("not scrolling")
+		const from = model.keys.indexOf(phase.renderedFromKey ?? "")
+		const to = model.keys.indexOf(phase.renderedToKey ?? "")
+		expect(from * 50).toBeLessThanOrEqual(6000 - 300)
+		expect((to + 1) * 50).toBeGreaterThanOrEqual(6000 + 800 + 300)
+	})
+})
+
+describe("the overscan window after a scroll settles", () => {
+	const scrolled = () => {
+		let model: MessageList.Model = {
+			...MessageList.init({ id: "list", estimatedRowHeightPx: 50, viewportHeight: 800 }),
+			keys: Array.from({ length: 400 }, (_, index) => `row-${index}`),
+			scrollTop: 0,
+		}
+		for (let top = 3000; top <= 3600; top += 20)
+			model = MessageList.update(model, MessageList.Message.ScrolledList({ scrollTop: top })).model
+		return model
+	}
+
+	test("stays rendered, and the next scroll goes on from it", () => {
+		const scrolling = scrolled()
+		const phase = scrolling.scrollPhase
+		if (phase._tag !== "Scrolling") throw new Error("not scrolling")
+		const settled = MessageList.update(
+			scrolling,
+			MessageList.Message.CompletedWaitForScrollSettle({ version: phase.eventVersion }),
+		).model
+		expect(settled.scrollPhase).toEqual(
+			MessageList.ScrollPhase.Settled({
+				keptFromKey: phase.renderedFromKey,
+				keptToKey: phase.renderedToKey,
+			}),
+		)
+		expect(MessageList.keptIndexes(settled, MessageList.layoutOf(settled))).toBeDefined()
+		const again = MessageList.update(settled, MessageList.Message.ScrolledList({ scrollTop: 3610 })).model
+		const next = again.scrollPhase
+		if (next._tag !== "Scrolling") throw new Error("not scrolling")
+		expect([next.renderedFromKey, next.renderedToKey]).toEqual([
+			phase.renderedFromKey,
+			phase.renderedToKey,
+		])
+	})
+
+	test("is let go once the viewport is elsewhere", () => {
+		const scrolling = scrolled()
+		const phase = scrolling.scrollPhase
+		if (phase._tag !== "Scrolling") throw new Error("not scrolling")
+		const settled = MessageList.update(
+			scrolling,
+			MessageList.Message.CompletedWaitForScrollSettle({ version: phase.eventVersion }),
+		).model
+		const away = { ...settled, scrollTop: 18000 }
+		expect(MessageList.keptIndexes(away, MessageList.layoutOf(away))).toBeUndefined()
+	})
+})

@@ -12,7 +12,8 @@ use serde_json::json;
 
 use hazel_native::wire::{Node, RuntimeMsg};
 use hazel_native::{
-    PRESS_EVENTS, State, TEXT_SMOOTHING, images, note_scroll, outbox, view, window_key,
+    PRESS_EVENTS, State, TEXT_SMOOTHING, apply_scroll, images, note_scroll, outbox, view,
+    window_key,
 };
 
 use crate::runtime::{FromRuntime, RuntimeChild, spawn_runtime};
@@ -268,13 +269,9 @@ impl Session {
                 self.timings.trees += 1;
                 self.rt.update_if(move |s, _| s.apply(tree));
             }
-            RuntimeMsg::Scroll { path, top, seq } => {
+            RuntimeMsg::Scroll { path, top, seq, by } => {
                 note_scroll(&path, seq);
-                if std::env::var("NATIVE_DEBUG").is_ok() {
-                    eprintln!("[host] scroll_to {top}")
-                }
-                self.rt
-                    .update(move |_, tx| tx.scroll_to_instant(path, 0.0, top))
+                self.rt.update(move |_, tx| apply_scroll(tx, path, top, by))
             }
             request => {
                 if let Some(run) = request.request() {

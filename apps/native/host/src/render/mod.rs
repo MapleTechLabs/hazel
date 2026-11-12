@@ -20,9 +20,9 @@ use crate::layout::{Inherit, apply_box, apply_flex, center_vertically, color, te
 use crate::wire::{self, Node, Style};
 
 pub use events::{PRESS_EVENTS, window_key};
-pub use handlers::note_scroll;
 #[cfg(test)]
 pub(crate) use handlers::scroll_seqs;
+pub use handlers::{apply_scroll, note_scroll};
 pub(crate) use state::is_portal;
 pub use state::{Env, State, child_path, last_env};
 
@@ -218,6 +218,109 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
     }
 }
 
+/// `white-space: pre` inline children split at the newlines in their text, one list per line,
+/// or None when no text has one. A newline inside an inline element (each of an editor's leaves
+/// wraps its text in spans) fragments that element across the lines, as CSS does an inline box.
+/// An empty line holds a space, so it keeps a line's height; the newline that ends the content
+/// starts no line of its own, as in a browser.
+fn split_pre_lines(kids: &[(usize, &Arc<Node>)]) -> Option<Vec<Vec<(usize, Arc<Node>)>>> {
+    let pieces: Vec<Option<Vec<Option<Arc<Node>>>>> =
+        kids.iter().map(|(_, kid)| pre_fragments(kid)).collect();
+    if pieces.iter().all(Option::is_none) {
+        return None;
+    }
+    let mut lines: Vec<Vec<(usize, Arc<Node>)>> = vec![Vec::new()];
+    for ((i, kid), split) in kids.iter().zip(pieces) {
+        let Some(fragments) = split else {
+            lines.last_mut().expect("a line").push((*i, (*kid).clone()));
+            continue;
+        };
+        for (n, fragment) in fragments.into_iter().enumerate() {
+            if n > 0 {
+                lines.push(Vec::new());
+            }
+            if let Some(fragment) = fragment {
+                lines.last_mut().expect("a line").push((*i, fragment));
+            }
+        }
+    }
+    if lines.len() > 1 && lines.last().is_some_and(Vec::is_empty) {
+        lines.pop();
+    }
+    for line in &mut lines {
+        if line.is_empty() {
+            line.push((0, Arc::new(Node::Text(" ".to_string()))));
+        }
+    }
+    Some(lines)
+}
+
+/// A node's parts on each line its newlines start, or None when it holds no newline: text
+/// splits at them, and an inline element takes its children's parts line by line.
+fn pre_fragments(node: &Arc<Node>) -> Option<Vec<Option<Arc<Node>>>> {
+    match node.as_ref() {
+        Node::Text(text) if text.contains('\n') => Some(
+            text.split('\n')
+                .map(|piece| (!piece.is_empty()).then(|| Arc::new(Node::Text(piece.to_string()))))
+                .collect(),
+        ),
+        Node::Elem { children, .. } if is_inline(node) => {
+            let split: Vec<_> = children.iter().map(pre_fragments).collect();
+            if split.iter().all(Option::is_none) {
+                return None;
+            }
+            let mut lines: Vec<Vec<Arc<Node>>> = vec![Vec::new()];
+            for (child, split) in children.iter().zip(split) {
+                let Some(fragments) = split else {
+                    lines.last_mut().expect("a line").push(child.clone());
+                    continue;
+                };
+                for (n, fragment) in fragments.into_iter().enumerate() {
+                    if n > 0 {
+                        lines.push(Vec::new());
+                    }
+                    lines.last_mut().expect("a line").extend(fragment);
+                }
+            }
+            Some(
+                lines
+                    .into_iter()
+                    .map(|line| (!line.is_empty()).then(|| Arc::new(with_children(node, line))))
+                    .collect(),
+            )
+        }
+        _ => None,
+    }
+}
+
+/// An element as it is, holding `children` instead of its own.
+fn with_children(node: &Node, children: Vec<Arc<Node>>) -> Node {
+    match node {
+        Node::Elem {
+            hash,
+            tag,
+            key,
+            st,
+            attrs,
+            on,
+            observed,
+            ov,
+            ..
+        } => Node::Elem {
+            hash: hash.clone(),
+            tag: tag.clone(),
+            key: key.clone(),
+            st: st.clone(),
+            attrs: attrs.clone(),
+            on: on.clone(),
+            observed: *observed,
+            ov: ov.clone(),
+            children,
+        },
+        Node::Text(_) | Node::Svg { .. } => Node::Text(String::new()),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_elem(
     path: &str,
@@ -278,7 +381,36 @@ fn build_elem(
         .grid_cols
         .as_deref()
         .or(st.grid_rows.as_ref().map(|_| &one_column[..]));
+    // `white-space: pre` inline content (a highlighted code block: token spans with the line
+    // breaks in the text between them) breaks its lines at its newlines, which a wrapping row
+    // would run together.
+    let pre_lines = if inh.pre
+        && matches!(st.display.as_deref(), None | Some("block") | Some("inline"))
+        && grid_cols.is_none()
+        && kids.iter().all(|(_, c)| is_inline(c))
+    {
+        split_pre_lines(&kids)
+    } else {
+        None
+    };
     let mut e = match (st.display.as_deref(), grid_cols) {
+        _ if let Some(lines) = &pre_lines => {
+            let parent = Parent {
+                is_row: true,
+                items: Some("start"),
+                block: false,
+            };
+            let mut column = crate::fx::under(apply_flex(col(), st), attrs, st, path);
+            for (n, line) in lines.iter().enumerate() {
+                let line: Vec<(usize, &Arc<Node>)> = line.iter().map(|(i, c)| (*i, c)).collect();
+                // Each line is its own parent: an element fragmented across lines has a part on
+                // each, under a path of its own.
+                let line_path = format!("{path}/line{n}");
+                let r = add_children(inline_row(), &line, &line_path, inh, &inline_ctx, parent);
+                column = column.child(r.key(line_path));
+            }
+            column
+        }
         // `overflow-y: auto` on a grid (the command palette's list). A Rune viewport scrolls only
         // in a bounded height, so a grid taller than its `max-h` becomes a viewport exactly that
         // tall; a shorter one stays a plain grid at its own height.

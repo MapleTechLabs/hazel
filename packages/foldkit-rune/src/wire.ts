@@ -178,6 +178,12 @@ export type RuntimeToHost =
 			readonly top: number
 			/** Echoed by the host's next offset report, so reports from before it can be told apart. */
 			readonly seq?: number
+			/**
+			 * `element.scrollBy()`: the host shifts the viewport by this much from where it is when
+			 * it applies it (`top` is where the runtime expects it), so a finger's drag and a fling
+			 * carry on; the runtime's offset is always a report behind the host's.
+			 */
+			readonly by?: number
 	  }
 	/** Focus the element keyed `key` once the host has the tree it is in (`element.focus()`). */
 	| { readonly t: "focus"; readonly key: string }
