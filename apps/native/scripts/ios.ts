@@ -60,6 +60,7 @@ const environment: Record<string, string> = release
 				"VITE_BACKEND_URL",
 				"VITE_APP_URL",
 				"NATIVE_DEBUG",
+				"NATIVE_STATS",
 				"NATIVE_PATH",
 				"HAZEL_ISLANDS",
 				"HAZEL_FIXTURE_HTML",

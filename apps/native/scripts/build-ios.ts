@@ -12,7 +12,20 @@ const stylesPath = new URL("../dist/styles.json", import.meta.url).pathname
 // an earlier build lacks every class added since.
 await import("./precompile-styles")
 
+// `setImmediate` runs before every module (`src/ios-immediate.ts`): Effect picks its scheduler as
+// its module loads, and the bundler orders modules its own way, so an import cannot go first.
+const immediate = await Bun.build({
+	entrypoints: [new URL("../src/ios-immediate.ts", import.meta.url).pathname],
+	target: "browser",
+	// Its own scope: its names must not meet the bundle's.
+	format: "iife",
+	minify: true,
+})
+if (!immediate.success) throw new AggregateError(immediate.logs, "src/ios-immediate.ts did not build")
+const banner = await immediate.outputs[0]!.text()
+
 const result = await Bun.build({
+	banner,
 	entrypoints: [new URL("../src/ios.ts", import.meta.url).pathname],
 	outdir: new URL("../dist/ios", import.meta.url).pathname,
 	naming: "runtime.js",

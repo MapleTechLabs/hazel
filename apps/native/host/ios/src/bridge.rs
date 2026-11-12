@@ -3,6 +3,7 @@
 //! Lines the worker posts are the render protocol the macOS app reads from its Bun child; the
 //! host's lines go back through `outbox`, each batch evaluated in the page on the main thread.
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Mutex, OnceLock};
 
@@ -70,6 +71,18 @@ pub fn environment(name: &str) -> Option<String> {
     let bundled: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
     Some(bundled.get(name)?.as_str()?.to_string())
+}
+
+/// Whether a debug setting is on; read once.
+fn environment_flag(name: &'static str) -> bool {
+    thread_local! {
+        static FLAGS: RefCell<HashMap<&'static str, bool>> = RefCell::new(HashMap::new());
+    }
+    FLAGS.with_borrow_mut(|flags| {
+        *flags
+            .entry(name)
+            .or_insert_with(|| environment(name).is_some())
+    })
 }
 
 /// Each frame's poll; the first one, with the window up, starts the runtime.
@@ -166,6 +179,7 @@ fn evaluate(web: &WebView, script: &str) {
 
 /// One line the worker posted: a tree or a request for Rune, as the macOS app handles its child's.
 fn receive(line: &str) {
+    let started = std::time::Instant::now();
     let message = match serde_json::from_str::<RuntimeMsg>(line) {
         Ok(message) => message,
         Err(error) => return log(&format!("[host] bad message: {error}")),
@@ -178,6 +192,13 @@ fn receive(line: &str) {
         Routed::Window(message) => {
             let is_tree = matches!(message, RuntimeMsg::Tree(_));
             shell::apply(message, &handle);
+            if is_tree && environment_flag("NATIVE_STATS") {
+                log(&format!(
+                    "[host] tree of {} KB parsed and applied in {:.1} ms",
+                    line.len() / 1024,
+                    started.elapsed().as_secs_f64() * 1000.0
+                ));
+            }
             // A navigation waiting on the next page moves once it is drawn.
             if is_tree {
                 crate::system::tree_applied();

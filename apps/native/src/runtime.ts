@@ -252,8 +252,12 @@ export const startRuntime = async (platform: NativePlatform) => {
 								tags.includes("GotListMessage") || tags.some((t) => t.startsWith("Failed"))
 									? ` ${JSON.stringify(leaf).slice(0, 600)}`
 									: ""
-							debug(`[msg] ${performance.now().toFixed(0)} ${tags.join("/")}${detail}`)
-							return app.update(model, message)
+							const startedAt = performance.now()
+							const result = app.update(model, message)
+							// When it started, and how long its update took.
+							const took = (performance.now() - startedAt).toFixed(1)
+							debug(`[msg] ${startedAt.toFixed(0)} +${took}ms ${tags.join("/")}${detail}`)
+							return result
 						},
 			view: app.view,
 			subscriptions: app.subscriptions,

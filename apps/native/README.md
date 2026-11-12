@@ -142,7 +142,9 @@ one view, so the runtime tells the host before every in-app navigation (`navigat
 history shim), and the host keeps a picture of the page it leaves. A page that leads back to the
 one left (its back chevron mounts `SwipeBack`, `web-foldkit/src/platform/system-ui.ts`) slides in
 over it from the right; going back slides the page off over the picture of where it goes; a drag
-from the left edge does that under the finger. Tabs change at once.
+to the right from anywhere on the page (as in Slack) does that under the finger, and when let go
+finishes at the finger's speed, the runtime drawing where it goes while the page slides off. A
+press on the tab bar never waits on a picture: the bar and the page stay live while the tab draws.
 
 **Live data** (`HAZEL_DATA=live bun run ios`, with `VITE_APP_URL`/`VITE_BACKEND_URL` for a dev
 stack on this Mac) signs in as the Mac app does: the sign-in link opens in the system's sign-in

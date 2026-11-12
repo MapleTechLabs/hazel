@@ -148,7 +148,22 @@ export const memberOf = (model: Model): Member | null =>
 		),
 	)
 
-export const sharedOf = (model: Model): Shared => ({
+/**
+ * Per Model: the Model never changes in place, and every page Subscription reads the page host on
+ * every Message (hundreds of reads of the same Model, each resolving the keymap).
+ */
+const sharedCache = new WeakMap<Model, Shared>()
+const pageHostCache = new WeakMap<Model, PageHost>()
+
+export const sharedOf = (model: Model): Shared => {
+	const cached = sharedCache.get(model)
+	if (cached !== undefined) return cached
+	const shared = computeShared(model)
+	sharedCache.set(model, shared)
+	return shared
+}
+
+const computeShared = (model: Model): Shared => ({
 	auth: authOf(model.session),
 	orgSlug: orgSlugOf(model.route) ?? null,
 	currentUser: currentUserOf(model),
@@ -165,7 +180,13 @@ export const sharedOf = (model: Model): Shared => ({
 	isOverlayOpen: model.modal.current !== null || model.commandPalette.isOpen,
 })
 
-export const pageHostOf = (model: Model): PageHost => ({ page: model.page, shared: sharedOf(model) })
+export const pageHostOf = (model: Model): PageHost => {
+	const cached = pageHostCache.get(model)
+	if (cached !== undefined) return cached
+	const host = { page: model.page, shared: sharedOf(model) }
+	pageHostCache.set(model, host)
+	return host
+}
 
 export const shellContextOf = (model: Model): ShellUpdateContext => ({
 	orgSlug: orgSlugOf(model.route) ?? null,
