@@ -1614,18 +1614,18 @@ export class StyleResolver {
 				break
 			case "overflow": {
 				const [x = "visible", y = x] = v.split(/\s+/)
-				if (y === "auto" || y === "scroll") s.scrollY = true
-				if (x === "auto" || x === "scroll") s.scrollX = true
+				setScroll(s, "scrollY", y)
+				setScroll(s, "scrollX", x)
 				if ([x, y].some((o) => o === "hidden" || o === "clip")) s.clip = true
 				break
 			}
 			case "overflow-y":
-				if (v === "auto" || v === "scroll") s.scrollY = true
-				else if (v === "hidden" || v === "clip") s.clip = true
+				setScroll(s, "scrollY", v)
+				if (v === "hidden" || v === "clip") s.clip = true
 				break
 			case "overflow-x":
+				setScroll(s, "scrollX", v)
 				if (v === "hidden" || v === "clip") s.clip = true
-				else if (v === "auto" || v === "scroll") s.scrollX = true
 				break
 			case "text-overflow":
 				s.truncate = v === "ellipsis"
@@ -1909,6 +1909,12 @@ const EASINGS = new Map<string, Timing["ease"]>([
 	["ease-in-out", [0.42, 0, 0.58, 1]],
 ])
 
+/** An `overflow` value on one axis: it scrolls, or a later `visible`/`hidden` says it does not. */
+const setScroll = (s: Style, axis: "scrollX" | "scrollY", v: string) => {
+	if (v === "auto" || v === "scroll") s[axis] = true
+	else delete s[axis]
+}
+
 const parseEase = (v: string): Timing["ease"] => {
 	const known = EASINGS.get(v)
 	if (known !== undefined) return known
@@ -2035,7 +2041,8 @@ const compileSheet = async (stylesheet: string): Promise<Compiler> => {
 		import("@tailwindcss/node"),
 		import("node:fs/promises"),
 	])
-	const base = stylesheet.slice(0, stylesheet.lastIndexOf("/") + 1)
+	// The sheet's directory, from a POSIX or a Windows path.
+	const base = stylesheet.slice(0, Math.max(stylesheet.lastIndexOf("/"), stylesheet.lastIndexOf("\\")) + 1)
 	const css = await readFile(stylesheet, "utf8")
 	return compile(css, { base, from: stylesheet, onDependency() {} })
 }

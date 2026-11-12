@@ -54,6 +54,9 @@ fn walk(
     if st.display.as_deref() == Some("none") {
         return;
     }
+    // A portal draws at the window's root: what clips the place it left does not clip it.
+    let portal = crate::is_portal(node);
+    let layer = if portal { Some(path) } else { layer };
     if tag == "iframe" {
         if let Some(src) = attrs.get("src").filter(|src| !src.is_empty()) {
             out.push(FrameSpec {
@@ -65,13 +68,8 @@ fn walk(
         }
         return;
     }
-    // A portal draws at the window's root: what clips the place it left does not clip it.
     let mut own_clips = Vec::new();
-    let (layer, clips) = if crate::is_portal(node) {
-        (Some(path), &mut own_clips)
-    } else {
-        (layer, clips)
-    };
+    let clips = if portal { &mut own_clips } else { clips };
     let clipping =
         st.scroll_y == Some(true) || st.clip == Some(true) || crate::layout::scrolls_x(st);
     if clipping {
@@ -570,6 +568,14 @@ mod views {
                 keep
             });
             for (frame, placement) in placed {
+                // A page that turns from inline to fullscreen or back gets a new view: some of
+                // what differs (iOS's text selection) is set only when a web view is made.
+                let mode_changed = views.get(&frame.path).is_some_and(|entry| {
+                    super::scrolls_itself(&entry.src) != super::scrolls_itself(&frame.src)
+                });
+                if mode_changed && let Some(entry) = views.remove(&frame.path) {
+                    entry.view.remove();
+                }
                 if !views.contains_key(&frame.path) {
                     // A frame nothing shows of yet still loads, as a browser's does; one under
                     // a dialog waits until it is uncovered.

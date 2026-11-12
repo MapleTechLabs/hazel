@@ -312,6 +312,14 @@ describe("StyleResolver", () => {
 		expect(resolve("overflow-y-auto").style.scrollX).toBeUndefined()
 		expect(resolve("overflow-auto").style).toMatchObject({ scrollX: true, scrollY: true })
 		expect(resolve("overflow-x-hidden").style).toMatchObject({ clip: true })
+		// A later declaration decides: an inline `visible` or `hidden` turns the scrolling off.
+		const inline = (overflowX: string) =>
+			resolve("flex overflow-x-auto overflow-y-auto", {
+				extra: { inline: { "overflow-x": overflowX } },
+			}).style
+		expect(inline("visible").scrollX).toBeUndefined()
+		expect(inline("hidden")).toMatchObject({ clip: true, scrollY: true })
+		expect(inline("hidden").scrollX).toBeUndefined()
 	})
 
 	it("hides screen-reader-only text and reads inline styles last", () => {

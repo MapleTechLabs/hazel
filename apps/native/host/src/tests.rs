@@ -81,6 +81,23 @@ fn render(rt: &mut Runtime<State>, size: (u32, u32)) -> Frame {
     draw(rt, size)
 }
 
+/// Renders until `drawn` holds of the frame, for at most two seconds: Rune takes a decoded
+/// picture in on a later frame on some platforms (lavapipe on Linux), as a window keeps drawing
+/// until it lands.
+fn render_until(
+    rt: &mut Runtime<State>,
+    size: (u32, u32),
+    drawn: impl Fn(&Frame) -> bool,
+) -> Frame {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let mut frame = render(rt, size);
+    while !drawn(&frame) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        frame = render(rt, size);
+    }
+    frame
+}
+
 /// The last frame as drawn, running animations included.
 fn draw(rt: &mut Runtime<State>, (w, h): (u32, u32)) -> Frame {
     const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -345,14 +362,7 @@ fn an_img_with_a_data_png_draws_its_pixels() {
         .wait()
         .expect("a png");
     let mut rt = Runtime::new(s, view, (40.0, 40.0), Env::new(false, 1.0));
-    // Rune takes the decoded picture in on a later frame on some platforms (lavapipe on Linux), as
-    // a window keeps drawing until it lands.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-    let mut frame = render(&mut rt, (40, 40));
-    while !frame.is(20, 20, RED) && std::time::Instant::now() < deadline {
-        std::thread::sleep(std::time::Duration::from_millis(20));
-        frame = render(&mut rt, (40, 40));
-    }
+    let frame = render_until(&mut rt, (40, 40), |frame| frame.is(20, 20, RED));
     assert!(frame.is(20, 20, RED), "centre {:?}", frame.at(20, 20));
 }
 
@@ -948,7 +958,7 @@ fn an_svg_keeps_its_aspect_ratio_unless_it_asks_to_stretch() {
         s.images.svg(16.0, body, 128.0).wait().expect("an svg");
         let mut rt = Runtime::new(s, view, (64.0, 32.0), Env::new(false, 1.0));
         rt.frame(0.0);
-        let frame = render(&mut rt, (64, 32));
+        let frame = render_until(&mut rt, (64, 32), |frame| frame.is(32, 16, RED));
         assert!(frame.is(32, 16, RED), "{:?}", frame.at(32, 16));
         frame.at(3, 16)
     };
@@ -3519,4 +3529,26 @@ fn overflow_x_on_a_block_leaves_its_text_wrapped() {
     let pre = rect(&rt, "r/0");
     assert_eq!(pre[2], 200.0);
     assert!(pre[3] > 40.0, "the text wraps onto several lines: {pre:?}");
+}
+
+/// An `<iframe>` that is itself fixed draws above the page, so the page's pinned dates are not
+/// over it.
+#[test]
+fn a_fixed_frame_is_its_own_layer() {
+    let frame = with_attrs(
+        e(
+            "iframe",
+            json!({ "fixed": true, "absolute": [0, 0, null, null], "w": 100, "h": 100 }),
+            vec![],
+        ),
+        json!({ "src": "https://api.hazel.sh/html-renders/a?sig=1" }),
+    );
+    let pinned = e(
+        "div",
+        json!({ "w": 80, "h": 24, "stickyTop": 0, "bg": "#333333ff" }),
+        vec![],
+    );
+    let s = state(e("div", json!({ "w": 400, "h": 300 }), vec![pinned, frame]));
+    assert_eq!(s.frames[0].layer.as_deref(), Some("r/1"));
+    assert!(!s.covers.iter().any(|cover| cover.is_over(&s.frames[0])));
 }

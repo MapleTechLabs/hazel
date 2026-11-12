@@ -691,7 +691,11 @@ pub fn apply_flex(mut e: El, st: &Style) -> El {
             .margin
             .is_some_and(|[_, r, _, l]| r.0 != 0.0 || l.0 != 0.0);
         if matches!(st.w, None | Some(Len::Auto)) && !side_margins {
-            e = e.w_full().shrink()
+            e = e.w_full();
+            // `shrink-0` keeps it at that width.
+            if f(st.shrink) != Some(0.0) {
+                e = e.shrink()
+            }
         }
     }
     e
