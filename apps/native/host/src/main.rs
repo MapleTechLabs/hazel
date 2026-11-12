@@ -8,11 +8,11 @@ mod updater;
 use hazel_native::outbox::write_line;
 use hazel_native::wire::RuntimeMsg;
 use hazel_native::{
-    State, TEXT_SMOOTHING, dom_motion, frames, images, note_scroll, poll, view, window_key,
+    State, TEXT_SMOOTHING, dom_motion, frames, images, poll, shell, view, window_key,
 };
 use rune::{App, AppSpec};
 
-use runtime::spawn_runtime;
+use runtime::{FromRuntime, spawn_runtime};
 
 /// The band the window's controls sit in, as the Tauri app's (`set_traffic_lights_inset(16, 20)`):
 /// 40 points tall, the traffic lights 16 points in and centred. The web layout leaves this room
@@ -51,13 +51,25 @@ fn main() {
         capture::run(script);
         return;
     }
-    let (mut child, messages) = spawn_runtime();
-    // Block on the first tree so the window opens with the app in it.
+    let (mut child, messages) = spawn_runtime().unwrap_or_else(|error| {
+        eprintln!("[host] {error}");
+        std::process::exit(1)
+    });
+    // Block on the first tree so the window opens with the app in it; what came before it
+    // (a focus, a scroll) applies once the window exists.
     let mut initial = initial_state();
+    let mut early = Vec::new();
     for msg in messages.iter() {
-        if let RuntimeMsg::Tree(tree) = msg {
-            initial.apply(tree);
-            break;
+        match msg {
+            FromRuntime::Message(RuntimeMsg::Tree(tree)) => {
+                initial.apply(tree);
+                break;
+            }
+            FromRuntime::Message(msg) => early.push(msg),
+            FromRuntime::Replaced => {
+                early.clear();
+                initial.runtime_replaced();
+            }
         }
     }
     let spec = AppSpec {
@@ -74,21 +86,17 @@ fn main() {
         .on_frame_drawn(frames::sync);
     let handle = app.handle();
     std::thread::spawn(move || {
+        for msg in early {
+            shell::apply(msg, &handle);
+        }
         for msg in messages.iter() {
             match msg {
-                RuntimeMsg::Tree(tree) => handle.update_if(move |s: &mut State, _| s.apply(tree)),
-                RuntimeMsg::Scroll { path, top, seq } => {
-                    note_scroll(&path, seq);
-                    handle.update(move |_: &mut State, tx| tx.scroll_to_instant(path, 0.0, top))
-                }
-                request => {
-                    if let Some(run) = request.request() {
-                        handle.update(move |_: &mut State, tx| run(tx))
-                    }
-                }
+                FromRuntime::Message(msg) => shell::apply(msg, &handle),
+                FromRuntime::Replaced => handle.update(|s: &mut State, _| s.runtime_replaced()),
             }
         }
     });
     app.run();
-    child.kill();
+    // Asked, not killed: the runtime saves what it stored before it goes.
+    child.stop();
 }
