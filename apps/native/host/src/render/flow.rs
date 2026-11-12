@@ -188,6 +188,15 @@ pub(super) fn join_text(children: &[Arc<Node>]) -> Option<Vec<(usize, Arc<Node>)
     Some(out)
 }
 
+/// A row standing for a line box, its content placed along it as `text-align` says.
+pub(super) fn justify_by_text_align(line: El, align: rune::Align) -> El {
+    match align {
+        rune::Align::Center => line.justify_center(),
+        rune::Align::End => line.justify_end(),
+        rune::Align::Start => line,
+    }
+}
+
 /// How a container lays out its children, for the children's auto margins.
 #[derive(Clone, Copy)]
 pub(super) struct Parent<'a> {
@@ -315,13 +324,7 @@ pub(super) fn add_children(
                 {
                     // A line across the block: the inline box keeps its own width but shrinks to
                     // the line, so its text wraps instead of running past the block's edge.
-                    let line = row().items_start();
-                    let line = match inh.align {
-                        rune::Align::Center => line.justify_center(),
-                        rune::Align::End => line.justify_end(),
-                        _ => line,
-                    };
-                    line.child(b)
+                    justify_by_text_align(row().items_start(), inh.align).child(b)
                 }
                 _ => b,
             };

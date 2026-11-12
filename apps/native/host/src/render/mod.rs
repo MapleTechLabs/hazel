@@ -30,14 +30,13 @@ use events::{POINTER_ONLY_EVENTS, send_dismiss, send_paste};
 use fields::{build_editable, build_input};
 use flow::{
     Parent, add_children, bounds_scroller, drop_grow, grid_fill, is_inline, join_text,
-    size_to_content,
+    justify_by_text_align, size_to_content,
 };
 use handlers::{behaviour, observe, presses};
 use media::{build_img, build_svg, picture_size};
 use state::{note_appearance, report_env, theme_override};
 use table_grid::{build_grid, build_table};
 
-/// What a browser fires for one press, in order.
 /// The web app sets `-webkit-font-smoothing: antialiased` on `html`: text without CoreText's
 /// smoothing dilation, lighter than macOS's default.
 pub const TEXT_SMOOTHING: rune::FontSmoothing = rune::FontSmoothing::Off;
@@ -126,7 +125,7 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             if tag == "img" {
                 return Some(center_vertically(build_img(path, st, attrs, on, ctx), st));
             }
-            if tag == "table" && st.display.as_deref() != Some("none") {
+            if tag == "table" {
                 return Some(build_table(path, st, children, inh, ctx));
             }
             if attrs.contains_key("data-editable") {
@@ -249,20 +248,10 @@ fn build_elem(
     };
     // `shrink-0` keeps an inline box at its size; Rune boxes only shrink when told to.
     let may_shrink = st.shrink.is_none_or(|s| s.0 > 0.0);
-    let inline_row = |inline_text: bool| {
-        let mut r = row().items_center().flex_wrap();
-        if may_shrink {
-            r = r.shrink()
-        }
-        // `text-align` places an inline formatting context's runs along the line.
-        if inline_text {
-            r = match inh.align {
-                rune::Align::Center => r.justify_center(),
-                rune::Align::End => r.justify_end(),
-                rune::Align::Start => r,
-            }
-        }
-        r
+    // An inline formatting context's line: its runs wrap, placed along it by `text-align`.
+    let inline_row = || {
+        let r = justify_by_text_align(row().items_center().flex_wrap(), inh.align);
+        if may_shrink { r.shrink() } else { r }
     };
     let items = st.items.as_deref();
     let inline_ctx = Ctx {
@@ -295,7 +284,7 @@ fn build_elem(
                 block: false,
             };
             add_children(
-                apply_flex(inline_row(true), st),
+                apply_flex(inline_row(), st),
                 &kids,
                 path,
                 inh,
@@ -312,7 +301,7 @@ fn build_elem(
                 block: false,
             };
             add_children(
-                apply_flex(inline_row(true), st),
+                apply_flex(inline_row(), st),
                 &kids,
                 path,
                 inh,
@@ -399,7 +388,7 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
     let mut page = col()
         .w_full()
         .h_full()
-        .on_layout(move |s: &mut State, rect| report_env(s, rect, inset))
+        .on_layout(move |_: &mut State, rect| report_env(rect, inset))
         .on_paste_content(|_: &mut State, content, _| send_paste(content));
     let bg = color(&s.page.bg);
     if let Some(bg) = bg {

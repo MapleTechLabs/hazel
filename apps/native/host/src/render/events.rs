@@ -98,6 +98,7 @@ pub(super) fn send_key(chain: &[u32], key: &str, mods: rune::edit::Mods) -> u64 
     seq
 }
 
+/// What a browser fires for one press, in order.
 pub const PRESS_EVENTS: [&str; 3] = ["pointerdown", "pointerup", "click"];
 
 pub(super) fn send_click(id: u32, href: &str) -> u64 {

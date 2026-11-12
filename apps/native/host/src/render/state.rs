@@ -52,8 +52,6 @@ pub struct State {
     pub(crate) root: Option<Arc<Node>>,
     pub(crate) subtrees: Subtrees,
     pub(crate) fields: HashMap<String, Field>,
-    /// Last window size, theme and safe area reported to the runtime.
-    pub(crate) reported: Option<Env>,
     /// The appearance a headless capture runs with (`NATIVE_THEME`); a window follows macOS's.
     pub(crate) dark: bool,
     /// The document's own background and text colour (`body` in the app's stylesheet).
@@ -95,7 +93,8 @@ impl Env {
     }
 }
 
-/// The env last sent, for a runtime that replaces the first.
+/// The env last sent: what a size or appearance change is compared with, and what a runtime that
+/// replaces the first is told.
 static REPORTED: Mutex<Option<Env>> = Mutex::new(None);
 
 /// The window size, theme and safe area last reported to the runtime.
@@ -185,9 +184,9 @@ impl State {
     }
 }
 
-/// An element the runtime asked to draw at the window's root (`ov.portal`).
-/// Drawn at the window's root rather than where the tree puts it: a portal, or a `fixed`
-/// element, which the window places as the browser's viewport does.
+/// An element drawn at the window's root rather than where the tree puts it: a portal the runtime
+/// asked for (`ov.portal`), or a `fixed` element, which the window places as the browser's
+/// viewport does.
 pub(crate) fn is_portal(node: &Arc<Node>) -> bool {
     match node.as_ref() {
         Node::Elem { ov, st, .. } => {
@@ -288,17 +287,17 @@ pub(super) fn note_appearance(dark: bool) {
 }
 
 /// Tells the runtime the page's size and safe area when either changed.
-pub(super) fn report_env(s: &mut State, rect: [f32; 4], inset: [f32; 4]) {
+pub(super) fn report_env(rect: [f32; 4], inset: [f32; 4]) {
     let next = Env {
         width: rect[2].round() as u32,
         height: rect[3].round() as u32,
         dark: DARK.load(Ordering::Relaxed),
         inset: inset.map(|edge| edge.max(0.0).round() as u32),
     };
-    if s.reported == Some(next) || next.width == 0 {
+    let mut reported = REPORTED.lock().unwrap();
+    if *reported == Some(next) || next.width == 0 {
         return;
     }
-    s.reported = Some(next);
-    *REPORTED.lock().unwrap() = Some(next);
+    *reported = Some(next);
     write_line(next.line());
 }
