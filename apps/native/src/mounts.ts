@@ -45,6 +45,8 @@ export const SCRIPT_MOUNTS = [
 	// React's `autoFocus`.
 	"AutoFocusMemberSearch",
 	"AutoFocusOnboardingInput",
+	// The edge swipe a back chevron enables (`platform/system-ui.ts`).
+	"SwipeBack",
 ]
 
 /**

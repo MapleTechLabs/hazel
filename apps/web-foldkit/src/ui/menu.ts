@@ -3,6 +3,7 @@ import { Command, type Update } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
+import type { NativeMenuItem, NativeMenuLook } from "../platform/native-island"
 import { Placement } from "./aria/placement"
 
 /**
@@ -90,6 +91,8 @@ export const Message = defineMessageUnion({
 	CompletedPortalMenu: {},
 	CompletedCaptureContextMenu: {},
 	CompletedFocusTriggerOnPress: {},
+	/** The system menu a native shell opens from the trigger (`nativeMenuItems`) chose this item. */
+	ChoseFromNativeMenu: { key: Schema.String, entries: Schema.Array(Entry) },
 })
 export type Message = typeof Message.Type
 
@@ -236,6 +239,78 @@ const searchKey = (
 		(found) => found.key,
 	)
 }
+
+// NATIVE MENU
+
+const SEPARATOR: NativeMenuItem = { separator: true }
+
+/**
+ * `entries` as the system menu a native shell opens from the trigger (`platform/native-island.ts`),
+ * or none when it can't say them: an item without `textValue`. Sections and separators divide
+ * groups; a section's header and label, custom content, are left out.
+ */
+export const nativeMenuItems = (
+	model: Model,
+	entries: ReadonlyArray<Entry>,
+	look: NativeMenuLook = {},
+): Option.Option<ReadonlyArray<NativeMenuItem>> => {
+	const leafOf = (leaf: Leaf): Option.Option<NativeMenuItem> =>
+		Option.map(leaf.textValue, (label) => ({
+			key: leaf.key,
+			label,
+			symbol: look.symbols?.[leaf.key],
+			disabled: leaf.isDisabled ? (true as const) : undefined,
+			destructive:
+				Option.contains(leaf.intent, "Danger") || look.destructive?.includes(leaf.key) === true
+					? (true as const)
+					: undefined,
+			checked:
+				model.selectionMode === "Single" && model.selectedKeys.includes(leaf.key)
+					? (true as const)
+					: undefined,
+		}))
+	const itemOf = (item: Item): Option.Option<NativeMenuItem> =>
+		Array.isReadonlyArrayNonEmpty(item.submenu)
+			? Option.flatMap(item.textValue, (label) =>
+					Option.map(Option.all(Array.map(item.submenu, leafOf)), (items) => ({ label, items })),
+				)
+			: leafOf(item)
+	const groups = Array.map(entries, (entry): Option.Option<ReadonlyArray<NativeMenuItem>> =>
+		Match.value(entry).pipe(
+			Match.tagsExhaustive({
+				Item: ({ item }) => Option.map(itemOf(item), (one) => [one]),
+				Separator: () => Option.some([SEPARATOR]),
+				Section: ({ items }) =>
+					Option.map(Option.all(Array.map(items, itemOf)), (found) => [
+						SEPARATOR,
+						...found,
+						SEPARATOR,
+					]),
+			}),
+		),
+	)
+	// One separator between groups, none at the ends.
+	return Option.map(Option.all(groups), (found) => {
+		const out: NativeMenuItem[] = []
+		let isSeparatorDue = false
+		for (const item of Array.flatten(found)) {
+			if ("separator" in item) isSeparatorDue = out.length > 0
+			else {
+				if (isSeparatorDue) out.push(SEPARATOR)
+				isSeparatorDue = false
+				out.push(item)
+			}
+		}
+		return out
+	})
+}
+
+/** The leaf with `key` at any level. */
+const findLeaf = (entries: ReadonlyArray<Entry>, key: string): Option.Option<Leaf> =>
+	Array.findFirst(
+		Array.flatMap(rootItems(entries), (found) => [found, ...found.submenu]),
+		(candidate) => candidate.key === key,
+	)
 
 // COMMAND
 
@@ -527,5 +602,23 @@ export const update = (model: Model, message: Message): UpdateReturn => {
 		CompletedPortalMenu: () => ({ model }),
 		CompletedCaptureContextMenu: () => ({ model }),
 		CompletedFocusTriggerOnPress: () => ({ model }),
+		ChoseFromNativeMenu: ({ key, entries }) =>
+			Option.match(
+				Option.filter(findLeaf(entries, key), (found) => !found.isDisabled),
+				{
+					onNone: () => ({ model: closed(model) }),
+					onSome: (found) => ({
+						model: modifyFields(closed(model), {
+							selectedKeys: () =>
+								model.selectionMode === "Single" ? [key] : model.selectedKeys,
+						}),
+						// No `<a>` was clicked: a link item navigates as from the keyboard.
+						outMessage: Option.match(found.href, {
+							onNone: () => OutMessage.SelectedItem({ key }),
+							onSome: (href) => OutMessage.ActivatedLink({ key, href }),
+						}),
+					}),
+				},
+			),
 	})
 }

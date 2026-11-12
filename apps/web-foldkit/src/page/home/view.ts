@@ -25,6 +25,14 @@ import { type DirectoryMember, filterMembers, menuEntries, menuIdOf, type Model,
 
 const toInteractionMessage = (message: Interaction.Message) => Message.GotInteractionMessage({ message })
 
+/** The member menu's items as SF Symbols, for the system's own menu. */
+const MEMBER_SYMBOLS = {
+	message: "message",
+	"view-profile": "person.crop.circle",
+	"start-call": "phone",
+	"copy-email": "doc.on.doc",
+} as const satisfies Readonly<Record<string, string>>
+
 const toMenuMessage = (member: DirectoryMember) => (message: Menu.Message) =>
 	Message.GotMemberMenuMessage({ userId: member.id, message })
 
@@ -72,6 +80,7 @@ const memberMenu = (h: HtmlBuilder<Message>, member: DirectoryMember, menu: Menu
 		view: menuView,
 		viewInputs: {
 			entries: menuEntries,
+			native: { symbols: MEMBER_SYMBOLS },
 			toTrigger: memberMenuTrigger(h),
 			content: menuContent(h, menu.id),
 		},

@@ -84,11 +84,60 @@ export const switcherLinkRoute = (key: SwitcherKey, orgSlug: string): Option.Opt
 const hrefOption = (route: Option.Option<AppRoute>) =>
 	Option.match(route, { onNone: () => ({}), onSome: (found) => ({ href: hrefOf(found) }) })
 
+/** The items' words: drawn by the view, and the titles of the system's menu (`textValue`). */
+const USER_TITLES = {
+	header: "Account",
+	profile: "Profile",
+	status: "Set status",
+	"my-settings": "My Settings",
+	feedback: "Feedback",
+	logout: "Log out",
+} as const satisfies Record<UserMenuKey, string>
+const SWITCHER_TITLES = {
+	"switch-server": "Switch Server",
+	"create-server": "Create server",
+	"invite-people": "Invite people",
+	"manage-members": "Manage members",
+	"create-channel": "Create channel",
+	"create-category": "Create category",
+	"server-settings": "Server settings",
+	"custom-emojis": "Custom emojis",
+	integrations: "Integrations",
+} as const satisfies Record<SwitcherKey, string>
+
+/** The items' SF Symbols, for the system's own sheet. */
+const USER_SYMBOLS = {
+	profile: "person.crop.circle",
+	status: "face.smiling",
+	"my-settings": "gearshape",
+	feedback: "bubble.left.and.text.bubble.right",
+	logout: "rectangle.portrait.and.arrow.right",
+} as const satisfies Partial<Record<UserMenuKey, string>>
+const SWITCHER_SYMBOLS = {
+	"create-server": "plus",
+	"invite-people": "person.badge.plus",
+	"manage-members": "person.2",
+	"switch-server": "arrow.left.arrow.right",
+	"create-channel": "plus.bubble",
+	"create-category": "folder.badge.plus",
+	"server-settings": "gearshape",
+	"custom-emojis": "face.smiling",
+	integrations: "puzzlepiece.extension",
+} as const satisfies Partial<Record<SwitcherKey, string>>
+
 type ItemOptions = Parameters<typeof Menu.item>[1]
 const userItem = (key: UserMenuKey, orgSlug: string, userId: UserId, options?: ItemOptions) =>
-	Menu.item(key, { ...options, ...hrefOption(userMenuLinkRoute(key, orgSlug, userId)) })
+	Menu.item(key, {
+		textValue: USER_TITLES[key],
+		...options,
+		...hrefOption(userMenuLinkRoute(key, orgSlug, userId)),
+	})
 const switcherItem = (key: SwitcherKey, orgSlug: string, options?: ItemOptions) =>
-	Menu.item(key, { ...options, ...hrefOption(switcherLinkRoute(key, orgSlug)) })
+	Menu.item(key, {
+		textValue: SWITCHER_TITLES[key],
+		...options,
+		...hrefOption(switcherLinkRoute(key, orgSlug)),
+	})
 
 // ENTRIES
 
@@ -216,17 +265,17 @@ const userMenuContent =
 								]
 							: []),
 					]),
-					Match.when("profile", () => item(IconProfiles2(h), "Profile")),
+					Match.when("profile", () => item(IconProfiles2(h), USER_TITLES.profile)),
 					Match.when("status", () => [
 						IconEmoji1(h),
 						menuLabel(h, USER_MENU_ID, key, [
-							"Set status",
+							USER_TITLES.status,
 							...(status?.emoji ? [h.span([h.Class("ml-1")], [status.emoji])] : []),
 						]),
 					]),
-					Match.when("my-settings", () => item(IconGear(h), "My Settings")),
-					Match.when("feedback", () => item(IconSupport(h), "Feedback")),
-					Match.when("logout", () => item(IconLogout(h), "Log out")),
+					Match.when("my-settings", () => item(IconGear(h), USER_TITLES["my-settings"])),
+					Match.when("feedback", () => item(IconSupport(h), USER_TITLES["feedback"])),
+					Match.when("logout", () => item(IconLogout(h), USER_TITLES["logout"])),
 					Match.exhaustive,
 				),
 		})
@@ -251,6 +300,14 @@ export const userMenuFooter = <M>(
 			view: menuView,
 			viewInputs: {
 				entries,
+				// The account, as a phone's own sheet: who you are over grouped actions.
+				native: {
+					presentation: "sheet",
+					title: displayName,
+					subtitle: context.currentUser?.email,
+					symbols: USER_SYMBOLS,
+					destructive: ["logout"],
+				},
 				toTrigger: (attributes, overlay) =>
 					h.button(
 						[
@@ -341,13 +398,21 @@ const switcherContent =
 						IconPlus(h, { attributes: { "data-slot": "icon" } }),
 						sidebarLabel(h, ["Create server"]),
 					]),
-					Match.when("invite-people", () => item(IconUsersPlus(h), "Invite people")),
-					Match.when("manage-members", () => item(IconUsers(h), "Manage members")),
-					Match.when("switch-server", () => item(IconServers(h), "Switch Server")),
-					Match.when("create-channel", () => item(IconCirclePlus(h), "Create channel")),
-					Match.when("create-category", () => item(IconFolderPlus(h), "Create category")),
-					Match.when("server-settings", () => item(IconGear(h), "Server settings")),
-					Match.when("custom-emojis", () => item(IconEmoji1(h), "Custom emojis")),
+					Match.when("invite-people", () =>
+						item(IconUsersPlus(h), SWITCHER_TITLES["invite-people"]),
+					),
+					Match.when("manage-members", () => item(IconUsers(h), SWITCHER_TITLES["manage-members"])),
+					Match.when("switch-server", () => item(IconServers(h), SWITCHER_TITLES["switch-server"])),
+					Match.when("create-channel", () =>
+						item(IconCirclePlus(h), SWITCHER_TITLES["create-channel"]),
+					),
+					Match.when("create-category", () =>
+						item(IconFolderPlus(h), SWITCHER_TITLES["create-category"]),
+					),
+					Match.when("server-settings", () =>
+						item(IconGear(h), SWITCHER_TITLES["server-settings"]),
+					),
+					Match.when("custom-emojis", () => item(IconEmoji1(h), SWITCHER_TITLES["custom-emojis"])),
 					Match.when("integrations", () => item(IconIntegratio(h), "Integrations")),
 					Match.exhaustive,
 				),
@@ -370,6 +435,17 @@ export const orgSwitcherHeader = <M>(
 			view: menuView,
 			viewInputs: {
 				entries,
+				// The servers, as a phone's own sheet: pick one, or make another.
+				native: {
+					presentation: "sheet",
+					title: "Servers",
+					symbols: {
+						...SWITCHER_SYMBOLS,
+						...Object.fromEntries(
+							organizations.map((organization) => [organization.id, "building.2"]),
+						),
+					},
+				},
 				toTrigger: (attributes, overlay) =>
 					h.button(
 						[

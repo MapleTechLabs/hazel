@@ -61,6 +61,7 @@ const environment: Record<string, string> = release
 				"VITE_APP_URL",
 				"NATIVE_DEBUG",
 				"NATIVE_PATH",
+				"HAZEL_ISLANDS",
 				"HAZEL_FIXTURE_HTML",
 			].flatMap((name) => {
 				const value = process.env[name]

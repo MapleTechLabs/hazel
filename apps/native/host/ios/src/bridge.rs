@@ -61,6 +61,17 @@ pub fn set_handle(handle: AppHandle<State>) {
     outbox::set_writer(Box::new(ToWorker));
 }
 
+/// A variable of the bundle's `environment.json`, as set when building (`scripts/ios.ts`).
+pub fn environment(name: &str) -> Option<String> {
+    let path = std::env::current_exe()
+        .ok()?
+        .parent()?
+        .join("environment.json");
+    let bundled: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    Some(bundled.get(name)?.as_str()?.to_string())
+}
+
 /// Each frame's poll; the first one, with the window up, starts the runtime.
 pub fn poll(s: &mut State, at: f64, tx: &mut rune::Tx) -> bool {
     if !STARTED.get() {
@@ -164,7 +175,14 @@ fn receive(line: &str) {
     };
     match shell::route(message) {
         Routed::Done => {}
-        Routed::Window(message) => shell::apply(message, &handle),
+        Routed::Window(message) => {
+            let is_tree = matches!(message, RuntimeMsg::Tree(_));
+            shell::apply(message, &handle);
+            // A navigation waiting on the next page moves once it is drawn.
+            if is_tree {
+                crate::system::tree_applied();
+            }
+        }
         // A full page load (after sign-in or sign-out): a fresh runtime at that path.
         Routed::Shell(ShellRequest::Reload { path }) => {
             if let Some(mtm) = MainThreadMarker::new() {
@@ -217,6 +235,12 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
         crate::http::send(&text);
     } else if let Some(text) = field("copy") {
         unsafe { UIPasteboard::generalPasteboard().setString(Some(&NSString::from_str(&text))) };
+    } else if body.objectForKey(ns_string!("haptic")).is_some() {
+        crate::system::haptic(mtm);
+    } else if let Some(path) = field("swipeBack") {
+        crate::system::set_swipe_back(mtm, &path);
+    } else if let Some(navigation) = field("navigate") {
+        crate::system::navigate(mtm, &navigation);
     }
 }
 
@@ -273,7 +297,7 @@ define_class!(
 );
 
 /// The app's window, once the scene has one.
-pub(crate) fn window(mtm: MainThreadMarker) -> Option<Retained<UIWindow>> {
+pub fn window(mtm: MainThreadMarker) -> Option<Retained<UIWindow>> {
     let scenes = UIApplication::sharedApplication(mtm).connectedScenes();
     scenes.iter().find_map(|scene| {
         let scene = scene.downcast::<UIWindowScene>().ok()?;

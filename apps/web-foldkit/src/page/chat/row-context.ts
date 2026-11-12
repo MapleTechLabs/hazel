@@ -1,5 +1,5 @@
 import type { ChannelId, MessageId } from "@hazel/schema"
-import type { Html, HtmlBuilder } from "foldkit/html"
+import { type ChildAttribute, childAttributes, type Html, type HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { menuHeaderBase } from "~/components/ui/menu.styles"
 import {
@@ -19,6 +19,7 @@ import { TOP_EMOJIS } from "../../chat/message/toolbar"
 import { popoverTrigger } from "../../chat/popover-host"
 import { profilePopoverContent } from "../../chat/profile-popover"
 import type * as TooltipHost from "../../chat/tooltip-host"
+import { nativeIsland } from "../../platform/native-island"
 import { button } from "../../ui/button"
 import type * as Menu from "../../ui/menu"
 import { contextMenuView, menuLabel } from "../../ui/menu-view"
@@ -136,6 +137,62 @@ const contextMenuContent =
 		return contextItem(h, key, "Copy Message ID", icon(IconHashtag))
 	}
 
+/** Each action's title and SF Symbol in the system menu a native shell opens for the row. */
+const nativeAction = (key: string, isPinned: boolean): Readonly<{ label: string; symbol: string }> => {
+	if (key === "add-reaction") return { label: "Add Reaction", symbol: "face.smiling" }
+	if (key === "reply") return { label: "Reply", symbol: "arrowshape.turn.up.left" }
+	if (key === "edit") return { label: "Edit Message", symbol: "pencil" }
+	if (key === "thread") return { label: "Reply in Thread", symbol: "bubble.left.and.bubble.right" }
+	if (key === "copy") return { label: "Copy Text", symbol: "doc.on.doc" }
+	if (key === "pin")
+		return isPinned
+			? { label: "Unpin Message", symbol: "pin.slash" }
+			: { label: "Pin Message", symbol: "pin" }
+	if (key === "delete") return { label: "Delete Message", symbol: "trash" }
+	return { label: "Copy Message ID", symbol: "number" }
+}
+
+/**
+ * The row as a native `context-menu`: on iOS a long press on it opens the system menu with the
+ * context menu's own entries and quick reactions, and the choice is a `change` here. The row
+ * draws as it is everywhere.
+ */
+const nativeContextMenu = (
+	h: H,
+	row: MessageRow,
+	currentUserId: Model["currentUserId"],
+	isThreadChannel: boolean,
+): ReadonlyArray<ChildAttribute> => {
+	const { id, isPinned } = row.message
+	const entries = Overlays.contextMenuEntries(
+		{
+			isOwnMessage: () => row.message.authorId === currentUserId,
+			isPinned: () => isPinned,
+			isThreadChannel,
+		},
+		id,
+	)
+	// Each run of items between separators is a group of the menu.
+	const groups: Array<Array<{ key: string; label: string; symbol: string; destructive: boolean }>> = [[]]
+	for (const entry of entries) {
+		if (entry._tag === "Separator") groups.push([])
+		if (entry._tag === "Item")
+			groups.at(-1)?.push({
+				key: entry.item.key,
+				...nativeAction(entry.item.key, isPinned),
+				destructive: entry.item.key === "delete",
+			})
+	}
+	return childAttributes([
+		...nativeIsland(h, "context-menu", {
+			reactions: TOP_EMOJIS,
+			reactionPrefix: Overlays.NATIVE_REACTION,
+			groups: groups.filter((group) => group.length > 0),
+		}),
+		h.OnChange((value) => toOverlays(Overlays.Message.ChoseNativeAction({ messageId: id, value }))),
+	])
+}
+
 const userNamesOf = (users: Model["lookups"]["users"]) =>
 	new Map(users.map((user) => [user.id as string, `${user.firstName} ${user.lastName}`]))
 
@@ -144,6 +201,7 @@ const buildIdleContext = (
 	h: H,
 	users: Model["lookups"]["users"],
 	currentUserId: Model["currentUserId"],
+	isThreadChannel: boolean,
 ): RowContext<Message> => {
 	const names = userNamesOf(users)
 	return {
@@ -161,7 +219,8 @@ const buildIdleContext = (
 		reply: (row, reply) => replyActions(h, row, reply, null, () => []),
 		toHtmlRenderMessage,
 		toPressEmbedAction,
-		contextMenu: (_row, render) => render([], h.empty),
+		contextMenu: (row, render) =>
+			render(nativeContextMenu(h, row, currentUserId, isThreadChannel), h.empty),
 		avatar: (row: MessageRow) =>
 			popoverTrigger(h, {
 				key: Overlays.avatarPopoverKey(row.message.id),
@@ -222,7 +281,10 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 		toPressEmbedAction,
 		contextMenu: (row, render) =>
 			contextMenu === null || contextMenu.messageId !== row.message.id
-				? render([], h.empty)
+				? render(
+						nativeContextMenu(h, row, model.currentUserId, factsOf(model).isThreadChannel),
+						h.empty,
+					)
 				: h.submodel({
 						slotId: "message-context-menu",
 						model: contextMenu.menu,
@@ -260,19 +322,18 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 
 // A pure view memo keyed by the (frozen) user list, like `MessageList.layoutOf`: the same Model
 // always yields the same idle context, so rendering it twice gives the same result.
-const idleContexts = new WeakMap<
-	Model["lookups"]["users"],
-	Map<Model["currentUserId"], RowContext<Message>>
->()
+const idleContexts = new WeakMap<Model["lookups"]["users"], Map<string, RowContext<Message>>>()
 
 /** The shared context for rows without an open overlay. */
 export const idleRowContext = (h: H, model: Model): RowContext<Message> => {
-	const byUser =
-		idleContexts.get(model.lookups.users) ?? new Map<Model["currentUserId"], RowContext<Message>>()
-	const cached = byUser.get(model.currentUserId)
+	const byUser = idleContexts.get(model.lookups.users) ?? new Map<string, RowContext<Message>>()
+	const isThreadChannel = factsOf(model).isThreadChannel
+	// What the context reads besides the user list: whose rows these are, and in what kind of channel.
+	const key = `${model.currentUserId ?? ""}:${isThreadChannel}`
+	const cached = byUser.get(key)
 	if (cached !== undefined) return cached
-	const context = buildIdleContext(h, model.lookups.users, model.currentUserId)
-	byUser.set(model.currentUserId, context)
+	const context = buildIdleContext(h, model.lookups.users, model.currentUserId, isThreadChannel)
+	byUser.set(key, context)
 	idleContexts.set(model.lookups.users, byUser)
 	return context
 }

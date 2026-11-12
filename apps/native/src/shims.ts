@@ -21,6 +21,8 @@ export type ShimEnv = {
 	loadDocument?: (href: string) => void
 	/** Keeps `localStorage` between launches. @default it starts empty every time */
 	storage?: PersistedStorage
+	/** The history is about to move from `from` to `to` (full URLs), before the app hears of it. */
+	onNavigate?: (from: string, to: string) => void
 }
 
 /** Where `localStorage` keeps its entries between launches; absent, it lasts as long as the runtime. */
@@ -330,7 +332,9 @@ export const installShims = (env: ShimEnv) => {
 	}
 	const navigateTo = (next: number) => {
 		index = Math.max(0, Math.min(entries.length - 1, next))
-		url = new URL(entries[index] ?? url.href)
+		const target = new URL(entries[index] ?? url.href)
+		if (target.href !== url.href) env.onNavigate?.(url.href, target.href)
+		url = target
 		windowTarget.dispatchEvent(Object.assign(new Event("popstate"), { state: null }))
 	}
 	const history = {
@@ -340,7 +344,9 @@ export const installShims = (env: ShimEnv) => {
 			return entries.length
 		},
 		pushState: (state: unknown, _title: string, next?: string | URL | null) => {
-			url = new URL(String(next ?? url.href), url)
+			const target = new URL(String(next ?? url.href), url)
+			if (target.href !== url.href) env.onNavigate?.(url.href, target.href)
+			url = target
 			entries.splice(index + 1, entries.length, url.href)
 			index = entries.length - 1
 			history.state = state

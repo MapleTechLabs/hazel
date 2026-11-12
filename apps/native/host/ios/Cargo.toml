@@ -10,7 +10,8 @@ hazel-native = { path = ".." }
 rune = { git = "https://github.com/Makisuo/rune", rev = "3b676200f9ab1923059651c4e81c0b77cb8699a2" }
 serde_json = "1"
 
-# The hidden web view the runtime's worker runs in (`src/bridge.rs`).
+# The hidden web view the runtime's worker runs in (`src/bridge.rs`), and the UIKit views of
+# native islands (`src/islands.rs`).
 [target.'cfg(target_os = "ios")'.dependencies]
 # Sign-in through the system's web authentication sheet (`src/sign_in.rs`).
 objc2-authentication-services = "0.3"
@@ -18,6 +19,10 @@ block2 = "0.6"
 dispatch2 = "0.3"
 objc2 = "0.6"
 objc2-core-foundation = "0.3"
+objc2-core-graphics = "0.3"
 objc2-foundation = "0.3"
+# The app's own icons as native images (the tab bar's), at the version Rune draws SVG with.
+resvg = "0.45"
+objc2-quartz-core = "0.3"
 objc2-ui-kit = "0.3"
 objc2-web-kit = "0.3"

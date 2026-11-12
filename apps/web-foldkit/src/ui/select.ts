@@ -63,6 +63,8 @@ export const Message = defineMessageUnion({
 	HoveredOption: { key: Schema.String, items: Schema.Array(Item) },
 	UnhoveredOption: { key: Schema.String },
 	ClickedOption: { key: Schema.String, items: Schema.Array(Item) },
+	/** A choice from the system menu a native shell shows for the trigger (`platform/native-island.ts`). */
+	ChoseFromNativeMenu: { key: Schema.String, items: Schema.Array(Item) },
 	PressedOutside: {},
 	ClickedDismiss: {},
 	CompletedFocusElement: {},
@@ -305,6 +307,10 @@ export const update = (model: Model, message: Message): UpdateReturn => {
 					? selected(model, key)
 					: { model },
 			),
+		ChoseFromNativeMenu: ({ key, items }) =>
+			Array.some(items, (candidate) => candidate.key === key && !candidate.isDisabled)
+				? selected(model, key)
+				: { model },
 		PressedOutside: () => ({ model: closed(model) }),
 		ClickedDismiss: () => ({ model: closed(model) }),
 		CompletedFocusElement: () => ({ model }),

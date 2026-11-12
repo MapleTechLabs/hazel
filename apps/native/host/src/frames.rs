@@ -281,6 +281,46 @@ pub fn place(rect: Rect, opacity: f32, clips: &[Rect], covers: &[Cover]) -> Opti
     })
 }
 
+/// The parts of a `size` box that none of `holes` covers, as rects that do not overlap: what a
+/// mask of the box shows. Holes may overlap each other (a dialog's backdrop and the panel on it),
+/// where a path of the holes themselves, filled even-odd, would show the box again.
+pub fn uncovered(size: [f32; 2], holes: &[Rect]) -> Vec<Rect> {
+    let edges = |at: usize, length: f32| {
+        let mut edges = vec![0.0, length];
+        for hole in holes {
+            edges.push(hole[at].clamp(0.0, length));
+            edges.push((hole[at] + hole[at + 2]).clamp(0.0, length));
+        }
+        edges.sort_by(f32::total_cmp);
+        edges.dedup();
+        edges
+    };
+    let (xs, ys) = (edges(0, size[0]), edges(1, size[1]));
+    let covered = |x: f32, y: f32| {
+        holes
+            .iter()
+            .any(|[hx, hy, hw, hh]| x > *hx && x < hx + hw && y > *hy && y < hy + hh)
+    };
+    let mut out: Vec<Rect> = Vec::new();
+    for rows in ys.windows(2) {
+        let (top, bottom) = (rows[0], rows[1]);
+        // Cells side by side in a row join into one rect.
+        let mut open: Option<Rect> = None;
+        for columns in xs.windows(2) {
+            let (left, right) = (columns[0], columns[1]);
+            if covered((left + right) / 2.0, (top + bottom) / 2.0) {
+                out.extend(open.take());
+            } else if let Some(run) = &mut open {
+                run[2] = right - run[0];
+            } else {
+                open = Some([left, top, right - left, bottom - top]);
+            }
+        }
+        out.extend(open);
+    }
+    out
+}
+
 /// What the wrapper page tells the host (`wrapper_html`'s script).
 #[derive(serde::Deserialize)]
 #[serde(tag = "k", rename_all = "lowercase")]
@@ -361,6 +401,73 @@ pub fn wrapper_html(src: &str) -> Option<String> {
         scheme = scheme,
         src = escape_attribute(src),
     ))
+}
+
+/// How far up the window's paint order the element at `path` is drawn (`view`): `0` in the page,
+/// `1` in a fixed element, and above those in a portal (a menu, a dialog), later ones higher.
+/// The highest layer it is in counts: a menu opened from a dialog is its own portal, above the
+/// dialog, and a fixed box inside a dialog is drawn with the dialog.
+pub(crate) fn layer_of(path: &str, portals: &[(String, Arc<Node>)]) -> usize {
+    portals
+        .iter()
+        .enumerate()
+        .filter(|(_, (portal, _))| {
+            path.strip_prefix(portal.as_str())
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+        })
+        .map(|(index, (_, node))| match node.as_ref() {
+            Node::Elem { ov: Some(_), .. } => 2 + index,
+            _ => 1,
+        })
+        .max()
+        .unwrap_or(0)
+}
+
+/// Where a native view goes for the box drawn at `path` in the frame just presented: clipped by
+/// the ancestors in `clips`, cut out where an overlay or a sticky element is drawn over it, and
+/// `None` when none of it shows. Shared with `islands`, whose views sit over Rune's drawing too.
+pub(crate) fn placement_of(
+    runtime: &rune::Runtime<crate::State>,
+    path: &str,
+    clips: &[String],
+) -> Option<Placement> {
+    let rect_of = |path: &str| runtime.presented(path).map(|(rect, _)| rect);
+    let (rect, opacity) = runtime.presented(path)?;
+    let clips: Vec<Rect> = clips.iter().filter_map(|path| rect_of(path)).collect();
+    let portals = &runtime.state.portals;
+    let layer = layer_of(path, portals);
+    let covers: Vec<Cover> = runtime
+        .state
+        .covers
+        .iter()
+        // Only what is painted above the view covers it: a layer over its own (a dialog over
+        // the page, a menu over the dialog it opened from; never the sheet a dialog opened
+        // over), or, in the page, a sticky element it scrolls under.
+        .filter(|cover| {
+            let above = layer_of(&cover.path, portals);
+            above > layer || (above == 0 && layer == 0)
+        })
+        // What the view is part of is not over it.
+        .filter(|cover| {
+            cover.path != path
+                && !path
+                    .strip_prefix(cover.path.as_str())
+                    .is_some_and(|rest| rest.starts_with('/'))
+        })
+        .filter_map(|cover| {
+            let rect = rect_of(&cover.path);
+            Some(Cover {
+                // A dialog covers wherever it is drawn.
+                rect: if cover.modal {
+                    rect.unwrap_or_default()
+                } else {
+                    rect?
+                },
+                modal: cover.modal,
+            })
+        })
+        .collect();
+    place(rect, opacity, &clips, &covers)
 }
 
 /// Puts every frame's web view where its box was drawn in the frame just presented.
@@ -1174,6 +1281,7 @@ mod platform {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wire::Overlay;
 
     #[test]
     fn a_frame_shows_where_its_ancestors_let_it() {
@@ -1207,6 +1315,78 @@ mod tests {
             modal: true,
         };
         assert_eq!(place(rect, 1.0, &[], &[dialog]), None);
+    }
+
+    #[test]
+    fn a_layer_is_above_the_ones_opened_before_it() {
+        let elem = |ov: Option<Overlay>| {
+            Arc::new(Node::Elem {
+                hash: String::new(),
+                tag: "div".to_string(),
+                key: None,
+                st: Default::default(),
+                attrs: Default::default(),
+                on: Default::default(),
+                observed: false,
+                ov: ov.map(Box::new),
+                children: Vec::new(),
+            })
+        };
+        let overlay = || Some(Overlay::default());
+        // A fixed nav, a sheet, a dialog opened over it, and a menu opened from the dialog.
+        let portals = vec![
+            ("r/1".to_string(), elem(None)),
+            ("r/2".to_string(), elem(overlay())),
+            ("r/3".to_string(), elem(overlay())),
+            ("r/3/0/4".to_string(), elem(overlay())),
+        ];
+        let layer = |path: &str| layer_of(path, &portals);
+        assert_eq!(layer("r/0/5"), 0, "the page");
+        assert_eq!(layer("r/1"), 1, "a fixed element");
+        assert!(layer("r/2/0") > layer("r/1"), "a sheet is over the nav");
+        assert!(
+            layer("r/3/0/1") > layer("r/2/0"),
+            "a dialog is over the sheet before it"
+        );
+        assert!(
+            layer("r/3/0/4/0") > layer("r/3/0/1"),
+            "a menu is over the dialog it is in"
+        );
+        // A fixed box inside the dialog is drawn with the dialog, over the sheet.
+        let mut portals = portals;
+        portals.push(("r/3/1".to_string(), elem(None)));
+        assert!(layer_of("r/3/1/0", &portals) > layer_of("r/2/0", &portals));
+    }
+
+    #[test]
+    fn overlapping_covers_stay_cut_out() {
+        // A backdrop over the right half and a panel inside it: only the left half shows (in
+        // one rect per row of the grid the covers' edges make).
+        let backdrop = [50.0, 0.0, 50.0, 40.0];
+        let panel = [60.0, 10.0, 20.0, 20.0];
+        assert_eq!(
+            uncovered([100.0, 40.0], &[backdrop, panel]),
+            vec![
+                [0.0, 0.0, 50.0, 10.0],
+                [0.0, 10.0, 50.0, 20.0],
+                [0.0, 30.0, 50.0, 10.0],
+            ]
+        );
+        // Covered whole: nothing shows.
+        assert_eq!(
+            uncovered([100.0, 40.0], &[[0.0, 0.0, 100.0, 40.0], panel]),
+            Vec::<Rect>::new()
+        );
+        // A hole in the middle leaves the box around it.
+        assert_eq!(
+            uncovered([30.0, 30.0], &[[10.0, 10.0, 10.0, 10.0]]),
+            vec![
+                [0.0, 0.0, 30.0, 10.0],
+                [0.0, 10.0, 10.0, 10.0],
+                [20.0, 10.0, 10.0, 10.0],
+                [0.0, 20.0, 30.0, 10.0],
+            ]
+        );
     }
 
     #[test]

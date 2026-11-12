@@ -118,7 +118,7 @@ describe("DM row menu", () => {
 	}
 	const dmMenu = (state: Model, menuMessage: Menu.Message) =>
 		update(state, Message.GotRowMenuMessage({ channelId: dmId, orgSlug: "acme", message: menuMessage }))
-	const dmClicked = (key: string) => Menu.Message.ClickedItem({ key, entries: dmMenuEntries })
+	const dmClicked = (key: string) => Menu.Message.ClickedItem({ key, entries: dmMenuEntries() })
 	const memberWrite = (key: string) => {
 		const open = dmMenu(withDm, pressed).model
 		expect(open.openMenu).toMatchObject({ _tag: "Row", channelId: dmId })

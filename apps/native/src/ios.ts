@@ -6,6 +6,7 @@
 import { nativeClient, nativeHeaders } from "@hazel/auth/contract"
 import type { PrecompiledStyles } from "@hazel/foldkit-rune"
 import { parseHostLine } from "@hazel/foldkit-rune"
+import { SYSTEM_UI_GLOBAL, type SystemUi } from "../../web-foldkit/src/platform/system-ui"
 import type { NativePlatform } from "./platform"
 
 /** What the page set before this worker's source: the host's environment. */
@@ -21,6 +22,15 @@ export type IosRequest =
 	| { readonly signIn: string; readonly callbackScheme: string }
 	/** A request the host sends for the worker (`host/ios/src/http.rs`), as JSON. */
 	| { readonly fetch: string }
+	/**
+	 * The page is about to move (`host/ios/src/system.rs`), as JSON `{ from, to, back }` (paths):
+	 * the host takes a picture of the page it leaves. `back`: to where the back chevron leads.
+	 */
+	| { readonly navigate: string }
+	/** A tap of the finger (`host/ios/src/system.rs`). */
+	| { readonly haptic: true }
+	/** Where the edge swipe goes back to; empty turns the swipe off. */
+	| { readonly swipeBack: string }
 
 /** The host's answer to a `fetch` request. */
 type FetchReply =
@@ -41,9 +51,25 @@ const request = (message: IosRequest) => post(message)
 const early: Array<string> = []
 let deliver: ((line: string) => void) | undefined
 const replies = new Map<number, (reply: FetchReply) => void>()
-globalThis.onmessage = (event: MessageEvent<string | FetchReply>) => {
+/** The edge swipe went back. */
+type BackReply = { readonly back: true }
+/** The back chevrons on screen, latest last: the swipe goes where the latest leads. */
+const backTargets: Array<{ readonly href: string }> = []
+/** A URL's path, query and hash: what the host keys its pictures of pages by. */
+const pathOf = (href: string) => {
+	const url = new URL(href, globalThis.location.href)
+	return `${url.pathname}${url.search}${url.hash}`
+}
+const goBack = () => {
+	const target = backTargets.at(-1)
+	if (target === undefined) return
+	// The runtime's link handling, as a tap on the chevron would follow it.
+	void import("./document-bridge").then(({ followLink }) => followLink(target.href))
+}
+globalThis.onmessage = (event: MessageEvent<string | FetchReply | BackReply>) => {
 	const data = event.data
-	if (typeof data !== "string") {
+	if (typeof data !== "string" && "back" in data) goBack()
+	else if (typeof data !== "string") {
 		replies.get(data.id)?.(data)
 		replies.delete(data.id)
 	} else if (deliver === undefined) early.push(data)
@@ -126,12 +152,35 @@ const platform: NativePlatform = {
 		request(isSignIn ? { signIn: href, callbackScheme: CALLBACK_SCHEME } : { open: href })
 	},
 	copyText: (text) => request({ copy: text }),
+	onNavigate: (from, to) => {
+		const back = backTargets.at(-1)
+		const isBack = back !== undefined && pathOf(back.href) === pathOf(to)
+		request({ navigate: JSON.stringify({ from: pathOf(from), to: pathOf(to), back: isBack }) })
+	},
 	// The bundle carries the sheet compiled for every class the app's sources use.
 	loadStyles: async () => {
 		const { StyleResolver } = await import("@hazel/foldkit-rune")
 		return StyleResolver.fromPrecompiled(__HAZEL_STYLES__, "styles.css")
 	},
 }
+
+const systemUi: SystemUi = {
+	haptic: () => request({ haptic: true }),
+	setSwipeBack: (href) => {
+		const target = { href }
+		backTargets.push(target)
+		request({ swipeBack: pathOf(href) })
+		return () => {
+			const index = backTargets.indexOf(target)
+			if (index !== -1) backTargets.splice(index, 1)
+			const back = backTargets.at(-1)
+			request({ swipeBack: back === undefined ? "" : pathOf(back.href) })
+		}
+	},
+}
+
+// Read by the app (`platform/system-ui.ts`), as the desktop shells install `window.__TAURI__`.
+Object.assign(globalThis, { [SYSTEM_UI_GLOBAL]: systemUi })
 
 const { startRuntime } = await import("./runtime")
 await startRuntime(platform)

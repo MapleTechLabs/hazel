@@ -11,7 +11,7 @@ use serde_json::json;
 use crate::html::is_text_field;
 use crate::outbox::{set_generation, write_line};
 use crate::wire::{self, Node, Subtrees, TreeMsg};
-use crate::{frames, images, margins};
+use crate::{frames, images, islands, margins};
 
 use super::handlers::scroll_seqs;
 
@@ -65,6 +65,8 @@ pub struct State {
     pub(crate) frames: Vec<frames::FrameSpec>,
     /// What the overlays among `portals` draw over the page, and so over those web views.
     pub(crate) covers: Vec<frames::CoverSpec>,
+    /// The elements a native view shows or drives (`data-native`), where the shell has one.
+    pub(crate) islands: Vec<islands::IslandSpec>,
     /// How far the on-screen keyboard covers the window's bottom edge, in points (iOS).
     pub(crate) keyboard: f32,
 }
@@ -163,7 +165,8 @@ impl State {
         self.portals.clear();
         collect_portals(&root, "r", &mut self.portals);
         self.frames = frames::collect(&root);
-        self.covers = if self.frames.is_empty() {
+        self.islands = islands::collect(&root);
+        self.covers = if self.frames.is_empty() && self.islands.is_empty() {
             Vec::new()
         } else {
             frames::collect_covers(&root, &self.portals)

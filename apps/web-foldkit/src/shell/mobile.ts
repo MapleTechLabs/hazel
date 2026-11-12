@@ -1,3 +1,5 @@
+import { Effect, Schema, Stream } from "effect"
+import { Mount } from "foldkit"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconBell, IconChevronLeft, IconGear, IconMenu, IconMsgs, IconOffice } from "../icons"
@@ -15,6 +17,8 @@ import {
 	orgSectionOf,
 	orgSlugOf,
 } from "../route"
+import { nativeIsland, nativeItem } from "../platform/native-island"
+import { systemUi } from "../platform/system-ui"
 import { button } from "../ui/button"
 import * as Modal from "../ui/modal"
 import * as Sheet from "../ui/sheet"
@@ -43,9 +47,17 @@ export const mobileNav = <Message>(
 ): Html => {
 	const { orgSlug, route } = context
 	/** `isActive` colours the item; `isLinkActive` is TanStack `Link`'s own (fuzzy) match. */
-	const link = (label: string, href: string, isActive: boolean, icon: Html, badge?: Html) =>
+	const link = (
+		label: string,
+		href: string,
+		isActive: boolean,
+		icon: Html,
+		symbol: string,
+		badge?: Readonly<{ html: Html; count: number }>,
+	) =>
 		h.a(
 			[
+				...nativeItem(h, { id: label, symbol, isSelected: isActive, badge: badge?.count }),
 				h.Class(twMerge(NAV_ITEM, isActive ? "text-primary" : "text-muted-fg", isActive && "active")),
 				h.Href(href),
 				...(isActive
@@ -53,24 +65,31 @@ export const mobileNav = <Message>(
 					: []),
 			],
 			[
-				h.span([h.Class("relative")], [icon, ...(badge === undefined ? [] : [badge])]),
+				h.span([h.Class("relative")], [icon, ...(badge === undefined ? [] : [badge.html])]),
 				h.span([h.Class("font-medium text-[10px] leading-none")], [label]),
 			],
 		)
 	const unread =
 		unreadNotificationCount > 0
-			? h.span(
-					[
-						h.Class(
-							"absolute -top-1 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 font-semibold text-[10px] text-white tabular-nums leading-none",
-						),
-					],
-					[unreadNotificationCount > 99 ? "99+" : String(unreadNotificationCount)],
-				)
+			? {
+					count: unreadNotificationCount,
+					html: h.span(
+						[
+							// The native tab shows the count as its badge, not in its title.
+							h.Attribute("data-native-skip", ""),
+							h.Class(
+								"absolute -top-1 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 font-semibold text-[10px] text-white tabular-nums leading-none",
+							),
+						],
+						[unreadNotificationCount > 99 ? "99+" : String(unreadNotificationCount)],
+					),
+				}
 			: undefined
 	return h.nav(
 		[
 			h.AriaLabel("Tabs"),
+			// A `UITabBar` on iOS; this markup everywhere else, and what its presses replay on.
+			...nativeIsland(h, "tab-bar"),
 			h.Class(
 				"shrink-0 border-sidebar-border border-t bg-sidebar pb-[env(safe-area-inset-bottom)] md:hidden",
 			),
@@ -84,12 +103,14 @@ export const mobileNav = <Message>(
 						hrefOf(AppRoute.ChatIndex({ orgSlug })),
 						isChatRoute(route) || route._tag === "OrgHome",
 						IconMsgs(h, { className: "size-6" }),
+						"bubble.left.and.bubble.right",
 					),
 					link(
 						"Activity",
 						hrefOf(AppRoute.NotificationsAll({ orgSlug })),
 						isNotificationsRoute(route),
 						IconBell(h, { className: "size-6" }),
+						"bell",
 						unread,
 					),
 					link(
@@ -97,12 +118,14 @@ export const mobileNav = <Message>(
 						hrefOf(AppRoute.CustomersOverview({ orgSlug })),
 						isCustomersRoute(route),
 						IconOffice(h, { className: "size-6" }),
+						"building.2",
 					),
 					link(
 						"Settings",
 						hrefOf(AppRoute.SettingsGeneral({ orgSlug })),
 						isSettingsRoute(route) || isMySettingsRoute(route),
 						IconGear(h, { className: "size-6" }),
+						"gearshape",
 					),
 				],
 			),
@@ -182,6 +205,26 @@ export const mobileTopBar = <Message>(
 				],
 	)
 
+/**
+ * While a back chevron is on screen, the swipe from the screen's left edge goes where it leads, as
+ * a phone's navigation does (where the shell has the swipe: `platform/system-ui.ts`).
+ */
+const SwipeBack = Mount.defineStream("SwipeBack", {
+	// It sends nothing: the shell follows the link itself.
+	messages: [Schema.Never],
+	// The swipe goes where the chevron's own link does.
+	execute: ({ element }) =>
+		Stream.unwrap(
+			Effect.acquireRelease(
+				Effect.sync(() => {
+					const href = element.getAttribute("href")
+					return href === null ? undefined : systemUi()?.setSwipeBack(href)
+				}),
+				(release) => Effect.sync(() => release?.()),
+			).pipe(Effect.as(Stream.never)),
+		),
+})
+
 /** A back chevron (44pt square) leading to `href`, labelled for where it goes. */
 export const mobileBackLink = <Message>(
 	h: HtmlBuilder<Message>,
@@ -193,6 +236,10 @@ export const mobileBackLink = <Message>(
 		[
 			h.Href(href),
 			h.AriaLabel(`Back to ${to}`),
+			// Keyed by where it leads, so its swipe follows a new destination. Only a shell with
+			// the swipe (installed before the app starts) gets the Mount; a browser has none.
+			h.Key(`back:${href}`),
+			...(systemUi() === undefined ? [] : [h.OnMount(SwipeBack())]),
 			h.Class(
 				twMerge(
 					"-ml-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-primary transition-opacity duration-100 active:opacity-60 md:hidden",

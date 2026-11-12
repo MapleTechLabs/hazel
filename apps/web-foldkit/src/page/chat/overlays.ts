@@ -172,6 +172,11 @@ export const Message = defineMessageUnion({
 	GotMoreMenuMessage: { messageId: MessageId, message: Menu.Message },
 	RightClickedMessage: { messageId: MessageId, offset: Schema.Number, crossOffset: Schema.Number },
 	GotContextMenuMessage: { message: Menu.Message },
+	/**
+	 * A choice from the system menu a native shell opens on a long press of the message
+	 * (`platform/native-island.ts`): a `MessageAction`, or `react:<emoji>` for a quick reaction.
+	 */
+	ChoseNativeAction: { messageId: MessageId, value: Schema.String },
 	GotPopoverMessage: { messageId: MessageId, key: Schema.String, message: Popover.Message },
 	GotPinnedMessage: { message: Popover.Message },
 	ClickedReply: { messageId: MessageId },
@@ -271,6 +276,9 @@ const withChild = <Child, ChildMessage>(
 			: model,
 	commands: Command.mapMessages(result.commands ?? [], options.wrap),
 })
+
+/** What a native menu's quick reaction reports, before its emoji. */
+export const NATIVE_REACTION = "react:"
 
 export const moreMenuEntries = (facts: MessageFacts): ReadonlyArray<Menu.Entry> => [
 	...(facts.isThreadChannel ? [] : [Menu.item("thread")]),
@@ -487,6 +495,18 @@ const updateOverlays = (model: Model, message: Message): OverlaysReturn =>
 				current.messageId,
 				result.outMessage,
 			)
+		},
+		ChoseNativeAction: ({ messageId, value }) => {
+			if (value.startsWith(NATIVE_REACTION))
+				return {
+					model,
+					outMessage: OutMessage.RequestedReaction({
+						messageId,
+						emoji: value.slice(NATIVE_REACTION.length),
+					}),
+				}
+			const parsed = Schema.decodeUnknownOption(MessageAction)(value)
+			return parsed._tag === "Some" ? action(model, messageId, parsed.value) : { model }
 		},
 		GotPopoverMessage: ({ messageId, key, message: popoverMessage }) => {
 			const isCurrent = model.open._tag === "Popover" && model.open.key === key
