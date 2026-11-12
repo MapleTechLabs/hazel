@@ -131,14 +131,14 @@ mod tests {
 
         // An entry asked for by name runs from source, bundle or not.
         let source = runtime_command(Some(&macos), Some("dist/entry.js".into()));
-        assert!(source.get_program().to_string_lossy().ends_with("bun"));
+        assert!(source.get_program().to_string_lossy().ends_with(BUN));
         assert_eq!(source.get_args().collect::<Vec<_>>(), ["dist/entry.js"]);
         let _ = std::fs::remove_dir_all(&root);
         assert!(
             runtime_command(Some(&macos), None)
                 .get_program()
                 .to_string_lossy()
-                .ends_with("bun")
+                .ends_with(BUN)
         );
     }
 }

@@ -52,6 +52,7 @@ jobs:
                   workspaces: "apps/native/host -> target"
 
             - name: Build the host
+              id: build
               working-directory: apps/native/host
               run: cargo build --release -p hazel-native
 
@@ -59,11 +60,14 @@ jobs:
               working-directory: apps/native/host
               run: cargo test --release -p hazel-native
 
+            # The capture runs even when a test failed: its screenshots show what the failure means.
             - name: Build the runtime
+              if: ${{ !cancelled() && steps.build.outcome == 'success' }}
               working-directory: apps/native
               run: bun run build
 
             - name: Headless capture
+              if: ${{ !cancelled() && steps.build.outcome == 'success' }}
               working-directory: apps/native
               env:
                   HAZEL_NATIVE_ENTRY: dist/entry.js
