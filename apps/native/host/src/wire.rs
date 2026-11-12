@@ -536,7 +536,8 @@ impl Node {
 }
 
 /// Whether a reference to a subtree the host lacks was logged (once: one divergence repeats).
-pub(crate) static MISSING_REF_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub(crate) static MISSING_REF_LOGGED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 /// Every hashed subtree of the tree on screen, for the next commit's references.
 #[derive(Default)]

@@ -3269,16 +3269,28 @@ fn a_field_that_leaves_the_tree_leaves_the_host_state() {
     assert!(s.fields.contains_key("r/0"));
     let apply = |s: &mut State, root: Value, ack: u64| {
         s.apply(
-            serde_json::from_value(json!({ "ack": ack, "page": { "bg": "#ffffffff" }, "root": root }))
-                .expect("wire tree"),
+            serde_json::from_value(
+                json!({ "ack": ack, "page": { "bg": "#ffffffff" }, "root": root }),
+            )
+            .expect("wire tree"),
         )
     };
     apply(&mut s, e("div", json!({}), vec![t("no field")]), 1);
-    assert!(s.fields.is_empty(), "the dialog's input went with the dialog");
+    assert!(
+        s.fields.is_empty(),
+        "the dialog's input went with the dialog"
+    );
     // A new field at the same path starts from the app's text, not the old one's.
     apply(
         &mut s,
-        e("div", json!({}), vec![with_attrs(e("input", json!({}), vec![]), json!({ "value": "" }))]),
+        e(
+            "div",
+            json!({}),
+            vec![with_attrs(
+                e("input", json!({}), vec![]),
+                json!({ "value": "" }),
+            )],
+        ),
         2,
     );
     assert_eq!(s.fields["r/0"].edit.text, "");
@@ -3289,16 +3301,28 @@ fn a_replaced_runtime_starts_with_no_fields_or_scroll_seqs() {
     let mut s = state(e(
         "div",
         json!({}),
-        vec![with_attrs(e("input", json!({}), vec![]), json!({ "value": "a" }))],
+        vec![with_attrs(
+            e("input", json!({}), vec![]),
+            json!({ "value": "a" }),
+        )],
     ));
     s.fields.get_mut("r/0").expect("the field").last_sent = 9;
     crate::note_scroll("r/replaced-runtime", Some(40));
     s.runtime_replaced();
     assert!(s.fields.is_empty() && s.root_hash.is_none());
-    assert!(crate::render::scroll_seqs().lock().unwrap().get("r/replaced-runtime").is_none());
+    assert!(
+        crate::render::scroll_seqs()
+            .lock()
+            .unwrap()
+            .get("r/replaced-runtime")
+            .is_none()
+    );
     // The new runtime numbers its scrolls from the start again, and the host follows it.
     crate::note_scroll("r/replaced-runtime", Some(1));
-    assert_eq!(crate::render::scroll_seqs().lock().unwrap()["r/replaced-runtime"], 1);
+    assert_eq!(
+        crate::render::scroll_seqs().lock().unwrap()["r/replaced-runtime"],
+        1
+    );
 }
 
 #[test]
