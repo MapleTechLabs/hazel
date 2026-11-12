@@ -164,6 +164,7 @@ struct Session {
     scale: f32,
     /// One renderer per session: Rune's glyph atlas uploads each glyph once, to the renderer it met.
     gpu: Option<(Gpu, Renderer, Offscreen)>,
+    fx: hazel_native::fx::Effects,
 }
 
 impl Session {
@@ -366,15 +367,17 @@ impl Session {
         self.rt.frame(0.0);
         // Pictures and colour emoji live in the runtime's image atlas, uploaded separately.
         renderer.upload_images(&gpu.device, &gpu.queue, &mut self.rt.images);
-        renderer.prepare(
+        let mut encoder = gpu.device.create_command_encoder(&Default::default());
+        self.fx.draw(
             &gpu.device,
             &gpu.queue,
-            &mut self.rt.text.atlas,
-            &self.rt.instances,
+            &mut encoder,
+            &target.view,
+            FORMAT,
             (dw, dh),
+            &mut self.rt,
+            renderer,
         );
-        let mut encoder = gpu.device.create_command_encoder(&Default::default());
-        renderer.draw(&mut encoder, &target.view, self.rt.clear_color());
         target.copy(&mut encoder);
         renderer.submit(&gpu.queue, encoder);
         let pixels = target.read(&gpu.device);
@@ -530,6 +533,7 @@ pub fn run(script_path: &str) {
         timings: Timings::default(),
         scale,
         gpu: None,
+        fx: Default::default(),
     };
     let mut report = serde_json::Map::new();
     let mut interactions = Vec::new();
@@ -647,12 +651,25 @@ pub fn run(script_path: &str) {
                     KeyStep::Name(name) => (name, None),
                     KeyStep::Until { name, until } => (name, Some(until)),
                 };
-                let Some(key) = named_key(&name) else {
+                // `Meta+k`: the key with Command held (a shortcut).
+                let (cmd, bare) = match name.strip_prefix("Meta+") {
+                    Some(bare) => (true, bare),
+                    None => (false, name.as_str()),
+                };
+                let Some(key) = named_key(bare) else {
                     fail(&mut child, &format!("key: unsupported key name \"{name}\""));
+                };
+                // A window reports a character typed with Command as `Key::Command`.
+                let key = match key {
+                    Key::Text(t) if cmd => Key::Command(t.chars().next().unwrap_or(' ')),
+                    key => key,
                 };
                 session.rt.key(KeyEvent {
                     key,
-                    mods: Mods::default(),
+                    mods: Mods {
+                        cmd,
+                        ..Mods::default()
+                    },
                 });
                 let rtt = session.round_trip(until.as_deref());
                 if rtt.is_none() {

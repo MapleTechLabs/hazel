@@ -165,6 +165,8 @@ fn dom_key(key: &rune::edit::Key) -> Option<&'static str> {
 fn element_key_name(key: &rune::edit::Key) -> Option<String> {
     match key {
         rune::edit::Key::Text(t) => Some(t.clone()),
+        // A character typed with Command (⌘K): the window reports it apart from typed text.
+        rune::edit::Key::Command(c) => Some(c.to_string()),
         key => dom_key(key).map(str::to_string),
     }
 }
@@ -944,6 +946,21 @@ fn build_elem(
         .as_deref()
         .or(st.grid_rows.as_ref().map(|_| &one_column[..]));
     let mut e = match (st.display.as_deref(), grid_cols) {
+        // `overflow-y: auto` on a grid (the command palette's list). A Rune viewport scrolls only
+        // in a bounded height, so a grid taller than its `max-h` becomes a viewport exactly that
+        // tall; a shorter one stays a plain grid at its own height.
+        (Some("grid"), Some(cols))
+            if st.scroll_y == Some(true)
+                && let Some(wire::Len::Px(wire::F(max_h))) = st.max_h
+                && grid_height_estimate(&kids) > max_h =>
+        {
+            col()
+                .h(max_h)
+                .scroll(rune::ScrollSpec {
+                    stick_bottom: false,
+                })
+                .child(build_grid(&kids, cols, path, inh, ctx, st).key(format!("{path}/grid")))
+        }
         (Some("grid"), Some(cols)) => build_grid(&kids, cols, path, inh, ctx, st),
         (Some("flex"), _) => {
             let is_row = st.dir.as_deref() != Some("col");
@@ -953,7 +970,14 @@ fn build_elem(
                 items,
                 block: false,
             };
-            add_children(apply_flex(base, st), &kids, path, inh, ctx, parent)
+            add_children(
+                crate::fx::under(apply_flex(base, st), attrs, st, path),
+                &kids,
+                path,
+                inh,
+                ctx,
+                parent,
+            )
         }
         (Some("inline") | None, _)
             if matches!(
@@ -968,7 +992,7 @@ fn build_elem(
                 block: false,
             };
             add_children(
-                apply_flex(inline_row(true), st),
+                crate::fx::under(apply_flex(inline_row(true), st), attrs, st, path),
                 &kids,
                 path,
                 inh,
@@ -985,7 +1009,7 @@ fn build_elem(
                 block: false,
             };
             add_children(
-                apply_flex(inline_row(true), st),
+                crate::fx::under(apply_flex(inline_row(true), st), attrs, st, path),
                 &kids,
                 path,
                 inh,
@@ -1000,7 +1024,14 @@ fn build_elem(
                 items,
                 block: true,
             };
-            add_children(apply_flex(col(), st), &kids, path, inh, ctx, parent)
+            add_children(
+                crate::fx::under(apply_flex(col(), st), attrs, st, path),
+                &kids,
+                path,
+                inh,
+                ctx,
+                parent,
+            )
         }
     };
     if let Some(wire::BgImage { url: Some(url), .. }) = &st.bg_image
@@ -1009,7 +1040,8 @@ fn build_elem(
         // `background-size: cover`, the common case for avatars and banners.
         e = e.pixels_fit(image.pixels(), SurfaceFit::Fill)
     }
-    e = apply_box(e.key(path), st);
+    e = crate::fx::glass_fill(apply_box(e.key(path), st), attrs, st);
+
     // A checkbox or radio is a 13px box unless styled, as a browser draws one; Tab skips a 0x0 one.
     if is_checkable(tag, attrs) {
         if st.w.is_none() {
@@ -1215,6 +1247,21 @@ fn drop_grow(node: &Arc<Node>, min_h_too: bool) -> Arc<Node> {
 /// A child that keeps a scrolling flex column from overflowing, as CSS flexes it: one that
 /// fills with a scroller, or one that grows and may shrink to nothing (`flex-1 min-h-0`, or
 /// `overflow: hidden`, whose automatic minimum size is zero).
+/// A rough height for a grid of menu rows: sections of rows, each about a menu item tall. Only
+/// decides whether a scrolling grid overflows its `max-h`.
+fn grid_height_estimate(kids: &[(usize, &Arc<Node>)]) -> f32 {
+    const ROW: f32 = 34.0;
+    const SECTION: f32 = 24.0;
+    kids.iter()
+        .map(|(_, node)| match node.as_ref() {
+            Node::Elem { children, .. } if !children.is_empty() => {
+                SECTION + children.len() as f32 * ROW
+            }
+            _ => ROW,
+        })
+        .sum()
+}
+
 fn bounds_scroller(node: &Arc<Node>) -> bool {
     if fills_with_scroll(node) {
         return true;

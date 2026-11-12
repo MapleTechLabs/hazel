@@ -216,6 +216,8 @@ const HOST_ATTRS = [
 	"tabindex",
 	// Moves the window, as Tauri's own attribute does: the host makes the element a drag region.
 	"data-tauri-drag-region",
+	// Shader effects the native host draws on the element (`apps/native/host/src/fx.rs`); the web ignores it.
+	"data-fx",
 ]
 const SVG_ATTRS = new Set([
 	"d",

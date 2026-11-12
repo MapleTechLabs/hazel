@@ -17,6 +17,7 @@ publish = false
 rune = { git = "https://github.com/Makisuo/rune", rev = "3b676200f9ab1923059651c4e81c0b77cb8699a2", features = [
 	"native-file-dialog",
 ] }
+rune-fx = { git = "https://github.com/Makisuo/rune", rev = "3b676200f9ab1923059651c4e81c0b77cb8699a2" }
 base64 = "0.22"
 # Decodes a picture and its mask picture to composite them (Rune's own decoder, same features).
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
