@@ -30,7 +30,12 @@ process.on("SIGTERM", () => process.exit(0))
  */
 const storagePath =
 	process.env.HAZEL_STORAGE_PATH ??
-	join(homedir(), "Library/Application Support", process.env.HAZEL_APP_ID ?? "com.hazel.native", "local-storage.json")
+	join(
+		homedir(),
+		"Library/Application Support",
+		process.env.HAZEL_APP_ID ?? "com.hazel.native",
+		"local-storage.json",
+	)
 
 const platform: NativePlatform = {
 	connect: stdioTransport,
@@ -63,7 +68,9 @@ const platform: NativePlatform = {
 				const saved: unknown = JSON.parse(readFileSync(storagePath, "utf8"))
 				if (typeof saved !== "object" || saved === null) return undefined
 				return Object.fromEntries(
-					Object.entries(saved).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+					Object.entries(saved).filter(
+						(entry): entry is [string, string] => typeof entry[1] === "string",
+					),
 				)
 			} catch {
 				// No file yet, or one cut short: start empty, as a browser with cleared storage does.
