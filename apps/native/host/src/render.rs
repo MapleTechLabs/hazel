@@ -1,7 +1,7 @@
 //! The runtime's tree drawn with Rune: each wire node becomes an element laid out as the browser
 //! would, and presses, keys, edits and layout go back to the runtime as the DOM events its
 //! handlers expect.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -615,7 +615,7 @@ impl State {
             && h == shown
         {
             // Its fields may still owe the app's value to an edit this tree acknowledges.
-            let fields_changed = sync_fields(root, "r", msg.ack, &mut self.fields);
+            let fields_changed = sync_fields(root, "r", msg.ack, &mut self.fields, None);
             let page_changed = self.page != msg.page;
             self.page = msg.page;
             return fields_changed || page_changed;
@@ -624,7 +624,11 @@ impl State {
         let (root, subtrees) = self.subtrees.resolve(msg.root);
         // CSS collapses vertical margins in block flow; Rune's layout does not, so do it here.
         let root = margins::collapse(&root, false);
-        sync_fields(&root, "r", msg.ack, &mut self.fields);
+        // A field gone from the tree goes from here too: its path may hold another field later,
+        // which must start from the app's text, and a live field under an element turns its memo off.
+        let mut live = HashSet::new();
+        sync_fields(&root, "r", msg.ack, &mut self.fields, Some(&mut live));
+        self.fields.retain(|path, _| live.contains(path));
         self.page = msg.page;
         self.portals.clear();
         collect_portals(&root, "r", &mut self.portals);
@@ -637,6 +641,16 @@ impl State {
         self.root = Some(root);
         self.subtrees = subtrees;
         true
+    }
+
+    /// A fresh runtime replaced the one that drew this (a full page load, a restart after a
+    /// crash): what the host kept for the old one's trees, edits and scrolls means nothing to it.
+    /// The screen keeps the old tree until the new runtime's first one arrives.
+    pub fn runtime_replaced(&mut self) {
+        self.fields.clear();
+        self.root_hash = None;
+        self.subtrees = Subtrees::default();
+        scroll_seqs().lock().expect("scroll seqs").clear();
     }
 }
 
@@ -666,7 +680,14 @@ fn collect_portals(node: &Arc<Node>, path: &str, out: &mut Vec<(String, Arc<Node
 
 /// Controlled inputs: take the app's `value` unless the user has typed past what the tree reflects.
 /// Whether any field's text changed.
-fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, Field>) -> bool {
+/// `live`, when given, collects every field's path.
+fn sync_fields(
+    node: &Node,
+    path: &str,
+    ack: u64,
+    fields: &mut HashMap<String, Field>,
+    mut live: Option<&mut HashSet<String>>,
+) -> bool {
     let Node::Elem {
         tag,
         attrs,
@@ -679,6 +700,9 @@ fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, F
     let mut changed = false;
     if is_text_field(tag, attrs) || attrs.contains_key("data-editable") {
         let value = attrs.get("value").cloned().unwrap_or_default();
+        if let Some(live) = live.as_deref_mut() {
+            live.insert(path.to_string());
+        }
         // A new field takes the app's text below, caret and all, as a changed one does.
         let field = fields
             .entry(path.to_string())
@@ -696,7 +720,7 @@ fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, F
         }
     }
     for (i, child) in children.iter().enumerate() {
-        changed |= sync_fields(child, &child_path(path, i, child), ack, fields);
+        changed |= sync_fields(child, &child_path(path, i, child), ack, fields, live.as_deref_mut());
     }
     changed
 }
@@ -864,7 +888,9 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             } else {
                 rune::memo(
                     path.to_string(),
-                    (hash, inh.key(), form, keys.to_vec()),
+                    // `pointer-events: none` comes from an ancestor: the same subtree under one
+                    // that toggles it must gain or lose its presses.
+                    (hash, inh.key(), form, keys.to_vec(), ctx.no_pointer),
                     make,
                 )
             };
@@ -1954,8 +1980,8 @@ pub(crate) fn scroll_seqs() -> &'static std::sync::Mutex<HashMap<String, u64>> {
 pub fn note_scroll(path: &str, seq: Option<u64>) {
     if let Some(seq) = seq {
         let mut seqs = scroll_seqs().lock().expect("scroll seqs");
-        let entry = seqs.entry(path.to_string()).or_default();
-        *entry = (*entry).max(seq);
+        // Scrolls arrive in order; a replaced runtime numbers its own from the start again.
+        seqs.insert(path.to_string(), seq);
     }
 }
 

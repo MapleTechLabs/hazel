@@ -19,10 +19,28 @@ export type ShimEnv = {
 	 * reboots the page. @default the in-memory history moves, the app keeps running
 	 */
 	loadDocument?: (href: string) => void
+	/** Keeps `localStorage` between launches. @default it starts empty every time */
+	storage?: PersistedStorage
 }
 
-class MemoryStorage {
-	private items = new Map<string, string>()
+/** Where `localStorage` keeps its entries between launches; absent, it lasts as long as the runtime. */
+export type PersistedStorage = {
+	/** The entries saved last time, if any. */
+	readonly load: () => Record<string, string> | undefined
+	/** Saves every entry, replacing what was saved. */
+	readonly save: (entries: Record<string, string>) => void
+}
+
+/** How long writes gather before one save: the app often sets several keys in a row. */
+const STORAGE_SAVE_DELAY_MS = 200
+
+/** `Storage` in memory, saved through `persisted` (in batches, and on `flush`) when given. */
+export class MemoryStorage {
+	private readonly items: Map<string, string>
+	private saveTimer: ReturnType<typeof setTimeout> | undefined
+	constructor(private readonly persisted?: PersistedStorage) {
+		this.items = new Map(Object.entries(persisted?.load() ?? {}))
+	}
 	get length() {
 		return this.items.size
 	}
@@ -33,13 +51,29 @@ class MemoryStorage {
 		return this.items.get(key) ?? null
 	}
 	setItem(key: string, value: string) {
-		this.items.set(key, String(value))
+		const text = String(value)
+		if (this.items.get(key) === text) return
+		this.items.set(key, text)
+		this.changed()
 	}
 	removeItem(key: string) {
-		this.items.delete(key)
+		if (this.items.delete(key)) this.changed()
 	}
 	clear() {
+		if (this.items.size === 0) return
 		this.items.clear()
+		this.changed()
+	}
+	/** Saves now what is waiting to be saved (before the runtime is replaced or quits). */
+	flush() {
+		if (this.saveTimer === undefined) return
+		clearTimeout(this.saveTimer)
+		this.saveTimer = undefined
+		this.persisted?.save(Object.fromEntries(this.items))
+	}
+	private changed() {
+		if (this.persisted === undefined || this.saveTimer !== undefined) return
+		this.saveTimer = setTimeout(() => this.flush(), STORAGE_SAVE_DELAY_MS)
 	}
 }
 
@@ -232,6 +266,7 @@ export const installShims = (env: ShimEnv) => {
 		type === "scroll" && (options === true || (typeof options === "object" && options.capture === true))
 			? capturedScrolls
 			: windowTarget
+	const localStorage = new MemoryStorage(env.storage)
 	let url = new URL(env.url)
 	const entries: Array<string> = [url.href]
 	let index = 0
@@ -263,13 +298,19 @@ export const installShims = (env: ShimEnv) => {
 		},
 		assign: (next: string) => navigate(next, "push"),
 		replace: (next: string) => navigate(next, "replace"),
-		reload: () => env.loadDocument?.(url.href),
+		reload: () => loadDocument(url.href),
+	}
+	/** A full page load ends this runtime: what it stored is saved first. */
+	const loadDocument = (href: string) => {
+		if (env.loadDocument === undefined) return
+		localStorage.flush()
+		env.loadDocument(href)
 	}
 	/** In-app paths move the history (or load the page anew); another origin opens in the browser. */
 	const navigate = (next: string | URL, mode: "push" | "replace") => {
 		const target = URL.parse(String(next), url)
 		if (target !== null && target.origin !== url.origin) return openExternal(target, env.openUrl)
-		if (target !== null && env.loadDocument !== undefined) return env.loadDocument(target.href)
+		if (target !== null && env.loadDocument !== undefined) return loadDocument(target.href)
 		if (mode === "push") history.pushState(null, "", next)
 		else history.replaceState(null, "", next)
 	}
@@ -374,7 +415,7 @@ export const installShims = (env: ShimEnv) => {
 		document,
 		history,
 		matchMedia,
-		localStorage: new MemoryStorage(),
+		localStorage,
 		sessionStorage: new MemoryStorage(),
 		MutationObserver: InertObserver,
 		ResizeObserver: InertObserver,
@@ -461,6 +502,8 @@ export const installShims = (env: ShimEnv) => {
 	}
 	return {
 		updateEnv,
+		/** Saves `localStorage` now: the runtime is about to end. */
+		flushStorage: () => localStorage.flush(),
 		history,
 		location,
 		rootStyle: rootStyle as ReadonlyMap<string, string>,
