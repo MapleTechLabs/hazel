@@ -243,8 +243,10 @@ export const ApplyScroll = Command.define("ApplyScroll", {
 			const element = document.getElementById(id)
 			if (element === null) return Message.SkippedApplyScroll({ version })
 			yield* afterLayout(element)
-			element.scrollTop =
-				adjustment._tag === "To" ? adjustment.scrollTop : element.scrollTop + adjustment.deltaPx
+			// `By` is relative: the native shell applies it to the offset the reader is at by then,
+			// so a drag or fling under way carries on instead of snapping back to a stale offset.
+			if (adjustment._tag === "To") element.scrollTop = adjustment.scrollTop
+			else element.scrollBy({ top: adjustment.deltaPx })
 			return Message.CompletedApplyScroll({ version, scrollTop: element.scrollTop })
 		}),
 })

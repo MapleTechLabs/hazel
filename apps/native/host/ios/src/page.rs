@@ -95,14 +95,15 @@ window.__hazel = {{
         worker.onmessage = (event) => host.postMessage(event.data)
         worker.onerror = (event) =>
             host.postMessage({{ log: `[worker] ${{event.message}} ${{event.filename}}:${{event.lineno}}` }})
-        for (const line of early.splice(0)) worker.postMessage(line)
+        for (const batch of early.splice(0)) worker.postMessage(batch)
     }},
     reply(message) {{
         worker?.postMessage(message)
     }},
+    // A frame's lines cross in one message, as they do down the desktop's pipe: the worker
+    // splits them, and handles a frame's reports in one task.
     toWorker(text) {{
-        for (const line of text.split("\n"))
-            if (line !== "") worker === undefined ? early.push(line) : worker.postMessage(line)
+        if (text !== "") worker === undefined ? early.push(text) : worker.postMessage(text)
     }},
 }}
 host.postMessage({{ ready: {id} }})
@@ -215,8 +216,8 @@ mod tests {
         assert!(ready < start);
         // Lines that arrive before the worker exists wait for it, in order.
         assert!(
-            page.contains("worker === undefined ? early.push(line) : worker.postMessage(line)")
+            page.contains("worker === undefined ? early.push(text) : worker.postMessage(text)")
         );
-        assert!(page.contains("for (const line of early.splice(0)) worker.postMessage(line)"));
+        assert!(page.contains("for (const batch of early.splice(0)) worker.postMessage(batch)"));
     }
 }

@@ -249,6 +249,21 @@ pub(crate) fn scroll_seqs() -> &'static std::sync::Mutex<HashMap<String, u64>> {
     SEQS.get_or_init(Default::default)
 }
 
+/// Applies a runtime scroll: `by` shifts the viewport from where it is now (`element.scrollBy`),
+/// which leaves a finger's drag and a fling's momentum running; otherwise it jumps to `top`.
+pub fn apply_scroll(tx: &mut rune::Tx, path: String, top: f32, by: Option<f32>) {
+    if std::env::var("NATIVE_DEBUG").is_ok() {
+        match by {
+            Some(by) => eprintln!("[host] scroll_by {by}"),
+            None => eprintln!("[host] scroll_to {top}"),
+        }
+    }
+    match by {
+        Some(by) => tx.scroll_by(path, by),
+        None => tx.scroll_to_instant(path, 0.0, top),
+    }
+}
+
 /// Notes a runtime scroll's `seq` for the offset reports after it.
 pub fn note_scroll(path: &str, seq: Option<u64>) {
     if let Some(seq) = seq {

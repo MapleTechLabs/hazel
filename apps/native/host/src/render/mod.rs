@@ -20,9 +20,9 @@ use crate::layout::{Inherit, apply_box, apply_flex, center_vertically, color, te
 use crate::wire::{self, Node, Style};
 
 pub use events::{PRESS_EVENTS, window_key};
-pub use handlers::note_scroll;
 #[cfg(test)]
 pub(crate) use handlers::scroll_seqs;
+pub use handlers::{apply_scroll, note_scroll};
 pub(crate) use state::is_portal;
 pub use state::{Env, State, child_path, last_env};
 

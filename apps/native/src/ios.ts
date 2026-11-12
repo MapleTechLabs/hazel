@@ -72,8 +72,14 @@ globalThis.onmessage = (event: MessageEvent<string | FetchReply | BackReply>) =>
 	else if (typeof data !== "string") {
 		replies.get(data.id)?.(data)
 		replies.delete(data.id)
-	} else if (deliver === undefined) early.push(data)
-	else deliver(data)
+	} else {
+		// A batch of host lines (one frame's reports), split here so they run in one task.
+		for (const line of data.split("\n")) {
+			if (line === "") continue
+			if (deliver === undefined) early.push(line)
+			else deliver(line)
+		}
+	}
 }
 
 /**
