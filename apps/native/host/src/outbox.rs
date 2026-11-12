@@ -32,7 +32,12 @@ pub fn set_writer(out: Box<dyn Write + Send>) {
 }
 
 pub fn write_line(message: serde_json::Value) {
-    let line = format!("{message}\n");
+    write_text(format!("{message}\n"));
+}
+
+/// A line already serialized, newline included: for reports sent every frame (a scrolling
+/// row's rect), which skip building a `serde_json::Value` each time.
+pub fn write_text(line: String) {
     // Tests read what was sent right after the frame that sent it.
     if cfg!(test) {
         write_now(&line);

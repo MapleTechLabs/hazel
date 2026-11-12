@@ -8,7 +8,7 @@ use serde_json::json;
 
 use crate::html::{focusable, is_checkable, script_focusable};
 use crate::layout::focus_styles;
-use crate::outbox::write_line;
+use crate::outbox::{write_line, write_text};
 use crate::wire::Style;
 
 use super::Ctx;
@@ -211,12 +211,13 @@ pub(super) fn behaviour(
 
 /// An element a runtime Mount observes: report its layout, and its offset when it scrolls.
 pub(super) fn observe(e: El, path: &str, st: &Style) -> El {
-    let layout_path = path.to_string();
+    // Serialized once per build: inside a scrolling list every observed row reports each frame.
+    let prefix = format!(r#"{{"t":"layout","path":{},"#, json!(path));
     // A report for the runtime, no change to the host's own state: no need to build its view
     // again, which inside a scrolling list would be every frame.
-    let e = e.on_layout_tx(move |_: &mut State, [x, y, w, h]: [f32; 4], tx| {
+    let e = e.on_layout_tx(move |_: &mut State, rect: [f32; 4], tx| {
         tx.live_only();
-        write_line(json!({ "t": "layout", "path": layout_path, "x": x, "y": y, "w": w, "h": h }));
+        write_text(layout_line(&prefix, rect));
     });
     if st.scroll_y != Some(true) {
         return e;
@@ -239,6 +240,13 @@ pub(super) fn observe(e: El, path: &str, st: &Style) -> El {
             json!({ "t": "scrolled", "path": scroll_path, "top": at.offset[1], "seq": seq }),
         );
     })
+}
+
+/// A layout report after its serialized `{"t":"layout","path":…,` prefix. A coordinate that is
+/// not finite has no JSON number and reports as zero.
+fn layout_line(prefix: &str, rect: [f32; 4]) -> String {
+    let [x, y, w, h] = rect.map(|v| if v.is_finite() { v } else { 0.0 });
+    format!("{prefix}\"x\":{x},\"y\":{y},\"w\":{w},\"h\":{h}}}\n")
 }
 
 /// The last runtime scroll the host applied to each viewport: its offset reports carry that
@@ -279,4 +287,25 @@ pub(super) fn focus_field_on_press(e: El, path: &str) -> El {
     let field = format!("{path}/field");
     e.cursor(Cursor::Text)
         .on_press_tx(move |_: &mut State, tx| tx.focus(field.clone()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_layout_line_is_the_json_the_runtime_reads() {
+        let path = r#"r/0/k"quoted" key"#;
+        let prefix = format!(r#"{{"t":"layout","path":{},"#, json!(path));
+        let line = layout_line(&prefix, [1.5, -20.25, 300.0, f32::NAN]);
+        assert!(line.ends_with('\n'));
+        let parsed: serde_json::Value = serde_json::from_str(line.trim_end()).unwrap();
+        assert_eq!(parsed["t"], "layout");
+        assert_eq!(parsed["path"], path);
+        let at = |k: &str| parsed[k].as_f64().unwrap();
+        assert_eq!(
+            [at("x"), at("y"), at("w"), at("h")],
+            [1.5, -20.25, 300.0, 0.0]
+        );
+    }
 }
