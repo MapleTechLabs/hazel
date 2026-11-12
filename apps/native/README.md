@@ -53,8 +53,8 @@ compiles after the commit that shows it, and the screen restyles.
 Message and editor event; `NATIVE_STATS=<file>` appends per-commit timings.
 `HAZEL_FIXTURE_HTML=<file.html>` ends the offline #general with a message showing that page as an
 HTML render, served from a local port as the api serves one (the file is read on every load); a
-page URL instead is shown as it is (iOS: `bun scripts/serve-fixture-html.ts page.html` serves the
-file and prints the URL to build with). Offline, links still unfurl: the link-preview worker's
+page URL instead is shown as it is (iOS: `bun run serve-fixture-html page.html` serves the file
+and prints the URL to build with). Offline, links still unfurl: the link-preview worker's
 requests (previews, tweets) go to the network.
 
 `host/target/release/hazel-native --capture script.json` runs headless on a real-time frame loop and

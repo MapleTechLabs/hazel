@@ -2,7 +2,7 @@
  * Serves a page as the api serves an HTML render, for the iOS Simulator's offline fixture, whose
  * runtime cannot serve one itself:
  *
- *   bun scripts/serve-fixture-html.ts page.html [port]
+ *   bun run serve-fixture-html page.html [port]
  *   HAZEL_FIXTURE_HTML=<the URL it prints> bun run ios --install booted
  *
  * The file is read on every load, so an edit shows when the app reloads the render.
