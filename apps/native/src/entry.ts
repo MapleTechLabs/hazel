@@ -7,8 +7,13 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeF
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { stdioTransport, StyleResolver } from "@hazel/foldkit-rune"
+import { Option, Schema } from "effect"
 import { overlayPlugin } from "./overlay-plugin"
 import type { NativePlatform } from "./platform"
+
+/** The saved store: an object of strings; a value of another type is dropped, not the whole store. */
+const decodeSaved = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))
+const isString = Schema.is(Schema.String)
 
 // Before any app module loads: its overlay helpers become the host-drawn ones.
 Bun.plugin(overlayPlugin)
@@ -65,11 +70,11 @@ const platform: NativePlatform = {
 	storage: {
 		load: () => {
 			try {
-				const saved: unknown = JSON.parse(readFileSync(storagePath, "utf8"))
-				if (typeof saved !== "object" || saved === null) return undefined
+				const saved = decodeSaved(JSON.parse(readFileSync(storagePath, "utf8")))
+				if (Option.isNone(saved)) return undefined
 				return Object.fromEntries(
-					Object.entries(saved).filter(
-						(entry): entry is [string, string] => typeof entry[1] === "string",
+					Object.entries(saved.value).filter((entry): entry is [string, string] =>
+						isString(entry[1]),
 					),
 				)
 			} catch {

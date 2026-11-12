@@ -9,7 +9,7 @@ import { view } from "./view"
 
 /** The desktop page through its view: the launch-at-login switch waits for the real autostart state. */
 
-const shared = makeShared()
+const shared = makeShared({ isDesktop: true })
 const openAtLogin = Scene.label("Open at login")
 
 describe("launch at startup", () => {

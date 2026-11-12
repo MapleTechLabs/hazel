@@ -1,7 +1,7 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconCheck, IconCube, IconDownload } from "../../../icons"
-import { hasUpdater, isDesktop } from "../../../platform/desktop"
+import { hasUpdater } from "../../../platform/desktop"
 import * as Updates from "../../../platform/updates"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
@@ -246,7 +246,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			pageHeader(h, "Desktop", "Settings for the desktop application."),
 			// Autostart is a Tauri plugin: the native app (an updater without Tauri) has none yet,
 			// and a browser that opens this page directly has neither.
-			...(isDesktop
+			...(shared.isDesktop
 				? [
 						h.div(
 							[h.Class("flex flex-col gap-5")],

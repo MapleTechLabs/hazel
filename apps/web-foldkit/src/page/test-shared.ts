@@ -11,6 +11,7 @@ export const sharedDefaults = {
 	keys: appKeymap.defaults,
 	keybindingOverrides: {},
 	keyboardPlatform: "linux",
+	isDesktop: false,
 	desktopUpdate: { _tag: "Idle" },
 	isOverlayOpen: false,
 } satisfies Partial<Shared>
