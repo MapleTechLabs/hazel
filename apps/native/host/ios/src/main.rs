@@ -3,6 +3,8 @@
 #[cfg(target_os = "ios")]
 mod bridge;
 #[cfg(target_os = "ios")]
+mod http;
+#[cfg(target_os = "ios")]
 mod keyboard;
 #[cfg(any(test, target_os = "ios"))]
 mod page;

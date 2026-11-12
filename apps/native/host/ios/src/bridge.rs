@@ -123,6 +123,16 @@ fn to_worker(text: &str) {
     });
 }
 
+/// A host reply to one of the worker's requests (an object, not a protocol line).
+pub(crate) fn reply(message: &serde_json::Value) {
+    let script = format!("__hazel.reply({message})");
+    WEB.with_borrow(|web| {
+        if let Some(web) = web {
+            evaluate(web, &script);
+        }
+    });
+}
+
 fn json_string(text: &str) -> String {
     serde_json::Value::String(text.to_string()).to_string()
 }
@@ -203,6 +213,8 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
             let app = UIApplication::sharedApplication(mtm);
             unsafe { app.openURL_options_completionHandler(&url, &NSDictionary::new(), None) };
         }
+    } else if let Some(text) = field("fetch") {
+        crate::http::send(&text);
     } else if let Some(text) = field("copy") {
         unsafe { UIPasteboard::generalPasteboard().setString(Some(&NSString::from_str(&text))) };
     }

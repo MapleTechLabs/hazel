@@ -3,7 +3,7 @@
  * WebKit's JIT), and its page relays between the worker and the Rune host (`host/ios`). Protocol
  * messages cross as JSON lines (strings); the platform's own requests as objects.
  */
-import { nativeClient } from "@hazel/auth/contract"
+import { nativeClient, nativeHeaders } from "@hazel/auth/contract"
 import type { PrecompiledStyles } from "@hazel/foldkit-rune"
 import { parseHostLine } from "@hazel/foldkit-rune"
 import type { NativePlatform } from "./platform"
@@ -19,6 +19,18 @@ export type IosRequest =
 	| { readonly open: string }
 	| { readonly copy: string }
 	| { readonly signIn: string; readonly callbackScheme: string }
+	/** A request the host sends for the worker (`host/ios/src/http.rs`), as JSON. */
+	| { readonly fetch: string }
+
+/** The host's answer to a `fetch` request. */
+type FetchReply =
+	| { readonly id: number; readonly error: string }
+	| {
+			readonly id: number
+			readonly status: number
+			readonly headers: Record<string, string>
+			readonly body: string
+	  }
 
 /** The scheme of the link sign-in hands back to the native app (`com.hazel.native`). */
 const CALLBACK_SCHEME = new URL(nativeClient.returnUrl).protocol.slice(0, -1)
@@ -28,9 +40,40 @@ const post = globalThis.postMessage.bind(globalThis)
 const request = (message: IosRequest) => post(message)
 const early: Array<string> = []
 let deliver: ((line: string) => void) | undefined
-globalThis.onmessage = (event: MessageEvent<string>) => {
-	if (deliver === undefined) early.push(event.data)
-	else deliver(event.data)
+const replies = new Map<number, (reply: FetchReply) => void>()
+globalThis.onmessage = (event: MessageEvent<string | FetchReply>) => {
+	const data = event.data
+	if (typeof data !== "string") {
+		replies.get(data.id)?.(data)
+		replies.delete(data.id)
+	} else if (deliver === undefined) early.push(data)
+	else deliver(data)
+}
+
+/**
+ * The app's requests as the native app (`x-auth-mode: native`: sign-in, the session) go out
+ * through the host: the API admits them only without `Origin`, `Sec-Fetch-Mode` and cookies,
+ * which WebKit puts on every fetch from here. Everything else is the page's own fetch.
+ */
+const webFetch = globalThis.fetch.bind(globalThis)
+let nextFetch = 0
+globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+	const outgoing = new Request(input, init)
+	if (outgoing.headers.get(nativeHeaders.modeHeader) !== "native") return webFetch(outgoing)
+	const id = ++nextFetch
+	const body = ["GET", "HEAD"].includes(outgoing.method) ? undefined : await outgoing.text()
+	const reply = await new Promise<FetchReply>((resolve, reject) => {
+		replies.set(id, resolve)
+		outgoing.signal.addEventListener("abort", () => {
+			replies.delete(id)
+			reject(outgoing.signal.reason)
+		})
+		const headers = Object.fromEntries(outgoing.headers)
+		request({ fetch: JSON.stringify({ id, url: outgoing.url, method: outgoing.method, headers, body }) })
+	})
+	if ("error" in reply) throw new TypeError(`Load failed: ${reply.error}`)
+	const empty = [101, 204, 205, 304].includes(reply.status)
+	return new Response(empty ? null : reply.body, { status: reply.status, headers: reply.headers })
 }
 
 // Bun's, which some of the app's dependencies schedule with.

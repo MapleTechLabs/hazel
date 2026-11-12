@@ -97,6 +97,9 @@ window.__hazel = {{
             host.postMessage({{ log: `[worker] ${{event.message}} ${{event.filename}}:${{event.lineno}}` }})
         for (const line of early.splice(0)) worker.postMessage(line)
     }},
+    reply(message) {{
+        worker?.postMessage(message)
+    }},
     toWorker(text) {{
         for (const line of text.split("\n"))
             if (line !== "") worker === undefined ? early.push(line) : worker.postMessage(line)
