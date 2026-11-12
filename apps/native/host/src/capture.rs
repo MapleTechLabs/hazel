@@ -328,15 +328,18 @@ impl Session {
             (gpu, renderer, target)
         });
         renderer.upload_images(&gpu.device, &gpu.queue, &mut self.rt.images);
-        renderer.prepare(
+        let mut encoder = gpu.device.create_command_encoder(&Default::default());
+        // As the window's compositor draws it, effects included.
+        self.fx.draw(
             &gpu.device,
             &gpu.queue,
-            &mut self.rt.text.atlas,
-            &self.rt.instances,
+            &mut encoder,
+            &target.view,
+            FORMAT,
             (dw, dh),
+            &mut self.rt,
+            renderer,
         );
-        let mut encoder = gpu.device.create_command_encoder(&Default::default());
-        renderer.draw(&mut encoder, &target.view, self.rt.clear_color());
         renderer.submit(&gpu.queue, encoder);
         began.elapsed().as_secs_f64() * 1000.0
     }
