@@ -345,8 +345,15 @@ fn an_img_with_a_data_png_draws_its_pixels() {
         .wait()
         .expect("a png");
     let mut rt = Runtime::new(s, view, (40.0, 40.0), Env::new(false, 1.0));
-    rt.frame(0.0);
-    assert!(render(&mut rt, (40, 40)).is(20, 20, RED));
+    // Rune takes the decoded picture in on a later frame on some platforms (lavapipe on Linux), as
+    // a window keeps drawing until it lands.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let mut frame = render(&mut rt, (40, 40));
+    while !frame.is(20, 20, RED) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        frame = render(&mut rt, (40, 40));
+    }
+    assert!(frame.is(20, 20, RED), "centre {:?}", frame.at(20, 20));
 }
 
 #[test]

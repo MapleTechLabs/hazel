@@ -203,6 +203,10 @@ export type RuntimeToHost =
 	 * they have not decided. Answered by `notifyPermission`.
 	 */
 	| { readonly t: "notifyPermission"; readonly id: number; readonly request: boolean }
+	/** Put `text` on the system clipboard. */
+	| { readonly t: "copy"; readonly text: string }
+	/** Open a web or mail link in the system's browser or mail app; the host drops other schemes. */
+	| { readonly t: "open"; readonly url: string }
 	/** A system notification; `group` gathers a channel's notifications together. */
 	| { readonly t: "notify"; readonly title: string; readonly body: string; readonly group?: string }
 
