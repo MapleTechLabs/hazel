@@ -1155,6 +1155,7 @@ dependencies = [
  "objc2-user-notifications 0.3.2",
  "objc2-web-kit",
  "rune",
+ "rune-fx",
  "serde",
  "serde_json",
  "wgpu",
@@ -2840,6 +2841,17 @@ dependencies = [
  "xkbcommon",
  "zbus 6.2.1",
  "zeroize",
+]
+
+[[package]]
+name = "rune-fx"
+version = "0.0.1"
+source = "git+https://github.com/Makisuo/rune?rev=3b676200f9ab1923059651c4e81c0b77cb8699a2#3b676200f9ab1923059651c4e81c0b77cb8699a2"
+dependencies = [
+ "bytemuck",
+ "rune-motion",
+ "rune-staging",
+ "wgpu",
 ]
 
 [[package]]

@@ -92,7 +92,8 @@ fn main() {
         .titlebar(TITLEBAR)
         .init(move || initial)
         .on_open_url(open_url)
-        .on_frame_drawn(frames::sync);
+        .on_frame_drawn(frames::sync)
+        .compositor(hazel_native::fx::Effects::default());
     let handle = app.handle();
     std::thread::spawn(move || {
         for msg in early {

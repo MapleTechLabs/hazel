@@ -69,6 +69,8 @@ pub(super) fn dom_key(key: &rune::edit::Key) -> Option<&'static str> {
 pub(super) fn element_key_name(key: &rune::edit::Key) -> Option<String> {
     match key {
         rune::edit::Key::Text(t) => Some(t.clone()),
+        // A character typed with Command (⌘K): the window reports it apart from typed text.
+        rune::edit::Key::Command(c) => Some(c.to_string()),
         key => dom_key(key).map(str::to_string),
     }
 }
