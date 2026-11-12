@@ -1,6 +1,16 @@
 import { Option, Schema } from "effect"
 import { describe, expect, test } from "vitest"
-import { combo, comboLabel, comboOfPress, identityOf, KeyCombo, keyCaps, normalizeCombo } from "./key-combo"
+import {
+	combo,
+	comboLabel,
+	comboOfPress,
+	comboSearchWords,
+	identityOf,
+	isTypingSafe,
+	KeyCombo,
+	keyCaps,
+	normalizeCombo,
+} from "./key-combo"
 
 const press = (
 	key: string,
@@ -54,6 +64,20 @@ describe("comboOfPress", () => {
 		expect(comboOfPress(press("k", { metaKey: true }), "windows")).toEqual(Option.some("Meta+K"))
 	})
 
+	test("both primary keys held are named, so the combo stays valid", () => {
+		for (const platform of ["mac", "windows"] as const) {
+			const recorded = comboOfPress(press("k", { metaKey: true, ctrlKey: true }), platform)
+			expect(recorded).toEqual(Option.some("Control+Meta+K"))
+			expect(Schema.is(KeyCombo)(Option.getOrThrow(recorded))).toBe(true)
+		}
+	})
+
+	test("a letter whose upper case is two letters keeps its own spelling", () => {
+		const recorded = comboOfPress(press("ß", { altKey: true }), "linux")
+		expect(recorded).toEqual(Option.some("Alt+ß"))
+		expect(Schema.is(KeyCombo)(Option.getOrThrow(recorded))).toBe(true)
+	})
+
 	test("a modifier alone, or a key no binding can match, makes no combo", () => {
 		expect(comboOfPress(press("Shift", { shiftKey: true }), "mac")).toEqual(Option.none())
 		expect(comboOfPress(press("Meta", { metaKey: true }), "mac")).toEqual(Option.none())
@@ -82,5 +106,46 @@ describe("labels", () => {
 		expect(comboLabel("Mod+Alt+ArrowUp", "mac")).toBe("⌥⌘↑")
 		expect(comboLabel("Mod+Shift+K", "windows")).toBe("Ctrl+Shift+K")
 		expect(comboLabel("Escape", "linux")).toBe("Esc")
+	})
+})
+
+describe("comboSearchWords", () => {
+	test("names each key the way the platform does", () => {
+		expect(comboSearchWords("Mod+Alt+ArrowUp", "mac")).toEqual(
+			expect.arrayContaining(["⌘", "cmd", "command", "option", "alt", "up", "arrowup"]),
+		)
+		expect(comboSearchWords("Mod+Shift+K", "windows")).toEqual(
+			expect.arrayContaining(["ctrl", "control", "shift", "k"]),
+		)
+		expect(comboSearchWords("Mod+K", "windows")).not.toContain("cmd")
+		expect(comboSearchWords("Escape", "linux")).toEqual(expect.arrayContaining(["esc", "escape"]))
+	})
+})
+
+describe("isTypingSafe", () => {
+	test("a key that types needs ⌘, Ctrl or Win (Alt types on a Mac); keys that type nothing need less", () => {
+		for (const text of [
+			"Mod+K",
+			"Alt+ArrowUp",
+			"Control+J",
+			"Meta+Tab",
+			"Escape",
+			"Shift+Escape",
+			"PageUp",
+			"F5",
+		])
+			expect(isTypingSafe(combo(text)), text).toBe(true)
+		for (const text of [
+			"K",
+			"Shift+K",
+			"Alt+K",
+			"Alt+@",
+			"Alt+Space",
+			"Tab",
+			"Shift+Tab",
+			"ArrowUp",
+			"/",
+		])
+			expect(isTypingSafe(combo(text)), text).toBe(false)
 	})
 })

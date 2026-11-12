@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { appKeymap } from "./app-keymap"
-import { combo, identityOf, type Platform } from "./key-combo"
+import { combo, identityOf, isTypingSafe, type Platform } from "./key-combo"
 import { defineKeymap } from "./keymap"
 
 const keymap = defineKeymap({
@@ -50,15 +50,32 @@ describe("defineKeymap", () => {
 	})
 
 	test("reset and unbind", () => {
-		const overrides = { open: combo("Mod+P") }
-		expect(keymap.reset(overrides, "open")).toEqual({})
+		expect(keymap.reset({ open: combo("Mod+P") }, "open", "linux")).toEqual({
+			overrides: {},
+			displaced: [],
+		})
 		expect(keymap.unbind({}, "open")).toEqual({ open: null })
 	})
 
-	test("clean drops unknown actions, fixed actions and keys that no longer parse", () => {
+	test("reset takes the default key back from the action that was given it", () => {
+		const moved = keymap.assign({}, "search", combo("Mod+K"), "linux").overrides
+		const { overrides, displaced } = keymap.reset(moved, "open", "linux")
+		expect(displaced).toEqual(["search"])
+		expect(keymap.resolve(overrides, "linux")).toMatchObject({ open: "Mod+K", search: null })
+	})
+
+	test("clean drops unknown actions, fixed actions, and values that are not a safe key", () => {
 		expect(
-			keymap.clean({ open: "Mod+P", removed: "Mod+J", bold: "Mod+J", search: "Mod+", inbox: null }),
+			keymap.clean({
+				open: "Mod+P",
+				removed: "Mod+J",
+				bold: "Mod+J",
+				search: "Mod+",
+				inbox: null,
+			}),
 		).toEqual({ open: "Mod+P", inbox: null })
+		// One bad entry (a number, a bare letter) leaves the rest.
+		expect(keymap.clean({ open: 42, search: "J", inbox: "Mod+J" })).toEqual({ inbox: "Mod+J" })
 	})
 
 	test("bindings skip unbound actions", () => {
@@ -84,5 +101,12 @@ describe("appKeymap", () => {
 
 	test("with no overrides every action keeps its default", () => {
 		expect(appKeymap.resolve({}, "mac")).toEqual(appKeymap.defaults)
+	})
+
+	test("every rebindable default is safe to bind, so Reset never restores a key the recorder refuses", () => {
+		for (const action of appKeymap.actions) {
+			if (action.rebindable && action.defaultKey !== null)
+				expect(isTypingSafe(action.defaultKey), action.id).toBe(true)
+		}
 	})
 })

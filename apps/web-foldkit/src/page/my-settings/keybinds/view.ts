@@ -2,7 +2,14 @@ import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twJoin } from "tailwind-merge"
 import { appKeymap, KEYMAP_CATEGORIES } from "~/lib/keybindings/app-keymap"
-import { comboLabel, keyCaps, type KeyCombo, modifierCaps, type Platform } from "~/lib/keybindings/key-combo"
+import {
+	comboLabel,
+	comboSearchWords,
+	keyCaps,
+	type KeyCombo,
+	modifierCaps,
+	type Platform,
+} from "~/lib/keybindings/key-combo"
 import { IconArrowPath, IconClose, IconLock, IconWarning } from "../../../icons"
 import { badge } from "../../../ui/badge"
 import { ariaButton, button } from "../../../ui/button"
@@ -42,19 +49,29 @@ const caps = (h: H, key: KeyCombo, platform: Platform): Html =>
 
 // MATCHING
 
+/**
+ * The query as typed appears in the row's text or key label (`⌘K`, `Ctrl+K`), or each of its words
+ * (split on spaces and `+`) starts a word of the row or a name of its keys: `cmd k`, `ctrl+shift`,
+ * `esc`. A one-letter word only matches a key, so the `k` of `cmd k` is not the start of "keyboard".
+ */
 const matches = (action: AppAction, query: string, shared: Shared): boolean => {
 	const needle = query.trim().toLowerCase()
 	if (needle === "") return true
+	const platform = shared.keyboardPlatform
 	const keys = appKeymap.keysOf(shared.keys, action.id)
-	return [
-		action.label,
-		action.description,
-		action.category,
-		...keys.map((key) => comboLabel(key, shared.keyboardPlatform)),
-	]
-		.join(" ")
-		.toLowerCase()
-		.includes(needle)
+	const text = [action.label, action.description, action.category].join(" ").toLowerCase()
+	const labels = keys.map((key) => comboLabel(key, platform).toLowerCase())
+	if (text.includes(needle) || labels.some((label) => label.includes(needle))) return true
+	const textWords = text.split(/\s+/)
+	const keyWords = keys.flatMap((key) => comboSearchWords(key, platform))
+	return needle
+		.split(/[\s+]+/)
+		.filter((token) => token !== "")
+		.every((token) =>
+			[...token].length === 1
+				? keyWords.includes(token)
+				: [...textWords, ...keyWords].some((word) => word.startsWith(token)),
+		)
 }
 
 // ROW PARTS
