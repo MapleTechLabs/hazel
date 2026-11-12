@@ -177,6 +177,8 @@ export type Style = {
 	fontWeight?: number
 	opacity?: number
 	scrollY?: boolean
+	/** `overflow-x: auto`/`scroll`: the host scrolls a flex row sideways (`scroll_x`). */
+	scrollX?: boolean
 	clip?: boolean
 	/** `contain: layout`/`paint`, `display: flow-root`: its own formatting context, so its
 	 * children's margins stay inside it. */
@@ -1613,6 +1615,7 @@ export class StyleResolver {
 			case "overflow": {
 				const [x = "visible", y = x] = v.split(/\s+/)
 				if (y === "auto" || y === "scroll") s.scrollY = true
+				if (x === "auto" || x === "scroll") s.scrollX = true
 				if ([x, y].some((o) => o === "hidden" || o === "clip")) s.clip = true
 				break
 			}
@@ -1622,7 +1625,7 @@ export class StyleResolver {
 				break
 			case "overflow-x":
 				if (v === "hidden" || v === "clip") s.clip = true
-				else if (v === "auto" || v === "scroll") unsupported()
+				else if (v === "auto" || v === "scroll") s.scrollX = true
 				break
 			case "text-overflow":
 				s.truncate = v === "ellipsis"

@@ -2784,6 +2784,7 @@ fn a_frame_takes_its_box_its_clips_and_what_overlays_paint_over_it() {
             path: "r/0/2".into(),
             src: "https://api.hazel.sh/html-renders/a?sig=1#hazel-display=inline".into(),
             clips: vec!["r/0".into()],
+            layer: None,
         }]
     );
     // The pinned date's pill; and the menu's panel, not its layer and not what the panel holds.
@@ -2792,11 +2793,13 @@ fn a_frame_takes_its_box_its_clips_and_what_overlays_paint_over_it() {
         vec![
             CoverSpec {
                 path: "r/0/0/0".into(),
-                modal: false
+                modal: false,
+                sticky_in: Some(None),
             },
             CoverSpec {
                 path: "r/1/0".into(),
-                modal: false
+                modal: false,
+                sticky_in: None,
             }
         ]
     );
@@ -2828,6 +2831,12 @@ fn a_dialog_covers_the_frames_behind_it_and_not_its_own() {
         e("iframe", json!({ "w": 100, "h": 100 }), vec![]),
         src.clone(),
     );
+    // The page's pinned date, behind the dialog.
+    let pinned = e(
+        "div",
+        json!({ "w": 80, "h": 24, "stickyTop": 0, "bg": "#333333ff" }),
+        vec![],
+    );
     let fullscreen = with_attrs(e("iframe", json!({ "w": 100, "h": 100 }), vec![]), src);
     let mut dialog = e(
         "div",
@@ -2838,29 +2847,41 @@ fn a_dialog_covers_the_frames_behind_it_and_not_its_own() {
             vec![fullscreen],
         )],
     );
-    dialog["ov"] = json!({ "portal": 1, "modal": "r/1" });
+    dialog["ov"] = json!({ "portal": 1, "modal": "r/2" });
     let s = state(e(
         "div",
         json!({ "w": 400, "h": 300 }),
-        vec![inline, dialog],
+        vec![pinned, inline, dialog],
     ));
     assert_eq!(
         s.covers,
-        vec![CoverSpec {
-            path: "r/1".into(),
-            modal: true
-        }]
+        vec![
+            CoverSpec {
+                path: "r/0".into(),
+                modal: false,
+                sticky_in: Some(None),
+            },
+            CoverSpec {
+                path: "r/2".into(),
+                modal: true,
+                sticky_in: None,
+            }
+        ]
     );
-    let inside = |frame: &str| {
-        s.covers.iter().any(|cover| {
-            frame
-                .strip_prefix(cover.path.as_str())
-                .is_some_and(|rest| rest.starts_with('/'))
-        })
+    let over = |frame: &str| -> Vec<&str> {
+        let frame = s.frames.iter().find(|f| f.path == frame).unwrap();
+        s.covers
+            .iter()
+            .filter(|cover| cover.is_over(frame))
+            .map(|cover| cover.path.as_str())
+            .collect()
     };
     let paths: Vec<&str> = s.frames.iter().map(|frame| frame.path.as_str()).collect();
-    assert_eq!(paths, ["r/0", "r/1/0/0"]);
-    assert!(!inside("r/0") && inside("r/1/0/0"));
+    assert_eq!(paths, ["r/1", "r/2/0/0"]);
+    // The page's frame is under the pinned date and the dialog; the dialog's own frame is under
+    // neither: the date is in the page behind the dialog.
+    assert_eq!(over("r/1"), ["r/0", "r/2"]);
+    assert!(over("r/2/0/0").is_empty());
 }
 
 fn composer_page() -> Runtime<State> {
@@ -3448,4 +3469,54 @@ fn a_command_key_reaches_document_with_meta() {
         keys.iter().any(|m| m["meta"] == true),
         "Cmd+K sent to document: {keys:?}"
     );
+}
+
+/// A tweet's photo strip (`url-embeds.ts`): a centred row holding an `overflow-x-auto` row whose
+/// photos are `w-5/6` of it. The strip takes the row's width, as in CSS, so each photo is 5/6
+/// of that and not of the strip's own (empty) content.
+#[test]
+fn a_horizontal_strip_takes_its_parents_width_and_its_items_share_it() {
+    let photo = || e("button", json!({ "w": { "frac": 0.8 }, "h": 100 }), vec![]);
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "dir": "col", "w": 400, "h": 300 }),
+            vec![e(
+                "div",
+                json!({ "display": "flex", "justify": "center", "items": "center" }),
+                vec![e(
+                    "div",
+                    json!({ "display": "flex", "scrollX": true, "gapCol": 10 }),
+                    vec![photo(), photo()],
+                )],
+            )],
+        ),
+        (400.0, 300.0),
+    );
+    assert_eq!(rect(&rt, "r/0/0")[2], 400.0);
+    assert_eq!(rect(&rt, "r/0/0/0"), [0.0, 0.0, 320.0, 100.0]);
+    // The second photo goes on past the strip's edge, where it scrolls into view.
+    assert_eq!(rect(&rt, "r/0/0/1")[0], 330.0);
+}
+
+/// `overflow-x-auto` on a block (a code block, a table's wrapper) keeps CSS's wrapping: Rune's
+/// horizontal viewport would lay its text out on one line.
+#[test]
+fn overflow_x_on_a_block_leaves_its_text_wrapped() {
+    let words = "lorem ipsum dolor sit amet ".repeat(8);
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 200, "h": 400 }),
+            vec![e(
+                "pre",
+                json!({ "scrollX": true, "fontSize": 14, "lineHeight": 20 }),
+                vec![t(&words)],
+            )],
+        ),
+        (200.0, 400.0),
+    );
+    let pre = rect(&rt, "r/0");
+    assert_eq!(pre[2], 200.0);
+    assert!(pre[3] > 40.0, "the text wraps onto several lines: {pre:?}");
 }

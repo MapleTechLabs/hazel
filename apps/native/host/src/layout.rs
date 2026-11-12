@@ -676,7 +676,36 @@ pub fn apply_flex(mut e: El, st: &Style) -> El {
             stick_bottom: false,
         })
     }
+    if scrolls_x(st) {
+        e = if st.scroll_y == Some(true) {
+            e.scroll_xy()
+        } else {
+            e.scroll_x()
+        };
+        // In CSS a scroller with no width of its own takes the room it has: its content (a
+        // picture at its natural size) is wider, and as an overflow box it may shrink to fit.
+        // Rune would size it to the content alone, which a `w-5/6` item sized off the
+        // viewport leaves empty.
+        // A horizontal margin would take it past its parent: it keeps Rune's own width then.
+        let side_margins = st
+            .margin
+            .is_some_and(|[_, r, _, l]| r.0 != 0.0 || l.0 != 0.0);
+        if matches!(st.w, None | Some(Len::Auto)) && !side_margins {
+            e = e.w_full().shrink()
+        }
+    }
     e
+}
+
+/// `overflow-x: auto` on a flex row that does not wrap (a filmstrip, a tab strip): Rune's
+/// horizontal viewport lays its items out side by side at their own widths, as CSS does there.
+/// Anywhere else (a code block, a table, a wrapped row) Rune would unwrap the content to its
+/// natural width, which CSS does not, so that box stays as wide as its parent.
+pub(crate) fn scrolls_x(st: &Style) -> bool {
+    st.scroll_x == Some(true)
+        && st.display.as_deref() == Some("flex")
+        && st.dir.as_deref() != Some("col")
+        && st.wrap != Some(true)
 }
 
 /// Auto margins, which Rune lacks. On the parent's main axis the child sits in a growing slot

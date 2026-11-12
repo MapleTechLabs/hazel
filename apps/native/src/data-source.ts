@@ -47,13 +47,19 @@ const installOffline = async (
 	const { makeOfflineFetch } = await import("./offline-backend")
 	const { makeFixtureServer, makeFixtureWebSocket } = await import("./fixture/fixture-socket")
 	const server = makeFixtureServer()
-	// `HAZEL_FIXTURE_HTML=<file.html>`: #general ends with that page as an HTML render.
+	// `HAZEL_FIXTURE_HTML=<file.html or page URL>`: #general ends with that page as an HTML render.
+	const { fixtureHtmlRenderAt, isPageUrl } = await import("./fixture/html-render-message")
 	const htmlRender =
-		config.fixtureHtml === undefined ? undefined : await platform.fixtureHtmlRender?.(config.fixtureHtml)
+		config.fixtureHtml === undefined
+			? undefined
+			: isPageUrl(config.fixtureHtml)
+				? fixtureHtmlRenderAt(config.fixtureHtml)
+				: await platform.fixtureHtmlRender?.(config.fixtureHtml)
 	if (htmlRender !== undefined)
 		server.write("channel", htmlRender.message.channelId, "messages", [htmlRender.message])
 	globalThis.fetch = makeOfflineFetch({
 		backendUrl: config.backendUrl,
+		unfurls: globalThis.fetch.bind(globalThis),
 		server,
 		htmlRenderUrl: htmlRender?.url,
 		user: offline.currentUser,
