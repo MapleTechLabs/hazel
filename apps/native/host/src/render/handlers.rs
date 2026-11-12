@@ -6,7 +6,8 @@ use std::collections::HashMap;
 use rune::{Cursor, El};
 use serde_json::json;
 
-use crate::layout::{focus_styles, focusable, is_checkable, script_focusable};
+use crate::html::{focusable, is_checkable, script_focusable};
+use crate::layout::focus_styles;
 use crate::outbox::write_line;
 use crate::wire::Style;
 

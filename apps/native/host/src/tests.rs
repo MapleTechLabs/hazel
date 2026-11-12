@@ -3301,3 +3301,21 @@ fn a_replaced_runtime_starts_with_no_fields_or_scroll_seqs() {
     crate::note_scroll("r/replaced-runtime", Some(1));
     assert_eq!(crate::render::scroll_seqs().lock().unwrap()["r/replaced-runtime"], 1);
 }
+
+#[test]
+fn a_b_element_holds_its_text_and_a_button_on_one_line() {
+    // `<b>` is inline as `<span>` is: its children run along a line, the button after the text.
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300 }),
+            vec![e(
+                "b",
+                json!({}),
+                vec![t("bold"), e("button", json!({ "w": 20, "h": 10 }), vec![])],
+            )],
+        ),
+        (300.0, 100.0),
+    );
+    assert!(rect(&rt, "r/0/1")[0] > 0.0, "{:?}", rect(&rt, "r/0/1"));
+}

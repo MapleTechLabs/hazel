@@ -4,10 +4,11 @@ use std::sync::Arc;
 
 use rune::{El, el};
 
+use crate::html::lays_out_inline;
 use crate::layout::{Inherit, apply_box, grid_track};
 use crate::wire::{self, F, Node, Style};
 
-use super::flow::{is_inline, is_inline_tag, restyle};
+use super::flow::{is_inline, restyle};
 use super::handlers::{behaviour, presses};
 use super::state::{child_path, is_portal};
 use super::{Ctx, build};
@@ -177,7 +178,7 @@ fn max_content(node: &Node, inh: Inherit) -> f32 {
             let row = match st.display.as_deref() {
                 Some("flex") => st.dir.as_deref() != Some("col"),
                 Some("grid") => false,
-                _ => is_inline_tag(tag) || children.iter().all(is_inline),
+                _ => lays_out_inline(tag) || children.iter().all(is_inline),
             };
             let inner = if row {
                 let gap = st.gap_col.map_or(0.0, |g| g.0) * children.len().saturating_sub(1) as f32;

@@ -14,10 +14,9 @@ use std::sync::Arc;
 
 use rune::{Align, Color, Cx, El, Side, SurfaceFit, col, el, row};
 
+use crate::html::{is_checkable, is_text_field, lays_out_inline};
 use crate::images;
-use crate::layout::{
-    Inherit, apply_box, apply_flex, center_vertically, color, is_checkable, is_text_field, text_run,
-};
+use crate::layout::{Inherit, apply_box, apply_flex, center_vertically, color, text_run};
 use crate::wire::{self, Node, Style};
 
 pub use events::{PRESS_EVENTS, window_key};
@@ -288,12 +287,7 @@ fn build_elem(
             };
             add_children(apply_flex(base, st), &kids, path, inh, ctx, parent)
         }
-        (Some("inline") | None, _)
-            if matches!(
-                tag,
-                "span" | "a" | "kbd" | "label" | "button" | "strong" | "em" | "code" | "time"
-            ) =>
-        {
+        (Some("inline") | None, _) if lays_out_inline(tag) => {
             // Inline boxes may shrink below their text, so the text inside can wrap.
             let parent = Parent {
                 is_row: true,

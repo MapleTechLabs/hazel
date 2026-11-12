@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use rune::edit::TextEdit;
 use serde_json::json;
 
-use crate::layout::is_text_field;
+use crate::html::is_text_field;
 use crate::outbox::{set_generation, write_line};
 use crate::wire::{self, Node, Subtrees, TreeMsg};
 use crate::{frames, images, margins};

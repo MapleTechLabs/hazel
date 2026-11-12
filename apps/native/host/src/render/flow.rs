@@ -5,18 +5,12 @@ use std::sync::Arc;
 
 use rune::{El, row};
 
+use crate::html::{is_atomic_inline_tag, is_inline_tag};
 use crate::layout::{ASCENT, DESCENT, Inherit, auto_margins};
 use crate::wire::{self, F, Node, Style};
 
 use super::state::{child_path, is_portal};
 use super::{Ctx, build};
-
-pub(super) fn is_inline_tag(tag: &str) -> bool {
-    matches!(
-        tag,
-        "span" | "a" | "strong" | "em" | "code" | "b" | "i" | "kbd" | "time" | "label"
-    )
-}
 
 pub(super) fn is_inline(node: &Arc<Node>) -> bool {
     match node.as_ref() {
@@ -28,27 +22,8 @@ pub(super) fn is_inline(node: &Arc<Node>) -> bool {
             // `display: contents` adds no box: inline when what it holds is.
             (_, Some("contents")) => children.iter().all(is_inline),
             (Some(true), _) | (_, Some("inline")) => true,
-            (_, None) => matches!(
-                tag.as_str(),
-                "span"
-                    | "a"
-                    | "strong"
-                    | "em"
-                    | "code"
-                    | "b"
-                    | "i"
-                    | "s"
-                    | "u"
-                    | "mark"
-                    | "time"
-                    | "br"
-                    | "label"
-                    | "kbd"
-                    | "small"
-                    | "abbr"
-                    | "sub"
-                    | "sup"
-            ),
+            // A `<button>` is atomic (`is_atomic_inline`), not part of the line's own text.
+            (_, None) => is_inline_tag(tag),
             _ => false,
         },
     }
@@ -485,12 +460,7 @@ fn first_baseline(node: &Node, inh: Inherit) -> Option<f32> {
 fn is_atomic_inline(node: &Node, st: &Style) -> bool {
     match (st.inline, st.display.as_deref(), node) {
         (Some(inline), _, _) => inline,
-        (None, None, Node::Elem { tag, .. }) => {
-            matches!(
-                tag.as_str(),
-                "button" | "img" | "input" | "select" | "textarea"
-            )
-        }
+        (None, None, Node::Elem { tag, .. }) => is_atomic_inline_tag(tag),
         _ => false,
     }
 }

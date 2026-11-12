@@ -3,6 +3,7 @@
 //! installs where the messages go (`outbox::set_writer`).
 pub mod fetch;
 pub mod frames;
+pub mod html;
 pub mod images;
 pub mod layout;
 mod margins;
