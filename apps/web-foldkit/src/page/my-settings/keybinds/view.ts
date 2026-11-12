@@ -109,7 +109,7 @@ const recorder = (h: H, model: Model, action: AppAction, shared: Shared): Html =
 		h,
 		{
 			className: twJoin(
-				"flex h-9 min-w-36 items-center justify-end gap-1 rounded-lg border px-2 outline-none transition-colors duration-150",
+				"flex h-9 min-w-36 items-center justify-end justify-self-end gap-1 rounded-lg border px-2 outline-none transition-colors duration-150",
 				"focus-visible:ring-2 focus-visible:ring-ring/40",
 				isRecording
 					? "border-primary bg-primary/5 ring-4 ring-primary/15"
@@ -198,7 +198,8 @@ const noticeLine = (h: H, model: Model, action: AppAction): Array<Html> => {
 
 const rowLabel = (h: H, action: AppAction, isCustom: boolean): Html =>
 	h.div(
-		[h.Class("flex min-w-0 flex-col gap-0.5")],
+		// On a phone the label takes its own line, so the key column never cuts it to a stub.
+		[h.Class("flex min-w-0 flex-col gap-0.5 max-md:col-span-full")],
 		[
 			h.div(
 				[h.Class("flex items-center gap-2")],
@@ -216,7 +217,7 @@ const editableRow = (h: H, model: Model, action: AppAction, shared: Shared): Htm
 		[
 			h.Class(
 				twJoin(
-					"group/row grid grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-1.5 px-4 py-2.5 transition-colors duration-150",
+					"group/row grid grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-1.5 px-4 py-2.5 transition-colors duration-150 max-md:grid-cols-[1fr_auto]",
 					model.recording === action.id && "bg-primary/[0.03]",
 				),
 			),
@@ -232,11 +233,15 @@ const editableRow = (h: H, model: Model, action: AppAction, shared: Shared): Htm
 /** A built-in key: listed so you know it is taken, not changeable. */
 const fixedRow = (h: H, action: AppAction, shared: Shared): Html =>
 	h.li(
-		[h.Class("grid grid-cols-[1fr_auto_auto] items-center gap-x-3 px-4 py-2.5")],
+		[
+			h.Class(
+				"grid grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-1.5 px-4 py-2.5 max-md:grid-cols-[1fr_auto]",
+			),
+		],
 		[
 			rowLabel(h, action, false),
 			h.span(
-				[h.Class("flex min-w-36 items-center justify-end gap-2 px-2")],
+				[h.Class("flex min-w-36 items-center justify-end justify-self-end gap-2 px-2")],
 				appKeymap.keysOf(shared.keys, action.id).map((key) => caps(h, key, shared.keyboardPlatform)),
 			),
 			h.span(
