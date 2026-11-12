@@ -244,8 +244,9 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
 		[
 			pageHeader(h, "Desktop", "Settings for the desktop application."),
-			// Autostart is a Tauri plugin: the native app (an updater without Tauri) has none yet.
-			...(!hasUpdater || isDesktop
+			// Autostart is a Tauri plugin: the native app (an updater without Tauri) has none yet,
+			// and a browser that opens this page directly has neither.
+			...(isDesktop
 				? [
 						h.div(
 							[h.Class("flex flex-col gap-5")],

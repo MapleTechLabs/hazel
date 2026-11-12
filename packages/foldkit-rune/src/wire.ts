@@ -156,6 +156,10 @@ export type HostToRuntime =
 			readonly downloaded: number
 			readonly total?: number | null
 	  }
+	/** The window became the key window (`true`) or another app's did: `document.hasFocus()`. */
+	| { readonly t: "windowFocus"; readonly focused: boolean }
+	/** The answer to notification permission request `id`: whether the app may show notifications. */
+	| { readonly t: "notifyPermission"; readonly id: number; readonly granted: boolean }
 
 export type RuntimeToHost =
 	| {
@@ -194,6 +198,13 @@ export type RuntimeToHost =
 	| { readonly t: "update"; readonly id: number; readonly op: "check" | "download" | "install" }
 	/** Quit, and open the app again once it has gone (after an update installs); a failure is answered by `update` with `id`. */
 	| { readonly t: "relaunch"; readonly id: number }
+	/**
+	 * Whether the app may show system notifications; with `request`, asks the user first when
+	 * they have not decided. Answered by `notifyPermission`.
+	 */
+	| { readonly t: "notifyPermission"; readonly id: number; readonly request: boolean }
+	/** A system notification; `group` gathers a channel's notifications together. */
+	| { readonly t: "notify"; readonly title: string; readonly body: string; readonly group?: string }
 
 /** Timings for one commit, for the benchmarks. */
 export type CommitStats = {

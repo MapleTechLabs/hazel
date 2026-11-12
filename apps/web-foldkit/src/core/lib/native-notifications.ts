@@ -5,17 +5,12 @@
  */
 
 import type { Channel, Message, User } from "@hazel/domain/models"
-import { getTauriNotification, type TauriNotificationApi } from "@hazel/desktop/bridge"
-import { isTauri } from "./tauri"
+import { getTauriNotification, type TauriNotificationApi } from "../../platform/tauri"
 
 let notificationApi: TauriNotificationApi | null = null
 let permissionGrantedCache: boolean | null = null
 
 const getNotificationApi = async (): Promise<TauriNotificationApi | null> => {
-	if (!isTauri()) {
-		return null
-	}
-
 	try {
 		notificationApi ??= getTauriNotification() ?? null
 		return notificationApi

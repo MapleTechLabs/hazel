@@ -5,15 +5,8 @@
 
 use std::sync::Arc;
 
+use crate::html::{is_inline_tag, is_opaque};
 use crate::wire::{F, Len, Node, Style};
-
-/// Tags whose default display is inline: they take part in a line, not in block flow.
-const INLINE_TAGS: [&str; 18] = [
-    "span", "a", "strong", "em", "code", "b", "i", "s", "u", "mark", "time", "br", "label", "kbd",
-    "small", "abbr", "sub", "sup",
-];
-/// Elements the host lays out as replaced boxes or tables: their insides are their own.
-const OPAQUE_TAGS: [&str; 6] = ["input", "textarea", "img", "table", "select", "button"];
 
 fn margin(st: &Style, side: usize) -> f32 {
     st.margin.map_or(0.0, |m| m[side].0)
@@ -27,10 +20,10 @@ fn edge(st: &Style, side: usize) -> f32 {
 fn is_block_container(tag: &str, st: &Style) -> bool {
     let block = match st.display.as_deref() {
         Some("block") => true,
-        None => !INLINE_TAGS.contains(&tag),
+        None => !is_inline_tag(tag),
         _ => false,
     };
-    block && st.inline != Some(true) && !OPAQUE_TAGS.contains(&tag)
+    block && st.inline != Some(true) && !is_opaque(tag)
 }
 
 /// A block-level box in its parent's flow: it collapses margins with its siblings.
@@ -43,7 +36,7 @@ fn is_block_level(node: &Node) -> bool {
             let inline = match st.display.as_deref() {
                 Some("block" | "flex" | "grid") => st.inline == Some(true),
                 Some(_) => true,
-                None => st.inline == Some(true) || INLINE_TAGS.contains(&tag.as_str()),
+                None => st.inline == Some(true) || is_inline_tag(tag),
             };
             shown && !out_of_flow && !inline
         }

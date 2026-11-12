@@ -17,6 +17,30 @@ const makeBridge = (updates = false) => {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe("the native desktop bridge", () => {
+	it("offers notifications only where the host shows them, and asks it for permission", async () => {
+		expect(makeBridge().bridge.tauri.notification).toBeUndefined()
+		const sent: Array<unknown> = []
+		const bridge = makeDesktopBridge({
+			send: (r) => sent.push(r),
+			openUrl: () => {},
+			notifications: true,
+		})
+		const notification = bridge.tauri.notification
+		if (notification === undefined) throw new Error("no notification API")
+		const granted = notification.isPermissionGranted()
+		const asked = notification.requestPermission()
+		bridge.answer({ t: "notifyPermission", id: 1, granted: false })
+		bridge.answer({ t: "notifyPermission", id: 2, granted: true })
+		expect(await granted).toBe(false)
+		expect(await asked).toBe("granted")
+		notification.sendNotification({ title: "Ada in #general", body: "Hi", group: "c1" })
+		expect(sent).toEqual([
+			{ t: "notifyPermission", id: 1, request: false },
+			{ t: "notifyPermission", id: 2, request: true },
+			{ t: "notify", title: "Ada in #general", body: "Hi", group: "c1" },
+		])
+	})
+
 	it("reads and writes the vault through the host", async () => {
 		const { bridge, sent } = makeBridge()
 		const written = bridge.tauri.core.invoke("auth_vault_write", { record: "{}" })

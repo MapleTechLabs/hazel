@@ -340,7 +340,7 @@ fn an_img_with_a_data_png_draws_its_pixels() {
         )],
     ));
     s.images
-        .get(&src, 40.0)
+        .get(&src, 40.0, "r/0")
         .expect("decodes")
         .wait()
         .expect("a png");
@@ -371,14 +371,13 @@ fn an_unsized_img_takes_its_pictures_size_within_its_max_height() {
             )],
         )
     };
-    // The decode lands off the main thread. `poll` rebuilds the row in the app; tests run side by
-    // side and share its flag, so each rebuilds its own rows until the picture shows.
+    // The decode lands off the main thread; `poll` rebuilds the rows that waited on it.
     let settled = |max_h: f32| {
         let mut rt = runtime(img(max_h), (400.0, 200.0));
         let started = std::time::Instant::now();
         loop {
-            rt.update(|_: &mut State, tx| {
-                tx.invalidate_memos_by_prefix("r");
+            rt.update(|s: &mut State, tx| {
+                crate::poll(s, 0.0, tx);
             });
             rt.frame(0.016);
             let drawn = rt.presented("r/0/0").map(|p| p.0);
@@ -3261,4 +3260,94 @@ fn narrowing_the_window_rewraps_a_message() {
         x + w
     );
     assert!(h > 30.0, "the text did not rewrap: {h} tall");
+}
+
+#[test]
+fn a_field_that_leaves_the_tree_leaves_the_host_state() {
+    let field = || with_attrs(e("input", json!({}), vec![]), json!({ "value": "draft" }));
+    let mut s = state(e("div", json!({}), vec![field()]));
+    assert!(s.fields.contains_key("r/0"));
+    let apply = |s: &mut State, root: Value, ack: u64| {
+        s.apply(
+            serde_json::from_value(
+                json!({ "ack": ack, "page": { "bg": "#ffffffff" }, "root": root }),
+            )
+            .expect("wire tree"),
+        )
+    };
+    apply(&mut s, e("div", json!({}), vec![t("no field")]), 1);
+    assert!(
+        s.fields.is_empty(),
+        "the dialog's input went with the dialog"
+    );
+    // A new field at the same path starts from the app's text, not the old one's.
+    apply(
+        &mut s,
+        e(
+            "div",
+            json!({}),
+            vec![with_attrs(
+                e("input", json!({}), vec![]),
+                json!({ "value": "" }),
+            )],
+        ),
+        2,
+    );
+    assert_eq!(s.fields["r/0"].edit.text, "");
+}
+
+#[test]
+fn a_replaced_runtime_starts_with_no_fields_or_scroll_seqs() {
+    let mut s = state(e(
+        "div",
+        json!({}),
+        vec![with_attrs(
+            e("input", json!({}), vec![]),
+            json!({ "value": "a" }),
+        )],
+    ));
+    s.fields.get_mut("r/0").expect("the field").last_sent = 9;
+    crate::note_scroll("r/replaced-runtime", Some(40));
+    s.runtime_replaced();
+    assert!(s.fields.is_empty() && s.root_hash.is_none());
+    assert!(
+        crate::render::scroll_seqs()
+            .lock()
+            .unwrap()
+            .get("r/replaced-runtime")
+            .is_none()
+    );
+    // The new runtime numbers its scrolls from the start again, and the host follows it.
+    crate::note_scroll("r/replaced-runtime", Some(1));
+    assert_eq!(
+        crate::render::scroll_seqs().lock().unwrap()["r/replaced-runtime"],
+        1
+    );
+}
+
+#[test]
+fn a_reference_to_a_subtree_the_host_lacks_draws_empty_and_is_logged() {
+    let wire: crate::wire::WireNode =
+        serde_json::from_value(json!({ "k": "r", "h": "never-sent" })).expect("a ref");
+    let (node, _) = crate::wire::Subtrees::default().resolve(wire);
+    assert!(matches!(node.as_ref(), crate::wire::Node::Text(t) if t.is_empty()));
+    assert!(crate::wire::MISSING_REF_LOGGED.load(Ordering::Relaxed));
+}
+
+#[test]
+fn a_b_element_holds_its_text_and_a_button_on_one_line() {
+    // `<b>` is inline as `<span>` is: its children run along a line, the button after the text.
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300 }),
+            vec![e(
+                "b",
+                json!({}),
+                vec![t("bold"), e("button", json!({ "w": 20, "h": 10 }), vec![])],
+            )],
+        ),
+        (300.0, 100.0),
+    );
+    assert!(rect(&rt, "r/0/1")[0] > 0.0, "{:?}", rect(&rt, "r/0/1"));
 }
