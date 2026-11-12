@@ -234,6 +234,20 @@ const element = () => {
 	})
 }
 
+/**
+ * What `navigator` says the system is, as a browser on it would: the app's shortcuts read ⌘ on a
+ * Mac and an iPhone, Ctrl elsewhere.
+ */
+export const navigatorPlatform = (
+	system: string,
+): { readonly platform: string; readonly userAgent: string } => {
+	if (system === "darwin") return { platform: "MacIntel", userAgent: "Hazel Native (Macintosh; Rune)" }
+	if (system === "ios")
+		return { platform: "iPhone", userAgent: "Hazel Native (iPhone; CPU iPhone OS like Mac OS X; Rune)" }
+	if (system === "win32") return { platform: "Win32", userAgent: "Hazel Native (Windows NT 10.0; Rune)" }
+	return { platform: "Linux x86_64", userAgent: "Hazel Native (X11; Linux x86_64; Rune)" }
+}
+
 /** `CSS.escape` (CSS Object Model): an identifier safe to put in a selector. */
 export const cssEscape = (value: string): string => {
 	let out = ""
@@ -474,8 +488,7 @@ export const installShims = (env: ShimEnv) => {
 		configurable: true,
 		value: {
 			...globalThis.navigator,
-			platform: "MacIntel",
-			userAgent: "Hazel Native (Macintosh; Rune)",
+			...navigatorPlatform(process.platform),
 			onLine: true,
 			language: "en-US",
 			languages: ["en-US"],
