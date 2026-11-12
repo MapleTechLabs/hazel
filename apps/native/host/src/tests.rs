@@ -3582,3 +3582,49 @@ fn a_fixed_frame_is_its_own_layer() {
     assert!(s.frames[0].clips.is_empty(), "{:?}", s.frames[0].clips);
     assert!(!s.covers.iter().any(|cover| cover.is_over(&s.frames[0])));
 }
+
+/// A highlighted code block as the editor's viewer draws one: each leaf wraps its text in two
+/// spans, so the line breaks are inside inline elements. Each newline starts a line, as
+/// `white-space: pre` does; the last one starts none.
+#[test]
+fn pre_code_with_token_spans_breaks_at_its_newlines() {
+    let leaf = |s: &str| {
+        e(
+            "span",
+            json!({ "color": "#f00" }),
+            vec![e("span", json!({}), vec![t(s)])],
+        )
+    };
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 400, "h": 400 }),
+            vec![e(
+                "pre",
+                json!({ "whiteSpacePre": true, "fontSize": 14, "lineHeight": 20 }),
+                vec![e(
+                    "code",
+                    json!({}),
+                    vec![
+                        leaf("const"),
+                        leaf(" results = {\n  "),
+                        leaf("boot"),
+                        leaf(": 412,\n\n  "),
+                        leaf("ready"),
+                        leaf(": 731,\n}\n"),
+                    ],
+                )],
+            )],
+        ),
+        (400.0, 400.0),
+    );
+    let pre = rect(&rt, "r/0");
+    // Five lines: `const results = {`, `boot: 412,`, an empty one, `ready: 731,` and `}`.
+    assert!((pre[3] - 100.0).abs() < 1.0, "five lines of 20: {pre:?}");
+    let first = rect(&rt, "r/0/line0");
+    let boot = rect(&rt, "r/0/line1");
+    assert!(
+        boot[1] >= first[1] + first[3] - 0.5,
+        "boot starts its own line: {first:?} {boot:?}"
+    );
+}
