@@ -1,5 +1,5 @@
 import { type DesktopAuth, layerVault, makeDesktopAuth } from "@hazel/auth/desktop"
-import { getTauriCore, getTauriDeepLink, getTauriOpener } from "@hazel/desktop/bridge"
+import { getTauriCore, getTauriDeepLink, getTauriOpener } from "./tauri"
 import { BrowserLogin } from "@yielded/auth"
 import * as WebCrypto from "@yielded/auth/WebCrypto"
 import { Context, Effect, Exit, Layer, ManagedRuntime, Option, Schema, SynchronizedRef } from "effect"

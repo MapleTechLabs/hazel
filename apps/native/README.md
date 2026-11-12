@@ -12,7 +12,12 @@ Rune host (Rust, host/)                     Bun runtime (src/runtime.ts)
 ```
 
 `src/runtime.ts` boots the app against a `NativePlatform` (`src/platform.ts`: the host connection,
-log, browser, clipboard, stylesheet); `src/entry.ts` is the Bun platform the host spawns.
+log, browser, clipboard, stylesheet, saved storage); `src/entry.ts` is the Bun platform the host
+spawns. Boot reads its settings once (`src/config.ts`), installs the browser surface
+(`src/shims.ts`), the Tauri APIs the host answers (`src/desktop-bridge.ts`) and the data source
+(`src/data-source.ts`), then the element bridge (`src/mounts.ts` lists the web app's Mounts it runs,
+`src/document-bridge.ts` the `document` lookups only the tree can answer). The host's side mirrors
+it: `host/src/shell.rs` routes the runtime's messages the same way for the macOS and iOS shells.
 
 - **Foldkit** renders into a `RenderTarget` instead of a DOM container (patched in via
   `patches/foldkit@0.170.0.patch` until a release ships it).
@@ -86,7 +91,19 @@ The app signs in as the `native` client (`@hazel/auth` `nativeClient`), its own 
 with the Tauri app installed routes each callback to the right app.
 
 A full page load in the app (`load("/")` after sign-in, `location.reload()`) sends `reload`: the
-host replaces the runtime with a fresh one at that path, as a browser reloads the page.
+host replaces the runtime with a fresh one at that path, as a browser reloads the page. A runtime
+that ends on its own starts again at the page it last loaded, three times a minute at most; lines
+the window queued for the old one are dropped (`outbox`), and the window forgets the old one's
+fields and scroll state.
+
+**Storage.** Live, `localStorage` (the app's settings, recent channels) is saved to
+`~/Library/Application Support/<HAZEL_APP_ID>/local-storage.json` (`HAZEL_STORAGE_PATH` overrides),
+written in batches and before the runtime is replaced or quits. Offline runs start empty every time.
+
+**Notifications.** A bundle shows the web app's notifications through UserNotifications
+(`host/src/notify.rs`); the host reports the window gaining and losing key status, so
+`document.hasFocus()` holds them back while the window is in front. A host run from source has no
+bundle identifier and so offers no notification API.
 
 ## iOS (simulator)
 
@@ -192,6 +209,8 @@ synthetic utility page (`conformance:extract` records it).
 
 ## Not yet native
 
+- The Tauri app's menu (Settings, Check for Updates, New Channel, Invite) and its autostart setting.
+- The app's own notification sounds (`Audio` is silent); the system notification is quiet too.
 - Overlays beyond the modal popovers: tooltips (`AnchorTooltipPanel`), submenus
   (`PositionSubmenu`) and the image viewer.
 - Colours a `focus:` variant changes (Rune draws focus as a ring only), focus or press state on an

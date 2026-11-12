@@ -23,6 +23,8 @@ const HOST_MESSAGE_TAGS = {
 	vault: true,
 	update: true,
 	updateProgress: true,
+	notifyPermission: true,
+	windowFocus: true,
 } satisfies Record<HostToRuntime["t"], true>
 const HOST_TAGS = new Set<string>(Object.keys(HOST_MESSAGE_TAGS))
 

@@ -4,7 +4,7 @@
  * @description Enable/disable automatic app launch at system login
  */
 
-import { getTauriAutostart } from "@hazel/desktop/bridge"
+import { getTauriAutostart } from "./tauri"
 
 export async function enableAutostart(): Promise<boolean> {
 	const autostart = getTauriAutostart()

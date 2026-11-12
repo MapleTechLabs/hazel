@@ -4,11 +4,13 @@
 pub mod fetch;
 pub mod frames;
 pub mod fx;
+pub mod html;
 pub mod images;
 pub mod layout;
 mod margins;
 pub mod outbox;
 mod render;
+pub mod shell;
 pub mod sign_in;
 mod svg_text;
 #[cfg(test)]

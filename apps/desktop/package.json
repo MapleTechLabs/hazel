@@ -3,30 +3,13 @@
 	"version": "1.1.2",
 	"private": true,
 	"type": "module",
-	"main": "src/index.ts",
-	"exports": {
-		".": "./src/index.ts",
-		"./bridge": "./src/bridge/index.ts"
-	},
 	"scripts": {
 		"tauri": "tauri",
 		"tauri:dev": "tauri dev",
 		"tauri:build": "tauri build",
-		"build:web": "bun run --cwd ../web-foldkit build:desktop",
-		"typecheck": "tsc --noEmit"
-	},
-	"dependencies": {
-		"@tauri-apps/api": "~2.12.4",
-		"@tauri-apps/plugin-autostart": "~2.7.0",
-		"@tauri-apps/plugin-deep-link": "~2.6.3",
-		"@tauri-apps/plugin-notification": "~2.8.0",
-		"@tauri-apps/plugin-opener": "~2.7.2",
-		"@tauri-apps/plugin-process": "~2.4.0",
-		"@tauri-apps/plugin-store": "~2.5.0",
-		"@tauri-apps/plugin-updater": "~2.14.1"
+		"build:web": "bun run --cwd ../web-foldkit build:desktop"
 	},
 	"devDependencies": {
-		"@tauri-apps/cli": "^2.12.4",
-		"typescript": "catalog:tooling"
+		"@tauri-apps/cli": "^2.12.4"
 	}
 }

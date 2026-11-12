@@ -15,7 +15,7 @@ use hazel_native::{
     PRESS_EVENTS, State, TEXT_SMOOTHING, images, note_scroll, outbox, view, window_key,
 };
 
-use crate::runtime::{RuntimeChild, spawn_runtime};
+use crate::runtime::{FromRuntime, RuntimeChild, spawn_runtime};
 use crate::{initial_state, window_size};
 
 const FRAME: Duration = Duration::from_micros(16_667);
@@ -156,7 +156,7 @@ struct Timings {
 
 struct Session {
     rt: Runtime<State>,
-    messages: std::sync::mpsc::Receiver<RuntimeMsg>,
+    messages: std::sync::mpsc::Receiver<FromRuntime>,
     started: Instant,
     last_tree: Instant,
     first_tree_ms: Option<f64>,
@@ -178,26 +178,8 @@ impl Session {
         let began = Instant::now();
         let mut got_tree = false;
         while let Ok(msg) = self.messages.try_recv() {
-            match msg {
-                RuntimeMsg::Tree(tree) => {
-                    got_tree = true;
-                    self.timings.trees += 1;
-                    self.rt.update_if(move |s, _| s.apply(tree));
-                }
-                RuntimeMsg::Scroll { path, top, seq } => {
-                    note_scroll(&path, seq);
-                    if std::env::var("NATIVE_DEBUG").is_ok() {
-                        eprintln!("[host] scroll_to {top}")
-                    }
-                    self.rt
-                        .update(move |_, tx| tx.scroll_to_instant(path, 0.0, top))
-                }
-                request => {
-                    if let Some(run) = request.request() {
-                        self.rt.update(move |_, tx| run(tx))
-                    }
-                }
-            }
+            got_tree |= matches!(msg, FromRuntime::Message(RuntimeMsg::Tree(_)));
+            self.apply(msg);
         }
         let arrived = images::take_arrived();
         if arrived {
@@ -247,7 +229,7 @@ impl Session {
         while sent.elapsed() < Duration::from_secs(5) {
             if let Ok(msg) = self.messages.try_recv() {
                 let ack = match &msg {
-                    RuntimeMsg::Tree(tree) => Some(tree.ack),
+                    FromRuntime::Message(RuntimeMsg::Tree(tree)) => Some(tree.ack),
                     _ => None,
                 };
                 self.apply(msg);
@@ -276,7 +258,11 @@ impl Session {
             .is_some_and(|root| text_of(root).contains(needle))
     }
 
-    fn apply(&mut self, msg: RuntimeMsg) {
+    fn apply(&mut self, msg: FromRuntime) {
+        let msg = match msg {
+            FromRuntime::Message(msg) => msg,
+            FromRuntime::Replaced => return self.rt.update(|s, _| s.runtime_replaced()),
+        };
         match msg {
             RuntimeMsg::Tree(tree) => {
                 self.timings.trees += 1;
@@ -284,6 +270,9 @@ impl Session {
             }
             RuntimeMsg::Scroll { path, top, seq } => {
                 note_scroll(&path, seq);
+                if std::env::var("NATIVE_DEBUG").is_ok() {
+                    eprintln!("[host] scroll_to {top}")
+                }
                 self.rt
                     .update(move |_, tx| tx.scroll_to_instant(path, 0.0, top))
             }
@@ -513,7 +502,10 @@ pub fn run(script_path: &str) {
         serde_json::from_str(&std::fs::read_to_string(script_path).expect("read script"))
             .expect("parse script");
     let started = Instant::now();
-    let (mut child, messages) = spawn_runtime();
+    let (mut child, messages) = spawn_runtime().unwrap_or_else(|error| {
+        eprintln!("[capture] {error}");
+        std::process::exit(1)
+    });
     let scale: f32 = std::env::var("NATIVE_SCALE")
         .ok()
         .and_then(|v| v.parse().ok())

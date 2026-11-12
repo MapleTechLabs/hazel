@@ -5,19 +5,21 @@
 //!
 //! The runtime drives it as the web app drives Tauri's updater (`platform/updates.ts`): `check`,
 //! `download` (verified before it counts as downloaded), `install` (the bundle swapped in place),
-//! then `relaunch`. Like images, the network goes through `curl`.
+//! then `relaunch`, one step at a time (`answer`). Downloads go through the system's `curl`.
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::sync::mpsc::{Sender, channel};
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use base64::Engine;
+use hazel_native::outbox::write_line;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 /// The latest release's update manifest, redirected to its asset.
-const FEED: &str = "https://github.com/HazelChat/hazel/releases/latest/download/latest.json";
+const FEED: &str = "https://github.com/MapleTechLabs/hazel/releases/latest/download/latest.json";
 
 /// This build's version and the key its updates are signed with (base64 of the minisign public
 /// key file, as `tauri.conf.json` has it), compiled in by `scripts/bundle.ts`. A build without
@@ -134,10 +136,53 @@ pub fn verify(data: &[u8], signature: &str, pubkey: &str) -> Result<(), String> 
 }
 
 fn curl() -> Command {
-    let mut command = Command::new("curl");
-    // Fail on an HTTP error, follow GitHub's redirect to the asset, give up on a dead network.
-    command.args(["-fsSL", "--connect-timeout", "15"]);
+    // The system's, by path: an app opened from Finder has a bare `PATH`.
+    let mut command = Command::new("/usr/bin/curl");
+    // Fail on an HTTP error, follow GitHub's redirect to the asset, give up on a dead network,
+    // and on a transfer that stalls (under 1 KB/s for a minute).
+    command.args([
+        "-fsSL",
+        "--connect-timeout",
+        "15",
+        "--speed-limit",
+        "1024",
+        "--speed-time",
+        "60",
+    ]);
     command
+}
+
+/// Answers the runtime's update request `id` (`check`, `download`, `install`). Steps run one at
+/// a time, in order, off the reader and UI threads: a periodic check must not forget the
+/// download in flight, and a second download must not write over the first.
+pub fn answer(id: u64, op: String) {
+    static STEPS: OnceLock<Sender<(u64, String)>> = OnceLock::new();
+    let steps = STEPS.get_or_init(|| {
+        let (send, receive) = channel::<(u64, String)>();
+        std::thread::spawn(move || {
+            for (id, op) in receive {
+                run_step(id, &op);
+            }
+        });
+        send
+    });
+    let _ = steps.send((id, op));
+}
+
+fn run_step(id: u64, op: &str) {
+    let result = match op {
+        "check" => check(),
+        "download" => {
+            download(|downloaded, total| write_line(progress_message(id, downloaded, total)))
+                .map(|()| None)
+        }
+        "install" => install().map(|()| None),
+        _ => Err(format!("unknown update request {op}")),
+    };
+    if let Err(error) = &result {
+        eprintln!("[host] update {op}: {error}");
+    }
+    write_line(reply(id, result));
 }
 
 /// Fetches the manifest and keeps what it offers this build.
@@ -164,7 +209,8 @@ pub fn check() -> Result<Option<Release>, String> {
 pub fn download(progress: impl Fn(u64, Option<u64>)) -> Result<(), String> {
     let release = FOUND.lock().unwrap().clone().ok_or("no update was found")?;
     let pubkey = PUBKEY.ok_or("this build does not update")?;
-    let file = std::env::temp_dir().join(format!("hazel-update-{}.app.tar.gz", release.version));
+    // A fixed name: the version comes from the (unsigned) manifest and must not pick the path.
+    let file = std::env::temp_dir().join("hazel-update.app.tar.gz");
     let _ = std::fs::remove_file(&file);
 
     let total = content_length(&release.asset.url);
@@ -271,15 +317,22 @@ pub fn install_into(archive: &Path, bundle: &Path) -> Result<(), String> {
     std::fs::rename(bundle, &backup)
         .map_err(|e| cleanup(format!("cannot move the app aside: {e}")))?;
     if let Err(error) = std::fs::rename(&app, bundle) {
-        let _ = std::fs::rename(&backup, bundle);
+        // The old app goes back; if even that fails, it is left at `backup` and the error says so.
+        let restored = std::fs::rename(&backup, bundle).map_err(|e| {
+            format!(
+                "; the previous app could not be put back either ({e}), it is at {}",
+                backup.display()
+            )
+        });
         return Err(cleanup(format!(
-            "cannot move the update into place: {error}"
+            "cannot move the update into place: {error}{}",
+            restored.err().unwrap_or_default()
         )));
     }
     let _ = std::fs::remove_dir_all(&backup);
     let _ = std::fs::remove_dir_all(&staging);
     // Launch Services and the Dock pick up the new bundle's Info.plist and icon.
-    let _ = Command::new("touch").arg(bundle).status();
+    let _ = Command::new("/usr/bin/touch").arg(bundle).status();
     Ok(())
 }
 
