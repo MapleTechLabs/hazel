@@ -35,7 +35,7 @@ use flow::{
 use handlers::{behaviour, observe, presses};
 use media::{build_img, build_svg, picture_size};
 use state::{note_appearance, report_env, theme_override};
-use table_grid::{build_grid, build_table, grid_height_estimate};
+use table_grid::{build_grid, build_table, grid_height_estimate, grid_scroll_bound};
 
 /// The web app sets `-webkit-font-smoothing: antialiased` on `html`: text without CoreText's
 /// smoothing dilation, lighter than macOS's default.
@@ -278,7 +278,7 @@ fn build_elem(
         // tall; a shorter one stays a plain grid at its own height.
         (Some("grid"), Some(cols))
             if st.scroll_y == Some(true)
-                && let Some(wire::Len::Px(wire::F(max_h))) = st.max_h
+                && let Some(max_h) = grid_scroll_bound(st)
                 && grid_height_estimate(&kids) > max_h =>
         {
             col()

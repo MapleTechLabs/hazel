@@ -303,3 +303,20 @@ pub(super) fn grid_height_estimate(kids: &[(usize, &Arc<Node>)]) -> f32 {
         })
         .sum()
 }
+
+/// The height a scrolling grid may take: its pixel `max-h`, or for `max-h-full` (the command
+/// palette's list in a narrow window, whose panel is `max-h-[80dvh]` under a search row) that
+/// panel's share of the window less the row. Rune can't resolve a percentage max height, and a
+/// viewport needs a bounded one to scroll.
+pub(super) fn grid_scroll_bound(st: &Style) -> Option<f32> {
+    /// The panel's `80dvh` and its search row, which the list sits under.
+    const PANEL: f32 = 0.8;
+    const ABOVE: f32 = 48.0;
+    match st.max_h {
+        Some(wire::Len::Px(F(max_h))) => Some(max_h),
+        Some(wire::Len::Full) => {
+            super::state::reported_height().map(|h| (h * PANEL - ABOVE).max(ABOVE))
+        }
+        _ => None,
+    }
+}
