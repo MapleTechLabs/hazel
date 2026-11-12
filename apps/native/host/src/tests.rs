@@ -3302,6 +3302,15 @@ fn a_replaced_runtime_starts_with_no_fields_or_scroll_seqs() {
 }
 
 #[test]
+fn a_reference_to_a_subtree_the_host_lacks_draws_empty_and_is_logged() {
+    let wire: crate::wire::WireNode =
+        serde_json::from_value(json!({ "k": "r", "h": "never-sent" })).expect("a ref");
+    let (node, _) = crate::wire::Subtrees::default().resolve(wire);
+    assert!(matches!(node.as_ref(), crate::wire::Node::Text(t) if t.is_empty()));
+    assert!(crate::wire::MISSING_REF_LOGGED.load(Ordering::Relaxed));
+}
+
+#[test]
 fn a_b_element_holds_its_text_and_a_button_on_one_line() {
     // `<b>` is inline as `<span>` is: its children run along a line, the button after the text.
     let rt = runtime(

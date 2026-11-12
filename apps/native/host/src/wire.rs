@@ -535,6 +535,9 @@ impl Node {
     }
 }
 
+/// Whether a reference to a subtree the host lacks was logged (once: one divergence repeats).
+pub(crate) static MISSING_REF_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Every hashed subtree of the tree on screen, for the next commit's references.
 #[derive(Default)]
 pub struct Subtrees(HashMap<String, Arc<Node>>);
@@ -551,11 +554,17 @@ impl Subtrees {
         let node = match wire {
             WireNode::Text { s } => return Arc::new(Node::Text(s)),
             WireNode::Ref { h } => {
-                let node = self
-                    .0
-                    .get(&h)
-                    .cloned()
-                    .unwrap_or_else(|| Arc::new(Node::Text(String::new())));
+                let node = self.0.get(&h).cloned().unwrap_or_else(|| {
+                    // The runtime referred to a subtree the host never had or already let go:
+                    // the two caches of the tree diverged, and that part of the page is blank.
+                    if !MISSING_REF_LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                        eprintln!(
+                            "[host] the runtime referred to subtree {h}, which the host does not \
+                             have; drawn empty (further missing subtrees are not logged)"
+                        );
+                    }
+                    Arc::new(Node::Text(String::new()))
+                });
                 index(&node, next);
                 return node;
             }
