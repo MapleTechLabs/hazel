@@ -34,7 +34,11 @@ export type ViewportAnchor = typeof ViewportAnchor.Type
  * change no DOM.
  */
 export const ScrollPhase = defineTaggedUnion({
-	Settled: {},
+	/**
+	 * The last scroll's overscan window stays rendered (beside the pool) while it overlaps the
+	 * viewport, so the next scroll starts from it instead of building those rows again.
+	 */
+	Settled: { keptFromKey: Schema.NullOr(Schema.String), keptToKey: Schema.NullOr(Schema.String) },
 	Scrolling: {
 		eventVersion: Schema.Number,
 		renderedFromKey: Schema.NullOr(Schema.String),
@@ -113,7 +117,7 @@ export const init = (config: {
 	scrollVersion: 0,
 	appliedScrollVersion: 0,
 	pool: emptyPool,
-	scrollPhase: ScrollPhase.Settled(),
+	scrollPhase: ScrollPhase.Settled({ keptFromKey: null, keptToKey: null }),
 	activeStickyKey: null,
 	stuckKey: null,
 })
@@ -291,19 +295,36 @@ const changedMeasurements = (
 /**
  * The overscan window always covers the viewport plus `RENDER_MARGIN_PX`, then grows toward
  * `RENDER_LEAD_PX` by at most `RENDER_STEP_PX` per side and update, so a frame builds a few rows,
- * never a 2400px chunk. Rows past the lead plus `RENDER_SLACK_PX` are dropped.
+ * never a 2400px chunk. Rows past the lead plus `RENDER_SLACK_PX` are dropped. Both wait a step
+ * before acting, so a steady scroll re-renders the window every few rows.
  */
 const RENDER_MARGIN_PX = 300
 const RENDER_LEAD_PX = 2400
 const RENDER_STEP_PX = 320
 const RENDER_SLACK_PX = 600
 
+const indexesOf = (layout: Layout, fromKey: string | null, toKey: string | null) => {
+	const from = fromKey === null ? undefined : layout.indexByKey.get(fromKey)
+	const to = toKey === null ? undefined : layout.indexByKey.get(toKey)
+	return from === undefined || to === undefined || from > to ? undefined : { from, to }
+}
+
 export const renderedIndexes = (model: Model, layout: Layout) => {
 	const phase = model.scrollPhase
 	if (phase._tag === "Settled") return undefined
-	const from = phase.renderedFromKey === null ? undefined : layout.indexByKey.get(phase.renderedFromKey)
-	const to = phase.renderedToKey === null ? undefined : layout.indexByKey.get(phase.renderedToKey)
-	return from === undefined || to === undefined || from > to ? undefined : { from, to }
+	return indexesOf(layout, phase.renderedFromKey, phase.renderedToKey)
+}
+
+/** The window the last scroll left rendered, while it still covers part of the viewport. */
+export const keptIndexes = (model: Model, layout: Layout) => {
+	const phase = model.scrollPhase
+	if (phase._tag === "Scrolling" || model.viewportHeight === 0) return undefined
+	const kept = indexesOf(layout, phase.keptFromKey, phase.keptToKey)
+	if (kept === undefined) return undefined
+	const top = Math.max(0, model.scrollTop)
+	const viewFrom = rowIndexAt(layout, top)
+	const viewTo = rowIndexAt(layout, top + model.viewportHeight)
+	return kept.to < viewFrom || kept.from > viewTo ? undefined : kept
 }
 
 const keepOverscan = (model: Model): Model => {
@@ -320,16 +341,26 @@ const keepOverscan = (model: Model): Model => {
 	const isDisjoint = current === undefined || current.to < hardFrom || current.from > hardTo
 	const coveredFrom = isDisjoint ? hardFrom : Math.min(current.from, hardFrom)
 	const coveredTo = isDisjoint ? hardTo : Math.max(current.to, hardTo)
-	const grownFrom = Math.max(
-		at(top - RENDER_LEAD_PX),
-		Math.min(coveredFrom, at(layout.offsets[coveredFrom]! - RENDER_STEP_PX)),
-	)
-	const grownTo = Math.min(
-		at(bottom + RENDER_LEAD_PX),
-		Math.max(coveredTo, at(layout.offsets[coveredTo + 1]! + RENDER_STEP_PX)),
-	)
-	const from = Math.max(Math.min(coveredFrom, grownFrom), at(top - RENDER_LEAD_PX - RENDER_SLACK_PX))
-	const to = Math.min(Math.max(coveredTo, grownTo), at(bottom + RENDER_LEAD_PX + RENDER_SLACK_PX))
+	// A side grows once its lead has run down by a step, and drops rows once they are a step past
+	// the slack: a steady scroll changes the window every few rows, not at every row boundary.
+	const coveredTop = layout.offsets[coveredFrom]!
+	const coveredBottom = layout.offsets[coveredTo + 1]!
+	const grownFrom =
+		coveredTop <= top - RENDER_LEAD_PX + RENDER_STEP_PX
+			? coveredFrom
+			: Math.max(at(top - RENDER_LEAD_PX), Math.min(coveredFrom, at(coveredTop - RENDER_STEP_PX)))
+	const grownTo =
+		coveredBottom >= bottom + RENDER_LEAD_PX - RENDER_STEP_PX
+			? coveredTo
+			: Math.min(at(bottom + RENDER_LEAD_PX), Math.max(coveredTo, at(coveredBottom + RENDER_STEP_PX)))
+	const dropAbove = top - RENDER_LEAD_PX - RENDER_SLACK_PX
+	const dropBelow = bottom + RENDER_LEAD_PX + RENDER_SLACK_PX
+	const from =
+		layout.offsets[grownFrom + 1]! < dropAbove - RENDER_STEP_PX
+			? at(dropAbove)
+			: Math.min(coveredFrom, grownFrom)
+	const to =
+		layout.offsets[grownTo]! > dropBelow + RENDER_STEP_PX ? at(dropBelow) : Math.max(coveredTo, grownTo)
 	if (current !== undefined && from === current.from && to === current.to) return model
 	return modifyFields(model, {
 		scrollPhase: () =>
@@ -351,10 +382,16 @@ const startedScrolling = (model: Model): ListReturn =>
 					ScrollPhase.Scrolling({ ...phase, eventVersion: Number.increment(phase.eventVersion) }),
 			}),
 		}),
-		Settled: () => ({
+		// The window the last scroll left goes on from where it is (or starts over, when it is
+		// far from the viewport now).
+		Settled: ({ keptFromKey, keptToKey }) => ({
 			model: modifyFields(model, {
 				scrollPhase: () =>
-					ScrollPhase.Scrolling({ eventVersion: 1, renderedFromKey: null, renderedToKey: null }),
+					ScrollPhase.Scrolling({
+						eventVersion: 1,
+						renderedFromKey: keptFromKey,
+						renderedToKey: keptToKey,
+					}),
 			}),
 			commands: [WaitForScrollSettle({ version: 1 })],
 		}),
@@ -442,9 +479,17 @@ const updateScroll = (model: Model, message: Message): ListReturn =>
 		CompletedWaitForScrollSettle: ({ version }) =>
 			ScrollPhase.match(model.scrollPhase, {
 				Settled: () => ({ model }),
-				Scrolling: ({ eventVersion }) =>
+				Scrolling: ({ eventVersion, renderedFromKey, renderedToKey }) =>
 					version === eventVersion
-						? { model: modifyFields(model, { scrollPhase: () => ScrollPhase.Settled() }) }
+						? {
+								model: modifyFields(model, {
+									scrollPhase: () =>
+										ScrollPhase.Settled({
+											keptFromKey: renderedFromKey,
+											keptToKey: renderedToKey,
+										}),
+								}),
+							}
 						: { model, commands: [WaitForScrollSettle({ version: eventVersion })] },
 			}),
 		ResizedViewport: ({ viewportHeight }) =>
@@ -701,7 +746,7 @@ export const isViewEqual = (a: Model, b: Model): boolean =>
 const isSamePhaseView = (a: ScrollPhase, b: ScrollPhase): boolean =>
 	a === b ||
 	(a._tag === "Settled"
-		? b._tag === "Settled"
+		? b._tag === "Settled" && a.keptFromKey === b.keptFromKey && a.keptToKey === b.keptToKey
 		: b._tag === "Scrolling" &&
 			a.renderedFromKey === b.renderedFromKey &&
 			a.renderedToKey === b.renderedToKey)
@@ -781,15 +826,17 @@ export const view = <Item, ParentMessage>(
 	// absolute offsets, so DOM order is not visible, and keeping it the same means a phase switch
 	// never moves a row's node. Moving a node reloads any iframe in it (HTML renders flash).
 	const containerRows = () => {
-		const indexes: Array<number> = []
+		const indexes = new Set<number>()
 		const empty: Array<number> = []
 		for (let slot = 0; slot < model.pool.pooledCount; slot++) {
 			const key = model.pool.slots[slot] ?? null
 			const index = key === null ? undefined : layout.indexByKey.get(key)
 			if (index === undefined) empty.push(slot)
-			else indexes.push(index)
+			else indexes.add(index)
 		}
-		return [...indexes.sort((a, b) => a - b).map(row), ...empty.map(emptyContainer)]
+		const kept = keptIndexes(model, layout)
+		if (kept !== undefined) for (let index = kept.from; index <= kept.to; index++) indexes.add(index)
+		return [...[...indexes].sort((a, b) => a - b).map(row), ...empty.map(emptyContainer)]
 	}
 	const rows =
 		model.viewportHeight === 0
