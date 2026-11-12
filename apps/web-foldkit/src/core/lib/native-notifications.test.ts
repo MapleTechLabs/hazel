@@ -6,10 +6,6 @@ import {
 	sendNativeNotification,
 } from "./native-notifications"
 
-vi.mock("./tauri", () => ({
-	isTauri: vi.fn(() => false),
-}))
-
 describe("native-notifications", () => {
 	it("suppresses when window is focused", async () => {
 		vi.spyOn(document, "hasFocus").mockReturnValue(true)

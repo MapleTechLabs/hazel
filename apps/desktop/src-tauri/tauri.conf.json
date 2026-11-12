@@ -11,7 +11,7 @@
 		},
 		"updater": {
 			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY2N0NEMDNBMkU3RjVGMjEKUldRaFgzOHVPdEI4WmkyanJkRVNBaWdydytxbTd5UmRjdkV1cHhVenRsOEdPRzM2dUhYSUMxaHYK",
-			"endpoints": ["https://github.com/HazelChat/hazel/releases/latest/download/latest.json"],
+			"endpoints": ["https://github.com/MapleTechLabs/hazel/releases/latest/download/latest.json"],
 			"windows": {
 				"installMode": "passive"
 			}
@@ -33,10 +33,10 @@
 				"minHeight": 500,
 				"resizable": true,
 				"fullscreen": false,
-				"devtools": true,
 				"backgroundColor": "#27272a",
 				"hiddenTitle": true,
-				"titleBarStyle": "Overlay"
+				"titleBarStyle": "Overlay",
+				"trafficLightPosition": { "x": 16, "y": 20 }
 			}
 		],
 		"security": {
@@ -47,6 +47,8 @@
 		"active": true,
 		"targets": "all",
 		"createUpdaterArtifacts": true,
+		"category": "Business",
+		"shortDescription": "Hazel team chat",
 		"icon": [
 			"icons/32x32.png",
 			"icons/128x128.png",

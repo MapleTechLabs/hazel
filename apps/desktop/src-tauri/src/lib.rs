@@ -1,7 +1,6 @@
 #[cfg(desktop)]
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{command, Emitter, Manager};
-use tauri_plugin_decorum::WebviewWindowExt;
 
 /// The desktop sign-in vault (`@hazel/auth/desktop`): one opaque JSON record holding the app's
 /// session and any sign-in in progress, kept in the OS keychain (Keychain, Credential Manager,
@@ -76,7 +75,6 @@ pub fn run() {
     }));
 
     let builder = builder
-        .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -85,10 +83,10 @@ pub fn run() {
 
     #[cfg(desktop)]
     let builder = builder
+        .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_decorum::init());
+        .plugin(tauri_plugin_process::init());
 
     builder
         .setup(|app| {
@@ -107,16 +105,8 @@ pub fn run() {
                 app.deep_link().register_all()?;
             }
 
-            // Configure custom titlebar with decorum
-            #[cfg(desktop)]
-            if let Some(main_window) = app.get_webview_window("main") {
-                // Create overlay titlebar (handles Windows custom controls)
-                main_window.create_overlay_titlebar().unwrap();
-
-                // macOS: Position traffic lights
-                #[cfg(target_os = "macos")]
-                main_window.set_traffic_lights_inset(16.0, 20.0).unwrap();
-            }
+            // Windows and Linux keep the system's own titlebar; on macOS the window draws its
+            // content under the traffic lights (`titleBarStyle`, `trafficLightPosition`).
 
             // Create native menu
             #[cfg(desktop)]

@@ -32,7 +32,7 @@ const record = () =>
 	})
 
 it("ignores a stale queued callback and waits for this attempt's state", async () => {
-	vi.doMock("@hazel/desktop/bridge", () => ({
+	vi.doMock("./tauri", () => ({
 		getTauriCore: () => ({ invoke: async () => native.record }),
 		getTauriDeepLink: () => ({
 			onOpenUrl: async (capture: typeof native.callback) => {
