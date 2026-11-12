@@ -985,8 +985,107 @@ index a26ae8ea901f2dc0af1a6977ade3ddc12df85b99..47c599347dcdda8c59755a610ea88628
              register: id => {
                  dialogIds.add(id);
              },
+diff --git a/dist/runtime/subscriptionFibers.js b/dist/runtime/subscriptionFibers.js
+index 8984e250b228da2774aec037862856290813eeae..6d93873d4ebb9e6ac39fd241af18cfc144d09ee8 100644
+--- a/dist/runtime/subscriptionFibers.js
++++ b/dist/runtime/subscriptionFibers.js
+@@ -1,33 +1,19 @@
+-import { Effect, Option, PubSub, Record, Ref, Schema, Scope, Stream, pipe, } from 'effect';
++import { Effect, Option, PubSub, Queue, Record, Schema, Scope, Stream, pipe, } from 'effect';
+ import { measureSlowPhase, reportSlowPhase, } from './slowPhase.js';
+ /**
+- * Forks one fiber per Subscription into the runtime scope. Each fiber
+- * derives the Subscription's dependencies from every Model, restarts its
+- * stream when they change under its equivalence, and feeds the Messages
+- * the stream emits into the queue. A defect anywhere in that pipeline
+- * crashes the runtime instead of dying silently in the fiber.
++ * Forks one fiber per Subscription into the runtime scope, and one fiber
++ * that follows the Model for all of them. On every Model that one fiber
++ * derives each Subscription's dependencies in a single synchronous pass and
++ * hands them on only to the Subscriptions whose dependencies changed under
++ * their equivalence; each Subscription's fiber restarts its stream on what
++ * it is handed and feeds the Messages the stream emits into the queue. (One
++ * Model subscriber per Subscription woke every fiber on every Message: with
++ * hundreds of Subscriptions that cost milliseconds per Message.) A defect
++ * anywhere in that pipeline crashes the runtime instead of dying silently in
++ * the fiber.
+  */
+-export const forkSubscriptionFibers = ({ subscriptions, initModel, modelPubSub, runtimeScope, maybeSlowSubscriptionDependencies, enqueueMessageEffect, provideAllResources, crashWith, }) => pipe(subscriptions, Record.toEntries, Effect.forEach(([key, { dependenciesSchema, modelToDependencies, keepAliveEquivalence, dependenciesToStream, },]) => Effect.gen(function* () {
+-    const equivalence = keepAliveEquivalence ?? Schema.toEquivalence(dependenciesSchema);
+-    const [initDependencies, maybeInitDependenciesDuration] = measureSlowPhase(maybeSlowSubscriptionDependencies, () => modelToDependencies(initModel));
+-    reportSlowPhase(maybeSlowSubscriptionDependencies, maybeInitDependenciesDuration, (durationMs, thresholdMs) => ({
+-        _tag: 'SubscriptionDependencies',
+-        subscriptionKey: key,
+-        model: initModel,
+-        durationMs,
+-        thresholdMs,
+-    }));
+-    const latestDependenciesRef = yield* Ref.make(initDependencies);
+-    const modelSubscription = yield* PubSub.subscribe(modelPubSub).pipe(Effect.provideService(Scope.Scope, runtimeScope));
+-    const modelChangesStream = Stream.fromSubscription(modelSubscription).pipe(
+-    // NOTE: Ref.set runs upstream of Stream.changesWith on
+-    // every model change, so readDependencies() returns
+-    // current values even when the equivalence filter
+-    // doesn't emit. Moving this into a tap after
+-    // changesWith would silently break subscribers whose
+-    // dependencies are equivalence-stable across model
+-    // changes.
+-    Stream.mapEffect(model => Effect.gen(function* () {
++export const forkSubscriptionFibers = ({ subscriptions, initModel, modelPubSub, runtimeScope, maybeSlowSubscriptionDependencies, enqueueMessageEffect, provideAllResources, crashWith, }) => Effect.gen(function* () {
++    const deriveDependencies = (key, modelToDependencies, model) => {
+         const [dependencies, maybeDependenciesDuration] = measureSlowPhase(maybeSlowSubscriptionDependencies, () => modelToDependencies(model));
+         reportSlowPhase(maybeSlowSubscriptionDependencies, maybeDependenciesDuration, (durationMs, thresholdMs) => ({
+             _tag: 'SubscriptionDependencies',
+@@ -36,13 +22,38 @@ export const forkSubscriptionFibers = ({ subscriptions, initModel, modelPubSub,
+             durationMs,
+             thresholdMs,
+         }));
+-        yield* Ref.set(latestDependenciesRef, dependencies);
+         return dependencies;
+-    })));
+-    yield* Effect.forkIn(runtimeScope)(Stream.concat(Stream.make(initDependencies), modelChangesStream).pipe(Stream.changesWith(equivalence), Stream.switchMap(dependencies => dependenciesToStream(dependencies, () => Ref.getUnsafe(latestDependenciesRef))), Stream.runForEach(message => 
+-    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+-    enqueueMessageEffect(message)), provideAllResources, Effect.catchCause(cause => crashWith(cause, Option.none()))));
+-}), {
+-    concurrency: 'unbounded',
+-    discard: true,
+-}));
++    };
++    const entries = yield* Effect.forEach(Record.toEntries(subscriptions), ([key, { dependenciesSchema, modelToDependencies, keepAliveEquivalence, dependenciesToStream, },]) => Effect.gen(function* () {
++        const equivalence = keepAliveEquivalence ?? Schema.toEquivalence(dependenciesSchema);
++        const initDependencies = deriveDependencies(key, modelToDependencies, initModel);
++        const changes = yield* Queue.unbounded();
++        // NOTE: `latest` is set on every Model, so readDependencies() returns
++        // current values even when the equivalence holds and nothing is handed
++        // on; `emitted` is what the stream last restarted on, which a new
++        // value is compared against, as `Stream.changesWith` compared it.
++        const entry = {
++            key,
++            modelToDependencies,
++            equivalence,
++            changes,
++            latest: initDependencies,
++            emitted: initDependencies,
++        };
++        yield* Effect.forkIn(runtimeScope)(Stream.concat(Stream.make(initDependencies), Stream.fromQueue(changes)).pipe(Stream.switchMap(dependencies => dependenciesToStream(dependencies, () => entry.latest)), Stream.runForEach(message =>
++        /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
++        enqueueMessageEffect(message)), provideAllResources, Effect.catchCause(cause => crashWith(cause, Option.none()))));
++        return entry;
++    }), { discard: false });
++    const modelSubscription = yield* PubSub.subscribe(modelPubSub).pipe(Effect.provideService(Scope.Scope, runtimeScope));
++    yield* Effect.forkIn(runtimeScope)(Stream.fromSubscription(modelSubscription).pipe(Stream.runForEach(model => Effect.sync(() => {
++        for (const entry of entries) {
++            const dependencies = deriveDependencies(entry.key, entry.modelToDependencies, model);
++            entry.latest = dependencies;
++            if (!entry.equivalence(entry.emitted, dependencies)) {
++                entry.emitted = dependencies;
++                Queue.offerUnsafe(entry.changes, dependencies);
++            }
++        }
++    })), Effect.catchCause(cause => crashWith(cause, Option.none()))));
++});
 diff --git a/dist/snabbdom/init.js b/dist/snabbdom/init.js
-index c6cf757..aa1246d 100644
+index c6cf75791ab75e3f98231b41e11e8bbca26f551c..aa1246d50373de7fb245285da2b13725d7304600 100644
 --- a/dist/snabbdom/init.js
 +++ b/dist/snabbdom/init.js
 @@ -43,6 +43,16 @@ function createKeyToPreviousIndex(children, beginIndex, endIndex) {

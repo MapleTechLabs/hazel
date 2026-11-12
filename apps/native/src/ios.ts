@@ -102,12 +102,6 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 	return new Response(empty ? null : reply.body, { status: reply.status, headers: reply.headers })
 }
 
-// Bun's, which some of the app's dependencies schedule with.
-Object.assign(globalThis, {
-	setImmediate: (callback: (...args: Array<unknown>) => void, ...args: Array<unknown>) =>
-		setTimeout(callback, 0, ...args),
-	clearImmediate: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
-})
 // The runtime and the web app read their settings from `process.env`, as under Bun.
 Object.assign(globalThis, { process: { env: { ...__HAZEL_ENV__ }, platform: "ios" } })
 const log = (line: string) => request({ log: line })
@@ -152,6 +146,8 @@ const platform: NativePlatform = {
 		request(isSignIn ? { signIn: href, callbackScheme: CALLBACK_SCHEME } : { open: href })
 	},
 	copyText: (text) => request({ copy: text }),
+	// No files from the worker: debug lines (`NATIVE_STATS`) go to the log, tagged with their file.
+	appendLine: (path, line) => log(`[${path}] ${line}`),
 	onNavigate: (from, to) => {
 		const back = backTargets.at(-1)
 		const isBack = back !== undefined && pathOf(back.href) === pathOf(to)

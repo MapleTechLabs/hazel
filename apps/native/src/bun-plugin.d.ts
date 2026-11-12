@@ -19,12 +19,20 @@ declare const Bun: {
 		target?: "bun" | "browser"
 		/** One executable with Bun inside (scripts/bundle.ts). */
 		compile?: { outfile: string; target?: string }
-		format?: "esm"
+		/** `iife`: code that must keep its names to itself (the iOS worker's banner). */
+		format?: "esm" | "iife"
+		/** Code put before the bundle's, unchanged. */
+		banner?: string
 		bytecode?: boolean
 		minify: boolean
 		/** Expressions replaced at build time, each by the code given. */
 		define?: Record<string, string>
-		external: Array<string>
-		plugins: Array<BunPlugin>
-	}): Promise<{ success: boolean; logs: Array<unknown> }>
+		external?: Array<string>
+		plugins?: Array<BunPlugin>
+	}): Promise<{
+		success: boolean
+		logs: Array<unknown>
+		/** What was built, when nothing was written (no `outdir`). */
+		outputs: Array<{ text(): Promise<string> }>
+	}>
 }
