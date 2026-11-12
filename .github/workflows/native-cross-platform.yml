@@ -1,0 +1,91 @@
+name: Native (Windows, Linux)
+
+# The Rune app off macOS: the host builds and passes its tests, and a headless capture of the
+# offline fixture proves it draws Hazel there (software GPUs: lavapipe's Vulkan on Linux, WARP's
+# DX12 on Windows). The captures are uploaded as artifacts.
+on:
+    pull_request:
+        paths:
+            - "apps/native/**"
+            - "packages/foldkit-rune/**"
+            - ".github/workflows/native-cross-platform.yml"
+    workflow_dispatch:
+
+jobs:
+    host:
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest, windows-latest]
+        runs-on: ${{ matrix.os }}
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Linux packages
+              if: runner.os == 'Linux'
+              run: |
+                  sudo apt-get update
+                  # The keychain (Secret Service over D-Bus), keyboard layouts, fonts, and a
+                  # software Vulkan driver for the headless capture.
+                  sudo apt-get install -y pkg-config libdbus-1-dev libxkbcommon-dev libfontconfig1-dev \
+                      fonts-inter fonts-noto-color-emoji mesa-vulkan-drivers
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v1
+              with:
+                  bun-version: latest
+
+            - name: Install dependencies
+              run: bun install --frozen-lockfile
+
+            - name: Rust toolchain (host/rust-toolchain.toml)
+              working-directory: apps/native/host
+              run: rustup show active-toolchain || rustup toolchain install
+
+            - name: Cache Rust
+              uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: "apps/native/host -> target"
+
+            - name: Build the host
+              working-directory: apps/native/host
+              run: cargo build --release -p hazel-native
+
+            - name: Test the host
+              working-directory: apps/native/host
+              run: cargo test --release -p hazel-native
+
+            - name: Build the runtime
+              working-directory: apps/native
+              run: bun run build
+
+            - name: Headless capture
+              working-directory: apps/native
+              env:
+                  HAZEL_NATIVE_ENTRY: dist/entry.js
+                  NATIVE_BENCH_OUT: capture/bench.json
+              run: |
+                  mkdir -p capture
+                  cat > capture/script.json <<'EOF'
+                  [
+                      { "waitText": "Shipping it. Thanks everyone" },
+                      { "settle": 1500 },
+                      { "snap": "capture/chat.png" },
+                      { "clickText": "Browse channels" },
+                      { "settle": 800 },
+                      { "snap": "capture/palette.png" }
+                  ]
+                  EOF
+                  host/target/release/hazel-native --capture capture/script.json
+
+            - name: Upload the capture
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: native-capture-${{ runner.os }}
+                  path: apps/native/capture/
+                  if-no-files-found: warn

@@ -19,10 +19,10 @@ export type NativePlatform = {
 	}
 	/** One diagnostic line (no trailing newline), never shown to the user. */
 	readonly log: (line: string) => void
-	/** Opens a web or mail link in the system's browser or mail app. */
-	readonly openUrl: (href: string) => void
-	/** Puts text on the system clipboard. */
-	readonly copyText: (text: string) => void
+	/** Opens a web or mail link in the system's browser or mail app. Absent: the host does (`open`). */
+	readonly openUrl?: (href: string) => void
+	/** Puts text on the system clipboard. Absent: the host does (`copy`). */
+	readonly copyText?: (text: string) => void
 	/** The app's stylesheet: the build's precompiled sheet when there is one, else compiled. */
 	readonly loadStyles: () => Promise<StyleResolver>
 	/** Keeps `localStorage` between launches (live data only). Absent: it starts empty every launch. */

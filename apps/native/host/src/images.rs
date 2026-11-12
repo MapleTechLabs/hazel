@@ -809,13 +809,21 @@ mod tests {
 
     #[test]
     fn a_downloaded_svg_rasterizes_at_each_size_it_is_drawn() {
-        let file = std::env::temp_dir().join(format!("hazel-remote-{}.svg", std::process::id()));
-        std::fs::write(
-            &file,
-            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="red"/></svg>"#,
-        )
-        .unwrap();
-        let url = format!("file://{}", file.display());
+        // Served once over http on a local port: downloads take web URLs only.
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="red"/></svg>"#;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/picture.svg", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            let (mut stream, _) = listener.accept().unwrap();
+            let _ = stream.read(&mut [0; 1024]);
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: image/svg+xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                svg.len()
+            );
+            stream.write_all(head.as_bytes()).unwrap();
+            stream.write_all(svg.as_bytes()).unwrap();
+        });
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         let small = loop {
             if let Some(image) = remote(&url, 16.0) {
@@ -830,7 +838,6 @@ mod tests {
         let large = remote(&url, 64.0).expect("already downloaded");
         let (small, large) = (small.wait().unwrap(), large.wait().unwrap());
         assert!(large[0] > small[0] * 3, "{small:?} {large:?}");
-        let _ = std::fs::remove_file(file);
     }
 
     /// A `w` by `h` PNG, its pixels all `rgba`.

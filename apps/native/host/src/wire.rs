@@ -426,6 +426,12 @@ pub enum RuntimeMsg {
     /// a relaunch that cannot start is answered as `update` with `id`.
     #[serde(rename = "relaunch")]
     Relaunch { id: u64 },
+    /// Put `text` on the system clipboard.
+    #[serde(rename = "copy")]
+    Copy { text: String },
+    /// Open a web or mail link in the system's browser or mail app.
+    #[serde(rename = "open")]
+    Open { url: String },
     /// Whether the app may show system notifications, asking the user first with `request`;
     /// answered as `notifyPermission` with `id`.
     #[serde(rename = "notifyPermission")]
@@ -442,6 +448,14 @@ pub enum RuntimeMsg {
 
 /// What a runtime request does to the host's Rune runtime, sent to its update thread.
 pub type HostRequest = Box<dyn FnOnce(&mut rune::Tx) + Send>;
+
+/// A link the system may open for the app: web and mail only, as the runtime filters them.
+pub fn is_external_link(url: &str) -> bool {
+    ["http:", "https:", "mailto:"].iter().any(|scheme| {
+        url.get(..scheme.len())
+            .is_some_and(|s| s.eq_ignore_ascii_case(scheme))
+    })
+}
 
 impl RuntimeMsg {
     /// A focus or reveal request, run against the host's next commit.
@@ -470,6 +484,18 @@ impl RuntimeMsg {
             }
             RuntimeMsg::Reveal { path, .. } => {
                 Some(Box::new(move |tx: &mut rune::Tx| tx.scroll_into_view(path)))
+            }
+            RuntimeMsg::Copy { text } => Some(Box::new(move |tx: &mut rune::Tx| tx.copy(text))),
+            RuntimeMsg::Open { url } if is_external_link(&url) => {
+                Some(Box::new(move |tx: &mut rune::Tx| {
+                    if let Err(error) = tx.open_url(&url) {
+                        eprintln!("[host] cannot open a link: {error:?}");
+                    }
+                }))
+            }
+            RuntimeMsg::Open { .. } => {
+                eprintln!("[host] not opening a link that is not web or mail");
+                None
             }
             RuntimeMsg::Measure { path } => Some(Box::new(move |tx: &mut rune::Tx| {
                 tx.drawn_rects(vec![path.clone()], move |_: &mut crate::State, rects, _| {

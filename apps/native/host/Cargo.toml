@@ -22,11 +22,16 @@ base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# The sign-in vault in the macOS keychain, as the Tauri app keeps its own (apps/desktop).
-keyring = { version = "3", features = ["apple-native"] }
+# The sign-in vault in the OS keychain (Keychain, Credential Manager, Secret Service), as the
+# Tauri app keeps its own (apps/desktop).
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 # Verifies an update's signature as the Tauri updater does (apps/desktop), with the same key.
 minisign-verify = "0.2"
 wgpu = { version = "~30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "wgsl"] }
+
+# Downloads off Apple platforms (`src/fetch.rs`).
+[target.'cfg(not(target_vendor = "apple"))'.dependencies]
+ureq = { version = "3", default-features = false, features = ["rustls", "gzip"] }
 
 # Downloads through the system's URL loading on macOS and iOS (`src/fetch.rs`).
 [target.'cfg(target_vendor = "apple")'.dependencies]
