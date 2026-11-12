@@ -6,7 +6,7 @@
 import { nativeClient, nativeHeaders } from "@hazel/auth/contract"
 import type { PrecompiledStyles } from "@hazel/foldkit-rune"
 import { parseHostLine } from "@hazel/foldkit-rune"
-import { installSystemUi } from "../../web-foldkit/src/platform/system-ui"
+import { SYSTEM_UI_GLOBAL, type SystemUi } from "../../web-foldkit/src/platform/system-ui"
 import type { NativePlatform } from "./platform"
 
 /** What the page set before this worker's source: the host's environment. */
@@ -164,7 +164,7 @@ const platform: NativePlatform = {
 	},
 }
 
-installSystemUi({
+const systemUi: SystemUi = {
 	haptic: () => request({ haptic: true }),
 	setSwipeBack: (href) => {
 		const target = { href }
@@ -177,7 +177,10 @@ installSystemUi({
 			request({ swipeBack: back === undefined ? "" : pathOf(back.href) })
 		}
 	},
-})
+}
+
+// Read by the app (`platform/system-ui.ts`), as the desktop shells install `window.__TAURI__`.
+Object.assign(globalThis, { [SYSTEM_UI_GLOBAL]: systemUi })
 
 const { startRuntime } = await import("./runtime")
 await startRuntime(platform)

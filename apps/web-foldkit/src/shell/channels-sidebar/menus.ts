@@ -62,20 +62,20 @@ const rowSymbols = (member: MemberToggles): Readonly<Record<string, string>> => 
 	favorite: member.isFavorite ? "star.slash" : "star",
 })
 
-const ROW_SYMBOLS: Readonly<Record<string, string>> = {
+const ROW_SYMBOLS = {
 	move: "folder",
 	settings: "gearshape",
 	delete: "trash",
 	leave: "rectangle.portrait.and.arrow.right",
 	hide: "eye.slash",
-}
+} as const satisfies Readonly<Record<string, string>>
 
-const SECTION_SYMBOLS: Readonly<Record<string, string>> = {
+const SECTION_SYMBOLS = {
 	"create-channel": "plus.circle",
 	"join-channel": "number",
 	"create-dm": "square.and.pencil",
 	"delete-section": "trash",
-}
+} as const satisfies Readonly<Record<string, string>>
 
 // ENTRIES
 

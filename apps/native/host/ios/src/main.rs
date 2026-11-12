@@ -21,7 +21,7 @@ mod system;
 
 #[cfg(target_os = "ios")]
 fn main() {
-    use hazel_native::{State, TEXT_SMOOTHING, dom_motion, images, view, window_key};
+    use hazel_native::{State, TEXT_SMOOTHING, dom_motion, frames, images, view, window_key};
     use rune::{App, AppSpec};
 
     dom_motion();
@@ -39,11 +39,15 @@ fn main() {
         // iOS gives the window the whole screen whatever size is asked for.
         ..AppSpec::new("Hazel", (402.0, 874.0), State::default, view)
     };
-    // The UIKit views the app's `data-native` elements get, placed after every frame.
+    // The UIKit views the app's `data-native` elements get, and HTML renders' web views, go
+    // where their boxes were drawn, after every frame.
     islands::install();
     let app = App::new(spec)
         .font_smoothing(TEXT_SMOOTHING)
-        .on_frame_drawn(hazel_native::islands::sync);
+        .on_frame_drawn(|runtime| {
+            frames::sync(runtime);
+            hazel_native::islands::sync(runtime);
+        });
     bridge::set_handle(app.handle());
     app.run();
 }

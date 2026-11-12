@@ -442,6 +442,8 @@ mod tests {
         assert!(verify(PAYLOAD, "!!", TEST_PUBKEY).is_err());
     }
 
+    // A macOS bundle, unpacked with the system's `/usr/bin/tar`.
+    #[cfg(target_os = "macos")]
     #[test]
     fn an_update_takes_the_bundles_place() {
         let root = std::env::temp_dir().join(format!("hazel-update-test-{}", std::process::id()));

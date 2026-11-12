@@ -38,6 +38,8 @@ pub struct Style {
     pub font_weight: Option<F>,
     pub opacity: Option<F>,
     pub scroll_y: Option<bool>,
+    /// `overflow-x: auto`/`scroll`.
+    pub scroll_x: Option<bool>,
     pub clip: Option<bool>,
     /// Its own formatting context (`contain: layout`, `display: flow-root`).
     pub isolated: Option<bool>,

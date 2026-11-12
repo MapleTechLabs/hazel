@@ -26,12 +26,12 @@ import { type DirectoryMember, filterMembers, menuEntries, menuIdOf, type Model,
 const toInteractionMessage = (message: Interaction.Message) => Message.GotInteractionMessage({ message })
 
 /** The member menu's items as SF Symbols, for the system's own menu. */
-const MEMBER_SYMBOLS: Readonly<Record<string, string>> = {
+const MEMBER_SYMBOLS = {
 	message: "message",
 	"view-profile": "person.crop.circle",
 	"start-call": "phone",
 	"copy-email": "doc.on.doc",
-}
+} as const satisfies Readonly<Record<string, string>>
 
 const toMenuMessage = (member: DirectoryMember) => (message: Menu.Message) =>
 	Message.GotMemberMenuMessage({ userId: member.id, message })

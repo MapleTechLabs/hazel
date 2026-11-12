@@ -1,8 +1,9 @@
 /**
  * The phone's own controls, where the app runs in a native shell that has them: the iOS app
- * (`apps/native/src/ios.ts`) installs them before the app starts: a tap of the finger, and the
- * swipe from the screen's left edge that goes back. A browser has none. (Native views that stand
- * in for the app's own elements are islands: `platform/native-island.ts`.)
+ * (`apps/native/src/ios.ts`) installs them on the global object before the app starts, as the
+ * desktop shells install `window.__TAURI__`: a tap of the finger, and the swipe from the screen's
+ * left edge that goes back. A browser has none. (Native views that stand in for the app's own
+ * elements are islands: `platform/native-island.ts`.)
  */
 
 export type SystemUi = Readonly<{
@@ -12,11 +13,10 @@ export type SystemUi = Readonly<{
 	setSwipeBack: (href: string) => () => void
 }>
 
-let installed: SystemUi | undefined
+/** The global a shell installs its controls as. */
+export const SYSTEM_UI_GLOBAL = "__HAZEL_SYSTEM_UI__"
 
-export const installSystemUi = (ui: SystemUi) => {
-	installed = ui
-}
+type SystemUiGlobal = typeof globalThis & { [SYSTEM_UI_GLOBAL]?: SystemUi }
 
 /** The shell's controls, or `undefined` in a browser. */
-export const systemUi = (): SystemUi | undefined => installed
+export const systemUi = (): SystemUi | undefined => (globalThis as SystemUiGlobal)[SYSTEM_UI_GLOBAL]

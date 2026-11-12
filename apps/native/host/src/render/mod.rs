@@ -427,12 +427,10 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
     let [top, right, bottom, left] = cx.safe_area();
     let keyboard = s.keyboard;
     let inset = [top, right, if keyboard > 0.0 { 0.0 } else { bottom }, left];
-    // A paste with no field focused goes to the page, which hands it to the composer.
     let mut page = col()
         .w_full()
         .h_full()
-        .on_layout(move |_: &mut State, rect| report_env(rect, inset))
-        .on_paste_content(|_: &mut State, content, _| send_paste(content));
+        .on_layout(move |_: &mut State, rect| report_env(rect, inset));
     let bg = color(&s.page.bg);
     if let Some(bg) = bg {
         page = page.fill(bg)
@@ -482,10 +480,16 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
             page = page.child(l);
         }
     }
-    if keyboard <= 0.0 {
-        return page;
-    }
-    let mut window = col().w_full().h_full().pb(keyboard);
+    // Always wrapped, the keyboard down or not: the tree keeps its shape, so the ids of the
+    // elements under it (the focused composer's among them) stay put as the keyboard moves.
+    // Wrapping only while the keyboard is up renamed every id, which dropped the composer's
+    // focus, which lowered the keyboard, which renamed them back: a loop.
+    // A paste with no field focused goes to the window's root, which hands it to the composer.
+    let mut window = col()
+        .w_full()
+        .h_full()
+        .pb(keyboard.max(0.0))
+        .on_paste_content(|_: &mut State, content, _| send_paste(content));
     if let Some(bg) = bg {
         window = window.fill(bg)
     }

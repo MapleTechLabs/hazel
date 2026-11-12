@@ -210,13 +210,16 @@ export const mobileTopBar = <Message>(
  * a phone's navigation does (where the shell has the swipe: `platform/system-ui.ts`).
  */
 const SwipeBack = Mount.defineStream("SwipeBack", {
-	args: { href: Schema.String },
 	// It sends nothing: the shell follows the link itself.
 	messages: [Schema.Never],
-	execute: ({ href }) =>
+	// The swipe goes where the chevron's own link does.
+	execute: ({ element }) =>
 		Stream.unwrap(
 			Effect.acquireRelease(
-				Effect.sync(() => systemUi()?.setSwipeBack(href)),
+				Effect.sync(() => {
+					const href = element.getAttribute("href")
+					return href === null ? undefined : systemUi()?.setSwipeBack(href)
+				}),
 				(release) => Effect.sync(() => release?.()),
 			).pipe(Effect.as(Stream.never)),
 		),
@@ -236,7 +239,7 @@ export const mobileBackLink = <Message>(
 			// Keyed by where it leads, so its swipe follows a new destination. Only a shell with
 			// the swipe (installed before the app starts) gets the Mount; a browser has none.
 			h.Key(`back:${href}`),
-			...(systemUi() === undefined ? [] : [h.OnMount(SwipeBack({ href }))]),
+			...(systemUi() === undefined ? [] : [h.OnMount(SwipeBack())]),
 			h.Class(
 				twMerge(
 					"-ml-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-primary transition-opacity duration-100 active:opacity-60 md:hidden",

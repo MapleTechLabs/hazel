@@ -52,7 +52,10 @@ compiles after the commit that shows it, and the screen restyles.
 `NATIVE_THEME=dark`, `NATIVE_WIDTH`/`NATIVE_HEIGHT` set the window; `NATIVE_DEBUG=1` logs every
 Message and editor event; `NATIVE_STATS=<file>` appends per-commit timings.
 `HAZEL_FIXTURE_HTML=<file.html>` ends the offline #general with a message showing that page as an
-HTML render, served from a local port as the api serves one (the file is read on every load).
+HTML render, served from a local port as the api serves one (the file is read on every load); a
+page URL instead is shown as it is (iOS: `bun run serve-fixture-html page.html` serves the file
+and prints the URL to build with). Offline, links still unfurl: the link-preview worker's
+requests (previews, tweets) go to the network.
 
 `host/target/release/hazel-native --capture script.json` runs headless on a real-time frame loop and
 follows a script (`settle`, `waitText`, `clickText`, `focusEditable`, `type`, `key`, `snap`, `dump`,
@@ -154,7 +157,12 @@ Motion runs on Rune's display link (`CADisplayLink`), at the screen's rate: 120 
 ProMotion iPhone (`CADisableMinimumFrameDurationOnPhone`). When WebKit ends the page's process
 (memory pressure, a crash), the bridge loads a fresh page and runtime, as a browser reloads a tab.
 
-Not yet on iOS: updates and HTML renders.
+HTML renders show as on the Mac (`host/src/frames.rs`, its UIKit side): each page in a `WKWebView`
+over its box. A finger on an inline page also reaches Rune's view, so a drag over it scrolls the
+list and a long press opens the message's menu, while a tap presses what is under it in the page; a
+fullscreen page scrolls itself.
+
+Not yet on iOS: updates.
 
 ### TestFlight
 

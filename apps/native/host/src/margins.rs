@@ -62,6 +62,7 @@ fn lets_margins_through(tag: &str, st: &Style) -> bool {
         && st.clip != Some(true)
         && st.isolated != Some(true)
         && st.scroll_y != Some(true)
+        && st.scroll_x != Some(true)
         && st.absolute.is_none()
         && st.fixed != Some(true)
 }

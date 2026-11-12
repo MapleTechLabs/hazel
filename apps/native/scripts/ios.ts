@@ -62,6 +62,7 @@ const environment: Record<string, string> = release
 				"NATIVE_DEBUG",
 				"NATIVE_PATH",
 				"HAZEL_ISLANDS",
+				"HAZEL_FIXTURE_HTML",
 			].flatMap((name) => {
 				const value = process.env[name]
 				return value === undefined ? [] : [[name, value]]

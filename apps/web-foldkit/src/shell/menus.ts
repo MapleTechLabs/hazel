@@ -106,14 +106,14 @@ const SWITCHER_TITLES = {
 } as const satisfies Record<SwitcherKey, string>
 
 /** The items' SF Symbols, for the system's own sheet. */
-const USER_SYMBOLS: Readonly<Record<string, string>> = {
+const USER_SYMBOLS = {
 	profile: "person.crop.circle",
 	status: "face.smiling",
 	"my-settings": "gearshape",
 	feedback: "bubble.left.and.text.bubble.right",
 	logout: "rectangle.portrait.and.arrow.right",
-}
-const SWITCHER_SYMBOLS: Readonly<Record<string, string>> = {
+} as const satisfies Partial<Record<UserMenuKey, string>>
+const SWITCHER_SYMBOLS = {
 	"create-server": "plus",
 	"invite-people": "person.badge.plus",
 	"manage-members": "person.2",
@@ -123,7 +123,7 @@ const SWITCHER_SYMBOLS: Readonly<Record<string, string>> = {
 	"server-settings": "gearshape",
 	"custom-emojis": "face.smiling",
 	integrations: "puzzlepiece.extension",
-}
+} as const satisfies Partial<Record<SwitcherKey, string>>
 
 type ItemOptions = Parameters<typeof Menu.item>[1]
 const userItem = (key: UserMenuKey, orgSlug: string, userId: UserId, options?: ItemOptions) =>
