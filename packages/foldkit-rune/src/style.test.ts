@@ -305,6 +305,23 @@ describe("StyleResolver", () => {
 		expect(resolve("absolute top-0").style.insetFrac).toBeUndefined()
 	})
 
+	it("sends horizontal and vertical overflow as the scrolling the host draws", () => {
+		expect(resolve("flex overflow-x-auto").style).toMatchObject({ scrollX: true })
+		expect(resolve("flex overflow-x-auto").style.scrollY).toBeUndefined()
+		expect(resolve("overflow-y-auto").style).toMatchObject({ scrollY: true })
+		expect(resolve("overflow-y-auto").style.scrollX).toBeUndefined()
+		expect(resolve("overflow-auto").style).toMatchObject({ scrollX: true, scrollY: true })
+		expect(resolve("overflow-x-hidden").style).toMatchObject({ clip: true })
+		// A later declaration decides: an inline `visible` or `hidden` turns the scrolling off.
+		const inline = (overflowX: string) =>
+			resolve("flex overflow-x-auto overflow-y-auto", {
+				extra: { inline: { "overflow-x": overflowX } },
+			}).style
+		expect(inline("visible").scrollX).toBeUndefined()
+		expect(inline("hidden")).toMatchObject({ clip: true, scrollY: true })
+		expect(inline("hidden").scrollX).toBeUndefined()
+	})
+
 	it("hides screen-reader-only text and reads inline styles last", () => {
 		expect(resolve("sr-only").style.display).toBe("none")
 		// A screen-reader-only control (a keyboard drag handle) stays a Tab stop.
