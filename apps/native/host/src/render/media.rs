@@ -99,14 +99,14 @@ pub(super) fn build_img(
         // nothing shows until it is laid out and the composite is ready.
         let size = rune::memo::layout_size(path).filter(|[w, h]| *w > 0.0 && *h > 0.0);
         let fit = st.object_fit.as_deref();
-        if let Some(image) = size.and_then(|size| ctx.s.images.masked(src, mask, size, fit)) {
+        if let Some(image) = size.and_then(|size| ctx.s.images.masked(src, mask, size, fit, path)) {
             e = e.pixels(image.pixels());
         }
     } else if let Some(image) = attrs
         .get("src")
-        .and_then(|src| ctx.s.images.get(src, picture_size(st)))
+        .and_then(|src| ctx.s.images.get(src, picture_size(st), path))
     {
-        if let Some([w, h]) = natural_box(st, &image, path) {
+        if let Some([w, h]) = natural_box(st, &image, path, ctx) {
             e = e.size(w, h);
         }
         e = match st.object_fit.as_deref() {
@@ -129,13 +129,13 @@ pub(super) fn build_img(
 /// A percentage max (`max-w-full max-h-full`, the image viewer's) is a share of the parent's
 /// laid-out box, read so the view rebuilds when that box changes. Before the parent is laid out
 /// that side has no cap, as a percentage of a size that depends on the content has none in CSS.
-fn natural_box(st: &Style, image: &rune::Image, path: &str) -> Option<[f32; 2]> {
+fn natural_box(st: &Style, image: &rune::Image, path: &str, ctx: &Ctx) -> Option<[f32; 2]> {
     let unset = |len: &Option<wire::Len>| matches!(len, None | Some(wire::Len::Auto));
     if !unset(&st.w) || !unset(&st.h) || st.aspect_ratio.is_some() {
         return None;
     }
     let Some([w, h]) = image.size() else {
-        images::rebuild_when_ready(image);
+        ctx.s.images.await_decode(image, path);
         return None;
     };
     let percent = st

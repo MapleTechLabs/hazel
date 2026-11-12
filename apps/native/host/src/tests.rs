@@ -340,7 +340,7 @@ fn an_img_with_a_data_png_draws_its_pixels() {
         )],
     ));
     s.images
-        .get(&src, 40.0)
+        .get(&src, 40.0, "r/0")
         .expect("decodes")
         .wait()
         .expect("a png");
@@ -371,14 +371,13 @@ fn an_unsized_img_takes_its_pictures_size_within_its_max_height() {
             )],
         )
     };
-    // The decode lands off the main thread. `poll` rebuilds the row in the app; tests run side by
-    // side and share its flag, so each rebuilds its own rows until the picture shows.
+    // The decode lands off the main thread; `poll` rebuilds the rows that waited on it.
     let settled = |max_h: f32| {
         let mut rt = runtime(img(max_h), (400.0, 200.0));
         let started = std::time::Instant::now();
         loop {
-            rt.update(|_: &mut State, tx| {
-                tx.invalidate_memos_by_prefix("r");
+            rt.update(|s: &mut State, tx| {
+                crate::poll(s, 0.0, tx);
             });
             rt.frame(0.016);
             let drawn = rt.presented("r/0/0").map(|p| p.0);

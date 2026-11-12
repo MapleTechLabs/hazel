@@ -194,8 +194,16 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
                 rune::memo(
                     path.to_string(),
                     // `pointer-events: none` comes from an ancestor: the same subtree under one
-                    // that toggles it must gain or lose its presses.
-                    (hash, inh.key(), form, keys.to_vec(), ctx.no_pointer),
+                    // that toggles it must gain or lose its presses. A picture landing for this
+                    // element or one inside it (`poll`) moves its epoch.
+                    (
+                        hash,
+                        inh.key(),
+                        form,
+                        keys.to_vec(),
+                        ctx.no_pointer,
+                        ctx.s.images.epoch(path),
+                    ),
                     make,
                 )
             };
@@ -320,7 +328,7 @@ fn build_elem(
         }
     };
     if let Some(wire::BgImage { url: Some(url), .. }) = &st.bg_image
-        && let Some(image) = ctx.s.images.get(url, picture_size(st))
+        && let Some(image) = ctx.s.images.get(url, picture_size(st), path)
     {
         // `background-size: cover`, the common case for avatars and banners.
         e = e.pixels_fit(image.pixels(), SurfaceFit::Fill)
@@ -491,11 +499,17 @@ fn overlay(mut e: El, ov: &Option<Box<wire::Overlay>>) -> El {
         .child(e)
 }
 
-/// A downloaded picture landed: rebuild the memoised subtrees that showed its empty box.
-pub fn poll(_: &mut State, _: f64, tx: &mut rune::Tx) -> bool {
-    let arrived = images::take_arrived();
-    if arrived {
+/// A picture landed (a download, a mask composite, a decode a box's size waited on): rebuild
+/// the memoised subtrees that drew its empty box, and the ones around them, reusing the rest.
+pub fn poll(s: &mut State, _: f64, tx: &mut rune::Tx) -> bool {
+    // The shell-wide flag is for a shell that rebuilds everything; this one knows what waited.
+    images::take_arrived();
+    let landed = s.images.landed();
+    if landed.is_empty() {
+        return false;
+    }
+    if s.images.mark_stale(&landed) {
         tx.invalidate_memos_by_prefix("r");
     }
-    arrived
+    true
 }
