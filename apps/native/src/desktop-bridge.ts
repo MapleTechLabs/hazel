@@ -110,7 +110,7 @@ export const makeDesktopBridge = (options: {
 				t: "notify",
 				title: content.title,
 				body: content.body ?? "",
-				...(content.group === undefined ? {} : { group: content.group }),
+				group: content.group,
 			}),
 	}
 

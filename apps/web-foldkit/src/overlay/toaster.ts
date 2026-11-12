@@ -86,7 +86,7 @@ export const view = <ParentMessage>(
 		viewInputs: {
 			position: isMobile ? "TopCenter" : "BottomRight",
 			// The kit pads the container inline; a phone's keeps clear of the status bar.
-			...(isMobile ? { containerClassName: "w-full pt-[calc(env(safe-area-inset-top)+0.5rem)]!" } : {}),
+			containerClassName: isMobile ? "w-full pt-[calc(env(safe-area-inset-top)+0.5rem)]!" : undefined,
 			entryClassName: isMobile
 				? `${toastEntryClassName} ${toastEntryFromTopClassName}`
 				: toastEntryClassName,

@@ -7,6 +7,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeF
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { stdioTransport, StyleResolver } from "@hazel/foldkit-rune"
+import { Option, Schema } from "effect"
 import { overlayPlugin } from "./overlay-plugin"
 import type { NativePlatform } from "./platform"
 
@@ -23,6 +24,11 @@ process.on("uncaughtException", reportUncaught("error"))
 process.on("unhandledRejection", reportUncaught("rejection"))
 // The host asks the runtime to stop with SIGTERM: exit normally, so exit work (a CPU profile) runs.
 process.on("SIGTERM", () => process.exit(0))
+
+/** The saved `localStorage`: one JSON object of strings, as `save` writes it. */
+const decodeSavedStorage = Schema.decodeUnknownOption(
+	Schema.fromJsonString(Schema.Record(Schema.String, Schema.String)),
+)
 
 /** Where each system keeps an app's own data: Application Support, AppData, XDG's data home. */
 const appDataRoot = (): string => {
@@ -54,13 +60,7 @@ const platform: NativePlatform = {
 	storage: {
 		load: () => {
 			try {
-				const saved: unknown = JSON.parse(readFileSync(storagePath, "utf8"))
-				if (typeof saved !== "object" || saved === null) return undefined
-				return Object.fromEntries(
-					Object.entries(saved).filter(
-						(entry): entry is [string, string] => typeof entry[1] === "string",
-					),
-				)
+				return Option.getOrUndefined(decodeSavedStorage(readFileSync(storagePath, "utf8")))
 			} catch {
 				// No file yet, or one cut short: start empty, as a browser with cleared storage does.
 				return undefined

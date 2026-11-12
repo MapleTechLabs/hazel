@@ -4,17 +4,21 @@ import { describe, expect, test } from "vitest"
 import { makeShared, pageScene } from "../../../test/pages-fixtures"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
-import { CheckAutostart, init, SetAutostart, update } from "./update"
+import { CheckAutostart, initOn, SetAutostart, update } from "./update"
 import { view } from "./view"
 
 /** The desktop page through its view: the launch-at-login switch waits for the real autostart state. */
 
 const shared = makeShared()
+/** The page as the Tauri app shows it: autostart and updates. */
+const init = () => initOn({ hasAutostart: true, hasUpdates: true })
 const openAtLogin = Scene.label("Open at login")
 
 describe("launch at startup", () => {
-	test("init asks for the current autostart state", () => {
-		expect(init().commands?.map((command) => command.name)).toEqual([CheckAutostart.name])
+	test("init asks for the current autostart state where the app has autostart", () => {
+		expect(init().commands?.map((command) => command.name)).toContain(CheckAutostart.name)
+		const commands = initOn({ hasAutostart: false, hasUpdates: true }).commands ?? []
+		expect(commands.map((command) => command.name)).not.toContain(CheckAutostart.name)
 	})
 
 	test("the switch is disabled until the state is known, then reflects it", () => {
