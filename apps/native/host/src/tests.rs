@@ -3532,7 +3532,7 @@ fn overflow_x_on_a_block_leaves_its_text_wrapped() {
 }
 
 /// An `<iframe>` that is itself fixed draws above the page, so the page's pinned dates are not
-/// over it.
+/// over it, and the list it sits in does not clip it.
 #[test]
 fn a_fixed_frame_is_its_own_layer() {
     let frame = with_attrs(
@@ -3548,7 +3548,13 @@ fn a_fixed_frame_is_its_own_layer() {
         json!({ "w": 80, "h": 24, "stickyTop": 0, "bg": "#333333ff" }),
         vec![],
     );
-    let s = state(e("div", json!({ "w": 400, "h": 300 }), vec![pinned, frame]));
-    assert_eq!(s.frames[0].layer.as_deref(), Some("r/1"));
+    let list = e(
+        "div",
+        json!({ "w": 400, "h": 200, "scrollY": true }),
+        vec![frame],
+    );
+    let s = state(e("div", json!({ "w": 400, "h": 300 }), vec![pinned, list]));
+    assert_eq!(s.frames[0].layer.as_deref(), Some("r/1/0"));
+    assert!(s.frames[0].clips.is_empty(), "{:?}", s.frames[0].clips);
     assert!(!s.covers.iter().any(|cover| cover.is_over(&s.frames[0])));
 }

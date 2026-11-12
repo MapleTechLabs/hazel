@@ -57,6 +57,8 @@ fn walk(
     // A portal draws at the window's root: what clips the place it left does not clip it.
     let portal = crate::is_portal(node);
     let layer = if portal { Some(path) } else { layer };
+    let mut own_clips = Vec::new();
+    let clips = if portal { &mut own_clips } else { clips };
     if tag == "iframe" {
         if let Some(src) = attrs.get("src").filter(|src| !src.is_empty()) {
             out.push(FrameSpec {
@@ -68,8 +70,6 @@ fn walk(
         }
         return;
     }
-    let mut own_clips = Vec::new();
-    let clips = if portal { &mut own_clips } else { clips };
     let clipping =
         st.scroll_y == Some(true) || st.clip == Some(true) || crate::layout::scrolls_x(st);
     if clipping {
