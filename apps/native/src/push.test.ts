@@ -49,20 +49,29 @@ describe("push device", () => {
 		})
 	})
 
-	it("signing out waits for the registration on its way, then forgets the token", async () => {
-		let finish: (signedIn: boolean) => void = () => {}
-		const { device, calls } = makeDevice(live, (call) =>
-			call.rpc === "pushDevice.register"
-				? new Promise((resolve) => (finish = resolve))
-				: Promise.resolve(true),
-		)
-		void device.register({ pushToken: token, bundleId: "hazel.app" })
-		const signedOut = device.unregister()
-		await Promise.resolve()
-		expect(calls.map((call) => call.rpc)).toEqual(["pushDevice.register"])
-		finish(true)
-		await signedOut
+	it("signing out stops the registration on its way and forgets the token at once", async () => {
+		const signals: Array<AbortSignal | undefined> = []
+		const lines: Array<string> = []
+		const calls: Array<PushCall> = []
+		const device = makePushDevice({
+			config: readConfig(live),
+			log: (line) => lines.push(line),
+			send: (call, signal) => {
+				calls.push(call)
+				signals.push(signal)
+				if (call.rpc === "pushDevice.unregister") return Promise.resolve(true)
+				// A registration still retrying: it ends only when stopped.
+				return new Promise((_, reject) =>
+					signal?.addEventListener("abort", () => reject(new Error("interrupted"))),
+				)
+			},
+		})
+		const registering = device.register({ pushToken: token, bundleId: "hazel.app" })
+		await device.unregister()
+		await registering
+		expect(signals[0]?.aborted).toBe(true)
 		expect(calls.map((call) => call.rpc)).toEqual(["pushDevice.register", "pushDevice.unregister"])
+		expect(lines).toContain("[push] register stopped: Error: interrupted")
 	})
 
 	it("signing out forgets the host's token even when its registration failed", async () => {

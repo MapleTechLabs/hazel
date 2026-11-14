@@ -63,7 +63,7 @@ pub fn install(mtm: MainThreadMarker) {
 /// The app came to the front: what it showed as unread is about to be seen, so the badge goes.
 /// An app the user allows registers again each time: the token can change, and notifications
 /// the user turned on in iOS Settings meanwhile start now (the same token reaches the runtime
-/// once, `bridge::set_push_token`).
+/// with each, `bridge::set_push_token`; the API hears it once).
 fn became_active() {
     UNUserNotificationCenter::currentNotificationCenter()
         .setBadgeCount_withCompletionHandler(0, None);

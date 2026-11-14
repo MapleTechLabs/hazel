@@ -65,17 +65,16 @@ fn page_ready() -> bool {
 }
 
 /// This device's push token, for the runtime to register (`src/push.ts`): now, and again for
-/// every runtime a page load starts (signing in loads one). The same token again (APNs answers
-/// every activation) goes nowhere; false then.
+/// every runtime a page load starts (signing in loads one). APNs answers every activation; the
+/// same token still goes to the runtime, which retries a registration that failed and calls the
+/// API only for a token it has not registered. Whether the token is new.
 pub fn set_push_token(message: serde_json::Value) -> bool {
-    if PUSH_TOKEN.with_borrow(|held| held.as_ref() == Some(&message)) {
-        return false;
-    }
     if page_ready() {
         reply(&message);
     }
+    let new = PUSH_TOKEN.with_borrow(|held| held.as_ref() != Some(&message));
     PUSH_TOKEN.set(Some(message));
-    true
+    new
 }
 
 /// Opens the app at `path` (a notification's tap): the runtime follows it as a link once it is

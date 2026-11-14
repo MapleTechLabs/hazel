@@ -86,11 +86,14 @@ const isHostReply = (data: FetchReply | HostReply): data is HostReply => !("id" 
 const openPath = (path: string) => {
 	if (!isAppPath(path, globalThis.location.href)) {
 		log(`[push] not opening a path that leaves the app: ${JSON.stringify(path)}`)
-	} else {
-		log(`[push] opening ${path}`)
-		void import("./document-bridge").then(({ followLink }) => followLink(path))
+		return request({ openedPath: path })
 	}
-	request({ openedPath: path })
+	log(`[push] opening ${path}`)
+	// The host holds the path until it is followed: a page that ends first restarts at it.
+	void import("./document-bridge").then(({ followLink }) => {
+		followLink(path)
+		request({ openedPath: path })
+	})
 }
 const hostReply = (reply: HostReply) => {
 	if ("back" in reply) goBack()

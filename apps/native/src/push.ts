@@ -22,8 +22,8 @@ export type PushCall =
 	  }
 	| { readonly rpc: "pushDevice.unregister"; readonly payload: { readonly token: string } }
 
-/** Makes a call when a session is signed in, resolving `false` when none is. */
-export type SendPushCall = (call: PushCall) => Promise<boolean>
+/** Makes a call when a session is signed in, resolving `false` when none is; `signal` stops it. */
+export type SendPushCall = (call: PushCall, signal?: AbortSignal) => Promise<boolean>
 
 /** A failed call is tried again this many times, waiting 1, 2, 4, 8 and 16 seconds. */
 const RETRIES = 5
@@ -48,7 +48,7 @@ const describe = (error: unknown) =>
  * The API client's call, retried with backoff while the API or the network fails; a signed-out
  * session (no session, or the API's `UnauthorizedError`) is not retried.
  */
-const sendWithSession: SendPushCall = async (call) => {
+const sendWithSession: SendPushCall = async (call, signal) => {
 	const { Effect, Schedule } = await import("effect")
 	const { sessionAuthorizationEffect } = await import("../../web-foldkit/src/core/lib/session-bearer")
 	const { HazelRpc, HazelRpcLive } = await import("../../web-foldkit/src/rpc")
@@ -65,7 +65,7 @@ const sendWithSession: SendPushCall = async (call) => {
 		}),
 		Effect.provide(HazelRpcLive),
 	)
-	return Effect.runPromise(program)
+	return Effect.runPromise(program, { signal })
 }
 
 export const makePushDevice = (options: {
@@ -79,23 +79,25 @@ export const makePushDevice = (options: {
 	let latest: string | undefined
 	/** The token the API has for this user from this runtime. */
 	let registered: string | undefined
-	/** The registration on its way, which sign-out waits for. */
-	let inFlight: { readonly token: string; readonly done: Promise<void> } | undefined
+	/** The registration on its way, which sign-out stops. */
+	let inFlight:
+		| { readonly token: string; readonly done: Promise<void>; readonly stop: AbortController }
+		| undefined
 
-	const registerNow = async (token: string, bundleId: string): Promise<void> => {
+	const registerNow = async (token: string, bundleId: string, signal: AbortSignal): Promise<void> => {
 		const environment = config.apnsEnvironment
 		if (environment === undefined)
 			return log("[push] this build names no APNs environment: not registering")
 		try {
-			const signedIn = await send({
-				rpc: "pushDevice.register",
-				payload: { token, environment, bundleId },
-			})
+			const signedIn = await send(
+				{ rpc: "pushDevice.register", payload: { token, environment, bundleId } },
+				signal,
+			)
 			if (!signedIn) return log(`[push] signed out: not registering ${short(token)}`)
 			registered = token
 			log(`[push] registered ${short(token)} (${environment}, ${bundleId})`)
 		} catch (error) {
-			log(`[push] register failed: ${describe(error)}`)
+			log(`[push] register ${signal.aborted ? "stopped" : "failed"}: ${describe(error)}`)
 		}
 	}
 
@@ -108,19 +110,22 @@ export const makePushDevice = (options: {
 		// The same token again: already registered, or on its way.
 		if (registered === pushToken) return Promise.resolve()
 		if (inFlight?.token === pushToken) return inFlight.done
-		const done = registerNow(pushToken, bundleId).finally(() => {
+		const stop = new AbortController()
+		const done = registerNow(pushToken, bundleId, stop.signal).finally(() => {
 			if (inFlight?.done === done) inFlight = undefined
 		})
-		inFlight = { token: pushToken, done }
+		inFlight = { token: pushToken, done, stop }
 		return done
 	}
 
 	/**
-	 * Forgets this device's token on the API (sign-out), after a registration still on its way:
-	 * the host's latest, even if this runtime's registration failed. Never rejects.
+	 * Forgets this device's token on the API (sign-out): the host's latest, even if this runtime's
+	 * registration failed. A registration on its way (and its retries) stops first, so the call
+	 * goes out at once, while the session it needs still exists. Never rejects.
 	 */
 	const unregister = async (): Promise<void> => {
-		await inFlight?.done
+		inFlight?.stop.abort()
+		inFlight = undefined
 		const token = latest
 		if (token === undefined) return
 		try {
