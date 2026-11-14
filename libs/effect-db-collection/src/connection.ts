@@ -126,6 +126,8 @@ export class SyncConnection {
 	readonly tablesSeen = new Set<string>()
 	/** Whether a snapshot completed at least once (a `Ready` arrived). */
 	hasSnapshot = false
+	/** Rows kept from an earlier load are showing for this source (`prime`). */
+	private primed = false
 
 	private readonly options: SyncConnectionOptions
 	private readonly backoff: Required<BackoffConfig>
@@ -175,7 +177,22 @@ export class SyncConnection {
 
 	/** Ready once, or stopped: a collection waiting on this source can stop waiting. */
 	get isSettled(): boolean {
-		return this.hasSnapshot || this.terminalError !== undefined || this.currentStatus.state === "closed"
+		return (
+			this.hasSnapshot ||
+			this.primed ||
+			this.terminalError !== undefined ||
+			this.currentStatus.state === "closed"
+		)
+	}
+
+	/**
+	 * The source's rows from an earlier load are showing: what waits on this source can stop
+	 * waiting, while it still opens and its snapshot replaces them.
+	 */
+	prime(): void {
+		if (this.isSettled) return
+		this.primed = true
+		this.setStatus(this.currentStatus)
 	}
 
 	get error(): SyncSourceTerminalError | undefined {

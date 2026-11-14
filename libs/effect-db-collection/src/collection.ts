@@ -28,6 +28,7 @@ import { type HistoryDemand, HistoryPager, type HistoryState } from "./history"
 import { ensureSources, type SyncHub, type SyncRetention, type SyncRunInfo, type SyncTableSink } from "./hub"
 import { extractPartitionValues } from "./subset"
 import { type SourceKey, sourceKey, type SyncLogger } from "./types"
+import { cursorOfWire, isBelowWindow } from "./window"
 
 export type { CollectionStatus } from "@tanstack/db"
 
@@ -97,13 +98,6 @@ interface MirrorRow<T> {
 	cursor: SyncPageCursor | undefined
 }
 
-/** A wire row's `(createdAt, id)`, when it has both as strings. */
-const cursorOfWire = (raw: unknown): SyncPageCursor | undefined => {
-	if (typeof raw !== "object" || raw === null) return undefined
-	const { createdAt, id } = raw as { readonly createdAt?: unknown; readonly id?: unknown }
-	return typeof createdAt === "string" && typeof id === "string" ? { createdAt, id } : undefined
-}
-
 /** The row metadata a persisted collection stores: the sources that held the row. */
 interface StoredRowMetadata {
 	readonly sources: ReadonlyArray<SourceKey>
@@ -121,18 +115,6 @@ const SEQ_PREFIX = "seq:"
 
 /** How long a persisted collection batches the seqs it stores (rows always land before them). */
 const SEQ_FLUSH_MS = 1000
-
-/** `(createdAt, id)` order; ISO timestamps compare as strings. */
-const compareCursor = (a: SyncPageCursor, b: SyncPageCursor): number =>
-	a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0
-
-/** Rows older than the window's start leave a gap below it: only paging brings them in. */
-const isBelowWindow = (window: SyncWindow | undefined, cursor: SyncPageCursor | undefined): boolean =>
-	window !== undefined &&
-	window.hasMore &&
-	window.oldest !== null &&
-	cursor !== undefined &&
-	compareCursor(cursor, window.oldest) < 0
 
 class SourceMirror<T extends object, TKey extends string | number> implements SyncTableSink {
 	readonly rows = new Map<TKey, MirrorRow<T>>()
