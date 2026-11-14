@@ -54,7 +54,8 @@ thread_local! {
     static RESTARTS: RefCell<Restarts> = RefCell::new(Restarts::default());
     /// This device's push token (`push.rs`): every runtime hears it once its page is ready.
     static PUSH_TOKEN: RefCell<Option<serde_json::Value>> = const { RefCell::new(None) };
-    /// The path a notification's tap opens, until a runtime can take it.
+    /// The path a notification's tap opens, until a runtime says it followed it (`openedPath`):
+    /// a page that ends before then (WebKit ended its process in the background) gets it again.
     static OPEN_PATH: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
@@ -64,22 +65,27 @@ fn page_ready() -> bool {
 }
 
 /// This device's push token, for the runtime to register (`src/push.ts`): now, and again for
-/// every runtime a page load starts (signing in loads one).
-pub fn set_push_token(message: serde_json::Value) {
+/// every runtime a page load starts (signing in loads one). The same token again (APNs answers
+/// every activation) goes nowhere; false then.
+pub fn set_push_token(message: serde_json::Value) -> bool {
+    if PUSH_TOKEN.with_borrow(|held| held.as_ref() == Some(&message)) {
+        return false;
+    }
     if page_ready() {
         reply(&message);
     }
     PUSH_TOKEN.set(Some(message));
+    true
 }
 
 /// Opens the app at `path` (a notification's tap): the runtime follows it as a link once it is
-/// up; a cold start from the tap loads its first page there.
+/// up, and the path is held until it says so; a cold start from the tap loads its first page
+/// there.
 pub fn open_path(path: String) {
     if page_ready() {
         reply(&serde_json::json!({ "openPath": path }));
-    } else {
-        OPEN_PATH.set(Some(path));
     }
+    OPEN_PATH.set(Some(path));
 }
 
 /// Where the runtime's trees go: the running app.
@@ -271,10 +277,17 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
             if let Some(token) = PUSH_TOKEN.with_borrow(Clone::clone) {
                 reply(&token);
             }
-            if let Some(path) = OPEN_PATH.take() {
+            if let Some(path) = OPEN_PATH.with_borrow(Clone::clone) {
                 reply(&serde_json::json!({ "openPath": path }));
             }
         }
+    } else if let Some(path) = field("openedPath") {
+        // The runtime followed the tap's path: a page that ends from now on need not.
+        OPEN_PATH.with_borrow_mut(|held| {
+            if held.as_deref() == Some(path.as_str()) {
+                *held = None;
+            }
+        });
     } else if let Some(line) = field("log") {
         log(&line);
     } else if let (Some(url), Some(scheme)) = (field("signIn"), field("callbackScheme")) {
@@ -347,7 +360,11 @@ define_class!(
                 return log("[host] the page's process keeps ending; not starting it again");
             }
             log("[host] the page's process ended; starting the runtime again");
-            let path = LAST_PATH.with_borrow(Clone::clone);
+            // A tap the old runtime never followed (the process ended first) leads instead.
+            let path = OPEN_PATH.take().or_else(|| LAST_PATH.with_borrow(Clone::clone));
+            if path.is_some() {
+                LAST_PATH.set(path.clone());
+            }
             load_page(self.mtm(), path.as_deref());
         }
     }

@@ -5,7 +5,7 @@
 //!
 //! Winit's iOS event loop runs `UIApplicationMain` without an application delegate, so the app
 //! sets its own (`HazelAppDelegate`) for the two calls APNs makes, just before it registers.
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::ptr::NonNull;
 
 use block2::{DynBlock, RcBlock};
@@ -32,8 +32,6 @@ thread_local! {
     static NOTIFICATIONS: RefCell<Option<Retained<Notifications>>> = const { RefCell::new(None) };
     /// The application's delegate (UIKit holds it weakly).
     static APP_DELEGATE: RefCell<Option<Retained<AppDelegate>>> = const { RefCell::new(None) };
-    /// The app has been active once: it checked whether it may register for pushes.
-    static LAUNCHED: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Before the app runs: the notification center's delegate (Apple asks for it before launch
@@ -63,18 +61,16 @@ pub fn install(mtm: MainThreadMarker) {
 }
 
 /// The app came to the front: what it showed as unread is about to be seen, so the badge goes.
-/// The first time (the launch), an app the user allowed already registers again: the token can
-/// change, and the API keeps the latest.
+/// An app the user allows registers again each time: the token can change, and notifications
+/// the user turned on in iOS Settings meanwhile start now (the same token reaches the runtime
+/// once, `bridge::set_push_token`).
 fn became_active() {
     UNUserNotificationCenter::currentNotificationCenter()
         .setBadgeCount_withCompletionHandler(0, None);
-    if LAUNCHED.replace(true) {
-        return;
-    }
     let answered = RcBlock::new(|settings: NonNull<UNNotificationSettings>| {
         // SAFETY: the framework passes valid settings.
         if hazel_native::notify::allowed(unsafe { settings.as_ref() }) {
-            after_permission(true);
+            DispatchQueue::main().exec_async(register_for_pushes);
         }
     });
     UNUserNotificationCenter::currentNotificationCenter()
@@ -89,26 +85,30 @@ pub fn after_permission(granted: bool) {
             "[push] notification permission: {}",
             if granted { "granted" } else { "not granted" }
         ));
-        if !granted {
-            return;
+        if granted {
+            register_for_pushes();
         }
-        let Some(mtm) = MainThreadMarker::new() else {
-            return;
-        };
-        let app = UIApplication::sharedApplication(mtm);
-        APP_DELEGATE.with_borrow_mut(|held| {
-            if held.is_none() {
-                let delegate: Retained<AppDelegate> = {
-                    let this = AppDelegate::alloc(mtm).set_ivars(());
-                    unsafe { msg_send![super(this), init] }
-                };
-                // SAFETY: the delegate lives as long as the app (`APP_DELEGATE`).
-                unsafe { app.setDelegate(Some(ProtocolObject::from_ref(&*delegate))) };
-                *held = Some(delegate);
-            }
-        });
-        app.registerForRemoteNotifications();
     });
+}
+
+/// Registers with APNs, which answers `HazelAppDelegate`; on the main thread.
+fn register_for_pushes() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let app = UIApplication::sharedApplication(mtm);
+    APP_DELEGATE.with_borrow_mut(|held| {
+        if held.is_none() {
+            let delegate: Retained<AppDelegate> = {
+                let this = AppDelegate::alloc(mtm).set_ivars(());
+                unsafe { msg_send![super(this), init] }
+            };
+            // SAFETY: the delegate lives as long as the app (`APP_DELEGATE`).
+            unsafe { app.setDelegate(Some(ProtocolObject::from_ref(&*delegate))) };
+            *held = Some(delegate);
+        }
+    });
+    app.registerForRemoteNotifications();
 }
 
 /// A device token as APNs's provider API takes it: lowercase hex.
@@ -116,13 +116,13 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-/// The path a notification opens the app at: its `hazel.path`, an app path.
+/// A notification's `hazel.path`, as sent; `hazel_native::shell::app_path` says whether the app
+/// may open it.
 fn path_of(user_info: &NSDictionary) -> Option<String> {
     let hazel = user_info.objectForKey(&**NSString::from_str("hazel"))?;
     let hazel = hazel.downcast::<NSDictionary>().ok()?;
     let path = hazel.objectForKey(&**NSString::from_str("path"))?;
-    let path = path.downcast::<NSString>().ok()?.to_string();
-    path.starts_with('/').then_some(path)
+    Some(path.downcast::<NSString>().ok()?.to_string())
 }
 
 define_class!(
@@ -143,14 +143,14 @@ define_class!(
                 .bundleIdentifier()
                 .map(|id| id.to_string())
                 .unwrap_or_default();
-            log(&format!(
-                "[push] device token {}… for {bundle_id}",
-                &token[..token.len().min(8)]
-            ));
-            crate::bridge::set_push_token(serde_json::json!({
+            let start = token[..token.len().min(8)].to_string();
+            let changed = crate::bridge::set_push_token(serde_json::json!({
                 "pushToken": token,
                 "bundleId": bundle_id,
             }));
+            if changed {
+                log(&format!("[push] device token {start}… for {bundle_id}"));
+            }
         }
 
         #[unsafe(method(application:didFailToRegisterForRemoteNotificationsWithError:))]
@@ -191,7 +191,9 @@ define_class!(
                     .is_some()
             });
             if pushed {
-                log("[push] a push arrived while the app is in front: not shown");
+                DispatchQueue::main().exec_async(|| {
+                    log("[push] a push arrived while the app is in front: not shown")
+                });
             }
             completion.call((if pushed {
                 UNNotificationPresentationOptions::empty()
@@ -211,13 +213,17 @@ define_class!(
             completion: &DynBlock<dyn Fn()>,
         ) {
             let user_info = response.notification().request().content().userInfo();
-            match path_of(&user_info) {
-                Some(path) => {
+            let path = path_of(&user_info);
+            DispatchQueue::main().exec_async(move || match path {
+                Some(path) if hazel_native::shell::app_path(&path).is_some() => {
                     log(&format!("[push] opened from a notification: {path}"));
                     crate::bridge::open_path(path);
                 }
+                Some(path) => log(&format!(
+                    "[push] opened from a notification whose path is not the app's: {path:?}"
+                )),
                 None => log("[push] opened from a notification without a path"),
-            }
+            });
             completion.call(());
         }
     }

@@ -10,7 +10,7 @@ import { PUSH_DEVICE_GLOBAL, type PushDevice } from "../../web-foldkit/src/platf
 import { SYSTEM_UI_GLOBAL, type SystemUi } from "../../web-foldkit/src/platform/system-ui"
 import { readConfig } from "./config"
 import type { NativePlatform } from "./platform"
-import { makePushDevice, type PushToken } from "./push"
+import { isAppPath, makePushDevice, type PushToken } from "./push"
 
 /** What the page set before this worker's source: the host's environment. */
 declare const __HAZEL_ENV__: Record<string, string>
@@ -34,6 +34,8 @@ export type IosRequest =
 	| { readonly haptic: true }
 	/** Where the edge swipe goes back to; empty turns the swipe off. */
 	| { readonly swipeBack: string }
+	/** The runtime followed a notification's path (`openPath`): the host stops holding it. */
+	| { readonly openedPath: string }
 
 /** The host's answer to a `fetch` request. */
 type FetchReply =
@@ -80,14 +82,20 @@ const goBack = () => {
 	void import("./document-bridge").then(({ followLink }) => followLink(target.href))
 }
 const isHostReply = (data: FetchReply | HostReply): data is HostReply => !("id" in data)
+/** Follows a notification's path, one of the app's own only (the host checks it too). */
+const openPath = (path: string) => {
+	if (!isAppPath(path, globalThis.location.href)) {
+		log(`[push] not opening a path that leaves the app: ${JSON.stringify(path)}`)
+	} else {
+		log(`[push] opening ${path}`)
+		void import("./document-bridge").then(({ followLink }) => followLink(path))
+	}
+	request({ openedPath: path })
+}
 const hostReply = (reply: HostReply) => {
 	if ("back" in reply) goBack()
 	else if ("pushToken" in reply) whenStarted(() => void push?.register(reply))
-	else
-		whenStarted(() => {
-			log(`[push] opening ${reply.openPath}`)
-			void import("./document-bridge").then(({ followLink }) => followLink(reply.openPath))
-		})
+	else if ("openPath" in reply) whenStarted(() => openPath(reply.openPath))
 }
 globalThis.onmessage = (event: MessageEvent<string | FetchReply | HostReply>) => {
 	const data = event.data
