@@ -1,4 +1,3 @@
-import EmblaCarousel from "embla-carousel"
 import { Effect, Queue, Schema, Stream } from "effect"
 import { Mount } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -79,16 +78,25 @@ const ThumbCarousel = Mount.defineStream("ImageViewerThumbCarousel", {
 	execute: ({ element }) =>
 		Stream.callback<Intent>(() =>
 			Effect.acquireRelease(
-				Effect.sync(() => {
-					if (!(element instanceof HTMLElement)) return NO_RELEASE
-					const embla = EmblaCarousel(element, { containScroll: "keepSnaps", dragFree: true })
-					embla.scrollTo(readSelected(element))
-					const observer = observeSelected(element, (index) => embla.scrollTo(index))
-					return () => {
-						observer.disconnect()
-						embla.destroy()
-					}
-				}),
+				// Its own chunk, fetched when a viewer first opens. Without it the strip does not scroll.
+				Effect.tryPromise(() => import("embla-carousel")).pipe(
+					Effect.match({
+						onFailure: () => NO_RELEASE,
+						onSuccess: ({ default: EmblaCarousel }) => {
+							if (!(element instanceof HTMLElement)) return NO_RELEASE
+							const embla = EmblaCarousel(element, {
+								containScroll: "keepSnaps",
+								dragFree: true,
+							})
+							embla.scrollTo(readSelected(element))
+							const observer = observeSelected(element, (index) => embla.scrollTo(index))
+							return () => {
+								observer.disconnect()
+								embla.destroy()
+							}
+						},
+					}),
+				),
 				(release) => Effect.sync(release),
 			).pipe(Effect.flatMap(() => Effect.never)),
 		),
