@@ -5,6 +5,7 @@
  * fresh runtime, which hears the token again; signing out forgets it first
  * (`web-foldkit/src/platform/push-device.ts`). Offline, nothing is registered.
  */
+import { Effect, Schedule } from "effect"
 import type { RuntimeConfig } from "./config"
 
 /** The host's token, as `push.rs` hands it over. */
@@ -29,6 +30,20 @@ export type SendPushCall = (call: PushCall, signal?: AbortSignal) => Promise<boo
 const RETRIES = 5
 
 /**
+ * An API call retried with backoff while the API or the network fails; the API's
+ * `UnauthorizedError` (signed out) is not retried. `base` is the backoff (tests shorten it).
+ */
+export const withRetries = <A, E extends { readonly _tag: string }, R>(
+	call: Effect.Effect<A, E, R>,
+	base: Schedule.Schedule<unknown> = Schedule.exponential("1 second"),
+) =>
+	Effect.retry(call, {
+		schedule: base,
+		times: RETRIES,
+		while: (error) => error._tag !== "UnauthorizedError",
+	})
+
+/**
  * Whether a notification's `path` is one of the app's own: it resolves against the page's `base`
  * to the same origin (`//host/x`, `/\host/x` and `https:` links do not).
  */
@@ -44,12 +59,8 @@ const short = (token: string) => `${token.slice(0, 8)}…`
 const describe = (error: unknown) =>
 	error instanceof Error ? `${error.name}: ${error.message}` : String(error)
 
-/**
- * The API client's call, retried with backoff while the API or the network fails; a signed-out
- * session (no session, or the API's `UnauthorizedError`) is not retried.
- */
+/** The API client's call (`withRetries`); with no session, none is made. */
 const sendWithSession: SendPushCall = async (call, signal) => {
-	const { Effect, Schedule } = await import("effect")
 	const { sessionAuthorizationEffect } = await import("../../web-foldkit/src/core/lib/session-bearer")
 	const { HazelRpc, HazelRpcLive } = await import("../../web-foldkit/src/rpc")
 	const program = Effect.gen(function* () {
@@ -57,14 +68,7 @@ const sendWithSession: SendPushCall = async (call, signal) => {
 		const client = yield* HazelRpc
 		yield* client(call.rpc, call.payload)
 		return true
-	}).pipe(
-		Effect.retry({
-			schedule: Schedule.exponential("1 second"),
-			times: RETRIES,
-			while: (error) => error._tag !== "UnauthorizedError",
-		}),
-		Effect.provide(HazelRpcLive),
-	)
+	}).pipe(withRetries, Effect.provide(HazelRpcLive))
 	return Effect.runPromise(program, { signal })
 }
 

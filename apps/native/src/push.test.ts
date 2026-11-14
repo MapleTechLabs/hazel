@@ -1,7 +1,8 @@
+import { Effect, Exit, Schedule } from "effect"
 import { describe, expect, it } from "vitest"
 
 import { readConfig } from "./config"
-import { isAppPath, makePushDevice, type PushCall } from "./push"
+import { isAppPath, makePushDevice, type PushCall, withRetries } from "./push"
 
 const token = "0a1b2c3d4e5f60718293a4b5c6d7e8f9"
 const other = "ffeeddccbbaa99887766554433221100"
@@ -113,5 +114,37 @@ describe("a notification's path", () => {
 			"/\t/evil.com",
 		])
 			expect(isAppPath(path, base), path).toBe(false)
+	})
+})
+
+describe("withRetries", () => {
+	const failing = (tag: string) => {
+		let attempts = 0
+		const call = Effect.suspend(() => {
+			attempts++
+			return Effect.fail({ _tag: tag })
+		})
+		const run = Effect.runPromiseExit(withRetries(call, Schedule.spaced("1 millis")))
+		return run.then((exit) => ({ exit, attempts }))
+	}
+
+	it("tries a failing call five more times, then fails", async () => {
+		const { exit, attempts } = await failing("RpcClientError")
+		expect(attempts).toBe(6)
+		expect(Exit.isFailure(exit)).toBe(true)
+	})
+
+	it("does not retry a signed-out session", async () => {
+		const { attempts } = await failing("UnauthorizedError")
+		expect(attempts).toBe(1)
+	})
+
+	it("stops retrying once a call succeeds", async () => {
+		let attempts = 0
+		const call = Effect.suspend(() =>
+			++attempts < 3 ? Effect.fail({ _tag: "RpcClientError" }) : Effect.succeed("ok"),
+		)
+		expect(await Effect.runPromise(withRetries(call, Schedule.spaced("1 millis")))).toBe("ok")
+		expect(attempts).toBe(3)
 	})
 })
