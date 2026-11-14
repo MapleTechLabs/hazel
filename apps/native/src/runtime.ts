@@ -80,6 +80,9 @@ export const startRuntime = async (platform: NativePlatform) => {
 	const { Layer } = await import("effect")
 	const { Runtime } = await import("foldkit")
 	const app = await import("../../web-foldkit/src/main")
+	// Every page area is in this bundle: loaded up front, a route opens its page at once.
+	const { loadPages } = await import("../../web-foldkit/src/page/registry")
+	await loadPages()
 	// The editor root's class: the composer field takes its padding, text size and minimum height.
 	const { EDITABLE_CLASS } = await import("../../web-foldkit/src/editor/editor-view")
 	const { ResourcesLive } = await import("../../web-foldkit/src/rpc")

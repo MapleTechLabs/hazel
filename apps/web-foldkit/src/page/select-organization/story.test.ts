@@ -3,10 +3,10 @@ import { OrganizationId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { fromString } from "foldkit/url"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
-import { describe, expect, test } from "vitest"
+import { beforeAll, describe, expect, test } from "vitest"
 import { makeShared, uuid } from "../../test/pages-fixtures"
 import { PageOutMessage } from "../out-message"
-import { enterRoute } from "../registry"
+import { enterRoute, loadPages } from "../registry"
 import { Message } from "./message"
 import type { UserOrganization } from "./model"
 import { hrefOf, organizationHref, routeOfPath, urlToAppRoute } from "../../route"
@@ -25,6 +25,9 @@ const hazel = org(1, "hazel")
 const unfinished = org(2, null)
 const navigation = (href: string) =>
 	PageOutMessage.RequestedNavigation({ route: routeOfPath(href), replace: false })
+
+// The last test opens an onboarding page, whose area is its own chunk (`page/lazy.ts`).
+beforeAll(loadPages)
 
 describe("select organization", () => {
 	test("a single organization redirects once, even when the live query re-emits", () => {

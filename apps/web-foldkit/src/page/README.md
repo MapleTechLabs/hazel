@@ -18,8 +18,26 @@ A page owns only its own state.
     | `subscription.ts` | `Subscription.make<PageSubscriptionInput<Model>, Message>()(...)`.             |
     | `index.ts`        | `export const page = definePage("<Id>", { Model, Message }, { routes, ... })`. |
 
-3. Register it in `page/registry.ts`: import the module and append `X.page` to `pages`. That is the
-   only shared file you touch.
+3. Register it, the only shared file you touch:
+    - A page of an area that is its own chunk (Customers, settings, my settings, channel settings,
+      onboarding): append `X.page` to the area's `pages.ts` (`page/customers/pages.ts`, ...). A new
+      route tag also goes into the area's routes in `page/registry.ts` (`registry.test.ts` fails
+      while it is missing).
+    - A page the first screen needs (chat, sign-in): import the module in `page/registry.ts` and
+      append `X.page` to `pages`. Everything it imports is downloaded before the app starts.
+
+## Lazy areas (`page/lazy.ts`)
+
+The pages outside the first screen are grouped into areas, each built into its own chunk and fetched
+when one of its routes is first entered. Until the chunk arrives the page slot is a `PagePending`
+(a loader that shows after a moment; a failed fetch offers a reload). Once an area is loaded its
+routes open their pages at once. The dev server, tests that enter a route through the root
+(`test/root-fixtures.ts`) and the native apps load every area up front (`loadPages`); a test that
+calls `enterRoute` on an area's route itself does the same (`beforeAll(loadPages)`).
+
+Never import an area's page statically from the first chunk (`registry.ts`, the shell, the root):
+that puts the page, and what it imports, back into the first download. A lazy page declares at
+most `SUBSCRIPTION_POOL_SIZE` Subscriptions (`registry.test.ts` checks).
 
 `page/settings/team/` is the minimal example; `page/chat/channel/` shows a page keyed by a route param,
 memoized views and a `sharedChanged` hook. `page/root/` shows a page that only redirects.

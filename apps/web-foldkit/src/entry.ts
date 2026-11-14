@@ -16,6 +16,7 @@ import { viewTransition } from "./app/view-transition"
 import { installImageViewerMorph } from "./chat/viewer/morph"
 import { installChannelPrefetch } from "./core/db/channel-prefetch"
 import { labPathOf } from "./lab/path"
+import { loadPages } from "./page/registry"
 import { ResourcesLive } from "./rpc"
 import * as PendingAnnouncement from "./ui/aria/pending-announcement"
 
@@ -53,7 +54,10 @@ else {
 	// The desktop app has no API cookie: its requests carry its own session as a bearer.
 	if (desktopAuthClient !== null) setSessionBearerProvider(desktopSessionBearer)
 	installImageViewerMorph()
-	startApplication()
+	// The dev server loads every page area first: the Model it keeps across a reload names a page
+	// by that page's own schema, which exists once its area has loaded (`page/registry.ts`).
+	if (import.meta.env.DEV) void loadPages().then(startApplication)
+	else startApplication()
 	installChannelPrefetch()
 	// Desktop only: native notification permission (a no-op in the browser).
 	initNativeNotifications().catch((error: unknown) =>

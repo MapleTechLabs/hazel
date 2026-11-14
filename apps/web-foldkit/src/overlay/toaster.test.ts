@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { Option } from "effect"
 import { fromString } from "foldkit/url"
-import { describe, expect, test } from "vitest"
+import { beforeAll, describe, expect, test } from "vitest"
 import { init, Message, update } from "../main"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
+import { loadPages } from "../page/registry"
 import { defaultThemePreference } from "../theme"
 import * as Toast from "../ui/toast"
 import * as Toaster from "./toaster"
@@ -18,6 +19,9 @@ const available = {
 	isSticky: true,
 	action: { label: "Install & Restart", key: "InstallUpdate" },
 } as const
+
+// The test boots on a settings page, whose area is its own chunk (`page/lazy.ts`).
+beforeAll(loadPages)
 
 describe("root toaster", () => {
 	test("a request adds a toast with its kind, title and description", () => {

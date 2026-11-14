@@ -210,6 +210,7 @@ export const definePage = <
 
 	return {
 		id,
+		routes: spec.routes,
 		Slot,
 		Wrapped,
 		ownsRoute,

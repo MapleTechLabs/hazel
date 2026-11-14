@@ -1,116 +1,109 @@
-import { Array, Option, Schema } from "effect"
+import { Option, Schema } from "effect"
 import { Subscription } from "foldkit"
 import type { Command } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import type { Resources } from "../rpc"
-import type { AppRoute } from "../route"
+import { AppRoute, isCustomersRoute, isMySettingsRoute, isSettingsRoute } from "../route"
 import * as Auth from "./auth"
 import * as BotInstall from "./bot-install"
-import * as ChannelSettingsConnect from "./channel-settings/connect"
-import * as ChannelSettingsIntegrations from "./channel-settings/integrations"
-import * as ChannelSettingsOverview from "./channel-settings/overview"
-import * as ChannelSettingsRedirect from "./channel-settings/redirect"
 import * as ChatChannel from "./chat/channel"
 import * as ChatIndex from "./chat-index"
-import * as CustomersAttention from "./customers/attention"
-import * as CustomerDetail from "./customers/detail"
-import * as CustomersList from "./customers/list"
-import * as CustomersOverview from "./customers/overview"
-import * as CustomersSettingsHealth from "./customers/settings/health"
-import * as CustomersSettingsPlans from "./customers/settings/plans"
-import * as CustomersSettingsSignals from "./customers/settings/signals"
-import * as CustomersSettingsSources from "./customers/settings/sources"
-import * as CustomersUnmatched from "./customers/settings/unmatched"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
+import * as Lazy from "./lazy"
 import type { PageOutMessage } from "./out-message"
 import * as NotificationsInbox from "./notifications/inbox"
 import * as OrgHome from "./home"
 import * as Profile from "./profile"
-import * as MySettingsAppearance from "./my-settings/appearance"
-import * as MySettingsDesktop from "./my-settings/desktop"
-import * as MySettingsKeybinds from "./my-settings/keybinds"
-import * as MySettingsLinkedAccounts from "./my-settings/linked-accounts"
-import * as MySettingsNotifications from "./my-settings/notifications"
-import * as MySettingsProfile from "./my-settings/profile"
 import * as Root from "./root"
-import * as IntegrationSettings from "./settings/integrations/detail"
-import * as IntegrationsSettings from "./settings/integrations/index"
-import * as InstalledAppsSettings from "./settings/integrations/installed"
-import * as MarketplaceSettings from "./settings/integrations/marketplace"
-import * as YourAppsSettings from "./settings/integrations/your-apps"
 import * as Invite from "./invite"
 import * as Join from "./join"
-import * as Onboarding from "./onboarding"
-import * as OnboardingSetupOrganization from "./onboarding/setup-organization"
 import * as SelectOrganization from "./select-organization"
-import * as SettingsChatSync from "./settings/chat-sync"
-import * as SettingsChatSyncConnection from "./settings/chat-sync-connection"
-import * as TeamSettings from "./settings/team"
-import * as SettingsConnectInvites from "./settings/connect-invites"
-import * as SettingsCustomEmojis from "./settings/custom-emojis"
-import * as SettingsDebug from "./settings/debug"
-import * as SettingsGeneral from "./settings/general"
-import * as SettingsInvitations from "./settings/invitations"
 
 /**
- * Every routed page, registered once. Adding a page: import its module and append `X.page` below.
- * Routes without a page render their layout around an empty placeholder (see README.md).
+ * Every routed page, registered once. Routes without a page render their layout around an empty
+ * placeholder (see README.md).
+ *
+ * `pages` are in the app's first chunk: what a signed-in user's first screen (the chat) and a
+ * signed-out one's (sign-in) can show. Adding one: import its module and append `X.page`.
  */
 export const pages = [
 	Root.page,
-	TeamSettings.page,
 	ChatChannel.page,
 	NotificationsInbox.page,
 	OrgHome.page,
 	Profile.page,
 	ChatIndex.page,
-	IntegrationsSettings.page,
-	InstalledAppsSettings.page,
-	MarketplaceSettings.page,
-	YourAppsSettings.page,
-	IntegrationSettings.page,
-	SettingsGeneral.page,
-	SettingsDebug.page,
-	SettingsConnectInvites.page,
-	SettingsInvitations.page,
-	SettingsCustomEmojis.page,
 	Auth.signInPage,
 	Auth.registerPage,
 	Auth.continuePage,
 	Auth.desktopPage,
-	Onboarding.page,
-	OnboardingSetupOrganization.page,
 	SelectOrganization.page,
 	Join.page,
 	Invite.page,
 	BotInstall.page,
-	ChannelSettingsRedirect.page,
-	ChannelSettingsOverview.page,
-	ChannelSettingsConnect.page,
-	ChannelSettingsIntegrations.page,
-	SettingsChatSync.page,
-	SettingsChatSyncConnection.page,
-	MySettingsAppearance.page,
-	MySettingsDesktop.page,
-	MySettingsKeybinds.page,
-	MySettingsLinkedAccounts.page,
-	MySettingsNotifications.page,
-	MySettingsProfile.page,
-	CustomersOverview.page,
-	CustomersAttention.page,
-	CustomersList.page,
-	CustomerDetail.page,
-	CustomersSettingsSignals.page,
-	CustomersSettingsHealth.page,
-	CustomersSettingsPlans.page,
-	CustomersSettingsSources.page,
-	CustomersUnmatched.page,
 ]
 
-export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
+type AreaPage =
+	| (typeof import("./customers/pages"))["pages"][number]
+	| (typeof import("./settings/pages"))["pages"][number]
+	| (typeof import("./my-settings/pages"))["pages"][number]
+	| (typeof import("./channel-settings/pages"))["pages"][number]
+	| (typeof import("./onboarding/pages"))["pages"][number]
+
+/**
+ * The other pages, by area: each area is a chunk fetched when one of its routes is first entered
+ * (`lazy.ts`). Adding a page to an area: append it in the area's `pages.ts`, and its routes to the
+ * area's routes here. The imports are dynamic: a static import of a page below puts it back into
+ * the first chunk.
+ */
+export const areas: ReadonlyArray<Lazy.LazyArea<AreaPage>> = [
+	Lazy.lazyArea("Customers", isCustomersRoute, () => import("./customers/pages")),
+	Lazy.lazyArea("Settings", isSettingsRoute, () => import("./settings/pages")),
+	Lazy.lazyArea("MySettings", isMySettingsRoute, () => import("./my-settings/pages")),
+	Lazy.lazyArea(
+		"ChannelSettings",
+		AppRoute.isAnyOf([
+			"ChannelSettings",
+			"ChannelSettingsOverview",
+			"ChannelSettingsIntegrations",
+			"ChannelSettingsConnect",
+		]),
+		() => import("./channel-settings/pages"),
+	),
+	Lazy.lazyArea(
+		"Onboarding",
+		AppRoute.isAnyOf(["Onboarding", "OnboardingSetupOrganization"]),
+		() => import("./onboarding/pages"),
+	),
+]
+
+type Page = (typeof pages)[number]
+
+/** Loads every area. The dev server, tests and the native apps do this before the app starts. */
+export const loadPages = (): Promise<void> =>
+	Promise.all(areas.map((area) => area.load())).then(() => undefined)
+
+const loadedAreaPages = (): ReadonlyArray<AreaPage> => areas.flatMap((area) => area.pages() ?? [])
+
+const areaPageById = (id: string): AreaPage | undefined => {
+	for (const area of areas) {
+		const page = area.pageById(id)
+		if (page !== undefined) return page
+	}
+	return undefined
+}
+
+/**
+ * The pages of the loaded areas. Only the dev server reads these schemas (a Model kept across a
+ * reload, DevTools), and it has loaded every area by then (`loadPages`).
+ */
+const AreaSlot = Schema.suspend(() => Schema.Union(loadedAreaPages().map((page) => page.Slot)))
+const AreaMessage = Schema.suspend(() => Schema.Union(loadedAreaPages().map((page) => page.Wrapped)))
+
+export const PageSlot = Schema.Union([...pages.map((page) => page.Slot), Lazy.Slot, AreaSlot])
 export type PageSlot = typeof PageSlot.Type
 
-export const PageMessage = Schema.Union(pages.map((page) => page.Wrapped))
+export const PageMessage = Schema.Union([...pages.map((page) => page.Wrapped), Lazy.Wrapped, AreaMessage])
 export type PageMessage = typeof PageMessage.Type
 /** `PageMessage` under the Submodel name, so a parent's Got wrapper imports it as `Message`. */
 export { PageMessage as Message }
@@ -130,56 +123,83 @@ const unchanged = (slot: PageSlot | null): PageTransition => ({
 const toTransition = (step: Option.Option<PageStep<PageSlot, PageMessage>>, fallback: PageSlot | null) =>
 	Option.match(step, { onNone: () => unchanged(fallback), onSome: (found): PageTransition => found })
 
-const pageById = (id: string) => Array.findFirst(pages, (page) => page.id === id)
+const pageById = (id: string): Page | AreaPage | undefined =>
+	pages.find((page) => page.id === id) ?? areaPageById(id)
+
+/** Keep the page when its key is unchanged (informing it of the new route), otherwise build it. */
+const enterPage = (
+	page: Page | AreaPage,
+	current: PageSlot | null,
+	route: AppRoute,
+	shared: Shared,
+	instance: number,
+): PageTransition => {
+	const isSameInstance =
+		current !== null && current._tag === page.id && Option.contains(page.keyOf(route), current.key)
+	return isSameInstance
+		? toTransition(page.routeChanged(current, route, shared), current)
+		: toTransition(page.init(route, shared, instance), null)
+}
+
+const pending = (step: Lazy.PendingStep): PageTransition => ({ ...step, outMessage: Option.none() })
 
 /**
- * Navigation: keep the page when its key is unchanged (informing it of the new route), otherwise
- * build the route's page and drop the previous one (React's unmount semantics).
+ * Navigation: the route's page, dropping the previous one (React's unmount semantics). A route of
+ * an area that has not loaded gets the pending slot, which opens the page once the chunk is here.
  */
 export const enterRoute = (
 	current: PageSlot | null,
 	route: AppRoute,
 	shared: Shared,
 	instance: number,
-): PageTransition =>
-	Option.match(
-		Array.findFirst(pages, (page) => page.ownsRoute(route)),
-		{
-			onNone: () => unchanged(null),
-			onSome: (page) => {
-				const isSameInstance =
-					current !== null &&
-					current._tag === page.id &&
-					Option.contains(page.keyOf(route), current.key)
-				return isSameInstance
-					? toTransition(page.routeChanged(current, route, shared), current)
-					: toTransition(page.init(route, shared, instance), null)
-			},
-		},
-	)
+): PageTransition => {
+	const page = pages.find((candidate) => candidate.ownsRoute(route))
+	if (page !== undefined) return enterPage(page, current, route, shared, instance)
+	const area = areas.find((candidate) => candidate.ownsRoute(route))
+	if (area === undefined) return unchanged(null)
+	const areaPages = area.pages()
+	if (areaPages === undefined) return pending(Lazy.enter(area, route, instance))
+	const areaPage = areaPages.find((candidate) => candidate.ownsRoute(route))
+	return areaPage === undefined ? unchanged(null) : enterPage(areaPage, current, route, shared, instance)
+}
 
 export const updatePage = (
 	current: PageSlot | null,
 	message: PageMessageBase,
 	shared: Shared,
-): PageTransition =>
-	current === null
+): PageTransition => {
+	if (current === null) return unchanged(current)
+	if (Lazy.isWrapped(message))
+		return Lazy.isSlot(current)
+			? Lazy.update(
+					current,
+					message,
+					(slot) => enterRoute(null, slot.route, shared, slot.instance),
+					pending,
+				)
+			: unchanged(current)
+	const page = pageById(message._tag)
+	return page === undefined
 		? unchanged(current)
-		: Option.match(pageById(message._tag), {
-				onNone: () => unchanged(current),
-				onSome: (page) => toTransition(page.update(current, message, shared), current),
-			})
+		: toTransition(page.update(current, message, shared), current)
+}
 
-export const informShared = (current: PageSlot | null, shared: Shared): PageTransition =>
-	current === null
+export const informShared = (current: PageSlot | null, shared: Shared): PageTransition => {
+	if (current === null) return unchanged(current)
+	const page = pageById(current._tag)
+	return page === undefined
 		? unchanged(current)
-		: Option.match(pageById(current._tag), {
-				onNone: () => unchanged(current),
-				onSome: (page) => toTransition(page.sharedChanged(current, shared), current),
-			})
+		: toTransition(page.sharedChanged(current, shared), current)
+}
+
+const noEntries: ReadonlyArray<never> = []
 
 export const pageSubscriptions = Subscription.aggregate<PageHost, PageMessage, Resources>()(
 	...pages.map((page) => page.subscriptions),
+	Lazy.pooledSubscriptions<PageMessage>((host) => {
+		const page = host.page === null ? undefined : areaPageById(host.page._tag)
+		return page === undefined ? noEntries : Object.values(page.subscriptions)
+	}),
 )
 
 /** Embeds the active page. `slotId` includes the key, so a new page instance gets a fresh boundary. */
@@ -188,15 +208,12 @@ export const viewPage = <ParentMessage>(
 	slot: PageSlotBase,
 	inputs: PageViewInputs,
 	toParentMessage: (message: PageMessage) => ParentMessage,
-): Html =>
-	Option.match(pageById(slot._tag), {
-		onNone: () => h.empty,
-		onSome: (page) =>
-			h.submodel({
-				slotId: `page:${slot._tag}:${slot.key}`,
-				model: slot,
-				view: page.hostView,
-				viewInputs: inputs,
-				toParentMessage,
-			}),
-	})
+): Html => {
+	const slotId = `page:${slot._tag}:${slot.key}`
+	if (Lazy.isSlot(slot))
+		return h.submodel({ slotId, model: slot, view: Lazy.view, viewInputs: inputs, toParentMessage })
+	const page = pageById(slot._tag)
+	return page === undefined
+		? h.empty
+		: h.submodel({ slotId, model: slot, view: page.hostView, viewInputs: inputs, toParentMessage })
+}

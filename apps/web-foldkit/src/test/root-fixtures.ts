@@ -10,11 +10,15 @@ import { view } from "../app/view"
 import { init, update } from "../main"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
 import type { Shared } from "../page/contract"
+import { loadPages } from "../page/registry"
 import { sharedDefaults } from "../page/test-shared"
 import type { CurrentUser, Member, Organization } from "../session"
 import { defaultThemePreference, type ThemePreference } from "../theme"
 
 /** Root program fixtures: boot the app at a URL and feed it the session facts the Subscriptions report. */
+
+// Every page area is loaded, so a route of any of them opens its page at once (`page/lazy.ts`).
+await loadPages()
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 
