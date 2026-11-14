@@ -8,13 +8,15 @@
  * levels (all, mentions, nothing), mutes, presence, do not disturb and quiet hours.
  *
  * Each recipient's `notificationCount` goes up here; the notification row itself is the
- * recipient's `UserObject`'s (`user.createNotification`).
+ * recipient's `UserObject`'s (`user.createNotification`), with what its push says
+ * (`./push-content.ts`) when the channel sent the content.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { ChannelId, type ConnectConversationId, MessageId, UserId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { NotificationService } from "../../../services/notifications/notification-service"
 import { enqueueEffect, defineEffect } from "../effects/registry"
+import { loadPushContent } from "./push-content"
 
 export const MessageCreatedPayload = Schema.Struct({
 	channelId: ChannelId,
@@ -26,6 +28,10 @@ export const MessageCreatedPayload = Schema.Struct({
 	notifyAll: Schema.Boolean,
 	/** The author of the message this one replies to. */
 	replyToAuthorId: Schema.NullOr(UserId),
+	/** For the push (shortened). Optional: deliveries enqueued before push have none. */
+	content: Schema.optional(Schema.String),
+	/** The message's attachments, counted when it has no text. */
+	attachmentCount: Schema.optional(Schema.Number),
 })
 export type MessageCreatedPayload = typeof MessageCreatedPayload.Type
 
@@ -104,6 +110,18 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 	const channel = yield* localChannel(payload.channelId)
 	if (channel._tag === "None") return
 
+	const push =
+		payload.content === undefined
+			? undefined
+			: yield* loadPushContent({
+					organizationId: channel.value.organizationId,
+					channelId: payload.channelId,
+					authorId: payload.authorId,
+					mentionedUserIds: payload.mentionedUserIds,
+					content: payload.content,
+					attachmentCount: payload.attachmentCount ?? 0,
+				})
+
 	yield* NotificationService.use((service) =>
 		service.notify(channel.value.organizationId, {
 			channelId: payload.channelId,
@@ -114,6 +132,7 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 			mentionedUserIds: payload.mentionedUserIds,
 			notifyAll: payload.notifyAll,
 			replyToAuthorId: payload.replyToAuthorId,
+			push,
 		}),
 	).pipe(Effect.provide(NotificationService.layer))
 })

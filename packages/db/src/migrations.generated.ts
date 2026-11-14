@@ -344,6 +344,12 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "notifications" ADD COLUMN "silent" integer NOT NULL DEFAULT false',
 			],
 		},
+		{
+			id: "0003_push_devices",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "push_devices" (\n\t"token" text PRIMARY KEY NOT NULL,\n\t"environment" text NOT NULL,\n\t"bundleId" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+			],
+		},
 	],
 	customers: [
 		{

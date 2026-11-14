@@ -14,6 +14,7 @@ import * as Cloudflare from "@alchemy.run/cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
 import { Cause, Effect, Exit, Layer, Scope } from "effect"
 import { FetchHttpClient, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { ApnsClient } from "../../services/apns"
 import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
 import { HtmlRenders } from "../../services/html-renders"
@@ -75,6 +76,9 @@ export const activateObject = (kind: ObjectKind) =>
 					HtmlRenders.layer.pipe(
 						Layer.provide(Layer.mergeAll(workerEnvLayer(env), htmlRenderStoreLive(env))),
 						Layer.orDie,
+					),
+					ApnsClient.layer.pipe(
+						Layer.provide(Layer.mergeAll(FetchHttpClient.layer, workerEnvLayer(env))),
 					),
 				),
 			}).pipe(

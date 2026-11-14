@@ -5,7 +5,8 @@
  * write and are delivered after it.
  *
  * - bots: `botGateway.messageEvent` (message create, update, delete);
- * - notifications: `org.messageCreated` to the channel's `OrgObject` (`../org/message-notifications.ts`);
+ * - notifications: `org.messageCreated` to the channel's `OrgObject` (`../org/message-notifications.ts`),
+ *   with the content its push shows;
  * - thread naming: `ai.nameThread` once a thread still called "Thread" has more than 3 replies.
  * - search: `org.indexMessages` (message create, update, delete), `./search-index.ts`.
  *
@@ -40,6 +41,9 @@ export type MessageEvent =
 export type MessageEventHook = (
 	event: MessageEvent,
 ) => Effect.Effect<void, DatabaseError | Schema.SchemaError, Database.Database | SqlClient>
+
+/** How much of a message's content `org.messageCreated` carries: a push shows far less. */
+const NOTIFICATION_CONTENT_MAX = 2000
 
 /** Threads are named once they have more replies than this. */
 export const THREAD_NAMING_THRESHOLD = 3
@@ -81,6 +85,15 @@ const notificationsHook: MessageEventHook = (event) =>
 		if (Option.isNone(organizationId)) return
 		const db = yield* Database.Database
 		const mentions = parseMentions(message.content)
+		// Only a message with no text needs its attachments counted ("Sent an attachment").
+		const attachments =
+			message.content.trim() !== ""
+				? Option.none()
+				: yield* db.first(
+						SQLite.from(schema.attachmentsTable)
+							.select(() => ({ count: SQLite.count() }))
+							.where(($) => [$.messageId.eq(message.id), $.deletedAt.isNull()]),
+					)
 		const replyTo =
 			message.replyToMessageId === null
 				? Option.none()
@@ -100,6 +113,11 @@ const notificationsHook: MessageEventHook = (event) =>
 				mentionedUserIds: mentions.userMentions,
 				notifyAll: mentions.hasChannelMention || mentions.hasHereMention,
 				replyToAuthorId: Option.getOrNull(Option.map(replyTo, (row) => row.authorId)),
+				content: message.content.slice(0, NOTIFICATION_CONTENT_MAX),
+				attachmentCount: Option.match(attachments, {
+					onNone: () => 0,
+					onSome: (row) => Number(row.count),
+				}),
 			},
 		)
 	})

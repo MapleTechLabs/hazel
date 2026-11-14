@@ -3,6 +3,7 @@ import { Database, SQLite, schema } from "@hazel/db"
 import { ChannelId, OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
+import type { ApnsClient } from "../../../services/apns"
 import { markOffline, projectPresenceTo } from "../user/presence"
 import { PresenceEffects } from "../user/presence-kinds"
 import { MessageNotificationEffects, messageNotificationReceivers } from "../user/message-notifications"
@@ -59,4 +60,4 @@ export const userReceivers = {
 		),
 	"user.markOffline": (payload) => Effect.asVoid(markOffline(payload.userId)),
 	...messageNotificationReceivers,
-} satisfies EffectReceivers<typeof UserEffects, Database.Database | SqlClient>
+} satisfies EffectReceivers<typeof UserEffects, Database.Database | SqlClient | ApnsClient>

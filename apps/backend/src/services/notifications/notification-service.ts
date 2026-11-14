@@ -9,6 +9,7 @@ import type { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema
 import { Array, Clock, Context, Effect, Layer } from "effect"
 import { enqueueEffect } from "../../worker/objects/effects/registry"
 import { MessageNotificationEffects } from "../../worker/objects/user/message-notifications"
+import type { PushContent } from "../../worker/objects/user/push"
 import {
 	decide,
 	defaultLevel,
@@ -169,7 +170,11 @@ export class NotificationService extends Context.Service<NotificationService>()(
 			/** Notify the recipients of `activity`: badge counts here, rows in their `UserObject`s. */
 			const notify = Effect.fn("NotificationService.notify")(function* (
 				organizationId: OrganizationId,
-				activity: MessageActivity & { readonly messageId: schema.Message["id"] },
+				activity: MessageActivity & {
+					readonly messageId: schema.Message["id"]
+					/** What a recipient's push says; absent: not pushed. */
+					readonly push?: PushContent | undefined
+				},
 			) {
 				const notified = yield* recipients(organizationId, activity)
 				if (notified.length === 0) return notified
@@ -198,6 +203,7 @@ export class NotificationService extends Context.Service<NotificationService>()(
 								messageId: activity.messageId,
 								reason: recipient.reason,
 								silent: recipient.silent,
+								...(activity.push === undefined ? {} : { push: activity.push }),
 							},
 							{ id: `notify:${activity.messageId}:${recipient.userId}` },
 						),

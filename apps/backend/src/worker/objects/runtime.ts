@@ -28,6 +28,7 @@ import {
 	makeRpcDispatcher,
 	rpcFor,
 } from "../../rpc/dispatch"
+import type { ApnsClient } from "../../services/apns"
 import type { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import type { Directory } from "../../services/directory"
 import type { HtmlRenders } from "../../services/html-renders"
@@ -75,6 +76,7 @@ export type ObjectPlatform =
 	| ThreadNamer
 	| ChatSyncProviders
 	| HtmlRenders
+	| ApnsClient
 
 export interface ObjectRuntimeOptions {
 	readonly kind: ObjectKind

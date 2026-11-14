@@ -1,13 +1,14 @@
 /**
  * Outbox delivery and receipt. `deliverOutboxRow` is every object's `deliver`: object targets get
- * a DO RPC `applyEffect`; directory, bot-gateway, ai, chat-sync and storage effects run right here,
- * in the sender.
+ * a DO RPC `applyEffect`; directory, bot-gateway, ai, chat-sync, storage and push effects run right
+ * here, in the sender.
  * `applyReceivedEffect` is the receiving object's side: decode, run once per key, report.
  */
 import { Database } from "@hazel/db"
 import { OutboxDeliveryError, type OutboxRow, withInbox } from "@hazel/sync-do"
 import { Cause, Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
+import type { ApnsClient } from "../../../services/apns"
 import type { BotGatewayTransport } from "../../../services/bot-gateway-transport"
 import type { Directory } from "../../../services/directory"
 import type { ObjectKind } from "../kinds"
@@ -34,6 +35,7 @@ import {
 	EffectSenderRefusedError,
 	parseEffectTarget,
 } from "./registry"
+import { pushReceivers, PushEffects } from "../user/push"
 import { storageReceivers, StorageEffects } from "./storage-effects"
 import { userReceivers, UserEffects } from "./user-effects"
 
@@ -50,7 +52,7 @@ const side = <R>(kinds: Record<string, AnyEffectKind>, receivers: Record<string,
 })
 
 /** What each object kind receives. */
-export const objectReceivers: Record<ObjectKind, Side<Database.Database | SqlClient>> = {
+export const objectReceivers: Record<ObjectKind, Side<Database.Database | SqlClient | ApnsClient>> = {
 	org: side(OrgEffects, orgReceivers),
 	channel: side(ChannelEffects, channelReceivers),
 	user: side(UserEffects, userReceivers),
@@ -72,6 +74,8 @@ const chatSyncSide = side<Database.Database | SqlClient | ChatSyncProviders | Di
 )
 
 const storageSide = side<Database.Database | HtmlRenders>(StorageEffects, storageReceivers)
+
+const pushSide = side<Database.Database | ApnsClient>(PushEffects, pushReceivers)
 
 const failure = (message: string, retryable = true) => new OutboxDeliveryError({ message, retryable })
 
@@ -152,6 +156,7 @@ export const deliverOutboxRow = (
 	| ThreadNamer
 	| ChatSyncProviders
 	| HtmlRenders
+	| ApnsClient
 > =>
 	Effect.gen(function* () {
 		const target = parseEffectTarget(row.target)
@@ -161,6 +166,7 @@ export const deliverOutboxRow = (
 		if (target.kind === "ai") return yield* runLocal(aiSide, row, sender)
 		if (target.kind === "chat-sync") return yield* runLocal(chatSyncSide, row, sender)
 		if (target.kind === "storage") return yield* runLocal(storageSide, row, sender)
+		if (target.kind === "push") return yield* runLocal(pushSide, row, sender)
 		const stubs = yield* ObjectStubs
 		const result = yield* stubs
 			.get({ kind: target.kind, id: target.id! })
@@ -190,7 +196,7 @@ export const deliverOutboxRow = (
 export const applyReceivedEffect = (
 	objectKind: ObjectKind,
 	request: ApplyEffectRequest,
-): Effect.Effect<ApplyEffectResult, never, Database.Database | SqlClient> =>
+): Effect.Effect<ApplyEffectResult, never, Database.Database | SqlClient | ApnsClient> =>
 	Effect.gen(function* () {
 		const { kinds, receivers } = objectReceivers[objectKind]
 		const kind = kinds[request.kind]

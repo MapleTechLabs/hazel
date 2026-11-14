@@ -11,6 +11,7 @@ import type { BotId } from "@hazel/schema"
 import { type FakeStorage, makeFakeState, makeFakeStorage, sqliteClientLayer } from "@hazel/sync-do/testing"
 import { ConfigProvider, Context, Deferred, Effect, type Exit, Layer, Option, Scope } from "effect"
 import { Persistence } from "effect/persistence"
+import { ApnsClient, type ApnsNotification, type ApnsResult } from "../../services/apns"
 import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
 import { HtmlRenderStore, HtmlRenders } from "../../services/html-renders"
@@ -82,6 +83,12 @@ export interface TestObjects {
 	readonly setThreadName: (name: string) => void
 	/** The HTML render pages (`HtmlRenderStore`), by key. */
 	readonly bucket: Map<string, string>
+	/** What the objects sent APNs, in order. */
+	readonly pushes: Array<ApnsNotification>
+	/** APNs's answer to the next pushes (default 200). */
+	readonly setApnsResult: (result: ApnsResult) => void
+	/** Provider token invalidations APNs asked for. */
+	readonly apnsTokenResets: { count: number }
 	/** Run `tag` (decoded payload) on the directory path, as the api Worker does for D1 methods. */
 	readonly invokeDirectory: (
 		tag: string,
@@ -93,6 +100,8 @@ export interface TestObjects {
 export interface TestObjectsOptions {
 	/** Each kind's migrations, in place of its store's (`storeMigrations`). */
 	readonly migrations?: Partial<Record<ObjectTarget["kind"], ReadonlyArray<StoreMigration>>>
+	/** APNs configured (default true): the fake records pushes. */
+	readonly apns?: boolean
 }
 
 export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
@@ -207,7 +216,20 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG))),
 			Layer.orDie,
 		)
+		const pushes: Array<ApnsNotification> = []
+		let apnsResult: ApnsResult = { status: 200, reason: null }
+		const apnsTokenResets = { count: 0 }
+		const apns = Layer.succeed(ApnsClient, {
+			enabled: options.apns ?? true,
+			send: (notification) =>
+				Effect.sync(() => {
+					pushes.push(structuredClone(notification))
+					return apnsResult
+				}),
+			invalidateToken: Effect.sync(() => void apnsTokenResets.count++),
+		})
 		const platform = Layer.mergeAll(
+			apns,
 			Layer.succeedContext(directory),
 			Layer.succeed(ObjectStubs, stubs),
 			transport,
@@ -285,6 +307,11 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 		return {
 			get,
 			bucket,
+			pushes,
+			setApnsResult: (result) => {
+				apnsResult = result
+			},
+			apnsTokenResets,
 			invokeDirectory: (tag, payload, principal) =>
 				isolated(
 					Effect.flatMap(directoryPath, (dispatcher) =>

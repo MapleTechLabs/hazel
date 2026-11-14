@@ -83,6 +83,8 @@ export const userTables = [
 	schema.notificationsTable,
 	schema.userPresenceStatusTable,
 	schema.userOrganizationsTable,
+	// Not synced: the push devices.
+	schema.pushDevicesTable,
 ] as const
 
 /**
