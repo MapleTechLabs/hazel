@@ -25,11 +25,14 @@
  * while the web app's script still loads (`index.html`): the caller's `UserObject`, and the
  * channel's object when the directory knows it (an unknown id must not create one). It carries
  * the access token as a bearer and answers 204 once they are up; the page does not wait for it.
+ *
+ * Every `fetch` into an object carries the forwarding span as `traceparent`, so the object's
+ * request span (and its `SyncDO.connect` or `SyncDO.warm`) is that span's child.
  */
 import { SYNC_MUX_SUBPROTOCOL, SYNC_SUBPROTOCOL, SyncCloseCode, type SyncMuxOpen } from "@hazel/domain/sync"
 import { type MuxOpenResult, refuseMuxStream, startMuxSession, toHttpServerResponse } from "@hazel/sync-do"
 import { type Context, Effect, Option, Schema } from "effect"
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { HttpRouter, HttpServerRequest, HttpServerResponse, HttpTraceContext } from "effect/http"
 import { HazelSession } from "../services/hazel-session"
 import { ChannelId, OrganizationId, type UserId } from "@hazel/schema"
 import type { Socket } from "effect/socket"
@@ -137,12 +140,20 @@ export const pathOf = (url: string) => {
 	return query === -1 ? path : path.slice(0, query)
 }
 
+/** The current span as `traceparent` and `b3` headers; none outside a span. */
+const traceHeaders = Effect.currentSpan.pipe(
+	Effect.map((span): Record<string, string> => ({ ...HttpTraceContext.toHeaders(span) })),
+	Effect.catchTag("NoSuchElementError", () => Effect.succeed<Record<string, string>>({})),
+)
+
 /** The object `kind`/`name` is up; a failure only means the socket wakes it later. */
 const warmObject = (namespace: Namespace, kind: ObjectKind, name: string) =>
-	Effect.tryPromise(() =>
-		namespace
-			.getByName(name)
-			.fetch(new Request("https://object/warm", { headers: { [WARM_HEADER]: "1" } })),
+	Effect.flatMap(traceHeaders, (trace) =>
+		Effect.tryPromise(() =>
+			namespace
+				.getByName(name)
+				.fetch(new Request("https://object/warm", { headers: { ...trace, [WARM_HEADER]: "1" } })),
+		),
 	).pipe(
 		Effect.ignore,
 		Effect.withSpan("SyncRoute.warmObject", {
@@ -270,6 +281,23 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 					} satisfies SocketTarget as SocketTarget
 				})
 
+			/**
+			 * The upgrade, forwarded to the target's object with its principal headers. The span is
+			 * the object's parent, so its time before `SyncDO.connect` starts is the object's wake.
+			 */
+			const forward = (target: Extract<SocketTarget, { readonly _tag: "Target" }>, upgrade: Request) =>
+				Effect.flatMap(traceHeaders, (trace) => {
+					const headers = new Headers(upgrade.headers)
+					for (const [name, value] of Object.entries({ ...trace, ...target.headers })) {
+						headers.set(name, value)
+					}
+					return Effect.tryPromise({
+						try: () => target.object.fetch(new Request(upgrade, { headers })),
+						catch: (cause) =>
+							new SyncForwardError({ objectId: target.headers[OBJECT_ID_HEADER], cause }),
+					})
+				}).pipe(Effect.withSpan("SyncRoute.forward", { kind: "client", attributes: target.span }))
+
 			/** One stream of a `/sync/mux` socket: its source object's socket, accepted here for the relay. */
 			const openMuxStream = (userId: UserId) => (stream: typeof SyncMuxOpen.Type) =>
 				Effect.gen(function* () {
@@ -279,20 +307,16 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 					// One socket is one user's: a source cannot be opened with someone else's token.
 					if (target.userId !== userId)
 						return refuseMuxStream(SyncCloseCode.Forbidden, "wrong_user")
-					const request = new Request(`https://object/sync/${kind}/${encodeURIComponent(id)}`, {
-						headers: {
-							upgrade: "websocket",
-							"sec-websocket-protocol": SYNC_SUBPROTOCOL,
-							...target.headers,
-						},
-					})
-					const response = yield* Effect.tryPromise({
-						try: () => target.object.fetch(request),
-						catch: (cause) =>
-							new SyncForwardError({ objectId: target.headers[OBJECT_ID_HEADER], cause }),
-					}).pipe(Effect.withSpan("SyncRoute.forward", { kind: "client", attributes: target.span }))
+					const response = yield* forward(
+						target,
+						new Request(`https://object/sync/${kind}/${encodeURIComponent(id)}`, {
+							headers: { upgrade: "websocket", "sec-websocket-protocol": SYNC_SUBPROTOCOL },
+						}),
+					)
 					const socket = (
-						response as Response & { webSocket?: (WorkerdSocket & Socket.WebSocketLike) | null }
+						response as Response & {
+							webSocket?: (WorkerdSocket & Socket.WebSocketLike) | null
+						}
 					).webSocket
 					if (socket === undefined || socket === null) {
 						yield* Effect.logError("Sync object answered without a socket", {
@@ -382,16 +406,8 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 						),
 					)
 					if (Option.isNone(web)) return acceptAndClose(UNAVAILABLE, "unavailable")
-					const headers = new Headers(web.value.headers)
-					for (const [name, value] of Object.entries(target.headers)) headers.set(name, value)
-					const forwarded = new Request(web.value, { headers })
-					return yield* Effect.tryPromise({
-						try: () => target.object.fetch(forwarded),
-						catch: (cause) =>
-							new SyncForwardError({ objectId: target.headers[OBJECT_ID_HEADER], cause }),
-					}).pipe(
+					return yield* forward(target, web.value).pipe(
 						Effect.map(toHttpServerResponse),
-						Effect.withSpan("SyncRoute.forward", { kind: "client", attributes: target.span }),
 						Effect.catchTag("SyncForwardError", (error) =>
 							Effect.logError("Sync upgrade could not reach the object", {
 								objectId: error.objectId,

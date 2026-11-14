@@ -10,6 +10,7 @@ import { FetchHttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } fr
 import { AppAuthorizationLive, AppServicesLive, makeRoutes } from "../app"
 import { LocalRpcDispatcher, RoutedRpcServerLive } from "../rpc/routed-server"
 import { Directory } from "../services/directory"
+import { takeIsolateCold } from "./cold-start"
 import { workerObjectStubs } from "./objects/stubs"
 import { makeSyncRoute } from "./sync-route"
 import { makeLiveRoute } from "./live-route"
@@ -66,12 +67,25 @@ const pathOf = (url: string): string => {
 }
 
 /** The fetch handler. `/health` answers before the route graph exists; the rest runs the router. */
-export const makeFetch = (app: Effect.Effect<HttpEffect, unknown>) =>
-	Effect.gen(function* () {
+export const makeFetch = (app: Effect.Effect<HttpEffect, unknown>) => {
+	let built = false
+	const ready = app.pipe(
+		Effect.orDie,
+		Effect.tap(() =>
+			Effect.sync(() => {
+				built = true
+			}),
+		),
+	)
+	return Effect.gen(function* () {
 		const request = yield* HttpServerRequest.HttpServerRequest
+		yield* Effect.annotateCurrentSpan("isolate.cold", takeIsolateCold())
 		if (request.method === "GET" && pathOf(request.url) === "/health") {
 			return HttpServerResponse.text("OK")
 		}
-		const handler = yield* app.pipe(Effect.orDie)
+		// The wait for the graph, as a span of its own: its build runs under the isolate's
+		// context, so nothing inside it is traced.
+		const handler = built ? yield* ready : yield* ready.pipe(Effect.withSpan("Api.buildRoutes"))
 		return yield* handler
 	})
+}

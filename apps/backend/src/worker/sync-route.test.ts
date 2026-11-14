@@ -6,9 +6,10 @@ import { Database } from "@hazel/db"
 import { CurrentUser, SessionLoadError } from "@hazel/domain"
 import { SYNC_MUX_SUBPROTOCOL, SYNC_SUBPROTOCOL, SyncCloseCode } from "@hazel/domain/sync"
 import type { UserId } from "@hazel/schema"
-import { Effect, Layer, Option } from "effect"
+import { ConfigProvider, Context, Effect, Layer, Option, Tracer } from "effect"
 import { HttpRouter } from "effect/http"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { corsPolicy } from "../lib/cors"
 import { Directory } from "../services/directory"
 import { HazelSession, type VerifiedUser } from "../services/hazel-session"
 import { decodeSyncPrincipal, OBJECT_ID_HEADER, PRINCIPAL_HEADER, WARM_HEADER } from "./objects/principal"
@@ -28,16 +29,41 @@ const user = new CurrentUser.Schema({
 } as never)
 const jwt = "header.payload.signature"
 
-/** Close codes of the sockets `acceptAndClose` made (workerd's `WebSocketPair`, faked). */
+/** A socket as the route sees it: what it was sent, and frames the test makes its peer send. */
+class FakeSocket extends EventTarget {
+	readyState = 1
+	readonly sent: Array<string> = []
+	accept() {}
+	send(data: string) {
+		this.sent.push(data)
+	}
+	close(_code?: number, _reason?: string) {
+		this.readyState = 3
+	}
+	receive(data: string) {
+		this.dispatchEvent(new MessageEvent("message", { data }))
+	}
+}
+
+/** Close codes of the client sockets the route made (workerd's `WebSocketPair`, faked). */
 let closed: Array<{ code: number; reason: string }> = []
+/** The server ends of those sockets, in order. */
+let servers: Array<FakeSocket> = []
 
 beforeEach(() => {
 	closed = []
+	servers = []
+	class ServerSocket extends FakeSocket {
+		override close(code = 1000, reason = "") {
+			super.close()
+			closed.push({ code, reason })
+		}
+	}
 	class FakePair {
 		0 = {}
-		1 = {
-			accept: () => {},
-			close: (code: number, reason: string) => void closed.push({ code, reason }),
+		1 = new ServerSocket()
+		constructor() {
+			servers.push(this[1])
 		}
 	}
 	// Node's Response refuses status 101; workerd's does not.
@@ -52,26 +78,60 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 type Verify = (token: string) => Effect.Effect<Option.Option<VerifiedUser>, unknown>
+type WebHandler = (request: Request, context?: Context.Context<never>) => Promise<Response>
+
+const flush = async () => {
+	for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+const appOrigin = "https://app-pr-7.hazel.sh"
 
 const build = (options: {
 	readonly verify: Verify
+	/** The session cookie's user (`HazelSession.fromCookie`); default: no cookie. */
+	readonly cookie?: HazelSession["Service"]["fromCookie"]
 	readonly channel?: Directory["Service"]["channel"]
 	readonly membership?: Directory["Service"]["membership"]
+	readonly organizationsOf?: Directory["Service"]["organizationsOf"]
 	readonly env: Record<string, unknown>
+	/** Spans the route records, by name. */
+	readonly spans?: Array<Tracer.Span>
 }) => {
 	const session = Layer.succeed(HazelSession, {
 		verifyAccessTokenWithExpiry: options.verify,
 		verifyWithExpiry: options.verify,
+		fromCookie: options.cookie ?? (() => Effect.succeed(Option.none())),
 	} as never)
 	const directory = Layer.succeed(Directory, {
 		channel: options.channel ?? (() => Effect.succeed(Option.none())),
 		membership: options.membership ?? (() => Effect.succeed(Option.none())),
+		organizationsOf: options.organizationsOf ?? (() => Effect.succeed([])),
 	} as never)
+	const { spans } = options
+	// The request's context: a tracer that keeps the spans it makes.
+	const tracing =
+		spans === undefined
+			? undefined
+			: Context.make(
+					Tracer.Tracer,
+					Tracer.make({
+						span: (span) => {
+							const recorded = new Tracer.NativeSpan(span)
+							spans.push(recorded)
+							return recorded
+						},
+					}),
+				)
 	const web = HttpRouter.toWebHandler(
-		makeSyncRoute(options.env).pipe(Layer.provide(Layer.mergeAll(session, directory))),
+		makeSyncRoute(options.env).pipe(
+			// As `makeRoutes` mounts it: under the api's CORS policy.
+			Layer.provide(Layer.unwrap(Effect.map(corsPolicy, HttpRouter.cors))),
+			Layer.provide(Layer.mergeAll(session, directory)),
+			Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ FRONTEND_URL: appOrigin }))),
+		),
 		{ disableLogger: true },
 	)
-	const handler = web.handler as (request: Request) => Promise<Response>
+	const handler = (request: Request) => (web.handler as WebHandler)(request, tracing)
 	return Object.assign(
 		(path: string) =>
 			handler(
@@ -90,28 +150,50 @@ const build = (options: {
 						headers: { upgrade: "websocket", "sec-websocket-protocol": protocols },
 					}),
 				),
-			/** `POST /sync/warm`, with `token` as the bearer (`null`: none). */
-			warm: (query: string, token: string | null = jwt) =>
-				handler(
-					new Request(`http://api.test/sync/warm${query}`, {
-						method: "POST",
-						headers: token === null ? {} : { authorization: `Bearer ${token}` },
+			/** A `/sync/mux` socket opened with `token`: sends `Open`s, reads the control frames back. */
+			openMux: async (token: string = jwt) => {
+				await handler(
+					new Request("http://api.test/sync/mux", {
+						headers: {
+							upgrade: "websocket",
+							"sec-websocket-protocol": `${SYNC_MUX_SUBPROTOCOL}, ${token}`,
+						},
 					}),
-				),
+				)
+				const client = servers.at(-1)!
+				return {
+					open: (id: number, source: string, streamToken: string = token) => {
+						const [kind, sourceId] = source.split(":")
+						client.receive(
+							JSON.stringify({ _tag: "Open", id, kind, sourceId, token: streamToken }),
+						)
+					},
+					controls: (): Array<unknown> => client.sent.map((frame) => JSON.parse(frame)),
+				}
+			},
+			/** `POST /sync/warm`, with `token` as the bearer (`null`: none) and any other `headers`. */
+			warm: (query: string, token: string | null = jwt, extra: Record<string, string> = {}) => {
+				const headers = new Headers(extra)
+				if (token !== null) headers.set("authorization", `Bearer ${token}`)
+				return handler(new Request(`http://api.test/sync/warm${query}`, { method: "POST", headers }))
+			},
 		},
 	)
 }
 
-/** A namespace that records which object names it was asked to wake. */
+/** A namespace that records which object names it was asked to wake, and the requests. */
 const warmNamespace = () => {
 	const woken: Array<string> = []
+	const requests: Array<Request> = []
 	return {
 		woken,
+		requests,
 		namespace: {
 			getByName: (name: string) => ({
 				fetch: (request: Request) => {
 					expect(request.headers.get(WARM_HEADER)).toBe("1")
 					woken.push(name)
+					requests.push(request)
 					return Promise.resolve(new Response(null, { status: 204 }))
 				},
 			}),
@@ -119,7 +201,7 @@ const warmNamespace = () => {
 	}
 }
 
-/** An `OrgObject` namespace that records what it was forwarded. */
+/** An object namespace that records what it was forwarded, and answers with a socket. */
 const recordingNamespace = () => {
 	const forwarded: Array<Request> = []
 	return {
@@ -128,12 +210,17 @@ const recordingNamespace = () => {
 			getByName: () => ({
 				fetch: (request: Request) => {
 					forwarded.push(request)
-					return Promise.resolve(new Response("upgraded"))
+					return Promise.resolve(
+						Object.assign(new Response("upgraded"), { webSocket: new FakeSocket() }),
+					)
 				},
 			}),
 		},
 	}
 }
+
+/** `traceparent` of `span`, as the object's HTTP tracer reads it. */
+const traceparentOf = (span: Tracer.Span) => `00-${span.traceId.padStart(32, "0")}-${span.spanId}-01`
 
 describe("multiplexed sync socket", () => {
 	it("closes a bad or missing token with 4001, echoing the mux subprotocol", async () => {
@@ -155,6 +242,21 @@ describe("multiplexed sync socket", () => {
 		await send.mux(`${SYNC_MUX_SUBPROTOCOL}, ${jwt}`)
 		expect(closed).toEqual([{ code: 1011, reason: "unavailable" }])
 	})
+
+	it("forwards each stream's span to its object as traceparent", async () => {
+		const spans: Array<Tracer.Span> = []
+		const { forwarded, namespace } = recordingNamespace()
+		const send = build({
+			verify: () => Effect.succeed(Option.some({ user, expiresAt: Date.now() + 300_000 })),
+			env: { OrgObject: namespace },
+			spans,
+		})
+		const mux = await send.openMux()
+		mux.open(1, "org:org-1")
+		await flush()
+		const forward = spans.find((span) => span.name === "SyncRoute.forward")!
+		expect(forwarded[0]!.headers.get("traceparent")).toBe(traceparentOf(forward))
+	})
 })
 
 describe("sync route", () => {
@@ -171,6 +273,21 @@ describe("sync route", () => {
 		const principal = decodeSyncPrincipal(forwarded[0]!.headers.get(PRINCIPAL_HEADER) ?? "")
 		expect(Option.getOrThrow(principal)).toEqual({ userId, expiresAt })
 		expect(forwarded[0]!.headers.get(OBJECT_ID_HEADER)).toBe("org-1")
+	})
+
+	it("forwards its span as traceparent, so the object's spans are its children", async () => {
+		const spans: Array<Tracer.Span> = []
+		const { forwarded, namespace } = recordingNamespace()
+		const send = build({
+			verify: () => Effect.succeed(Option.some({ user, expiresAt: Date.now() + 300_000 })),
+			env: { OrgObject: namespace },
+			spans,
+		})
+		await send("/sync/org/org-1")
+		const forward = spans.find((span) => span.name === "SyncRoute.forward")!
+		expect(forwarded[0]!.headers.get("traceparent")).toBe(traceparentOf(forward))
+		// The upgrade's own headers still reach the object.
+		expect(forwarded[0]!.headers.get("upgrade")).toBe("websocket")
 	})
 
 	it("closes a bad token with 4001, so the client fetches a fresh one", async () => {
@@ -273,14 +390,15 @@ describe("sync warm-up", () => {
 	const verify: Verify = () => Effect.succeed(Option.some({ user, expiresAt: Date.now() + 60_000 }))
 	const channelId = crypto.randomUUID()
 	const hostChannelId = crypto.randomUUID()
+	const channelRow = (id: string, host: string | null = null, deletedAt: Date | null = null) =>
+		Option.some({ channelId: id, hostChannelId: host, deletedAt } as never)
 
 	it("wakes the caller's user object and the channel the directory knows, by its host", async () => {
 		const users = warmNamespace()
 		const channels = warmNamespace()
 		const send = build({
 			verify,
-			channel: () =>
-				Effect.succeed(Option.some({ channelId, hostChannelId, deletedAt: null } as never)),
+			channel: () => Effect.succeed(channelRow(channelId, hostChannelId)),
 			env: { UserObject: users.namespace, ChannelObject: channels.namespace },
 		})
 		const response = await send.warm(`?channel=${channelId}`)
@@ -299,10 +417,7 @@ describe("sync warm-up", () => {
 		await unknown.warm("?channel=not-a-uuid")
 		const deleted = build({
 			verify,
-			channel: () =>
-				Effect.succeed(
-					Option.some({ channelId, hostChannelId: null, deletedAt: new Date() } as never),
-				),
+			channel: () => Effect.succeed(channelRow(channelId, null, new Date())),
 			env: { UserObject: warmNamespace().namespace, ChannelObject: channels.namespace },
 		})
 		await deleted.warm(`?channel=${channelId}`)
@@ -327,5 +442,14 @@ describe("sync warm-up", () => {
 			env: { UserObject: { getByName: () => ({ fetch: () => Promise.reject(new Error("reset")) }) } },
 		})
 		expect((await send.warm("")).status).toBe(204)
+	})
+
+	it("sends each wake its span as traceparent", async () => {
+		const spans: Array<Tracer.Span> = []
+		const users = warmNamespace()
+		const send = build({ verify, env: { UserObject: users.namespace }, spans })
+		await send.warm("")
+		const wake = spans.find((span) => span.name === "SyncRoute.warmObject")!
+		expect(users.requests[0]!.headers.get("traceparent")).toBe(traceparentOf(wake))
 	})
 })
