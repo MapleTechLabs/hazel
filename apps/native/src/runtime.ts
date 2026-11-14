@@ -27,6 +27,12 @@ const HEADLESS_DOM_LATEST_MS = 2000
 export const startRuntime = async (platform: NativePlatform) => {
 	const config = readConfig(process.env)
 	const debug = config.debug ? platform.log : undefined
+	/** `NATIVE_STATS`: when boot reached `phase`, in ms since this process (or worker) began. */
+	const bootStat = (phase: string) => {
+		if (config.statsPath)
+			platform.appendLine?.(config.statsPath, JSON.stringify({ boot: phase, at: performance.now() }))
+	}
+	bootStat("runtime")
 
 	// What the web app reads as `import.meta.env` (under Bun, `process.env`): a production build,
 	// as the web app ships, unless `HAZEL_DEV=1`; and the backend it talks to.
@@ -89,8 +95,10 @@ export const startRuntime = async (platform: NativePlatform) => {
 	const { NotificationSinks } = await import("../../web-foldkit/src/app/notification-sinks")
 	const PendingAnnouncement = await import("../../web-foldkit/src/ui/aria/pending-announcement")
 	const composer = await import("./composer")
+	bootStat("app modules")
 
 	const styles = await platform.loadStyles()
+	bootStat("styles")
 	const onLink = (href: string) => {
 		debug?.(`[link] ${href}`)
 		followLink(href)
@@ -241,6 +249,7 @@ export const startRuntime = async (platform: NativePlatform) => {
 		rune.handleHostMessage(message)
 	})
 
+	bootStat("connected")
 	Runtime.run(
 		Runtime.makeApplication({
 			Model: app.Model,

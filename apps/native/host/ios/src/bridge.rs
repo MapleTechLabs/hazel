@@ -57,6 +57,8 @@ thread_local! {
     /// The path a notification's tap opens, until a runtime says it followed it (`openedPath`):
     /// a page that ends before then (WebKit ended its process in the background) gets it again.
     static OPEN_PATH: RefCell<Option<String>> = const { RefCell::new(None) };
+    /// `NATIVE_STATS`: the launch's first tree is applied (1), and its frame is drawn (2).
+    static FIRST_TREE: Cell<u8> = const { Cell::new(0) };
 }
 
 /// Whether the page loaded last can take lines and replies.
@@ -126,9 +128,22 @@ pub fn poll(s: &mut State, at: f64, tx: &mut rune::Tx) -> bool {
     hazel_native::poll(s, at, tx)
 }
 
-/// A diagnostic line: stderr, and `hazel.log` in the app's temporary directory, which
-/// `xcrun simctl get_app_container <device> sh.hazel.ios data` finds under `tmp/`.
+/// When the process reached `main`: the log's lines count from here.
+static LAUNCHED: OnceLock<std::time::Instant> = OnceLock::new();
+
+/// Starts the log's clock; called first thing in `main`.
+pub fn mark_launch() {
+    let _ = LAUNCHED.set(std::time::Instant::now());
+}
+
+/// A diagnostic line, after the milliseconds since launch: stderr, and `hazel.log` in the app's
+/// temporary directory, which `xcrun simctl get_app_container <device> sh.hazel.ios data` finds
+/// under `tmp/`.
 pub fn log(line: &str) {
+    let at = LAUNCHED
+        .get()
+        .map_or(0.0, |launched| launched.elapsed().as_secs_f64() * 1000.0);
+    let line = &format!("{at:9.1} {line}");
     eprintln!("{line}");
     let path = std::env::temp_dir().join("hazel.log");
     if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -137,6 +152,16 @@ pub fn log(line: &str) {
         .open(path)
     {
         let _ = writeln!(file, "{line}");
+    }
+}
+
+/// A frame was drawn (`NATIVE_STATS`: the log says when the launch's first tree got on screen).
+pub fn frame_drawn() {
+    if FIRST_TREE.get() == 1 {
+        FIRST_TREE.set(2);
+        if environment_flag("NATIVE_STATS") {
+            log("[host] the first tree's frame is drawn");
+        }
     }
 }
 
@@ -232,6 +257,9 @@ fn receive(line: &str) {
                     started.elapsed().as_secs_f64() * 1000.0
                 ));
             }
+            if is_tree && FIRST_TREE.get() == 0 {
+                FIRST_TREE.set(1);
+            }
             // A navigation waiting on the next page moves once it is drawn.
             if is_tree {
                 crate::system::tree_applied();
@@ -269,6 +297,9 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
         // replaced since says so too late; its lines stay held for the new one.
         let page = ready.downcast::<NSNumber>().ok().map(|n| n.as_u64());
         if page == Some(PAGE.get()) {
+            if environment_flag("NATIVE_STATS") {
+                log("[host] the page is ready");
+            }
             REPLACING.set(false);
             for text in EARLY.take().unwrap_or_default() {
                 to_worker(&text);
