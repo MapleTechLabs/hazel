@@ -283,17 +283,29 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 											}),
 										],
 									),
-									h.p(
+									// Each part's dot sits in the gap before it, so a wrapped line starts
+									// with a part, not a dot: the dot of a line's first part is clipped.
+									h.div(
+										[h.Class("overflow-hidden text-muted-fg text-sm")],
 										[
-											h.Class(
-												"flex flex-wrap items-center gap-x-2 text-muted-fg text-sm",
+											h.p(
+												[h.Class("-ml-4 flex flex-wrap items-center")],
+												[
+													...(account.domain === null
+														? []
+														: [domainLink(h, account.domain)]),
+													...meta.map((part) => h.span([], [part])),
+												].map((part) =>
+													h.span(
+														[
+															h.Class(
+																"relative ml-4 whitespace-nowrap before:absolute before:-left-2.5 before:content-['·']",
+															),
+														],
+														[part],
+													),
+												),
 											),
-										],
-										[
-											...(account.domain === null
-												? []
-												: [domainLink(h, account.domain)]),
-											...meta.map((part) => h.span([], [`· ${part}`])),
 										],
 									),
 									h.div(

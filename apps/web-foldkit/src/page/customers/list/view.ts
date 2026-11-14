@@ -824,7 +824,8 @@ const table = (
 				onRowPress: (account) => Message.ClickedRow({ accountId: account.id }),
 				focusedKey: model.focusedId,
 				stickyHeader: true,
-				className: "rounded-none border-x-0",
+				// The frame is the container its columns drop by (`COLUMN_LAYOUT`).
+				className: "@container rounded-none border-x-0",
 				loadingRows: isLoading ? 12 : undefined,
 			}),
 			...(rows.length > model.rowLimit

@@ -131,18 +131,19 @@ const kpiTile = (
 	base.h.div(
 		[
 			base.h.Id(`customer-kpi-${base.id}`),
-			base.h.Class("flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-bg p-4"),
+			base.h.Class("flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-bg p-4 max-md:p-3"),
 		],
 		[
 			base.h.span([base.h.Class("text-muted-fg text-sm")], [base.label]),
 			base.h.div(
-				[base.h.Class("flex min-w-0 items-baseline gap-1.5")],
+				// A narrow tile wraps the detail under the value instead of cutting it off.
+				[base.h.Class("flex min-w-0 flex-wrap items-baseline gap-x-1.5")],
 				[
 					base.h.span(
 						[
 							base.h.Class(
 								twMerge(
-									"font-semibold text-2xl text-fg tabular-nums tracking-tight",
+									"whitespace-nowrap font-semibold text-2xl text-fg tabular-nums tracking-tight max-md:text-xl",
 									options.valueClass,
 								),
 							),
@@ -151,7 +152,12 @@ const kpiTile = (
 					),
 					...(options.detail === undefined
 						? []
-						: [base.h.span([base.h.Class("truncate text-muted-fg text-sm")], [options.detail])]),
+						: [
+								base.h.span(
+									[base.h.Class("min-w-0 truncate text-muted-fg text-sm")],
+									[options.detail],
+								),
+							]),
 				],
 			),
 			...(options.footer === undefined ? [] : [options.footer]),
@@ -421,7 +427,9 @@ const signalsCard = (h: HtmlBuilder<Message>, model: Model, context: Context): H
 			aside: h.a(
 				[
 					h.Href(hrefOf(AppRoute.CustomersAttention({ orgSlug: context.orgSlug }))),
-					h.Class("inline-flex items-center gap-1 text-primary text-sm hover:underline"),
+					h.Class(
+						"inline-flex items-center gap-1 whitespace-nowrap text-primary text-sm hover:underline",
+					),
 				],
 				["Open in Needs attention", IconChevronRight(h, { className: "size-3" })],
 			),

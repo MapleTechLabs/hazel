@@ -39,10 +39,14 @@ export const card = (
 		[h.Class(twMerge("flex min-w-0 flex-col rounded-xl border border-border bg-bg", options.className))],
 		[
 			h.header(
-				[h.Class("flex items-center justify-between gap-4 px-4 pt-4 sm:px-5")],
+				[h.Class("flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 pt-4 sm:px-5")],
 				[
 					h.h2(
-						[h.Class("flex items-baseline gap-2 font-semibold text-base text-fg")],
+						[
+							h.Class(
+								"flex items-baseline gap-2 whitespace-nowrap font-semibold text-base text-fg",
+							),
+						],
 						[
 							options.title,
 							...(options.count === undefined

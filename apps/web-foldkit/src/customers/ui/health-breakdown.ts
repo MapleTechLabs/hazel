@@ -75,13 +75,17 @@ export const healthBreakdown = <M>(
 				[h.Class("flex flex-col gap-3 p-4 sm:p-5")],
 				[
 					h.div(
-						[h.Class("flex items-start justify-between gap-4")],
+						[h.Class("flex flex-wrap items-start justify-between gap-x-4 gap-y-1")],
 						[
 							h.div(
-								[h.Class("flex min-w-0 flex-col gap-1")],
+								[h.Class("flex min-w-0 flex-1 basis-48 flex-col gap-1")],
 								[
 									h.h2(
-										[h.Class("flex items-center gap-2 font-semibold text-base text-fg")],
+										[
+											h.Class(
+												"flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-base text-fg",
+											),
+										],
 										[
 											score === null ? "No health score yet" : `Why health is ${score}`,
 											healthBadge(h, { status: breakdown.status }),
@@ -130,7 +134,12 @@ export const healthBreakdown = <M>(
 										],
 									),
 									h.span(
-										[h.Class("truncate text-muted-fg text-xs tabular-nums")],
+										// A phone has no room for these under the bars; the table below says the same.
+										[
+											h.Class(
+												"truncate text-muted-fg text-xs tabular-nums max-sm:hidden",
+											),
+										],
 										[
 											`${COMPONENT_LABEL[component.key]} ${Math.round(pointsOf(component))} of ${Math.round(component.effectiveWeight)}`,
 										],
@@ -155,12 +164,21 @@ export const healthBreakdown = <M>(
 								],
 								[
 									h.th(
-										[h.Scope("col"), h.Class("w-32 pl-4 text-left sm:pl-5")],
+										[h.Scope("col"), h.Class("w-32 pl-4 text-left max-sm:w-28 sm:pl-5")],
 										["Component"],
 									),
 									h.th([h.Scope("col"), h.Class("px-3 text-left")], ["Why"]),
-									h.th([h.Scope("col"), h.Class("w-32 px-3 text-right")], ["Score"]),
-									h.th([h.Scope("col"), h.Class("w-24 px-3 text-right")], ["Weight"]),
+									h.th(
+										[
+											h.Scope("col"),
+											h.Class("w-32 px-3 text-right max-sm:w-auto max-sm:px-2"),
+										],
+										["Score"],
+									),
+									h.th(
+										[h.Scope("col"), h.Class("w-24 px-3 text-right max-sm:hidden")],
+										["Weight"],
+									),
 									h.th(
 										[h.Scope("col"), h.Class("w-20 pr-4 text-right sm:pr-5")],
 										["Points"],
@@ -220,7 +238,7 @@ export const healthBreakdown = <M>(
 										],
 									),
 									h.td(
-										[h.Class("px-3 text-right")],
+										[h.Class("px-3 text-right max-sm:px-2")],
 										[
 											component.score === null
 												? h.span(
@@ -241,7 +259,7 @@ export const healthBreakdown = <M>(
 															h.span(
 																[
 																	h.Class(
-																		"block h-1 w-10 overflow-hidden rounded-full bg-secondary",
+																		"block h-1 w-10 overflow-hidden rounded-full bg-secondary max-sm:hidden",
 																	),
 																],
 																[
@@ -274,7 +292,7 @@ export const healthBreakdown = <M>(
 										],
 									),
 									h.td(
-										[h.Class("px-3 text-right tabular-nums")],
+										[h.Class("px-3 text-right tabular-nums max-sm:hidden")],
 										[
 											...(isRedistributed &&
 											Math.round(component.effectiveWeight) !== component.weight
