@@ -24,6 +24,7 @@ import {
 	SaveThemePreference,
 	SignOut,
 	WarmAccessToken,
+	WarmSyncObjects,
 } from "./app/command"
 import { Message } from "./app/message"
 import {
@@ -728,7 +729,17 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 		enteredRoute,
 		informShell,
 		redirect,
-		isAppRoute ? command(CheckSession(), FetchCurrentUser(), WarmAccessToken()) : command(CheckSession()),
+		isAppRoute
+			? command(
+					CheckSession(),
+					FetchCurrentUser(),
+					WarmAccessToken(),
+					WarmSyncObjects({
+						userId: flags.rememberedUser?.id ?? null,
+						channelId: chatChannelIdOf(route),
+					}),
+				)
+			: command(CheckSession()),
 	])
 }
 
@@ -782,6 +793,7 @@ export const update = (model: Model, message: Message): Return =>
 		FailedFetchCurrentUser: ({ reason }) => failedFetchCurrentUser(reason)(model),
 		PressedRetryCurrentUser: () => refreshCurrentUser(model),
 		CompletedWarmAccessToken: () => ({ model }),
+		CompletedWarmSyncObjects: () => ({ model }),
 		SucceededCreateDm: (succeeded) => succeededCreateDm(succeeded)(model),
 		FailedCreateDm: ({ organizationId, userId, reason }) =>
 			Update.combine(model, [

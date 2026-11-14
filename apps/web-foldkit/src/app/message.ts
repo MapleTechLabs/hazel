@@ -55,6 +55,7 @@ export const Message = defineMessageUnion({
 	FailedFetchCurrentUser: { reason: CommonReason },
 	PressedRetryCurrentUser: {},
 	CompletedWarmAccessToken: {},
+	CompletedWarmSyncObjects: {},
 	CompletedClearNoteDrafts: {},
 	SucceededSignOut: {},
 	FailedSignOut: { reason: CommonReason },

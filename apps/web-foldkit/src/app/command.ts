@@ -1,7 +1,8 @@
-import { NotificationId, OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, NotificationId, OrganizationId, UserId } from "@hazel/schema"
 import { Duration, Effect, Schedule, Schema } from "effect"
 import { Command } from "foldkit"
 import { back, forward, load, pushUrl, replaceUrl } from "foldkit/navigation"
+import { warmSyncObjects } from "~/db/warm"
 import { readAccessToken } from "~/lib/access-token"
 import { isRetryableError } from "~/lib/error-messages"
 import { catchCommon } from "../data/actions"
@@ -204,6 +205,14 @@ export const WarmAccessToken = Command.define("WarmAccessToken", {
 		Effect.ignore,
 		Effect.as(Message.CompletedWarmAccessToken()),
 	),
+})
+
+/** Wakes the objects this load opens, where `index.html` has not (`core/db/warm.ts`). */
+export const WarmSyncObjects = Command.define("WarmSyncObjects", {
+	args: { userId: Schema.NullOr(UserId), channelId: Schema.NullOr(ChannelId) },
+	messages: [Message.CompletedWarmSyncObjects],
+	execute: ({ userId, channelId }) =>
+		warmSyncObjects(userId, channelId).pipe(Effect.as(Message.CompletedWarmSyncObjects())),
 })
 
 /** `user.me` again after a pause, while the API keeps failing to answer it. */

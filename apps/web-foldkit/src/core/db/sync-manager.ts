@@ -155,6 +155,10 @@ const localRememberedOrgSources: RememberedOrgSources = {
 	},
 }
 
+/** The organizations `userId` had open at the end of the last load. */
+export const rememberedOrganizationIds = (userId: UserId): ReadonlyArray<string> =>
+	(localRememberedOrgSources.read(userId) ?? []).map((source) => source.slice("org:".length))
+
 const appDeps: SyncManagerDeps = {
 	userSources,
 	orgSources,
