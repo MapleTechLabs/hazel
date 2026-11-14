@@ -22,7 +22,9 @@ const immediate = await Bun.build({
 	minify: true,
 })
 if (!immediate.success) throw new AggregateError(immediate.logs, "src/ios-immediate.ts did not build")
-const banner = await immediate.outputs[0]!.text()
+const [immediateOutput] = immediate.outputs
+if (immediateOutput === undefined) throw new Error("src/ios-immediate.ts built no output")
+const banner = await immediateOutput.text()
 
 const result = await Bun.build({
 	banner,
