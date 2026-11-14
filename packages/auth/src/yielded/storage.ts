@@ -328,11 +328,13 @@ const validateMappings = (mappings: ReadonlyArray<unknown>) =>
 			}
 			plans.push(...planned.success)
 		}
-		yield* Adapter.validateStorageBatch(
-			"sqlite",
-			plans.map(({ table, keys }) => ({ table: describe(table as Table), required: [keys] })),
-		)
-	}).pipe(Adapter.withStorageValidation, Effect.withSpan("HazelAuth.validateOAuthStorage"))
+		yield* Adapter.validateStorageBatch("sqlite", [
+			...plans.map(({ table, keys }) => ({ table: describe(table as Table), required: [keys] })),
+			// No mapping keys on `users`, but the services built next read its metadata: fetch it
+			// in this query, not in one of its own.
+			{ table: describe(T.users), required: [] },
+		])
+	}).pipe(Effect.withSpan("HazelAuth.validateOAuthStorage"))
 
 export const OAuthStorageLive = Layer.effectContext(
 	Effect.gen(function* () {
@@ -395,5 +397,10 @@ export const OAuthStorageLive = Layer.effectContext(
 				registration.registrationAuthority,
 			),
 		)
-	}).pipe(Effect.withSpan("HazelAuth.oauthStorage")),
+	}).pipe(
+		// One metadata snapshot for the whole build: each service below validates its tables
+		// again, which without it is a D1 round trip apiece on an isolate's first request.
+		Adapter.withStorageValidation,
+		Effect.withSpan("HazelAuth.oauthStorage"),
+	),
 )
