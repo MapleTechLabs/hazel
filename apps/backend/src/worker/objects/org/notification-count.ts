@@ -24,15 +24,8 @@ export const notificationsRemoved = Effect.fn("OrgEffects.notificationsRemoved")
 	payload: NotificationsRemovedPayload,
 ) {
 	const db = yield* Database.Database
-	yield* db.run(
-		SQLite.update(schema.channelMembersTable)
-			.set(($) => ({ notificationCount: $.notificationCount.add(-payload.count) }))
-			.where(($) => [
-				$.channelId.eq(payload.channelId),
-				$.userId.eq(payload.userId),
-				$.notificationCount.gte(payload.count),
-			]),
-	)
+	// max(0, count - removed), in this order: a count too low to subtract from goes to 0 first,
+	// so the subtraction below never sees a count it already lowered.
 	yield* db.run(
 		SQLite.update(schema.channelMembersTable)
 			.set({ notificationCount: 0 })
@@ -41,6 +34,15 @@ export const notificationsRemoved = Effect.fn("OrgEffects.notificationsRemoved")
 				$.userId.eq(payload.userId),
 				$.notificationCount.lt(payload.count),
 				$.notificationCount.gt(0),
+			]),
+	)
+	yield* db.run(
+		SQLite.update(schema.channelMembersTable)
+			.set(($) => ({ notificationCount: $.notificationCount.add(-payload.count) }))
+			.where(($) => [
+				$.channelId.eq(payload.channelId),
+				$.userId.eq(payload.userId),
+				$.notificationCount.gte(payload.count),
 			]),
 	)
 })

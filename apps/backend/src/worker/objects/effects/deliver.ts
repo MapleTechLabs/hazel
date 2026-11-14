@@ -78,7 +78,10 @@ const chatSyncSide = side<Database.Database | SqlClient | ChatSyncProviders | Di
 
 const storageSide = side<Database.Database | HtmlRenders>(StorageEffects, storageReceivers)
 
-const pushSide = side<Database.Database | ApnsClient>(PushEffects, pushReceivers)
+const pushSide = side<Database.Database | ApnsClient | Directory | CurrentEffectSender>(
+	PushEffects,
+	pushReceivers,
+)
 
 const failure = (message: string, retryable = true) => new OutboxDeliveryError({ message, retryable })
 
