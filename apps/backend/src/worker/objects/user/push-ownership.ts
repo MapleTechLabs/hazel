@@ -17,6 +17,12 @@
  *    stale forget never removes a newer registration.
  *
  * `pushDevice.unregister` releases the directory row if it still names the caller.
+ *
+ * Until the forget lands, every send checks the directory too (`push.send`, `./push.ts`): a token
+ * the directory gives another user at or after the local registration is not sent to, and its
+ * local row goes. That also settles two users claiming an unowned token at the same moment (both
+ * read no owner, so neither forgets the other): the earlier claimant's row can never send, and is
+ * deleted on its next attempt.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { UserId } from "@hazel/schema"
@@ -88,7 +94,8 @@ const forget = (userId: UserId, token: string, claimedAt: Date, claimant: UserId
 		{ id: `push-forget:${claimant}:${userId}:${claimedAt.getTime()}:${tokenTag(token)}` },
 	)
 
-const tokenOwner = (token: string) =>
+/** The token's owner in the directory, and since when. */
+export const tokenOwner = (token: string) =>
 	Effect.flatMap(Directory, ({ db }) =>
 		db.first(
 			SQLite.from(schema.pushDeviceTokensTable)

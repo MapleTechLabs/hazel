@@ -17,7 +17,9 @@ import { Database, SQLite, schema } from "@hazel/db"
 import { ChannelId, NotificationId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
 import { ApnsClient, ApnsRetryableError, type ApnsResult } from "../../../services/apns"
-import { defineEffect, enqueueEffect, type EffectReceivers } from "../effects/registry"
+import { Directory } from "../../../services/directory"
+import { CurrentEffectSender, defineEffect, enqueueEffect, type EffectReceivers } from "../effects/registry"
+import { tokenOwner } from "./push-ownership"
 import { HEARTBEAT_TIMEOUT_MS } from "./presence-timing"
 
 /** How long a notification waits while the user is active elsewhere. */
@@ -208,7 +210,11 @@ export const schedulePush = Effect.fn("UserObject.pushDecision")(function* (inpu
 
 // SENDING
 
-/** `push.send`: one device, if the notification is still unread. Runs in the sender's outbox. */
+/**
+ * `push.send`: one device, if the notification is still unread, the user is not on do not
+ * disturb now, and the token is still theirs. Runs in the sender's outbox: `CurrentEffectSender`
+ * is this `UserObject`, with its stored id, so it names the owner.
+ */
 const sendPush = Effect.fn("UserObject.sendPush")(function* (payload: PushSendPayload) {
 	const db = yield* Database.Database
 	const apns = yield* ApnsClient
@@ -228,9 +234,15 @@ const sendPush = Effect.fn("UserObject.sendPush")(function* (payload: PushSendPa
 		yield* Effect.annotateCurrentSpan({ "push.skipped": "expired" })
 		return
 	}
+	// Deferred while they were online: do not disturb set since then holds it back.
+	const presence = yield* db.first(SQLite.from(schema.userPresenceStatusTable).select("status").limit(1))
+	if (Option.isSome(presence) && presence.value.status === "dnd") {
+		yield* Effect.annotateCurrentSpan({ "push.skipped": "dnd" })
+		return
+	}
 	const device = yield* db.first(
 		SQLite.from(schema.pushDevicesTable)
-			.select("environment", "bundleId")
+			.select("environment", "bundleId", "updatedAt")
 			.where(($) => [$.token.eq(payload.token)])
 			.limit(1),
 	)
@@ -240,6 +252,20 @@ const sendPush = Effect.fn("UserObject.sendPush")(function* (payload: PushSendPa
 	}
 	if (!apns.enabled) {
 		yield* Effect.annotateCurrentSpan({ "push.skipped": "disabled" })
+		return
+	}
+	// Another user claimed the token at or after our registration, and its forget has not landed
+	// yet: the phone is theirs now. (A directory row older than ours is our own claim pending.)
+	const sender = yield* CurrentEffectSender
+	const owner = yield* tokenOwner(payload.token)
+	if (
+		sender.kind === "user" &&
+		Option.isSome(owner) &&
+		owner.value.userId !== sender.id &&
+		owner.value.updatedAt.getTime() >= device.value.updatedAt.getTime()
+	) {
+		yield* unregisterDevice(payload.token, owner.value.updatedAt)
+		yield* Effect.annotateCurrentSpan({ "push.skipped": "not-owner" })
 		return
 	}
 	// The badge: what would make a sound, unread.
@@ -301,4 +327,7 @@ const sendPush = Effect.fn("UserObject.sendPush")(function* (payload: PushSendPa
 
 export const pushReceivers = {
 	"push.send": sendPush,
-} satisfies EffectReceivers<typeof PushEffects, Database.Database | ApnsClient>
+} satisfies EffectReceivers<
+	typeof PushEffects,
+	Database.Database | ApnsClient | Directory | CurrentEffectSender
+>

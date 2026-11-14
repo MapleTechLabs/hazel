@@ -499,6 +499,38 @@ describe("push notifications", () => {
 				expect(unreadCount()).toBe(0)
 			}),
 		))
+	it("holds back a deferred push if the user turned on do not disturb meanwhile", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld(yield* makeTestObjects)
+				yield* register(world)
+				ok(
+					yield* call(
+						world.aliceObject,
+						world.alice,
+						"userPresenceStatus.heartbeat",
+						{},
+						world.alice,
+					),
+				)
+				yield* mentionAlice(world)
+				expect(pendingPushes(world.aliceObject)).toBe(1)
+
+				ok(
+					yield* call(
+						world.aliceObject,
+						world.alice,
+						"userPresenceStatus.update",
+						{ status: "dnd" },
+						world.alice,
+					),
+				)
+				yield* runAlarm(world.aliceObject)
+				expect(world.objects.pushes).toEqual([])
+				expect(pendingPushes(world.aliceObject)).toBe(0)
+				expect(notificationsOf(world.aliceObject).length).toBe(1)
+			}),
+		))
 })
 
 describe("push device ownership", () => {
@@ -513,6 +545,53 @@ describe("push device ownership", () => {
 			Effect.provideContext(world.objects.directory),
 			Effect.map((rows) => rows.map((row) => row.userId)),
 		)
+
+	it("does not send to a token another user claimed before that user's forget arrives", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld(yield* makeTestObjects)
+				yield* register(world)
+				expect(yield* ownerOf(world, TOKEN)).toEqual([world.alice])
+				// Ada's claim landed in the directory; the forget to Alice is still in Ada's outbox.
+				yield* Directory.use(({ db }) =>
+					db.run(
+						SQLite.update(schema.pushDeviceTokensTable)
+							.set({ userId: world.ada, updatedAt: new Date(Date.now() + 60_000) })
+							.where(($) => [$.token.eq(TOKEN)]),
+					),
+				).pipe(Effect.provideContext(world.objects.directory))
+
+				yield* mentionAlice(world)
+				expect(notificationsOf(world.aliceObject).length).toBe(1)
+				expect(world.objects.pushes).toEqual([])
+				expect(devicesOf(world.aliceObject)).toEqual([])
+				expect(pendingPushes(world.aliceObject)).toBe(0)
+			}),
+		))
+
+	it("sends while its own claim is still on its way (an older directory row)", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld(yield* makeTestObjects)
+				yield* Directory.use(({ db }) =>
+					db.run(
+						SQLite.insertInto(schema.pushDeviceTokensTable).values({
+							token: TOKEN,
+							userId: world.ada,
+							updatedAt: new Date(Date.now() - 60_000),
+						}),
+					),
+				).pipe(Effect.provideContext(world.objects.directory))
+				// Alice's object has the row; her claim has not reached the directory.
+				world.aliceObject.storage.db
+					.prepare(
+						`INSERT INTO push_devices (token, environment, bundleId, updatedAt) VALUES (?, 'production', ?, ?)`,
+					)
+					.run(TOKEN, BUNDLE, new Date().toISOString())
+				yield* mentionAlice(world)
+				expect(world.objects.pushes.length).toBe(1)
+			}),
+		))
 
 	it("a token registered by another user leaves the previous owner's object", () =>
 		run(
