@@ -49,6 +49,8 @@ export interface BootOptions {
 	readonly systemTheme?: "light" | "dark"
 	readonly isMobile?: boolean
 	readonly keybindingOverrides?: Overrides
+	/** The last session's user (`app/remembered-user.ts`); none by default. */
+	readonly rememberedUser?: CurrentUser
 }
 
 /** `init` at `path` with default flags (the Model and its Commands). */
@@ -63,6 +65,7 @@ export const bootReturn = (path: string, options: BootOptions = {}) =>
 			sessionStartMs: 0,
 			isMobile: options.isMobile ?? false,
 			isCreateChannelHintDismissed: false,
+			rememberedUser: options.rememberedUser ?? null,
 		},
 		urlOf(path),
 	)

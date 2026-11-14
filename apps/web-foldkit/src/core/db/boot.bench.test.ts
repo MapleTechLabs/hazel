@@ -13,7 +13,19 @@
  * - `parallel`: `user.me` and the token beside the session check; org sockets from the remembered set.
  * - `early`: plus the token exchange and the object wakes from `index.html`, before the script runs,
  *   and no `OPTIONS` round trip (preflights cached 2h).
+ * - `cached`: plus the remembered user and the local cache (`node:sqlite` in place of wa-sqlite on
+ *   OPFS, which is slower): the sources open when the script runs, without `user.me`, the org
+ *   shell's rows come from disk, and the wakes start beside the token exchange instead of after it.
  */
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { DatabaseSync, type SQLInputValue } from "node:sqlite"
+import {
+	type BrowserWASQLiteDatabase,
+	createBrowserWASQLitePersistence,
+	persistedCollectionOptions,
+} from "@tanstack/browser-db-sqlite-persistence"
 import {
 	type CollectionSources,
 	createEffectCollection,
@@ -37,7 +49,7 @@ const PERCENTILES = {
 	p90: { session: 76, userMe: 216, token: 76, route: 75, warm: 61, coldUser: 1062, coldChannel: 1252 },
 } as const
 type Hops = (typeof PERCENTILES)[keyof typeof PERCENTILES]
-type Order = "main" | "parallel" | "early"
+type Order = "main" | "parallel" | "early" | "cached"
 
 const userId = UserId.make("00000000-0000-4000-8000-000000000001")
 const orgA = OrganizationId.make("00000000-0000-4000-8000-000000000010")
@@ -46,14 +58,45 @@ const Row = Schema.Struct({ id: Schema.String })
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
+/** The persistence's database handle over `node:sqlite`. */
+const nodeDatabase = (path: string): BrowserWASQLiteDatabase & { readonly close: () => void } => {
+	const db = new DatabaseSync(path)
+	return {
+		execute: async <TRow>(sql: string, params: ReadonlyArray<unknown> = []) => {
+			if (params.length === 0 && sql.trim().replace(/;$/, "").includes(";")) {
+				db.exec(sql)
+				return []
+			}
+			const statement = db.prepare(sql)
+			// SAFETY: the persistence binds only what SQLite stores (text, numbers, blobs, null).
+			const args = params as Array<SQLInputValue>
+			// SAFETY: a statement's rows are objects keyed by its columns, which is what the caller names.
+			if (statement.columns().length > 0) return statement.all(...args) as Array<TRow>
+			statement.run(...args)
+			return []
+		},
+		close: () => db.close(),
+	}
+}
+
 let count = 0
 
-/** One page load; the ms from the HTML until the org row, and until the channel's rows. */
-const load = async (hops: Hops, order: Order): Promise<{ shell: number; channel: number }> => {
+/**
+ * One page load; the ms from the HTML until the org row, and until the channel's rows. `cache`
+ * is the file the eager collections keep their rows in (`cached`, and the load that fills it).
+ */
+const load = async (
+	hops: Hops,
+	order: Order,
+	cache?: { readonly path: string; readonly isFilled: boolean },
+): Promise<{ shell: number; channel: number }> => {
 	const start = performance.now()
 	const now = () => performance.now() - start
+	const isEarly = order === "early" || order === "cached"
+	/** The user is remembered and their rows are on disk. */
+	const isCached = cache?.isFilled === true
 	// Before `early`, each request waited a round trip on its preflight.
-	const http = (serverMs: number) => sleep((order === "early" ? 1 : 2) * RTT_MS + serverMs)
+	const http = (serverMs: number) => sleep((isEarly ? 1 : 2) * RTT_MS + serverMs)
 
 	// When each cold object started waking.
 	const wakeStartedAt: Partial<Record<"user" | "channel", number>> = {}
@@ -87,9 +130,10 @@ const load = async (hops: Hops, order: Order): Promise<{ shell: number; channel:
 		}
 	}, 1)
 
-	// `early`: the token from `index.html` at once, then the warm-up wakes the objects.
-	const earlyToken = order === "early" ? http(hops.token).then(() => "token") : undefined
-	void earlyToken?.then(() =>
+	// `early`: the token from `index.html` at once, then the warm-up wakes the objects; `cached`
+	// asks for the wakes beside the token (the session cookie is enough).
+	const earlyToken = isEarly ? http(hops.token).then(() => "token") : undefined
+	void (order === "cached" ? Promise.resolve() : earlyToken)?.then(() =>
 		sleep(RTT_MS + hops.route).then(() => {
 			wake("user")
 			wake("channel")
@@ -107,35 +151,51 @@ const load = async (hops: Hops, order: Order): Promise<{ shell: number; channel:
 	const userSources = sourceSet()
 	const orgSources = sourceSet()
 	const id = ++count
+	const database = cache === undefined ? undefined : nodeDatabase(cache.path)
+	const persistence = database === undefined ? undefined : createBrowserWASQLitePersistence({ database })
+	// A stored collection is named by its id: the same across the loads on one file.
+	const idOf = (table: string) => (cache === undefined ? `bench-${table}-${id}` : `bench-${table}`)
+	const persist =
+		persistence === undefined
+			? undefined
+			: <O extends object>(options: O) =>
+					persistedCollectionOptions({
+						...(options as O & Parameters<typeof persistedCollectionOptions>[0]),
+						persistence,
+						schemaVersion: 1,
+					})
 	const collection = (table: string, sources: CollectionSources) =>
-		createEffectCollection({
-			id: `bench-${table}-${id}`,
-			table,
-			schema: Row,
+		createEffectCollection(
+			{ id: idOf(table), table, schema: Row, getKey: (row) => row.id, hub, sources },
+			// As in the app: a channel's collections keep nothing.
+			Array.isArray(sources) ? undefined : persist,
+		)
+	const userOrganizations = createEffectCollection(
+		{
+			id: idOf("user_organizations"),
+			table: "user_organizations",
+			schema: UserOrganization,
+			getKey: (row) => row.organizationId,
+			hub,
+			sources: userSources,
+		},
+		persist,
+	)
+	const connectConversations = createEffectCollection(
+		{
+			id: idOf("connect_conversations"),
+			table: "connect_conversations",
+			schema: Schema.Struct({
+				id: Schema.String,
+				hostOrganizationId: OrganizationId,
+				deletedAt: Schema.Null,
+			}),
 			getKey: (row) => row.id,
 			hub,
-			sources,
-		})
-	const userOrganizations = createEffectCollection({
-		id: `bench-user_organizations-${id}`,
-		table: "user_organizations",
-		schema: UserOrganization,
-		getKey: (row) => row.organizationId,
-		hub,
-		sources: userSources,
-	})
-	const connectConversations = createEffectCollection({
-		id: `bench-connect_conversations-${id}`,
-		table: "connect_conversations",
-		schema: Schema.Struct({
-			id: Schema.String,
-			hostOrganizationId: OrganizationId,
-			deletedAt: Schema.Null,
-		}),
-		getKey: (row) => row.id,
-		hub,
-		sources: orgSources,
-	})
+			sources: orgSources,
+		},
+		persist,
+	)
 	const organizations = collection("organizations", orgSources)
 	// The chat page's message query opens its channel as soon as the page exists (at boot).
 	const messages = collection("messages", [`channel:${channelId}`])
@@ -146,7 +206,8 @@ const load = async (hops: Hops, order: Order): Promise<{ shell: number; channel:
 	}
 
 	if (order === "main") await http(hops.session)
-	await http(hops.userMe)
+	// A remembered user is known when the script runs: nothing waits for `user.me`.
+	if (!isCached) await http(hops.userMe)
 	const stop = startSyncSession(
 		{ userSources, orgSources, userOrganizations, connectConversations, rememberedOrgSources },
 		userId,
@@ -156,11 +217,27 @@ const load = async (hops: Hops, order: Order): Promise<{ shell: number; channel:
 	const shell = now()
 	const channel = await channelReady
 
+	// The seqs the next load resumes from are stored a moment after their rows.
+	if (cache !== undefined && !cache.isFilled) await sleep(1200)
 	clearInterval(answer)
-	stop()
+	// An unload: the collections stop before the sources are let go, so their rows stay on disk.
 	for (const c of [userOrganizations, connectConversations, organizations, messages]) await c.cleanup()
+	stop()
 	hub.close()
+	database?.close()
 	return { shell, channel }
+}
+
+/** A `cached` load: the load before it left the user's rows on disk. */
+const loadCached = async (hops: Hops) => {
+	const dir = mkdtempSync(join(tmpdir(), "hazel-boot-bench-"))
+	try {
+		const path = join(dir, "cache.sqlite")
+		await load(hops, "cached", { path, isFilled: false })
+		return await load(hops, "cached", { path, isFilled: true })
+	} finally {
+		rmSync(dir, { recursive: true, force: true })
+	}
 }
 
 const RUNS = Number(process.env.BENCH_RUNS ?? 5)
@@ -175,10 +252,12 @@ describe.skipIf(!process.env.BENCH)("boot", () => {
 				main: [],
 				parallel: [],
 				early: [],
+				cached: [],
 			}
 			for (let run = 0; run < RUNS; run++) {
 				for (const order of ["main", "parallel", "early"] as const)
 					runs[order].push(await load(hops, order))
+				runs.cached.push(await loadCached(hops))
 			}
 			for (const milestone of ["shell", "channel"] as const) {
 				const of = (order: Order) => median(runs[order].map((r) => r[milestone]))
@@ -190,6 +269,7 @@ describe.skipIf(!process.env.BENCH)("boot", () => {
 					main: `${main.toFixed(0)} ms`,
 					parallel: cell("parallel"),
 					early: cell("early"),
+					cached: cell("cached"),
 				})
 			}
 		}

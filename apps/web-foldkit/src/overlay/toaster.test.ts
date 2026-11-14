@@ -49,6 +49,7 @@ describe("root toaster", () => {
 						sessionStartMs: 0,
 						isMobile: false,
 						isCreateChannelHintDismissed: false,
+						rememberedUser: null,
 						keybindingOverrides: {},
 						keyboardPlatform: "linux",
 					},
