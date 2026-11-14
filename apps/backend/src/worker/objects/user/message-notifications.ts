@@ -5,10 +5,11 @@
  * `push` is what the owner's phones show, if it is pushed (`./push.ts`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { ChannelId, MessageId, OrganizationMemberId } from "@hazel/schema"
+import { ChannelId, MessageId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { NotificationReasons } from "../../../services/notifications/notification-rules"
-import { defineEffect } from "../effects/registry"
+import { defineEffect, enqueueEffect } from "../effects/registry"
+import { NotificationCountOrgEffects } from "../org/notification-count"
 import { PushContent, schedulePush } from "./push"
 
 export const CreateNotificationPayload = Schema.Struct({
@@ -26,6 +27,11 @@ export type CreateNotificationPayload = typeof CreateNotificationPayload.Type
 /** Messages deleted: their notifications go, so a deferred or retrying push finds nothing to send. */
 export const DeleteMessageNotificationsPayload = Schema.Struct({
 	messageIds: Schema.Array(MessageId).check(Schema.isMaxLength(90)),
+	/** The channel's org, told how many came off its unread count. */
+	organizationId: OrganizationId,
+	channelId: ChannelId,
+	/** This object's owner (the org's guard holds the reply to it). */
+	userId: UserId,
 })
 
 export const MessageNotificationEffects = {
@@ -68,11 +74,16 @@ export const deleteMessageNotifications = Effect.fn("UserEffects.deleteMessageNo
 ) {
 	if (payload.messageIds.length === 0) return
 	const db = yield* Database.Database
-	yield* db.run(
-		SQLite.deleteFrom(schema.notificationsTable).where(($) => [
-			$.resourceId.in_(...payload.messageIds),
-			$.resourceType.eq("message"),
-		]),
+	const removed = yield* db.run(
+		SQLite.deleteFrom(schema.notificationsTable)
+			.where(($) => [$.resourceId.in_(...payload.messageIds), $.resourceType.eq("message")])
+			.returning("id"),
+	)
+	if (removed.length === 0) return
+	yield* enqueueEffect(
+		NotificationCountOrgEffects.notificationsRemoved,
+		{ kind: "org", id: payload.organizationId },
+		{ channelId: payload.channelId, userId: payload.userId, count: removed.length },
 	)
 })
 

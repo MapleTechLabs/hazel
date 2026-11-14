@@ -157,7 +157,8 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 
 /**
  * Drop the message's notifications in the `UserObject`s that may hold one: the channel's members
- * with unread notifications there (`notificationCount`, reset when they read it).
+ * with unread notifications there (`notificationCount`, reset when they read it). Each that held
+ * one tells the org back (`org.notificationsRemoved`), so the unread count comes down too.
  */
 export const messageDeleted = Effect.fn("OrgEffects.messageDeleted")(function* (
 	input: MessageDeletedPayload,
@@ -187,7 +188,12 @@ export const messageDeleted = Effect.fn("OrgEffects.messageDeleted")(function* (
 			enqueueEffect(
 				MessageNotificationEffects.deleteMessageNotifications,
 				{ kind: "user", id: userId },
-				{ messageIds: [input.messageId] },
+				{
+					messageIds: [input.messageId],
+					organizationId: channel.value.organizationId,
+					channelId: channel.value.id,
+					userId,
+				},
 				{ id: `unnotify:${input.messageId}:${userId}` },
 			),
 		{ discard: true },

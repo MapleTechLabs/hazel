@@ -25,6 +25,7 @@ import { customersReceivers, CustomersEffects, customersSenderRefusal } from "./
 import { directoryReceivers, DirectoryEffects } from "./directory-effects"
 import { connectSenderRefusal } from "../org/connect"
 import { searchSenderRefusal } from "../org/message-search"
+import { notificationCountSenderRefusal } from "../org/notification-count"
 import { orgReceivers, OrgEffects } from "./org-effects"
 import {
 	type AnyEffectKind,
@@ -111,6 +112,9 @@ const senderGuards: Partial<Record<ObjectKind, SenderGuard>> = {
 		connectSenderRefusal(kind, payload, sender).pipe(
 			Effect.flatMap((refusal) =>
 				Option.isSome(refusal) ? Effect.succeed(refusal) : searchSenderRefusal(kind, payload, sender),
+			),
+			Effect.map((refusal) =>
+				Option.isSome(refusal) ? refusal : notificationCountSenderRefusal(kind, payload, sender),
 			),
 		),
 }

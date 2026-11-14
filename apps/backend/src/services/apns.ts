@@ -202,7 +202,12 @@ export class ApnsClient extends Context.Service<ApnsClient, ApnsSender>()("@haze
 			})
 
 			const send = Effect.fn("ApnsClient.send")(function* (notification: ApnsNotification) {
-				yield* Effect.annotateCurrentSpan({ "apns.environment": notification.environment })
+				// The peer by name (the service map's edge); the URL, which holds the token, is never recorded.
+				yield* Effect.annotateCurrentSpan({
+					"apns.environment": notification.environment,
+					"peer.service": "apns",
+					"server.address": new URL(APNS_HOSTS[notification.environment]).host,
+				})
 				const token = yield* providerToken
 				const request = HttpClientRequest.post(
 					`${APNS_HOSTS[notification.environment]}/3/device/${notification.token}`,
