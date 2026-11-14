@@ -161,6 +161,8 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 	 * instead of resuming past the missing rows. A clean snapshot of the source clears it.
 	 */
 	private readonly lossy = new Set<SourceKey>()
+	/** Sources restored with the seq their stored rows reflect. */
+	private readonly restoredSeqs = new Set<SourceKey>()
 	/** Sources whose stored seq is behind `seqs`. */
 	private readonly dirtySeqs = new Set<SourceKey>()
 	private seqFlush: ReturnType<typeof setTimeout> | undefined
@@ -192,6 +194,14 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 		if (!this.concerns(source)) return undefined
 		if (!this.expectsRestore) return null
 		return this.restored.then(() => (this.persistent ? (this.seqs.get(source) ?? null) : null))
+	}
+
+	/**
+	 * The stored rows of `source` are whole up to a stored seq: what the collection holds of it is
+	 * last session's truth, no rows included.
+	 */
+	isRestoredWhole(source: SourceKey): boolean {
+		return this.persistent && this.restoredSeqs.has(source)
 	}
 
 	onCommit(source: SourceKey, seq: SyncSeq): void {
@@ -406,6 +416,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 					const source = key.slice(SEQ_PREFIX.length) as SourceKey
 					if (typeof value === "number" && !this.delivered.has(source) && !this.seqs.has(source)) {
 						this.seqs.set(source, value as SyncSeq)
+						this.restoredSeqs.add(source)
 					}
 				}
 				this.target = params
@@ -719,12 +730,20 @@ function syncSourced<T extends object, TKey extends string | number>(
 	const leases = new Map<SourceKey, { release(): void }>()
 	let ready = false
 	let active = true
+	let isRestored = false
 
+	/** A source counts once it answered, or once storage gave back all it held of it. */
 	const checkReady = () => {
 		if (ready || !active) return
 		const current = set.get()
 		if (current === undefined) return
-		if (current.every((source) => hub.connectionOf(source)?.isSettled ?? false)) {
+		if (
+			current.every(
+				(source) =>
+					(hub.connectionOf(source)?.isSettled ?? false) ||
+					(isRestored && mirror.isRestoredWhole(source)),
+			)
+		) {
 			ready = true
 			params.markReady()
 		}
@@ -760,11 +779,13 @@ function syncSourced<T extends object, TKey extends string | number>(
 	// Stored rows show at once; each source's snapshot replaces its rows as it arrives.
 	restored?.then((hasRows) => {
 		if (!active) return
+		isRestored = true
 		dropUnwanted()
 		if (hasRows && !ready) {
 			ready = true
 			params.markReady()
 		}
+		checkReady()
 	})
 
 	return {
