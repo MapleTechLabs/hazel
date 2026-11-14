@@ -141,7 +141,7 @@ export default Api.make(
 			),
 		)
 
-		return { fetch: makeFetch(app) }
+		return { fetch: makeFetch(app, env) }
 	}).pipe(
 		Effect.provide(
 			Layer.mergeAll(

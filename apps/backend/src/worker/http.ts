@@ -1,13 +1,23 @@
 /**
- * The api Worker's request path: the route graph built once per isolate on the first request,
- * and the fetch handler that runs it.
+ * The api Worker's request path: the route graph built once per isolate, by the first request
+ * that needs it or in the background of the preflight that announces it, and the fetch handler
+ * that runs it.
  */
 import { bridgeHandler, forIsolate, WorkerPlatformLive } from "@hazel/infra/worker-http"
-import type * as Cloudflare from "@alchemy.run/cloudflare"
+import { workerEnvLayer } from "@hazel/infra/worker-runtime"
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import type { HttpEffect } from "alchemy/Http"
+import { RuntimeContext } from "alchemy/RuntimeContext"
 import { type Context, Effect, Layer } from "effect"
-import { FetchHttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import {
+	FetchHttpClient,
+	HttpMiddleware,
+	HttpRouter,
+	HttpServerRequest,
+	HttpServerResponse,
+} from "effect/http"
 import { AppAuthorizationLive, AppServicesLive, makeRoutes } from "../app"
+import { corsPolicy } from "../lib/cors"
 import { LocalRpcDispatcher, RoutedRpcServerLive } from "../rpc/routed-server"
 import { Directory } from "../services/directory"
 import { takeIsolateCold } from "./cold-start"
@@ -66,8 +76,34 @@ const pathOf = (url: string): string => {
 	return query === -1 ? url : url.slice(0, query)
 }
 
-/** The fetch handler. `/health` answers before the route graph exists; the rest runs the router. */
-export const makeFetch = (app: Effect.Effect<HttpEffect, unknown>) => {
+/**
+ * A CORS preflight's answer, from the policy the router applies (`lib/cors.ts`): the same
+ * middleware, over the Worker's env instead of the graph's `ConfigProvider`.
+ */
+const makePreflight = (env: Record<string, unknown>) => {
+	let cors: ReturnType<typeof HttpMiddleware.cors> | undefined
+	return Effect.gen(function* () {
+		cors ??= HttpMiddleware.cors(
+			yield* corsPolicy.pipe(Effect.provide(workerEnvLayer(env)), Effect.orDie),
+		)
+		// The middleware answers every `OPTIONS` itself and never runs what it wraps.
+		return yield* cors(Effect.succeed(HttpServerResponse.empty({ status: 204 })))
+	})
+}
+
+/**
+ * The fetch handler. `/health` and CORS preflights answer before the route graph exists; the
+ * rest runs the router.
+ *
+ * A preflight on a cold isolate starts the graph in the background (`waitUntil`), so the request
+ * it announces finds it built or being built. This takes the graph's build off the preflight,
+ * not the isolate's own start (the script's evaluation), which every first request still pays.
+ */
+export const makeFetch = (app: Effect.Effect<HttpEffect, unknown>, env: Record<string, unknown>) => {
+	const preflight = makePreflight(env)
+	// One macrotask later: the build starts with a stretch of CPU, which would otherwise run
+	// before the preflight's answer leaves.
+	const afterAnswer = Effect.promise(() => new Promise<void>((resolve) => setTimeout(resolve, 0)))
 	let built = false
 	const ready = app.pipe(
 		Effect.orDie,
@@ -82,6 +118,15 @@ export const makeFetch = (app: Effect.Effect<HttpEffect, unknown>) => {
 		yield* Effect.annotateCurrentSpan("isolate.cold", takeIsolateCold())
 		if (request.method === "GET" && pathOf(request.url) === "/health") {
 			return HttpServerResponse.text("OK")
+		}
+		if (request.method === "OPTIONS" && request.headers["access-control-request-method"] !== undefined) {
+			// A failed build is retried by the request that needs it (`cachedRecoverable`).
+			if (!built) {
+				yield* Cloudflare.waitUntil(Effect.exit(Effect.andThen(afterAnswer, ready))).pipe(
+					Effect.provide(RuntimeContext.phantom),
+				)
+			}
+			return yield* preflight
 		}
 		// The wait for the graph, as a span of its own: its build runs under the isolate's
 		// context, so nothing inside it is traced.
