@@ -68,14 +68,24 @@ const requireUserSender = (kind: string, userId: UserId) =>
 				),
 	)
 
+/** A short FNV-1a hash of `token`: tells tokens apart in an outbox id without naming them. */
+const tokenTag = (token: string) => {
+	let hash = 0x811c9dc5
+	for (let index = 0; index < token.length; index++) {
+		hash = Math.imul(hash ^ token.charCodeAt(index), 0x01000193)
+	}
+	return (hash >>> 0).toString(16).padStart(8, "0")
+}
+
 /** `userId`'s `UserObject` forgets `token` if registered no later than `claimedAt`. */
 const forget = (userId: UserId, token: string, claimedAt: Date, claimant: UserId) =>
 	enqueueEffect(
 		PushOwnershipUserEffects.forgetPushDevice,
 		{ kind: "user", id: userId },
 		{ token, claimedAt: claimedAt.toISOString() },
-		// Fixed per claim: a retried claim enqueues nothing new. The token stays out of the id.
-		{ id: `push-forget:${claimant}:${userId}:${claimedAt.getTime()}` },
+		// Fixed per claim (a retried claim enqueues nothing new), apart per token (two tokens
+		// claimed in one millisecond). The token itself stays out of the id.
+		{ id: `push-forget:${claimant}:${userId}:${claimedAt.getTime()}:${tokenTag(token)}` },
 	)
 
 const tokenOwner = (token: string) =>

@@ -177,8 +177,8 @@ export const messageDeleted = Effect.fn("OrgEffects.messageDeleted")(function* (
 			.select("userId")
 			.where(($) => [
 				$.channelId.eq(channel.value.id),
+				// Members who left since keep their notifications: theirs go too.
 				$.notificationCount.gt(0),
-				$.deletedAt.isNull(),
 			]),
 	)
 	yield* Effect.forEach(
