@@ -33,6 +33,20 @@ pub fn permission_reply(id: u64, granted: bool) -> serde_json::Value {
     serde_json::json!({ "t": "notifyPermission", "id": id, "granted": granted })
 }
 
+/// The longest path a notification may open (a channel's or a thread's is well under it).
+const MAX_APP_PATH: usize = 1024;
+
+/// A path a notification may open the app at: one of the app's own (`/hazel/chat/...`), never
+/// a link that leaves it. `//host/x` and `/\host/x` are another origin to a URL parser (WebKit
+/// reads `\` as `/`), so a backslash or a control character anywhere refuses the path.
+pub fn app_path(path: &str) -> Option<&str> {
+    let refused = !path.starts_with('/')
+        || path.starts_with("//")
+        || path.len() > MAX_APP_PATH
+        || path.chars().any(|c| c == '\\' || c.is_control());
+    (!refused).then_some(path)
+}
+
 /// The window became the key window or stopped being it: the runtime's `document.hasFocus()`,
 /// which notifications wait on.
 pub fn window_focus_message(focused: bool) -> serde_json::Value {
@@ -155,6 +169,30 @@ mod tests {
             route(parse(r#"{"t":"focus","key":"r/1"}"#)),
             Routed::Window(RuntimeMsg::Focus { .. })
         ));
+    }
+
+    #[test]
+    fn a_notification_opens_only_the_apps_own_paths() {
+        let channel = "/hazel/chat/00000005-0000-4000-8000-000000000002";
+        assert_eq!(app_path(channel), Some(channel));
+        assert_eq!(
+            app_path("/hazel/chat/c?thread=1#m"),
+            Some("/hazel/chat/c?thread=1#m")
+        );
+        for refused in [
+            "",
+            "hazel/chat/c",
+            "https://evil.com/x",
+            "//evil.com/x",
+            "/\\evil.com/x",
+            "/hazel\\..\\x",
+            "/\t/evil.com",
+            "/hazel/chat\n/c",
+            "/\u{0}",
+        ] {
+            assert_eq!(app_path(refused), None, "{refused:?}");
+        }
+        assert_eq!(app_path(&format!("/{}", "a".repeat(MAX_APP_PATH))), None);
     }
 
     #[test]

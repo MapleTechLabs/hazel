@@ -52,6 +52,39 @@ thread_local! {
     /// Where the last full page load went; a restart goes back there.
     static LAST_PATH: RefCell<Option<String>> = const { RefCell::new(None) };
     static RESTARTS: RefCell<Restarts> = RefCell::new(Restarts::default());
+    /// This device's push token (`push.rs`): every runtime hears it once its page is ready.
+    static PUSH_TOKEN: RefCell<Option<serde_json::Value>> = const { RefCell::new(None) };
+    /// The path a notification's tap opens, until a runtime says it followed it (`openedPath`):
+    /// a page that ends before then (WebKit ended its process in the background) gets it again.
+    static OPEN_PATH: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+/// Whether the page loaded last can take lines and replies.
+fn page_ready() -> bool {
+    EARLY.with_borrow(Option::is_none)
+}
+
+/// This device's push token, for the runtime to register (`src/push.ts`): now, and again for
+/// every runtime a page load starts (signing in loads one). APNs answers every activation; the
+/// same token still goes to the runtime, which retries a registration that failed and calls the
+/// API only for a token it has not registered. Whether the token is new.
+pub fn set_push_token(message: serde_json::Value) -> bool {
+    if page_ready() {
+        reply(&message);
+    }
+    let new = PUSH_TOKEN.with_borrow(|held| held.as_ref() != Some(&message));
+    PUSH_TOKEN.set(Some(message));
+    new
+}
+
+/// Opens the app at `path` (a notification's tap): the runtime follows it as a link once it is
+/// up, and the path is held until it says so; a cold start from the tap loads its first page
+/// there.
+pub fn open_path(path: String) {
+    if page_ready() {
+        reply(&serde_json::json!({ "openPath": path }));
+    }
+    OPEN_PATH.set(Some(path));
 }
 
 /// Where the runtime's trees go: the running app.
@@ -214,11 +247,13 @@ fn receive(line: &str) {
         Routed::Shell(ShellRequest::Update { .. } | ShellRequest::Relaunch { .. }) => {
             log("[host] updates are not on iOS");
         }
-        // Not offered on iOS (no `HAZEL_NOTIFICATIONS`); a request still gets its answer.
-        Routed::Shell(ShellRequest::NotifyPermission { id, .. }) => {
-            outbox::write_line(shell::permission_reply(id, false));
+        // The web app's notification flow: its permission is the one pushes need.
+        Routed::Shell(ShellRequest::NotifyPermission { id, request }) => {
+            hazel_native::notify::permission(id, request, crate::push::after_permission);
         }
-        Routed::Shell(ShellRequest::Notify { .. }) => {}
+        Routed::Shell(ShellRequest::Notify { title, body, group }) => {
+            hazel_native::notify::show(&title, &body, group.as_deref());
+        }
     }
 }
 
@@ -238,7 +273,20 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
             for text in EARLY.take().unwrap_or_default() {
                 to_worker(&text);
             }
+            if let Some(token) = PUSH_TOKEN.with_borrow(Clone::clone) {
+                reply(&token);
+            }
+            if let Some(path) = OPEN_PATH.with_borrow(Clone::clone) {
+                reply(&serde_json::json!({ "openPath": path }));
+            }
         }
+    } else if let Some(path) = field("openedPath") {
+        // The runtime followed the tap's path: a page that ends from now on need not.
+        OPEN_PATH.with_borrow_mut(|held| {
+            if held.as_deref() == Some(path.as_str()) {
+                *held = None;
+            }
+        });
     } else if let Some(line) = field("log") {
         log(&line);
     } else if let (Some(url), Some(scheme)) = (field("signIn"), field("callbackScheme")) {
@@ -311,7 +359,11 @@ define_class!(
                 return log("[host] the page's process keeps ending; not starting it again");
             }
             log("[host] the page's process ended; starting the runtime again");
-            let path = LAST_PATH.with_borrow(Clone::clone);
+            // A tap the old runtime never followed (the process ended first) leads instead.
+            let path = OPEN_PATH.take().or_else(|| LAST_PATH.with_borrow(Clone::clone));
+            if path.is_some() {
+                LAST_PATH.set(path.clone());
+            }
             load_page(self.mtm(), path.as_deref());
         }
     }
@@ -378,7 +430,10 @@ fn start() -> bool {
     }
     NAVIGATION.set(Some(navigation));
     WEB.set(Some(web));
-    load_page(mtm, None);
+    // A tap on a notification that launched the app: the first page opens where it leads.
+    let path = OPEN_PATH.take();
+    load_page(mtm, path.as_deref());
+    LAST_PATH.set(path);
     if let Some(handle) = HANDLE.get().map(|h| h.lock().unwrap().clone()) {
         crate::keyboard::observe(mtm, handle);
     }

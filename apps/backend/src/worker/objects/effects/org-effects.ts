@@ -25,6 +25,7 @@ import {
 } from "../org/projections"
 import { channelRenameReceivers, ChannelRenameEffects } from "../org/channel-rename"
 import { messageNotificationOrgReceivers, MessageNotificationOrgEffects } from "../org/message-notifications"
+import { notificationCountOrgReceivers, NotificationCountOrgEffects } from "../org/notification-count"
 import { DirectoryWireOrgEffects } from "../directory-wire"
 import { upsertBotProjection } from "../org/bot-installs"
 import { acceptInvitation } from "../org/invitation-accept"
@@ -44,6 +45,7 @@ export const OrgEffects = {
 	/** Drop a user's copy (and presence) unless they are still a member or participant here. */
 	removeUserProjection: defineEffect("org.removeUserProjection", "org", RemoveUserProjectionPayload),
 	...MessageNotificationOrgEffects,
+	...NotificationCountOrgEffects,
 	...ChannelRenameEffects,
 	...DirectoryWireOrgEffects,
 	/** Chat sync: gateway ingest, channel-provisioned link settings (`services/chat-sync`). */
@@ -59,6 +61,7 @@ export const orgReceivers = {
 	"org.upsertPresenceProjection": upsertPresenceProjection,
 	"org.removeUserProjection": removeUserProjection,
 	...messageNotificationOrgReceivers,
+	...notificationCountOrgReceivers,
 	...channelRenameReceivers,
 	// Called lazily: these modules import the effect registries back.
 	"org.upsertBotProjection": (payload) => upsertBotProjection(payload),

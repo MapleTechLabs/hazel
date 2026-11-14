@@ -32,6 +32,7 @@ export const directoryTables = [
 	schema.integrationIndexTable,
 	schema.chatSyncIndexTable,
 	schema.chatSyncInstallationsTable,
+	schema.pushDeviceTokensTable,
 ] as const
 
 /** `OrgObject`, one per organization. */
@@ -83,6 +84,8 @@ export const userTables = [
 	schema.notificationsTable,
 	schema.userPresenceStatusTable,
 	schema.userOrganizationsTable,
+	// Not synced: the push devices.
+	schema.pushDevicesTable,
 ] as const
 
 /**

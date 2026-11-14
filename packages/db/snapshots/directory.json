@@ -1,5 +1,5 @@
 {
-	"migration": "0003_chat_sync_installations",
+	"migration": "0004_push_device_tokens",
 	"entities": [
 		{
 			"kind": "table",
@@ -123,6 +123,13 @@
 			"name": "organization_invitations",
 			"primaryKey": {
 				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "push_device_tokens",
+			"primaryKey": {
+				"columns": ["token"]
 			}
 		},
 		{
@@ -1741,6 +1748,33 @@
 		},
 		{
 			"kind": "column",
+			"table": "push_device_tokens",
+			"name": "token",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "push_device_tokens",
+			"name": "userId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "push_device_tokens",
+			"name": "updatedAt",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
 			"table": "users",
 			"name": "id",
 			"position": 0,
@@ -2234,6 +2268,13 @@
 			"name": "organization_invitations_token_hash_idx",
 			"unique": true,
 			"columns": ["\"tokenHash\""]
+		},
+		{
+			"kind": "index",
+			"table": "push_device_tokens",
+			"name": "push_device_tokens_user_id_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
 		},
 		{
 			"kind": "index",

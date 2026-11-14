@@ -15,6 +15,8 @@ mod menu_sheet;
 #[cfg(any(test, target_os = "ios"))]
 mod page;
 #[cfg(target_os = "ios")]
+mod push;
+#[cfg(target_os = "ios")]
 mod sign_in;
 #[cfg(target_os = "ios")]
 mod system;
@@ -42,6 +44,10 @@ fn main() {
     // The UIKit views the app's `data-native` elements get, and HTML renders' web views, go
     // where their boxes were drawn, after every frame.
     islands::install();
+    // Before the app runs, as Apple asks: a tap on a notification that launches it is heard.
+    if let Some(mtm) = objc2::MainThreadMarker::new() {
+        push::install(mtm);
+    }
     let app = App::new(spec)
         .font_smoothing(TEXT_SMOOTHING)
         .on_frame_drawn(|runtime| {

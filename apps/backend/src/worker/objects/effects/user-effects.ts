@@ -3,9 +3,11 @@ import { Database, SQLite, schema } from "@hazel/db"
 import { ChannelId, OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
+import type { ApnsClient } from "../../../services/apns"
 import { markOffline, projectPresenceTo } from "../user/presence"
 import { PresenceEffects } from "../user/presence-kinds"
 import { MessageNotificationEffects, messageNotificationReceivers } from "../user/message-notifications"
+import { PushOwnershipUserEffects, pushOwnershipUserReceivers } from "../user/push-ownership"
 import { defineEffect, type EffectReceivers } from "./registry"
 
 /** The user joined (`deletedAt: null`) or left an organization: which `OrgObject`s the client opens. */
@@ -26,6 +28,7 @@ export const UserEffects = {
 	),
 	...PresenceEffects,
 	...MessageNotificationEffects,
+	...PushOwnershipUserEffects,
 }
 
 export const userReceivers = {
@@ -59,4 +62,5 @@ export const userReceivers = {
 		),
 	"user.markOffline": (payload) => Effect.asVoid(markOffline(payload.userId)),
 	...messageNotificationReceivers,
-} satisfies EffectReceivers<typeof UserEffects, Database.Database | SqlClient>
+	...pushOwnershipUserReceivers,
+} satisfies EffectReceivers<typeof UserEffects, Database.Database | SqlClient | ApnsClient>

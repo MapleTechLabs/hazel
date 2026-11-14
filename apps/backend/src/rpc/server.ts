@@ -21,6 +21,7 @@ import {
 	OrganizationMemberRpcs,
 	OrganizationRpcs,
 	PinnedMessageRpcs,
+	PushDeviceRpcs,
 	TypingIndicatorRpcs,
 	UserPresenceStatusRpcs,
 	UserRpcs,
@@ -47,6 +48,7 @@ import { NotificationRpcLive } from "./handlers/notifications"
 import { OrganizationMemberRpcLive } from "./handlers/organization-members"
 import { OrganizationRpcLive } from "./handlers/organizations"
 import { PinnedMessageRpcLive } from "./handlers/pinned-messages"
+import { PushDeviceRpcLive } from "./handlers/push-devices"
 import { TypingIndicatorRpcLive } from "./handlers/typing-indicators"
 import { UserPresenceStatusRpcLive } from "./handlers/user-presence-status"
 import { UserRpcLive } from "./handlers/users"
@@ -77,6 +79,7 @@ const BaseRpcs = MessageRpcs.merge(
 	OrganizationMemberRpcs,
 	UserRpcs,
 	UserPresenceStatusRpcs,
+	PushDeviceRpcs,
 ).merge(
 	ChannelRpcs,
 	ChannelMemberRpcs,
@@ -110,6 +113,7 @@ const rpcGroups = [
 	["OrganizationMemberRpcs", OrganizationMemberRpcs],
 	["UserRpcs", UserRpcs],
 	["UserPresenceStatusRpcs", UserPresenceStatusRpcs],
+	["PushDeviceRpcs", PushDeviceRpcs],
 	["ChannelRpcs", ChannelRpcs],
 	["ChannelMemberRpcs", ChannelMemberRpcs],
 	["ChannelSectionRpcs", ChannelSectionRpcs],
@@ -152,6 +156,7 @@ export const RpcHandlersLive = Layer.empty
 		Layer.provideMerge(OrganizationMemberRpcLive),
 		Layer.provideMerge(UserRpcLive),
 		Layer.provideMerge(UserPresenceStatusRpcLive),
+		Layer.provideMerge(PushDeviceRpcLive),
 	)
 	.pipe(
 		Layer.provideMerge(ChannelRpcLive),

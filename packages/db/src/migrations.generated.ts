@@ -89,6 +89,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE TABLE IF NOT EXISTS "chat_sync_installations" (\n\t"provider" text NOT NULL,\n\t"externalWorkspaceId" text NOT NULL,\n\t"externalWorkspaceName" text,\n\t"encryptedToken" text NOT NULL,\n\t"iv" text NOT NULL,\n\t"encryptionKeyVersion" integer NOT NULL,\n\t"scope" text,\n\t"installedBy" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("provider", "externalWorkspaceId")\n)',
 			],
 		},
+		{
+			id: "0004_push_device_tokens",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "push_device_tokens" (\n\t"token" text PRIMARY KEY NOT NULL,\n\t"userId" text NOT NULL,\n\t"updatedAt" text NOT NULL\n)',
+				'CREATE INDEX IF NOT EXISTS "push_device_tokens_user_id_idx" ON "push_device_tokens" ("userId")',
+			],
+		},
 	],
 	org: [
 		{
@@ -342,6 +349,12 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			statements: [
 				'ALTER TABLE "notifications" ADD COLUMN "reason" text',
 				'ALTER TABLE "notifications" ADD COLUMN "silent" integer NOT NULL DEFAULT false',
+			],
+		},
+		{
+			id: "0003_push_devices",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "push_devices" (\n\t"token" text PRIMARY KEY NOT NULL,\n\t"environment" text NOT NULL,\n\t"bundleId" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
 			],
 		},
 	],

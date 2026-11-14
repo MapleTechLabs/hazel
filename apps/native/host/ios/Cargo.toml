@@ -26,3 +26,5 @@ resvg = "0.45"
 objc2-quartz-core = "0.3"
 objc2-ui-kit = "0.3"
 objc2-web-kit = "0.3"
+# Pushes: the notification center's delegate and the badge (`src/push.rs`).
+objc2-user-notifications = "0.3"

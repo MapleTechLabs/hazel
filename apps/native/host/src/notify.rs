@@ -1,26 +1,27 @@
 //! System notifications through UserNotifications, for the web app's own notification flow
-//! (`core/lib/native-notifications.ts`, over `desktop-bridge.ts`'s `notification`). macOS only
-//! shows them for an app it knows by its bundle identifier, so a host run from source (no bundle)
-//! offers none: the runtime then sees no notification API, as a browser without one.
-//! Windows and Linux have none yet (`available` is false), so the runtime offers none.
-#[cfg(target_os = "macos")]
-pub use mac::{available, permission, show};
+//! (`core/lib/native-notifications.ts`, over `desktop-bridge.ts`'s `notification`), on macOS and
+//! iOS. The system only shows them for an app it knows by its bundle identifier, so a macOS host
+//! run from source (no bundle) offers none: the runtime then sees no notification API, as a
+//! browser without one. On iOS the permission also covers the app's badge, and pushes are the
+//! real channel (`host/ios/src/push.rs`). Windows and Linux have none yet (`available` is false).
+#[cfg(target_vendor = "apple")]
+pub use apple::{allowed, available, permission, show};
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(target_vendor = "apple"))]
 pub fn available() -> bool {
     false
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn permission(id: u64, _request: bool) {
-    hazel_native::outbox::write_line(hazel_native::shell::permission_reply(id, false));
+#[cfg(not(target_vendor = "apple"))]
+pub fn permission(id: u64, _request: bool, _then: fn(bool)) {
+    crate::outbox::write_line(crate::shell::permission_reply(id, false));
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(target_vendor = "apple"))]
 pub fn show(_title: &str, _body: &str, _group: Option<&str>) {}
 
-#[cfg(target_os = "macos")]
-mod mac {
+#[cfg(target_vendor = "apple")]
+mod apple {
     use block2::RcBlock;
     use objc2::runtime::Bool;
     use objc2_foundation::{NSBundle, NSError, NSString};
@@ -31,8 +32,18 @@ mod mac {
     use std::ptr::NonNull;
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    use hazel_native::outbox::write_line;
-    use hazel_native::shell::permission_reply;
+    use crate::outbox::write_line;
+    use crate::shell::permission_reply;
+
+    /// What the app asks to do: a phone's notifications also set the app's badge.
+    fn options() -> UNAuthorizationOptions {
+        let options = UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound;
+        if cfg!(target_os = "ios") {
+            options | UNAuthorizationOptions::Badge
+        } else {
+            options
+        }
+    }
 
     /// Whether this process can show notifications: it runs from a bundle with an identifier.
     /// (Asking for the notification center without one raises an Objective-C exception.)
@@ -41,8 +52,9 @@ mod mac {
     }
 
     /// Answers permission request `id`: whether notifications are allowed, asking the user first
-    /// when `request` is set and they have not decided yet.
-    pub fn permission(id: u64, request: bool) {
+    /// when `request` is set and they have not decided yet. `then` hears the answer too, on the
+    /// framework's queue (iOS registers for pushes once allowed).
+    pub fn permission(id: u64, request: bool, then: fn(bool)) {
         if !available() {
             return write_line(permission_reply(id, false));
         }
@@ -57,21 +69,24 @@ mod mac {
                     );
                 }
                 write_line(permission_reply(id, granted.as_bool()));
+                then(granted.as_bool());
             });
-            center.requestAuthorizationWithOptions_completionHandler(
-                UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound,
-                &answered,
-            );
+            center.requestAuthorizationWithOptions_completionHandler(options(), &answered);
         } else {
             let answered = RcBlock::new(move |settings: NonNull<UNNotificationSettings>| {
                 // SAFETY: the framework passes valid settings.
-                let status = unsafe { settings.as_ref() }.authorizationStatus();
-                let granted = status == UNAuthorizationStatus::Authorized
-                    || status == UNAuthorizationStatus::Provisional;
+                let granted = allowed(unsafe { settings.as_ref() });
                 write_line(permission_reply(id, granted));
+                then(granted);
             });
             center.getNotificationSettingsWithCompletionHandler(&answered);
         }
+    }
+
+    /// Whether `settings` let the app notify (provisional delivery counts).
+    pub fn allowed(settings: &UNNotificationSettings) -> bool {
+        let status = settings.authorizationStatus();
+        status == UNAuthorizationStatus::Authorized || status == UNAuthorizationStatus::Provisional
     }
 
     /// Shows a notification now; `group` threads a channel's notifications together.

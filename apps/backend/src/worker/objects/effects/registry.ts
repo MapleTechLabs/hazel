@@ -23,10 +23,18 @@ import type { ObjectKind } from "../kinds"
 /**
  * Where an effect is applied: an object, the directory (D1), the bot gateway, `ai` (a model
  * call made by the sending object itself, `ai-effects.ts`), `chat-sync` (a provider API call
- * made by the sending `ChannelObject`, `services/chat-sync/chat-sync-outbound.ts`), or `storage`
- * (HTML render bucket cleanup by the sender, `storage-effects.ts`).
+ * made by the sending `ChannelObject`, `services/chat-sync/chat-sync-outbound.ts`), `storage`
+ * (HTML render bucket cleanup by the sender, `storage-effects.ts`), or `push` (an APNs request
+ * made by the sending `UserObject`, `../user/push.ts`; its id only names its own outbox queue).
  */
-export type EffectTargetKind = ObjectKind | "directory" | "bot-gateway" | "ai" | "chat-sync" | "storage"
+export type EffectTargetKind =
+	| ObjectKind
+	| "directory"
+	| "bot-gateway"
+	| "ai"
+	| "chat-sync"
+	| "storage"
+	| "push"
 
 export interface EffectKind<Name extends string, Target extends EffectTargetKind, S extends Schema.Top> {
 	readonly name: Name
@@ -47,7 +55,7 @@ export const defineEffect = <
 ): EffectKind<Name, Target, S> => ({ name, target, payload })
 
 /** An effect's target as the outbox row stores it: `channel:<id>`, `directory`, `bot-gateway`. */
-export type EffectTarget<Target extends EffectTargetKind> = Target extends ObjectKind
+export type EffectTarget<Target extends EffectTargetKind> = Target extends ObjectKind | "push"
 	? { readonly kind: Target; readonly id: string }
 	: { readonly kind: Target }
 
@@ -70,7 +78,9 @@ export const parseEffectTarget = (
 	if (separator === -1) return undefined
 	const kind = value.slice(0, separator)
 	const id = value.slice(separator + 1)
-	if (kind !== "org" && kind !== "channel" && kind !== "user" && kind !== "customers") return undefined
+	if (kind !== "org" && kind !== "channel" && kind !== "user" && kind !== "customers" && kind !== "push") {
+		return undefined
+	}
 	return id.length > 0 ? { kind, id } : undefined
 }
 

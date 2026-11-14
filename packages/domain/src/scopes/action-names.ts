@@ -16,6 +16,7 @@ import type {
 	OrganizationMemberRpcs,
 	OrganizationRpcs,
 	PinnedMessageRpcs,
+	PushDeviceRpcs,
 	RssSubscriptionRpcs,
 	TypingIndicatorRpcs,
 	UserPresenceStatusRpcs,
@@ -49,6 +50,7 @@ export type RpcActionName =
 	| ActionOf<OrganizationMemberRpcs>
 	| ActionOf<OrganizationRpcs>
 	| ActionOf<PinnedMessageRpcs>
+	| ActionOf<PushDeviceRpcs>
 	| ActionOf<RssSubscriptionRpcs>
 	| ActionOf<TypingIndicatorRpcs>
 	| ActionOf<UserPresenceStatusRpcs>

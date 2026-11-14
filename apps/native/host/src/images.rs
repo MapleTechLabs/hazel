@@ -916,7 +916,13 @@ mod tests {
             .unwrap()
             .insert(url.clone(), Fetched::Failed(long_ago), 0, |_| false);
         assert!(remote(&url, 16.0).is_none());
-        assert_ne!(state(), "failed", "fetched again once the delay passed");
+        // Asked for again: pending, or (a missing file fails fast) failed anew, not the old failure.
+        let retried = match REMOTE.lock().unwrap().peek(&url) {
+            Some(Fetched::Failed(at)) => *at > long_ago,
+            Some(Fetched::Pending) => true,
+            _ => false,
+        };
+        assert!(retried, "fetched again once the delay passed");
     }
 
     #[test]

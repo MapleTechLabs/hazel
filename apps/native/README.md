@@ -147,7 +147,8 @@ finishes at the finger's speed, the runtime drawing where it goes while the page
 press on the tab bar never waits on a picture: the bar and the page stay live while the tab draws.
 
 **Live data** (`HAZEL_DATA=live bun run ios`, with `VITE_APP_URL`/`VITE_BACKEND_URL` for a dev
-stack on this Mac) signs in as the Mac app does: the sign-in link opens in the system's sign-in
+stack on this Mac, and `HAZEL_SESSION_TOKEN` from `dev:sign-in` for a PR preview, which has no
+OAuth) signs in as the Mac app does: the sign-in link opens in the system's sign-in
 sheet (`ASWebAuthenticationSession`, `host/ios/src/sign_in.rs`), whose callback goes to the
 runtime as an opened link, and the session lives in the keychain (`hazel_native::sign_in`). The
 simulator's keychain serves only an app with an identifier and access group, which the
@@ -163,6 +164,28 @@ HTML renders show as on the Mac (`host/src/frames.rs`, its UIKit side): each pag
 over its box. A finger on an inline page also reaches Rune's view, so a drag over it scrolls the
 list and a long press opens the message's menu, while a tap presses what is under it in the page; a
 fullscreen page scrolls itself.
+
+**Push notifications** (`host/ios/src/push.rs`, `src/push.ts`). The app asks for notifications
+through the web app's own flow (`host/src/notify.rs`, as on the Mac; Settings > Notifications'
+test asks offline, live asks at start), for alerts, sounds and the badge. Once allowed, and again
+on every launch, it registers with APNs; the token goes to every runtime, which registers it for
+the signed-in user (`pushDevice.register`, with the build's APNs environment and the bundle ID).
+Signing in loads a fresh runtime, which registers it then; signing out forgets it first
+(`web-foldkit/src/platform/push-device.ts`). Offline, nothing is registered. Winit runs
+`UIApplicationMain` without an application delegate, so the app sets its own for APNs's two
+answers. A push shows while the app is away and nothing while it is in front (the app shows its
+own); a tap opens the app at its `hazel.path`, a cold start's first page loads there. Becoming
+active clears the badge. The simulator's executable embeds `aps-environment` `development`
+(`host/ios/build.rs`): an Apple-silicon simulator gets a real sandbox token. A release is signed
+with `production`, which its provisioning profile must grant (the App ID's Push Notifications
+capability; `scripts/ios.ts` stops otherwise). The log has each step (`[push] ...`: the
+permission, the token's first 8 characters, the registration, a tap's path). To try it:
+
+```sh
+xcrun simctl push <udid> sh.hazel.ios payload.json
+# {"aps":{"alert":{"title":"Maki · #engineering","body":"Can you look at the deploy?"},"badge":3},
+#  "hazel":{"path":"/hazel/chat/00000005-0000-4000-8000-000000000002"}}
+```
 
 Not yet on iOS: updates.
 

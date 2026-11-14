@@ -9,6 +9,7 @@ pub mod images;
 pub mod islands;
 pub mod layout;
 mod margins;
+pub mod notify;
 pub mod outbox;
 mod render;
 pub mod shell;
