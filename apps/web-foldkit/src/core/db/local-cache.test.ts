@@ -181,9 +181,21 @@ describe("local cache", () => {
 		expect(reload).toHaveBeenCalledTimes(1)
 	})
 
-	it("forgets nothing while no file is open", async () => {
+	it("deletes the remembered user's file when the session ended before the cache was opened", async () => {
+		persistence.open.mockResolvedValue({ execute: async () => [], close: vi.fn() })
+		files.add(fileA).add(`${fileA}-journal`).add(`hazel-cache-${userB}.sqlite`)
 		const cache = await loadModule()
-		await expect(cache.forgetLocalCache()).resolves.toBe(false)
+		// No page shows the rows: nothing to load again.
+		await expect(cache.forgetLocalCache(userA)).resolves.toBe(false)
+		expect([...files]).toEqual([`hazel-cache-${userB}.sqlite`])
+
+		// A sign-in on the same page opens the cache, and its sign-out deletes it.
+		files.add(fileA)
+		cache.bindLocalCache(userA)
+		await databaseOf().execute("SELECT 1")
+		expect(reload).not.toHaveBeenCalled()
+		await expect(cache.forgetLocalCache()).resolves.toBe(true)
+		expect(files.has(fileA)).toBe(false)
 	})
 
 	it("closes and deletes the user's file when the session ends, and a later sign-in reloads", async () => {

@@ -5,7 +5,8 @@
  *
  * One database file per user. It opens once the user is known (`bindLocalCache`), which with a
  * remembered user (`app/remembered-user.ts`) is before any request, and the persisted collections
- * start syncing only then. It is deleted when the session ends (`forgetLocalCache`).
+ * start syncing only then. It is deleted when the session ends (`forgetLocalCache`). The channels'
+ * last states are kept beside it (`./channel-snapshots.ts`), under the same two calls.
  *
  * One tab per user holds the file (a Web Lock, for as long as the tab lives). Each tab runs its own
  * sync, and two writers could leave a row older than the seq stored for its source, so any other
@@ -21,6 +22,7 @@ import {
 	type PersistedCollectionPersistence,
 } from "@tanstack/browser-db-sqlite-persistence"
 import type { UserId } from "@hazel/schema"
+import { makeAppChannelSnapshots } from "./channel-snapshots"
 import { localCacheHost } from "./local-cache-host"
 
 const FLAG_KEY = "hazel:local-cache"
@@ -35,12 +37,9 @@ const scratchFile = () => `${FILE_PREFIX}tab-${crypto.randomUUID().slice(0, 13)}
 
 const hasOpfs = () => typeof Worker !== "undefined" && typeof navigator.storage?.getDirectory === "function"
 
-const isEnabled = (): boolean => {
+const isOn = (): boolean => {
 	try {
-		return (
-			globalThis.localStorage?.getItem(FLAG_KEY) !== "off" &&
-			(localCacheHost() !== undefined || hasOpfs())
-		)
+		return globalThis.localStorage?.getItem(FLAG_KEY) !== "off"
 	} catch {
 		return false
 	}
@@ -120,17 +119,22 @@ const database = new Promise<BrowserWASQLiteDatabase>((resolve) => {
 })
 
 /** The persistence of the collections kept on disk; `undefined` while the cache is off. */
-export const localCachePersistence: PersistedCollectionPersistence | undefined = isEnabled()
-	? createBrowserWASQLitePersistence({
-			database: { execute: (sql, params) => database.then((db) => db.execute(sql, params)) },
-		})
-	: undefined
+export const localCachePersistence: PersistedCollectionPersistence | undefined =
+	isOn() && (localCacheHost() !== undefined || hasOpfs())
+		? createBrowserWASQLitePersistence({
+				database: { execute: (sql, params) => database.then((db) => db.execute(sql, params)) },
+			})
+		: undefined
+
+/** The channels' kept states (`./channel-snapshots.ts`); `undefined` while the cache is off. */
+export const channelSnapshots = isOn() ? makeAppChannelSnapshots() : undefined
 
 /**
  * Opens `userId`'s cache. A different user later in the same page reloads it: the open
  * collections hold the first user's file, and no row may reach another user.
  */
 export const bindLocalCache = (userId: UserId): void => {
+	channelSnapshots?.bind(userId)
 	if (localCachePersistence === undefined) return
 	if (boundUser !== undefined) {
 		if (boundUser !== userId || isForgotten) window.location.reload()
@@ -155,20 +159,27 @@ export const bindLocalCache = (userId: UserId): void => {
 }
 
 /**
- * The session ended: closes and deletes this tab's file and the bound user's (another tab that
- * holds it deletes it when it learns the same, or the next holder does). Whether a file was open,
- * in which case the collections still hold its rows in memory and the page must load again.
+ * The session ended: deletes what is kept of the bound user, or of `userId` (the remembered user)
+ * when the cache was never opened in this page. A file another tab holds is deleted by that tab
+ * when it learns the same, or by the next tab to hold one. Whether a file was open here, in which
+ * case the collections still hold its rows in memory and the page must load again.
  */
-export const forgetLocalCache = async (): Promise<boolean> => {
-	if (boundUser === undefined || opened === undefined || isForgotten) return false
-	isForgotten = true
-	const userFile = fileOf(boundUser)
+export const forgetLocalCache = async (userId?: UserId): Promise<boolean> => {
+	if (isForgotten) return false
+	await channelSnapshots?.forget(userId)
+	const user = boundUser ?? userId
+	if (localCachePersistence === undefined || user === undefined) return false
 	try {
+		if (opened === undefined) {
+			await removeDatabase(fileOf(user))
+			return false
+		}
+		isForgotten = true
 		const { file, database: db } = await opened
 		await db.close?.()
-		await Promise.all([...new Set([file, userFile])].map(removeDatabase))
+		await Promise.all([...new Set([file, fileOf(user)])].map(removeDatabase))
 	} catch (cause) {
 		console.error("[local-cache] Could not delete the cache", cause)
 	}
-	return true
+	return isForgotten
 }

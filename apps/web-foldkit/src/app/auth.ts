@@ -1,5 +1,4 @@
 import { Effect, Schedule, Schema } from "effect"
-import { forgetLocalCache } from "~/db/local-cache"
 import { closeSync } from "~/db/sync-manager"
 import { clearAccessToken } from "~/lib/access-token"
 import { CommonReason, reasonOfUnknown } from "~/lib/error-messages"
@@ -8,7 +7,7 @@ import { desktopAuthClient } from "../platform/desktop"
 import { runDesktopAuth } from "../platform/desktop-auth"
 import { unregisterPushDevice } from "../platform/push-device"
 import type { SessionAnswer } from "./message"
-import { forgetRememberedSession, forgetUser } from "./remembered-user"
+import { clearRememberedSession, forgetRememberedSession } from "./remembered-user"
 
 /**
  * The Hazel session, read from the API. In a browser it is an HttpOnly cookie on the API host
@@ -77,6 +76,5 @@ export const signOut: Effect.Effect<void, SignOutError, HazelAuthClient> = Effec
 		closeSync()
 		clearAccessToken()
 	})
-	yield* forgetUser
-	yield* Effect.promise(forgetLocalCache)
+	yield* clearRememberedSession
 }).pipe(Effect.mapError((cause) => new SignOutError({ reason: reasonOfUnknown(cause) })))

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { CurrentUser } from "../session"
 import { loadRememberedUser, makeRememberedSession, REMEMBERED_USER_KEY } from "./remembered-user"
 
-const forget = vi.fn<() => Promise<boolean>>()
+const forget = vi.fn<(userId?: UserId) => Promise<boolean>>()
 const reload = vi.fn()
 const { forget: forgetRememberedSession, settle: settleRememberedUser } = makeRememberedSession({
 	forget,
@@ -60,7 +60,8 @@ describe("the remembered user", () => {
 		forget.mockResolvedValue(true)
 		const fiber = await run(settleRememberedUser(grace))
 		expect(await remembered()).toEqual(grace)
-		expect(forget).toHaveBeenCalledTimes(1)
+		// Ada's rows, whether or not this page had opened them.
+		expect(forget.mock.calls).toEqual([[ada.id]])
 		expect(reload).toHaveBeenCalledTimes(1)
 		// Nothing after the reload runs: no message for a page that is going away.
 		expect(fiber.pollUnsafe()).toBeUndefined()
@@ -78,7 +79,7 @@ describe("the remembered user", () => {
 		await run(settleRememberedUser(ada))
 		await run(forgetRememberedSession)
 		expect(await remembered()).toBeNull()
-		expect(forget).toHaveBeenCalledTimes(1)
+		expect(forget.mock.calls).toEqual([[ada.id]])
 		expect(reload).not.toHaveBeenCalled()
 
 		forget.mockResolvedValue(true)
