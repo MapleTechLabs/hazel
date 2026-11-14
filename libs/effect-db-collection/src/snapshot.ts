@@ -51,11 +51,12 @@ export class SourceRecorder {
 
 	constructor(private readonly keepsTable: (table: string) => boolean) {}
 
-	/** Applies `run`; whether the held state changed. */
+	/** Applies `run`; whether the held rows changed (a run of tables that are not kept changes none). */
 	apply(run: SyncRun): boolean {
 		if (run.page) return false
 		// A catch-up with no snapshot before it has nothing to build on.
 		if (!run.reset && this.seq === undefined) return false
+		let changed = run.reset
 		if (run.reset) {
 			this.tables.clear()
 			this.unkeyed.clear()
@@ -78,11 +79,12 @@ export class SourceRecorder {
 				}
 				if (!held.has(id) && isBelowWindow(window, cursorOfWire(row))) continue
 				held.set(id, row)
+				changed = true
 			}
-			for (const key of rows.deletes) held.delete(key)
+			for (const key of rows.deletes) changed = held.delete(key) || changed
 		}
 		this.seq = run.seq
-		return true
+		return changed
 	}
 
 	/** The held state; `undefined` before the source's first snapshot. */

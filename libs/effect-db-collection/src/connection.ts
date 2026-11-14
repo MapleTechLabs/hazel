@@ -334,6 +334,24 @@ export class SyncConnection {
 		})
 	}
 
+	/**
+	 * Resolves once the source itself has answered: `undefined` when its snapshot is in (or it
+	 * closed), the error when stopped for good. Rows kept from an earlier load (`prime`) do not
+	 * count: they cannot hold what arrived since.
+	 */
+	whenDelivered(): Promise<SyncSourceTerminalError | undefined> {
+		const isDelivered = () =>
+			this.hasSnapshot || this.terminalError !== undefined || this.currentStatus.state === "closed"
+		if (isDelivered()) return Promise.resolve(this.terminalError)
+		return new Promise((resolve) => {
+			const unsubscribe = this.subscribeStatus(() => {
+				if (!isDelivered()) return
+				unsubscribe()
+				resolve(this.terminalError)
+			})
+		})
+	}
+
 	/** Resolves once settled: `undefined` when ready (or closed), the error when stopped for good. */
 	whenSettled(): Promise<SyncSourceTerminalError | undefined> {
 		if (this.isSettled) return Promise.resolve(this.terminalError)

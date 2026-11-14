@@ -197,6 +197,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 	private markLossy(sources: Iterable<SourceKey>): void {
 		for (const source of sources) {
 			this.lossy.add(source)
+			this.restoredSeqs.delete(source)
 			if (this.seqs.delete(source)) this.markSeqDirty(source)
 		}
 	}
@@ -349,6 +350,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 	dropSource(source: SourceKey): void {
 		this.delivered.delete(source)
 		this.restoredSources.delete(source)
+		this.restoredSeqs.delete(source)
 		this.applyRows(source, true, undefined, undefined)
 		if (this.seqs.delete(source)) this.markSeqDirty(source)
 	}

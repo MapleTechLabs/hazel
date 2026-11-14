@@ -90,6 +90,8 @@ export interface SyncLease {
 export interface SyncRetention {
 	/** Resolves once every source is settled, with the first refusal if any source was refused. */
 	readonly settled: Promise<SyncSourceTerminalError | undefined>
+	/** Like `settled`, but only once every source's own snapshot is in (not a kept state shown for it). */
+	readonly delivered: Promise<SyncSourceTerminalError | undefined>
 	readonly isSettled: () => boolean
 	release(): void
 }
@@ -164,11 +166,14 @@ export class SyncHub {
 	/** Takes leases on all `sources`; see {@link SyncRetention}. */
 	retain(sources: Iterable<SourceKey>): SyncRetention {
 		const leases = [...new Set(sources)].map((source) => this.acquireKey(source))
-		const settled = Promise.all(leases.map((lease) => lease.connection.whenSettled())).then((errors) =>
-			errors.find((error) => error !== undefined),
-		)
+		const firstError = (errors: ReadonlyArray<SyncSourceTerminalError | undefined>) =>
+			errors.find((error) => error !== undefined)
+		const settled = Promise.all(leases.map((lease) => lease.connection.whenSettled())).then(firstError)
 		return {
 			settled,
+			get delivered() {
+				return Promise.all(leases.map((lease) => lease.connection.whenDelivered())).then(firstError)
+			},
 			isSettled: () => leases.every((lease) => lease.connection.isSettled),
 			release: () => {
 				for (const lease of leases) lease.release()
@@ -480,8 +485,9 @@ export class SyncHub {
 }
 
 /**
- * Holds `sources` open for the enclosing scope and waits until each is settled; fails with the
- * first refusal (4003, 4004).
+ * Holds `sources` open for the enclosing scope and waits until each has delivered its own
+ * snapshot (a kept state shown meanwhile is not enough: the caller wants what arrived since);
+ * fails with the first refusal (4003, 4004).
  */
 export const ensureSources = (
 	hub: SyncHub,
@@ -491,6 +497,6 @@ export const ensureSources = (
 		Effect.sync(() => hub.retain(sources)),
 		(retention) => Effect.sync(() => retention.release()),
 	).pipe(
-		Effect.flatMap((retention) => Effect.promise(() => retention.settled)),
+		Effect.flatMap((retention) => Effect.promise(() => retention.delivered)),
 		Effect.flatMap((error) => (error === undefined ? Effect.void : Effect.fail(error))),
 	)

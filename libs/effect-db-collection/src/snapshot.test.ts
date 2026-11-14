@@ -122,6 +122,16 @@ describe("SourceRecorder", () => {
 		expect(contentsOf(recording.snapshot())).toEqual(["m10", "m9", "m8", "pinned, edited"])
 	})
 
+	it("reports no change for a run of tables it does not keep, or of rows it does not hold", () => {
+		const recording = recorder()
+		recording.apply(run(5, { messages: { upserts: [message(1)] } }, { reset: true }))
+		expect(recording.apply(run(6, { typing_indicators: { upserts: [{ id: "t1" }] } }))).toBe(false)
+		expect(recording.apply(run(7, { messages: { deletes: ["unknown"] } }))).toBe(false)
+		expect(recording.apply(run(8, { messages: { deletes: [message(1).id] } }))).toBe(true)
+		// The seq still follows the stream.
+		expect(recording.snapshot()?.seq).toBe(8)
+	})
+
 	it("keeps only the tables it is told to, and none whose rows have no id", () => {
 		const recording = recorder()
 		recording.apply(
@@ -242,6 +252,24 @@ describe("kept source states", () => {
 		expect(contents(live)).toEqual(["edited", "m3", "m4"])
 		// The source asked for a snapshot: a kept state is shown, never resumed from.
 		expect(stream.sent.find((frame) => frame._tag === "Hello")).toMatchObject({ since: null })
+	})
+
+	it("still makes a caller that needs the source's own snapshot wait for it", async () => {
+		const { store } = memoryStore({ [SOURCE]: keptState(range(3, 1)) })
+		const { hub, live, socket } = setup(store)
+		await live.preload()
+		const retention = hub.retain([SOURCE])
+		// Shown from the kept state: settled, but the source has not delivered.
+		expect(retention.isSettled()).toBe(true)
+		let delivered = false
+		void retention.delivered.then(() => {
+			delivered = true
+		})
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(delivered).toBe(false)
+		deliver(await socket(), 9, [message(4)])
+		await vi.waitFor(() => expect(delivered).toBe(true))
+		retention.release()
 	})
 
 	it("does not show a kept state over what the source already delivered", async () => {
