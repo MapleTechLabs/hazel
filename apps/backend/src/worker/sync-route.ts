@@ -19,7 +19,8 @@
  * `GET /sync/mux` carries every source of a client over one socket (`hazel.mux.v1, <token>`): the
  * client opens each source with its own token, and the route opens that object's socket the same
  * way and relays its frames (`@hazel/sync-do` `mux.ts`). A browser opens WebSockets to a host one handshake
- * at a time, so a socket per source costs a load one round of handshakes per source.
+ * at a time, so a socket per source costs a load one round of handshakes per source. A token is
+ * verified once per socket, not once per source opened with it.
  *
  * `POST /sync/warm?org=<id>&channel=<id>` (each up to 8 times) wakes the objects a load is about
  * to open, so a cold one starts while the web app's script still loads (`index.html`): the
@@ -33,9 +34,10 @@
  */
 import { SYNC_MUX_SUBPROTOCOL, SYNC_SUBPROTOCOL, SyncCloseCode, type SyncMuxOpen } from "@hazel/domain/sync"
 import { type MuxOpenResult, refuseMuxStream, startMuxSession, toHttpServerResponse } from "@hazel/sync-do"
-import { type Context, Effect, Option, Schema } from "effect"
+import { AccessToken } from "@hazel/auth/server"
+import { Clock, type Context, Effect, Option, Schema } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse, HttpTraceContext } from "effect/http"
-import { HazelSession } from "../services/hazel-session"
+import { HazelSession, type VerifiedUser } from "../services/hazel-session"
 import { ChannelId, OrganizationId, type UserId } from "@hazel/schema"
 import type { Socket } from "effect/socket"
 import { type ChannelIndexRow, Directory } from "../services/directory"
@@ -59,6 +61,12 @@ export const UNAVAILABLE = 1011
 
 /** `POST /sync/warm` reads this many `org` and `channel` parameters each; the rest are ignored. */
 const WARM_IDS_MAX = 8
+
+/**
+ * How long a mux socket reuses a verified token: an access token's lifetime. A session credential
+ * is valid far longer, and is checked again as often as a token would be re-minted.
+ */
+const TOKEN_REUSE_MS = AccessToken.lifetimeSeconds * 1000
 
 /** The object's `fetch` failed (overloaded, reset, unreachable). */
 class SyncForwardError extends Schema.TaggedError<SyncForwardError>()("SyncForwardError", {
@@ -138,6 +146,47 @@ export const verifySocketToken = (session: Context.Service.Shape<typeof HazelSes
 				),
 		}),
 	)
+
+type SocketTokenCheck = Effect.Success<ReturnType<typeof verifySocketToken>>
+
+/**
+ * One mux socket's token checks. A token string is verified once (the session's user is a D1
+ * read), then reused by every stream opened with it until it expires or `TOKEN_REUSE_MS` passed;
+ * streams opened together with an unseen token share its one check.
+ */
+const makeSocketTokens = (session: Context.Service.Shape<typeof HazelSession>) => {
+	const verified = new Map<string, { readonly user: VerifiedUser; readonly until: number }>()
+	const inFlight = new Map<string, Effect.Effect<SocketTokenCheck>>()
+	return (token: string): Effect.Effect<SocketTokenCheck> =>
+		Effect.gen(function* () {
+			const now = yield* Clock.currentTimeMillis
+			const known = verified.get(token)
+			if (known !== undefined && now < known.until) {
+				return { _tag: "Checked", user: Option.some(known.user) } as const
+			}
+			// Tokens rotate on a long-lived socket: drop the ones that are over.
+			for (const [key, entry] of verified) if (now >= entry.until) verified.delete(key)
+			const running = inFlight.get(token)
+			if (running !== undefined) return yield* running
+			const check = yield* Effect.cached(
+				verifySocketToken(session, token).pipe(
+					Effect.tap((checked) =>
+						Effect.sync(() => {
+							if (checked._tag !== "Checked" || Option.isNone(checked.user)) return
+							const user = checked.user.value
+							verified.set(token, {
+								user,
+								until: Math.min(user.expiresAt, now + TOKEN_REUSE_MS),
+							})
+						}),
+					),
+					Effect.ensuring(Effect.sync(() => void inFlight.delete(token))),
+				),
+			)
+			inFlight.set(token, check)
+			return yield* check
+		})
+}
 
 export const pathOf = (url: string) => {
 	const path = url.startsWith("/") ? url : new URL(url).pathname
@@ -302,12 +351,17 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 				})
 
 			/**
-			 * The object a socket for `kind`/`id` opens with `token`, and the principal headers it gets;
-			 * or the close code the client gets instead.
+			 * The object a socket for `kind`/`id` opens with `token` (checked by `verify`), and the
+			 * principal headers it gets; or the close code the client gets instead.
 			 */
-			const socketTarget = (kind: ObjectKind, id: string, token: string) =>
+			const socketTarget = (
+				kind: ObjectKind,
+				id: string,
+				token: string,
+				verify: (token: string) => Effect.Effect<SocketTokenCheck>,
+			) =>
 				Effect.gen(function* () {
-					const verified = yield* verifySocketToken(session, token)
+					const verified = yield* verify(token)
 					if (verified._tag === "Unavailable") return refusedTarget(UNAVAILABLE, "unavailable")
 					if (Option.isNone(verified.user))
 						return refusedTarget(SyncCloseCode.Reauth, "invalid_token")
@@ -372,45 +426,47 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 				}).pipe(Effect.withSpan("SyncRoute.forward", { kind: "client", attributes: target.span }))
 
 			/** One stream of a `/sync/mux` socket: its source object's socket, accepted here for the relay. */
-			const openMuxStream = (userId: UserId) => (stream: typeof SyncMuxOpen.Type) =>
-				Effect.gen(function* () {
-					const { kind, sourceId: id, token } = stream
-					const target = yield* socketTarget(kind, id, token)
-					if (target._tag === "Refused") return refuseMuxStream(target.code, target.reason)
-					// One socket is one user's: a source cannot be opened with someone else's token.
-					if (target.userId !== userId)
-						return refuseMuxStream(SyncCloseCode.Forbidden, "wrong_user")
-					const response = yield* forward(
-						target,
-						new Request(`https://object/sync/${kind}/${encodeURIComponent(id)}`, {
-							headers: { upgrade: "websocket", "sec-websocket-protocol": SYNC_SUBPROTOCOL },
+			const openMuxStream =
+				(userId: UserId, verify: (token: string) => Effect.Effect<SocketTokenCheck>) =>
+				(stream: typeof SyncMuxOpen.Type) =>
+					Effect.gen(function* () {
+						const { kind, sourceId: id, token } = stream
+						const target = yield* socketTarget(kind, id, token, verify)
+						if (target._tag === "Refused") return refuseMuxStream(target.code, target.reason)
+						// One socket is one user's: a source cannot be opened with someone else's token.
+						if (target.userId !== userId)
+							return refuseMuxStream(SyncCloseCode.Forbidden, "wrong_user")
+						const response = yield* forward(
+							target,
+							new Request(`https://object/sync/${kind}/${encodeURIComponent(id)}`, {
+								headers: { upgrade: "websocket", "sec-websocket-protocol": SYNC_SUBPROTOCOL },
+							}),
+						)
+						const socket = (
+							response as Response & {
+								webSocket?: (WorkerdSocket & Socket.WebSocketLike) | null
+							}
+						).webSocket
+						if (socket === undefined || socket === null) {
+							yield* Effect.logError("Sync object answered without a socket", {
+								source: `${kind}:${id}`,
+								status: response.status,
+							})
+							return refuseMuxStream(UNAVAILABLE, "unavailable")
+						}
+						socket.accept()
+						return { _tag: "Opened", socket } satisfies MuxOpenResult as MuxOpenResult
+					}).pipe(
+						Effect.catchTag("SyncForwardError", (error) =>
+							Effect.logError("Sync upgrade could not reach the object", {
+								objectId: error.objectId,
+								cause: String(error.cause),
+							}).pipe(Effect.as(refuseMuxStream(UNAVAILABLE, "unavailable"))),
+						),
+						Effect.withSpan("SyncMux.open", {
+							attributes: { "sync.source": `${stream.kind}:${stream.sourceId}` },
 						}),
 					)
-					const socket = (
-						response as Response & {
-							webSocket?: (WorkerdSocket & Socket.WebSocketLike) | null
-						}
-					).webSocket
-					if (socket === undefined || socket === null) {
-						yield* Effect.logError("Sync object answered without a socket", {
-							source: `${kind}:${id}`,
-							status: response.status,
-						})
-						return refuseMuxStream(UNAVAILABLE, "unavailable")
-					}
-					socket.accept()
-					return { _tag: "Opened", socket } satisfies MuxOpenResult as MuxOpenResult
-				}).pipe(
-					Effect.catchTag("SyncForwardError", (error) =>
-						Effect.logError("Sync upgrade could not reach the object", {
-							objectId: error.objectId,
-							cause: String(error.cause),
-						}).pipe(Effect.as(refuseMuxStream(UNAVAILABLE, "unavailable"))),
-					),
-					Effect.withSpan("SyncMux.open", {
-						attributes: { "sync.source": `${stream.kind}:${stream.sourceId}` },
-					}),
-				)
 
 			yield* router.add(
 				"GET",
@@ -427,8 +483,10 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 					if (token === undefined) {
 						return acceptAndClose(SyncCloseCode.Reauth, "missing_token", SYNC_MUX_SUBPROTOCOL)
 					}
-					// The socket's token only says whose it is; each source is opened with its own.
-					const verified = yield* verifySocketToken(session, token)
+					// The socket's token only says whose it is; each source is opened with its own,
+					// most often this same one, which is then not checked again.
+					const verify = makeSocketTokens(session)
+					const verified = yield* verify(token)
 					if (verified._tag === "Unavailable") {
 						return acceptAndClose(UNAVAILABLE, "unavailable", SYNC_MUX_SUBPROTOCOL)
 					}
@@ -438,7 +496,7 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 					const pair = makePair()
 					const server = pair[1] as WorkerdSocket & Socket.WebSocketLike
 					server.accept()
-					yield* startMuxSession(server, openMuxStream(verified.user.value.user.id))
+					yield* startMuxSession(server, openMuxStream(verified.user.value.user.id, verify))
 					return toHttpServerResponse(
 						new Response(null, {
 							status: 101,
@@ -466,7 +524,9 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 					const token = tokenFromProtocols(request.headers["sec-websocket-protocol"])
 					if (token === undefined) return acceptAndClose(SyncCloseCode.Reauth, "missing_token")
 
-					const target = yield* socketTarget(kind, id, token)
+					const target = yield* socketTarget(kind, id, token, (value) =>
+						verifySocketToken(session, value),
+					)
 					if (target._tag === "Refused") return acceptAndClose(target.code, target.reason)
 
 					const web = yield* HttpServerRequest.toWeb(request).pipe(

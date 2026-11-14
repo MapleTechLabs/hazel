@@ -1,7 +1,8 @@
 /**
  * `GET /sync/:kind/:id`: what the route forwards (the principal's expiry) and how it closes a
  * socket it cannot serve (4001 for a bad token, 1011 for everything that is not the token's fault).
- * `POST /sync/warm`: who may ask, and which objects it wakes.
+ * `GET /sync/mux`: how often a socket's tokens are verified. `POST /sync/warm`: who may ask, and
+ * which objects it wakes.
  */
 import { Database } from "@hazel/db"
 import { CurrentUser, InvalidBearerTokenError, SessionLoadError } from "@hazel/domain"
@@ -242,6 +243,111 @@ describe("multiplexed sync socket", () => {
 		})
 		await send.mux(`${SYNC_MUX_SUBPROTOCOL}, ${jwt}`)
 		expect(closed).toEqual([{ code: 1011, reason: "unavailable" }])
+	})
+
+	it("verifies a token once per socket, however many sources it opens", async () => {
+		const verified: Array<string> = []
+		const { forwarded, namespace } = recordingNamespace()
+		const send = build({
+			verify: (token) => {
+				verified.push(token)
+				return Effect.succeed(Option.some({ user, expiresAt: Date.now() + 300_000 }))
+			},
+			env: { OrgObject: namespace, UserObject: namespace },
+		})
+		const mux = await send.openMux()
+		mux.open(1, "org:org-1")
+		mux.open(2, `user:${userId}`)
+		mux.open(3, "org:org-2")
+		await flush()
+		expect(forwarded).toHaveLength(3)
+		expect(verified).toEqual([jwt])
+		expect(mux.controls()).toEqual([
+			{ _tag: "Opened", id: 1 },
+			{ _tag: "Opened", id: 2 },
+			{ _tag: "Opened", id: 3 },
+		])
+
+		// A second socket checks its token itself.
+		await send.openMux()
+		expect(verified).toEqual([jwt, jwt])
+	})
+
+	it("checks a token the socket has not seen once, for the streams opened together with it", async () => {
+		const verified: Array<string> = []
+		const { forwarded, namespace } = recordingNamespace()
+		const send = build({
+			verify: (token) => {
+				verified.push(token)
+				return Effect.as(
+					Effect.promise(() => flush()),
+					Option.some({ user, expiresAt: Date.now() + 300_000 }),
+				)
+			},
+			env: { OrgObject: namespace },
+		})
+		const mux = await send.openMux()
+		const fresh = "fresh.access.token"
+		mux.open(1, "org:org-1", fresh)
+		mux.open(2, "org:org-2", fresh)
+		await flush()
+		await flush()
+		expect(forwarded).toHaveLength(2)
+		expect(verified).toEqual([jwt, fresh])
+	})
+
+	it("checks an expired token again, and never caches a refused one", async () => {
+		let valid = true
+		const verified: Array<string> = []
+		const { forwarded, namespace } = recordingNamespace()
+		const send = build({
+			verify: (token) => {
+				verified.push(token)
+				// Already past its expiry when verified (inside the verifier's clock tolerance).
+				return Effect.succeed(
+					valid ? Option.some({ user, expiresAt: Date.now() - 1 }) : Option.none(),
+				)
+			},
+			env: { OrgObject: namespace },
+		})
+		const mux = await send.openMux()
+		mux.open(1, "org:org-1")
+		await flush()
+		expect(verified).toEqual([jwt, jwt])
+		expect(forwarded).toHaveLength(1)
+
+		valid = false
+		mux.open(2, "org:org-2")
+		mux.open(3, "org:org-3")
+		await flush()
+		expect(forwarded).toHaveLength(1)
+		expect(verified).toHaveLength(4)
+		expect(mux.controls().slice(1)).toEqual([
+			{ _tag: "Closed", id: 2, code: SyncCloseCode.Reauth, reason: "invalid_token" },
+			{ _tag: "Closed", id: 3, code: SyncCloseCode.Reauth, reason: "invalid_token" },
+		])
+	})
+
+	it("refuses a stream opened with another user's token", async () => {
+		const other = new CurrentUser.Schema({ ...user, id: crypto.randomUUID() as UserId })
+		const { forwarded, namespace } = recordingNamespace()
+		const send = build({
+			verify: (token) =>
+				Effect.succeed(
+					Option.some({ user: token === jwt ? user : other, expiresAt: Date.now() + 300_000 }),
+				),
+			env: { OrgObject: namespace },
+		})
+		const mux = await send.openMux()
+		mux.open(1, "org:org-1", "someone.elses.token")
+		// Asked twice: the cached check refuses it the same way.
+		mux.open(2, "org:org-1", "someone.elses.token")
+		await flush()
+		expect(forwarded).toEqual([])
+		expect(mux.controls()).toEqual([
+			{ _tag: "Closed", id: 1, code: SyncCloseCode.Forbidden, reason: "wrong_user" },
+			{ _tag: "Closed", id: 2, code: SyncCloseCode.Forbidden, reason: "wrong_user" },
+		])
 	})
 
 	it("forwards each stream's span to its object as traceparent", async () => {
