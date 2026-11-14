@@ -178,8 +178,13 @@ export const bindLocalCache = (userId: UserId): void => {
 	opened = openFor(userId).catch((cause: unknown) => {
 		// The persisted collections cannot run without their file: turn the cache off and start over.
 		console.error("[local-cache] Could not open the cache; turning it off", cause)
-		if (turnOffAfterFailure()) window.location.reload()
-		return new Promise<never>(() => {})
+		if (turnOffAfterFailure()) {
+			window.location.reload()
+			return new Promise<never>(() => {})
+		}
+		// Not recorded, so a reload would only fail again: the collections fail, and sign-out still
+		// gets past this file.
+		throw cause
 	})
 	resolveDatabase(opened.then((cache) => cache.database))
 }

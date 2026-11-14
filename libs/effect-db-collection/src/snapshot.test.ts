@@ -298,6 +298,22 @@ describe("kept source states", () => {
 		await vi.waitFor(() => expect(kept.has(SOURCE)).toBe(false))
 	})
 
+	it("does not show a kept state read after the source refused the user", async () => {
+		const { store } = memoryStore()
+		let release: (snapshot: SourceSnapshot | undefined) => void = () => {}
+		const slow: SourceSnapshotStore = {
+			...store,
+			read: () => new Promise((resolve) => void (release = resolve)),
+		}
+		const { live, socket } = setup(slow)
+		void live.preload()
+		;(await socket()).serverClose(4003)
+		await vi.waitFor(() => expect(live.status).toBe("ready"))
+		release(keptState(range(3, 1)))
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(contents(live)).toEqual([])
+	})
+
 	it("keeps nothing of a source the store does not name", async () => {
 		vi.useFakeTimers()
 		const { store, kept } = memoryStore()

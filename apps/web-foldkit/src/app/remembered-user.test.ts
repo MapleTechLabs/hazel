@@ -82,6 +82,14 @@ describe("the remembered user", () => {
 		await Effect.runPromise(Fiber.interrupt(fiber))
 	})
 
+	it("remembers nobody from a user.me that answers after the session ended", async () => {
+		const session = makeRememberedSession({ forget, reload })
+		await run(session.settle(ada))
+		await run(session.forget)
+		await run(session.settle(ada))
+		expect(await remembered()).toBeNull()
+	})
+
 	it("needs no new page for another user while no cache was open", async () => {
 		await run(settleRememberedUser(ada))
 		await run(settleRememberedUser(grace))

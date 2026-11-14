@@ -63,9 +63,11 @@ export const makeBunLocalCache = (directory: string | undefined): LocalCacheHost
 				execute: async <TRow>(sql: string, params: ReadonlyArray<unknown> = []) => {
 					const rows: Array<Record<string, unknown>> = []
 					const values = params.map(toBindable)
-					for (const [index, statementSql] of splitStatements(sql).entries()) {
-						if (index > 0 && values.length > 0)
-							throw new Error("Parameters bind to a single SQL statement only")
+					const statements = splitStatements(sql)
+					// Checked before anything runs: a refused script must leave the database as it was.
+					if (statements.length > 1 && values.length > 0)
+						throw new Error("Parameters bind to a single SQL statement only")
+					for (const statementSql of statements) {
 						const statement = db.prepare(statementSql)
 						try {
 							for (const row of statement.all(...values) as Array<Record<string, unknown>>) {

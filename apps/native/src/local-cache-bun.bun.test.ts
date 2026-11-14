@@ -80,6 +80,12 @@ describe("the Bun local cache host", () => {
 		// Rows of every statement come back, as the OPFS worker gathers them.
 		expect(await db.execute("SELECT 1 AS a; SELECT 2 AS b")).toEqual([{ a: 1 }, { b: 2 }])
 		await expect(db.execute("SELECT ? AS a; SELECT ? AS b", [1])).rejects.toThrow("single SQL statement")
+		// Refused before anything ran: the first statement did not insert.
+		const before = await db.execute("SELECT count(*) AS n FROM log")
+		await expect(db.execute("INSERT INTO log (line) VALUES (?); SELECT 1", ["refused"])).rejects.toThrow(
+			"single SQL statement",
+		)
+		expect(await db.execute("SELECT count(*) AS n FROM log")).toEqual(before)
 		await expect(db.execute("SELECT * FROM missing")).rejects.toThrow("no such table")
 		await db.close?.()
 	})

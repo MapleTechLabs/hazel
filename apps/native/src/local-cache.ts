@@ -49,6 +49,8 @@ export const splitStatements = (sql: string): Array<string> => {
 	/** The words of the statement so far, lowercased: the first four, and the latest. */
 	let words: Array<string> = []
 	let lastWord = ""
+	/** `CASE` expressions open in a trigger's body: their `END` does not end the trigger. */
+	let caseDepth = 0
 	let hasToken = false
 	const isTrigger = () => {
 		const [first, second, third] = words
@@ -60,6 +62,7 @@ export const splitStatements = (sql: string): Array<string> => {
 		start = at + 1
 		words = []
 		lastWord = ""
+		caseDepth = 0
 		hasToken = false
 	}
 	let at = 0
@@ -100,6 +103,12 @@ export const splitStatements = (sql: string): Array<string> => {
 			while (cursor < sql.length && isWordChar(sql.charAt(cursor))) cursor++
 			lastWord = sql.slice(at, cursor).toLowerCase()
 			if (words.length < 3) words.push(lastWord)
+			if (lastWord === "case") caseDepth++
+			else if (lastWord === "end" && caseDepth > 0) {
+				// A `CASE`'s own `END`: not the one that ends a trigger.
+				caseDepth--
+				lastWord = "end case"
+			}
 			hasToken = true
 			at = cursor
 		} else {

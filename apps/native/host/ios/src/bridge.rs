@@ -361,10 +361,11 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
         let saved = crate::storage::data_dir()
             .ok_or_else(|| "the app has no folder for its data".to_string())
             .and_then(|dir| crate::storage::save(&dir, &entries));
-        match saved {
-            Ok(()) => STORAGE.set(Some(entries)),
-            Err(error) => log(&format!("[host] localStorage was not saved: {error}")),
+        if let Err(error) = saved {
+            log(&format!("[host] localStorage was not saved: {error}"));
         }
+        // The latest entries either way: a reload in this launch must not go back to older ones.
+        STORAGE.set(Some(entries));
     } else if let Some(text) = field("copy") {
         unsafe { UIPasteboard::generalPasteboard().setString(Some(&NSString::from_str(&text))) };
     } else if body.objectForKey(ns_string!("haptic")).is_some() {

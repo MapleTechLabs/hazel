@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, test } from "vitest"
+import { beforeAll, describe, expect, test } from "vitest"
 import { AppRoute } from "../route"
 import { makeShared } from "../test/pages-fixtures"
 import * as Lazy from "./lazy"
@@ -27,13 +27,15 @@ describe("a route of an area", () => {
 		expect(opened.slot).toMatchObject({ _tag: "CustomersOverview", instance: 4 })
 	})
 
-	test("opens at once when the area is loaded", () => {
+	test("opens at once when the area is loaded", async () => {
+		await loadPages()
 		expect(enterRoute(null, overview, shared, 5).slot?._tag).toBe("CustomersOverview")
 	})
 })
 
 describe("the areas", () => {
-	// Read in the tests: the areas load in the test above.
+	// Each loads them itself, so a test run alone still checks every page.
+	beforeAll(loadPages)
 	const loadedAreas = () => areas.map((area) => ({ area, pages: area.pages() ?? [] }))
 
 	test("are all loaded by loadPages", () => {

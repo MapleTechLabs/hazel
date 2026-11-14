@@ -184,8 +184,11 @@ describe("local cache", () => {
 			},
 		})
 		cache.bindLocalCache(userA)
-		await vi.waitFor(() => expect(console.error).toHaveBeenCalled())
+		// The collections' statements fail instead of waiting forever.
+		await expect(databaseOf().execute("SELECT 1")).rejects.toThrow("OPFS unavailable")
 		expect(reload).not.toHaveBeenCalled()
+		// And the session can still end.
+		await expect(cache.forgetLocalCache()).resolves.toBe(true)
 	})
 
 	it("reloads a page restored from the back/forward cache: its database connection is gone", async () => {

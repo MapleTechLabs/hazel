@@ -97,8 +97,9 @@ const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
 					: Stream.empty,
 		},
 	),
-	// Another tab learned the session ended and forgot the remembered user: this one checks too,
-	// and deletes the cache it holds (which the other tab could not).
+	// Another tab learned the session ended (or changed hands) and forgot the remembered user: this
+	// one checks the session, and deletes the cache it holds (which the other tab could not), and
+	// asks whose it is now (`user.me` starts over as someone else).
 	sessionEndedElsewhere: entry(
 		{ isSignedIn: Schema.Boolean },
 		{
@@ -109,7 +110,9 @@ const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
 							Stream.filter(
 								(event) => event.key === REMEMBERED_USER_KEY && event.newValue === null,
 							),
-							Stream.map(() => Message.RejectedSession()),
+							Stream.flatMap(() =>
+								Stream.make(Message.RejectedSession(), Message.PressedRetryCurrentUser()),
+							),
 						)
 					: Stream.empty,
 		},

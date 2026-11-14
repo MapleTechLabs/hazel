@@ -246,7 +246,10 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 	}
 
 	applyRun(source: SourceKey, reset: boolean, rows: SyncRunTable | undefined, info?: SyncRunInfo): void {
-		if (reset) {
+		if (reset && info?.kept === true) {
+			// Older than the stream: a persisted collection must not resume past what replaced its rows.
+			this.markLossy([source])
+		} else if (reset) {
 			this.delivered.add(source)
 			this.restoredSources.delete(source)
 			this.lossy.delete(source)

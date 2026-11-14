@@ -45,6 +45,14 @@ describe("splitStatements", () => {
 })
 
 describe("toBindable", () => {
+	it("does not take a CASE expression's END for the trigger's", () => {
+		const trigger = `CREATE TRIGGER tr AFTER INSERT ON t BEGIN
+  SELECT CASE WHEN 1 THEN CASE WHEN 2 THEN 3 END ELSE 4 END;
+  SELECT 3;
+END`
+		expect(splitStatements(`${trigger}; SELECT 1`)).toEqual([trigger, " SELECT 1"])
+	})
+
 	it("converts parameters as the OPFS worker does", () => {
 		expect(toBindable(undefined)).toBe(null)
 		expect(toBindable(null)).toBe(null)

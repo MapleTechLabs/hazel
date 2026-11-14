@@ -61,6 +61,8 @@ export interface SyncRunInfo {
 	readonly window?: SyncWindow | undefined
 	/** The run answers a `LoadOlder`. */
 	readonly page?: boolean
+	/** The rows are a source's kept state from an earlier load (`./snapshot.ts`), not its stream. */
+	readonly kept?: boolean
 }
 
 export interface SyncTableSink {
@@ -332,7 +334,14 @@ export class SyncHub {
 		}
 		this.entries.set(source, entry)
 		const showKept = (snapshot: SourceSnapshot | undefined) => {
-			if (snapshot === undefined || hasDelivered || this.entries.get(source) !== entry) return
+			// Nor over a source that refused the user while the state was read.
+			if (
+				snapshot === undefined ||
+				hasDelivered ||
+				connection.error !== undefined ||
+				this.entries.get(source) !== entry
+			)
+				return
 			const windows = new Map(snapshot.windows.map((window) => [window.table, window]))
 			for (const set of this.sinks.values()) {
 				for (const sink of set) {
@@ -342,7 +351,7 @@ export class SyncHub {
 						source,
 						true,
 						upserts === undefined ? undefined : { upserts, deletes: [] },
-						{ window: windows.get(sink.table), page: false },
+						{ window: windows.get(sink.table), page: false, kept: true },
 					)
 				}
 			}

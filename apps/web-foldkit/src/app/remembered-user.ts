@@ -28,9 +28,12 @@ export interface RememberedCache {
 }
 
 export const makeRememberedSession = (cache: RememberedCache) => {
+	/** The session ended in this page: a `user.me` that answers late must not remember anyone. */
+	let hasEnded = false
 	const startOver = Effect.sync(cache.reload).pipe(Effect.andThen(Effect.never))
 	/** Forgets the remembered user and deletes their cached rows; whether a cache was open. */
 	const clear = Effect.gen(function* () {
+		hasEnded = true
 		const remembered = yield* stored
 		yield* forgetUser
 		return yield* Effect.promise(() => cache.forget(Option.getOrUndefined(remembered)?.id))
@@ -47,6 +50,7 @@ export const makeRememberedSession = (cache: RememberedCache) => {
 		 */
 		settle: (user: CurrentUser): Effect.Effect<void> =>
 			Effect.gen(function* () {
+				if (hasEnded) return
 				const remembered = yield* stored
 				const isOther = Option.isSome(remembered) && remembered.value.id !== user.id
 				// Removed first: should the write below fail, the next load must not start as them.

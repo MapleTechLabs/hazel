@@ -56,7 +56,11 @@ else {
 	installImageViewerMorph()
 	// The dev server loads every page area first: the Model it keeps across a reload names a page
 	// by that page's own schema, which exists once its area has loaded (`page/registry.ts`).
-	if (import.meta.env.DEV) void loadPages().then(startApplication)
+	if (import.meta.env.DEV)
+		loadPages().then(startApplication, (error: unknown) => {
+			console.error("[dev] a page area did not load; reload to try again", error)
+			container.textContent = "A page area did not load. Reload to try again."
+		})
 	else startApplication()
 	installChannelPrefetch()
 	// Desktop only: native notification permission (a no-op in the browser).
