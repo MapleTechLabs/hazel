@@ -14,6 +14,8 @@ import { isAppPath, makePushDevice, type PushToken } from "./push"
 
 /** What the page set before this worker's source: the host's environment. */
 declare const __HAZEL_ENV__: Record<string, string>
+/** `localStorage`'s entries as the host saved them last, set with the environment; `null` before the first save. */
+declare const __HAZEL_STORAGE__: Record<string, string> | null
 /** The stylesheet compiled for every class the app's sources use (`scripts/build-ios.ts`). */
 declare const __HAZEL_STYLES__: PrecompiledStyles
 
@@ -36,6 +38,8 @@ export type IosRequest =
 	| { readonly swipeBack: string }
 	/** The runtime followed a notification's path (`openPath`): the host stops holding it. */
 	| { readonly openedPath: string }
+	/** `localStorage`'s entries to save (`host/ios/src/storage.rs`), as JSON. */
+	| { readonly storage: string }
 
 /** The host's answer to a `fetch` request. */
 type FetchReply =
@@ -186,6 +190,11 @@ const platform: NativePlatform = {
 		request(isSignIn ? { signIn: href, callbackScheme: CALLBACK_SCHEME } : { open: href })
 	},
 	copyText: (text) => request({ copy: text }),
+	// The host keeps the file, and hands every page it loads the entries it checked.
+	storage: {
+		load: () => __HAZEL_STORAGE__ ?? undefined,
+		save: (entries) => request({ storage: JSON.stringify(entries) }),
+	},
 	// No files from the worker: debug lines (`NATIVE_STATS`) go to the log, tagged with their file.
 	appendLine: (path, line) => log(`[${path}] ${line}`),
 	onNavigate: (from, to) => {

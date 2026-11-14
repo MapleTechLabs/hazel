@@ -18,6 +18,8 @@ mod page;
 mod push;
 #[cfg(target_os = "ios")]
 mod sign_in;
+#[cfg(any(test, target_os = "ios"))]
+mod storage;
 #[cfg(target_os = "ios")]
 mod system;
 

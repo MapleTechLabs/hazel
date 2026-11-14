@@ -57,6 +57,8 @@ thread_local! {
     /// The path a notification's tap opens, until a runtime says it followed it (`openedPath`):
     /// a page that ends before then (WebKit ended its process in the background) gets it again.
     static OPEN_PATH: RefCell<Option<String>> = const { RefCell::new(None) };
+    /// The web app's `localStorage` as last saved (JSON text), handed to every page it loads.
+    static STORAGE: RefCell<Option<String>> = const { RefCell::new(None) };
     /// `NATIVE_STATS`: the launch's first tree is applied (1), and its frame is drawn (2).
     static FIRST_TREE: Cell<u8> = const { Cell::new(0) };
 }
@@ -333,6 +335,15 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
         }
     } else if let Some(text) = field("fetch") {
         crate::http::send(&text);
+    } else if let Some(entries) = field("storage") {
+        // Saved before anything after it in the queue runs: a reload that follows loads it.
+        let saved = crate::storage::data_dir()
+            .ok_or_else(|| "the app has no folder for its data".to_string())
+            .and_then(|dir| crate::storage::save(&dir, &entries));
+        match saved {
+            Ok(()) => STORAGE.set(Some(entries)),
+            Err(error) => log(&format!("[host] localStorage was not saved: {error}")),
+        }
     } else if let Some(text) = field("copy") {
         unsafe { UIPasteboard::generalPasteboard().setString(Some(&NSString::from_str(&text))) };
     } else if body.objectForKey(ns_string!("haptic")).is_some() {
@@ -432,6 +443,7 @@ fn start() -> bool {
     // The bundle's environment (`scripts/ios.ts` writes it).
     let bundled = read("environment.json").and_then(|text| serde_json::from_str(&text).ok());
     BUNDLE.set(Some((source, bundled)));
+    STORAGE.set(crate::storage::data_dir().and_then(|dir| crate::storage::load(&dir)));
 
     let configuration = unsafe { WKWebViewConfiguration::new(mtm) };
     let messages: Retained<RuntimeMessages> = {
@@ -512,7 +524,13 @@ fn load_page(mtm: MainThreadMarker, path: Option<&str>) {
     }
     let Some(html) = BUNDLE.with_borrow(|bundle| {
         let (source, _) = bundle.as_ref()?;
-        Some(NSString::from_str(&page::html(source, &env, id)))
+        let storage = STORAGE.with_borrow(Clone::clone);
+        Some(NSString::from_str(&page::html(
+            source,
+            &env,
+            storage.as_deref(),
+            id,
+        )))
     }) else {
         return;
     };
