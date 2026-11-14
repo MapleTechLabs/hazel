@@ -46,12 +46,7 @@ objc2-web-kit = "0.3"
 objc2-quartz-core = "0.3"
 objc2-core-graphics = "0.3"
 objc2-core-foundation = "0.3"
-
-[target.'cfg(target_os = "ios")'.dependencies]
-objc2-ui-kit = "0.3"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2-app-kit = "0.3"
+# System notifications (`src/notify.rs`): the web app's on macOS, the permission for pushes on iOS.
 objc2-user-notifications = { version = "0.3", default-features = false, features = [
 	"std",
 	"UNUserNotificationCenter",
@@ -61,6 +56,12 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
 	"UNNotificationTrigger",
 	"block2",
 ] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2-ui-kit = "0.3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = "0.3"
 
 [profile.release]
 debug = false

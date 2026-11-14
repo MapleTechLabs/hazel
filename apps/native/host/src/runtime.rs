@@ -11,7 +11,8 @@ use hazel_native::outbox::{self, write_line};
 use hazel_native::shell::{self, Restarts, Routed, ShellRequest};
 use hazel_native::wire::RuntimeMsg;
 
-use crate::{notify, platform, updater};
+use crate::{platform, updater};
+use hazel_native::notify;
 
 /// What the window hears from the runtime.
 // One message at a time, as `RuntimeMsg` itself; boxing the tree would only add an allocation.
@@ -143,7 +144,7 @@ pub fn spawn_runtime() -> Result<(RuntimeChild, Receiver<FromRuntime>), String> 
                     }
                     Routed::Shell(ShellRequest::Update { id, op }) => updater::answer(id, op),
                     Routed::Shell(ShellRequest::NotifyPermission { id, request }) => {
-                        notify::permission(id, request)
+                        notify::permission(id, request, |_| {})
                     }
                     Routed::Shell(ShellRequest::Notify { title, body, group }) => {
                         notify::show(&title, &body, group.as_deref())

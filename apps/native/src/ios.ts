@@ -6,8 +6,11 @@
 import { nativeClient, nativeHeaders } from "@hazel/auth/contract"
 import type { PrecompiledStyles } from "@hazel/foldkit-rune"
 import { parseHostLine } from "@hazel/foldkit-rune"
+import { PUSH_DEVICE_GLOBAL, type PushDevice } from "../../web-foldkit/src/platform/push-device"
 import { SYSTEM_UI_GLOBAL, type SystemUi } from "../../web-foldkit/src/platform/system-ui"
+import { readConfig } from "./config"
 import type { NativePlatform } from "./platform"
+import { makePushDevice, type PushToken } from "./push"
 
 /** What the page set before this worker's source: the host's environment. */
 declare const __HAZEL_ENV__: Record<string, string>
@@ -53,6 +56,16 @@ let deliver: ((line: string) => void) | undefined
 const replies = new Map<number, (reply: FetchReply) => void>()
 /** The edge swipe went back. */
 type BackReply = { readonly back: true }
+/** A notification's tap opens the app at this path (`host/ios/src/push.rs`). */
+type OpenPathReply = { readonly openPath: string }
+/** What the host hands the worker that is not a line or a fetch's answer. */
+type HostReply = BackReply | PushToken | OpenPathReply
+/** What waits for the runtime to start: the push token, a notification's path. */
+const afterStart: Array<() => void> = []
+let isRuntimeStarted = false
+const whenStarted = (run: () => void) => (isRuntimeStarted ? run() : afterStart.push(run))
+/** Set below, once `log` exists. */
+let push: ReturnType<typeof makePushDevice> | undefined
 /** The back chevrons on screen, latest last: the swipe goes where the latest leads. */
 const backTargets: Array<{ readonly href: string }> = []
 /** A URL's path, query and hash: what the host keys its pictures of pages by. */
@@ -66,9 +79,19 @@ const goBack = () => {
 	// The runtime's link handling, as a tap on the chevron would follow it.
 	void import("./document-bridge").then(({ followLink }) => followLink(target.href))
 }
-globalThis.onmessage = (event: MessageEvent<string | FetchReply | BackReply>) => {
+const isHostReply = (data: FetchReply | HostReply): data is HostReply => !("id" in data)
+const hostReply = (reply: HostReply) => {
+	if ("back" in reply) goBack()
+	else if ("pushToken" in reply) whenStarted(() => void push?.register(reply))
+	else
+		whenStarted(() => {
+			log(`[push] opening ${reply.openPath}`)
+			void import("./document-bridge").then(({ followLink }) => followLink(reply.openPath))
+		})
+}
+globalThis.onmessage = (event: MessageEvent<string | FetchReply | HostReply>) => {
 	const data = event.data
-	if (typeof data !== "string" && "back" in data) goBack()
+	if (typeof data !== "string" && isHostReply(data)) hostReply(data)
 	else if (typeof data !== "string") {
 		replies.get(data.id)?.(data)
 		replies.delete(data.id)
@@ -181,8 +204,14 @@ const systemUi: SystemUi = {
 	},
 }
 
-// Read by the app (`platform/system-ui.ts`), as the desktop shells install `window.__TAURI__`.
-Object.assign(globalThis, { [SYSTEM_UI_GLOBAL]: systemUi })
+push = makePushDevice({ config: readConfig(process.env), log })
+const pushDevice: PushDevice = { unregister: () => push?.unregister() ?? Promise.resolve() }
+
+// Read by the app (`platform/system-ui.ts`, `platform/push-device.ts`), as the desktop shells
+// install `window.__TAURI__`.
+Object.assign(globalThis, { [SYSTEM_UI_GLOBAL]: systemUi, [PUSH_DEVICE_GLOBAL]: pushDevice })
 
 const { startRuntime } = await import("./runtime")
 await startRuntime(platform)
+isRuntimeStarted = true
+for (const run of afterStart.splice(0)) run()

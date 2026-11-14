@@ -24,6 +24,12 @@ const app = `${out}/Hazel.app`
 // The simulator's executable carries its entitlements for this ID (`host/ios/build.rs`).
 const bundleId = release ? process.env.HAZEL_IOS_BUNDLE_ID || "hazel.app" : "sh.hazel.ios"
 const minimumOS = "17.0"
+/**
+ * The APNs host this build's device tokens belong to: the simulator's executable embeds
+ * `development` (`host/ios/build.rs`), a release is signed with `production`. The runtime sends it
+ * with the token (`src/push.ts`).
+ */
+const apsEnvironment = release ? "production" : "development"
 
 const run = (command: string, args: Array<string>, options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}) =>
 	execFileSync(command, args, { cwd: options.cwd ?? root, stdio: "inherit", env: options.env })
@@ -47,8 +53,11 @@ cpSync(`${root}host/target/${target}/release/hazel-ios`, `${app}/hazel-ios`)
 cpSync(`${out}/runtime.js`, `${app}/runtime.js`)
 // What the runtime reads from `process.env`. A simulator build is offline unless `HAZEL_DATA=live`
 // was set when building; a release build is live against production (`scripts/bundle.ts`'s origins).
+// Both offer the app's notifications (the permission pushes need) and name their APNs host.
+const platformEnvironment = { HAZEL_NOTIFICATIONS: "1", HAZEL_APNS_ENV: apsEnvironment }
 const environment: Record<string, string> = release
 	? {
+			...platformEnvironment,
 			HAZEL_DATA: "live",
 			VITE_BACKEND_URL: process.env.HAZEL_BACKEND_URL || "https://api.hazel.sh",
 			VITE_APP_URL: process.env.HAZEL_APP_URL || "https://app.hazel.sh",
@@ -64,10 +73,12 @@ const environment: Record<string, string> = release
 				"NATIVE_PATH",
 				"HAZEL_ISLANDS",
 				"HAZEL_FIXTURE_HTML",
-			].flatMap((name) => {
-				const value = process.env[name]
-				return value === undefined ? [] : [[name, value]]
-			}),
+			]
+				.flatMap((name) => {
+					const value = process.env[name]
+					return value === undefined ? [] : [[name, value]]
+				})
+				.concat(Object.entries(platformEnvironment)),
 		)
 writeFileSync(`${app}/environment.json`, JSON.stringify(environment))
 cpSync(`${root}../web-foldkit/public`, `${app}/public`, { recursive: true })
@@ -182,6 +193,20 @@ const team = read("plutil", ["-extract", "TeamIdentifier.0", "raw", "-o", "-", d
 const granted = read("plutil", ["-extract", "Entitlements.application-identifier", "raw", "-o", "-", decoded])
 const appId = `${team}.${bundleId}`
 if (granted !== appId) throw new Error(`HAZEL_IOS_PROFILE is for ${granted}, not ${appId}`)
+// Pushes need the profile to grant them (the App ID's Push Notifications capability); a build
+// signed without the grant installs, but APNs never hands it a token.
+const grantedAps = (() => {
+	try {
+		return read("plutil", ["-extract", "Entitlements.aps-environment", "raw", "-o", "-", decoded])
+	} catch {
+		return undefined
+	}
+})()
+if (grantedAps !== apsEnvironment)
+	throw new Error(
+		`HAZEL_IOS_PROFILE grants aps-environment ${grantedAps ?? "(none)"}, not ${apsEnvironment}: ` +
+			"enable Push Notifications for the App ID and download the profile again",
+	)
 const entitlements = `${out}/build/entitlements.plist`
 writeFileSync(
 	`${out}/build/entitlements.json`,
@@ -189,6 +214,7 @@ writeFileSync(
 		"application-identifier": appId,
 		"com.apple.developer.team-identifier": team,
 		"keychain-access-groups": [appId],
+		"aps-environment": apsEnvironment,
 		"get-task-allow": false,
 		"beta-reports-active": true,
 	}),

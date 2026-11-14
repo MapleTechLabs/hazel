@@ -5,6 +5,7 @@ import { CommonReason, reasonOfUnknown } from "~/lib/error-messages"
 import { HazelAuthClient } from "../auth/client"
 import { desktopAuthClient } from "../platform/desktop"
 import { runDesktopAuth } from "../platform/desktop-auth"
+import { unregisterPushDevice } from "../platform/push-device"
 import type { SessionAnswer } from "./message"
 
 /**
@@ -54,8 +55,13 @@ export class SignOutError extends Schema.TaggedError<SignOutError>()("SignOutErr
 	reason: CommonReason,
 }) {}
 
-/** Ends the session on the API, closes every sync connection and drops the cached access token. */
+/**
+ * Forgets this device's push token, ends the session on the API, closes every sync connection and
+ * drops the cached access token.
+ */
 export const signOut: Effect.Effect<void, SignOutError, HazelAuthClient> = Effect.gen(function* () {
+	// The phone stops getting this user's pushes; the session still says whose device it is.
+	yield* unregisterPushDevice
 	if (desktopAuthClient !== null) {
 		// Ends only the desktop app's session; the browser it signed in with stays signed in.
 		yield* runDesktopAuth((auth) => auth.signOut)

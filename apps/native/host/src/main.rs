@@ -1,7 +1,6 @@
 //! Hazel's native window on macOS: runs Hazel's Foldkit app in a Bun child process and draws the
 //! tree it renders (`hazel_native`), sending presses, edits and the window's size and theme back.
 mod capture;
-mod notify;
 mod platform;
 mod runtime;
 mod updater;

@@ -1,6 +1,7 @@
 //! The simulator takes an app's entitlements from its executable (`__TEXT,__entitlements`), as
 //! Xcode's simulator builds embed them: the keychain (the sign-in vault) serves only an app with
-//! an identifier and an access group. An ad-hoc signature carries none.
+//! an identifier and an access group. An ad-hoc signature carries none. `aps-environment` lets it
+//! register for pushes: an Apple-silicon simulator gets a sandbox (`development`) token.
 use std::path::PathBuf;
 
 /// The team prefix of an ad-hoc signed simulator build: any ten characters do.
@@ -24,6 +25,8 @@ fn main() {
 <dict>
 	<key>application-identifier</key>
 	<string>{id}</string>
+	<key>aps-environment</key>
+	<string>development</string>
 	<key>keychain-access-groups</key>
 	<array>
 		<string>{id}</string>
