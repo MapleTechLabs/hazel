@@ -12,8 +12,8 @@ Rune host (Rust, host/)                     Bun runtime (src/runtime.ts)
 ```
 
 `src/runtime.ts` boots the app against a `NativePlatform` (`src/platform.ts`: the host connection,
-log, browser, clipboard, stylesheet, saved storage); `src/entry.ts` is the Bun platform the host
-spawns. Boot reads its settings once (`src/config.ts`), installs the browser surface
+log, browser, clipboard, stylesheet, saved storage, SQLite); `src/entry.ts` is the Bun platform the
+host spawns. Boot reads its settings once (`src/config.ts`), installs the browser surface
 (`src/shims.ts`), the Tauri APIs the host answers (`src/desktop-bridge.ts`) and the data source
 (`src/data-source.ts`), then the element bridge (`src/mounts.ts` lists the web app's Mounts it runs,
 `src/document-bridge.ts` the `document` lookups only the tree can answer). The host's side mirrors
@@ -50,7 +50,8 @@ Without `HAZEL_NATIVE_ENTRY` the host runs `src/entry.ts` directly (slower boot,
 sources use, so the bundled runtime boots without Tailwind's compiler; a class the scan missed
 compiles after the commit that shows it, and the screen restyles.
 `NATIVE_THEME=dark`, `NATIVE_WIDTH`/`NATIVE_HEIGHT` set the window; `NATIVE_DEBUG=1` logs every
-Message and editor event; `NATIVE_STATS=<file>` appends per-commit timings.
+Message and editor event; `NATIVE_STATS=<file>` appends when boot reached each phase, then
+per-commit timings.
 `HAZEL_FIXTURE_HTML=<file.html>` ends the offline #general with a message showing that page as an
 HTML render, served from a local port as the api serves one (the file is read on every load); a
 page URL instead is shown as it is (iOS: `bun run serve-fixture-html page.html` serves the file
@@ -102,6 +103,16 @@ fields and scroll state.
 **Storage.** Live, `localStorage` (the app's settings, recent channels) is saved to
 `~/Library/Application Support/<HAZEL_APP_ID>/local-storage.json` (`HAZEL_STORAGE_PATH` overrides),
 written in batches and before the runtime is replaced or quits. Offline runs start empty every time.
+Signing out leaves the entries, as a browser does: the app keys what is a user's own by their id.
+
+**Local cache.** The web app keeps its synced rows in SQLite between launches (TanStack DB's
+persistence; wa-sqlite on OPFS in a browser, which neither runtime here can run). The runtime sets
+`globalThis.__hazelLocalCacheHost` (`web-foldkit/src/core/db/local-cache-host.ts`) before the app's
+modules load, and the platform answers it: `src/local-cache-bun.ts` with `bun:sqlite`, one
+write-ahead-logged file per database beside `local-storage.json`. Either host answers as the OPFS
+worker does (every statement of the text runs, parameters bind to the first, rows keyed by column
+name), takes only names that stay in its folder (`<name>.sqlite`), and starts a file that is no
+database over. Offline, databases are in memory.
 
 **Notifications.** A bundle shows the web app's notifications through UserNotifications
 (`host/src/notify.rs`); the host reports the window gaining and losing key status, so
@@ -123,7 +134,17 @@ the compiled stylesheet inlined. The bundle's `environment.json` holds `HAZEL_DA
 `VITE_BACKEND_URL`, `VITE_APP_URL`, `NATIVE_DEBUG` and `NATIVE_PATH` as set when building
 (offline by default);
 the runtime's log goes to `tmp/hazel.log` in the app's data container
-(`xcrun simctl get_app_container booted sh.hazel.ios data`).
+(`xcrun simctl get_app_container booted sh.hazel.ios data`), each line after the milliseconds
+since `main`. Built with `NATIVE_STATS=1`, it times a launch: the page ready, the runtime's boot
+phases (in the worker's own milliseconds), each tree, and the first tree's frame drawn.
+
+**Storage and the local cache** live in the container's `Library/Application Support`, live data
+only, as on the Mac. The host keeps `local-storage.json` (`host/ios/src/storage.rs`) and hands its
+entries to every page it loads, so the app reads them as its modules load; the worker sends each
+batch of changes back. The local cache's SQLite is the system's, in the host on a thread of its
+own (`host/ios/src/local_cache.rs`): each statement is one request and one reply over the bridge
+(`src/local-cache-ios.ts`), a result crossing as one JSON string that the worker parses. A page
+that replaces another finds every database closed, whatever transaction was left open with it.
 
 The page (`host/ios/src/page.rs`) is a secure context, as the web app's `crypto.randomUUID`
 needs. Live, its origin is the web app's (`VITE_APP_URL`, `https://app.hazel.sh` by default), so
