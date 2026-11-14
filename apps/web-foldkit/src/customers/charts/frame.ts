@@ -198,22 +198,36 @@ export const gridlines = <M>(
 		),
 	)
 
-/** X-axis labels under the plot, centred on their x; `isActive` marks the hovered one. */
+/**
+ * X-axis labels under the plot, centred on their x; `isActive` marks the hovered one. Labels at
+ * the plot's edges align inward so they stay in the card, and a phone keeps only the first, the
+ * middle and the last (plus the hovered one), so the dates never run into each other.
+ */
 export const xAxis = <M>(
 	h: HtmlBuilder<M>,
 	ticks: ReadonlyArray<Readonly<{ x: number; label: string; isActive?: boolean }>>,
-): Html =>
-	h.div(
+): Html => {
+	const last = ticks.length - 1
+	const middle = Math.floor(last / 2)
+	return h.div(
 		[h.AriaHidden(true), h.Class("relative h-6")],
-		ticks.map((tick) =>
+		ticks.map((tick, index) =>
 			h.span(
 				[
 					h.Class(
 						twMerge(
 							"absolute top-1.5 -translate-x-1/2 whitespace-nowrap text-xs tabular-nums",
 							tick.isActive ? "font-medium text-fg" : "text-muted-fg",
-							tick.x <= 0 && "translate-x-0",
-							tick.x >= 100 && "-translate-x-full",
+							tick.x <= 4 && "translate-x-0",
+							tick.x >= 96 && "-translate-x-full",
+							index === 0 && "max-md:translate-x-0",
+							index === last && index > 0 && "max-md:-translate-x-full",
+							ticks.length > 3 &&
+								index !== 0 &&
+								index !== middle &&
+								index !== last &&
+								tick.isActive !== true &&
+								"max-md:hidden",
 						),
 					),
 					h.Style({ left: `${tick.x}%` }),
@@ -222,6 +236,7 @@ export const xAxis = <M>(
 			),
 		),
 	)
+}
 
 /**
  * Invisible full-height hover targets, one per index, each `[x - width / 2, x + width / 2]`

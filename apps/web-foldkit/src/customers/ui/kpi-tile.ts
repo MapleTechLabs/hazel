@@ -24,7 +24,7 @@ export const deltaPill = <M>(h: HtmlBuilder<M>, delta: Delta, className?: string
 		[
 			h.Class(
 				twMerge(
-					"inline-flex items-center gap-0.5 font-medium tabular-nums",
+					"inline-flex items-center gap-0.5 whitespace-nowrap font-medium tabular-nums",
 					TONE_TEXT[tone],
 					className,
 				),
@@ -123,12 +123,13 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 							[h.Class("flex items-end justify-between gap-4")],
 							[
 								h.div(
-									[h.Class("flex min-w-0 items-baseline gap-2")],
+									// A narrow tile wraps the detail under the value instead of cutting it off.
+									[h.Class("flex min-w-0 flex-wrap items-baseline gap-x-2")],
 									[
 										h.span(
 											[
 												h.Class(
-													"font-semibold text-2xl/8 text-fg tabular-nums tracking-tight",
+													"font-semibold text-2xl/8 text-fg tabular-nums tracking-tight max-md:text-xl/7",
 												),
 											],
 											[options.value ?? "—"],
@@ -138,7 +139,7 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 													h.span(
 														[
 															h.Class(
-																"truncate text-muted-fg text-sm tabular-nums",
+																"min-w-0 truncate text-muted-fg text-sm tabular-nums",
 															),
 														],
 														[options.detail],
@@ -153,11 +154,16 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 						...(options.delta || options.comparison
 							? [
 									h.p(
-										[h.Class("flex items-center gap-1.5 text-sm")],
+										[h.Class("flex flex-wrap items-center gap-x-1.5 text-sm")],
 										[
 											...(options.delta ? [deltaPill(h, options.delta)] : []),
 											...(options.comparison
-												? [h.span([h.Class("text-muted-fg")], [options.comparison])]
+												? [
+														h.span(
+															[h.Class("whitespace-nowrap text-muted-fg")],
+															[options.comparison],
+														),
+													]
 												: []),
 										],
 									),
@@ -169,7 +175,7 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 			...(state === "loading" ? [h.AriaBusy(true)] : []),
 			h.Class(
 				twMerge(
-					"flex min-w-0 flex-col gap-2 rounded-xl border bg-bg p-4",
+					"flex min-w-0 flex-col gap-2 rounded-xl border bg-bg p-4 max-md:p-3",
 					state === "empty" ? "border-border border-dashed" : "border-border",
 					options.className,
 				),

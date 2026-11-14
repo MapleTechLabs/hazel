@@ -89,6 +89,16 @@ const bandInput = (h: H, band: BandKey, context: Context): Html =>
 		onInput: (text) => Message.ChangedBand({ band, value: parseNumber(text), text }),
 	})
 
+/** "Score of at least", shortened to "At least" where a phone has no room for it on one line. */
+const atLeast = (h: H): Html =>
+	h.span(
+		[h.Class("whitespace-nowrap")],
+		[
+			h.span([h.Class("max-sm:hidden")], ["Score of at least"]),
+			h.span([h.Class("sm:hidden")], ["At least"]),
+		],
+	)
+
 const statusLabel = (h: H, status: Status): Html =>
 	h.span(
 		[h.Class("inline-flex w-20 shrink-0 items-center gap-2 text-fg")],
@@ -104,8 +114,8 @@ export const bandsCard = (h: H, model: Model, context: Context): Html => {
 			[h.Class("flex min-h-10 items-center gap-3 border-border border-b px-1 text-xs last:border-b-0")],
 			[
 				statusLabel(h, status),
-				h.span([h.Class("flex flex-1 items-center gap-2 text-muted-fg")], [...rule]),
-				h.span([h.Class("text-muted-fg tabular-nums")], [range]),
+				h.span([h.Class("flex min-w-0 flex-1 items-center gap-2 text-muted-fg")], [...rule]),
+				h.span([h.Class("w-14 shrink-0 text-right text-muted-fg tabular-nums")], [range]),
 			],
 		)
 	return card(h, "", [
@@ -150,12 +160,12 @@ export const bandsCard = (h: H, model: Model, context: Context): Html => {
 			[
 				bandRow(
 					"healthy",
-					["Score of at least", bandInput(h, "healthyMin", context)],
+					[atLeast(h), bandInput(h, "healthyMin", context)],
 					`${textOf(healthyMin)}–100`,
 				),
 				bandRow(
 					"at_risk",
-					["Score of at least", bandInput(h, "atRiskMin", context)],
+					[atLeast(h), bandInput(h, "atRiskMin", context)],
 					`${textOf(atRiskMin)}–${textOf(healthyMin - 1)}`,
 				),
 				bandRow("critical", [`Everything below ${textOf(atRiskMin)}`], `0–${textOf(atRiskMin - 1)}`),

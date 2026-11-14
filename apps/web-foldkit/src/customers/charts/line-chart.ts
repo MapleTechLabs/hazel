@@ -137,7 +137,8 @@ export const lineChart = <M>(h: HtmlBuilder<M>, options: LineChartOptions<M>): H
 					...(options.endLabels
 						? [
 								h.div(
-									[h.AriaHidden(true), h.Class("relative w-24 shrink-0")],
+									// A phone gives the plot the room: the card states the same values above it.
+									[h.AriaHidden(true), h.Class("relative w-24 shrink-0 max-md:hidden")],
 									options.series.map((series, index) =>
 										h.span(
 											[
@@ -181,7 +182,7 @@ export const lineChart = <M>(h: HtmlBuilder<M>, options: LineChartOptions<M>): H
 							),
 						],
 					),
-					...(options.endLabels ? [h.div([h.Class("w-24 shrink-0")])] : []),
+					...(options.endLabels ? [h.div([h.Class("w-24 shrink-0 max-md:hidden")])] : []),
 				],
 			),
 		],

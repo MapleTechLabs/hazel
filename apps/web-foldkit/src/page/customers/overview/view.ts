@@ -84,10 +84,11 @@ const card = (h: HtmlBuilder<Message>, className: string, children: ReadonlyArra
 
 const cardHeader = (h: HtmlBuilder<Message>, title: Html | string, description: string, aside?: Html): Html =>
 	h.header(
-		[h.Class("flex items-start justify-between gap-4")],
+		[h.Class("flex flex-wrap items-start justify-between gap-x-4 gap-y-2")],
 		[
+			// A basis: the title shrinks before the aside wraps under it, and wraps only when narrow.
 			h.div(
-				[h.Class("flex min-w-0 flex-col gap-0.5")],
+				[h.Class("flex min-w-0 flex-1 basis-40 flex-col gap-0.5")],
 				[
 					typeof title === "string"
 						? h.h2([h.Class("font-semibold text-base/6 text-fg")], [title])
@@ -344,7 +345,7 @@ const mrrCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html =>
 			"MRR movement",
 			`${result.bucket === "day" ? "Daily" : result.bucket === "week" ? "Weekly" : "Monthly"} change by type`,
 			h.div(
-				[h.Class("flex flex-col items-end")],
+				[h.Class("flex flex-col items-end max-sm:items-start")],
 				[
 					h.span(
 						[
@@ -479,11 +480,15 @@ const attentionCard = (
 		cardHeader(
 			h,
 			h.h2(
-				[h.Class("flex items-center gap-2 font-semibold text-base/6 text-fg")],
+				[h.Class("flex flex-wrap items-center gap-x-2 font-semibold text-base/6 text-fg")],
 				[
 					"Needs attention",
 					h.span(
-						[h.Class("rounded-full bg-primary-subtle px-2 text-primary-subtle-fg text-xs")],
+						[
+							h.Class(
+								"whitespace-nowrap rounded-full bg-primary-subtle px-2 text-primary-subtle-fg text-xs",
+							),
+						],
 						[`${open.length} open`],
 					),
 				],
@@ -499,7 +504,7 @@ const attentionCard = (
 		h.footer(
 			[
 				h.Class(
-					"mt-auto flex items-center justify-between border-border border-t pt-3 text-muted-fg text-xs",
+					"mt-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-border border-t pt-3 text-muted-fg text-xs",
 				),
 			],
 			[
@@ -516,6 +521,8 @@ const attentionCard = (
 }
 
 // MOVERS AND LISTS
+
+const accountsLabel = (count: number): string => `${formatCount(count)} account${count === 1 ? "" : "s"}`
 
 const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): Html => {
 	const column = (title: string, movers: ReadonlyArray<Customers.Mover>) =>
@@ -571,7 +578,7 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 												h.span(
 													[
 														h.Class(
-															"w-20 text-right text-muted-fg text-xs tabular-nums",
+															"w-20 shrink-0 text-right text-muted-fg text-xs tabular-nums max-sm:hidden",
 														),
 													],
 													[
@@ -584,13 +591,17 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 														value: mover.changePct,
 														text: formatDeltaPct(mover.changePct),
 													},
-													"w-16 justify-end text-sm",
+													"w-16 shrink-0 justify-end text-sm",
 												),
 												...(account === undefined
 													? []
 													: [
 															h.span(
-																[h.Class("w-12 text-right")],
+																[
+																	h.Class(
+																		"w-12 shrink-0 text-right max-sm:w-9",
+																	),
+																],
 																[
 																	healthDot(h, {
 																		status: account.healthStatus,
@@ -641,13 +652,20 @@ const listRow = (
 				],
 				[
 					companyLogo(h, { name: entry.name, logoUrl: entry.logoUrl, size: "xs" }),
-					h.span([h.Class("truncate font-medium text-fg")], [entry.name]),
-					h.span([h.Class("truncate text-muted-fg text-xs")], [entry.detail]),
+					h.span([h.Class("min-w-0 truncate font-medium text-fg")], [entry.name]),
+					// A phone keeps the name readable; the plan is on the account.
+					h.span(
+						[h.Class("min-w-0 shrink-[2] truncate text-muted-fg text-xs max-sm:hidden")],
+						[entry.detail],
+					),
 					h.span(
 						[h.Class("ml-auto shrink-0 text-muted-fg text-xs tabular-nums")],
 						[formatDate(new Date(entry.date), { now: new Date(context.nowMs) })],
 					),
-					h.span([h.Class("w-20 shrink-0 text-right tabular-nums")], [entry.value]),
+					h.span(
+						[h.Class("w-20 shrink-0 text-right tabular-nums max-sm:w-auto max-sm:min-w-12")],
+						[entry.value],
+					),
 				],
 			),
 		],
@@ -737,7 +755,7 @@ const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, con
 		[
 			listCard(h, {
 				title: "New customers",
-				description: `${formatCount(result.recentNew.length)} accounts · ${formatMoney(newMrr, result.currency, { signed: true })} MRR · first paid invoice in period`,
+				description: `${accountsLabel(result.recentNew.length)} · ${formatMoney(newMrr, result.currency, { signed: true })} MRR · first paid invoice in period`,
 				aside: link(h, hrefOf(customersListRoute(context.orgSlug, "paying")), "View all"),
 				rows: result.recentNew.map((entry) =>
 					brief(entry, formatMoney(entry.mrrMinor, result.currency)),
@@ -746,7 +764,7 @@ const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, con
 			}),
 			listCard(h, {
 				title: "Recent churn",
-				description: `${formatCount(result.recentChurn.length)} accounts${lostMrr > 0 ? ` · ${formatMoney(-lostMrr, result.currency)} MRR` : ""}`,
+				description: `${accountsLabel(result.recentChurn.length)}${lostMrr > 0 ? ` · ${formatMoney(-lostMrr, result.currency)} MRR` : ""}`,
 				aside: link(h, hrefOf(customersListRoute(context.orgSlug, "churned")), "View churned"),
 				rows: result.recentChurn.map((entry) =>
 					brief(

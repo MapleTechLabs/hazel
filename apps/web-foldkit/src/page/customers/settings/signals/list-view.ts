@@ -144,6 +144,8 @@ const ruleRow = (h: H, model: Model, rule: RuleRow, shared: Shared): Html => {
 							isSelected: rule.enabled,
 							isDisabled: !isAdmin,
 							onChange: toToggle(rule.id),
+							// The label is screen-reader only: no gap pushing the track off the "On" column.
+							className: "gap-x-0",
 						},
 						[h.span([h.Class("sr-only")], [`${rule.name} on`])],
 					),
@@ -152,7 +154,7 @@ const ruleRow = (h: H, model: Model, rule: RuleRow, shared: Shared): Html => {
 			h.div(
 				[h.Class(twMerge("flex min-w-0 items-center gap-3", muted))],
 				[
-					templateTile(h, rule.template),
+					templateTile(h, rule.template, "max-sm:hidden"),
 					h.div(
 						[h.Class("flex min-w-0 flex-col")],
 						[

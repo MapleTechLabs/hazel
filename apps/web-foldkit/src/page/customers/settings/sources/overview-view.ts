@@ -256,8 +256,9 @@ const column = (h: H, label: string, children: ReadonlyArray<Html>): Html =>
 	h.div([h.Class("flex min-w-0 flex-col gap-1 px-4 py-3")], [eyebrow(h, label), ...children])
 
 const value = (h: H, text: string, className = "text-fg"): Html =>
-	h.p([h.Class(`truncate font-medium text-sm ${className}`)], [text])
-const detail = (h: H, text: string): Html => h.p([h.Class("truncate text-muted-fg text-xs")], [text])
+	h.p([h.Class(`truncate font-medium text-sm max-sm:whitespace-normal ${className}`)], [text])
+const detail = (h: H, text: string): Html =>
+	h.p([h.Class("truncate text-muted-fg text-xs max-sm:whitespace-normal")], [text])
 
 const lastSyncColumn = (h: H, model: Model, connection: ConnectionRow, context: Context): Html => {
 	const now = new Date(context.nowMs)
@@ -338,7 +339,9 @@ const connectedCard = (h: H, model: Model, connection: ConnectionRow, context: C
 						[
 							sourceMark(h, connection.provider, { size: "md" }),
 							h.div(
-								[h.Class("flex min-w-0 flex-1 flex-col gap-0.5")],
+								// A basis, so a narrow card wraps the buttons under the blurb instead of squeezing the
+								// blurb to a word per line.
+								[h.Class("flex min-w-0 flex-1 basis-48 flex-col gap-0.5")],
 								[
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-2")],

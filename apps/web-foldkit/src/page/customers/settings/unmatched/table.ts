@@ -480,8 +480,11 @@ export const recordsTable = (
 	return h.table(
 		[
 			h.AriaLabel(context.ariaLabel),
-			// A phone keeps the record and its actions, at a width its card scrolls sideways to.
-			h.Class("w-full table-fixed border-separate border-spacing-0 max-md:min-w-[28rem]"),
+			// A phone keeps the record and its actions, at a width its card scrolls sideways to; the
+			// layout follows the content there, so the record's name is never squeezed out.
+			h.Class(
+				"w-full table-fixed border-separate border-spacing-0 max-md:table-auto max-md:min-w-[28rem]",
+			),
 		],
 		[
 			h.thead(
