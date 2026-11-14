@@ -471,6 +471,15 @@ describe("push notifications", () => {
 				)
 				const sent = yield* mentionAlice(world)
 				expect(pendingPushes(world.aliceObject)).toBe(1)
+				const unreadCount = () =>
+					(
+						world.org.storage.db
+							.prepare(
+								`SELECT notificationCount FROM channel_members WHERE userId = ? AND channelId = ?`,
+							)
+							.get(world.alice, world.channelId) as { notificationCount: number }
+					).notificationCount
+				expect(unreadCount()).toBe(1)
 
 				ok(
 					yield* call(
@@ -486,6 +495,8 @@ describe("push notifications", () => {
 				yield* runAlarm(world.aliceObject)
 				expect(world.objects.pushes).toEqual([])
 				expect(pendingPushes(world.aliceObject)).toBe(0)
+				// The channel's unread count comes down with the notification.
+				expect(unreadCount()).toBe(0)
 			}),
 		))
 })
