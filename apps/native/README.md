@@ -147,7 +147,8 @@ finishes at the finger's speed, the runtime drawing where it goes while the page
 press on the tab bar never waits on a picture: the bar and the page stay live while the tab draws.
 
 **Live data** (`HAZEL_DATA=live bun run ios`, with `VITE_APP_URL`/`VITE_BACKEND_URL` for a dev
-stack on this Mac) signs in as the Mac app does: the sign-in link opens in the system's sign-in
+stack on this Mac, and `HAZEL_SESSION_TOKEN` from `dev:sign-in` for a PR preview, which has no
+OAuth) signs in as the Mac app does: the sign-in link opens in the system's sign-in
 sheet (`ASWebAuthenticationSession`, `host/ios/src/sign_in.rs`), whose callback goes to the
 runtime as an opened link, and the session lives in the keychain (`hazel_native::sign_in`). The
 simulator's keychain serves only an app with an identifier and access group, which the

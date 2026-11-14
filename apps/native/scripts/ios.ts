@@ -73,6 +73,9 @@ const environment: Record<string, string> = release
 				"NATIVE_PATH",
 				"HAZEL_ISLANDS",
 				"HAZEL_FIXTURE_HTML",
+				// A session bearer for a live run against a stack without OAuth (a PR preview's
+				// `dev:sign-in`); simulator builds only, it is written into the bundle as is.
+				"HAZEL_SESSION_TOKEN",
 			]
 				.flatMap((name) => {
 					const value = process.env[name]
