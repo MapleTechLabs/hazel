@@ -63,6 +63,27 @@ const prismLanguagesImportCore = (): Plugin => ({
 })
 
 /**
+ * Preloads the two Inter files the chat paints most text with (Latin 400 for message text, 600 for
+ * author names), so they download beside the scripts instead of after the first render asks for
+ * them. The other faces load on demand, as before.
+ */
+const preloadFirstPaintFonts = (): Plugin => ({
+	name: "hazel:preload-first-paint-fonts",
+	apply: "build",
+	transformIndexHtml(_html, context) {
+		return Object.keys(context.bundle ?? {})
+			.filter((file) => /^assets\/inter-latin-(400|600)-normal-[\w-]+\.woff2$/.test(file))
+			.sort()
+			.map((file) => ({
+				tag: "link",
+				// Fonts are fetched in CORS mode: without `crossorigin` the preload is not reused.
+				attrs: { rel: "preload", as: "font", type: "font/woff2", href: `/${file}`, crossorigin: "" },
+				injectTo: "head" as const,
+			}))
+	},
+})
+
+/**
  * What the app's first screen loads (`$initial`: reached by static imports from the entry), split
  * so that a deploy which changes only app code leaves the libraries' chunks, and their cached
  * copies, as they are. The last group keeps the app's own first-screen code in one chunk. Code
@@ -108,6 +129,7 @@ export default defineConfig({
 		tailwindcss(),
 		foldkit({ devToolsMcpPort: false }),
 		prismLanguagesImportCore(),
+		preloadFirstPaintFonts(),
 		immutableAssetHeaders(),
 	],
 	// The local cache's OPFS worker and wa-sqlite wasm resolve next to the package's own code.
