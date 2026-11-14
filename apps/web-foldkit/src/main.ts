@@ -568,8 +568,9 @@ const failedFetchCurrentUser =
 			}
 		if (model.session._tag !== "SignedIn") return { model }
 		const { user, retries } = model.session
-		const hasUser = AsyncData.hasData(user)
-		if (!hasUser && isRetryableReason(reason) && retries < MAX_AUTO_RETRIES)
+		// With a user on screen too (the remembered one, or the one being refreshed): the retries
+		// run behind them, and a remembered user is only confirmed by an answer.
+		if (isRetryableReason(reason) && retries < MAX_AUTO_RETRIES)
 			return {
 				model: modifyFields(model, {
 					session: () => Session.SignedIn({ user, retries: retries + 1 }),

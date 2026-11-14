@@ -26,6 +26,7 @@ import * as Updates from "../platform/updates"
 import * as Toasts from "../overlay/toaster"
 import { MOBILE_QUERY } from "../ui/viewport"
 import { Message } from "./message"
+import { REMEMBERED_USER_KEY } from "./remembered-user"
 import { authOf, currentUserOf, loadedOrgOf, memberOf, type Model, pageHostOf, sharedOf } from "./model"
 
 export { MOBILE_QUERY } from "../ui/viewport"
@@ -91,6 +92,23 @@ const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
 								duration: Duration.seconds(30),
 								strategy: "enforce",
 							}),
+							Stream.map(() => Message.RejectedSession()),
+						)
+					: Stream.empty,
+		},
+	),
+	// Another tab learned the session ended and forgot the remembered user: this one checks too,
+	// and deletes the cache it holds (which the other tab could not).
+	sessionEndedElsewhere: entry(
+		{ isSignedIn: Schema.Boolean },
+		{
+			modelToDependencies: (model) => ({ isSignedIn: authOf(model.session) === "SignedIn" }),
+			dependenciesToStream: ({ isSignedIn }) =>
+				isSignedIn
+					? Stream.fromEventListener<StorageEvent>(window, "storage").pipe(
+							Stream.filter(
+								(event) => event.key === REMEMBERED_USER_KEY && event.newValue === null,
+							),
 							Stream.map(() => Message.RejectedSession()),
 						)
 					: Stream.empty,

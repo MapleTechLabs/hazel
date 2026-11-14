@@ -55,8 +55,14 @@ const committed = (transaction: IDBTransaction): Promise<void> =>
 		transaction.onabort = () => reject(transaction.error)
 	})
 
+/** Deletes the database once every tab has let go of it (`onversionchange` below); does not wait for that. */
 const deleteIdb = (name: string): Promise<void> =>
-	requestOf(indexedDB.deleteDatabase(name)).then(() => undefined)
+	new Promise((resolve, reject) => {
+		const request = indexedDB.deleteDatabase(name)
+		request.onsuccess = () => resolve()
+		request.onblocked = () => resolve()
+		request.onerror = () => reject(request.error)
+	})
 
 export const openIdbBackend = async (userId: UserId): Promise<SnapshotBackend> => {
 	const name = `${IDB_PREFIX}${userId}`
@@ -106,13 +112,16 @@ export const openIdbBackend = async (userId: UserId): Promise<SnapshotBackend> =
 	}
 }
 
-/** Deletes the stores of every user but `userId`: sessions that ended without this tab hearing. */
-const removeOtherIdbStores = async (userId: UserId): Promise<void> => {
+/**
+ * Deletes the stores of every user but `keep`: sessions that ended without this tab hearing. With
+ * no `keep` (the session ended) none may stay.
+ */
+const removeIdbStores = async (keep?: UserId): Promise<void> => {
 	// Not in every browser; where it is missing, those stores stay until their user's next sign-out.
 	const databases = (await indexedDB.databases?.()) ?? []
 	await Promise.all(
 		databases.flatMap(({ name }) =>
-			name !== undefined && name.startsWith(IDB_PREFIX) && name !== `${IDB_PREFIX}${userId}`
+			name !== undefined && name.startsWith(IDB_PREFIX) && name !== `${IDB_PREFIX}${keep}`
 				? [deleteIdb(name)]
 				: [],
 		),
@@ -165,16 +174,19 @@ export interface ChannelSnapshots {
 	/** Opens `userId`'s states; until then reads wait and writes are dropped. */
 	readonly bind: (userId: UserId) => void
 	/**
-	 * The session ended: deletes the bound user's states, or `userId`'s when none is bound (a
-	 * later `bind` then opens a new store).
+	 * The session ended: deletes the bound user's states, `userId`'s (the remembered user), and
+	 * every other store left behind. With none bound, a later `bind` opens a new store.
 	 */
 	readonly forget: (userId?: UserId) => Promise<void>
 }
 
-/** `open`: a user's backend. `destroyFor`: deletes the states of a user whose backend is not open. */
+/**
+ * `open`: a user's backend. `destroyRest`: deletes the states no open backend holds, `userId`'s
+ * (the remembered user) among them.
+ */
 export const makeChannelSnapshots = (
 	open: (userId: UserId) => Promise<SnapshotBackend>,
-	destroyFor: (userId: UserId) => Promise<void>,
+	destroyRest: (userId?: UserId) => Promise<void>,
 ): ChannelSnapshots => {
 	let bound: { readonly userId: UserId; readonly backend: Promise<SnapshotBackend | undefined> } | undefined
 	let isForgotten = false
@@ -215,7 +227,8 @@ export const makeChannelSnapshots = (
 					// The open store is gone for this page: nothing more is read from or written to it.
 					isForgotten = true
 					await (await bound.backend)?.destroy()
-				} else if (userId !== undefined) await destroyFor(userId)
+				}
+				await destroyRest(userId)
 			} catch (cause) {
 				console.error("[local-cache] Could not delete the channel states", cause)
 			}
@@ -229,15 +242,23 @@ export const makeAppChannelSnapshots = (): ChannelSnapshots | undefined => {
 	if (host !== undefined) {
 		return makeChannelSnapshots(
 			(userId) => openHostBackend(host, userId),
-			(userId) => host.remove(hostFileOf(userId)),
+			async (userId) => {
+				if (userId !== undefined) await host.remove(hostFileOf(userId))
+			},
 		)
 	}
 	if (typeof indexedDB === "undefined") return undefined
 	return makeChannelSnapshots(
 		async (userId) => {
-			void removeOtherIdbStores(userId).catch(() => {})
+			void removeIdbStores(userId).catch(() => {})
 			return openIdbBackend(userId)
 		},
-		(userId) => deleteIdb(`${IDB_PREFIX}${userId}`),
+		async (userId) => {
+			// By name too: not every browser lists its databases.
+			await Promise.all([
+				removeIdbStores(),
+				...(userId === undefined ? [] : [deleteIdb(`${IDB_PREFIX}${userId}`)]),
+			])
+		},
 	)
 }

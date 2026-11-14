@@ -68,6 +68,20 @@ describe("the remembered user", () => {
 		await Effect.runPromise(Fiber.interrupt(fiber))
 	})
 
+	it("does not start as the previous user again when the new one cannot be stored", async () => {
+		await run(settleRememberedUser(ada))
+		forget.mockResolvedValue(true)
+		const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+			throw new Error("QuotaExceededError")
+		})
+		const fiber = await run(settleRememberedUser(grace))
+		setItem.mockRestore()
+		// Nobody is remembered: the load after the reload waits for `user.me` instead of looping.
+		expect(await remembered()).toBeNull()
+		expect(reload).toHaveBeenCalledTimes(1)
+		await Effect.runPromise(Fiber.interrupt(fiber))
+	})
+
 	it("needs no new page for another user while no cache was open", async () => {
 		await run(settleRememberedUser(ada))
 		await run(settleRememberedUser(grace))

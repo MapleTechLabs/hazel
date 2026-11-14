@@ -7,6 +7,7 @@
 import type { UserId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { forgetLocalCache } from "~/db/local-cache"
+import { forgetRememberedOrganizations } from "~/db/sync-manager"
 import { readStored, removeStored, writeStored } from "../data/storage"
 import { CurrentUser } from "../session"
 
@@ -47,15 +48,21 @@ export const makeRememberedSession = (cache: RememberedCache) => {
 		settle: (user: CurrentUser): Effect.Effect<void> =>
 			Effect.gen(function* () {
 				const remembered = yield* stored
+				const isOther = Option.isSome(remembered) && remembered.value.id !== user.id
+				// Removed first: should the write below fail, the next load must not start as them.
+				if (isOther) yield* forgetUser
 				yield* writeStored(REMEMBERED_USER_KEY, CurrentUser, user).pipe(Effect.ignore)
-				if (Option.isNone(remembered) || remembered.value.id === user.id) return
+				if (!isOther) return
 				if (yield* Effect.promise(() => cache.forget(remembered.value.id))) yield* startOver
 			}),
 	}
 }
 
 const session = makeRememberedSession({
-	forget: forgetLocalCache,
+	forget: (userId) => {
+		if (userId !== undefined) forgetRememberedOrganizations(userId)
+		return forgetLocalCache(userId)
+	},
 	reload: () => window.location.reload(),
 })
 

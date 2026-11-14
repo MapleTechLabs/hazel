@@ -12,8 +12,8 @@
  * sync, and two writers could leave a row older than the seq stored for its source, so any other
  * tab of that user works on a scratch file of its own: it starts empty and is deleted later.
  *
- * `localStorage["hazel:local-cache"] = "off"` turns the cache off; the app sets it itself when the
- * file cannot be opened.
+ * `localStorage["hazel:local-cache"] = "off"` turns the cache off. When the file cannot be opened
+ * the app turns it off itself, for a day.
  */
 import {
 	type BrowserWASQLiteDatabase,
@@ -37,13 +37,39 @@ const scratchFile = () => `${FILE_PREFIX}tab-${crypto.randomUUID().slice(0, 13)}
 
 const hasOpfs = () => typeof Worker !== "undefined" && typeof navigator.storage?.getDirectory === "function"
 
+/** How long the cache stays off after it could not be opened, before a load tries it again. */
+const RETRY_AFTER_MS = 24 * 60 * 60 * 1000
+const FAILED = /^failed:(\d+)$/
+
+/** `localStorage`, and `sessionStorage` for a failure `localStorage` had no room to record. */
+const flagStores = (): ReadonlyArray<Storage> =>
+	[globalThis.localStorage, globalThis.sessionStorage].filter((store) => store !== undefined)
+
+/** Off while a store says `off` (the user's, for good) or `failed:<ms>` (the app's, since a failed open). */
 const isOn = (): boolean => {
 	try {
-		return globalThis.localStorage?.getItem(FLAG_KEY) !== "off"
+		return flagStores().every((store) => {
+			const flag = store.getItem(FLAG_KEY)
+			const failedAt = FAILED.exec(flag ?? "")?.[1]
+			return (
+				flag !== "off" && (failedAt === undefined || Date.now() - Number(failedAt) >= RETRY_AFTER_MS)
+			)
+		})
 	} catch {
 		return false
 	}
 }
+
+/** Records a failed open; whether any store took it (without it, a reload would only fail again). */
+const turnOffAfterFailure = (): boolean =>
+	flagStores().some((store) => {
+		try {
+			store.setItem(FLAG_KEY, `failed:${Date.now()}`)
+			return true
+		} catch {
+			return false
+		}
+	})
 
 const openDatabase = (databaseName: string): Promise<BrowserWASQLiteDatabase> =>
 	localCacheHost()?.open(databaseName) ?? openBrowserWASQLiteOPFSDatabase({ databaseName })
@@ -63,9 +89,10 @@ const removeDatabase = async (databaseName: string): Promise<void> => {
 
 /**
  * Deletes every cache file but `keep` that no tab holds: the scratch files of tabs that are gone,
- * and the file of a user whose session ended while the tab holding it could not delete it.
+ * and the file of a user whose session ended while the tab holding it could not delete it. With
+ * no `keep` (the session ended) none may stay.
  */
-const removeStaleFiles = async (keep: string): Promise<void> => {
+const removeStaleFiles = async (keep?: string): Promise<void> => {
 	const root = await navigator.storage.getDirectory()
 	const held = new Set((await navigator.locks.query()).held?.map((lock) => lock.name))
 	const stale: Array<string> = []
@@ -151,8 +178,7 @@ export const bindLocalCache = (userId: UserId): void => {
 	opened = openFor(userId).catch((cause: unknown) => {
 		// The persisted collections cannot run without their file: turn the cache off and start over.
 		console.error("[local-cache] Could not open the cache; turning it off", cause)
-		globalThis.localStorage?.setItem(FLAG_KEY, "off")
-		window.location.reload()
+		if (turnOffAfterFailure()) window.location.reload()
 		return new Promise<never>(() => {})
 	})
 	resolveDatabase(opened.then((cache) => cache.database))
@@ -160,26 +186,31 @@ export const bindLocalCache = (userId: UserId): void => {
 
 /**
  * The session ended: deletes what is kept of the bound user, or of `userId` (the remembered user)
- * when the cache was never opened in this page. A file another tab holds is deleted by that tab
- * when it learns the same, or by the next tab to hold one. Whether a file was open here, in which
- * case the collections still hold its rows in memory and the page must load again.
+ * when the cache was never opened in this page, and every cache file no tab holds. A file another
+ * tab holds is deleted by that tab when it learns the same (`app/subscription.ts` hears the
+ * remembered user go), or by the next tab to hold one. Whether a file was open here, in which case
+ * the collections still hold its rows in memory and the page must load again.
  */
 export const forgetLocalCache = async (userId?: UserId): Promise<boolean> => {
 	if (isForgotten) return false
-	await channelSnapshots?.forget(userId)
+	const wasOpen = opened
+	if (wasOpen !== undefined) isForgotten = true
 	const user = boundUser ?? userId
-	if (localCachePersistence === undefined || user === undefined) return false
-	try {
-		if (opened === undefined) {
-			await removeDatabase(fileOf(user))
-			return false
+	const removeFiles = async () => {
+		if (wasOpen !== undefined) {
+			const { file, database: db } = await wasOpen
+			await db.close?.()
+			await removeDatabase(file)
 		}
-		isForgotten = true
-		const { file, database: db } = await opened
-		await db.close?.()
-		await Promise.all([...new Set([file, fileOf(user)])].map(removeDatabase))
-	} catch (cause) {
-		console.error("[local-cache] Could not delete the cache", cause)
+		if (localCacheHost() !== undefined || typeof navigator.locks?.query !== "function") {
+			if (user !== undefined) await removeDatabase(fileOf(user))
+		} else if (hasOpfs()) await removeStaleFiles()
 	}
-	return isForgotten
+	// Neither waits on the other: a store one cannot delete must not keep the other on disk.
+	const results = await Promise.allSettled([channelSnapshots?.forget(userId), removeFiles()])
+	for (const result of results) {
+		if (result.status === "rejected")
+			console.error("[local-cache] Could not delete the cache", result.reason)
+	}
+	return wasOpen !== undefined
 }

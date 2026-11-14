@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { given, role, scene, expect as sceneExpect } from "foldkit/scene"
 import { describe, expect, test } from "vitest"
+import { MAX_AUTO_RETRIES, update } from "../main"
 import { ada, after, boot, bootReturn, hazelOrg, rootScene } from "../test/root-fixtures"
-import { CheckSession, FetchCurrentUser } from "./command"
+import { CheckSession, FetchCurrentUser, RetryFetchCurrentUser } from "./command"
 import { Message } from "./message"
 import { currentUserOf } from "./model"
 
@@ -39,6 +40,21 @@ describe("a remembered user", () => {
 			Message.FailedFetchCurrentUser({ reason: "Offline" }),
 		])
 		expect(currentUserOf(model)).toEqual(ada)
+	})
+
+	test("is confirmed by retrying user.me behind them, a bounded number of times", () => {
+		const offline = Message.FailedFetchCurrentUser({ reason: "Offline" })
+		let result = update(boot("/hazel/settings/team", { rememberedUser: ada }), offline)
+		for (let retry = 1; retry <= MAX_AUTO_RETRIES; retry++) {
+			expect((result.commands ?? []).map((command) => command.name)).toEqual([
+				RetryFetchCurrentUser.name,
+			])
+			expect(currentUserOf(result.model)).toEqual(ada)
+			result = update(result.model, offline)
+		}
+		// Out of retries: still Ada's rows, and nothing more is asked.
+		expect(result.commands ?? []).toEqual([])
+		expect(currentUserOf(result.model)).toEqual(ada)
 	})
 
 	test("goes to sign-in once the session check says the session has ended", () => {

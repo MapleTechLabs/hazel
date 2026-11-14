@@ -156,13 +156,36 @@ describe("local cache", () => {
 		expect(reload).toHaveBeenCalledTimes(1)
 	})
 
-	it("turns itself off and reloads when the file cannot open", async () => {
+	it("turns itself off for a day and reloads when the file cannot open", async () => {
 		persistence.open.mockRejectedValue(new Error("OPFS unavailable"))
 		vi.spyOn(console, "error").mockImplementation(() => {})
+		vi.spyOn(Date, "now").mockReturnValue(1_000_000)
 		const cache = await loadModule()
 		cache.bindLocalCache(userA)
 		await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
-		expect(storage.get("hazel:local-cache")).toBe("off")
+		expect(storage.get("hazel:local-cache")).toBe("failed:1000000")
+
+		const dayMs = 24 * 60 * 60 * 1000
+		vi.spyOn(Date, "now").mockReturnValue(1_000_000 + dayMs - 1)
+		expect((await loadModule("failed:1000000")).localCachePersistence).toBeUndefined()
+		// A day later the next load tries the cache again.
+		vi.spyOn(Date, "now").mockReturnValue(1_000_000 + dayMs)
+		expect((await loadModule("failed:1000000")).localCachePersistence).toBeDefined()
+	})
+
+	it("does not reload when the failure cannot be recorded: the next load would only fail again", async () => {
+		persistence.open.mockRejectedValue(new Error("OPFS unavailable"))
+		vi.spyOn(console, "error").mockImplementation(() => {})
+		const cache = await loadModule()
+		vi.stubGlobal("localStorage", {
+			getItem: () => null,
+			setItem: () => {
+				throw new Error("QuotaExceededError")
+			},
+		})
+		cache.bindLocalCache(userA)
+		await vi.waitFor(() => expect(console.error).toHaveBeenCalled())
+		expect(reload).not.toHaveBeenCalled()
 	})
 
 	it("reloads a page restored from the back/forward cache: its database connection is gone", async () => {
@@ -185,9 +208,13 @@ describe("local cache", () => {
 		persistence.open.mockResolvedValue({ execute: async () => [], close: vi.fn() })
 		files.add(fileA).add(`${fileA}-journal`).add(`hazel-cache-${userB}.sqlite`)
 		const cache = await loadModule()
+		// A scratch file another tab still works on stays; every file nobody holds goes.
+		const openScratch = "hazel-cache-tab-open.sqlite"
+		locksHeldElsewhere.add(openScratch)
+		files.add(openScratch)
 		// No page shows the rows: nothing to load again.
 		await expect(cache.forgetLocalCache(userA)).resolves.toBe(false)
-		expect([...files]).toEqual([`hazel-cache-${userB}.sqlite`])
+		expect([...files]).toEqual([openScratch])
 
 		// A sign-in on the same page opens the cache, and its sign-out deletes it.
 		files.add(fileA)
@@ -196,6 +223,23 @@ describe("local cache", () => {
 		expect(reload).not.toHaveBeenCalled()
 		await expect(cache.forgetLocalCache()).resolves.toBe(true)
 		expect(files.has(fileA)).toBe(false)
+	})
+
+	it("leaves the user's file to the tab that holds it, and deletes its own scratch file", async () => {
+		const close = vi.fn()
+		persistence.open.mockResolvedValue({ execute: async () => [], close })
+		locksHeldElsewhere.add(fileA)
+		files.add(fileA)
+		const cache = await loadModule()
+		cache.bindLocalCache(userA)
+		await databaseOf().execute("SELECT 1")
+		const scratch = openedFiles()[0]!
+		files.add(scratch)
+
+		await expect(cache.forgetLocalCache()).resolves.toBe(true)
+		expect(close).toHaveBeenCalledTimes(1)
+		// The holder hears the remembered user go and deletes its file itself.
+		expect([...files]).toEqual([fileA])
 	})
 
 	it("closes and deletes the user's file when the session ends, and a later sign-in reloads", async () => {

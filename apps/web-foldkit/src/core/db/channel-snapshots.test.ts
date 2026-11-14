@@ -41,13 +41,13 @@ const memoryBackend = () => {
 describe("channel snapshots", () => {
 	const setup = () => {
 		const backends = new Map<UserId, ReturnType<typeof memoryBackend>>()
-		const destroyFor = vi.fn(async (_userId: UserId) => {})
+		const destroyRest = vi.fn(async (_userId?: UserId) => {})
 		const open = vi.fn(async (userId: UserId) => {
 			const created = memoryBackend()
 			backends.set(userId, created)
 			return created.backend
 		})
-		return { snapshots: makeChannelSnapshots(open, destroyFor), backends, open, destroyFor }
+		return { snapshots: makeChannelSnapshots(open, destroyRest), backends, open, destroyRest }
 	}
 
 	it("keeps channels only, and not who is typing", () => {
@@ -82,20 +82,22 @@ describe("channel snapshots", () => {
 	})
 
 	it("deletes the open store when the session ends, and reads and writes nothing after", async () => {
-		const { snapshots, backends } = setup()
+		const { snapshots, backends, destroyRest } = setup()
 		snapshots.bind(userA)
 		await snapshots.store.write("channel:c1", snapshotOf("hello"))
 		await snapshots.forget()
 		expect(backends.get(userA)?.state.destroyed).toBe(true)
+		// And whatever other sessions left behind.
+		expect(destroyRest).toHaveBeenCalledTimes(1)
 		await snapshots.store.write("channel:c1", snapshotOf("after"))
 		expect(backends.get(userA)?.kept.size).toBe(0)
 		await expect(snapshots.store.read("channel:c1")).resolves.toBeUndefined()
 	})
 
 	it("deletes the remembered user's states when no store is open, and still opens one later", async () => {
-		const { snapshots, backends, destroyFor } = setup()
+		const { snapshots, backends, destroyRest } = setup()
 		await snapshots.forget(userA)
-		expect(destroyFor.mock.calls).toEqual([[userA]])
+		expect(destroyRest.mock.calls).toEqual([[userA]])
 		snapshots.bind(userB)
 		await snapshots.store.write("channel:c1", snapshotOf("hello"))
 		expect(backends.get(userB)?.kept.size).toBe(1)
