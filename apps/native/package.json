@@ -35,6 +35,8 @@
 	"devDependencies": {
 		"@foldkit/vite-plugin": "0.29.0",
 		"@tailwindcss/vite": "^4.3.3",
+		"@tanstack/browser-db-sqlite-persistence": "1.0.0-rc.1.1",
+		"@tanstack/db": "1.0.0-rc.1.1",
 		"@types/node": "^24.19.2",
 		"playwright": "1.64.1",
 		"typescript": "catalog:tooling",

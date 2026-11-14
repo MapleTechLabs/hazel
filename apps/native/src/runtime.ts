@@ -66,6 +66,9 @@ export const startRuntime = async (platform: NativePlatform) => {
 		onNavigate: platform.onNavigate,
 	})
 	platform.onExit?.(shims.flushStorage)
+	// Read by the web app's local cache (`core/db/local-cache-host.ts`) as its modules load. Like
+	// `localStorage`, it is kept only with live data.
+	globalThis.__hazelLocalCacheHost = platform.localCache?.({ persist: config.dataMode === "live" })
 
 	/** The Tauri APIs the host answers: the keychain sign-in, and updates where it offers them. */
 	const desktopBridge = makeDesktopBridge({

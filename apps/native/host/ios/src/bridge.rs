@@ -217,8 +217,27 @@ pub(crate) fn reply(message: &serde_json::Value) {
     });
 }
 
+/// The local cache's reply `{ id, cache: text }` to a request `page`'s worker made. `text`
+/// crosses as one string, which the worker parses itself: the page never walks a large result.
+/// A reply to a page that has been replaced since is dropped, as its worker's ids mean nothing
+/// to the next.
+pub(crate) fn reply_cache(page: u64, id: u64, text: &str) {
+    if page != PAGE.get() {
+        return;
+    }
+    let script = format!(
+        r#"__hazel.reply({{"id":{id},"cache":{}}})"#,
+        json_string(text)
+    );
+    WEB.with_borrow(|web| {
+        if let Some(web) = web {
+            evaluate(web, &script);
+        }
+    });
+}
+
 fn json_string(text: &str) -> String {
-    serde_json::Value::String(text.to_string()).to_string()
+    serde_json::to_string(text).expect("a string serializes")
 }
 
 fn evaluate(web: &WebView, script: &str) {
@@ -335,6 +354,8 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
         }
     } else if let Some(text) = field("fetch") {
         crate::http::send(&text);
+    } else if let Some(text) = field("cache") {
+        crate::local_cache::send(text, PAGE.get());
     } else if let Some(entries) = field("storage") {
         // Saved before anything after it in the queue runs: a reload that follows loads it.
         let saved = crate::storage::data_dir()
@@ -521,6 +542,7 @@ fn load_page(mtm: MainThreadMarker, path: Option<&str>) {
         // first one did, once its page is ready, and the window forgets the old one's trees.
         let handle = HANDLE.get().map(|h| h.lock().unwrap().clone());
         shell::runtime_replaced(handle.as_ref());
+        crate::local_cache::reset();
     }
     let Some(html) = BUNDLE.with_borrow(|bundle| {
         let (source, _) = bundle.as_ref()?;

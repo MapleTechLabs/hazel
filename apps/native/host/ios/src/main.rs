@@ -10,6 +10,8 @@ mod http;
 mod islands;
 #[cfg(target_os = "ios")]
 mod keyboard;
+#[cfg(any(target_os = "ios", all(test, target_vendor = "apple")))]
+mod local_cache;
 #[cfg(target_os = "ios")]
 mod menu_sheet;
 #[cfg(any(test, target_os = "ios"))]

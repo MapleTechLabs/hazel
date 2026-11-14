@@ -9,6 +9,7 @@ import { parseHostLine } from "@hazel/foldkit-rune"
 import { PUSH_DEVICE_GLOBAL, type PushDevice } from "../../web-foldkit/src/platform/push-device"
 import { SYSTEM_UI_GLOBAL, type SystemUi } from "../../web-foldkit/src/platform/system-ui"
 import { readConfig } from "./config"
+import { type CacheRequest, makeIosLocalCache } from "./local-cache-ios"
 import type { NativePlatform } from "./platform"
 import { isAppPath, makePushDevice, type PushToken } from "./push"
 
@@ -40,6 +41,8 @@ export type IosRequest =
 	| { readonly openedPath: string }
 	/** `localStorage`'s entries to save (`host/ios/src/storage.rs`), as JSON. */
 	| { readonly storage: string }
+	/** A statement for the local cache's SQLite (`host/ios/src/local_cache.rs`), as JSON with its `id`. */
+	| { readonly cache: string }
 
 /** The host's answer to a `fetch` request. */
 type FetchReply =
@@ -59,7 +62,11 @@ const post = globalThis.postMessage.bind(globalThis)
 const request = (message: IosRequest) => post(message)
 const early: Array<string> = []
 let deliver: ((line: string) => void) | undefined
-const replies = new Map<number, (reply: FetchReply) => void>()
+/** The host's answer to a `cache` request: the reply's JSON text, parsed here. */
+type CacheReply = { readonly id: number; readonly cache: string }
+/** Requests waiting on the host, by the id each went out with. */
+const replies = new Map<number, (reply: FetchReply | CacheReply) => void>()
+let nextRequest = 0
 /** The edge swipe went back. */
 type BackReply = { readonly back: true }
 /** A notification's tap opens the app at this path (`host/ios/src/push.rs`). */
@@ -85,7 +92,7 @@ const goBack = () => {
 	// The runtime's link handling, as a tap on the chevron would follow it.
 	void import("./document-bridge").then(({ followLink }) => followLink(target.href))
 }
-const isHostReply = (data: FetchReply | HostReply): data is HostReply => !("id" in data)
+const isHostReply = (data: FetchReply | CacheReply | HostReply): data is HostReply => !("id" in data)
 /** Follows a notification's path, one of the app's own only (the host checks it too). */
 const openPath = (path: string) => {
 	if (!isAppPath(path, globalThis.location.href)) {
@@ -104,7 +111,7 @@ const hostReply = (reply: HostReply) => {
 	else if ("pushToken" in reply) whenStarted(() => void push?.register(reply))
 	else if ("openPath" in reply) whenStarted(() => openPath(reply.openPath))
 }
-globalThis.onmessage = (event: MessageEvent<string | FetchReply | HostReply>) => {
+globalThis.onmessage = (event: MessageEvent<string | FetchReply | CacheReply | HostReply>) => {
 	const data = event.data
 	if (typeof data !== "string" && isHostReply(data)) hostReply(data)
 	else if (typeof data !== "string") {
@@ -126,13 +133,12 @@ globalThis.onmessage = (event: MessageEvent<string | FetchReply | HostReply>) =>
  * which WebKit puts on every fetch from here. Everything else is the page's own fetch.
  */
 const webFetch = globalThis.fetch.bind(globalThis)
-let nextFetch = 0
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 	const outgoing = new Request(input, init)
 	if (outgoing.headers.get(nativeHeaders.modeHeader) !== "native") return webFetch(outgoing)
-	const id = ++nextFetch
+	const id = ++nextRequest
 	const body = ["GET", "HEAD"].includes(outgoing.method) ? undefined : await outgoing.text()
-	const reply = await new Promise<FetchReply>((resolve, reject) => {
+	const reply = await new Promise<FetchReply | CacheReply>((resolve, reject) => {
 		replies.set(id, resolve)
 		outgoing.signal.addEventListener("abort", () => {
 			replies.delete(id)
@@ -141,6 +147,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 		const headers = Object.fromEntries(outgoing.headers)
 		request({ fetch: JSON.stringify({ id, url: outgoing.url, method: outgoing.method, headers, body }) })
 	})
+	if ("cache" in reply) throw new TypeError("Load failed: not a fetch reply")
 	if ("error" in reply) throw new TypeError(`Load failed: ${reply.error}`)
 	const empty = [101, 204, 205, 304].includes(reply.status)
 	return new Response(empty ? null : reply.body, { status: reply.status, headers: reply.headers })
@@ -162,6 +169,16 @@ globalThis.addEventListener("error", (event) => {
 globalThis.addEventListener("unhandledrejection", (event) =>
 	log(`[uncaught rejection] ${describe(event.reason)}`),
 )
+
+/** One local cache request to the host; answers with its reply's text. */
+const askCache = (cacheRequest: CacheRequest) =>
+	new Promise<string>((resolve, reject) => {
+		const id = ++nextRequest
+		replies.set(id, (reply) =>
+			"cache" in reply ? resolve(reply.cache) : reject(new Error("not a local cache reply")),
+		)
+		request({ cache: JSON.stringify({ id, ...cacheRequest }) })
+	})
 
 const platform: NativePlatform = {
 	connect: (onMessage) => {
@@ -195,6 +212,7 @@ const platform: NativePlatform = {
 		load: () => __HAZEL_STORAGE__ ?? undefined,
 		save: (entries) => request({ storage: JSON.stringify(entries) }),
 	},
+	localCache: ({ persist }) => makeIosLocalCache({ persist, send: askCache }),
 	// No files from the worker: debug lines (`NATIVE_STATS`) go to the log, tagged with their file.
 	appendLine: (path, line) => log(`[${path}] ${line}`),
 	onNavigate: (from, to) => {
