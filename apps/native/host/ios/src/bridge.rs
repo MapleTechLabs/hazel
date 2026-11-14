@@ -57,6 +57,10 @@ thread_local! {
     /// The path a notification's tap opens, until a runtime says it followed it (`openedPath`):
     /// a page that ends before then (WebKit ended its process in the background) gets it again.
     static OPEN_PATH: RefCell<Option<String>> = const { RefCell::new(None) };
+    /// The web app's `localStorage` as last saved (JSON text), handed to every page it loads.
+    static STORAGE: RefCell<Option<String>> = const { RefCell::new(None) };
+    /// `NATIVE_STATS`: the launch's first tree is applied (1), and its frame is drawn (2).
+    static FIRST_TREE: Cell<u8> = const { Cell::new(0) };
 }
 
 /// Whether the page loaded last can take lines and replies.
@@ -126,9 +130,22 @@ pub fn poll(s: &mut State, at: f64, tx: &mut rune::Tx) -> bool {
     hazel_native::poll(s, at, tx)
 }
 
-/// A diagnostic line: stderr, and `hazel.log` in the app's temporary directory, which
-/// `xcrun simctl get_app_container <device> sh.hazel.ios data` finds under `tmp/`.
+/// When the process reached `main`: the log's lines count from here.
+static LAUNCHED: OnceLock<std::time::Instant> = OnceLock::new();
+
+/// Starts the log's clock; called first thing in `main`.
+pub fn mark_launch() {
+    let _ = LAUNCHED.set(std::time::Instant::now());
+}
+
+/// A diagnostic line, after the milliseconds since launch: stderr, and `hazel.log` in the app's
+/// temporary directory, which `xcrun simctl get_app_container <device> sh.hazel.ios data` finds
+/// under `tmp/`.
 pub fn log(line: &str) {
+    let at = LAUNCHED
+        .get()
+        .map_or(0.0, |launched| launched.elapsed().as_secs_f64() * 1000.0);
+    let line = &format!("{at:9.1} {line}");
     eprintln!("{line}");
     let path = std::env::temp_dir().join("hazel.log");
     if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -137,6 +154,16 @@ pub fn log(line: &str) {
         .open(path)
     {
         let _ = writeln!(file, "{line}");
+    }
+}
+
+/// A frame was drawn (`NATIVE_STATS`: the log says when the launch's first tree got on screen).
+pub fn frame_drawn() {
+    if FIRST_TREE.get() == 1 {
+        FIRST_TREE.set(2);
+        if environment_flag("NATIVE_STATS") {
+            log("[host] the first tree's frame is drawn");
+        }
     }
 }
 
@@ -190,8 +217,27 @@ pub(crate) fn reply(message: &serde_json::Value) {
     });
 }
 
+/// The local cache's reply `{ id, cache: text }` to a request `page`'s worker made. `text`
+/// crosses as one string, which the worker parses itself: the page never walks a large result.
+/// A reply to a page that has been replaced since is dropped, as its worker's ids mean nothing
+/// to the next.
+pub(crate) fn reply_cache(page: u64, id: u64, text: &str) {
+    if page != PAGE.get() {
+        return;
+    }
+    let script = format!(
+        r#"__hazel.reply({{"id":{id},"cache":{}}})"#,
+        json_string(text)
+    );
+    WEB.with_borrow(|web| {
+        if let Some(web) = web {
+            evaluate(web, &script);
+        }
+    });
+}
+
 fn json_string(text: &str) -> String {
-    serde_json::Value::String(text.to_string()).to_string()
+    serde_json::to_string(text).expect("a string serializes")
 }
 
 fn evaluate(web: &WebView, script: &str) {
@@ -232,6 +278,9 @@ fn receive(line: &str) {
                     started.elapsed().as_secs_f64() * 1000.0
                 ));
             }
+            if is_tree && FIRST_TREE.get() == 0 {
+                FIRST_TREE.set(1);
+            }
             // A navigation waiting on the next page moves once it is drawn.
             if is_tree {
                 crate::system::tree_applied();
@@ -269,6 +318,9 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
         // replaced since says so too late; its lines stay held for the new one.
         let page = ready.downcast::<NSNumber>().ok().map(|n| n.as_u64());
         if page == Some(PAGE.get()) {
+            if environment_flag("NATIVE_STATS") {
+                log("[host] the page is ready");
+            }
             REPLACING.set(false);
             for text in EARLY.take().unwrap_or_default() {
                 to_worker(&text);
@@ -302,6 +354,18 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
         }
     } else if let Some(text) = field("fetch") {
         crate::http::send(&text);
+    } else if let Some(text) = field("cache") {
+        crate::local_cache::send(text, PAGE.get());
+    } else if let Some(entries) = field("storage") {
+        // Saved before anything after it in the queue runs: a reload that follows loads it.
+        let saved = crate::storage::data_dir()
+            .ok_or_else(|| "the app has no folder for its data".to_string())
+            .and_then(|dir| crate::storage::save(&dir, &entries));
+        if let Err(error) = saved {
+            log(&format!("[host] localStorage was not saved: {error}"));
+        }
+        // The latest entries either way: a reload in this launch must not go back to older ones.
+        STORAGE.set(Some(entries));
     } else if let Some(text) = field("copy") {
         unsafe { UIPasteboard::generalPasteboard().setString(Some(&NSString::from_str(&text))) };
     } else if body.objectForKey(ns_string!("haptic")).is_some() {
@@ -401,6 +465,7 @@ fn start() -> bool {
     // The bundle's environment (`scripts/ios.ts` writes it).
     let bundled = read("environment.json").and_then(|text| serde_json::from_str(&text).ok());
     BUNDLE.set(Some((source, bundled)));
+    STORAGE.set(crate::storage::data_dir().and_then(|dir| crate::storage::load(&dir)));
 
     let configuration = unsafe { WKWebViewConfiguration::new(mtm) };
     let messages: Retained<RuntimeMessages> = {
@@ -478,10 +543,17 @@ fn load_page(mtm: MainThreadMarker, path: Option<&str>) {
         // first one did, once its page is ready, and the window forgets the old one's trees.
         let handle = HANDLE.get().map(|h| h.lock().unwrap().clone());
         shell::runtime_replaced(handle.as_ref());
+        crate::local_cache::reset();
     }
     let Some(html) = BUNDLE.with_borrow(|bundle| {
         let (source, _) = bundle.as_ref()?;
-        Some(NSString::from_str(&page::html(source, &env, id)))
+        let storage = STORAGE.with_borrow(Clone::clone);
+        Some(NSString::from_str(&page::html(
+            source,
+            &env,
+            storage.as_deref(),
+            id,
+        )))
     }) else {
         return;
     };

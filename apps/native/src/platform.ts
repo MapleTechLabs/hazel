@@ -1,11 +1,12 @@
 /**
  * What the runtime needs from the process it runs in: the host connection, a log, the system's
- * browser and clipboard, the stylesheet, saved storage, and file-backed debug output. `src/entry.ts` answers it
+ * browser and clipboard, the stylesheet, saved storage, SQLite, and file-backed debug output. `src/entry.ts` answers it
  * for Bun; the runtime itself (`src/runtime.ts`) touches no Bun or Node API beyond a global
  * `process.env` (and `process.platform`), which every platform provides.
  */
 import type { HostToRuntime, RuntimeToHost, StyleResolver } from "@hazel/foldkit-rune"
 import type { makeFixtureHtmlRender } from "./fixture/html-render"
+import type { LocalCacheHost } from "./local-cache"
 import type { PersistedStorage } from "./shims"
 
 export type NativePlatform = {
@@ -27,6 +28,11 @@ export type NativePlatform = {
 	readonly loadStyles: () => Promise<StyleResolver>
 	/** Keeps `localStorage` between launches (live data only). Absent: it starts empty every launch. */
 	readonly storage?: PersistedStorage
+	/**
+	 * SQLite for the web app's local cache (its synced rows, kept between launches), which has none
+	 * of its own here. `persist` false keeps every database in memory. Absent: no local cache.
+	 */
+	readonly localCache?: (options: { readonly persist: boolean }) => LocalCacheHost
 	/** Runs `work` as the process exits normally (the host asks it to quit). */
 	readonly onExit?: (work: () => void) => void
 	/** Appends a line to the file at `path` (`NATIVE_TREES_OUT`, `NATIVE_STATS`). Absent: no debug files. */

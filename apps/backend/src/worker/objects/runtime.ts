@@ -14,6 +14,9 @@
  * - `call`: a route's typed call (`./calls.ts`), flushed before it answers like `invoke`.
  * - `connect` / `onMessage` / `onClose`: the sync sockets.
  * - `alarm`: socket expiry, outbox retries, pruning, and the kind's own timers.
+ * - `warm`: a wake-up ahead of a load's sockets.
+ *
+ * Each entry's span carries `object.cold` and `isolate.cold` (`../cold-start.ts`).
  */
 import { Database, type StoreMigration, type StoreName, applyMigrations } from "@hazel/db"
 import { makeSyncedObject, type SyncObjectState, type SyncSocket, type SyncSource } from "@hazel/sync-do"
@@ -21,6 +24,7 @@ import type { AlarmStorageLike, SqlStorageLike } from "@hazel/sync-do"
 import { Context, Effect, Exit, FiberSet, Layer, Option, Result, Schema } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import { CurrentObject } from "../../lib/current-object"
+import { takeIsolateCold } from "../cold-start"
 import {
 	decodePayload,
 	encodeExit,
@@ -211,6 +215,17 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		const dispatcher = yield* makeRpcDispatcher.pipe(Effect.provideContext(handlers))
 		const calls = Context.get(handlers, ObjectCalls)
 
+		let served = false
+		/** Marks the entry's span: the first call this instance serves, and the isolate's first event. */
+		const markEntry = Effect.suspend(() => {
+			const objectCold = !served
+			served = true
+			return Effect.annotateCurrentSpan({
+				"object.cold": objectCold,
+				"isolate.cold": takeIsolateCold(),
+			})
+		})
+
 		const remember = (id: string) => run(identity.remember(id).pipe(Effect.orDie))
 		const afterCommit = run(synced.afterCommit)
 		// Outbox deliveries started after answering; they live as long as the instance.
@@ -264,6 +279,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 
 		const invoke = (request: InvokeRequest): Effect.Effect<InvokeResponse> =>
 			Effect.gen(function* () {
+				yield* markEntry
 				const id = yield* remember(request.objectId)
 				yield* prepare
 				const rpc = yield* rpcFor(request.tag).pipe(Effect.orDie)
@@ -299,6 +315,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 
 		const call = (request: CallRequest): Effect.Effect<CallResponse> =>
 			Effect.gen(function* () {
+				yield* markEntry
 				const id = yield* remember(request.objectId)
 				// A webhook is unauthenticated until its signature checks out: it never sets Customers up
 				// (no connection on an object that is not set up, so it answers 404).
@@ -321,6 +338,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 
 		const applyEffect = (request: ApplyEffectRequest): Effect.Effect<ApplyEffectResult> =>
 			Effect.gen(function* () {
+				yield* markEntry
 				yield* remember(request.objectId)
 				const result = yield* run(applyReceivedEffect(kind, request))
 				if (result._tag === "Applied") return { ...result, seq: yield* answer }
@@ -361,6 +379,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		 */
 		const connect = (request: Request) =>
 			Effect.gen(function* () {
+				yield* markEntry
 				const objectId = request.headers.get(OBJECT_ID_HEADER)
 				const principal = decodeSyncPrincipal(request.headers.get(PRINCIPAL_HEADER) ?? "")
 				if (objectId === null || Option.isNone(principal)) {
@@ -380,22 +399,26 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 				)
 			}).pipe(Effect.withSpan("SyncDO.connect", { attributes: { "object.kind": kind } }))
 
+		/** A wake-up (`POST /sync/warm`): the instance being built is all it asks for. */
+		const warm = markEntry.pipe(Effect.withSpan("SyncDO.warm", { attributes: { "object.kind": kind } }))
+
+		// A hibernated socket's event wakes the instance too: the next entry is not its first.
 		const onMessage = (socket: SyncSocket, message: string | ArrayBuffer) =>
-			run(synced.sync.onMessage(socket, message))
+			Effect.andThen(markEntry, run(synced.sync.onMessage(socket, message)))
 		const onClose = (socket: SyncSocket) =>
-			synced.sync
-				.onClose(socket)
-				.pipe(
-					Effect.andThen(
-						presence === undefined
-							? Effect.void
-							: Effect.flatMap(run(presence.closed(socket)), (changed) =>
-									changed ? Effect.asVoid(afterCommit) : Effect.void,
-								),
-					),
-				)
+			markEntry.pipe(
+				Effect.andThen(synced.sync.onClose(socket)),
+				Effect.andThen(
+					presence === undefined
+						? Effect.void
+						: Effect.flatMap(run(presence.closed(socket)), (changed) =>
+								changed ? Effect.asVoid(afterCommit) : Effect.void,
+							),
+				),
+			)
 
 		const alarm = Effect.gen(function* () {
+			yield* markEntry
 			if (kind === "channel") {
 				const changed = yield* run(runChannelTimers)
 				if (changed > 0) yield* afterCommit
@@ -424,6 +447,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			call,
 			adopt,
 			connect,
+			warm,
 			onMessage,
 			onClose,
 			alarm,

@@ -8,6 +8,7 @@ import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { stdioTransport, StyleResolver } from "@hazel/foldkit-rune"
 import { Option, Schema } from "effect"
+import { makeBunLocalCache } from "./local-cache-bun"
 import { overlayPlugin } from "./overlay-plugin"
 import type { NativePlatform } from "./platform"
 
@@ -78,6 +79,8 @@ const platform: NativePlatform = {
 			}
 		},
 	},
+	// The cache's databases sit beside `localStorage`'s file.
+	localCache: ({ persist }) => makeBunLocalCache(persist ? dirname(storagePath) : undefined),
 	onExit: (work) => process.on("exit", work),
 	appendLine: (path, line) => appendFileSync(path, `${line}\n`),
 	memoryUsedMb: () => process.memoryUsage().heapUsed / 1048576,

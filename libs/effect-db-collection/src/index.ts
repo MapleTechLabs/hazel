@@ -31,6 +31,7 @@ export {
 	type SyncTableSink,
 } from "./hub"
 export { SyncMux, type SyncMuxOptions } from "./mux"
+export { type SourceSnapshot, type SourceSnapshotStore } from "./snapshot"
 export { HISTORY_PAGE_SIZE, type HistoryDemand, type HistoryState } from "./history"
 export { extractPartitionValues } from "./subset"
 // Events

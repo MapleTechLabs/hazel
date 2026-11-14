@@ -9,6 +9,12 @@ import type { SyncSourceTerminalError } from "./errors"
 import { dispatchErrorStateChanged } from "./events"
 import { SyncMux } from "./mux"
 import {
+	SNAPSHOT_WRITE_DELAY_MS,
+	SourceRecorder,
+	type SourceSnapshot,
+	type SourceSnapshotStore,
+} from "./snapshot"
+import {
 	type BackoffConfig,
 	consoleLogger,
 	parseSourceKey,
@@ -40,6 +46,8 @@ export interface SyncHubConfig {
 	readonly releaseGraceMs?: number
 	/** How long a new connection waits for its sinks' resume points before it asks for a snapshot. @default 3000 */
 	readonly resumeTimeoutMs?: number
+	/** Keeps the last state of the sources it names, shown on their next open (`./snapshot.ts`). */
+	readonly snapshots?: SourceSnapshotStore
 	readonly log?: SyncLogger
 }
 
@@ -53,6 +61,8 @@ export interface SyncRunInfo {
 	readonly window?: SyncWindow | undefined
 	/** The run answers a `LoadOlder`. */
 	readonly page?: boolean
+	/** The rows are a source's kept state from an earlier load (`./snapshot.ts`), not its stream. */
+	readonly kept?: boolean
 }
 
 export interface SyncTableSink {
@@ -82,6 +92,8 @@ export interface SyncLease {
 export interface SyncRetention {
 	/** Resolves once every source is settled, with the first refusal if any source was refused. */
 	readonly settled: Promise<SyncSourceTerminalError | undefined>
+	/** Like `settled`, but only once every source's own snapshot is in (not a kept state shown for it). */
+	readonly delivered: Promise<SyncSourceTerminalError | undefined>
 	readonly isSettled: () => boolean
 	release(): void
 }
@@ -156,11 +168,14 @@ export class SyncHub {
 	/** Takes leases on all `sources`; see {@link SyncRetention}. */
 	retain(sources: Iterable<SourceKey>): SyncRetention {
 		const leases = [...new Set(sources)].map((source) => this.acquireKey(source))
-		const settled = Promise.all(leases.map((lease) => lease.connection.whenSettled())).then((errors) =>
-			errors.find((error) => error !== undefined),
-		)
+		const firstError = (errors: ReadonlyArray<SyncSourceTerminalError | undefined>) =>
+			errors.find((error) => error !== undefined)
+		const settled = Promise.all(leases.map((lease) => lease.connection.whenSettled())).then(firstError)
 		return {
 			settled,
+			get delivered() {
+				return Promise.all(leases.map((lease) => lease.connection.whenDelivered())).then(firstError)
+			},
 			isSettled: () => leases.every((lease) => lease.connection.isSettled),
 			release: () => {
 				for (const lease of leases) lease.release()
@@ -245,7 +260,11 @@ export class SyncHub {
 			log: this.log,
 		})
 		let wasError = false
+		/** The source's own stream has delivered: a kept state must not be shown over it. */
+		let hasDelivered = false
+		const kept = this.keep(source, connection)
 		const unsubscribeRuns = connection.subscribeRuns((run) => {
+			hasDelivered = true
 			const info = (table: string): SyncRunInfo => ({ window: run.windows.get(table), page: run.page })
 			if (run.reset) {
 				for (const set of this.sinks.values()) {
@@ -290,7 +309,10 @@ export class SyncHub {
 				})
 			}
 			// A refused source's rows are no longer visible to this principal.
-			if (status.state === "error" && status.terminal) this.dropSource(source)
+			if (status.state === "error" && status.terminal) {
+				this.dropSource(source)
+				kept?.forget()
+			}
 			for (const listener of this.statusListeners) {
 				try {
 					listener(source, status)
@@ -307,14 +329,81 @@ export class SyncHub {
 				unsubscribeRuns()
 				unsubscribeCommits()
 				unsubscribeStatus()
+				kept?.close()
 			},
 		}
 		this.entries.set(source, entry)
+		const showKept = (snapshot: SourceSnapshot | undefined) => {
+			// Nor over a source that refused the user while the state was read.
+			if (
+				snapshot === undefined ||
+				hasDelivered ||
+				connection.error !== undefined ||
+				this.entries.get(source) !== entry
+			)
+				return
+			const windows = new Map(snapshot.windows.map((window) => [window.table, window]))
+			for (const set of this.sinks.values()) {
+				for (const sink of set) {
+					const upserts = snapshot.tables[sink.table]
+					this.applyToSink(
+						sink,
+						source,
+						true,
+						upserts === undefined ? undefined : { upserts, deletes: [] },
+						{ window: windows.get(sink.table), page: false, kept: true },
+					)
+				}
+			}
+			connection.prime()
+		}
 		void this.resumePoint(source).then((since) => {
 			connection.resumeFrom(since)
 			connection.start()
+			// A source that resumes builds on the rows its sinks kept themselves.
+			if (since === null) void kept?.read().then(showKept)
 		})
 		return entry
+	}
+
+	/**
+	 * Follows `source`'s stream into the snapshot store, when the store keeps it: its state is
+	 * written a moment after each change, and when the source is let go.
+	 */
+	private keep(source: SourceKey, connection: SyncConnection) {
+		const store = this.config.snapshots
+		if (store === undefined || !store.keeps(source)) return undefined
+		const failed = (action: string) => (cause: unknown) =>
+			this.log("warning", `Could not ${action} a source's kept state`, { source, cause })
+		const recorder = new SourceRecorder(store.keepsTable)
+		let timer: ReturnType<typeof setTimeout> | undefined
+		let isForgotten = false
+		const write = () => {
+			clearTimeout(timer)
+			timer = undefined
+			const snapshot = recorder.snapshot()
+			if (snapshot !== undefined && !isForgotten) store.write(source, snapshot).catch(failed("write"))
+		}
+		const unsubscribe = connection.subscribeRuns((run) => {
+			if (recorder.apply(run)) timer ??= setTimeout(write, SNAPSHOT_WRITE_DELAY_MS)
+		})
+		return {
+			read: () =>
+				store.read(source).catch((cause: unknown) => {
+					failed("read")(cause)
+					return undefined
+				}),
+			/** The source refused this principal: nothing of it may show again. */
+			forget: () => {
+				isForgotten = true
+				clearTimeout(timer)
+				store.remove(source).catch(failed("remove"))
+			},
+			close: () => {
+				unsubscribe()
+				if (timer !== undefined) write()
+			},
+		}
 	}
 
 	/** The seq every sink holding `source` can resume after, or `null` for a snapshot. */
@@ -405,8 +494,9 @@ export class SyncHub {
 }
 
 /**
- * Holds `sources` open for the enclosing scope and waits until each is settled; fails with the
- * first refusal (4003, 4004).
+ * Holds `sources` open for the enclosing scope and waits until each has delivered its own
+ * snapshot (a kept state shown meanwhile is not enough: the caller wants what arrived since);
+ * fails with the first refusal (4003, 4004).
  */
 export const ensureSources = (
 	hub: SyncHub,
@@ -416,6 +506,6 @@ export const ensureSources = (
 		Effect.sync(() => hub.retain(sources)),
 		(retention) => Effect.sync(() => retention.release()),
 	).pipe(
-		Effect.flatMap((retention) => Effect.promise(() => retention.settled)),
+		Effect.flatMap((retention) => Effect.promise(() => retention.delivered)),
 		Effect.flatMap((error) => (error === undefined ? Effect.void : Effect.fail(error))),
 	)

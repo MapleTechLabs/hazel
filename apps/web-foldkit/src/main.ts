@@ -24,6 +24,7 @@ import {
 	SaveThemePreference,
 	SignOut,
 	WarmAccessToken,
+	WarmSyncObjects,
 } from "./app/command"
 import { Message } from "./app/message"
 import {
@@ -39,6 +40,7 @@ import {
 	shellContextOf,
 } from "./app/model"
 import { MOBILE_QUERY } from "./app/subscription"
+import { loadRememberedUser } from "./app/remembered-user"
 import { toPageMessage } from "./app/view"
 import { errorToast, errorToastOf, loadingToast, successToast } from "./data/actions"
 import { loadSoundSettings, SoundSettings } from "./notification-sound"
@@ -69,7 +71,7 @@ import {
 } from "./route"
 import * as Notifications from "./shell/notifications"
 import * as ChannelNavigation from "./shell/channels-sidebar/navigation"
-import type { CurrentUser, Member, Organization } from "./session"
+import { CurrentUser, type Member, type Organization } from "./session"
 import type { Resources } from "./rpc"
 import { loadIsCreateChannelHintDismissed } from "./shell/channels-sidebar"
 import { Message as ShellMessage, type Model as ShellModel } from "./shell/model"
@@ -100,6 +102,8 @@ export const Flags = Schema.Struct({
 	isMobile: Schema.Boolean,
 	/** `useFeatureHint("create-channel")`. */
 	isCreateChannelHintDismissed: Schema.Boolean,
+	/** The last session's user (`app/remembered-user.ts`): an app route starts signed in as them. */
+	rememberedUser: Schema.NullOr(CurrentUser),
 })
 export type Flags = typeof Flags.Type
 
@@ -112,6 +116,7 @@ export const flags: Effect.Effect<Flags> = Effect.all({
 	sessionStartMs: Clock.currentTimeMillis,
 	isMobile: Effect.sync(() => globalThis.matchMedia?.(MOBILE_QUERY).matches ?? false),
 	isCreateChannelHintDismissed: loadIsCreateChannelHintDismissed,
+	rememberedUser: loadRememberedUser,
 })
 
 /** Production builds skip the dev-only routes. Read once here, never inside `update`. */
@@ -563,8 +568,9 @@ const failedFetchCurrentUser =
 			}
 		if (model.session._tag !== "SignedIn") return { model }
 		const { user, retries } = model.session
-		const hasUser = AsyncData.hasData(user)
-		if (!hasUser && isRetryableReason(reason) && retries < MAX_AUTO_RETRIES)
+		// With a user on screen too (the remembered one, or the one being refreshed): the retries
+		// run behind them, and a remembered user is only confirmed by an answer.
+		if (isRetryableReason(reason) && retries < MAX_AUTO_RETRIES)
 			return {
 				model: modifyFields(model, {
 					session: () => Session.SignedIn({ user, retries: retries + 1 }),
@@ -689,7 +695,15 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 		{
 			route,
 			currentUrl: "",
-			session: Session.Loading({ isFetchingUser: isAppRoute }),
+			// The remembered user shows at once, from the local cache; the session check and
+			// `user.me` below still decide whether the session is theirs.
+			session:
+				isAppRoute && flags.rememberedUser !== null
+					? Session.SignedIn({
+							user: AsyncData.Refreshing({ data: flags.rememberedUser }),
+							retries: 0,
+						})
+					: Session.Loading({ isFetchingUser: isAppRoute }),
 			org: OrgState.None(),
 			isMobile: flags.isMobile,
 			nowMs: flags.sessionStartMs,
@@ -716,7 +730,17 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 		enteredRoute,
 		informShell,
 		redirect,
-		isAppRoute ? command(CheckSession(), FetchCurrentUser(), WarmAccessToken()) : command(CheckSession()),
+		isAppRoute
+			? command(
+					CheckSession(),
+					FetchCurrentUser(),
+					WarmAccessToken(),
+					WarmSyncObjects({
+						userId: flags.rememberedUser?.id ?? null,
+						channelId: chatChannelIdOf(route),
+					}),
+				)
+			: command(CheckSession()),
 	])
 }
 
@@ -770,6 +794,7 @@ export const update = (model: Model, message: Message): Return =>
 		FailedFetchCurrentUser: ({ reason }) => failedFetchCurrentUser(reason)(model),
 		PressedRetryCurrentUser: () => refreshCurrentUser(model),
 		CompletedWarmAccessToken: () => ({ model }),
+		CompletedWarmSyncObjects: () => ({ model }),
 		SucceededCreateDm: (succeeded) => succeededCreateDm(succeeded)(model),
 		FailedCreateDm: ({ organizationId, userId, reason }) =>
 			Update.combine(model, [

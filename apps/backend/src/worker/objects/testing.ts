@@ -49,6 +49,11 @@ export type TestObject = ObjectRuntime & {
 export interface TestObjects {
 	/** The object for `target`, created (and migrated) on first use. */
 	readonly get: (target: ObjectTarget) => Effect.Effect<TestObject>
+	/**
+	 * Evicts `target` and wakes it: a new in-memory instance over the storage it already has, as
+	 * workerd builds one for the first request after an eviction.
+	 */
+	readonly reactivate: (target: ObjectTarget) => Effect.Effect<TestObject>
 	readonly directory: Context.Context<Directory>
 	/** Envelopes appended to each bot's gateway. */
 	readonly published: Array<{
@@ -245,9 +250,11 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG)),
 		)
 
-		const create = (target: ObjectTarget) => {
-			const storage = makeFakeStorage()
-			const state = makeFakeState()
+		const create = (
+			target: ObjectTarget,
+			storage: FakeStorage = makeFakeStorage(),
+			state: ReturnType<typeof makeFakeState> = makeFakeState(),
+		) => {
 			return makeObjectRuntime({
 				kind: target.kind,
 				storage,
@@ -280,6 +287,13 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 				)
 			})
 
+		const reactivate = (target: ObjectTarget): Effect.Effect<TestObject> =>
+			Effect.flatMap(get(target), (evicted) =>
+				create(target, evicted.storage, evicted.state).pipe(
+					Effect.tap((object) => Effect.sync(() => objects.set(formatTarget(target), object))),
+				),
+			)
+
 		/** The api Worker's directory path: the handlers in process over the directory database. */
 		let directoryDispatcher: RpcDispatcherShape | undefined
 		const directoryPath = Effect.suspend(() =>
@@ -303,6 +317,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 
 		return {
 			get,
+			reactivate,
 			bucket,
 			pushes,
 			setApnsResult: (result) => {

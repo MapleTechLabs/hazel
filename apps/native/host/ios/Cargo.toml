@@ -10,6 +10,12 @@ hazel-native = { path = ".." }
 rune = { git = "https://github.com/Makisuo/rune", rev = "c3536c225a3a7e0bb8af798e011ef56fd4a8bb92" }
 serde_json = "1"
 
+# The local cache's databases (`src/local_cache.rs`), on the system's own SQLite; off Apple
+# platforms nothing builds it.
+[target.'cfg(target_vendor = "apple")'.dependencies]
+base64 = "0.22"
+rusqlite = { version = "0.42", default-features = false }
+
 # The hidden web view the runtime's worker runs in (`src/bridge.rs`), and the UIKit views of
 # native islands (`src/islands.rs`).
 [target.'cfg(target_os = "ios")'.dependencies]

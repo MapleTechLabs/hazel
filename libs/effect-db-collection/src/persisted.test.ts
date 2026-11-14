@@ -217,6 +217,43 @@ describe("persisted collections", () => {
 			expect(names(third.collection)).toEqual({ u1: "Ada L." })
 		})
 
+		it("is ready from storage with no rows, once the seq of each source was stored", async () => {
+			const path = tempDatabase()
+			const first = session(path, ["org:a"])
+			first.collection.preload()
+			;(await first.socket("org:a")).snapshot(7, { users: [] })
+			await vi.waitFor(() => expect(first.collection.status).toBe("ready"))
+			await seqsStored()
+			await first.unload()
+
+			// No row to show, and no source has answered: storage says there are none.
+			const second = session(path, ["org:a"])
+			await second.collection.preload()
+			expect(second.collection.status).toBe("ready")
+			expect(names(second.collection)).toEqual({})
+			const { socket, hello } = await helloOf(second, "org:a")
+			expect(hello).toMatchObject({ since: 7 })
+			socket.commit(8, { users: { upserts: [{ id: "u1", name: "Ada" }] } })
+			await vi.waitFor(() => expect(names(second.collection)).toEqual({ u1: "Ada" }))
+		})
+
+		it("waits for the source while storage holds no seq for it", async () => {
+			const path = tempDatabase()
+			const first = session(path, ["org:a"])
+			first.collection.preload()
+			;(await first.socket("org:a")).snapshot(7, { users: [] })
+			await vi.waitFor(() => expect(first.collection.status).toBe("ready"))
+			// Unloaded before the seq was stored.
+			await first.unload()
+
+			const second = session(path, ["org:a"])
+			second.collection.preload()
+			const { socket } = await helloOf(second, "org:a")
+			expect(second.collection.status).not.toBe("ready")
+			socket.snapshot(9, { users: [] })
+			await vi.waitFor(() => expect(second.collection.status).toBe("ready"))
+		})
+
 		it("asks for a snapshot after a run whose rows did not all reach the collection", async () => {
 			const path = tempDatabase()
 			const first = session(path, ["org:a"])

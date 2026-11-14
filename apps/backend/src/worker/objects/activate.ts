@@ -90,8 +90,10 @@ export const activateObject = (kind: ObjectKind) =>
 			const fetch = Effect.gen(function* () {
 				const request = yield* HttpServerRequest.HttpServerRequest
 				// Reaching here means the instance is built: a warm-up needs nothing else.
-				if (request.headers[WARM_HEADER] !== undefined)
+				if (request.headers[WARM_HEADER] !== undefined) {
+					yield* object.warm
 					return HttpServerResponse.empty({ status: 204 })
+				}
 				if (request.headers.upgrade?.toLowerCase() !== "websocket") {
 					return HttpServerResponse.text("Expected a WebSocket upgrade", { status: 426 })
 				}

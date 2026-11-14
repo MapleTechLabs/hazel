@@ -27,3 +27,10 @@ export const writeStored = <S extends Schema.Constraint>(key: string, schema: S,
 		Effect.provide(platformStorageLayer),
 		Effect.mapError((cause) => new StorageWriteError({ key, cause })),
 	)
+
+/** Removes a stored value; a store that cannot be reached leaves nothing to do. */
+export const removeStored = (key: string) =>
+	KeyValueStore.KeyValueStore.use((store) => store.remove(key)).pipe(
+		Effect.provide(platformStorageLayer),
+		Effect.ignore,
+	)

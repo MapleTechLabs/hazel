@@ -17,6 +17,7 @@ import {
 	DiscordGatewayObjectLive,
 } from "./worker/discord-gateway-object"
 import { HTML_RENDER_PENDING_MAX_AGE_SECONDS, HTML_RENDER_PENDING_PREFIX } from "./services/html-renders"
+import { takeIsolateCold } from "./worker/cold-start"
 import { apiEnv } from "./worker/env"
 import { buildApp, makeFetch } from "./worker/http"
 import { MessageLiveObject, MessageLiveObjectLive } from "./worker/live/message-live-object"
@@ -133,10 +134,14 @@ export default Api.make(
 
 		// Backstop: keep the Discord gateway session up across deploys and evictions.
 		yield* Cloudflare.Workers.cron("* * * * *", () =>
-			discordGateway.getByName(DISCORD_GATEWAY_NAME).ensureRunning(),
+			// The cron is an event too: a request after it is not the isolate's first.
+			Effect.andThen(
+				Effect.sync(takeIsolateCold),
+				discordGateway.getByName(DISCORD_GATEWAY_NAME).ensureRunning(),
+			),
 		)
 
-		return { fetch: makeFetch(app) }
+		return { fetch: makeFetch(app, env) }
 	}).pipe(
 		Effect.provide(
 			Layer.mergeAll(

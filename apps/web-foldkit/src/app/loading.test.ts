@@ -46,6 +46,7 @@ const boot = (path: string): Model =>
 					sessionStartMs: 0,
 					isMobile: false,
 					isCreateChannelHintDismissed: false,
+					rememberedUser: null,
 					keybindingOverrides: {},
 					keyboardPlatform: "linux",
 				},

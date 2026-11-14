@@ -10,6 +10,8 @@ mod http;
 mod islands;
 #[cfg(target_os = "ios")]
 mod keyboard;
+#[cfg(any(target_os = "ios", all(test, target_vendor = "apple")))]
+mod local_cache;
 #[cfg(target_os = "ios")]
 mod menu_sheet;
 #[cfg(any(test, target_os = "ios"))]
@@ -18,6 +20,8 @@ mod page;
 mod push;
 #[cfg(target_os = "ios")]
 mod sign_in;
+#[cfg(any(test, target_os = "ios"))]
+mod storage;
 #[cfg(target_os = "ios")]
 mod system;
 
@@ -26,6 +30,7 @@ fn main() {
     use hazel_native::{State, TEXT_SMOOTHING, dom_motion, frames, images, view, window_key};
     use rune::{App, AppSpec};
 
+    bridge::mark_launch();
     dom_motion();
     // The app's public assets sit at the bundle's top, beside the binary.
     if let Some(bundle) = std::env::current_exe()
@@ -51,6 +56,7 @@ fn main() {
     let app = App::new(spec)
         .font_smoothing(TEXT_SMOOTHING)
         .on_frame_drawn(|runtime| {
+            bridge::frame_drawn();
             frames::sync(runtime);
             hazel_native::islands::sync(runtime);
         });

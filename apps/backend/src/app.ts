@@ -34,9 +34,10 @@ import {
 	UserRepo,
 } from "@hazel/backend-core"
 import { Discord, GitHub, Slack } from "@hazel/integrations"
-import { Config, Effect, Layer, Option } from "effect"
+import { Effect, Layer } from "effect"
 import { HazelApi } from "./api"
 import { HttpApiRoutes } from "./http"
+import { corsPolicy } from "./lib/cors"
 import { ServerFailureReporterLive } from "./lib/error-reporter"
 import { AttachmentPolicy } from "./policies/attachment-policy"
 import { BotPolicy } from "./policies/bot-policy"
@@ -113,31 +114,7 @@ export const makeRoutes = <E, R, EX = never, RX = never>(
 		CustomersWebhookRoutes,
 		extra,
 	).pipe(
-		Layer.provide(
-			Layer.unwrap(
-				Effect.map(Config.option(Config.String("FRONTEND_URL")), (frontendUrl) =>
-					HttpRouter.cors({
-						allowedOrigins: [
-							...new Set([
-								"http://localhost:3000",
-								"http://localhost:3100",
-								"http://localhost:5173",
-								"https://app.hazel.sh",
-								"tauri://localhost",
-								"http://tauri.localhost",
-								// The stage's own web app (`https://app-pr-<n>.hazel.sh` on a preview).
-								...Option.toArray(Option.map(frontendUrl, (url) => new URL(url).origin)),
-							]),
-						],
-						allowedMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-						credentials: true,
-						// Without it a preflight is cached for 5s (Chrome), so each load's first session check,
-						// token exchange and RPC waited a round trip on `OPTIONS`. Chrome caps this at 2h.
-						maxAge: 7200,
-					}),
-				),
-			),
-		),
+		Layer.provide(Layer.unwrap(Effect.map(corsPolicy, HttpRouter.cors))),
 		// RpcServer and HttpApiBuilder report failed requests here; server failures get logged.
 		Layer.provide(ServerFailureReporterLive),
 	)

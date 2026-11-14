@@ -27,6 +27,12 @@ const HEADLESS_DOM_LATEST_MS = 2000
 export const startRuntime = async (platform: NativePlatform) => {
 	const config = readConfig(process.env)
 	const debug = config.debug ? platform.log : undefined
+	/** `NATIVE_STATS`: when boot reached `phase`, in ms since this process (or worker) began. */
+	const bootStat = (phase: string) => {
+		if (config.statsPath)
+			platform.appendLine?.(config.statsPath, JSON.stringify({ boot: phase, at: performance.now() }))
+	}
+	bootStat("runtime")
 
 	// What the web app reads as `import.meta.env` (under Bun, `process.env`): a production build,
 	// as the web app ships, unless `HAZEL_DEV=1`; and the backend it talks to.
@@ -60,6 +66,9 @@ export const startRuntime = async (platform: NativePlatform) => {
 		onNavigate: platform.onNavigate,
 	})
 	platform.onExit?.(shims.flushStorage)
+	// Read by the web app's local cache (`core/db/local-cache-host.ts`) as its modules load. Like
+	// `localStorage`, it is kept only with live data.
+	globalThis.__hazelLocalCacheHost = platform.localCache?.({ persist: config.dataMode === "live" })
 
 	/** The Tauri APIs the host answers: the keychain sign-in, and updates where it offers them. */
 	const desktopBridge = makeDesktopBridge({
@@ -80,14 +89,19 @@ export const startRuntime = async (platform: NativePlatform) => {
 	const { Layer } = await import("effect")
 	const { Runtime } = await import("foldkit")
 	const app = await import("../../web-foldkit/src/main")
+	// Every page area is in this bundle: loaded up front, a route opens its page at once.
+	const { loadPages } = await import("../../web-foldkit/src/page/registry")
+	await loadPages()
 	// The editor root's class: the composer field takes its padding, text size and minimum height.
 	const { EDITABLE_CLASS } = await import("../../web-foldkit/src/editor/editor-view")
 	const { ResourcesLive } = await import("../../web-foldkit/src/rpc")
 	const { NotificationSinks } = await import("../../web-foldkit/src/app/notification-sinks")
 	const PendingAnnouncement = await import("../../web-foldkit/src/ui/aria/pending-announcement")
 	const composer = await import("./composer")
+	bootStat("app modules")
 
 	const styles = await platform.loadStyles()
+	bootStat("styles")
 	const onLink = (href: string) => {
 		debug?.(`[link] ${href}`)
 		followLink(href)
@@ -238,6 +252,7 @@ export const startRuntime = async (platform: NativePlatform) => {
 		rune.handleHostMessage(message)
 	})
 
+	bootStat("connected")
 	Runtime.run(
 		Runtime.makeApplication({
 			Model: app.Model,

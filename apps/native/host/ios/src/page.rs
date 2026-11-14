@@ -76,9 +76,15 @@ pub fn environment(
 }
 
 /// The page: it runs the runtime's source in a module worker (from a Blob, after the host's
-/// environment) and relays between it and the host.
-pub fn html(source: &str, env: &Value, id: u64) -> String {
-    let start = format!("__hazel.start({}, {})", json!(source), env);
+/// environment and `storage`: the saved `localStorage` entries, one JSON object of strings, which
+/// the worker reads as that object) and relays between it and the host.
+pub fn html(source: &str, env: &Value, storage: Option<&str>, id: u64) -> String {
+    let start = format!(
+        "__hazel.start({}, {}, {})",
+        json!(source),
+        env,
+        json!(storage)
+    );
     // Nothing in the inline script may end it early (`</script>`, `<!--`): every `<` is inside a
     // JSON string there, where `\u003c` reads the same.
     let start = start.replace('<', "\\u003c");
@@ -88,8 +94,11 @@ const host = window.webkit.messageHandlers.hazel
 let worker
 const early = []
 window.__hazel = {{
-    start(source, env) {{
-        const head = `globalThis.__HAZEL_ENV__ = ${{JSON.stringify(env)}};\n`
+    start(source, env, storage) {{
+        // Parsed in the worker, not written as an object: a key such as `__proto__` stays a key.
+        const head =
+            `globalThis.__HAZEL_ENV__ = ${{JSON.stringify(env)}};\n` +
+            `globalThis.__HAZEL_STORAGE__ = JSON.parse(${{JSON.stringify(storage ?? "null")}});\n`
         const url = URL.createObjectURL(new Blob([head, source], {{ type: "text/javascript" }}))
         worker = new Worker(url, {{ type: "module" }})
         worker.onmessage = (event) => host.postMessage(event.data)
@@ -194,7 +203,8 @@ mod tests {
     fn nothing_in_the_source_or_environment_ends_the_inline_script() {
         let source = r#"const a = "</script><script>alert(1)</script>"; // <!-- -->"#;
         let env = json!({ "NATIVE_PATH": "/</script>" });
-        let page = html(source, &env, 1);
+        let storage = r#"{"note":"</script><!--"}"#;
+        let page = html(source, &env, Some(storage), 1);
         let (_, inline) = page.split_once("</script><script>").expect("two scripts");
         let inline = inline.strip_suffix("</script>").expect("one closing tag");
         assert!(!inline.contains('<'), "{inline}");
@@ -204,12 +214,14 @@ mod tests {
             .and_then(|s| s.strip_suffix(')'))
             .unwrap();
         let args: Value = serde_json::from_str(&format!("[{call}]")).unwrap();
-        assert_eq!(args, json!([source, env]));
+        assert_eq!(args, json!([source, env, storage]));
+        // Without saved entries the worker is handed `null`.
+        assert!(html("", &env, None, 1).ends_with(", null)</script>"));
     }
 
     #[test]
     fn the_page_says_it_is_ready_before_it_starts_the_worker() {
-        let page = html("", &json!({}), 7);
+        let page = html("", &json!({}), None, 7);
         // With its load's id: a page a later load replaced cannot release the new one's lines.
         let ready = page.find("host.postMessage({ ready: 7 })").expect("ready");
         let start = page.find("__hazel.start(").expect("start");

@@ -5,12 +5,13 @@
  * exchanges again, and a refused exchange dispatches `SESSION_REJECTED_EVENT` as before.
  */
 import type { SourceKey, SourceSet } from "@hazel/effect-db-collection"
-import { SyncHub, sourceSet } from "@hazel/effect-db-collection"
+import { SyncHub, type SyncHubConfig, sourceSet } from "@hazel/effect-db-collection"
 import { invalidateAccessToken, readAccessToken } from "~/lib/access-token"
+import { channelSnapshots } from "./local-cache"
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:3003"
 
-export const syncHub = new SyncHub({
+const hubConfig: SyncHubConfig = {
 	baseUrl: backendUrl,
 	getToken: readAccessToken,
 	invalidateToken: invalidateAccessToken,
@@ -19,7 +20,12 @@ export const syncHub = new SyncHub({
 	multiplex: true,
 	// Going back to a channel within this keeps its rows and live stream: no new snapshot.
 	releaseGraceMs: 3 * 60_000,
-})
+}
+
+export const syncHub = new SyncHub(
+	// A channel opened again later shows its last state while its source answers.
+	channelSnapshots === undefined ? hubConfig : { ...hubConfig, snapshots: channelSnapshots.store },
+)
 
 /** `user:<me>`, set by the connection manager once `user.me` answered. */
 export const userSources = sourceSet()

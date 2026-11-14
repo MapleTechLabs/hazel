@@ -28,6 +28,7 @@ import { type HistoryDemand, HistoryPager, type HistoryState } from "./history"
 import { ensureSources, type SyncHub, type SyncRetention, type SyncRunInfo, type SyncTableSink } from "./hub"
 import { extractPartitionValues } from "./subset"
 import { type SourceKey, sourceKey, type SyncLogger } from "./types"
+import { cursorOfWire, isBelowWindow } from "./window"
 
 export type { CollectionStatus } from "@tanstack/db"
 
@@ -97,13 +98,6 @@ interface MirrorRow<T> {
 	cursor: SyncPageCursor | undefined
 }
 
-/** A wire row's `(createdAt, id)`, when it has both as strings. */
-const cursorOfWire = (raw: unknown): SyncPageCursor | undefined => {
-	if (typeof raw !== "object" || raw === null) return undefined
-	const { createdAt, id } = raw as { readonly createdAt?: unknown; readonly id?: unknown }
-	return typeof createdAt === "string" && typeof id === "string" ? { createdAt, id } : undefined
-}
-
 /** The row metadata a persisted collection stores: the sources that held the row. */
 interface StoredRowMetadata {
 	readonly sources: ReadonlyArray<SourceKey>
@@ -121,18 +115,6 @@ const SEQ_PREFIX = "seq:"
 
 /** How long a persisted collection batches the seqs it stores (rows always land before them). */
 const SEQ_FLUSH_MS = 1000
-
-/** `(createdAt, id)` order; ISO timestamps compare as strings. */
-const compareCursor = (a: SyncPageCursor, b: SyncPageCursor): number =>
-	a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0
-
-/** Rows older than the window's start leave a gap below it: only paging brings them in. */
-const isBelowWindow = (window: SyncWindow | undefined, cursor: SyncPageCursor | undefined): boolean =>
-	window !== undefined &&
-	window.hasMore &&
-	window.oldest !== null &&
-	cursor !== undefined &&
-	compareCursor(cursor, window.oldest) < 0
 
 class SourceMirror<T extends object, TKey extends string | number> implements SyncTableSink {
 	readonly rows = new Map<TKey, MirrorRow<T>>()
@@ -161,6 +143,8 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 	 * instead of resuming past the missing rows. A clean snapshot of the source clears it.
 	 */
 	private readonly lossy = new Set<SourceKey>()
+	/** Sources restored with the seq their stored rows reflect. */
+	private readonly restoredSeqs = new Set<SourceKey>()
 	/** Sources whose stored seq is behind `seqs`. */
 	private readonly dirtySeqs = new Set<SourceKey>()
 	private seqFlush: ReturnType<typeof setTimeout> | undefined
@@ -194,6 +178,14 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 		return this.restored.then(() => (this.persistent ? (this.seqs.get(source) ?? null) : null))
 	}
 
+	/**
+	 * The stored rows of `source` are whole up to a stored seq: what the collection holds of it is
+	 * last session's truth, no rows included.
+	 */
+	isRestoredWhole(source: SourceKey): boolean {
+		return this.persistent && this.restoredSeqs.has(source)
+	}
+
 	onCommit(source: SourceKey, seq: SyncSeq): void {
 		if (!this.concerns(source)) return
 		if (this.lossy.has(source)) this.seqs.delete(source)
@@ -205,6 +197,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 	private markLossy(sources: Iterable<SourceKey>): void {
 		for (const source of sources) {
 			this.lossy.add(source)
+			this.restoredSeqs.delete(source)
 			if (this.seqs.delete(source)) this.markSeqDirty(source)
 		}
 	}
@@ -253,7 +246,10 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 	}
 
 	applyRun(source: SourceKey, reset: boolean, rows: SyncRunTable | undefined, info?: SyncRunInfo): void {
-		if (reset) {
+		if (reset && info?.kept === true) {
+			// Older than the stream: a persisted collection must not resume past what replaced its rows.
+			this.markLossy([source])
+		} else if (reset) {
 			this.delivered.add(source)
 			this.restoredSources.delete(source)
 			this.lossy.delete(source)
@@ -357,6 +353,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 	dropSource(source: SourceKey): void {
 		this.delivered.delete(source)
 		this.restoredSources.delete(source)
+		this.restoredSeqs.delete(source)
 		this.applyRows(source, true, undefined, undefined)
 		if (this.seqs.delete(source)) this.markSeqDirty(source)
 	}
@@ -406,6 +403,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 					const source = key.slice(SEQ_PREFIX.length) as SourceKey
 					if (typeof value === "number" && !this.delivered.has(source) && !this.seqs.has(source)) {
 						this.seqs.set(source, value as SyncSeq)
+						this.restoredSeqs.add(source)
 					}
 				}
 				this.target = params
@@ -719,12 +717,20 @@ function syncSourced<T extends object, TKey extends string | number>(
 	const leases = new Map<SourceKey, { release(): void }>()
 	let ready = false
 	let active = true
+	let isRestored = false
 
+	/** A source counts once it answered, or once storage gave back all it held of it. */
 	const checkReady = () => {
 		if (ready || !active) return
 		const current = set.get()
 		if (current === undefined) return
-		if (current.every((source) => hub.connectionOf(source)?.isSettled ?? false)) {
+		if (
+			current.every(
+				(source) =>
+					(hub.connectionOf(source)?.isSettled ?? false) ||
+					(isRestored && mirror.isRestoredWhole(source)),
+			)
+		) {
 			ready = true
 			params.markReady()
 		}
@@ -760,11 +766,13 @@ function syncSourced<T extends object, TKey extends string | number>(
 	// Stored rows show at once; each source's snapshot replaces its rows as it arrives.
 	restored?.then((hasRows) => {
 		if (!active) return
+		isRestored = true
 		dropUnwanted()
 		if (hasRows && !ready) {
 			ready = true
 			params.markReady()
 		}
+		checkReady()
 	})
 
 	return {

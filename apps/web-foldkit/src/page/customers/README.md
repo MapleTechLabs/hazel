@@ -1,7 +1,8 @@
 # Customers pages
 
 The Customers area (`docs/customers/tech-design.md` §6). Read `src/page/README.md` first: every page
-here is an ordinary page (`definePage`), registered in `src/page/registry.ts`.
+here is an ordinary page (`definePage`), registered in `pages.ts`, the Customers area's own chunk
+(`src/page/README.md`, "Lazy areas").
 
 ## Routes (`src/route.ts`)
 
