@@ -1,11 +1,12 @@
 /**
  * `GET /sync/:kind/:id`: what the route forwards (the principal's expiry) and how it closes a
  * socket it cannot serve (4001 for a bad token, 1011 for everything that is not the token's fault).
+ * `POST /sync/warm`: who may ask, and which objects it wakes.
  */
 import { Database } from "@hazel/db"
-import { CurrentUser, SessionLoadError } from "@hazel/domain"
+import { CurrentUser, InvalidBearerTokenError, SessionLoadError } from "@hazel/domain"
 import { SYNC_MUX_SUBPROTOCOL, SYNC_SUBPROTOCOL, SyncCloseCode } from "@hazel/domain/sync"
-import type { UserId } from "@hazel/schema"
+import type { OrganizationId, UserId } from "@hazel/schema"
 import { ConfigProvider, Context, Effect, Layer, Option, Tracer } from "effect"
 import { HttpRouter } from "effect/http"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -407,6 +408,25 @@ describe("sync warm-up", () => {
 		expect(channels.woken).toEqual([hostChannelId])
 	})
 
+	it("wakes every channel asked for, up to eight", async () => {
+		const channels = warmNamespace()
+		const looked: Array<string> = []
+		const ids = Array.from({ length: 10 }, () => crypto.randomUUID())
+		const send = build({
+			verify,
+			channel: (id) => {
+				looked.push(id)
+				return Effect.succeed(channelRow(id))
+			},
+			env: { UserObject: warmNamespace().namespace, ChannelObject: channels.namespace },
+		})
+		// A repeated id is looked up once.
+		const query = [ids[0], ...ids].map((id) => `channel=${id}`).join("&")
+		expect((await send.warm(`?${query}`)).status).toBe(204)
+		expect(looked).toEqual(ids.slice(0, 7))
+		expect(channels.woken.toSorted()).toEqual(ids.slice(0, 7).toSorted())
+	})
+
 	it("never wakes a channel the directory does not know, or a deleted one", async () => {
 		const channels = warmNamespace()
 		const unknown = build({
@@ -422,6 +442,112 @@ describe("sync warm-up", () => {
 		})
 		await deleted.warm(`?channel=${channelId}`)
 		expect(channels.woken).toEqual([])
+	})
+
+	it("wakes the orgs the caller is a member of, from one membership lookup", async () => {
+		const orgs = warmNamespace()
+		const [own, alsoOwn, foreign] = [1, 2, 3].map(() => crypto.randomUUID() as OrganizationId)
+		const lookups: Array<string> = []
+		const send = build({
+			verify,
+			organizationsOf: (id) => {
+				lookups.push(id)
+				return Effect.succeed([own!, alsoOwn!])
+			},
+			env: { UserObject: warmNamespace().namespace, OrgObject: orgs.namespace },
+		})
+		const response = await send.warm(`?org=${own}&org=${foreign}&org=not-an-org&org=${alsoOwn}`)
+		expect(response.status).toBe(204)
+		expect(orgs.woken.toSorted()).toEqual([own, alsoOwn].toSorted())
+		expect(lookups).toEqual([userId])
+
+		// No org asked for: no lookup.
+		await send.warm("")
+		expect(lookups).toEqual([userId])
+	})
+
+	it("wakes no org when the membership cannot be read, and still answers", async () => {
+		const orgs = warmNamespace()
+		const users = warmNamespace()
+		const send = build({
+			verify,
+			organizationsOf: () =>
+				Effect.fail(
+					new Database.DatabaseError({ type: "connection_error", message: "D1 down", cause: null }),
+				),
+			env: { UserObject: users.namespace, OrgObject: orgs.namespace },
+		})
+		expect((await send.warm(`?org=${crypto.randomUUID()}`)).status).toBe(204)
+		expect(orgs.woken).toEqual([])
+		expect(users.woken).toEqual([userId])
+	})
+
+	it("wakes the user object without waiting for the directory", async () => {
+		const users = warmNamespace()
+		const channels = warmNamespace()
+		const send = build({
+			verify,
+			// Answers only once the user object was asked to wake.
+			channel: (id) =>
+				Effect.promise(async () => {
+					while (users.woken.length === 0) await flush()
+					return channelRow(id)
+				}),
+			env: { UserObject: users.namespace, ChannelObject: channels.namespace },
+		})
+		expect((await send.warm(`?channel=${channelId}`)).status).toBe(204)
+		expect(channels.woken).toEqual([channelId])
+	})
+
+	it("takes a session credential as the bearer", async () => {
+		const users = warmNamespace()
+		const send = build({ verify, env: { UserObject: users.namespace } })
+		expect((await send.warm("", "an-opaque-session-credential")).status).toBe(204)
+		expect(users.woken).toEqual([userId])
+	})
+
+	it("takes the session cookie alone, and answers with the credentialed CORS headers", async () => {
+		const users = warmNamespace()
+		const seen: Array<string> = []
+		const send = build({
+			verify: () => Effect.succeed(Option.none()),
+			cookie: (headers, method) => {
+				seen.push(`${method} ${headers.origin}`)
+				return Effect.succeed(Option.some(user))
+			},
+			env: { UserObject: users.namespace },
+		})
+		// A CORS simple request: no custom header, so no preflight.
+		const response = await send.warm("", null, { origin: appOrigin, cookie: "session=1" })
+		expect(response.status).toBe(204)
+		expect(users.woken).toEqual([userId])
+		expect(seen).toEqual([`POST ${appOrigin}`])
+		expect(response.headers.get("access-control-allow-origin")).toBe(appOrigin)
+		expect(response.headers.get("access-control-allow-credentials")).toBe("true")
+	})
+
+	it("refuses a cookie the session refuses, and answers 503 when the store is down", async () => {
+		const users = warmNamespace()
+		const refused = build({
+			verify,
+			cookie: () =>
+				Effect.fail(
+					new InvalidBearerTokenError({
+						message: "Invalid session",
+						detail: "Untrusted origin for a cookie session",
+					}),
+				),
+			env: { UserObject: users.namespace },
+		})
+		expect((await refused.warm("", null, { origin: "https://evil.test" })).status).toBe(401)
+		const down = build({
+			verify: () => Effect.fail(new SessionLoadError({ message: "down", detail: "db" })),
+			cookie: () => Effect.fail(new SessionLoadError({ message: "down", detail: "db" })),
+			env: { UserObject: users.namespace },
+		})
+		expect((await down.warm("", null)).status).toBe(503)
+		expect((await down.warm("")).status).toBe(503)
+		expect(users.woken).toEqual([])
 	})
 
 	it("refuses a missing or invalid token, and wakes nothing", async () => {

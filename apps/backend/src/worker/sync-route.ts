@@ -21,10 +21,12 @@
  * way and relays its frames (`@hazel/sync-do` `mux.ts`). A browser opens WebSockets to a host one handshake
  * at a time, so a socket per source costs a load one round of handshakes per source.
  *
- * `POST /sync/warm?channel=<id>` wakes the objects a load is about to open, so a cold one starts
- * while the web app's script still loads (`index.html`): the caller's `UserObject`, and the
- * channel's object when the directory knows it (an unknown id must not create one). It carries
- * the access token as a bearer and answers 204 once they are up; the page does not wait for it.
+ * `POST /sync/warm?org=<id>&channel=<id>` (each up to 8 times) wakes the objects a load is about
+ * to open, so a cold one starts while the web app's script still loads (`index.html`): the
+ * caller's `UserObject`, the `OrgObject` of each org they are a member of, and each channel's
+ * object when the directory knows it (an unknown id must not create one). The caller is a bearer
+ * (access token or session credential) or the browser's session cookie; it answers 204 once they
+ * are up, and the page does not wait for it.
  *
  * Every `fetch` into an object carries the forwarding span as `traceparent`, so the object's
  * request span (and its `SyncDO.connect` or `SyncDO.warm`) is that span's child.
@@ -36,7 +38,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse, HttpTraceContext } f
 import { HazelSession } from "../services/hazel-session"
 import { ChannelId, OrganizationId, type UserId } from "@hazel/schema"
 import type { Socket } from "effect/socket"
-import { Directory } from "../services/directory"
+import { type ChannelIndexRow, Directory } from "../services/directory"
 import { isObjectKind, OBJECT_NAMESPACES, type ObjectKind } from "./objects/kinds"
 import { encodeSyncPrincipal, OBJECT_ID_HEADER, PRINCIPAL_HEADER, WARM_HEADER } from "./objects/principal"
 
@@ -54,6 +56,9 @@ const decodeOrganizationId = Schema.decodeUnknownOption(OrganizationId)
 
 /** Closed with this when the route cannot serve the socket right now; the client retries. */
 export const UNAVAILABLE = 1011
+
+/** `POST /sync/warm` reads this many `org` and `channel` parameters each; the rest are ignored. */
+const WARM_IDS_MAX = 8
 
 /** The object's `fetch` failed (overloaded, reset, unreachable). */
 class SyncForwardError extends Schema.TaggedError<SyncForwardError>()("SyncForwardError", {
@@ -146,6 +151,11 @@ const traceHeaders = Effect.currentSpan.pipe(
 	Effect.catchTag("NoSuchElementError", () => Effect.succeed<Record<string, string>>({})),
 )
 
+/** The first `WARM_IDS_MAX` values that decode, once each. */
+const warmIds = <A>(values: ReadonlyArray<string>, decode: (value: string) => Option.Option<A>) => [
+	...new Set(values.slice(0, WARM_IDS_MAX).flatMap((value) => Option.toArray(decode(value)))),
+]
+
 /** The object `kind`/`name` is up; a failure only means the socket wakes it later. */
 const warmObject = (namespace: Namespace, kind: ObjectKind, name: string) =>
 	Effect.flatMap(traceHeaders, (trace) =>
@@ -175,39 +185,102 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 					: undefined
 			}
 
+			const wake = (kind: ObjectKind, name: string) => {
+				const namespace = namespaceOf(kind)
+				return namespace === undefined ? Effect.void : warmObject(namespace, kind, name)
+			}
+
+			/**
+			 * Who asks for a warm-up, or the status they get instead: a bearer (access token or
+			 * session credential), else the browser's session cookie.
+			 *
+			 * The cookie is taken without the CSRF header the `/auth` routes require, so a page can
+			 * send this as a CORS simple request (no preflight) before it has a token: the route
+			 * only wakes objects and answers nothing. `fromCookie` still refuses a foreign `Origin`.
+			 */
+			const warmCaller = (request: HttpServerRequest.HttpServerRequest) =>
+				Effect.gen(function* () {
+					const refused = (status: 401 | 503) => ({ _tag: "Refused", status }) as const
+					const caller = (userId: UserId) => ({ _tag: "Caller", userId }) as const
+					const authorization = request.headers.authorization
+					const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : ""
+					if (token !== "") {
+						const verified = yield* verifySocketToken(session, token)
+						if (verified._tag === "Unavailable") return refused(503)
+						return Option.match(verified.user, {
+							onNone: () => refused(401),
+							onSome: ({ user }) => caller(user.id),
+						})
+					}
+					return yield* session.fromCookie(request.headers, request.method).pipe(
+						Effect.map(
+							Option.match({
+								onNone: () => refused(401),
+								onSome: (user) => caller(user.id),
+							}),
+						),
+						Effect.catchTags({
+							InvalidBearerTokenError: () => Effect.succeed(refused(401)),
+							SessionLoadError: (error) =>
+								Effect.logWarning("Warm-up session check unavailable", {
+									detail: error.detail,
+								}).pipe(Effect.as(refused(503))),
+						}),
+					)
+				})
+
 			yield* router.add(
 				"POST",
 				"/sync/warm",
 				Effect.gen(function* () {
 					const request = yield* HttpServerRequest.HttpServerRequest
-					const authorization = request.headers.authorization
-					const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : undefined
-					if (token === undefined || !isJwt(token)) return HttpServerResponse.empty({ status: 401 })
-					const verified = yield* verifySocketToken(session, token)
-					if (verified._tag === "Unavailable") return HttpServerResponse.empty({ status: 503 })
-					if (Option.isNone(verified.user)) return HttpServerResponse.empty({ status: 401 })
+					const caller = yield* warmCaller(request)
+					if (caller._tag === "Refused") return HttpServerResponse.empty({ status: caller.status })
 
-					const channelId = decodeChannelId(
-						new URL(request.url, "http://localhost").searchParams.get("channel"),
-					)
-					const channel = Option.isNone(channelId)
-						? Option.none()
-						: yield* directory
-								.channel(channelId.value)
-								.pipe(Effect.catchTag("DatabaseError", () => Effect.succeed(Option.none())))
-					const targets: Array<readonly [ObjectKind, string]> = [
-						["user", verified.user.value.user.id],
-					]
-					if (Option.isSome(channel) && channel.value.deletedAt === null) {
-						targets.push(["channel", channel.value.hostChannelId ?? channel.value.channelId])
-					}
-					yield* Effect.forEach(
-						targets,
-						([kind, name]) => {
-							const namespace = namespaceOf(kind)
-							return namespace === undefined ? Effect.void : warmObject(namespace, kind, name)
-						},
-						{ concurrency: "unbounded", discard: true },
+					const query = new URL(request.url, "http://localhost").searchParams
+					const organizationIds = warmIds(query.getAll("org"), decodeOrganizationId)
+					const channelIds = warmIds(query.getAll("channel"), decodeChannelId)
+					const each = { concurrency: "unbounded", discard: true } as const
+					// The user object wakes while D1 resolves the orgs and the channels.
+					yield* Effect.all(
+						[
+							wake("user", caller.userId),
+							// One `membership_index` read for every id: only the caller's own orgs.
+							organizationIds.length === 0
+								? Effect.void
+								: directory.organizationsOf(caller.userId).pipe(
+										Effect.catchTag("DatabaseError", () =>
+											Effect.succeed<ReadonlyArray<OrganizationId>>([]),
+										),
+										Effect.flatMap((own) =>
+											Effect.forEach(
+												organizationIds.filter((id) => own.includes(id)),
+												(id) => wake("org", id),
+												each,
+											),
+										),
+									),
+							Effect.forEach(
+								channelIds,
+								(id) =>
+									directory.channel(id).pipe(
+										Effect.catchTag("DatabaseError", () =>
+											Effect.succeed(Option.none<ChannelIndexRow>()),
+										),
+										Effect.flatMap(
+											Option.match({
+												onNone: () => Effect.void,
+												onSome: (row) =>
+													row.deletedAt === null
+														? wake("channel", row.hostChannelId ?? row.channelId)
+														: Effect.void,
+											}),
+										),
+									),
+								each,
+							),
+						],
+						each,
 					)
 					return HttpServerResponse.empty({ status: 204 })
 				}).pipe(Effect.withSpan("SyncRoute.warm")),
