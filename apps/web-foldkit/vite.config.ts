@@ -47,6 +47,37 @@ const immutableAssetHeaders = (): Plugin => ({
 	},
 })
 
+/**
+ * Prism's language files use the global its core sets, without importing it: each gets the import,
+ * so the core runs first in whatever chunk they land (the native bundle does the same,
+ * `apps/native/scripts/prism-plugin.ts`).
+ */
+const prismLanguagesImportCore = (): Plugin => ({
+	name: "hazel:prism-languages-import-core",
+	apply: "build",
+	transform(code, id) {
+		return /[\\/]prismjs[\\/]components[\\/]prism-[\w-]+\.js$/.test(id)
+			? { code: `import Prism from "prismjs";\n${code}`, map: null }
+			: null
+	},
+})
+
+/**
+ * What the app's first screen loads (`$initial`: reached by static imports from the entry), split
+ * so that a deploy which changes only app code leaves the libraries' chunks, and their cached
+ * copies, as they are. The last group keeps the app's own first-screen code in one chunk. Code
+ * only the lazy page areas use stays out of all of them (`src/page/registry.ts`).
+ */
+const initialChunks = [
+	{ name: "effect", test: /[\\/]node_modules[\\/]effect[\\/]/ },
+	{ name: "foldkit", test: /[\\/]node_modules[\\/](foldkit|@foldkit|@floating-ui)[\\/]/ },
+	{ name: "data", test: /[\\/]node_modules[\\/]@tanstack[\\/]/ },
+	{ name: "editor", test: /[\\/]node_modules[\\/](prosemirror-[\w-]+|orderedmap|rope-sequence)[\\/]/ },
+	// Not the font faces: their CSS stays in the app's one stylesheet.
+	{ name: "vendor", test: /^(?!.*[\\/]@fontsource[\\/]).*[\\/]node_modules[\\/]/ },
+	{ name: "app" },
+].map((group, index, groups) => ({ ...group, tags: ["$initial" as const], priority: groups.length - index }))
+
 export default defineConfig({
 	server: {
 		port: 3100,
@@ -61,8 +92,24 @@ export default defineConfig({
 	build: {
 		target: process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari14",
 		sourcemap: !!process.env.TAURI_ENV_DEBUG,
+		rolldownOptions: {
+			output: {
+				chunkFileNames: (chunk) => {
+					const area = /[\\/]src[\\/]page[\\/]([\w-]+)[\\/]pages\.ts$/.exec(
+						chunk.facadeModuleId ?? "",
+					)
+					return area ? `assets/${area[1]}-pages-[hash].js` : "assets/[name]-[hash].js"
+				},
+				codeSplitting: { groups: initialChunks },
+			},
+		},
 	},
-	plugins: [tailwindcss(), foldkit({ devToolsMcpPort: false }), immutableAssetHeaders()],
+	plugins: [
+		tailwindcss(),
+		foldkit({ devToolsMcpPort: false }),
+		prismLanguagesImportCore(),
+		immutableAssetHeaders(),
+	],
 	// The local cache's OPFS worker and wa-sqlite wasm resolve next to the package's own code.
 	optimizeDeps: { exclude: ["@tanstack/browser-db-sqlite-persistence"] },
 	resolve: {
