@@ -1,5 +1,5 @@
 import { ConfigProvider, Effect, Layer } from "effect"
-import { HttpClient, HttpClientResponse } from "effect/http"
+import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http"
 import type { HttpClientRequest } from "effect/http"
 import { describe, expect, it } from "vitest"
 import { ApnsClient, type ApnsNotification, importApnsKey, pkcs8Of, signProviderToken } from "./apns"
@@ -27,6 +27,7 @@ const notification: ApnsNotification = {
 	token: "ab".repeat(32),
 	topic: "app.hazel.ios",
 	expiration: 1_900_000_000,
+	collapseId: "n-1",
 	payload: {
 		aps: {
 			alert: { title: "Ada · #general", body: "hi" },
@@ -119,6 +120,10 @@ describe("ApnsClient", () => {
 		expect(headers["apns-push-type"]).toBe("alert")
 		expect(headers["apns-priority"]).toBe("10")
 		expect(headers["apns-expiration"]).toBe("1900000000")
+		expect(headers["apns-collapse-id"]).toBe("n-1")
+		// No trace propagation to Apple.
+		expect(headers.traceparent).toBeUndefined()
+		expect(headers.b3).toBeUndefined()
 		expect(headers.authorization).toMatch(/^bearer [\w-]+\.[\w-]+\.[\w-]+$/)
 		expect(requests[1]!.headers.authorization).toBe(headers.authorization)
 		const body = requests[0]!.body
@@ -136,6 +141,52 @@ describe("ApnsClient", () => {
 			ApnsClient.use((apns) => apns.send(notification)).pipe(Effect.provide(layer)),
 		)
 		expect(result).toEqual({ status: 410, reason: "Unregistered" })
+	})
+
+	it("re-signs the provider token once APNs calls it expired", async () => {
+		let answers = [403, 200]
+		const { layer, requests } = await clientWith(() => {
+			const status = answers[0]!
+			answers = answers.slice(1)
+			return status === 403
+				? new Response(JSON.stringify({ reason: "ExpiredProviderToken" }), { status })
+				: new Response(null, { status })
+		})
+		const results = await Effect.runPromise(
+			ApnsClient.use((apns) => Effect.all([apns.send(notification), apns.send(notification)])).pipe(
+				Effect.provide(layer),
+			),
+		)
+		expect(results).toEqual([
+			{ status: 403, reason: "ExpiredProviderToken" },
+			{ status: 200, reason: null },
+		])
+		expect(requests[1]!.headers.authorization).not.toBe(requests[0]!.headers.authorization)
+	})
+
+	it("fails a request that never reached APNs without naming the device", async () => {
+		const { pem } = await generateKey()
+		const http = Layer.succeed(
+			HttpClient.HttpClient,
+			HttpClient.make((request) =>
+				Effect.fail(
+					new HttpClientError.HttpClientError({
+						reason: new HttpClientError.TransportError({ request, description: "no HTTP/2" }),
+					}),
+				),
+			),
+		)
+		const config = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({ APNS_KEY_ID: "K", APNS_TEAM_ID: "T", APNS_PRIVATE_KEY: pem }),
+		)
+		const error = await Effect.runPromise(
+			ApnsClient.use((apns) => Effect.flip(apns.send(notification))).pipe(
+				Effect.provide(ApnsClient.layer.pipe(Layer.provide(Layer.mergeAll(http, config)))),
+			),
+		)
+		expect(error._tag).toBe("ApnsRequestError")
+		expect(error.message).toBe("APNs request failed (TransportError)")
+		expect(JSON.stringify(error)).not.toContain(notification.token)
 	})
 
 	it("is off without config", async () => {

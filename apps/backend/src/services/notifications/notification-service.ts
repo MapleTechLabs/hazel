@@ -4,7 +4,7 @@
  * (`./notification-rules.ts`), bumps each recipient's `notificationCount` and sends the
  * notification row to their `UserObject` (`user.createNotification`) through the outbox.
  */
-import { Database, SQLite, schema } from "@hazel/db"
+import { Database, type DatabaseError, SQLite, schema } from "@hazel/db"
 import type { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Array, Clock, Context, Effect, Layer } from "effect"
 import { enqueueEffect } from "../../worker/objects/effects/registry"
@@ -172,12 +172,21 @@ export class NotificationService extends Context.Service<NotificationService>()(
 				organizationId: OrganizationId,
 				activity: MessageActivity & {
 					readonly messageId: schema.Message["id"]
-					/** What a recipient's push says; absent: not pushed. */
-					readonly push?: PushContent | undefined
+					/**
+					 * What a recipient's push says; absent: not pushed. Run only when some recipient's
+					 * notification is not silent (silent ones are never pushed).
+					 */
+					readonly push?:
+						| Effect.Effect<PushContent | undefined, DatabaseError, Database.Database>
+						| undefined
 				},
 			) {
 				const notified = yield* recipients(organizationId, activity)
 				if (notified.length === 0) return notified
+				const push =
+					activity.push !== undefined && notified.some((recipient) => !recipient.silent)
+						? yield* activity.push
+						: undefined
 				yield* Effect.forEach(
 					Array.chunksOf(
 						notified.map((recipient) => recipient.channelMemberId),
@@ -203,7 +212,7 @@ export class NotificationService extends Context.Service<NotificationService>()(
 								messageId: activity.messageId,
 								reason: recipient.reason,
 								silent: recipient.silent,
-								...(activity.push === undefined ? {} : { push: activity.push }),
+								...(push === undefined || recipient.silent ? {} : { push }),
 							},
 							{ id: `notify:${activity.messageId}:${recipient.userId}` },
 						),

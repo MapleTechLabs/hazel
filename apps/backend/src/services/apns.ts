@@ -23,6 +23,9 @@ export const APNS_HOSTS: Record<ApnsEnvironment, string> = {
 	development: "https://api.sandbox.push.apple.com",
 }
 
+/** One request, answer read: well under the outbox's 10 s delivery timeout. */
+export const APNS_REQUEST_TIMEOUT_MS = 8_000
+
 /** How long a signed provider token is reused. */
 export const PROVIDER_TOKEN_TTL_MS = 50 * 60 * 1000
 
@@ -48,6 +51,8 @@ export interface ApnsNotification {
 	readonly topic: string
 	/** Epoch seconds after which APNs stops trying. */
 	readonly expiration: number
+	/** Copies with one collapse id show as one on the phone (a retried send). */
+	readonly collapseId: string
 	readonly payload: ApnsPayload
 }
 
@@ -57,10 +62,12 @@ export interface ApnsResult {
 	readonly reason: string | null
 }
 
-/** APNs was not reached (network, no HTTP/2, a timeout). */
+/**
+ * APNs was not reached (network, no HTTP/2, a timeout). No cause: the HTTP client's errors carry
+ * the URL, which names the device token, and this ends up in logs and the outbox's `last_error`.
+ */
 export class ApnsRequestError extends Schema.TaggedError<ApnsRequestError>()("ApnsRequestError", {
 	message: Schema.String,
-	cause: Schema.optional(Schema.Unknown),
 }) {}
 
 /** APNs answered with a failure worth retrying (429, 5xx, a stale provider token). */
@@ -72,9 +79,8 @@ export class ApnsRetryableError extends Schema.TaggedError<ApnsRetryableError>()
 export interface ApnsClientShape {
 	/** False when the `APNS_*` config is missing or the key does not import. */
 	readonly enabled: boolean
+	/** One push. On `ExpiredProviderToken` the next send signs a new provider token. */
 	readonly send: (notification: ApnsNotification) => Effect.Effect<ApnsResult, ApnsRequestError>
-	/** Forget the cached provider token (APNs called it expired or invalid). */
-	readonly invalidateToken: Effect.Effect<void>
 }
 
 // PROVIDER TOKEN
@@ -133,7 +139,6 @@ const ReasonBody = Schema.fromJsonString(Schema.Struct({ reason: Schema.optional
 const disabled: ApnsClientShape = {
 	enabled: false,
 	send: () => Effect.fail(new ApnsRequestError({ message: "APNs is not configured" })),
-	invalidateToken: Effect.void,
 }
 
 export class ApnsClient extends Context.Service<ApnsClient, ApnsClientShape>()("@hazel/backend/ApnsClient") {
@@ -173,8 +178,8 @@ export class ApnsClient extends Context.Service<ApnsClient, ApnsClientShape>()("
 			const rawKey = Redacted.value(config.privateKey.value)
 			const key = yield* Effect.tryPromise({
 				try: () => importApnsKey(rawKey),
-				catch: (cause) =>
-					new ApnsRequestError({ message: "APNS_PRIVATE_KEY does not import", cause }),
+				catch: () =>
+					new ApnsRequestError({ message: "APNS_PRIVATE_KEY does not import; push is off" }),
 			}).pipe(
 				Effect.catchTag("ApnsRequestError", (error) =>
 					Effect.logError(error.message).pipe(Effect.as(undefined)),
@@ -190,8 +195,7 @@ export class ApnsClient extends Context.Service<ApnsClient, ApnsClientShape>()("
 					return cached.token
 				const token = yield* Effect.tryPromise({
 					try: () => signProviderToken({ key, keyId, teamId, nowMs }),
-					catch: (cause) =>
-						new ApnsRequestError({ message: "Could not sign the provider token", cause }),
+					catch: () => new ApnsRequestError({ message: "Could not sign the provider token" }),
 				})
 				providerTokens.set(cacheKey, { token, issuedAtMs: nowMs })
 				return token
@@ -209,38 +213,53 @@ export class ApnsClient extends Context.Service<ApnsClient, ApnsClientShape>()("
 						"apns-push-type": "alert",
 						"apns-priority": "10",
 						"apns-expiration": String(notification.expiration),
+						"apns-collapse-id": notification.collapseId,
 					}),
 					HttpClientRequest.bodyJsonUnsafe(notification.payload),
 				)
-				const response = yield* client
-					.execute(request)
-					.pipe(
-						Effect.catchTag("HttpClientError", (cause) =>
-							Effect.fail(new ApnsRequestError({ message: "APNs request failed", cause })),
-						),
-					)
-				if (response.status === 200) return { status: 200, reason: null } satisfies ApnsResult
-				// A failure's body is `{"reason": "BadDeviceToken"}`; anything else has no reason.
-				const reason = yield* response.text.pipe(
-					Effect.flatMap(Schema.decodeUnknownEffect(ReasonBody)),
-					Effect.map((body) => body.reason ?? null),
+				const result = yield* client.execute(request).pipe(
+					Effect.flatMap((response) =>
+						response.status === 200
+							? Effect.succeed<ApnsResult>({ status: 200, reason: null })
+							: // A failure's body is `{"reason": "BadDeviceToken"}`; anything else has no reason.
+								response.text.pipe(
+									Effect.flatMap(Schema.decodeUnknownEffect(ReasonBody)),
+									Effect.map((body): ApnsResult => ({
+										status: response.status,
+										reason: body.reason ?? null,
+									})),
+									Effect.catchTag("SchemaError", () =>
+										Effect.succeed<ApnsResult>({ status: response.status, reason: null }),
+									),
+								),
+					),
+					Effect.timeout(APNS_REQUEST_TIMEOUT_MS),
+					// The client's own span would record the URL (the device token), and its trace
+					// headers have no business at Apple: this span is the request's.
+					Effect.provideService(HttpClient.TracerDisabledWhen, () => true),
 					Effect.catchTags({
-						HttpClientError: () => Effect.succeed(null),
-						SchemaError: () => Effect.succeed(null),
+						HttpClientError: (error) =>
+							Effect.fail(
+								new ApnsRequestError({
+									message: `APNs request failed (${error.reason._tag})`,
+								}),
+							),
+						TimeoutError: () =>
+							Effect.fail(new ApnsRequestError({ message: "APNs request timed out" })),
 					}),
 				)
+				// Compare and delete: of several sends refused with the same token, one re-signs.
+				if (result.status === 403 && result.reason === "ExpiredProviderToken") {
+					if (providerTokens.get(cacheKey)?.token === token) providerTokens.delete(cacheKey)
+				}
 				yield* Effect.annotateCurrentSpan({
-					"apns.status": response.status,
-					"apns.reason": reason ?? "",
+					"apns.status": result.status,
+					"apns.reason": result.reason ?? "",
 				})
-				return { status: response.status, reason } satisfies ApnsResult
+				return result
 			})
 
-			return {
-				enabled: true,
-				send,
-				invalidateToken: Effect.sync(() => void providerTokens.delete(cacheKey)),
-			} satisfies ApnsClientShape
+			return { enabled: true, send } satisfies ApnsClientShape
 		}),
 	)
 

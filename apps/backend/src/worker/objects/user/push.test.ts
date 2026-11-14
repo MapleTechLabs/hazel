@@ -52,7 +52,7 @@ describe("apnsOutcome", () => {
 		expect(apnsOutcome({ status: 400, reason: "BadDeviceToken" })).toBe("Unregistered")
 		expect(apnsOutcome({ status: 400, reason: "DeviceTokenNotForTopic" })).toBe("Unregistered")
 		expect(apnsOutcome({ status: 403, reason: "ExpiredProviderToken" })).toBe("ProviderToken")
-		expect(apnsOutcome({ status: 403, reason: "InvalidProviderToken" })).toBe("ProviderToken")
+		expect(apnsOutcome({ status: 403, reason: "InvalidProviderToken" })).toBe("Misconfigured")
 		expect(apnsOutcome({ status: 429, reason: "TooManyRequests" })).toBe("Retry")
 		expect(apnsOutcome({ status: 503, reason: "ServiceUnavailable" })).toBe("Retry")
 		expect(apnsOutcome({ status: 400, reason: "PayloadTooLarge" })).toBe("Rejected")

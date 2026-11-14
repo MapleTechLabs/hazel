@@ -23,8 +23,18 @@ export const CreateNotificationPayload = Schema.Struct({
 })
 export type CreateNotificationPayload = typeof CreateNotificationPayload.Type
 
+/** Messages deleted: their notifications go, so a deferred or retrying push finds nothing to send. */
+export const DeleteMessageNotificationsPayload = Schema.Struct({
+	messageIds: Schema.Array(MessageId).check(Schema.isMaxLength(90)),
+})
+
 export const MessageNotificationEffects = {
 	createNotification: defineEffect("user.createNotification", "user", CreateNotificationPayload),
+	deleteMessageNotifications: defineEffect(
+		"user.deleteMessageNotifications",
+		"user",
+		DeleteMessageNotificationsPayload,
+	),
 }
 
 export const createNotification = Effect.fn("UserEffects.createNotification")(function* (
@@ -52,6 +62,20 @@ export const createNotification = Effect.fn("UserEffects.createNotification")(fu
 	})
 })
 
+export const deleteMessageNotifications = Effect.fn("UserEffects.deleteMessageNotifications")(function* (
+	payload: typeof DeleteMessageNotificationsPayload.Type,
+) {
+	if (payload.messageIds.length === 0) return
+	const db = yield* Database.Database
+	yield* db.run(
+		SQLite.deleteFrom(schema.notificationsTable).where(($) => [
+			$.resourceId.in_(...payload.messageIds),
+			$.resourceType.eq("message"),
+		]),
+	)
+})
+
 export const messageNotificationReceivers = {
 	"user.createNotification": createNotification,
+	"user.deleteMessageNotifications": deleteMessageNotifications,
 }

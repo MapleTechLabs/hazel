@@ -7,7 +7,9 @@ import { CurrentUser, UnauthorizedError } from "@hazel/domain"
 import type { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Cause, Effect, Exit, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
+import { SQLite, schema } from "@hazel/db"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
+import { Directory } from "../../services/directory"
 import { channelTarget, orgTarget, userTarget } from "./kinds"
 import { encodeInvokePrincipal } from "./principal"
 import { makeTestObjects, makeTestObjectsWith, type TestObject, type TestObjects } from "./testing"
@@ -215,6 +217,7 @@ describe("push notifications", () => {
 						token: TOKEN,
 						topic: BUNDLE,
 						expiration: expect.any(Number),
+						collapseId: expect.any(String),
 						payload: {
 							aps: {
 								alert: { title: "Ada Lovelace · #general", body: "@Alice Liddell lunch?" },
@@ -380,20 +383,209 @@ describe("push notifications", () => {
 			}),
 		))
 
-	it("signs a new provider token when APNs calls it expired", () =>
+	it("retries an expired provider token; drops a push APNs refuses the key for", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeWorld(yield* makeTestObjects)
 				yield* register(world)
 				world.objects.setApnsResult({ status: 403, reason: "ExpiredProviderToken" })
 				yield* mentionAlice(world)
-				expect(world.objects.apnsTokenResets.count).toBe(1)
 				expect(pendingPushes(world.aliceObject)).toBe(1)
 
 				world.objects.setApnsResult({ status: 200, reason: null })
 				yield* runAlarm(world.aliceObject)
 				expect(world.objects.pushes.length).toBe(2)
 				expect(pendingPushes(world.aliceObject)).toBe(0)
+
+				world.objects.setApnsResult({ status: 403, reason: "InvalidProviderToken" })
+				yield* mentionAlice(world, "again")
+				expect(world.objects.pushes.length).toBe(3)
+				expect(pendingPushes(world.aliceObject)).toBe(0)
+				expect(devicesOf(world.aliceObject).length).toBe(1)
+			}),
+		))
+
+	it("collapses by notification, expires a day after it, and badges only unread sounds", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld(yield* makeTestObjects)
+				yield* register(world)
+				// A silent notification already waiting: not in the badge.
+				yield* world.aliceObject.applyEffect({
+					objectId: world.alice,
+					kind: "user.createNotification",
+					payload: {
+						memberId: uuid(),
+						channelId: world.channelId,
+						messageId: uuid(),
+						silent: true,
+					},
+					key: "silent",
+					sender: { kind: "org", id: world.orgId },
+				})
+				yield* mentionAlice(world)
+				const created = world.aliceObject.storage.db
+					.prepare(`SELECT id, createdAt FROM notifications WHERE silent = 0`)
+					.get() as { id: string; createdAt: string }
+				const [push] = world.objects.pushes
+				expect(push!.payload.aps.badge).toBe(1)
+				expect(push!.collapseId).toBe(created.id)
+				const createdMs = Date.parse(`${created.createdAt.replace(" ", "T").replace(/Z?$/, "Z")}`)
+				expect(push!.expiration).toBe(Math.floor((createdMs + 24 * 60 * 60 * 1000) / 1000))
+			}),
+		))
+
+	it("keeps at most 10 devices, dropping the least recently registered", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld(yield* makeTestObjects)
+				const tokens = Array.from({ length: 11 }, (_, i) =>
+					i.toString(16).padStart(2, "0").repeat(32),
+				)
+				for (const [i, token] of tokens.entries()) {
+					yield* register(world, token)
+					// Distinct registration times, oldest first.
+					world.aliceObject.storage.db
+						.prepare(`UPDATE push_devices SET updatedAt = ? WHERE token = ?`)
+						.run(new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(), token)
+				}
+				const left = devicesOf(world.aliceObject).map((device) => device.token)
+				expect(left.length).toBe(10)
+				expect(left).not.toContain(tokens[0])
+			}),
+		))
+
+	it("drops a deferred push once its message is deleted", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld(yield* makeTestObjects)
+				yield* register(world)
+				ok(
+					yield* call(
+						world.aliceObject,
+						world.alice,
+						"userPresenceStatus.heartbeat",
+						{},
+						world.alice,
+					),
+				)
+				const sent = yield* mentionAlice(world)
+				expect(pendingPushes(world.aliceObject)).toBe(1)
+
+				ok(
+					yield* call(
+						world.channel,
+						world.channelId,
+						"message.delete",
+						{ id: sent.id, channelId: world.channelId },
+						world.ada,
+					),
+				)
+				expect(notificationsOf(world.aliceObject)).toEqual([])
+
+				yield* runAlarm(world.aliceObject)
+				expect(world.objects.pushes).toEqual([])
+				expect(pendingPushes(world.aliceObject)).toBe(0)
+			}),
+		))
+})
+
+describe("push device ownership", () => {
+	const ownerOf = (world: World, token: string) =>
+		Directory.use(({ db }) =>
+			db.run(
+				SQLite.from(schema.pushDeviceTokensTable)
+					.select("userId")
+					.where(($) => [$.token.eq(token)]),
+			),
+		).pipe(
+			Effect.provideContext(world.objects.directory),
+			Effect.map((rows) => rows.map((row) => row.userId)),
+		)
+
+	it("a token registered by another user leaves the previous owner's object", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld(yield* makeTestObjects)
+				yield* register(world)
+				expect(yield* ownerOf(world, TOKEN)).toEqual([world.alice])
+
+				// Ada signs in on Alice's phone; Alice's unregister never landed.
+				const adaObject = yield* world.objects.get(userTarget(world.ada))
+				ok(
+					yield* call(
+						adaObject,
+						world.ada,
+						"pushDevice.register",
+						{ token: TOKEN, environment: "production", bundleId: BUNDLE },
+						world.ada,
+					),
+				)
+				expect(yield* ownerOf(world, TOKEN)).toEqual([world.ada])
+				// The forget goes out from Ada's outbox.
+				yield* runAlarm(adaObject)
+				expect(devicesOf(world.aliceObject)).toEqual([])
+				expect(devicesOf(adaObject).map((device) => device.token)).toEqual([TOKEN])
+
+				yield* mentionAlice(world)
+				expect(notificationsOf(world.aliceObject).length).toBe(1)
+				expect(world.objects.pushes).toEqual([])
+			}),
+		))
+
+	it("an older claim never takes a token back; unregister releases only one's own", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld(yield* makeTestObjects)
+				const adaObject = yield* world.objects.get(userTarget(world.ada))
+				ok(
+					yield* call(
+						adaObject,
+						world.ada,
+						"pushDevice.register",
+						{ token: TOKEN, environment: "production", bundleId: BUNDLE },
+						world.ada,
+					),
+				)
+				// Ada's registration is newer than Alice's claim (her claim arrives late): Alice's
+				// object forgets the token itself, and the directory keeps Ada.
+				yield* Directory.use(({ db }) =>
+					db.run(
+						SQLite.update(schema.pushDeviceTokensTable)
+							.set({ updatedAt: new Date(Date.now() + 60 * 60 * 1000) })
+							.where(($) => [$.token.eq(TOKEN)]),
+					),
+				).pipe(Effect.provideContext(world.objects.directory))
+				yield* register(world)
+				yield* runAlarm(world.aliceObject)
+				expect(devicesOf(world.aliceObject)).toEqual([])
+				expect(yield* ownerOf(world, TOKEN)).toEqual([world.ada])
+				expect(devicesOf(adaObject).length).toBe(1)
+
+				// A forget from anything but a UserObject is refused.
+				const refused = yield* adaObject.applyEffect({
+					objectId: world.ada,
+					kind: "user.forgetPushDevice",
+					payload: { token: TOKEN, claimedAt: new Date().toISOString() },
+					key: "forged",
+					sender: { kind: "org", id: world.orgId },
+				})
+				expect(refused._tag).toBe("Rejected")
+				expect(devicesOf(adaObject).length).toBe(1)
+
+				// Alice unregistering a token Ada holds leaves Ada's directory row.
+				ok(
+					yield* call(
+						world.aliceObject,
+						world.alice,
+						"pushDevice.unregister",
+						{ token: TOKEN },
+						world.alice,
+					),
+				)
+				expect(yield* ownerOf(world, TOKEN)).toEqual([world.ada])
+				ok(yield* call(adaObject, world.ada, "pushDevice.unregister", { token: TOKEN }, world.ada))
+				expect(yield* ownerOf(world, TOKEN)).toEqual([])
 			}),
 		))
 })

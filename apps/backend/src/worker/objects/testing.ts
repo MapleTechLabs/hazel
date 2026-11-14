@@ -87,8 +87,7 @@ export interface TestObjects {
 	readonly pushes: Array<ApnsNotification>
 	/** APNs's answer to the next pushes (default 200). */
 	readonly setApnsResult: (result: ApnsResult) => void
-	/** Provider token invalidations APNs asked for. */
-	readonly apnsTokenResets: { count: number }
+
 	/** Run `tag` (decoded payload) on the directory path, as the api Worker does for D1 methods. */
 	readonly invokeDirectory: (
 		tag: string,
@@ -218,7 +217,6 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 		)
 		const pushes: Array<ApnsNotification> = []
 		let apnsResult: ApnsResult = { status: 200, reason: null }
-		const apnsTokenResets = { count: 0 }
 		const apns = Layer.succeed(ApnsClient, {
 			enabled: options.apns ?? true,
 			send: (notification) =>
@@ -226,7 +224,6 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 					pushes.push(structuredClone(notification))
 					return apnsResult
 				}),
-			invalidateToken: Effect.sync(() => void apnsTokenResets.count++),
 		})
 		const platform = Layer.mergeAll(
 			apns,
@@ -311,7 +308,6 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			setApnsResult: (result) => {
 				apnsResult = result
 			},
-			apnsTokenResets,
 			invokeDirectory: (tag, payload, principal) =>
 				isolated(
 					Effect.flatMap(directoryPath, (dispatcher) =>

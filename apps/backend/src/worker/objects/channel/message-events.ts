@@ -6,7 +6,7 @@
  *
  * - bots: `botGateway.messageEvent` (message create, update, delete);
  * - notifications: `org.messageCreated` to the channel's `OrgObject` (`../org/message-notifications.ts`),
- *   with the content its push shows;
+ *   with the content its push shows; `org.messageDeleted` once it is deleted, which drops them;
  * - thread naming: `ai.nameThread` once a thread still called "Thread" has more than 3 replies.
  * - search: `org.indexMessages` (message create, update, delete), `./search-index.ts`.
  *
@@ -79,10 +79,22 @@ const botGatewayHook: MessageEventHook = (event) =>
 
 const notificationsHook: MessageEventHook = (event) =>
 	Effect.gen(function* () {
-		if (event._tag !== "MessageCreated") return
+		if (!("message" in event)) return
 		const { message } = event
+		const deleted =
+			event._tag === "MessageDeleted" || (event._tag === "MessageUpdated" && message.deletedAt !== null)
+		if (event._tag !== "MessageCreated" && !deleted) return
 		const organizationId = yield* channelOrganization
 		if (Option.isNone(organizationId)) return
+		if (deleted) {
+			yield* enqueueEffect(
+				MessageNotificationOrgEffects.messageDeleted,
+				{ kind: "org", id: organizationId.value },
+				{ channelId: message.channelId, messageId: message.id },
+				{ id: `unnotify:${message.id}` },
+			)
+			return
+		}
 		const db = yield* Database.Database
 		const mentions = parseMentions(message.content)
 		// Only a message with no text needs its attachments counted ("Sent an attachment").
@@ -113,7 +125,7 @@ const notificationsHook: MessageEventHook = (event) =>
 				mentionedUserIds: mentions.userMentions,
 				notifyAll: mentions.hasChannelMention || mentions.hasHereMention,
 				replyToAuthorId: Option.getOrNull(Option.map(replyTo, (row) => row.authorId)),
-				content: message.content.slice(0, NOTIFICATION_CONTENT_MAX),
+				content: Array.from(message.content).slice(0, NOTIFICATION_CONTENT_MAX).join(""),
 				attachmentCount: Option.match(attachments, {
 					onNone: () => 0,
 					onSome: (row) => Number(row.count),

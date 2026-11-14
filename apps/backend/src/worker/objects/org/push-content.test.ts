@@ -40,6 +40,8 @@ describe("push content", () => {
 		const body = pushBody("a".repeat(500), 0, names)
 		expect(body.length).toBe(PUSH_BODY_MAX)
 		expect(body.endsWith("…")).toBe(true)
+		const emoji = pushBody("😀".repeat(300), 0, names)
+		expect(emoji).toBe(`${"😀".repeat(PUSH_BODY_MAX - 1)}…`)
 		expect(pushBody("  ", 2, names)).toBe("Sent an attachment")
 		expect(pushBody("", 0, names)).toBe("Sent a message")
 	})

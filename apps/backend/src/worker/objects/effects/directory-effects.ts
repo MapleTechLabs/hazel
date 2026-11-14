@@ -5,10 +5,12 @@
 import { SQLite, schema } from "@hazel/db"
 import { ChannelId, ChannelWebhookId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
+import type { SqlClient } from "effect/sql/SqlClient"
 import { Directory, type DirectoryShape } from "../../../services/directory"
 import { DirectoryWireEffects, directoryWireReceivers } from "../directory-wire"
 import { ConnectDirectoryEffects, connectDirectoryReceivers } from "../connect-wire"
 import { UserProjection } from "../org/projections"
+import { PushDirectoryEffects, pushDirectoryReceivers } from "../user/push-ownership"
 import { ChatSyncDirectoryEffects } from "../../../services/chat-sync/chat-sync-effects"
 import { chatSyncDirectoryReceivers } from "../../../services/chat-sync/chat-sync-index"
 import { CurrentEffectSender, defineEffect, type EffectReceivers, requireOrgSender } from "./registry"
@@ -73,6 +75,7 @@ export const DirectoryEffects = {
 	...DirectoryWireEffects,
 	...ChatSyncDirectoryEffects,
 	...ConnectDirectoryEffects,
+	...PushDirectoryEffects,
 }
 
 /** Index rows an org owns are written only by that org's own `OrgObject` (its outbox). */
@@ -133,4 +136,5 @@ export const directoryReceivers = {
 	...directoryWireReceivers,
 	...chatSyncDirectoryReceivers,
 	...connectDirectoryReceivers,
-} satisfies EffectReceivers<typeof DirectoryEffects, Directory | CurrentEffectSender>
+	...pushDirectoryReceivers,
+} satisfies EffectReceivers<typeof DirectoryEffects, Directory | CurrentEffectSender | SqlClient>

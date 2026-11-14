@@ -59,8 +59,16 @@ export const plainTextOf = (content: string, names: ReadonlyMap<string, string>)
 		.replace(/\s+/g, " ")
 		.trim()
 
-const truncate = (text: string, max: number) =>
-	text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`
+/** At most `max` code points, so an emoji or a surrogate pair is never cut in half. */
+const truncate = (text: string, max: number) => {
+	const points = Array.from(text)
+	return points.length <= max
+		? text
+		: `${points
+				.slice(0, max - 1)
+				.join("")
+				.trimEnd()}…`
+}
 
 export const pushBody = (content: string, attachmentCount: number, names: ReadonlyMap<string, string>) => {
 	const text = plainTextOf(content, names)

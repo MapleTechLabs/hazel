@@ -36,6 +36,7 @@ import {
 	parseEffectTarget,
 } from "./registry"
 import { pushReceivers, PushEffects } from "../user/push"
+import { PushOwnershipUserEffects } from "../user/push-ownership"
 import { storageReceivers, StorageEffects } from "./storage-effects"
 import { userReceivers, UserEffects } from "./user-effects"
 
@@ -59,7 +60,8 @@ export const objectReceivers: Record<ObjectKind, Side<Database.Database | SqlCli
 	customers: side(CustomersEffects, customersReceivers),
 }
 
-const directorySide = side<Directory | CurrentEffectSender>(DirectoryEffects, directoryReceivers)
+// SqlClient: the sender's own outbox, for a directory step that passes work on (`push-ownership.ts`).
+const directorySide = side<Directory | CurrentEffectSender | SqlClient>(DirectoryEffects, directoryReceivers)
 const botGatewaySide = side<Database.Database | BotGatewayTransport | Directory>(
 	BotGatewayEffects,
 	botGatewayReceivers,
@@ -97,6 +99,13 @@ type SenderGuard = (
 const senderGuards: Partial<Record<ObjectKind, SenderGuard>> = {
 	channel: channelSenderRefusal,
 	customers: customersSenderRefusal,
+	// Only a `UserObject`'s claim of a device token makes another user's object forget it.
+	user: (kind, _payload, sender) =>
+		Effect.succeed(
+			kind === PushOwnershipUserEffects.forgetPushDevice.name && sender.kind !== "user"
+				? Option.some(`${kind} sent by ${sender.kind}`)
+				: Option.none(),
+		),
 	// Each check refuses only the kinds it owns; the first refusal wins.
 	org: (kind, payload, sender) =>
 		connectSenderRefusal(kind, payload, sender).pipe(

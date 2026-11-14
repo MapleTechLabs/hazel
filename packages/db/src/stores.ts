@@ -32,6 +32,7 @@ export const directoryTables = [
 	schema.integrationIndexTable,
 	schema.chatSyncIndexTable,
 	schema.chatSyncInstallationsTable,
+	schema.pushDeviceTokensTable,
 ] as const
 
 /** `OrgObject`, one per organization. */

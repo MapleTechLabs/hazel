@@ -1,5 +1,6 @@
+import { UserId } from "@hazel/schema"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
-import { textEnum, timestamptz, varchar } from "./columns"
+import { textEnum, timestamptz, uuid, varchar } from "./columns"
 
 export const pushEnvironmentEnum = textEnum(["development", "production"])
 
@@ -22,3 +23,20 @@ export const pushDevicesTable = SQLite.table("push_devices", {
 })
 export type PushDevice = SQLite.SelectRowOf<typeof pushDevicesTable>
 export type NewPushDevice = SQLite.InsertRowOf<typeof pushDevicesTable>
+
+/**
+ * Directory (D1): which user a device token belongs to now. A phone signed into another account
+ * moves its token: the new owner's claim makes the previous owner's `UserObject` forget it
+ * (`apps/backend/src/worker/objects/user/push-ownership.ts`).
+ */
+export const pushDeviceTokensTable = SQLite.table("push_device_tokens", {
+	columns: {
+		token: SQLite.text,
+		userId: uuid(UserId),
+		/** When the owner registered it; an older claim never overwrites a newer one. */
+		updatedAt: timestamptz,
+	},
+	primaryKey: ["token"],
+	indexes: [SQLite.index("push_device_tokens_user_id_idx", ["userId"])],
+})
+export type PushDeviceToken = SQLite.SelectRowOf<typeof pushDeviceTokensTable>

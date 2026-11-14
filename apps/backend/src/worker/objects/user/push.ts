@@ -94,8 +94,10 @@ export type ApnsOutcome =
 	| "Delivered"
 	/** The token is dead: forget the device. */
 	| "Unregistered"
-	/** The provider token was refused: sign a new one and retry. */
+	/** The provider token expired: the client signs a new one, retry. */
 	| "ProviderToken"
+	/** The provider token is wrong (key, key id or team): no retry fixes that. */
+	| "Misconfigured"
 	| "Retry"
 	/** Any other refusal: log and drop (retrying would not help). */
 	| "Rejected"
@@ -106,40 +108,48 @@ export const apnsOutcome = ({ status, reason }: ApnsResult): ApnsOutcome => {
 	if (status === 200) return "Delivered"
 	if (status === 410) return "Unregistered"
 	if (status === 400 && reason !== null && DEAD_TOKEN_REASONS.has(reason)) return "Unregistered"
-	if (status === 403 && (reason === "ExpiredProviderToken" || reason === "InvalidProviderToken")) {
-		return "ProviderToken"
-	}
+	if (status === 403 && reason === "ExpiredProviderToken") return "ProviderToken"
+	if (status === 403 && reason === "InvalidProviderToken") return "Misconfigured"
 	if (status === 429 || status >= 500) return "Retry"
 	return "Rejected"
 }
 
 // DEVICES
 
-export const registerDevice = (device: {
+/** A user's devices past this many: the least recently registered go. */
+export const MAX_PUSH_DEVICES = 10
+
+/** Register (or refresh) a device; returns its `updatedAt`. */
+export const registerDevice = Effect.fn("UserObject.registerDevice")(function* (device: {
 	readonly token: string
 	readonly environment: schema.PushDevice["environment"]
 	readonly bundleId: string
-}) =>
-	Effect.flatMap(Database.Database, (db) =>
-		Effect.flatMap(Clock.currentTimeMillis, (nowMs) =>
-			db.run(
-				SQLite.insertInto(schema.pushDevicesTable)
-					.values({ ...device, updatedAt: new Date(nowMs) })
-					.onConflictDoUpdate({
-						target: ["token"],
-						set: {
-							environment: device.environment,
-							bundleId: device.bundleId,
-							updatedAt: new Date(nowMs),
-						},
-					}),
-			),
-		),
+}) {
+	const db = yield* Database.Database
+	const updatedAt = new Date(yield* Clock.currentTimeMillis)
+	yield* db.run(
+		SQLite.insertInto(schema.pushDevicesTable)
+			.values({ ...device, updatedAt })
+			.onConflictDoUpdate({
+				target: ["token"],
+				set: { environment: device.environment, bundleId: device.bundleId, updatedAt },
+			}),
 	)
+	yield* db.query(
+		Database.sql`DELETE FROM push_devices WHERE token NOT IN (SELECT token FROM push_devices ORDER BY updatedAt DESC LIMIT ${MAX_PUSH_DEVICES})`,
+	)
+	return updatedAt
+})
 
-export const unregisterDevice = (token: string) =>
+/** Forget a device; with `registeredBy`, only if it was not registered again after that. */
+export const unregisterDevice = (token: string, registeredBy?: Date) =>
 	Effect.flatMap(Database.Database, (db) =>
-		db.run(SQLite.deleteFrom(schema.pushDevicesTable).where(($) => [$.token.eq(token)])),
+		db.run(
+			SQLite.deleteFrom(schema.pushDevicesTable).where(($) => [
+				$.token.eq(token),
+				...(registeredBy === undefined ? [] : [$.updatedAt.lte(registeredBy)]),
+			]),
+		),
 	)
 
 // SCHEDULING
@@ -232,16 +242,20 @@ const sendPush = Effect.fn("UserObject.sendPush")(function* (payload: PushSendPa
 		yield* Effect.annotateCurrentSpan({ "push.skipped": "disabled" })
 		return
 	}
+	// The badge: what would make a sound, unread.
 	const unread = yield* db.first(
 		SQLite.from(schema.notificationsTable)
 			.select(() => ({ count: SQLite.count() }))
-			.where(($) => [$.readAt.isNull()]),
+			.where(($) => [$.readAt.isNull(), $.silent.eq(false)]),
 	)
+	const sentAt = new Date(nowMs)
 	const result = yield* apns.send({
 		environment: device.value.environment,
 		token: payload.token,
 		topic: device.value.bundleId,
-		expiration: Math.floor((nowMs + PUSH_EXPIRATION_MS) / 1000),
+		expiration: Math.floor((notification.value.createdAt.getTime() + PUSH_EXPIRATION_MS) / 1000),
+		// A retry after a lost answer replaces the first copy on the phone.
+		collapseId: payload.notificationId,
 		payload: {
 			aps: {
 				alert: { title: payload.title, body: payload.body },
@@ -267,11 +281,16 @@ const sendPush = Effect.fn("UserObject.sendPush")(function* (payload: PushSendPa
 		case "Delivered":
 			return
 		case "Unregistered":
-			yield* unregisterDevice(payload.token)
+			// Not a registration that came in while this send was out.
+			yield* unregisterDevice(payload.token, sentAt)
 			return
 		case "ProviderToken":
-			yield* apns.invalidateToken
 			return yield* new ApnsRetryableError({ status: result.status, reason: result.reason })
+		case "Misconfigured":
+			yield* Effect.logError(
+				"APNs refused the provider token: check APNS_KEY_ID, APNS_TEAM_ID and APNS_PRIVATE_KEY",
+			)
+			return
 		case "Retry":
 			return yield* new ApnsRetryableError({ status: result.status, reason: result.reason })
 		case "Rejected":
