@@ -264,7 +264,7 @@ const sendPush = Effect.fn("UserObject.sendPush")(function* (payload: PushSendPa
 				"thread-id": payload.channelId,
 			},
 			hazel: {
-				...(payload.path === undefined ? {} : { path: payload.path }),
+				path: payload.path,
 				channelId: payload.channelId,
 				notificationId: payload.notificationId,
 			},

@@ -18,10 +18,10 @@ import { HttpClient, HttpClientRequest } from "effect/http"
 
 export type ApnsEnvironment = "development" | "production"
 
-export const APNS_HOSTS: Record<ApnsEnvironment, string> = {
+export const APNS_HOSTS = {
 	production: "https://api.push.apple.com",
 	development: "https://api.sandbox.push.apple.com",
-}
+} satisfies Record<ApnsEnvironment, string>
 
 /** One request, answer read: well under the outbox's 10 s delivery timeout. */
 export const APNS_REQUEST_TIMEOUT_MS = 8_000
@@ -76,7 +76,7 @@ export class ApnsRetryableError extends Schema.TaggedError<ApnsRetryableError>()
 	reason: Schema.NullOr(Schema.String),
 }) {}
 
-export interface ApnsClientShape {
+export interface ApnsSender {
 	/** False when the `APNS_*` config is missing or the key does not import. */
 	readonly enabled: boolean
 	/** One push. On `ExpiredProviderToken` the next send signs a new provider token. */
@@ -136,12 +136,12 @@ let loggedDisabled = false
 
 const ReasonBody = Schema.fromJsonString(Schema.Struct({ reason: Schema.optional(Schema.String) }))
 
-const disabled: ApnsClientShape = {
+const disabled: ApnsSender = {
 	enabled: false,
 	send: () => Effect.fail(new ApnsRequestError({ message: "APNs is not configured" })),
 }
 
-export class ApnsClient extends Context.Service<ApnsClient, ApnsClientShape>()("@hazel/backend/ApnsClient") {
+export class ApnsClient extends Context.Service<ApnsClient, ApnsSender>()("@hazel/backend/ApnsClient") {
 	/** APNs over the ambient `HttpClient`; the `APNS_*` config is read once. */
 	static readonly layer = Layer.effect(
 		this,
@@ -259,7 +259,7 @@ export class ApnsClient extends Context.Service<ApnsClient, ApnsClientShape>()("
 				return result
 			})
 
-			return { enabled: true, send } satisfies ApnsClientShape
+			return { enabled: true, send } satisfies ApnsSender
 		}),
 	)
 

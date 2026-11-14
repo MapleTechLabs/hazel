@@ -96,13 +96,14 @@ export const loadPushContent = Effect.fn("OrgObject.pushContent")(function* (inp
 			.limit(1),
 	)
 	if (Option.isNone(channel)) return undefined
+	const parentChannelId = channel.value.parentChannelId
 	const parent =
-		channel.value.parentChannelId === null
+		parentChannelId === null
 			? Option.none()
 			: yield* db.first(
 					SQLite.from(schema.channelsTable)
 						.select("type", "name")
-						.where(($) => [$.id.eq(channel.value.parentChannelId!)])
+						.where(($) => [$.id.eq(parentChannelId)])
 						.limit(1),
 				)
 	const organization = yield* db.first(
