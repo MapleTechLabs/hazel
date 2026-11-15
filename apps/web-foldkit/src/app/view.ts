@@ -77,6 +77,7 @@ const shellContextOf = (model: Model, data: ShellData): ShellContext => ({
 		email: data.user.email,
 		avatarUrl: data.user.avatarUrl,
 	},
+	currentUserId: data.user.id,
 	appVersion: __APP_VERSION__,
 	paletteKey: sharedOf(model).keys["commandPalette.open"],
 	createChannelKey: sharedOf(model).keys["channel.create"],

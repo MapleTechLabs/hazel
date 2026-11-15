@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import { forgetPaint, handOffPaint, hasLiveScreen, PAINT_KEY, savePaint, takePaint } from "./paint"
+import {
+	forgetPaint,
+	handOffPaint,
+	hasLiveScreen,
+	PAINT_KEY,
+	paintStorage,
+	savePaint,
+	takePaint,
+} from "./paint"
 import { hazelPaintBoot } from "./paint-boot.js"
 
 const USER = { id: "11111111-1111-4111-8111-111111111111" }
@@ -9,7 +17,7 @@ const PATH = "/acme/chat/22222222-2222-4222-8222-222222222222"
 let media = { mobile: false, dark: false }
 
 const shell = (page: string) => `
-	<div id="app" data-paint="shell">
+	<div id="app" data-paint="shell" data-paint-user="${USER.id}">
 		<aside><a href="/acme/chat/x" id="general">general</a></aside>
 		<main><div class="flex overflow-y-auto" style="height:10px">${page}</div></main>
 		<div role="dialog">a menu that was open</div>
@@ -44,14 +52,15 @@ const load = () => {
 
 describe("taking the paint", () => {
 	test("keeps the org shell, its scroll offsets and theme, and leaves out what was open over it", () => {
+		// jsdom keeps no layout: the offsets a browser would report.
 		const scroller = document.querySelector<HTMLElement>(".overflow-y-auto")!
-		scroller.scrollTop = 120
+		Object.defineProperty(scroller, "scrollTop", { value: 120 })
+		Object.defineProperty(scroller, "scrollLeft", { value: 4 })
 		const paint = takePaint(document, localStorage, 1000)!
 		expect(paint).toMatchObject({ userId: USER.id, path: PATH, theme: "dark", isMobile: false })
 		expect(paint.html).toContain("hello from the cache")
 		expect(paint.html).not.toContain("a menu that was open")
-		// jsdom keeps no layout, so the offset only shows when it reads one back.
-		if (scroller.scrollTop === 120) expect(paint.html).toContain('data-paint-scroll="120 0"')
+		expect(paint.html).toContain('data-paint-scroll="120 4"')
 	})
 
 	test("nothing while the app shows its loader, a list still loading, or no one is remembered", () => {
@@ -62,6 +71,36 @@ describe("taking the paint", () => {
 		document.body.innerHTML = shell("<p>rows</p>")
 		localStorage.removeItem("hazel:last-user")
 		expect(takePaint(document, localStorage, 0)).toBeNull()
+	})
+
+	test("never under another user than the one the screen was drawn for", () => {
+		// User B signed in (in this tab before its reload, or in another), while A's screen shows.
+		localStorage.setItem(
+			"hazel:last-user",
+			JSON.stringify({ id: "33333333-3333-4333-8333-333333333333" }),
+		)
+		savePaint(document, localStorage)
+		expect(localStorage.getItem(PAINT_KEY)).toBeNull()
+		// A screen that names no user is no one's.
+		localStorage.setItem("hazel:last-user", JSON.stringify(USER))
+		document.getElementById("app")!.removeAttribute("data-paint-user")
+		expect(takePaint(document, localStorage, 0)).toBeNull()
+	})
+
+	test("no storage where reading it throws", () => {
+		const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage")!
+		Object.defineProperty(window, "localStorage", {
+			configurable: true,
+			get: () => {
+				throw new DOMException("blocked", "SecurityError")
+			},
+		})
+		try {
+			expect(paintStorage()).toBeNull()
+		} finally {
+			Object.defineProperty(window, "localStorage", descriptor)
+		}
+		expect(paintStorage()).toBe(localStorage)
 	})
 
 	test("a screen too large to be worth reading is not kept", () => {

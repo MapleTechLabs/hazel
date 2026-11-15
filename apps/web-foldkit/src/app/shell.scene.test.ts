@@ -78,7 +78,8 @@ describe("the last screen's paint", () => {
 			rootScene,
 			given(after(signedIn("/hazel/chat"), [channelListsArrived])),
 			...menusMounted,
-			sceneExpect(selector('#app[data-paint="shell"]')).toExist(),
+			// Named for the signed-in user: a paint is only kept under its own user.
+			sceneExpect(selector(`#app[data-paint="shell"][data-paint-user="${ada.id}"]`)).toExist(),
 			sceneExpect(waiting).toBeAbsent(),
 		)
 	})

@@ -17,15 +17,26 @@ import { Cause, Config, Context, Effect, Layer, Option, Redacted, Schema } from 
  * 503 while it is unset. Drop this (and `@clerk/backend`) once Maple moves to Hazel-issued
  * OAuth tokens.
  */
-export class OAuthBearerAuth extends Context.Service<OAuthBearerAuth>()("@hazel/backend/OAuthBearerAuth", {
-	make: Effect.gen(function* () {
+/** The one part of Clerk's client this service calls. */
+interface ClerkVerifier {
+	readonly idPOAuthAccessToken: Pick<ClerkClient["idPOAuthAccessToken"], "verify">
+}
+
+/** Loads Clerk's SDK: `import("@clerk/backend")`, or a test's stand-in. */
+export type LoadClerk = () => Promise<{
+	readonly createClerkClient: (options: { readonly secretKey: string }) => ClerkVerifier
+}>
+
+/** The service, with Clerk's SDK loaded by `loadClerk` on the first token. */
+export const makeOAuthBearerAuth = (loadClerk: LoadClerk) =>
+	Effect.gen(function* () {
 		const secretKey = yield* Config.option(Config.Redacted("CLERK_SECRET_KEY"))
 		// The SDK loads on the first token, not with the layer: the objects build this layer too,
 		// and a cold isolate would otherwise evaluate it at start.
 		const clerk = Option.map(secretKey, (key) => {
-			let client: ClerkClient | undefined
+			let client: ClerkVerifier | undefined
 			return async () =>
-				(client ??= (await import("@clerk/backend")).createClerkClient({
+				(client ??= (await loadClerk()).createClerkClient({
 					secretKey: Redacted.value(key),
 				}))
 		})
@@ -43,10 +54,25 @@ export class OAuthBearerAuth extends Context.Service<OAuthBearerAuth>()("@hazel/
 						}),
 					)
 				}
-				const client = clerk.value
+				// The SDK failing to load is ours, not the token's: a 500, never "invalid token".
+				const client = yield* Effect.tryPromise({
+					try: clerk.value,
+					catch: (error) => error,
+				}).pipe(
+					Effect.tapError((error) =>
+						Effect.logError("Clerk SDK failed to load", Cause.fail(error)),
+					),
+					Effect.mapError(
+						() =>
+							new SessionLoadError({
+								message: "OAuth token verification is unavailable",
+								detail: "The Clerk SDK failed to load",
+							}),
+					),
+				)
 
 				const introspected = yield* Effect.tryPromise({
-					try: async () => (await client()).idPOAuthAccessToken.verify(accessToken),
+					try: () => client.idPOAuthAccessToken.verify(accessToken),
 					catch: (error) => error,
 				}).pipe(
 					Effect.tapError((error) =>
@@ -136,7 +162,10 @@ export class OAuthBearerAuth extends Context.Service<OAuthBearerAuth>()("@hazel/
 		return {
 			authenticate,
 		} as const
-	}),
+	})
+
+export class OAuthBearerAuth extends Context.Service<OAuthBearerAuth>()("@hazel/backend/OAuthBearerAuth", {
+	make: makeOAuthBearerAuth(() => import("@clerk/backend")),
 }) {
 	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(UserRepo.layer))
 }

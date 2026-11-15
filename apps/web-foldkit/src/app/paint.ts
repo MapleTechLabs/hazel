@@ -63,6 +63,9 @@ export const takePaint = (doc: Document, storage: Storage, nowMs: number): Store
 	const live = doc.getElementById("app")
 	const userId = rememberedUserId(storage)
 	if (live === null || userId === null || !live.matches(PAINT_SHELL)) return null
+	// The screen must be the remembered user's own: after a switch of user (in this tab or
+	// another), the page can still show the previous one's rows.
+	if (live.getAttribute("data-paint-user") !== userId) return null
 	if (live.querySelector(PAINT_WAITING) !== null) return null
 	const copy = live.cloneNode(true) as HTMLElement
 	// Same selector on the same tree: the copies line up with the originals.
@@ -161,6 +164,15 @@ export const handOffPaint = (doc: Document, maxMs: number = MAX_PAINT_MS): (() =
 	})
 	const timeout = setTimeout(done, maxMs)
 	return done
+}
+
+/** `localStorage`, or `null` where reading it throws (blocked storage, a partitioned frame). */
+export const paintStorage = (): Storage | null => {
+	try {
+		return globalThis.localStorage ?? null
+	} catch {
+		return null
+	}
 }
 
 /** Keeps the screen's paint while the page lives: when hidden or left, and now and then as it changes. */
