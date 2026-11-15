@@ -47,7 +47,7 @@ const lift = (result: {
 const OutcomeKind = Schema.Literals(["success", "warning", "error"])
 const isOutcome = Schema.is(OutcomeKind)
 
-const PlayToastFeedback = Command.define("PlayToastFeedback", {
+export const PlayToastFeedback = Command.define("PlayToastFeedback", {
 	args: { kind: OutcomeKind },
 	messages: [Message.CompletedToastFeedback],
 	execute: ({ kind }) =>

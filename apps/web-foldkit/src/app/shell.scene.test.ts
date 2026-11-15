@@ -24,7 +24,7 @@ import { AutoFocusSearch } from "../page/home/commands"
 import { Message as HomeMessage } from "../page/home/message"
 import { CreateChannel, FocusInput } from "../overlay/command-palette/commands"
 import { ada, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
-import { drainToast } from "../test/toast-fixtures"
+import { drainToast, playToastFeedback } from "../test/toast-fixtures"
 import * as CommandMenu from "../ui/command-menu"
 import { PortalCommandMenu } from "../ui/command-menu-view"
 import * as Menu from "../ui/menu"
@@ -159,6 +159,7 @@ describe("command palette", () => {
 			Mount.expectEnded(PortalCommandMenu),
 			sceneExpect(text("Channel created successfully")).toExist(),
 			// The toast enters, its 4s lifetime runs out, then it is removed after its exit animation.
+			playToastFeedback,
 			...drainToast(),
 			sceneExpect(text("Channel created successfully")).toBeAbsent(),
 		)
