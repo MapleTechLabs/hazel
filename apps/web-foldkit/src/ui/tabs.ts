@@ -44,7 +44,7 @@ export const layout = <M, Value extends string>(
 						info.value,
 						[
 							...info.tab,
-							...(info.isActive ? [] : [pressFeedback(h, "selection")]),
+							...(info.isActive || info.isDisabled ? [] : [pressFeedback(h, "selection")]),
 							h.Class(twMerge(...tabsStyles.tab("horizontal", false))),
 							h.DataAttribute("slot", "tab"),
 						],
