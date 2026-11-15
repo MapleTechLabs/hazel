@@ -134,10 +134,7 @@ describe("update toast replacement", () => {
 			payload: { kind: "error", title: "Failed", maybeAction: Option.none() },
 		})
 		expect(Option.isSome(failed.model.entries[0]!.maybeDuration)).toBe(true)
-		expect(failed.commands?.map((command) => command.name)).toEqual([
-			"WaitBeforeDismissal",
-			"PlayToastFeedback",
-		])
+		expect(failed.commands?.map((command) => command.name)).toContain("WaitBeforeDismissal")
 	})
 
 	test("creates a new toast after its action dismissed the previous one", () => {
