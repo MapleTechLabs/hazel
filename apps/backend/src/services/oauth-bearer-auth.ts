@@ -1,4 +1,4 @@
-import { createClerkClient } from "@clerk/backend"
+import type { ClerkClient } from "@clerk/backend"
 import { UserRepo } from "@hazel/backend-core"
 import { CurrentUser, SessionLoadError, UnauthorizedError } from "@hazel/domain"
 import { ClerkUserId } from "@hazel/schema"
@@ -20,7 +20,15 @@ import { Cause, Config, Context, Effect, Layer, Option, Redacted, Schema } from 
 export class OAuthBearerAuth extends Context.Service<OAuthBearerAuth>()("@hazel/backend/OAuthBearerAuth", {
 	make: Effect.gen(function* () {
 		const secretKey = yield* Config.option(Config.Redacted("CLERK_SECRET_KEY"))
-		const clerk = Option.map(secretKey, (key) => createClerkClient({ secretKey: Redacted.value(key) }))
+		// The SDK loads on the first token, not with the layer: the objects build this layer too,
+		// and a cold isolate would otherwise evaluate it at start.
+		const clerk = Option.map(secretKey, (key) => {
+			let client: ClerkClient | undefined
+			return async () =>
+				(client ??= (await import("@clerk/backend")).createClerkClient({
+					secretKey: Redacted.value(key),
+				}))
+		})
 		const userRepo = yield* UserRepo
 
 		const decodeClerkUserId = Schema.decodeUnknownEffect(ClerkUserId)
@@ -38,7 +46,7 @@ export class OAuthBearerAuth extends Context.Service<OAuthBearerAuth>()("@hazel/
 				const client = clerk.value
 
 				const introspected = yield* Effect.tryPromise({
-					try: () => client.idPOAuthAccessToken.verify(accessToken),
+					try: async () => (await client()).idPOAuthAccessToken.verify(accessToken),
 					catch: (error) => error,
 				}).pipe(
 					Effect.tapError((error) =>

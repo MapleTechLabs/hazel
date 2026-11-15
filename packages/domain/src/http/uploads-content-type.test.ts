@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { isActiveContentType } from "./content-type"
+import { isActiveContentType } from "./uploads"
 
 describe("isActiveContentType", () => {
 	it("lets ordinary single types through", () => {

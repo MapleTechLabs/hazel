@@ -52,8 +52,6 @@ import { PushDeviceRpcLive } from "./handlers/push-devices"
 import { TypingIndicatorRpcLive } from "./handlers/typing-indicators"
 import { UserPresenceStatusRpcLive } from "./handlers/user-presence-status"
 import { UserRpcLive } from "./handlers/users"
-import { AuthMiddlewareLive } from "./middleware/auth"
-import { ScopeInjectionMiddlewareLive } from "./middleware/scope-injection"
 import { ScopeInjectionMiddleware } from "@hazel/domain/rpc"
 
 /**
@@ -142,7 +140,9 @@ for (const [name, group] of rpcGroups) {
 
 /**
  * Every group's handlers, without the api middleware: what the objects and the api Worker's
- * directory path run in process (`./dispatch.ts`). Still requires the app services.
+ * directory path run in process (`./dispatch.ts`). Still requires the app services. The
+ * handlers behind the middleware (`RpcServerLive`) are in `app.ts`, which only the api Worker's
+ * HTTP side reaches: the auth middleware brings Hazel's sign-in.
  */
 export const RpcHandlersLive = Layer.empty
 	.pipe(
@@ -177,9 +177,3 @@ export const RpcHandlersLive = Layer.empty
 		Layer.provideMerge(CustomerQueueRpcLive),
 		Layer.provideMerge(CustomerAdminRpcLive),
 	)
-
-/** The handlers behind the api's own middleware, served in-process (tests). */
-export const RpcServerLive = RpcHandlersLive.pipe(
-	Layer.provideMerge(AuthMiddlewareLive),
-	Layer.provideMerge(ScopeInjectionMiddlewareLive),
-)
