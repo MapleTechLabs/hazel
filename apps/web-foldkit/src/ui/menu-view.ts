@@ -27,7 +27,7 @@ import {
 import { popoverContentBase, popoverInnerClassName } from "~/components/ui/popover.styles"
 import { IconCheck, IconChevronRight } from "../icons"
 import { type NativeMenuLook, nativeIsland } from "../platform/native-island"
-import { systemUi } from "../platform/system-ui"
+import { playFeedback } from "../platform/feedback"
 import { dismissButton, focusScopeSentinel, openModalPopover, positionOverlay } from "./aria/overlay"
 import { Placement } from "./aria/placement"
 import { MOBILE_QUERY } from "./viewport"
@@ -95,7 +95,7 @@ const PortalMenu = Mount.defineStream("PortalMenu", {
 					Effect.acquireRelease(
 						Effect.sync(() => {
 							// A long-press's menu taps the finger as it opens, where the shell can.
-							if (isSheetOnPhone) systemUi()?.haptic()
+							if (isSheetOnPhone) playFeedback("impact")
 							// useMenuItem focuses an item in onHoverStart, synchronously, so the click that follows
 							// lands on a focused item and never focuses it with the mouse (Chrome keeps :focus-visible).
 							const onPointerOver = (event: Event) => {

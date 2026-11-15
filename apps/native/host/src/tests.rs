@@ -3651,3 +3651,39 @@ fn pre_code_with_token_spans_breaks_at_its_newlines() {
         "boot starts its own line: {first:?} {boot:?}"
     );
 }
+
+#[test]
+fn a_press_plays_its_elements_haptic_before_the_runtime_hears_it() {
+    use crate::feedback::{self, Feedback};
+    static PLAYED: std::sync::Mutex<Vec<Feedback>> = std::sync::Mutex::new(Vec::new());
+    feedback::set_player(|kind| PLAYED.lock().unwrap().push(kind));
+    sent_events(0);
+    let mut marked = with_attrs(
+        e(
+            "label",
+            json!({ "display": "block", "h": 20 }),
+            vec![t("Mute")],
+        ),
+        json!({ "data-native-feedback": "selection" }),
+    );
+    marked["on"] = json!({ "click": 81 });
+    let mut plain = e("button", json!({ "display": "block", "h": 20 }), vec![]);
+    plain["on"] = json!({ "click": 82 });
+    let mut rt = runtime(
+        e("div", json!({ "flex": "col" }), vec![marked, plain]),
+        (200.0, 100.0),
+    );
+    for y in [10.0, 30.0] {
+        rt.pointer_move(5.0, y);
+        rt.pointer_down(5.0, y);
+        rt.pointer_up(5.0, y);
+        rt.frame(0.1);
+    }
+    assert_eq!(
+        *PLAYED.lock().unwrap(),
+        [Feedback::Selection],
+        "only the marked press plays"
+    );
+    assert_eq!(sent_events(81).len(), 1, "the marked press still clicks");
+    assert_eq!(sent_events(82).len(), 1);
+}

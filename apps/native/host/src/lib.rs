@@ -1,6 +1,7 @@
 //! Hazel's Foldkit app drawn with Rune: the runtime's wire tree as Rune elements, and the events,
 //! layout and edits sent back to it. A shell (the macOS app in `main.rs`) runs the runtime and
 //! installs where the messages go (`outbox::set_writer`).
+pub mod feedback;
 pub mod fetch;
 pub mod frames;
 pub mod fx;

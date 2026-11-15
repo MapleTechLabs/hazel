@@ -1,3 +1,5 @@
+import type { Feedback } from "./feedback"
+
 /**
  * The phone's own controls, where the app runs in a native shell that has them: the iOS app
  * (`apps/native/src/ios.ts`) installs them on the global object before the app starts, as the
@@ -7,8 +9,8 @@
  */
 
 export type SystemUi = Readonly<{
-	/** A tap of the finger, as a long-press's menu opening gives. */
-	haptic: () => void
+	/** Plays a haptic (`platform/feedback.ts` says which kind means what). */
+	feedback: (kind: Feedback) => void
 	/** From now on the edge swipe goes to `href`, until the function this returns runs. */
 	setSwipeBack: (href: string) => () => void
 }>

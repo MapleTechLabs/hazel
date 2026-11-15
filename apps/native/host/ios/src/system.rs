@@ -1,5 +1,5 @@
-//! The phone's own controls the app asks for (`web-foldkit/src/platform/system-ui.ts`): a tap of
-//! the finger, and navigation that moves as a navigation stack's does.
+//! The phone's own controls the app asks for (`web-foldkit/src/platform/system-ui.ts`): haptics,
+//! and navigation that moves as a navigation stack's does.
 //!
 //! Rune draws the whole page in one view, so the page left behind is gone once the next is
 //! drawn. The runtime says before every in-app navigation where it goes (`navigate`), and the
@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 
 use block2::RcBlock;
 use dispatch2::{DispatchQueue, DispatchTime};
+use hazel_native::feedback::Feedback;
 use objc2::rc::Retained;
 use objc2::runtime::{Bool, ProtocolObject};
 use objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
@@ -24,22 +25,45 @@ use objc2_core_foundation::{CGAffineTransform, CGFloat, CGSize};
 use objc2_foundation::{NSObject, NSObjectProtocol};
 use objc2_ui_kit::{
     UIBezierPath, UIColor, UIGestureRecognizer, UIGestureRecognizerDelegate,
-    UIImpactFeedbackGenerator, UIImpactFeedbackStyle, UIPanGestureRecognizer, UIView,
+    UIImpactFeedbackGenerator, UIImpactFeedbackStyle, UINotificationFeedbackGenerator,
+    UINotificationFeedbackType, UIPanGestureRecognizer, UISelectionFeedbackGenerator, UIView,
     UIViewAnimationOptions,
 };
 use serde_json::Value;
 
 use crate::bridge::{log, reply, window};
 
-/// A tap of the finger, as a long-press's menu gives.
-pub fn haptic(mtm: MainThreadMarker) {
-    // `feedbackGeneratorWithStyle:forView:` replaces it from iOS 17.5; the app runs on 17.0.
+/// Plays a haptic (`hazel_native::feedback`): a press's, or an outcome the runtime asks for.
+/// `NATIVE_DEBUG=1` logs each, since the simulator plays none.
+pub fn feedback(kind: Feedback) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    if crate::bridge::environment_flag("NATIVE_DEBUG") {
+        log(&format!("[host] haptic {kind:?}"));
+    }
+    // The generators' `…forView:` constructors replace these from iOS 17.5; the app runs on 17.0.
     #[allow(deprecated)]
-    let generator = UIImpactFeedbackGenerator::initWithStyle(
-        UIImpactFeedbackGenerator::alloc(mtm),
-        UIImpactFeedbackStyle::Medium,
-    );
-    generator.impactOccurred();
+    match kind {
+        Feedback::Selection => {
+            UISelectionFeedbackGenerator::init(UISelectionFeedbackGenerator::alloc(mtm))
+                .selectionChanged()
+        }
+        Feedback::Impact => UIImpactFeedbackGenerator::initWithStyle(
+            UIImpactFeedbackGenerator::alloc(mtm),
+            UIImpactFeedbackStyle::Medium,
+        )
+        .impactOccurred(),
+        Feedback::Success | Feedback::Warning | Feedback::Error => {
+            let generator =
+                UINotificationFeedbackGenerator::init(UINotificationFeedbackGenerator::alloc(mtm));
+            generator.notificationOccurred(match kind {
+                Feedback::Success => UINotificationFeedbackType::Success,
+                Feedback::Warning => UINotificationFeedbackType::Warning,
+                _ => UINotificationFeedbackType::Error,
+            });
+        }
+    }
 }
 
 // PICTURES OF PAGES

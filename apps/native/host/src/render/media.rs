@@ -137,7 +137,7 @@ pub(super) fn build_img(
             _ => e.pixels(image.pixels()),
         };
     }
-    press_handlers(apply_box(e, st), on, None)
+    press_handlers(apply_box(e, st), on, None, None)
 }
 
 /// The box of an `<img>` that sets neither its width nor its height (`w-auto h-auto`, a chat

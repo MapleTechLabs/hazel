@@ -167,6 +167,13 @@ to the right from anywhere on the page (as in Slack) does that under the finger,
 finishes at the finger's speed, the runtime drawing where it goes while the page slides off. A
 press on the tab bar never waits on a picture: the bar and the page stay live while the tab draws.
 
+**Haptics** (`web-foldkit/src/platform/feedback.ts`, `host/src/feedback.rs`). Components own
+them, never features: a Switch, Checkbox, Radio, ChoiceBox or tab marks its pressed element
+`data-native-feedback="selection"`, and the host plays it as the finger lifts, before the press
+reaches the runtime; a success, warning or error toast plays its outcome through the bridge
+(`{ feedback }`). `NATIVE_DEBUG=1` logs each one (`[host] haptic Selection`), since the
+simulator plays none.
+
 **Live data** (`HAZEL_DATA=live bun run ios`, with `VITE_APP_URL`/`VITE_BACKEND_URL` for a dev
 stack on this Mac, and `HAZEL_SESSION_TOKEN` from `dev:sign-in` for a PR preview, which has no
 OAuth) signs in as the Mac app does: the sign-in link opens in the system's sign-in

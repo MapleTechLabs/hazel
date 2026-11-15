@@ -111,7 +111,7 @@ pub fn environment(name: &str) -> Option<String> {
 }
 
 /// Whether a debug setting is on; read once.
-fn environment_flag(name: &'static str) -> bool {
+pub fn environment_flag(name: &'static str) -> bool {
     thread_local! {
         static FLAGS: RefCell<HashMap<&'static str, bool>> = RefCell::new(HashMap::new());
     }
@@ -368,8 +368,11 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
         STORAGE.set(Some(entries));
     } else if let Some(text) = field("copy") {
         unsafe { UIPasteboard::generalPasteboard().setString(Some(&NSString::from_str(&text))) };
-    } else if body.objectForKey(ns_string!("haptic")).is_some() {
-        crate::system::haptic(mtm);
+    } else if let Some(kind) = field("feedback") {
+        match hazel_native::feedback::Feedback::parse(&kind) {
+            Some(kind) => hazel_native::feedback::play(kind),
+            None => log(&format!("[host] no haptic is called {kind}")),
+        }
     } else if let Some(path) = field("swipeBack") {
         crate::system::set_swipe_back(mtm, &path);
     } else if let Some(navigation) = field("navigate") {

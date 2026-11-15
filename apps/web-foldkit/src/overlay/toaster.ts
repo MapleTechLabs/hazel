@@ -1,8 +1,9 @@
-import { Option, Schema } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { Command, Subscription, type Update } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { toastEntryClassName, toastEntryFromTopClassName } from "~/components/ui/toast.styles"
+import { playFeedback } from "../platform/feedback"
 import * as Toast from "../ui/toast"
 import * as ToastView from "../ui/toast-view"
 import { ToastAction, ToastRequest } from "./toasts"
@@ -22,6 +23,7 @@ export type Model = Toast.Model
 export const Message = defineMessageUnion({
 	GotToastMessage: { message: Toast.Message },
 	ClickedAction: { entryId: Schema.String, action: ToastAction },
+	CompletedToastFeedback: {},
 })
 export type Message = typeof Message.Type
 
@@ -39,11 +41,27 @@ const lift = (result: {
 	commands: Command.mapMessages(result.commands ?? [], (message) => Message.GotToastMessage({ message })),
 })
 
+// COMMAND
+
+/** An outcome's toast plays its haptic as it shows (`platform/feedback.ts`). */
+const OutcomeKind = Schema.Literals(["success", "warning", "error"])
+const isOutcome = Schema.is(OutcomeKind)
+
+const PlayToastFeedback = Command.define("PlayToastFeedback", {
+	args: { kind: OutcomeKind },
+	messages: [Message.CompletedToastFeedback],
+	execute: ({ kind }) =>
+		Effect.sync(() => {
+			playFeedback(kind)
+			return Message.CompletedToastFeedback()
+		}),
+})
+
 // UPDATE
 
 /** `toast.success(title, { id, description })` and friends; a known `id` updates that toast in place. */
-export const push = (model: Model, request: ToastRequest): Return =>
-	lift(
+export const push = (model: Model, request: ToastRequest): Return => {
+	const shown = lift(
 		Toast.show(
 			model,
 			{
@@ -56,12 +74,18 @@ export const push = (model: Model, request: ToastRequest): Return =>
 			request.isSticky === true,
 		),
 	)
+	const { intent } = request
+	return isOutcome(intent)
+		? { ...shown, commands: [...(shown.commands ?? []), PlayToastFeedback({ kind: intent })] }
+		: shown
+}
 
 /** Clicking a toast's action dismisses it and hands its `action` to the root. */
 export const update = (model: Model, message: Message): ReturnWithAction =>
 	Message.match<ReturnWithAction>(message, {
 		GotToastMessage: ({ message: toastMessage }) => lift(Toast.update(model, toastMessage)),
 		ClickedAction: ({ entryId, action }) => ({ ...lift(Toast.dismiss(model, entryId)), action }),
+		CompletedToastFeedback: () => ({ model }),
 	})
 
 // SUBSCRIPTION
