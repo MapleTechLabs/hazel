@@ -60,6 +60,9 @@ export const trackHoverAttribute = (h: H) =>
 /** `MessageToolbar` in its body portal, for the hovered message. */
 export const messageToolbarOverlay = (h: H, model: Model): Html => {
 	const overlays = model.overlays
+	// The image viewer covers the list: its toolbar would otherwise stay on the image's message
+	// (Rune draws the portalled toolbar over the viewer, and the pointer never left the message).
+	if (Overlays.imageViewerOf(overlays) !== null) return h.empty
 	const messageId = Overlays.hoveredMessageIdOf(overlays)
 	const row = messageId === null ? undefined : model.rows.find((candidate) => candidate.key === messageId)
 	if (messageId === null || row === undefined || row._tag !== "MessageRow") return h.empty

@@ -1,4 +1,4 @@
-import { Effect, Queue, Schema, Stream } from "effect"
+import { Effect, Option, Queue, Schema, Stream } from "effect"
 import { Mount } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
@@ -14,7 +14,9 @@ import {
 } from "../icons"
 import { avatar } from "../ui/avatar"
 import { ariaButton, button } from "../ui/button"
-import { containFocus, portalOverlay } from "../ui/aria/overlay"
+import { containFocus, isolateOverlay, portalOverlay, watchInteractOutside } from "../ui/aria/overlay"
+import { isNativeRenderer } from "../platform/renderer"
+import { systemUi } from "../platform/system-ui"
 import type { ChatAttachmentView } from "./attachments"
 import { embedMarkdownView } from "./embeds/embed-markdown"
 import { attachViewer, PART, type Viewer } from "./viewer/gestures"
@@ -50,7 +52,11 @@ export interface ImageViewerInputs<M> {
 	readonly toAction?: (action: ImageViewerAction, image: ChatAttachmentView) => M
 }
 
-const Intent = defineMessageUnion({ PressedClose: {}, PressedSelect: { index: Schema.Number } })
+const Intent = defineMessageUnion({
+	PressedClose: {},
+	PressedSelect: { index: Schema.Number },
+	Swiped: { step: Schema.Number },
+})
 type Intent = typeof Intent.Type
 
 // The selected slide as the Model has it, which the track and the thumbnails follow.
@@ -74,7 +80,7 @@ const observeSelected = (element: Element, follow: (index: number) => void) => {
 
 /** The thumbnail strip (`containScroll: "keepSnaps"`, `dragFree`), kept on the selected slide. */
 const ThumbCarousel = Mount.defineStream("ImageViewerThumbCarousel", {
-	messages: [Intent.PressedClose, Intent.PressedSelect],
+	messages: [Intent.PressedClose, Intent.PressedSelect, Intent.Swiped],
 	execute: ({ element }) =>
 		Stream.callback<Intent>(() =>
 			Effect.acquireRelease(
@@ -156,7 +162,7 @@ const acquire = (open: () => () => void) =>
  * keep the morph's plate on the slide on view. The gestures report a slide, or a dismissal.
  */
 const ImageViewerMount = Mount.defineStream("ImageViewerPortal", {
-	messages: [Intent.PressedClose, Intent.PressedSelect],
+	messages: [Intent.PressedClose, Intent.PressedSelect, Intent.Swiped],
 	execute: ({ element }) =>
 		Stream.callback<Intent>((queue) =>
 			Effect.gen(function* () {
@@ -221,6 +227,41 @@ const ImageViewerMount = Mount.defineStream("ImageViewerPortal", {
 				})
 				return yield* Effect.never
 			}),
+		),
+})
+
+/**
+ * The viewer in the Rune-native app, which never runs the DOM Mounts above: the host portals it
+ * to the window's root and makes it modal, and Escape (the host's dismissal) closes it.
+ */
+const NativeImageViewerModal = Mount.defineStream("ImageViewerNativeModal", {
+	messages: [Intent.PressedClose, Intent.PressedSelect, Intent.Swiped],
+	execute: ({ element }) =>
+		Stream.callback<Intent>((queue) =>
+			Effect.gen(function* () {
+				yield* acquire(() => portalOverlay(element))
+				yield* isolateOverlay(element, "image-viewer")
+				yield* acquire(() =>
+					watchInteractOutside(element, `[${VIEWER_ATTRIBUTE}]`, () =>
+						Queue.offerUnsafe(queue, Intent.PressedClose()),
+					),
+				)
+				return yield* Effect.never
+			}),
+		),
+})
+
+/** The phone shell's swipe pages the native viewer (`platform/system-ui.ts`), where it has one. */
+const NativeSwipePager = Mount.defineStream("ImageViewerSwipePager", {
+	messages: [Intent.PressedClose, Intent.PressedSelect, Intent.Swiped],
+	execute: () =>
+		Stream.callback<Intent>((queue) =>
+			acquire(
+				() =>
+					systemUi()?.setSwipePager?.((step) =>
+						Queue.offerUnsafe(queue, Intent.Swiped({ step })),
+					) ?? NO_RELEASE,
+			).pipe(Effect.flatMap(() => Effect.never)),
 		),
 })
 
@@ -336,12 +377,18 @@ const slideView = <M>(
 	index: number,
 	selectedIndex: number,
 	count: number,
+	isNative = false,
 ): Html => {
 	const isActive = index === selectedIndex
 	return h.keyed("div")(
 		image.id,
 		[
-			h.Class("relative box-border flex h-full min-w-full flex-[0_0_100%] flex-col items-center"),
+			h.Class(
+				// One slide at a time in Rune, which sizes no `flex-basis: 100%`: pinned to the edges.
+				isNative
+					? "absolute inset-0 box-border flex flex-col items-center"
+					: "relative box-border flex h-full min-w-full flex-[0_0_100%] flex-col items-center",
+			),
 			h.DataAttribute("viewer-slide", ""),
 			h.Role("group"),
 			h.AriaRoleDescription("slide"),
@@ -353,7 +400,11 @@ const slideView = <M>(
 			: [
 					h.div(
 						[
-							h.Class("flex min-h-0 w-full flex-1 items-center justify-center"),
+							h.Class(
+								isNative
+									? "relative min-h-0 w-full flex-1"
+									: "flex min-h-0 w-full flex-1 items-center justify-center",
+							),
 							h.DataAttribute("viewer-zoom", ""),
 						],
 						[
@@ -366,7 +417,11 @@ const slideView = <M>(
 								h.DataAttribute("viewer-media", ""),
 								...(isActive ? [h.DataAttribute("active", "")] : []),
 								h.Class(
-									"block h-auto max-h-full w-auto min-w-0 max-w-full select-none rounded-md object-contain",
+									// Rune does not shrink an auto-sized picture to its box: there it
+									// fills its box and fits inside it.
+									isNative
+										? "block size-full select-none object-contain"
+										: "block h-auto max-h-full w-auto min-w-0 max-w-full select-none rounded-md object-contain",
 								),
 							]),
 						],
@@ -387,18 +442,31 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 	const selectedIndex = Math.min(Math.max(inputs.index, 0), Math.max(images.length - 1, 0))
 	const current = images[selectedIndex]
 	const hasMany = images.length > 1
+	// Rune runs none of the DOM gestures: one slide at a time, chosen by the Model alone.
+	const isNative = isNativeRenderer()
+	const select = (index: number) =>
+		inputs.toSelect(Math.min(Math.max(index, 0), Math.max(images.length - 1, 0)))
 	const act = (action: ImageViewerAction) =>
 		inputs.toAction && current ? inputs.toAction(action, current) : undefined
 	const actions: ReadonlyArray<readonly [M | undefined, string, Html, ("in" | "out")?]> = [
-		[undefined, "Zoom out", IconMinus(h, { className: "size-4" }), "out"],
-		[undefined, "Zoom in", IconPlus(h, { className: "size-4" }), "in"],
+		// Zoom is the gestures' to do, which Rune does not run.
+		...(isNative
+			? []
+			: ([
+					[undefined, "Zoom out", IconMinus(h, { className: "size-4" }), "out"],
+					[undefined, "Zoom in", IconPlus(h, { className: "size-4" }), "in"],
+				] as const)),
 		[act("download"), "Download", IconDownload(h, { className: "size-4" })],
 		[act("copyUrl"), "Copy image URL", IconCopy(h, { className: "size-4" })],
 		[act("openInBrowser"), "Open in browser", IconExternalLink(h, { className: "size-4" })],
 		[inputs.toClose(), "Close", IconClose(h, { className: "size-4" })],
 	]
 	const toMessage = (intent: Intent) =>
-		intent._tag === "PressedClose" ? inputs.toClose() : inputs.toSelect(intent.index)
+		Intent.match(intent, {
+			PressedClose: () => inputs.toClose(),
+			PressedSelect: ({ index }) => select(index),
+			Swiped: ({ step }) => select(selectedIndex + step),
+		})
 	return h.div(
 		[
 			h.Class("fixed inset-0 isolate z-9999"),
@@ -406,12 +474,14 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 			// Legacy renders the viewer through a React portal inside the message list, so React's
 			// pointerleave never sees the pointer leave the list for it. Hover tracking reads this.
 			h.DataAttribute(LIST_PORTAL_ATTRIBUTE, ""),
-			h.OnMount(Mount.mapMessage(ImageViewerMount(), toMessage)),
+			h.OnMount(Mount.mapMessage(isNative ? NativeImageViewerModal() : ImageViewerMount(), toMessage)),
 		],
 		[
 			h.div([
 				h.Class("absolute inset-0 bg-black/90"),
-				h.DataAttribute("viewer-backdrop", ""),
+				// Thinned by a pull (`--viewer-pull-progress`), which only the browser's gestures make;
+				// Rune draws the backdrop as it is.
+				...(isNative ? [] : [h.DataAttribute("viewer-backdrop", "")]),
 				h.AriaHidden(true),
 			]),
 			h.div(
@@ -422,21 +492,55 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 					h.AriaModal(true),
 					h.AriaLabel(hasMany ? "Image gallery" : "Image viewer"),
 					h.Tabindex(-1),
+					...(isNative
+						? [
+								h.OnKeyDownPreventDefault((key) =>
+									key === "ArrowLeft" || key === "ArrowUp"
+										? Option.some(select(selectedIndex - 1))
+										: key === "ArrowRight" || key === "ArrowDown"
+											? Option.some(select(selectedIndex + 1))
+											: key === "Home"
+												? Option.some(select(0))
+												: key === "End"
+													? Option.some(select(images.length - 1))
+													: Option.none(),
+								),
+							]
+						: []),
 				],
 				[
 					h.div(
 						[
 							h.Class("relative flex h-full w-full"),
-							h.DataAttribute("viewer-slides", ""),
+							// The scroll-snap track is the browser's; in Rune it would be a bare
+							// scroller the Model cannot move, so there only the open slide is drawn.
+							...(isNative ? [] : [h.DataAttribute("viewer-slides", "")]),
 							h.Attribute(SELECTED_ATTRIBUTE, String(selectedIndex)),
 							h.Role("group"),
 							h.AriaRoleDescription("carousel"),
 							h.AriaLabel("Images"),
 						],
-						images.map((image, index) =>
-							slideView(h, image, index, selectedIndex, images.length),
-						),
+						isNative
+							? current === undefined
+								? []
+								: [slideView(h, current, selectedIndex, selectedIndex, images.length, true)]
+							: images.map((image, index) =>
+									slideView(h, image, index, selectedIndex, images.length),
+								),
 					),
+					...(isNative && hasMany && systemUi()?.setSwipePager !== undefined
+						? [
+								// Remounted on every slide, so a swipe steps from the slide on view.
+								h.keyed("span")(
+									`swipe:${selectedIndex}`,
+									[
+										h.Class("hidden"),
+										h.OnMount(Mount.mapMessage(NativeSwipePager(), toMessage)),
+									],
+									[],
+								),
+							]
+						: []),
 					h.div(
 						[h.Class("sr-only"), h.AriaLive("polite"), h.AriaAtomic(true)],
 						[announcement(current, selectedIndex, images.length)],
@@ -475,26 +579,47 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 						: []),
 					...(hasMany
 						? [
-								h.div(
-									[
-										h.Class(
-											"absolute top-5 left-1/2 -translate-x-1/2 rounded-md bg-black/50 px-3 py-1.5 text-sm text-white tabular-nums max-md:top-[calc(env(safe-area-inset-top)+4rem)] max-md:right-3 max-md:left-auto max-md:translate-x-0",
+								isNative
+									? // Rune keeps `left-1/2 -translate-x-1/2` centred at every width, so
+										// on a phone the counter would sit on the author: a row places it.
+										h.div(
+											[
+												h.Class(
+													"pointer-events-none absolute inset-x-0 top-5 flex justify-center max-md:top-[calc(env(safe-area-inset-top)+4rem)] max-md:justify-end max-md:px-3",
+												),
+												h.DataAttribute("viewer-chrome", ""),
+												h.AriaHidden(true),
+											],
+											[
+												h.div(
+													[
+														h.Class(
+															"rounded-md bg-black/50 px-3 py-1.5 text-sm text-white tabular-nums",
+														),
+													],
+													[
+														String(selectedIndex + 1),
+														" of ",
+														String(images.length),
+													],
+												),
+											],
+										)
+									: h.div(
+											[
+												h.Class(
+													"absolute top-5 left-1/2 -translate-x-1/2 rounded-md bg-black/50 px-3 py-1.5 text-sm text-white tabular-nums max-md:top-[calc(env(safe-area-inset-top)+4rem)] max-md:right-3 max-md:left-auto max-md:translate-x-0",
+												),
+												h.DataAttribute("viewer-chrome", ""),
+												h.AriaHidden(true),
+											],
+											[String(selectedIndex + 1), " of ", String(images.length)],
 										),
-										h.DataAttribute("viewer-chrome", ""),
-										h.AriaHidden(true),
-									],
-									[String(selectedIndex + 1), " of ", String(images.length)],
-								),
-								navButton(
-									h,
-									"left",
-									inputs.toSelect(Math.max(selectedIndex - 1, 0)),
-									selectedIndex === 0,
-								),
+								navButton(h, "left", select(selectedIndex - 1), selectedIndex === 0),
 								navButton(
 									h,
 									"right",
-									inputs.toSelect(Math.min(selectedIndex + 1, images.length - 1)),
+									select(selectedIndex + 1),
 									selectedIndex === images.length - 1,
 								),
 							]
@@ -523,15 +648,26 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 									[
 										h.div(
 											[
+												// Embla drags the strip in a browser; Rune scrolls a
+												// plain row sideways itself.
 												h.Class(
-													"pointer-events-auto max-w-2xl overflow-hidden rounded-md",
+													isNative
+														? "pointer-events-auto flex max-w-2xl overflow-x-auto rounded-md"
+														: "pointer-events-auto max-w-2xl overflow-hidden rounded-md",
 												),
 												h.Attribute(SELECTED_ATTRIBUTE, String(selectedIndex)),
-												h.OnMount(Mount.mapMessage(ThumbCarousel(), toMessage)),
+												...(isNative
+													? []
+													: [
+															h.OnMount(
+																Mount.mapMessage(ThumbCarousel(), toMessage),
+															),
+														]),
 											],
 											[
 												h.div(
-													[h.Class("flex gap-2")],
+													// Centred in Rune's scroller, which is as wide as it may be.
+													[h.Class(isNative ? "mx-auto flex gap-2" : "flex gap-2")],
 													images.map((image, index) =>
 														thumbView(
 															h,

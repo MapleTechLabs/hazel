@@ -32,7 +32,7 @@ export type ViewerEvent =
 	| Readonly<{ _tag: "Dismiss" }>
 
 export type Viewer = Readonly<{
-	/** Jumps to a slide. Dropped while a swipe is still in flight. */
+	/** Jumps to a slide; asked mid-swipe, once the track has stopped. */
 	goTo: (index: number) => void
 	zoomBy: (step: "in" | "out" | "reset") => void
 	/** Moves the view over a zoomed shot by this many pixels. */
@@ -113,6 +113,8 @@ export const attachViewer = (content: HTMLElement, emit: (event: ViewerEvent) =>
 
 	let isScrolling = false
 	let isJumping = false
+	/** A slide asked for while the track was still moving: it is jumped to once the track stops. */
+	let pending: number | null = null
 	let scrollIdle = 0
 	let scrollFrame = 0
 
@@ -149,6 +151,8 @@ export const attachViewer = (content: HTMLElement, emit: (event: ViewerEvent) =>
 	}
 
 	const syncActive = () => {
+		// The slide asked for mid-swipe stays selected while the swipe runs out under it.
+		if (pending !== null) return
 		const index = M.slideAt(offsets(), track.scrollLeft)
 		if (index !== active) activate(index)
 	}
@@ -158,6 +162,14 @@ export const attachViewer = (content: HTMLElement, emit: (event: ViewerEvent) =>
 		isScrolling = false
 		// Anything measured while the slide was still travelling is off by the distance it had left.
 		frame = null
+		const asked = pending
+		pending = null
+		// A thumbnail or arrow pressed mid-swipe wins over where the swipe ended, or the track
+		// would rest on one slide while the counter and the thumbnails show another.
+		if (asked !== null && jump(asked)) {
+			if (asked !== active) activate(asked)
+			return
+		}
 		syncActive()
 	}
 
@@ -561,6 +573,19 @@ export const attachViewer = (content: HTMLElement, emit: (event: ViewerEvent) =>
 		else glide(M.clampPose(measured, pose), SETTLE_MS, SETTLE)
 	}
 
+	// Safari and Chrome on Android start their own scroll or pinch from a touch that `touch-action`
+	// should have left to us (a second finger landing on a horizontal pan, a pull starting on an
+	// edge): once a gesture is ours, the touch's default is cancelled so the browser lets it be.
+	listen(
+		track,
+		"touchmove",
+		(event) => {
+			if (event.touches.length >= 2 || mode === "pull" || mode === "pan" || mode === "pinch")
+				event.preventDefault()
+		},
+		{ passive: false },
+	)
+
 	listen(track, "pointerup", (event) => release(event, false))
 	listen(track, "pointercancel", (event) => release(event, true))
 
@@ -648,7 +673,10 @@ export const attachViewer = (content: HTMLElement, emit: (event: ViewerEvent) =>
 
 	if (typeof ResizeObserver === "function") {
 		const observer = new ResizeObserver(() => {
-			jump(active)
+			// A phone's toolbar showing or hiding resizes the viewer mid-swipe: jumping then would
+			// yank the slide back under the finger, so the jump waits for the track to stop.
+			if (isScrolling) pending ??= active
+			else jump(active)
 			remeasure()
 		})
 		observer.observe(track)
@@ -663,7 +691,11 @@ export const attachViewer = (content: HTMLElement, emit: (event: ViewerEvent) =>
 
 	const viewer: Viewer = {
 		goTo: (index) => {
-			if (isScrolling || !jump(index)) return
+			if (isScrolling) {
+				pending = index
+				return
+			}
+			if (!jump(index)) return
 			if (index !== active) activate(index)
 		},
 		zoomBy: (step) => {

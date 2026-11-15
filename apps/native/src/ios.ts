@@ -38,6 +38,8 @@ export type IosRequest =
 	| { readonly feedback: Feedback }
 	/** Where the edge swipe goes back to; empty turns the swipe off. */
 	| { readonly swipeBack: string }
+	/** Horizontal swipes page an image viewer (`page` replies) instead of going back. */
+	| { readonly swipePager: boolean }
 	/** The runtime followed a notification's path (`openPath`): the host stops holding it. */
 	| { readonly openedPath: string }
 	/** `localStorage`'s entries to save (`host/ios/src/storage.rs`), as JSON. */
@@ -73,13 +75,17 @@ type BackReply = { readonly back: true }
 /** A notification's tap opens the app at this path (`host/ios/src/push.rs`). */
 type OpenPathReply = { readonly openPath: string }
 /** What the host hands the worker that is not a line or a fetch's answer. */
-type HostReply = BackReply | PushToken | OpenPathReply
+/** A horizontal swipe let go while an image viewer pages (`swipePager`): toward the next, or back. */
+type PageReply = { readonly page: -1 | 1 }
+type HostReply = BackReply | PushToken | OpenPathReply | PageReply
 /** What waits for the runtime to start: the push token, a notification's path. */
 const afterStart: Array<() => void> = []
 let isRuntimeStarted = false
 const whenStarted = (run: () => void) => (isRuntimeStarted ? run() : afterStart.push(run))
 /** Set below, once `log` exists. */
 let push: ReturnType<typeof makePushDevice> | undefined
+/** The image viewers' pagers, latest last: a horizontal swipe pages the latest. */
+const pagers: Array<{ readonly onPage: (step: -1 | 1) => void }> = []
 /** The back chevrons on screen, latest last: the swipe goes where the latest leads. */
 const backTargets: Array<{ readonly href: string }> = []
 /** A URL's path, query and hash: what the host keys its pictures of pages by. */
@@ -109,6 +115,7 @@ const openPath = (path: string) => {
 }
 const hostReply = (reply: HostReply) => {
 	if ("back" in reply) goBack()
+	else if ("page" in reply) pagers.at(-1)?.onPage(reply.page)
 	else if ("pushToken" in reply) whenStarted(() => void push?.register(reply))
 	else if ("openPath" in reply) whenStarted(() => openPath(reply.openPath))
 }
@@ -239,6 +246,16 @@ const systemUi: SystemUi = {
 			if (index !== -1) backTargets.splice(index, 1)
 			const back = backTargets.at(-1)
 			request({ swipeBack: back === undefined ? "" : pathOf(back.href) })
+		}
+	},
+	setSwipePager: (onPage) => {
+		const pager = { onPage }
+		pagers.push(pager)
+		request({ swipePager: true })
+		return () => {
+			const index = pagers.indexOf(pager)
+			if (index !== -1) pagers.splice(index, 1)
+			request({ swipePager: pagers.length > 0 })
 		}
 	},
 }
