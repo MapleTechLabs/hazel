@@ -19,7 +19,7 @@ import * as CreateSection from "../overlay/modal/create-section"
 import { orgSwitcherEntries, userMenuEntries } from "../shell/menus"
 import * as Shell from "../shell/model"
 import { ada, after, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
-import { drainToast } from "../test/toast-fixtures"
+import { drainToast, playToastFeedback } from "../test/toast-fixtures"
 import * as Menu from "../ui/menu"
 import { FocusTriggerOnPress } from "../ui/menu-view"
 import * as Modal from "../ui/modal"
@@ -75,6 +75,7 @@ describe("modal host", () => {
 			sceneExpect(dialog).toBeAbsent(),
 			Mount.expectEnded(Modal.AcquireResources),
 			sceneExpect(text("Section created successfully")).toExist(),
+			playToastFeedback,
 			...drainToast(),
 		)
 	})
@@ -94,6 +95,7 @@ describe("modal host", () => {
 			sceneExpect(dialog).toExist(),
 			sceneExpect(role("button", { name: "Create section" })).toBeEnabled(),
 			sceneExpect(text("Could not create the section")).toExist(),
+			playToastFeedback,
 			...drainToast(),
 		)
 	})

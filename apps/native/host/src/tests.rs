@@ -3666,9 +3666,9 @@ fn a_press_plays_its_elements_haptic_before_the_runtime_hears_it() {
         ),
         json!({ "data-native-feedback": "selection" }),
     );
-    marked["on"] = json!({ "click": 81 });
+    marked["on"] = json!({ "click": 981 });
     let mut plain = e("button", json!({ "display": "block", "h": 20 }), vec![]);
-    plain["on"] = json!({ "click": 82 });
+    plain["on"] = json!({ "click": 982 });
     let mut rt = runtime(
         e("div", json!({ "flex": "col" }), vec![marked, plain]),
         (200.0, 100.0),
@@ -3684,6 +3684,6 @@ fn a_press_plays_its_elements_haptic_before_the_runtime_hears_it() {
         [Feedback::Selection],
         "only the marked press plays"
     );
-    assert_eq!(sent_events(81).len(), 1, "the marked press still clicks");
-    assert_eq!(sent_events(82).len(), 1);
+    assert_eq!(sent_events(981).len(), 1, "the marked press still clicks");
+    assert_eq!(sent_events(982).len(), 1);
 }
