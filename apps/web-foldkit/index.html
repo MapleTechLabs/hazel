@@ -7,6 +7,7 @@
 		<meta name="theme-color" content="#000000" />
 		<meta name="description" content="Slack alternative for modern teams." />
 		<title>Hazel</title>
+		<!-- hazel:paint-read (the last screen's paint, `src/app/paint-boot.js`; a production build only) -->
 		<script>
 			// Runs before the app's script has loaded. It starts the sync token exchange, which
 			// `readAccessToken` takes over (`src/core/lib/access-token.ts`), and beside it wakes the
@@ -53,6 +54,7 @@
 	</head>
 	<body class="bg-bg text-fg">
 		<div id="app"></div>
+		<!-- hazel:paint-show -->
 		<script type="module" src="/src/entry.ts"></script>
 	</body>
 </html>

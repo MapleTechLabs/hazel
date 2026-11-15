@@ -122,6 +122,8 @@ const loadingView = (h: H): Html =>
 				"flex size-full animate-skeleton-in flex-col justify-end pb-4 motion-safe:*:animate-pulse",
 			),
 			h.Attribute("aria-busy", "true"),
+			// The last screen's paint stays up while this shows (`app/paint.ts`).
+			h.Attribute("data-paint", "loading"),
 		],
 		[
 			h.span([h.Class("sr-only"), h.Attribute("role", "status")], ["Loading messages"]),

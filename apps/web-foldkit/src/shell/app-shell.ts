@@ -174,7 +174,8 @@ export const orgShell = <Message>(
 	const { mobile } = parts
 	if (mobile.isMobile) return phoneShell(h, context, parts, sidebarChildren)
 	return h.div(
-		[h.Id("app")],
+		// The screen the next load paints first (`app/paint.ts`).
+		[h.Id("app"), h.Attribute("data-paint", "shell")],
 		[
 			parts.toaster,
 			sidebarProvider(h, { width: "350px" }, [
@@ -209,7 +210,8 @@ const phoneShell = <Message>(
 	const { mobile } = parts
 	const chrome = mobileChromeOf(context.route)
 	return h.div(
-		[h.Id("app")],
+		// The screen the next load paints first (`app/paint.ts`).
+		[h.Id("app"), h.Attribute("data-paint", "shell")],
 		[
 			parts.toaster,
 			sidebarProvider(

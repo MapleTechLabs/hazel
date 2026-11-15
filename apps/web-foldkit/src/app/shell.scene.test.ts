@@ -23,7 +23,9 @@ import * as CommandPalette from "../overlay/command-palette"
 import { AutoFocusSearch } from "../page/home/commands"
 import { Message as HomeMessage } from "../page/home/message"
 import { CreateChannel, FocusInput } from "../overlay/command-palette/commands"
-import { ada, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
+import * as ChannelsSidebar from "../shell/channels-sidebar"
+import * as Shell from "../shell/model"
+import { after, ada, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
 import { drainToast } from "../test/toast-fixtures"
 import * as CommandMenu from "../ui/command-menu"
 import { PortalCommandMenu } from "../ui/command-menu-view"
@@ -55,6 +57,29 @@ describe("nav rail", () => {
 			sceneExpect(within(navItem("Settings"), currentLink)).toExist(),
 			sceneExpect(within(navItem("Chat"), currentLink)).toBeAbsent(),
 			sceneExpect(within(navItem("Home"), currentLink)).toBeAbsent(),
+		)
+	})
+})
+
+describe("the last screen's paint", () => {
+	const waiting = selector('#app[data-paint="shell"] [data-paint="loading"]')
+	const channelListsArrived = Message.GotShellMessage({
+		message: Shell.Message.GotChannelsSidebarMessage({
+			message: ChannelsSidebar.Message.UpdatedMemberChannelIds({ channelIds: [] }),
+		}),
+	})
+
+	test("stays up while the sidebar's channel lists have yet to arrive", () => {
+		scene(rootScene, given(signedIn("/hazel/chat")), ...menusMounted, sceneExpect(waiting).toExist())
+	})
+
+	test("goes once they have, empty or not", () => {
+		scene(
+			rootScene,
+			given(after(signedIn("/hazel/chat"), [channelListsArrived])),
+			...menusMounted,
+			sceneExpect(selector('#app[data-paint="shell"]')).toExist(),
+			sceneExpect(waiting).toBeAbsent(),
 		)
 	})
 })
