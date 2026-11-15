@@ -301,7 +301,18 @@ const svgPaint = (name: string, value: string): string => {
 }
 
 /** An element's `fill` and `stroke` from its classes (`stroke-chart-new`), which beat its attributes. */
-type SvgPaint = (vnode: AnyVNode, tag: string) => Readonly<{ fill?: string; stroke?: string }>
+/** An svg's wire node while it is built: its optional fields set only when present. */
+type SvgWireDraft = {
+	-readonly [K in keyof Extract<WireNode, { readonly k: "svg" }>]: Extract<
+		WireNode,
+		{ readonly k: "svg" }
+	>[K]
+}
+
+/** The paint an svg's own classes give a shape. */
+type SvgColors = { fill?: string; stroke?: string }
+
+type SvgPaint = (vnode: AnyVNode, tag: string) => Readonly<SvgColors>
 
 /**
  * An SVG subtree as a flat icon body: `<g>` attributes pushed down onto their children, and paint
@@ -717,10 +728,10 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 						dark,
 						env.width,
 					)
-					return {
-						...(style.fill === undefined ? {} : { fill: style.fill }),
-						...(style.stroke === undefined ? {} : { stroke: style.stroke }),
-					}
+					const colors: SvgColors = {}
+					if (style.fill !== undefined) colors.fill = style.fill
+					if (style.stroke !== undefined) colors.stroke = style.stroke
+					return colors
 				}
 				const body = svgBody(vnode, paint, inherited)
 				// `none` stretches the drawing to the box (the dithered avatar); absent means `xMidYMid meet`.
@@ -748,15 +759,10 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					reusedSubtrees += 1
 					return { k: "r", h }
 				}
-				return {
-					k: "svg",
-					h,
-					view,
-					...(viewH === view ? {} : { vh: viewH }),
-					body,
-					st: sized,
-					...(par === undefined ? {} : { par }),
-				}
+				const svg: SvgWireDraft = { k: "svg", h, view, body, st: sized }
+				if (viewH !== view) svg.vh = viewH
+				if (par !== undefined) svg.par = par
+				return svg
 			}
 			const on: Record<string, number> = {}
 			const ownHandlers: Array<[number, Handler]> = []

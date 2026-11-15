@@ -8,7 +8,8 @@ import type { HttpEffect } from "alchemy/Http"
 import { Context, Effect, type Scope, Tracer } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import { describe, expect, it, vi } from "vitest"
-import { buildApp, makeFetch } from "./http"
+import { makeFetch } from "./fetch"
+import { buildApp } from "./http"
 import { makeFakeApiEnv } from "./http-testing"
 
 const appOrigin = "https://app-pr-7.hazel.sh"
@@ -88,7 +89,7 @@ const gatedApp = () => {
 describe("api fetch handler", () => {
 	it("marks the isolate's first request cold, and no later one", async () => {
 		vi.resetModules()
-		const fresh = await import("./http")
+		const fresh = await import("./fetch")
 		const fetch = fresh.makeFetch(Effect.succeed(Effect.succeed(HttpServerResponse.text("routed"))), env)
 		const health = new Request("https://api.test/health")
 		expect((await send(fetch, health)).attributes.get("isolate.cold")).toBe(true)

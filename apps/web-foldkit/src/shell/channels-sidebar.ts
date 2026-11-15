@@ -262,6 +262,10 @@ const sidebarBody = <ParentMessage>(
 		createChannelKey,
 	}
 	return sidebarStatic(h, "flex flex-1", [
+		// Until the channel lists arrive, the last screen's paint stays up (`app/paint.ts`).
+		...(model.memberChannelIds === null
+			? [h.div([h.Attribute("data-paint", "loading"), h.Attribute("hidden", "")])]
+			: []),
 		orgSwitcherHeader(h, orgSwitcher, orgSwitcherEntries, shell, organizations, toOrgSwitcherMessage),
 		sidebarContent(h, { state: "expanded" }, [
 			sidebarSectionGroup(

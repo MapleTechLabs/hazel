@@ -84,6 +84,47 @@ const preloadFirstPaintFonts = (): Plugin => ({
 })
 
 /**
+ * Inlines the last screen's paint (`src/app/paint-boot.js`) in `index.html`: read in the head, so
+ * the theme and the resumed path are in place before anything draws, and shown right after `#app`,
+ * before the app's script has run. The entry is preloaded in its place and started by the boot,
+ * which lets the paint's first frame draw before it. A build only: the dev server's styles arrive
+ * with its scripts, after the paint would have drawn unstyled.
+ */
+const inlinePaintBoot = (): Plugin => ({
+	name: "hazel:inline-paint-boot",
+	apply: "build",
+	transformIndexHtml: {
+		order: "post",
+		handler(html) {
+			// Its comments stay in the source: every load downloads this page.
+			// A module for its tests; a plain script here.
+			const boot = readFileSync(resolve(__dirname, "src/app/paint-boot.js"), "utf-8")
+				.split("\n")
+				.filter((line) => !/^\s*\/\//.test(line))
+				.join("\n")
+				.replace(/^export function hazelPaintBoot\(/m, "function hazelPaintBoot(")
+			const read = /<!-- hazel:paint-read[^>]*-->/
+			const show = "<!-- hazel:paint-show -->"
+			const entry = /<script type="module" crossorigin src="([^"]+)"><\/script>/
+			const src = entry.exec(html)?.[1]
+			if (!read.test(html) || !html.includes(show) || src === undefined || boot.includes("export "))
+				throw new Error("index.html lost its paint markers or its entry script")
+			return html
+				.replace(entry, () => `<link rel="modulepreload" crossorigin href="${src}">`)
+				.replace(
+					read,
+					() =>
+						`<script>${boot}\nwindow.__hazelPaint = hazelPaintBoot(window); __hazelPaint.read()</script>`,
+				)
+				.replace(
+					show,
+					() => `<script>__hazelPaint.show(); __hazelPaint.start(${JSON.stringify(src)})</script>`,
+				)
+		},
+	},
+})
+
+/**
  * What the app's first screen loads (`$initial`: reached by static imports from the entry), split
  * so that a deploy which changes only app code leaves the libraries' chunks, and their cached
  * copies, as they are. The last group keeps the app's own first-screen code in one chunk. Code
@@ -130,6 +171,7 @@ export default defineConfig({
 		foldkit({ devToolsMcpPort: false }),
 		prismLanguagesImportCore(),
 		preloadFirstPaintFonts(),
+		inlinePaintBoot(),
 		immutableAssetHeaders(),
 	],
 	// The local cache's OPFS worker and wa-sqlite wasm resolve next to the package's own code.

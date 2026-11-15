@@ -14,7 +14,6 @@ import { RuntimeContext } from "alchemy/RuntimeContext"
 import { Context, Effect, Layer, Option, Ref } from "effect"
 import * as Socket from "effect/socket/Socket"
 import { workerEnvLayer } from "@hazel/infra/worker-runtime"
-import { DiscordGatewayService } from "../services/chat-sync/providers/discord/gateway-service"
 import { Directory } from "../services/directory"
 import { workerObjectStubs } from "./objects/stubs"
 import { directoryBinding } from "./platform"
@@ -40,6 +39,12 @@ export const DiscordGatewayObjectLive = DiscordGatewayObject.make(
 		const env = yield* Cloudflare.WorkerEnvironment
 		return Effect.gen(function* () {
 			const instanceScope = yield* Effect.scope
+			// Imported by the instance, not the module: the gateway client (dfx and Discord's API
+			// types) would otherwise be evaluated by every cold isolate of the script, the other
+			// objects' included, while only this singleton runs it.
+			const { DiscordGatewayService } = yield* Effect.promise(
+				() => import("../services/chat-sync/providers/discord/gateway-service"),
+			)
 			const services = yield* Layer.build(
 				DiscordGatewayService.layer.pipe(
 					Layer.provide(

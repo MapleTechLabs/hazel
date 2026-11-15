@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { isActiveContentType } from "./content-type"
+// Through the public entry, as consumers import it: `uploads.ts` imports the package barrel, which
+// reaches back to it, so loading it first leaves `UploadsGroup` undefined while `api.ts` adds it.
+import { isActiveContentType } from "./index"
 
 describe("isActiveContentType", () => {
 	it("lets ordinary single types through", () => {

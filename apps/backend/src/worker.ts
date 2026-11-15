@@ -19,7 +19,7 @@ import {
 import { HTML_RENDER_PENDING_MAX_AGE_SECONDS, HTML_RENDER_PENDING_PREFIX } from "./services/html-renders"
 import { takeIsolateCold } from "./worker/cold-start"
 import { apiEnv } from "./worker/env"
-import { buildApp, makeFetch } from "./worker/http"
+import { makeFetch } from "./worker/fetch"
 import { MessageLiveObject, MessageLiveObjectLive } from "./worker/live/message-live-object"
 import { ChannelObject, ChannelObjectLive } from "./worker/objects/channel-object"
 import { CustomersObject, CustomersObjectLive } from "./worker/objects/customers-object"
@@ -126,10 +126,16 @@ export default Api.make(
 		const env = yield* Cloudflare.WorkerEnvironment
 
 		// The graph builds on the first request, not here: init also runs at plan time, where
-		// alchemy would auto-bind every `Config` read.
+		// alchemy would auto-bind every `Config` read. Its module is imported by that request too
+		// (a chunk of its own): it reaches the whole HTTP app (routes, sign-in, Clerk), which every
+		// cold isolate would otherwise evaluate at start, the objects' included, which never serve it.
 		const isolate = isolateContext(yield* Effect.context())
 		const app = yield* cachedRecoverable(
-			buildApp(isolate, env, rateLimiters, messageRateLimit, botGateways),
+			Effect.promise(() => import("./worker/http")).pipe(
+				Effect.flatMap(({ buildApp }) =>
+					buildApp(isolate, env, rateLimiters, messageRateLimit, botGateways),
+				),
+			),
 		)
 
 		// Backstop: keep the Discord gateway session up across deploys and evictions.
