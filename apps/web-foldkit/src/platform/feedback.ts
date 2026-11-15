@@ -7,11 +7,11 @@ import { systemUi } from "./system-ui"
  * component:
  *
  * - `selection`: a discrete value changed (Switch, Checkbox, Radio, Tabs, ChoiceBox).
- * - `impact`: a deliberate commit with weight (a message sent).
+ * - `impact`: something with weight arrived under the finger (a context menu opening as a sheet).
  * - `success` / `warning` / `error`: how something turned out (a Toast of that kind).
  *
- * Plain buttons, links, navigation and typing play nothing; a menu that opens on a long press
- * plays the system's own. A browser and the desktop shells play nothing either.
+ * Plain buttons, links, navigation and typing play nothing; the system's own menus (a long
+ * press's, a Select's) play their own. A browser and the desktop shells play nothing either.
  */
 export type Feedback = "selection" | "impact" | "success" | "warning" | "error"
 
