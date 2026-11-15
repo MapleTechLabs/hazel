@@ -73,6 +73,19 @@ describe("checkbox scene", () => {
 		)
 	})
 
+	test("a press on the checkbox plays the selection haptic natively; a disabled one plays nothing", () => {
+		Scene.scene(
+			{ update, view: view() },
+			Scene.given(init()),
+			Scene.expect(control).toHaveAttr("data-native-feedback", "selection"),
+		)
+		Scene.scene(
+			{ update, view: view({ isDisabled: true }) },
+			Scene.given(init()),
+			Scene.expect(control).not.toHaveAttr("data-native-feedback"),
+		)
+	})
+
 	test("a disabled checkbox is disabled and ignores clicks", () => {
 		Scene.scene(
 			{ update, view: view({ isDisabled: true }) },

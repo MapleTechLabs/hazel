@@ -87,6 +87,16 @@ describe("tabs scene", () => {
 		)
 	})
 
+	test("only an unselected, enabled tab plays the selection haptic natively", () => {
+		Scene.scene(
+			{ update, view },
+			Scene.given(init()),
+			Scene.expect(tab("Members")).toHaveAttr("data-native-feedback", "selection"),
+			Scene.expect(tab("General")).not.toHaveAttr("data-native-feedback"),
+			Scene.expect(tab("Billing")).not.toHaveAttr("data-native-feedback"),
+		)
+	})
+
 	test("clicking a tab tells the parent, which swaps the panel", () => {
 		Scene.scene(
 			{ update, view },

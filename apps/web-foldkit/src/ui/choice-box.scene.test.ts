@@ -101,6 +101,20 @@ describe("choice-box scene", () => {
 		Scene.scene(config, Scene.given(plan), Scene.keydown(grid, "a"), Scene.expectIgnored())
 	})
 
+	test("an enabled row plays the selection haptic natively; a disabled or read-only one plays nothing", () => {
+		Scene.scene(
+			config,
+			Scene.given(plan),
+			Scene.expect(row("Free")).toHaveAttr("data-native-feedback", "selection"),
+			Scene.expect(row("Enterprise")).not.toHaveAttr("data-native-feedback"),
+		)
+		Scene.scene(
+			{ update, view: viewWith({ isReadOnly: true }) },
+			Scene.given(plan),
+			Scene.expect(row("Free")).not.toHaveAttr("data-native-feedback"),
+		)
+	})
+
 	test("a read-only choice box ignores row clicks", () => {
 		Scene.scene(
 			{ update, view: viewWith({ isReadOnly: true }) },
