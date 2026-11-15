@@ -242,10 +242,7 @@ pub(crate) fn menu_children(
     selected: Option<&str>,
     options: &[serde_json::Value],
 ) -> Vec<Retained<UIMenuElement>> {
-    let groups: Vec<&[serde_json::Value]> = options
-        .split(|option| option.get("separator").is_some())
-        .filter(|group| !group.is_empty())
-        .collect();
+    let groups = groups_of(options);
     let element = |option: &serde_json::Value| menu_element(mtm, spec, selected, option);
     if groups.len() <= 1 {
         return options.iter().filter_map(element).collect();
@@ -253,6 +250,14 @@ pub(crate) fn menu_children(
     groups
         .into_iter()
         .map(|group| inline_section(mtm, group.iter().filter_map(element).collect()))
+        .collect()
+}
+
+/// The menu's groups: the runs of items between separators. More than one shows as sections.
+pub(crate) fn groups_of(options: &[serde_json::Value]) -> Vec<&[serde_json::Value]> {
+    options
+        .split(|option| option.get("separator").is_some())
+        .filter(|group| !group.is_empty())
         .collect()
 }
 

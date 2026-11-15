@@ -29,7 +29,7 @@ use objc2_ui_kit::{
 type Rect = [f32; 4];
 
 /// How many small elements a menu shows side by side; more wrap onto rows of their own.
-const REACTIONS_IN_A_ROW: usize = 4;
+const QUICK_IN_A_ROW: usize = 4;
 
 struct Region {
     spec: IslandSpec,
@@ -172,7 +172,7 @@ fn menu_of(mtm: MainThreadMarker, island: &IslandSpec) -> Retained<UIMenu> {
         .flatten()
         .filter_map(|choice| choice.as_str())
         // As many as the system lays out in one row.
-        .take(REACTIONS_IN_A_ROW)
+        .take(QUICK_IN_A_ROW)
         .map(|choice| {
             Retained::into_super(action(mtm, island, choice, format!("{prefix}{choice}")))
         })
@@ -189,7 +189,7 @@ fn menu_of(mtm: MainThreadMarker, island: &IslandSpec) -> Retained<UIMenu> {
     let children = crate::islands::menu_children(mtm, island, None, items);
     // Several groups come as sections already; one group is a section of its own here, divided
     // from the quick row.
-    if items.iter().any(|item| item.get("separator").is_some()) {
+    if crate::islands::groups_of(items).len() > 1 {
         sections.extend(children);
     } else if !children.is_empty() {
         sections.push(Retained::into_super(inline(mtm, children)));
