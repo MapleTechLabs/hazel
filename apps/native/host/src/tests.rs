@@ -462,7 +462,7 @@ fn a_multicolour_svg_draws_its_own_oklch_fill_filling_its_box() {
         json!({ "w": 32, "h": 32, "bg": "#0000ffff" }),
         vec![json!({ "k": "svg", "h": "svg-test", "view": 16, "body": body, "st": {} })],
     ));
-    s.images.svg(16.0, body, 128.0).wait().expect("an svg");
+    s.images.svg([16.0; 2], body, 128.0).wait().expect("an svg");
     let mut rt = Runtime::new(s, view, (32.0, 32.0), Env::new(false, 1.0));
     rt.frame(0.0);
     let frame = render(&mut rt, (32, 32));
@@ -955,7 +955,7 @@ fn an_svg_keeps_its_aspect_ratio_unless_it_asks_to_stretch() {
             json!({ "w": 64, "h": 32, "bg": "#0000ffff" }),
             vec![svg],
         ));
-        s.images.svg(16.0, body, 128.0).wait().expect("an svg");
+        s.images.svg([16.0; 2], body, 128.0).wait().expect("an svg");
         let mut rt = Runtime::new(s, view, (64.0, 32.0), Env::new(false, 1.0));
         rt.frame(0.0);
         let frame = render_until(&mut rt, (64, 32), |frame| frame.is(32, 16, RED));
@@ -967,6 +967,29 @@ fn an_svg_keeps_its_aspect_ratio_unless_it_asks_to_stretch() {
     assert!(fitted[2] > 200 && fitted[0] < 60, "{fitted:?}");
     let stretched = left_edge(Some("none"));
     assert!(stretched[0] > 200 && stretched[2] < 60, "{stretched:?}");
+}
+
+#[test]
+fn a_stretched_chart_draws_at_its_box_and_keeps_its_non_scaling_stroke_width() {
+    // A chart's percent-space layer: a vertical line at x = 50 of a 100×100 viewBox, stretched
+    // to a 400×100 box. Stretched with its stroke, the 4-unit line would be 16 points wide.
+    let body = r##"<path d="M50 0V100" fill="none" stroke="#ff0000" stroke-width="4" vector-effect="non-scaling-stroke"/>"##;
+    let svg = json!({ "k": "svg", "h": "chart", "view": 100, "body": body, "par": "none",
+        "st": { "absolute": [0, 0, 0, 0], "w": "full", "h": "full" } });
+    let s = state(e(
+        "div",
+        json!({ "w": 400, "h": 100, "bg": "#0000ffff" }),
+        vec![svg],
+    ));
+    let mut rt = Runtime::new(s, view, (400.0, 100.0), Env::new(false, 1.0));
+    rt.frame(0.0);
+    let frame = render_until(&mut rt, (400, 100), |frame| frame.is(200, 50, RED));
+    assert!(frame.is(200, 50, RED), "drawn: {:?}", frame.at(200, 50));
+    let beside = frame.at(206, 50);
+    assert!(
+        beside[2] > 200 && beside[0] < 60,
+        "2 points wide, not 16: {beside:?}"
+    );
 }
 
 /// Two 40x40 buttons 20 pt apart, the first with `st`; Tab focuses it from the keyboard.

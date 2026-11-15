@@ -498,15 +498,15 @@ impl Images {
         shown
     }
 
-    /// An inline SVG drawn in its own colours (not tinted like an icon).
-    pub fn svg(&self, view: f32, body: &str, size_pt: f32) -> Image {
+    /// An inline SVG drawn in its own colours (not tinted like an icon), `[w, h]` its viewBox size.
+    pub fn svg(&self, [vw, vh]: [f32; 2], body: &str, size_pt: f32) -> Image {
         let size_pt = size_pt.clamp(8.0, 1024.0);
-        let id = key(("svg", view.to_bits(), size_pt.to_bits(), body));
+        let id = key(("svg", vw.to_bits(), vh.to_bits(), size_pt.to_bits(), body));
         if let Some(image) = self.loaded.borrow_mut().get(&id) {
             return image.clone();
         }
         let markup = format!(
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {view} {view}\" preserveAspectRatio=\"none\">{}</svg>",
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {vw} {vh}\" preserveAspectRatio=\"none\">{}</svg>",
             replace_oklch(body)
         );
         let image = cache().svg(markup.into_bytes(), size_pt, SCALE);
@@ -514,6 +514,50 @@ impl Images {
             .borrow_mut()
             .insert(id, image.clone(), 1, |_| false);
         image
+    }
+
+    /// An inline SVG stretched to a `box_pt` box (`preserveAspectRatio="none"`, a chart's
+    /// percent-space layer), rasterized at the box's own size: Rune's square, 1024-pixel icon
+    /// raster would blur a wide chart. A shape with `vector-effect="non-scaling-stroke"` keeps its
+    /// stroke width, as in a browser (resvg reads the attribute but ignores it). `None` when the
+    /// drawing cannot be read.
+    pub fn svg_stretched(&self, view: [f32; 2], body: &str, box_pt: [f32; 2]) -> Option<Image> {
+        let [w, h] = box_pt.map(|v| v.round().clamp(1.0, 2048.0));
+        let id = key((
+            "svg-box",
+            view.map(f32::to_bits),
+            w.to_bits(),
+            h.to_bits(),
+            body,
+        ));
+        if let Some(image) = self.loaded.borrow_mut().get(&id) {
+            return Some(image.clone());
+        }
+        let markup = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w}\" height=\"{h}\" viewBox=\"0 0 {w} {h}\">{}</svg>",
+            stretch_body(&replace_oklch(body), [w / view[0], h / view[1]])
+        );
+        let (pw, ph) = ((w * SCALE) as u32, (h * SCALE) as u32);
+        let tree = resvg::usvg::Tree::from_data(markup.as_bytes(), &Default::default()).ok()?;
+        let mut pixmap = resvg::tiny_skia::Pixmap::new(pw, ph)?;
+        resvg::render(
+            &tree,
+            resvg::tiny_skia::Transform::from_scale(SCALE, SCALE),
+            &mut pixmap.as_mut(),
+        );
+        let rgba: Vec<u8> = pixmap
+            .pixels()
+            .iter()
+            .flat_map(|p| {
+                let c = p.demultiply();
+                [c.red(), c.green(), c.blue(), c.alpha()]
+            })
+            .collect();
+        let image = cache().rgba(pw, ph, rgba);
+        self.loaded
+            .borrow_mut()
+            .insert(id, image.clone(), 1, |_| false);
+        Some(image)
     }
 
     /// Rebuilds the element at `path` once `image` has decoded, for a box sized from the
@@ -693,6 +737,132 @@ fn percent_decode(s: &str) -> Vec<u8> {
     out
 }
 
+/// A flat SVG body (`<tag a="v" .../>` elements, as the runtime sends it) drawn in viewBox units
+/// scaled by `[sx, sy]` into a viewBox in box units. Each shape is scaled by a group transform,
+/// which scales its stroke too, except a `vector-effect="non-scaling-stroke"` path, line,
+/// polyline or polygon: its points are scaled instead, so its stroke keeps its width.
+fn stretch_body(body: &str, [sx, sy]: [f32; 2]) -> String {
+    let mut out = String::with_capacity(body.len() + 64);
+    let mut rest = body;
+    while let Some(start) = rest.find('<') {
+        let Some(len) = element_len(&rest[start..]) else {
+            break;
+        };
+        let element = &rest[start..start + len];
+        rest = &rest[start + len..];
+        match element
+            .contains("vector-effect=\"non-scaling-stroke\"")
+            .then(|| unscaled_stroke(element, sx, sy))
+            .flatten()
+        {
+            Some(scaled) => out.push_str(&scaled),
+            None => out.push_str(&format!("<g transform=\"scale({sx} {sy})\">{element}</g>")),
+        }
+    }
+    out
+}
+
+/// The length of the element at the start of `s`: up to its `/>`, or its closing tag.
+fn element_len(s: &str) -> Option<usize> {
+    let mut quoted = false;
+    for (i, c) in s.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            '>' if !quoted => {
+                if s[..i].ends_with('/') {
+                    return Some(i + 1);
+                }
+                let tag = s[1..].split([' ', '>', '/']).next()?;
+                let close = format!("</{tag}>");
+                return s[i..].find(&close).map(|at| i + at + close.len());
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// `element` with its geometry scaled by `sx, sy` and its stroke left as it is; `None` for a shape
+/// whose geometry this does not scale (it is then scaled with its stroke).
+fn unscaled_stroke(element: &str, sx: f32, sy: f32) -> Option<String> {
+    let (sx, sy) = (f64::from(sx), f64::from(sy));
+    let tag = element[1..].split([' ', '/', '>']).next()?;
+    let mut out = element.to_string();
+    let mut set = |name: &str, f: &dyn Fn(&str) -> Option<String>| -> Option<()> {
+        let needle = format!(" {name}=\"");
+        let Some(at) = out.find(&needle) else {
+            return Some(());
+        };
+        let from = at + needle.len();
+        let to = from + out[from..].find('"')?;
+        let value = f(&out[from..to])?;
+        out.replace_range(from..to, &value);
+        Some(())
+    };
+    let number = |v: &str, k: f64| v.trim().parse::<f64>().ok().map(|n| (n * k).to_string());
+    match tag {
+        "path" => set("d", &|d| scale_path(d, sx, sy))?,
+        "line" => {
+            set("x1", &|v| number(v, sx))?;
+            set("x2", &|v| number(v, sx))?;
+            set("y1", &|v| number(v, sy))?;
+            set("y2", &|v| number(v, sy))?;
+        }
+        "polyline" | "polygon" => set("points", &|points| {
+            let numbers: Vec<f64> = points
+                .split([' ', ',', '\n', '\t'])
+                .filter(|s| !s.is_empty())
+                .map(|s| s.parse().ok())
+                .collect::<Option<_>>()?;
+            Some(
+                numbers
+                    .chunks(2)
+                    .map(|p| format!("{},{}", p[0] * sx, p.get(1).copied().unwrap_or(0.0) * sy))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )
+        })?,
+        _ => return None,
+    }
+    Some(out)
+}
+
+/// Path data with every point scaled by `sx, sy`, as absolute moves, lines and curves (an arc
+/// becomes curves, so it scales exactly too).
+fn scale_path(d: &str, sx: f64, sy: f64) -> Option<String> {
+    use std::fmt::Write;
+    use svgtypes::SimplePathSegment as S;
+    let mut out = String::with_capacity(d.len());
+    for segment in svgtypes::SimplifyingPathParser::from(d) {
+        let _ = match segment.ok()? {
+            S::MoveTo { x, y } => write!(out, "M{} {}", x * sx, y * sy),
+            S::LineTo { x, y } => write!(out, "L{} {}", x * sx, y * sy),
+            S::CurveTo {
+                x1,
+                y1,
+                x2,
+                y2,
+                x,
+                y,
+            } => write!(
+                out,
+                "C{} {} {} {} {} {}",
+                x1 * sx,
+                y1 * sy,
+                x2 * sx,
+                y2 * sy,
+                x * sx,
+                y * sy
+            ),
+            S::Quadratic { x1, y1, x, y } => {
+                write!(out, "Q{} {} {} {}", x1 * sx, y1 * sy, x * sx, y * sy)
+            }
+            S::ClosePath => write!(out, "Z"),
+        };
+    }
+    Some(out)
+}
+
 /// Whether an SVG body paints in its own colours rather than `currentColor`.
 pub fn is_multicolour(body: &str) -> bool {
     if body.contains("currentColor") {
@@ -870,19 +1040,53 @@ mod tests {
     }
 
     #[test]
+    fn a_stretched_svg_scales_a_non_scaling_strokes_points_and_groups_the_rest() {
+        let body = concat!(
+            r##"<path d="M0 100l50 -50H100" fill="none" stroke="#ff0000" stroke-width="2" vector-effect="non-scaling-stroke"/>"##,
+            r##"<path d="M0 0h100v100z" fill="#00ff00"/>"##,
+        );
+        let out = stretch_body(body, [8.0, 2.0]);
+        assert_eq!(
+            out,
+            concat!(
+                r##"<path d="M0 200L400 100L800 100" fill="none" stroke="#ff0000" stroke-width="2" vector-effect="non-scaling-stroke"/>"##,
+                r##"<g transform="scale(8 2)"><path d="M0 0h100v100z" fill="#00ff00"/></g>"##,
+            )
+        );
+        let line =
+            r##"<line x1="0" y1="50" x2="100" y2="50" vector-effect="non-scaling-stroke"/>"##;
+        assert_eq!(
+            stretch_body(line, [8.0, 2.0]),
+            r##"<line x1="0" y1="100" x2="800" y2="100" vector-effect="non-scaling-stroke"/>"##
+        );
+    }
+
+    #[test]
+    fn a_stretched_chart_rasterizes_at_its_box_size() {
+        let images = Images::default();
+        // A horizontal line across a 100×100 viewBox, stretched to 300×60 points.
+        let body = r##"<path d="M0 50H100" fill="none" stroke="#ff0000" stroke-width="2" vector-effect="non-scaling-stroke"/>"##;
+        let image = images
+            .svg_stretched([100.0, 100.0], body, [300.0, 60.0])
+            .expect("rasterized");
+        let [w, h] = image.wait().expect("decoded");
+        assert_eq!([w, h], [600, 120], "the box at 2x");
+    }
+
+    #[test]
     fn a_window_keeps_a_bounded_number_of_pictures_keyed_by_their_hash() {
         let images = Images::default();
         let body = r#"<path d="M0 0h1v1z" fill="red"/>"#;
-        let first = images.svg(16.0, body, 32.0);
+        let first = images.svg([16.0; 2], body, 32.0);
         assert_eq!(
-            images.svg(16.0, body, 32.0).id(),
+            images.svg([16.0; 2], body, 32.0).id(),
             first.id(),
             "found, not built again"
         );
         assert_eq!(images.loaded.borrow().len(), 1);
         for i in 0..LOADED_ENTRIES + 20 {
             images.svg(
-                16.0,
+                [16.0; 2],
                 &format!(r#"<path d="M0 0h{i}v1z" fill="red"/>"#),
                 32.0,
             );

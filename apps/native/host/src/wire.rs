@@ -339,6 +339,9 @@ pub enum WireNode {
     Svg {
         h: String,
         view: f32,
+        /// The viewBox height, when it differs from its width (`view`).
+        #[serde(default)]
+        vh: Option<f32>,
         body: String,
         st: Style,
         /// The svg's `preserveAspectRatio`, when it sets one.
@@ -541,7 +544,8 @@ pub enum Node {
     Text(String),
     Svg {
         hash: String,
-        view: f32,
+        /// The viewBox's width and height.
+        view: [f32; 2],
         body: String,
         st: Style,
         par: Option<String>,
@@ -605,12 +609,13 @@ impl Subtrees {
             WireNode::Svg {
                 h,
                 view,
+                vh,
                 body,
                 st,
                 par,
             } => Arc::new(Node::Svg {
                 hash: h,
-                view,
+                view: [view, vh.unwrap_or(view)],
                 body,
                 st,
                 par,

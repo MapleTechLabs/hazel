@@ -497,6 +497,33 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("writes a chart's class paint into the svg body and keeps its viewBox height", async () => {
+		const chart = (_: Model, h: HtmlBuilder<Message>): Html =>
+			h.svg(
+				[h.Attribute("viewBox", "0 0 80 24"), h.Class("h-6 w-20")],
+				[
+					h.path([
+						h.Attribute("d", "M0 24L80 0"),
+						h.Attribute("fill", "none"),
+						h.Attribute("vector-effect", "non-scaling-stroke"),
+						h.Class("stroke-red-500"),
+					]),
+					h.circle([h.Attribute("r", "2"), h.Class("fill-current")]),
+				],
+			)
+		const { handle, trees } = boot(chart)
+		await settle()
+		const root = trees().at(-1)!.root
+		expect(root).toMatchObject({ k: "svg", view: 80, vh: 24 })
+		const body = root.k === "svg" ? root.body : ""
+		expect(body).toMatch(/^<path [^>]*stroke="#[0-9a-f]{6}"/)
+		expect(body).toContain('vector-effect="non-scaling-stroke"')
+		expect(body).toContain('fill="none"')
+		// `currentColor` stays a keyword, so an icon drawn with it is still tinted.
+		expect(body).toContain('<circle r="2" fill="currentColor"/>')
+		handle.dispose()
+	})
+
 	it("sends the overlays Mounts asked for and routes the host's dismiss back", async () => {
 		const menu = (_: Model, h: HtmlBuilder<Message>): Html =>
 			h.div(

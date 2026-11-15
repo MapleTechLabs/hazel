@@ -169,6 +169,12 @@ export type Style = {
 	hoverBg?: string
 	color?: string
 	hoverColor?: string
+	/**
+	 * SVG paint from CSS (`fill-*`, `stroke-*` classes): a colour, `none` or `currentColor`. The
+	 * serializer writes it into the SVG body as the presentation attribute; the host never reads it.
+	 */
+	fill?: string
+	stroke?: string
 	border?: [number, number, number, number]
 	borderColor?: string
 	radius?: [number, number, number, number]
@@ -1359,6 +1365,20 @@ export class StyleResolver {
 			case "color":
 				setColor("color")
 				break
+			case "fill":
+			case "stroke": {
+				// `currentColor` stays a keyword: a `fill-current` icon is still tinted as text.
+				const lower = v.toLowerCase()
+				if (lower === "none" || lower === "currentcolor") {
+					s[d.prop] = lower === "none" ? "none" : "currentColor"
+					break
+				}
+				const c = color(v, current)
+				if (c === null) return unsupported()
+				// Opaque as `#rrggbb`, which every SVG rasteriser reads.
+				s[d.prop] = c.endsWith("ff") ? c.slice(0, 7) : c
+				break
+			}
 			case "border": {
 				const parts = splitTop(v, /\s/)
 				sides(
@@ -2468,8 +2488,6 @@ const IGNORED = new Set([
 	"background-clip",
 	"background-origin",
 	"stroke-width",
-	"fill",
-	"stroke",
 	"shape-rendering",
 	"line-clamp",
 	"-webkit-line-clamp",

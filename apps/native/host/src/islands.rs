@@ -202,7 +202,7 @@ fn collect_items(node: &Arc<Node>, path: &str, out: &mut Vec<Item>) {
 /// The first inline SVG under `node`, outside the parts the native view skips.
 fn icon_of(node: &Arc<Node>) -> Option<(f32, String)> {
     match node.as_ref() {
-        Node::Svg { view, body, .. } => Some((*view, body.clone())),
+        Node::Svg { view, body, .. } => Some((view[0], body.clone())),
         Node::Elem {
             attrs, children, ..
         } if !attrs.contains_key(SKIP) => children.iter().find_map(icon_of),

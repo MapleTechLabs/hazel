@@ -17,6 +17,8 @@ export type WireNode =
 			readonly k: "svg"
 			readonly h: string
 			readonly view: number
+			/** The viewBox height, when it differs from its width (`view`). */
+			readonly vh?: number
 			readonly body: string
 			readonly st: Style
 			/** The svg's `preserveAspectRatio` when it sets one (`none`: stretch to the box). */
