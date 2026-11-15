@@ -27,6 +27,7 @@ import * as EmojiDialog from "../../../emoji-picker/dialog"
 import { PopoverEvent, popoverId } from "../../../picker-popover/popover"
 import type { EmojiData } from "../../../emoji-picker/data"
 import * as Overlays from "../overlays"
+import { TOP_EMOJIS } from "../../../chat/message/toolbar"
 import { imageAttachmentOf } from "../../../test/chat-messages"
 import { PageOutMessage } from "../../out-message"
 import {
@@ -240,6 +241,41 @@ describe("hover toolbar", () => {
 				ToggleReaction({ messageId: graceMessageId, channelId, emoji: "👍", userId: ada }),
 			),
 			Scene.Command.resolve(ToggleReaction, ActionMessage.SucceededToggleReaction()),
+		)
+	})
+
+	// The contract with the iOS host's `context_menu.rs`: `items` as a `menu` island's, `quick` above.
+	test("a long press on a message opens its context menu natively, words, symbols and quick reactions", () => {
+		const item = (key: string, label: string, symbol: string) => ({ key, label, symbol })
+		const separator = { separator: true }
+		const props = (own: boolean) =>
+			JSON.stringify({
+				items: [
+					item("add-reaction", "Add Reaction", "face.smiling"),
+					separator,
+					item("reply", "Reply", "arrowshape.turn.up.left"),
+					...(own ? [item("edit", "Edit Message", "pencil")] : []),
+					item("thread", "Reply in Thread", "bubble.left.and.bubble.right"),
+					separator,
+					item("copy", "Copy Text", "doc.on.doc"),
+					item("pin", "Pin Message", "pin"),
+					separator,
+					...(own ? [{ ...item("delete", "Delete Message", "trash"), destructive: true }] : []),
+					item("copy-id", "Copy Message ID", "number"),
+				],
+				quick: { choices: TOP_EMOJIS, prefix: Overlays.NATIVE_REACTION },
+			})
+		// Ada's own message, then Grace's: the island wraps each row.
+		const rows = Scene.all.selector('[data-native="context-menu"]')
+		const withProps = (own: boolean) => Scene.all.selector(`[data-native-props='${props(own)}']`)
+		Scene.scene(
+			channelScene,
+			Scene.given(derivedModel()),
+			mountedChannel(),
+			Scene.expectAll(rows).toHaveCount(2),
+			Scene.expectAll(withProps(true)).toHaveCount(1),
+			Scene.expectAll(withProps(false)).toHaveCount(1),
+			Scene.expect(Scene.selector('[data-native="context-menu"]')).toHaveHandler("change"),
 		)
 	})
 
