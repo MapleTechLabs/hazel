@@ -6,6 +6,7 @@
  * host answers (`desktop-bridge.ts`), the data source (`data-source.ts`), the app's modules and
  * stylesheet, the element bridge and render target, and last the host connection.
  */
+import { RENDERER_GLOBAL } from "../../web-foldkit/src/platform/renderer"
 import { Option } from "effect"
 import { makeElementBridge, makeRuneTarget, type HostToRuntime } from "@hazel/foldkit-rune"
 import { readConfig } from "./config"
@@ -69,6 +70,8 @@ export const startRuntime = async (platform: NativePlatform) => {
 	// Read by the web app's local cache (`core/db/local-cache-host.ts`) as its modules load. Like
 	// `localStorage`, it is kept only with live data.
 	globalThis.__hazelLocalCacheHost = platform.localCache?.({ persist: config.dataMode === "live" })
+	// Read by the app's views that pick a shape without their DOM-only Mounts (`platform/renderer.ts`).
+	Object.assign(globalThis, { [RENDERER_GLOBAL]: "rune" })
 
 	/** The Tauri APIs the host answers: the keychain sign-in, and updates where it offers them. */
 	const desktopBridge = makeDesktopBridge({

@@ -375,6 +375,12 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
         }
     } else if let Some(path) = field("swipeBack") {
         crate::system::set_swipe_back(mtm, &path);
+    } else if let Some(on) = body
+        .objectForKey(ns_string!("swipePager"))
+        .and_then(|value| value.downcast::<NSNumber>().ok())
+    {
+        let on = on.as_bool();
+        crate::system::set_swipe_pager(mtm, on);
     } else if let Some(navigation) = field("navigate") {
         crate::system::navigate(mtm, &navigation);
     }

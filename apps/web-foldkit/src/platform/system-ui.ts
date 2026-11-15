@@ -13,6 +13,11 @@ export type SystemUi = Readonly<{
 	feedback: (kind: Feedback) => void
 	/** From now on the edge swipe goes to `href`, until the function this returns runs. */
 	setSwipeBack: (href: string) => () => void
+	/**
+	 * From now on a horizontal swipe pages (`onPage(1)` toward the next, `-1` the previous) instead
+	 * of going back, until the function this returns runs. An image viewer's slides.
+	 */
+	setSwipePager?: (onPage: (step: -1 | 1) => void) => () => void
 }>
 
 /** The global a shell installs its controls as. */

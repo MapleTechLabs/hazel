@@ -33,6 +33,8 @@ export const OVERLAY_MOUNTS = [
 	"AnchorTooltip",
 	// A Dialog shows itself (`Dom.showDialog`, which the render target answers) when it mounts.
 	"AcquireResources",
+	// The image viewer: portalled to the window's root and modal, closed by Escape.
+	"ImageViewerNativeModal",
 ]
 
 /**
@@ -47,6 +49,8 @@ export const SCRIPT_MOUNTS = [
 	"AutoFocusOnboardingInput",
 	// The edge swipe a back chevron enables (`platform/system-ui.ts`).
 	"SwipeBack",
+	// The image viewer's slides page with the phone's horizontal swipe.
+	"ImageViewerSwipePager",
 ]
 
 /**

@@ -98,6 +98,8 @@ thread_local! {
         const { RefCell::new(None) };
     /// The swipe under the finger now.
     static DRAG: RefCell<Option<Drag>> = const { RefCell::new(None) };
+    /// An image viewer is open: a horizontal swipe pages it (`page` replies) instead of going back.
+    static PAGER: Cell<bool> = const { Cell::new(false) };
 }
 
 /// A swipe going back, until the page it goes to is drawn under its picture.
@@ -409,7 +411,19 @@ const RELEASE: f64 = 0.32;
 /// on while there is one.
 pub fn set_swipe_back(mtm: MainThreadMarker, path: &str) {
     BACK.set((!path.is_empty()).then(|| path.to_string()));
-    let enabled = !path.is_empty();
+    sync_swipe(mtm);
+}
+
+/// While an image viewer is open, the same pan pages it either way: let go far or fast enough,
+/// the runtime hears `page` (1 toward the next slide, -1 back), and nothing slides here.
+pub fn set_swipe_pager(mtm: MainThreadMarker, on: bool) {
+    PAGER.set(on);
+    sync_swipe(mtm);
+}
+
+/// The pan is on while a back chevron or a pager wants it, made the first time one does.
+fn sync_swipe(mtm: MainThreadMarker) {
+    let enabled = BACK.with_borrow(Option::is_some) || PAGER.get();
     if SWIPE.with_borrow(Option::is_none) {
         if !enabled {
             return;
@@ -604,6 +618,35 @@ fn slide_off(
     );
 }
 
+/// A pager's swipe let go: past `PAGE_SHARE` of the width (where its flick would carry it), or
+/// flicked hard, it pages; heading left is toward the next slide.
+fn page_swipe(swipe: &UIPanGestureRecognizer) {
+    // UIGestureRecognizerState 3: ended.
+    let state: isize = unsafe { msg_send![swipe, state] };
+    let Some(window) = window(swipe.mtm()) else {
+        return;
+    };
+    if state != 3 {
+        return;
+    }
+    let width = window.bounds().size.width;
+    let moved = swipe.translationInView(Some(&window)).x;
+    let velocity = swipe.velocityInView(Some(&window)).x;
+    let projected = moved + velocity * PROJECTION;
+    let step = if velocity.abs() > PAGE_VELOCITY || projected.abs() > width * PAGE_SHARE {
+        if projected < 0.0 { 1 } else { -1 }
+    } else {
+        return;
+    };
+    feedback(Feedback::Selection);
+    reply(&serde_json::json!({ "page": step }));
+}
+
+/// A pager's swipe pages once its flick would carry it past this share of the width.
+const PAGE_SHARE: CGFloat = 0.25;
+/// A flick this fast (points per second) pages however short.
+const PAGE_VELOCITY: CGFloat = 500.0;
+
 /// The swipe's cover goes once the slide is at rest and the page under it drawn (or `anyway`).
 fn finish_return(anyway: bool) {
     let done = RETURNING.with_borrow(|returning| {
@@ -638,6 +681,10 @@ define_class!(
             };
             let moved = swipe.translationInView(Some(&window));
             let velocity = swipe.velocityInView(Some(&window));
+            if PAGER.get() {
+                let sideways = |x: CGFloat, y: CGFloat| x.abs() > y.abs() * 1.2;
+                return Bool::new(sideways(velocity.x, velocity.y) || sideways(moved.x, moved.y));
+            }
             let rightward = |x: CGFloat, y: CGFloat| x > 0.0 && x > y.abs() * 1.2;
             Bool::new(
                 !MOVING.get()
@@ -652,6 +699,10 @@ define_class!(
         #[unsafe(method(pan:))]
         fn pan(&self, swipe: &UIPanGestureRecognizer) {
             let mtm = self.mtm();
+            if PAGER.get() {
+                page_swipe(swipe);
+                return;
+            }
             let (Some(window), Some(page)) = (window(mtm), page(mtm)) else {
                 return;
             };

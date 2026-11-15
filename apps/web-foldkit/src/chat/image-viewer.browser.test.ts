@@ -280,4 +280,22 @@ describe("image viewer in a real browser", () => {
 		await userEvent.keyboard("{Escape}")
 		await waitFor(() => viewer() === null)
 	})
+
+	test("a thumbnail pressed while the track still moves lands the track on it", async () => {
+		await sleep(450)
+		await open(0)
+		const track = document.querySelector<HTMLElement>("[data-viewer-slides]") as HTMLElement
+		// A swipe toward the second slide, still in flight (a phone's momentum) when the press lands.
+		track.scrollTo({ left: track.clientWidth, behavior: "smooth" })
+		await waitFor(() => track.scrollLeft > 0)
+		document.querySelector<HTMLElement>('button[aria-label="photo-3.png"]')?.click()
+		await waitFor(() => counter() === "3 of 3")
+		// The swipe runs out without taking the selection back.
+		await sleep(600)
+		expect(counter()).toBe("3 of 3")
+		expect(activeMedia()?.getAttribute("alt")).toBe("photo-3.png")
+		expect(Math.abs(track.scrollLeft - (activeSlide()?.offsetLeft ?? -1))).toBeLessThan(2)
+		await userEvent.keyboard("{Escape}")
+		await waitFor(() => viewer() === null)
+	})
 })

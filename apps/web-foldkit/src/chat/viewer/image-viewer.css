@@ -181,8 +181,15 @@
 		visibility 0s linear 200ms;
 }
 
-/* A finger swipes; the step buttons are for a pointer. */
-@media (hover: none), (max-width: 767px) {
+/* A finger swipes; the step buttons are for a pointer. Two rules, not one query list: the native
+   app's resolver (`@hazel/foldkit-rune`) reads only single queries. */
+@media (hover: none) {
+	[data-viewer-step] {
+		display: none;
+	}
+}
+
+@media (max-width: 767px) {
 	[data-viewer-step] {
 		display: none;
 	}
