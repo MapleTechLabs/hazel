@@ -245,12 +245,12 @@ Foldkit view                 hazel_native (host/src/islands.rs)        iOS shell
   own links and clicks        DOM events, on the existing wire          delegate callbacks
 ```
 
-| Component      | Where                                                                                     | Native view                                                                          | Who draws | Comes back as                                             |
-| -------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------- | --------------------------------------------------------- |
-| `tab-bar`      | the mobile nav (`shell/mobile`)                                                           | `UITabBar`, with the items' counts as badges                                         | UIKit     | the `click` of the item's own link or button              |
-| `menu`         | every Select's trigger, and every menu whose items are all words (`Menu.nativeMenuItems`) | a clear `UIButton` with a `UIMenu`                                                   | Rune      | `change` on the trigger, with the item's key              |
-| `date-picker`  | every DatePicker's field                                                                  | a clear `UIButton` that presents a calendar sheet                                    | Rune      | `change` on the field, `yyyy-MM-dd`                       |
-| `context-menu` | every message row                                                                         | none: one `UIContextMenuInteraction` on Rune's view finds the row under a held press | Rune      | `change` on the row: the action's key, or `react:<emoji>` |
+| Component      | Where                                                                                     | Native view                                                                          | Who draws | Comes back as                                           |
+| -------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------- | ------------------------------------------------------- |
+| `tab-bar`      | the mobile nav (`shell/mobile`)                                                           | `UITabBar`, with the items' counts as badges                                         | UIKit     | the `click` of the item's own link or button            |
+| `menu`         | every Select's trigger, and every menu whose items are all words (`Menu.nativeMenuItems`) | a clear `UIButton` with a `UIMenu`                                                   | Rune      | `change` on the trigger, with the item's key            |
+| `date-picker`  | every DatePicker's field                                                                  | a clear `UIButton` that presents a calendar sheet                                    | Rune      | `change` on the field, `yyyy-MM-dd`                     |
+| `context-menu` | every message row, and sidebar channel and DM rows (`Menu.longPressMenu`)                 | none: one `UIContextMenuInteraction` on Rune's view finds the row under a held press | Rune      | `change` on the row: the item's key, or `react:<emoji>` |
 
 Nothing new crosses the wire: the host replays DOM events on handlers the tree already carries,
 so a component needs no Message of its own beyond what its `change` maps to.

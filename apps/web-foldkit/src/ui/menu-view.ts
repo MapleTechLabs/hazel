@@ -1,6 +1,7 @@
 import { Array, Effect, Option, Queue, Schema, Stream } from "effect"
 import { Mount, Submodel } from "foldkit"
 import {
+	type Attribute,
 	type ChildAttribute,
 	childAttributes,
 	type Html,
@@ -26,7 +27,7 @@ import {
 } from "~/components/ui/menu.styles"
 import { popoverContentBase, popoverInnerClassName } from "~/components/ui/popover.styles"
 import { IconCheck, IconChevronRight } from "../icons"
-import { type NativeMenuLook, nativeIsland } from "../platform/native-island"
+import { type NativeMenuLook, nativeContextMenu, nativeIsland } from "../platform/native-island"
 import { playFeedback } from "../platform/feedback"
 import { dismissButton, focusScopeSentinel, openModalPopover, positionOverlay } from "./aria/overlay"
 import { Placement } from "./aria/placement"
@@ -304,6 +305,28 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 		model.popup._tag === "Open" ? overlay(model, model.popup, viewInputs, h) : h.empty,
 	)
 })
+
+/**
+ * A long press on the element (a row) opens this menu's `entries` as the system's context menu,
+ * where the shell has one (iOS): the same menu a "⋯" trigger opens, so a choice comes back as the
+ * same `ChoseFromNativeMenu`. Nothing where the entries are not all words, and nothing in a browser.
+ */
+export const longPressMenu = <ParentMessage>(
+	h: HtmlBuilder<ParentMessage>,
+	options: Readonly<{
+		menu: Model
+		entries: ReadonlyArray<Entry>
+		native?: NativeMenuLook
+		toParentMessage: (message: Message) => ParentMessage
+	}>,
+): ReadonlyArray<Attribute<ParentMessage>> =>
+	Option.match(nativeMenuItems(options.menu, options.entries, options.native), {
+		onNone: () => [],
+		onSome: (items) =>
+			nativeContextMenu(h, { items }, (key) =>
+				options.toParentMessage(Message.ChoseFromNativeMenu({ key, entries: options.entries })),
+			),
+	})
 
 /** `ContextMenu` + `ContextMenuTrigger` + `ContextMenuContent`; init the Model with `anchor: "Pointer"`. */
 export const contextMenuView = Submodel.defineView<Model, Message, ViewInputs>((model, viewInputs, h) => {

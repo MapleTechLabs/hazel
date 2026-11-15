@@ -285,19 +285,22 @@ export const moreMenuEntries = (facts: MessageFacts): ReadonlyArray<Menu.Entry> 
 	Menu.item("pin"),
 ]
 
+/** A message's context menu; the words are what the system's menu shows (`textValue`). */
 export const contextMenuEntries = (facts: MessageFacts, messageId: MessageId): ReadonlyArray<Menu.Entry> => [
 	Menu.separator,
-	Menu.item("add-reaction"),
+	Menu.item("add-reaction", { textValue: "Add Reaction" }),
 	Menu.separator,
-	Menu.item("reply"),
-	...(facts.isOwnMessage(messageId) ? [Menu.item("edit")] : []),
-	...(facts.isThreadChannel ? [] : [Menu.item("thread")]),
+	Menu.item("reply", { textValue: "Reply" }),
+	...(facts.isOwnMessage(messageId) ? [Menu.item("edit", { textValue: "Edit Message" })] : []),
+	...(facts.isThreadChannel ? [] : [Menu.item("thread", { textValue: "Reply in Thread" })]),
 	Menu.separator,
-	Menu.item("copy"),
-	Menu.item("pin"),
+	Menu.item("copy", { textValue: "Copy Text" }),
+	Menu.item("pin", { textValue: facts.isPinned(messageId) ? "Unpin Message" : "Pin Message" }),
 	Menu.separator,
-	...(facts.isOwnMessage(messageId) ? [Menu.item("delete", { intent: "Danger" })] : []),
-	Menu.item("copy-id"),
+	...(facts.isOwnMessage(messageId)
+		? [Menu.item("delete", { intent: "Danger", textValue: "Delete Message" })]
+		: []),
+	Menu.item("copy-id", { textValue: "Copy Message ID" }),
 ]
 
 /** The "More actions" menu of a message: the open one, or a closed one. */

@@ -1,5 +1,5 @@
 import type { ChannelId } from "@hazel/schema"
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { styles as avatarStyles } from "~/components/ui/avatar/styles"
 import { cx } from "~/utils/cx"
@@ -122,9 +122,11 @@ export const channelItem = <M>(
 	partners: ReadonlyArray<PartnerOrg>,
 	context: RowLinkContext,
 	menu: Html = dotsMenuTrigger(h, "Channel options"),
+	/** The row's long-press menu (`rowLongPress`). */
+	longPress: ReadonlyArray<Attribute<M>> = [],
 ): Html => {
 	const href = chatHref(context, entry.channel.id)
-	return sidebarItem(h, {}, [
+	return sidebarItem(h, { attributes: longPress }, [
 		sidebarLink(h, { href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE }, [
 			h.span(
 				// Positioned only for the partner marks: needless positioned spans slow every hit test.
@@ -341,11 +343,13 @@ export const dmItem = <M>(
 	notificationCount: number,
 	context: DmRowContext,
 	menu: Html = dotsMenuTrigger(h, "Conversation options"),
+	/** The row's long-press menu (`dmLongPress`). */
+	longPress: ReadonlyArray<Attribute<M>> = [],
 ): Html => {
 	const href = chatHref(context, channel.id)
 	const partners = dmPartners(channel, context.currentUserId)
 	const only = partners[0]
-	return sidebarItem(h, {}, [
+	return sidebarItem(h, { attributes: longPress }, [
 		sidebarLink(
 			h,
 			{ href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE },

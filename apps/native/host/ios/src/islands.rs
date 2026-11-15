@@ -221,8 +221,6 @@ fn tint_tab_bar(bar: &UITabBar, spec: &IslandSpec) {
     }
 }
 
-/// The system menu of a Select's options (`props.items`), the selected one checked. A choice is
-/// a `change` on the island's element, with the option's key.
 /// The island's menu (`props.items`, from a Select or the app's menus): items, `{ separator }`
 /// between groups (each group an inline section), and `{ label, items }` submenus. A choice is a
 /// `change` on the island with the item's key.
@@ -238,7 +236,7 @@ fn menu_of(mtm: MainThreadMarker, spec: &IslandSpec) -> Retained<UIMenu> {
     UIMenu::menuWithChildren(&NSArray::from_retained_slice(&children), mtm)
 }
 
-fn menu_children(
+pub(crate) fn menu_children(
     mtm: MainThreadMarker,
     spec: &IslandSpec,
     selected: Option<&str>,
