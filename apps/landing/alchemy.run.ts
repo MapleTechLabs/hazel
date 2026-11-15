@@ -11,7 +11,7 @@ const props = Effect.gen(function* () {
 		command: "bun run build",
 		outdir: "dist",
 		dev: { command: "bun run dev" },
-		memo: { include: ["**/*", "../../packages/ui/src/**"], lockfile: true },
+		memo: { include: ["**/*"], lockfile: true },
 		compatibility: { date: "2026-09-25" },
 		workersDev: stage.kind !== "prd",
 		domain: domains.landing,

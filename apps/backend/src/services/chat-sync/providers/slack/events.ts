@@ -7,6 +7,7 @@
  * Every key is Slack's `event_id`, which a retried delivery keeps, so each event applies once.
  */
 import { Slack } from "@hazel/integrations"
+import * as SlackFormat from "@hazel/integrations/slack/format"
 import { ExternalChannelId, ExternalMessageId, ExternalThreadId, ExternalUserId } from "@hazel/schema"
 import { Effect, Option, Redacted } from "effect"
 import type { ChatSyncAttachment, ChatSyncMention } from "../../chat-sync-effects"
@@ -70,7 +71,7 @@ const MAX_MENTION_LOOKUPS = 10
 
 /** Names for the users a message mentions, so ones Hazel cannot map still read as names. */
 const mentionsOf = (text: string, lookupUser: SlackUserLookup) => {
-	const pattern = new RegExp(Slack.SLACK_USER_MENTION_PATTERN.source, "g")
+	const pattern = new RegExp(SlackFormat.SLACK_USER_MENTION_PATTERN.source, "g")
 	const ids = [...new Set([...text.matchAll(pattern)].map((match) => match[1]!))].slice(
 		0,
 		MAX_MENTION_LOOKUPS,
@@ -111,7 +112,7 @@ export const slackInbound = Effect.fn("SlackEvents.inbound")(function* (
 		case "MessagePosted": {
 			const { message } = event
 			if (isOwnOrBot(envelope, message) || message.user === null) return Option.none<ChatSyncInbound>()
-			const text = Slack.slackMrkdwnToMarkdown(message.text)
+			const text = SlackFormat.slackMrkdwnToMarkdown(message.text)
 			return Option.some<ChatSyncInbound>({
 				...base,
 				externalChannelId: ExternalChannelId.make(message.channel),
@@ -135,7 +136,7 @@ export const slackInbound = Effect.fn("SlackEvents.inbound")(function* (
 			if (event.previousMessage !== null && event.previousMessage.text === message.text) {
 				return Option.none<ChatSyncInbound>()
 			}
-			const text = Slack.slackMrkdwnToMarkdown(message.text)
+			const text = SlackFormat.slackMrkdwnToMarkdown(message.text)
 			return Option.some<ChatSyncInbound>({
 				...base,
 				externalChannelId: ExternalChannelId.make(event.channel),

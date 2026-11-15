@@ -34,7 +34,7 @@
  */
 import { SYNC_MUX_SUBPROTOCOL, SYNC_SUBPROTOCOL, SyncCloseCode, type SyncMuxOpen } from "@hazel/domain/sync"
 import { type MuxOpenResult, refuseMuxStream, startMuxSession, toHttpServerResponse } from "@hazel/sync-do"
-import { AccessToken } from "@hazel/auth/server"
+import * as AccessToken from "@hazel/auth/access-token"
 import { Clock, type Context, Effect, Option, Schema } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse, HttpTraceContext } from "effect/http"
 import { HazelSession, type VerifiedUser } from "../services/hazel-session"

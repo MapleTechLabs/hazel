@@ -1,4 +1,5 @@
-import { AccessToken, HazelAuth } from "@hazel/auth/server"
+import * as AccessToken from "@hazel/auth/access-token"
+import { HazelAuth } from "@hazel/auth/server"
 import { UserRepo } from "@hazel/backend-core"
 import { CurrentUser, InvalidBearerTokenError, SessionLoadError } from "@hazel/domain"
 import { UserId } from "@hazel/schema"

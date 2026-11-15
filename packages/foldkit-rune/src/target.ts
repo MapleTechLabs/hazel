@@ -301,18 +301,18 @@ const svgPaint = (name: string, value: string): string => {
 }
 
 /** An element's `fill` and `stroke` from its classes (`stroke-chart-new`), which beat its attributes. */
-/** The wire node an `<svg>` becomes, built a field at a time. */
-type SvgNode = {
+/** An svg's wire node while it is built: its optional fields set only when present. */
+type SvgWireDraft = {
 	-readonly [K in keyof Extract<WireNode, { readonly k: "svg" }>]: Extract<
 		WireNode,
 		{ readonly k: "svg" }
 	>[K]
 }
 
-/** The fill and stroke a child's own classes give it. */
-type ClassPaint = { fill?: string; stroke?: string }
+/** The paint an svg's own classes give a shape. */
+type SvgColors = { fill?: string; stroke?: string }
 
-type SvgPaint = (vnode: AnyVNode, tag: string) => Readonly<ClassPaint>
+type SvgPaint = (vnode: AnyVNode, tag: string) => Readonly<SvgColors>
 
 /**
  * An SVG subtree as a flat icon body: `<g>` attributes pushed down onto their children, and paint
@@ -728,10 +728,10 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 						dark,
 						env.width,
 					)
-					const painted: ClassPaint = {}
-					if (style.fill !== undefined) painted.fill = style.fill
-					if (style.stroke !== undefined) painted.stroke = style.stroke
-					return painted
+					const colors: SvgColors = {}
+					if (style.fill !== undefined) colors.fill = style.fill
+					if (style.stroke !== undefined) colors.stroke = style.stroke
+					return colors
 				}
 				const body = svgBody(vnode, paint, inherited)
 				// `none` stretches the drawing to the box (the dithered avatar); absent means `xMidYMid meet`.
@@ -759,13 +759,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					reusedSubtrees += 1
 					return { k: "r", h }
 				}
-				const svg: SvgNode = {
-					k: "svg",
-					h,
-					view,
-					body,
-					st: sized,
-				}
+				const svg: SvgWireDraft = { k: "svg", h, view, body, st: sized }
 				if (viewH !== view) svg.vh = viewH
 				if (par !== undefined) svg.par = par
 				return svg
