@@ -3,6 +3,7 @@ import * as Scene from "foldkit/scene"
 import type { HtmlBuilder } from "foldkit/html"
 import { describe, test } from "vitest"
 import { type Entry, init, item, leaf, type Message, type Model, separator, update } from "./menu"
+import type { NativeMenuItem } from "../platform/native-island"
 import { longPressMenu } from "./menu-view"
 
 /** `longPressMenu`: a row carries its menu's own entries as the system's long-press menu. */
@@ -32,7 +33,7 @@ const row = Scene.selector("#row")
 
 const MUTE = { key: "mute", label: "Mute", symbol: "bell.slash" }
 const LEAVE = { key: "leave", label: "Leave", destructive: true }
-const propsWith = (sectionA: object) =>
+const propsWith = (sectionA: NativeMenuItem) =>
 	JSON.stringify({
 		items: [MUTE, { label: "Move to", items: [sectionA] }, { separator: true }, LEAVE],
 	})
