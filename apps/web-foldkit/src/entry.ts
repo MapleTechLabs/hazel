@@ -12,9 +12,11 @@ import { desktopAuthClient } from "./platform/desktop"
 import { desktopSessionBearer } from "./platform/desktop-auth"
 import { Flags, flags, init, Message, Model, subscriptions, update, view } from "./main"
 import { NotificationSinks } from "./app/notification-sinks"
+import { handOffPaint, installPaintCapture, paintStorage } from "./app/paint"
 import { viewTransition } from "./app/view-transition"
 import { installImageViewerMorph } from "./chat/viewer/morph"
 import { installChannelPrefetch } from "./core/db/channel-prefetch"
+import { localCacheHost } from "./core/db/local-cache-host"
 import { labPathOf } from "./lab/path"
 import { loadPages } from "./page/registry"
 import { ResourcesLive } from "./rpc"
@@ -62,6 +64,13 @@ else {
 			container.textContent = "A page area did not load. Reload to try again."
 		})
 	else startApplication()
+	// The last screen, drawn by `index.html` before this script loaded, until the app draws its own;
+	// and this screen, for the next load. The native apps draw no `index.html`.
+	if (localCacheHost() === undefined) {
+		handOffPaint(document)
+		const storage = paintStorage()
+		if (storage !== null) installPaintCapture(document, storage)
+	}
 	installChannelPrefetch()
 	// Desktop only: native notification permission (a no-op in the browser).
 	initNativeNotifications().catch((error: unknown) =>

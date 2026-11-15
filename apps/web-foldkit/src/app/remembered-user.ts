@@ -10,6 +10,7 @@ import { forgetLocalCache } from "~/db/local-cache"
 import { forgetRememberedOrganizations } from "~/db/sync-manager"
 import { readStored, removeStored, writeStored } from "../data/storage"
 import { CurrentUser } from "../session"
+import { forgetPaint } from "./paint"
 
 export const REMEMBERED_USER_KEY = "hazel:last-user"
 
@@ -17,7 +18,10 @@ const stored = readStored(REMEMBERED_USER_KEY, CurrentUser)
 
 export const loadRememberedUser: Effect.Effect<CurrentUser | null> = stored.pipe(Effect.map(Option.getOrNull))
 
-const forgetUser: Effect.Effect<void> = removeStored(REMEMBERED_USER_KEY)
+/** The user, and the paint of their last screen (`./paint.ts`), which only they may see. */
+const forgetUser: Effect.Effect<void> = removeStored(REMEMBERED_USER_KEY).pipe(
+	Effect.andThen(Effect.sync(forgetPaint)),
+)
 
 /** The cached rows the remembered user's load shows, and the page that shows them. */
 export interface RememberedCache {

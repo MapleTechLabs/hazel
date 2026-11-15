@@ -203,7 +203,11 @@ export const channelSettingsLayout = <Message>(
  */
 export const appLoader = <Message>(h: HtmlBuilder<Message>, onReload?: Message): Html =>
 	h.div(
-		[h.Class("flex h-screen flex-col items-center justify-center gap-6")],
+		// The last screen's paint stays up while this shows (`app/paint.ts`).
+		[
+			h.Class("flex h-screen flex-col items-center justify-center gap-6"),
+			h.Attribute("data-paint", "loader"),
+		],
 		[
 			h.div(
 				[h.Class("flex w-full max-w-sm flex-col items-center gap-4")],
