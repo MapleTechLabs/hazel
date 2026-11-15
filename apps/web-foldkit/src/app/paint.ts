@@ -17,7 +17,11 @@ const VERSION = 1
 
 /** A paint larger than this is not kept: reading it would cost the load more than it saves. */
 export const MAX_PAINT_CHARS = 1_500_000
-/** The longest the paint stays up when the app never draws the screen in place of its loader. */
+/**
+ * The longest the paint stays up when the app never draws the screen in place of its loader. The
+ * boot script holds the same limit from when the paint appears (`paint-boot.js`), so a slow script
+ * cannot extend it; this one only applies where the paint was drawn without it (tests).
+ */
 export const MAX_PAINT_MS = 6000
 const SAVE_EVERY_MS = 30_000
 
@@ -151,7 +155,8 @@ export const handOffPaint = (doc: Document, maxMs: number = MAX_PAINT_MS): (() =
 	view?.addEventListener("keydown", onInput, true)
 	const check = () => {
 		frame = 0
-		if (hasLiveScreen(doc)) done()
+		// Gone already: the boot script's own limit took it down.
+		if (!paint.isConnected || hasLiveScreen(doc)) done()
 	}
 	const observer = new MutationObserver(() => {
 		if (frame === 0) frame = requestAnimationFrame(check)

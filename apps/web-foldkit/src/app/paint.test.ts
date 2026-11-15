@@ -233,6 +233,16 @@ describe("handing off to the app", () => {
 		expect(started()).toBe(1)
 	})
 
+	test("goes six seconds after it appears, though the app's script never runs", () => {
+		vi.useFakeTimers()
+		savePaint(document, localStorage)
+		const paint = load()!
+		vi.advanceTimersByTime(5999)
+		expect(paint.isConnected).toBe(true)
+		vi.advanceTimersByTime(1)
+		expect(paint.isConnected).toBe(false)
+	})
+
 	test("goes after a while even when the app never draws the screen", () => {
 		vi.useFakeTimers()
 		savePaint(document, localStorage)

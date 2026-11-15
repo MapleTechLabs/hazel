@@ -11,6 +11,9 @@ export function hazelPaintBoot(win) {
 	var USER_KEY = "hazel:last-user"
 	var VERSION = 1
 	var MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+	// The longest the paint stays up, from when it appears: whatever the app's script does, a slow
+	// or failed load never leaves the page covered by an inert copy (`paint.ts`, `MAX_PAINT_MS`).
+	var MAX_SHOWN_MS = 6000
 	var DROP =
 		"script,iframe,frame,frameset,object,embed,base,link,meta,noscript,template,dialog,video,audio," +
 		'[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"],[role="tooltip"],[popover],[data-paint-skip]'
@@ -110,6 +113,9 @@ export function hazelPaintBoot(win) {
 				host.appendChild(template.content)
 				doc.body.appendChild(host)
 				isShown = true
+				win.setTimeout(function () {
+					if (host.parentNode) host.parentNode.removeChild(host)
+				}, MAX_SHOWN_MS)
 				var scrolled = host.querySelectorAll("[data-paint-scroll]")
 				for (var i = 0; i < scrolled.length; i++) {
 					var offsets = scrolled[i].getAttribute("data-paint-scroll").split(" ")
