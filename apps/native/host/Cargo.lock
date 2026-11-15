@@ -1259,10 +1259,12 @@ dependencies = [
  "objc2-ui-kit 0.3.2",
  "objc2-user-notifications 0.3.2",
  "objc2-web-kit",
+ "resvg",
  "rune",
  "rune-fx",
  "serde",
  "serde_json",
+ "svgtypes",
  "ureq",
  "wgpu",
 ]

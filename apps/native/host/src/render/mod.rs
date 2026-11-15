@@ -75,7 +75,7 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             st,
             par,
             ..
-        } => Some(build_svg(*view, body, st, par.as_deref(), inh, ctx)),
+        } => Some(build_svg(path, *view, body, st, par.as_deref(), inh, ctx)),
         Node::Elem {
             hash,
             tag,

@@ -42,9 +42,10 @@ pub(super) fn picture_size(st: &Style) -> f32 {
 }
 
 /// An inline SVG: a `currentColor` icon tinted with the text colour, or one with its own
-/// colours (an avatar's dither pattern) drawn as a picture.
+/// colours (an avatar's dither pattern, a chart) drawn as a picture.
 pub(super) fn build_svg(
-    view: f32,
+    path: &str,
+    view: [f32; 2],
     body: &str,
     st: &Style,
     par: Option<&str>,
@@ -57,24 +58,43 @@ pub(super) fn build_svg(
     let labels = |e: El, size: f32| {
         texts
             .iter()
-            .fold(e, |e, t| e.child(svg_text::overlay(t, view, size, c)))
+            .fold(e, |e, t| e.child(svg_text::overlay(t, view[0], size, c)))
     };
     if !images::is_multicolour(body) {
         let size = match st.w {
             Some(wire::Len::Px(wire::F(v))) => v,
             _ => 16.0,
         };
-        let e = labels(icon(intern_icon(view, body), size).color(c), size);
+        let e = labels(icon(intern_icon(view[0], body), size).color(c), size);
         return center_vertically(apply_box(e, st), st);
     }
-    let image = ctx.s.images.svg(view, body, picture_size(st));
+    let stretch = par == Some("none");
+    // A stretched drawing not sized in points (a chart's `size-full` layer) rasterizes at its
+    // laid-out box, so it stays sharp and its non-scaling strokes keep their width; nothing shows
+    // until that box is known, and the element rebuilds when it changes.
+    let px_sized = matches!(
+        (&st.w, &st.h),
+        (Some(wire::Len::Px(_)), Some(wire::Len::Px(_)))
+    );
+    let laid_out = (stretch && !px_sized)
+        .then(|| rune::memo::layout_size(path))
+        .flatten()
+        .filter(|[w, h]| *w > 0.0 && *h > 0.0);
+    let image = match laid_out {
+        Some(size) => ctx.s.images.svg_stretched(view, body, size),
+        None => Some(ctx.s.images.svg(view, body, picture_size(st))),
+    };
     // `preserveAspectRatio`: `none` stretches to the box (the dithered avatar), `slice` covers
     // it, and the default (`meet`) fits inside it.
-    let mut e = match par.unwrap_or("xMidYMid meet") {
-        "none" => el().pixels(image.pixels()),
-        p if p.ends_with("slice") => el().pixels_fit(image.pixels(), SurfaceFit::Fill),
-        _ => el().pixels_fit(image.pixels(), SurfaceFit::Fit),
-    };
+    let mut e = match (image, par.unwrap_or("xMidYMid meet")) {
+        (None, _) => el(),
+        (Some(image), "none") => el().pixels(image.pixels()),
+        (Some(image), p) if p.ends_with("slice") => {
+            el().pixels_fit(image.pixels(), SurfaceFit::Fill)
+        }
+        (Some(image), _) => el().pixels_fit(image.pixels(), SurfaceFit::Fit),
+    }
+    .key(path);
     if st.w.is_none() && st.h.is_none() && st.absolute.is_none() {
         // An unsized SVG fills its box; the decorative ones here sit under their siblings.
         e = e.pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0))

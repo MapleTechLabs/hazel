@@ -245,6 +245,8 @@ const SVG_ATTRS = new Set([
 	"opacity",
 	"fill-opacity",
 	"stroke-opacity",
+	// The host keeps such a stroke's width when it stretches the drawing (its rasteriser does not).
+	"vector-effect",
 	"text-anchor",
 	"dominant-baseline",
 	"font-size",
@@ -298,14 +300,20 @@ const svgPaint = (name: string, value: string): string => {
 	return hex === null ? value : hex.endsWith("ff") ? hex.slice(0, 7) : hex
 }
 
-/** An SVG subtree as a flat icon body: `<g>` attributes pushed down onto their children. */
-const svgBody = (vnode: AnyVNode, inherited: Record<string, string> = {}): string =>
+/** An element's `fill` and `stroke` from its classes (`stroke-chart-new`), which beat its attributes. */
+type SvgPaint = (vnode: AnyVNode, tag: string) => Readonly<{ fill?: string; stroke?: string }>
+
+/**
+ * An SVG subtree as a flat icon body: `<g>` attributes pushed down onto their children, and paint
+ * set by classes written as attributes (the host's rasteriser reads no CSS).
+ */
+const svgBody = (vnode: AnyVNode, paint: SvgPaint, inherited: Record<string, string> = {}): string =>
 	(vnode.children ?? [])
 		.map((child) => {
 			if (typeof child === "string" || child.sel === undefined) return ""
-			const attrs = { ...inherited, ...attrsOf(child) }
 			const tag = tagOf(child)
-			if (tag === "g") return svgBody(child, attrs)
+			const attrs = { ...inherited, ...attrsOf(child), ...paint(child, tag) }
+			if (tag === "g") return svgBody(child, paint, attrs)
 			const list = Object.entries(attrs)
 				.filter(([name]) => SVG_ATTRS.has(name))
 				.map(([name, value]) => `${name}="${svgPaint(name, value).replace(/"/g, "&quot;")}"`)
@@ -681,16 +689,43 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			)
 			const st: Style = resolved.style
 			if (tag === "svg") {
-				const view = Number((attrs.viewBox ?? "0 0 24 24").split(/\s+/)[2]) || 24
+				const box = (attrs.viewBox ?? "0 0 24 24").trim().split(/[\s,]+/)
+				const view = Number(box[2]) || 24
+				// A drawing that is not square (a sparkline's `0 0 80 24`) says its height too.
+				const viewH = Number(box[3]) || view
+				const { fill, stroke, ...own } = st
 				const sized: Style = {
-					...st,
+					...own,
 					w: st.w ?? (attrs.width ? Number(attrs.width) : undefined),
 					h: st.h ?? (attrs.height ? Number(attrs.height) : undefined),
 				}
-				const body = svgBody(vnode)
+				// Paint inherits, as in CSS: the svg's own `fill-*`/`stroke-*` class reaches its shapes.
+				const inherited: Record<string, string> = {}
+				if (fill !== undefined) inherited.fill = fill
+				if (stroke !== undefined) inherited.stroke = stroke
+				const paint: SvgPaint = (child, childTag) => {
+					const childClasses = classesOf(child)
+					if (childClasses.length === 0) return {}
+					const { style } = styles.resolve(
+						{
+							tag: childTag,
+							classes: childClasses,
+							attrs: attrsOf(child),
+							hasDescendant: hasDescendant(child),
+						},
+						resolved.scope,
+						dark,
+						env.width,
+					)
+					return {
+						...(style.fill === undefined ? {} : { fill: style.fill }),
+						...(style.stroke === undefined ? {} : { stroke: style.stroke }),
+					}
+				}
+				const body = svgBody(vnode, paint, inherited)
 				// `none` stretches the drawing to the box (the dithered avatar); absent means `xMidYMid meet`.
 				const par = attrs.preserveAspectRatio
-				const h = hash(`svg${view}${body}${JSON.stringify(sized)}${par ?? ""}`)
+				const h = hash(`svg${view}x${viewH}${body}${JSON.stringify(sized)}${par ?? ""}`)
 				nextHashes.add(h)
 				nextCache.set(path, {
 					vnode,
@@ -713,9 +748,15 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					reusedSubtrees += 1
 					return { k: "r", h }
 				}
-				return par === undefined
-					? { k: "svg", h, view, body, st: sized }
-					: { k: "svg", h, view, body, st: sized, par }
+				return {
+					k: "svg",
+					h,
+					view,
+					...(viewH === view ? {} : { vh: viewH }),
+					body,
+					st: sized,
+					...(par === undefined ? {} : { par }),
+				}
 			}
 			const on: Record<string, number> = {}
 			const ownHandlers: Array<[number, Handler]> = []
