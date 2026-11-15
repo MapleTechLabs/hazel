@@ -1,6 +1,6 @@
 import type { ChannelSectionId } from "@hazel/schema"
 import { Array, Option, Schema } from "effect"
-import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import {
 	IconCirclePlus,
 	IconClose,
@@ -17,7 +17,7 @@ import {
 } from "../../icons"
 import { button } from "../../ui/button"
 import * as Menu from "../../ui/menu"
-import { menuLabel, view as menuView } from "../../ui/menu-view"
+import { longPressMenu, menuLabel, view as menuView } from "../../ui/menu-view"
 import { SectionAction } from "./model"
 import type { ChannelEntry, Section, SidebarMember } from "./rows"
 
@@ -205,24 +205,32 @@ const rowMenuContent =
 		return section ? [text(section.name)] : []
 	}
 
+type RowMenuOptions<M> = Readonly<{
+	menu: Menu.Model
+	entry: ChannelEntry
+	sections: ReadonlyArray<Section>
+	canDelete: boolean
+	toMessage: (message: Menu.Message) => M
+}>
+
+/** A channel row's menu, which its dots trigger and a long press on the row both open. */
+const rowMenu = <M>(options: RowMenuOptions<M>) => ({
+	entries: rowMenuEntries(options.sections, options.canDelete, options.entry.member),
+	native: { symbols: rowSymbols(options.entry.member) },
+})
+
+/** A long press on a channel row opens its menu as the system's (iOS). */
+export const rowLongPress = <M>(h: HtmlBuilder<M>, options: RowMenuOptions<M>): ReadonlyArray<Attribute<M>> =>
+	longPressMenu(h, { menu: options.menu, ...rowMenu(options), toParentMessage: options.toMessage })
+
 /** `ChannelItem`'s `<Menu>`: the dots trigger and `MenuContent placement="right top" className="w-42"`. */
-export const rowMenuView = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{
-		menu: Menu.Model
-		entry: ChannelEntry
-		sections: ReadonlyArray<Section>
-		canDelete: boolean
-		toMessage: (message: Menu.Message) => M
-	}>,
-): Html =>
+export const rowMenuView = <M>(h: HtmlBuilder<M>, options: RowMenuOptions<M>): Html =>
 	h.submodel({
 		slotId: options.menu.id,
 		model: options.menu,
 		view: menuView,
 		viewInputs: {
-			entries: rowMenuEntries(options.sections, options.canDelete, options.entry.member),
-			native: { symbols: rowSymbols(options.entry.member) },
+			...rowMenu(options),
 			toTrigger: rowMenuTrigger(
 				h,
 				options.entry.channel.type === "single" || options.entry.channel.type === "direct"
@@ -237,23 +245,31 @@ export const rowMenuView = <M>(
 		toParentMessage: options.toMessage,
 	})
 
+type DmMenuOptions<M> = Readonly<{
+	menu: Menu.Model
+	channelId: string
+	member: SidebarMember
+	toMessage: (message: Menu.Message) => M
+}>
+
+/** A DM row's menu, which its dots trigger and a long press on the row both open. */
+const dmMenu = <M>(options: DmMenuOptions<M>) => ({
+	entries: dmMenuEntries(options.member),
+	native: { symbols: rowSymbols(options.member) },
+})
+
+/** A long press on a DM row opens its menu as the system's (iOS). */
+export const dmLongPress = <M>(h: HtmlBuilder<M>, options: DmMenuOptions<M>): ReadonlyArray<Attribute<M>> =>
+	longPressMenu(h, { menu: options.menu, ...dmMenu(options), toParentMessage: options.toMessage })
+
 /** `DmChannelItem`'s `<Menu>`: Mute, Favorite and Hide conversation, on the same dots trigger. */
-export const dmMenuView = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{
-		menu: Menu.Model
-		channelId: string
-		member: SidebarMember
-		toMessage: (message: Menu.Message) => M
-	}>,
-): Html =>
+export const dmMenuView = <M>(h: HtmlBuilder<M>, options: DmMenuOptions<M>): Html =>
 	h.submodel({
 		slotId: options.menu.id,
 		model: options.menu,
 		view: menuView,
 		viewInputs: {
-			entries: dmMenuEntries(options.member),
-			native: { symbols: rowSymbols(options.member) },
+			...dmMenu(options),
 			toTrigger: rowMenuTrigger(h, "Conversation options"),
 			content: (key: string): ReadonlyArray<Html | string> => {
 				const text = (value: string, className?: string) =>

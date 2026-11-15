@@ -50,6 +50,19 @@ describe("switch scene", () => {
 		)
 	})
 
+	test("a press on the switch plays the selection haptic natively; a disabled one plays nothing", () => {
+		Scene.scene(
+			{ update, view: view() },
+			Scene.given(init()),
+			Scene.expect(control).toHaveAttr("data-native-feedback", "selection"),
+		)
+		Scene.scene(
+			{ update, view: view({ isDisabled: true }) },
+			Scene.given(init()),
+			Scene.expect(control).not.toHaveAttr("data-native-feedback"),
+		)
+	})
+
 	test("Space on the switch flips it through the native change", () => {
 		Scene.scene(
 			{ update, view: view() },

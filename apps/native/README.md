@@ -167,6 +167,13 @@ to the right from anywhere on the page (as in Slack) does that under the finger,
 finishes at the finger's speed, the runtime drawing where it goes while the page slides off. A
 press on the tab bar never waits on a picture: the bar and the page stay live while the tab draws.
 
+**Haptics** (`web-foldkit/src/platform/feedback.ts`, `host/src/feedback.rs`). Components own
+them, never features: a Switch, Checkbox, Radio, ChoiceBox or tab marks its pressed element
+`data-native-feedback="selection"`, and the host plays it as the finger lifts, before the press
+reaches the runtime; a success, warning or error toast plays its outcome through the bridge
+(`{ feedback }`). `NATIVE_DEBUG=1` logs each one (`[host] haptic Selection`), since the
+simulator plays none.
+
 **Live data** (`HAZEL_DATA=live bun run ios`, with `VITE_APP_URL`/`VITE_BACKEND_URL` for a dev
 stack on this Mac, and `HAZEL_SESSION_TOKEN` from `dev:sign-in` for a PR preview, which has no
 OAuth) signs in as the Mac app does: the sign-in link opens in the system's sign-in
@@ -238,12 +245,12 @@ Foldkit view                 hazel_native (host/src/islands.rs)        iOS shell
   own links and clicks        DOM events, on the existing wire          delegate callbacks
 ```
 
-| Component      | Where                                                                                     | Native view                                                                          | Who draws | Comes back as                                             |
-| -------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------- | --------------------------------------------------------- |
-| `tab-bar`      | the mobile nav (`shell/mobile`)                                                           | `UITabBar`, with the items' counts as badges                                         | UIKit     | the `click` of the item's own link or button              |
-| `menu`         | every Select's trigger, and every menu whose items are all words (`Menu.nativeMenuItems`) | a clear `UIButton` with a `UIMenu`                                                   | Rune      | `change` on the trigger, with the item's key              |
-| `date-picker`  | every DatePicker's field                                                                  | a clear `UIButton` that presents a calendar sheet                                    | Rune      | `change` on the field, `yyyy-MM-dd`                       |
-| `context-menu` | every message row                                                                         | none: one `UIContextMenuInteraction` on Rune's view finds the row under a held press | Rune      | `change` on the row: the action's key, or `react:<emoji>` |
+| Component      | Where                                                                                     | Native view                                                                          | Who draws | Comes back as                                           |
+| -------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------- | ------------------------------------------------------- |
+| `tab-bar`      | the mobile nav (`shell/mobile`)                                                           | `UITabBar`, with the items' counts as badges                                         | UIKit     | the `click` of the item's own link or button            |
+| `menu`         | every Select's trigger, and every menu whose items are all words (`Menu.nativeMenuItems`) | a clear `UIButton` with a `UIMenu`                                                   | Rune      | `change` on the trigger, with the item's key            |
+| `date-picker`  | every DatePicker's field                                                                  | a clear `UIButton` that presents a calendar sheet                                    | Rune      | `change` on the field, `yyyy-MM-dd`                     |
+| `context-menu` | every message row, and sidebar channel and DM rows (`Menu.longPressMenu`)                 | none: one `UIContextMenuInteraction` on Rune's view finds the row under a held press | Rune      | `change` on the row: the item's key, or `react:<emoji>` |
 
 Nothing new crosses the wire: the host replays DOM events on handlers the tree already carries,
 so a component needs no Message of its own beyond what its `change` maps to.

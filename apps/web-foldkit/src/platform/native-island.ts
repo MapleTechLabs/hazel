@@ -3,8 +3,8 @@ import type { Attribute, HtmlBuilder } from "foldkit/html"
 /**
  * Native islands: marks an element the Rune-native app may show or drive with a real platform
  * view (`apps/native/host/src/islands.rs`): a `UITabBar` for the mobile nav, a system menu for a
- * Select, the system's long-press menu for a message. The element and its children stay the whole UI everywhere else: the browser ignores
- * these attributes, and a native shell without the component draws the element as it is.
+ * Select, the system's long-press menu for a row (`nativeContextMenu`). The element and its
+ * children stay the whole UI everywhere else: the browser ignores these attributes, and a native shell without the component draws the element as it is.
  *
  * Nothing comes back through a channel of its own. The native view replays DOM events on this
  * markup: a tab press is the `click` of the item it stands for, a picker's choice is a `change`
@@ -70,3 +70,20 @@ export type NativeMenuLook = Readonly<{
 	/** Items that read as destructive (red) natively, beyond their `intent`. */
 	destructive?: ReadonlyArray<string>
 }>
+
+/**
+ * A `context-menu` island: a long press on the element opens the system's menu for it (iOS's
+ * `UIContextMenuInteraction`), lifting the element as drawn. `quick` is a row of small choices
+ * above the items (a message's reactions), each chosen as `prefix + choice`.
+ */
+export type NativeContextMenu = Readonly<{
+	items: ReadonlyArray<NativeMenuItem>
+	quick?: Readonly<{ choices: ReadonlyArray<string>; prefix: string }>
+}>
+
+/** The element's long-press menu; a choice is `onChoose` with the item's key. */
+export const nativeContextMenu = <Message>(
+	h: HtmlBuilder<Message>,
+	menu: NativeContextMenu,
+	onChoose: (key: string) => Message,
+): ReadonlyArray<Attribute<Message>> => [...nativeIsland(h, "context-menu", menu), h.OnChange(onChoose)]

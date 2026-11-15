@@ -1,4 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
+import { pressFeedback } from "../platform/feedback"
 import * as Collection from "./aria/collection"
 import * as Interaction from "./aria/interaction"
 import { visuallyHiddenStyle } from "./checkbox"
@@ -83,6 +84,7 @@ export const ariaRadioGroup = <Message>(
 								defaultAction: "Prevent",
 								focusSelector: Collection.idAttributeSelector(id),
 							}),
+							...(isSelected ? [] : [pressFeedback(h, "selection")]),
 						]),
 			],
 			[

@@ -103,6 +103,20 @@ describe("root toaster", () => {
 	})
 })
 
+describe("toast haptics", () => {
+	const commandNames = (intent: Toaster.ToastRequest["intent"]) =>
+		Toaster.push(Toaster.init(), { intent, title: "T", description: null }).commands?.map(
+			(command) => command.name,
+		) ?? []
+
+	test("an outcome's toast plays its haptic, an info or loading one does not", () => {
+		for (const intent of ["success", "warning", "error"] as const)
+			expect(commandNames(intent), intent).toContain("PlayToastFeedback")
+		for (const intent of ["info", "loading"] as const)
+			expect(commandNames(intent), intent).not.toContain("PlayToastFeedback")
+	})
+})
+
 describe("update toast replacement", () => {
 	test("a failure replaces availability in place, dropping the action and starting a timer", () => {
 		const initial = Toaster.push(Toaster.init(), available).model
@@ -120,7 +134,9 @@ describe("update toast replacement", () => {
 			payload: { kind: "error", title: "Failed", maybeAction: Option.none() },
 		})
 		expect(Option.isSome(failed.model.entries[0]!.maybeDuration)).toBe(true)
-		expect(failed.commands?.map((command) => command.name)).toEqual(["WaitBeforeDismissal"])
+		// One dismissal timer, restarted in place: never a second one running beside it.
+		const timers = (failed.commands ?? []).filter((command) => command.name === "WaitBeforeDismissal")
+		expect(timers).toHaveLength(1)
 	})
 
 	test("creates a new toast after its action dismissed the previous one", () => {

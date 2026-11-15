@@ -49,6 +49,8 @@ fn main() {
     // The UIKit views the app's `data-native` elements get, and HTML renders' web views, go
     // where their boxes were drawn, after every frame.
     islands::install();
+    // Presses marked `data-native-feedback`, and outcomes the runtime asks for, play UIKit haptics.
+    hazel_native::feedback::set_player(system::feedback);
     // Before the app runs, as Apple asks: a tap on a notification that launches it is heard.
     if let Some(mtm) = objc2::MainThreadMarker::new() {
         push::install(mtm);

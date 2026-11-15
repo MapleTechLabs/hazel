@@ -6,6 +6,7 @@ import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import { update } from "../main"
 import * as CommandPalette from "../overlay/command-palette"
+import * as Toaster from "../overlay/toaster"
 import { FocusInput, SetPresenceStatus } from "../overlay/command-palette/commands"
 import { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as ChannelsSidebar from "../shell/channels-sidebar"
@@ -157,6 +158,7 @@ describe("RequestedSignOut", () => {
 			model((m) =>
 				expect(m.toasts.entries.map((entry) => entry.payload.title)).toEqual(["Failed to sign out"]),
 			),
+			Command.resolve(Toaster.PlayToastFeedback, Toaster.Message.CompletedToastFeedback()),
 			UiToast.test.drainEntry({ entryId: "toaster-entry-0" }),
 			model((m) => expect(m.toasts.entries).toEqual([])),
 		)

@@ -3,6 +3,7 @@ import { Array } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { tabsStyles } from "~/components/ui/tabs.styles"
+import { pressFeedback } from "../platform/feedback"
 
 /**
  * The `@foldkit/ui` Tabs, styled. The parent owns the selected tab: it passes it to the view as
@@ -43,6 +44,7 @@ export const layout = <M, Value extends string>(
 						info.value,
 						[
 							...info.tab,
+							...(info.isActive || info.isDisabled ? [] : [pressFeedback(h, "selection")]),
 							h.Class(twMerge(...tabsStyles.tab("horizontal", false))),
 							h.DataAttribute("slot", "tab"),
 						],

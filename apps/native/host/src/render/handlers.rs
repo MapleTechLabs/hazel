@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use rune::{Cursor, El};
 use serde_json::json;
 
+use crate::feedback::{self, Feedback};
 use crate::html::{focusable, is_checkable, script_focusable};
 use crate::layout::focus_styles;
 use crate::outbox::{write_line, write_text};
@@ -17,8 +18,14 @@ use super::state::State;
 
 /// A press as the browser reports it, for the handlers the element has. Rune reports a press
 /// when it is released, so all of them go then (a menu opens on release, not on press). A link's
-/// click carries its `href`, which the runtime follows unless the handler prevents it.
-pub(super) fn press_handlers(e: El, on: &HashMap<String, u32>, href: Option<&String>) -> El {
+/// click carries its `href`, which the runtime follows unless the handler prevents it. `feedback`
+/// plays first, so the finger feels it before the runtime has seen the press.
+pub(super) fn press_handlers(
+    e: El,
+    on: &HashMap<String, u32>,
+    href: Option<&String>,
+    feedback: Option<Feedback>,
+) -> El {
     let events: Vec<(&'static str, u32)> = PRESS_EVENTS
         .iter()
         .filter_map(|kind| on.get(*kind).map(|&id| (*kind, id)))
@@ -28,6 +35,9 @@ pub(super) fn press_handlers(e: El, on: &HashMap<String, u32>, href: Option<&Str
     }
     let href = href.cloned();
     e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
+        if let Some(kind) = feedback {
+            feedback::play(kind);
+        }
         for (kind, id) in &events {
             match (&href, *kind) {
                 (Some(href), "click") => send_click(*id, href),
@@ -50,6 +60,7 @@ pub(super) fn presses(
     if ctx.no_pointer {
         return e;
     }
+    let feedback = feedback::of(attrs);
     // A press or Space on a checkbox toggles it, and on an unchecked radio checks it: `change`.
     if is_checkable(tag, attrs)
         && let Some(&change) = on.get("change")
@@ -58,6 +69,9 @@ pub(super) fn presses(
             attrs.get("type").is_some_and(|t| t == "checkbox") || !attrs.contains_key("checked");
         let click = on.get("click").copied();
         return e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
+            if let Some(kind) = feedback {
+                feedback::play(kind);
+            }
             if let Some(id) = click {
                 send(id, "click", None);
             }
@@ -67,7 +81,7 @@ pub(super) fn presses(
         });
     }
     if PRESS_EVENTS.iter().any(|k| on.contains_key(*k)) {
-        return press_handlers(e, on, link_href(tag, attrs));
+        return press_handlers(e, on, link_href(tag, attrs), feedback);
     }
     if let Some(href) = link_href(tag, attrs) {
         let href = href.clone();

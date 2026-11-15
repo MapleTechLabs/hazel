@@ -26,7 +26,7 @@ import { CreateChannel, FocusInput } from "../overlay/command-palette/commands"
 import * as ChannelsSidebar from "../shell/channels-sidebar"
 import * as Shell from "../shell/model"
 import { after, ada, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
-import { drainToast } from "../test/toast-fixtures"
+import { drainToast, playToastFeedback } from "../test/toast-fixtures"
 import * as CommandMenu from "../ui/command-menu"
 import { PortalCommandMenu } from "../ui/command-menu-view"
 import * as Menu from "../ui/menu"
@@ -185,6 +185,7 @@ describe("command palette", () => {
 			Mount.expectEnded(PortalCommandMenu),
 			sceneExpect(text("Channel created successfully")).toExist(),
 			// The toast enters, its 4s lifetime runs out, then it is removed after its exit animation.
+			playToastFeedback,
 			...drainToast(),
 			sceneExpect(text("Channel created successfully")).toBeAbsent(),
 		)

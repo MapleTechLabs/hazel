@@ -8,6 +8,7 @@ import {
 	checkboxStyles,
 } from "~/components/ui/checkbox.styles"
 import { IconCheck, IconMinus } from "../icons"
+import { pressFeedback } from "../platform/feedback"
 import * as Collection from "./aria/collection"
 import * as Field from "./field"
 
@@ -84,6 +85,7 @@ export const checkbox = <Message>(
 							focusSelector: Collection.idAttributeSelector(options.id),
 							...(options.stopsClickPropagation ? { propagation: "Stop" as const } : {}),
 						}),
+						pressFeedback(h, "selection"),
 					]),
 		],
 		[

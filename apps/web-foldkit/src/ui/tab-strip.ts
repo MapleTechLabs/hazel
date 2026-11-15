@@ -1,6 +1,7 @@
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { tabsStyles } from "~/components/ui/tabs.styles"
+import { pressFeedback } from "../platform/feedback"
 
 /**
  * A horizontal tab list whose selection is the route (the chat tab bar and the channel settings
@@ -26,6 +27,7 @@ export const tabView = <M>(
 			h.DataAttribute("slot", "tab"),
 			h.Role("tab"),
 			h.Tabindex(options.isSelected ? 0 : -1),
+			...(options.isSelected ? [] : [pressFeedback(h, "selection")]),
 			...(options.attributes ?? []),
 		],
 		[

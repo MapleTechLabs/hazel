@@ -7,7 +7,7 @@ import { AppRoute, hrefOf } from "../../route"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
 import type * as Menu from "../../ui/menu"
 import { canOn, openRowMenu } from "./menu-update"
-import { closedRowMenu, dmMenuView, rowMenuView } from "./menus"
+import { closedRowMenu, dmLongPress, dmMenuView, rowLongPress, rowMenuView } from "./menus"
 import { Message, type Model } from "./model"
 import { createChannelHint } from "./create-channel-hint"
 import { hotkeyLabel } from "./hotkey-label"
@@ -124,8 +124,16 @@ const channelRowView = <M>(
 	toParentMessage: (message: Message) => M,
 	threads: ReadonlyArray<SidebarThread>,
 	activeThreadId: ChannelId | null,
-): Html =>
-	treeRow(h, {
+): Html => {
+	const menu = {
+		menu: openMenu ?? closedRowMenu(entry.channel.id),
+		canDelete,
+		entry,
+		sections,
+		toMessage: (message: Menu.Message) =>
+			toParentMessage(Message.GotRowMenuMessage({ channelId: entry.channel.id, orgSlug, message })),
+	}
+	return treeRow(h, {
 		onActiveMount,
 		treeId,
 		key: entry.channel.id,
@@ -139,19 +147,12 @@ const channelRowView = <M>(
 			notificationCount,
 			partners,
 			{ orgSlug, isActive: isLinkActive },
-			rowMenuView(h, {
-				menu: openMenu ?? closedRowMenu(entry.channel.id),
-				canDelete,
-				entry,
-				sections,
-				toMessage: (message) =>
-					toParentMessage(
-						Message.GotRowMenuMessage({ channelId: entry.channel.id, orgSlug, message }),
-					),
-			}),
+			rowMenuView(h, menu),
+			rowLongPress(h, menu),
 		),
 		children: threadItems(h, threads, activeThreadId, orgSlug),
 	})
+}
 
 /** Favorites render `ChannelItem` without `partnerOrgs`, so they never show the shared-org badge. */
 const channelRow = <M>(
@@ -206,8 +207,15 @@ const dmRowView = <M>(
 	onActiveMount: Attribute<M> | null,
 	openMenu: Menu.Model | null,
 	toParentMessage: (message: Message) => M,
-): Html =>
-	treeRow(h, {
+): Html => {
+	const menu = {
+		menu: openMenu ?? closedRowMenu(channel.id),
+		channelId: channel.id,
+		member: channel.currentUser,
+		toMessage: (message: Menu.Message) =>
+			toParentMessage(Message.GotRowMenuMessage({ channelId: channel.id, orgSlug, message })),
+	}
+	return treeRow(h, {
 		onActiveMount,
 		treeId,
 		key: channel.id,
@@ -220,15 +228,11 @@ const dmRowView = <M>(
 			channel,
 			notificationCount,
 			{ orgSlug, isActive: isLinkActive, currentUserId, nowMs, presence },
-			dmMenuView(h, {
-				menu: openMenu ?? closedRowMenu(channel.id),
-				channelId: channel.id,
-				member: channel.currentUser,
-				toMessage: (message) =>
-					toParentMessage(Message.GotRowMenuMessage({ channelId: channel.id, orgSlug, message })),
-			}),
+			dmMenuView(h, menu),
+			dmLongPress(h, menu),
 		),
 	})
+}
 
 /** A `DmChannelItem` renders nothing until its channel and the user's membership load. */
 const dmRow = <M>(

@@ -60,6 +60,15 @@ describe("radio group scene", () => {
 		)
 	})
 
+	test("only an unselected radio plays the selection haptic: pressing the chosen one changes nothing", () => {
+		Scene.scene(
+			{ update, view: styledView() },
+			Scene.given(init({ choice: "free" })),
+			Scene.expect(Scene.selector("label[data-native-feedback]")).toContainText("Pro"),
+			Scene.expect(Scene.selector("label[data-selected]")).not.toHaveAttr("data-native-feedback"),
+		)
+	})
+
 	test("an arrow key's native change moves the selection", () => {
 		Scene.scene(
 			{ update, view: styledView() },

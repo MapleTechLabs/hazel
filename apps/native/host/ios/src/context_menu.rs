@@ -1,10 +1,12 @@
-//! The `context-menu` island: the system's long-press menu for an element Rune draws (a message).
+//! The `context-menu` island: the system's long-press menu for an element Rune draws (a message,
+//! a sidebar row).
 //!
 //! Unlike the other islands it has no view of its own. A list holds many of these and scrolls,
 //! so each one is only a region: where its element was drawn in the last frame. One
 //! `UIContextMenuInteraction` on Rune's view asks, when a press has been held, which region is
-//! under the finger, and opens that element's menu (`props.groups`, with a row of quick
-//! reactions from `props.reactions`). A choice is a `change` on the element, with the action's key.
+//! under the finger (the innermost), and opens that element's menu (`props.items`, as a `menu`
+//! island's, with a row of quick choices from `props.quick`). A choice is a `change` on the
+//! element, with the item's key.
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ptr::NonNull;
@@ -19,16 +21,15 @@ use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSArray, NSCopying, NSObject, NSObjectProtocol, NSString, ns_string};
 use objc2_ui_kit::{
     UIAction, UIBezierPath, UIColor, UIContextMenuConfiguration, UIContextMenuInteraction,
-    UIContextMenuInteractionAnimating, UIContextMenuInteractionDelegate, UIEdgeInsets, UIImage,
-    UIInteraction, UIMenu, UIMenuElement, UIMenuElementAttributes, UIMenuElementSize,
-    UIMenuOptions, UIPreviewParameters, UIPreviewTarget, UITargetedPreview, UIUserInterfaceStyle,
-    UIView,
+    UIContextMenuInteractionAnimating, UIContextMenuInteractionDelegate, UIEdgeInsets,
+    UIInteraction, UIMenu, UIMenuElement, UIMenuElementSize, UIMenuOptions, UIPreviewParameters,
+    UIPreviewTarget, UITargetedPreview, UIUserInterfaceStyle, UIView,
 };
 
 type Rect = [f32; 4];
 
 /// How many small elements a menu shows side by side; more wrap onto rows of their own.
-const REACTIONS_IN_A_ROW: usize = 4;
+const QUICK_IN_A_ROW: usize = 4;
 
 struct Region {
     spec: IslandSpec,
@@ -109,31 +110,33 @@ pub fn end(mtm: MainThreadMarker, parent: &UIView) {
     INTERACTION.set(Some((interaction, delegate)));
 }
 
-/// The island whose element is drawn at `at`, and where.
+/// The island whose element is drawn at `at`, and where: the innermost, when one sits in another.
 fn region_at(at: CGPoint) -> Option<(IslandSpec, Rect)> {
     REGIONS.with_borrow(|regions| {
-        regions.values().find_map(|region| {
-            let (rect, holes) = region.shown.as_ref()?;
-            let pressed = contains(*rect, at) && !holes.iter().any(|hole| contains(*hole, at));
-            pressed.then(|| (region.spec.clone(), *rect))
-        })
+        regions
+            .values()
+            .filter_map(|region| {
+                let (rect, holes) = region.shown.as_ref()?;
+                let pressed = contains(*rect, at) && !holes.iter().any(|hole| contains(*hole, at));
+                pressed.then(|| (region.spec.clone(), *rect))
+            })
+            .min_by(|(_, [.., aw, ah]), (_, [.., bw, bh])| (aw * ah).total_cmp(&(bw * bh)))
     })
 }
 
+/// A quick choice: a `change` on the element with `value`.
 fn action(
     mtm: MainThreadMarker,
     island: &IslandSpec,
     title: &str,
-    symbol: Option<&str>,
     value: String,
 ) -> Retained<UIAction> {
     let island = island.clone();
     let handler = RcBlock::new(move |_: NonNull<UIAction>| islands::change(&island, &value));
-    let image = symbol.and_then(|symbol| UIImage::systemImageNamed(&NSString::from_str(symbol)));
     unsafe {
         UIAction::actionWithTitle_image_identifier_handler(
             &NSString::from_str(title),
-            image.as_deref(),
+            None,
             None,
             RcBlock::as_ptr(&handler),
             mtm,
@@ -152,53 +155,44 @@ fn inline(mtm: MainThreadMarker, children: Vec<Retained<UIMenuElement>>) -> Reta
     )
 }
 
-/// The element's menu: its quick reactions in a row, then each group of actions.
+/// The element's menu: its quick choices in a row (`props.quick`), then its items
+/// (`props.items`, the `menu` island's shape: groups between separators, submenus).
 fn menu_of(mtm: MainThreadMarker, island: &IslandSpec) -> Retained<UIMenu> {
     let props = &island.props;
-    let text = |value: &serde_json::Value, name: &str| {
-        value
-            .get(name)
-            .and_then(|field| field.as_str())
-            .map(str::to_string)
-    };
     let mut sections: Vec<Retained<UIMenuElement>> = Vec::new();
-    let prefix = text(props, "reactionPrefix").unwrap_or_default();
-    let reactions: Vec<Retained<UIMenuElement>> = props
-        .get("reactions")
-        .and_then(|reactions| reactions.as_array())
+    let quick = props.get("quick");
+    let prefix = quick
+        .and_then(|quick| quick.get("prefix"))
+        .and_then(|prefix| prefix.as_str())
+        .unwrap_or_default();
+    let choices: Vec<Retained<UIMenuElement>> = quick
+        .and_then(|quick| quick.get("choices"))
+        .and_then(|choices| choices.as_array())
         .into_iter()
         .flatten()
-        .filter_map(|emoji| emoji.as_str())
+        .filter_map(|choice| choice.as_str())
         // As many as the system lays out in one row.
-        .take(REACTIONS_IN_A_ROW)
-        .map(|emoji| {
-            Retained::into_super(action(mtm, island, emoji, None, format!("{prefix}{emoji}")))
+        .take(QUICK_IN_A_ROW)
+        .map(|choice| {
+            Retained::into_super(action(mtm, island, choice, format!("{prefix}{choice}")))
         })
         .collect();
-    if !reactions.is_empty() {
-        let row = inline(mtm, reactions);
+    if !choices.is_empty() {
+        let row = inline(mtm, choices);
         row.setPreferredElementSize(UIMenuElementSize::Small);
         sections.push(Retained::into_super(row));
     }
-    let groups = props.get("groups").and_then(|groups| groups.as_array());
-    for group in groups.into_iter().flatten() {
-        let items: Vec<Retained<UIMenuElement>> = group
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|item| {
-                let key = text(item, "key")?;
-                let title = text(item, "label").unwrap_or_else(|| key.clone());
-                let item_action = action(mtm, island, &title, text(item, "symbol").as_deref(), key);
-                if item.get("destructive").and_then(|d| d.as_bool()) == Some(true) {
-                    item_action.setAttributes(UIMenuElementAttributes::Destructive);
-                }
-                Some(Retained::into_super(item_action))
-            })
-            .collect();
-        if !items.is_empty() {
-            sections.push(Retained::into_super(inline(mtm, items)));
-        }
+    let items = props
+        .get("items")
+        .and_then(|items| items.as_array())
+        .map_or(&[][..], |items| items.as_slice());
+    let children = crate::islands::menu_children(mtm, island, None, items);
+    // Several groups come as sections already; one group is a section of its own here, divided
+    // from the quick row.
+    if crate::islands::groups_of(items).len() > 1 {
+        sections.extend(children);
+    } else if !children.is_empty() {
+        sections.push(Retained::into_super(inline(mtm, children)));
     }
     UIMenu::menuWithChildren(&NSArray::from_retained_slice(&sections), mtm)
 }

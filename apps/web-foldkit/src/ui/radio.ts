@@ -6,6 +6,7 @@ import {
 	radioLayoutStyles,
 	radioStyles,
 } from "~/components/ui/radio.styles"
+import { pressFeedback } from "../platform/feedback"
 import * as Collection from "./aria/collection"
 import { visuallyHiddenStyle } from "./checkbox"
 import * as Field from "./field"
@@ -79,6 +80,7 @@ export const radioGroup = <Message>(
 									defaultAction: "Prevent",
 									focusSelector: Collection.idAttributeSelector(id),
 								}),
+								...(isSelected ? [] : [pressFeedback(h, "selection")]),
 							]),
 				],
 				[

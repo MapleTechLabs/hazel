@@ -221,8 +221,6 @@ fn tint_tab_bar(bar: &UITabBar, spec: &IslandSpec) {
     }
 }
 
-/// The system menu of a Select's options (`props.items`), the selected one checked. A choice is
-/// a `change` on the island's element, with the option's key.
 /// The island's menu (`props.items`, from a Select or the app's menus): items, `{ separator }`
 /// between groups (each group an inline section), and `{ label, items }` submenus. A choice is a
 /// `change` on the island with the item's key.
@@ -238,16 +236,13 @@ fn menu_of(mtm: MainThreadMarker, spec: &IslandSpec) -> Retained<UIMenu> {
     UIMenu::menuWithChildren(&NSArray::from_retained_slice(&children), mtm)
 }
 
-fn menu_children(
+pub(crate) fn menu_children(
     mtm: MainThreadMarker,
     spec: &IslandSpec,
     selected: Option<&str>,
     options: &[serde_json::Value],
 ) -> Vec<Retained<UIMenuElement>> {
-    let groups: Vec<&[serde_json::Value]> = options
-        .split(|option| option.get("separator").is_some())
-        .filter(|group| !group.is_empty())
-        .collect();
+    let groups = groups_of(options);
     let element = |option: &serde_json::Value| menu_element(mtm, spec, selected, option);
     if groups.len() <= 1 {
         return options.iter().filter_map(element).collect();
@@ -255,6 +250,14 @@ fn menu_children(
     groups
         .into_iter()
         .map(|group| inline_section(mtm, group.iter().filter_map(element).collect()))
+        .collect()
+}
+
+/// The menu's groups: the runs of items between separators. More than one shows as sections.
+pub(crate) fn groups_of(options: &[serde_json::Value]) -> Vec<&[serde_json::Value]> {
+    options
+        .split(|option| option.get("separator").is_some())
+        .filter(|group| !group.is_empty())
         .collect()
 }
 

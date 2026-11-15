@@ -6,6 +6,7 @@
 import { nativeClient, nativeHeaders } from "@hazel/auth/contract"
 import type { PrecompiledStyles } from "@hazel/foldkit-rune"
 import { parseHostLine } from "@hazel/foldkit-rune"
+import type { Feedback } from "../../web-foldkit/src/platform/feedback"
 import { PUSH_DEVICE_GLOBAL, type PushDevice } from "../../web-foldkit/src/platform/push-device"
 import { SYSTEM_UI_GLOBAL, type SystemUi } from "../../web-foldkit/src/platform/system-ui"
 import { readConfig } from "./config"
@@ -33,8 +34,8 @@ export type IosRequest =
 	 * the host takes a picture of the page it leaves. `back`: to where the back chevron leads.
 	 */
 	| { readonly navigate: string }
-	/** A tap of the finger (`host/ios/src/system.rs`). */
-	| { readonly haptic: true }
+	/** A haptic of this kind (`host/ios/src/system.rs`, `web-foldkit/src/platform/feedback.ts`). */
+	| { readonly feedback: Feedback }
 	/** Where the edge swipe goes back to; empty turns the swipe off. */
 	| { readonly swipeBack: string }
 	/** The runtime followed a notification's path (`openPath`): the host stops holding it. */
@@ -228,7 +229,7 @@ const platform: NativePlatform = {
 }
 
 const systemUi: SystemUi = {
-	haptic: () => request({ haptic: true }),
+	feedback: (kind) => request({ feedback: kind }),
 	setSwipeBack: (href) => {
 		const target = { href }
 		backTargets.push(target)
