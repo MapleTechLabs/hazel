@@ -15,6 +15,7 @@ import {
 	IntegrationConnection,
 	JsonDate,
 	Message,
+	MessageAgentMark,
 	MessageReaction,
 	Notification,
 	Organization,
@@ -122,6 +123,8 @@ export const userOrganizationCollection = createEffectCollection(
 export const organizationCollection = orgCollection("organizations", Organization.Schema)
 export const messageCollection = channelCollectionOf("messages", Message.Schema)
 export const messageReactionCollection = channelCollectionOf("message_reactions", MessageReaction.Schema)
+/** Messages an agent wrote for their author (the author's organization only). */
+export const messageAgentMarkCollection = channelCollectionOf("message_agent_marks", MessageAgentMark.Schema)
 export const pinnedMessageCollection = channelCollectionOf("pinned_messages", PinnedMessage.Schema)
 export const notificationCollection = syncedCollection("notifications", Notification.Schema, userSources)
 export const userCollection = orgCollection("users", User.Schema)

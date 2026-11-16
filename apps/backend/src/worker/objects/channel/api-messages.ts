@@ -112,3 +112,39 @@ export const messageThread = Effect.fn("ChannelObject.messageThread")(
 	},
 	Effect.catchTag("DatabaseError", (error) => Effect.die(error)),
 )
+
+/** The most messages one `channel.messagesByIds` returns (DO SQLite binds at most 100 parameters). */
+export const MESSAGES_BY_IDS_MAX = 50
+
+export const MessagesByIdsCall = defineCall("channel.messagesByIds", "channel", {
+	payload: Schema.Struct({ userId: UserId, ids: Schema.Array(MessageId) }),
+	success: Schema.Array(Message.Schema),
+	error: UnauthorizedError,
+})
+
+/** Messages by id, for a viewer of the channel (the MCP server's notifications and lookups). */
+export const messagesByIds = Effect.fn("ChannelObject.messagesByIds")(
+	function* (payload: typeof MessagesByIdsCall.payload.Type) {
+		const db = yield* Database.Database
+		const viewer = yield* db.first(
+			SQLite.from(schema.channelViewersTable)
+				.select("userId")
+				.where(($) => [$.userId.eq(payload.userId)])
+				.limit(1),
+		)
+		if (Option.isNone(viewer)) {
+			return yield* new UnauthorizedError({
+				message: "You can't read this channel",
+				detail: "messagesByIds",
+			})
+		}
+		const ids = payload.ids.slice(0, MESSAGES_BY_IDS_MAX)
+		if (ids.length === 0) return []
+		return yield* db.run(
+			SQLite.from(schema.messagesTable)
+				.select()
+				.where(($) => [$.id.in_(...ids), $.deletedAt.isNull()]),
+		)
+	},
+	Effect.catchTag("DatabaseError", (error) => Effect.die(error)),
+)

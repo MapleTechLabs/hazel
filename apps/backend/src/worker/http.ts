@@ -16,6 +16,9 @@ import { workerObjectStubs } from "./objects/stubs"
 import { makeSyncRoute } from "./sync-route"
 import { makeLiveRoute } from "./live-route"
 import { HtmlRenderRoute } from "./html-render-route"
+import { AgentOAuthRoutes } from "../routes/agent-oauth"
+import { McpRoute } from "../routes/mcp"
+import { AgentAccess } from "../services/agent-access"
 import { workerLiveObjectStubs } from "./live/message-live-object"
 import type { BotGatewayNamespace } from "../services/bot-gateway-transport"
 import { directoryBinding, requestPlatformLive } from "./platform"
@@ -46,7 +49,13 @@ export const buildApp = (
 			// `AppServicesLive`'s error and requirement channels to `unknown`.
 			makeRoutes(
 				workerRpcServer(env),
-				Layer.mergeAll(makeSyncRoute(env), makeLiveRoute(env), HtmlRenderRoute),
+				Layer.mergeAll(
+					makeSyncRoute(env),
+					makeLiveRoute(env),
+					HtmlRenderRoute,
+					AgentOAuthRoutes,
+					McpRoute,
+				),
 			).pipe(
 				Layer.provide(AppAuthorizationLive),
 				Layer.provide(AppServicesLive),
@@ -57,6 +66,8 @@ export const buildApp = (
 				// HTTP routes that reach objects or the directory (presence, bot commands).
 				Layer.provideMerge(workerObjectStubs(env)),
 				Layer.provideMerge(workerLiveObjectStubs(env)),
+				// Agent access (OAuth for MCP clients, personal tokens) over the directory.
+				Layer.provideMerge(AgentAccess.layer),
 				Layer.provideMerge(Layer.suspend(() => Directory.layerD1(directoryBinding(env)))),
 			) as unknown as Layer.Layer<never, never, HttpRouter.HttpRouter>,
 		),

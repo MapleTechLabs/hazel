@@ -6,6 +6,7 @@ import type { Resources } from "../rpc"
 import { AppRoute, isCustomersRoute, isMySettingsRoute, isSettingsRoute } from "../route"
 import * as Auth from "./auth"
 import * as BotInstall from "./bot-install"
+import * as OAuthAuthorize from "./oauth-authorize"
 import * as ChatChannel from "./chat/channel"
 import * as ChatIndex from "./chat-index"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
@@ -41,6 +42,7 @@ export const pages = [
 	Join.page,
 	Invite.page,
 	BotInstall.page,
+	OAuthAuthorize.page,
 ]
 
 type AreaPage =

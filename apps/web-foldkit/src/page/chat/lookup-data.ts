@@ -10,6 +10,7 @@ import {
 	chatSyncConnectionCollection,
 	chatSyncMessageLinkCollection,
 	customEmojiCollection,
+	messageAgentMarkCollection,
 	messageCollection,
 	pinnedMessageCollection,
 	typingIndicatorCollection,
@@ -19,6 +20,7 @@ import {
 import { getAttachmentUrl } from "~/utils/attachment-url"
 import { liveQueryStream } from "../../data/live-query"
 import {
+	type AgentMarkInfo,
 	type AttachmentInfo,
 	type AttachmentRow,
 	type BotInfo,
@@ -128,6 +130,20 @@ export const discordSyncedStream = <M>(
 				)
 				.select(({ messageLink }) => ({ hazelMessageId: messageLink.hazelMessageId })),
 		(rows) => toMessage(rows.map((row) => row.hazelMessageId)),
+	)
+
+/** Agent-written messages (`message_agent_marks`) in `channelIds`: a channel and its open thread. */
+export const agentMarksStream = <M>(
+	channelIds: ReadonlyArray<ChannelId>,
+	toMessage: (marks: ReadonlyArray<AgentMarkInfo>) => M,
+) =>
+	liveQueryStream<AgentMarkInfo, M>(
+		(q) =>
+			q
+				.from({ mark: messageAgentMarkCollection })
+				.where(({ mark }) => inArray(mark.channelId, [...channelIds]))
+				.select(({ mark }) => ({ id: mark.id, agentName: mark.agentName })),
+		(rows) => toMessage(rows),
 	)
 
 /** Thread names for `InlineThreadPreview`. */

@@ -1,7 +1,7 @@
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { formatDistanceToNowStrict } from "date-fns"
 import { cx } from "~/utils/cx"
-import { IconChevronRight, IconDiscord, IconPin } from "../../icons"
+import { IconChevronRight, IconDiscord, IconPin, IconSparkles } from "../../icons"
 import { avatar } from "../../ui/avatar"
 import { badge } from "../../ui/badge"
 import type { MessageRow, ReplyPreview, ThreadPreview } from "../../page/chat/rows"
@@ -15,6 +15,21 @@ export const formatTime = (ms: number) => {
 	const date = new Date(ms)
 	return `${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
+
+/**
+ * "via <agent>": the message was written by an agent for its author over Hazel's MCP server. Shown
+ * only to the author's own organization (the mark never syncs elsewhere).
+ */
+const agentBadge = <M>(h: HtmlBuilder<M>, agentName: string, authorName: string): Html =>
+	h.span(
+		[
+			h.Class(
+				"inline-flex items-center gap-1 rounded-sm bg-secondary px-1.5 py-0.5 text-xs/4 font-medium text-muted-fg",
+			),
+			h.Attribute("title", `Written by ${agentName}, an AI agent acting for ${authorName}`),
+		],
+		[IconSparkles(h, { className: "size-3" }), `via ${agentName}`],
+	)
 
 /** `Message.Header`; `statusEmoji` is the tooltip-wrapped status trigger (or nothing). */
 export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: Html): Html => {
@@ -47,6 +62,7 @@ export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: H
 					: row.isDiscordSynced
 						? badge(h, { intent: "secondary" }, ["Synced from Discord"])
 						: h.empty,
+			row.agentName === null ? h.empty : agentBadge(h, row.agentName, author.displayName),
 			h.span([h.Class("text-muted-fg text-xs")], isEdited ? [time, " (edited)"] : [time]),
 			message.isPinned
 				? h.span(

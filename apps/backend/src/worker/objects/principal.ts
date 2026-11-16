@@ -4,8 +4,22 @@
  */
 import { CurrentUser } from "@hazel/domain"
 import { ApiScope, CurrentBotScopes } from "@hazel/domain/scopes"
-import { UserId } from "@hazel/schema"
-import { Effect, Option, Schema } from "effect"
+import { AgentGrantId, UserId } from "@hazel/schema"
+import { Context, Effect, Option, Schema } from "effect"
+
+/**
+ * The agent a user's call came through (Hazel's MCP server, `routes/mcp`): the grant and the name
+ * chat shows. Writes made with it are marked (`message_agent_marks`). Only the api Worker sets it,
+ * from a verified agent token; a client cannot.
+ */
+export const AgentActor = Schema.Struct({
+	grantId: AgentGrantId,
+	name: Schema.String,
+})
+export type AgentActor = typeof AgentActor.Type
+
+/** Provided while a call runs for an agent; absent for the user's own calls. */
+export class CurrentAgent extends Context.Service<CurrentAgent, AgentActor>()("CurrentAgent") {}
 
 /**
  * An RPC's principal: the resolved `CurrentUser` (null for the public methods, which carry no
@@ -14,6 +28,7 @@ import { Effect, Option, Schema } from "effect"
 export const InvokePrincipal = Schema.Struct({
 	user: Schema.NullOr(CurrentUser.Schema),
 	botScopes: Schema.NullOr(Schema.Array(ApiScope)),
+	agent: Schema.optional(Schema.NullOr(AgentActor)),
 })
 export type InvokePrincipal = typeof InvokePrincipal.Type
 
@@ -29,26 +44,37 @@ export const currentInvokePrincipal = Effect.gen(function* () {
 	const botScopes = yield* Effect.serviceOption(CurrentBotScopes)
 	const scopes = Option.flatten(botScopes)
 	const user = Option.getOrNull(current)
+	const agent = yield* Effect.serviceOption(CurrentAgent)
 	return {
 		// The bot-token path provides a plain object; the schema encodes only the class.
 		user: user === null || user instanceof CurrentUser.Schema ? user : new CurrentUser.Schema(user),
 		botScopes: Option.isSome(scopes) ? [...scopes.value] : null,
+		agent: Option.getOrNull(agent),
 	} satisfies InvokePrincipal
 })
 
-/** Provide `principal` the way the api's `AuthMiddleware` does: `CurrentUser`, and a bot's scopes. */
+/**
+ * Provide `principal` the way the api's `AuthMiddleware` does: `CurrentUser`, a bot's scopes, and
+ * the agent it came through.
+ */
 export const providePrincipal =
 	(principal: InvokePrincipal) =>
-	<A, E, R>(effect: Effect.Effect<A, E, R>) =>
-		(principal.user === null
-			? effect
-			: effect.pipe(Effect.provideService(CurrentUser.Context, principal.user))
-		).pipe(
+	<A, E, R>(effect: Effect.Effect<A, E, R>) => {
+		const withUser =
+			principal.user === null
+				? effect
+				: effect.pipe(Effect.provideService(CurrentUser.Context, principal.user))
+		const withAgent =
+			principal.agent === undefined || principal.agent === null
+				? withUser
+				: withUser.pipe(Effect.provideService(CurrentAgent, principal.agent))
+		return withAgent.pipe(
 			Effect.provideService(
 				CurrentBotScopes,
 				principal.botScopes === null ? Option.none() : Option.some(new Set(principal.botScopes)),
 			),
 		) as Effect.Effect<A, E, Exclude<R, CurrentUser.Context | CurrentBotScopes>>
+	}
 
 /**
  * A sync socket's principal, kept small (it rides in the socket attachment, 2 KiB max): the user

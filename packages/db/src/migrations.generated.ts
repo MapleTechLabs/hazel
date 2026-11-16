@@ -96,6 +96,17 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "push_device_tokens_user_id_idx" ON "push_device_tokens" ("userId")',
 			],
 		},
+		{
+			id: "0005_agent_access",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "agent_auth_codes" (\n\t"codeHash" text PRIMARY KEY NOT NULL,\n\t"clientId" text NOT NULL,\n\t"userId" text NOT NULL,\n\t"redirectUri" text NOT NULL,\n\t"codeChallenge" text NOT NULL,\n\t"scopes" text NOT NULL,\n\t"expiresAt" text NOT NULL,\n\t"redeemedAt" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				"CREATE TABLE IF NOT EXISTS \"agent_clients\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"clientName\" text NOT NULL,\n\t\"redirectUris\" text NOT NULL,\n\t\"clientUri\" text,\n\t\"logoUri\" text,\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))\n)",
+				'CREATE TABLE IF NOT EXISTS "agent_grants" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"userId" text NOT NULL,\n\t"kind" text NOT NULL,\n\t"clientId" text,\n\t"name" text NOT NULL,\n\t"scopes" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"lastUsedAt" text,\n\t"revokedAt" text\n)',
+				'CREATE TABLE IF NOT EXISTS "agent_tokens" (\n\t"tokenHash" text PRIMARY KEY NOT NULL,\n\t"grantId" text NOT NULL,\n\t"kind" text NOT NULL,\n\t"expiresAt" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				'CREATE INDEX IF NOT EXISTS "agent_grants_user_idx" ON "agent_grants" ("userId")',
+				'CREATE INDEX IF NOT EXISTS "agent_tokens_grant_idx" ON "agent_tokens" ("grantId")',
+			],
+		},
 	],
 	org: [
 		{
@@ -323,6 +334,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 		{
 			id: "0002_channel_bot_region",
 			statements: ['ALTER TABLE "channel_bots" ADD COLUMN "region" text'],
+		},
+		{
+			id: "0003_agent_access",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "message_agent_marks" (\n\t"id" text PRIMARY KEY NOT NULL,\n\t"channelId" text NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"authorId" text NOT NULL,\n\t"grantId" text NOT NULL,\n\t"agentName" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text\n)',
+				'CREATE INDEX IF NOT EXISTS "message_agent_marks_channel_idx" ON "message_agent_marks" ("channelId")',
+			],
 		},
 	],
 	user: [

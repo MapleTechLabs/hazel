@@ -1,5 +1,5 @@
 {
-	"migration": "0002_channel_bot_region",
+	"migration": "0003_agent_access",
 	"entities": [
 		{
 			"kind": "table",
@@ -32,6 +32,13 @@
 		{
 			"kind": "table",
 			"name": "chat_sync_message_links",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "message_agent_marks",
 			"primaryKey": {
 				"columns": ["id"]
 			}
@@ -435,6 +442,78 @@
 		},
 		{
 			"kind": "column",
+			"table": "message_agent_marks",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "message_agent_marks",
+			"name": "channelId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "message_agent_marks",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "message_agent_marks",
+			"name": "authorId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "message_agent_marks",
+			"name": "grantId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "message_agent_marks",
+			"name": "agentName",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "message_agent_marks",
+			"name": "createdAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "message_agent_marks",
+			"name": "updatedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
 			"table": "message_reactions",
 			"name": "id",
 			"position": 0,
@@ -794,6 +873,13 @@
 			"name": "chat_sync_msg_link_root_hazel_idx",
 			"unique": false,
 			"columns": ["\"rootHazelMessageId\""]
+		},
+		{
+			"kind": "index",
+			"table": "message_agent_marks",
+			"name": "message_agent_marks_channel_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
 		},
 		{
 			"kind": "index",

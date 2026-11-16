@@ -108,6 +108,7 @@ const row = (options: {
 		hasAuthor: true,
 		status: null,
 		isDiscordSynced: false,
+		agentName: null,
 		reply: null,
 		thread: null,
 		attachments: options.attachments ?? [],

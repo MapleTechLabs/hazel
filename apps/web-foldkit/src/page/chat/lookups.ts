@@ -72,6 +72,10 @@ export type CustomEmojiInfo = typeof CustomEmojiInfo.Type
 export const BotInfo = Schema.Struct({ userId: UserId, name: Schema.String })
 export type BotInfo = typeof BotInfo.Type
 
+/** A message an agent wrote for its author, and the agent's name. */
+export const AgentMarkInfo = Schema.Struct({ id: MessageId, agentName: Schema.String })
+export type AgentMarkInfo = typeof AgentMarkInfo.Type
+
 /** Everything the rows are derived from, besides messages and reactions. */
 export const Lookups = Schema.Struct({
 	users: Schema.Array(UserInfo),
@@ -80,6 +84,7 @@ export const Lookups = Schema.Struct({
 	customEmojis: Schema.Array(CustomEmojiInfo),
 	attachments: Schema.Array(AttachmentInfo),
 	discordSyncedIds: Schema.Array(MessageId),
+	agentMarks: Schema.Array(AgentMarkInfo),
 	threadChannels: Schema.Array(ThreadChannelInfo),
 	threadMessages: Schema.Array(ThreadMessageInfo),
 	replyTargets: Schema.Array(ReplyTarget),
@@ -93,6 +98,7 @@ export const emptyLookups: Lookups = {
 	customEmojis: [],
 	attachments: [],
 	discordSyncedIds: [],
+	agentMarks: [],
 	threadChannels: [],
 	threadMessages: [],
 	replyTargets: [],
