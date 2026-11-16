@@ -21,6 +21,7 @@ import { popoverTrigger } from "../../chat/popover-host"
 import { profilePopoverContent } from "../../chat/profile-popover"
 import type * as TooltipHost from "../../chat/tooltip-host"
 import { nativeContextMenu } from "../../platform/native-island"
+import { AppRoute, hrefOf } from "../../route"
 import { button } from "../../ui/button"
 import * as Menu from "../../ui/menu"
 import { contextMenuView, menuLabel } from "../../ui/menu-view"
@@ -249,6 +250,7 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 			...identity,
 			presence: model.lookups.presence.find((presence) => presence.userId === user.id) ?? null,
 			isOwnProfile: model.currentUserId === user.id,
+			editProfileHref: hrefOf(AppRoute.MySettingsProfile({ orgSlug: model.orgSlug })),
 			nowMs,
 		})
 	}
