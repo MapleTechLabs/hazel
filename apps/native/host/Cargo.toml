@@ -13,12 +13,13 @@ publish = false
 # El::focusable_by_script and El::clip_fade_linear_frac (Makisuo/rune's `hazel-grid` branch), plus
 # iOS's full-screen window, safe area and motion frames (`hazel-ios`), plus a soft keyboard's
 # return as Enter, iOS's display link and El::pin_insets (`hazel-ios-followups`), plus a
-# long-press opening an element's context menu (`hazel-long-press`), plus Tx::scroll_by (`hazel-scroll-by`),
+# long-press opening an element's context menu (`hazel-long-press`), plus Tx::scroll_by (`hazel-scroll-by`), plus a fling at the finger's recent speed
+# (`hazel-touch-velocity`),
 # until they land upstream.
-rune = { git = "https://github.com/Makisuo/rune", rev = "c3536c225a3a7e0bb8af798e011ef56fd4a8bb92", features = [
+rune = { git = "https://github.com/Makisuo/rune", rev = "364829293d3af04c9738e29e3d9647bbe4b13103", features = [
 	"native-file-dialog",
 ] }
-rune-fx = { git = "https://github.com/Makisuo/rune", rev = "c3536c225a3a7e0bb8af798e011ef56fd4a8bb92" }
+rune-fx = { git = "https://github.com/Makisuo/rune", rev = "364829293d3af04c9738e29e3d9647bbe4b13103" }
 base64 = "0.22"
 # Decodes a picture and its mask picture to composite them (Rune's own decoder, same features).
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
