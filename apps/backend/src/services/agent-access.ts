@@ -327,14 +327,13 @@ export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/
 						.returning("tokenHash"),
 				)
 				if (claimed.length === 0) {
-					const lost = yield* Effect.all([
-						sha256Hex(issued.accessToken),
-						sha256Hex(issued.refreshToken),
-					])
-					yield* db.run(
-						SQLite.deleteFrom(schema.agentTokensTable).where(($) => [$.tokenHash.in_(...lost)]),
-					)
-					return yield* invalidGrant("The refresh token was already used")
+					// Two refreshes of one token at once: the same reuse, decided by timing. End the grant
+					// (the winner's tokens with it), as a sequential reuse does.
+					yield* Effect.logWarning("Agent refresh token used concurrently; ending its grant", {
+						grantId: grant.value.id,
+					})
+					yield* endGrant(grant.value.id)
+					return yield* invalidGrant("The refresh token was already used; sign in again")
 				}
 				return issued
 			}).pipe(Effect.withSpan("AgentAccess.refresh"))

@@ -8,7 +8,7 @@ import { createHash } from "node:crypto"
 import { NodeHttpPlatform, NodeServices } from "@effect/platform-node"
 import { SQLite, schema } from "@hazel/db"
 import type { AgentClientId, ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { ConfigProvider, Context, Effect, Layer, Option, type Scope } from "effect"
+import { ConfigProvider, Context, Effect, Exit, Layer, Option, type Scope } from "effect"
 import { HttpRouter } from "effect/http"
 import { describe, expect, it } from "vitest"
 import { AgentAccess } from "../services/agent-access"
@@ -360,13 +360,44 @@ describe("MCP server", () => {
 					}),
 				)
 
+				// Two refreshes of one token at once end the grant, whichever wins.
+				const racedTokens = yield* json(
+					yield* exchange({
+						grant_type: "refresh_token",
+						refresh_token: again.refresh_token,
+						client_id: clientId,
+					}),
+				)
+				const refreshOnce = Effect.exit(
+					world.access.refresh({ refreshToken: racedTokens.refresh_token, clientId }),
+				)
+				const raced = yield* Effect.all([refreshOnce, refreshOnce], { concurrency: "unbounded" })
+				expect(raced.filter(Exit.isFailure).length).toBeGreaterThanOrEqual(1)
+				expect(yield* world.access.listGrants(world.alice)).toEqual([])
+				const code4 = yield* world.access.createCode({
+					clientId,
+					userId: world.alice,
+					redirectUri,
+					codeChallenge: challenge,
+					scopes: ["messages:read", "messages:write"],
+				})
+				const fresh = yield* json(
+					yield* exchange({
+						grant_type: "authorization_code",
+						code: code4,
+						client_id: clientId,
+						redirect_uri: redirectUri,
+						code_verifier: verifier,
+					}),
+				)
+
 				// Revoking the grant ends every token at once.
 				const [grant] = yield* world.access.listGrants(world.alice)
 				expect(grant).toMatchObject({ kind: "oauth", name: "Claude" })
 				expect(yield* world.access.revokeGrant(world.alice, grant!.id)).toBe(true)
 				const after = yield* world.fetch("/mcp", {
 					method: "POST",
-					headers: { authorization: `Bearer ${again.access_token}` },
+					headers: { authorization: `Bearer ${fresh.access_token}` },
 					body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
 				})
 				expect(after.status).toBe(401)

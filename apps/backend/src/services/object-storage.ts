@@ -75,7 +75,11 @@ export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStora
 			if (response.status === 404) return Option.none<number>()
 			if (!response.ok)
 				return yield* new ObjectStorageError({ message: `The bucket answered ${response.status}` })
-			return Option.some(Number(response.headers.get("content-length") ?? "0"))
+			// The size check rests on it: no length is an error, never "0 bytes".
+			const size = Number(response.headers.get("content-length") ?? Number.NaN)
+			if (!Number.isFinite(size) || size < 0)
+				return yield* new ObjectStorageError({ message: "The bucket gave no valid Content-Length" })
+			return Option.some(size)
 		})
 
 		const presignPut = Effect.fn("ObjectStorage.presignPut")(function* (
