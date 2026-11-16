@@ -33,6 +33,10 @@ export const directoryTables = [
 	schema.chatSyncIndexTable,
 	schema.chatSyncInstallationsTable,
 	schema.pushDeviceTokensTable,
+	schema.agentClientsTable,
+	schema.agentGrantsTable,
+	schema.agentTokensTable,
+	schema.agentAuthCodesTable,
 ] as const
 
 /** `OrgObject`, one per organization. */
@@ -74,6 +78,7 @@ export const channelTables = [
 	schema.chatSyncMessageLinksTable,
 	schema.chatSyncEventReceiptsTable,
 	schema.typingIndicatorsTable,
+	schema.messageAgentMarksTable,
 	// Projections from the `OrgObject`.
 	schema.channelViewersTable,
 	schema.channelBotsTable,

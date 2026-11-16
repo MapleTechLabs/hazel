@@ -52,6 +52,7 @@ export interface DeriveContext {
 	readonly emojiUrls: ReadonlyMap<string, string>
 	readonly attachmentsByMessage: ReadonlyMap<string, ReadonlyArray<AttachmentInfo>>
 	readonly discordSynced: ReadonlySet<string>
+	readonly agentNames: ReadonlyMap<string, string>
 	readonly threadNames: ReadonlyMap<string, string>
 	readonly threadMessages: ReadonlyMap<string, ReadonlyArray<Lookups["threadMessages"][number]>>
 	readonly replyTargets: ReadonlyMap<string, Lookups["replyTargets"][number]>
@@ -105,6 +106,7 @@ export const toDeriveContext = (
 	emojiUrls: new Map(lookups.customEmojis.map((emoji) => [emoji.name, emoji.imageUrl])),
 	attachmentsByMessage: groupBy(lookups.attachments, (attachment) => attachment.messageId),
 	discordSynced: new Set(lookups.discordSyncedIds),
+	agentNames: new Map(lookups.agentMarks.map((mark) => [mark.id, mark.agentName])),
 	threadNames: new Map(lookups.threadChannels.map((channel) => [channel.id, channel.name])),
 	threadMessages: groupBy(lookups.threadMessages, (message) => message.channelId),
 	replyTargets: byKey(lookups.replyTargets, (target) => target.id),
@@ -344,6 +346,7 @@ export const messageRowData = (
 		hasAuthor: user !== null,
 		status: statusOf(context, message.authorId),
 		isDiscordSynced: context.discordSynced.has(message.id),
+		agentName: context.agentNames.get(message.id) ?? null,
 		reply: replyOf(context, message.replyToMessageId),
 		thread: threadOf(context, message.threadChannelId),
 		attachments: context.attachmentsByMessage.get(message.id) ?? NO_ATTACHMENTS,

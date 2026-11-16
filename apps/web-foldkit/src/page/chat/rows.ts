@@ -146,6 +146,8 @@ export const MessageRowData = Schema.Struct({
 	hasAuthor: Schema.Boolean,
 	status: Schema.NullOr(StatusEmoji),
 	isDiscordSynced: Schema.Boolean,
+	/** The agent that wrote the message for its author (Hazel's MCP server), if one did. */
+	agentName: Schema.NullOr(Schema.String),
 	reply: Schema.NullOr(ReplyPreview),
 	thread: Schema.NullOr(ThreadPreview),
 	attachments: Schema.Array(AttachmentInfo),

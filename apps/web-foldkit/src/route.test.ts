@@ -321,6 +321,21 @@ describe("hrefOf", () => {
 				"/oauth/bot-install",
 			],
 		],
+		OAuthAuthorize: [
+			[
+				AppRoute.OAuthAuthorize({
+					clientId: Option.some(orgId),
+					redirectUri: Option.some("http://127.0.0.1:5000/cb"),
+					responseType: Option.some("code"),
+					codeChallenge: Option.some("abc"),
+					codeChallengeMethod: Option.some("S256"),
+					scope: Option.some("messages:read messages:write"),
+					state: Option.some("s1"),
+					resource: Option.none(),
+				}),
+				`/oauth/authorize?client_id=${orgId}&redirect_uri=http%3A%2F%2F127.0.0.1%3A5000%2Fcb&response_type=code&code_challenge=abc&code_challenge_method=S256&scope=messages%3Aread+messages%3Awrite&state=s1`,
+			],
+		],
 		AuthDesktop: [[AppRoute.AuthDesktop({ attempt: Option.some("a1") }), "/auth/desktop?attempt=a1"]],
 		Onboarding: [
 			[AppRoute.Onboarding({ orgId: Option.none(), step: none }), "/onboarding"],
@@ -376,6 +391,7 @@ describe("hrefOf", () => {
 		],
 		MySettingsAppearance: [[AppRoute.MySettingsAppearance({ orgSlug }), "/hazel/my-settings"]],
 		MySettingsProfile: [[AppRoute.MySettingsProfile({ orgSlug }), "/hazel/my-settings/profile"]],
+		MySettingsAgents: [[AppRoute.MySettingsAgents({ orgSlug }), "/hazel/my-settings/agents"]],
 		MySettingsLinkedAccounts: [
 			[
 				AppRoute.MySettingsLinkedAccounts({

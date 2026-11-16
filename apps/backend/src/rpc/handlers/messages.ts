@@ -19,6 +19,7 @@ import { HtmlRenders, htmlRenderIdsOf } from "../../services/html-renders"
 import { checkMessageRateLimit } from "../../services/rate-limit-helpers"
 import { SqlClient } from "effect/sql/SqlClient"
 import { channelOrganization, emitMessageEvent } from "../../worker/objects/channel/message-events"
+import { deleteAgentMark, markAgentWrite } from "../../worker/objects/channel/agent-marks"
 import { BotGatewayEffects } from "../../worker/objects/effects/bot-gateway-effects"
 import { enqueueEffect } from "../../worker/objects/effects/registry"
 import { StorageEffects } from "../../worker/objects/effects/storage-effects"
@@ -121,6 +122,7 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 									createdMessage,
 									htmlRenderIdsOf(createdMessage.embeds),
 								)
+								yield* markAgentWrite(createdMessage)
 								yield* emitMessageEvent({ _tag: "MessageCreated", message: createdMessage })
 
 								const txid = yield* generateTransactionId()
@@ -157,6 +159,7 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 										[...before].filter((renderId) => !after.has(renderId)),
 									)
 								}
+								yield* markAgentWrite(updatedMessage)
 								yield* emitMessageEvent({ _tag: "MessageUpdated", message: updatedMessage })
 
 								const txid = yield* generateTransactionId()
@@ -177,6 +180,7 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 								yield* messagePolicy.canDelete(id)
 								const existing = yield* messageRepo.findById(id)
 								yield* messageRepo.deleteById(id)
+								yield* deleteAgentMark(id)
 								// Its reactions and pins go with it (no foreign keys in the object's SQLite).
 								yield* db.run(
 									SQLite.deleteFrom(schema.messageReactionsTable).where(($) => [

@@ -13,6 +13,7 @@ import {
 	IconMsgs,
 	IconPaintbrush,
 	IconShop,
+	IconSparkles,
 	IconThread,
 	IconUser,
 	IconUsers,
@@ -173,6 +174,7 @@ export const mySettingsSidebar = <Message>(
 	const appearance = hrefOf(AppRoute.MySettingsAppearance({ orgSlug }))
 	const profile = hrefOf(AppRoute.MySettingsProfile({ orgSlug }))
 	const linkedAccounts = linkedAccountsHref(orgSlug)
+	const agents = hrefOf(AppRoute.MySettingsAgents({ orgSlug }))
 	const notifications = hrefOf(AppRoute.MySettingsNotifications({ orgSlug }))
 	const desktop = hrefOf(AppRoute.MySettingsDesktop({ orgSlug }))
 	const keybinds = hrefOf(AppRoute.MySettingsKeybinds({ orgSlug }))
@@ -199,6 +201,7 @@ export const mySettingsSidebar = <Message>(
 						onRoutes(route, "MySettingsLinkedAccounts"),
 						IconArrowPath,
 					),
+					item("Agents", agents, onRoutes(route, "MySettingsAgents"), IconSparkles),
 					item(
 						"Notifications",
 						notifications,

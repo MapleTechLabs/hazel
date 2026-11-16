@@ -17,7 +17,16 @@ import type { IntegrationTokenService } from "../../services/integration-token-s
 import type { IntegrationBotService } from "../../services/integrations/integration-bot-service"
 import type { WebhookBotService } from "../../services/webhook-bot-service"
 import { type AnyObjectCall, type CallRequest, type CallResponse, exitCodec, payloadCodec } from "./calls"
-import { listMessages, ListMessagesCall, messageThread, MessageThreadCall } from "./channel/api-messages"
+import {
+	listMessages,
+	ListMessagesCall,
+	messagesByIds,
+	MessagesByIdsCall,
+	messageThread,
+	MessageThreadCall,
+} from "./channel/api-messages"
+import { agentChannels, AgentChannelsCall } from "./org/agent"
+import { agentNotifications, AgentNotificationsCall } from "./user/agent"
 import { liveAccess, LiveAccessCall } from "./channel/live-access"
 import {
 	bootstrap,
@@ -125,6 +134,7 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(GitHubInstallationCall, githubInstallation),
 		receiver(OrganizationProfileCall, () => organizationProfile()),
 		receiver(ListChannelsCall, listChannels),
+		receiver(AgentChannelsCall, agentChannels),
 		receiver(IsOrgAdminCall, isOrgAdmin),
 		receiver(RedeemBotInstallGrantCall, redeemBotInstallGrant),
 		receiver(BotInstallRegionCall, botInstallRegion),
@@ -136,8 +146,9 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(ListMessagesCall, listMessages),
 		receiver(MessageThreadCall, messageThread),
 		receiver(LiveAccessCall, liveAccess),
+		receiver(MessagesByIdsCall, messagesByIds),
 	]),
-	user: byName([]),
+	user: byName([receiver(AgentNotificationsCall, agentNotifications)]),
 	// Its own bootstrap and alarm work, and webhook deliveries (`docs/customers/tech-design.md` §5).
 	customers: byName([
 		receiver(CustomersBootstrapCall, bootstrap),

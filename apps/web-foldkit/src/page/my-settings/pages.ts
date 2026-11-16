@@ -1,3 +1,4 @@
+import * as MySettingsAgents from "./agents"
 import * as MySettingsAppearance from "./appearance"
 import * as MySettingsDesktop from "./desktop"
 import * as MySettingsKeybinds from "./keybinds"
@@ -7,6 +8,7 @@ import * as MySettingsProfile from "./profile"
 
 /** The user's own settings pages: their own chunk, loaded with the first of their routes (`../registry.ts`). */
 export const pages = [
+	MySettingsAgents.page,
 	MySettingsAppearance.page,
 	MySettingsDesktop.page,
 	MySettingsKeybinds.page,

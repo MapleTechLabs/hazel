@@ -1,6 +1,7 @@
 // Every Hazel table as an effect-orm SQLite definition: the query builder reads them, and
 // `renderStoreSchema` (`../schema-ddl.ts`) writes their DDL.
 
+export * from "./agents"
 export * from "./attachments"
 export * from "./auth"
 export * from "./bot-commands"

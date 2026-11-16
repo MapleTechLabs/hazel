@@ -16,6 +16,7 @@ import {
 	attachmentsStream,
 	botsStream,
 	customEmojisStream,
+	agentMarksStream,
 	discordSyncedStream,
 	membersStream,
 	pinnedStream,
@@ -197,6 +198,11 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
 			discordSyncedStream(channelId, (messageIds) => Message.UpdatedDiscordSynced({ messageIds })),
+	}),
+	chatAgentMarks: entry(byChannel, {
+		modelToDependencies: channelOf,
+		dependenciesToStream: ({ channelId }) =>
+			agentMarksStream(channelId, (marks) => Message.UpdatedAgentMarks({ marks })),
 	}),
 	chatThreadChannels: entry(
 		{ threadIds: Schema.Array(ChannelId) },

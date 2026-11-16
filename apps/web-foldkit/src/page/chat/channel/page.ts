@@ -519,6 +519,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			),
 		UpdatedAttachments: ({ attachments }) => withLookup(model, "attachments", attachments),
 		UpdatedDiscordSynced: ({ messageIds }) => withLookup(model, "discordSyncedIds", messageIds),
+		UpdatedAgentMarks: ({ marks }) => withLookup(model, "agentMarks", marks),
 		UpdatedThreadChannels: ({ channels }) => withLookup(model, "threadChannels", channels),
 		UpdatedThreadMessages: ({ messages }) => withLookup(model, "threadMessages", messages),
 		UpdatedReplyTargets: ({ targets }) => withLookup(model, "replyTargets", targets),
