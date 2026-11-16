@@ -1,4 +1,4 @@
-import type { AgentGrantInfo, AgentScope } from "@hazel/domain/http"
+import { type AgentGrantInfo, type AgentScope, CreateAgentTokenRequest } from "@hazel/domain/http"
 import { AgentGrantId } from "@hazel/schema"
 import { DateTime, Effect, Schema } from "effect"
 import { Command } from "foldkit"
@@ -48,7 +48,9 @@ export const CreateAgentToken = Command.define("CreateAgentToken", {
 	messages: [Message.SucceededCreateToken, Message.FailedCreateToken],
 	execute: ({ name, access }) =>
 		HazelApiClient.use((client) =>
-			client.agentAccess.createAgentToken({ payload: { name, scopes: scopesOf(access) } }),
+			client.agentAccess.createAgentToken({
+				payload: new CreateAgentTokenRequest({ name, scopes: scopesOf(access) }),
+			}),
 		).pipe(
 			Effect.map((response) =>
 				Message.SucceededCreateToken({
