@@ -32,6 +32,40 @@ export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStora
 			region,
 		})
 
+		const urlOf = (key: string) =>
+			new URL(`${endpoint}/${bucket}/${key.split("/").map(encodeURIComponent).join("/")}`)
+
+		/** Store `body` at `key` from the server (the MCP server's `upload_file`). */
+		const put = Effect.fn("ObjectStorage.put")(function* (
+			key: string,
+			body: Uint8Array<ArrayBuffer>,
+			contentType: string,
+		) {
+			const response = yield* Effect.tryPromise({
+				try: () =>
+					client.fetch(urlOf(key).toString(), {
+						method: "PUT",
+						headers: { "Content-Type": contentType },
+						body,
+						aws: { allHeaders: true },
+					}),
+				catch: (cause) => new ObjectStorageError({ message: "Failed to store the file", cause }),
+			})
+			if (!response.ok)
+				return yield* new ObjectStorageError({
+					message: `The bucket refused the file (${response.status})`,
+				})
+		})
+
+		/** Whether an object is stored at `key` (an upload through a presigned URL finished). */
+		const exists = Effect.fn("ObjectStorage.exists")(function* (key: string) {
+			const response = yield* Effect.tryPromise({
+				try: () => client.fetch(urlOf(key).toString(), { method: "HEAD" }),
+				catch: (cause) => new ObjectStorageError({ message: "Failed to check the file", cause }),
+			})
+			return response.ok
+		})
+
 		const presignPut = Effect.fn("ObjectStorage.presignPut")(function* (
 			key: string,
 			options: PresignPutOptions,
@@ -52,7 +86,7 @@ export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStora
 			return signed.url
 		})
 
-		return { presignPut } as const
+		return { presignPut, put, exists } as const
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make)

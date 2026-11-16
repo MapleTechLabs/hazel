@@ -13,8 +13,9 @@ import { HttpRouter } from "effect/http"
 import { describe, expect, it } from "vitest"
 import { AgentAccess } from "../services/agent-access"
 import { Directory } from "../services/directory"
+import { ObjectStorage } from "../services/object-storage"
 import { RateLimiterAllowAll } from "../services/rate-limiter"
-import { channelTarget, orgTarget } from "../worker/objects/kinds"
+import { channelTarget, orgTarget, userTarget } from "../worker/objects/kinds"
 import { ObjectStubs } from "../worker/objects/protocol"
 import { makeTestObjects, type TestObject } from "../worker/objects/testing"
 import { AgentOAuthRoutes } from "./agent-oauth"
@@ -79,7 +80,19 @@ const makeWorld = Effect.gen(function* () {
 		}),
 	)
 
+	// The bucket: what `put` stored, and what a presigned PUT would have.
+	const bucket = new Map<string, { bytes: Uint8Array; contentType: string }>()
+	const storage = Layer.succeed(ObjectStorage)({
+		presignPut: (key: string, options: { contentType: string }) =>
+			Effect.succeed(`https://bucket.test/${key}?type=${encodeURIComponent(options.contentType)}`),
+		put: (key: string, bytes: Uint8Array, contentType: string) =>
+			Effect.sync(() => {
+				bucket.set(key, { bytes, contentType })
+			}),
+		exists: (key: string) => Effect.succeed(bucket.has(key)),
+	} as never)
 	const services = Layer.mergeAll(
+		storage,
 		AgentAccess.layer.pipe(Layer.provide(Layer.succeedContext(objects.directory))),
 		Layer.succeedContext(objects.directory),
 		Layer.succeed(ObjectStubs, objects.stubs),
@@ -104,7 +117,7 @@ const makeWorld = Effect.gen(function* () {
 		yield* Layer.build(AgentAccess.layer.pipe(Layer.provide(Layer.succeedContext(objects.directory)))),
 		AgentAccess,
 	)
-	return { objects, orgId, alice, channelId, channel, fetch, access }
+	return { objects, orgId, alice, channelId, channel, fetch, access, bucket }
 }).pipe(Effect.orDie)
 
 type World = Effect.Success<typeof makeWorld>
@@ -372,6 +385,115 @@ describe("MCP server", () => {
 					body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
 				})
 				expect(note.status).toBe(202)
+			}),
+		))
+
+	it("files: upload inline or through a URL, then post them; set and clear the status", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { token } = yield* world.access.createPersonalToken({
+					userId: world.alice,
+					name: "Claude Code",
+					scopes: ["messages:read", "messages:write"],
+				})
+				const attachments = () =>
+					world.channel.storage.db
+						.prepare(
+							`SELECT id, fileName, fileSize, status, messageId, uploadedBy FROM attachments`,
+						)
+						.all() as Array<Record<string, unknown>>
+
+				// Inline: stored, complete, then attached to the message.
+				const uploaded = yield* callTool(world, token, "upload_file", {
+					channel_id: world.channelId,
+					file_name: "notes.txt",
+					text: "hello file",
+				})
+				expect(uploaded.isError).toBeUndefined()
+				const inlineId = uploaded.structuredContent.attachment_id
+				expect(uploaded.structuredContent).toMatchObject({ size: 10, content_type: "text/plain" })
+				expect(new TextDecoder().decode(world.bucket.get(inlineId)!.bytes)).toBe("hello file")
+				expect(attachments()).toEqual([
+					expect.objectContaining({
+						id: inlineId,
+						fileName: "notes.txt",
+						status: "complete",
+						uploadedBy: world.alice,
+					}),
+				])
+
+				// Active content is stored as a download, never as HTML.
+				const html = yield* callTool(world, token, "upload_file", {
+					channel_id: world.channelId,
+					file_name: "page.html",
+					content_base64: Buffer.from("<script>alert(1)</script>").toString("base64"),
+				})
+				expect(html.structuredContent.content_type).toBe("application/octet-stream")
+
+				// Through a URL: refused until the bytes are in the bucket.
+				const url = yield* callTool(world, token, "create_upload_url", {
+					channel_id: world.channelId,
+					file_name: "demo.png",
+					file_size: 3,
+				})
+				const urlId = url.structuredContent.attachment_id
+				expect(url.structuredContent).toMatchObject({
+					method: "PUT",
+					headers: { "Content-Type": "image/png" },
+				})
+				const early = yield* callTool(world, token, "send_message", {
+					channel_id: world.channelId,
+					attachment_ids: [urlId],
+				})
+				expect(early.isError).toBe(true)
+				world.bucket.set(urlId, { bytes: new Uint8Array([1, 2, 3]), contentType: "image/png" })
+
+				const sent = yield* callTool(world, token, "send_message", {
+					channel_id: world.channelId,
+					content: "Here you go",
+					attachment_ids: [inlineId, urlId],
+				})
+				expect(sent.isError).toBeUndefined()
+				const messageId = sent.structuredContent.message.id
+				const linked = attachments().filter((row) => row.messageId === messageId)
+				expect(linked.map((row) => row.id).sort()).toEqual([inlineId, urlId].sort())
+				expect(linked.every((row) => row.status === "complete")).toBe(true)
+
+				// Too big is refused before anything is created.
+				const huge = yield* callTool(world, token, "create_upload_url", {
+					channel_id: world.channelId,
+					file_name: "huge.bin",
+					file_size: 50 * 1024 * 1024,
+				})
+				expect(huge.isError).toBe(true)
+
+				// Status: set with an expiry and a presence, then clear.
+				const user = yield* world.objects.get(userTarget(world.alice))
+				const status = () =>
+					user.storage.db
+						.prepare(
+							`SELECT status, statusEmoji, customMessage, statusExpiresAt FROM user_presence_status`,
+						)
+						.get() as Record<string, unknown>
+				const set = yield* callTool(world, token, "set_status", {
+					emoji: "🌴",
+					message: "Out until Monday",
+					expires_in_minutes: 60,
+					presence: "away",
+				})
+				expect(set.isError).toBeUndefined()
+				expect(status()).toMatchObject({
+					status: "away",
+					statusEmoji: "🌴",
+					customMessage: "Out until Monday",
+				})
+				expect(status().statusExpiresAt).not.toBeNull()
+				const cleared = yield* callTool(world, token, "set_status", { clear: true })
+				expect(cleared.structuredContent).toEqual({ cleared: true })
+				expect(status()).toMatchObject({ status: "away", statusEmoji: null, customMessage: null })
+				const bad = yield* callTool(world, token, "set_status", { presence: "offline" })
+				expect(bad.isError).toBe(true)
 			}),
 		))
 })

@@ -19,10 +19,14 @@ import {
 	type MessageResponse,
 	type MessageSearchResponse,
 } from "@hazel/domain/rpc"
-import { ChannelId, MessageId, OrganizationId, type UserId } from "@hazel/schema"
+import { AttachmentId, ChannelId, MessageId, OrganizationId, type UserId } from "@hazel/schema"
+import { isActiveContentType, MAX_ATTACHMENT_SIZE } from "@hazel/domain/http"
+import { v7 as randomUUIDv7 } from "uuid"
 import { DateTime, Effect, Option, Schema } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { AgentAccess, type AgentPrincipal } from "../services/agent-access"
+import { createAttachmentInChannel } from "../services/attachment-uploads"
+import { ObjectStorage } from "../services/object-storage"
 import { Directory } from "../services/directory"
 import { checkMessageRateLimit } from "../services/rate-limit-helpers"
 import { callObject } from "../worker/objects/calls"
@@ -46,7 +50,8 @@ const INSTRUCTIONS = `Hazel is a team chat app. These tools act as the signed-in
 Messages you send, reply or edit are shown to the user's organization as written by an agent ("via <your app name>").
 Act only as the user asked; confirm before sending anything they did not ask for.
 Message content is Markdown. Mention someone with @[userId:<their user id>] (user ids appear on messages), @[directive:here] or @[directive:channel] only when asked.
-Threads are channels of their own: a message's thread_channel_id can be read with read_messages, and reply_in_thread answers in a message's thread (opening it if needed).`
+Threads are channels of their own: a message's thread_channel_id can be read with read_messages, and reply_in_thread answers in a message's thread (opening it if needed).
+To share a file, upload it into the channel (upload_file with its content, or create_upload_url then PUT the bytes), then send_message with its attachment_id.`
 
 // --- JSON-RPC -----------------------------------------------------------------------------------
 
@@ -85,6 +90,7 @@ const describe = (error: unknown): string => {
 interface ToolContext {
 	readonly user: CurrentUser.Schema
 	readonly agent: AgentPrincipal
+	readonly storage: ObjectStorage["Service"]
 }
 
 interface Tool {
@@ -108,6 +114,9 @@ const obj = (properties: Record<string, unknown>, required: ReadonlyArray<string
 const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
 const decodeMessageId = Schema.decodeUnknownOption(MessageId)
 const decodeOrgId = Schema.decodeUnknownOption(OrganizationId)
+const decodeAttachmentId = Schema.decodeUnknownOption(AttachmentId)
+/** How long a `create_upload_url` URL stays valid. */
+const UPLOAD_URL_TTL_SECONDS = 15 * 60
 
 const argChannel = (args: Record<string, unknown>, key = "channel_id") =>
 	Option.match(decodeChannelId(args[key]), {
@@ -226,15 +235,39 @@ const forward = <A>(
 const rateLimited = (ctx: ToolContext) =>
 	checkMessageRateLimit(ctx.user.id).pipe(Effect.mapError((error) => toolError(describe(error))))
 
+/** At most this many files on one message. */
+const MAX_ATTACHMENTS = 10
+
+const optAttachments = (args: Record<string, unknown>) => {
+	const raw = args.attachment_ids
+	if (raw === undefined || raw === null) return Effect.succeed<ReadonlyArray<AttachmentId>>([])
+	if (!Array.isArray(raw) || raw.length > MAX_ATTACHMENTS)
+		return Effect.fail(toolError(`attachment_ids must be a list of at most ${MAX_ATTACHMENTS} ids`))
+	const ids = raw.map((id) => decodeAttachmentId(id))
+	if (ids.some(Option.isNone))
+		return Effect.fail(toolError("attachment_ids must be attachment ids (UUIDs)"))
+	return Effect.succeed(ids.map((id) => Option.getOrThrow(id)))
+}
+
 const sendIn = (
 	ctx: ToolContext,
 	channelId: ChannelId,
 	content: string,
 	replyToMessageId: MessageId | null,
+	attachmentIds: ReadonlyArray<AttachmentId> = [],
 ) =>
 	Effect.gen(function* () {
 		const { host } = yield* channelInfo(channelId)
 		yield* rateLimited(ctx)
+		// A presigned upload is finished once its file is in the bucket; mark it complete then.
+		for (const id of attachmentIds) {
+			const stored = yield* ctx.storage
+				.exists(id)
+				.pipe(Effect.mapError((error) => toolError(error.message)))
+			if (!stored)
+				return yield* toolError(`File ${id} is not uploaded yet: PUT it to its upload_url first`)
+			yield* forward(host, "attachment.complete", { id, channelId })
+		}
 		const response = yield* forward<MessageResponse>(host, "message.create", {
 			channelId,
 			content,
@@ -243,9 +276,76 @@ const sendIn = (
 			embeds: null,
 			replyToMessageId,
 			threadChannelId: null,
+			...(attachmentIds.length === 0 ? {} : { attachmentIds: [...attachmentIds] }),
 		})
-		return { sent: true, message: (yield* present([response.data]))[0] }
+		return {
+			sent: true,
+			message: (yield* present([response.data]))[0],
+			...(attachmentIds.length === 0 ? {} : { attachment_ids: attachmentIds }),
+		}
 	})
+
+/** The content type a file is stored with; active types (HTML, SVG…) only as a download. */
+const storedContentType = (fileName: string, given: unknown) => {
+	const type = typeof given === "string" && given.trim() !== "" ? given.trim() : guessContentType(fileName)
+	return isActiveContentType(type) ? "application/octet-stream" : type
+}
+
+const EXTENSION_TYPES: Record<string, string> = {
+	png: "image/png",
+	jpg: "image/jpeg",
+	jpeg: "image/jpeg",
+	gif: "image/gif",
+	webp: "image/webp",
+	pdf: "application/pdf",
+	txt: "text/plain",
+	md: "text/markdown",
+	csv: "text/csv",
+	json: "application/json",
+	zip: "application/zip",
+	mp4: "video/mp4",
+	mov: "video/quicktime",
+	mp3: "audio/mpeg",
+	wav: "audio/wav",
+}
+
+const guessContentType = (fileName: string) =>
+	EXTENSION_TYPES[fileName.split(".").pop()?.toLowerCase() ?? ""] ?? "application/octet-stream"
+
+const argFileName = (args: Record<string, unknown>) => {
+	const name = typeof args.file_name === "string" ? args.file_name.trim().replace(/[\\/]/g, "_") : ""
+	if (name === "" || name.length > 255)
+		return Effect.fail(toolError("file_name must be 1 to 255 characters"))
+	return Effect.succeed(name)
+}
+
+/** The `uploading` row in the channel (the channel refuses a user who cannot see it). */
+const startUpload = (ctx: ToolContext, channelId: ChannelId, fileName: string, fileSize: number) =>
+	Effect.gen(function* () {
+		if (fileSize < 1 || fileSize > MAX_ATTACHMENT_SIZE)
+			return yield* toolError(`Files must be 1 byte to ${MAX_ATTACHMENT_SIZE / 1024 / 1024} MB`)
+		const { organizationId } = yield* channelInfo(channelId)
+		const id = AttachmentId.make(randomUUIDv7())
+		yield* createAttachmentInChannel({
+			id,
+			organizationId,
+			channelId,
+			uploadedBy: ctx.user.id,
+			fileName,
+			fileSize,
+		}).pipe(Effect.mapError((error) => toolError(describe(error))))
+		return id
+	})
+
+const decodeBase64 = (value: string) => {
+	try {
+		return Option.some(Uint8Array.from(atob(value.replace(/\s+/g, "")), (char) => char.charCodeAt(0)))
+	} catch {
+		return Option.none<Uint8Array<ArrayBuffer>>()
+	}
+}
+
+const PRESENCE = ["online", "away", "busy", "dnd"] as const
 
 const tools: ReadonlyArray<Tool> = [
 	{
@@ -456,17 +556,121 @@ const tools: ReadonlyArray<Tool> = [
 		inputSchema: obj(
 			{
 				channel_id: str("Where to post"),
-				content: str("Markdown text"),
+				content: str("Markdown text (may be empty when sending files)"),
 				reply_to_message_id: str("Reply to this message (inline quote)"),
+				attachment_ids: {
+					type: "array",
+					items: { type: "string" },
+					maxItems: MAX_ATTACHMENTS,
+					description:
+						"Files to attach, from upload_file or create_upload_url in this same channel",
+				},
 			},
-			["channel_id", "content"],
+			["channel_id"],
 		),
 		run: (args, ctx) =>
 			Effect.gen(function* () {
 				const channelId = yield* argChannel(args)
-				const content = yield* argContent(args)
+				const attachmentIds = yield* optAttachments(args)
+				const content =
+					attachmentIds.length > 0 && (args.content === undefined || args.content === "")
+						? ""
+						: yield* argContent(args)
 				const replyTo = yield* optMessage(args, "reply_to_message_id")
-				return yield* sendIn(ctx, channelId, content, replyTo)
+				return yield* sendIn(ctx, channelId, content, replyTo, attachmentIds)
+			}),
+	},
+	{
+		name: "upload_file",
+		title: "Upload file",
+		description:
+			"Upload a file (up to 10 MB) into a channel from its content: base64 for any file, or text for a text file. Returns an attachment_id; post it with send_message's attachment_ids. For large files or files on disk, use create_upload_url instead.",
+		scope: "messages:write",
+		readOnly: false,
+		inputSchema: obj(
+			{
+				channel_id: str("The channel (or thread channel) the file will be posted in"),
+				file_name: str("The file's name, e.g. report.pdf"),
+				content_base64: str("The file's bytes, base64-encoded"),
+				text: str("The file's content as text (instead of content_base64)"),
+				content_type: str("MIME type; guessed from the file name when omitted"),
+			},
+			["channel_id", "file_name"],
+		),
+		run: (args, ctx) =>
+			Effect.gen(function* () {
+				const channelId = yield* argChannel(args)
+				const fileName = yield* argFileName(args)
+				const bytes =
+					typeof args.content_base64 === "string"
+						? yield* Option.match(decodeBase64(args.content_base64), {
+								onNone: () => Effect.fail(toolError("content_base64 is not valid base64")),
+								onSome: Effect.succeed,
+							})
+						: typeof args.text === "string"
+							? new TextEncoder().encode(args.text)
+							: yield* toolError("Give content_base64 or text")
+				// Text with no type and an unknown extension is plain text.
+				const contentType = storedContentType(
+					fileName,
+					args.content_type ??
+						(typeof args.content_base64 !== "string" &&
+						guessContentType(fileName) === "application/octet-stream"
+							? "text/plain"
+							: undefined),
+				)
+				const id = yield* startUpload(ctx, channelId, fileName, bytes.byteLength)
+				const { host } = yield* channelInfo(channelId)
+				yield* ctx.storage.put(id, bytes as Uint8Array<ArrayBuffer>, contentType).pipe(
+					Effect.tapError(() =>
+						forward(host, "attachment.fail", { id, channelId, reason: "MCP upload failed" }).pipe(
+							Effect.ignore,
+						),
+					),
+					Effect.mapError((error) => toolError(error.message)),
+				)
+				yield* forward(host, "attachment.complete", { id, channelId })
+				return {
+					attachment_id: id,
+					file_name: fileName,
+					size: bytes.byteLength,
+					content_type: contentType,
+				}
+			}),
+	},
+	{
+		name: "create_upload_url",
+		title: "Create upload URL",
+		description:
+			"For a file on disk or too big to inline (up to 10 MB): returns an upload_url valid for 15 minutes. PUT the raw bytes there with the given headers (e.g. curl -X PUT -H 'Content-Type: …' --data-binary @file '<upload_url>'), then post attachment_id with send_message's attachment_ids.",
+		scope: "messages:write",
+		readOnly: false,
+		inputSchema: obj(
+			{
+				channel_id: str("The channel (or thread channel) the file will be posted in"),
+				file_name: str("The file's name, e.g. demo.mp4"),
+				file_size: { type: "integer", minimum: 1, description: "Size in bytes" },
+				content_type: str("MIME type; guessed from the file name when omitted"),
+			},
+			["channel_id", "file_name", "file_size"],
+		),
+		run: (args, ctx) =>
+			Effect.gen(function* () {
+				const channelId = yield* argChannel(args)
+				const fileName = yield* argFileName(args)
+				const fileSize = typeof args.file_size === "number" ? Math.floor(args.file_size) : 0
+				const contentType = storedContentType(fileName, args.content_type)
+				const id = yield* startUpload(ctx, channelId, fileName, fileSize)
+				const uploadUrl = yield* ctx.storage
+					.presignPut(id, { contentType, expiresIn: UPLOAD_URL_TTL_SECONDS })
+					.pipe(Effect.mapError((error) => toolError(error.message)))
+				return {
+					attachment_id: id,
+					upload_url: uploadUrl,
+					method: "PUT",
+					headers: { "Content-Type": contentType },
+					expires_in_seconds: UPLOAD_URL_TTL_SECONDS,
+				}
 			}),
 	},
 	{
@@ -555,6 +759,81 @@ const tools: ReadonlyArray<Tool> = [
 			}),
 	},
 	{
+		name: "set_status",
+		title: "Set status",
+		description:
+			'Set the user\'s status: an emoji and message (e.g. 🌴 "Out until Monday"), optionally clearing itself after some minutes, and/or their presence (online, away, busy, dnd). clear: true removes the emoji and message.',
+		scope: "messages:write",
+		readOnly: false,
+		inputSchema: obj({
+			emoji: str("One emoji, e.g. 🌴"),
+			message: str("Up to 100 characters"),
+			expires_in_minutes: {
+				type: "integer",
+				minimum: 1,
+				maximum: 43200,
+				description: "Clear the status after this long",
+			},
+			presence: {
+				type: "string",
+				enum: [...PRESENCE],
+				description: "online, away, busy or dnd (do not disturb)",
+			},
+			clear: { type: "boolean", description: "Remove the emoji and message" },
+		}),
+		run: (args, ctx) =>
+			Effect.gen(function* () {
+				const target = userTarget(ctx.user.id)
+				const presence =
+					args.presence === undefined
+						? undefined
+						: (PRESENCE.find((value) => value === args.presence) ??
+							(yield* toolError("presence must be online, away, busy or dnd")))
+				if (args.clear === true) {
+					yield* forward(target, "userPresenceStatus.clearStatus", {})
+					if (presence !== undefined)
+						yield* forward(target, "userPresenceStatus.update", { status: presence })
+					return { cleared: true, ...(presence === undefined ? {} : { presence }) }
+				}
+				const emoji =
+					typeof args.emoji === "string" && args.emoji.trim() !== "" ? args.emoji.trim() : undefined
+				const message =
+					typeof args.message === "string" && args.message.trim() !== ""
+						? args.message.trim()
+						: undefined
+				if (emoji !== undefined && emoji.length > 32)
+					return yield* toolError("emoji must be one emoji")
+				if (message !== undefined && message.length > 100)
+					return yield* toolError("message must be at most 100 characters")
+				if (emoji === undefined && message === undefined && presence === undefined)
+					return yield* toolError("Give an emoji, a message, a presence, or clear: true")
+				const minutes =
+					typeof args.expires_in_minutes === "number"
+						? Math.floor(args.expires_in_minutes)
+						: undefined
+				const expiresAt =
+					minutes === undefined
+						? null
+						: new Date(Date.now() + Math.min(Math.max(minutes, 1), 43200) * 60_000)
+				const custom = emoji !== undefined || message !== undefined
+				yield* forward(target, "userPresenceStatus.update", {
+					...(presence === undefined ? {} : { status: presence }),
+					...(custom
+						? {
+								statusEmoji: emoji ?? null,
+								customMessage: message ?? null,
+								statusExpiresAt: expiresAt,
+							}
+						: {}),
+				})
+				return {
+					...(custom ? { emoji: emoji ?? null, message: message ?? null } : {}),
+					...(custom && expiresAt !== null ? { expires_at: expiresAt.toISOString() } : {}),
+					...(presence === undefined ? {} : { presence }),
+				}
+			}),
+	},
+	{
 		name: "toggle_reaction",
 		title: "Toggle reaction",
 		description: "Add an emoji reaction as the user, or remove it if the user already reacted with it.",
@@ -615,13 +894,11 @@ const callTool = (params: Record<string, unknown> | undefined, ctx: ToolContext)
 		if (tool === undefined) return yield* toolError(`Unknown tool ${name}`)
 		if (!ctx.agent.scopes.includes(tool.scope))
 			return yield* toolError(`This connection is read-only; ${name} needs write access`)
-		return yield* tool
-			.run(args, ctx)
-			.pipe(
-				Effect.withSpan("Mcp.tool", {
-					attributes: { "mcp.tool": name, "agent.grant_id": ctx.agent.grantId },
-				}),
-			)
+		return yield* tool.run(args, ctx).pipe(
+			Effect.withSpan("Mcp.tool", {
+				attributes: { "mcp.tool": name, "agent.grant_id": ctx.agent.grantId },
+			}),
+		)
 	}).pipe(
 		Effect.map((result) => ({
 			content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -695,6 +972,7 @@ const loadUser = (userId: UserId) =>
 export const McpRoute = HttpRouter.use((router) =>
 	Effect.gen(function* () {
 		const access = yield* AgentAccess
+		const storage = yield* ObjectStorage
 		const { apiOrigin } = yield* agentOAuthConfig
 		const unauthorized = (description: string) =>
 			HttpServerResponse.jsonUnsafe(
@@ -744,7 +1022,7 @@ export const McpRoute = HttpRouter.use((router) =>
 				}
 				const batch = Array.isArray(parsed)
 				const items = (batch ? parsed : [parsed]) as ReadonlyArray<unknown>
-				const ctx: ToolContext = { user: user.value, agent: agent.value }
+				const ctx: ToolContext = { user: user.value, agent: agent.value, storage }
 				const principal = {
 					user: user.value,
 					botScopes: null,

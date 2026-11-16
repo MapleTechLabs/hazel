@@ -88,7 +88,7 @@ const ACCESS_OPTIONS: ReadonlyArray<{
 	readonly label: string
 	readonly hint: string
 }> = [
-	{ access: "write", label: "Read & write", hint: "Read, send, reply, react, edit" },
+	{ access: "write", label: "Read & write", hint: "Read, send, share files, react, edit, set status" },
 	{ access: "read", label: "Read only", hint: "Read channels and messages" },
 ]
 

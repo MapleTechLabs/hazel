@@ -17,8 +17,10 @@ const SCOPE_ABILITIES: Readonly<Record<AgentScope, ReadonlyArray<string>>> = {
 	"messages:read": ["Read your channels, direct messages and threads", "See messages that mention you"],
 	"messages:write": [
 		"Send messages and replies as you",
+		"Share files in your channels",
 		"React to messages",
-		"Edit and delete messages it sent",
+		"Edit and delete your messages",
+		"Set your status",
 	],
 }
 
