@@ -326,7 +326,9 @@ const goToAdjacentOrganization =
 			organizations.length < 2 || index === -1
 				? undefined
 				: organizations.at((index + step) % organizations.length)
-		return next === undefined ? { model } : navigateTo(organizationRoute(next))(model)
+		return next === undefined
+			? { model }
+			: navigateTo(organizationRoute(next, { isMobile: model.isMobile }))(model)
 	}
 
 /** Discord's Shift+Escape: every unread notification of this organization's member marked read. */

@@ -564,19 +564,24 @@ export const onboardingHref = (orgId: OrganizationId | null, step: string): stri
 export const signInHref = (returnTo: string): string =>
 	hrefOf(AppRoute.SignIn({ redirectUrl: Option.some(returnTo) }))
 
-/** An organization's home, or its slug setup step while it has no slug yet. */
-export const organizationRoute = (organization: {
-	readonly id: OrganizationId
-	readonly slug: string | null
-}): AppRoute =>
+/**
+ * Where entering an organization lands, or its slug setup step while it has no slug yet. On a phone
+ * that is the channel list (the Chats tab; the tab bar has no Home), elsewhere the org home.
+ */
+export const organizationRoute = (
+	organization: { readonly id: OrganizationId; readonly slug: string | null },
+	options: { readonly isMobile: boolean } = { isMobile: false },
+): AppRoute =>
 	organization.slug
-		? AppRoute.OrgHome({ orgSlug: organization.slug })
+		? options.isMobile
+			? AppRoute.ChatIndex({ orgSlug: organization.slug })
+			: AppRoute.OrgHome({ orgSlug: organization.slug })
 		: AppRoute.OnboardingSetupOrganization({ orgId: Option.some(organization.id) })
 
-export const organizationHref = (organization: {
-	readonly id: OrganizationId
-	readonly slug: string | null
-}): string => hrefOf(organizationRoute(organization))
+export const organizationHref = (
+	organization: { readonly id: OrganizationId; readonly slug: string | null },
+	options?: { readonly isMobile: boolean },
+): string => hrefOf(organizationRoute(organization, options))
 
 /** A channel scrolled to one message (`?messageId=`, read by the channel page, not the route). */
 export const chatMessageHref = (orgSlug: string, channelId: ChannelId, messageId: string): string =>

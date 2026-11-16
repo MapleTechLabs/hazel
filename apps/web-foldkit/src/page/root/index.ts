@@ -42,10 +42,16 @@ export const ForgetReturnTo = Command.define("ForgetReturnTo", {
 const targetOf = (
 	model: Model,
 	user: CurrentUser,
+	shared: Shared,
 ): { readonly route: AppRoute; readonly isReturn: boolean } =>
 	model.returnTo && user.isOnboarded
 		? { route: routeOfPath(model.returnTo), isReturn: true }
-		: { route: rootRedirect(user, Option.fromNullishOr(model.membership)), isReturn: false }
+		: {
+				route: rootRedirect(user, Option.fromNullishOr(model.membership), {
+					isMobile: shared.isMobile,
+				}),
+				isReturn: false,
+			}
 
 export const Reload = Command.define("Reload", {
 	messages: [Message.CompletedReload],
@@ -64,7 +70,7 @@ const redirectWhenReady = (model: Model, shared: Shared): Return => {
 		(model.membership === undefined && needsMembership(model, shared.currentUser))
 	)
 		return { model }
-	const target = targetOf(model, shared.currentUser)
+	const target = targetOf(model, shared.currentUser, shared)
 	return {
 		model: modifyFields(model, { hasRedirected: () => true }),
 		commands: target.isReturn ? [ForgetReturnTo()] : [],
