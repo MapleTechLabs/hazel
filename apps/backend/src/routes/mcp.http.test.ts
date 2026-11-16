@@ -411,6 +411,21 @@ describe("MCP server", () => {
 				expect(edit.isError).toBe(true)
 				expect(messagesIn(world.channel)[0]!.content).toBe("bob says hi")
 
+				// A body past the cap is refused while it streams, with no Content-Length to go by.
+				const huge = new Uint8Array(15 * 1024 * 1024).fill(32)
+				const oversized = yield* world.fetch("/mcp", {
+					method: "POST",
+					headers: { authorization: `Bearer ${writer.token}` },
+					body: new ReadableStream({
+						start: (controller) => {
+							controller.enqueue(huge)
+							controller.close()
+						},
+					}),
+					duplex: "half",
+				} as RequestInit)
+				expect(oversized.status).toBe(413)
+
 				// Notifications are a JSON-RPC notification: 202, no body.
 				const note = yield* world.fetch("/mcp", {
 					method: "POST",

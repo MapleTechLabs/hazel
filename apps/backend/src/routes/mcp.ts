@@ -23,7 +23,7 @@ import {
 import { AttachmentId, ChannelId, MessageId, OrganizationId, type UserId } from "@hazel/schema"
 import { isActiveContentType, MAX_ATTACHMENT_SIZE } from "@hazel/domain/http"
 import { v7 as randomUUIDv7 } from "uuid"
-import { DateTime, Effect, Option, Schema } from "effect"
+import { DateTime, Effect, Option, Schema, Stream } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { AgentAccess, type AgentPrincipal } from "../services/agent-access"
 import { createAttachmentInChannel } from "../services/attachment-uploads"
@@ -48,6 +48,36 @@ const SUPPORTED_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"]
 const MAX_CONTENT_LENGTH = 8000
 /** The largest JSON-RPC body read: a 10 MB file as base64 (4/3) and room for the envelope. */
 const MAX_REQUEST_BYTES = 14 * 1024 * 1024
+
+class BodyTooLarge extends Schema.TaggedError<BodyTooLarge>()("BodyTooLarge", {}) {}
+
+/**
+ * The body as text, read chunk by chunk and abandoned past `MAX_REQUEST_BYTES` actual bytes (a
+ * missing or false `Content-Length` cannot get more read); none when too large, "" when unreadable.
+ */
+const readCapped = (request: HttpServerRequest.HttpServerRequest) =>
+	request.stream.pipe(
+		Stream.runFoldEffect(
+			() => ({ chunks: new Array<Uint8Array>(), size: 0 }),
+			(acc, chunk: Uint8Array) => {
+				const size = acc.size + chunk.byteLength
+				if (size > MAX_REQUEST_BYTES) return Effect.fail(new BodyTooLarge())
+				acc.chunks.push(chunk)
+				return Effect.succeed({ chunks: acc.chunks, size })
+			},
+		),
+		Effect.map(({ chunks, size }) => {
+			const bytes = new Uint8Array(size)
+			let offset = 0
+			for (const chunk of chunks) {
+				bytes.set(chunk, offset)
+				offset += chunk.byteLength
+			}
+			return Option.some(new TextDecoder().decode(bytes))
+		}),
+		Effect.catchTag("BodyTooLarge", () => Effect.succeed(Option.none<string>())),
+		Effect.orElseSucceed(() => Option.some("")),
+	)
 
 const tooLarge = HttpServerResponse.jsonUnsafe(
 	{ jsonrpc: "2.0", id: null, error: { code: -32600, message: "The request is too large" } },
@@ -717,7 +747,7 @@ const tools: ReadonlyArray<Tool> = [
 		name: "create_upload_url",
 		title: "Create upload URL",
 		description:
-			"For a file on disk or too big to inline (up to 10 MB): returns an upload_url valid for 15 minutes. PUT the raw bytes there with the given headers (e.g. curl -X PUT -H 'Content-Type: …' --data-binary @file '<upload_url>'), then post attachment_id with send_message's attachment_ids.",
+			"For a file on disk or too big to inline (up to 10 MB): returns an upload_url valid for 15 minutes. PUT the raw bytes there with the given headers (e.g. curl -X PUT -H 'Content-Type: …' -H 'If-None-Match: *' --data-binary @file '<upload_url>'); the URL stores one file and cannot replace it, then post attachment_id with send_message's attachment_ids.",
 		scope: "messages:write",
 		readOnly: false,
 		inputSchema: obj(
@@ -737,13 +767,13 @@ const tools: ReadonlyArray<Tool> = [
 				const contentType = storedContentType(fileName, args.content_type)
 				const id = yield* startUpload(ctx, channelId, fileName, fileSize)
 				const uploadUrl = yield* ctx.storage
-					.presignPut(id, { contentType, expiresIn: UPLOAD_URL_TTL_SECONDS })
+					.presignPut(id, { contentType, expiresIn: UPLOAD_URL_TTL_SECONDS, createOnly: true })
 					.pipe(Effect.mapError((error) => toolError(error.message)))
 				return {
 					attachment_id: id,
 					upload_url: uploadUrl,
 					method: "PUT",
-					headers: { "Content-Type": contentType },
+					headers: { "Content-Type": contentType, "If-None-Match": "*" },
 					expires_in_seconds: UPLOAD_URL_TTL_SECONDS,
 				}
 			}),
@@ -1098,11 +1128,11 @@ export const McpRoute = HttpRouter.use((router) =>
 				// `upload_file` carries a file of up to 10 MB as base64; nothing larger is read.
 				const declared = Number(request.headers["content-length"] ?? "0")
 				if (declared > MAX_REQUEST_BYTES) return tooLarge
-				const body = yield* request.text.pipe(Effect.orElseSucceed(() => ""))
-				if (body.length > MAX_REQUEST_BYTES) return tooLarge
+				const body = yield* readCapped(request)
+				if (Option.isNone(body)) return tooLarge
 				let parsed: unknown
 				try {
-					parsed = JSON.parse(body)
+					parsed = JSON.parse(body.value)
 				} catch {
 					return HttpServerResponse.jsonUnsafe(rpcError(null, -32700, "Parse error"), {
 						status: 400,

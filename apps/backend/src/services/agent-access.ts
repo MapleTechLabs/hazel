@@ -288,39 +288,55 @@ export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/
 		/**
 		 * `grant_type=refresh_token`: rotate. The old refresh token is kept as `spent`; presenting it
 		 * again means it leaked (whoever refreshed first holds the live chain), so the grant ends.
+		 *
+		 * D1 has no transactions, so the claim is the last write: the new tokens are issued first, and
+		 * a failure before the claim leaves the presented token usable for a retry. Losing the claim
+		 * to a concurrent refresh of the same token drops the tokens just issued.
 		 */
 		const refresh = (input: { readonly refreshToken: string; readonly clientId: string }) =>
 			Effect.gen(function* () {
 				const tokenHash = yield* sha256Hex(input.refreshToken)
-				const claimed = yield* db.first(
-					SQLite.update(schema.agentTokensTable)
-						.set({ kind: "spent" })
-						.where(($) => [
-							$.tokenHash.eq(tokenHash),
-							$.kind.eq("refresh"),
-							$.expiresAt.gt(new Date()),
-						])
-						.returning("grantId"),
+				const presented = yield* db.first(
+					SQLite.from(schema.agentTokensTable)
+						.select("grantId", "kind", "expiresAt")
+						.where(($) => [$.tokenHash.eq(tokenHash)]),
 				)
-				if (Option.isNone(claimed)) {
-					const reused = yield* db.first(
-						SQLite.from(schema.agentTokensTable)
-							.select("grantId")
-							.where(($) => [$.tokenHash.eq(tokenHash), $.kind.eq("spent")]),
-					)
-					if (Option.isSome(reused)) {
-						yield* Effect.logWarning("Agent refresh token reused; ending its grant", {
-							grantId: reused.value.grantId,
-						})
-						yield* endGrant(reused.value.grantId)
-						return yield* invalidGrant("The refresh token was already used; sign in again")
-					}
-					return yield* invalidGrant("The refresh token is invalid or expired")
+				if (Option.isSome(presented) && presented.value.kind === "spent") {
+					yield* Effect.logWarning("Agent refresh token reused; ending its grant", {
+						grantId: presented.value.grantId,
+					})
+					yield* endGrant(presented.value.grantId)
+					return yield* invalidGrant("The refresh token was already used; sign in again")
 				}
-				const grant = yield* liveGrant(claimed.value.grantId)
+				if (
+					Option.isNone(presented) ||
+					presented.value.kind !== "refresh" ||
+					presented.value.expiresAt === null ||
+					presented.value.expiresAt.getTime() <= Date.now()
+				)
+					return yield* invalidGrant("The refresh token is invalid or expired")
+				const grant = yield* liveGrant(presented.value.grantId)
 				if (Option.isNone(grant) || grant.value.clientId !== input.clientId)
 					return yield* invalidGrant("The grant was revoked")
-				return yield* issueTokens(grant.value.id, toScopes(grant.value.scopes))
+
+				const issued = yield* issueTokens(grant.value.id, toScopes(grant.value.scopes))
+				const claimed = yield* db.run(
+					SQLite.update(schema.agentTokensTable)
+						.set({ kind: "spent" })
+						.where(($) => [$.tokenHash.eq(tokenHash), $.kind.eq("refresh")])
+						.returning("tokenHash"),
+				)
+				if (claimed.length === 0) {
+					const lost = yield* Effect.all([
+						sha256Hex(issued.accessToken),
+						sha256Hex(issued.refreshToken),
+					])
+					yield* db.run(
+						SQLite.deleteFrom(schema.agentTokensTable).where(($) => [$.tokenHash.in_(...lost)]),
+					)
+					return yield* invalidGrant("The refresh token was already used")
+				}
+				return issued
 			}).pipe(Effect.withSpan("AgentAccess.refresh"))
 
 		/** The user and grant a bearer token acts for: a live access or personal token of a live grant. */

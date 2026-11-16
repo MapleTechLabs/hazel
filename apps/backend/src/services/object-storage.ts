@@ -10,6 +10,11 @@ export interface PresignPutOptions {
 	readonly contentType: string
 	/** Seconds until the URL expires. */
 	readonly expiresIn: number
+	/**
+	 * Sign `If-None-Match: *` into the URL: the PUT must send it, and the bucket refuses it (412)
+	 * once an object is at the key, so the URL cannot replace a file after it was checked.
+	 */
+	readonly createOnly?: boolean
 }
 
 /**
@@ -45,7 +50,8 @@ export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStora
 				try: () =>
 					client.fetch(urlOf(key).toString(), {
 						method: "PUT",
-						headers: { "Content-Type": contentType },
+						// The key is a fresh attachment id: never replace what is there.
+						headers: { "Content-Type": contentType, "If-None-Match": "*" },
 						body,
 						aws: { allHeaders: true },
 					}),
@@ -82,7 +88,9 @@ export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStora
 				try: () =>
 					client.sign(url.toString(), {
 						method: "PUT",
-						headers: { "Content-Type": options.contentType },
+						headers: options.createOnly
+							? { "Content-Type": options.contentType, "If-None-Match": "*" }
+							: { "Content-Type": options.contentType },
 						// `allHeaders` signs Content-Type too (aws4fetch skips it by default): the PUT must send
 						// the type the handler checked, so a refused type cannot be stored after all.
 						aws: { signQuery: true, allHeaders: true },
