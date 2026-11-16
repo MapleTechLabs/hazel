@@ -1,3 +1,4 @@
+import { AuthorizeAgentRequest } from "@hazel/domain/http"
 import { AgentClientId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
@@ -47,7 +48,12 @@ export const AuthorizeAgent = Command.define("AuthorizeAgent", {
 	execute: ({ scope, state, ...request }) =>
 		HazelApiClient.use((client) =>
 			client.agentAccess.authorizeAgent({
-				payload: { ...request, scope: scope ?? undefined, state: state ?? undefined },
+				// The payload is a `Schema.Class`: a plain object fails to encode before the request is sent.
+				payload: new AuthorizeAgentRequest({
+					...request,
+					...(scope === null ? {} : { scope }),
+					...(state === null ? {} : { state }),
+				}),
 			}),
 		).pipe(
 			Effect.flatMap(({ redirectTo }) => load(redirectTo)),
