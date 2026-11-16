@@ -13,7 +13,7 @@ import { HttpRouter } from "effect/http"
 import { describe, expect, it } from "vitest"
 import { AgentAccess } from "../services/agent-access"
 import { Directory } from "../services/directory"
-import { ObjectStorage } from "../services/object-storage"
+import { ObjectStorage, type PresignPutOptions } from "../services/object-storage"
 import { RateLimiterAllowAll } from "../services/rate-limiter"
 import { channelTarget, orgTarget, userTarget } from "../worker/objects/kinds"
 import { ObjectStubs } from "../worker/objects/protocol"
@@ -82,9 +82,13 @@ const makeWorld = Effect.gen(function* () {
 
 	// The bucket: what `put` stored, and what a presigned PUT would have.
 	const bucket = new Map<string, { bytes: Uint8Array; contentType: string }>()
+	const presigned = new Map<string, PresignPutOptions>()
 	const storage = Layer.succeed(ObjectStorage)({
-		presignPut: (key: string, options: { contentType: string }) =>
-			Effect.succeed(`https://bucket.test/${key}?type=${encodeURIComponent(options.contentType)}`),
+		presignPut: (key: string, options: PresignPutOptions) =>
+			Effect.sync(() => {
+				presigned.set(key, options)
+				return `https://bucket.test/${key}?type=${encodeURIComponent(options.contentType)}`
+			}),
 		put: (key: string, bytes: Uint8Array, contentType: string) =>
 			Effect.sync(() => {
 				bucket.set(key, { bytes, contentType })
@@ -120,7 +124,7 @@ const makeWorld = Effect.gen(function* () {
 		yield* Layer.build(AgentAccess.layer.pipe(Layer.provide(Layer.succeedContext(objects.directory)))),
 		AgentAccess,
 	)
-	return { objects, orgId, alice, channelId, channel, fetch, access, bucket }
+	return { objects, orgId, alice, channelId, channel, fetch, access, bucket, presigned }
 }).pipe(Effect.orDie)
 
 type World = Effect.Success<typeof makeWorld>
@@ -486,9 +490,16 @@ describe("MCP server", () => {
 					file_size: 3,
 				})
 				const urlId = url.structuredContent.attachment_id
-				expect(url.structuredContent).toMatchObject({
-					method: "PUT",
-					headers: { "Content-Type": "image/png" },
+				// Create-only: signed with If-None-Match: *, which the agent is told to send.
+				expect(url.structuredContent).toMatchObject({ method: "PUT" })
+				expect(url.structuredContent.headers).toEqual({
+					"Content-Type": "image/png",
+					"If-None-Match": "*",
+				})
+				expect(world.presigned.get(urlId)).toEqual({
+					contentType: "image/png",
+					expiresIn: 900,
+					createOnly: true,
 				})
 				const early = yield* callTool(world, token, "send_message", {
 					channel_id: world.channelId,
