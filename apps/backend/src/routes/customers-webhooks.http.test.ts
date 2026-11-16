@@ -5,13 +5,13 @@
 import { Database } from "@hazel/db"
 import type { OrganizationId } from "@hazel/schema"
 import { Effect, Exit, Layer, Option, Schema } from "effect"
-import { HttpServerRequest, HttpServerResponse } from "effect/http"
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { describe, expect, it } from "vitest"
 import { Directory } from "../services/directory"
 import { exitCodec } from "../worker/objects/calls"
 import { CustomersWebhookCall, CustomerWebhookFailedError } from "../worker/objects/customers/jobs"
 import { ObjectStubs } from "../worker/objects/protocol"
-import { handleCustomersWebhook } from "./customers-webhooks.http"
+import { CustomersWebhookRoutes, handleCustomersWebhook } from "./customers-webhooks.http"
 
 const orgId = crypto.randomUUID() as OrganizationId
 const connectionId = crypto.randomUUID()
@@ -66,12 +66,38 @@ const build = (options: {
 				Effect.map((response) => HttpServerResponse.toWeb(response)),
 			),
 		)
-	return { send, woken }
+	/** Through the router as the api Worker mounts it: services only at build, none per request. */
+	const sendRouted = (path: string) =>
+		Effect.runPromise(
+			Effect.gen(function* () {
+				const handler = yield* HttpRouter.toHttpEffect(CustomersWebhookRoutes).pipe(
+					Effect.provide(services),
+				)
+				const response = yield* handler.pipe(
+					Effect.provideService(
+						HttpServerRequest.HttpServerRequest,
+						HttpServerRequest.fromWeb(
+							new Request(`http://api.test${path}`, { method: "POST", body: "{}" }),
+						),
+					),
+				)
+				return HttpServerResponse.toWeb(response)
+			}).pipe(Effect.scoped) as Effect.Effect<Response>,
+		)
+	return { send, sendRouted, woken }
 }
 
 const path = `/webhooks/customers/stripe/${orgId}/${connectionId}`
 
 describe("POST /webhooks/customers", () => {
+	it("gets its directory and object stubs from the route's build, not from the request", async () => {
+		const unknown = build({ org: "unknown" })
+		expect((await unknown.sendRouted(path)).status).toBe(404)
+		const live = build({ org: "live" })
+		const applied = await live.sendRouted(path)
+		expect([applied.status, await applied.json()]).toEqual([200, { received: true, applied: 2 }])
+	})
+
 	it("answers 404 for a bad path, or an unknown or deleted org, without waking anything", async () => {
 		const unknown = build({ org: "unknown" })
 		expect((await unknown.send(`/webhooks/customers/nope/${orgId}/${connectionId}`)).status).toBe(404)

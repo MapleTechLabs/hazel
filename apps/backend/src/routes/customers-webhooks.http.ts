@@ -19,6 +19,7 @@ import { Directory } from "../services/directory"
 import { callObject } from "../worker/objects/calls"
 import { CustomersWebhookCall } from "../worker/objects/customers/jobs"
 import { customersTarget } from "../worker/objects/kinds"
+import type { ObjectStubs } from "../worker/objects/protocol"
 
 const PATH = /^\/webhooks\/customers\/([^/]+)\/([^/]+)\/([^/?]+)/
 
@@ -91,4 +92,15 @@ export const handleCustomersWebhook = Effect.gen(function* () {
 	Effect.withSpan("CustomersWebhook.receive"),
 )
 
-export const CustomersWebhookRoutes = HttpRouter.add("POST", "/webhooks/customers/*", handleCustomersWebhook)
+export const CustomersWebhookRoutes = HttpRouter.use((router) =>
+	Effect.gen(function* () {
+		// Resolved when the route is built: `HttpRouter.add` alone leaves these for each request to
+		// provide, and nothing does ("Service not found: @hazel/backend/Directory").
+		const services = yield* Effect.context<Directory | ObjectStubs>()
+		return yield* router.add(
+			"POST",
+			"/webhooks/customers/*",
+			handleCustomersWebhook.pipe(Effect.provideContext(services)),
+		)
+	}),
+)
