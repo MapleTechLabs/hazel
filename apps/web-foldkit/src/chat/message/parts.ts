@@ -83,7 +83,7 @@ export const replySectionView = <M>(h: HtmlBuilder<M>, reply: ReplyPreview, acti
 		[
 			h.svg(
 				[
-					h.Class("absolute -bottom-1 left-5 rotate-90 text-muted-fg"),
+					h.Class("absolute -bottom-[3px] left-5 text-muted-fg"),
 					h.Attribute("xmlns", "http://www.w3.org/2000/svg"),
 					h.Attribute("width", "24"),
 					h.Attribute("height", "20"),
@@ -92,7 +92,7 @@ export const replySectionView = <M>(h: HtmlBuilder<M>, reply: ReplyPreview, acti
 				],
 				[
 					h.path([
-						h.Attribute("d", "M2 2 L2 12 Q2 16 6 16 L12 16"),
+						h.Attribute("d", "M6 11 L6 5 Q6 1 10 1 L20 1"),
 						h.Attribute("stroke", "currentColor"),
 						h.Attribute("stroke-width", "2"),
 						h.Attribute("stroke-linecap", "round"),
