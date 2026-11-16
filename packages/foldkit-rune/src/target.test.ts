@@ -239,6 +239,47 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("opens the Open dialog for a hidden file input that Dom.clickElement clicks", async () => {
+		const Browse = defineMessageUnion({ Opened: {} })
+		const OpenPicker = Command.define("OpenPicker", {
+			messages: [Browse.Opened],
+			execute: Dom.clickElement("#picker").pipe(Effect.ignore, Effect.as(Browse.Opened())),
+		})
+		const sent: Array<RuntimeToHost> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		const rune = makeRuneTarget({
+			styles,
+			bridge,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ n: Schema.Number }),
+				init: () => ({ model: { n: 0 }, commands: [OpenPicker()] }),
+				update: (model) => ({ model }),
+				view: (_model, h) =>
+					h.div(
+						[],
+						[
+							h.input([
+								h.Id("picker"),
+								h.Type("file"),
+								h.Attribute("accept", "image/png,image/gif"),
+								h.Attribute("style", "display: none;"),
+							]),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		expect(sent.filter((m) => m.t === "pickFile")).toEqual([
+			{ t: "pickFile", path: "r/0", accept: "image/png,image/gif" },
+		])
+		handle.dispose()
+	})
+
 	it("moves an arrowed radio's group to the next radio, wrapping, and focuses it", async () => {
 		const Chose = defineMessageUnion({ Chose: { value: Schema.String } })
 		const sent: Array<RuntimeToHost> = []

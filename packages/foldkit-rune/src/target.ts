@@ -994,7 +994,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			send({ t: "focus", key: hostFocusKey(path, bridge.tagAt(path), bridge.attrsAt(path)) })
 		return {
 			focus: (selector) => withPath(selector, focusPath),
-			click: (selector) => withPath(selector, click),
+			// `Dom.clickElement`: a file input opens the host's Open dialog, as `element.click()` does.
+			click: (selector) => withPath(selector, clickElement),
 			scrollIntoView: (selector, block) =>
 				withPath(selector, (path) => send({ t: "reveal", path, block })),
 			advanceFocus: (selector, direction) =>
@@ -1224,7 +1225,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			send({ t: "focus", key: focusKey })
 			return
 		}
-		click(control)
+		clickElement(control)
 		const checkable = tag === "input" && (attrs.type === "checkbox" || attrs.type === "radio")
 		if (checkable && !(attrs.type === "radio" && "checked" in attrs))
 			fire(

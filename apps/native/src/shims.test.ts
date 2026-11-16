@@ -15,6 +15,26 @@ describe("installShims", () => {
 		expect(document.createElement("canvas").getContext("2d")).toBeNull()
 	})
 
+	it("opens a clicked download link's URL in the browser, as the attachment download clicks one", () => {
+		const opened: Array<string> = []
+		installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/",
+			openUrl: (href) => opened.push(href),
+			copyText: () => {},
+		})
+		const link = document.createElement("a")
+		link.href = "https://files.hazel.test/report.pdf"
+		link.download = "report.pdf"
+		link.click()
+		const blob = document.createElement("a")
+		blob.href = "blob:http://app.hazel.test/1"
+		blob.click()
+		expect(opened).toEqual(["https://files.hazel.test/report.pdf"])
+	})
+
 	it("reports the app's version as the web build does, so the sidebar's label matches", () => {
 		installShims({
 			width: 800,
