@@ -119,7 +119,7 @@ describe("org switcher", () => {
 		})
 
 		// B2: the "Single" menu selects the clicked key before the shell folds its OutMessage.
-		test("another organization navigates to its slug", () => {
+		test("another organization opens its channel list", () => {
 			story(
 				runMobile,
 				given(mobile),
@@ -127,7 +127,7 @@ describe("org switcher", () => {
 				message(orgSwitcher(clicked(otherOrgId, mobile.orgSwitcherEntries))),
 				expectOutMessage(
 					PageOutMessage.RequestedNavigation({
-						route: AppRoute.OrgHome({ orgSlug: "acme" }),
+						route: AppRoute.ChatIndex({ orgSlug: "acme" }),
 						replace: false,
 					}),
 				),

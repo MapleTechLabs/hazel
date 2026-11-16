@@ -6,7 +6,11 @@ import { PageOutMessage } from "../out-message"
 import { FetchPublicOrganization, JoinWorkspace, RedirectToSignIn } from "./command"
 import { Message } from "./message"
 import { Lookup, type Model } from "./model"
-import { init, update } from "./update"
+import { makeShared, storyUpdate } from "../../test/pages-fixtures"
+import { init, update as pageUpdate } from "./update"
+
+const update = storyUpdate(pageUpdate, makeShared({ isMobile: false }))
+const mobileUpdate = storyUpdate(pageUpdate, makeShared({ isMobile: true }))
 
 /** `/join/$slug`: the public lookup, the sign-in detour and joining. */
 
@@ -68,6 +72,22 @@ describe("join workspace", () => {
 			),
 			Command.expectNone(),
 			model((current) => expect(current.isJoining).toBe(false)),
+		)
+	})
+
+	test("on a phone, joining opens the workspace's channel list", () => {
+		story(
+			mobileUpdate,
+			given(loaded),
+			message(Message.ClickedJoin()),
+			Command.resolve(JoinWorkspace, Message.SucceededJoinWorkspace()),
+			expectOutMessage(
+				PageOutMessage.RequestedNavigation({
+					route: routeOfPath("/hazel/chat"),
+					replace: false,
+					toast: { intent: "success", title: "Successfully joined workspace!", description: null },
+				}),
+			),
 		)
 	})
 

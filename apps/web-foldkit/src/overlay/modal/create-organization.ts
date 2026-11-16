@@ -5,6 +5,7 @@ import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import { IconServers } from "../../icons"
 import { AppRoute, organizationRoute } from "../../route"
+import { isMobileViewport } from "../../ui/viewport"
 import { HazelRpc } from "../../rpc"
 import { button } from "../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
@@ -64,7 +65,9 @@ const CreateOrganization = Command.define("CreateOrganization", {
 				settings: null,
 				isPublic: false,
 			})
-			return Message.SucceededCreateOrganization({ route: organizationRoute(result.data) })
+			return Message.SucceededCreateOrganization({
+				route: organizationRoute(result.data, { isMobile: isMobileViewport() }),
+			})
 		}).pipe(
 			Effect.catchCause((cause) =>
 				Effect.succeed(

@@ -1,8 +1,8 @@
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import { errorToastOf, successToast } from "../../data/actions"
-import { AppRoute, hrefOf, type RouteOf } from "../../route"
-import type { PageReturn } from "../contract"
+import { AppRoute, hrefOf, orgLandingRoute, type RouteOf } from "../../route"
+import type { PageReturn, Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
 import { FetchPublicOrganization, JoinWorkspace, RedirectToSignIn } from "./command"
 import { Message } from "./message"
@@ -15,7 +15,7 @@ export const init = (route: RouteOf<"Join">): Return => ({
 	commands: [FetchPublicOrganization({ slug: route.slug })],
 })
 
-export const update = (model: Model, message: Message): Return =>
+export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		SucceededFetchOrganization: ({ organization }) => ({
 			model: modifyFields(model, {
@@ -46,7 +46,7 @@ export const update = (model: Model, message: Message): Return =>
 		SucceededJoinWorkspace: () => ({
 			model: modifyFields(model, { isJoining: () => false }),
 			outMessage: PageOutMessage.RequestedNavigation({
-				route: AppRoute.OrgHome({ orgSlug: model.slug }),
+				route: orgLandingRoute(model.slug, { isMobile: shared.isMobile }),
 				replace: false,
 				toast: successToast("Successfully joined workspace!"),
 			}),

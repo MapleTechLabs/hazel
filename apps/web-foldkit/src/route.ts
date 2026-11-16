@@ -565,17 +565,19 @@ export const signInHref = (returnTo: string): string =>
 	hrefOf(AppRoute.SignIn({ redirectUrl: Option.some(returnTo) }))
 
 /**
- * Where entering an organization lands, or its slug setup step while it has no slug yet. On a phone
- * that is the channel list (the Chats tab; the tab bar has no Home), elsewhere the org home.
+ * Where entering an organization with a slug lands: on a phone the channel list (the Chats tab; the
+ * tab bar has no Home), elsewhere the org home.
  */
+export const orgLandingRoute = (orgSlug: string, options: { readonly isMobile: boolean }): AppRoute =>
+	options.isMobile ? AppRoute.ChatIndex({ orgSlug }) : AppRoute.OrgHome({ orgSlug })
+
+/** `orgLandingRoute`, or the organization's slug setup step while it has no slug yet. */
 export const organizationRoute = (
 	organization: { readonly id: OrganizationId; readonly slug: string | null },
 	options: { readonly isMobile: boolean } = { isMobile: false },
 ): AppRoute =>
 	organization.slug
-		? options.isMobile
-			? AppRoute.ChatIndex({ orgSlug: organization.slug })
-			: AppRoute.OrgHome({ orgSlug: organization.slug })
+		? orgLandingRoute(organization.slug, options)
 		: AppRoute.OnboardingSetupOrganization({ orgId: Option.some(organization.id) })
 
 export const organizationHref = (

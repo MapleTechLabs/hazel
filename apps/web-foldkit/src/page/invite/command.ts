@@ -2,7 +2,8 @@ import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { load } from "foldkit/navigation"
 import { catchCommon } from "../../data/actions"
-import { AppRoute, hrefOf, signInHref } from "../../route"
+import { AppRoute, hrefOf, orgLandingRoute, signInHref } from "../../route"
+import { isMobileViewport } from "../../ui/viewport"
 import { HazelRpc } from "../../rpc"
 import { Message } from "./message"
 
@@ -46,7 +47,7 @@ export const AcceptInvitation = Command.define("AcceptInvitation", {
 			Effect.flatMap((accepted) =>
 				load(
 					accepted.slug
-						? hrefOf(AppRoute.OrgHome({ orgSlug: accepted.slug }))
+						? hrefOf(orgLandingRoute(accepted.slug, { isMobile: isMobileViewport() }))
 						: hrefOf(AppRoute.Root()),
 				),
 			),

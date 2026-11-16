@@ -5,7 +5,7 @@ import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import { errorToast, errorToastOf, successToast, warningToast } from "../../data/actions"
 import type { ToastRequest } from "../../overlay/toasts"
-import { AppRoute, hrefOf, type RouteOf } from "../../route"
+import { AppRoute, hrefOf, orgLandingRoute, type RouteOf } from "../../route"
 import type { ThemeCustomization, ThemeMode } from "../../theme"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
@@ -405,7 +405,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					commands: [
 						...(completed.commands ?? []),
 						LoadOnboardingHome({
-							href: hrefOf(slug ? AppRoute.OrgHome({ orgSlug: slug }) : AppRoute.Root()),
+							href: hrefOf(
+								slug ? orgLandingRoute(slug, { isMobile: shared.isMobile }) : AppRoute.Root(),
+							),
 						}),
 					],
 				}
