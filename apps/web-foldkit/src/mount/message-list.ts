@@ -47,6 +47,9 @@ export const ScrollPhase = defineTaggedUnion({
 })
 export type ScrollPhase = typeof ScrollPhase.Type
 
+export const LikeRow = Schema.Struct({ key: Schema.String, deltaPx: Schema.Number })
+export type LikeRow = typeof LikeRow.Type
+
 export const Model = Schema.Struct({
 	id: Schema.String,
 	estimatedRowHeightPx: Schema.Number,
@@ -57,6 +60,12 @@ export const Model = Schema.Struct({
 	/** Rows that never anchor the viewport (date dividers move with the first message of their day). */
 	stickyKeys: Schema.Array(Schema.String),
 	measuredHeights: Schema.Record(Schema.String, Schema.Number),
+	/**
+	 * For a row not measured yet, a measured row the parent expects to be as tall give or take
+	 * `deltaPx` (the same kind of one-line message, in another place in its group): that height
+	 * stands in for the estimate, so a new message at the end lands where it will stay.
+	 */
+	likeRows: Schema.Record(Schema.String, LikeRow),
 	viewportHeight: Schema.Number,
 	scrollTop: Schema.Number,
 	anchor: ViewportAnchor,
@@ -111,6 +120,7 @@ export const init = (config: {
 	keys: [],
 	stickyKeys: [],
 	measuredHeights: config.measuredHeights ?? {},
+	likeRows: NO_LIKE_ROWS,
 	viewportHeight: config.viewportHeight ?? 0,
 	scrollTop: 0,
 	anchor: ViewportAnchor.End(),
@@ -124,6 +134,17 @@ export const init = (config: {
 
 // LAYOUT
 
+const NO_LIKE_ROWS: Readonly<Record<string, LikeRow>> = {}
+
+/** A row's height: measured, else the measured height of a row like it, else the estimate. */
+const heightOf = (model: Model, key: string): number => {
+	const measured = model.measuredHeights[key]
+	if (measured !== undefined) return measured
+	const like = model.likeRows[key]
+	const likeHeight = like === undefined ? undefined : model.measuredHeights[like.key]
+	return likeHeight === undefined ? model.estimatedRowHeightPx : likeHeight + like.deltaPx
+}
+
 export interface Layout {
 	/** `offsets[i]` is the top of row i inside the content box; `offsets[n]` is the total height. */
 	readonly offsets: Float64Array
@@ -132,12 +153,12 @@ export interface Layout {
 }
 
 const computeLayout = (model: Model): Layout => {
-	const { keys, measuredHeights, estimatedRowHeightPx } = model
+	const { keys } = model
 	const offsets = new Float64Array(keys.length + 1)
 	const indexByKey = new Map<string, number>()
 	keys.forEach((key, index) => {
 		indexByKey.set(key, index)
-		offsets[index + 1] = offsets[index]! + (measuredHeights[key] ?? estimatedRowHeightPx)
+		offsets[index + 1] = offsets[index]! + heightOf(model, key)
 	})
 	return { offsets, indexByKey, totalHeight: offsets[keys.length]! }
 }
@@ -145,16 +166,32 @@ const computeLayout = (model: Model): Layout => {
 // Pure memos keyed by the frozen inputs, so lists never evict each other's entries.
 const layouts = new WeakMap<
 	ReadonlyArray<string>,
-	WeakMap<object, { readonly estimate: number; readonly layout: Layout }>
+	WeakMap<
+		object,
+		{
+			readonly estimate: number
+			readonly likeRows: Readonly<Record<string, LikeRow>>
+			readonly layout: Layout
+		}
+	>
 >()
 
 /** Prefix sums over measured or estimated heights, memoized on the (frozen) inputs by reference. */
 export const layoutOf = (model: Model): Layout => {
 	const byHeights = layouts.get(model.keys) ?? new WeakMap()
 	const cached = byHeights.get(model.measuredHeights)
-	if (cached !== undefined && cached.estimate === model.estimatedRowHeightPx) return cached.layout
+	if (
+		cached !== undefined &&
+		cached.estimate === model.estimatedRowHeightPx &&
+		cached.likeRows === model.likeRows
+	)
+		return cached.layout
 	const layout = computeLayout(model)
-	byHeights.set(model.measuredHeights, { estimate: model.estimatedRowHeightPx, layout })
+	byHeights.set(model.measuredHeights, {
+		estimate: model.estimatedRowHeightPx,
+		likeRows: model.likeRows,
+		layout,
+	})
 	layouts.set(model.keys, byHeights)
 	return layout
 }
@@ -526,15 +563,61 @@ const updateScroll = (model: Model, message: Message): ListReturn =>
 				: { model: modifyFields(model, { appliedScrollVersion: () => version }) },
 	})
 
+export interface KeyHints {
+	/**
+	 * See `Model.likeRows`: given the heights with `heightShifts` applied and the current like rows,
+	 * the new ones (the same object while they do not change).
+	 */
+	readonly likeRowsOf?: (
+		measuredHeights: Readonly<Record<string, number>>,
+		previous: Readonly<Record<string, LikeRow>>,
+	) => Readonly<Record<string, LikeRow>>
+	/**
+	 * Measured rows whose height changed by a known amount with these keys (a message joining the
+	 * group above it takes that row's bottom margin), applied before the row is measured again.
+	 */
+	readonly heightShifts?: ReadonlyArray<{ readonly key: string; readonly deltaPx: number }>
+}
+
+const shiftedHeights = (
+	model: Model,
+	shifts: ReadonlyArray<{ readonly key: string; readonly deltaPx: number }>,
+): Model["measuredHeights"] => {
+	const applicable = shifts.filter(
+		({ key, deltaPx }) => deltaPx !== 0 && model.measuredHeights[key] !== undefined,
+	)
+	if (applicable.length === 0) return model.measuredHeights
+	const heights = { ...model.measuredHeights }
+	for (const { key, deltaPx } of applicable) heights[key] = Math.max(0, heights[key]! + deltaPx)
+	return heights
+}
+
 /** The parent's rows changed (prepended page, new message, deletion). Keeps the anchor in place. */
 export const setKeys = (
 	model: Model,
 	keys: ReadonlyArray<string>,
 	stickyKeys: ReadonlyArray<string> = model.stickyKeys,
-): ListReturn =>
-	model.keys === keys && model.stickyKeys === stickyKeys
+	hints: KeyHints = {},
+): ListReturn => {
+	const measuredHeights = shiftedHeights(model, hints.heightShifts ?? [])
+	const likeRows = hints.likeRowsOf?.(measuredHeights, model.likeRows) ?? model.likeRows
+	return model.keys === keys &&
+		model.stickyKeys === stickyKeys &&
+		model.likeRows === likeRows &&
+		model.measuredHeights === measuredHeights
 		? { model }
-		: withPool(reconcile(modifyFields(model, { keys: () => keys, stickyKeys: () => stickyKeys })), "Data")
+		: withPool(
+				reconcile(
+					modifyFields(model, {
+						keys: () => keys,
+						stickyKeys: () => stickyKeys,
+						likeRows: () => likeRows,
+						measuredHeights: () => measuredHeights,
+					}),
+				),
+				"Data",
+			)
+}
 
 /** Jumps to the newest row and follows it (after sending a message). */
 export const scrollToEnd = (model: Model): ListReturn =>
@@ -735,6 +818,7 @@ export const isViewEqual = (a: Model, b: Model): boolean =>
 		a.keys === b.keys &&
 		a.stickyKeys === b.stickyKeys &&
 		a.measuredHeights === b.measuredHeights &&
+		a.likeRows === b.likeRows &&
 		a.estimatedRowHeightPx === b.estimatedRowHeightPx &&
 		a.viewportHeight === b.viewportHeight &&
 		isSamePhaseView(a.scrollPhase, b.scrollPhase) &&

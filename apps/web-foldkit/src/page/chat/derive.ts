@@ -16,6 +16,7 @@ import {
 } from "../../chat/html-render"
 import { cachedLiveState, initialLiveState, liveEmbedOf, type LiveStates } from "../../chat/live-state"
 import { processMessageUrls } from "../../chat/message/content"
+import type { LikeRow } from "../../mount/message-list"
 import { linkPreviewKey, tweetKey, type Unfurls } from "../../chat/unfurl"
 import { type AttachmentInfo, byKey, type Lookups, type PresenceInfo, type UserInfo } from "./lookups"
 import {
@@ -361,8 +362,45 @@ export const messageRowData = (
 		urlEmbeds: urlEmbedsOf(context, message),
 		live: liveOf(context, message),
 		htmlRenders: htmlRendersOf(context, message, "list"),
+		isEntering: false,
 	}
 }
+
+/** More new messages than this at once are a catch-up (a reconnect, the sync after the cache), not live. */
+const MAX_ENTERING = 3
+
+/**
+ * The messages that just arrived live, as Slack and Discord animate them: new since `previousRows`,
+ * which already showed messages, and newer than all of them, so a first load or an older page has
+ * none. A batch past `MAX_ENTERING` animates nothing.
+ */
+const enteringIdsOf = (
+	messages: ReadonlyArray<ChatMessage>,
+	previousRows: ReadonlyArray<DisplayRow>,
+	previousByKey: ReadonlyMap<string, DisplayRow>,
+): ReadonlySet<MessageId> => {
+	let newestMs = Number.NEGATIVE_INFINITY
+	for (const row of previousRows)
+		if (row._tag === "MessageRow" && row.message.createdAtMs > newestMs)
+			newestMs = row.message.createdAtMs
+	if (newestMs === Number.NEGATIVE_INFINITY) return NO_ENTERING
+	const entering = new Set<MessageId>()
+	for (const message of messages) {
+		if (previousByKey.has(message.id) || message.createdAtMs <= newestMs) continue
+		if (entering.size === MAX_ENTERING) return NO_ENTERING
+		entering.add(message.id)
+	}
+	return entering
+}
+
+const NO_ENTERING: ReadonlySet<MessageId> = new Set()
+
+/** A row keeps its entrance flag for as long as it is listed, so a re-derive never restarts it. */
+const isEnteringRow = (
+	old: DisplayRow | undefined,
+	messageId: MessageId,
+	entering: ReadonlySet<MessageId>,
+): boolean => (old !== undefined && old._tag === "MessageRow" ? old.isEntering : entering.has(messageId))
 
 /**
  * Oldest-first rows with a date header before each day; `messagesNewestFirst` is the query order.
@@ -375,6 +413,7 @@ export const toDisplayRows = (
 	previousRows: ReadonlyArray<DisplayRow>,
 ): ReadonlyArray<DisplayRow> => {
 	const previousByKey = new Map(previousRows.map((row) => [row.key, row]))
+	const entering = enteringIdsOf(messagesNewestFirst, previousRows, previousByKey)
 	const reactionsByMessage = groupBy(reactions, (reaction) => reaction.messageId)
 	const rows: DisplayRow[] = []
 	let lastDate = ""
@@ -407,13 +446,14 @@ export const toDisplayRows = (
 			lastDate = date
 		}
 
+		const old = previousByKey.get(message.id)
 		const data = messageRowData(
 			message,
 			toGroupPosition(isGroupStart, isGroupEnd),
 			reactionsByMessage.get(message.id) ?? NO_REACTIONS,
 			context,
 		)
-		rows.push(sharedRow(previousByKey.get(message.id), data))
+		rows.push(sharedRow(old, { ...data, isEntering: isEnteringRow(old, message.id, entering) }))
 	}
 	return rows
 }
@@ -459,9 +499,11 @@ export const toThreadRows = (
 	context: DeriveContext,
 	previousRows: ReadonlyArray<MessageRow>,
 ): ReadonlyArray<MessageRow> => {
-	const previousByKey = new Map(previousRows.map((row) => [row.key, row]))
-	const rows = messagesOldestFirst.map((message, index) =>
-		sharedRow(previousByKey.get(message.id), {
+	const previousByKey = new Map<string, DisplayRow>(previousRows.map((row) => [row.key, row]))
+	const entering = enteringIdsOf(messagesOldestFirst, previousRows, previousByKey)
+	const rows = messagesOldestFirst.map((message, index) => {
+		const old = previousByKey.get(message.id)
+		return sharedRow(old, {
 			...messageRowData(
 				message,
 				threadGroupPositionAt(messagesOldestFirst, index, context),
@@ -469,8 +511,9 @@ export const toThreadRows = (
 				context,
 			),
 			thread: null,
-		}),
-	)
+			isEntering: isEnteringRow(old, message.id, entering),
+		})
+	})
 	return rows.length === previousRows.length && rows.every((row, index) => row === previousRows[index])
 		? previousRows
 		: rows
@@ -488,3 +531,126 @@ export const threadIdsOf = (messages: ReadonlyArray<ChatMessage>): ReadonlyArray
 	[
 		...new Set(messages.flatMap((message) => (message.threadChannelId ? [message.threadChannelId] : []))),
 	].sort()
+
+/** `mt-2` above a group's first row and `mb-2` below its last (`messageRowView`). */
+const GROUP_MARGIN_PX = 8
+
+/** `py-1` on a message row. */
+const ROW_PADDING_PX = 8
+
+/** Starts a markdown block that draws taller than a line: a heading, quote, list or code. */
+const BLOCK_START = /^\s*([#>*+-]|\d+\.)|`/
+
+/** The margins a row's place in its group gives it: `mt-2` on a group's first, `mb-2` on its last. */
+const marginsOf = (position: GroupPosition) =>
+	(Number(startsGroup(position)) + Number(endsGroup(position))) * GROUP_MARGIN_PX
+
+/**
+ * The kind of row a message row is when nothing but a short line of text is in it: one with the
+ * author header (a group's first) or without. Two rows of a kind differ only by their margins.
+ * Null for anything that could wrap or draw taller.
+ */
+const plainKindOf = (row: MessageRow): string | null => {
+	const { message } = row
+	const content = message.content
+	const isPlain =
+		row.reply === null &&
+		row.thread === null &&
+		row.live === null &&
+		row.attachments.length === 0 &&
+		row.urlEmbeds.length === 0 &&
+		row.reactions.length === 0 &&
+		row.htmlRenders.length === 0 &&
+		!message.hasEmbeds &&
+		!message.isPinned &&
+		content.length > 0 &&
+		content.length <= 40 &&
+		!content.includes("\n") &&
+		// Emoji-only messages draw large.
+		/[\p{L}\p{N}]/u.test(content) &&
+		!BLOCK_START.test(content)
+	if (!isPlain) return null
+	return startsGroup(row.groupPosition) ? `header|${row.hasAuthor}` : "line"
+}
+
+/**
+ * For each row not measured yet, the nearest older measured row of its kind (a one-line message,
+ * a date divider) and the margins they differ by, so a message just sent or received, or the day's
+ * first divider, is laid out at its real height before it is measured. Returns `previous` while
+ * nothing changed.
+ */
+export const likeRowsOf = (
+	rows: ReadonlyArray<DisplayRow>,
+	measuredHeights: Readonly<Record<string, number>>,
+	previous: Readonly<Record<string, LikeRow>>,
+): Readonly<Record<string, LikeRow>> => {
+	const lastByKind = new Map<string, { key: string; margins: number }>()
+	const likeRows: Record<string, LikeRow> = {}
+	let count = 0
+	for (const row of rows) {
+		const kind = row._tag === "DateHeader" ? "date-header" : plainKindOf(row)
+		if (kind === null) continue
+		const margins = row._tag === "DateHeader" ? 0 : marginsOf(row.groupPosition)
+		const measured = measuredHeights[row.key]
+		if (measured !== undefined) {
+			lastByKind.set(kind, { key: row.key, margins })
+			continue
+		}
+		const like = lastByKind.get(kind)
+		if (like !== undefined) {
+			likeRows[row.key] = { key: like.key, deltaPx: margins - like.margins }
+			count++
+			continue
+		}
+		// The group's first line-only row: the header is one line of the same text, so a row with
+		// it is the padding and two lines, this one the padding and one.
+		const headed = kind === "line" ? lastByKind.get("header|true") : undefined
+		const headedHeight = headed === undefined ? undefined : measuredHeights[headed.key]
+		if (headed !== undefined && headedHeight !== undefined) {
+			const lineHeight = (headedHeight - headed.margins - ROW_PADDING_PX) / 2
+			likeRows[row.key] = {
+				key: headed.key,
+				deltaPx: ROW_PADDING_PX + lineHeight + margins - headedHeight,
+			}
+			count++
+		}
+	}
+	const previousKeys = Object.keys(previous)
+	return previousKeys.length === count &&
+		previousKeys.every(
+			(key) =>
+				previous[key]!.key === likeRows[key]?.key &&
+				previous[key]!.deltaPx === likeRows[key]?.deltaPx,
+		)
+		? previous
+		: likeRows
+}
+
+const endsGroup = (position: GroupPosition) => position === "end" || position === "standalone"
+const startsGroup = (position: GroupPosition) => position === "start" || position === "standalone"
+
+/**
+ * Rows that gained or lost their bottom margin with this change (a message joined the group of the
+ * row above it, or the row after it went away), by how much their measured height moved.
+ */
+export const marginShiftsOf = (
+	previousRows: ReadonlyArray<DisplayRow>,
+	rows: ReadonlyArray<DisplayRow>,
+): ReadonlyArray<{ readonly key: string; readonly deltaPx: number }> => {
+	if (previousRows.length === 0) return []
+	const previousByKey = new Map(previousRows.map((row) => [row.key, row]))
+	const shifts: Array<{ key: string; deltaPx: number }> = []
+	for (const row of rows) {
+		const old = previousByKey.get(row.key)
+		if (row._tag !== "MessageRow" || old === undefined || old._tag !== "MessageRow") continue
+		const before = old.groupPosition
+		const after = row.groupPosition
+		// A row that starts or stops starting a group also gains or loses its header: left to measure.
+		if (before === after || startsGroup(before) !== startsGroup(after)) continue
+		shifts.push({
+			key: row.key,
+			deltaPx: (Number(endsGroup(after)) - Number(endsGroup(before))) * GROUP_MARGIN_PX,
+		})
+	}
+	return shifts
+}

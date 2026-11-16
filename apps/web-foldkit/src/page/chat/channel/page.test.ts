@@ -220,14 +220,13 @@ describe("channel page list", () => {
 			update,
 			given(atEnd),
 			message(loaded(page(70, 100))),
+			// Not measured yet, the one-line message is laid out as tall as the measured one-line
+			// messages before it, not at the estimate, so it does not move once measured.
 			model((current) => {
 				expect(current.list.anchor._tag).toBe("End")
-				expect(current.list.scrollTop).toBe(endBefore + ESTIMATE)
+				expect(current.list.scrollTop).toBe(endBefore + ROW)
 			}),
-			Command.resolve(
-				MessageList.ApplyScroll,
-				applied(atEnd.list.scrollVersion + 1, endBefore + ESTIMATE),
-			),
+			Command.resolve(MessageList.ApplyScroll, applied(atEnd.list.scrollVersion + 1, endBefore + ROW)),
 		)
 	})
 

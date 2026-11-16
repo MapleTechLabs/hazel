@@ -108,6 +108,7 @@ const row = (options: {
 		hasAuthor: true,
 		status: null,
 		isDiscordSynced: false,
+		isEntering: false,
 		agentName: null,
 		reply: null,
 		thread: null,

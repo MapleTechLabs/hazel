@@ -19,6 +19,8 @@ import {
 	replyIdsOf,
 	threadIdsOf,
 	toDeriveContext,
+	likeRowsOf,
+	marginShiftsOf,
 	toDisplayRows,
 	toThreadRows,
 	unfurlRequestsOf,
@@ -275,6 +277,10 @@ const deriveRows = (current: Model): PageReturn => {
 			withRows.list,
 			shareKeys(withRows.list.keys, rows),
 			shareStickyKeys(withRows.list.stickyKeys, rows),
+			{
+				likeRowsOf: (heights, previous) => likeRowsOf(rows, heights, previous),
+				heightShifts: marginShiftsOf(model.rows, rows),
+			},
 		),
 	)
 	return { ...listed, commands: [...(requested.commands ?? []), ...(listed.commands ?? [])] }
