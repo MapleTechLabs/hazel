@@ -45,16 +45,13 @@ export const AuthorizeAgent = Command.define("AuthorizeAgent", {
 		approve: Schema.Boolean,
 	},
 	messages: [Message.LeftPage, Message.FailedAuthorize],
-	execute: ({ scope, state, ...request }) =>
-		HazelApiClient.use((client) =>
-			client.agentAccess.authorizeAgent({
-				// The payload is a `Schema.Class`: a plain object fails to encode before the request is sent.
-				payload: new AuthorizeAgentRequest({
-					...request,
-					...(scope === null ? {} : { scope }),
-					...(state === null ? {} : { state }),
-				}),
-			}),
+	execute: ({ scope, state, ...request }) => {
+		const fields: { -readonly [K in keyof AuthorizeAgentRequest]: AuthorizeAgentRequest[K] } = request
+		if (scope !== null) fields.scope = scope
+		if (state !== null) fields.state = state
+		return HazelApiClient.use((client) =>
+			// The payload is a `Schema.Class`: a plain object fails to encode before the request is sent.
+			client.agentAccess.authorizeAgent({ payload: new AuthorizeAgentRequest(fields) }),
 		).pipe(
 			Effect.flatMap(({ redirectTo }) => load(redirectTo)),
 			Effect.as(Message.LeftPage()),
@@ -62,7 +59,8 @@ export const AuthorizeAgent = Command.define("AuthorizeAgent", {
 				AgentClientInvalidError: () => Effect.succeed(Message.FailedAuthorize({ reason: "Invalid" })),
 			}),
 			catchCommon((reason) => Message.FailedAuthorize({ reason })),
-		),
+		)
+	},
 })
 
 /** Sign in, then come back to this link. */
