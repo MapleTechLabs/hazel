@@ -254,13 +254,14 @@ const NativeImageViewerModal = Mount.defineStream("ImageViewerNativeModal", {
 /** The phone shell's swipe pages the native viewer (`platform/system-ui.ts`), where it has one. */
 const NativeSwipePager = Mount.defineStream("ImageViewerSwipePager", {
 	messages: [Intent.PressedClose, Intent.PressedSelect, Intent.Swiped],
-	execute: () =>
+	execute: ({ element }) =>
 		Stream.callback<Intent>((queue) =>
 			acquire(
 				() =>
-					systemUi()?.setSwipePager?.((step) =>
-						Queue.offerUnsafe(queue, Intent.Swiped({ step })),
-					) ?? NO_RELEASE,
+					systemUi()?.setSwipePager?.((step) => {
+						// A swipe landing after this slide left the page belongs to the next slide's pager.
+						if (element.isConnected) Queue.offerUnsafe(queue, Intent.Swiped({ step }))
+					}) ?? NO_RELEASE,
 			).pipe(Effect.flatMap(() => Effect.never)),
 		),
 })
@@ -531,14 +532,10 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 					...(isNative && hasMany && systemUi()?.setSwipePager !== undefined
 						? [
 								// Remounted on every slide, so a swipe steps from the slide on view.
-								h.keyed("span")(
-									`swipe:${selectedIndex}`,
-									[
-										h.Class("hidden"),
-										h.OnMount(Mount.mapMessage(NativeSwipePager(), toMessage)),
-									],
-									[],
-								),
+								h.keyed("span")(`swipe:${selectedIndex}`, [
+									h.Class("hidden"),
+									h.OnMount(Mount.mapMessage(NativeSwipePager(), toMessage)),
+								]),
 							]
 						: []),
 					h.div(

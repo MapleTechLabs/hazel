@@ -45,6 +45,8 @@ const oauthError = (error: string, description: string, status = 400) =>
 	)
 
 const decodeClientId = Schema.decodeUnknownOption(AgentClientId)
+/** A JSON token request's string fields (other values are not OAuth parameters). */
+const decodeJsonParams = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.String))
 
 const RegistrationRequest = Schema.Struct({
 	client_name: Schema.optional(Schema.String),
@@ -82,9 +84,9 @@ const readParams = Effect.gen(function* () {
 	const body = yield* readBody
 	if ((request.headers["content-type"] ?? "").includes("application/json")) {
 		try {
-			const parsed = JSON.parse(body) as Record<string, unknown>
+			const parsed = decodeJsonParams(JSON.parse(body))
 			return new Map(
-				Object.entries(parsed).flatMap(([k, v]) => (typeof v === "string" ? [[k, v] as const] : [])),
+				Option.match(parsed, { onNone: () => [], onSome: (params) => Object.entries(params) }),
 			)
 		} catch {
 			return new Map<string, string>()

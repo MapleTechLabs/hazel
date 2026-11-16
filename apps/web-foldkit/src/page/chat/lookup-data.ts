@@ -132,16 +132,16 @@ export const discordSyncedStream = <M>(
 		(rows) => toMessage(rows.map((row) => row.hazelMessageId)),
 	)
 
-/** The channel's agent-written messages (`message_agent_marks`). */
+/** Agent-written messages (`message_agent_marks`) in `channelIds`: a channel and its open thread. */
 export const agentMarksStream = <M>(
-	channelId: ChannelId,
+	channelIds: ReadonlyArray<ChannelId>,
 	toMessage: (marks: ReadonlyArray<AgentMarkInfo>) => M,
 ) =>
 	liveQueryStream<AgentMarkInfo, M>(
 		(q) =>
 			q
 				.from({ mark: messageAgentMarkCollection })
-				.where(({ mark }) => eq(mark.channelId, channelId))
+				.where(({ mark }) => inArray(mark.channelId, [...channelIds]))
 				.select(({ mark }) => ({ id: mark.id, agentName: mark.agentName })),
 		(rows) => toMessage(rows),
 	)

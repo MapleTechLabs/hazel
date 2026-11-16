@@ -42,3 +42,13 @@ export const Model = Schema.Struct({
 	revoking: Schema.NullOr(AgentGrantId),
 })
 export type Model = typeof Model.Type
+
+/** The longest token name the API takes (`CreateAgentTokenRequest`). */
+export const TOKEN_NAME_MAX = 80
+
+/**
+ * A token may be created with a name, and once the one on show is dismissed: its secret is
+ * shown only once, so a second creation must not replace it.
+ */
+export const canCreateToken = (model: Model) =>
+	!model.isCreating && model.createdToken === null && model.tokenName.trim().length > 0

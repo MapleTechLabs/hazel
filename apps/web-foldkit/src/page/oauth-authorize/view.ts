@@ -13,7 +13,7 @@ import { Message } from "./message"
 import { type ApproveFailure, type ClientSummary, Lookup, type Model } from "./model"
 
 /** What each scope lets the agent do, in the user's words. */
-const SCOPE_ABILITIES: Readonly<Record<AgentScope, ReadonlyArray<string>>> = {
+const SCOPE_ABILITIES = {
 	"messages:read": ["Read your channels, direct messages and threads", "See messages that mention you"],
 	"messages:write": [
 		"Send messages and replies as you",
@@ -22,7 +22,7 @@ const SCOPE_ABILITIES: Readonly<Record<AgentScope, ReadonlyArray<string>>> = {
 		"Edit and delete your messages",
 		"Set your status",
 	],
-}
+} satisfies Readonly<Record<AgentScope, ReadonlyArray<string>>>
 
 const homeLink = (h: HtmlBuilder<Message>): Html =>
 	h.a(

@@ -17,6 +17,7 @@ import {
 	ChannelResponse,
 	CreateThreadRequest,
 	type MessageResponse,
+	type MessageSearchPayload,
 	type MessageSearchResponse,
 } from "@hazel/domain/rpc"
 import { AttachmentId, ChannelId, MessageId, OrganizationId, type UserId } from "@hazel/schema"
@@ -45,6 +46,13 @@ import { agentOAuthConfig, protectedResourceMetadataUrl } from "./agent-oauth"
 
 const SUPPORTED_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"]
 const MAX_CONTENT_LENGTH = 8000
+/** The largest JSON-RPC body read: a 10 MB file as base64 (4/3) and room for the envelope. */
+const MAX_REQUEST_BYTES = 14 * 1024 * 1024
+
+const tooLarge = HttpServerResponse.jsonUnsafe(
+	{ jsonrpc: "2.0", id: null, error: { code: -32600, message: "The request is too large" } },
+	{ status: 413 },
+)
 
 const INSTRUCTIONS = `Hazel is a team chat app. These tools act as the signed-in user.
 Messages you send, reply or edit are shown to the user's organization as written by an agent ("via <your app name>").
@@ -115,6 +123,12 @@ const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
 const decodeMessageId = Schema.decodeUnknownOption(MessageId)
 const decodeOrgId = Schema.decodeUnknownOption(OrganizationId)
 const decodeAttachmentId = Schema.decodeUnknownOption(AttachmentId)
+const decodeCallParams = Schema.decodeUnknownOption(
+	Schema.Struct({
+		name: Schema.String,
+		arguments: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+	}),
+)
 /** How long a `create_upload_url` URL stays valid. */
 const UPLOAD_URL_TTL_SECONDS = 15 * 60
 
@@ -182,34 +196,87 @@ interface MessageLike {
 	readonly channelId: string
 }
 
+/** A message as a tool returns it. */
+interface PresentedMessage {
+	readonly id: string
+	readonly channel_id: string
+	readonly author: { readonly id: string; readonly name: string }
+	readonly content: string
+	readonly created_at: string
+	edited_at?: string
+	reply_to_message_id?: string
+	thread_channel_id?: string
+}
+
+interface SentResult {
+	readonly sent: true
+	readonly message: PresentedMessage | undefined
+	attachment_ids?: ReadonlyArray<AttachmentId>
+}
+
+interface ListedChannel {
+	readonly id: string
+	readonly organization_id: string
+	readonly name: string
+	readonly type: string
+	readonly unread_count: number
+	muted?: true
+}
+
+interface SearchResult {
+	readonly results: ReadonlyArray<unknown>
+	note?: string
+}
+
+/** `userPresenceStatus.update`'s payload, as far as `set_status` sets it. */
+interface StatusUpdate {
+	status?: (typeof PRESENCE)[number]
+	statusEmoji?: string | null
+	customMessage?: string | null
+	statusExpiresAt?: Date | null
+}
+
+interface StatusResult {
+	cleared?: true
+	presence?: (typeof PRESENCE)[number]
+	emoji?: string | null
+	message?: string | null
+	expires_at?: string
+}
+
 /** Messages as the agent reads them: author names, mentions shown as `@Name (userId)`. */
 const present = (messages: ReadonlyArray<MessageLike>) =>
 	Effect.gen(function* () {
 		const ids: Array<string> = []
 		for (const message of messages) {
 			ids.push(message.authorId)
-			for (const match of message.content.matchAll(MENTION)) ids.push(match[1]!)
+			for (const match of message.content.matchAll(MENTION)) {
+				const mentioned = match[1]
+				if (mentioned !== undefined) ids.push(mentioned)
+			}
 		}
 		const names = yield* namesOf(ids)
 		const iso = (at: Date | DateTime.Utc) =>
 			at instanceof Date ? at.toISOString() : DateTime.formatIso(at)
 		const ms = (at: Date | DateTime.Utc) =>
 			at instanceof Date ? at.getTime() : DateTime.toEpochMillis(at)
-		return messages.map((message) => ({
-			id: message.id,
-			channel_id: message.channelId,
-			author: { id: message.authorId, name: names.get(message.authorId) ?? "Unknown" },
-			content: message.content.replace(
-				MENTION,
-				(whole, id: string) => `@${names.get(id) ?? "someone"} (${whole})`,
-			),
-			created_at: iso(message.createdAt),
-			...(message.updatedAt !== null && ms(message.updatedAt) > ms(message.createdAt)
-				? { edited_at: iso(message.updatedAt) }
-				: {}),
-			...(message.replyToMessageId === null ? {} : { reply_to_message_id: message.replyToMessageId }),
-			...(message.threadChannelId === null ? {} : { thread_channel_id: message.threadChannelId }),
-		}))
+		return messages.map((message) => {
+			const shown: PresentedMessage = {
+				id: message.id,
+				channel_id: message.channelId,
+				author: { id: message.authorId, name: names.get(message.authorId) ?? "Unknown" },
+				content: message.content.replace(
+					MENTION,
+					(whole, id: string) => `@${names.get(id) ?? "someone"} (${whole})`,
+				),
+				created_at: iso(message.createdAt),
+			}
+			if (message.updatedAt !== null && ms(message.updatedAt) > ms(message.createdAt))
+				shown.edited_at = iso(message.updatedAt)
+			if (message.replyToMessageId !== null) shown.reply_to_message_id = message.replyToMessageId
+			if (message.threadChannelId !== null) shown.thread_channel_id = message.threadChannelId
+			return shown
+		})
 	})
 
 /** The user's own message in its channel; edits and deletes go no further. */
@@ -255,17 +322,25 @@ const sendIn = (
 	content: string,
 	replyToMessageId: MessageId | null,
 	attachmentIds: ReadonlyArray<AttachmentId> = [],
+	knownHost?: ReturnType<typeof channelTarget>,
 ) =>
 	Effect.gen(function* () {
-		const { host } = yield* channelInfo(channelId)
+		const host = knownHost ?? (yield* channelInfo(channelId)).host
 		yield* rateLimited(ctx)
 		// A presigned upload is finished once its file is in the bucket; mark it complete then.
 		for (const id of attachmentIds) {
 			const stored = yield* ctx.storage
-				.exists(id)
+				.storedSize(id)
 				.pipe(Effect.mapError((error) => toolError(error.message)))
-			if (!stored)
+			if (Option.isNone(stored))
 				return yield* toolError(`File ${id} is not uploaded yet: PUT it to its upload_url first`)
+			// A presigned PUT does not bound the body: the limit is checked on what was stored.
+			if (stored.value > MAX_ATTACHMENT_SIZE) {
+				yield* forward(host, "attachment.fail", { id, channelId, reason: "Larger than 10 MB" }).pipe(
+					Effect.ignore,
+				)
+				return yield* toolError(`File ${id} is larger than 10 MB`)
+			}
 			yield* forward(host, "attachment.complete", { id, channelId })
 		}
 		const response = yield* forward<MessageResponse>(host, "message.create", {
@@ -276,13 +351,11 @@ const sendIn = (
 			embeds: null,
 			replyToMessageId,
 			threadChannelId: null,
-			...(attachmentIds.length === 0 ? {} : { attachmentIds: [...attachmentIds] }),
+			attachmentIds: [...attachmentIds],
 		})
-		return {
-			sent: true,
-			message: (yield* present([response.data]))[0],
-			...(attachmentIds.length === 0 ? {} : { attachment_ids: attachmentIds }),
-		}
+		const sent: SentResult = { sent: true, message: (yield* present([response.data]))[0] }
+		if (attachmentIds.length > 0) sent.attachment_ids = attachmentIds
+		return sent
 	})
 
 /** The content type a file is stored with; active types (HTML, SVG…) only as a download. */
@@ -291,26 +364,26 @@ const storedContentType = (fileName: string, given: unknown) => {
 	return isActiveContentType(type) ? "application/octet-stream" : type
 }
 
-const EXTENSION_TYPES: Record<string, string> = {
-	png: "image/png",
-	jpg: "image/jpeg",
-	jpeg: "image/jpeg",
-	gif: "image/gif",
-	webp: "image/webp",
-	pdf: "application/pdf",
-	txt: "text/plain",
-	md: "text/markdown",
-	csv: "text/csv",
-	json: "application/json",
-	zip: "application/zip",
-	mp4: "video/mp4",
-	mov: "video/quicktime",
-	mp3: "audio/mpeg",
-	wav: "audio/wav",
-}
+const EXTENSION_TYPES = new Map([
+	["png", "image/png"],
+	["jpg", "image/jpeg"],
+	["jpeg", "image/jpeg"],
+	["gif", "image/gif"],
+	["webp", "image/webp"],
+	["pdf", "application/pdf"],
+	["txt", "text/plain"],
+	["md", "text/markdown"],
+	["csv", "text/csv"],
+	["json", "application/json"],
+	["zip", "application/zip"],
+	["mp4", "video/mp4"],
+	["mov", "video/quicktime"],
+	["mp3", "audio/mpeg"],
+	["wav", "audio/wav"],
+])
 
 const guessContentType = (fileName: string) =>
-	EXTENSION_TYPES[fileName.split(".").pop()?.toLowerCase() ?? ""] ?? "application/octet-stream"
+	EXTENSION_TYPES.get(fileName.split(".").pop()?.toLowerCase() ?? "") ?? "application/octet-stream"
 
 const argFileName = (args: Record<string, unknown>) => {
 	const name = typeof args.file_name === "string" ? args.file_name.trim().replace(/[\\/]/g, "_") : ""
@@ -395,17 +468,20 @@ const tools: ReadonlyArray<Tool> = [
 					),
 				)
 				return {
-					channels: lists.flat().map((channel) => ({
-						id: channel.id,
-						organization_id: channel.organizationId,
-						name:
-							channel.type === "direct" || channel.type === "single"
-								? channel.members.join(", ") || channel.name
-								: channel.name,
-						type: channel.type,
-						unread_count: channel.unreadCount,
-						...(channel.isMuted ? { muted: true } : {}),
-					})),
+					channels: lists.flat().map((channel) => {
+						const shown: ListedChannel = {
+							id: channel.id,
+							organization_id: channel.organizationId,
+							name:
+								channel.type === "direct" || channel.type === "single"
+									? channel.members.join(", ") || channel.name
+									: channel.name,
+							type: channel.type,
+							unread_count: channel.unreadCount,
+						}
+						if (channel.isMuted) shown.muted = true
+						return shown
+					}),
 				}
 			}),
 	},
@@ -470,20 +546,19 @@ const tools: ReadonlyArray<Tool> = [
 						: args.organization_id !== undefined
 							? Option.toArray(decodeOrgId(args.organization_id))
 							: yield* directory.organizationsOf(ctx.user.id).pipe(Effect.orDie)
-				const pages = yield* Effect.forEach(orgIds, (organizationId) =>
-					forward<MessageSearchResponse>(orgTarget(organizationId), "message.search", {
-						organizationId,
-						query,
-						limit,
-						...(channelId === undefined ? {} : { channelId }),
-					}),
-				)
+				const pages = yield* Effect.forEach(orgIds, (organizationId) => {
+					const search: MessageSearchPayload =
+						channelId === undefined
+							? { organizationId, query, limit }
+							: { organizationId, query, limit, channelId }
+					return forward<MessageSearchResponse>(orgTarget(organizationId), "message.search", search)
+				})
 				const hits = pages
 					.flatMap((page) => page.results)
 					.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
 					.slice(0, limit)
 				const names = yield* namesOf(hits.map((hit) => hit.authorId))
-				return {
+				const found: SearchResult = {
 					results: hits.map((hit) => ({
 						message_id: hit.messageId,
 						channel_id: hit.channelId,
@@ -491,10 +566,10 @@ const tools: ReadonlyArray<Tool> = [
 						created_at: hit.createdAt.toISOString(),
 						snippet: hit.snippet,
 					})),
-					...(pages.some((page) => page.indexing)
-						? { note: "Search is still indexing; results may be incomplete" }
-						: {}),
 				}
+				if (pages.some((page) => page.indexing))
+					found.note = "Search is still indexing; results may be incomplete"
+				return found
 			}),
 	},
 	{
@@ -704,7 +779,12 @@ const tools: ReadonlyArray<Tool> = [
 						"channel.createThread",
 						new CreateThreadRequest({ messageId, channelId, organizationId }),
 					)).data.id
-				return { thread_channel_id: threadId, ...(yield* sendIn(ctx, threadId, content, null)) }
+				// A thread is a channel of its own object. A new one may not be in the directory yet
+				// (its index row is published after `channel.createThread` answers), so no lookup.
+				return {
+					thread_channel_id: threadId,
+					...(yield* sendIn(ctx, threadId, content, null, [], channelTarget(threadId))),
+				}
 			}),
 	},
 	{
@@ -793,7 +873,9 @@ const tools: ReadonlyArray<Tool> = [
 					yield* forward(target, "userPresenceStatus.clearStatus", {})
 					if (presence !== undefined)
 						yield* forward(target, "userPresenceStatus.update", { status: presence })
-					return { cleared: true, ...(presence === undefined ? {} : { presence }) }
+					const cleared: StatusResult = { cleared: true }
+					if (presence !== undefined) cleared.presence = presence
+					return cleared
 				}
 				const emoji =
 					typeof args.emoji === "string" && args.emoji.trim() !== "" ? args.emoji.trim() : undefined
@@ -816,21 +898,22 @@ const tools: ReadonlyArray<Tool> = [
 						? null
 						: new Date(Date.now() + Math.min(Math.max(minutes, 1), 43200) * 60_000)
 				const custom = emoji !== undefined || message !== undefined
-				yield* forward(target, "userPresenceStatus.update", {
-					...(presence === undefined ? {} : { status: presence }),
-					...(custom
-						? {
-								statusEmoji: emoji ?? null,
-								customMessage: message ?? null,
-								statusExpiresAt: expiresAt,
-							}
-						: {}),
-				})
-				return {
-					...(custom ? { emoji: emoji ?? null, message: message ?? null } : {}),
-					...(custom && expiresAt !== null ? { expires_at: expiresAt.toISOString() } : {}),
-					...(presence === undefined ? {} : { presence }),
+				const update: StatusUpdate = {}
+				const result: StatusResult = {}
+				if (presence !== undefined) {
+					update.status = presence
+					result.presence = presence
 				}
+				if (custom) {
+					update.statusEmoji = emoji ?? null
+					update.customMessage = message ?? null
+					update.statusExpiresAt = expiresAt
+					result.emoji = emoji ?? null
+					result.message = message ?? null
+					if (expiresAt !== null) result.expires_at = expiresAt.toISOString()
+				}
+				yield* forward(target, "userPresenceStatus.update", update)
+				return result
 			}),
 	},
 	{
@@ -886,10 +969,10 @@ const toolListing = (scopes: ReadonlyArray<AgentScope>) =>
 
 const callTool = (params: Record<string, unknown> | undefined, ctx: ToolContext) =>
 	Effect.gen(function* () {
-		const name = typeof params?.name === "string" ? params.name : ""
-		const args = (
-			typeof params?.arguments === "object" && params.arguments !== null ? params.arguments : {}
-		) as Record<string, unknown>
+		const call = decodeCallParams(params)
+		if (Option.isNone(call)) return yield* toolError("tools/call needs a tool name")
+		const name = call.value.name
+		const args = call.value.arguments ?? {}
 		const tool = tools.find((candidate) => candidate.name === name)
 		if (tool === undefined) return yield* toolError(`Unknown tool ${name}`)
 		if (!ctx.agent.scopes.includes(tool.scope))
@@ -950,7 +1033,8 @@ const loadUser = (userId: UserId) =>
 		const row = yield* (yield* Directory).db.first(
 			SQLite.from(schema.usersTable)
 				.select()
-				.where(($) => [$.id.eq(userId), $.deletedAt.isNull()]),
+				// A user whose sign-in was deactivated loses their agents too.
+				.where(($) => [$.id.eq(userId), $.deletedAt.isNull(), $.authActive.eq(true)]),
 		)
 		return Option.map(
 			row,
@@ -1011,7 +1095,11 @@ export const McpRoute = HttpRouter.use((router) =>
 					"user.id": user.value.id,
 				})
 
+				// `upload_file` carries a file of up to 10 MB as base64; nothing larger is read.
+				const declared = Number(request.headers["content-length"] ?? "0")
+				if (declared > MAX_REQUEST_BYTES) return tooLarge
 				const body = yield* request.text.pipe(Effect.orElseSucceed(() => ""))
+				if (body.length > MAX_REQUEST_BYTES) return tooLarge
 				let parsed: unknown
 				try {
 					parsed = JSON.parse(body)

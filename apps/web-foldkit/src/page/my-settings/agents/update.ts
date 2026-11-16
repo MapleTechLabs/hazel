@@ -4,9 +4,9 @@ import { errorToast, successToast } from "../../../data/actions"
 import type { RouteOf } from "../../../route"
 import type { PageReturn } from "../../contract"
 import { PageOutMessage } from "../../out-message"
-import { CopyText, CreateToken, FetchGrants, RevokeGrant } from "./command"
+import { CopyAgentText, CreateAgentToken, FetchAgentGrants, RevokeAgentGrant } from "./command"
 import { Message } from "./message"
-import { Grants, type Model } from "./model"
+import { canCreateToken, Grants, type Model, TOKEN_NAME_MAX } from "./model"
 
 type Return = PageReturn<Model, Message>
 
@@ -21,7 +21,7 @@ export const init = (route: RouteOf<"MySettingsAgents">): Return => ({
 		confirmingRevoke: null,
 		revoking: null,
 	},
-	commands: [FetchGrants()],
+	commands: [FetchAgentGrants()],
 })
 
 const toast = (
@@ -42,7 +42,7 @@ export const update = (model: Model, message: Message): Return =>
 		}),
 		ClickedRetry: () => ({
 			model: modifyFields(model, { grants: () => Grants.Loading() }),
-			commands: [FetchGrants()],
+			commands: [FetchAgentGrants()],
 		}),
 		ClickedRevoke: ({ grantId }) =>
 			model.revoking !== null
@@ -54,7 +54,7 @@ export const update = (model: Model, message: Message): Return =>
 				? { model }
 				: {
 						model: modifyFields(model, { confirmingRevoke: () => null, revoking: () => grantId }),
-						commands: [RevokeGrant({ grantId })],
+						commands: [RevokeAgentGrant({ grantId })],
 					},
 		SucceededRevoke: ({ grantId }) =>
 			toast(
@@ -75,15 +75,17 @@ export const update = (model: Model, message: Message): Return =>
 				modifyFields(model, { revoking: () => null }),
 				errorToast("Couldn't disconnect the agent", commonMessage(reason).title),
 			),
-		ChangedTokenName: ({ value }) => ({ model: modifyFields(model, { tokenName: () => value }) }),
+		ChangedTokenName: ({ value }) => ({
+			model: modifyFields(model, { tokenName: () => value.slice(0, TOKEN_NAME_MAX) }),
+		}),
 		SelectedTokenAccess: ({ access }) => ({ model: modifyFields(model, { tokenAccess: () => access }) }),
 		ClickedCreateToken: () => {
 			const name = model.tokenName.trim()
-			return model.isCreating || name.length === 0
+			return !canCreateToken(model)
 				? { model }
 				: {
 						model: modifyFields(model, { isCreating: () => true }),
-						commands: [CreateToken({ name, access: model.tokenAccess })],
+						commands: [CreateAgentToken({ name, access: model.tokenAccess })],
 					}
 		},
 		SucceededCreateToken: ({ token, grant }) => ({
@@ -103,7 +105,7 @@ export const update = (model: Model, message: Message): Return =>
 				errorToast("Couldn't create the token", commonMessage(reason).title),
 			),
 		ClickedDismissToken: () => ({ model: modifyFields(model, { createdToken: () => null }) }),
-		ClickedCopy: ({ target, text }) => ({ model, commands: [CopyText({ target, text })] }),
+		ClickedCopy: ({ target, text }) => ({ model, commands: [CopyAgentText({ target, text })] }),
 		SucceededCopy: ({ target }) =>
 			toast(model, successToast(target === "Token" ? "Token copied" : "MCP URL copied")),
 		FailedCopy: () => toast(model, errorToast("Couldn't copy to the clipboard")),

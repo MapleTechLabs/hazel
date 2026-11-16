@@ -16,7 +16,7 @@ const toGrant = (grant: AgentGrantInfo): Grant => ({
 	lastUsedAtMs: grant.lastUsedAt === null ? null : DateTime.toEpochMillis(grant.lastUsedAt),
 })
 
-export const FetchGrants = Command.define("FetchAgentGrants", {
+export const FetchAgentGrants = Command.define("FetchAgentGrants", {
 	messages: [Message.SucceededFetchGrants, Message.FailedFetchGrants],
 	execute: HazelApiClient.use((client) => client.agentAccess.listAgentGrants()).pipe(
 		Effect.map((response) =>
@@ -26,7 +26,7 @@ export const FetchGrants = Command.define("FetchAgentGrants", {
 	),
 })
 
-export const RevokeGrant = Command.define("RevokeAgentGrant", {
+export const RevokeAgentGrant = Command.define("RevokeAgentGrant", {
 	args: { grantId: AgentGrantId },
 	messages: [Message.SucceededRevoke, Message.FailedRevoke],
 	execute: ({ grantId }) =>
@@ -43,7 +43,7 @@ export const RevokeGrant = Command.define("RevokeAgentGrant", {
 const scopesOf = (access: TokenAccess): Array<AgentScope> =>
 	access === "write" ? ["messages:read", "messages:write"] : ["messages:read"]
 
-export const CreateToken = Command.define("CreateAgentToken", {
+export const CreateAgentToken = Command.define("CreateAgentToken", {
 	args: { name: Schema.String, access: TokenAccess },
 	messages: [Message.SucceededCreateToken, Message.FailedCreateToken],
 	execute: ({ name, access }) =>
@@ -60,7 +60,7 @@ export const CreateToken = Command.define("CreateAgentToken", {
 		),
 })
 
-export const CopyText = Command.define("CopyAgentText", {
+export const CopyAgentText = Command.define("CopyAgentText", {
 	args: { target: CopyTarget, text: Schema.String },
 	messages: [Message.SucceededCopy, Message.FailedCopy],
 	execute: ({ target, text }) =>

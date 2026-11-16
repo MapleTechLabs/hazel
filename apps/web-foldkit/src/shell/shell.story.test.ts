@@ -118,7 +118,8 @@ describe("org switcher", () => {
 			expect(mobile.orgSwitcher.selectedKeys).toEqual([hazelOrg.id])
 		})
 
-		// B2: the "Single" menu selects the clicked key before the shell folds its OutMessage.
+		// B2: the "Single" menu selects the clicked key before the shell folds its OutMessage. A phone
+		// lands on the channel list, not the org home (#494).
 		test("another organization navigates to its slug", () => {
 			story(
 				runMobile,
@@ -127,7 +128,7 @@ describe("org switcher", () => {
 				message(orgSwitcher(clicked(otherOrgId, mobile.orgSwitcherEntries))),
 				expectOutMessage(
 					PageOutMessage.RequestedNavigation({
-						route: AppRoute.OrgHome({ orgSlug: "acme" }),
+						route: AppRoute.ChatIndex({ orgSlug: "acme" }),
 						replace: false,
 					}),
 				),

@@ -47,11 +47,7 @@ export const AuthorizeAgent = Command.define("AuthorizeAgent", {
 	execute: ({ scope, state, ...request }) =>
 		HazelApiClient.use((client) =>
 			client.agentAccess.authorizeAgent({
-				payload: {
-					...request,
-					...(scope === null ? {} : { scope }),
-					...(state === null ? {} : { state }),
-				},
+				payload: { ...request, scope: scope ?? undefined, state: state ?? undefined },
 			}),
 		).pipe(
 			Effect.flatMap(({ redirectTo }) => load(redirectTo)),

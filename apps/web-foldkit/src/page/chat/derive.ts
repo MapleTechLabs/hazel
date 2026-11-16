@@ -40,6 +40,13 @@ import {
 
 const GROUP_THRESHOLD_MS = 3 * 60 * 1000
 
+/**
+ * Both written the same way (by hand, or by the same agent): a change starts a new group, since
+ * the "via <agent>" badge is in the group's header.
+ */
+const sameAttribution = (context: DeriveContext, a: { readonly id: string }, b: { readonly id: string }) =>
+	context.agentNames.get(a.id) === context.agentNames.get(b.id)
+
 const toGroupPosition = (isGroupStart: boolean, isGroupEnd: boolean): GroupPosition =>
 	isGroupStart && isGroupEnd ? "standalone" : isGroupStart ? "start" : isGroupEnd ? "end" : "middle"
 
@@ -380,11 +387,13 @@ export const toDisplayRows = (
 			previous === null ||
 			message.authorId !== previous.authorId ||
 			message.createdAtMs - previous.createdAtMs > GROUP_THRESHOLD_MS ||
-			previous.replyToMessageId !== null
+			previous.replyToMessageId !== null ||
+			!sameAttribution(context, message, previous)
 		const isGroupEnd =
 			next === null ||
 			message.authorId !== next.authorId ||
-			next.createdAtMs - message.createdAtMs > GROUP_THRESHOLD_MS
+			next.createdAtMs - message.createdAtMs > GROUP_THRESHOLD_MS ||
+			!sameAttribution(context, message, next)
 
 		const date = new Date(message.createdAtMs).toDateString()
 		if (date !== lastDate) {
@@ -419,7 +428,11 @@ const sharedRow = (old: DisplayRow | undefined, data: MessageRowData): MessageRo
 		: { _tag: "MessageRow", ...data }
 
 /** `ThreadMessageListContent`'s grouping (oldest first). */
-const threadGroupPositionAt = (messages: ReadonlyArray<ChatMessage>, index: number): GroupPosition => {
+const threadGroupPositionAt = (
+	messages: ReadonlyArray<ChatMessage>,
+	index: number,
+	context: DeriveContext,
+): GroupPosition => {
 	const message = messages[index]!
 	const previous = index > 0 ? messages[index - 1]! : null
 	const next = index < messages.length - 1 ? messages[index + 1]! : null
@@ -427,11 +440,13 @@ const threadGroupPositionAt = (messages: ReadonlyArray<ChatMessage>, index: numb
 		previous === null ||
 		message.authorId !== previous.authorId ||
 		message.createdAtMs - previous.createdAtMs > GROUP_THRESHOLD_MS ||
-		previous.replyToMessageId !== null
+		previous.replyToMessageId !== null ||
+		!sameAttribution(context, message, previous)
 	const isEnd =
 		next === null ||
 		message.authorId !== next.authorId ||
-		next.createdAtMs - message.createdAtMs > GROUP_THRESHOLD_MS
+		next.createdAtMs - message.createdAtMs > GROUP_THRESHOLD_MS ||
+		!sameAttribution(context, message, next)
 	return toGroupPosition(isStart, isEnd)
 }
 
@@ -449,7 +464,7 @@ export const toThreadRows = (
 		sharedRow(previousByKey.get(message.id), {
 			...messageRowData(
 				message,
-				threadGroupPositionAt(messagesOldestFirst, index),
+				threadGroupPositionAt(messagesOldestFirst, index, context),
 				NO_REACTIONS,
 				context,
 			),

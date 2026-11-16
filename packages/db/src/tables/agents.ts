@@ -48,7 +48,11 @@ export const agentGrantsTable = SQLite.table("agent_grants", {
 })
 export type AgentGrant = SQLite.SelectRowOf<typeof agentGrantsTable>
 
-export const agentTokenKindEnum = textEnum(["access", "refresh", "personal"])
+/**
+ * `spent`: a refresh token already exchanged, kept until it would have expired so a second use is
+ * seen as the theft it is (RFC 9700 §4.14.2) and ends the grant.
+ */
+export const agentTokenKindEnum = textEnum(["access", "refresh", "personal", "spent"])
 
 /** A bearer credential of a grant, by its SHA-256 hex. `expiresAt` null: until revoked. */
 export const agentTokensTable = SQLite.table("agent_tokens", {

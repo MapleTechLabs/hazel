@@ -209,7 +209,7 @@ export const Message = defineMessageUnion({
 	UpdatedCustomEmojis: { customEmojis: Schema.Array(CustomEmojiInfo) },
 	UpdatedAttachments: { attachments: Schema.Array(AttachmentInfo) },
 	UpdatedDiscordSynced: { messageIds: Schema.Array(MessageId) },
-	UpdatedAgentMarks: { marks: Schema.Array(AgentMarkInfo) },
+	UpdatedAgentMarks: { channelId: ChannelId, marks: Schema.Array(AgentMarkInfo) },
 	UpdatedThreadChannels: { channels: Schema.Array(ThreadChannelInfo) },
 	UpdatedThreadMessages: { messages: Schema.Array(ThreadMessageInfo) },
 	UpdatedReplyTargets: { targets: Schema.Array(ReplyTarget) },

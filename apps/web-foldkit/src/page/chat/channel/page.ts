@@ -519,7 +519,9 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			),
 		UpdatedAttachments: ({ attachments }) => withLookup(model, "attachments", attachments),
 		UpdatedDiscordSynced: ({ messageIds }) => withLookup(model, "discordSyncedIds", messageIds),
-		UpdatedAgentMarks: ({ marks }) => withLookup(model, "agentMarks", marks),
+		// A late result from the channel just left must not replace the new channel's marks.
+		UpdatedAgentMarks: ({ channelId, marks }) =>
+			channelId === model.channelId ? withLookup(model, "agentMarks", marks) : { model },
 		UpdatedThreadChannels: ({ channels }) => withLookup(model, "threadChannels", channels),
 		UpdatedThreadMessages: ({ messages }) => withLookup(model, "threadMessages", messages),
 		UpdatedReplyTargets: ({ targets }) => withLookup(model, "replyTargets", targets),

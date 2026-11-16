@@ -8,7 +8,7 @@ import { createHash } from "node:crypto"
 import { NodeHttpPlatform, NodeServices } from "@effect/platform-node"
 import { SQLite, schema } from "@hazel/db"
 import type { AgentClientId, ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { ConfigProvider, Context, Effect, Layer, type Scope } from "effect"
+import { ConfigProvider, Context, Effect, Layer, Option, type Scope } from "effect"
 import { HttpRouter } from "effect/http"
 import { describe, expect, it } from "vitest"
 import { AgentAccess } from "../services/agent-access"
@@ -89,7 +89,10 @@ const makeWorld = Effect.gen(function* () {
 			Effect.sync(() => {
 				bucket.set(key, { bytes, contentType })
 			}),
-		exists: (key: string) => Effect.succeed(bucket.has(key)),
+		storedSize: (key: string) => {
+			const stored = bucket.get(key)
+			return Effect.succeed(stored === undefined ? Option.none() : Option.some(stored.bytes.byteLength))
+		},
 	} as never)
 	const services = Layer.mergeAll(
 		storage,
@@ -136,7 +139,11 @@ const mcp = (world: World, token: string, method: string, params?: Record<string
 		.fetch("/mcp", {
 			method: "POST",
 			headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-			body: JSON.stringify({ jsonrpc: "2.0", id: nextId++, method, ...(params ? { params } : {}) }),
+			body: JSON.stringify(
+				params === undefined
+					? { jsonrpc: "2.0", id: nextId++, method }
+					: { jsonrpc: "2.0", id: nextId++, method, params },
+			),
 		})
 		.pipe(Effect.flatMap(json))
 
@@ -322,6 +329,32 @@ describe("MCP server", () => {
 					client_id: clientId,
 				})
 				expect((yield* json(reused)).error).toBe("invalid_grant")
+				// Reusing a spent refresh token ends the grant: the chain refreshed from it stops too.
+				const stolen = yield* world.fetch("/mcp", {
+					method: "POST",
+					headers: { authorization: `Bearer ${refreshed.access_token}` },
+					body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+				})
+				expect(stolen.status).toBe(401)
+				expect(yield* world.access.listGrants(world.alice)).toEqual([])
+
+				// Sign in again for the rest.
+				const code3 = yield* world.access.createCode({
+					clientId,
+					userId: world.alice,
+					redirectUri,
+					codeChallenge: challenge,
+					scopes: ["messages:read", "messages:write"],
+				})
+				const again = yield* json(
+					yield* exchange({
+						grant_type: "authorization_code",
+						code: code3,
+						client_id: clientId,
+						redirect_uri: redirectUri,
+						code_verifier: verifier,
+					}),
+				)
 
 				// Revoking the grant ends every token at once.
 				const [grant] = yield* world.access.listGrants(world.alice)
@@ -329,7 +362,7 @@ describe("MCP server", () => {
 				expect(yield* world.access.revokeGrant(world.alice, grant!.id)).toBe(true)
 				const after = yield* world.fetch("/mcp", {
 					method: "POST",
-					headers: { authorization: `Bearer ${refreshed.access_token}` },
+					headers: { authorization: `Bearer ${again.access_token}` },
 					body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
 				})
 				expect(after.status).toBe(401)

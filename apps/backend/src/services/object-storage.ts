@@ -1,5 +1,5 @@
 import { AwsClient } from "aws4fetch"
-import { Config, Context, Effect, Layer, Redacted, Schema } from "effect"
+import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 
 export class ObjectStorageError extends Schema.TaggedError<ObjectStorageError>()("ObjectStorageError", {
 	message: Schema.String,
@@ -57,13 +57,19 @@ export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStora
 				})
 		})
 
-		/** Whether an object is stored at `key` (an upload through a presigned URL finished). */
-		const exists = Effect.fn("ObjectStorage.exists")(function* (key: string) {
+		/**
+		 * The size of the object stored at `key`, none when there is none (a presigned upload not
+		 * made yet). Any other answer from the bucket is an error, not "missing".
+		 */
+		const storedSize = Effect.fn("ObjectStorage.storedSize")(function* (key: string) {
 			const response = yield* Effect.tryPromise({
 				try: () => client.fetch(urlOf(key).toString(), { method: "HEAD" }),
 				catch: (cause) => new ObjectStorageError({ message: "Failed to check the file", cause }),
 			})
-			return response.ok
+			if (response.status === 404) return Option.none<number>()
+			if (!response.ok)
+				return yield* new ObjectStorageError({ message: `The bucket answered ${response.status}` })
+			return Option.some(Number(response.headers.get("content-length") ?? "0"))
 		})
 
 		const presignPut = Effect.fn("ObjectStorage.presignPut")(function* (
@@ -86,7 +92,7 @@ export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStora
 			return signed.url
 		})
 
-		return { presignPut, put, exists } as const
+		return { presignPut, put, storedSize } as const
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make)

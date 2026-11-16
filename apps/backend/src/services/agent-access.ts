@@ -117,6 +117,14 @@ export interface AgentPrincipal {
 	readonly scopes: ReadonlyArray<AgentScope>
 }
 
+/** The row an `INSERT … RETURNING` wrote; none is a broken invariant. */
+const returnedRow = <A>(rows: ReadonlyArray<A>) => {
+	const row = rows[0]
+	return row === undefined
+		? Effect.die(new Error("INSERT … RETURNING returned no row"))
+		: Effect.succeed(row)
+}
+
 const toScopes = (scopes: ReadonlyArray<string>) => parseAgentScopes(scopes.join(" "))
 
 export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/AgentAccess", {
@@ -156,7 +164,7 @@ export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/
 						})
 						.returning("id", "createdAt"),
 				)
-				.pipe(Effect.map((rows) => rows[0]!))
+				.pipe(Effect.flatMap(returnedRow))
 
 		const createCode = (input: {
 			readonly clientId: AgentClientId
@@ -253,7 +261,7 @@ export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/
 							})
 							.returning("id"),
 					)
-					.pipe(Effect.map((rows) => rows[0]!))
+					.pipe(Effect.flatMap(returnedRow))
 				return yield* issueTokens(grant.id, scopes)
 			}).pipe(Effect.withSpan("AgentAccess.exchangeCode"))
 
@@ -264,12 +272,29 @@ export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/
 					.where(($) => [$.id.eq(grantId), $.revokedAt.isNull()]),
 			)
 
-		/** `grant_type=refresh_token`: rotate; the old refresh token is spent. */
+		/** End a grant: no new tokens, and every token it issued stops working. */
+		const endGrant = (grantId: AgentGrantId) =>
+			Effect.gen(function* () {
+				yield* db.run(
+					SQLite.update(schema.agentGrantsTable)
+						.set({ revokedAt: new Date() })
+						.where(($) => [$.id.eq(grantId), $.revokedAt.isNull()]),
+				)
+				yield* db.run(
+					SQLite.deleteFrom(schema.agentTokensTable).where(($) => [$.grantId.eq(grantId)]),
+				)
+			})
+
+		/**
+		 * `grant_type=refresh_token`: rotate. The old refresh token is kept as `spent`; presenting it
+		 * again means it leaked (whoever refreshed first holds the live chain), so the grant ends.
+		 */
 		const refresh = (input: { readonly refreshToken: string; readonly clientId: string }) =>
 			Effect.gen(function* () {
 				const tokenHash = yield* sha256Hex(input.refreshToken)
-				const spent = yield* db.first(
-					SQLite.deleteFrom(schema.agentTokensTable)
+				const claimed = yield* db.first(
+					SQLite.update(schema.agentTokensTable)
+						.set({ kind: "spent" })
 						.where(($) => [
 							$.tokenHash.eq(tokenHash),
 							$.kind.eq("refresh"),
@@ -277,9 +302,22 @@ export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/
 						])
 						.returning("grantId"),
 				)
-				if (Option.isNone(spent))
+				if (Option.isNone(claimed)) {
+					const reused = yield* db.first(
+						SQLite.from(schema.agentTokensTable)
+							.select("grantId")
+							.where(($) => [$.tokenHash.eq(tokenHash), $.kind.eq("spent")]),
+					)
+					if (Option.isSome(reused)) {
+						yield* Effect.logWarning("Agent refresh token reused; ending its grant", {
+							grantId: reused.value.grantId,
+						})
+						yield* endGrant(reused.value.grantId)
+						return yield* invalidGrant("The refresh token was already used; sign in again")
+					}
 					return yield* invalidGrant("The refresh token is invalid or expired")
-				const grant = yield* liveGrant(spent.value.grantId)
+				}
+				const grant = yield* liveGrant(claimed.value.grantId)
 				if (Option.isNone(grant) || grant.value.clientId !== input.clientId)
 					return yield* invalidGrant("The grant was revoked")
 				return yield* issueTokens(grant.value.id, toScopes(grant.value.scopes))
@@ -295,7 +333,9 @@ export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/
 						.select()
 						.where(($) => [$.tokenHash.eq(tokenHash)]),
 				)
-				if (Option.isNone(row) || row.value.kind === "refresh") return Option.none<AgentPrincipal>()
+				// Only access and personal tokens authenticate (never a refresh or spent one).
+				if (Option.isNone(row) || (row.value.kind !== "access" && row.value.kind !== "personal"))
+					return Option.none<AgentPrincipal>()
 				if (row.value.expiresAt !== null && row.value.expiresAt.getTime() <= Date.now())
 					return Option.none<AgentPrincipal>()
 				const grant = yield* liveGrant(row.value.grantId)
@@ -360,7 +400,7 @@ export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/
 							})
 							.returning(),
 					)
-					.pipe(Effect.map((rows) => rows[0]!))
+					.pipe(Effect.flatMap(returnedRow))
 				const secret = yield* newSecret("personal")
 				yield* db.run(
 					SQLite.insertInto(schema.agentTokensTable).values({

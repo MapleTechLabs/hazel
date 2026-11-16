@@ -10,7 +10,7 @@ import { textField } from "../../../ui/text-field"
 import type { PageViewInputs } from "../../contract"
 import { divider, pageHeader, settingsRow } from "../shared"
 import { Message } from "./message"
-import { type CreatedToken, type Grant, Grants, type Model, type TokenAccess } from "./model"
+import { canCreateToken, type CreatedToken, type Grant, Grants, type Model, type TokenAccess } from "./model"
 
 const ago = (ms: number, nowMs: number) => formatDistanceStrict(ms, Math.max(ms, nowMs), { addSuffix: true })
 
@@ -132,7 +132,7 @@ const createSection = (h: HtmlBuilder<Message>, model: Model): Html =>
 						id: "agent-token-name",
 						value: model.tokenName,
 						onInput: (value) => Message.ChangedTokenName({ value }),
-						isDisabled: model.isCreating,
+						isDisabled: model.isCreating || model.createdToken !== null,
 					},
 					(field) => [
 						field.label(["Name"]),
@@ -151,7 +151,7 @@ const createSection = (h: HtmlBuilder<Message>, model: Model): Html =>
 							{
 								intent: "primary",
 								size: "sm",
-								isDisabled: model.isCreating || model.tokenName.trim().length === 0,
+								isDisabled: !canCreateToken(model),
 								onPress: Message.ClickedCreateToken(),
 							},
 							[model.isCreating ? "Creating..." : "Create token"],
