@@ -7,7 +7,7 @@ import { IconChatBubble, IconClock, IconDotsVertical, IconPhone } from "../icons
 import type { PresenceInfo, UserInfo } from "../page/chat/lookups"
 import { avatar } from "../ui/avatar"
 import { badge } from "../ui/badge"
-import { button } from "../ui/button"
+import { button, buttonClassName } from "../ui/button"
 import { menuTriggerClassName } from "../ui/menu-view"
 
 /** `UserProfilePopover`'s `PopoverBody` (the trigger is the message avatar). */
@@ -19,6 +19,8 @@ export interface ProfileInputs {
 	readonly isBot: boolean
 	readonly presence: PresenceInfo | null
 	readonly isOwnProfile: boolean
+	/** Where "Edit profile" (own profile only) leads: the settings profile page. */
+	readonly editProfileHref: string
 	readonly nowMs: number
 }
 
@@ -33,7 +35,15 @@ const statusIntent = (status: PresenceStatus) =>
 
 const actionBar = <M>(h: HtmlBuilder<M>, inputs: ProfileInputs): ReadonlyArray<Html> =>
 	inputs.isOwnProfile
-		? [button(h, { size: "sm", intent: "primary", className: "flex-1" }, ["Edit profile"])]
+		? [
+				h.a(
+					[
+						h.Class(buttonClassName({ size: "sm", intent: "primary" }, "flex-1")),
+						h.Href(inputs.editProfileHref),
+					],
+					["Edit profile"],
+				),
+			]
 		: [
 				button(h, { size: "sm", intent: "primary", className: "flex-1" }, [
 					IconChatBubble(h, { attributes: { "data-slot": "icon" } }),
