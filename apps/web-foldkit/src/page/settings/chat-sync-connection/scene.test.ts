@@ -8,7 +8,14 @@ import * as Menu from "../../../ui/menu"
 import { FocusTriggerOnPress } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
 import { successToast } from "../../../data/actions"
-import { makeShared, organizationId, pageScene, portalModalMounted, uuid } from "../../../test/pages-fixtures"
+import {
+	makeShared,
+	organizationId,
+	pageScene,
+	portalModalMounted,
+	userId,
+	uuid,
+} from "../../../test/pages-fixtures"
 import {
 	connection,
 	slackChannels,
@@ -21,7 +28,9 @@ import * as ConfirmAction from "../../shared/confirm-action"
 import { ExternalChannels } from "../chat-sync/providers"
 import {
 	CreateChannelLink,
+	CreateHazelChannelForLink,
 	DisconnectConnection,
+	FocusNewChannelName,
 	ListChannelLinks,
 	ListChatSyncConnectionsForConnection,
 	ListExternalChannels,
@@ -303,6 +312,66 @@ describe("link a channel", () => {
 			),
 			linkMenuMounted,
 			Scene.expect(Scene.text("general")).toExist(),
+		)
+	})
+
+	test("New channel creates a Hazel channel named after the picked channel, then links it", () => {
+		const created = { id: Schema.decodeSync(ChannelId)(uuid(42)), name: "dev-chat" }
+		Scene.scene(
+			config,
+			Scene.given(withoutLinks),
+			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
+			addLinkModalMounted,
+			Scene.click(Scene.within(dialog, Scene.role("button", { name: /dev-chat$/ }))),
+			Scene.click(Scene.within(dialog, Scene.role("radio", { name: "New channel" }))),
+			Scene.Command.resolve(FocusNewChannelName, Message.CompletedFocusChannelSearch()),
+			Scene.expect(Scene.within(dialog, Scene.text(/Creates a public channel, #dev-chat/))).toExist(),
+			Scene.click(inDialog("Create and link")),
+			Scene.Command.expectExact(
+				CreateHazelChannelForLink({ organizationId, currentUserId: userId, name: "dev-chat" }),
+			),
+			Scene.expect(inDialog("Creating channel...")).toBeDisabled(),
+			Scene.Command.resolve(
+				CreateHazelChannelForLink,
+				Message.SucceededCreateHazelChannel({ channel: created }),
+			),
+			Scene.Command.expectExact(
+				CreateChannelLink({
+					syncConnectionId,
+					hazelChannelId: created.id,
+					hazelChannelName: "dev-chat",
+					externalChannelId: discordChannel.id,
+					externalChannelName: "dev-chat",
+					direction: "both",
+				}),
+			),
+			Scene.expect(inDialog("Linking...")).toBeDisabled(),
+			// A failed link retries against the created channel instead of creating another.
+			Scene.Command.resolve(CreateChannelLink, Message.FailedCreateLink({ reason: "AlreadyLinked" })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "Link already exists",
+						description: "This channel is already synced.",
+					},
+				}),
+			),
+			Scene.expect(Scene.within(dialog, Scene.text("dev-chat"))).toExist(),
+			Scene.expect(inDialog("Link Channel")).toBeEnabled(),
+		)
+	})
+
+	test("a Hazel search with no match offers to create that channel", () => {
+		Scene.scene(
+			config,
+			Scene.given(withoutLinks),
+			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
+			addLinkModalMounted,
+			Scene.type(Scene.placeholder("Search channels..."), "releases"),
+			Scene.click(Scene.within(dialog, Scene.role("button", { name: /Create\s*#releases/ }))),
+			Scene.Command.resolve(FocusNewChannelName, Message.CompletedFocusChannelSearch()),
+			Scene.expect(Scene.within(dialog, Scene.text(/Creates a public channel, #releases/))).toExist(),
 		)
 	})
 

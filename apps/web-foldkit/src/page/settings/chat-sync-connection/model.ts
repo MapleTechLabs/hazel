@@ -8,6 +8,7 @@ import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import * as ConfirmAction from "../../shared/confirm-action"
+import { ToastRequest } from "../../../overlay/toasts"
 import {
 	type ChatSyncProvider,
 	ExternalChannel,
@@ -60,9 +61,13 @@ export const CreateLinkFailure = Schema.Union([
 ])
 export type CreateLinkFailure = typeof CreateLinkFailure.Type
 
-/** The link modal's Link Channel: not pressed yet, linking, or failed (the modal stays open to retry). */
+/**
+ * The link modal's Link Channel: not pressed yet, creating the new Hazel channel, linking, or failed
+ * (the modal stays open to retry).
+ */
 export const Submission = defineTaggedUnion({
 	NotSubmitted: {},
+	CreatingChannel: {},
 	Submitting: {},
 	Failed: { reason: CreateLinkFailure },
 })
@@ -71,6 +76,10 @@ export type Submission = typeof Submission.Type
 /** A Hazel channel as `AddChannelLinkModal` lists it. */
 export const HazelChannel = Schema.Struct({ id: ChannelId, name: Schema.String })
 export type HazelChannel = typeof HazelChannel.Type
+
+/** Link to a channel the org already has, or create a new one for the link. */
+export const HazelChannelMode = Schema.Literals(["existing", "new"])
+export type HazelChannelMode = typeof HazelChannelMode.Type
 
 export const LinkTarget = Schema.Struct({ id: SyncChannelLinkId, name: Schema.String })
 export type LinkTarget = typeof LinkTarget.Type
@@ -92,6 +101,10 @@ export const Model = Schema.Struct({
 	externalChannels: ExternalChannels.schema,
 	hazelChannels: Schema.Array(HazelChannel),
 	selectedChannel: Schema.NullOr(HazelChannel),
+	hazelChannelMode: HazelChannelMode,
+	/** The new channel's name; follows the picked external channel's name until it is edited. */
+	newChannelName: Schema.String,
+	isNewChannelNameEdited: Schema.Boolean,
 	selectedExternalChannel: Schema.NullOr(ExternalChannel),
 	direction: SyncDirection,
 	channelSearch: Schema.String,
@@ -140,6 +153,12 @@ export const Message = defineMessageUnion({
 	CompletedFocusChannelSearch: {},
 	ClickedHazelChannel: { channel: HazelChannel },
 	ClickedChangeHazelChannel: {},
+	ClickedHazelChannelMode: { mode: HazelChannelMode },
+	ChangedNewChannelName: { value: Schema.String },
+	/** The Hazel search's "Create #name" row: a new channel named after the search. */
+	ClickedCreateChannelFromSearch: {},
+	SucceededCreateHazelChannel: { channel: HazelChannel },
+	FailedCreateHazelChannel: { toast: ToastRequest },
 	ClickedExternalChannel: { channel: ExternalChannel },
 	ClickedChangeExternalChannel: {},
 	ClickedDirection: { direction: SyncDirection },
@@ -168,6 +187,21 @@ export const directionLabel = (direction: SyncDirection, provider: ChatSyncProvi
 
 export const ADD_LINK_MODAL_ID = "chat-sync-add-link"
 export const CHANNEL_SEARCH_ID = `${ADD_LINK_MODAL_ID}-search`
+export const EXTERNAL_SEARCH_ID = `${ADD_LINK_MODAL_ID}-external-search`
+export const NEW_CHANNEL_NAME_ID = `${ADD_LINK_MODAL_ID}-new-name`
+
+/** A Slack or Discord name as a Hazel channel name: trimmed, at most 80 characters. */
+export const newChannelNameOf = (name: string): string => name.trim().slice(0, 80)
+
+export const isSubmitting = (model: Model): boolean =>
+	model.submission._tag === "Submitting" || model.submission._tag === "CreatingChannel"
+
+/** Both sides are chosen: a picked or named Hazel channel, and a picked external channel. */
+export const isLinkReady = (model: Model): boolean =>
+	model.selectedExternalChannel !== null &&
+	(model.hazelChannelMode === "new"
+		? newChannelNameOf(model.newChannelName).length > 0
+		: model.selectedChannel !== null)
 
 export const linkMenuId = (linkId: string) => `chat-sync-link-${linkId}`
 

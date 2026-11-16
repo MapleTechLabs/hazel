@@ -16,8 +16,10 @@ import * as ConfirmAction from "../../shared/confirm-action"
 import { ExternalChannels } from "../chat-sync/providers"
 import {
 	CreateChannelLink,
+	CreateHazelChannelForLink,
 	DisconnectConnection,
 	FocusChannelSearch,
+	FocusNewChannelName,
 	ListChannelLinks,
 	ListChatSyncConnectionsForConnection,
 	ListExternalChannels,
@@ -26,11 +28,13 @@ import {
 } from "./command"
 import {
 	ADD_LINK_MODAL_ID,
-	CHANNEL_SEARCH_ID,
 	type ChannelLink,
 	ChannelLinks,
 	ConnectionLookup,
+	EXTERNAL_SEARCH_ID,
 	foundConnection,
+	type HazelChannel,
+	isSubmitting,
 	type LinkFailure,
 	type LinkTarget,
 	linkMenuId,
@@ -38,6 +42,7 @@ import {
 	listLinksFailureMessage,
 	Message,
 	type Model,
+	newChannelNameOf,
 	Submission,
 	SyncDirection,
 } from "./model"
@@ -79,10 +84,13 @@ export const init = (route: RouteOf<"SettingsChatSyncConnection">, shared: Share
 			updatingLinkIds: [],
 			channelNames: {},
 			linkMenus: [],
-			addLinkModal: Modal.init(ADD_LINK_MODAL_ID, { focusSelector: `#${CHANNEL_SEARCH_ID}` }),
+			addLinkModal: Modal.init(ADD_LINK_MODAL_ID, { focusSelector: `#${EXTERNAL_SEARCH_ID}` }),
 			externalChannels: ExternalChannels.Loading(),
 			hazelChannels: [],
 			selectedChannel: null,
+			hazelChannelMode: "existing",
+			newChannelName: "",
+			isNewChannelNameEdited: false,
 			selectedExternalChannel: null,
 			direction: "both",
 			channelSearch: "",
@@ -214,6 +222,9 @@ const addLinkModal = {
 			: modifyFields(model, {
 					addLinkModal: () => modal,
 					selectedChannel: () => null,
+					hazelChannelMode: () => "existing" as const,
+					newChannelName: () => "",
+					isNewChannelNameEdited: () => false,
 					selectedExternalChannel: () => null,
 					direction: () => "both" as const,
 					channelSearch: () => "",
@@ -230,11 +241,10 @@ const foldAddLinkModal = Update.foldChild({ update: Modal.update, ...addLinkModa
 const openAddLinkModal = Update.foldChildStep({ update: Modal.open, ...addLinkModal })
 const closeAddLinkModal = Update.foldChildStep({ update: Modal.close, ...addLinkModal })
 
-const submitLink = (model: Model): Return => {
-	const channel = model.selectedChannel
+/** Links the Hazel channel to the picked external channel. */
+const linkTo = (model: Model, channel: HazelChannel): Return => {
 	const externalChannel = model.selectedExternalChannel
-	if (channel === null || externalChannel === null || model.submission._tag === "Submitting")
-		return { model }
+	if (externalChannel === null) return { model }
 	return {
 		// Link Channel disables while it runs, which ends its hover (useHover).
 		model: modifyFields(model, {
@@ -251,6 +261,23 @@ const submitLink = (model: Model): Return => {
 				direction: model.direction,
 			}),
 		],
+	}
+}
+
+/** "New channel" creates the Hazel channel first (`SucceededCreateHazelChannel` then links it). */
+const submitLink = (model: Model, shared: Shared): Return => {
+	if (model.selectedExternalChannel === null || isSubmitting(model)) return { model }
+	if (model.hazelChannelMode === "existing")
+		return model.selectedChannel === null ? { model } : linkTo(model, model.selectedChannel)
+	const name = newChannelNameOf(model.newChannelName)
+	const organizationId = model.requestedOrganizationId
+	if (name.length === 0 || organizationId === null || shared.currentUser === null) return { model }
+	return {
+		model: modifyFields(model, {
+			submission: () => Submission.CreatingChannel(),
+			interaction: (state) => Interaction.disabledTargets(state, [CREATE_LINK_TARGET]),
+		}),
+		commands: [CreateHazelChannelForLink({ organizationId, currentUserId: shared.currentUser.id, name })],
 	}
 }
 
@@ -433,14 +460,51 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				selectedExternalChannel: () => channel,
 				externalChannelSearch: () => "",
 				focusedSearch: () => null,
+				newChannelName: (name) =>
+					model.isNewChannelNameEdited ? name : newChannelNameOf(channel.name),
 			}),
+		}),
+		ClickedHazelChannelMode: ({ mode }) => {
+			if (mode === model.hazelChannelMode || isSubmitting(model)) return { model }
+			return {
+				model: modifyFields(model, { hazelChannelMode: () => mode, focusedSearch: () => null }),
+				commands: [mode === "new" ? FocusNewChannelName() : FocusChannelSearch()],
+			}
+		},
+		ClickedCreateChannelFromSearch: () => ({
+			model: modifyFields(model, {
+				hazelChannelMode: () => "new" as const,
+				newChannelName: () => newChannelNameOf(model.channelSearch),
+				isNewChannelNameEdited: () => true,
+				channelSearch: () => "",
+				focusedSearch: () => null,
+			}),
+			commands: [FocusNewChannelName()],
+		}),
+		ChangedNewChannelName: ({ value }) => ({
+			model: modifyFields(model, { newChannelName: () => value, isNewChannelNameEdited: () => true }),
+		}),
+		// The channel exists now: a failed link retries against it rather than creating another.
+		SucceededCreateHazelChannel: ({ channel }) =>
+			linkTo(
+				modifyFields(model, {
+					selectedChannel: () => channel,
+					hazelChannelMode: () => "existing" as const,
+					newChannelName: () => "",
+					isNewChannelNameEdited: () => false,
+				}),
+				channel,
+			),
+		FailedCreateHazelChannel: ({ toast }) => ({
+			model: modifyFields(model, { submission: () => Submission.NotSubmitted() }),
+			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
 		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 		ClickedChangeExternalChannel: () => ({
 			model: modifyFields(model, { selectedExternalChannel: () => null }),
 		}),
 		ClickedDirection: ({ direction }) => ({ model: modifyFields(model, { direction: () => direction }) }),
-		ClickedCreateLink: () => submitLink(model),
+		ClickedCreateLink: () => submitLink(model, shared),
 		// `onSuccess()` reloads the links (a new query key), then `handleClose()`.
 		SucceededCreateLink: ({ successMessage }) => ({
 			...Update.combine(modifyFields(model, { submission: () => Submission.NotSubmitted() }), [
