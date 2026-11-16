@@ -155,6 +155,8 @@ export const MessageRowData = Schema.Struct({
 	urlEmbeds: Schema.Array(UrlEmbed),
 	live: Schema.NullOr(LiveRow),
 	htmlRenders: Schema.Array(HtmlRenderRow),
+	/** The message arrived live, after the list had loaded: its row plays the entrance once it mounts. */
+	isEntering: Schema.Boolean,
 })
 export type MessageRowData = typeof MessageRowData.Type
 
