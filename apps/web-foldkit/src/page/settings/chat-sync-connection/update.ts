@@ -486,15 +486,23 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 		// The channel exists now: a failed link retries against it rather than creating another.
 		SucceededCreateHazelChannel: ({ channel }) =>
-			linkTo(
-				modifyFields(model, {
-					selectedChannel: () => channel,
-					hazelChannelMode: () => "existing" as const,
-					newChannelName: () => "",
-					isNewChannelNameEdited: () => false,
-				}),
-				channel,
-			),
+			// Closed while the channel was created: the form is already reset, nothing is left to link.
+			!model.addLinkModal.isOpen || model.selectedExternalChannel === null
+				? {
+						model: modifyFields(model, { submission: () => Submission.NotSubmitted() }),
+						outMessage: PageOutMessage.RequestedToast({
+							toast: successToast(`Created #${channel.name}`, "It isn't linked yet."),
+						}),
+					}
+				: linkTo(
+						modifyFields(model, {
+							selectedChannel: () => channel,
+							hazelChannelMode: () => "existing" as const,
+							newChannelName: () => "",
+							isNewChannelNameEdited: () => false,
+						}),
+						channel,
+					),
 		FailedCreateHazelChannel: ({ toast }) => ({
 			model: modifyFields(model, { submission: () => Submission.NotSubmitted() }),
 			outMessage: PageOutMessage.RequestedToast({ toast }),

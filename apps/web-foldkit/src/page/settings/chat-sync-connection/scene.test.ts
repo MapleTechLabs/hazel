@@ -3,7 +3,7 @@ import { routeOfPath } from "../../../route"
 import { ChannelId, ExternalChannelId, SyncChannelLinkId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as Scene from "foldkit/scene"
-import { describe, test } from "vitest"
+import { describe, expect, test } from "vitest"
 import * as Menu from "../../../ui/menu"
 import { FocusTriggerOnPress } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
@@ -359,6 +359,28 @@ describe("link a channel", () => {
 			),
 			Scene.expect(Scene.within(dialog, Scene.text("dev-chat"))).toExist(),
 			Scene.expect(inDialog("Link Channel")).toBeEnabled(),
+		)
+	})
+
+	test("a channel created after the dialog closed settles the submission instead of linking", () => {
+		const created = { id: Schema.decodeSync(ChannelId)(uuid(43)), name: "dev-chat" }
+		// Closed mid-create: the form is reset, the create is still in flight.
+		const closedMidCreate = {
+			...withoutLinks,
+			submission: { _tag: "CreatingChannel" as const },
+		}
+		const result = update(
+			closedMidCreate,
+			Message.SucceededCreateHazelChannel({ channel: created }),
+			shared,
+		)
+		expect(result.model.submission._tag).toBe("NotSubmitted")
+		expect(result.model.selectedChannel).toBeNull()
+		expect(result.commands ?? []).toEqual([])
+		expect(result.outMessage).toEqual(
+			PageOutMessage.RequestedToast({
+				toast: successToast("Created #dev-chat", "It isn't linked yet."),
+			}),
 		)
 	})
 
