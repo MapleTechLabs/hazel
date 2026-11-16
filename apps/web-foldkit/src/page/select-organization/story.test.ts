@@ -8,7 +8,8 @@ import { makeShared, uuid } from "../../test/pages-fixtures"
 import { PageOutMessage } from "../out-message"
 import { enterRoute, loadPages } from "../registry"
 import { Message } from "./message"
-import type { UserOrganization } from "./model"
+import type { Model, UserOrganization } from "./model"
+import type { Shared } from "../contract"
 import { hrefOf, organizationHref, routeOfPath, urlToAppRoute } from "../../route"
 import { init, update } from "./update"
 
@@ -23,6 +24,9 @@ const org = (n: number, slug: string | null): UserOrganization => ({
 })
 const hazel = org(1, "hazel")
 const unfinished = org(2, null)
+const desktop = makeShared({ isMobile: false })
+const stepWith = (shared: Shared) => (current: Model, next: Message) => update(current, next, shared)
+const step = stepWith(desktop)
 const navigation = (href: string) =>
 	PageOutMessage.RequestedNavigation({ route: routeOfPath(href), replace: false })
 
@@ -32,7 +36,7 @@ beforeAll(loadPages)
 describe("select organization", () => {
 	test("a single organization redirects once, even when the live query re-emits", () => {
 		story(
-			update,
+			step,
 			given(init().model),
 			message(Message.UpdatedOrganizations({ organizations: [hazel] })),
 			expectOutMessage(navigation("/hazel")),
@@ -46,7 +50,7 @@ describe("select organization", () => {
 	test("an organization without a slug goes to its setup", () => {
 		expect(organizationHref(unfinished)).toBe(`/onboarding/setup-organization?orgId=${unfinished.id}`)
 		story(
-			update,
+			step,
 			given(init().model),
 			message(Message.UpdatedOrganizations({ organizations: [unfinished] })),
 			expectOutMessage(navigation(organizationHref(unfinished))),
@@ -55,7 +59,7 @@ describe("select organization", () => {
 
 	test("several organizations wait for a pick; Create a new one opens the workspace form", () => {
 		story(
-			update,
+			step,
 			given(init().model),
 			message(Message.UpdatedOrganizations({ organizations: [hazel, unfinished] })),
 			expectNoOutMessage(),
@@ -72,12 +76,22 @@ describe("select organization", () => {
 		)
 	})
 
+	test("on a phone, picking an organization opens its channel list", () => {
+		const mobile = makeShared({ isMobile: true })
+		story(
+			stepWith(mobile),
+			given(init().model),
+			message(Message.UpdatedOrganizations({ organizations: [hazel] })),
+			expectOutMessage(navigation("/hazel/chat")),
+		)
+	})
+
 	// Anyone on the picker is onboarded. `/onboarding` sent them straight back to `/` and into an
 	// organization, so "Create a new one" never reached a form.
 	test("Create a new one lands on a page that keeps an onboarded user", () => {
 		const onboarded = makeShared()
-		const picked = update(
-			update(init().model, Message.UpdatedOrganizations({ organizations: [hazel, unfinished] })).model,
+		const picked = step(
+			step(init().model, Message.UpdatedOrganizations({ organizations: [hazel, unfinished] })).model,
 			Message.ClickedCreateNew(),
 		)
 		const href = picked.outMessage?._tag === "RequestedNavigation" ? hrefOf(picked.outMessage.route) : ""

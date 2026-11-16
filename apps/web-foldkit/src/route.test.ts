@@ -256,6 +256,17 @@ describe("redirects", () => {
 			`/onboarding/setup-organization?orgId=${orgId}`,
 		)
 	})
+
+	// The phone's tab bar has no Home; opening the app lands on the Chats tab, not the members page.
+	it("lands a phone on the channel list", () => {
+		const organizationId = Schema.decodeUnknownSync(OrganizationId)(orgId)
+		const member = Option.some({ organizationId, slug: "hazel" })
+		const mobile = { isMobile: true }
+		expect(hrefOf(rootRedirect(user(true), member, mobile))).toBe("/hazel/chat")
+		expect(hrefOf(rootRedirect(user(true), Option.some({ organizationId, slug: null }), mobile))).toBe(
+			`/onboarding/setup-organization?orgId=${orgId}`,
+		)
+	})
 })
 
 describe("hrefOf", () => {

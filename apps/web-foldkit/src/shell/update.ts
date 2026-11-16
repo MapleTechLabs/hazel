@@ -155,7 +155,8 @@ const switchedOrganization =
 			),
 			{
 				onNone: () => ({ model }),
-				onSome: (organization) => navigateTo(organizationRoute(organization))(model),
+				onSome: (organization) =>
+					navigateTo(organizationRoute(organization, { isMobile: context.isMobile }))(model),
 			},
 		)
 
