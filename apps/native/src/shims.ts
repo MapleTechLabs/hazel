@@ -415,7 +415,20 @@ export const installShims = (env: ShimEnv) => {
 		hidden: false,
 		readyState: "complete",
 		hasFocus: () => isWindowFocused,
-		createElement: () => element(),
+		// A temporary `<a download>` the app clicks (an attachment's or image's download) opens its
+		// URL in the browser, which downloads it; a `blob:` one has nowhere to go and is dropped.
+		createElement: (tag: string) =>
+			tag.toLowerCase() === "a"
+				? Object.assign(element(), {
+						href: "",
+						download: "",
+						target: "",
+						click(this: { href: string }) {
+							const target = URL.parse(this.href, url)
+							if (target !== null) openExternal(target, env.openUrl)
+						},
+					})
+				: element(),
 		createElementNS: () => element(),
 		createTextNode: () => element(),
 		getElementById: () => null,
