@@ -332,7 +332,10 @@ describe("organization switch", () => {
 		const switched = after(signedIn("/hazel/settings/team"), [
 			Message.ChangedUrl({ url: urlOf("/acme/settings/team") }),
 		])
-		const loaded = update(switched, Message.UpdatedOrganization({ orgSlug: "acme", organization: acmeOrg }))
+		const loaded = update(
+			switched,
+			Message.UpdatedOrganization({ orgSlug: "acme", organization: acmeOrg }),
+		)
 		expect(loaded.commands?.map(({ name, args }) => ({ name, args }))).toContainEqual({
 			name: RememberLastOrganization.name,
 			args: { organizationId: acmeOrg.id },

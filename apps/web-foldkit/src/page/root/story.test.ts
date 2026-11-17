@@ -5,14 +5,7 @@ import { Command, expectOutMessage, given, message, model, story } from "foldkit
 import { describe, expect, test } from "vitest"
 import { currentUser, makeShared, organizationId, storyUpdate } from "../../test/pages-fixtures"
 import { PageOutMessage } from "../out-message"
-import {
-	ForgetReturnTo,
-	init,
-	ReadLastOrganization,
-	ReadReturnTo,
-	Reload,
-	update,
-} from "./index"
+import { ForgetReturnTo, init, ReadLastOrganization, ReadReturnTo, Reload, update } from "./index"
 import { Message } from "./model"
 
 /** `/` forwards once the user, their membership and the page sign-in started from are known. */
@@ -26,7 +19,10 @@ const go = (href: string) =>
 
 describe("root redirect", () => {
 	test("reads the remembered page and the last organization first", () => {
-		expect(init().commands?.map((command) => command.name)).toEqual([ReadReturnTo.name, ReadLastOrganization.name])
+		expect(init().commands?.map((command) => command.name)).toEqual([
+			ReadReturnTo.name,
+			ReadLastOrganization.name,
+		])
 	})
 
 	test("without a remembered page it goes to the user's organization", () => {
