@@ -93,6 +93,23 @@ export const PartnerOrg = Schema.Struct({
 })
 export type PartnerOrg = typeof PartnerOrg.Type
 
+/** A Hazel channel bridged to Slack or Discord by an active chat sync link. */
+export const SyncedChannel = Schema.Struct({
+	channelId: ChannelId,
+	provider: Schema.Literals(["discord", "slack"]),
+})
+export type SyncedChannel = typeof SyncedChannel.Type
+export type SyncProvider = SyncedChannel["provider"]
+
+/** The first provider each channel syncs to (a channel linked to both shows one mark). */
+export const syncProviderByChannel = (
+	synced: ReadonlyArray<SyncedChannel>,
+): ReadonlyMap<string, SyncProvider> => {
+	const result = new Map<string, SyncProvider>()
+	for (const row of synced) if (!result.has(row.channelId)) result.set(row.channelId, row.provider)
+	return result
+}
+
 export const DiscoverableChannel = Schema.Struct({
 	id: ChannelId,
 	name: Schema.String,

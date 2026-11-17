@@ -93,6 +93,9 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		UpdatedOrganizations: ({ organizations }) => ({
 			model: modifyFields(model, { organizations: () => organizations }),
 		}),
+		UpdatedSyncedChannels: ({ synced }) => ({
+			model: modifyFields(model, { syncedChannels: () => synced }),
+		}),
 		UpdatedMemberChannelIds: ({ channelIds }) => ({
 			model: modifyFields(model, { memberChannelIds: () => channelIds }),
 		}),

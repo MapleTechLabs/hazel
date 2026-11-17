@@ -11,6 +11,7 @@ import {
 	DmChannel,
 	Membership,
 	PartnerOrg,
+	SyncedChannel,
 	Presence,
 	Section,
 	SidebarThread,
@@ -43,6 +44,7 @@ export const Model = Schema.Struct({
 	unreadCounts: Schema.Array(UnreadCount),
 	connectMounts: Schema.Array(ConnectMount),
 	organizations: Schema.Array(PartnerOrg),
+	syncedChannels: Schema.Array(SyncedChannel),
 	memberChannelIds: Schema.NullOr(Schema.Array(ChannelId)),
 	discoverableChannels: Schema.Array(DiscoverableChannel),
 	/** `useFeatureHint("create-channel")`, persisted across organizations. */
@@ -91,6 +93,7 @@ export const Message = defineMessageUnion({
 	UpdatedUnreadCounts: { counts: Schema.Array(UnreadCount) },
 	UpdatedConnectMounts: { mounts: Schema.Array(ConnectMount) },
 	UpdatedOrganizations: { organizations: Schema.Array(PartnerOrg) },
+	UpdatedSyncedChannels: { synced: Schema.Array(SyncedChannel) },
 	UpdatedMemberChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedDiscoverableChannels: { channels: Schema.Array(DiscoverableChannel) },
 	/** "Browse channels"; the sidebar answers with `RequestedCommandPalette`. */
@@ -120,6 +123,7 @@ export const emptyData = {
 	unreadCounts: [],
 	connectMounts: [],
 	organizations: [],
+	syncedChannels: [],
 	memberChannelIds: null,
 	discoverableChannels: [],
 	openMenu: null,

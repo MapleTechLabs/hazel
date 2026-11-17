@@ -5,6 +5,7 @@ import { styles as avatarStyles } from "~/components/ui/avatar/styles"
 import { cx } from "~/utils/cx"
 import { getEffectivePresenceStatus } from "~/utils/presence"
 import { IconHashtag } from "../../icons"
+import { discordLogo, slackLogo } from "../../page/settings/chat-sync/brand-icons"
 import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { presenceDot } from "../../ui/presence-dot"
@@ -17,6 +18,7 @@ import type {
 	PartnerOrg,
 	Presence,
 	SidebarThread,
+	SyncProvider,
 } from "./rows"
 import { dotsMenuTrigger } from "./tree"
 
@@ -40,6 +42,8 @@ const chatHref = (context: { readonly orgSlug: string }, channelId: ChannelId) =
 export interface RowLinkContext {
 	readonly orgSlug: string
 	readonly isActive: boolean
+	/** The platform the channel is bridged to by chat sync, marked on its icon. */
+	readonly syncProvider?: SyncProvider | null
 }
 
 /** `SidebarLabel` with a `className`. */
@@ -115,6 +119,21 @@ const partnerOrgMarks = <M>(h: HtmlBuilder<M>, partners: ReadonlyArray<PartnerOr
 	]
 }
 
+/** The Slack or Discord mark on a synced channel's icon; top corner when partner marks take the bottom. */
+const syncMark = <M>(h: HtmlBuilder<M>, provider: SyncProvider, hasPartners: boolean): Html =>
+	h.span(
+		[
+			h.Class(
+				cx(
+					"absolute -right-1 flex size-3 items-center justify-center rounded-full bg-sidebar",
+					hasPartners ? "-top-1" : "-bottom-0.5",
+				),
+			),
+			h.Attribute("title", provider === "slack" ? "Synced with Slack" : "Synced with Discord"),
+		],
+		[provider === "slack" ? slackLogo(h, "size-2") : discordLogo(h, "size-2.5")],
+	)
+
 export const channelItem = <M>(
 	h: HtmlBuilder<M>,
 	entry: ChannelEntry,
@@ -126,12 +145,18 @@ export const channelItem = <M>(
 	longPress: ReadonlyArray<Attribute<M>> = [],
 ): Html => {
 	const href = chatHref(context, entry.channel.id)
+	const syncProvider = context.syncProvider ?? null
+	const hasPartners = partners.length > 0
 	return sidebarItem(h, { attributes: longPress }, [
 		sidebarLink(h, { href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE }, [
 			h.span(
-				// Positioned only for the partner marks: needless positioned spans slow every hit test.
-				[h.Class(partners.length > 0 ? "relative shrink-0" : "shrink-0")],
-				[channelIcon(h, entry.channel.icon), ...partnerOrgMarks(h, partners)],
+				// Positioned only for the marks: needless positioned spans slow every hit test.
+				[h.Class(hasPartners || syncProvider ? "relative shrink-0" : "shrink-0")],
+				[
+					channelIcon(h, entry.channel.icon),
+					...partnerOrgMarks(h, partners),
+					...(syncProvider ? [syncMark(h, syncProvider, hasPartners)] : []),
+				],
 			),
 			// Unread: the name steps up to full ink and medium, the count says how many.
 			label(h, [entry.channel.name], notificationCount > 0 ? "font-medium text-fg" : undefined),

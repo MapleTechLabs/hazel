@@ -41,6 +41,7 @@ const sidebar: Model = {
 	unreadCounts: [],
 	connectMounts: [],
 	organizations: [],
+	syncedChannels: [],
 	memberChannelIds: [general, dmGrace],
 	discoverableChannels: [],
 	isCreateChannelHintDismissed: true,
