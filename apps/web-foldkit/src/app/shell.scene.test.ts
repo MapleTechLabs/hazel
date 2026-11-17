@@ -63,20 +63,35 @@ describe("nav rail", () => {
 
 describe("the last screen's paint", () => {
 	const waiting = selector('#app[data-paint="shell"] [data-paint="loading"]')
-	const channelListsArrived = Message.GotShellMessage({
-		message: Shell.Message.GotChannelsSidebarMessage({
-			message: ChannelsSidebar.Message.UpdatedMemberChannelIds({ channelIds: [] }),
-		}),
-	})
+	const toSidebar = (message: ChannelsSidebar.Message) =>
+		Message.GotShellMessage({ message: Shell.Message.GotChannelsSidebarMessage({ message }) })
+	const membershipsArrived = toSidebar(ChannelsSidebar.Message.UpdatedMemberChannelIds({ channelIds: [] }))
+	// Every list the sidebar draws: each comes from its own query.
+	const channelListsArrived = [
+		membershipsArrived,
+		toSidebar(ChannelsSidebar.Message.UpdatedSections({ sections: [] })),
+		toSidebar(ChannelsSidebar.Message.UpdatedFavorites({ channels: [] })),
+		toSidebar(ChannelsSidebar.Message.UpdatedDmChannelIds({ channelIds: [] })),
+		toSidebar(ChannelsSidebar.Message.UpdatedSectionChannels({ sectionKey: "default", channels: [] })),
+	]
 
 	test("stays up while the sidebar's channel lists have yet to arrive", () => {
 		scene(rootScene, given(signedIn("/hazel/chat")), ...menusMounted, sceneExpect(waiting).toExist())
 	})
 
+	test("stays up while only the memberships have arrived, not the Channels list", () => {
+		scene(
+			rootScene,
+			given(after(signedIn("/hazel/chat"), [membershipsArrived])),
+			...menusMounted,
+			sceneExpect(waiting).toExist(),
+		)
+	})
+
 	test("goes once they have, empty or not", () => {
 		scene(
 			rootScene,
-			given(after(signedIn("/hazel/chat"), [channelListsArrived])),
+			given(after(signedIn("/hazel/chat"), channelListsArrived)),
 			...menusMounted,
 			// Named for the signed-in user: a paint is only kept under its own user.
 			sceneExpect(selector(`#app[data-paint="shell"][data-paint-user="${ada.id}"]`)).toExist(),

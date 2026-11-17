@@ -497,6 +497,8 @@ export const sectionGroupContent = <M>(
 	const role = model.membership?.role
 	const canCreateChannel = role !== undefined && canPerform(RPC_SCOPE_MAP, role, "channel.create")
 	const defaultEntries = model.sectionChannels["default"] ?? []
+	// Before the list arrives, empty is not "no channels": the hint would flash in and out.
+	const hasNoChannels = model.sectionChannels["default"]?.length === 0
 	return [
 		gotoSection(h, context),
 		...(model.organizationId === null
@@ -513,7 +515,7 @@ export const sectionGroupContent = <M>(
 						context,
 					),
 					...discoverSection(h, model, context),
-					...(defaultEntries.length === 0 && canCreateChannel && !model.isCreateChannelHintDismissed
+					...(hasNoChannels && canCreateChannel && !model.isCreateChannelHintDismissed
 						? [
 								createChannelHint(
 									h,

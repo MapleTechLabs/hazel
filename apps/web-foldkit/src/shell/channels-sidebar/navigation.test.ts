@@ -60,6 +60,7 @@ const sidebar = (overrides: Partial<Model> = {}): Model => ({
 	syncedChannels: [],
 	memberChannelIds: null,
 	discoverableChannels: [],
+	loaded: { sections: true, favorites: true, dmChannelIds: true },
 	isCreateChannelHintDismissed: false,
 	openMenu: null,
 	...overrides,
