@@ -4,7 +4,7 @@ import { Schema } from "effect"
 import { defineTaggedUnion } from "foldkit/schema"
 import { LiveActorState } from "../../chat/live-state"
 import { Unfurl } from "../../chat/unfurl"
-import { AttachmentInfo } from "./lookups"
+import { AttachmentInfo, SyncProvider } from "./lookups"
 
 /**
  * Message list rows: the data the list renders, derived once per data change in `update` (port
@@ -145,7 +145,8 @@ export const MessageRowData = Schema.Struct({
 	/** The author is known (the users lookup has them); until then the row has no header. */
 	hasAuthor: Schema.Boolean,
 	status: Schema.NullOr(StatusEmoji),
-	isDiscordSynced: Schema.Boolean,
+	/** The platform the message was synced in from (chat sync), if it was. */
+	syncedFrom: Schema.NullOr(SyncProvider),
 	/** The agent that wrote the message for its author (Hazel's MCP server), if one did. */
 	agentName: Schema.NullOr(Schema.String),
 	reply: Schema.NullOr(ReplyPreview),

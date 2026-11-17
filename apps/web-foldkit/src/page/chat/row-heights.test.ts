@@ -33,7 +33,7 @@ const row = (key: string, groupPosition: GroupPosition, content = "short line"):
 	author: { displayName: "Ada", avatarUrl: null, isBot: false },
 	hasAuthor: true,
 	status: null,
-	isDiscordSynced: false,
+	syncedFrom: null,
 	agentName: null,
 	reply: null,
 	thread: null,

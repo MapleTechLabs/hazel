@@ -1,9 +1,10 @@
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { formatDistanceToNowStrict } from "date-fns"
 import { cx } from "~/utils/cx"
-import { IconChevronRight, IconDiscord, IconPin, IconSparkles } from "../../icons"
+import { IconChevronRight, IconDiscord, IconPin, IconSlack, IconSparkles } from "../../icons"
 import { avatar } from "../../ui/avatar"
 import { badge } from "../../ui/badge"
+import type { SyncProvider } from "../../page/chat/lookups"
 import type { MessageRow, ReplyPreview, ThreadPreview } from "../../page/chat/rows"
 
 /** Static parts of `Message.*`: author header, reply section, thread card. */
@@ -31,6 +32,32 @@ const agentBadge = <M>(h: HtmlBuilder<M>, agentName: string, authorName: string)
 		[IconSparkles(h, { className: "size-3" }), `via ${agentName}`],
 	)
 
+/** Each platform's brand color: Discord blurple with its white mark, Slack aubergine with its colored mark. */
+const SYNC_PROVIDERS = {
+	discord: { label: "Discord", icon: IconDiscord, className: "bg-[#5865F2]" },
+	slack: { label: "Slack", icon: IconSlack, className: "bg-[#4A154B]" },
+} satisfies Record<
+	SyncProvider,
+	{ readonly label: string; readonly icon: typeof IconDiscord; readonly className: string }
+>
+
+/** In place of "APP" on a message two-way synced in from another platform: its mark and its name. */
+const syncBadge = <M>(h: HtmlBuilder<M>, provider: SyncProvider): Html => {
+	const { label, icon, className } = SYNC_PROVIDERS[provider]
+	return h.span(
+		[
+			h.Class(
+				cx(
+					"inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs/5 font-medium text-white",
+					className,
+				),
+			),
+			h.Attribute("title", `Synced from ${label}`),
+		],
+		[icon(h, { className: "size-3" }), label],
+	)
+}
+
 /** `Message.Header`; `statusEmoji` is the tooltip-wrapped status trigger (or nothing). */
 export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: Html): Html => {
 	const { message, author } = row
@@ -45,23 +72,11 @@ export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: H
 				[author.displayName],
 			),
 			statusEmoji,
-			isMachine && row.isDiscordSynced
-				? h.span(
-						[
-							h.Class(
-								"inline-flex items-center gap-1 rounded-sm bg-primary px-1.5 py-0.5 text-xs/5 font-medium text-primary-fg",
-							),
-						],
-						[
-							IconDiscord(h, { className: "size-3", attributes: { fill: "currentColor" } }),
-							"Discord",
-						],
-					)
+			row.syncedFrom !== null
+				? syncBadge(h, row.syncedFrom)
 				: isMachine
 					? badge(h, { intent: "primary" }, ["APP"])
-					: row.isDiscordSynced
-						? badge(h, { intent: "secondary" }, ["Synced from Discord"])
-						: h.empty,
+					: h.empty,
 			row.agentName === null ? h.empty : agentBadge(h, row.agentName, author.displayName),
 			h.span([h.Class("text-muted-fg text-xs")], isEdited ? [time, " (edited)"] : [time]),
 			message.isPinned
