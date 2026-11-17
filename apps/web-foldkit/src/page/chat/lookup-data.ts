@@ -21,6 +21,7 @@ import { getAttachmentUrl } from "~/utils/attachment-url"
 import { liveQueryStream } from "../../data/live-query"
 import {
 	type AgentMarkInfo,
+	type SyncedMessageInfo,
 	type AttachmentInfo,
 	type AttachmentRow,
 	type BotInfo,
@@ -103,12 +104,12 @@ export const attachmentsStream = <M>(
 			),
 	)
 
-/** `isDiscordSyncedMessageAtomFamily`, scoped to the channel's link instead of one message. */
-export const discordSyncedStream = <M>(
+/** Messages synced in from Discord or Slack over the channel's links, with the platform each came from. */
+export const syncedMessagesStream = <M>(
 	channelId: ChannelId,
-	toMessage: (ids: ReadonlyArray<MessageId>) => M,
+	toMessage: (messages: ReadonlyArray<SyncedMessageInfo>) => M,
 ) =>
-	liveQueryStream<{ hazelMessageId: MessageId }, M>(
+	liveQueryStream<{ hazelMessageId: MessageId; provider: string }, M>(
 		(q) =>
 			q
 				.from({ messageLink: chatSyncMessageLinkCollection })
@@ -122,14 +123,23 @@ export const discordSyncedStream = <M>(
 					and(
 						eq(channelLink.hazelChannelId, channelId),
 						eq(messageLink.source, "external"),
-						eq(connection.provider, "discord"),
+						inArray(connection.provider, ["discord", "slack"]),
 						isNull(messageLink.deletedAt),
 						isNull(channelLink.deletedAt),
 						isNull(connection.deletedAt),
 					),
 				)
-				.select(({ messageLink }) => ({ hazelMessageId: messageLink.hazelMessageId })),
-		(rows) => toMessage(rows.map((row) => row.hazelMessageId)),
+				.select(({ messageLink, connection }) => ({
+					hazelMessageId: messageLink.hazelMessageId,
+					provider: connection.provider,
+				})),
+		(rows) =>
+			toMessage(
+				rows.map((row) => ({
+					messageId: row.hazelMessageId,
+					provider: row.provider === "slack" ? "slack" : "discord",
+				})),
+			),
 	)
 
 /** Agent-written messages (`message_agent_marks`) in `channelIds`: a channel and its open thread. */

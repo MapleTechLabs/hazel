@@ -107,7 +107,7 @@ const row = (options: {
 		author: { displayName: options.name, avatarUrl: null, isBot: options.isBot ?? false },
 		hasAuthor: true,
 		status: null,
-		isDiscordSynced: false,
+		syncedFrom: null,
 		isEntering: false,
 		agentName: null,
 		reply: null,

@@ -72,6 +72,14 @@ export type CustomEmojiInfo = typeof CustomEmojiInfo.Type
 export const BotInfo = Schema.Struct({ userId: UserId, name: Schema.String })
 export type BotInfo = typeof BotInfo.Type
 
+/** The chat platform a two-way synced message came from. */
+export const SyncProvider = Schema.Literals(["discord", "slack"])
+export type SyncProvider = typeof SyncProvider.Type
+
+/** A message that arrived through chat sync, and the platform it came from. */
+export const SyncedMessageInfo = Schema.Struct({ messageId: MessageId, provider: SyncProvider })
+export type SyncedMessageInfo = typeof SyncedMessageInfo.Type
+
 /** A message an agent wrote for its author, and the agent's name. */
 export const AgentMarkInfo = Schema.Struct({ id: MessageId, agentName: Schema.String })
 export type AgentMarkInfo = typeof AgentMarkInfo.Type
@@ -83,7 +91,7 @@ export const Lookups = Schema.Struct({
 	bots: Schema.Array(BotInfo),
 	customEmojis: Schema.Array(CustomEmojiInfo),
 	attachments: Schema.Array(AttachmentInfo),
-	discordSyncedIds: Schema.Array(MessageId),
+	syncedMessages: Schema.Array(SyncedMessageInfo),
 	agentMarks: Schema.Array(AgentMarkInfo),
 	threadChannels: Schema.Array(ThreadChannelInfo),
 	threadMessages: Schema.Array(ThreadMessageInfo),
@@ -97,7 +105,7 @@ export const emptyLookups: Lookups = {
 	bots: [],
 	customEmojis: [],
 	attachments: [],
-	discordSyncedIds: [],
+	syncedMessages: [],
 	agentMarks: [],
 	threadChannels: [],
 	threadMessages: [],

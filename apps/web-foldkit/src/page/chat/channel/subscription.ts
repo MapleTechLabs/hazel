@@ -17,7 +17,7 @@ import {
 	botsStream,
 	customEmojisStream,
 	agentMarksStream,
-	discordSyncedStream,
+	syncedMessagesStream,
 	membersStream,
 	pinnedStream,
 	presenceStream,
@@ -194,10 +194,10 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		dependenciesToStream: ({ channelId }) =>
 			attachmentsStream(channelId, (attachments) => Message.UpdatedAttachments({ attachments })),
 	}),
-	chatDiscordSynced: entry(byChannel, {
+	chatSyncedMessages: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
-			discordSyncedStream(channelId, (messageIds) => Message.UpdatedDiscordSynced({ messageIds })),
+			syncedMessagesStream(channelId, (messages) => Message.UpdatedSyncedMessages({ messages })),
 	}),
 	// The channel's marks and the open thread's: the thread panel's rows read the same lookup.
 	chatAgentMarks: entry(

@@ -524,7 +524,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				),
 			),
 		UpdatedAttachments: ({ attachments }) => withLookup(model, "attachments", attachments),
-		UpdatedDiscordSynced: ({ messageIds }) => withLookup(model, "discordSyncedIds", messageIds),
+		UpdatedSyncedMessages: ({ messages }) => withLookup(model, "syncedMessages", messages),
 		// A late result from the channel just left must not replace the new channel's marks.
 		UpdatedAgentMarks: ({ channelId, marks }) =>
 			channelId === model.channelId ? withLookup(model, "agentMarks", marks) : { model },

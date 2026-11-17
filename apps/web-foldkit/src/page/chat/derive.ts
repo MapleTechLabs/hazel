@@ -18,7 +18,14 @@ import { cachedLiveState, initialLiveState, liveEmbedOf, type LiveStates } from 
 import { processMessageUrls } from "../../chat/message/content"
 import type { LikeRow } from "../../mount/message-list"
 import { linkPreviewKey, tweetKey, type Unfurls } from "../../chat/unfurl"
-import { type AttachmentInfo, byKey, type Lookups, type PresenceInfo, type UserInfo } from "./lookups"
+import {
+	type AttachmentInfo,
+	byKey,
+	type Lookups,
+	type PresenceInfo,
+	type SyncProvider,
+	type UserInfo,
+} from "./lookups"
 import {
 	type AggregatedReaction,
 	type AuthorIdentity,
@@ -59,7 +66,7 @@ export interface DeriveContext {
 	readonly botNames: ReadonlyMap<string, string>
 	readonly emojiUrls: ReadonlyMap<string, string>
 	readonly attachmentsByMessage: ReadonlyMap<string, ReadonlyArray<AttachmentInfo>>
-	readonly discordSynced: ReadonlySet<string>
+	readonly syncedFrom: ReadonlyMap<string, SyncProvider>
 	readonly agentNames: ReadonlyMap<string, string>
 	readonly threadNames: ReadonlyMap<string, string>
 	readonly threadMessages: ReadonlyMap<string, ReadonlyArray<Lookups["threadMessages"][number]>>
@@ -113,7 +120,7 @@ export const toDeriveContext = (
 	botNames: new Map(lookups.bots.map((bot) => [bot.userId, bot.name])),
 	emojiUrls: new Map(lookups.customEmojis.map((emoji) => [emoji.name, emoji.imageUrl])),
 	attachmentsByMessage: groupBy(lookups.attachments, (attachment) => attachment.messageId),
-	discordSynced: new Set(lookups.discordSyncedIds),
+	syncedFrom: new Map(lookups.syncedMessages.map((synced) => [synced.messageId, synced.provider])),
 	agentNames: new Map(lookups.agentMarks.map((mark) => [mark.id, mark.agentName])),
 	threadNames: new Map(lookups.threadChannels.map((channel) => [channel.id, channel.name])),
 	threadMessages: groupBy(lookups.threadMessages, (message) => message.channelId),
@@ -353,7 +360,7 @@ export const messageRowData = (
 		author: authorIdentity(user, context.botNames.get(message.authorId)),
 		hasAuthor: user !== null,
 		status: statusOf(context, message.authorId),
-		isDiscordSynced: context.discordSynced.has(message.id),
+		syncedFrom: context.syncedFrom.get(message.id) ?? null,
 		agentName: context.agentNames.get(message.id) ?? null,
 		reply: replyOf(context, message.replyToMessageId),
 		thread: threadOf(context, message.threadChannelId),
