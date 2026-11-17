@@ -852,6 +852,22 @@ describe("chat sync on the objects", () => {
 					),
 				)) as { data: ReadonlyArray<{ id: string }> }
 				expect(listed.data.map((link) => link.id)).toEqual([world.channelLinkId])
+				// Nor can a thread be linked on its own.
+				const linkThreadDirectly = yield* call(
+					world.org,
+					world.orgId,
+					"chatSync.channelLink.create",
+					{
+						organizationId: world.orgId,
+						syncConnectionId: world.syncConnectionId,
+						hazelChannelId: threadId,
+						externalChannelId: "888888888888888888",
+					},
+					world.owner,
+				)
+				expect(
+					Exit.isFailure(linkThreadDirectly) && Cause.pretty(linkThreadDirectly.cause),
+				).toContain("ChannelNotFoundError")
 
 				const thread = yield* world.objects.get(channelTarget(threadId))
 				const threadLinks = () =>

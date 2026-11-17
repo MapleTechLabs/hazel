@@ -178,10 +178,11 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							const connection = connectionOption.value
 							yield* integrationConnectionPolicy.canInsert(connection.organizationId)
 
-							// Only a live channel of the connection's own org (this OrgObject's).
+							// Only a live channel of the connection's own org (this OrgObject's), not a thread:
+							// a thread syncs through its channel's link.
 							const channel = yield* db.first(
 								SQLite.from(schema.channelsTable)
-									.select("id")
+									.select("id", "type")
 									.where(($) => [
 										$.id.eq(payload.hazelChannelId),
 										$.organizationId.eq(connection.organizationId),
@@ -189,7 +190,7 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 									])
 									.limit(1),
 							)
-							if (Option.isNone(channel)) {
+							if (Option.isNone(channel) || channel.value.type === "thread") {
 								return yield* new ChannelNotFoundError({ channelId: payload.hazelChannelId })
 							}
 
@@ -330,16 +331,14 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							yield* Effect.forEach(
 								threads,
 								(thread) =>
-									channelLinkRepo
-										.softDelete(thread.id)
-										.pipe(
-											Effect.andThen(
-												indexChatSync(connectionOption.value, {
-													link: thread,
-													deleted: true,
-												}),
-											),
+									channelLinkRepo.softDelete(thread.id).pipe(
+										Effect.andThen(
+											indexChatSync(connectionOption.value, {
+												link: thread,
+												deleted: true,
+											}),
 										),
+									),
 								{ discard: true },
 							)
 							yield* channelLinkRepo.softDelete(syncChannelLinkId)
