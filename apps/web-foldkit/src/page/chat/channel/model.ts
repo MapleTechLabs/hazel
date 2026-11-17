@@ -219,7 +219,8 @@ export const Message = defineMessageUnion({
 	UpdatedReplyTargets: { targets: Schema.Array(ReplyTarget) },
 	UpdatedMembers: { members: Schema.Array(ChannelMemberInfo) },
 	UpdatedPinned: { pins: Schema.Array(PinnedInfo) },
-	UpdatedCustomer: { customer: Schema.NullOr(ChannelCustomerRow) },
+	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
+	UpdatedCustomer: { channelId: ChannelId, customer: Schema.NullOr(ChannelCustomerRow) },
 	/** The open thread's messages, oldest first; tagged with the thread they were queried for. */
 	UpdatedThreadPanelMessages: { threadChannelId: ChannelId, messages: Schema.Array(ChatMessage) },
 	UpdatedTyping: { typing: Schema.Array(TypingInfo) },

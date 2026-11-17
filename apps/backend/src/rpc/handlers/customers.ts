@@ -23,10 +23,12 @@ import {
 	CustomersNotFoundError,
 } from "@hazel/domain/rpc"
 import type {
+	ChannelId,
 	CustomerAccountId,
 	CustomerSavedViewId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
+	OrganizationId,
 	UserId,
 } from "@hazel/schema"
 import { Clock, DateTime, Effect, Layer, Option, Predicate, Redacted } from "effect"
@@ -177,6 +179,23 @@ const requireAccount = (accountId: CustomerAccountId) =>
 			onNone: () => Effect.fail(notFound("account", accountId)),
 			onSome: Effect.succeed,
 		}),
+	)
+
+/**
+ * Ask the org whether `userId` sees the channel and whether it can be linked
+ * (`org.customerChannel`): `not_found` for a missing, deleted or invisible one.
+ */
+const checkChannel = (organizationId: OrganizationId, channelId: ChannelId, userId: UserId) =>
+	callObject(CustomerChannelCall, orgTarget(organizationId), { organizationId, channelId, userId }).pipe(
+		Effect.catchTag("ObjectCallError", (cause) =>
+			Effect.fail(
+				new InternalServerError({
+					message: "Could not check the channel",
+					detail: cause.message,
+					cause,
+				}),
+			),
+		),
 	)
 
 /** An account's open-signal counters from its unclosed signals (open or snoozed). */
@@ -715,21 +734,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					const actor = yield* requireMember
 					// Before asking the org: an unknown account is answered without waking it.
 					yield* requireAccount(accountId)
-					const check = yield* callObject(CustomerChannelCall, orgTarget(organizationId), {
-						organizationId,
-						channelId,
-						userId: actor.userId,
-					}).pipe(
-						Effect.catchTag("ObjectCallError", (cause) =>
-							Effect.fail(
-								new InternalServerError({
-									message: "Could not check the channel",
-									detail: cause.message,
-									cause,
-								}),
-							),
-						),
-					)
+					const check = yield* checkChannel(organizationId, channelId, actor.userId)
 					if (check === "not_found") return yield* notFound("channel", channelId)
 					if (check === "not_linkable") {
 						return yield* invalid("Only channels can be linked to a customer, not threads or DMs")
@@ -792,6 +797,9 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 				Effect.gen(function* () {
 					const organizationId = yield* requireOwnOrganization(payloadOrg)
 					const actor = yield* requireMember
+					// As for linking: a channel the caller cannot see is not theirs to unlink.
+					const check = yield* checkChannel(organizationId, channelId, actor.userId)
+					if (check === "not_found") return yield* notFound("channel", channelId)
 					const now = yield* currentTime
 					return yield* txOnly(
 						Effect.gen(function* () {

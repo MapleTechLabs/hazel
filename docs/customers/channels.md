@@ -12,18 +12,18 @@ all of them.
   that belongs to another account moves it (both accounts get a `hazel` timeline event:
   `channel.unlinked`, `channel.linked`).
 - Only `public` and `private` channels can be linked (not threads or DMs).
-- Linking is queue work: any member of the org (`customer_members`) may link and unlink. The caller
-  must see the channel (`channel_access`); a channel they cannot see answers `not_found`, the same as
+- Linking is queue work: any member of the org (`customer_members`) may link and unlink. For both,
+  the caller must see the channel (`channel_access`); a channel they cannot see answers `not_found`, the same as
   one that does not exist.
 - Customer data stays internal: the projection streams only to org members who see the channel,
   never to Connect guests.
 
 ## Data
 
-| Where                               | Table                    | What                                                                                                                                   |
-| ----------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `CustomersObject` (`customers`)     | `customer_channel_links` | The link (authoritative). `accountId`, `channelId`, `linkedBy`, soft delete; partial unique index on `channelId` while live. Synced to members. |
-| `OrgObject` (`org`), projection     | `channel_customers`      | `channelId` → `accountId`, `accountName`. Written only by `org.setChannelCustomers`. Synced with `byChannel` (members who see it).    |
+| Where                           | Table                    | What                                                                                                                                            |
+| ------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CustomersObject` (`customers`) | `customer_channel_links` | The link (authoritative). `accountId`, `channelId`, `linkedBy`, soft delete; partial unique index on `channelId` while live. Synced to members. |
+| `OrgObject` (`org`), projection | `channel_customers`      | `channelId` → `accountId`, `accountName`. Written only by `org.setChannelCustomers`. Synced with `byChannel` (members who see it).              |
 
 ## Flow
 
@@ -40,7 +40,10 @@ all of them.
    source deleted).
 5. Org deletion purges `customer_channel_links` with the rest of the customer data.
 
-A deleted channel keeps its link; clients skip channels they no longer see.
+Deleting a channel that has a customer: the `OrgObject` sends `customers.channelDeleted` (from
+`channel.delete`, only when `channel_customers` has the channel; sender guard: the org's own
+object). The customers object drops the live link, writes a `channel.deleted` event on the
+account and sends a new snapshot.
 
 ## Client
 

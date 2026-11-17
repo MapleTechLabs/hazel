@@ -60,6 +60,9 @@ export const UnlinkChannelCustomer = Command.define("UnlinkChannelCustomer", {
 	execute: (args) =>
 		HazelRpc.use((rpc) => rpc("customers.channel.unlink", args)).pipe(
 			Effect.as(Message.SucceededCustomerLink()),
+			Effect.catchTag("CustomersNotFoundError", () =>
+				Effect.succeed(Message.FailedCustomerLink({ unlinking: true, reason: "NotFound" })),
+			),
 			catchCommon((reason) => Message.FailedCustomerLink({ unlinking: true, reason })),
 		),
 })

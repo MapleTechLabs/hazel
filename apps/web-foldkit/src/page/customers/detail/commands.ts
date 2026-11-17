@@ -180,6 +180,9 @@ export const UnlinkCustomerChannel = Command.define("UnlinkCustomerChannel", {
 	execute: (args) =>
 		unlinkChannelAction(args).pipe(
 			Effect.as(Message.SucceededChannelAction({ action: "unlink" })),
+			Effect.catchTag("CustomersNotFoundError", () =>
+				Effect.succeed(Message.FailedChannelAction({ action: "unlink", reason: "NotFound" })),
+			),
 			catchCommon((reason) => Message.FailedChannelAction({ action: "unlink", reason })),
 		),
 })

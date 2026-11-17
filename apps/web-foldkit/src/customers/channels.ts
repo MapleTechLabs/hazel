@@ -303,15 +303,6 @@ export const unlinkChannelAction = (props: {
 	readonly channelId: ChannelId
 }) => Effect.flatMap(Clock.currentTimeMillis, (ms) => unlinkChannel({ ...props, at: new Date(ms) }))
 
-/**
- * Unlink without the Customers source: from a channel, whose page has only the org source. The
- * `channel_customers` row follows once the customers object's snapshot lands.
- */
-export const unlinkChannelRpc = (props: {
-	readonly organizationId: OrganizationId
-	readonly channelId: ChannelId
-}) => HazelRpc.use((rpc) => rpc("customers.channel.unlink", props))
-
 // VIEW
 
 /** The channel's mark: its platform's logo, or `#` / a lock for a Hazel or Connect channel. */

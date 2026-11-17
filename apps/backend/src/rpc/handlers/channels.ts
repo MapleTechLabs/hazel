@@ -20,6 +20,7 @@ import { ChannelEffects } from "../../worker/objects/effects/channel-effects"
 import { enqueueEffect } from "../../worker/objects/effects/registry"
 import { channelTarget } from "../../worker/objects/kinds"
 import { syncChannelAccess, syncChannelTree } from "../../worker/objects/org/channel-access"
+import { forgetChannelCustomer } from "../../worker/objects/org/channel-customers"
 import { publishHostChannel } from "../../worker/objects/org/connect"
 import { ChannelViewers } from "../../services/channel-viewers"
 import { Directory } from "../../services/directory"
@@ -163,7 +164,10 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 									.where(($) => [$.id.eq(id), $.deletedAt.isNull()]),
 							)
 							yield* syncChannelTree(id)
-							if (Option.isSome(existing)) yield* channelEvent("channel.delete", existing.value)
+							if (Option.isSome(existing)) {
+								yield* channelEvent("channel.delete", existing.value)
+								yield* forgetChannelCustomer(existing.value.organizationId, id)
+							}
 
 							const txid = yield* generateTransactionId()
 

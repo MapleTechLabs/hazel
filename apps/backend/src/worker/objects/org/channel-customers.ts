@@ -15,7 +15,9 @@ import { Clock, Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import { defineCall } from "../calls"
 import { inList } from "../customers/sql"
-import { defineEffect, type EffectReceivers, type EffectSender } from "../effects/registry"
+import { CustomersEffects } from "../effects/customers-effects"
+import { defineEffect, enqueueEffect, type EffectReceivers, type EffectSender } from "../effects/registry"
+import { customersTarget } from "../kinds"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 
 // ---------------------------------------------------------------------------
@@ -145,3 +147,25 @@ export const channelCustomersSenderRefusal = (kind: string, payload: unknown, se
 			? Option.none<string>()
 			: Option.some(`${kind} for org ${organizationId} from ${sender.kind}`)
 	})
+
+/**
+ * A deleted channel with a customer: its `CustomersObject` drops the link (and sends a new
+ * snapshot). Inside the delete's transaction; nothing to send for a channel without a customer.
+ */
+export const forgetChannelCustomer = Effect.fn("OrgObject.forgetChannelCustomer")(function* (
+	organizationId: OrganizationId,
+	channelId: ChannelId,
+) {
+	const db = yield* Database.Database
+	const linked = yield* db.first(
+		SQLite.from(schema.channelCustomersTable)
+			.select("channelId")
+			.where(($) => [$.channelId.eq(channelId)])
+			.limit(1),
+	)
+	if (Option.isNone(linked)) return
+	yield* enqueueEffect(CustomersEffects.channelDeleted, customersTarget(organizationId), {
+		organizationId,
+		channelId,
+	})
+})

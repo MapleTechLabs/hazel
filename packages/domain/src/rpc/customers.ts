@@ -360,8 +360,11 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 		CustomersInvalidRequestError,
 	),
 
-	/** Unlink the channel from whichever account it is linked to (none: a no-op). */
-	write("customers.channel.unlink", { channelId: ChannelId }, Tx),
+	/**
+	 * Unlink the channel from whichever account it is linked to (none: a no-op). The caller must
+	 * see the channel, as for linking.
+	 */
+	write("customers.channel.unlink", { channelId: ChannelId }, Tx, CustomersNotFoundError),
 
 	/** The list's bulk actions. */
 	write(

@@ -295,7 +295,7 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 	chatCustomer: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
-			channelCustomerStream(channelId, (customer) => Message.UpdatedCustomer({ customer })),
+			channelCustomerStream(channelId, (customer) => Message.UpdatedCustomer({ channelId, customer })),
 	}),
 	chatMembers: entry(byChannel, {
 		modelToDependencies: channelOf,

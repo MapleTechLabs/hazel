@@ -3,10 +3,11 @@
  * channel with its `OrgObject`, keeps one live link per channel, and projects the links to the
  * org (`channel_customers`), which follows renames, moves, unlinks and deleted accounts.
  */
-import type { UserId } from "@hazel/schema"
+import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { orgTarget } from "../kinds"
+import { forgetChannelCustomer } from "../org/channel-customers"
 import { runCompute } from "./compute"
 import { makeCustomersWorld, tagOf, uuid } from "./test-kit"
 
@@ -125,6 +126,48 @@ describe("Customer channel links", () => {
 			}),
 		))
 
+	it("refuses to unlink a channel the member cannot see", () =>
+		run(
+			Effect.gen(function* () {
+				const t = yield* setup
+				const secret = t.channel("private", [t.world.owner])
+				expect(tagOf(yield* t.link("Acme", secret, t.world.owner))).toBe("Success")
+				expect(tagOf(yield* t.unlink(secret))).toBe("CustomersNotFoundError")
+				expect(t.liveLinks()).toHaveLength(1)
+				expect(tagOf(yield* t.unlink(secret, t.world.owner))).toBe("Success")
+				expect(t.liveLinks()).toEqual([])
+			}),
+		))
+
+	it("drops a deleted channel's link and its projection", () =>
+		run(
+			Effect.gen(function* () {
+				const t = yield* setup
+				const general = t.channel("public", [t.world.member])
+				const other = t.channel("public", [t.world.member])
+				yield* t.link("Acme", general)
+				yield* t.link("Acme", other)
+				// What `channel.delete` does in the org, inside its transaction.
+				yield* t.org
+					.run(forgetChannelCustomer(t.world.orgId as OrganizationId, general as ChannelId))
+					.pipe(Effect.orDie)
+				yield* t.org.alarm.pipe(Effect.orDie)
+				expect(t.liveLinks().map((row) => row.channelId)).toEqual([other])
+				expect(t.projected().map((row) => row.channelId)).toEqual([other])
+				const events = t.world.rows<{ type: string }>(
+					`SELECT type FROM customer_events WHERE type = 'channel.deleted'`,
+				)
+				expect(events).toHaveLength(1)
+				// A channel without a customer sends nothing.
+				const before = t.world.objects.deliveries.length
+				yield* t.org
+					.run(forgetChannelCustomer(t.world.orgId as OrganizationId, general as ChannelId))
+					.pipe(Effect.orDie)
+				yield* t.org.alarm.pipe(Effect.orDie)
+				expect(t.world.objects.deliveries.length).toBe(before)
+			}),
+		))
+
 	it("drops a deleted account's channels from the projection on the next compute", () =>
 		run(
 			Effect.gen(function* () {
@@ -145,6 +188,29 @@ describe("Customer channel links", () => {
 				// The alarm delivers what the compute queued.
 				yield* t.world.object.alarm.pipe(Effect.orDie)
 				expect(t.projected()).toEqual([])
+			}),
+		))
+
+	it("accepts a deleted channel only from the org's own org object", () =>
+		run(
+			Effect.gen(function* () {
+				const t = yield* setup
+				const general = t.channel("public", [t.world.member])
+				yield* t.link("Acme", general)
+				for (const sender of [
+					{ kind: "org", id: uuid() },
+					{ kind: "channel", id: general },
+				] as const) {
+					const result = yield* t.world.object.applyEffect({
+						objectId: t.world.orgId,
+						kind: "customers.channelDeleted",
+						payload: { organizationId: t.world.orgId, channelId: general },
+						key: uuid(),
+						sender,
+					})
+					expect(result._tag).toBe("Rejected")
+				}
+				expect(t.liveLinks()).toHaveLength(1)
 			}),
 		))
 
