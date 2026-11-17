@@ -5,6 +5,7 @@ import { Command, Submodel, Subscription } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { organizationCollection, organizationMemberCollection } from "~/db/collections"
 import { forgetReturnTo, readReturnTo } from "../../auth/return-to"
+import { readLastOrganization } from "../../data/last-organization"
 import { liveQueryStream } from "../../data/live-query"
 import { rootRedirect } from "../../redirect"
 import { type AppRoute, routeOfPath } from "../../route"
@@ -18,7 +19,7 @@ import {
 	type Shared,
 } from "../contract"
 import { PageOutMessage } from "../out-message"
-import { Message, Model } from "./model"
+import { Message, Model, type RootMembership } from "./model"
 
 /** `_app/index.tsx`: a loader that forwards to the user's org, onboarding or org selection. */
 
@@ -30,10 +31,23 @@ export const ReadReturnTo = Command.define("ReadReturnTo", {
 	execute: readReturnTo.pipe(Effect.map((returnTo) => Message.ReadReturnTo({ returnTo }))),
 })
 
+/** The organization last opened on this device: `/` goes back to it while the user is still a member. */
+export const ReadLastOrganization = Command.define("ReadLastOrganization", {
+	messages: [Message.ReadLastOrganization],
+	execute: readLastOrganization.pipe(
+		Effect.map((organizationId) => Message.ReadLastOrganization({ organizationId })),
+	),
+})
+
 export const ForgetReturnTo = Command.define("ForgetReturnTo", {
 	messages: [Message.CompletedForgetReturnTo],
 	execute: forgetReturnTo.pipe(Effect.as(Message.CompletedForgetReturnTo())),
 })
+
+/** The last opened organization when the user is still in it, else any of theirs. */
+const membershipOf = (model: Model): RootMembership | undefined =>
+	model.memberships?.find(({ organizationId }) => organizationId === model.lastOrganizationId) ??
+	model.memberships?.[0]
 
 /**
  * Where to go: back to where sign-in started, unless onboarding comes first; else `rootRedirect`.
@@ -47,7 +61,7 @@ const targetOf = (
 	model.returnTo && user.isOnboarded
 		? { route: routeOfPath(model.returnTo), isReturn: true }
 		: {
-				route: rootRedirect(user, Option.fromNullishOr(model.membership), {
+				route: rootRedirect(user, Option.fromNullishOr(membershipOf(model)), {
 					isMobile: shared.isMobile,
 				}),
 				isReturn: false,
@@ -67,7 +81,8 @@ const redirectWhenReady = (model: Model, shared: Shared): Return => {
 		model.hasRedirected ||
 		model.returnTo === undefined ||
 		shared.currentUser === null ||
-		(model.membership === undefined && needsMembership(model, shared.currentUser))
+		((model.memberships === undefined || model.lastOrganizationId === undefined) &&
+			needsMembership(model, shared.currentUser))
 	)
 		return { model }
 	const target = targetOf(model, shared.currentUser, shared)
@@ -97,16 +112,14 @@ const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()
 									.innerJoin({ org: organizationCollection }, ({ member, org }) =>
 										eq(member.organizationId, org.id),
 									)
-									.where(({ member }) => eq(member.userId, userId))
-									.findOne(),
-							(rows) => {
-								const row = rows[0]
-								return Message.UpdatedMembership({
-									membership: row
-										? { organizationId: row.org.id, slug: row.org.slug ?? null }
-										: null,
-								})
-							},
+									.where(({ member }) => eq(member.userId, userId)),
+							(rows) =>
+								Message.UpdatedMemberships({
+									memberships: rows.map(({ org }) => ({
+										organizationId: org.id,
+										slug: org.slug ?? null,
+									})),
+								}),
 							{ onStalled: () => Message.StalledMembership() },
 						),
 		},
@@ -114,17 +127,25 @@ const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()
 }))
 
 export const init = (): Return => ({
-	model: { membership: undefined, returnTo: undefined, hasRedirected: false, isStalled: false },
-	commands: [ReadReturnTo()],
+	model: {
+		memberships: undefined,
+		lastOrganizationId: undefined,
+		returnTo: undefined,
+		hasRedirected: false,
+		isStalled: false,
+	},
+	commands: [ReadReturnTo(), ReadLastOrganization()],
 })
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		UpdatedMembership: ({ membership }) =>
+		UpdatedMemberships: ({ memberships }) =>
 			redirectWhenReady(
-				modifyFields(model, { membership: () => membership, isStalled: () => false }),
+				modifyFields(model, { memberships: () => memberships, isStalled: () => false }),
 				shared,
 			),
+		ReadLastOrganization: ({ organizationId }) =>
+			redirectWhenReady(modifyFields(model, { lastOrganizationId: () => organizationId }), shared),
 		StalledMembership: () => ({ model: modifyFields(model, { isStalled: () => true }) }),
 		PressedReload: () => ({ model, commands: [Reload()] }),
 		CompletedReload: () => ({ model }),

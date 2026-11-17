@@ -6,10 +6,13 @@ export const RootMembership = Schema.Struct({
 	organizationId: OrganizationId,
 	slug: Schema.NullOr(Schema.String),
 })
+export type RootMembership = typeof RootMembership.Type
 
 export const Model = Schema.Struct({
-	/** `undefined` until the live query is ready; `null` when the user has no membership. */
-	membership: Schema.UndefinedOr(Schema.NullOr(RootMembership)),
+	/** `undefined` until the live query is ready; empty when the user has no membership. */
+	memberships: Schema.UndefinedOr(Schema.Array(RootMembership)),
+	/** The organization last opened on this device (`data/last-organization.ts`); `undefined` until read. */
+	lastOrganizationId: Schema.UndefinedOr(Schema.NullOr(OrganizationId)),
 	/** The page sign-in started from (`auth/return-to.ts`); `undefined` until read, `null` if none. */
 	returnTo: Schema.UndefinedOr(Schema.NullOr(Schema.String)),
 	hasRedirected: Schema.Boolean,
@@ -19,7 +22,8 @@ export const Model = Schema.Struct({
 export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
-	UpdatedMembership: { membership: Schema.NullOr(RootMembership) },
+	UpdatedMemberships: { memberships: Schema.Array(RootMembership) },
+	ReadLastOrganization: { organizationId: Schema.NullOr(OrganizationId) },
 	ReadReturnTo: { returnTo: Schema.NullOr(Schema.String) },
 	CompletedForgetReturnTo: {},
 	StalledMembership: {},

@@ -1,32 +1,65 @@
 // @vitest-environment jsdom
+import type { OrganizationId } from "@hazel/schema"
 import { routeOfPath } from "../../route"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import { currentUser, makeShared, organizationId, storyUpdate } from "../../test/pages-fixtures"
 import { PageOutMessage } from "../out-message"
-import { ForgetReturnTo, init, ReadReturnTo, Reload, update } from "./index"
+import {
+	ForgetReturnTo,
+	init,
+	ReadLastOrganization,
+	ReadReturnTo,
+	Reload,
+	update,
+} from "./index"
 import { Message } from "./model"
 
 /** `/` forwards once the user, their membership and the page sign-in started from are known. */
 
 const membership = { organizationId, slug: "hazel" }
+const other = { organizationId: "00000000-0000-4000-8000-0000000000ac" as OrganizationId, slug: "acme" }
 const signedIn = storyUpdate(update, makeShared())
 const notOnboarded = storyUpdate(update, makeShared({ currentUser: { ...currentUser, isOnboarded: false } }))
 const go = (href: string) =>
 	expectOutMessage(PageOutMessage.RequestedNavigation({ route: routeOfPath(href), replace: true }))
 
 describe("root redirect", () => {
-	test("reads the remembered page first", () => {
-		expect(init().commands?.map((command) => command.name)).toEqual([ReadReturnTo.name])
+	test("reads the remembered page and the last organization first", () => {
+		expect(init().commands?.map((command) => command.name)).toEqual([ReadReturnTo.name, ReadLastOrganization.name])
 	})
 
 	test("without a remembered page it goes to the user's organization", () => {
 		story(
 			signedIn,
 			given(init().model),
-			message(Message.UpdatedMembership({ membership })),
+			message(Message.UpdatedMemberships({ memberships: [membership] })),
 			Command.expectNone(),
 			message(Message.ReadReturnTo({ returnTo: null })),
+			Command.expectNone(),
+			message(Message.ReadLastOrganization({ organizationId: null })),
+			go("/hazel"),
+		)
+	})
+
+	test("goes back to the organization last opened on this device", () => {
+		story(
+			signedIn,
+			given(init().model),
+			message(Message.ReadReturnTo({ returnTo: null })),
+			message(Message.ReadLastOrganization({ organizationId: other.organizationId })),
+			message(Message.UpdatedMemberships({ memberships: [membership, other] })),
+			go("/acme"),
+		)
+	})
+
+	test("an organization the user has left falls back to one they are in", () => {
+		story(
+			signedIn,
+			given(init().model),
+			message(Message.ReadReturnTo({ returnTo: null })),
+			message(Message.ReadLastOrganization({ organizationId: other.organizationId })),
+			message(Message.UpdatedMemberships({ memberships: [membership] })),
 			go("/hazel"),
 		)
 	})
@@ -48,12 +81,13 @@ describe("root redirect", () => {
 			signedIn,
 			given(init().model),
 			message(Message.ReadReturnTo({ returnTo: null })),
+			message(Message.ReadLastOrganization({ organizationId: null })),
 			message(Message.StalledMembership()),
 			model((m) => expect(m.isStalled).toBe(true)),
 			message(Message.PressedReload()),
 			Command.expectExact(Reload()),
 			Command.resolve(Reload, Message.CompletedReload()),
-			message(Message.UpdatedMembership({ membership })),
+			message(Message.UpdatedMemberships({ memberships: [membership] })),
 			model((m) => expect(m.isStalled).toBe(false)),
 			go("/hazel"),
 		)
@@ -64,7 +98,8 @@ describe("root redirect", () => {
 			notOnboarded,
 			given(init().model),
 			message(Message.ReadReturnTo({ returnTo: "/join/acme" })),
-			message(Message.UpdatedMembership({ membership: null })),
+			message(Message.ReadLastOrganization({ organizationId: null })),
+			message(Message.UpdatedMemberships({ memberships: [] })),
 			go("/onboarding"),
 			// The remembered page stays for after onboarding, when `/` runs this redirect again.
 			Command.expectNone(),
