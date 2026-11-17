@@ -9,6 +9,8 @@
 /** A user mention, `<@U123>` or `<@W123|name>`; group 1 is the user id. Global: reset `lastIndex`. */
 export const SLACK_USER_MENTION_PATTERN = /<@([UW][A-Z0-9]+)(?:\|[^>]*)?>/g
 
+import { slackEmojiToUnicode } from "./emoji.ts"
+
 const CODE_PATTERN = /```[\s\S]*?```|`[^`\n]+`/g
 const ANGLE_TOKEN_PATTERN = /<([^<>\n]+)>/g
 
@@ -89,7 +91,14 @@ const convertAngleToken = (token: string): string => {
 	return `[${escapeLinkLabel(label)}](${escapeLinkUrl(url)})`
 }
 
-/** Slack mrkdwn (message `text`) to CommonMark. User mentions stay as `<@U123>` for the caller to resolve. */
+/** A Slack emoji shortcode, `:smile:` or `:+1::skin-tone-3:`; group 1 is the name with its modifiers. */
+const EMOJI_SHORTCODE_PATTERN = /:([a-z0-9_+'-]+(?:::skin-tone-[2-6])?):/g
+
+/** Shortcodes to unicode; a custom workspace emoji or an unknown name keeps its `:name:`. */
+const convertEmojiShortcodes = (text: string): string =>
+	text.replace(EMOJI_SHORTCODE_PATTERN, (shortcode, name: string) => slackEmojiToUnicode(name) ?? shortcode)
+
+/** Slack mrkdwn (message `text`) to CommonMark, emoji shortcodes as unicode. User mentions stay as `<@U123>` for the caller to resolve. */
 export const slackMrkdwnToMarkdown = (text: string): string =>
 	outsideCode(
 		text,
@@ -98,6 +107,7 @@ export const slackMrkdwnToMarkdown = (text: string): string =>
 			let result = prose.replace(ANGLE_TOKEN_PATTERN, (_, token: string) =>
 				vault.put(convertAngleToken(token)),
 			)
+			result = convertEmojiShortcodes(result)
 			result = replaceDelimited(result, "*", BOLD)
 			result = replaceDelimited(result, "_", ITALIC)
 			result = replaceDelimited(result, "~", STRIKE)
