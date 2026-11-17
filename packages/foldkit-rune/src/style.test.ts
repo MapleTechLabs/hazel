@@ -338,6 +338,9 @@ describe("StyleResolver", () => {
 		expect(moved.anchorX).toEqual([0.3, 0.5])
 		// `calc(100% - 1px)` is no zero: it is zero only against a basis of 1.
 		expect(at("absolute -translate-x-1/2", { left: "calc(100% - 1px)" }).anchorX).toBeUndefined()
+		// In flow, a shift by its own size is nothing the host draws: reported, not dropped silently.
+		expect(resolve("relative -translate-x-1/2").style.translate).toBeUndefined()
+		expect([...styles.unsupportedProps.keys()].some((k) => k.endsWith("in flow"))).toBe(true)
 	})
 
 	it("spans grid columns and starts a grown item from its flex basis", () => {

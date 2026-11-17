@@ -1961,6 +1961,9 @@ export class StyleResolver {
 		const top = s.absolute?.[1]
 		if (s.position === "sticky" && top !== null && top !== undefined) s.stickyTop = top
 		if (s.position !== "absolute") {
+			// Moved by a share of its own size, in flow: nothing the host draws.
+			if (acc.selfShift?.some((x) => x !== 0))
+				this.bump(this.unsupportedProps, "translate: a share of its own size, in flow")
 			delete s.absolute
 			delete s.insetFrac
 			delete s.centerY
