@@ -126,6 +126,9 @@ pub struct Style {
     /// `top: y%` with `-translate-y-1/2` (or `-full`), as `anchor_x`.
     #[serde(default, deserialize_with = "lenient")]
     pub anchor_y: Option<[F; 2]>,
+    /// `overflow: hidden` (not `clip`): a scroll container, whose automatic minimum width is 0.
+    #[serde(default, deserialize_with = "lenient")]
+    pub clip_scrolls: Option<bool>,
     /// `flex-basis` in points (`basis-72`), which a grown item starts from.
     #[serde(default, deserialize_with = "lenient")]
     pub basis: Option<F>,

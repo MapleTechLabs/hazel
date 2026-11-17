@@ -260,8 +260,15 @@ export const startRuntime = async (platform: NativePlatform) => {
 	// server boots it, so a page can be compared with Chromium without a backend. From source only
 	// (no `HAZEL_NATIVE_ENTRY`): the bundle leaves this import unresolved and ships no lab code.
 	const { labPathOf } = await import("../../web-foldkit/src/lab/path")
-	const labPath = labPathOf(new URL(startPath, "http://lab.invalid").pathname)
+	const labUrl = new URL(startPath, "http://lab.invalid")
+	const labPath = labPathOf(labUrl.pathname)
 	if (labPath !== undefined) {
+		// `?theme=dark|light`, as the web lab reads it; without one, `NATIVE_THEME` decides.
+		const theme = labUrl.searchParams.get("theme")
+		if (theme === "dark" || theme === "light") {
+			document.documentElement.classList.remove("light", "dark")
+			document.documentElement.classList.add(theme)
+		}
 		const { lab } = (await import(`../../web-foldkit/src/lab/entries/${labPath}.ts`)) as {
 			lab: import("../../web-foldkit/src/lab/define").LabEntry
 		}

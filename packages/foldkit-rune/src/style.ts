@@ -188,6 +188,9 @@ export type Style = {
 	/** `overflow-x: auto`/`scroll`: the host scrolls a flex row sideways (`scroll_x`). */
 	scrollX?: boolean
 	clip?: boolean
+	/** `overflow: hidden` (not `clip`): a scroll container, whose automatic minimum size is 0, so a
+	 * row lets it shrink. */
+	clipScrolls?: boolean
 	/** `contain: layout`/`paint`, `display: flow-root`: its own formatting context, so its
 	 * children's margins stay inside it. */
 	isolated?: boolean
@@ -1197,12 +1200,19 @@ export class StyleResolver {
 		}
 		/** `left`/`top` as a share of the containing block, which a self-relative translate is anchored at. */
 		const anchorAt = (axis: 0 | 1, value: string) => {
-			const pct = evalLength(value, units, 1) === 0 ? 0 : percentage(value, units)
+			// Zero whatever the basis (`0`, `0%`); `calc(100% - 1px)` is zero only against a basis of 1.
+			const zero = evalLength(value, units, 1) === 0 && evalLength(value, units, 2) === 0
+			const pct = zero ? 0 : percentage(value, units)
 			const at = acc.anchorPct ?? [null, null]
 			at[axis] = pct === null ? null : pct / 100
 			acc.anchorPct = at
 		}
 		const inset = (i: number, value: string) => {
+			// The last left/top written is the one a self-relative translate is anchored at.
+			if (i === 0 || i === 1) {
+				anchorAt(i, value)
+				delete s[i === 0 ? "centerX" : "centerY"]
+			}
 			// A percentage is of the containing block: the window for `fixed`, else (most often) the parent.
 			const horizontal = i % 2 === 0
 			// Read only for a percentage: a box an inset never looked at is no fact about it.
@@ -1587,8 +1597,8 @@ export class StyleResolver {
 			}
 			case "top":
 			case "inset-block":
-				anchorAt(1, v)
 				if (percentage(v, units) === 50) {
+					anchorAt(1, v)
 					s.absolute = s.absolute ?? [null, null, null, null]
 					s.centerY = true
 					break
@@ -1610,8 +1620,8 @@ export class StyleResolver {
 			}
 			case "left":
 			case "inset-inline-start":
-				anchorAt(0, v)
 				if (percentage(v, units) === 50) {
+					anchorAt(0, v)
 					s.absolute = s.absolute ?? [null, null, null, null]
 					s.centerX = true
 					break
@@ -1677,15 +1687,18 @@ export class StyleResolver {
 				setScroll(s, "scrollY", y)
 				setScroll(s, "scrollX", x)
 				if ([x, y].some((o) => o === "hidden" || o === "clip")) s.clip = true
+				if ([x, y].includes("hidden")) s.clipScrolls = true
 				break
 			}
 			case "overflow-y":
 				setScroll(s, "scrollY", v)
 				if (v === "hidden" || v === "clip") s.clip = true
+				if (v === "hidden") s.clipScrolls = true
 				break
 			case "overflow-x":
 				setScroll(s, "scrollX", v)
 				if (v === "hidden" || v === "clip") s.clip = true
+				if (v === "hidden") s.clipScrolls = true
 				break
 			case "text-overflow":
 				s.truncate = v === "ellipsis"

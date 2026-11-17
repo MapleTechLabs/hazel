@@ -330,6 +330,14 @@ describe("StyleResolver", () => {
 		expect(centred.anchorX).toBeUndefined()
 		// `0%` is 0 of any box: a gridline at the top of the plot.
 		expect(at("absolute inset-x-0", { top: "0%" }).absolute?.[1]).toBe(0)
+		// The last left/top written is the anchor: an `inset` after `left: 30%` sets it to 0, and an
+		// inline `left` after `left-1/2` moves the centre off 50%.
+		expect(at("absolute -translate-x-1/2", { left: "30%", inset: "0" }).anchorX).toEqual([0, 0.5])
+		const moved = at("absolute left-1/2 -translate-x-1/2", { left: "30%" })
+		expect(moved.centerX).toBeUndefined()
+		expect(moved.anchorX).toEqual([0.3, 0.5])
+		// `calc(100% - 1px)` is no zero: it is zero only against a basis of 1.
+		expect(at("absolute -translate-x-1/2", { left: "calc(100% - 1px)" }).anchorX).toBeUndefined()
 	})
 
 	it("spans grid columns and starts a grown item from its flex basis", () => {
@@ -347,7 +355,10 @@ describe("StyleResolver", () => {
 		expect(resolve("overflow-y-auto").style).toMatchObject({ scrollY: true })
 		expect(resolve("overflow-y-auto").style.scrollX).toBeUndefined()
 		expect(resolve("overflow-auto").style).toMatchObject({ scrollX: true, scrollY: true })
-		expect(resolve("overflow-x-hidden").style).toMatchObject({ clip: true })
+		expect(resolve("overflow-x-hidden").style).toMatchObject({ clip: true, clipScrolls: true })
+		// `overflow: clip` clips without being a scroll container (its minimum width stays its content's).
+		expect(resolve("overflow-clip").style).toMatchObject({ clip: true })
+		expect(resolve("overflow-clip").style.clipScrolls).toBeUndefined()
 		// A later declaration decides: an inline `visible` or `hidden` turns the scrolling off.
 		const inline = (overflowX: string) =>
 			resolve("flex overflow-x-auto overflow-y-auto", {

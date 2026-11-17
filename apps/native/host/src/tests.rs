@@ -3709,6 +3709,15 @@ fn an_anchored_box_sits_on_its_percentage_point() {
     );
     assert_eq!(rect(&rt, "r/0"), [85.0, 75.0, 10.0, 10.0]);
     assert_eq!(rect(&rt, "r/1"), [230.0, 6.0, 40.0, 10.0]);
+    // A rule pinned top and bottom with no height stretches between them, as CSS does.
+    let mut rule = e("div", json!({ "w": 1 }), vec![]);
+    rule["st"]["absolute"] = json!([null, 0, null, 0]);
+    rule["st"]["anchorX"] = json!([0.3, 0.5]);
+    let rt = runtime(
+        e("div", json!({ "w": 300, "h": 200 }), vec![rule]),
+        (300.0, 200.0),
+    );
+    assert_eq!(rect(&rt, "r/0"), [89.5, 0.0, 1.0, 200.0]);
 }
 
 /// `truncate` beside an icon in a row: it clips, so CSS lets it shrink to the row (its automatic
@@ -3717,7 +3726,7 @@ fn an_anchored_box_sits_on_its_percentage_point() {
 fn a_truncating_row_item_shrinks_to_the_row() {
     let reason = e(
         "span",
-        json!({ "clip": true, "truncate": true, "nowrap": true }),
+        json!({ "clip": true, "clipScrolls": true, "truncate": true, "nowrap": true }),
         vec![t(
             "Payment failed · Invoice INV-2041 for $2,150 open 9 days past due, 3 retries",
         )],
@@ -3730,6 +3739,17 @@ fn a_truncating_row_item_shrinks_to_the_row() {
     let rt = runtime(row, (300.0, 100.0));
     let [x, _, w, _] = rect(&rt, "r/1");
     assert!(x + w <= 200.5, "the reason ends inside the row: {x} + {w}");
+    // `overflow: clip` (an image's default) is no scroll container: it keeps its width.
+    let row = e(
+        "div",
+        json!({ "display": "flex", "w": 100 }),
+        vec![
+            e("div", json!({ "w": 80, "h": 10, "clip": true }), vec![]),
+            e("div", json!({ "w": 80, "h": 10, "clip": true }), vec![]),
+        ],
+    );
+    let rt = runtime(row, (300.0, 100.0));
+    assert_eq!(rect(&rt, "r/0")[2], 80.0);
 }
 
 /// `col-span-2` in a three-column grid takes two tracks; `flex-1 basis-72` in a wrapping row

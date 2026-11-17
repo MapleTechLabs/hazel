@@ -650,6 +650,9 @@ pub fn center_vertically(e: El, st: &Style) -> El {
                 row.items_end()
             } else if cross > 0.0 {
                 row.items_center()
+            } else if y.is_none() && t.is_some() && b.is_some() && st.h.is_none() {
+                // Pinned top and bottom with no height of its own: CSS stretches it between them.
+                row.items_stretch()
             } else {
                 row.items_start()
             };
