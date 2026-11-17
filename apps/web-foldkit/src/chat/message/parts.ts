@@ -32,18 +32,25 @@ const agentBadge = <M>(h: HtmlBuilder<M>, agentName: string, authorName: string)
 		[IconSparkles(h, { className: "size-3" }), `via ${agentName}`],
 	)
 
+/** Each platform's brand color: Discord blurple with its white mark, Slack aubergine with its colored mark. */
 const SYNC_PROVIDERS = {
-	discord: { label: "Discord", icon: IconDiscord },
-	slack: { label: "Slack", icon: IconSlack },
-} satisfies Record<SyncProvider, { readonly label: string; readonly icon: typeof IconDiscord }>
+	discord: { label: "Discord", icon: IconDiscord, className: "bg-[#5865F2]" },
+	slack: { label: "Slack", icon: IconSlack, className: "bg-[#4A154B]" },
+} satisfies Record<
+	SyncProvider,
+	{ readonly label: string; readonly icon: typeof IconDiscord; readonly className: string }
+>
 
 /** In place of "APP" on a message two-way synced in from another platform: its mark and its name. */
 const syncBadge = <M>(h: HtmlBuilder<M>, provider: SyncProvider): Html => {
-	const { label, icon } = SYNC_PROVIDERS[provider]
+	const { label, icon, className } = SYNC_PROVIDERS[provider]
 	return h.span(
 		[
 			h.Class(
-				"inline-flex items-center gap-1 rounded-sm bg-primary px-1.5 py-0.5 text-xs/5 font-medium text-primary-fg",
+				cx(
+					"inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs/5 font-medium text-white",
+					className,
+				),
 			),
 			h.Attribute("title", `Synced from ${label}`),
 		],
