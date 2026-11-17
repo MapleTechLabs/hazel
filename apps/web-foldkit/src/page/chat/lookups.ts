@@ -92,6 +92,8 @@ export const Lookups = Schema.Struct({
 	customEmojis: Schema.Array(CustomEmojiInfo),
 	attachments: Schema.Array(AttachmentInfo),
 	syncedMessages: Schema.Array(SyncedMessageInfo),
+	/** The platform the channel is bridged to by an active chat sync link, marked on its header icon. */
+	syncProvider: Schema.NullOr(SyncProvider),
 	agentMarks: Schema.Array(AgentMarkInfo),
 	threadChannels: Schema.Array(ThreadChannelInfo),
 	threadMessages: Schema.Array(ThreadMessageInfo),
@@ -106,6 +108,7 @@ export const emptyLookups: Lookups = {
 	customEmojis: [],
 	attachments: [],
 	syncedMessages: [],
+	syncProvider: null,
 	agentMarks: [],
 	threadChannels: [],
 	threadMessages: [],
