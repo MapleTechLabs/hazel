@@ -15,7 +15,7 @@ import type { BotCommand, MentionableBot, MentionMember, MentionProvider } from 
 
 interface MentionUserRow {
 	readonly id: UserId
-	readonly externalId: string
+	readonly email: string
 	readonly firstName: string
 	readonly lastName: string
 	readonly avatarUrl?: string | null
@@ -74,7 +74,7 @@ const syncedProviders = (channelId: ChannelId) =>
 
 /**
  * The org's Slack and Discord people: the shadow users chat sync made for provider users who
- * wrote in a linked channel (`<provider>-user-<id>`). They are org members but join no channel.
+ * wrote in a linked channel (`<provider>-user-<id>@<provider>.internal`). They are org members but join no channel.
  */
 const externalUsers = () =>
 	liveQueryStream<MentionUserRow, ReadonlyArray<MentionUserRow>>(
@@ -85,9 +85,12 @@ const externalUsers = () =>
 		(rows) => rows,
 	)
 
-/** The platform a shadow user belongs to, from its `<provider>-user-<id>` external id. */
-const shadowProviderOf = (externalId: string): MentionProvider | null =>
-	externalId.startsWith("discord-user-") ? "discord" : externalId.startsWith("slack-user-") ? "slack" : null
+/**
+ * The platform a shadow user belongs to, from its `<provider>-user-<id>@<provider>.internal` email.
+ * Not the external id: it is `Sensitive`, so the synced user rows never carry it.
+ */
+const shadowProviderOf = (email: string | undefined): MentionProvider | null =>
+	email?.startsWith("discord-user-") ? "discord" : email?.startsWith("slack-user-") ? "slack" : null
 
 /**
  * Mention autocomplete: the channel's members (the query `useMentionOptions` runs), and in a
@@ -101,7 +104,7 @@ export const mentionMembersStream = <Message>(
 		Stream.map(([members, providers, external]) => {
 			const memberIds = new Set(members.map((user) => user.id))
 			const synced = external.flatMap((user) => {
-				const provider = shadowProviderOf(user.externalId)
+				const provider = shadowProviderOf(user.email)
 				return provider !== null && providers.includes(provider) && !memberIds.has(user.id)
 					? [toMentionMember(user, provider)]
 					: []
