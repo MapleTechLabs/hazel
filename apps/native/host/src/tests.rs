@@ -3687,3 +3687,111 @@ fn a_press_plays_its_elements_haptic_before_the_runtime_hears_it() {
     assert_eq!(sent_events(981).len(), 1, "the marked press still clicks");
     assert_eq!(sent_events(982).len(), 1);
 }
+
+/// A chart's dot at `left: 30%; top: 40%` moved back by half its size (`-translate-1/2`): centred
+/// on that point. A tick moved back by all its width (`-translate-x-full`) ends at its point.
+#[test]
+fn an_anchored_box_sits_on_its_percentage_point() {
+    let mut dot = e(
+        "div",
+        json!({ "w": 10, "h": 10, "bg": "#ff0000ff" }),
+        vec![],
+    );
+    dot["st"]["absolute"] = json!([null, null, null, null]);
+    dot["st"]["anchorX"] = json!([0.3, 0.5]);
+    dot["st"]["anchorY"] = json!([0.4, 0.5]);
+    let mut tick = e("div", json!({ "w": 40, "h": 10 }), vec![]);
+    tick["st"]["absolute"] = json!([null, 6, null, null]);
+    tick["st"]["anchorX"] = json!([0.9, 1.0]);
+    let rt = runtime(
+        e("div", json!({ "w": 300, "h": 200 }), vec![dot, tick]),
+        (300.0, 200.0),
+    );
+    assert_eq!(rect(&rt, "r/0"), [85.0, 75.0, 10.0, 10.0]);
+    assert_eq!(rect(&rt, "r/1"), [230.0, 6.0, 40.0, 10.0]);
+    // A rule pinned top and bottom with no height stretches between them, as CSS does.
+    let mut rule = e("div", json!({ "w": 1 }), vec![]);
+    rule["st"]["absolute"] = json!([null, 0, null, 0]);
+    rule["st"]["anchorX"] = json!([0.3, 0.5]);
+    let rt = runtime(
+        e("div", json!({ "w": 300, "h": 200 }), vec![rule]),
+        (300.0, 200.0),
+    );
+    assert_eq!(rect(&rt, "r/0"), [89.5, 0.0, 1.0, 200.0]);
+    let mut rule = e("div", json!({ "w": 1, "h": "auto" }), vec![]);
+    rule["st"]["absolute"] = json!([null, 0, null, 0]);
+    rule["st"]["anchorX"] = json!([0.3, 0.5]);
+    let rt = runtime(
+        e("div", json!({ "w": 300, "h": 200 }), vec![rule]),
+        (300.0, 200.0),
+    );
+    assert_eq!(rect(&rt, "r/0")[3], 200.0);
+}
+
+/// `truncate` beside an icon in a row: it clips, so CSS lets it shrink to the row (its automatic
+/// minimum width is 0) and its text ends in an ellipsis instead of running out of the row.
+#[test]
+fn a_truncating_row_item_shrinks_to_the_row() {
+    let reason = e(
+        "span",
+        json!({ "clip": true, "clipScrolls": true, "truncate": true, "nowrap": true }),
+        vec![t(
+            "Payment failed · Invoice INV-2041 for $2,150 open 9 days past due, 3 retries",
+        )],
+    );
+    let row = e(
+        "div",
+        json!({ "display": "flex", "gapCol": 6, "w": 200 }),
+        vec![e("span", json!({ "w": 12, "h": 12 }), vec![]), reason],
+    );
+    let rt = runtime(row, (300.0, 100.0));
+    let [x, _, w, _] = rect(&rt, "r/1");
+    assert!(x + w <= 200.5, "the reason ends inside the row: {x} + {w}");
+    // `overflow: clip` (an image's default) is no scroll container: it keeps its width.
+    let row = e(
+        "div",
+        json!({ "display": "flex", "w": 100 }),
+        vec![
+            e(
+                "div",
+                json!({ "w": 80, "h": 10, "clip": true }),
+                vec![e("div", json!({ "w": 80, "h": 10 }), vec![])],
+            ),
+            e(
+                "div",
+                json!({ "w": 80, "h": 10, "clip": true }),
+                vec![e("div", json!({ "w": 80, "h": 10 }), vec![])],
+            ),
+        ],
+    );
+    let rt = runtime(row, (300.0, 100.0));
+    assert_eq!(rect(&rt, "r/0")[2], 80.0);
+}
+
+/// `col-span-2` in a three-column grid takes two tracks; `flex-1 basis-72` in a wrapping row
+/// starts from 288, so the next item wraps under it rather than squeezing it.
+#[test]
+fn a_column_span_and_a_flex_basis_size_their_items() {
+    let grid = e(
+        "div",
+        json!({ "display": "grid", "gridCols": ["1fr", "1fr", "1fr"], "w": 300 }),
+        vec![
+            e("div", json!({ "h": 10, "colSpan": 2 }), vec![]),
+            e("div", json!({ "h": 10 }), vec![]),
+        ],
+    );
+    let rt = runtime(grid, (300.0, 100.0));
+    assert_eq!(rect(&rt, "r/0")[2], 200.0);
+    assert_eq!(rect(&rt, "r/1")[0], 200.0);
+    let header = e(
+        "div",
+        json!({ "display": "flex", "wrap": true, "w": 400 }),
+        vec![
+            e("div", json!({ "grow": 1, "basis": 288, "h": 20 }), vec![]),
+            e("div", json!({ "w": 150, "h": 20 }), vec![]),
+        ],
+    );
+    let rt = runtime(header, (400.0, 100.0));
+    assert_eq!(rect(&rt, "r/0")[2], 400.0);
+    assert_eq!(rect(&rt, "r/1")[1], 20.0);
+}

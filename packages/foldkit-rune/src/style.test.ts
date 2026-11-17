@@ -305,13 +305,69 @@ describe("StyleResolver", () => {
 		expect(resolve("absolute top-0").style.insetFrac).toBeUndefined()
 	})
 
+	it("anchors a box moved by a share of its own size at its percentage inset (a chart's dots and ticks)", () => {
+		const plot = resolve("relative flex-1")
+		const at = (classes: string, inline: Record<string, string>) =>
+			resolve(classes, { scope: plot.scope, extra: { inline } }).style
+		// `left: 30%` then `-translate-1/2`: centred on (30%, 40%), whichever comes first.
+		const dot = at("absolute size-2.5 -translate-1/2", { left: "30%", top: "40%" })
+		expect(dot.anchorX).toEqual([0.3, 0.5])
+		expect(dot.anchorY).toEqual([0.4, 0.5])
+		expect(dot.translate).toBeUndefined()
+		expect(dot.absolute?.[0]).toBeNull()
+		expect(dot.absolute?.[1]).toBeNull()
+		// An x-axis tick: centred across, its top a plain inset; at the right end, right-aligned.
+		const tick = at("absolute top-1.5 -translate-x-1/2", { left: "50.5%" })
+		expect(tick.anchorX).toEqual([0.505, 0.5])
+		expect(tick.anchorY).toBeUndefined()
+		expect(tick.absolute?.[1]).toBe(6)
+		expect(at("absolute top-1.5 -translate-x-full", { left: "98%" }).anchorX).toEqual([0.98, 1])
+		// `translate-x-0` undoes the shift: a plain left inset.
+		expect(at("absolute -translate-x-1/2 translate-x-0", { left: "2%" }).anchorX).toBeUndefined()
+		// `left-1/2 -translate-x-1/2` stays the centring the host already knows.
+		const centred = resolve("absolute left-1/2 -translate-x-1/2").style
+		expect(centred.centerX).toBe(true)
+		expect(centred.anchorX).toBeUndefined()
+		// `0%` is 0 of any box: a gridline at the top of the plot.
+		expect(at("absolute inset-x-0", { top: "0%" }).absolute?.[1]).toBe(0)
+		// The last left/top written is the anchor: an `inset` after `left: 30%` sets it to 0, and an
+		// inline `left` after `left-1/2` moves the centre off 50%.
+		expect(at("absolute -translate-x-1/2", { left: "30%", inset: "0" }).anchorX).toEqual([0, 0.5])
+		const moved = at("absolute left-1/2 -translate-x-1/2", { left: "30%" })
+		expect(moved.centerX).toBeUndefined()
+		expect(moved.anchorX).toEqual([0.3, 0.5])
+		// `calc(100% - 1px)` is no zero: it is zero only against a basis of 1.
+		expect(at("absolute -translate-x-1/2", { left: "calc(100% - 1px)" }).anchorX).toBeUndefined()
+		// In flow, a shift by its own size is nothing the host draws: reported, not dropped silently.
+		expect(resolve("relative -translate-x-1/2").style.translate).toBeUndefined()
+		expect([...styles.unsupportedProps.keys()].some((k) => k.endsWith("in flow"))).toBe(true)
+	})
+
+	it("spans grid columns and starts a grown item from its flex basis", () => {
+		expect(resolve("lg:col-span-2").style.colSpan).toBe(2)
+		expect(resolve("col-span-1").style.colSpan).toBeUndefined()
+		expect(resolve("col-span-full").style.colSpanFull).toBe(true)
+		expect(resolve("flex-1 basis-72").style).toMatchObject({ grow: 1, basis: 288 })
+		expect(resolve("flex-1").style.basis).toBeUndefined()
+		expect(resolve("basis-72 basis-auto").style.basis).toBeUndefined()
+	})
+
 	it("sends horizontal and vertical overflow as the scrolling the host draws", () => {
 		expect(resolve("flex overflow-x-auto").style).toMatchObject({ scrollX: true })
 		expect(resolve("flex overflow-x-auto").style.scrollY).toBeUndefined()
 		expect(resolve("overflow-y-auto").style).toMatchObject({ scrollY: true })
 		expect(resolve("overflow-y-auto").style.scrollX).toBeUndefined()
 		expect(resolve("overflow-auto").style).toMatchObject({ scrollX: true, scrollY: true })
-		expect(resolve("overflow-x-hidden").style).toMatchObject({ clip: true })
+		expect(resolve("overflow-x-hidden").style).toMatchObject({ clip: true, clipScrolls: true })
+		// `overflow: clip` clips without being a scroll container (its minimum width stays its content's).
+		expect(resolve("overflow-clip").style).toMatchObject({ clip: true })
+		expect(resolve("overflow-clip").style.clipScrolls).toBeUndefined()
+		// The last overflow per axis decides: an inline `clip` after `overflow-hidden` is no scroll
+		// container, while `overflow-y: clip` leaves a hidden x one.
+		const after = (inline: Record<string, string>) =>
+			resolve("overflow-hidden", { extra: { inline } }).style.clipScrolls
+		expect(after({ overflow: "clip" })).toBeUndefined()
+		expect(after({ "overflow-y": "clip" })).toBe(true)
 		// A later declaration decides: an inline `visible` or `hidden` turns the scrolling off.
 		const inline = (overflowX: string) =>
 			resolve("flex overflow-x-auto overflow-y-auto", {

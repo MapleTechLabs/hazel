@@ -162,6 +162,8 @@ export type Style = {
 	maxH?: number | "full"
 	grow?: number
 	shrink?: number
+	/** px: `flex-basis` as a length (`basis-72`); absent for `auto` and `0`, which grow already says. */
+	basis?: number
 	items?: string
 	justify?: string
 	self?: string
@@ -186,6 +188,9 @@ export type Style = {
 	/** `overflow-x: auto`/`scroll`: the host scrolls a flex row sideways (`scroll_x`). */
 	scrollX?: boolean
 	clip?: boolean
+	/** `overflow: hidden` (not `clip`): a scroll container, whose automatic minimum size is 0, so a
+	 * row lets it shrink. */
+	clipScrolls?: boolean
 	/** `contain: layout`/`paint`, `display: flow-root`: its own formatting context, so its
 	 * children's margins stay inside it. */
 	isolated?: boolean
@@ -210,6 +215,8 @@ export type Style = {
 	/** `justify-items: center`: a grid centres each item across its cell. */
 	justifyItems?: "center"
 	colSpanFull?: boolean
+	/** `grid-column: span N / span N`: the columns a grid item spans, when more than one. */
+	colSpan?: number
 	subgrid?: boolean
 	/** CSS `text-align` as written (`left`, `center`, `right`, `justify`, `start`, `end`); inherited. */
 	textAlign?: string
@@ -217,6 +224,13 @@ export type Style = {
 	centerY?: boolean
 	/** `left-1/2 -translate-x-1/2`: centred horizontally in its containing block. */
 	centerX?: boolean
+	/**
+	 * `left: x%` with `-translate-x-1/2` (or `-translate-x-full`): [x as a fraction of the containing
+	 * block, the share of its own width it is moved back by (0.5 or 1)]. A chart's dots and ticks.
+	 */
+	anchorX?: [number, number]
+	/** `top: y%` with `-translate-y-1/2` (or `-translate-y-full`), as `anchorX`. */
+	anchorY?: [number, number]
 	/** `position: sticky; top: N`: held N px below the top of the scrolling viewport around it. */
 	stickyTop?: number
 	/** Resolution scratch: whether insets apply. Never sent. */
@@ -1184,7 +1198,21 @@ export class StyleResolver {
 			if (c === null) return unsupported()
 			s[key] = c
 		}
+		/** `left`/`top` as a share of the containing block, which a self-relative translate is anchored at. */
+		const anchorAt = (axis: 0 | 1, value: string) => {
+			// Zero whatever the basis (`0`, `0%`); `calc(100% - 1px)` is zero only against a basis of 1.
+			const zero = evalLength(value, units, 1) === 0 && evalLength(value, units, 2) === 0
+			const pct = zero ? 0 : percentage(value, units)
+			const at = acc.anchorPct ?? [null, null]
+			at[axis] = pct === null ? null : pct / 100
+			acc.anchorPct = at
+		}
 		const inset = (i: number, value: string) => {
+			// The last left/top written is the one a self-relative translate is anchored at.
+			if (i === 0 || i === 1) {
+				anchorAt(i, value)
+				delete s[i === 0 ? "centerX" : "centerY"]
+			}
 			// A percentage is of the containing block: the window for `fixed`, else (most often) the parent.
 			const horizontal = i % 2 === 0
 			// Read only for a percentage: a box an inset never looked at is no fact about it.
@@ -1201,6 +1229,12 @@ export class StyleResolver {
 			const a = s.absolute ?? [null, null, null, null]
 			s.absolute = a
 			if (n === null && value !== "auto") {
+				// `0%` is 0 whatever it is a share of.
+				if (evalLength(value, units, 1) === 0 && evalLength(value, units, 2) === 0) {
+					a[i] = 0
+					if (s.insetFrac !== undefined) s.insetFrac[i] = null
+					return
+				}
 				// A percentage of a size known only once laid out: the host resolves it.
 				const percent = basis === undefined ? percentage(value, units) : null
 				if (percent === null) return unsupported()
@@ -1331,6 +1365,18 @@ export class StyleResolver {
 				if (flex === null) return unsupported()
 				s.grow = flex.grow
 				s.shrink = flex.shrink
+				// `flex: 1 1 18rem`: the basis, past the numbers (`flex: 1` is a basis of 0%).
+				const basis = splitTop(v, /\s/).find((part) => !/^[\d.]+$/.test(part))
+				const n = basis === undefined ? null : evalLength(basis, units)
+				if (n !== null && n > 0) s.basis = n
+				else delete s.basis
+				break
+			}
+			case "flex-basis": {
+				const n = v === "auto" || v === "content" ? 0 : evalLength(v, units)
+				if (n === null) return unsupported()
+				if (n > 0) s.basis = n
+				else delete s.basis
 				break
 			}
 			case "flex-grow":
@@ -1552,6 +1598,7 @@ export class StyleResolver {
 			case "top":
 			case "inset-block":
 				if (percentage(v, units) === 50) {
+					anchorAt(1, v)
 					s.absolute = s.absolute ?? [null, null, null, null]
 					s.centerY = true
 					break
@@ -1574,6 +1621,7 @@ export class StyleResolver {
 			case "left":
 			case "inset-inline-start":
 				if (percentage(v, units) === 50) {
+					anchorAt(0, v)
 					s.absolute = s.absolute ?? [null, null, null, null]
 					s.centerX = true
 					break
@@ -1590,15 +1638,17 @@ export class StyleResolver {
 			case "translate": {
 				const [tx = "0", ty = "0"] = splitTop(v, /\s/)
 				const t = parseTranslate(tx, ty, units)
+				delete acc.selfShift
 				if (t === "none") delete s.translate
 				else if (t !== null) s.translate = t
-				// `-translate-x/y-1/2` under `left/top-1/2` is the centring `centerX`/`centerY` already says.
+				// A share of its own size (`-translate-x-1/2`): placed against its anchor in `finish`.
 				else {
-					const xCentred =
-						s.centerX === true ? percentage(tx, units) === -50 : evalLength(tx, units) === 0
-					const yCentred =
-						s.centerY === true ? percentage(ty, units) === -50 : evalLength(ty, units) === 0
-					if (!(xCentred && yCentred)) unsupported()
+					delete s.translate
+					const share = (part: string) =>
+						evalLength(part, units) === 0 ? 0 : (percentage(part, units) ?? Number.NaN) / 100
+					const shift: [number, number] = [share(tx), share(ty)]
+					if (shift.every((x) => x === 0 || x === -0.5 || x === -1)) acc.selfShift = shift
+					else unsupported()
 				}
 				break
 			}
@@ -1637,15 +1687,18 @@ export class StyleResolver {
 				setScroll(s, "scrollY", y)
 				setScroll(s, "scrollX", x)
 				if ([x, y].some((o) => o === "hidden" || o === "clip")) s.clip = true
+				acc.hidden = [x === "hidden", y === "hidden"]
 				break
 			}
 			case "overflow-y":
 				setScroll(s, "scrollY", v)
 				if (v === "hidden" || v === "clip") s.clip = true
+				acc.hidden = [acc.hidden?.[0] ?? false, v === "hidden"]
 				break
 			case "overflow-x":
 				setScroll(s, "scrollX", v)
 				if (v === "hidden" || v === "clip") s.clip = true
+				acc.hidden = [v === "hidden", acc.hidden?.[1] ?? false]
 				break
 			case "text-overflow":
 				s.truncate = v === "ellipsis"
@@ -1682,10 +1735,18 @@ export class StyleResolver {
 				else if (v === "normal" || v === "stretch" || v === "legacy") delete s.justifyItems
 				else unsupported()
 				break
-			case "grid-column":
+			case "grid-column": {
+				// `col-span-full`, and `col-span-N` (`span N / span N`); a start line is not placed.
+				const span = /^span (\d+)(?: \/ span \1)?$/.exec(v)
 				if (v === "1 / -1") s.colSpanFull = true
-				else unsupported()
+				else if (span !== null) {
+					delete s.colSpanFull
+					const n = Number(span[1])
+					if (n > 1) s.colSpan = n
+					else delete s.colSpan
+				} else unsupported()
 				break
+			}
 			case "text-align":
 				s.textAlign = v
 				break
@@ -1869,14 +1930,48 @@ export class StyleResolver {
 				s.display = "block"
 			if (s.inline === true || INLINE_TAGS.has(acc.tag)) s.inline = false
 		}
+		if (acc.hidden?.some((h) => h)) s.clipScrolls = true
+		else delete s.clipScrolls
+		// A self-relative translate: `-translate-x/y-1/2` under `left/top-1/2` is the centring
+		// `centerX`/`centerY` already says; under another percentage it is an anchor the host places.
+		if (acc.selfShift !== undefined && s.position === "absolute") {
+			for (const axis of [0, 1] as const) {
+				const shift = -acc.selfShift[axis]
+				if (shift === 0) continue
+				const centred = axis === 0 ? s.centerX : s.centerY
+				if (centred === true && shift === 0.5) continue
+				const at = acc.anchorPct?.[axis]
+				if (at === null || at === undefined) {
+					this.bump(
+						this.unsupportedProps,
+						`translate: ${-shift * 100}% of its own size, unanchored`,
+					)
+					continue
+				}
+				if (axis === 0) {
+					delete s.centerX
+					s.anchorX = [at, shift]
+				} else {
+					delete s.centerY
+					s.anchorY = [at, shift]
+				}
+				if (s.absolute !== undefined) s.absolute[axis] = null
+				if (s.insetFrac !== undefined) s.insetFrac[axis] = null
+			}
+		}
 		// Insets place an element only when it is taken out of flow (`sticky` and `relative` stay in it).
 		const top = s.absolute?.[1]
 		if (s.position === "sticky" && top !== null && top !== undefined) s.stickyTop = top
 		if (s.position !== "absolute") {
+			// Moved by a share of its own size, in flow: nothing the host draws.
+			if (acc.selfShift?.some((x) => x !== 0))
+				this.bump(this.unsupportedProps, "translate: a share of its own size, in flow")
 			delete s.absolute
 			delete s.insetFrac
 			delete s.centerY
 			delete s.centerX
+			delete s.anchorX
+			delete s.anchorY
 		}
 		if (s.insetFrac?.every((edge) => edge === null)) delete s.insetFrac
 		delete s.position
@@ -2161,6 +2256,12 @@ type Accumulator = {
 	transition: { property?: string; duration?: string; timing?: string; delay?: string }
 	/** This element's own line-height, when it sets one. */
 	line?: LineSpec
+	/** `left` and `top` as a percentage of the containing block, when written as one. */
+	anchorPct?: [number | null, number | null]
+	/** A translate by a share of its own size (`-translate-x-1/2`): -0.5, -1, or 0, per axis. */
+	selfShift?: [number, number]
+	/** Whether the last overflow written for x, y is `hidden`, which `clipScrolls` is derived from. */
+	hidden?: [boolean, boolean]
 }
 
 /** The `space-x/y` margin as a gap, with the rule's own custom properties in view. */

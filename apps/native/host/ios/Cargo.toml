@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 hazel-native = { path = ".." }
 # The same revision as `hazel-native`'s (`../Cargo.toml`).
-rune = { git = "https://github.com/Makisuo/rune", rev = "364829293d3af04c9738e29e3d9647bbe4b13103" }
+rune = { git = "https://github.com/Makisuo/rune", rev = "4739720eed3ee50eaaa811a3ab7c84b29b976180" }
 serde_json = "1"
 
 # The local cache's databases (`src/local_cache.rs`), on the system's own SQLite; off Apple

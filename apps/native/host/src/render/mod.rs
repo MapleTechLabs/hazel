@@ -120,7 +120,10 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             };
             let inh = inh.from(st);
             if is_text_field(tag, attrs) {
-                return Some(build_input(path, tag, st, attrs, on, inh, ctx));
+                return Some(center_vertically(
+                    build_input(path, tag, st, attrs, on, inh, ctx),
+                    st,
+                ));
             }
             if tag == "img" {
                 return Some(center_vertically(build_img(path, st, attrs, on, ctx), st));
