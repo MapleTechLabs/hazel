@@ -44,6 +44,7 @@ const sidebar: Model = {
 	syncedChannels: [],
 	memberChannelIds: [general, dmGrace],
 	discoverableChannels: [],
+	loaded: { sections: true, favorites: true, dmChannelIds: true },
 	isCreateChannelHintDismissed: true,
 	openMenu: null,
 }

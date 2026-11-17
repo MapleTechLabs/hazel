@@ -47,6 +47,12 @@ export const Model = Schema.Struct({
 	syncedChannels: Schema.Array(SyncedChannel),
 	memberChannelIds: Schema.NullOr(Schema.Array(ChannelId)),
 	discoverableChannels: Schema.Array(DiscoverableChannel),
+	/** Which of the lists that start empty have arrived; an empty one is "none" only then. */
+	loaded: Schema.Struct({
+		sections: Schema.Boolean,
+		favorites: Schema.Boolean,
+		dmChannelIds: Schema.Boolean,
+	}),
 	/** `useFeatureHint("create-channel")`, persisted across organizations. */
 	isCreateChannelHintDismissed: Schema.Boolean,
 	openMenu: Schema.NullOr(OpenMenu),
@@ -126,5 +132,20 @@ export const emptyData = {
 	syncedChannels: [],
 	memberChannelIds: null,
 	discoverableChannels: [],
+	loaded: { sections: false, favorites: false, dmChannelIds: false },
 	openMenu: null,
 } satisfies Omit<Model, "organizationId" | "currentUserId" | "isCreateChannelHintDismissed">
+
+/**
+ * Whether a list the sidebar draws has not arrived yet. Each comes from its own query, so the
+ * sidebar draws them one by one; until the last one is in, it must not count as the screen (the
+ * last screen's paint stays up, `app/paint.ts`), or it shows empty sections that then fill in.
+ */
+export const isLoading = (model: Model): boolean =>
+	model.memberChannelIds === null ||
+	!model.loaded.sections ||
+	!model.loaded.favorites ||
+	!model.loaded.dmChannelIds ||
+	!("default" in model.sectionChannels) ||
+	model.sections.some((section) => !(section.id in model.sectionChannels)) ||
+	model.dmChannelIds.some((channelId) => !(channelId in model.dmChannels))
