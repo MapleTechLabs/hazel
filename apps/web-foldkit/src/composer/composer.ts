@@ -26,11 +26,17 @@ import { editorRegistry, withEditor } from "../editor/registry"
 export const PresenceStatus = Schema.Literals(["online", "away", "busy", "dnd", "offline"])
 export type PresenceStatus = typeof PresenceStatus.Type
 
+/** The synced platform a mentionable person is on, when they are a Slack or Discord user. */
+export const MentionProvider = Schema.Literals(["discord", "slack"])
+export type MentionProvider = typeof MentionProvider.Type
+
 export const MentionMember = Schema.Struct({
 	userId: UserId,
 	firstName: Schema.String,
 	lastName: Schema.String,
 	avatarUrl: Schema.NullOr(Schema.String),
+	/** Set for a Slack or Discord person in a synced channel (not a Hazel member of it). */
+	provider: Schema.optionalKey(Schema.NullOr(MentionProvider)),
 })
 export type MentionMember = typeof MentionMember.Type
 

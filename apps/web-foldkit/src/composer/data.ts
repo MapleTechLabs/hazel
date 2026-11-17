@@ -1,24 +1,36 @@
-import { and, eq, isNull } from "@tanstack/db"
+import { and, eq, inArray, isNull } from "@tanstack/db"
+import { Stream } from "effect"
 import {
 	botCollection,
 	botCommandCollection,
 	botInstallationCollection,
 	channelMemberCollection,
+	chatSyncChannelLinkCollection,
+	chatSyncConnectionCollection,
 	userCollection,
 } from "~/db/collections"
 import type { BotCommandId, BotId, ChannelId, ChannelMemberId, OrganizationId, UserId } from "@hazel/schema"
 import { liveQueryStream } from "../data/live-query"
-import type { BotCommand, MentionableBot, MentionMember } from "./composer"
+import type { BotCommand, MentionableBot, MentionMember, MentionProvider } from "./composer"
 
-/** Channel members for mention autocomplete: the exact query `useMentionOptions` runs. */
-export const mentionMembersStream = <Message>(
-	channelId: ChannelId,
-	toMessage: (members: ReadonlyArray<MentionMember>) => Message,
-) =>
-	liveQueryStream<
-		{ user?: { id: UserId; firstName: string; lastName: string; avatarUrl?: string | null } },
-		Message
-	>(
+interface MentionUserRow {
+	readonly id: UserId
+	readonly externalId: string
+	readonly firstName: string
+	readonly lastName: string
+	readonly avatarUrl?: string | null
+}
+
+const toMentionMember = (user: MentionUserRow, provider: MentionProvider | null): MentionMember => ({
+	userId: user.id,
+	firstName: user.firstName,
+	lastName: user.lastName,
+	avatarUrl: user.avatarUrl ?? null,
+	provider,
+})
+
+const channelMembersRows = (channelId: ChannelId) =>
+	liveQueryStream<{ user?: MentionUserRow }, ReadonlyArray<MentionUserRow>>(
 		(q) =>
 			q
 				.from({ channelMember: channelMemberCollection })
@@ -29,21 +41,73 @@ export const mentionMembersStream = <Message>(
 				.limit(100)
 				.orderBy(({ channelMember }) => channelMember.joinedAt, "desc")
 				.select(({ channelMember, user }) => ({ ...channelMember, user })),
-		(rows) =>
-			toMessage(
-				rows.flatMap((row) =>
-					row.user
-						? [
-								{
-									userId: row.user.id,
-									firstName: row.user.firstName,
-									lastName: row.user.lastName,
-									avatarUrl: row.user.avatarUrl ?? null,
-								},
-							]
-						: [],
+		(rows) => rows.flatMap((row) => (row.user ? [row.user] : [])),
+	)
+
+/** The platforms `channelId` is two-way synced with over an active link. */
+const syncedProviders = (channelId: ChannelId) =>
+	liveQueryStream<{ provider: string }, ReadonlyArray<MentionProvider>>(
+		(q) =>
+			q
+				.from({ link: chatSyncChannelLinkCollection })
+				.innerJoin({ connection: chatSyncConnectionCollection }, ({ link, connection }) =>
+					eq(link.syncConnectionId, connection.id),
+				)
+				.where(({ link, connection }) =>
+					and(
+						eq(link.hazelChannelId, channelId),
+						eq(link.isActive, true),
+						isNull(link.deletedAt),
+						isNull(connection.deletedAt),
+						inArray(connection.provider, ["slack", "discord"]),
+					),
+				)
+				.select(({ connection }) => ({ provider: connection.provider })),
+		(rows) => [
+			...new Set(
+				rows.flatMap((row): Array<MentionProvider> =>
+					row.provider === "slack" || row.provider === "discord" ? [row.provider] : [],
 				),
 			),
+		],
+	)
+
+/**
+ * The org's Slack and Discord people: the shadow users chat sync made for provider users who
+ * wrote in a linked channel (`<provider>-user-<id>`). They are org members but join no channel.
+ */
+const externalUsers = () =>
+	liveQueryStream<MentionUserRow, ReadonlyArray<MentionUserRow>>(
+		(q) =>
+			q
+				.from({ user: userCollection })
+				.where(({ user }) => and(eq(user.userType, "machine"), isNull(user.deletedAt))),
+		(rows) => rows,
+	)
+
+/** The platform a shadow user belongs to, from its `<provider>-user-<id>` external id. */
+const shadowProviderOf = (externalId: string): MentionProvider | null =>
+	externalId.startsWith("discord-user-") ? "discord" : externalId.startsWith("slack-user-") ? "slack" : null
+
+/**
+ * Mention autocomplete: the channel's members (the query `useMentionOptions` runs), and in a
+ * channel synced to Slack or Discord, that platform's people too, so a message can ping them there.
+ */
+export const mentionMembersStream = <Message>(
+	channelId: ChannelId,
+	toMessage: (members: ReadonlyArray<MentionMember>) => Message,
+) =>
+	Stream.zipLatestAll(channelMembersRows(channelId), syncedProviders(channelId), externalUsers()).pipe(
+		Stream.map(([members, providers, external]) => {
+			const memberIds = new Set(members.map((user) => user.id))
+			const synced = external.flatMap((user) => {
+				const provider = shadowProviderOf(user.externalId)
+				return provider !== null && providers.includes(provider) && !memberIds.has(user.id)
+					? [toMentionMember(user, provider)]
+					: []
+			})
+			return toMessage([...members.map((user) => toMentionMember(user, null)), ...synced])
+		}),
 	)
 
 /** `useMentionOptions`' mentionable bots installed in the organization. */

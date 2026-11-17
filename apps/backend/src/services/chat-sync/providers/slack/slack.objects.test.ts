@@ -272,6 +272,39 @@ describe("Slack chat sync on the objects", () => {
 			}),
 		))
 
+	it("mentioning a Slack user's shadow pings them in Slack", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				// Dana writes once from Slack, so the org knows her shadow.
+				yield* world.inbound("Ev20", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000900", "hello"),
+				})
+				const dana = rows<{ authorId: string }>(world.channel, `SELECT authorId FROM messages`)[0]!
+					.authorId
+				yield* ok(
+					yield* call(
+						world.channel,
+						world.channelId,
+						"message.create",
+						{
+							channelId: world.channelId,
+							content: `ping @[userId:${dana}]`,
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: world.owner,
+							deletedAt: null,
+						},
+						world.owner,
+					),
+				)
+				expect(world.objects.chatSyncCalls.at(-1)?.content).toBe("ping <@U0DANA0001>")
+			}),
+		))
+
 	it("a first Slack reply makes a Hazel thread on its parent; later replies join it", () =>
 		run(
 			Effect.gen(function* () {

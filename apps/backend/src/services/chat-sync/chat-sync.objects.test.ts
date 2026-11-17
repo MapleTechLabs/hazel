@@ -644,6 +644,36 @@ describe("chat sync on the objects", () => {
 			}),
 		))
 
+	it("mentioning a provider user's shadow pings them on that provider", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				// Dana writes once from Discord, so the org knows her shadow.
+				yield* world.inbound(discordCreate("444444444444444480", "hello", "333333333333333333"))
+				const dana = rows<{ authorId: string }>(world.channel, `SELECT authorId FROM messages`)[0]!
+					.authorId
+
+				yield* ok(
+					yield* call(
+						world.channel,
+						world.channelId,
+						"message.create",
+						{
+							channelId: world.channelId,
+							content: `ping @[userId:${dana}]`,
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: world.owner,
+							deletedAt: null,
+						},
+						world.owner,
+					),
+				)
+				expect(world.objects.chatSyncCalls.at(-1)?.content).toBe("ping <@333333333333333333>")
+			}),
+		))
+
 	it("a provider user cannot mention or broadcast to Hazel users with Hazel's own syntax", () =>
 		run(
 			Effect.gen(function* () {
