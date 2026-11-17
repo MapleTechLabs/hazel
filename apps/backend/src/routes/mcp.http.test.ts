@@ -9,7 +9,7 @@ import { NodeHttpPlatform, NodeServices } from "@effect/platform-node"
 import { SQLite, schema } from "@hazel/db"
 import type { AgentClientId, ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { ConfigProvider, Context, Effect, Exit, Layer, Option, type Scope } from "effect"
-import { HttpRouter } from "effect/http"
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { describe, expect, it } from "vitest"
 import { AgentAccess } from "../services/agent-access"
 import { Directory } from "../services/directory"
@@ -114,11 +114,27 @@ const makeWorld = Effect.gen(function* () {
 		Layer.provideMerge(NodeServices.layer),
 		Layer.provideMerge(NodeHttpPlatform.layer),
 	)
-	const { handler, dispose } = HttpRouter.toWebHandler(app as never, { disableLogger: true })
-	yield* Effect.addFinalizer(() => Effect.promise(() => dispose()))
+	// Served the way the api Worker serves it (`worker/http.ts`): the graph is built once and each
+	// request runs with only itself in context, so a handler that reaches for a layer service it
+	// did not capture fails here as it does in production.
+	type Handler = Effect.Effect<
+		HttpServerResponse.HttpServerResponse,
+		unknown,
+		HttpServerRequest.HttpServerRequest | Scope.Scope
+	>
+	const handler = yield* HttpRouter.toHttpEffect(app as never) as Effect.Effect<Handler, never, Scope.Scope>
 	const fetch = (path: string, init: RequestInit = {}) =>
-		Effect.promise(() =>
-			handler(new Request(`${API}${path}`, init), Context.empty() as Context.Context<any>),
+		handler.pipe(
+			Effect.provideService(
+				HttpServerRequest.HttpServerRequest,
+				HttpServerRequest.fromWeb(new Request(`${API}${path}`, init)),
+			),
+			Effect.scoped,
+			Effect.catchCause((cause) =>
+				Effect.succeed(HttpServerResponse.text(String(cause), { status: 500 })),
+			),
+			Effect.map((response) => HttpServerResponse.toWeb(response)),
+			Effect.updateContext((_: Context.Context<never>) => Context.empty() as Context.Context<any>),
 		)
 	const access = Context.get(
 		yield* Layer.build(AgentAccess.layer.pipe(Layer.provide(Layer.succeedContext(objects.directory)))),
