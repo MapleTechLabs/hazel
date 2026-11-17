@@ -186,6 +186,46 @@ export const slackInbound = Effect.fn("SlackEvents.inbound")(function* (
 	}
 })
 
+/** History subtypes a person wrote; thread broadcasts are thread replies and stay in Slack. */
+const HISTORY_SUBTYPES: ReadonlySet<string | null> = new Set([null, "file_share", "me_message"])
+
+/**
+ * A message from a channel's history as the `MessageCreate` its live event would have been, sent
+ * at its own time (`sentAt`); `None` for a bot's or an app's (Hazel's own included), a channel
+ * notice (joins, topic) or a thread reply.
+ */
+export const slackHistoryInbound = Effect.fn("SlackEvents.historyInbound")(function* (
+	entry: Slack.SlackHistoryMessage,
+	externalWorkspaceId: string,
+	lookupUser: SlackUserLookup,
+) {
+	const { message } = entry
+	if (!HISTORY_SUBTYPES.has(entry.subtype)) return Option.none<ChatSyncInbound>()
+	if (message.botId !== null || message.appId !== null || message.user === null) {
+		return Option.none<ChatSyncInbound>()
+	}
+	if (message.threadTs !== null && message.threadTs !== message.ts) return Option.none<ChatSyncInbound>()
+	const sentAt = Math.round(Number(message.ts) * 1000)
+	const text = SlackFormat.slackMrkdwnToMarkdown(message.text)
+	return Option.some<ChatSyncInbound>({
+		provider: "slack",
+		externalWorkspaceIds: [externalWorkspaceId],
+		externalChannelId: ExternalChannelId.make(message.channel),
+		dedupeKey: `slack:history:${message.channel}:${message.ts}`,
+		author: yield* authorOf(message.user, lookupUser),
+		event: {
+			_tag: "MessageCreate",
+			externalMessageId: ExternalMessageId.make(message.ts),
+			externalWebhookId: null,
+			content: text,
+			externalReplyToMessageId: null,
+			attachments: attachmentsOf(message),
+			mentions: yield* mentionsOf(text, lookupUser),
+			sentAt: Number.isFinite(sentAt) ? sentAt : undefined,
+		},
+	})
+})
+
 /** Whether the event ends the workspace's install (its bot token is dead). */
 export const endsInstall = (event: Slack.SlackEvent) =>
 	event._tag === "AppUninstalled" || (event._tag === "TokensRevoked" && event.bot.length > 0)

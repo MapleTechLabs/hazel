@@ -172,6 +172,8 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 		externalChannelId: ExternalChannelId,
 		externalChannelName: Schema.String,
 		direction: SyncDirection,
+		/** The latest messages to import (0: none). */
+		historyLimit: Schema.Number,
 	},
 	messages: [Message.SucceededCreateLink, Message.FailedCreateLink],
 	execute: ({ hazelChannelName, ...payload }) =>
@@ -184,7 +186,10 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 				organizationId: orgOfChatSyncConnection(payload.syncConnectionId),
 			})
 			return Message.SucceededCreateLink({
-				successMessage: `Linked #${hazelChannelName} to #${payload.externalChannelName}`,
+				successMessage:
+					payload.historyLimit > 0
+						? `Linked #${hazelChannelName} to #${payload.externalChannelName}. Importing recent messages…`
+						: `Linked #${hazelChannelName} to #${payload.externalChannelName}`,
 			})
 		}).pipe(
 			Effect.catchTags({

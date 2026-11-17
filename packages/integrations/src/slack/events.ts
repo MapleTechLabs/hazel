@@ -234,6 +234,24 @@ const toMessage = (
 	edited: raw.edited ? { user: raw.edited.user ?? null, ts: raw.edited.ts } : null,
 })
 
+/** A message as `conversations.history` lists it, with its subtype (`null`: a plain message). */
+export interface SlackHistoryMessage {
+	readonly subtype: string | null
+	readonly message: SlackMessage
+}
+
+const decodeRawInnerMessage = Schema.decodeUnknownOption(RawInnerMessage)
+
+/** One `conversations.history` entry of `channel`; `None` when it is not a message Slack describes. */
+export const decodeSlackHistoryMessage = (
+	raw: unknown,
+	channel: string,
+): Option.Option<SlackHistoryMessage> =>
+	Option.map(decodeRawInnerMessage(raw), (message) => ({
+		subtype: message.subtype ?? null,
+		message: toMessage(message, channel, null),
+	}))
+
 const decodeMessageEvent = (raw: typeof RawMessageEvent.Type): Option.Option<SlackEvent> => {
 	const channel = raw.channel
 	if (!channel) return Option.none()

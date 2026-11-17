@@ -107,6 +107,11 @@ export const ChatSyncInboundEvent = Schema.TaggedUnion({
 		inExternalThreadId: Schema.optional(ExternalThreadId),
 		/** The thread's provider name, for a thread this message is the first Hazel sees of. */
 		externalThreadName: Schema.optional(Schema.String),
+		/**
+		 * When the provider says it was sent (epoch ms); set only on imported history, which is
+		 * written at that time and notifies nobody.
+		 */
+		sentAt: Schema.optional(Schema.Number),
 	},
 	MessageUpdate: {
 		externalMessageId: ExternalMessageId,
@@ -165,6 +170,8 @@ export const ChannelIngestEvent = Schema.TaggedUnion({
 		authorId: UserId,
 		externalReplyToMessageId: Schema.NullOr(ExternalMessageId),
 		attachments: Schema.Array(ChatSyncAttachment),
+		/** Imported history: its provider send time (epoch ms). */
+		sentAt: Schema.optional(Schema.Number),
 	},
 	MessageUpdate: { externalMessageId: ExternalMessageId, content: Schema.String },
 	MessageDelete: { externalMessageId: ExternalMessageId },
@@ -283,6 +290,25 @@ export type PrepareLinkPayload = typeof PrepareLinkPayload.Type
 export const ChatSyncDeliveryEffects = {
 	outbound: defineEffect("chatSync.outbound", "chat-sync", ChatSyncOutboundPayload),
 	prepareLink: defineEffect("chatSync.prepareLink", "chat-sync", PrepareLinkPayload),
+}
+
+/**
+ * A new link imports the external channel's past messages, one page per delivery (newest page
+ * first), each page ingested at this org like live events. The next page is its own delivery.
+ */
+export const ImportHistoryPayload = Schema.Struct({
+	provider: Schema.String,
+	externalWorkspaceId: Schema.String,
+	externalChannelId: ExternalChannelId,
+	/** Messages still to import, this page included. */
+	remaining: Schema.Number,
+	/** Where this page starts (the provider's cursor); `null` on the first page. */
+	cursor: Schema.NullOr(Schema.String),
+})
+export type ImportHistoryPayload = typeof ImportHistoryPayload.Type
+
+export const ChatSyncHistoryEffects = {
+	importHistory: defineEffect("chatSync.importHistory", "chat-sync", ImportHistoryPayload),
 }
 
 /**

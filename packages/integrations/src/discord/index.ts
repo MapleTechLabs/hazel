@@ -5,4 +5,5 @@ export {
 	DiscordAccountInfo,
 	DiscordGuild,
 	DiscordGuildChannel,
+	DiscordChannelMessage,
 } from "./api-client.ts"

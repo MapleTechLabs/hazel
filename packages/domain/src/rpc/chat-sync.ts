@@ -136,6 +136,11 @@ export class ChatSyncRpcs extends RpcGroup.make(
 			externalChannelName: Schema.optional(Schema.String),
 			direction: Schema.optional(ChatSyncChannelLink.ChatSyncDirection),
 			settings: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+			/**
+			 * Import up to this many of the external channel's latest messages into the Hazel channel
+			 * (capped per provider, 500 at most), in the background. Omitted or 0: no history.
+			 */
+			historyLimit: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1000 }))),
 		}),
 		success: ChatSyncChannelLinkResponse,
 		error: Schema.Union([

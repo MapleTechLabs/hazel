@@ -312,6 +312,112 @@ describe("chat sync on the objects", () => {
 			}),
 		))
 
+	it(
+		"a new link imports the channel's history in pages, backdated and silent",
+		() =>
+			run(
+				Effect.gen(function* () {
+					const world = yield* makeWorld
+					const HISTORY_CHANNEL = "555555555555555555" as ExternalChannelId
+					const start = Date.UTC(2026, 0, 1)
+					// 120 past messages, oldest first, a minute apart; the link asks for the last 110.
+					const past = Array.from({ length: 120 }, (_, index) => {
+						const id = `60000000000000${String(index).padStart(4, "0")}`
+						const message = discordCreate(id, `old ${index}`)
+						return {
+							...message,
+							externalChannelId: HISTORY_CHANNEL,
+							dedupeKey: `discord:history:${id}`,
+							event: { ...message.event, sentAt: start + index * 60_000 },
+						} as ChatSyncInbound
+					})
+					world.objects.chatSyncHistory.set(HISTORY_CHANNEL, past)
+
+					const created = (yield* ok(
+						yield* call(
+							world.org,
+							world.orgId,
+							"channel.create",
+							{
+								name: "history",
+								icon: null,
+								type: "public",
+								organizationId: world.orgId,
+								parentChannelId: null,
+								sectionId: null,
+							},
+							world.owner,
+						),
+					)) as { data: { id: ChannelId } }
+					yield* ok(
+						yield* call(
+							world.org,
+							world.orgId,
+							"chatSync.channelLink.create",
+							{
+								organizationId: world.orgId,
+								syncConnectionId: world.syncConnectionId,
+								hazelChannelId: created.data.id,
+								externalChannelId: HISTORY_CHANNEL,
+								historyLimit: 110,
+							},
+							world.owner,
+						),
+					)
+					const channel = yield* world.objects.get(channelTarget(created.data.id))
+					const imported = () =>
+						rows<{ content: string; createdAt: string }>(
+							channel,
+							`SELECT content, createdAt FROM messages ORDER BY createdAt, id`,
+						)
+					// The org's alarm until nothing due is left (one drain delivers what was due when it began).
+					const drain = Effect.gen(function* () {
+						for (let round = 0; round < 50; round++) {
+							const due = rows<{ n: number }>(
+								world.org,
+								`SELECT count(*) AS n FROM _outbox WHERE status = 'pending' AND next_at <= ?`,
+								String(Date.now()),
+							)[0]!.n
+							if (due === 0) return
+							yield* Effect.sleep("2 millis")
+							yield* world.org.alarm
+						}
+					})
+					// The first page (the newest 100), then the next once Discord's pause is over.
+					yield* drain
+					world.org.storage.db.exec(`UPDATE _outbox SET next_at = 0 WHERE status = 'pending'`)
+					yield* drain
+
+					const messages = imported()
+					expect(messages.map((message) => message.content)).toEqual(
+						past.slice(10).map((message) => (message.event as { content: string }).content),
+					)
+					// Stored as UTC without a zone (`2026-01-01 00:10:00.000`).
+					expect(Date.parse(`${messages[0]!.createdAt.replace(" ", "T")}Z`)).toBe(
+						start + 10 * 60_000,
+					)
+					expect(
+						world.objects.chatSyncCalls.filter((entry) => entry.op === "fetchHistory"),
+					).toHaveLength(2)
+					// Old news: no notifications, no bot events, nothing synced back to Discord.
+					expect(
+						world.objects.deliveries.filter(
+							(delivery) =>
+								delivery.includes("org.messageCreated") ||
+								delivery.includes("botGateway.messageEvent"),
+						),
+					).toEqual([])
+					expect(chatSyncOutbox(channel)).toBe(0)
+
+					// Importing again changes nothing: each message is linked once.
+					yield* world.inbound(past[119]!)
+					expect(imported()).toHaveLength(110)
+				}),
+			),
+		// Two pages of real ingests (110 messages through the org and the channel).
+		30_000,
+	)
+
 	it("inbound update, reactions and delete follow the message link, each once", () =>
 		run(
 			Effect.gen(function* () {

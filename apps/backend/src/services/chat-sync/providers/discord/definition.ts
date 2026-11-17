@@ -41,4 +41,6 @@ export const discord: ChatSyncProviderDefinition = {
 		const config = discordWebhookConfigOf(identity)
 		return Option.isSome(config) && config.value.webhookId === externalWebhookId
 	},
+	// GET /channels/:id/messages answers at most 100, and its bucket allows about 5 calls per 5s.
+	history: { maxMessages: 500, pageSize: 100, pageDelayMs: 1_000 },
 }
