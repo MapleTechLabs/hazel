@@ -373,6 +373,26 @@ export class SlackApiClient extends Context.Service<SlackApiClient>()("SlackApiC
 			} satisfies SlackHistoryPage
 		})
 
+		/**
+		 * conversations.replies: a thread's first `limit` messages, oldest first, its parent
+		 * included. Same scopes as conversations.history.
+		 */
+		const conversationReplies = Effect.fn("SlackApiClient.conversationReplies")(function* (
+			token: string,
+			params: { channel: string; ts: string; limit: number },
+		) {
+			const method = "conversations.replies"
+			const body = yield* getQuery(method, token, {
+				channel: params.channel,
+				ts: params.ts,
+				limit: String(Math.max(1, Math.min(CHANNELS_PAGE_SIZE, params.limit))),
+			})
+			const page = yield* decode(method, ConversationsHistoryResponse, body)
+			return page.messages.flatMap((raw) =>
+				Option.toArray(decodeSlackHistoryMessage(raw, params.channel)),
+			) as ReadonlyArray<SlackHistoryMessage>
+		})
+
 		/** conversations.join; joining a channel the bot is in is a success (Slack warns `already_in_channel`). */
 		const joinChannel = Effect.fn("SlackApiClient.joinChannel")(function* (
 			token: string,
@@ -470,6 +490,7 @@ export class SlackApiClient extends Context.Service<SlackApiClient>()("SlackApiC
 			authTest,
 			listChannels,
 			conversationHistory,
+			conversationReplies,
 			joinChannel,
 			postMessage,
 			updateMessage,
