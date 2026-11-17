@@ -23,7 +23,7 @@ import {
 import { AttachmentId, ChannelId, MessageId, OrganizationId, type UserId } from "@hazel/schema"
 import { isActiveContentType, MAX_ATTACHMENT_SIZE } from "@hazel/domain/http"
 import { v7 as randomUUIDv7 } from "uuid"
-import { DateTime, Effect, Option, Schema, Stream } from "effect"
+import { Context, DateTime, Effect, Option, Schema, Stream } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { AgentAccess, type AgentPrincipal } from "../services/agent-access"
 import { createAttachmentInChannel } from "../services/attachment-uploads"
@@ -1087,6 +1087,10 @@ export const McpRoute = HttpRouter.use((router) =>
 	Effect.gen(function* () {
 		const access = yield* AgentAccess
 		const storage = yield* ObjectStorage
+		// A route handler runs in the request's context, not the layer's: on the Worker that holds
+		// none of the services the tools reach (`Directory`, `ObjectStubs`, the rate limiter), so the
+		// layer's are captured here and laid under each request's.
+		const services = yield* Effect.context<never>()
 		const { apiOrigin } = yield* agentOAuthConfig
 		const unauthorized = (description: string) =>
 			HttpServerResponse.jsonUnsafe(
@@ -1172,6 +1176,9 @@ export const McpRoute = HttpRouter.use((router) =>
 					),
 				),
 				Effect.withSpan("Mcp.request"),
+				Effect.updateContext((request: Context.Context<HttpServerRequest.HttpServerRequest>) =>
+					Context.merge(services, request),
+				),
 			),
 		)
 	}),
