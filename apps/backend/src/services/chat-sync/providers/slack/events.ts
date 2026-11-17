@@ -186,25 +186,34 @@ export const slackInbound = Effect.fn("SlackEvents.inbound")(function* (
 	}
 })
 
-/** History subtypes a person wrote; thread broadcasts are thread replies and stay in Slack. */
+/** History subtypes a person wrote. */
 const HISTORY_SUBTYPES: ReadonlySet<string | null> = new Set([null, "file_share", "me_message"])
+/** A thread's replies can also be broadcast to the channel; it is still a reply. */
+const REPLY_SUBTYPES: ReadonlySet<string | null> = new Set([...HISTORY_SUBTYPES, "thread_broadcast"])
 
 /**
- * A message from a channel's history as the `MessageCreate` its live event would have been, sent
- * at its own time (`sentAt`); `None` for a bot's or an app's (Hazel's own included), a channel
- * notice (joins, topic) or a thread reply.
+ * A message from a channel's history (`conversations.history`), or from a thread's replies
+ * (`conversations.replies`, `fromReplies`), as the `MessageCreate` its live event would have been,
+ * sent at its own time (`sentAt`). `None` for a bot's or an app's (Hazel's own included) or a
+ * channel notice (joins, topic). The channel's history drops replies (a broadcast one too): they
+ * come with their thread's replies, after its parent, so the parent is in Hazel when they make the
+ * thread; the replies drop the parent, which the channel's history brought.
  */
 export const slackHistoryInbound = Effect.fn("SlackEvents.historyInbound")(function* (
 	entry: Slack.SlackHistoryMessage,
 	externalWorkspaceId: string,
 	lookupUser: SlackUserLookup,
+	fromReplies = false,
 ) {
 	const { message } = entry
-	if (!HISTORY_SUBTYPES.has(entry.subtype)) return Option.none<ChatSyncInbound>()
+	const isReply = message.threadTs !== null && message.threadTs !== message.ts
+	if (isReply !== fromReplies) return Option.none<ChatSyncInbound>()
+	if (!(fromReplies ? REPLY_SUBTYPES : HISTORY_SUBTYPES).has(entry.subtype)) {
+		return Option.none<ChatSyncInbound>()
+	}
 	if (message.botId !== null || message.appId !== null || message.user === null) {
 		return Option.none<ChatSyncInbound>()
 	}
-	if (message.threadTs !== null && message.threadTs !== message.ts) return Option.none<ChatSyncInbound>()
 	const sentAt = Math.round(Number(message.ts) * 1000)
 	const text = SlackFormat.slackMrkdwnToMarkdown(message.text)
 	return Option.some<ChatSyncInbound>({
@@ -222,6 +231,7 @@ export const slackHistoryInbound = Effect.fn("SlackEvents.historyInbound")(funct
 			attachments: attachmentsOf(message),
 			mentions: yield* mentionsOf(text, lookupUser),
 			sentAt: Number.isFinite(sentAt) ? sentAt : undefined,
+			...threadOf(message),
 		},
 	})
 })

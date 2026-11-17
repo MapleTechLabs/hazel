@@ -18,6 +18,9 @@ import type { ChatSyncInboundAuthor } from "../../chat-sync-inbound"
 import { slack, slackTarget } from "./definition"
 import { type SlackUserLookup, slackHistoryInbound } from "./events"
 
+/** A synced thread's replies a history import brings (one conversations.replies call each). */
+const MAX_THREAD_REPLIES = 100
+
 const configError = (message: string) =>
 	new ChatSyncProviderConfigurationError({ provider: "slack", message })
 
@@ -214,12 +217,35 @@ export const makeSlackClient = Effect.gen(function* () {
 					users.set(userId, found)
 					return found
 				})
+			// Each message, followed by its thread's replies (the first `MAX_THREAD_REPLIES`), so a
+			// reply makes its thread on a parent that is already in Hazel.
 			const messages = yield* Effect.forEach(
 				page.messages.slice().reverse(),
-				(entry) => slackHistoryInbound(entry, params.externalWorkspaceId, lookupUser),
+				(entry) =>
+					Effect.gen(function* () {
+						const message = yield* slackHistoryInbound(
+							entry,
+							params.externalWorkspaceId,
+							lookupUser,
+						)
+						if (Option.isNone(message) || entry.replyCount === 0) {
+							return Option.toArray(message)
+						}
+						const replies = yield* call(params.externalWorkspaceId, (token) =>
+							api.conversationReplies(token, {
+								channel,
+								ts: entry.message.ts,
+								limit: MAX_THREAD_REPLIES + 1,
+							}),
+						)
+						const inbound = yield* Effect.forEach(replies, (reply) =>
+							slackHistoryInbound(reply, params.externalWorkspaceId, lookupUser, true),
+						)
+						return [message.value, ...inbound.flatMap(Option.toArray)]
+					}),
 				{ concurrency: 4 },
 			)
-			return { messages: messages.flatMap(Option.toArray), cursor: page.nextCursor }
+			return { messages: messages.flat(), cursor: page.nextCursor }
 		}),
 		// Replies to the synced message are the thread: its link is keyed by the message's ts.
 		createThread: (context, thread) =>

@@ -180,8 +180,13 @@ describe("Slack events → chat-sync inbound", () => {
 })
 
 describe("slackHistoryInbound", () => {
-	const history = (subtype: string | null, extra: Partial<Slack.SlackMessage> = {}) =>
-		slackHistoryInbound({ subtype, message: message(extra) }, "T0HAZEL01", lookupUser)
+	const history = (subtype: string | null, extra: Partial<Slack.SlackMessage> = {}, fromReplies = false) =>
+		slackHistoryInbound(
+			{ subtype, message: message(extra), replyCount: 0 },
+			"T0HAZEL01",
+			lookupUser,
+			fromReplies,
+		)
 
 	it.effect("is a MessageCreate sent at its ts, in the link's workspace", () =>
 		Effect.gen(function* () {
@@ -208,5 +213,27 @@ describe("slackHistoryInbound", () => {
 			)
 			expect(Option.isSome(yield* history("file_share"))).toBe(true)
 		}),
+	)
+
+	it.effect(
+		"a thread's replies name their thread; the channel's history and the replies skip each other's",
+		() =>
+			Effect.gen(function* () {
+				const parent = { ts: "1699999999.000100", threadTs: "1699999999.000100" }
+				const reply = { threadTs: "1699999999.000100" }
+				expect(Option.isSome(yield* history(null, parent))).toBe(true)
+				expect(Option.isNone(yield* history(null, parent, true))).toBe(true)
+				expect(Option.isNone(yield* history(null, reply))).toBe(true)
+				const inbound = Option.getOrThrow(yield* history(null, reply, true))
+				expect(inbound.dedupeKey).toBe("slack:history:C0GENERAL1:1700000000.000100")
+				expect(inbound.event).toMatchObject({
+					_tag: "MessageCreate",
+					externalMessageId: "1700000000.000100",
+					inExternalThreadId: "1699999999.000100",
+					sentAt: 1_700_000_000_000,
+				})
+				expect(Option.isSome(yield* history("thread_broadcast", reply, true))).toBe(true)
+				expect(Option.isNone(yield* history(null, { ...reply, botId: "B0OTHER01" }, true))).toBe(true)
+			}),
 	)
 })

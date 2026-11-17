@@ -81,6 +81,7 @@ const RawMessageFields = {
 	text: OptionalString,
 	ts: Schema.String,
 	thread_ts: OptionalString,
+	reply_count: Schema.optional(Schema.NullOr(Schema.Number)),
 	bot_id: OptionalString,
 	app_id: OptionalString,
 	username: OptionalString,
@@ -238,11 +239,13 @@ const toMessage = (
 export interface SlackHistoryMessage {
 	readonly subtype: string | null
 	readonly message: SlackMessage
+	/** How many replies a thread's parent has (0 for any other message). */
+	readonly replyCount: number
 }
 
 const decodeRawInnerMessage = Schema.decodeUnknownOption(RawInnerMessage)
 
-/** One `conversations.history` entry of `channel`; `None` when it is not a message Slack describes. */
+/** One `conversations.history` (or `conversations.replies`) entry of `channel`; `None` when it is not a message Slack describes. */
 export const decodeSlackHistoryMessage = (
 	raw: unknown,
 	channel: string,
@@ -250,6 +253,7 @@ export const decodeSlackHistoryMessage = (
 	Option.map(decodeRawInnerMessage(raw), (message) => ({
 		subtype: message.subtype ?? null,
 		message: toMessage(message, channel, null),
+		replyCount: message.reply_count ?? 0,
 	}))
 
 const decodeMessageEvent = (raw: typeof RawMessageEvent.Type): Option.Option<SlackEvent> => {

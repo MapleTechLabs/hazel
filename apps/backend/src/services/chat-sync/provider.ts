@@ -166,7 +166,8 @@ export interface ChatSyncClient {
 	 */
 	/**
 	 * One page of the channel's top-level messages, newest page first (`cursor` from the previous
-	 * page), each page oldest first. Thread replies stay in the provider.
+	 * page), each page oldest first. A provider whose threads are replies in the channel (Slack)
+	 * puts each thread's replies right after their parent, naming the thread (`inExternalThreadId`).
 	 */
 	readonly fetchHistory: (params: {
 		readonly externalWorkspaceId: string
