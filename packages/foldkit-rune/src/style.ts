@@ -1687,18 +1687,18 @@ export class StyleResolver {
 				setScroll(s, "scrollY", y)
 				setScroll(s, "scrollX", x)
 				if ([x, y].some((o) => o === "hidden" || o === "clip")) s.clip = true
-				if ([x, y].includes("hidden")) s.clipScrolls = true
+				acc.hidden = [x === "hidden", y === "hidden"]
 				break
 			}
 			case "overflow-y":
 				setScroll(s, "scrollY", v)
 				if (v === "hidden" || v === "clip") s.clip = true
-				if (v === "hidden") s.clipScrolls = true
+				acc.hidden = [acc.hidden?.[0] ?? false, v === "hidden"]
 				break
 			case "overflow-x":
 				setScroll(s, "scrollX", v)
 				if (v === "hidden" || v === "clip") s.clip = true
-				if (v === "hidden") s.clipScrolls = true
+				acc.hidden = [v === "hidden", acc.hidden?.[1] ?? false]
 				break
 			case "text-overflow":
 				s.truncate = v === "ellipsis"
@@ -1930,6 +1930,8 @@ export class StyleResolver {
 				s.display = "block"
 			if (s.inline === true || INLINE_TAGS.has(acc.tag)) s.inline = false
 		}
+		if (acc.hidden?.some((h) => h)) s.clipScrolls = true
+		else delete s.clipScrolls
 		// A self-relative translate: `-translate-x/y-1/2` under `left/top-1/2` is the centring
 		// `centerX`/`centerY` already says; under another percentage it is an anchor the host places.
 		if (acc.selfShift !== undefined && s.position === "absolute") {
@@ -2258,6 +2260,8 @@ type Accumulator = {
 	anchorPct?: [number | null, number | null]
 	/** A translate by a share of its own size (`-translate-x-1/2`): -0.5, -1, or 0, per axis. */
 	selfShift?: [number, number]
+	/** Whether the last overflow written for x, y is `hidden`, which `clipScrolls` is derived from. */
+	hidden?: [boolean, boolean]
 }
 
 /** The `space-x/y` margin as a gap, with the rule's own custom properties in view. */

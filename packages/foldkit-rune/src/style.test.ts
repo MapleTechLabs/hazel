@@ -362,6 +362,12 @@ describe("StyleResolver", () => {
 		// `overflow: clip` clips without being a scroll container (its minimum width stays its content's).
 		expect(resolve("overflow-clip").style).toMatchObject({ clip: true })
 		expect(resolve("overflow-clip").style.clipScrolls).toBeUndefined()
+		// The last overflow per axis decides: an inline `clip` after `overflow-hidden` is no scroll
+		// container, while `overflow-y: clip` leaves a hidden x one.
+		const after = (inline: Record<string, string>) =>
+			resolve("overflow-hidden", { extra: { inline } }).style.clipScrolls
+		expect(after({ overflow: "clip" })).toBeUndefined()
+		expect(after({ "overflow-y": "clip" })).toBe(true)
 		// A later declaration decides: an inline `visible` or `hidden` turns the scrolling off.
 		const inline = (overflowX: string) =>
 			resolve("flex overflow-x-auto overflow-y-auto", {

@@ -3718,6 +3718,14 @@ fn an_anchored_box_sits_on_its_percentage_point() {
         (300.0, 200.0),
     );
     assert_eq!(rect(&rt, "r/0"), [89.5, 0.0, 1.0, 200.0]);
+    let mut rule = e("div", json!({ "w": 1, "h": "auto" }), vec![]);
+    rule["st"]["absolute"] = json!([null, 0, null, 0]);
+    rule["st"]["anchorX"] = json!([0.3, 0.5]);
+    let rt = runtime(
+        e("div", json!({ "w": 300, "h": 200 }), vec![rule]),
+        (300.0, 200.0),
+    );
+    assert_eq!(rect(&rt, "r/0")[3], 200.0);
 }
 
 /// `truncate` beside an icon in a row: it clips, so CSS lets it shrink to the row (its automatic
@@ -3744,8 +3752,16 @@ fn a_truncating_row_item_shrinks_to_the_row() {
         "div",
         json!({ "display": "flex", "w": 100 }),
         vec![
-            e("div", json!({ "w": 80, "h": 10, "clip": true }), vec![]),
-            e("div", json!({ "w": 80, "h": 10, "clip": true }), vec![]),
+            e(
+                "div",
+                json!({ "w": 80, "h": 10, "clip": true }),
+                vec![e("div", json!({ "w": 80, "h": 10 }), vec![])],
+            ),
+            e(
+                "div",
+                json!({ "w": 80, "h": 10, "clip": true }),
+                vec![e("div", json!({ "w": 80, "h": 10 }), vec![])],
+            ),
         ],
     );
     let rt = runtime(row, (300.0, 100.0));
