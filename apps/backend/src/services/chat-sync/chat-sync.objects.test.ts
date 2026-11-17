@@ -924,6 +924,49 @@ describe("chat sync on the objects", () => {
 				)
 				yield* world.org.alarm
 				expect(yield* threadLinks()).toEqual([])
+				// The thread's link went with its channel's, out of the index too.
+				expect(
+					rows<{ deletedAt: string | null }>(
+						world.org,
+						`SELECT deletedAt FROM chat_sync_channel_links WHERE hazelChannelId = ?`,
+						threadId,
+					)[0]!.deletedAt,
+				).not.toBeNull()
+				expect((yield* world.index()).some((row) => row.channelId === threadId)).toBe(false)
+
+				// Linked again, to another Discord channel: an old thread link (one left from before
+				// unlinking took threads along) does not take the new link as its parent.
+				const relinked = (yield* ok(
+					yield* call(
+						world.org,
+						world.orgId,
+						"chatSync.channelLink.create",
+						{
+							organizationId: world.orgId,
+							syncConnectionId: world.syncConnectionId,
+							hazelChannelId: world.channelId,
+							externalChannelId: "999999999999999999",
+						},
+						world.owner,
+					),
+				)) as { data: { id: SyncChannelLinkId } }
+				world.org.storage.db
+					.prepare(
+						`UPDATE chat_sync_channel_links SET deletedAt = NULL, isActive = 1 WHERE hazelChannelId = ?`,
+					)
+					.run(threadId)
+				// Any change to the channel's link projects its threads again.
+				yield* ok(
+					yield* call(
+						world.org,
+						world.orgId,
+						"chatSync.channelLink.update",
+						{ syncChannelLinkId: relinked.data.id, direction: "both" },
+						world.owner,
+					),
+				)
+				yield* world.org.alarm
+				expect(yield* threadLinks()).toEqual([])
 			}),
 		))
 

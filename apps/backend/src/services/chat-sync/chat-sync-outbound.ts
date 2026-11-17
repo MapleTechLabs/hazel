@@ -11,7 +11,14 @@
  * so the outbox retries it; any other failure marks the receipt `failed` and the row done.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import type { ChannelId, ExternalMessageId, MessageId, MessageReactionId, UserId } from "@hazel/schema"
+import {
+	type ChannelId,
+	type ExternalMessageId,
+	type MessageId,
+	type MessageReactionId,
+	SyncChannelLinkId,
+	type UserId,
+} from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import type { MessageEventHook } from "../../worker/objects/channel/message-events"
@@ -420,7 +427,7 @@ const deliver = (
  */
 export class ChatSyncLinksOutdatedError extends Schema.TaggedError<ChatSyncLinksOutdatedError>()(
 	"ChatSyncLinksOutdatedError",
-	{ channelLinkId: Schema.String },
+	{ channelLinkId: SyncChannelLinkId },
 ) {}
 
 /** The `chatSync.outbound` receiver: runs in the sending `ChannelObject`'s outbox. */

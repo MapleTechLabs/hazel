@@ -22,6 +22,7 @@ import {
 	type ExternalUserId,
 	type OrganizationId,
 	type SyncChannelLinkId,
+	type SyncConnectionId,
 	type UserId,
 } from "@hazel/schema"
 import { Effect, Layer, Option } from "effect"
@@ -54,7 +55,14 @@ import {
 import type { ChatSyncProviderDefinition } from "./provider"
 import { definitionOf } from "./providers"
 
-/** The channel's own active links (on active connections). */
+/**
+ * Whether `parent` is the link `thread`'s link was made under: a thread's link is always made
+ * after its parent's, so a parent linked again later (perhaps to another provider channel) is not.
+ */
+const isParentOf = (parent: { readonly createdAt: Date }, thread: { readonly createdAt: Date }) =>
+	parent.createdAt.getTime() <= thread.createdAt.getTime()
+
+/** The channel's own active links (on active connections), with when each was made. */
 const activeLinksOf = (channelId: ChannelId) =>
 	Effect.flatMap(Database.Database, (db) =>
 		db.run(
@@ -71,6 +79,7 @@ const activeLinksOf = (channelId: ChannelId) =>
 					externalChannelId: $.externalChannelId,
 					direction: $.direction,
 					settings: $.settings,
+					createdAt: $.createdAt,
 				}))
 				.where(($) => [
 					$.hazelChannelId.eq(channelId),
@@ -82,9 +91,12 @@ const activeLinksOf = (channelId: ChannelId) =>
 		),
 	).pipe(
 		Effect.map((rows) =>
-			rows.map((row): ChatSyncChannelTarget => ({
-				...row,
-				externalChannelId: row.externalChannelId as ExternalChannelId,
+			rows.map(({ createdAt, ...row }) => ({
+				createdAt,
+				target: {
+					...row,
+					externalChannelId: row.externalChannelId as ExternalChannelId,
+				} satisfies ChatSyncChannelTarget,
 			})),
 		),
 	)
@@ -97,7 +109,7 @@ const activeLinksOf = (channelId: ChannelId) =>
 const channelTargets = Effect.fn("OrgObject.chatSyncChannelTargets")(function* (channelId: ChannelId) {
 	const db = yield* Database.Database
 	const links = yield* activeLinksOf(channelId)
-	if (links.length === 0) return links
+	if (links.length === 0) return []
 	const channel = yield* db.first(
 		SQLite.from(schema.channelsTable)
 			.select("type", "parentChannelId")
@@ -105,15 +117,18 @@ const channelTargets = Effect.fn("OrgObject.chatSyncChannelTargets")(function* (
 			.limit(1),
 	)
 	if (Option.isNone(channel) || channel.value.type !== "thread" || channel.value.parentChannelId === null) {
-		return links
+		return links.map((link) => link.target)
 	}
 	const parents = yield* activeLinksOf(channel.value.parentChannelId)
-	return links.flatMap((link): Array<ChatSyncChannelTarget> => {
-		const parent = parents.find((entry) => entry.syncConnectionId === link.syncConnectionId)
+	return links.flatMap(({ target, createdAt }): Array<ChatSyncChannelTarget> => {
+		const parent = parents.find(
+			(entry) =>
+				entry.target.syncConnectionId === target.syncConnectionId && isParentOf(entry, { createdAt }),
+		)?.target
 		if (parent === undefined) return []
 		return [
 			{
-				...link,
+				...target,
 				direction: parent.direction,
 				settings: parent.settings,
 				parent: { channelLinkId: parent.channelLinkId, externalChannelId: parent.externalChannelId },
@@ -139,6 +154,31 @@ const linkedThreadsOf = (channelId: ChannelId) =>
 				]),
 		),
 	).pipe(Effect.map((rows) => [...new Set(rows.map((row) => row.id))]))
+
+/** The links of the threads under a channel's link: they go with it when it is unlinked. */
+export const threadLinksUnder = (link: {
+	readonly syncConnectionId: SyncConnectionId
+	readonly hazelChannelId: ChannelId
+}) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.run(
+			SQLite.from(schema.chatSyncChannelLinksTable, "link")
+				.innerJoin(schema.channelsTable, "channel", (link, channel) =>
+					channel.id.eq(link.hazelChannelId),
+				)
+				.select(($) => ({
+					id: $.id,
+					externalChannelId: $.externalChannelId,
+					hazelChannelId: $.hazelChannelId,
+				}))
+				.where(($) => [
+					$.syncConnectionId.eq(link.syncConnectionId),
+					$.deletedAt.isNull(),
+					$.channel.parentChannelId.eq(link.hazelChannelId),
+					$.channel.type.eq("thread"),
+				]),
+		),
+	)
 
 /** The org's users with a linked provider account (outbound mentions). */
 const linkedAccounts = (providers: ReadonlyArray<string>) =>
@@ -278,6 +318,7 @@ const findInboundLink = (
 					direction: $.direction,
 					isActive: $.isActive,
 					settings: $.settings,
+					createdAt: $.createdAt,
 					organizationId: $.connection.organizationId,
 					externalWorkspaceId: $.connection.externalWorkspaceId,
 					status: $.connection.status,
@@ -317,7 +358,7 @@ const ownerOf = Effect.fn("OrgObject.chatSyncOwnerLink")(function* (link: Inboun
 	const parentChannelId = channel.value.parentChannelId
 	const parent = yield* db.first(
 		SQLite.from(schema.chatSyncChannelLinksTable)
-			.select("isActive", "direction", "settings")
+			.select("isActive", "direction", "settings", "createdAt")
 			.where(($) => [
 				$.syncConnectionId.eq(link.syncConnectionId),
 				$.hazelChannelId.eq(parentChannelId),
@@ -325,7 +366,10 @@ const ownerOf = Effect.fn("OrgObject.chatSyncOwnerLink")(function* (link: Inboun
 			])
 			.limit(1),
 	)
-	return Option.map(parent, (owner) => ({ ...link, ...owner }))
+	return Option.map(
+		Option.filter(parent, (owner) => isParentOf(owner, link)),
+		({ isActive, direction, settings }) => ({ ...link, isActive, direction, settings }),
+	)
 })
 
 /**
