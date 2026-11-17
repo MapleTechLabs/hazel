@@ -524,13 +524,15 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 					Composer.Message.UpdatedCustomEmojis({ emojis: customEmojis }),
 				),
 			),
-		UpdatedAttachments: ({ attachments }) => withLookup(model, "attachments", attachments),
-		UpdatedSyncedMessages: ({ messages }) => withLookup(model, "syncedMessages", messages),
-		UpdatedSyncProvider: ({ provider }) =>
-			provider === model.lookups.syncProvider ? { model } : withLookup(model, "syncProvider", provider),
-		// A late result from the channel just left must not replace the new channel's marks.
+		// A late result from the channel just left must not replace the new channel's lookups.
+		UpdatedAttachments: ({ channelId, attachments }) =>
+			channelId === model.channelId ? withLookup(model, "attachments", attachments) : { model },
+		UpdatedSyncedMessages: ({ channelId, messages }) =>
+			channelId === model.channelId ? withLookup(model, "syncedMessages", messages) : { model },
 		UpdatedAgentMarks: ({ channelId, marks }) =>
 			channelId === model.channelId ? withLookup(model, "agentMarks", marks) : { model },
+		UpdatedSyncProvider: ({ provider }) =>
+			provider === model.lookups.syncProvider ? { model } : withLookup(model, "syncProvider", provider),
 		UpdatedThreadChannels: ({ channels }) => withLookup(model, "threadChannels", channels),
 		UpdatedThreadMessages: ({ messages }) => withLookup(model, "threadMessages", messages),
 		UpdatedReplyTargets: ({ targets }) => withLookup(model, "replyTargets", targets),

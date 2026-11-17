@@ -54,6 +54,24 @@ type Input = PageSubscriptionInput<Model>
 const byChannel = { channelId: ChannelId }
 const channelOf = ({ model }: Input) => ({ channelId: model.channelId })
 
+/** The open thread, once `channel.createThread` answered (before, its object would refuse the socket). */
+const openThreadIdOf = (model: Model): ChannelId | null =>
+	model.threadPanel?.creation === "Created" ? model.threadPanel.threadChannelId : null
+
+/**
+ * The channels whose messages the page shows: the channel and its open thread. The thread panel's rows
+ * read the channel's lookups, so every per-message lookup is keyed by these, never the channel alone.
+ */
+export const shownChannelIdsOf = (model: Model): ReadonlyArray<ChannelId> => {
+	const threadChannelId = openThreadIdOf(model)
+	return threadChannelId === null ? [model.channelId] : [model.channelId, threadChannelId]
+}
+const byShownChannels = { channelId: ChannelId, channelIds: Schema.Array(ChannelId) }
+const shownChannelsOf = ({ model }: Input) => ({
+	channelId: model.channelId,
+	channelIds: shownChannelIdsOf(model),
+})
+
 const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 	chatChannel: entry(byChannel, {
 		modelToDependencies: channelOf,
@@ -191,37 +209,30 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 						),
 		},
 	),
-	chatAttachments: entry(byChannel, {
-		modelToDependencies: channelOf,
-		dependenciesToStream: ({ channelId }) =>
-			attachmentsStream(channelId, (attachments) => Message.UpdatedAttachments({ attachments })),
+	chatAttachments: entry(byShownChannels, {
+		modelToDependencies: shownChannelsOf,
+		dependenciesToStream: ({ channelId, channelIds }) =>
+			attachmentsStream(channelIds, (attachments) =>
+				Message.UpdatedAttachments({ channelId, attachments }),
+			),
 	}),
-	chatSyncedMessages: entry(byChannel, {
-		modelToDependencies: channelOf,
-		dependenciesToStream: ({ channelId }) =>
-			syncedMessagesStream(channelId, (messages) => Message.UpdatedSyncedMessages({ messages })),
+	chatSyncedMessages: entry(byShownChannels, {
+		modelToDependencies: shownChannelsOf,
+		dependenciesToStream: ({ channelId, channelIds }) =>
+			syncedMessagesStream(channelIds, (messages) =>
+				Message.UpdatedSyncedMessages({ channelId, messages }),
+			),
 	}),
 	chatSyncProvider: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
 			channelSyncProviderStream(channelId, (provider) => Message.UpdatedSyncProvider({ provider })),
 	}),
-	// The channel's marks and the open thread's: the thread panel's rows read the same lookup.
-	chatAgentMarks: entry(
-		{ channelId: ChannelId, threadChannelId: Schema.NullOr(ChannelId) },
-		{
-			modelToDependencies: ({ model }) => ({
-				channelId: model.channelId,
-				threadChannelId:
-					model.threadPanel?.creation === "Created" ? model.threadPanel.threadChannelId : null,
-			}),
-			dependenciesToStream: ({ channelId, threadChannelId }) =>
-				agentMarksStream(
-					threadChannelId === null ? [channelId] : [channelId, threadChannelId],
-					(marks) => Message.UpdatedAgentMarks({ channelId, marks }),
-				),
-		},
-	),
+	chatAgentMarks: entry(byShownChannels, {
+		modelToDependencies: shownChannelsOf,
+		dependenciesToStream: ({ channelId, channelIds }) =>
+			agentMarksStream(channelIds, (marks) => Message.UpdatedAgentMarks({ channelId, marks })),
+	}),
 	chatThreadChannels: entry(
 		{ threadIds: Schema.Array(ChannelId) },
 		{
@@ -251,11 +262,7 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 	chatThreadPanel: entry(
 		{ threadChannelId: Schema.NullOr(ChannelId) },
 		{
-			// Not while `channel.createThread` runs: the thread's object would refuse the socket.
-			modelToDependencies: ({ model }) => ({
-				threadChannelId:
-					model.threadPanel?.creation === "Created" ? model.threadPanel.threadChannelId : null,
-			}),
+			modelToDependencies: ({ model }) => ({ threadChannelId: openThreadIdOf(model) }),
 			dependenciesToStream: ({ threadChannelId }) =>
 				threadChannelId === null
 					? Stream.empty

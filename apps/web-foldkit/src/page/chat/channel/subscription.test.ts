@@ -19,7 +19,13 @@ import { PAGE_SIZE } from "../queries"
 import { init, setTab, switchChannel } from "./page"
 import { HTML_RENDER_DEFAULT_THEMES } from "@hazel/domain/html-render"
 import { Message, type Model } from "./model"
-import { indicatorsOf, subscriptions, type TypingCleanup, typingCleanupStream } from "./subscription"
+import {
+	indicatorsOf,
+	shownChannelIdsOf,
+	subscriptions,
+	type TypingCleanup,
+	typingCleanupStream,
+} from "./subscription"
 
 /** Which Model slices gate the channel's Subscriptions (a changed dependency restarts the stream). */
 
@@ -116,6 +122,69 @@ describe("channel subscription gates", () => {
 			messageId: live.id,
 			channelId: threadChannelId,
 		})
+	})
+})
+
+/**
+ * The thread panel's rows read the channel's lookups, so a lookup keyed by the channel alone leaves
+ * the thread's replies without it. Entries keyed by the channel and
+ * not the open thread are declared here; a new one fails until it takes `shownChannelIdsOf` or is.
+ */
+const CHANNEL_ONLY = [
+	"chatChannel",
+	"chatMessages",
+	"chatMessagesWindow",
+	// The thread panel's rows take no reactions (`toThreadRows`).
+	"chatReactions",
+	// The channel's header badge, not per message.
+	"chatSyncProvider",
+	// Reply targets are keyed by message id; the channel only names where to load them.
+	"chatReplyTargets",
+	"chatPinned",
+	"chatCustomer",
+	"chatMembers",
+	"chatTyping",
+	"composerMembers",
+	"composerBots",
+	"composerCommands",
+	"typingCleanup",
+	"channelUpload",
+]
+
+describe("lookups the thread panel's rows read", () => {
+	const opened = updateWithShared(
+		loadedModel(),
+		Message.ClickedThreadPreview({ threadChannelId, messageId: adaMessageId }),
+	).model
+	const created: Model = { ...opened, threadPanel: { ...opened.threadPanel!, creation: "Created" } }
+
+	test("an open thread is shown beside the channel; one still being created is not", () => {
+		expect(shownChannelIdsOf(created)).toEqual([created.channelId, threadChannelId])
+		expect(
+			shownChannelIdsOf({ ...created, threadPanel: { ...created.threadPanel!, creation: "Creating" } }),
+		).toEqual([created.channelId])
+		expect(shownChannelIdsOf(loadedModel())).toEqual([loadedModel().channelId])
+	})
+
+	test.each(["chatSyncedMessages", "chatAttachments", "chatAgentMarks"] as const)(
+		"%s covers the open thread",
+		(key) => {
+			expect(subscriptions[key].modelToDependencies(input(created))).toEqual({
+				channelId: created.channelId,
+				channelIds: [created.channelId, threadChannelId],
+			})
+		},
+	)
+
+	test("every entry keyed by the channel covers the open thread, or is declared channel-only", () => {
+		const mentions = (dependencies: unknown, id: ChannelId) => JSON.stringify(dependencies).includes(id)
+		const channelOnly = Object.entries(subscriptions)
+			.filter(([, entry]) => {
+				const dependencies = entry.modelToDependencies(input(created))
+				return mentions(dependencies, created.channelId) && !mentions(dependencies, threadChannelId)
+			})
+			.map(([key]) => key)
+		expect(channelOnly.toSorted()).toEqual(CHANNEL_ONLY.toSorted())
 	})
 })
 
