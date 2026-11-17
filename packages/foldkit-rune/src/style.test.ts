@@ -46,6 +46,19 @@ describe("StyleResolver", () => {
 		})
 	})
 
+	it("gives a list item the list's inherited marker type and its ::marker colour", () => {
+		const list = resolve("list-decimal marker:text-[#00ff00]", { extra: { tag: "ol" } })
+		expect(list.style.listMarker).toBeUndefined()
+		const item = resolve("", { scope: list.scope, extra: { tag: "li" } })
+		expect(item.style.listMarker).toEqual({ type: "decimal", color: "#00ff00ff" })
+		expect(
+			resolve("list-none", { scope: list.scope, extra: { tag: "li" } }).style.listMarker,
+		).toBeUndefined()
+		// Preflight's `list-style: none` on a bare list: no marker.
+		const bare = resolve("", { extra: { tag: "ul" } })
+		expect(resolve("", { scope: bare.scope, extra: { tag: "li" } }).style.listMarker).toBeUndefined()
+	})
+
 	it("sends focus and press styles as the states the host draws", () => {
 		const button = resolve(
 			"bg-[#ffffff] outline-hidden focus-visible:ring-2 focus-visible:ring-[#3366ff] active:bg-[#ff0000]",

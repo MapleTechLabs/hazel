@@ -18,6 +18,8 @@ export type Compound = {
 	attrs: Array<AttrTest>
 	pseudos: Array<Pseudo>
 	hover: boolean
+	/** `::marker`: the rule styles the list item's marker, not the element. */
+	marker?: boolean
 	ctx: Array<Context>
 	/** Source offset of each class: the earliest is the Tailwind utility the rule belongs to. */
 	classAt: Array<number>
@@ -178,7 +180,13 @@ class Parser {
 			} else if (ch === "[") {
 				c.attrs.push(this.attr())
 			} else if (ch === ":") {
-				if (this.src[this.i + 1] === ":") throw new Unsupported("pseudo-element")
+				if (this.src[this.i + 1] === ":") {
+					this.i += 2
+					// A list item's marker, which the serializer draws; every other one is not modelled.
+					if (this.ident().toLowerCase() !== "marker") throw new Unsupported("pseudo-element")
+					c.marker = true
+					continue
+				}
 				this.i++
 				this.pseudo(c)
 			} else if (/[\w-]/.test(ch) || ch === "\\") {
@@ -266,6 +274,7 @@ const merge = (c: Compound, x: Compound) => {
 	c.attrs.push(...x.attrs)
 	c.pseudos.push(...x.pseudos)
 	c.hover ||= x.hover
+	if (x.marker) c.marker = true
 	c.ctx.push(...x.ctx)
 }
 
