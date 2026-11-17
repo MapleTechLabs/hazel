@@ -51,7 +51,7 @@ const statusLine = (h: H, context: PreviewContext): Html => {
 	const [text, dot] = Option.isNone(status.draft)
 		? ["Waiting for valid values", "bg-warning"]
 		: AsyncData.isPending(editor.preview)
-			? ["Updating…", "bg-info animate-pulse"]
+			? ["Updating…", "bg-info-subtle-fg animate-pulse"]
 			: editor.ruleId !== null && status.changes === 0
 				? ["Same as saved", "bg-success"]
 				: ["Updates as you edit", "bg-success"]

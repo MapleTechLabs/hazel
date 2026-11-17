@@ -15,6 +15,7 @@ import { loader } from "../../ui/loader"
 import { MIN_CHANNEL_WIDTH, MIN_THREAD_PANEL_WIDTH } from "./channel/thread-width"
 import { type DeriveContext, authorIdentity, authorOf, htmlRendersOf } from "./derive"
 import type { ChatMessage, MessageRow } from "./rows"
+import { heading } from "../../ui/heading"
 
 /**
  * Discord's thread sidebar: a resizable panel beside the channel with the thread's header, its
@@ -143,7 +144,9 @@ const headerView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html =>
 				[h.Class("flex min-w-0 items-center gap-2")],
 				[
 					IconThread(h, { className: "size-4 shrink-0 text-muted-fg" }),
-					h.h2([h.Class("truncate font-semibold text-fg text-sm")], [inputs.threadName]),
+					heading(h, { variant: "subsection", level: 2, className: "truncate" }, [
+						inputs.threadName,
+					]),
 				],
 			),
 			h.div(

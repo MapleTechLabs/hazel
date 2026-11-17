@@ -91,7 +91,7 @@ const codeBlockView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode): Html => 
 							h.Attribute("role", "button"),
 							h.Attribute("tabindex", "0"),
 							h.Class(
-								"cursor-pointer rounded bg-accent-9/10 p-1.5 opacity-0 transition-opacity hover:bg-accent-9/20 group-hover:opacity-100",
+								"cursor-pointer rounded bg-fg/10 p-1.5 opacity-0 transition-opacity hover:bg-fg/20 group-hover:opacity-100",
 							),
 							h.Attribute("contenteditable", "false"),
 							h.Attribute("style", ""),

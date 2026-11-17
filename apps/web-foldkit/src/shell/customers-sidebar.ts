@@ -124,7 +124,7 @@ const BUILT_IN_VIEWS: ReadonlyArray<{ readonly key: Customers.BuiltInViewKey; re
 const VIEW_DOT = {
 	my_customers: "",
 	paying: "bg-health-healthy",
-	trialing: "bg-blue-light-400",
+	trialing: "bg-info-subtle-fg",
 	at_risk: "bg-health-at-risk",
 	churned: "bg-health-unknown",
 } as const satisfies Record<Customers.BuiltInViewKey, string>
@@ -151,7 +151,7 @@ const badge = <M>(h: HtmlBuilder<M>, count: number): Html =>
 			h.Attribute("data-slot", "sidebar-badge"),
 			h.AriaLabel(`${count} open`),
 			h.Class(
-				"ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-[11px] text-primary-fg tabular-nums",
+				"ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-2xs text-primary-fg tabular-nums",
 			),
 		],
 		[count > 99 ? "99+" : String(count)],

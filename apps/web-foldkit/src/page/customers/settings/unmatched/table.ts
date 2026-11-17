@@ -541,7 +541,7 @@ export const recordsTable = (
 										h.Scope("colgroup"),
 										h.Attribute("colspan", String(columnCount)),
 										h.Class(
-											"bg-secondary/40 px-4 py-1.5 text-left font-medium text-[11px] text-muted-fg uppercase tracking-wider",
+											"bg-secondary/40 px-4 py-1.5 text-left font-medium text-2xs text-muted-fg uppercase tracking-wider",
 										),
 									],
 									[groupSummary(group)],

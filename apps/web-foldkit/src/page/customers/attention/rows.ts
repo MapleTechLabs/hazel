@@ -202,7 +202,7 @@ export const accountGroupRow = (
 											h.span(
 												[
 													h.Class(
-														"rounded bg-secondary px-1 text-[11px] text-muted-fg tabular-nums",
+														"rounded bg-secondary px-1 text-2xs text-muted-fg tabular-nums",
 													),
 												],
 												[String(group.signals.length)],
@@ -224,7 +224,7 @@ export const accountGroupRow = (
 					[
 						severityGlyph(h, signal.severity),
 						...(signal.kind === "opportunity"
-							? [kindChip(h, "opportunity", { className: "py-0 text-[11px]/5" })]
+							? [kindChip(h, "opportunity", { className: "py-0 text-2xs/5" })]
 							: []),
 						h.span([h.Class("shrink-0 font-medium text-fg")], [signal.title]),
 						h.span([h.Class("truncate text-muted-fg text-xs")], [signal.reason]),

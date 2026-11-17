@@ -123,7 +123,7 @@ export const composerBoxView = <M>(h: HtmlBuilder<M>, model: Model, extras: BoxE
 								[
 									h.Class(
 										cn(
-											"relative inset-ring inset-ring-secondary flex h-max flex-col rounded-xl bg-secondary",
+											"relative flex h-max flex-col rounded-xl border border-border bg-bg shadow-xs transition-[border-color,box-shadow] duration-150 ease-out focus-within:border-border-hover focus-within:shadow-sm dark:bg-wash",
 											(extras.hasTopContent ?? false) && "rounded-t-none",
 										),
 									),

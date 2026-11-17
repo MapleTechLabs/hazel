@@ -10,6 +10,7 @@ import { card, cardHeader, cardHeaderGroup } from "../../../ui/card"
 import type { PageViewInputs } from "../../contract"
 import { Message } from "./message"
 import type { Model, TeamMember } from "./model"
+import { heading } from "../../../ui/heading"
 
 /** Port of `routes/_app/$orgSlug/settings/team.tsx` (read path; menus and modals follow in Phase 5). */
 
@@ -164,7 +165,7 @@ export const teamPage = <Message>(
 								h.div(
 									[h.Class("flex items-center gap-2")],
 									[
-										h.h2([h.Class("font-semibold text-fg text-lg")], ["Team members"]),
+										heading(h, { variant: "title" }, ["Team members"]),
 										badge(h, { intent: "secondary" }, [
 											`${props.members.length || 0}`,
 											" users",

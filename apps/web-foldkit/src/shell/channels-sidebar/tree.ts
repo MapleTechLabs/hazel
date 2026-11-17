@@ -138,7 +138,7 @@ const treeEmptyState = <M>(h: HtmlBuilder<M>): Html =>
 		[
 			h.div(
 				[h.Attribute("role", "gridcell"), h.Style({ display: "contents" })],
-				[h.div([h.Class(twMerge("col-span-full rounded-lg transition-all"))])],
+				[h.div([h.Class(twMerge("col-span-full rounded-lg transition-colors"))])],
 			),
 		],
 	)

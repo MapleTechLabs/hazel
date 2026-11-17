@@ -9,6 +9,7 @@ import { switchControl } from "../../../../ui/switch"
 import { CHECK, spinner, strokeIcon } from "../shared/view"
 import { Message } from "./message"
 import type { Model } from "./model"
+import { heading } from "../../../../ui/heading"
 
 /** The connection states, API key form and config rows of `$integrationId.tsx`. */
 
@@ -30,7 +31,7 @@ export const panel = <Message>(
 		[
 			h.div(
 				[h.Class("border-border border-b bg-bg-muted/30 px-5 py-3")],
-				[h.h3([h.Class("font-semibold text-fg text-sm")], [title])],
+				[heading(h, { variant: "subsection" }, [title])],
 			),
 			h.div([h.Class(bodyClass)], [...body]),
 		],

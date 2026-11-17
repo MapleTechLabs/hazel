@@ -3,7 +3,7 @@
  * (top|bottom|left|right) and `--button-width`; the panel fades in from `@starting-style` (150ms).
  */
 export const popoverContentBase = [
-	"group/popover z-50 min-w-(--trigger-width) max-w-xs rounded-(--popover-radius) border border-fg/10 bg-overlay text-overlay-fg shadow-xs outline-hidden [--gutter:--spacing(6)] [--popover-radius:var(--radius-xl)] sm:text-sm dark:backdrop-saturate-200 **:[[role=dialog]]:[--gutter:--spacing(6)]",
+	"group/popover z-50 min-w-(--trigger-width) max-w-xs rounded-(--popover-radius) border border-fg/10 bg-overlay text-overlay-fg shadow-lg outline-hidden [--gutter:--spacing(6)] [--popover-radius:var(--radius-xl)] sm:text-sm dark:backdrop-saturate-200 **:[[role=dialog]]:[--gutter:--spacing(6)]",
 	"flex flex-col transition-opacity duration-150 ease-out starting:opacity-0",
 	"forced-colors:bg-[Canvas]",
 ] as const

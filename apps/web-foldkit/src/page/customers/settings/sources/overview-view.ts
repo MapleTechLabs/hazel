@@ -25,6 +25,7 @@ import {
 	TRIGGER_LABEL,
 } from "./parts"
 import type { ConnectionRow, SyncRunRow } from "./queries"
+import { heading } from "../../../../ui/heading"
 
 /** The Data sources overview (Wonder `lac`): identity coverage, connected sources, the rest. */
 
@@ -346,18 +347,15 @@ const connectedCard = (h: H, model: Model, connection: ConnectionRow, context: C
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-2")],
 										[
-											h.h3(
-												[h.Class("font-medium text-base/6 text-fg")],
-												[
-													h.a(
-														[
-															h.Href(detailHref(context, connection.provider)),
-															h.Class("hover:underline"),
-														],
-														[descriptor.name],
-													),
-												],
-											),
+											heading(h, { variant: "section", level: 3 }, [
+												h.a(
+													[
+														h.Href(detailHref(context, connection.provider)),
+														h.Class("hover:underline"),
+													],
+													[descriptor.name],
+												),
+											]),
 											statusBadge(h, status),
 										],
 									),
@@ -483,18 +481,15 @@ const notConnectedCard = (
 							h.div(
 								[h.Class("flex flex-wrap items-center gap-2")],
 								[
-									h.h3(
-										[h.Class("font-medium text-base/6 text-fg")],
-										[
-											h.a(
-												[
-													h.Href(detailHref(context, provider)),
-													h.Class("hover:underline"),
-												],
-												[descriptor.name],
-											),
-										],
-									),
+									heading(h, { variant: "section", level: 3 }, [
+										h.a(
+											[
+												h.Href(detailHref(context, provider)),
+												h.Class("hover:underline"),
+											],
+											[descriptor.name],
+										),
+									]),
 									...(connection === undefined
 										? descriptor.isAvailable
 											? []
@@ -532,10 +527,10 @@ const section = (h: H, title: string, count: number, children: ReadonlyArray<Htm
 	h.section(
 		[h.Class("flex flex-col gap-3")],
 		[
-			h.h2(
-				[h.Class("flex items-center gap-2 font-semibold text-fg text-sm")],
-				[title, h.span([h.Class("font-normal text-muted-fg tabular-nums")], [formatCount(count)])],
-			),
+			heading(h, { variant: "subsection", level: 2, className: "flex items-center gap-2" }, [
+				title,
+				h.span([h.Class("font-normal text-muted-fg tabular-nums")], [formatCount(count)]),
+			]),
 			...children,
 		],
 	)

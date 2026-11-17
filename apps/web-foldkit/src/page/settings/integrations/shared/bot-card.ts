@@ -16,6 +16,7 @@ import { button } from "../../../../ui/button"
 import * as Menu from "../../../../ui/menu"
 import { menuLabel, menuTriggerClassName, view as menuView } from "../../../../ui/menu-view"
 import type { Bot, PublicBot } from "./bots"
+import { heading } from "../../../../ui/heading"
 
 /** Ports of `components/bots/bot-card.tsx` and `marketplace-bot-card.tsx`. */
 
@@ -43,7 +44,7 @@ const permissions = <Message>(h: HtmlBuilder<Message>, bot: Bot): ReadonlyArray<
 							h.span(
 								[
 									h.Class(
-										"inline-flex items-center rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-fg",
+										"inline-flex items-center rounded bg-secondary px-1.5 py-0.5 text-3xs text-secondary-fg",
 									),
 								],
 								[
@@ -78,7 +79,7 @@ const permissions = <Message>(h: HtmlBuilder<Message>, bot: Bot): ReadonlyArray<
 		: []
 
 const CARD_CLASS =
-	"flex h-full flex-col overflow-hidden rounded-xl border border-border bg-bg transition-all duration-200 hover:border-border-hover hover:shadow-md"
+	"flex h-full flex-col overflow-hidden rounded-xl border border-border bg-bg transition-[border-color,box-shadow] duration-200 hover:border-border-hover hover:shadow-md"
 
 export const BOT_MENU_ENTRIES: ReadonlyArray<Menu.Entry> = [
 	Menu.item("edit"),
@@ -176,7 +177,7 @@ export const botCard = <Message>(h: HtmlBuilder<Message>, bot: Bot, actions: Bot
 							h.div(
 								[h.Class("flex items-center gap-2")],
 								[
-									h.h3([h.Class("font-semibold text-fg text-sm truncate")], [bot.name]),
+									heading(h, { variant: "subsection", className: "truncate" }, [bot.name]),
 									...(bot.isPublic
 										? [badge(h, { intent: "secondary", size: "sm" }, ["Public"])]
 										: []),
@@ -236,7 +237,7 @@ export const marketplaceBotCard = <Message>(
 					h.div(
 						[h.Class("flex flex-1 flex-col gap-0.5 min-w-0")],
 						[
-							h.h3([h.Class("font-semibold text-fg text-sm truncate")], [bot.name]),
+							heading(h, { variant: "subsection", className: "truncate" }, [bot.name]),
 							h.p([h.Class("text-muted-fg text-xs truncate")], ["by ", bot.creatorName]),
 						],
 					),

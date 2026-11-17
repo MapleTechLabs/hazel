@@ -109,7 +109,7 @@ const linkedBadge = (h: HtmlBuilder<Message>): Html =>
 	h.span(
 		[
 			h.Class(
-				"ml-auto shrink-0 rounded-md bg-secondary px-1.5 py-0.5 font-medium text-[11px] text-muted-fg",
+				"ml-auto shrink-0 rounded-md bg-secondary px-1.5 py-0.5 font-medium text-2xs text-muted-fg",
 			),
 		],
 		["Linked"],

@@ -60,6 +60,7 @@ import { previewPanel } from "./preview"
 import { accountGroupRow, compactRow, doneRow, type RowContext, rowIdOf, signalRow, snoozedRow } from "./rows"
 import { ScrollRowIntoView } from "./commands"
 import { viewerOf } from "./update"
+import { heading } from "../../../ui/heading"
 
 /** The Needs-attention page (Wonder: Needs Attention). */
 
@@ -255,7 +256,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: 
 			h.div(
 				[h.Class("flex min-w-0 flex-col gap-1")],
 				[
-					h.h1([h.Class("font-semibold text-2xl text-fg")], ["Needs attention"]),
+					heading(h, { variant: "display" }, ["Needs attention"]),
 					h.p([h.Class("text-muted-fg text-sm")], [subtitle]),
 				],
 			),
@@ -449,7 +450,7 @@ const columnHeader = (h: HtmlBuilder<Message>, cells: ReadonlyArray<readonly [st
 			h.Role("row"),
 			h.Class(
 				// A phone's rows wrap into lines that no longer sit under these columns.
-				"flex items-center gap-4 border-border border-b bg-secondary/30 px-4 py-2 font-medium text-[11px] text-muted-fg uppercase tracking-wider max-md:hidden",
+				"flex items-center gap-4 border-border border-b bg-secondary/30 px-4 py-2 font-medium text-2xs text-muted-fg uppercase tracking-wider max-md:hidden",
 			),
 		],
 		cells.map(([label, className]) => h.span([h.Role("columnheader"), h.Class(className)], [label])),

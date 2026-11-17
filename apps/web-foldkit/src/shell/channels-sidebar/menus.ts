@@ -199,7 +199,7 @@ const rowMenuContent =
 		if (key === "move") return [IconFolderPlus(h, { className: "size-4" }), text("Move to section")]
 		if (key === "settings") return [IconGear(h), text("Settings")]
 		if (key === "delete") return [IconTrash(h), text("Delete")]
-		if (key === "leave") return [IconLeave(h), text("Leave", "text-destructive")]
+		if (key === "leave") return [IconLeave(h), text("Leave", "text-danger-subtle-fg")]
 		if (key === DEFAULT_SECTION_KEY) return [text("Channels (Default)")]
 		const section = sections.find((candidate) => sectionKeyOf(candidate.id) === key)
 		return section ? [text(section.name)] : []
@@ -279,7 +279,7 @@ export const dmMenuView = <M>(h: HtmlBuilder<M>, options: DmMenuOptions<M>): Htm
 				if (key === "hide")
 					return [
 						IconClose(h, { className: "size-4" }),
-						text("Hide conversation", "text-destructive"),
+						text("Hide conversation", "text-danger-subtle-fg"),
 					]
 				return []
 			},
