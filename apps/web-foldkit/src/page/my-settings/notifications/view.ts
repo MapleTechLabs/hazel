@@ -71,7 +71,7 @@ const soundSettings = (
 											[
 												h.Class(
 													twMerge(
-														"relative flex items-center gap-3 rounded-lg border-2 border-border bg-secondary p-4 transition-all",
+														"relative flex items-center gap-3 rounded-lg border-2 border-border bg-secondary p-4 transition-colors",
 														isSelected && "border-ring bg-secondary/50",
 														isFocusVisible && "ring-2 ring-ring ring-offset-2",
 														!enabled && "cursor-not-allowed opacity-50",

@@ -10,6 +10,7 @@ import { loader } from "../../../../ui/loader"
 import { textField } from "../../../../ui/text-field"
 import { Message } from "./message"
 import type { SourceStatus } from "./model"
+import { heading } from "../../../../ui/heading"
 
 /** The Data sources views' shared pieces: status badges, record counts, error copy, fields, cards. */
 
@@ -182,7 +183,7 @@ export const cardHeader = (h: H, title: string, description?: string, aside?: Ht
 			h.div(
 				[h.Class("flex min-w-0 flex-col gap-0.5")],
 				[
-					h.h2([h.Class("font-semibold text-base/6 text-fg")], [title]),
+					heading(h, { variant: "section" }, [title]),
 					...(description === undefined
 						? []
 						: [h.p([h.Class("text-muted-fg text-sm")], [description])]),

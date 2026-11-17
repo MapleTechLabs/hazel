@@ -65,7 +65,7 @@ const sidebarBadge = <M>(h: HtmlBuilder<M>, count: number): Html =>
 		[
 			h.Attribute("data-slot", "sidebar-badge"),
 			h.Class(
-				"absolute inset-y-1/2 right-1.5 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-[11px] text-primary-fg tabular-nums group-hover/sidebar-item:right-8",
+				"absolute inset-y-1/2 right-1.5 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-2xs text-primary-fg tabular-nums group-hover/sidebar-item:right-8",
 			),
 		],
 		[String(count)],
@@ -174,7 +174,7 @@ const threadItem = <M>(
 				? h.span(
 						[
 							h.Class(
-								"flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-[11px] text-primary-fg tabular-nums",
+								"flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-2xs text-primary-fg tabular-nums",
 							),
 						],
 						[String(count)],
@@ -301,7 +301,7 @@ const overflowAvatar = <M>(h: HtmlBuilder<M>, count: number): Html =>
 		],
 		[
 			h.span(
-				[h.Class("flex items-center justify-center font-semibold text-quaternary text-sm")],
+				[h.Class("flex items-center justify-center font-semibold text-fg-2 text-sm")],
 				[`+${count}`],
 			),
 		],

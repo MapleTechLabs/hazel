@@ -53,6 +53,7 @@ import { notesTab } from "./notes-tab"
 import { overviewTab } from "./overview-tab"
 import { type Context, icon, memberOf, menu } from "./parts"
 import { usersTab } from "./users-tab"
+import { heading } from "../../../ui/heading"
 
 /** The customer page (Wonder: Customer Page — overview, users, billing, activity, notes, header menu). */
 
@@ -272,10 +273,9 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-2")],
 										[
-											h.h1(
-												[h.Class("font-semibold text-2xl text-fg max-md:text-xl")],
-												[account.name],
-											),
+											heading(h, { variant: "display", className: "max-md:text-xl" }, [
+												account.name,
+											]),
 											stageBadge(h, account.lifecycleStage),
 											healthBadge(h, {
 												status: account.healthStatus,
@@ -455,7 +455,7 @@ const sidebarSection = (
 			h.div(
 				[h.Class("flex items-center justify-between pb-1")],
 				[
-					h.h2([h.Class("font-medium text-muted-fg text-xs uppercase tracking-wider")], [title]),
+					heading(h, { variant: "label", level: 2 }, [title]),
 					...(aside === null ? [] : [h.span([h.Class("text-muted-fg text-xs")], [aside])]),
 				],
 			),
@@ -759,7 +759,7 @@ const centered = (h: HtmlBuilder<Message>, title: string, description: string, a
 	h.div(
 		[h.Class("flex h-full flex-col items-center justify-center gap-2 px-6 text-center")],
 		[
-			h.h1([h.Class("font-semibold text-fg text-lg")], [title]),
+			heading(h, { variant: "title", level: 1 }, [title]),
 			h.p([h.Class("max-w-sm text-muted-fg text-sm")], [description]),
 			...(action === undefined ? [] : [h.div([h.Class("pt-2")], [action])]),
 		],

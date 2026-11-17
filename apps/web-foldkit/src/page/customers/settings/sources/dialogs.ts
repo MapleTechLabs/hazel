@@ -18,6 +18,7 @@ import { Message } from "./message"
 import { connectFailureMessage, type ConnectForm, connectionOf, isLive, type Model } from "./model"
 import { BACKEND_URL, callout, codeChips, formField, type H, webhookUrlField } from "./parts"
 import { configFieldView } from "./settings-view"
+import { heading } from "../../../../ui/heading"
 
 /**
  * The connect modal (Wonder `fip`, `jpg`), "Update keys" and the disconnect confirmation.
@@ -49,7 +50,7 @@ const step = (h: H, index: number, isDone: boolean, title: string, children: Rea
 			),
 			h.div(
 				[h.Class("flex min-w-0 flex-1 flex-col gap-2")],
-				[h.h3([h.Class("font-medium text-fg text-sm")], [title]), ...children],
+				[heading(h, { variant: "subsection" }, [title]), ...children],
 			),
 		],
 	)

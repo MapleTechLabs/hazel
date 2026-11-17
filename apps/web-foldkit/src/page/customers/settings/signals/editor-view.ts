@@ -20,6 +20,7 @@ import { currencyOf, type Editor, type Model, type RuleForm, ruleById } from "./
 import { card, errorIdOf, fieldError, severityPicker, templateTile } from "./parts"
 import { previewCard } from "./preview-view"
 import { scopeCard } from "./scope-view"
+import { heading } from "../../../../ui/heading"
 
 /** The rule editor (Wonder `ati`, `mia`): the rule, its condition and scope, and the live preview. */
 
@@ -211,7 +212,7 @@ const deleteCard = (h: H, editor: Editor): Html =>
 			h.div(
 				[h.Class("flex flex-col gap-0.5")],
 				[
-					h.h2([h.Class("font-medium text-fg text-sm")], ["Delete this rule"]),
+					heading(h, { variant: "subsection", level: 2 }, ["Delete this rule"]),
 					h.p(
 						[h.Class("text-muted-fg text-xs")],
 						["Its open items in Needs attention resolve on their own."],

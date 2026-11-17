@@ -23,6 +23,7 @@ import { button } from "../ui/button"
 import * as Modal from "../ui/modal"
 import * as Sheet from "../ui/sheet"
 import type { ShellContext } from "./context"
+import { heading } from "../ui/heading"
 
 /** The phone shell (`useSidebar().isMobile`): tab bar, top bars, the sidebar sheet and its buttons. */
 
@@ -66,7 +67,7 @@ export const mobileNav = <Message>(
 			],
 			[
 				h.span([h.Class("relative")], [icon, ...(badge === undefined ? [] : [badge.html])]),
-				h.span([h.Class("font-medium text-[10px] leading-none")], [label]),
+				h.span([h.Class("font-medium text-3xs leading-none")], [label]),
 			],
 		)
 	const unread =
@@ -78,7 +79,7 @@ export const mobileNav = <Message>(
 							// The native tab shows the count as its badge, not in its title.
 							h.Attribute("data-native-skip", ""),
 							h.Class(
-								"absolute -top-1 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 font-semibold text-[10px] text-white tabular-nums leading-none",
+								"absolute -top-1 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 font-semibold text-3xs text-white tabular-nums leading-none",
 							),
 						],
 						[unreadNotificationCount > 99 ? "99+" : String(unreadNotificationCount)],
@@ -201,7 +202,9 @@ export const mobileTopBar = <Message>(
 						},
 						[IconMenu(h, { className: "size-5" })],
 					),
-					h.h1([h.Class("min-w-0 flex-1 truncate font-semibold text-base")], [bar.title]),
+					heading(h, { variant: "section", level: 1, className: "min-w-0 flex-1 truncate" }, [
+						bar.title,
+					]),
 				],
 	)
 

@@ -42,7 +42,7 @@ export const linkPreviewView = <M>(h: HtmlBuilder<M>, url: string, unfurl: Unfur
 										[og.description],
 									)
 								: h.empty,
-							h.div([h.Class("mt-1 text-[11px] text-primary-subtle-fg")], [host]),
+							h.div([h.Class("mt-1 text-2xs text-primary-subtle-fg")], [host]),
 						],
 					),
 				],
@@ -61,9 +61,7 @@ export const linkPreviewView = <M>(h: HtmlBuilder<M>, url: string, unfurl: Unfur
 						],
 					)
 				: h.empty,
-			isLoading
-				? h.div([h.Class("px-3 pb-3 text-[11px] text-muted-fg")], ["Loading preview…"])
-				: h.empty,
+			isLoading ? h.div([h.Class("px-3 pb-3 text-2xs text-muted-fg")], ["Loading preview…"]) : h.empty,
 		],
 	)
 }
@@ -127,7 +125,7 @@ export const gifView = <M>(h: HtmlBuilder<M>, mediaUrl: string, isKlipy: boolean
 					h.Href(isKlipy ? "https://klipy.com" : "https://giphy.com"),
 					h.Attribute("target", "_blank"),
 					h.Attribute("rel", "noopener noreferrer"),
-					h.Class("mt-0.5 block text-[10px] text-muted-fg hover:text-fg/60"),
+					h.Class("mt-0.5 block text-3xs text-muted-fg hover:text-fg/60"),
 				],
 				["via ", isKlipy ? "KLIPY" : "GIPHY"],
 			),
@@ -214,7 +212,7 @@ const twitterIcon = <M>(h: HtmlBuilder<M>): Html =>
 			h.Attribute("height", "1em"),
 			h.Attribute("width", "1em"),
 			h.Attribute("xmlns", "http://www.w3.org/2000/svg"),
-			h.Class("size-5 items-start text-[#3BA9EE] transition-all hover:scale-105"),
+			h.Class("size-5 items-start text-[#3BA9EE] transition-[scale] hover:scale-105"),
 		],
 		[
 			h.g(

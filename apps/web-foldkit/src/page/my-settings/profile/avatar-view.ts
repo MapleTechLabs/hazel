@@ -110,7 +110,7 @@ export const profilePictureUpload = (
 						h,
 						{
 							className: cx(
-								"group relative size-24 cursor-pointer rounded-xl transition-all duration-200",
+								"group relative size-24 cursor-pointer rounded-xl transition-[scale] duration-200",
 								isUploading && "pointer-events-none",
 								isOver && "scale-105",
 							),
@@ -128,7 +128,7 @@ export const profilePictureUpload = (
 								alt: "Your profile picture",
 								seed: user.name,
 								size: "4xl",
-								className: "transition-all duration-200",
+								className: "transition-[opacity,filter] duration-200",
 							}),
 							...(isOver
 								? [

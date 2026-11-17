@@ -46,7 +46,7 @@ const bellIcon = <Message>(h: HtmlBuilder<Message>, unreadCount: number): Html =
 						h.span(
 							[
 								h.Class(
-									"absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-danger font-medium text-[10px] text-danger-fg",
+									"absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-danger font-medium text-3xs text-danger-fg",
 								),
 							],
 							[unreadCount > 9 ? "9+" : `${unreadCount}`],
@@ -135,10 +135,7 @@ const navRail = <Message>(h: HtmlBuilder<Message>, context: ShellContext, unread
 				],
 			),
 			sidebarFooter(h, "p-2 ", [
-				h.span(
-					[h.Class("text-center text-[10px] font-mono text-muted-fg")],
-					["v", context.appVersion],
-				),
+				h.span([h.Class("text-center text-3xs font-mono text-muted-fg")], ["v", context.appVersion]),
 			]),
 		],
 	)

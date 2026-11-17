@@ -4,6 +4,7 @@ import { cn } from "~/lib/utils"
 import { badge } from "../../ui/badge"
 import { embedMarkdownView } from "./embed-markdown"
 import type { EmbedBadge, EmbedField } from "./types"
+import { heading } from "../../ui/heading"
 
 /** Ports of `Embed.Author`, `Body`, `Thumbnail`, `Fields`, `Image` and `Footer` (components/embeds). */
 
@@ -32,7 +33,7 @@ export const embedAuthorView = <M>(
 	const badgeElement = props.badge
 		? h.span(
 				[
-					h.Class("rounded-full px-2 py-0.5 font-medium text-[11px]"),
+					h.Class("rounded-full px-2 py-0.5 font-medium text-2xs"),
 					h.Style({
 						"background-color": badgeColor ? `${colorToHex(badgeColor)}18` : "var(--color-muted)",
 						color: badgeColor ? colorToHex(badgeColor) : "var(--color-muted-fg)",
@@ -67,10 +68,9 @@ export const embedBodyView = <M>(
 		description && description.length > DESCRIPTION_MAX_LENGTH
 			? `${description.slice(0, DESCRIPTION_MAX_LENGTH)}...`
 			: description
-	const titleElement = h.h4(
-		[h.Class("font-semibold text-fg text-sm leading-snug")],
-		[embedMarkdownView(h, props.title)],
-	)
+	const titleElement = heading(h, { variant: "subsection", level: 4, className: "leading-snug" }, [
+		embedMarkdownView(h, props.title),
+	])
 	const descriptionElement = truncated
 		? h.p(
 				[h.Class(cn("line-clamp-2 text-muted-fg text-xs leading-relaxed", props.title && "mt-1.5"))],
@@ -203,7 +203,7 @@ export const embedFooterView = <M>(
 			h.Class(
 				cn(
 					embedSectionStyles({ position: "bottom", padding: "compact" }),
-					"flex items-center gap-2 text-[11px] text-muted-fg",
+					"flex items-center gap-2 text-2xs text-muted-fg",
 				),
 			),
 		],

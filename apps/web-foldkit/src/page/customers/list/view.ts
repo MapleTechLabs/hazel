@@ -64,6 +64,7 @@ import {
 } from "./model"
 import { shortName, type TableContext, tableColumns } from "./table"
 import { viewerOf } from "./update"
+import { heading } from "../../../ui/heading"
 
 /** The customers list (Wonder: List — all, at risk, filter builder, columns, bulk, hover, no results, first run). */
 
@@ -145,7 +146,7 @@ const header = (
 			h.div(
 				[h.Class("flex min-w-0 flex-col gap-1")],
 				[
-					h.h1([h.Class("font-semibold text-2xl text-fg")], ["Customers"]),
+					heading(h, { variant: "display" }, ["Customers"]),
 					h.p([h.Class("text-muted-fg text-sm")], [subtitle]),
 				],
 			),
@@ -681,7 +682,7 @@ const firstRun = (h: HtmlBuilder<Message>, orgSlug: string, nowMs: number): Html
 					h.div(
 						[h.Class("flex flex-col gap-1")],
 						[
-							h.h1([h.Class("font-semibold text-2xl text-fg")], ["Customers"]),
+							heading(h, { variant: "display" }, ["Customers"]),
 							h.p(
 								[h.Class("text-muted-fg text-sm")],
 								["Your customer accounts, built from the tools you already use."],

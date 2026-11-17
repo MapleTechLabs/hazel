@@ -10,6 +10,7 @@ import { documentsOf, filterAttachments, formatRelativeTime, mediaOf, uploaderId
 import { type FilesContext, filesHref, mediaGalleryView, mediaGridView } from "./media-view"
 import { filterItems, Message, type Model, SEARCH_FIELD_ID } from "./page"
 import type { FileAttachment } from "./queries"
+import { heading } from "../../../ui/heading"
 
 /** The `files/` and `files/media` route outlets (the lead renders the chat header and tab bar). */
 
@@ -110,10 +111,7 @@ const documentItem = <M>(context: FilesContext<M>, attachment: FileAttachment): 
 }
 
 const sectionView = <M>(h: HtmlBuilder<M>, title: string, content: Html): Html =>
-	h.section(
-		[],
-		[h.h2([h.Class("mb-3 font-medium text-muted-fg text-xs uppercase tracking-wide")], [title]), content],
-	)
+	h.section([], [heading(h, { variant: "label", level: 2, className: "mb-3" }, [title]), content])
 
 /** `ChannelFilesView`. */
 const filesView = <M>(context: FilesContext<M>): Html => {
@@ -142,10 +140,9 @@ const filesView = <M>(context: FilesContext<M>): Html => {
 											],
 											[
 												IconFolders(h, { className: "mb-3 size-12 text-muted-fg" }),
-												h.h3(
-													[h.Class("font-medium text-fg text-lg")],
-													["No files found"],
-												),
+												heading(h, { variant: "title", level: 3 }, [
+													"No files found",
+												]),
 												h.p(
 													[h.Class("text-muted-fg text-sm")],
 													[
@@ -212,7 +209,7 @@ const mediaPageView = <M>(context: FilesContext<M>): Html => {
 							),
 						],
 					),
-					h.h1([h.Class("font-semibold text-lg")], ["All Media"]),
+					heading(h, { variant: "title", level: 1 }, ["All Media"]),
 				],
 			),
 			mediaGalleryView(context),

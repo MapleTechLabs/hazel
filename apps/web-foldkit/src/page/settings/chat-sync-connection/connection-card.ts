@@ -11,6 +11,7 @@ import { PROVIDERS } from "../chat-sync/providers"
 import { formatSyncedAt } from "../chat-sync/rpc"
 import { Message } from "./model"
 import { outlineIcon } from "./parts"
+import { heading } from "../../../ui/heading"
 
 /** The connection detail header and its Connection status card. */
 
@@ -72,7 +73,7 @@ export const header = (h: HtmlBuilder<Message>, connection: Connection): Html =>
 const cardHeader = (h: HtmlBuilder<Message>, title: string): Html =>
 	h.div(
 		[h.Class("border-border border-b bg-bg-muted/30 px-5 py-3")],
-		[h.h3([h.Class("font-semibold text-fg text-sm")], [title])],
+		[heading(h, { variant: "subsection" }, [title])],
 	)
 
 const disconnectButton = (h: HtmlBuilder<Message>, label: string): Html =>

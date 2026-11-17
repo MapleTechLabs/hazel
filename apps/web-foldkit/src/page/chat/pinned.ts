@@ -5,6 +5,7 @@ import { avatar } from "../../ui/avatar"
 import * as Popover from "../../ui/popover"
 import { pinnedButton } from "./header"
 import type { PinnedInfo } from "./lookups"
+import { heading } from "../../ui/heading"
 
 /** Port of `PinnedMessagesModal` (a Popover from the header's pin button). */
 
@@ -93,7 +94,7 @@ const content = <M>(h: HtmlBuilder<M>, pins: ReadonlyArray<PinnedInfo>): Readonl
 				[h.Class("flex items-center gap-2 border-border border-b px-4 py-3")],
 				[
 					IconPin(h, { className: "size-4 text-muted-fg" }),
-					h.h3([h.Class("font-semibold text-fg text-sm")], ["Pinned Messages"]),
+					heading(h, { variant: "subsection" }, ["Pinned Messages"]),
 					h.span(
 						[
 							h.Class(

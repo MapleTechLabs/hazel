@@ -41,6 +41,7 @@ import {
 	quietAccounts,
 	topOpenSignals,
 } from "./model"
+import { heading } from "../../../ui/heading"
 
 /** The Customers overview (Wonder: Overview › default, hover, empty, partial, 12 months). */
 
@@ -90,9 +91,7 @@ const cardHeader = (h: HtmlBuilder<Message>, title: Html | string, description: 
 			h.div(
 				[h.Class("flex min-w-0 flex-1 basis-40 flex-col gap-0.5")],
 				[
-					typeof title === "string"
-						? h.h2([h.Class("font-semibold text-base/6 text-fg")], [title])
-						: title,
+					typeof title === "string" ? heading(h, { variant: "section" }, [title]) : title,
 					h.p([h.Class("text-muted-fg text-sm")], [description]),
 				],
 			),
@@ -121,7 +120,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, result: Result | undefine
 			h.div(
 				[h.Class("flex min-w-0 flex-col gap-1")],
 				[
-					h.h1([h.Class("font-semibold text-2xl text-fg")], ["Overview"]),
+					heading(h, { variant: "display" }, ["Overview"]),
 					h.p([h.Class("text-muted-fg text-sm")], [subtitle]),
 				],
 			),
@@ -479,20 +478,17 @@ const attentionCard = (
 	return card(h, "", [
 		cardHeader(
 			h,
-			h.h2(
-				[h.Class("flex flex-wrap items-center gap-x-2 font-semibold text-base/6 text-fg")],
-				[
-					"Needs attention",
-					h.span(
-						[
-							h.Class(
-								"whitespace-nowrap rounded-full bg-primary-subtle px-2 text-primary-subtle-fg text-xs",
-							),
-						],
-						[`${open.length} open`],
-					),
-				],
-			),
+			heading(h, { variant: "section", className: "flex flex-wrap items-center gap-x-2" }, [
+				"Needs attention",
+				h.span(
+					[
+						h.Class(
+							"whitespace-nowrap rounded-full bg-primary-subtle px-2 text-primary-subtle-fg text-xs",
+						),
+					],
+					[`${open.length} open`],
+				),
+			]),
 			"Top 5 by priority",
 			link(h, hrefOf(AppRoute.CustomersAttention({ orgSlug: context.orgSlug })), "View queue"),
 		),
@@ -798,10 +794,9 @@ const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 						[h.Class("font-medium text-primary text-xs uppercase tracking-wider")],
 						["Set up customers"],
 					),
-					h.h2(
-						[h.Class("font-semibold text-fg text-lg")],
-						["Connect a source to see how your customers are doing"],
-					),
+					heading(h, { variant: "title" }, [
+						"Connect a source to see how your customers are doing",
+					]),
 					h.p(
 						[h.Class("max-w-2xl text-muted-fg text-sm")],
 						[

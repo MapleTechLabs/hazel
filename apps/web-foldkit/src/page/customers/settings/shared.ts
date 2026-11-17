@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconChevronRight } from "../../../icons"
 import type { Shared } from "../../contract"
+import { heading } from "../../../ui/heading"
 
 /**
  * What the Customers settings pages (signals, health, sources, unmatched) share: who may change
@@ -75,10 +76,7 @@ export const settingsHeader = <M>(
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-2")],
 										[
-											h.h1(
-												[h.Class("font-semibold text-2xl text-fg")],
-												[options.title],
-											),
+											heading(h, { variant: "display" }, [options.title]),
 											...(options.badges ?? []),
 										],
 									),

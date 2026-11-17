@@ -19,6 +19,7 @@ import { pageHeader } from "../shared"
 import { Message } from "./message"
 import type { Model } from "./model"
 import { RECORDER_ATTRIBUTE } from "./subscription"
+import { heading } from "../../../ui/heading"
 
 type H = HtmlBuilder<Message>
 type AppAction = (typeof appKeymap.actions)[number]
@@ -270,7 +271,7 @@ const section = (
 			h.div(
 				[h.Class("flex items-baseline justify-between px-1")],
 				[
-					h.h3([h.Class("font-medium text-muted-fg text-xs uppercase tracking-wide")], [category]),
+					heading(h, { variant: "label" }, [category]),
 					...(isFixed ? [h.span([h.Class("text-muted-fg text-xs")], ["Built in"])] : []),
 				],
 			),

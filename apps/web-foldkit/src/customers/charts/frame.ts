@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { clamp } from "./scale"
+import { heading } from "../../ui/heading"
 
 /**
  * What the axis charts share: the palette, the card, the legend, the axes and the hover tooltip.
@@ -89,7 +90,7 @@ export const chartCard = <M>(
 					h.div(
 						[h.Class("flex min-w-0 flex-col gap-0.5")],
 						[
-							h.h2([h.Class("font-semibold text-base/6 text-fg")], [options.title]),
+							heading(h, { variant: "section" }, [options.title]),
 							...(options.description
 								? [h.p([h.Class("text-muted-fg text-sm")], [options.description])]
 								: []),

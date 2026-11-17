@@ -2,6 +2,7 @@ import type * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import type { Message } from "./message"
+import { heading } from "../../../../ui/heading"
 
 /** What every part of the health settings view reads: the saved and draft settings and who may edit. */
 export interface Context {
@@ -32,7 +33,7 @@ export const cardTitle = (h: H, title: string, subtitle: string): Html =>
 	h.div(
 		[h.Class("flex flex-col gap-0.5")],
 		[
-			h.h2([h.Class("font-medium text-fg text-sm")], [title]),
+			heading(h, { variant: "subsection", level: 2 }, [title]),
 			h.p([h.Class("text-muted-fg text-xs")], [subtitle]),
 		],
 	)
@@ -104,6 +105,6 @@ export const ruleHeading = (h: H, name: string, formula: string): Html =>
 		[h.Class("flex items-baseline justify-between gap-3")],
 		[
 			h.span([h.Class("font-medium text-secondary-fg text-xs")], [name]),
-			h.span([h.Class("text-right text-[0.6875rem] text-muted-fg")], [formula]),
+			h.span([h.Class("text-right text-2xs text-muted-fg")], [formula]),
 		],
 	)

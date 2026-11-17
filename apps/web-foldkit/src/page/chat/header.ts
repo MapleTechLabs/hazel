@@ -7,6 +7,7 @@ import { presenceDot } from "../../ui/presence-dot"
 import type { PresenceStatus } from "~/utils/presence"
 import { type AuthorIdentity } from "./rows"
 import type { ChannelInfo, ParentChannelInfo } from "./queries"
+import { heading } from "../../ui/heading"
 
 /** Port of `ChatHeader` (desktop): channel, thread breadcrumb, DM and the not-a-member fallback. */
 
@@ -81,7 +82,7 @@ const threadTitle = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs, channel: Channe
 				[h.Class("flex min-w-0 items-center gap-1.5")],
 				[
 					IconThread(h, { className: "size-4 shrink-0 text-muted-fg" }),
-					h.h2([h.Class("truncate font-semibold text-fg text-sm")], [channel.name]),
+					heading(h, { variant: "subsection", level: 2, className: "truncate" }, [channel.name]),
 				],
 			),
 		],
@@ -107,27 +108,24 @@ const dmTitle = <M>(
 	h.div(
 		[h.Class("max-md:min-w-0")],
 		[
-			h.h2(
-				[h.Class("font-semibold text-fg text-sm max-md:truncate")],
-				[
-					...(members.length > 0
-						? members
-								.slice(0, 3)
-								.map((member, index) =>
-									h.span([], [...(index > 0 ? [", "] : []), member.displayName]),
-								)
-						: ["Direct Message"]),
-					" ",
-					...(members.length > 3
-						? [
-								h.span(
-									[h.Class("font-normal text-muted-fg text-xs")],
-									[` +${members.length - 3} more`],
-								),
-							]
-						: []),
-				],
-			),
+			heading(h, { variant: "subsection", level: 2, className: "max-md:truncate" }, [
+				...(members.length > 0
+					? members
+							.slice(0, 3)
+							.map((member, index) =>
+								h.span([], [...(index > 0 ? [", "] : []), member.displayName]),
+							)
+					: ["Direct Message"]),
+				" ",
+				...(members.length > 3
+					? [
+							h.span(
+								[h.Class("font-normal text-muted-fg text-xs")],
+								[` +${members.length - 3} more`],
+							),
+						]
+					: []),
+			]),
 		],
 	),
 ]
@@ -144,8 +142,9 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 							[h.Class("flex items-center gap-3 max-md:min-w-0")],
 							[
 								channelIcon(h, channel.icon, "size-5 text-muted-fg max-md:shrink-0"),
-								h.h2(
-									[h.Class("font-semibold text-fg text-sm max-md:truncate")],
+								heading(
+									h,
+									{ variant: "subsection", level: 2, className: "max-md:truncate" },
 									[channel.name],
 								),
 							],
@@ -170,8 +169,9 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 									h.div(
 										[h.Class("flex items-center gap-2 max-md:min-w-0")],
 										[
-											h.h2(
-												[h.Class("truncate font-semibold text-fg text-sm")],
+											heading(
+												h,
+												{ variant: "subsection", level: 2, className: "truncate" },
 												[channel.name],
 											),
 										],

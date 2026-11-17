@@ -17,6 +17,7 @@ import { deleteEmojiModal, restoreEmojiModal } from "./modals"
 import { Message } from "./message"
 import type { Draft, Emoji, Model } from "./model"
 import { EMOJI_NAME_ID, isBusy } from "./update"
+import { heading } from "../../../ui/heading"
 
 /** Port of `routes/_app/$orgSlug/settings/custom-emojis.tsx`. */
 
@@ -377,7 +378,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 								[h.Class("flex items-center gap-2")],
 								[
 									IconEmoji1(h, { className: "size-5 text-muted-fg" }),
-									h.h2([h.Class("font-semibold text-fg text-lg")], ["Custom Emojis"]),
+									heading(h, { variant: "title" }, ["Custom Emojis"]),
 									badge(h, { intent: "secondary" }, [
 										`${count}`,
 										" emoji",

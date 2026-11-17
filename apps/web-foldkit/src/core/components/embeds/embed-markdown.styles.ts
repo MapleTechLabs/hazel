@@ -8,8 +8,8 @@ export const colorMap: Record<string, string> = {
 	orange: "text-orange-500",
 	gray: "text-gray-500",
 	// Semantic aliases
-	success: "text-green-500",
-	error: "text-red-500",
-	warning: "text-yellow-500",
-	info: "text-blue-500",
+	success: "text-success-subtle-fg",
+	error: "text-danger-subtle-fg",
+	warning: "text-warning-subtle-fg",
+	info: "text-info-subtle-fg",
 }

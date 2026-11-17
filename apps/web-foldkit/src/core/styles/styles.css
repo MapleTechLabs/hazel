@@ -57,6 +57,11 @@ If you want to use the typography plugin, uncomment the line below.
 	--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 	--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 
+	/* Two steps under `text-xs` for counters, badges and meta. Font size only: the line height
+	   stays whatever the context sets, as the arbitrary sizes they replace did. */
+	--text-2xs: 0.6875rem;
+	--text-3xs: 0.625rem;
+
 	--color-bg-muted: var(--muted);
 	--color-border-hover: var(--border-hover);
 

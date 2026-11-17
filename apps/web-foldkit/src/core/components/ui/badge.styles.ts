@@ -25,7 +25,7 @@ export const badgeStyles = tv({
 			outline: "[--badge-overlay:var(--color-secondary)]/20 [--badge-ring:var(--color-border)]",
 		},
 		size: {
-			sm: "gap-x-1 py-px text-[10px]/4 *:data-[slot=icon]:size-2.5",
+			sm: "gap-x-1 py-px text-3xs/4 *:data-[slot=icon]:size-2.5",
 			md: "gap-x-1.5 py-0.5 text-xs/5 *:data-[slot=icon]:size-3",
 		},
 		isPill: {

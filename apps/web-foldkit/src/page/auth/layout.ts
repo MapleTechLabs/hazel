@@ -4,6 +4,7 @@ import { failureMessage, type UserErrorMessage } from "~/lib/error-messages"
 import type { AuthFailure } from "../../auth/flows"
 import { AppRoute, hrefOf } from "../../route"
 import { backgroundImage, logoContent, panelCard, panelFrame } from "../onboarding/brand-panel"
+import { heading } from "../../ui/heading"
 
 /** The auth pages' frame: the pixel-art panel on large screens, the form beside it. */
 
@@ -63,10 +64,7 @@ export const authFrame = <M>(h: HtmlBuilder<M>, nowMs: number, content: Readonly
 export const authHeading = <M>(h: HtmlBuilder<M>, title: string, description: string): Html =>
 	h.div(
 		[h.Class("mb-8 space-y-2")],
-		[
-			h.h1([h.Class("font-semibold text-2xl text-fg")], [title]),
-			h.p([h.Class("text-muted-fg text-sm")], [description]),
-		],
+		[heading(h, { variant: "display" }, [title]), h.p([h.Class("text-muted-fg text-sm")], [description])],
 	)
 
 /** A failure under the form, announced to screen readers. */

@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { LAB_ROOT } from "./registry"
+import { heading } from "../ui/heading"
 
 /**
  * The lab's page chrome: a header with the page's switches (`?state=`, `?range=`, …) and the
@@ -127,7 +128,7 @@ export const labSection = <M>(
 	h.section(
 		[h.Class("flex flex-col gap-3")],
 		[
-			h.h2([h.Class("font-medium text-muted-fg text-xs uppercase tracking-wider")], [title]),
+			heading(h, { variant: "label", level: 2 }, [title]),
 			h.div([h.Class(twMerge("flex flex-col gap-4", className))], [...children]),
 		],
 	)

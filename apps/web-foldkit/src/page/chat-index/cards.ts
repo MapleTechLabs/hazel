@@ -10,7 +10,7 @@ import { type ChannelSummary, type DmParticipant, otherMembers, type Presence } 
 /** `ChannelCard`, `DmCard` and `SingleDmCard` from `routes/_app/$orgSlug/chat/index.tsx`. */
 
 const cardLinkClass =
-	"group flex items-center justify-between gap-4 px-4 py-3 transition-all duration-200 hover:bg-secondary/50"
+	"group flex items-center justify-between gap-4 px-4 py-3 transition-colors duration-200 hover:bg-secondary/50"
 
 const titleClass = (channel: ChannelSummary) =>
 	cn("truncate font-semibold text-fg text-sm", channel.isMuted && "text-muted-fg")

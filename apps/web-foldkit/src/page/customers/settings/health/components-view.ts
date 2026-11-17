@@ -17,6 +17,7 @@ import {
 	type StepList,
 } from "./model"
 import { SLIDER_MESSAGE } from "./update"
+import { heading } from "../../../../ui/heading"
 
 /** The score card (weights and their total) and the four component cards (weight, scoring rules). */
 
@@ -96,10 +97,9 @@ export const weightsCard = (h: H, context: Context): Html => {
 				h.div(
 					[h.Class("flex min-w-0 flex-col gap-0.5")],
 					[
-						h.h2(
-							[h.Class("font-medium text-fg text-sm")],
-							["Score = weighted average of four parts"],
-						),
+						heading(h, { variant: "subsection", level: 2 }, [
+							"Score = weighted average of four parts",
+						]),
 						isOff
 							? h.p(
 									[h.Role("alert"), h.Class("text-danger-subtle-fg text-xs")],
@@ -519,7 +519,7 @@ export const componentCard = (
 							[h.Class("flex items-center gap-2")],
 							[
 								h.span([h.Class(twMerge("size-2.5 rounded-[2px]", COMPONENT_FILL[key]))]),
-								h.h3([h.Class("font-medium text-fg text-sm")], [COMPONENT_LABEL[key]]),
+								heading(h, { variant: "subsection" }, [COMPONENT_LABEL[key]]),
 							],
 						),
 						h.p([h.Class("text-muted-fg text-xs")], [DESCRIPTION[key]]),

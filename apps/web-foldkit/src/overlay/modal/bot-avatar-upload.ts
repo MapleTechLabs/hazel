@@ -83,7 +83,7 @@ export const botAvatarUpload = <Message>(
 						h,
 						{
 							className: cx(
-								"group relative size-24 cursor-pointer rounded-xl transition-all duration-200",
+								"group relative size-24 cursor-pointer rounded-xl transition-[scale] duration-200",
 								options.isUploading && "pointer-events-none",
 								isOver && "scale-105",
 							),
@@ -102,7 +102,7 @@ export const botAvatarUpload = <Message>(
 								src: options.avatarUrl,
 								seed: options.name,
 								alt: options.name ? `${options.name} avatar` : "Bot avatar",
-								className: "transition-all duration-200",
+								className: "transition-[opacity,filter] duration-200",
 							}),
 							isOver
 								? overlay(h, true, [

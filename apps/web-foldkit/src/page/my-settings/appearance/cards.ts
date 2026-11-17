@@ -91,7 +91,7 @@ export const themePresetCard = <M>(
 				[
 					h.Class(
 						twMerge(
-							"relative flex h-20 w-28 flex-col overflow-hidden rounded-lg border-2 bg-secondary transition-all",
+							"relative flex h-20 w-28 flex-col overflow-hidden rounded-lg border-2 bg-secondary transition-colors",
 							isSelected
 								? "border-ring ring-2 ring-ring/20"
 								: "border-border hover:border-muted-fg/50",
@@ -128,7 +128,7 @@ export const radiusOption = <M>(
 				[
 					h.Class(
 						twMerge(
-							"flex items-center gap-2 rounded-lg border px-3 py-2 transition-all",
+							"flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors",
 							isSelected
 								? "border-ring bg-primary-subtle/10 ring-2 ring-ring/20"
 								: "border-border hover:border-muted-fg/50 hover:bg-secondary/50",
@@ -189,7 +189,7 @@ export const remixOptionCard = <M>(
 			h.OnClick(onSelect),
 			h.Class(
 				twMerge(
-					"group flex flex-col gap-2 rounded-lg border border-border p-3 text-left transition-all",
+					"group flex flex-col gap-2 rounded-lg border border-border p-3 text-left transition-colors",
 					"hover:border-muted-fg/50 hover:bg-secondary/50",
 					"focus:outline-none focus:ring-2 focus:ring-ring/40",
 				),

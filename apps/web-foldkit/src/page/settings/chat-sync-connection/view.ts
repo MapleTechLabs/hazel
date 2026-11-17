@@ -21,6 +21,7 @@ import {
 import { addLinkModal } from "./add-link-view"
 import { connectionCard, header } from "./connection-card"
 import { aboutCard, channelLinkRow, outlineIcon } from "./parts"
+import { heading } from "../../../ui/heading"
 
 /** Port of `settings/chat-sync/$connectionId.tsx`. */
 
@@ -151,7 +152,7 @@ const linksCard = (h: HtmlBuilder<Message>, model: Model, connection: Connection
 					h.div(
 						[h.Class("flex items-center gap-2")],
 						[
-							h.h3([h.Class("font-semibold text-fg text-sm")], ["Channel Links"]),
+							heading(h, { variant: "subsection" }, ["Channel Links"]),
 							...(links.length > 0
 								? [
 										h.span(

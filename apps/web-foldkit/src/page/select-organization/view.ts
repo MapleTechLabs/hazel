@@ -7,6 +7,7 @@ import type { PageViewInputs } from "../contract"
 import * as CreateWorkspace from "../create-workspace"
 import { Message } from "./message"
 import { type Model, Organizations, type UserOrganization } from "./model"
+import { heading } from "../../ui/heading"
 
 const toCreateWorkspaceMessage = (message: CreateWorkspace.Message): Message =>
 	Message.GotCreateWorkspaceMessage({ message })
@@ -24,7 +25,7 @@ const createWorkspace = (h: HtmlBuilder<Message>, model: Model): Html =>
 					h.div(
 						[h.Class("text-center")],
 						[
-							h.h1([h.Class("font-semibold text-2xl")], ["Create your workspace"]),
+							heading(h, { variant: "display" }, ["Create your workspace"]),
 							h.p(
 								[h.Class("mt-2 text-muted-fg text-sm")],
 								["Create a workspace for your team, or ask a teammate to invite you."],
@@ -44,7 +45,7 @@ const organizationButton = (h: HtmlBuilder<Message>, organization: UserOrganizat
 			h.Type("button"),
 			h.OnClick(Message.ClickedOrganization({ organization })),
 			h.Class(
-				"flex w-full items-center gap-4 rounded-xl border border-border bg-bg p-4 text-left transition-all hover:border-primary hover:bg-secondary/50 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+				"flex w-full items-center gap-4 rounded-xl border border-border bg-bg p-4 text-left transition-[border-color,background-color] hover:border-primary hover:bg-secondary/50 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
 			),
 		],
 		[
@@ -109,10 +110,7 @@ const picker = (h: HtmlBuilder<Message>, organizations: ReadonlyArray<UserOrgani
 					h.div(
 						[h.Class("mb-8 text-center")],
 						[
-							h.h1(
-								[h.Class("mb-2 font-semibold text-2xl text-fg")],
-								["Select an organization"],
-							),
+							heading(h, { variant: "display", className: "mb-2" }, ["Select an organization"]),
 							h.p(
 								[h.Class("text-muted-fg text-sm")],
 								["Choose which organization you'd like to access"],
