@@ -317,6 +317,7 @@ const headerView = (
 				)
 	return chatHeaderView(h, {
 		channel,
+		syncProvider: lookups.syncProvider,
 		parentChannel,
 		orgSlug,
 		isMember: currentMember !== undefined,
