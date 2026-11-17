@@ -1,5 +1,6 @@
 import { HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
 import { Context, Duration, Effect, Layer, Option, Result, Schema } from "effect"
+import { decodeSlackHistoryMessage, type SlackHistoryMessage } from "./events.ts"
 
 /**
  * A failed Slack Web API call.
@@ -127,6 +128,19 @@ const ConversationsListResponse = Schema.Struct({
 	),
 	response_metadata: Schema.optional(Schema.Struct({ next_cursor: OptionalString })),
 })
+
+const ConversationsHistoryResponse = Schema.Struct({
+	messages: Schema.Array(Schema.Unknown),
+	has_more: Schema.optional(Schema.Boolean),
+	response_metadata: Schema.optional(Schema.NullOr(Schema.Struct({ next_cursor: OptionalString }))),
+})
+
+/** A page of `conversations.history`, newest first, and the cursor of the next (older) page. */
+export interface SlackHistoryPage {
+	readonly messages: ReadonlyArray<SlackHistoryMessage>
+	/** `null`: no older messages. */
+	readonly nextCursor: string | null
+}
 
 const PostMessageResponse = Schema.Struct({
 	channel: Schema.String,
@@ -336,6 +350,29 @@ export class SlackApiClient extends Context.Service<SlackApiClient>()("SlackApiC
 			return channels as ReadonlyArray<SlackChannel>
 		})
 
+		/**
+		 * conversations.history: one page of the channel's top-level messages (and thread
+		 * parents), newest first. Needs `channels:history` / `groups:history` and the bot in it.
+		 */
+		const conversationHistory = Effect.fn("SlackApiClient.conversationHistory")(function* (
+			token: string,
+			params: { channel: string; limit: number; cursor?: string },
+		) {
+			const method = "conversations.history"
+			const body = yield* getQuery(method, token, {
+				channel: params.channel,
+				limit: String(Math.max(1, Math.min(CHANNELS_PAGE_SIZE, params.limit))),
+				...(params.cursor ? { cursor: params.cursor } : {}),
+			})
+			const page = yield* decode(method, ConversationsHistoryResponse, body)
+			return {
+				messages: page.messages.flatMap((raw) =>
+					Option.toArray(decodeSlackHistoryMessage(raw, params.channel)),
+				),
+				nextCursor: page.has_more === false ? null : nonEmpty(page.response_metadata?.next_cursor),
+			} satisfies SlackHistoryPage
+		})
+
 		/** conversations.join; joining a channel the bot is in is a success (Slack warns `already_in_channel`). */
 		const joinChannel = Effect.fn("SlackApiClient.joinChannel")(function* (
 			token: string,
@@ -432,6 +469,7 @@ export class SlackApiClient extends Context.Service<SlackApiClient>()("SlackApiC
 			oauthAccess,
 			authTest,
 			listChannels,
+			conversationHistory,
 			joinChannel,
 			postMessage,
 			updateMessage,

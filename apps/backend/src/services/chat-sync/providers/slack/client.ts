@@ -5,7 +5,7 @@
  * (`thread_ts`); creating one is only naming it.
  */
 import { Slack } from "@hazel/integrations"
-import type { ExternalMessageId, ExternalThreadId } from "@hazel/schema"
+import { type ExternalMessageId, type ExternalThreadId, ExternalUserId } from "@hazel/schema"
 import { Effect, Option, Redacted } from "effect"
 import { formatMessageContentWithAttachments } from "../../chat-sync-attachment-content"
 import { ChatSyncInstallations } from "../../chat-sync-installations"
@@ -14,7 +14,9 @@ import {
 	ChatSyncProviderApiError,
 	ChatSyncProviderConfigurationError,
 } from "../../provider"
+import type { ChatSyncInboundAuthor } from "../../chat-sync-inbound"
 import { slack, slackTarget } from "./definition"
+import { type SlackUserLookup, slackHistoryInbound } from "./events"
 
 const configError = (message: string) =>
 	new ChatSyncProviderConfigurationError({ provider: "slack", message })
@@ -175,6 +177,49 @@ export const makeSlackClient = Effect.gen(function* () {
 			yield* call(context.link.externalWorkspaceId, (token) =>
 				api.removeReaction(token, { channel, ts: reaction.externalMessageId, name }),
 			)
+		}),
+		fetchHistory: Effect.fn("SlackChatSyncClient.fetchHistory")(function* (params) {
+			const { channel } = slackTarget(params.externalChannelId)
+			const page = yield* call(params.externalWorkspaceId, (token) =>
+				api.conversationHistory(token, {
+					channel,
+					limit: params.limit,
+					...(params.cursor === null ? {} : { cursor: params.cursor }),
+				}),
+			)
+			// One users.info per person on the page (authors and mentions); one Slack cannot answer
+			// stays unnamed, as on a live event.
+			const users = new Map<string, Option.Option<ChatSyncInboundAuthor>>()
+			const lookupUser: SlackUserLookup = (userId) =>
+				Effect.gen(function* () {
+					const cached = users.get(userId)
+					if (cached !== undefined) return cached
+					const found = yield* call(params.externalWorkspaceId, (token) =>
+						api.getUser(token, userId),
+					).pipe(
+						Effect.map((user) =>
+							Option.some<ChatSyncInboundAuthor>({
+								externalUserId: ExternalUserId.make(user.id),
+								displayName: user.displayName,
+								avatarUrl: user.avatarUrl,
+							}),
+						),
+						Effect.catch((error) =>
+							Effect.logWarning("Slack user lookup failed", {
+								userId,
+								error: error.message,
+							}).pipe(Effect.as(Option.none<ChatSyncInboundAuthor>())),
+						),
+					)
+					users.set(userId, found)
+					return found
+				})
+			const messages = yield* Effect.forEach(
+				page.messages.slice().reverse(),
+				(entry) => slackHistoryInbound(entry, params.externalWorkspaceId, lookupUser),
+				{ concurrency: 4 },
+			)
+			return { messages: messages.flatMap(Option.toArray), cursor: page.nextCursor }
 		}),
 		// Replies to the synced message are the thread: its link is keyed by the message's ts.
 		createThread: (context, thread) =>

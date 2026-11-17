@@ -4,6 +4,7 @@
  * (`routeChatSyncInbound`) is the caller's `ingest`.
  */
 import { createHash } from "node:crypto"
+import type { Discord } from "@hazel/integrations"
 import {
 	ExternalChannelId,
 	ExternalMessageId,
@@ -251,6 +252,49 @@ const decodeOptionalExternalIdOrWarn = <A>(params: {
 /** The event's guild, the workspace its channel link must be under. */
 const guildOf = (event: { readonly guild_id?: string }): ReadonlyArray<string> =>
 	typeof event.guild_id === "string" && event.guild_id.length > 0 ? [event.guild_id] : []
+
+/** Discord message types a person writes: 0 (default) and 19 (reply). The rest are system notices. */
+const PERSON_MESSAGE_TYPES: ReadonlySet<number> = new Set([0, 19])
+
+/**
+ * A message from a channel's history as the `MessageCreate` its live event would have been, sent
+ * at its own time (`sentAt`); `None` for a bot's, a webhook's (Hazel's own included) or a system
+ * message. Keyed apart from live events: the channel's message link dedupes the two.
+ */
+export const discordHistoryInbound = (
+	message: Discord.DiscordChannelMessage,
+	guildId: string,
+): Option.Option<ChatSyncInbound> => {
+	if (!PERSON_MESSAGE_TYPES.has(message.type)) return Option.none()
+	if (message.author.bot || message.webhook_id !== undefined) return Option.none()
+	const channelId = decodeExternalChannelId(message.channel_id)
+	const messageId = decodeExternalMessageId(message.id)
+	const authorId = decodeExternalUserId(message.author.id)
+	if (Option.isNone(channelId) || Option.isNone(messageId) || Option.isNone(authorId)) return Option.none()
+	const sentAt = Date.parse(message.timestamp)
+	const replyTo = decodeOptionalExternalId(message.message_reference?.message_id, decodeExternalMessageId)
+	return Option.some<ChatSyncInbound>({
+		provider: "discord",
+		externalWorkspaceIds: [guildId],
+		externalChannelId: channelId.value,
+		dedupeKey: `discord:history:${messageId.value}`,
+		author: {
+			externalUserId: authorId.value,
+			displayName: formatDiscordDisplayName(message.author),
+			avatarUrl: buildAuthorAvatarUrl(message.author),
+		},
+		event: {
+			_tag: "MessageCreate",
+			externalMessageId: messageId.value,
+			externalWebhookId: null,
+			content: message.content,
+			externalReplyToMessageId: replyTo ?? null,
+			attachments: normalizeDiscordMessageAttachments(message.attachments),
+			mentions: normalizeDiscordMentions(message.mentions),
+			sentAt: Number.isNaN(sentAt) ? undefined : sentAt,
+		},
+	})
+}
 
 export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 	readonly ingest: (inbound: ChatSyncInbound) => Effect.Effect<void, E, R>

@@ -17,6 +17,7 @@ import { Directory } from "../../services/directory"
 import { HtmlRenderStore, HtmlRenders } from "../../services/html-renders"
 import { InviteMailer } from "../../services/invite-mailer"
 import { ThreadNamer, type ThreadNamingContext } from "../../services/thread-namer"
+import type { ChatSyncInbound } from "../../services/chat-sync/chat-sync-inbound"
 import { type ChatSyncCall, makeRecordingChatSyncProviders } from "../../services/chat-sync/testing"
 import { makeRpcDispatcher, type RpcDispatcherShape } from "../../rpc/dispatch"
 import { objectHandlersLive } from "./handlers"
@@ -80,6 +81,8 @@ export interface TestObjects {
 	readonly chatSyncCalls: Array<ChatSyncCall>
 	/** External channels new chat-sync links prepared (`chatSync.prepareLink`). */
 	readonly chatSyncPrepared: Array<string>
+	/** Each external channel's past messages, oldest first, for `chatSync.importHistory`. */
+	readonly chatSyncHistory: Map<string, ReadonlyArray<ChatSyncInbound>>
 	/** Make provider calls fail with `status` (retryable for 429/5xx), or succeed again (undefined). */
 	readonly setChatSyncFailure: (status: number | undefined) => void
 	/** What `ThreadNamer` was asked to name, in order. */
@@ -350,6 +353,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			stubs,
 			chatSyncCalls: chatSync.calls,
 			chatSyncPrepared: chatSync.prepared,
+			chatSyncHistory: chatSync.history,
 			setChatSyncFailure: (status) => {
 				chatSync.control.fail = status
 			},

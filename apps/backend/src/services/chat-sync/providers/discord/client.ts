@@ -24,6 +24,7 @@ import {
 	isRetryableStatus,
 } from "../../provider"
 import { discord, discordWebhookConfigOf } from "./definition"
+import { discordHistoryInbound } from "./gateway-dispatch"
 
 interface WebhookTarget {
 	readonly webhookId: string
@@ -208,6 +209,28 @@ export const makeDiscordClient = Effect.gen(function* () {
 	const client: ChatSyncClient = {
 		// The bot is in every channel of a guild it was added to.
 		prepareLink: () => Effect.void,
+		fetchHistory: Effect.fn("DiscordChatSyncClient.fetchHistory")(function* (params) {
+			yield* requireIds({ channelId: params.externalChannelId, before: params.cursor ?? undefined })
+			// Newest first; `before` the oldest one seen walks back in time.
+			const page = yield* viaBot((token) =>
+				api.listMessages({
+					channelId: params.externalChannelId,
+					...(params.cursor === null ? {} : { before: params.cursor }),
+					limit: params.limit,
+					botToken: token,
+				}),
+			)
+			const oldest = page.at(-1)
+			return {
+				messages: page
+					.slice()
+					.reverse()
+					.flatMap((message) =>
+						Option.toArray(discordHistoryInbound(message, params.externalWorkspaceId)),
+					),
+				cursor: page.length < params.limit || oldest === undefined ? null : oldest.id,
+			}
+		}),
 		postMessage: Effect.fn("DiscordChatSyncClient.postMessage")(function* (context, message) {
 			const channelId = context.link.externalChannelId
 			yield* requireIds({ channelId, replyToMessageId: message.replyToExternalMessageId })

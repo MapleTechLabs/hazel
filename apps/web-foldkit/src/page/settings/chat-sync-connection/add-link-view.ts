@@ -28,6 +28,7 @@ import {
 	EXTERNAL_SEARCH_ID,
 	type HazelChannel,
 	type HazelChannelMode,
+	HistoryImport,
 	isLinkReady,
 	isSubmitting,
 	listedLinks,
@@ -460,6 +461,36 @@ const directionSection = (h: HtmlBuilder<Message>, model: Model, provider: ChatS
 		],
 	)
 
+// --- History ------------------------------------------------------------------------------------
+
+const HISTORY_LABELS = { none: "None", "100": "Last 100", "500": "Last 500" } satisfies Record<
+	HistoryImport,
+	string
+>
+
+const historySummary = (history: HistoryImport, provider: ChatSyncProvider): string => {
+	const { name } = PROVIDERS[provider]
+	if (history === "none") return `Only messages sent from now on are synced.`
+	return `The latest ${history} ${name} messages are copied in with their original times, without notifying anyone. Thread replies stay in ${name}.`
+}
+
+/** Shown only while the direction brings external messages into Hazel. */
+const historySection = (h: HtmlBuilder<Message>, model: Model, provider: ChatSyncProvider): Html =>
+	h.div(
+		[h.Class("flex flex-col gap-2")],
+		[
+			sectionLabel(h, "Message History"),
+			segmented(h, {
+				ariaLabel: "Message history to import",
+				segments: HistoryImport.literals.map((value) => ({ value, label: HISTORY_LABELS[value] })),
+				selected: model.history,
+				onSelect: (history) => Message.ClickedHistory({ history }),
+				isDisabled: isSubmitting(model),
+			}),
+			description(h, {}, [historySummary(model.history, provider)]),
+		],
+	)
+
 // --- Modal --------------------------------------------------------------------------------------
 
 const submitLabel = (model: Model): string => {
@@ -489,6 +520,7 @@ const content = (
 				externalSection(h, model, provider),
 				hazelSection(h, model, provider),
 				directionSection(h, model, provider),
+				...(model.direction === "hazel_to_external" ? [] : [historySection(h, model, provider)]),
 			],
 			"flex flex-col gap-6",
 		),

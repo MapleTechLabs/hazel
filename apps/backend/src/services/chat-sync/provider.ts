@@ -16,6 +16,7 @@ import { type Effect, Schema } from "effect"
 import type { SqlError } from "effect/sql/SqlError"
 import type { ChatSyncOutboundAttachment } from "./chat-sync-attachment-content"
 import type { ChatSyncChannelTarget } from "./chat-sync-effects"
+import type { ChatSyncInbound } from "./chat-sync-inbound"
 
 export type { ChatSyncOutboundAttachment }
 
@@ -84,6 +85,23 @@ export interface ChatSyncProviderDefinition {
 		settings: Record<string, unknown> | null,
 		externalWebhookId: ExternalWebhookId | null,
 	) => boolean
+	/**
+	 * How a new link imports the channel's past messages (`chatSync.importHistory`), paced for the
+	 * provider's rate limits: at most `maxMessages`, `pageSize` per call, `pageDelayMs` between calls.
+	 */
+	readonly history: {
+		readonly maxMessages: number
+		readonly pageSize: number
+		readonly pageDelayMs: number
+	}
+}
+
+/** One page of a channel's past messages, oldest first, and where the next (older) page starts. */
+export interface ChatSyncHistoryPage {
+	/** `MessageCreate`s with `sentAt`, ready to ingest like live events. */
+	readonly messages: ReadonlyArray<ChatSyncInbound>
+	/** `null`: the channel has no older messages. */
+	readonly cursor: string | null
 }
 
 /** Who wrote a Hazel message, for providers that can post under a person's name. */
@@ -146,6 +164,16 @@ export interface ChatSyncClient {
 	 * Start a provider thread on a synced message. The id it answers is the thread's external
 	 * channel id: where its replies are posted, and what its channel link is keyed by.
 	 */
+	/**
+	 * One page of the channel's top-level messages, newest page first (`cursor` from the previous
+	 * page), each page oldest first. Thread replies stay in the provider.
+	 */
+	readonly fetchHistory: (params: {
+		readonly externalWorkspaceId: string
+		readonly externalChannelId: ExternalChannelId
+		readonly cursor: string | null
+		readonly limit: number
+	}) => Effect.Effect<ChatSyncHistoryPage, ChatSyncClientError>
 	readonly createThread: (
 		context: ChatSyncLinkContext,
 		thread: { readonly externalMessageId: ExternalMessageId; readonly name: string },

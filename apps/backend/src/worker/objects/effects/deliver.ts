@@ -16,7 +16,11 @@ import { ObjectStubs } from "../protocol"
 import type { HtmlRenders } from "../../../services/html-renders"
 import type { ThreadNamer } from "../../../services/thread-namer"
 import { chatSyncDeliveryReceivers } from "../../../services/chat-sync/chat-sync-outbound"
-import { ChatSyncDeliveryEffects } from "../../../services/chat-sync/chat-sync-effects"
+import {
+	ChatSyncDeliveryEffects,
+	ChatSyncHistoryEffects,
+} from "../../../services/chat-sync/chat-sync-effects"
+import { chatSyncHistoryReceivers } from "../../../services/chat-sync/chat-sync-history"
 import type { ChatSyncProviders } from "../../../services/chat-sync/chat-sync-providers"
 import { aiReceivers, AiEffects } from "./ai-effects"
 import { botGatewayReceivers, BotGatewayEffects } from "./bot-gateway-effects"
@@ -73,8 +77,8 @@ const aiSide = side<Database.Database | SqlClient | ThreadNamer | ObjectStubs | 
 	aiReceivers,
 )
 const chatSyncSide = side<Database.Database | SqlClient | ChatSyncProviders | Directory>(
-	ChatSyncDeliveryEffects,
-	chatSyncDeliveryReceivers,
+	{ ...ChatSyncDeliveryEffects, ...ChatSyncHistoryEffects },
+	{ ...chatSyncDeliveryReceivers, ...chatSyncHistoryReceivers },
 )
 
 const storageSide = side<Database.Database | HtmlRenders>(StorageEffects, storageReceivers)

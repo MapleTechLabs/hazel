@@ -21,6 +21,14 @@ import { Connection, DeleteConnectionFailure } from "../chat-sync/model"
 export const SyncDirection = Schema.Literals(["both", "hazel_to_external", "external_to_hazel"])
 export type SyncDirection = typeof SyncDirection.Type
 
+/** How many of the external channel's latest messages a new link imports (`none`: only new ones). */
+export const HistoryImport = Schema.Literals(["none", "100", "500"])
+export type HistoryImport = typeof HistoryImport.Type
+
+/** `chatSync.channelLink.create`'s `historyLimit` for a choice; none when nothing flows into Hazel. */
+export const historyLimitOf = (history: HistoryImport, direction: SyncDirection): number =>
+	history === "none" || direction === "hazel_to_external" ? 0 : Number(history)
+
 export const WebhookPermission = Schema.Literals(["allowed", "denied", "unknown"])
 export type WebhookPermission = typeof WebhookPermission.Type
 
@@ -107,6 +115,7 @@ export const Model = Schema.Struct({
 	isNewChannelNameEdited: Schema.Boolean,
 	selectedExternalChannel: Schema.NullOr(ExternalChannel),
 	direction: SyncDirection,
+	history: HistoryImport,
 	channelSearch: Schema.String,
 	externalChannelSearch: Schema.String,
 	focusedSearch: Schema.NullOr(Schema.Literals(["hazel", "external"])),
@@ -162,6 +171,7 @@ export const Message = defineMessageUnion({
 	ClickedExternalChannel: { channel: ExternalChannel },
 	ClickedChangeExternalChannel: {},
 	ClickedDirection: { direction: SyncDirection },
+	ClickedHistory: { history: HistoryImport },
 	ClickedCreateLink: {},
 	SucceededCreateLink: { successMessage: Schema.String },
 	FailedCreateLink: { reason: CreateLinkFailure },

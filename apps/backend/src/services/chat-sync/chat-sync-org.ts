@@ -25,6 +25,7 @@ import {
 	type SyncConnectionId,
 	type UserId,
 } from "@hazel/schema"
+import { withInbox } from "@hazel/sync-do"
 import { Effect, Layer, Option } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import {
@@ -633,6 +634,7 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 				authorId,
 				externalReplyToMessageId: event.externalReplyToMessageId,
 				attachments: event.attachments,
+				sentAt: event.sentAt,
 			}
 			break
 		case "MessageUpdate":
@@ -864,6 +866,15 @@ const orgServices = Layer.mergeAll(
 	OrganizationMemberRepo.layer,
 	ChannelAccessSyncService.layer,
 )
+
+/**
+ * `org.chatSyncIngest` applied in this org by its own outbox (imported history): once per dedupe
+ * key, in one transaction with its inbox row, as `applyEffect` would.
+ */
+export const ingestChatSyncHere = (payload: OrgChatSyncIngestPayload) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.transaction(withInbox(payload.dedupeKey, ingest(payload).pipe(Effect.provide(orgServices)))),
+	).pipe(Effect.asVoid)
 
 export const chatSyncOrgReceivers = {
 	"org.chatSyncIngest": (payload) => ingest(payload).pipe(Effect.provide(orgServices)),

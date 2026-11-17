@@ -45,6 +45,7 @@ import {
 	newChannelNameOf,
 	Submission,
 	SyncDirection,
+	historyLimitOf,
 } from "./model"
 
 type Return = PageReturn<Model, Message>
@@ -93,6 +94,7 @@ export const init = (route: RouteOf<"SettingsChatSyncConnection">, shared: Share
 			isNewChannelNameEdited: false,
 			selectedExternalChannel: null,
 			direction: "both",
+			history: "none",
 			channelSearch: "",
 			externalChannelSearch: "",
 			focusedSearch: null,
@@ -227,6 +229,7 @@ const addLinkModal = {
 					isNewChannelNameEdited: () => false,
 					selectedExternalChannel: () => null,
 					direction: () => "both" as const,
+					history: () => "none" as const,
 					channelSearch: () => "",
 					externalChannelSearch: () => "",
 					focusedSearch: () => null,
@@ -259,6 +262,7 @@ const linkTo = (model: Model, channel: HazelChannel): Return => {
 				externalChannelId: externalChannel.id,
 				externalChannelName: externalChannel.name,
 				direction: model.direction,
+				historyLimit: historyLimitOf(model.history, model.direction),
 			}),
 		],
 	}
@@ -512,6 +516,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model: modifyFields(model, { selectedExternalChannel: () => null }),
 		}),
 		ClickedDirection: ({ direction }) => ({ model: modifyFields(model, { direction: () => direction }) }),
+		ClickedHistory: ({ history }) => ({ model: modifyFields(model, { history: () => history }) }),
 		ClickedCreateLink: () => submitLink(model, shared),
 		// `onSuccess()` reloads the links (a new query key), then `handleClose()`.
 		SucceededCreateLink: ({ successMessage }) => ({

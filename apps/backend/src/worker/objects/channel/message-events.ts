@@ -12,6 +12,8 @@
  *
  * - chat sync: `chatSync.outbound` per outbound link (`services/chat-sync/chat-sync-outbound.ts`),
  *   except for writes that came from the provider.
+ *
+ * Imported provider history runs only the search hook (`emitImportedMessage`).
  */
 import { Database, type DatabaseError, SQLite, schema } from "@hazel/db"
 import { parseMentions } from "@hazel/domain"
@@ -193,6 +195,18 @@ export const onMessageEvent: ReadonlyArray<MessageEventHook> = [
 	// Lazy: the chat-sync module imports this one back.
 	(event) => chatSyncOutboundHook(event),
 ]
+
+/**
+ * A message imported from a provider's history (`chatSync.importHistory`): searchable like any
+ * other, but old news, so it reaches no bot, notifies nobody and is never synced back out.
+ */
+export const emitImportedMessage = (
+	message: MessageRow,
+): Effect.Effect<void, DatabaseError, Database.Database | SqlClient> =>
+	searchIndexHook({ _tag: "MessageCreated", message }).pipe(
+		Effect.catchTag("SchemaError", (error) => Effect.die(error)),
+		Effect.withSpan("ChannelObject.emitImportedMessage"),
+	)
 
 /**
  * Run every hook for `event`; call it inside the write's `db.transaction`. A payload that does

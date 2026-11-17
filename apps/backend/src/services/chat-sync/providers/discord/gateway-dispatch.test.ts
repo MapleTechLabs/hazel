@@ -1,9 +1,11 @@
 import { describe, expect, it } from "@effect/vitest"
+import type { Discord } from "@hazel/integrations"
 import { ExternalMessageId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 
 import {
 	decodeOptionalExternalId,
+	discordHistoryInbound,
 	decodeRequiredExternalId,
 	extractReactionAuthor,
 	normalizeDiscordMessageAttachments,
@@ -129,5 +131,46 @@ describe("DiscordGatewayService attachment normalization", () => {
 				publicUrl: "https://cdn.discordapp.com/good.jpg",
 			},
 		])
+	})
+})
+
+describe("discordHistoryInbound", () => {
+	const GUILD = "111111111111111111"
+	const message = (extra: Partial<Discord.DiscordChannelMessage> = {}): Discord.DiscordChannelMessage => ({
+		id: "444444444444444444",
+		channel_id: "222222222222222222",
+		type: 0,
+		content: "hello",
+		timestamp: "2026-01-02T03:04:05.000Z",
+		author: { id: "333333333333333333", username: "dana", global_name: "Dana" },
+		...extra,
+	})
+
+	it("is a MessageCreate sent at its own time, keyed apart from the live event", () => {
+		const inbound = discordHistoryInbound(
+			message({ type: 19, message_reference: { message_id: "444444444444444400" } }),
+			GUILD,
+		)
+		expect(Option.isSome(inbound)).toBe(true)
+		const value = Option.getOrThrow(inbound)
+		expect(value.dedupeKey).toBe("discord:history:444444444444444444")
+		expect(value.externalWorkspaceIds).toEqual([GUILD])
+		expect(value.author?.displayName).toBe("Dana")
+		expect(value.event).toMatchObject({
+			_tag: "MessageCreate",
+			content: "hello",
+			externalReplyToMessageId: "444444444444444400",
+			sentAt: Date.parse("2026-01-02T03:04:05.000Z"),
+		})
+	})
+
+	it("skips bots, webhooks (Hazel's own posts) and system messages", () => {
+		const bot = message({ author: { id: "333333333333333333", bot: true } })
+		expect(Option.isNone(discordHistoryInbound(bot, GUILD))).toBe(true)
+		expect(
+			Option.isNone(discordHistoryInbound(message({ webhook_id: "555555555555555555" }), GUILD)),
+		).toBe(true)
+		// 7: a member joined.
+		expect(Option.isNone(discordHistoryInbound(message({ type: 7 }), GUILD))).toBe(true)
 	})
 })

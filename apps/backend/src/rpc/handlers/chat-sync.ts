@@ -30,7 +30,7 @@ import { generateTransactionId } from "../../lib/create-transactionId"
 import { IntegrationConnectionPolicy } from "../../policies/integration-connection-policy"
 import { indexedLinkOwner } from "../../services/chat-sync/chat-sync-index"
 import { indexChatSync, publishChatSyncLinks, threadLinksUnder } from "../../services/chat-sync/chat-sync-org"
-import { ChatSyncDeliveryEffects } from "../../services/chat-sync/chat-sync-effects"
+import { ChatSyncDeliveryEffects, ChatSyncHistoryEffects } from "../../services/chat-sync/chat-sync-effects"
 import { normalizeChannelLinkSettings } from "../../services/chat-sync/chat-sync-settings"
 import { isChatSyncProviderId } from "../../services/chat-sync/provider"
 import { chatSyncProviders } from "../../services/chat-sync/providers"
@@ -254,6 +254,26 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 									externalChannelId: link!.externalChannelId as ExternalChannelId,
 								},
 							)
+							// Past messages come in only where the provider's messages flow into Hazel.
+							const historyLimit = Math.min(
+								payload.historyLimit ?? 0,
+								isChatSyncProviderId(connection.provider)
+									? chatSyncProviders[connection.provider].history.maxMessages
+									: 0,
+							)
+							if (historyLimit > 0 && link!.direction !== "hazel_to_external") {
+								yield* enqueueEffect(
+									ChatSyncHistoryEffects.importHistory,
+									{ kind: "chat-sync" },
+									{
+										provider: connection.provider,
+										externalWorkspaceId: connection.externalWorkspaceId,
+										externalChannelId: link!.externalChannelId as ExternalChannelId,
+										remaining: historyLimit,
+										cursor: null,
+									},
+								)
+							}
 
 							const brandedLink = {
 								...link,

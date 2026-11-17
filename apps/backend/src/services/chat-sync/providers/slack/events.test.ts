@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import type { Slack } from "@hazel/integrations"
 import { Effect, Option } from "effect"
-import { type SlackUserLookup, slackInbound } from "./events"
+import { type SlackUserLookup, slackHistoryInbound, slackInbound } from "./events"
 
 const APP = "A0HAZELAPP"
 const BOT_USER = "U0HAZELBOT"
@@ -175,6 +175,38 @@ describe("Slack events → chat-sync inbound", () => {
 				externalMessageId: "1700000000.000100",
 				emoji: "thumbsup",
 			})
+		}),
+	)
+})
+
+describe("slackHistoryInbound", () => {
+	const history = (subtype: string | null, extra: Partial<Slack.SlackMessage> = {}) =>
+		slackHistoryInbound({ subtype, message: message(extra) }, "T0HAZEL01", lookupUser)
+
+	it.effect("is a MessageCreate sent at its ts, in the link's workspace", () =>
+		Effect.gen(function* () {
+			const inbound = Option.getOrThrow(yield* history(null, { text: "hi <@U0DANA0001>" }))
+			expect(inbound.dedupeKey).toBe("slack:history:C0GENERAL1:1700000000.000100")
+			expect(inbound.externalWorkspaceIds).toEqual(["T0HAZEL01"])
+			expect(inbound.author?.displayName).toBe("Name U0DANA0001")
+			expect(inbound.event).toMatchObject({
+				_tag: "MessageCreate",
+				externalMessageId: "1700000000.000100",
+				sentAt: 1_700_000_000_000,
+			})
+			expect(inbound.event).not.toHaveProperty("inExternalThreadId")
+		}),
+	)
+
+	it.effect("skips bots, apps (Hazel's own posts), channel notices and thread broadcasts", () =>
+		Effect.gen(function* () {
+			expect(Option.isNone(yield* history(null, { botId: "B0OTHER01" }))).toBe(true)
+			expect(Option.isNone(yield* history(null, { appId: APP }))).toBe(true)
+			expect(Option.isNone(yield* history("channel_join"))).toBe(true)
+			expect(Option.isNone(yield* history("thread_broadcast", { threadTs: "1699999999.000100" }))).toBe(
+				true,
+			)
+			expect(Option.isSome(yield* history("file_share"))).toBe(true)
 		}),
 	)
 })

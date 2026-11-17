@@ -6,6 +6,7 @@ export {
 	SlackApiError,
 	type SlackAuthTest,
 	type SlackChannel,
+	type SlackHistoryPage,
 	type SlackOAuthAccess,
 	type SlackPostedMessage,
 	type SlackUser,
@@ -14,12 +15,14 @@ export { slackEmojiToUnicode, unicodeToSlackEmoji } from "./emoji.ts"
 export {
 	decodeSlackEnvelope,
 	decodeSlackEvent,
+	decodeSlackHistoryMessage,
 	SlackAuthorization,
 	SlackEnvelopePayload,
 	type SlackEnvelope,
 	type SlackEvent,
 	type SlackEventTag,
 	type SlackFile,
+	type SlackHistoryMessage,
 	type SlackMessage,
 	type SlackPostedSubtype,
 } from "./events.ts"
