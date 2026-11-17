@@ -1,6 +1,6 @@
 import * as Customers from "@hazel/domain/customers"
 import type { CustomersNotFoundError } from "@hazel/domain/rpc"
-import { CustomerAccountId, CustomerNoteId, OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, CustomerAccountId, CustomerNoteId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import * as Dom from "foldkit/dom"
@@ -11,6 +11,7 @@ import {
 	updateAccountAction,
 	updateNoteAction,
 } from "../../../customers/actions"
+import { linkChannelAction, unlinkChannelAction } from "../../../customers/channels"
 import { catchCommon, errorToastOf } from "../../../data/actions"
 import { showBackgroundToast } from "../../../overlay/background-toasts"
 import { HazelRpc } from "../../../rpc"
@@ -152,6 +153,34 @@ export const UpdateCustomerAccount = Command.define("UpdateCustomerAccount", {
 					Effect.succeed(Message.FailedAccountUpdate({ reason: "Stale" })),
 			}),
 			catchCommon((reason) => Message.FailedAccountUpdate({ reason })),
+		),
+})
+
+// CHANNELS
+
+export const LinkCustomerChannel = Command.define("LinkCustomerChannel", {
+	args: { ...target, channelId: ChannelId, userId: UserId },
+	messages: [Message.SucceededChannelAction, Message.FailedChannelAction],
+	execute: (args) =>
+		linkChannelAction(args).pipe(
+			Effect.as(Message.SucceededChannelAction({ action: "link" })),
+			Effect.catchTags({
+				CustomersNotFoundError: () =>
+					Effect.succeed(Message.FailedChannelAction({ action: "link", reason: "NotFound" })),
+				CustomersInvalidRequestError: () =>
+					Effect.succeed(Message.FailedChannelAction({ action: "link", reason: "Stale" })),
+			}),
+			catchCommon((reason) => Message.FailedChannelAction({ action: "link", reason })),
+		),
+})
+
+export const UnlinkCustomerChannel = Command.define("UnlinkCustomerChannel", {
+	args: { organizationId: OrganizationId, channelId: ChannelId },
+	messages: [Message.SucceededChannelAction, Message.FailedChannelAction],
+	execute: (args) =>
+		unlinkChannelAction(args).pipe(
+			Effect.as(Message.SucceededChannelAction({ action: "unlink" })),
+			catchCommon((reason) => Message.FailedChannelAction({ action: "unlink", reason })),
 		),
 })
 

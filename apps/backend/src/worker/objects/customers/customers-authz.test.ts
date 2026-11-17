@@ -69,6 +69,8 @@ const PAYLOADS = {
 	"customers.note.delete": { noteId: uuid() },
 	"customers.account.update": { accountId: uuid(), tags: [] },
 	"customers.account.bulkUpdate": { accountIds: [] },
+	"customers.channel.link": { accountId: uuid(), channelId: uuid() },
+	"customers.channel.unlink": { channelId: uuid() },
 	"customers.view.create": { view: viewDraft, shared: true },
 	"customers.view.update": { viewId: uuid(), view: viewDraft },
 	"customers.view.delete": { viewId: uuid() },

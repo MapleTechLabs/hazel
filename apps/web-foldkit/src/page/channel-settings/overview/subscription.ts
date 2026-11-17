@@ -1,7 +1,10 @@
-import { ChannelId } from "@hazel/schema"
+import { ChannelId, OrganizationId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
+import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import { channelCollection } from "~/db/collections"
+import { channelCustomerStream } from "../../../customers/channels"
+import { accountsStream } from "../../../customers/queries"
 import { liveQueryStream } from "../../../data/live-query"
 import type { PageSubscriptionInput } from "../../contract"
 import { Message } from "./message"
@@ -39,6 +42,34 @@ const own = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) =
 						})
 					},
 				),
+		},
+	),
+	customer: entry(
+		{ channelId: ChannelId },
+		{
+			modelToDependencies: ({ model }) => ({ channelId: model.channelId }),
+			dependenciesToStream: ({ channelId }) =>
+				channelCustomerStream(channelId, (customer) => Message.UpdatedCustomer({ customer })),
+		},
+	),
+	// The Customers source opens only while the picker is open.
+	customers: entry(
+		{ organizationId: Schema.NullOr(OrganizationId) },
+		{
+			modelToDependencies: ({ model, shared }) => ({
+				organizationId: model.customerPopover.isOpen ? (shared.organization?.id ?? null) : null,
+			}),
+			dependenciesToStream: ({ organizationId }) =>
+				organizationId === null
+					? Stream.empty
+					: accountsStream(organizationId, (accounts) =>
+							Message.UpdatedCustomers({
+								customers: accounts.map((account) => ({
+									id: account.id,
+									name: account.name,
+								})),
+							}),
+						),
 		},
 	),
 }))

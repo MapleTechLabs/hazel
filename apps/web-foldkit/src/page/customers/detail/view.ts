@@ -26,11 +26,13 @@ import {
 	IconExternalLink,
 	IconPlus,
 } from "../../../icons"
+import { type ChannelOption, channelMark, ORIGIN_LABEL, searchOptions } from "../../../customers/channels"
 import { safeSourceUrl } from "../../../customers/providers"
 import { AppRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
 import { input } from "../../../ui/input"
+import { link } from "../../../ui/link"
 import { menuLabel } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
@@ -538,6 +540,154 @@ const tags = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =>
 		],
 	)
 
+/** One linked channel: its mark, name (opens it), origin, and unlink. */
+const linkedChannelRow = (
+	h: HtmlBuilder<Message>,
+	context: Context,
+	channelId: ChannelOption["id"],
+	channel: ChannelOption | undefined,
+): Html =>
+	h.div(
+		[h.Key(channelId), h.Class("flex items-center gap-2 rounded-lg border border-border px-3 py-2")],
+		[
+			channel === undefined
+				? channelMark(h, { origin: "hazel", isPrivate: true })
+				: channelMark(h, channel),
+			h.div(
+				[h.Class("flex min-w-0 flex-1 flex-col")],
+				channel === undefined
+					? [h.span([h.Class("truncate text-muted-fg text-sm")], ["A channel you can't see"])]
+					: [
+							link(
+								h,
+								{
+									href: hrefOf(
+										AppRoute.ChatChannel({
+											orgSlug: context.orgSlug,
+											channelId: channel.id,
+										}),
+									),
+									className: "truncate font-medium text-fg text-sm",
+								},
+								[channel.name],
+							),
+							h.span([h.Class("text-muted-fg text-xs")], [ORIGIN_LABEL[channel.origin]]),
+						],
+			),
+			button(
+				h,
+				{
+					intent: "plain",
+					size: "sq-xs",
+					onPress: Message.PressedUnlinkChannel({ channelId }),
+					attributes: [
+						h.AriaLabel(channel === undefined ? "Unlink channel" : `Unlink ${channel.name}`),
+					],
+				},
+				[IconClose(h, icon)],
+			),
+		],
+	)
+
+/** The channel picker: search the org's channels; one linked elsewhere says where (it moves here). */
+const channelPicker = (h: HtmlBuilder<Message>, model: Model, linkedHere: ReadonlySet<string>): Html => {
+	const owners = new Map(model.channelLinks.map((entry) => [entry.channelId, entry.accountId]))
+	const names = new Map((model.accounts ?? []).map((account) => [account.id, account.name]))
+	const candidates = searchOptions(
+		model.channelOptions.filter((channel) => !linkedHere.has(channel.id)),
+		model.channelSearch,
+	)
+	return h.submodel({
+		slotId: model.channelPopover.id,
+		model: model.channelPopover,
+		view: Popover.view,
+		viewInputs: {
+			toTrigger: (attributes) =>
+				button(h, { intent: "outline", size: "xs", attributes: [...attributes] }, [
+					IconPlus(h, icon),
+					"Link channel",
+				]),
+			toContent: () => [
+				h.div(
+					[h.Class("flex w-72 flex-col gap-1 p-2")],
+					[
+						input(h, {
+							placeholder: "Search channels",
+							attributes: [
+								h.AriaLabel("Search channels"),
+								h.Value(model.channelSearch),
+								h.OnInput((value) => Message.ChangedChannelSearch({ value })),
+							],
+						}),
+						...(candidates.length === 0
+							? [
+									h.p(
+										[h.Class("px-2 py-3 text-muted-fg text-sm")],
+										[
+											model.channelOptions.length === 0
+												? "No channels to link yet."
+												: "No channel matches.",
+										],
+									),
+								]
+							: candidates.map((channel) => {
+									const owner = owners.get(channel.id)
+									const ownerName = owner === undefined ? undefined : names.get(owner)
+									return button(
+										h,
+										{
+											intent: "plain",
+											size: "sm",
+											className: "w-full justify-start",
+											onPress: Message.PressedLinkChannel({ channelId: channel.id }),
+											attributes: [h.Key(channel.id)],
+										},
+										[
+											channelMark(h, channel),
+											h.span(
+												[h.Class("min-w-0 flex-1 truncate text-left")],
+												[channel.name],
+											),
+											h.span(
+												[h.Class("shrink-0 text-muted-fg text-xs")],
+												[
+													owner === undefined
+														? ORIGIN_LABEL[channel.origin]
+														: `Linked to ${ownerName ?? "another customer"}`,
+												],
+											),
+										],
+									)
+								})),
+					],
+				),
+			],
+			placement: "bottom start",
+		},
+		toParentMessage: (message) => Message.GotChannelPopoverMessage({ message }),
+	})
+}
+
+/** Where the team talks to this customer: Hazel, Slack, Discord or Connect channels. */
+const channelsSection = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+	const linked = model.channelLinks.filter((entry) => entry.accountId === context.account.id)
+	const linkedHere = new Set<string>(linked.map((entry) => entry.channelId))
+	const options = new Map(model.channelOptions.map((channel) => [channel.id, channel]))
+	return sidebarSection(h, "Channels", linked.length === 0 ? null : formatCount(linked.length), [
+		...(linked.length === 0
+			? [
+					h.p(
+						[h.Class("text-muted-fg text-sm")],
+						["Link the Slack, Discord, Connect or Hazel channels you talk to this customer in."],
+					),
+				]
+			: linked.map((entry) =>
+					linkedChannelRow(h, context, entry.channelId, options.get(entry.channelId)),
+				)),
+		h.div([h.Class("pt-1")], [channelPicker(h, model, linkedHere)]),
+	])
+}
+
 const attributeValue = (value: unknown): string =>
 	typeof value === "string" || typeof value === "number" || typeof value === "boolean"
 		? String(value)
@@ -612,6 +762,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 				),
 				property(h, "Tags", tags(h, model, context)),
 			]),
+			channelsSection(h, model, context),
 			sidebarSection(
 				h,
 				"Attributes",

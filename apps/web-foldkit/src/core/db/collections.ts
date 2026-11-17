@@ -6,6 +6,7 @@ import {
 	Channel,
 	ChannelMember,
 	ChannelSection,
+	ChannelCustomer,
 	ChatSyncChannelLink,
 	ChatSyncConnection,
 	ChatSyncMessageLink,
@@ -160,6 +161,22 @@ export const chatSyncMessageLinkCollection = channelCollectionOf(
 	"chat_sync_message_links",
 	ChatSyncMessageLink.Schema,
 )
+/**
+ * Each linked channel's customer (`channel_customers`, the `CustomersObject`'s projection into the
+ * org): what chat shows on a channel. Keyed by `channelId`; members who see the channel only.
+ */
+export const channelCustomerCollection = createEffectCollection(
+	{
+		id: "channel_customers",
+		table: "channel_customers",
+		schema: ChannelCustomer.Schema,
+		parseRow: parseTimestamps,
+		getKey: (row) => row.channelId,
+		hub: syncHub,
+		sources: orgSources,
+	},
+	persist,
+)
 export const botCollection = orgCollection("bots", Bot.Schema)
 export const botCommandCollection = orgCollection("bot_commands", BotCommand.Schema)
 export const botInstallationCollection = orgCollection("bot_installations", BotInstallation.Schema)
@@ -191,3 +208,7 @@ export const customerConnectionCollection = customersCollection(
 	Customers.Connection.Schema,
 )
 export const customerSyncRunCollection = customersCollection("customer_sync_runs", Customers.SyncRun.Schema)
+export const customerChannelLinkCollection = customersCollection(
+	"customer_channel_links",
+	Customers.ChannelLink.Schema,
+)

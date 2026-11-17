@@ -47,6 +47,8 @@ import {
 	storeSecrets,
 	switchProviderAccount,
 } from "../../worker/objects/customers/credentials"
+import { callObject } from "../../worker/objects/calls"
+import { publishChannelCustomers } from "../../worker/objects/customers/channels"
 import { seedDemo } from "../../worker/objects/customers/demo"
 import { healthDryRun, ruleDryRun } from "../../worker/objects/customers/dry-run"
 import { CustomerIngest } from "../../worker/objects/customers/ingest"
@@ -68,6 +70,8 @@ import {
 import { requestCompute } from "../../worker/objects/customers/schedule"
 import { inList } from "../../worker/objects/customers/sql"
 import { CLOSED_SIGNAL_WINDOW_DAYS } from "../../worker/objects/sources/customers-source"
+import { orgTarget } from "../../worker/objects/kinds"
+import { CustomerChannelCall } from "../../worker/objects/org/channel-customers"
 import { REOPEN_COOLDOWN_MS } from "../../worker/objects/customers/lifecycle"
 
 // ---------------------------------------------------------------------------
@@ -699,6 +703,119 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 								)
 							}
 							if (lifecycleStageOverride !== undefined) yield* requestCompute
+							// Chat shows linked channels' customer by name.
+							if (name !== undefined) yield* publishChannelCustomers(account.organizationId)
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.channel.link": ({ id, accountId, channelId, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					const actor = yield* requireMember
+					// Before asking the org: an unknown account is answered without waking it.
+					yield* requireAccount(accountId)
+					const check = yield* callObject(CustomerChannelCall, orgTarget(organizationId), {
+						organizationId,
+						channelId,
+						userId: actor.userId,
+					}).pipe(
+						Effect.catchTag("ObjectCallError", (cause) =>
+							Effect.fail(
+								new InternalServerError({
+									message: "Could not check the channel",
+									detail: cause.message,
+									cause,
+								}),
+							),
+						),
+					)
+					if (check === "not_found") return yield* notFound("channel", channelId)
+					if (check === "not_linkable") {
+						return yield* invalid("Only channels can be linked to a customer, not threads or DMs")
+					}
+					const now = yield* currentTime
+					return yield* withTx(
+						Effect.gen(function* () {
+							yield* requireAccount(accountId)
+							const current = yield* db.first(
+								SQLite.from(schema.customerChannelLinksTable)
+									.select()
+									.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()])
+									.limit(1),
+							)
+							if (Option.isSome(current) && current.value.accountId === accountId) {
+								return current.value
+							}
+							// A channel has one customer: linking it here moves it from the other.
+							if (Option.isSome(current)) {
+								yield* db.run(
+									SQLite.update(schema.customerChannelLinksTable)
+										.set({ deletedAt: now, updatedAt: now })
+										.where(($) => [$.id.eq(current.value.id)]),
+								)
+								yield* hazelEvent(
+									current.value.accountId,
+									actor.userId,
+									"channel.unlinked",
+									"Channel unlinked",
+									{ channelId, movedTo: accountId },
+									now,
+								)
+							}
+							const [link] = yield* db.run(
+								SQLite.insertInto(schema.customerChannelLinksTable)
+									.values({
+										id, // `undefined`: the column's default
+										organizationId,
+										accountId,
+										channelId,
+										linkedBy: actor.userId,
+									})
+									.returning(),
+							)
+							yield* hazelEvent(
+								accountId,
+								actor.userId,
+								"channel.linked",
+								"Channel linked",
+								{ channelId },
+								now,
+							)
+							yield* publishChannelCustomers(organizationId)
+							return link
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.channel.unlink": ({ channelId, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					const actor = yield* requireMember
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.gen(function* () {
+							const current = yield* db.first(
+								SQLite.from(schema.customerChannelLinksTable)
+									.select("id", "accountId")
+									.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()])
+									.limit(1),
+							)
+							if (Option.isNone(current)) return
+							yield* db.run(
+								SQLite.update(schema.customerChannelLinksTable)
+									.set({ deletedAt: now, updatedAt: now })
+									.where(($) => [$.id.eq(current.value.id)]),
+							)
+							yield* hazelEvent(
+								current.value.accountId,
+								actor.userId,
+								"channel.unlinked",
+								"Channel unlinked",
+								{ channelId },
+								now,
+							)
+							yield* publishChannelCustomers(organizationId)
 						}),
 					)
 				}).pipe(remap),

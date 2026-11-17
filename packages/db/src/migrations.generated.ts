@@ -277,6 +277,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0005_bot_installation_region",
 			statements: ['ALTER TABLE "bot_installations" ADD COLUMN "region" text'],
 		},
+		{
+			id: "0006_customer_channel_links",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "channel_customers" (\n\t"channelId" text PRIMARY KEY NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"accountId" text NOT NULL,\n\t"accountName" text NOT NULL,\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				'CREATE INDEX IF NOT EXISTS "channel_customers_account_idx" ON "channel_customers" ("accountId")',
+			],
+		},
 	],
 	channel: [
 		{
@@ -489,6 +496,15 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0009_customer_settings_add_on_plans",
 			statements: [
 				'ALTER TABLE "customer_settings" ADD COLUMN "addOnPlans" text NOT NULL DEFAULT \'[]\'',
+			],
+		},
+		{
+			id: "0010_customer_channel_links",
+			statements: [
+				"CREATE TABLE IF NOT EXISTS \"customer_channel_links\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"organizationId\" text NOT NULL,\n\t\"accountId\" text NOT NULL,\n\t\"channelId\" text NOT NULL,\n\t\"linkedBy\" text NOT NULL,\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"updatedAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"deletedAt\" text\n)",
+				'CREATE INDEX IF NOT EXISTS "customer_channel_links_account_idx" ON "customer_channel_links" ("accountId")',
+				'CREATE INDEX IF NOT EXISTS "customer_channel_links_channel_idx" ON "customer_channel_links" ("channelId")',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_channel_links_channel_unique" ON "customer_channel_links" ("channelId") WHERE "deletedAt" IS NULL',
 			],
 		},
 	],

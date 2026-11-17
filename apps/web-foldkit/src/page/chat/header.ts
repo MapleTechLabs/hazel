@@ -1,8 +1,9 @@
 import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
-import { IconChevronRight, IconEye, IconHashtag, IconPin, IconThread } from "../../icons"
+import { IconChevronRight, IconEye, IconHashtag, IconOffice, IconPin, IconThread } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
 import { avatar, type AvatarProps } from "../../ui/avatar"
 import { button } from "../../ui/button"
+import { link } from "../../ui/link"
 import { presenceDot } from "../../ui/presence-dot"
 import type { PresenceStatus } from "~/utils/presence"
 import { type AuthorIdentity } from "./rows"
@@ -33,7 +34,25 @@ export interface HeaderInputs {
 	readonly pinnedTrigger: Html
 	/** A phone's back button (`md:hidden`) to the chat list, or a thread's channel; empty elsewhere. */
 	readonly mobileBack: Html
+	/** The customer the channel is linked to, shown beside its name and opening its page. */
+	readonly customer?: { readonly name: string; readonly href: string } | null
 }
+
+/** The channel's customer: a quiet chip beside the name that opens the customer page. */
+const customerChip = <M>(
+	h: HtmlBuilder<M>,
+	customer: { readonly name: string; readonly href: string },
+): Html =>
+	link(
+		h,
+		{
+			href: customer.href,
+			className:
+				"inline-flex min-w-0 shrink items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-muted-fg text-xs no-underline hover:bg-secondary hover:text-fg max-md:hidden",
+			attributes: [h.Attribute("title", `Customer: ${customer.name}`)],
+		},
+		[IconOffice(h, { className: "size-3 shrink-0" }), h.span([h.Class("truncate")], [customer.name])],
+	)
 
 const ROW = "flex h-14 shrink-0 items-center justify-between border-border border-b bg-bg px-4"
 
@@ -174,6 +193,7 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 												{ variant: "subsection", level: 2, className: "truncate" },
 												[channel.name],
 											),
+											...(inputs.customer ? [customerChip(h, inputs.customer)] : []),
 										],
 									),
 								]),

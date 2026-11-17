@@ -67,6 +67,8 @@ export const orgTables = [
 	schema.userPresenceStatusTable,
 	schema.botsTable,
 	schema.botCommandsTable,
+	// Projection from the `CustomersObject`: each linked channel's customer.
+	schema.channelCustomersTable,
 ] as const
 
 /** `ChannelObject`, one per channel (threads too). */
@@ -120,6 +122,7 @@ export const customersTables = [
 	schema.customerSyncRunsTable,
 	schema.customerUnmatchedRecordsTable,
 	schema.customerIgnoreRulesTable,
+	schema.customerChannelLinksTable,
 	// Projection from the `OrgObject`.
 	schema.customerMembersTable,
 ] as const

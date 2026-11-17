@@ -29,6 +29,8 @@ import {
 	FetchCustomerUsage,
 	FocusNoteComposer,
 	LoadNoteDrafts,
+	LinkCustomerChannel,
+	UnlinkCustomerChannel,
 	UpdateCustomerAccount,
 	UpdateCustomerNote,
 } from "./commands"
@@ -63,6 +65,7 @@ import {
 	signalMoreEntries,
 	snoozeEntries,
 	TAG_POPOVER_ID,
+	CHANNEL_POPOVER_ID,
 	UNASSIGN,
 	userIdOfOwnerKey,
 } from "./model"
@@ -215,6 +218,10 @@ const initialModel = (route: Route): Model => ({
 	signalMoreMenu: Menu.init({ id: SIGNAL_MORE_MENU_ID, placement: "bottom end" }),
 	tagPopover: Popover.init(TAG_POPOVER_ID),
 	tagInput: "",
+	channelLinks: [],
+	channelOptions: [],
+	channelPopover: Popover.init(CHANNEL_POPOVER_ID),
+	channelSearch: "",
 	rawModal: Modal.init(RAW_MODAL_ID),
 	deletingNoteId: null,
 	deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
@@ -729,6 +736,64 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 					failureMessage(reason, {
 						NotFound: { title: "Couldn't update the customer", description: "It was removed." },
 						Stale: { title: "Couldn't update the customer" },
+					}),
+				),
+			),
+		}),
+		UpdatedChannelLinks: ({ links }) => ({ model: modifyFields(model, { channelLinks: () => links }) }),
+		UpdatedChannelOptions: ({ channels }) => ({
+			model: modifyFields(model, { channelOptions: () => channels }),
+		}),
+		GotChannelPopoverMessage: ({ message: popoverMessage }) => {
+			const result = Popover.update(model.channelPopover, popoverMessage)
+			return {
+				model: modifyFields(model, { channelPopover: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotChannelPopoverMessage({ message: child }),
+				),
+			}
+		},
+		ChangedChannelSearch: ({ value }) => ({ model: modifyFields(model, { channelSearch: () => value }) }),
+		PressedLinkChannel: ({ channelId }) => {
+			const args = target(model, shared)
+			const userId = shared.currentUser?.id
+			const closed = PopoverControl.close(model.channelPopover)
+			const next = modifyFields(model, { channelSearch: () => "", channelPopover: () => closed.model })
+			const commands = Command.mapMessages(closed.commands ?? [], (child) =>
+				Message.GotChannelPopoverMessage({ message: child }),
+			)
+			if (args === null || userId === undefined) return { model: next, commands }
+			return {
+				model: next,
+				commands: [...commands, LinkCustomerChannel({ ...args, channelId, userId })],
+			}
+		},
+		PressedUnlinkChannel: ({ channelId }) => {
+			const args = target(model, shared)
+			return args === null
+				? { model }
+				: {
+						model,
+						commands: [UnlinkCustomerChannel({ organizationId: args.organizationId, channelId })],
+					}
+		},
+		SucceededChannelAction: () => ({ model }),
+		FailedChannelAction: ({ action, reason }) => ({
+			model,
+			outMessage: toast(
+				errorToastOf(
+					failureMessage(reason, {
+						NotFound: {
+							title:
+								action === "link"
+									? "Couldn't link the channel"
+									: "Couldn't unlink the channel",
+							description: "The channel or customer is no longer available.",
+						},
+						Stale: {
+							title: "Couldn't link the channel",
+							description: "Threads and direct messages can't be linked to a customer.",
+						},
 					}),
 				),
 			),

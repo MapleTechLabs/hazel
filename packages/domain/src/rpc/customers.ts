@@ -10,7 +10,9 @@
  * Mutations answer a `transactionId` on the `customers:<orgId>` source, which the client awaits.
  */
 import {
+	ChannelId,
 	CustomerAccountId,
+	CustomerChannelLinkId,
 	CustomerConnectionId,
 	CustomerIgnoreRuleId,
 	CustomerNoteId,
@@ -46,6 +48,7 @@ import {
 } from "../customers/enums"
 import { HealthSettings } from "../customers/health"
 import {
+	ChannelLink,
 	Connection,
 	Event,
 	IgnoreRule,
@@ -93,6 +96,8 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"unmatched_record",
 			"ignore_rule",
 			"metric",
+			/** No such channel in the org, or one the caller cannot see. */
+			"channel",
 		]),
 		id: Schema.String,
 	},
@@ -336,6 +341,27 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 		/** The owner is not a member of the organization. */
 		CustomersInvalidRequestError,
 	),
+
+	/**
+	 * Link a channel of the org (Hazel, Slack, Discord or Connect) to the account; a channel
+	 * linked to another account moves here. The caller must see the channel; threads and direct
+	 * messages are refused (`CustomersInvalidRequestError`).
+	 */
+	write(
+		"customers.channel.link",
+		{
+			/** Client-generated, for the optimistic row. */
+			id: Schema.optionalKey(CustomerChannelLinkId),
+			accountId: CustomerAccountId,
+			channelId: ChannelId,
+		},
+		withTx(ChannelLink.Schema),
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+	),
+
+	/** Unlink the channel from whichever account it is linked to (none: a no-op). */
+	write("customers.channel.unlink", { channelId: ChannelId }, Tx),
 
 	/** The list's bulk actions. */
 	write(

@@ -1,8 +1,9 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerAccountId, CustomerNoteId, CustomerSignalId } from "@hazel/schema"
+import { ChannelId, CustomerAccountId, CustomerNoteId, CustomerSignalId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
+import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -14,6 +15,10 @@ import { ContactFilter, DetailFailure, MetricRow, NoteDrafts, NoteRow, SignalMen
 /** A note or signal action: the row is gone, its status moved on, or a common reason. */
 export const ActionFailure = Schema.Union([Schema.Literals(["NotFound", "Stale"]), CommonReason])
 export type ActionFailure = typeof ActionFailure.Type
+
+/** Linking a channel to this customer, or unlinking one. */
+export const ChannelAction = Schema.Literals(["link", "unlink"])
+export type ChannelAction = typeof ChannelAction.Type
 
 export const NoteAction = Schema.Literals(["create", "update", "delete"])
 export type NoteAction = typeof NoteAction.Type
@@ -91,6 +96,15 @@ export const Message = defineMessageUnion({
 	SucceededAccountUpdate: {},
 	FailedAccountUpdate: { reason: ActionFailure },
 	GotRawModalMessage: { message: Modal.Message },
+
+	UpdatedChannelLinks: { links: Schema.Array(ChannelLinkRow) },
+	UpdatedChannelOptions: { channels: Schema.Array(ChannelOption) },
+	GotChannelPopoverMessage: { message: Popover.Message },
+	ChangedChannelSearch: { value: Schema.String },
+	PressedLinkChannel: { channelId: ChannelId },
+	PressedUnlinkChannel: { channelId: ChannelId },
+	SucceededChannelAction: { action: ChannelAction },
+	FailedChannelAction: { action: ChannelAction, reason: ActionFailure },
 
 	PressedSignalMenu: { signalId: CustomerSignalId, menu: SignalMenu },
 	GotSnoozeMenuMessage: { message: Menu.Message },

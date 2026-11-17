@@ -9,6 +9,7 @@ import {
 	settingsSummaryStream,
 	signalsStream,
 } from "../../../customers/queries"
+import { channelLinksStream, channelOptionsStream } from "../../../customers/channels"
 import type { PageSubscriptionInput } from "../../contract"
 import { metricsStream, notesStream } from "./data"
 import { Message } from "./message"
@@ -95,6 +96,22 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 				? Stream.empty
 				: settingsSummaryStream(organizationId, (settings) =>
 						Message.UpdatedBands({ bands: settings?.bands ?? DEFAULT_HEALTH_SETTINGS.bands }),
+					),
+	}),
+	channelLinks: entry(organization, {
+		modelToDependencies: organizationOf,
+		dependenciesToStream: ({ organizationId }) =>
+			organizationId === null
+				? Stream.empty
+				: channelLinksStream(organizationId, (links) => Message.UpdatedChannelLinks({ links })),
+	}),
+	channelOptions: entry(organization, {
+		modelToDependencies: organizationOf,
+		dependenciesToStream: ({ organizationId }) =>
+			organizationId === null
+				? Stream.empty
+				: channelOptionsStream(organizationId, (channels) =>
+						Message.UpdatedChannelOptions({ channels }),
 					),
 	}),
 	connections: entry(organization, {
