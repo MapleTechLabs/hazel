@@ -214,12 +214,7 @@ const noteCard = (h: HtmlBuilder<Message>, model: Model, note: NoteRow, context:
 }
 
 const section = (h: HtmlBuilder<Message>, title: string, notes: ReadonlyArray<Html>): ReadonlyArray<Html> =>
-	notes.length === 0
-		? []
-		: [
-				h.h3([h.Class("pt-2 font-medium text-muted-fg text-xs uppercase tracking-wider")], [title]),
-				...notes,
-			]
+	notes.length === 0 ? [] : [h.h3([h.Class("pt-2 font-medium text-muted-fg text-xs")], [title]), ...notes]
 
 export const notesTab = (
 	h: HtmlBuilder<Message>,
@@ -234,8 +229,11 @@ export const notesTab = (
 			[h.Class("flex items-center justify-between")],
 			[
 				h.h2(
-					[h.Class("flex items-baseline gap-2 font-semibold text-fg")],
-					["Notes", h.span([h.Class("font-normal text-muted-fg text-sm")], [String(notes.length)])],
+					[h.Class("flex items-baseline gap-2 font-semibold text-fg text-sm/6")],
+					[
+						"Notes",
+						h.span([h.Class("font-normal text-muted-fg tabular-nums")], [String(notes.length)]),
+					],
 				),
 				h.span([h.Class("text-muted-fg text-xs")], ["Pinned, then newest"]),
 			],

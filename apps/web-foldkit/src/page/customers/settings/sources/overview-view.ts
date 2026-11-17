@@ -278,7 +278,7 @@ const lastSyncColumn = (h: H, model: Model, connection: ConnectionRow, context: 
 				connection.lastSuccessAtMs === null
 					? "Never"
 					: formatRelative(new Date(connection.lastSuccessAtMs), now),
-				"text-danger",
+				"text-danger-subtle-fg",
 			),
 			detail(
 				h,
@@ -347,7 +347,7 @@ const connectedCard = (h: H, model: Model, connection: ConnectionRow, context: C
 										[h.Class("flex flex-wrap items-center gap-2")],
 										[
 											h.h3(
-												[h.Class("font-medium text-base/6 text-fg")],
+												[h.Class("font-semibold text-fg text-sm/6")],
 												[
 													h.a(
 														[
@@ -430,7 +430,7 @@ export const addsList = (h: H, provider: CustomerProvider): Html =>
 			h.li(
 				[h.Class("flex items-start gap-2 text-sm")],
 				[
-					IconCheck(h, { className: "mt-0.5 size-3.5 shrink-0 text-success" }),
+					IconCheck(h, { className: "mt-0.5 size-3.5 shrink-0 text-success-subtle-fg" }),
 					h.span(
 						[],
 						[
@@ -484,7 +484,7 @@ const notConnectedCard = (
 								[h.Class("flex flex-wrap items-center gap-2")],
 								[
 									h.h3(
-										[h.Class("font-medium text-base/6 text-fg")],
+										[h.Class("font-semibold text-fg text-sm/6")],
 										[
 											h.a(
 												[

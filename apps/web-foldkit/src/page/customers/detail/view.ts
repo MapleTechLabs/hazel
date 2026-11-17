@@ -8,6 +8,7 @@ import { commonMessage } from "~/lib/error-messages"
 import { formatCount, formatDate, formatMoney, formatRelative } from "../../../customers/format"
 import { healthBadge, stageBadge } from "../../../customers/ui/badges"
 import { viewTabs } from "../../../customers/ui/filter-bar"
+import { labelClass, linkClass, pageTitleClass, titleClass } from "../../../customers/ui/surface"
 import {
 	companyLogo,
 	personAvatar,
@@ -23,7 +24,6 @@ import {
 	IconClose,
 	IconDots,
 	IconEdit,
-	IconExternalLink,
 	IconPlus,
 } from "../../../icons"
 import { safeSourceUrl } from "../../../customers/providers"
@@ -104,14 +104,16 @@ const domainLink = (h: HtmlBuilder<Message>, domain: string): Html => {
 					h.Href(site),
 					h.Attribute("target", "_blank"),
 					h.Attribute("rel", "noreferrer"),
-					h.Class("inline-flex items-center gap-1 text-fg-2 hover:underline"),
+					h.Class(
+						"rounded-sm text-fg-2 outline-hidden hover:text-fg hover:underline focus-visible:ring-2 focus-visible:ring-ring/70",
+					),
 				],
-				[domain, IconExternalLink(h, { className: "size-3" })],
+				[domain],
 			),
 	})
 }
 
-/** `↗` to the record in its provider, when its URL is on the provider's hosts (`safeSourceUrl`). */
+/** `Open` to the record in its provider, when its URL is on the provider's hosts (`safeSourceUrl`). */
 const recordLink = (
 	h: HtmlBuilder<Message>,
 	ref: Readonly<{ provider: Customers.CustomerSource; externalUrl: string | null }>,
@@ -126,9 +128,9 @@ const recordLink = (
 						h.Attribute("target", "_blank"),
 						h.Attribute("rel", "noreferrer"),
 						h.AriaLabel(`Open in ${SOURCE_LABEL[ref.provider]}`),
-						h.Class("text-muted-fg hover:text-fg"),
+						h.Class(twMerge(linkClass, "text-xs")),
 					],
-					[IconExternalLink(h, { className: "size-3.5" })],
+					["Open"],
 				),
 			]
 }
@@ -182,7 +184,7 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 				h.Disabled(isDisabled),
 				h.OnClick(Message.PressedNeighbour({ step })),
 				h.Class(
-					"inline-flex size-7 cursor-pointer items-center justify-center rounded-md border border-border text-fg-2 hover:bg-secondary disabled:cursor-default disabled:opacity-40 max-md:size-10",
+					"inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-fg outline-hidden transition-colors hover:bg-secondary hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent max-md:size-10",
 				),
 			],
 			[IconChevronDown(h, { className: twMerge("size-3.5", step === -1 && "rotate-180") })],
@@ -205,17 +207,20 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 						["Customers"],
 					),
 					IconChevronRight(h, { className: "size-3 text-muted-fg" }),
-					h.span([h.Class("truncate font-medium text-fg")], [context?.account.name ?? "…"]),
+					h.span(
+						[h.AriaCurrent("page"), h.Class("truncate font-medium text-fg")],
+						[context?.account.name ?? "…"],
+					),
 				],
 			),
 			h.div(
-				[h.Class("flex items-center gap-2")],
+				[h.Class("flex items-center gap-1")],
 				[
 					...(position === null
 						? []
 						: [
 								h.span(
-									[h.Class("text-muted-fg text-xs tabular-nums max-md:hidden")],
+									[h.Class("pr-1 text-muted-fg text-xs tabular-nums max-md:hidden")],
 									[`${formatCount(position.index + 1)} of ${formatCount(position.total)}`],
 								),
 								navButton(-1, "Previous customer", position.previous === null),
@@ -230,7 +235,7 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 							h.Class(
 								twMerge(
 									// A phone has no side panel to toggle: its details sit under the overview.
-									"ml-2 inline-flex h-7 cursor-pointer items-center rounded-md border border-border px-2 text-fg-2 text-xs hover:bg-secondary max-md:hidden",
+									"ml-1 inline-flex h-7 cursor-pointer items-center rounded-md px-2 font-medium text-muted-fg text-xs outline-hidden transition-colors hover:bg-secondary hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70 max-md:hidden",
 									model.isSidebarOpen && "bg-secondary text-fg",
 								),
 							),
@@ -257,25 +262,22 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 			: `Customer since ${formatDate(new Date(account.customerSinceMs), { now, withYear: true })}`,
 	].filter((part) => part !== null)
 	return h.div(
-		[h.Class("flex flex-col gap-4 px-4 pt-5 lg:px-6")],
+		[h.Class("flex flex-col gap-4 px-4 pt-6 lg:px-6")],
 		[
 			h.div(
 				[h.Class("flex items-start justify-between gap-4 max-md:flex-col max-md:gap-3")],
 				[
 					h.div(
-						[h.Class("flex min-w-0 gap-4")],
+						[h.Class("flex min-w-0 gap-3.5")],
 						[
-							companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "lg" }),
+							companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "md" }),
 							h.div(
-								[h.Class("flex min-w-0 flex-col gap-1.5")],
+								[h.Class("flex min-w-0 flex-col gap-1")],
 								[
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-2")],
 										[
-											h.h1(
-												[h.Class("font-semibold text-2xl text-fg max-md:text-xl")],
-												[account.name],
-											),
+											h.h1([h.Class(pageTitleClass)], [account.name]),
 											stageBadge(h, account.lifecycleStage),
 											healthBadge(h, {
 												status: account.healthStatus,
@@ -309,10 +311,10 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 										],
 									),
 									h.div(
-										[h.Class("flex flex-wrap items-center gap-2 pt-1")],
+										[h.Class("flex flex-wrap items-center gap-1.5 pt-2")],
 										[
 											ownerMenu(h, model, context),
-											h.span([h.Class("mx-1 h-5 w-px bg-border")]),
+											h.span([h.AriaHidden(true), h.Class("mx-1 h-4 w-px bg-border")]),
 											...refs
 												.filter(
 													(ref) =>
@@ -333,13 +335,10 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 													[
 														h.Title("Link records from Data sources › Unmatched"),
 														h.Class(
-															"inline-flex h-7 items-center gap-1 rounded-md border border-border border-dashed px-2 text-muted-fg text-xs",
+															"inline-flex h-7 items-center rounded-md border border-border border-dashed px-2 text-muted-fg text-xs",
 														),
 													],
-													[
-														IconPlus(h, { className: "size-3" }),
-														`No ${SOURCE_LABEL[provider]} record`,
-													],
+													[`No ${SOURCE_LABEL[provider]} record`],
 												),
 											),
 										],
@@ -427,7 +426,7 @@ const tabsRow = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 				? []
 				: [
 						h.span(
-							[h.Class("pb-3 text-muted-fg text-xs max-md:hidden")],
+							[h.Class("whitespace-nowrap pb-3 text-muted-fg text-xs max-md:hidden")],
 							[`Health computed ${formatRelative(healthAt, new Date(context.nowMs))}`],
 						),
 					]),
@@ -439,7 +438,7 @@ const tabsRow = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 
 const property = (h: HtmlBuilder<Message>, label: string, value: Html | string) =>
 	h.div(
-		[h.Class("grid grid-cols-[7rem_1fr] items-center gap-2 py-1.5 text-sm")],
+		[h.Class("grid min-h-8 grid-cols-[7rem_1fr] items-center gap-2 text-sm")],
 		[h.span([h.Class("text-muted-fg")], [label]), h.div([h.Class("min-w-0 text-fg")], [value])],
 	)
 
@@ -450,12 +449,12 @@ const sidebarSection = (
 	children: ReadonlyArray<Html>,
 ) =>
 	h.section(
-		[h.Class("flex flex-col gap-1 border-border border-b px-5 py-4 last:border-b-0 max-md:px-4")],
+		[h.Class("flex flex-col border-border border-b px-5 py-4 last:border-b-0 max-md:px-4")],
 		[
 			h.div(
-				[h.Class("flex items-center justify-between pb-1")],
+				[h.Class("flex items-center justify-between pb-2")],
 				[
-					h.h2([h.Class("font-medium text-muted-fg text-xs uppercase tracking-wider")], [title]),
+					h.h2([h.Class(labelClass)], [title]),
 					...(aside === null ? [] : [h.span([h.Class("text-muted-fg text-xs")], [aside])]),
 				],
 			),
@@ -543,9 +542,6 @@ const attributeValue = (value: unknown): string =>
 		? String(value)
 		: JSON.stringify(value)
 
-const sourceLabelOf = (source: Customers.CustomerSource | undefined): ReadonlyArray<Html | string> =>
-	source === undefined ? [] : [SOURCE_LABEL[source]]
-
 /** Beside the tab on a desktop (hidden below lg); under the overview on a phone (`isStacked`). */
 const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStacked = false): Html => {
 	const { account, detail } = context
@@ -558,7 +554,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 		const source = fieldSources[field]
 		return source === undefined
 			? []
-			: [h.span([h.Class("ml-2 text-muted-fg text-xs")], [`from ${SOURCE_LABEL[source]}`])]
+			: [h.span([h.Class("ml-auto text-muted-fg text-xs")], [SOURCE_LABEL[source]])]
 	}
 	return h.aside(
 		[
@@ -576,7 +572,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 					h,
 					"Stage",
 					h.span(
-						[h.Class("inline-flex items-center")],
+						[h.Class("flex items-center")],
 						[stageBadge(h, account.lifecycleStage), ...sourceOf("lifecycleStage")],
 					),
 				),
@@ -628,7 +624,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 								[
 									h.Key(key),
 									h.Class(
-										"grid grid-cols-[7rem_1fr_auto] items-center gap-2 py-1.5 text-sm",
+										"grid min-h-8 grid-cols-[7rem_1fr_auto] items-center gap-2 text-sm",
 									),
 								],
 								[
@@ -641,7 +637,14 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 										],
 									),
 									h.span([h.Class("truncate text-fg")], [attributeValue(value)]),
-									...sourceLabelOf(fieldSources[key]),
+									...(fieldSources[key] === undefined
+										? []
+										: [
+												h.span(
+													[h.Class("text-muted-fg text-xs")],
+													[SOURCE_LABEL[fieldSources[key]]],
+												),
+											]),
 								],
 							),
 						),
@@ -659,7 +662,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 								h.Key(ref.id),
 								h.Class(
 									twMerge(
-										"flex flex-col gap-0.5 rounded-lg border border-border p-3",
+										"mb-2 flex flex-col gap-0.5 rounded-lg border border-border p-3 last:mb-0",
 										ref.staleAt !== null && "opacity-60",
 									),
 								),
@@ -679,10 +682,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 										...recordLink(h, ref),
 									],
 								),
-								h.span(
-									[h.Class("truncate font-mono text-muted-fg text-xs")],
-									[ref.externalId],
-								),
+								h.span([h.Class("truncate font-mono text-fg-2 text-xs")], [ref.externalId]),
 								h.span(
 									[h.Class("text-muted-fg text-xs")],
 									[
@@ -707,7 +707,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 								[
 									h.Key(provider),
 									h.Class(
-										"flex items-center gap-2 rounded-lg border border-border border-dashed p-3",
+										"mb-2 flex items-center gap-2.5 rounded-lg border border-border border-dashed p-3 last:mb-0",
 									),
 								],
 								[
@@ -732,9 +732,9 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 													AppRoute.CustomersUnmatched({ orgSlug: context.orgSlug }),
 												),
 											),
-											h.Class("ml-auto text-primary text-xs hover:underline"),
+											h.Class(twMerge(linkClass, "ml-auto shrink-0 text-xs")),
 										],
-										["Unmatched"],
+										["Find record"],
 									),
 								],
 							),
@@ -759,7 +759,7 @@ const centered = (h: HtmlBuilder<Message>, title: string, description: string, a
 	h.div(
 		[h.Class("flex h-full flex-col items-center justify-center gap-2 px-6 text-center")],
 		[
-			h.h1([h.Class("font-semibold text-fg text-lg")], [title]),
+			h.h1([h.Class(titleClass)], [title]),
 			h.p([h.Class("max-w-sm text-muted-fg text-sm")], [description]),
 			...(action === undefined ? [] : [h.div([h.Class("pt-2")], [action])]),
 		],
@@ -850,7 +850,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					h.a(
 						[
 							h.Href(hrefOf(AppRoute.CustomersList({ orgSlug, view: Option.none() }))),
-							h.Class("text-primary text-sm hover:underline"),
+							h.Class(linkClass),
 						],
 						["Back to customers"],
 					),

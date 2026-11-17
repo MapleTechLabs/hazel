@@ -403,7 +403,7 @@ const moneyTotal = (records: RecordGroup["records"]): string | null => {
 		: [...totals].map(([currency, minor]) => formatMoney(minor, currency ?? undefined)).join(" + ")
 }
 
-/** `STRIPE CUSTOMERS · 5 · $1,840 MRR`, `MAPLE GROUPS · 9 · 6,951 EVENTS · 30D`. */
+/** `Stripe customers · 5 · $1,840 MRR`, `Maple groups · 9 · 6,951 events · 30d`. */
 const groupSummary = (group: RecordGroup): string => {
 	const money = moneyTotal(group.records)
 	const events = group.records.reduce((sum, record) => sum + (record.eventCount30d ?? 0), 0)
@@ -431,7 +431,10 @@ export const recordsTable = (
 	const columnCount = context.isAdmin ? 5 : 3
 	const header = (label: string, className: string) =>
 		h.th(
-			[h.Scope("col"), h.Class(twMerge("h-10 font-normal text-muted-fg text-sm", cell, className))],
+			[
+				h.Scope("col"),
+				h.Class(twMerge("h-9 whitespace-nowrap font-medium text-muted-fg text-xs", cell, className)),
+			],
 			[label],
 		)
 	const row = (record: RecordRow): Html => {
@@ -541,7 +544,7 @@ export const recordsTable = (
 										h.Scope("colgroup"),
 										h.Attribute("colspan", String(columnCount)),
 										h.Class(
-											"bg-secondary/40 px-4 py-1.5 text-left font-medium text-[11px] text-muted-fg uppercase tracking-wider",
+											"bg-secondary/40 px-4 py-1.5 text-left font-medium text-muted-fg text-xs",
 										),
 									],
 									[groupSummary(group)],

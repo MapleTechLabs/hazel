@@ -125,7 +125,11 @@ export const healthDistribution = <M>(
 						[],
 						[
 							h.tr(
-								[h.Class("border-border border-b text-muted-fg")],
+								[
+									h.Class(
+										"border-border border-b font-medium text-muted-fg text-xs [&>th]:font-medium",
+									),
+								],
 								[
 									h.th([h.Class("py-2 text-left font-normal")], ["Status"]),
 									h.th(

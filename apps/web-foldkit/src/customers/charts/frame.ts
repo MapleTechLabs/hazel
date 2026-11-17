@@ -1,5 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
+import { descriptionClass, panelClass, panelPadClass, titleClass } from "../ui/surface"
 import { clamp } from "./scale"
 
 /**
@@ -74,24 +75,17 @@ export const chartCard = <M>(
 	children: ReadonlyArray<Html>,
 ): Html =>
 	h.section(
-		[
-			h.Class(
-				twMerge(
-					"flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-bg p-4 sm:p-5",
-					options.className,
-				),
-			),
-		],
+		[h.Class(twMerge("flex min-w-0 flex-col gap-4", panelClass, panelPadClass, options.className))],
 		[
 			h.header(
 				[h.Class("flex flex-wrap items-start justify-between gap-x-6 gap-y-2")],
 				[
 					h.div(
-						[h.Class("flex min-w-0 flex-col gap-0.5")],
+						[h.Class("flex min-w-0 flex-col")],
 						[
-							h.h2([h.Class("font-semibold text-base/6 text-fg")], [options.title]),
+							h.h2([h.Class(titleClass)], [options.title]),
 							...(options.description
-								? [h.p([h.Class("text-muted-fg text-sm")], [options.description])]
+								? [h.p([h.Class(descriptionClass)], [options.description])]
 								: []),
 						],
 					),

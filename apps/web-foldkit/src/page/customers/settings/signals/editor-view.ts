@@ -114,10 +114,7 @@ const plainWordsCard = (h: H, model: Model, form: RuleForm): Html =>
 	h.section(
 		[h.Class("flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary-subtle/40 p-4 sm:p-5")],
 		[
-			h.h2(
-				[h.Class("font-semibold text-primary-subtle-fg text-xs uppercase tracking-wide")],
-				["In plain words"],
-			),
+			h.h2([h.Class("font-semibold text-primary-subtle-fg text-xs")], ["In plain words"]),
 			h.p(
 				[h.Class("text-fg-2 text-sm/6")],
 				[

@@ -47,16 +47,19 @@ export const definedLabel = <M>(
 	options: Readonly<{ id: string; label: string; definition?: string; className?: string }>,
 ): Html =>
 	options.definition === undefined
-		? h.span([h.Class(twMerge("text-muted-fg text-sm", options.className))], [options.label])
+		? h.span(
+				[h.Class(twMerge("font-medium text-muted-fg text-xs/5", options.className))],
+				[options.label],
+			)
 		: h.span(
-				[h.Class(twMerge("group/definition relative inline-flex", options.className))],
+				[h.Class(twMerge("group/definition relative inline-flex min-w-0", options.className))],
 				[
 					h.button(
 						[
 							h.Type("button"),
 							h.AriaDescribedBy(`${options.id}-definition`),
 							h.Class(
-								"cursor-help text-left text-muted-fg text-sm underline decoration-muted-fg/40 decoration-dotted underline-offset-4 outline-hidden hover:text-fg focus-visible:text-fg",
+								"cursor-help truncate text-left font-medium text-muted-fg text-xs/5 outline-hidden transition-colors hover:text-fg focus-visible:text-fg",
 							),
 						],
 						[options.label],
@@ -129,7 +132,7 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 										h.span(
 											[
 												h.Class(
-													"font-semibold text-2xl/8 text-fg tabular-nums tracking-tight max-md:text-xl/7",
+													"shrink-0 font-semibold text-2xl/8 text-fg tabular-nums tracking-tight max-md:text-xl/7",
 												),
 											],
 											[options.value ?? "—"],
@@ -154,13 +157,13 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 						...(options.delta || options.comparison
 							? [
 									h.p(
-										[h.Class("flex flex-wrap items-center gap-x-1.5 text-sm")],
+										[h.Class("flex min-w-0 items-center gap-x-1.5 text-xs/5")],
 										[
 											...(options.delta ? [deltaPill(h, options.delta)] : []),
 											...(options.comparison
 												? [
 														h.span(
-															[h.Class("whitespace-nowrap text-muted-fg")],
+															[h.Class("min-w-0 truncate text-muted-fg")],
 															[options.comparison],
 														),
 													]
@@ -175,7 +178,7 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 			...(state === "loading" ? [h.AriaBusy(true)] : []),
 			h.Class(
 				twMerge(
-					"flex min-w-0 flex-col gap-2 rounded-xl border bg-bg p-4 max-md:p-3",
+					"flex min-w-0 flex-col gap-1.5 rounded-xl border bg-bg p-4 max-md:p-3",
 					state === "empty" ? "border-border border-dashed" : "border-border",
 					options.className,
 				),

@@ -8,6 +8,24 @@ Colors are theme tokens (`src/core/styles/theme.css` › Customers): `chart-{new
 churn,neutral,series-1..3,grid,net}`, `health-{healthy,at-risk,critical,unknown}`,
 `severity-{high,medium,low,off}` — use them as `bg-chart-new`, `stroke-chart-series-1`, …
 
+## Surface — `ui/surface.ts`
+
+The one visual grammar every Customers page builds from. Reach for these before writing a class
+string, so a title, a table head or a link reads the same on every page.
+
+- Type: `pageTitleClass` (20px semibold), `titleClass` (panel titles, 14px semibold), `descriptionClass`
+  (14px muted), `labelClass` (12px medium muted: eyebrows, field names), `tableHeadClass`. Labels are
+  sentence case; nothing is uppercase.
+- `pageHeader(h, { title, subtitle?, crumbs?, leading?, badges?, actions? })` — every page's title row
+  (`settingsHeader` is this); `breadcrumb(h, crumbs)`; `freshness(h, "Synced 1h ago")` beside the actions.
+- `panel(h, className, children)`, `panelHeader(h, { title, count?, description?, aside? })`,
+  `panelClass` / `panelPadClass` for a panel built by hand, `sectionLabel(h, label)`.
+- Links: `linkClass` (inline text link), `moreLink(h, href, "View queue")` (a panel's way out, with `›`).
+  A link that leaves Hazel is a plain text link (`Open`, `View`) or a chip; never an external-link arrow.
+- Text takes the `*-subtle-fg` semantic colors (`text-danger-subtle-fg`), not the raw `text-danger`.
+- A segmented control's selected segment is a raised neutral chip (`segmentedTrackClass`,
+  `segmentClass(isSelected)` in `ui/filter-bar.ts`); the brand fill is for primary buttons only.
+
 ## Formatting — `src/customers/format.ts`
 
 | Export                                                                                                    | Example                                      |
@@ -38,7 +56,8 @@ churn,neutral,series-1..3,grid,net}`, `health-{healthy,at-risk,critical,unknown}
 
 - `companyLogo(h, { name, logoUrl?, size?: "xs"|"sm"|"md"|"lg" })` — 20/28/40/48px, initials tint by name hash.
 - `personAvatar(h, person | null, { size? })` — `null` = dashed "Unassigned"; `personLabel(h, person | null)`; `avatarStack(h, people, { max? })`.
-- `sourceLogo(h, source)`, `sourceMark(h, source, { size? })` (tile), `sourceChip(h, source)`, `sourceLinkChip(h, { source, label, href })`.
+- `sourceLogo(h, source)`, `sourceMark(h, source, { size? })` (tile), `sourceChip(h, source)`, `sourceLinkChip(h, { source, label, href })`
+  (the chip itself is the link out; no arrow glyph, the accessible name and title say where it goes).
 - `SOURCE_LABEL`, `sourceLogoSrc(source)` (Brandfetch; Hazel uses `/icon.svg`), `initialsOf`, `tintIndex`.
 
 ## KPI and evidence — `ui/kpi-tile.ts`, `ui/evidence.ts`

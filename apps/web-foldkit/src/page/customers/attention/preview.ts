@@ -8,7 +8,7 @@ import { healthBadge, kindChip, severityChip, STAGE_LABEL } from "../../../custo
 import { evidenceDetail } from "../../../customers/ui/evidence"
 import { companyLogo, personLabel, sourceMark } from "../../../customers/ui/identity"
 import { kbd } from "../../../customers/ui/shortcuts"
-import { IconClose, IconCopy, IconExternalLink } from "../../../icons"
+import { IconClose, IconCopy } from "../../../icons"
 import { button } from "../../../ui/button"
 import { loader } from "../../../ui/loader"
 import { Message } from "./message"
@@ -112,7 +112,7 @@ const contactRow = (h: HtmlBuilder<Message>, row: Customers.ContactRow, nowMs: n
 					h.Class(
 						twMerge(
 							"shrink-0 text-xs",
-							row.status === "active" ? "text-muted-fg" : "text-warning",
+							row.status === "active" ? "text-muted-fg" : "text-warning-subtle-fg",
 						),
 					),
 				],
@@ -284,11 +284,7 @@ export const previewPanel = (
 							size: "sm",
 							onPress: Message.PressedOpenCustomer({ accountId: account.id }),
 						},
-						[
-							IconExternalLink(h, { attributes: { "data-slot": "icon" } }),
-							"Open",
-							kbd(h, "Enter"),
-						],
+						["Open", kbd(h, "Enter")],
 					),
 				],
 			),

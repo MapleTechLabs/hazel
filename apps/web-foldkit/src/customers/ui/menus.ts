@@ -2,7 +2,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { dropdownKeyboardBase } from "~/components/ui/dropdown.styles"
 import { keyboardStyles } from "~/components/ui/keyboard.styles"
-import { IconCheck, IconClock, IconClose, IconCopy, IconExternalLink, IconUser } from "../../icons"
+import { IconCheck, IconClock, IconClose, IconCopy, IconOffice, IconUser } from "../../icons"
 import * as Menu from "../../ui/menu"
 import { menuLabel } from "../../ui/menu-view"
 import { formatWeekdayTime, type Instant } from "../format"
@@ -116,7 +116,7 @@ const ROW_ACTION = {
 	snooze: { label: "Snooze", key: "S", icon: (h) => IconClock(h) },
 	done: { label: "Mark done…", key: "D", icon: (h) => IconCheck(h) },
 	dismiss: { label: "Dismiss, not useful", key: null, icon: (h) => IconClose(h) },
-	open: { label: "Open customer", key: "Enter", icon: (h) => IconExternalLink(h) },
+	open: { label: "Open customer", key: "Enter", icon: (h) => IconOffice(h) },
 	copy_email: { label: "Copy champion’s email", key: null, icon: (h) => IconCopy(h) },
 } satisfies Record<RowActionKey, RowAction>
 

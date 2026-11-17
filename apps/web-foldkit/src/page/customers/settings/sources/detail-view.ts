@@ -6,7 +6,7 @@ import { providerOf, webhookUrlOf } from "../../../../customers/providers"
 import { dataTable } from "../../../../customers/ui/data-table"
 import { segmented } from "../../../../customers/ui/filter-bar"
 import { sourceMark } from "../../../../customers/ui/identity"
-import { IconArrowPath, IconChevronRight, IconExternalLink } from "../../../../icons"
+import { IconArrowPath, IconChevronRight } from "../../../../icons"
 import { AppRoute, hrefOf } from "../../../../route"
 import { button, buttonClassName } from "../../../../ui/button"
 import { readOnlyNotice, settingsHeader, settingsPage } from "../shared"
@@ -47,7 +47,7 @@ const runStatus = (h: H, run: SyncRunRow): Html => {
 		run.status === "running"
 			? ["bg-primary", "Running", "text-fg"]
 			: run.status === "failed"
-				? ["bg-danger-subtle-fg", "Failed", "text-danger"]
+				? ["bg-danger-subtle-fg", "Failed", "text-danger-subtle-fg"]
 				: ["bg-success-subtle-fg", "Succeeded", "text-fg"]
 	return h.span(
 		[h.Class(`inline-flex items-center gap-1.5 text-sm ${text}`)],
@@ -67,14 +67,25 @@ const runRecords = (h: H, run: SyncRunRow, name: string): Html => {
 		[h.Class("flex min-w-0 flex-col")],
 		[
 			h.span(
-				[h.Class(written.length === 0 ? "text-muted-fg text-sm" : "text-fg text-sm")],
+				[
+					h.Class(
+						written.length === 0 ? "truncate text-muted-fg text-sm" : "truncate text-fg text-sm",
+					),
+					h.Title(written.join(" · ")),
+				],
 				[written.length === 0 ? "Nothing written" : written.join(" · ")],
 			),
 			...(note === null
 				? []
 				: [
 						h.span(
-							[h.Class(run.error === null ? "text-muted-fg text-xs" : "text-danger text-xs")],
+							[
+								h.Class(
+									run.error === null
+										? "text-muted-fg text-xs"
+										: "text-danger-subtle-fg text-xs",
+								),
+							],
 							[note],
 						),
 					]),
@@ -120,7 +131,7 @@ const historyCard = (h: H, model: Model, connection: ConnectionRow): Html => {
 						{
 							key: "trigger",
 							label: "Trigger",
-							widthClass: "w-28",
+							widthClass: "w-24",
 							cell: (run) =>
 								h.span(
 									[
@@ -134,21 +145,25 @@ const historyCard = (h: H, model: Model, connection: ConnectionRow): Html => {
 						{
 							key: "status",
 							label: "Status",
-							widthClass: "w-32",
+							widthClass: "w-28",
 							cell: (run) => runStatus(h, run),
 						},
 						{
 							key: "started",
 							label: "Started",
-							widthClass: "w-36",
+							widthClass: "w-32",
 							hideClass: "max-sm:hidden",
-							cell: (run) => formatDateTime(new Date(run.startedAtMs)),
+							cell: (run) =>
+								h.span(
+									[h.Class("whitespace-nowrap text-fg-2")],
+									[formatDateTime(new Date(run.startedAtMs))],
+								),
 						},
 						{
 							key: "duration",
 							label: "Duration",
 							align: "right",
-							widthClass: "w-24",
+							widthClass: "w-20",
 							cell: (run) =>
 								run.finishedAtMs === null
 									? "—"
@@ -156,7 +171,7 @@ const historyCard = (h: H, model: Model, connection: ConnectionRow): Html => {
 						},
 						{
 							key: "records",
-							label: "Records upserted · note",
+							label: "Records",
 							cell: (run) => runRecords(h, run, name),
 						},
 					],
@@ -175,7 +190,7 @@ const row = (h: H, label: string, value: Html | string): Html =>
 		[h.Class("flex items-baseline justify-between gap-3 text-sm")],
 		[
 			h.dt([h.Class("shrink-0 text-muted-fg")], [label]),
-			h.dd([h.Class("min-w-0 truncate text-right text-fg")], [value]),
+			h.dd([h.Class("min-w-0 text-right text-fg")], [value]),
 		],
 	)
 
@@ -244,38 +259,30 @@ const connectionCard = (h: H, model: Model, connection: ConnectionRow, context: 
 
 const dangerZone = (h: H, provider: CustomerProvider): Html => {
 	const name = providerOf(provider).name
-	return card(
-		h,
-		[
-			h.div(
-				[h.Class("flex flex-col gap-1")],
-				[
-					h.span(
-						[h.Class("font-medium text-danger text-xs uppercase tracking-wide")],
-						["Danger zone"],
-					),
-					h.h2([h.Class("font-semibold text-base/6 text-fg")], [`Disconnect ${name}`]),
-					h.p(
-						[h.Class("text-muted-fg text-sm")],
-						[
-							`Stops syncs and drops the stored keys. Accounts and contacts stay but stop updating and are marked stale; signals that need ${name} go quiet.`,
-						],
-					),
-				],
-			),
-			button(
-				h,
-				{
-					intent: "outline",
-					size: "sm",
-					className: "self-start text-danger",
-					onPress: Message.PressedDisconnect(),
-				},
-				[`Disconnect ${name}…`],
-			),
-		],
-		"border-danger/30",
-	)
+	return card(h, [
+		h.div(
+			[h.Class("flex flex-col gap-1")],
+			[
+				h.h2([h.Class("font-semibold text-fg text-sm/6")], [`Disconnect ${name}`]),
+				h.p(
+					[h.Class("text-muted-fg text-sm")],
+					[
+						`Stops syncs and drops the stored keys. Accounts and contacts stay but stop updating and are marked stale; signals that need ${name} go quiet.`,
+					],
+				),
+			],
+		),
+		button(
+			h,
+			{
+				intent: "outline",
+				size: "sm",
+				className: "self-start text-danger-subtle-fg",
+				onPress: Message.PressedDisconnect(),
+			},
+			[`Disconnect ${name}…`],
+		),
+	])
 }
 
 // MAPPING
@@ -312,7 +319,7 @@ const mappingCard = (h: H, provider: CustomerProvider): Html => {
 											h.Attribute("colspan", "3"),
 											h.Attribute("scope", "rowgroup"),
 											h.Class(
-												"border-border border-t py-2 text-left font-medium text-muted-fg text-xs uppercase tracking-wide",
+												"border-border border-t py-2 text-left font-medium text-muted-fg text-xs",
 											),
 										],
 										[group.group],
@@ -457,7 +464,7 @@ export const detailView = (h: H, model: Model, provider: CustomerProvider, conte
 						h.Rel("noreferrer"),
 						h.Class(buttonClassName({ intent: "outline", size: "sm" })),
 					],
-					[IconExternalLink(h, { attributes: { "data-slot": "icon" } }), `Open ${descriptor.name}`],
+					[`Open ${descriptor.name}`],
 				),
 				...(context.isAdmin && live !== undefined && statusOf(model, live) !== "syncing"
 					? [

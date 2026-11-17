@@ -9,6 +9,7 @@ import { progressBar, progressBarTrack } from "../../ui/progress-bar"
 import { formatCount, formatRelative, type Instant } from "../format"
 import { providerOf } from "../providers"
 import { SOURCE_LABEL, sourceMark } from "./identity"
+import { titleClass } from "./surface"
 
 /**
  * A data source card (Foundations › Integration Connect Cards): what the source brings, then its
@@ -171,10 +172,7 @@ export const connectCard = <M>(
 					h.div(
 						[h.Class("flex min-w-0 flex-col gap-0.5")],
 						[
-							h.h3(
-								[h.Class("font-medium text-base/6 text-fg")],
-								[SOURCE_LABEL[options.provider]],
-							),
+							h.h3([h.Class(titleClass)], [SOURCE_LABEL[options.provider]]),
 							h.p(
 								[h.Class("text-muted-fg text-sm")],
 								[options.description ?? providerOf(options.provider).blurb],

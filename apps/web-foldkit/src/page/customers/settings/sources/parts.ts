@@ -182,7 +182,7 @@ export const cardHeader = (h: H, title: string, description?: string, aside?: Ht
 			h.div(
 				[h.Class("flex min-w-0 flex-col gap-0.5")],
 				[
-					h.h2([h.Class("font-semibold text-base/6 text-fg")], [title]),
+					h.h2([h.Class("font-semibold text-fg text-sm/6")], [title]),
 					...(description === undefined
 						? []
 						: [h.p([h.Class("text-muted-fg text-sm")], [description])]),
@@ -192,9 +192,9 @@ export const cardHeader = (h: H, title: string, description?: string, aside?: Ht
 		],
 	)
 
-/** A small uppercase label over a value (the source card's columns, the connection card's rows). */
+/** A small label over a value (the source card's columns, the connection card's rows). */
 export const eyebrow = (h: H, text: string): Html =>
-	h.span([h.Class("font-medium text-muted-fg text-xs uppercase tracking-wide")], [text])
+	h.span([h.Class("font-medium text-muted-fg text-xs")], [text])
 
 /** `Accounts` `Contacts`: what a source writes. */
 export const chips = (h: H, labels: ReadonlyArray<string>): Html =>

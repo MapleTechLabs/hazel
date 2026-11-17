@@ -83,7 +83,7 @@ export const healthBreakdown = <M>(
 									h.h2(
 										[
 											h.Class(
-												"flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-base text-fg",
+												"flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-fg text-sm/6",
 											),
 										],
 										[
@@ -159,7 +159,7 @@ export const healthBreakdown = <M>(
 							h.tr(
 								[
 									h.Class(
-										"[&>th]:h-9 [&>th]:border-border [&>th]:border-y [&>th]:font-normal [&>th]:text-muted-fg",
+										"[&>th]:h-9 [&>th]:border-border [&>th]:border-y [&>th]:font-medium [&>th]:text-muted-fg [&>th]:text-xs",
 									),
 								],
 								[

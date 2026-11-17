@@ -2,6 +2,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconChevronDown } from "../../icons"
 import { checkbox } from "../../ui/checkbox"
+import { tableHeadClass } from "./surface"
 
 /**
  * A dense, sortable data table (Foundations › Table Customers States): sticky header, sort
@@ -83,7 +84,7 @@ export const dataTable = <Row, M, K extends string = string>(
 							h.Class(
 								twMerge(
 									"inline-flex cursor-pointer items-center gap-1 rounded outline-hidden hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
-									isSorted && "font-medium text-fg",
+									isSorted && "text-fg",
 								),
 							),
 							h.OnClick(options.onSort(column.key)),
@@ -115,7 +116,7 @@ export const dataTable = <Row, M, K extends string = string>(
 				...(isSorted ? [h.AriaSort(direction === "asc" ? "ascending" : "descending")] : []),
 				h.Class(
 					twMerge(
-						"h-10 whitespace-nowrap font-normal text-muted-fg text-sm",
+						tableHeadClass,
 						cellPad,
 						alignClass(column.align),
 						column.widthClass,
@@ -193,7 +194,7 @@ export const dataTable = <Row, M, K extends string = string>(
 						[
 							h.Class(
 								twMerge(
-									"h-14 text-fg text-sm tabular-nums",
+									"h-13 text-fg text-sm tabular-nums",
 									cellPad,
 									alignClass(column.align),
 									column.widthClass,
@@ -237,7 +238,7 @@ export const dataTable = <Row, M, K extends string = string>(
 					: []),
 				...options.columns.map((column) =>
 					h.td(
-						[h.Class(twMerge("h-14", cellPad, column.widthClass, column.hideClass))],
+						[h.Class(twMerge("h-13", cellPad, column.widthClass, column.hideClass))],
 						[
 							h.span([
 								h.Class(

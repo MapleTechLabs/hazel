@@ -44,7 +44,7 @@ export const card = (
 					h.h2(
 						[
 							h.Class(
-								"flex items-baseline gap-2 whitespace-nowrap font-semibold text-base text-fg",
+								"flex items-baseline gap-2 whitespace-nowrap font-semibold text-fg text-sm/6",
 							),
 						],
 						[
@@ -53,7 +53,7 @@ export const card = (
 								? []
 								: [
 										h.span(
-											[h.Class("font-normal text-muted-fg text-sm tabular-nums")],
+											[h.Class("font-normal text-muted-fg tabular-nums")],
 											[String(options.count)],
 										),
 									]),
@@ -73,7 +73,7 @@ export const headerLink = (h: HtmlBuilder<Message>, label: string, onPress: Mess
 			h.Type("button"),
 			h.OnClick(onPress),
 			h.Class(
-				"cursor-pointer rounded text-primary text-sm outline-hidden hover:underline focus-visible:ring-2 focus-visible:ring-ring/70",
+				"cursor-pointer rounded-sm font-medium text-primary text-sm outline-hidden hover:underline focus-visible:ring-2 focus-visible:ring-ring/70",
 			),
 		],
 		[label],
@@ -126,7 +126,7 @@ export const pageFooter = (
 										h.Disabled(options.status === "Loading"),
 										h.OnClick(options.onMore),
 										h.Class(
-											"cursor-pointer rounded-lg border border-border px-3 py-1.5 text-fg text-sm hover:bg-wash disabled:cursor-default disabled:opacity-60",
+											"cursor-pointer rounded-lg border border-border px-3 py-1.5 font-medium text-fg text-sm outline-hidden transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-default disabled:opacity-60",
 										),
 									],
 									[

@@ -63,10 +63,11 @@ const kpis = (h: HtmlBuilder<Message>, context: Context): Html => {
 		[h.Class("grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5")],
 		[
 			kpiTile(
-				{ h, id: "active-users", label: "Active users, 30d" },
+				{ h, id: "active-users", label: "Active users" },
 				{
 					value: formatCount(account.activeUsers30d),
-					detail: `of ${formatCount(account.contactCount)}`,
+					suffix: `of ${formatCount(account.contactCount)}`,
+					detail: "Last 30 days",
 				},
 			),
 			kpiTile(
@@ -93,7 +94,7 @@ const kpis = (h: HtmlBuilder<Message>, context: Context): Html => {
 				{ h, id: "seats", label: "Seats used" },
 				{
 					value: account.seatsUsed === null ? "—" : formatCount(account.seatsUsed),
-					detail: account.seatsLimit === null ? undefined : `/ ${formatCount(account.seatsLimit)}`,
+					suffix: account.seatsLimit === null ? undefined : `/ ${formatCount(account.seatsLimit)}`,
 					footer:
 						account.seatsUsed === null || account.seatsLimit === null
 							? undefined
@@ -123,6 +124,9 @@ const kpiTile = (
 	base: Readonly<{ h: HtmlBuilder<Message>; id: string; label: string }>,
 	options: Readonly<{
 		value: string
+		/** Beside the value: `of 24`, `/ 25`. */
+		suffix?: string | undefined
+		/** Under the value: what the number is measured against or who it is. */
 		detail?: string | undefined
 		valueClass?: string | undefined
 		footer?: Html | undefined
@@ -131,35 +135,44 @@ const kpiTile = (
 	base.h.div(
 		[
 			base.h.Id(`customer-kpi-${base.id}`),
-			base.h.Class("flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-bg p-4 max-md:p-3"),
+			base.h.Class(
+				"flex min-w-0 flex-col gap-1.5 rounded-xl border border-border bg-bg p-4 max-md:p-3",
+			),
 		],
 		[
-			base.h.span([base.h.Class("text-muted-fg text-sm")], [base.label]),
+			base.h.span([base.h.Class("truncate font-medium text-muted-fg text-xs/5")], [base.label]),
 			base.h.div(
-				// A narrow tile wraps the detail under the value instead of cutting it off.
-				[base.h.Class("flex min-w-0 flex-wrap items-baseline gap-x-1.5")],
+				[base.h.Class("flex min-w-0 items-baseline gap-x-1.5")],
 				[
 					base.h.span(
 						[
 							base.h.Class(
 								twMerge(
-									"whitespace-nowrap font-semibold text-2xl text-fg tabular-nums tracking-tight max-md:text-xl",
+									"shrink-0 whitespace-nowrap font-semibold text-2xl/8 text-fg tabular-nums tracking-tight max-md:text-xl/7",
 									options.valueClass,
 								),
 							),
 						],
 						[options.value],
 					),
-					...(options.detail === undefined
+					...(options.suffix === undefined
 						? []
 						: [
 								base.h.span(
-									[base.h.Class("min-w-0 truncate text-muted-fg text-sm")],
-									[options.detail],
+									[base.h.Class("whitespace-nowrap text-muted-fg text-sm tabular-nums")],
+									[options.suffix],
 								),
 							]),
 				],
 			),
+			...(options.detail === undefined
+				? []
+				: [
+						base.h.span(
+							[base.h.Class("truncate text-muted-fg text-xs/5"), base.h.Title(options.detail)],
+							[options.detail],
+						),
+					]),
 			...(options.footer === undefined ? [] : [options.footer]),
 		],
 	)

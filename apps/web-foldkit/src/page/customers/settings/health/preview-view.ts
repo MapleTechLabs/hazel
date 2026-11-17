@@ -231,7 +231,7 @@ export const transitionsText = (result: Customers.HealthDryRunResult): string =>
 }
 
 const th = (h: H, label: string, className = "text-right") =>
-	h.th([h.Class(twMerge("py-2 font-normal", className))], [label])
+	h.th([h.Class(twMerge("py-2 font-medium text-xs", className))], [label])
 const td = (h: H, text: string, className = "") =>
 	h.td([h.Class(twMerge("py-2 text-right text-fg tabular-nums", className))], [text])
 
