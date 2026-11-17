@@ -30,14 +30,15 @@ type ChainRule = RuleBody & {
 	childGap: boolean
 }
 type Pending = { rule: ChainRule; step: number; rel: "child" | "desc"; originHover: boolean }
-type Mode = "base" | "hover" | "groupHover"
+type Mode = "base" | "hover" | "groupHover" | "marker"
 
 /** A registered context condition (`.group[data-x] *`, `.parent > *`): matched against ancestors. */
 type Condition = { id: number; comb: Context["comb"]; compound: Compound }
 
 /** Inherited text properties the resolver needs to resolve `em`, `bolder` and `currentColor`. */
 type LineSpec = { px: number } | { mult: number } | "normal"
-type TextContext = { color: string; size: number; line: LineSpec; weight: number }
+/** `list`: the inherited `list-style-type`, when it draws a marker (absent: `none`). */
+type TextContext = { color: string; size: number; line: LineSpec; weight: number; list?: ListType }
 type Box = { w?: number; h?: number }
 type ContainerBox = { names: Array<string>; w?: number; h?: number }
 
@@ -142,7 +143,36 @@ export type Mask = {
 	/** A picture whose alpha shows the box: centred, not repeated, `w` by `h` of the box. */
 	image?: { url: string; w: number; h: number }
 }
+/** The `list-style-type` values a marker is drawn for. */
+export type ListType =
+	| "disc"
+	| "circle"
+	| "square"
+	| "decimal"
+	| "lower-alpha"
+	| "upper-alpha"
+	| "lower-roman"
+	| "upper-roman"
+
+const LIST_TYPES = new Map<string, ListType>([
+	["disc", "disc"],
+	["circle", "circle"],
+	["square", "square"],
+	["decimal", "decimal"],
+	["lower-alpha", "lower-alpha"],
+	["lower-latin", "lower-alpha"],
+	["upper-alpha", "upper-alpha"],
+	["upper-latin", "upper-alpha"],
+	["lower-roman", "lower-roman"],
+	["upper-roman", "upper-roman"],
+])
+
 export type Style = {
+	/**
+	 * A list item's marker (`display: list-item` with a `list-style-type`), and its `::marker`
+	 * colour. The serializer draws it as a child and takes it off: the host never reads it.
+	 */
+	listMarker?: { type: ListType; color?: string }
 	display?: "flex" | "block" | "inline" | "grid" | "none" | "contents"
 	dir?: "row" | "col"
 	wrap?: boolean
@@ -966,7 +996,13 @@ export class StyleResolver {
 		const pick = (r: RuleBody, c: Compound, originHover: boolean) =>
 			picked.push({
 				order: r.order,
-				mode: originHover || hoverContext(c) ? "groupHover" : c.hover ? "hover" : "base",
+				mode: c.marker
+					? "marker"
+					: originHover || hoverContext(c)
+						? "groupHover"
+						: c.hover
+							? "hover"
+							: "base",
 				decls: r.decls,
 			})
 		for (const r of this.rules.get("*") ?? [])
@@ -1140,6 +1176,12 @@ export class StyleResolver {
 			}
 			return
 		}
+		if (mode === "marker") {
+			// The marker inherits from its item, so `currentColor` is the item's own colour.
+			const c = d.prop === "color" ? color(v, acc.text.color) : null
+			if (c !== null) acc.markerColor = c
+			return
+		}
 		if (mode === "hover") {
 			const c = color(v, d.prop === "color" ? acc.text.color : current)
 			if (c !== null && d.prop === "background-color") s.hoverBg = c
@@ -1149,6 +1191,7 @@ export class StyleResolver {
 		if (v === "inherit" || v === "unset" || v === "revert" || v === "revert-layer") {
 			const field = INHERITED_FIELD.get(d.prop)
 			if (field !== undefined) delete s[field]
+			if (d.prop === "list-style-type" || d.prop === "list-style") delete acc.list
 			return
 		}
 		const fontSize = s.fontSize ?? acc.text.size
@@ -1550,6 +1593,16 @@ export class StyleResolver {
 				const n = v === "normal" ? 0 : num()
 				if (n === null) return unsupported()
 				s.letterSpacing = n
+				break
+			}
+			case "list-style":
+			case "list-style-type": {
+				// The shorthand's type is whichever word names one; `none` alone takes the marker off.
+				const words = d.prop === "list-style" ? v.split(/\s+/) : [v]
+				const type = words.map((w) => LIST_TYPES.get(w)).find((t) => t !== undefined)
+				if (type !== undefined) acc.list = type
+				else if (words.includes("none")) acc.list = "none"
+				else unsupported()
 				break
 			}
 			case "text-transform":
@@ -1992,6 +2045,11 @@ export class StyleResolver {
 		if (s.border === undefined) delete s.borderColor
 		if (s.bg === "#00000000") delete s.bg
 		if (s.opacity === 1) delete s.opacity
+		// An `<li>` is `display: list-item` until a `display` says otherwise: only then a marker.
+		const list = acc.list ?? acc.text.list
+		if (acc.tag === "li" && s.display === undefined && list !== undefined && list !== "none")
+			s.listMarker =
+				acc.markerColor === undefined ? { type: list } : { type: list, color: acc.markerColor }
 	}
 }
 
@@ -2262,6 +2320,10 @@ type Accumulator = {
 	selfShift?: [number, number]
 	/** Whether the last overflow written for x, y is `hidden`, which `clipScrolls` is derived from. */
 	hidden?: [boolean, boolean]
+	/** This element's own `list-style-type`, when it sets one ("none" stops the inherited one). */
+	list?: ListType | "none"
+	/** `::marker { color }`, against this element's own colour. */
+	markerColor?: string
 }
 
 /** The `space-x/y` margin as a gap, with the rule's own custom properties in view. */
@@ -2279,7 +2341,14 @@ const childText = (parent: TextContext, s: Style, acc: Accumulator): TextContext
 	size: s.fontSize ?? parent.size,
 	weight: s.fontWeight ?? parent.weight,
 	line: acc.line ?? (s.lineHeight !== undefined ? { px: s.lineHeight } : parent.line),
+	...listOf(parent, acc),
 })
+
+/** The `list-style-type` an element has: its own, else its parent's (the property inherits). */
+const listOf = (parent: TextContext, acc: Accumulator): { list?: ListType } => {
+	const list = acc.list ?? parent.list
+	return list === undefined || list === "none" ? {} : { list }
+}
 
 /** The content box children see: known only when this element's size is (or both insets pin it). */
 /** A length that is only a share of the parent (`calc(1/2 * 100%)`), as a fraction; else null. */
@@ -2554,8 +2623,6 @@ const IGNORED = new Set([
 	"font-feature-settings",
 	"font-variation-settings",
 	"font-variant-numeric",
-	"list-style",
-	"list-style-type",
 	"appearance",
 	"-webkit-appearance",
 	"vertical-align",
