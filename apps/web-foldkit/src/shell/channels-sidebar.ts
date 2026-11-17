@@ -74,7 +74,7 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		UpdatedSections: ({ sections }) => ({
 			model: modifyFields(model, {
 				sections: () => sections,
-				loaded: (loaded) => ({ ...loaded, sections: true }),
+				loaded: () => modifyFields(model.loaded, { sections: () => true }),
 			}),
 		}),
 		UpdatedSectionChannels: ({ sectionKey, channels }) => ({
@@ -85,14 +85,14 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		UpdatedFavorites: ({ channels }) => ({
 			model: modifyFields(model, {
 				favorites: () => channels,
-				loaded: (loaded) => ({ ...loaded, favorites: true }),
+				loaded: () => modifyFields(model.loaded, { favorites: () => true }),
 			}),
 		}),
 		UpdatedThreads: ({ threads }) => ({ model: modifyFields(model, { threads: () => threads }) }),
 		UpdatedDmChannelIds: ({ channelIds }) => ({
 			model: modifyFields(model, {
 				dmChannelIds: () => channelIds,
-				loaded: (loaded) => ({ ...loaded, dmChannelIds: true }),
+				loaded: () => modifyFields(model.loaded, { dmChannelIds: () => true }),
 			}),
 		}),
 		UpdatedDmChannel: ({ channelId, channel }) => ({
