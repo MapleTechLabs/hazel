@@ -156,14 +156,15 @@ const threadNameOf = (definition: ChatSyncProviderDefinition, content: string) =
 		.trim()
 		.slice(0, definition.maxThreadNameLength) || "Thread"
 
-/** Directory display names for `userIds` (D1 `users`). */
+/** Directory display names (and external ids) for `userIds` (D1 `users`). */
 const displayNames = (userIds: ReadonlyArray<UserId>) =>
 	Effect.gen(function* () {
-		if (userIds.length === 0) return new Map<UserId, { name: string; avatarUrl: string | null }>()
+		if (userIds.length === 0)
+			return new Map<UserId, { name: string; avatarUrl: string | null; externalId: string }>()
 		const directory = yield* Directory
 		const rows = yield* directory.db.run(
 			SQLite.from(schema.usersTable)
-				.select("id", "firstName", "lastName", "avatarUrl")
+				.select("id", "externalId", "firstName", "lastName", "avatarUrl")
 				.where(($) => [$.id.in_(...new Set(userIds))]),
 		)
 		return new Map(
@@ -174,12 +175,16 @@ const displayNames = (userIds: ReadonlyArray<UserId>) =>
 						[row.firstName, row.lastName].filter(Boolean).join(" ").trim() ||
 						row.firstName.trim(),
 					avatarUrl: row.avatarUrl?.trim() ? row.avatarUrl : null,
+					externalId: row.externalId,
 				},
 			]),
 		)
 	})
 
-/** `@[userId:…]` → the provider's mention for linked accounts, else `@Name`. */
+/**
+ * `@[userId:…]` → the provider's mention for a linked account or for that provider's own user
+ * (their shadow, `<provider>-user-<id>`, picked in Hazel's mention list), else `@Name`.
+ */
 const outboundContent = (
 	definition: ChatSyncProviderDefinition,
 	content: string,
@@ -197,8 +202,11 @@ const outboundContent = (
 		return content.replace(MENTION_PATTERN, (_match, userId: string) => {
 			const external = linked.get(userId as UserId)
 			if (external !== undefined) return definition.mention(external)
-			const name = names.get(userId as UserId)?.name
-			return name ? `@${name}` : "@unknown-user"
+			const user = names.get(userId as UserId)
+			const shadowPrefix = `${definition.id}-user-`
+			if (user?.externalId.startsWith(shadowPrefix))
+				return definition.mention(user.externalId.slice(shadowPrefix.length))
+			return user?.name ? `@${user.name}` : "@unknown-user"
 		})
 	})
 

@@ -1,6 +1,6 @@
 import { formatCustomEmojiKey } from "~/lib/custom-emoji-utils"
 import { EMOJI_DATA } from "~/lib/emoji-shortcode-map"
-import type { BotCommand, Model, PresenceStatus } from "./composer"
+import type { BotCommand, MentionProvider, Model, PresenceStatus } from "./composer"
 
 /** The option lists of the three autocomplete triggers (`useMentionOptions`, `useBotCommandOptions`, `useEmojiOptions`). */
 
@@ -13,9 +13,14 @@ export interface MentionOption {
 	readonly displayName: string
 	readonly avatarUrl: string | null
 	readonly status: PresenceStatus | null
+	/** A Slack or Discord person in a synced channel: their platform's mark replaces presence. */
+	readonly provider: MentionProvider | null
 }
 
-/** @channel and @here, then mentionable bots, then channel members, filtered by search. */
+/**
+ * @channel and @here, then mentionable bots, then channel members (and, in a synced channel,
+ * the Slack or Discord people there), filtered by search.
+ */
 export const mentionOptions = (model: Model): ReadonlyArray<MentionOption> => {
 	if (model.autocomplete?.trigger !== "mention") return []
 	const search = model.autocomplete.search.toLowerCase()
@@ -32,6 +37,7 @@ export const mentionOptions = (model: Model): ReadonlyArray<MentionOption> => {
 			displayName: id,
 			avatarUrl: null,
 			status: null,
+			provider: null,
 		}))
 	const bots = model.mentionableBots
 		.filter((bot) => bot.name.toLowerCase().includes(search))
@@ -43,10 +49,11 @@ export const mentionOptions = (model: Model): ReadonlyArray<MentionOption> => {
 			displayName: bot.name,
 			avatarUrl: bot.avatarUrl,
 			status: null,
+			provider: null,
 		}))
 	const statusOf = new Map(model.presence.map((row) => [row.userId, row.status]))
 	const members = model.members.flatMap((member): Array<MentionOption> => {
-		const displayName = `${member.firstName} ${member.lastName}`
+		const displayName = `${member.firstName} ${member.lastName}`.trim()
 		if (!displayName.toLowerCase().includes(search)) return []
 		return [
 			{
@@ -56,7 +63,9 @@ export const mentionOptions = (model: Model): ReadonlyArray<MentionOption> => {
 				type: "user",
 				displayName,
 				avatarUrl: member.avatarUrl,
-				status: statusOf.get(member.userId) ?? "offline",
+				// A Slack or Discord person has no Hazel presence.
+				status: member.provider ? null : (statusOf.get(member.userId) ?? "offline"),
+				provider: member.provider ?? null,
 			},
 		]
 	})
