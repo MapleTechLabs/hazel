@@ -261,12 +261,18 @@ const wakeCell = (h: HtmlBuilder<Message>, signal: SignalRow, nowMs: number): Ht
 			h.Class(twMerge("flex w-44 shrink-0 items-start gap-2", PHONE_SECOND_LINE, "max-md:w-auto")),
 		],
 		[
-			IconClock(h, { className: twMerge("mt-0.5 size-3.5", isDue ? "text-warning" : "text-muted-fg") }),
+			IconClock(h, {
+				className: twMerge("mt-0.5 size-3.5", isDue ? "text-warning-subtle-fg" : "text-muted-fg"),
+			}),
 			h.div(
 				[h.Class("flex flex-col")],
 				[
 					h.span(
-						[h.Class(twMerge("font-medium text-sm", isDue ? "text-warning" : "text-fg"))],
+						[
+							h.Class(
+								twMerge("font-medium text-sm", isDue ? "text-warning-subtle-fg" : "text-fg"),
+							),
+						],
 						[
 							isDue
 								? "Returning now"

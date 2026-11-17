@@ -193,9 +193,9 @@ export const cardHeader = (h: H, title: string, description?: string, aside?: Ht
 		],
 	)
 
-/** A small uppercase label over a value (the source card's columns, the connection card's rows). */
+/** A small label over a value (the source card's columns, the connection card's rows). */
 export const eyebrow = (h: H, text: string): Html =>
-	h.span([h.Class("font-medium text-muted-fg text-xs uppercase tracking-wide")], [text])
+	h.span([h.Class("font-medium text-muted-fg text-xs")], [text])
 
 /** `Accounts` `Contacts`: what a source writes. */
 export const chips = (h: H, labels: ReadonlyArray<string>): Html =>

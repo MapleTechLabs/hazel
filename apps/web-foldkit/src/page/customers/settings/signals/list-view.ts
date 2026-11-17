@@ -79,11 +79,14 @@ const summary = (h: H, model: Model, rules: ReadonlyArray<RuleRow>, nowMs: numbe
 // ROWS
 
 const COLUMNS =
-	"grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 px-4 md:grid-cols-[auto_minmax(0,1fr)_7rem_9rem_8rem_8rem]"
+	"grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 px-4 md:grid-cols-[auto_minmax(0,1fr)_7rem_9rem_7rem_9.5rem]"
 
 const headerRow = (h: H): Html =>
 	h.div(
-		[h.AriaHidden(true), h.Class(twMerge(COLUMNS, "h-9 border-border border-b text-muted-fg text-xs"))],
+		[
+			h.AriaHidden(true),
+			h.Class(twMerge(COLUMNS, "h-9 border-border border-b font-medium text-muted-fg text-xs")),
+		],
 		[
 			h.span([], ["On"]),
 			h.span([], ["Rule"]),
@@ -207,10 +210,10 @@ const ruleRow = (h: H, model: Model, rule: RuleRow, shared: Shared): Html => {
 							],
 						),
 						h.span(
-							[h.Class("text-right text-muted-fg text-sm tabular-nums")],
+							[h.Class("whitespace-nowrap text-right text-muted-fg text-sm tabular-nums")],
 							[
 								!rule.enabled
-									? `Off · updated ${formatDate(new Date(rule.updatedAtMs), { now: new Date(shared.nowMs) })}`
+									? `Off since ${formatDate(new Date(rule.updatedAtMs), { now: new Date(shared.nowMs) })}`
 									: rule.lastTriggeredAtMs === null
 										? "Never"
 										: formatRelative(

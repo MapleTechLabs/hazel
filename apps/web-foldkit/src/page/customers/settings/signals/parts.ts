@@ -2,6 +2,7 @@ import type * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { SEVERITY_LABEL, severityGlyph } from "../../../../customers/ui/badges"
+import { segmentClass, segmentedTrackClass } from "../../../../customers/ui/filter-bar"
 import { inputElement } from "../../../../ui/input"
 import { TEMPLATE_ICON } from "./describe"
 import type { Message } from "./message"
@@ -98,11 +99,7 @@ export const severityPicker = (
 	}>,
 ): Html =>
 	h.div(
-		[
-			h.Role("radiogroup"),
-			h.AriaLabel("Severity"),
-			h.Class("inline-flex items-center gap-0.5 rounded-lg border border-border p-0.5"),
-		],
+		[h.Role("radiogroup"), h.AriaLabel("Severity"), h.Class(segmentedTrackClass)],
 		(["low", "medium", "high"] as const).map((severity) => {
 			const isSelected = severity === options.selected
 			return h.button(
@@ -111,14 +108,7 @@ export const severityPicker = (
 					h.Role("radio"),
 					h.AriaChecked(isSelected),
 					...(options.isDisabled ? [h.Disabled(true)] : [h.OnClick(options.onSelect(severity))]),
-					h.Class(
-						twMerge(
-							"inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 font-medium text-sm outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-default",
-							isSelected
-								? "bg-secondary text-fg shadow-control"
-								: "text-fg-3 hover:bg-secondary hover:text-fg",
-						),
-					),
+					h.Class(segmentClass(isSelected)),
 				],
 				[severityGlyph(h, severity, { labelled: false }), SEVERITY_LABEL[severity]],
 			)
