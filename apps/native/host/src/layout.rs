@@ -314,6 +314,10 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     if let Some(g) = f(st.grow).filter(|g| *g > 0.0) {
         e = e.grow(g)
     }
+    // After `grow`, which starts it from zero.
+    if let Some(b) = f(st.basis).filter(|b| *b > 0.0) {
+        e = e.basis(b)
+    }
     // Rune draws a border inside the box; CSS lays it out (box-sizing: border-box), so each
     // side's border width joins its padding, a transparent border's too.
     if st.pad.is_some() || st.border.is_some() {
@@ -401,8 +405,7 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
         _ => {}
     }
     if let Some([l, t, r, b]) = insets(st)
-        && st.center_y != Some(true)
-        && st.center_x != Some(true)
+        && anchors(st) == (None, None)
     {
         e = e.pin_insets(l, t, r, b)
     }
@@ -606,29 +609,69 @@ fn apply_shadows(mut e: El, st: &Style) -> El {
     e
 }
 
-/// `inset-y-1/2 -translate-y-1/2`: a shift by half its own size, which Rune has no inset for, so
-/// centre in a full-height slot.
+/// Where an out-of-flow box is anchored by a share of its own size, per axis: (the anchor as a
+/// fraction of the parent, the share of its size it moves back by). `left-1/2 -translate-x-1/2` is
+/// (0.5, 0.5); a chart's dot at `left: 30%` is (0.3, 0.5); `-translate-x-full` moves back by 1.
+fn anchors(st: &Style) -> (Option<(f32, f32)>, Option<(f32, f32)>) {
+    let axis = |anchor: Option<[F; 2]>, centred: Option<bool>| {
+        anchor
+            .map(|[at, shift]| (at.0, shift.0))
+            .or((centred == Some(true)).then_some((0.5, 0.5)))
+    };
+    (
+        axis(st.anchor_x, st.center_x),
+        axis(st.anchor_y, st.center_y),
+    )
+}
+
+/// `left: x%` with `-translate-x-1/2` (and the vertical, and `-translate-*-full`): a shift by a
+/// share of its own size, which Rune has no inset for. The box goes in a slot as big as the parent,
+/// moved so that its centre (or its far edge, for a full shift) is the anchor, and is centred (or
+/// end-aligned) in it: CSS's result for any size of box, overflowing the slot or not.
 pub fn center_vertically(e: El, st: &Style) -> El {
-    let zero = Some(rune::Inset::Px(0.0));
-    match (insets(st), st.center_y) {
-        // `left-1/2 -translate-x-1/2` (and both axes): centred in a full-width slot at its insets.
-        (Some([_, t, _, b]), centre_y) if st.center_x == Some(true) => {
-            let both = centre_y == Some(true);
-            let slot = if both {
-                row().pin_insets(zero, zero, zero, zero).items_center()
-            } else {
-                row().pin_insets(zero, t, zero, b).items_start()
+    let Some([l, t, r, b]) = insets(st) else {
+        return e;
+    };
+    let frac = |v: f32| Some(rune::Inset::Frac(v));
+    // The slot's two edges along an axis, for an anchor at `at` moved back by `shift` of itself.
+    let slot = |(at, shift): (f32, f32)| (frac(at - shift), frac(shift - at));
+    match anchors(st) {
+        (Some(x), y) => {
+            let (sl, sr) = slot(x);
+            let (st_, sb, cross) = match y {
+                Some(y) => {
+                    let (a, b) = slot(y);
+                    (a, b, y.1)
+                }
+                None => (t, b, 0.0),
             };
-            slot.justify_center().child(e)
+            let row = row().pin_insets(sl, st_, sr, sb);
+            let row = if cross == 1.0 {
+                row.items_end()
+            } else if cross > 0.0 {
+                row.items_center()
+            } else {
+                row.items_start()
+            };
+            let row = if x.1 == 1.0 {
+                row.justify_end()
+            } else {
+                row.justify_center()
+            };
+            row.child(e)
         }
-        (Some([l, _, r, _]), Some(true)) => {
+        (None, Some(y)) => {
+            let (a, bottom) = slot(y);
             // Pinned on both sides with no width of its own, CSS stretches it between them
             // (`inset-x-0 top-1/2`: a full-width divider or overlay).
             let spans = l.is_some() && r.is_some() && st.w.is_none();
-            row()
-                .pin_insets(l, zero, r, zero)
-                .items_center()
-                .child(if spans { e.grow(1.0) } else { e })
+            let row = row().pin_insets(l, a, r, bottom);
+            let row = if y.1 == 1.0 {
+                row.items_end()
+            } else {
+                row.items_center()
+            };
+            row.child(if spans { e.grow(1.0) } else { e })
         }
         _ => e,
     }

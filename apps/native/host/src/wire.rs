@@ -51,8 +51,7 @@ pub struct Style {
     /// Host-only: a table row's key, so its cells hover together (`hover_group_shared`).
     #[serde(skip)]
     pub hover_share: Option<String>,
-    /// Host-only: a table cell's `colspan`.
-    #[serde(skip)]
+    /// `grid-column: span N / span N` (`col-span-2`), or a table cell's `colspan` (set here).
     pub col_span: Option<u16>,
     /// `position: fixed`: drawn at the window's root and placed against the window.
     pub fixed: Option<bool>,
@@ -120,6 +119,16 @@ pub struct Style {
     /// `left-1/2 -translate-x-1/2`: centred horizontally in its containing block.
     #[serde(default, deserialize_with = "lenient")]
     pub center_x: Option<bool>,
+    /// `left: x%` with `-translate-x-1/2` (or `-full`): [x as a fraction of the parent, the share
+    /// of its own width it moves back by].
+    #[serde(default, deserialize_with = "lenient")]
+    pub anchor_x: Option<[F; 2]>,
+    /// `top: y%` with `-translate-y-1/2` (or `-full`), as `anchor_x`.
+    #[serde(default, deserialize_with = "lenient")]
+    pub anchor_y: Option<[F; 2]>,
+    /// `flex-basis` in points (`basis-72`), which a grown item starts from.
+    #[serde(default, deserialize_with = "lenient")]
+    pub basis: Option<F>,
     /// Insets as fractions of the parent's size where the runtime could not know it
     /// (`bottom-full`), left, top, right, bottom; an edge here is free in `absolute`.
     #[serde(default, deserialize_with = "lenient")]

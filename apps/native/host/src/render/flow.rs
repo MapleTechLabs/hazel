@@ -354,15 +354,20 @@ pub(super) fn add_children(
             // CSS's default `flex-shrink: 1` in a row, where Rune boxes keep their size unless
             // told to shrink: a `w-full` item beside others gives them their room, and a
             // `min-w-0` one (the idiom for "may shrink below its content") shrinks to the row, so
-            // its text wraps or truncates instead of running past the row's edge.
+            // its text wraps or truncates instead of running past the row's edge. So does one
+            // that clips or scrolls (`truncate`): CSS's automatic minimum width for it is 0.
             let b = match style_of(child) {
                 Some(st)
                     if parent.is_row
-                        && kids.len() > 1
                         && st.shrink.is_none()
                         && st.absolute.is_none()
                         && match &st.min_w {
-                            None => st.w == Some(wire::Len::Full),
+                            None => {
+                                (kids.len() > 1 && st.w == Some(wire::Len::Full))
+                                    || st.clip == Some(true)
+                                    || st.scroll_x == Some(true)
+                                    || st.scroll_y == Some(true)
+                            }
                             Some(wire::Len::Px(min)) => min.0 == 0.0,
                             Some(_) => false,
                         } =>

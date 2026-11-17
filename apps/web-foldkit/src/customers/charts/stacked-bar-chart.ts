@@ -90,7 +90,9 @@ export const stackedBarChart = <M>(h: HtmlBuilder<M>, options: StackedBarChartOp
 			],
 			segments.map((segment) => {
 				const top = Math.min(y(segment.from), y(segment.to))
-				const height = Math.abs(y(segment.from) - y(segment.to))
+				// Insets, not a height: a percentage height needs the parent's height, which the native
+				// renderer does not resolve.
+				const bottom = 100 - Math.max(y(segment.from), y(segment.to))
 				return h.span([
 					h.Class(
 						twMerge(
@@ -100,7 +102,7 @@ export const stackedBarChart = <M>(h: HtmlBuilder<M>, options: StackedBarChartOp
 							segment === lastDown && "rounded-b-[3px]",
 						),
 					),
-					h.Style({ top: `${top}%`, height: `${height}%` }),
+					h.Style({ top: `${top}%`, bottom: `${bottom}%` }),
 				])
 			}),
 		)

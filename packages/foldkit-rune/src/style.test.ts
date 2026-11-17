@@ -305,6 +305,42 @@ describe("StyleResolver", () => {
 		expect(resolve("absolute top-0").style.insetFrac).toBeUndefined()
 	})
 
+	it("anchors a box moved by a share of its own size at its percentage inset (a chart's dots and ticks)", () => {
+		const plot = resolve("relative flex-1")
+		const at = (classes: string, inline: Record<string, string>) =>
+			resolve(classes, { scope: plot.scope, extra: { inline } }).style
+		// `left: 30%` then `-translate-1/2`: centred on (30%, 40%), whichever comes first.
+		const dot = at("absolute size-2.5 -translate-1/2", { left: "30%", top: "40%" })
+		expect(dot.anchorX).toEqual([0.3, 0.5])
+		expect(dot.anchorY).toEqual([0.4, 0.5])
+		expect(dot.translate).toBeUndefined()
+		expect(dot.absolute?.[0]).toBeNull()
+		expect(dot.absolute?.[1]).toBeNull()
+		// An x-axis tick: centred across, its top a plain inset; at the right end, right-aligned.
+		const tick = at("absolute top-1.5 -translate-x-1/2", { left: "50.5%" })
+		expect(tick.anchorX).toEqual([0.505, 0.5])
+		expect(tick.anchorY).toBeUndefined()
+		expect(tick.absolute?.[1]).toBe(6)
+		expect(at("absolute top-1.5 -translate-x-full", { left: "98%" }).anchorX).toEqual([0.98, 1])
+		// `translate-x-0` undoes the shift: a plain left inset.
+		expect(at("absolute -translate-x-1/2 translate-x-0", { left: "2%" }).anchorX).toBeUndefined()
+		// `left-1/2 -translate-x-1/2` stays the centring the host already knows.
+		const centred = resolve("absolute left-1/2 -translate-x-1/2").style
+		expect(centred.centerX).toBe(true)
+		expect(centred.anchorX).toBeUndefined()
+		// `0%` is 0 of any box: a gridline at the top of the plot.
+		expect(at("absolute inset-x-0", { top: "0%" }).absolute?.[1]).toBe(0)
+	})
+
+	it("spans grid columns and starts a grown item from its flex basis", () => {
+		expect(resolve("lg:col-span-2").style.colSpan).toBe(2)
+		expect(resolve("col-span-1").style.colSpan).toBeUndefined()
+		expect(resolve("col-span-full").style.colSpanFull).toBe(true)
+		expect(resolve("flex-1 basis-72").style).toMatchObject({ grow: 1, basis: 288 })
+		expect(resolve("flex-1").style.basis).toBeUndefined()
+		expect(resolve("basis-72 basis-auto").style.basis).toBeUndefined()
+	})
+
 	it("sends horizontal and vertical overflow as the scrolling the host draws", () => {
 		expect(resolve("flex overflow-x-auto").style).toMatchObject({ scrollX: true })
 		expect(resolve("flex overflow-x-auto").style.scrollY).toBeUndefined()
