@@ -29,6 +29,8 @@ import {
 	partnerOrgsByChannel,
 	type Presence,
 	type SidebarThread,
+	type SyncProvider,
+	syncProviderByChannel,
 } from "./rows"
 import { sectionGroupHeader, strong, treeRow, treeSection } from "./tree"
 
@@ -50,6 +52,7 @@ interface SectionsContext<M> extends ItemContext {
 	readonly sectionAction: (sectionKey: string) => Html
 	readonly unreadByChannel: ReadonlyMap<string, number>
 	readonly partnersByChannel: ReturnType<typeof partnerOrgsByChannel>
+	readonly syncProviderByChannel: ReadonlyMap<string, SyncProvider>
 	/** Joined threads listed under each channel row, by parent channel id. */
 	readonly threadsByParent: ReadonlyMap<string, ReadonlyArray<SidebarThread>>
 }
@@ -111,6 +114,7 @@ const channelRowView = <M>(
 	entry: ChannelEntry,
 	notificationCount: number,
 	partners: ReadonlyArray<PartnerOrg>,
+	syncProvider: SyncProvider | null,
 	isLinkActive: boolean,
 	orgSlug: string,
 	treeId: string,
@@ -146,7 +150,7 @@ const channelRowView = <M>(
 			entry,
 			notificationCount,
 			partners,
-			{ orgSlug, isActive: isLinkActive },
+			{ orgSlug, isActive: isLinkActive, syncProvider },
 			rowMenuView(h, menu),
 			rowLongPress(h, menu),
 		),
@@ -173,6 +177,7 @@ const channelRow = <M>(
 			entry,
 			context.unreadByChannel.get(id) ?? entry.member.notificationCount,
 			showsPartners ? (context.partnersByChannel.get(id) ?? NO_PARTNERS) : NO_PARTNERS,
+			context.syncProviderByChannel.get(id) ?? null,
 			id === context.activeChannelId,
 			context.orgSlug,
 			place.treeId,
@@ -452,6 +457,16 @@ const partnersOf = (model: Model) => {
 	return result
 }
 
+// Pure memo on the frozen rows, so a re-render does not rebuild the map.
+const syncMemo = new WeakMap<Model["syncedChannels"], ReadonlyMap<string, SyncProvider>>()
+const syncProvidersOf = (model: Model) => {
+	const cached = syncMemo.get(model.syncedChannels)
+	if (cached) return cached
+	const result = syncProviderByChannel(model.syncedChannels)
+	syncMemo.set(model.syncedChannels, result)
+	return result
+}
+
 export const sectionGroupContent = <M>(
 	h: HtmlBuilder<M>,
 	model: Model,
@@ -473,6 +488,7 @@ export const sectionGroupContent = <M>(
 		presenceByUser: new Map(model.presence.map((presence) => [presence.userId, presence])),
 		unreadByChannel: new Map(model.unreadCounts.map((unread) => [unread.channelId, unread.count])),
 		partnersByChannel: partnersOf(model),
+		syncProviderByChannel: syncProvidersOf(model),
 		threadsByParent: threadsByParentOf(model.threads, itemContext.activeChannelId, itemContext.nowMs),
 		openMenu: model.openMenu,
 		sections: model.sections,

@@ -10,6 +10,8 @@ import { Stream } from "effect"
 import {
 	channelCollection,
 	channelMemberCollection,
+	chatSyncChannelLinkCollection,
+	chatSyncConnectionCollection,
 	connectConversationChannelCollection,
 	notificationCollection,
 	organizationCollection,
@@ -19,7 +21,15 @@ import {
 } from "~/db/collections"
 import { liveQueryStream } from "../../data/live-query"
 import { type MemberRow, toMember } from "./data"
-import type { ConnectMount, DmChannel, Membership, PartnerOrg, Presence, UnreadCount } from "./rows"
+import type {
+	ConnectMount,
+	DmChannel,
+	Membership,
+	PartnerOrg,
+	Presence,
+	SyncedChannel,
+	UnreadCount,
+} from "./rows"
 
 /** The sidebar's queries about people: membership, unread counts, DM rows, presence, Connect partners. */
 
@@ -208,4 +218,35 @@ export const organizationsStream = <M>(toMessage: (orgs: Array<PartnerOrg>) => M
 			})),
 		(rows) =>
 			toMessage(rows.map((row) => ({ id: row.id, name: row.name, logoUrl: row.logoUrl ?? null }))),
+	)
+
+/** Channels with an active chat sync link on a live Slack or Discord connection. */
+export const syncedChannelsStream = <M>(toMessage: (synced: Array<SyncedChannel>) => M) =>
+	liveQueryStream<{ channelId: ChannelId; provider: string }, M>(
+		(q) =>
+			q
+				.from({ link: chatSyncChannelLinkCollection })
+				.innerJoin({ connection: chatSyncConnectionCollection }, ({ link, connection }) =>
+					eq(link.syncConnectionId, connection.id),
+				)
+				.where(({ link, connection }) =>
+					and(
+						eq(link.isActive, true),
+						isNull(link.deletedAt),
+						isNull(connection.deletedAt),
+						inArray(connection.provider, ["slack", "discord"]),
+					),
+				)
+				.select(({ link, connection }) => ({
+					channelId: link.hazelChannelId,
+					provider: connection.provider,
+				})),
+		(rows) =>
+			toMessage(
+				rows.flatMap((row) =>
+					row.provider === "slack" || row.provider === "discord"
+						? [{ channelId: row.channelId, provider: row.provider }]
+						: [],
+				),
+			),
 	)
