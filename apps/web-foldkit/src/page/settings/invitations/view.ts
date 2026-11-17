@@ -14,6 +14,7 @@ import type { PageViewInputs } from "../../contract"
 import { Message } from "./message"
 import type { Invitation, Model, RowMenu } from "./model"
 import { invitationsOf, rowMenuEntries } from "./update"
+import { heading } from "../../../ui/heading"
 
 /** Port of `routes/_app/$orgSlug/settings/invitations.tsx`. */
 
@@ -221,10 +222,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 								h.div(
 									[h.Class("flex items-center gap-2")],
 									[
-										h.h2(
-											[h.Class("font-semibold text-fg text-lg")],
-											["Pending invitations"],
-										),
+										heading(h, { variant: "title" }, ["Pending invitations"]),
 										...(count > 0
 											? [badge(h, { intent: "secondary" }, [`${count}`, " pending"])]
 											: []),

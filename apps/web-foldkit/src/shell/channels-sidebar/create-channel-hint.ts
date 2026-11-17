@@ -29,7 +29,7 @@ export const createChannelHint = <M>(
 								[
 									h.Attribute("data-slot", "keyboard"),
 									h.Attribute("dir", "ltr"),
-									h.Class(twMerge(keyboardStyles, "text-[10px]")),
+									h.Class(twMerge(keyboardStyles, "text-3xs")),
 								],
 								[hotkeyLabel(createChannelKey)],
 							),

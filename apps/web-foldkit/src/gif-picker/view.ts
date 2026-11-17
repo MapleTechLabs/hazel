@@ -93,7 +93,7 @@ const categoryChips = <M>(h: HtmlBuilder<M>, model: Model, toMessage: (message: 
 										h.Class(
 											`shrink-0 outline-none rounded-full border px-2.5 py-0.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
 												model.selectedCategory === category.category
-													? "border-primary bg-primary text-on-primary"
+													? "border-primary bg-primary text-primary-fg"
 													: "border-fg/10 bg-muted/40 text-muted-fg hover:border-fg/20 hover:bg-muted hover:text-fg"
 											}`,
 										),
@@ -142,7 +142,7 @@ const gifButton = <M>(h: HtmlBuilder<M>, model: Model, gif: Gif, toMessage: (mes
 					h.Attribute("type", "button"),
 					h.AriaLabel(gif.title || "GIF"),
 					h.Class(
-						"relative block w-full cursor-pointer overflow-hidden rounded-md bg-muted/60 outline-none transition-all hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary",
+						"relative block w-full cursor-pointer overflow-hidden rounded-md bg-muted/60 outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary",
 					),
 					h.Attribute("style", `aspect-ratio: ${gif.width} / ${gif.height};`),
 					h.OnClick(toMessage(Message.ClickedGif({ slug: gif.slug }))),
@@ -246,7 +246,7 @@ const content = <M>(h: HtmlBuilder<M>, model: Model, toMessage: (message: Messag
 							h.Attribute("href", "https://klipy.com"),
 							h.Attribute("target", "_blank"),
 							h.Attribute("rel", "noopener noreferrer"),
-							h.Class("text-[10px] font-medium text-muted-fg transition-colors hover:text-fg"),
+							h.Class("text-3xs font-medium text-muted-fg transition-colors hover:text-fg"),
 						],
 						["Powered by KLIPY"],
 					),

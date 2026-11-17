@@ -4,7 +4,8 @@ export const dialogBase =
 
 export const dialogHeaderBase = "relative space-y-1 p-(--gutter) pb-[calc(var(--gutter)---spacing(3))]"
 
-export const dialogTitleBase = "text-balance font-semibold text-fg text-lg/6 sm:text-base/6"
+export const dialogTitleBase =
+	"text-balance font-semibold text-fg text-lg/6 tracking-[-0.011em] sm:text-base/6"
 
 export const dialogDescriptionBase =
 	"text-pretty text-base/6 text-muted-fg group-data-disabled:opacity-50 sm:text-sm/6"

@@ -19,6 +19,7 @@ import {
 } from "./model"
 import { card, cardHeader, eyebrow, formField, type H } from "./parts"
 import type { ConnectionRow, UnitMetricRow } from "./queries"
+import { heading } from "../../../../ui/heading"
 
 /**
  * A source's provider settings (Wonder `one` for Maple): the descriptor's config fields for any
@@ -115,7 +116,7 @@ const block = (h: H, title: string, description: string, children: ReadonlyArray
 			h.div(
 				[h.Class("flex flex-col gap-0.5")],
 				[
-					h.h3([h.Class("font-medium text-fg text-sm")], [title]),
+					heading(h, { variant: "subsection" }, [title]),
 					h.p([h.Class("text-muted-fg text-xs")], [description]),
 				],
 			),

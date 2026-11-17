@@ -27,6 +27,7 @@ import {
 	type PreviewMetric,
 } from "./model"
 import { SLIDER_MESSAGE, toCheckAccountMessage } from "./update"
+import { heading } from "../../../../ui/heading"
 
 /** The bands editor, the distribution preview, "Check one customer" and the unsaved-changes bar. */
 
@@ -563,7 +564,7 @@ export const checkCard = (h: H, model: Model, context: Context): Html => {
 		h.div(
 			[h.Class("flex flex-wrap items-center gap-3")],
 			[
-				h.h2([h.Class("font-medium text-fg text-sm")], ["Check one customer"]),
+				heading(h, { variant: "subsection", level: 2 }, ["Check one customer"]),
 				picker,
 				h.span([h.Class("flex-1")]),
 				...scores,

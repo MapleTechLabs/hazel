@@ -2,6 +2,7 @@ import { Schema } from "effect"
 import { Submodel } from "foldkit"
 import { definePage, type PageReturn, type PageViewInputs } from "../../contract"
 import * as CreateWorkspace from "../../create-workspace"
+import { heading } from "../../../ui/heading"
 
 /** `_app/onboarding/setup-organization.tsx`: create a workspace, centered. */
 
@@ -27,7 +28,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					h.div(
 						[h.Class("space-y-2 text-center")],
 						[
-							h.h1([h.Class("font-semibold text-2xl text-fg")], ["Create your workspace"]),
+							heading(h, { variant: "display" }, ["Create your workspace"]),
 							h.p(
 								[h.Class("text-muted-fg text-sm")],
 								["A workspace is where your team's channels and conversations live."],

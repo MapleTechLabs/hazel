@@ -149,7 +149,7 @@ export type LogoSize = "xs" | "sm" | "md" | "lg"
 /** 20 · 28 · 40 · 48px. */
 const LOGO_SIZE = {
 	xs: "size-5 rounded-[5px] text-[9px]",
-	sm: "size-7 rounded-md text-[11px]",
+	sm: "size-7 rounded-md text-2xs",
 	md: "size-10 rounded-lg text-sm",
 	lg: "size-12 rounded-xl text-base",
 } as const satisfies Record<LogoSize, string>
@@ -200,7 +200,7 @@ export const companyLogo = <M>(
 export type AvatarSize = "sm" | "md"
 
 const AVATAR_SIZE = {
-	sm: "size-6 text-[10px]",
+	sm: "size-6 text-3xs",
 	md: "size-8 text-xs",
 } as const satisfies Record<AvatarSize, string>
 
@@ -290,7 +290,7 @@ export const avatarStack = <M>(
 						h.span(
 							[
 								h.Class(
-									"inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] text-secondary-fg ring-2 ring-bg",
+									"inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-secondary text-3xs text-secondary-fg ring-2 ring-bg",
 								),
 								h.Title(
 									people

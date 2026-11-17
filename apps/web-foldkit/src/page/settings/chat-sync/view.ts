@@ -22,6 +22,7 @@ import { confirmDialog } from "./confirm-dialog"
 import { formatSyncedAt } from "./rpc"
 import { addMenuEntries, type Connection, Message, type Model, STATUS_CONFIG } from "./model"
 import { isChatSyncProvider, PROVIDERS } from "./providers"
+import { heading } from "../../../ui/heading"
 
 /** Port of `settings/chat-sync/index.tsx`. */
 
@@ -93,7 +94,7 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 		connection.id,
 		[
 			h.Class(
-				"group relative flex flex-col overflow-hidden rounded-xl border border-border bg-bg transition-all duration-200 hover:border-border-hover hover:shadow-md",
+				"group relative flex flex-col overflow-hidden rounded-xl border border-border bg-bg transition-[border-color,box-shadow] duration-200 hover:border-border-hover hover:shadow-md",
 			),
 		],
 		[
@@ -121,10 +122,7 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 									h.div(
 										[h.Class("flex flex-col gap-0.5")],
 										[
-											h.h3(
-												[h.Class("font-semibold text-fg text-sm")],
-												[connection.displayName],
-											),
+											heading(h, { variant: "subsection" }, [connection.displayName]),
 											h.div(
 												[h.Class("flex items-center gap-1.5")],
 												[
@@ -191,7 +189,7 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 							h.button(
 								[
 									h.Class(
-										"rounded-sm p-1 text-muted-fg opacity-0 transition-all hover:bg-danger/10 hover:text-danger group-hover:opacity-100 max-md:-my-2.5 max-md:p-3.5 max-md:opacity-100",
+										"rounded-sm p-1 text-muted-fg opacity-0 transition-[opacity,color,background-color] hover:bg-danger/10 hover:text-danger group-hover:opacity-100 max-md:-my-2.5 max-md:p-3.5 max-md:opacity-100",
 									),
 									h.Title("Delete connection"),
 									h.AriaLabel("Delete connection"),

@@ -27,7 +27,6 @@ import { companyLogo } from "../../../customers/ui/identity"
 import { deltaPill, type Delta, kpiTile } from "../../../customers/ui/kpi-tile"
 import { rangePicker } from "../../../customers/ui/filter-bar"
 import {
-	labelClass,
 	moreLink,
 	pageHeader,
 	panel,
@@ -50,6 +49,7 @@ import {
 	quietAccounts,
 	topOpenSignals,
 } from "./model"
+import { heading } from "../../../ui/heading"
 
 /** The Customers overview (Wonder: Overview › default, hover, empty, partial, 12 months). */
 
@@ -445,13 +445,10 @@ const attentionCard = (
 	return card(h, "", [
 		cardHeader(
 			h,
-			h.h2(
-				[h.Class(twMerge("flex items-baseline gap-2 whitespace-nowrap", titleClass))],
-				[
-					"Needs attention",
-					h.span([h.Class("font-normal text-muted-fg tabular-nums")], [String(open.length)]),
-				],
-			),
+			heading(h, { variant: "section", className: "flex items-baseline gap-2 whitespace-nowrap" }, [
+				"Needs attention",
+				h.span([h.Class("font-normal text-muted-fg text-sm tabular-nums")], [String(open.length)]),
+			]),
 			"Top 5 by priority",
 			link(h, hrefOf(AppRoute.CustomersAttention({ orgSlug: context.orgSlug })), "View queue"),
 		),
@@ -488,7 +485,7 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 		h.div(
 			[h.Class("flex min-w-0 flex-col")],
 			[
-				h.h3([h.Class(twMerge("pb-1", labelClass))], [title]),
+				heading(h, { variant: "subsection", className: "pb-1" }, [title]),
 				movers.length === 0
 					? h.p([h.Class("py-6 text-muted-fg text-sm")], ["No big moves in this period."])
 					: h.ul(
@@ -757,7 +754,9 @@ const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 			h.div(
 				[h.Class("flex flex-col gap-1")],
 				[
-					h.h2([h.Class(titleClass)], ["Connect a source to see how your customers are doing"]),
+					heading(h, { variant: "title" }, [
+						"Connect a source to see how your customers are doing",
+					]),
 					h.p(
 						[h.Class("max-w-2xl text-muted-fg text-sm")],
 						[

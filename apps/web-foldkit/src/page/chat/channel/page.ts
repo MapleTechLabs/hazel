@@ -525,6 +525,8 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			),
 		UpdatedAttachments: ({ attachments }) => withLookup(model, "attachments", attachments),
 		UpdatedSyncedMessages: ({ messages }) => withLookup(model, "syncedMessages", messages),
+		UpdatedSyncProvider: ({ provider }) =>
+			provider === model.lookups.syncProvider ? { model } : withLookup(model, "syncProvider", provider),
 		// A late result from the channel just left must not replace the new channel's marks.
 		UpdatedAgentMarks: ({ channelId, marks }) =>
 			channelId === model.channelId ? withLookup(model, "agentMarks", marks) : { model },

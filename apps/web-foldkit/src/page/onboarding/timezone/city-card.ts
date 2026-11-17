@@ -33,7 +33,7 @@ export const cityCard = (
 			h.OnMouseEnter(Message.HoveredOffset({ offset: city.offset })),
 			h.OnMouseLeave(Message.HoveredOffset({ offset: null })),
 			h.Class(
-				`relative p-4 rounded-xl text-left transition-all active:scale-[0.98] ${
+				`relative p-4 rounded-xl text-left transition-[border-color,background-color,box-shadow,scale] active:scale-[0.98] ${
 					isSelected
 						? "bg-primary text-primary-fg ring-2 ring-inset ring-primary/30"
 						: "bg-bg hover:bg-secondary border border-border hover:border-primary/50"
@@ -46,7 +46,7 @@ export const cityCard = (
 						h.div(
 							[
 								h.Class(
-									"absolute -top-1.5 -right-1.5 px-1.5 py-0.5 bg-primary text-primary-fg rounded-full flex items-center gap-0.5 text-[10px] font-medium",
+									"absolute -top-1.5 -right-1.5 px-1.5 py-0.5 bg-primary text-primary-fg rounded-full flex items-center gap-0.5 text-3xs font-medium",
 								),
 								...enterAnimation(h, "Pop"),
 							],

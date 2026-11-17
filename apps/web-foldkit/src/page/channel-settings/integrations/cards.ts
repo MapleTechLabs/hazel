@@ -131,7 +131,7 @@ const gitHubItem = (h: HtmlBuilder<Message>, model: Model, repo: GitHubRepo, log
 		repo.id,
 		[
 			h.Class(
-				"group flex items-center gap-3 rounded-lg border border-border bg-bg p-3 transition-all hover:border-border-hover hover:bg-bg-muted/50 hover:shadow-sm",
+				"group flex items-center gap-3 rounded-lg border border-border bg-bg p-3 transition-[border-color,background-color,box-shadow] hover:border-border-hover hover:bg-bg-muted/50 hover:shadow-sm",
 			),
 		],
 		[

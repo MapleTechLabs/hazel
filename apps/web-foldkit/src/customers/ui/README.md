@@ -13,9 +13,12 @@ churn,neutral,series-1..3,grid,net}`, `health-{healthy,at-risk,critical,unknown}
 The one visual grammar every Customers page builds from. Reach for these before writing a class
 string, so a title, a table head or a link reads the same on every page.
 
-- Type: `pageTitleClass` (20px semibold), `titleClass` (panel titles, 14px semibold), `descriptionClass`
-  (14px muted), `labelClass` (12px medium muted: eyebrows, field names), `tableHeadClass`. Labels are
-  sentence case; nothing is uppercase.
+- Headings are the app's `heading` kit (`src/ui/heading`, `DESIGN-RULES.md`): `display` for a page's
+  title, `section` for a panel's, `subsection` for a group inside a panel or the sidebar. `pageHeader`
+  and `panelHeader` render them for you.
+- Type for everything that is not a heading: `titleClass` (an emphasised line, 14px semibold),
+  `descriptionClass` (14px muted), `labelClass` (12px medium muted: field names, eyebrows),
+  `tableHeadClass`. Labels are sentence case; nothing is uppercase.
 - `pageHeader(h, { title, subtitle?, crumbs?, leading?, badges?, actions? })` — every page's title row
   (`settingsHeader` is this); `breadcrumb(h, crumbs)`; `freshness(h, "Synced 1h ago")` beside the actions.
 - `panel(h, className, children)`, `panelHeader(h, { title, count?, description?, aside? })`,

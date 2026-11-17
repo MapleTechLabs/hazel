@@ -22,6 +22,7 @@ import { liveQueryStream } from "../../data/live-query"
 import {
 	type AgentMarkInfo,
 	type SyncedMessageInfo,
+	type SyncProvider,
 	type AttachmentInfo,
 	type AttachmentRow,
 	type BotInfo,
@@ -140,6 +141,34 @@ export const syncedMessagesStream = <M>(
 					provider: row.provider === "slack" ? "slack" : "discord",
 				})),
 			),
+	)
+
+/** The platform the channel syncs to over an active Slack or Discord link (the first, if both). */
+export const channelSyncProviderStream = <M>(
+	channelId: ChannelId,
+	toMessage: (provider: SyncProvider | null) => M,
+) =>
+	liveQueryStream<{ provider: string }, M>(
+		(q) =>
+			q
+				.from({ link: chatSyncChannelLinkCollection })
+				.innerJoin({ connection: chatSyncConnectionCollection }, ({ link, connection }) =>
+					eq(link.syncConnectionId, connection.id),
+				)
+				.where(({ link, connection }) =>
+					and(
+						eq(link.hazelChannelId, channelId),
+						eq(link.isActive, true),
+						isNull(link.deletedAt),
+						isNull(connection.deletedAt),
+						inArray(connection.provider, ["slack", "discord"]),
+					),
+				)
+				.select(({ connection }) => ({ provider: connection.provider })),
+		(rows) => {
+			const provider = rows[0]?.provider
+			return toMessage(provider === "slack" || provider === "discord" ? provider : null)
+		},
 	)
 
 /** Agent-written messages (`message_agent_marks`) in `channelIds`: a channel and its open thread. */

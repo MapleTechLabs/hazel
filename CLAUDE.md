@@ -125,6 +125,10 @@ The project uses OXC for consistent formatting:
 
 Run `bun run format:fix` to apply formatting and fix linting issues automatically.
 
+### UI: build from the kit
+
+The web app enforces its design system by lint (`apps/web-foldkit/DESIGN-RULES.md`, rules in `scripts/oxlint-plugins/hazel-ui.mjs`): pages compose `src/ui` (`button`, `textField`, `heading`, ...) instead of raw `h.button`/`h.input`/`h.h2`, and classes use tokens (no unknown or palette colours, arbitrary text sizes, radii or shadows, or `transition-all`). If the kit lacks a variant, add it to the kit. Existing violations are ratcheted per file in `scripts/oxlint-plugins/ui-kit-baseline.json`; after fixing some, run `bun run lint:ui-baseline`.
+
 ### Package Import Guide
 
 **`@hazel/schema`** - Branded ID types (foundational, minimal dependencies):

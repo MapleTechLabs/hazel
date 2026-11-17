@@ -3,6 +3,7 @@ import type { UserId } from "@hazel/schema"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
+import { heading } from "../../../ui/heading"
 import type * as Menu from "../../../ui/menu"
 import { view as menuView } from "../../../ui/menu-view"
 import type { Message } from "./message"
@@ -41,19 +42,16 @@ export const card = (
 			h.header(
 				[h.Class("flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 pt-4 sm:px-5")],
 				[
-					h.h2(
-						[
-							h.Class(
-								"flex items-baseline gap-2 whitespace-nowrap font-semibold text-fg text-sm/6",
-							),
-						],
+					heading(
+						h,
+						{ variant: "section", className: "flex items-baseline gap-2 whitespace-nowrap" },
 						[
 							options.title,
 							...(options.count === undefined
 								? []
 								: [
 										h.span(
-											[h.Class("font-normal text-muted-fg tabular-nums")],
+											[h.Class("font-normal text-muted-fg text-sm tabular-nums")],
 											[String(options.count)],
 										),
 									]),

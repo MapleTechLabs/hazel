@@ -11,7 +11,6 @@ describe("slackMrkdwnToMarkdown", () => {
 		["(*parenthesized*)", "(**parenthesized**)"],
 		["snake_case_name and 2*3*4", "snake_case_name and 2*3*4"],
 		["* not bold *", "* not bold *"],
-		[":white_check_mark: done", ":white_check_mark: done"],
 		["&gt; quoted *text*", "> quoted **text**"],
 	])("formatting %j", (input, expected) => {
 		expect(slackMrkdwnToMarkdown(input)).toBe(expected)
@@ -40,6 +39,19 @@ describe("slackMrkdwnToMarkdown", () => {
 		["<!subteam^S123|@eng> ping", "@eng ping"],
 		["<!date^1392734382^{date_short}|Feb 18, 2014>", "Feb 18, 2014"],
 	])("mentions and specials %j", (input, expected) => {
+		expect(slackMrkdwnToMarkdown(input)).toBe(expected)
+	})
+
+	it.each([
+		[":smile:", "😄"],
+		[":white_check_mark: done", "✅ done"],
+		["nice :+1::skin-tone-3: :thumbsup:", "nice 👍🏼 👍"],
+		["*wow* :tada:", "**wow** 🎉"],
+		[":party_parrot: custom", ":party_parrot: custom"],
+		["at 10:30:45", "at 10:30:45"],
+		["`:smile:` :smile:", "`:smile:` 😄"],
+		["<https://e.com/:smile:/x>", "https://e.com/:smile:/x"],
+	])("emoji %j", (input, expected) => {
 		expect(slackMrkdwnToMarkdown(input)).toBe(expected)
 	})
 

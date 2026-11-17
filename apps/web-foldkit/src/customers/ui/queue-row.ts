@@ -108,7 +108,7 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 					h.div(
 						[h.Class("flex min-w-0 items-center gap-2")],
 						[
-							kindChip(h, options.signal.kind, { className: "py-0 text-[11px]/5" }),
+							kindChip(h, options.signal.kind, { className: "py-0 text-2xs/5" }),
 							h.span([h.Class("truncate font-medium text-fg text-sm")], [options.signal.title]),
 						],
 					),

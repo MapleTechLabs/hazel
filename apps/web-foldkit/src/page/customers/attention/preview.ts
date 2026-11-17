@@ -14,6 +14,7 @@ import { loader } from "../../../ui/loader"
 import { Message } from "./message"
 import { type Model, rowIds, type Viewer } from "./model"
 import { otherSignalRow, type RowContext } from "./rows"
+import { heading } from "../../../ui/heading"
 
 /** The side panel for the selected signal (Wonder: Queue Selected With Preview). */
 
@@ -95,7 +96,7 @@ const contactRow = (h: HtmlBuilder<Message>, row: Customers.ContactRow, nowMs: n
 								? []
 								: [
 										h.span(
-											[h.Class("rounded bg-secondary px-1 text-[11px] text-muted-fg")],
+											[h.Class("rounded bg-secondary px-1 text-2xs text-muted-fg")],
 											[contact.role],
 										),
 									]),
@@ -261,7 +262,7 @@ export const previewPanel = (
 					h.div(
 						[h.Class("flex min-w-0 flex-1 flex-col")],
 						[
-							h.h2([h.Class("truncate font-semibold text-fg text-lg")], [account.name]),
+							heading(h, { variant: "title", className: "truncate" }, [account.name]),
 							h.span(
 								[h.Class("truncate text-muted-fg text-xs")],
 								[

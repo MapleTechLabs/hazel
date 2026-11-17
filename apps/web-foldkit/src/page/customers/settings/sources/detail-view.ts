@@ -31,6 +31,7 @@ import {
 } from "./parts"
 import type { ConnectionRow, SyncRunRow } from "./queries"
 import { settingsCard, unitsCard } from "./settings-view"
+import { heading } from "../../../../ui/heading"
 
 /** One source (Wonder `loy`, `one`): its runs, connection, mapping, settings and the way out. */
 
@@ -263,7 +264,7 @@ const dangerZone = (h: H, provider: CustomerProvider): Html => {
 		h.div(
 			[h.Class("flex flex-col gap-1")],
 			[
-				h.h2([h.Class("font-semibold text-fg text-sm/6")], [`Disconnect ${name}`]),
+				heading(h, { variant: "section" }, [`Disconnect ${name}`]),
 				h.p(
 					[h.Class("text-muted-fg text-sm")],
 					[

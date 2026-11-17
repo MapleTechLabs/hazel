@@ -30,7 +30,7 @@ const card = <M>(h: HtmlBuilder<M>, path: string): Html =>
 						[h.Class("flex items-baseline justify-between gap-2")],
 						[
 							h.span([h.Class("font-medium text-sm")], [labNameOf(path)]),
-							h.span([h.Class("truncate font-mono text-[10px] text-muted-fg")], [path]),
+							h.span([h.Class("truncate font-mono text-3xs text-muted-fg")], [path]),
 						],
 					),
 					...[LAB_DESCRIPTIONS.get(path)].flatMap((description) =>

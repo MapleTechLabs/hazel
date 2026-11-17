@@ -59,7 +59,7 @@ const progressView = <M>(h: HtmlBuilder<M>, value: number): Html => {
 						[
 							h.Class(
 								cn(
-									"relative h-full rounded-full transition-all duration-500 ease-out",
+									"relative h-full rounded-full transition-[width] duration-500 ease-out",
 									isComplete ? "bg-success" : "bg-primary",
 								),
 							),

@@ -172,7 +172,7 @@ export const messageRowView = <M>(
 		: h.div(
 				[
 					h.Class(
-						"flex w-10 items-center justify-end pr-1 text-[10px] text-muted-fg leading-tight opacity-0 group-hover:opacity-100",
+						"flex w-10 items-center justify-end pr-1 text-3xs text-muted-fg leading-tight opacity-0 group-hover:opacity-100",
 					),
 				],
 				[formatTime(message.createdAtMs)],

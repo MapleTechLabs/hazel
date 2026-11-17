@@ -8,7 +8,7 @@ import { commonMessage } from "~/lib/error-messages"
 import { formatCount, formatDate, formatMoney, formatRelative } from "../../../customers/format"
 import { healthBadge, stageBadge } from "../../../customers/ui/badges"
 import { viewTabs } from "../../../customers/ui/filter-bar"
-import { labelClass, linkClass, pageTitleClass, titleClass } from "../../../customers/ui/surface"
+import { linkClass } from "../../../customers/ui/surface"
 import {
 	companyLogo,
 	personAvatar,
@@ -53,6 +53,7 @@ import { notesTab } from "./notes-tab"
 import { overviewTab } from "./overview-tab"
 import { type Context, icon, memberOf, menu } from "./parts"
 import { usersTab } from "./users-tab"
+import { heading } from "../../../ui/heading"
 
 /** The customer page (Wonder: Customer Page — overview, users, billing, activity, notes, header menu). */
 
@@ -277,7 +278,9 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-2")],
 										[
-											h.h1([h.Class(pageTitleClass)], [account.name]),
+											heading(h, { variant: "display", className: "max-md:text-xl" }, [
+												account.name,
+											]),
 											stageBadge(h, account.lifecycleStage),
 											healthBadge(h, {
 												status: account.healthStatus,
@@ -454,7 +457,7 @@ const sidebarSection = (
 			h.div(
 				[h.Class("flex items-center justify-between pb-2")],
 				[
-					h.h2([h.Class(labelClass)], [title]),
+					heading(h, { variant: "subsection", level: 2 }, [title]),
 					...(aside === null ? [] : [h.span([h.Class("text-muted-fg text-xs")], [aside])]),
 				],
 			),
@@ -759,7 +762,7 @@ const centered = (h: HtmlBuilder<Message>, title: string, description: string, a
 	h.div(
 		[h.Class("flex h-full flex-col items-center justify-center gap-2 px-6 text-center")],
 		[
-			h.h1([h.Class(titleClass)], [title]),
+			heading(h, { variant: "title", level: 1 }, [title]),
 			h.p([h.Class("max-w-sm text-muted-fg text-sm")], [description]),
 			...(action === undefined ? [] : [h.div([h.Class("pt-2")], [action])]),
 		],

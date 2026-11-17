@@ -11,7 +11,7 @@ import { sidebarContent, sidebarSectionGroup, sidebarStatic } from "../ui/sideba
 import type { ShellContext } from "./context"
 import type { SwitcherOrg, UserStatus } from "./model"
 import { orgSwitcherHeader, userMenuFooter } from "./menus"
-import { emptyData, Message, type Model, type SidebarOutcome } from "./channels-sidebar/model"
+import { emptyData, isLoading, Message, type Model, type SidebarOutcome } from "./channels-sidebar/model"
 import { PageOutMessage } from "../page/out-message"
 import { PersistDismissedHint } from "./channels-sidebar/hints"
 import {
@@ -71,16 +71,29 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		UpdatedMembership: ({ membership }) => ({
 			model: modifyFields(model, { membership: () => membership }),
 		}),
-		UpdatedSections: ({ sections }) => ({ model: modifyFields(model, { sections: () => sections }) }),
+		UpdatedSections: ({ sections }) => ({
+			model: modifyFields(model, {
+				sections: () => sections,
+				loaded: (loaded) => ({ ...loaded, sections: true }),
+			}),
+		}),
 		UpdatedSectionChannels: ({ sectionKey, channels }) => ({
 			model: modifyFields(model, {
 				sectionChannels: (previous) => ({ ...previous, [sectionKey]: channels }),
 			}),
 		}),
-		UpdatedFavorites: ({ channels }) => ({ model: modifyFields(model, { favorites: () => channels }) }),
+		UpdatedFavorites: ({ channels }) => ({
+			model: modifyFields(model, {
+				favorites: () => channels,
+				loaded: (loaded) => ({ ...loaded, favorites: true }),
+			}),
+		}),
 		UpdatedThreads: ({ threads }) => ({ model: modifyFields(model, { threads: () => threads }) }),
 		UpdatedDmChannelIds: ({ channelIds }) => ({
-			model: modifyFields(model, { dmChannelIds: () => channelIds }),
+			model: modifyFields(model, {
+				dmChannelIds: () => channelIds,
+				loaded: (loaded) => ({ ...loaded, dmChannelIds: true }),
+			}),
 		}),
 		UpdatedDmChannel: ({ channelId, channel }) => ({
 			model: modifyFields(model, { dmChannels: (previous) => ({ ...previous, [channelId]: channel }) }),
@@ -266,7 +279,7 @@ const sidebarBody = <ParentMessage>(
 	}
 	return sidebarStatic(h, "flex flex-1", [
 		// Until the channel lists arrive, the last screen's paint stays up (`app/paint.ts`).
-		...(model.memberChannelIds === null
+		...(isLoading(model)
 			? [h.div([h.Attribute("data-paint", "loading"), h.Attribute("hidden", "")])]
 			: []),
 		orgSwitcherHeader(h, orgSwitcher, orgSwitcherEntries, shell, organizations, toOrgSwitcherMessage),

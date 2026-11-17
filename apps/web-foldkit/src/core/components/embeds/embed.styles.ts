@@ -11,7 +11,7 @@ export const embedContainerStyles = tv({
 	base: ["mt-2 flex max-w-md overflow-hidden", "border border-border/60 bg-muted"],
 	variants: {
 		variant: {
-			default: "flex-col rounded-r-lg border-l-2! transition-all duration-200",
+			default: "flex-col rounded-r-lg border-l-2! transition-colors duration-200",
 			error: "items-center gap-3 rounded-r-lg border-l-2! p-3",
 			skeleton: "flex-col rounded-lg border-l-4",
 		},

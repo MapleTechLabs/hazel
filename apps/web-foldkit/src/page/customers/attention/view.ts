@@ -61,6 +61,7 @@ import { previewPanel } from "./preview"
 import { accountGroupRow, compactRow, doneRow, type RowContext, rowIdOf, signalRow, snoozedRow } from "./rows"
 import { ScrollRowIntoView } from "./commands"
 import { viewerOf } from "./update"
+import { heading } from "../../../ui/heading"
 
 /** The Needs-attention page (Wonder: Needs Attention). */
 
@@ -462,7 +463,7 @@ const allClear = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =
 			h.div(
 				[h.Class("flex flex-col gap-1")],
 				[
-					h.h2([h.Class("font-semibold text-fg text-sm/6")], ["All clear"]),
+					heading(h, { variant: "subsection", level: 2 }, ["All clear"]),
 					h.p(
 						[h.Class("max-w-sm text-muted-fg text-sm")],
 						[
@@ -551,7 +552,7 @@ const noMatches = (h: HtmlBuilder<Message>): Html =>
 			h.div(
 				[h.Class("flex flex-col gap-1")],
 				[
-					h.h2([h.Class("font-semibold text-fg")], ["No matches"]),
+					heading(h, { variant: "subsection", level: 2 }, ["No matches"]),
 					h.p(
 						[h.Class("max-w-sm text-muted-fg text-sm")],
 						["No signals in this tab match your search and filters."],

@@ -13,6 +13,7 @@ import type { PageViewInputs } from "../../contract"
 import { Message } from "./message"
 import { acceptTarget, declineTarget, interaction, invitesOf } from "./update"
 import type { Invite, Model } from "./model"
+import { heading } from "../../../ui/heading"
 
 /** Port of `routes/_app/$orgSlug/settings/connect-invites.tsx`. */
 
@@ -205,7 +206,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 							h.div(
 								[h.Class("flex items-center gap-2")],
 								[
-									h.h2([h.Class("font-semibold text-fg text-lg")], ["Connect invitations"]),
+									heading(h, { variant: "title" }, ["Connect invitations"]),
 									...(pendingCount > 0
 										? [badge(h, { intent: "secondary" }, [`${pendingCount}`, " pending"])]
 										: []),

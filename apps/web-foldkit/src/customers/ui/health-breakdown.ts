@@ -6,6 +6,7 @@ import type {
 } from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
+import { heading } from "../../ui/heading"
 import { healthBadge } from "./badges"
 
 /**
@@ -80,12 +81,12 @@ export const healthBreakdown = <M>(
 							h.div(
 								[h.Class("flex min-w-0 flex-1 basis-48 flex-col gap-1")],
 								[
-									h.h2(
-										[
-											h.Class(
-												"flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-fg text-sm/6",
-											),
-										],
+									heading(
+										h,
+										{
+											variant: "section",
+											className: "flex flex-wrap items-center gap-x-2 gap-y-1",
+										},
 										[
 											score === null ? "No health score yet" : `Why health is ${score}`,
 											healthBadge(h, { status: breakdown.status }),

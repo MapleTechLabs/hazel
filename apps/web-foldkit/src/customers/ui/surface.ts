@@ -1,20 +1,22 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconChevronRight } from "../../icons"
+import { heading } from "../../ui/heading"
 
 /**
  * The Customers pages' one visual grammar: page titles, panels, panel headers, labels and text
  * links. Every page builds from these, so a title, a table head or a link reads the same on the
  * overview, a customer and the settings.
  *
- * - Page title: 20px semibold. Panel title: 14px semibold. Body and descriptions: 14px.
- * - Labels (eyebrows, table heads, field names): 12px medium, sentence case, never uppercase.
+ * - Headings come from the app's `heading` kit: `display` for a page's title, `section` for a
+ *   panel's, `subsection` for a group inside a panel or the sidebar. Body and descriptions: 14px.
+ * - Labels (table heads, field names, eyebrows): 12px medium, sentence case, never uppercase.
  * - A panel is a 12px-radius hairline box on the page background; nothing is shadowed.
  */
 
 // TYPE
 
-export const pageTitleClass = "font-semibold text-fg text-xl/7 tracking-tight"
+/** An emphasised line that is not a heading (an empty state's headline). */
 export const titleClass = "font-semibold text-fg text-sm/6"
 export const descriptionClass = "text-muted-fg text-sm"
 export const labelClass = "font-medium text-muted-fg text-xs"
@@ -59,20 +61,17 @@ export const panelHeader = <M>(
 				[h.Class("flex min-w-0 flex-1 basis-40 flex-col")],
 				[
 					typeof options.title === "string"
-						? h.h2(
-								[h.Class(twMerge("flex items-baseline gap-2", titleClass))],
-								[
-									options.title,
-									...(options.count === undefined
-										? []
-										: [
-												h.span(
-													[h.Class("font-normal text-muted-fg tabular-nums")],
-													[String(options.count)],
-												),
-											]),
-								],
-							)
+						? heading(h, { variant: "section", className: "flex items-baseline gap-2" }, [
+								options.title,
+								...(options.count === undefined
+									? []
+									: [
+											h.span(
+												[h.Class("font-normal text-muted-fg text-sm tabular-nums")],
+												[String(options.count)],
+											),
+										]),
+							])
 						: options.title,
 					...(options.description === undefined
 						? []
@@ -164,7 +163,7 @@ export const pageHeader = <M>(
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-2")],
 										[
-											h.h1([h.Class(pageTitleClass)], [options.title]),
+											heading(h, { variant: "display" }, [options.title]),
 											...(options.badges ?? []),
 										],
 									),

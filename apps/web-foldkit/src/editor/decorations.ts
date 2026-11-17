@@ -279,7 +279,7 @@ export function splitLeaves(
 	})
 }
 
-export const LINK_CLASS = "cursor-pointer text-primary underline hover:text-primary-hover"
+export const LINK_CLASS = "cursor-pointer text-primary underline hover:text-primary/80"
 
 /** `MarkdownLeaf` in composer mode: the class for a decorated leaf. */
 export function leafClassName(leaf: LeafProps): string {
@@ -292,7 +292,7 @@ export function leafClassName(leaf: LeafProps): string {
 		Match.when("code", () => "bg-accent/50 rounded px-1 py-0.5 font-mono text-sm"),
 		Match.when("underline", () => "underline"),
 		Match.when("highlight", () => "bg-highlight rounded px-0.5"),
-		Match.when("spoiler", () => "bg-muted blur-sm hover:blur-none transition-all"),
+		Match.when("spoiler", () => "bg-muted blur-sm hover:blur-none transition-[filter]"),
 		Match.whenOr("link", "url", () => LINK_CLASS),
 		Match.when("emoji", () => ""),
 		Match.exhaustive,

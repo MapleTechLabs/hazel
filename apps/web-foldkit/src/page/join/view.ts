@@ -11,6 +11,7 @@ import { isSessionLoading, type PageViewInputs, type Shared } from "../contract"
 import { animateEnter, endStyleOf } from "../onboarding/motion"
 import { Message } from "./message"
 import { Lookup, type Model, type PublicOrganization } from "./model"
+import { heading } from "../../ui/heading"
 
 /** `cardVariants`: the card fades, rises and unblurs in. */
 export const CardEnterAnimation = Mount.define("JoinCardEnterAnimation", {
@@ -73,7 +74,7 @@ const problemCard = (
 			[h.Class("mb-6 flex size-20 items-center justify-center rounded-2xl bg-danger/10")],
 			[warningIcon(h)],
 		),
-		h.h1([h.Class("mb-2 font-semibold text-2xl text-fg")], [options.title]),
+		heading(h, { variant: "display", className: "mb-2" }, [options.title]),
 		h.p([h.Class("mb-8 text-muted-fg")], [options.description]),
 		options.action,
 	])

@@ -6,6 +6,7 @@ import { segmentClass, segmentedTrackClass } from "../../../../customers/ui/filt
 import { inputElement } from "../../../../ui/input"
 import { TEMPLATE_ICON } from "./describe"
 import type { Message } from "./message"
+import { heading } from "../../../../ui/heading"
 
 /** View pieces the list, the picker and the editor share. */
 
@@ -32,7 +33,7 @@ export const card = (
 						h.header(
 							[h.Class("flex flex-wrap items-center justify-between gap-2")],
 							[
-								h.h2([h.Class("font-semibold text-fg text-sm/6")], [options.title]),
+								heading(h, { variant: "section" }, [options.title]),
 								...(options.aside == null ? [] : [options.aside]),
 							],
 						),

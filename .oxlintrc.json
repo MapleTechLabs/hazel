@@ -1,7 +1,11 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 	// anti-slop is vendored from Maple's copy (see its UPSTREAM.md); test-slop is Maple's too.
-	"jsPlugins": ["./scripts/oxlint-plugins/anti-slop/index.ts", "./scripts/oxlint-plugins/test-slop.mjs"],
+	"jsPlugins": [
+		"./scripts/oxlint-plugins/anti-slop/index.ts",
+		"./scripts/oxlint-plugins/test-slop.mjs",
+		"./scripts/oxlint-plugins/hazel-ui.mjs"
+	],
 	"options": {
 		"reportUnusedDisableDirectives": "deny"
 	},
@@ -104,6 +108,51 @@
 				"foldkit/require-rel-for-external-link": "error",
 				"foldkit/selection-submodel-factory-at-module-scope": "error",
 				"foldkit/wrap-child-output-in-got-message": "error"
+			}
+		},
+		{
+			// Design rules (apps/web-foldkit/DESIGN-RULES.md): values come from tokens, on pages and the kit.
+			// Existing sites are ratcheted per file by scripts/oxlint-plugins/ui-kit-baseline.json.
+			"files": ["apps/web-foldkit/src/**"],
+			"rules": {
+				"hazel-ui/no-arbitrary-radius": "error",
+				"hazel-ui/no-arbitrary-text-size": "error",
+				"hazel-ui/no-palette-color": "error",
+				"hazel-ui/no-raw-color": "error",
+				"hazel-ui/no-raw-shadow": "error",
+				"hazel-ui/no-transition-all": "error",
+				"hazel-ui/no-unknown-color": "error",
+				// Build from the kit: pages compose src/ui instead of raw elements or the kit's styles.
+				"hazel-ui/no-kit-styles-in-pages": "error",
+				"hazel-ui/no-raw-control": "error",
+				"hazel-ui/no-raw-heading": "error"
+			}
+		},
+		{
+			// The kit itself, the galleries that showcase it, and tests render raw elements.
+			"files": [
+				"apps/web-foldkit/src/ui/**",
+				"apps/web-foldkit/src/core/components/**",
+				"apps/web-foldkit/src/**/*.gallery.ts",
+				"apps/web-foldkit/src/**/*.test.ts"
+			],
+			"rules": {
+				"hazel-ui/no-kit-styles-in-pages": "off",
+				"hazel-ui/no-raw-control": "off",
+				"hazel-ui/no-raw-heading": "off"
+			}
+		},
+		{
+			// Tests and galleries build fixtures, not UI.
+			"files": ["apps/web-foldkit/src/**/*.test.ts", "apps/web-foldkit/src/**/*.gallery.ts"],
+			"rules": {
+				"hazel-ui/no-arbitrary-radius": "off",
+				"hazel-ui/no-arbitrary-text-size": "off",
+				"hazel-ui/no-palette-color": "off",
+				"hazel-ui/no-raw-color": "off",
+				"hazel-ui/no-raw-shadow": "off",
+				"hazel-ui/no-transition-all": "off",
+				"hazel-ui/no-unknown-color": "off"
 			}
 		},
 		{
