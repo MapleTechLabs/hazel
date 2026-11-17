@@ -3,10 +3,12 @@
  * stream and the RPCs carry them: timestamps as `JsonDate`, JSON columns parsed.
  *
  * Synced (client collections): `Account`, `Signal`, `SignalRule`, `Note`, `SavedView`, `Settings`,
- * `MetricDefinition`, `Connection`, `SyncRun`. The rest travel in RPC results.
+ * `MetricDefinition`, `Connection`, `SyncRun`, `ChannelLink`. The rest travel in RPC results.
  */
 import {
+	ChannelId,
 	CustomerAccountId,
+	CustomerChannelLinkId,
 	CustomerConnectionId,
 	CustomerContactId,
 	CustomerEventId,
@@ -182,6 +184,19 @@ class NoteModel extends M.Class<NoteModel>("CustomerNote")({
 }) {}
 export const Note = M.expose(NoteModel)
 export type Note = typeof Note.Schema.Type
+
+/** A channel linked to the account: a Hazel, Slack, Discord or Connect channel of the org. */
+class ChannelLinkModel extends M.Class<ChannelLinkModel>("CustomerChannelLink")({
+	id: M.GeneratedOptional(CustomerChannelLinkId),
+	organizationId: OrganizationId,
+	accountId: CustomerAccountId,
+	channelId: ChannelId,
+	linkedBy: UserId,
+	...timestamps,
+	deletedAt: M.GeneratedByApp(NullDate),
+}) {}
+export const ChannelLink = M.expose(ChannelLinkModel)
+export type ChannelLink = typeof ChannelLink.Schema.Type
 
 class SavedViewModel extends M.Class<SavedViewModel>("CustomerSavedView")({
 	id: M.GeneratedOptional(CustomerSavedViewId),

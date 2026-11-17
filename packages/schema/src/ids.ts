@@ -434,6 +434,14 @@ export const CustomerMetricDefinitionId = Schema.String.check(Schema.isUUID())
 	})
 export type CustomerMetricDefinitionId = Schema.Schema.Type<typeof CustomerMetricDefinitionId>
 
+export const CustomerChannelLinkId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerChannelLinkId"))
+	.annotate({
+		description: "The ID of a link between a channel and a customer account",
+		title: "Customer Channel Link ID",
+	})
+export type CustomerChannelLinkId = Schema.Schema.Type<typeof CustomerChannelLinkId>
+
 export const AgentClientId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/AgentClientId"))
 	.annotate({

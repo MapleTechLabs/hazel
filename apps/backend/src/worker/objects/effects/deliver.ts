@@ -23,6 +23,7 @@ import { botGatewayReceivers, BotGatewayEffects } from "./bot-gateway-effects"
 import { channelReceivers, ChannelEffects, channelSenderRefusal } from "./channel-effects"
 import { customersReceivers, CustomersEffects, customersSenderRefusal } from "./customers-effects"
 import { directoryReceivers, DirectoryEffects } from "./directory-effects"
+import { channelCustomersSenderRefusal } from "../org/channel-customers"
 import { connectSenderRefusal } from "../org/connect"
 import { searchSenderRefusal } from "../org/message-search"
 import { notificationCountSenderRefusal } from "../org/notification-count"
@@ -118,6 +119,11 @@ const senderGuards: Partial<Record<ObjectKind, SenderGuard>> = {
 			),
 			Effect.map((refusal) =>
 				Option.isSome(refusal) ? refusal : notificationCountSenderRefusal(kind, payload, sender),
+			),
+			Effect.flatMap((refusal) =>
+				Option.isSome(refusal)
+					? Effect.succeed(refusal)
+					: channelCustomersSenderRefusal(kind, payload, sender),
 			),
 		),
 }

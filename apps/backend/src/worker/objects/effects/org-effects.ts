@@ -9,7 +9,9 @@
  * - Connect: a guest org's mount and participants (host side), the host's conversation snapshot
  *   (guest side), `../org/connect.ts`;
  * - message search: index changes from the org's channels, and from a Connect host org
- *   (`../org/message-search.ts`).
+ *   (`../org/message-search.ts`);
+ * - from its `CustomersObject`: which customer each linked channel belongs to
+ *   (`../org/channel-customers.ts`).
  */
 import type { Database } from "@hazel/db"
 import { Effect } from "effect"
@@ -35,6 +37,7 @@ import { ChatSyncOrgEffects } from "../../../services/chat-sync/chat-sync-effect
 import { chatSyncOrgReceivers } from "../../../services/chat-sync/chat-sync-org"
 import { messageSearchOrgReceivers } from "../org/message-search"
 import { SearchOrgEffects } from "../search-wire"
+import { channelCustomerOrgReceivers, ChannelCustomerOrgEffects } from "../org/channel-customers"
 import { defineEffect, type EffectReceivers } from "./registry"
 
 export const OrgEffects = {
@@ -54,6 +57,8 @@ export const OrgEffects = {
 	...ConnectOrgEffects,
 	/** Message search (`../org/message-search.ts`). */
 	...SearchOrgEffects,
+	/** Customers' channel links (`../org/channel-customers.ts`). */
+	...ChannelCustomerOrgEffects,
 }
 
 export const orgReceivers = {
@@ -63,6 +68,7 @@ export const orgReceivers = {
 	...messageNotificationOrgReceivers,
 	...notificationCountOrgReceivers,
 	...channelRenameReceivers,
+	...channelCustomerOrgReceivers,
 	// Called lazily: these modules import the effect registries back.
 	"org.upsertBotProjection": (payload) => upsertBotProjection(payload),
 	"org.acceptInvitation": (payload) =>

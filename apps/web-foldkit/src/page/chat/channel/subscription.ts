@@ -29,6 +29,7 @@ import {
 	usersStream,
 } from "../lookup-data"
 import type { PageSubscriptionInput } from "../../contract"
+import { channelCustomerStream } from "../../../customers/channels"
 import * as Composer from "../../../composer/composer"
 import {
 	botCommandsStream,
@@ -296,6 +297,11 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
 			pinnedStream(channelId, (pins) => Message.UpdatedPinned({ pins })),
+	}),
+	chatCustomer: entry(byChannel, {
+		modelToDependencies: channelOf,
+		dependenciesToStream: ({ channelId }) =>
+			channelCustomerStream(channelId, (customer) => Message.UpdatedCustomer({ channelId, customer })),
 	}),
 	chatMembers: entry(byChannel, {
 		modelToDependencies: channelOf,

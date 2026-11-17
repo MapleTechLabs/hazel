@@ -52,7 +52,9 @@ import {
 	UnmatchedStatus,
 } from "@hazel/domain/customers"
 import {
+	ChannelId,
 	CustomerAccountId,
+	CustomerChannelLinkId,
 	CustomerConnectionId,
 	CustomerContactId,
 	CustomerEventId,
@@ -769,6 +771,31 @@ export const customerIgnoreRulesTable = SQLite.table("customer_ignore_rules", {
 	primaryKey: ["id"],
 })
 export type CustomerIgnoreRule = SQLite.SelectRowOf<typeof customerIgnoreRulesTable>
+
+/**
+ * A channel of the org linked to an account (`docs/customers/channels.md`): a Hazel channel, a
+ * Slack or Discord channel synced into one, or a Connect channel. An account has any number; a
+ * channel belongs to at most one live account (partial unique index on `channelId`). Projected
+ * to the `OrgObject` as `channel_customers` (`org.setChannelCustomers`).
+ */
+export const customerChannelLinksTable = SQLite.table("customer_channel_links", {
+	columns: {
+		id: id(CustomerChannelLinkId),
+		organizationId: uuid(OrganizationId),
+		accountId: uuid(CustomerAccountId),
+		channelId: uuid(ChannelId),
+		linkedBy: uuid(UserId),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+		deletedAt: SQLite.nullable(timestamptz),
+	},
+	primaryKey: ["id"],
+	indexes: [
+		SQLite.index("customer_channel_links_account_idx", ["accountId"]),
+		SQLite.index("customer_channel_links_channel_idx", ["channelId"]),
+	],
+})
+export type CustomerChannelLink = SQLite.SelectRowOf<typeof customerChannelLinksTable>
 
 // ---------------------------------------------------------------------------
 // Projection

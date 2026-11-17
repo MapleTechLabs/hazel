@@ -25,7 +25,7 @@ import { idleRowContext, rowContextFor, threadRowContextFor } from "../row-conte
 import type { DisplayRow, MessageRow } from "../rows"
 import { chatTabBarView } from "../tab-bar"
 import { threadPanelView } from "../thread-panel"
-import { AppRoute, hrefOf } from "../../../route"
+import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
 import { threadPanelWidthOf } from "./thread-width"
 
@@ -301,6 +301,7 @@ const headerView = (
 	currentUserId: Model["currentUserId"],
 	pinnedPopover: Model["overlays"]["pinned"],
 	pins: Model["pinned"],
+	customer: Model["customer"],
 	isMobile: boolean,
 	h: H,
 ): Html => {
@@ -340,6 +341,13 @@ const headerView = (
 					: mobileBackLink(h, hrefOf(AppRoute.ChatIndex({ orgSlug })), "Chats", "-ml-3 -mr-1")
 				: h.empty,
 		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, toPinnedMessage),
+		customer:
+			customer === null || orgSlug === null
+				? null
+				: {
+						name: customer.accountName,
+						href: hrefOf(customerRoute(orgSlug, customer.accountId)),
+					},
 	})
 }
 
@@ -399,6 +407,7 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						model.currentUserId,
 						model.overlays.pinned,
 						model.pinned,
+						model.customer,
 						options.isMobile ?? false,
 						h,
 					]) ?? h.empty,

@@ -61,6 +61,7 @@ import {
 	githubInstallation,
 	GitHubInstallationCall,
 } from "./org/github-webhooks"
+import { customerChannel, CustomerChannelCall } from "./org/channel-customers"
 import { customerMembers, CustomerMembersCall } from "./org/customer-members"
 import { executeWebhook, ExecuteWebhookCall } from "./org/incoming-webhooks"
 import {
@@ -141,6 +142,7 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(OrganizationUsersCall, organizationUsers),
 		receiver(OrganizationChannelsCall, organizationChannels),
 		receiver(CustomerMembersCall, customerMembers),
+		receiver(CustomerChannelCall, customerChannel),
 	]),
 	channel: byName([
 		receiver(ListMessagesCall, listMessages),

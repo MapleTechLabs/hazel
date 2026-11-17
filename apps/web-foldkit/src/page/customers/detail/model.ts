@@ -1,4 +1,5 @@
 import * as Customers from "@hazel/domain/customers"
+import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
 import { CustomerAccountId, CustomerNoteId, CustomerSignalId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
@@ -132,6 +133,12 @@ export const Model = Schema.Struct({
 	signalMoreMenu: Menu.Model,
 	tagPopover: Popover.Model,
 	tagInput: Schema.String,
+	/** The org's live channel links (every account's: a channel shows which customer has it). */
+	channelLinks: Schema.Array(ChannelLinkRow),
+	/** The org's channels the user sees that can be linked, with their origin. */
+	channelOptions: Schema.Array(ChannelOption),
+	channelPopover: Popover.Model,
+	channelSearch: Schema.String,
 	rawModal: Modal.Model,
 	/** The note the delete confirmation asks about (kept while the dialog animates out). */
 	deletingNoteId: Schema.NullOr(CustomerNoteId),
@@ -147,6 +154,7 @@ export const SNOOZE_MENU_ID = "customer-signal-snooze"
 export const DONE_MENU_ID = "customer-signal-done"
 export const SIGNAL_MORE_MENU_ID = "customer-signal-more"
 export const TAG_POPOVER_ID = "customer-tag"
+export const CHANNEL_POPOVER_ID = "customer-channel"
 export const RAW_MODAL_ID = "customer-raw"
 export const DELETE_NOTE_MODAL_ID = "customer-delete-note"
 export const COMPOSER_ID = "customer-note-composer"

@@ -1,4 +1,5 @@
 import { ChannelHotkey } from "./hotkeys"
+import { ChannelCustomerRow } from "../../../customers/channels"
 import { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { File, type Update } from "foldkit"
@@ -122,6 +123,8 @@ export const Model = Schema.Struct({
 	members: Schema.NullOr(Schema.Array(ChannelMemberInfo)),
 	/** `PinnedMessagesModal`'s pins, oldest pin first. */
 	pinned: Schema.Array(PinnedInfo),
+	/** The customer the channel is linked to (`channel_customers`); null when none. */
+	customer: Schema.NullOr(ChannelCustomerRow),
 	typing: Schema.Array(TypingInfo),
 	typingNowMs: Schema.Number,
 	/** First names of the other members typing now (`useTypingIndicators`), derived in `update`. */
@@ -218,6 +221,8 @@ export const Message = defineMessageUnion({
 	UpdatedReplyTargets: { targets: Schema.Array(ReplyTarget) },
 	UpdatedMembers: { members: Schema.Array(ChannelMemberInfo) },
 	UpdatedPinned: { pins: Schema.Array(PinnedInfo) },
+	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
+	UpdatedCustomer: { channelId: ChannelId, customer: Schema.NullOr(ChannelCustomerRow) },
 	/** The open thread's messages, oldest first; tagged with the thread they were queried for. */
 	UpdatedThreadPanelMessages: { threadChannelId: ChannelId, messages: Schema.Array(ChatMessage) },
 	UpdatedTyping: { typing: Schema.Array(TypingInfo) },

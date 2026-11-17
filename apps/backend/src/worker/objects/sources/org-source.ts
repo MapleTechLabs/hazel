@@ -107,9 +107,10 @@ const byMembership =
 
 /** Rows of the member's channels; never a guest's (`isMember`). */
 const byChannel =
-	(table: Spec["table"], channelColumn: string, softDelete = true) =>
+	(table: Spec["table"], channelColumn: string, softDelete = true, key: ReadonlyArray<string> = ["id"]) =>
 	(affected: Affected): Spec => ({
 		table,
+		key,
 		visible: (p, $) => [
 			softDelete ? $.deletedAt!.isNull() : undefined,
 			isMember(p.userId),
@@ -180,6 +181,8 @@ const orgSyncTables: ReadonlyArray<(affected: Affected) => Spec> = [
 	}),
 	byMembership(schema.chatSyncConnectionsTable, "organizationId"),
 	byChannel(schema.chatSyncChannelLinksTable, "hazelChannelId"),
+	// A linked channel's customer: the org's members who see the channel, never a Connect guest.
+	byChannel(schema.channelCustomersTable, "channelId", false, ["channelId"]),
 	byConversation(schema.connectConversationsTable, "id"),
 	// Every mount of the conversation (the host's copies of the guests', a guest's of the host's).
 	byConversation(schema.connectConversationChannelsTable, "conversationId"),
