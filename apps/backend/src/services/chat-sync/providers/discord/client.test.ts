@@ -93,20 +93,24 @@ describe("Discord per-author identity", () => {
 			Discord.DiscordApiError
 		>
 		readonly executeWebhook?: () => Effect.Effect<string, Discord.DiscordApiError>
+		/** The link is a thread's, under this parent channel. */
+		readonly threadOf?: ExternalChannelId
 	}) => {
 		const calls: Array<string> = []
 		const contents: Array<string> = []
 		const saved: Array<Record<string, unknown>> = []
 		const api = {
-			createWebhook: () => {
-				calls.push("createWebhook")
+			createWebhook: (params: { channelId: string }) => {
+				calls.push(`createWebhook:${params.channelId}`)
 				return (
 					options.createWebhook?.() ??
 					Effect.succeed({ webhookId: "700000000000000001", webhookToken: "t" })
 				)
 			},
-			executeWebhookMessage: (params: { username: string }) => {
-				calls.push(`executeWebhook:${params.username}`)
+			executeWebhookMessage: (params: { username: string; threadId?: string }) => {
+				calls.push(
+					`executeWebhook:${params.username}${params.threadId === undefined ? "" : `@${params.threadId}`}`,
+				)
 				return options.executeWebhook?.() ?? Effect.succeed("100000000000000010")
 			},
 			createMessage: (params: { content: string }) => {
@@ -123,7 +127,17 @@ describe("Discord per-author identity", () => {
 			const client = yield* makeDiscordClient
 			return yield* client.postMessage(
 				{
-					link: { ...context.link, settings: options.settings },
+					link: {
+						...context.link,
+						settings: options.settings,
+						parent:
+							options.threadOf === undefined
+								? undefined
+								: {
+										channelLinkId: SyncChannelLinkId.make(crypto.randomUUID()),
+										externalChannelId: options.threadOf,
+									},
+					},
 					saveSettings: (settings) => Effect.sync(() => void saved.push(settings)),
 				},
 				message,
@@ -139,7 +153,7 @@ describe("Discord per-author identity", () => {
 		Effect.gen(function* () {
 			const h = harness({ settings: identityOn() })
 			expect(yield* h.post).toBe("100000000000000010")
-			expect(h.calls).toEqual(["createWebhook", "executeWebhook:Olive Owner"])
+			expect(h.calls).toEqual([`createWebhook:${channelId}`, "executeWebhook:Olive Owner"])
 			expect(permissionOf(h.saved[0])).toBe("allowed")
 			expect(
 				(h.saved[0]!.outboundIdentity as { providers: Record<string, unknown> }).providers.discord,
@@ -155,7 +169,7 @@ describe("Discord per-author identity", () => {
 					Effect.fail(new Discord.DiscordApiError({ message: "Missing Permissions", status: 403 })),
 			})
 			expect(yield* h.post).toBe("100000000000000020")
-			expect(h.calls).toEqual(["createWebhook", "createMessage"])
+			expect(h.calls).toEqual([`createWebhook:${channelId}`, "createMessage"])
 			expect(permissionOf(h.saved[0])).toBe("denied")
 			expect((h.saved[0]!.outboundIdentity as { strategy: string }).strategy).toBe("fallback_bot")
 		}),
@@ -192,7 +206,7 @@ describe("Discord per-author identity", () => {
 		Effect.gen(function* () {
 			const h = harness({ settings: {} })
 			expect(yield* h.post).toBe("100000000000000010")
-			expect(h.calls).toEqual(["createWebhook", "executeWebhook:Olive Owner"])
+			expect(h.calls).toEqual([`createWebhook:${channelId}`, "executeWebhook:Olive Owner"])
 		}),
 	)
 
@@ -202,7 +216,7 @@ describe("Discord per-author identity", () => {
 				settings: { outboundIdentity: { enabled: false, strategy: "webhook", providers: {} } },
 			})
 			yield* h.post
-			expect(h.calls).toEqual(["createWebhook", "executeWebhook:Olive Owner"])
+			expect(h.calls).toEqual([`createWebhook:${channelId}`, "executeWebhook:Olive Owner"])
 			const saved = h.saved[0]!.outboundIdentity as Record<string, unknown>
 			expect("enabled" in saved).toBe(false)
 		}),
@@ -215,6 +229,35 @@ describe("Discord per-author identity", () => {
 			expect(h.calls).toEqual(["createMessage"])
 			expect(h.contents).toEqual(["**Olive Owner**\nhi"])
 		}),
+	)
+
+	it.effect("a thread posts through its parent channel's webhook, into the thread", () =>
+		Effect.gen(function* () {
+			const parentId = ExternalChannelId.make("100000000000000099")
+			const provisioned = harness({
+				settings: identityOn({
+					discord: { kind: "discord.webhook", webhookId: "700000000000000001", webhookToken: "t" },
+				}),
+				threadOf: parentId,
+			})
+			yield* provisioned.post
+			expect(provisioned.calls).toEqual([`executeWebhook:Olive Owner@${channelId}`])
+		}),
+	)
+
+	it.effect(
+		"a thread never provisions its parent's webhook: it posts as the bot until the parent has one",
+		() =>
+			Effect.gen(function* () {
+				const h = harness({
+					settings: identityOn(),
+					threadOf: ExternalChannelId.make("100000000000000099"),
+				})
+				yield* h.post
+				expect(h.calls).toEqual(["createMessage"])
+				expect(h.contents).toEqual(["**Olive Owner**\nhi"])
+				expect(h.saved).toEqual([])
+			}),
 	)
 })
 

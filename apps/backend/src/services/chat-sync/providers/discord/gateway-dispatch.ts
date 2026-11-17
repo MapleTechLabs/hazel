@@ -14,6 +14,7 @@ import {
 import { Effect, Option, Schema } from "effect"
 import type { ChatSyncAttachment, ChatSyncMention } from "../../chat-sync-effects"
 import type { ChatSyncInbound } from "../../chat-sync-inbound"
+import type { DiscordThreadInfo } from "./thread-parents"
 
 export interface DiscordMessageAuthor {
 	id?: string
@@ -254,11 +255,35 @@ const guildOf = (event: { readonly guild_id?: string }): ReadonlyArray<string> =
 export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 	readonly ingest: (inbound: ChatSyncInbound) => Effect.Effect<void, E, R>
 	readonly isCurrentBotAuthor: (authorId?: string) => Effect.Effect<boolean>
+	/** The channel as a thread (its parent, name, starter); none for a channel that is not one. */
+	readonly threadOf: (channelId: string) => Effect.Effect<Option.Option<DiscordThreadInfo>>
 }) => {
 	const required = <A>(eventType: string, field: string, value: unknown, decode: ExternalIdDecoder<A>) =>
 		decodeRequiredExternalIdOrWarn({ eventType, field, value, decode })
 	const optional = <A>(eventType: string, field: string, value: unknown, decode: ExternalIdDecoder<A>) =>
 		decodeOptionalExternalIdOrWarn({ eventType, field, value, decode })
+
+	/**
+	 * Where an event in `channelId` routes: a thread's events go by their parent channel and name
+	 * the thread (`inExternalThreadId`), so the org finds, or makes, the thread's link. A thread our
+	 * bot started mirrors a Hazel thread, which Hazel links itself: its events keep its own id, so
+	 * an early reply never makes a second Hazel thread.
+	 */
+	const routeOf = (channelId: ExternalChannelId) =>
+		Effect.gen(function* () {
+			const thread = yield* deps.threadOf(channelId)
+			if (
+				Option.isNone(thread) ||
+				(yield* deps.isCurrentBotAuthor(thread.value.ownerId ?? undefined))
+			) {
+				return { externalChannelId: channelId, thread: {}, threadName: {} }
+			}
+			return {
+				externalChannelId: thread.value.parentId,
+				thread: { inExternalThreadId: ExternalThreadId.make(channelId) },
+				threadName: thread.value.name === null ? {} : { externalThreadName: thread.value.name },
+			}
+		})
 
 	const ingestMessageCreateEvent = Effect.fn("DiscordGateway.ingestMessageCreateEvent")(function* (
 		event: DiscordMessageCreateEvent,
@@ -293,10 +318,11 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 			event.webhook_id,
 			decodeExternalWebhookId,
 		)
+		const route = yield* routeOf(channelId.value)
 		yield* deps.ingest({
 			provider: "discord",
 			externalWorkspaceIds: guildOf(event),
-			externalChannelId: channelId.value,
+			externalChannelId: route.externalChannelId,
 			dedupeKey: `discord:gateway:create:${messageId.value}`,
 			author:
 				authorId === undefined
@@ -314,6 +340,8 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 				externalReplyToMessageId: replyTo ?? null,
 				attachments: normalizeDiscordMessageAttachments(event.attachments),
 				mentions: normalizeDiscordMentions(event.mentions),
+				...route.thread,
+				...route.threadName,
 			},
 		})
 	})
@@ -342,10 +370,11 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 		const version =
 			event.edited_timestamp ??
 			createHash("sha256").update(`${messageId.value}:${event.content}`).digest("hex").slice(0, 16)
+		const route = yield* routeOf(channelId.value)
 		yield* deps.ingest({
 			provider: "discord",
 			externalWorkspaceIds: guildOf(event),
-			externalChannelId: channelId.value,
+			externalChannelId: route.externalChannelId,
 			dedupeKey: `discord:gateway:update:${messageId.value}:${version}`,
 			author: null,
 			event: {
@@ -354,6 +383,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 				externalWebhookId: webhookId ?? null,
 				content: event.content,
 				mentions: normalizeDiscordMentions(event.mentions),
+				...route.thread,
 			},
 		})
 	})
@@ -377,16 +407,18 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 			event.webhook_id,
 			decodeExternalWebhookId,
 		)
+		const route = yield* routeOf(channelId.value)
 		yield* deps.ingest({
 			provider: "discord",
 			externalWorkspaceIds: guildOf(event),
-			externalChannelId: channelId.value,
+			externalChannelId: route.externalChannelId,
 			dedupeKey: `discord:gateway:delete:${messageId.value}`,
 			author: null,
 			event: {
 				_tag: "MessageDelete",
 				externalMessageId: messageId.value,
 				externalWebhookId: webhookId ?? null,
+				...route.thread,
 			},
 		})
 	})
@@ -417,10 +449,11 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 			if (Option.isNone(userId)) return
 			const { externalAuthorDisplayName, externalAuthorAvatarUrl } = extractReactionAuthor(event)
 			const add = eventType === "MESSAGE_REACTION_ADD"
+			const route = yield* routeOf(channelId.value)
 			yield* deps.ingest({
 				provider: "discord",
 				externalWorkspaceIds: guildOf(event),
-				externalChannelId: channelId.value,
+				externalChannelId: route.externalChannelId,
 				dedupeKey: `discord:gateway:reaction:${add ? "add" : "remove"}:${channelId.value}:${messageId.value}:${userId.value}:${emoji}`,
 				author: {
 					externalUserId: userId.value,
@@ -431,6 +464,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 					_tag: add ? "ReactionAdd" : "ReactionRemove",
 					externalMessageId: messageId.value,
 					emoji,
+					...route.thread,
 				},
 			})
 		})

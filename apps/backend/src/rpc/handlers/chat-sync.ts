@@ -280,7 +280,21 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 					const connection = connectionOption.value
 					yield* integrationConnectionPolicy.canSelect(connection.organizationId)
 
-					const data = yield* channelLinkRepo.findBySyncConnection(syncConnectionId)
+					const links = yield* channelLinkRepo.findBySyncConnection(syncConnectionId)
+					// A thread's link follows its channel's (direction, identity): only channels are listed.
+					const threads =
+						links.length === 0
+							? []
+							: yield* db.run(
+									SQLite.from(schema.channelsTable)
+										.select("id")
+										.where(($) => [
+											$.id.in_(...links.map((link) => link.hazelChannelId)),
+											$.type.eq("thread"),
+										]),
+								)
+					const threadIds = new Set(threads.map((thread) => thread.id))
+					const data = links.filter((link) => !threadIds.has(link.hazelChannelId))
 					return new ChatSyncChannelLinkListResponse({ data })
 				}).pipe(withRemapDbErrors("ChatSyncChannelLink", "select")),
 

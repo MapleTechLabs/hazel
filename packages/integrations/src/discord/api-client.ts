@@ -322,9 +322,17 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 			}
 		})
 
+		/** A webhook URL aimed at a thread of the webhook's channel (`thread_id`). */
+		const inThread = (url: string, threadId: string | undefined) =>
+			threadId === undefined
+				? url
+				: `${url}${url.includes("?") ? "&" : "?"}thread_id=${encodeURIComponent(threadId)}`
+
 		const executeWebhookMessage = Effect.fn("DiscordApiClient.executeWebhookMessage")(function* (params: {
 			webhookId: string
 			webhookToken: string
+			/** Post into this thread of the webhook's channel. */
+			threadId?: string
 			content: string
 			replyToExternalMessageId?: string
 			username?: string
@@ -354,7 +362,10 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 
 			const response = yield* httpClient
 				.post(
-					`${DISCORD_API_BASE_URL}/webhooks/${params.webhookId}/${params.webhookToken}?wait=true`,
+					inThread(
+						`${DISCORD_API_BASE_URL}/webhooks/${params.webhookId}/${params.webhookToken}?wait=true`,
+						params.threadId,
+					),
 					{
 						body: HttpBody.text(JSON.stringify(payload), "application/json"),
 						headers: {
@@ -386,11 +397,15 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 			webhookId: string
 			webhookToken: string
 			webhookMessageId: string
+			threadId?: string
 			content: string
 		}) {
 			const response = yield* httpClient
 				.patch(
-					`${DISCORD_API_BASE_URL}/webhooks/${params.webhookId}/${params.webhookToken}/messages/${params.webhookMessageId}`,
+					inThread(
+						`${DISCORD_API_BASE_URL}/webhooks/${params.webhookId}/${params.webhookToken}/messages/${params.webhookMessageId}`,
+						params.threadId,
+					),
 					{
 						body: HttpBody.text(JSON.stringify({ content: params.content }), "application/json"),
 						headers: {
@@ -409,10 +424,14 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 			webhookId: string
 			webhookToken: string
 			webhookMessageId: string
+			threadId?: string
 		}) {
 			const response = yield* httpClient
 				.del(
-					`${DISCORD_API_BASE_URL}/webhooks/${params.webhookId}/${params.webhookToken}/messages/${params.webhookMessageId}`,
+					inThread(
+						`${DISCORD_API_BASE_URL}/webhooks/${params.webhookId}/${params.webhookToken}/messages/${params.webhookMessageId}`,
+						params.threadId,
+					),
 				)
 				.pipe(Effect.scoped, Effect.timeout(DEFAULT_TIMEOUT))
 

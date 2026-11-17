@@ -5,7 +5,7 @@
 import { FetchHttpClient } from "effect/http"
 import { ExternalUserId } from "@hazel/schema"
 import { Schema } from "effect"
-import { DiscordConfig } from "dfx"
+import { DiscordConfig, DiscordREST } from "dfx"
 import { DiscordGateway, DiscordLive } from "dfx/gateway"
 import { Cause, Context, Config, Effect, Layer, Option, Redacted, Ref } from "effect"
 import { ObjectStubs } from "../../../../worker/objects/protocol"
@@ -22,6 +22,13 @@ import {
 	type DiscordReadyEvent,
 	type DiscordThreadCreateEvent,
 } from "./gateway-dispatch"
+import { type DiscordChannelInfo, makeDiscordThreadParents } from "./thread-parents"
+
+/** The gateway events that list a guild's channels and threads. */
+interface DiscordGuildChannelsEvent {
+	readonly channels?: ReadonlyArray<DiscordChannelInfo>
+	readonly threads?: ReadonlyArray<DiscordChannelInfo>
+}
 
 const DISCORD_REQUIRED_GATEWAY_INTENTS = 34305
 
@@ -79,14 +86,11 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 				return Option.isSome(botUserId) && botUserId.value === authorId
 			})
 
-		const dispatchHandlers = createDiscordGatewayDispatchHandlers({
-			ingest: (inbound) =>
-				routeChatSyncInbound(inbound).pipe(
-					Effect.provideService(Directory, directory),
-					Effect.provideService(ObjectStubs, stubs),
-				),
-			isCurrentBotAuthor,
-		})
+		const ingest = (inbound: Parameters<typeof routeChatSyncInbound>[0]) =>
+			routeChatSyncInbound(inbound).pipe(
+				Effect.provideService(Directory, directory),
+				Effect.provideService(ObjectStubs, stubs),
+			)
 
 		const onReady = Effect.fn("DiscordGatewayService.onReady")(function* (event: DiscordReadyEvent) {
 			if (!event.user?.id) {
@@ -132,9 +136,43 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 
 			yield* Effect.gen(function* () {
 				const gateway = yield* DiscordGateway
+				const rest = yield* DiscordREST
+				const threadParents = makeDiscordThreadParents((channelId) =>
+					rest.getChannel(channelId).pipe(
+						Effect.map((channel) => ({
+							id: channel.id,
+							type: channel.type,
+							parent_id: "parent_id" in channel ? channel.parent_id : null,
+							name: "name" in channel ? channel.name : null,
+							owner_id: "owner_id" in channel ? channel.owner_id : null,
+						})),
+					),
+				)
+				const dispatchHandlers = createDiscordGatewayDispatchHandlers({
+					ingest,
+					isCurrentBotAuthor,
+					threadOf: threadParents.threadOf,
+				})
+				const rememberGuild = (event: DiscordGuildChannelsEvent) =>
+					Effect.sync(() => {
+						threadParents.rememberAll(event.channels)
+						threadParents.rememberAll(event.threads)
+					})
 
 				yield* Effect.all(
 					[
+						gateway.handleDispatch("GUILD_CREATE", (event) =>
+							rememberGuild(event as DiscordGuildChannelsEvent),
+						),
+						gateway.handleDispatch("THREAD_LIST_SYNC", (event) =>
+							rememberGuild(event as DiscordGuildChannelsEvent),
+						),
+						gateway.handleDispatch("CHANNEL_CREATE", (event) =>
+							Effect.sync(() => threadParents.remember(event as DiscordChannelInfo)),
+						),
+						gateway.handleDispatch("THREAD_UPDATE", (event) =>
+							Effect.sync(() => threadParents.remember(event as DiscordChannelInfo)),
+						),
 						gateway.handleDispatch("READY", (event) =>
 							onReady(event as DiscordReadyEvent).pipe(
 								Effect.catch((error) => onDispatchError("READY", error)),
@@ -172,9 +210,14 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 								),
 						),
 						gateway.handleDispatch("THREAD_CREATE", (event) =>
-							dispatchHandlers
-								.ingestThreadCreateEvent(event as DiscordThreadCreateEvent)
-								.pipe(Effect.catch((error) => onDispatchError("THREAD_CREATE", error))),
+							Effect.sync(() => threadParents.remember(event as DiscordChannelInfo)).pipe(
+								Effect.andThen(
+									dispatchHandlers.ingestThreadCreateEvent(
+										event as DiscordThreadCreateEvent,
+									),
+								),
+								Effect.catch((error) => onDispatchError("THREAD_CREATE", error)),
+							),
 						),
 					],
 					{

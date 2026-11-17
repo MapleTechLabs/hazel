@@ -81,16 +81,16 @@ export const customEmojisStream = <M>(
 		(rows) => toMessage(rows.map((row) => ({ name: row.name, imageUrl: row.imageUrl }))),
 	)
 
-/** `useAttachments`, for the whole channel (rows are grouped by message when deriving). */
+/** `useAttachments`, for whole channels (rows are grouped by message when deriving). */
 export const attachmentsStream = <M>(
-	channelId: ChannelId,
+	channelIds: ReadonlyArray<ChannelId>,
 	toMessage: (attachments: ReadonlyArray<AttachmentInfo>) => M,
 ) =>
 	liveQueryStream<AttachmentRow, M>(
 		(q) =>
 			q
 				.from({ attachments: attachmentCollection })
-				.where(({ attachments }) => eq(attachments.channelId, channelId))
+				.where(({ attachments }) => inArray(attachments.channelId, [...channelIds]))
 				.orderBy(({ attachments }) => attachments.uploadedAt, "asc"),
 		(rows) =>
 			toMessage(
@@ -105,9 +105,9 @@ export const attachmentsStream = <M>(
 			),
 	)
 
-/** Messages synced in from Discord or Slack over the channel's links, with the platform each came from. */
+/** Messages synced in from Discord or Slack over the channels' links, with the platform each came from. */
 export const syncedMessagesStream = <M>(
-	channelId: ChannelId,
+	channelIds: ReadonlyArray<ChannelId>,
 	toMessage: (messages: ReadonlyArray<SyncedMessageInfo>) => M,
 ) =>
 	liveQueryStream<{ hazelMessageId: MessageId; provider: string }, M>(
@@ -122,7 +122,7 @@ export const syncedMessagesStream = <M>(
 				)
 				.where(({ messageLink, channelLink, connection }) =>
 					and(
-						eq(channelLink.hazelChannelId, channelId),
+						inArray(channelLink.hazelChannelId, [...channelIds]),
 						eq(messageLink.source, "external"),
 						inArray(connection.provider, ["discord", "slack"]),
 						isNull(messageLink.deletedAt),
@@ -171,7 +171,7 @@ export const channelSyncProviderStream = <M>(
 		},
 	)
 
-/** Agent-written messages (`message_agent_marks`) in `channelIds`: a channel and its open thread. */
+/** Agent-written messages (`message_agent_marks`) in `channelIds`. */
 export const agentMarksStream = <M>(
 	channelIds: ReadonlyArray<ChannelId>,
 	toMessage: (marks: ReadonlyArray<AgentMarkInfo>) => M,

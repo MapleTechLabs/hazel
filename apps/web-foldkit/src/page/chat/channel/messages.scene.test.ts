@@ -411,6 +411,7 @@ describe("image viewer", () => {
 		updateWithShared(
 			derivedModel(),
 			Message.UpdatedAttachments({
+				channelId,
 				attachments: [imageAttachmentOf(1, graceMessageId), imageAttachmentOf(2, graceMessageId)],
 			}),
 		).model

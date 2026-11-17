@@ -13,13 +13,14 @@ import type {
 	ExternalMessageId,
 	ExternalThreadId,
 	ExternalUserId,
+	ExternalWebhookId,
 	MessageId,
 	OrganizationId,
 	SyncChannelLinkId,
 	SyncConnectionId,
 	UserId,
 } from "@hazel/schema"
-import { Cause, Effect, Exit, Layer, type Scope } from "effect"
+import { Cause, Effect, Exit, Layer, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
 import { callObject } from "../../worker/objects/calls"
@@ -29,7 +30,7 @@ import { encodeInvokePrincipal } from "../../worker/objects/principal"
 import { ObjectStubs } from "../../worker/objects/protocol"
 import { makeTestObjects, type TestObject, type TestObjects } from "../../worker/objects/testing"
 import { Directory } from "../directory"
-import { readChatSyncLinks } from "./chat-sync-channel"
+import { readChatSyncLinks, writeChatSyncLinks } from "./chat-sync-channel"
 import { type ChatSyncInbound, routeChatSyncInbound } from "./chat-sync-inbound"
 import { createDiscordGatewayDispatchHandlers } from "./providers/discord/gateway-dispatch"
 
@@ -452,6 +453,46 @@ describe("chat sync on the objects", () => {
 			}),
 		))
 
+	it("a channel holding links from before their version asks the org for fresh ones, then posts", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				// A copy projected before this version (a thread's carried its parent's webhook).
+				const current = yield* world.channel.run(readChatSyncLinks)
+				yield* world.channel.run(
+					writeChatSyncLinks({ links: current.links, accounts: current.accounts }),
+				)
+				yield* ok(
+					yield* call(
+						world.channel,
+						world.channelId,
+						"message.create",
+						{
+							channelId: world.channelId,
+							content: "after deploy",
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: world.owner,
+							deletedAt: null,
+						},
+						world.owner,
+					),
+				)
+				// Held, not sent with the old copy; the org projects a fresh one.
+				expect(world.objects.chatSyncCalls).toEqual([])
+				expect(chatSyncOutbox(world.channel)).toBe(1)
+				yield* world.channel.alarm
+				yield* world.org.alarm
+				expect((yield* world.channel.run(readChatSyncLinks)).version).toBe(2)
+
+				world.channel.storage.db.exec(`UPDATE _outbox SET next_at = 0`)
+				yield* world.channel.alarm
+				expect(chatSyncOutbox(world.channel)).toBe(0)
+				expect(world.objects.chatSyncCalls.map((c) => c.op)).toEqual(["createMessage"])
+			}),
+		))
+
 	it("the message link a delivery writes reaches the channel's sockets in the same request", () =>
 		run(
 			Effect.gen(function* () {
@@ -581,6 +622,7 @@ describe("chat sync on the objects", () => {
 				const handlers = createDiscordGatewayDispatchHandlers({
 					ingest: (inbound) => Effect.sync(() => void ingested.push(inbound)),
 					isCurrentBotAuthor: (id) => Effect.succeed(id === "777777777777777777"),
+					threadOf: () => Effect.succeed(Option.none()),
 				})
 				yield* handlers.ingestThreadCreateEvent({
 					id: externalThreadId,
@@ -716,6 +758,172 @@ describe("chat sync on the objects", () => {
 				// Inbound: no provider thread is created back.
 				expect(chatSyncOutbox(world.channel)).toBe(0)
 				expect(world.objects.chatSyncCalls).toEqual([])
+			}),
+		))
+
+	it("a Discord thread's first message lands even before the thread's own event, which then names it", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const starter = "444444444444444470" as ExternalMessageId
+				const externalThreadId = starter as string as ExternalThreadId
+				yield* world.inbound(discordCreate(starter, "test back"))
+				// The gateway routes a thread's message by its parent channel, naming the thread, so it
+				// does not wait on the thread's own link being indexed.
+				yield* world.inbound({
+					...discordCreate("444444444444444471", "a thread"),
+					event: {
+						_tag: "MessageCreate",
+						externalMessageId: "444444444444444471" as ExternalMessageId,
+						externalWebhookId: null,
+						content: "a thread",
+						externalReplyToMessageId: null,
+						attachments: [],
+						inExternalThreadId: externalThreadId,
+					},
+				})
+				yield* world.inbound({
+					provider: "discord",
+					externalWorkspaceIds: [GUILD],
+					externalChannelId: DISCORD_CHANNEL,
+					dedupeKey: `discord:gateway:thread:create:${externalThreadId}`,
+					author: null,
+					event: {
+						_tag: "ThreadCreate",
+						externalThreadId,
+						name: "Ship plan",
+						externalParentMessageId: starter,
+					},
+				})
+				yield* world.org.alarm
+
+				const links = rows<{ hazelChannelId: ChannelId; externalChannelName: string | null }>(
+					world.org,
+					`SELECT hazelChannelId, externalChannelName FROM chat_sync_channel_links WHERE externalChannelId = ?`,
+					externalThreadId,
+				)
+				expect(links).toHaveLength(1)
+				const threadId = links[0]!.hazelChannelId
+				expect(links[0]!.externalChannelName).toBe("Ship plan")
+				expect(rows(world.org, `SELECT name FROM channels WHERE id = ?`, threadId)).toEqual([
+					{ name: "Ship plan" },
+				])
+				const thread = yield* world.objects.get(channelTarget(threadId))
+				expect(rows(thread, `SELECT content FROM messages`)).toEqual([{ content: "a thread" }])
+				expect(rows(world.channel, `SELECT content, threadChannelId FROM messages`)).toEqual([
+					{ content: "test back", threadChannelId: threadId },
+				])
+			}),
+		))
+
+	it("a thread's link is its parent's: settings and direction follow it, and unlinking it stops the thread", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const starter = "444444444444444480" as ExternalMessageId
+				yield* world.inbound(discordCreate(starter, "start here"))
+				yield* world.inbound({
+					provider: "discord",
+					externalWorkspaceIds: [GUILD],
+					externalChannelId: DISCORD_CHANNEL,
+					dedupeKey: `discord:gateway:thread:create:${starter}`,
+					author: null,
+					event: {
+						_tag: "ThreadCreate",
+						externalThreadId: starter as string as ExternalThreadId,
+						name: "Start here",
+						externalParentMessageId: starter,
+					},
+				})
+				yield* world.org.alarm
+				const threadId = rows<{ hazelChannelId: ChannelId }>(
+					world.org,
+					`SELECT hazelChannelId FROM chat_sync_channel_links WHERE externalChannelId = ?`,
+					starter,
+				)[0]!.hazelChannelId
+				// Settings list only the channel's link: it decides for its threads.
+				const listed = (yield* ok(
+					yield* call(
+						world.org,
+						world.orgId,
+						"chatSync.channelLink.list",
+						{ organizationId: world.orgId, syncConnectionId: world.syncConnectionId },
+						world.owner,
+					),
+				)) as { data: ReadonlyArray<{ id: string }> }
+				expect(listed.data.map((link) => link.id)).toEqual([world.channelLinkId])
+
+				const thread = yield* world.objects.get(channelTarget(threadId))
+				const threadLinks = () =>
+					thread.run(readChatSyncLinks).pipe(Effect.map((value) => value.links))
+
+				// The parent's identity changes (a webhook provisioned): its threads see it.
+				const webhookId = "555555555555555555"
+				const settings = {
+					outboundIdentity: {
+						strategy: "webhook",
+						providers: { discord: { kind: "discord.webhook", webhookId, webhookToken: "t" } },
+					},
+				}
+				yield* world.org.applyEffect({
+					objectId: world.orgId,
+					kind: "org.chatSyncLinkSettings",
+					payload: { channelLinkId: world.channelLinkId, settings },
+					key: uuid(),
+					sender: { kind: "channel", id: world.channelId },
+				})
+				yield* world.org.alarm
+				const [linked] = yield* threadLinks()
+				expect(linked).toMatchObject({
+					externalChannelId: starter,
+					settings,
+					parent: { channelLinkId: world.channelLinkId, externalChannelId: DISCORD_CHANNEL },
+				})
+
+				// An event routed by the thread's own id (the gateway could not resolve its parent)
+				// still lands, and still knows the parent's webhook for an echo.
+				const byThreadId = (id: string, externalWebhookId: string | null): ChatSyncInbound => ({
+					...discordCreate(id, `via ${id}`),
+					externalChannelId: starter as string as ExternalChannelId,
+					event: {
+						_tag: "MessageCreate",
+						externalMessageId: id as ExternalMessageId,
+						externalWebhookId: externalWebhookId as ExternalWebhookId | null,
+						content: `via ${id}`,
+						externalReplyToMessageId: null,
+						attachments: [],
+					},
+				})
+				yield* world.inbound(byThreadId("444444444444444481", webhookId))
+				yield* world.inbound(byThreadId("444444444444444482", null))
+				yield* world.org.alarm
+				expect(rows(thread, `SELECT content FROM messages`)).toEqual([
+					{ content: "via 444444444444444482" },
+				])
+
+				yield* ok(
+					yield* call(
+						world.org,
+						world.orgId,
+						"chatSync.channelLink.update",
+						{ syncChannelLinkId: world.channelLinkId, direction: "external_to_hazel" },
+						world.owner,
+					),
+				)
+				yield* world.org.alarm
+				expect((yield* threadLinks()).map((link) => link.direction)).toEqual(["external_to_hazel"])
+
+				yield* ok(
+					yield* call(
+						world.org,
+						world.orgId,
+						"chatSync.channelLink.delete",
+						{ syncChannelLinkId: world.channelLinkId },
+						world.owner,
+					),
+				)
+				yield* world.org.alarm
+				expect(yield* threadLinks()).toEqual([])
 			}),
 		))
 

@@ -12,7 +12,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import type { ChannelId, ExternalMessageId, MessageId, MessageReactionId, UserId } from "@hazel/schema"
-import { Effect, Option } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import type { MessageEventHook } from "../../worker/objects/channel/message-events"
 import { enqueueEffect, type EffectReceivers } from "../../worker/objects/effects/registry"
@@ -26,6 +26,7 @@ import {
 	writeChatSyncLinks,
 } from "./chat-sync-channel"
 import {
+	CHAT_SYNC_LINKS_VERSION,
 	type ChatSyncChannelTarget,
 	ChatSyncDeliveryEffects,
 	type ChatSyncLinkedAccount,
@@ -51,8 +52,10 @@ import {
 export const enqueueChatSyncOutbound = Effect.fn("ChatSync.enqueueOutbound")(function* (
 	event: ChatSyncOutboundEvent,
 ) {
-	const { links } = yield* readChatSyncLinks
-	const outbound = links.filter((link) => link.direction !== "external_to_hazel")
+	const { version, links } = yield* readChatSyncLinks
+	// An outdated copy may hold a thread's old direction: the delivery checks a fresh one.
+	const outdated = (version ?? 1) < CHAT_SYNC_LINKS_VERSION
+	const outbound = links.filter((link) => outdated || link.direction !== "external_to_hazel")
 	yield* Effect.forEach(
 		outbound,
 		(link) =>
@@ -202,7 +205,10 @@ const outboundContent = (
 		})
 	})
 
-/** Store new link settings here at once, and at the org (the owner), which re-projects them. */
+/**
+ * Store new link settings here at once, and at the org (the owner), which re-projects them. A
+ * thread's settings are its parent channel's link's, so they are saved there.
+ */
 const persistLinkSettings = (link: ChatSyncChannelTarget, settings: Record<string, unknown>) =>
 	Effect.gen(function* () {
 		const current = yield* readChatSyncLinks
@@ -213,7 +219,7 @@ const persistLinkSettings = (link: ChatSyncChannelTarget, settings: Record<strin
 			),
 		})
 		yield* enqueueEffect(ChatSyncOrgEffects.chatSyncLinkSettings, orgTarget(link.organizationId), {
-			channelLinkId: link.channelLinkId,
+			channelLinkId: link.parent?.channelLinkId ?? link.channelLinkId,
 			settings,
 		})
 	})
@@ -408,18 +414,39 @@ const deliver = (
 		}
 	})
 
+/**
+ * The channel's copy of its links predates `CHAT_SYNC_LINKS_VERSION` (a thread's could post through
+ * its parent's webhook into the parent): retried once the org has projected a fresh copy.
+ */
+export class ChatSyncLinksOutdatedError extends Schema.TaggedError<ChatSyncLinksOutdatedError>()(
+	"ChatSyncLinksOutdatedError",
+	{ channelLinkId: Schema.String },
+) {}
+
 /** The `chatSync.outbound` receiver: runs in the sending `ChannelObject`'s outbox. */
 export const deliverChatSyncOutbound = Effect.fn("ChatSync.deliverOutbound")(function* (
 	payload: ChatSyncOutboundPayload,
 ) {
-	const { links, accounts } = yield* readChatSyncLinks
+	const { version, links, accounts } = yield* readChatSyncLinks
 	const link = links.find((entry) => entry.channelLinkId === payload.channelLinkId)
 	yield* Effect.annotateCurrentSpan({
 		"chat_sync.event": payload.event._tag,
 		"chat_sync.link_id": payload.channelLinkId,
 	})
-	// Unlinked (or turned inbound-only) since the write: nothing to mirror.
-	if (link === undefined || link.direction === "external_to_hazel") {
+	// Unlinked since the write: nothing to mirror.
+	if (link === undefined) {
+		yield* Effect.annotateCurrentSpan({ "chat_sync.outcome": "link_gone" })
+		return
+	}
+	if ((version ?? 1) < CHAT_SYNC_LINKS_VERSION) {
+		yield* Effect.annotateCurrentSpan({ "chat_sync.outcome": "links_outdated" })
+		yield* enqueueEffect(ChatSyncOrgEffects.chatSyncRepublishLinks, orgTarget(link.organizationId), {
+			channelLinkId: link.channelLinkId,
+		})
+		return yield* new ChatSyncLinksOutdatedError({ channelLinkId: link.channelLinkId })
+	}
+	// Turned inbound-only since the write: nothing to mirror.
+	if (link.direction === "external_to_hazel") {
 		yield* Effect.annotateCurrentSpan({ "chat_sync.outcome": "link_gone" })
 		return
 	}

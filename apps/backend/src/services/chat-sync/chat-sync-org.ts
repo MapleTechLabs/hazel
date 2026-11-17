@@ -14,15 +14,15 @@
  */
 import { ChannelRepo, OrganizationMemberRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
-import type {
-	ChannelId,
-	ExternalChannelId,
+import {
+	type ChannelId,
+	type ExternalChannelId,
 	ExternalMessageId,
 	ExternalThreadId,
-	ExternalUserId,
-	OrganizationId,
-	SyncChannelLinkId,
-	UserId,
+	type ExternalUserId,
+	type OrganizationId,
+	type SyncChannelLinkId,
+	type UserId,
 } from "@hazel/schema"
 import { Effect, Layer, Option } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
@@ -33,10 +33,12 @@ import {
 } from "../../worker/objects/effects/registry"
 import { channelTarget } from "../../worker/objects/kinds"
 import { syncChannelAccess, syncMemberAccess } from "../../worker/objects/org/channel-access"
+import { renameChannel } from "../../worker/objects/org/channel-rename"
 import { upsertUserProjection } from "../../worker/objects/org/projections"
 import { ChannelAccessSyncService } from "../channel-access-sync"
 import {
 	type ChannelIngestEvent,
+	CHAT_SYNC_LINKS_VERSION,
 	ChatSyncChannelEffects,
 	type ChatSyncChannelTarget,
 	ChatSyncDirectoryEffects,
@@ -47,12 +49,13 @@ import {
 	type LinkSettingsPayload,
 	type LinkThreadPayload,
 	type OrgChatSyncIngestPayload,
+	type RepublishLinksPayload,
 } from "./chat-sync-effects"
 import type { ChatSyncProviderDefinition } from "./provider"
 import { definitionOf } from "./providers"
 
-/** The channel's active links (on active connections), as its `ChannelObject` keeps them. */
-const channelTargets = (channelId: ChannelId) =>
+/** The channel's own active links (on active connections). */
+const activeLinksOf = (channelId: ChannelId) =>
 	Effect.flatMap(Database.Database, (db) =>
 		db.run(
 			SQLite.from(schema.chatSyncChannelLinksTable, "link")
@@ -86,6 +89,57 @@ const channelTargets = (channelId: ChannelId) =>
 		),
 	)
 
+/**
+ * The channel's active links, as its `ChannelObject` keeps them. A thread's link is its parent's
+ * link carried into the thread: direction and settings (the webhook identity) are read from the
+ * parent's, so they cannot drift, and a thread whose parent is no longer linked does not sync.
+ */
+const channelTargets = Effect.fn("OrgObject.chatSyncChannelTargets")(function* (channelId: ChannelId) {
+	const db = yield* Database.Database
+	const links = yield* activeLinksOf(channelId)
+	if (links.length === 0) return links
+	const channel = yield* db.first(
+		SQLite.from(schema.channelsTable)
+			.select("type", "parentChannelId")
+			.where(($) => [$.id.eq(channelId)])
+			.limit(1),
+	)
+	if (Option.isNone(channel) || channel.value.type !== "thread" || channel.value.parentChannelId === null) {
+		return links
+	}
+	const parents = yield* activeLinksOf(channel.value.parentChannelId)
+	return links.flatMap((link): Array<ChatSyncChannelTarget> => {
+		const parent = parents.find((entry) => entry.syncConnectionId === link.syncConnectionId)
+		if (parent === undefined) return []
+		return [
+			{
+				...link,
+				direction: parent.direction,
+				settings: parent.settings,
+				parent: { channelLinkId: parent.channelLinkId, externalChannelId: parent.externalChannelId },
+			},
+		]
+	})
+})
+
+/** The linked thread channels under `channelId`. */
+const linkedThreadsOf = (channelId: ChannelId) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.run(
+			SQLite.from(schema.chatSyncChannelLinksTable, "link")
+				.innerJoin(schema.channelsTable, "channel", (link, channel) =>
+					channel.id.eq(link.hazelChannelId),
+				)
+				.select(($) => ({ id: $.hazelChannelId }))
+				.where(($) => [
+					$.deletedAt.isNull(),
+					$.channel.parentChannelId.eq(channelId),
+					$.channel.type.eq("thread"),
+					$.channel.deletedAt.isNull(),
+				]),
+		),
+	).pipe(Effect.map((rows) => [...new Set(rows.map((row) => row.id))]))
+
 /** The org's users with a linked provider account (outbound mentions). */
 const linkedAccounts = (providers: ReadonlyArray<string>) =>
 	Effect.gen(function* () {
@@ -114,17 +168,30 @@ const linkedAccounts = (providers: ReadonlyArray<string>) =>
 		)
 	})
 
-/** Project `channelId`'s active links to its `ChannelObject` (outbox, inside the transaction). */
+/** Project one channel's active links to its `ChannelObject` (outbox, inside the transaction). */
+const publishLinksOf = (channelId: ChannelId) =>
+	Effect.gen(function* () {
+		const links = yield* channelTargets(channelId)
+		const accounts = yield* linkedAccounts([...new Set(links.map((link) => link.provider))])
+		yield* enqueueEffect(ChatSyncChannelEffects.setChatSyncLinks, channelTarget(channelId), {
+			version: CHAT_SYNC_LINKS_VERSION,
+			links,
+			accounts,
+		})
+		return links.length
+	})
+
+/**
+ * Project `channelId`'s active links to its `ChannelObject`, and its linked threads' (which read
+ * the channel's link), so a change to a link reaches every thread under it.
+ */
 export const publishChatSyncLinks = Effect.fn("OrgObject.publishChatSyncLinks")(function* (
 	channelId: ChannelId,
 ) {
-	const links = yield* channelTargets(channelId)
-	const accounts = yield* linkedAccounts([...new Set(links.map((link) => link.provider))])
-	yield* enqueueEffect(ChatSyncChannelEffects.setChatSyncLinks, channelTarget(channelId), {
-		links,
-		accounts,
-	})
-	yield* Effect.annotateCurrentSpan({ "chat_sync.links": links.length })
+	const links = yield* publishLinksOf(channelId)
+	const threads = yield* linkedThreadsOf(channelId)
+	yield* Effect.forEach(threads, publishLinksOf, { discard: true })
+	yield* Effect.annotateCurrentSpan({ "chat_sync.links": links, "chat_sync.threads": threads.length })
 })
 
 /**
@@ -148,7 +215,8 @@ export const publishChatSyncAccounts = Effect.fn("OrgObject.publishChatSyncAccou
 			]),
 	)
 	const channelIds = [...new Set(rows.map((row) => row.hazelChannelId))]
-	yield* Effect.forEach(channelIds, (channelId) => publishChatSyncLinks(channelId), { discard: true })
+	// Every linked channel, threads included: each once.
+	yield* Effect.forEach(channelIds, publishLinksOf, { discard: true })
 	yield* Effect.annotateCurrentSpan({
 		"chat_sync.provider": provider,
 		"chat_sync.channels": channelIds.length,
@@ -231,6 +299,36 @@ const findInboundLink = (
 type InboundLink = Option.Option.Value<Effect.Success<ReturnType<typeof findInboundLink>>>
 
 /**
+ * What decides for `link`: its direction, whether it is active, and its identity (`settings`).
+ * A thread's link takes them from its parent channel's link on the same connection, however the
+ * event reached it; `None`: that parent is no longer linked, so the thread does not sync.
+ */
+const ownerOf = Effect.fn("OrgObject.chatSyncOwnerLink")(function* (link: InboundLink) {
+	const db = yield* Database.Database
+	const channel = yield* db.first(
+		SQLite.from(schema.channelsTable)
+			.select("type", "parentChannelId")
+			.where(($) => [$.id.eq(link.hazelChannelId)])
+			.limit(1),
+	)
+	if (Option.isNone(channel) || channel.value.type !== "thread" || channel.value.parentChannelId === null) {
+		return Option.some(link)
+	}
+	const parentChannelId = channel.value.parentChannelId
+	const parent = yield* db.first(
+		SQLite.from(schema.chatSyncChannelLinksTable)
+			.select("isActive", "direction", "settings")
+			.where(($) => [
+				$.syncConnectionId.eq(link.syncConnectionId),
+				$.hazelChannelId.eq(parentChannelId),
+				$.deletedAt.isNull(),
+			])
+			.limit(1),
+	)
+	return Option.map(parent, (owner) => ({ ...link, ...owner }))
+})
+
+/**
  * Who the event's author is here: the Hazel user who linked that provider account, else the
  * provider user's shadow (the directory row the gateway upserted), made a member on first sight.
  */
@@ -280,16 +378,26 @@ const resolveAuthor = Effect.fn("OrgObject.chatSyncResolveAuthor")(function* (
 	return userId
 })
 
-/** A provider thread under a linked channel: a Hazel thread, linked the same way. */
+/** The name of a thread made by a message in it, before the provider names it. */
+const UNNAMED_THREAD = "Thread"
+
+/**
+ * A provider thread under a linked channel: a Hazel thread, linked the same way. `name: null`: made
+ * by a message in it, which can arrive before the thread's own event; that event names it later.
+ */
 const ingestThreadCreate = Effect.fn("OrgObject.chatSyncThreadCreate")(function* (
 	provider: string,
 	parent: InboundLink,
-	event: Extract<OrgChatSyncIngestPayload["event"], { readonly _tag: "ThreadCreate" }>,
+	event: {
+		readonly externalThreadId: ExternalThreadId
+		readonly name: string | null
+		readonly externalParentMessageId?: ExternalMessageId | undefined
+	},
 ) {
 	const db = yield* Database.Database
 	const existing = yield* db.first(
 		SQLite.from(schema.chatSyncChannelLinksTable)
-			.select("id")
+			.select("id", "hazelChannelId", "externalChannelName")
 			.where(($) => [
 				$.syncConnectionId.eq(parent.syncConnectionId),
 				$.externalChannelId.eq(event.externalThreadId),
@@ -297,10 +405,25 @@ const ingestThreadCreate = Effect.fn("OrgObject.chatSyncThreadCreate")(function*
 			])
 			.limit(1),
 	)
-	if (Option.isSome(existing)) return "already_linked"
+	if (Option.isSome(existing)) {
+		const name = event.name?.trim()
+		if (!name || existing.value.externalChannelName !== null) return "already_linked"
+		yield* db.run(
+			SQLite.update(schema.chatSyncChannelLinksTable)
+				.set({ externalChannelName: name, updatedAt: new Date() })
+				.where(($) => [$.id.eq(existing.value.id)]),
+		)
+		// Keeps a name someone (or thread naming) gave it since.
+		yield* renameChannel({
+			channelId: existing.value.hazelChannelId,
+			name,
+			onlyIfName: UNNAMED_THREAD,
+		})
+		return "named"
+	}
 	const channels = yield* ChannelRepo
 	const [thread] = yield* channels.insert({
-		name: event.name.trim() || "Thread",
+		name: event.name?.trim() || UNNAMED_THREAD,
 		icon: null,
 		type: "thread",
 		organizationId: parent.organizationId,
@@ -314,10 +437,11 @@ const ingestThreadCreate = Effect.fn("OrgObject.chatSyncThreadCreate")(function*
 			syncConnectionId: parent.syncConnectionId,
 			hazelChannelId: thread!.id,
 			externalChannelId: event.externalThreadId,
-			externalChannelName: event.name,
+			externalChannelName: event.name?.trim() || null,
 			direction: parent.direction,
 			isActive: true,
-			settings: parent.settings,
+			// Read from the parent's link (`channelTargets`).
+			settings: null,
 			lastSyncedAt: null,
 			deletedAt: null,
 		}),
@@ -367,10 +491,9 @@ const replyThreadLink = Effect.fn("OrgObject.chatSyncReplyThread")(function* (
 		return Option.some(channel)
 	}
 	yield* ingestThreadCreate(payload.provider, channel, {
-		_tag: "ThreadCreate",
-		externalThreadId: threadChannelId as string as ExternalThreadId,
-		name: "Thread",
-		externalParentMessageId: event.inExternalThreadId as string as ExternalMessageId,
+		externalThreadId: ExternalThreadId.make(threadChannelId),
+		name: event.externalThreadName ?? null,
+		externalParentMessageId: ExternalMessageId.make(event.inExternalThreadId),
 	})
 	return yield* findInboundLink(payload.provider, threadChannelId, payload.externalWorkspaceIds)
 })
@@ -441,9 +564,12 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 	const resolved = yield* replyThreadLink(definition.value, payload, found.value)
 	if (Option.isNone(resolved)) return yield* outcome("unlinked_thread")
 	const link = resolved.value
-	if (link.status !== "active" || !link.isActive) return yield* outcome("inactive")
-	if (link.direction === "hazel_to_external") return yield* outcome("outbound_only")
-	if ("externalWebhookId" in event && definition.value.isOwnEcho(link.settings, event.externalWebhookId)) {
+	const owned = yield* ownerOf(link)
+	if (Option.isNone(owned)) return yield* outcome("unlinked_parent")
+	const owner = owned.value
+	if (link.status !== "active" || !link.isActive || !owner.isActive) return yield* outcome("inactive")
+	if (owner.direction === "hazel_to_external") return yield* outcome("outbound_only")
+	if ("externalWebhookId" in event && definition.value.isOwnEcho(owner.settings, event.externalWebhookId)) {
 		return yield* outcome("own_webhook")
 	}
 	if (event._tag === "ThreadCreate") return yield* outcome(yield* ingestThreadCreate(provider, link, event))
@@ -509,16 +635,48 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 	yield* outcome("forwarded")
 })
 
+/** What a link's threads read of its settings: the identity they post as. */
+const threadFacingSettings = (settings: Record<string, unknown> | null) =>
+	JSON.stringify([
+		settings?.outboundIdentity ?? null,
+		(settings?.webhookPermission as { status?: unknown } | undefined)?.status ?? null,
+	])
+
 const linkSettings = Effect.fn("OrgObject.chatSyncLinkSettings")(function* (payload: LinkSettingsPayload) {
 	const db = yield* Database.Database
-	const updated = yield* db.run(
+	const previous = yield* db.first(
+		SQLite.from(schema.chatSyncChannelLinksTable)
+			.select("hazelChannelId", "settings")
+			.where(($) => [$.id.eq(payload.channelLinkId), $.deletedAt.isNull()])
+			.limit(1),
+	)
+	if (Option.isNone(previous)) return
+	yield* db.run(
 		SQLite.update(schema.chatSyncChannelLinksTable)
 			.set({ settings: payload.settings, updatedAt: new Date() })
-			.where(($) => [$.id.eq(payload.channelLinkId), $.deletedAt.isNull()])
-			.returning("hazelChannelId"),
+			.where(($) => [$.id.eq(payload.channelLinkId)]),
 	)
-	const channelId = updated[0]?.hazelChannelId
-	if (channelId !== undefined) yield* publishChatSyncLinks(channelId)
+	const { hazelChannelId } = previous.value
+	// A refreshed permission check alone does not wake every thread under the channel.
+	if (threadFacingSettings(previous.value.settings) === threadFacingSettings(payload.settings)) {
+		yield* publishLinksOf(hazelChannelId)
+	} else {
+		yield* publishChatSyncLinks(hazelChannelId)
+	}
+})
+
+/** `org.chatSyncRepublishLinks`: a channel asked for a fresh copy of its links. */
+const republishLinks = Effect.fn("OrgObject.chatSyncRepublishLinks")(function* (
+	payload: RepublishLinksPayload,
+) {
+	const db = yield* Database.Database
+	const link = yield* db.first(
+		SQLite.from(schema.chatSyncChannelLinksTable)
+			.select("hazelChannelId")
+			.where(($) => [$.id.eq(payload.channelLinkId)])
+			.limit(1),
+	)
+	if (Option.isSome(link)) yield* publishLinksOf(link.value.hazelChannelId)
 })
 
 /**
@@ -601,7 +759,8 @@ const linkThread = Effect.fn("OrgObject.chatSyncLinkThread")(function* (payload:
 			externalChannelName: payload.externalThreadName,
 			direction: parent.direction,
 			isActive: true,
-			settings: parent.settings,
+			// Read from the parent's link (`channelTargets`).
+			settings: null,
 			lastSyncedAt: null,
 			deletedAt: null,
 		}),
@@ -666,4 +825,5 @@ export const chatSyncOrgReceivers = {
 	"org.chatSyncIngest": (payload) => ingest(payload).pipe(Effect.provide(orgServices)),
 	"org.chatSyncLinkSettings": linkSettings,
 	"org.chatSyncLinkThread": linkThread,
+	"org.chatSyncRepublishLinks": republishLinks,
 } satisfies EffectReceivers<typeof ChatSyncOrgEffects, Database.Database | SqlClient>

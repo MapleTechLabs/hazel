@@ -28,6 +28,8 @@ import { discord, discordWebhookConfigOf } from "./definition"
 interface WebhookTarget {
 	readonly webhookId: string
 	readonly webhookToken: string
+	/** Set on a thread's link: the webhook belongs to the parent channel and posts into the thread. */
+	readonly threadId?: string
 }
 
 const RETRY_SCHEDULE = Schedule.max([
@@ -122,16 +124,20 @@ export const makeDiscordClient = Effect.gen(function* () {
 	/**
 	 * The link's webhook, provisioned on first use: every link posts as each author until Discord
 	 * refuses the webhook. `None`: post as the bot (refused before, not configured, or Discord failing).
+	 * Discord has no webhooks on threads: a thread posts through its parent channel's webhook, which
+	 * only the parent's own deliveries provision (one writer); until then the thread posts as the bot.
 	 */
 	const webhookOf = (context: ChatSyncLinkContext) =>
 		Effect.gen(function* () {
 			const { link } = context
+			const threadId = link.parent === undefined ? undefined : link.externalChannelId
 			const identity = outboundIdentityOf(link.settings)
 			if (!postsAsEachAuthor(identity)) return Option.none<WebhookTarget>()
 			if (webhookPermissionOf(link.settings)?.status === "denied") return Option.none<WebhookTarget>()
 			const current = discordWebhookConfigOf(identity)
-			if (Option.isSome(current)) return Option.some<WebhookTarget>(current.value)
-			if (Option.isNone(botTokenOption)) return Option.none<WebhookTarget>()
+			if (Option.isSome(current)) return Option.some<WebhookTarget>({ ...current.value, threadId })
+			if (link.parent !== undefined || Option.isNone(botTokenOption))
+				return Option.none<WebhookTarget>()
 
 			const created = yield* api
 				.createWebhook({
@@ -153,7 +159,7 @@ export const makeDiscordClient = Effect.gen(function* () {
 						webhookPermission("allowed"),
 					),
 				)
-				return Option.some<WebhookTarget>(created.success)
+				return Option.some<WebhookTarget>({ ...created.success, threadId })
 			}
 			const error = created.failure
 			yield* context.saveSettings(
