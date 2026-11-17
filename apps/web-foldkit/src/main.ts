@@ -19,6 +19,7 @@ import {
 	ReplaceUrl,
 	RetryCheckSession,
 	RetryFetchCurrentUser,
+	RememberLastOrganization,
 	SaveKeybindings,
 	SaveSoundSettings,
 	SaveThemePreference,
@@ -612,7 +613,12 @@ const updatedOrganization =
 								? current.member
 								: MemberData.Loading(),
 					})
-		return Update.combine(modifyFields(model, { org: () => next }), [informPage, informShell])
+		const remember: Step = (m) =>
+			next._tag === "Loaded" &&
+			!(current._tag === "Loaded" && current.organization.id === next.organization.id)
+				? { model: m, commands: [RememberLastOrganization({ organizationId: next.organization.id })] }
+				: { model: m }
+		return Update.combine(modifyFields(model, { org: () => next }), [informPage, informShell, remember])
 	}
 
 /** The user's row in the loaded organization; a row for another organization is stale and ignored. */
@@ -772,6 +778,7 @@ export const update = (model: Model, message: Message): Return =>
 		CompletedSaveThemePreference: () => ({ model }),
 		FailedSaveThemePreference: () => savingFailed("Couldn't save your theme")(model),
 		CompletedSaveSoundSettings: () => ({ model }),
+		CompletedRememberLastOrganization: () => ({ model }),
 		FailedSaveSoundSettings: () => savingFailed("Couldn't save your sound settings")(model),
 		CompletedSaveKeybindings: () => ({ model }),
 		FailedSaveKeybindings: () => savingFailed("Couldn't save your keybinds")(model),

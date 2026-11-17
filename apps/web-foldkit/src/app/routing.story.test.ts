@@ -13,6 +13,7 @@ import {
 	FetchCurrentUser,
 	LoadExternal,
 	NavigateInternal,
+	RememberLastOrganization,
 	ReplaceUrl,
 	RetryCheckSession,
 	RetryFetchCurrentUser,
@@ -325,6 +326,25 @@ describe("organization switch", () => {
 		expect(sharedOf(loaded).member).toBeNull()
 		const withRole = after(loaded, [Message.UpdatedMember({ organizationId: acmeOrg.id, member: owner })])
 		expect(sharedOf(withRole).member).toEqual(owner)
+	})
+
+	test("an organization that arrives is remembered for the next app start, once", () => {
+		const switched = after(signedIn("/hazel/settings/team"), [
+			Message.ChangedUrl({ url: urlOf("/acme/settings/team") }),
+		])
+		const loaded = update(
+			switched,
+			Message.UpdatedOrganization({ orgSlug: "acme", organization: acmeOrg }),
+		)
+		expect(loaded.commands?.map(({ name, args }) => ({ name, args }))).toContainEqual({
+			name: RememberLastOrganization.name,
+			args: { organizationId: acmeOrg.id },
+		})
+		const again = update(
+			loaded.model,
+			Message.UpdatedOrganization({ orgSlug: "acme", organization: acmeOrg }),
+		)
+		expect(again.commands?.map(({ name }) => name) ?? []).not.toContain(RememberLastOrganization.name)
 	})
 })
 

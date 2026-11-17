@@ -6,6 +6,7 @@ import { warmSyncObjects } from "~/db/warm"
 import { readAccessToken } from "~/lib/access-token"
 import { isRetryableError } from "~/lib/error-messages"
 import { catchCommon } from "../data/actions"
+import { rememberLastOrganization } from "../data/last-organization"
 import { saveSoundSettings, SoundSettings } from "../notification-sound"
 import { saveKeybindingOverrides } from "../keybindings"
 import { Overrides } from "~/lib/keybindings/keymap"
@@ -77,6 +78,14 @@ export const SaveSoundSettings = Command.define("SaveSoundSettings", {
 			Effect.as(Message.CompletedSaveSoundSettings()),
 			Effect.catchTag("StorageWriteError", () => Effect.succeed(Message.FailedSaveSoundSettings())),
 		),
+})
+
+/** The organization the user opened, for the next app start (`page/root`). */
+export const RememberLastOrganization = Command.define("RememberLastOrganization", {
+	args: { organizationId: OrganizationId },
+	messages: [Message.CompletedRememberLastOrganization],
+	execute: ({ organizationId }) =>
+		rememberLastOrganization(organizationId).pipe(Effect.as(Message.CompletedRememberLastOrganization())),
 })
 
 export const SaveKeybindings = Command.define("SaveKeybindings", {
