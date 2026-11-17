@@ -7,7 +7,7 @@ import { tv } from "tailwind-variants"
  */
 export const tooltipStyles = tv({
 	base: [
-		"group z-50 max-w-sm rounded-lg border border-(--tooltip-border) px-2.5 py-1.5 text-sm/6 [--tooltip-border:var(--color-muted-fg)]/30 dark:shadow-none *:[strong]:font-medium",
+		"group z-50 max-w-sm rounded-lg border border-(--tooltip-border) px-2.5 py-1 text-[0.8125rem]/5 shadow-md [--tooltip-border:var(--color-fg)]/10 *:[strong]:font-medium",
 		"transition-[opacity,translate] duration-150 ease-out starting:opacity-0",
 	],
 	variants: {

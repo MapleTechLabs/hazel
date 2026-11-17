@@ -42,6 +42,24 @@ If you want to use the typography plugin, uncomment the line below.
 
 	--shadow-control: var(--control-shadow);
 
+	/*
+	 * Elevation: layered shadows (a tight contact shadow under a soft ambient one) that read as light,
+	 * not smudge. Dark mode deepens them and adds a top highlight to raised surfaces, since a shadow
+	 * alone barely shows on a dark page. Defined per theme below (`--elevation-*`).
+	 */
+	--shadow-xs: var(--elevation-xs);
+	--shadow-sm: var(--elevation-sm);
+	--shadow-md: var(--elevation-md);
+	--shadow-lg: var(--elevation-lg);
+	--shadow-xl: var(--elevation-xl);
+
+	/* A strong ease-out (fast start, long settle) for everything that enters: `ease-out` everywhere. */
+	--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+	--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+	--color-bg-muted: var(--muted);
+	--color-border-hover: var(--border-hover);
+
 	--color-primary: var(--primary);
 	--color-primary-fg: var(--primary-fg);
 	--color-primary-subtle: var(--primary-subtle);
@@ -261,8 +279,16 @@ If you want to use the typography plugin, uncomment the line below.
 	--field: oklch(0 0 0 / 0.04);
 	--field-hover: oklch(0 0 0 / 0.065);
 
-	/* A filled control's edge: a top highlight and a bottom shade instead of a border. */
-	--control-shadow: inset 0 1px 0 oklch(1 0 0 / 0.16), inset 0 -1px 0 oklch(0 0 0 / 0.12);
+	/* A filled control's edge: a top highlight and a bottom shade instead of a border, over a hairline
+	   contact shadow that seats it on the page. */
+	--control-shadow:
+		inset 0 1px 0 oklch(1 0 0 / 0.16), inset 0 -1px 0 oklch(0 0 0 / 0.12), 0 1px 2px oklch(0 0 0 / 0.08);
+
+	--elevation-xs: 0 1px 2px 0 oklch(0 0 0 / 0.04);
+	--elevation-sm: 0 1px 2px -1px oklch(0 0 0 / 0.06), 0 1px 3px 0 oklch(0 0 0 / 0.06);
+	--elevation-md: 0 2px 4px -2px oklch(0 0 0 / 0.05), 0 6px 16px -4px oklch(0 0 0 / 0.1);
+	--elevation-lg: 0 4px 8px -4px oklch(0 0 0 / 0.06), 0 16px 36px -8px oklch(0 0 0 / 0.14);
+	--elevation-xl: 0 8px 16px -8px oklch(0 0 0 / 0.08), 0 28px 64px -12px oklch(0 0 0 / 0.22);
 
 	--primary: var(--color-brand-600);
 	--primary-fg: oklch(1 0 0);
@@ -300,6 +326,7 @@ If you want to use the typography plugin, uncomment the line below.
 	--danger-subtle-fg: var(--color-red-700);
 
 	--border: var(--color-zinc-200);
+	--border-hover: var(--color-zinc-300);
 	--input: var(--color-zinc-300);
 	--ring: var(--primary);
 
@@ -328,7 +355,7 @@ If you want to use the typography plugin, uncomment the line below.
 	--verified: var(--color-brand-500);
 	--selection-bg: var(--color-brand-100);
 	--selection-fg: var(--color-brand-700);
-	--overlay-backdrop: oklch(0 0 0 / 0.15);
+	--overlay-backdrop: oklch(0.2 0.01 286 / 0.2);
 
 	--radius-lg: 0.5rem;
 	--radius-xs: calc(var(--radius-lg) * 0.25);
@@ -353,7 +380,20 @@ If you want to use the typography plugin, uncomment the line below.
 	--wash-strong: oklch(1 0 0 / 0.08);
 	--field: oklch(1 0 0 / 0.05);
 	--field-hover: oklch(1 0 0 / 0.08);
-	--control-shadow: inset 0 1px 0 oklch(1 0 0 / 0.14), inset 0 -1px 0 oklch(0 0 0 / 0.2);
+	--control-shadow:
+		inset 0 1px 0 oklch(1 0 0 / 0.14), inset 0 -1px 0 oklch(0 0 0 / 0.2), 0 1px 2px oklch(0 0 0 / 0.3);
+
+	--elevation-xs: 0 1px 2px 0 oklch(0 0 0 / 0.3);
+	--elevation-sm: 0 1px 2px -1px oklch(0 0 0 / 0.3), 0 1px 3px 0 oklch(0 0 0 / 0.35);
+	--elevation-md:
+		inset 0 1px 0 oklch(1 0 0 / 0.04), 0 2px 4px -2px oklch(0 0 0 / 0.3),
+		0 6px 16px -4px oklch(0 0 0 / 0.45);
+	--elevation-lg:
+		inset 0 1px 0 oklch(1 0 0 / 0.05), 0 4px 8px -4px oklch(0 0 0 / 0.4),
+		0 16px 36px -8px oklch(0 0 0 / 0.6);
+	--elevation-xl:
+		inset 0 1px 0 oklch(1 0 0 / 0.06), 0 8px 16px -8px oklch(0 0 0 / 0.45),
+		0 28px 64px -12px oklch(0 0 0 / 0.7);
 
 	--primary: var(--color-brand-600);
 	--primary-fg: oklch(1 0 0);
@@ -390,8 +430,11 @@ If you want to use the typography plugin, uncomment the line below.
 	--danger-subtle: theme("color-red-500/10%");
 	--danger-subtle-fg: var(--color-red-400);
 
-	--border: oklch(0.3 0.013 285.805);
-	--input: oklch(0.31 0.013 285.805);
+	/* Hairlines are alpha in dark mode, so one border reads the same on the page, the sidebar and a
+	   raised overlay instead of glowing on the darker surfaces. */
+	--border: oklch(1 0 0 / 0.085);
+	--border-hover: oklch(1 0 0 / 0.14);
+	--input: oklch(1 0 0 / 0.1);
 
 	--navbar: oklch(0.17 0.006 285.885);
 	--navbar-fg: var(--color-zinc-50);
@@ -402,7 +445,7 @@ If you want to use the typography plugin, uncomment the line below.
 	--sidebar-primary-fg: var(--color-brand-300);
 	--sidebar-accent: oklch(0.274 0.006 286.033);
 	--sidebar-accent-fg: oklch(0.985 0 0);
-	--sidebar-border: oklch(0.274 0.006 286.033);
+	--sidebar-border: oklch(1 0 0 / 0.07);
 	--sidebar-ring: var(--color-brand-500);
 
 	--chart-1: var(--color-brand-700);
@@ -418,7 +461,7 @@ If you want to use the typography plugin, uncomment the line below.
 	--verified: var(--color-brand-400);
 	--selection-bg: var(--color-brand-900);
 	--selection-fg: var(--color-brand-200);
-	--overlay-backdrop: oklch(0 0 0 / 0.15);
+	--overlay-backdrop: oklch(0 0 0 / 0.5);
 
 	::selection {
 		background-color: var(--selection-bg);
@@ -469,7 +512,7 @@ If you want to use the typography plugin, uncomment the line below.
 		color: var(--fg);
 	}
 
-	/* Balanced text wrapping for headings */
+	/* Balanced text wrapping for headings; Inter tightens slightly as it grows. */
 	h1,
 	h2,
 	h3,
@@ -477,6 +520,7 @@ If you want to use the typography plugin, uncomment the line below.
 	h5,
 	h6 {
 		text-wrap: balance;
+		letter-spacing: -0.011em;
 	}
 }
 

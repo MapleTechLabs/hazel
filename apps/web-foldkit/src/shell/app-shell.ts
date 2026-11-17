@@ -33,7 +33,7 @@ import { hasDesktopTitlebar } from "../platform/desktop"
  * sidebar moves into a sheet and `MobileNav` joins the inset.
  */
 
-const NAV_ACTIVE = "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+const NAV_ACTIVE = "bg-sidebar-accent font-medium text-sidebar-accent-fg"
 
 /** `useUnreadNotificationCount` badge on the bell. */
 const bellIcon = <Message>(h: HtmlBuilder<Message>, unreadCount: number): Html =>

@@ -23,13 +23,13 @@ export const commandMenuOverlayClassName = (isBlurred: boolean) =>
 /** The `cx` arguments of the Modal, before the caller's `className`. */
 export const commandMenuModalBase = (size: CommandMenuSize) =>
 	[
-		"row-start-2 bg-overlay text-left text-overlay-fg shadow-lg outline-none ring ring-muted-fg/15 md:row-start-1 dark:ring-border",
+		"row-start-2 bg-overlay text-left text-overlay-fg shadow-xl outline-none ring ring-fg/8 md:row-start-1 dark:ring-fg/10",
 		"max-h-[80dvh] w-full sm:fixed sm:top-[10%] sm:left-1/2 sm:-translate-x-1/2",
 		"rounded-t-2xl md:rounded-xl",
 		commandMenuSizes[size],
 		// Fades and rises (scales on wider screens) in from `@starting-style`, in 200ms.
 		"transition-[opacity,translate,scale] duration-200 ease-out",
-		"starting:translate-y-4 starting:opacity-0 sm:starting:translate-y-0 sm:starting:scale-95",
+		"starting:translate-y-4 starting:opacity-0 sm:starting:translate-y-0 sm:starting:scale-[0.97]",
 	] as const
 
 export const commandMenuDialogClassName = "flex max-h-[inherit] flex-col overflow-hidden outline-hidden"

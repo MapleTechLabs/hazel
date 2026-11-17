@@ -118,7 +118,7 @@ export const commandInputPanel = <M>(
 	const { command } = input
 	const isExecuting = input.submission === "Executing"
 	return h.div(
-		[h.Class("mb-2 rounded-lg border border-border bg-surface-2 p-4")],
+		[h.Class("mb-2 rounded-lg border border-border bg-muted p-4")],
 		[
 			h.div(
 				[h.Class("mb-3 flex items-center gap-2")],
