@@ -9,14 +9,15 @@ import type { ChatSyncChannelLink } from "@hazel/domain/models"
 import { Cause, Config, Effect, Option, Redacted, Schedule } from "effect"
 import { formatMessageContentWithAttachments } from "../../chat-sync-attachment-content"
 import {
-	isWebhookStrategyEnabled,
 	outboundIdentityOf,
+	postsAsEachAuthor,
 	webhookPermission,
 	webhookPermissionOf,
 	withOutboundIdentity,
 } from "../../chat-sync-settings"
 import {
 	ChatSyncProviderApiError,
+	type ChatSyncAuthor,
 	type ChatSyncClient,
 	ChatSyncProviderConfigurationError,
 	type ChatSyncLinkContext,
@@ -77,6 +78,22 @@ const requireContent = (content: string) =>
 				)
 			: Effect.void
 
+/** Discord markdown in a name shown literally, and `@` kept from pinging (`@everyone`). */
+const escapeName = (name: string) => name.replace(/[\\*_~`|]/g, "\\$&").replace(/@/g, "@\u200b")
+
+/**
+ * A message the bot posts shows as "Hazel", so it names its Hazel author on a first line:
+ * `**Olive Owner**`. A body the header would push past Discord's limit is cut to fit.
+ */
+export const withAuthorHeader = (author: ChatSyncAuthor, content: string) => {
+	const name = author.name.trim()
+	if (!name) return content
+	const header = `**${escapeName(name)}**\n`
+	const room = discord.maxMessageLength - header.length
+	const body = content.length > room ? `${content.slice(0, room - 1)}…` : content
+	return header + body
+}
+
 export const makeDiscordClient = Effect.gen(function* () {
 	const api = yield* Discord.DiscordApiClient
 	const botTokenOption = yield* Config.Redacted("DISCORD_BOT_TOKEN").pipe(Config.option)
@@ -103,14 +120,14 @@ export const makeDiscordClient = Effect.gen(function* () {
 		)
 
 	/**
-	 * The link's webhook when it posts as each author, provisioned on first use. `None`: post as
-	 * the bot (identity off, refused before, not configured, or Discord failing).
+	 * The link's webhook, provisioned on first use: every link posts as each author until Discord
+	 * refuses the webhook. `None`: post as the bot (refused before, not configured, or Discord failing).
 	 */
 	const webhookOf = (context: ChatSyncLinkContext) =>
 		Effect.gen(function* () {
 			const { link } = context
 			const identity = outboundIdentityOf(link.settings)
-			if (!isWebhookStrategyEnabled(identity)) return Option.none<WebhookTarget>()
+			if (!postsAsEachAuthor(identity)) return Option.none<WebhookTarget>()
 			if (webhookPermissionOf(link.settings)?.status === "denied") return Option.none<WebhookTarget>()
 			const current = discordWebhookConfigOf(identity)
 			if (Option.isSome(current)) return Option.some<WebhookTarget>(current.value)
@@ -127,7 +144,6 @@ export const makeDiscordClient = Effect.gen(function* () {
 					withOutboundIdentity(
 						link.settings,
 						{
-							enabled: true,
 							strategy: "webhook",
 							providers: {
 								...identity.providers,
@@ -210,7 +226,7 @@ export const makeDiscordClient = Effect.gen(function* () {
 				viaBot((token) =>
 					api.createMessage({
 						channelId,
-						content,
+						content: withAuthorHeader(message.author, content),
 						replyToMessageId: message.replyToExternalMessageId,
 						botToken: token,
 					}),
@@ -241,7 +257,7 @@ export const makeDiscordClient = Effect.gen(function* () {
 					api.updateMessage({
 						channelId,
 						messageId: message.externalMessageId,
-						content,
+						content: withAuthorHeader(message.author, content),
 						botToken: token,
 					}),
 				).pipe(Effect.asVoid),

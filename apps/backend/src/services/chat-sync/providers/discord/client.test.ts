@@ -9,7 +9,7 @@ import {
 } from "@hazel/schema"
 import { ConfigProvider, Effect, Layer } from "effect"
 import type { ChatSyncLinkContext } from "../../provider"
-import { makeDiscordClient } from "./client"
+import { makeDiscordClient, withAuthorHeader } from "./client"
 
 const channelId = ExternalChannelId.make("100000000000000001")
 const messageId = ExternalMessageId.make("100000000000000002")
@@ -82,7 +82,7 @@ describe("Discord per-author identity", () => {
 	const author = { name: "Olive Owner", avatarUrl: "https://example.com/olive.png" }
 	const message = { content: "hi", attachments: [], replyToExternalMessageId: undefined, author }
 	const identityOn = (providers: Record<string, unknown> = {}) => ({
-		outboundIdentity: { enabled: true, strategy: "webhook", providers },
+		outboundIdentity: { strategy: "webhook", providers },
 	})
 
 	/** The client over a fake Discord API; records calls and the settings the client saved. */
@@ -95,6 +95,7 @@ describe("Discord per-author identity", () => {
 		readonly executeWebhook?: () => Effect.Effect<string, Discord.DiscordApiError>
 	}) => {
 		const calls: Array<string> = []
+		const contents: Array<string> = []
 		const saved: Array<Record<string, unknown>> = []
 		const api = {
 			createWebhook: () => {
@@ -108,8 +109,9 @@ describe("Discord per-author identity", () => {
 				calls.push(`executeWebhook:${params.username}`)
 				return options.executeWebhook?.() ?? Effect.succeed("100000000000000010")
 			},
-			createMessage: () => {
+			createMessage: (params: { content: string }) => {
 				calls.push("createMessage")
+				contents.push(params.content)
 				return Effect.succeed("100000000000000020")
 			},
 		}
@@ -127,7 +129,7 @@ describe("Discord per-author identity", () => {
 				message,
 			)
 		}).pipe(Effect.provide(layer))
-		return { post, calls, saved }
+		return { post, calls, contents, saved }
 	}
 
 	const permissionOf = (settings: Record<string, unknown> | undefined) =>
@@ -186,13 +188,57 @@ describe("Discord per-author identity", () => {
 		}),
 	)
 
-	it.effect("identity off posts as the bot", () =>
+	it.effect("a new link with no identity settings posts as the author", () =>
 		Effect.gen(function* () {
 			const h = harness({ settings: {} })
-			yield* h.post
-			expect(h.calls).toEqual(["createMessage"])
+			expect(yield* h.post).toBe("100000000000000010")
+			expect(h.calls).toEqual(["createWebhook", "executeWebhook:Olive Owner"])
 		}),
 	)
+
+	it.effect("a link saved with the old `enabled: false` default posts as the author", () =>
+		Effect.gen(function* () {
+			const h = harness({
+				settings: { outboundIdentity: { enabled: false, strategy: "webhook", providers: {} } },
+			})
+			yield* h.post
+			expect(h.calls).toEqual(["createWebhook", "executeWebhook:Olive Owner"])
+			const saved = h.saved[0]!.outboundIdentity as Record<string, unknown>
+			expect("enabled" in saved).toBe(false)
+		}),
+	)
+
+	it.effect("a link Discord refused posts as the bot, naming the author", () =>
+		Effect.gen(function* () {
+			const h = harness({ settings: { outboundIdentity: { strategy: "fallback_bot", providers: {} } } })
+			yield* h.post
+			expect(h.calls).toEqual(["createMessage"])
+			expect(h.contents).toEqual(["**Olive Owner**\nhi"])
+		}),
+	)
+})
+
+describe("Discord bot attribution header", () => {
+	const author = (name: string) => ({ name, avatarUrl: null })
+
+	it("names the author on a first line", () => {
+		expect(withAuthorHeader(author("Olive Owner"), "hi")).toBe("**Olive Owner**\nhi")
+	})
+
+	it("leaves the content alone without a name", () => {
+		expect(withAuthorHeader(author("  "), "hi")).toBe("hi")
+	})
+
+	it("escapes markdown and keeps @ from pinging", () => {
+		expect(withAuthorHeader(author("*@everyone*"), "hi")).toBe("**\\*@\u200beveryone\\***\nhi")
+	})
+
+	it("cuts a body the header would push past the limit", () => {
+		const out = withAuthorHeader(author("Olive"), "x".repeat(2000))
+		expect(out.length).toBe(2000)
+		expect(out.startsWith("**Olive**\n")).toBe(true)
+		expect(out.endsWith("…")).toBe(true)
+	})
 })
 
 describe("Discord edits", () => {
@@ -214,20 +260,25 @@ describe("Discord edits", () => {
 					),
 				),
 			)
-			yield* client.updateMessage(context, {
-				externalMessageId: messageId,
-				content: "edited",
-				attachments: [
-					{
-						id: "00000000-0000-0000-0000-000000000001" as never,
-						fileName: "plan.pdf",
-						fileSize: 2048,
-						publicUrl: "https://files.test/plan.pdf",
-					},
-				],
-			})
+			const refused = { outboundIdentity: { strategy: "fallback_bot", providers: {} } }
+			yield* client.updateMessage(
+				{ ...context, link: { ...context.link, settings: refused } },
+				{
+					externalMessageId: messageId,
+					content: "edited",
+					author: { name: "Olive Owner", avatarUrl: null },
+					attachments: [
+						{
+							id: "00000000-0000-0000-0000-000000000001" as never,
+							fileName: "plan.pdf",
+							fileSize: 2048,
+							publicUrl: "https://files.test/plan.pdf",
+						},
+					],
+				},
+			)
 			expect(sent).toHaveLength(1)
-			expect(sent[0]).toContain("edited")
+			expect(sent[0]!.startsWith("**Olive Owner**\nedited")).toBe(true)
 			expect(sent[0]).toContain("https://files.test/plan.pdf")
 		}),
 	)
