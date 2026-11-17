@@ -127,6 +127,7 @@ export interface ChatSyncClient {
 			readonly externalMessageId: ExternalMessageId
 			readonly content: string
 			readonly attachments: ReadonlyArray<ChatSyncOutboundAttachment>
+			readonly author: ChatSyncAuthor
 		},
 	) => Effect.Effect<void, ChatSyncClientError | ChatSyncSaveSettingsError>
 	readonly deleteMessage: (

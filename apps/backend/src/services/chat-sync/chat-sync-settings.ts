@@ -1,5 +1,6 @@
 /**
- * A channel link's `settings`: the outbound identity (post as each Hazel author, or as the bot)
+ * A channel link's `settings`: the outbound identity (post as each Hazel author, the default, or
+ * as the bot once the provider refused the identity)
  * and the permission the provider last reported for it. Pure; the org owns the row, the channel
  * holds a copy (`channel.setChatSyncLinks`). A provider keeps its own identity config under
  * `outboundIdentity.providers.<id>` (`providers/<id>/definition.ts`).
@@ -22,12 +23,11 @@ const decodeOutboundIdentitySettings = Schema.decodeUnknownOption(
 )
 
 export const defaultOutboundIdentity = (): ChatSyncChannelLink.OutboundIdentitySettings => ({
-	enabled: false,
 	strategy: "webhook",
 	providers: {},
 })
 
-/** A new link's settings: the caller's, with an outbound identity (off) when they gave none. */
+/** A new link's settings: the caller's, with the default outbound identity when they gave none. */
 export const normalizeChannelLinkSettings = (settings: Settings): Record<string, unknown> => ({
 	...settings,
 	outboundIdentity: settings?.outboundIdentity ?? defaultOutboundIdentity(),
@@ -45,8 +45,8 @@ export const outboundIdentityOf = (settings: Settings): ChatSyncChannelLink.Outb
 }
 
 /** Whether the link posts as each Hazel author (rather than as the bot). */
-export const isWebhookStrategyEnabled = (identity: ChatSyncChannelLink.OutboundIdentitySettings) =>
-	identity.enabled && identity.strategy === "webhook"
+export const postsAsEachAuthor = (identity: ChatSyncChannelLink.OutboundIdentitySettings) =>
+	identity.strategy === "webhook"
 
 export const webhookPermissionOf = (settings: Settings): WebhookPermissionState | undefined => {
 	const raw = settings?.webhookPermission
@@ -78,7 +78,9 @@ export const withOutboundIdentity = (
 	identity: ChatSyncChannelLink.OutboundIdentitySettings,
 	permission?: WebhookPermissionState,
 ): Record<string, unknown> => {
-	const current = rawOutboundIdentity(settings) ?? defaultOutboundIdentity()
+	// `enabled` predates posting as each author by default; a rewrite drops it.
+	const { enabled: _enabled, ...current }: Record<string, unknown> =
+		rawOutboundIdentity(settings) ?? defaultOutboundIdentity()
 	const providers =
 		current.providers !== null && typeof current.providers === "object"
 			? (current.providers as Record<string, unknown>)
@@ -87,7 +89,6 @@ export const withOutboundIdentity = (
 		...settings,
 		outboundIdentity: {
 			...current,
-			enabled: identity.enabled,
 			strategy: identity.strategy,
 			providers: { ...providers, ...identity.providers },
 		},

@@ -331,10 +331,12 @@ const deliver = (
 				const linked = yield* findMessageLink({ channelLinkId, hazelMessageId: event.messageId })
 				if (Option.isNone(linked)) return ignored("missing_link")
 				const externalMessageId = linked.value.externalMessageId as ExternalMessageId
+				const author = (yield* displayNames([message.value.authorId])).get(message.value.authorId)
 				yield* client.updateMessage(context, {
 					externalMessageId,
 					content: yield* outboundContent(definition, message.value.content, accounts),
 					attachments: yield* attachmentsOf(event.messageId),
+					author: { name: author?.name ?? "", avatarUrl: author?.avatarUrl ?? null },
 				})
 				yield* touchMessageLink(linked.value.id, {})
 				return synced
