@@ -9,9 +9,12 @@ import { tv } from "tailwind-variants"
  * - `section`: a section inside a page (a card, a settings group)
  * - `subsection`: a group inside a section, a list's header
  * - `label`: a quiet uppercase eyebrow over a group of rows
+ *
+ * Balancing sets only `text-wrap-style`: `text-balance` is the `text-wrap` shorthand, which also
+ * resets `text-wrap-mode` to `wrap` and so beats a call site's `truncate` (`white-space: nowrap`).
  */
 export const headingStyles = tv({
-	base: "text-balance text-fg",
+	base: "[text-wrap-style:balance] text-fg",
 	variants: {
 		variant: {
 			display: "font-semibold text-2xl/8 tracking-[-0.02em]",

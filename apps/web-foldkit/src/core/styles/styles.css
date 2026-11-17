@@ -127,6 +127,10 @@ If you want to use the typography plugin, uncomment the line below.
 	--color-selection-fg: var(--selection-fg);
 	--color-overlay-backdrop: var(--overlay-backdrop);
 
+	/* Vendor brand colours, the same in both themes: the Slack/Discord sync badges. */
+	--color-discord: #5865f2;
+	--color-slack: #4a154b;
+
 	--animate-field-error-enter: field-error-enter 0.2s ease-out;
 	/* A message that arrives live rises into place (Slack, Discord); the native host plays it too. */
 	--animate-message-enter: message-enter 180ms cubic-bezier(0.2, 0, 0, 1);

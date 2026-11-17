@@ -34,8 +34,8 @@ const agentBadge = <M>(h: HtmlBuilder<M>, agentName: string, authorName: string)
 
 /** Each platform's brand color: Discord blurple with its white mark, Slack aubergine with its colored mark. */
 const SYNC_PROVIDERS = {
-	discord: { label: "Discord", icon: IconDiscord, className: "bg-[#5865F2]" },
-	slack: { label: "Slack", icon: IconSlack, className: "bg-[#4A154B]" },
+	discord: { label: "Discord", icon: IconDiscord, className: "bg-discord" },
+	slack: { label: "Slack", icon: IconSlack, className: "bg-slack" },
 } satisfies Record<
 	SyncProvider,
 	{ readonly label: string; readonly icon: typeof IconDiscord; readonly className: string }
