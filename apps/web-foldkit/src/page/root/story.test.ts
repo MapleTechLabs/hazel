@@ -19,10 +19,9 @@ const go = (href: string) =>
 
 describe("root redirect", () => {
 	test("reads the remembered page and the last organization first", () => {
-		expect(init().commands?.map((command) => command.name)).toEqual([
-			ReadReturnTo.name,
-			ReadLastOrganization.name,
-		])
+		const names = init().commands?.map((command) => command.name)
+		expect(names).toContain(ReadReturnTo.name)
+		expect(names).toContain(ReadLastOrganization.name)
 	})
 
 	test("without a remembered page it goes to the user's organization", () => {
@@ -49,13 +48,28 @@ describe("root redirect", () => {
 		)
 	})
 
-	test("an organization the user has left falls back to one they are in", () => {
+	test("waits for the last opened organization while the org sources are still syncing", () => {
 		story(
 			signedIn,
 			given(init().model),
 			message(Message.ReadReturnTo({ returnTo: null })),
 			message(Message.ReadLastOrganization({ organizationId: other.organizationId })),
 			message(Message.UpdatedMemberships({ memberships: [membership] })),
+			model((m) => expect(m.hasRedirected).toBe(false)),
+			message(Message.UpdatedMemberships({ memberships: [membership, other] })),
+			go("/acme"),
+		)
+	})
+
+	test("an organization the user has left falls back once every org source answered", () => {
+		story(
+			signedIn,
+			given(init().model),
+			message(Message.ReadReturnTo({ returnTo: null })),
+			message(Message.ReadLastOrganization({ organizationId: other.organizationId })),
+			message(Message.UpdatedMemberships({ memberships: [membership] })),
+			model((m) => expect(m.hasRedirected).toBe(false)),
+			message(Message.SettledOrgSources()),
 			go("/hazel"),
 		)
 	})

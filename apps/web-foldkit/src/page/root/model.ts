@@ -13,6 +13,8 @@ export const Model = Schema.Struct({
 	memberships: Schema.UndefinedOr(Schema.Array(RootMembership)),
 	/** The organization last opened on this device (`data/last-organization.ts`); `undefined` until read. */
 	lastOrganizationId: Schema.UndefinedOr(Schema.NullOr(OrganizationId)),
+	/** Every org source has answered: `memberships` is complete, not just the orgs synced so far. */
+	areOrgsSettled: Schema.Boolean,
 	/** The page sign-in started from (`auth/return-to.ts`); `undefined` until read, `null` if none. */
 	returnTo: Schema.UndefinedOr(Schema.NullOr(Schema.String)),
 	hasRedirected: Schema.Boolean,
@@ -24,6 +26,7 @@ export type Model = typeof Model.Type
 export const Message = defineMessageUnion({
 	UpdatedMemberships: { memberships: Schema.Array(RootMembership) },
 	ReadLastOrganization: { organizationId: Schema.NullOr(OrganizationId) },
+	SettledOrgSources: {},
 	ReadReturnTo: { returnTo: Schema.NullOr(Schema.String) },
 	CompletedForgetReturnTo: {},
 	StalledMembership: {},

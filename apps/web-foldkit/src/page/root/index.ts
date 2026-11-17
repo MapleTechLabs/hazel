@@ -1,9 +1,10 @@
 import { OrganizationId, UserId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
-import { Effect, Option, Schema, Stream } from "effect"
+import { Effect, Option, Queue, Schema, Stream } from "effect"
 import { Command, Submodel, Subscription } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { organizationCollection, organizationMemberCollection } from "~/db/collections"
+import { appOrgSourcesSettled } from "~/db/sync-manager"
 import { forgetReturnTo, readReturnTo } from "../../auth/return-to"
 import { readLastOrganization } from "../../data/last-organization"
 import { liveQueryStream } from "../../data/live-query"
@@ -44,10 +45,21 @@ export const ForgetReturnTo = Command.define("ForgetReturnTo", {
 	execute: forgetReturnTo.pipe(Effect.as(Message.CompletedForgetReturnTo())),
 })
 
+const lastMembershipOf = (model: Model): RootMembership | undefined =>
+	model.memberships?.find(({ organizationId }) => organizationId === model.lastOrganizationId)
+
 /** The last opened organization when the user is still in it, else any of theirs. */
 const membershipOf = (model: Model): RootMembership | undefined =>
-	model.memberships?.find(({ organizationId }) => organizationId === model.lastOrganizationId) ??
-	model.memberships?.[0]
+	lastMembershipOf(model) ?? model.memberships?.[0]
+
+/**
+ * Memberships arrive as each org source syncs: one missing the last opened organization only
+ * means the user left it once every source has answered.
+ */
+const isMembershipKnown = (model: Model): boolean =>
+	model.memberships !== undefined &&
+	model.lastOrganizationId !== undefined &&
+	(model.lastOrganizationId === null || model.areOrgsSettled || lastMembershipOf(model) !== undefined)
 
 /**
  * Where to go: back to where sign-in started, unless onboarding comes first; else `rootRedirect`.
@@ -81,8 +93,7 @@ const redirectWhenReady = (model: Model, shared: Shared): Return => {
 		model.hasRedirected ||
 		model.returnTo === undefined ||
 		shared.currentUser === null ||
-		((model.memberships === undefined || model.lastOrganizationId === undefined) &&
-			needsMembership(model, shared.currentUser))
+		(!isMembershipKnown(model) && needsMembership(model, shared.currentUser))
 	)
 		return { model }
 	const target = targetOf(model, shared.currentUser, shared)
@@ -124,12 +135,35 @@ const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()
 						),
 		},
 	),
+	orgSourcesSettled: entry(
+		{ userId: Schema.NullOr(UserId) },
+		{
+			modelToDependencies: ({ shared }) => ({ userId: shared.currentUser?.id ?? null }),
+			dependenciesToStream: ({ userId }) =>
+				userId === null
+					? Stream.empty
+					: Stream.callback<Message>((queue) =>
+							Effect.acquireRelease(
+								Effect.sync(() => {
+									const check = () => {
+										if (appOrgSourcesSettled.isSettled())
+											Queue.offerUnsafe(queue, Message.SettledOrgSources())
+									}
+									check()
+									return appOrgSourcesSettled.subscribe(check)
+								}),
+								(unsubscribe) => Effect.sync(unsubscribe),
+							).pipe(Effect.flatMap(() => Effect.never)),
+						),
+		},
+	),
 }))
 
 export const init = (): Return => ({
 	model: {
 		memberships: undefined,
 		lastOrganizationId: undefined,
+		areOrgsSettled: false,
 		returnTo: undefined,
 		hasRedirected: false,
 		isStalled: false,
@@ -144,6 +178,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				modifyFields(model, { memberships: () => memberships, isStalled: () => false }),
 				shared,
 			),
+		SettledOrgSources: () =>
+			model.areOrgsSettled
+				? { model }
+				: redirectWhenReady(modifyFields(model, { areOrgsSettled: () => true }), shared),
 		ReadLastOrganization: ({ organizationId }) =>
 			redirectWhenReady(modifyFields(model, { lastOrganizationId: () => organizationId }), shared),
 		StalledMembership: () => ({ model: modifyFields(model, { isStalled: () => true }) }),
