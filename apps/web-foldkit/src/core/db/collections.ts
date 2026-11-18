@@ -212,3 +212,11 @@ export const customerChannelLinkCollection = customersCollection(
 	"customer_channel_links",
 	Customers.ChannelLink.Schema,
 )
+export const customerImpersonatorCollection = customersCollection(
+	"customer_impersonators",
+	Customers.Impersonator.Schema,
+)
+export const customerImpersonationCollection = customersCollection(
+	"customer_impersonations",
+	Customers.Impersonation.Schema,
+)

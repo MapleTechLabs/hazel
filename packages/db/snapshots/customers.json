@@ -1,5 +1,5 @@
 {
-	"migration": "0011_customer_merge",
+	"migration": "0012_customer_impersonation",
 	"entities": [
 		{
 			"kind": "table",
@@ -67,6 +67,20 @@
 		{
 			"kind": "table",
 			"name": "customer_ignore_rules",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_impersonations",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_impersonators",
 			"primaryKey": {
 				"columns": ["id"]
 			}
@@ -1461,6 +1475,159 @@
 			"table": "customer_ignore_rules",
 			"name": "createdAt",
 			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonations",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonations",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonations",
+			"name": "userId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonations",
+			"name": "provider",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonations",
+			"name": "accountId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonations",
+			"name": "contactId",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonations",
+			"name": "contactLabel",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonations",
+			"name": "externalUserId",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonations",
+			"name": "externalTokenId",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonations",
+			"name": "createdAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonations",
+			"name": "updatedAt",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonators",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonators",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonators",
+			"name": "userId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonators",
+			"name": "grantedBy",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonators",
+			"name": "createdAt",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_impersonators",
+			"name": "updatedAt",
+			"position": 5,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -3356,6 +3523,20 @@
 			"name": "customer_health_daily_day_idx",
 			"unique": false,
 			"columns": ["\"day\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_impersonations",
+			"name": "customer_impersonations_created_idx",
+			"unique": false,
+			"columns": ["\"createdAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_impersonators",
+			"name": "customer_impersonators_user_unique",
+			"unique": true,
+			"columns": ["\"userId\""]
 		},
 		{
 			"kind": "index",

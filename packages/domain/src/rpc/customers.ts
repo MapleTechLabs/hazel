@@ -14,6 +14,7 @@ import {
 	CustomerAccountId,
 	CustomerChannelLinkId,
 	CustomerConnectionId,
+	CustomerContactId,
 	CustomerIgnoreRuleId,
 	CustomerNoteId,
 	CustomerSavedViewId,
@@ -96,6 +97,7 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"unmatched_record",
 			"ignore_rule",
 			"metric",
+			"contact",
 			/** No such channel in the org, or one the caller cannot see. */
 			"channel",
 		]),
@@ -125,6 +127,20 @@ export class CustomerProviderUnavailableError extends Schema.TaggedError<Custome
 export class CustomerConnectionCredentialsError extends Schema.TaggedError<CustomerConnectionCredentialsError>()(
 	"CustomerConnectionCredentialsError",
 	{ provider: CustomerProvider, message: Schema.String, retryable: Schema.Boolean },
+) {}
+
+/**
+ * The provider would not start an impersonation: no live connection that can impersonate
+ * (`unavailable`), the contact has no user there (`no_user`), impersonation is off in the
+ * provider's settings (`disabled`), or the provider refused or failed (`provider`, its own
+ * explanation in `message`, e.g. the monthly allowance used up).
+ */
+export class CustomerImpersonationError extends Schema.TaggedError<CustomerImpersonationError>()(
+	"CustomerImpersonationError",
+	{
+		reason: Schema.Literals(["unavailable", "no_user", "disabled", "provider"]),
+		message: Schema.String,
+	},
 ) {}
 
 const Tx = Schema.Struct({ transactionId: TransactionId })
@@ -559,6 +575,24 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		{ metricKey: NonEmptyText(200), unit: Schema.NullOr(NonEmptyText(40)) },
 		Tx,
 		CustomersNotFoundError,
+	),
+
+	/** Let a member sign in as customers' users (Clerk impersonation). Admins and owners. */
+	write("customers.impersonator.grant", { userId: UserId }, Tx, CustomersInvalidRequestError),
+
+	/** Take the grant back; impersonation links already handed out expire within a minute. */
+	write("customers.impersonator.revoke", { userId: UserId }, Tx),
+
+	/**
+	 * Sign in as the contact's user in the customer's app: answers the provider's one-time sign-in
+	 * URL (valid for a minute), for the caller only. Members with a grant, not admins as such.
+	 */
+	write(
+		"customers.impersonation.start",
+		{ contactId: CustomerContactId },
+		withTx(Schema.Struct({ url: Schema.String })),
+		CustomersNotFoundError,
+		CustomerImpersonationError,
 	),
 
 	/**

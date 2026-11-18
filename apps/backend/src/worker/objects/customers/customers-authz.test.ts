@@ -95,6 +95,9 @@ const PAYLOADS = {
 	"customers.ignoreRule.delete": { ruleId: uuid() },
 	"customers.metric.setUnit": { metricKey: "autumn.traces", unit: "GB" },
 	"customers.demo.seed": { accounts: 1 },
+	"customers.impersonator.grant": { userId: uuid() },
+	"customers.impersonator.revoke": { userId: uuid() },
+	"customers.impersonation.start": { contactId: uuid() },
 } satisfies Record<HazelRpcTag & `customers.${string}`, Record<string, unknown>>
 
 /** Settings, rules and their dry runs, shared views, data sources, unmatched records, the demo seed. */
@@ -119,6 +122,10 @@ const ADMIN_ONLY = new Set([
 	"customers.ignoreRule.delete",
 	"customers.metric.setUnit",
 	"customers.demo.seed",
+	"customers.impersonator.grant",
+	"customers.impersonator.revoke",
+	// Not admin-only: members an admin granted it (none here).
+	"customers.impersonation.start",
 ])
 
 const meta = (rows: (query: string, key: string) => Array<{ value: string }>, key: string) =>
@@ -159,6 +166,65 @@ describe("Customers authorization", () => {
 					if (ADMIN_ONLY.has(tag)) expect([tag, member]).toEqual([tag, "UnauthorizedError"])
 					else expect([tag, member]).not.toEqual([tag, "UnauthorizedError"])
 				}
+			}),
+		))
+
+	it("starts an impersonation only for a member an admin granted it", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					{ _tag: "account", externalId: "org_1", name: "Acme", sameAs: [], onNoMatch: "create" },
+				])
+				const accountId = world.rows<{ id: string }>(`SELECT id FROM customer_accounts`)[0]!.id
+				const contactId = uuid()
+				world.object.storage.db
+					.prepare(`INSERT INTO customer_contacts (id, accountId, email) VALUES (?, ?, ?)`)
+					.run(contactId, accountId, "ada@acme.dev")
+				world.object.storage.db
+					.prepare(
+						`INSERT INTO customer_external_refs (id, connectionId, provider, entityType, entityId, accountId, externalId, matchMethod) VALUES (?, ?, 'clerk', 'contact', ?, ?, 'user_1', 'existing')`,
+					)
+					.run(uuid(), world.connection("clerk"), contactId, accountId)
+				const start = (user: UserId) =>
+					world.call("customers.impersonation.start", { contactId }, user).pipe(Effect.map(tagOf))
+				// Admins are not granted it by their role.
+				expect(yield* start(world.owner)).toBe("UnauthorizedError")
+				expect(yield* start(world.member)).toBe("UnauthorizedError")
+				expect(
+					tagOf(
+						yield* world.call(
+							"customers.impersonator.grant",
+							{ userId: world.stranger },
+							world.owner,
+						),
+					),
+				).toBe("CustomersInvalidRequestError")
+				ok(yield* world.call("customers.impersonator.grant", { userId: world.member }, world.owner))
+				ok(yield* world.call("customers.impersonator.grant", { userId: world.member }, world.owner))
+				expect(world.rows(`SELECT userId, grantedBy FROM customer_impersonators`)).toEqual([
+					{ userId: world.member, grantedBy: world.owner },
+				])
+				// Granted, past the gate: the test connection holds no key, so Clerk is never called.
+				const refused = yield* world.call(
+					"customers.impersonation.start",
+					{ contactId },
+					world.member,
+				)
+				expect(refused).toMatchObject({ _tag: "Failure" })
+				expect(JSON.stringify(refused)).toContain('"reason":"unavailable"')
+				expect(
+					tagOf(
+						yield* world.call(
+							"customers.impersonation.start",
+							{ contactId: uuid() },
+							world.member,
+						),
+					),
+				).toBe("CustomersNotFoundError")
+				ok(yield* world.call("customers.impersonator.revoke", { userId: world.member }, world.owner))
+				expect(yield* start(world.member)).toBe("UnauthorizedError")
+				expect(world.rows(`SELECT id FROM customer_impersonations`)).toEqual([])
 			}),
 		))
 
