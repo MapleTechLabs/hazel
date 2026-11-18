@@ -280,13 +280,26 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			)
 		}
 
+		// One creation per target: concurrent first deliveries (a commit's drain and the alarm) must
+		// share an instance, or one of them writes to a copy that is then dropped.
+		const creating = new Map<string, Deferred.Deferred<TestObject>>()
 		const get = (target: ObjectTarget): Effect.Effect<TestObject> =>
 			Effect.suspend(() => {
 				const key = formatTarget(target)
 				const existing = objects.get(key)
 				if (existing !== undefined) return Effect.succeed(existing)
+				const pending = creating.get(key)
+				if (pending !== undefined) return Deferred.await(pending)
+				const created = Deferred.makeUnsafe<TestObject>()
+				creating.set(key, created)
 				return create(target).pipe(
 					Effect.tap((object) => Effect.sync(() => objects.set(key, object))),
+					Effect.onExit((exit) =>
+						Effect.andThen(
+							Effect.sync(() => creating.delete(key)),
+							Deferred.done(created, exit),
+						),
+					),
 				)
 			})
 
