@@ -103,6 +103,12 @@ export interface NativeNotificationOptions {
 	largeBody?: string
 	/** Channel ID for grouping notifications */
 	group?: string
+	/** The author's profile picture (a web URL), shown with the notification */
+	image?: string
+	/** Who sent the message: the native app shows it as from them */
+	sender?: { id: string; name: string }
+	/** The channel's name, for a message in a channel (not a direct message) */
+	conversation?: string
 }
 
 /**
@@ -140,6 +146,12 @@ export async function sendNativeNotification(
 			body: options.body,
 			largeBody: options.largeBody,
 			group: options.group,
+			// Tauri's attachments and extra: the native app's host shows the sender and their picture.
+			attachments: options.image ? [{ id: "avatar", url: options.image }] : undefined,
+			extra:
+				options.sender === undefined
+					? undefined
+					: { sender: options.sender, conversation: options.conversation },
 		})
 		return {
 			status: "sent",
@@ -211,6 +223,7 @@ export function buildNotificationContent(
 	channel: Channel.Type | undefined,
 ): NativeNotificationOptions {
 	const title = formatNotificationTitle(author, channel)
+	const direct = channel?.type === "direct" || channel?.type === "single"
 	const body = getMessagePreview(message?.content)
 	const largeBody = message?.content ? getMessagePreview(message.content, 300) : undefined
 
@@ -219,5 +232,8 @@ export function buildNotificationContent(
 		body,
 		largeBody,
 		group: channel?.id,
+		image: author?.avatarUrl ?? undefined,
+		sender: author ? { id: author.id, name: formatAuthorName(author) } : undefined,
+		conversation: channel && !direct ? channel.name : undefined,
 	}
 }

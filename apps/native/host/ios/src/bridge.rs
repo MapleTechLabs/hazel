@@ -300,8 +300,8 @@ fn receive(line: &str) {
         Routed::Shell(ShellRequest::NotifyPermission { id, request }) => {
             hazel_native::notify::permission(id, request, crate::push::after_permission);
         }
-        Routed::Shell(ShellRequest::Notify { title, body, group }) => {
-            hazel_native::notify::show(&title, &body, group.as_deref());
+        Routed::Shell(ShellRequest::Notify(notification)) => {
+            hazel_native::notify::show(notification);
         }
     }
 }

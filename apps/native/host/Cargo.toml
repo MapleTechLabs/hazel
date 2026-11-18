@@ -59,7 +59,23 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
 	"UNNotificationRequest",
 	"UNNotificationSettings",
 	"UNNotificationTrigger",
+	"UNNotificationAttachment",
 	"block2",
+] }
+# Notifications from a person drawn as messages from them (`src/notify.rs`).
+objc2-intents = { version = "0.3", default-features = false, features = [
+	"std",
+	"block2",
+	"INOutgoingMessageType",
+	"INSendMessageAttachment",
+	"INImage",
+	"INIntent",
+	"INInteraction",
+	"INPerson",
+	"INPersonHandle",
+	"INSendMessageIntent",
+	"INSpeakableString",
+	"INIntentResponse",
 ] }
 
 [target.'cfg(target_os = "ios")'.dependencies]

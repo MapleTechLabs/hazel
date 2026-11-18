@@ -27,6 +27,13 @@ export type DownloadEvent =
 	| { readonly event: "Progress"; readonly data: { readonly chunkLength: number } }
 	| { readonly event: "Finished" }
 
+/** A notification's sender, as `native-notifications.ts` puts it in Tauri's `extra`. */
+const notificationSender = (value: unknown): { id: string; name: string } | undefined => {
+	if (typeof value !== "object" || value === null) return undefined
+	const { id, name } = value as Record<string, unknown>
+	return typeof id === "string" && typeof name === "string" ? { id, name } : undefined
+}
+
 /** Links kept before the sign-in listens: the one that launched the app, at most a few. */
 const MAX_QUEUED_LINKS = 8
 
@@ -105,12 +112,26 @@ export const makeDesktopBridge = (options: {
 		isPermissionGranted: () => permission(false),
 		requestPermission: () =>
 			permission(true).then((granted): NotificationPermission => (granted ? "granted" : "denied")),
-		sendNotification: (content: { title: string; body?: string; group?: string }) =>
+		/**
+		 * The first attachment (Tauri's mobile-only field) is the sender's picture, and `extra`
+		 * names the sender and the channel (`native-notifications.ts`).
+		 */
+		sendNotification: (content: {
+			title: string
+			body?: string
+			group?: string
+			attachments?: ReadonlyArray<{ id: string; url: string }>
+			extra?: Record<string, unknown>
+		}) =>
 			options.send({
 				t: "notify",
 				title: content.title,
 				body: content.body ?? "",
 				group: content.group,
+				image: content.attachments?.[0]?.url,
+				sender: notificationSender(content.extra?.sender),
+				conversation:
+					typeof content.extra?.conversation === "string" ? content.extra.conversation : undefined,
 			}),
 	}
 

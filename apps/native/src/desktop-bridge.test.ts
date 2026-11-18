@@ -34,10 +34,33 @@ describe("the native desktop bridge", () => {
 		expect(await granted).toBe(false)
 		expect(await asked).toBe("granted")
 		notification.sendNotification({ title: "Ada in #general", body: "Hi", group: "c1" })
+		notification.sendNotification({
+			title: "Ada",
+			body: "Hey",
+			attachments: [{ id: "avatar", url: "https://cdn.example.com/ada.webp" }],
+			extra: { sender: { id: "u1", name: "Ada" }, conversation: "general" },
+		})
 		expect(sent).toEqual([
 			{ t: "notifyPermission", id: 1, request: false },
 			{ t: "notifyPermission", id: 2, request: true },
-			{ t: "notify", title: "Ada in #general", body: "Hi", group: "c1" },
+			{
+				t: "notify",
+				title: "Ada in #general",
+				body: "Hi",
+				group: "c1",
+				image: undefined,
+				sender: undefined,
+				conversation: undefined,
+			},
+			{
+				t: "notify",
+				title: "Ada",
+				body: "Hey",
+				group: undefined,
+				image: "https://cdn.example.com/ada.webp",
+				sender: { id: "u1", name: "Ada" },
+				conversation: "general",
+			},
 		])
 	})
 
