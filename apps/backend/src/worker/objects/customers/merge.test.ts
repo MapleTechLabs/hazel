@@ -5,7 +5,8 @@
 import type { UpsertAccount, UpsertContact, UpsertSubscription } from "@hazel/domain/customers"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
-import { makeCustomersWorld, NOW, TODAY } from "./test-kit"
+import { addDays } from "./time"
+import { makeCustomersWorld, NOW, TODAY, uuid } from "./test-kit"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
@@ -179,6 +180,84 @@ describe("customers.account.merge", () => {
 						`SELECT name FROM customer_external_refs WHERE provider = 'clerk' AND externalId = 'org_2'`,
 					),
 				).toEqual([{ name: "Acme Europe" }])
+			}),
+		))
+
+	it("folds two people into one, resolves a doubled signal and rebuilds the year's movements", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					clerkOrg("org_1", "Acme"),
+					clerkOrg("org_2", "Acme EU"),
+					member("user_a", "org_1", "ada@acme.com"),
+					// The same Clerk user (folds by ref, brings the billing flag), then another one with
+					// the kept contact's email (folds by email): the second fold keeps the first's.
+					{ ...member("user_a", "org_2", "ada@old.com"), isBillingContact: true },
+					member("user_z", "org_2", "ada@acme.com"),
+				])
+				const idOf = (name: string) =>
+					world.rows<{ id: string }>(`SELECT id FROM customer_accounts WHERE name = ?`, name)[0]!.id
+				const kept = idOf("Acme")
+				const merged = idOf("Acme EU")
+				const signal = (accountId: string, ruleId: string) =>
+					world.rows(
+						`INSERT INTO customer_signals (id, organizationId, accountId, ruleId, template, kind,
+						severity, title, reason, evidence, openingEvidence) VALUES (?, ?, ?, ?, 'inactive', 'risk',
+						'high', 'Quiet', 'Quiet', '{}', '{}')`,
+						uuid(),
+						world.orgId,
+						accountId,
+						ruleId,
+					)
+				const shared = uuid()
+				const other = uuid()
+				signal(kept, shared)
+				signal(merged, shared)
+				signal(merged, other)
+				const movement = (accountId: string, day: string) =>
+					world.rows(
+						`INSERT INTO customer_mrr_movements (id, accountId, day, type, deltaMinor, fromMrrMinor,
+						toMrrMinor, currency) VALUES (?, ?, ?, 'new', 100, 0, 100, 'usd')`,
+						uuid(),
+						accountId,
+						day,
+					)
+				const old = addDays(TODAY, -400)
+				movement(merged, old)
+				movement(merged, addDays(TODAY, -10))
+				movement(kept, addDays(TODAY, -20))
+
+				const result = yield* world.call(
+					"customers.account.merge",
+					{ accountId: merged, intoAccountId: kept },
+					world.owner,
+				)
+				expect(result._tag).toBe("Success")
+
+				expect(
+					world.rows(
+						`SELECT lower(email) AS email, isBillingContact FROM customer_contacts
+						WHERE accountId = ? AND deletedAt IS NULL`,
+						kept,
+					),
+				).toEqual([{ email: "ada@acme.com", isBillingContact: 1 }])
+				expect(
+					world.rows(
+						`SELECT ruleId, status FROM customer_signals WHERE accountId = ? ORDER BY ruleId = ?, status`,
+						kept,
+						other,
+					),
+				).toEqual([
+					{ ruleId: shared, status: "auto_resolved" },
+					{ ruleId: shared, status: "open" },
+					{ ruleId: other, status: "open" },
+				])
+				// The year's movements go (a rebuild brings them back); an older one moves.
+				expect(world.rows(`SELECT accountId, day FROM customer_mrr_movements`)).toEqual([
+					{ accountId: kept, day: old },
+				])
+				expect(world.rows(`SELECT value FROM _object_meta WHERE key LIKE '%rebuild%'`).length).toBe(1)
 			}),
 		))
 })

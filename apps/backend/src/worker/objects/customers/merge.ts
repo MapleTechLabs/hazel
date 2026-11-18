@@ -33,12 +33,20 @@ const emailKey = (email: string | null) => (email === null ? null : email.trim()
 /** Fold contact `from` into `into` (both of the kept account by now, or `from` still of the merged one). */
 const foldContact = (
 	from: schema.CustomerContact,
-	into: schema.CustomerContact,
+	intoId: CustomerContactId,
 	accountId: CustomerAccountId,
 	now: Date,
 ) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
+		// Read now: an earlier fold into it may have changed it.
+		const [into] = yield* db.run(
+			SQLite.from(schema.customerContactsTable)
+				.select()
+				.where(($) => [$.id.eq(intoId)])
+				.limit(1),
+		)
+		if (into === undefined) return
 		// Its refs: a provider user the kept contact already carries is dropped, the rest move.
 		const refs = yield* db.run(
 			SQLite.from(schema.customerExternalRefsTable)
@@ -153,9 +161,8 @@ const mergeContacts = (from: CustomerAccountId, into: CustomerAccountId, now: Da
 			const email = emailKey(contact.email)
 			const match =
 				byRefMatch ?? (email === null || contact.deletedAt !== null ? undefined : byEmail.get(email))
-			const target = match === undefined ? undefined : kept.get(match)
-			if (target !== undefined) {
-				yield* foldContact(contact, target, into, now)
+			if (match !== undefined && kept.has(match)) {
+				yield* foldContact(contact, match, into, now)
 				continue
 			}
 			yield* db.run(
