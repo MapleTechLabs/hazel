@@ -515,5 +515,9 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "customer_external_refs" ADD COLUMN "viaAccounts" text',
 			],
 		},
+		{
+			id: "0012_drop_signal_reopen_after",
+			statements: ['ALTER TABLE "customer_signals" DROP COLUMN "reopenAfter"'],
+		},
 	],
 }

@@ -396,7 +396,7 @@ describe("Customers RPCs", () => {
 					expect(healthDry.transitions.length).toBeGreaterThan(0)
 					expect(healthDry.samples.length).toBeGreaterThan(0)
 
-					// The queue: snooze, reopen, done (with a cooldown), notes.
+					// The queue: snooze, reopen, done, notes.
 					const snoozed = ok(
 						yield* world.call(
 							"customers.signal.snooze",
@@ -428,12 +428,9 @@ describe("Customers RPCs", () => {
 							yield* world.call("customers.signal.dismiss", { signalId: top.id }, world.member),
 						),
 					).toBe("CustomerSignalTransitionError")
-					const done = world.rows<{ status: string; reopenAfter: string | null }>(
-						`SELECT status, reopenAfter FROM customer_signals WHERE id = ?`,
-						top.id,
-					)[0]!
-					expect(done.status).toBe("done")
-					expect(done.reopenAfter).not.toBeNull()
+					expect(world.rows(`SELECT status FROM customer_signals WHERE id = ?`, top.id)).toEqual([
+						{ status: "done" },
+					])
 					const note = ok(
 						yield* world.call(
 							"customers.note.create",
@@ -467,16 +464,17 @@ describe("Customers RPCs", () => {
 						]),
 					)
 
-					// A later compute keeps the done signal done while it holds, then reopens it after 7 days.
+					// Later computes keep the done signal done while it holds, however long.
 					const later = (days: number) => new Date(Date.now() + days * 86_400_000)
-					yield* world.object.run(runCompute(later(1))).pipe(Effect.orDie)
-					expect(world.rows(`SELECT status FROM customer_signals WHERE id = ?`, top.id)).toEqual([
-						{ status: "done" },
-					])
-					yield* world.object.run(runCompute(later(8))).pipe(Effect.orDie)
-					expect(
-						world.rows(`SELECT status, reopenCount FROM customer_signals WHERE id = ?`, top.id),
-					).toEqual([{ status: "open", reopenCount: 1 }])
+					for (const days of [1, 8, 30]) {
+						yield* world.object.run(runCompute(later(days))).pipe(Effect.orDie)
+						expect(
+							world.rows(
+								`SELECT status, reopenCount FROM customer_signals WHERE id = ?`,
+								top.id,
+							),
+						).toEqual([{ status: "done", reopenCount: 0 }])
+					}
 				}),
 			),
 		120_000,
