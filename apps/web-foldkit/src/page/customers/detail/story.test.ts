@@ -3,6 +3,7 @@ import type * as Customers from "@hazel/domain/customers"
 import type { SignalEvidence } from "@hazel/domain/customers"
 import {
 	CustomerAccountId,
+	CustomerEmailId,
 	CustomerEventId,
 	CustomerNoteId,
 	CustomerSignalId,
@@ -22,6 +23,7 @@ import { Message } from "./message"
 import {
 	actionEntries,
 	EMPTY_NOTE_DRAFTS,
+	emailDataOf,
 	isNotFound,
 	mergeCandidates,
 	type Model,
@@ -50,6 +52,7 @@ const grace = Schema.decodeSync(UserId)(uuid(2))
 const organizationId = Schema.decodeSync(OrganizationId)(uuid(3))
 const accountId = Schema.decodeSync(CustomerAccountId)
 const noteId = Schema.decodeSync(CustomerNoteId)
+const emailId = Schema.decodeSync(CustomerEmailId)
 const NOW = Date.UTC(2026, 10, 10, 12)
 
 const shared: Shared = {
@@ -279,6 +282,51 @@ describe("customer page: tabs", () => {
 			}),
 		])
 		expect(stale.events.status).toBe("Loading")
+	})
+
+	test("an email event opens the email; an answer for one closed since is dropped", () => {
+		const first = emailId(uuid(400))
+		const second = emailId(uuid(401))
+		const opened = update(loaded("activity"), Message.PressedEmail({ emailId: first }), shared)
+		expect(opened.model.emailModal.isOpen).toBe(true)
+		expect(opened.model.email._tag).toBe("Loading")
+		expect(opened.commands?.map((command) => [command.name, command.args])).toEqual([
+			["FetchCustomerEmail", { organizationId, emailId: first }],
+		])
+		const reopened = run(opened.model, [
+			Message.PressedEmail({ emailId: second }),
+			Message.FailedFetchEmail({ emailId: first, reason: "NotFound" }),
+		])
+		expect(reopened.email._tag).toBe("Loading")
+		expect(
+			run(reopened, [Message.FailedFetchEmail({ emailId: second, reason: "NotFound" })]).email,
+		).toEqual({ _tag: "Failure", error: "NotFound" })
+	})
+
+	test("an email event's data decodes; other events have none", () => {
+		const event = (type: string, data: Customers.Event["data"]): Customers.Event => ({
+			id: Schema.decodeSync(CustomerEventId)(uuid(410)),
+			accountId: beta.id,
+			contactId: null,
+			provider: "gmail",
+			type,
+			title: "Renewal",
+			data,
+			occurredAt: new Date(NOW),
+			externalId: null,
+			actorUserId: null,
+			createdAt: new Date(NOW),
+		})
+		const data = {
+			emailId: uuid(400),
+			direction: "inbound",
+			snippet: "Can we talk pricing?",
+			from: { email: "ceo@acme.com", name: "Wile E." },
+			to: [{ email: "ada@hazel.test", name: null }],
+			cc: [],
+		}
+		expect(emailDataOf(event("email.received", data))).toMatchObject({ direction: "inbound" })
+		expect(emailDataOf(event("note.created", data))).toBeNull()
 	})
 
 	test("an answer for the customer shown before is dropped", () => {

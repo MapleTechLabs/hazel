@@ -110,6 +110,7 @@ export const customersTables = [
 	schema.customerMetricDailyTable,
 	schema.customerOrgDailyTable,
 	schema.customerEventsTable,
+	schema.customerEmailsTable,
 	schema.customerMrrMovementsTable,
 	schema.customerSignalRulesTable,
 	schema.customerSignalsTable,

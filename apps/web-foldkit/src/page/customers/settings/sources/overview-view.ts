@@ -1,17 +1,19 @@
 import type { CustomerProvider } from "@hazel/domain/customers"
+import type { OrganizationId, UserId } from "@hazel/schema"
 import * as AsyncData from "foldkit/asyncData"
 import type { Html } from "foldkit/html"
 import { formatCount, formatDate, formatRelative } from "../../../../customers/format"
-import { PROVIDER_ORDER, providerOf } from "../../../../customers/providers"
+import { gmailAuthorizeUrl, PROVIDER_ORDER, providerOf } from "../../../../customers/providers"
 import { sourceMark } from "../../../../customers/ui/identity"
 import { IconArrowPath, IconCheck, IconChevronRight, IconGear, IconPlus } from "../../../../icons"
-import { AppRoute, hrefOf } from "../../../../route"
+import { AppRoute, hrefOf, sourceDetailRoute } from "../../../../route"
 import { button, buttonClassName } from "../../../../ui/button"
 import { progressBar, progressBarTrack } from "../../../../ui/progress-bar"
 import { readOnlyNotice, settingsHeader, settingsPage } from "../shared"
 import { Message } from "./message"
-import { connectionOf, isLive, type Model, runningRunOf, statusOf } from "./model"
+import { connectionOf, isLive, mailboxOf, type Model, runningRunOf, statusOf } from "./model"
 import {
+	BACKEND_URL,
 	callout,
 	card,
 	chips,
@@ -33,10 +35,16 @@ export interface Context {
 	readonly orgSlug: string
 	readonly nowMs: number
 	readonly isAdmin: boolean
+	readonly organizationId: OrganizationId | null
+	readonly userId: UserId | null
 }
 
+/** Sync, settings and disconnect: admins, and for a Gmail mailbox the member who connected it. */
+export const canManage = (connection: ConnectionRow, context: Context): boolean =>
+	context.isAdmin || (connection.provider === "gmail" && connection.connectedBy === context.userId)
+
 export const detailHref = (context: Context, provider: CustomerProvider): string =>
-	hrefOf(AppRoute.CustomersSourceDetail({ orgSlug: context.orgSlug, provider }))
+	hrefOf(sourceDetailRoute(context.orgSlug, provider))
 
 const linkButton = (h: H, href: string, children: ReadonlyArray<Html | string>, primary = false): Html =>
 	h.a(
@@ -127,7 +135,11 @@ const coverageCard = (h: H, model: Model, context: Context, live: ReadonlyArray<
 											}),
 											h.span(
 												[h.Class("font-medium text-fg")],
-												[providerOf(connection.provider).name],
+												[
+													connection.provider === "gmail"
+														? mailboxOf(connection)
+														: providerOf(connection.provider).name,
+												],
 											),
 											h.span(
 												[h.Class("truncate text-muted-fg tabular-nums")],
@@ -153,7 +165,7 @@ const coverageCard = (h: H, model: Model, context: Context, live: ReadonlyArray<
 
 // CONNECTED
 
-const progressLine = (h: H, run: SyncRunRow, context: Context): Html => {
+export const progressLine = (h: H, run: SyncRunRow, context: Context): Html => {
 	const progress = run.progress
 	const pct =
 		progress === null || progress.total === null || progress.total === 0
@@ -215,7 +227,13 @@ export const errorBanner = (
 	const message =
 		error === null
 			? { title: "Sync failing", description: "The last syncs failed. Syncs retry with backoff." }
-			: syncErrorMessage(error, descriptor.name)
+			: connection.provider === "gmail"
+				? // Gmail's messages are written for people ("…reconnect Gmail").
+					{
+						title: error.code === "auth" ? "Gmail access lost" : "Sync failing",
+						description: error.message,
+					}
+				: syncErrorMessage(error, descriptor.name)
 	const lastGood =
 		connection.lastSuccessAtMs === null
 			? "No sync has succeeded yet."
@@ -236,22 +254,45 @@ export const errorBanner = (
 						),
 					]
 				: []),
-			...(context.isAdmin && error?.code === "auth"
-				? [
-						button(
-							h,
-							{
-								intent: "primary",
-								size: "sm",
-								onPress: Message.PressedReconnect({ connectionId: connection.id }),
-							},
-							["Reconnect"],
-						),
-					]
+			...(canManage(connection, context) && error?.code === "auth"
+				? [reconnectButton(h, connection, context)]
 				: []),
 		],
 	})
 }
+
+/** Gmail reconnects over Google sign-in (a navigation); the others in the connect modal. */
+const reconnectButton = (h: H, connection: ConnectionRow, context: Context): Html =>
+	connection.provider === "gmail"
+		? gmailConnectLink(h, context, "Reconnect", "primary")
+		: button(
+				h,
+				{
+					intent: "primary",
+					size: "sm",
+					onPress: Message.PressedReconnect({ connectionId: connection.id }),
+				},
+				["Reconnect"],
+			)
+
+/** Google's consent screen for the signed-in member's mailbox. */
+export const gmailConnectLink = (
+	h: H,
+	context: Context,
+	label: string,
+	intent: "primary" | "outline" = "outline",
+): Html =>
+	h.a(
+		[
+			h.Href(
+				context.organizationId === null
+					? "#"
+					: gmailAuthorizeUrl(BACKEND_URL, context.organizationId),
+			),
+			h.Class(buttonClassName({ intent, size: "sm" }, "no-underline")),
+		],
+		[label],
+	)
 
 const column = (h: H, label: string, children: ReadonlyArray<Html>): Html =>
 	h.div([h.Class("flex min-w-0 flex-col gap-1 px-4 py-3")], [eyebrow(h, label), ...children])
@@ -359,13 +400,20 @@ const connectedCard = (h: H, model: Model, connection: ConnectionRow, context: C
 											statusBadge(h, status),
 										],
 									),
-									h.p([h.Class("text-muted-fg text-sm")], [descriptor.blurb]),
+									h.p(
+										[h.Class("text-muted-fg text-sm")],
+										[
+											connection.provider === "gmail"
+												? mailboxOf(connection)
+												: descriptor.blurb,
+										],
+									),
 								],
 							),
 							h.div(
 								[h.Class("flex items-center gap-2")],
 								[
-									...(context.isAdmin && status !== "syncing"
+									...(canManage(connection, context) && status !== "syncing"
 										? [
 												button(
 													h,
@@ -388,7 +436,7 @@ const connectedCard = (h: H, model: Model, connection: ConnectionRow, context: C
 										: []),
 									linkButton(h, detailHref(context, connection.provider), [
 										IconGear(h, { attributes: { "data-slot": "icon" } }),
-										context.isAdmin ? "Settings" : "Details",
+										canManage(connection, context) ? "Settings" : "Details",
 									]),
 								],
 							),
@@ -516,7 +564,12 @@ const notConnectedCard = (
 				[h.Class("flex flex-col gap-2 lg:border-border lg:border-l lg:pl-5")],
 				[eyebrow(h, "Adds to the model"), addsList(h, provider)],
 			),
-			...(context.isAdmin ? [connectButton(h, provider, connection)] : []),
+			// Gmail's connect is every member's, from its page (which says who reads the mail).
+			...(provider === "gmail"
+				? [linkButton(h, detailHref(context, provider), ["Connect Gmail"])]
+				: context.isAdmin
+					? [connectButton(h, provider, connection)]
+					: []),
 		],
 	)
 }
@@ -536,10 +589,12 @@ const section = (h: H, title: string, count: number, children: ReadonlyArray<Htm
 	)
 
 export const overviewView = (h: H, model: Model, context: Context): Html => {
-	const live = PROVIDER_ORDER.flatMap((provider) => {
-		const connection = connectionOf(model, provider)
-		return connection !== undefined && isLive(connection) ? [connection] : []
-	})
+	// Gmail may have several mailboxes, each its own card.
+	const live = PROVIDER_ORDER.flatMap((provider) =>
+		(model.connections ?? []).filter(
+			(connection) => connection.provider === provider && isLive(connection),
+		),
+	)
 	const rest = PROVIDER_ORDER.filter(
 		(provider) => !live.some((connection) => connection.provider === provider),
 	)

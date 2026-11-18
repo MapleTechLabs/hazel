@@ -14,6 +14,7 @@ import {
 	CustomerAccountId,
 	CustomerChannelLinkId,
 	CustomerConnectionId,
+	CustomerEmailId,
 	CustomerIgnoreRuleId,
 	CustomerNoteId,
 	CustomerSavedViewId,
@@ -50,6 +51,7 @@ import { HealthSettings } from "../customers/health"
 import {
 	ChannelLink,
 	Connection,
+	Email,
 	Event,
 	IgnoreRule,
 	Invoice,
@@ -98,6 +100,7 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"metric",
 			/** No such channel in the org, or one the caller cannot see. */
 			"channel",
+			"email",
 		]),
 		id: Schema.String,
 	},
@@ -210,6 +213,18 @@ export class CustomerReadRpcs extends RpcGroup.make(
 			...PageRequest,
 		},
 		Page(Event.Schema),
+	),
+
+	/**
+	 * One imported email in full (an `email.received` / `email.sent` event's `data.emailId`), with
+	 * the link that opens its thread in the mailbox it was read from. Any member reads it, like the
+	 * timeline.
+	 */
+	read(
+		"customers.email.get",
+		{ emailId: CustomerEmailId },
+		Schema.Struct({ email: Email.Schema, url: Schema.String }),
+		CustomersNotFoundError,
 	),
 
 	/** Closed signals older than the synced window (30 days), newest first. */
@@ -452,7 +467,11 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		Tx,
 	),
 
-	/** API-key connect: validates with the provider, stores the credentials encrypted, starts the backfill. */
+	/**
+	 * API-key connect: validates with the provider, stores the credentials encrypted, starts the
+	 * backfill. Gmail is refused (`CustomersInvalidRequestError`): a mailbox connects over Google
+	 * sign-in (`GET /customers/gmail/authorize`).
+	 */
 	write(
 		"customers.connection.connect",
 		{
@@ -467,7 +486,10 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		CustomersInvalidRequestError,
 	),
 
-	/** New config and/or rotated credentials. */
+	/**
+	 * New config and/or rotated credentials (a Gmail connection takes config only). Gmail
+	 * connections: their `connectedBy` or an admin; others admins only (as for disconnect and sync).
+	 */
 	write(
 		"customers.connection.update",
 		{

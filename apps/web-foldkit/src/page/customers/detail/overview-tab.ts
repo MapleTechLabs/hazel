@@ -27,7 +27,7 @@ import { snoozeMenuContent } from "../../../customers/ui/menus"
 import { queueAction } from "../../../customers/ui/queue-row"
 import { markdownView } from "../../../chat/markdown/markdown-view"
 import { IconCheck, IconChevronDown, IconChevronRight, IconClock, IconDots } from "../../../icons"
-import { AppRoute, hrefOf } from "../../../route"
+import { AppRoute, hrefOf, sourceDetailRoute } from "../../../route"
 import { button } from "../../../ui/button"
 import { menuLabel } from "../../../ui/menu-view"
 import { Message } from "./message"
@@ -231,14 +231,7 @@ const usageCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Htm
 						? [
 								h.a(
 									[
-										h.Href(
-											hrefOf(
-												AppRoute.CustomersSourceDetail({
-													orgSlug: context.orgSlug,
-													provider: "autumn",
-												}),
-											),
-										),
+										h.Href(hrefOf(sourceDetailRoute(context.orgSlug, "autumn"))),
 										h.Class("text-primary text-sm hover:underline"),
 									],
 									["Set unit"],

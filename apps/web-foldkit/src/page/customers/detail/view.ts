@@ -44,6 +44,7 @@ import * as Popover from "../../../ui/popover"
 import type { PageViewInputs } from "../../contract"
 import { activityTab } from "./activity-tab"
 import { billingTab } from "./billing-tab"
+import { emailDialog } from "./email"
 import { Message } from "./message"
 import {
 	accountOf,
@@ -87,6 +88,7 @@ const LINK_LABEL = {
 	stripe: "Stripe customer",
 	autumn: "Autumn customer",
 	maple: "Maple group",
+	gmail: "Gmail mailbox",
 } as const satisfies Record<Customers.CustomerProvider, string>
 
 const MATCH_LABEL = {
@@ -1238,6 +1240,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				],
 			),
 			rawDialog(h, model, context),
+			emailDialog(h, model),
 			deleteNoteDialog(h, model),
 			mergeDialog(h, model, context),
 		],

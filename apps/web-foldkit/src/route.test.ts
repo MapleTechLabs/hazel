@@ -23,6 +23,7 @@ import {
 	type RouteTag,
 	signInHref,
 	urlToAppRoute,
+	sourceDetailRoute,
 } from "./route"
 import type { CurrentUser } from "./session"
 
@@ -171,6 +172,7 @@ describe("customers routes", () => {
 		["/hazel/customers/settings/plans", "CustomersSettingsPlans"],
 		["/hazel/customers/settings/sources", "CustomersSettingsSources"],
 		["/hazel/customers/settings/sources/stripe", "CustomersSourceDetail"],
+		["/hazel/customers/settings/sources/gmail?gmail=connected", "CustomersSourceDetail"],
 		["/hazel/customers/settings/sources/unmatched", "CustomersUnmatched"],
 	]
 
@@ -192,6 +194,11 @@ describe("customers routes", () => {
 			template: Option.some("usage_drop"),
 		})
 		expect(parse("/hazel/customers/settings/sources/maple")).toMatchObject({ provider: "maple" })
+		expect(parse("/hazel/customers/settings/sources/gmail?gmail=error&reason=denied")).toMatchObject({
+			provider: "gmail",
+			gmail: Option.some("error"),
+			reason: Option.some("denied"),
+		})
 	})
 
 	it("refuses what is not a customer, rule or provider", () => {
@@ -518,10 +525,7 @@ describe("hrefOf", () => {
 			[AppRoute.CustomersSettingsSources({ orgSlug }), "/hazel/customers/settings/sources"],
 		],
 		CustomersSourceDetail: [
-			[
-				AppRoute.CustomersSourceDetail({ orgSlug, provider: "clerk" }),
-				"/hazel/customers/settings/sources/clerk",
-			],
+			[sourceDetailRoute(orgSlug, "clerk"), "/hazel/customers/settings/sources/clerk"],
 		],
 		CustomersUnmatched: [
 			[AppRoute.CustomersUnmatched({ orgSlug }), "/hazel/customers/settings/sources/unmatched"],

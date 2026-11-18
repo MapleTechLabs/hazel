@@ -1,12 +1,13 @@
 import type * as Customers from "@hazel/domain/customers"
+import { GmailConnectErrorReason } from "@hazel/domain/http"
 import type { CustomerConnectionId } from "@hazel/schema"
-import { Record, Redacted, Result } from "effect"
+import { Option, Record, Redacted, Result, Schema } from "effect"
 import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
-import { failureMessage } from "~/lib/error-messages"
+import { failureMessage, type UserErrorMessage } from "~/lib/error-messages"
 import { defaultConfigOf, providerOf } from "../../../../customers/providers"
 import { errorToastOf, successToast } from "../../../../data/actions"
-import type { AppRoute } from "../../../../route"
+import { type AppRoute, sourceDetailRoute } from "../../../../route"
 import * as Modal from "../../../../ui/modal"
 import type { PageReturn, Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
@@ -31,6 +32,7 @@ import {
 	connectFailureMessage,
 	connectionOf,
 	DISCONNECT_MODAL_ID,
+	gmailLookbackOf,
 	isLive,
 	isSettingsDirty,
 	isSettingsValid,
@@ -73,6 +75,69 @@ const unitFailureMessage = (reason: UnitFailure) =>
 		NotFound: { title: "This metric is gone", description: "Its source no longer defines it." },
 	})
 
+/** Why Gmail's connect did not go through (`?gmail=error&reason=`), in our words. */
+const GMAIL_CONNECT_ERROR = {
+	not_configured: {
+		title: "Gmail isn't set up on this server",
+		description: "Whoever runs this Hazel server needs to add a Google OAuth client first.",
+	},
+	denied: {
+		title: "Gmail wasn't connected",
+		description: "The sign-in was cancelled on Google's screen. Nothing was imported.",
+	},
+	scope_missing: {
+		title: "Hazel needs to read your mail",
+		description: "Connect again and allow Hazel to read your email on Google's screen.",
+	},
+	invalid_state: {
+		title: "The connection request expired",
+		description: "It took longer than 15 minutes, or was started in another browser. Try again.",
+	},
+	token_exchange_failed: {
+		title: "Google refused the sign-in",
+		description: "Try connecting again in a moment.",
+	},
+	profile_failed: {
+		title: "Couldn't read your mailbox address",
+		description: "Google didn't answer. Try connecting again in a moment.",
+	},
+	forbidden: {
+		title: "You're not a member of this organization",
+		description: "Only its members can connect a mailbox.",
+	},
+	failed: {
+		title: "Couldn't save the connection",
+		description: "Something broke on our side. Try connecting again.",
+	},
+} as const satisfies { readonly [R in GmailConnectErrorReason]: UserErrorMessage }
+
+const decodeGmailReason = Schema.decodeUnknownOption(GmailConnectErrorReason)
+
+/**
+ * The Gmail connect's return (`?gmail=connected`, `?gmail=error&reason=`): a toast, and the URL
+ * without them, so a reload does not say it again.
+ */
+const gmailReturn = (route: Route, result: Return): Return => {
+	if (route._tag !== "CustomersSourceDetail") return result
+	const status = Option.getOrNull(route.gmail)
+	if (status !== "connected" && status !== "error") return result
+	const reason = Option.getOrElse(Option.flatMap(route.reason, decodeGmailReason), () => "failed" as const)
+	return {
+		...result,
+		outMessage: PageOutMessage.RequestedNavigation({
+			route: sourceDetailRoute(route.orgSlug, route.provider),
+			replace: true,
+			toast:
+				status === "connected"
+					? successToast(
+							"Gmail connected",
+							"Emails with your customers show on their timelines as the import runs.",
+						)
+					: errorToastOf(GMAIL_CONNECT_ERROR[reason]),
+		}),
+	}
+}
+
 // INIT
 
 /** The unmatched count is admins' (the RPC refuses members), so only they ask for it. */
@@ -87,31 +152,39 @@ const fetchUnmatched = (model: Model, shared: Shared): Return => {
 }
 
 export const init = (route: Route, shared: Shared): Return =>
-	fetchUnmatched(
-		{
-			provider: route._tag === "CustomersSourceDetail" ? route.provider : null,
-			connections: null,
-			syncRuns: null,
-			accountCount: null,
-			members: [],
-			unmatched: AsyncData.Idle(),
-			syncing: [],
-			isSeedingDemo: false,
-			historyFilter: "all",
-			connectModal: Modal.init(CONNECT_MODAL_ID),
-			connectForm: null,
-			keysModal: Modal.init(KEYS_MODAL_ID),
-			keysForm: null,
-			disconnectModal: Modal.init(DISCONNECT_MODAL_ID),
-			isDisconnecting: false,
-			settingsDraft: null,
-			activityEventInput: "",
-			isSavingSettings: false,
-			unitMetrics: null,
-			unitDrafts: {},
-		},
-		shared,
+	gmailReturn(
+		route,
+		fetchUnmatched(
+			{
+				provider: route._tag === "CustomersSourceDetail" ? route.provider : null,
+				connections: null,
+				syncRuns: null,
+				accountCount: null,
+				members: [],
+				unmatched: AsyncData.Idle(),
+				syncing: [],
+				isSeedingDemo: false,
+				historyFilter: "all",
+				connectModal: Modal.init(CONNECT_MODAL_ID),
+				connectForm: null,
+				keysModal: Modal.init(KEYS_MODAL_ID),
+				keysForm: null,
+				disconnectModal: Modal.init(DISCONNECT_MODAL_ID),
+				disconnectId: null,
+				isDisconnecting: false,
+				settingsDraft: null,
+				activityEventInput: "",
+				isSavingSettings: false,
+				gmailLookback: null,
+				unitMetrics: null,
+				unitDrafts: {},
+			},
+			shared,
+		),
 	)
+
+/** The cleaned URL arrives here (nothing to show), or a later connect's return. */
+export const routeChanged = (model: Model, route: Route): Return => gmailReturn(route, { model })
 
 /** The organization arrived after the page opened. */
 export const sharedChanged = (model: Model, shared: Shared): Return =>
@@ -234,7 +307,15 @@ const syncNow = (
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedConnections: ({ connections }) => {
-			const next = { ...model, connections }
+			const lookback = model.gmailLookback
+			// A saved lookback is done once the synced row has it.
+			const saving = connections.find((connection) => connection.id === lookback?.connectionId)?.config
+			const next = {
+				...model,
+				connections,
+				gmailLookback:
+					saving?._tag === "gmail" && saving.lookbackDays !== lookback?.days ? lookback : null,
+			}
 			// A saved draft is done once the synced row has it.
 			const connection = detailConnection(next)
 			return {
@@ -477,8 +558,12 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 
 		// DISCONNECT
 
-		PressedDisconnect: () => ({
-			model: { ...model, disconnectModal: Modal.open(model.disconnectModal).model },
+		PressedDisconnect: ({ connectionId }) => ({
+			model: {
+				...model,
+				disconnectId: connectionId,
+				disconnectModal: Modal.open(model.disconnectModal).model,
+			},
 		}),
 		GotDisconnectModalMessage: ({ message: modalMessage }) =>
 			updateModal(model, "disconnectModal", modalMessage, (child) =>
@@ -504,7 +589,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				disconnectModal: Modal.close(model.disconnectModal).model,
 			},
 			outMessage: toast(
-				successToast(`${providerOf(provider).name} disconnected`, "Its data stays, marked stale."),
+				successToast(
+					`${providerOf(provider).name} disconnected`,
+					provider === "gmail" ? "Emails already imported stay." : "Its data stays, marked stale.",
+				),
 			),
 		}),
 		FailedDisconnect: ({ reason }) => ({
@@ -558,6 +646,27 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ClickedLookback: ({ days }) => ({
 			model: editMaple(model, (config) => ({ ...config, lookbackDays: days })),
 		}),
+		ClickedGmailLookback: ({ connectionId, days }) => {
+			const connection = model.connections?.find((row) => row.id === connectionId)
+			const organizationId = shared.organization?.id
+			if (
+				connection === undefined ||
+				organizationId === undefined ||
+				model.isSavingSettings ||
+				gmailLookbackOf(model, connection) === days
+			)
+				return { model }
+			return {
+				model: { ...model, gmailLookback: { connectionId, days }, isSavingSettings: true },
+				commands: [
+					SaveCustomerSourceSettings({
+						organizationId,
+						connectionId,
+						config: { _tag: "gmail", lookbackDays: days },
+					}),
+				],
+			}
+		},
 		PressedDiscardSettings: () => ({ model: { ...model, settingsDraft: null, activityEventInput: "" } }),
 		PressedSaveSettings: () => {
 			const connection = detailConnection(model)
@@ -584,7 +693,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			outMessage: toast(successToast("Settings saved")),
 		}),
 		FailedSaveSettings: ({ reason }) => {
-			const next = { ...model, isSavingSettings: false }
+			const next = { ...model, isSavingSettings: false, gmailLookback: null }
 			// Settings are saved from a source's detail, where `provider` is set.
 			return model.provider === null
 				? { model: next }

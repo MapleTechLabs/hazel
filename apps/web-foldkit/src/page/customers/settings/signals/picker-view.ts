@@ -6,7 +6,7 @@ import { KIND_LABEL } from "../../../../customers/ui/badges"
 import { searchBox, segmented } from "../../../../customers/ui/filter-bar"
 import { sourceLogo } from "../../../../customers/ui/identity"
 import { IconCheck } from "../../../../icons"
-import { AppRoute, hrefOf } from "../../../../route"
+import { hrefOf, sourceDetailRoute } from "../../../../route"
 import { button } from "../../../../ui/button"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../../ui/dialog"
 import * as Modal from "../../../../ui/modal"
@@ -110,14 +110,7 @@ const templateCard = (h: H, model: Model, template: Customers.SignalTemplate, or
 							: [
 									h.a(
 										[
-											h.Href(
-												hrefOf(
-													AppRoute.CustomersSourceDetail({
-														orgSlug,
-														provider: first,
-													}),
-												),
-											),
+											h.Href(hrefOf(sourceDetailRoute(orgSlug, first))),
 											h.Class("font-medium text-primary hover:underline"),
 										],
 										[`Connect ${PROVIDERS[first].name}`],

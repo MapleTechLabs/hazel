@@ -7,7 +7,7 @@ import { modifyFields } from "foldkit/struct"
 import { commonMessage, failureMessage } from "~/lib/error-messages"
 import type { AccountRow } from "../../../customers/queries"
 import { errorToastOf, successToast } from "../../../data/actions"
-import { AppRoute, customerRoute, customersListRoute, type RouteOf } from "../../../route"
+import { customerRoute, customersListRoute, type RouteOf, sourceDetailRoute } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import { Popover as PopoverControl } from "@foldkit/ui"
@@ -687,7 +687,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		PressedConnect: ({ provider }) => ({
 			model,
 			outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
-				AppRoute.CustomersSourceDetail({ orgSlug, provider }),
+				sourceDetailRoute(orgSlug, provider),
 			),
 		}),
 

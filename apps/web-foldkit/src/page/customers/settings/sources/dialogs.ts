@@ -15,7 +15,7 @@ import {
 } from "../../../../ui/dialog"
 import * as Modal from "../../../../ui/modal"
 import { Message } from "./message"
-import { connectFailureMessage, type ConnectForm, connectionOf, isLive, type Model } from "./model"
+import { connectFailureMessage, type ConnectForm, isLive, mailboxOf, type Model } from "./model"
 import { BACKEND_URL, callout, codeChips, formField, type H, webhookUrlField } from "./parts"
 import { configFieldView } from "./settings-view"
 import { heading } from "../../../../ui/heading"
@@ -76,16 +76,18 @@ const permissionsList = (h: H, form: ConnectForm): ReadonlyArray<Html> => {
 			]
 }
 
-const keyStep = (h: H, form: ConnectForm): Html => {
+const keyStep = (h: H, form: ConnectForm): Html | null => {
 	const descriptor = providerOf(form.provider)
-	return step(h, 1, form.connected !== null, descriptor.apiKey.label, [
+	const apiKey = descriptor.apiKey
+	if (apiKey === null) return null
+	return step(h, 1, form.connected !== null, apiKey.label, [
 		h.div(
 			[h.Class("flex items-center justify-between gap-3")],
 			[
-				h.p([h.Class("text-muted-fg text-xs")], [descriptor.apiKey.help]),
+				h.p([h.Class("text-muted-fg text-xs")], [apiKey.help]),
 				h.a(
 					[
-						h.Href(descriptor.apiKey.createHref),
+						h.Href(apiKey.createHref),
 						h.Target("_blank"),
 						h.Rel("noreferrer"),
 						h.Class(
@@ -100,9 +102,9 @@ const keyStep = (h: H, form: ConnectForm): Html => {
 			? [
 					formField(h, {
 						id: "customers-connect-api-key",
-						label: descriptor.apiKey.label,
+						label: apiKey.label,
 						value: form.apiKey,
-						placeholder: descriptor.apiKey.placeholder,
+						placeholder: apiKey.placeholder,
 						isCode: true,
 						isSecret: true,
 						isDisabled: form.isPending,
@@ -312,6 +314,8 @@ export const keysDialog = (h: H, model: Model): Html =>
 			const connection = model.connections?.find((row) => row.id === form?.connectionId)
 			if (form === null || connection === undefined) return []
 			const descriptor = providerOf(connection.provider)
+			const apiKey = descriptor.apiKey
+			if (apiKey === null) return []
 			const isEmpty = form.apiKey.trim() === "" && form.webhookSecret.trim() === ""
 			return [
 				dialogHeader(h, {
@@ -325,10 +329,10 @@ export const keysDialog = (h: H, model: Model): Html =>
 						[
 							formField(h, {
 								id: "customers-keys-api-key",
-								label: descriptor.apiKey.label,
+								label: apiKey.label,
 								description: `${descriptor.name} checks a new key before it is stored.`,
 								value: form.apiKey,
-								placeholder: descriptor.apiKey.placeholder,
+								placeholder: apiKey.placeholder,
 								isCode: true,
 								isSecret: true,
 								isDisabled: form.isPending,
@@ -387,13 +391,18 @@ export const disconnectDialog = (h: H, model: Model): Html =>
 		role: "alertdialog",
 		size: "sm",
 		toContent: (closeAttributes) => {
-			const connection = model.provider === null ? undefined : connectionOf(model, model.provider)
+			const connection = model.connections?.find((row) => row.id === model.disconnectId)
 			if (connection === undefined || !isLive(connection)) return []
-			const name = providerOf(connection.provider).name
+			const isGmail = connection.provider === "gmail"
 			return [
 				dialogHeader(h, {
-					title: { id: Modal.titleId(model.disconnectModal.id), text: `Disconnect ${name}?` },
-					description: `Hazel stops syncing and drops the stored keys. Accounts, contacts and history stay, marked stale. Reconnect any time to resume.`,
+					title: {
+						id: Modal.titleId(model.disconnectModal.id),
+						text: `Disconnect ${isGmail ? mailboxOf(connection) : providerOf(connection.provider).name}?`,
+					},
+					description: isGmail
+						? "Hazel stops reading this mailbox and drops its access. Emails already imported stay on the timelines. Connect it again any time to resume."
+						: "Hazel stops syncing and drops the stored keys. Accounts, contacts and history stay, marked stale. Reconnect any time to resume.",
 				}),
 				dialogFooter(h, [
 					dialogClose(h, closeAttributes, ["Cancel"]),

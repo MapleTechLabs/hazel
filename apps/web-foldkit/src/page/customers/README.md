@@ -6,25 +6,28 @@ here is an ordinary page (`definePage`), registered in `pages.ts`, the Customers
 
 ## Routes (`src/route.ts`)
 
-| Route tag                     | URL (`/$orgSlug/customers…`)      | Fields                                  | Page module           |
-| ----------------------------- | --------------------------------- | --------------------------------------- | --------------------- |
-| `CustomersOverview`           | ``                                |                                         | `overview/`           |
-| `CustomersAttention`          | `/attention`                      |                                         | `attention/`          |
-| `CustomersList`               | `/list?view=`                     | `view: Option<string>`                  | `list/`               |
-| `CustomerDetail`              | `/$accountId?tab=`                | `accountId`, `tab: Option<CustomerTab>` | `detail/`             |
-| `CustomersSettingsSignals`    | `/settings/signals`               |                                         | `settings/signals/`   |
-| `CustomersSettingsSignalNew`  | `/settings/signals/new?template=` | `template: Option<SignalTemplate>`      | `settings/signals/`   |
-| `CustomersSettingsSignalRule` | `/settings/signals/$ruleId`       | `ruleId`                                | `settings/signals/`   |
-| `CustomersSettingsHealth`     | `/settings/health`                |                                         | `settings/health/`    |
-| `CustomersSettingsPlans`      | `/settings/plans`                 |                                         | `settings/plans/`     |
-| `CustomersSettingsSources`    | `/settings/sources`               |                                         | `settings/sources/`   |
-| `CustomersSourceDetail`       | `/settings/sources/$provider`     | `provider: CustomerProvider`            | `settings/sources/`   |
-| `CustomersUnmatched`          | `/settings/sources/unmatched`     |                                         | `settings/unmatched/` |
+| Route tag                     | URL (`/$orgSlug/customers…`)                 | Fields                                          | Page module           |
+| ----------------------------- | -------------------------------------------- | ----------------------------------------------- | --------------------- |
+| `CustomersOverview`           | ``                                           |                                                 | `overview/`           |
+| `CustomersAttention`          | `/attention`                                 |                                                 | `attention/`          |
+| `CustomersList`               | `/list?view=`                                | `view: Option<string>`                          | `list/`               |
+| `CustomerDetail`              | `/$accountId?tab=`                           | `accountId`, `tab: Option<CustomerTab>`         | `detail/`             |
+| `CustomersSettingsSignals`    | `/settings/signals`                          |                                                 | `settings/signals/`   |
+| `CustomersSettingsSignalNew`  | `/settings/signals/new?template=`            | `template: Option<SignalTemplate>`              | `settings/signals/`   |
+| `CustomersSettingsSignalRule` | `/settings/signals/$ruleId`                  | `ruleId`                                        | `settings/signals/`   |
+| `CustomersSettingsHealth`     | `/settings/health`                           |                                                 | `settings/health/`    |
+| `CustomersSettingsPlans`      | `/settings/plans`                            |                                                 | `settings/plans/`     |
+| `CustomersSettingsSources`    | `/settings/sources`                          |                                                 | `settings/sources/`   |
+| `CustomersSourceDetail`       | `/settings/sources/$provider?gmail=&reason=` | `provider: CustomerProvider`, `gmail`, `reason` | `settings/sources/`   |
+| `CustomersUnmatched`          | `/settings/sources/unmatched`                |                                                 | `settings/unmatched/` |
 
 - `view` is a built-in view's key (`BuiltInViewKey`: `my_customers`, `paying`, `trialing`, `at_risk`,
   `churned`) or a saved view's id; the sidebar links built-ins by key, so they work before views sync.
 - `CustomerTab` = `overview | users | billing | activity | notes` (none = overview).
-- Helpers: `customersListRoute(orgSlug, view?)`, `customerRoute(orgSlug, accountId, tab?)`;
+- `gmail` / `reason` (`Option<string>`) are Gmail's connect result (`?gmail=connected`,
+  `?gmail=error&reason=<GmailConnectErrorReason>`): the page toasts it and replaces the URL without them.
+- Helpers: `customersListRoute(orgSlug, view?)`, `customerRoute(orgSlug, accountId, tab?)`,
+  `sourceDetailRoute(orgSlug, provider)`;
   `isCustomersRoute`. Links are `h.Href(hrefOf(route))`; navigation from `update` is `requestedOrgNavigation(shared.orgSlug, (orgSlug) => customerRoute(orgSlug, id))`.
 - `orgSectionOf` is `"Customers"` for all of them: the shell shows the Customers sidebar
   (`src/shell/customers-sidebar.ts`) and wraps the page in a full-height `main` with

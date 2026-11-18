@@ -14,6 +14,7 @@ import {
 	BillingInterval,
 	CustomerProvider,
 	CustomerSource,
+	EmailDirection,
 	InvoiceStatus,
 	MetricAggregation,
 	SubscriptionStatus,
@@ -201,6 +202,39 @@ export const RecordEvent = Schema.TaggedStruct("event", {
 })
 export type RecordEvent = typeof RecordEvent.Type
 
+/** One address of an email's From, To or Cc. */
+export const EmailParticipant = Schema.Struct({ email: Schema.String, name: NullableText })
+export type EmailParticipant = typeof EmailParticipant.Type
+
+/**
+ * One email read from a connected mailbox (Gmail). It names no account: ingest attributes it to the
+ * accounts of its external participants (a contact's exact address, else a domain only one account
+ * holds), stores it once per `messageId` (two members' mailboxes holding one thread land once) and
+ * records one `email.received` / `email.sent` event per account. An email no account matches is
+ * dropped.
+ */
+export const RecordEmail = Schema.TaggedStruct("email", {
+	/** The RFC 822 `Message-ID` without its angle brackets, else `<provider>:<externalId>`. */
+	messageId: Schema.String,
+	/** The provider's id of the message in this mailbox (Gmail's message id). */
+	externalId: Schema.String,
+	/** The provider's thread id (Gmail's), for the deep link. */
+	threadId: Schema.String,
+	/** The connected mailbox's address, lowercased. */
+	mailbox: Schema.String,
+	/** `outbound` when the mailbox sent it; ingest also counts any of the org's own addresses. */
+	direction: EmailDirection,
+	from: EmailParticipant,
+	to: Schema.Array(EmailParticipant),
+	cc: Schema.Array(EmailParticipant),
+	subject: Schema.String,
+	snippet: Schema.String,
+	/** Plain text (an HTML-only body stripped of its markup), capped by the adapter. */
+	bodyText: Schema.String,
+	occurredAt: IsoTimestamp,
+})
+export type RecordEmail = typeof RecordEmail.Type
+
 export const IngestOp = Schema.Union([
 	UpsertAccount,
 	UpsertContact,
@@ -210,6 +244,7 @@ export const IngestOp = Schema.Union([
 	RecordMetric,
 	DefineMetric,
 	RecordEvent,
+	RecordEmail,
 ])
 export type IngestOp = typeof IngestOp.Type
 

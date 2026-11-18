@@ -96,15 +96,16 @@ export const configFieldView = (
 	})
 }
 
-const LOOKBACK = [
+/** A backfill's lookback choices (Maple's settings, each Gmail mailbox). */
+export const LOOKBACK = [
 	{ key: "30", label: "30d" },
 	{ key: "90", label: "90d" },
 	{ key: "180", label: "180d" },
 	{ key: "365", label: "1y" },
 ] as const
-type LookbackKey = (typeof LOOKBACK)[number]["key"]
+export type LookbackKey = (typeof LOOKBACK)[number]["key"]
 const toLookback = (key: LookbackKey) => Message.ClickedLookback({ days: Number(key) })
-const lookbackKeyOf = (days: number): LookbackKey =>
+export const lookbackKeyOf = (days: number): LookbackKey =>
 	LOOKBACK.find((option) => option.key === String(days))?.key ?? "90"
 
 type MapleConfig = Extract<Customers.ConnectionConfig, { _tag: "maple" }>

@@ -62,11 +62,22 @@ export const MapleConnectionConfig = Schema.TaggedStruct("maple", {
 	lookbackDays: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })),
 })
 
+/**
+ * Gmail: one connected mailbox (an org has one connection per mailbox, each member connecting their
+ * own over Google sign-in). Emails with the org's customers become timeline events; the first pull
+ * reads `lookbackDays` back.
+ */
+export const GmailConnectionConfig = Schema.TaggedStruct("gmail", {
+	/** 1–365. */
+	lookbackDays: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })),
+})
+
 export const ConnectionConfig = Schema.Union([
 	ClerkConnectionConfig,
 	StripeConnectionConfig,
 	AutumnConnectionConfig,
 	MapleConnectionConfig,
+	GmailConnectionConfig,
 ])
 export type ConnectionConfig = typeof ConnectionConfig.Type
 
@@ -84,6 +95,7 @@ export const DEFAULT_CONNECTION_CONFIG: ConnectionConfigTable = {
 		metricMappings: [],
 		lookbackDays: 90,
 	},
+	gmail: { _tag: "gmail", lookbackDays: 90 },
 }
 
 /** Records written by a run (or, on a connection, in total). */

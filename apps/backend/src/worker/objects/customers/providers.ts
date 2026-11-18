@@ -5,7 +5,9 @@
  * `CustomerProviderUnavailableError` on connect (the UI shows "coming soon").
  *
  * Registered: **clerk** (`./clerk/adapter.ts`), **stripe** (`./stripe/adapter.ts`), **autumn**
- * (`./autumn/adapter.ts`), **maple** (`./maple/adapter.ts`).
+ * (`./autumn/adapter.ts`), **maple** (`./maple/adapter.ts`), **gmail** (`./gmail/adapter.ts`; one
+ * connection per mailbox, connected over Google OAuth rather than `customers.connection.connect`,
+ * `docs/customers/gmail.md`).
  *
  * What an adapter's ops must carry:
  *
@@ -44,6 +46,7 @@ import { Context, Effect, Layer, Option, type Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { makeAutumnAdapter } from "./autumn/adapter"
 import { makeClerkAdapter } from "./clerk/adapter"
+import { makeGmailAdapter } from "./gmail/adapter"
 import { makeMapleAdapter } from "./maple/adapter"
 import { makeStripeAdapter } from "./stripe/adapter"
 import { CustomerProviderError, CustomerWebhookRejectedError } from "./provider-errors"
@@ -138,6 +141,7 @@ export class CustomerProviders extends Context.Service<CustomerProviders, Custom
 				["stripe", yield* makeStripeAdapter],
 				["autumn", yield* makeAutumnAdapter],
 				["maple", yield* makeMapleAdapter],
+				["gmail", yield* makeGmailAdapter],
 			])
 			return CustomerProviders.of({ get: (provider) => Option.fromNullishOr(adapters.get(provider)) })
 		}),

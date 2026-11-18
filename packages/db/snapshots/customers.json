@@ -1,5 +1,5 @@
 {
-	"migration": "0012_drop_signal_reopen_after",
+	"migration": "0013_customers_gmail",
 	"entities": [
 		{
 			"kind": "table",
@@ -39,6 +39,13 @@
 		{
 			"kind": "table",
 			"name": "customer_contacts",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_emails",
 			"primaryKey": {
 				"columns": ["id"]
 			}
@@ -1095,6 +1102,141 @@
 			"type": "text",
 			"notNull": false,
 			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "provider",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "messageId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "mailbox",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "externalId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "threadId",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "direction",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "fromAddress",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "toAddresses",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "ccAddresses",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "subject",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "snippet",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "bodyText",
+			"position": 12,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "occurredAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_emails",
+			"name": "createdAt",
+			"position": 14,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
 		},
 		{
 			"kind": "column",
@@ -3287,13 +3429,6 @@
 		},
 		{
 			"kind": "index",
-			"table": "customer_connections",
-			"name": "customer_connections_provider_unique",
-			"unique": true,
-			"columns": ["\"provider\""]
-		},
-		{
-			"kind": "index",
 			"table": "customer_contacts",
 			"name": "customer_contacts_account_idx",
 			"unique": false,
@@ -3305,6 +3440,13 @@
 			"name": "customer_contacts_email_idx",
 			"unique": false,
 			"columns": ["\"email\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_emails",
+			"name": "customer_emails_message_unique",
+			"unique": true,
+			"columns": ["\"messageId\""]
 		},
 		{
 			"kind": "index",
@@ -3502,6 +3644,27 @@
 			"table": "customer_channel_links",
 			"unique": true,
 			"on": ["channelId"],
+			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "customer_connections_gmail_mailbox_unique",
+			"table": "customer_connections",
+			"unique": true,
+			"on": ["provider", "externalAccountId"],
+			"where": "\"provider\" = 'gmail'"
+		},
+		{
+			"name": "customer_connections_provider_single_unique",
+			"table": "customer_connections",
+			"unique": true,
+			"on": ["provider"],
+			"where": "\"provider\" <> 'gmail'"
+		},
+		{
+			"name": "customer_contacts_email_lower_idx",
+			"table": "customer_contacts",
+			"unique": false,
+			"on": ["lower(\"email\")"],
 			"where": "\"deletedAt\" IS NULL"
 		},
 		{

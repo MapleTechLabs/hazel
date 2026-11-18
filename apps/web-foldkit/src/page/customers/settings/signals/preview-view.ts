@@ -16,7 +16,7 @@ import { PROVIDERS, sourcesLabel } from "../../../../customers/providers"
 import { evidenceViz } from "../../../../customers/ui/evidence"
 import { companyLogo } from "../../../../customers/ui/identity"
 import { IconWarning } from "../../../../icons"
-import { AppRoute, customerRoute, hrefOf } from "../../../../route"
+import { customerRoute, hrefOf, sourceDetailRoute } from "../../../../route"
 import { badge } from "../../../../ui/badge"
 import { button } from "../../../../ui/button"
 import { loader } from "../../../../ui/loader"
@@ -84,7 +84,7 @@ const missingSources = (h: H, result: Result, orgSlug: string): ReadonlyArray<Ht
 						),
 						h.a(
 							[
-								h.Href(hrefOf(AppRoute.CustomersSourceDetail({ orgSlug, provider: first }))),
+								h.Href(hrefOf(sourceDetailRoute(orgSlug, first))),
 								h.Class("shrink-0 font-medium underline underline-offset-2"),
 							],
 							[`Connect ${PROVIDERS[first].name}`],

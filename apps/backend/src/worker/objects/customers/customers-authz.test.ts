@@ -54,6 +54,7 @@ const PAYLOADS = {
 	"customers.contacts.list": { accountId: uuid() },
 	"customers.invoices.list": { accountId: uuid() },
 	"customers.events.list": {},
+	"customers.email.get": { emailId: uuid() },
 	"customers.signals.history": {},
 	"customers.rule.dryRun": { draft: ruleDraft },
 	"customers.health.dryRun": { draft: DEFAULT_HEALTH_SETTINGS },

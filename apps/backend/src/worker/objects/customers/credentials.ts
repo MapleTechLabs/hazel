@@ -77,6 +77,30 @@ export const disconnectConnections = Effect.fn("Customers.disconnectConnections"
 	)
 })
 
+/**
+ * New credentials start a new run: one left running ends, so only one run pulls. It is a
+ * `backfill` until one succeeded, else a `manual` run from the last success.
+ */
+export const restartRun = Effect.fn("Customers.restartRun")(function* (
+	connection: Pick<schema.CustomerConnection, "id" | "backfilledAt">,
+	now: Date,
+) {
+	const db = yield* Database.Database
+	yield* db.run(
+		SQLite.update(schema.customerSyncRunsTable)
+			.set({
+				status: "failed",
+				finishedAt: now,
+				error: { code: "internal", message: "Replaced by new credentials", httpStatus: null },
+			})
+			.where(($) => [$.connectionId.eq(connection.id), $.status.eq("running")]),
+	)
+	yield* (yield* CustomerIngest).startRun(
+		connection.id,
+		connection.backfilledAt === null ? "backfill" : "manual",
+	)
+})
+
 /** The decrypted credentials of a connection; `None` once disconnected (no secrets). */
 export const loadCredentials = Effect.fn("Customers.loadCredentials")(function* (
 	connection: Pick<schema.CustomerConnection, "id" | "config" | "externalAccountId">,

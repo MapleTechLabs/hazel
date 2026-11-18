@@ -1,7 +1,7 @@
 import { Option, Result } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
-import { AppRoute } from "../../../route"
+import { sourceDetailRoute } from "../../../route"
 import type { PageReturn, Shared } from "../../contract"
 import { requestedOrgNavigation } from "../../out-message"
 import { FetchCustomersOverview } from "./commands"
@@ -70,7 +70,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		PressedConnect: ({ provider }) => ({
 			model,
 			outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
-				AppRoute.CustomersSourceDetail({ orgSlug, provider }),
+				sourceDetailRoute(orgSlug, provider),
 			),
 		}),
 

@@ -5,10 +5,10 @@
 import { Schema } from "effect"
 
 /** The providers that write customer data. `hazel` marks what Hazel itself wrote (manual edits, compute). */
-export const CustomerProvider = Schema.Literals(["clerk", "stripe", "autumn", "maple"])
+export const CustomerProvider = Schema.Literals(["clerk", "stripe", "autumn", "maple", "gmail"])
 export type CustomerProvider = typeof CustomerProvider.Type
 
-export const CustomerSource = Schema.Literals(["clerk", "stripe", "autumn", "maple", "hazel"])
+export const CustomerSource = Schema.Literals(["clerk", "stripe", "autumn", "maple", "gmail", "hazel"])
 export type CustomerSource = typeof CustomerSource.Type
 
 export const LifecycleStage = Schema.Literals(["lead", "trialing", "active", "past_due", "churned"])
@@ -112,6 +112,10 @@ export type BuiltInViewKey = typeof BuiltInViewKey.Type
 /** The overview's range picker. */
 export const CustomersRange = Schema.Literals(["7d", "30d", "90d", "12m"])
 export type CustomersRange = typeof CustomersRange.Type
+
+/** An imported email: `outbound` when one of the org's own addresses sent it. */
+export const EmailDirection = Schema.Literals(["inbound", "outbound"])
+export type EmailDirection = typeof EmailDirection.Type
 
 /** Ignore rule targets: what of a provider record the pattern is matched against. */
 export const IgnoreRuleField = Schema.Literals(["email", "domain", "name", "external_id"])

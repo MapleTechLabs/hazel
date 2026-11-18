@@ -5,6 +5,7 @@ import { HttpAgentAccessLive } from "./routes/agent-access.http"
 import { HttpApiV1BotsLive, HttpApiV1IntegrationsLive, HttpMessagesApiLive } from "./routes/api-v1"
 import { HttpKlipyLive } from "./routes/klipy.http"
 import { HttpBotCommandsLive } from "./routes/bot-commands.http"
+import { HttpCustomersGmailLive } from "./routes/customers-gmail.http"
 import { HttpIncomingWebhookLive } from "./routes/incoming-webhooks.http"
 import { HttpIntegrationCommandLive } from "./routes/integration-commands.http"
 import { HttpIntegrationResourceLive } from "./routes/integration-resources.http"
@@ -31,4 +32,5 @@ export const HttpApiRoutes = HttpApiBuilder.layer(HazelApi).pipe(
 	Layer.provide(HttpUploadsLive),
 	Layer.provide(HttpWebhookLive),
 	Layer.provide(HttpKlipyLive),
+	Layer.provide(HttpCustomersGmailLive),
 )

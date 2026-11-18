@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { DEFAULT_CONNECTION_CONFIG, EMPTY_SYNC_STATS } from "@hazel/domain/customers"
-import { CustomerConnectionId } from "@hazel/schema"
+import { CustomerConnectionId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
@@ -12,7 +12,7 @@ import {
 	userId,
 	uuid,
 } from "../../../../test/pages-fixtures"
-import { AppRoute } from "../../../../route"
+import { AppRoute, sourceDetailRoute } from "../../../../route"
 import { Message } from "./message"
 import type { ConnectionRow } from "./queries"
 import { init, update } from "./update"
@@ -24,6 +24,7 @@ const clerk: ConnectionRow = {
 	id: Schema.decodeSync(CustomerConnectionId)(uuid(500)),
 	provider: "clerk",
 	status: "active",
+	externalAccountId: null,
 	externalAccountName: "Northwind",
 	config: DEFAULT_CONNECTION_CONFIG.clerk,
 	connectedBy: userId,
@@ -35,6 +36,7 @@ const clerk: ConnectionRow = {
 	lastError: null,
 	consecutiveFailures: 0,
 	nextSyncAtMs: null,
+	backfilledAtMs: null,
 	stats: { ...EMPTY_SYNC_STATS, accounts: 12 },
 	disconnectedAtMs: null,
 }
@@ -42,7 +44,7 @@ const clerk: ConnectionRow = {
 const admin = makeShared({ member: memberWithRole("admin") })
 const member = makeShared({ member: memberWithRole("member") })
 const overview = AppRoute.CustomersSettingsSources({ orgSlug: "hazel" })
-const clerkDetail = AppRoute.CustomersSourceDetail({ orgSlug: "hazel", provider: "clerk" })
+const clerkDetail = sourceDetailRoute("hazel", "clerk")
 const connections = Scene.Subscription.emit(Message.UpdatedConnections({ connections: [clerk] }))
 const readOnly = Scene.text("Only admins and owners can change data sources.", { exact: false })
 
@@ -145,6 +147,50 @@ describe("connect modal", () => {
 			portalModalMounted,
 			Scene.expect(Scene.text("Key was refused")).toExist(),
 			Scene.expect(Scene.role("button", { name: "Test again" })).toExist(),
+		)
+	})
+})
+
+describe("Gmail", () => {
+	const otherUser = Schema.decodeSync(UserId)(uuid(501))
+	const mailbox = (n: number, address: string, connectedBy: UserId): ConnectionRow => ({
+		...clerk,
+		id: Schema.decodeSync(CustomerConnectionId)(uuid(510 + n)),
+		provider: "gmail",
+		externalAccountId: address,
+		externalAccountName: null,
+		config: DEFAULT_CONNECTION_CONFIG.gmail,
+		connectedBy,
+		stats: { ...EMPTY_SYNC_STATS, events: 42 },
+	})
+	const mine = mailbox(1, "ada@hazel.test", userId)
+	const theirs = mailbox(2, "grace@hazel.test", otherUser)
+	const gmail = sourceDetailRoute("hazel", "gmail")
+
+	test("a member connects their own mailbox after the privacy note, and manages only theirs", () => {
+		Scene.scene(
+			pageScene(update, view, member),
+			Scene.given(init(gmail, member).model),
+			Scene.Subscription.emit(Message.UpdatedConnections({ connections: [mine, theirs] })),
+			Scene.expect(Scene.text("Imported emails are shared with this organization")).toExist(),
+			Scene.expect(Scene.role("link", { name: "Connect another mailbox" })).toExist(),
+			Scene.expect(Scene.role("heading", { name: "ada@hazel.test" })).toExist(),
+			Scene.expect(Scene.role("heading", { name: "grace@hazel.test" })).toExist(),
+			Scene.expect(Scene.role("button", { name: "Sync now" })).toExist(),
+			Scene.expect(Scene.role("button", { name: "Disconnect…" })).toExist(),
+			Scene.expect(Scene.role("radiogroup", { name: "Lookback of ada@hazel.test" })).toExist(),
+			Scene.expect(Scene.role("radiogroup", { name: "Lookback of grace@hazel.test" })).toBeAbsent(),
+			Scene.expect(readOnly).toBeAbsent(),
+		)
+	})
+
+	test("with no mailbox, the page offers to connect one", () => {
+		Scene.scene(
+			pageScene(update, view, member),
+			Scene.given(init(gmail, member).model),
+			Scene.Subscription.emit(Message.UpdatedConnections({ connections: [] })),
+			Scene.expect(Scene.text("No mailbox connected")).toExist(),
+			Scene.expect(Scene.role("link", { name: "Connect Gmail" })).toExist(),
 		)
 	})
 })
