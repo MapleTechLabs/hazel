@@ -1045,6 +1045,26 @@ const SIGNAL_SEEDS: ReadonlyArray<SignalSeed> = [
 			contactEmail: null,
 		},
 	},
+	// A second open signal on Acme, last so the ids above stay put: the queue groups it under Acme's first.
+	{
+		account: "acme",
+		template: "usage_drop",
+		severity: "low",
+		reason: "Daily active users down 24% (7-day avg 19 vs 25 before)",
+		priority: 2.8,
+		openedDaysAgo: 3,
+		evidence: {
+			_tag: "series",
+			step: 0,
+			metricKey: "active_users",
+			recentAvg: 19,
+			baselineAvg: 25,
+			changePct: -24,
+			recentDays: 7,
+			baselineDays: 28,
+			series: dropSeries(25, 19, 7),
+		},
+	},
 ]
 
 /** Every signal with its account, in priority order. */
