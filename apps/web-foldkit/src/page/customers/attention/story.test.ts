@@ -193,6 +193,7 @@ const oldDone = signal(7, kestrel, {
 	title: "Seat growth",
 	status: "done",
 	resolvedAtMs: NOW - 20 * DAY,
+	closedAtMs: NOW - 19 * DAY,
 	priorityScore: 2,
 })
 
@@ -238,9 +239,12 @@ describe("needs attention: what shows", () => {
 		expect(ids(visibleSignals(mine, viewer))).toEqual(ids([paymentFailed, stoppedLogging, usageDown]))
 	})
 
-	test("Done keeps the last week only", () => {
+	test("Done keeps the last week, and older signals still muted", () => {
 		const current = pageUpdate(loaded(), Message.ClickedTab({ tab: "done" })).model
 		expect(ids(visibleSignals(current, viewer))).toEqual(ids([done]))
+		const muted = { ...oldDone, closedAtMs: null }
+		const withMuted = { ...current, signals: [...(current.signals ?? []), muted] }
+		expect(ids(visibleSignals(withMuted, viewer))).toEqual(ids([done, muted]))
 	})
 
 	test("removing the owner chip shows everyone's signals", () => {
