@@ -20,6 +20,12 @@ export const NAVIGATION = [
 	{ key: "nav:dashboard", route: AppRoute.OrgHome, label: "Dashboard", textValue: "dashboard home" },
 	{ key: "nav:chat", route: AppRoute.ChatIndex, label: "Chat", textValue: "chat messages" },
 	{
+		key: "nav:customers",
+		route: AppRoute.CustomersOverview,
+		label: "Customers",
+		textValue: "customers accounts",
+	},
+	{
 		key: "nav:notifications",
 		route: AppRoute.NotificationsAll,
 		label: "Notifications",
@@ -93,6 +99,8 @@ const recentItem = (model: Model, channel: ChannelSummary) => {
 
 const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 	const recent = recentChannelsOf(model)
+	// Only once the user types: an org can have thousands of customers.
+	const showCustomers = model.menu.inputValue.trim() !== "" && model.customers.length > 0
 	return [
 		...(recent.length > 0
 			? [
@@ -129,6 +137,19 @@ const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 								dm.otherMembers
 									.map((member) => `${member.firstName} ${member.lastName}`)
 									.join(" "),
+							),
+						),
+					),
+				]
+			: []),
+		...(showCustomers
+			? [
+					CommandMenu.section(
+						"Customers",
+						model.customers.map((customer) =>
+							CommandMenu.item(
+								`customer:${customer.id}`,
+								[customer.name, ...customer.domains].join(" "),
 							),
 						),
 					),

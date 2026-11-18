@@ -1,9 +1,16 @@
 import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { and, eq, inArray, not, or } from "@tanstack/db"
+import type * as Customers from "@hazel/domain/customers"
+import { and, eq, inArray, isNull, not, or } from "@tanstack/db"
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
-import { channelCollection, channelMemberCollection, userPresenceStatusCollection } from "~/db/collections"
+import {
+	channelCollection,
+	channelMemberCollection,
+	customerAccountCollection,
+	userPresenceStatusCollection,
+} from "~/db/collections"
 import { getEffectivePresenceStatus } from "~/utils/presence"
+import { withCustomersSource } from "../../customers/queries"
 import { liveQueryStream } from "../../data/live-query"
 import type { Shared } from "../../page/contract"
 import { channelMemberWithUserCollection } from "../data"
@@ -126,6 +133,39 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 						(rows) => Message.UpdatedDmChannels({ dmChannels: toDmChannels(rows, userId) }),
 					),
 	}),
+	homeCustomers: entry(
+		{ organizationId: Schema.NullOr(OrganizationId) },
+		{
+			modelToDependencies: (input) => ({ organizationId: contextOf(input, "Home").organizationId }),
+			dependenciesToStream: ({ organizationId }) =>
+				organizationId === null
+					? Stream.empty
+					: withCustomersSource(
+							organizationId,
+							liveQueryStream<Customers.Account, Message>(
+								(q) =>
+									q
+										.from({ account: customerAccountCollection })
+										.where(({ account }) =>
+											and(
+												eq(account.organizationId, organizationId),
+												isNull(account.deletedAt),
+											),
+										)
+										.orderBy(({ account }) => account.name, "asc"),
+								(rows) =>
+									Message.UpdatedCustomers({
+										customers: rows.map((account) => ({
+											id: account.id,
+											name: account.name,
+											domains: account.domains,
+											logoUrl: account.logoUrl,
+										})),
+									}),
+							),
+						),
+		},
+	),
 	recentChannelIds: entry(
 		{ isOpen: Schema.Boolean },
 		{
