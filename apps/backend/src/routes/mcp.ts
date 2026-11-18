@@ -12,7 +12,7 @@
  */
 import { SQLite, schema } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
-import type { AgentScope } from "@hazel/domain/http"
+import { type AgentScope, DEFAULT_AGENT_SCOPES } from "@hazel/domain/http"
 import {
 	ChannelResponse,
 	CreateThreadRequest,
@@ -1098,7 +1098,7 @@ export const McpRoute = HttpRouter.use((router) =>
 				{
 					status: 401,
 					headers: {
-						"WWW-Authenticate": `Bearer resource_metadata="${protectedResourceMetadataUrl(apiOrigin)}", error="invalid_token"`,
+						"WWW-Authenticate": `Bearer resource_metadata="${protectedResourceMetadataUrl(apiOrigin)}", scope="${DEFAULT_AGENT_SCOPES.join(" ")}", error="invalid_token"`,
 					},
 				},
 			)

@@ -1,11 +1,11 @@
 import { Color, Detail, Icon } from "@raycast/api"
-import { getFavicon, useCachedPromise } from "@raycast/utils"
+import { usePromise } from "@raycast/utils"
 import { CustomerActions, channelUrl, providerLinks } from "./customer-actions"
-import { HEALTH, STAGE, SOURCE, date, money, relative } from "./lib/format"
+import { HEALTH, STAGE, SOURCE, date, httpsUrl, md, money, relative } from "./lib/format"
 import type { Account, AccountDetail, ChannelLink, Organization, Signal } from "./lib/models"
 import { call } from "./lib/rpc"
 
-/** `customers.account.detail`; module-level, so the list's prefetch and this view share a cache entry. */
+/** `customers.account.detail`. */
 export const fetchDetail = (organizationId: string, accountId: string) =>
 	call<AccountDetail>("customers.account.detail", { organizationId, accountId })
 
@@ -25,11 +25,11 @@ export const detailMarkdown = (
 ) => {
 	const health = HEALTH[account.healthStatus]
 	const lines: Array<string> = [
-		`# ${account.name}`,
+		`# ${md(account.name)}`,
 		[
 			`**${health.label}${account.healthScore === null ? "" : ` · ${account.healthScore}`}**`,
 			STAGE[account.lifecycleStage],
-			account.planName,
+			account.planName === null ? null : md(account.planName),
 			account.mrrMinor > 0 ? `${money(account.mrrMinor, account.currency)}/mo` : null,
 		]
 			.filter((part) => part !== null)
@@ -41,7 +41,9 @@ export const detailMarkdown = (
 		lines.push("## Needs attention")
 		for (const signal of open) {
 			const icon = signal.kind === "opportunity" ? "✨" : SEVERITY_ICON[signal.severity]
-			lines.push(`- ${icon} **${signal.title}** — ${signal.reason} _(${relative(signal.openedAt)})_`)
+			lines.push(
+				`- ${icon} **${md(signal.title)}** — ${md(signal.reason)} _(${relative(signal.openedAt)})_`,
+			)
 		}
 	}
 	if (detail === undefined) return lines.join("\n\n")
@@ -50,17 +52,18 @@ export const detailMarkdown = (
 	if (overdue.length > 0 || detail.subscriptions.length > 0 || detail.upcomingInvoice !== null) {
 		lines.push("## Billing")
 		for (const invoice of overdue) {
-			const reason = invoice.declineReason === null ? "" : ` — ${invoice.declineReason}`
+			const reason = invoice.declineReason === null ? "" : ` — ${md(invoice.declineReason)}`
 			const due = invoice.dueAt === null ? "" : `, due ${date(invoice.dueAt)}`
+			const invoiceUrl = httpsUrl(invoice.hostedUrl)
 			lines.push(
 				`- ⚠️ **${money(invoice.amountDueMinor, invoice.currency)} ${invoice.status}**${due}${reason}` +
-					(invoice.hostedUrl === null ? "" : ` · [Invoice](${invoice.hostedUrl})`),
+					(invoiceUrl === null ? "" : ` · [Invoice](<${invoiceUrl}>)`),
 			)
 		}
 		for (const subscription of detail.subscriptions) {
 			const ends = subscription.cancelAtPeriodEnd ? "cancels" : "renews"
 			lines.push(
-				`- ${subscription.planName ?? "Subscription"} · ${money(subscription.mrrMinor, subscription.currency)}/mo · ${subscription.status}` +
+				`- ${subscription.planName === null ? "Subscription" : md(subscription.planName)} · ${money(subscription.mrrMinor, subscription.currency)}/mo · ${subscription.status}` +
 					(subscription.currentPeriodEnd === null
 						? ""
 						: ` · ${ends} ${date(subscription.currentPeriodEnd)}`) +
@@ -84,7 +87,7 @@ export const detailMarkdown = (
 				"| --- | --- | --- |",
 				...components.map(
 					(component) =>
-						`| ${HEALTH_LABEL[component.key]} | ${component.excluded || component.score === null ? "—" : component.score} | ${component.why.replaceAll("|", "\\|")} |`,
+						`| ${HEALTH_LABEL[component.key]} | ${component.excluded || component.score === null ? "—" : component.score} | ${md(component.why)} |`,
 				),
 			].join("\n"),
 		)
@@ -93,9 +96,10 @@ export const detailMarkdown = (
 	if (detail.contactsToReach.length > 0) {
 		lines.push("## Who to reach")
 		for (const { contact, status } of detail.contactsToReach) {
-			const who = contact.name ?? contact.email ?? "Unknown"
-			const email = contact.email !== null && contact.name !== null ? ` · ${contact.email}` : ""
+			const who = md(contact.name ?? contact.email ?? "Unknown")
+			const email = contact.email !== null && contact.name !== null ? ` · ${md(contact.email)}` : ""
 			const role = contact.title ?? contact.role
+			const roleText = role === null ? null : md(role)
 			const seen =
 				contact.lastSeenAt === null
 					? status === "never_active"
@@ -103,7 +107,7 @@ export const detailMarkdown = (
 						: null
 					: `seen ${relative(contact.lastSeenAt)}`
 			lines.push(
-				`- **${who}**${email}${[role, seen]
+				`- **${who}**${email}${[roleText, seen]
 					.filter(Boolean)
 					.map((part) => ` · ${part}`)
 					.join("")}`,
@@ -114,7 +118,9 @@ export const detailMarkdown = (
 	if (detail.recentEvents.length > 0) {
 		lines.push("## Recent activity")
 		for (const event of detail.recentEvents) {
-			lines.push(`- ${relative(event.occurredAt)} · ${SOURCE[event.provider].label} · ${event.title}`)
+			lines.push(
+				`- ${relative(event.occurredAt)} · ${SOURCE[event.provider].label} · ${md(event.title)}`,
+			)
 		}
 	}
 	return lines.join("\n\n")
@@ -128,7 +134,7 @@ export function CustomerDetail(props: {
 	readonly links: ReadonlyArray<ChannelLink>
 }) {
 	const { organization, signals, links } = props
-	const detail = useCachedPromise(fetchDetail, [organization.id, props.account.id], {
+	const detail = usePromise(fetchDetail, [organization.id, props.account.id], {
 		failureToastOptions: { title: "Could not load the customer" },
 	})
 	const account = detail.data?.account ?? props.account
@@ -247,10 +253,8 @@ export function CustomerDetail(props: {
 	)
 }
 
-/** The account's logo, else its domain's favicon. */
-export const accountIcon = (account: Account) =>
-	account.logoUrl !== null
-		? { source: account.logoUrl, fallback: Icon.Building }
-		: account.domains[0] !== undefined
-			? getFavicon(`https://${account.domains[0]}`, { fallback: Icon.Building })
-			: Icon.Building
+/** The account's logo when it is https (as on the web), else a building. */
+export const accountIcon = (account: Account) => {
+	const logo = httpsUrl(account.logoUrl)
+	return logo === null ? Icon.Building : { source: logo, fallback: Icon.Building }
+}

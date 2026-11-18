@@ -40,7 +40,7 @@ import { type MuxOpenResult, refuseMuxStream, startMuxSession, toHttpServerRespo
 import * as AccessToken from "@hazel/auth/access-token"
 import { Clock, type Context, Effect, Option, Schema } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse, HttpTraceContext } from "effect/http"
-import { ACCESS_TOKEN_TTL_MS, AgentAccess, isAgentToken } from "../services/agent-access"
+import { AgentAccess, isAgentToken } from "../services/agent-access"
 import { HazelSession, type VerifiedUser } from "../services/hazel-session"
 import { ChannelId, OrganizationId, type UserId } from "@hazel/schema"
 import type { Socket } from "effect/socket"
@@ -71,6 +71,9 @@ const WARM_IDS_MAX = 8
  * is valid far longer, and is checked again as often as a token would be re-minted.
  */
 const TOKEN_REUSE_MS = AccessToken.lifetimeSeconds * 1000
+
+/** The longest an agent token's socket lives before it must reconnect (and its token is checked again). */
+const AGENT_SOCKET_MS = 5 * 60 * 1000
 
 /** The object's `fetch` failed (overloaded, reset, unreachable). */
 class SyncForwardError extends Schema.TaggedError<SyncForwardError>()("SyncForwardError", {
@@ -357,8 +360,9 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 
 			/**
 			 * An agent token on a `kind` socket: valid for the customers stream of a grant with
-			 * `customers:read`. A personal token has no expiry; its socket still closes with 4001
-			 * after an access token's lifetime, so a revoked grant stops streaming.
+			 * `customers:read`. Its socket closes with 4001 within `AGENT_SOCKET_MS` (sooner when the
+			 * token expires), so a revoked grant stops streaming soon: revoking deletes the tokens
+			 * but cannot reach open sockets.
 			 */
 			const verifyAgentSocketToken = (kind: ObjectKind, token: string) =>
 				Effect.gen(function* () {
@@ -366,9 +370,9 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 					if (kind !== "customers") return refused
 					const agent = yield* agents.authenticate(token)
 					if (Option.isNone(agent) || !agent.value.scopes.includes("customers:read")) return refused
-					const user = yield* session.userOf(agent.value.userId)
-					const expiresAt =
-						agent.value.expiresAt ?? (yield* Clock.currentTimeMillis) + ACCESS_TOKEN_TTL_MS
+					const user = yield* session.agentUserOf(agent.value.userId)
+					const latest = (yield* Clock.currentTimeMillis) + AGENT_SOCKET_MS
+					const expiresAt = Math.min(agent.value.expiresAt ?? latest, latest)
 					return { _tag: "Checked", user: Option.some({ user, expiresAt }) } as const
 				}).pipe(
 					Effect.catchTags({

@@ -15,7 +15,7 @@ import { Config, Effect, Option, Schema } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { AgentClientId } from "@hazel/schema"
 import { AgentAccess, isAllowedRedirectUri, OAuthProtocolError } from "../services/agent-access"
-import { ALL_AGENT_SCOPES } from "@hazel/domain/http"
+import { ALL_AGENT_SCOPES, DEFAULT_AGENT_SCOPES } from "@hazel/domain/http"
 
 const originOf = (url: string) => new URL(url).origin
 
@@ -104,7 +104,9 @@ export const AgentOAuthRoutes = HttpRouter.use((router) =>
 			{
 				resource: mcpResourceUrl(apiOrigin),
 				authorization_servers: [apiOrigin],
-				scopes_supported: ALL_AGENT_SCOPES,
+				// The MCP server's own scopes: clients request what the resource lists (MCP authorization),
+				// and Customers access is for clients that ask for it by name.
+				scopes_supported: DEFAULT_AGENT_SCOPES,
 				bearer_methods_supported: ["header"],
 				resource_name: "Hazel",
 			},

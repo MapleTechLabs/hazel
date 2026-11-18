@@ -92,7 +92,7 @@ export const AuthMiddlewareLive = Layer.effect(
 								}),
 							)
 						}
-						const user = yield* hazelSession.userOf(agent.value.userId)
+						const user = yield* hazelSession.agentUserOf(agent.value.userId)
 						return yield* effect.pipe(
 							Effect.provideService(CurrentUser.Context, user),
 							Effect.provideService(CurrentAgent, {

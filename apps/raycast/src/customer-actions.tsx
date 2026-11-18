@@ -1,4 +1,4 @@
-import { Action, ActionPanel, Icon, Keyboard, showToast, Toast } from "@raycast/api"
+import { Action, ActionPanel, Icon, Keyboard, PopToRootType, showHUD } from "@raycast/api"
 import { getFavicon } from "@raycast/utils"
 import type { ReactNode } from "react"
 import { signOut } from "./lib/auth"
@@ -107,7 +107,7 @@ export function CustomerActions(props: {
 					<Action.CopyToClipboard
 						title="Copy Hazel Link"
 						content={page}
-						shortcut={Keyboard.Shortcut.Common.CopyDeeplink}
+						shortcut={{ modifiers: ["cmd", "shift"], key: "l" }}
 					/>
 				)}
 				{props.syncAction}
@@ -121,16 +121,23 @@ export function CustomerActions(props: {
 				)}
 			</ActionPanel.Section>
 			<ActionPanel.Section>
-				<Action
-					title="Sign Out of Hazel"
-					icon={Icon.Logout}
-					style={Action.Style.Destructive}
-					onAction={async () => {
-						await signOut()
-						await showToast({ style: Toast.Style.Success, title: "Signed out of Hazel" })
-					}}
-				/>
+				<SignOutAction />
 			</ActionPanel.Section>
 		</ActionPanel>
+	)
+}
+
+/** Signs out and forgets everything saved from Hazel, then closes the command. */
+export function SignOutAction() {
+	return (
+		<Action
+			title="Sign Out of Hazel"
+			icon={Icon.Logout}
+			style={Action.Style.Destructive}
+			onAction={async () => {
+				await signOut()
+				await showHUD("Signed out of Hazel", { popToRootType: PopToRootType.Immediate })
+			}}
+		/>
 	)
 }

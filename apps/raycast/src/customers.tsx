@@ -1,17 +1,14 @@
 import { Action, ActionPanel, Icon, Keyboard, List } from "@raycast/api"
-import { useCachedPromise, useCachedState } from "@raycast/utils"
-import { useMemo, useState } from "react"
-import { CustomerActions } from "./customer-actions"
+import { useCachedState, usePromise } from "@raycast/utils"
+import { useEffect, useMemo, useState } from "react"
+import { CustomerActions, SignOutAction } from "./customer-actions"
 import { CustomerDetail, accountIcon, fetchDetail } from "./customer-detail"
 import { HEALTH, STAGE, money, relative, risk } from "./lib/format"
-import type { Account, ChannelLink, Organization, Signal } from "./lib/models"
-import { call } from "./lib/rpc"
+import type { Account, ChannelLink, Signal } from "./lib/models"
 import { useCustomers } from "./lib/use-customers"
 
-export const fetchOrganizations = () =>
-	call<{ organizations: ReadonlyArray<Organization> }>("customers.organizations", {}).then(
-		(result) => result.organizations,
-	)
+/** How long a selection rests before its detail loads (arrowing through the list loads nothing). */
+const PREFETCH_DELAY_MS = 400
 
 const groupBy = <A extends { readonly accountId: string }>(rows: Readonly<Record<string, A>>) => {
 	const groups = new Map<string, Array<A>>()
@@ -45,21 +42,19 @@ const accessories = (account: Account): Array<List.Item.Accessory> => {
 }
 
 export default function Command() {
-	const organizations = useCachedPromise(fetchOrganizations, [], {
-		failureToastOptions: { title: "Could not load your organizations" },
-	})
 	const [chosenId, setChosenId] = useCachedState<string | undefined>("organization", undefined)
-	const organization =
-		organizations.data?.find((candidate) => candidate.id === chosenId) ?? organizations.data?.[0]
-	const customers = useCustomers(organizations.data, organization?.id)
-	const { state } = customers
+	const customers = useCustomers(chosenId)
+	const { state, organization, organizations } = customers
 	const [selectedId, setSelectedId] = useState<string | null>(null)
+	const [restingId, setRestingId] = useState<string | null>(null)
+	useEffect(() => {
+		const timer = setTimeout(() => setRestingId(selectedId), PREFETCH_DELAY_MS)
+		return () => clearTimeout(timer)
+	}, [selectedId])
 
-	// The selected customer's detail, so the list offers its Clerk, Stripe and Autumn links too.
-	const detail = useCachedPromise(fetchDetail, [organization?.id ?? "", selectedId ?? ""], {
-		execute:
-			organization !== undefined && selectedId !== null && state.accounts[selectedId] !== undefined,
-		keepPreviousData: false,
+	// The resting selection's detail, so the list offers its Clerk, Stripe and Autumn links too.
+	const detail = usePromise(fetchDetail, [organization?.id ?? "", restingId ?? ""], {
+		execute: organization !== undefined && restingId !== null && state.accounts[restingId] !== undefined,
 		onError: () => undefined,
 	})
 
@@ -78,6 +73,23 @@ export default function Command() {
 		: customers.syncedAt === undefined
 			? "Not synced yet"
 			: `Synced ${relative(new Date(customers.syncedAt).toISOString())}`
+	const emptyView = customers.isUnavailable
+		? {
+				title: "No customers here",
+				description: `${organization?.name ?? "This organization"} has no Customers area, or you are not a member.`,
+			}
+		: customers.isSyncing
+			? { title: "Syncing customers…" }
+			: customers.failure !== undefined && organization === undefined
+				? {
+						title: "Could not reach Hazel",
+						description: `${customers.failure}\n\nPress ⌘R to try again.`,
+					}
+				: {
+						title: "No customers",
+						description:
+							"Connect Clerk, Stripe or Autumn in Hazel's Customers settings to see them here.",
+					}
 	const syncAction = (
 		<Action
 			title="Sync Now"
@@ -89,13 +101,13 @@ export default function Command() {
 
 	return (
 		<List
-			isLoading={organizations.isLoading || customers.isSyncing}
+			isLoading={customers.isSyncing}
 			searchBarPlaceholder="Search customers by name, domain, plan or tag"
 			onSelectionChange={setSelectedId}
 			searchBarAccessory={
-				(organizations.data?.length ?? 0) > 1 ? (
+				(organizations?.length ?? 0) > 1 ? (
 					<List.Dropdown tooltip="Organization" value={organization?.id} onChange={setChosenId}>
-						{organizations.data?.map((candidate) => (
+						{organizations?.map((candidate) => (
 							<List.Dropdown.Item
 								key={candidate.id}
 								title={candidate.name}
@@ -106,21 +118,20 @@ export default function Command() {
 				) : undefined
 			}
 		>
-			{customers.isUnavailable ? (
-				<List.EmptyView
-					icon={Icon.PersonLines}
-					title="No customers here"
-					description={`${organization?.name ?? "This organization"} has no Customers area, or you are not a member.`}
-					actions={<ActionPanel>{syncAction}</ActionPanel>}
-				/>
-			) : (
-				<List.EmptyView
-					icon={Icon.PersonLines}
-					title={customers.isSyncing ? "Syncing customers…" : "No customers"}
-					description="Connect Clerk, Stripe or Autumn in Hazel's Customers settings to see them here."
-					actions={<ActionPanel>{syncAction}</ActionPanel>}
-				/>
-			)}
+			<List.EmptyView
+				icon={
+					customers.failure !== undefined && organization === undefined
+						? Icon.Warning
+						: Icon.PersonLines
+				}
+				{...emptyView}
+				actions={
+					<ActionPanel>
+						{syncAction}
+						<SignOutAction />
+					</ActionPanel>
+				}
+			/>
 			{organization !== undefined && (
 				<List.Section title={organization.name} subtitle={`${accounts.length} · ${syncLabel}`}>
 					{accounts.map((account) => {

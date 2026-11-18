@@ -332,7 +332,7 @@ describe("AuthMiddlewareLive", () => {
 				),
 				hazelSession: makeHazelSessionLayer({
 					enabled: true,
-					userOf: () => Effect.succeed(makeCurrentUser({ email: "agent-user@example.com" })),
+					agentUserOf: () => Effect.succeed(makeCurrentUser({ email: "agent-user@example.com" })),
 					verify: () => Effect.die("an agent token is never checked as a session"),
 				}),
 			})
@@ -375,7 +375,7 @@ describe("AuthMiddlewareLive", () => {
 						Effect.provide(
 							makeHazelSessionLayer({
 								enabled: true,
-								userOf: () => Effect.succeed(makeCurrentUser()),
+								agentUserOf: () => Effect.succeed(makeCurrentUser()),
 							}),
 						),
 						Effect.provide(makeAgentAccessLayer(() => Option.some(agent(["customers:read"])))),

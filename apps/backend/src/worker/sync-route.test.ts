@@ -108,7 +108,7 @@ const build = (options: {
 		verifyAccessTokenWithExpiry: options.verify,
 		verifyWithExpiry: options.verify,
 		fromCookie: options.cookie ?? (() => Effect.succeed(Option.none())),
-		userOf: () => Effect.succeed(user),
+		agentUserOf: () => Effect.succeed(user),
 	} as never)
 	const agents = Layer.succeed(AgentAccess, {
 		authenticate: (token: string) => Effect.succeed(options.agent?.(token) ?? Option.none()),
@@ -535,20 +535,27 @@ describe("agent token sync", () => {
 		expect(Option.getOrThrow(principal)).toEqual({ userId, expiresAt })
 	})
 
-	it("closes a personal token's socket after an access token's lifetime", async () => {
+	it("closes an agent socket within 5 minutes, whatever the token's own expiry", async () => {
 		const { forwarded, namespace } = recordingNamespace()
 		const before = Date.now()
-		await build({
-			verify,
-			token,
-			agent: agent(["customers:read"], null),
-			membership: member,
-			env: { CustomersObject: namespace },
-		})(`/sync/customers/${orgId}`)
-		const principal = Option.getOrThrow(
-			decodeSyncPrincipal(forwarded[0]!.headers.get(PRINCIPAL_HEADER) ?? ""),
-		)
-		expect(principal.expiresAt).toBeGreaterThanOrEqual(before + 60 * 60 * 1000)
+		const open = (expiresAt: number | null) =>
+			build({
+				verify,
+				token,
+				agent: agent(["customers:read"], expiresAt),
+				membership: member,
+				env: { CustomersObject: namespace },
+			})(`/sync/customers/${orgId}`)
+		await open(null)
+		await open(before + 60 * 60 * 1000)
+		for (const request of forwarded) {
+			const principal = Option.getOrThrow(
+				decodeSyncPrincipal(request.headers.get(PRINCIPAL_HEADER) ?? ""),
+			)
+			expect(principal.expiresAt).toBeGreaterThanOrEqual(before + 5 * 60 * 1000)
+			expect(principal.expiresAt).toBeLessThanOrEqual(Date.now() + 5 * 60 * 1000)
+		}
+		expect(forwarded).toHaveLength(2)
 	})
 
 	it("refuses another source, a grant without customers:read, and an unknown token", async () => {
