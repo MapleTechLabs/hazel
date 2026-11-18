@@ -2371,13 +2371,15 @@ const make = Effect.gen(function* () {
 						} else if (yield* removeContactRef(session, ref)) count++
 					}
 					// A person still seen through one organization: the memberships it lists that this
-					// listing did not see are gone.
+					// listing did not see are left as of the run's start (an update read before it is late).
 					if (entityType === "contact")
 						yield* db.query(
 							Database.sql`UPDATE "customer_external_refs" SET "viaAccounts" = (
-								SELECT json_group_object("key", json("value")) FROM json_each("viaAccounts")
-								WHERE json_extract("value", '$.leftAt') IS NOT NULL
-									OR json_extract("value", '$.seenAt') >= ${since.toISOString()})
+								SELECT json_group_object("key",
+									CASE WHEN json_extract("value", '$.leftAt') IS NULL
+										AND json_extract("value", '$.seenAt') < ${since.toISOString()}
+									THEN json_set("value", '$.leftAt', ${since.toISOString()}) ELSE json("value") END)
+								FROM json_each("viaAccounts"))
 							WHERE "connectionId" = ${connectionId} AND "entityType" = 'contact'
 								AND "staleAt" IS NULL AND "viaAccounts" IS NOT NULL
 								AND EXISTS (SELECT 1 FROM json_each("viaAccounts")

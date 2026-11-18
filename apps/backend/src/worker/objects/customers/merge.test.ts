@@ -385,6 +385,13 @@ describe("customers.account.merge", () => {
 						kept,
 					)
 				expect(ada()).toEqual([{ deleted: 0 }])
+				// An Acme EU update read before the listing arrives late: it does not bring that membership back.
+				yield* world.ingest("clerk", [
+					{
+						...member("user_a", "org_2", "ada@acme.com"),
+						observedAt: new Date(since.getTime() - 1).toISOString(),
+					},
+				])
 				// Leaving Acme now removes her.
 				yield* world.ingest("clerk", [
 					{ ...member("user_a", "org_1", "ada@acme.com"), removed: true },
