@@ -22,7 +22,6 @@ import {
 	IconArrowPath,
 	IconCheck,
 	IconClock,
-	IconDots,
 	IconLightbulb,
 	IconMagnifier3,
 	IconUser,
@@ -45,7 +44,6 @@ import {
 	filterEntries,
 	type Filters,
 	isNarrowed,
-	moreEntries,
 	type Model,
 	SEARCH_ID,
 	selectedSignal,
@@ -70,7 +68,6 @@ import { heading } from "../../../ui/heading"
 
 const toAssignMenuMessage = (message: Menu.Message) => Message.GotAssignMenuMessage({ message })
 const toSnoozeMenuMessage = (message: Menu.Message) => Message.GotSnoozeMenuMessage({ message })
-const toMoreMenuMessage = (message: Menu.Message) => Message.GotMoreMenuMessage({ message })
 const toFilterMenuMessage = (message: Menu.Message) => Message.GotFilterMenuMessage({ message })
 const toSortMenuMessage = (message: Menu.Message) => Message.GotSortMenuMessage({ message })
 
@@ -211,28 +208,7 @@ const signalActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): R
 			snooze,
 			done,
 		]
-	const more = menu(h, model.moreMenu, {
-		entries: moreEntries,
-		trigger: (attributes, overlay) =>
-			queueAction(h, {
-				label: "More actions",
-				iconOnly: true,
-				icon: IconDots(h, icon),
-				attributes,
-				overlay,
-			}),
-		content: (key) => [
-			menuLabel(
-				h,
-				model.moreMenu.id,
-				key,
-				key === "dismiss" ? "Dismiss (not useful)" : "Open customer",
-			),
-			...(key === "dismiss" ? [kbd(h, "E", "ml-auto")] : [kbd(h, "Enter", "ml-auto")]),
-		],
-		toMessage: toMoreMenuMessage,
-	})
-	return [assign, snooze, done, more]
+	return [assign, snooze, done]
 }
 
 // HEADER AND CONTROLS
@@ -434,7 +410,6 @@ const SHORTCUTS = {
 		{ keys: ["I"], label: "Assign to me" },
 		{ keys: ["H"], label: "Snooze" },
 		{ keys: ["D"], label: "Mark done" },
-		{ keys: ["E"], label: "Dismiss" },
 		{ keys: ["Enter"], label: "Open customer" },
 		{ keys: ["Space"], label: "Preview" },
 	],

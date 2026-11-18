@@ -33,7 +33,6 @@ import { menuLabel } from "../../../ui/menu-view"
 import { Message } from "./message"
 import {
 	ASSIGN_ME,
-	DISMISS,
 	doneEntries,
 	metricEntries,
 	type Model,
@@ -354,7 +353,6 @@ const MORE_LABEL = {
 	[ASSIGN_ME]: "Assign to me",
 	[UNASSIGN]: "Unassign",
 	[OPEN_QUEUE]: "Open in Needs attention",
-	[DISMISS]: "Dismiss (not useful)",
 } as const
 
 const labelOf = (labels: Readonly<Record<string, string>>, key: string) => labels[key] ?? key

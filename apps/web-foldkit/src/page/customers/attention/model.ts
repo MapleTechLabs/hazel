@@ -100,7 +100,6 @@ export const Model = Schema.Struct({
 	detail: Schema.NullOr(PreviewDetail),
 	assignMenu: Menu.Model,
 	snoozeMenu: Menu.Model,
-	moreMenu: Menu.Model,
 	filterMenu: Menu.Model,
 	sortMenu: Menu.Model,
 	doneModal: Modal.Model,
@@ -113,7 +112,6 @@ export type Model = typeof Model.Type
 export const SEARCH_ID = "attention-search"
 export const ASSIGN_MENU_ID = "attention-assign"
 export const SNOOZE_MENU_ID = "attention-snooze"
-export const MORE_MENU_ID = "attention-more"
 export const FILTER_MENU_ID = "attention-filter"
 export const SORT_MENU_ID = "attention-sort"
 export const DONE_MODAL_ID = "attention-done"
@@ -399,12 +397,6 @@ export const localDateOf = (nowMs: number, days = 0): string => {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 
-export const moreEntries: ReadonlyArray<Menu.Entry> = [
-	Menu.item("open_customer"),
-	Menu.separator,
-	Menu.item("dismiss", { intent: "Danger" }),
-]
-
 export const sortEntries: ReadonlyArray<Menu.Entry> = Sort.literals.map((sort) => Menu.item(sort))
 
 /** Filter keys: `<field>:<value>` toggles that filter. */
@@ -498,7 +490,6 @@ export const QueueKey = Schema.Literals([
 	"assignToMe",
 	"snooze",
 	"done",
-	"dismiss",
 	"reopen",
 	"open",
 	"preview",

@@ -26,7 +26,6 @@ const KEYS = new Map<string, QueueKey>([
 	["i", "assignToMe"],
 	["h", "snooze"],
 	["d", "done"],
-	["e", "dismiss"],
 	["r", "reopen"],
 	["w", "reopen"],
 	["Enter", "open"],
@@ -91,7 +90,7 @@ export const queueKeyOf = (event: {
 }
 
 const isMenuOpen = (model: Model) =>
-	[model.assignMenu, model.snoozeMenu, model.moreMenu, model.filterMenu, model.sortMenu].some(
+	[model.assignMenu, model.snoozeMenu, model.filterMenu, model.sortMenu].some(
 		(menu) => menu.popup._tag === "Open",
 	)
 

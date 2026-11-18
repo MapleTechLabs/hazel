@@ -15,7 +15,7 @@ import * as Menu from "../../../ui/menu"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { sharedDefaults } from "../../test-shared"
-import { AssignSignal, DismissSignal, FetchAccountDetail, MarkSignalDone, SnoozeSignal } from "./commands"
+import { AssignSignal, FetchAccountDetail, MarkSignalDone, SnoozeSignal } from "./commands"
 import { Message } from "./message"
 import {
 	accountGroups,
@@ -417,13 +417,11 @@ describe("needs attention: keyboard", () => {
 		// A selection filtered out of the rows moves to the first row.
 		const hidden = pageUpdate(withSelection(nearLimit), Message.ChangedSearch({ value: "kestrel" })).model
 		expect(pageUpdate(hidden, key("snooze")).model.selectedId).toBe(stoppedLogging.id)
-		// …and stops there: the first e selects the row, the next one dismisses it.
-		const selecting = pageUpdate(hidden, key("dismiss"))
-		expect(selecting.model.selectedId).toBe(stoppedLogging.id)
-		expect(selecting.commands?.map((command) => command.name)).not.toContain("DismissSignal")
-		expect(
-			pageUpdate(selecting.model, key("dismiss")).commands?.map((command) => command.name),
-		).toContain("DismissSignal")
+		// …and stops there: the first d selects the row, the next one opens Done.
+		const selecting = pageUpdate(hidden, key("done")).model
+		expect(selecting.selectedId).toBe(stoppedLogging.id)
+		expect(selecting.doneForm).toBeNull()
+		expect(pageUpdate(selecting, key("done")).model.doneForm?.signalId).toBe(stoppedLogging.id)
 		// The snoozed tab has no Assign button.
 		const snoozedTab = { ...loaded(), tab: "snoozed" as const, selectedId: snoozed.id }
 		expect(pageUpdate(snoozedTab, key("assign")).model.assignMenu.popup._tag).toBe("Closed")
@@ -566,28 +564,6 @@ describe("needs attention: actions", () => {
 			Command.resolve(
 				MarkSignalDone,
 				Message.SucceededSignalAction({ signalId: paymentFailed.id, action: "done" }),
-			),
-		)
-	})
-
-	test("a failed dismiss toasts why (the live rows roll the row back)", () => {
-		story(
-			pageUpdate,
-			given(withSelection(usageDown)),
-			message(key("dismiss")),
-			model((current) => expect(statusOf(current, usageDown.id)).toBe("dismissed")),
-			Command.resolve(
-				DismissSignal,
-				Message.FailedSignalAction({ signalId: usageDown.id, action: "dismiss", reason: "Stale" }),
-			),
-			expectOutMessage(
-				PageOutMessage.RequestedToast({
-					toast: {
-						intent: "error",
-						title: "Couldn't dismiss the signal",
-						description: "Someone else acted on it first.",
-					},
-				}),
 			),
 		)
 	})
