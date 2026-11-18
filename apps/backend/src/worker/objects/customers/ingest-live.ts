@@ -461,6 +461,8 @@ const make = Effect.gen(function* () {
 			readonly matchedByUserId?: UserId | null
 			/** The provider record's own name (account refs). */
 			readonly name?: string | null | undefined
+			/** The account records a contact ref is a member through. */
+			readonly viaAccounts?: ReadonlyArray<string> | null
 		},
 	) =>
 		Effect.gen(function* () {
@@ -473,6 +475,7 @@ const make = Effect.gen(function* () {
 					accountId: ref.accountId,
 					externalId: ref.externalId,
 					name: ref.name ?? null,
+					viaAccounts: ref.viaAccounts ?? null,
 					externalUrl: ref.externalUrl ?? null,
 					matchMethod: ref.matchMethod,
 					matchedByUserId: ref.matchedByUserId ?? null,
@@ -1164,6 +1167,18 @@ const make = Effect.gen(function* () {
 			if (op.removed === true) {
 				if (Option.isNone(known) || alreadyRemoved(op.observedAt, known.value))
 					return outcome.unchanged(op.externalId)
+				// A merged customer's member through another of its organizations stays.
+				const via = known.value.viaAccounts ?? []
+				const rest = via.filter((externalId) => externalId !== op.account.externalId)
+				if (rest.length > 0) {
+					if (rest.length === via.length) return outcome.unchanged(known.value.entityId)
+					yield* db.run(
+						SQLite.update(schema.customerExternalRefsTable)
+							.set({ viaAccounts: rest, updatedAt: session.now })
+							.where(($) => [$.id.eq(known.value.id)]),
+					)
+					return outcome.updated(known.value.entityId)
+				}
 				yield* removeContactRef(session, known.value, op.observedAt)
 				return outcome.updated(known.value.entityId)
 			}
@@ -1212,6 +1227,7 @@ const make = Effect.gen(function* () {
 					accountId: accountId.value,
 					matchMethod: created ? "created" : "existing",
 					externalUrl: providerLink(session.context.provider, op.externalUrl),
+					viaAccounts: [op.account.externalId],
 				})
 			}
 			const id = contactId
@@ -1224,8 +1240,16 @@ const make = Effect.gen(function* () {
 			if (Option.isNone(current)) return outcome.unchanged(id)
 			const contact = current.value
 			// Seen again (a full sweep removes the contacts it does not see).
-			if (Option.isSome(known))
+			if (Option.isSome(known)) {
 				yield* touchRef(session, known.value, providerLink(session.context.provider, op.externalUrl))
+				const via = known.value.viaAccounts ?? []
+				if (!via.includes(op.account.externalId))
+					yield* db.run(
+						SQLite.update(schema.customerExternalRefsTable)
+							.set({ viaAccounts: [...via, op.account.externalId] })
+							.where(($) => [$.id.eq(known.value.id)]),
+					)
+			}
 			const patch = makePatch(contact, contact.fieldSources, provider)
 			patch.set("email", op.email, true)
 			patch.set("name", op.name, true)

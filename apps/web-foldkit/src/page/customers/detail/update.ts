@@ -972,6 +972,11 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 					mergeAccountId: () => null,
 					mergeModal: (modal) => Modal.close(modal).model,
 					detail: () => AsyncData.Idle(),
+					usage: () => AsyncData.Idle(),
+					mrrHistory: () => AsyncData.Idle(),
+					contacts: () => EMPTY_PAGE,
+					invoices: () => EMPTY_PAGE,
+					events: () => EMPTY_PAGE,
 				}),
 				shared,
 			)

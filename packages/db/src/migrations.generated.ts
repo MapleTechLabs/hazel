@@ -512,6 +512,7 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			statements: [
 				'ALTER TABLE "customer_accounts" ADD COLUMN "organizationCount" integer NOT NULL DEFAULT 0',
 				'ALTER TABLE "customer_external_refs" ADD COLUMN "name" text',
+				'ALTER TABLE "customer_external_refs" ADD COLUMN "viaAccounts" text',
 			],
 		},
 	],

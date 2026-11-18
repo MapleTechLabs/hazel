@@ -135,8 +135,9 @@ export const Message = defineMessageUnion({
 	/** Not `accountId`: a message naming another account is dropped (`isForOtherAccount`). */
 	PickedMergeAccount: { pickedId: Schema.String },
 	PressedConfirmMerge: {},
-	SucceededMerge: { name: Schema.String },
-	FailedMerge: { reason: ActionFailure },
+	/** `accountId` is the kept customer: another customer's page drops the answer. */
+	SucceededMerge: { accountId: CustomerAccountId, name: Schema.String },
+	FailedMerge: { accountId: CustomerAccountId, reason: ActionFailure },
 	SucceededNoteAction: { action: NoteAction },
 	FailedNoteAction: { action: NoteAction, reason: ActionFailure, draft: Schema.NullOr(NoteDraft) },
 

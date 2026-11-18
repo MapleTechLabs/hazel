@@ -56,7 +56,7 @@ const foldContact = (
 		for (const ref of refs) {
 			const [held] = yield* db.run(
 				SQLite.from(schema.customerExternalRefsTable)
-					.select("id")
+					.select("id", "viaAccounts", "staleAt")
 					.where(($) => [
 						$.entityType.eq("contact"),
 						$.provider.eq(ref.provider),
@@ -71,7 +71,27 @@ const foldContact = (
 							.set({ entityId: into.id, accountId, updatedAt: now })
 							.where(($) => [$.id.eq(ref.id)]),
 					)
-				: db.run(SQLite.deleteFrom(schema.customerExternalRefsTable).where(($) => [$.id.eq(ref.id)]))
+				: Effect.gen(function* () {
+						// One ref for both memberships: it is live while either is.
+						yield* db.run(
+							SQLite.update(schema.customerExternalRefsTable)
+								.set({
+									viaAccounts: [
+										...new Set([...(held.viaAccounts ?? []), ...(ref.viaAccounts ?? [])]),
+									],
+									// `undefined` leaves the column as it is.
+									staleAt: ref.staleAt === null ? null : undefined,
+									deletedObservedAt: ref.staleAt === null ? null : undefined,
+									updatedAt: now,
+								})
+								.where(($) => [$.id.eq(held.id)]),
+						)
+						yield* db.run(
+							SQLite.deleteFrom(schema.customerExternalRefsTable).where(($) => [
+								$.id.eq(ref.id),
+							]),
+						)
+					})
 		}
 		// Its days, as ingest keeps a day two sources report: never lowered.
 		yield* db.query(
@@ -199,6 +219,15 @@ export const mergeAccounts = Effect.fn("Customers.mergeAccounts")(function* (
 	const fromId = from.id
 	const intoId = into.id
 
+	// Contact refs from before memberships were recorded: their account's own records of that source.
+	yield* db.query(
+		Database.sql`UPDATE "customer_external_refs" SET "viaAccounts" = (
+			SELECT json_group_array("a"."externalId") FROM "customer_external_refs" AS "a"
+			WHERE "a"."entityType" = 'account' AND "a"."accountId" = "customer_external_refs"."accountId"
+				AND "a"."provider" = "customer_external_refs"."provider")
+		WHERE "entityType" = 'contact' AND "viaAccounts" IS NULL AND "accountId" IN (${fromId}, ${intoId})`,
+	)
+
 	yield* db.run(
 		SQLite.update(schema.customerExternalRefsTable)
 			.set({ accountId: intoId, entityId: intoId, updatedAt: now })
@@ -243,12 +272,24 @@ export const mergeAccounts = Effect.fn("Customers.mergeAccounts")(function* (
 			.select("ruleId")
 			.where(($) => [$.accountId.eq(intoId), $.closedAt.isNull()]),
 	)).map((signal) => signal.ruleId)
-	if (keptRules.length > 0)
+	if (keptRules.length > 0) {
 		yield* db.run(
 			SQLite.update(schema.customerSignalsTable)
 				.set({ status: "auto_resolved", resolvedAt: now, closedAt: now, updatedAt: now })
+				.where(($) => [
+					$.accountId.eq(fromId),
+					$.closedAt.isNull(),
+					$.status.in_("open", "snoozed"),
+					$.ruleId.in_(...keptRules),
+				]),
+		)
+		// Done or dismissed (waiting to reopen): closed as they are.
+		yield* db.run(
+			SQLite.update(schema.customerSignalsTable)
+				.set({ closedAt: now, updatedAt: now })
 				.where(($) => [$.accountId.eq(fromId), $.closedAt.isNull(), $.ruleId.in_(...keptRules)]),
 		)
+	}
 	yield* db.run(
 		SQLite.update(schema.customerSignalsTable)
 			.set({ accountId: intoId })

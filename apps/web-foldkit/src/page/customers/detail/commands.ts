@@ -192,15 +192,19 @@ export const UnlinkCustomerChannel = Command.define("UnlinkCustomerChannel", {
 export const MergeCustomerAccount = Command.define("MergeCustomerAccount", {
 	args: { ...target, intoAccountId: CustomerAccountId, name: Schema.String },
 	messages: [Message.SucceededMerge, Message.FailedMerge],
-	execute: ({ name, ...args }) =>
-		mergeAccountAction(args).pipe(
-			Effect.as(Message.SucceededMerge({ name })),
+	execute: ({ name, ...args }) => {
+		const accountId = args.intoAccountId
+		return mergeAccountAction(args).pipe(
+			Effect.as(Message.SucceededMerge({ accountId, name })),
 			Effect.catchTags({
-				CustomersNotFoundError: () => Effect.succeed(Message.FailedMerge({ reason: "NotFound" })),
-				CustomersInvalidRequestError: () => Effect.succeed(Message.FailedMerge({ reason: "Stale" })),
+				CustomersNotFoundError: () =>
+					Effect.succeed(Message.FailedMerge({ accountId, reason: "NotFound" })),
+				CustomersInvalidRequestError: () =>
+					Effect.succeed(Message.FailedMerge({ accountId, reason: "Stale" })),
 			}),
-			catchCommon((reason) => Message.FailedMerge({ reason })),
-		),
+			catchCommon((reason) => Message.FailedMerge({ accountId, reason })),
+		)
+	},
 })
 
 // NOTES

@@ -214,6 +214,11 @@ export const customerExternalRefsTable = SQLite.table("customer_external_refs", 
 		externalId: SQLite.text,
 		/** The provider record's own name (an account ref's organization or customer name), as last seen. */
 		name: SQLite.nullable(SQLite.text),
+		/**
+		 * A contact ref's account records (Clerk organizations) it is a member through: after a merge one
+		 * ref may stand for several memberships, and leaving one keeps it live. Null before it was known.
+		 */
+		viaAccounts: SQLite.nullable(jsonb<ReadonlyArray<string>>()),
 		/** Deep link to the provider's dashboard. */
 		externalUrl: SQLite.nullable(SQLite.text),
 		matchMethod: textEnum(MatchMethod.literals),

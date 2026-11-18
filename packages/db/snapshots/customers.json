@@ -1270,7 +1270,7 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "externalUrl",
+			"name": "viaAccounts",
 			"position": 8,
 			"type": "text",
 			"notNull": false,
@@ -1279,8 +1279,17 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "matchMethod",
+			"name": "externalUrl",
 			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "matchMethod",
+			"position": 10,
 			"type": "text",
 			"notNull": true,
 			"default": null
@@ -1289,7 +1298,7 @@
 			"kind": "column",
 			"table": "customer_external_refs",
 			"name": "matchedByUserId",
-			"position": 10,
+			"position": 11,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -1298,7 +1307,7 @@
 			"kind": "column",
 			"table": "customer_external_refs",
 			"name": "matchedAt",
-			"position": 11,
+			"position": 12,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1307,15 +1316,6 @@
 			"kind": "column",
 			"table": "customer_external_refs",
 			"name": "lastSyncedAt",
-			"position": 12,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_external_refs",
-			"name": "staleAt",
 			"position": 13,
 			"type": "text",
 			"notNull": false,
@@ -1324,7 +1324,7 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "deletedObservedAt",
+			"name": "staleAt",
 			"position": 14,
 			"type": "text",
 			"notNull": false,
@@ -1333,8 +1333,17 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "createdAt",
+			"name": "deletedObservedAt",
 			"position": 15,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "createdAt",
+			"position": 16,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1343,7 +1352,7 @@
 			"kind": "column",
 			"table": "customer_external_refs",
 			"name": "updatedAt",
-			"position": 16,
+			"position": 17,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

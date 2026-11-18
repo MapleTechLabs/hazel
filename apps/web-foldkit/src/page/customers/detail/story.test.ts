@@ -441,7 +441,16 @@ describe("customer page: notes", () => {
 		const merging = update(picked, Message.PressedConfirmMerge(), shared)
 		expect(commandNames(merging)).toEqual(["MergeCustomerAccount"])
 		expect(commandNames(update(merging.model, Message.PressedConfirmMerge(), shared))).toEqual([])
-		const merged = update(merging.model, Message.SucceededMerge({ name: "Gamma" }), shared)
+		// Another customer's merge finishing (its page was left) changes nothing here.
+		expect(
+			update(merging.model, Message.SucceededMerge({ accountId: acme.id, name: "Gamma" }), shared).model
+				.isMerging,
+		).toBe(true)
+		const merged = update(
+			merging.model,
+			Message.SucceededMerge({ accountId: beta.id, name: "Gamma" }),
+			shared,
+		)
 		expect(merged.model.mergeModal.isOpen).toBe(false)
 		expect(merged.model.isMerging).toBe(false)
 		expect(commandNames(merged)).toContain("FetchCustomerDetail")

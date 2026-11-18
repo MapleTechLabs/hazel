@@ -180,6 +180,23 @@ describe("customers.account.merge", () => {
 						`SELECT name FROM customer_external_refs WHERE provider = 'clerk' AND externalId = 'org_2'`,
 					),
 				).toEqual([{ name: "Acme Europe" }])
+
+				// Ada is a member through both organizations: leaving one keeps her, leaving both removes her.
+				const ada = () =>
+					world.rows<{ deleted: number }>(
+						`SELECT c.deletedAt IS NOT NULL AS deleted FROM customer_contacts AS c
+						JOIN customer_external_refs AS r ON r.entityId = c.id
+						WHERE r.entityType = 'contact' AND r.externalId = 'user_a' AND r.accountId = ?`,
+						kept,
+					)
+				yield* world.ingest("clerk", [
+					{ ...member("user_a", "org_2", "ada@acme.com"), removed: true },
+				])
+				expect(ada()).toEqual([{ deleted: 0 }])
+				yield* world.ingest("clerk", [
+					{ ...member("user_a", "org_1", "ada@acme.com"), removed: true },
+				])
+				expect(ada()).toEqual([{ deleted: 1 }])
 			}),
 		))
 
@@ -211,10 +228,19 @@ describe("customers.account.merge", () => {
 						ruleId,
 					)
 				const shared = uuid()
+				const dismissed = uuid()
 				const other = uuid()
 				signal(kept, shared)
+				signal(kept, dismissed)
 				signal(merged, shared)
+				signal(merged, dismissed)
 				signal(merged, other)
+				// Dismissed, waiting to reopen: still unclosed.
+				world.rows(
+					`UPDATE customer_signals SET status = 'dismissed' WHERE accountId = ? AND ruleId = ?`,
+					merged,
+					dismissed,
+				)
 				const movement = (accountId: string, day: string) =>
 					world.rows(
 						`INSERT INTO customer_mrr_movements (id, accountId, day, type, deltaMinor, fromMrrMinor,
@@ -242,17 +268,22 @@ describe("customers.account.merge", () => {
 						kept,
 					),
 				).toEqual([{ email: "ada@acme.com", isBillingContact: 1 }])
-				expect(
+				const statusOf = (ruleId: string) =>
 					world.rows(
-						`SELECT ruleId, status FROM customer_signals WHERE accountId = ? ORDER BY ruleId = ?, status`,
+						`SELECT status, closedAt IS NOT NULL AS closed FROM customer_signals
+						WHERE accountId = ? AND ruleId = ? ORDER BY status`,
 						kept,
-						other,
-					),
-				).toEqual([
-					{ ruleId: shared, status: "auto_resolved" },
-					{ ruleId: shared, status: "open" },
-					{ ruleId: other, status: "open" },
+						ruleId,
+					)
+				expect(statusOf(shared)).toEqual([
+					{ status: "auto_resolved", closed: 1 },
+					{ status: "open", closed: 0 },
 				])
+				expect(statusOf(dismissed)).toEqual([
+					{ status: "dismissed", closed: 1 },
+					{ status: "open", closed: 0 },
+				])
+				expect(statusOf(other)).toEqual([{ status: "open", closed: 0 }])
 				// The year's movements go (a rebuild brings them back); an older one moves.
 				expect(world.rows(`SELECT accountId, day FROM customer_mrr_movements`)).toEqual([
 					{ accountId: kept, day: old },
