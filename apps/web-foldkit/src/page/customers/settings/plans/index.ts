@@ -5,7 +5,10 @@ import { subscriptions } from "./subscription"
 import { init, sharedChanged, update } from "./update"
 import { view } from "./view"
 
-/** `/$orgSlug/customers/settings/plans`: which plans are add-ons billed on top of a base plan. */
+/**
+ * `/$orgSlug/customers/settings/plans`: whether usage overage counts in MRR, and which plans are
+ * add-ons billed on top of a base plan.
+ */
 export const page = definePage(
 	"CustomersSettingsPlans",
 	{ Model, Message },

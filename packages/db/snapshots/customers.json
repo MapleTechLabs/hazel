@@ -1,5 +1,5 @@
 {
-	"migration": "0013_customer_impersonation",
+	"migration": "0014_customer_impersonation",
 	"entities": [
 		{
 			"kind": "table",
@@ -2436,16 +2436,16 @@
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "lastComputedAt",
+			"name": "overageInMrr",
 			"position": 5,
-			"type": "text",
-			"notNull": false,
-			"default": null
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
 		},
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "updatedBy",
+			"name": "lastComputedAt",
 			"position": 6,
 			"type": "text",
 			"notNull": false,
@@ -2454,8 +2454,17 @@
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "createdAt",
+			"name": "updatedBy",
 			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "createdAt",
+			"position": 8,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2464,7 +2473,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "updatedAt",
-			"position": 8,
+			"position": 9,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
