@@ -40,6 +40,12 @@ const clerkWriter = Effect.gen(function* () {
 			.limit(1),
 	)
 	if (Option.isNone(connection)) return yield* invalid("Connect Clerk to manage feature flags")
+	// A refused key would only be refused again; a sync failing for another reason (Clerk down, rate
+	// limited) leaves the key good, so flags stay writable.
+	if (connection.value.status === "error" && connection.value.lastError?.code === "auth")
+		return yield* invalid(
+			"Clerk rejected the secret key: update it under Data sources to manage feature flags",
+		)
 	const credentials = yield* loadCredentials(connection.value).pipe(
 		Effect.catchTags({
 			IntegrationEncryptionError: credentialsUnreadable,

@@ -202,6 +202,32 @@ describe("Customers feature flags", () => {
 			}),
 		))
 
+	it("refuses while Clerk rejects the secret key, before any request", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* setUp({ org_a: {} })
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET status = 'error', lastError = ? WHERE provider = 'clerk'`,
+					)
+					.run(
+						JSON.stringify({
+							code: "auth",
+							message: "Clerk rejected the secret key (401)",
+							httpStatus: 401,
+						}),
+					)
+				const exit = yield* world.call(
+					"customers.featureFlags.set",
+					{ accountIds: [accountOf(world, "org_a")], keys: ["beta"], enabled: true },
+					world.owner,
+				)
+				expect(tagOf(exit)).toBe("CustomersInvalidRequestError")
+				expect(messageOf(exit)).toContain("Clerk rejected the secret key")
+				expect(clerk.writes).toEqual([])
+			}),
+		))
+
 	it("refuses an account with no Clerk organization before writing anything", () =>
 		run(
 			Effect.gen(function* () {
