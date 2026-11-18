@@ -11,8 +11,8 @@
 import { type MutableSourceSet, type SourceKey, type SyncHub, sourceKey } from "@hazel/effect-db-collection"
 import type { Collection } from "@tanstack/db"
 import type { EmptyHold } from "../../data/live-query"
-import type { OrganizationId, UserId } from "@hazel/schema"
-import { Effect, Stream } from "effect"
+import { OrganizationId, type UserId } from "@hazel/schema"
+import { Effect, Option, Schema, Stream } from "effect"
 import { connectConversationCollection, userOrganizationCollection } from "./collections"
 import { bindLocalCache } from "./local-cache"
 import { orgSources, syncHub, userSources } from "./sync"
@@ -153,6 +153,21 @@ const localRememberedOrgSources: RememberedOrgSources = {
 			globalThis.localStorage?.setItem(rememberedKey(userId), JSON.stringify(sources))
 		} catch {}
 	},
+}
+
+const decodeOrganizationId = Schema.decodeUnknownOption(OrganizationId)
+
+/** The organizations `userId` had open at the end of the last load. */
+export const rememberedOrganizationIds = (userId: UserId): ReadonlyArray<OrganizationId> =>
+	(localRememberedOrgSources.read(userId) ?? []).flatMap((source) =>
+		Option.toArray(decodeOrganizationId(source.slice("org:".length))),
+	)
+
+/** The session ended: which organizations `userId` was in is theirs, and goes with it. */
+export const forgetRememberedOrganizations = (userId: UserId): void => {
+	try {
+		globalThis.localStorage?.removeItem(rememberedKey(userId))
+	} catch {}
 }
 
 const appDeps: SyncManagerDeps = {

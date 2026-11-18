@@ -32,6 +32,11 @@ export const directoryTables = [
 	schema.integrationIndexTable,
 	schema.chatSyncIndexTable,
 	schema.chatSyncInstallationsTable,
+	schema.pushDeviceTokensTable,
+	schema.agentClientsTable,
+	schema.agentGrantsTable,
+	schema.agentTokensTable,
+	schema.agentAuthCodesTable,
 ] as const
 
 /** `OrgObject`, one per organization. */
@@ -62,6 +67,8 @@ export const orgTables = [
 	schema.userPresenceStatusTable,
 	schema.botsTable,
 	schema.botCommandsTable,
+	// Projection from the `CustomersObject`: each linked channel's customer.
+	schema.channelCustomersTable,
 ] as const
 
 /** `ChannelObject`, one per channel (threads too). */
@@ -73,6 +80,7 @@ export const channelTables = [
 	schema.chatSyncMessageLinksTable,
 	schema.chatSyncEventReceiptsTable,
 	schema.typingIndicatorsTable,
+	schema.messageAgentMarksTable,
 	// Projections from the `OrgObject`.
 	schema.channelViewersTable,
 	schema.channelBotsTable,
@@ -83,6 +91,8 @@ export const userTables = [
 	schema.notificationsTable,
 	schema.userPresenceStatusTable,
 	schema.userOrganizationsTable,
+	// Not synced: the push devices.
+	schema.pushDevicesTable,
 ] as const
 
 /**
@@ -112,6 +122,7 @@ export const customersTables = [
 	schema.customerSyncRunsTable,
 	schema.customerUnmatchedRecordsTable,
 	schema.customerIgnoreRulesTable,
+	schema.customerChannelLinksTable,
 	// Projection from the `OrgObject`.
 	schema.customerMembersTable,
 ] as const

@@ -19,10 +19,13 @@ import {
 	ReplaceUrl,
 	RetryCheckSession,
 	RetryFetchCurrentUser,
+	RememberLastOrganization,
+	SaveKeybindings,
 	SaveSoundSettings,
 	SaveThemePreference,
 	SignOut,
 	WarmAccessToken,
+	WarmSyncObjects,
 } from "./app/command"
 import { Message } from "./app/message"
 import {
@@ -38,9 +41,13 @@ import {
 	shellContextOf,
 } from "./app/model"
 import { MOBILE_QUERY } from "./app/subscription"
+import { loadRememberedUser } from "./app/remembered-user"
 import { toPageMessage } from "./app/view"
 import { errorToast, errorToastOf, loadingToast, successToast } from "./data/actions"
 import { loadSoundSettings, SoundSettings } from "./notification-sound"
+import { loadKeybindingOverrides } from "./keybindings"
+import { detectPlatform, Platform as KeyboardPlatform } from "~/lib/keybindings/key-combo"
+import { Overrides } from "~/lib/keybindings/keymap"
 import * as CommandPalette from "./overlay/command-palette"
 import type { LayoutHotkeyActionId } from "./overlay/hotkeys"
 import * as Modal from "./overlay/modal"
@@ -65,7 +72,7 @@ import {
 } from "./route"
 import * as Notifications from "./shell/notifications"
 import * as ChannelNavigation from "./shell/channels-sidebar/navigation"
-import type { CurrentUser, Member, Organization } from "./session"
+import { CurrentUser, type Member, type Organization } from "./session"
 import type { Resources } from "./rpc"
 import { loadIsCreateChannelHintDismissed } from "./shell/channels-sidebar"
 import { Message as ShellMessage, type Model as ShellModel } from "./shell/model"
@@ -88,12 +95,16 @@ export const Flags = Schema.Struct({
 	themePreference: ThemePreference,
 	systemTheme: ResolvedTheme,
 	soundSettings: SoundSettings,
+	keybindingOverrides: Overrides,
+	keyboardPlatform: KeyboardPlatform,
 	/** `sessionStartTimeAtom`: notifications from before this load never play; also the clock's first value. */
 	sessionStartMs: Schema.Number,
 	/** `useSidebar().isMobile` at load: the mobile layout renders from the first frame. */
 	isMobile: Schema.Boolean,
 	/** `useFeatureHint("create-channel")`. */
 	isCreateChannelHintDismissed: Schema.Boolean,
+	/** The last session's user (`app/remembered-user.ts`): an app route starts signed in as them. */
+	rememberedUser: Schema.NullOr(CurrentUser),
 })
 export type Flags = typeof Flags.Type
 
@@ -101,9 +112,12 @@ export const flags: Effect.Effect<Flags> = Effect.all({
 	themePreference: loadThemePreference,
 	systemTheme: Effect.sync(resolveSystemTheme),
 	soundSettings: loadSoundSettings,
+	keybindingOverrides: loadKeybindingOverrides,
+	keyboardPlatform: Effect.sync(detectPlatform),
 	sessionStartMs: Clock.currentTimeMillis,
 	isMobile: Effect.sync(() => globalThis.matchMedia?.(MOBILE_QUERY).matches ?? false),
 	isCreateChannelHintDismissed: loadIsCreateChannelHintDismissed,
+	rememberedUser: loadRememberedUser,
 })
 
 /** Production builds skip the dev-only routes. Read once here, never inside `update`. */
@@ -313,7 +327,9 @@ const goToAdjacentOrganization =
 			organizations.length < 2 || index === -1
 				? undefined
 				: organizations.at((index + step) % organizations.length)
-		return next === undefined ? { model } : navigateTo(organizationRoute(next))(model)
+		return next === undefined
+			? { model }
+			: navigateTo(organizationRoute(next, { isMobile: model.isMobile }))(model)
 	}
 
 /** Discord's Shift+Escape: every unread notification of this organization's member marked read. */
@@ -458,6 +474,12 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 				command(SaveSoundSettings({ settings })),
 				informPage,
 			]),
+		RequestedKeybindings: ({ overrides }) =>
+			Update.combine([
+				setModel((model) => modifyFields(model, { keybindingOverrides: () => overrides })),
+				command(SaveKeybindings({ overrides })),
+				informPage,
+			]),
 		RequestedCurrentUserRefresh: ({ toast }) => Update.combine([showToastIf(toast), refreshCurrentUser]),
 		RequestedUpdateCheck: () => stepUpdates(Updates.check),
 		RequestedUpdateInstall: () => stepUpdates(Updates.install),
@@ -549,8 +571,9 @@ const failedFetchCurrentUser =
 			}
 		if (model.session._tag !== "SignedIn") return { model }
 		const { user, retries } = model.session
-		const hasUser = AsyncData.hasData(user)
-		if (!hasUser && isRetryableReason(reason) && retries < MAX_AUTO_RETRIES)
+		// With a user on screen too (the remembered one, or the one being refreshed): the retries
+		// run behind them, and a remembered user is only confirmed by an answer.
+		if (isRetryableReason(reason) && retries < MAX_AUTO_RETRIES)
 			return {
 				model: modifyFields(model, {
 					session: () => Session.SignedIn({ user, retries: retries + 1 }),
@@ -590,7 +613,12 @@ const updatedOrganization =
 								? current.member
 								: MemberData.Loading(),
 					})
-		return Update.combine(modifyFields(model, { org: () => next }), [informPage, informShell])
+		const remember: Step = (m) =>
+			next._tag === "Loaded" &&
+			!(current._tag === "Loaded" && current.organization.id === next.organization.id)
+				? { model: m, commands: [RememberLastOrganization({ organizationId: next.organization.id })] }
+				: { model: m }
+		return Update.combine(modifyFields(model, { org: () => next }), [informPage, informShell, remember])
 	}
 
 /** The user's row in the loaded organization; a row for another organization is stale and ignored. */
@@ -675,13 +703,23 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 		{
 			route,
 			currentUrl: "",
-			session: Session.Loading({ isFetchingUser: isAppRoute }),
+			// The remembered user shows at once, from the local cache; the session check and
+			// `user.me` below still decide whether the session is theirs.
+			session:
+				isAppRoute && flags.rememberedUser !== null
+					? Session.SignedIn({
+							user: AsyncData.Refreshing({ data: flags.rememberedUser }),
+							retries: 0,
+						})
+					: Session.Loading({ isFetchingUser: isAppRoute }),
 			org: OrgState.None(),
 			isMobile: flags.isMobile,
 			nowMs: flags.sessionStartMs,
 			themePreference: flags.themePreference,
 			systemTheme: flags.systemTheme,
 			soundSettings: flags.soundSettings,
+			keybindingOverrides: flags.keybindingOverrides,
+			keyboardPlatform: flags.keyboardPlatform,
 			sessionStartMs: flags.sessionStartMs,
 			page: null,
 			pageInstances: 0,
@@ -700,7 +738,17 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 		enteredRoute,
 		informShell,
 		redirect,
-		isAppRoute ? command(CheckSession(), FetchCurrentUser(), WarmAccessToken()) : command(CheckSession()),
+		isAppRoute
+			? command(
+					CheckSession(),
+					FetchCurrentUser(),
+					WarmAccessToken(),
+					WarmSyncObjects({
+						userId: flags.rememberedUser?.id ?? null,
+						channelId: chatChannelIdOf(route),
+					}),
+				)
+			: command(CheckSession()),
 	])
 }
 
@@ -730,7 +778,10 @@ export const update = (model: Model, message: Message): Return =>
 		CompletedSaveThemePreference: () => ({ model }),
 		FailedSaveThemePreference: () => savingFailed("Couldn't save your theme")(model),
 		CompletedSaveSoundSettings: () => ({ model }),
+		CompletedRememberLastOrganization: () => ({ model }),
 		FailedSaveSoundSettings: () => savingFailed("Couldn't save your sound settings")(model),
+		CompletedSaveKeybindings: () => ({ model }),
+		FailedSaveKeybindings: () => savingFailed("Couldn't save your keybinds")(model),
 		UpdatedRecentNotifications: ({ ids }) => ({
 			model,
 			commands: ids.length === 0 ? [] : [DeliverNotifications({ ids })],
@@ -752,6 +803,7 @@ export const update = (model: Model, message: Message): Return =>
 		FailedFetchCurrentUser: ({ reason }) => failedFetchCurrentUser(reason)(model),
 		PressedRetryCurrentUser: () => refreshCurrentUser(model),
 		CompletedWarmAccessToken: () => ({ model }),
+		CompletedWarmSyncObjects: () => ({ model }),
 		SucceededCreateDm: (succeeded) => succeededCreateDm(succeeded)(model),
 		FailedCreateDm: ({ organizationId, userId, reason }) =>
 			Update.combine(model, [

@@ -12,10 +12,11 @@ use serde_json::json;
 
 use hazel_native::wire::{Node, RuntimeMsg};
 use hazel_native::{
-    PRESS_EVENTS, State, TEXT_SMOOTHING, images, note_scroll, outbox, view, window_key,
+    PRESS_EVENTS, State, TEXT_SMOOTHING, apply_scroll, images, note_scroll, outbox, view,
+    window_key,
 };
 
-use crate::runtime::{RuntimeChild, spawn_runtime};
+use crate::runtime::{FromRuntime, RuntimeChild, spawn_runtime};
 use crate::{initial_state, window_size};
 
 const FRAME: Duration = Duration::from_micros(16_667);
@@ -156,7 +157,7 @@ struct Timings {
 
 struct Session {
     rt: Runtime<State>,
-    messages: std::sync::mpsc::Receiver<RuntimeMsg>,
+    messages: std::sync::mpsc::Receiver<FromRuntime>,
     started: Instant,
     last_tree: Instant,
     first_tree_ms: Option<f64>,
@@ -164,6 +165,7 @@ struct Session {
     scale: f32,
     /// One renderer per session: Rune's glyph atlas uploads each glyph once, to the renderer it met.
     gpu: Option<(Gpu, Renderer, Offscreen)>,
+    fx: hazel_native::fx::Effects,
 }
 
 impl Session {
@@ -177,26 +179,8 @@ impl Session {
         let began = Instant::now();
         let mut got_tree = false;
         while let Ok(msg) = self.messages.try_recv() {
-            match msg {
-                RuntimeMsg::Tree(tree) => {
-                    got_tree = true;
-                    self.timings.trees += 1;
-                    self.rt.update_if(move |s, _| s.apply(tree));
-                }
-                RuntimeMsg::Scroll { path, top, seq } => {
-                    note_scroll(&path, seq);
-                    if std::env::var("NATIVE_DEBUG").is_ok() {
-                        eprintln!("[host] scroll_to {top}")
-                    }
-                    self.rt
-                        .update(move |_, tx| tx.scroll_to_instant(path, 0.0, top))
-                }
-                request => {
-                    if let Some(run) = request.request() {
-                        self.rt.update(move |_, tx| run(tx))
-                    }
-                }
-            }
+            got_tree |= matches!(msg, FromRuntime::Message(RuntimeMsg::Tree(_)));
+            self.apply(msg);
         }
         let arrived = images::take_arrived();
         if arrived {
@@ -246,7 +230,7 @@ impl Session {
         while sent.elapsed() < Duration::from_secs(5) {
             if let Ok(msg) = self.messages.try_recv() {
                 let ack = match &msg {
-                    RuntimeMsg::Tree(tree) => Some(tree.ack),
+                    FromRuntime::Message(RuntimeMsg::Tree(tree)) => Some(tree.ack),
                     _ => None,
                 };
                 self.apply(msg);
@@ -275,16 +259,19 @@ impl Session {
             .is_some_and(|root| text_of(root).contains(needle))
     }
 
-    fn apply(&mut self, msg: RuntimeMsg) {
+    fn apply(&mut self, msg: FromRuntime) {
+        let msg = match msg {
+            FromRuntime::Message(msg) => msg,
+            FromRuntime::Replaced => return self.rt.update(|s, _| s.runtime_replaced()),
+        };
         match msg {
             RuntimeMsg::Tree(tree) => {
                 self.timings.trees += 1;
                 self.rt.update_if(move |s, _| s.apply(tree));
             }
-            RuntimeMsg::Scroll { path, top, seq } => {
+            RuntimeMsg::Scroll { path, top, seq, by } => {
                 note_scroll(&path, seq);
-                self.rt
-                    .update(move |_, tx| tx.scroll_to_instant(path, 0.0, top))
+                self.rt.update(move |_, tx| apply_scroll(tx, path, top, by))
             }
             request => {
                 if let Some(run) = request.request() {
@@ -338,15 +325,18 @@ impl Session {
             (gpu, renderer, target)
         });
         renderer.upload_images(&gpu.device, &gpu.queue, &mut self.rt.images);
-        renderer.prepare(
+        let mut encoder = gpu.device.create_command_encoder(&Default::default());
+        // As the window's compositor draws it, effects included.
+        self.fx.draw(
             &gpu.device,
             &gpu.queue,
-            &mut self.rt.text.atlas,
-            &self.rt.instances,
+            &mut encoder,
+            &target.view,
+            FORMAT,
             (dw, dh),
+            &mut self.rt,
+            renderer,
         );
-        let mut encoder = gpu.device.create_command_encoder(&Default::default());
-        renderer.draw(&mut encoder, &target.view, self.rt.clear_color());
         renderer.submit(&gpu.queue, encoder);
         began.elapsed().as_secs_f64() * 1000.0
     }
@@ -366,15 +356,17 @@ impl Session {
         self.rt.frame(0.0);
         // Pictures and colour emoji live in the runtime's image atlas, uploaded separately.
         renderer.upload_images(&gpu.device, &gpu.queue, &mut self.rt.images);
-        renderer.prepare(
+        let mut encoder = gpu.device.create_command_encoder(&Default::default());
+        self.fx.draw(
             &gpu.device,
             &gpu.queue,
-            &mut self.rt.text.atlas,
-            &self.rt.instances,
+            &mut encoder,
+            &target.view,
+            FORMAT,
             (dw, dh),
+            &mut self.rt,
+            renderer,
         );
-        let mut encoder = gpu.device.create_command_encoder(&Default::default());
-        renderer.draw(&mut encoder, &target.view, self.rt.clear_color());
         target.copy(&mut encoder);
         renderer.submit(&gpu.queue, encoder);
         let pixels = target.read(&gpu.device);
@@ -510,7 +502,10 @@ pub fn run(script_path: &str) {
         serde_json::from_str(&std::fs::read_to_string(script_path).expect("read script"))
             .expect("parse script");
     let started = Instant::now();
-    let (mut child, messages) = spawn_runtime();
+    let (mut child, messages) = spawn_runtime().unwrap_or_else(|error| {
+        eprintln!("[capture] {error}");
+        std::process::exit(1)
+    });
     let scale: f32 = std::env::var("NATIVE_SCALE")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -530,6 +525,7 @@ pub fn run(script_path: &str) {
         timings: Timings::default(),
         scale,
         gpu: None,
+        fx: Default::default(),
     };
     let mut report = serde_json::Map::new();
     let mut interactions = Vec::new();
@@ -647,12 +643,25 @@ pub fn run(script_path: &str) {
                     KeyStep::Name(name) => (name, None),
                     KeyStep::Until { name, until } => (name, Some(until)),
                 };
-                let Some(key) = named_key(&name) else {
+                // `Meta+k`: the key with Command held (a shortcut).
+                let (cmd, bare) = match name.strip_prefix("Meta+") {
+                    Some(bare) => (true, bare),
+                    None => (false, name.as_str()),
+                };
+                let Some(key) = named_key(bare) else {
                     fail(&mut child, &format!("key: unsupported key name \"{name}\""));
+                };
+                // A window reports a character typed with Command as `Key::Command`.
+                let key = match key {
+                    Key::Text(t) if cmd => Key::Command(t.chars().next().unwrap_or(' ')),
+                    key => key,
                 };
                 session.rt.key(KeyEvent {
                     key,
-                    mods: Mods::default(),
+                    mods: Mods {
+                        cmd,
+                        ..Mods::default()
+                    },
                 });
                 let rtt = session.round_trip(until.as_deref());
                 if rtt.is_none() {

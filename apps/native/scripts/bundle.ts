@@ -12,6 +12,12 @@
  * feed with the same key, signed with `APPLE_SIGNING_IDENTITY` under the hardened runtime.
  * `HAZEL_BUNDLE_ARCH=x86_64` (or `aarch64`) builds for that Mac; the default is this one's.
  * `scripts/release.ts` then notarizes it and makes the downloads.
+ *
+ * `HAZEL_MACOS_PROFILE` (a release only) is a Developer ID provisioning profile for the app's ID
+ * with the Communication Notifications capability: the app is signed with that entitlement, so a
+ * notification from a person shows their picture in place of the app's icon
+ * (`host/src/notify.rs`). Without it the picture shows beside the text. A restricted entitlement
+ * needs the profile embedded, or macOS refuses to launch the app, so there is none without one.
  */
 import { execFileSync } from "node:child_process"
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
@@ -44,10 +50,43 @@ const scheme = new URL(nativeClient.returnUrl).protocol.slice(0, -1)
 const identity = release ? process.env.APPLE_SIGNING_IDENTITY : undefined
 if (release && !identity) throw new Error("HAZEL_RELEASE=1 needs APPLE_SIGNING_IDENTITY")
 
+const communicationEntitlement = "com.apple.developer.usernotifications.communication"
+/** The profile that grants the Communication Notifications entitlement, and its team. */
+const macProfile = (() => {
+	const path = identity ? process.env.HAZEL_MACOS_PROFILE || undefined : undefined
+	if (path === undefined) return undefined
+	const plist = execFileSync("security", ["cms", "-D", "-i", path])
+	const decoded = `${root}dist/macos-profile.plist`
+	mkdirSync(`${root}dist`, { recursive: true })
+	writeFileSync(decoded, plist)
+	const extract = (key: string) => {
+		try {
+			return execFileSync("plutil", ["-extract", key, "raw", "-o", "-", decoded], {
+				encoding: "utf8",
+			}).trim()
+		} catch {
+			return undefined
+		}
+	}
+	const team = extract("TeamIdentifier.0")
+	const appId = `${team}.${product.id}`
+	const granted = extract("Entitlements.com\\.apple\\.application-identifier")
+	if (team === undefined || granted !== appId)
+		throw new Error(`HAZEL_MACOS_PROFILE is for ${granted ?? "(no app)"}, not ${appId}`)
+	if (extract(`Entitlements.${communicationEntitlement.replaceAll(".", "\\.")}`) !== "true")
+		throw new Error(
+			"HAZEL_MACOS_PROFILE does not grant Communication Notifications: enable the capability " +
+				"for the App ID and download the profile again",
+		)
+	return { path, team, appId }
+})()
+
 // The Tauri app's production origins (apps/web-foldkit/scripts/production-env.sh). `||`: an
 // unset GitHub `vars` value arrives as an empty string, which must not ship as the backend.
 const environment = {
 	HAZEL_DATA: "live",
+	// Where the runtime keeps `localStorage` (Application Support/<id>, `src/entry.ts`).
+	HAZEL_APP_ID: product.id,
 	VITE_BACKEND_URL: process.env.HAZEL_BACKEND_URL || "https://api.hazel.sh",
 	VITE_APP_URL: process.env.HAZEL_APP_URL || "https://app.hazel.sh",
 	VITE_R2_PUBLIC_URL: process.env.HAZEL_R2_PUBLIC_URL || "https://cdn.hazel.sh",
@@ -136,6 +175,16 @@ writeFileSync(
 	<string>public.app-category.business</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>${localNetworking}
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>INSendMessageIntent</string>
+	</array>${
+		macProfile
+			? `
+	<key>HazelCommunicationNotifications</key>
+	<true/>`
+			: ""
+	}
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -173,8 +222,31 @@ if (identity) {
 	)
 	const sign = ["--force", "--timestamp", "--options", "runtime", "--sign", identity]
 	run("codesign", [...sign, "--entitlements", entitlements, `${contents}/MacOS/hazel-runtime`])
-	run("codesign", [...sign, `${contents}/MacOS/hazel-native`])
-	run("codesign", [...sign, app])
+	// The host shows the notifications: with the profile, it carries the entitlement for them.
+	const host: Array<string> = []
+	if (macProfile) {
+		cpSync(macProfile.path, `${contents}/embedded.provisionprofile`)
+		const hostEntitlements = `${root}dist/host.entitlements`
+		writeFileSync(
+			hostEntitlements,
+			`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.application-identifier</key>
+	<string>${macProfile.appId}</string>
+	<key>com.apple.developer.team-identifier</key>
+	<string>${macProfile.team}</string>
+	<key>${communicationEntitlement}</key>
+	<true/>
+</dict>
+</plist>
+`,
+		)
+		host.push("--entitlements", hostEntitlements)
+	}
+	run("codesign", [...sign, ...host, `${contents}/MacOS/hazel-native`])
+	run("codesign", [...sign, ...host, app])
 	run("codesign", ["--verify", "--strict", "--verbose=2", app])
 } else {
 	// Ad-hoc: launches on this Mac, nowhere else. Then Launch Services learns the callback scheme.

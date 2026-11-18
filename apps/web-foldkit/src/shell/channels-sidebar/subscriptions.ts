@@ -150,9 +150,16 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 				organizationId === null
 					? Stream.empty
 					: Stream.merge(
-							People.connectMountsStream((mounts) => Message.UpdatedConnectMounts({ mounts })),
-							People.organizationsStream((organizations) =>
-								Message.UpdatedOrganizations({ organizations }),
+							Stream.merge(
+								People.connectMountsStream((mounts) =>
+									Message.UpdatedConnectMounts({ mounts }),
+								),
+								People.organizationsStream((organizations) =>
+									Message.UpdatedOrganizations({ organizations }),
+								),
+							),
+							People.syncedChannelsStream((synced) =>
+								Message.UpdatedSyncedChannels({ synced }),
 							),
 						),
 		},

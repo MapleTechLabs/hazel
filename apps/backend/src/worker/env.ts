@@ -81,4 +81,8 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalSecret("KLIPY_API_KEY"),
 		// Thread naming (services/thread-namer.ts); unset disables it.
 		optionalSecret("OPENROUTER_API_KEY"),
+		// iOS push (services/apns.ts): an APNs auth key (.p8); any one unset disables push.
+		optionalSecret("APNS_KEY_ID"),
+		optionalSecret("APNS_TEAM_ID"),
+		optionalSecret("APNS_PRIVATE_KEY"),
 	)

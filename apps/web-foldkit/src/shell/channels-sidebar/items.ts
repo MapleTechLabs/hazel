@@ -1,10 +1,11 @@
 import type { ChannelId } from "@hazel/schema"
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { styles as avatarStyles } from "~/components/ui/avatar/styles"
 import { cx } from "~/utils/cx"
 import { getEffectivePresenceStatus } from "~/utils/presence"
 import { IconHashtag } from "../../icons"
+import { discordLogo, slackLogo } from "../../page/settings/chat-sync/brand-icons"
 import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { presenceDot } from "../../ui/presence-dot"
@@ -17,6 +18,7 @@ import type {
 	PartnerOrg,
 	Presence,
 	SidebarThread,
+	SyncProvider,
 } from "./rows"
 import { dotsMenuTrigger } from "./tree"
 
@@ -40,6 +42,8 @@ const chatHref = (context: { readonly orgSlug: string }, channelId: ChannelId) =
 export interface RowLinkContext {
 	readonly orgSlug: string
 	readonly isActive: boolean
+	/** The platform the channel is bridged to by chat sync, marked on its icon. */
+	readonly syncProvider?: SyncProvider | null
 }
 
 /** `SidebarLabel` with a `className`. */
@@ -65,7 +69,7 @@ const sidebarBadge = <M>(h: HtmlBuilder<M>, count: number): Html =>
 		[
 			h.Attribute("data-slot", "sidebar-badge"),
 			h.Class(
-				"absolute inset-y-1/2 right-1.5 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-[11px] text-primary-fg tabular-nums group-hover/sidebar-item:right-8",
+				"absolute inset-y-1/2 right-1.5 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-2xs text-primary-fg tabular-nums group-hover/sidebar-item:right-8",
 			),
 		],
 		[String(count)],
@@ -115,6 +119,21 @@ const partnerOrgMarks = <M>(h: HtmlBuilder<M>, partners: ReadonlyArray<PartnerOr
 	]
 }
 
+/** The Slack or Discord mark on a synced channel's icon; top corner when partner marks take the bottom. */
+const syncMark = <M>(h: HtmlBuilder<M>, provider: SyncProvider, hasPartners: boolean): Html =>
+	h.span(
+		[
+			h.Class(
+				cx(
+					"absolute -right-1 flex size-3 items-center justify-center rounded-full bg-sidebar",
+					hasPartners ? "-top-1" : "-bottom-0.5",
+				),
+			),
+			h.Attribute("title", provider === "slack" ? "Synced with Slack" : "Synced with Discord"),
+		],
+		[provider === "slack" ? slackLogo(h, "size-2") : discordLogo(h, "size-2.5")],
+	)
+
 export const channelItem = <M>(
 	h: HtmlBuilder<M>,
 	entry: ChannelEntry,
@@ -122,14 +141,22 @@ export const channelItem = <M>(
 	partners: ReadonlyArray<PartnerOrg>,
 	context: RowLinkContext,
 	menu: Html = dotsMenuTrigger(h, "Channel options"),
+	/** The row's long-press menu (`rowLongPress`). */
+	longPress: ReadonlyArray<Attribute<M>> = [],
 ): Html => {
 	const href = chatHref(context, entry.channel.id)
-	return sidebarItem(h, {}, [
+	const syncProvider = context.syncProvider ?? null
+	const hasPartners = partners.length > 0
+	return sidebarItem(h, { attributes: longPress }, [
 		sidebarLink(h, { href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE }, [
 			h.span(
-				// Positioned only for the partner marks: needless positioned spans slow every hit test.
-				[h.Class(partners.length > 0 ? "relative shrink-0" : "shrink-0")],
-				[channelIcon(h, entry.channel.icon), ...partnerOrgMarks(h, partners)],
+				// Positioned only for the marks: needless positioned spans slow every hit test.
+				[h.Class(hasPartners || syncProvider ? "relative shrink-0" : "shrink-0")],
+				[
+					channelIcon(h, entry.channel.icon),
+					...partnerOrgMarks(h, partners),
+					...(syncProvider ? [syncMark(h, syncProvider, hasPartners)] : []),
+				],
 			),
 			// Unread: the name steps up to full ink and medium, the count says how many.
 			label(h, [entry.channel.name], notificationCount > 0 ? "font-medium text-fg" : undefined),
@@ -172,7 +199,7 @@ const threadItem = <M>(
 				? h.span(
 						[
 							h.Class(
-								"flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-[11px] text-primary-fg tabular-nums",
+								"flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-2xs text-primary-fg tabular-nums",
 							),
 						],
 						[String(count)],
@@ -299,7 +326,7 @@ const overflowAvatar = <M>(h: HtmlBuilder<M>, count: number): Html =>
 		],
 		[
 			h.span(
-				[h.Class("flex items-center justify-center font-semibold text-quaternary text-sm")],
+				[h.Class("flex items-center justify-center font-semibold text-fg-2 text-sm")],
 				[`+${count}`],
 			),
 		],
@@ -341,11 +368,13 @@ export const dmItem = <M>(
 	notificationCount: number,
 	context: DmRowContext,
 	menu: Html = dotsMenuTrigger(h, "Conversation options"),
+	/** The row's long-press menu (`dmLongPress`). */
+	longPress: ReadonlyArray<Attribute<M>> = [],
 ): Html => {
 	const href = chatHref(context, channel.id)
 	const partners = dmPartners(channel, context.currentUserId)
 	const only = partners[0]
-	return sidebarItem(h, {}, [
+	return sidebarItem(h, { attributes: longPress }, [
 		sidebarLink(
 			h,
 			{ href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE },

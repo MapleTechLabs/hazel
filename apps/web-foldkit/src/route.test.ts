@@ -91,6 +91,10 @@ describe("urlToAppRoute", () => {
 		expect(parse(path)._tag).toBe(tag)
 	})
 
+	it("resolves the routes added since the port", () => {
+		expect(parse("/hazel/my-settings/keybinds")._tag).toBe("MySettingsKeybinds")
+	})
+
 	it("decodes branded and query segments", () => {
 		expect(parse(`/hazel/chat/${channelId}`)).toMatchObject({ orgSlug: "hazel", channelId })
 		expect(parse(`/hazel/profile/${userId}`)).toMatchObject({ userId })
@@ -252,6 +256,17 @@ describe("redirects", () => {
 			`/onboarding/setup-organization?orgId=${orgId}`,
 		)
 	})
+
+	// The phone's tab bar has no Home; opening the app lands on the Chats tab, not the members page.
+	it("lands a phone on the channel list", () => {
+		const organizationId = Schema.decodeUnknownSync(OrganizationId)(orgId)
+		const member = Option.some({ organizationId, slug: "hazel" })
+		const mobile = { isMobile: true }
+		expect(hrefOf(rootRedirect(user(true), member, mobile))).toBe("/hazel/chat")
+		expect(hrefOf(rootRedirect(user(true), Option.some({ organizationId, slug: null }), mobile))).toBe(
+			`/onboarding/setup-organization?orgId=${orgId}`,
+		)
+	})
 })
 
 describe("hrefOf", () => {
@@ -304,6 +319,21 @@ describe("hrefOf", () => {
 					state: Option.none(),
 				}),
 				"/oauth/bot-install",
+			],
+		],
+		OAuthAuthorize: [
+			[
+				AppRoute.OAuthAuthorize({
+					clientId: Option.some(orgId),
+					redirectUri: Option.some("http://127.0.0.1:5000/cb"),
+					responseType: Option.some("code"),
+					codeChallenge: Option.some("abc"),
+					codeChallengeMethod: Option.some("S256"),
+					scope: Option.some("messages:read messages:write"),
+					state: Option.some("s1"),
+					resource: Option.none(),
+				}),
+				`/oauth/authorize?client_id=${orgId}&redirect_uri=http%3A%2F%2F127.0.0.1%3A5000%2Fcb&response_type=code&code_challenge=abc&code_challenge_method=S256&scope=messages%3Aread+messages%3Awrite&state=s1`,
 			],
 		],
 		AuthDesktop: [[AppRoute.AuthDesktop({ attempt: Option.some("a1") }), "/auth/desktop?attempt=a1"]],
@@ -361,6 +391,7 @@ describe("hrefOf", () => {
 		],
 		MySettingsAppearance: [[AppRoute.MySettingsAppearance({ orgSlug }), "/hazel/my-settings"]],
 		MySettingsProfile: [[AppRoute.MySettingsProfile({ orgSlug }), "/hazel/my-settings/profile"]],
+		MySettingsAgents: [[AppRoute.MySettingsAgents({ orgSlug }), "/hazel/my-settings/agents"]],
 		MySettingsLinkedAccounts: [
 			[
 				AppRoute.MySettingsLinkedAccounts({
@@ -385,6 +416,7 @@ describe("hrefOf", () => {
 			[AppRoute.MySettingsNotifications({ orgSlug }), "/hazel/my-settings/notifications"],
 		],
 		MySettingsDesktop: [[AppRoute.MySettingsDesktop({ orgSlug }), "/hazel/my-settings/desktop"]],
+		MySettingsKeybinds: [[AppRoute.MySettingsKeybinds({ orgSlug }), "/hazel/my-settings/keybinds"]],
 		NotificationsAll: [[AppRoute.NotificationsAll({ orgSlug }), "/hazel/notifications"]],
 		NotificationsGeneral: [[AppRoute.NotificationsGeneral({ orgSlug }), "/hazel/notifications/general"]],
 		NotificationsThreads: [[AppRoute.NotificationsThreads({ orgSlug }), "/hazel/notifications/threads"]],

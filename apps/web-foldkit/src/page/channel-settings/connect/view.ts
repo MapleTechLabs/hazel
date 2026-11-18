@@ -15,6 +15,7 @@ import { type Invite, Message, type Model, type Mount, rowRoles } from "./model"
 import type * as ShareModal from "./share-modal"
 import { shareChannelModal } from "./share-modal-view"
 import { interaction, revokeTarget } from "./update"
+import { heading } from "../../../ui/heading"
 
 /** Port of `channels/$channelId/settings/connect.tsx`. */
 
@@ -83,7 +84,7 @@ const activeConnections = (h: HtmlBuilder<Message>, model: Model, shared: Shared
 					h.div(
 						[h.Class("flex items-center gap-2")],
 						[
-							h.h3([h.Class("font-semibold text-fg text-sm")], ["Active connections"]),
+							heading(h, { variant: "subsection" }, ["Active connections"]),
 							badge(h, { intent: "success", size: "sm" }, [
 								`${model.mounts.filter((mount) => mount.organizationId !== shared.organization?.id).length}`,
 							]),
@@ -174,7 +175,7 @@ const invitations = (h: HtmlBuilder<Message>, model: Model, invites: ReadonlyArr
 		[
 			h.div(
 				[h.Class("border-border border-b bg-bg px-4 py-4 md:px-6")],
-				[h.h3([h.Class("font-semibold text-fg text-sm")], ["Invitations"])],
+				[heading(h, { variant: "subsection" }, ["Invitations"])],
 			),
 			h.div(
 				[h.Class("overflow-x-auto")],

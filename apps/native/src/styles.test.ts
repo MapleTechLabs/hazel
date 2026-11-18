@@ -33,4 +33,17 @@ describe("the app's stylesheet on Rune", () => {
 		})
 		expect(style.w).toEqual({ frac: 0.4 })
 	})
+
+	it("rises a message that arrives live into place, as the web list does", () => {
+		const { style } = resolve("animate-message-enter")
+		expect(style.animation).toEqual({
+			kind: "enter",
+			duration: 0.18,
+			delay: 0,
+			opacity: 0,
+			x: 0,
+			y: 6,
+			scale: 1,
+		})
+	})
 })

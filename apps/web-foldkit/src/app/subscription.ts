@@ -17,7 +17,7 @@ import { chatChannelIdOf, isChatRoute, orgSlugOf } from "../route"
 import type { Member, Organization } from "../session"
 import * as ShellSubscription from "../shell/subscription"
 import * as CommandPalette from "../overlay/command-palette"
-import { layoutHotkeys } from "../overlay/hotkeys"
+import { LayoutKeys, layoutHotkeys, layoutKeysOf } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
 import * as Platform from "../platform"
 import { desktopMenuItems } from "../platform/desktop-menu"
@@ -26,6 +26,7 @@ import * as Updates from "../platform/updates"
 import * as Toasts from "../overlay/toaster"
 import { MOBILE_QUERY } from "../ui/viewport"
 import { Message } from "./message"
+import { REMEMBERED_USER_KEY } from "./remembered-user"
 import { authOf, currentUserOf, loadedOrgOf, memberOf, type Model, pageHostOf, sharedOf } from "./model"
 
 export { MOBILE_QUERY } from "../ui/viewport"
@@ -92,6 +93,26 @@ const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
 								strategy: "enforce",
 							}),
 							Stream.map(() => Message.RejectedSession()),
+						)
+					: Stream.empty,
+		},
+	),
+	// Another tab learned the session ended (or changed hands) and forgot the remembered user: this
+	// one checks the session, and deletes the cache it holds (which the other tab could not), and
+	// asks whose it is now (`user.me` starts over as someone else).
+	sessionEndedElsewhere: entry(
+		{ isSignedIn: Schema.Boolean },
+		{
+			modelToDependencies: (model) => ({ isSignedIn: authOf(model.session) === "SignedIn" }),
+			dependenciesToStream: ({ isSignedIn }) =>
+				isSignedIn
+					? Stream.fromEventListener<StorageEvent>(window, "storage").pipe(
+							Stream.filter(
+								(event) => event.key === REMEMBERED_USER_KEY && event.newValue === null,
+							),
+							Stream.flatMap(() =>
+								Stream.make(Message.RejectedSession(), Message.PressedRetryCurrentUser()),
+							),
 						)
 					: Stream.empty,
 		},
@@ -218,6 +239,7 @@ const overlaySubscriptions = Subscription.make<Model, Message>()((entry) => ({
 			isEnabled: Schema.Boolean,
 			isChannelNavigationEnabled: Schema.Boolean,
 			isOverlayOpen: Schema.Boolean,
+			keys: LayoutKeys,
 		},
 		{
 			modelToDependencies: (model) => {
@@ -226,11 +248,12 @@ const overlaySubscriptions = Subscription.make<Model, Message>()((entry) => ({
 					isEnabled: authOf(model.session) === "SignedIn" && orgSlugOf(model.route) !== undefined,
 					isChannelNavigationEnabled: isChatRoute(model.route) && !isOverlayOpen,
 					isOverlayOpen,
+					keys: layoutKeysOf(sharedOf(model).keys),
 				}
 			},
-			dependenciesToStream: ({ isEnabled, isChannelNavigationEnabled, isOverlayOpen }) =>
+			dependenciesToStream: ({ isEnabled, isChannelNavigationEnabled, isOverlayOpen, keys }) =>
 				isEnabled
-					? layoutHotkeys((actionId) => Message.PressedHotkey({ actionId }), {
+					? layoutHotkeys((actionId) => Message.PressedHotkey({ actionId }), keys, {
 							isChannelNavigationEnabled,
 							isOverlayOpen,
 						})

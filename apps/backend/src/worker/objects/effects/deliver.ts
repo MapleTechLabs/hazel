@@ -1,13 +1,14 @@
 /**
  * Outbox delivery and receipt. `deliverOutboxRow` is every object's `deliver`: object targets get
- * a DO RPC `applyEffect`; directory, bot-gateway, ai, chat-sync and storage effects run right here,
- * in the sender.
+ * a DO RPC `applyEffect`; directory, bot-gateway, ai, chat-sync, storage and push effects run right
+ * here, in the sender.
  * `applyReceivedEffect` is the receiving object's side: decode, run once per key, report.
  */
 import { Database } from "@hazel/db"
 import { OutboxDeliveryError, type OutboxRow, withInbox } from "@hazel/sync-do"
 import { Cause, Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
+import type { ApnsClient } from "../../../services/apns"
 import type { BotGatewayTransport } from "../../../services/bot-gateway-transport"
 import type { Directory } from "../../../services/directory"
 import type { ObjectKind } from "../kinds"
@@ -15,15 +16,21 @@ import { ObjectStubs } from "../protocol"
 import type { HtmlRenders } from "../../../services/html-renders"
 import type { ThreadNamer } from "../../../services/thread-namer"
 import { chatSyncDeliveryReceivers } from "../../../services/chat-sync/chat-sync-outbound"
-import { ChatSyncDeliveryEffects } from "../../../services/chat-sync/chat-sync-effects"
+import {
+	ChatSyncDeliveryEffects,
+	ChatSyncHistoryEffects,
+} from "../../../services/chat-sync/chat-sync-effects"
+import { chatSyncHistoryReceivers } from "../../../services/chat-sync/chat-sync-history"
 import type { ChatSyncProviders } from "../../../services/chat-sync/chat-sync-providers"
 import { aiReceivers, AiEffects } from "./ai-effects"
 import { botGatewayReceivers, BotGatewayEffects } from "./bot-gateway-effects"
 import { channelReceivers, ChannelEffects, channelSenderRefusal } from "./channel-effects"
 import { customersReceivers, CustomersEffects, customersSenderRefusal } from "./customers-effects"
 import { directoryReceivers, DirectoryEffects } from "./directory-effects"
+import { channelCustomersSenderRefusal } from "../org/channel-customers"
 import { connectSenderRefusal } from "../org/connect"
 import { searchSenderRefusal } from "../org/message-search"
+import { notificationCountSenderRefusal } from "../org/notification-count"
 import { orgReceivers, OrgEffects } from "./org-effects"
 import {
 	type AnyEffectKind,
@@ -34,6 +41,8 @@ import {
 	EffectSenderRefusedError,
 	parseEffectTarget,
 } from "./registry"
+import { pushReceivers, PushEffects } from "../user/push"
+import { PushOwnershipUserEffects } from "../user/push-ownership"
 import { storageReceivers, StorageEffects } from "./storage-effects"
 import { userReceivers, UserEffects } from "./user-effects"
 
@@ -50,14 +59,15 @@ const side = <R>(kinds: Record<string, AnyEffectKind>, receivers: Record<string,
 })
 
 /** What each object kind receives. */
-export const objectReceivers: Record<ObjectKind, Side<Database.Database | SqlClient>> = {
+export const objectReceivers: Record<ObjectKind, Side<Database.Database | SqlClient | ApnsClient>> = {
 	org: side(OrgEffects, orgReceivers),
 	channel: side(ChannelEffects, channelReceivers),
 	user: side(UserEffects, userReceivers),
 	customers: side(CustomersEffects, customersReceivers),
 }
 
-const directorySide = side<Directory | CurrentEffectSender>(DirectoryEffects, directoryReceivers)
+// SqlClient: the sender's own outbox, for a directory step that passes work on (`push-ownership.ts`).
+const directorySide = side<Directory | CurrentEffectSender | SqlClient>(DirectoryEffects, directoryReceivers)
 const botGatewaySide = side<Database.Database | BotGatewayTransport | Directory>(
 	BotGatewayEffects,
 	botGatewayReceivers,
@@ -67,11 +77,16 @@ const aiSide = side<Database.Database | SqlClient | ThreadNamer | ObjectStubs | 
 	aiReceivers,
 )
 const chatSyncSide = side<Database.Database | SqlClient | ChatSyncProviders | Directory>(
-	ChatSyncDeliveryEffects,
-	chatSyncDeliveryReceivers,
+	{ ...ChatSyncDeliveryEffects, ...ChatSyncHistoryEffects },
+	{ ...chatSyncDeliveryReceivers, ...chatSyncHistoryReceivers },
 )
 
 const storageSide = side<Database.Database | HtmlRenders>(StorageEffects, storageReceivers)
+
+const pushSide = side<Database.Database | ApnsClient | Directory | CurrentEffectSender>(
+	PushEffects,
+	pushReceivers,
+)
 
 const failure = (message: string, retryable = true) => new OutboxDeliveryError({ message, retryable })
 
@@ -93,11 +108,26 @@ type SenderGuard = (
 const senderGuards: Partial<Record<ObjectKind, SenderGuard>> = {
 	channel: channelSenderRefusal,
 	customers: customersSenderRefusal,
+	// Only a `UserObject`'s claim of a device token makes another user's object forget it.
+	user: (kind, _payload, sender) =>
+		Effect.succeed(
+			kind === PushOwnershipUserEffects.forgetPushDevice.name && sender.kind !== "user"
+				? Option.some(`${kind} sent by ${sender.kind}`)
+				: Option.none(),
+		),
 	// Each check refuses only the kinds it owns; the first refusal wins.
 	org: (kind, payload, sender) =>
 		connectSenderRefusal(kind, payload, sender).pipe(
 			Effect.flatMap((refusal) =>
 				Option.isSome(refusal) ? Effect.succeed(refusal) : searchSenderRefusal(kind, payload, sender),
+			),
+			Effect.map((refusal) =>
+				Option.isSome(refusal) ? refusal : notificationCountSenderRefusal(kind, payload, sender),
+			),
+			Effect.flatMap((refusal) =>
+				Option.isSome(refusal)
+					? Effect.succeed(refusal)
+					: channelCustomersSenderRefusal(kind, payload, sender),
 			),
 		),
 }
@@ -152,6 +182,7 @@ export const deliverOutboxRow = (
 	| ThreadNamer
 	| ChatSyncProviders
 	| HtmlRenders
+	| ApnsClient
 > =>
 	Effect.gen(function* () {
 		const target = parseEffectTarget(row.target)
@@ -161,6 +192,7 @@ export const deliverOutboxRow = (
 		if (target.kind === "ai") return yield* runLocal(aiSide, row, sender)
 		if (target.kind === "chat-sync") return yield* runLocal(chatSyncSide, row, sender)
 		if (target.kind === "storage") return yield* runLocal(storageSide, row, sender)
+		if (target.kind === "push") return yield* runLocal(pushSide, row, sender)
 		const stubs = yield* ObjectStubs
 		const result = yield* stubs
 			.get({ kind: target.kind, id: target.id! })
@@ -190,7 +222,7 @@ export const deliverOutboxRow = (
 export const applyReceivedEffect = (
 	objectKind: ObjectKind,
 	request: ApplyEffectRequest,
-): Effect.Effect<ApplyEffectResult, never, Database.Database | SqlClient> =>
+): Effect.Effect<ApplyEffectResult, never, Database.Database | SqlClient | ApnsClient> =>
 	Effect.gen(function* () {
 		const { kinds, receivers } = objectReceivers[objectKind]
 		const kind = kinds[request.kind]

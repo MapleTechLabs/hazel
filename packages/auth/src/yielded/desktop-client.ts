@@ -169,22 +169,27 @@ export const makeDesktopAuth = Effect.fnUntraced(function* (options: {
 	})
 
 	/**
-	 * A sign-in whose exchange failed keeps its attempt `Exchanging`: the library cannot tell a
-	 * refused exchange from a lost answer, and refuses every later sign-in as busy, across
-	 * restarts. With no session in the vault the exchange gave this app nothing, so the attempt
-	 * is retired and a new sign-in can start (a session the server issued but never delivered
-	 * only expires).
+	 * Clears what an earlier sign-in left behind, since the library refuses every new sign-in as busy
+	 * while an attempt is stored, across restarts and past its expiry:
+	 * - `Waiting`: that sign-in's wait ended with its app (quit, or reloaded mid-way); `signIn` is
+	 *   serialized, so no wait in this app owns it. Cancelled on the API, or just forgotten when that
+	 *   fails (it expires there on its own).
+	 * - `Exchanging` with no session in the vault: the library cannot tell a refused exchange from a
+	 *   lost answer, but the exchange gave this app nothing (a session the server issued but never
+	 *   delivered only expires).
 	 */
-	const retireFailedExchange = Effect.gen(function* () {
+	const retireStaleAttempt = Effect.gen(function* () {
 		const pending = yield* vault.loadAttempt
-		if (pending?.phase !== "Exchanging") return
+		if (pending === undefined) return
+		if (pending.phase === "Waiting")
+			return yield* login.cancel.pipe(Effect.catch(() => login.acknowledge))
 		if ((yield* vault.read).session !== undefined) return
 		yield* login.acknowledge
 	})
 
 	return {
 		/** Opens the browser and waits for its callback, then exchanges it for a session. */
-		signIn: Effect.andThen(retireFailedExchange, login.signIn),
+		signIn: Effect.andThen(retireStaleAttempt, login.signIn),
 		/** Continues a sign-in left waiting (the app restarted mid-way). */
 		resume: login.resume,
 		cancel: login.cancel,

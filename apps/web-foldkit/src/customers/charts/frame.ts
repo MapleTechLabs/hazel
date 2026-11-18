@@ -1,6 +1,8 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
+import { descriptionClass, panelClass, panelPadClass } from "../ui/surface"
 import { clamp } from "./scale"
+import { heading } from "../../ui/heading"
 
 /**
  * What the axis charts share: the palette, the card, the legend, the axes and the hover tooltip.
@@ -74,24 +76,17 @@ export const chartCard = <M>(
 	children: ReadonlyArray<Html>,
 ): Html =>
 	h.section(
-		[
-			h.Class(
-				twMerge(
-					"flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-bg p-4 sm:p-5",
-					options.className,
-				),
-			),
-		],
+		[h.Class(twMerge("flex min-w-0 flex-col gap-4", panelClass, panelPadClass, options.className))],
 		[
 			h.header(
 				[h.Class("flex flex-wrap items-start justify-between gap-x-6 gap-y-2")],
 				[
 					h.div(
-						[h.Class("flex min-w-0 flex-col gap-0.5")],
+						[h.Class("flex min-w-0 flex-col")],
 						[
-							h.h2([h.Class("font-semibold text-base/6 text-fg")], [options.title]),
+							heading(h, { variant: "section" }, [options.title]),
 							...(options.description
-								? [h.p([h.Class("text-muted-fg text-sm")], [options.description])]
+								? [h.p([h.Class(descriptionClass)], [options.description])]
 								: []),
 						],
 					),
@@ -198,22 +193,36 @@ export const gridlines = <M>(
 		),
 	)
 
-/** X-axis labels under the plot, centred on their x; `isActive` marks the hovered one. */
+/**
+ * X-axis labels under the plot, centred on their x; `isActive` marks the hovered one. Labels at
+ * the plot's edges align inward so they stay in the card, and a phone keeps only the first, the
+ * middle and the last (plus the hovered one), so the dates never run into each other.
+ */
 export const xAxis = <M>(
 	h: HtmlBuilder<M>,
 	ticks: ReadonlyArray<Readonly<{ x: number; label: string; isActive?: boolean }>>,
-): Html =>
-	h.div(
+): Html => {
+	const last = ticks.length - 1
+	const middle = Math.floor(last / 2)
+	return h.div(
 		[h.AriaHidden(true), h.Class("relative h-6")],
-		ticks.map((tick) =>
+		ticks.map((tick, index) =>
 			h.span(
 				[
 					h.Class(
 						twMerge(
 							"absolute top-1.5 -translate-x-1/2 whitespace-nowrap text-xs tabular-nums",
 							tick.isActive ? "font-medium text-fg" : "text-muted-fg",
-							tick.x <= 0 && "translate-x-0",
-							tick.x >= 100 && "-translate-x-full",
+							tick.x <= 4 && "translate-x-0",
+							tick.x >= 96 && "-translate-x-full",
+							index === 0 && "max-md:translate-x-0",
+							index === last && index > 0 && "max-md:-translate-x-full",
+							ticks.length > 3 &&
+								index !== 0 &&
+								index !== middle &&
+								index !== last &&
+								tick.isActive !== true &&
+								"max-md:hidden",
 						),
 					),
 					h.Style({ left: `${tick.x}%` }),
@@ -222,6 +231,7 @@ export const xAxis = <M>(
 			),
 		),
 	)
+}
 
 /**
  * Invisible full-height hover targets, one per index, each `[x - width / 2, x + width / 2]`

@@ -20,6 +20,11 @@ export const workerObjectStubs = (env: Record<string, unknown>): Layer.Layer<Obj
 			if (namespace === undefined) {
 				throw new Error(`${OBJECT_NAMESPACES[target.kind]} is not bound on this Worker`)
 			}
-			return Cloudflare.makeRpcStub<ObjectRpc>(namespace.getByName(target.id)) as ObjectStub
+			// The caller's span rides in the call's arguments (the bridge strips it), so the
+			// object's `ObjectRpc.invoke`, `ObjectCall.invoke` and `ObjectEffects.receive` are its
+			// children.
+			return Cloudflare.makeRpcStub<ObjectRpc>(namespace.getByName(target.id), {
+				traceContext: true,
+			}) as ObjectStub
 		},
 	}))

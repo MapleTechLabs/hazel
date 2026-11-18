@@ -173,6 +173,7 @@ const commandMenuOverlay = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder
 								),
 							),
 							h.Attribute("data-modal-content", model.id),
+							h.Attribute("data-fx", "glass"),
 						],
 						[
 							...(isDismissable ? [dismissButton(h, Message.ClickedDismiss())] : []),

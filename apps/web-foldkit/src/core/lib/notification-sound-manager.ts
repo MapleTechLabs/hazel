@@ -3,7 +3,7 @@
  * @description Singleton class for notification sound playback with cooldown and dedupe.
  */
 
-import { isTauri } from "./tauri"
+import { isTauri } from "../../platform/tauri"
 import type { NotificationDeliveryReason, NotificationSinkStatus } from "./notifications/types"
 
 export interface NotificationSoundConfig {

@@ -11,10 +11,9 @@
  */
 import * as Cloudflare from "@alchemy.run/cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
-import { Context, Effect, Layer, Option, Ref } from "effect"
+import { Context, Effect, Layer, Option, Ref, Scope } from "effect"
 import * as Socket from "effect/socket/Socket"
 import { workerEnvLayer } from "@hazel/infra/worker-runtime"
-import { DiscordGatewayService } from "../services/chat-sync/providers/discord/gateway-service"
 import { Directory } from "../services/directory"
 import { workerObjectStubs } from "./objects/stubs"
 import { directoryBinding } from "./platform"
@@ -39,8 +38,18 @@ export const DiscordGatewayObjectLive = DiscordGatewayObject.make(
 		const state = yield* Cloudflare.DurableObjectState
 		const env = yield* Cloudflare.WorkerEnvironment
 		return Effect.gen(function* () {
-			const instanceScope = yield* Effect.scope
-			const services = yield* Layer.build(
+			// The session's scope, owned by this in-memory instance and never closed. Not the
+			// ambient `Scope`: that is the scope `worker.ts` built this object's layer in, closed
+			// once the Worker's init returns. A fiber forked into a closed scope is interrupted
+			// before its first step, so the session never connected (and never logged).
+			const objectScope = yield* Scope.make()
+			// Imported by the instance, not the module: the gateway client (dfx and Discord's API
+			// types) would otherwise be evaluated by every cold isolate of the script, the other
+			// objects' included, while only this singleton runs it.
+			const { DiscordGatewayService } = yield* Effect.promise(
+				() => import("../services/chat-sync/providers/discord/gateway-service"),
+			)
+			const services = yield* Layer.buildWithScope(
 				DiscordGatewayService.layer.pipe(
 					Layer.provide(
 						Layer.mergeAll(
@@ -51,6 +60,7 @@ export const DiscordGatewayObjectLive = DiscordGatewayObject.make(
 					),
 					Layer.orDie,
 				),
+				objectScope,
 			)
 			const gateway = Context.get(services, DiscordGatewayService)
 			const running = yield* Ref.make(false)
@@ -60,8 +70,11 @@ export const DiscordGatewayObjectLive = DiscordGatewayObject.make(
 				if (!(yield* Ref.getAndSet(running, true))) {
 					yield* gateway.run.value.pipe(
 						Effect.provide(Socket.layerWebSocketConstructorGlobal),
+						// A scope of the session's own: the one in context is this call's, closed
+						// as soon as the call returns.
+						Effect.scoped,
 						Effect.ensuring(Ref.set(running, false)),
-						Effect.forkIn(instanceScope),
+						Effect.forkIn(objectScope),
 					)
 				}
 				yield* state.storage.setAlarm(Date.now() + WATCHDOG_INTERVAL_MS)

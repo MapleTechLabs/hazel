@@ -1,10 +1,9 @@
 import { type BrowserLoginClient, desktopClient } from "@hazel/auth/contract"
-import { getTauriUpdater } from "@hazel/desktop/bridge"
-import { isTauri, isTauriMacOS } from "~/lib/tauri"
+import { getTauriUpdater, isTauri, isTauriMacOS } from "./tauri"
 
 /**
- * Whether this build runs inside the Tauri desktop app. Fixed for the page's life, so views
- * may read it like a constant (legacy calls `isTauri()` / `isTauriMacOS()` during render).
+ * Whether this build runs inside the Tauri desktop app (Windows, Linux). Fixed for the page's
+ * life, so views read it like a constant.
  */
 export const isDesktop: boolean = typeof window !== "undefined" && isTauri()
 

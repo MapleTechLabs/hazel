@@ -73,20 +73,9 @@
     },
     "apps/desktop": {
       "name": "@hazel/desktop",
-      "version": "1.1.2",
-      "dependencies": {
-        "@tauri-apps/api": "~2.12.4",
-        "@tauri-apps/plugin-autostart": "~2.7.0",
-        "@tauri-apps/plugin-deep-link": "~2.6.3",
-        "@tauri-apps/plugin-notification": "~2.8.0",
-        "@tauri-apps/plugin-opener": "~2.7.2",
-        "@tauri-apps/plugin-process": "~2.4.0",
-        "@tauri-apps/plugin-store": "~2.5.0",
-        "@tauri-apps/plugin-updater": "~2.14.1",
-      },
+      "version": "1.1.4",
       "devDependencies": {
         "@tauri-apps/cli": "^2.12.4",
-        "typescript": "catalog:tooling",
       },
     },
     "apps/docs": {
@@ -191,6 +180,8 @@
       "devDependencies": {
         "@foldkit/vite-plugin": "0.29.0",
         "@tailwindcss/vite": "^4.3.3",
+        "@tanstack/browser-db-sqlite-persistence": "1.0.0-rc.1.1",
+        "@tanstack/db": "1.0.0-rc.1.1",
         "@types/node": "^24.19.2",
         "playwright": "1.64.1",
         "typescript": "catalog:tooling",
@@ -205,7 +196,6 @@
         "@foldkit/ui": "0.170.0",
         "@fontsource/inter": "^5.3.0",
         "@hazel/auth": "workspace:*",
-        "@hazel/desktop": "workspace:*",
         "@hazel/domain": "workspace:*",
         "@hazel/effect-db-collection": "workspace:*",
         "@hazel/schema": "workspace:*",
@@ -213,7 +203,6 @@
         "@simplewebauthn/browser": "^14.0.0",
         "@tanstack/browser-db-sqlite-persistence": "1.0.0-rc.1.1",
         "@tanstack/db": "1.0.0-rc.1.1",
-        "@tanstack/hotkeys": "0.22.0",
         "@yielded/auth": "0.1.0-beta.47",
         "@yielded/auth-simplewebauthn": "0.1.0-beta.47",
         "clsx": "^2.1.1",
@@ -237,6 +226,14 @@
         "@foldkit/oxlint-plugin": "0.15.4",
         "@foldkit/vite-plugin": "0.29.0",
         "@tailwindcss/vite": "^4.3.3",
+        "@tauri-apps/api": "~2.12.4",
+        "@tauri-apps/plugin-autostart": "~2.7.0",
+        "@tauri-apps/plugin-deep-link": "~2.6.3",
+        "@tauri-apps/plugin-notification": "~2.8.0",
+        "@tauri-apps/plugin-opener": "~2.7.2",
+        "@tauri-apps/plugin-process": "~2.4.0",
+        "@tauri-apps/plugin-store": "~2.5.0",
+        "@tauri-apps/plugin-updater": "~2.14.1",
         "@types/prismjs": "^1.26.6",
         "@vitest/browser-playwright": "5.0.5",
         "jsdom": "^30.1.3",
@@ -1366,8 +1363,6 @@
     "@tanstack/db-sqlite-persistence-core": ["@tanstack/db-sqlite-persistence-core@1.0.0-rc.1.1", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "@tanstack/db": "1.0.0-rc.1.1" }, "peerDependencies": { "typescript": ">=4.7" } }, "sha512-OrvklxE69h5Z3b9G6YFpHzmHG1OBoCFVimiQbZaOk9ZaRQSmDO9xj/V5Gce7vEN5Kf3bqZvwwFvIRqXwIMhX/Q=="],
 
     "@tanstack/history": ["@tanstack/history@1.161.4", "", {}, "sha512-Kp/WSt411ZWYvgXy6uiv5RmhHrz9cAml05AQPrtdAp7eUqvIDbMGPnML25OKbzR3RJ1q4wgENxDTvlGPa9+Mww=="],
-
-    "@tanstack/hotkeys": ["@tanstack/hotkeys@0.22.0", "", {}, "sha512-gncuZunCZKjB8AqZGydvs1OBTc9ut4PHWc42ovdJJpjjxnhyswnSy7fNKpGv0PKuosnzDtNmwAnGcLcFy0e6zg=="],
 
     "@tanstack/pacer-lite": ["@tanstack/pacer-lite@0.2.1", "", {}, "sha512-3PouiFjR4B6x1c969/Pl4ZIJleof1M0n6fNX8NRiC9Sqv1g06CVDlEaXUR4212ycGFyfq4q+t8Gi37Xy+z34iQ=="],
 

@@ -6,6 +6,7 @@ import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import { update } from "../main"
 import * as CommandPalette from "../overlay/command-palette"
+import * as Toaster from "../overlay/toaster"
 import { FocusInput, SetPresenceStatus } from "../overlay/command-palette/commands"
 import { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as ChannelsSidebar from "../shell/channels-sidebar"
@@ -18,18 +19,20 @@ import { BroadcastActivity, SendPresenceUpdate } from "../platform/presence/upda
 import { ada, hazelOrg, plainMember, signedIn, urlOf } from "../test/root-fixtures"
 import * as CommandMenu from "../ui/command-menu"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
+import { combo } from "~/lib/keybindings/key-combo"
 import * as Menu from "../ui/menu"
 import {
 	ApplyTheme,
 	CreateDm,
 	LoadExternal,
 	NavigateInternal,
+	SaveKeybindings,
 	SaveSoundSettings,
 	SaveThemePreference,
 	SignOut,
 } from "./command"
 import { Message } from "./message"
-import { dmRequestKey, type Model } from "./model"
+import { dmRequestKey, type Model, sharedOf } from "./model"
 import { Message as HomeMessage } from "../page/home/message"
 import type { DirectoryMember } from "../page/home/model"
 
@@ -155,6 +158,7 @@ describe("RequestedSignOut", () => {
 			model((m) =>
 				expect(m.toasts.entries.map((entry) => entry.payload.title)).toEqual(["Failed to sign out"]),
 			),
+			Command.resolve(Toaster.PlayToastFeedback, Toaster.Message.CompletedToastFeedback()),
 			UiToast.test.drainEntry({ entryId: "toaster-entry-0" }),
 			model((m) => expect(m.toasts.entries).toEqual([])),
 		)
@@ -296,6 +300,38 @@ describe("RequestedSoundSettings", () => {
 			Command.expectHas(SaveSoundSettings({ settings: off })),
 			Command.resolveAll([SaveSoundSettings, Message.CompletedSaveSoundSettings()]),
 			model((m) => expect(m.soundSettings).toEqual(off)),
+		)
+	})
+})
+
+describe("RequestedKeybindings", () => {
+	test("the Keybinds page's new key is stored by the root and rebinds the hotkeys", () => {
+		const overrides = { "inbox.open": combo("Mod+J") }
+		story(
+			update,
+			given(signedIn("/hazel/my-settings/keybinds")),
+			message(
+				Message.GotPageMessage({
+					message: {
+						_tag: "MySettingsKeybinds",
+						message: { _tag: "ClickedRecord", actionId: "inbox.open" },
+					},
+				}),
+			),
+			message(
+				Message.GotPageMessage({
+					message: {
+						_tag: "MySettingsKeybinds",
+						message: { _tag: "PressedCombo", combo: combo("Mod+J") },
+					},
+				}),
+			),
+			Command.expectHas(SaveKeybindings({ overrides })),
+			Command.resolveAll([SaveKeybindings, Message.CompletedSaveKeybindings()]),
+			model((m) => {
+				expect(m.keybindingOverrides).toEqual(overrides)
+				expect(sharedOf(m).keys["inbox.open"]).toBe("Mod+J")
+			}),
 		)
 	})
 })

@@ -3,7 +3,8 @@
  * answered by the native host: `core.invoke` for the keychain vault, `deepLink` for the callback
  * the system opens with the app, and `opener` for the system browser. A release bundle also gets
  * the two its updates use (`web-foldkit/src/platform/updates.ts`): `updater` (check, download,
- * install, done by the host on its own bundle), `process.relaunch` and `app.getVersion`. Installed as
+ * install, done by the host on its own bundle), `process.relaunch` and `app.getVersion`; and a
+ * bundle the system knows by its identifier gets `notification` (system notifications). Installed as
  * `window.__TAURI__` without `__TAURI_INTERNALS__`, so the app's other Tauri features stay off.
  */
 import type { HostToRuntime, RuntimeToHost } from "@hazel/foldkit-rune"
@@ -13,13 +14,25 @@ type VaultAnswer = Extract<HostToRuntime, { t: "vault" }>
 type UpdateRequest = Extract<RuntimeToHost, { t: "update" }>
 type UpdateAnswer = Extract<HostToRuntime, { t: "update" }>
 type UpdateProgress = Extract<HostToRuntime, { t: "updateProgress" }>
-type HostRequest = VaultRequest | UpdateRequest | Extract<RuntimeToHost, { t: "relaunch" }>
+type PermissionAnswer = Extract<HostToRuntime, { t: "notifyPermission" }>
+type Answer = VaultAnswer | UpdateAnswer | PermissionAnswer
+type HostRequest =
+	| VaultRequest
+	| UpdateRequest
+	| Extract<RuntimeToHost, { t: "relaunch" | "notifyPermission" | "notify" }>
 
 /** The download events Tauri's `Update.download` reports, as `updates.ts` reads them. */
 export type DownloadEvent =
 	| { readonly event: "Started"; readonly data: { readonly contentLength?: number } }
 	| { readonly event: "Progress"; readonly data: { readonly chunkLength: number } }
 	| { readonly event: "Finished" }
+
+/** A notification's sender, as `native-notifications.ts` puts it in Tauri's `extra`. */
+const notificationSender = (value: unknown): { id: string; name: string } | undefined => {
+	if (typeof value !== "object" || value === null) return undefined
+	const { id, name } = value as Record<string, unknown>
+	return typeof id === "string" && typeof name === "string" ? { id, name } : undefined
+}
 
 /** Links kept before the sign-in listens: the one that launched the app, at most a few. */
 const MAX_QUEUED_LINKS = 8
@@ -32,14 +45,13 @@ export const makeDesktopBridge = (options: {
 	readonly updates?: boolean
 	/** This build's version, from the host (`app.getVersion`, shown in Settings > Desktop). */
 	readonly version?: string
+	/** The host can show system notifications: offer `notification`. */
+	readonly notifications?: boolean
 }) => {
 	let nextId = 0
-	const waiting = new Map<
-		number,
-		{ resolve: (answer: VaultAnswer | UpdateAnswer) => void; reject: (error: Error) => void }
-	>()
+	const waiting = new Map<number, { resolve: (answer: Answer) => void; reject: (error: Error) => void }>()
 	/** Sends a request with a fresh id; the host's answer with that id settles it. */
-	const request = <A extends VaultAnswer | UpdateAnswer>(make: (id: number) => HostRequest) =>
+	const request = <A extends Answer>(make: (id: number) => HostRequest) =>
 		new Promise<A>((resolve, reject) => {
 			nextId += 1
 			waiting.set(nextId, { resolve: (answer) => resolve(answer as A), reject })
@@ -91,6 +103,38 @@ export const makeDesktopBridge = (options: {
 		exit: () => Promise.reject(new Error("the native app quits through relaunch")),
 	}
 
+	/** What `native-notifications.ts` reads of Tauri's notification plugin. */
+	const permission = (ask: boolean) =>
+		request<PermissionAnswer>((id) => ({ t: "notifyPermission", id, request: ask })).then(
+			(answer) => answer.granted,
+		)
+	const notification = {
+		isPermissionGranted: () => permission(false),
+		requestPermission: () =>
+			permission(true).then((granted): NotificationPermission => (granted ? "granted" : "denied")),
+		/**
+		 * The first attachment (Tauri's mobile-only field) is the sender's picture, and `extra`
+		 * names the sender and the channel (`native-notifications.ts`).
+		 */
+		sendNotification: (content: {
+			title: string
+			body?: string
+			group?: string
+			attachments?: ReadonlyArray<{ id: string; url: string }>
+			extra?: Record<string, unknown>
+		}) =>
+			options.send({
+				t: "notify",
+				title: content.title,
+				body: content.body ?? "",
+				group: content.group,
+				image: content.attachments?.[0]?.url,
+				sender: notificationSender(content.extra?.sender),
+				conversation:
+					typeof content.extra?.conversation === "string" ? content.extra.conversation : undefined,
+			}),
+	}
+
 	const queued: Array<string> = []
 	const listeners = new Set<(urls: ReadonlyArray<string>) => void>()
 
@@ -120,6 +164,7 @@ export const makeDesktopBridge = (options: {
 		opener,
 		updater: options.updates ? updater : undefined,
 		process: options.updates ? appProcess : undefined,
+		notification: options.notifications ? notification : undefined,
 		app:
 			options.version === undefined
 				? undefined
@@ -127,7 +172,7 @@ export const makeDesktopBridge = (options: {
 	}
 
 	/** The host's answer to a vault or update request, or a download's progress. */
-	const answer = (message: VaultAnswer | UpdateAnswer | UpdateProgress) => {
+	const answer = (message: Answer | UpdateProgress) => {
 		if (message.t === "updateProgress") {
 			progressListeners.get(message.id)?.(message)
 			return
@@ -136,7 +181,7 @@ export const makeDesktopBridge = (options: {
 		const pending = waiting.get(message.id)
 		if (pending === undefined) return
 		waiting.delete(message.id)
-		if (message.error !== undefined) pending.reject(new Error(message.error))
+		if ("error" in message && message.error !== undefined) pending.reject(new Error(message.error))
 		else pending.resolve(message)
 	}
 

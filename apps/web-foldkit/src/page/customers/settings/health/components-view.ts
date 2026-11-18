@@ -17,6 +17,7 @@ import {
 	type StepList,
 } from "./model"
 import { SLIDER_MESSAGE } from "./update"
+import { heading } from "../../../../ui/heading"
 
 /** The score card (weights and their total) and the four component cards (weight, scoring rules). */
 
@@ -96,10 +97,9 @@ export const weightsCard = (h: H, context: Context): Html => {
 				h.div(
 					[h.Class("flex min-w-0 flex-col gap-0.5")],
 					[
-						h.h2(
-							[h.Class("font-medium text-fg text-sm")],
-							["Score = weighted average of four parts"],
-						),
+						heading(h, { variant: "subsection", level: 2 }, [
+							"Score = weighted average of four parts",
+						]),
 						isOff
 							? h.p(
 									[h.Role("alert"), h.Class("text-danger-subtle-fg text-xs")],
@@ -384,16 +384,27 @@ const rules = (h: H, key: ComponentKey, context: Context): ReadonlyArray<Html> =
 				]),
 				h.p(
 					[h.Class("flex flex-wrap items-center gap-1.5 text-muted-fg text-xs")],
+					// Each phrase wraps whole, so the `%` never lands apart from its input.
 					[
-						"Part score =",
-						scoreInput(
-							h,
-							"activeRatioWeight",
-							steps.usage.activeRatioWeight,
-							"Active ratio share",
-							context,
+						h.span([h.Class("whitespace-nowrap")], ["Part score ="]),
+						h.span(
+							[h.Class("inline-flex items-center gap-1.5 whitespace-nowrap")],
+							[
+								scoreInput(
+									h,
+									"activeRatioWeight",
+									steps.usage.activeRatioWeight,
+									"Active ratio share",
+									context,
+								),
+								"% active ratio",
+							],
 						),
-						`% active ratio + ${textOf(100 - steps.usage.activeRatioWeight)}% trend. No trend yet: the ratio alone.`,
+						h.span(
+							[h.Class("whitespace-nowrap")],
+							[`+ ${textOf(100 - steps.usage.activeRatioWeight)}% trend.`],
+						),
+						h.span([], ["No trend yet: the ratio alone."]),
 					],
 				),
 			]
@@ -508,7 +519,7 @@ export const componentCard = (
 							[h.Class("flex items-center gap-2")],
 							[
 								h.span([h.Class(twMerge("size-2.5 rounded-[2px]", COMPONENT_FILL[key]))]),
-								h.h3([h.Class("font-medium text-fg text-sm")], [COMPONENT_LABEL[key]]),
+								heading(h, { variant: "subsection" }, [COMPONENT_LABEL[key]]),
 							],
 						),
 						h.p([h.Class("text-muted-fg text-xs")], [DESCRIPTION[key]]),

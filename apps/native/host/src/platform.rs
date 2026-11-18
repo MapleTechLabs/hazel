@@ -77,15 +77,18 @@ fn resources_of(binary: &Path) -> Option<PathBuf> {
     Some(contents.join("Resources"))
 }
 
+const BUN: &str = if cfg!(windows) { "bun.exe" } else { "bun" };
+
 /// Bun on `PATH`, or where its installer puts it: an app opened from Finder has a bare `PATH`.
 fn bun() -> PathBuf {
     let on_path = std::env::var_os("PATH")
         .into_iter()
         .flat_map(|paths| std::env::split_paths(&paths).collect::<Vec<_>>())
-        .map(|dir| dir.join("bun"))
+        .map(|dir| dir.join(BUN))
         .find(|path| path.is_file());
-    let installed = std::env::var_os("HOME").map(|home| Path::new(&home).join(".bun/bin/bun"));
-    on_path.or(installed).unwrap_or_else(|| "bun".into())
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
+    let installed = home.map(|home| Path::new(&home).join(".bun/bin").join(BUN));
+    on_path.or(installed).unwrap_or_else(|| BUN.into())
 }
 
 #[cfg(test)]
@@ -128,14 +131,14 @@ mod tests {
 
         // An entry asked for by name runs from source, bundle or not.
         let source = runtime_command(Some(&macos), Some("dist/entry.js".into()));
-        assert!(source.get_program().to_string_lossy().ends_with("bun"));
+        assert!(source.get_program().to_string_lossy().ends_with(BUN));
         assert_eq!(source.get_args().collect::<Vec<_>>(), ["dist/entry.js"]);
         let _ = std::fs::remove_dir_all(&root);
         assert!(
             runtime_command(Some(&macos), None)
                 .get_program()
                 .to_string_lossy()
-                .ends_with("bun")
+                .ends_with(BUN)
         );
     }
 }

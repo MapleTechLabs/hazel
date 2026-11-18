@@ -36,6 +36,7 @@ import { CustomerAccountId, type CustomerSignalId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
 import type { SqlError } from "effect/sql/SqlError"
 import { readObjectMeta, writeObjectMeta } from "../meta"
+import { publishChannelCustomersAfterCompute } from "./channels"
 import { evaluate, type Match } from "./evaluate"
 import { type HealthInputs, scoreHealth } from "./health"
 import { type LifecycleEvent, transition, valueOf, wakeDue } from "./lifecycle"
@@ -1277,6 +1278,8 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	)
 	yield* clearComputeProgress
 	yield* resetComputeFailures
+	// Names a source changed, accounts a source deleted: chat's view of linked channels follows.
+	yield* publishChannelCustomersAfterCompute
 	// Hourly; sooner after a person's change during a compute spread over turns, or for a done
 	// signal's reopen check (one already overdue, its source unavailable, waits for the hourly run).
 	const again = yield* takeComputeAgain

@@ -115,6 +115,13 @@ export const extraIndexes: ReadonlyArray<ExtraIndex> = [
 		where: `"closedAt" IS NULL`,
 	},
 	{
+		name: "customer_channel_links_channel_unique",
+		table: "customer_channel_links",
+		unique: true,
+		on: ["channelId"],
+		where: notDeleted,
+	},
+	{
 		name: "custom_emojis_org_name_unique_idx",
 		table: "custom_emojis",
 		unique: true,

@@ -202,7 +202,7 @@ export const accountGroupRow = (
 											h.span(
 												[
 													h.Class(
-														"rounded bg-secondary px-1 text-[11px] text-muted-fg tabular-nums",
+														"rounded bg-secondary px-1 text-2xs text-muted-fg tabular-nums",
 													),
 												],
 												[String(group.signals.length)],
@@ -224,7 +224,7 @@ export const accountGroupRow = (
 					[
 						severityGlyph(h, signal.severity),
 						...(signal.kind === "opportunity"
-							? [kindChip(h, "opportunity", { className: "py-0 text-[11px]/5" })]
+							? [kindChip(h, "opportunity", { className: "py-0 text-2xs/5" })]
 							: []),
 						h.span([h.Class("shrink-0 font-medium text-fg")], [signal.title]),
 						h.span([h.Class("truncate text-muted-fg text-xs")], [signal.reason]),
@@ -261,12 +261,18 @@ const wakeCell = (h: HtmlBuilder<Message>, signal: SignalRow, nowMs: number): Ht
 			h.Class(twMerge("flex w-44 shrink-0 items-start gap-2", PHONE_SECOND_LINE, "max-md:w-auto")),
 		],
 		[
-			IconClock(h, { className: twMerge("mt-0.5 size-3.5", isDue ? "text-warning" : "text-muted-fg") }),
+			IconClock(h, {
+				className: twMerge("mt-0.5 size-3.5", isDue ? "text-warning-subtle-fg" : "text-muted-fg"),
+			}),
 			h.div(
 				[h.Class("flex flex-col")],
 				[
 					h.span(
-						[h.Class(twMerge("font-medium text-sm", isDue ? "text-warning" : "text-fg"))],
+						[
+							h.Class(
+								twMerge("font-medium text-sm", isDue ? "text-warning-subtle-fg" : "text-fg"),
+							),
+						],
 						[
 							isDue
 								? "Returning now"

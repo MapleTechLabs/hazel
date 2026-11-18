@@ -26,7 +26,15 @@ import { connectCard } from "../../../customers/ui/connect-card"
 import { companyLogo } from "../../../customers/ui/identity"
 import { deltaPill, type Delta, kpiTile } from "../../../customers/ui/kpi-tile"
 import { rangePicker } from "../../../customers/ui/filter-bar"
-import { IconArrowPath, IconChevronRight } from "../../../icons"
+import {
+	moreLink,
+	pageHeader,
+	panel,
+	panelClass,
+	panelHeader,
+	titleClass,
+} from "../../../customers/ui/surface"
+import { IconArrowPath } from "../../../icons"
 import { AppRoute, customerRoute, customersListRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
 import { switchControl } from "../../../ui/switch"
@@ -41,6 +49,7 @@ import {
 	quietAccounts,
 	topOpenSignals,
 } from "./model"
+import { heading } from "../../../ui/heading"
 
 /** The Customers overview (Wonder: Overview › default, hover, empty, partial, 12 months). */
 
@@ -58,46 +67,11 @@ interface Context {
 	readonly accountsById: ReadonlyMap<string, AccountRow>
 }
 
-const link = (h: HtmlBuilder<Message>, href: string, label: string): Html =>
-	h.a(
-		[
-			h.Href(href),
-			h.Class(
-				"inline-flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-primary text-sm hover:underline",
-			),
-		],
-		[label, IconChevronRight(h, { className: "size-3.5" })],
-	)
-
-const card = (h: HtmlBuilder<Message>, className: string, children: ReadonlyArray<Html>): Html =>
-	h.section(
-		[
-			h.Class(
-				twMerge(
-					"flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-bg p-4 sm:p-5",
-					className,
-				),
-			),
-		],
-		[...children],
-	)
+const link = moreLink
+const card = panel
 
 const cardHeader = (h: HtmlBuilder<Message>, title: Html | string, description: string, aside?: Html): Html =>
-	h.header(
-		[h.Class("flex items-start justify-between gap-4")],
-		[
-			h.div(
-				[h.Class("flex min-w-0 flex-col gap-0.5")],
-				[
-					typeof title === "string"
-						? h.h2([h.Class("font-semibold text-base/6 text-fg")], [title])
-						: title,
-					h.p([h.Class("text-muted-fg text-sm")], [description]),
-				],
-			),
-			...(aside ? [aside] : []),
-		],
-	)
+	panelHeader(h, { title, description, aside })
 
 // HEADER
 
@@ -114,37 +88,29 @@ const header = (h: HtmlBuilder<Message>, model: Model, result: Result | undefine
 				...(synced === null ? [] : [synced]),
 			].join(" · ")
 	const previous = previousPeriodOf(model.range, nowMs)
-	return h.div(
-		[h.Class("flex flex-wrap items-start justify-between gap-4")],
-		[
-			h.div(
-				[h.Class("flex min-w-0 flex-col gap-1")],
-				[
-					h.h1([h.Class("font-semibold text-2xl text-fg")], ["Overview"]),
-					h.p([h.Class("text-muted-fg text-sm")], [subtitle]),
+	return pageHeader(h, {
+		title: "Overview",
+		subtitle,
+		actions: isUnconnected(model)
+			? []
+			: [
+					h.div(
+						[h.Class("flex flex-wrap items-center gap-4")],
+						[
+							switchControl(
+								h,
+								{
+									id: "overview-compare",
+									isSelected: model.isComparing,
+									onChange: toCompare,
+								},
+								`Compare to ${formatDate(new Date(previous.startMs), { now: new Date(nowMs) })} – ${formatDate(new Date(previous.endMs), { now: new Date(nowMs) })}`,
+							),
+							rangePicker(h, { selected: model.range, onSelect: toRange, caption: null }),
+						],
+					),
 				],
-			),
-			...(isUnconnected(model)
-				? []
-				: [
-						h.div(
-							[h.Class("flex flex-wrap items-center gap-4")],
-							[
-								switchControl(
-									h,
-									{
-										id: "overview-compare",
-										isSelected: model.isComparing,
-										onChange: toCompare,
-									},
-									`Compare to ${formatDate(new Date(previous.startMs), { now: new Date(nowMs) })} – ${formatDate(new Date(previous.endMs), { now: new Date(nowMs) })}`,
-								),
-								rangePicker(h, { selected: model.range, onSelect: toRange, caption: null }),
-							],
-						),
-					]),
-		],
-	)
+	})
 }
 
 // KPIS
@@ -202,11 +168,10 @@ const kpiRow = (
 		kpiTile(h, {
 			id: "kpi-stickiness",
 			label: "Stickiness",
-			definition: "Weekly active users divided by monthly active users.",
+			definition: `Weekly active users divided by monthly active users: ${formatCount(kpis.wau.value)} of ${formatCount(kpis.mau.value)}.`,
 			value: formatPct(kpis.stickinessPct.value, { digits: 0 }),
-			detail: `${formatCount(kpis.wau.value)} / ${formatCount(kpis.mau.value)}`,
 			delta: kpiDelta(model, kpis.stickinessPct, (value) => formatDeltaPoints(value)),
-			comparison: "WAU ÷ MAU",
+			comparison,
 		}),
 	]
 	if (!result.hasData.billing)
@@ -214,7 +179,7 @@ const kpiRow = (
 			h.div(
 				[
 					h.Class(
-						"col-span-2 flex items-center justify-between gap-4 rounded-xl border border-border p-4 max-md:flex-col max-md:items-start max-md:gap-3 md:col-span-3 xl:col-span-4",
+						"col-span-2 flex items-center justify-between gap-4 rounded-xl border border-border border-dashed p-4 max-md:flex-col max-md:items-start max-md:gap-3 md:col-span-3 xl:col-span-4",
 					),
 				],
 				[
@@ -303,11 +268,11 @@ const mrrCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html =>
 			h.div(
 				[
 					h.Class(
-						"flex h-56 flex-col items-center justify-center gap-3 rounded-lg border border-border border-dashed px-6 text-center",
+						"flex min-h-56 flex-1 flex-col items-center justify-center gap-3 rounded-lg border border-border border-dashed px-6 text-center",
 					),
 				],
 				[
-					h.span([h.Class("font-medium text-fg")], ["Connect Stripe or Autumn to see revenue"]),
+					h.span([h.Class(titleClass)], ["Connect Stripe or Autumn to see revenue"]),
 					h.span(
 						[h.Class("max-w-sm text-muted-fg text-sm")],
 						[
@@ -344,14 +309,14 @@ const mrrCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html =>
 			"MRR movement",
 			`${result.bucket === "day" ? "Daily" : result.bucket === "week" ? "Weekly" : "Monthly"} change by type`,
 			h.div(
-				[h.Class("flex flex-col items-end")],
+				[h.Class("flex flex-col items-end max-sm:items-start")],
 				[
 					h.span(
 						[
 							h.Class(
 								twMerge(
 									"font-semibold text-sm tabular-nums",
-									net >= 0 ? "text-success" : "text-danger",
+									net >= 0 ? "text-success-subtle-fg" : "text-danger-subtle-fg",
 								),
 							),
 						],
@@ -441,7 +406,9 @@ const attentionCard = (
 				h.a(
 					[
 						h.Href(hrefOf(customerRoute(context.orgSlug, account.id))),
-						h.Class("flex items-center gap-3 rounded-lg px-1 py-2 hover:bg-wash"),
+						h.Class(
+							"-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 outline-hidden transition-colors hover:bg-wash focus-visible:bg-wash",
+						),
 					],
 					[
 						companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "sm" }),
@@ -478,16 +445,10 @@ const attentionCard = (
 	return card(h, "", [
 		cardHeader(
 			h,
-			h.h2(
-				[h.Class("flex items-center gap-2 font-semibold text-base/6 text-fg")],
-				[
-					"Needs attention",
-					h.span(
-						[h.Class("rounded-full bg-primary-subtle px-2 text-primary-subtle-fg text-xs")],
-						[`${open.length} open`],
-					),
-				],
-			),
+			heading(h, { variant: "section", className: "flex items-baseline gap-2 whitespace-nowrap" }, [
+				"Needs attention",
+				h.span([h.Class("font-normal text-muted-fg text-sm tabular-nums")], [String(open.length)]),
+			]),
 			"Top 5 by priority",
 			link(h, hrefOf(AppRoute.CustomersAttention({ orgSlug: context.orgSlug })), "View queue"),
 		),
@@ -499,7 +460,7 @@ const attentionCard = (
 		h.footer(
 			[
 				h.Class(
-					"mt-auto flex items-center justify-between border-border border-t pt-3 text-muted-fg text-xs",
+					"mt-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-border border-t pt-3 text-muted-fg text-xs",
 				),
 			],
 			[
@@ -517,16 +478,18 @@ const attentionCard = (
 
 // MOVERS AND LISTS
 
+const accountsLabel = (count: number): string => `${formatCount(count)} account${count === 1 ? "" : "s"}`
+
 const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): Html => {
 	const column = (title: string, movers: ReadonlyArray<Customers.Mover>) =>
 		h.div(
 			[h.Class("flex min-w-0 flex-col")],
 			[
-				h.h3([h.Class("pb-2 text-muted-fg text-sm")], [title]),
+				heading(h, { variant: "subsection", className: "pb-1" }, [title]),
 				movers.length === 0
 					? h.p([h.Class("py-6 text-muted-fg text-sm")], ["No big moves in this period."])
 					: h.ul(
-							[h.Class("divide-y divide-border")],
+							[h.Class("flex flex-col")],
 							movers.map((mover) => {
 								const account = context.accountsById.get(mover.accountId)
 								const values = mover.series.map((point) => point.value)
@@ -538,7 +501,9 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 												h.Href(
 													hrefOf(customerRoute(context.orgSlug, mover.accountId)),
 												),
-												h.Class("flex items-center gap-3 py-2.5 hover:bg-wash"),
+												h.Class(
+													"-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 outline-hidden transition-colors hover:bg-wash focus-visible:bg-wash",
+												),
 											],
 											[
 												companyLogo(h, {
@@ -571,7 +536,7 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 												h.span(
 													[
 														h.Class(
-															"w-20 text-right text-muted-fg text-xs tabular-nums",
+															"w-20 shrink-0 text-right text-muted-fg text-xs tabular-nums max-sm:hidden",
 														),
 													],
 													[
@@ -584,13 +549,17 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 														value: mover.changePct,
 														text: formatDeltaPct(mover.changePct),
 													},
-													"w-16 justify-end text-sm",
+													"w-16 shrink-0 justify-end text-sm",
 												),
 												...(account === undefined
 													? []
 													: [
 															h.span(
-																[h.Class("w-12 text-right")],
+																[
+																	h.Class(
+																		"w-12 shrink-0 text-right max-sm:w-9",
+																	),
+																],
 																[
 																	healthDot(h, {
 																		status: account.healthStatus,
@@ -637,17 +606,26 @@ const listRow = (
 			h.a(
 				[
 					h.Href(hrefOf(customerRoute(context.orgSlug, entry.accountId))),
-					h.Class("flex items-center gap-3 py-2.5 text-sm hover:bg-wash"),
+					h.Class(
+						"-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm outline-hidden transition-colors hover:bg-wash focus-visible:bg-wash",
+					),
 				],
 				[
 					companyLogo(h, { name: entry.name, logoUrl: entry.logoUrl, size: "xs" }),
-					h.span([h.Class("truncate font-medium text-fg")], [entry.name]),
-					h.span([h.Class("truncate text-muted-fg text-xs")], [entry.detail]),
+					h.span([h.Class("min-w-0 truncate font-medium text-fg")], [entry.name]),
+					// A phone keeps the name readable; the plan is on the account.
+					h.span(
+						[h.Class("min-w-0 shrink-[2] truncate text-muted-fg text-xs max-sm:hidden")],
+						[entry.detail],
+					),
 					h.span(
 						[h.Class("ml-auto shrink-0 text-muted-fg text-xs tabular-nums")],
 						[formatDate(new Date(entry.date), { now: new Date(context.nowMs) })],
 					),
-					h.span([h.Class("w-20 shrink-0 text-right tabular-nums")], [entry.value]),
+					h.span(
+						[h.Class("w-20 shrink-0 text-right tabular-nums max-sm:w-auto max-sm:min-w-12")],
+						[entry.value],
+					),
 				],
 			),
 		],
@@ -667,7 +645,7 @@ const listCard = (
 		cardHeader(h, options.title, options.description, options.aside),
 		options.rows.length === 0
 			? h.p([h.Class("py-6 text-center text-muted-fg text-sm")], [options.empty])
-			: h.ul([h.Class("divide-y divide-border")], [...options.rows]),
+			: h.ul([h.Class("flex flex-col")], [...options.rows]),
 	])
 
 const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, context: Context): Html => {
@@ -709,7 +687,7 @@ const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, con
 							detail: `${formatCount(account.activeUsers30d)} active users`,
 							date: account.lastActiveAtMs ?? context.nowMs,
 							value: h.span(
-								[h.Class("text-warning")],
+								[h.Class("text-warning-subtle-fg")],
 								[
 									`${Math.floor((context.nowMs - (account.lastActiveAtMs ?? context.nowMs)) / 86_400_000)}d`,
 								],
@@ -737,7 +715,7 @@ const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, con
 		[
 			listCard(h, {
 				title: "New customers",
-				description: `${formatCount(result.recentNew.length)} accounts · ${formatMoney(newMrr, result.currency, { signed: true })} MRR · first paid invoice in period`,
+				description: `${accountsLabel(result.recentNew.length)} · ${formatMoney(newMrr, result.currency, { signed: true })} MRR · first paid invoice in period`,
 				aside: link(h, hrefOf(customersListRoute(context.orgSlug, "paying")), "View all"),
 				rows: result.recentNew.map((entry) =>
 					brief(entry, formatMoney(entry.mrrMinor, result.currency)),
@@ -746,14 +724,14 @@ const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, con
 			}),
 			listCard(h, {
 				title: "Recent churn",
-				description: `${formatCount(result.recentChurn.length)} accounts${lostMrr > 0 ? ` · ${formatMoney(-lostMrr, result.currency)} MRR` : ""}`,
+				description: `${accountsLabel(result.recentChurn.length)}${lostMrr > 0 ? ` · ${formatMoney(-lostMrr, result.currency)} MRR` : ""}`,
 				aside: link(h, hrefOf(customersListRoute(context.orgSlug, "churned")), "View churned"),
 				rows: result.recentChurn.map((entry) =>
 					brief(
 						entry,
 						entry.mrrMinor > 0
 							? h.span(
-									[h.Class("text-danger")],
+									[h.Class("text-danger-subtle-fg")],
 									[formatMoney(-entry.mrrMinor, result.currency)],
 								)
 							: h.span([h.Class("text-muted-fg")], ["—"]),
@@ -776,14 +754,9 @@ const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 			h.div(
 				[h.Class("flex flex-col gap-1")],
 				[
-					h.span(
-						[h.Class("font-medium text-primary text-xs uppercase tracking-wider")],
-						["Set up customers"],
-					),
-					h.h2(
-						[h.Class("font-semibold text-fg text-lg")],
-						["Connect a source to see how your customers are doing"],
-					),
+					heading(h, { variant: "title" }, [
+						"Connect a source to see how your customers are doing",
+					]),
 					h.p(
 						[h.Class("max-w-2xl text-muted-fg text-sm")],
 						[
@@ -809,9 +782,9 @@ const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 const failure = (h: HtmlBuilder<Message>, reason: Parameters<typeof commonMessage>[0]): Html => {
 	const message = commonMessage(reason)
 	return h.div(
-		[h.Class("flex flex-col items-center gap-3 rounded-xl border border-border px-6 py-14 text-center")],
+		[h.Class(twMerge("flex flex-col items-center gap-3 px-6 py-14 text-center", panelClass))],
 		[
-			h.span([h.Class("font-medium text-fg")], [message.title]),
+			h.span([h.Class(titleClass)], [message.title]),
 			...(message.description
 				? [h.span([h.Class("text-muted-fg text-sm")], [message.description])]
 				: []),

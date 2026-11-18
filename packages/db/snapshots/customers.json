@@ -1,5 +1,5 @@
 {
-	"migration": "0010_customer_settings_overage_in_mrr",
+	"migration": "0011_customer_settings_overage_in_mrr",
 	"entities": [
 		{
 			"kind": "table",
@@ -13,6 +13,13 @@
 			"name": "customer_activity_daily",
 			"primaryKey": {
 				"columns": ["contactId", "day"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_channel_links",
+			"primaryKey": {
+				"columns": ["id"]
 			}
 		},
 		{
@@ -566,6 +573,78 @@
 			"type": "integer",
 			"notNull": true,
 			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_links",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_links",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_links",
+			"name": "accountId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_links",
+			"name": "channelId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_links",
+			"name": "linkedBy",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_links",
+			"name": "createdAt",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_links",
+			"name": "updatedAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_links",
+			"name": "deletedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
 		},
 		{
 			"kind": "column",
@@ -3185,6 +3264,20 @@
 		},
 		{
 			"kind": "index",
+			"table": "customer_channel_links",
+			"name": "customer_channel_links_account_idx",
+			"unique": false,
+			"columns": ["\"accountId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_channel_links",
+			"name": "customer_channel_links_channel_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
 			"table": "customer_connections",
 			"name": "customer_connections_provider_unique",
 			"unique": true,
@@ -3395,6 +3488,13 @@
 		}
 	],
 	"extraIndexes": [
+		{
+			"name": "customer_channel_links_channel_unique",
+			"table": "customer_channel_links",
+			"unique": true,
+			"on": ["channelId"],
+			"where": "\"deletedAt\" IS NULL"
+		},
 		{
 			"name": "customer_events_external_unique",
 			"table": "customer_events",

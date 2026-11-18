@@ -4,18 +4,21 @@ import {
 	OrganizationId,
 	SyncChannelLinkId,
 	SyncConnectionId,
+	UserId,
 } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command, Render } from "foldkit"
 import * as Dom from "foldkit/dom"
+import { createChannelAction } from "~/db/actions"
 import { orgOfChatSyncChannelLink, orgOfChatSyncConnection } from "~/db/routing-hints"
 import { HazelRpc } from "../../../rpc"
-import { catchCommon } from "../../../data/actions"
+import { catchCommon, failureToast } from "../../../data/actions"
 import { ChatSyncProvider, listResource, PROVIDERS } from "../chat-sync/providers"
 import { fetchConnections } from "../chat-sync/rpc"
 import {
 	CHANNEL_SEARCH_ID,
 	type ChannelLink,
+	NEW_CHANNEL_NAME_ID,
 	directionLabel,
 	Message,
 	SyncDirection,
@@ -169,6 +172,8 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 		externalChannelId: ExternalChannelId,
 		externalChannelName: Schema.String,
 		direction: SyncDirection,
+		/** The latest messages to import (0: none). */
+		historyLimit: Schema.Number,
 	},
 	messages: [Message.SucceededCreateLink, Message.FailedCreateLink],
 	execute: ({ hazelChannelName, ...payload }) =>
@@ -181,7 +186,10 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 				organizationId: orgOfChatSyncConnection(payload.syncConnectionId),
 			})
 			return Message.SucceededCreateLink({
-				successMessage: `Linked #${hazelChannelName} to #${payload.externalChannelName}`,
+				successMessage:
+					payload.historyLimit > 0
+						? `Linked #${hazelChannelName} to #${payload.externalChannelName}. Importing recent messages…`
+						: `Linked #${hazelChannelName} to #${payload.externalChannelName}`,
 			})
 		}).pipe(
 			Effect.catchTags({
@@ -197,10 +205,41 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 		),
 })
 
+/** The link modal's "New channel": a public Hazel channel the link then targets. */
+export const CreateHazelChannelForLink = Command.define("CreateHazelChannelForLink", {
+	args: { organizationId: OrganizationId, currentUserId: UserId, name: Schema.String },
+	messages: [Message.SucceededCreateHazelChannel, Message.FailedCreateHazelChannel],
+	execute: ({ organizationId, currentUserId, name }) =>
+		createChannelAction({
+			organizationId,
+			currentUserId,
+			name,
+			icon: null,
+			type: "public",
+			parentChannelId: null,
+		}).pipe(
+			Effect.map((result) =>
+				Message.SucceededCreateHazelChannel({ channel: { id: result.data.channelId, name } }),
+			),
+			Effect.catchCause((cause) =>
+				Effect.succeed(Message.FailedCreateHazelChannel({ toast: failureToast(cause, "friendly") })),
+			),
+		),
+})
+
 /** The Hazel channel search's `autoFocus`, once it is rendered. */
 export const FocusChannelSearch = Command.define("FocusChannelSearch", {
 	messages: [Message.CompletedFocusChannelSearch],
 	execute: Dom.focus(`#${CHANNEL_SEARCH_ID}`).pipe(
+		Effect.ignoreCause,
+		Effect.as(Message.CompletedFocusChannelSearch()),
+	),
+})
+
+/** Switching the Hazel side to "New channel" moves focus to its name. */
+export const FocusNewChannelName = Command.define("FocusNewChannelName", {
+	messages: [Message.CompletedFocusChannelSearch],
+	execute: Dom.focus(`#${NEW_CHANNEL_NAME_ID}`).pipe(
 		Effect.ignoreCause,
 		Effect.as(Message.CompletedFocusChannelSearch()),
 	),

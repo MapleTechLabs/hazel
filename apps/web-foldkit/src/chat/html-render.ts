@@ -1,4 +1,4 @@
-import { getTauriOpener } from "@hazel/desktop/bridge"
+import { getTauriOpener } from "../platform/tauri"
 import {
 	clampHtmlRenderHeight,
 	HTML_RENDER_DEFAULT_THEMES,

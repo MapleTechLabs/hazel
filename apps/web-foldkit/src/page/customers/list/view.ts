@@ -19,6 +19,7 @@ import {
 } from "../../../customers/ui/filter-bar"
 import { companyLogo, personAvatar, personLabel } from "../../../customers/ui/identity"
 import { kbd } from "../../../customers/ui/shortcuts"
+import { freshness, pageHeader } from "../../../customers/ui/surface"
 import { IconClose, IconDots, IconDownload, IconOffice, IconPlus, IconUser } from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
 import { button, buttonClassName } from "../../../ui/button"
@@ -139,43 +140,29 @@ const header = (
 			: tab.key === null
 				? "Every account from Clerk, Stripe, Autumn and Maple, merged into one list."
 				: `${formatCount(rows.length)} account${rows.length === 1 ? "" : "s"} in ${tab.name}, worth ${formatMoney(mrr, model.reportingCurrency)} MRR.`
-	return h.div(
-		[h.Class("flex items-start justify-between gap-4")],
-		[
-			h.div(
-				[h.Class("flex min-w-0 flex-col gap-1")],
-				[
-					h.h1([h.Class("font-semibold text-2xl text-fg")], ["Customers"]),
-					h.p([h.Class("text-muted-fg text-sm")], [subtitle]),
-				],
-			),
-			h.div(
-				[h.Class("flex shrink-0 items-center gap-4")],
-				[
-					...(model.lastComputedAtMs === null
-						? []
-						: [
-								h.span(
-									[
-										h.Class(
-											"inline-flex items-center gap-1.5 text-muted-fg text-sm max-md:hidden",
-										),
-									],
-									[
-										h.span([h.Class("size-1.5 rounded-full bg-success")]),
-										`Synced ${formatRelative(new Date(model.lastComputedAtMs), new Date(viewer.nowMs))}`,
-									],
+	return pageHeader(h, {
+		title: "Customers",
+		subtitle,
+		actions: [
+			...(model.lastComputedAtMs === null
+				? []
+				: [
+						h.span(
+							[h.Class("mr-1 inline-flex items-center max-md:hidden")],
+							[
+								freshness(
+									h,
+									`Synced ${formatRelative(new Date(model.lastComputedAtMs), new Date(viewer.nowMs))}`,
 								),
-							]),
-					button(
-						h,
-						{ intent: "outline", size: "sm", onPress: Message.PressedExport({ scope: "all" }) },
-						[IconDownload(h, icon), "Export CSV"],
-					),
-				],
-			),
+							],
+						),
+					]),
+			button(h, { intent: "outline", size: "sm", onPress: Message.PressedExport({ scope: "all" }) }, [
+				IconDownload(h, icon),
+				"Export CSV",
+			]),
 		],
-	)
+	})
 }
 
 const VIEW_MENU_LABEL = {
@@ -675,19 +662,10 @@ const firstRun = (h: HtmlBuilder<Message>, orgSlug: string, nowMs: number): Html
 	h.div(
 		[h.Class("flex flex-col gap-8")],
 		[
-			h.div(
-				[h.Class("flex items-start justify-between gap-4")],
-				[
-					h.div(
-						[h.Class("flex flex-col gap-1")],
-						[
-							h.h1([h.Class("font-semibold text-2xl text-fg")], ["Customers"]),
-							h.p(
-								[h.Class("text-muted-fg text-sm")],
-								["Your customer accounts, built from the tools you already use."],
-							),
-						],
-					),
+			pageHeader(h, {
+				title: "Customers",
+				subtitle: "Your customer accounts, built from the tools you already use.",
+				actions: [
 					h.a(
 						[
 							h.Href(hrefOf(AppRoute.CustomersSettingsSources({ orgSlug }))),
@@ -696,7 +674,7 @@ const firstRun = (h: HtmlBuilder<Message>, orgSlug: string, nowMs: number): Html
 						["Data sources settings"],
 					),
 				],
-			),
+			}),
 			emptyState(h, {
 				title: "No customers yet",
 				icon: (className) => IconOffice(h, { className }),
@@ -824,7 +802,8 @@ const table = (
 				onRowPress: (account) => Message.ClickedRow({ accountId: account.id }),
 				focusedKey: model.focusedId,
 				stickyHeader: true,
-				className: "rounded-none border-x-0",
+				// The frame is the container its columns drop by (`COLUMN_LAYOUT`).
+				className: "@container rounded-none border-x-0",
 				loadingRows: isLoading ? 12 : undefined,
 			}),
 			...(rows.length > model.rowLimit

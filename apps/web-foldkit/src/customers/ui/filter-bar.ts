@@ -95,6 +95,16 @@ export const viewTabs = <M, K extends string>(
 
 export type Segment<K extends string> = Readonly<{ key: K; label: string }>
 
+/** The track a segmented control's segments sit in. */
+export const segmentedTrackClass = "inline-flex items-center gap-0.5 rounded-lg bg-secondary/70 p-0.5"
+
+/** One segment: the selected one is a raised chip on the track, never a brand fill. */
+export const segmentClass = (isSelected: boolean): string =>
+	twMerge(
+		"inline-flex h-7 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 font-medium text-xs tabular-nums outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-default max-md:h-9 max-md:text-sm",
+		isSelected ? "bg-bg text-fg shadow-xs ring-1 ring-fg/10" : "text-muted-fg hover:text-fg",
+	)
+
 /** A radio group drawn as joined buttons: `7d 30d 90d 12m`, `Signals | Accounts`, `Customers | MRR`. */
 export const segmented = <M, K extends string>(
 	h: HtmlBuilder<M>,
@@ -110,12 +120,7 @@ export const segmented = <M, K extends string>(
 		[
 			h.Role("radiogroup"),
 			h.AriaLabel(options.ariaLabel),
-			h.Class(
-				twMerge(
-					"inline-flex items-center gap-0.5 rounded-lg border border-border p-0.5",
-					options.className,
-				),
-			),
+			h.Class(twMerge(segmentedTrackClass, options.className)),
 		],
 		options.segments.map((segment) => {
 			const isSelected = segment.key === options.selected
@@ -124,14 +129,7 @@ export const segmented = <M, K extends string>(
 					h.Type("button"),
 					h.Role("radio"),
 					h.AriaChecked(isSelected),
-					h.Class(
-						twMerge(
-							"h-7 cursor-pointer rounded-md px-2.5 font-medium text-sm tabular-nums outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring/70",
-							isSelected
-								? "bg-primary text-primary-fg shadow-control"
-								: "text-fg-3 hover:bg-secondary hover:text-fg",
-						),
-					),
+					h.Class(segmentClass(isSelected)),
 					h.OnClick(options.onSelect(segment.key)),
 				],
 				[segment.label],

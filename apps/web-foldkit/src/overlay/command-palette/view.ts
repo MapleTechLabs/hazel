@@ -82,11 +82,7 @@ const dmIcon = (h: HtmlBuilder<Message>, dm: DmChannel): Html => {
 							size: "xs",
 							className: "ring-[1.5px] ring-overlay",
 							placeholder: h.span(
-								[
-									h.Class(
-										"flex items-center justify-center font-semibold text-quaternary text-xs",
-									),
-								],
+								[h.Class("flex items-center justify-center font-semibold text-fg-2 text-xs")],
 								[`+${dm.otherMembers.length - 2}`],
 							),
 						}),

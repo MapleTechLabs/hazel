@@ -9,7 +9,7 @@ import { defineTaggedUnion } from "foldkit/schema"
  * `https://link-preview.hazel.sh`): `LinkPreview`'s Open Graph data and `TweetEmbed`'s tweet.
  */
 
-const LINK_PREVIEW_URL = "https://link-preview.hazel.sh"
+export const LINK_PREVIEW_URL = "https://link-preview.hazel.sh"
 
 // MODEL
 

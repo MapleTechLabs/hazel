@@ -1,6 +1,7 @@
 /** For tests: chat-sync providers whose every client records its calls instead of sending. */
 import type { ExternalMessageId, ExternalThreadId } from "@hazel/schema"
 import { Effect, Layer, Option } from "effect"
+import type { ChatSyncInbound } from "./chat-sync-inbound"
 import { ChatSyncProviders, chatSyncProvidersOf } from "./chat-sync-providers"
 import { type ChatSyncClient, ChatSyncProviderApiError, type ChatSyncProviderId } from "./provider"
 import { chatSyncProviders } from "./providers"
@@ -20,6 +21,11 @@ export interface ChatSyncCall {
  */
 export const makeRecordingChatSyncProviders = (options?: { readonly attachmentPublicUrlBase?: string }) => {
 	const calls: Array<ChatSyncCall> = []
+	/**
+	 * Each external channel's past messages, oldest first, as `fetchHistory` serves them (pages
+	 * newest first, the cursor an index). Set per test.
+	 */
+	const history = new Map<string, ReadonlyArray<ChatSyncInbound>>()
 	/** External channels a new link prepared (kept apart: every link makes one). */
 	const prepared: Array<string> = []
 	const control: { fail: number | undefined } = { fail: undefined }
@@ -43,6 +49,13 @@ export const makeRecordingChatSyncProviders = (options?: { readonly attachmentPu
 			})
 		return {
 			prepareLink: (link) => Effect.sync(() => void prepared.push(link.externalChannelId)),
+			fetchHistory: (params) =>
+				record({ op: "fetchHistory", externalChannelId: params.externalChannelId }, () => {
+					const all = history.get(params.externalChannelId) ?? []
+					const end = params.cursor === null ? all.length : Number(params.cursor)
+					const start = Math.max(0, end - params.limit)
+					return { messages: all.slice(start, end), cursor: start > 0 ? String(start) : null }
+				}),
 			postMessage: ({ link }, message) =>
 				record(
 					{
@@ -117,5 +130,5 @@ export const makeRecordingChatSyncProviders = (options?: { readonly attachmentPu
 		),
 	)
 
-	return { layer, calls, prepared, control }
+	return { layer, calls, prepared, control, history }
 }

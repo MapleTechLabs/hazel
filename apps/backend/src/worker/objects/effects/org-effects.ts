@@ -9,7 +9,9 @@
  * - Connect: a guest org's mount and participants (host side), the host's conversation snapshot
  *   (guest side), `../org/connect.ts`;
  * - message search: index changes from the org's channels, and from a Connect host org
- *   (`../org/message-search.ts`).
+ *   (`../org/message-search.ts`);
+ * - from its `CustomersObject`: which customer each linked channel belongs to
+ *   (`../org/channel-customers.ts`).
  */
 import type { Database } from "@hazel/db"
 import { Effect } from "effect"
@@ -25,6 +27,7 @@ import {
 } from "../org/projections"
 import { channelRenameReceivers, ChannelRenameEffects } from "../org/channel-rename"
 import { messageNotificationOrgReceivers, MessageNotificationOrgEffects } from "../org/message-notifications"
+import { notificationCountOrgReceivers, NotificationCountOrgEffects } from "../org/notification-count"
 import { DirectoryWireOrgEffects } from "../directory-wire"
 import { upsertBotProjection } from "../org/bot-installs"
 import { acceptInvitation } from "../org/invitation-accept"
@@ -34,6 +37,7 @@ import { ChatSyncOrgEffects } from "../../../services/chat-sync/chat-sync-effect
 import { chatSyncOrgReceivers } from "../../../services/chat-sync/chat-sync-org"
 import { messageSearchOrgReceivers } from "../org/message-search"
 import { SearchOrgEffects } from "../search-wire"
+import { channelCustomerOrgReceivers, ChannelCustomerOrgEffects } from "../org/channel-customers"
 import { defineEffect, type EffectReceivers } from "./registry"
 
 export const OrgEffects = {
@@ -44,6 +48,7 @@ export const OrgEffects = {
 	/** Drop a user's copy (and presence) unless they are still a member or participant here. */
 	removeUserProjection: defineEffect("org.removeUserProjection", "org", RemoveUserProjectionPayload),
 	...MessageNotificationOrgEffects,
+	...NotificationCountOrgEffects,
 	...ChannelRenameEffects,
 	...DirectoryWireOrgEffects,
 	/** Chat sync: gateway ingest, channel-provisioned link settings (`services/chat-sync`). */
@@ -52,6 +57,8 @@ export const OrgEffects = {
 	...ConnectOrgEffects,
 	/** Message search (`../org/message-search.ts`). */
 	...SearchOrgEffects,
+	/** Customers' channel links (`../org/channel-customers.ts`). */
+	...ChannelCustomerOrgEffects,
 }
 
 export const orgReceivers = {
@@ -59,7 +66,9 @@ export const orgReceivers = {
 	"org.upsertPresenceProjection": upsertPresenceProjection,
 	"org.removeUserProjection": removeUserProjection,
 	...messageNotificationOrgReceivers,
+	...notificationCountOrgReceivers,
 	...channelRenameReceivers,
+	...channelCustomerOrgReceivers,
 	// Called lazily: these modules import the effect registries back.
 	"org.upsertBotProjection": (payload) => upsertBotProjection(payload),
 	"org.acceptInvitation": (payload) =>
@@ -67,6 +76,7 @@ export const orgReceivers = {
 	"org.chatSyncIngest": (payload) => chatSyncOrgReceivers["org.chatSyncIngest"](payload),
 	"org.chatSyncLinkSettings": (payload) => chatSyncOrgReceivers["org.chatSyncLinkSettings"](payload),
 	"org.chatSyncLinkThread": (payload) => chatSyncOrgReceivers["org.chatSyncLinkThread"](payload),
+	"org.chatSyncRepublishLinks": (payload) => chatSyncOrgReceivers["org.chatSyncRepublishLinks"](payload),
 	// Connect receivers recompute channel access, which needs the sync service.
 	"org.connectMountAdded": (payload) =>
 		connectOrgReceivers["org.connectMountAdded"](payload).pipe(

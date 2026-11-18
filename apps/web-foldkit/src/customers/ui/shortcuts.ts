@@ -8,7 +8,7 @@ export const kbd = <M>(h: HtmlBuilder<M>, key: string, className?: string): Html
 		[
 			h.Class(
 				twMerge(
-					"inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-secondary/60 px-1 font-mono text-[11px] text-muted-fg max-md:hidden",
+					"inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-secondary/60 px-1 font-mono text-2xs text-muted-fg max-md:hidden",
 					className,
 				),
 			),

@@ -4,6 +4,7 @@ import * as DomainRpc from "@hazel/domain/rpc"
 import { ChannelId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as CurrentUser from "../../../packages/domain/src/current-user"
+import { LINK_PREVIEW_URL } from "../../web-foldkit/src/chat/unfurl"
 import { isBackendUrl } from "./backend-origin"
 import type { FixtureServer } from "./fixture/fixture-socket"
 import {
@@ -31,6 +32,12 @@ export const makeOfflineFetch = (options: {
 	readonly server?: FixtureServer
 	/** `message.htmlRenderUrl`'s answer, when the fixture shows an HTML render. */
 	readonly htmlRenderUrl?: () => { readonly url: string; readonly expiresAt: number }
+	/**
+	 * Where requests to the link-preview worker go (the network's own `fetch`): its link previews
+	 * and tweets are public and carry no credentials, so a fixture message's links unfurl as
+	 * they do live. Without it they fail like any other URL outside the backend.
+	 */
+	readonly unfurls?: typeof fetch
 }): typeof fetch => {
 	const now = Date.now()
 	const session: typeof HazelAuthApi.sessions.Session.Type = Schema.decodeUnknownSync(
@@ -184,6 +191,8 @@ export const makeOfflineFetch = (options: {
 		const request = new Request(input, init)
 		const url = new URL(request.url)
 		options.onRequest?.(request.method, url.pathname)
+		if (options.unfurls !== undefined && url.origin === new URL(LINK_PREVIEW_URL).origin)
+			return options.unfurls(request)
 		if (!isBackendUrl(request.url, options.backendUrl)) return new Response(null, { status: 404 })
 		switch (url.pathname.replace(/\/$/, "")) {
 			case "/auth/getSession":

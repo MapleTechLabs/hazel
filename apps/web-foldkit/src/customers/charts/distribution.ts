@@ -89,7 +89,7 @@ export const healthDistribution = <M>(
 	const customers = rows.reduce((sum, row) => sum + row.count, 0)
 	const mrr = rows.reduce((sum, row) => sum + row.mrrMinor, 0)
 	const cell = (text: string, className = "") =>
-		h.td([h.Class(twMerge("py-2 text-right tabular-nums", className))], [text])
+		h.td([h.Class(twMerge("py-2 pl-3 text-right tabular-nums whitespace-nowrap", className))], [text])
 	return chartCard(
 		h,
 		{
@@ -125,12 +125,22 @@ export const healthDistribution = <M>(
 						[],
 						[
 							h.tr(
-								[h.Class("border-border border-b text-muted-fg")],
+								[
+									h.Class(
+										"border-border border-b font-medium text-muted-fg text-xs [&>th]:font-medium",
+									),
+								],
 								[
 									h.th([h.Class("py-2 text-left font-normal")], ["Status"]),
-									h.th([h.Class("py-2 text-right font-normal")], ["Customers"]),
-									h.th([h.Class("py-2 text-right font-normal")], ["MRR"]),
-									h.th([h.Class("py-2 text-right font-normal")], ["Share"]),
+									h.th(
+										[h.Class("py-2 pl-3 text-right font-normal")],
+										[
+											h.span([h.Class("max-sm:hidden")], ["Customers"]),
+											h.span([h.Class("sm:hidden")], ["Count"]),
+										],
+									),
+									h.th([h.Class("py-2 pl-3 text-right font-normal")], ["MRR"]),
+									h.th([h.Class("py-2 pl-3 text-right font-normal")], ["Share"]),
 								],
 							),
 						],
@@ -145,7 +155,7 @@ export const healthDistribution = <M>(
 										[h.Class("py-2")],
 										[
 											h.span(
-												[h.Class("inline-flex items-center gap-2")],
+												[h.Class("inline-flex items-center gap-2 whitespace-nowrap")],
 												[
 													h.span([
 														h.Class(
@@ -157,7 +167,8 @@ export const healthDistribution = <M>(
 													]),
 													h.span([h.Class("text-fg")], [HEALTH_LABEL[row.status]]),
 													h.span(
-														[h.Class("text-muted-fg text-xs")],
+														// A phone keeps the table in the card; the bands are in Settings › Health.
+														[h.Class("text-muted-fg text-xs max-sm:hidden")],
 														[bandText(row.status, options.bands)],
 													),
 												],

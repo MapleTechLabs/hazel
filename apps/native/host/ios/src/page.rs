@@ -1,6 +1,5 @@
 //! The hidden page the runtime's worker runs in: its HTML, its origin and the environment it hands
 //! the worker. Plain data, so it is tested on the host (`cargo test -p hazel-ios`).
-use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
@@ -77,9 +76,15 @@ pub fn environment(
 }
 
 /// The page: it runs the runtime's source in a module worker (from a Blob, after the host's
-/// environment) and relays between it and the host.
-pub fn html(source: &str, env: &Value, id: u64) -> String {
-    let start = format!("__hazel.start({}, {})", json!(source), env);
+/// environment and `storage`: the saved `localStorage` entries, one JSON object of strings, which
+/// the worker reads as that object) and relays between it and the host.
+pub fn html(source: &str, env: &Value, storage: Option<&str>, id: u64) -> String {
+    let start = format!(
+        "__hazel.start({}, {}, {})",
+        json!(source),
+        env,
+        json!(storage)
+    );
     // Nothing in the inline script may end it early (`</script>`, `<!--`): every `<` is inside a
     // JSON string there, where `\u003c` reads the same.
     let start = start.replace('<', "\\u003c");
@@ -89,44 +94,30 @@ const host = window.webkit.messageHandlers.hazel
 let worker
 const early = []
 window.__hazel = {{
-    start(source, env) {{
-        const head = `globalThis.__HAZEL_ENV__ = ${{JSON.stringify(env)}};\n`
+    start(source, env, storage) {{
+        // Parsed in the worker, not written as an object: a key such as `__proto__` stays a key.
+        const head =
+            `globalThis.__HAZEL_ENV__ = ${{JSON.stringify(env)}};\n` +
+            `globalThis.__HAZEL_STORAGE__ = JSON.parse(${{JSON.stringify(storage ?? "null")}});\n`
         const url = URL.createObjectURL(new Blob([head, source], {{ type: "text/javascript" }}))
         worker = new Worker(url, {{ type: "module" }})
         worker.onmessage = (event) => host.postMessage(event.data)
         worker.onerror = (event) =>
             host.postMessage({{ log: `[worker] ${{event.message}} ${{event.filename}}:${{event.lineno}}` }})
-        for (const line of early.splice(0)) worker.postMessage(line)
+        for (const batch of early.splice(0)) worker.postMessage(batch)
     }},
+    reply(message) {{
+        worker?.postMessage(message)
+    }},
+    // A frame's lines cross in one message, as they do down the desktop's pipe: the worker
+    // splits them, and handles a frame's reports in one task.
     toWorker(text) {{
-        for (const line of text.split("\n"))
-            if (line !== "") worker === undefined ? early.push(line) : worker.postMessage(line)
+        if (text !== "") worker === undefined ? early.push(text) : worker.postMessage(text)
     }},
 }}
 host.postMessage({{ ready: {id} }})
 </script><script>{start}</script>"#
     )
-}
-
-/// How often the page may restart after its process ends: a page that crashes on every load
-/// would otherwise restart for as long as the app is open.
-const RESTARTS: usize = 3;
-const RESTART_WINDOW: Duration = Duration::from_secs(60);
-
-/// The restarts after the page's process ended, recent ones only.
-#[derive(Default)]
-pub struct Restarts(Vec<Instant>);
-
-impl Restarts {
-    /// Whether the page may restart now, counting this one if so.
-    pub fn allow(&mut self, now: Instant) -> bool {
-        self.0.retain(|at| now.duration_since(*at) < RESTART_WINDOW);
-        let allowed = self.0.len() < RESTARTS;
-        if allowed {
-            self.0.push(now);
-        }
-        allowed
-    }
 }
 
 /// The lines of a batch a replacing page's runtime should still hear: the window's size, theme
@@ -141,16 +132,6 @@ pub fn for_replacement(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_page_restarts_three_times_a_minute_at_most() {
-        let mut restarts = Restarts::default();
-        let start = Instant::now();
-        assert!((0..3).all(|i| restarts.allow(start + Duration::from_secs(i))));
-        assert!(!restarts.allow(start + Duration::from_secs(10)));
-        // Once the first has aged out, one more may.
-        assert!(restarts.allow(start + Duration::from_secs(61)));
-    }
 
     #[test]
     fn a_replacing_page_hears_only_the_window() {
@@ -222,7 +203,8 @@ mod tests {
     fn nothing_in_the_source_or_environment_ends_the_inline_script() {
         let source = r#"const a = "</script><script>alert(1)</script>"; // <!-- -->"#;
         let env = json!({ "NATIVE_PATH": "/</script>" });
-        let page = html(source, &env, 1);
+        let storage = r#"{"note":"</script><!--"}"#;
+        let page = html(source, &env, Some(storage), 1);
         let (_, inline) = page.split_once("</script><script>").expect("two scripts");
         let inline = inline.strip_suffix("</script>").expect("one closing tag");
         assert!(!inline.contains('<'), "{inline}");
@@ -232,20 +214,22 @@ mod tests {
             .and_then(|s| s.strip_suffix(')'))
             .unwrap();
         let args: Value = serde_json::from_str(&format!("[{call}]")).unwrap();
-        assert_eq!(args, json!([source, env]));
+        assert_eq!(args, json!([source, env, storage]));
+        // Without saved entries the worker is handed `null`.
+        assert!(html("", &env, None, 1).ends_with(", null)</script>"));
     }
 
     #[test]
     fn the_page_says_it_is_ready_before_it_starts_the_worker() {
-        let page = html("", &json!({}), 7);
+        let page = html("", &json!({}), None, 7);
         // With its load's id: a page a later load replaced cannot release the new one's lines.
         let ready = page.find("host.postMessage({ ready: 7 })").expect("ready");
         let start = page.find("__hazel.start(").expect("start");
         assert!(ready < start);
         // Lines that arrive before the worker exists wait for it, in order.
         assert!(
-            page.contains("worker === undefined ? early.push(line) : worker.postMessage(line)")
+            page.contains("worker === undefined ? early.push(text) : worker.postMessage(text)")
         );
-        assert!(page.contains("for (const line of early.splice(0)) worker.postMessage(line)"));
+        assert!(page.contains("for (const batch of early.splice(0)) worker.postMessage(batch)"));
     }
 }

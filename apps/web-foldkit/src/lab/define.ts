@@ -19,7 +19,8 @@ type ProgramKeys = "Model" | "update" | "view" | "subscriptions"
 
 export interface LabEntry {
 	readonly title: string
-	readonly start: (container: HTMLElement) => void
+	/** Into a DOM container (`{ container }`), or a render target (the native app's Rune). */
+	readonly start: (surface: Runtime.RenderSurfaceConfig) => void
 }
 
 export const defineLab = <Model, Message extends { _tag: string }>(
@@ -27,8 +28,8 @@ export const defineLab = <Model, Message extends { _tag: string }>(
 	program: Pick<Runtime.ElementConfig<Model, Message, Resources>, ProgramKeys | "init">,
 ): LabEntry => ({
 	title,
-	start: (container) => {
-		Runtime.run(Runtime.makeElement<Model, Message, Resources>({ ...program, container, resources }))
+	start: (surface) => {
+		Runtime.run(Runtime.makeElement<Model, Message, Resources>({ ...program, ...surface, resources }))
 	},
 })
 
@@ -41,9 +42,9 @@ export const defineLabWithFlags = <Model, Message extends { _tag: string }, Flag
 	>,
 ): LabEntry => ({
 	title,
-	start: (container) => {
+	start: (surface) => {
 		Runtime.run(
-			Runtime.makeElement<Model, Message, Flags, Resources>({ ...program, container, resources }),
+			Runtime.makeElement<Model, Message, Flags, Resources>({ ...program, ...surface, resources }),
 		)
 	},
 })

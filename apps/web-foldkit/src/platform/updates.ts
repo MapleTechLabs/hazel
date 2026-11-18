@@ -1,4 +1,4 @@
-import { getTauriProcess, getTauriUpdater } from "@hazel/desktop/bridge"
+import { getTauriProcess, getTauriUpdater } from "./tauri"
 import { Clock, Duration, Effect, Queue, Schema, Stream } from "effect"
 import { Command, Subscription, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"

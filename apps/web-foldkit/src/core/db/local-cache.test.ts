@@ -8,12 +8,17 @@ const persistence = {
 
 const userA = UserId.make("00000000-0000-4000-8000-000000000001")
 const userB = UserId.make("00000000-0000-4000-8000-000000000002")
+const fileA = `hazel-cache-${userA}.sqlite`
 
 const storage = new Map<string, string>()
 const reload = vi.fn()
+/** OPFS root entries, and the Web Locks other tabs hold. */
+const files = new Set<string>()
+const locksHeldElsewhere = new Set<string>()
+const locksHeldHere = new Set<string>()
 
 /** The module reads the flag once, when it loads. */
-const loadModule = async (flag: string | undefined) => {
+const loadModule = async (flag?: string) => {
 	storage.clear()
 	if (flag !== undefined) storage.set("hazel:local-cache", flag)
 	vi.resetModules()
@@ -32,16 +37,45 @@ const databaseOf = () =>
 		}
 	).database
 
+const openedFiles = () => persistence.open.mock.calls.map(([options]) => options.databaseName)
+
 beforeEach(() => {
 	persistence.open.mockReset()
 	persistence.create.mockClear()
 	reload.mockClear()
+	files.clear()
+	locksHeldElsewhere.clear()
+	locksHeldHere.clear()
 	vi.stubGlobal("localStorage", {
 		getItem: (key: string) => storage.get(key) ?? null,
+		setItem: (key: string, value: string) => void storage.set(key, value),
 		removeItem: (key: string) => storage.delete(key),
 	})
 	vi.stubGlobal("Worker", class {})
-	vi.stubGlobal("navigator", { storage: { getDirectory: () => Promise.resolve({}) } })
+	vi.stubGlobal("navigator", {
+		storage: {
+			getDirectory: async () => ({
+				removeEntry: async (name: string) => void files.delete(name),
+				keys: async function* () {
+					yield* [...files]
+				},
+			}),
+		},
+		locks: {
+			request: async (
+				name: string,
+				_options: unknown,
+				callback: (lock: { readonly name: string } | null) => Promise<unknown> | undefined,
+			) => {
+				if (locksHeldElsewhere.has(name)) return callback(null)
+				locksHeldHere.add(name)
+				return callback({ name })
+			},
+			query: async () => ({
+				held: [...locksHeldElsewhere, ...locksHeldHere].map((name) => ({ name })),
+			}),
+		},
+	})
 	vi.stubGlobal("window", { location: { reload } })
 })
 
@@ -50,8 +84,8 @@ afterEach(() => {
 })
 
 describe("local cache", () => {
-	it("is off unless the flag is on", async () => {
-		const cache = await loadModule(undefined)
+	it("is off once turned off", async () => {
+		const cache = await loadModule("off")
 		expect(cache.localCachePersistence).toBeUndefined()
 		cache.bindLocalCache(userA)
 		expect(persistence.open).not.toHaveBeenCalled()
@@ -60,41 +94,187 @@ describe("local cache", () => {
 
 	it("is off where the browser has no OPFS", async () => {
 		vi.stubGlobal("navigator", {})
-		const cache = await loadModule("on")
+		const cache = await loadModule()
 		expect(cache.localCachePersistence).toBeUndefined()
 	})
 
-	it("opens the user's own file, and only once it is bound", async () => {
+	it("is on where the browser has OPFS: opens the user's own file, and only once it is bound", async () => {
 		const execute = vi.fn(async () => [{ ok: 1 }])
 		persistence.open.mockResolvedValue({ execute })
-		const cache = await loadModule("on")
-		expect(cache.localCachePersistence).toBeDefined()
+		const cache = await loadModule()
 		const query = databaseOf().execute("SELECT 1")
 		expect(persistence.open).not.toHaveBeenCalled()
 
 		cache.bindLocalCache(userA)
 		await expect(query).resolves.toEqual([{ ok: 1 }])
-		expect(persistence.open).toHaveBeenCalledWith({ databaseName: `hazel-cache-${userA}.sqlite` })
+		expect(openedFiles()).toEqual([fileA])
 		cache.bindLocalCache(userA)
 		expect(persistence.open).toHaveBeenCalledTimes(1)
 		expect(reload).not.toHaveBeenCalled()
 	})
 
+	it("works on a scratch file while another tab holds the user's", async () => {
+		persistence.open.mockResolvedValue({ execute: async () => [] })
+		locksHeldElsewhere.add(fileA)
+		const cache = await loadModule()
+		cache.bindLocalCache(userA)
+		await databaseOf().execute("SELECT 1")
+		expect(openedFiles()).toEqual([expect.stringMatching(/^hazel-cache-tab-.+\.sqlite$/)])
+		// wa-sqlite opens no longer name (`restore.browser.test.ts` opens one of this length).
+		expect(Math.max(fileA.length, ...openedFiles().map((name) => name.length))).toBeLessThanOrEqual(56)
+	})
+
+	it("deletes the files no tab holds when it takes the user's file", async () => {
+		persistence.open.mockResolvedValue({ execute: async () => [] })
+		const openScratch = "hazel-cache-tab-open.sqlite"
+		locksHeldElsewhere.add(openScratch)
+		for (const name of [
+			fileA,
+			`${fileA}-journal`,
+			openScratch,
+			"hazel-cache-tab-gone.sqlite",
+			"hazel-cache-tab-gone.sqlite-journal",
+			`hazel-cache-${userB}.sqlite`,
+			"unrelated.txt",
+		])
+			files.add(name)
+		const cache = await loadModule()
+		cache.bindLocalCache(userA)
+		await databaseOf().execute("SELECT 1")
+		await vi.waitFor(() =>
+			expect([...files].sort()).toEqual(
+				[fileA, `${fileA}-journal`, openScratch, "unrelated.txt"].sort(),
+			),
+		)
+	})
+
 	it("reloads when another user signs in on the same page", async () => {
 		persistence.open.mockResolvedValue({ execute: async () => [] })
-		const cache = await loadModule("on")
+		const cache = await loadModule()
 		cache.bindLocalCache(userA)
 		cache.bindLocalCache(userB)
 		expect(reload).toHaveBeenCalledTimes(1)
-		expect(persistence.open).toHaveBeenCalledTimes(1)
 	})
 
-	it("turns itself off and reloads when the file cannot open", async () => {
+	it("turns itself off for a day and reloads when the file cannot open", async () => {
 		persistence.open.mockRejectedValue(new Error("OPFS unavailable"))
 		vi.spyOn(console, "error").mockImplementation(() => {})
-		const cache = await loadModule("on")
+		vi.spyOn(Date, "now").mockReturnValue(1_000_000)
+		const cache = await loadModule()
 		cache.bindLocalCache(userA)
 		await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
-		expect(storage.has("hazel:local-cache")).toBe(false)
+		expect(storage.get("hazel:local-cache")).toBe("failed:1000000")
+
+		const dayMs = 24 * 60 * 60 * 1000
+		vi.spyOn(Date, "now").mockReturnValue(1_000_000 + dayMs - 1)
+		expect((await loadModule("failed:1000000")).localCachePersistence).toBeUndefined()
+		// A day later the next load tries the cache again.
+		vi.spyOn(Date, "now").mockReturnValue(1_000_000 + dayMs)
+		expect((await loadModule("failed:1000000")).localCachePersistence).toBeDefined()
+	})
+
+	it("does not reload when the failure cannot be recorded: the next load would only fail again", async () => {
+		persistence.open.mockRejectedValue(new Error("OPFS unavailable"))
+		vi.spyOn(console, "error").mockImplementation(() => {})
+		const cache = await loadModule()
+		vi.stubGlobal("localStorage", {
+			getItem: () => null,
+			setItem: () => {
+				throw new Error("QuotaExceededError")
+			},
+		})
+		cache.bindLocalCache(userA)
+		// The collections' statements fail instead of waiting forever.
+		await expect(databaseOf().execute("SELECT 1")).rejects.toThrow("OPFS unavailable")
+		expect(reload).not.toHaveBeenCalled()
+		// And the session can still end.
+		await expect(cache.forgetLocalCache()).resolves.toBe(true)
+	})
+
+	it("reloads a page restored from the back/forward cache: its database connection is gone", async () => {
+		persistence.open.mockResolvedValue({ execute: async () => [] })
+		const listeners = new Map<string, (event: { readonly persisted: boolean }) => void>()
+		vi.stubGlobal("window", {
+			location: { reload },
+			addEventListener: (type: string, listener: (event: { readonly persisted: boolean }) => void) =>
+				void listeners.set(type, listener),
+		})
+		const cache = await loadModule()
+		cache.bindLocalCache(userA)
+		listeners.get("pageshow")?.({ persisted: false })
+		expect(reload).not.toHaveBeenCalled()
+		listeners.get("pageshow")?.({ persisted: true })
+		expect(reload).toHaveBeenCalledTimes(1)
+	})
+
+	it("deletes the remembered user's file when the session ended before the cache was opened", async () => {
+		persistence.open.mockResolvedValue({ execute: async () => [], close: vi.fn() })
+		files.add(fileA).add(`${fileA}-journal`).add(`hazel-cache-${userB}.sqlite`)
+		const cache = await loadModule()
+		// A scratch file another tab still works on stays; every file nobody holds goes.
+		const openScratch = "hazel-cache-tab-open.sqlite"
+		locksHeldElsewhere.add(openScratch)
+		files.add(openScratch)
+		// No page shows the rows: nothing to load again.
+		await expect(cache.forgetLocalCache(userA)).resolves.toBe(false)
+		expect([...files]).toEqual([openScratch])
+
+		// A sign-in on the same page opens the cache, and its sign-out deletes it.
+		files.add(fileA)
+		cache.bindLocalCache(userA)
+		await databaseOf().execute("SELECT 1")
+		expect(reload).not.toHaveBeenCalled()
+		await expect(cache.forgetLocalCache()).resolves.toBe(true)
+		expect(files.has(fileA)).toBe(false)
+	})
+
+	it("leaves the user's file to the tab that holds it, and deletes its own scratch file", async () => {
+		const close = vi.fn()
+		persistence.open.mockResolvedValue({ execute: async () => [], close })
+		locksHeldElsewhere.add(fileA)
+		files.add(fileA)
+		const cache = await loadModule()
+		cache.bindLocalCache(userA)
+		await databaseOf().execute("SELECT 1")
+		const scratch = openedFiles()[0]!
+		files.add(scratch)
+
+		await expect(cache.forgetLocalCache()).resolves.toBe(true)
+		expect(close).toHaveBeenCalledTimes(1)
+		// The holder hears the remembered user go and deletes its file itself.
+		expect([...files]).toEqual([fileA])
+	})
+
+	it("closes and deletes the user's file when the session ends, and a later sign-in reloads", async () => {
+		const close = vi.fn()
+		persistence.open.mockResolvedValue({ execute: async () => [], close })
+		files.add(fileA).add(`${fileA}-journal`)
+		const cache = await loadModule()
+		cache.bindLocalCache(userA)
+		await databaseOf().execute("SELECT 1")
+
+		await expect(cache.forgetLocalCache()).resolves.toBe(true)
+		expect(close).toHaveBeenCalledTimes(1)
+		expect([...files]).toEqual([])
+		await expect(cache.forgetLocalCache()).resolves.toBe(false)
+		cache.bindLocalCache(userA)
+		expect(reload).toHaveBeenCalledTimes(1)
+	})
+
+	it("opens and deletes through the host that keeps SQLite itself", async () => {
+		const host = {
+			open: vi.fn(async () => ({ execute: async () => [{ ok: 1 }] })),
+			remove: vi.fn(async () => {}),
+		}
+		vi.stubGlobal("__hazelLocalCacheHost", host)
+		// No OPFS: the host alone turns the cache on.
+		vi.stubGlobal("navigator", {})
+		const cache = await loadModule()
+		cache.bindLocalCache(userA)
+		await expect(databaseOf().execute("SELECT 1")).resolves.toEqual([{ ok: 1 }])
+		expect(host.open).toHaveBeenCalledWith(fileA)
+		expect(persistence.open).not.toHaveBeenCalled()
+		await cache.forgetLocalCache()
+		expect(host.remove).toHaveBeenCalledWith(fileA)
 	})
 })

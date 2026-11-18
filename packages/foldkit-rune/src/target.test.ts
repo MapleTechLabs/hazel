@@ -239,6 +239,47 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("opens the Open dialog for a hidden file input that Dom.clickElement clicks", async () => {
+		const Browse = defineMessageUnion({ Opened: {} })
+		const OpenPicker = Command.define("OpenPicker", {
+			messages: [Browse.Opened],
+			execute: Dom.clickElement("#picker").pipe(Effect.ignore, Effect.as(Browse.Opened())),
+		})
+		const sent: Array<RuntimeToHost> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		const rune = makeRuneTarget({
+			styles,
+			bridge,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ n: Schema.Number }),
+				init: () => ({ model: { n: 0 }, commands: [OpenPicker()] }),
+				update: (model) => ({ model }),
+				view: (_model, h) =>
+					h.div(
+						[],
+						[
+							h.input([
+								h.Id("picker"),
+								h.Type("file"),
+								h.Attribute("accept", "image/png,image/gif"),
+								h.Attribute("style", "display: none;"),
+							]),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		expect(sent.filter((m) => m.t === "pickFile")).toEqual([
+			{ t: "pickFile", path: "r/0", accept: "image/png,image/gif" },
+		])
+		handle.dispose()
+	})
+
 	it("moves an arrowed radio's group to the next radio, wrapping, and focuses it", async () => {
 		const Chose = defineMessageUnion({ Chose: { value: Schema.String } })
 		const sent: Array<RuntimeToHost> = []
@@ -462,6 +503,50 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("draws a list item's marker as its last child: bullets, numbers from `start`, none unstyled", async () => {
+		const { handle, trees } = boot((_model, h) =>
+			h.div(
+				[],
+				[
+					h.ul(
+						[h.Class("ml-5 list-disc marker:text-[#ff0000]")],
+						[h.li([], ["a"]), h.li([], ["b"])],
+					),
+					h.ol(
+						[h.Class("list-decimal"), h.Attribute("start", "3")],
+						[h.li([], ["c"]), h.li([], ["d"])],
+					),
+					h.ul([], [h.li([], ["plain"])]),
+					h.ol([h.Class("list-decimal")], [h.li([h.Class("flex")], ["flex item"])]),
+				],
+			),
+		)
+		await settle()
+		// Each item as last sent: a later tree refers to an unchanged subtree by its hash.
+		const latest = new Map<string, Extract<WireNode, { k: "e" }>>()
+		for (const tree of trees())
+			for (const e of elements(tree.root)) if (e.tag === "li") latest.set(texts(e)[0]!, e)
+		const items = ["a", "b", "c", "d", "plain", "flex item"].map((text) => latest.get(text)!)
+		const markers = items.map((li) => {
+			const last = li.c.at(-1)
+			return last?.k === "e" && last.key === "list-marker" ? last : undefined
+		})
+		expect(markers.map((m) => (m === undefined ? null : texts(m).join("")))).toEqual([
+			"\u2022",
+			"\u2022",
+			"3.",
+			"4.",
+			null,
+			null,
+		])
+		expect(markers[0]!.st).toMatchObject({ color: "#ff0000ff", textAlign: "right" })
+		expect(markers[0]!.st.absolute?.[0]).toBeLessThan(0)
+		expect(markers[2]!.st.color).toBeUndefined()
+		// The marker is the serializer's: no list item carries it in its own style.
+		expect(items.every((li) => !("listMarker" in li.st))).toBe(true)
+		handle.dispose()
+	})
+
 	it("sends h.Tabindex as the tabindex attribute the host makes a Tab stop", async () => {
 		const tabbable = (_: Model, h: HtmlBuilder<Message>): Html =>
 			h.div([], [h.span([h.Tabindex(0), h.Role("link")], ["Home"])])
@@ -494,6 +579,33 @@ describe("makeRuneTarget", () => {
 		expect(root.k === "svg" ? root.body : "").toBe(
 			'<text x="9" text-anchor="middle" font-size="6" font-weight="700">G&lt;F</text>',
 		)
+		handle.dispose()
+	})
+
+	it("writes a chart's class paint into the svg body and keeps its viewBox height", async () => {
+		const chart = (_: Model, h: HtmlBuilder<Message>): Html =>
+			h.svg(
+				[h.Attribute("viewBox", "0 0 80 24"), h.Class("h-6 w-20")],
+				[
+					h.path([
+						h.Attribute("d", "M0 24L80 0"),
+						h.Attribute("fill", "none"),
+						h.Attribute("vector-effect", "non-scaling-stroke"),
+						h.Class("stroke-red-500"),
+					]),
+					h.circle([h.Attribute("r", "2"), h.Class("fill-current")]),
+				],
+			)
+		const { handle, trees } = boot(chart)
+		await settle()
+		const root = trees().at(-1)!.root
+		expect(root).toMatchObject({ k: "svg", view: 80, vh: 24 })
+		const body = root.k === "svg" ? root.body : ""
+		expect(body).toMatch(/^<path [^>]*stroke="#[0-9a-f]{6}"/)
+		expect(body).toContain('vector-effect="non-scaling-stroke"')
+		expect(body).toContain('fill="none"')
+		// `currentColor` stays a keyword, so an icon drawn with it is still tinted.
+		expect(body).toContain('<circle r="2" fill="currentColor"/>')
 		handle.dispose()
 	})
 

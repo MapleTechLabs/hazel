@@ -9,24 +9,28 @@ import type { ChatSyncChannelLink } from "@hazel/domain/models"
 import { Cause, Config, Effect, Option, Redacted, Schedule } from "effect"
 import { formatMessageContentWithAttachments } from "../../chat-sync-attachment-content"
 import {
-	isWebhookStrategyEnabled,
 	outboundIdentityOf,
+	postsAsEachAuthor,
 	webhookPermission,
 	webhookPermissionOf,
 	withOutboundIdentity,
 } from "../../chat-sync-settings"
 import {
 	ChatSyncProviderApiError,
+	type ChatSyncAuthor,
 	type ChatSyncClient,
 	ChatSyncProviderConfigurationError,
 	type ChatSyncLinkContext,
 	isRetryableStatus,
 } from "../../provider"
 import { discord, discordWebhookConfigOf } from "./definition"
+import { discordHistoryInbound } from "./gateway-dispatch"
 
 interface WebhookTarget {
 	readonly webhookId: string
 	readonly webhookToken: string
+	/** Set on a thread's link: the webhook belongs to the parent channel and posts into the thread. */
+	readonly threadId?: string
 }
 
 const RETRY_SCHEDULE = Schedule.max([
@@ -77,6 +81,22 @@ const requireContent = (content: string) =>
 				)
 			: Effect.void
 
+/** Discord markdown in a name shown literally, and `@` kept from pinging (`@everyone`). */
+const escapeName = (name: string) => name.replace(/[\\*_~`|]/g, "\\$&").replace(/@/g, "@\u200b")
+
+/**
+ * A message the bot posts shows as "Hazel", so it names its Hazel author on a first line:
+ * `**Olive Owner**`. A body the header would push past Discord's limit is cut to fit.
+ */
+export const withAuthorHeader = (author: ChatSyncAuthor, content: string) => {
+	const name = author.name.trim()
+	if (!name) return content
+	const header = `**${escapeName(name)}**\n`
+	const room = discord.maxMessageLength - header.length
+	const body = content.length > room ? `${content.slice(0, room - 1)}…` : content
+	return header + body
+}
+
 export const makeDiscordClient = Effect.gen(function* () {
 	const api = yield* Discord.DiscordApiClient
 	const botTokenOption = yield* Config.Redacted("DISCORD_BOT_TOKEN").pipe(Config.option)
@@ -103,18 +123,22 @@ export const makeDiscordClient = Effect.gen(function* () {
 		)
 
 	/**
-	 * The link's webhook when it posts as each author, provisioned on first use. `None`: post as
-	 * the bot (identity off, refused before, not configured, or Discord failing).
+	 * The link's webhook, provisioned on first use: every link posts as each author until Discord
+	 * refuses the webhook. `None`: post as the bot (refused before, not configured, or Discord failing).
+	 * Discord has no webhooks on threads: a thread posts through its parent channel's webhook, which
+	 * only the parent's own deliveries provision (one writer); until then the thread posts as the bot.
 	 */
 	const webhookOf = (context: ChatSyncLinkContext) =>
 		Effect.gen(function* () {
 			const { link } = context
+			const threadId = link.parent === undefined ? undefined : link.externalChannelId
 			const identity = outboundIdentityOf(link.settings)
-			if (!isWebhookStrategyEnabled(identity)) return Option.none<WebhookTarget>()
+			if (!postsAsEachAuthor(identity)) return Option.none<WebhookTarget>()
 			if (webhookPermissionOf(link.settings)?.status === "denied") return Option.none<WebhookTarget>()
 			const current = discordWebhookConfigOf(identity)
-			if (Option.isSome(current)) return Option.some<WebhookTarget>(current.value)
-			if (Option.isNone(botTokenOption)) return Option.none<WebhookTarget>()
+			if (Option.isSome(current)) return Option.some<WebhookTarget>({ ...current.value, threadId })
+			if (link.parent !== undefined || Option.isNone(botTokenOption))
+				return Option.none<WebhookTarget>()
 
 			const created = yield* api
 				.createWebhook({
@@ -127,7 +151,6 @@ export const makeDiscordClient = Effect.gen(function* () {
 					withOutboundIdentity(
 						link.settings,
 						{
-							enabled: true,
 							strategy: "webhook",
 							providers: {
 								...identity.providers,
@@ -137,7 +160,7 @@ export const makeDiscordClient = Effect.gen(function* () {
 						webhookPermission("allowed"),
 					),
 				)
-				return Option.some<WebhookTarget>(created.success)
+				return Option.some<WebhookTarget>({ ...created.success, threadId })
 			}
 			const error = created.failure
 			yield* context.saveSettings(
@@ -186,6 +209,28 @@ export const makeDiscordClient = Effect.gen(function* () {
 	const client: ChatSyncClient = {
 		// The bot is in every channel of a guild it was added to.
 		prepareLink: () => Effect.void,
+		fetchHistory: Effect.fn("DiscordChatSyncClient.fetchHistory")(function* (params) {
+			yield* requireIds({ channelId: params.externalChannelId, before: params.cursor ?? undefined })
+			// Newest first; `before` the oldest one seen walks back in time.
+			const page = yield* viaBot((token) =>
+				api.listMessages({
+					channelId: params.externalChannelId,
+					...(params.cursor === null ? {} : { before: params.cursor }),
+					limit: params.limit,
+					botToken: token,
+				}),
+			)
+			const oldest = page.at(-1)
+			return {
+				messages: page
+					.slice()
+					.reverse()
+					.flatMap((message) =>
+						Option.toArray(discordHistoryInbound(message, params.externalWorkspaceId)),
+					),
+				cursor: page.length < params.limit || oldest === undefined ? null : oldest.id,
+			}
+		}),
 		postMessage: Effect.fn("DiscordChatSyncClient.postMessage")(function* (context, message) {
 			const channelId = context.link.externalChannelId
 			yield* requireIds({ channelId, replyToMessageId: message.replyToExternalMessageId })
@@ -210,7 +255,7 @@ export const makeDiscordClient = Effect.gen(function* () {
 				viaBot((token) =>
 					api.createMessage({
 						channelId,
-						content,
+						content: withAuthorHeader(message.author, content),
 						replyToMessageId: message.replyToExternalMessageId,
 						botToken: token,
 					}),
@@ -241,7 +286,7 @@ export const makeDiscordClient = Effect.gen(function* () {
 					api.updateMessage({
 						channelId,
 						messageId: message.externalMessageId,
-						content,
+						content: withAuthorHeader(message.author, content),
 						botToken: token,
 					}),
 				).pipe(Effect.asVoid),

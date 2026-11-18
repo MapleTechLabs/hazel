@@ -1,5 +1,5 @@
 {
-	"migration": "0005_bot_installation_region",
+	"migration": "0006_customer_channel_links",
 	"entities": [
 		{
 			"kind": "table",
@@ -34,6 +34,13 @@
 			"name": "channel_access",
 			"primaryKey": {
 				"columns": ["userId", "channelId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "channel_customers",
+			"primaryKey": {
+				"columns": ["channelId"]
 			}
 		},
 		{
@@ -575,6 +582,51 @@
 		{
 			"kind": "column",
 			"table": "channel_access",
+			"name": "updatedAt",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "channelId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "accountId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "accountName",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
 			"name": "updatedAt",
 			"position": 4,
 			"type": "text",
@@ -2755,6 +2807,13 @@
 			"name": "channel_access_user_id_idx",
 			"unique": false,
 			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_customers",
+			"name": "channel_customers_account_idx",
+			"unique": false,
+			"columns": ["\"accountId\""]
 		},
 		{
 			"kind": "index",

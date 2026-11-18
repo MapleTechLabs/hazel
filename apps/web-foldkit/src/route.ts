@@ -36,6 +36,20 @@ export const AppRoute = defineRouteUnion({
 		redirectUri: Schema.Option(Schema.String),
 		state: Schema.Option(Schema.String),
 	},
+	/**
+	 * Hazel's MCP OAuth consent page (`GET /oauth/authorize` on the api redirects here with the same
+	 * query): an agent asks to act for the signed-in user.
+	 */
+	OAuthAuthorize: {
+		clientId: Schema.Option(Schema.String),
+		redirectUri: Schema.Option(Schema.String),
+		responseType: Schema.Option(Schema.String),
+		codeChallenge: Schema.Option(Schema.String),
+		codeChallengeMethod: Schema.Option(Schema.String),
+		scope: Schema.Option(Schema.String),
+		state: Schema.Option(Schema.String),
+		resource: Schema.Option(Schema.String),
+	},
 	/** `?orgId=&step=` (`validateSearch` in `onboarding/index.tsx`). */
 	Onboarding: { orgId: Schema.Option(OrganizationId), step: Schema.Option(Schema.String) },
 	OnboardingSetupOrganization: { orgId: Schema.Option(OrganizationId) },
@@ -51,6 +65,8 @@ export const AppRoute = defineRouteUnion({
 	ChannelSettingsConnect: { orgSlug: Schema.String, channelId: ChannelId },
 	MySettingsAppearance: { orgSlug: Schema.String },
 	MySettingsProfile: { orgSlug: Schema.String },
+	/** The agents (MCP OAuth apps and personal tokens) that may act for the user. */
+	MySettingsAgents: { orgSlug: Schema.String },
 	/** The OAuth callback redirect's `?connection_status=&provider=&error_code=`. */
 	MySettingsLinkedAccounts: {
 		orgSlug: Schema.String,
@@ -60,6 +76,7 @@ export const AppRoute = defineRouteUnion({
 	},
 	MySettingsNotifications: { orgSlug: Schema.String },
 	MySettingsDesktop: { orgSlug: Schema.String },
+	MySettingsKeybinds: { orgSlug: Schema.String },
 	NotificationsAll: { orgSlug: Schema.String },
 	NotificationsGeneral: { orgSlug: Schema.String },
 	NotificationsThreads: { orgSlug: Schema.String },
@@ -128,6 +145,25 @@ const BotInstallQuery = Schema.Struct({
 	redirectUri: Schema.OptionFromOptional(Schema.String),
 	state: Schema.OptionFromOptional(Schema.String),
 }).pipe(Schema.encodeKeys({ botId: "bot_id", redirectUri: "redirect_uri" }))
+/** OAuth's snake_case parameters; the page checks them (a bad link is a page state, not a 404). */
+const OAuthAuthorizeQuery = Schema.Struct({
+	clientId: Schema.OptionFromOptional(Schema.String),
+	redirectUri: Schema.OptionFromOptional(Schema.String),
+	responseType: Schema.OptionFromOptional(Schema.String),
+	codeChallenge: Schema.OptionFromOptional(Schema.String),
+	codeChallengeMethod: Schema.OptionFromOptional(Schema.String),
+	scope: Schema.OptionFromOptional(Schema.String),
+	state: Schema.OptionFromOptional(Schema.String),
+	resource: Schema.OptionFromOptional(Schema.String),
+}).pipe(
+	Schema.encodeKeys({
+		clientId: "client_id",
+		redirectUri: "redirect_uri",
+		responseType: "response_type",
+		codeChallenge: "code_challenge",
+		codeChallengeMethod: "code_challenge_method",
+	}),
+)
 const OrgIdQuery = Schema.Struct({ orgId: Schema.OptionFromOptional(OrganizationId) })
 const OnboardingQuery = Schema.Struct({
 	orgId: Schema.OptionFromOptional(OrganizationId),
@@ -190,6 +226,12 @@ const routers = {
 		query(BotInstallQuery),
 		Route.mapTo(AppRoute.BotInstall),
 	),
+	OAuthAuthorize: pipe(
+		literal("oauth"),
+		slash(literal("authorize")),
+		query(OAuthAuthorizeQuery),
+		Route.mapTo(AppRoute.OAuthAuthorize),
+	),
 	Onboarding: pipe(literal("onboarding"), query(OnboardingQuery), Route.mapTo(AppRoute.Onboarding)),
 	OnboardingSetupOrganization: pipe(
 		literal("onboarding"),
@@ -217,6 +259,7 @@ const routers = {
 	ChannelSettingsConnect: pipe(channelSettings("connect"), Route.mapTo(AppRoute.ChannelSettingsConnect)),
 	MySettingsAppearance: pipe(orgPath("my-settings"), Route.mapTo(AppRoute.MySettingsAppearance)),
 	MySettingsProfile: pipe(orgPath("my-settings", "profile"), Route.mapTo(AppRoute.MySettingsProfile)),
+	MySettingsAgents: pipe(orgPath("my-settings", "agents"), Route.mapTo(AppRoute.MySettingsAgents)),
 	MySettingsLinkedAccounts: pipe(
 		orgPath("my-settings", "linked-accounts"),
 		query(LinkedAccountsCallbackQuery),
@@ -227,6 +270,7 @@ const routers = {
 		Route.mapTo(AppRoute.MySettingsNotifications),
 	),
 	MySettingsDesktop: pipe(orgPath("my-settings", "desktop"), Route.mapTo(AppRoute.MySettingsDesktop)),
+	MySettingsKeybinds: pipe(orgPath("my-settings", "keybinds"), Route.mapTo(AppRoute.MySettingsKeybinds)),
 	NotificationsAll: pipe(orgPath("notifications"), Route.mapTo(AppRoute.NotificationsAll)),
 	NotificationsGeneral: pipe(
 		orgPath("notifications", "general"),
@@ -340,6 +384,7 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.Join,
 		routers.Invite,
 		routers.BotInstall,
+		routers.OAuthAuthorize,
 		routers.Onboarding,
 		routers.OnboardingSetupOrganization,
 		routers.SelectOrganization,
@@ -354,9 +399,11 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.ChannelSettingsConnect,
 		routers.MySettingsAppearance,
 		routers.MySettingsProfile,
+		routers.MySettingsAgents,
 		routers.MySettingsLinkedAccounts,
 		routers.MySettingsNotifications,
 		routers.MySettingsDesktop,
+		routers.MySettingsKeybinds,
 		routers.NotificationsAll,
 		routers.NotificationsGeneral,
 		routers.NotificationsThreads,
@@ -425,6 +472,7 @@ export const isPublicRoute = AppRoute.isAnyOf([
 	"Join",
 	"Invite",
 	"BotInstall",
+	"OAuthAuthorize",
 	"NotFound",
 ])
 
@@ -449,9 +497,11 @@ export const isSettingsRoute = AppRoute.isAnyOf([
 export const isMySettingsRoute = AppRoute.isAnyOf([
 	"MySettingsAppearance",
 	"MySettingsProfile",
+	"MySettingsAgents",
 	"MySettingsLinkedAccounts",
 	"MySettingsNotifications",
 	"MySettingsDesktop",
+	"MySettingsKeybinds",
 ])
 
 /** `/$orgSlug/notifications/*`. */
@@ -533,6 +583,7 @@ export const titleOf = (route: AppRoute): string => {
 			Join: () => "Join",
 			Invite: () => "Invitation",
 			BotInstall: () => "Install an app",
+			OAuthAuthorize: () => "Connect an agent",
 			Onboarding: () => "Welcome",
 			OnboardingSetupOrganization: () => "Welcome",
 			SelectOrganization: () => "Select a workspace",
@@ -560,19 +611,24 @@ export const onboardingHref = (orgId: OrganizationId | null, step: string): stri
 export const signInHref = (returnTo: string): string =>
 	hrefOf(AppRoute.SignIn({ redirectUrl: Option.some(returnTo) }))
 
-/** An organization's home, or its slug setup step while it has no slug yet. */
-export const organizationRoute = (organization: {
-	readonly id: OrganizationId
-	readonly slug: string | null
-}): AppRoute =>
+/**
+ * Where entering an organization lands, or its slug setup step while it has no slug yet. On a phone
+ * that is the channel list (the Chats tab; the tab bar has no Home), elsewhere the org home.
+ */
+export const organizationRoute = (
+	organization: { readonly id: OrganizationId; readonly slug: string | null },
+	options: { readonly isMobile: boolean } = { isMobile: false },
+): AppRoute =>
 	organization.slug
-		? AppRoute.OrgHome({ orgSlug: organization.slug })
+		? options.isMobile
+			? AppRoute.ChatIndex({ orgSlug: organization.slug })
+			: AppRoute.OrgHome({ orgSlug: organization.slug })
 		: AppRoute.OnboardingSetupOrganization({ orgId: Option.some(organization.id) })
 
-export const organizationHref = (organization: {
-	readonly id: OrganizationId
-	readonly slug: string | null
-}): string => hrefOf(organizationRoute(organization))
+export const organizationHref = (
+	organization: { readonly id: OrganizationId; readonly slug: string | null },
+	options?: { readonly isMobile: boolean },
+): string => hrefOf(organizationRoute(organization, options))
 
 /** A channel scrolled to one message (`?messageId=`, read by the channel page, not the route). */
 export const chatMessageHref = (orgSlug: string, channelId: ChannelId, messageId: string): string =>

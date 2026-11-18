@@ -1,4 +1,5 @@
-import { ChannelIcon, ChannelId } from "@hazel/schema"
+import { ChannelIcon, ChannelId, CustomerAccountId, OrganizationId } from "@hazel/schema"
+import { Popover as PopoverControl } from "@foldkit/ui"
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { NotValidated, validate } from "foldkit/fieldValidation"
@@ -8,11 +9,12 @@ import { catchCommon, errorToastOf, successToast } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
 import type { RouteOf } from "../../../route"
 import * as Interaction from "../../../ui/aria/interaction"
-import type { PageReturn, PageSubscriptionInput } from "../../contract"
+import * as Popover from "../../../ui/popover"
+import type { PageReturn, PageSubscriptionInput, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { channelNameRules } from "../name-rules"
 import { Message } from "./message"
-import { canSave, type Form, type Model, saveButtonTarget, Submission } from "./model"
+import { CUSTOMER_POPOVER_ID, canSave, type Form, type Model, saveButtonTarget, Submission } from "./model"
 
 type Return = PageReturn<Model, Message>
 
@@ -35,10 +37,49 @@ export const UpdateChannel = Command.define("UpdateChannel", {
 		),
 })
 
+/** Link the channel to a customer (a link to another customer moves). */
+export const LinkChannelCustomer = Command.define("LinkChannelCustomer", {
+	args: { organizationId: OrganizationId, channelId: ChannelId, accountId: CustomerAccountId },
+	messages: [Message.SucceededCustomerLink, Message.FailedCustomerLink],
+	execute: (args) =>
+		HazelRpc.use((rpc) => rpc("customers.channel.link", args)).pipe(
+			Effect.as(Message.SucceededCustomerLink()),
+			Effect.catchTags({
+				CustomersNotFoundError: () =>
+					Effect.succeed(Message.FailedCustomerLink({ unlinking: false, reason: "NotFound" })),
+				CustomersInvalidRequestError: () =>
+					Effect.succeed(Message.FailedCustomerLink({ unlinking: false, reason: "NotLinkable" })),
+			}),
+			catchCommon((reason) => Message.FailedCustomerLink({ unlinking: false, reason })),
+		),
+})
+
+export const UnlinkChannelCustomer = Command.define("UnlinkChannelCustomer", {
+	args: { organizationId: OrganizationId, channelId: ChannelId },
+	messages: [Message.SucceededCustomerLink, Message.FailedCustomerLink],
+	execute: (args) =>
+		HazelRpc.use((rpc) => rpc("customers.channel.unlink", args)).pipe(
+			Effect.as(Message.SucceededCustomerLink()),
+			Effect.catchTag("CustomersNotFoundError", () =>
+				Effect.succeed(Message.FailedCustomerLink({ unlinking: true, reason: "NotFound" })),
+			),
+			catchCommon((reason) => Message.FailedCustomerLink({ unlinking: true, reason })),
+		),
+})
+
 // INIT
 
 export const init = (route: RouteOf<"ChannelSettingsOverview">): Return => ({
-	model: { channelId: route.channelId, form: null, interaction: Interaction.init() },
+	model: {
+		channelId: route.channelId,
+		form: null,
+		interaction: Interaction.init(),
+		customer: null,
+		customers: null,
+		customerPopover: Popover.init(CUSTOMER_POPOVER_ID),
+		customerSearch: "",
+		customerLinking: "Idle",
+	},
 })
 
 // UPDATE
@@ -68,7 +109,17 @@ const submit = (model: Model): Return => {
 	}
 }
 
-export const update = (model: Model, message: Message): Return =>
+const closePicker = (model: Model): Return => {
+	const closed = PopoverControl.close(model.customerPopover)
+	return {
+		model: modifyFields(model, { customerSearch: () => "", customerPopover: () => closed.model }),
+		commands: Command.mapMessages(closed.commands ?? [], (child) =>
+			Message.GotCustomerPopoverMessage({ message: child }),
+		),
+	}
+}
+
+export const update = (model: Model, message: Message, shared?: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedChannel: ({ channel }) => {
 			// `{channel && <ChannelSettingsForm key={channel.id} />}`: a loaded form keeps its state.
@@ -122,4 +173,60 @@ export const update = (model: Model, message: Message): Return =>
 		}),
 		GotInteractionMessage: ({ message: interactionMessage }) =>
 			interaction.fold(model, interactionMessage),
+
+		// The projection landing ends the pending state: the change is what the server now holds.
+		UpdatedCustomer: ({ customer }) => ({
+			model: modifyFields(model, { customer: () => customer, customerLinking: () => "Idle" }),
+		}),
+		UpdatedCustomers: ({ customers }) => ({ model: modifyFields(model, { customers: () => customers }) }),
+		GotCustomerPopoverMessage: ({ message: popoverMessage }) => {
+			const result = Popover.update(model.customerPopover, popoverMessage)
+			return {
+				model: modifyFields(model, { customerPopover: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotCustomerPopoverMessage({ message: child }),
+				),
+			}
+		},
+		ChangedCustomerSearch: ({ value }) => ({
+			model: modifyFields(model, { customerSearch: () => value }),
+		}),
+		PressedLinkCustomer: ({ accountId }) => {
+			const closed = closePicker(model)
+			const organizationId = shared?.organization?.id
+			if (organizationId === undefined || accountId === model.customer?.accountId) return closed
+			return {
+				model: modifyFields(closed.model, { customerLinking: () => "Linking" }),
+				commands: [
+					...(closed.commands ?? []),
+					LinkChannelCustomer({ organizationId, channelId: model.channelId, accountId }),
+				],
+			}
+		},
+		PressedUnlinkCustomer: () => {
+			const organizationId = shared?.organization?.id
+			if (organizationId === undefined || model.customer === null) return { model }
+			return {
+				model: modifyFields(model, { customerLinking: () => "Unlinking" }),
+				commands: [UnlinkChannelCustomer({ organizationId, channelId: model.channelId })],
+			}
+		},
+		SucceededCustomerLink: () => ({ model }),
+		FailedCustomerLink: ({ unlinking, reason }) => ({
+			model: modifyFields(model, { customerLinking: () => "Idle" }),
+			outMessage: PageOutMessage.RequestedToast({
+				toast: errorToastOf(
+					failureMessage(reason, {
+						NotFound: {
+							title: unlinking ? "Couldn't unlink the customer" : "Couldn't link the customer",
+							description: "The customer or channel is no longer available.",
+						},
+						NotLinkable: {
+							title: "Couldn't link the customer",
+							description: "Threads and direct messages can't be linked to a customer.",
+						},
+					}),
+				),
+			}),
+		}),
 	})

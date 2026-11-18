@@ -2,6 +2,7 @@ import { Mount } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { cx } from "~/utils/cx"
 import { getEffectivePresenceStatus } from "~/utils/presence"
+import { IconDiscord, IconSlack } from "../icons"
 import { avatar } from "../ui/avatar"
 import { presenceDot } from "../ui/presence-dot"
 import {
@@ -12,10 +13,34 @@ import {
 	optionDomId,
 	PreventEditorBlur,
 } from "./composer"
+import type { MentionProvider } from "./composer"
 import { clampedActiveIndex, type MentionOption, mentionOptions } from "./update"
 import { commandTriggerContent, emojiTriggerContent } from "./trigger-views"
 
 /** `EditorAutocomplete` with the trigger lists (`MentionTrigger`, `CommandTrigger`, `EmojiTrigger`). */
+
+/** The platform's mark in the avatar's corner, cut out like the presence dot. */
+const providerBadge = <M>(h: HtmlBuilder<M>, provider: MentionProvider): Html => {
+	const label = provider === "discord" ? "Discord" : "Slack"
+	return h.span(
+		[
+			h.Class(
+				cx(
+					"flex size-3 translate-x-1/4 translate-y-1/4 items-center justify-center rounded-full ring-2 ring-bg",
+					provider === "discord" ? "bg-discord text-white" : "bg-bg",
+				),
+			),
+			h.Attribute("role", "img"),
+			h.Attribute("aria-label", label),
+			h.Attribute("title", label),
+		],
+		[
+			provider === "discord"
+				? IconDiscord(h, { className: "size-2" })
+				: IconSlack(h, { className: "size-2" }),
+		],
+	)
+}
 
 /** `MentionItem` from `triggers/mention-trigger.tsx`. */
 const mentionItem = <M>(h: HtmlBuilder<M>, option: MentionOption): Html =>
@@ -28,9 +53,16 @@ const mentionItem = <M>(h: HtmlBuilder<M>, option: MentionOption): Html =>
 						src: option.avatarUrl,
 						seed: option.displayName,
 						alt: option.displayName,
-						...(option.status
-							? { badge: presenceDot(h, getEffectivePresenceStatus({ status: option.status })) }
-							: {}),
+						...(option.provider
+							? { badge: providerBadge(h, option.provider) }
+							: option.status
+								? {
+										badge: presenceDot(
+											h,
+											getEffectivePresenceStatus({ status: option.status }),
+										),
+									}
+								: {}),
 					})
 				: h.div(
 						[

@@ -14,6 +14,7 @@ import * as Cloudflare from "@alchemy.run/cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
 import { Cause, Effect, Exit, Layer, Scope } from "effect"
 import { FetchHttpClient, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { ApnsClient } from "../../services/apns"
 import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
 import { HtmlRenders } from "../../services/html-renders"
@@ -76,6 +77,9 @@ export const activateObject = (kind: ObjectKind) =>
 						Layer.provide(Layer.mergeAll(workerEnvLayer(env), htmlRenderStoreLive(env))),
 						Layer.orDie,
 					),
+					ApnsClient.layer.pipe(
+						Layer.provide(Layer.mergeAll(FetchHttpClient.layer, workerEnvLayer(env))),
+					),
 				),
 			}).pipe(
 				Effect.provideService(Scope.Scope, instanceScope),
@@ -86,8 +90,10 @@ export const activateObject = (kind: ObjectKind) =>
 			const fetch = Effect.gen(function* () {
 				const request = yield* HttpServerRequest.HttpServerRequest
 				// Reaching here means the instance is built: a warm-up needs nothing else.
-				if (request.headers[WARM_HEADER] !== undefined)
+				if (request.headers[WARM_HEADER] !== undefined) {
+					yield* object.warm
 					return HttpServerResponse.empty({ status: 204 })
+				}
 				if (request.headers.upgrade?.toLowerCase() !== "websocket") {
 					return HttpServerResponse.text("Expected a WebSocket upgrade", { status: 426 })
 				}

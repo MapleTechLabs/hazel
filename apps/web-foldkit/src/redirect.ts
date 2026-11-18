@@ -33,7 +33,11 @@ export interface RootMembership {
 }
 
 /** `_app/index.tsx`: where `/` sends a signed-in user once their membership is known. */
-export const rootRedirect = (user: CurrentUser, membership: Option.Option<RootMembership>): AppRoute => {
+export const rootRedirect = (
+	user: CurrentUser,
+	membership: Option.Option<RootMembership>,
+	options: { readonly isMobile: boolean } = { isMobile: false },
+): AppRoute => {
 	if (!user.isOnboarded)
 		return AppRoute.Onboarding({
 			orgId: Option.map(membership, ({ organizationId }) => organizationId),
@@ -41,6 +45,6 @@ export const rootRedirect = (user: CurrentUser, membership: Option.Option<RootMe
 		})
 	return Option.match(membership, {
 		onNone: () => AppRoute.SelectOrganization(),
-		onSome: ({ organizationId, slug }) => organizationRoute({ id: organizationId, slug }),
+		onSome: ({ organizationId, slug }) => organizationRoute({ id: organizationId, slug }, options),
 	})
 }

@@ -4,7 +4,7 @@
  */
 import type { OrganizationId, UserId } from "@hazel/schema"
 import { makeFakeSocket, type FakeSocket } from "@hazel/sync-do/testing"
-import { Cause, Effect, Exit, type Scope } from "effect"
+import { Cause, Effect, Exit, type Scope, Tracer } from "effect"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { decodeExit, rpcFor } from "../../rpc/dispatch"
 import { orgTarget, userTarget } from "./kinds"
@@ -226,6 +226,46 @@ describe("object runtime", () => {
 				expect(pretty).toContain("Undecodable message.create request")
 				// The request's values never reach the message (it is logged).
 				expect(pretty).not.toContain("42")
+			}),
+		))
+
+	it("an instance's first call is marked cold on its entry span, and no later one", () =>
+		run(
+			Effect.gen(function* () {
+				const objects = yield* makeTestObjects
+				const spans: Array<Tracer.NativeSpan> = []
+				const traced = Effect.provideService(
+					Tracer.Tracer,
+					Tracer.make({
+						span: (span) => {
+							const recorded = new Tracer.NativeSpan(span)
+							spans.push(recorded)
+							return recorded
+						},
+					}),
+				)
+				const userId = uuid()
+				const user = yield* objects.get(userTarget(userId))
+				yield* traced(user.warm)
+				yield* traced(user.alarm)
+				// Evicted and woken: a new instance, in the same isolate.
+				const woken = yield* objects.reactivate(userTarget(userId))
+				yield* traced(woken.alarm)
+				yield* traced(woken.warm)
+
+				const entries = spans.filter((span) => ["SyncDO.warm", "ObjectRpc.alarm"].includes(span.name))
+				expect(entries.map((span) => [span.name, span.attributes.get("object.cold")])).toEqual([
+					["SyncDO.warm", true],
+					["ObjectRpc.alarm", false],
+					["ObjectRpc.alarm", true],
+					["SyncDO.warm", false],
+				])
+				// One isolate: whatever its first event was, it was not one of the later ones.
+				expect(entries.slice(1).map((span) => span.attributes.get("isolate.cold"))).toEqual([
+					false,
+					false,
+					false,
+				])
 			}),
 		))
 })

@@ -1,6 +1,7 @@
 import { Array, Effect, Option, Queue, Schema, Stream } from "effect"
 import { Mount, Submodel } from "foldkit"
 import {
+	type Attribute,
 	type ChildAttribute,
 	childAttributes,
 	type Html,
@@ -26,6 +27,8 @@ import {
 } from "~/components/ui/menu.styles"
 import { popoverContentBase, popoverInnerClassName } from "~/components/ui/popover.styles"
 import { IconCheck, IconChevronRight } from "../icons"
+import { type NativeMenuLook, nativeContextMenu, nativeIsland } from "../platform/native-island"
+import { playFeedback } from "../platform/feedback"
 import { dismissButton, focusScopeSentinel, openModalPopover, positionOverlay } from "./aria/overlay"
 import { Placement } from "./aria/placement"
 import { MOBILE_QUERY } from "./viewport"
@@ -41,6 +44,7 @@ import {
 	menuId,
 	popoverId,
 	rootItems,
+	nativeMenuItems,
 	submenuId,
 	triggerId,
 } from "./menu"
@@ -91,6 +95,8 @@ const PortalMenu = Mount.defineStream("PortalMenu", {
 				Effect.andThen(
 					Effect.acquireRelease(
 						Effect.sync(() => {
+							// A long-press's menu taps the finger as it opens, where the shell can.
+							if (isSheetOnPhone) playFeedback("impact")
 							// useMenuItem focuses an item in onHoverStart, synchronously, so the click that follows
 							// lands on a focused item and never focuses it with the mouse (Chrome keeps :focus-visible).
 							const onPointerOver = (event: Event) => {
@@ -237,6 +243,8 @@ export type ViewInputs = Readonly<{
 	header?: Html | (() => Html)
 	/** A `MenuItem`'s own className, by key. */
 	itemClassName?: (key: string) => string | undefined
+	/** How a native shell shows the menu (`platform/native-island.ts`); a pull-down by default. */
+	native?: NativeMenuLook
 }>
 
 /**
@@ -277,12 +285,48 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 				? Option.some(Message.PressedTriggerKey({ key, entries: viewInputs.entries }))
 				: Option.none(),
 		),
+		// A system menu on iOS, opened from this trigger as drawn, where its entries are all words;
+		// its choice is a `change` here.
+		...Option.match(nativeMenuItems(model, viewInputs.entries, viewInputs.native), {
+			onNone: () => [],
+			onSome: (items) => [
+				...nativeIsland(h, "menu", {
+					items,
+					presentation: viewInputs.native?.presentation,
+					title: viewInputs.native?.title,
+					subtitle: viewInputs.native?.subtitle,
+				}),
+				h.OnChange((key) => Message.ChoseFromNativeMenu({ key, entries: viewInputs.entries })),
+			],
+		}),
 	])
 	return viewInputs.toTrigger(
 		triggerAttributes,
 		model.popup._tag === "Open" ? overlay(model, model.popup, viewInputs, h) : h.empty,
 	)
 })
+
+/**
+ * A long press on the element (a row) opens this menu's `entries` as the system's context menu,
+ * where the shell has one (iOS): the same menu a "⋯" trigger opens, so a choice comes back as the
+ * same `ChoseFromNativeMenu`. Nothing where the entries are not all words, and nothing in a browser.
+ */
+export const longPressMenu = <ParentMessage>(
+	h: HtmlBuilder<ParentMessage>,
+	options: Readonly<{
+		menu: Model
+		entries: ReadonlyArray<Entry>
+		native?: NativeMenuLook
+		toParentMessage: (message: Message) => ParentMessage
+	}>,
+): ReadonlyArray<Attribute<ParentMessage>> =>
+	Option.match(nativeMenuItems(options.menu, options.entries, options.native), {
+		onNone: () => [],
+		onSome: (items) =>
+			nativeContextMenu(h, { items }, (key) =>
+				options.toParentMessage(Message.ChoseFromNativeMenu({ key, entries: options.entries })),
+			),
+	})
 
 /** `ContextMenu` + `ContextMenuTrigger` + `ContextMenuContent`; init the Model with `anchor: "Pointer"`. */
 export const contextMenuView = Submodel.defineView<Model, Message, ViewInputs>((model, viewInputs, h) => {

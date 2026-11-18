@@ -1,6 +1,34 @@
 {
-	"migration": "0003_chat_sync_installations",
+	"migration": "0005_agent_access",
 	"entities": [
+		{
+			"kind": "table",
+			"name": "agent_auth_codes",
+			"primaryKey": {
+				"columns": ["codeHash"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "agent_clients",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "agent_grants",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "agent_tokens",
+			"primaryKey": {
+				"columns": ["tokenHash"]
+			}
+		},
 		{
 			"kind": "table",
 			"name": "auth_credentials",
@@ -127,6 +155,13 @@
 		},
 		{
 			"kind": "table",
+			"name": "push_device_tokens",
+			"primaryKey": {
+				"columns": ["token"]
+			}
+		},
+		{
+			"kind": "table",
 			"name": "users",
 			"primaryKey": {
 				"columns": ["id"]
@@ -145,6 +180,267 @@
 			"primaryKey": {
 				"columns": ["namespace", "attempt_id"]
 			}
+		},
+		{
+			"kind": "column",
+			"table": "agent_auth_codes",
+			"name": "codeHash",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_auth_codes",
+			"name": "clientId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_auth_codes",
+			"name": "userId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_auth_codes",
+			"name": "redirectUri",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_auth_codes",
+			"name": "codeChallenge",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_auth_codes",
+			"name": "scopes",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_auth_codes",
+			"name": "expiresAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_auth_codes",
+			"name": "redeemedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_auth_codes",
+			"name": "createdAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "agent_clients",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "agent_clients",
+			"name": "clientName",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_clients",
+			"name": "redirectUris",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_clients",
+			"name": "clientUri",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_clients",
+			"name": "logoUri",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_clients",
+			"name": "createdAt",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "agent_grants",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "agent_grants",
+			"name": "userId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_grants",
+			"name": "kind",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_grants",
+			"name": "clientId",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_grants",
+			"name": "name",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_grants",
+			"name": "scopes",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_grants",
+			"name": "createdAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "agent_grants",
+			"name": "lastUsedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_grants",
+			"name": "revokedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_tokens",
+			"name": "tokenHash",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_tokens",
+			"name": "grantId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_tokens",
+			"name": "kind",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_tokens",
+			"name": "expiresAt",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "agent_tokens",
+			"name": "createdAt",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
 		},
 		{
 			"kind": "column",
@@ -1741,6 +2037,33 @@
 		},
 		{
 			"kind": "column",
+			"table": "push_device_tokens",
+			"name": "token",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "push_device_tokens",
+			"name": "userId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "push_device_tokens",
+			"name": "updatedAt",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
 			"table": "users",
 			"name": "id",
 			"position": 0,
@@ -1954,6 +2277,20 @@
 			"type": "text",
 			"notNull": true,
 			"default": null
+		},
+		{
+			"kind": "index",
+			"table": "agent_grants",
+			"name": "agent_grants_user_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "agent_tokens",
+			"name": "agent_tokens_grant_idx",
+			"unique": false,
+			"columns": ["\"grantId\""]
 		},
 		{
 			"kind": "index",
@@ -2234,6 +2571,13 @@
 			"name": "organization_invitations_token_hash_idx",
 			"unique": true,
 			"columns": ["\"tokenHash\""]
+		},
+		{
+			"kind": "index",
+			"table": "push_device_tokens",
+			"name": "push_device_tokens_user_id_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
 		},
 		{
 			"kind": "index",

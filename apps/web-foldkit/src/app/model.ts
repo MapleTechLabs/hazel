@@ -12,6 +12,9 @@ import { PageSlot } from "../page/registry"
 import { AppRoute, orgSectionOf, orgSlugOf } from "../route"
 import { type Auth, CurrentUser, Member, Organization } from "../session"
 import { SoundSettings } from "../notification-sound"
+import { appKeymap } from "~/lib/keybindings/app-keymap"
+import { Platform as KeyboardPlatform } from "~/lib/keybindings/key-combo"
+import { Overrides } from "~/lib/keybindings/keymap"
 import * as Platform from "../platform"
 import * as Updates from "../platform/updates"
 import * as Shell from "../shell/model"
@@ -86,6 +89,10 @@ export const Model = Schema.Struct({
 	systemTheme: ResolvedTheme,
 	/** `notificationSoundSettingsAtom`, stored like legacy. */
 	soundSettings: SoundSettings,
+	/** The user's keybinding changes (`keybindings.ts`), stored per device. */
+	keybindingOverrides: Overrides,
+	/** The keyboard's platform: what `Mod` means, and how keys are labeled. */
+	keyboardPlatform: KeyboardPlatform,
 	/** When this app load started (from Flags), for the notification sinks. */
 	sessionStartMs: Schema.Number,
 	page: Schema.NullOr(PageSlot),
@@ -141,7 +148,22 @@ export const memberOf = (model: Model): Member | null =>
 		),
 	)
 
-export const sharedOf = (model: Model): Shared => ({
+/**
+ * Per Model: the Model never changes in place, and every page Subscription reads the page host on
+ * every Message (hundreds of reads of the same Model, each resolving the keymap).
+ */
+const sharedCache = new WeakMap<Model, Shared>()
+const pageHostCache = new WeakMap<Model, PageHost>()
+
+export const sharedOf = (model: Model): Shared => {
+	const cached = sharedCache.get(model)
+	if (cached !== undefined) return cached
+	const shared = computeShared(model)
+	sharedCache.set(model, shared)
+	return shared
+}
+
+const computeShared = (model: Model): Shared => ({
 	auth: authOf(model.session),
 	orgSlug: orgSlugOf(model.route) ?? null,
 	currentUser: currentUserOf(model),
@@ -151,11 +173,20 @@ export const sharedOf = (model: Model): Shared => ({
 	isMobile: model.isMobile,
 	theme: { ...model.themePreference, resolved: resolvedThemeOf(model) },
 	soundSettings: model.soundSettings,
+	keys: appKeymap.resolve(model.keybindingOverrides, model.keyboardPlatform),
+	keybindingOverrides: model.keybindingOverrides,
+	keyboardPlatform: model.keyboardPlatform,
 	desktopUpdate: model.desktopUpdate,
 	isOverlayOpen: model.modal.current !== null || model.commandPalette.isOpen,
 })
 
-export const pageHostOf = (model: Model): PageHost => ({ page: model.page, shared: sharedOf(model) })
+export const pageHostOf = (model: Model): PageHost => {
+	const cached = pageHostCache.get(model)
+	if (cached !== undefined) return cached
+	const host = { page: model.page, shared: sharedOf(model) }
+	pageHostCache.set(model, host)
+	return host
+}
 
 export const shellContextOf = (model: Model): ShellUpdateContext => ({
 	orgSlug: orgSlugOf(model.route) ?? null,

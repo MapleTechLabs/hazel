@@ -1,7 +1,6 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconCheck, IconCube, IconDownload } from "../../../icons"
-import { hasUpdater, isDesktop } from "../../../platform/desktop"
 import * as Updates from "../../../platform/updates"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
@@ -244,8 +243,9 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
 		[
 			pageHeader(h, "Desktop", "Settings for the desktop application."),
-			// Autostart is a Tauri plugin: the native app (an updater without Tauri) has none yet.
-			...(!hasUpdater || isDesktop
+			// Autostart is a Tauri plugin: the native app (an updater without Tauri) has none yet,
+			// and a browser that opens this page directly has neither.
+			...(model.hasAutostart
 				? [
 						h.div(
 							[h.Class("flex flex-col gap-5")],
@@ -292,7 +292,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 						),
 					]
 				: []),
-			...(hasUpdater ? appUpdates(h, model, shared.desktopUpdate) : []),
+			...(model.hasUpdates ? appUpdates(h, model, shared.desktopUpdate) : []),
 		],
 	),
 )

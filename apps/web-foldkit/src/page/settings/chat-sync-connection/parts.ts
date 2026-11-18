@@ -12,6 +12,7 @@ import {
 	type SyncDirection,
 	type WebhookPermission,
 } from "./model"
+import { heading } from "../../../ui/heading"
 
 /** A heroicons-style outline `<svg>` with one path, as the legacy page inlines them. */
 export const outlineIcon = <M>(
@@ -213,7 +214,7 @@ export const aboutCard = <M>(h: HtmlBuilder<M>, provider: ChatSyncProvider): Htm
 				[
 					h.div(
 						[h.Class("border-border border-b bg-bg-muted/30 px-5 py-3")],
-						[h.h3([h.Class("font-semibold text-fg text-sm")], ["About Chat Sync"])],
+						[heading(h, { variant: "subsection" }, ["About Chat Sync"])],
 					),
 					h.div(
 						[h.Class("p-5")],

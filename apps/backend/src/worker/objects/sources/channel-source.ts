@@ -49,12 +49,27 @@ const pins = toViewers(schema.pinnedMessagesTable, false)
 const attachments = toViewers(schema.attachmentsTable, true)
 const messageLinks = toViewers(schema.chatSyncMessageLinksTable, true)
 
+/**
+ * Agent marks go only to viewers of the author's organization: in a Connect channel, viewers from
+ * the other organizations see the message without it.
+ */
+const agentMarks = {
+	table: schema.messageAgentMarksTable,
+	visible: (p, $) => [
+		SQLite.sql
+			.cond`EXISTS (SELECT 1 FROM "channel_viewers" v WHERE v."userId" = ${p.userId} AND v."organizationId" = ${$.organizationId!})`,
+	],
+	dependsOn: ["channel_viewers"],
+	affectedPrincipals: userIdsOf,
+} satisfies SyncTableSpec<SyncPrincipal>
+
 export const channelSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = [
 	messages,
 	reactions,
 	pins,
 	attachments,
 	messageLinks,
+	agentMarks,
 	toViewers(schema.typingIndicatorsTable, false),
 ]
 
@@ -64,6 +79,7 @@ const dependents = [
 	{ spec: pins, column: "messageId" },
 	{ spec: attachments, column: "messageId" },
 	{ spec: messageLinks, column: "hazelMessageId" },
+	{ spec: agentMarks, column: "id" },
 ] as const
 
 /** Strictly older than `cursor` in `(createdAt, id)` order. */

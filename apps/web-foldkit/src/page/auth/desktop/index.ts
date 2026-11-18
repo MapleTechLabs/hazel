@@ -62,7 +62,7 @@ export const DescribeAttempt = Command.define("DescribeAttempt", {
 		),
 })
 
-/** Authorizes, then opens the app's link (`hazel://…`); the OS hands it to the desktop app. */
+/** Authorizes, then opens the app's callback link (`com.hazel.app://…`, `com.hazel.native://…`); the OS hands it to the desktop app. */
 export const AuthorizeAttempt = Command.define("AuthorizeAttempt", {
 	args: { attemptId: Schema.String },
 	messages: [Message.AuthorizedAttempt, Message.FailedAuthorize],

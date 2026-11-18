@@ -1,7 +1,7 @@
 /** Discord's chat-sync facts: limits, mention syntax, and its webhook identity in link settings. */
 import { ChatSyncChannelLink } from "@hazel/domain/models"
 import { Option, Schema } from "effect"
-import { isWebhookStrategyEnabled, outboundIdentityOf } from "../../chat-sync-settings"
+import { outboundIdentityOf, postsAsEachAuthor } from "../../chat-sync-settings"
 import type { ChatSyncProviderDefinition } from "../../provider"
 
 type Settings = Record<string, unknown> | null | undefined
@@ -37,8 +37,10 @@ export const discord: ChatSyncProviderDefinition = {
 	isOwnEcho: (settings: Settings, externalWebhookId) => {
 		if (externalWebhookId === null) return false
 		const identity = outboundIdentityOf(settings)
-		if (!isWebhookStrategyEnabled(identity)) return false
+		if (!postsAsEachAuthor(identity)) return false
 		const config = discordWebhookConfigOf(identity)
 		return Option.isSome(config) && config.value.webhookId === externalWebhookId
 	},
+	// GET /channels/:id/messages answers at most 100, and its bucket allows about 5 calls per 5s.
+	history: { maxMessages: 500, pageSize: 100, pageDelayMs: 1_000 },
 }

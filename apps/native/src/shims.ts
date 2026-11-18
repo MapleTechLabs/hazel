@@ -19,10 +19,30 @@ export type ShimEnv = {
 	 * reboots the page. @default the in-memory history moves, the app keeps running
 	 */
 	loadDocument?: (href: string) => void
+	/** Keeps `localStorage` between launches. @default it starts empty every time */
+	storage?: PersistedStorage
+	/** The history is about to move from `from` to `to` (full URLs), before the app hears of it. */
+	onNavigate?: (from: string, to: string) => void
 }
 
-class MemoryStorage {
-	private items = new Map<string, string>()
+/** Where `localStorage` keeps its entries between launches; absent, it lasts as long as the runtime. */
+export type PersistedStorage = {
+	/** The entries saved last time, if any. */
+	readonly load: () => Record<string, string> | undefined
+	/** Saves every entry, replacing what was saved. */
+	readonly save: (entries: Record<string, string>) => void
+}
+
+/** How long writes gather before one save: the app often sets several keys in a row. */
+const STORAGE_SAVE_DELAY_MS = 200
+
+/** `Storage` in memory, saved through `persisted` (in batches, and on `flush`) when given. */
+export class MemoryStorage {
+	private readonly items: Map<string, string>
+	private saveTimer: ReturnType<typeof setTimeout> | undefined
+	constructor(private readonly persisted?: PersistedStorage) {
+		this.items = new Map(Object.entries(persisted?.load() ?? {}))
+	}
 	get length() {
 		return this.items.size
 	}
@@ -33,13 +53,29 @@ class MemoryStorage {
 		return this.items.get(key) ?? null
 	}
 	setItem(key: string, value: string) {
-		this.items.set(key, String(value))
+		const text = String(value)
+		if (this.items.get(key) === text) return
+		this.items.set(key, text)
+		this.changed()
 	}
 	removeItem(key: string) {
-		this.items.delete(key)
+		if (this.items.delete(key)) this.changed()
 	}
 	clear() {
+		if (this.items.size === 0) return
 		this.items.clear()
+		this.changed()
+	}
+	/** Saves now what is waiting to be saved (before the runtime is replaced or quits). */
+	flush() {
+		if (this.saveTimer === undefined) return
+		clearTimeout(this.saveTimer)
+		this.saveTimer = undefined
+		this.persisted?.save(Object.fromEntries(this.items))
+	}
+	private changed() {
+		if (this.persisted === undefined || this.saveTimer !== undefined) return
+		this.saveTimer = setTimeout(() => this.flush(), STORAGE_SAVE_DELAY_MS)
 	}
 }
 
@@ -200,6 +236,20 @@ const element = () => {
 	})
 }
 
+/**
+ * What `navigator` says the system is, as a browser on it would: the app's shortcuts read ⌘ on a
+ * Mac and an iPhone, Ctrl elsewhere.
+ */
+export const navigatorPlatform = (
+	system: string,
+): { readonly platform: string; readonly userAgent: string } => {
+	if (system === "darwin") return { platform: "MacIntel", userAgent: "Hazel Native (Macintosh; Rune)" }
+	if (system === "ios")
+		return { platform: "iPhone", userAgent: "Hazel Native (iPhone; CPU iPhone OS like Mac OS X; Rune)" }
+	if (system === "win32") return { platform: "Win32", userAgent: "Hazel Native (Windows NT 10.0; Rune)" }
+	return { platform: "Linux x86_64", userAgent: "Hazel Native (X11; Linux x86_64; Rune)" }
+}
+
 /** `CSS.escape` (CSS Object Model): an identifier safe to put in a selector. */
 export const cssEscape = (value: string): string => {
 	let out = ""
@@ -232,6 +282,7 @@ export const installShims = (env: ShimEnv) => {
 		type === "scroll" && (options === true || (typeof options === "object" && options.capture === true))
 			? capturedScrolls
 			: windowTarget
+	const localStorage = new MemoryStorage(env.storage)
 	let url = new URL(env.url)
 	const entries: Array<string> = [url.href]
 	let index = 0
@@ -263,19 +314,27 @@ export const installShims = (env: ShimEnv) => {
 		},
 		assign: (next: string) => navigate(next, "push"),
 		replace: (next: string) => navigate(next, "replace"),
-		reload: () => env.loadDocument?.(url.href),
+		reload: () => loadDocument(url.href),
+	}
+	/** A full page load ends this runtime: what it stored is saved first. */
+	const loadDocument = (href: string) => {
+		if (env.loadDocument === undefined) return
+		localStorage.flush()
+		env.loadDocument(href)
 	}
 	/** In-app paths move the history (or load the page anew); another origin opens in the browser. */
 	const navigate = (next: string | URL, mode: "push" | "replace") => {
 		const target = URL.parse(String(next), url)
 		if (target !== null && target.origin !== url.origin) return openExternal(target, env.openUrl)
-		if (target !== null && env.loadDocument !== undefined) return env.loadDocument(target.href)
+		if (target !== null && env.loadDocument !== undefined) return loadDocument(target.href)
 		if (mode === "push") history.pushState(null, "", next)
 		else history.replaceState(null, "", next)
 	}
 	const navigateTo = (next: number) => {
 		index = Math.max(0, Math.min(entries.length - 1, next))
-		url = new URL(entries[index] ?? url.href)
+		const target = new URL(entries[index] ?? url.href)
+		if (target.href !== url.href) env.onNavigate?.(url.href, target.href)
+		url = target
 		windowTarget.dispatchEvent(Object.assign(new Event("popstate"), { state: null }))
 	}
 	const history = {
@@ -285,7 +344,9 @@ export const installShims = (env: ShimEnv) => {
 			return entries.length
 		},
 		pushState: (state: unknown, _title: string, next?: string | URL | null) => {
-			url = new URL(String(next ?? url.href), url)
+			const target = new URL(String(next ?? url.href), url)
+			if (target.href !== url.href) env.onNavigate?.(url.href, target.href)
+			url = target
 			entries.splice(index + 1, entries.length, url.href)
 			index = entries.length - 1
 			history.state = state
@@ -343,6 +404,8 @@ export const installShims = (env: ShimEnv) => {
 			getPropertyValue: (name: string) => rootStyle.get(name) ?? "",
 		},
 	})
+	// Whether the window is the key window: notifications wait until it is not.
+	let isWindowFocused = true
 	const document = Object.assign(new DomNode(), {
 		documentElement,
 		body: element(),
@@ -351,8 +414,21 @@ export const installShims = (env: ShimEnv) => {
 		visibilityState: "visible",
 		hidden: false,
 		readyState: "complete",
-		hasFocus: () => true,
-		createElement: () => element(),
+		hasFocus: () => isWindowFocused,
+		// A temporary `<a download>` the app clicks (an attachment's or image's download) opens its
+		// URL in the browser, which downloads it; a `blob:` one has nowhere to go and is dropped.
+		createElement: (tag: string) =>
+			tag.toLowerCase() === "a"
+				? Object.assign(element(), {
+						href: "",
+						download: "",
+						target: "",
+						click(this: { href: string }) {
+							const target = URL.parse(this.href, url)
+							if (target !== null) openExternal(target, env.openUrl)
+						},
+					})
+				: element(),
 		createElementNS: () => element(),
 		createTextNode: () => element(),
 		getElementById: () => null,
@@ -374,7 +450,7 @@ export const installShims = (env: ShimEnv) => {
 		document,
 		history,
 		matchMedia,
-		localStorage: new MemoryStorage(),
+		localStorage,
 		sessionStorage: new MemoryStorage(),
 		MutationObserver: InertObserver,
 		ResizeObserver: InertObserver,
@@ -431,8 +507,7 @@ export const installShims = (env: ShimEnv) => {
 		configurable: true,
 		value: {
 			...globalThis.navigator,
-			platform: "MacIntel",
-			userAgent: "Hazel Native (Macintosh; Rune)",
+			...navigatorPlatform(process.platform),
 			onLine: true,
 			language: "en-US",
 			languages: ["en-US"],
@@ -452,6 +527,12 @@ export const installShims = (env: ShimEnv) => {
 		}
 		windowTarget.dispatchEvent(new Event("resize"))
 	}
+	/** The window became the key window, or stopped being it: `focus` / `blur` on `window`. */
+	const setWindowFocus = (focused: boolean) => {
+		if (focused === isWindowFocused) return
+		isWindowFocused = focused
+		windowTarget.dispatchEvent(new Event(focused ? "focus" : "blur"))
+	}
 	/** Hears every change to `<html>`'s class or inline custom properties; returns how to stop. */
 	const onRootStyle = (listener: () => void) => {
 		rootStyleListeners.add(listener)
@@ -461,6 +542,9 @@ export const installShims = (env: ShimEnv) => {
 	}
 	return {
 		updateEnv,
+		setWindowFocus,
+		/** Saves `localStorage` now: the runtime is about to end. */
+		flushStorage: () => localStorage.flush(),
 		history,
 		location,
 		rootStyle: rootStyle as ReadonlyMap<string, string>,

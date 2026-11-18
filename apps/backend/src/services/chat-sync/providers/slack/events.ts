@@ -7,6 +7,7 @@
  * Every key is Slack's `event_id`, which a retried delivery keeps, so each event applies once.
  */
 import { Slack } from "@hazel/integrations"
+import * as SlackFormat from "@hazel/integrations/slack/format"
 import { ExternalChannelId, ExternalMessageId, ExternalThreadId, ExternalUserId } from "@hazel/schema"
 import { Effect, Option, Redacted } from "effect"
 import type { ChatSyncAttachment, ChatSyncMention } from "../../chat-sync-effects"
@@ -70,7 +71,7 @@ const MAX_MENTION_LOOKUPS = 10
 
 /** Names for the users a message mentions, so ones Hazel cannot map still read as names. */
 const mentionsOf = (text: string, lookupUser: SlackUserLookup) => {
-	const pattern = new RegExp(Slack.SLACK_USER_MENTION_PATTERN.source, "g")
+	const pattern = new RegExp(SlackFormat.SLACK_USER_MENTION_PATTERN.source, "g")
 	const ids = [...new Set([...text.matchAll(pattern)].map((match) => match[1]!))].slice(
 		0,
 		MAX_MENTION_LOOKUPS,
@@ -111,7 +112,7 @@ export const slackInbound = Effect.fn("SlackEvents.inbound")(function* (
 		case "MessagePosted": {
 			const { message } = event
 			if (isOwnOrBot(envelope, message) || message.user === null) return Option.none<ChatSyncInbound>()
-			const text = Slack.slackMrkdwnToMarkdown(message.text)
+			const text = SlackFormat.slackMrkdwnToMarkdown(message.text)
 			return Option.some<ChatSyncInbound>({
 				...base,
 				externalChannelId: ExternalChannelId.make(message.channel),
@@ -135,7 +136,7 @@ export const slackInbound = Effect.fn("SlackEvents.inbound")(function* (
 			if (event.previousMessage !== null && event.previousMessage.text === message.text) {
 				return Option.none<ChatSyncInbound>()
 			}
-			const text = Slack.slackMrkdwnToMarkdown(message.text)
+			const text = SlackFormat.slackMrkdwnToMarkdown(message.text)
 			return Option.some<ChatSyncInbound>({
 				...base,
 				externalChannelId: ExternalChannelId.make(event.channel),
@@ -183,6 +184,56 @@ export const slackInbound = Effect.fn("SlackEvents.inbound")(function* (
 		case "ChannelRenamed":
 			return Option.none<ChatSyncInbound>()
 	}
+})
+
+/** History subtypes a person wrote. */
+const HISTORY_SUBTYPES: ReadonlySet<string | null> = new Set([null, "file_share", "me_message"])
+/** A thread's replies can also be broadcast to the channel; it is still a reply. */
+const REPLY_SUBTYPES: ReadonlySet<string | null> = new Set([...HISTORY_SUBTYPES, "thread_broadcast"])
+
+/**
+ * A message from a channel's history (`conversations.history`), or from a thread's replies
+ * (`conversations.replies`, `fromReplies`), as the `MessageCreate` its live event would have been,
+ * sent at its own time (`sentAt`). `None` for a bot's or an app's (Hazel's own included) or a
+ * channel notice (joins, topic). The channel's history drops replies (a broadcast one too): they
+ * come with their thread's replies, after its parent, so the parent is in Hazel when they make the
+ * thread; the replies drop the parent, which the channel's history brought.
+ */
+export const slackHistoryInbound = Effect.fn("SlackEvents.historyInbound")(function* (
+	entry: Slack.SlackHistoryMessage,
+	externalWorkspaceId: string,
+	lookupUser: SlackUserLookup,
+	fromReplies = false,
+) {
+	const { message } = entry
+	const isReply = message.threadTs !== null && message.threadTs !== message.ts
+	if (isReply !== fromReplies) return Option.none<ChatSyncInbound>()
+	if (!(fromReplies ? REPLY_SUBTYPES : HISTORY_SUBTYPES).has(entry.subtype)) {
+		return Option.none<ChatSyncInbound>()
+	}
+	if (message.botId !== null || message.appId !== null || message.user === null) {
+		return Option.none<ChatSyncInbound>()
+	}
+	const sentAt = Math.round(Number(message.ts) * 1000)
+	const text = SlackFormat.slackMrkdwnToMarkdown(message.text)
+	return Option.some<ChatSyncInbound>({
+		provider: "slack",
+		externalWorkspaceIds: [externalWorkspaceId],
+		externalChannelId: ExternalChannelId.make(message.channel),
+		dedupeKey: `slack:history:${message.channel}:${message.ts}`,
+		author: yield* authorOf(message.user, lookupUser),
+		event: {
+			_tag: "MessageCreate",
+			externalMessageId: ExternalMessageId.make(message.ts),
+			externalWebhookId: null,
+			content: text,
+			externalReplyToMessageId: null,
+			attachments: attachmentsOf(message),
+			mentions: yield* mentionsOf(text, lookupUser),
+			sentAt: Number.isFinite(sentAt) ? sentAt : undefined,
+			...threadOf(message),
+		},
+	})
 })
 
 /** Whether the event ends the workspace's install (its bot token is dead). */

@@ -13,10 +13,12 @@ import {
 	FetchCurrentUser,
 	LoadExternal,
 	NavigateInternal,
+	RememberLastOrganization,
 	ReplaceUrl,
 	RetryCheckSession,
 	RetryFetchCurrentUser,
 	WarmAccessToken,
+	WarmSyncObjects,
 } from "./command"
 import { Message } from "./message"
 import { currentUserOf, sharedOf } from "./model"
@@ -88,11 +90,21 @@ describe("redirects", () => {
 		)
 	})
 
+	test("an app route asks for its objects to wake: the remembered user's, and the URL's channel", () => {
+		const channelId = "00000000-0000-4000-8000-0000000000c1"
+		const commands = bootReturn(`/hazel/chat/${channelId}`, { rememberedUser: ada }).commands ?? []
+		expect(commands.map(({ name, args }) => ({ name, args }))).toContainEqual({
+			name: WarmSyncObjects.name,
+			args: { userId: ada.id, channelId },
+		})
+	})
+
 	test("a public route asks only for the session", () => {
 		const names = (bootReturn("/sign-in").commands ?? []).map((command) => command.name)
 		expect(names).toContain("CheckSession")
 		expect(names).not.toContain("FetchCurrentUser")
 		expect(names).not.toContain("WarmAccessToken")
+		expect(names).not.toContain("WarmSyncObjects")
 	})
 
 	test("a confirmed session does not ask for user.me again while the boot one runs", () => {
@@ -314,6 +326,25 @@ describe("organization switch", () => {
 		expect(sharedOf(loaded).member).toBeNull()
 		const withRole = after(loaded, [Message.UpdatedMember({ organizationId: acmeOrg.id, member: owner })])
 		expect(sharedOf(withRole).member).toEqual(owner)
+	})
+
+	test("an organization that arrives is remembered for the next app start, once", () => {
+		const switched = after(signedIn("/hazel/settings/team"), [
+			Message.ChangedUrl({ url: urlOf("/acme/settings/team") }),
+		])
+		const loaded = update(
+			switched,
+			Message.UpdatedOrganization({ orgSlug: "acme", organization: acmeOrg }),
+		)
+		expect(loaded.commands?.map(({ name, args }) => ({ name, args }))).toContainEqual({
+			name: RememberLastOrganization.name,
+			args: { organizationId: acmeOrg.id },
+		})
+		const again = update(
+			loaded.model,
+			Message.UpdatedOrganization({ orgSlug: "acme", organization: acmeOrg }),
+		)
+		expect(again.commands?.map(({ name }) => name) ?? []).not.toContain(RememberLastOrganization.name)
 	})
 })
 

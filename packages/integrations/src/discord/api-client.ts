@@ -58,6 +58,49 @@ const DiscordMessageCreateResponse = Schema.Struct({
 	id: Schema.String,
 })
 
+const OptionalNullableString = Schema.optional(Schema.NullOr(Schema.String))
+
+const DiscordMessageUser = Schema.Struct({
+	id: Schema.String,
+	username: Schema.optional(Schema.String),
+	global_name: OptionalNullableString,
+	discriminator: Schema.optional(Schema.String),
+	avatar: OptionalNullableString,
+	bot: Schema.optional(Schema.Boolean),
+})
+
+/** A message as `GET /channels/:id/messages` answers it: only what chat sync reads. */
+export const DiscordChannelMessage = Schema.Struct({
+	id: Schema.String,
+	channel_id: Schema.String,
+	/** 0: default, 19: reply; the rest are system messages (joins, pins, boosts). */
+	type: Schema.Number,
+	content: Schema.String,
+	/** ISO 8601. */
+	timestamp: Schema.String,
+	author: DiscordMessageUser,
+	webhook_id: Schema.optional(Schema.String),
+	attachments: Schema.optional(
+		Schema.Array(
+			Schema.Struct({
+				id: Schema.String,
+				filename: Schema.String,
+				size: Schema.optional(Schema.Number),
+				url: Schema.String,
+			}),
+		),
+	),
+	mentions: Schema.optional(Schema.Array(DiscordMessageUser)),
+	message_reference: Schema.optional(
+		Schema.Struct({
+			message_id: Schema.optional(Schema.String),
+			channel_id: Schema.optional(Schema.String),
+		}),
+	),
+})
+
+export type DiscordChannelMessage = typeof DiscordChannelMessage.Type
+
 const DiscordErrorApiResponse = Schema.Struct({
 	message: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed("Unknown Discord error"))),
 	code: Schema.optional(Schema.Number),
@@ -234,6 +277,35 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 				}))
 		})
 
+		/** A channel's messages, newest first: at most `limit` (1-100), all older than `before`. */
+		const listMessages = Effect.fn("DiscordApiClient.listMessages")(function* (params: {
+			channelId: string
+			before?: string
+			limit: number
+			botToken: string
+		}) {
+			const query = new URLSearchParams({ limit: String(Math.max(1, Math.min(100, params.limit))) })
+			if (params.before !== undefined) query.set("before", params.before)
+			const response = yield* makeBotClient(params.botToken)
+				.get(`${DISCORD_API_BASE_URL}/channels/${params.channelId}/messages?${query.toString()}`)
+				.pipe(Effect.scoped, Effect.timeout(DEFAULT_TIMEOUT))
+
+			if (response.status >= 400) {
+				return yield* handleApiError(response)
+			}
+
+			return yield* response.json.pipe(
+				Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(DiscordChannelMessage))),
+				Effect.mapError(
+					(cause) =>
+						new DiscordApiError({
+							message: "Failed to parse Discord messages response",
+							cause,
+						}),
+				),
+			)
+		})
+
 		const createMessage = Effect.fn("DiscordApiClient.createMessage")(function* (params: {
 			channelId: string
 			content: string
@@ -322,9 +394,17 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 			}
 		})
 
+		/** A webhook URL aimed at a thread of the webhook's channel (`thread_id`). */
+		const inThread = (url: string, threadId: string | undefined) =>
+			threadId === undefined
+				? url
+				: `${url}${url.includes("?") ? "&" : "?"}thread_id=${encodeURIComponent(threadId)}`
+
 		const executeWebhookMessage = Effect.fn("DiscordApiClient.executeWebhookMessage")(function* (params: {
 			webhookId: string
 			webhookToken: string
+			/** Post into this thread of the webhook's channel. */
+			threadId?: string
 			content: string
 			replyToExternalMessageId?: string
 			username?: string
@@ -354,7 +434,10 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 
 			const response = yield* httpClient
 				.post(
-					`${DISCORD_API_BASE_URL}/webhooks/${params.webhookId}/${params.webhookToken}?wait=true`,
+					inThread(
+						`${DISCORD_API_BASE_URL}/webhooks/${params.webhookId}/${params.webhookToken}?wait=true`,
+						params.threadId,
+					),
 					{
 						body: HttpBody.text(JSON.stringify(payload), "application/json"),
 						headers: {
@@ -386,11 +469,15 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 			webhookId: string
 			webhookToken: string
 			webhookMessageId: string
+			threadId?: string
 			content: string
 		}) {
 			const response = yield* httpClient
 				.patch(
-					`${DISCORD_API_BASE_URL}/webhooks/${params.webhookId}/${params.webhookToken}/messages/${params.webhookMessageId}`,
+					inThread(
+						`${DISCORD_API_BASE_URL}/webhooks/${params.webhookId}/${params.webhookToken}/messages/${params.webhookMessageId}`,
+						params.threadId,
+					),
 					{
 						body: HttpBody.text(JSON.stringify({ content: params.content }), "application/json"),
 						headers: {
@@ -409,10 +496,14 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 			webhookId: string
 			webhookToken: string
 			webhookMessageId: string
+			threadId?: string
 		}) {
 			const response = yield* httpClient
 				.del(
-					`${DISCORD_API_BASE_URL}/webhooks/${params.webhookId}/${params.webhookToken}/messages/${params.webhookMessageId}`,
+					inThread(
+						`${DISCORD_API_BASE_URL}/webhooks/${params.webhookId}/${params.webhookToken}/messages/${params.webhookMessageId}`,
+						params.threadId,
+					),
 				)
 				.pipe(Effect.scoped, Effect.timeout(DEFAULT_TIMEOUT))
 
@@ -539,6 +630,7 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 			getAccountInfo,
 			listGuilds,
 			listGuildChannels,
+			listMessages,
 			createMessage,
 			updateMessage,
 			deleteMessage,

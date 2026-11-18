@@ -11,11 +11,13 @@ import type { BotId } from "@hazel/schema"
 import { type FakeStorage, makeFakeState, makeFakeStorage, sqliteClientLayer } from "@hazel/sync-do/testing"
 import { ConfigProvider, Context, Deferred, Effect, type Exit, Layer, Option, Scope } from "effect"
 import { Persistence } from "effect/persistence"
+import { ApnsClient, type ApnsNotification, type ApnsResult } from "../../services/apns"
 import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
 import { HtmlRenderStore, HtmlRenders } from "../../services/html-renders"
 import { InviteMailer } from "../../services/invite-mailer"
 import { ThreadNamer, type ThreadNamingContext } from "../../services/thread-namer"
+import type { ChatSyncInbound } from "../../services/chat-sync/chat-sync-inbound"
 import { type ChatSyncCall, makeRecordingChatSyncProviders } from "../../services/chat-sync/testing"
 import { makeRpcDispatcher, type RpcDispatcherShape } from "../../rpc/dispatch"
 import { objectHandlersLive } from "./handlers"
@@ -48,6 +50,11 @@ export type TestObject = ObjectRuntime & {
 export interface TestObjects {
 	/** The object for `target`, created (and migrated) on first use. */
 	readonly get: (target: ObjectTarget) => Effect.Effect<TestObject>
+	/**
+	 * Evicts `target` and wakes it: a new in-memory instance over the storage it already has, as
+	 * workerd builds one for the first request after an eviction.
+	 */
+	readonly reactivate: (target: ObjectTarget) => Effect.Effect<TestObject>
 	readonly directory: Context.Context<Directory>
 	/** Envelopes appended to each bot's gateway. */
 	readonly published: Array<{
@@ -74,6 +81,8 @@ export interface TestObjects {
 	readonly chatSyncCalls: Array<ChatSyncCall>
 	/** External channels new chat-sync links prepared (`chatSync.prepareLink`). */
 	readonly chatSyncPrepared: Array<string>
+	/** Each external channel's past messages, oldest first, for `chatSync.importHistory`. */
+	readonly chatSyncHistory: Map<string, ReadonlyArray<ChatSyncInbound>>
 	/** Make provider calls fail with `status` (retryable for 429/5xx), or succeed again (undefined). */
 	readonly setChatSyncFailure: (status: number | undefined) => void
 	/** What `ThreadNamer` was asked to name, in order. */
@@ -82,6 +91,11 @@ export interface TestObjects {
 	readonly setThreadName: (name: string) => void
 	/** The HTML render pages (`HtmlRenderStore`), by key. */
 	readonly bucket: Map<string, string>
+	/** What the objects sent APNs, in order. */
+	readonly pushes: Array<ApnsNotification>
+	/** APNs's answer to the next pushes (default 200). */
+	readonly setApnsResult: (result: ApnsResult) => void
+
 	/** Run `tag` (decoded payload) on the directory path, as the api Worker does for D1 methods. */
 	readonly invokeDirectory: (
 		tag: string,
@@ -93,6 +107,8 @@ export interface TestObjects {
 export interface TestObjectsOptions {
 	/** Each kind's migrations, in place of its store's (`storeMigrations`). */
 	readonly migrations?: Partial<Record<ObjectTarget["kind"], ReadonlyArray<StoreMigration>>>
+	/** APNs configured (default true): the fake records pushes. */
+	readonly apns?: boolean
 }
 
 export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
@@ -207,7 +223,18 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG))),
 			Layer.orDie,
 		)
+		const pushes: Array<ApnsNotification> = []
+		let apnsResult: ApnsResult = { status: 200, reason: null }
+		const apns = Layer.succeed(ApnsClient, {
+			enabled: options.apns ?? true,
+			send: (notification) =>
+				Effect.sync(() => {
+					pushes.push(structuredClone(notification))
+					return apnsResult
+				}),
+		})
 		const platform = Layer.mergeAll(
+			apns,
 			Layer.succeedContext(directory),
 			Layer.succeed(ObjectStubs, stubs),
 			transport,
@@ -226,9 +253,11 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG)),
 		)
 
-		const create = (target: ObjectTarget) => {
-			const storage = makeFakeStorage()
-			const state = makeFakeState()
+		const create = (
+			target: ObjectTarget,
+			storage: FakeStorage = makeFakeStorage(),
+			state: ReturnType<typeof makeFakeState> = makeFakeState(),
+		) => {
 			return makeObjectRuntime({
 				kind: target.kind,
 				storage,
@@ -251,15 +280,35 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			)
 		}
 
+		// One creation per target: concurrent first deliveries (a commit's drain and the alarm) must
+		// share an instance, or one of them writes to a copy that is then dropped.
+		const creating = new Map<string, Deferred.Deferred<TestObject>>()
 		const get = (target: ObjectTarget): Effect.Effect<TestObject> =>
 			Effect.suspend(() => {
 				const key = formatTarget(target)
 				const existing = objects.get(key)
 				if (existing !== undefined) return Effect.succeed(existing)
+				const pending = creating.get(key)
+				if (pending !== undefined) return Deferred.await(pending)
+				const created = Deferred.makeUnsafe<TestObject>()
+				creating.set(key, created)
 				return create(target).pipe(
 					Effect.tap((object) => Effect.sync(() => objects.set(key, object))),
+					Effect.onExit((exit) =>
+						Effect.andThen(
+							Effect.sync(() => creating.delete(key)),
+							Deferred.done(created, exit),
+						),
+					),
 				)
 			})
+
+		const reactivate = (target: ObjectTarget): Effect.Effect<TestObject> =>
+			Effect.flatMap(get(target), (evicted) =>
+				create(target, evicted.storage, evicted.state).pipe(
+					Effect.tap((object) => Effect.sync(() => objects.set(formatTarget(target), object))),
+				),
+			)
 
 		/** The api Worker's directory path: the handlers in process over the directory database. */
 		let directoryDispatcher: RpcDispatcherShape | undefined
@@ -284,7 +333,12 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 
 		return {
 			get,
+			reactivate,
 			bucket,
+			pushes,
+			setApnsResult: (result) => {
+				apnsResult = result
+			},
 			invokeDirectory: (tag, payload, principal) =>
 				isolated(
 					Effect.flatMap(directoryPath, (dispatcher) =>
@@ -312,6 +366,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			stubs,
 			chatSyncCalls: chatSync.calls,
 			chatSyncPrepared: chatSync.prepared,
+			chatSyncHistory: chatSync.history,
 			setChatSyncFailure: (status) => {
 				chatSync.control.fail = status
 			},

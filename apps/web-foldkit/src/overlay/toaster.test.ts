@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { Option } from "effect"
 import { fromString } from "foldkit/url"
-import { describe, expect, test } from "vitest"
+import { beforeAll, describe, expect, test } from "vitest"
 import { init, Message, update } from "../main"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
+import { loadPages } from "../page/registry"
 import { defaultThemePreference } from "../theme"
 import * as Toast from "../ui/toast"
 import * as Toaster from "./toaster"
@@ -18,6 +19,9 @@ const available = {
 	isSticky: true,
 	action: { label: "Install & Restart", key: "InstallUpdate" },
 } as const
+
+// The test boots on a settings page, whose area is its own chunk (`page/lazy.ts`).
+beforeAll(loadPages)
 
 describe("root toaster", () => {
 	test("a request adds a toast with its kind, title and description", () => {
@@ -49,6 +53,9 @@ describe("root toaster", () => {
 						sessionStartMs: 0,
 						isMobile: false,
 						isCreateChannelHintDismissed: false,
+						rememberedUser: null,
+						keybindingOverrides: {},
+						keyboardPlatform: "linux",
 					},
 					url,
 				),
@@ -96,6 +103,20 @@ describe("root toaster", () => {
 	})
 })
 
+describe("toast haptics", () => {
+	const commandNames = (intent: Toaster.ToastRequest["intent"]) =>
+		Toaster.push(Toaster.init(), { intent, title: "T", description: null }).commands?.map(
+			(command) => command.name,
+		) ?? []
+
+	test("an outcome's toast plays its haptic, an info or loading one does not", () => {
+		for (const intent of ["success", "warning", "error"] as const)
+			expect(commandNames(intent), intent).toContain("PlayToastFeedback")
+		for (const intent of ["info", "loading"] as const)
+			expect(commandNames(intent), intent).not.toContain("PlayToastFeedback")
+	})
+})
+
 describe("update toast replacement", () => {
 	test("a failure replaces availability in place, dropping the action and starting a timer", () => {
 		const initial = Toaster.push(Toaster.init(), available).model
@@ -113,7 +134,9 @@ describe("update toast replacement", () => {
 			payload: { kind: "error", title: "Failed", maybeAction: Option.none() },
 		})
 		expect(Option.isSome(failed.model.entries[0]!.maybeDuration)).toBe(true)
-		expect(failed.commands?.map((command) => command.name)).toEqual(["WaitBeforeDismissal"])
+		// One dismissal timer, restarted in place: never a second one running beside it.
+		const timers = (failed.commands ?? []).filter((command) => command.name === "WaitBeforeDismissal")
+		expect(timers).toHaveLength(1)
 	})
 
 	test("creates a new toast after its action dismissed the previous one", () => {

@@ -618,6 +618,7 @@ describe("image viewer", () => {
 		return updateWithShared(
 			base,
 			Message.UpdatedAttachments({
+				channelId,
 				attachments: [imageAttachmentOf(1, graceMessageId), imageAttachmentOf(2, graceMessageId)],
 			}),
 		).model
@@ -852,7 +853,7 @@ describe("image viewer", () => {
 				opened,
 				Message.UpdatedThreadPanelMessages({ threadChannelId, messages: [reply] }),
 			).model,
-			Message.UpdatedAttachments({ attachments: [imageAttachmentOf(3, reply.id)] }),
+			Message.UpdatedAttachments({ channelId, attachments: [imageAttachmentOf(3, reply.id)] }),
 		).model
 		story(
 			updateWithShared,

@@ -1,5 +1,7 @@
-import { Option } from "effect"
-import type { Html, HtmlBuilder } from "foldkit/html"
+import { Effect, Option, Queue, Stream } from "effect"
+import { Mount } from "foldkit"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
+import { defineMessageUnion } from "foldkit/message"
 import { handleStyles, indicatorStyles, panelStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { cn } from "~/lib/utils"
 import { attachmentsView } from "../../chat/attachments"
@@ -12,9 +14,11 @@ import { IconClose, IconEdit, IconMaximize, IconPenSparkle, IconThread } from ".
 import { avatar } from "../../ui/avatar"
 import { button, buttonClassName } from "../../ui/button"
 import { loader } from "../../ui/loader"
+import { systemUi } from "../../platform/system-ui"
 import { MIN_CHANNEL_WIDTH, MIN_THREAD_PANEL_WIDTH } from "./channel/thread-width"
 import { type DeriveContext, authorIdentity, authorOf, htmlRendersOf } from "./derive"
 import type { ChatMessage, MessageRow } from "./rows"
+import { heading } from "../../ui/heading"
 
 /**
  * Discord's thread sidebar: a resizable panel beside the channel with the thread's header, its
@@ -51,6 +55,11 @@ export interface ThreadPanelInputs<M> {
 	readonly isCreating: boolean
 	/** The thread's own composer (`SlateMessageComposer placeholder="Reply in thread..."`). */
 	readonly composer: Html
+	/**
+	 * The channel list's hover and right-click tracking, so a reply gets the same hover toolbar and
+	 * context menu as a channel message.
+	 */
+	readonly trackHover: Attribute<M>
 }
 
 const iconAttributes = { "data-slot": "icon" }
@@ -143,7 +152,9 @@ const headerView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html =>
 				[h.Class("flex min-w-0 items-center gap-2")],
 				[
 					IconThread(h, { className: "size-4 shrink-0 text-muted-fg" }),
-					h.h2([h.Class("truncate font-semibold text-fg text-sm")], [inputs.threadName]),
+					heading(h, { variant: "subsection", level: 2, className: "truncate" }, [
+						inputs.threadName,
+					]),
 				],
 			),
 			h.div(
@@ -281,6 +292,7 @@ const scrollView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html =>
 			h.Class("flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-bg"),
 			// `HighlightMessage` scrolls a quoted reply into view inside it.
 			h.Attribute("data-jump-scroll", ""),
+			inputs.trackHover,
 		],
 		[
 			h.div(
@@ -303,9 +315,35 @@ const scrollView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html =>
 	)
 }
 
+const SwipeIntent = defineMessageUnion({ SwipedBack: {} })
+type SwipeIntent = typeof SwipeIntent.Type
+
+/**
+ * On a phone the panel covers its channel, so the swipe back closes it, as the channel's own back
+ * chevron would otherwise take the swipe to the chat list (`platform/system-ui.ts`).
+ */
+const SwipeCloses = Mount.defineStream("ThreadPanelSwipeCloses", {
+	messages: [SwipeIntent.SwipedBack],
+	execute: ({ element }) =>
+		Stream.callback<SwipeIntent>((queue) =>
+			Effect.acquireRelease(
+				Effect.sync(() =>
+					systemUi()?.setSwipeBack(globalThis.location.href, () => {
+						if (element.isConnected) Queue.offerUnsafe(queue, SwipeIntent.SwipedBack())
+					}),
+				),
+				(release) => Effect.sync(() => release?.()),
+			).pipe(Effect.flatMap(() => Effect.never)),
+		),
+})
+
 export const threadPanelView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html =>
 	h.div(
 		[
+			// Only a shell with the swipe (installed before the app starts) gets the Mount.
+			...(systemUi() === undefined
+				? []
+				: [h.OnMount(Mount.mapMessage(SwipeCloses(), () => inputs.onClose))]),
 			// Below `md` there is no room beside the channel: the panel covers it, full width.
 			h.Class(
 				cn(

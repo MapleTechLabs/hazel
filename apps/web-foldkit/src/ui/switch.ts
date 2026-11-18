@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twJoin, twMerge } from "tailwind-merge"
 import { switchIndicatorStyles, switchStyles, switchThumbStyles } from "~/components/ui/switch.styles"
+import { pressFeedback } from "../platform/feedback"
 import * as Collection from "./aria/collection"
 import { visuallyHiddenStyle } from "./checkbox"
 import * as Field from "./field"
@@ -44,6 +45,7 @@ export const switchControl = <Message>(
 							defaultAction: "Prevent",
 							focusSelector: Collection.idAttributeSelector(options.id),
 						}),
+						pressFeedback(h, "selection"),
 					]),
 		],
 		[

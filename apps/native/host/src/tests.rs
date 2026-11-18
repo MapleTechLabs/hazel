@@ -81,6 +81,23 @@ fn render(rt: &mut Runtime<State>, size: (u32, u32)) -> Frame {
     draw(rt, size)
 }
 
+/// Renders until `drawn` holds of the frame, for at most two seconds: Rune takes a decoded
+/// picture in on a later frame on some platforms (lavapipe on Linux), as a window keeps drawing
+/// until it lands.
+fn render_until(
+    rt: &mut Runtime<State>,
+    size: (u32, u32),
+    drawn: impl Fn(&Frame) -> bool,
+) -> Frame {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let mut frame = render(rt, size);
+    while !drawn(&frame) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        frame = render(rt, size);
+    }
+    frame
+}
+
 /// The last frame as drawn, running animations included.
 fn draw(rt: &mut Runtime<State>, (w, h): (u32, u32)) -> Frame {
     const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -340,13 +357,13 @@ fn an_img_with_a_data_png_draws_its_pixels() {
         )],
     ));
     s.images
-        .get(&src, 40.0)
+        .get(&src, 40.0, "r/0")
         .expect("decodes")
         .wait()
         .expect("a png");
     let mut rt = Runtime::new(s, view, (40.0, 40.0), Env::new(false, 1.0));
-    rt.frame(0.0);
-    assert!(render(&mut rt, (40, 40)).is(20, 20, RED));
+    let frame = render_until(&mut rt, (40, 40), |frame| frame.is(20, 20, RED));
+    assert!(frame.is(20, 20, RED), "centre {:?}", frame.at(20, 20));
 }
 
 #[test]
@@ -371,14 +388,13 @@ fn an_unsized_img_takes_its_pictures_size_within_its_max_height() {
             )],
         )
     };
-    // The decode lands off the main thread. `poll` rebuilds the row in the app; tests run side by
-    // side and share its flag, so each rebuilds its own rows until the picture shows.
+    // The decode lands off the main thread; `poll` rebuilds the rows that waited on it.
     let settled = |max_h: f32| {
         let mut rt = runtime(img(max_h), (400.0, 200.0));
         let started = std::time::Instant::now();
         loop {
-            rt.update(|_: &mut State, tx| {
-                tx.invalidate_memos_by_prefix("r");
+            rt.update(|s: &mut State, tx| {
+                crate::poll(s, 0.0, tx);
             });
             rt.frame(0.016);
             let drawn = rt.presented("r/0/0").map(|p| p.0);
@@ -446,7 +462,7 @@ fn a_multicolour_svg_draws_its_own_oklch_fill_filling_its_box() {
         json!({ "w": 32, "h": 32, "bg": "#0000ffff" }),
         vec![json!({ "k": "svg", "h": "svg-test", "view": 16, "body": body, "st": {} })],
     ));
-    s.images.svg(16.0, body, 128.0).wait().expect("an svg");
+    s.images.svg([16.0; 2], body, 128.0).wait().expect("an svg");
     let mut rt = Runtime::new(s, view, (32.0, 32.0), Env::new(false, 1.0));
     rt.frame(0.0);
     let frame = render(&mut rt, (32, 32));
@@ -939,10 +955,10 @@ fn an_svg_keeps_its_aspect_ratio_unless_it_asks_to_stretch() {
             json!({ "w": 64, "h": 32, "bg": "#0000ffff" }),
             vec![svg],
         ));
-        s.images.svg(16.0, body, 128.0).wait().expect("an svg");
+        s.images.svg([16.0; 2], body, 128.0).wait().expect("an svg");
         let mut rt = Runtime::new(s, view, (64.0, 32.0), Env::new(false, 1.0));
         rt.frame(0.0);
-        let frame = render(&mut rt, (64, 32));
+        let frame = render_until(&mut rt, (64, 32), |frame| frame.is(32, 16, RED));
         assert!(frame.is(32, 16, RED), "{:?}", frame.at(32, 16));
         frame.at(3, 16)
     };
@@ -951,6 +967,29 @@ fn an_svg_keeps_its_aspect_ratio_unless_it_asks_to_stretch() {
     assert!(fitted[2] > 200 && fitted[0] < 60, "{fitted:?}");
     let stretched = left_edge(Some("none"));
     assert!(stretched[0] > 200 && stretched[2] < 60, "{stretched:?}");
+}
+
+#[test]
+fn a_stretched_chart_draws_at_its_box_and_keeps_its_non_scaling_stroke_width() {
+    // A chart's percent-space layer: a vertical line at x = 50 of a 100×100 viewBox, stretched
+    // to a 400×100 box. Stretched with its stroke, the 4-unit line would be 16 points wide.
+    let body = r##"<path d="M50 0V100" fill="none" stroke="#ff0000" stroke-width="4" vector-effect="non-scaling-stroke"/>"##;
+    let svg = json!({ "k": "svg", "h": "chart", "view": 100, "body": body, "par": "none",
+        "st": { "absolute": [0, 0, 0, 0], "w": "full", "h": "full" } });
+    let s = state(e(
+        "div",
+        json!({ "w": 400, "h": 100, "bg": "#0000ffff" }),
+        vec![svg],
+    ));
+    let mut rt = Runtime::new(s, view, (400.0, 100.0), Env::new(false, 1.0));
+    rt.frame(0.0);
+    let frame = render_until(&mut rt, (400, 100), |frame| frame.is(200, 50, RED));
+    assert!(frame.is(200, 50, RED), "drawn: {:?}", frame.at(200, 50));
+    let beside = frame.at(206, 50);
+    assert!(
+        beside[2] > 200 && beside[0] < 60,
+        "2 points wide, not 16: {beside:?}"
+    );
 }
 
 /// Two 40x40 buttons 20 pt apart, the first with `st`; Tab focuses it from the keyboard.
@@ -2778,6 +2817,7 @@ fn a_frame_takes_its_box_its_clips_and_what_overlays_paint_over_it() {
             path: "r/0/2".into(),
             src: "https://api.hazel.sh/html-renders/a?sig=1#hazel-display=inline".into(),
             clips: vec!["r/0".into()],
+            layer: None,
         }]
     );
     // The pinned date's pill; and the menu's panel, not its layer and not what the panel holds.
@@ -2786,11 +2826,13 @@ fn a_frame_takes_its_box_its_clips_and_what_overlays_paint_over_it() {
         vec![
             CoverSpec {
                 path: "r/0/0/0".into(),
-                modal: false
+                modal: false,
+                sticky_in: Some(None),
             },
             CoverSpec {
                 path: "r/1/0".into(),
-                modal: false
+                modal: false,
+                sticky_in: None,
             }
         ]
     );
@@ -2822,6 +2864,12 @@ fn a_dialog_covers_the_frames_behind_it_and_not_its_own() {
         e("iframe", json!({ "w": 100, "h": 100 }), vec![]),
         src.clone(),
     );
+    // The page's pinned date, behind the dialog.
+    let pinned = e(
+        "div",
+        json!({ "w": 80, "h": 24, "stickyTop": 0, "bg": "#333333ff" }),
+        vec![],
+    );
     let fullscreen = with_attrs(e("iframe", json!({ "w": 100, "h": 100 }), vec![]), src);
     let mut dialog = e(
         "div",
@@ -2832,29 +2880,41 @@ fn a_dialog_covers_the_frames_behind_it_and_not_its_own() {
             vec![fullscreen],
         )],
     );
-    dialog["ov"] = json!({ "portal": 1, "modal": "r/1" });
+    dialog["ov"] = json!({ "portal": 1, "modal": "r/2" });
     let s = state(e(
         "div",
         json!({ "w": 400, "h": 300 }),
-        vec![inline, dialog],
+        vec![pinned, inline, dialog],
     ));
     assert_eq!(
         s.covers,
-        vec![CoverSpec {
-            path: "r/1".into(),
-            modal: true
-        }]
+        vec![
+            CoverSpec {
+                path: "r/0".into(),
+                modal: false,
+                sticky_in: Some(None),
+            },
+            CoverSpec {
+                path: "r/2".into(),
+                modal: true,
+                sticky_in: None,
+            }
+        ]
     );
-    let inside = |frame: &str| {
-        s.covers.iter().any(|cover| {
-            frame
-                .strip_prefix(cover.path.as_str())
-                .is_some_and(|rest| rest.starts_with('/'))
-        })
+    let over = |frame: &str| -> Vec<&str> {
+        let frame = s.frames.iter().find(|f| f.path == frame).unwrap();
+        s.covers
+            .iter()
+            .filter(|cover| cover.is_over(frame))
+            .map(|cover| cover.path.as_str())
+            .collect()
     };
     let paths: Vec<&str> = s.frames.iter().map(|frame| frame.path.as_str()).collect();
-    assert_eq!(paths, ["r/0", "r/1/0/0"]);
-    assert!(!inside("r/0") && inside("r/1/0/0"));
+    assert_eq!(paths, ["r/1", "r/2/0/0"]);
+    // The page's frame is under the pinned date and the dialog; the dialog's own frame is under
+    // neither: the date is in the page behind the dialog.
+    assert_eq!(over("r/1"), ["r/0", "r/2"]);
+    assert!(over("r/2/0/0").is_empty());
 }
 
 fn composer_page() -> Runtime<State> {
@@ -3094,6 +3154,30 @@ fn the_page_ends_above_the_on_screen_keyboard() {
     assert_eq!(rect(&rt, "r/1"), [0.0, 760.0, 400.0, 40.0]);
 }
 
+/// Focusing the composer raises the keyboard, and the keyboard must leave the composer focused:
+/// a page whose element ids change under it would drop focus, which lowers the keyboard, which
+/// changes them back, over and over.
+#[test]
+fn the_on_screen_keyboard_leaves_the_composer_focused() {
+    let mut rt = composer_page();
+    rt.update(|_, tx| tx.focus("r/0/field".to_string()));
+    rt.frame(0.1);
+    let focused = rt.focused_path().map(|p| p.to_string());
+    assert!(focused.is_some(), "the composer took focus");
+    for covered in [300.0, 0.0, 300.0] {
+        assert!(rt.state.set_keyboard(covered));
+        rt.invalidate();
+        rt.frame(0.1);
+        rt.settle_all();
+        rt.frame(0.1);
+        assert_eq!(
+            rt.focused_path().map(|p| p.to_string()),
+            focused,
+            "keyboard covering {covered}"
+        );
+    }
+}
+
 #[test]
 fn a_lone_inline_span_in_a_block_wraps_its_text_to_the_block() {
     // A message's markdown: `p > span > span > span > text` in the content column of a row.
@@ -3261,4 +3345,453 @@ fn narrowing_the_window_rewraps_a_message() {
         x + w
     );
     assert!(h > 30.0, "the text did not rewrap: {h} tall");
+}
+
+#[test]
+fn a_field_that_leaves_the_tree_leaves_the_host_state() {
+    let field = || with_attrs(e("input", json!({}), vec![]), json!({ "value": "draft" }));
+    let mut s = state(e("div", json!({}), vec![field()]));
+    assert!(s.fields.contains_key("r/0"));
+    let apply = |s: &mut State, root: Value, ack: u64| {
+        s.apply(
+            serde_json::from_value(
+                json!({ "ack": ack, "page": { "bg": "#ffffffff" }, "root": root }),
+            )
+            .expect("wire tree"),
+        )
+    };
+    apply(&mut s, e("div", json!({}), vec![t("no field")]), 1);
+    assert!(
+        s.fields.is_empty(),
+        "the dialog's input went with the dialog"
+    );
+    // A new field at the same path starts from the app's text, not the old one's.
+    apply(
+        &mut s,
+        e(
+            "div",
+            json!({}),
+            vec![with_attrs(
+                e("input", json!({}), vec![]),
+                json!({ "value": "" }),
+            )],
+        ),
+        2,
+    );
+    assert_eq!(s.fields["r/0"].edit.text, "");
+}
+
+#[test]
+fn a_replaced_runtime_starts_with_no_fields_or_scroll_seqs() {
+    let mut s = state(e(
+        "div",
+        json!({}),
+        vec![with_attrs(
+            e("input", json!({}), vec![]),
+            json!({ "value": "a" }),
+        )],
+    ));
+    s.fields.get_mut("r/0").expect("the field").last_sent = 9;
+    crate::note_scroll("r/replaced-runtime", Some(40));
+    s.runtime_replaced();
+    assert!(s.fields.is_empty() && s.root_hash.is_none());
+    assert!(
+        crate::render::scroll_seqs()
+            .lock()
+            .unwrap()
+            .get("r/replaced-runtime")
+            .is_none()
+    );
+    // The new runtime numbers its scrolls from the start again, and the host follows it.
+    crate::note_scroll("r/replaced-runtime", Some(1));
+    assert_eq!(
+        crate::render::scroll_seqs().lock().unwrap()["r/replaced-runtime"],
+        1
+    );
+}
+
+#[test]
+fn a_reference_to_a_subtree_the_host_lacks_draws_empty_and_is_logged() {
+    let wire: crate::wire::WireNode =
+        serde_json::from_value(json!({ "k": "r", "h": "never-sent" })).expect("a ref");
+    let (node, _) = crate::wire::Subtrees::default().resolve(wire);
+    assert!(matches!(node.as_ref(), crate::wire::Node::Text(t) if t.is_empty()));
+    assert!(crate::wire::MISSING_REF_LOGGED.load(Ordering::Relaxed));
+}
+
+#[test]
+fn a_b_element_holds_its_text_and_a_button_on_one_line() {
+    // `<b>` is inline as `<span>` is: its children run along a line, the button after the text.
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300 }),
+            vec![e(
+                "b",
+                json!({}),
+                vec![t("bold"), e("button", json!({ "w": 20, "h": 10 }), vec![])],
+            )],
+        ),
+        (300.0, 100.0),
+    );
+    assert!(rect(&rt, "r/0/1")[0] > 0.0, "{:?}", rect(&rt, "r/0/1"));
+}
+
+/// The command palette's list: a grid with `overflow-y: auto` and a `max-h`, in a column that
+/// hugs its content. Sections of rows taller than the `max-h` scroll in a viewport that tall;
+/// a short list (a filtered search) keeps its own height.
+fn scrolling_grid(sections: usize, rows: usize) -> Value {
+    let section = |s: usize| {
+        with_attrs(
+            e(
+                "section",
+                json!({ "display": "grid", "colSpanFull": true, "gridCols": ["auto", "1fr"] }),
+                (0..rows)
+                    .map(|r| {
+                        e(
+                            "div",
+                            json!({ "h": 30, "colSpanFull": true }),
+                            vec![t(&format!("Item {s}.{r}"))],
+                        )
+                    })
+                    .collect(),
+            ),
+            json!({ "role": "group" }),
+        )
+    };
+    e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "w": 300 }),
+        vec![
+            e("div", json!({ "h": 40 }), vec![t("Search")]),
+            e(
+                "div",
+                json!({ "display": "grid", "gridCols": ["auto", "1fr"], "scrollY": true, "maxH": 200, "grow": 1 }),
+                (0..sections).map(section).collect(),
+            ),
+        ],
+    )
+}
+
+#[test]
+fn a_scrolling_grid_taller_than_its_max_height_scrolls_in_a_viewport_that_tall() {
+    let mut rt = runtime(scrolling_grid(3, 6), (400.0, 600.0));
+    assert_eq!(rect(&rt, "r/1")[3], 200.0, "{:?}", rect(&rt, "r/1"));
+    assert_eq!(
+        rect(&rt, "r")[3],
+        240.0,
+        "the column holds the search row and the viewport"
+    );
+    let top = rect(&rt, "r/1/0")[1];
+    rt.wheel(150.0, 140.0, -120.0);
+    for _ in 0..30 {
+        rt.frame(1.0 / 60.0);
+    }
+    rt.settle_all();
+    rt.frame(0.0);
+    let after = rect(&rt, "r/1/0")[1];
+    assert!(after < top, "the wheel scrolls the rows: {top} -> {after}");
+}
+
+#[test]
+fn a_short_scrolling_grid_keeps_its_own_height() {
+    let rt = runtime(scrolling_grid(1, 2), (400.0, 600.0));
+    let h = rect(&rt, "r/1")[3];
+    assert!(h > 0.0 && h < 200.0, "two rows, not the max-h: {h}");
+}
+
+/// A window reports a character typed with Command as `Key::Command`; with nothing focused it
+/// reaches `document` as that character with `meta`, where the app's shortcuts (Cmd+K) listen.
+#[test]
+fn a_command_key_reaches_document_with_meta() {
+    sent_events(0);
+    let mut rt = runtime(
+        e("div", json!({ "w": 100, "h": 100 }), vec![]),
+        (100.0, 100.0),
+    );
+    rt.key(KeyEvent {
+        key: Key::Command('k'),
+        mods: Mods {
+            cmd: true,
+            ..Mods::default()
+        },
+    });
+    rt.frame(0.0);
+    let keys: Vec<Value> = String::from_utf8_lossy(&SENT.lock().unwrap())
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(|m| m["t"] == "key" && m["key"] == "k")
+        .collect();
+    assert!(
+        keys.iter().any(|m| m["meta"] == true),
+        "Cmd+K sent to document: {keys:?}"
+    );
+}
+
+/// A tweet's photo strip (`url-embeds.ts`): a centred row holding an `overflow-x-auto` row whose
+/// photos are `w-5/6` of it. The strip takes the row's width, as in CSS, so each photo is 5/6
+/// of that and not of the strip's own (empty) content.
+#[test]
+fn a_horizontal_strip_takes_its_parents_width_and_its_items_share_it() {
+    let photo = || e("button", json!({ "w": { "frac": 0.8 }, "h": 100 }), vec![]);
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "dir": "col", "w": 400, "h": 300 }),
+            vec![e(
+                "div",
+                json!({ "display": "flex", "justify": "center", "items": "center" }),
+                vec![e(
+                    "div",
+                    json!({ "display": "flex", "scrollX": true, "gapCol": 10 }),
+                    vec![photo(), photo()],
+                )],
+            )],
+        ),
+        (400.0, 300.0),
+    );
+    assert_eq!(rect(&rt, "r/0/0")[2], 400.0);
+    assert_eq!(rect(&rt, "r/0/0/0"), [0.0, 0.0, 320.0, 100.0]);
+    // The second photo goes on past the strip's edge, where it scrolls into view.
+    assert_eq!(rect(&rt, "r/0/0/1")[0], 330.0);
+}
+
+/// `overflow-x-auto` on a block (a code block, a table's wrapper) keeps CSS's wrapping: Rune's
+/// horizontal viewport would lay its text out on one line.
+#[test]
+fn overflow_x_on_a_block_leaves_its_text_wrapped() {
+    let words = "lorem ipsum dolor sit amet ".repeat(8);
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 200, "h": 400 }),
+            vec![e(
+                "pre",
+                json!({ "scrollX": true, "fontSize": 14, "lineHeight": 20 }),
+                vec![t(&words)],
+            )],
+        ),
+        (200.0, 400.0),
+    );
+    let pre = rect(&rt, "r/0");
+    assert_eq!(pre[2], 200.0);
+    assert!(pre[3] > 40.0, "the text wraps onto several lines: {pre:?}");
+}
+
+/// An `<iframe>` that is itself fixed draws above the page, so the page's pinned dates are not
+/// over it, and the list it sits in does not clip it.
+#[test]
+fn a_fixed_frame_is_its_own_layer() {
+    let frame = with_attrs(
+        e(
+            "iframe",
+            json!({ "fixed": true, "absolute": [0, 0, null, null], "w": 100, "h": 100 }),
+            vec![],
+        ),
+        json!({ "src": "https://api.hazel.sh/html-renders/a?sig=1" }),
+    );
+    let pinned = e(
+        "div",
+        json!({ "w": 80, "h": 24, "stickyTop": 0, "bg": "#333333ff" }),
+        vec![],
+    );
+    let list = e(
+        "div",
+        json!({ "w": 400, "h": 200, "scrollY": true }),
+        vec![frame],
+    );
+    let s = state(e("div", json!({ "w": 400, "h": 300 }), vec![pinned, list]));
+    assert_eq!(s.frames[0].layer.as_deref(), Some("r/1/0"));
+    assert!(s.frames[0].clips.is_empty(), "{:?}", s.frames[0].clips);
+    assert!(!s.covers.iter().any(|cover| cover.is_over(&s.frames[0])));
+}
+
+/// A highlighted code block as the editor's viewer draws one: each leaf wraps its text in two
+/// spans, so the line breaks are inside inline elements. Each newline starts a line, as
+/// `white-space: pre` does; the last one starts none.
+#[test]
+fn pre_code_with_token_spans_breaks_at_its_newlines() {
+    let leaf = |s: &str| {
+        e(
+            "span",
+            json!({ "color": "#f00" }),
+            vec![e("span", json!({}), vec![t(s)])],
+        )
+    };
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 400, "h": 400 }),
+            vec![e(
+                "pre",
+                json!({ "whiteSpacePre": true, "fontSize": 14, "lineHeight": 20 }),
+                vec![e(
+                    "code",
+                    json!({}),
+                    vec![
+                        leaf("const"),
+                        leaf(" results = {\n  "),
+                        leaf("boot"),
+                        leaf(": 412,\n\n  "),
+                        leaf("ready"),
+                        leaf(": 731,\n}\n"),
+                    ],
+                )],
+            )],
+        ),
+        (400.0, 400.0),
+    );
+    let pre = rect(&rt, "r/0");
+    // Five lines: `const results = {`, `boot: 412,`, an empty one, `ready: 731,` and `}`.
+    assert!((pre[3] - 100.0).abs() < 1.0, "five lines of 20: {pre:?}");
+    let first = rect(&rt, "r/0/line0");
+    let boot = rect(&rt, "r/0/line1");
+    assert!(
+        boot[1] >= first[1] + first[3] - 0.5,
+        "boot starts its own line: {first:?} {boot:?}"
+    );
+}
+
+#[test]
+fn a_press_plays_its_elements_haptic_before_the_runtime_hears_it() {
+    use crate::feedback::{self, Feedback};
+    static PLAYED: std::sync::Mutex<Vec<Feedback>> = std::sync::Mutex::new(Vec::new());
+    feedback::set_player(|kind| PLAYED.lock().unwrap().push(kind));
+    sent_events(0);
+    let mut marked = with_attrs(
+        e(
+            "label",
+            json!({ "display": "block", "h": 20 }),
+            vec![t("Mute")],
+        ),
+        json!({ "data-native-feedback": "selection" }),
+    );
+    marked["on"] = json!({ "click": 981 });
+    let mut plain = e("button", json!({ "display": "block", "h": 20 }), vec![]);
+    plain["on"] = json!({ "click": 982 });
+    let mut rt = runtime(
+        e("div", json!({ "flex": "col" }), vec![marked, plain]),
+        (200.0, 100.0),
+    );
+    for y in [10.0, 30.0] {
+        rt.pointer_move(5.0, y);
+        rt.pointer_down(5.0, y);
+        rt.pointer_up(5.0, y);
+        rt.frame(0.1);
+    }
+    assert_eq!(
+        *PLAYED.lock().unwrap(),
+        [Feedback::Selection],
+        "only the marked press plays"
+    );
+    assert_eq!(sent_events(981).len(), 1, "the marked press still clicks");
+    assert_eq!(sent_events(982).len(), 1);
+}
+
+/// A chart's dot at `left: 30%; top: 40%` moved back by half its size (`-translate-1/2`): centred
+/// on that point. A tick moved back by all its width (`-translate-x-full`) ends at its point.
+#[test]
+fn an_anchored_box_sits_on_its_percentage_point() {
+    let mut dot = e(
+        "div",
+        json!({ "w": 10, "h": 10, "bg": "#ff0000ff" }),
+        vec![],
+    );
+    dot["st"]["absolute"] = json!([null, null, null, null]);
+    dot["st"]["anchorX"] = json!([0.3, 0.5]);
+    dot["st"]["anchorY"] = json!([0.4, 0.5]);
+    let mut tick = e("div", json!({ "w": 40, "h": 10 }), vec![]);
+    tick["st"]["absolute"] = json!([null, 6, null, null]);
+    tick["st"]["anchorX"] = json!([0.9, 1.0]);
+    let rt = runtime(
+        e("div", json!({ "w": 300, "h": 200 }), vec![dot, tick]),
+        (300.0, 200.0),
+    );
+    assert_eq!(rect(&rt, "r/0"), [85.0, 75.0, 10.0, 10.0]);
+    assert_eq!(rect(&rt, "r/1"), [230.0, 6.0, 40.0, 10.0]);
+    // A rule pinned top and bottom with no height stretches between them, as CSS does.
+    let mut rule = e("div", json!({ "w": 1 }), vec![]);
+    rule["st"]["absolute"] = json!([null, 0, null, 0]);
+    rule["st"]["anchorX"] = json!([0.3, 0.5]);
+    let rt = runtime(
+        e("div", json!({ "w": 300, "h": 200 }), vec![rule]),
+        (300.0, 200.0),
+    );
+    assert_eq!(rect(&rt, "r/0"), [89.5, 0.0, 1.0, 200.0]);
+    let mut rule = e("div", json!({ "w": 1, "h": "auto" }), vec![]);
+    rule["st"]["absolute"] = json!([null, 0, null, 0]);
+    rule["st"]["anchorX"] = json!([0.3, 0.5]);
+    let rt = runtime(
+        e("div", json!({ "w": 300, "h": 200 }), vec![rule]),
+        (300.0, 200.0),
+    );
+    assert_eq!(rect(&rt, "r/0")[3], 200.0);
+}
+
+/// `truncate` beside an icon in a row: it clips, so CSS lets it shrink to the row (its automatic
+/// minimum width is 0) and its text ends in an ellipsis instead of running out of the row.
+#[test]
+fn a_truncating_row_item_shrinks_to_the_row() {
+    let reason = e(
+        "span",
+        json!({ "clip": true, "clipScrolls": true, "truncate": true, "nowrap": true }),
+        vec![t(
+            "Payment failed · Invoice INV-2041 for $2,150 open 9 days past due, 3 retries",
+        )],
+    );
+    let row = e(
+        "div",
+        json!({ "display": "flex", "gapCol": 6, "w": 200 }),
+        vec![e("span", json!({ "w": 12, "h": 12 }), vec![]), reason],
+    );
+    let rt = runtime(row, (300.0, 100.0));
+    let [x, _, w, _] = rect(&rt, "r/1");
+    assert!(x + w <= 200.5, "the reason ends inside the row: {x} + {w}");
+    // `overflow: clip` (an image's default) is no scroll container: it keeps its width.
+    let row = e(
+        "div",
+        json!({ "display": "flex", "w": 100 }),
+        vec![
+            e(
+                "div",
+                json!({ "w": 80, "h": 10, "clip": true }),
+                vec![e("div", json!({ "w": 80, "h": 10 }), vec![])],
+            ),
+            e(
+                "div",
+                json!({ "w": 80, "h": 10, "clip": true }),
+                vec![e("div", json!({ "w": 80, "h": 10 }), vec![])],
+            ),
+        ],
+    );
+    let rt = runtime(row, (300.0, 100.0));
+    assert_eq!(rect(&rt, "r/0")[2], 80.0);
+}
+
+/// `col-span-2` in a three-column grid takes two tracks; `flex-1 basis-72` in a wrapping row
+/// starts from 288, so the next item wraps under it rather than squeezing it.
+#[test]
+fn a_column_span_and_a_flex_basis_size_their_items() {
+    let grid = e(
+        "div",
+        json!({ "display": "grid", "gridCols": ["1fr", "1fr", "1fr"], "w": 300 }),
+        vec![
+            e("div", json!({ "h": 10, "colSpan": 2 }), vec![]),
+            e("div", json!({ "h": 10 }), vec![]),
+        ],
+    );
+    let rt = runtime(grid, (300.0, 100.0));
+    assert_eq!(rect(&rt, "r/0")[2], 200.0);
+    assert_eq!(rect(&rt, "r/1")[0], 200.0);
+    let header = e(
+        "div",
+        json!({ "display": "flex", "wrap": true, "w": 400 }),
+        vec![
+            e("div", json!({ "grow": 1, "basis": 288, "h": 20 }), vec![]),
+            e("div", json!({ "w": 150, "h": 20 }), vec![]),
+        ],
+    );
+    let rt = runtime(header, (400.0, 100.0));
+    assert_eq!(rect(&rt, "r/0")[2], 400.0);
+    assert_eq!(rect(&rt, "r/1")[1], 20.0);
 }

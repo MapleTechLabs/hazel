@@ -23,8 +23,10 @@ import * as CommandPalette from "../overlay/command-palette"
 import { AutoFocusSearch } from "../page/home/commands"
 import { Message as HomeMessage } from "../page/home/message"
 import { CreateChannel, FocusInput } from "../overlay/command-palette/commands"
-import { ada, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
-import { drainToast } from "../test/toast-fixtures"
+import * as ChannelsSidebar from "../shell/channels-sidebar"
+import * as Shell from "../shell/model"
+import { after, ada, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
+import { drainToast, playToastFeedback } from "../test/toast-fixtures"
 import * as CommandMenu from "../ui/command-menu"
 import { PortalCommandMenu } from "../ui/command-menu-view"
 import * as Menu from "../ui/menu"
@@ -55,6 +57,45 @@ describe("nav rail", () => {
 			sceneExpect(within(navItem("Settings"), currentLink)).toExist(),
 			sceneExpect(within(navItem("Chat"), currentLink)).toBeAbsent(),
 			sceneExpect(within(navItem("Home"), currentLink)).toBeAbsent(),
+		)
+	})
+})
+
+describe("the last screen's paint", () => {
+	const waiting = selector('#app[data-paint="shell"] [data-paint="loading"]')
+	const toSidebar = (message: ChannelsSidebar.Message) =>
+		Message.GotShellMessage({ message: Shell.Message.GotChannelsSidebarMessage({ message }) })
+	const membershipsArrived = toSidebar(ChannelsSidebar.Message.UpdatedMemberChannelIds({ channelIds: [] }))
+	// Every list the sidebar draws: each comes from its own query.
+	const channelListsArrived = [
+		membershipsArrived,
+		toSidebar(ChannelsSidebar.Message.UpdatedSections({ sections: [] })),
+		toSidebar(ChannelsSidebar.Message.UpdatedFavorites({ channels: [] })),
+		toSidebar(ChannelsSidebar.Message.UpdatedDmChannelIds({ channelIds: [] })),
+		toSidebar(ChannelsSidebar.Message.UpdatedSectionChannels({ sectionKey: "default", channels: [] })),
+	]
+
+	test("stays up while the sidebar's channel lists have yet to arrive", () => {
+		scene(rootScene, given(signedIn("/hazel/chat")), ...menusMounted, sceneExpect(waiting).toExist())
+	})
+
+	test("stays up while only the memberships have arrived, not the Channels list", () => {
+		scene(
+			rootScene,
+			given(after(signedIn("/hazel/chat"), [membershipsArrived])),
+			...menusMounted,
+			sceneExpect(waiting).toExist(),
+		)
+	})
+
+	test("goes once they have, empty or not", () => {
+		scene(
+			rootScene,
+			given(after(signedIn("/hazel/chat"), channelListsArrived)),
+			...menusMounted,
+			// Named for the signed-in user: a paint is only kept under its own user.
+			sceneExpect(selector(`#app[data-paint="shell"][data-paint-user="${ada.id}"]`)).toExist(),
+			sceneExpect(waiting).toBeAbsent(),
 		)
 	})
 })
@@ -159,6 +200,7 @@ describe("command palette", () => {
 			Mount.expectEnded(PortalCommandMenu),
 			sceneExpect(text("Channel created successfully")).toExist(),
 			// The toast enters, its 4s lifetime runs out, then it is removed after its exit animation.
+			playToastFeedback,
 			...drainToast(),
 			sceneExpect(text("Channel created successfully")).toBeAbsent(),
 		)

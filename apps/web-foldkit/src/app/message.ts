@@ -40,6 +40,9 @@ export const Message = defineMessageUnion({
 	FailedSaveThemePreference: {},
 	CompletedSaveSoundSettings: {},
 	FailedSaveSoundSettings: {},
+	CompletedSaveKeybindings: {},
+	CompletedRememberLastOrganization: {},
+	FailedSaveKeybindings: {},
 	/** The member's latest notifications (newest first), for the sound and native sinks. */
 	UpdatedRecentNotifications: { ids: Schema.Array(NotificationId) },
 	CompletedDeliverNotifications: {},
@@ -53,6 +56,7 @@ export const Message = defineMessageUnion({
 	FailedFetchCurrentUser: { reason: CommonReason },
 	PressedRetryCurrentUser: {},
 	CompletedWarmAccessToken: {},
+	CompletedWarmSyncObjects: {},
 	CompletedClearNoteDrafts: {},
 	SucceededSignOut: {},
 	FailedSignOut: { reason: CommonReason },

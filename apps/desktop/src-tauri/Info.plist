@@ -10,6 +10,7 @@
             <key>CFBundleURLSchemes</key>
             <array>
                 <string>hazel</string>
+                <string>com.hazel.app</string>
             </array>
         </dict>
     </array>

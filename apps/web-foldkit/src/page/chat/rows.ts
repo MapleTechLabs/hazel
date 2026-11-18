@@ -4,7 +4,7 @@ import { Schema } from "effect"
 import { defineTaggedUnion } from "foldkit/schema"
 import { LiveActorState } from "../../chat/live-state"
 import { Unfurl } from "../../chat/unfurl"
-import { AttachmentInfo } from "./lookups"
+import { AttachmentInfo, SyncProvider } from "./lookups"
 
 /**
  * Message list rows: the data the list renders, derived once per data change in `update` (port
@@ -58,7 +58,10 @@ export type AggregatedReaction = typeof AggregatedReaction.Type
 export const AuthorIdentity = Schema.Struct({
 	displayName: Schema.String,
 	avatarUrl: Schema.NullOr(Schema.String),
+	/** An app (a bot); never a Slack or Discord person. */
 	isBot: Schema.Boolean,
+	/** For a chat sync shadow user: the platform the person is on. */
+	syncProvider: Schema.NullOr(SyncProvider),
 })
 export type AuthorIdentity = typeof AuthorIdentity.Type
 
@@ -145,7 +148,10 @@ export const MessageRowData = Schema.Struct({
 	/** The author is known (the users lookup has them); until then the row has no header. */
 	hasAuthor: Schema.Boolean,
 	status: Schema.NullOr(StatusEmoji),
-	isDiscordSynced: Schema.Boolean,
+	/** The platform the message was synced in from (chat sync), if it was. */
+	syncedFrom: Schema.NullOr(SyncProvider),
+	/** The agent that wrote the message for its author (Hazel's MCP server), if one did. */
+	agentName: Schema.NullOr(Schema.String),
 	reply: Schema.NullOr(ReplyPreview),
 	thread: Schema.NullOr(ThreadPreview),
 	attachments: Schema.Array(AttachmentInfo),
@@ -153,6 +159,8 @@ export const MessageRowData = Schema.Struct({
 	urlEmbeds: Schema.Array(UrlEmbed),
 	live: Schema.NullOr(LiveRow),
 	htmlRenders: Schema.Array(HtmlRenderRow),
+	/** The message arrived live, after the list had loaded: its row plays the entrance once it mounts. */
+	isEntering: Schema.Boolean,
 })
 export type MessageRowData = typeof MessageRowData.Type
 

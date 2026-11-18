@@ -1,4 +1,5 @@
 import { ChannelHotkey } from "./hotkeys"
+import { ChannelCustomerRow } from "../../../customers/channels"
 import { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { File, type Update } from "foldkit"
@@ -18,6 +19,9 @@ import {
 	BotInfo,
 	ChannelMemberInfo,
 	CustomEmojiInfo,
+	AgentMarkInfo,
+	SyncedMessageInfo,
+	SyncProvider,
 	Lookups,
 	PinnedInfo,
 	PresenceInfo,
@@ -86,6 +90,8 @@ export const ThreadPanel = Schema.Struct({
 	messages: Schema.Array(ChatMessage),
 	/** Their rows, derived in `update` like the channel's. */
 	rows: Schema.Array(DisplayRow.MessageRow),
+	/** The thread's pins: a reply is unpinned by its pin's id, like a channel message. */
+	pins: Schema.Array(PinnedInfo),
 })
 export type ThreadPanel = typeof ThreadPanel.Type
 
@@ -119,6 +125,8 @@ export const Model = Schema.Struct({
 	members: Schema.NullOr(Schema.Array(ChannelMemberInfo)),
 	/** `PinnedMessagesModal`'s pins, oldest pin first. */
 	pinned: Schema.Array(PinnedInfo),
+	/** The customer the channel is linked to (`channel_customers`); null when none. */
+	customer: Schema.NullOr(ChannelCustomerRow),
 	typing: Schema.Array(TypingInfo),
 	typingNowMs: Schema.Number,
 	/** First names of the other members typing now (`useTypingIndicators`), derived in `update`. */
@@ -206,15 +214,21 @@ export const Message = defineMessageUnion({
 	UpdatedPresence: { presence: Schema.Array(PresenceInfo) },
 	UpdatedBots: { bots: Schema.Array(BotInfo) },
 	UpdatedCustomEmojis: { customEmojis: Schema.Array(CustomEmojiInfo) },
-	UpdatedAttachments: { attachments: Schema.Array(AttachmentInfo) },
-	UpdatedDiscordSynced: { messageIds: Schema.Array(MessageId) },
+	UpdatedAttachments: { channelId: ChannelId, attachments: Schema.Array(AttachmentInfo) },
+	UpdatedSyncedMessages: { channelId: ChannelId, messages: Schema.Array(SyncedMessageInfo) },
+	UpdatedSyncProvider: { provider: Schema.NullOr(SyncProvider) },
+	UpdatedAgentMarks: { channelId: ChannelId, marks: Schema.Array(AgentMarkInfo) },
 	UpdatedThreadChannels: { channels: Schema.Array(ThreadChannelInfo) },
 	UpdatedThreadMessages: { messages: Schema.Array(ThreadMessageInfo) },
 	UpdatedReplyTargets: { targets: Schema.Array(ReplyTarget) },
 	UpdatedMembers: { members: Schema.Array(ChannelMemberInfo) },
 	UpdatedPinned: { pins: Schema.Array(PinnedInfo) },
+	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
+	UpdatedCustomer: { channelId: ChannelId, customer: Schema.NullOr(ChannelCustomerRow) },
 	/** The open thread's messages, oldest first; tagged with the thread they were queried for. */
 	UpdatedThreadPanelMessages: { threadChannelId: ChannelId, messages: Schema.Array(ChatMessage) },
+	/** The open thread's pins; tagged with the thread they were queried for. */
+	UpdatedThreadPanelPins: { threadChannelId: ChannelId, pins: Schema.Array(PinnedInfo) },
 	UpdatedTyping: { typing: Schema.Array(TypingInfo) },
 	TickedTypingClock: { nowMs: Schema.Number },
 	GotListMessage: { message: MessageList.Message },

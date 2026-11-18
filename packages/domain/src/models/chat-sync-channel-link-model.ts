@@ -36,7 +36,6 @@ export type ProviderOutboundConfig = S.Schema.Type<typeof ProviderOutboundConfig
 export const OutboundIdentityProviders = S.Record(S.String, ProviderOutboundConfig)
 
 export const OutboundIdentitySettings = S.Struct({
-	enabled: S.Boolean,
 	strategy: ChatSyncOutboundIdentityStrategy,
 	providers: OutboundIdentityProviders,
 })

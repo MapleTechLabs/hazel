@@ -20,7 +20,11 @@ import {
 } from "@hazel/schema"
 import { Effect, Layer, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
-import { emitMessageEvent, type MessageEvent } from "../../worker/objects/channel/message-events"
+import {
+	emitImportedMessage,
+	emitMessageEvent,
+	type MessageEvent,
+} from "../../worker/objects/channel/message-events"
 import { setThreadChannel } from "../../worker/objects/channel/thread"
 import type { EffectReceivers } from "../../worker/objects/effects/registry"
 import { readObjectMeta, writeObjectMeta } from "../../worker/objects/meta"
@@ -144,6 +148,17 @@ const conversationIdOf = readObjectMeta(CONVERSATION_KEY).pipe(
 	Effect.map((value) => Option.getOrNull(Option.map(value, (id) => ConnectConversationId.make(id)))),
 )
 
+/** Set a just-written message's `createdAt` (imported history), answering the row as it now is. */
+const backdate = (id: MessageId, createdAt: Date) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.run(
+			SQLite.update(schema.messagesTable)
+				.set({ createdAt })
+				.where(($) => [$.id.eq(id)])
+				.returning(),
+		),
+	).pipe(Effect.map((rows) => rows[0]!))
+
 const ingest = Effect.fn("ChannelObject.chatSyncIngest")(function* (payload: ChannelChatSyncIngestPayload) {
 	const db = yield* Database.Database
 	const messages = yield* MessageRepo
@@ -178,7 +193,7 @@ const ingest = Effect.fn("ChannelObject.chatSyncIngest")(function* (payload: Cha
 			event.externalReplyToMessageId === null
 				? Option.none()
 				: yield* findMessageLink({ channelLinkId, externalMessageId: event.externalReplyToMessageId })
-		const [message] = yield* messages.insert({
+		const [inserted] = yield* messages.insert({
 			channelId: payload.channelId,
 			conversationId: yield* conversationIdOf,
 			authorId: event.authorId,
@@ -188,6 +203,12 @@ const ingest = Effect.fn("ChannelObject.chatSyncIngest")(function* (payload: Cha
 			threadChannelId: null,
 			deletedAt: null,
 		})
+		// Imported history keeps its provider send time, so it sorts where it was said.
+		const sentAt = event.sentAt === undefined ? undefined : new Date(event.sentAt)
+		const message =
+			sentAt === undefined || Number.isNaN(sentAt.getTime())
+				? inserted!
+				: yield* backdate(inserted!.id, sentAt)
 		const attachments = event.attachments.filter(
 			(attachment) => attachment.fileName.trim() !== "" && attachment.publicUrl.trim() !== "",
 		)
@@ -198,7 +219,7 @@ const ingest = Effect.fn("ChannelObject.chatSyncIngest")(function* (payload: Cha
 					attachments.map((attachment, index) => ({
 						organizationId,
 						channelId: payload.channelId,
-						messageId: message!.id,
+						messageId: message.id,
 						fileName: attachment.fileName.trim(),
 						fileSize:
 							Number.isFinite(attachment.fileSize) && attachment.fileSize >= 0
@@ -216,7 +237,7 @@ const ingest = Effect.fn("ChannelObject.chatSyncIngest")(function* (payload: Cha
 		yield* db.run(
 			SQLite.insertInto(schema.chatSyncMessageLinksTable).values({
 				channelLinkId,
-				hazelMessageId: message!.id,
+				hazelMessageId: message.id,
 				externalMessageId: event.externalMessageId,
 				source: "external",
 				rootHazelMessageId: null,
@@ -226,8 +247,12 @@ const ingest = Effect.fn("ChannelObject.chatSyncIngest")(function* (payload: Cha
 				deletedAt: null,
 			}),
 		)
-		yield* emit({ _tag: "MessageCreated", message: message! })
-		yield* Effect.annotateCurrentSpan({ "chat_sync.outcome": "created", "message.id": message!.id })
+		if (sentAt === undefined) yield* emit({ _tag: "MessageCreated", message })
+		else yield* emitImportedMessage(message)
+		yield* Effect.annotateCurrentSpan({
+			"chat_sync.outcome": sentAt === undefined ? "created" : "imported",
+			"message.id": message.id,
+		})
 		return
 	}
 

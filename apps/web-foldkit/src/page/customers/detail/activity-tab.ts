@@ -2,6 +2,7 @@ import * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { msOf } from "../../../customers/queries"
+import { segmentClass, segmentedTrackClass } from "../../../customers/ui/filter-bar"
 import { SOURCE_LABEL, sourceLogo, sourceMark } from "../../../customers/ui/identity"
 import { IconChevronDown } from "../../../icons"
 import { button } from "../../../ui/button"
@@ -102,9 +103,7 @@ const filters = (h: HtmlBuilder<Message>, model: Model): Html =>
 				[
 					h.Role("radiogroup"),
 					h.AriaLabel("Source"),
-					h.Class(
-						"inline-flex flex-wrap items-center gap-0.5 rounded-lg border border-border p-0.5",
-					),
+					h.Class(twMerge(segmentedTrackClass, "flex-wrap")),
 				],
 				SOURCES.map((source) => {
 					const isSelected = source === model.eventProvider
@@ -114,12 +113,7 @@ const filters = (h: HtmlBuilder<Message>, model: Model): Html =>
 							h.Role("radio"),
 							h.AriaChecked(isSelected),
 							h.OnClick(Message.ClickedEventProvider({ provider: source })),
-							h.Class(
-								twMerge(
-									"inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-sm outline-hidden hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70",
-									isSelected ? "bg-secondary font-medium text-fg" : "text-fg-3",
-								),
-							),
+							h.Class(segmentClass(isSelected)),
 						],
 						source === null ? ["All"] : [sourceLogo(h, source, "size-3.5"), SOURCE_LABEL[source]],
 					)

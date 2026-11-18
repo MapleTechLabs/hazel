@@ -17,6 +17,8 @@ export type WireNode =
 			readonly k: "svg"
 			readonly h: string
 			readonly view: number
+			/** The viewBox height, when it differs from its width (`view`). */
+			readonly vh?: number
 			readonly body: string
 			readonly st: Style
 			/** The svg's `preserveAspectRatio` when it sets one (`none`: stretch to the box). */
@@ -156,6 +158,10 @@ export type HostToRuntime =
 			readonly downloaded: number
 			readonly total?: number | null
 	  }
+	/** The window became the key window (`true`) or another app's did: `document.hasFocus()`. */
+	| { readonly t: "windowFocus"; readonly focused: boolean }
+	/** The answer to notification permission request `id`: whether the app may show notifications. */
+	| { readonly t: "notifyPermission"; readonly id: number; readonly granted: boolean }
 
 export type RuntimeToHost =
 	| {
@@ -174,6 +180,12 @@ export type RuntimeToHost =
 			readonly top: number
 			/** Echoed by the host's next offset report, so reports from before it can be told apart. */
 			readonly seq?: number
+			/**
+			 * `element.scrollBy()`: the host shifts the viewport by this much from where it is when
+			 * it applies it (`top` is where the runtime expects it), so a finger's drag and a fling
+			 * carry on; the runtime's offset is always a report behind the host's.
+			 */
+			readonly by?: number
 	  }
 	/** Focus the element keyed `key` once the host has the tree it is in (`element.focus()`). */
 	| { readonly t: "focus"; readonly key: string }
@@ -194,6 +206,29 @@ export type RuntimeToHost =
 	| { readonly t: "update"; readonly id: number; readonly op: "check" | "download" | "install" }
 	/** Quit, and open the app again once it has gone (after an update installs); a failure is answered by `update` with `id`. */
 	| { readonly t: "relaunch"; readonly id: number }
+	/**
+	 * Whether the app may show system notifications; with `request`, asks the user first when
+	 * they have not decided. Answered by `notifyPermission`.
+	 */
+	| { readonly t: "notifyPermission"; readonly id: number; readonly request: boolean }
+	/** Put `text` on the system clipboard. */
+	| { readonly t: "copy"; readonly text: string }
+	/** Open a web or mail link in the system's browser or mail app; the host drops other schemes. */
+	| { readonly t: "open"; readonly url: string }
+	/**
+	 * A system notification; `group` gathers a channel's notifications together. A message's
+	 * `sender` (and their `image`, a web URL) shows as the person it is from, in the channel named
+	 * `conversation` (none for a direct message).
+	 */
+	| {
+			readonly t: "notify"
+			readonly title: string
+			readonly body: string
+			readonly group?: string
+			readonly image?: string
+			readonly sender?: { readonly id: string; readonly name: string }
+			readonly conversation?: string
+	  }
 
 /** Timings for one commit, for the benchmarks. */
 export type CommitStats = {

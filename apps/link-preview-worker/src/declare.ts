@@ -16,14 +16,14 @@ export class AppApi extends HttpApiGroup.make("app")
 	) {}
 
 // Link Preview Schemas
-export class LinkPreviewData extends Schema.Class<LinkPreviewData>("LinkPreviewData")({
+export const LinkPreviewData = Schema.Struct({
 	url: Schema.optional(Schema.String),
 	title: Schema.optional(Schema.String),
 	description: Schema.optional(Schema.String),
 	image: Schema.optional(Schema.Struct({ url: Schema.optional(Schema.String) })),
 	logo: Schema.optional(Schema.Struct({ url: Schema.optional(Schema.String) })),
 	publisher: Schema.optional(Schema.String),
-}) {}
+})
 
 export class LinkPreviewError extends Schema.TaggedError<LinkPreviewError>()(
 	"LinkPreviewError",

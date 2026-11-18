@@ -89,6 +89,24 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE TABLE IF NOT EXISTS "chat_sync_installations" (\n\t"provider" text NOT NULL,\n\t"externalWorkspaceId" text NOT NULL,\n\t"externalWorkspaceName" text,\n\t"encryptedToken" text NOT NULL,\n\t"iv" text NOT NULL,\n\t"encryptionKeyVersion" integer NOT NULL,\n\t"scope" text,\n\t"installedBy" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("provider", "externalWorkspaceId")\n)',
 			],
 		},
+		{
+			id: "0004_push_device_tokens",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "push_device_tokens" (\n\t"token" text PRIMARY KEY NOT NULL,\n\t"userId" text NOT NULL,\n\t"updatedAt" text NOT NULL\n)',
+				'CREATE INDEX IF NOT EXISTS "push_device_tokens_user_id_idx" ON "push_device_tokens" ("userId")',
+			],
+		},
+		{
+			id: "0005_agent_access",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "agent_auth_codes" (\n\t"codeHash" text PRIMARY KEY NOT NULL,\n\t"clientId" text NOT NULL,\n\t"userId" text NOT NULL,\n\t"redirectUri" text NOT NULL,\n\t"codeChallenge" text NOT NULL,\n\t"scopes" text NOT NULL,\n\t"expiresAt" text NOT NULL,\n\t"redeemedAt" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				"CREATE TABLE IF NOT EXISTS \"agent_clients\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"clientName\" text NOT NULL,\n\t\"redirectUris\" text NOT NULL,\n\t\"clientUri\" text,\n\t\"logoUri\" text,\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))\n)",
+				'CREATE TABLE IF NOT EXISTS "agent_grants" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"userId" text NOT NULL,\n\t"kind" text NOT NULL,\n\t"clientId" text,\n\t"name" text NOT NULL,\n\t"scopes" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"lastUsedAt" text,\n\t"revokedAt" text\n)',
+				'CREATE TABLE IF NOT EXISTS "agent_tokens" (\n\t"tokenHash" text PRIMARY KEY NOT NULL,\n\t"grantId" text NOT NULL,\n\t"kind" text NOT NULL,\n\t"expiresAt" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				'CREATE INDEX IF NOT EXISTS "agent_grants_user_idx" ON "agent_grants" ("userId")',
+				'CREATE INDEX IF NOT EXISTS "agent_tokens_grant_idx" ON "agent_tokens" ("grantId")',
+			],
+		},
 	],
 	org: [
 		{
@@ -259,6 +277,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0005_bot_installation_region",
 			statements: ['ALTER TABLE "bot_installations" ADD COLUMN "region" text'],
 		},
+		{
+			id: "0006_customer_channel_links",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "channel_customers" (\n\t"channelId" text PRIMARY KEY NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"accountId" text NOT NULL,\n\t"accountName" text NOT NULL,\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				'CREATE INDEX IF NOT EXISTS "channel_customers_account_idx" ON "channel_customers" ("accountId")',
+			],
+		},
 	],
 	channel: [
 		{
@@ -317,6 +342,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0002_channel_bot_region",
 			statements: ['ALTER TABLE "channel_bots" ADD COLUMN "region" text'],
 		},
+		{
+			id: "0003_agent_access",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "message_agent_marks" (\n\t"id" text PRIMARY KEY NOT NULL,\n\t"channelId" text NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"authorId" text NOT NULL,\n\t"grantId" text NOT NULL,\n\t"agentName" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text\n)',
+				'CREATE INDEX IF NOT EXISTS "message_agent_marks_channel_idx" ON "message_agent_marks" ("channelId")',
+			],
+		},
 	],
 	user: [
 		{
@@ -342,6 +374,12 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			statements: [
 				'ALTER TABLE "notifications" ADD COLUMN "reason" text',
 				'ALTER TABLE "notifications" ADD COLUMN "silent" integer NOT NULL DEFAULT false',
+			],
+		},
+		{
+			id: "0003_push_devices",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "push_devices" (\n\t"token" text PRIMARY KEY NOT NULL,\n\t"environment" text NOT NULL,\n\t"bundleId" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
 			],
 		},
 	],
@@ -461,7 +499,16 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			],
 		},
 		{
-			id: "0010_customer_settings_overage_in_mrr",
+			id: "0010_customer_channel_links",
+			statements: [
+				"CREATE TABLE IF NOT EXISTS \"customer_channel_links\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"organizationId\" text NOT NULL,\n\t\"accountId\" text NOT NULL,\n\t\"channelId\" text NOT NULL,\n\t\"linkedBy\" text NOT NULL,\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"updatedAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"deletedAt\" text\n)",
+				'CREATE INDEX IF NOT EXISTS "customer_channel_links_account_idx" ON "customer_channel_links" ("accountId")',
+				'CREATE INDEX IF NOT EXISTS "customer_channel_links_channel_idx" ON "customer_channel_links" ("channelId")',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_channel_links_channel_unique" ON "customer_channel_links" ("channelId") WHERE "deletedAt" IS NULL',
+			],
+		},
+		{
+			id: "0011_customer_settings_overage_in_mrr",
 			statements: [
 				'ALTER TABLE "customer_settings" ADD COLUMN "overageInMrr" integer NOT NULL DEFAULT false',
 			],

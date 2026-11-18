@@ -11,7 +11,7 @@ import { sidebarContent, sidebarSectionGroup, sidebarStatic } from "../ui/sideba
 import type { ShellContext } from "./context"
 import type { SwitcherOrg, UserStatus } from "./model"
 import { orgSwitcherHeader, userMenuFooter } from "./menus"
-import { emptyData, Message, type Model, type SidebarOutcome } from "./channels-sidebar/model"
+import { emptyData, isLoading, Message, type Model, type SidebarOutcome } from "./channels-sidebar/model"
 import { PageOutMessage } from "../page/out-message"
 import { PersistDismissedHint } from "./channels-sidebar/hints"
 import {
@@ -71,16 +71,29 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		UpdatedMembership: ({ membership }) => ({
 			model: modifyFields(model, { membership: () => membership }),
 		}),
-		UpdatedSections: ({ sections }) => ({ model: modifyFields(model, { sections: () => sections }) }),
+		UpdatedSections: ({ sections }) => ({
+			model: modifyFields(model, {
+				sections: () => sections,
+				loaded: () => modifyFields(model.loaded, { sections: () => true }),
+			}),
+		}),
 		UpdatedSectionChannels: ({ sectionKey, channels }) => ({
 			model: modifyFields(model, {
 				sectionChannels: (previous) => ({ ...previous, [sectionKey]: channels }),
 			}),
 		}),
-		UpdatedFavorites: ({ channels }) => ({ model: modifyFields(model, { favorites: () => channels }) }),
+		UpdatedFavorites: ({ channels }) => ({
+			model: modifyFields(model, {
+				favorites: () => channels,
+				loaded: () => modifyFields(model.loaded, { favorites: () => true }),
+			}),
+		}),
 		UpdatedThreads: ({ threads }) => ({ model: modifyFields(model, { threads: () => threads }) }),
 		UpdatedDmChannelIds: ({ channelIds }) => ({
-			model: modifyFields(model, { dmChannelIds: () => channelIds }),
+			model: modifyFields(model, {
+				dmChannelIds: () => channelIds,
+				loaded: () => modifyFields(model.loaded, { dmChannelIds: () => true }),
+			}),
 		}),
 		UpdatedDmChannel: ({ channelId, channel }) => ({
 			model: modifyFields(model, { dmChannels: (previous) => ({ ...previous, [channelId]: channel }) }),
@@ -92,6 +105,9 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		}),
 		UpdatedOrganizations: ({ organizations }) => ({
 			model: modifyFields(model, { organizations: () => organizations }),
+		}),
+		UpdatedSyncedChannels: ({ synced }) => ({
+			model: modifyFields(model, { syncedChannels: () => synced }),
 		}),
 		UpdatedMemberChannelIds: ({ channelIds }) => ({
 			model: modifyFields(model, { memberChannelIds: () => channelIds }),
@@ -217,6 +233,8 @@ type ShellArgs = readonly [
 	email: string | undefined,
 	avatarUrl: string | null | undefined,
 	appVersion: string,
+	paletteKey: string | null,
+	createChannelKey: string | null,
 ]
 
 const sidebarBody = <ParentMessage>(
@@ -234,7 +252,18 @@ const sidebarBody = <ParentMessage>(
 	statusExpiration: string | null,
 	toUserMenuMessage: (message: Menu.Message) => ParentMessage,
 	toOrgSwitcherMessage: (message: Menu.Message) => ParentMessage,
-	...[orgSlug, route, orgName, orgLogoUrl, displayName, email, avatarUrl, appVersion]: ShellArgs
+	...[
+		orgSlug,
+		route,
+		orgName,
+		orgLogoUrl,
+		displayName,
+		email,
+		avatarUrl,
+		appVersion,
+		paletteKey,
+		createChannelKey,
+	]: ShellArgs
 ): Html => {
 	const shell: ShellContext = {
 		orgSlug,
@@ -245,8 +274,14 @@ const sidebarBody = <ParentMessage>(
 				? undefined
 				: { displayName, email, avatarUrl: avatarUrl ?? null },
 		appVersion,
+		paletteKey,
+		createChannelKey,
 	}
 	return sidebarStatic(h, "flex flex-1", [
+		// Until the channel lists arrive, the last screen's paint stays up (`app/paint.ts`).
+		...(isLoading(model)
+			? [h.div([h.Attribute("data-paint", "loading"), h.Attribute("hidden", "")])]
+			: []),
 		orgSwitcherHeader(h, orgSwitcher, orgSwitcherEntries, shell, organizations, toOrgSwitcherMessage),
 		sidebarContent(h, { state: "expanded" }, [
 			sidebarSectionGroup(
@@ -256,6 +291,8 @@ const sidebarBody = <ParentMessage>(
 					route,
 					activeChannelId,
 					nowMs,
+					paletteKey,
+					createChannelKey,
 					onActiveMount: h.OnMount(Mount.mapMessage(ScrollActiveIntoView(), toParentMessage)),
 					onBrowseChannels: h.OnClick(toParentMessage(Message.ClickedBrowseChannels())),
 					onDismissCreateChannelHint: h.OnClick(
@@ -328,5 +365,7 @@ export const view = <ParentMessage>(
 		shell.currentUser?.email,
 		shell.currentUser?.avatarUrl,
 		shell.appVersion,
+		shell.paletteKey,
+		shell.createChannelKey,
 	])
 }

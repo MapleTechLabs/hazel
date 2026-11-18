@@ -14,7 +14,8 @@ import {
 import { safeSourceUrl } from "../../../customers/providers"
 import { stageBadge } from "../../../customers/ui/badges"
 import { dataTable } from "../../../customers/ui/data-table"
-import { IconCopy, IconExternalLink, IconWarning } from "../../../icons"
+import { linkClass } from "../../../customers/ui/surface"
+import { IconCopy, IconWarning } from "../../../icons"
 import { badge } from "../../../ui/badge"
 import { buttonClassName, button } from "../../../ui/button"
 import { Message } from "./message"
@@ -51,7 +52,7 @@ const externalLink = (h: HtmlBuilder<Message>, href: string, label: string): Htm
 			h.Attribute("rel", "noreferrer"),
 			h.Class(buttonClassName({ intent: "outline", size: "xs" })),
 		],
-		[label, IconExternalLink(h, icon)],
+		[label],
 	)
 
 const banner = (h: HtmlBuilder<Message>, context: Context, detail: Customers.AccountDetail): Html | null => {
@@ -354,7 +355,7 @@ const invoicesCard = (
 				{
 					key: "number",
 					label: "Invoice",
-					widthClass: "w-32",
+					widthClass: "w-28",
 					cell: (invoice) =>
 						invoice.status === "upcoming"
 							? h.span([h.Class("text-muted-fg")], ["Upcoming"])
@@ -363,7 +364,7 @@ const invoicesCard = (
 				{
 					key: "status",
 					label: "Status",
-					widthClass: "w-32",
+					widthClass: "w-28",
 					cell: (invoice) =>
 						badge(h, { intent: INVOICE_STATUS[invoice.status][1] }, [
 							INVOICE_STATUS[invoice.status][0],
@@ -381,15 +382,25 @@ const invoicesCard = (
 					label: "Issued",
 					widthClass: "w-32",
 					hideClass: "max-md:hidden",
-					cell: (invoice) => date(invoice.issuedAt),
+					cell: (invoice) => h.span([h.Class("whitespace-nowrap")], [date(invoice.issuedAt)]),
 				},
-				{ key: "due", label: "Due", widthClass: "w-28", cell: (invoice) => date(invoice.dueAt) },
+				{
+					key: "due",
+					label: "Due",
+					widthClass: "w-28",
+					cell: (invoice) => h.span([h.Class("whitespace-nowrap")], [date(invoice.dueAt)]),
+				},
 				{
 					key: "paid",
 					label: "Paid",
 					cell: (invoice) =>
 						invoice.paidAt !== null
-							? `${date(invoice.paidAt)}${invoice.attemptCount > 1 ? ` · attempt ${invoice.attemptCount}` : ""}`
+							? h.span(
+									[h.Class("whitespace-nowrap")],
+									[
+										`${date(invoice.paidAt)}${invoice.attemptCount > 1 ? ` · attempt ${invoice.attemptCount}` : ""}`,
+									],
+								)
 							: invoice.status === "open"
 								? h.span(
 										[h.Class("text-danger-subtle-fg")],
@@ -403,7 +414,7 @@ const invoicesCard = (
 					key: "link",
 					label: "",
 					align: "right",
-					widthClass: "w-12",
+					widthClass: "w-16",
 					cell: (invoice) => {
 						const href = safeSourceUrl(invoice.provider, invoice.hostedUrl)
 						return href === null
@@ -414,9 +425,9 @@ const invoicesCard = (
 										h.Attribute("target", "_blank"),
 										h.Attribute("rel", "noreferrer"),
 										h.AriaLabel(`Open invoice ${invoice.number ?? ""}`),
-										h.Class("inline-flex text-muted-fg hover:text-fg"),
+										h.Class(linkClass),
 									],
-									[IconExternalLink(h, { className: "size-4" })],
+									["View"],
 								)
 					},
 				},

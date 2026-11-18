@@ -1,5 +1,6 @@
 import { Toolkit } from "effect/ai"
-import { LinearApiClient, makeLinearSdkClient } from "@hazel/integrations/linear"
+import { LinearApiClient } from "@hazel/integrations/linear"
+import { makeLinearSdkClient } from "@hazel/integrations/linear/sdk"
 import { CraftApiClient } from "@hazel/integrations/craft"
 import type { IntegrationConnection } from "@hazel/domain/models"
 import type { OrganizationId } from "@hazel/schema"

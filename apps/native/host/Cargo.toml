@@ -13,20 +13,32 @@ publish = false
 # El::focusable_by_script and El::clip_fade_linear_frac (Makisuo/rune's `hazel-grid` branch), plus
 # iOS's full-screen window, safe area and motion frames (`hazel-ios`), plus a soft keyboard's
 # return as Enter, iOS's display link and El::pin_insets (`hazel-ios-followups`), plus a
-# long-press opening an element's context menu (`hazel-long-press`), until they land upstream.
-rune = { git = "https://github.com/Makisuo/rune", rev = "3b676200f9ab1923059651c4e81c0b77cb8699a2", features = [
+# long-press opening an element's context menu (`hazel-long-press`), plus Tx::scroll_by (`hazel-scroll-by`), plus a fling at the finger's recent speed
+# (`hazel-touch-velocity`), plus El::basis (`hazel-flex-basis`), plus iOS's text proxy for a
+# focused field's autocorrection and predictions (`hazel-ios-text-input`), until they land upstream.
+rune = { git = "https://github.com/Makisuo/rune", rev = "884a6069c97a36231b0f0e67bdd35e9d04ad3d14", features = [
 	"native-file-dialog",
 ] }
+rune-fx = { git = "https://github.com/Makisuo/rune", rev = "884a6069c97a36231b0f0e67bdd35e9d04ad3d14" }
 base64 = "0.22"
 # Decodes a picture and its mask picture to composite them (Rune's own decoder, same features).
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
+# Rasterizes a stretched inline SVG (a chart) at its box's own size, and scales the points of a
+# non-scaling stroke's path (`src/images.rs`). The versions Rune's `svg` feature already builds.
+resvg = { version = "0.45", default-features = false }
+svgtypes = "0.15"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# The sign-in vault in the macOS keychain, as the Tauri app keeps its own (apps/desktop).
-keyring = { version = "3", features = ["apple-native"] }
+# The sign-in vault in the OS keychain (Keychain, Credential Manager, Secret Service), as the
+# Tauri app keeps its own (apps/desktop).
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 # Verifies an update's signature as the Tauri updater does (apps/desktop), with the same key.
 minisign-verify = "0.2"
 wgpu = { version = "~30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "wgsl"] }
+
+# Downloads off Apple platforms (`src/fetch.rs`).
+[target.'cfg(not(target_vendor = "apple"))'.dependencies]
+ureq = { version = "3", default-features = false, features = ["rustls", "gzip"] }
 
 # Downloads through the system's URL loading on macOS and iOS (`src/fetch.rs`).
 [target.'cfg(target_vendor = "apple")'.dependencies]
@@ -34,13 +46,43 @@ block2 = "0.6"
 objc2-foundation = "0.3"
 
 # The web views HTML render frames show their pages in (`src/frames.rs`).
-[target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-app-kit = "0.3"
 objc2-web-kit = "0.3"
 objc2-quartz-core = "0.3"
 objc2-core-graphics = "0.3"
 objc2-core-foundation = "0.3"
+# System notifications (`src/notify.rs`): the web app's on macOS, the permission for pushes on iOS.
+objc2-user-notifications = { version = "0.3", default-features = false, features = [
+	"std",
+	"UNUserNotificationCenter",
+	"UNNotificationContent",
+	"UNNotificationRequest",
+	"UNNotificationSettings",
+	"UNNotificationTrigger",
+	"UNNotificationAttachment",
+	"block2",
+] }
+# Notifications from a person drawn as messages from them (`src/notify.rs`).
+objc2-intents = { version = "0.3", default-features = false, features = [
+	"std",
+	"block2",
+	"INOutgoingMessageType",
+	"INSendMessageAttachment",
+	"INImage",
+	"INIntent",
+	"INInteraction",
+	"INPerson",
+	"INPersonHandle",
+	"INSendMessageIntent",
+	"INSpeakableString",
+	"INIntentResponse",
+] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2-ui-kit = "0.3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = "0.3"
 
 [profile.release]
 debug = false

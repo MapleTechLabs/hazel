@@ -3,7 +3,7 @@ import type { RenderTarget } from "foldkit/runtime"
 
 import { type ElementBridge, hostFocusKey, matchesElement } from "./bridge"
 import type { OverlayWire, Overlays } from "./overlays"
-import { type NodeInfo, type Scope, type Style, StyleResolver, color } from "./style"
+import { type ListType, type NodeInfo, type Scope, type Style, StyleResolver, color } from "./style"
 import type { CommitStats, HostToRuntime, RuntimeToHost, WireNode } from "./wire"
 
 /** Event-shaped objects with the fields Foldkit's handlers read (see foldkit html/index.ts). */
@@ -135,6 +135,8 @@ type CachedElement = {
 	readonly context: string
 	/** The pointer-tracking Mount above it, which its `data-hover-report` names. */
 	readonly pointerMount: string | undefined
+	/** The number a list item's marker shows: `<ol start>` plus the `<li>`s before it. */
+	readonly listOrdinal: number | undefined
 }
 
 /** A Mount watching pointer events below it, and the selector of the elements it looks for. */
@@ -216,6 +218,11 @@ const HOST_ATTRS = [
 	"tabindex",
 	// Moves the window, as Tauri's own attribute does: the host makes the element a drag region.
 	"data-tauri-drag-region",
+	// Shader effects the native host draws on the element (`apps/native/host/src/fx.rs`); the web ignores it.
+	"data-fx",
+	// A press keeps the editor focused, as the web's `preventDefault`ed `mousedown` does (the
+	// composer's send button): the host leaves the focus, and the keyboard, where they are.
+	"data-keeps-editor-focus",
 ]
 const SVG_ATTRS = new Set([
 	"d",
@@ -243,6 +250,8 @@ const SVG_ATTRS = new Set([
 	"opacity",
 	"fill-opacity",
 	"stroke-opacity",
+	// The host keeps such a stroke's width when it stretches the drawing (its rasteriser does not).
+	"vector-effect",
 	"text-anchor",
 	"dominant-baseline",
 	"font-size",
@@ -296,14 +305,31 @@ const svgPaint = (name: string, value: string): string => {
 	return hex === null ? value : hex.endsWith("ff") ? hex.slice(0, 7) : hex
 }
 
-/** An SVG subtree as a flat icon body: `<g>` attributes pushed down onto their children. */
-const svgBody = (vnode: AnyVNode, inherited: Record<string, string> = {}): string =>
+/** An element's `fill` and `stroke` from its classes (`stroke-chart-new`), which beat its attributes. */
+/** An svg's wire node while it is built: its optional fields set only when present. */
+type SvgWireDraft = {
+	-readonly [K in keyof Extract<WireNode, { readonly k: "svg" }>]: Extract<
+		WireNode,
+		{ readonly k: "svg" }
+	>[K]
+}
+
+/** The paint an svg's own classes give a shape. */
+type SvgColors = { fill?: string; stroke?: string }
+
+type SvgPaint = (vnode: AnyVNode, tag: string) => Readonly<SvgColors>
+
+/**
+ * An SVG subtree as a flat icon body: `<g>` attributes pushed down onto their children, and paint
+ * set by classes written as attributes (the host's rasteriser reads no CSS).
+ */
+const svgBody = (vnode: AnyVNode, paint: SvgPaint, inherited: Record<string, string> = {}): string =>
 	(vnode.children ?? [])
 		.map((child) => {
 			if (typeof child === "string" || child.sel === undefined) return ""
-			const attrs = { ...inherited, ...attrsOf(child) }
 			const tag = tagOf(child)
-			if (tag === "g") return svgBody(child, attrs)
+			const attrs = { ...inherited, ...attrsOf(child), ...paint(child, tag) }
+			if (tag === "g") return svgBody(child, paint, attrs)
 			const list = Object.entries(attrs)
 				.filter(([name]) => SVG_ATTRS.has(name))
 				.map(([name, value]) => `${name}="${svgPaint(name, value).replace(/"/g, "&quot;")}"`)
@@ -364,6 +390,123 @@ const inlineStyleOf = (vnode: AnyVNode): Record<string, string> | undefined => {
 		}
 	}
 	return out
+}
+
+const ROMAN: ReadonlyArray<readonly [number, string]> = [
+	[1000, "m"],
+	[900, "cm"],
+	[500, "d"],
+	[400, "cd"],
+	[100, "c"],
+	[90, "xc"],
+	[50, "l"],
+	[40, "xl"],
+	[10, "x"],
+	[9, "ix"],
+	[5, "v"],
+	[4, "iv"],
+	[1, "i"],
+]
+
+const roman = (n: number): string => {
+	let out = ""
+	let rest = n
+	for (const [value, digits] of ROMAN)
+		while (rest >= value) {
+			out += digits
+			rest -= value
+		}
+	return out
+}
+
+/** `a`…`z`, `aa`…: CSS's `lower-alpha`. */
+const alpha = (n: number): string => {
+	let out = ""
+	for (let k = n; k > 0; k = Math.floor((k - 1) / 26)) out = String.fromCharCode(97 + ((k - 1) % 26)) + out
+	return out
+}
+
+/** What a marker of `type` reads for the item counted `n`. */
+export const markerText = (type: ListType, n: number): string => {
+	switch (type) {
+		case "disc":
+			return "\u2022"
+		case "circle":
+			return "\u25E6"
+		case "square":
+			return "\u25AA"
+		case "decimal":
+			return `${n}.`
+		case "lower-alpha":
+			return n > 0 ? `${alpha(n)}.` : `${n}.`
+		case "upper-alpha":
+			return n > 0 ? `${alpha(n).toUpperCase()}.` : `${n}.`
+		case "lower-roman":
+			return n > 0 && n < 4000 ? `${roman(n)}.` : `${n}.`
+		case "upper-roman":
+			return n > 0 && n < 4000 ? `${roman(n).toUpperCase()}.` : `${n}.`
+	}
+}
+
+/**
+ * A list item's `::marker`, `list-style-position: outside`: a box out of flow, ending where the
+ * item's own box starts, its text on the item's first line (the item's font and line height are
+ * inherited). The space CSS puts after the marker is its end padding. Keyed, and last among the
+ * children, so the item's other children keep the paths they have without it.
+ */
+/**
+ * A list item's style without its marker, once per resolved style: the resolver hands out the
+ * same object for every item styled alike, so a long list copies it once, and no other element
+ * pays for the copy at all.
+ */
+const unmarked = new WeakMap<Style, Style>()
+
+const withoutMarker = (style: Style): Style => {
+	const known = unmarked.get(style)
+	if (known !== undefined) return known
+	const { listMarker: _, ...rest } = style
+	unmarked.set(style, rest)
+	return rest
+}
+
+/**
+ * Marker boxes by font size and colour, with their style already as JSON: a list's items share
+ * one, so a long list stringifies it once. A page holds a handful (one per list font and colour).
+ */
+const markerBoxes = new Map<string, { st: Style; json: string }>()
+
+const markerBox = (em: number, color: string | undefined) => {
+	const id = `${em}|${color ?? ""}`
+	const known = markerBoxes.get(id)
+	if (known !== undefined) return known
+	const width = Math.round(em * 3)
+	const st: Style = {
+		absolute: [-width, 0, null, null],
+		w: width,
+		pad: [0, Math.round(em * 0.3), 0, 0],
+		textAlign: "right",
+		nowrap: true,
+		pointerEvents: "none",
+	}
+	if (color !== undefined) st.color = color
+	const box = { st, json: JSON.stringify(st) }
+	markerBoxes.set(id, box)
+	return box
+}
+
+const markerNode = (marker: NonNullable<Style["listMarker"]>, n: number, em: number): WireNode => {
+	const { st, json } = markerBox(em, marker.color)
+	const text = markerText(marker.type, n)
+	return {
+		k: "e",
+		h: hash(`marker${json}${text}`),
+		tag: "span",
+		key: "list-marker",
+		st,
+		attrs: {},
+		on: {},
+		c: [{ k: "t", s: text }],
+	}
 }
 
 const hash = (text: string): string => {
@@ -617,7 +760,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			path: string,
 			parentPath: string | undefined,
 			scope: Scope,
-			position: { siblings: ReadonlyArray<NodeInfo>; index: number } | undefined,
+			position: { siblings: ReadonlyArray<NodeInfo>; index: number; listOrdinal?: number } | undefined,
 			prevSame: boolean,
 			pointer: PointerWatch | undefined,
 		): WireNode => {
@@ -638,6 +781,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				last.context === context &&
 				!isTouched(path) &&
 				last.pointerMount === pointer?.mount &&
+				last.listOrdinal === position?.listOrdinal &&
 				sentHashes.has(last.h)
 			) {
 				replay(last)
@@ -677,18 +821,47 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				dark,
 				env.width,
 			)
-			const st: Style = resolved.style
+			// A list item's marker is drawn as a child of its own (below), not read by the host.
+			const listMarker = resolved.style.listMarker
+			const st = listMarker === undefined ? resolved.style : withoutMarker(resolved.style)
 			if (tag === "svg") {
-				const view = Number((attrs.viewBox ?? "0 0 24 24").split(/\s+/)[2]) || 24
+				const box = (attrs.viewBox ?? "0 0 24 24").trim().split(/[\s,]+/)
+				const view = Number(box[2]) || 24
+				// A drawing that is not square (a sparkline's `0 0 80 24`) says its height too.
+				const viewH = Number(box[3]) || view
+				const { fill, stroke, ...own } = st
 				const sized: Style = {
-					...st,
+					...own,
 					w: st.w ?? (attrs.width ? Number(attrs.width) : undefined),
 					h: st.h ?? (attrs.height ? Number(attrs.height) : undefined),
 				}
-				const body = svgBody(vnode)
+				// Paint inherits, as in CSS: the svg's own `fill-*`/`stroke-*` class reaches its shapes.
+				const inherited: Record<string, string> = {}
+				if (fill !== undefined) inherited.fill = fill
+				if (stroke !== undefined) inherited.stroke = stroke
+				const paint: SvgPaint = (child, childTag) => {
+					const childClasses = classesOf(child)
+					if (childClasses.length === 0) return {}
+					const { style } = styles.resolve(
+						{
+							tag: childTag,
+							classes: childClasses,
+							attrs: attrsOf(child),
+							hasDescendant: hasDescendant(child),
+						},
+						resolved.scope,
+						dark,
+						env.width,
+					)
+					const colors: SvgColors = {}
+					if (style.fill !== undefined) colors.fill = style.fill
+					if (style.stroke !== undefined) colors.stroke = style.stroke
+					return colors
+				}
+				const body = svgBody(vnode, paint, inherited)
 				// `none` stretches the drawing to the box (the dithered avatar); absent means `xMidYMid meet`.
 				const par = attrs.preserveAspectRatio
-				const h = hash(`svg${view}${body}${JSON.stringify(sized)}${par ?? ""}`)
+				const h = hash(`svg${view}x${viewH}${body}${JSON.stringify(sized)}${par ?? ""}`)
 				nextHashes.add(h)
 				nextCache.set(path, {
 					vnode,
@@ -706,14 +879,16 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					count: position?.siblings.length,
 					context,
 					pointerMount: pointer?.mount,
+					listOrdinal: position?.listOrdinal,
 				})
 				if (sentHashes.has(h)) {
 					reusedSubtrees += 1
 					return { k: "r", h }
 				}
-				return par === undefined
-					? { k: "svg", h, view, body, st: sized }
-					: { k: "svg", h, view, body, st: sized, par }
+				const svg: SvgWireDraft = { k: "svg", h, view, body, st: sized }
+				if (viewH !== view) svg.vh = viewH
+				if (par !== undefined) svg.par = par
+				return svg
 			}
 			const on: Record<string, number> = {}
 			const ownHandlers: Array<[number, Handler]> = []
@@ -727,6 +902,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			}
 			const keep: Record<string, string> = {}
 			for (const name of HOST_ATTRS) if (name in attrs) keep[name] = attrs[name] as string
+			// Native islands (`data-native`, its props and items): the host reads them all.
+			for (const name in attrs) if (name.startsWith("data-native")) keep[name] = attrs[name] as string
 			// A Mount that delegates pointer events: its element and the ones it looks for report them.
 			const watchSelector = options.bridge?.pointerSelector(vnode.data?.foldkitMount?.name ?? "")
 			const watch = watchSelector === undefined ? pointer : { mount: path, selector: watchSelector }
@@ -742,13 +919,22 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			const childPaths: Array<string> = []
 			const childList = vnode.children ?? []
 			let siblingsSame = true
+			// The list's counter, counted up once per `<li>` as the loop passes it: `<ol start>`, else 1.
+			let listOrdinal = tag === "ol" ? Number.parseInt(attrs.start ?? "1", 10) || 1 : 1
 			for (let index = 0; index < childList.length; index++) {
 				const child = childList[index] as AnyVNode | string
 				const segment =
 					typeof child !== "string" && child.key !== undefined ? `k${child.key}` : `${index}`
 				const childPath = `${path}/${segment}`
 				const info = typeof child === "string" ? undefined : infoOf.get(child)
-				const position = info === undefined ? undefined : { siblings: infos, index: info.index ?? 0 }
+				const position =
+					info === undefined
+						? undefined
+						: {
+								siblings: infos,
+								index: info.index ?? 0,
+								listOrdinal: info.tag === "li" ? listOrdinal++ : undefined,
+							}
 				children.push(
 					serialize(child, childPath, path, resolved.scope, position, siblingsSame, watch),
 				)
@@ -762,6 +948,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			const innerHtml = vnode.data?.props?.innerHTML
 			if (typeof innerHtml === "string" && children.length === 0)
 				children.push({ k: "t", s: htmlText(innerHtml) })
+			if (listMarker !== undefined)
+				children.push(markerNode(listMarker, position?.listOrdinal ?? 1, resolved.scope.text.size))
 			const mount = vnode.data?.foldkitMount?.name
 			if (mount !== undefined && options.bridge?.isDomMount(mount)) {
 				keep["data-editable"] = "1"
@@ -832,6 +1020,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					count: position?.siblings.length,
 					context,
 					pointerMount: pointer?.mount,
+					listOrdinal: position?.listOrdinal,
 				})
 			if (sentHashes.has(h)) {
 				reusedSubtrees += 1
@@ -943,7 +1132,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			send({ t: "focus", key: hostFocusKey(path, bridge.tagAt(path), bridge.attrsAt(path)) })
 		return {
 			focus: (selector) => withPath(selector, focusPath),
-			click: (selector) => withPath(selector, click),
+			// `Dom.clickElement`: a file input opens the host's Open dialog, as `element.click()` does.
+			click: (selector) => withPath(selector, clickElement),
 			scrollIntoView: (selector, block) =>
 				withPath(selector, (path) => send({ t: "reveal", path, block })),
 			advanceFocus: (selector, direction) =>
@@ -1173,7 +1363,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			send({ t: "focus", key: focusKey })
 			return
 		}
-		click(control)
+		clickElement(control)
 		const checkable = tag === "input" && (attrs.type === "checkbox" || attrs.type === "radio")
 		if (checkable && !(attrs.type === "radio" && "checked" in attrs))
 			fire(

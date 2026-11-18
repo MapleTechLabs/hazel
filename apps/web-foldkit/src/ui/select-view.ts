@@ -18,6 +18,7 @@ import {
 	selectValueClassName,
 } from "~/components/ui/select.styles"
 import { IconCheck, IconChevronUpDown } from "../icons"
+import { nativeIsland } from "../platform/native-island"
 import { dismissButton, focusScopeSentinel, openModalPopover } from "./aria/overlay"
 import {
 	type Item,
@@ -189,6 +190,22 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 							h.Id(triggerId(model.id)),
 							...(model.isDisabled ? [] : [h.Attribute("tabindex", "0")]),
 							h.Attribute("type", "button"),
+							// A system menu on iOS, opened from this trigger as drawn; its choice is a `change` here.
+							...(model.isDisabled
+								? []
+								: [
+										...nativeIsland(h, "menu", {
+											items: Array.map(viewInputs.items, (candidate) => ({
+												key: candidate.key,
+												label: candidate.label,
+												disabled: candidate.isDisabled === true,
+											})),
+											selected: Option.getOrNull(model.selectedKey),
+										}),
+										h.OnChange((key) =>
+											Message.ChoseFromNativeMenu({ key, items: viewInputs.items }),
+										),
+									]),
 							h.OnFocus(Message.FocusedTrigger()),
 							h.OnBlur(Message.BlurredTrigger()),
 							h.OnMount(FocusTriggerOnPress()),

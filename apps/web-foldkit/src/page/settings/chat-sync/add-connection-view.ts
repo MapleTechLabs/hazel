@@ -35,12 +35,7 @@ const workspaceRow = (h: HtmlBuilder<Message>, workspace: Workspace): Html =>
 		[
 			h.span([h.Class("truncate text-fg")], [workspace.name]),
 			...(workspace.owner
-				? [
-						h.span(
-							[h.Class("rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-fg")],
-							["Owner"],
-						),
-					]
+				? [h.span([h.Class("rounded bg-secondary px-1.5 py-0.5 text-3xs text-muted-fg")], ["Owner"])]
 				: []),
 		],
 	)

@@ -84,7 +84,7 @@ export function PlatformDownloadSection({ release }: PlatformDownloadSectionProp
 				)}
 			>
 				<a
-					href="https://github.com/HazelChat/hazel/releases"
+					href="https://github.com/MapleTechLabs/hazel/releases"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="inline-flex items-center gap-1.5 hover:text-secondary transition-colors"

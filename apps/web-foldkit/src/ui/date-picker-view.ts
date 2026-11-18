@@ -25,6 +25,7 @@ import {
 	popoverId,
 	triggerId,
 } from "./date-picker"
+import { nativeIsland } from "../platform/native-island"
 import * as Field from "./field"
 import { inputGroup } from "./input"
 
@@ -170,6 +171,12 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 				...nameAttributes,
 				h.DataAttribute("react-aria-pressable", "true"),
 				h.Id(groupId(model.id)),
+				// The system date picker on iOS, opened from this field as drawn; the day it picks is a `change` here.
+				...nativeIsland(h, "date-picker", {
+					value: segments.committed,
+					min: Option.getOrNull(model.calendar.minValue),
+				}),
+				h.OnChange((date) => Message.PickedNativeDate({ date })),
 			],
 		},
 		[

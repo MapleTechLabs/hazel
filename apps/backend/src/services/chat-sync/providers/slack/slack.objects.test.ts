@@ -16,7 +16,7 @@ import { encodeInvokePrincipal } from "../../../../worker/objects/principal"
 import { ObjectStubs } from "../../../../worker/objects/protocol"
 import { makeTestObjects, type TestObject, type TestObjects } from "../../../../worker/objects/testing"
 import { routeChatSyncInbound } from "../../chat-sync-inbound"
-import { type SlackUserLookup, slackInbound } from "./events"
+import { type SlackUserLookup, slackHistoryInbound, slackInbound } from "./events"
 
 const TEAM = "T0HAZEL01"
 const SLACK_CHANNEL = "C0GENERAL1"
@@ -142,19 +142,16 @@ const makeOrg = (objects: TestObjects, team = TEAM) =>
 				owner,
 			)
 		const connection = (yield* ok(yield* connectTo(team))) as { data: { id: SyncConnectionId } }
-		const linkChannel = () =>
-			call(
-				org,
-				orgId,
-				"chatSync.channelLink.create",
-				{
-					organizationId: orgId,
-					syncConnectionId: connection.data.id,
-					hazelChannelId: created.data.id,
-					externalChannelId: SLACK_CHANNEL,
-				},
-				owner,
-			)
+		const linkChannel = (historyLimit?: number) => {
+			const payload = {
+				organizationId: orgId,
+				syncConnectionId: connection.data.id,
+				hazelChannelId: created.data.id,
+				externalChannelId: SLACK_CHANNEL,
+			}
+			const withLimit = historyLimit === undefined ? payload : { ...payload, historyLimit }
+			return call(org, orgId, "chatSync.channelLink.create", withLimit, owner)
+		}
 		const stubs = Layer.succeed(ObjectStubs, objects.stubs)
 		const inbound = (eventId: string, event: Slack.SlackEvent, fromTeam = team) =>
 			Effect.gen(function* () {
@@ -269,6 +266,94 @@ describe("Slack chat sync on the objects", () => {
 				})
 				const messages = rows<{ content: string }>(world.channel, `SELECT content FROM messages`)
 				expect(messages).toEqual([{ content: "**ship** it [today](https://hazel.sh)" }])
+			}),
+		))
+
+	it("mentioning a Slack user's shadow pings them in Slack", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				// Dana writes once from Slack, so the org knows her shadow.
+				yield* world.inbound("Ev20", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000900", "hello"),
+				})
+				const dana = rows<{ authorId: string }>(world.channel, `SELECT authorId FROM messages`)[0]!
+					.authorId
+				yield* ok(
+					yield* call(
+						world.channel,
+						world.channelId,
+						"message.create",
+						{
+							channelId: world.channelId,
+							content: `ping @[userId:${dana}]`,
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: world.owner,
+							deletedAt: null,
+						},
+						world.owner,
+					),
+				)
+				expect(world.objects.chatSyncCalls.at(-1)?.content).toBe("ping <@U0DANA0001>")
+			}),
+		))
+
+	it("a linked channel's history brings its threads: replies after their parent, in a Hazel thread", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeOrg(yield* makeTestObjects)
+				const parentTs = "1700000000.000300"
+				const entry = (fromReplies: boolean, ts: string, text: string, threadTs: string | null) =>
+					slackHistoryInbound(
+						{ subtype: null, message: slackMessage(ts, text, { threadTs }), replyCount: 0 },
+						TEAM,
+						lookupUser,
+						fromReplies,
+					).pipe(Effect.map(Option.getOrThrow))
+				// As the Slack client serves a page: each message, then its thread's replies.
+				world.objects.chatSyncHistory.set(SLACK_CHANNEL, [
+					yield* entry(false, "1700000000.000100", "before", null),
+					yield* entry(false, parentTs, "parent", parentTs),
+					yield* entry(true, "1700000000.000400", "first reply", parentTs),
+					yield* entry(true, "1700000000.000500", "second reply", parentTs),
+					yield* entry(false, "1700000000.000600", "after", null),
+				])
+				yield* ok(yield* world.linkChannel(50))
+				for (let round = 0; round < 10; round++) {
+					yield* Effect.sleep("2 millis")
+					yield* world.org.alarm
+				}
+
+				const threadLinks = rows<{ hazelChannelId: string }>(
+					world.org,
+					`SELECT hazelChannelId FROM chat_sync_channel_links WHERE externalChannelId = ?`,
+					`${SLACK_CHANNEL}/${parentTs}`,
+				)
+				expect(threadLinks).toHaveLength(1)
+				const threadId = threadLinks[0]!.hazelChannelId
+				expect(
+					rows<{ content: string; threadChannelId: string | null }>(
+						world.channel,
+						`SELECT content, threadChannelId FROM messages ORDER BY createdAt, rowid`,
+					),
+				).toEqual([
+					{ content: "before", threadChannelId: null },
+					{ content: "parent", threadChannelId: threadId },
+					{ content: "after", threadChannelId: null },
+				])
+				const thread = yield* world.objects.get(channelTarget(threadId as ChannelId))
+				expect(
+					rows<{ content: string }>(
+						thread,
+						`SELECT content FROM messages ORDER BY createdAt, rowid`,
+					),
+				).toEqual([{ content: "first reply" }, { content: "second reply" }])
+				// Old news: nothing went back out to Slack.
+				expect(world.objects.chatSyncCalls.filter((entry) => entry.op !== "fetchHistory")).toEqual([])
 			}),
 		))
 

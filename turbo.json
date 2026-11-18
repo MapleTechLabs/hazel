@@ -32,7 +32,10 @@
 		"OTEL_BASE_URL",
 		"MAPLE_INGEST_KEY",
 		"COMMIT_SHA",
-		"OPENROUTER_API_KEY"
+		"OPENROUTER_API_KEY",
+		"APNS_KEY_ID",
+		"APNS_TEAM_ID",
+		"APNS_PRIVATE_KEY"
 	],
 	"globalPassThroughEnv": ["*"],
 	"ui": "tui",

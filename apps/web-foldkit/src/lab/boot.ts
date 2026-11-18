@@ -32,6 +32,6 @@ export const startLab = (path: string, container: HTMLElement): Promise<void> =>
 	}
 	return load().then((module) => {
 		document.title = `${module.lab.title} · Lab`
-		module.lab.start(container)
+		module.lab.start({ container })
 	})
 }

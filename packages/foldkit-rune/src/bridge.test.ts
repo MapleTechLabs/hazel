@@ -84,7 +84,7 @@ describe("makeElementBridge", () => {
 		expect(calls).toEqual(["insert", "postpatch", "destroy"])
 	})
 
-	it("answers queries, sizes and ResizeObserver from host layout", () => {
+	it("answers queries, sizes and ResizeObserver from host layout", async () => {
 		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
 		bridge.commit(record(bridge), new Map())
 		const list = bridge.findById("list")
@@ -97,8 +97,26 @@ describe("makeElementBridge", () => {
 		})
 		observer.observe(rows[1])
 		bridge.reportLayout("r/1", { x: 0, y: 40, width: 300, height: 72 })
+		await Promise.resolve()
 		expect(heights).toEqual([72])
 		expect(rows[1]?.getBoundingClientRect().top).toBe(40)
+	})
+
+	it("delivers a batch of host layouts to a ResizeObserver in one callback", async () => {
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		bridge.commit(record(bridge), new Map())
+		const rows = bridge.findById("list")?.querySelectorAll("[data-list-key]") ?? []
+		const calls: Array<Array<number>> = []
+		const observer = new bridge.ResizeObserver((entries) => {
+			calls.push(entries.map((entry) => entry.contentRect.height))
+		})
+		for (const row of rows) observer.observe(row)
+		bridge.reportLayout("r/0", { x: 0, y: 0, width: 300, height: 40 })
+		bridge.reportLayout("r/1", { x: 0, y: 40, width: 300, height: 72 })
+		// Resized again in the same batch: the entry carries the latest size, once.
+		bridge.reportLayout("r/1", { x: 0, y: 40, width: 300, height: 80 })
+		await Promise.resolve()
+		expect(calls).toEqual([[40, 80]])
 	})
 
 	it("asks the host to measure an element once, when it is first observed", () => {
@@ -139,6 +157,27 @@ describe("makeElementBridge", () => {
 		await Promise.resolve()
 		expect(scrolls).toBe(1)
 		expect(sent).toEqual([480])
+	})
+
+	it("sends scrollBy as a shift from the host's offset, and takes the host's answer", () => {
+		const sent: Array<{ top: number; by?: number; seq?: number }> = []
+		const bridge = makeElementBridge({
+			mounts: new Set(),
+			send: (command) => {
+				if (command.t === "scroll") sent.push({ top: command.top, by: command.by, seq: command.seq })
+			},
+		})
+		bridge.commit(record(bridge), new Map())
+		const list = bridge.findById("list")
+		if (list === null) throw new Error("no #list element")
+		bridge.reportScroll("r", 300)
+		list.scrollBy({ top: 40 })
+		list.scrollBy(0, 0)
+		expect(list.scrollTop).toBe(340)
+		expect(sent).toEqual([{ top: 340, by: 40, seq: 1 }])
+		// The reader kept scrolling while the shift crossed: the host's offset after it wins.
+		bridge.reportScroll("r", 390, 1)
+		expect(list.scrollTop).toBe(390)
 	})
 
 	it("fires scroll once the host's rects for that frame are in, as one batch", async () => {

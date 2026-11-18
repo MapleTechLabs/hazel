@@ -16,7 +16,9 @@ import {
 	attachmentsStream,
 	botsStream,
 	customEmojisStream,
-	discordSyncedStream,
+	agentMarksStream,
+	syncedMessagesStream,
+	channelSyncProviderStream,
 	membersStream,
 	pinnedStream,
 	presenceStream,
@@ -27,6 +29,7 @@ import {
 	usersStream,
 } from "../lookup-data"
 import type { PageSubscriptionInput } from "../../contract"
+import { channelCustomerStream } from "../../../customers/channels"
 import * as Composer from "../../../composer/composer"
 import {
 	botCommandsStream,
@@ -40,7 +43,7 @@ import { uploadStream } from "../../../composer/upload"
 import { MessageWindows } from "../../../data/message-windows"
 import type { HazelApiClient, HazelRpc } from "../../../rpc"
 import { globalPasteStream, globalTypingStream, leftWindowStream } from "../../../composer/window-events"
-import { channelHotkeysStream } from "./hotkeys"
+import { ChannelKeys, channelHotkeysStream, channelKeysOf } from "./hotkeys"
 import { isMemberOf, Message, type Model } from "./page"
 import { windowFocus } from "../../../platform/presence/activity"
 
@@ -50,6 +53,24 @@ type Input = PageSubscriptionInput<Model>
 
 const byChannel = { channelId: ChannelId }
 const channelOf = ({ model }: Input) => ({ channelId: model.channelId })
+
+/** The open thread, once `channel.createThread` answered (before, its object would refuse the socket). */
+const openThreadIdOf = (model: Model): ChannelId | null =>
+	model.threadPanel?.creation === "Created" ? model.threadPanel.threadChannelId : null
+
+/**
+ * The channels whose messages the page shows: the channel and its open thread. The thread panel's rows
+ * read the channel's lookups, so every per-message lookup is keyed by these, never the channel alone.
+ */
+export const shownChannelIdsOf = (model: Model): ReadonlyArray<ChannelId> => {
+	const threadChannelId = openThreadIdOf(model)
+	return threadChannelId === null ? [model.channelId] : [model.channelId, threadChannelId]
+}
+const byShownChannels = { channelId: ChannelId, channelIds: Schema.Array(ChannelId) }
+const shownChannelsOf = ({ model }: Input) => ({
+	channelId: model.channelId,
+	channelIds: shownChannelIdsOf(model),
+})
 
 const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 	chatChannel: entry(byChannel, {
@@ -188,15 +209,29 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 						),
 		},
 	),
-	chatAttachments: entry(byChannel, {
-		modelToDependencies: channelOf,
-		dependenciesToStream: ({ channelId }) =>
-			attachmentsStream(channelId, (attachments) => Message.UpdatedAttachments({ attachments })),
+	chatAttachments: entry(byShownChannels, {
+		modelToDependencies: shownChannelsOf,
+		dependenciesToStream: ({ channelId, channelIds }) =>
+			attachmentsStream(channelIds, (attachments) =>
+				Message.UpdatedAttachments({ channelId, attachments }),
+			),
 	}),
-	chatDiscordSynced: entry(byChannel, {
+	chatSyncedMessages: entry(byShownChannels, {
+		modelToDependencies: shownChannelsOf,
+		dependenciesToStream: ({ channelId, channelIds }) =>
+			syncedMessagesStream(channelIds, (messages) =>
+				Message.UpdatedSyncedMessages({ channelId, messages }),
+			),
+	}),
+	chatSyncProvider: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
-			discordSyncedStream(channelId, (messageIds) => Message.UpdatedDiscordSynced({ messageIds })),
+			channelSyncProviderStream(channelId, (provider) => Message.UpdatedSyncProvider({ provider })),
+	}),
+	chatAgentMarks: entry(byShownChannels, {
+		modelToDependencies: shownChannelsOf,
+		dependenciesToStream: ({ channelId, channelIds }) =>
+			agentMarksStream(channelIds, (marks) => Message.UpdatedAgentMarks({ channelId, marks })),
 	}),
 	chatThreadChannels: entry(
 		{ threadIds: Schema.Array(ChannelId) },
@@ -227,16 +262,24 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 	chatThreadPanel: entry(
 		{ threadChannelId: Schema.NullOr(ChannelId) },
 		{
-			// Not while `channel.createThread` runs: the thread's object would refuse the socket.
-			modelToDependencies: ({ model }) => ({
-				threadChannelId:
-					model.threadPanel?.creation === "Created" ? model.threadPanel.threadChannelId : null,
-			}),
+			modelToDependencies: ({ model }) => ({ threadChannelId: openThreadIdOf(model) }),
 			dependenciesToStream: ({ threadChannelId }) =>
 				threadChannelId === null
 					? Stream.empty
 					: threadPanelStream(threadChannelId, (messages) =>
 							Message.UpdatedThreadPanelMessages({ threadChannelId, messages }),
+						),
+		},
+	),
+	chatThreadPanelPins: entry(
+		{ threadChannelId: Schema.NullOr(ChannelId) },
+		{
+			modelToDependencies: ({ model }) => ({ threadChannelId: openThreadIdOf(model) }),
+			dependenciesToStream: ({ threadChannelId }) =>
+				threadChannelId === null
+					? Stream.empty
+					: pinnedStream(threadChannelId, (pins) =>
+							Message.UpdatedThreadPanelPins({ threadChannelId, pins }),
 						),
 		},
 	),
@@ -273,6 +316,11 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
 			pinnedStream(channelId, (pins) => Message.UpdatedPinned({ pins })),
+	}),
+	chatCustomer: entry(byChannel, {
+		modelToDependencies: channelOf,
+		dependenciesToStream: ({ channelId }) =>
+			channelCustomerStream(channelId, (customer) => Message.UpdatedCustomer({ channelId, customer })),
 	}),
 	chatMembers: entry(byChannel, {
 		modelToDependencies: channelOf,
@@ -475,17 +523,19 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 	),
 	// Discord's channel shortcuts (`hotkeys.ts`), while the page (not a root overlay) holds the keyboard.
 	channelHotkeys: entry(
-		{ isActive: Schema.Boolean, isDialogOpen: Schema.Boolean },
+		{ isActive: Schema.Boolean, isDialogOpen: Schema.Boolean, keys: ChannelKeys },
 		{
 			modelToDependencies: ({ model, shared }) => ({
 				isActive:
 					model.tab._tag === "Messages" && isMemberOf(model) !== false && !shared.isOverlayOpen,
 				isDialogOpen: hasOpenDialog(model),
+				keys: channelKeysOf(shared.keys),
 			}),
-			dependenciesToStream: ({ isActive, isDialogOpen }) =>
+			dependenciesToStream: ({ isActive, isDialogOpen, keys }) =>
 				isActive
 					? channelHotkeysStream((action) => Message.PressedChannelHotkey({ action }), {
 							isDialogOpen,
+							keys,
 						})
 					: Stream.empty,
 		},

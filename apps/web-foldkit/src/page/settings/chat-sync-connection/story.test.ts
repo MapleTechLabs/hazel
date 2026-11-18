@@ -24,7 +24,7 @@ import {
 	RemoveChannelLink,
 	UpdateChannelLink,
 } from "./command"
-import { ChannelLinks, ConnectionLookup, directionLabel, Message, Submission } from "./model"
+import { ChannelLinks, ConnectionLookup, directionLabel, historyLimitOf, Message, Submission } from "./model"
 import { init, update } from "./update"
 import { sharedDefaults } from "../../test-shared"
 import { linkMenuEntries } from "./model"
@@ -297,6 +297,7 @@ describe("chat sync connection", () => {
 			message(Message.ClickedHazelChannel({ channel: hazel })),
 			message(Message.ClickedExternalChannel({ channel: discord })),
 			message(Message.ClickedDirection({ direction: "external_to_hazel" })),
+			message(Message.ClickedHistory({ history: "500" })),
 			message(Message.ClickedCreateLink()),
 			Command.expectExact(
 				CreateChannelLink({
@@ -306,6 +307,7 @@ describe("chat sync connection", () => {
 					externalChannelId: discord.id,
 					externalChannelName: "announcements",
 					direction: "external_to_hazel",
+					historyLimit: 500,
 				}),
 			),
 			Command.resolve(
@@ -325,11 +327,21 @@ describe("chat sync connection", () => {
 				expect(current.addLinkModal.isOpen).toBe(false)
 				expect(current.selectedChannel).toBeNull()
 				expect(current.direction).toBe("both")
+				expect(current.history).toBe("none")
 				expect(current.submission).toEqual(Submission.NotSubmitted())
 				expect(current.links._tag).toBe("Refreshing")
 			}),
 			Command.resolve(ListChannelLinks, Message.SucceededListChannelLinks({ version: 2, links: [] })),
 		)
+	})
+})
+
+describe("history import", () => {
+	test("asks for the chosen count, and none where nothing flows into Hazel", () => {
+		expect(historyLimitOf("none", "both")).toBe(0)
+		expect(historyLimitOf("100", "both")).toBe(100)
+		expect(historyLimitOf("500", "external_to_hazel")).toBe(500)
+		expect(historyLimitOf("500", "hazel_to_external")).toBe(0)
 	})
 })
 

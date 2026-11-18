@@ -26,11 +26,17 @@ import { editorRegistry, withEditor } from "../editor/registry"
 export const PresenceStatus = Schema.Literals(["online", "away", "busy", "dnd", "offline"])
 export type PresenceStatus = typeof PresenceStatus.Type
 
+/** The synced platform a mentionable person is on, when they are a Slack or Discord user. */
+export const MentionProvider = Schema.Literals(["discord", "slack"])
+export type MentionProvider = typeof MentionProvider.Type
+
 export const MentionMember = Schema.Struct({
 	userId: UserId,
 	firstName: Schema.String,
 	lastName: Schema.String,
 	avatarUrl: Schema.NullOr(Schema.String),
+	/** Set for a Slack or Discord person in a synced channel (not a Hazel member of it). */
+	provider: Schema.optionalKey(Schema.NullOr(MentionProvider)),
 })
 export type MentionMember = typeof MentionMember.Type
 
@@ -203,6 +209,13 @@ const eventToMessage = (event: EditorEvent): EditorMessage =>
 // MOUNT
 
 /**
+ * Marks a control whose press must not take the focus from editor `<value>` (the send button):
+ * the editor's Mount cancels its mousedown, so a touch keyboard stays up. One listener on the
+ * document, not a Mount of the control's own, so every composer scene needs no extra resolve.
+ */
+export const KEEPS_EDITOR_FOCUS = "data-keeps-editor-focus"
+
+/**
  * Owns the ProseMirror editor for the element's lifetime; editor events stream out as Messages.
  * `initialMarkdown` is read once, when the element mounts: the Model's draft after a remount.
  */
@@ -233,6 +246,17 @@ export const MountEditor = Mount.defineStream("MountEditor", {
 					// The editor is destroyed once its element has left the document: tearing it down
 					// while still attached forces a synchronous layout of the whole page.
 					(editor) => Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => editor.destroy()))),
+				)
+				// Duck-typed, with no `CSS.escape`: the native runtime's headless DOM runs this too.
+				const keepFocus = (event: Event) => {
+					const target = event.target as Partial<Element> | null
+					const control = target?.closest?.(`[${KEEPS_EDITOR_FOCUS}]`)
+					if (control?.getAttribute(KEEPS_EDITOR_FOCUS) === editorId) event.preventDefault()
+				}
+				const root = element.ownerDocument
+				yield* Effect.acquireRelease(
+					Effect.sync(() => root.addEventListener("mousedown", keepFocus)),
+					() => Effect.sync(() => root.removeEventListener("mousedown", keepFocus)),
 				)
 				// Registered after the editor exists, so it is released (unregistered) before the destroy.
 				yield* editorRegistry.register(editorId, view)

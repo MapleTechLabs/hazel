@@ -39,17 +39,14 @@ export interface ChatSyncInbound {
 	readonly event: ChatSyncInboundEvent
 }
 
-/** Route one provider event to every org whose link indexes its channel. */
-export const routeChatSyncInbound = Effect.fn("ChatSync.routeInbound")(function* (inbound: ChatSyncInbound) {
+/**
+ * The org-side payload of one event: its actor upserted into the directory as a shadow user (or the
+ * integration bot, for a message that names nobody).
+ */
+export const orgIngestPayloadOf = Effect.fn("ChatSync.orgIngestPayload")(function* (
+	inbound: ChatSyncInbound,
+) {
 	const { provider } = inbound
-	const targets = yield* indexedLinks(provider, inbound.externalChannelId, inbound.externalWorkspaceIds)
-	yield* Effect.annotateCurrentSpan({
-		"chat_sync.provider": provider,
-		"chat_sync.event": inbound.event._tag,
-		"chat_sync.external_channel_id": inbound.externalChannelId,
-		"chat_sync.orgs": targets.length,
-	})
-	if (targets.length === 0) return
 	const author: OrgChatSyncIngestPayload["author"] =
 		inbound.author !== null
 			? {
@@ -64,14 +61,28 @@ export const routeChatSyncInbound = Effect.fn("ChatSync.routeInbound")(function*
 			: inbound.event._tag === "MessageCreate"
 				? { externalUserId: null, user: yield* upsertIntegrationBot(provider) }
 				: null
-	const payload: OrgChatSyncIngestPayload = {
+	return {
 		provider,
 		externalChannelId: inbound.externalChannelId,
 		externalWorkspaceIds: inbound.externalWorkspaceIds,
 		dedupeKey: inbound.dedupeKey,
 		author,
 		event: inbound.event,
-	}
+	} satisfies OrgChatSyncIngestPayload
+})
+
+/** Route one provider event to every org whose link indexes its channel. */
+export const routeChatSyncInbound = Effect.fn("ChatSync.routeInbound")(function* (inbound: ChatSyncInbound) {
+	const { provider } = inbound
+	const targets = yield* indexedLinks(provider, inbound.externalChannelId, inbound.externalWorkspaceIds)
+	yield* Effect.annotateCurrentSpan({
+		"chat_sync.provider": provider,
+		"chat_sync.event": inbound.event._tag,
+		"chat_sync.external_channel_id": inbound.externalChannelId,
+		"chat_sync.orgs": targets.length,
+	})
+	if (targets.length === 0) return
+	const payload = yield* orgIngestPayloadOf(inbound)
 	const organizations = [...new Set(targets.map((target) => target.organizationId))]
 	yield* Effect.forEach(
 		organizations,

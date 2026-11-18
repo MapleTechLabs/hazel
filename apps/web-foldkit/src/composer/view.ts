@@ -8,11 +8,12 @@ import {
 } from "foldkit/html"
 import { cn } from "~/lib/utils"
 import { cx } from "~/utils/cx"
-import { IconEmoji1, IconGif, IconPaperclip2 } from "../icons"
+import { IconArrowUp, IconEmoji1, IconGif, IconPaperclip2 } from "../icons"
+import { button } from "../ui/button"
 import { ACCEPT_ATTRIBUTE } from "../editor/file-types"
 import { autocompletePopover } from "./autocomplete-view"
 import { commandInputPanel } from "./trigger-views"
-import { type Message, type Model, MountEditor } from "./composer"
+import { KEEPS_EDITOR_FOCUS, Message, type Model, MountEditor } from "./composer"
 
 /** Port of `SlateMessageComposer`: DropZone > (previews, indicators) > Frame > (Editor, Actions). */
 
@@ -66,8 +67,28 @@ const closedPicker =
 	(render: PickerButton) =>
 		render(childAttributes([h.Attribute("aria-expanded", "false")]), h.empty)
 
-/** `ComposerActions`: hidden file input, then Attach, GIF and Emoji. */
-const actions = <M>(h: HtmlBuilder<M>, extras: BoxExtras<M>): Array<Html> => [
+/**
+ * Send: what Enter does, for a pointer or a touch keyboard whose return key a user does not read
+ * as send. The draft decides as for Enter (an empty draft goes only with attachments). Pressing
+ * keeps the focus in the editor (`MountEditor`), so a touch keyboard stays up.
+ */
+const sendButton = <M>(h: HtmlBuilder<M>, model: Model, extras: BoxExtras<M>): Html => {
+	const hasContent = model.markdown.trim() !== "" || (extras.hasTopContent ?? false)
+	return button(
+		h,
+		{
+			intent: hasContent ? "primary" : "plain",
+			size: "sq-xs",
+			isCircle: true,
+			onPress: extras.toMessage(Message.SubmittedDraft({ markdown: model.markdown.trim() })),
+			attributes: [h.AriaLabel("Send message"), h.Attribute(KEEPS_EDITOR_FOCUS, model.editorId)],
+		},
+		[IconArrowUp(h)],
+	)
+}
+
+/** `ComposerActions`: hidden file input, then Attach, GIF and Emoji, and Send at the end. */
+const actions = <M>(h: HtmlBuilder<M>, model: Model, extras: BoxExtras<M>): Array<Html> => [
 	h.input([
 		h.Attribute("type", "file"),
 		h.Attribute("multiple", ""),
@@ -96,6 +117,7 @@ const actions = <M>(h: HtmlBuilder<M>, extras: BoxExtras<M>): Array<Html> => [
 					(extras.emojiTrigger ?? closedPicker(h))(pickerButton(h, "Emoji")),
 				],
 			),
+			sendButton(h, model, extras),
 		],
 	),
 ]
@@ -123,7 +145,7 @@ export const composerBoxView = <M>(h: HtmlBuilder<M>, model: Model, extras: BoxE
 								[
 									h.Class(
 										cn(
-											"relative inset-ring inset-ring-secondary flex h-max flex-col rounded-xl bg-secondary",
+											"relative flex h-max flex-col rounded-xl border border-border bg-bg shadow-xs transition-[border-color,box-shadow] duration-150 ease-out focus-within:border-border-hover focus-within:shadow-sm dark:bg-wash",
 											(extras.hasTopContent ?? false) && "rounded-t-none",
 										),
 									),
@@ -166,7 +188,7 @@ export const composerBoxView = <M>(h: HtmlBuilder<M>, model: Model, extras: BoxE
 											]),
 										],
 									),
-									...actions(h, extras),
+									...actions(h, model, extras),
 								],
 							),
 						],

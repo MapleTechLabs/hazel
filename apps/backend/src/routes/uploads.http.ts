@@ -20,10 +20,9 @@ import { AttachmentPolicy } from "../policies/attachment-policy"
 import { ObjectStorage } from "../services/object-storage"
 import { checkAvatarRateLimit } from "../services/rate-limit-helpers"
 import { Directory } from "../services/directory"
-import { AttachmentEffects, type CreateAttachmentPayload } from "../worker/objects/channel/attachments"
-import { WORKER_SENDER } from "../worker/objects/effects/registry"
+import { createAttachmentInChannel } from "../services/attachment-uploads"
 import { callObject } from "../worker/objects/calls"
-import { channelTarget, orgTarget } from "../worker/objects/kinds"
+import { orgTarget } from "../worker/objects/kinds"
 import { IsOrgAdminCall } from "../worker/objects/org/api-v1"
 import { ObjectStubs } from "../worker/objects/protocol"
 
@@ -64,34 +63,6 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 					message: "You can't manage this organization",
 					detail: `organizationId=${organizationId}`,
 				})
-			}
-		})
-
-		/** Create the `uploading` row in the channel's `ChannelObject` (a Connect mount's host). */
-		const createAttachmentInChannel = Effect.fn("Uploads.createAttachment")(function* (
-			payload: CreateAttachmentPayload,
-		) {
-			const index = yield* directory
-				.channel(payload.channelId)
-				.pipe(withRemapDbErrors("ChannelIndex", "select"))
-			const hostId = Option.match(index, {
-				onNone: () => payload.channelId,
-				onSome: (row) => row.hostChannelId ?? payload.channelId,
-			})
-			const kind = AttachmentEffects.createAttachment
-			const result = yield* stubs
-				.get(channelTarget(hostId))
-				.applyEffect({
-					objectId: hostId,
-					kind: kind.name,
-					payload: yield* Schema.encodeEffect(kind.payload)(payload).pipe(Effect.orDie),
-					key: `attachment:${payload.id}`,
-					sender: WORKER_SENDER,
-				})
-				.pipe(Effect.mapError(() => new UploadError({ message: "The channel is unreachable" })))
-			if (result._tag === "Rejected") {
-				yield* Effect.logWarning("Attachment upload refused", { message: result.message })
-				return yield* new UploadError({ message: "You can't upload to this channel" })
 			}
 		})
 
@@ -399,7 +370,10 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 								uploadedBy: user.id,
 								fileName,
 								fileSize: req.fileSize,
-							})
+							}).pipe(
+								Effect.provideService(ObjectStubs, stubs),
+								Effect.provideService(Directory, directory),
+							)
 
 							// Generate presigned URL
 							const uploadUrl = yield* storage

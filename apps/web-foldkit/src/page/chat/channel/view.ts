@@ -25,7 +25,7 @@ import { idleRowContext, rowContextFor, threadRowContextFor } from "../row-conte
 import type { DisplayRow, MessageRow } from "../rows"
 import { chatTabBarView } from "../tab-bar"
 import { threadPanelView } from "../thread-panel"
-import { AppRoute, hrefOf } from "../../../route"
+import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
 import { threadPanelWidthOf } from "./thread-width"
 
@@ -122,6 +122,8 @@ const loadingView = (h: H): Html =>
 				"flex size-full animate-skeleton-in flex-col justify-end pb-4 motion-safe:*:animate-pulse",
 			),
 			h.Attribute("aria-busy", "true"),
+			// The last screen's paint stays up while this shows (`app/paint.ts`).
+			h.Attribute("data-paint", "loading"),
 		],
 		[
 			h.span([h.Class("sr-only"), h.Attribute("role", "status")], ["Loading messages"]),
@@ -299,6 +301,7 @@ const headerView = (
 	currentUserId: Model["currentUserId"],
 	pinnedPopover: Model["overlays"]["pinned"],
 	pins: Model["pinned"],
+	customer: Model["customer"],
 	isMobile: boolean,
 	h: H,
 ): Html => {
@@ -315,6 +318,7 @@ const headerView = (
 				)
 	return chatHeaderView(h, {
 		channel,
+		syncProvider: lookups.syncProvider,
 		parentChannel,
 		orgSlug,
 		isMember: currentMember !== undefined,
@@ -337,6 +341,13 @@ const headerView = (
 					: mobileBackLink(h, hrefOf(AppRoute.ChatIndex({ orgSlug })), "Chats", "-ml-3 -mr-1")
 				: h.empty,
 		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, toPinnedMessage),
+		customer:
+			customer === null || orgSlug === null
+				? null
+				: {
+						name: customer.accountName,
+						href: hrefOf(customerRoute(orgSlug, customer.accountId)),
+					},
 	})
 }
 
@@ -345,6 +356,8 @@ const isToolbarInputEqual = (a: Model, b: Model) =>
 	a.overlays === b.overlays &&
 	a.rows === b.rows &&
 	a.messages === b.messages &&
+	a.threadPanel?.rows === b.threadPanel?.rows &&
+	a.threadPanel?.messages === b.threadPanel?.messages &&
 	a.currentUserId === b.currentUserId &&
 	a.channel === b.channel &&
 	a.lookups.customEmojis === b.lookups.customEmojis
@@ -396,6 +409,7 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						model.currentUserId,
 						model.overlays.pinned,
 						model.pinned,
+						model.customer,
 						options.isMobile ?? false,
 						h,
 					]) ?? h.empty,
@@ -484,6 +498,7 @@ const threadPanelOverlay = (
 		onRename: Message.ClickedRenameThread(),
 		isGeneratingName: panel.isNaming,
 		isCreating: panel.creation === "Creating",
+		trackHover: trackHoverAttribute(h),
 		composer: draftView(h, panel.draft, {
 			toMessage: toThreadDraftMessage,
 			replyPreview: replyPreviewOf(

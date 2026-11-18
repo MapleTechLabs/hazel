@@ -172,6 +172,11 @@ export const Message = defineMessageUnion({
 	GotMoreMenuMessage: { messageId: MessageId, message: Menu.Message },
 	RightClickedMessage: { messageId: MessageId, offset: Schema.Number, crossOffset: Schema.Number },
 	GotContextMenuMessage: { message: Menu.Message },
+	/**
+	 * A choice from the system menu a native shell opens on a long press of the message
+	 * (`platform/native-island.ts`): a `MessageAction`, or `react:<emoji>` for a quick reaction.
+	 */
+	ChoseNativeAction: { messageId: MessageId, value: Schema.String },
 	GotPopoverMessage: { messageId: MessageId, key: Schema.String, message: Popover.Message },
 	GotPinnedMessage: { message: Popover.Message },
 	ClickedReply: { messageId: MessageId },
@@ -214,7 +219,8 @@ export type OutMessage = typeof OutMessage.Type
 export interface MessageFacts {
 	readonly isOwnMessage: (messageId: MessageId) => boolean
 	readonly isPinned: (messageId: MessageId) => boolean
-	readonly isThreadChannel: boolean
+	/** A thread can start from it: a message of the channel itself, not of a thread (or the open thread panel). */
+	readonly canStartThread: (messageId: MessageId) => boolean
 }
 
 // COMMAND
@@ -272,24 +278,30 @@ const withChild = <Child, ChildMessage>(
 	commands: Command.mapMessages(result.commands ?? [], options.wrap),
 })
 
-export const moreMenuEntries = (facts: MessageFacts): ReadonlyArray<Menu.Entry> => [
-	...(facts.isThreadChannel ? [] : [Menu.item("thread")]),
+/** What a native menu's quick reaction reports, before its emoji. */
+export const NATIVE_REACTION = "react:"
+
+export const moreMenuEntries = (facts: MessageFacts, messageId: MessageId): ReadonlyArray<Menu.Entry> => [
+	...(facts.canStartThread(messageId) ? [Menu.item("thread")] : []),
 	Menu.item("pin"),
 ]
 
+/** A message's context menu; the words are what the system's menu shows (`textValue`). */
 export const contextMenuEntries = (facts: MessageFacts, messageId: MessageId): ReadonlyArray<Menu.Entry> => [
 	Menu.separator,
-	Menu.item("add-reaction"),
+	Menu.item("add-reaction", { textValue: "Add Reaction" }),
 	Menu.separator,
-	Menu.item("reply"),
-	...(facts.isOwnMessage(messageId) ? [Menu.item("edit")] : []),
-	...(facts.isThreadChannel ? [] : [Menu.item("thread")]),
+	Menu.item("reply", { textValue: "Reply" }),
+	...(facts.isOwnMessage(messageId) ? [Menu.item("edit", { textValue: "Edit Message" })] : []),
+	...(facts.canStartThread(messageId) ? [Menu.item("thread", { textValue: "Reply in Thread" })] : []),
 	Menu.separator,
-	Menu.item("copy"),
-	Menu.item("pin"),
+	Menu.item("copy", { textValue: "Copy Text" }),
+	Menu.item("pin", { textValue: facts.isPinned(messageId) ? "Unpin Message" : "Pin Message" }),
 	Menu.separator,
-	...(facts.isOwnMessage(messageId) ? [Menu.item("delete", { intent: "Danger" })] : []),
-	Menu.item("copy-id"),
+	...(facts.isOwnMessage(messageId)
+		? [Menu.item("delete", { intent: "Danger", textValue: "Delete Message" })]
+		: []),
+	Menu.item("copy-id", { textValue: "Copy Message ID" }),
 ]
 
 /** The "More actions" menu of a message: the open one, or a closed one. */
@@ -487,6 +499,18 @@ const updateOverlays = (model: Model, message: Message): OverlaysReturn =>
 				current.messageId,
 				result.outMessage,
 			)
+		},
+		ChoseNativeAction: ({ messageId, value }) => {
+			if (value.startsWith(NATIVE_REACTION))
+				return {
+					model,
+					outMessage: OutMessage.RequestedReaction({
+						messageId,
+						emoji: value.slice(NATIVE_REACTION.length),
+					}),
+				}
+			const parsed = Schema.decodeUnknownOption(MessageAction)(value)
+			return parsed._tag === "Some" ? action(model, messageId, parsed.value) : { model }
 		},
 		GotPopoverMessage: ({ messageId, key, message: popoverMessage }) => {
 			const isCurrent = model.open._tag === "Popover" && model.open.key === key

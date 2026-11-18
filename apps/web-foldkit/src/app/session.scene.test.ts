@@ -4,7 +4,7 @@ import { describe, test } from "vitest"
 import { boot, rootScene, sessionMessages } from "../test/root-fixtures"
 import * as Menu from "../ui/menu"
 import { FocusTriggerOnPress } from "../ui/menu-view"
-import { RetryFetchCurrentUser } from "./command"
+import { RememberLastOrganization, RetryFetchCurrentUser } from "./command"
 import { Message } from "./message"
 
 /** What the root renders for each session state, and how a session arriving changes it. */
@@ -57,6 +57,7 @@ describe("session states", () => {
 			Subscription.emit(organization),
 			Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()),
 			Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()),
+			Command.resolve(RememberLastOrganization, Message.CompletedRememberLastOrganization()),
 			Subscription.emit(member),
 			sceneExpect(loader).toBeAbsent(),
 			sceneExpect(settingsNav).toExist(),

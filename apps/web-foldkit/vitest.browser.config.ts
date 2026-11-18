@@ -10,6 +10,8 @@ import { defineConfig } from "vitest/config"
 export default defineConfig({
 	// The app stylesheet, for layout tests that depend on it (`mention.browser.test.ts`).
 	plugins: [tailwindcss()],
+	// As in `vite.config.ts`: the local cache's OPFS worker and wasm resolve next to the package.
+	optimizeDeps: { exclude: ["@tanstack/browser-db-sqlite-persistence"] },
 	resolve: { alias: { "~": resolve(__dirname, "src/core") } },
 	test: {
 		include: ["src/**/*.browser.test.ts"],

@@ -1,12 +1,14 @@
 // Every Hazel table as an effect-orm SQLite definition: the query builder reads them, and
 // `renderStoreSchema` (`../schema-ddl.ts`) writes their DDL.
 
+export * from "./agents"
 export * from "./attachments"
 export * from "./auth"
 export * from "./bot-commands"
 export * from "./bot-installations"
 export * from "./bots"
 export * from "./channel-access"
+export * from "./channel-customers"
 export * from "./channel-projections"
 export * from "./channel-sections"
 export * from "./channel-webhooks"
@@ -25,6 +27,7 @@ export * from "./messages"
 export * from "./notifications"
 export * from "./organizations"
 export * from "./pinned-messages"
+export * from "./push-devices"
 export * from "./rss-subscriptions"
 export * from "./typing-indicators"
 export * from "./user-presence-status"

@@ -3,6 +3,10 @@
  *
  * Effect-based wrapper around the official @linear/sdk client.
  * Provides strongly typed methods for listing, searching, and updating issues.
+ *
+ * Its own entry (`@hazel/integrations/linear/sdk`), not part of `./index.ts`: the SDK is a
+ * generated client for Linear's whole API (2 MB of source), and a Worker that imports the
+ * package for Linear's URLs or its plain API client must not bundle it.
  */
 
 import {

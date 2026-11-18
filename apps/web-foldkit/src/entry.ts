@@ -7,15 +7,18 @@ import "./styles.css"
 import { Layer } from "effect"
 import { Runtime } from "foldkit"
 import { setSessionBearerProvider } from "~/lib/session-bearer"
-import { initTauri } from "~/lib/tauri"
+import { initNativeNotifications } from "~/lib/native-notifications"
 import { desktopAuthClient } from "./platform/desktop"
 import { desktopSessionBearer } from "./platform/desktop-auth"
 import { Flags, flags, init, Message, Model, subscriptions, update, view } from "./main"
 import { NotificationSinks } from "./app/notification-sinks"
+import { handOffPaint, installPaintCapture, paintStorage } from "./app/paint"
 import { viewTransition } from "./app/view-transition"
 import { installImageViewerMorph } from "./chat/viewer/morph"
 import { installChannelPrefetch } from "./core/db/channel-prefetch"
+import { localCacheHost } from "./core/db/local-cache-host"
 import { labPathOf } from "./lab/path"
+import { loadPages } from "./page/registry"
 import { ResourcesLive } from "./rpc"
 import * as PendingAnnouncement from "./ui/aria/pending-announcement"
 
@@ -53,8 +56,24 @@ else {
 	// The desktop app has no API cookie: its requests carry its own session as a bearer.
 	if (desktopAuthClient !== null) setSessionBearerProvider(desktopSessionBearer)
 	installImageViewerMorph()
-	startApplication()
+	// The dev server loads every page area first: the Model it keeps across a reload names a page
+	// by that page's own schema, which exists once its area has loaded (`page/registry.ts`).
+	if (import.meta.env.DEV)
+		loadPages().then(startApplication, (error: unknown) => {
+			console.error("[dev] a page area did not load; reload to try again", error)
+			container.textContent = "A page area did not load. Reload to try again."
+		})
+	else startApplication()
+	// The last screen, drawn by `index.html` before this script loaded, until the app draws its own;
+	// and this screen, for the next load. The native apps draw no `index.html`.
+	if (localCacheHost() === undefined) {
+		handOffPaint(document)
+		const storage = paintStorage()
+		if (storage !== null) installPaintCapture(document, storage)
+	}
 	installChannelPrefetch()
 	// Desktop only: native notification permission (a no-op in the browser).
-	void initTauri()
+	initNativeNotifications().catch((error: unknown) =>
+		console.error("[desktop] native notifications did not start:", error),
+	)
 }

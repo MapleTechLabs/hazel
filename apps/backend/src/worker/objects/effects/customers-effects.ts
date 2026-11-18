@@ -7,9 +7,10 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import { DEFAULT_CONNECTION_CONFIG } from "@hazel/domain/customers"
 import { OrganizationMember } from "@hazel/domain/models"
-import { OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
+import { publishChannelCustomers } from "../customers/channels"
 import { disconnectConnections } from "../customers/credentials"
 import { inList } from "../customers/sql"
 import { stopComputing } from "../customers/schedule"
@@ -33,8 +34,13 @@ export const SetMembersPayload = Schema.Struct({
 })
 export type SetMembersPayload = typeof SetMembersPayload.Type
 
+/** A channel of the org was deleted: its customer link goes with it. */
+export const ChannelDeletedPayload = Schema.Struct({ organizationId: OrganizationId, channelId: ChannelId })
+export type ChannelDeletedPayload = typeof ChannelDeletedPayload.Type
+
 export const CustomersEffects = {
 	setMembers: defineEffect("customers.setMembers", "customers", SetMembersPayload),
+	channelDeleted: defineEffect("customers.channelDeleted", "customers", ChannelDeletedPayload),
 }
 
 /** The `version` of the last applied `setMembers`. */
@@ -83,6 +89,7 @@ const CUSTOMER_DATA: ReadonlyArray<Parameters<typeof SQLite.deleteFrom>[0]> = [
 	schema.customerSyncRunsTable,
 	schema.customerUnmatchedRecordsTable,
 	schema.customerIgnoreRulesTable,
+	schema.customerChannelLinksTable,
 ]
 
 /**
@@ -121,6 +128,37 @@ const shutDown = Effect.gen(function* () {
 	for (const table of CUSTOMER_DATA) yield* db.run(SQLite.deleteFrom(table).allRows())
 })
 
+/** The deleted channel's live link is removed (an event on its account), and chat's copy follows. */
+const dropDeletedChannel = Effect.fn("CustomersEffects.dropDeletedChannel")(function* (
+	payload: ChannelDeletedPayload,
+) {
+	const db = yield* Database.Database
+	const link = yield* db.first(
+		SQLite.from(schema.customerChannelLinksTable)
+			.select("id", "accountId")
+			.where(($) => [$.channelId.eq(payload.channelId), $.deletedAt.isNull()])
+			.limit(1),
+	)
+	if (Option.isNone(link)) return
+	const now = new Date(yield* Clock.currentTimeMillis)
+	yield* db.run(
+		SQLite.update(schema.customerChannelLinksTable)
+			.set({ deletedAt: now, updatedAt: now })
+			.where(($) => [$.id.eq(link.value.id)]),
+	)
+	yield* db.run(
+		SQLite.insertInto(schema.customerEventsTable).values({
+			accountId: link.value.accountId,
+			provider: "hazel",
+			type: "channel.deleted",
+			title: "Linked channel deleted",
+			data: { channelId: payload.channelId },
+			occurredAt: now,
+		}),
+	)
+	yield* publishChannelCustomers(payload.organizationId)
+})
+
 export const customersReceivers = {
 	"customers.setMembers": (payload) =>
 		Effect.gen(function* () {
@@ -130,13 +168,16 @@ export const customersReceivers = {
 			yield* applyMembers(payload.members)
 			if (payload.organizationDeleted === true) yield* shutDown
 		}),
+	"customers.channelDeleted": (payload) => dropDeletedChannel(payload),
 } satisfies EffectReceivers<typeof CustomersEffects, Database.Database | SqlClient>
 
-/** Only this org's `OrgObject` sends members, and only to its own customers object. */
+/** Only this org's `OrgObject` sends members and deleted channels, and only to its own customers object. */
 export const customersSenderRefusal = (kind: string, payload: unknown, sender: EffectSender) =>
 	Effect.gen(function* () {
-		if (kind !== CustomersEffects.setMembers.name) return Option.none<string>()
-		const { organizationId } = payload as SetMembersPayload
+		if (kind !== CustomersEffects.setMembers.name && kind !== CustomersEffects.channelDeleted.name) {
+			return Option.none<string>()
+		}
+		const { organizationId } = payload as { readonly organizationId: OrganizationId }
 		const self = yield* readObjectMeta("id").pipe(Effect.orDie)
 		return isOrgSender(sender, organizationId) && Option.getOrUndefined(self) === organizationId
 			? Option.none<string>()

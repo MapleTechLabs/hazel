@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { cssEscape, installShims, makeRootAwareMutationObserver } from "./shims"
+import { cssEscape, installShims, makeRootAwareMutationObserver, navigatorPlatform } from "./shims"
 
 describe("installShims", () => {
 	it("answers a 2D canvas probe with no context, as a browser without canvas does", () => {
@@ -13,6 +13,26 @@ describe("installShims", () => {
 			copyText: () => {},
 		})
 		expect(document.createElement("canvas").getContext("2d")).toBeNull()
+	})
+
+	it("opens a clicked download link's URL in the browser, as the attachment download clicks one", () => {
+		const opened: Array<string> = []
+		installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/",
+			openUrl: (href) => opened.push(href),
+			copyText: () => {},
+		})
+		const link = document.createElement("a")
+		link.href = "https://files.hazel.test/report.pdf"
+		link.download = "report.pdf"
+		link.click()
+		const blob = document.createElement("a")
+		blob.href = "blob:http://app.hazel.test/1"
+		blob.click()
+		expect(opened).toEqual(["https://files.hazel.test/report.pdf"])
 	})
 
 	it("reports the app's version as the web build does, so the sidebar's label matches", () => {
@@ -194,5 +214,32 @@ describe("installShims", () => {
 		expect(cssEscape("1st")).toBe("\\31 st")
 		expect(cssEscape("-")).toBe("\\-")
 		expect(cssEscape("a b")).toBe("a\\ b")
+	})
+
+	it("reports the window's focus as document.hasFocus, with focus and blur on window", () => {
+		const { setWindowFocus } = installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/",
+			openUrl: () => {},
+			copyText: () => {},
+		})
+		const heard: Array<string> = []
+		window.addEventListener("blur", () => heard.push("blur"))
+		window.addEventListener("focus", () => heard.push("focus"))
+		expect(document.hasFocus()).toBe(true)
+		setWindowFocus(false)
+		setWindowFocus(false)
+		expect(document.hasFocus()).toBe(false)
+		setWindowFocus(true)
+		expect(heard).toEqual(["blur", "focus"])
+	})
+
+	it("tells the app which system it runs on, so shortcuts read ⌘ only on Apple's", () => {
+		expect(navigatorPlatform("darwin").platform).toContain("Mac")
+		expect(navigatorPlatform("ios").platform).toBe("iPhone")
+		expect(navigatorPlatform("win32").platform).toBe("Win32")
+		expect(navigatorPlatform("linux").platform).not.toContain("Mac")
 	})
 })

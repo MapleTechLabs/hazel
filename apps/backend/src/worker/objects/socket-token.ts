@@ -8,7 +8,7 @@
  * `AccessToken.lifetimeSeconds`, and an ended session cannot mint another, so its sockets close
  * with 4001 at the last token's `exp` either way.
  */
-import { AccessToken } from "@hazel/auth/server"
+import * as AccessToken from "@hazel/auth/access-token"
 import { SQLite, schema } from "@hazel/db"
 import { UserId } from "@hazel/schema"
 import { Config, Effect, Option, Redacted, Schema } from "effect"

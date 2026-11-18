@@ -172,7 +172,7 @@ export const messageRowView = <M>(
 		: h.div(
 				[
 					h.Class(
-						"flex w-10 items-center justify-end pr-1 text-[10px] text-muted-fg leading-tight opacity-0 group-hover:opacity-100",
+						"flex w-10 items-center justify-end pr-1 text-3xs text-muted-fg leading-tight opacity-0 group-hover:opacity-100",
 					),
 				],
 				[formatTime(message.createdAtMs)],
@@ -194,6 +194,7 @@ export const messageRowView = <M>(
 								"group relative flex flex-col rounded-lg px-0.5 py-1 outline-hidden hover:bg-secondary focus-visible:bg-secondary focus-visible:ring-2 focus-visible:ring-primary/40",
 								isGroupStart ? "mt-2" : "",
 								isGroupEndOf(row) ? "mb-2" : "",
+								row.isEntering ? "animate-message-enter" : "",
 								message.isPinned
 									? "rounded-l-none border-warning border-l-4 bg-warning/10 pl-2 shadow-sm hover:bg-warning/15"
 									: "",

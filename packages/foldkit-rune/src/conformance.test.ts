@@ -531,7 +531,7 @@ const ALLOWLIST: Array<{ prop: string; when: RegExp; reason: string }> = [
 	},
 	{
 		prop: "translate",
-		when: /\s-translate-x-1\/2\b/,
+		when: /\s-translate-x-1\/2\b|\btranslate-x-1\/4\b/,
 		reason: "translate is px: a share of the element's own width has no wire form (only -50% Y under top-1/2, as centerY)",
 	},
 	{

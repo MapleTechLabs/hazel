@@ -1,0 +1,217 @@
+//! What every shell (the macOS app, the iOS app) does with the runtime the same way: which of
+//! its messages the window takes and which only the shell can answer, how often a runtime that
+//! keeps ending may start again, and what a fresh runtime needs when it replaces the last one.
+use std::time::{Duration, Instant};
+
+use rune::AppHandle;
+
+use crate::State;
+use crate::wire::RuntimeMsg;
+
+/// A runtime message only the shell can act on: it owns the runtime and the app's bundle.
+#[derive(Debug, PartialEq)]
+pub enum ShellRequest {
+    /// A full page load in the app: a fresh runtime at `path`.
+    Reload { path: String },
+    /// A step of the app's update (`check`, `download`, `install`), answered as `update` with `id`.
+    Update { id: u64, op: String },
+    /// Quit and open the app again (after an update); answered only when that fails.
+    Relaunch { id: u64 },
+    /// May the app show notifications (asking first with `request`)? Answered by
+    /// `permission_reply`.
+    NotifyPermission { id: u64, request: bool },
+    /// A system notification.
+    Notify(crate::notify::Notification),
+}
+
+/// The answer to notification permission request `id`.
+pub fn permission_reply(id: u64, granted: bool) -> serde_json::Value {
+    serde_json::json!({ "t": "notifyPermission", "id": id, "granted": granted })
+}
+
+/// The longest path a notification may open (a channel's or a thread's is well under it).
+const MAX_APP_PATH: usize = 1024;
+
+/// A path a notification may open the app at: one of the app's own (`/hazel/chat/...`), never
+/// a link that leaves it. `//host/x` and `/\host/x` are another origin to a URL parser (WebKit
+/// reads `\` as `/`), so a backslash or a control character anywhere refuses the path.
+pub fn app_path(path: &str) -> Option<&str> {
+    let refused = !path.starts_with('/')
+        || path.starts_with("//")
+        || path.len() > MAX_APP_PATH
+        || path.chars().any(|c| c == '\\' || c.is_control());
+    (!refused).then_some(path)
+}
+
+/// The window became the key window or stopped being it: the runtime's `document.hasFocus()`,
+/// which notifications wait on.
+pub fn window_focus_message(focused: bool) -> serde_json::Value {
+    serde_json::json!({ "t": "windowFocus", "focused": focused })
+}
+
+/// Where a runtime message goes.
+// One message at a time, as `RuntimeMsg` itself; boxing the tree would only add an allocation.
+#[allow(clippy::large_enum_variant)]
+pub enum Routed {
+    /// To the window: a tree, a scroll, a request against the next commit.
+    Window(RuntimeMsg),
+    /// To the shell.
+    Shell(ShellRequest),
+    /// Answered already (the keychain vault, on its own thread).
+    Done,
+}
+
+/// Sorts one runtime message. The vault is answered here, off the window's thread, so sign-in
+/// reads it before the window has drawn anything.
+pub fn route(message: RuntimeMsg) -> Routed {
+    match message {
+        RuntimeMsg::Vault { id, op, record } => {
+            crate::sign_in::answer_vault(id, &op, record);
+            Routed::Done
+        }
+        RuntimeMsg::Reload { path } => Routed::Shell(ShellRequest::Reload { path }),
+        RuntimeMsg::Update { id, op } => Routed::Shell(ShellRequest::Update { id, op }),
+        RuntimeMsg::Relaunch { id } => Routed::Shell(ShellRequest::Relaunch { id }),
+        RuntimeMsg::NotifyPermission { id, request } => {
+            Routed::Shell(ShellRequest::NotifyPermission { id, request })
+        }
+        RuntimeMsg::Notify(notification) => Routed::Shell(ShellRequest::Notify(notification)),
+        message => Routed::Window(message),
+    }
+}
+
+/// Applies a message `route` gave the window.
+pub fn apply(message: RuntimeMsg, handle: &AppHandle<State>) {
+    match message {
+        RuntimeMsg::Tree(tree) => handle.update_if(move |s: &mut State, _| s.apply(tree)),
+        RuntimeMsg::Scroll { path, top, seq, by } => {
+            crate::note_scroll(&path, seq);
+            handle.update(move |_: &mut State, tx| crate::apply_scroll(tx, path, top, by));
+        }
+        request => {
+            if let Some(run) = request.request() {
+                handle.update(move |_: &mut State, tx| run(tx));
+            }
+        }
+    }
+}
+
+/// A fresh runtime replaced the last one (a page load, a restart): lines still on their way to
+/// the old one are dropped, it hears the window's size and theme (it starts at the default),
+/// and the window forgets what it kept for the old one's trees.
+pub fn runtime_replaced(handle: Option<&AppHandle<State>>) {
+    crate::outbox::new_runtime();
+    if let Some(env) = crate::last_env() {
+        crate::outbox::write_line(env.line());
+    }
+    if let Some(handle) = handle {
+        handle.update(|s: &mut State, _| s.runtime_replaced());
+    }
+}
+
+/// How often a runtime that ended may start again: one that ends on every start would otherwise
+/// restart for as long as the app is open.
+const RESTARTS: usize = 3;
+const RESTART_WINDOW: Duration = Duration::from_secs(60);
+
+/// The restarts after the runtime ended, recent ones only.
+#[derive(Default)]
+pub struct Restarts(Vec<Instant>);
+
+impl Restarts {
+    /// Whether the runtime may restart now, counting this one if so.
+    pub fn allow(&mut self, now: Instant) -> bool {
+        self.0.retain(|at| now.duration_since(*at) < RESTART_WINDOW);
+        let allowed = self.0.len() < RESTARTS;
+        if allowed {
+            self.0.push(now);
+        }
+        allowed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_runtime_restarts_three_times_a_minute_at_most() {
+        let mut restarts = Restarts::default();
+        let start = Instant::now();
+        assert!((0..3).all(|i| restarts.allow(start + Duration::from_secs(i))));
+        assert!(!restarts.allow(start + Duration::from_secs(10)));
+        // Once the first has aged out, one more may.
+        assert!(restarts.allow(start + Duration::from_secs(61)));
+    }
+
+    #[test]
+    fn the_shell_answers_page_loads_and_updates_and_the_window_the_rest() {
+        let parse = |line: &str| serde_json::from_str::<RuntimeMsg>(line).expect("message");
+        assert!(matches!(
+            route(parse(r#"{"t":"reload","path":"/hazel"}"#)),
+            Routed::Shell(ShellRequest::Reload { path }) if path == "/hazel"
+        ));
+        assert!(matches!(
+            route(parse(r#"{"t":"update","id":4,"op":"check"}"#)),
+            Routed::Shell(ShellRequest::Update { id: 4, .. })
+        ));
+        assert!(matches!(
+            route(parse(r#"{"t":"relaunch","id":5}"#)),
+            Routed::Shell(ShellRequest::Relaunch { id: 5 })
+        ));
+        assert!(matches!(
+            route(parse(r#"{"t":"focus","key":"r/1"}"#)),
+            Routed::Window(RuntimeMsg::Focus { .. })
+        ));
+    }
+
+    #[test]
+    fn a_notification_opens_only_the_apps_own_paths() {
+        let channel = "/hazel/chat/00000005-0000-4000-8000-000000000002";
+        assert_eq!(app_path(channel), Some(channel));
+        assert_eq!(
+            app_path("/hazel/chat/c?thread=1#m"),
+            Some("/hazel/chat/c?thread=1#m")
+        );
+        for refused in [
+            "",
+            "hazel/chat/c",
+            "https://evil.com/x",
+            "//evil.com/x",
+            "/\\evil.com/x",
+            "/hazel\\..\\x",
+            "/\t/evil.com",
+            "/hazel/chat\n/c",
+            "/\u{0}",
+        ] {
+            assert_eq!(app_path(refused), None, "{refused:?}");
+        }
+        assert_eq!(app_path(&format!("/{}", "a".repeat(MAX_APP_PATH))), None);
+    }
+
+    #[test]
+    fn the_window_copies_and_opens_only_web_and_mail_links() {
+        let parse = |line: &str| serde_json::from_str::<RuntimeMsg>(line).expect("message");
+        assert!(parse(r#"{"t":"copy","text":"hi"}"#).request().is_some());
+        assert!(
+            parse(r#"{"t":"open","url":"https://hazel.sh"}"#)
+                .request()
+                .is_some()
+        );
+        assert!(
+            parse(r#"{"t":"open","url":"MAILTO:ada@hazel.test"}"#)
+                .request()
+                .is_some()
+        );
+        assert!(
+            parse(r#"{"t":"open","url":"file:///etc/passwd"}"#)
+                .request()
+                .is_none()
+        );
+        assert!(
+            parse(r#"{"t":"open","url":"javascript:alert(1)"}"#)
+                .request()
+                .is_none()
+        );
+    }
+}

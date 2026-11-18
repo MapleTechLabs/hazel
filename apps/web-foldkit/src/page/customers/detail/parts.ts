@@ -3,6 +3,7 @@ import type { UserId } from "@hazel/schema"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
+import { heading } from "../../../ui/heading"
 import type * as Menu from "../../../ui/menu"
 import { view as menuView } from "../../../ui/menu-view"
 import type { Message } from "./message"
@@ -39,10 +40,11 @@ export const card = (
 		[h.Class(twMerge("flex min-w-0 flex-col rounded-xl border border-border bg-bg", options.className))],
 		[
 			h.header(
-				[h.Class("flex items-center justify-between gap-4 px-4 pt-4 sm:px-5")],
+				[h.Class("flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 pt-4 sm:px-5")],
 				[
-					h.h2(
-						[h.Class("flex items-baseline gap-2 font-semibold text-base text-fg")],
+					heading(
+						h,
+						{ variant: "section", className: "flex items-baseline gap-2 whitespace-nowrap" },
 						[
 							options.title,
 							...(options.count === undefined
@@ -69,7 +71,7 @@ export const headerLink = (h: HtmlBuilder<Message>, label: string, onPress: Mess
 			h.Type("button"),
 			h.OnClick(onPress),
 			h.Class(
-				"cursor-pointer rounded text-primary text-sm outline-hidden hover:underline focus-visible:ring-2 focus-visible:ring-ring/70",
+				"cursor-pointer rounded-sm font-medium text-primary text-sm outline-hidden hover:underline focus-visible:ring-2 focus-visible:ring-ring/70",
 			),
 		],
 		[label],
@@ -122,7 +124,7 @@ export const pageFooter = (
 										h.Disabled(options.status === "Loading"),
 										h.OnClick(options.onMore),
 										h.Class(
-											"cursor-pointer rounded-lg border border-border px-3 py-1.5 text-fg text-sm hover:bg-wash disabled:cursor-default disabled:opacity-60",
+											"cursor-pointer rounded-lg border border-border px-3 py-1.5 font-medium text-fg text-sm outline-hidden transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-default disabled:opacity-60",
 										),
 									],
 									[

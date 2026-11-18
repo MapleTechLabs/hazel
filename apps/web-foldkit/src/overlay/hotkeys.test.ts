@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, test } from "vitest"
 import { collectKeyStream } from "../test/key-stream"
-import { layoutHotkeys } from "./hotkeys"
+import { appKeymap } from "~/lib/keybindings/app-keymap"
+import { combo } from "~/lib/keybindings/key-combo"
+import type { Overrides } from "~/lib/keybindings/keymap"
+import { layoutHotkeys, layoutKeysOf } from "./hotkeys"
 
 /** The org layout's hotkeys from real `keydown`s: Mod is Meta on a Mac, Control elsewhere. */
 
@@ -14,7 +17,10 @@ const run = (
 	isOverlayOpen = false,
 ) =>
 	collectKeyStream(
-		layoutHotkeys((id) => id, { isChannelNavigationEnabled, isOverlayOpen }),
+		layoutHotkeys((id) => id, layoutKeysOf(appKeymap.defaults), {
+			isChannelNavigationEnabled,
+			isOverlayOpen,
+		}),
 		act,
 	)
 
@@ -142,5 +148,34 @@ describe("layout hotkeys", () => {
 		const editable = composer()
 		expect(await run((press) => press(mod({ key: "b" }), editable))).toEqual([])
 		editable.remove()
+	})
+})
+
+describe("rebound layout hotkeys", () => {
+	const rebound = (overrides: Overrides) =>
+		layoutKeysOf(appKeymap.resolve(overrides, isMac ? "mac" : "linux"))
+	const runWith = (overrides: Overrides, act: Parameters<typeof collectKeyStream>[1]) =>
+		collectKeyStream(
+			layoutHotkeys((id) => id, rebound(overrides)),
+			act,
+		)
+
+	test("an action fires on its new key, and no longer on its old one", async () => {
+		const fired = await runWith({ "inbox.open": combo("Mod+J") }, (press) => {
+			press(mod({ key: "j" }))
+			press(mod({ key: "i" }))
+		})
+		expect(fired).toEqual(["inbox.open"])
+	})
+
+	test("an action that lost its key to another, or was unbound, does not fire", async () => {
+		const fired = await runWith(
+			{ "search.open": combo("Mod+K"), "commandPalette.open": null, "shortcuts.open": null },
+			(press) => {
+				press(mod({ key: "k" }))
+				press(mod({ key: "/" }))
+			},
+		)
+		expect(fired).toEqual(["search.open"])
 	})
 })

@@ -4,10 +4,11 @@ import { getEffectivePresenceStatus, type PresenceStatus } from "~/utils/presenc
 import { formatStatusExpiration, getStatusDotColor, getStatusLabel } from "~/utils/status"
 import { formatUserLocalTime, getTimezoneAbbreviation } from "~/utils/timezone"
 import { IconChatBubble, IconClock, IconDotsVertical, IconPhone } from "../icons"
-import type { PresenceInfo, UserInfo } from "../page/chat/lookups"
+import type { PresenceInfo, SyncProvider, UserInfo } from "../page/chat/lookups"
+import { syncBadge } from "./message/parts"
 import { avatar } from "../ui/avatar"
 import { badge } from "../ui/badge"
-import { button } from "../ui/button"
+import { button, buttonClassName } from "../ui/button"
 import { menuTriggerClassName } from "../ui/menu-view"
 
 /** `UserProfilePopover`'s `PopoverBody` (the trigger is the message avatar). */
@@ -17,8 +18,12 @@ export interface ProfileInputs {
 	readonly displayName: string
 	readonly avatarUrl: string | null
 	readonly isBot: boolean
+	/** A Slack or Discord person (a chat sync shadow user): no presence, no Hazel email. */
+	readonly syncProvider: SyncProvider | null
 	readonly presence: PresenceInfo | null
 	readonly isOwnProfile: boolean
+	/** Where "Edit profile" (own profile only) leads: the settings profile page. */
+	readonly editProfileHref: string
 	readonly nowMs: number
 }
 
@@ -33,13 +38,21 @@ const statusIntent = (status: PresenceStatus) =>
 
 const actionBar = <M>(h: HtmlBuilder<M>, inputs: ProfileInputs): ReadonlyArray<Html> =>
 	inputs.isOwnProfile
-		? [button(h, { size: "sm", intent: "primary", className: "flex-1" }, ["Edit profile"])]
+		? [
+				h.a(
+					[
+						h.Class(buttonClassName({ size: "sm", intent: "primary" }, "flex-1")),
+						h.Href(inputs.editProfileHref),
+					],
+					["Edit profile"],
+				),
+			]
 		: [
 				button(h, { size: "sm", intent: "primary", className: "flex-1" }, [
 					IconChatBubble(h, { attributes: { "data-slot": "icon" } }),
 					"Message",
 				]),
-				...(inputs.isBot
+				...(inputs.isBot || inputs.syncProvider !== null
 					? []
 					: [
 							button(
@@ -82,7 +95,9 @@ const actionBar = <M>(h: HtmlBuilder<M>, inputs: ProfileInputs): ReadonlyArray<H
 			]
 
 export const profilePopoverContent = <M>(h: HtmlBuilder<M>, inputs: ProfileInputs): ReadonlyArray<Html> => {
-	const { user, presence, isBot } = inputs
+	const { user, presence, isBot, syncProvider } = inputs
+	// Neither an app nor a Slack or Discord person has Hazel presence, a status or a reachable email.
+	const isExternal = isBot || syncProvider !== null
 	const status = getEffectivePresenceStatus(presence)
 	const localTime = user.timezone ? formatUserLocalTime(user.timezone) : ""
 	const expiration =
@@ -116,7 +131,7 @@ export const profilePopoverContent = <M>(h: HtmlBuilder<M>, inputs: ProfileInput
 									seed: inputs.displayName || undefined,
 									isSquare: isBot,
 								}),
-								isBot
+								isExternal
 									? h.empty
 									: h.span([
 											h.Class(
@@ -137,18 +152,22 @@ export const profilePopoverContent = <M>(h: HtmlBuilder<M>, inputs: ProfileInput
 							[h.Class("flex items-center gap-2")],
 							[
 								h.span([h.Class("text-lg font-semibold text-fg")], [inputs.displayName]),
-								isBot ? badge(h, { intent: "primary", size: "sm" }, ["APP"]) : h.empty,
+								syncProvider !== null
+									? syncBadge(h, syncProvider)
+									: isBot
+										? badge(h, { intent: "primary", size: "sm" }, ["APP"])
+										: h.empty,
 							],
 						),
-						isBot ? h.empty : h.span([h.Class("text-sm text-muted-fg")], [user.email]),
-						!isBot && status !== "online"
+						isExternal ? h.empty : h.span([h.Class("text-sm text-muted-fg")], [user.email]),
+						!isExternal && status !== "online"
 							? badge(h, { intent: statusIntent(status), size: "sm", className: "mt-1" }, [
 									getStatusLabel(status),
 								])
 							: h.empty,
 					],
 				),
-				!isBot && (presence?.statusEmoji || presence?.customMessage)
+				!isExternal && (presence?.statusEmoji || presence?.customMessage)
 					? h.div(
 							[h.Class("mx-4 mt-3 rounded-lg bg-secondary/50 p-3")],
 							[
@@ -180,7 +199,7 @@ export const profilePopoverContent = <M>(h: HtmlBuilder<M>, inputs: ProfileInput
 							],
 						)
 					: h.empty,
-				!isBot && user.timezone && localTime
+				!isExternal && user.timezone && localTime
 					? h.div(
 							[h.Class("mt-3 px-4")],
 							[

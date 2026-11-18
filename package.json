@@ -40,6 +40,7 @@
 		"typecheck": "turbo build typecheck",
 		"format": "oxfmt",
 		"lint": "oxlint --disable-nested-config --quiet",
+		"lint:ui-baseline": "bun run ./scripts/ui-kit-baseline.ts",
 		"test": "vitest",
 		"test:once": "vitest run",
 		"test:debug": "vitest --inspect-brk --no-file-parallelism",

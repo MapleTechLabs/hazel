@@ -40,8 +40,8 @@ export const modalContentBase = (size: ModalSize) =>
 			: "sm:rounded-xl sm:[--visual-viewport-vertical-padding:32px]",
 		"max-h-[calc(100dvh-var(--visual-viewport-vertical-padding))]",
 		"relative overflow-hidden bg-overlay text-overlay-fg",
-		"rounded-t-2xl shadow-lg ring ring-fg/5 dark:ring-border",
+		"rounded-t-2xl shadow-xl ring ring-fg/8 dark:ring-fg/10",
 		modalSizes[size],
 		"origin-center transition-[opacity,translate,scale] duration-200 ease-out",
-		"starting:translate-y-4 starting:opacity-0 sm:starting:translate-y-0 sm:starting:scale-95",
+		"starting:translate-y-4 starting:opacity-0 sm:starting:translate-y-0 sm:starting:scale-[0.97]",
 	] as const

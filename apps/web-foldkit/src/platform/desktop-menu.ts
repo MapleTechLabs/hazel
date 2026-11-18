@@ -1,4 +1,4 @@
-import { getTauriEvent } from "@hazel/desktop/bridge"
+import { getTauriEvent } from "./tauri"
 import { Effect, Queue, Schema, Stream } from "effect"
 import { isDesktop } from "./desktop"
 

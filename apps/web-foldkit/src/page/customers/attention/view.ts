@@ -17,6 +17,7 @@ import {
 import { snoozeMenuContent } from "../../../customers/ui/menus"
 import { queueAction, queueList } from "../../../customers/ui/queue-row"
 import { kbd, shortcutBar, type Shortcut } from "../../../customers/ui/shortcuts"
+import { freshness, pageHeader } from "../../../customers/ui/surface"
 import {
 	IconArrowPath,
 	IconCheck,
@@ -60,6 +61,7 @@ import { previewPanel } from "./preview"
 import { accountGroupRow, compactRow, doneRow, type RowContext, rowIdOf, signalRow, snoozedRow } from "./rows"
 import { ScrollRowIntoView } from "./commands"
 import { viewerOf } from "./update"
+import { heading } from "../../../ui/heading"
 
 /** The Needs-attention page (Wonder: Needs Attention). */
 
@@ -249,49 +251,36 @@ const header = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: 
 					: model.tab === "snoozed"
 						? `${signals.length} snoozed signal${signals.length === 1 ? "" : "s"}${whose}`
 						: `${signals.length} signal${signals.length === 1 ? "" : "s"} resolved in the last 7 days · ${signals.filter((signal) => signal.status === "auto_resolved").length} cleared on their own`
-	return h.div(
-		[h.Class("flex items-start justify-between gap-4")],
-		[
-			h.div(
-				[h.Class("flex min-w-0 flex-col gap-1")],
-				[
-					h.h1([h.Class("font-semibold text-2xl text-fg")], ["Needs attention"]),
-					h.p([h.Class("text-muted-fg text-sm")], [subtitle]),
-				],
-			),
-			h.div(
-				[h.Class("flex shrink-0 items-center gap-4")],
-				[
-					...(model.lastComputedAtMs === null
-						? []
-						: [
-								h.span(
-									[
-										h.Class(
-											"inline-flex items-center gap-1.5 text-muted-fg text-sm max-md:hidden",
-										),
-									],
-									[
-										IconArrowPath(h, { className: "size-3.5" }),
-										`Evaluated ${formatRelative(new Date(model.lastComputedAtMs), new Date(viewer.nowMs))}`,
-									],
+	return pageHeader(h, {
+		title: "Needs attention",
+		subtitle,
+		actions: [
+			...(model.lastComputedAtMs === null
+				? []
+				: [
+						h.span(
+							[h.Class("mr-1 inline-flex items-center max-md:hidden")],
+							[
+								freshness(
+									h,
+									`Evaluated ${formatRelative(new Date(model.lastComputedAtMs), new Date(viewer.nowMs))}`,
 								),
-							]),
-					...(orgSlug === null
-						? []
-						: [
-								h.a(
-									[
-										h.Href(hrefOf(AppRoute.CustomersSettingsSignals({ orgSlug }))),
-										h.Class(buttonClassName({ intent: "outline", size: "sm" })),
-									],
-									[IconLightbulb(h, icon), "Signal rules"],
-								),
-							]),
-				],
-			),
+							],
+						),
+					]),
+			...(orgSlug === null
+				? []
+				: [
+						h.a(
+							[
+								h.Href(hrefOf(AppRoute.CustomersSettingsSignals({ orgSlug }))),
+								h.Class(buttonClassName({ intent: "outline", size: "sm" })),
+							],
+							[IconLightbulb(h, icon), "Signal rules"],
+						),
+					]),
 		],
-	)
+	})
 }
 
 const filterChips = (h: HtmlBuilder<Message>, filters: Filters): ReadonlyArray<Html> => [
@@ -449,7 +438,7 @@ const columnHeader = (h: HtmlBuilder<Message>, cells: ReadonlyArray<readonly [st
 			h.Role("row"),
 			h.Class(
 				// A phone's rows wrap into lines that no longer sit under these columns.
-				"flex items-center gap-4 border-border border-b bg-secondary/30 px-4 py-2 font-medium text-[11px] text-muted-fg uppercase tracking-wider max-md:hidden",
+				"flex h-9 items-center gap-4 border-border border-b px-4 font-medium text-muted-fg text-xs max-md:hidden",
 			),
 		],
 		cells.map(([label, className]) => h.span([h.Role("columnheader"), h.Class(className)], [label])),
@@ -466,7 +455,7 @@ const allClear = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =
 			h.div(
 				[
 					h.Class(
-						"flex size-11 items-center justify-center rounded-xl bg-success-subtle text-success",
+						"flex size-11 items-center justify-center rounded-xl bg-success-subtle text-success-subtle-fg",
 					),
 				],
 				[IconCheck(h, { className: "size-5" })],
@@ -474,7 +463,7 @@ const allClear = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =
 			h.div(
 				[h.Class("flex flex-col gap-1")],
 				[
-					h.h2([h.Class("font-semibold text-fg")], ["All clear"]),
+					heading(h, { variant: "subsection", level: 2 }, ["All clear"]),
 					h.p(
 						[h.Class("max-w-sm text-muted-fg text-sm")],
 						[
@@ -563,7 +552,7 @@ const noMatches = (h: HtmlBuilder<Message>): Html =>
 			h.div(
 				[h.Class("flex flex-col gap-1")],
 				[
-					h.h2([h.Class("font-semibold text-fg")], ["No matches"]),
+					heading(h, { variant: "subsection", level: 2 }, ["No matches"]),
 					h.p(
 						[h.Class("max-w-sm text-muted-fg text-sm")],
 						["No signals in this tab match your search and filters."],

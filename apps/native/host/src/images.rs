@@ -1,16 +1,41 @@
 //! Pictures: `<img src>`, CSS `background-image: url(..)` and multi-colour inline SVGs, decoded
 //! off the main thread by Rune's `ImageCache`. Rune has no HTTP client on native, so http(s)
-//! sources are fetched with the system's (`fetch`) on a worker thread and redrawn when they land.
+//! sources are fetched with the system's (`fetch`) on a few worker threads, and the elements that
+//! drew an empty box for them are rebuilt when they land.
+//!
+//! Every cache here is bounded (least recently used goes first) and keyed by a hash of its
+//! source, never by the source itself, which may be a multi-megabyte `data:` URL. Dropping an
+//! entry never blanks an element: Rune's cache is content-addressed and keeps a picture alive
+//! while any element draws it, so asking again hands back the same one.
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock, mpsc};
+use std::time::{Duration, Instant};
 
 use base64::Engine;
-use rune::{Image, ImageCache, Waker};
+use rune::{Image, ImageCache, ImageId, Waker};
 
 /// Device pixels per point the images rasterize at (Retina).
 const SCALE: f32 = 2.0;
+/// How long a failed download stays failed before a build asks for it again.
+const RETRY_AFTER: Duration = Duration::from_secs(60);
+/// Threads downloads and mask composites share.
+const WORKERS: usize = 4;
+/// Pictures a window keeps handles on, by source and size.
+const LOADED_ENTRIES: usize = 512;
+/// Downloaded bytes kept (encoded, as fetched), and how many downloads.
+const REMOTE_BYTES: usize = 64 << 20;
+const REMOTE_ENTRIES: usize = 1024;
+/// Mask composites kept, and their pixels.
+const MASKED_ENTRIES: usize = 128;
+const MASKED_BYTES: usize = 128 << 20;
+/// Decoded pictures and mask pictures kept for compositing at a new size.
+const SOURCES_BYTES: usize = 64 << 20;
+const SOURCES_ENTRIES: usize = 64;
+/// Element paths whose memos a landed picture made stale, before they are all dropped at once.
+const STALE_PATHS: usize = 4096;
 
 static CACHE: OnceLock<Arc<ImageCache>> = OnceLock::new();
 /// The app's public assets, where a root-relative `src` is found (the shell's bundle).
@@ -21,21 +46,25 @@ pub fn set_assets_root(root: std::path::PathBuf) {
     let _ = ASSETS.set(root);
 }
 static WAKER: OnceLock<Waker> = OnceLock::new();
-/// A downloaded http(s) source, by URL: fetched once, whatever sizes draw it.
+
+/// A downloaded http(s) source, by URL: fetched once, whatever sizes draw it. Its bytes are
+/// kept encoded; Rune's cache decodes them, once for as long as anything draws the picture.
 enum Fetched {
     Pending,
-    Failed,
-    /// A bitmap decodes once; it scales like any picture.
-    Picture(Image),
-    /// An SVG keeps its bytes and rasterizes once per size it is drawn at.
-    Svg(Arc<Vec<u8>>),
+    /// When it failed: asked for again after `RETRY_AFTER`.
+    Failed(Instant),
+    /// A bitmap; it scales like any picture.
+    Picture(Arc<[u8]>),
+    /// An SVG rasterizes once per size it is drawn at.
+    Svg(Arc<[u8]>),
 }
 
-static REMOTE: Mutex<Option<HashMap<String, Fetched>>> = Mutex::new(None);
-/// Remote SVGs rasterized, by URL and drawn size in points.
-static REMOTE_SVGS: Mutex<Option<HashMap<(String, u32), Image>>> = Mutex::new(None);
-/// A remote image arrived since the view last ran; the next frame must rebuild memoised subtrees.
+static REMOTE: LazyLock<Mutex<Lru<String, Fetched>>> =
+    LazyLock::new(|| Mutex::new(Lru::new(REMOTE_ENTRIES, REMOTE_BYTES)));
+/// A remote picture or a composite landed since `take_arrived` last looked.
 static ARRIVED: AtomicBool = AtomicBool::new(false);
+/// Decodes some box's size waits on (`Images::await_decode`), for `take_arrived`.
+static DECODING: Mutex<Vec<Image>> = Mutex::new(Vec::new());
 
 /// The window's waker, so a finished decode or download redraws it. Without one (capture,
 /// tests) the frame loop runs anyway.
@@ -53,60 +82,153 @@ fn cache() -> &'static Arc<ImageCache> {
     CACHE.get_or_init(|| Arc::new(ImageCache::new(Arc::new(wake))))
 }
 
-/// Whether a remote image arrived since the last call (the view should rebuild).
+/// Whether any picture landed (a download, a composite, an awaited decode) since the last call:
+/// for a shell that rebuilds the whole view then. `poll` rebuilds only what waited on one.
 pub fn take_arrived() -> bool {
-    ARRIVED.swap(false, Ordering::SeqCst)
-}
-
-/// Pictures a thread waits on to rebuild the view once they decode, by image id.
-static AWAITED: Mutex<Option<std::collections::HashSet<rune::ImageId>>> = Mutex::new(None);
-
-/// Rebuilds the memoised subtrees once `image` has decoded, for a box sized from the picture's
-/// own size. A decode wakes the window to redraw, but a memoised row is not rebuilt by a
-/// redraw, so a row built while its picture decoded would keep its empty box. A picture that
-/// failed to decode stays empty and asks for nothing.
-pub fn rebuild_when_ready(image: &Image) {
-    if image.is_ready() {
-        // The decode finished after the caller found no size: that build drew the empty box.
-        if image.error().is_none() {
-            arrived();
-        }
-        return;
-    }
-    let mut awaited = AWAITED.lock().unwrap();
-    if !awaited
-        .get_or_insert_with(Default::default)
-        .insert(image.id())
-    {
-        return;
-    }
-    drop(awaited);
-    let image = image.clone();
-    std::thread::spawn(move || {
-        let decoded = image.wait().is_ok();
-        if let Some(set) = AWAITED.lock().unwrap().as_mut() {
-            set.remove(&image.id());
-        }
-        if decoded {
-            arrived();
-        }
+    let mut decoded = false;
+    DECODING.lock().unwrap().retain(|image| {
+        let ready = image.is_ready();
+        decoded |= ready && image.error().is_none();
+        !ready
     });
+    ARRIVED.swap(false, Ordering::SeqCst) | decoded
 }
 
-/// A picture landed: the next frame rebuilds the memoised subtrees.
+/// A picture landed: the next frame rebuilds what waited on it.
 fn arrived() {
     ARRIVED.store(true, Ordering::SeqCst);
     wake();
 }
 
-/// A picture composited with its mask, by what was asked for: the size it was last asked at,
-/// and the latest finished one (shown while a new size composites).
-struct Masked {
-    size: (u32, u32),
+/// Runs `job` on one of a few shared background threads: downloads and composites queue there
+/// rather than each taking a thread. A job that panics (a malformed picture) loses only itself.
+fn background(job: impl FnOnce() + Send + 'static) {
+    type Job = Box<dyn FnOnce() + Send>;
+    static JOBS: OnceLock<mpsc::Sender<Job>> = OnceLock::new();
+    let jobs = JOBS.get_or_init(|| {
+        let (send, receive) = mpsc::channel::<Job>();
+        let receive = Arc::new(Mutex::new(receive));
+        for _ in 0..WORKERS {
+            let receive = receive.clone();
+            std::thread::Builder::new()
+                .name("hazel-images".into())
+                .spawn(move || {
+                    loop {
+                        let job = receive.lock().unwrap_or_else(|e| e.into_inner()).recv();
+                        let Ok(job) = job else { return };
+                        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(job));
+                    }
+                })
+                .expect("image worker");
+        }
+        send
+    });
+    let _ = jobs.send(Box::new(job));
+}
+
+/// A hash of what a cache entry was made from.
+fn key(of: impl Hash) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    of.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// A map that keeps at most `max_entries` entries and `max_weight` of their total weight (bytes,
+/// say), dropping the least recently used first. An entry `keep` says to hold is never dropped.
+pub(crate) struct Lru<K, V> {
+    entries: HashMap<K, (V, u64, usize)>,
+    tick: u64,
+    weight: usize,
+    max_entries: usize,
+    max_weight: usize,
+}
+
+impl<K: Hash + Eq + Clone, V> Lru<K, V> {
+    pub(crate) fn new(max_entries: usize, max_weight: usize) -> Self {
+        Lru {
+            entries: HashMap::new(),
+            tick: 0,
+            weight: 0,
+            max_entries,
+            max_weight,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// The entry at `key`, now the most recently used.
+    pub(crate) fn get(&mut self, key: &K) -> Option<&mut V> {
+        self.tick += 1;
+        let tick = self.tick;
+        self.entries.get_mut(key).map(|(value, used, _)| {
+            *used = tick;
+            value
+        })
+    }
+
+    /// The entry at `key`, its use not counted.
+    pub(crate) fn peek(&self, key: &K) -> Option<&V> {
+        self.entries.get(key).map(|(value, ..)| value)
+    }
+
+    /// Puts `value` at `key`, then drops the least recently used entries `keep` lets go of
+    /// until the map is within its bounds.
+    pub(crate) fn insert(&mut self, key: K, value: V, weight: usize, keep: impl Fn(&V) -> bool) {
+        self.tick += 1;
+        if let Some((_, _, old)) = self.entries.insert(key.clone(), (value, self.tick, weight)) {
+            self.weight -= old;
+        }
+        self.weight += weight;
+        while self.entries.len() > self.max_entries || self.weight > self.max_weight {
+            let oldest = self
+                .entries
+                .iter()
+                .filter(|(k, (v, ..))| **k != key && !keep(v))
+                .min_by_key(|(_, (_, used, _))| *used)
+                .map(|(k, _)| k.clone());
+            let Some(oldest) = oldest else { break };
+            if let Some((_, _, w)) = self.entries.remove(&oldest) {
+                self.weight -= w;
+            }
+        }
+    }
+}
+
+/// What a build drew an empty (or stale) box for, to rebuild once it lands.
+#[derive(Clone, PartialEq, Eq, Hash)]
+enum Awaited {
+    /// A download, by URL.
+    Download(String),
+    /// A mask composite, by its key, at a size in pixels.
+    Composite(u64, (u32, u32)),
+    /// A decode the box's size waits on.
+    Decode(ImageId),
+}
+
+/// The element paths waiting on one picture, and the picture when it is a decode.
+struct Waiter {
+    paths: HashSet<String>,
     image: Option<Image>,
 }
 
-static MASKED: Mutex<Option<HashMap<String, Masked>>> = Mutex::new(None);
+/// A picture composited with its mask: the size last asked for, and the latest finished one
+/// (shown while a new size composites).
+struct Masked {
+    asked: (u32, u32),
+    made: Option<((u32, u32), Image)>,
+    /// The picture or its mask picture would not decode at `asked`.
+    failed: bool,
+}
+
+static MASKED: LazyLock<Mutex<Lru<u64, Masked>>> =
+    LazyLock::new(|| Mutex::new(Lru::new(MASKED_ENTRIES, MASKED_BYTES)));
+/// Pictures and mask pictures decoded to composite, by source: a new box size only
+/// recomposites.
+static SOURCES: LazyLock<Mutex<Lru<u64, Arc<image::RgbaImage>>>> =
+    LazyLock::new(|| Mutex::new(Lru::new(SOURCES_ENTRIES, SOURCES_BYTES)));
 
 /// Whether `src` is read from here (a `data:` URL or a file), not fetched.
 pub fn is_local(src: &str) -> bool {
@@ -120,6 +242,21 @@ fn local_bytes(src: &str) -> Option<Vec<u8>> {
         return decode_data_url(rest).map(|(_, bytes)| bytes);
     }
     std::fs::read(local_path(src)?).ok()
+}
+
+/// The picture at local `src` decoded to RGBA, once while it stays in use.
+fn decoded_source(src: &str) -> Option<Arc<image::RgbaImage>> {
+    let id = key(src);
+    if let Some(found) = SOURCES.lock().unwrap().get(&id) {
+        return Some(found.clone());
+    }
+    let decoded = Arc::new(image::load_from_memory(&local_bytes(src)?).ok()?.to_rgba8());
+    let bytes = decoded.as_raw().len();
+    SOURCES
+        .lock()
+        .unwrap()
+        .insert(id, decoded.clone(), bytes, |_| false);
+    Some(decoded)
 }
 
 /// `src` as a file: a path, else one relative to the app's public assets (`HAZEL_ASSET_ROOT`, or
@@ -216,160 +353,343 @@ pub fn composite(
     out.into_raw()
 }
 
-/// Decoded images by source, kept alive while the app may draw them.
-#[derive(Default)]
+/// A window's pictures: handles on those it drew, by source and size, and the elements waiting
+/// on one still to land.
 pub struct Images {
-    loaded: RefCell<HashMap<String, Image>>,
+    loaded: RefCell<Lru<u64, Image>>,
+    waiting: RefCell<HashMap<Awaited, Waiter>>,
+    /// Element paths whose memos a landed picture made stale, by when it landed.
+    stale: HashMap<String, u64>,
+    landings: u64,
+}
+
+impl Default for Images {
+    fn default() -> Self {
+        Images {
+            loaded: RefCell::new(Lru::new(LOADED_ENTRIES, usize::MAX)),
+            waiting: RefCell::default(),
+            stale: HashMap::new(),
+            landings: 0,
+        }
+    }
 }
 
 impl Images {
     /// The image at `src` (data:, file:, a path, or http(s)), rasterized for `size_pt` when it
-    /// is an SVG. `None` while a download is in flight or when the source cannot load.
-    pub fn get(&self, src: &str, size_pt: f32) -> Option<Image> {
+    /// is an SVG. `None` while a download is in flight or when the source cannot load; the
+    /// element at `path` is rebuilt once the download lands.
+    pub fn get(&self, src: &str, size_pt: f32, path: &str) -> Option<Image> {
         let size_pt = size_pt.clamp(8.0, 1024.0);
-        let key = format!("{size_pt}|{src}");
-        if let Some(image) = self.loaded.borrow().get(&key) {
+        let id = key((size_pt.to_bits(), src));
+        if let Some(image) = self.loaded.borrow_mut().get(&id) {
             return Some(image.clone());
         }
         let image = if let Some(rest) = src.strip_prefix("data:") {
             let (mime, bytes) = decode_data_url(rest)?;
             cache().load_mime(bytes, &mime, size_pt, SCALE)
-        } else if src.starts_with("http://") || src.starts_with("https://") {
-            remote(src, size_pt)?
+        } else if !is_local(src) {
+            let Some(image) = remote(src, size_pt) else {
+                self.wait(Awaited::Download(src.to_string()), path, None);
+                return None;
+            };
+            image
         } else {
             cache().file(local_path(src)?, size_pt, SCALE)
         };
-        self.loaded.borrow_mut().insert(key, image.clone());
+        self.loaded
+            .borrow_mut()
+            .insert(id, image.clone(), 1, |_| false);
         Some(image)
     }
 
     /// The picture at `src` as it shows under `mask` in a box `size` points big (CSS
     /// `mask-image` on an `<img>`), composited off the main thread. `None` until the first one
     /// is ready, or when the picture or its mask picture cannot be read here (an http(s) one).
+    /// The element at `path` is rebuilt once the composite at this size lands.
     pub fn masked(
         &self,
         src: &str,
         mask: &crate::wire::Mask,
         size: [f32; 2],
         fit: Option<&str>,
+        path: &str,
     ) -> Option<Image> {
         let px = |v: f32| (v * SCALE).round().clamp(1.0, 4096.0) as u32;
         let size = (px(size[0]), px(size[1]));
-        let key = format!("{src}|{mask:?}|{fit:?}");
+        let id = key((src, mask, fit));
         let mut masked = MASKED.lock().unwrap();
-        let map = masked.get_or_insert_with(HashMap::new);
-        if let Some(entry) = map.get_mut(&key) {
-            if entry.size == size {
-                return entry.image.clone();
+        let shown = match masked.get(&id) {
+            Some(entry) => {
+                if let Some((made, image)) = &entry.made
+                    && *made == size
+                {
+                    return Some(image.clone());
+                }
+                let shown = entry.made.as_ref().map(|(_, image)| image.clone());
+                if entry.asked == size {
+                    // Already compositing at this size (or it failed): wait, or show what there is.
+                    if !entry.failed {
+                        self.wait(Awaited::Composite(id, size), path, None);
+                    }
+                    return shown;
+                }
+                entry.asked = size;
+                entry.failed = false;
+                shown
             }
-            entry.size = size;
-        } else {
-            map.insert(key.clone(), Masked { size, image: None });
-        }
-        let shown = map.get(&key).and_then(|entry| entry.image.clone());
+            None => {
+                let entry = Masked {
+                    asked: size,
+                    made: None,
+                    failed: false,
+                };
+                masked.insert(id, entry, 0, |_| false);
+                None
+            }
+        };
         drop(masked);
+        self.wait(Awaited::Composite(id, size), path, None);
         let (src, mask, fit) = (src.to_string(), mask.clone(), fit.map(str::to_string));
-        std::thread::spawn(move || {
-            let decode = |src: &str| {
-                let bytes = local_bytes(src)?;
-                Some(image::load_from_memory(&bytes).ok()?.to_rgba8())
-            };
-            let Some(picture) = decode(&src) else { return };
+        background(move || {
+            // A newer size asked for since this was queued composites on its own.
+            let wanted =
+                |masked: &Lru<u64, Masked>| masked.peek(&id).is_some_and(|e| e.asked == size);
+            if !wanted(&MASKED.lock().unwrap()) {
+                return;
+            }
+            let picture = decoded_source(&src);
             let shape = match &mask.image {
-                Some(m) => match decode(&m.url) {
-                    Some(shape) => Some((shape, [m.w.0, m.h.0])),
-                    None => return,
-                },
-                None => None,
+                Some(m) => decoded_source(&m.url).map(|shape| Some((shape, [m.w.0, m.h.0]))),
+                None => Some(None),
+            };
+            let (Some(picture), Some(shape)) = (picture, shape) else {
+                if let Some(entry) = MASKED.lock().unwrap().get(&id)
+                    && entry.asked == size
+                {
+                    entry.failed = true;
+                }
+                return;
             };
             let fade = mask.fade.map_or([0.0; 4], |f| f.map(|v| v.0));
             let rgba = composite(
                 &picture,
-                shape.as_ref().map(|(shape, share)| (shape, *share)),
+                shape
+                    .as_ref()
+                    .map(|(shape, share)| (shape.as_ref(), *share)),
                 fade,
                 size,
                 fit.as_deref(),
             );
             let image = cache().rgba(size.0, size.1, rgba);
-            // A newer size asked for since then composites on its own thread; keep that one.
-            if let Some(entry) = MASKED
-                .lock()
-                .unwrap()
-                .as_mut()
-                .and_then(|m| m.get_mut(&key))
-                && entry.size == size
-            {
-                entry.image = Some(image);
-                ARRIVED.store(true, Ordering::SeqCst);
-                wake();
+            let mut masked = MASKED.lock().unwrap();
+            if !wanted(&masked) {
+                return;
             }
+            let bytes = (size.0 * size.1 * 4) as usize;
+            let entry = Masked {
+                asked: size,
+                made: Some((size, image)),
+                failed: false,
+            };
+            masked.insert(id, entry, bytes, |_| false);
+            drop(masked);
+            arrived();
         });
         shown
     }
 
-    /// An inline SVG drawn in its own colours (not tinted like an icon).
-    pub fn svg(&self, view: f32, body: &str, size_pt: f32) -> Image {
+    /// An inline SVG drawn in its own colours (not tinted like an icon), `[w, h]` its viewBox size.
+    pub fn svg(&self, [vw, vh]: [f32; 2], body: &str, size_pt: f32) -> Image {
         let size_pt = size_pt.clamp(8.0, 1024.0);
-        let markup = format!(
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {view} {view}\" preserveAspectRatio=\"none\">{}</svg>",
-            replace_oklch(body)
-        );
-        let key = format!("{size_pt}|svg|{markup}");
-        if let Some(image) = self.loaded.borrow().get(&key) {
+        let id = key(("svg", vw.to_bits(), vh.to_bits(), size_pt.to_bits(), body));
+        if let Some(image) = self.loaded.borrow_mut().get(&id) {
             return image.clone();
         }
+        let markup = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {vw} {vh}\" preserveAspectRatio=\"none\">{}</svg>",
+            replace_oklch(body)
+        );
         let image = cache().svg(markup.into_bytes(), size_pt, SCALE);
-        self.loaded.borrow_mut().insert(key, image.clone());
+        self.loaded
+            .borrow_mut()
+            .insert(id, image.clone(), 1, |_| false);
         image
+    }
+
+    /// An inline SVG stretched to a `box_pt` box (`preserveAspectRatio="none"`, a chart's
+    /// percent-space layer), rasterized at the box's own size: Rune's square, 1024-pixel icon
+    /// raster would blur a wide chart. A shape with `vector-effect="non-scaling-stroke"` keeps its
+    /// stroke width, as in a browser (resvg reads the attribute but ignores it). `None` when the
+    /// drawing cannot be read.
+    pub fn svg_stretched(&self, view: [f32; 2], body: &str, box_pt: [f32; 2]) -> Option<Image> {
+        let [w, h] = box_pt.map(|v| v.round().clamp(1.0, 2048.0));
+        let id = key((
+            "svg-box",
+            view.map(f32::to_bits),
+            w.to_bits(),
+            h.to_bits(),
+            body,
+        ));
+        if let Some(image) = self.loaded.borrow_mut().get(&id) {
+            return Some(image.clone());
+        }
+        let markup = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w}\" height=\"{h}\" viewBox=\"0 0 {w} {h}\">{}</svg>",
+            stretch_body(&replace_oklch(body), [w / view[0], h / view[1]])
+        );
+        let (pw, ph) = ((w * SCALE) as u32, (h * SCALE) as u32);
+        let tree = resvg::usvg::Tree::from_data(markup.as_bytes(), &Default::default()).ok()?;
+        let mut pixmap = resvg::tiny_skia::Pixmap::new(pw, ph)?;
+        resvg::render(
+            &tree,
+            resvg::tiny_skia::Transform::from_scale(SCALE, SCALE),
+            &mut pixmap.as_mut(),
+        );
+        let rgba: Vec<u8> = pixmap
+            .pixels()
+            .iter()
+            .flat_map(|p| {
+                let c = p.demultiply();
+                [c.red(), c.green(), c.blue(), c.alpha()]
+            })
+            .collect();
+        let image = cache().rgba(pw, ph, rgba);
+        self.loaded
+            .borrow_mut()
+            .insert(id, image.clone(), 1, |_| false);
+        Some(image)
+    }
+
+    /// Rebuilds the element at `path` once `image` has decoded, for a box sized from the
+    /// picture's own size. A decode wakes the window to redraw, but a memoised row is not rebuilt
+    /// by a redraw, so a row built while its picture decoded would keep its empty box. A picture
+    /// that fails to decode stays empty and asks for nothing.
+    pub fn await_decode(&self, image: &Image, path: &str) {
+        if image.is_ready() && image.error().is_some() {
+            return;
+        }
+        let mut decoding = DECODING.lock().unwrap();
+        if !decoding.iter().any(|d| d.id() == image.id()) {
+            decoding.push(image.clone());
+        }
+        drop(decoding);
+        self.wait(Awaited::Decode(image.id()), path, Some(image));
+    }
+
+    fn wait(&self, on: Awaited, path: &str, image: Option<&Image>) {
+        let mut waiting = self.waiting.borrow_mut();
+        let waiter = waiting.entry(on).or_insert_with(|| Waiter {
+            paths: HashSet::new(),
+            image: image.cloned(),
+        });
+        waiter.paths.insert(path.to_string());
+    }
+
+    /// The paths of the elements whose pictures landed since the last call. A picture that
+    /// failed lets its elements go: they keep their empty box.
+    pub(crate) fn landed(&mut self) -> Vec<String> {
+        let waiting = self.waiting.get_mut();
+        if waiting.is_empty() {
+            return Vec::new();
+        }
+        let remote = REMOTE.lock().unwrap();
+        let masked = MASKED.lock().unwrap();
+        let mut paths = Vec::new();
+        waiting.retain(|on, waiter| {
+            let landed = match on {
+                Awaited::Download(url) => match remote.peek(url) {
+                    Some(Fetched::Pending) => return true,
+                    Some(Fetched::Picture(_) | Fetched::Svg(_)) => true,
+                    Some(Fetched::Failed(_)) | None => false,
+                },
+                Awaited::Composite(id, size) => match masked.peek(id) {
+                    Some(entry) if entry.made.as_ref().is_some_and(|(made, _)| made == size) => {
+                        true
+                    }
+                    Some(entry) if entry.asked == *size && !entry.failed => return true,
+                    _ => false,
+                },
+                Awaited::Decode(_) => match &waiter.image {
+                    Some(image) if !image.is_ready() => return true,
+                    Some(image) => image.error().is_none(),
+                    None => false,
+                },
+            };
+            if landed {
+                paths.extend(waiter.paths.drain());
+            }
+            false
+        });
+        paths
+    }
+
+    /// Marks the memos of the elements at `paths` and of every element around them stale: each
+    /// rebuilds once, the rest of the tree is reused. Whether that overflowed what is tracked, so
+    /// that every memo must go instead.
+    pub(crate) fn mark_stale(&mut self, paths: &[String]) -> bool {
+        self.landings += 1;
+        for path in paths {
+            let ends = path
+                .match_indices('/')
+                .map(|(at, _)| at)
+                .chain([path.len()]);
+            for end in ends {
+                self.stale.insert(path[..end].to_string(), self.landings);
+            }
+        }
+        if self.stale.len() > STALE_PATHS {
+            self.stale.clear();
+            return true;
+        }
+        false
+    }
+
+    /// Part of the memo version of the element at `path`: changes when a picture it or an
+    /// element inside it waited on lands.
+    pub(crate) fn epoch(&self, path: &str) -> u64 {
+        if self.stale.is_empty() {
+            return 0;
+        }
+        self.stale.get(path).copied().unwrap_or(0)
     }
 }
 
-/// Starts (once) the download of `url`; the image at `size_pt` once it has arrived.
+/// Starts (once, or again `RETRY_AFTER` a failure) the download of `url`; the image at `size_pt`
+/// once it has arrived.
 fn remote(url: &str, size_pt: f32) -> Option<Image> {
     let mut remote = REMOTE.lock().unwrap();
-    let map = remote.get_or_insert_with(HashMap::new);
-    match map.get(url) {
-        Some(Fetched::Picture(image)) => return Some(image.clone()),
-        Some(Fetched::Svg(bytes)) => {
-            let bytes = bytes.clone();
-            drop(remote);
-            return Some(remote_svg(url, &bytes, size_pt));
-        }
-        Some(Fetched::Pending | Fetched::Failed) => return None,
-        None => {}
+    match remote.get(&url.to_string()) {
+        Some(Fetched::Picture(bytes)) => return Some(cache().load(bytes.clone())),
+        Some(Fetched::Svg(bytes)) => return Some(cache().svg(bytes.clone(), size_pt, SCALE)),
+        Some(Fetched::Pending) => return None,
+        Some(Fetched::Failed(at)) if at.elapsed() < RETRY_AFTER => return None,
+        Some(Fetched::Failed(_)) | None => {}
     }
-    map.insert(url.to_string(), Fetched::Pending);
+    let pending = |f: &Fetched| matches!(f, Fetched::Pending);
+    remote.insert(url.to_string(), Fetched::Pending, 0, pending);
+    drop(remote);
     let url = url.to_string();
-    std::thread::spawn(move || {
-        let fetched = match crate::fetch::get(&url, std::time::Duration::from_secs(15)) {
+    background(move || {
+        let fetched = match crate::fetch::get(&url, Duration::from_secs(15)) {
             Ok(body) if !body.is_empty() => {
                 if url.ends_with(".svg") || body.starts_with(b"<svg") {
-                    Fetched::Svg(Arc::new(body))
+                    Fetched::Svg(body.into())
                 } else {
-                    Fetched::Picture(cache().load(body))
+                    Fetched::Picture(body.into())
                 }
             }
-            _ => Fetched::Failed,
+            _ => Fetched::Failed(Instant::now()),
         };
-        let failed = matches!(fetched, Fetched::Failed);
-        if let Some(map) = REMOTE.lock().unwrap().as_mut() {
-            map.insert(url, fetched);
-        }
+        let (failed, bytes) = match &fetched {
+            Fetched::Picture(b) | Fetched::Svg(b) => (false, b.len()),
+            _ => (true, 0),
+        };
+        REMOTE.lock().unwrap().insert(url, fetched, bytes, pending);
         if !failed {
-            ARRIVED.store(true, Ordering::SeqCst);
-            wake();
+            arrived();
         }
     });
     None
-}
-
-fn remote_svg(url: &str, bytes: &Arc<Vec<u8>>, size_pt: f32) -> Image {
-    let key = (url.to_string(), size_pt.to_bits());
-    let mut svgs = REMOTE_SVGS.lock().unwrap();
-    let map = svgs.get_or_insert_with(HashMap::new);
-    map.entry(key)
-        .or_insert_with(|| cache().svg(bytes.to_vec(), size_pt, SCALE))
-        .clone()
 }
 
 /// `[mime][;base64],payload` into its MIME type and bytes.
@@ -415,6 +735,132 @@ fn percent_decode(s: &str) -> Vec<u8> {
         i += 1;
     }
     out
+}
+
+/// A flat SVG body (`<tag a="v" .../>` elements, as the runtime sends it) drawn in viewBox units
+/// scaled by `[sx, sy]` into a viewBox in box units. Each shape is scaled by a group transform,
+/// which scales its stroke too, except a `vector-effect="non-scaling-stroke"` path, line,
+/// polyline or polygon: its points are scaled instead, so its stroke keeps its width.
+fn stretch_body(body: &str, [sx, sy]: [f32; 2]) -> String {
+    let mut out = String::with_capacity(body.len() + 64);
+    let mut rest = body;
+    while let Some(start) = rest.find('<') {
+        let Some(len) = element_len(&rest[start..]) else {
+            break;
+        };
+        let element = &rest[start..start + len];
+        rest = &rest[start + len..];
+        match element
+            .contains("vector-effect=\"non-scaling-stroke\"")
+            .then(|| unscaled_stroke(element, sx, sy))
+            .flatten()
+        {
+            Some(scaled) => out.push_str(&scaled),
+            None => out.push_str(&format!("<g transform=\"scale({sx} {sy})\">{element}</g>")),
+        }
+    }
+    out
+}
+
+/// The length of the element at the start of `s`: up to its `/>`, or its closing tag.
+fn element_len(s: &str) -> Option<usize> {
+    let mut quoted = false;
+    for (i, c) in s.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            '>' if !quoted => {
+                if s[..i].ends_with('/') {
+                    return Some(i + 1);
+                }
+                let tag = s[1..].split([' ', '>', '/']).next()?;
+                let close = format!("</{tag}>");
+                return s[i..].find(&close).map(|at| i + at + close.len());
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// `element` with its geometry scaled by `sx, sy` and its stroke left as it is; `None` for a shape
+/// whose geometry this does not scale (it is then scaled with its stroke).
+fn unscaled_stroke(element: &str, sx: f32, sy: f32) -> Option<String> {
+    let (sx, sy) = (f64::from(sx), f64::from(sy));
+    let tag = element[1..].split([' ', '/', '>']).next()?;
+    let mut out = element.to_string();
+    let mut set = |name: &str, f: &dyn Fn(&str) -> Option<String>| -> Option<()> {
+        let needle = format!(" {name}=\"");
+        let Some(at) = out.find(&needle) else {
+            return Some(());
+        };
+        let from = at + needle.len();
+        let to = from + out[from..].find('"')?;
+        let value = f(&out[from..to])?;
+        out.replace_range(from..to, &value);
+        Some(())
+    };
+    let number = |v: &str, k: f64| v.trim().parse::<f64>().ok().map(|n| (n * k).to_string());
+    match tag {
+        "path" => set("d", &|d| scale_path(d, sx, sy))?,
+        "line" => {
+            set("x1", &|v| number(v, sx))?;
+            set("x2", &|v| number(v, sx))?;
+            set("y1", &|v| number(v, sy))?;
+            set("y2", &|v| number(v, sy))?;
+        }
+        "polyline" | "polygon" => set("points", &|points| {
+            let numbers: Vec<f64> = points
+                .split([' ', ',', '\n', '\t'])
+                .filter(|s| !s.is_empty())
+                .map(|s| s.parse().ok())
+                .collect::<Option<_>>()?;
+            Some(
+                numbers
+                    .chunks(2)
+                    .map(|p| format!("{},{}", p[0] * sx, p.get(1).copied().unwrap_or(0.0) * sy))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )
+        })?,
+        _ => return None,
+    }
+    Some(out)
+}
+
+/// Path data with every point scaled by `sx, sy`, as absolute moves, lines and curves (an arc
+/// becomes curves, so it scales exactly too).
+fn scale_path(d: &str, sx: f64, sy: f64) -> Option<String> {
+    use std::fmt::Write;
+    use svgtypes::SimplePathSegment as S;
+    let mut out = String::with_capacity(d.len());
+    for segment in svgtypes::SimplifyingPathParser::from(d) {
+        let _ = match segment.ok()? {
+            S::MoveTo { x, y } => write!(out, "M{} {}", x * sx, y * sy),
+            S::LineTo { x, y } => write!(out, "L{} {}", x * sx, y * sy),
+            S::CurveTo {
+                x1,
+                y1,
+                x2,
+                y2,
+                x,
+                y,
+            } => write!(
+                out,
+                "C{} {} {} {} {} {}",
+                x1 * sx,
+                y1 * sy,
+                x2 * sx,
+                y2 * sy,
+                x * sx,
+                y * sy
+            ),
+            S::Quadratic { x1, y1, x, y } => {
+                write!(out, "Q{} {} {} {}", x1 * sx, y1 * sy, x * sx, y * sy)
+            }
+            S::ClosePath => write!(out, "Z"),
+        };
+    }
+    Some(out)
 }
 
 /// Whether an SVG body paints in its own colours rather than `currentColor`.
@@ -533,13 +979,21 @@ mod tests {
 
     #[test]
     fn a_downloaded_svg_rasterizes_at_each_size_it_is_drawn() {
-        let file = std::env::temp_dir().join(format!("hazel-remote-{}.svg", std::process::id()));
-        std::fs::write(
-            &file,
-            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="red"/></svg>"#,
-        )
-        .unwrap();
-        let url = format!("file://{}", file.display());
+        // Served once over http on a local port: downloads take web URLs only.
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="red"/></svg>"#;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/picture.svg", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            let (mut stream, _) = listener.accept().unwrap();
+            let _ = stream.read(&mut [0; 1024]);
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: image/svg+xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                svg.len()
+            );
+            stream.write_all(head.as_bytes()).unwrap();
+            stream.write_all(svg.as_bytes()).unwrap();
+        });
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         let small = loop {
             if let Some(image) = remote(&url, 16.0) {
@@ -554,7 +1008,161 @@ mod tests {
         let large = remote(&url, 64.0).expect("already downloaded");
         let (small, large) = (small.wait().unwrap(), large.wait().unwrap());
         assert!(large[0] > small[0] * 3, "{small:?} {large:?}");
-        let _ = std::fs::remove_file(file);
+    }
+
+    /// A `w` by `h` PNG, its pixels all `rgba`.
+    fn png(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
+        let mut out = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(w, h, image::Rgba(rgba)))
+            .write_to(&mut out, image::ImageFormat::Png)
+            .unwrap();
+        out.into_inner()
+    }
+
+    #[test]
+    fn an_lru_drops_the_least_recently_used_within_its_bounds() {
+        let never = |_: &u32| false;
+        let mut lru = Lru::new(2, 100);
+        lru.insert("a", 1, 10, never);
+        lru.insert("b", 2, 10, never);
+        lru.get(&"a");
+        lru.insert("c", 3, 10, never);
+        assert!(lru.peek(&"b").is_none(), "b was used least recently");
+        assert!(lru.peek(&"a").is_some() && lru.peek(&"c").is_some());
+        // Over its weight, it drops until it fits; what `keep` holds stays.
+        let mut lru = Lru::new(10, 100);
+        lru.insert("pending", 0, 60, |_| false);
+        lru.insert("old", 1, 30, |_| false);
+        lru.insert("new", 2, 50, |v: &u32| *v == 0);
+        assert!(lru.peek(&"pending").is_some(), "kept");
+        assert!(lru.peek(&"old").is_none());
+        assert_eq!(lru.len(), 2);
+    }
+
+    #[test]
+    fn a_stretched_svg_scales_a_non_scaling_strokes_points_and_groups_the_rest() {
+        let body = concat!(
+            r##"<path d="M0 100l50 -50H100" fill="none" stroke="#ff0000" stroke-width="2" vector-effect="non-scaling-stroke"/>"##,
+            r##"<path d="M0 0h100v100z" fill="#00ff00"/>"##,
+        );
+        let out = stretch_body(body, [8.0, 2.0]);
+        assert_eq!(
+            out,
+            concat!(
+                r##"<path d="M0 200L400 100L800 100" fill="none" stroke="#ff0000" stroke-width="2" vector-effect="non-scaling-stroke"/>"##,
+                r##"<g transform="scale(8 2)"><path d="M0 0h100v100z" fill="#00ff00"/></g>"##,
+            )
+        );
+        let line =
+            r##"<line x1="0" y1="50" x2="100" y2="50" vector-effect="non-scaling-stroke"/>"##;
+        assert_eq!(
+            stretch_body(line, [8.0, 2.0]),
+            r##"<line x1="0" y1="100" x2="800" y2="100" vector-effect="non-scaling-stroke"/>"##
+        );
+    }
+
+    #[test]
+    fn a_stretched_chart_rasterizes_at_its_box_size() {
+        let images = Images::default();
+        // A horizontal line across a 100×100 viewBox, stretched to 300×60 points.
+        let body = r##"<path d="M0 50H100" fill="none" stroke="#ff0000" stroke-width="2" vector-effect="non-scaling-stroke"/>"##;
+        let image = images
+            .svg_stretched([100.0, 100.0], body, [300.0, 60.0])
+            .expect("rasterized");
+        let [w, h] = image.wait().expect("decoded");
+        assert_eq!([w, h], [600, 120], "the box at 2x");
+    }
+
+    #[test]
+    fn a_window_keeps_a_bounded_number_of_pictures_keyed_by_their_hash() {
+        let images = Images::default();
+        let body = r#"<path d="M0 0h1v1z" fill="red"/>"#;
+        let first = images.svg([16.0; 2], body, 32.0);
+        assert_eq!(
+            images.svg([16.0; 2], body, 32.0).id(),
+            first.id(),
+            "found, not built again"
+        );
+        assert_eq!(images.loaded.borrow().len(), 1);
+        for i in 0..LOADED_ENTRIES + 20 {
+            images.svg(
+                [16.0; 2],
+                &format!(r#"<path d="M0 0h{i}v1z" fill="red"/>"#),
+                32.0,
+            );
+        }
+        assert_eq!(images.loaded.borrow().len(), LOADED_ENTRIES);
+    }
+
+    #[test]
+    fn a_failed_download_is_asked_for_again_after_the_retry_delay() {
+        let url = format!(
+            "file:///nonexistent/hazel-{}/missing.png",
+            std::process::id()
+        );
+        let state = || match REMOTE.lock().unwrap().peek(&url) {
+            Some(Fetched::Pending) => "pending",
+            Some(Fetched::Failed(_)) => "failed",
+            Some(_) => "fetched",
+            None => "none",
+        };
+        assert!(remote(&url, 16.0).is_none());
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while state() != "failed" {
+            assert!(Instant::now() < deadline, "the download never failed");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(remote(&url, 16.0).is_none());
+        assert_eq!(state(), "failed", "not fetched again at once");
+        let long_ago = Instant::now() - RETRY_AFTER - Duration::from_secs(1);
+        REMOTE
+            .lock()
+            .unwrap()
+            .insert(url.clone(), Fetched::Failed(long_ago), 0, |_| false);
+        assert!(remote(&url, 16.0).is_none());
+        // Asked for again: pending, or (a missing file fails fast) failed anew, not the old failure.
+        let retried = match REMOTE.lock().unwrap().peek(&url) {
+            Some(Fetched::Failed(at)) => *at > long_ago,
+            Some(Fetched::Pending) => true,
+            _ => false,
+        };
+        assert!(retried, "fetched again once the delay passed");
+    }
+
+    #[test]
+    fn a_mask_composite_decodes_its_source_once_for_every_size() {
+        use base64::Engine;
+        let src = format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(png(3, 2, [0, 0, 255, 255]))
+        );
+        let first = decoded_source(&src).expect("decodes");
+        assert_eq!(first.dimensions(), (3, 2));
+        assert!(Arc::ptr_eq(&first, &decoded_source(&src).unwrap()));
+    }
+
+    #[test]
+    fn a_landed_picture_makes_only_its_element_and_those_around_it_stale() {
+        let mut images = Images::default();
+        let image = cache().load(png(2, 2, [255, 0, 0, 255]));
+        images.await_decode(&image, "r/1/k7");
+        image.wait().unwrap();
+        let landed = images.landed();
+        assert_eq!(landed, ["r/1/k7"]);
+        assert!(images.landed().is_empty(), "told once");
+        assert!(!images.mark_stale(&landed));
+        for path in ["r", "r/1", "r/1/k7"] {
+            assert_eq!(images.epoch(path), 1, "{path}");
+        }
+        for path in ["r/0", "r/1/k7/0", "r/10"] {
+            assert_eq!(images.epoch(path), 0, "{path} is reused");
+        }
+        let many: Vec<String> = (0..STALE_PATHS).map(|i| format!("r/{i}")).collect();
+        assert!(
+            images.mark_stale(&many),
+            "too many: every memo goes instead"
+        );
+        assert_eq!(images.epoch("r/1"), 0);
     }
 
     #[test]

@@ -45,7 +45,7 @@ export function useLatestRelease(initial: ReleaseData | null): ReleaseData | nul
 // Fetch latest release from GitHub API
 export async function fetchLatestRelease(): Promise<ReleaseData | null> {
 	try {
-		const res = await fetch("https://api.github.com/repos/HazelChat/hazel/releases/latest")
+		const res = await fetch("https://api.github.com/repos/MapleTechLabs/hazel/releases/latest")
 		if (!res.ok) return null
 		const data: GitHubRelease = await res.json()
 		return {

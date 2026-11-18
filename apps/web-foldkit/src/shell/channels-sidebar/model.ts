@@ -11,6 +11,7 @@ import {
 	DmChannel,
 	Membership,
 	PartnerOrg,
+	SyncedChannel,
 	Presence,
 	Section,
 	SidebarThread,
@@ -43,8 +44,15 @@ export const Model = Schema.Struct({
 	unreadCounts: Schema.Array(UnreadCount),
 	connectMounts: Schema.Array(ConnectMount),
 	organizations: Schema.Array(PartnerOrg),
+	syncedChannels: Schema.Array(SyncedChannel),
 	memberChannelIds: Schema.NullOr(Schema.Array(ChannelId)),
 	discoverableChannels: Schema.Array(DiscoverableChannel),
+	/** Which of the lists that start empty have arrived; an empty one is "none" only then. */
+	loaded: Schema.Struct({
+		sections: Schema.Boolean,
+		favorites: Schema.Boolean,
+		dmChannelIds: Schema.Boolean,
+	}),
 	/** `useFeatureHint("create-channel")`, persisted across organizations. */
 	isCreateChannelHintDismissed: Schema.Boolean,
 	openMenu: Schema.NullOr(OpenMenu),
@@ -91,6 +99,7 @@ export const Message = defineMessageUnion({
 	UpdatedUnreadCounts: { counts: Schema.Array(UnreadCount) },
 	UpdatedConnectMounts: { mounts: Schema.Array(ConnectMount) },
 	UpdatedOrganizations: { organizations: Schema.Array(PartnerOrg) },
+	UpdatedSyncedChannels: { synced: Schema.Array(SyncedChannel) },
 	UpdatedMemberChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedDiscoverableChannels: { channels: Schema.Array(DiscoverableChannel) },
 	/** "Browse channels"; the sidebar answers with `RequestedCommandPalette`. */
@@ -120,7 +129,23 @@ export const emptyData = {
 	unreadCounts: [],
 	connectMounts: [],
 	organizations: [],
+	syncedChannels: [],
 	memberChannelIds: null,
 	discoverableChannels: [],
+	loaded: { sections: false, favorites: false, dmChannelIds: false },
 	openMenu: null,
 } satisfies Omit<Model, "organizationId" | "currentUserId" | "isCreateChannelHintDismissed">
+
+/**
+ * Whether a list the sidebar draws has not arrived yet. Each comes from its own query, so the
+ * sidebar draws them one by one; until the last one is in, it must not count as the screen (the
+ * last screen's paint stays up, `app/paint.ts`), or it shows empty sections that then fill in.
+ */
+export const isLoading = (model: Model): boolean =>
+	model.memberChannelIds === null ||
+	!model.loaded.sections ||
+	!model.loaded.favorites ||
+	!model.loaded.dmChannelIds ||
+	!("default" in model.sectionChannels) ||
+	model.sections.some((section) => !(section.id in model.sectionChannels)) ||
+	model.dmChannelIds.some((channelId) => !(channelId in model.dmChannels))

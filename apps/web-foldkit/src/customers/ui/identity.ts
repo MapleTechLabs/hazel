@@ -2,7 +2,7 @@ import type { CustomerSource } from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { getBrandfetchIcon } from "~/lib/integrations/__data"
-import { IconExternalLink, IconUser } from "../../icons"
+import { IconUser } from "../../icons"
 import { safeSourceUrl } from "../providers"
 
 /**
@@ -66,7 +66,7 @@ export const sourceMark = <M>(
 	)
 
 const chipClassName =
-	"inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-1.5 font-medium text-fg text-sm"
+	"inline-flex h-7 items-center gap-1.5 rounded-md border border-border pr-2 pl-1.5 font-medium text-fg text-xs"
 
 /** `[mark] Stripe`. */
 export const sourceChip = <M>(
@@ -80,8 +80,8 @@ export const sourceChip = <M>(
 	)
 
 /**
- * `[mark] cus_Q8f2Lk ↗`: links out to the provider's record in a new tab; a plain chip when `href`
- * is not on the provider's hosts (`safeSourceUrl`).
+ * `[mark] Stripe` as a link: opens the provider's record in a new tab (the accessible name says
+ * so); a plain chip when `href` is not on the provider's hosts (`safeSourceUrl`).
  */
 export const sourceLinkChip = <M>(
 	h: HtmlBuilder<M>,
@@ -96,19 +96,16 @@ export const sourceLinkChip = <M>(
 			h.Target("_blank"),
 			h.Rel("noreferrer"),
 			h.AriaLabel(`${options.label} in ${SOURCE_LABEL[options.source]}`),
+			h.Title(`Open in ${SOURCE_LABEL[options.source]}`),
 			h.Class(
 				twMerge(
 					chipClassName,
-					"group bg-secondary/60 font-mono text-xs hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring",
+					"outline-hidden transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70",
 					options.className,
 				),
 			),
 		],
-		[
-			logoImage(h, options.source, "size-4"),
-			options.label,
-			IconExternalLink(h, { className: "size-3 text-muted-fg group-hover:text-fg" }),
-		],
+		[logoImage(h, options.source, "size-4"), options.label],
 	)
 }
 
@@ -152,7 +149,7 @@ export type LogoSize = "xs" | "sm" | "md" | "lg"
 /** 20 · 28 · 40 · 48px. */
 const LOGO_SIZE = {
 	xs: "size-5 rounded-[5px] text-[9px]",
-	sm: "size-7 rounded-md text-[11px]",
+	sm: "size-7 rounded-md text-2xs",
 	md: "size-10 rounded-lg text-sm",
 	lg: "size-12 rounded-xl text-base",
 } as const satisfies Record<LogoSize, string>
@@ -203,7 +200,7 @@ export const companyLogo = <M>(
 export type AvatarSize = "sm" | "md"
 
 const AVATAR_SIZE = {
-	sm: "size-6 text-[10px]",
+	sm: "size-6 text-3xs",
 	md: "size-8 text-xs",
 } as const satisfies Record<AvatarSize, string>
 
@@ -293,7 +290,7 @@ export const avatarStack = <M>(
 						h.span(
 							[
 								h.Class(
-									"inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] text-secondary-fg ring-2 ring-bg",
+									"inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-secondary text-3xs text-secondary-fg ring-2 ring-bg",
 								),
 								h.Title(
 									people

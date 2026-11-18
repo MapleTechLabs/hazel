@@ -33,7 +33,7 @@ import { hasDesktopTitlebar } from "../platform/desktop"
  * sidebar moves into a sheet and `MobileNav` joins the inset.
  */
 
-const NAV_ACTIVE = "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+const NAV_ACTIVE = "bg-sidebar-accent font-medium text-sidebar-accent-fg"
 
 /** `useUnreadNotificationCount` badge on the bell. */
 const bellIcon = <Message>(h: HtmlBuilder<Message>, unreadCount: number): Html =>
@@ -46,7 +46,7 @@ const bellIcon = <Message>(h: HtmlBuilder<Message>, unreadCount: number): Html =
 						h.span(
 							[
 								h.Class(
-									"absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-danger font-medium text-[10px] text-danger-fg",
+									"absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-danger font-medium text-3xs text-danger-fg",
 								),
 							],
 							[unreadCount > 9 ? "9+" : `${unreadCount}`],
@@ -135,10 +135,7 @@ const navRail = <Message>(h: HtmlBuilder<Message>, context: ShellContext, unread
 				],
 			),
 			sidebarFooter(h, "p-2 ", [
-				h.span(
-					[h.Class("text-center text-[10px] font-mono text-muted-fg")],
-					["v", context.appVersion],
-				),
+				h.span([h.Class("text-center text-3xs font-mono text-muted-fg")], ["v", context.appVersion]),
 			]),
 		],
 	)
@@ -158,6 +155,10 @@ export interface MobileShell<Message> {
  * `SidebarProvider` > `AppSidebar` (nav rail + `secondarySidebar`) + `SidebarInset` > `page`.
  * `overlays` are the root's toaster, modal and command palette slots.
  */
+/** Whose screen this is, for the last screen's paint (`app/paint.ts`). */
+const paintUser = <Message>(h: HtmlBuilder<Message>, context: ShellContext) =>
+	context.currentUserId === undefined ? [] : [h.Attribute("data-paint-user", context.currentUserId)]
+
 export const orgShell = <Message>(
 	h: HtmlBuilder<Message>,
 	context: ShellContext,
@@ -174,7 +175,8 @@ export const orgShell = <Message>(
 	const { mobile } = parts
 	if (mobile.isMobile) return phoneShell(h, context, parts, sidebarChildren)
 	return h.div(
-		[h.Id("app")],
+		// The screen the next load paints first (`app/paint.ts`).
+		[h.Id("app"), h.Attribute("data-paint", "shell"), ...paintUser(h, context)],
 		[
 			parts.toaster,
 			sidebarProvider(h, { width: "350px" }, [
@@ -209,7 +211,8 @@ const phoneShell = <Message>(
 	const { mobile } = parts
 	const chrome = mobileChromeOf(context.route)
 	return h.div(
-		[h.Id("app")],
+		// The screen the next load paints first (`app/paint.ts`).
+		[h.Id("app"), h.Attribute("data-paint", "shell"), ...paintUser(h, context)],
 		[
 			parts.toaster,
 			sidebarProvider(

@@ -1,11 +1,11 @@
 import { Schema } from "effect"
 import { Dom } from "foldkit"
-import { HOTKEY_DEFINITIONS_BY_ID } from "~/lib/hotkeys/hotkey-registry"
+import { type AppKeys, appKeymap } from "~/lib/keybindings/app-keymap"
+import { KeyCombo } from "~/lib/keybindings/key-combo"
 
 /**
- * The org layout's `useAppHotkey` bindings, fed from the legacy registry's default hotkeys.
- * User overrides (`hotkey-atoms`) are not read yet. Mod combos fire while typing, as in legacy,
- * except Mod+I, which is also italic in the composer.
+ * The org layout's hotkeys, on the user's keys (`Shared.keys`). Mod combos fire while typing, except
+ * the inbox's, which shares Mod+I with italic in the composer.
  */
 const LAYOUT_ACTIONS = [
 	"commandPalette.open",
@@ -29,9 +29,20 @@ const LAYOUT_ACTIONS = [
 	"history.forward",
 ] as const
 
-/** The `AppHotkeyActionId`s the org layout binds. */
+/** The `appKeymap` actions the org layout binds. */
 export const LayoutHotkeyActionId = Schema.Literals(LAYOUT_ACTIONS)
 export type LayoutHotkeyActionId = typeof LayoutHotkeyActionId.Type
+
+/** The layout actions' keys: a subscription dependency, so a rebinding restarts the bindings. */
+export const LayoutKeys = Schema.Struct(
+	Object.fromEntries(LAYOUT_ACTIONS.map((id) => [id, Schema.NullOr(KeyCombo)])) as {
+		readonly [K in LayoutHotkeyActionId]: Schema.NullOr<typeof KeyCombo>
+	},
+)
+export type LayoutKeys = typeof LayoutKeys.Type
+
+export const layoutKeysOf = (keys: AppKeys): LayoutKeys =>
+	Object.fromEntries(LAYOUT_ACTIONS.map((id) => [id, keys[id]])) as LayoutKeys
 
 /**
  * Discord's Alt+ArrowUp/Down (Shift: unread, Mod+Shift: mentions): on chat pages, where the only text
@@ -64,6 +75,7 @@ const NOT_WHILE_TYPING: ReadonlySet<LayoutHotkeyActionId> = new Set(["inbox.open
 
 export const layoutHotkeys = <Message>(
 	toMessage: (actionId: LayoutHotkeyActionId) => Message,
+	keys: LayoutKeys,
 	options: {
 		/** On a chat page, with no modal or palette open. */
 		readonly isChannelNavigationEnabled: boolean
@@ -72,9 +84,8 @@ export const layoutHotkeys = <Message>(
 	} = { isChannelNavigationEnabled: true, isOverlayOpen: false },
 ) =>
 	Dom.streamFromKeyBindings<Message>({
-		bindings: LAYOUT_ACTIONS.map((actionId) => ({
-			keys: HOTKEY_DEFINITIONS_BY_ID[actionId].defaultHotkey,
-			whileTyping: NOT_WHILE_TYPING.has(actionId) ? ("Suppress" as const) : ("Allow" as const),
+		bindings: appKeymap.bindings(keys, LAYOUT_ACTIONS, (actionId) => ({
+			whileTyping: NOT_WHILE_TYPING.has(actionId) ? "Suppress" : "Allow",
 			isEnabled:
 				(!CHANNEL_NAVIGATION.has(actionId) || options.isChannelNavigationEnabled) &&
 				(!NOT_UNDER_OVERLAY.has(actionId) || !options.isOverlayOpen),

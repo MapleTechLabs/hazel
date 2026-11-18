@@ -217,6 +217,8 @@ export const routes: RouteTable = {
 	"userPresenceStatus.update": user,
 	"userPresenceStatus.heartbeat": user,
 	"userPresenceStatus.clearStatus": user,
+	"pushDevice.register": user,
+	"pushDevice.unregister": user,
 
 	// OrgObject
 	// The org's search index, filtered by the caller's `channel_access` there.

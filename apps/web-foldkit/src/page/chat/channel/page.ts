@@ -19,6 +19,8 @@ import {
 	replyIdsOf,
 	threadIdsOf,
 	toDeriveContext,
+	likeRowsOf,
+	marginShiftsOf,
 	toDisplayRows,
 	toThreadRows,
 	unfurlRequestsOf,
@@ -85,6 +87,7 @@ export const init = (
 	lookups: emptyLookups,
 	members: null,
 	pinned: [],
+	customer: null,
 	typing: [],
 	typingNowMs: 0,
 	typingNames: [],
@@ -275,6 +278,10 @@ const deriveRows = (current: Model): PageReturn => {
 			withRows.list,
 			shareKeys(withRows.list.keys, rows),
 			shareStickyKeys(withRows.list.stickyKeys, rows),
+			{
+				likeRowsOf: (heights, previous) => likeRowsOf(rows, heights, previous),
+				heightShifts: marginShiftsOf(model.rows, rows),
+			},
 		),
 	)
 	return { ...listed, commands: [...(requested.commands ?? []), ...(listed.commands ?? [])] }
@@ -445,7 +452,7 @@ const pressedMessageKey = (model: Model, messageId: MessageId, key: MessageKey):
 		case "Reply":
 			return Write.andThen(act("reply"), Write.focusComposer)
 		case "Thread":
-			return facts.isThreadChannel ? { model } : act("thread")
+			return facts.canStartThread(messageId) ? act("thread") : { model }
 		case "Pin":
 			return act("pin")
 		case "Delete":
@@ -517,8 +524,15 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 					Composer.Message.UpdatedCustomEmojis({ emojis: customEmojis }),
 				),
 			),
-		UpdatedAttachments: ({ attachments }) => withLookup(model, "attachments", attachments),
-		UpdatedDiscordSynced: ({ messageIds }) => withLookup(model, "discordSyncedIds", messageIds),
+		// A late result from the channel just left must not replace the new channel's lookups.
+		UpdatedAttachments: ({ channelId, attachments }) =>
+			channelId === model.channelId ? withLookup(model, "attachments", attachments) : { model },
+		UpdatedSyncedMessages: ({ channelId, messages }) =>
+			channelId === model.channelId ? withLookup(model, "syncedMessages", messages) : { model },
+		UpdatedAgentMarks: ({ channelId, marks }) =>
+			channelId === model.channelId ? withLookup(model, "agentMarks", marks) : { model },
+		UpdatedSyncProvider: ({ provider }) =>
+			provider === model.lookups.syncProvider ? { model } : withLookup(model, "syncProvider", provider),
 		UpdatedThreadChannels: ({ channels }) => withLookup(model, "threadChannels", channels),
 		UpdatedThreadMessages: ({ messages }) => withLookup(model, "threadMessages", messages),
 		UpdatedReplyTargets: ({ targets }) => withLookup(model, "replyTargets", targets),
@@ -526,6 +540,9 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			syncUnread(withTypingNames(modifyFields(model, { members: () => members }))),
 		ChangedWindowFocus: ({ isFocused }) => stepNotifications(model, { _tag: "ChangedFocus", isFocused }),
 		UpdatedPinned: ({ pins }) => ({ model: modifyFields(model, { pinned: () => pins }) }),
+		UpdatedCustomer: ({ channelId, customer }) => ({
+			model: channelId === model.channelId ? modifyFields(model, { customer: () => customer }) : model,
+		}),
 		// A result for a thread the panel no longer shows is dropped.
 		UpdatedThreadPanelMessages: ({ threadChannelId, messages }) => {
 			const panel = model.threadPanel
@@ -539,6 +556,15 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			const requested = requestUnfurls(withMessages, messages)
 			return { ...requested, model: withThreadRows(requested.model) }
 		},
+		UpdatedThreadPanelPins: ({ threadChannelId, pins }) =>
+			model.threadPanel?.threadChannelId === threadChannelId
+				? {
+						model: modifyFields(model, {
+							threadPanel: (panel) =>
+								panel === null ? null : modifyFields(panel, { pins: () => pins }),
+						}),
+					}
+				: { model },
 		UpdatedTyping: ({ typing }) => ({
 			model: withTypingNames(modifyFields(model, { typing: () => typing })),
 		}),
@@ -657,13 +683,28 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 
 /** Message facts the overlays read when a menu opens. */
 export const factsOf = (model: Model): Overlays.MessageFacts => {
-	const find = (messageId: MessageId) => model.messages.find((message) => message.id === messageId)
+	// The channel's messages and the open thread panel's replies: both take the same actions.
+	const find = (messageId: MessageId) =>
+		model.messages.find((message) => message.id === messageId) ??
+		model.threadPanel?.messages.find((message) => message.id === messageId)
 	return {
 		isOwnMessage: (messageId) => find(messageId)?.authorId === model.currentUserId,
 		isPinned: (messageId) => find(messageId)?.isPinned ?? false,
-		isThreadChannel: model.channel?.type === "thread",
+		canStartThread: (messageId) =>
+			canStartThreadIn(
+				model.channel?.type ?? null,
+				model.channelId,
+				find(messageId)?.channelId ?? null,
+			),
 	}
 }
+
+/** Threads start from a channel's own messages: not inside a thread, nor from a thread panel's reply. */
+export const canStartThreadIn = (
+	channelType: string | null,
+	channelId: ChannelId,
+	messageChannelId: ChannelId | null,
+): boolean => channelType !== "thread" && messageChannelId === channelId
 
 /** The signed-in user arrived after the page was created (reactions need it for `hasReacted`). */
 export const setCurrentUserId = (model: Model, currentUserId: UserId | null): PageReturn =>

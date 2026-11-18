@@ -6,6 +6,7 @@ import {
 	Channel,
 	ChannelMember,
 	ChannelSection,
+	ChannelCustomer,
 	ChatSyncChannelLink,
 	ChatSyncConnection,
 	ChatSyncMessageLink,
@@ -15,6 +16,7 @@ import {
 	IntegrationConnection,
 	JsonDate,
 	Message,
+	MessageAgentMark,
 	MessageReaction,
 	Notification,
 	Organization,
@@ -122,6 +124,8 @@ export const userOrganizationCollection = createEffectCollection(
 export const organizationCollection = orgCollection("organizations", Organization.Schema)
 export const messageCollection = channelCollectionOf("messages", Message.Schema)
 export const messageReactionCollection = channelCollectionOf("message_reactions", MessageReaction.Schema)
+/** Messages an agent wrote for their author (the author's organization only). */
+export const messageAgentMarkCollection = channelCollectionOf("message_agent_marks", MessageAgentMark.Schema)
 export const pinnedMessageCollection = channelCollectionOf("pinned_messages", PinnedMessage.Schema)
 export const notificationCollection = syncedCollection("notifications", Notification.Schema, userSources)
 export const userCollection = orgCollection("users", User.Schema)
@@ -157,6 +161,22 @@ export const chatSyncMessageLinkCollection = channelCollectionOf(
 	"chat_sync_message_links",
 	ChatSyncMessageLink.Schema,
 )
+/**
+ * Each linked channel's customer (`channel_customers`, the `CustomersObject`'s projection into the
+ * org): what chat shows on a channel. Keyed by `channelId`; members who see the channel only.
+ */
+export const channelCustomerCollection = createEffectCollection(
+	{
+		id: "channel_customers",
+		table: "channel_customers",
+		schema: ChannelCustomer.Schema,
+		parseRow: parseTimestamps,
+		getKey: (row) => row.channelId,
+		hub: syncHub,
+		sources: orgSources,
+	},
+	persist,
+)
 export const botCollection = orgCollection("bots", Bot.Schema)
 export const botCommandCollection = orgCollection("bot_commands", BotCommand.Schema)
 export const botInstallationCollection = orgCollection("bot_installations", BotInstallation.Schema)
@@ -188,3 +208,7 @@ export const customerConnectionCollection = customersCollection(
 	Customers.Connection.Schema,
 )
 export const customerSyncRunCollection = customersCollection("customer_sync_runs", Customers.SyncRun.Schema)
+export const customerChannelLinkCollection = customersCollection(
+	"customer_channel_links",
+	Customers.ChannelLink.Schema,
+)

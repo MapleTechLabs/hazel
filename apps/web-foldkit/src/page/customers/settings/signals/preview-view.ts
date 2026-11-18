@@ -51,7 +51,7 @@ const statusLine = (h: H, context: PreviewContext): Html => {
 	const [text, dot] = Option.isNone(status.draft)
 		? ["Waiting for valid values", "bg-warning"]
 		: AsyncData.isPending(editor.preview)
-			? ["Updating…", "bg-info animate-pulse"]
+			? ["Updating…", "bg-info-subtle-fg animate-pulse"]
 			: editor.ruleId !== null && status.changes === 0
 				? ["Same as saved", "bg-success"]
 				: ["Updates as you edit", "bg-success"]
@@ -279,7 +279,7 @@ const exampleChart = (h: H, context: PreviewContext, result: Result): ReadonlyAr
 
 const matchRow = (h: H, match: Customers.RuleMatch, currency: string, orgSlug: string): Html =>
 	h.li(
-		[h.Class("relative flex items-center gap-3 px-1 py-2.5")],
+		[h.Class("relative flex items-center gap-3 py-2.5")],
 		[
 			companyLogo(h, { name: match.name, logoUrl: match.logoUrl, size: "sm" }),
 			h.div(
@@ -304,7 +304,7 @@ const matchRow = (h: H, match: Customers.RuleMatch, currency: string, orgSlug: s
 					h.span([h.Class("truncate text-muted-fg text-xs")], [match.reason]),
 				],
 			),
-			evidenceViz(h, match.evidence, { className: "w-20 shrink-0" }),
+			evidenceViz(h, match.evidence, { className: "shrink-0" }),
 		],
 	)
 

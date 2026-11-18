@@ -10,6 +10,7 @@ import { Message } from "./message"
 import { COMPOSER_ID, type Model, type NoteRow, sortedNotes } from "./model"
 import { noteBody } from "./overview-tab"
 import { type Context, memberOf } from "./parts"
+import { heading } from "../../../ui/heading"
 
 /** The notes tab: a markdown composer, then pinned notes and the rest, newest first. */
 
@@ -214,12 +215,7 @@ const noteCard = (h: HtmlBuilder<Message>, model: Model, note: NoteRow, context:
 }
 
 const section = (h: HtmlBuilder<Message>, title: string, notes: ReadonlyArray<Html>): ReadonlyArray<Html> =>
-	notes.length === 0
-		? []
-		: [
-				h.h3([h.Class("pt-2 font-medium text-muted-fg text-xs uppercase tracking-wider")], [title]),
-				...notes,
-			]
+	notes.length === 0 ? [] : [heading(h, { variant: "subsection", className: "pt-2" }, [title]), ...notes]
 
 export const notesTab = (
 	h: HtmlBuilder<Message>,
@@ -233,10 +229,13 @@ export const notesTab = (
 		h.div(
 			[h.Class("flex items-center justify-between")],
 			[
-				h.h2(
-					[h.Class("flex items-baseline gap-2 font-semibold text-fg")],
-					["Notes", h.span([h.Class("font-normal text-muted-fg text-sm")], [String(notes.length)])],
-				),
+				heading(h, { variant: "section", className: "flex items-baseline gap-2" }, [
+					"Notes",
+					h.span(
+						[h.Class("font-normal text-muted-fg text-sm tabular-nums")],
+						[String(notes.length)],
+					),
+				]),
 				h.span([h.Class("text-muted-fg text-xs")], ["Pinned, then newest"]),
 			],
 		),

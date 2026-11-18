@@ -3,12 +3,14 @@
 //! Lines the worker posts are the render protocol the macOS app reads from its Bun child; the
 //! host's lines go back through `outbox`, each batch evaluated in the page on the main thread.
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Mutex, OnceLock};
 
 use dispatch2::DispatchQueue;
+use hazel_native::shell::{self, Restarts, Routed, ShellRequest};
 use hazel_native::wire::RuntimeMsg;
-use hazel_native::{State, note_scroll, outbox};
+use hazel_native::{State, outbox};
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2::{MainThreadMarker, MainThreadOnly, define_class, extern_class, msg_send};
@@ -49,7 +51,44 @@ thread_local! {
     static REPLACING: Cell<bool> = const { Cell::new(false) };
     /// Where the last full page load went; a restart goes back there.
     static LAST_PATH: RefCell<Option<String>> = const { RefCell::new(None) };
-    static RESTARTS: RefCell<page::Restarts> = RefCell::new(page::Restarts::default());
+    static RESTARTS: RefCell<Restarts> = RefCell::new(Restarts::default());
+    /// This device's push token (`push.rs`): every runtime hears it once its page is ready.
+    static PUSH_TOKEN: RefCell<Option<serde_json::Value>> = const { RefCell::new(None) };
+    /// The path a notification's tap opens, until a runtime says it followed it (`openedPath`):
+    /// a page that ends before then (WebKit ended its process in the background) gets it again.
+    static OPEN_PATH: RefCell<Option<String>> = const { RefCell::new(None) };
+    /// The web app's `localStorage` as last saved (JSON text), handed to every page it loads.
+    static STORAGE: RefCell<Option<String>> = const { RefCell::new(None) };
+    /// `NATIVE_STATS`: the launch's first tree is applied (1), and its frame is drawn (2).
+    static FIRST_TREE: Cell<u8> = const { Cell::new(0) };
+}
+
+/// Whether the page loaded last can take lines and replies.
+fn page_ready() -> bool {
+    EARLY.with_borrow(Option::is_none)
+}
+
+/// This device's push token, for the runtime to register (`src/push.ts`): now, and again for
+/// every runtime a page load starts (signing in loads one). APNs answers every activation; the
+/// same token still goes to the runtime, which retries a registration that failed and calls the
+/// API only for a token it has not registered. Whether the token is new.
+pub fn set_push_token(message: serde_json::Value) -> bool {
+    if page_ready() {
+        reply(&message);
+    }
+    let new = PUSH_TOKEN.with_borrow(|held| held.as_ref() != Some(&message));
+    PUSH_TOKEN.set(Some(message));
+    new
+}
+
+/// Opens the app at `path` (a notification's tap): the runtime follows it as a link once it is
+/// up, and the path is held until it says so; a cold start from the tap loads its first page
+/// there.
+pub fn open_path(path: String) {
+    if page_ready() {
+        reply(&serde_json::json!({ "openPath": path }));
+    }
+    OPEN_PATH.set(Some(path));
 }
 
 /// Where the runtime's trees go: the running app.
@@ -60,6 +99,29 @@ pub fn set_handle(handle: AppHandle<State>) {
     outbox::set_writer(Box::new(ToWorker));
 }
 
+/// A variable of the bundle's `environment.json`, as set when building (`scripts/ios.ts`).
+pub fn environment(name: &str) -> Option<String> {
+    let path = std::env::current_exe()
+        .ok()?
+        .parent()?
+        .join("environment.json");
+    let bundled: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    Some(bundled.get(name)?.as_str()?.to_string())
+}
+
+/// Whether a debug setting is on; read once.
+pub fn environment_flag(name: &'static str) -> bool {
+    thread_local! {
+        static FLAGS: RefCell<HashMap<&'static str, bool>> = RefCell::new(HashMap::new());
+    }
+    FLAGS.with_borrow_mut(|flags| {
+        *flags
+            .entry(name)
+            .or_insert_with(|| environment(name).is_some())
+    })
+}
+
 /// Each frame's poll; the first one, with the window up, starts the runtime.
 pub fn poll(s: &mut State, at: f64, tx: &mut rune::Tx) -> bool {
     if !STARTED.get() {
@@ -68,9 +130,22 @@ pub fn poll(s: &mut State, at: f64, tx: &mut rune::Tx) -> bool {
     hazel_native::poll(s, at, tx)
 }
 
-/// A diagnostic line: stderr, and `hazel.log` in the app's temporary directory, which
-/// `xcrun simctl get_app_container <device> sh.hazel.ios data` finds under `tmp/`.
+/// When the process reached `main`: the log's lines count from here.
+static LAUNCHED: OnceLock<std::time::Instant> = OnceLock::new();
+
+/// Starts the log's clock; called first thing in `main`.
+pub fn mark_launch() {
+    let _ = LAUNCHED.set(std::time::Instant::now());
+}
+
+/// A diagnostic line, after the milliseconds since launch: stderr, and `hazel.log` in the app's
+/// temporary directory, which `xcrun simctl get_app_container <device> sh.hazel.ios data` finds
+/// under `tmp/`.
 pub fn log(line: &str) {
+    let at = LAUNCHED
+        .get()
+        .map_or(0.0, |launched| launched.elapsed().as_secs_f64() * 1000.0);
+    let line = &format!("{at:9.1} {line}");
     eprintln!("{line}");
     let path = std::env::temp_dir().join("hazel.log");
     if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -79,6 +154,16 @@ pub fn log(line: &str) {
         .open(path)
     {
         let _ = writeln!(file, "{line}");
+    }
+}
+
+/// A frame was drawn (`NATIVE_STATS`: the log says when the launch's first tree got on screen).
+pub fn frame_drawn() {
+    if FIRST_TREE.get() == 1 {
+        FIRST_TREE.set(2);
+        if environment_flag("NATIVE_STATS") {
+            log("[host] the first tree's frame is drawn");
+        }
     }
 }
 
@@ -122,8 +207,37 @@ fn to_worker(text: &str) {
     });
 }
 
+/// A host reply to one of the worker's requests (an object, not a protocol line).
+pub(crate) fn reply(message: &serde_json::Value) {
+    let script = format!("__hazel.reply({message})");
+    WEB.with_borrow(|web| {
+        if let Some(web) = web {
+            evaluate(web, &script);
+        }
+    });
+}
+
+/// The local cache's reply `{ id, cache: text }` to a request `page`'s worker made. `text`
+/// crosses as one string, which the worker parses itself: the page never walks a large result.
+/// A reply to a page that has been replaced since is dropped, as its worker's ids mean nothing
+/// to the next.
+pub(crate) fn reply_cache(page: u64, id: u64, text: &str) {
+    if page != PAGE.get() {
+        return;
+    }
+    let script = format!(
+        r#"__hazel.reply({{"id":{id},"cache":{}}})"#,
+        json_string(text)
+    );
+    WEB.with_borrow(|web| {
+        if let Some(web) = web {
+            evaluate(web, &script);
+        }
+    });
+}
+
 fn json_string(text: &str) -> String {
-    serde_json::Value::String(text.to_string()).to_string()
+    serde_json::to_string(text).expect("a string serializes")
 }
 
 fn evaluate(web: &WebView, script: &str) {
@@ -144,6 +258,7 @@ fn evaluate(web: &WebView, script: &str) {
 
 /// One line the worker posted: a tree or a request for Rune, as the macOS app handles its child's.
 fn receive(line: &str) {
+    let started = std::time::Instant::now();
     let message = match serde_json::from_str::<RuntimeMsg>(line) {
         Ok(message) => message,
         Err(error) => return log(&format!("[host] bad message: {error}")),
@@ -151,29 +266,42 @@ fn receive(line: &str) {
     let Some(handle) = HANDLE.get().map(|h| h.lock().unwrap().clone()) else {
         return;
     };
-    match message {
-        RuntimeMsg::Tree(tree) => handle.update_if(move |s: &mut State, _| s.apply(tree)),
-        RuntimeMsg::Scroll { path, top, seq } => {
-            note_scroll(&path, seq);
-            handle.update(move |_: &mut State, tx| tx.scroll_to_instant(path, 0.0, top));
-        }
-        RuntimeMsg::Vault { id, op, record } => {
-            hazel_native::sign_in::answer_vault(id, &op, record)
+    match shell::route(message) {
+        Routed::Done => {}
+        Routed::Window(message) => {
+            let is_tree = matches!(message, RuntimeMsg::Tree(_));
+            shell::apply(message, &handle);
+            if is_tree && environment_flag("NATIVE_STATS") {
+                log(&format!(
+                    "[host] tree of {} KB parsed and applied in {:.1} ms",
+                    line.len() / 1024,
+                    started.elapsed().as_secs_f64() * 1000.0
+                ));
+            }
+            if is_tree && FIRST_TREE.get() == 0 {
+                FIRST_TREE.set(1);
+            }
+            // A navigation waiting on the next page moves once it is drawn.
+            if is_tree {
+                crate::system::tree_applied();
+            }
         }
         // A full page load (after sign-in or sign-out): a fresh runtime at that path.
-        RuntimeMsg::Reload { path } => {
+        Routed::Shell(ShellRequest::Reload { path }) => {
             if let Some(mtm) = MainThreadMarker::new() {
                 load_page(mtm, Some(&path));
                 LAST_PATH.set(Some(path));
             }
         }
-        RuntimeMsg::Update { .. } | RuntimeMsg::Relaunch { .. } => {
+        Routed::Shell(ShellRequest::Update { .. } | ShellRequest::Relaunch { .. }) => {
             log("[host] updates are not on iOS");
         }
-        request => {
-            if let Some(run) = request.request() {
-                handle.update(move |_: &mut State, tx| run(tx));
-            }
+        // The web app's notification flow: its permission is the one pushes need.
+        Routed::Shell(ShellRequest::NotifyPermission { id, request }) => {
+            hazel_native::notify::permission(id, request, crate::push::after_permission);
+        }
+        Routed::Shell(ShellRequest::Notify(notification)) => {
+            hazel_native::notify::show(notification);
         }
     }
 }
@@ -190,22 +318,71 @@ fn request(mtm: MainThreadMarker, body: &NSDictionary<NSString, AnyObject>) {
         // replaced since says so too late; its lines stay held for the new one.
         let page = ready.downcast::<NSNumber>().ok().map(|n| n.as_u64());
         if page == Some(PAGE.get()) {
+            if environment_flag("NATIVE_STATS") {
+                log("[host] the page is ready");
+            }
             REPLACING.set(false);
             for text in EARLY.take().unwrap_or_default() {
                 to_worker(&text);
             }
+            if let Some(token) = PUSH_TOKEN.with_borrow(Clone::clone) {
+                reply(&token);
+            }
+            if let Some(path) = OPEN_PATH.with_borrow(Clone::clone) {
+                reply(&serde_json::json!({ "openPath": path }));
+            }
         }
+    } else if let Some(path) = field("openedPath") {
+        // The runtime followed the tap's path: a page that ends from now on need not.
+        OPEN_PATH.with_borrow_mut(|held| {
+            if held.as_deref() == Some(path.as_str()) {
+                *held = None;
+            }
+        });
     } else if let Some(line) = field("log") {
         log(&line);
     } else if let (Some(url), Some(scheme)) = (field("signIn"), field("callbackScheme")) {
         crate::sign_in::start(mtm, &url, &scheme);
     } else if let Some(href) = field("open") {
+        // As the runtime filters them: the system opens web and mail links, nothing else.
+        if !hazel_native::wire::is_external_link(&href) {
+            return log("[host] not opening a link that is not web or mail");
+        }
         if let Some(url) = NSURL::URLWithString(&NSString::from_str(&href)) {
             let app = UIApplication::sharedApplication(mtm);
             unsafe { app.openURL_options_completionHandler(&url, &NSDictionary::new(), None) };
         }
+    } else if let Some(text) = field("fetch") {
+        crate::http::send(&text);
+    } else if let Some(text) = field("cache") {
+        crate::local_cache::send(text, PAGE.get());
+    } else if let Some(entries) = field("storage") {
+        // Saved before anything after it in the queue runs: a reload that follows loads it.
+        let saved = crate::storage::data_dir()
+            .ok_or_else(|| "the app has no folder for its data".to_string())
+            .and_then(|dir| crate::storage::save(&dir, &entries));
+        if let Err(error) = saved {
+            log(&format!("[host] localStorage was not saved: {error}"));
+        }
+        // The latest entries either way: a reload in this launch must not go back to older ones.
+        STORAGE.set(Some(entries));
     } else if let Some(text) = field("copy") {
         unsafe { UIPasteboard::generalPasteboard().setString(Some(&NSString::from_str(&text))) };
+    } else if let Some(kind) = field("feedback") {
+        match hazel_native::feedback::Feedback::parse(&kind) {
+            Some(kind) => hazel_native::feedback::play(kind),
+            None => log(&format!("[host] no haptic is called {kind}")),
+        }
+    } else if let Some(path) = field("swipeBack") {
+        crate::system::set_swipe_back(mtm, &path);
+    } else if let Some(on) = body
+        .objectForKey(ns_string!("swipePager"))
+        .and_then(|value| value.downcast::<NSNumber>().ok())
+    {
+        let on = on.as_bool();
+        crate::system::set_swipe_pager(mtm, on);
+    } else if let Some(navigation) = field("navigate") {
+        crate::system::navigate(mtm, &navigation);
     }
 }
 
@@ -255,14 +432,18 @@ define_class!(
                 return log("[host] the page's process keeps ending; not starting it again");
             }
             log("[host] the page's process ended; starting the runtime again");
-            let path = LAST_PATH.with_borrow(Clone::clone);
+            // A tap the old runtime never followed (the process ended first) leads instead.
+            let path = OPEN_PATH.take().or_else(|| LAST_PATH.with_borrow(Clone::clone));
+            if path.is_some() {
+                LAST_PATH.set(path.clone());
+            }
             load_page(self.mtm(), path.as_deref());
         }
     }
 );
 
 /// The app's window, once the scene has one.
-pub(crate) fn window(mtm: MainThreadMarker) -> Option<Retained<UIWindow>> {
+pub fn window(mtm: MainThreadMarker) -> Option<Retained<UIWindow>> {
     let scenes = UIApplication::sharedApplication(mtm).connectedScenes();
     scenes.iter().find_map(|scene| {
         let scene = scene.downcast::<UIWindowScene>().ok()?;
@@ -293,6 +474,7 @@ fn start() -> bool {
     // The bundle's environment (`scripts/ios.ts` writes it).
     let bundled = read("environment.json").and_then(|text| serde_json::from_str(&text).ok());
     BUNDLE.set(Some((source, bundled)));
+    STORAGE.set(crate::storage::data_dir().and_then(|dir| crate::storage::load(&dir)));
 
     let configuration = unsafe { WKWebViewConfiguration::new(mtm) };
     let messages: Retained<RuntimeMessages> = {
@@ -322,7 +504,10 @@ fn start() -> bool {
     }
     NAVIGATION.set(Some(navigation));
     WEB.set(Some(web));
-    load_page(mtm, None);
+    // A tap on a notification that launched the app: the first page opens where it leads.
+    let path = OPEN_PATH.take();
+    load_page(mtm, path.as_deref());
+    LAST_PATH.set(path);
     if let Some(handle) = HANDLE.get().map(|h| h.lock().unwrap().clone()) {
         crate::keyboard::observe(mtm, handle);
     }
@@ -364,14 +549,20 @@ fn load_page(mtm: MainThreadMarker, path: Option<&str>) {
         EARLY.set(Some(Vec::new()));
         REPLACING.set(true);
         // A fresh runtime starts light at the bundle's size: it hears the window's as the
-        // first one did, once its page is ready.
-        if let Some(env) = hazel_native::last_env() {
-            outbox::write_line(env.line());
-        }
+        // first one did, once its page is ready, and the window forgets the old one's trees.
+        let handle = HANDLE.get().map(|h| h.lock().unwrap().clone());
+        shell::runtime_replaced(handle.as_ref());
+        crate::local_cache::reset();
     }
     let Some(html) = BUNDLE.with_borrow(|bundle| {
         let (source, _) = bundle.as_ref()?;
-        Some(NSString::from_str(&page::html(source, &env, id)))
+        let storage = STORAGE.with_borrow(Clone::clone);
+        Some(NSString::from_str(&page::html(
+            source,
+            &env,
+            storage.as_deref(),
+            id,
+        )))
     }) else {
         return;
     };

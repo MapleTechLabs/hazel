@@ -433,3 +433,27 @@ export const CustomerMetricDefinitionId = Schema.String.check(Schema.isUUID())
 		title: "Customer Metric Definition ID",
 	})
 export type CustomerMetricDefinitionId = Schema.Schema.Type<typeof CustomerMetricDefinitionId>
+
+export const CustomerChannelLinkId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerChannelLinkId"))
+	.annotate({
+		description: "The ID of a link between a channel and a customer account",
+		title: "Customer Channel Link ID",
+	})
+export type CustomerChannelLinkId = Schema.Schema.Type<typeof CustomerChannelLinkId>
+
+export const AgentClientId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/AgentClientId"))
+	.annotate({
+		description: "The ID of an MCP OAuth client registered with Hazel",
+		title: "Agent Client ID",
+	})
+export type AgentClientId = Schema.Schema.Type<typeof AgentClientId>
+
+export const AgentGrantId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/AgentGrantId"))
+	.annotate({
+		description: "The ID of a user's grant letting an agent act for them (OAuth or personal token)",
+		title: "Agent Grant ID",
+	})
+export type AgentGrantId = Schema.Schema.Type<typeof AgentGrantId>

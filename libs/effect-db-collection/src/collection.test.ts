@@ -386,6 +386,28 @@ describe("channel-partitioned collections", () => {
 		await second.cleanup()
 	})
 
+	it("asks a not-found channel again when a new query comes while another still holds it", async () => {
+		const { sockets, messages } = messagesSetup({ releaseGraceMs: 60 })
+		const query = () =>
+			createLiveQueryCollection((q) => q.from({ m: messages }).where(({ m }) => eq(m.channelId, "t1")))
+		// A thread's preview opens it before the thread's object has its viewers, and keeps it.
+		const preview = query()
+		const previewReady = preview.preload()
+		;(await socketFor(sockets, "/sync/channel/t1")).serverClose(4004)
+		await previewReady
+
+		// The thread exists now: the panel's query opens a new socket while the preview holds the old one.
+		const panel = query()
+		const loaded = panel.preload()
+		const socket = await socketFor(sockets, "/sync/channel/t1", 2)
+		socket.snapshot(1, { messages: [{ id: "m1", channelId: "t1", content: "a" }] })
+		await loaded
+		expect(ids(panel)).toEqual(["m1"])
+		expect(ids(preview)).toEqual(["m1"])
+		await panel.cleanup()
+		await preview.cleanup()
+	})
+
 	it("loads channels named through ensureChannels for the scope", async () => {
 		const { sockets, messages } = messagesSetup()
 		const live = createLiveQueryCollection((q) => q.from({ m: messages }))
@@ -453,6 +475,32 @@ describe("awaitSeqEffect", () => {
 
 		const invalid = await Effect.runPromise(Effect.flip(channels.utils.awaitSeqEffect("42")))
 		expect(invalid._tag).toBe("InvalidTxIdError")
+	})
+
+	it("asks a not-found source again for a write to it, while a query still holds the refusal", async () => {
+		const { sockets, hub } = setup()
+		const messages = createEffectCollection({
+			id: `messages-${++collectionCount}`,
+			table: "messages",
+			schema: Message,
+			getKey: (row) => row.id,
+			hub,
+			sources: channelPartition(),
+		})
+		const preview = createLiveQueryCollection((q) =>
+			q.from({ m: messages }).where(({ m }) => eq(m.channelId, "t1")),
+		)
+		const previewReady = preview.preload()
+		;(await socketFor(sockets, "/sync/channel/t1")).serverClose(4004)
+		await previewReady
+
+		// The write landed in the thread: its object exists, so the wait opens the source again.
+		const waiting = Effect.runPromise(messages.utils.awaitSeqEffect("channel:t1:12", 5000))
+		const socket = await socketFor(sockets, "/sync/channel/t1", 2)
+		socket.snapshot(12, { messages: [{ id: "m1", channelId: "t1", content: "sent" }] })
+		expect(await waiting).toBe(true)
+		expect(ids(preview)).toEqual(["m1"])
+		await preview.cleanup()
 	})
 
 	it("resolves a local position at once: no source streams it", async () => {

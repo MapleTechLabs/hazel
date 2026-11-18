@@ -10,6 +10,7 @@ import {
 	chatSyncConnectionCollection,
 	chatSyncMessageLinkCollection,
 	customEmojiCollection,
+	messageAgentMarkCollection,
 	messageCollection,
 	pinnedMessageCollection,
 	typingIndicatorCollection,
@@ -19,6 +20,9 @@ import {
 import { getAttachmentUrl } from "~/utils/attachment-url"
 import { liveQueryStream } from "../../data/live-query"
 import {
+	type AgentMarkInfo,
+	type SyncedMessageInfo,
+	type SyncProvider,
 	type AttachmentInfo,
 	type AttachmentRow,
 	type BotInfo,
@@ -77,16 +81,16 @@ export const customEmojisStream = <M>(
 		(rows) => toMessage(rows.map((row) => ({ name: row.name, imageUrl: row.imageUrl }))),
 	)
 
-/** `useAttachments`, for the whole channel (rows are grouped by message when deriving). */
+/** `useAttachments`, for whole channels (rows are grouped by message when deriving). */
 export const attachmentsStream = <M>(
-	channelId: ChannelId,
+	channelIds: ReadonlyArray<ChannelId>,
 	toMessage: (attachments: ReadonlyArray<AttachmentInfo>) => M,
 ) =>
 	liveQueryStream<AttachmentRow, M>(
 		(q) =>
 			q
 				.from({ attachments: attachmentCollection })
-				.where(({ attachments }) => eq(attachments.channelId, channelId))
+				.where(({ attachments }) => inArray(attachments.channelId, [...channelIds]))
 				.orderBy(({ attachments }) => attachments.uploadedAt, "asc"),
 		(rows) =>
 			toMessage(
@@ -101,12 +105,12 @@ export const attachmentsStream = <M>(
 			),
 	)
 
-/** `isDiscordSyncedMessageAtomFamily`, scoped to the channel's link instead of one message. */
-export const discordSyncedStream = <M>(
-	channelId: ChannelId,
-	toMessage: (ids: ReadonlyArray<MessageId>) => M,
+/** Messages synced in from Discord or Slack over the channels' links, with the platform each came from. */
+export const syncedMessagesStream = <M>(
+	channelIds: ReadonlyArray<ChannelId>,
+	toMessage: (messages: ReadonlyArray<SyncedMessageInfo>) => M,
 ) =>
-	liveQueryStream<{ hazelMessageId: MessageId }, M>(
+	liveQueryStream<{ hazelMessageId: MessageId; provider: string }, M>(
 		(q) =>
 			q
 				.from({ messageLink: chatSyncMessageLinkCollection })
@@ -118,16 +122,67 @@ export const discordSyncedStream = <M>(
 				)
 				.where(({ messageLink, channelLink, connection }) =>
 					and(
-						eq(channelLink.hazelChannelId, channelId),
+						inArray(channelLink.hazelChannelId, [...channelIds]),
 						eq(messageLink.source, "external"),
-						eq(connection.provider, "discord"),
+						inArray(connection.provider, ["discord", "slack"]),
 						isNull(messageLink.deletedAt),
 						isNull(channelLink.deletedAt),
 						isNull(connection.deletedAt),
 					),
 				)
-				.select(({ messageLink }) => ({ hazelMessageId: messageLink.hazelMessageId })),
-		(rows) => toMessage(rows.map((row) => row.hazelMessageId)),
+				.select(({ messageLink, connection }) => ({
+					hazelMessageId: messageLink.hazelMessageId,
+					provider: connection.provider,
+				})),
+		(rows) =>
+			toMessage(
+				rows.map((row) => ({
+					messageId: row.hazelMessageId,
+					provider: row.provider === "slack" ? "slack" : "discord",
+				})),
+			),
+	)
+
+/** The platform the channel syncs to over an active Slack or Discord link (the first, if both). */
+export const channelSyncProviderStream = <M>(
+	channelId: ChannelId,
+	toMessage: (provider: SyncProvider | null) => M,
+) =>
+	liveQueryStream<{ provider: string }, M>(
+		(q) =>
+			q
+				.from({ link: chatSyncChannelLinkCollection })
+				.innerJoin({ connection: chatSyncConnectionCollection }, ({ link, connection }) =>
+					eq(link.syncConnectionId, connection.id),
+				)
+				.where(({ link, connection }) =>
+					and(
+						eq(link.hazelChannelId, channelId),
+						eq(link.isActive, true),
+						isNull(link.deletedAt),
+						isNull(connection.deletedAt),
+						inArray(connection.provider, ["slack", "discord"]),
+					),
+				)
+				.select(({ connection }) => ({ provider: connection.provider })),
+		(rows) => {
+			const provider = rows[0]?.provider
+			return toMessage(provider === "slack" || provider === "discord" ? provider : null)
+		},
+	)
+
+/** Agent-written messages (`message_agent_marks`) in `channelIds`. */
+export const agentMarksStream = <M>(
+	channelIds: ReadonlyArray<ChannelId>,
+	toMessage: (marks: ReadonlyArray<AgentMarkInfo>) => M,
+) =>
+	liveQueryStream<AgentMarkInfo, M>(
+		(q) =>
+			q
+				.from({ mark: messageAgentMarkCollection })
+				.where(({ mark }) => inArray(mark.channelId, [...channelIds]))
+				.select(({ mark }) => ({ id: mark.id, agentName: mark.agentName })),
+		(rows) => toMessage(rows),
 	)
 
 /** Thread names for `InlineThreadPreview`. */

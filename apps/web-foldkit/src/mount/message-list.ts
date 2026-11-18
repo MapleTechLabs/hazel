@@ -34,7 +34,11 @@ export type ViewportAnchor = typeof ViewportAnchor.Type
  * change no DOM.
  */
 export const ScrollPhase = defineTaggedUnion({
-	Settled: {},
+	/**
+	 * The last scroll's overscan window stays rendered (beside the pool) while it overlaps the
+	 * viewport, so the next scroll starts from it instead of building those rows again.
+	 */
+	Settled: { keptFromKey: Schema.NullOr(Schema.String), keptToKey: Schema.NullOr(Schema.String) },
 	Scrolling: {
 		eventVersion: Schema.Number,
 		renderedFromKey: Schema.NullOr(Schema.String),
@@ -42,6 +46,9 @@ export const ScrollPhase = defineTaggedUnion({
 	},
 })
 export type ScrollPhase = typeof ScrollPhase.Type
+
+export const LikeRow = Schema.Struct({ key: Schema.String, deltaPx: Schema.Number })
+export type LikeRow = typeof LikeRow.Type
 
 export const Model = Schema.Struct({
 	id: Schema.String,
@@ -53,6 +60,12 @@ export const Model = Schema.Struct({
 	/** Rows that never anchor the viewport (date dividers move with the first message of their day). */
 	stickyKeys: Schema.Array(Schema.String),
 	measuredHeights: Schema.Record(Schema.String, Schema.Number),
+	/**
+	 * For a row not measured yet, a measured row the parent expects to be as tall give or take
+	 * `deltaPx` (the same kind of one-line message, in another place in its group): that height
+	 * stands in for the estimate, so a new message at the end lands where it will stay.
+	 */
+	likeRows: Schema.Record(Schema.String, LikeRow),
 	viewportHeight: Schema.Number,
 	scrollTop: Schema.Number,
 	anchor: ViewportAnchor,
@@ -107,18 +120,30 @@ export const init = (config: {
 	keys: [],
 	stickyKeys: [],
 	measuredHeights: config.measuredHeights ?? {},
+	likeRows: NO_LIKE_ROWS,
 	viewportHeight: config.viewportHeight ?? 0,
 	scrollTop: 0,
 	anchor: ViewportAnchor.End(),
 	scrollVersion: 0,
 	appliedScrollVersion: 0,
 	pool: emptyPool,
-	scrollPhase: ScrollPhase.Settled(),
+	scrollPhase: ScrollPhase.Settled({ keptFromKey: null, keptToKey: null }),
 	activeStickyKey: null,
 	stuckKey: null,
 })
 
 // LAYOUT
+
+const NO_LIKE_ROWS: Readonly<Record<string, LikeRow>> = {}
+
+/** A row's height: measured, else the measured height of a row like it, else the estimate. */
+const heightOf = (model: Model, key: string): number => {
+	const measured = model.measuredHeights[key]
+	if (measured !== undefined) return measured
+	const like = model.likeRows[key]
+	const likeHeight = like === undefined ? undefined : model.measuredHeights[like.key]
+	return likeHeight === undefined ? model.estimatedRowHeightPx : likeHeight + like.deltaPx
+}
 
 export interface Layout {
 	/** `offsets[i]` is the top of row i inside the content box; `offsets[n]` is the total height. */
@@ -128,12 +153,12 @@ export interface Layout {
 }
 
 const computeLayout = (model: Model): Layout => {
-	const { keys, measuredHeights, estimatedRowHeightPx } = model
+	const { keys } = model
 	const offsets = new Float64Array(keys.length + 1)
 	const indexByKey = new Map<string, number>()
 	keys.forEach((key, index) => {
 		indexByKey.set(key, index)
-		offsets[index + 1] = offsets[index]! + (measuredHeights[key] ?? estimatedRowHeightPx)
+		offsets[index + 1] = offsets[index]! + heightOf(model, key)
 	})
 	return { offsets, indexByKey, totalHeight: offsets[keys.length]! }
 }
@@ -141,16 +166,32 @@ const computeLayout = (model: Model): Layout => {
 // Pure memos keyed by the frozen inputs, so lists never evict each other's entries.
 const layouts = new WeakMap<
 	ReadonlyArray<string>,
-	WeakMap<object, { readonly estimate: number; readonly layout: Layout }>
+	WeakMap<
+		object,
+		{
+			readonly estimate: number
+			readonly likeRows: Readonly<Record<string, LikeRow>>
+			readonly layout: Layout
+		}
+	>
 >()
 
 /** Prefix sums over measured or estimated heights, memoized on the (frozen) inputs by reference. */
 export const layoutOf = (model: Model): Layout => {
 	const byHeights = layouts.get(model.keys) ?? new WeakMap()
 	const cached = byHeights.get(model.measuredHeights)
-	if (cached !== undefined && cached.estimate === model.estimatedRowHeightPx) return cached.layout
+	if (
+		cached !== undefined &&
+		cached.estimate === model.estimatedRowHeightPx &&
+		cached.likeRows === model.likeRows
+	)
+		return cached.layout
 	const layout = computeLayout(model)
-	byHeights.set(model.measuredHeights, { estimate: model.estimatedRowHeightPx, layout })
+	byHeights.set(model.measuredHeights, {
+		estimate: model.estimatedRowHeightPx,
+		likeRows: model.likeRows,
+		layout,
+	})
 	layouts.set(model.keys, byHeights)
 	return layout
 }
@@ -243,8 +284,10 @@ export const ApplyScroll = Command.define("ApplyScroll", {
 			const element = document.getElementById(id)
 			if (element === null) return Message.SkippedApplyScroll({ version })
 			yield* afterLayout(element)
-			element.scrollTop =
-				adjustment._tag === "To" ? adjustment.scrollTop : element.scrollTop + adjustment.deltaPx
+			// `By` is relative: the native shell applies it to the offset the reader is at by then,
+			// so a drag or fling under way carries on instead of snapping back to a stale offset.
+			if (adjustment._tag === "To") element.scrollTop = adjustment.scrollTop
+			else element.scrollBy({ top: adjustment.deltaPx })
 			return Message.CompletedApplyScroll({ version, scrollTop: element.scrollTop })
 		}),
 })
@@ -289,19 +332,36 @@ const changedMeasurements = (
 /**
  * The overscan window always covers the viewport plus `RENDER_MARGIN_PX`, then grows toward
  * `RENDER_LEAD_PX` by at most `RENDER_STEP_PX` per side and update, so a frame builds a few rows,
- * never a 2400px chunk. Rows past the lead plus `RENDER_SLACK_PX` are dropped.
+ * never a 2400px chunk. Rows past the lead plus `RENDER_SLACK_PX` are dropped. Both wait a step
+ * before acting, so a steady scroll re-renders the window every few rows.
  */
 const RENDER_MARGIN_PX = 300
 const RENDER_LEAD_PX = 2400
 const RENDER_STEP_PX = 320
 const RENDER_SLACK_PX = 600
 
+const indexesOf = (layout: Layout, fromKey: string | null, toKey: string | null) => {
+	const from = fromKey === null ? undefined : layout.indexByKey.get(fromKey)
+	const to = toKey === null ? undefined : layout.indexByKey.get(toKey)
+	return from === undefined || to === undefined || from > to ? undefined : { from, to }
+}
+
 export const renderedIndexes = (model: Model, layout: Layout) => {
 	const phase = model.scrollPhase
 	if (phase._tag === "Settled") return undefined
-	const from = phase.renderedFromKey === null ? undefined : layout.indexByKey.get(phase.renderedFromKey)
-	const to = phase.renderedToKey === null ? undefined : layout.indexByKey.get(phase.renderedToKey)
-	return from === undefined || to === undefined || from > to ? undefined : { from, to }
+	return indexesOf(layout, phase.renderedFromKey, phase.renderedToKey)
+}
+
+/** The window the last scroll left rendered, while it still covers part of the viewport. */
+export const keptIndexes = (model: Model, layout: Layout) => {
+	const phase = model.scrollPhase
+	if (phase._tag === "Scrolling" || model.viewportHeight === 0) return undefined
+	const kept = indexesOf(layout, phase.keptFromKey, phase.keptToKey)
+	if (kept === undefined) return undefined
+	const top = Math.max(0, model.scrollTop)
+	const viewFrom = rowIndexAt(layout, top)
+	const viewTo = rowIndexAt(layout, top + model.viewportHeight)
+	return kept.to < viewFrom || kept.from > viewTo ? undefined : kept
 }
 
 const keepOverscan = (model: Model): Model => {
@@ -318,16 +378,26 @@ const keepOverscan = (model: Model): Model => {
 	const isDisjoint = current === undefined || current.to < hardFrom || current.from > hardTo
 	const coveredFrom = isDisjoint ? hardFrom : Math.min(current.from, hardFrom)
 	const coveredTo = isDisjoint ? hardTo : Math.max(current.to, hardTo)
-	const grownFrom = Math.max(
-		at(top - RENDER_LEAD_PX),
-		Math.min(coveredFrom, at(layout.offsets[coveredFrom]! - RENDER_STEP_PX)),
-	)
-	const grownTo = Math.min(
-		at(bottom + RENDER_LEAD_PX),
-		Math.max(coveredTo, at(layout.offsets[coveredTo + 1]! + RENDER_STEP_PX)),
-	)
-	const from = Math.max(Math.min(coveredFrom, grownFrom), at(top - RENDER_LEAD_PX - RENDER_SLACK_PX))
-	const to = Math.min(Math.max(coveredTo, grownTo), at(bottom + RENDER_LEAD_PX + RENDER_SLACK_PX))
+	// A side grows once its lead has run down by a step, and drops rows once they are a step past
+	// the slack: a steady scroll changes the window every few rows, not at every row boundary.
+	const coveredTop = layout.offsets[coveredFrom]!
+	const coveredBottom = layout.offsets[coveredTo + 1]!
+	const grownFrom =
+		coveredTop <= top - RENDER_LEAD_PX + RENDER_STEP_PX
+			? coveredFrom
+			: Math.max(at(top - RENDER_LEAD_PX), Math.min(coveredFrom, at(coveredTop - RENDER_STEP_PX)))
+	const grownTo =
+		coveredBottom >= bottom + RENDER_LEAD_PX - RENDER_STEP_PX
+			? coveredTo
+			: Math.min(at(bottom + RENDER_LEAD_PX), Math.max(coveredTo, at(coveredBottom + RENDER_STEP_PX)))
+	const dropAbove = top - RENDER_LEAD_PX - RENDER_SLACK_PX
+	const dropBelow = bottom + RENDER_LEAD_PX + RENDER_SLACK_PX
+	const from =
+		layout.offsets[grownFrom + 1]! < dropAbove - RENDER_STEP_PX
+			? at(dropAbove)
+			: Math.min(coveredFrom, grownFrom)
+	const to =
+		layout.offsets[grownTo]! > dropBelow + RENDER_STEP_PX ? at(dropBelow) : Math.max(coveredTo, grownTo)
 	if (current !== undefined && from === current.from && to === current.to) return model
 	return modifyFields(model, {
 		scrollPhase: () =>
@@ -349,10 +419,16 @@ const startedScrolling = (model: Model): ListReturn =>
 					ScrollPhase.Scrolling({ ...phase, eventVersion: Number.increment(phase.eventVersion) }),
 			}),
 		}),
-		Settled: () => ({
+		// The window the last scroll left goes on from where it is (or starts over, when it is
+		// far from the viewport now).
+		Settled: ({ keptFromKey, keptToKey }) => ({
 			model: modifyFields(model, {
 				scrollPhase: () =>
-					ScrollPhase.Scrolling({ eventVersion: 1, renderedFromKey: null, renderedToKey: null }),
+					ScrollPhase.Scrolling({
+						eventVersion: 1,
+						renderedFromKey: keptFromKey,
+						renderedToKey: keptToKey,
+					}),
 			}),
 			commands: [WaitForScrollSettle({ version: 1 })],
 		}),
@@ -440,9 +516,17 @@ const updateScroll = (model: Model, message: Message): ListReturn =>
 		CompletedWaitForScrollSettle: ({ version }) =>
 			ScrollPhase.match(model.scrollPhase, {
 				Settled: () => ({ model }),
-				Scrolling: ({ eventVersion }) =>
+				Scrolling: ({ eventVersion, renderedFromKey, renderedToKey }) =>
 					version === eventVersion
-						? { model: modifyFields(model, { scrollPhase: () => ScrollPhase.Settled() }) }
+						? {
+								model: modifyFields(model, {
+									scrollPhase: () =>
+										ScrollPhase.Settled({
+											keptFromKey: renderedFromKey,
+											keptToKey: renderedToKey,
+										}),
+								}),
+							}
 						: { model, commands: [WaitForScrollSettle({ version: eventVersion })] },
 			}),
 		ResizedViewport: ({ viewportHeight }) =>
@@ -479,15 +563,61 @@ const updateScroll = (model: Model, message: Message): ListReturn =>
 				: { model: modifyFields(model, { appliedScrollVersion: () => version }) },
 	})
 
+export interface KeyHints {
+	/**
+	 * See `Model.likeRows`: given the heights with `heightShifts` applied and the current like rows,
+	 * the new ones (the same object while they do not change).
+	 */
+	readonly likeRowsOf?: (
+		measuredHeights: Readonly<Record<string, number>>,
+		previous: Readonly<Record<string, LikeRow>>,
+	) => Readonly<Record<string, LikeRow>>
+	/**
+	 * Measured rows whose height changed by a known amount with these keys (a message joining the
+	 * group above it takes that row's bottom margin), applied before the row is measured again.
+	 */
+	readonly heightShifts?: ReadonlyArray<{ readonly key: string; readonly deltaPx: number }>
+}
+
+const shiftedHeights = (
+	model: Model,
+	shifts: ReadonlyArray<{ readonly key: string; readonly deltaPx: number }>,
+): Model["measuredHeights"] => {
+	const applicable = shifts.filter(
+		({ key, deltaPx }) => deltaPx !== 0 && model.measuredHeights[key] !== undefined,
+	)
+	if (applicable.length === 0) return model.measuredHeights
+	const heights = { ...model.measuredHeights }
+	for (const { key, deltaPx } of applicable) heights[key] = Math.max(0, heights[key]! + deltaPx)
+	return heights
+}
+
 /** The parent's rows changed (prepended page, new message, deletion). Keeps the anchor in place. */
 export const setKeys = (
 	model: Model,
 	keys: ReadonlyArray<string>,
 	stickyKeys: ReadonlyArray<string> = model.stickyKeys,
-): ListReturn =>
-	model.keys === keys && model.stickyKeys === stickyKeys
+	hints: KeyHints = {},
+): ListReturn => {
+	const measuredHeights = shiftedHeights(model, hints.heightShifts ?? [])
+	const likeRows = hints.likeRowsOf?.(measuredHeights, model.likeRows) ?? model.likeRows
+	return model.keys === keys &&
+		model.stickyKeys === stickyKeys &&
+		model.likeRows === likeRows &&
+		model.measuredHeights === measuredHeights
 		? { model }
-		: withPool(reconcile(modifyFields(model, { keys: () => keys, stickyKeys: () => stickyKeys })), "Data")
+		: withPool(
+				reconcile(
+					modifyFields(model, {
+						keys: () => keys,
+						stickyKeys: () => stickyKeys,
+						likeRows: () => likeRows,
+						measuredHeights: () => measuredHeights,
+					}),
+				),
+				"Data",
+			)
+}
 
 /** Jumps to the newest row and follows it (after sending a message). */
 export const scrollToEnd = (model: Model): ListReturn =>
@@ -688,6 +818,7 @@ export const isViewEqual = (a: Model, b: Model): boolean =>
 		a.keys === b.keys &&
 		a.stickyKeys === b.stickyKeys &&
 		a.measuredHeights === b.measuredHeights &&
+		a.likeRows === b.likeRows &&
 		a.estimatedRowHeightPx === b.estimatedRowHeightPx &&
 		a.viewportHeight === b.viewportHeight &&
 		isSamePhaseView(a.scrollPhase, b.scrollPhase) &&
@@ -699,7 +830,7 @@ export const isViewEqual = (a: Model, b: Model): boolean =>
 const isSamePhaseView = (a: ScrollPhase, b: ScrollPhase): boolean =>
 	a === b ||
 	(a._tag === "Settled"
-		? b._tag === "Settled"
+		? b._tag === "Settled" && a.keptFromKey === b.keptFromKey && a.keptToKey === b.keptToKey
 		: b._tag === "Scrolling" &&
 			a.renderedFromKey === b.renderedFromKey &&
 			a.renderedToKey === b.renderedToKey)
@@ -779,15 +910,17 @@ export const view = <Item, ParentMessage>(
 	// absolute offsets, so DOM order is not visible, and keeping it the same means a phase switch
 	// never moves a row's node. Moving a node reloads any iframe in it (HTML renders flash).
 	const containerRows = () => {
-		const indexes: Array<number> = []
+		const indexes = new Set<number>()
 		const empty: Array<number> = []
 		for (let slot = 0; slot < model.pool.pooledCount; slot++) {
 			const key = model.pool.slots[slot] ?? null
 			const index = key === null ? undefined : layout.indexByKey.get(key)
 			if (index === undefined) empty.push(slot)
-			else indexes.push(index)
+			else indexes.add(index)
 		}
-		return [...indexes.sort((a, b) => a - b).map(row), ...empty.map(emptyContainer)]
+		const kept = keptIndexes(model, layout)
+		if (kept !== undefined) for (let index = kept.from; index <= kept.to; index++) indexes.add(index)
+		return [...[...indexes].sort((a, b) => a - b).map(row), ...empty.map(emptyContainer)]
 	}
 	const rows =
 		model.viewportHeight === 0

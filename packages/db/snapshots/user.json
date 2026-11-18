@@ -1,11 +1,18 @@
 {
-	"migration": "0002_notification_levels",
+	"migration": "0003_push_devices",
 	"entities": [
 		{
 			"kind": "table",
 			"name": "notifications",
 			"primaryKey": {
 				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "push_devices",
+			"primaryKey": {
+				"columns": ["token"]
 			}
 		},
 		{
@@ -111,6 +118,51 @@
 			"type": "integer",
 			"notNull": true,
 			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "push_devices",
+			"name": "token",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "push_devices",
+			"name": "environment",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "push_devices",
+			"name": "bundleId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "push_devices",
+			"name": "createdAt",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "push_devices",
+			"name": "updatedAt",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
 		},
 		{
 			"kind": "column",

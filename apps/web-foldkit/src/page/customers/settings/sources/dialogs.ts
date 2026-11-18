@@ -3,7 +3,7 @@ import type { ChildAttribute, Html } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { providerOf, webhookUrlOf } from "../../../../customers/providers"
 import { sourceMark } from "../../../../customers/ui/identity"
-import { IconCheck, IconExternalLink } from "../../../../icons"
+import { IconCheck } from "../../../../icons"
 import { button } from "../../../../ui/button"
 import {
 	dialogBody,
@@ -18,6 +18,7 @@ import { Message } from "./message"
 import { connectFailureMessage, type ConnectForm, connectionOf, isLive, type Model } from "./model"
 import { BACKEND_URL, callout, codeChips, formField, type H, webhookUrlField } from "./parts"
 import { configFieldView } from "./settings-view"
+import { heading } from "../../../../ui/heading"
 
 /**
  * The connect modal (Wonder `fip`, `jpg`), "Update keys" and the disconnect confirmation.
@@ -49,7 +50,7 @@ const step = (h: H, index: number, isDone: boolean, title: string, children: Rea
 			),
 			h.div(
 				[h.Class("flex min-w-0 flex-1 flex-col gap-2")],
-				[h.h3([h.Class("font-medium text-fg text-sm")], [title]), ...children],
+				[heading(h, { variant: "subsection" }, [title]), ...children],
 			),
 		],
 	)
@@ -65,7 +66,7 @@ const permissionsList = (h: H, form: ConnectForm): ReadonlyArray<Html> => {
 						h.li(
 							[h.Class("flex items-center gap-1 text-sm")],
 							[
-								IconCheck(h, { className: "size-3.5 text-success" }),
+								IconCheck(h, { className: "size-3.5 text-success-subtle-fg" }),
 								h.span([h.Class("font-medium text-fg")], [permission.resource]),
 								h.span([h.Class("text-muted-fg")], [permission.access]),
 							],
@@ -91,7 +92,7 @@ const keyStep = (h: H, form: ConnectForm): Html => {
 							"inline-flex shrink-0 items-center gap-1 font-medium text-primary text-xs hover:underline",
 						),
 					],
-					[`Create key in ${descriptor.name}`, IconExternalLink(h, { className: "size-3" })],
+					[`Create key in ${descriptor.name}`],
 				),
 			],
 		),

@@ -53,6 +53,7 @@ type ProxyElement = EventTarget & {
 	readonly parentElement: ProxyElement | null
 	contains(other: EventTarget | null): boolean
 	scrollTo(arg: { top?: number } | number, y?: number): void
+	scrollBy(arg: { top?: number } | number, y?: number): void
 	scrollIntoView(arg?: boolean | { block?: HostReveal["block"] }): void
 	focus(): void
 	blur(): void
@@ -259,7 +260,7 @@ export const makeElementBridge = (options: {
 		}
 		const rect = () => rects.get(path) ?? { x: 0, y: 0, width: 0, height: 0 }
 		const record = () => records.get(path)
-		const setScrollTop = (top: number) => {
+		const setScrollTop = (top: number, by?: number) => {
 			// A write of the offset it read (an anchor kept with no change) is no move: sending it
 			// would put back an offset the user may have scrolled on from.
 			if (top === (scrollTops.get(path) ?? 0)) return
@@ -267,7 +268,9 @@ export const makeElementBridge = (options: {
 			clearTimeout(pendingScrolls.get(path)?.timer)
 			const seq = ++scrollSeq
 			pendingScrolls.set(path, { top, at: performance.now(), seq })
-			options.send({ t: "scroll", path, top, seq })
+			options.send(
+				by === undefined ? { t: "scroll", path, top, seq } : { t: "scroll", path, top, seq, by },
+			)
 		}
 		const proxy = Object.defineProperties(new ElementClass(), {
 			__path: { value: path },
@@ -319,6 +322,13 @@ export const makeElementBridge = (options: {
 			scrollTo: {
 				value: (arg: { top?: number } | number, y?: number) =>
 					setScrollTop(typeof arg === "number" ? (y ?? 0) : (arg.top ?? 0)),
+			},
+			// Relative, as the host applies it: what the reader scrolled since the last report stays.
+			scrollBy: {
+				value: (arg: { top?: number } | number, y?: number) => {
+					const by = typeof arg === "number" ? (y ?? 0) : (arg.top ?? 0)
+					if (by !== 0) setScrollTop((scrollTops.get(path) ?? 0) + by, by)
+				},
 			},
 			scrollIntoView: {
 				value: (arg?: boolean | { block?: HostReveal["block"] }) =>
@@ -656,21 +666,31 @@ export const makeElementBridge = (options: {
 
 	class BridgeResizeObserver {
 		private targets = new Map<string, (target: ProxyElement) => void>()
+		/** Targets resized in the current batch of host lines, delivered in one callback. */
+		private due = new Map<string, ProxyElement>()
 		constructor(
 			private callback: (entries: Array<ResizeEntry>, observer: BridgeResizeObserver) => void,
 		) {}
+		/** As a browser's: one callback per frame with every target that resized in it. */
+		private deliver = () => {
+			const entries: Array<ResizeEntry> = []
+			for (const [path, proxy] of this.due) {
+				if (!this.targets.has(path)) continue
+				const r = rects.get(path) ?? { x: 0, y: 0, width: 0, height: 0 }
+				const size = [{ inlineSize: r.width, blockSize: r.height }]
+				entries.push({ target: proxy, contentRect: r, borderBoxSize: size, contentBoxSize: size })
+			}
+			this.due.clear()
+			if (entries.length > 0) this.callback(entries, this)
+		}
 		observe(target: unknown) {
 			if (!isProxy(target)) return
 			const path = target.__path
 			// An element reached by walking (`parentElement`) is not observed yet: its size is asked for.
 			proxyFor(path)
 			const notify = (proxy: ProxyElement) => {
-				const r = rects.get(path) ?? { x: 0, y: 0, width: 0, height: 0 }
-				const size = [{ inlineSize: r.width, blockSize: r.height }]
-				this.callback(
-					[{ target: proxy, contentRect: r, borderBoxSize: size, contentBoxSize: size }],
-					this,
-				)
+				if (this.due.size === 0) queueMicrotask(this.deliver)
+				this.due.set(path, proxy)
 			}
 			this.targets.set(path, notify)
 			const set = resizeObservers.get(path) ?? new Set()

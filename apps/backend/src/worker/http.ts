@@ -1,19 +1,24 @@
 /**
- * The api Worker's request path: the route graph built once per isolate on the first request,
- * and the fetch handler that runs it.
+ * The api Worker's route graph, built once per isolate by the first request that needs it or in
+ * the background of the preflight that announces it (`./fetch.ts`). `worker.ts` imports this
+ * module dynamically: it reaches the whole HTTP app (routes, auth, integrations), which a cold
+ * isolate then only evaluates when a request needs the graph, and a Durable Object never.
  */
 import { bridgeHandler, forIsolate, WorkerPlatformLive } from "@hazel/infra/worker-http"
 import type * as Cloudflare from "@alchemy.run/cloudflare"
-import type { HttpEffect } from "alchemy/Http"
 import { type Context, Effect, Layer } from "effect"
-import { FetchHttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
-import { AppAuthorizationLive, AppServicesLive, makeRoutes } from "../app"
+import { FetchHttpClient, HttpRouter } from "effect/http"
+import { AppAuthorizationLive, makeRoutes } from "../app"
+import { AppServicesLive } from "../app-services"
 import { LocalRpcDispatcher, RoutedRpcServerLive } from "../rpc/routed-server"
 import { Directory } from "../services/directory"
 import { workerObjectStubs } from "./objects/stubs"
 import { makeSyncRoute } from "./sync-route"
 import { makeLiveRoute } from "./live-route"
 import { HtmlRenderRoute } from "./html-render-route"
+import { AgentOAuthRoutes } from "../routes/agent-oauth"
+import { McpRoute } from "../routes/mcp"
+import { AgentAccess } from "../services/agent-access"
 import { workerLiveObjectStubs } from "./live/message-live-object"
 import type { BotGatewayNamespace } from "../services/bot-gateway-transport"
 import { directoryBinding, requestPlatformLive } from "./platform"
@@ -44,7 +49,13 @@ export const buildApp = (
 			// `AppServicesLive`'s error and requirement channels to `unknown`.
 			makeRoutes(
 				workerRpcServer(env),
-				Layer.mergeAll(makeSyncRoute(env), makeLiveRoute(env), HtmlRenderRoute),
+				Layer.mergeAll(
+					makeSyncRoute(env),
+					makeLiveRoute(env),
+					HtmlRenderRoute,
+					AgentOAuthRoutes,
+					McpRoute,
+				),
 			).pipe(
 				Layer.provide(AppAuthorizationLive),
 				Layer.provide(AppServicesLive),
@@ -55,23 +66,9 @@ export const buildApp = (
 				// HTTP routes that reach objects or the directory (presence, bot commands).
 				Layer.provideMerge(workerObjectStubs(env)),
 				Layer.provideMerge(workerLiveObjectStubs(env)),
+				// Agent access (OAuth for MCP clients, personal tokens) over the directory.
+				Layer.provideMerge(AgentAccess.layer),
 				Layer.provideMerge(Layer.suspend(() => Directory.layerD1(directoryBinding(env)))),
 			) as unknown as Layer.Layer<never, never, HttpRouter.HttpRouter>,
 		),
 	).pipe(Effect.map(bridgeHandler))
-
-const pathOf = (url: string): string => {
-	const query = url.indexOf("?")
-	return query === -1 ? url : url.slice(0, query)
-}
-
-/** The fetch handler. `/health` answers before the route graph exists; the rest runs the router. */
-export const makeFetch = (app: Effect.Effect<HttpEffect, unknown>) =>
-	Effect.gen(function* () {
-		const request = yield* HttpServerRequest.HttpServerRequest
-		if (request.method === "GET" && pathOf(request.url) === "/health") {
-			return HttpServerResponse.text("OK")
-		}
-		const handler = yield* app.pipe(Effect.orDie)
-		return yield* handler
-	})

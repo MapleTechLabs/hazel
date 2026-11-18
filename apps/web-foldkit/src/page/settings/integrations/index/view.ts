@@ -15,6 +15,7 @@ import type { Connection } from "../shared/connections"
 import { CHEVRON_RIGHT, fragment, integrationLogo, strokeIcon } from "../shared/view"
 import { Message } from "./message"
 import type { Model } from "./model"
+import { heading } from "../../../../ui/heading"
 
 /** Port of `routes/_app/$orgSlug/settings/integrations/index.tsx`. */
 
@@ -45,7 +46,7 @@ const cardContent = (h: HtmlBuilder<Message>, integration: Integration, status: 
 			h.div(
 				[h.Class("flex min-w-0 flex-1 flex-col gap-0.5")],
 				[
-					h.h3([h.Class("truncate font-medium text-fg text-sm")], [integration.name]),
+					heading(h, { variant: "subsection", className: "truncate" }, [integration.name]),
 					connectionStatus(h, status),
 				],
 			),

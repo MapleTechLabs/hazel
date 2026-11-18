@@ -11,7 +11,7 @@ import type { HazelAuthConfig } from "./server.ts"
 /**
  * Desktop sign-in through the system browser (`BrowserLogin`):
  * - the web app's `/auth/desktop` page describes the attempt and authorizes it with the
- *   browser's session cookie, then opens `hazel://auth/callback`;
+ *   browser's session cookie, then opens the client's callback (`com.hazel.app://auth/callback`);
  * - the desktop app exchanges that callback for its own session (native mode: credentials in
  *   headers, never cookies) and later verifies or ends it at `/auth/native/*`.
  *

@@ -114,7 +114,7 @@ const attachmentPreviews = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftVie
 									[h.Class("absolute inset-x-0 -bottom-px h-1 bg-muted")],
 									[
 										h.div([
-											h.Class("h-full bg-primary transition-all duration-200"),
+											h.Class("h-full bg-primary transition-[width] duration-200"),
 											h.Attribute("style", `width: ${upload.progress}%;`),
 										]),
 									],

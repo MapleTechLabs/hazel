@@ -1,17 +1,23 @@
-import { NotificationId, OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, NotificationId, OrganizationId, UserId } from "@hazel/schema"
 import { Duration, Effect, Schedule, Schema } from "effect"
 import { Command } from "foldkit"
 import { back, forward, load, pushUrl, replaceUrl } from "foldkit/navigation"
+import { warmSyncObjects } from "~/db/warm"
 import { readAccessToken } from "~/lib/access-token"
 import { isRetryableError } from "~/lib/error-messages"
 import { catchCommon } from "../data/actions"
+import { rememberLastOrganization } from "../data/last-organization"
 import { saveSoundSettings, SoundSettings } from "../notification-sound"
+import { saveKeybindingOverrides } from "../keybindings"
+import { Overrides } from "~/lib/keybindings/keymap"
 import { clearNoteDrafts } from "../page/customers/detail/note-drafts"
 import { HazelRpc } from "../rpc"
+import type { CurrentUser } from "../session"
 import { applyTheme, ResolvedTheme, saveThemePreference, ThemeCustomization, ThemePreference } from "../theme"
 import { readSession, signOut } from "./auth"
 import { Message } from "./message"
 import { deliverNotifications } from "./notification-sinks"
+import { settleRememberedUser } from "./remembered-user"
 
 export const NavigateInternal = Command.define("NavigateInternal", {
 	args: { url: Schema.String },
@@ -71,6 +77,24 @@ export const SaveSoundSettings = Command.define("SaveSoundSettings", {
 		saveSoundSettings(settings).pipe(
 			Effect.as(Message.CompletedSaveSoundSettings()),
 			Effect.catchTag("StorageWriteError", () => Effect.succeed(Message.FailedSaveSoundSettings())),
+		),
+})
+
+/** The organization the user opened, for the next app start (`page/root`). */
+export const RememberLastOrganization = Command.define("RememberLastOrganization", {
+	args: { organizationId: OrganizationId },
+	messages: [Message.CompletedRememberLastOrganization],
+	execute: ({ organizationId }) =>
+		rememberLastOrganization(organizationId).pipe(Effect.as(Message.CompletedRememberLastOrganization())),
+})
+
+export const SaveKeybindings = Command.define("SaveKeybindings", {
+	args: { overrides: Overrides },
+	messages: [Message.CompletedSaveKeybindings, Message.FailedSaveKeybindings],
+	execute: ({ overrides }) =>
+		saveKeybindingOverrides(overrides).pipe(
+			Effect.as(Message.CompletedSaveKeybindings()),
+			Effect.catchTag("StorageWriteError", () => Effect.succeed(Message.FailedSaveKeybindings())),
 		),
 })
 
@@ -161,16 +185,17 @@ const fetchCurrentUser = Effect.gen(function* () {
 	const user = yield* client("user.me", undefined).pipe(
 		Effect.retry({ schedule: retryBlip, times: 2, while: isRetryableError }),
 	)
-	return Message.SucceededFetchCurrentUser({
-		user: {
-			id: user.id,
-			firstName: user.firstName ?? "",
-			lastName: user.lastName ?? "",
-			email: user.email,
-			avatarUrl: user.avatarUrl ?? null,
-			isOnboarded: user.isOnboarded,
-		},
-	})
+	const current: CurrentUser = {
+		id: user.id,
+		firstName: user.firstName ?? "",
+		lastName: user.lastName ?? "",
+		email: user.email,
+		avatarUrl: user.avatarUrl ?? null,
+		isOnboarded: user.isOnboarded,
+	}
+	// The next load starts as this user; one that started as someone else starts over.
+	yield* settleRememberedUser(current)
+	return Message.SucceededFetchCurrentUser({ user: current })
 }).pipe(catchCommon((reason) => Message.FailedFetchCurrentUser({ reason })))
 
 export const FetchCurrentUser = Command.define("FetchCurrentUser", {
@@ -189,6 +214,14 @@ export const WarmAccessToken = Command.define("WarmAccessToken", {
 		Effect.ignore,
 		Effect.as(Message.CompletedWarmAccessToken()),
 	),
+})
+
+/** Wakes the objects this load opens, where `index.html` has not (`core/db/warm.ts`). */
+export const WarmSyncObjects = Command.define("WarmSyncObjects", {
+	args: { userId: Schema.NullOr(UserId), channelId: Schema.NullOr(ChannelId) },
+	messages: [Message.CompletedWarmSyncObjects],
+	execute: ({ userId, channelId }) =>
+		warmSyncObjects(userId, channelId).pipe(Effect.as(Message.CompletedWarmSyncObjects())),
 })
 
 /** `user.me` again after a pause, while the API keeps failing to answer it. */

@@ -4,17 +4,16 @@
  * page can be tried in the native app without a backend.
  */
 import { readFileSync } from "node:fs"
-import { createServer } from "node:http"
+import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { HTML_RENDER_CONTENT_SECURITY_POLICY, injectHtmlRenderBootstrap } from "@hazel/domain/html-render"
-import { generalChannelId, generalMessageRows } from "./snapshot"
+import { fixtureHtmlRenderAt } from "./html-render-message"
 
-const RENDER_ID = "00000000-0000-4000-8000-0000000f0001"
-const MESSAGE_ID = "00000000-0000-4000-8000-0000000f0002"
-const HOUR = 3_600_000
-
-/** Starts the page server for `file` and answers with the message to add and its `message.htmlRenderUrl`. */
-export const makeFixtureHtmlRender = async (file: string) => {
+/** Serves `file` as the api serves an HTML render, on `port` (any free one by default). */
+export const serveFixtureHtml = async (
+	file: string,
+	port = 0,
+): Promise<{ readonly url: string; readonly server: Server }> => {
 	// Read per request: an edit to the file shows on the next load.
 	const server = createServer((_request, response) => {
 		let page: string
@@ -35,27 +34,16 @@ export const makeFixtureHtmlRender = async (file: string) => {
 		})
 		response.end(page)
 	})
-	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+	await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve))
 	// SAFETY: a TCP server that is listening has an `AddressInfo`.
-	const { port } = server.address() as AddressInfo
+	const address = server.address() as AddressInfo
+	return { url: `http://127.0.0.1:${address.port}/html-renders/fixture`, server }
+}
+
+/** Starts the page server for `file` and answers with the message to add and its `message.htmlRenderUrl`. */
+export const makeFixtureHtmlRender = async (file: string) => {
+	const { url, server } = await serveFixtureHtml(file)
 	// The runtime exits with the app; the server must not keep it alive on its own.
 	server.unref()
-	return {
-		/** A row for the channel's `messages`: the last message's author posts the render. */
-		message: {
-			...generalMessageRows.at(-1),
-			id: MESSAGE_ID,
-			channelId: generalChannelId,
-			content: "",
-			embeds: [{ html: { renderId: RENDER_ID, title: "Fixture render", height: 320 } }],
-			replyToMessageId: null,
-			createdAt: new Date().toISOString(),
-			updatedAt: null,
-		},
-		/** `message.htmlRenderUrl`'s answer. */
-		url: () => ({
-			url: `http://127.0.0.1:${port}/html-renders/fixture`,
-			expiresAt: Date.now() + HOUR,
-		}),
-	}
+	return fixtureHtmlRenderAt(url)
 }

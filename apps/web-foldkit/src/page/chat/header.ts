@@ -1,12 +1,16 @@
 import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
-import { IconChevronRight, IconEye, IconHashtag, IconPin, IconThread } from "../../icons"
+import { IconChevronRight, IconEye, IconHashtag, IconOffice, IconPin, IconThread } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
 import { avatar, type AvatarProps } from "../../ui/avatar"
 import { button } from "../../ui/button"
+import { link } from "../../ui/link"
 import { presenceDot } from "../../ui/presence-dot"
 import type { PresenceStatus } from "~/utils/presence"
 import { type AuthorIdentity } from "./rows"
 import type { ChannelInfo, ParentChannelInfo } from "./queries"
+import { heading } from "../../ui/heading"
+import { discordLogo, slackLogo } from "../settings/chat-sync/brand-icons"
+import type { SyncProvider } from "./lookups"
 
 /** Port of `ChatHeader` (desktop): channel, thread breadcrumb, DM and the not-a-member fallback. */
 
@@ -16,8 +20,35 @@ export const channelIcon = <M>(h: HtmlBuilder<M>, icon: string | null, className
 		? h.span([h.Attribute("data-slot", "icon"), h.Class(className)], [icon])
 		: IconHashtag(h, { className })
 
+/** The channel's icon with the Slack or Discord mark in its corner when chat sync bridges it. */
+const syncedChannelIcon = <M>(
+	h: HtmlBuilder<M>,
+	icon: string | null,
+	provider: SyncProvider | null,
+): Html => {
+	const base = channelIcon(h, icon, "size-5 text-muted-fg")
+	if (provider === null) return h.span([h.Class("shrink-0")], [base])
+	return h.span(
+		[h.Class("relative shrink-0")],
+		[
+			base,
+			h.span(
+				[
+					h.Class(
+						"absolute -right-1 -bottom-0.5 flex size-3.5 items-center justify-center rounded-full bg-bg",
+					),
+					h.Attribute("title", provider === "slack" ? "Synced with Slack" : "Synced with Discord"),
+				],
+				[provider === "slack" ? slackLogo(h, "size-2.5") : discordLogo(h, "size-3")],
+			),
+		],
+	)
+}
+
 export interface HeaderInputs {
 	readonly channel: ChannelInfo | null
+	/** The platform chat sync bridges the channel to, marked on its icon; null when it is not synced. */
+	readonly syncProvider: SyncProvider | null
 	readonly parentChannel: ParentChannelInfo | null
 	/** Null only before the org is known; the parent breadcrumb needs it for its link. */
 	readonly orgSlug: string | null
@@ -32,7 +63,25 @@ export interface HeaderInputs {
 	readonly pinnedTrigger: Html
 	/** A phone's back button (`md:hidden`) to the chat list, or a thread's channel; empty elsewhere. */
 	readonly mobileBack: Html
+	/** The customer the channel is linked to, shown beside its name and opening its page. */
+	readonly customer?: { readonly name: string; readonly href: string } | null
 }
+
+/** The channel's customer: a quiet chip beside the name that opens the customer page. */
+const customerChip = <M>(
+	h: HtmlBuilder<M>,
+	customer: { readonly name: string; readonly href: string },
+): Html =>
+	link(
+		h,
+		{
+			href: customer.href,
+			className:
+				"inline-flex min-w-0 shrink items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-muted-fg text-xs no-underline hover:bg-secondary hover:text-fg max-md:hidden",
+			attributes: [h.Attribute("title", `Customer: ${customer.name}`)],
+		},
+		[IconOffice(h, { className: "size-3 shrink-0" }), h.span([h.Class("truncate")], [customer.name])],
+	)
 
 const ROW = "flex h-14 shrink-0 items-center justify-between border-border border-b bg-bg px-4"
 
@@ -81,7 +130,7 @@ const threadTitle = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs, channel: Channe
 				[h.Class("flex min-w-0 items-center gap-1.5")],
 				[
 					IconThread(h, { className: "size-4 shrink-0 text-muted-fg" }),
-					h.h2([h.Class("truncate font-semibold text-fg text-sm")], [channel.name]),
+					heading(h, { variant: "subsection", level: 2, className: "truncate" }, [channel.name]),
 				],
 			),
 		],
@@ -107,27 +156,24 @@ const dmTitle = <M>(
 	h.div(
 		[h.Class("max-md:min-w-0")],
 		[
-			h.h2(
-				[h.Class("font-semibold text-fg text-sm max-md:truncate")],
-				[
-					...(members.length > 0
-						? members
-								.slice(0, 3)
-								.map((member, index) =>
-									h.span([], [...(index > 0 ? [", "] : []), member.displayName]),
-								)
-						: ["Direct Message"]),
-					" ",
-					...(members.length > 3
-						? [
-								h.span(
-									[h.Class("font-normal text-muted-fg text-xs")],
-									[` +${members.length - 3} more`],
-								),
-							]
-						: []),
-				],
-			),
+			heading(h, { variant: "subsection", level: 2, className: "max-md:truncate" }, [
+				...(members.length > 0
+					? members
+							.slice(0, 3)
+							.map((member, index) =>
+								h.span([], [...(index > 0 ? [", "] : []), member.displayName]),
+							)
+					: ["Direct Message"]),
+				" ",
+				...(members.length > 3
+					? [
+							h.span(
+								[h.Class("font-normal text-muted-fg text-xs")],
+								[` +${members.length - 3} more`],
+							),
+						]
+					: []),
+			]),
 		],
 	),
 ]
@@ -144,8 +190,9 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 							[h.Class("flex items-center gap-3 max-md:min-w-0")],
 							[
 								channelIcon(h, channel.icon, "size-5 text-muted-fg max-md:shrink-0"),
-								h.h2(
-									[h.Class("font-semibold text-fg text-sm max-md:truncate")],
+								heading(
+									h,
+									{ variant: "subsection", level: 2, className: "max-md:truncate" },
 									[channel.name],
 								),
 							],
@@ -166,14 +213,16 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 						: isDirectMessage
 							? dmTitle(h, inputs.otherMembers, inputs.dmPresence)
 							: [
-									channelIcon(h, channel.icon, "size-5 text-muted-fg max-md:shrink-0"),
+									syncedChannelIcon(h, channel.icon, inputs.syncProvider),
 									h.div(
 										[h.Class("flex items-center gap-2 max-md:min-w-0")],
 										[
-											h.h2(
-												[h.Class("truncate font-semibold text-fg text-sm")],
+											heading(
+												h,
+												{ variant: "subsection", level: 2, className: "truncate" },
 												[channel.name],
 											),
+											...(inputs.customer ? [customerChip(h, inputs.customer)] : []),
 										],
 									),
 								]),

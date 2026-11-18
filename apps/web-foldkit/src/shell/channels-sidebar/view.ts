@@ -7,7 +7,7 @@ import { AppRoute, hrefOf } from "../../route"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
 import type * as Menu from "../../ui/menu"
 import { canOn, openRowMenu } from "./menu-update"
-import { closedRowMenu, dmMenuView, rowMenuView } from "./menus"
+import { closedRowMenu, dmLongPress, dmMenuView, rowLongPress, rowMenuView } from "./menus"
 import { Message, type Model } from "./model"
 import { createChannelHint } from "./create-channel-hint"
 import { hotkeyLabel } from "./hotkey-label"
@@ -29,6 +29,8 @@ import {
 	partnerOrgsByChannel,
 	type Presence,
 	type SidebarThread,
+	type SyncProvider,
+	syncProviderByChannel,
 } from "./rows"
 import { sectionGroupHeader, strong, treeRow, treeSection } from "./tree"
 
@@ -41,6 +43,7 @@ interface SectionsContext<M> extends ItemContext {
 	readonly isMembersActive: boolean
 	readonly onActiveMount: Attribute<M>
 	readonly onBrowseChannels: Attribute<M>
+	readonly paletteKey: string | null
 	/** The row menus' inputs; each row builds its own menu inside its memo. */
 	readonly openMenu: Model["openMenu"]
 	readonly sections: Model["sections"]
@@ -49,6 +52,7 @@ interface SectionsContext<M> extends ItemContext {
 	readonly sectionAction: (sectionKey: string) => Html
 	readonly unreadByChannel: ReadonlyMap<string, number>
 	readonly partnersByChannel: ReturnType<typeof partnerOrgsByChannel>
+	readonly syncProviderByChannel: ReadonlyMap<string, SyncProvider>
 	/** Joined threads listed under each channel row, by parent channel id. */
 	readonly threadsByParent: ReadonlyMap<string, ReadonlyArray<SidebarThread>>
 }
@@ -110,6 +114,7 @@ const channelRowView = <M>(
 	entry: ChannelEntry,
 	notificationCount: number,
 	partners: ReadonlyArray<PartnerOrg>,
+	syncProvider: SyncProvider | null,
 	isLinkActive: boolean,
 	orgSlug: string,
 	treeId: string,
@@ -123,8 +128,16 @@ const channelRowView = <M>(
 	toParentMessage: (message: Message) => M,
 	threads: ReadonlyArray<SidebarThread>,
 	activeThreadId: ChannelId | null,
-): Html =>
-	treeRow(h, {
+): Html => {
+	const menu = {
+		menu: openMenu ?? closedRowMenu(entry.channel.id),
+		canDelete,
+		entry,
+		sections,
+		toMessage: (message: Menu.Message) =>
+			toParentMessage(Message.GotRowMenuMessage({ channelId: entry.channel.id, orgSlug, message })),
+	}
+	return treeRow(h, {
 		onActiveMount,
 		treeId,
 		key: entry.channel.id,
@@ -137,20 +150,13 @@ const channelRowView = <M>(
 			entry,
 			notificationCount,
 			partners,
-			{ orgSlug, isActive: isLinkActive },
-			rowMenuView(h, {
-				menu: openMenu ?? closedRowMenu(entry.channel.id),
-				canDelete,
-				entry,
-				sections,
-				toMessage: (message) =>
-					toParentMessage(
-						Message.GotRowMenuMessage({ channelId: entry.channel.id, orgSlug, message }),
-					),
-			}),
+			{ orgSlug, isActive: isLinkActive, syncProvider },
+			rowMenuView(h, menu),
+			rowLongPress(h, menu),
 		),
 		children: threadItems(h, threads, activeThreadId, orgSlug),
 	})
+}
 
 /** Favorites render `ChannelItem` without `partnerOrgs`, so they never show the shared-org badge. */
 const channelRow = <M>(
@@ -171,6 +177,7 @@ const channelRow = <M>(
 			entry,
 			context.unreadByChannel.get(id) ?? entry.member.notificationCount,
 			showsPartners ? (context.partnersByChannel.get(id) ?? NO_PARTNERS) : NO_PARTNERS,
+			context.syncProviderByChannel.get(id) ?? null,
 			id === context.activeChannelId,
 			context.orgSlug,
 			place.treeId,
@@ -205,8 +212,15 @@ const dmRowView = <M>(
 	onActiveMount: Attribute<M> | null,
 	openMenu: Menu.Model | null,
 	toParentMessage: (message: Message) => M,
-): Html =>
-	treeRow(h, {
+): Html => {
+	const menu = {
+		menu: openMenu ?? closedRowMenu(channel.id),
+		channelId: channel.id,
+		member: channel.currentUser,
+		toMessage: (message: Menu.Message) =>
+			toParentMessage(Message.GotRowMenuMessage({ channelId: channel.id, orgSlug, message })),
+	}
+	return treeRow(h, {
 		onActiveMount,
 		treeId,
 		key: channel.id,
@@ -219,15 +233,11 @@ const dmRowView = <M>(
 			channel,
 			notificationCount,
 			{ orgSlug, isActive: isLinkActive, currentUserId, nowMs, presence },
-			dmMenuView(h, {
-				menu: openMenu ?? closedRowMenu(channel.id),
-				channelId: channel.id,
-				member: channel.currentUser,
-				toMessage: (message) =>
-					toParentMessage(Message.GotRowMenuMessage({ channelId: channel.id, orgSlug, message })),
-			}),
+			dmMenuView(h, menu),
+			dmLongPress(h, menu),
 		),
 	})
+}
 
 /** A `DmChannelItem` renders nothing until its channel and the user's membership load. */
 const dmRow = <M>(
@@ -301,19 +311,23 @@ const gotoSection = <M>(h: HtmlBuilder<M>, context: SectionsContext<M>): Html =>
 					sidebarItem(h, { attributes: [context.onBrowseChannels] }, [
 						IconMagnifier3(h),
 						label(h, ["Browse channels"]),
-						h.kbd(
-							[
-								h.Attribute("data-slot", "keyboard"),
-								h.Attribute("dir", "ltr"),
-								h.Class(
-									twMerge(
-										"hidden font-mono text-[0.80rem]/6 text-current/60 group-hover:text-fg group-focus:text-fg group-focus:opacity-90 group-disabled:opacity-50 lg:inline forced-colors:group-focus:text-[HighlightText]",
-										"absolute top-1/2 right-2 -translate-y-1/2 font-mono text-muted-fg text-xs",
+						...(context.paletteKey === null
+							? []
+							: [
+									h.kbd(
+										[
+											h.Attribute("data-slot", "keyboard"),
+											h.Attribute("dir", "ltr"),
+											h.Class(
+												twMerge(
+													"hidden font-mono text-[0.80rem]/6 text-current/60 group-hover:text-fg group-focus:text-fg group-focus:opacity-90 group-disabled:opacity-50 lg:inline forced-colors:group-focus:text-[HighlightText]",
+													"absolute top-1/2 right-2 -translate-y-1/2 font-mono text-muted-fg text-xs",
+												),
+											),
+										],
+										[hotkeyLabel(context.paletteKey)],
 									),
-								),
-							],
-							[hotkeyLabel("Mod+K")],
-						),
+								]),
 					]),
 					sidebarItem(h, {}, [
 						sidebarLink(
@@ -443,6 +457,16 @@ const partnersOf = (model: Model) => {
 	return result
 }
 
+// Pure memo on the frozen rows, so a re-render does not rebuild the map.
+const syncMemo = new WeakMap<Model["syncedChannels"], ReadonlyMap<string, SyncProvider>>()
+const syncProvidersOf = (model: Model) => {
+	const cached = syncMemo.get(model.syncedChannels)
+	if (cached) return cached
+	const result = syncProviderByChannel(model.syncedChannels)
+	syncMemo.set(model.syncedChannels, result)
+	return result
+}
+
 export const sectionGroupContent = <M>(
 	h: HtmlBuilder<M>,
 	model: Model,
@@ -451,6 +475,8 @@ export const sectionGroupContent = <M>(
 		readonly onActiveMount: Attribute<M>
 		readonly onBrowseChannels: Attribute<M>
 		readonly onDismissCreateChannelHint: Attribute<M>
+		readonly paletteKey: string | null
+		readonly createChannelKey: string | null
 		readonly toParentMessage: (message: Message) => M
 		readonly sectionAction: (sectionKey: string) => Html
 	},
@@ -462,6 +488,7 @@ export const sectionGroupContent = <M>(
 		presenceByUser: new Map(model.presence.map((presence) => [presence.userId, presence])),
 		unreadByChannel: new Map(model.unreadCounts.map((unread) => [unread.channelId, unread.count])),
 		partnersByChannel: partnersOf(model),
+		syncProviderByChannel: syncProvidersOf(model),
 		threadsByParent: threadsByParentOf(model.threads, itemContext.activeChannelId, itemContext.nowMs),
 		openMenu: model.openMenu,
 		sections: model.sections,
@@ -470,6 +497,8 @@ export const sectionGroupContent = <M>(
 	const role = model.membership?.role
 	const canCreateChannel = role !== undefined && canPerform(RPC_SCOPE_MAP, role, "channel.create")
 	const defaultEntries = model.sectionChannels["default"] ?? []
+	// Before the list arrives, empty is not "no channels": the hint would flash in and out.
+	const hasNoChannels = model.sectionChannels["default"]?.length === 0
 	return [
 		gotoSection(h, context),
 		...(model.organizationId === null
@@ -486,8 +515,14 @@ export const sectionGroupContent = <M>(
 						context,
 					),
 					...discoverSection(h, model, context),
-					...(defaultEntries.length === 0 && canCreateChannel && !model.isCreateChannelHintDismissed
-						? [createChannelHint(h, itemContext.onDismissCreateChannelHint)]
+					...(hasNoChannels && canCreateChannel && !model.isCreateChannelHintDismissed
+						? [
+								createChannelHint(
+									h,
+									itemContext.onDismissCreateChannelHint,
+									itemContext.createChannelKey,
+								),
+							]
 						: []),
 					...model.sections.map((section) =>
 						channelSection(

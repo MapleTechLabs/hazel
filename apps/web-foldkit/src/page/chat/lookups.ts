@@ -72,6 +72,26 @@ export type CustomEmojiInfo = typeof CustomEmojiInfo.Type
 export const BotInfo = Schema.Struct({ userId: UserId, name: Schema.String })
 export type BotInfo = typeof BotInfo.Type
 
+/** The chat platform a two-way synced message came from. */
+export const SyncProvider = Schema.Literals(["discord", "slack"])
+export type SyncProvider = typeof SyncProvider.Type
+
+/**
+ * The platform a chat sync shadow user stands for, from its `<provider>-user-<id>@<provider>.internal`
+ * email. Shadow users are `machine` users, but they are people on Slack or Discord, not apps.
+ * Not the external id: it is `Sensitive`, so the synced user rows never carry it.
+ */
+export const shadowProviderOf = (email: string | null | undefined): SyncProvider | null =>
+	email?.startsWith("discord-user-") ? "discord" : email?.startsWith("slack-user-") ? "slack" : null
+
+/** A message that arrived through chat sync, and the platform it came from. */
+export const SyncedMessageInfo = Schema.Struct({ messageId: MessageId, provider: SyncProvider })
+export type SyncedMessageInfo = typeof SyncedMessageInfo.Type
+
+/** A message an agent wrote for its author, and the agent's name. */
+export const AgentMarkInfo = Schema.Struct({ id: MessageId, agentName: Schema.String })
+export type AgentMarkInfo = typeof AgentMarkInfo.Type
+
 /** Everything the rows are derived from, besides messages and reactions. */
 export const Lookups = Schema.Struct({
 	users: Schema.Array(UserInfo),
@@ -79,7 +99,10 @@ export const Lookups = Schema.Struct({
 	bots: Schema.Array(BotInfo),
 	customEmojis: Schema.Array(CustomEmojiInfo),
 	attachments: Schema.Array(AttachmentInfo),
-	discordSyncedIds: Schema.Array(MessageId),
+	syncedMessages: Schema.Array(SyncedMessageInfo),
+	/** The platform the channel is bridged to by an active chat sync link, marked on its header icon. */
+	syncProvider: Schema.NullOr(SyncProvider),
+	agentMarks: Schema.Array(AgentMarkInfo),
 	threadChannels: Schema.Array(ThreadChannelInfo),
 	threadMessages: Schema.Array(ThreadMessageInfo),
 	replyTargets: Schema.Array(ReplyTarget),
@@ -92,7 +115,9 @@ export const emptyLookups: Lookups = {
 	bots: [],
 	customEmojis: [],
 	attachments: [],
-	discordSyncedIds: [],
+	syncedMessages: [],
+	syncProvider: null,
+	agentMarks: [],
 	threadChannels: [],
 	threadMessages: [],
 	replyTargets: [],

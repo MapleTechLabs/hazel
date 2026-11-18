@@ -19,6 +19,7 @@ import { formatDistanceToNow } from "~/lib/format-distance"
 import { contextOf, filterByCategory, groupByTime, previewOf } from "./format"
 import { Message } from "./message"
 import type { Category, Model, NotificationItem } from "./model"
+import { heading } from "../../../ui/heading"
 
 /** Ports of `routes/_app/$orgSlug/notifications/{index,general,threads,dms}.tsx` and `NotificationList`. */
 
@@ -177,12 +178,7 @@ const notificationList = (
 				[
 					h.div(
 						[h.Class("sticky top-0 z-10 bg-bg/95 backdrop-blur-sm px-4 py-2")],
-						[
-							h.h2(
-								[h.Class("text-xs font-semibold uppercase tracking-wider text-muted-fg")],
-								[group.label],
-							),
-						],
+						[heading(h, { variant: "label", level: 2 }, [group.label])],
 					),
 					h.div(
 						[h.Class("overflow-hidden rounded-xl border border-border bg-bg shadow-sm")],

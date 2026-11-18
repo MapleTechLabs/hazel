@@ -7,9 +7,10 @@ use rune::{
     ScrollSpec, Shadow, Span, Spring, SpringPair, TextCase, Transition, Vec2, el, row, text,
 };
 
-use std::collections::HashMap;
-
 use crate::wire::{Animation, BgImage, F, FocusRing, Len, OutlineSpec, Style, TextBox, Timing};
+
+/// HTML's own semantics, which lived here first: `crate::html` has them now.
+pub use crate::html::{focusable, is_checkable, is_text_field, script_focusable};
 
 pub fn color(hex: &Option<String>) -> Option<Color> {
     let h = hex.as_deref()?;
@@ -313,6 +314,10 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     if let Some(g) = f(st.grow).filter(|g| *g > 0.0) {
         e = e.grow(g)
     }
+    // After `grow`, which starts it from zero.
+    if let Some(b) = f(st.basis).filter(|b| *b > 0.0) {
+        e = e.basis(b)
+    }
     // Rune draws a border inside the box; CSS lays it out (box-sizing: border-box), so each
     // side's border width joins its padding, a transparent border's too.
     if st.pad.is_some() || st.border.is_some() {
@@ -400,8 +405,7 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
         _ => {}
     }
     if let Some([l, t, r, b]) = insets(st)
-        && st.center_y != Some(true)
-        && st.center_x != Some(true)
+        && anchors(st) == (None, None)
     {
         e = e.pin_insets(l, t, r, b)
     }
@@ -561,63 +565,6 @@ pub fn focus_styles(mut e: El, st: &Style, field: bool) -> El {
     e
 }
 
-/// Elements HTML puts in the Tab order (or `tabindex` adds), unless disabled. A negative
-/// `tabindex` takes them out: in Rune a focusable element keeps the presses on it, where a
-/// browser lets the click bubble, and the host has no script focus that would need it.
-/// `tabindex="-1"`: focusable by script (`element.focus()`, a menu moving its highlight) and
-/// by a press, but no Tab stop.
-pub fn script_focusable(attrs: &HashMap<String, String>) -> bool {
-    !attrs.contains_key("disabled")
-        && attrs
-            .get("tabindex")
-            .and_then(|t| t.trim().parse::<i32>().ok())
-            .is_some_and(|order| order < 0)
-}
-
-/// A checkbox or radio: a control a press or Space checks, not a text field.
-pub fn is_checkable(tag: &str, attrs: &HashMap<String, String>) -> bool {
-    tag == "input"
-        && attrs
-            .get("type")
-            .is_some_and(|t| t == "checkbox" || t == "radio")
-}
-
-/// An element Rune edits as text: a textarea, or an `<input>` of a typing type.
-pub fn is_text_field(tag: &str, attrs: &HashMap<String, String>) -> bool {
-    tag == "textarea"
-        || (tag == "input"
-            && !attrs.get("type").is_some_and(|t| {
-                matches!(
-                    t.as_str(),
-                    "checkbox"
-                        | "radio"
-                        | "button"
-                        | "submit"
-                        | "reset"
-                        | "image"
-                        | "range"
-                        | "color"
-                )
-            }))
-}
-
-pub fn focusable(tag: &str, attrs: &HashMap<String, String>) -> Option<i32> {
-    if attrs.contains_key("disabled") {
-        return None;
-    }
-    let native = matches!(tag, "button" | "select" | "summary")
-        || (tag == "a" && attrs.contains_key("href"))
-        || is_checkable(tag, attrs);
-    match attrs
-        .get("tabindex")
-        .and_then(|t| t.trim().parse::<i32>().ok())
-    {
-        Some(order) if order < 0 => None,
-        Some(order) => Some(order),
-        None => native.then_some(0),
-    }
-}
-
 /// `box-shadow` layers. The outermost spread-only ring (Tailwind `ring-*`, with any
 /// `ring-offset-*` inside it) becomes Rune's crisp outline; the rest are analytic shadows.
 fn apply_shadows(mut e: El, st: &Style) -> El {
@@ -662,29 +609,76 @@ fn apply_shadows(mut e: El, st: &Style) -> El {
     e
 }
 
-/// `inset-y-1/2 -translate-y-1/2`: a shift by half its own size, which Rune has no inset for, so
-/// centre in a full-height slot.
+/// Where an out-of-flow box is anchored by a share of its own size, per axis: (the anchor as a
+/// fraction of the parent, the share of its size it moves back by). `left-1/2 -translate-x-1/2` is
+/// (0.5, 0.5); a chart's dot at `left: 30%` is (0.3, 0.5); `-translate-x-full` moves back by 1.
+fn anchors(st: &Style) -> (Option<(f32, f32)>, Option<(f32, f32)>) {
+    let axis = |anchor: Option<[F; 2]>, centred: Option<bool>| {
+        anchor
+            .map(|[at, shift]| (at.0, shift.0))
+            .or((centred == Some(true)).then_some((0.5, 0.5)))
+    };
+    (
+        axis(st.anchor_x, st.center_x),
+        axis(st.anchor_y, st.center_y),
+    )
+}
+
+/// `left: x%` with `-translate-x-1/2` (and the vertical, and `-translate-*-full`): a shift by a
+/// share of its own size, which Rune has no inset for. The box goes in a slot as big as the parent,
+/// moved so that its centre (or its far edge, for a full shift) is the anchor, and is centred (or
+/// end-aligned) in it: CSS's result for any size of box, overflowing the slot or not.
 pub fn center_vertically(e: El, st: &Style) -> El {
-    let zero = Some(rune::Inset::Px(0.0));
-    match (insets(st), st.center_y) {
-        // `left-1/2 -translate-x-1/2` (and both axes): centred in a full-width slot at its insets.
-        (Some([_, t, _, b]), centre_y) if st.center_x == Some(true) => {
-            let both = centre_y == Some(true);
-            let slot = if both {
-                row().pin_insets(zero, zero, zero, zero).items_center()
-            } else {
-                row().pin_insets(zero, t, zero, b).items_start()
+    let Some([l, t, r, b]) = insets(st) else {
+        return e;
+    };
+    let frac = |v: f32| Some(rune::Inset::Frac(v));
+    // The slot's two edges along an axis, for an anchor at `at` moved back by `shift` of itself.
+    let slot = |(at, shift): (f32, f32)| (frac(at - shift), frac(shift - at));
+    match anchors(st) {
+        (Some(x), y) => {
+            let (sl, sr) = slot(x);
+            let (st_, sb, cross) = match y {
+                Some(y) => {
+                    let (a, b) = slot(y);
+                    (a, b, y.1)
+                }
+                None => (t, b, 0.0),
             };
-            slot.justify_center().child(e)
+            let row = row().pin_insets(sl, st_, sr, sb);
+            let row = if cross == 1.0 {
+                row.items_end()
+            } else if cross > 0.0 {
+                row.items_center()
+            } else if y.is_none()
+                && t.is_some()
+                && b.is_some()
+                && matches!(st.h, None | Some(crate::wire::Len::Auto))
+            {
+                // Pinned top and bottom with no height of its own: CSS stretches it between them.
+                row.items_stretch()
+            } else {
+                row.items_start()
+            };
+            let row = if x.1 == 1.0 {
+                row.justify_end()
+            } else {
+                row.justify_center()
+            };
+            row.child(e)
         }
-        (Some([l, _, r, _]), Some(true)) => {
+        (None, Some(y)) => {
+            let (a, bottom) = slot(y);
             // Pinned on both sides with no width of its own, CSS stretches it between them
             // (`inset-x-0 top-1/2`: a full-width divider or overlay).
             let spans = l.is_some() && r.is_some() && st.w.is_none();
-            row()
-                .pin_insets(l, zero, r, zero)
-                .items_center()
-                .child(if spans { e.grow(1.0) } else { e })
+            let row = row().pin_insets(l, a, r, bottom);
+            let row = if y.1 == 1.0 {
+                row.items_end()
+            } else {
+                row.items_center()
+            };
+            row.child(if spans { e.grow(1.0) } else { e })
         }
         _ => e,
     }
@@ -732,7 +726,40 @@ pub fn apply_flex(mut e: El, st: &Style) -> El {
             stick_bottom: false,
         })
     }
+    if scrolls_x(st) {
+        e = if st.scroll_y == Some(true) {
+            e.scroll_xy()
+        } else {
+            e.scroll_x()
+        };
+        // In CSS a scroller with no width of its own takes the room it has: its content (a
+        // picture at its natural size) is wider, and as an overflow box it may shrink to fit.
+        // Rune would size it to the content alone, which a `w-5/6` item sized off the
+        // viewport leaves empty.
+        // A horizontal margin would take it past its parent: it keeps Rune's own width then.
+        let side_margins = st
+            .margin
+            .is_some_and(|[_, r, _, l]| r.0 != 0.0 || l.0 != 0.0);
+        if matches!(st.w, None | Some(Len::Auto)) && !side_margins {
+            e = e.w_full();
+            // `shrink-0` keeps it at that width.
+            if f(st.shrink) != Some(0.0) {
+                e = e.shrink()
+            }
+        }
+    }
     e
+}
+
+/// `overflow-x: auto` on a flex row that does not wrap (a filmstrip, a tab strip): Rune's
+/// horizontal viewport lays its items out side by side at their own widths, as CSS does there.
+/// Anywhere else (a code block, a table, a wrapped row) Rune would unwrap the content to its
+/// natural width, which CSS does not, so that box stays as wide as its parent.
+pub(crate) fn scrolls_x(st: &Style) -> bool {
+    st.scroll_x == Some(true)
+        && st.display.as_deref() == Some("flex")
+        && st.dir.as_deref() != Some("col")
+        && st.wrap != Some(true)
 }
 
 /// Auto margins, which Rune lacks. On the parent's main axis the child sits in a growing slot

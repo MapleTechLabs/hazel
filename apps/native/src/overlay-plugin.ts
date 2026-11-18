@@ -6,11 +6,12 @@
  * (`platform/desktop.ts`), from `src/native-auth.ts`, and its titlebar flag: the host keeps
  * the macOS traffic lights over the content, so headers leave room for them.
  */
+import { fileURLToPath } from "node:url"
 import { readFileSync } from "node:fs"
 
-const native = new URL("./overlay.ts", import.meta.url).pathname
-const nativeAnchor = new URL("./anchor.ts", import.meta.url).pathname
-const nativeAuth = new URL("./native-auth.ts", import.meta.url).pathname
+const native = fileURLToPath(new URL("./overlay.ts", import.meta.url))
+const nativeAnchor = fileURLToPath(new URL("./anchor.ts", import.meta.url))
+const nativeAuth = fileURLToPath(new URL("./native-auth.ts", import.meta.url))
 /** The line in `platform/desktop.ts` that picks the client; the native app picks its own. */
 const WEB_AUTH_CLIENT =
 	"export const desktopAuthClient: BrowserLoginClient | null = isDesktop ? desktopClient : null"
@@ -25,11 +26,11 @@ const NATIVE_EXPORTS = ["anchorSetup", "portalBackdrop", "portalToContainingRoot
 export const overlayPlugin: BunPlugin = {
 	name: "hazel-native-overlay",
 	setup(build) {
-		build.onLoad({ filter: /web-foldkit\/src\/ui\/aria\/overlay\.ts$/ }, () => ({
+		build.onLoad({ filter: /web-foldkit[\\/]src[\\/]ui[\\/]aria[\\/]overlay\.ts$/ }, () => ({
 			contents: `export * from ${JSON.stringify(native)}`,
 			loader: "ts",
 		}))
-		build.onLoad({ filter: /web-foldkit\/src\/platform\/desktop\.ts$/ }, ({ path }) => {
+		build.onLoad({ filter: /web-foldkit[\\/]src[\\/]platform[\\/]desktop\.ts$/ }, ({ path }) => {
 			const source = readFileSync(path, "utf8")
 			// A changed line must fail loudly here, not leave the native app unable to sign in.
 			if (!source.includes(WEB_AUTH_CLIENT)) throw new Error(`${path}: desktopAuthClient not found`)
@@ -45,7 +46,7 @@ export const overlayPlugin: BunPlugin = {
 				loader: "ts",
 			}
 		})
-		build.onLoad({ filter: /@foldkit\/ui\/dist\/anchor\/anchor\.js$/ }, ({ path }) => {
+		build.onLoad({ filter: /@foldkit[\\/]ui[\\/]dist[\\/]anchor[\\/]anchor\.js$/ }, ({ path }) => {
 			let source = readFileSync(path, "utf8")
 			for (const name of NATIVE_EXPORTS) {
 				const web = `export const ${name} = (element`

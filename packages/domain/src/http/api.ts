@@ -1,4 +1,5 @@
 import { HttpApi, OpenApi } from "effect/http-api"
+import { AgentAccessGroup } from "./agent-access"
 import { IntegrationsApiGroup as ApiV1IntegrationsApiGroup } from "./api-v1/integrations"
 import { MessagesApiGroup } from "./api-v1/messages"
 import { BotsApiGroup as ApiV1BotsApiGroup } from "./api-v1/bots"
@@ -23,6 +24,7 @@ export class HazelApi extends HttpApi.make("HazelApp")
 	.add(RootGroup)
 	.add(IntegrationGroup)
 	.add(T3CodeGroup)
+	.add(AgentAccessGroup)
 	.add(IntegrationCommandGroup)
 	.add(IntegrationResourceGroup)
 	.add(IncomingWebhookGroup)

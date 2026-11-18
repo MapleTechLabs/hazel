@@ -29,8 +29,8 @@ import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { IntegrationConnectionPolicy } from "../../policies/integration-connection-policy"
 import { indexedLinkOwner } from "../../services/chat-sync/chat-sync-index"
-import { indexChatSync, publishChatSyncLinks } from "../../services/chat-sync/chat-sync-org"
-import { ChatSyncDeliveryEffects } from "../../services/chat-sync/chat-sync-effects"
+import { indexChatSync, publishChatSyncLinks, threadLinksUnder } from "../../services/chat-sync/chat-sync-org"
+import { ChatSyncDeliveryEffects, ChatSyncHistoryEffects } from "../../services/chat-sync/chat-sync-effects"
 import { normalizeChannelLinkSettings } from "../../services/chat-sync/chat-sync-settings"
 import { isChatSyncProviderId } from "../../services/chat-sync/provider"
 import { chatSyncProviders } from "../../services/chat-sync/providers"
@@ -178,10 +178,11 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							const connection = connectionOption.value
 							yield* integrationConnectionPolicy.canInsert(connection.organizationId)
 
-							// Only a live channel of the connection's own org (this OrgObject's).
+							// Only a live channel of the connection's own org (this OrgObject's), not a thread:
+							// a thread syncs through its channel's link.
 							const channel = yield* db.first(
 								SQLite.from(schema.channelsTable)
-									.select("id")
+									.select("id", "type")
 									.where(($) => [
 										$.id.eq(payload.hazelChannelId),
 										$.organizationId.eq(connection.organizationId),
@@ -189,7 +190,7 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 									])
 									.limit(1),
 							)
-							if (Option.isNone(channel)) {
+							if (Option.isNone(channel) || channel.value.type === "thread") {
 								return yield* new ChannelNotFoundError({ channelId: payload.hazelChannelId })
 							}
 
@@ -253,6 +254,26 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 									externalChannelId: link!.externalChannelId as ExternalChannelId,
 								},
 							)
+							// Past messages come in only where the provider's messages flow into Hazel.
+							const historyLimit = Math.min(
+								payload.historyLimit ?? 0,
+								isChatSyncProviderId(connection.provider)
+									? chatSyncProviders[connection.provider].history.maxMessages
+									: 0,
+							)
+							if (historyLimit > 0 && link!.direction !== "hazel_to_external") {
+								yield* enqueueEffect(
+									ChatSyncHistoryEffects.importHistory,
+									{ kind: "chat-sync" },
+									{
+										provider: connection.provider,
+										externalWorkspaceId: connection.externalWorkspaceId,
+										externalChannelId: link!.externalChannelId as ExternalChannelId,
+										remaining: historyLimit,
+										cursor: null,
+									},
+								)
+							}
 
 							const brandedLink = {
 								...link,
@@ -280,7 +301,21 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 					const connection = connectionOption.value
 					yield* integrationConnectionPolicy.canSelect(connection.organizationId)
 
-					const data = yield* channelLinkRepo.findBySyncConnection(syncConnectionId)
+					const links = yield* channelLinkRepo.findBySyncConnection(syncConnectionId)
+					// A thread's link follows its channel's (direction, identity): only channels are listed.
+					const threadLinks = yield* db.run(
+						SQLite.from(schema.chatSyncChannelLinksTable, "link")
+							.innerJoin(schema.channelsTable, "channel", (link, channel) =>
+								channel.id.eq(link.hazelChannelId),
+							)
+							.select(($) => ({ id: $.id }))
+							.where(($) => [
+								$.syncConnectionId.eq(syncConnectionId),
+								$.channel.type.eq("thread"),
+							]),
+					)
+					const threadLinkIds = new Set(threadLinks.map((link) => link.id))
+					const data = links.filter((link) => !threadLinkIds.has(link.id))
 					return new ChatSyncChannelLinkListResponse({ data })
 				}).pipe(withRemapDbErrors("ChatSyncChannelLink", "select")),
 
@@ -311,9 +346,31 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 								connectionOption.value.organizationId,
 							)
 
+							// Its threads' links go with it: relinked later, the channel starts their threads anew.
+							const threads = yield* threadLinksUnder(link)
+							yield* Effect.forEach(
+								threads,
+								(thread) =>
+									channelLinkRepo.softDelete(thread.id).pipe(
+										Effect.andThen(
+											indexChatSync(connectionOption.value, {
+												link: thread,
+												deleted: true,
+											}),
+										),
+									),
+								{ discard: true },
+							)
 							yield* channelLinkRepo.softDelete(syncChannelLinkId)
 							yield* indexChatSync(connectionOption.value, { link, deleted: true })
 							yield* publishChatSyncLinks(link.hazelChannelId)
+							yield* Effect.forEach(
+								threads,
+								(thread) => publishChatSyncLinks(thread.hazelChannelId),
+								{
+									discard: true,
+								},
+							)
 							const txid = yield* generateTransactionId()
 							return { transactionId: txid }
 						}),

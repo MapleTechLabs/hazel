@@ -38,6 +38,8 @@ pub struct Style {
     pub font_weight: Option<F>,
     pub opacity: Option<F>,
     pub scroll_y: Option<bool>,
+    /// `overflow-x: auto`/`scroll`.
+    pub scroll_x: Option<bool>,
     pub clip: Option<bool>,
     /// Its own formatting context (`contain: layout`, `display: flow-root`).
     pub isolated: Option<bool>,
@@ -49,8 +51,7 @@ pub struct Style {
     /// Host-only: a table row's key, so its cells hover together (`hover_group_shared`).
     #[serde(skip)]
     pub hover_share: Option<String>,
-    /// Host-only: a table cell's `colspan`.
-    #[serde(skip)]
+    /// `grid-column: span N / span N` (`col-span-2`), or a table cell's `colspan` (set here).
     pub col_span: Option<u16>,
     /// `position: fixed`: drawn at the window's root and placed against the window.
     pub fixed: Option<bool>,
@@ -118,6 +119,19 @@ pub struct Style {
     /// `left-1/2 -translate-x-1/2`: centred horizontally in its containing block.
     #[serde(default, deserialize_with = "lenient")]
     pub center_x: Option<bool>,
+    /// `left: x%` with `-translate-x-1/2` (or `-full`): [x as a fraction of the parent, the share
+    /// of its own width it moves back by].
+    #[serde(default, deserialize_with = "lenient")]
+    pub anchor_x: Option<[F; 2]>,
+    /// `top: y%` with `-translate-y-1/2` (or `-full`), as `anchor_x`.
+    #[serde(default, deserialize_with = "lenient")]
+    pub anchor_y: Option<[F; 2]>,
+    /// `overflow: hidden` (not `clip`): a scroll container, whose automatic minimum width is 0.
+    #[serde(default, deserialize_with = "lenient")]
+    pub clip_scrolls: Option<bool>,
+    /// `flex-basis` in points (`basis-72`), which a grown item starts from.
+    #[serde(default, deserialize_with = "lenient")]
+    pub basis: Option<F>,
     /// Insets as fractions of the parent's size where the runtime could not know it
     /// (`bottom-full`), left, top, right, bottom; an edge here is free in `absolute`.
     #[serde(default, deserialize_with = "lenient")]
@@ -337,6 +351,9 @@ pub enum WireNode {
     Svg {
         h: String,
         view: f32,
+        /// The viewBox height, when it differs from its width (`view`).
+        #[serde(default)]
+        vh: Option<f32>,
         body: String,
         st: Style,
         /// The svg's `preserveAspectRatio`, when it sets one.
@@ -388,6 +405,11 @@ pub enum RuntimeMsg {
         /// Echoed in the next offset report, so the runtime can tell reports from before it.
         #[serde(default)]
         seq: Option<u64>,
+        /// An `element.scrollBy()`: shift the offset by this much from wherever the viewport is
+        /// now (`top` is where the runtime expects it to land), keeping a finger's drag and a
+        /// fling's momentum. The runtime's idea of the offset is a report behind the host's.
+        #[serde(default)]
+        by: Option<f32>,
     },
     /// Focus the element keyed `key` (an `element.focus()` in the runtime).
     #[serde(rename = "focus")]
@@ -426,10 +448,31 @@ pub enum RuntimeMsg {
     /// a relaunch that cannot start is answered as `update` with `id`.
     #[serde(rename = "relaunch")]
     Relaunch { id: u64 },
+    /// Put `text` on the system clipboard.
+    #[serde(rename = "copy")]
+    Copy { text: String },
+    /// Open a web or mail link in the system's browser or mail app.
+    #[serde(rename = "open")]
+    Open { url: String },
+    /// Whether the app may show system notifications, asking the user first with `request`;
+    /// answered as `notifyPermission` with `id`.
+    #[serde(rename = "notifyPermission")]
+    NotifyPermission { id: u64, request: bool },
+    /// Show a system notification (`crate::notify::Notification`).
+    #[serde(rename = "notify")]
+    Notify(crate::notify::Notification),
 }
 
 /// What a runtime request does to the host's Rune runtime, sent to its update thread.
 pub type HostRequest = Box<dyn FnOnce(&mut rune::Tx) + Send>;
+
+/// A link the system may open for the app: web and mail only, as the runtime filters them.
+pub fn is_external_link(url: &str) -> bool {
+    ["http:", "https:", "mailto:"].iter().any(|scheme| {
+        url.get(..scheme.len())
+            .is_some_and(|s| s.eq_ignore_ascii_case(scheme))
+    })
+}
 
 impl RuntimeMsg {
     /// A focus or reveal request, run against the host's next commit.
@@ -458,6 +501,18 @@ impl RuntimeMsg {
             }
             RuntimeMsg::Reveal { path, .. } => {
                 Some(Box::new(move |tx: &mut rune::Tx| tx.scroll_into_view(path)))
+            }
+            RuntimeMsg::Copy { text } => Some(Box::new(move |tx: &mut rune::Tx| tx.copy(text))),
+            RuntimeMsg::Open { url } if is_external_link(&url) => {
+                Some(Box::new(move |tx: &mut rune::Tx| {
+                    if let Err(error) = tx.open_url(&url) {
+                        eprintln!("[host] cannot open a link: {error:?}");
+                    }
+                }))
+            }
+            RuntimeMsg::Open { .. } => {
+                eprintln!("[host] not opening a link that is not web or mail");
+                None
             }
             RuntimeMsg::Measure { path } => Some(Box::new(move |tx: &mut rune::Tx| {
                 tx.drawn_rects(vec![path.clone()], move |_: &mut crate::State, rects, _| {
@@ -496,7 +551,8 @@ pub enum Node {
     Text(String),
     Svg {
         hash: String,
-        view: f32,
+        /// The viewBox's width and height.
+        view: [f32; 2],
         body: String,
         st: Style,
         par: Option<String>,
@@ -523,6 +579,10 @@ impl Node {
     }
 }
 
+/// Whether a reference to a subtree the host lacks was logged (once: one divergence repeats).
+pub(crate) static MISSING_REF_LOGGED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 /// Every hashed subtree of the tree on screen, for the next commit's references.
 #[derive(Default)]
 pub struct Subtrees(HashMap<String, Arc<Node>>);
@@ -539,23 +599,30 @@ impl Subtrees {
         let node = match wire {
             WireNode::Text { s } => return Arc::new(Node::Text(s)),
             WireNode::Ref { h } => {
-                let node = self
-                    .0
-                    .get(&h)
-                    .cloned()
-                    .unwrap_or_else(|| Arc::new(Node::Text(String::new())));
+                let node = self.0.get(&h).cloned().unwrap_or_else(|| {
+                    // The runtime referred to a subtree the host never had or already let go:
+                    // the two caches of the tree diverged, and that part of the page is blank.
+                    if !MISSING_REF_LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                        eprintln!(
+                            "[host] the runtime referred to subtree {h}, which the host does not \
+                             have; drawn empty (further missing subtrees are not logged)"
+                        );
+                    }
+                    Arc::new(Node::Text(String::new()))
+                });
                 index(&node, next);
                 return node;
             }
             WireNode::Svg {
                 h,
                 view,
+                vh,
                 body,
                 st,
                 par,
             } => Arc::new(Node::Svg {
                 hash: h,
-                view,
+                view: [view, vh.unwrap_or(view)],
                 body,
                 st,
                 par,

@@ -1,5 +1,6 @@
 import type { ChannelId, MessageId } from "@hazel/schema"
-import type { Html, HtmlBuilder } from "foldkit/html"
+import { Option } from "effect"
+import { type ChildAttribute, childAttributes, type Html, type HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { menuHeaderBase } from "~/components/ui/menu.styles"
 import {
@@ -19,12 +20,14 @@ import { TOP_EMOJIS } from "../../chat/message/toolbar"
 import { popoverTrigger } from "../../chat/popover-host"
 import { profilePopoverContent } from "../../chat/profile-popover"
 import type * as TooltipHost from "../../chat/tooltip-host"
+import { nativeContextMenu } from "../../platform/native-island"
+import { AppRoute, hrefOf } from "../../route"
 import { button } from "../../ui/button"
-import type * as Menu from "../../ui/menu"
+import * as Menu from "../../ui/menu"
 import { contextMenuView, menuLabel } from "../../ui/menu-view"
 import type * as Popover from "../../ui/popover"
 import * as Overlays from "./overlays"
-import { factsOf, Message, type Model } from "./channel/page"
+import { canStartThreadIn, factsOf, Message, type Model } from "./channel/page"
 import { authorIdentity } from "./derive"
 import type { MessageRow, ReplyPreview } from "./rows"
 
@@ -136,6 +139,64 @@ const contextMenuContent =
 		return contextItem(h, key, "Copy Message ID", icon(IconHashtag))
 	}
 
+/** Each action's SF Symbol in the system menu a native shell opens for the row. */
+const nativeSymbols = (isPinned: boolean): Readonly<Record<string, string>> => ({
+	"add-reaction": "face.smiling",
+	reply: "arrowshape.turn.up.left",
+	edit: "pencil",
+	thread: "bubble.left.and.bubble.right",
+	copy: "doc.on.doc",
+	pin: isPinned ? "pin.slash" : "pin",
+	delete: "trash",
+	"copy-id": "number",
+})
+
+/** Every row's native menu reads no selection: none of its items are checked. */
+const UNSELECTED_MENU = Menu.init({ id: "message-context-menu" })
+
+/**
+ * A long press on the row opens its context menu as the system's (iOS), with quick reactions
+ * above it; the choice is a `change` here. The row draws as it is everywhere.
+ */
+const rowLongPress = (
+	h: H,
+	row: MessageRow,
+	currentUserId: Model["currentUserId"],
+	channel: ChannelFacts,
+): ReadonlyArray<ChildAttribute> => {
+	const { id, isPinned } = row.message
+	const facts = {
+		isOwnMessage: () => row.message.authorId === currentUserId,
+		isPinned: () => isPinned,
+		canStartThread: () => canStartThreadIn(channel.type, channel.id, row.message.channelId),
+	}
+	const items = Menu.nativeMenuItems(UNSELECTED_MENU, Overlays.contextMenuEntries(facts, id), {
+		symbols: nativeSymbols(isPinned),
+	})
+	return Option.match(items, {
+		onNone: () => [],
+		onSome: (found) =>
+			childAttributes(
+				nativeContextMenu(
+					h,
+					{ items: found, quick: { choices: TOP_EMOJIS, prefix: Overlays.NATIVE_REACTION } },
+					(value) => toOverlays(Overlays.Message.ChoseNativeAction({ messageId: id, value })),
+				),
+			),
+	})
+}
+
+/** What the long-press menu reads about the page's channel. */
+interface ChannelFacts {
+	readonly id: Model["channelId"]
+	readonly type: string | null
+}
+
+const channelFactsOf = (model: Model): ChannelFacts => ({
+	id: model.channelId,
+	type: model.channel?.type ?? null,
+})
+
 const userNamesOf = (users: Model["lookups"]["users"]) =>
 	new Map(users.map((user) => [user.id as string, `${user.firstName} ${user.lastName}`]))
 
@@ -144,6 +205,7 @@ const buildIdleContext = (
 	h: H,
 	users: Model["lookups"]["users"],
 	currentUserId: Model["currentUserId"],
+	channel: ChannelFacts,
 ): RowContext<Message> => {
 	const names = userNamesOf(users)
 	return {
@@ -161,7 +223,7 @@ const buildIdleContext = (
 		reply: (row, reply) => replyActions(h, row, reply, null, () => []),
 		toHtmlRenderMessage,
 		toPressEmbedAction,
-		contextMenu: (_row, render) => render([], h.empty),
+		contextMenu: (row, render) => render(rowLongPress(h, row, currentUserId, channel), h.empty),
 		avatar: (row: MessageRow) =>
 			popoverTrigger(h, {
 				key: Overlays.avatarPopoverKey(row.message.id),
@@ -199,6 +261,7 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 			...identity,
 			presence: model.lookups.presence.find((presence) => presence.userId === user.id) ?? null,
 			isOwnProfile: model.currentUserId === user.id,
+			editProfileHref: hrefOf(AppRoute.MySettingsProfile({ orgSlug: model.orgSlug })),
 			nowMs,
 		})
 	}
@@ -222,7 +285,7 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 		toPressEmbedAction,
 		contextMenu: (row, render) =>
 			contextMenu === null || contextMenu.messageId !== row.message.id
-				? render([], h.empty)
+				? render(rowLongPress(h, row, model.currentUserId, channelFactsOf(model)), h.empty)
 				: h.submodel({
 						slotId: "message-context-menu",
 						model: contextMenu.menu,
@@ -260,19 +323,18 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 
 // A pure view memo keyed by the (frozen) user list, like `MessageList.layoutOf`: the same Model
 // always yields the same idle context, so rendering it twice gives the same result.
-const idleContexts = new WeakMap<
-	Model["lookups"]["users"],
-	Map<Model["currentUserId"], RowContext<Message>>
->()
+const idleContexts = new WeakMap<Model["lookups"]["users"], Map<string, RowContext<Message>>>()
 
 /** The shared context for rows without an open overlay. */
 export const idleRowContext = (h: H, model: Model): RowContext<Message> => {
-	const byUser =
-		idleContexts.get(model.lookups.users) ?? new Map<Model["currentUserId"], RowContext<Message>>()
-	const cached = byUser.get(model.currentUserId)
+	const byUser = idleContexts.get(model.lookups.users) ?? new Map<string, RowContext<Message>>()
+	const channel = channelFactsOf(model)
+	// What the context reads besides the user list: whose rows these are, and in what channel.
+	const key = `${model.currentUserId ?? ""}:${channel.id}:${channel.type ?? ""}`
+	const cached = byUser.get(key)
 	if (cached !== undefined) return cached
-	const context = buildIdleContext(h, model.lookups.users, model.currentUserId)
-	byUser.set(model.currentUserId, context)
+	const context = buildIdleContext(h, model.lookups.users, model.currentUserId, channel)
+	byUser.set(key, context)
 	idleContexts.set(model.lookups.users, byUser)
 	return context
 }

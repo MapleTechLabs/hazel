@@ -36,7 +36,9 @@ const OVERLAYS: ReadonlyArray<Overlay> = [
 	{ name: "org menu", open: [{ clickText: "Hazel" }], shows: "Switch Server", toggles: true },
 	{
 		name: "sidebar channel menu",
-		open: [{ move: [200, 220] }, { wait: 250 }, { clickLabel: "Channel options" }],
+		// Over Favorites' first channel, the first row with a dots trigger: `clickLabel` presses
+		// the first trigger in the tree, which shows only while its own row is hovered.
+		open: [{ move: [200, 270] }, { wait: 250 }, { clickLabel: "Channel options" }],
 		// The item a panel drawn inside its row (clipped there) would still show.
 		shows: "Settings",
 		toggles: true,

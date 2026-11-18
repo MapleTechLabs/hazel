@@ -1,6 +1,7 @@
 import * as Animation from "@foldkit/ui/animation"
 import * as UiToast from "@foldkit/ui/toast"
 import * as Scene from "foldkit/scene"
+import * as Toaster from "../overlay/toaster"
 
 /**
  * Scene steps for the root toaster's `@foldkit/ui` Toast. `Toast.test.drainEntry` is Story-only, so
@@ -48,3 +49,9 @@ export const drainToast = (entryId: string = FIRST_TOAST, version = 0) => [
 	),
 	leaveToast(entryId),
 ]
+
+/** A success, warning or error toast plays its haptic as it shows (`overlay/toaster.ts`). */
+export const playToastFeedback = Scene.Command.resolve(
+	Toaster.PlayToastFeedback,
+	Toaster.Message.CompletedToastFeedback(),
+)

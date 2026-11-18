@@ -2,7 +2,7 @@ import { Option } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { AppRoute, organizationRoute } from "../../route"
-import type { PageReturn } from "../contract"
+import type { PageReturn, Shared } from "../contract"
 import * as CreateWorkspace from "../create-workspace"
 import { PageOutMessage } from "../out-message"
 import { Message } from "./message"
@@ -19,7 +19,7 @@ export const init = (): Return => ({
 	model: { organizations: Organizations.Loading(), createWorkspace: CreateWorkspace.init() },
 })
 
-export const update = (model: Model, message: Message): Return =>
+export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedOrganizations: ({ organizations }) => {
 			// The live query re-emits after the redirect; the page is already leaving.
@@ -29,7 +29,7 @@ export const update = (model: Model, message: Message): Return =>
 			return organizations.length === 1 && single
 				? navigate(
 						modifyFields(model, { organizations: () => Organizations.Redirected() }),
-						organizationRoute(single),
+						organizationRoute(single, { isMobile: shared.isMobile }),
 					)
 				: {
 						model: modifyFields(model, {
@@ -37,7 +37,8 @@ export const update = (model: Model, message: Message): Return =>
 						}),
 					}
 		},
-		ClickedOrganization: ({ organization }) => navigate(model, organizationRoute(organization)),
+		ClickedOrganization: ({ organization }) =>
+			navigate(model, organizationRoute(organization, { isMobile: shared.isMobile })),
 		// Not `/onboarding`: it sends an onboarded user (anyone with organizations to pick) back to `/`.
 		ClickedCreateNew: () =>
 			navigate(model, AppRoute.OnboardingSetupOrganization({ orgId: Option.none() })),

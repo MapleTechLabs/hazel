@@ -28,4 +28,9 @@ export const slack: ChatSyncProviderDefinition = {
 	emojiFromProvider: (name) => Slack.slackEmojiToUnicode(name) ?? `:${name}:`,
 	// The events source drops the app's own posts (`app_id`), so nothing reaches the org as one.
 	isOwnEcho: () => false,
+	// conversations.history and .replies are Tier 3 (about 50 calls a minute). A page also reads
+	// each of its threads (conversations.replies) and looks up its people (users.info), so it stays
+	// small enough for one delivery. An app Slack holds to its stricter limit (1 call a minute)
+	// answers `ratelimited`, and the outbox backs off and retries.
+	history: { maxMessages: 500, pageSize: 20, pageDelayMs: 1_500 },
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { LINK_PREVIEW_URL } from "../../web-foldkit/src/chat/unfurl"
 import { makeFixtureServer } from "./fixture/fixture-socket"
 import { designChannelId, orgId, snapshotFor } from "./fixture/snapshot"
 import { makeOfflineFetch } from "./offline-backend"
@@ -47,5 +48,17 @@ describe("makeOfflineFetch", () => {
 		const fetch = makeOfflineFetch({ backendUrl, user: currentUser })
 		const response = await fetch("http://offline.hazel.test.evil.example/auth/token")
 		expect(response.status).toBe(404)
+	})
+
+	it("sends the link-preview worker's requests to the network, and nothing else", async () => {
+		const sent: Array<string> = []
+		const unfurls: typeof globalThis.fetch = async (input) => {
+			sent.push(new Request(input).url)
+			return new Response("{}")
+		}
+		const fetch = makeOfflineFetch({ backendUrl, user: currentUser, unfurls })
+		expect((await fetch(`${LINK_PREVIEW_URL}/tweet?id=1`)).status).toBe(200)
+		expect((await fetch("https://link-preview.hazel.sh.evil.example/tweet?id=1")).status).toBe(404)
+		expect(sent).toEqual([`${LINK_PREVIEW_URL}/tweet?id=1`])
 	})
 })

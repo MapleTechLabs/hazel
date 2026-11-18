@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
-import type { ExternalChannelId } from "@hazel/schema"
-import { Effect } from "effect"
+import { ExternalChannelId } from "@hazel/schema"
+import { Effect, Option } from "effect"
 import {
 	createDiscordGatewayDispatchHandlers,
 	type DiscordMessageCreateEvent,
@@ -9,16 +9,27 @@ import {
 	type DiscordMessageUpdateEvent,
 	type DiscordThreadCreateEvent,
 } from "./gateway-dispatch"
+import type { DiscordThreadInfo } from "./thread-parents"
 import type { ChatSyncInbound } from "../../chat-sync-inbound"
 
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect)
 
 /** The handlers with a recording `ingest`; routing by link happens behind it (the index, the org). */
-const makeDispatchHarness = () => {
+const makeDispatchHarness = (
+	threads: Record<string, Partial<DiscordThreadInfo> & { parent: string }> = {},
+) => {
 	const routed: Array<ChatSyncInbound> = []
 	const handlers = createDiscordGatewayDispatchHandlers({
 		ingest: (inbound) => Effect.sync(() => void routed.push(inbound)),
 		isCurrentBotAuthor: (authorId) => Effect.succeed(authorId === "bot-self"),
+		threadOf: (channelId) =>
+			Effect.succeed(
+				Option.map(Option.fromNullishOr(threads[channelId]), (thread) => ({
+					parentId: ExternalChannelId.make(thread.parent),
+					name: thread.name ?? null,
+					ownerId: thread.ownerId ?? null,
+				})),
+			),
 	})
 	const of = (tag: ChatSyncInbound["event"]["_tag"]) =>
 		routed.filter((inbound) => inbound.event._tag === tag)
@@ -144,5 +155,83 @@ describe("Discord gateway dispatch handlers", () => {
 		expect(harness.of("ThreadCreate").map((inbound) => inbound.dedupeKey)).toEqual([
 			"discord:gateway:thread:create:323456789012345679",
 		])
+	})
+
+	it("routes a thread's events by its parent channel, naming the thread", async () => {
+		const threadId = "523456789012345678"
+		const harness = makeDispatchHarness({ [threadId]: { parent: channelId, name: "Ship plan" } })
+		await run(
+			harness.handlers.ingestMessageCreateEvent({
+				id: "623456789012345678",
+				channel_id: threadId,
+				content: "first in thread",
+				author: { id: "778899", username: "alice" },
+			} satisfies DiscordMessageCreateEvent),
+		)
+		await run(
+			harness.handlers.ingestMessageUpdateEvent({
+				id: "623456789012345678",
+				channel_id: threadId,
+				content: "edited",
+				edited_timestamp: "2026-11-17T14:46:57Z",
+			} satisfies DiscordMessageUpdateEvent),
+		)
+		await run(
+			harness.handlers.ingestMessageReactionAddEvent({
+				channel_id: threadId,
+				message_id: "623456789012345678",
+				user_id: "998877665544332211",
+				emoji: { name: "👍" },
+			}),
+		)
+		await run(
+			harness.handlers.ingestMessageDeleteEvent({
+				id: "623456789012345678",
+				channel_id: threadId,
+			} satisfies DiscordMessageDeleteEvent),
+		)
+		expect(harness.routed.map((inbound) => inbound.event._tag)).toEqual([
+			"MessageCreate",
+			"MessageUpdate",
+			"ReactionAdd",
+			"MessageDelete",
+		])
+		for (const inbound of harness.routed) {
+			expect(inbound.externalChannelId).toBe(channelId)
+			expect(inbound.event).toMatchObject({ inExternalThreadId: threadId })
+		}
+		// The first message names the thread, which it may be the first Hazel sees of.
+		expect(harness.of("MessageCreate")[0]?.event).toMatchObject({ externalThreadName: "Ship plan" })
+	})
+
+	it("routes a thread our bot started (a Hazel thread's mirror) by its own id", async () => {
+		const threadId = "523456789012345679"
+		const harness = makeDispatchHarness({ [threadId]: { parent: channelId, ownerId: "bot-self" } })
+		await run(
+			harness.handlers.ingestMessageCreateEvent({
+				id: "623456789012345680",
+				channel_id: threadId,
+				content: "early reply",
+				author: { id: "778899", username: "alice" },
+			} satisfies DiscordMessageCreateEvent),
+		)
+		const [create] = harness.of("MessageCreate")
+		expect(create?.externalChannelId).toBe(threadId)
+		expect(create?.event).not.toHaveProperty("inExternalThreadId")
+	})
+
+	it("routes a channel that is not a thread by itself", async () => {
+		const harness = makeDispatchHarness()
+		await run(
+			harness.handlers.ingestMessageCreateEvent({
+				id: "623456789012345679",
+				channel_id: channelId,
+				content: "top level",
+				author: { id: "778899", username: "alice" },
+			} satisfies DiscordMessageCreateEvent),
+		)
+		const [create] = harness.of("MessageCreate")
+		expect(create?.externalChannelId).toBe(channelId)
+		expect(create?.event).not.toHaveProperty("inExternalThreadId")
 	})
 })

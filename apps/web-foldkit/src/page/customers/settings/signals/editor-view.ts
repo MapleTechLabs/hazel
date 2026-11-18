@@ -20,6 +20,7 @@ import { currencyOf, type Editor, type Model, type RuleForm, ruleById } from "./
 import { card, errorIdOf, fieldError, severityPicker, templateTile } from "./parts"
 import { previewCard } from "./preview-view"
 import { scopeCard } from "./scope-view"
+import { heading } from "../../../../ui/heading"
 
 /** The rule editor (Wonder `ati`, `mia`): the rule, its condition and scope, and the live preview. */
 
@@ -114,10 +115,7 @@ const plainWordsCard = (h: H, model: Model, form: RuleForm): Html =>
 	h.section(
 		[h.Class("flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary-subtle/40 p-4 sm:p-5")],
 		[
-			h.h2(
-				[h.Class("font-semibold text-primary-subtle-fg text-xs uppercase tracking-wide")],
-				["In plain words"],
-			),
+			h.h2([h.Class("font-semibold text-primary-subtle-fg text-xs")], ["In plain words"]),
 			h.p(
 				[h.Class("text-fg-2 text-sm/6")],
 				[
@@ -211,7 +209,7 @@ const deleteCard = (h: H, editor: Editor): Html =>
 			h.div(
 				[h.Class("flex flex-col gap-0.5")],
 				[
-					h.h2([h.Class("font-medium text-fg text-sm")], ["Delete this rule"]),
+					heading(h, { variant: "subsection", level: 2 }, ["Delete this rule"]),
 					h.p(
 						[h.Class("text-muted-fg text-xs")],
 						["Its open items in Needs attention resolve on their own."],

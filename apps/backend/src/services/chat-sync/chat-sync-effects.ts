@@ -45,6 +45,10 @@ export const ChatSyncChannelTarget = Schema.Struct({
 	externalChannelId: ExternalChannelId,
 	direction: ChatSyncDirection,
 	settings: Settings,
+	/** Set on a thread's link: the parent channel's link, whose `direction` and `settings` it carries. */
+	parent: Schema.optional(
+		Schema.Struct({ channelLinkId: SyncChannelLinkId, externalChannelId: ExternalChannelId }),
+	),
 })
 export type ChatSyncChannelTarget = typeof ChatSyncChannelTarget.Type
 
@@ -56,8 +60,16 @@ export const ChatSyncLinkedAccount = Schema.Struct({
 })
 export type ChatSyncLinkedAccount = typeof ChatSyncLinkedAccount.Type
 
+/**
+ * The shape of the links a `ChannelObject` keeps. 2: a thread's link carries its parent's settings
+ * (`parent`); a channel holding an older copy asks its org for a fresh one before it posts.
+ */
+export const CHAT_SYNC_LINKS_VERSION = 2
+
 /** The channel's links and the org's linked accounts (mentions), replacing the previous ones. */
 export const SetChatSyncLinksPayload = Schema.Struct({
+	/** `CHAT_SYNC_LINKS_VERSION` when projected; absent on copies from before it. */
+	version: Schema.optional(Schema.Number),
 	links: Schema.Array(ChatSyncChannelTarget),
 	accounts: Schema.Array(ChatSyncLinkedAccount),
 })
@@ -93,6 +105,13 @@ export const ChatSyncInboundEvent = Schema.TaggedUnion({
 		attachments: Schema.Array(ChatSyncAttachment),
 		mentions: Schema.optional(Schema.Array(ChatSyncMention)),
 		inExternalThreadId: Schema.optional(ExternalThreadId),
+		/** The thread's provider name, for a thread this message is the first Hazel sees of. */
+		externalThreadName: Schema.optional(Schema.String),
+		/**
+		 * When the provider says it was sent (epoch ms); set only on imported history, which is
+		 * written at that time and notifies nobody.
+		 */
+		sentAt: Schema.optional(Schema.Number),
 	},
 	MessageUpdate: {
 		externalMessageId: ExternalMessageId,
@@ -106,8 +125,16 @@ export const ChatSyncInboundEvent = Schema.TaggedUnion({
 		externalWebhookId: Schema.NullOr(ExternalWebhookId),
 		inExternalThreadId: Schema.optional(ExternalThreadId),
 	},
-	ReactionAdd: { externalMessageId: ExternalMessageId, emoji: Schema.String },
-	ReactionRemove: { externalMessageId: ExternalMessageId, emoji: Schema.String },
+	ReactionAdd: {
+		externalMessageId: ExternalMessageId,
+		emoji: Schema.String,
+		inExternalThreadId: Schema.optional(ExternalThreadId),
+	},
+	ReactionRemove: {
+		externalMessageId: ExternalMessageId,
+		emoji: Schema.String,
+		inExternalThreadId: Schema.optional(ExternalThreadId),
+	},
 	ThreadCreate: {
 		externalThreadId: ExternalThreadId,
 		name: Schema.String,
@@ -143,6 +170,8 @@ export const ChannelIngestEvent = Schema.TaggedUnion({
 		authorId: UserId,
 		externalReplyToMessageId: Schema.NullOr(ExternalMessageId),
 		attachments: Schema.Array(ChatSyncAttachment),
+		/** Imported history: its provider send time (epoch ms). */
+		sentAt: Schema.optional(Schema.Number),
 	},
 	MessageUpdate: { externalMessageId: ExternalMessageId, content: Schema.String },
 	MessageDelete: { externalMessageId: ExternalMessageId },
@@ -184,6 +213,10 @@ export const LinkSettingsPayload = Schema.Struct({
 	settings: Schema.Record(Schema.String, Schema.Unknown),
 })
 export type LinkSettingsPayload = typeof LinkSettingsPayload.Type
+
+/** A channel holds an outdated copy of its links: project them to it again. */
+export const RepublishLinksPayload = Schema.Struct({ channelLinkId: SyncChannelLinkId })
+export type RepublishLinksPayload = typeof RepublishLinksPayload.Type
 
 /** A Hazel write to mirror on one link's provider channel. */
 export const ChatSyncOutboundEvent = Schema.TaggedUnion({
@@ -238,6 +271,7 @@ export const ChatSyncOrgEffects = {
 	chatSyncIngest: defineEffect("org.chatSyncIngest", "org", OrgChatSyncIngestPayload),
 	chatSyncLinkSettings: defineEffect("org.chatSyncLinkSettings", "org", LinkSettingsPayload),
 	chatSyncLinkThread: defineEffect("org.chatSyncLinkThread", "org", LinkThreadPayload),
+	chatSyncRepublishLinks: defineEffect("org.chatSyncRepublishLinks", "org", RepublishLinksPayload),
 }
 
 export const ChatSyncDirectoryEffects = {
@@ -256,6 +290,25 @@ export type PrepareLinkPayload = typeof PrepareLinkPayload.Type
 export const ChatSyncDeliveryEffects = {
 	outbound: defineEffect("chatSync.outbound", "chat-sync", ChatSyncOutboundPayload),
 	prepareLink: defineEffect("chatSync.prepareLink", "chat-sync", PrepareLinkPayload),
+}
+
+/**
+ * A new link imports the external channel's past messages, one page per delivery (newest page
+ * first), each page ingested at this org like live events. The next page is its own delivery.
+ */
+export const ImportHistoryPayload = Schema.Struct({
+	provider: Schema.String,
+	externalWorkspaceId: Schema.String,
+	externalChannelId: ExternalChannelId,
+	/** Messages still to import, this page included. */
+	remaining: Schema.Number,
+	/** Where this page starts (the provider's cursor); `null` on the first page. */
+	cursor: Schema.NullOr(Schema.String),
+})
+export type ImportHistoryPayload = typeof ImportHistoryPayload.Type
+
+export const ChatSyncHistoryEffects = {
+	importHistory: defineEffect("chatSync.importHistory", "chat-sync", ImportHistoryPayload),
 }
 
 /**

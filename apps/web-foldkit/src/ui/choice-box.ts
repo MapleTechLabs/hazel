@@ -13,6 +13,7 @@ import {
 	choiceBoxLabelStyles,
 	choiceBoxStyles,
 } from "~/components/ui/choice-box.styles"
+import { pressFeedback } from "../platform/feedback"
 import { announce, gridSelectionMessage } from "./aria/announcer"
 import * as Interaction from "./aria/interaction"
 import { checkbox } from "./checkbox"
@@ -300,7 +301,12 @@ export const choiceBox = <ParentMessage>(
 										...Interaction.stateAttributes(h, state),
 									]
 								: []),
-							...(isReadOnly ? [] : [h.OnClick(send(Message.ClickedItem({ key: item.key })))]),
+							...(isReadOnly
+								? []
+								: [
+										h.OnClick(send(Message.ClickedItem({ key: item.key }))),
+										pressFeedback(h, "selection"),
+									]),
 						]),
 			],
 			[

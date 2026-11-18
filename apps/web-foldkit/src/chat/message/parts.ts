@@ -1,9 +1,10 @@
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { formatDistanceToNowStrict } from "date-fns"
 import { cx } from "~/utils/cx"
-import { IconChevronRight, IconDiscord, IconPin } from "../../icons"
+import { IconChevronRight, IconDiscord, IconPin, IconSlack, IconSparkles } from "../../icons"
 import { avatar } from "../../ui/avatar"
 import { badge } from "../../ui/badge"
+import type { SyncProvider } from "../../page/chat/lookups"
 import type { MessageRow, ReplyPreview, ThreadPreview } from "../../page/chat/rows"
 
 /** Static parts of `Message.*`: author header, reply section, thread card. */
@@ -16,12 +17,56 @@ export const formatTime = (ms: number) => {
 	return `${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+/**
+ * "via <agent>": the message was written by an agent for its author over Hazel's MCP server. Shown
+ * only to the author's own organization (the mark never syncs elsewhere).
+ */
+const agentBadge = <M>(h: HtmlBuilder<M>, agentName: string, authorName: string): Html =>
+	h.span(
+		[
+			h.Class(
+				"inline-flex items-center gap-1 rounded-sm bg-secondary px-1.5 py-0.5 text-xs/4 font-medium text-muted-fg",
+			),
+			h.Attribute("title", `Written by ${agentName}, an AI agent acting for ${authorName}`),
+		],
+		[IconSparkles(h, { className: "size-3" }), `via ${agentName}`],
+	)
+
+/** Each platform's brand color: Discord blurple with its white mark, Slack aubergine with its colored mark. */
+const SYNC_PROVIDERS = {
+	discord: { label: "Discord", icon: IconDiscord, className: "bg-discord" },
+	slack: { label: "Slack", icon: IconSlack, className: "bg-slack" },
+} satisfies Record<
+	SyncProvider,
+	{ readonly label: string; readonly icon: typeof IconDiscord; readonly className: string }
+>
+
+/**
+ * In place of "APP" on a message (or a person) synced in from another platform: its mark and its name.
+ */
+export const syncBadge = <M>(h: HtmlBuilder<M>, provider: SyncProvider): Html => {
+	const { label, icon, className } = SYNC_PROVIDERS[provider]
+	return h.span(
+		[
+			h.Class(
+				cx(
+					"inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs/5 font-medium text-white",
+					className,
+				),
+			),
+			h.Attribute("title", `Synced from ${label}`),
+		],
+		[icon(h, { className: "size-3" }), label],
+	)
+}
+
 /** `Message.Header`; `statusEmoji` is the tooltip-wrapped status trigger (or nothing). */
 export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: Html): Html => {
 	const { message, author } = row
 	const isEdited = message.updatedAtMs !== null && message.updatedAtMs > message.createdAtMs
 	const time = formatTime(message.createdAtMs)
 	const isMachine = author.isBot
+	const syncedFrom = row.syncedFrom ?? author.syncProvider
 	return h.div(
 		[h.Class("flex items-baseline gap-2 max-md:flex-wrap max-md:gap-y-0")],
 		[
@@ -30,23 +75,12 @@ export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: H
 				[author.displayName],
 			),
 			statusEmoji,
-			isMachine && row.isDiscordSynced
-				? h.span(
-						[
-							h.Class(
-								"inline-flex items-center gap-1 rounded-sm bg-primary px-1.5 py-0.5 text-xs/5 font-medium text-primary-fg",
-							),
-						],
-						[
-							IconDiscord(h, { className: "size-3", attributes: { fill: "currentColor" } }),
-							"Discord",
-						],
-					)
+			syncedFrom !== null
+				? syncBadge(h, syncedFrom)
 				: isMachine
 					? badge(h, { intent: "primary" }, ["APP"])
-					: row.isDiscordSynced
-						? badge(h, { intent: "secondary" }, ["Synced from Discord"])
-						: h.empty,
+					: h.empty,
+			row.agentName === null ? h.empty : agentBadge(h, row.agentName, author.displayName),
 			h.span([h.Class("text-muted-fg text-xs")], isEdited ? [time, " (edited)"] : [time]),
 			message.isPinned
 				? h.span(
@@ -83,7 +117,7 @@ export const replySectionView = <M>(h: HtmlBuilder<M>, reply: ReplyPreview, acti
 		[
 			h.svg(
 				[
-					h.Class("absolute -bottom-1 left-5 rotate-90 text-muted-fg"),
+					h.Class("absolute -bottom-[3px] left-5 text-muted-fg"),
 					h.Attribute("xmlns", "http://www.w3.org/2000/svg"),
 					h.Attribute("width", "24"),
 					h.Attribute("height", "20"),
@@ -92,7 +126,7 @@ export const replySectionView = <M>(h: HtmlBuilder<M>, reply: ReplyPreview, acti
 				],
 				[
 					h.path([
-						h.Attribute("d", "M2 2 L2 12 Q2 16 6 16 L12 16"),
+						h.Attribute("d", "M6 11 L6 5 Q6 1 10 1 L20 1"),
 						h.Attribute("stroke", "currentColor"),
 						h.Attribute("stroke-width", "2"),
 						h.Attribute("stroke-linecap", "round"),

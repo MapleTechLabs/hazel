@@ -1,6 +1,6 @@
 import type { ChannelSectionId } from "@hazel/schema"
 import { Array, Option, Schema } from "effect"
-import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import {
 	IconCirclePlus,
 	IconClose,
@@ -17,7 +17,7 @@ import {
 } from "../../icons"
 import { button } from "../../ui/button"
 import * as Menu from "../../ui/menu"
-import { menuLabel, view as menuView } from "../../ui/menu-view"
+import { longPressMenu, menuLabel, view as menuView } from "../../ui/menu-view"
 import { SectionAction } from "./model"
 import type { ChannelEntry, Section, SidebarMember } from "./rows"
 
@@ -49,17 +49,47 @@ export const decodeDmMenuKey = Schema.decodeUnknownOption(DmMenuKey)
 
 const rowItem = (key: RowMenuKey, options?: Parameters<typeof Menu.item>[1]) => Menu.item(key, options)
 
+/** The mute and favorite toggles' words, which rows and the system's menu (`textValue`) share. */
+type MemberToggles = Pick<SidebarMember, "isMuted" | "isFavorite">
+const NOT_TOGGLED: MemberToggles = { isMuted: false, isFavorite: false }
+const muteTitle = (member: MemberToggles) => (member.isMuted ? "Unmute" : "Mute")
+const favoriteTitle = (member: MemberToggles) => (member.isFavorite ? "Unfavorite" : "Favorite")
+
+/** A row's items as SF Symbols, for the system's own menu; the toggles show what they turn to. */
+const rowSymbols = (member: MemberToggles): Readonly<Record<string, string>> => ({
+	...ROW_SYMBOLS,
+	mute: member.isMuted ? "bell" : "bell.slash",
+	favorite: member.isFavorite ? "star.slash" : "star",
+})
+
+const ROW_SYMBOLS = {
+	move: "folder",
+	settings: "gearshape",
+	delete: "trash",
+	leave: "rectangle.portrait.and.arrow.right",
+	hide: "eye.slash",
+} as const satisfies Readonly<Record<string, string>>
+
+const SECTION_SYMBOLS = {
+	"create-channel": "plus.circle",
+	"join-channel": "number",
+	"create-dm": "square.and.pencil",
+	"delete-section": "trash",
+} as const satisfies Readonly<Record<string, string>>
+
 // ENTRIES
 
 export const rowMenuEntries = (
 	sections: ReadonlyArray<Section>,
 	canDelete: boolean,
+	member: MemberToggles = NOT_TOGGLED,
 ): ReadonlyArray<Menu.Entry> => [
-	rowItem("mute"),
-	rowItem("favorite"),
+	rowItem("mute", { textValue: muteTitle(member) }),
+	rowItem("favorite", { textValue: favoriteTitle(member) }),
 	...(sections.length > 0
 		? [
 				Menu.item("move", {
+					textValue: "Move to section",
 					submenu: [
 						Menu.leaf(DEFAULT_SECTION_KEY, { textValue: "Channels (Default)" }),
 						...sections.map((section) =>
@@ -70,17 +100,17 @@ export const rowMenuEntries = (
 			]
 		: []),
 	Menu.separator,
-	rowItem("settings"),
-	...(canDelete ? [rowItem("delete", { intent: "Danger" })] : []),
+	rowItem("settings", { textValue: "Settings" }),
+	...(canDelete ? [rowItem("delete", { intent: "Danger", textValue: "Delete" })] : []),
 	Menu.separator,
-	rowItem("leave", { intent: "Danger" }),
+	rowItem("leave", { intent: "Danger", textValue: "Leave" }),
 ]
 
-export const dmMenuEntries: ReadonlyArray<Menu.Entry> = [
-	Menu.item("mute" satisfies DmMenuKey),
-	Menu.item("favorite" satisfies DmMenuKey),
+export const dmMenuEntries = (member: MemberToggles = NOT_TOGGLED): ReadonlyArray<Menu.Entry> => [
+	Menu.item("mute" satisfies DmMenuKey, { textValue: muteTitle(member) }),
+	Menu.item("favorite" satisfies DmMenuKey, { textValue: favoriteTitle(member) }),
 	Menu.separator,
-	Menu.item("hide" satisfies DmMenuKey, { intent: "Danger" }),
+	Menu.item("hide" satisfies DmMenuKey, { intent: "Danger", textValue: "Hide conversation" }),
 ]
 
 /** The move target a submenu key names: `null` for the default section. */
@@ -100,9 +130,17 @@ export const sectionMenuEntries = (
 	actions: ReadonlyArray<SectionAction>,
 	isEditable: boolean,
 ): ReadonlyArray<Menu.Entry> => [
-	...actions.map((action) => Menu.item(action satisfies SectionMenuKey)),
+	...actions.map((action) =>
+		Menu.item(action satisfies SectionMenuKey, { textValue: sectionActionLabel(action) }),
+	),
 	...(isEditable
-		? [Menu.separator, Menu.item("delete-section" satisfies SectionMenuKey, { intent: "Danger" })]
+		? [
+				Menu.separator,
+				Menu.item("delete-section" satisfies SectionMenuKey, {
+					intent: "Danger",
+					textValue: "Delete section",
+				}),
+			]
 		: []),
 ]
 
@@ -126,12 +164,12 @@ const memberItemContent = <M>(
 			member.isMuted
 				? IconVolume(h, { className: "size-4" })
 				: IconVolumeMute(h, { className: "size-4" }),
-			text(member.isMuted ? "Unmute" : "Mute"),
+			text(muteTitle(member)),
 		]
 	if (key === "favorite")
 		return [
 			IconStar(h, { className: member.isFavorite ? "size-4 text-favorite" : "size-4 text-muted-fg" }),
-			text(member.isFavorite ? "Unfavorite" : "Favorite"),
+			text(favoriteTitle(member)),
 		]
 	return null
 }
@@ -161,29 +199,38 @@ const rowMenuContent =
 		if (key === "move") return [IconFolderPlus(h, { className: "size-4" }), text("Move to section")]
 		if (key === "settings") return [IconGear(h), text("Settings")]
 		if (key === "delete") return [IconTrash(h), text("Delete")]
-		if (key === "leave") return [IconLeave(h), text("Leave", "text-destructive")]
+		if (key === "leave") return [IconLeave(h), text("Leave", "text-danger-subtle-fg")]
 		if (key === DEFAULT_SECTION_KEY) return [text("Channels (Default)")]
 		const section = sections.find((candidate) => sectionKeyOf(candidate.id) === key)
 		return section ? [text(section.name)] : []
 	}
 
+type RowMenuOptions<M> = Readonly<{
+	menu: Menu.Model
+	entry: ChannelEntry
+	sections: ReadonlyArray<Section>
+	canDelete: boolean
+	toMessage: (message: Menu.Message) => M
+}>
+
+/** A channel row's menu, which its dots trigger and a long press on the row both open. */
+const rowMenu = <M>(options: RowMenuOptions<M>) => ({
+	entries: rowMenuEntries(options.sections, options.canDelete, options.entry.member),
+	native: { symbols: rowSymbols(options.entry.member) },
+})
+
+/** A long press on a channel row opens its menu as the system's (iOS). */
+export const rowLongPress = <M>(h: HtmlBuilder<M>, options: RowMenuOptions<M>): ReadonlyArray<Attribute<M>> =>
+	longPressMenu(h, { menu: options.menu, ...rowMenu(options), toParentMessage: options.toMessage })
+
 /** `ChannelItem`'s `<Menu>`: the dots trigger and `MenuContent placement="right top" className="w-42"`. */
-export const rowMenuView = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{
-		menu: Menu.Model
-		entry: ChannelEntry
-		sections: ReadonlyArray<Section>
-		canDelete: boolean
-		toMessage: (message: Menu.Message) => M
-	}>,
-): Html =>
+export const rowMenuView = <M>(h: HtmlBuilder<M>, options: RowMenuOptions<M>): Html =>
 	h.submodel({
 		slotId: options.menu.id,
 		model: options.menu,
 		view: menuView,
 		viewInputs: {
-			entries: rowMenuEntries(options.sections, options.canDelete),
+			...rowMenu(options),
 			toTrigger: rowMenuTrigger(
 				h,
 				options.entry.channel.type === "single" || options.entry.channel.type === "direct"
@@ -198,22 +245,31 @@ export const rowMenuView = <M>(
 		toParentMessage: options.toMessage,
 	})
 
+type DmMenuOptions<M> = Readonly<{
+	menu: Menu.Model
+	channelId: string
+	member: SidebarMember
+	toMessage: (message: Menu.Message) => M
+}>
+
+/** A DM row's menu, which its dots trigger and a long press on the row both open. */
+const dmMenu = <M>(options: DmMenuOptions<M>) => ({
+	entries: dmMenuEntries(options.member),
+	native: { symbols: rowSymbols(options.member) },
+})
+
+/** A long press on a DM row opens its menu as the system's (iOS). */
+export const dmLongPress = <M>(h: HtmlBuilder<M>, options: DmMenuOptions<M>): ReadonlyArray<Attribute<M>> =>
+	longPressMenu(h, { menu: options.menu, ...dmMenu(options), toParentMessage: options.toMessage })
+
 /** `DmChannelItem`'s `<Menu>`: Mute, Favorite and Hide conversation, on the same dots trigger. */
-export const dmMenuView = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{
-		menu: Menu.Model
-		channelId: string
-		member: SidebarMember
-		toMessage: (message: Menu.Message) => M
-	}>,
-): Html =>
+export const dmMenuView = <M>(h: HtmlBuilder<M>, options: DmMenuOptions<M>): Html =>
 	h.submodel({
 		slotId: options.menu.id,
 		model: options.menu,
 		view: menuView,
 		viewInputs: {
-			entries: dmMenuEntries,
+			...dmMenu(options),
 			toTrigger: rowMenuTrigger(h, "Conversation options"),
 			content: (key: string): ReadonlyArray<Html | string> => {
 				const text = (value: string, className?: string) =>
@@ -223,7 +279,7 @@ export const dmMenuView = <M>(
 				if (key === "hide")
 					return [
 						IconClose(h, { className: "size-4" }),
-						text("Hide conversation", "text-destructive"),
+						text("Hide conversation", "text-danger-subtle-fg"),
 					]
 				return []
 			},
@@ -266,6 +322,7 @@ export const sectionMenuView = <M>(
 		view: menuView,
 		viewInputs: {
 			entries: options.entries,
+			native: { symbols: SECTION_SYMBOLS },
 			toTrigger: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) =>
 				button(
 					h,
