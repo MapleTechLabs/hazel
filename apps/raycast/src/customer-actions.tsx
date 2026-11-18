@@ -37,7 +37,10 @@ export function CustomerActions(props: {
 	readonly detail: AccountDetail | undefined
 	/** The details view, pushed by the primary action (the list's); absent on the details view. */
 	readonly details?: ReactNode
+	/** The detail view's: reloads the customer. */
 	readonly onRefresh?: () => void
+	/** The list's: syncs every organization now. */
+	readonly syncAction?: ReactNode
 }) {
 	const { organization, account, links, detail } = props
 	const channels = links.flatMap((link) => {
@@ -107,6 +110,7 @@ export function CustomerActions(props: {
 						shortcut={Keyboard.Shortcut.Common.CopyDeeplink}
 					/>
 				)}
+				{props.syncAction}
 				{props.onRefresh !== undefined && (
 					<Action
 						title="Refresh"

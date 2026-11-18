@@ -108,10 +108,9 @@ let pending: Promise<string> | undefined
 
 /**
  * A live access token: the stored one, refreshed when expired (or when `forceRefresh`, after the
- * API refused it). Without tokens, `interactive` signs in through the browser; otherwise it fails
- * with `SignInRequiredError` (a background run cannot show the sign-in).
+ * API refused it); without tokens, or when the refresh is refused, signs in through the browser.
  */
-export const accessToken = (options: { readonly interactive: boolean; readonly forceRefresh?: boolean }) => {
+export const accessToken = (options: { readonly forceRefresh?: boolean } = {}) => {
 	pending ??= (async () => {
 		const api = apiUrl()
 		const tokens = await client.getTokens()
@@ -120,10 +119,9 @@ export const accessToken = (options: { readonly interactive: boolean; readonly f
 			try {
 				return await refresh(api, tokens.refreshToken)
 			} catch (error) {
-				if (!(error instanceof SignInRequiredError) || !options.interactive) throw error
+				if (!(error instanceof SignInRequiredError)) throw error
 			}
 		}
-		if (!options.interactive) throw new SignInRequiredError()
 		return signIn(api)
 	})().finally(() => {
 		pending = undefined

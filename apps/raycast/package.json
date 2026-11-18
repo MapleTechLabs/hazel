@@ -33,14 +33,6 @@
 			"subtitle": "Hazel",
 			"description": "Your organization's customers, kept in sync with Hazel's Customers area.",
 			"mode": "view"
-		},
-		{
-			"name": "sync-customers",
-			"title": "Sync Customers",
-			"subtitle": "Hazel",
-			"description": "Keeps the customer list fresh in the background.",
-			"mode": "no-view",
-			"interval": "10m"
 		}
 	],
 	"preferences": [

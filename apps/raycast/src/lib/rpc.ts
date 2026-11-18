@@ -2,7 +2,7 @@
  * Hazel's RPCs over HTTP: `POST /rpc` with Effect RPC's NDJSON framing, one request per call. The
  * extension's token reaches the Customers read RPCs and `customers.organizations` only.
  */
-import { accessToken, SignInRequiredError } from "./auth"
+import { accessToken } from "./auth"
 import { apiUrl } from "./config"
 import { decodeResponse, RpcError } from "./protocol"
 
@@ -20,14 +20,11 @@ const send = async <A>(tag: string, payload: unknown, token: string) => {
 }
 
 /** Calls `tag`, refreshing the token once if the API refuses it. */
-export const call = async <A>(tag: string, payload: unknown, options = { interactive: true }): Promise<A> => {
+export const call = async <A>(tag: string, payload: unknown): Promise<A> => {
 	try {
-		return await send<A>(tag, payload, await accessToken(options))
+		return await send<A>(tag, payload, await accessToken())
 	} catch (error) {
 		if (!(error instanceof RpcError) || !TOKEN_ERRORS.has(error.tag)) throw error
-		const token = await accessToken({ ...options, forceRefresh: true }).catch((cause: unknown) => {
-			throw cause instanceof SignInRequiredError ? cause : error
-		})
-		return send<A>(tag, payload, token)
+		return send<A>(tag, payload, await accessToken({ forceRefresh: true }))
 	}
 }

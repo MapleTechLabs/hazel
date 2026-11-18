@@ -1,91 +1,120 @@
 import { showToast, Toast } from "@raycast/api"
-import { useEffect, useState } from "react"
-import { accessToken, SignInRequiredError } from "./auth"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { accessToken } from "./auth"
 import { apiUrl } from "./config"
+import type { Organization } from "./models"
+import { CloseCode } from "./protocol"
 import {
-	CloseCode,
 	type CustomersState,
 	EMPTY_STATE,
+	lastSyncedAt,
 	loadState,
-	openCustomersSync,
-	saveState,
-	type SyncSession,
+	SyncClosedError,
+	syncOrganization,
 } from "./sync"
 
-export type SyncStatus = "connecting" | "live" | "offline" | "unavailable"
-
-/** How long to wait before reconnecting after the network or the API dropped the socket. */
-const RETRY_MS = 5_000
+/** An org synced this recently is not synced again on open (`syncNow` still does). */
+const DEBOUNCE_MS = 5 * 60 * 1000
 
 /**
- * The org's customers: the cached copy at once, then live from the sync socket while the command is
- * open. A 4001 refreshes the token and reconnects (once, if the fresh token is refused too); a
- * dropped socket reconnects after `RETRY_MS`.
+ * The selected org's customers, from the cache at once. On open (and when the organizations
+ * load), every org not synced within `DEBOUNCE_MS` catches up in the background, the selected one
+ * first; `syncNow` catches them all up regardless. A refused token is refreshed once per org.
  */
-export const useCustomers = (organizationId: string | undefined) => {
+export const useCustomers = (
+	organizations: ReadonlyArray<Organization> | undefined,
+	selectedId: string | undefined,
+) => {
 	const api = apiUrl()
 	const [state, setState] = useState<CustomersState>(EMPTY_STATE)
-	const [status, setStatus] = useState<SyncStatus>("connecting")
+	const [isSyncing, setIsSyncing] = useState(false)
+	/** Orgs without a Customers area for this user (the stream refused them). */
+	const [unavailable, setUnavailable] = useState<ReadonlySet<string>>(new Set())
+	const [syncedAt, setSyncedAt] = useState<number | undefined>(undefined)
+	const selected = useRef(selectedId)
+	selected.current = selectedId
+	const running = useRef<AbortController | undefined>(undefined)
 
 	useEffect(() => {
-		if (organizationId === undefined) return
-		let session: SyncSession | undefined
-		let retry: ReturnType<typeof setTimeout> | undefined
-		let stopped = false
-		let latest = loadState(api, organizationId)
-		setState(latest)
-		setStatus("connecting")
+		if (selectedId === undefined) return
+		setState(loadState(api, selectedId))
+		setSyncedAt(lastSyncedAt(api, selectedId))
+	}, [api, selectedId])
 
-		const connect = async (forceRefresh: boolean) => {
-			try {
-				const token = await accessToken({ interactive: true, forceRefresh })
-				if (stopped) return
-				let ready = false
-				session = openCustomersSync({
-					api,
-					organizationId,
-					token,
-					state: latest,
-					onCommit: (next) => {
-						latest = next
-						saveState(api, organizationId, next)
-						setState(next)
-					},
-					onReady: () => {
-						ready = true
-						setStatus("live")
-					},
-					onClose: (code) => {
-						if (stopped) return
-						// The token expired (or was refused): refresh once per attempt that never got going.
-						if (code === CloseCode.Reauth && (ready || !forceRefresh)) return void connect(true)
-						if (code === CloseCode.Forbidden || code === CloseCode.NotFound) {
-							setStatus("unavailable")
-							return
-						}
-						setStatus("offline")
-						retry = setTimeout(() => void connect(false), RETRY_MS)
-					},
-				})
-			} catch (error) {
-				if (stopped) return
-				setStatus("offline")
+	const sync = useCallback(
+		async (force: boolean) => {
+			if (organizations === undefined || running.current !== undefined) return
+			const now = Date.now()
+			const due = organizations
+				.filter((org) => force || now - (lastSyncedAt(api, org.id) ?? 0) >= DEBOUNCE_MS)
+				.sort((a, b) => Number(b.id === selected.current) - Number(a.id === selected.current))
+			if (due.length === 0) return
+			const controller = new AbortController()
+			running.current = controller
+			setIsSyncing(true)
+			const failures: Array<string> = []
+			for (const organization of due) {
+				const once = async (forceRefresh: boolean): Promise<CustomersState | null> => {
+					try {
+						return await syncOrganization({
+							api,
+							organizationId: organization.id,
+							token: await accessToken({ forceRefresh }),
+							signal: controller.signal,
+							onCommit: (next) => {
+								if (organization.id === selected.current) setState(next)
+							},
+						})
+					} catch (error) {
+						if (
+							error instanceof SyncClosedError &&
+							error.code === CloseCode.Reauth &&
+							!forceRefresh
+						)
+							return once(true)
+						throw error
+					}
+				}
+				try {
+					const result = await once(false)
+					setUnavailable((current) => {
+						const next = new Set(current)
+						if (result === null) next.add(organization.id)
+						else next.delete(organization.id)
+						return next
+					})
+					if (organization.id === selected.current) setSyncedAt(lastSyncedAt(api, organization.id))
+				} catch (error) {
+					if (controller.signal.aborted) return
+					failures.push(
+						`${organization.name}: ${error instanceof Error ? error.message : String(error)}`,
+					)
+				}
+			}
+			running.current = undefined
+			setIsSyncing(false)
+			if (failures.length > 0) {
 				await showToast({
 					style: Toast.Style.Failure,
-					title:
-						error instanceof SignInRequiredError ? "Sign in to Hazel" : "Could not reach Hazel",
-					message: error instanceof Error ? error.message : String(error),
+					title: "Could not sync customers",
+					message: failures.join("\n"),
 				})
 			}
-		}
-		void connect(false)
+		},
+		[api, organizations],
+	)
 
-		return () => {
-			stopped = true
-			clearTimeout(retry)
-			session?.close()
-		}
-	}, [api, organizationId])
+	const organizationIds = organizations?.map((org) => org.id).join(",")
+	useEffect(() => {
+		void sync(false)
+	}, [organizationIds])
+	useEffect(() => () => running.current?.abort(), [])
 
-	return { state, status }
+	return {
+		state,
+		isSyncing,
+		isUnavailable: selectedId !== undefined && unavailable.has(selectedId),
+		syncedAt,
+		syncNow: () => sync(true),
+	}
 }

@@ -4,12 +4,12 @@ Search your organization's customers from Raycast: health, MRR, open risks and b
 then jump to the customer's channel, their page in Hazel, or their record in Clerk, Stripe, Autumn or
 Maple.
 
-- **Search Customers**: the customer list, synced live from Hazel (`/sync/customers/:org`) and
-  cached, so it opens instantly. Pick the organization in the dropdown. `↵` shows a customer's
-  details (`customers.account.detail`); `⌘O` opens their channel, `⌘⇧O` their Hazel page,
-  `⌘⌥C` / `⌘⌥S` / `⌘⌥A` / `⌘⌥M` their Clerk / Stripe / Autumn / Maple record.
-- **Sync Customers**: refreshes every organization's list in the background every 10 minutes
-  (enable it once in Raycast).
+**Search Customers** opens on the cached list at once. Each organization whose list is more than 5
+minutes old then catches up in the background (`/sync/customers/:org`, resuming from the cached
+position), the selected one first; **Sync Now** (`⌘R`) syncs them all regardless. Pick the
+organization in the dropdown. `↵` shows a customer's details (`customers.account.detail`); `⌘O`
+opens their channel, `⌘⇧O` their Hazel page, `⌘⌥C` / `⌘⌥S` / `⌘⌥A` / `⌘⌥M` their Clerk / Stripe /
+Autumn / Maple record.
 
 ## Sign-in
 
