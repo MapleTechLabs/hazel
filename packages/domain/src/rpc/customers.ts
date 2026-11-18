@@ -600,13 +600,14 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	/**
 	 * Turn every key on (`true` in each account's Clerk organizations' `public_metadata`) or off (the
 	 * key removed) for every account. An account with no live Clerk organization, or no active Clerk
-	 * connection, is `CustomersInvalidRequestError` before anything is written.
+	 * connection, is `CustomersInvalidRequestError` before anything is written. No list cap: the
+	 * pickers offer every customer and every flag, and Clerk bounds an organization's metadata (8 KB).
 	 */
 	write(
 		"customers.featureFlags.set",
 		{
-			accountIds: Schema.Array(CustomerAccountId).check(Schema.isMinLength(1), Schema.isMaxLength(500)),
-			keys: Schema.Array(FeatureFlagKey).check(Schema.isMinLength(1), Schema.isMaxLength(500)),
+			accountIds: Schema.Array(CustomerAccountId).check(Schema.isMinLength(1)),
+			keys: Schema.Array(FeatureFlagKey).check(Schema.isMinLength(1)),
 			enabled: Schema.Boolean,
 		},
 		Tx,

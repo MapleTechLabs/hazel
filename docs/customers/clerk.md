@@ -169,7 +169,8 @@ failure is logged by path and issue kind only, never with the payload.
 ## Feature flags
 
 A customer's feature flags are the **boolean** keys of its Clerk organization's `public_metadata`
-(`{ "beta": true }`). Other metadata (strings, arrays, objects) is not read and never changed.
+(`{ "beta": true }`). Other metadata (strings, arrays, objects) is not synced, and a write leaves it
+as it is except as **Writes** below says.
 
 - **Sync.** Every organization record a pull or an `organization.*` webhook brings carries its
   metadata; ingest replaces the account's `featureFlags` with its boolean keys. The flags Hazel lists
