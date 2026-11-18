@@ -184,6 +184,25 @@ describe("Gmail", () => {
 		)
 	})
 
+	test("a lookback outside the presets shows as saved, managed or read-only", () => {
+		const sevenDays = { _tag: "gmail" as const, lookbackDays: 7 }
+		Scene.scene(
+			pageScene(update, view, member),
+			Scene.given(init(gmail, member).model),
+			Scene.Subscription.emit(
+				Message.UpdatedConnections({
+					connections: [
+						{ ...mine, config: sevenDays },
+						{ ...theirs, config: sevenDays },
+					],
+				}),
+			),
+			Scene.expect(Scene.role("radio", { name: "7d" })).toHaveAttr("aria-checked", "true"),
+			Scene.expect(Scene.role("radio", { name: "90d" })).toHaveAttr("aria-checked", "false"),
+			Scene.expect(Scene.text("7 days")).toExist(),
+		)
+	})
+
 	test("with no mailbox, the page offers to connect one", () => {
 		Scene.scene(
 			pageScene(update, view, member),

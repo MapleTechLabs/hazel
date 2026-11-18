@@ -229,6 +229,7 @@ const initialModel = (route: Route): Model => ({
 	rawModal: Modal.init(RAW_MODAL_ID),
 	emailId: null,
 	email: AsyncData.Idle(),
+	emailRequest: 0,
 	emailModal: Modal.init(EMAIL_MODAL_ID),
 	deletingNoteId: null,
 	deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
@@ -819,13 +820,15 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		PressedEmail: ({ emailId }) => {
 			const organizationId = shared.organization?.id
 			if (organizationId === undefined) return { model }
+			const request = model.emailRequest + 1
 			return {
 				model: modifyFields(model, {
 					emailId: () => emailId,
 					email: () => AsyncData.Loading(),
+					emailRequest: () => request,
 					emailModal: (modal) => Modal.open(modal).model,
 				}),
-				commands: [FetchCustomerEmail({ organizationId, emailId })],
+				commands: [FetchCustomerEmail({ organizationId, emailId, request })],
 			}
 		},
 		GotEmailModalMessage: ({ message: modalMessage }) => {
@@ -837,12 +840,12 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				),
 			}
 		},
-		SucceededFetchEmail: ({ emailId, email, url }) =>
-			emailId === model.emailId
+		SucceededFetchEmail: ({ emailId, request, email, url }) =>
+			emailId === model.emailId && request === model.emailRequest
 				? { model: modifyFields(model, { email: () => AsyncData.Success({ data: { email, url } }) }) }
 				: { model },
-		FailedFetchEmail: ({ emailId, reason }) =>
-			emailId === model.emailId
+		FailedFetchEmail: ({ emailId, request, reason }) =>
+			emailId === model.emailId && request === model.emailRequest
 				? { model: modifyFields(model, { email: () => AsyncData.Failure({ error: reason }) }) }
 				: { model },
 

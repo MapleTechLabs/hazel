@@ -478,7 +478,33 @@ describe("data sources: Gmail", () => {
 		expect(gmailLookbackOf(stillOld, theirs)).toBe(30)
 		const synced = { ...theirs, config: { _tag: "gmail" as const, lookbackDays: 30 } }
 		const done = pageUpdate(stillOld, Message.UpdatedConnections({ connections: [clerk, mine, synced] }))
-		expect(done.model.gmailLookback).toBeNull()
+		expect(done.model.gmailLookback).toEqual({})
+	})
+
+	test("each mailbox keeps its saved lookback until its own row has it; a refused one can be retried", () => {
+		const savedMine = [
+			Message.ClickedGmailLookback({ connectionId: mine.id, days: 30 }),
+			Message.SucceededSaveSettings(),
+			Message.ClickedGmailLookback({ connectionId: theirs.id, days: 180 }),
+		].reduce((current, next) => pageUpdate(current, next).model, gmailPage())
+		expect([gmailLookbackOf(savedMine, mine), gmailLookbackOf(savedMine, theirs)]).toEqual([30, 180])
+
+		const refused = pageUpdate(
+			savedMine,
+			Message.FailedSaveSettings({ connectionId: theirs.id, reason: "Refused" }),
+		).model
+		expect([gmailLookbackOf(refused, mine), gmailLookbackOf(refused, theirs)]).toEqual([30, 90])
+		expect(
+			pageUpdate(refused, Message.ClickedGmailLookback({ connectionId: theirs.id, days: 180 }))
+				.commands,
+		).toHaveLength(1)
+
+		const mineSynced = { ...mine, config: { _tag: "gmail" as const, lookbackDays: 30 } }
+		const synced = pageUpdate(
+			refused,
+			Message.UpdatedConnections({ connections: [clerk, mineSynced, theirs] }),
+		).model
+		expect(synced.gmailLookback).toEqual({})
 	})
 
 	test("Disconnect asks about the mailbox it was pressed on", () => {

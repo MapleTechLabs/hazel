@@ -75,13 +75,14 @@ access under their Google account's security settings.
 Each message of the mailbox (`users.messages.list` with `q = after:<epoch> -in:spam -in:trash
 -in:chats`, then `users.messages.get` with `format=full`):
 
-- **Participants**: From, To and Cc, parsed into addresses (lowercased) and names.
+- **Participants**: From, To and Cc, parsed into addresses (lowercased) and names (RFC 2047 encoded
+  words decoded, as in the subject).
 - **Direction**: `outbound` when one of the organization's own addresses sent it (the mailbox, any
   other connected mailbox, or Gmail's `SENT` label), else `inbound`.
 - **Subject** (≤ 1,000 characters) and Gmail's **snippet**.
 - **Body**: the first `text/plain` part of the MIME tree, else the first `text/html` part stripped
-  of its markup, decoded in the part's charset, capped at **100,000 characters**. Attachments are
-  never fetched.
+  of its markup, decoded in the part's charset, capped at **100,000 characters**. A body too large
+  for Gmail to inline is read with `users.messages.attachments.get`; attachments are never fetched.
 - **When**: Gmail's `internalDate`.
 - Drafts are skipped. Spam, trash and Google Chat are never listed.
 

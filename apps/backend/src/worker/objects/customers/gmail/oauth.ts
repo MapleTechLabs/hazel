@@ -70,8 +70,9 @@ const failure = (code: CustomerProviderError["code"], message: string, httpStatu
 const fatal = (message: string, httpStatus: number) =>
 	new CustomerProviderError({ code: "provider", message, httpStatus, retryAfterMs: null, retryable: false })
 
-const decodeToken = Schema.decodeUnknownEffect(TokenResponse)
-const decodeTokenError = Schema.decodeUnknownOption(TokenError)
+// A complete body that is not JSON fails to decode like one of the wrong shape: not retried.
+const decodeToken = Schema.decodeUnknownEffect(Schema.fromJsonString(TokenResponse))
+const decodeTokenError = Schema.decodeUnknownOption(Schema.fromJsonString(TokenError))
 
 /** One `POST /token`, form-encoded; the client secret travels in the body only. */
 const requestToken = Effect.fn("Gmail.token")(function* (
@@ -88,24 +89,42 @@ const requestToken = Effect.fn("Gmail.token")(function* (
 		}),
 		HttpClientRequest.acceptJson,
 	)
-	const response = yield* http.execute(request).pipe(
-		Effect.mapError((error) => failure("network", `Could not reach Google (${error.reason._tag})`, null)),
+	// The timeout covers the answer's body as well as its headers.
+	const { status, text } = yield* Effect.gen(function* () {
+		const response = yield* http
+			.execute(request)
+			.pipe(
+				Effect.mapError((error) =>
+					failure("network", `Could not reach Google (${error.reason._tag})`, null),
+				),
+			)
+		const ok = response.status >= 200 && response.status < 300
+		// A body cut off in transit: a granted token's is retried; a refusal's explains nothing.
+		const text = yield* response.text.pipe(
+			Effect.catchTag("HttpClientError", () =>
+				ok
+					? Effect.fail(
+							failure("network", "Google's answer to the token request was cut off", null),
+						)
+					: Effect.succeed(""),
+			),
+		)
+		return { status: response.status, text }
+	}).pipe(
 		Effect.timeoutOrElse({
 			duration: TIMEOUT_MS,
 			orElse: () =>
 				Effect.fail(failure("network", "Google did not answer the token request in time", null)),
 		}),
 	)
-	const body = yield* response.json.pipe(Effect.catchTag("HttpClientError", () => Effect.succeed(null)))
-	const status = response.status
 	if (status >= 200 && status < 300) {
-		return yield* decodeToken(body).pipe(
+		return yield* decodeToken(text).pipe(
 			Effect.catchTag("SchemaError", () =>
 				Effect.fail(fatal("Google answered the token request with a body Hazel cannot read", status)),
 			),
 		)
 	}
-	const refusal = Option.getOrNull(decodeTokenError(body))
+	const refusal = Option.getOrNull(decodeTokenError(text))
 	if (refusal?.error === "invalid_grant") {
 		return yield* failure(
 			"auth",

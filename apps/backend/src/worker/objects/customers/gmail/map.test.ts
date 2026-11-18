@@ -4,8 +4,17 @@
  * the direction, the dedupe key, and what is skipped.
  */
 import { describe, expect, it } from "vitest"
-import { MAILBOX, message, multipart, part } from "./fixtures"
-import { bodyTextOf, emailOp, htmlToText, MAX_BODY_CHARS, parseAddressList } from "./map"
+import { b64, MAILBOX, message, multipart, part } from "./fixtures"
+import {
+	bodyAttachmentIdOf,
+	bodyTextOf,
+	decodeEncodedWords,
+	emailOp,
+	htmlToText,
+	MAX_BODY_CHARS,
+	parseAddressList,
+} from "./map"
+import type { MessagePart } from "./wire"
 
 describe("Gmail address lists", () => {
 	it("reads names, quoted names with commas, bare addresses and groups", () => {
@@ -27,6 +36,49 @@ describe("Gmail address lists", () => {
 			{ email: "lin@acme.com", name: null },
 		])
 		expect(parseAddressList(undefined)).toEqual([])
+	})
+
+	it("reads comments after an address, and quoted names holding parens and brackets", () => {
+		expect(
+			parseAddressList(
+				`Alice <alice@acme.com> (work, mostly), "Bob (Sales) <CEO>" <bob@acme.com>, ` +
+					`carol@acme.com (Carol C), "Dee [Ops], EU" <dee@acme.com> (home)`,
+			),
+		).toEqual([
+			{ email: "alice@acme.com", name: "Alice" },
+			{ email: "bob@acme.com", name: "Bob (Sales) <CEO>" },
+			{ email: "carol@acme.com", name: "Carol C" },
+			{ email: "dee@acme.com", name: "Dee [Ops], EU" },
+		])
+		// The sender with a comment is still the sender: the message is kept.
+		expect(emailOp(message({ id: "m8", from: "Grace <grace@globex.io> (work)" }), MAILBOX)?.from).toEqual(
+			{
+				email: "grace@globex.io",
+				name: "Grace",
+			},
+		)
+	})
+})
+
+describe("Gmail encoded words", () => {
+	it("decodes RFC 2047 words in the subject and names, dropping the space between adjacent words", () => {
+		const op = emailOp(
+			message({
+				id: "m9",
+				from: "=?UTF-8?Q?Ren=C3=A9e_Dupont?= <renee@acme.fr>",
+				subject: "=?UTF-8?B?Q2Fmw6k=?= =?UTF-8?Q?_ouvert?= today",
+			}),
+			MAILBOX,
+		)
+		expect(op?.from).toEqual({ email: "renee@acme.fr", name: "Renée Dupont" })
+		expect(op?.subject).toBe("Café ouvert today")
+	})
+
+	it("reads other charsets and a character split across words; leaves the rest as written", () => {
+		expect(decodeEncodedWords("=?ISO-8859-1?Q?Caf=E9?=")).toBe("Café")
+		expect(decodeEncodedWords("=?utf-8?b?ww==?= =?utf-8?b?qQ==?=")).toBe("é")
+		expect(decodeEncodedWords("Plain = ?? subject")).toBe("Plain = ?? subject")
+		expect(decodeEncodedWords("=?x-unknown?Q?abc?=")).toBe("=?x-unknown?Q?abc?=")
 	})
 })
 
@@ -71,6 +123,24 @@ describe("Gmail bodies", () => {
 		).toBe("Café")
 		expect(bodyTextOf(part("text/plain", "Grüße 👋"))).toBe("Grüße 👋")
 		expect(bodyTextOf(part("text/plain", "x".repeat(MAX_BODY_CHARS + 50)))).toHaveLength(MAX_BODY_CHARS)
+	})
+
+	it("names a body Gmail did not inline, reads it once fetched, and never takes an attachment's", () => {
+		const outOfLine: MessagePart = {
+			mimeType: "text/plain",
+			filename: "",
+			headers: [],
+			body: { attachmentId: "body-1", size: 250_000 },
+		}
+		const body = multipart("multipart/mixed", [
+			{ ...outOfLine, filename: "notes.txt", body: { attachmentId: "notes-1", size: 9 } },
+			multipart("multipart/alternative", [outOfLine, part("text/html", "<p>HTML words</p>")]),
+		])
+		expect(bodyAttachmentIdOf(body)).toBe("body-1")
+		expect(bodyTextOf(body)).toBe("")
+		expect(bodyTextOf(body, b64("Long body\r\n"))).toBe("Long body")
+		expect(bodyTextOf(outOfLine, b64("x".repeat(MAX_BODY_CHARS + 5)))).toHaveLength(MAX_BODY_CHARS)
+		expect(bodyAttachmentIdOf(part("text/plain", "inline"))).toBeNull()
 	})
 })
 

@@ -175,7 +175,7 @@ export const init = (route: Route, shared: Shared): Return =>
 				settingsDraft: null,
 				activityEventInput: "",
 				isSavingSettings: false,
-				gmailLookback: null,
+				gmailLookback: {},
 				unitMetrics: null,
 				unitDrafts: {},
 			},
@@ -307,14 +307,14 @@ const syncNow = (
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedConnections: ({ connections }) => {
-			const lookback = model.gmailLookback
-			// A saved lookback is done once the synced row has it.
-			const saving = connections.find((connection) => connection.id === lookback?.connectionId)?.config
+			// A mailbox's saved lookback is done once its synced row has it.
 			const next = {
 				...model,
 				connections,
-				gmailLookback:
-					saving?._tag === "gmail" && saving.lookbackDays !== lookback?.days ? lookback : null,
+				gmailLookback: Record.filter(model.gmailLookback, (days, connectionId) => {
+					const config = connections.find((connection) => connection.id === connectionId)?.config
+					return config?._tag === "gmail" && config.lookbackDays !== days
+				}),
 			}
 			// A saved draft is done once the synced row has it.
 			const connection = detailConnection(next)
@@ -657,7 +657,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			)
 				return { model }
 			return {
-				model: { ...model, gmailLookback: { connectionId, days }, isSavingSettings: true },
+				model: {
+					...model,
+					gmailLookback: { ...model.gmailLookback, [connectionId]: days },
+					isSavingSettings: true,
+				},
 				commands: [
 					SaveCustomerSourceSettings({
 						organizationId,
@@ -692,8 +696,13 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model: { ...model, isSavingSettings: false },
 			outMessage: toast(successToast("Settings saved")),
 		}),
-		FailedSaveSettings: ({ reason }) => {
-			const next = { ...model, isSavingSettings: false, gmailLookback: null }
+		FailedSaveSettings: ({ connectionId, reason }) => {
+			// A refused lookback goes: the mailbox shows its own again, and the same choice can be retried.
+			const next = {
+				...model,
+				isSavingSettings: false,
+				gmailLookback: Record.remove(model.gmailLookback, connectionId),
+			}
 			// Settings are saved from a source's detail, where `provider` is set.
 			return model.provider === null
 				? { model: next }

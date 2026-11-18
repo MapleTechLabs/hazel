@@ -341,12 +341,12 @@ interface Session {
 	readonly disconnected: boolean
 	/** Gmail: every connected mailbox's address (the org's own people, never a customer). */
 	readonly mailboxes: ReadonlySet<string>
-	/** Email attribution: an address → the live contacts holding it. */
+	/** Email attribution: an address → the live contacts holding it. Cleared by account and contact ops. */
 	readonly contactsByEmail: Map<
 		string,
 		ReadonlyArray<{ readonly contactId: CustomerContactId; readonly accountId: CustomerAccountId }>
 	>
-	/** Email attribution: a domain → the one live account holding it (null: none, or several). */
+	/** Email attribution: a domain → the one live account holding it (null: none, or several). Cleared likewise. */
 	readonly accountByDomain: Map<string, CustomerAccountId | null>
 }
 
@@ -1996,8 +1996,6 @@ const make = Effect.gen(function* () {
 			}
 			// Mail with no customer on it is not the org's customer conversation: dropped.
 			if (matched.size === 0) return { _tag: "Ignored", ruleId: null } satisfies IngestOutcome
-			const direction =
-				op.direction === "outbound" || isOwn(op.from.email.toLowerCase()) ? "outbound" : "inbound"
 			const occurredAt = new Date(op.occurredAt)
 			yield* db.run(
 				SQLite.insertInto(schema.customerEmailsTable)
@@ -2007,7 +2005,10 @@ const make = Effect.gen(function* () {
 						mailbox,
 						externalId: op.externalId,
 						threadId: op.threadId,
-						direction,
+						direction:
+							op.direction === "outbound" || isOwn(op.from.email.toLowerCase())
+								? "outbound"
+								: "inbound",
 						fromAddress: op.from,
 						toAddresses: op.to,
 						ccAddresses: op.cc,
@@ -2018,14 +2019,15 @@ const make = Effect.gen(function* () {
 					})
 					.onConflictDoNothing(),
 			)
+			// Already stored (a re-read, or another mailbox's copy): its events follow the stored direction.
 			const email = yield* db.first(
 				SQLite.from(schema.customerEmailsTable)
-					.select("id")
+					.select("id", "direction")
 					.where(($) => [$.messageId.eq(op.messageId)])
 					.limit(1),
 			)
 			if (Option.isNone(email)) return yield* Effect.die(new Error("The email row was not stored"))
-			const emailId = email.value.id
+			const { id: emailId, direction } = email.value
 			let created = false
 			for (const [accountId, contactId] of matched) {
 				const externalId = `${op.messageId}:${accountId}`
@@ -2064,6 +2066,13 @@ const make = Effect.gen(function* () {
 	// Dispatch
 	// -----------------------------------------------------------------------
 
+	/** An account or contact op can change what an address or a domain matches: email lookups start over. */
+	const forgetAttribution = (session: Session) =>
+		Effect.sync(() => {
+			session.contactsByEmail.clear()
+			session.accountByDomain.clear()
+		})
+
 	const applyOp = (
 		session: Session,
 		op: IngestOp,
@@ -2074,9 +2083,9 @@ const make = Effect.gen(function* () {
 			return Effect.fail(reject(index, op, "The op does not match the ingest contract"))
 		switch (op._tag) {
 			case "account":
-				return applyAccount(session, op)
+				return applyAccount(session, op).pipe(Effect.ensuring(forgetAttribution(session)))
 			case "contact":
-				return applyContact(session, op)
+				return applyContact(session, op).pipe(Effect.ensuring(forgetAttribution(session)))
 			case "subscription":
 				return applySubscription(session, op, index)
 			case "invoice":

@@ -210,6 +210,93 @@ describe("Gmail ingest", () => {
 			}),
 		))
 
+	it("attributes after an account or contact op earlier in the same batch", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, ada } = yield* setUp
+				const fromJoe = (messageId: string) =>
+					email({ messageId, from: { email: "joe@newco.io", name: "Joe" } })
+				const report = yield* world.ingestGmail(ada, [
+					fromJoe("n1"),
+					{
+						_tag: "account",
+						externalId: "acc_newco",
+						name: "Newco",
+						domains: ["newco.io"],
+						sameAs: [],
+						onNoMatch: "create",
+					},
+					fromJoe("n2"),
+					{
+						_tag: "contact",
+						externalId: "joe",
+						account: { provider: "gmail", externalId: "acc_newco" },
+						email: "joe@newco.io",
+						name: "Joe",
+					},
+					fromJoe("n3"),
+				])
+
+				expect([0, 2, 4].map((index) => report.outcomes[index]?._tag)).toEqual([
+					"Ignored",
+					"Created",
+					"Created",
+				])
+				const emails = timeline(world).filter((row) => row.type.startsWith("email."))
+				expect(emails).toHaveLength(2)
+				expect(emails).toEqual(
+					expect.arrayContaining([
+						{ account: "Newco", type: "email.received", title: "Renewal", contact: null },
+						{
+							account: "Newco",
+							type: "email.received",
+							title: "Renewal",
+							contact: "joe@newco.io",
+						},
+					]),
+				)
+			}),
+		))
+
+	it("lands a re-read email's new events in the direction it was stored with", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, ada } = yield* setUp
+				const thread = {
+					messageId: "m5",
+					from: { email: "ceo@personal.dev", name: "CEO" },
+					to: [
+						{ email: "grace@globex.io", name: "Grace" },
+						{ email: "joe@newco.io", name: null },
+					],
+					cc: [{ email: ADA, name: "Ada" }],
+				}
+				yield* world.ingestGmail(ada, [email({ ...thread, direction: "inbound" })])
+				yield* world.ingest("clerk", [
+					{
+						_tag: "account",
+						externalId: "org_newco",
+						name: "Newco",
+						domains: ["newco.io"],
+						sameAs: [],
+						onNoMatch: "create",
+					},
+				])
+				// Read again (the pull's overlap), now labelled sent: Newco's new event keeps "received".
+				yield* world.ingestGmail(ada, [email({ ...thread, direction: "outbound" })])
+
+				expect(timeline(world)).toEqual([
+					{
+						account: "Globex",
+						type: "email.received",
+						title: "Renewal",
+						contact: "Grace@Globex.io",
+					},
+					{ account: "Newco", type: "email.received", title: "Renewal", contact: null },
+				])
+			}),
+		))
+
 	it("lands one event on each account an email names", () =>
 		run(
 			Effect.gen(function* () {

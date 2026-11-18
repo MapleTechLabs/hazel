@@ -9,8 +9,9 @@
  *   round trip), then `rate_limited` carrying the delay. Core keeps the run open at its cursor and
  *   resumes it after. A webhook's requests are never retried in place. Only reads come through
  *   here, so retrying a POST is as safe as retrying a GET.
- * - 5xx → `provider`; unreachable, or no answer within the request's timeout (30 s on a pull, 5 s on
- *   the webhook path, which must answer the provider) → `network`. Both retryable: the run resumes
+ * - 5xx → `provider`; unreachable, an answer cut off in transit, or no answer (body included) within
+ *   the request's timeout (30 s on a pull, 5 s on the webhook path, which must answer the provider)
+ *   → `network`. Both retryable: the run resumes
  *   after core's backoff.
  * - Any other 4xx (a cursor the provider no longer accepts, an object it does not know) →
  *   `provider`, not retryable: the same request would be refused again.
@@ -224,12 +225,21 @@ const makeProviderCall = <Path extends string, Refusal>(
 		if (response.status < 200 || response.status >= 300) {
 			return yield* failureOf(call.method, route, response)
 		}
-		const body = yield* response.json.pipe(
-			Effect.catchTag("HttpClientError", () =>
-				unreadable(call.method, route, response.status, "not JSON"),
+		// Cut off in transit: retried like an unreachable provider. A complete body that is not JSON is not.
+		const text = yield* response.text.pipe(
+			Effect.mapError(
+				(error) =>
+					new CustomerProviderError({
+						code: "network",
+						message: `${api.name}'s answer to ${call.method} ${route} was cut off (${error.reason._tag})`,
+						httpStatus: null,
+						retryAfterMs: null,
+					}),
 			),
 		)
-		return { status: response.status, body }
+		const body = Result.try(() => (text === "" ? null : JSON.parse(text)))
+		if (Result.isFailure(body)) return yield* unreadable(call.method, route, response.status, "not JSON")
+		return { status: response.status, body: body.success }
 	})
 
 	/** One call's JSON body; a rate-limited request waits out a short `Retry-After` in place. */

@@ -10,7 +10,7 @@ import { TestClock } from "effect/testing"
 import { describe, expect, it } from "vitest"
 import type { CustomerProviderAdapter, ProviderCredentials, PullPage } from "../providers"
 import { makeGmailAdapter } from "./adapter"
-import { message } from "./fixtures"
+import { message, multipart } from "./fixtures"
 import { PAGE_SIZE } from "./pull"
 import { fakeGmailHttpClient, type FakeGmailState, gmailOAuthEnv, makeFakeGmail } from "./testing"
 
@@ -108,18 +108,79 @@ describe("Gmail pull", () => {
 		expect(error.message).toContain("reconnect Gmail")
 	})
 
-	it("retries Gmail's quota 403 and a failing read instead of stopping", async () => {
+	it("retries Gmail's quota 403 (however long its message) and a failing or cut-off read; stops on a refused scope", async () => {
 		const quota = makeFakeGmail({ messages: inbound(2), quota: true })
 		const limited = await withAdapter(quota, (adapter) =>
 			Effect.flip(adapter.pull({ credentials: credentials(quota), cursor: null, since: null })),
 		)
 		expect([limited.code, limited.retryAfterMs]).toEqual(["rate_limited", 60_000])
 
+		const scope = makeFakeGmail({ messages: inbound(2), forbidden: true })
+		const refused = await withAdapter(scope, (adapter) =>
+			Effect.flip(adapter.pull({ credentials: credentials(scope), cursor: null, since: null })),
+		)
+		expect([refused.code, refused.httpStatus]).toEqual(["auth", 403])
+
 		const failing = makeFakeGmail({ messages: inbound(2), failing: new Set(["m1"]) })
 		const outage = await withAdapter(failing, (adapter) =>
 			Effect.flip(adapter.pull({ credentials: credentials(failing), cursor: null, since: null })),
 		)
 		expect([outage.code, outage.httpStatus, outage.retryable]).toEqual(["provider", 503, undefined])
+
+		const reset = makeFakeGmail({ messages: inbound(2), cut: new Set(["m1"]) })
+		const dropped = await withAdapter(reset, (adapter) =>
+			Effect.flip(adapter.pull({ credentials: credentials(reset), cursor: null, since: null })),
+		)
+		expect([dropped.code, dropped.retryable]).toEqual(["network", undefined])
+	})
+
+	it("reads a body Gmail did not inline by its attachment id, never a real attachment", async () => {
+		const large = message({
+			id: "big",
+			from: "grace@globex.io",
+			to: "ada@hazel.sh",
+			body: multipart("multipart/mixed", [
+				{
+					mimeType: "text/plain",
+					filename: "",
+					headers: [],
+					body: { attachmentId: "body-1", size: 250_000 },
+				},
+				{
+					mimeType: "application/pdf",
+					filename: "quote.pdf",
+					headers: [],
+					body: { attachmentId: "pdf-1" },
+				},
+			]),
+		})
+		const fake = makeFakeGmail({
+			messages: [large],
+			attachments: new Map([
+				["body-1", "The whole long body"],
+				["pdf-1", "%PDF-1.7"],
+			]),
+		})
+		const pages = await withAdapter(fake, (adapter) => walk(adapter, credentials(fake)))
+
+		expect(pages[0]?.ops[0]).toMatchObject({ bodyText: "The whole long body" })
+		expect(fake.calls.filter((call) => call.includes("/attachments/"))).toEqual([
+			"GET https://gmail.googleapis.com/gmail/v1/users/me/messages/big/attachments/body-1",
+		])
+	})
+
+	it("retries a token answer cut off in transit, not a whole one that is not JSON", async () => {
+		const cut = makeFakeGmail({ messages: inbound(1), tokenBody: "cut" })
+		const dropped = await withAdapter(cut, (adapter) =>
+			Effect.flip(adapter.pull({ credentials: credentials(cut), cursor: null, since: null })),
+		)
+		expect([dropped.code, dropped.retryable]).toEqual(["network", undefined])
+
+		const garbled = makeFakeGmail({ messages: inbound(1), tokenBody: "garbled" })
+		const unreadable = await withAdapter(garbled, (adapter) =>
+			Effect.flip(adapter.pull({ credentials: credentials(garbled), cursor: null, since: null })),
+		)
+		expect([unreadable.code, unreadable.retryable]).toEqual(["provider", false])
 	})
 
 	it("answers a retryable error when the server has no Google OAuth client", async () => {

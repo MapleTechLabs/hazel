@@ -112,8 +112,8 @@ export const Model = Schema.Struct({
 	/** Maple's "add an activity event" field. */
 	activityEventInput: Schema.String,
 	isSavingSettings: Schema.Boolean,
-	/** A Gmail mailbox's lookback while it saves; shown until the synced row has it. */
-	gmailLookback: Schema.NullOr(Schema.Struct({ connectionId: CustomerConnectionId, days: Schema.Int })),
+	/** Gmail mailboxes' lookbacks saved, by connection id; each shown until its synced row has it. */
+	gmailLookback: Schema.Record(Schema.String, Schema.Int),
 	/** The sources' own metrics; null until the query answers. */
 	unitMetrics: Schema.NullOr(Schema.Array(UnitMetricRow)),
 	/** A metric's unit while typed, by key; saved on Enter or blur. */
@@ -140,13 +140,12 @@ export const mailboxesOf = (model: Model): ReadonlyArray<ConnectionRow> =>
 export const mailboxOf = (connection: ConnectionRow): string =>
 	connection.externalAccountId ?? connection.externalAccountName ?? "Gmail mailbox"
 
-/** The lookback a mailbox shows: the one saving, else its own. */
+/** The lookback a mailbox shows: the one it saved, until its row has it, else its own. */
 export const gmailLookbackOf = (model: Model, connection: ConnectionRow): number =>
-	model.gmailLookback?.connectionId === connection.id
-		? model.gmailLookback.days
-		: connection.config._tag === "gmail"
-			? connection.config.lookbackDays
-			: Customers.DEFAULT_CONNECTION_CONFIG.gmail.lookbackDays
+	model.gmailLookback[connection.id] ??
+	(connection.config._tag === "gmail"
+		? connection.config.lookbackDays
+		: Customers.DEFAULT_CONNECTION_CONFIG.gmail.lookbackDays)
 
 /** Connected, failing or syncing; a disconnected connection's data stays, marked stale. */
 export const isLive = (connection: ConnectionRow): boolean => connection.status !== "disconnected"

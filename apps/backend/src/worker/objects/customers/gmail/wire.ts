@@ -1,7 +1,8 @@
 /**
  * What Hazel sends to Google and what it reads back: the OAuth endpoints (consent, token) and the
- * three Gmail API reads the integration makes (`users.getProfile`, `users.messages.list`,
- * `users.messages.get` with `format=full`). Only the fields Hazel reads are declared; Google adds
+ * Gmail API reads the integration makes (`users.getProfile`, `users.messages.list`,
+ * `users.messages.get` with `format=full`, and `users.messages.attachments.get` for a body too large
+ * to inline). Only the fields Hazel reads are declared; Google adds
  * fields freely, which decoding ignores.
  */
 import { Schema } from "effect"
@@ -68,6 +69,9 @@ export const MessagePart: Schema.Codec<MessagePart> = Schema.Struct({
 	parts: optional(Schema.Array(Schema.suspend((): Schema.Codec<MessagePart> => MessagePart))),
 })
 
+/** `users.messages.attachments.get`: a body part Gmail did not inline, base64url. */
+export const MessagePartBody = Schema.Struct({ data: optional(Schema.String) })
+
 /** One message, `format=full`. */
 export const Message = Schema.Struct({
 	id: Schema.String,
@@ -90,10 +94,14 @@ export const GoogleErrorBody = Schema.Struct({
 	),
 })
 
+/**
+ * Google's explanation of a refusal, its `reason` first: the message is truncated at its end, and
+ * the reason is what tells Gmail's quota 403 from a refused grant (`./http.ts`).
+ */
 export const detailOf = ({ error }: typeof GoogleErrorBody.Type): string => {
 	const reason = error?.errors?.[0]?.reason
 	const message = error?.message?.trim() ?? ""
-	return reason === undefined ? message : `${message} (${reason})`
+	return reason === undefined ? message : message === "" ? reason : `${reason}: ${message}`
 }
 
 /**

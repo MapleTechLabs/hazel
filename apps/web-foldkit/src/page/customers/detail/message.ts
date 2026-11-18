@@ -113,9 +113,17 @@ export const Message = defineMessageUnion({
 
 	PressedEmail: { emailId: CustomerEmailId },
 	GotEmailModalMessage: { message: Modal.Message },
-	/** `emailId` names the email asked for: an answer for one closed since is dropped. */
-	SucceededFetchEmail: { emailId: CustomerEmailId, email: Customers.Email.Schema, url: Schema.String },
-	FailedFetchEmail: { emailId: CustomerEmailId, reason: EmailFailure },
+	/**
+	 * `emailId` and `request` name the open that asked: an answer for an email closed since, or for
+	 * an earlier open of the same one, is dropped.
+	 */
+	SucceededFetchEmail: {
+		emailId: CustomerEmailId,
+		request: Schema.Int,
+		email: Customers.Email.Schema,
+		url: Schema.String,
+	},
+	FailedFetchEmail: { emailId: CustomerEmailId, request: Schema.Int, reason: EmailFailure },
 
 	UpdatedChannelLinks: { links: Schema.Array(ChannelLinkRow) },
 	UpdatedChannelOptions: { channels: Schema.Array(ChannelOption) },

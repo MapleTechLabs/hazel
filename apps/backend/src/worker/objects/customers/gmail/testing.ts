@@ -2,11 +2,13 @@
  * A fake Google for the adapter's tests: the token endpoint (a refresh token for an access token,
  * `invalid_grant` for any other) and the three Gmail reads, answered from a list of messages the
  * way Gmail would — `after:` filters by the message's time, `maxResults` pages with a token, an id
- * it does not hold is a 404. It can also fail one message's get (503), answer every read with
- * Gmail's 403 quota refusal, and it records every call.
+ * it does not hold is a 404, a body part too large to inline is read by its attachment id. It can
+ * also fail one message's get (503) or cut it off mid-body, answer every read with Gmail's 403 quota refusal or a refused
+ * scope, cut off or garble the token endpoint's answer, and it records every call.
  */
 import { ConfigProvider, Effect, Layer } from "effect"
 import { HttpClient, HttpClientResponse } from "effect/http"
+import { b64 } from "./fixtures"
 import type { Message } from "./wire"
 
 export interface FakeGmailState {
@@ -18,8 +20,16 @@ export interface FakeGmailState {
 	readonly deleted: Set<string>
 	/** Ids whose read fails with a 503. */
 	readonly failing: Set<string>
-	/** Every Gmail read answers 403 `rateLimitExceeded`. */
+	/** Ids whose read answers 200 and is cut off mid-body. */
+	readonly cut: Set<string>
+	/** Body parts Gmail did not inline, by attachment id: their text. */
+	readonly attachments: Map<string, string>
+	/** Every Gmail read answers 403 `userRateLimitExceeded`, with Google's long quota message. */
 	quota: boolean
+	/** Every Gmail read answers 403 `insufficientPermissions`. */
+	forbidden: boolean
+	/** A granted token's answer: whole, cut off mid-body, or not JSON. */
+	tokenBody: "ok" | "cut" | "garbled"
 	readonly calls: Array<string>
 	readonly queries: Array<string>
 }
@@ -31,7 +41,11 @@ export const makeFakeGmail = (options: Partial<FakeGmailState> = {}): FakeGmailS
 	messages: [],
 	deleted: new Set(),
 	failing: new Set(),
+	cut: new Set(),
+	attachments: new Map(),
 	quota: false,
+	forbidden: false,
+	tokenBody: "ok",
 	calls: [],
 	queries: [],
 	...options,
@@ -39,13 +53,23 @@ export const makeFakeGmail = (options: Partial<FakeGmailState> = {}): FakeGmailS
 
 const json = (status: number, body: unknown) => Response.json(body, { status })
 
+/** A 200 whose body never arrives whole: the connection resets mid-read. */
+const cutOff = () =>
+	new Response(new ReadableStream({ start: (stream) => stream.error(new Error("connection reset")) }), {
+		status: 200,
+	})
+
 const googleError = (status: number, message: string, reason: string) =>
 	json(status, { error: { code: status, message, errors: [{ reason }] } })
 
 const answer = (fake: FakeGmailState, url: URL, method: string, body: string, auth: string) => {
 	if (url.origin === "https://oauth2.googleapis.com" && method === "POST") {
 		const form = new URLSearchParams(body)
-		return form.get("grant_type") === "refresh_token" && form.get("refresh_token") === fake.refreshToken
+		const granted =
+			form.get("grant_type") === "refresh_token" && form.get("refresh_token") === fake.refreshToken
+		if (granted && fake.tokenBody === "cut") return cutOff()
+		if (granted && fake.tokenBody === "garbled") return new Response("{ not json", { status: 200 })
+		return granted
 			? json(200, {
 					access_token: fake.accessToken,
 					expires_in: 3599,
@@ -55,7 +79,16 @@ const answer = (fake: FakeGmailState, url: URL, method: string, body: string, au
 			: json(400, { error: "invalid_grant", error_description: "Token has been expired or revoked." })
 	}
 	if (auth !== `Bearer ${fake.accessToken}`) return googleError(401, "Invalid Credentials", "authError")
-	if (fake.quota) return googleError(403, "User Rate Limit Exceeded", "userRateLimitExceeded")
+	if (fake.quota)
+		return googleError(
+			403,
+			"Quota exceeded for quota metric 'Queries' and limit 'Queries per minute per user' of service " +
+				"'gmail.googleapis.com' for consumer 'project_number:123456789012'. Please retry later, or " +
+				"request a higher quota for this project in the Google Cloud console.",
+			"userRateLimitExceeded",
+		)
+	if (fake.forbidden)
+		return googleError(403, "Request had insufficient authentication scopes.", "insufficientPermissions")
 	const path = url.pathname
 	if (path === "/gmail/v1/users/me/profile")
 		return json(200, { emailAddress: fake.mailbox, messagesTotal: 1 })
@@ -79,8 +112,16 @@ const answer = (fake: FakeGmailState, url: URL, method: string, body: string, au
 				: { messages, resultSizeEstimate },
 		)
 	}
+	const attachment = /\/attachments\/([^/]+)$/.exec(path)
+	if (attachment !== null) {
+		const text = fake.attachments.get(decodeURIComponent(attachment[1] ?? ""))
+		return text === undefined
+			? googleError(404, "Requested entity was not found.", "notFound")
+			: json(200, { size: text.length, data: b64(text) })
+	}
 	const id = decodeURIComponent(path.split("/").pop() ?? "")
 	if (fake.failing.has(id)) return json(503, { error: { code: 503, message: "Backend Error" } })
+	if (fake.cut.has(id)) return cutOff()
 	const message = fake.messages.find((candidate) => candidate.id === id)
 	if (message === undefined || fake.deleted.has(id))
 		return googleError(404, "Requested entity was not found.", "notFound")

@@ -101,7 +101,7 @@ export const Message = defineMessageUnion({
 	PressedDiscardSettings: {},
 	PressedSaveSettings: {},
 	SucceededSaveSettings: {},
-	FailedSaveSettings: { reason: ConnectFailure },
+	FailedSaveSettings: { connectionId: CustomerConnectionId, reason: ConnectFailure },
 
 	// Usage units
 	ChangedUnit: { metricKey: Schema.String, value: Schema.String },

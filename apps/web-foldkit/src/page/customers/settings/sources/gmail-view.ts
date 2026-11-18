@@ -21,7 +21,7 @@ import {
 } from "./overview-view"
 import { callout, card, cardHeader, eyebrow, formatClock, type H, statusBadge } from "./parts"
 import type { ConnectionRow } from "./queries"
-import { LOOKBACK, type LookbackKey, lookbackKeyOf } from "./settings-view"
+import { lookbackSegments } from "./settings-view"
 
 /**
  * Gmail's source page (`docs/customers/gmail.md`): one connection per mailbox, each member connecting
@@ -78,9 +78,9 @@ const lookback = (h: H, model: Model, connection: ConnectionRow, context: Contex
 			canManage(connection, context)
 				? segmented(h, {
 						ariaLabel: `Lookback of ${mailboxOf(connection)}`,
-						segments: LOOKBACK,
-						selected: lookbackKeyOf(days),
-						onSelect: (key: LookbackKey) =>
+						segments: lookbackSegments(days),
+						selected: String(days),
+						onSelect: (key) =>
 							Message.ClickedGmailLookback({ connectionId: connection.id, days: Number(key) }),
 						className: model.isSavingSettings ? "pointer-events-none opacity-60" : undefined,
 					})

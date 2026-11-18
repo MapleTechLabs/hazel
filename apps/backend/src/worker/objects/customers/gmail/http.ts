@@ -15,6 +15,7 @@ import {
 	GoogleErrorBody,
 	Message,
 	MessageList,
+	MessagePartBody,
 	MESSAGES_PATH,
 	Profile,
 	PROFILE_PATH,
@@ -27,7 +28,11 @@ const API = {
 	baseUrl: GMAIL_API_URL,
 	// A message id never reaches a message, a log or a span.
 	routeOf: (path: GmailPath) =>
-		path === PROFILE_PATH || path === MESSAGES_PATH ? path : `${MESSAGES_PATH}/{id}`,
+		path === PROFILE_PATH || path === MESSAGES_PATH
+			? path
+			: path.includes("/attachments/")
+				? `${MESSAGES_PATH}/{id}/attachments/{id}`
+				: `${MESSAGES_PATH}/{id}`,
 	refusal: GoogleErrorBody,
 	detailOf,
 	refusedMessage: (_route: string, status: number) =>
@@ -72,6 +77,13 @@ export const makeGmailApi = (client: HttpClient.HttpClient, accessToken: Redacte
 			),
 		message: (id: string) =>
 			read(`${MESSAGES_PATH}/${encodeURIComponent(id)}`, [["format", "full"]], Message),
+		/** A body part Gmail did not inline (`body.attachmentId`). */
+		attachment: (messageId: string, attachmentId: string) =>
+			read(
+				`${MESSAGES_PATH}/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+				[],
+				MessagePartBody,
+			),
 	}
 }
 

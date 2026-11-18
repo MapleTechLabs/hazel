@@ -178,6 +178,8 @@ export const Model = Schema.Struct({
 	/** The email the email dialog shows (kept while it animates out), and its fetch. */
 	emailId: Schema.NullOr(CustomerEmailId),
 	email: OpenEmail.schema,
+	/** Bumped by each open: only the latest open's answer lands (the same email reopened included). */
+	emailRequest: Schema.Int,
 	emailModal: Modal.Model,
 	/** The note the delete confirmation asks about (kept while the dialog animates out). */
 	deletingNoteId: Schema.NullOr(CustomerNoteId),

@@ -7,10 +7,12 @@
  * message read twice lands once). Spam, trash and chats are left out. The `after` of a walk is kept
  * on the cursor beside Gmail's `pageToken`, which is only valid for the search that issued it.
  *
- * **Page size.** A page costs one list and {@link PAGE_SIZE} gets (plus a token refresh the first
- * time a tick pulls the connection), read {@link CONCURRENCY} at a time. Core pulls up to 20 pages
- * of a connection per alarm, so a tick stays around 500 subrequests per mailbox, and Gmail's
- * per-user quota (250 units a second; a get costs 5) is never approached.
+ * **Page size.** A page costs one list and {@link PAGE_SIZE} gets, plus one attachment read per
+ * message whose body Gmail did not inline (too large: `body.attachmentId`, rare), and a token
+ * refresh the first time a tick pulls the connection; read {@link CONCURRENCY} at a time. Core pulls
+ * up to 20 pages of a connection per alarm, so a tick stays around 500 subrequests per mailbox
+ * (about 1,000 at worst, every body out of line), and Gmail's per-user quota (250 units a second; a get
+ * costs 5) is never approached.
  *
  * **Errors.** A message deleted between the list and its get (404) is skipped; any other failure is
  * the page's, and core resumes the run at the same cursor after its backoff.
@@ -21,7 +23,7 @@ import type { ConnectionConfig, IngestOp, SyncProgress } from "@hazel/domain/cus
 import { Clock, Effect, Option, Schema } from "effect"
 import type { PullPage } from "../providers"
 import type { GmailApi } from "./http"
-import { emailOp } from "./map"
+import { bodyAttachmentIdOf, emailOp } from "./map"
 
 /** Polling (no Pub/Sub push): ten minutes is soon enough for a timeline. */
 export const GMAIL_PULL_INTERVAL_MS = 10 * 60_000
@@ -70,6 +72,15 @@ export const pullPage = Effect.fn("Gmail.pullPage")(function* (input: {
 		ids,
 		(id) =>
 			input.api.message(id).pipe(
+				Effect.flatMap((message) => {
+					const attachmentId =
+						message.payload === undefined ? null : bodyAttachmentIdOf(message.payload)
+					return attachmentId === null
+						? Effect.succeed({ message, body: undefined })
+						: input.api
+								.attachment(id, attachmentId)
+								.pipe(Effect.map((part) => ({ message, body: part.data })))
+				}),
 				Effect.map(Option.some),
 				// Deleted since the list: nothing to read.
 				Effect.catchIf(
@@ -82,7 +93,7 @@ export const pullPage = Effect.fn("Gmail.pullPage")(function* (input: {
 	const ops: Array<IngestOp> = []
 	for (const message of messages) {
 		if (Option.isNone(message)) continue
-		const op = emailOp(message.value, input.mailbox)
+		const op = emailOp(message.value.message, input.mailbox, message.value.body)
 		if (op !== null) ops.push(op)
 	}
 	const done = Option.match(resumed, { onNone: () => 0, onSome: (cursor) => cursor.done }) + ids.length

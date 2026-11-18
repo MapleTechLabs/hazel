@@ -85,15 +85,15 @@ export const FetchCustomerMrrHistory = Command.define("FetchCustomerMrrHistory",
 
 /** One imported email in full, for the email dialog. */
 export const FetchCustomerEmail = Command.define("FetchCustomerEmail", {
-	args: { organizationId: OrganizationId, emailId: CustomerEmailId },
+	args: { organizationId: OrganizationId, emailId: CustomerEmailId, request: Schema.Int },
 	messages: [Message.SucceededFetchEmail, Message.FailedFetchEmail],
-	execute: ({ organizationId, emailId }) =>
+	execute: ({ organizationId, emailId, request }) =>
 		HazelRpc.use((rpc) => rpc("customers.email.get", { organizationId, emailId })).pipe(
-			Effect.map(({ email, url }) => Message.SucceededFetchEmail({ emailId, email, url })),
+			Effect.map(({ email, url }) => Message.SucceededFetchEmail({ emailId, request, email, url })),
 			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(Message.FailedFetchEmail({ emailId, reason: "NotFound" })),
+				Effect.succeed(Message.FailedFetchEmail({ emailId, request, reason: "NotFound" })),
 			),
-			catchCommon((reason) => Message.FailedFetchEmail({ emailId, reason })),
+			catchCommon((reason) => Message.FailedFetchEmail({ emailId, request, reason })),
 		),
 })
 
