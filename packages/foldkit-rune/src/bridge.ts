@@ -410,6 +410,16 @@ export const makeElementBridge = (options: {
 	 */
 	const commit = (next: Map<string, ElementRecord>, mountVNodes: Map<string, AnyVNode>): boolean => {
 		records = next
+		// An element that left the tree is a new host node when it comes back (the message list
+		// after the Files tab), laid out afresh and scrolled to the top: its old rect and offset
+		// would start its Mount from where the last one was, and skip the scroll back to it.
+		for (const path of rects.keys()) if (!next.has(path)) rects.delete(path)
+		for (const path of scrollTops.keys()) if (!next.has(path)) scrollTops.delete(path)
+		for (const [path, pending] of pendingScrolls)
+			if (!next.has(path)) {
+				clearTimeout(pending.timer)
+				pendingScrolls.delete(path)
+			}
 		let startedImmediate = false
 		const nextMounted = new Map<string, AnyVNode>()
 		for (const [path, vnode] of mountVNodes) {

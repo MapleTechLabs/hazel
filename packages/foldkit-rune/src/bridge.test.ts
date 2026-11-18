@@ -133,6 +133,34 @@ describe("makeElementBridge", () => {
 		expect(measured).toEqual(["r"])
 	})
 
+	it("starts a returning element from no layout and no offset, as the host's new node does", () => {
+		const sent: Array<number> = []
+		const calls: Array<string> = []
+		const bridge = makeElementBridge({
+			mounts: new Set(["ObserveList"]),
+			send: (command) => {
+				if (command.t === "scroll") sent.push(command.top)
+			},
+		})
+		bridge.commit(record(bridge), new Map([["r", mountVNode(calls)]]))
+		bridge.reportLayout("r", { x: 0, y: 0, width: 300, height: 200 })
+		const list = bridge.findById("list")
+		if (list === null) throw new Error("no #list element")
+		list.scrollTop = 2000
+		bridge.reportScroll("r", 2000, 1)
+
+		// Away (the Files tab), then back.
+		bridge.commit(new Map(), new Map())
+		bridge.commit(record(bridge), new Map([["r", mountVNode(calls)]]))
+		expect(calls).toEqual(["insert", "destroy"])
+		expect(list.scrollTop).toBe(0)
+		bridge.reportLayout("r", { x: 0, y: 0, width: 300, height: 200 })
+		expect(calls).toEqual(["insert", "destroy", "insert"])
+		// The list scrolls its new node back to where it was.
+		list.scrollTop = 2000
+		expect(sent).toEqual([2000, 2000])
+	})
+
 	it("ignores host scroll reports older than the runtime's own scroll", async () => {
 		const sent: Array<number> = []
 		const bridge = makeElementBridge({
