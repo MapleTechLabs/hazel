@@ -694,7 +694,11 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 					client: nativeClient,
 				})
 				const first = yield* Effect.forkChild(desktop.signIn)
-				yield* Effect.promise(() => waiting)
+				// A sign-in that fails before the browser opens fails the test here, not at its timeout.
+				yield* Effect.raceFirst(
+					Effect.promise(() => waiting),
+					Effect.andThen(Fiber.join(first), Effect.die("signed in before the browser opened")),
+				)
 				yield* Fiber.interrupt(first)
 				expect((yield* desktop.pendingAttempt)?.phase).toBe("Waiting")
 

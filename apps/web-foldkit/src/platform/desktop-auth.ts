@@ -1,5 +1,5 @@
 import { type DesktopAuth, layerVault, makeDesktopAuth } from "@hazel/auth/desktop"
-import { getTauriCore, getTauriDeepLink, getTauriOpener, isTauri, type TauriCoreApi } from "./tauri"
+import { getTauriCore, getTauriDeepLink, getTauriOpener, isTauri } from "./tauri"
 import { BrowserLogin } from "@yielded/auth"
 import * as WebCrypto from "@yielded/auth/WebCrypto"
 import { Context, Effect, Exit, Layer, ManagedRuntime, Option, Schema, SynchronizedRef } from "effect"
@@ -145,7 +145,7 @@ const hostedUrl = () => {
 	return `${new URL(appOrigin).origin}/auth/desktop`
 }
 
-type HostResponse = { status: number; headers: Array<[string, string]>; body: string }
+export type HostResponse = { status: number; headers: Array<[string, string]>; body: string }
 
 /**
  * The auth API's native mode refuses any request a browser could have sent, and the Tauri webview's
@@ -153,13 +153,15 @@ type HostResponse = { status: number; headers: Array<[string, string]>; body: st
  * instead, without the browser's headers, cookies or redirects. An abort stops the wait here; the
  * host's own request is bounded by its timeout.
  */
-const hostFetch =
-	(core: TauriCoreApi): typeof globalThis.fetch =>
+export const hostFetch =
+	(core: {
+		readonly invoke: (command: string, args: Record<string, unknown>) => Promise<HostResponse>
+	}): typeof globalThis.fetch =>
 	async (input, init) => {
 		const request = new Request(input, init)
 		const { signal } = request
 		signal.throwIfAborted()
-		const invoked = core.invoke<HostResponse>("auth_http", {
+		const invoked = core.invoke("auth_http", {
 			request: {
 				method: request.method,
 				url: request.url,
