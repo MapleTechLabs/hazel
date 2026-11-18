@@ -19,7 +19,6 @@ import { heading } from "../../ui/heading"
 /** An emphasised line that is not a heading (an empty state's headline). */
 export const titleClass = "font-semibold text-fg text-sm/6"
 export const descriptionClass = "text-muted-fg text-sm"
-export const labelClass = "font-medium text-muted-fg text-xs"
 
 /** A table's column heads: the label style on a 36px row. */
 export const tableHeadClass = "h-9 whitespace-nowrap font-medium text-muted-fg text-xs"
@@ -81,10 +80,6 @@ export const panelHeader = <M>(
 			...(options.aside ? [options.aside] : []),
 		],
 	)
-
-/** A small label over a group: `Properties`, `Provides`, `Webhook URL`. */
-export const sectionLabel = <M>(h: HtmlBuilder<M>, label: string, className?: string): Html =>
-	h.span([h.Class(twMerge(labelClass, className))], [label])
 
 // LINKS
 

@@ -17,12 +17,12 @@ string, so a title, a table head or a link reads the same on every page.
   title, `section` for a panel's, `subsection` for a group inside a panel or the sidebar. `pageHeader`
   and `panelHeader` render them for you.
 - Type for everything that is not a heading: `titleClass` (an emphasised line, 14px semibold),
-  `descriptionClass` (14px muted), `labelClass` (12px medium muted: field names, eyebrows),
+  `descriptionClass` (14px muted),
   `tableHeadClass`. Labels are sentence case; nothing is uppercase.
 - `pageHeader(h, { title, subtitle?, crumbs?, leading?, badges?, actions? })` — every page's title row
   (`settingsHeader` is this); `breadcrumb(h, crumbs)`; `freshness(h, "Synced 1h ago")` beside the actions.
 - `panel(h, className, children)`, `panelHeader(h, { title, count?, description?, aside? })`,
-  `panelClass` / `panelPadClass` for a panel built by hand, `sectionLabel(h, label)`.
+  `panelClass` / `panelPadClass` for a panel built by hand.
 - Links: `linkClass` (inline text link), `moreLink(h, href, "View queue")` (a panel's way out, with `›`).
   A link that leaves Hazel is a plain text link (`Open`, `View`) or a chip; never an external-link arrow.
 - Text takes the `*-subtle-fg` semantic colors (`text-danger-subtle-fg`), not the raw `text-danger`.
