@@ -18,14 +18,7 @@ import { snoozeMenuContent } from "../../../customers/ui/menus"
 import { queueAction, queueColumnHeader, type QueueColumn, queueList } from "../../../customers/ui/queue-row"
 import { kbd, shortcutBar, type Shortcut } from "../../../customers/ui/shortcuts"
 import { freshness, pageHeader } from "../../../customers/ui/surface"
-import {
-	IconArrowPath,
-	IconCheck,
-	IconClock,
-	IconLightbulb,
-	IconMagnifier3,
-	IconUser,
-} from "../../../icons"
+import { IconArrowPath, IconCheck, IconClock, IconLightbulb, IconMagnifier3, IconUser } from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
 import { buttonClassName } from "../../../ui/button"
 import type * as Menu from "../../../ui/menu"
