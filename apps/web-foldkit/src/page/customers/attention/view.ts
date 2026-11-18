@@ -15,7 +15,7 @@ import {
 	viewTabs,
 } from "../../../customers/ui/filter-bar"
 import { snoozeMenuContent } from "../../../customers/ui/menus"
-import { queueAction, queueList } from "../../../customers/ui/queue-row"
+import { queueAction, queueColumnHeader, type QueueColumn, queueList } from "../../../customers/ui/queue-row"
 import { kbd, shortcutBar, type Shortcut } from "../../../customers/ui/shortcuts"
 import { freshness, pageHeader } from "../../../customers/ui/surface"
 import {
@@ -51,6 +51,8 @@ import {
 	snoozeEntries,
 	snoozeUntilMs,
 	NEXT_RETRY,
+	type Sort,
+	SORT_ASCENDING,
 	sortEntries,
 	tabCounts,
 	userIdOfAssignKey,
@@ -71,7 +73,15 @@ const toMoreMenuMessage = (message: Menu.Message) => Message.GotMoreMenuMessage(
 const toFilterMenuMessage = (message: Menu.Message) => Message.GotFilterMenuMessage({ message })
 const toSortMenuMessage = (message: Menu.Message) => Message.GotSortMenuMessage({ message })
 
-const SORT_LABEL = { priority: "Priority", severity: "Severity", age: "Oldest first", mrr: "MRR" } as const
+const SORT_LABEL = {
+	priority: "Priority",
+	account: "Account",
+	signal: "Signal",
+	severity: "Severity",
+	age: "Age",
+	health: "Health",
+	mrr: "MRR",
+} as const satisfies Record<Sort, string>
 const OWNER_LABEL = {
 	mine_or_unowned: "Mine or unowned",
 	mine: "Mine",
@@ -432,16 +442,26 @@ const SHORTCUTS = {
 	],
 } as const satisfies Record<Model["tab"], ReadonlyArray<Shortcut>>
 
-const columnHeader = (h: HtmlBuilder<Message>, cells: ReadonlyArray<readonly [string, string]>): Html =>
-	h.div(
-		[
-			h.Role("row"),
-			h.Class(
-				// A phone's rows wrap into lines that no longer sit under these columns.
-				"flex h-9 items-center gap-4 border-border border-b px-4 font-medium text-muted-fg text-xs max-md:hidden",
-			),
-		],
-		cells.map(([label, className]) => h.span([h.Role("columnheader"), h.Class(className)], [label])),
+/** The list's header row: a column with a sort key (Open tab) sorts the queue by it. */
+const columnHeader = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	cells: ReadonlyArray<readonly [string, string, Sort?]>,
+): Html =>
+	queueColumnHeader(
+		h,
+		cells.map(([label, className, sort]): QueueColumn<Message> => {
+			if (sort === undefined) return { label, className }
+			const isAscending = SORT_ASCENDING[sort] !== model.isSortReversed
+			return {
+				label,
+				className,
+				sort: {
+					onPress: Message.ClickedColumnSort({ sort }),
+					direction: model.sort !== sort ? null : isAscending ? "ascending" : "descending",
+				},
+			}
+		}),
 	)
 
 const allClear = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
@@ -600,7 +620,7 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 	}
 	if (model.tab === "snoozed")
 		return queueList(h, { ariaLabel: "Snoozed signals" }, [
-			columnHeader(h, [
+			columnHeader(h, model, [
 				["Account", "w-52"],
 				["Signal and snooze note", "flex-1"],
 				["Wakes up", "w-44"],
@@ -618,7 +638,7 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 		])
 	if (model.tab === "done")
 		return queueList(h, { ariaLabel: "Resolved signals" }, [
-			columnHeader(h, [
+			columnHeader(h, model, [
 				["Account", "w-52"],
 				["Signal and resolution", "flex-1"],
 				["Outcome", "w-28"],
@@ -638,28 +658,28 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 		)
 	return model.grouping === "accounts"
 		? queueList(h, { ariaLabel: "Accounts needing attention" }, [
-				columnHeader(h, [
-					["#", "w-5 text-right"],
-					["Account", "w-52"],
+				columnHeader(h, model, [
+					["#", "w-5 text-right", "priority"],
+					["Account", "w-52", "account"],
 					["Open signals", "flex-1"],
-					["Oldest", "w-8 text-right"],
+					["Oldest", "w-8 text-right", "age"],
 					["", "w-10"],
-					["Health", "w-28 text-right"],
+					["Health", "w-28 text-right", "health"],
 				]),
 				...accountGroups(signals).map((group, index) =>
 					accountGroupRow(h, group, index + 1, context),
 				),
 			])
 		: queueList(h, { ariaLabel: "Open signals" }, [
-				columnHeader(h, [
-					["#", "w-5 text-right"],
-					["Account", "w-52 max-md:w-40"],
-					["Signal and reason", "flex-1"],
+				columnHeader(h, model, [
+					["#", "w-5 text-right", "priority"],
+					["Account", "w-52 max-md:w-40", "account"],
+					["Signal and reason", "flex-1", "signal"],
 					["Evidence", "w-32 text-right max-lg:hidden"],
-					["Severity", "w-24"],
-					["Age", "w-8 text-right"],
+					["Severity", "w-24", "severity"],
+					["Age", "w-8 text-right", "age"],
 					["", "w-6"],
-					["Health", "w-28 text-right"],
+					["Health", "w-28 text-right", "health"],
 				]),
 				...signals.map((signal, index) => signalRow(h, signal, index + 1, context)),
 			])
