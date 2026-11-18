@@ -8,6 +8,7 @@ import { DEFAULT_HEALTH_SETTINGS, TEMPLATES } from "@hazel/domain/customers"
 import { CustomerRpcs } from "@hazel/domain/rpc"
 import type { OrganizationId, UserId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option, Redacted, type Scope } from "effect"
+import type { RpcGroup } from "effect/rpc"
 import { describe, expect, it } from "vitest"
 import { resolveTarget } from "../../../rpc/routing"
 import type { HazelRpcTag } from "../../../rpc/dispatch"
@@ -94,7 +95,7 @@ const PAYLOADS = {
 	"customers.ignoreRule.delete": { ruleId: uuid() },
 	"customers.metric.setUnit": { metricKey: "autumn.traces", unit: "GB" },
 	"customers.demo.seed": { accounts: 1 },
-} satisfies Record<HazelRpcTag & `customers.${string}`, Record<string, unknown>>
+} satisfies Record<RpcGroup.Rpcs<typeof CustomerRpcs>["_tag"], Record<string, unknown>>
 
 /** Settings, rules and their dry runs, shared views, data sources, unmatched records, the demo seed. */
 const ADMIN_ONLY = new Set([

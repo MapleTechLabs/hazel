@@ -15,16 +15,23 @@ import * as CurrentUser from "../current-user"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { RequiredScopes } from "../scopes/required-scopes"
 
-/** What an agent may do: read only, or read and write (send, reply, react, edit, delete). */
-export const AgentScope = Schema.Literals(["messages:read", "messages:write"])
+/**
+ * What an agent may do: read messages, or read and write them (send, reply, react, edit, delete),
+ * through the MCP server; or read the Customers area of the user's organizations (`customers:read`:
+ * the Customers read RPCs and the `/sync/customers` stream, e.g. the Raycast extension).
+ */
+export const AgentScope = Schema.Literals(["messages:read", "messages:write", "customers:read"])
 export type AgentScope = typeof AgentScope.Type
 
-export const ALL_AGENT_SCOPES: ReadonlyArray<AgentScope> = ["messages:read", "messages:write"]
+export const ALL_AGENT_SCOPES: ReadonlyArray<AgentScope> = AgentScope.literals
 
-/** Parse an OAuth `scope` string; unknown scopes are dropped, none means every scope. */
+/** What a client that names no scope gets: the MCP server's (never Customers unless asked). */
+export const DEFAULT_AGENT_SCOPES: ReadonlyArray<AgentScope> = ["messages:read", "messages:write"]
+
+/** Parse an OAuth `scope` string; unknown scopes are dropped, none means the default ones. */
 export const parseAgentScopes = (scope: string | null | undefined): ReadonlyArray<AgentScope> => {
 	const requested = (scope ?? "").split(/\s+/).filter((s): s is AgentScope => Schema.is(AgentScope)(s))
-	return requested.length === 0 ? ALL_AGENT_SCOPES : [...new Set(requested)]
+	return requested.length === 0 ? DEFAULT_AGENT_SCOPES : [...new Set(requested)]
 }
 
 export class AgentClientInfo extends Schema.Class<AgentClientInfo>("AgentClientInfo")({

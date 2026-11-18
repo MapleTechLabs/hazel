@@ -1,7 +1,8 @@
 /**
  * Agent access over the directory (D1): Hazel as an OAuth 2.1 authorization server for MCP clients
  * (dynamic registration, PKCE S256 authorization codes, rotating refresh tokens), personal access
- * tokens, and resolving a bearer token to the user and grant it acts for (`routes/mcp.ts`).
+ * tokens, and resolving a bearer token to the user and grant it acts for (`routes/mcp.ts`, and for
+ * `customers:read` the RPC middleware and the customers sync socket).
  *
  * Only SHA-256 hashes of codes and tokens are stored. D1 has no transactions, so each step is one
  * statement and a code is claimed (`redeemedAt`) before anything is issued for it: a replayed code
@@ -10,6 +11,7 @@
  */
 import { SQLite, schema } from "@hazel/db"
 import { type AgentScope, parseAgentScopes } from "@hazel/domain/http"
+import type { ApiScope } from "@hazel/domain/scopes"
 import type { AgentClientId, AgentGrantId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { Base64Url, Hex } from "effect/encoding"
@@ -115,6 +117,27 @@ export interface AgentPrincipal {
 	readonly grantId: AgentGrantId
 	readonly name: string
 	readonly scopes: ReadonlyArray<AgentScope>
+	/** When the token stops authenticating (epoch ms); `null` for a personal token without expiry. */
+	readonly expiresAt: number | null
+}
+
+/**
+ * The RPC scopes each agent scope grants on `/rpc`. The messages scopes are the MCP server's alone
+ * (its tools run the handlers themselves); `customers:read` reaches the Customers read RPCs.
+ */
+const AGENT_RPC_SCOPES = {
+	"messages:read": [],
+	"messages:write": [],
+	"customers:read": ["customers:read"],
+} as const satisfies Record<AgentScope, ReadonlyArray<ApiScope>>
+
+/** An agent may call an RPC when it requires scopes, and the agent's scopes grant each one. */
+export const agentMayCallRpc = (
+	agentScopes: ReadonlyArray<AgentScope>,
+	required: ReadonlyArray<ApiScope>,
+): boolean => {
+	const granted = new Set<ApiScope>(agentScopes.flatMap((scope) => AGENT_RPC_SCOPES[scope]))
+	return required.length > 0 && required.every((scope) => granted.has(scope))
 }
 
 /** The row an `INSERT … RETURNING` wrote; none is a broken invariant. */
@@ -370,6 +393,7 @@ export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/
 					grantId: grant.value.id,
 					name: grant.value.name,
 					scopes: toScopes(grant.value.scopes),
+					expiresAt: row.value.expiresAt?.getTime() ?? null,
 				})
 			}).pipe(Effect.withSpan("AgentAccess.authenticate"))
 

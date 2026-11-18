@@ -1,0 +1,65 @@
+{
+	"$schema": "https://www.raycast.com/schemas/extension.json",
+	"name": "hazel",
+	"private": true,
+	"description": "Search your Hazel customers, see their health and billing, and jump to their channel, Clerk, Stripe or Autumn.",
+	"categories": [
+		"Communication",
+		"Productivity"
+	],
+	"license": "MIT",
+	"author": "hazel",
+	"scripts": {
+		"dev": "ray develop",
+		"build:raycast": "ray build -e dist",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@raycast/api": "^2.13.1",
+		"@raycast/utils": "^2.3.3"
+	},
+	"devDependencies": {
+		"@types/node": "^22.19.0",
+		"@types/react": "^19.1.0",
+		"typescript": "^5.9.3",
+		"vitest": "^5.0.5"
+	},
+	"icon": "extension-icon.png",
+	"commands": [
+		{
+			"name": "customers",
+			"title": "Search Customers",
+			"subtitle": "Hazel",
+			"description": "Your organization's customers, kept in sync with Hazel's Customers area.",
+			"mode": "view"
+		},
+		{
+			"name": "sync-customers",
+			"title": "Sync Customers",
+			"subtitle": "Hazel",
+			"description": "Keeps the customer list fresh in the background.",
+			"mode": "no-view",
+			"interval": "10m"
+		}
+	],
+	"preferences": [
+		{
+			"name": "apiUrl",
+			"title": "API URL",
+			"description": "Hazel's API. Change it only for a local or preview stage.",
+			"type": "textfield",
+			"required": false,
+			"default": "https://api.hazel.sh"
+		},
+		{
+			"name": "appUrl",
+			"title": "App URL",
+			"description": "Where links open. Change it only for a local or preview stage.",
+			"type": "textfield",
+			"required": false,
+			"default": "https://app.hazel.sh"
+		}
+	],
+	"title": "Hazel"
+}

@@ -14,6 +14,9 @@
  * A failure that is not the token's (the session store, the directory, the object) closes with
  * 1011, which the client retries without dropping its token.
  *
+ * An agent token (`AgentAccess`) opens only `/sync/customers/:org`, and only for a grant with
+ * `customers:read` (the Raycast extension); on any other source it reads as an invalid token.
+ *
  * A Connect guest's mounted channel streams from its host channel's object (`channel_index`).
  *
  * `GET /sync/mux` carries every source of a client over one socket (`hazel.mux.v1, <token>`): the
@@ -37,6 +40,7 @@ import { type MuxOpenResult, refuseMuxStream, startMuxSession, toHttpServerRespo
 import * as AccessToken from "@hazel/auth/access-token"
 import { Clock, type Context, Effect, Option, Schema } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse, HttpTraceContext } from "effect/http"
+import { ACCESS_TOKEN_TTL_MS, AgentAccess, isAgentToken } from "../services/agent-access"
 import { HazelSession, type VerifiedUser } from "../services/hazel-session"
 import { ChannelId, OrganizationId, type UserId } from "@hazel/schema"
 import type { Socket } from "effect/socket"
@@ -227,6 +231,7 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 			// Resolved when the route is built: a handler only sees the request's own services.
 			const session = yield* HazelSession
 			const directory = yield* Directory
+			const agents = yield* AgentAccess
 			const namespaceOf = (kind: ObjectKind) => {
 				const namespace = env[OBJECT_NAMESPACES[kind]] as Namespace | undefined
 				return namespace !== undefined && typeof namespace.getByName === "function"
@@ -349,6 +354,36 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 							),
 						),
 				})
+
+			/**
+			 * An agent token on a `kind` socket: valid for the customers stream of a grant with
+			 * `customers:read`. A personal token has no expiry; its socket still closes with 4001
+			 * after an access token's lifetime, so a revoked grant stops streaming.
+			 */
+			const verifyAgentSocketToken = (kind: ObjectKind, token: string) =>
+				Effect.gen(function* () {
+					const refused = { _tag: "Checked", user: Option.none<VerifiedUser>() } as const
+					if (kind !== "customers") return refused
+					const agent = yield* agents.authenticate(token)
+					if (Option.isNone(agent) || !agent.value.scopes.includes("customers:read")) return refused
+					const user = yield* session.userOf(agent.value.userId)
+					const expiresAt =
+						agent.value.expiresAt ?? (yield* Clock.currentTimeMillis) + ACCESS_TOKEN_TTL_MS
+					return { _tag: "Checked", user: Option.some({ user, expiresAt }) } as const
+				}).pipe(
+					Effect.catchTags({
+						InvalidBearerTokenError: () =>
+							Effect.succeed({ _tag: "Checked", user: Option.none<VerifiedUser>() } as const),
+						DatabaseError: (error) =>
+							Effect.logWarning("Agent socket token check unavailable", {
+								error: error.message,
+							}).pipe(Effect.as({ _tag: "Unavailable" } as const)),
+						SessionLoadError: (error) =>
+							Effect.logWarning("Agent socket token check unavailable", {
+								detail: error.detail,
+							}).pipe(Effect.as({ _tag: "Unavailable" } as const)),
+					}),
+				)
 
 			/**
 			 * The object a socket for `kind`/`id` opens with `token` (checked by `verify`), and the
@@ -525,7 +560,9 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 					if (token === undefined) return acceptAndClose(SyncCloseCode.Reauth, "missing_token")
 
 					const target = yield* socketTarget(kind, id, token, (value) =>
-						verifySocketToken(session, value),
+						isAgentToken(value)
+							? verifyAgentSocketToken(kind, value)
+							: verifySocketToken(session, value),
 					)
 					if (target._tag === "Refused") return acceptAndClose(target.code, target.reason)
 

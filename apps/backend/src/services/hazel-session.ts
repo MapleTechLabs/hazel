@@ -175,6 +175,8 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 
 		return {
 			enabled,
+			/** The live user `userId` names, as `CurrentUser` (an agent token's, `AgentAccess`). */
+			userOf: loadUser,
 			verify,
 			verifyWithExpiry,
 			verifyAccessToken,

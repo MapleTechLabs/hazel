@@ -5,11 +5,14 @@ import {
 	InvalidBearerTokenError,
 	SessionLoadError,
 	SessionNotProvidedError,
+	UnauthorizedError,
 } from "@hazel/domain"
-import { Cause, Effect, Layer, Option } from "effect"
+import { Cause, Context, Effect, Layer, Option } from "effect"
 import { AuthMiddleware } from "@hazel/domain/rpc"
-import { type ApiScope, CurrentBotScopes } from "@hazel/domain/scopes"
+import { type ApiScope, CurrentBotScopes, RequiredScopes } from "@hazel/domain/scopes"
+import { AgentAccess, agentMayCallRpc, isAgentToken } from "../../services/agent-access"
 import { HazelSession } from "../../services/hazel-session"
+import { CurrentAgent } from "../../worker/objects/principal"
 
 export { AuthMiddleware } from "@hazel/domain/rpc"
 
@@ -30,8 +33,9 @@ export const AuthMiddlewareLive = Layer.effect(
 		const hazelSession = yield* HazelSession
 		const botRepo = yield* BotRepo
 		const userRepo = yield* UserRepo
+		const agentAccess = yield* AgentAccess
 
-		return AuthMiddleware.of((effect, { headers }) =>
+		return AuthMiddleware.of((effect, { headers, rpc }) =>
 			Effect.gen(function* () {
 				// Hazel session cookie (browser). RPC calls are POSTs, so the Origin is checked.
 				const authHeader = Headers.get(headers, "authorization")
@@ -53,6 +57,50 @@ export const AuthMiddlewareLive = Layer.effect(
 				// Bearer token: Hazel session credential (native clients) or bot token
 				if (Option.isSome(authHeader) && authHeader.value.startsWith("Bearer ")) {
 					const token = authHeader.value.slice(7)
+
+					// Agent token (`AgentAccess`): the user it acts for, on the RPCs its scopes grant
+					// (`customers:read`: the Customers reads); every other RPC is refused.
+					if (isAgentToken(token)) {
+						const agent = yield* agentAccess.authenticate(token).pipe(
+							Effect.catchTag("DatabaseError", (error) =>
+								Effect.logError("Agent token lookup failed", Cause.fail(error)).pipe(
+									Effect.andThen(
+										Effect.fail(
+											new SessionLoadError({
+												message: "Failed to validate agent token",
+												detail: "The session store is unavailable",
+											}),
+										),
+									),
+								),
+							),
+						)
+						if (Option.isNone(agent)) {
+							return yield* Effect.fail(
+								new InvalidBearerTokenError({
+									message: "Invalid agent token",
+									detail: "The token is invalid, expired or revoked",
+								}),
+							)
+						}
+						const required = Context.getOrElse(rpc.annotations, RequiredScopes, () => [])
+						if (!agentMayCallRpc(agent.value.scopes, required)) {
+							return yield* Effect.fail(
+								new UnauthorizedError({
+									message: "This token cannot call this method",
+									detail: `${rpc._tag} is outside the token's scopes`,
+								}),
+							)
+						}
+						const user = yield* hazelSession.userOf(agent.value.userId)
+						return yield* effect.pipe(
+							Effect.provideService(CurrentUser.Context, user),
+							Effect.provideService(CurrentAgent, {
+								grantId: agent.value.grantId,
+								name: agent.value.name,
+							}),
+						)
+					}
 
 					if (hazelSession.enabled && !token.startsWith("hzl_bot_")) {
 						const sessionUser = yield* hazelSession.verify(token)
