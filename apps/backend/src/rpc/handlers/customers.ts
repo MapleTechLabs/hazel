@@ -1625,7 +1625,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.impersonator.grant": ({ userId, organizationId: payloadOrg }) =>
+			"customers.impersonator.grant": ({ id, userId, organizationId: payloadOrg }) =>
 				Effect.gen(function* () {
 					const organizationId = yield* requireOwnOrganization(payloadOrg)
 					const actor = yield* requireAdmin
@@ -1639,7 +1639,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					return yield* txOnly(
 						db.run(
 							SQLite.insertInto(schema.customerImpersonatorsTable)
-								.values({ organizationId, userId, grantedBy: actor.userId })
+								.values({ id, organizationId, userId, grantedBy: actor.userId })
 								.onConflictDoNothing({ target: ["userId"] }),
 						),
 					)

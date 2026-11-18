@@ -458,7 +458,7 @@ interface ImpersonatorGrant {
 	readonly grantedBy: UserId
 }
 
-/** The server makes its own row (its own id); the optimistic one goes once that row syncs. */
+/** The server keeps the client's id, so the synced row replaces the optimistic one. */
 const grantImpersonator = optimisticAction({
 	collections: [customerImpersonatorCollection],
 	onMutate: (props: ImpersonatorGrant & Stamp & { readonly id: CustomerImpersonatorId }) => {
@@ -476,6 +476,7 @@ const grantImpersonator = optimisticAction({
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
 			const result = yield* client("customers.impersonator.grant", {
+				id: props.id,
 				organizationId: props.organizationId,
 				userId: props.userId,
 			})

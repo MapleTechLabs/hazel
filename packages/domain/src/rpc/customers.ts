@@ -16,6 +16,7 @@ import {
 	CustomerConnectionId,
 	CustomerContactId,
 	CustomerIgnoreRuleId,
+	CustomerImpersonatorId,
 	CustomerNoteId,
 	CustomerSavedViewId,
 	CustomerSignalId,
@@ -581,7 +582,16 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	),
 
 	/** Let a member sign in as customers' users (Clerk impersonation). Admins and owners. */
-	write("customers.impersonator.grant", { userId: UserId }, Tx, CustomersInvalidRequestError),
+	write(
+		"customers.impersonator.grant",
+		{
+			/** Client-generated, for the optimistic row. */
+			id: Schema.optionalKey(CustomerImpersonatorId),
+			userId: UserId,
+		},
+		Tx,
+		CustomersInvalidRequestError,
+	),
 
 	/**
 	 * Take the grant back. A link already handed out still works for its minute, and a session it

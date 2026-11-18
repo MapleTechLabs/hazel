@@ -201,10 +201,18 @@ describe("Customers authorization", () => {
 						),
 					),
 				).toBe("CustomersInvalidRequestError")
+				const grantId = uuid()
+				ok(
+					yield* world.call(
+						"customers.impersonator.grant",
+						{ id: grantId, userId: world.member },
+						world.owner,
+					),
+				)
 				ok(yield* world.call("customers.impersonator.grant", { userId: world.member }, world.owner))
-				ok(yield* world.call("customers.impersonator.grant", { userId: world.member }, world.owner))
-				expect(world.rows(`SELECT userId, grantedBy FROM customer_impersonators`)).toEqual([
-					{ userId: world.member, grantedBy: world.owner },
+				// The client's id is kept: the synced row replaces the optimistic one.
+				expect(world.rows(`SELECT id, userId, grantedBy FROM customer_impersonators`)).toEqual([
+					{ id: grantId, userId: world.member, grantedBy: world.owner },
 				])
 				// Granted, past the gate: the test connection holds no key, so Clerk is never called.
 				const refused = yield* world.call(
