@@ -70,6 +70,8 @@ export const catchUp = (options: {
 			socket.send(JSON.stringify({ _tag: "Hello", since: state.seq })),
 		)
 		socket.addEventListener("message", (event) => {
+			// Frames still in flight after an abort or `Ready` are not applied.
+			if (settled) return
 			// SAFETY: the source sends `SyncServerFrame`s as JSON text, one per message.
 			const frame = JSON.parse(String(event.data)) as ServerFrame
 			switch (frame._tag) {

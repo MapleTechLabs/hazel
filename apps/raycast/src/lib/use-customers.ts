@@ -63,8 +63,12 @@ export const useCustomers = (chosenId: string | undefined) => {
 				organizationId: org.id,
 				token: await accessToken({ forceRefresh }),
 				signal,
-				onCommit: setState,
+				// A sync preempted (another org chosen) must not write into the list on screen.
+				onCommit: (next) => {
+					if (!signal.aborted) setState(next)
+				},
 			})
+			if (signal.aborted) return
 			if (result === null) {
 				// Refused: nothing kept, and not asked again before the debounce passes.
 				forgetOrganization(api, org.id)

@@ -25,7 +25,13 @@ const accessories = (account: Account): Array<List.Item.Accessory> => {
 	const health = HEALTH[account.healthStatus]
 	return [
 		...(open.count > 0
-			? [{ icon: open.icon, text: `${open.count}`, tooltip: `${open.count} open risks` }]
+			? [
+					{
+						icon: open.icon,
+						text: `${open.count}`,
+						tooltip: `${open.count} open risk${open.count === 1 ? "" : "s"}`,
+					},
+				]
 			: []),
 		...(account.lifecycleStage !== "active" ? [{ text: STAGE[account.lifecycleStage] }] : []),
 		...(account.mrrMinor > 0
@@ -80,7 +86,7 @@ export default function Command() {
 			}
 		: customers.isSyncing
 			? { title: "Syncing customers…" }
-			: customers.failure !== undefined && organization === undefined
+			: customers.failure !== undefined
 				? {
 						title: "Could not reach Hazel",
 						description: `${customers.failure}\n\nPress ⌘R to try again.`,
@@ -119,11 +125,7 @@ export default function Command() {
 			}
 		>
 			<List.EmptyView
-				icon={
-					customers.failure !== undefined && organization === undefined
-						? Icon.Warning
-						: Icon.PersonLines
-				}
+				icon={customers.failure !== undefined ? Icon.Warning : Icon.PersonLines}
 				{...emptyView}
 				actions={
 					<ActionPanel>

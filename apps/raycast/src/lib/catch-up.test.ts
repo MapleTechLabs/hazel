@@ -111,6 +111,18 @@ describe("catchUp", () => {
 		expect(FakeSocket.last.closedWith).toBe(1000)
 		expect(memory.synced.has("org-3")).toBe(false)
 
+		// A frame that arrives after the abort is not applied.
+		const onCommit = vi.fn()
+		const late = new AbortController()
+		const pending = sync("org-4", late.signal, onCommit)
+		await opened()
+		late.abort()
+		FakeSocket.last.frame({ _tag: "Begin", reset: true })
+		FakeSocket.last.frame({ _tag: "Commit", seq: 1 })
+		await expect(pending).rejects.toBeInstanceOf(SyncClosedError)
+		expect(onCommit).not.toHaveBeenCalled()
+		expect(memory.states.has("org-4")).toBe(false)
+
 		const before = FakeSocket.last
 		await expect(sync("org-3", controller.signal)).rejects.toBeInstanceOf(SyncClosedError)
 		expect(FakeSocket.last).toBe(before)
