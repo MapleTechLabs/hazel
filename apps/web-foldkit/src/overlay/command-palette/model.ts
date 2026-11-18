@@ -1,4 +1,4 @@
-import { ChannelId, UserId } from "@hazel/schema"
+import { ChannelId, CustomerAccountId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as CommandMenu from "../../ui/command-menu"
 import { RecentSearch, SearchAutocomplete, SearchData, SearchFilter, Suggestion } from "./search-data"
@@ -86,6 +86,15 @@ export const DmChannel = Schema.Struct({
 })
 export type DmChannel = typeof DmChannel.Type
 
+/** A customer account the home page can jump to. */
+export const CustomerSummary = Schema.Struct({
+	id: CustomerAccountId,
+	name: Schema.String,
+	domains: Schema.Array(Schema.String),
+	logoUrl: Schema.NullOr(Schema.String),
+})
+export type CustomerSummary = typeof CustomerSummary.Type
+
 export const Theme = Schema.Literals(["system", "light", "dark"])
 export type Theme = typeof Theme.Type
 
@@ -97,6 +106,7 @@ export const Model = Schema.Struct({
 	menu: CommandMenu.Model,
 	channels: Schema.Array(ChannelSummary),
 	dmChannels: Schema.Array(DmChannel),
+	customers: Schema.Array(CustomerSummary),
 	recentChannelIds: Schema.Array(ChannelId),
 	recentChannels: Schema.Array(ChannelSummary),
 	/** `userChannels` (every channel the user is a member of), the join page's first query. */
