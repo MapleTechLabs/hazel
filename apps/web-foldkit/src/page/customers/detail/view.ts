@@ -1,4 +1,5 @@
 import * as Customers from "@hazel/domain/customers"
+import { CustomerAccountId } from "@hazel/schema"
 import { Option } from "effect"
 import { Submodel } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
@@ -1049,7 +1050,10 @@ const mergeDialog = (h: HtmlBuilder<Message>, model: Model, context: Context | n
 									{
 										id: "customer-merge-pick",
 										value: picked?.id ?? null,
-										onChange: (pickedId) => Message.PickedMergeAccount({ pickedId }),
+										onChange: (value) =>
+											Message.PickedMergeAccount({
+												pickedId: CustomerAccountId.make(value),
+											}),
 										className: "max-h-72 overflow-y-auto",
 									},
 									(parts) => [

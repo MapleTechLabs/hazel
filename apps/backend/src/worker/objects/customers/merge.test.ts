@@ -3,6 +3,7 @@
  * become one customer; the providers keep their ids and later syncs land on the kept account.
  */
 import type { UpsertAccount, UpsertContact, UpsertSubscription } from "@hazel/domain/customers"
+import type { CustomerAccountId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { addDays } from "./time"
@@ -90,7 +91,10 @@ describe("customers.account.merge", () => {
 					},
 				])
 				const idOf = (name: string) =>
-					world.rows<{ id: string }>(`SELECT id FROM customer_accounts WHERE name = ?`, name)[0]!.id
+					world.rows<{ id: CustomerAccountId }>(
+						`SELECT id FROM customer_accounts WHERE name = ?`,
+						name,
+					)[0]!.id
 				const kept = idOf("Acme")
 				const merged = idOf("Acme EU")
 
@@ -214,7 +218,10 @@ describe("customers.account.merge", () => {
 					member("user_z", "org_2", "ada@acme.com"),
 				])
 				const idOf = (name: string) =>
-					world.rows<{ id: string }>(`SELECT id FROM customer_accounts WHERE name = ?`, name)[0]!.id
+					world.rows<{ id: CustomerAccountId }>(
+						`SELECT id FROM customer_accounts WHERE name = ?`,
+						name,
+					)[0]!.id
 				const kept = idOf("Acme")
 				const merged = idOf("Acme EU")
 				const signal = (accountId: string, ruleId: string) =>

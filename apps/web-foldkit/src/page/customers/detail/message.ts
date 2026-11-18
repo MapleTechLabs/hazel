@@ -133,7 +133,7 @@ export const Message = defineMessageUnion({
 	ChangedMergeQuery: { value: Schema.String },
 	ClearedMergeQuery: {},
 	/** Not `accountId`: a message naming another account is dropped (`isForOtherAccount`). */
-	PickedMergeAccount: { pickedId: Schema.String },
+	PickedMergeAccount: { pickedId: CustomerAccountId },
 	PressedConfirmMerge: {},
 	/** `accountId` is the kept customer: another customer's page drops the answer. */
 	SucceededMerge: { accountId: CustomerAccountId, name: Schema.String },
