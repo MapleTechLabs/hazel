@@ -6,7 +6,13 @@ import { formatDate, formatMoney, formatWeekdayTime } from "../../../customers/f
 import { healthBadge, healthDot, kindChip, severityGlyph } from "../../../customers/ui/badges"
 import { evidenceViz } from "../../../customers/ui/evidence"
 import { companyLogo, personAvatar, personLabel } from "../../../customers/ui/identity"
-import { planLine, queueRow } from "../../../customers/ui/queue-row"
+import {
+	accountMark,
+	type AccountRunMark,
+	planLine,
+	queueRow,
+	RUN_CONTINUES_CLASS,
+} from "../../../customers/ui/queue-row"
 import { IconClock } from "../../../icons"
 import { Message } from "./message"
 import type { AccountGroup } from "./model"
@@ -47,18 +53,29 @@ const PHONE_ACCOUNT = "max-md:w-auto max-md:min-w-0 max-md:flex-1 max-md:shrink"
 /** Under the account on a phone, in line with its name (past the size-7 logo and its gap). */
 const PHONE_SECOND_LINE = "max-md:order-last max-md:basis-full max-md:pl-10"
 
-const accountCell = <M>(h: HtmlBuilder<M>, account: AccountRow, className = `w-52 ${PHONE_ACCOUNT}`): Html =>
+/** The account (the line alone when the row above is the same account's). */
+const accountCell = <M>(h: HtmlBuilder<M>, account: AccountRow, run: AccountRunMark): Html =>
 	h.div(
-		[h.Role("cell"), h.Class(twMerge("flex shrink-0 items-center gap-3", className))],
 		[
-			companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "sm" }),
-			h.div(
-				[h.Class("flex min-w-0 flex-col")],
-				[
-					h.span([h.Class("truncate font-medium text-fg text-sm")], [account.name]),
-					h.span([h.Class("truncate text-muted-fg text-xs tabular-nums")], [planLine(account)]),
-				],
-			),
+			h.Role("cell"),
+			h.Class(twMerge("flex w-52 shrink-0 items-center gap-3 self-stretch", PHONE_ACCOUNT)),
+		],
+		[
+			accountMark(h, account, run),
+			...(run.continuesAbove
+				? []
+				: [
+						h.div(
+							[h.Class("flex min-w-0 flex-col")],
+							[
+								h.span([h.Class("truncate font-medium text-fg text-sm")], [account.name]),
+								h.span(
+									[h.Class("truncate text-muted-fg text-xs tabular-nums")],
+									[planLine(account)],
+								),
+							],
+						),
+					]),
 		],
 	)
 
@@ -67,6 +84,7 @@ const rowShell = (
 	h: HtmlBuilder<Message>,
 	signal: SignalRow,
 	context: RowContext,
+	run: AccountRunMark,
 	cells: ReadonlyArray<Html>,
 ): Html => {
 	const isSelected = signal.id === context.selectedId
@@ -83,6 +101,7 @@ const rowShell = (
 					"max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-1.5",
 					"transition-colors hover:bg-wash data-focused:bg-wash",
 					"before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary before:opacity-0 data-focused:before:opacity-100",
+					run.continuesAbove && RUN_CONTINUES_CLASS,
 				),
 			),
 			h.OnClick(Message.ClickedRow({ signalId: signal.id })),
@@ -97,11 +116,13 @@ export const signalRow = (
 	signal: SignalRow,
 	rank: number,
 	context: RowContext,
+	run: AccountRunMark,
 ): Html => {
 	const account = context.accountsById.get(signal.accountId)
 	if (account === undefined) return h.empty
 	const isSelected = signal.id === context.selectedId
 	return queueRow(h, {
+		run,
 		id: rowIdOf(signal.id),
 		rank,
 		account,
@@ -123,28 +144,34 @@ export const compactRow = (
 	signal: SignalRow,
 	rank: number,
 	context: RowContext,
+	run: AccountRunMark,
 ): Html => {
 	const account = context.accountsById.get(signal.accountId)
 	if (account === undefined) return h.empty
-	return rowShell(h, signal, context, [
+	return rowShell(h, signal, context, run, [
 		h.span(
 			[h.Role("cell"), h.Class("w-5 shrink-0 text-right text-muted-fg text-sm tabular-nums")],
 			[String(rank)],
 		),
-		companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "sm" }),
+		accountMark(h, account, run),
 		h.div(
 			[h.Role("cell"), h.Class("flex min-w-0 flex-1 flex-col gap-0.5")],
 			[
-				h.span(
-					[h.Class("flex min-w-0 items-baseline gap-2")],
-					[
-						h.span([h.Class("truncate font-medium text-fg text-sm")], [account.name]),
-						h.span(
-							[h.Class("shrink-0 text-muted-fg text-xs tabular-nums")],
-							[`${formatMoney(account.mrrMinor, account.currency)}/mo`],
-						),
-					],
-				),
+				// A continuing row leaves the account to the row above.
+				...(run.continuesAbove
+					? []
+					: [
+							h.span(
+								[h.Class("flex min-w-0 items-baseline gap-2")],
+								[
+									h.span([h.Class("truncate font-medium text-fg text-sm")], [account.name]),
+									h.span(
+										[h.Class("shrink-0 text-muted-fg text-xs tabular-nums")],
+										[`${formatMoney(account.mrrMinor, account.currency)}/mo`],
+									),
+								],
+							),
+						]),
 				h.span(
 					[h.Class("flex min-w-0 items-center gap-1.5 text-xs")],
 					[
@@ -178,7 +205,8 @@ export const accountGroupRow = (
 	if (account === undefined) return h.empty
 	const oldest = Math.min(...group.signals.map((signal) => signal.openedAtMs))
 	const assignees = [...new Set(group.signals.map((signal) => signal.assigneeUserId))]
-	return rowShell(h, lead, context, [
+	// One row per account: nothing to join.
+	return rowShell(h, lead, context, { continuesAbove: false, continuesBelow: false }, [
 		h.span(
 			[
 				h.Role("cell"),
@@ -292,11 +320,16 @@ const wakeCell = (h: HtmlBuilder<Message>, signal: SignalRow, nowMs: number): Ht
 }
 
 /** Snoozed tab: signal and snooze note, wake time, who snoozed it. */
-export const snoozedRow = (h: HtmlBuilder<Message>, signal: SignalRow, context: RowContext): Html => {
+export const snoozedRow = (
+	h: HtmlBuilder<Message>,
+	signal: SignalRow,
+	context: RowContext,
+	run: AccountRunMark,
+): Html => {
 	const account = context.accountsById.get(signal.accountId)
 	if (account === undefined) return h.empty
-	return rowShell(h, signal, context, [
-		accountCell(h, account),
+	return rowShell(h, signal, context, run, [
+		accountCell(h, account, run),
 		h.div(
 			[h.Role("cell"), h.Class(twMerge("flex min-w-0 flex-1 flex-col gap-0.5", PHONE_SECOND_LINE))],
 			[
@@ -371,7 +404,12 @@ const dismissNoteOf = (reason: string | null): string =>
 	reason === null ? NOT_USEFUL : (DISMISS_NOTE.get(reason) ?? `Dismissed: ${reason}`)
 
 /** Done tab: resolution, outcome, who resolved it (Hazel when it cleared on its own), how long it was open. */
-export const doneRow = (h: HtmlBuilder<Message>, signal: SignalRow, context: RowContext): Html => {
+export const doneRow = (
+	h: HtmlBuilder<Message>,
+	signal: SignalRow,
+	context: RowContext,
+	run: AccountRunMark,
+): Html => {
 	const account = context.accountsById.get(signal.accountId)
 	if (account === undefined) return h.empty
 	const resolvedMs = resolvedAtMsOf(signal) ?? context.nowMs
@@ -383,8 +421,8 @@ export const doneRow = (h: HtmlBuilder<Message>, signal: SignalRow, context: Row
 				: signal.resolutionNote === null
 					? signal.reason
 					: `“${signal.resolutionNote}”`
-	return rowShell(h, signal, context, [
-		accountCell(h, account),
+	return rowShell(h, signal, context, run, [
+		accountCell(h, account, run),
 		h.div(
 			[h.Role("cell"), h.Class(twMerge("flex min-w-0 flex-1 flex-col gap-0.5", PHONE_SECOND_LINE))],
 			[

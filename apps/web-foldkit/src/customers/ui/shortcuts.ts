@@ -22,7 +22,8 @@ export type Shortcut = Readonly<{ keys: ReadonlyArray<string>; label: string }>
 export const QUEUE_SHORTCUTS: ReadonlyArray<Shortcut> = [
 	{ keys: ["j", "k"], label: "Navigate" },
 	{ keys: ["a"], label: "Assign" },
-	{ keys: ["s"], label: "Snooze" },
+	{ keys: ["i"], label: "Assign to me" },
+	{ keys: ["h"], label: "Snooze" },
 	{ keys: ["d"], label: "Done" },
 	{ keys: ["Enter"], label: "Open" },
 ]

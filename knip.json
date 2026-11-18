@@ -47,7 +47,7 @@
 			],
 			// Left external by `bun run build` and loaded at runtime from the bundle.
 			"ignoreDependencies": ["@tailwindcss/node", "@tailwindcss/oxide", "postcss", "prismjs"],
-			// macOS plist tool, used by the bundle and iOS scripts.
+			// macOS's plist tool, for the app bundle and iOS scripts.
 			"ignoreBinaries": ["plutil"]
 		},
 		"apps/web-foldkit": {

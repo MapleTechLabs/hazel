@@ -7,7 +7,7 @@ import { ModalRequest } from "../modal"
 import { ToastRequest } from "../toasts"
 import { PresenceStatus } from "../../platform/presence/model"
 import { ThemePreference } from "../../theme"
-import { ChannelSummary, ChannelType, DmChannel } from "./model"
+import { ChannelSummary, ChannelType, CustomerSummary, DmChannel } from "./model"
 import { RecentSearch, SearchAutocomplete, SearchData, Suggestion } from "./search-data"
 
 /** What can go wrong joining a channel, beyond the shared reasons. */
@@ -23,6 +23,7 @@ export const Message = defineMessageUnion({
 	ClickedEscButton: {},
 	UpdatedChannels: { channels: Schema.Array(ChannelSummary) },
 	UpdatedDmChannels: { dmChannels: Schema.Array(DmChannel) },
+	UpdatedCustomers: { customers: Schema.Array(CustomerSummary) },
 	UpdatedRecentChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedRecentChannels: { channels: Schema.Array(ChannelSummary) },
 	UpdatedMemberChannelIds: { channelIds: Schema.Array(ChannelId) },

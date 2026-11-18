@@ -11,7 +11,6 @@ import * as Dom from "foldkit/dom"
 import type { CommonError } from "~/lib/error-messages"
 import {
 	assignSignalAction,
-	dismissSignalAction,
 	markSignalDoneAction,
 	reopenSignalAction,
 	snoozeSignalAction,
@@ -75,12 +74,6 @@ export const MarkSignalDone = Command.define("MarkSignalDone", {
 		markSignalDoneAction({ ...args, note: note.trim() === "" ? undefined : note.trim() }).pipe(
 			settle(args.signalId, "done"),
 		),
-})
-
-export const DismissSignal = Command.define("DismissSignal", {
-	args: { ...target, userId: UserId },
-	messages: signalMessages,
-	execute: (args) => dismissSignalAction(args).pipe(settle(args.signalId, "dismiss")),
 })
 
 export const ReopenSignal = Command.define("ReopenSignal", {
