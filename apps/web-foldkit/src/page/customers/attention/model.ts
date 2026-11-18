@@ -100,7 +100,6 @@ export const Model = Schema.Struct({
 	detail: Schema.NullOr(PreviewDetail),
 	assignMenu: Menu.Model,
 	snoozeMenu: Menu.Model,
-	moreMenu: Menu.Model,
 	filterMenu: Menu.Model,
 	sortMenu: Menu.Model,
 	doneModal: Modal.Model,
@@ -113,13 +112,12 @@ export type Model = typeof Model.Type
 export const SEARCH_ID = "attention-search"
 export const ASSIGN_MENU_ID = "attention-assign"
 export const SNOOZE_MENU_ID = "attention-snooze"
-export const MORE_MENU_ID = "attention-more"
 export const FILTER_MENU_ID = "attention-filter"
 export const SORT_MENU_ID = "attention-sort"
 export const DONE_MODAL_ID = "attention-done"
 export const SNOOZE_DATE_MODAL_ID = "attention-snooze-date"
 
-/** Done shows what was resolved in the last week. */
+/** Done shows what was resolved in the last week, and every signal still muted. */
 export const DONE_WINDOW_MS = 7 * 86_400_000
 
 // WHAT IS SHOWN
@@ -187,10 +185,15 @@ const matchesFilters = (
 	)
 }
 
-/** Done keeps the last week; the rest of a tab is its status. */
+/**
+ * Done keeps the last week, and a done or dismissed signal still true however old (it stays muted
+ * until it clears, so it must stay reachable to reopen); the rest of a tab is its status.
+ */
 const isInTab = (tab: QueueTab, viewer: Viewer, signal: SignalRowType): boolean =>
 	queueTabOf(signal) === tab &&
-	(tab !== "done" || (resolvedAtMsOf(signal) ?? 0) >= viewer.nowMs - DONE_WINDOW_MS)
+	(tab !== "done" ||
+		(signal.status !== "auto_resolved" && signal.closedAtMs === null) ||
+		(resolvedAtMsOf(signal) ?? 0) >= viewer.nowMs - DONE_WINDOW_MS)
 
 const sortedForTab = (
 	model: Model,
@@ -221,18 +224,42 @@ const sortedForTab = (
 	return Array.sort(signals, Order.combine(model.isSortReversed ? Order.flip(order) : order, byPriority))
 }
 
-/** The current tab's signals after the filters and search, in display order. */
+/** Keeps each account's signals together, at its first signal's place in the sorted order. */
+const clusterByAccount = (signals: ReadonlyArray<SignalRowType>): ReadonlyArray<SignalRowType> => {
+	const byAccount = new Map<CustomerAccountId, Array<SignalRowType>>()
+	for (const signal of signals) {
+		const cluster = byAccount.get(signal.accountId)
+		if (cluster === undefined) byAccount.set(signal.accountId, [signal])
+		else cluster.push(signal)
+	}
+	return [...byAccount.values()].flat()
+}
+
+/** The current tab's signals after the filters and search, in display order (an account's together). */
 export const visibleSignals = (model: Model, viewer: Viewer): ReadonlyArray<SignalRowType> => {
 	const accountsById = accountsByIdOfModel(model)
-	return sortedForTab(
-		model,
-		accountsById,
-		(model.signals ?? []).filter(
-			(signal) =>
-				isInTab(model.tab, viewer, signal) && matchesFilters(model, viewer, accountsById, signal),
+	return clusterByAccount(
+		sortedForTab(
+			model,
+			accountsById,
+			(model.signals ?? []).filter(
+				(signal) =>
+					isInTab(model.tab, viewer, signal) && matchesFilters(model, viewer, accountsById, signal),
+			),
 		),
 	)
 }
+
+/** Where a row sits in its account's run of rows: whether the row above and below are the same account. */
+export interface AccountRun {
+	readonly continuesAbove: boolean
+	readonly continuesBelow: boolean
+}
+
+export const accountRunOf = (signals: ReadonlyArray<SignalRowType>, index: number): AccountRun => ({
+	continuesAbove: index > 0 && signals[index - 1]?.accountId === signals[index]?.accountId,
+	continuesBelow: signals[index + 1]?.accountId === signals[index]?.accountId,
+})
 
 /** Each tab's count under the current filters. */
 export const tabCounts = (model: Model, viewer: Viewer): Readonly<Record<QueueTab, number>> => {
@@ -253,7 +280,7 @@ export interface AccountGroup {
 	readonly signals: ReadonlyArray<SignalRowType>
 }
 
-/** Account grouping: accounts ordered by their best signal. */
+/** Account grouping: accounts ordered by their best signal (`visibleSignals` keeps each one's together). */
 export const accountGroups = (signals: ReadonlyArray<SignalRowType>): ReadonlyArray<AccountGroup> => {
 	const groups = new Map<CustomerAccountId, { lead: SignalRowType; signals: Array<SignalRowType> }>()
 	for (const signal of signals) {
@@ -375,12 +402,6 @@ export const localDateOf = (nowMs: number, days = 0): string => {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 
-export const moreEntries: ReadonlyArray<Menu.Entry> = [
-	Menu.item("open_customer"),
-	Menu.separator,
-	Menu.item("dismiss", { intent: "Danger" }),
-]
-
 export const sortEntries: ReadonlyArray<Menu.Entry> = Sort.literals.map((sort) => Menu.item(sort))
 
 /** Filter keys: `<field>:<value>` toggles that filter. */
@@ -471,9 +492,9 @@ export const QueueKey = Schema.Literals([
 	"next",
 	"previous",
 	"assign",
+	"assignToMe",
 	"snooze",
 	"done",
-	"dismiss",
 	"reopen",
 	"open",
 	"preview",

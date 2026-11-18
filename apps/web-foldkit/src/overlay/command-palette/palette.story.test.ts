@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ChannelId, MessageId } from "@hazel/schema"
+import { ChannelId, CustomerAccountId, MessageId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
@@ -258,6 +258,28 @@ describe("home actions", () => {
 			message(item("status:dnd")),
 			Command.resolve(SetPresenceStatus, Message.FailedSetPresenceStatus({ reason: "Offline" })),
 			model((m) => expect(m.isOpen).toBe(false)),
+		)
+	})
+
+	test("customers show once the user types, matched by name or domain, and open their page", () => {
+		const accountId = Schema.decodeSync(CustomerAccountId)("00000000-0000-4000-8000-0000000000a1")
+		const customerItems = (m: Model) =>
+			CommandMenu.visibleSections(m.menu)
+				.filter((section) => section.label._tag === "Some" && section.label.value === "Customers")
+				.flatMap((section) => section.items.map((entry) => entry.key))
+		story(
+			run,
+			given(opened),
+			message(
+				Message.UpdatedCustomers({
+					customers: [{ id: accountId, name: "Acme", domains: ["acme.dev"], logoUrl: null }],
+				}),
+			),
+			model((m) => expect(customerItems(m)).toEqual([])),
+			message(searched("acme.d")),
+			model((m) => expect(customerItems(m)).toEqual([`customer:${accountId}`])),
+			message(item(`customer:${accountId}`)),
+			expectOutMessage(OutMessage.Completed({ href: `/hazel/customers/${accountId}`, toast: null })),
 		)
 	})
 

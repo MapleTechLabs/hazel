@@ -14,6 +14,7 @@ import {
 	AuthorizeAgentResponse,
 	CreateAgentTokenResponse,
 	parseAgentScopes,
+	storedAgentScopes,
 } from "@hazel/domain/http"
 import type { schema } from "@hazel/db"
 import { DateTime, Effect, Option } from "effect"
@@ -31,7 +32,7 @@ const toGrantInfo = (grant: schema.AgentGrant) =>
 		id: grant.id,
 		kind: grant.kind,
 		name: grant.name,
-		scopes: parseAgentScopes(grant.scopes.join(" ")),
+		scopes: storedAgentScopes(grant.scopes),
 		createdAt: DateTime.fromDateUnsafe(grant.createdAt),
 		lastUsedAt: grant.lastUsedAt === null ? null : DateTime.fromDateUnsafe(grant.lastUsedAt),
 	})

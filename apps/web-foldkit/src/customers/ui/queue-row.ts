@@ -6,6 +6,7 @@ import { ariaButton, button } from "../../ui/button"
 import { formatMoney } from "../format"
 import { healthBadge, kindChip, severityChip } from "./badges"
 import { companyLogo, personAvatar } from "./identity"
+import { kbd } from "./shortcuts"
 
 /**
  * A row of the Needs-attention queue (Foundations › Queue Row Signal States): rank, account,
@@ -33,12 +34,50 @@ export type QueueRowOptions<M> = Readonly<{
 	health: Readonly<{ status: HealthStatus; score: number | null }>
 	isFocused?: boolean
 	isSelected?: boolean
+	/** The account's other signals in the rows next to this one (`accountMark`). */
+	run?: AccountRunMark
 	/** A press on the row: select it (the side panel preview). */
 	onPress?: M
 	/** Shown in place of evidence…assignee on hover/focus: `queueAction`s and the `⋯` menu. */
 	actions?: ReadonlyArray<Html>
 	className?: string
 }>
+
+/** Whether the rows above and below are the same account's signals. */
+export type AccountRunMark = Readonly<{ continuesAbove: boolean; continuesBelow: boolean }>
+
+const NO_RUN: AccountRunMark = { continuesAbove: false, continuesBelow: false }
+
+/**
+ * A row's account logo, joined by a line to the same account's rows above and below; a row that
+ * continues the account above draws only the line. Stretches over the row's `py-3` so the line meets
+ * the next row's. A phone's wrapped rows go without the line.
+ */
+export const accountMark = <M>(
+	h: HtmlBuilder<M>,
+	account: Readonly<{ name: string; logoUrl: string | null }>,
+	run: AccountRunMark = NO_RUN,
+): Html => {
+	const line = (isShown: boolean) =>
+		h.span([h.Class(twMerge("w-px flex-1 max-md:hidden", isShown && "bg-border"))])
+	return h.span(
+		[
+			h.Class(
+				"-my-3 flex w-7 shrink-0 flex-col items-center self-stretch max-md:my-0 max-md:justify-center",
+			),
+		],
+		run.continuesAbove
+			? [line(true), ...(run.continuesBelow ? [] : [line(false)])]
+			: [
+					line(false),
+					companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "sm" }),
+					line(run.continuesBelow),
+				],
+	)
+}
+
+/** A continuing row's top border: the account's rows read as one block. */
+export const RUN_CONTINUES_CLASS = "border-t-transparent"
 
 /** `Growth · $2,150/mo`, `Trial · $0/mo`. */
 export const planLine = (account: QueueRowOptions<never>["account"]): string =>
@@ -60,6 +99,7 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 					"before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary before:opacity-0 data-focused:before:opacity-100",
 					options.isSelected && "bg-primary-subtle/40 hover:bg-primary-subtle/50",
 					options.onPress !== undefined && "cursor-pointer",
+					options.run?.continuesAbove && RUN_CONTINUES_CLASS,
 					options.className,
 				),
 			),
@@ -77,25 +117,29 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 				[
 					h.Role("cell"),
 					h.Class(
-						"flex w-52 shrink-0 items-center gap-3 max-md:w-auto max-md:min-w-0 max-md:flex-1 max-md:shrink",
+						"flex w-52 shrink-0 items-center gap-3 self-stretch max-md:w-auto max-md:min-w-0 max-md:flex-1 max-md:shrink",
 					),
 				],
 				[
-					companyLogo(h, {
-						name: options.account.name,
-						logoUrl: options.account.logoUrl,
-						size: "sm",
-					}),
-					h.div(
-						[h.Class("flex min-w-0 flex-col")],
-						[
-							h.span([h.Class("truncate font-medium text-fg text-sm")], [options.account.name]),
-							h.span(
-								[h.Class("truncate text-muted-fg text-xs tabular-nums")],
-								[planLine(options.account)],
-							),
-						],
-					),
+					accountMark(h, options.account, options.run),
+					// A continuing row leaves the account to the row above.
+					...(options.run?.continuesAbove
+						? []
+						: [
+								h.div(
+									[h.Class("flex min-w-0 flex-col")],
+									[
+										h.span(
+											[h.Class("truncate font-medium text-fg text-sm")],
+											[options.account.name],
+										),
+										h.span(
+											[h.Class("truncate text-muted-fg text-xs tabular-nums")],
+											[planLine(options.account)],
+										),
+									],
+								),
+							]),
 				],
 			),
 			h.div(
@@ -245,6 +289,8 @@ export const queueAction = <M>(
 		onPress?: M
 		/** An icon-only action (`⋯`) is named by `label`. */
 		iconOnly?: boolean
+		/** The action's queue key, shown after the label (`A`, `H`, `D`). */
+		shortcut?: string
 		attributes?: ReadonlyArray<Attribute<M> | ChildAttribute>
 		overlay?: Html
 	}>,
@@ -263,6 +309,7 @@ export const queueAction = <M>(
 		[
 			...(options.icon ? [options.icon] : []),
 			...(options.iconOnly ? [] : [options.label]),
+			...(options.shortcut === undefined ? [] : [kbd(h, options.shortcut, "-mr-0.5 h-4 min-w-4")]),
 			...(options.overlay ? [options.overlay] : []),
 		],
 	)

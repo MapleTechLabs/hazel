@@ -49,7 +49,6 @@ import {
 	COMPUTE_INTERVAL_MS,
 	computeProgress,
 	historyRebuildPending,
-	nextReopenAt,
 	resetComputeFailures,
 	saveComputeProgress,
 	scheduleComputeAt,
@@ -83,8 +82,6 @@ const COMPUTE_TURN_BUDGET_MS = 10_000
 const MAX_CHUNKS_PER_TURN = 8
 /** A compute spread over turns that started longer ago than this starts over (its totals are stale). */
 const COMPUTE_PROGRESS_MAX_AGE_MS = 60 * 60_000
-/** A done signal whose reopen cannot be checked (its source is unavailable) is checked again then. */
-const REOPEN_RETRY_MS = DAY_MS
 /** A source disconnected this long is gone for good: the signals that need it close. */
 const GONE_AFTER_MS = 14 * DAY_MS
 /** Retention (`prune`). */
@@ -546,26 +543,7 @@ const writeSignals = Effect.fn("Customers.writeSignals")(function* (snapshot: Sn
 						// stays as it is, and nothing new opens until the source is back; disconnected for
 						// good, the signal closes.
 						if (result._tag === "NoMatch" && result.reason === "Missing data source") {
-							if (signal === null) return
-							if (!sourceGone) {
-								// A done signal due to reopen cannot be checked: checked again later, so
-								// its overdue reopen does not bring every compute forward.
-								if (
-									signal.status === "done" &&
-									signal.reopenAfter !== null &&
-									signal.reopenAfter <= now
-								) {
-									yield* db.run(
-										SQLite.update(schema.customerSignalsTable)
-											.set({
-												reopenAfter: new Date(now.getTime() + REOPEN_RETRY_MS),
-												updatedAt: now,
-											})
-											.where(($) => [$.id.eq(signal.id)]),
-									)
-								}
-								return
-							}
+							if (signal === null || !sourceGone) return
 							counts.updated++
 							live.delete(key)
 							yield* db.run(
@@ -1276,20 +1254,9 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	yield* resetComputeFailures
 	// Names a source changed, accounts a source deleted: chat's view of linked channels follows.
 	yield* publishChannelCustomersAfterCompute
-	// Hourly; sooner after a person's change during a compute spread over turns, or for a done
-	// signal's reopen check (one already overdue, its source unavailable, waits for the hourly run).
+	// Hourly; sooner after a person's change during a compute spread over turns.
 	const again = yield* takeComputeAgain
-	const reopen = yield* nextReopenAt(now)
-	const hourly = now.getTime() + COMPUTE_INTERVAL_MS
-	const soon = now.getTime() + COMPUTE_DEBOUNCE_MS
-	yield* scheduleComputeAt(
-		again
-			? soon
-			: Option.match(reopen, {
-					onNone: () => hourly,
-					onSome: (at) => Math.min(hourly, Math.max(at, soon)),
-				}),
-	)
+	yield* scheduleComputeAt(now.getTime() + (again ? COMPUTE_DEBOUNCE_MS : COMPUTE_INTERVAL_MS))
 })
 
 /** Snoozes that ended open again (between computes). */

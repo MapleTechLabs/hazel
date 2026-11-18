@@ -1,4 +1,4 @@
-import { ChannelId } from "@hazel/schema"
+import { ChannelId, CustomerAccountId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { Command, type Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
@@ -32,6 +32,7 @@ export const init = (): Model => ({
 	menu: CommandMenu.init({ id: MENU_ID, sections: [] }),
 	channels: [],
 	dmChannels: [],
+	customers: [],
 	recentChannelIds: [],
 	recentChannels: [],
 	memberChannelIds: null,
@@ -135,6 +136,7 @@ const PAGE_ACTIONS: Readonly<Record<string, Page>> = {
 }
 
 const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
+const decodeCustomerAccountId = Schema.decodeUnknownOption(CustomerAccountId)
 
 const chatHref = (shared: Shared, channelId: ChannelId) =>
 	orgHrefOf(shared.orgSlug, (orgSlug) => AppRoute.ChatChannel({ orgSlug, channelId }))
@@ -159,6 +161,18 @@ const selectedItem = (model: Model, key: string, shared: Shared, current: PageSt
 				...closedWith(model, chatHref(shared, channelId), null),
 				commands: kind === "recent" ? [] : [TrackRecentChannel({ channelId })],
 			}),
+		})
+	if (kind === "customer")
+		return Option.match(decodeCustomerAccountId(value), {
+			onNone: () => closedWith(model, null, null),
+			onSome: (accountId) =>
+				closedWith(
+					model,
+					orgHrefOf(shared.orgSlug, (orgSlug) =>
+						AppRoute.CustomerDetail({ orgSlug, accountId, tab: Option.none() }),
+					),
+					null,
+				),
 		})
 	const link = [...NAVIGATION, ...SETTINGS].find((entry) => entry.key === key)
 	if (link !== undefined)
@@ -233,6 +247,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			UpdatedChannels: ({ channels }) => ({ model: modifyFields(model, { channels: () => channels }) }),
 			UpdatedDmChannels: ({ dmChannels }) => ({
 				model: modifyFields(model, { dmChannels: () => dmChannels }),
+			}),
+			UpdatedCustomers: ({ customers }) => ({
+				model: modifyFields(model, { customers: () => customers }),
 			}),
 			UpdatedRecentChannelIds: ({ channelIds }) => ({
 				model: modifyFields(model, { recentChannelIds: () => channelIds }),

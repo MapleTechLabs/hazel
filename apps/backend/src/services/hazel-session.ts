@@ -35,7 +35,8 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 		const invalid = (detail: string) =>
 			new InvalidBearerTokenError({ message: "Invalid session", detail })
 
-		const loadUser = (subjectId: string) =>
+		/** `requireActive`: also refuse a user whose sign-in was deactivated (`authActive`). */
+		const loadUser = (subjectId: string, options: { readonly requireActive?: boolean } = {}) =>
 			userRepo.findById(UserId.make(subjectId)).pipe(
 				Effect.catchTags({
 					DatabaseError: (error) =>
@@ -56,19 +57,21 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 						onSome: (user) =>
 							user.deletedAt !== null
 								? Effect.fail(invalid("User is deleted"))
-								: Effect.succeed(
-										new CurrentUser.Schema({
-											id: user.id,
-											role: "member",
-											avatarUrl: user.avatarUrl ?? undefined,
-											firstName: user.firstName,
-											lastName: user.lastName,
-											email: user.email,
-											isOnboarded: user.isOnboarded,
-											timezone: user.timezone,
-											settings: user.settings,
-										}),
-									),
+								: options.requireActive === true && !user.authActive
+									? Effect.fail(invalid("User sign-in is deactivated"))
+									: Effect.succeed(
+											new CurrentUser.Schema({
+												id: user.id,
+												role: "member",
+												avatarUrl: user.avatarUrl ?? undefined,
+												firstName: user.firstName,
+												lastName: user.lastName,
+												email: user.email,
+												isOnboarded: user.isOnboarded,
+												timezone: user.timezone,
+												settings: user.settings,
+											}),
+										),
 					}),
 				),
 			)
@@ -175,6 +178,11 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 
 		return {
 			enabled,
+			/**
+			 * An agent token's user (`AgentAccess`), as `CurrentUser`: live, and allowed to sign in
+			 * (deactivating a user's sign-in ends their agents, as on `/mcp`).
+			 */
+			agentUserOf: (userId: string) => loadUser(userId, { requireActive: true }),
 			verify,
 			verifyWithExpiry,
 			verifyAccessToken,

@@ -11,6 +11,7 @@ export default defineConfig({
 			"libs/*",
 			"apps/bot-gateway",
 			"bots/t3code-bot",
+			"apps/raycast",
 		],
 		coverage: {
 			reporter: ["text", "json-summary", "json"],

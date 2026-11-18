@@ -255,7 +255,6 @@ export const signalRow = (
 	outcome: null,
 	resolutionNote: null,
 	dismissReason: null,
-	reopenAfter: null,
 	reopenCount: 0,
 	closedAt: null,
 	createdAt: NOW,

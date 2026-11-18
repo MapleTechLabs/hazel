@@ -16,14 +16,16 @@ import type { Model, QueueKey } from "./model"
 type Input = PageSubscriptionInput<Model>
 
 const KEYS = new Map<string, QueueKey>([
-	["j", "next"],
+	// k walks down the queue, j up.
+	["k", "next"],
 	["ArrowDown", "next"],
-	["k", "previous"],
+	["j", "previous"],
 	["ArrowUp", "previous"],
+	// Linear's keys: A assign, I assign to me, H snooze.
 	["a", "assign"],
-	["s", "snooze"],
+	["i", "assignToMe"],
+	["h", "snooze"],
 	["d", "done"],
-	["e", "dismiss"],
 	["r", "reopen"],
 	["w", "reopen"],
 	["Enter", "open"],
@@ -88,7 +90,7 @@ export const queueKeyOf = (event: {
 }
 
 const isMenuOpen = (model: Model) =>
-	[model.assignMenu, model.snoozeMenu, model.moreMenu, model.filterMenu, model.sortMenu].some(
+	[model.assignMenu, model.snoozeMenu, model.filterMenu, model.sortMenu].some(
 		(menu) => menu.popup._tag === "Open",
 	)
 

@@ -329,12 +329,10 @@ export const doneEntries: ReadonlyArray<Menu.Entry> = Customers.SignalOutcome.li
 
 export const ASSIGN_ME = "assign_me"
 export const UNASSIGN = "unassign"
-export const DISMISS = "dismiss"
 export const OPEN_QUEUE = "open_queue"
 export const signalMoreEntries: ReadonlyArray<Menu.Entry> = [
 	Menu.item(ASSIGN_ME),
 	Menu.item(UNASSIGN),
 	Menu.separator,
 	Menu.item(OPEN_QUEUE),
-	Menu.item(DISMISS, { intent: "Danger" }),
 ]

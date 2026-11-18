@@ -1,5 +1,5 @@
 {
-	"migration": "0012_customer_feature_flags",
+	"migration": "0013_customer_feature_flags",
 	"entities": [
 		{
 			"kind": "table",
@@ -2753,17 +2753,8 @@
 		{
 			"kind": "column",
 			"table": "customer_signals",
-			"name": "reopenAfter",
-			"position": 27,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_signals",
 			"name": "reopenCount",
-			"position": 28,
+			"position": 27,
 			"type": "integer",
 			"notNull": true,
 			"default": "0"
@@ -2772,7 +2763,7 @@
 			"kind": "column",
 			"table": "customer_signals",
 			"name": "closedAt",
-			"position": 29,
+			"position": 28,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -2781,7 +2772,7 @@
 			"kind": "column",
 			"table": "customer_signals",
 			"name": "createdAt",
-			"position": 30,
+			"position": 29,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2790,7 +2781,7 @@
 			"kind": "column",
 			"table": "customer_signals",
 			"name": "updatedAt",
-			"position": 31,
+			"position": 30,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

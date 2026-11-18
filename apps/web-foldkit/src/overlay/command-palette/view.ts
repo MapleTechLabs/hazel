@@ -12,10 +12,12 @@ import {
 	IconIntegratio,
 	IconMagnifier3,
 	IconMsgs,
+	IconOffice,
 	IconPlus,
 	IconServers,
 	IconUsersPlus,
 } from "../../icons"
+import { companyLogo } from "../../customers/ui/identity"
 import type { Shared } from "../../page/contract"
 import { avatar } from "../../ui/avatar"
 import type * as CommandMenu from "../../ui/command-menu"
@@ -114,6 +116,7 @@ const QUICK_ACTIONS: Readonly<
 const LINK_ICONS: Readonly<Record<string, (h: HtmlBuilder<Message>) => Html>> = {
 	"nav:dashboard": (h) => IconDashboard(h),
 	"nav:chat": (h) => IconMsgs(h),
+	"nav:customers": (h) => IconOffice(h),
 	"nav:notifications": (h) => IconBell(h),
 	"nav:my-settings": (h) => IconGear(h),
 	"nav:profile": (h) => IconCircleDottedUser(h),
@@ -170,6 +173,30 @@ const itemContent = (
 			key,
 			model.channels.find((channel) => channel.id === value),
 		)
+	if (kind === "customer") {
+		const customer = model.customers.find((candidate) => candidate.id === value)
+		return customer
+			? [
+					h.span(
+						[h.Attribute("data-slot", "icon")],
+						[
+							companyLogo(h, {
+								name: customer.name,
+								logoUrl: customer.logoUrl,
+								size: "xs",
+								className: "size-4 rounded-sm text-3xs",
+							}),
+						],
+					),
+					label(h, key, [
+						customer.name,
+						...(customer.domains[0]
+							? [h.span([h.Class("ml-2 text-muted-fg text-xs")], [customer.domains[0]])]
+							: []),
+					]),
+				]
+			: []
+	}
 	const dm = model.dmChannels.find((candidate) => candidate.id === value)
 	if (kind === "dm") return dm ? [dmIcon(h, dm), label(h, key, [dmDisplayName(dm)])] : []
 	if (kind === "recent") {

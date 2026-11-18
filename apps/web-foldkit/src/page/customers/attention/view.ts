@@ -22,7 +22,6 @@ import {
 	IconArrowPath,
 	IconCheck,
 	IconClock,
-	IconDots,
 	IconLightbulb,
 	IconMagnifier3,
 	IconUser,
@@ -36,6 +35,7 @@ import { doneDialog, snoozeDateDialog } from "./done-dialog"
 import { Message } from "./message"
 import {
 	accountGroups,
+	accountRunOf,
 	accountsByIdOfModel,
 	ASSIGN_ME,
 	ASSIGN_NONE,
@@ -44,7 +44,6 @@ import {
 	filterEntries,
 	type Filters,
 	isNarrowed,
-	moreEntries,
 	type Model,
 	SEARCH_ID,
 	selectedSignal,
@@ -69,7 +68,6 @@ import { heading } from "../../../ui/heading"
 
 const toAssignMenuMessage = (message: Menu.Message) => Message.GotAssignMenuMessage({ message })
 const toSnoozeMenuMessage = (message: Menu.Message) => Message.GotSnoozeMenuMessage({ message })
-const toMoreMenuMessage = (message: Menu.Message) => Message.GotMoreMenuMessage({ message })
 const toFilterMenuMessage = (message: Menu.Message) => Message.GotFilterMenuMessage({ message })
 const toSortMenuMessage = (message: Menu.Message) => Message.GotSortMenuMessage({ message })
 
@@ -143,7 +141,7 @@ const signalActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): R
 	const assign = menu(h, model.assignMenu, {
 		entries: assignEntries(model.members, viewer),
 		trigger: (attributes, overlay) =>
-			queueAction(h, { label: "Assign", icon: IconUser(h, icon), attributes, overlay }),
+			queueAction(h, { label: "Assign", icon: IconUser(h, icon), shortcut: "A", attributes, overlay }),
 		content: (key) => [
 			menuLabel(
 				h,
@@ -155,6 +153,7 @@ const signalActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): R
 						? "Unassign"
 						: (model.members.find((member) => member.id === userIdOfAssignKey(key))?.name ?? key),
 			),
+			...(key === ASSIGN_ME ? [kbd(h, "I", "ml-auto")] : []),
 		],
 		toMessage: toAssignMenuMessage,
 	})
@@ -164,6 +163,7 @@ const signalActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): R
 			queueAction(h, {
 				label: signal.status === "snoozed" ? "Change snooze" : "Snooze",
 				icon: IconClock(h, icon),
+				shortcut: "H",
 				attributes,
 				overlay,
 			}),
@@ -183,6 +183,7 @@ const signalActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): R
 	const done = queueAction(h, {
 		label: "Done",
 		icon: IconCheck(h, icon),
+		shortcut: "D",
 		onPress: Message.PressedMarkDone({ signalId: signal.id }),
 	})
 	if (model.tab === "done")
@@ -191,6 +192,7 @@ const signalActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): R
 					queueAction(h, {
 						label: "Reopen",
 						icon: IconArrowPath(h, icon),
+						shortcut: "R",
 						onPress: Message.PressedReopen({ signalId: signal.id }),
 					}),
 				]
@@ -200,33 +202,13 @@ const signalActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): R
 			queueAction(h, {
 				label: "Wake now",
 				icon: IconArrowPath(h, icon),
+				shortcut: "W",
 				onPress: Message.PressedReopen({ signalId: signal.id }),
 			}),
 			snooze,
 			done,
 		]
-	const more = menu(h, model.moreMenu, {
-		entries: moreEntries,
-		trigger: (attributes, overlay) =>
-			queueAction(h, {
-				label: "More actions",
-				iconOnly: true,
-				icon: IconDots(h, icon),
-				attributes,
-				overlay,
-			}),
-		content: (key) => [
-			menuLabel(
-				h,
-				model.moreMenu.id,
-				key,
-				key === "dismiss" ? "Dismiss (not useful)" : "Open customer",
-			),
-			...(key === "dismiss" ? [kbd(h, "E", "ml-auto")] : [kbd(h, "Enter", "ml-auto")]),
-		],
-		toMessage: toMoreMenuMessage,
-	})
-	return [assign, snooze, done, more]
+	return [assign, snooze, done]
 }
 
 // HEADER AND CONTROLS
@@ -260,7 +242,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: 
 							].join(" · ")
 					: model.tab === "snoozed"
 						? `${signals.length} snoozed signal${signals.length === 1 ? "" : "s"}${whose}`
-						: `${signals.length} signal${signals.length === 1 ? "" : "s"} resolved in the last 7 days · ${signals.filter((signal) => signal.status === "auto_resolved").length} cleared on their own`
+						: `${signals.length} signal${signals.length === 1 ? "" : "s"} muted, or resolved in the last 7 days · ${signals.filter((signal) => signal.status === "auto_resolved").length} cleared on their own`
 	return pageHeader(h, {
 		title: "Needs attention",
 		subtitle,
@@ -418,20 +400,23 @@ const controls = (h: HtmlBuilder<Message>, model: Model): Html =>
 
 // LIST
 
+/** Account grouping has one row per account: nothing to join. */
+const NO_ACCOUNT_RUN = { continuesAbove: false, continuesBelow: false } as const
+
 const SHORTCUTS = {
 	open: [
 		{ keys: ["J", "K"], label: "Move" },
 		{ keys: ["A"], label: "Assign" },
-		{ keys: ["S"], label: "Snooze" },
+		{ keys: ["I"], label: "Assign to me" },
+		{ keys: ["H"], label: "Snooze" },
 		{ keys: ["D"], label: "Mark done" },
-		{ keys: ["E"], label: "Dismiss" },
 		{ keys: ["Enter"], label: "Open customer" },
 		{ keys: ["Space"], label: "Preview" },
 	],
 	snoozed: [
 		{ keys: ["J", "K"], label: "Move" },
 		{ keys: ["W"], label: "Wake now" },
-		{ keys: ["S"], label: "Change snooze" },
+		{ keys: ["H"], label: "Change snooze" },
 		{ keys: ["D"], label: "Mark done" },
 		{ keys: ["Enter"], label: "Open customer" },
 	],
@@ -608,7 +593,7 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 					[
 						model.tab === "snoozed"
 							? "Nothing is snoozed."
-							: "Nothing resolved in the last 7 days.",
+							: "Nothing muted, or resolved in the last 7 days.",
 					],
 				)
 	const context: RowContext = {
@@ -627,7 +612,7 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 				["Snoozed by", "w-36 max-lg:hidden"],
 				["Health", "w-28 text-right"],
 			]),
-			...signals.map((signal) => snoozedRow(h, signal, context)),
+			...signals.map((signal, index) => snoozedRow(h, signal, context, accountRunOf(signals, index))),
 			h.div(
 				[h.Class("flex items-center gap-2 border-border border-t px-4 py-2.5 text-muted-fg text-xs")],
 				[
@@ -646,15 +631,19 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 				["Open for", "w-16 text-right whitespace-nowrap"],
 				["Resolved", "w-16 text-right"],
 			]),
-			...signals.map((signal) => doneRow(h, signal, context)),
+			...signals.map((signal, index) => doneRow(h, signal, context, accountRunOf(signals, index))),
 		])
 	if (model.isPreviewOpen && selectedSignal(model) !== undefined)
 		return queueList(
 			h,
 			{ ariaLabel: "Open signals" },
 			model.grouping === "accounts"
-				? accountGroups(signals).map((group, index) => compactRow(h, group.lead, index + 1, context))
-				: signals.map((signal, index) => compactRow(h, signal, index + 1, context)),
+				? accountGroups(signals).map((group, index) =>
+						compactRow(h, group.lead, index + 1, context, NO_ACCOUNT_RUN),
+					)
+				: signals.map((signal, index) =>
+						compactRow(h, signal, index + 1, context, accountRunOf(signals, index)),
+					),
 		)
 	return model.grouping === "accounts"
 		? queueList(h, { ariaLabel: "Accounts needing attention" }, [
@@ -681,7 +670,9 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 					["", "w-6"],
 					["Health", "w-28 text-right", "health"],
 				]),
-				...signals.map((signal, index) => signalRow(h, signal, index + 1, context)),
+				...signals.map((signal, index) =>
+					signalRow(h, signal, index + 1, context, accountRunOf(signals, index)),
+				),
 			])
 }
 
@@ -693,7 +684,9 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	const selected = selectedSignal(model)
 	const isPreviewShown = model.isPreviewOpen && selected !== undefined
 	return h.div(
-		[h.Class("flex h-full min-h-0 w-full")],
+		// Capped at the screen (the desktop shell grows with its page) so the queue and the preview
+		// each scroll on their own.
+		[h.Class("flex h-full max-h-dvh min-h-0 w-full")],
 		[
 			h.div(
 				[h.Class("flex min-w-0 flex-1 flex-col overflow-y-auto")],
@@ -737,9 +730,9 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				],
 			),
 			...(isPreviewShown
-				? [previewPanel(h, model, selected, viewer, signalActions(h, model, viewer))]
+				? [previewPanel(h, model, selected, viewer, shared.orgSlug, signalActions(h, model, viewer))]
 				: []),
-			doneDialog(h, model, viewer),
+			doneDialog(h, model),
 			snoozeDateDialog(h, model, viewer),
 		],
 	)

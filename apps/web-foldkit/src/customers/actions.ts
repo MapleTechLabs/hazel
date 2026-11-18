@@ -54,11 +54,6 @@ interface DonePayload {
 	outcome: Customers.SignalOutcome
 	note?: string
 }
-interface DismissPayload {
-	organizationId: OrganizationId
-	signalId: CustomerSignalId
-	reason?: string
-}
 interface NoteCreatePayload {
 	organizationId: OrganizationId
 	id: CustomerNoteId
@@ -179,35 +174,6 @@ const markSignalDone = optimisticAction({
 
 /** Mark done with an outcome; it reopens after the cooldown if the condition still holds. */
 export const markSignalDoneAction = stamped(markSignalDone)
-
-type DismissProps = SignalTarget & Actor & { readonly reason?: string }
-
-const dismissSignal = optimisticAction({
-	collections: [customerSignalCollection],
-	onMutate: (props: DismissProps & Stamp) => {
-		customerSignalCollection.update(props.signalId, (signal) => {
-			signal.status = "dismissed"
-			signal.dismissReason = props.reason ?? null
-			signal.resolvedAt = props.at
-			signal.resolvedByUserId = props.userId
-		})
-		return { signalId: props.signalId }
-	},
-	mutate: (props) =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			const payload: DismissPayload = {
-				organizationId: props.organizationId,
-				signalId: props.signalId,
-			}
-			if (props.reason !== undefined) payload.reason = props.reason
-			const result = yield* client("customers.signal.dismiss", payload)
-			return { data: result, transactionId: result.transactionId }
-		}),
-})
-
-/** Not useful: it reopens only if the evidence gets worse by a full step. */
-export const dismissSignalAction = stamped(dismissSignal)
 
 /** Undo a snooze, done or dismiss (back to open). */
 export const reopenSignalAction = optimisticAction({

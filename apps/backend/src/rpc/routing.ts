@@ -24,7 +24,7 @@ import type { CurrentUser, RateLimitExceededError } from "@hazel/domain"
 import { CustomerRpcs } from "@hazel/domain/rpc"
 import type { ChannelId, ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
-import type { Rpc } from "effect/rpc"
+import type { Rpc, RpcGroup } from "effect/rpc"
 import { Directory } from "../services/directory"
 import {
 	checkBotOperationRateLimit,
@@ -176,7 +176,9 @@ const byCustomers = (payload: { readonly organizationId: OrganizationId }, curre
 	})
 
 type CustomersRouteTable = {
-	readonly [R in HazelRpc as R["_tag"] extends `customers.${string}` ? R["_tag"] : never]: RouteFn<R>
+	readonly [
+		R in HazelRpc as R["_tag"] extends RpcGroup.Rpcs<typeof CustomerRpcs>["_tag"] ? R["_tag"] : never
+	]: RouteFn<R>
 }
 // SAFETY: the keys are exactly `CustomerRpcs`' tags (every `customers.*` method), and each payload
 // carries `organizationId`, all `byCustomers` reads.
@@ -187,6 +189,7 @@ const customersRoutes = Object.fromEntries(
 export const routes: RouteTable = {
 	// CustomersObject
 	...customersRoutes,
+	"customers.organizations": directory, // the caller's orgs, before it names one
 
 	// ChannelObject
 	"message.create": byChannel,
