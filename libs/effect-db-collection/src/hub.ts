@@ -146,6 +146,10 @@ export class SyncHub {
 			this.evict(source, entry)
 			entry = undefined
 		}
+		// Still held (a thread's preview opened it before the thread's object had its viewers):
+		// ask again in place, or every later lease (the open thread, a write's `awaitSeq`) would
+		// get the old refusal for as long as anything holds it.
+		if (entry?.connection.error?._tag === "SyncSourceNotFoundError") entry.connection.reask()
 		if (entry === undefined) entry = this.open(source)
 		if (entry.graceTimer !== undefined) {
 			clearTimeout(entry.graceTimer)

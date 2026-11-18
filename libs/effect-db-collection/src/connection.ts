@@ -231,6 +231,19 @@ export class SyncConnection {
 		this.ephemeralListeners.clear()
 	}
 
+	/**
+	 * Asks a refused source again, in place: the same connection reopens and its leases keep it.
+	 * A source refused as not found may exist by now (a thread whose object had no viewers yet).
+	 */
+	reask(): void {
+		if (this.closed || this.terminalError === undefined) return
+		this.terminalError = undefined
+		this.stopped = false
+		this.attempt = 0
+		this.reauthStreak = 0
+		if (this.started) void this.open()
+	}
+
 	/** Drops the resume point and reconnects: the source answers with a full `Begin{reset}` snapshot. */
 	resync(): void {
 		this.lastSeq = null
