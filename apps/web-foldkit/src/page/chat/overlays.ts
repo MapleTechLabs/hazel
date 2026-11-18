@@ -219,7 +219,8 @@ export type OutMessage = typeof OutMessage.Type
 export interface MessageFacts {
 	readonly isOwnMessage: (messageId: MessageId) => boolean
 	readonly isPinned: (messageId: MessageId) => boolean
-	readonly isThreadChannel: boolean
+	/** A thread can start from it: a message of the channel itself, not of a thread (or the open thread panel). */
+	readonly canStartThread: (messageId: MessageId) => boolean
 }
 
 // COMMAND
@@ -280,8 +281,8 @@ const withChild = <Child, ChildMessage>(
 /** What a native menu's quick reaction reports, before its emoji. */
 export const NATIVE_REACTION = "react:"
 
-export const moreMenuEntries = (facts: MessageFacts): ReadonlyArray<Menu.Entry> => [
-	...(facts.isThreadChannel ? [] : [Menu.item("thread")]),
+export const moreMenuEntries = (facts: MessageFacts, messageId: MessageId): ReadonlyArray<Menu.Entry> => [
+	...(facts.canStartThread(messageId) ? [Menu.item("thread")] : []),
 	Menu.item("pin"),
 ]
 
@@ -292,7 +293,7 @@ export const contextMenuEntries = (facts: MessageFacts, messageId: MessageId): R
 	Menu.separator,
 	Menu.item("reply", { textValue: "Reply" }),
 	...(facts.isOwnMessage(messageId) ? [Menu.item("edit", { textValue: "Edit Message" })] : []),
-	...(facts.isThreadChannel ? [] : [Menu.item("thread", { textValue: "Reply in Thread" })]),
+	...(facts.canStartThread(messageId) ? [Menu.item("thread", { textValue: "Reply in Thread" })] : []),
 	Menu.separator,
 	Menu.item("copy", { textValue: "Copy Text" }),
 	Menu.item("pin", { textValue: facts.isPinned(messageId) ? "Unpin Message" : "Pin Message" }),

@@ -223,6 +223,7 @@ const KEYED_BY_CHANNEL_DATA = [
 	"chatThreadChannels",
 	"chatThreadMessages",
 	"chatThreadPanel",
+	"chatThreadPanelPins",
 	"threadMembership",
 	"filesAttachments",
 ]

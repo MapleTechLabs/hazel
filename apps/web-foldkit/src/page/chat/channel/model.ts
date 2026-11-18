@@ -90,6 +90,8 @@ export const ThreadPanel = Schema.Struct({
 	messages: Schema.Array(ChatMessage),
 	/** Their rows, derived in `update` like the channel's. */
 	rows: Schema.Array(DisplayRow.MessageRow),
+	/** The thread's pins: a reply is unpinned by its pin's id, like a channel message. */
+	pins: Schema.Array(PinnedInfo),
 })
 export type ThreadPanel = typeof ThreadPanel.Type
 
@@ -225,6 +227,8 @@ export const Message = defineMessageUnion({
 	UpdatedCustomer: { channelId: ChannelId, customer: Schema.NullOr(ChannelCustomerRow) },
 	/** The open thread's messages, oldest first; tagged with the thread they were queried for. */
 	UpdatedThreadPanelMessages: { threadChannelId: ChannelId, messages: Schema.Array(ChatMessage) },
+	/** The open thread's pins; tagged with the thread they were queried for. */
+	UpdatedThreadPanelPins: { threadChannelId: ChannelId, pins: Schema.Array(PinnedInfo) },
 	UpdatedTyping: { typing: Schema.Array(TypingInfo) },
 	TickedTypingClock: { nowMs: Schema.Number },
 	GotListMessage: { message: MessageList.Message },

@@ -356,6 +356,8 @@ const isToolbarInputEqual = (a: Model, b: Model) =>
 	a.overlays === b.overlays &&
 	a.rows === b.rows &&
 	a.messages === b.messages &&
+	a.threadPanel?.rows === b.threadPanel?.rows &&
+	a.threadPanel?.messages === b.threadPanel?.messages &&
 	a.currentUserId === b.currentUserId &&
 	a.channel === b.channel &&
 	a.lookups.customEmojis === b.lookups.customEmojis
@@ -496,6 +498,7 @@ const threadPanelOverlay = (
 		onRename: Message.ClickedRenameThread(),
 		isGeneratingName: panel.isNaming,
 		isCreating: panel.creation === "Creating",
+		trackHover: trackHoverAttribute(h),
 		composer: draftView(h, panel.draft, {
 			toMessage: toThreadDraftMessage,
 			replyPreview: replyPreviewOf(

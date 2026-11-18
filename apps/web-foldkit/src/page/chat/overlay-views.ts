@@ -64,7 +64,12 @@ export const messageToolbarOverlay = (h: H, model: Model): Html => {
 	// (Rune draws the portalled toolbar over the viewer, and the pointer never left the message).
 	if (Overlays.imageViewerOf(overlays) !== null) return h.empty
 	const messageId = Overlays.hoveredMessageIdOf(overlays)
-	const row = messageId === null ? undefined : model.rows.find((candidate) => candidate.key === messageId)
+	// A row of the channel's list, or a reply in the open thread panel: both get the same toolbar.
+	const row =
+		messageId === null
+			? undefined
+			: (model.rows.find((candidate) => candidate.key === messageId) ??
+				model.threadPanel?.rows.find((candidate) => candidate.key === messageId))
 	if (messageId === null || row === undefined || row._tag !== "MessageRow") return h.empty
 	const facts = factsOf(model)
 	const menu = Overlays.moreMenuFor(overlays, messageId)
@@ -74,7 +79,7 @@ export const messageToolbarOverlay = (h: H, model: Model): Html => {
 		model: menu,
 		view: menuView,
 		viewInputs: {
-			entries: Overlays.moreMenuEntries(facts),
+			entries: Overlays.moreMenuEntries(facts, messageId),
 			toTrigger: (attributes, overlay) =>
 				h.button(
 					[

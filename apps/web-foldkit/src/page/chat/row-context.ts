@@ -27,7 +27,7 @@ import * as Menu from "../../ui/menu"
 import { contextMenuView, menuLabel } from "../../ui/menu-view"
 import type * as Popover from "../../ui/popover"
 import * as Overlays from "./overlays"
-import { factsOf, Message, type Model } from "./channel/page"
+import { canStartThreadIn, factsOf, Message, type Model } from "./channel/page"
 import { authorIdentity } from "./derive"
 import type { MessageRow, ReplyPreview } from "./rows"
 
@@ -162,13 +162,13 @@ const rowLongPress = (
 	h: H,
 	row: MessageRow,
 	currentUserId: Model["currentUserId"],
-	isThreadChannel: boolean,
+	channel: ChannelFacts,
 ): ReadonlyArray<ChildAttribute> => {
 	const { id, isPinned } = row.message
 	const facts = {
 		isOwnMessage: () => row.message.authorId === currentUserId,
 		isPinned: () => isPinned,
-		isThreadChannel,
+		canStartThread: () => canStartThreadIn(channel.type, channel.id, row.message.channelId),
 	}
 	const items = Menu.nativeMenuItems(UNSELECTED_MENU, Overlays.contextMenuEntries(facts, id), {
 		symbols: nativeSymbols(isPinned),
@@ -186,6 +186,17 @@ const rowLongPress = (
 	})
 }
 
+/** What the long-press menu reads about the page's channel. */
+interface ChannelFacts {
+	readonly id: Model["channelId"]
+	readonly type: string | null
+}
+
+const channelFactsOf = (model: Model): ChannelFacts => ({
+	id: model.channelId,
+	type: model.channel?.type ?? null,
+})
+
 const userNamesOf = (users: Model["lookups"]["users"]) =>
 	new Map(users.map((user) => [user.id as string, `${user.firstName} ${user.lastName}`]))
 
@@ -194,7 +205,7 @@ const buildIdleContext = (
 	h: H,
 	users: Model["lookups"]["users"],
 	currentUserId: Model["currentUserId"],
-	isThreadChannel: boolean,
+	channel: ChannelFacts,
 ): RowContext<Message> => {
 	const names = userNamesOf(users)
 	return {
@@ -212,7 +223,7 @@ const buildIdleContext = (
 		reply: (row, reply) => replyActions(h, row, reply, null, () => []),
 		toHtmlRenderMessage,
 		toPressEmbedAction,
-		contextMenu: (row, render) => render(rowLongPress(h, row, currentUserId, isThreadChannel), h.empty),
+		contextMenu: (row, render) => render(rowLongPress(h, row, currentUserId, channel), h.empty),
 		avatar: (row: MessageRow) =>
 			popoverTrigger(h, {
 				key: Overlays.avatarPopoverKey(row.message.id),
@@ -274,7 +285,7 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 		toPressEmbedAction,
 		contextMenu: (row, render) =>
 			contextMenu === null || contextMenu.messageId !== row.message.id
-				? render(rowLongPress(h, row, model.currentUserId, factsOf(model).isThreadChannel), h.empty)
+				? render(rowLongPress(h, row, model.currentUserId, channelFactsOf(model)), h.empty)
 				: h.submodel({
 						slotId: "message-context-menu",
 						model: contextMenu.menu,
@@ -317,12 +328,12 @@ const idleContexts = new WeakMap<Model["lookups"]["users"], Map<string, RowConte
 /** The shared context for rows without an open overlay. */
 export const idleRowContext = (h: H, model: Model): RowContext<Message> => {
 	const byUser = idleContexts.get(model.lookups.users) ?? new Map<string, RowContext<Message>>()
-	const isThreadChannel = factsOf(model).isThreadChannel
-	// What the context reads besides the user list: whose rows these are, and in what kind of channel.
-	const key = `${model.currentUserId ?? ""}:${isThreadChannel}`
+	const channel = channelFactsOf(model)
+	// What the context reads besides the user list: whose rows these are, and in what channel.
+	const key = `${model.currentUserId ?? ""}:${channel.id}:${channel.type ?? ""}`
 	const cached = byUser.get(key)
 	if (cached !== undefined) return cached
-	const context = buildIdleContext(h, model.lookups.users, model.currentUserId, isThreadChannel)
+	const context = buildIdleContext(h, model.lookups.users, model.currentUserId, channel)
 	byUser.set(key, context)
 	idleContexts.set(model.lookups.users, byUser)
 	return context

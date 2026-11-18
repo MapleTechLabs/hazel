@@ -27,7 +27,7 @@ import * as EmojiDialog from "../../../emoji-picker/dialog"
 import { PopoverEvent, popoverId } from "../../../picker-popover/popover"
 import type { EmojiData } from "../../../emoji-picker/data"
 import * as Overlays from "../overlays"
-import { TOP_EMOJIS } from "../../../chat/message/toolbar"
+import { TOP_EMOJIS, TrackMessageHover } from "../../../chat/message/toolbar"
 import { imageAttachmentOf } from "../../../test/chat-messages"
 import { PageOutMessage } from "../../out-message"
 import {
@@ -389,6 +389,11 @@ describe("threads", () => {
 						}),
 					),
 				],
+				// The panel's replies track hover like the list's: the pointer is still on the message.
+				[
+					{ name: "TrackMessageHover" },
+					overlays(Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId })),
+				],
 			),
 			Scene.Command.resolve(CreateThread, ActionMessage.SucceededCreateThread({ threadChannelId })),
 			Scene.expect(Scene.text("Creating thread...")).toBeAbsent(),
@@ -401,6 +406,7 @@ describe("threads", () => {
 					initialMarkdown: "",
 				}),
 				TrackFileDrop,
+				TrackMessageHover,
 			),
 		)
 	})

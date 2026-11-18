@@ -1,5 +1,5 @@
 import { Option } from "effect"
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { handleStyles, indicatorStyles, panelStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { cn } from "~/lib/utils"
 import { attachmentsView } from "../../chat/attachments"
@@ -52,6 +52,11 @@ export interface ThreadPanelInputs<M> {
 	readonly isCreating: boolean
 	/** The thread's own composer (`SlateMessageComposer placeholder="Reply in thread..."`). */
 	readonly composer: Html
+	/**
+	 * The channel list's hover and right-click tracking, so a reply gets the same hover toolbar and
+	 * context menu as a channel message.
+	 */
+	readonly trackHover: Attribute<M>
 }
 
 const iconAttributes = { "data-slot": "icon" }
@@ -284,6 +289,7 @@ const scrollView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html =>
 			h.Class("flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-bg"),
 			// `HighlightMessage` scrolls a quoted reply into view inside it.
 			h.Attribute("data-jump-scroll", ""),
+			inputs.trackHover,
 		],
 		[
 			h.div(
