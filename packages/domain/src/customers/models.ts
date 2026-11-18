@@ -142,7 +142,6 @@ class SignalModel extends M.Class<SignalModel>("CustomerSignal")({
 	outcome: S.NullOr(SignalOutcome),
 	resolutionNote: S.NullOr(S.String),
 	dismissReason: S.NullOr(S.String),
-	reopenAfter: NullDate,
 	reopenCount: S.Int,
 	closedAt: NullDate,
 	...timestamps,

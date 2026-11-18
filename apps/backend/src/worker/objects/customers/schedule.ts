@@ -2,7 +2,7 @@
  * When a `CustomersObject` works on its own (`docs/customers/tech-design.md` §4.1). Its one alarm
  * (`runtime.ts`) folds these deadlines:
  *
- * - `computeDueAt` (meta): hourly, sooner when a done signal's `reopenAfter` comes first,
+ * - `computeDueAt` (meta): hourly,
  *   ≤ 2 minutes after a person's change (rule, settings, a signal's status: `requestCompute`, a
  *   debounce that only moves the deadline earlier; during a compute spread over several turns, ≤ 2
  *   minutes after it ends), right away while such a compute continues (`computeProgress`), and
@@ -161,26 +161,6 @@ export const takeRebuildAttempt = Effect.gen(function* () {
 	)
 	yield* meta(writeObjectMeta(REBUILD_ATTEMPTS_KEY, String(attempts + 1)))
 	return attempts
-})
-
-/**
- * The earliest `reopenAfter` after `now` of a done signal still unclosed, on a live account (a
- * deleted account's signals are closed by the next compute, never reopened; an overdue one, its
- * source unavailable, waits for the hourly run).
- */
-export const nextReopenAt = Effect.fn("Customers.nextReopenAt")(function* (now: Date) {
-	const db = yield* Database.Database
-	const row = yield* db.first(
-		SQLite.from(schema.customerSignalsTable, "s")
-			.innerJoin(schema.customerAccountsTable, "a", (s, a) =>
-				SQLite.and(a.id.eq(s.accountId), a.deletedAt.isNull()),
-			)
-			.select(($) => ({ reopenAfter: $.reopenAfter }))
-			.where(($) => [$.status.eq("done"), $.closedAt.isNull(), $.reopenAfter.gt(now)])
-			.orderBy(($) => [[$.reopenAfter, "asc"]])
-			.limit(1),
-	)
-	return Option.flatMap(row, (signal) => Option.fromNullishOr(signal.reopenAfter?.getTime()))
 })
 
 /** Every deadline of the object's own work, for its one alarm. */

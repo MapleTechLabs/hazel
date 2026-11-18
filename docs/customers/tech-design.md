@@ -139,7 +139,7 @@ filter), internal ones don't. Partial unique indexes in `tables/extra-indexes.ts
 | `customer_events`             | Timeline; unique `(provider, externalId)` when set; `actorUserId`                                                                                                                                                                                                                                                                                                                                                             | RPC (paged)                                                                  |
 | `customer_mrr_movements`      | One per account per day max; `type`, `deltaMinor`, from/to                                                                                                                                                                                                                                                                                                                                                                    | RPC                                                                          |
 | `customer_signal_rules`       | Spec + `updatedBy`, `lastTriggeredAt`, `matchingCount`; `config` = `RuleConfig` (tagged by template)                                                                                                                                                                                                                                                                                                                          | **synced**                                                                   |
-| `customer_signals`            | Queue items. Spec + `template`, `openingEvidence`, `actionEvidence`, `priorityScore`, `openedAt`, snooze fields, `dismissReason`, `reopenAfter`, `reopenCount`, `closedAt`. One unclosed episode per `(ruleId, accountId)`                                                                                                                                                                                                    | **synced** (unclosed + closed ≤ 30 d); older via `customers.signals.history` |
+| `customer_signals`            | Queue items. Spec + `template`, `openingEvidence`, `actionEvidence`, `priorityScore`, `openedAt`, snooze fields, `dismissReason`, `reopenCount`             , `closedAt`. One unclosed episode per `(ruleId, accountId)`                                                                                                                                                                                                    | **synced** (unclosed + closed ≤ 30 d); older via `customers.signals.history` |
 | `customer_settings`           | One row: `health` (`HealthSettings`), `reportingCurrency`, `addOnPlans`, `lastComputedAt`, `updatedBy` (spec's `customer_health_settings`)                                                                                                                                                                                                                                                                                    | **synced**                                                                   |
 | `customer_health_daily`       | PK `(accountId, day)`: score, status, `breakdown` (`HealthBreakdown`)                                                                                                                                                                                                                                                                                                                                                         | RPC                                                                          |
 | `customer_notes`              | Spec + `editedAt`, `signalId`                                                                                                                                                                                                                                                                                                                                                                                                 | **synced**                                                                   |
@@ -252,14 +252,11 @@ Rules:
 
 - Alarm deadlines (folded into the object's one alarm, like `rssDeadlines`): `computeDueAt`
   (hourly, ≤ 2 min after a person's rule / settings / signal change, ≥ 15 min after the last
-  compute for ingest), each connection's `nextSyncAt`, the earliest `snoozedUntil`, the earliest
-  `reopenAfter`. One kind of work per alarm turn, each bounded for the default 30 s CPU / 128 MB:
+  compute for ingest), each connection's `nextSyncAt`, the earliest `snoozedUntil`. One kind of work per alarm turn, each bounded for the default 30 s CPU / 128 MB:
   a due compute (or, before it, a pending history rebuild, alone in its turn), else the due pulls
   (≤ 20 pages per connection). Each first moves its deadline a lease ahead; a compute's lease counts
   the attempt and doubles until one succeeds (5 min … 6 h), so a failed or killed run cannot loop,
   and ingest does not bring a failing compute closer. A rebuild that failed 3 times is given up.
-  A done signal's overdue `reopenAfter` never schedules a compute sooner than hourly (one its
-  source cannot check is retried a day later).
 - Compute is one function `runCompute(now)`, steps below, over accounts loaded in chunks of 250
   (one chunk's activity in memory; the org's DAU/WAU/MAU from SQL). A turn past ~10 s stops after a
   chunk and the next alarm turn continues from a cursor in object meta (the org-level steps run
@@ -372,8 +369,8 @@ signals stay as they are (nothing opens or auto-resolves), as with a source in e
 - **snoozed**: wakes to open at `snoozedUntil`; wakes **early** when `evidence.step >
   actionEvidence.step` or severity rose ("got worse", event `signal.woke`). Condition false →
   `auto_resolved` + closed.
-- **done**: `reopenAfter = resolvedAt + 7 d`. Condition false → closed (status stays done). Still
-  true at `reopenAfter` → reopen (`reopenCount++`, `openedAt = now`).
+- **done**: muted while true, however long or worse (refreshed, never reopened). Condition false →
+  closed (status stays done); a later match opens a new episode.
 - **dismissed**: stays while true; reopens only when `evidence.step > actionEvidence.step` (worse by a
   full step). Condition false → closed.
 - Every human action stores `actionEvidence` = current evidence. Assign/snooze/done/dismiss/note
@@ -610,7 +607,7 @@ mutations/compute → end-to-end pass on `alchemy:dev` with the demo seed.
   replay, reconnect keeps removed refs removed, another provider account sweeps the old one.
 - **Compute (pure, fixtures):** rollup formulas, MRR movements, health components +
   redistribution + bands + churned → unknown, each template's match/evidence/step, lifecycle state
-  machine (open → snooze → wake worse, done → reopen after 7 d, dismissed reopen on step, auto
+  machine (open → snooze → wake worse, done stays muted while true, dismissed reopen on step, auto
   resolve, baseline after backfill), priority ordering incl. no-MRR and trials.
 - **Frontend:** story tests for page updates, scene tests for key flows (snooze from queue, mark done
   dialog, rule editor dry-run, health weights validation, connect modal errors), route examples,

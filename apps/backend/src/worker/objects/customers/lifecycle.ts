@@ -5,7 +5,7 @@
  * - open: refreshed while true; auto-resolved (closed) once false.
  * - snoozed: wakes at `snoozedUntil`, or early when its evidence got a full step worse than when
  *   it was snoozed; auto-resolved once false.
- * - done: reopens if still true at `reopenAfter` (7 days after); closed once false.
+ * - done: muted while still true, closed once false; a later match opens a new episode.
  * - dismissed: reopens only a full step worse than when dismissed; closed once false.
  * - Baseline mode (first evaluation after a backfill): a new match is recorded dismissed
  *   (`baseline`), silently; a dismissed one that got worse stays dismissed at its new evidence.
@@ -14,8 +14,6 @@ import type { schema } from "@hazel/db"
 import { type SignalEvidence, SignalSeverity } from "@hazel/domain/customers"
 import type { Match } from "./evaluate"
 import { DAY_MS } from "./time"
-
-export const REOPEN_COOLDOWN_MS = 7 * DAY_MS
 
 const SEVERITY_WEIGHT = { low: 1, medium: 2, high: 4 } as const
 
@@ -60,7 +58,6 @@ type SignalPatch = Partial<
 		| "resolvedByUserId"
 		| "outcome"
 		| "resolutionNote"
-		| "reopenAfter"
 		| "reopenCount"
 		| "dismissReason"
 		| "closedAt"
@@ -126,7 +123,6 @@ const reopened = (signal: schema.CustomerSignal, match: Match, input: Transition
 			resolvedByUserId: null,
 			outcome: null,
 			resolutionNote: null,
-			reopenAfter: null,
 			dismissReason: null,
 			snoozedUntil: null,
 		},
@@ -179,10 +175,7 @@ export const transition = (
 		}
 		case "done": {
 			if (match === null) return updated({ closedAt: now, lastEvaluatedAt: now })
-			const due = signal.reopenAfter !== null && signal.reopenAfter.getTime() <= now.getTime()
-			return due
-				? reopened(signal, match, input)
-				: updated(refresh(signal, match, input, signal.openedAt))
+			return updated(refresh(signal, match, input, signal.openedAt))
 		}
 		case "dismissed": {
 			if (match === null) return updated({ closedAt: now, lastEvaluatedAt: now })

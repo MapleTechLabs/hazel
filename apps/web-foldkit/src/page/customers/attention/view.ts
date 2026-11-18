@@ -739,7 +739,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			...(isPreviewShown
 				? [previewPanel(h, model, selected, viewer, signalActions(h, model, viewer))]
 				: []),
-			doneDialog(h, model, viewer),
+			doneDialog(h, model),
 			snoozeDateDialog(h, model, viewer),
 		],
 	)

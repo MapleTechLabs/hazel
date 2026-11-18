@@ -507,5 +507,9 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_channel_links_channel_unique" ON "customer_channel_links" ("channelId") WHERE "deletedAt" IS NULL',
 			],
 		},
+		{
+			id: "0011_drop_signal_reopen_after",
+			statements: ['ALTER TABLE "customer_signals" DROP COLUMN "reopenAfter"'],
+		},
 	],
 }

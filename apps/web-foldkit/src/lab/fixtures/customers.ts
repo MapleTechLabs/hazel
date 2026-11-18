@@ -694,7 +694,6 @@ const makeSignal = (seed: SignalSeed, n: number): SignalEntry => {
 		outcome: status === "done" ? "contacted" : null,
 		resolutionNote: status === "done" ? "Called their CTO; they're rolling out to two more teams." : null,
 		dismissReason: status === "dismissed" ? "Seasonal dip, expected" : null,
-		reopenAfter: status === "done" && resolved !== null ? new Date(resolved.getTime() + 7 * DAY) : null,
 		reopenCount: 0,
 		closedAt: status === "auto_resolved" ? resolved : null,
 		createdAt: opened,
