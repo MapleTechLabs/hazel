@@ -24,6 +24,7 @@ import type {
 	ViewSort,
 	ListColumn,
 	CustomerSource,
+	EmailParticipant,
 } from "@hazel/domain/customers"
 import {
 	EMPTY_SYNC_STATS,
@@ -32,6 +33,7 @@ import {
 	ConnectionStatus,
 	CustomerProvider,
 	CustomerSource as CustomerSourceSchema,
+	EmailDirection,
 	HealthStatus,
 	IgnoreRuleField,
 	InvoiceStatus,
@@ -57,6 +59,7 @@ import {
 	CustomerChannelLinkId,
 	CustomerConnectionId,
 	CustomerContactId,
+	CustomerEmailId,
 	CustomerEventId,
 	CustomerExternalRefId,
 	CustomerIgnoreRuleId,
@@ -460,6 +463,36 @@ export const customerEventsTable = SQLite.table("customer_events", {
 export type CustomerEvent = SQLite.SelectRowOf<typeof customerEventsTable>
 export type NewCustomerEvent = SQLite.InsertRowOf<typeof customerEventsTable>
 
+/**
+ * An email read from a connected mailbox (Gmail), once per `messageId` however many members'
+ * mailboxes hold it. Its timeline events (`email.received` / `email.sent`, one per account it was
+ * attributed to) carry its id. RPC only (`customers.email.get`), never synced: bodies are large.
+ */
+export const customerEmailsTable = SQLite.table("customer_emails", {
+	columns: {
+		id: id(CustomerEmailId),
+		provider: textEnum(CustomerProvider.literals),
+		/** The RFC 822 `Message-ID` (no angle brackets), else `<provider>:<externalId>`. */
+		messageId: SQLite.text,
+		/** The mailbox it was first read from, and its ids there (for the deep link). */
+		mailbox: SQLite.text,
+		externalId: SQLite.text,
+		threadId: SQLite.text,
+		direction: textEnum(EmailDirection.literals),
+		fromAddress: jsonb<EmailParticipant>(),
+		toAddresses: SQLite.column(jsonb<ReadonlyArray<EmailParticipant>>(), { default: [] }),
+		ccAddresses: SQLite.column(jsonb<ReadonlyArray<EmailParticipant>>(), { default: [] }),
+		subject: SQLite.text,
+		snippet: SQLite.text,
+		bodyText: SQLite.text,
+		occurredAt: timestamptz,
+		createdAt: createdAt(),
+	},
+	primaryKey: ["id"],
+	indexes: [SQLite.uniqueIndex("customer_emails_message_unique", ["messageId"])],
+})
+export type CustomerEmail = SQLite.SelectRowOf<typeof customerEmailsTable>
+
 export const customerMrrMovementsTable = SQLite.table("customer_mrr_movements", {
 	columns: {
 		id: id(CustomerMrrMovementId),
@@ -660,7 +693,11 @@ export type NewCustomerSavedView = SQLite.InsertRowOf<typeof customerSavedViewsT
 // Data sources
 // ---------------------------------------------------------------------------
 
-/** One per provider (reconnecting reuses it, so the webhook URL is stable). Synced: no secrets here. */
+/**
+ * One per provider (reconnecting reuses it, so the webhook URL is stable), except Gmail: one per
+ * mailbox (`externalAccountId`, the lowercased address). Both rules are partial unique indexes
+ * (`extra-indexes.ts`). Synced: no secrets here.
+ */
 export const customerConnectionsTable = SQLite.table("customer_connections", {
 	columns: {
 		id: id(CustomerConnectionId),
@@ -690,7 +727,6 @@ export const customerConnectionsTable = SQLite.table("customer_connections", {
 		updatedAt: updatedAt(),
 	},
 	primaryKey: ["id"],
-	indexes: [SQLite.uniqueIndex("customer_connections_provider_unique", ["provider"])],
 })
 export type CustomerConnection = SQLite.SelectRowOf<typeof customerConnectionsTable>
 export type NewCustomerConnection = SQLite.InsertRowOf<typeof customerConnectionsTable>

@@ -80,13 +80,14 @@ export interface ProviderDescriptor<P extends CustomerProvider = CustomerProvide
 	 * "Coming soon" and Connect still answers `CustomerProviderUnavailableError` if tried.
 	 */
 	readonly isAvailable: boolean
+	/** Null: it connects over its own sign-in (Gmail), never through the connect or keys modal. */
 	readonly apiKey: Readonly<{
 		label: string
 		placeholder: string
 		/** Where to create the key. */
 		createHref: string
 		help: string
-	}>
+	}> | null
 	/** The key's required scopes; the connect modal lists them, the failure state highlights the missing one. */
 	readonly permissions: ReadonlyArray<ProviderPermission>
 	/** Null: no webhooks (pulled on a schedule only). */
@@ -490,9 +491,49 @@ export const PROVIDERS: Descriptors = {
 		docsHref: "https://maple.dev/docs/reference/mcp",
 		dashboardHref: "https://app.maple.dev",
 	},
+	gmail: {
+		provider: "gmail",
+		name: "Gmail",
+		domain: "gmail.com",
+		linkHosts: ["mail.google.com"],
+		blurb: "Emails with your customers on their timelines. Each member connects their own mailbox.",
+		provides: ["Emails"],
+		adds: [
+			{ title: "Emails", detail: "sent and received with known customers, on their timelines" },
+			{ title: "Full messages", detail: "participants, subject and plain-text body" },
+		],
+		accessNote: "Read-only. Hazel reads the mailbox's messages and never sends, changes or deletes mail.",
+		isAvailable: true,
+		apiKey: null,
+		permissions: [],
+		webhook: null,
+		syncMode: "Scheduled pull · every 10 minutes",
+		configFields: [],
+		mapping: [
+			{
+				group: "Message → Timeline",
+				fields: [
+					{ from: "From, To, Cc", to: "a contact's address, else a domain one account holds" },
+					{ from: "an email no customer is on", to: "dropped, never stored" },
+					{ from: "sent by one of your addresses", to: "timeline: email.sent" },
+					{ from: "anything else", to: "timeline: email.received" },
+				],
+			},
+			{
+				group: "Message → Email",
+				fields: [
+					{ from: "Subject, snippet", to: "the event's title and preview" },
+					{ from: "text/plain part (else text/html, stripped)", to: "the email's body" },
+					{ from: "Message-ID", to: "one email however many mailboxes hold it" },
+				],
+			},
+		],
+		docsHref: "https://developers.google.com/gmail/api",
+		dashboardHref: "https://mail.google.com",
+	},
 }
 
-export const PROVIDER_ORDER: ReadonlyArray<CustomerProvider> = ["clerk", "stripe", "autumn", "maple"]
+export const PROVIDER_ORDER: ReadonlyArray<CustomerProvider> = ["clerk", "stripe", "autumn", "maple", "gmail"]
 
 export const providerOf = <P extends CustomerProvider>(provider: P): ProviderDescriptor<P> =>
 	PROVIDERS[provider] as ProviderDescriptor<P>
@@ -528,6 +569,13 @@ export const webhookUrlOf = (
 	organizationId: OrganizationId,
 	connectionId: CustomerConnectionId,
 ): string => `${backendUrl}/webhooks/customers/${provider}/${organizationId}/${connectionId}`
+
+/**
+ * Connecting a Gmail mailbox (`docs/customers/gmail.md`): the browser navigates here (it redirects to
+ * Google's consent screen, then back to the Gmail source page), so it is a link, never a fetch.
+ */
+export const gmailAuthorizeUrl = (backendUrl: string, organizationId: OrganizationId): string =>
+	`${backendUrl}/customers/gmail/authorize?${new URLSearchParams({ organizationId })}`
 
 /** "Clerk or Maple", "Stripe or Autumn", "Autumn"; empty: built in (needs no source). */
 export const sourcesLabel = (sources: ReadonlyArray<CustomerSource>): string =>

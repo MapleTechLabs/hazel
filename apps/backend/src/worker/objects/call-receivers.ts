@@ -36,6 +36,7 @@ import {
 	receiveWebhook,
 	tick,
 } from "./customers/jobs"
+import { connectGmail, CustomersGmailConnectCall } from "./customers/gmail/connect"
 import type { ObjectKind } from "./kinds"
 import {
 	organizationChannels,
@@ -151,11 +152,13 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(MessagesByIdsCall, messagesByIds),
 	]),
 	user: byName([receiver(AgentNotificationsCall, agentNotifications)]),
-	// Its own bootstrap and alarm work, and webhook deliveries (`docs/customers/tech-design.md` §5).
+	// Its own bootstrap and alarm work, webhook deliveries (`docs/customers/tech-design.md` §5), and
+	// Gmail mailboxes connected over OAuth (`routes/customers-gmail.http.ts`).
 	customers: byName([
 		receiver(CustomersBootstrapCall, bootstrap),
 		receiver(CustomersTickCall, () => tick()),
 		receiver(CustomersWebhookCall, receiveWebhook),
+		receiver(CustomersGmailConnectCall, connectGmail),
 	]),
 }
 

@@ -4,6 +4,7 @@ import { IntegrationsApiGroup as ApiV1IntegrationsApiGroup } from "./api-v1/inte
 import { MessagesApiGroup } from "./api-v1/messages"
 import { BotsApiGroup as ApiV1BotsApiGroup } from "./api-v1/bots"
 import { BotCommandsApiGroup } from "./bot-commands"
+import { CustomersGmailGroup } from "./customers-gmail"
 import { IncomingWebhookGroup } from "./incoming-webhooks"
 import { IntegrationCommandGroup } from "./integration-commands"
 import { IntegrationResourceGroup } from "./integration-resources"
@@ -31,6 +32,7 @@ export class HazelApi extends HttpApi.make("HazelApp")
 	.add(UploadsGroup)
 	.add(KlipyGroup)
 	.add(WebhookGroup)
+	.add(CustomersGmailGroup)
 	.annotateMerge(
 		OpenApi.annotations({
 			title: "Hazel Chat API",

@@ -346,6 +346,14 @@ export const CustomerEventId = Schema.String.check(Schema.isUUID())
 	})
 export type CustomerEventId = Schema.Schema.Type<typeof CustomerEventId>
 
+export const CustomerEmailId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerEmailId"))
+	.annotate({
+		description: "The ID of an email imported from a connected mailbox",
+		title: "Customer Email ID",
+	})
+export type CustomerEmailId = Schema.Schema.Type<typeof CustomerEmailId>
+
 export const CustomerMrrMovementId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/CustomerMrrMovementId"))
 	.annotate({

@@ -2,7 +2,7 @@ import type * as Customers from "@hazel/domain/customers"
 import { Option } from "effect"
 import type { Html } from "foldkit/html"
 import { type ConfigField, providerOf } from "../../../../customers/providers"
-import { segmented } from "../../../../customers/ui/filter-bar"
+import { type Segment, segmented } from "../../../../customers/ui/filter-bar"
 import { IconClose, IconPlus, IconTrash } from "../../../../icons"
 import { button } from "../../../../ui/button"
 import { input } from "../../../../ui/input"
@@ -96,16 +96,22 @@ export const configFieldView = (
 	})
 }
 
+/** A backfill's lookback choices (Maple's settings, each Gmail mailbox). */
 const LOOKBACK = [
 	{ key: "30", label: "30d" },
 	{ key: "90", label: "90d" },
 	{ key: "180", label: "180d" },
 	{ key: "365", label: "1y" },
 ] as const
-type LookbackKey = (typeof LOOKBACK)[number]["key"]
-const toLookback = (key: LookbackKey) => Message.ClickedLookback({ days: Number(key) })
-const lookbackKeyOf = (days: number): LookbackKey =>
-	LOOKBACK.find((option) => option.key === String(days))?.key ?? "90"
+const toLookback = (key: string) => Message.ClickedLookback({ days: Number(key) })
+
+/** The presets, with `days` in its place among them when it is none (set through the API, e.g. 7). */
+export const lookbackSegments = (days: number): ReadonlyArray<Segment<string>> =>
+	LOOKBACK.some((option) => option.key === String(days))
+		? LOOKBACK
+		: [...LOOKBACK, { key: String(days), label: `${days}d` }].toSorted(
+				(left, right) => Number(left.key) - Number(right.key),
+			)
 
 type MapleConfig = Extract<Customers.ConnectionConfig, { _tag: "maple" }>
 
@@ -293,8 +299,8 @@ const lookback = (h: H, config: MapleConfig, isDisabled: boolean): Html =>
 			? h.p([h.Class("text-fg text-sm")], [`${config.lookbackDays} days`])
 			: segmented(h, {
 					ariaLabel: "Lookback window",
-					segments: LOOKBACK,
-					selected: lookbackKeyOf(config.lookbackDays),
+					segments: lookbackSegments(config.lookbackDays),
+					selected: String(config.lookbackDays),
 					onSelect: toLookback,
 					className: "self-start",
 				}),

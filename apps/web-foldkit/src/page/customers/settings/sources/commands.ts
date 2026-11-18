@@ -169,7 +169,7 @@ export const SaveCustomerSourceSettings = Command.define("SaveCustomerSourceSett
 		updateConnection(payload).pipe(
 			settleUpdate(
 				() => Message.SucceededSaveSettings(),
-				(reason) => Message.FailedSaveSettings({ reason }),
+				(reason) => Message.FailedSaveSettings({ connectionId: payload.connectionId, reason }),
 			),
 		),
 })

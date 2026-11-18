@@ -6,7 +6,7 @@ import { sourcesLabel } from "../../../../customers/providers"
 import { KIND_LABEL, kindChip, severityChip } from "../../../../customers/ui/badges"
 import { sourceLogo } from "../../../../customers/ui/identity"
 import { IconPlus } from "../../../../icons"
-import { AppRoute, hrefOf } from "../../../../route"
+import { AppRoute, hrefOf, sourceDetailRoute } from "../../../../route"
 import { button } from "../../../../ui/button"
 import { switchControl } from "../../../../ui/switch"
 import type { Shared } from "../../../contract"
@@ -117,7 +117,7 @@ const requires = (h: H, rule: RuleRow, orgSlug: string): Html => {
 				: [
 						h.a(
 							[
-								h.Href(hrefOf(AppRoute.CustomersSourceDetail({ orgSlug, provider: first }))),
+								h.Href(hrefOf(sourceDetailRoute(orgSlug, first))),
 								h.Class("relative z-10 font-medium text-primary hover:underline"),
 							],
 							["Connect"],

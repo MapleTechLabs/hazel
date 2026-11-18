@@ -8,7 +8,8 @@ import { IconChevronDown } from "../../../icons"
 import { button } from "../../../ui/button"
 import { menuLabel } from "../../../ui/menu-view"
 import { Message } from "./message"
-import { type EventType, eventTypeEntries, type Model } from "./model"
+import { emailRow } from "./email"
+import { emailDataOf, type EventType, eventTypeEntries, type Model } from "./model"
 import { type Context, memberOf, menu, pageFooter, skeletonRows } from "./parts"
 
 /** The activity tab: the account's timeline by day, filtered by source and type, paged. */
@@ -16,6 +17,7 @@ import { type Context, memberOf, menu, pageFooter, skeletonRows } from "./parts"
 const TYPE_LABEL = {
 	all: "All events",
 	billing: "Billing",
+	emails: "Emails",
 	signals: "Signals",
 	contacts: "Contacts",
 	health: "Health",
@@ -47,6 +49,8 @@ const detailOf = (event: Customers.Event): string | null => {
 }
 
 const eventRow = (h: HtmlBuilder<Message>, event: Customers.Event, context: Context): Html => {
+	const email = emailDataOf(event)
+	if (email !== null) return emailRow(h, event, email, timeFormat.format(msOf(event.occurredAt)))
 	const actor = memberOf(context, event.actorUserId)?.name ?? null
 	const detail = detailOf(event)
 	return h.li(

@@ -1,5 +1,4 @@
 import type { CustomerProvider } from "@hazel/domain/customers"
-import type { OrganizationId } from "@hazel/schema"
 import type { Html } from "foldkit/html"
 import { formatCount, formatDate, formatDateTime, formatRelative } from "../../../../customers/format"
 import { providerOf, webhookUrlOf } from "../../../../customers/providers"
@@ -34,10 +33,6 @@ import { settingsCard, unitsCard } from "./settings-view"
 import { heading } from "../../../../ui/heading"
 
 /** One source (Wonder `loy`, `one`): its runs, connection, mapping, settings and the way out. */
-
-export interface DetailContext extends Context {
-	readonly organizationId: OrganizationId | null
-}
 
 const toHistoryFilter = (filter: HistoryFilter) => Message.ClickedHistoryFilter({ filter })
 
@@ -195,7 +190,7 @@ const row = (h: H, label: string, value: Html | string): Html =>
 		],
 	)
 
-const connectionCard = (h: H, model: Model, connection: ConnectionRow, context: DetailContext): Html => {
+const connectionCard = (h: H, model: Model, connection: ConnectionRow, context: Context): Html => {
 	const descriptor = providerOf(connection.provider)
 	const connectedBy =
 		model.members.find((member) => member.id === connection.connectedBy)?.name ?? "A former member"
@@ -258,8 +253,8 @@ const connectionCard = (h: H, model: Model, connection: ConnectionRow, context: 
 	])
 }
 
-const dangerZone = (h: H, provider: CustomerProvider): Html => {
-	const name = providerOf(provider).name
+const dangerZone = (h: H, connection: ConnectionRow): Html => {
+	const name = providerOf(connection.provider).name
 	return card(h, [
 		h.div(
 			[h.Class("flex flex-col gap-1")],
@@ -279,7 +274,7 @@ const dangerZone = (h: H, provider: CustomerProvider): Html => {
 				intent: "outline",
 				size: "sm",
 				className: "self-start text-danger-subtle-fg",
-				onPress: Message.PressedDisconnect(),
+				onPress: Message.PressedDisconnect({ connectionId: connection.id }),
 			},
 			[`Disconnect ${name}…`],
 		),
@@ -288,7 +283,7 @@ const dangerZone = (h: H, provider: CustomerProvider): Html => {
 
 // MAPPING
 
-const mappingCard = (h: H, provider: CustomerProvider): Html => {
+export const mappingCard = (h: H, provider: CustomerProvider): Html => {
 	const descriptor = providerOf(provider)
 	return card(h, [
 		cardHeader(h, "Field mapping", `How ${descriptor.name} records become Hazel fields.`),
@@ -440,7 +435,7 @@ const subtitleOf = (connection: ConnectionRow, context: Context): string => {
 	].join(" · ")
 }
 
-export const detailView = (h: H, model: Model, provider: CustomerProvider, context: DetailContext): Html => {
+export const detailView = (h: H, model: Model, provider: CustomerProvider, context: Context): Html => {
 	const descriptor = providerOf(provider)
 	const connection = connectionOf(model, provider)
 	const live = connection !== undefined && isLive(connection) ? connection : undefined
@@ -510,7 +505,7 @@ export const detailView = (h: H, model: Model, provider: CustomerProvider, conte
 									[h.Class("flex min-w-0 flex-col gap-5")],
 									[
 										connectionCard(h, model, live, context),
-										...(context.isAdmin ? [dangerZone(h, provider)] : []),
+										...(context.isAdmin ? [dangerZone(h, live)] : []),
 									],
 								),
 							],

@@ -1,7 +1,7 @@
 import * as Customers from "@hazel/domain/customers"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
-import { CustomerAccountId, CustomerNoteId, CustomerSignalId, UserId } from "@hazel/schema"
-import { Schema } from "effect"
+import { CustomerAccountId, CustomerEmailId, CustomerNoteId, CustomerSignalId, UserId } from "@hazel/schema"
+import { Option, Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
 import { AccountRow, MemberRow, msOf, SignalRow } from "../../../customers/queries"
@@ -64,18 +64,53 @@ export const EMPTY_PAGE = { items: [], nextCursor: null, status: "Idle" } as con
 export const ContactFilter = Schema.Literals(["all", "active", "dormant", "never_active"])
 export type ContactFilter = typeof ContactFilter.Type
 
-export const EventType = Schema.Literals(["all", "billing", "signals", "contacts", "health", "notes"])
+export const EventType = Schema.Literals([
+	"all",
+	"billing",
+	"emails",
+	"signals",
+	"contacts",
+	"health",
+	"notes",
+])
 export type EventType = typeof EventType.Type
 
 /** `customers.events.list` type prefixes per filter. */
 export const EVENT_TYPE_PREFIXES = {
 	all: [],
 	billing: ["invoice.", "subscription."],
+	emails: ["email."],
 	signals: ["signal."],
 	contacts: ["contact."],
 	health: ["health."],
 	notes: ["note."],
 } as const satisfies Record<EventType, ReadonlyArray<string>>
+
+/** An `email.received` / `email.sent` event's `data` (Gmail's ingest). */
+const Participant = Schema.Struct({ email: Schema.String, name: Schema.NullOr(Schema.String) })
+export const EmailEventData = Schema.Struct({
+	emailId: CustomerEmailId,
+	direction: Customers.EmailDirection,
+	snippet: Schema.String,
+	from: Participant,
+	to: Schema.Array(Participant),
+	cc: Schema.Array(Participant),
+})
+export type EmailEventData = typeof EmailEventData.Type
+
+const decodeEmailEventData = Schema.decodeUnknownOption(EmailEventData)
+
+/** The email an event is about; null for every other event. */
+export const emailDataOf = (event: Customers.Event): EmailEventData | null =>
+	event.type.startsWith("email.") ? Option.getOrNull(decodeEmailEventData(event.data)) : null
+
+/** The open email (`customers.email.get`): it, and the link to its thread in Gmail. */
+export const EmailFailure = Schema.Union([Schema.Literal("NotFound"), CommonReason])
+export type EmailFailure = typeof EmailFailure.Type
+export const OpenEmail = AsyncData.Schema(
+	Schema.Struct({ email: Customers.Email.Schema, url: Schema.String }),
+	EmailFailure,
+)
 
 export const SignalMenu = Schema.Literals(["snooze", "done", "more"])
 export type SignalMenu = typeof SignalMenu.Type
@@ -140,6 +175,12 @@ export const Model = Schema.Struct({
 	channelPopover: Popover.Model,
 	channelSearch: Schema.String,
 	rawModal: Modal.Model,
+	/** The email the email dialog shows (kept while it animates out), and its fetch. */
+	emailId: Schema.NullOr(CustomerEmailId),
+	email: OpenEmail.schema,
+	/** Bumped by each open: only the latest open's answer lands (the same email reopened included). */
+	emailRequest: Schema.Int,
+	emailModal: Modal.Model,
 	/** The note the delete confirmation asks about (kept while the dialog animates out). */
 	deletingNoteId: Schema.NullOr(CustomerNoteId),
 	deleteNoteModal: Modal.Model,
@@ -161,6 +202,7 @@ export const SIGNAL_MORE_MENU_ID = "customer-signal-more"
 export const TAG_POPOVER_ID = "customer-tag"
 export const CHANNEL_POPOVER_ID = "customer-channel"
 export const RAW_MODAL_ID = "customer-raw"
+export const EMAIL_MODAL_ID = "customer-email"
 export const DELETE_NOTE_MODAL_ID = "customer-delete-note"
 export const MERGE_MODAL_ID = "customer-merge"
 export const MERGE_SEARCH_ID = "customer-merge-search"

@@ -11,6 +11,7 @@ import {
 	CustomerChannelLinkId,
 	CustomerConnectionId,
 	CustomerContactId,
+	CustomerEmailId,
 	CustomerEventId,
 	CustomerExternalRefId,
 	CustomerIgnoreRuleId,
@@ -37,6 +38,7 @@ import {
 	ConnectionStatus,
 	CustomerProvider,
 	CustomerSource,
+	EmailDirection,
 	HealthStatus,
 	IgnoreRuleField,
 	InvoiceStatus,
@@ -405,6 +407,34 @@ class EventModel extends M.Class<EventModel>("CustomerEvent")({
 }) {}
 export const Event = M.expose(EventModel)
 export type Event = typeof Event.Schema.Type
+
+const Participant = S.Struct({ email: S.String, name: S.NullOr(S.String) })
+
+/**
+ * An imported email (`customer_emails`), stored once per `messageId` whichever mailboxes hold it.
+ * Its timeline events (`email.received` / `email.sent`) carry `data.emailId`; the whole email is read
+ * with `customers.email.get`.
+ */
+class EmailModel extends M.Class<EmailModel>("CustomerEmail")({
+	id: M.Generated(CustomerEmailId),
+	provider: CustomerProvider,
+	messageId: S.String,
+	/** The mailbox it was first read from, and its ids there (Gmail's message and thread ids). */
+	mailbox: S.String,
+	externalId: S.String,
+	threadId: S.String,
+	direction: EmailDirection,
+	fromAddress: Participant,
+	toAddresses: S.Array(Participant),
+	ccAddresses: S.Array(Participant),
+	subject: S.String,
+	snippet: S.String,
+	bodyText: S.String,
+	occurredAt: JsonDate,
+	createdAt: M.Generated(JsonDate),
+}) {}
+export const Email = M.expose(EmailModel)
+export type Email = typeof Email.Schema.Type
 
 class UnmatchedRecordModel extends M.Class<UnmatchedRecordModel>("CustomerUnmatchedRecord")({
 	id: M.Generated(CustomerUnmatchedRecordId),

@@ -1,5 +1,11 @@
 import * as Customers from "@hazel/domain/customers"
-import { ChannelId, CustomerAccountId, CustomerNoteId, CustomerSignalId } from "@hazel/schema"
+import {
+	ChannelId,
+	CustomerAccountId,
+	CustomerEmailId,
+	CustomerNoteId,
+	CustomerSignalId,
+} from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
@@ -10,7 +16,15 @@ import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import { SignalAction, SignalActionFailure } from "../attention/message"
-import { ContactFilter, DetailFailure, MetricRow, NoteDrafts, NoteRow, SignalMenu } from "./model"
+import {
+	ContactFilter,
+	DetailFailure,
+	EmailFailure,
+	MetricRow,
+	NoteDrafts,
+	NoteRow,
+	SignalMenu,
+} from "./model"
 
 /** A note or signal action: the row is gone, its status moved on, or a common reason. */
 export const ActionFailure = Schema.Union([Schema.Literals(["NotFound", "Stale"]), CommonReason])
@@ -96,6 +110,20 @@ export const Message = defineMessageUnion({
 	SucceededAccountUpdate: {},
 	FailedAccountUpdate: { reason: ActionFailure },
 	GotRawModalMessage: { message: Modal.Message },
+
+	PressedEmail: { emailId: CustomerEmailId },
+	GotEmailModalMessage: { message: Modal.Message },
+	/**
+	 * `emailId` and `request` name the open that asked: an answer for an email closed since, or for
+	 * an earlier open of the same one, is dropped.
+	 */
+	SucceededFetchEmail: {
+		emailId: CustomerEmailId,
+		request: Schema.Int,
+		email: Customers.Email.Schema,
+		url: Schema.String,
+	},
+	FailedFetchEmail: { emailId: CustomerEmailId, request: Schema.Int, reason: EmailFailure },
 
 	UpdatedChannelLinks: { links: Schema.Array(ChannelLinkRow) },
 	UpdatedChannelOptions: { channels: Schema.Array(ChannelOption) },

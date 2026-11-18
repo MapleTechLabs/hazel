@@ -46,6 +46,7 @@ const ACCOUNT_NOUN = {
 	stripe: "customers",
 	autumn: "customers",
 	maple: "groups",
+	gmail: "emails",
 } as const satisfies Record<CustomerProvider, string>
 
 /** What a source calls its records of a kind: Stripe "customers", Maple "groups". */

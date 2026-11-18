@@ -4,7 +4,7 @@ import { twMerge } from "tailwind-merge"
 import { formatDate } from "../../../../customers/format"
 import { PROVIDERS } from "../../../../customers/providers"
 import { sourceChip, sourceLogo } from "../../../../customers/ui/identity"
-import { AppRoute, hrefOf } from "../../../../route"
+import { hrefOf, sourceDetailRoute } from "../../../../route"
 import { switchControl } from "../../../../ui/switch"
 import { Message } from "./message"
 import type { MetricRow, Model, RuleForm } from "./model"
@@ -383,14 +383,7 @@ const metricRow = (h: H, context: ConditionContext, metric: MetricRow, selected:
 				h.span([h.Class("text-muted-fg text-xs")], [`Requires ${PROVIDERS[metric.provider].name}`]),
 				h.a(
 					[
-						h.Href(
-							hrefOf(
-								AppRoute.CustomersSourceDetail({
-									orgSlug: context.orgSlug,
-									provider: metric.provider,
-								}),
-							),
-						),
+						h.Href(hrefOf(sourceDetailRoute(context.orgSlug, metric.provider))),
 						h.Class("font-medium text-primary text-xs hover:underline"),
 					],
 					["Connect"],

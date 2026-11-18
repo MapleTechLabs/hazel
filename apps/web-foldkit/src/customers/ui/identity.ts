@@ -17,6 +17,7 @@ export const SOURCE_LABEL = {
 	stripe: "Stripe",
 	autumn: "Autumn",
 	maple: "Maple",
+	gmail: "Gmail",
 	hazel: "Hazel",
 } as const satisfies Record<CustomerSource, string>
 
@@ -25,6 +26,7 @@ const SOURCE_DOMAIN = {
 	stripe: "stripe.com",
 	autumn: "useautumn.com",
 	maple: "maple.dev",
+	gmail: "gmail.com",
 } as const satisfies Record<Exclude<CustomerSource, "hazel">, string>
 
 /** The brand mark's image: Brandfetch for providers, Hazel's own icon for Hazel. */

@@ -1,6 +1,13 @@
 import * as Customers from "@hazel/domain/customers"
 import type { CustomersNotFoundError } from "@hazel/domain/rpc"
-import { ChannelId, CustomerAccountId, CustomerNoteId, OrganizationId, UserId } from "@hazel/schema"
+import {
+	ChannelId,
+	CustomerAccountId,
+	CustomerEmailId,
+	CustomerNoteId,
+	OrganizationId,
+	UserId,
+} from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import * as Dom from "foldkit/dom"
@@ -73,6 +80,20 @@ export const FetchCustomerMrrHistory = Command.define("FetchCustomerMrrHistory",
 				),
 			),
 			catchCommon((reason) => Message.FailedFetchMrrHistory({ accountId: args.accountId, reason })),
+		),
+})
+
+/** One imported email in full, for the email dialog. */
+export const FetchCustomerEmail = Command.define("FetchCustomerEmail", {
+	args: { organizationId: OrganizationId, emailId: CustomerEmailId, request: Schema.Int },
+	messages: [Message.SucceededFetchEmail, Message.FailedFetchEmail],
+	execute: ({ organizationId, emailId, request }) =>
+		HazelRpc.use((rpc) => rpc("customers.email.get", { organizationId, emailId })).pipe(
+			Effect.map(({ email, url }) => Message.SucceededFetchEmail({ emailId, request, email, url })),
+			Effect.catchTag("CustomersNotFoundError", () =>
+				Effect.succeed(Message.FailedFetchEmail({ emailId, request, reason: "NotFound" })),
+			),
+			catchCommon((reason) => Message.FailedFetchEmail({ emailId, request, reason })),
 		),
 })
 

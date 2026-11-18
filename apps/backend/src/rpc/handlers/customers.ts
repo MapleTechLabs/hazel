@@ -4,7 +4,8 @@
  *
  * - Reads: any member (`customer_members`).
  * - Queue work (signals, notes, owners, tags, personal views): any member.
- * - Settings, rules, shared views, data sources, unmatched records, the demo seed: admins and owners.
+ * - Settings, rules, shared views, data sources, unmatched records, the demo seed: admins and owners;
+ *   a Gmail connection also by the member who connected the mailbox (`requireManagedConnection`).
  *
  * Mutations answer the `customers:<orgId>` write position; queue and settings changes ask for a
  * compute soon (health and counters follow from them).
@@ -46,6 +47,7 @@ import {
 	encryptSecrets,
 	loadCredentials,
 	otherProviderAccount,
+	restartRun as restartConnectionRun,
 	storeSecrets,
 	switchProviderAccount,
 } from "../../worker/objects/customers/credentials"
@@ -55,6 +57,7 @@ import { seedDemo } from "../../worker/objects/customers/demo"
 import { healthDryRun, ruleDryRun } from "../../worker/objects/customers/dry-run"
 import { CustomerIngest } from "../../worker/objects/customers/ingest"
 import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/customers/ingest-live"
+import { threadUrl } from "../../worker/objects/customers/gmail/wire"
 import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
 import { configProblem as mapleConfigProblem } from "../../worker/objects/customers/maple/pull"
 import { mergeAccounts } from "../../worker/objects/customers/merge"
@@ -318,6 +321,19 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 							.offset(page.offset),
 					)
 					return pageResult(rows, page)
+				}).pipe(remap),
+
+			"customers.email.get": ({ emailId }) =>
+				Effect.gen(function* () {
+					yield* requireMember
+					const email = yield* db.first(
+						SQLite.from(schema.customerEmailsTable)
+							.select()
+							.where(($) => [$.id.eq(emailId)])
+							.limit(1),
+					)
+					if (Option.isNone(email)) return yield* notFound("email", emailId)
+					return { email: email.value, url: threadUrl(email.value.mailbox, email.value.threadId) }
 				}).pipe(remap),
 
 			"customers.signals.history": ({ accountId, ...request }) =>
@@ -1075,6 +1091,29 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 				}),
 			)
 
+		/**
+		 * The connection, for someone who may change it: admins and owners; a Gmail mailbox also the
+		 * member who connected it (each member connects their own). Anyone else is refused before
+		 * learning whether it exists.
+		 */
+		const requireManagedConnection = (connectionId: schema.CustomerConnection["id"]) =>
+			Effect.gen(function* () {
+				const actor = yield* requireMember
+				const found = yield* db.first(
+					SQLite.from(schema.customerConnectionsTable)
+						.select()
+						.where(($) => [$.id.eq(connectionId)])
+						.limit(1),
+				)
+				const own =
+					Option.isSome(found) &&
+					found.value.provider === "gmail" &&
+					found.value.connectedBy === actor.userId
+				if (!own) yield* requireAdmin
+				if (Option.isNone(found)) return yield* notFound("connection", connectionId)
+				return found.value
+			})
+
 		const requireRecord = (recordId: schema.CustomerUnmatchedRecord["id"]) =>
 			Effect.flatMap(
 				db.first(
@@ -1102,27 +1141,8 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					),
 				)
 
-		/** New credentials start a new run: one left running ends, so only one run pulls. */
 		const restartRun = (connection: schema.CustomerConnection, now: Date) =>
-			Effect.gen(function* () {
-				yield* db.run(
-					SQLite.update(schema.customerSyncRunsTable)
-						.set({
-							status: "failed",
-							finishedAt: now,
-							error: {
-								code: "internal",
-								message: "Replaced by new credentials",
-								httpStatus: null,
-							},
-						})
-						.where(($) => [$.connectionId.eq(connection.id), $.status.eq("running")]),
-				)
-				yield* ingest.startRun(
-					connection.id,
-					connection.backfilledAt === null ? "backfill" : "manual",
-				)
-			})
+			restartConnectionRun(connection, now).pipe(Effect.provideService(CustomerIngest, ingest))
 
 		const switchAccount = (connection: schema.CustomerConnection, now: Date) =>
 			switchProviderAccount(connection, now).pipe(Effect.provideService(CustomerIngest, ingest))
@@ -1247,6 +1267,9 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 				Effect.gen(function* () {
 					const organizationId = yield* requireOwnOrganization(payloadOrg)
 					const actor = yield* requireAdmin
+					if (provider === "gmail") {
+						return yield* invalid("Gmail connects with Google sign-in, not an API key")
+					}
 					const webhookSecret = secretOf(given)
 					if (config._tag !== provider)
 						return yield* invalid(`The config is for ${config._tag}, not ${provider}`)
@@ -1266,7 +1289,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 						Effect.gen(function* () {
 							const previous = yield* db.first(
 								SQLite.from(schema.customerConnectionsTable)
-									.select("externalAccountId", "lastSuccessAt", "backfilledAt")
+									.select("id", "externalAccountId", "lastSuccessAt", "backfilledAt")
 									.where(($) => [$.provider.eq(provider)])
 									.limit(1),
 							)
@@ -1283,15 +1306,20 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 								disconnectedAt: null,
 								nextSyncAt: now,
 							}
-							const [connection] = yield* db.run(
-								SQLite.insertInto(schema.customerConnectionsTable)
-									.values({ organizationId, provider, ...values })
-									.onConflictDoUpdate({
-										target: ["provider"],
-										set: { ...values, updatedAt: now },
-									})
-									.returning(),
-							)
+							// One per provider (a partial unique index, so no `ON CONFLICT` target: Gmail
+							// holds one per mailbox).
+							const [connection] = Option.isSome(previous)
+								? yield* db.run(
+										SQLite.update(schema.customerConnectionsTable)
+											.set({ ...values, updatedAt: now })
+											.where(($) => [$.id.eq(previous.value.id)])
+											.returning(),
+									)
+								: yield* db.run(
+										SQLite.insertInto(schema.customerConnectionsTable)
+											.values({ organizationId, provider, ...values })
+											.returning(),
+									)
 							yield* storeSecrets(connection.id, secrets)
 							const current = otherProviderAccount(
 								Option.getOrNull(previous),
@@ -1307,9 +1335,13 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 
 			"customers.connection.update": ({ connectionId, config, apiKey, webhookSecret: given }) =>
 				Effect.gen(function* () {
-					yield* requireAdmin
+					const connection = yield* requireManagedConnection(connectionId)
 					const webhookSecret = given === undefined ? undefined : secretOf(given)
-					const connection = yield* requireConnection(connectionId)
+					if (connection.provider === "gmail" && (apiKey !== undefined || given !== undefined)) {
+						return yield* invalid(
+							"A Gmail mailbox's access comes from Google sign-in: connect it again",
+						)
+					}
 					// Its secrets were deleted: new ones come with a connect.
 					if (connection.status === "disconnected")
 						return yield* invalid("The connection is disconnected: connect it again")
@@ -1436,9 +1468,8 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 
 			"customers.connection.disconnect": ({ connectionId }) =>
 				Effect.gen(function* () {
-					yield* requireAdmin
+					yield* requireManagedConnection(connectionId)
 					const now = yield* currentTime
-					yield* requireConnection(connectionId)
 					return yield* txOnly(
 						Effect.gen(function* () {
 							yield* disconnectConnections([connectionId], now)
@@ -1449,8 +1480,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 
 			"customers.connection.syncNow": ({ connectionId }) =>
 				Effect.gen(function* () {
-					yield* requireAdmin
-					const connection = yield* requireConnection(connectionId)
+					const connection = yield* requireManagedConnection(connectionId)
 					if (connection.status === "disconnected")
 						return yield* notFound("connection", connectionId)
 					yield* adapterOf(connection.provider)

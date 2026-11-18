@@ -25,6 +25,14 @@
  * account or contact is soft-deleted once no live ref of it is left. A subscription or invoice op
  * read (`observedAt`) before the newest one applied to its row is late too and changes nothing.
  *
+ * Emails (`email` ops, Gmail) name no account: each lands on the accounts of its external
+ * participants (every address but the connected mailboxes' and their non-free-mail domains'): a
+ * live contact with that exact address (case-insensitive) places it on the contact's account, else
+ * the address's domain when exactly one live account holds it (free-mail domains never match). One
+ * `email.received` / `email.sent` event per account, keyed `<messageId>:<accountId>`; the email
+ * itself is stored once per `messageId` (`customer_emails`). An email no account matches is dropped
+ * (`Ignored`), never parked.
+ *
  * Writes compare first, so an op that changes nothing writes nothing (`Unchanged`, no `_changes`
  * row; a billing op still advances its row's `observedAt`). Ingest also records timeline events for the state changes it sees (subscription started,
  * plan changed, cancellation, invoice paid or failed, contact joined, left, first active), keyed so
@@ -42,6 +50,7 @@ import {
 	type ProviderRef,
 	type RecordActivity,
 	type RefEntityType,
+	type RecordEmail,
 	type RecordEvent,
 	type SweepEntityType,
 	type RecordMetric,
@@ -155,6 +164,7 @@ const LINK_HOSTS = {
 	stripe: ["stripe.com"],
 	autumn: ["useautumn.com"],
 	maple: ["maple.dev"],
+	gmail: ["mail.google.com"],
 } satisfies Record<CustomerProvider, ReadonlyArray<string>>
 
 /** A provider's link as given when it is `https:` on one of its hosts, else null (`undefined` stays). */
@@ -309,6 +319,7 @@ const STAT_OF = {
 	activity: "activityDays",
 	metric: "metricDays",
 	metric_definition: null,
+	email: "events",
 } satisfies Record<IngestOp["_tag"], keyof SyncStats | null>
 
 const encodeOp = Schema.encodeUnknownSync(IngestOp)
@@ -328,6 +339,15 @@ interface Session {
 	readonly active: Map<CustomerContactId, { readonly first: Date | null; readonly last: string | null }>
 	/** The connection was disconnected: nothing it sends lands. */
 	readonly disconnected: boolean
+	/** Gmail: every connected mailbox's address (the org's own people, never a customer). */
+	readonly mailboxes: ReadonlySet<string>
+	/** Email attribution: an address → the live contacts holding it. Cleared by account and contact ops. */
+	readonly contactsByEmail: Map<
+		string,
+		ReadonlyArray<{ readonly contactId: CustomerContactId; readonly accountId: CustomerAccountId }>
+	>
+	/** Email attribution: a domain → the one live account holding it (null: none, or several). Cleared likewise. */
+	readonly accountByDomain: Map<string, CustomerAccountId | null>
 }
 
 const refKey = (ref: ProviderRef) => `${ref.provider}:${ref.externalId}`
@@ -1905,8 +1925,153 @@ const make = Effect.gen(function* () {
 		})
 
 	// -----------------------------------------------------------------------
+	// Emails
+	// -----------------------------------------------------------------------
+
+	/** The live contacts (of live accounts) whose address is `address` (lowercased). */
+	const contactsWithEmail = (session: Session, address: string) =>
+		Effect.gen(function* () {
+			const cached = session.contactsByEmail.get(address)
+			if (cached !== undefined) return cached
+			const rows = (yield* db.query(
+				Database.sql`SELECT c."id" AS "contactId", c."accountId" AS "accountId" FROM "customer_contacts" c
+					JOIN "customer_accounts" a ON a."id" = c."accountId"
+					WHERE lower(c."email") = ${address} AND c."deletedAt" IS NULL AND a."deletedAt" IS NULL
+					ORDER BY c."createdAt"`,
+			)) as ReadonlyArray<{ contactId: CustomerContactId; accountId: CustomerAccountId }>
+			session.contactsByEmail.set(address, rows)
+			return rows
+		})
+
+	/** The one live account holding `domain`; none when no account or several do. */
+	const accountWithDomain = (session: Session, domain: string) =>
+		Effect.gen(function* () {
+			const cached = session.accountByDomain.get(domain)
+			if (cached !== undefined) return cached
+			const rows = yield* db.query(
+				Database.sql`SELECT DISTINCT a."id" AS id FROM "customer_accounts" a, json_each(a."domains") d
+					WHERE a."deletedAt" IS NULL AND d.value = ${domain} LIMIT 2`,
+			)
+			const accountId = rows.length === 1 ? (rows[0].id as CustomerAccountId) : null
+			session.accountByDomain.set(domain, accountId)
+			return accountId
+		})
+
+	/** At most this many recipients of each field in an event's `data` (the email holds them all). */
+	const EVENT_RECIPIENTS = 10
+
+	const applyEmail = (session: Session, op: RecordEmail) =>
+		Effect.gen(function* () {
+			const { provider } = session.context
+			const mailbox = op.mailbox.toLowerCase()
+			const ownAddresses = new Set([mailbox, ...session.mailboxes])
+			// The org's own domains: its mailboxes' (`emailDomain` leaves free-mail ones out).
+			const ownDomains = new Set(
+				[...ownAddresses].flatMap((address) =>
+					Option.toArray(Option.fromNullishOr(emailDomain(address))),
+				),
+			)
+			const isOwn = (address: string) => {
+				const domain = emailDomain(address)
+				return ownAddresses.has(address) || (domain !== null && ownDomains.has(domain))
+			}
+			const external = [
+				...new Set(
+					[op.from, ...op.to, ...op.cc].map((participant) => participant.email.toLowerCase()),
+				),
+			].filter((address) => !isOwn(address))
+			// Account → the contact it was matched through (null: by domain).
+			const matched = new Map<CustomerAccountId, CustomerContactId | null>()
+			for (const address of external) {
+				const contacts = yield* contactsWithEmail(session, address)
+				for (const contact of contacts) {
+					if ((matched.get(contact.accountId) ?? null) === null) {
+						matched.set(contact.accountId, contact.contactId)
+					}
+				}
+				if (contacts.length > 0) continue
+				const domain = emailDomain(address)
+				const accountId = domain === null ? null : yield* accountWithDomain(session, domain)
+				if (accountId !== null && !matched.has(accountId)) matched.set(accountId, null)
+			}
+			// Mail with no customer on it is not the org's customer conversation: dropped.
+			if (matched.size === 0) return { _tag: "Ignored", ruleId: null } satisfies IngestOutcome
+			const occurredAt = new Date(op.occurredAt)
+			yield* db.run(
+				SQLite.insertInto(schema.customerEmailsTable)
+					.values({
+						provider,
+						messageId: op.messageId,
+						mailbox,
+						externalId: op.externalId,
+						threadId: op.threadId,
+						direction:
+							op.direction === "outbound" || isOwn(op.from.email.toLowerCase())
+								? "outbound"
+								: "inbound",
+						fromAddress: op.from,
+						toAddresses: op.to,
+						ccAddresses: op.cc,
+						subject: op.subject,
+						snippet: op.snippet,
+						bodyText: op.bodyText,
+						occurredAt,
+					})
+					.onConflictDoNothing(),
+			)
+			// Already stored (a re-read, or another mailbox's copy): its events follow the stored direction.
+			const email = yield* db.first(
+				SQLite.from(schema.customerEmailsTable)
+					.select("id", "direction")
+					.where(($) => [$.messageId.eq(op.messageId)])
+					.limit(1),
+			)
+			if (Option.isNone(email)) return yield* Effect.die(new Error("The email row was not stored"))
+			const { id: emailId, direction } = email.value
+			let created = false
+			for (const [accountId, contactId] of matched) {
+				const externalId = `${op.messageId}:${accountId}`
+				const existing = yield* db.first(
+					SQLite.from(schema.customerEventsTable)
+						.select("id")
+						.where(($) => [$.provider.eq(provider), $.externalId.eq(externalId)])
+						.limit(1),
+				)
+				if (Option.isSome(existing)) continue
+				yield* db.run(
+					SQLite.insertInto(schema.customerEventsTable).values({
+						accountId,
+						contactId,
+						provider,
+						type: direction === "outbound" ? "email.sent" : "email.received",
+						title: op.subject === "" ? "(no subject)" : op.subject,
+						data: {
+							emailId,
+							direction,
+							snippet: op.snippet,
+							from: op.from,
+							to: op.to.slice(0, EVENT_RECIPIENTS),
+							cc: op.cc.slice(0, EVENT_RECIPIENTS),
+						},
+						occurredAt,
+						externalId,
+					}),
+				)
+				created = true
+			}
+			return created ? outcome.created(emailId) : outcome.unchanged(emailId)
+		})
+
+	// -----------------------------------------------------------------------
 	// Dispatch
 	// -----------------------------------------------------------------------
+
+	/** An account or contact op can change what an address or a domain matches: email lookups start over. */
+	const forgetAttribution = (session: Session) =>
+		Effect.sync(() => {
+			session.contactsByEmail.clear()
+			session.accountByDomain.clear()
+		})
 
 	const applyOp = (
 		session: Session,
@@ -1918,9 +2083,9 @@ const make = Effect.gen(function* () {
 			return Effect.fail(reject(index, op, "The op does not match the ingest contract"))
 		switch (op._tag) {
 			case "account":
-				return applyAccount(session, op)
+				return applyAccount(session, op).pipe(Effect.ensuring(forgetAttribution(session)))
 			case "contact":
-				return applyContact(session, op)
+				return applyContact(session, op).pipe(Effect.ensuring(forgetAttribution(session)))
 			case "subscription":
 				return applySubscription(session, op, index)
 			case "invoice":
@@ -1933,6 +2098,8 @@ const make = Effect.gen(function* () {
 				return applyDefinition(session, op, index)
 			case "event":
 				return applyEvent(session, op)
+			case "email":
+				return applyEmail(session, op)
 		}
 	}
 
@@ -1945,6 +2112,14 @@ const make = Effect.gen(function* () {
 					.limit(1),
 			)
 			const ignoreRules = yield* db.run(SQLite.from(schema.customerIgnoreRulesTable).select())
+			const mailboxes =
+				context.provider === "gmail"
+					? yield* db.run(
+							SQLite.from(schema.customerConnectionsTable)
+								.select("externalAccountId")
+								.where(($) => [$.provider.eq("gmail")]),
+						)
+					: []
 			return {
 				context,
 				now: new Date(yield* Clock.currentTimeMillis),
@@ -1957,6 +2132,13 @@ const make = Effect.gen(function* () {
 					onNone: () => false,
 					onSome: (row) => row.status === "disconnected",
 				}),
+				mailboxes: new Set(
+					mailboxes.flatMap((row) =>
+						row.externalAccountId === null ? [] : [row.externalAccountId.toLowerCase()],
+					),
+				),
+				contactsByEmail: new Map(),
+				accountByDomain: new Map(),
 			} satisfies Session
 		})
 

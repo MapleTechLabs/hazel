@@ -25,6 +25,8 @@ export const ConnectionRow = Schema.Struct({
 	id: CustomerConnectionId,
 	provider: Customers.CustomerProvider,
 	status: Customers.ConnectionStatus,
+	/** The provider's id of what it reads: Gmail's mailbox address (lowercased). */
+	externalAccountId: Schema.NullOr(Schema.String),
 	externalAccountName: Schema.NullOr(Schema.String),
 	config: Customers.ConnectionConfig,
 	connectedBy: UserId,
@@ -36,6 +38,7 @@ export const ConnectionRow = Schema.Struct({
 	lastError: Schema.NullOr(Customers.SyncError),
 	consecutiveFailures: Schema.Int,
 	nextSyncAtMs: Schema.NullOr(Schema.Number),
+	backfilledAtMs: Schema.NullOr(Schema.Number),
 	stats: Customers.SyncStats,
 	disconnectedAtMs: Schema.NullOr(Schema.Number),
 })
@@ -72,6 +75,7 @@ export const toConnectionRow = (connection: Customers.Connection): ConnectionRow
 	id: connection.id,
 	provider: connection.provider,
 	status: connection.status,
+	externalAccountId: connection.externalAccountId,
 	externalAccountName: connection.externalAccountName,
 	config: connection.config,
 	connectedBy: connection.connectedBy,
@@ -83,6 +87,7 @@ export const toConnectionRow = (connection: Customers.Connection): ConnectionRow
 	lastError: connection.lastError,
 	consecutiveFailures: connection.consecutiveFailures,
 	nextSyncAtMs: msOrNull(connection.nextSyncAt),
+	backfilledAtMs: msOrNull(connection.backfilledAt),
 	stats: connection.stats,
 	disconnectedAtMs: msOrNull(connection.disconnectedAt),
 })

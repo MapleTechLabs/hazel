@@ -519,5 +519,16 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0012_drop_signal_reopen_after",
 			statements: ['ALTER TABLE "customer_signals" DROP COLUMN "reopenAfter"'],
 		},
+		{
+			id: "0013_customers_gmail",
+			statements: [
+				'DROP INDEX IF EXISTS "customer_connections_provider_unique"',
+				'CREATE TABLE IF NOT EXISTS "customer_emails" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"provider" text NOT NULL,\n\t"messageId" text NOT NULL,\n\t"mailbox" text NOT NULL,\n\t"externalId" text NOT NULL,\n\t"threadId" text NOT NULL,\n\t"direction" text NOT NULL,\n\t"fromAddress" text NOT NULL,\n\t"toAddresses" text NOT NULL DEFAULT \'[]\',\n\t"ccAddresses" text NOT NULL DEFAULT \'[]\',\n\t"subject" text NOT NULL,\n\t"snippet" text NOT NULL,\n\t"bodyText" text NOT NULL,\n\t"occurredAt" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_emails_message_unique" ON "customer_emails" ("messageId")',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_connections_gmail_mailbox_unique" ON "customer_connections" ("provider", "externalAccountId") WHERE "provider" = \'gmail\'',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_connections_provider_single_unique" ON "customer_connections" ("provider") WHERE "provider" <> \'gmail\'',
+				'CREATE INDEX IF NOT EXISTS "customer_contacts_email_lower_idx" ON "customer_contacts" (lower("email")) WHERE "deletedAt" IS NULL',
+			],
+		},
 	],
 }

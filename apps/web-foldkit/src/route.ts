@@ -120,7 +120,13 @@ export const AppRoute = defineRouteUnion({
 	CustomersSettingsHealth: { orgSlug: Schema.String },
 	CustomersSettingsPlans: { orgSlug: Schema.String },
 	CustomersSettingsSources: { orgSlug: Schema.String },
-	CustomersSourceDetail: { orgSlug: Schema.String, provider: CustomerProvider },
+	/** Gmail's connect lands here with `?gmail=connected` or `?gmail=error&reason=` (`docs/customers/gmail.md`). */
+	CustomersSourceDetail: {
+		orgSlug: Schema.String,
+		provider: CustomerProvider,
+		gmail: Schema.Option(Schema.String),
+		reason: Schema.Option(Schema.String),
+	},
 	CustomersUnmatched: { orgSlug: Schema.String },
 	NotFound: { path: Schema.String },
 })
@@ -183,6 +189,11 @@ const IntegrationCallbackQuery = Schema.Struct({
 const ListViewQuery = Schema.Struct({ view: Schema.OptionFromOptional(Schema.String) })
 const CustomerTabQuery = Schema.Struct({ tab: Schema.OptionFromOptional(CustomerTab) })
 const SignalTemplateQuery = Schema.Struct({ template: Schema.OptionFromOptional(SignalTemplate) })
+/** Passed through unchecked; the page decodes the values it acts on. */
+const GmailCallbackQuery = Schema.Struct({
+	gmail: Schema.OptionFromOptional(Schema.String),
+	reason: Schema.OptionFromOptional(Schema.String),
+})
 
 const org = string("orgSlug")
 const orgPath = (...segments: ReadonlyArray<string>) =>
@@ -364,6 +375,7 @@ const routers = {
 	CustomersSourceDetail: pipe(
 		orgPath("customers", "settings", "sources"),
 		slash(schemaSegment("provider", CustomerProvider)),
+		query(GmailCallbackQuery),
 		Route.mapTo(AppRoute.CustomersSourceDetail),
 	),
 	CustomersUnmatched: pipe(
@@ -657,6 +669,13 @@ export const integrationRoute = (orgSlug: string, integrationId: string): AppRou
 /** The customers list, unfiltered or on a saved view (its id, or a built-in view's key). */
 export const customersListRoute = (orgSlug: string, view: string | null = null): AppRoute =>
 	AppRoute.CustomersList({ orgSlug, view: Option.fromNullishOr(view) })
+
+/** A data source's page, without a connect result. */
+export const sourceDetailRoute = (
+	orgSlug: string,
+	provider: CustomerProvider,
+): RouteOf<"CustomersSourceDetail"> =>
+	AppRoute.CustomersSourceDetail({ orgSlug, provider, gmail: Option.none(), reason: Option.none() })
 
 /** A customer's page on `tab` (none: the overview tab). */
 export const customerRoute = (

@@ -78,7 +78,7 @@ export const Message = defineMessageUnion({
 	FailedUpdateKeys: { reason: ConnectFailure },
 
 	// Disconnect
-	PressedDisconnect: {},
+	PressedDisconnect: { connectionId: CustomerConnectionId },
 	GotDisconnectModalMessage: { message: Modal.Message },
 	ConfirmedDisconnect: { connectionId: CustomerConnectionId },
 	SucceededDisconnect: { provider: Customers.CustomerProvider },
@@ -96,10 +96,12 @@ export const Message = defineMessageUnion({
 		value: Schema.String,
 	},
 	ClickedLookback: { days: Schema.Int },
+	/** A Gmail mailbox's lookback: saved at once (a page may list several mailboxes). */
+	ClickedGmailLookback: { connectionId: CustomerConnectionId, days: Schema.Int },
 	PressedDiscardSettings: {},
 	PressedSaveSettings: {},
 	SucceededSaveSettings: {},
-	FailedSaveSettings: { reason: ConnectFailure },
+	FailedSaveSettings: { connectionId: CustomerConnectionId, reason: ConnectFailure },
 
 	// Usage units
 	ChangedUnit: { metricKey: Schema.String, value: Schema.String },

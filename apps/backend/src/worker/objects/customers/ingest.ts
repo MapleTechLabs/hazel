@@ -16,6 +16,9 @@
  *   are ignored with it.
  * - Contacts: ref → same email within the account → create. Billing rows and metrics whose
  *   account does not resolve become unmatched records holding the op (replayed once linked).
+ * - Emails (`email` ops): attributed to the accounts of their external participants (a contact's
+ *   exact address, else a domain only one account holds), one event per account, the email stored
+ *   once per `Message-ID`; no match drops it (`Ignored`), nothing is parked.
  * - Precedence: `FIELD_PRECEDENCE` per field, recorded in `fieldSources`.
  * - Ordering: an op's `observedAt` at or before its record's deletion leaves it deleted; a
  *   subscription or invoice op observed before the newest one applied to its row changes nothing.

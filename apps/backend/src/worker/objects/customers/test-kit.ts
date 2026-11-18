@@ -300,6 +300,13 @@ export interface CustomersWorld {
 		ops: ReadonlyArray<IngestOp>,
 	) => Effect.Effect<any>
 	readonly connection: (provider: "clerk" | "stripe" | "autumn" | "maple") => CustomerConnectionId
+	/** A Gmail connection (fake, active) of `mailbox`, connected by `by` (the member by default). */
+	readonly connectGmail: (mailbox: string, by?: UserId) => CustomerConnectionId
+	/** Apply ops as a Gmail connection's. */
+	readonly ingestGmail: (
+		connectionId: CustomerConnectionId,
+		ops: ReadonlyArray<IngestOp>,
+	) => Effect.Effect<any>
 }
 
 /** A `CustomersObject` whose members are an owner and a member, bootstrapped (defaults installed). */
@@ -356,18 +363,34 @@ export const makeCustomersWorld = Effect.gen(function* () {
 		maple: insertConnection("maple"),
 	}
 	const connection = (provider: keyof typeof connections) => connections[provider]
-	const ingest = (provider: "clerk" | "stripe" | "autumn" | "maple", ops: ReadonlyArray<IngestOp>) =>
+	const connectGmail = (mailbox: string, by: UserId = member) => {
+		const id = uuid() as CustomerConnectionId
+		object.storage.db
+			.prepare(
+				`INSERT INTO customer_connections (id, organizationId, provider, externalAccountId, config, connectedBy)
+				 VALUES (?, ?, 'gmail', ?, ?, ?)`,
+			)
+			.run(id, orgId, mailbox, JSON.stringify(DEFAULT_CONNECTION_CONFIG.gmail), by)
+		return id
+	}
+	const applyAs = (
+		connectionId: CustomerConnectionId,
+		provider: "clerk" | "stripe" | "autumn" | "maple" | "gmail",
+		ops: ReadonlyArray<IngestOp>,
+	) =>
 		object
 			.run(
 				Effect.gen(function* () {
 					const service = yield* CustomerIngest
 					return yield* service.apply(
-						{ connectionId: connection(provider), provider, runId: null, trigger: "manual" },
+						{ connectionId, provider, runId: null, trigger: "manual" },
 						ops,
 					)
 				}).pipe(Effect.provide(CustomerIngest.layer)),
 			)
 			.pipe(Effect.orDie)
+	const ingest = (provider: "clerk" | "stripe" | "autumn" | "maple", ops: ReadonlyArray<IngestOp>) =>
+		applyAs(connection(provider), provider, ops)
 	return {
 		objects,
 		object,
@@ -379,6 +402,8 @@ export const makeCustomersWorld = Effect.gen(function* () {
 		rows,
 		ingest,
 		connection,
+		connectGmail,
+		ingestGmail: (connectionId, ops) => applyAs(connectionId, "gmail", ops),
 	} satisfies CustomersWorld
 })
 

@@ -7,7 +7,7 @@ import { Model } from "../../../../page/customers/settings/sources/model"
 import { toConnectionRow, toSyncRunRow } from "../../../../page/customers/settings/sources/queries"
 import { init, update } from "../../../../page/customers/settings/sources/update"
 import { view } from "../../../../page/customers/settings/sources/view"
-import { AppRoute } from "../../../../route"
+import { AppRoute, sourceDetailRoute } from "../../../../route"
 import { defineLabWithFlags, queryParam } from "../../../define"
 import { labPage } from "../../../frame"
 import { ACCOUNTS, STRIPE_CONNECTION, TEAM } from "../../../fixtures/customers"
@@ -93,11 +93,11 @@ const answered = (model: Model, shared: Shared): Model => {
 
 const routeOf = (state: State) =>
 	state === "detail-clerk"
-		? AppRoute.CustomersSourceDetail({ orgSlug: "lab", provider: "clerk" })
+		? sourceDetailRoute("lab", "clerk")
 		: state === "detail-maple-settings"
-			? AppRoute.CustomersSourceDetail({ orgSlug: "lab", provider: "maple" })
+			? sourceDetailRoute("lab", "maple")
 			: state === "detail-not-connected"
-				? AppRoute.CustomersSourceDetail({ orgSlug: "lab", provider: "autumn" })
+				? sourceDetailRoute("lab", "autumn")
 				: AppRoute.CustomersSettingsSources({ orgSlug: "lab" })
 
 const stateModel = (state: State): Model => {

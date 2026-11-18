@@ -23,6 +23,7 @@ import {
 	DeleteCustomerNote,
 	FetchCustomerContacts,
 	FetchCustomerDetail,
+	FetchCustomerEmail,
 	FetchCustomerEvents,
 	FetchCustomerInvoices,
 	FetchCustomerMrrHistory,
@@ -44,6 +45,7 @@ import {
 	DELETE_NOTE_MODAL_ID,
 	DONE_MENU_ID,
 	doneEntries,
+	EMAIL_MODAL_ID,
 	EMPTY_NOTE_DRAFTS,
 	EMPTY_PAGE,
 	EVENT_TYPE_MENU_ID,
@@ -225,6 +227,10 @@ const initialModel = (route: Route): Model => ({
 	channelPopover: Popover.init(CHANNEL_POPOVER_ID),
 	channelSearch: "",
 	rawModal: Modal.init(RAW_MODAL_ID),
+	emailId: null,
+	email: AsyncData.Idle(),
+	emailRequest: 0,
+	emailModal: Modal.init(EMAIL_MODAL_ID),
 	deletingNoteId: null,
 	deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
 	mergeModal: Modal.init(MERGE_MODAL_ID),
@@ -810,6 +816,38 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				),
 			}
 		},
+
+		PressedEmail: ({ emailId }) => {
+			const organizationId = shared.organization?.id
+			if (organizationId === undefined) return { model }
+			const request = model.emailRequest + 1
+			return {
+				model: modifyFields(model, {
+					emailId: () => emailId,
+					email: () => AsyncData.Loading(),
+					emailRequest: () => request,
+					emailModal: (modal) => Modal.open(modal).model,
+				}),
+				commands: [FetchCustomerEmail({ organizationId, emailId, request })],
+			}
+		},
+		GotEmailModalMessage: ({ message: modalMessage }) => {
+			const result = Modal.update(model.emailModal, modalMessage)
+			return {
+				model: modifyFields(model, { emailModal: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotEmailModalMessage({ message: child }),
+				),
+			}
+		},
+		SucceededFetchEmail: ({ emailId, request, email, url }) =>
+			emailId === model.emailId && request === model.emailRequest
+				? { model: modifyFields(model, { email: () => AsyncData.Success({ data: { email, url } }) }) }
+				: { model },
+		FailedFetchEmail: ({ emailId, request, reason }) =>
+			emailId === model.emailId && request === model.emailRequest
+				? { model: modifyFields(model, { email: () => AsyncData.Failure({ error: reason }) }) }
+				: { model },
 
 		PressedSignalMenu: ({ signalId, menu }) => {
 			const [field, entries] = SIGNAL_MENU[menu]

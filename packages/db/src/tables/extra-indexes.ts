@@ -108,6 +108,29 @@ export const extraIndexes: ReadonlyArray<ExtraIndex> = [
 		where: `"externalId" IS NOT NULL`,
 	},
 	{
+		// One connection per provider, except Gmail: one per connected mailbox.
+		name: "customer_connections_provider_single_unique",
+		table: "customer_connections",
+		unique: true,
+		on: ["provider"],
+		where: `"provider" <> 'gmail'`,
+	},
+	{
+		name: "customer_connections_gmail_mailbox_unique",
+		table: "customer_connections",
+		unique: true,
+		on: ["provider", "externalAccountId"],
+		where: `"provider" = 'gmail'`,
+	},
+	{
+		// Email attribution looks contacts up by address, whatever case the source stored it in.
+		name: "customer_contacts_email_lower_idx",
+		table: "customer_contacts",
+		unique: false,
+		on: [`lower("email")`],
+		where: `"deletedAt" IS NULL`,
+	},
+	{
 		name: "customer_signals_episode_unique",
 		table: "customer_signals",
 		unique: true,

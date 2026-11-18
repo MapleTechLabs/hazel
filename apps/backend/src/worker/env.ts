@@ -78,6 +78,10 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalSecret("GITHUB_APP_PRIVATE_KEY"),
 		optionalSecret("GITHUB_WEBHOOK_SECRET"),
 		optionalPlain("GITHUB_WEBHOOK_SKIP_SIGNATURE"),
+		// Customers' Gmail source (routes/customers-gmail.http.ts): a Google OAuth web client whose
+		// redirect URI is <API_BASE_URL>/customers/gmail/callback; unset leaves Gmail unavailable.
+		optionalPlain("GOOGLE_GMAIL_CLIENT_ID"),
+		optionalSecret("GOOGLE_GMAIL_CLIENT_SECRET"),
 		optionalSecret("KLIPY_API_KEY"),
 		// Thread naming (services/thread-namer.ts); unset disables it.
 		optionalSecret("OPENROUTER_API_KEY"),

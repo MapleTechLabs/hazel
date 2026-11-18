@@ -6,10 +6,10 @@ import {
 	OrganizationMemberId,
 	UserId,
 } from "@hazel/schema"
-import { Redacted, Schema } from "effect"
+import { Option, Redacted, Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
-import { AppRoute } from "../../../../route"
+import { AppRoute, sourceDetailRoute } from "../../../../route"
 import type { Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
 import { sharedDefaults } from "../../../test-shared"
@@ -21,9 +21,9 @@ import {
 	SyncCustomerSource,
 } from "./commands"
 import { Message } from "./message"
-import { isSettingsDirty, type Model } from "./model"
+import { gmailLookbackOf, isSettingsDirty, type Model } from "./model"
 import type { ConnectionRow } from "./queries"
-import { init, update } from "./update"
+import { init, routeChanged, update } from "./update"
 
 // `ui/aria/*` names `document` when its modules load; the update loop never touches it.
 vi.hoisted(() => {
@@ -61,6 +61,7 @@ const connection = (
 ): ConnectionRow => ({
 	id: connectionId(uuid(100 + n)),
 	status: "active",
+	externalAccountId: null,
 	externalAccountName: null,
 	config: DEFAULT_CONNECTION_CONFIG[fields.provider],
 	connectedBy: ada,
@@ -72,6 +73,7 @@ const connection = (
 	lastError: null,
 	consecutiveFailures: 0,
 	nextSyncAtMs: NOW + 3_600_000,
+	backfilledAtMs: null,
 	stats: EMPTY_SYNC_STATS,
 	disconnectedAtMs: null,
 	...fields,
@@ -289,8 +291,8 @@ describe("data sources: sync and disconnect", () => {
 	test("Disconnect asks first, then disconnects", () => {
 		story(
 			pageUpdate,
-			given(loaded(AppRoute.CustomersSourceDetail({ orgSlug: "hazel", provider: "clerk" }))),
-			message(Message.PressedDisconnect()),
+			given(loaded(sourceDetailRoute("hazel", "clerk"))),
+			message(Message.PressedDisconnect({ connectionId: clerk.id })),
 			model((current) => expect(current.disconnectModal.isOpen).toBe(true)),
 			message(Message.ConfirmedDisconnect({ connectionId: clerk.id })),
 			Command.expectHas(
@@ -315,7 +317,7 @@ describe("data sources: sync and disconnect", () => {
 })
 
 describe("data sources: Maple settings", () => {
-	const detail = () => loaded(AppRoute.CustomersSourceDetail({ orgSlug: "hazel", provider: "maple" }))
+	const detail = () => loaded(sourceDetailRoute("hazel", "maple"))
 
 	test("edits build the update payload; the draft clears once the row syncs", () => {
 		story(
@@ -413,5 +415,118 @@ describe("data sources: usage units", () => {
 		expect(
 			pageUpdate(withMetrics(), Message.SubmittedUnit({ metricKey: traces.key })).commands ?? [],
 		).toEqual([])
+	})
+})
+
+describe("data sources: Gmail", () => {
+	const grace = Schema.decodeSync(UserId)(uuid(4))
+	const mine = connection(10, { provider: "gmail", externalAccountId: "ada@hazel.test" })
+	const theirs = connection(11, {
+		provider: "gmail",
+		externalAccountId: "grace@hazel.test",
+		connectedBy: grace,
+	})
+	const gmailRoute = (gmail: string | null, reason: string | null = null) => ({
+		...sourceDetailRoute("hazel", "gmail"),
+		gmail: Option.fromNullishOr(gmail),
+		reason: Option.fromNullishOr(reason),
+	})
+	const gmailPage = () =>
+		pageUpdate(
+			init(sourceDetailRoute("hazel", "gmail"), shared).model,
+			Message.UpdatedConnections({ connections: [clerk, mine, theirs] }),
+		).model
+
+	test("the connect's return says how it went and cleans the URL", () => {
+		expect(init(gmailRoute("connected"), shared).outMessage).toEqual(
+			PageOutMessage.RequestedNavigation({
+				route: sourceDetailRoute("hazel", "gmail"),
+				replace: true,
+				toast: {
+					intent: "success",
+					title: "Gmail connected",
+					description: "Emails with your customers show on their timelines as the import runs.",
+				},
+			}),
+		)
+		expect(routeChanged(gmailPage(), gmailRoute("error", "denied")).outMessage).toMatchObject({
+			toast: { intent: "error", title: "Gmail wasn't connected" },
+		})
+		// An unknown reason reads as a failure of ours.
+		expect(routeChanged(gmailPage(), gmailRoute("error", "nope")).outMessage).toMatchObject({
+			toast: { title: "Couldn't save the connection" },
+		})
+		expect(routeChanged(gmailPage(), sourceDetailRoute("hazel", "gmail")).outMessage).toBeUndefined()
+	})
+
+	test("a mailbox's lookback saves at once and shows until its row has it", () => {
+		const saving = pageUpdate(
+			gmailPage(),
+			Message.ClickedGmailLookback({ connectionId: theirs.id, days: 30 }),
+		)
+		expect(saving.commands?.map((command) => [command.name, command.args])).toEqual([
+			[
+				"SaveCustomerSourceSettings",
+				{ organizationId, connectionId: theirs.id, config: { _tag: "gmail", lookbackDays: 30 } },
+			],
+		])
+		expect(gmailLookbackOf(saving.model, theirs)).toBe(30)
+		const stillOld = pageUpdate(
+			saving.model,
+			Message.UpdatedConnections({ connections: [clerk, mine, theirs] }),
+		).model
+		expect(gmailLookbackOf(stillOld, theirs)).toBe(30)
+		const synced = { ...theirs, config: { _tag: "gmail" as const, lookbackDays: 30 } }
+		const done = pageUpdate(stillOld, Message.UpdatedConnections({ connections: [clerk, mine, synced] }))
+		expect(done.model.gmailLookback).toEqual({})
+	})
+
+	test("each mailbox keeps its saved lookback until its own row has it; a refused one can be retried", () => {
+		const savedMine = [
+			Message.ClickedGmailLookback({ connectionId: mine.id, days: 30 }),
+			Message.SucceededSaveSettings(),
+			Message.ClickedGmailLookback({ connectionId: theirs.id, days: 180 }),
+		].reduce((current, next) => pageUpdate(current, next).model, gmailPage())
+		expect([gmailLookbackOf(savedMine, mine), gmailLookbackOf(savedMine, theirs)]).toEqual([30, 180])
+
+		const refused = pageUpdate(
+			savedMine,
+			Message.FailedSaveSettings({ connectionId: theirs.id, reason: "Refused" }),
+		).model
+		expect([gmailLookbackOf(refused, mine), gmailLookbackOf(refused, theirs)]).toEqual([30, 90])
+		expect(
+			pageUpdate(refused, Message.ClickedGmailLookback({ connectionId: theirs.id, days: 180 }))
+				.commands,
+		).toHaveLength(1)
+
+		const mineSynced = { ...mine, config: { _tag: "gmail" as const, lookbackDays: 30 } }
+		const synced = pageUpdate(
+			refused,
+			Message.UpdatedConnections({ connections: [clerk, mineSynced, theirs] }),
+		).model
+		expect(synced.gmailLookback).toEqual({})
+	})
+
+	test("Disconnect asks about the mailbox it was pressed on", () => {
+		story(
+			pageUpdate,
+			given(gmailPage()),
+			message(Message.PressedDisconnect({ connectionId: theirs.id })),
+			model((current) => expect(current.disconnectId).toBe(theirs.id)),
+			message(Message.ConfirmedDisconnect({ connectionId: theirs.id })),
+			Command.expectHas(
+				DisconnectCustomerSource({ organizationId, connectionId: theirs.id, provider: "gmail" }),
+			),
+			Command.resolve(DisconnectCustomerSource, Message.SucceededDisconnect({ provider: "gmail" })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "success",
+						title: "Gmail disconnected",
+						description: "Emails already imported stay.",
+					},
+				}),
+			),
+		)
 	})
 })

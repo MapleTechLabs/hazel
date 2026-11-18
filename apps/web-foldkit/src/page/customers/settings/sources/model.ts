@@ -104,12 +104,16 @@ export const Model = Schema.Struct({
 	keysModal: Modal.Model,
 	keysForm: Schema.NullOr(KeysForm),
 	disconnectModal: Modal.Model,
+	/** The connection the disconnect confirmation asks about (kept while the dialog animates out). */
+	disconnectId: Schema.NullOr(CustomerConnectionId),
 	isDisconnecting: Schema.Boolean,
 	/** The detail's provider settings while edited; null shows the connection's own. */
 	settingsDraft: Schema.NullOr(Customers.ConnectionConfig),
 	/** Maple's "add an activity event" field. */
 	activityEventInput: Schema.String,
 	isSavingSettings: Schema.Boolean,
+	/** Gmail mailboxes' lookbacks saved, by connection id; each shown until its synced row has it. */
+	gmailLookback: Schema.Record(Schema.String, Schema.Int),
 	/** The sources' own metrics; null until the query answers. */
 	unitMetrics: Schema.NullOr(Schema.Array(UnitMetricRow)),
 	/** A metric's unit while typed, by key; saved on Enter or blur. */
@@ -125,6 +129,23 @@ export const DISCONNECT_MODAL_ID = "customers-source-disconnect"
 
 export const connectionOf = (model: Model, provider: Customers.CustomerProvider): ConnectionRow | undefined =>
 	model.connections?.find((connection) => connection.provider === provider)
+
+/** Gmail's mailboxes (an org may connect several), live ones first. */
+export const mailboxesOf = (model: Model): ReadonlyArray<ConnectionRow> =>
+	(model.connections ?? [])
+		.filter((connection) => connection.provider === "gmail")
+		.toSorted((left, right) => Number(!isLive(left)) - Number(!isLive(right)))
+
+/** A mailbox's address; the connection's name while the row has none. */
+export const mailboxOf = (connection: ConnectionRow): string =>
+	connection.externalAccountId ?? connection.externalAccountName ?? "Gmail mailbox"
+
+/** The lookback a mailbox shows: the one it saved, until its row has it, else its own. */
+export const gmailLookbackOf = (model: Model, connection: ConnectionRow): number =>
+	model.gmailLookback[connection.id] ??
+	(connection.config._tag === "gmail"
+		? connection.config.lookbackDays
+		: Customers.DEFAULT_CONNECTION_CONFIG.gmail.lookbackDays)
 
 /** Connected, failing or syncing; a disconnected connection's data stays, marked stale. */
 export const isLive = (connection: ConnectionRow): boolean => connection.status !== "disconnected"
