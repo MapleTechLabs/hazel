@@ -6,6 +6,7 @@ import type { UpsertAccount, UpsertContact, UpsertSubscription } from "@hazel/do
 import type { CustomerAccountId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
+import { CustomerIngest } from "./ingest"
 import { addDays } from "./time"
 import { makeCustomersWorld, NOW, TODAY, uuid } from "./test-kit"
 
@@ -201,6 +202,13 @@ describe("customers.account.merge", () => {
 					{ ...member("user_a", "org_1", "ada@acme.com"), removed: true },
 				])
 				expect(ada()).toEqual([{ deleted: 1 }])
+				// She rejoins through one organization and leaves it: removed again.
+				yield* world.ingest("clerk", [member("user_a", "org_2", "ada@acme.com")])
+				expect(ada()).toEqual([{ deleted: 0 }])
+				yield* world.ingest("clerk", [
+					{ ...member("user_a", "org_2", "ada@acme.com"), removed: true },
+				])
+				expect(ada()).toEqual([{ deleted: 1 }])
 			}),
 		))
 
@@ -332,6 +340,56 @@ describe("customers.account.merge", () => {
 						kept,
 					),
 				).toEqual([{ email: "ada@acme.com" }])
+			}),
+		))
+
+	it("drops a membership a full listing no longer sees", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					clerkOrg("org_1", "Acme"),
+					clerkOrg("org_2", "Acme EU"),
+					member("user_a", "org_1", "ada@acme.com"),
+					member("user_a", "org_2", "ada@acme.com"),
+				])
+				const idOf = (name: string) =>
+					world.rows<{ id: CustomerAccountId }>(
+						`SELECT id FROM customer_accounts WHERE name = ?`,
+						name,
+					)[0]!.id
+				const kept = idOf("Acme")
+				yield* world.call(
+					"customers.account.merge",
+					{ accountId: idOf("Acme EU"), intoAccountId: kept },
+					world.owner,
+				)
+				// She left Acme EU without a webhook: the next full listing sees her through Acme only.
+				yield* Effect.sleep("5 millis")
+				const since = new Date()
+				yield* world.ingest("clerk", [
+					clerkOrg("org_1", "Acme"),
+					clerkOrg("org_2", "Acme EU"),
+					member("user_a", "org_1", "ada@acme.com"),
+				])
+				yield* world.object.run(
+					Effect.flatMap(CustomerIngest, (ingest) =>
+						ingest.completeSweep(world.connection("clerk"), since, ["account", "contact"]),
+					).pipe(Effect.provide(CustomerIngest.layer)),
+				)
+				const ada = () =>
+					world.rows(
+						`SELECT c.deletedAt IS NOT NULL AS deleted FROM customer_contacts AS c
+						JOIN customer_external_refs AS r ON r.entityId = c.id
+						WHERE r.entityType = 'contact' AND r.externalId = 'user_a' AND r.accountId = ?`,
+						kept,
+					)
+				expect(ada()).toEqual([{ deleted: 0 }])
+				// Leaving Acme now removes her.
+				yield* world.ingest("clerk", [
+					{ ...member("user_a", "org_1", "ada@acme.com"), removed: true },
+				])
+				expect(ada()).toEqual([{ deleted: 1 }])
 			}),
 		))
 })

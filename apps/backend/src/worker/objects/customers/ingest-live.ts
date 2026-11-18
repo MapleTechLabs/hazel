@@ -462,7 +462,7 @@ const make = Effect.gen(function* () {
 			/** The provider record's own name (account refs). */
 			readonly name?: string | null | undefined
 			/** The account records a contact ref is a member through. */
-			readonly viaAccounts?: ReadonlyArray<string> | null
+			readonly viaAccounts?: Readonly<Record<string, string>> | null
 		},
 	) =>
 		Effect.gen(function* () {
@@ -1096,6 +1096,12 @@ const make = Effect.gen(function* () {
 	const removeContactRef = (session: Session, ref: schema.CustomerExternalRef, observedAt?: string) =>
 		Effect.gen(function* () {
 			yield* removeRef(session.now, ref, observedAt)
+			// No membership is left: a later sighting starts the list over.
+			yield* db.run(
+				SQLite.update(schema.customerExternalRefsTable)
+					.set({ viaAccounts: null })
+					.where(($) => [$.id.eq(ref.id)]),
+			)
 			const contactId = ref.entityId as CustomerContactId
 			const other = yield* db.first(
 				SQLite.from(schema.customerExternalRefsTable)
@@ -1168,10 +1174,10 @@ const make = Effect.gen(function* () {
 				if (Option.isNone(known) || alreadyRemoved(op.observedAt, known.value))
 					return outcome.unchanged(op.externalId)
 				// A merged customer's member through another of its organizations stays.
-				const via = known.value.viaAccounts ?? []
-				const rest = via.filter((externalId) => externalId !== op.account.externalId)
-				if (rest.length > 0) {
-					if (rest.length === via.length) return outcome.unchanged(known.value.entityId)
+				const via = known.value.viaAccounts ?? {}
+				const { [op.account.externalId]: left, ...rest } = via
+				if (Object.keys(rest).length > 0) {
+					if (left === undefined) return outcome.unchanged(known.value.entityId)
 					yield* db.run(
 						SQLite.update(schema.customerExternalRefsTable)
 							.set({ viaAccounts: rest, updatedAt: session.now })
@@ -1227,7 +1233,7 @@ const make = Effect.gen(function* () {
 					accountId: accountId.value,
 					matchMethod: created ? "created" : "existing",
 					externalUrl: providerLink(session.context.provider, op.externalUrl),
-					viaAccounts: [op.account.externalId],
+					viaAccounts: { [op.account.externalId]: session.now.toISOString() },
 				})
 			}
 			const id = contactId
@@ -1242,13 +1248,13 @@ const make = Effect.gen(function* () {
 			// Seen again (a full sweep removes the contacts it does not see).
 			if (Option.isSome(known)) {
 				yield* touchRef(session, known.value, providerLink(session.context.provider, op.externalUrl))
-				const via = known.value.viaAccounts ?? []
-				if (!via.includes(op.account.externalId))
-					yield* db.run(
-						SQLite.update(schema.customerExternalRefsTable)
-							.set({ viaAccounts: [...via, op.account.externalId] })
-							.where(($) => [$.id.eq(known.value.id)]),
-					)
+				// Revived (stale, so no memberships): only this one.
+				const via = known.value.staleAt === null ? (known.value.viaAccounts ?? {}) : {}
+				yield* db.run(
+					SQLite.update(schema.customerExternalRefsTable)
+						.set({ viaAccounts: { ...via, [op.account.externalId]: session.now.toISOString() } })
+						.where(($) => [$.id.eq(known.value.id)]),
+				)
 			}
 			const patch = makePatch(contact, contact.fieldSources, provider)
 			patch.set("email", op.email, true)
@@ -2338,6 +2344,17 @@ const make = Effect.gen(function* () {
 							count++
 						} else if (yield* removeContactRef(session, ref)) count++
 					}
+					// A person still seen through one organization: the memberships it lists that this
+					// listing did not see are gone.
+					if (entityType === "contact")
+						yield* db.query(
+							Database.sql`UPDATE "customer_external_refs" SET "viaAccounts" = (
+								SELECT json_group_object("key", "value") FROM json_each("viaAccounts")
+								WHERE "value" >= ${since.toISOString()})
+							WHERE "connectionId" = ${connectionId} AND "entityType" = 'contact'
+								AND "staleAt" IS NULL AND "viaAccounts" IS NOT NULL
+								AND EXISTS (SELECT 1 FROM json_each("viaAccounts") WHERE "value" < ${since.toISOString()})`,
+						)
 				}
 				if (entityTypes.includes("subscription")) {
 					const subs = yield* unseenSubscriptions

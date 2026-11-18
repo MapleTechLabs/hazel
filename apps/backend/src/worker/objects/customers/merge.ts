@@ -79,9 +79,7 @@ const foldContact = (
 						yield* db.run(
 							SQLite.update(schema.customerExternalRefsTable)
 								.set({
-									viaAccounts: [
-										...new Set([...(held.viaAccounts ?? []), ...(ref.viaAccounts ?? [])]),
-									],
+									viaAccounts: { ...ref.viaAccounts, ...held.viaAccounts },
 									// `undefined` leaves the column as it is.
 									staleAt: ref.staleAt === null ? null : undefined,
 									deletedObservedAt: ref.staleAt === null ? null : undefined,
@@ -230,10 +228,11 @@ export const mergeAccounts = Effect.fn("Customers.mergeAccounts")(function* (
 	// Contact refs from before memberships were recorded: their account's own records of that source.
 	yield* db.query(
 		Database.sql`UPDATE "customer_external_refs" SET "viaAccounts" = (
-			SELECT json_group_array("a"."externalId") FROM "customer_external_refs" AS "a"
+			SELECT json_group_object("a"."externalId", ${now.toISOString()}) FROM "customer_external_refs" AS "a"
 			WHERE "a"."entityType" = 'account' AND "a"."accountId" = "customer_external_refs"."accountId"
 				AND "a"."provider" = "customer_external_refs"."provider")
-		WHERE "entityType" = 'contact' AND "viaAccounts" IS NULL AND "accountId" IN (${fromId}, ${intoId})`,
+		WHERE "entityType" = 'contact' AND "viaAccounts" IS NULL AND "staleAt" IS NULL
+			AND "accountId" IN (${fromId}, ${intoId})`,
 	)
 
 	yield* db.run(

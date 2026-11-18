@@ -215,10 +215,12 @@ export const customerExternalRefsTable = SQLite.table("customer_external_refs", 
 		/** The provider record's own name (an account ref's organization or customer name), as last seen. */
 		name: SQLite.nullable(SQLite.text),
 		/**
-		 * A contact ref's account records (Clerk organizations) it is a member through: after a merge one
-		 * ref may stand for several memberships, and leaving one keeps it live. Null before it was known.
+		 * A contact ref's memberships: each account record (Clerk organization) it is a member through,
+		 * with when it was last seen there (ISO). After a merge one ref may stand for several; leaving
+		 * one keeps it live, and a full sweep drops the ones it did not see. Null before it was known,
+		 * and once the ref is stale.
 		 */
-		viaAccounts: SQLite.nullable(jsonb<ReadonlyArray<string>>()),
+		viaAccounts: SQLite.nullable(jsonb<Readonly<Record<string, string>>>()),
 		/** Deep link to the provider's dashboard. */
 		externalUrl: SQLite.nullable(SQLite.text),
 		matchMethod: textEnum(MatchMethod.literals),
