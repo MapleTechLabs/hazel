@@ -222,20 +222,20 @@ const statusOf = (current: Model, id: SignalRow["id"]) =>
 const ids = (rows: ReadonlyArray<SignalRow>) => rows.map((row) => row.id)
 
 describe("needs attention: what shows", () => {
-	test("Open, Mine or unowned by default, by priority", () => {
+	test("Open, Mine or unowned by default, by priority, an account's signals together", () => {
 		const current = loaded()
 		expect(current.filters.owner).toBe("mine_or_unowned")
-		expect(ids(visibleSignals(current, viewer))).toEqual(ids([paymentFailed, stoppedLogging, usageDown]))
+		expect(ids(visibleSignals(current, viewer))).toEqual(ids([paymentFailed, usageDown, stoppedLogging]))
 		expect(tabCounts(current, viewer)).toEqual({ open: 3, snoozed: 1, done: 1 })
 	})
 
 	test("an unowned account's signals show by default, but not under Mine", () => {
 		const unowned = { ...loaded(), accounts: [acme, kestrel, { ...northwind, ownerUserId: null }] }
 		expect(ids(visibleSignals(unowned, viewer))).toEqual(
-			ids([paymentFailed, stoppedLogging, nearLimit, usageDown]),
+			ids([paymentFailed, usageDown, stoppedLogging, nearLimit]),
 		)
 		const mine = { ...unowned, filters: { ...unowned.filters, owner: "mine" as const } }
-		expect(ids(visibleSignals(mine, viewer))).toEqual(ids([paymentFailed, stoppedLogging, usageDown]))
+		expect(ids(visibleSignals(mine, viewer))).toEqual(ids([paymentFailed, usageDown, stoppedLogging]))
 	})
 
 	test("Done keeps the last week only", () => {
@@ -247,7 +247,7 @@ describe("needs attention: what shows", () => {
 		const current = pageUpdate(loaded(), Message.ClearedFilter({ field: "owner" })).model
 		expect(current.filters.owner).toBe("anyone")
 		expect(ids(visibleSignals(current, viewer))).toEqual(
-			ids([paymentFailed, stoppedLogging, nearLimit, usageDown]),
+			ids([paymentFailed, usageDown, stoppedLogging, nearLimit]),
 		)
 	})
 
@@ -303,7 +303,7 @@ describe("needs attention: what shows", () => {
 		).model
 		expect(cleared.search).toBe("")
 		expect(cleared.filters).toEqual(loaded().filters)
-		expect(ids(visibleSignals(cleared, viewer))).toEqual(ids([paymentFailed, stoppedLogging, usageDown]))
+		expect(ids(visibleSignals(cleared, viewer))).toEqual(ids([paymentFailed, usageDown, stoppedLogging]))
 	})
 
 	test("sorting by MRR puts the biggest account first", () => {
@@ -317,7 +317,9 @@ describe("needs attention: what shows", () => {
 		expect(byAge.isSortReversed).toBe(false)
 		const reversed = pageUpdate(byAge, Message.ClickedColumnSort({ sort: "age" })).model
 		expect(reversed.isSortReversed).toBe(true)
-		expect(ids(visibleSignals(reversed, viewer))).toEqual(ids(visibleSignals(byAge, viewer)).toReversed())
+		// Oldest first, then newest first; each account's signals stay together.
+		expect(ids(visibleSignals(byAge, viewer))).toEqual(ids([usageDown, paymentFailed, stoppedLogging]))
+		expect(ids(visibleSignals(reversed, viewer))).toEqual(ids([paymentFailed, usageDown, stoppedLogging]))
 		expect(pageUpdate(reversed, Message.ClickedColumnSort({ sort: "health" })).model.isSortReversed).toBe(
 			false,
 		)
@@ -341,14 +343,15 @@ describe("needs attention: what shows", () => {
 })
 
 describe("needs attention: keyboard", () => {
-	test("j and k move the selection within the rows", () => {
+	test("k and j move the selection down and up the rows", () => {
 		const first = pageUpdate(loaded(), key("next")).model
 		expect(first.selectedId).toBe(paymentFailed.id)
+		// Acme's two signals sit together, ahead of Kestrel's higher-priority one.
 		const second = pageUpdate(first, key("next")).model
-		expect(second.selectedId).toBe(stoppedLogging.id)
-		expect(pageUpdate(pageUpdate(second, key("next")).model, key("next")).model.selectedId).toBe(
-			usageDown.id,
-		)
+		expect(second.selectedId).toBe(usageDown.id)
+		const third = pageUpdate(second, key("next")).model
+		expect(third.selectedId).toBe(stoppedLogging.id)
+		expect(pageUpdate(third, key("next")).model.selectedId).toBe(stoppedLogging.id)
 		expect(pageUpdate(second, key("previous")).model.selectedId).toBe(paymentFailed.id)
 	})
 
@@ -445,15 +448,20 @@ describe("needs attention: keyboard", () => {
 			repeat: false,
 			...extra,
 		})
-		expect(queueKeyOf(event("j"))).toBe("next")
-		// Caps Lock: still j. Shift+A is not A.
-		expect(queueKeyOf(event("J"))).toBe("next")
+		// k walks down, j up.
+		expect(queueKeyOf(event("k"))).toBe("next")
+		expect(queueKeyOf(event("j"))).toBe("previous")
+		// Caps Lock: still k. Shift+A is not A.
+		expect(queueKeyOf(event("K"))).toBe("next")
+		// Linear's keys: I assigns to me, H snoozes.
+		expect(queueKeyOf(event("i"))).toBe("assignToMe")
+		expect(queueKeyOf(event("h"))).toBe("snooze")
 		expect(queueKeyOf(event("A", { shiftKey: true }))).toBeNull()
 		expect(queueKeyOf(event("ArrowUp"))).toBe("previous")
 		expect(queueKeyOf(event(" "))).toBe("preview")
 		expect(queueKeyOf(event("d", { metaKey: true }))).toBeNull()
 		expect(queueKeyOf(event("x"))).toBeNull()
-		expect(queueKeyOf(event("j", { repeat: true }))).toBe("next")
+		expect(queueKeyOf(event("k", { repeat: true }))).toBe("next")
 		expect(queueKeyOf(event("e", { repeat: true }))).toBeNull()
 	})
 })
@@ -619,5 +627,12 @@ describe("needs attention: actions", () => {
 				Message.SucceededSignalAction({ signalId: stoppedLogging.id, action: "assign" }),
 			),
 		)
+	})
+
+	test("I assigns the selected signal to me without a menu", () => {
+		const assigned = pageUpdate(withSelection(stoppedLogging), key("assignToMe"))
+		expect(assigned.model.signals?.find((row) => row.id === stoppedLogging.id)?.assigneeUserId).toBe(ada)
+		expect(assigned.model.assignMenu.popup._tag).not.toBe("Open")
+		expect((assigned.commands ?? []).map((command) => command.name)).toEqual(["AssignSignal"])
 	})
 })

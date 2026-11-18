@@ -92,8 +92,9 @@ Charts fill their container's width (no measuring); set the height with `heightC
   — `Column = { key, label, align?, sortable?, widthClass?, hideClass?, cell, footer? }`; a footer row renders when any column has `footer`.
   `selection = { selected: ReadonlySet<string>, onToggle(key, isSelected), onToggleAll(isSelected) }`.
 - `primaryCell(h, { leading?, title, subtitle?, href? })` — logo + name + domain.
-- `queueRow(h, { id, rank, account, signal, evidence, age, assignee, health, isFocused?, isSelected?, onPress?, actions? })`,
-  `queueList(h, { ariaLabel }, rows)`, `queueAction(h, { label, icon?, onPress?, iconOnly?, attributes?, overlay? })`, `planLine(account)`.
+- `queueRow(h, { id, rank, account, signal, evidence, age, assignee, health, isFocused?, isSelected?, run?, onPress?, actions? })`,
+  `queueList(h, { ariaLabel }, rows)`, `queueAction(h, { label, icon?, onPress?, iconOnly?, shortcut?, attributes?, overlay? })`, `planLine(account)`,
+  `accountMark(h, account, run?)` (the logo, joined by a line to the same account's rows).
   Inline actions replace evidence…assignee on hover / focus. A press on an action also reaches the row's `onPress` (selects it).
 
 ## Controls — `ui/filter-bar.ts`, `ui/shortcuts.ts`

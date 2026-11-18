@@ -1,6 +1,6 @@
 import { TEMPLATES } from "@hazel/domain/customers"
 import type * as Customers from "@hazel/domain/customers"
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { formatCount, formatDate, formatMoney, formatRelative } from "../../../customers/format"
@@ -10,6 +10,8 @@ import { companyLogo, personLabel, sourceMark } from "../../../customers/ui/iden
 import { kbd } from "../../../customers/ui/shortcuts"
 import { IconClose, IconCopy } from "../../../icons"
 import { button } from "../../../ui/button"
+import { link } from "../../../ui/link"
+import { customerRoute, hrefOf } from "../../../route"
 import { loader } from "../../../ui/loader"
 import { Message } from "./message"
 import { type Model, rowIds, type Viewer } from "./model"
@@ -17,6 +19,18 @@ import { otherSignalRow, type RowContext } from "./rows"
 import { heading } from "../../../ui/heading"
 
 /** The side panel for the selected signal (Wonder: Queue Selected With Preview). */
+
+/** A link to the customer's page; without an org, the children alone. */
+const toCustomer = (
+	h: HtmlBuilder<Message>,
+	href: string | null,
+	attributes: ReadonlyArray<Attribute<Message>>,
+	children: Array<Html | string>,
+	className?: string,
+): Html =>
+	href === null
+		? h.span([h.Class(className ?? "")], children)
+		: link(h, { href, className: twMerge("text-inherit", className), attributes }, children)
 
 const section = (h: HtmlBuilder<Message>, title: string, children: ReadonlyArray<Html>, aside?: Html): Html =>
 	h.section(
@@ -202,6 +216,7 @@ export const previewPanel = (
 	model: Model,
 	signal: SignalRow,
 	viewer: Viewer,
+	orgSlug: string | null,
 	actions: ReadonlyArray<Html>,
 ): Html => {
 	const accountsById = new Map((model.accounts ?? []).map((account) => [account.id, account]))
@@ -220,6 +235,7 @@ export const previewPanel = (
 		selectedId: signal.id,
 		actions: [],
 	}
+	const href = orgSlug === null ? null : hrefOf(customerRoute(orgSlug, account.id))
 	const owner = account.ownerUserId === null ? null : (membersById.get(account.ownerUserId)?.name ?? null)
 	return h.aside(
 		[
@@ -237,8 +253,8 @@ export const previewPanel = (
 					h.span(
 						[h.Class("flex items-center gap-2 text-muted-fg text-sm")],
 						[
-							kbd(h, "K"),
 							kbd(h, "J"),
+							kbd(h, "K"),
 							position < 0 ? "" : `Signal ${position + 1} of ${ids.length}`,
 						],
 					),
@@ -258,11 +274,20 @@ export const previewPanel = (
 			h.div(
 				[h.Class("flex items-start gap-3 px-5 pt-4")],
 				[
-					companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "md" }),
+					// The logo and the name open the customer (as Enter does); the logo is out of the tab order.
+					toCustomer(
+						h,
+						href,
+						[h.Tabindex(-1), h.AriaHidden(true)],
+						[companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "md" })],
+						"shrink-0",
+					),
 					h.div(
 						[h.Class("flex min-w-0 flex-1 flex-col")],
 						[
-							heading(h, { variant: "title", className: "truncate" }, [account.name]),
+							heading(h, { variant: "title", className: "truncate" }, [
+								toCustomer(h, href, [], [account.name], "hover:underline"),
+							]),
 							h.span(
 								[h.Class("truncate text-muted-fg text-xs")],
 								[
@@ -277,15 +302,6 @@ export const previewPanel = (
 								],
 							),
 						],
-					),
-					button(
-						h,
-						{
-							intent: "outline",
-							size: "sm",
-							onPress: Message.PressedOpenCustomer({ accountId: account.id }),
-						},
-						["Open", kbd(h, "Enter")],
 					),
 				],
 			),

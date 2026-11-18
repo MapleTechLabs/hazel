@@ -221,18 +221,42 @@ const sortedForTab = (
 	return Array.sort(signals, Order.combine(model.isSortReversed ? Order.flip(order) : order, byPriority))
 }
 
-/** The current tab's signals after the filters and search, in display order. */
+/** Keeps each account's signals together, at its first signal's place in the sorted order. */
+const clusterByAccount = (signals: ReadonlyArray<SignalRowType>): ReadonlyArray<SignalRowType> => {
+	const byAccount = new Map<CustomerAccountId, Array<SignalRowType>>()
+	for (const signal of signals) {
+		const cluster = byAccount.get(signal.accountId)
+		if (cluster === undefined) byAccount.set(signal.accountId, [signal])
+		else cluster.push(signal)
+	}
+	return [...byAccount.values()].flat()
+}
+
+/** The current tab's signals after the filters and search, in display order (an account's together). */
 export const visibleSignals = (model: Model, viewer: Viewer): ReadonlyArray<SignalRowType> => {
 	const accountsById = accountsByIdOfModel(model)
-	return sortedForTab(
-		model,
-		accountsById,
-		(model.signals ?? []).filter(
-			(signal) =>
-				isInTab(model.tab, viewer, signal) && matchesFilters(model, viewer, accountsById, signal),
+	return clusterByAccount(
+		sortedForTab(
+			model,
+			accountsById,
+			(model.signals ?? []).filter(
+				(signal) =>
+					isInTab(model.tab, viewer, signal) && matchesFilters(model, viewer, accountsById, signal),
+			),
 		),
 	)
 }
+
+/** Where a row sits in its account's run of rows: whether the row above and below are the same account. */
+export interface AccountRun {
+	readonly continuesAbove: boolean
+	readonly continuesBelow: boolean
+}
+
+export const accountRunOf = (signals: ReadonlyArray<SignalRowType>, index: number): AccountRun => ({
+	continuesAbove: index > 0 && signals[index - 1]?.accountId === signals[index]?.accountId,
+	continuesBelow: signals[index + 1]?.accountId === signals[index]?.accountId,
+})
 
 /** Each tab's count under the current filters. */
 export const tabCounts = (model: Model, viewer: Viewer): Readonly<Record<QueueTab, number>> => {
@@ -253,7 +277,7 @@ export interface AccountGroup {
 	readonly signals: ReadonlyArray<SignalRowType>
 }
 
-/** Account grouping: accounts ordered by their best signal. */
+/** Account grouping: accounts ordered by their best signal (`visibleSignals` keeps each one's together). */
 export const accountGroups = (signals: ReadonlyArray<SignalRowType>): ReadonlyArray<AccountGroup> => {
 	const groups = new Map<CustomerAccountId, { lead: SignalRowType; signals: Array<SignalRowType> }>()
 	for (const signal of signals) {
@@ -471,6 +495,7 @@ export const QueueKey = Schema.Literals([
 	"next",
 	"previous",
 	"assign",
+	"assignToMe",
 	"snooze",
 	"done",
 	"dismiss",

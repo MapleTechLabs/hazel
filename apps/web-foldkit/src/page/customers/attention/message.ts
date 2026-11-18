@@ -38,7 +38,6 @@ export const Message = defineMessageUnion({
 	ClickedRowActions: {},
 	ClosedPreview: {},
 	PressedQueueKey: { key: QueueKey },
-	PressedOpenCustomer: { accountId: CustomerAccountId },
 	PressedMarkDone: { signalId: CustomerSignalId },
 	PressedReopen: { signalId: CustomerSignalId },
 
