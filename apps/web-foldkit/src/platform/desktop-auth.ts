@@ -173,6 +173,11 @@ export const hostFetch =
 			signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
 		)
 		const response = await Promise.race([invoked, aborted])
+		// As a browser fetch with `redirect: "error"` does: the host never follows one either.
+		const isRedirect =
+			[301, 302, 303, 307, 308].includes(response.status) &&
+			response.headers.some(([name]) => name.toLowerCase() === "location")
+		if (request.redirect === "error" && isRedirect) throw new TypeError("redirect refused")
 		const hasBody = ![101, 204, 205, 304].includes(response.status)
 		return new Response(hasBody ? response.body : null, {
 			status: response.status,

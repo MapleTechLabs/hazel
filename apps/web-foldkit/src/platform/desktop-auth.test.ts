@@ -115,8 +115,13 @@ it("sends auth calls through the host's `auth_http`, as a fetch would answer the
 	expect(empty.status).toBe(204)
 	expect(empty.body).toBeNull()
 
+	answer = { status: 302, headers: [["location", "https://elsewhere.test/"]], body: "" }
+	await expect(
+		fetch("https://api.hazel.test/auth/x", { method: "POST", redirect: "error" }),
+	).rejects.toThrow(TypeError)
+
 	const aborted = new AbortController()
 	aborted.abort()
 	await expect(fetch("https://api.hazel.test/auth/x", { signal: aborted.signal })).rejects.toThrow()
-	expect(calls).toHaveLength(2)
+	expect(calls).toHaveLength(3)
 })
