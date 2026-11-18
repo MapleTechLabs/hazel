@@ -462,6 +462,10 @@ const onKey = (model: Model, shared: Shared, key: QueueKey): Return => {
 							? openMenu(next, "assignMenu", assignEntries(next.members, viewer))
 							: { model: next },
 					)
+		case "assignToMe":
+			return model.tab !== "open"
+				? { model }
+				: withSelected(model, shared, (next, signal) => assign(next, shared, signal, ASSIGN_ME))
 		case "snooze":
 			return model.tab === "done"
 				? { model }
@@ -524,12 +528,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ClickedRowActions: () => ({ model }),
 		ClosedPreview: () => ({ model: modifyFields(model, { isPreviewOpen: () => false }) }),
 		PressedQueueKey: ({ key }) => onKey(model, shared, key),
-		PressedOpenCustomer: ({ accountId }) => ({
-			model,
-			outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
-				customerRoute(orgSlug, accountId),
-			),
-		}),
 		PressedMarkDone: ({ signalId }) => {
 			const signal = signalById(model, signalId)
 			return signal === undefined ? { model } : openDoneDialog(model, signal)

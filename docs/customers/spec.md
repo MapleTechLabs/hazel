@@ -182,7 +182,7 @@ Routes: `/$orgSlug/customers` (overview), `/customers/attention`, `/customers/li
 - Rows: rank, account (logo, name, plan, MRR), signal title + plain reason, evidence mini-viz (sparkline or invoice amount), severity, age, assignee, health badge.
 - Grouping toggle: one row per signal, or one row per account with its stacked signals.
 - Row actions: assign, snooze (tomorrow / 3 days / next week / date), mark done (outcome + note), dismiss (not useful), open customer.
-- Keyboard: j/k, a assign, s snooze, d done, enter open.
+- Keyboard: k down / j up, a assign, i assign to me, h snooze (Linear's keys), d done, enter open. An account's signals sit together in the queue, joined by a line.
 - Side panel preview on select: account summary, signal evidence chart, other open signals, recent timeline, contacts to reach (most active / admins with emails, copy email).
 - Empty state: "All clear" (+ count of snoozed).
 
