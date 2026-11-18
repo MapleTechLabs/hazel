@@ -271,6 +271,18 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 						),
 		},
 	),
+	chatThreadPanelPins: entry(
+		{ threadChannelId: Schema.NullOr(ChannelId) },
+		{
+			modelToDependencies: ({ model }) => ({ threadChannelId: openThreadIdOf(model) }),
+			dependenciesToStream: ({ threadChannelId }) =>
+				threadChannelId === null
+					? Stream.empty
+					: pinnedStream(threadChannelId, (pins) =>
+							Message.UpdatedThreadPanelPins({ threadChannelId, pins }),
+						),
+		},
+	),
 	// The panel edge's drag: window listeners, so the pointer may leave the thin handle.
 	chatThreadPanelDrag: entry(
 		{ isDragging: Schema.Boolean },

@@ -357,6 +357,7 @@ export const openThread = (
 						isNaming: false,
 						messages: [],
 						rows: [],
+						pins: [],
 					}),
 				}),
 				commands: [
@@ -407,9 +408,17 @@ const namedThread = (model: Model, threadChannelId: ChannelId): Model =>
 // ACTIONS
 
 const pinnedIdOf = (model: Model, messageId: MessageId) =>
-	Option.fromNullishOr(model.pinned.find((pin) => pin.messageId === messageId)?.pinnedId).pipe(
-		Option.flatMap(Schema.decodeUnknownOption(PinnedMessageId)),
-	)
+	Option.fromNullishOr(
+		[...model.pinned, ...(model.threadPanel?.pins ?? [])].find((pin) => pin.messageId === messageId)
+			?.pinnedId,
+	).pipe(Option.flatMap(Schema.decodeUnknownOption(PinnedMessageId)))
+
+/** The draft a message's actions (reply, edit) act in: the thread panel's for one of its replies. */
+const draftForMessage = (model: Model, messageId: MessageId): Which =>
+	model.threadPanel?.messages.some((message) => message.id === messageId) === true &&
+	!model.messages.some((message) => message.id === messageId)
+		? "thread"
+		: "channel"
 
 /** `handlePin`: unpin by the pin's id, else pin. */
 const togglePin = (model: Model, messageId: MessageId): PageReturn => {
@@ -420,7 +429,11 @@ const togglePin = (model: Model, messageId: MessageId): PageReturn => {
 	return {
 		model,
 		commands: actionCommands([
-			PinMessage({ messageId, channelId: model.channelId, userId: model.currentUserId }),
+			PinMessage({
+				messageId,
+				channelId: findMessage(model, messageId)?.channelId ?? model.channelId,
+				userId: model.currentUserId,
+			}),
 		]),
 	}
 }
@@ -476,18 +489,26 @@ const messageAction = (model: Model, messageId: MessageId, action: Overlays.Mess
 	const message = findMessage(model, messageId)
 	return Match.value(action).pipe(
 		Match.withReturnType<PageReturn>(),
-		Match.when("reply", () => ({
-			model: modifyFields(model, { draft: (draft) => DraftUpdate.setReply(draft, messageId) }),
-		})),
-		Match.when("edit", () =>
-			message === undefined
-				? { model }
-				: liftDraft(
-						model,
-						"channel",
-						DraftUpdate.startEditing(model.draft, messageId, message.content),
-					),
+		Match.when("reply", () =>
+			draftForMessage(model, messageId) === "thread"
+				? {
+						model: withPanel(model, (panel) =>
+							modifyFields(panel, { draft: (draft) => DraftUpdate.setReply(draft, messageId) }),
+						),
+					}
+				: {
+						model: modifyFields(model, {
+							draft: (draft) => DraftUpdate.setReply(draft, messageId),
+						}),
+					},
 		),
+		Match.when("edit", () => {
+			const which = draftForMessage(model, messageId)
+			const draft = draftOf(model, which)
+			return message === undefined || draft === null
+				? { model }
+				: liftDraft(model, which, DraftUpdate.startEditing(draft, messageId, message.content))
+		}),
 		Match.when("thread", () => createThread(model, messageId)),
 		Match.when("pin", () => togglePin(model, messageId)),
 		Match.when("copy", () => copy(model, message?.content ?? "", "MessageText")),
