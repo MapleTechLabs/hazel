@@ -63,6 +63,7 @@ import {
 import { RuleDraft } from "../customers/rules"
 import { MAX_VIEWS, ViewDraft } from "../customers/views"
 import { InternalServerError, UnauthorizedError } from "../errors"
+import { RateLimitExceededError } from "../rate-limit-errors"
 import { JsonDate } from "../models/utils"
 import { RequiredScopes } from "../scopes/required-scopes"
 import { AuthMiddleware } from "./middleware"
@@ -580,7 +581,10 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	/** Let a member sign in as customers' users (Clerk impersonation). Admins and owners. */
 	write("customers.impersonator.grant", { userId: UserId }, Tx, CustomersInvalidRequestError),
 
-	/** Take the grant back; impersonation links already handed out expire within a minute. */
+	/**
+	 * Take the grant back. A link already handed out still works for its minute, and a session it
+	 * opened for at most 15 minutes.
+	 */
 	write("customers.impersonator.revoke", { userId: UserId }, Tx),
 
 	/**
@@ -593,6 +597,7 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		withTx(Schema.Struct({ url: Schema.String })),
 		CustomersNotFoundError,
 		CustomerImpersonationError,
+		RateLimitExceededError,
 	),
 
 	/**

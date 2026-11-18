@@ -49,7 +49,12 @@ describe("Clerk actor tokens", () => {
 			{
 				url: "https://api.clerk.com/v1/actor_tokens",
 				auth: "Bearer sk_test_1",
-				body: { user_id: "user_1", actor: { sub: actorUserId }, expires_in_seconds: 60 },
+				body: {
+					user_id: "user_1",
+					actor: { sub: actorUserId },
+					expires_in_seconds: 60,
+					session_max_duration_in_seconds: 900,
+				},
 			},
 		])
 	})

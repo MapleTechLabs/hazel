@@ -226,6 +226,29 @@ describe("Customers authorization", () => {
 				ok(yield* world.call("customers.impersonator.revoke", { userId: world.member }, world.owner))
 				expect(yield* start(world.member)).toBe("UnauthorizedError")
 				expect(world.rows(`SELECT id FROM customer_impersonations`)).toEqual([])
+				// A grant goes with the membership: invited back, they are not granted again.
+				ok(yield* world.call("customers.impersonator.grant", { userId: world.member }, world.owner))
+				const setMembers = (
+					members: ReadonlyArray<{ userId: UserId; role: "owner" | "member" }>,
+					version: number,
+				) =>
+					world.object.applyEffect({
+						objectId: world.orgId,
+						kind: "customers.setMembers",
+						payload: { organizationId: world.orgId, members, version },
+						key: uuid(),
+						sender: { kind: "org", id: world.orgId },
+					})
+				yield* setMembers([{ userId: world.owner, role: "owner" }], 2)
+				yield* setMembers(
+					[
+						{ userId: world.owner, role: "owner" },
+						{ userId: world.member, role: "member" },
+					],
+					3,
+				)
+				expect(yield* start(world.member)).toBe("UnauthorizedError")
+				expect(world.rows(`SELECT userId FROM customer_impersonators`)).toEqual([])
 			}),
 		))
 

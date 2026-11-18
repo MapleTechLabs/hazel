@@ -1670,6 +1670,8 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 							.limit(1),
 					)
 					if (Option.isNone(contact)) return yield* notFound("contact", contactId)
+					const account = yield* liveAccount(contact.value.accountId)
+					if (Option.isNone(account)) return yield* notFound("contact", contactId)
 					// The live connections whose provider can impersonate (Clerk).
 					const connections = (yield* db.run(
 						SQLite.from(schema.customerConnectionsTable)

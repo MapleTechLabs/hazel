@@ -17,7 +17,19 @@ import { CLERK_API_URL } from "./http"
 /** The link is opened right away; a token left unused stops working after this. */
 export const ACTOR_TOKEN_TTL_SECONDS = 60
 
-const ActorToken = Schema.Struct({ id: Schema.String, url: Schema.String })
+/**
+ * How long the impersonated session lasts at most: revoking a grant stops new links, not a session
+ * already open, so this bounds it.
+ */
+export const IMPERSONATION_SESSION_SECONDS = 15 * 60
+
+/** Only an https link reaches the client's `href`. */
+const ActorToken = Schema.Struct({
+	id: Schema.String,
+	url: Schema.String.check(
+		Schema.makeFilter((url) => (url.startsWith("https://") ? undefined : "Not an https URL")),
+	),
+})
 
 const ClerkErrors = Schema.Struct({
 	errors: Schema.optionalKey(
@@ -46,6 +58,7 @@ export const createActorToken = Effect.fn("Clerk.createActorToken")(function* (
 			user_id: input.clerkUserId,
 			actor: { sub: input.actorUserId },
 			expires_in_seconds: ACTOR_TOKEN_TTL_SECONDS,
+			session_max_duration_in_seconds: IMPERSONATION_SESSION_SECONDS,
 		}),
 	)
 	const response = yield* client.execute(request).pipe(
