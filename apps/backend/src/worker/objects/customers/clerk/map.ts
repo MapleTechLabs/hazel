@@ -70,10 +70,12 @@ export const onNoMatchOf = (config: ConnectionConfig): OnNoMatch =>
 const seatsLimitOf = (max: number | null | undefined): number | null =>
 	max === null || max === undefined || max <= 0 ? null : Math.trunc(max)
 
-/** The boolean keys of an organization's `public_metadata`: its feature flags. */
+/** The boolean keys of an organization's `public_metadata`: its feature flags. An empty key is none. */
 export const featureFlagsOf = (metadata: Readonly<Record<string, unknown>>): Record<string, boolean> =>
 	Object.fromEntries(
-		Object.entries(metadata).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
+		Object.entries(metadata).filter(
+			(entry): entry is [string, boolean] => entry[0] !== "" && typeof entry[1] === "boolean",
+		),
 	)
 
 /**

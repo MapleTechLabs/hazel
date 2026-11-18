@@ -606,7 +606,7 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		"customers.featureFlags.set",
 		{
 			accountIds: Schema.Array(CustomerAccountId).check(Schema.isMinLength(1), Schema.isMaxLength(500)),
-			keys: Schema.Array(FeatureFlagKey).check(Schema.isMinLength(1), Schema.isMaxLength(50)),
+			keys: Schema.Array(FeatureFlagKey).check(Schema.isMinLength(1), Schema.isMaxLength(500)),
 			enabled: Schema.Boolean,
 		},
 		Tx,

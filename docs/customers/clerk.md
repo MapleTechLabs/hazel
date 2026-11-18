@@ -179,8 +179,9 @@ A customer's feature flags are the **boolean** keys of its Clerk organization's 
   `customers.featureFlag.delete` (the key removed from every organization holding it, then the flag
   forgotten) call `PATCH /organizations/{id}/metadata` once per organization, 4 at a time. Clerk
   deep-merges the body and a `null` removes a key, so nothing else in the metadata moves. A key
-  that holds a non-boolean value in an organization is refused there (one `GET` before each `PATCH`),
-  never overwritten. Each
+  that holds a non-boolean value is refused when turned on and skipped when removed, judged by a
+  `GET` just before each `PATCH`; Clerk has no conditional write, so a change made in Clerk between
+  the two is not protected. Each
   account is then written from Clerk's answer; the `organization.updated` webhook that follows
   brings the same set. Organizations Clerk refuses leave their account unchanged and the call fails
   with `CustomerFeatureFlagsError` naming them, after the others were written.
