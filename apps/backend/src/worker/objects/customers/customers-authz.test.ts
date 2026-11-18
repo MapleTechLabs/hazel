@@ -9,7 +9,7 @@ import { CustomerRpcs } from "@hazel/domain/rpc"
 import type { OrganizationId, UserId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option, Redacted, type Scope } from "effect"
 import type { RpcGroup } from "effect/rpc"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { resolveTarget } from "../../../rpc/routing"
 import type { HazelRpcTag } from "../../../rpc/dispatch"
 import { Directory } from "../../../services/directory"
@@ -133,6 +133,10 @@ const meta = (rows: (query: string, key: string) => Array<{ value: string }>, ke
 	rows(`SELECT value FROM _object_meta WHERE key = ?`, key)[0]?.value
 
 describe("Customers authorization", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals()
+	})
+
 	it("refuses strangers and bots every method, and members the admin-only ones", () =>
 		run(
 			Effect.gen(function* () {
@@ -257,6 +261,81 @@ describe("Customers authorization", () => {
 				)
 				expect(yield* start(world.member)).toBe("UnauthorizedError")
 				expect(world.rows(`SELECT userId FROM customer_impersonators`)).toEqual([])
+			}),
+		))
+
+	it("a granted member's impersonation mints a Clerk actor token, logs it and answers its link", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					{ _tag: "account", externalId: "org_1", name: "Acme", sameAs: [], onNoMatch: "create" },
+				])
+				const accountId = world.rows<{ id: string }>(`SELECT id FROM customer_accounts`)[0]!.id
+				const contactId = uuid()
+				world.object.storage.db
+					.prepare(`INSERT INTO customer_contacts (id, accountId, email) VALUES (?, ?, ?)`)
+					.run(contactId, accountId, "ada@acme.dev")
+				world.object.storage.db
+					.prepare(
+						`INSERT INTO customer_external_refs (id, connectionId, provider, entityType, entityId, accountId, externalId, matchMethod) VALUES (?, ?, 'clerk', 'contact', ?, ?, 'user_1', 'existing')`,
+					)
+					.run(uuid(), world.connection("clerk"), contactId, accountId)
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							yield* storeSecrets(
+								world.connection("clerk"),
+								yield* encryptSecrets("sk_test_1", null),
+							)
+						}).pipe(Effect.provide(encryption)),
+					)
+					.pipe(Effect.orDie)
+				ok(yield* world.call("customers.impersonator.grant", { userId: world.member }, world.owner))
+				const sent: Array<{ url: string; auth: string | null; body: unknown }> = []
+				vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+					const request = new Request(input, init)
+					sent.push({
+						url: request.url,
+						auth: request.headers.get("authorization"),
+						body: await request.json(),
+					})
+					return Response.json({
+						id: "act_1",
+						url: "https://clerk.acme.dev/v1/tickets/accept?ticket=t",
+					})
+				})
+				const started = ok(
+					yield* world.call("customers.impersonation.start", { contactId }, world.member),
+				)
+				expect(started.data.url).toBe("https://clerk.acme.dev/v1/tickets/accept?ticket=t")
+				expect(sent).toEqual([
+					{
+						url: "https://api.clerk.com/v1/actor_tokens",
+						auth: "Bearer sk_test_1",
+						body: {
+							user_id: "user_1",
+							actor: { sub: world.member },
+							expires_in_seconds: 60,
+							session_max_duration_in_seconds: 900,
+						},
+					},
+				])
+				expect(
+					world.rows(
+						`SELECT userId, provider, accountId, contactId, contactLabel, externalUserId, externalTokenId FROM customer_impersonations`,
+					),
+				).toEqual([
+					{
+						userId: world.member,
+						provider: "clerk",
+						accountId,
+						contactId,
+						contactLabel: "ada@acme.dev",
+						externalUserId: "user_1",
+						externalTokenId: "act_1",
+					},
+				])
 			}),
 		))
 
