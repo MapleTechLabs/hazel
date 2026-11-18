@@ -293,13 +293,13 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 				const created = Deferred.makeUnsafe<TestObject>()
 				creating.set(key, created)
 				return create(target).pipe(
-					Effect.tap((object) =>
-						Effect.sync(() => {
-							objects.set(key, object)
-							creating.delete(key)
-						}),
+					Effect.tap((object) => Effect.sync(() => objects.set(key, object))),
+					Effect.onExit((exit) =>
+						Effect.andThen(
+							Effect.sync(() => creating.delete(key)),
+							Deferred.done(created, exit),
+						),
 					),
-					Effect.onExit((exit) => Deferred.done(created, exit)),
 				)
 			})
 
