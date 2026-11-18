@@ -72,6 +72,8 @@ dependencies = [
  "log",
  "objc2",
  "objc2-foundation",
+ "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "tauri",

@@ -9,6 +9,7 @@
 		"core:window:allow-toggle-maximize",
 		"allow-auth-vault-read",
 		"allow-auth-vault-write",
+		"allow-auth-http",
 		"deep-link:default",
 		"opener:default",
 		"notification:default",

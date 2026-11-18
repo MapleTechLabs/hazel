@@ -1,5 +1,5 @@
 import { type DesktopAuth, layerVault, makeDesktopAuth } from "@hazel/auth/desktop"
-import { getTauriCore, getTauriDeepLink, getTauriOpener } from "./tauri"
+import { getTauriCore, getTauriDeepLink, getTauriOpener, isTauri } from "./tauri"
 import { BrowserLogin } from "@yielded/auth"
 import * as WebCrypto from "@yielded/auth/WebCrypto"
 import { Context, Effect, Exit, Layer, ManagedRuntime, Option, Schema, SynchronizedRef } from "effect"
@@ -145,6 +145,46 @@ const hostedUrl = () => {
 	return `${new URL(appOrigin).origin}/auth/desktop`
 }
 
+export type HostResponse = { status: number; headers: Array<[string, string]>; body: string }
+
+/**
+ * The auth API's native mode refuses any request a browser could have sent, and the Tauri webview's
+ * fetch always sends `Origin: tauri://localhost`: the desktop host (`auth_http`) makes the request
+ * instead, without the browser's headers, cookies or redirects. An abort stops the wait here; the
+ * host's own request is bounded by its timeout.
+ */
+export const hostFetch =
+	(core: {
+		readonly invoke: (command: string, args: Record<string, unknown>) => Promise<HostResponse>
+	}): typeof globalThis.fetch =>
+	async (input, init) => {
+		const request = new Request(input, init)
+		const { signal } = request
+		signal.throwIfAborted()
+		const invoked = core.invoke("auth_http", {
+			request: {
+				method: request.method,
+				url: request.url,
+				headers: [...request.headers],
+				body: request.body === null ? null : await request.text(),
+			},
+		})
+		const aborted = new Promise<never>((_, reject) =>
+			signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
+		)
+		const response = await Promise.race([invoked, aborted])
+		// As a browser fetch with `redirect: "error"` does: the host never follows one either.
+		const isRedirect =
+			[301, 302, 303, 307, 308].includes(response.status) &&
+			response.headers.some(([name]) => name.toLowerCase() === "location")
+		if (request.redirect === "error" && isRedirect) throw new TypeError("redirect refused")
+		const hasBody = ![101, 204, 205, 304].includes(response.status)
+		return new Response(hasBody ? response.body : null, {
+			status: response.status,
+			headers: response.headers,
+		})
+	}
+
 const DesktopAuthLive = Layer.effect(
 	DesktopAuthService,
 	makeDesktopAuth({
@@ -155,8 +195,16 @@ const DesktopAuthLive = Layer.effect(
 ).pipe(
 	Layer.provide(Layer.mergeAll(BrowserLive, layerVault(KeychainStore), WebCrypto.layer)),
 	Layer.provide(FetchHttpClient.layer),
-	// The desktop session travels in headers: never cookies, never redirects.
+	// The desktop session travels in headers: never cookies, never redirects (the host's
+	// `auth_http` sends no cookies and follows no redirects either).
 	Layer.provide(Layer.succeed(FetchHttpClient.RequestInit, { credentials: "omit", redirect: "error" })),
+	Layer.provide(
+		Layer.sync(FetchHttpClient.Fetch, () => {
+			const core = getTauriCore()
+			// The native Mac app's host answers only the vault; its fetch is not a browser's.
+			return core === undefined || !isTauri() ? globalThis.fetch : hostFetch(core)
+		}),
+	),
 )
 
 /** The desktop auth runtime could not be built (keychain, crypto or deep link setup failed). */
