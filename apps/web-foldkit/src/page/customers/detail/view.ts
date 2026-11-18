@@ -693,8 +693,16 @@ const channelsSection = (h: HtmlBuilder<Message>, model: Model, context: Context
 	])
 }
 
-/** The "Add flags" picker: tick the flags this customer does not have, then add them at once. */
-const flagPicker = (h: HtmlBuilder<Message>, model: Model, candidates: ReadonlyArray<string>): Html =>
+/**
+ * The "Add flags" picker: tick the flags this customer does not have, then add them at once.
+ * `holdsAny`: with no candidates, the customer has every flag rather than none existing.
+ */
+const flagPicker = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	candidates: ReadonlyArray<string>,
+	holdsAny: boolean,
+): Html =>
 	h.submodel({
 		slotId: model.flagPopover.id,
 		model: model.flagPopover,
@@ -712,7 +720,11 @@ const flagPicker = (h: HtmlBuilder<Message>, model: Model, candidates: ReadonlyA
 						? [
 								h.p(
 									[h.Class("px-2 py-3 text-muted-fg text-sm")],
-									["It has every flag. Create new ones under Settings → Feature flags."],
+									[
+										holdsAny
+											? "It has every flag. Create new ones under Settings → Feature flags."
+											: "No flags to add yet. Create one under Settings → Feature flags.",
+									],
 								),
 							]
 						: [
@@ -803,7 +815,9 @@ const featureFlagsSection = (h: HtmlBuilder<Message>, model: Model, context: Con
 						),
 					),
 				]),
-		...(context.isAdmin ? [h.div([h.Class("pt-1")], [flagPicker(h, model, candidates)])] : []),
+		...(context.isAdmin
+			? [h.div([h.Class("pt-1")], [flagPicker(h, model, candidates, on.length > 0)])]
+			: []),
 	])
 }
 
