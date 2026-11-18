@@ -15,6 +15,7 @@ import {
 	lastSyncedAt,
 	loadOrganizations,
 	loadState,
+	markSynced,
 	saveOrganizations,
 } from "./sync"
 
@@ -27,31 +28,34 @@ const errorText = (error: unknown) => (error instanceof Error ? error.message : 
  * The user's organizations and the chosen one's customers, saved data first (only while signed
  * in: Raycast's own "Log out" leaves it behind, so it is dropped then).
  *
- * On open the organizations are listed again and every org not synced within `DEBOUNCE_MS` catches
- * up from Hazel's store, the chosen one first. `syncNow` lists and catches up every org regardless,
- * preempting a sync in progress. An org whose stream refuses the user loses its saved list.
+ * On open the organizations are listed again, and the chosen org catches up from Hazel's store
+ * unless it did within `DEBOUNCE_MS`; so does an org when it is chosen. Only the chosen org syncs,
+ * as on the web: opening an org's customers stream sets up its Customers area. `syncNow` lists the
+ * organizations and catches the chosen org up regardless, preempting a sync in progress.
  */
 export const useCustomers = (chosenId: string | undefined) => {
 	const api = apiUrl()
 	const [organizations, setOrganizations] = useState<ReadonlyArray<Organization> | undefined>(undefined)
 	const [state, setState] = useState<CustomersState>(EMPTY_STATE)
-	const [isSyncing, setIsSyncing] = useState(true)
+	const [isListing, setIsListing] = useState(true)
+	const [isSyncing, setIsSyncing] = useState(false)
 	const [syncedAt, setSyncedAt] = useState<number | undefined>(undefined)
 	const [failure, setFailure] = useState<string | undefined>(undefined)
 	/** Orgs without a Customers area for this user (their stream refused them). */
 	const [unavailable, setUnavailable] = useState<ReadonlySet<string>>(new Set())
 	const organization = organizations?.find((org) => org.id === chosenId) ?? organizations?.[0]
-	const selected = useRef(organization?.id)
-	selected.current = organization?.id
 	const running = useRef<AbortController | undefined>(undefined)
 
-	useEffect(() => {
-		if (organization === undefined) return
-		setState(loadState(api, organization.id))
-		setSyncedAt(lastSyncedAt(api, organization.id))
-	}, [api, organization?.id])
+	const fail = async (error: unknown) => {
+		setFailure(errorText(error))
+		await showToast({
+			style: Toast.Style.Failure,
+			title: "Could not sync customers",
+			message: errorText(error),
+		})
+	}
 
-	const syncOne = async (org: Organization, signal: AbortSignal, forceRefresh = false) => {
+	const syncOne = async (org: Organization, signal: AbortSignal, forceRefresh = false): Promise<void> => {
 		try {
 			const result = await catchUp({
 				api,
@@ -59,21 +63,21 @@ export const useCustomers = (chosenId: string | undefined) => {
 				organizationId: org.id,
 				token: await accessToken({ forceRefresh }),
 				signal,
-				onCommit: (next) => {
-					if (org.id === selected.current) setState(next)
-				},
+				onCommit: setState,
 			})
-			if (result === null) forgetOrganization(api, org.id)
+			if (result === null) {
+				// Refused: nothing kept, and not asked again before the debounce passes.
+				forgetOrganization(api, org.id)
+				markSynced(api, org.id, Date.now())
+			}
 			setUnavailable((current) => {
 				const next = new Set(current)
 				if (result === null) next.add(org.id)
 				else next.delete(org.id)
 				return next
 			})
-			if (org.id === selected.current) {
-				setState(result ?? EMPTY_STATE)
-				setSyncedAt(lastSyncedAt(api, org.id))
-			}
+			setState(result ?? EMPTY_STATE)
+			setSyncedAt(lastSyncedAt(api, org.id))
 		} catch (error) {
 			// The token expired or was revoked: refresh it and try once more.
 			if (error instanceof SyncClosedError && error.code === CloseCode.Reauth && !forceRefresh)
@@ -82,73 +86,73 @@ export const useCustomers = (chosenId: string | undefined) => {
 		}
 	}
 
-	const sync = useCallback(
-		async (force: boolean) => {
-			if (running.current !== undefined && !force) return
-			running.current?.abort()
-			const controller = new AbortController()
-			running.current = controller
-			setIsSyncing(true)
-			setFailure(undefined)
-			const failures: Array<string> = []
-			try {
-				const { organizations: listed } = await call<{ organizations: ReadonlyArray<Organization> }>(
-					"customers.organizations",
-					{},
-				)
-				if (controller.signal.aborted) return
-				saveOrganizations(api, listed)
-				setOrganizations(listed)
-				const now = Date.now()
-				const due = listed
-					.filter((org) => force || now - (lastSyncedAt(api, org.id) ?? 0) >= DEBOUNCE_MS)
-					.sort((a, b) => Number(b.id === selected.current) - Number(a.id === selected.current))
-				for (const org of due) {
-					try {
-						await syncOne(org, controller.signal)
-					} catch (error) {
-						if (controller.signal.aborted) return
-						failures.push(`${org.name}: ${errorText(error)}`)
-					}
-				}
-			} catch (error) {
-				if (controller.signal.aborted) return
-				failures.push(errorText(error))
-			} finally {
-				if (running.current === controller) {
-					running.current = undefined
-					setIsSyncing(false)
-				}
+	const syncOrganization = async (org: Organization, force: boolean) => {
+		if (!force && Date.now() - (lastSyncedAt(api, org.id) ?? 0) < DEBOUNCE_MS) return
+		running.current?.abort()
+		const controller = new AbortController()
+		running.current = controller
+		setIsSyncing(true)
+		setFailure(undefined)
+		try {
+			await syncOne(org, controller.signal)
+		} catch (error) {
+			if (!controller.signal.aborted) await fail(error)
+		} finally {
+			if (running.current === controller) {
+				running.current = undefined
+				setIsSyncing(false)
 			}
-			if (failures.length > 0) {
-				setFailure(failures.join("\n"))
-				await showToast({
-					style: Toast.Style.Failure,
-					title: "Could not sync customers",
-					message: failures.join("\n"),
-				})
-			}
-		},
-		[api],
-	)
+		}
+	}
+
+	const listOrganizations = useCallback(async () => {
+		setIsListing(true)
+		try {
+			const { organizations: listed } = await call<{ organizations: ReadonlyArray<Organization> }>(
+				"customers.organizations",
+				{},
+			)
+			// An org the user left keeps nothing on disk.
+			for (const gone of loadOrganizations(api) ?? [])
+				if (!listed.some((org) => org.id === gone.id)) forgetOrganization(api, gone.id)
+			saveOrganizations(api, listed)
+			setOrganizations(listed)
+		} catch (error) {
+			await fail(error)
+		} finally {
+			setIsListing(false)
+		}
+	}, [api])
 
 	useEffect(() => {
 		void (async () => {
 			if (await isSignedIn()) setOrganizations(loadOrganizations(api))
 			else clearSavedData()
-			await sync(false)
+			await listOrganizations()
 		})()
 		return () => running.current?.abort()
 	}, [api])
+
+	// The chosen org: its saved list at once, then a catch-up unless it had one within the debounce.
+	useEffect(() => {
+		if (organization === undefined) return
+		running.current?.abort()
+		setState(loadState(api, organization.id))
+		setSyncedAt(lastSyncedAt(api, organization.id))
+		void syncOrganization(organization, false)
+	}, [api, organization?.id])
 
 	return {
 		organizations,
 		organization,
 		state,
-		isSyncing,
+		isSyncing: isListing || isSyncing,
 		syncedAt,
 		failure,
 		isUnavailable: organization !== undefined && unavailable.has(organization.id),
-		syncNow: () => void sync(true),
+		syncNow: async () => {
+			await listOrganizations()
+			if (organization !== undefined) await syncOrganization(organization, true)
+		},
 	}
 }

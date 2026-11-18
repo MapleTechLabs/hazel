@@ -10,7 +10,7 @@
  * sees and can revoke.
  */
 import { SQLite, schema } from "@hazel/db"
-import { type AgentScope, parseAgentScopes } from "@hazel/domain/http"
+import { type AgentScope, storedAgentScopes } from "@hazel/domain/http"
 import type { ApiScope } from "@hazel/domain/scopes"
 import type { AgentClientId, AgentGrantId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer, Option, Schema } from "effect"
@@ -148,8 +148,6 @@ const returnedRow = <A>(rows: ReadonlyArray<A>) => {
 		: Effect.succeed(row)
 }
 
-const toScopes = (scopes: ReadonlyArray<string>) => parseAgentScopes(scopes.join(" "))
-
 export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/AgentAccess", {
 	make: Effect.gen(function* () {
 		const directory = yield* Directory
@@ -271,7 +269,7 @@ export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/
 
 				const registered = yield* client(code.clientId)
 				if (Option.isNone(registered)) return yield* invalidGrant("The client is gone")
-				const scopes = toScopes(code.scopes)
+				const scopes = storedAgentScopes(code.scopes)
 				const grant = yield* db
 					.run(
 						SQLite.insertInto(schema.agentGrantsTable)
@@ -342,7 +340,7 @@ export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/
 				if (Option.isNone(grant) || grant.value.clientId !== input.clientId)
 					return yield* invalidGrant("The grant was revoked")
 
-				const issued = yield* issueTokens(grant.value.id, toScopes(grant.value.scopes))
+				const issued = yield* issueTokens(grant.value.id, storedAgentScopes(grant.value.scopes))
 				const claimed = yield* db.run(
 					SQLite.update(schema.agentTokensTable)
 						.set({ kind: "spent" })
@@ -392,7 +390,7 @@ export class AgentAccess extends Context.Service<AgentAccess>()("@hazel/backend/
 					userId: grant.value.userId,
 					grantId: grant.value.id,
 					name: grant.value.name,
-					scopes: toScopes(grant.value.scopes),
+					scopes: storedAgentScopes(grant.value.scopes),
 					expiresAt: row.value.expiresAt?.getTime() ?? null,
 				})
 			}).pipe(Effect.withSpan("AgentAccess.authenticate"))

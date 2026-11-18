@@ -161,6 +161,8 @@ export const isSignedIn = async () =>
 
 /** Forgets the tokens and everything saved from Hazel (customer lists, organizations, details). */
 export const signOut = async () => {
+	// A refresh in flight would store its tokens after these are removed.
+	await pending?.promise.catch(() => undefined)
 	await client.removeTokens()
 	await LocalStorage.removeItem(TOKEN_API_KEY)
 	clearSavedData()

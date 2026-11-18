@@ -102,7 +102,7 @@ describe("catchUp", () => {
 		await expect(expired).rejects.toBeInstanceOf(SyncClosedError)
 	})
 
-	it("stops when aborted, and closes the socket", async () => {
+	it("stops when aborted, and closes the socket; never opens one already aborted", async () => {
 		const controller = new AbortController()
 		const aborted = sync("org-3", controller.signal)
 		await opened()
@@ -110,5 +110,9 @@ describe("catchUp", () => {
 		await expect(aborted).rejects.toBeInstanceOf(SyncClosedError)
 		expect(FakeSocket.last.closedWith).toBe(1000)
 		expect(memory.synced.has("org-3")).toBe(false)
+
+		const before = FakeSocket.last
+		await expect(sync("org-3", controller.signal)).rejects.toBeInstanceOf(SyncClosedError)
+		expect(FakeSocket.last).toBe(before)
 	})
 })

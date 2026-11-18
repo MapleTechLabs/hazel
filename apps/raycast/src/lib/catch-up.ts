@@ -46,6 +46,8 @@ export const catchUp = (options: {
 	readonly signal: AbortSignal
 }) =>
 	new Promise<CustomersState | null>((resolve, reject) => {
+		// Aborted while the token was fetched: never open.
+		if (options.signal.aborted) return reject(new SyncClosedError(1000))
 		const { api, organizationId } = options
 		let state = options.store.load(organizationId)
 		let run: { reset: boolean; rows: Array<RowsFrame> } | null = null

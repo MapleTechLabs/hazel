@@ -155,7 +155,9 @@ export default function Command() {
 										organization={organization}
 										account={account}
 										links={accountLinks}
-										detail={selectedId === account.id ? detail.data : undefined}
+										detail={
+											detail.data?.account.id === account.id ? detail.data : undefined
+										}
 										syncAction={syncAction}
 										details={
 											<CustomerDetail

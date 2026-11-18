@@ -36,7 +36,13 @@ export const relative = (iso: string, now = Date.now()) => {
  * Text from providers and customers, inert in markdown: no images, links, emphasis, tables or
  * headings it did not ask for, and on one line.
  */
-export const md = (text: string) => text.replace(/\s+/g, " ").replace(/[\\`*_[\]()!<>|#~]/g, "\\$&")
+export const md = (text: string) =>
+	text
+		.replace(/\s+/g, " ")
+		.replace(/[\\`*_[\]()!<>|#~]/g, "\\$&")
+		// No bare-URL autolinks either (`https://…`, `www.…`).
+		.replace(/:\/\//g, ":\\/\\/")
+		.replace(/\bwww\./gi, "www\\.")
 
 /** `url` when it is https; anything else is not shown or loaded. */
 export const httpsUrl = (url: string | null) => {
