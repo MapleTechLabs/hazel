@@ -37,6 +37,10 @@ use media::{build_img, build_svg, picture_size};
 use state::{note_appearance, report_env, theme_override};
 use table_grid::{build_grid, build_table, grid_height_estimate, grid_scroll_bound};
 
+/// The web app's mark on a control a press on which keeps the editor focused
+/// (`web-foldkit/src/composer/composer.ts` `KEEPS_EDITOR_FOCUS`).
+const KEEPS_EDITOR_FOCUS: &str = "data-keeps-editor-focus";
+
 /// The web app sets `-webkit-font-smoothing: antialiased` on `html`: text without CoreText's
 /// smoothing dilation, lighter than macOS's default.
 pub const TEXT_SMOOTHING: rune::FontSmoothing = rune::FontSmoothing::Off;
@@ -515,6 +519,12 @@ fn build_elem(
     }
     if let Some(label) = attrs.get("aria-label") {
         e = e.label(label.clone());
+    }
+    // A control the web app keeps the editor focused through (its `mousedown` is
+    // `preventDefault`ed, as the composer's send button): a press leaves the focus, and so the
+    // keyboard, where they are, instead of dropping the keyboard and raising it again.
+    if attrs.contains_key(KEEPS_EDITOR_FOCUS) {
+        e = e.keeps_text_selection();
     }
     e = presses(e, path, tag, attrs, on, ctx);
     // `ctx.keys` starts with this element's own keydown when it has one.

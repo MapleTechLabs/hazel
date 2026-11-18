@@ -220,6 +220,9 @@ const HOST_ATTRS = [
 	"data-tauri-drag-region",
 	// Shader effects the native host draws on the element (`apps/native/host/src/fx.rs`); the web ignores it.
 	"data-fx",
+	// A press keeps the editor focused, as the web's `preventDefault`ed `mousedown` does (the
+	// composer's send button): the host leaves the focus, and the keyboard, where they are.
+	"data-keeps-editor-focus",
 ]
 const SVG_ATTRS = new Set([
 	"d",

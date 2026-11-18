@@ -11,8 +11,13 @@ import type { Feedback } from "./feedback"
 export type SystemUi = Readonly<{
 	/** Plays a haptic (`platform/feedback.ts` says which kind means what). */
 	feedback: (kind: Feedback) => void
-	/** From now on the edge swipe goes to `href`, until the function this returns runs. */
-	setSwipeBack: (href: string) => () => void
+	/**
+	 * From now on the edge swipe goes to `href`, until the function this returns runs. With
+	 * `onBack`, the swipe runs it instead of following `href` (something over the page that closes,
+	 * as a thread over its channel; `href` is then the page under it), and it goes before every
+	 * plain chevron on screen.
+	 */
+	setSwipeBack: (href: string, onBack?: () => void) => () => void
 	/**
 	 * From now on a horizontal swipe pages (`onPage(1)` toward the next, `-1` the previous) instead
 	 * of going back, until the function this returns runs. An image viewer's slides.

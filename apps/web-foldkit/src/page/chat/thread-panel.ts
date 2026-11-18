@@ -1,5 +1,7 @@
-import { Option } from "effect"
+import { Effect, Option, Queue, Stream } from "effect"
+import { Mount } from "foldkit"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
+import { defineMessageUnion } from "foldkit/message"
 import { handleStyles, indicatorStyles, panelStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { cn } from "~/lib/utils"
 import { attachmentsView } from "../../chat/attachments"
@@ -12,6 +14,7 @@ import { IconClose, IconEdit, IconMaximize, IconPenSparkle, IconThread } from ".
 import { avatar } from "../../ui/avatar"
 import { button, buttonClassName } from "../../ui/button"
 import { loader } from "../../ui/loader"
+import { systemUi } from "../../platform/system-ui"
 import { MIN_CHANNEL_WIDTH, MIN_THREAD_PANEL_WIDTH } from "./channel/thread-width"
 import { type DeriveContext, authorIdentity, authorOf, htmlRendersOf } from "./derive"
 import type { ChatMessage, MessageRow } from "./rows"
@@ -312,9 +315,35 @@ const scrollView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html =>
 	)
 }
 
+const SwipeIntent = defineMessageUnion({ SwipedBack: {} })
+type SwipeIntent = typeof SwipeIntent.Type
+
+/**
+ * On a phone the panel covers its channel, so the swipe back closes it, as the channel's own back
+ * chevron would otherwise take the swipe to the chat list (`platform/system-ui.ts`).
+ */
+const SwipeCloses = Mount.defineStream("ThreadPanelSwipeCloses", {
+	messages: [SwipeIntent.SwipedBack],
+	execute: ({ element }) =>
+		Stream.callback<SwipeIntent>((queue) =>
+			Effect.acquireRelease(
+				Effect.sync(() =>
+					systemUi()?.setSwipeBack(globalThis.location.href, () => {
+						if (element.isConnected) Queue.offerUnsafe(queue, SwipeIntent.SwipedBack())
+					}),
+				),
+				(release) => Effect.sync(() => release?.()),
+			).pipe(Effect.flatMap(() => Effect.never)),
+		),
+})
+
 export const threadPanelView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html =>
 	h.div(
 		[
+			// Only a shell with the swipe (installed before the app starts) gets the Mount.
+			...(systemUi() === undefined
+				? []
+				: [h.OnMount(Mount.mapMessage(SwipeCloses(), () => inputs.onClose))]),
 			// Below `md` there is no room beside the channel: the panel covers it, full width.
 			h.Class(
 				cn(
