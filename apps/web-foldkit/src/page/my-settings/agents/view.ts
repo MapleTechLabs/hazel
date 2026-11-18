@@ -165,7 +165,16 @@ const createSection = (h: HtmlBuilder<Message>, model: Model): Html =>
 const grantRow = (h: HtmlBuilder<Message>, model: Model, grant: Grant, nowMs: number): Html => {
 	const isConfirming = model.confirmingRevoke === grant.id
 	const isRevoking = model.revoking === grant.id
-	const canWrite = grant.scopes.includes("messages:write")
+	const access = [
+		grant.scopes.includes("messages:write")
+			? "Read & write"
+			: grant.scopes.includes("messages:read")
+				? "Read only"
+				: null,
+		grant.scopes.includes("customers:read") ? "Customers (read)" : null,
+	]
+		.filter((label) => label !== null)
+		.join(" · ")
 	const used = grant.lastUsedAtMs === null ? "never used" : `last used ${ago(grant.lastUsedAtMs, nowMs)}`
 	return h.keyed("li")(
 		grant.id,
@@ -185,9 +194,7 @@ const grantRow = (h: HtmlBuilder<Message>, model: Model, grant: Grant, nowMs: nu
 					),
 					h.p(
 						[h.Class("text-muted-fg text-xs")],
-						[
-							`${canWrite ? "Read & write" : "Read only"} · added ${ago(grant.createdAtMs, nowMs)} · ${used}`,
-						],
+						[`${access} · added ${ago(grant.createdAtMs, nowMs)} · ${used}`],
 					),
 				],
 			),
@@ -250,7 +257,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	h.div(
 		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
 		[
-			pageHeader(h, "Agents", "AI agents that can read and answer messages for you."),
+			pageHeader(h, "Agents", "AI agents and apps you let act for you, like Raycast."),
 			...Grants.match<ReadonlyArray<Html>>(model.grants, {
 				Loading: () => [loader(h, { className: "size-5" })],
 				Failed: ({ reason }) => [

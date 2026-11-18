@@ -684,6 +684,68 @@ describe("directory path", () => {
 		))
 })
 
+describe("customers.organizations", () => {
+	it("lists the caller's live organizations by name, nothing deleted or left", () =>
+		run(
+			Effect.gen(function* () {
+				const objects = yield* makeTestObjects
+				const [me, other] = [uuid(), uuid()]
+				const [beta, acme, gone, left, foreign] = [
+					uuid(),
+					uuid(),
+					uuid(),
+					uuid(),
+					uuid(),
+				] as Array<OrganizationId>
+				yield* Effect.flatMap(Directory, (directory) =>
+					Effect.all([
+						directory.upsertOrg({ id: beta, name: "Beta", slug: "beta", deletedAt: null }),
+						directory.upsertOrg({ id: acme, name: "Acme", slug: null, deletedAt: null }),
+						directory.upsertOrg({ id: gone, name: "Gone", slug: "gone", deletedAt: new Date() }),
+						directory.upsertOrg({ id: left, name: "Left", slug: "left", deletedAt: null }),
+						directory.upsertOrg({
+							id: foreign,
+							name: "Foreign",
+							slug: "foreign",
+							deletedAt: null,
+						}),
+						directory.upsertMembership({
+							userId: me as UserId,
+							organizationId: beta,
+							deletedAt: null,
+						}),
+						directory.upsertMembership({
+							userId: me as UserId,
+							organizationId: acme,
+							deletedAt: null,
+						}),
+						directory.upsertMembership({
+							userId: me as UserId,
+							organizationId: gone,
+							deletedAt: null,
+						}),
+						directory.upsertMembership({
+							userId: me as UserId,
+							organizationId: left,
+							deletedAt: new Date(),
+						}),
+						directory.upsertMembership({
+							userId: other as UserId,
+							organizationId: foreign,
+							deletedAt: null,
+						}),
+					]),
+				).pipe(Effect.provideContext(objects.directory))
+
+				const exit = yield* objects.invokeDirectory("customers.organizations", {}, principalOf(me))
+				expect(ok<{ organizations: unknown }>(exit).organizations).toEqual([
+					{ id: acme, name: "Acme", slug: null },
+					{ id: beta, name: "Beta", slug: "beta" },
+				])
+			}),
+		))
+})
+
 describe("UserObject", () => {
 	it("notifications are the owner's: update, deleteByMessageIds, others refused", () =>
 		run(

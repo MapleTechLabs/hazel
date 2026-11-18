@@ -4,10 +4,13 @@ import type { SuccessValue } from "effect/rpc/RpcMiddleware"
 import { BotRepo, UserRepo } from "@hazel/backend-core"
 import { CurrentUser, InvalidBearerTokenError, type CurrentUser as CurrentUserNamespace } from "@hazel/domain"
 import { Database } from "@hazel/db"
-import type { UserId } from "@hazel/schema"
+import { CustomerReadRpcs, MessageRpcs } from "@hazel/domain/rpc"
+import type { AgentGrantId, UserId } from "@hazel/schema"
 import { Effect, Layer, Option, Ref, Result, Context } from "effect"
 import { AuthMiddleware, AuthMiddlewareLive } from "./auth.ts"
+import { AgentAccess, type AgentPrincipal } from "../../services/agent-access.ts"
 import { HazelSession } from "../../services/hazel-session.ts"
+import { CurrentAgent } from "../../worker/objects/principal.ts"
 import { serviceShape } from "../../test/effect-helpers"
 
 const USER_ID = "00000000-0000-4000-8000-000000000001" as UserId
@@ -43,7 +46,7 @@ const hashToken = async (token: string) => {
 		.join("")
 }
 
-const invokeMiddleware = (headers: Headers.Headers) =>
+const invokeMiddleware = (headers: Headers.Headers, rpc: unknown = {}) =>
 	Effect.gen(function* () {
 		const currentUserRef = yield* Ref.make<Option.Option<CurrentUserNamespace.Schema>>(Option.none())
 		const middleware = yield* AuthMiddleware
@@ -56,7 +59,7 @@ const invokeMiddleware = (headers: Headers.Headers) =>
 			{
 				client: {} as never,
 				requestId: 1n as never,
-				rpc: {} as never,
+				rpc: rpc as never,
 				payload: undefined,
 				headers,
 			},
@@ -74,6 +77,16 @@ const makeHazelSessionLayer = (overrides: Partial<HazelSessionShape> = {}) =>
 			verify: () => Effect.succeedNone,
 			fromCookie: () => Effect.succeedNone,
 			...overrides,
+		}),
+	)
+
+const makeAgentAccessLayer = (
+	authenticate: (token: string) => Option.Option<AgentPrincipal> = () => Option.none(),
+) =>
+	Layer.succeed(
+		AgentAccess,
+		serviceShape<typeof AgentAccess>({
+			authenticate: (token: string) => Effect.succeed(authenticate(token)),
 		}),
 	)
 
@@ -137,13 +150,16 @@ const runAuth = (
 		hazelSession?: ReturnType<typeof makeHazelSessionLayer>
 		botRepo?: ReturnType<typeof makeBotRepoLayer>
 		userRepo?: ReturnType<typeof makeUserRepoLayer>
+		agentAccess?: ReturnType<typeof makeAgentAccessLayer>
+		rpc?: unknown
 	} = {},
 ) =>
 	Effect.runPromise(
 		Effect.scoped(
-			invokeMiddleware(headers).pipe(
+			invokeMiddleware(headers, overrides.rpc).pipe(
 				Effect.provide(AuthMiddlewareLive),
 				Effect.provide(overrides.hazelSession ?? makeHazelSessionLayer()),
+				Effect.provide(overrides.agentAccess ?? makeAgentAccessLayer()),
 				Effect.provide(
 					overrides.botRepo ?? makeBotRepoLayer(() => Effect.succeed(Option.none<BotRecord>())),
 				),
@@ -295,5 +311,94 @@ describe("AuthMiddlewareLive", () => {
 
 		expect(checked).toBe(false)
 		expect(Result.isFailure(result)).toBe(true)
+	})
+
+	describe("agent tokens", () => {
+		const AGENT_TOKEN = "hzl_oat_agent"
+		const agent = (scopes: AgentPrincipal["scopes"]): AgentPrincipal => ({
+			userId: USER_ID,
+			grantId: "00000000-0000-4000-8000-000000000020" as AgentGrantId,
+			name: "Raycast",
+			scopes,
+			expiresAt: Date.now() + 60_000,
+		})
+		const detailRpc = CustomerReadRpcs.requests.get("customers.account.detail")
+		const sendRpc = MessageRpcs.requests.get("message.create")
+		const agentRun = (scopes: AgentPrincipal["scopes"] | null, rpc: unknown) =>
+			runAuth(Headers.fromInput({ authorization: `Bearer ${AGENT_TOKEN}` }), {
+				rpc,
+				agentAccess: makeAgentAccessLayer((token) =>
+					token === AGENT_TOKEN && scopes !== null ? Option.some(agent(scopes)) : Option.none(),
+				),
+				hazelSession: makeHazelSessionLayer({
+					enabled: true,
+					agentUserOf: () => Effect.succeed(makeCurrentUser({ email: "agent-user@example.com" })),
+					verify: () => Effect.die("an agent token is never checked as a session"),
+				}),
+			})
+		const failureTag = (result: Awaited<ReturnType<typeof runAuth>>) =>
+			Result.isFailure(result) && ("_tag" in result.failure ? result.failure._tag : "unhandled")
+
+		it("acts as the grant's user on an RPC its scopes grant", async () => {
+			const result = await agentRun(["customers:read"], detailRpc)
+			expect(Result.isSuccess(result) && Option.getOrNull(result.success)?.email).toBe(
+				"agent-user@example.com",
+			)
+		})
+
+		it("provides the agent it came through", async () => {
+			const seen = await Effect.runPromise(
+				Effect.scoped(
+					Effect.gen(function* () {
+						const middleware = yield* AuthMiddleware
+						const ref = yield* Ref.make<Option.Option<string>>(Option.none())
+						yield* middleware(
+							Effect.gen(function* () {
+								const current = yield* Effect.serviceOption(CurrentAgent)
+								yield* Ref.set(
+									ref,
+									Option.map(current, (agent) => agent.name),
+								)
+								return successValue
+							}),
+							{
+								client: {} as never,
+								requestId: 1n as never,
+								rpc: detailRpc as never,
+								payload: undefined,
+								headers: Headers.fromInput({ authorization: `Bearer ${AGENT_TOKEN}` }),
+							},
+						)
+						return yield* Ref.get(ref)
+					}).pipe(
+						Effect.provide(AuthMiddlewareLive),
+						Effect.provide(
+							makeHazelSessionLayer({
+								enabled: true,
+								agentUserOf: () => Effect.succeed(makeCurrentUser()),
+							}),
+						),
+						Effect.provide(makeAgentAccessLayer(() => Option.some(agent(["customers:read"])))),
+						Effect.provide(makeBotRepoLayer(() => Effect.succeed(Option.none<BotRecord>()))),
+						Effect.provide(makeUserRepoLayer(() => Effect.succeed(Option.none<UserRecord>()))),
+					),
+				),
+			)
+			expect(Option.getOrNull(seen)).toBe("Raycast")
+		})
+
+		it("refuses an RPC outside its scopes, and a messages grant every RPC", async () => {
+			expect(failureTag(await agentRun(["customers:read"], sendRpc))).toBe("UnauthorizedError")
+			expect(failureTag(await agentRun(["messages:read", "messages:write"], detailRpc))).toBe(
+				"UnauthorizedError",
+			)
+			expect(failureTag(await agentRun(["messages:read", "messages:write"], sendRpc))).toBe(
+				"UnauthorizedError",
+			)
+		})
+
+		it("refuses an invalid, expired or revoked agent token", async () => {
+			expect(failureTag(await agentRun(null, detailRpc))).toBe("InvalidBearerTokenError")
+		})
 	})
 })
