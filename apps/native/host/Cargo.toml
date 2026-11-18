@@ -14,12 +14,12 @@ publish = false
 # iOS's full-screen window, safe area and motion frames (`hazel-ios`), plus a soft keyboard's
 # return as Enter, iOS's display link and El::pin_insets (`hazel-ios-followups`), plus a
 # long-press opening an element's context menu (`hazel-long-press`), plus Tx::scroll_by (`hazel-scroll-by`), plus a fling at the finger's recent speed
-# (`hazel-touch-velocity`), plus El::basis (`hazel-flex-basis`),
-# until they land upstream.
-rune = { git = "https://github.com/Makisuo/rune", rev = "4739720eed3ee50eaaa811a3ab7c84b29b976180", features = [
+# (`hazel-touch-velocity`), plus El::basis (`hazel-flex-basis`), plus iOS's text proxy for a
+# focused field's autocorrection and predictions (`hazel-ios-text-input`), until they land upstream.
+rune = { git = "https://github.com/Makisuo/rune", rev = "884a6069c97a36231b0f0e67bdd35e9d04ad3d14", features = [
 	"native-file-dialog",
 ] }
-rune-fx = { git = "https://github.com/Makisuo/rune", rev = "4739720eed3ee50eaaa811a3ab7c84b29b976180" }
+rune-fx = { git = "https://github.com/Makisuo/rune", rev = "884a6069c97a36231b0f0e67bdd35e9d04ad3d14" }
 base64 = "0.22"
 # Decodes a picture and its mask picture to composite them (Rune's own decoder, same features).
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }

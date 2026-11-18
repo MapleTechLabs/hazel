@@ -156,7 +156,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -847,7 +847,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2446,7 +2446,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2933,7 +2933,7 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 [[package]]
 name = "rune"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=4739720eed3ee50eaaa811a3ab7c84b29b976180#4739720eed3ee50eaaa811a3ab7c84b29b976180"
+source = "git+https://github.com/Makisuo/rune?rev=884a6069c97a36231b0f0e67bdd35e9d04ad3d14#884a6069c97a36231b0f0e67bdd35e9d04ad3d14"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -2964,6 +2964,7 @@ dependencies = [
  "objc2-io-surface",
  "objc2-metal 0.3.2",
  "objc2-quartz-core 0.3.2",
+ "objc2-ui-kit 0.3.2",
  "opuscule",
  "parking_lot",
  "parley",
@@ -3010,7 +3011,7 @@ dependencies = [
 [[package]]
 name = "rune-fx"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=4739720eed3ee50eaaa811a3ab7c84b29b976180#4739720eed3ee50eaaa811a3ab7c84b29b976180"
+source = "git+https://github.com/Makisuo/rune?rev=884a6069c97a36231b0f0e67bdd35e9d04ad3d14#884a6069c97a36231b0f0e67bdd35e9d04ad3d14"
 dependencies = [
  "bytemuck",
  "rune-motion",
@@ -3021,12 +3022,12 @@ dependencies = [
 [[package]]
 name = "rune-motion"
 version = "0.1.0"
-source = "git+https://github.com/Makisuo/rune?rev=4739720eed3ee50eaaa811a3ab7c84b29b976180#4739720eed3ee50eaaa811a3ab7c84b29b976180"
+source = "git+https://github.com/Makisuo/rune?rev=884a6069c97a36231b0f0e67bdd35e9d04ad3d14#884a6069c97a36231b0f0e67bdd35e9d04ad3d14"
 
 [[package]]
 name = "rune-staging"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=4739720eed3ee50eaaa811a3ab7c84b29b976180#4739720eed3ee50eaaa811a3ab7c84b29b976180"
+source = "git+https://github.com/Makisuo/rune?rev=884a6069c97a36231b0f0e67bdd35e9d04ad3d14#884a6069c97a36231b0f0e67bdd35e9d04ad3d14"
 dependencies = [
  "wgpu",
 ]
@@ -3034,7 +3035,7 @@ dependencies = [
 [[package]]
 name = "rune-taffy"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=4739720eed3ee50eaaa811a3ab7c84b29b976180#4739720eed3ee50eaaa811a3ab7c84b29b976180"
+source = "git+https://github.com/Makisuo/rune?rev=884a6069c97a36231b0f0e67bdd35e9d04ad3d14#884a6069c97a36231b0f0e67bdd35e9d04ad3d14"
 dependencies = [
  "taffy",
 ]
@@ -3102,7 +3103,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3417,7 +3418,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3616,7 +3617,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3841,7 +3842,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4388,7 +4389,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

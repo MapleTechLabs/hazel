@@ -34,6 +34,28 @@ const icon = <Message>(
 	)
 }
 
+export const IconArrowUp = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
+	icon(
+		h,
+		{
+			height: "18",
+			width: "18",
+			"data-slot": "icon",
+			viewBox: "0 0 18 18",
+			xmlns: "http://www.w3.org/2000/svg",
+		},
+		options,
+		[
+			h.path([
+				h.Attribute("fill", "currentColor"),
+				h.Attribute(
+					"d",
+					"M9 15.5a.75.75 0 0 1-.75-.75V5.06L5.28 8.03a.75.75 0 0 1-1.06-1.06l4.25-4.25a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1-1.06 1.06L9.75 5.06v9.69a.75.75 0 0 1-.75.75",
+				),
+			]),
+		],
+	)
+
 export const IconArrowLeft = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
 	icon(
 		h,
