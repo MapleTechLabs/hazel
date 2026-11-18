@@ -9,6 +9,7 @@ import {
 	accountDeletedOp,
 	accountOp,
 	billingContactOp,
+	billingIntervalOf,
 	clerkOrgIdsOf,
 	customerOps,
 	invoiceOp,
@@ -181,6 +182,13 @@ describe("MRR, normalized to a month in minor units", () => {
 		expect(
 			monthlyMrrOf(oneItem(monthly(120_000, { interval: "year", interval_count: 1 }))).mrrMinor,
 		).toBe(10_000)
+	})
+
+	it("reads a multi-period price's interval as `other`", () => {
+		const intervalOf = (recurring: Record<string, unknown>) =>
+			billingIntervalOf(oneItem(monthly(9_000, recurring)).items?.data?.[0]?.price ?? null)
+		expect(intervalOf({ interval: "month", interval_count: 3 })).toBe("other")
+		expect(intervalOf({ interval: "month", interval_count: 1 })).toBe("month")
 	})
 
 	it("divides by the interval count, and rounds once at the end", () => {

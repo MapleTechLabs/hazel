@@ -520,7 +520,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			statements: ['ALTER TABLE "customer_signals" DROP COLUMN "reopenAfter"'],
 		},
 		{
-			id: "0013_customer_feature_flags",
+			id: "0013_customer_settings_overage_in_mrr",
+			statements: [
+				'ALTER TABLE "customer_settings" ADD COLUMN "overageInMrr" integer NOT NULL DEFAULT false',
+			],
+		},
+		{
+			id: "0014_customer_feature_flags",
 			statements: [
 				'ALTER TABLE "customer_accounts" ADD COLUMN "featureFlags" text NOT NULL DEFAULT \'{}\'',
 				"CREATE TABLE IF NOT EXISTS \"customer_feature_flags\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"organizationId\" text NOT NULL,\n\t\"key\" text NOT NULL,\n\t\"createdBy\" text NOT NULL,\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))\n)",

@@ -1,13 +1,14 @@
 import { CustomerSettingsId, OrganizationId } from "@hazel/schema"
 import { optimisticAction } from "@hazel/effect-db-collection"
-import { Effect, Schema } from "effect"
+import { Effect } from "effect"
 import { Command } from "foldkit"
 import { customerSettingsCollection } from "~/db/collections"
 import { catchCommon } from "../../../../data/actions"
 import { HazelRpc } from "../../../../rpc"
 import { Message } from "./message"
+import { SettingsChange } from "./model"
 
-/** The plans page's Commands: the plan names, and saving the add-on list. */
+/** The plans page's Commands: the plan names, and saving the settings (add-ons, overage in MRR). */
 
 export const FetchPlans = Command.define("FetchPlans", {
 	args: { organizationId: OrganizationId },
@@ -22,15 +23,15 @@ export const FetchPlans = Command.define("FetchPlans", {
 interface SaveProps {
 	readonly organizationId: OrganizationId
 	readonly settingsId: CustomerSettingsId
-	readonly addOnPlans: ReadonlyArray<string>
+	readonly change: SettingsChange
 }
 
-/** The settings row takes the list at once; the server recomputes the accounts' plans soon. */
-const saveAddOnPlansAction = optimisticAction({
+/** The settings row takes the change at once; the server recomputes the accounts soon. */
+const saveSettingsAction = optimisticAction({
 	collections: [customerSettingsCollection],
 	onMutate: (props: SaveProps) => {
 		customerSettingsCollection.update(props.settingsId, (row) => {
-			row.addOnPlans = [...props.addOnPlans]
+			Object.assign(row, props.change)
 		})
 		return { settingsId: props.settingsId }
 	},
@@ -39,22 +40,18 @@ const saveAddOnPlansAction = optimisticAction({
 			const client = yield* HazelRpc
 			const result = yield* client("customers.settings.update", {
 				organizationId: props.organizationId,
-				addOnPlans: props.addOnPlans,
+				...props.change,
 			})
 			return { data: result, transactionId: result.transactionId }
 		}),
 })
 
-export const SaveAddOnPlans = Command.define("SaveAddOnPlans", {
-	args: {
-		organizationId: OrganizationId,
-		settingsId: CustomerSettingsId,
-		addOnPlans: Schema.Array(Schema.String),
-	},
-	messages: [Message.SucceededSaveAddOnPlans, Message.FailedSaveAddOnPlans],
+export const SaveSettings = Command.define("SaveSettings", {
+	args: { organizationId: OrganizationId, settingsId: CustomerSettingsId, change: SettingsChange },
+	messages: [Message.SucceededSaveSettings, Message.FailedSaveSettings],
 	execute: (args) =>
-		saveAddOnPlansAction(args).pipe(
-			Effect.as(Message.SucceededSaveAddOnPlans()),
-			catchCommon((reason) => Message.FailedSaveAddOnPlans({ reason })),
+		saveSettingsAction(args).pipe(
+			Effect.as(Message.SucceededSaveSettings()),
+			catchCommon((reason) => Message.FailedSaveSettings({ reason })),
 		),
 })
