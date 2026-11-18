@@ -35,7 +35,6 @@ import {
 	DONE_MODAL_ID,
 	FILTER_MENU_ID,
 	isSelectionVisible,
-	MORE_MENU_ID,
 	type Model,
 	type QueueKey,
 	rowIds,
@@ -82,7 +81,6 @@ export const init = (): Return => ({
 		detail: null,
 		assignMenu: Menu.init({ id: ASSIGN_MENU_ID, placement: "bottom end" }),
 		snoozeMenu: Menu.init({ id: SNOOZE_MENU_ID, placement: "bottom end" }),
-		moreMenu: Menu.init({ id: MORE_MENU_ID, placement: "bottom end" }),
 		filterMenu: Menu.init({ id: FILTER_MENU_ID }),
 		sortMenu: Menu.init({ id: SORT_MENU_ID, placement: "bottom end", selectionMode: "Single" }),
 		doneModal: Modal.init(DONE_MODAL_ID),
@@ -365,7 +363,7 @@ const ACTION_VERB = {
 
 // MENUS
 
-type MenuField = "assignMenu" | "snoozeMenu" | "moreMenu" | "filterMenu" | "sortMenu"
+type MenuField = "assignMenu" | "snoozeMenu" | "filterMenu" | "sortMenu"
 
 type MenuCommands = NonNullable<ReturnType<typeof Menu.update>["commands"]>
 
@@ -375,8 +373,6 @@ const mapMenuCommands = (field: MenuField, commands: MenuCommands): Commands => 
 			return Command.mapMessages(commands, (message) => Message.GotAssignMenuMessage({ message }))
 		case "snoozeMenu":
 			return Command.mapMessages(commands, (message) => Message.GotSnoozeMenuMessage({ message }))
-		case "moreMenu":
-			return Command.mapMessages(commands, (message) => Message.GotMoreMenuMessage({ message }))
 		case "filterMenu":
 			return Command.mapMessages(commands, (message) => Message.GotFilterMenuMessage({ message }))
 		case "sortMenu":
@@ -390,8 +386,6 @@ const withMenu = (model: Model, field: MenuField, menu: Menu.Model): Model => {
 			return modifyFields(model, { assignMenu: () => menu })
 		case "snoozeMenu":
 			return modifyFields(model, { snoozeMenu: () => menu })
-		case "moreMenu":
-			return modifyFields(model, { moreMenu: () => menu })
 		case "filterMenu":
 			return modifyFields(model, { filterMenu: () => menu })
 		case "sortMenu":
@@ -536,6 +530,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const signal = signalById(model, signalId)
 			return signal === undefined ? { model } : reopen(model, shared, signal)
 		},
+		PressedDismiss: ({ signalId }) => {
+			const signal = signalById(model, signalId)
+			return signal === undefined ? { model } : dismiss(model, shared, signal)
+		},
 
 		GotAssignMenuMessage: ({ message: menuMessage }) =>
 			updateMenu(model, "assignMenu", menuMessage, (next, key) => {
@@ -550,12 +548,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				return isSnoozeOption(key)
 					? snooze(next, shared, signal, snoozeUntilMs(key, shared.nowMs, signal))
 					: { model: next }
-			}),
-		GotMoreMenuMessage: ({ message: menuMessage }) =>
-			updateMenu(model, "moreMenu", menuMessage, (next, key) => {
-				const signal = selectedSignal(next)
-				if (signal === undefined) return { model: next }
-				return key === "dismiss" ? dismiss(next, shared, signal) : openCustomer(next, shared, signal)
 			}),
 		GotFilterMenuMessage: ({ message: menuMessage }) =>
 			updateMenu(model, "filterMenu", menuMessage, (next, key) => ({

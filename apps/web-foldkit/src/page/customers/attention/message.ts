@@ -40,10 +40,10 @@ export const Message = defineMessageUnion({
 	PressedQueueKey: { key: QueueKey },
 	PressedMarkDone: { signalId: CustomerSignalId },
 	PressedReopen: { signalId: CustomerSignalId },
+	PressedDismiss: { signalId: CustomerSignalId },
 
 	GotAssignMenuMessage: { message: Menu.Message },
 	GotSnoozeMenuMessage: { message: Menu.Message },
-	GotMoreMenuMessage: { message: Menu.Message },
 	GotFilterMenuMessage: { message: Menu.Message },
 	GotSortMenuMessage: { message: Menu.Message },
 
