@@ -30,7 +30,7 @@ const row = (key: string, groupPosition: GroupPosition, content = "short line"):
 	},
 	groupPosition,
 	reactions: [],
-	author: { displayName: "Ada", avatarUrl: null, isBot: false },
+	author: { displayName: "Ada", avatarUrl: null, isBot: false, syncProvider: null },
 	hasAuthor: true,
 	status: null,
 	syncedFrom: null,

@@ -11,6 +11,7 @@ import {
 } from "~/db/collections"
 import type { BotCommandId, BotId, ChannelId, ChannelMemberId, OrganizationId, UserId } from "@hazel/schema"
 import { liveQueryStream } from "../data/live-query"
+import { shadowProviderOf } from "../page/chat/lookups"
 import type { BotCommand, MentionableBot, MentionMember, MentionProvider } from "./composer"
 
 interface MentionUserRow {
@@ -84,13 +85,6 @@ const externalUsers = () =>
 				.where(({ user }) => and(eq(user.userType, "machine"), isNull(user.deletedAt))),
 		(rows) => rows,
 	)
-
-/**
- * The platform a shadow user belongs to, from its `<provider>-user-<id>@<provider>.internal` email.
- * Not the external id: it is `Sensitive`, so the synced user rows never carry it.
- */
-const shadowProviderOf = (email: string | undefined): MentionProvider | null =>
-	email?.startsWith("discord-user-") ? "discord" : email?.startsWith("slack-user-") ? "slack" : null
 
 /**
  * Mention autocomplete: the channel's members (the query `useMentionOptions` runs), and in a

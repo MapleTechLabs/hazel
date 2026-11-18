@@ -58,7 +58,10 @@ export type AggregatedReaction = typeof AggregatedReaction.Type
 export const AuthorIdentity = Schema.Struct({
 	displayName: Schema.String,
 	avatarUrl: Schema.NullOr(Schema.String),
+	/** An app (a bot); never a Slack or Discord person. */
 	isBot: Schema.Boolean,
+	/** For a chat sync shadow user: the platform the person is on. */
+	syncProvider: Schema.NullOr(SyncProvider),
 })
 export type AuthorIdentity = typeof AuthorIdentity.Type
 
