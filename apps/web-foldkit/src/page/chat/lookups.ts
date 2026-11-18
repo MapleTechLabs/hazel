@@ -76,6 +76,14 @@ export type BotInfo = typeof BotInfo.Type
 export const SyncProvider = Schema.Literals(["discord", "slack"])
 export type SyncProvider = typeof SyncProvider.Type
 
+/**
+ * The platform a chat sync shadow user stands for, from its `<provider>-user-<id>@<provider>.internal`
+ * email. Shadow users are `machine` users, but they are people on Slack or Discord, not apps.
+ * Not the external id: it is `Sensitive`, so the synced user rows never carry it.
+ */
+export const shadowProviderOf = (email: string | null | undefined): SyncProvider | null =>
+	email?.startsWith("discord-user-") ? "discord" : email?.startsWith("slack-user-") ? "slack" : null
+
 /** A message that arrived through chat sync, and the platform it came from. */
 export const SyncedMessageInfo = Schema.Struct({ messageId: MessageId, provider: SyncProvider })
 export type SyncedMessageInfo = typeof SyncedMessageInfo.Type

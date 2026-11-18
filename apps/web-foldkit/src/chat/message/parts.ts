@@ -41,8 +41,10 @@ const SYNC_PROVIDERS = {
 	{ readonly label: string; readonly icon: typeof IconDiscord; readonly className: string }
 >
 
-/** In place of "APP" on a message two-way synced in from another platform: its mark and its name. */
-const syncBadge = <M>(h: HtmlBuilder<M>, provider: SyncProvider): Html => {
+/**
+ * In place of "APP" on a message (or a person) synced in from another platform: its mark and its name.
+ */
+export const syncBadge = <M>(h: HtmlBuilder<M>, provider: SyncProvider): Html => {
 	const { label, icon, className } = SYNC_PROVIDERS[provider]
 	return h.span(
 		[
@@ -64,6 +66,7 @@ export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: H
 	const isEdited = message.updatedAtMs !== null && message.updatedAtMs > message.createdAtMs
 	const time = formatTime(message.createdAtMs)
 	const isMachine = author.isBot
+	const syncedFrom = row.syncedFrom ?? author.syncProvider
 	return h.div(
 		[h.Class("flex items-baseline gap-2 max-md:flex-wrap max-md:gap-y-0")],
 		[
@@ -72,8 +75,8 @@ export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: H
 				[author.displayName],
 			),
 			statusEmoji,
-			row.syncedFrom !== null
-				? syncBadge(h, row.syncedFrom)
+			syncedFrom !== null
+				? syncBadge(h, syncedFrom)
 				: isMachine
 					? badge(h, { intent: "primary" }, ["APP"])
 					: h.empty,

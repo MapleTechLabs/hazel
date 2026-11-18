@@ -104,7 +104,12 @@ const row = (options: {
 		},
 		groupPosition: "standalone",
 		reactions: [],
-		author: { displayName: options.name, avatarUrl: null, isBot: options.isBot ?? false },
+		author: {
+			displayName: options.name,
+			avatarUrl: null,
+			isBot: options.isBot ?? false,
+			syncProvider: null,
+		},
 		hasAuthor: true,
 		status: null,
 		syncedFrom: null,

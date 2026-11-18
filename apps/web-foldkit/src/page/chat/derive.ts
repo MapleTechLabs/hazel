@@ -23,6 +23,7 @@ import {
 	byKey,
 	type Lookups,
 	type PresenceInfo,
+	shadowProviderOf,
 	type SyncProvider,
 	type UserInfo,
 } from "./lookups"
@@ -127,22 +128,34 @@ export const toDeriveContext = (
 	replyTargets: byKey(lookups.replyTargets, (target) => target.id),
 })
 
+type AuthorUser = Pick<UserInfo, "firstName" | "lastName" | "avatarUrl" | "userType"> & {
+	readonly email?: string | undefined
+}
+
 /** The message's author: the row's own join when its query has one, else the users lookup. */
-export const authorOf = (
-	context: DeriveContext,
-	message: ChatMessage,
-): Pick<UserInfo, "firstName" | "lastName" | "avatarUrl" | "userType"> | null =>
-	message.author ?? context.users.get(message.authorId) ?? null
+export const authorOf = (context: DeriveContext, message: ChatMessage): AuthorUser | null => {
+	const user = context.users.get(message.authorId)
+	// The row's join carries no email; the lookup's tells a Slack or Discord person from an app.
+	return message.author ? { ...message.author, email: user?.email } : (user ?? null)
+}
 
 /** `buildChatAuthorIdentity` with `useBotName`. */
 export const authorIdentity = (
-	user: Pick<UserInfo, "firstName" | "lastName" | "avatarUrl" | "userType"> | null | undefined,
+	user: AuthorUser | null | undefined,
 	botName: string | undefined,
 ): AuthorIdentity => {
-	if (!user) return { displayName: "", avatarUrl: null, isBot: false }
-	const isBot = user.userType === "machine"
+	if (!user) return { displayName: "", avatarUrl: null, isBot: false, syncProvider: null }
+	const isMachine = user.userType === "machine"
+	// Chat sync's shadow users are machine users too, but they are people on Slack or Discord.
+	const syncProvider = isMachine ? shadowProviderOf(user.email) : null
+	const isBot = isMachine && syncProvider === null
 	const fallback = [user.firstName, user.lastName].filter(Boolean).join(" ").trim()
-	return { displayName: isBot && botName ? botName : fallback, avatarUrl: user.avatarUrl, isBot }
+	return {
+		displayName: isBot && botName ? botName : fallback,
+		avatarUrl: user.avatarUrl,
+		isBot,
+		syncProvider,
+	}
 }
 
 export const identityOf = (context: DeriveContext, userId: string): AuthorIdentity | null => {
