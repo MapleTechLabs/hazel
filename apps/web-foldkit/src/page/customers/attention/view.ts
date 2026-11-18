@@ -260,7 +260,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: 
 							].join(" · ")
 					: model.tab === "snoozed"
 						? `${signals.length} snoozed signal${signals.length === 1 ? "" : "s"}${whose}`
-						: `${signals.length} signal${signals.length === 1 ? "" : "s"} muted or resolved in the last 7 days · ${signals.filter((signal) => signal.status === "auto_resolved").length} cleared on their own`
+						: `${signals.length} signal${signals.length === 1 ? "" : "s"} muted, or resolved in the last 7 days · ${signals.filter((signal) => signal.status === "auto_resolved").length} cleared on their own`
 	return pageHeader(h, {
 		title: "Needs attention",
 		subtitle,
@@ -608,7 +608,7 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 					[
 						model.tab === "snoozed"
 							? "Nothing is snoozed."
-							: "Nothing muted or resolved in the last 7 days.",
+							: "Nothing muted, or resolved in the last 7 days.",
 					],
 				)
 	const context: RowContext = {
