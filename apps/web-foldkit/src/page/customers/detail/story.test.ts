@@ -20,8 +20,10 @@ import type { Shared } from "../../contract"
 import { sharedDefaults } from "../../test-shared"
 import { Message } from "./message"
 import {
+	actionEntries,
 	EMPTY_NOTE_DRAFTS,
 	isNotFound,
+	mergeCandidates,
 	type Model,
 	type NoteRow,
 	ownerEntries,
@@ -84,6 +86,7 @@ const account = (n: number, name: string): AccountRow => ({
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 10,
+	organizationCount: 1,
 	activeUsers30d: 5,
 	activeUsersTrendPct: 0,
 	openRiskHigh: 0,
@@ -418,6 +421,39 @@ describe("customer page: notes", () => {
 		expect(deleted.model.notes?.map((row) => row.id)).not.toContain(target)
 		expect(deleted.model.editingNote).toBeNull()
 		expect(commandNames(deleted)).toEqual(["DeleteCustomerNote"])
+	})
+
+	test("merging picks another customer into this one, once", () => {
+		const opened = pick(
+			loaded(),
+			(message) => Message.GotActionsMenuMessage({ message }),
+			"merge",
+			actionEntries,
+		).model
+		expect(opened.mergeModal.isOpen).toBe(true)
+		expect(mergeCandidates(opened).map((row) => row.name)).toEqual(["Acme", "Gamma"])
+		const searched = run(opened, [Message.ChangedMergeQuery({ value: "gam" })])
+		expect(mergeCandidates(searched).map((row) => row.name)).toEqual(["Gamma"])
+		// Nothing picked yet: nothing to merge; this customer itself cannot be picked.
+		expect(commandNames(update(searched, Message.PressedConfirmMerge(), shared))).toEqual([])
+		expect(run(searched, [Message.PickedMergeAccount({ pickedId: beta.id })]).mergeAccountId).toBeNull()
+		const picked = run(searched, [Message.PickedMergeAccount({ pickedId: gamma.id })])
+		const merging = update(picked, Message.PressedConfirmMerge(), shared)
+		expect(commandNames(merging)).toEqual(["MergeCustomerAccount"])
+		expect(commandNames(update(merging.model, Message.PressedConfirmMerge(), shared))).toEqual([])
+		// Another customer's merge finishing (its page was left) changes nothing here.
+		expect(
+			update(merging.model, Message.SucceededMerge({ accountId: acme.id, name: "Gamma" }), shared).model
+				.isMerging,
+		).toBe(true)
+		const merged = update(
+			merging.model,
+			Message.SucceededMerge({ accountId: beta.id, name: "Gamma" }),
+			shared,
+		)
+		expect(merged.model.mergeModal.isOpen).toBe(false)
+		expect(merged.model.isMerging).toBe(false)
+		expect(commandNames(merged)).toContain("FetchCustomerDetail")
 	})
 
 	test("a failed save or edit puts the text back", () => {

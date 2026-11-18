@@ -59,6 +59,7 @@ export const accountRow = (overrides: Partial<schema.CustomerAccount> = {}): sch
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 0,
+	organizationCount: 1,
 	activeUsers30d: 0,
 	activeUsersTrendPct: null,
 	openRiskHigh: 0,

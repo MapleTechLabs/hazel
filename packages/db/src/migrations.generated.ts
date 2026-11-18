@@ -508,7 +508,15 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			],
 		},
 		{
-			id: "0011_drop_signal_reopen_after",
+			id: "0011_customer_merge",
+			statements: [
+				'ALTER TABLE "customer_accounts" ADD COLUMN "organizationCount" integer NOT NULL DEFAULT 0',
+				'ALTER TABLE "customer_external_refs" ADD COLUMN "name" text',
+				'ALTER TABLE "customer_external_refs" ADD COLUMN "viaAccounts" text',
+			],
+		},
+		{
+			id: "0012_drop_signal_reopen_after",
 			statements: ['ALTER TABLE "customer_signals" DROP COLUMN "reopenAfter"'],
 		},
 	],

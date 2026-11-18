@@ -459,6 +459,10 @@ const make = Effect.gen(function* () {
 			readonly matchMethod: schema.CustomerExternalRef["matchMethod"]
 			readonly externalUrl?: string | null | undefined
 			readonly matchedByUserId?: UserId | null
+			/** The provider record's own name (account refs). */
+			readonly name?: string | null | undefined
+			/** The account records a contact ref is a member through. */
+			readonly viaAccounts?: Readonly<Record<string, schema.ContactMembership>> | null
 		},
 	) =>
 		Effect.gen(function* () {
@@ -470,6 +474,8 @@ const make = Effect.gen(function* () {
 					entityId: ref.entityId,
 					accountId: ref.accountId,
 					externalId: ref.externalId,
+					name: ref.name ?? null,
+					viaAccounts: ref.viaAccounts ?? null,
 					externalUrl: ref.externalUrl ?? null,
 					matchMethod: ref.matchMethod,
 					matchedByUserId: ref.matchedByUserId ?? null,
@@ -488,11 +494,12 @@ const make = Effect.gen(function* () {
 			yield* replayUnblocked(session, ref.provider, ref.entityType, ref.externalId)
 		})
 
-	/** A ref seen again: refresh its link and sync time, and mark it live. */
+	/** A ref seen again: refresh its link, name (`undefined` keeps it) and sync time, and mark it live. */
 	const touchRef = (
 		session: Session,
 		ref: schema.CustomerExternalRef,
 		externalUrl: string | null | undefined,
+		name?: string | undefined,
 	) =>
 		db.run(
 			SQLite.update(schema.customerExternalRefsTable)
@@ -501,6 +508,7 @@ const make = Effect.gen(function* () {
 					staleAt: null,
 					deletedObservedAt: null,
 					externalUrl,
+					name,
 					updatedAt: session.now,
 				})
 				.where(($) => [$.id.eq(ref.id)]),
@@ -987,7 +995,12 @@ const make = Effect.gen(function* () {
 			if (Option.isSome(ref)) {
 				// Deleted after the source last changed it: a late delivery.
 				if (observedBefore(op.observedAt, ref.value)) return outcome.unchanged(ref.value.accountId)
-				yield* touchRef(session, ref.value, providerLink(session.context.provider, op.externalUrl))
+				yield* touchRef(
+					session,
+					ref.value,
+					providerLink(session.context.provider, op.externalUrl),
+					op.name,
+				)
 				const changed = yield* applyAccountFields(session, ref.value.accountId, op, domains)
 				return changed ? outcome.updated(ref.value.accountId) : outcome.unchanged(ref.value.accountId)
 			}
@@ -1003,6 +1016,7 @@ const make = Effect.gen(function* () {
 					accountId: match.accountId,
 					matchMethod: match.method,
 					externalUrl: providerLink(session.context.provider, op.externalUrl),
+					name: op.name,
 				})
 				return outcome.updated(match.accountId)
 			}
@@ -1048,6 +1062,7 @@ const make = Effect.gen(function* () {
 				accountId,
 				matchMethod: "created",
 				externalUrl: providerLink(session.context.provider, op.externalUrl),
+				name: op.name,
 			})
 			return outcome.created(accountId)
 		})
@@ -1081,6 +1096,12 @@ const make = Effect.gen(function* () {
 	const removeContactRef = (session: Session, ref: schema.CustomerExternalRef, observedAt?: string) =>
 		Effect.gen(function* () {
 			yield* removeRef(session.now, ref, observedAt)
+			// No membership is left: a later sighting starts the list over.
+			yield* db.run(
+				SQLite.update(schema.customerExternalRefsTable)
+					.set({ viaAccounts: null })
+					.where(($) => [$.id.eq(ref.id)]),
+			)
 			const contactId = ref.entityId as CustomerContactId
 			const other = yield* db.first(
 				SQLite.from(schema.customerExternalRefsTable)
@@ -1152,11 +1173,44 @@ const make = Effect.gen(function* () {
 			if (op.removed === true) {
 				if (Option.isNone(known) || alreadyRemoved(op.observedAt, known.value))
 					return outcome.unchanged(op.externalId)
+				// A merged customer's member through another of its organizations stays; this one is
+				// marked left, so a late update from before it cannot add it back.
+				const via = known.value.viaAccounts ?? {}
+				const org = op.account.externalId
+				const others = Object.entries(via).filter(
+					([key, membership]) => key !== org && membership.leftAt === undefined,
+				)
+				if (others.length > 0) {
+					const current = via[org]
+					if (current === undefined || current.leftAt !== undefined)
+						return outcome.unchanged(known.value.entityId)
+					const leftAt = op.observedAt ?? session.now.toISOString()
+					yield* db.run(
+						SQLite.update(schema.customerExternalRefsTable)
+							.set({
+								viaAccounts: { ...via, [org]: { ...current, leftAt } },
+								updatedAt: session.now,
+							})
+							.where(($) => [$.id.eq(known.value.id)]),
+					)
+					return outcome.updated(known.value.entityId)
+				}
 				yield* removeContactRef(session, known.value, op.observedAt)
 				return outcome.updated(known.value.entityId)
 			}
 			// Removed after the source last changed it: a late delivery.
 			if (Option.isSome(known) && observedBefore(op.observedAt, known.value))
+				return outcome.unchanged(known.value.entityId)
+			// The same for one membership of a merged customer's person.
+			const leftAt = Option.isSome(known)
+				? known.value.viaAccounts?.[op.account.externalId]?.leftAt
+				: undefined
+			if (
+				Option.isSome(known) &&
+				leftAt !== undefined &&
+				op.observedAt !== undefined &&
+				new Date(op.observedAt) <= new Date(leftAt)
+			)
 				return outcome.unchanged(known.value.entityId)
 			let contactId = Option.isSome(known) ? (known.value.entityId as CustomerContactId) : undefined
 			let created = false
@@ -1200,6 +1254,7 @@ const make = Effect.gen(function* () {
 					accountId: accountId.value,
 					matchMethod: created ? "created" : "existing",
 					externalUrl: providerLink(session.context.provider, op.externalUrl),
+					viaAccounts: { [op.account.externalId]: { seenAt: session.now.toISOString() } },
 				})
 			}
 			const id = contactId
@@ -1212,8 +1267,21 @@ const make = Effect.gen(function* () {
 			if (Option.isNone(current)) return outcome.unchanged(id)
 			const contact = current.value
 			// Seen again (a full sweep removes the contacts it does not see).
-			if (Option.isSome(known))
+			if (Option.isSome(known)) {
 				yield* touchRef(session, known.value, providerLink(session.context.provider, op.externalUrl))
+				// Revived (stale, so no memberships): only this one.
+				const via = known.value.staleAt === null ? (known.value.viaAccounts ?? {}) : {}
+				yield* db.run(
+					SQLite.update(schema.customerExternalRefsTable)
+						.set({
+							viaAccounts: {
+								...via,
+								[op.account.externalId]: { seenAt: session.now.toISOString() },
+							},
+						})
+						.where(($) => [$.id.eq(known.value.id)]),
+				)
+			}
 			const patch = makePatch(contact, contact.fieldSources, provider)
 			patch.set("email", op.email, true)
 			patch.set("name", op.name, true)
@@ -2168,6 +2236,7 @@ const make = Effect.gen(function* () {
 				accountId,
 				matchMethod: "manual",
 				matchedByUserId: by,
+				name: record.entityType === "account" ? record.label : null,
 			})
 		}
 		yield* db.run(
@@ -2301,6 +2370,22 @@ const make = Effect.gen(function* () {
 							count++
 						} else if (yield* removeContactRef(session, ref)) count++
 					}
+					// A person still seen through one organization: the memberships it lists that this
+					// listing did not see are left as of the run's start (an update read before it is late).
+					if (entityType === "contact")
+						yield* db.query(
+							Database.sql`UPDATE "customer_external_refs" SET "viaAccounts" = (
+								SELECT json_group_object("key",
+									CASE WHEN json_extract("value", '$.leftAt') IS NULL
+										AND json_extract("value", '$.seenAt') < ${since.toISOString()}
+									THEN json_set("value", '$.leftAt', ${since.toISOString()}) ELSE json("value") END)
+								FROM json_each("viaAccounts"))
+							WHERE "connectionId" = ${connectionId} AND "entityType" = 'contact'
+								AND "staleAt" IS NULL AND "viaAccounts" IS NOT NULL
+								AND EXISTS (SELECT 1 FROM json_each("viaAccounts")
+									WHERE json_extract("value", '$.leftAt') IS NULL
+										AND json_extract("value", '$.seenAt') < ${since.toISOString()})`,
+						)
 				}
 				if (entityTypes.includes("subscription")) {
 					const subs = yield* unseenSubscriptions

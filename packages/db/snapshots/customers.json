@@ -1,5 +1,5 @@
 {
-	"migration": "0011_drop_signal_reopen_after",
+	"migration": "0012_drop_signal_reopen_after",
 	"entities": [
 		{
 			"kind": "table",
@@ -352,7 +352,7 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "activeUsers30d",
+			"name": "organizationCount",
 			"position": 20,
 			"type": "integer",
 			"notNull": true,
@@ -361,8 +361,17 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "activeUsersTrendPct",
+			"name": "activeUsers30d",
 			"position": 21,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "activeUsersTrendPct",
+			"position": 22,
 			"type": "real",
 			"notNull": false,
 			"default": null
@@ -371,15 +380,6 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "openRiskHigh",
-			"position": 22,
-			"type": "integer",
-			"notNull": true,
-			"default": "0"
-		},
-		{
-			"kind": "column",
-			"table": "customer_accounts",
-			"name": "openRiskMedium",
 			"position": 23,
 			"type": "integer",
 			"notNull": true,
@@ -388,7 +388,7 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "openRiskLow",
+			"name": "openRiskMedium",
 			"position": 24,
 			"type": "integer",
 			"notNull": true,
@@ -397,7 +397,7 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "openOpportunities",
+			"name": "openRiskLow",
 			"position": 25,
 			"type": "integer",
 			"notNull": true,
@@ -406,16 +406,16 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "championContactId",
+			"name": "openOpportunities",
 			"position": 26,
-			"type": "text",
-			"notNull": false,
-			"default": null
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
 		},
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "championInactiveSince",
+			"name": "championContactId",
 			"position": 27,
 			"type": "text",
 			"notNull": false,
@@ -424,7 +424,7 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "lastActiveContactId",
+			"name": "championInactiveSince",
 			"position": 28,
 			"type": "text",
 			"notNull": false,
@@ -433,8 +433,17 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "firstSeenAt",
+			"name": "lastActiveContactId",
 			"position": 29,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "firstSeenAt",
+			"position": 30,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -443,15 +452,6 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "lastActiveAt",
-			"position": 30,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_accounts",
-			"name": "customerSince",
 			"position": 31,
 			"type": "text",
 			"notNull": false,
@@ -460,7 +460,7 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "churnedAt",
+			"name": "customerSince",
 			"position": 32,
 			"type": "text",
 			"notNull": false,
@@ -469,8 +469,17 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "tags",
+			"name": "churnedAt",
 			"position": 33,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "tags",
+			"position": 34,
 			"type": "text",
 			"notNull": true,
 			"default": "'[]'"
@@ -479,15 +488,6 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "attributes",
-			"position": 34,
-			"type": "text",
-			"notNull": true,
-			"default": "'{}'"
-		},
-		{
-			"kind": "column",
-			"table": "customer_accounts",
-			"name": "fieldSources",
 			"position": 35,
 			"type": "text",
 			"notNull": true,
@@ -496,16 +496,16 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "createdAt",
+			"name": "fieldSources",
 			"position": 36,
 			"type": "text",
 			"notNull": true,
-			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+			"default": "'{}'"
 		},
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "updatedAt",
+			"name": "createdAt",
 			"position": 37,
 			"type": "text",
 			"notNull": true,
@@ -514,8 +514,17 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "deletedAt",
+			"name": "updatedAt",
 			"position": 38,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "deletedAt",
+			"position": 39,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -1252,7 +1261,7 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "externalUrl",
+			"name": "name",
 			"position": 7,
 			"type": "text",
 			"notNull": false,
@@ -1261,16 +1270,16 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "matchMethod",
+			"name": "viaAccounts",
 			"position": 8,
 			"type": "text",
-			"notNull": true,
+			"notNull": false,
 			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "matchedByUserId",
+			"name": "externalUrl",
 			"position": 9,
 			"type": "text",
 			"notNull": false,
@@ -1279,16 +1288,16 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "matchedAt",
+			"name": "matchMethod",
 			"position": 10,
 			"type": "text",
 			"notNull": true,
-			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "lastSyncedAt",
+			"name": "matchedByUserId",
 			"position": 11,
 			"type": "text",
 			"notNull": false,
@@ -1297,16 +1306,16 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "staleAt",
+			"name": "matchedAt",
 			"position": 12,
 			"type": "text",
-			"notNull": false,
-			"default": null
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
 		},
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "deletedObservedAt",
+			"name": "lastSyncedAt",
 			"position": 13,
 			"type": "text",
 			"notNull": false,
@@ -1315,8 +1324,26 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "createdAt",
+			"name": "staleAt",
 			"position": 14,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "deletedObservedAt",
+			"position": 15,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "createdAt",
+			"position": 16,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1325,7 +1352,7 @@
 			"kind": "column",
 			"table": "customer_external_refs",
 			"name": "updatedAt",
-			"position": 15,
+			"position": 17,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
