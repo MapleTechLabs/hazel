@@ -70,6 +70,7 @@ export const init = (): Return => ({
 		tab: "open",
 		grouping: "signals",
 		sort: "priority",
+		isSortReversed: false,
 		filters: DEFAULT_FILTERS,
 		search: "",
 		signals: null,
@@ -497,6 +498,13 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}),
 		}),
 		ClickedGrouping: ({ grouping }) => ({ model: modifyFields(model, { grouping: () => grouping }) }),
+		ClickedColumnSort: ({ sort }) => ({
+			model: modifyFields(model, {
+				sort: () => sort,
+				isSortReversed: (isReversed) => sort === model.sort && !isReversed,
+				sortMenu: (menu) => modifyFields(menu, { selectedKeys: () => [sort] }),
+			}),
+		}),
 		ChangedSearch: ({ value }) => ({ model: modifyFields(model, { search: () => value }) }),
 		ClearedSearch: () => ({ model: modifyFields(model, { search: () => "" }) }),
 		ClearedFilter: ({ field }) => ({
@@ -563,6 +571,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					: {
 							model: modifyFields(next, {
 								sort: () => sort,
+								isSortReversed: () => false,
 								sortMenu: (menu) => modifyFields(menu, { selectedKeys: () => [sort] }),
 							}),
 						}

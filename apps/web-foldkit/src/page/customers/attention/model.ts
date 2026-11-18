@@ -30,8 +30,18 @@ import * as Modal from "../../../ui/modal"
 export const Tab = Schema.Literals(["open", "snoozed", "done"])
 export const Grouping = Schema.Literals(["signals", "accounts"])
 export type Grouping = typeof Grouping.Type
-export const Sort = Schema.Literals(["priority", "severity", "age", "mrr"])
+export const Sort = Schema.Literals(["priority", "account", "signal", "severity", "age", "health", "mrr"])
 export type Sort = typeof Sort.Type
+/** Each sort's own direction (the header's `aria-sort`): # runs 1 down, Age oldest first, Health worst first. */
+export const SORT_ASCENDING = {
+	priority: true,
+	account: true,
+	signal: true,
+	severity: false,
+	age: false,
+	health: true,
+	mrr: false,
+} as const satisfies Record<Sort, boolean>
 /** Whose accounts: the default, "Mine or unowned", is accounts I own plus ones nobody owns yet. */
 export const OwnerFilter = Schema.Literals(["mine_or_unowned", "mine", "anyone", "unowned"])
 export type OwnerFilter = typeof OwnerFilter.Type
@@ -75,6 +85,8 @@ export const Model = Schema.Struct({
 	tab: Tab,
 	grouping: Grouping,
 	sort: Sort,
+	/** A second click on the sorted column's header flips its direction. */
+	isSortReversed: Schema.Boolean,
 	filters: Filters,
 	search: Schema.String,
 	/** Live rows; null until each query answers. */
@@ -187,17 +199,26 @@ const sortedForTab = (
 ): ReadonlyArray<SignalRowType> => {
 	if (model.tab === "snoozed") return Array.sort(signals, byWake)
 	if (model.tab === "done") return Array.sort(signals, byResolved)
-	const byMrr = Order.mapInput(
-		Order.flip(Order.Number),
-		(signal: SignalRowType) => accountsById.get(signal.accountId)?.mrrMinor ?? 0,
-	)
+	const accountOf = (signal: SignalRowType) => accountsById.get(signal.accountId)
 	const order = {
 		priority: byPriority,
-		severity: Order.combine(bySeverity, byPriority),
+		account: Order.mapInput(Order.String, (signal: SignalRowType) =>
+			(accountOf(signal)?.name ?? "").toLowerCase(),
+		),
+		signal: Order.mapInput(Order.String, (signal: SignalRowType) => signal.title.toLowerCase()),
+		severity: bySeverity,
 		age: byOpened,
-		mrr: Order.combine(byMrr, byPriority),
+		// No score yet sorts last.
+		health: Order.mapInput(
+			Order.Number,
+			(signal: SignalRowType) => accountOf(signal)?.healthScore ?? Infinity,
+		),
+		mrr: Order.mapInput(
+			Order.flip(Order.Number),
+			(signal: SignalRowType) => accountOf(signal)?.mrrMinor ?? 0,
+		),
 	}[model.sort]
-	return Array.sort(signals, order)
+	return Array.sort(signals, Order.combine(model.isSortReversed ? Order.flip(order) : order, byPriority))
 }
 
 /** The current tab's signals after the filters and search, in display order. */
