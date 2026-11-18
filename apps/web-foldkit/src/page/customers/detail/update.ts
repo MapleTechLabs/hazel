@@ -15,7 +15,7 @@ import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
-import { AssignSignal, DismissSignal, MarkSignalDone, SnoozeSignal } from "../attention/commands"
+import { AssignSignal, MarkSignalDone, SnoozeSignal } from "../attention/commands"
 import type { SignalAction } from "../attention/message"
 import {
 	CopyCustomerText,
@@ -42,7 +42,6 @@ import {
 	ASSIGN_ME,
 	ActionKey,
 	DELETE_NOTE_MODAL_ID,
-	DISMISS,
 	DONE_MENU_ID,
 	doneEntries,
 	EMPTY_NOTE_DRAFTS,
@@ -418,16 +417,6 @@ const onSignalMenu = (model: Model, shared: Shared, menu: SignalMenu, key: strin
 				commands: [AssignSignal({ ...actor, assigneeUserId })],
 			}
 		}
-		case DISMISS:
-			return {
-				model: patchSignal(model, signal.id, (row) => ({
-					...row,
-					status: "dismissed",
-					resolvedAtMs: shared.nowMs,
-					resolvedByUserId: userId,
-				})),
-				commands: [DismissSignal({ ...actor, userId })],
-			}
 		case OPEN_QUEUE:
 			return {
 				model,
@@ -444,7 +433,6 @@ const SIGNAL_VERB = {
 	assign: "assign",
 	snooze: "snooze",
 	done: "mark done",
-	dismiss: "dismiss",
 	reopen: "reopen",
 } as const satisfies Record<SignalAction, string>
 

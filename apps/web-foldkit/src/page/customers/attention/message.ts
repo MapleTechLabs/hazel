@@ -12,7 +12,7 @@ import { Grouping, QueueKey, Sort, Tab } from "./model"
 export const SignalActionFailure = Schema.Union([Schema.Literals(["NotFound", "Stale"]), CommonReason])
 export type SignalActionFailure = typeof SignalActionFailure.Type
 
-export const SignalAction = Schema.Literals(["assign", "snooze", "done", "dismiss", "reopen"])
+export const SignalAction = Schema.Literals(["assign", "snooze", "done", "reopen"])
 export type SignalAction = typeof SignalAction.Type
 
 export const Message = defineMessageUnion({
@@ -40,7 +40,6 @@ export const Message = defineMessageUnion({
 	PressedQueueKey: { key: QueueKey },
 	PressedMarkDone: { signalId: CustomerSignalId },
 	PressedReopen: { signalId: CustomerSignalId },
-	PressedDismiss: { signalId: CustomerSignalId },
 
 	GotAssignMenuMessage: { message: Menu.Message },
 	GotSnoozeMenuMessage: { message: Menu.Message },

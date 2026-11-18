@@ -490,7 +490,6 @@ export const QueueKey = Schema.Literals([
 	"assignToMe",
 	"snooze",
 	"done",
-	"dismiss",
 	"reopen",
 	"open",
 	"preview",

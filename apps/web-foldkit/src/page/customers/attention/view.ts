@@ -22,7 +22,6 @@ import {
 	IconArrowPath,
 	IconCheck,
 	IconClock,
-	IconClose,
 	IconLightbulb,
 	IconMagnifier3,
 	IconUser,
@@ -209,13 +208,7 @@ const signalActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): R
 			snooze,
 			done,
 		]
-	const dismiss = queueAction(h, {
-		label: "Dismiss",
-		icon: IconClose(h, icon),
-		shortcut: "E",
-		onPress: Message.PressedDismiss({ signalId: signal.id }),
-	})
-	return [assign, snooze, done, dismiss]
+	return [assign, snooze, done]
 }
 
 // HEADER AND CONTROLS
@@ -417,7 +410,6 @@ const SHORTCUTS = {
 		{ keys: ["I"], label: "Assign to me" },
 		{ keys: ["H"], label: "Snooze" },
 		{ keys: ["D"], label: "Mark done" },
-		{ keys: ["E"], label: "Dismiss" },
 		{ keys: ["Enter"], label: "Open customer" },
 		{ keys: ["Space"], label: "Preview" },
 	],

@@ -26,7 +26,6 @@ const KEYS = new Map<string, QueueKey>([
 	["i", "assignToMe"],
 	["h", "snooze"],
 	["d", "done"],
-	["e", "dismiss"],
 	["r", "reopen"],
 	["w", "reopen"],
 	["Enter", "open"],

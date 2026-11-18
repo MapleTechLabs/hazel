@@ -14,7 +14,6 @@ import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
 import {
 	AssignSignal,
 	CopyAttentionEmail,
-	DismissSignal,
 	FetchAccountDetail,
 	FocusAttentionSearch,
 	MarkSignalDone,
@@ -222,23 +221,6 @@ const snooze = (model: Model, shared: Shared, signal: SignalRow, untilMs: number
 	)
 }
 
-const dismiss = (model: Model, shared: Shared, signal: SignalRow): Return => {
-	const actor = actorOf(shared)
-	if (actor === undefined || signal.status !== "open") return { model }
-	return act(
-		model,
-		shared,
-		signal,
-		(row) => ({
-			...row,
-			status: "dismissed",
-			resolvedAtMs: shared.nowMs,
-			resolvedByUserId: actor.userId,
-		}),
-		DismissSignal({ ...actor, signalId: signal.id }),
-	)
-}
-
 const reopen = (model: Model, shared: Shared, signal: SignalRow): Return => {
 	const organizationId = shared.organization?.id
 	if (organizationId === undefined || !canReopen(signal)) return { model }
@@ -357,7 +339,6 @@ const ACTION_VERB = {
 	assign: "assign",
 	snooze: "snooze",
 	done: "mark done",
-	dismiss: "dismiss",
 	reopen: "reopen",
 } as const satisfies Record<SignalAction, string>
 
@@ -470,8 +451,6 @@ const onKey = (model: Model, shared: Shared, key: QueueKey): Return => {
 					)
 		case "done":
 			return withSelected(model, shared, openDoneDialog)
-		case "dismiss":
-			return withSelected(model, shared, (next, signal) => dismiss(next, shared, signal))
 		case "reopen":
 			return withSelected(model, shared, (next, signal) => reopen(next, shared, signal))
 	}
@@ -529,10 +508,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		PressedReopen: ({ signalId }) => {
 			const signal = signalById(model, signalId)
 			return signal === undefined ? { model } : reopen(model, shared, signal)
-		},
-		PressedDismiss: ({ signalId }) => {
-			const signal = signalById(model, signalId)
-			return signal === undefined ? { model } : dismiss(model, shared, signal)
 		},
 
 		GotAssignMenuMessage: ({ message: menuMessage }) =>
