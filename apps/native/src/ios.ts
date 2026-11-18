@@ -86,16 +86,21 @@ const whenStarted = (run: () => void) => (isRuntimeStarted ? run() : afterStart.
 let push: ReturnType<typeof makePushDevice> | undefined
 /** The image viewers' pagers, latest last: a horizontal swipe pages the latest. */
 const pagers: Array<{ readonly onPage: (step: -1 | 1) => void }> = []
-/** The back chevrons on screen, latest last: the swipe goes where the latest leads. */
-const backTargets: Array<{ readonly href: string }> = []
+/**
+ * The back chevrons on screen, latest last: the swipe goes where the latest leads, unless
+ * something over the page closes on the swipe (`onBack`), which goes first.
+ */
+const backTargets: Array<{ readonly href: string; readonly onBack?: (() => void) | undefined }> = []
+const currentBack = () => backTargets.findLast((target) => target.onBack !== undefined) ?? backTargets.at(-1)
 /** A URL's path, query and hash: what the host keys its pictures of pages by. */
 const pathOf = (href: string) => {
 	const url = new URL(href, globalThis.location.href)
 	return `${url.pathname}${url.search}${url.hash}`
 }
 const goBack = () => {
-	const target = backTargets.at(-1)
+	const target = currentBack()
 	if (target === undefined) return
+	if (target.onBack !== undefined) return target.onBack()
 	// The runtime's link handling, as a tap on the chevron would follow it.
 	void import("./document-bridge").then(({ followLink }) => followLink(target.href))
 }
@@ -224,7 +229,7 @@ const platform: NativePlatform = {
 	// No files from the worker: debug lines (`NATIVE_STATS`) go to the log, tagged with their file.
 	appendLine: (path, line) => log(`[${path}] ${line}`),
 	onNavigate: (from, to) => {
-		const back = backTargets.at(-1)
+		const back = currentBack()
 		const isBack = back !== undefined && pathOf(back.href) === pathOf(to)
 		request({ navigate: JSON.stringify({ from: pathOf(from), to: pathOf(to), back: isBack }) })
 	},
@@ -237,15 +242,18 @@ const platform: NativePlatform = {
 
 const systemUi: SystemUi = {
 	feedback: (kind) => request({ feedback: kind }),
-	setSwipeBack: (href) => {
-		const target = { href }
+	setSwipeBack: (href, onBack) => {
+		const target = { href, onBack }
+		const tell = () => {
+			const back = currentBack()
+			request({ swipeBack: back === undefined ? "" : pathOf(back.href) })
+		}
 		backTargets.push(target)
-		request({ swipeBack: pathOf(href) })
+		tell()
 		return () => {
 			const index = backTargets.indexOf(target)
 			if (index !== -1) backTargets.splice(index, 1)
-			const back = backTargets.at(-1)
-			request({ swipeBack: back === undefined ? "" : pathOf(back.href) })
+			tell()
 		}
 	},
 	setSwipePager: (onPage) => {
