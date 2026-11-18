@@ -79,4 +79,17 @@ describe("Clerk setFeatureFlags", () => {
 		expect(org.public_metadata).toEqual({ plan: "pro" })
 		expect(fake.calls.map((call) => call.path)).toEqual(["/organizations/org_1"])
 	})
+
+	it("removing a flag leaves a key holding non-boolean metadata as it is", async () => {
+		const org = { id: "org_1", public_metadata: { plan: "pro", beta: true } }
+		const fake = makeFakeClerk({ secretKey: API_KEY, organizations: [org] })
+		expect(await Effect.runPromise(set(fake, { plan: null, beta: null }))).toEqual({})
+		expect(org.public_metadata).toEqual({ plan: "pro" })
+		const only = makeFakeClerk({
+			secretKey: API_KEY,
+			organizations: [{ id: "org_1", public_metadata: { plan: "pro" } }],
+		})
+		expect(await Effect.runPromise(set(only, { plan: null }))).toEqual({})
+		expect(only.calls.map((call) => call.path)).toEqual(["/organizations/org_1"])
+	})
 })

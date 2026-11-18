@@ -108,12 +108,10 @@ export const makeClerkAdapter = Effect.gen(function* () {
 			const path = `/organizations/${encodeURIComponent(organizationId)}` as const
 			const org = yield* getOf(credentials)(path, [], ClerkOrganization)
 			const metadata = org.public_metadata ?? {}
-			const taken = Object.keys(changes).filter(
-				(key) =>
-					changes[key] !== null &&
-					Object.hasOwn(metadata, key) &&
-					typeof metadata[key] !== "boolean",
-			)
+			const nonBoolean = (key: string) =>
+				Object.hasOwn(metadata, key) && typeof metadata[key] !== "boolean"
+			// Turning a flag on over other metadata is refused; removing one leaves that metadata alone.
+			const taken = Object.keys(changes).filter((key) => changes[key] !== null && nonBoolean(key))
 			if (taken.length > 0) {
 				return yield* new CustomerProviderError({
 					code: "provider",
@@ -123,9 +121,11 @@ export const makeClerkAdapter = Effect.gen(function* () {
 					retryable: false,
 				})
 			}
+			const safe = Object.fromEntries(Object.entries(changes).filter(([key]) => !nonBoolean(key)))
+			if (Object.keys(safe).length === 0) return featureFlagsOf(metadata)
 			const updated = yield* makeClerkPatch(client, credentials.apiKey)(
 				`${path}/metadata`,
-				{ public_metadata: changes },
+				{ public_metadata: safe },
 				ClerkOrganization,
 			)
 			return featureFlagsOf(updated.public_metadata ?? {})
