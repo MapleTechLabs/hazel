@@ -298,4 +298,40 @@ describe("customers.account.merge", () => {
 				expect(world.rows(`SELECT value FROM _object_meta WHERE key LIKE '%rebuild%'`).length).toBe(1)
 			}),
 		))
+
+	it("folds into a kept person revived by an earlier fold, by email", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					clerkOrg("org_1", "Acme"),
+					clerkOrg("org_2", "Acme EU"),
+					member("user_a", "org_1", "ada@acme.com"),
+					member("user_a", "org_2", "ada@old.com"),
+					member("user_z", "org_2", "ada@acme.com"),
+				])
+				// Ada left the kept organization: her contact there is deleted.
+				yield* world.ingest("clerk", [
+					{ ...member("user_a", "org_1", "ada@acme.com"), removed: true },
+				])
+				const idOf = (name: string) =>
+					world.rows<{ id: CustomerAccountId }>(
+						`SELECT id FROM customer_accounts WHERE name = ?`,
+						name,
+					)[0]!.id
+				const kept = idOf("Acme")
+				const result = yield* world.call(
+					"customers.account.merge",
+					{ accountId: idOf("Acme EU"), intoAccountId: kept },
+					world.owner,
+				)
+				expect(result._tag).toBe("Success")
+				expect(
+					world.rows(
+						`SELECT lower(email) AS email FROM customer_contacts WHERE accountId = ? AND deletedAt IS NULL`,
+						kept,
+					),
+				).toEqual([{ email: "ada@acme.com" }])
+			}),
+		))
 })

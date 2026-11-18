@@ -30,7 +30,10 @@ const latestDay = (a: string | null, b: string | null) => (a === null ? b : b ==
 
 const emailKey = (email: string | null) => (email === null ? null : email.trim().toLowerCase())
 
-/** Fold contact `from` into `into` (both of the kept account by now, or `from` still of the merged one). */
+/**
+ * Fold contact `from` into `intoId` (both of the kept account by now, or `from` still of the merged
+ * one). Answers the kept contact's email and whether it is live after the fold.
+ */
 const foldContact = (
 	from: schema.CustomerContact,
 	intoId: CustomerContactId,
@@ -46,7 +49,7 @@ const foldContact = (
 				.where(($) => [$.id.eq(intoId)])
 				.limit(1),
 		)
-		if (into === undefined) return
+		if (into === undefined) return null
 		// Its refs: a provider user the kept contact already carries is dropped, the rest move.
 		const refs = yield* db.run(
 			SQLite.from(schema.customerExternalRefsTable)
@@ -113,7 +116,7 @@ const foldContact = (
 				.set({ contactId: into.id })
 				.where(($) => [$.contactId.eq(from.id)]),
 		)
-		yield* db.run(
+		const [folded] = yield* db.run(
 			SQLite.update(schema.customerContactsTable)
 				.set({
 					email: into.email ?? from.email,
@@ -134,13 +137,15 @@ const foldContact = (
 					deletedAt: from.deletedAt === null ? null : into.deletedAt,
 					updatedAt: now,
 				})
-				.where(($) => [$.id.eq(into.id)]),
+				.where(($) => [$.id.eq(into.id)])
+				.returning("email", "deletedAt"),
 		)
 		yield* db.run(
 			SQLite.update(schema.customerContactsTable)
 				.set({ accountId, deletedAt: from.deletedAt ?? now, updatedAt: now })
 				.where(($) => [$.id.eq(from.id)]),
 		)
+		return folded ?? null
 	})
 
 const mergeContacts = (from: CustomerAccountId, into: CustomerAccountId, now: Date) =>
@@ -182,7 +187,10 @@ const mergeContacts = (from: CustomerAccountId, into: CustomerAccountId, now: Da
 			const match =
 				byRefMatch ?? (email === null || contact.deletedAt !== null ? undefined : byEmail.get(email))
 			if (match !== undefined && kept.has(match)) {
-				yield* foldContact(contact, match, into, now)
+				const folded = yield* foldContact(contact, match, into, now)
+				// Revived, or given an email: a later person with that email folds into it too.
+				const key = emailKey(folded?.email ?? null)
+				if (key !== null && folded?.deletedAt === null && !byEmail.has(key)) byEmail.set(key, match)
 				continue
 			}
 			yield* db.run(
