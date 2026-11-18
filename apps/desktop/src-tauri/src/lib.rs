@@ -84,6 +84,7 @@ async fn auth_http(request: AuthRequest) -> Result<AuthResponse, String> {
                 }
                 let client = reqwest::Client::builder()
                     .redirect(reqwest::redirect::Policy::none())
+                    .timeout(std::time::Duration::from_secs(30))
                     .build()
                     .map_err(|error| error.to_string())?;
                 CLIENT.get_or_init(|| client)

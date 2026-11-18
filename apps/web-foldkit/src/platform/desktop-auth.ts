@@ -1,5 +1,5 @@
 import { type DesktopAuth, layerVault, makeDesktopAuth } from "@hazel/auth/desktop"
-import { getTauriCore, getTauriDeepLink, getTauriOpener, type TauriCoreApi } from "./tauri"
+import { getTauriCore, getTauriDeepLink, getTauriOpener, isTauri, type TauriCoreApi } from "./tauri"
 import { BrowserLogin } from "@yielded/auth"
 import * as WebCrypto from "@yielded/auth/WebCrypto"
 import { Context, Effect, Exit, Layer, ManagedRuntime, Option, Schema, SynchronizedRef } from "effect"
@@ -148,15 +148,18 @@ const hostedUrl = () => {
 type HostResponse = { status: number; headers: Array<[string, string]>; body: string }
 
 /**
- * The auth API's native mode refuses any request a browser could have sent, and the webview's
+ * The auth API's native mode refuses any request a browser could have sent, and the Tauri webview's
  * fetch always sends `Origin: tauri://localhost`: the desktop host (`auth_http`) makes the request
- * instead, without the browser's headers, cookies or redirects.
+ * instead, without the browser's headers, cookies or redirects. An abort stops the wait here; the
+ * host's own request is bounded by its timeout.
  */
 const hostFetch =
 	(core: TauriCoreApi): typeof globalThis.fetch =>
 	async (input, init) => {
 		const request = new Request(input, init)
-		const response = await core.invoke<HostResponse>("auth_http", {
+		const { signal } = request
+		signal.throwIfAborted()
+		const invoked = core.invoke<HostResponse>("auth_http", {
 			request: {
 				method: request.method,
 				url: request.url,
@@ -164,6 +167,10 @@ const hostFetch =
 				body: request.body === null ? null : await request.text(),
 			},
 		})
+		const aborted = new Promise<never>((_, reject) =>
+			signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
+		)
+		const response = await Promise.race([invoked, aborted])
 		const hasBody = ![101, 204, 205, 304].includes(response.status)
 		return new Response(hasBody ? response.body : null, {
 			status: response.status,
@@ -184,7 +191,8 @@ const DesktopAuthLive = Layer.effect(
 	Layer.provide(
 		Layer.sync(FetchHttpClient.Fetch, () => {
 			const core = getTauriCore()
-			return core === undefined ? globalThis.fetch : hostFetch(core)
+			// The native Mac app's host answers only the vault; its fetch is not a browser's.
+			return core === undefined || !isTauri() ? globalThis.fetch : hostFetch(core)
 		}),
 	),
 )

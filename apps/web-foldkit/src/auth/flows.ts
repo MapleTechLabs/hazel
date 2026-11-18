@@ -121,8 +121,9 @@ const newId = Effect.sync(() => crypto.randomUUID())
 /** After a session is issued: a full load of the remembered page, so the app boots signed in. */
 const enterApp = (returnTo: string | null) =>
 	Effect.gen(function* () {
-		const remembered = returnTo ?? (yield* takeReturnTo)
-		yield* load(remembered ?? "/")
+		// Taken either way: a path left by an earlier attempt must not apply to a later `/`.
+		const remembered = yield* takeReturnTo
+		yield* load(returnTo ?? remembered ?? "/")
 	})
 
 /** Starts OAuth with `provider` and leaves for its consent screen. */

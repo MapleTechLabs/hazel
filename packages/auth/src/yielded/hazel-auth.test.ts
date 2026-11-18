@@ -8,7 +8,7 @@ import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { layerMemory } from "@hazel/db/node"
 import { BrowserLogin, Hooks } from "@yielded/auth"
-import { Context, Effect, Exit, Layer, Redacted, References, Scope } from "effect"
+import { Context, Effect, Exit, Fiber, Layer, Redacted, References, Scope } from "effect"
 import { Base64Url } from "effect/encoding"
 import {
 	Etag,
@@ -660,10 +660,12 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 
 		// The first open never comes back (the app quits while waiting); the second completes.
 		let opens = 0
+		let firstOpened = () => {}
+		const waiting = new Promise<void>((resolve) => (firstOpened = resolve))
 		const FakeBrowser = Layer.succeed(BrowserLogin.Browser, {
 			open: ({ url }) => {
 				opens += 1
-				if (opens === 1) return Effect.never
+				if (opens === 1) return Effect.andThen(Effect.sync(firstOpened), Effect.never)
 				return Effect.promise(async () => {
 					const attemptId = new URL(url).searchParams.get("attempt")!
 					await signInWithGitHub(browser)
@@ -691,7 +693,9 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 					hostedUrl: `${webOrigin}/auth/desktop`,
 					client: nativeClient,
 				})
-				yield* Effect.ignore(Effect.timeout(desktop.signIn, "50 millis"))
+				const first = yield* Effect.forkChild(desktop.signIn)
+				yield* Effect.promise(() => waiting)
+				yield* Fiber.interrupt(first)
 				expect((yield* desktop.pendingAttempt)?.phase).toBe("Waiting")
 
 				yield* desktop.signIn
