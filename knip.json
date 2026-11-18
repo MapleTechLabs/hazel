@@ -50,6 +50,10 @@
 			// macOS's plist tool, for the app bundle and iOS scripts.
 			"ignoreBinaries": ["plutil"]
 		},
+		"apps/raycast": {
+			// Raycast provides React to extensions at runtime.
+			"ignoreDependencies": ["react"]
+		},
 		"apps/web-foldkit": {
 			"entry": ["alchemy.run.ts", "src/main.ts", "**/*.gallery.ts", "public/sw.js"],
 			// @foldkit/devtools is loaded by @foldkit/vite-plugin's dev overlay; the oxlint plugin by

@@ -178,20 +178,16 @@ describe("signal lifecycle", () => {
 		})
 	})
 
-	it("reopens a done signal still true after the cooldown; closes it once false", () => {
+	it("keeps a done signal muted while true, however long; closes it once false", () => {
 		const done = signalRow({
 			evidence: evidence(0),
 			status: "done",
-			reopenAfter: at(7),
 			outcome: "contacted",
 			actionEvidence: evidence(0),
 		})
 		expect(transition(done, matchOf(0), { ...input, now: at(2) })).toMatchObject({ _tag: "Update" })
 		expect(transition(done, matchOf(0), { ...input, now: at(2) })).not.toHaveProperty("patch.status")
-		expect(transition(done, matchOf(0), { ...input, now: at(8) })).toMatchObject({
-			patch: { status: "open", reopenCount: 1, openedAt: at(8), outcome: null, reopenAfter: null },
-			event: { type: "signal.reopened" },
-		})
+		expect(transition(done, matchOf(2), { ...input, now: at(30) })).not.toHaveProperty("patch.status")
 		expect(transition(done, null, input)).toMatchObject({ patch: { closedAt: NOW }, event: null })
 		expect(transition(done, null, input)).not.toHaveProperty("patch.status")
 	})

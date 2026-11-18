@@ -21,7 +21,6 @@ import {
 } from "./providers"
 import {
 	computeDueAt,
-	nextReopenAt,
 	requestCompute,
 	requestComputeAfterIngest,
 	requestHistoryRebuild,
@@ -593,7 +592,7 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
-	it("closes the signals of a deleted account, so no reopen stays due", () =>
+	it("closes the signals of a deleted account", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
@@ -634,7 +633,6 @@ describe("Customers compute and sync loop", () => {
 									openedAt: new Date(now.getTime() - 10 * DAY),
 									lastEvaluatedAt: new Date(now.getTime() - 10 * DAY),
 									resolvedAt: new Date(now.getTime() - 8 * DAY),
-									reopenAfter: new Date(now.getTime() - DAY),
 								}),
 							)
 						}),
@@ -643,9 +641,6 @@ describe("Customers compute and sync loop", () => {
 				world.object.storage.db
 					.prepare(`UPDATE customer_accounts SET deletedAt = '2026-01-01 00:00:00.000'`)
 					.run()
-				expect(Option.isNone(yield* world.object.run(nextReopenAt(now)).pipe(Effect.orDie))).toBe(
-					true,
-				)
 				yield* world.object.run(runCompute(now)).pipe(Effect.orDie)
 				expect(
 					world.rows(`SELECT status, closedAt IS NOT NULL AS closed FROM customer_signals`),
@@ -1784,80 +1779,6 @@ describe("Customers compute and sync loop", () => {
 				expect(epoch(connection().nextSyncAt!)).toBeGreaterThan(NOW.getTime())
 			}),
 		))
-	it("an overdue reopen its source cannot check waits a day, and never brings computes forward", () =>
-		run(
-			Effect.gen(function* () {
-				const world = yield* makeCustomersWorld
-				const accountId = yield* quietOrg(world)
-				yield* world.object
-					.run(
-						Effect.gen(function* () {
-							const db = yield* Database.Database
-							const rule = world.rows<{ id: CustomerSignalRuleId }>(
-								`SELECT id FROM customer_signal_rules WHERE template = 'inactive'`,
-							)[0]!
-							const evidence = {
-								_tag: "last_active" as const,
-								step: 0 as const,
-								lastActiveAt: null,
-								daysInactive: 21,
-								priorActiveUsers: 2,
-								contactId: null,
-								contactName: null,
-								contactEmail: null,
-							}
-							yield* db.run(
-								SQLite.insertInto(schema.customerSignalsTable).values({
-									organizationId: world.orgId as OrganizationId,
-									accountId,
-									ruleId: rule.id,
-									template: "inactive",
-									kind: "risk",
-									severity: "medium",
-									status: "done",
-									title: "Stopped using the product",
-									reason: "",
-									evidence,
-									openingEvidence: evidence,
-									priorityScore: 1,
-									firstDetectedAt: new Date(NOW.getTime() - 10 * DAY),
-									openedAt: new Date(NOW.getTime() - 10 * DAY),
-									lastEvaluatedAt: new Date(NOW.getTime() - 10 * DAY),
-									resolvedAt: new Date(NOW.getTime() - 8 * DAY),
-									reopenAfter: new Date(NOW.getTime() - DAY),
-								}),
-							)
-						}),
-					)
-					.pipe(Effect.orDie)
-				// Its activity sources are in error: the reopen cannot be checked.
-				world.object.storage.db
-					.prepare(
-						`UPDATE customer_connections SET status = 'error' WHERE provider IN ('clerk', 'maple')`,
-					)
-					.run()
-				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
-				const [signal] = world.rows<{ status: string; reopenAfter: string }>(
-					`SELECT status, reopenAfter FROM customer_signals`,
-				)
-				expect(signal!.status).toBe("done")
-				expect(epoch(signal!.reopenAfter)).toBe(NOW.getTime() + DAY)
-				expect(Number(meta(world, "computeDueAt"))).toBe(NOW.getTime() + 60 * 60_000)
-
-				// Overdue again (no compute ran since): still the hourly run, not one 2 minutes out.
-				const later = new Date(NOW.getTime() + 2 * DAY)
-				world.object.storage.db
-					.prepare(`UPDATE customer_signals SET reopenAfter = '2000-01-01 00:00:00.000'`)
-					.run()
-				// Its rule no longer evaluates it (disabled behind compute's back): it stays overdue.
-				world.object.storage.db
-					.prepare(`UPDATE customer_signal_rules SET enabled = 0 WHERE template = 'inactive'`)
-					.run()
-				yield* world.object.run(runCompute(later)).pipe(Effect.orDie)
-				expect(Number(meta(world, "computeDueAt"))).toBe(later.getTime() + 60 * 60_000)
-			}),
-		))
-
 	it("a billing backfill failing now and then still imports; the rebuild replaces today's movement", () =>
 		run(
 			Effect.gen(function* () {

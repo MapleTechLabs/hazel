@@ -516,7 +516,11 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			],
 		},
 		{
-			id: "0012_customer_settings_overage_in_mrr",
+			id: "0012_drop_signal_reopen_after",
+			statements: ['ALTER TABLE "customer_signals" DROP COLUMN "reopenAfter"'],
+		},
+		{
+			id: "0013_customer_settings_overage_in_mrr",
 			statements: [
 				'ALTER TABLE "customer_settings" ADD COLUMN "overageInMrr" integer NOT NULL DEFAULT false',
 			],

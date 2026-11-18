@@ -7,11 +7,12 @@
 import { Database } from "@hazel/db"
 import { CurrentUser, InvalidBearerTokenError, SessionLoadError } from "@hazel/domain"
 import { SYNC_MUX_SUBPROTOCOL, SYNC_SUBPROTOCOL, SyncCloseCode } from "@hazel/domain/sync"
-import type { OrganizationId, UserId } from "@hazel/schema"
+import type { AgentGrantId, OrganizationId, UserId } from "@hazel/schema"
 import { ConfigProvider, Context, Effect, Layer, Option, Tracer } from "effect"
 import { HttpRouter } from "effect/http"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { corsPolicy } from "../lib/cors"
+import { AgentAccess, type AgentPrincipal } from "../services/agent-access"
 import { Directory } from "../services/directory"
 import { HazelSession, type VerifiedUser } from "../services/hazel-session"
 import { decodeSyncPrincipal, OBJECT_ID_HEADER, PRINCIPAL_HEADER, WARM_HEADER } from "./objects/principal"
@@ -95,6 +96,10 @@ const build = (options: {
 	readonly channel?: Directory["Service"]["channel"]
 	readonly membership?: Directory["Service"]["membership"]
 	readonly organizationsOf?: Directory["Service"]["organizationsOf"]
+	/** The agent an agent token acts as (`AgentAccess.authenticate`); default: none. */
+	readonly agent?: (token: string) => Option.Option<AgentPrincipal>
+	/** The socket's token; default: a JWT. */
+	readonly token?: string
 	readonly env: Record<string, unknown>
 	/** Spans the route records, by name. */
 	readonly spans?: Array<Tracer.Span>
@@ -103,6 +108,10 @@ const build = (options: {
 		verifyAccessTokenWithExpiry: options.verify,
 		verifyWithExpiry: options.verify,
 		fromCookie: options.cookie ?? (() => Effect.succeed(Option.none())),
+		agentUserOf: () => Effect.succeed(user),
+	} as never)
+	const agents = Layer.succeed(AgentAccess, {
+		authenticate: (token: string) => Effect.succeed(options.agent?.(token) ?? Option.none()),
 	} as never)
 	const directory = Layer.succeed(Directory, {
 		channel: options.channel ?? (() => Effect.succeed(Option.none())),
@@ -128,7 +137,7 @@ const build = (options: {
 		makeSyncRoute(options.env).pipe(
 			// As `makeRoutes` mounts it: under the api's CORS policy.
 			Layer.provide(Layer.unwrap(Effect.map(corsPolicy, HttpRouter.cors))),
-			Layer.provide(Layer.mergeAll(session, directory)),
+			Layer.provide(Layer.mergeAll(session, directory, agents)),
 			Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ FRONTEND_URL: appOrigin }))),
 		),
 		{ disableLogger: true },
@@ -140,7 +149,7 @@ const build = (options: {
 				new Request(`http://api.test${path}`, {
 					headers: {
 						upgrade: "websocket",
-						"sec-websocket-protocol": `${SYNC_SUBPROTOCOL}, ${jwt}`,
+						"sec-websocket-protocol": `${SYNC_SUBPROTOCOL}, ${options.token ?? jwt}`,
 					},
 				}),
 			),
@@ -490,6 +499,80 @@ describe("customers sync", () => {
 			env: {},
 		})(`/sync/customers/${orgId}`)
 		expect(closed).toEqual([{ code: 1011, reason: "unavailable" }])
+	})
+})
+
+describe("agent token sync", () => {
+	const orgId = crypto.randomUUID()
+	const token = "hzl_oat_agent"
+	const verify: Verify = () => Effect.die("an agent token is never checked as a session")
+	const agent =
+		(scopes: AgentPrincipal["scopes"], expiresAt: number | null = Date.now() + 60_000) =>
+		(candidate: string) =>
+			candidate === token
+				? Option.some<AgentPrincipal>({
+						userId,
+						grantId: crypto.randomUUID() as AgentGrantId,
+						name: "Raycast",
+						scopes,
+						expiresAt,
+					})
+				: Option.none()
+	const member = () => Effect.succeed(Option.some({ deletedAt: null } as never))
+
+	it("opens a member's customers socket for a customers:read grant, until the token expires", async () => {
+		const expiresAt = Date.now() + 60_000
+		const { forwarded, namespace } = recordingNamespace()
+		await build({
+			verify,
+			token,
+			agent: agent(["customers:read"], expiresAt),
+			membership: member,
+			env: { CustomersObject: namespace },
+		})(`/sync/customers/${orgId}`)
+		expect(forwarded).toHaveLength(1)
+		const principal = decodeSyncPrincipal(forwarded[0]!.headers.get(PRINCIPAL_HEADER) ?? "")
+		expect(Option.getOrThrow(principal)).toEqual({ userId, expiresAt })
+	})
+
+	it("closes an agent socket within 5 minutes, whatever the token's own expiry", async () => {
+		const { forwarded, namespace } = recordingNamespace()
+		const before = Date.now()
+		const open = (expiresAt: number | null) =>
+			build({
+				verify,
+				token,
+				agent: agent(["customers:read"], expiresAt),
+				membership: member,
+				env: { CustomersObject: namespace },
+			})(`/sync/customers/${orgId}`)
+		await open(null)
+		await open(before + 60 * 60 * 1000)
+		for (const request of forwarded) {
+			const principal = Option.getOrThrow(
+				decodeSyncPrincipal(request.headers.get(PRINCIPAL_HEADER) ?? ""),
+			)
+			expect(principal.expiresAt).toBeGreaterThanOrEqual(before + 5 * 60 * 1000)
+			expect(principal.expiresAt).toBeLessThanOrEqual(Date.now() + 5 * 60 * 1000)
+		}
+		expect(forwarded).toHaveLength(2)
+	})
+
+	it("refuses another source, a grant without customers:read, and an unknown token", async () => {
+		const { forwarded, namespace } = recordingNamespace()
+		const env = { CustomersObject: namespace, OrgObject: namespace, UserObject: namespace }
+		await build({ verify, token, agent: agent(["customers:read"]), membership: member, env })(
+			`/sync/org/${orgId}`,
+		)
+		await build({ verify, token, agent: agent(["customers:read"]), membership: member, env })(
+			`/sync/user/${userId}`,
+		)
+		await build({ verify, token, agent: agent(["messages:read"]), membership: member, env })(
+			`/sync/customers/${orgId}`,
+		)
+		await build({ verify, token, membership: member, env })(`/sync/customers/${orgId}`)
+		expect(forwarded).toEqual([])
+		expect(closed).toEqual(Array(4).fill({ code: SyncCloseCode.Reauth, reason: "invalid_token" }))
 	})
 })
 

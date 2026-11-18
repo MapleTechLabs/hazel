@@ -243,7 +243,7 @@ Wonder file "Maple Design System", pages `Hazel Customers · *` (Foundations, Ov
     - `openingEvidence` vs current `evidence`
     - `evidence.viz` type: `amount | last_active | series | limit | delta | ratio`
     - `snoozedByUserId`, `snoozedAt`, `snoozeNote`, `snoozeEvidence`
-    - `reopenAfter` (cooldown), `dismissReason`
+    - `dismissReason`
 - **Signal rules**: `updatedBy`, `lastTriggeredAt`, `matchingCount`. Template metadata: required sources and friendly names.
 - **Health settings**: scoring steps per input, signal deductions per severity, excluded rules (`health_drop`), `updatedBy`.
 - **Notes**: `editedAt`, optional `signalId`.

@@ -22,6 +22,10 @@ const SCOPE_ABILITIES = {
 		"Edit and delete your messages",
 		"Set your status",
 	],
+	"customers:read": [
+		"See your organizations' customers: health, revenue, billing and signals",
+		"See which channels each customer is linked to",
+	],
 } satisfies Readonly<Record<AgentScope, ReadonlyArray<string>>>
 
 const homeLink = (h: HtmlBuilder<Message>): Html =>
