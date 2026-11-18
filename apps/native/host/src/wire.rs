@@ -458,14 +458,9 @@ pub enum RuntimeMsg {
     /// answered as `notifyPermission` with `id`.
     #[serde(rename = "notifyPermission")]
     NotifyPermission { id: u64, request: bool },
-    /// Show a system notification; `group` gathers a channel's together.
+    /// Show a system notification (`crate::notify::Notification`).
     #[serde(rename = "notify")]
-    Notify {
-        title: String,
-        body: String,
-        #[serde(default)]
-        group: Option<String>,
-    },
+    Notify(crate::notify::Notification),
 }
 
 /// What a runtime request does to the host's Rune runtime, sent to its update thread.

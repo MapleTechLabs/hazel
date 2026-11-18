@@ -215,8 +215,20 @@ export type RuntimeToHost =
 	| { readonly t: "copy"; readonly text: string }
 	/** Open a web or mail link in the system's browser or mail app; the host drops other schemes. */
 	| { readonly t: "open"; readonly url: string }
-	/** A system notification; `group` gathers a channel's notifications together. */
-	| { readonly t: "notify"; readonly title: string; readonly body: string; readonly group?: string }
+	/**
+	 * A system notification; `group` gathers a channel's notifications together. A message's
+	 * `sender` (and their `image`, a web URL) shows as the person it is from, in the channel named
+	 * `conversation` (none for a direct message).
+	 */
+	| {
+			readonly t: "notify"
+			readonly title: string
+			readonly body: string
+			readonly group?: string
+			readonly image?: string
+			readonly sender?: { readonly id: string; readonly name: string }
+			readonly conversation?: string
+	  }
 
 /** Timings for one commit, for the benchmarks. */
 export type CommitStats = {

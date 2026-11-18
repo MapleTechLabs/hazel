@@ -12,6 +12,11 @@
  * Apple Distribution certificate in the keychain (`HAZEL_IOS_IDENTITY` picks another identity).
  * Its version is `HAZEL_IOS_VERSION` (0.1.0), its build number `HAZEL_IOS_BUILD` (the commit
  * count, which only grows on main). `--upload` uses the `asc` CLI's stored credentials.
+ *
+ * When the profile grants Communication Notifications (the App ID's capability), the app is signed
+ * with it, and a notification from a person shows their picture in place of the app's icon
+ * (`host/src/notify.rs`); otherwise the picture shows beside the text. The simulator always has it
+ * (`host/ios/build.rs`).
  */
 import { execFileSync } from "node:child_process"
 import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
@@ -38,6 +43,32 @@ const read = (command: string, args: Array<string>) =>
 
 const profile = release ? process.env.HAZEL_IOS_PROFILE : undefined
 if (release && !profile) throw new Error("--release needs HAZEL_IOS_PROFILE (an App Store .mobileprovision)")
+
+const communicationEntitlement = "com.apple.developer.usernotifications.communication"
+/** Whether this build carries the Communication Notifications entitlement. */
+const communication =
+	profile === undefined ||
+	(() => {
+		try {
+			const decoded = execFileSync("security", ["cms", "-D", "-i", profile])
+			return (
+				execFileSync(
+					"plutil",
+					[
+						"-extract",
+						`Entitlements.${communicationEntitlement.replaceAll(".", "\\.")}`,
+						"raw",
+						"-o",
+						"-",
+						"-",
+					],
+					{ input: decoded, encoding: "utf8" },
+				).trim() === "true"
+			)
+		} catch {
+			return false
+		}
+	})()
 
 run("bun", ["scripts/build-ios.ts"])
 run("cargo", ["build", "--release", "-p", "hazel-ios", "--target", target], {
@@ -103,6 +134,9 @@ const info = {
 	// Motion may run above 60 Hz on a ProMotion iPhone (Rune's display link asks for 120).
 	CADisableMinimumFrameDurationOnPhone: true,
 	UIRequiredDeviceCapabilities: ["arm64"],
+	// Notifications from a person are messages from them (`host/src/notify.rs`).
+	NSUserActivityTypes: ["INSendMessageIntent"],
+	HazelCommunicationNotifications: communication,
 } satisfies Record<string, unknown>
 // A dev stack on this Mac (http://localhost); everything else is HTTPS.
 if ((environment.VITE_BACKEND_URL ?? "http://").startsWith("http://"))
@@ -218,6 +252,7 @@ writeFileSync(
 		"com.apple.developer.team-identifier": team,
 		"keychain-access-groups": [appId],
 		"aps-environment": apsEnvironment,
+		...(communication ? { [communicationEntitlement]: true } : {}),
 		"get-task-allow": false,
 		"beta-reports-active": true,
 	}),

@@ -115,7 +115,15 @@ jobs:
                   APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
                   HAZEL_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
                   HAZEL_R2_PUBLIC_URL: ${{ vars.VITE_R2_PUBLIC_URL }}
-              run: bun scripts/bundle.ts
+                  # Optional: a Developer ID provisioning profile (base64) with Communication
+                  # Notifications, so a notification shows its sender's picture as the icon.
+                  APPLE_MACOS_PROFILE: ${{ secrets.APPLE_MACOS_PROFILE }}
+              run: |
+                  if [ -n "$APPLE_MACOS_PROFILE" ]; then
+                      echo "$APPLE_MACOS_PROFILE" | base64 --decode > "$RUNNER_TEMP/hazel.provisionprofile"
+                      export HAZEL_MACOS_PROFILE="$RUNNER_TEMP/hazel.provisionprofile"
+                  fi
+                  bun scripts/bundle.ts
 
             - name: Notarize and package
               working-directory: apps/native

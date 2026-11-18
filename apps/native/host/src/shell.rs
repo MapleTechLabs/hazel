@@ -21,11 +21,7 @@ pub enum ShellRequest {
     /// `permission_reply`.
     NotifyPermission { id: u64, request: bool },
     /// A system notification.
-    Notify {
-        title: String,
-        body: String,
-        group: Option<String>,
-    },
+    Notify(crate::notify::Notification),
 }
 
 /// The answer to notification permission request `id`.
@@ -79,9 +75,7 @@ pub fn route(message: RuntimeMsg) -> Routed {
         RuntimeMsg::NotifyPermission { id, request } => {
             Routed::Shell(ShellRequest::NotifyPermission { id, request })
         }
-        RuntimeMsg::Notify { title, body, group } => {
-            Routed::Shell(ShellRequest::Notify { title, body, group })
-        }
+        RuntimeMsg::Notify(notification) => Routed::Shell(ShellRequest::Notify(notification)),
         message => Routed::Window(message),
     }
 }

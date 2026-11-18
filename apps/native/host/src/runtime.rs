@@ -146,9 +146,7 @@ pub fn spawn_runtime() -> Result<(RuntimeChild, Receiver<FromRuntime>), String> 
                     Routed::Shell(ShellRequest::NotifyPermission { id, request }) => {
                         notify::permission(id, request, |_| {})
                     }
-                    Routed::Shell(ShellRequest::Notify { title, body, group }) => {
-                        notify::show(&title, &body, group.as_deref())
-                    }
+                    Routed::Shell(ShellRequest::Notify(notification)) => notify::show(notification),
                     Routed::Shell(ShellRequest::Relaunch { id }) => {
                         match updater::relaunch_after_exit() {
                             Ok(()) => {
