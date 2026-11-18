@@ -108,9 +108,11 @@ const customerPicker = (h: HtmlBuilder<Message>, model: Model, key: string): Htm
 							? h.p(
 									[h.Class("px-2 py-3 text-muted-fg text-sm")],
 									[
-										search === ""
-											? "Every customer already has this flag."
-											: "No customer matches.",
+										(model.accounts ?? []).length === 0
+											? "No customers yet."
+											: search === ""
+												? "Every customer already has this flag."
+												: "No customer matches.",
 									],
 								)
 							: h.div(

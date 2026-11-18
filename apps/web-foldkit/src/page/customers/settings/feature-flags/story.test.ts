@@ -2,6 +2,7 @@ import { CustomerAccountId, OrganizationId, OrganizationMemberId, UserId } from 
 import { Schema } from "effect"
 import { describe, expect, test, vi } from "vitest"
 import type { AccountRow } from "../../../../customers/queries"
+import * as Popover from "../../../../ui/popover"
 import type { Shared } from "../../../contract"
 import { sharedDefaults } from "../../../test-shared"
 import { CreateFeatureFlag, DeleteFeatureFlag, SetFeatureFlagCustomers } from "./commands"
@@ -113,6 +114,23 @@ describe("feature flags settings", () => {
 		expect(
 			update(added.model, Message.PressedRemoveCustomer({ accountId: one.id }), admin).commands?.[0],
 		).toMatchObject({ args: { key: "new_nav", accountIds: [one.id], enabled: false } })
+	})
+
+	test("closing the picker unsubmitted drops its ticks and search", () => {
+		const opened = [
+			Message.PressedFlag({ key: "new_nav" }),
+			Message.GotCustomerPopoverMessage({ message: Popover.Message.RequestedOpen() }),
+			Message.ChangedCustomerSearch({ value: "Customer" }),
+			Message.ToggledCustomer({ accountId: one.id, isSelected: true }),
+		].reduce((current, next) => update(current, next, admin).model, loaded())
+		expect(opened.customerSelection).toEqual([one.id])
+		const closed = update(
+			opened,
+			Message.GotCustomerPopoverMessage({ message: Popover.Message.RequestedClose() }),
+			admin,
+		).model
+		expect(closed.customerSelection).toEqual([])
+		expect(closed.customerSearch).toBe("")
 	})
 
 	test("deletes after the confirmation; members change nothing", () => {
