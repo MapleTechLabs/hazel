@@ -311,6 +311,18 @@ describe("needs attention: what shows", () => {
 		expect(ids(visibleSignals(current, viewer))).toEqual(ids([paymentFailed, usageDown, stoppedLogging]))
 	})
 
+	test("a column header sorts by it, and a second click flips the direction", () => {
+		const byAge = pageUpdate(loaded(), Message.ClickedColumnSort({ sort: "age" })).model
+		expect(byAge.sort).toBe("age")
+		expect(byAge.isSortReversed).toBe(false)
+		const reversed = pageUpdate(byAge, Message.ClickedColumnSort({ sort: "age" })).model
+		expect(reversed.isSortReversed).toBe(true)
+		expect(ids(visibleSignals(reversed, viewer))).toEqual(ids(visibleSignals(byAge, viewer)).toReversed())
+		expect(pageUpdate(reversed, Message.ClickedColumnSort({ sort: "health" })).model.isSortReversed).toBe(
+			false,
+		)
+	})
+
 	test("grouping by account steps through each account's lead signal", () => {
 		const current = pageUpdate(loaded(), Message.ClickedGrouping({ grouping: "accounts" })).model
 		const groups = accountGroups(visibleSignals(current, viewer))

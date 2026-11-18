@@ -1,7 +1,8 @@
 import type { HealthStatus, SignalKind, SignalSeverity } from "@hazel/domain/customers"
 import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { button } from "../../ui/button"
+import { IconChevronDown } from "../../icons"
+import { ariaButton, button } from "../../ui/button"
 import { formatMoney } from "../format"
 import { healthBadge, kindChip, severityChip } from "./badges"
 import { companyLogo, personAvatar } from "./identity"
@@ -158,6 +159,66 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 				[healthBadge(h, { status: options.health.status, score: options.health.score })],
 			),
 		],
+	)
+
+/** One column of `queueColumnHeader`: a sortable one carries its press and its current direction. */
+export type QueueColumn<M> = Readonly<{
+	label: string
+	className: string
+	sort?: Readonly<{ onPress: M; direction: "ascending" | "descending" | null }>
+}>
+
+/**
+ * The queue's header row. A sortable label is a button; the sorted column's chevron sits in the
+ * gap beside it (before a right-aligned label), so sorting never shifts the columns.
+ */
+export const queueColumnHeader = <M>(h: HtmlBuilder<M>, columns: ReadonlyArray<QueueColumn<M>>): Html =>
+	h.div(
+		[
+			h.Role("row"),
+			h.Class(
+				// A phone's rows wrap into lines that no longer sit under these columns.
+				"flex h-9 items-center gap-4 border-border border-b px-4 font-medium text-muted-fg text-xs max-md:hidden",
+			),
+		],
+		columns.map(({ label, className, sort }) => {
+			if (sort === undefined) return h.span([h.Role("columnheader"), h.Class(className)], [label])
+			const { direction } = sort
+			const isRight = className.split(" ").includes("text-right")
+			return h.span(
+				[
+					h.Role("columnheader"),
+					...(direction === null ? [] : [h.AriaSort(direction)]),
+					h.Class(className),
+				],
+				[
+					ariaButton(
+						h,
+						{
+							className: twMerge(
+								"relative cursor-pointer rounded outline-hidden hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
+								direction !== null && "text-fg",
+							),
+							onPress: sort.onPress,
+						},
+						[
+							label,
+							...(direction === null
+								? []
+								: [
+										IconChevronDown(h, {
+											className: twMerge(
+												"absolute top-1/2 size-3 -translate-y-1/2",
+												isRight ? "right-full mr-0.5" : "left-full ml-0.5",
+												direction === "ascending" && "rotate-180",
+											),
+										}),
+									]),
+						],
+					),
+				],
+			)
+		}),
 	)
 
 /** The queue's container (`role="table"`, rows above). */
