@@ -98,8 +98,8 @@ export const accountOp = (
 	if (org.members_count != null) op.seatsUsed = Math.trunc(org.members_count)
 	if (org.max_allowed_memberships !== undefined) op.seatsLimit = seatsLimitOf(org.max_allowed_memberships)
 	if (org.slug != null) op.attributes = { slug: org.slug }
-	// Absent: a payload that does not carry the metadata leaves the flags as they are.
-	if (org.public_metadata != null) op.featureFlags = featureFlagsOf(org.public_metadata)
+	// Absent: a payload that does not carry the metadata leaves the flags as they are; null has none.
+	if (org.public_metadata !== undefined) op.featureFlags = featureFlagsOf(org.public_metadata ?? {})
 	const createdAt = isoOf(org.created_at)
 	if (createdAt !== null) op.createdAt = createdAt
 	if (observedAt !== undefined) op.observedAt = observedAt

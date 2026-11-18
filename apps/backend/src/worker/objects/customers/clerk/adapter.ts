@@ -102,13 +102,34 @@ export const makeClerkAdapter = Effect.gen(function* () {
 
 		pullIntervalMs: CLERK_PULL_INTERVAL_MS,
 
-		// Clerk deep-merges `public_metadata`, and a `null` removes the key: other metadata is kept.
-		setFeatureFlags: (credentials, organizationId, changes) =>
-			makeClerkPatch(client, credentials.apiKey)(
-				`/organizations/${encodeURIComponent(organizationId)}/metadata`,
+		// Clerk deep-merges `public_metadata` and a `null` removes the key, so other metadata is kept;
+		// but a key set here replaces whatever it held, so one holding a non-boolean value is refused.
+		setFeatureFlags: Effect.fn("Clerk.setFeatureFlags")(function* (credentials, organizationId, changes) {
+			const path = `/organizations/${encodeURIComponent(organizationId)}` as const
+			const org = yield* getOf(credentials)(path, [], ClerkOrganization)
+			const metadata = org.public_metadata ?? {}
+			const taken = Object.keys(changes).filter(
+				(key) =>
+					changes[key] !== null &&
+					Object.hasOwn(metadata, key) &&
+					typeof metadata[key] !== "boolean",
+			)
+			if (taken.length > 0) {
+				return yield* new CustomerProviderError({
+					code: "provider",
+					message: `${taken.join(", ")} already ${taken.length === 1 ? "holds" : "hold"} non-boolean metadata in Clerk`,
+					httpStatus: null,
+					retryAfterMs: null,
+					retryable: false,
+				})
+			}
+			const updated = yield* makeClerkPatch(client, credentials.apiKey)(
+				`${path}/metadata`,
 				{ public_metadata: changes },
 				ClerkOrganization,
-			).pipe(Effect.map((org) => featureFlagsOf(org.public_metadata ?? {}))),
+			)
+			return featureFlagsOf(updated.public_metadata ?? {})
+		}),
 	}
 	return adapter
 })

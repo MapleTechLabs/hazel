@@ -537,8 +537,10 @@ export const createFeatureFlagAction = (props: {
 export const deleteFeatureFlagAction = optimisticAction({
 	collections: [customerAccountCollection, customerFeatureFlagCollection],
 	onMutate: (props: { readonly organizationId: OrganizationId; readonly key: string }) => {
-		const holders = customerAccountCollection.toArray.filter((account) =>
-			Object.hasOwn(account.featureFlags, props.key),
+		const holders = customerAccountCollection.toArray.filter(
+			(account) =>
+				account.organizationId === props.organizationId &&
+				Object.hasOwn(account.featureFlags, props.key),
 		)
 		if (holders.length > 0) {
 			customerAccountCollection.update(
@@ -551,7 +553,9 @@ export const deleteFeatureFlagAction = optimisticAction({
 				},
 			)
 		}
-		const created = customerFeatureFlagCollection.toArray.filter((flag) => flag.key === props.key)
+		const created = customerFeatureFlagCollection.toArray.filter(
+			(flag) => flag.organizationId === props.organizationId && flag.key === props.key,
+		)
 		if (created.length > 0) customerFeatureFlagCollection.delete(created.map((flag) => flag.id))
 		return { key: props.key }
 	},

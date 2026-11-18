@@ -59,10 +59,16 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const key = model.newKey.trim()
 			if (organizationId === null || createdBy === undefined || !FEATURE_FLAG_KEY.test(key))
 				return { model }
-			if (flagKeysOf(model).includes(key))
-				return { model: modifyFields(model, { newKey: () => "", selectedKey: () => key }) }
+			// The new or existing flag opens with an empty picker: another flag's ticks do not carry over.
+			const opened = modifyFields(model, {
+				newKey: () => "",
+				selectedKey: () => key,
+				customerSelection: () => [],
+				customerSearch: () => "",
+			})
+			if (flagKeysOf(model).includes(key)) return { model: opened }
 			return {
-				model: modifyFields(model, { newKey: () => "", selectedKey: () => key }),
+				model: opened,
 				commands: [CreateFeatureFlag({ organizationId, key, createdBy })],
 			}
 		},

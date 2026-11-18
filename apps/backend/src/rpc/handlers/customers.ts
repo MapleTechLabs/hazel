@@ -1149,7 +1149,10 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 				)
 				const now = yield* currentTime
 				const answer = yield* txOnly(
-					Effect.andThen(writeFeatureFlags(writes, now), Option.isNone(error) ? also : Effect.void),
+					Effect.andThen(
+						writeFeatureFlags(writes, input.changes, now),
+						Option.isNone(error) ? also : Effect.void,
+					),
 				)
 				if (Option.isSome(error)) return yield* error.value
 				return answer

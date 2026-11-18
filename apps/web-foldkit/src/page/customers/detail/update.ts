@@ -7,7 +7,7 @@ import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
-import { featureFlagToast } from "../../../customers/feature-flags"
+import { featureFlagKeysOf, featureFlagToast } from "../../../customers/feature-flags"
 import { isSnoozeKey, snoozeUntil } from "../../../customers/ui/menus"
 import { errorToastOf, successToast } from "../../../data/actions"
 import { AppRoute, type CustomerTab, customerRoute, hrefOf, type RouteOf } from "../../../route"
@@ -824,7 +824,9 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		}),
 		PressedAddFlags: () => {
 			const args = target(model, shared)
-			const keys = model.flagSelection
+			// A flag deleted since it was ticked is gone from the list: setting it would bring it back.
+			const live = featureFlagKeysOf(model.createdFeatureFlags, model.accounts ?? [])
+			const keys = model.flagSelection.filter((key) => live.includes(key))
 			const closed = PopoverControl.close(model.flagPopover)
 			const next = modifyFields(model, { flagSelection: () => [], flagPopover: () => closed.model })
 			const commands = Command.mapMessages(closed.commands ?? [], (child) =>

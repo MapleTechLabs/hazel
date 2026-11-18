@@ -27,7 +27,7 @@ export const CLERK_API_URL = "https://api.clerk.com/v1"
 
 /** The endpoints this integration may call: reads, and the feature flags' metadata write. */
 export type ClerkPath =
-	| `/organizations/${string}/metadata`
+	| `/organizations/${string}`
 	| "/instance"
 	| "/organizations"
 	| "/organization_memberships"
@@ -54,7 +54,9 @@ const CLERK = {
 		path.startsWith("/users/")
 			? "/users/{user_id}/organization_memberships"
 			: path.startsWith("/organizations/")
-				? "/organizations/{organization_id}/metadata"
+				? path.endsWith("/metadata")
+					? "/organizations/{organization_id}/metadata"
+					: "/organizations/{organization_id}"
 				: path,
 	refusal: ClerkErrors,
 	detailOf: ({ errors }: typeof ClerkErrors.Type) =>

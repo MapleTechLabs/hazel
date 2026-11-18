@@ -57,10 +57,13 @@ const clerkWriter = Effect.gen(function* () {
 	}
 })
 
-/** An account's new flags, to write in the caller's transaction. */
+/**
+ * An account to write in the caller's transaction: with Clerk's answer, that set; without (no
+ * organization to ask), the change applied to what the account holds when it is written.
+ */
 export interface FeatureFlagWrite {
 	readonly accountId: CustomerAccountId
-	readonly featureFlags: Record<string, boolean>
+	readonly answered: Record<string, boolean> | null
 }
 
 /**
@@ -91,7 +94,7 @@ export const sendFeatureFlags = Effect.fn("Customers.sendFeatureFlags")(function
 	)
 	const accounts = yield* db.run(
 		SQLite.from(schema.customerAccountsTable)
-			.select("id", "name", "featureFlags")
+			.select("id", "name")
 			.where(($) => [$.deletedAt.isNull(), inList($.id, accountIds)]),
 	)
 	const withRefs = new Set(refs.map((ref) => ref.accountId))
@@ -123,20 +126,9 @@ export const sendFeatureFlags = Effect.fn("Customers.sendFeatureFlags")(function
 		}
 	}
 
-	const writes: Array<FeatureFlagWrite> = []
-	for (const account of accounts) {
-		if (failed.has(account.id)) continue
-		// Clerk's answer, else (no organization to ask) the change applied to what we hold.
-		const next =
-			answered.get(account.id) ??
-			Object.fromEntries(
-				Object.entries({ ...account.featureFlags, ...input.changes }).filter(
-					(entry): entry is [string, boolean] => entry[1] !== null,
-				),
-			)
-		if (JSON.stringify(next) !== JSON.stringify(account.featureFlags))
-			writes.push({ accountId: account.id, featureFlags: next })
-	}
+	const writes: Array<FeatureFlagWrite> = accounts
+		.filter((account) => !failed.has(account.id))
+		.map((account) => ({ accountId: account.id, answered: answered.get(account.id) ?? null }))
 
 	if (failed.size === 0) return { writes, error: Option.none<CustomerFeatureFlagsError>() }
 	yield* Effect.logWarning("Clerk refused some feature flag changes", { failed: failed.size, reason })
@@ -151,19 +143,40 @@ export const sendFeatureFlags = Effect.fn("Customers.sendFeatureFlags")(function
 	}
 })
 
-export const writeFeatureFlags = (writes: ReadonlyArray<FeatureFlagWrite>, now: Date) =>
-	Effect.flatMap(Database.Database, (db) =>
-		Effect.forEach(
-			writes,
-			({ accountId, featureFlags }) =>
-				db.run(
-					SQLite.update(schema.customerAccountsTable)
-						.set({ featureFlags, updatedAt: now })
-						.where(($) => [$.id.eq(accountId)]),
+/**
+ * Write each account, reading it again here: another request may have changed it while Clerk was
+ * asked, and a change applied locally must merge into that, not into what was read before.
+ */
+export const writeFeatureFlags = Effect.fn("Customers.writeFeatureFlags")(function* (
+	writes: ReadonlyArray<FeatureFlagWrite>,
+	changes: Readonly<Record<string, boolean | null>>,
+	now: Date,
+) {
+	const db = yield* Database.Database
+	for (const { accountId, answered } of writes) {
+		const current = yield* db.first(
+			SQLite.from(schema.customerAccountsTable)
+				.select("featureFlags")
+				.where(($) => [$.id.eq(accountId)])
+				.limit(1),
+		)
+		if (Option.isNone(current)) continue
+		const held = current.value.featureFlags
+		const next =
+			answered ??
+			Object.fromEntries(
+				Object.entries({ ...held, ...changes }).filter(
+					(entry): entry is [string, boolean] => entry[1] !== null,
 				),
-			{ discard: true },
-		),
-	)
+			)
+		if (JSON.stringify(next) === JSON.stringify(held)) continue
+		yield* db.run(
+			SQLite.update(schema.customerAccountsTable)
+				.set({ featureFlags: next, updatedAt: now })
+				.where(($) => [$.id.eq(accountId)]),
+		)
+	}
+})
 
 /** Every live account holding `key` (on or off). */
 export const accountsWithFlag = Effect.fn("Customers.accountsWithFlag")(function* (key: string) {

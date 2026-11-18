@@ -83,8 +83,8 @@ const NewFeatureFlagKey = Schema.String.check(
 		message: "Letters, digits, `_`, `.`, `:` and `-`, at most 64, starting with a letter or digit",
 	}),
 )
-/** Any flag's key: one Clerk already holds may be any metadata key. */
-const FeatureFlagKey = NonEmptyText(200)
+/** Any flag's key: one Clerk already holds may be any metadata key (Clerk caps metadata at 8 KB). */
+const FeatureFlagKey = NonEmptyText(8192)
 const GlobPattern = NonEmptyText(200).check(
 	Schema.makeFilter((pattern) => (pattern.split("*").length <= 6 ? undefined : "At most 5 wildcards")),
 )
