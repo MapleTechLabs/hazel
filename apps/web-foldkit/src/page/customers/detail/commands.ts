@@ -1,6 +1,13 @@
 import * as Customers from "@hazel/domain/customers"
 import type { CustomersNotFoundError } from "@hazel/domain/rpc"
-import { ChannelId, CustomerAccountId, CustomerNoteId, OrganizationId, UserId } from "@hazel/schema"
+import {
+	ChannelId,
+	CustomerAccountId,
+	CustomerContactId,
+	CustomerNoteId,
+	OrganizationId,
+	UserId,
+} from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import * as Dom from "foldkit/dom"
@@ -20,7 +27,7 @@ import { Message, type NoteAction, type NoteDraft } from "./message"
 import { COMPOSER_ID, PAGE_SIZE } from "./model"
 import { draftToRestore, readNoteDrafts, restoreNoteDraft } from "./note-drafts"
 
-/** The customer page's Commands: its reads, and the account, note and signal actions. */
+/** The customer page's Commands: its reads, the account, note and signal actions, impersonation. */
 
 const target = { organizationId: OrganizationId, accountId: CustomerAccountId }
 
@@ -293,6 +300,35 @@ export const LoadNoteDrafts = Command.define("LoadNoteDrafts", {
 	messages: [Message.LoadedNoteDrafts],
 	execute: ({ accountId }) =>
 		Effect.map(readNoteDrafts(accountId), (drafts) => Message.LoadedNoteDrafts({ drafts })),
+})
+
+// IMPERSONATION
+
+/**
+ * A one-time sign-in link as the contact's user (Clerk, valid for a minute). `UnauthorizedError`
+ * is caught before `catchCommon`: here it means no grant, not a lost session.
+ */
+export const StartCustomerImpersonation = Command.define("StartCustomerImpersonation", {
+	args: { organizationId: OrganizationId, contactId: CustomerContactId },
+	messages: [Message.SucceededStartImpersonation, Message.FailedStartImpersonation],
+	execute: ({ organizationId, contactId }) =>
+		HazelRpc.use((rpc) => rpc("customers.impersonation.start", { organizationId, contactId })).pipe(
+			Effect.map(({ data }) => Message.SucceededStartImpersonation({ contactId, url: data.url })),
+			Effect.catchTags({
+				CustomerImpersonationError: ({ message }) =>
+					Effect.succeed(
+						Message.FailedStartImpersonation({
+							contactId,
+							reason: { _tag: "Refused", message },
+						}),
+					),
+				UnauthorizedError: () =>
+					Effect.succeed(Message.FailedStartImpersonation({ contactId, reason: "NotAllowed" })),
+				CustomersNotFoundError: () =>
+					Effect.succeed(Message.FailedStartImpersonation({ contactId, reason: "NotFound" })),
+			}),
+			catchCommon((reason) => Message.FailedStartImpersonation({ contactId, reason })),
+		),
 })
 
 // LOCAL

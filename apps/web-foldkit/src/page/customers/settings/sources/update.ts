@@ -7,6 +7,7 @@ import { failureMessage } from "~/lib/error-messages"
 import { defaultConfigOf, providerOf } from "../../../../customers/providers"
 import { errorToastOf, successToast } from "../../../../data/actions"
 import type { AppRoute } from "../../../../route"
+import * as Menu from "../../../../ui/menu"
 import * as Modal from "../../../../ui/modal"
 import type { PageReturn, Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
@@ -16,6 +17,8 @@ import {
 	CopyCustomerWebhookUrl,
 	DisconnectCustomerSource,
 	FetchUnmatchedCount,
+	GrantCustomerImpersonator,
+	RevokeCustomerImpersonator,
 	SaveCustomerSourceSettings,
 	SaveMetricUnit,
 	SaveCustomerWebhookSecret,
@@ -23,7 +26,14 @@ import {
 	SyncCustomerSource,
 	UpdateCustomerSourceKeys,
 } from "./commands"
-import type { ConfigTarget, DisconnectFailure, SeedFailure, SyncFailure, UnitFailure } from "./message"
+import type {
+	ConfigTarget,
+	DisconnectFailure,
+	ImpersonatorFailure,
+	SeedFailure,
+	SyncFailure,
+	UnitFailure,
+} from "./message"
 import { Message } from "./message"
 import {
 	CONNECT_MODAL_ID,
@@ -31,6 +41,8 @@ import {
 	connectFailureMessage,
 	connectionOf,
 	DISCONNECT_MODAL_ID,
+	grantableMembers,
+	IMPERSONATOR_MENU_ID,
 	isLive,
 	isSettingsDirty,
 	isSettingsValid,
@@ -73,6 +85,14 @@ const unitFailureMessage = (reason: UnitFailure) =>
 		NotFound: { title: "This metric is gone", description: "Its source no longer defines it." },
 	})
 
+const impersonatorFailureMessage = (reason: ImpersonatorFailure) =>
+	failureMessage(reason, {
+		NotMember: {
+			title: "Couldn't let them impersonate",
+			description: "They are no longer a member of this organization.",
+		},
+	})
+
 // INIT
 
 /** The unmatched count is admins' (the RPC refuses members), so only they ask for it. */
@@ -109,6 +129,9 @@ export const init = (route: Route, shared: Shared): Return =>
 			isSavingSettings: false,
 			unitMetrics: null,
 			unitDrafts: {},
+			impersonators: [],
+			impersonations: [],
+			impersonatorMenu: Menu.init({ id: IMPERSONATOR_MENU_ID, placement: "bottom end" }),
 		},
 		shared,
 	)
@@ -214,6 +237,16 @@ const cleaned = (config: Customers.ConnectionConfig): Customers.ConnectionConfig
 				})),
 			}
 		: config
+
+/** "Add member": grants the picked member, if still without a grant. */
+const grantImpersonator = (model: Model, shared: Shared, key: string): Return => {
+	const member = grantableMembers(model).find((entry) => entry.id === key)
+	const organizationId = shared.organization?.id
+	const grantedBy = shared.currentUser?.id
+	return member === undefined || organizationId === undefined || grantedBy === undefined
+		? { model }
+		: { model, commands: [GrantCustomerImpersonator({ organizationId, userId: member.id, grantedBy })] }
+}
 
 const syncNow = (
 	model: Model,
@@ -618,5 +651,45 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		FailedSaveUnit: ({ reason }) => ({
 			model,
 			outMessage: toast(errorToastOf(unitFailureMessage(reason))),
+		}),
+
+		// IMPERSONATION
+
+		UpdatedImpersonators: ({ impersonators }) => ({ model: { ...model, impersonators } }),
+		UpdatedImpersonations: ({ impersonations }) => ({ model: { ...model, impersonations } }),
+		GotImpersonatorMenuMessage: ({ message: menuMessage }) => {
+			const result = Menu.update(model.impersonatorMenu, menuMessage)
+			const next = { ...model, impersonatorMenu: result.model }
+			const granted =
+				result.outMessage?._tag === "SelectedItem"
+					? grantImpersonator(next, shared, result.outMessage.key)
+					: { model: next }
+			return {
+				...granted,
+				commands: [
+					...Command.mapMessages(result.commands ?? [], (child) =>
+						Message.GotImpersonatorMenuMessage({ message: child }),
+					),
+					...(granted.commands ?? []),
+				],
+			}
+		},
+		// The synced rows change at once (the optimistic action), and come back if the RPC fails.
+		PressedRevokeImpersonator: ({ userId }) => {
+			const row = model.impersonators.find((entry) => entry.userId === userId)
+			const organizationId = shared.organization?.id
+			return row === undefined || organizationId === undefined
+				? { model }
+				: {
+						model,
+						commands: [
+							RevokeCustomerImpersonator({ organizationId, impersonatorId: row.id, userId }),
+						],
+					}
+		},
+		SucceededImpersonatorAction: () => ({ model }),
+		FailedImpersonatorAction: ({ reason }) => ({
+			model,
+			outMessage: toast(errorToastOf(impersonatorFailureMessage(reason))),
 		}),
 	})

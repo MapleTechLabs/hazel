@@ -31,6 +31,7 @@ import {
 	LoadNoteDrafts,
 	LinkCustomerChannel,
 	MergeCustomerAccount,
+	StartCustomerImpersonation,
 	UnlinkCustomerChannel,
 	UpdateCustomerAccount,
 	UpdateCustomerNote,
@@ -50,6 +51,7 @@ import {
 	EVENT_TYPE_MENU_ID,
 	EVENT_TYPE_PREFIXES,
 	EventType,
+	IMPERSONATE_MODAL_ID,
 	MERGE_MODAL_ID,
 	mergeCandidates,
 	METRIC_MENU_ID,
@@ -232,6 +234,9 @@ const initialModel = (route: Route): Model => ({
 	mergeQuery: "",
 	mergeAccountId: null,
 	isMerging: false,
+	isImpersonator: false,
+	impersonateModal: Modal.init(IMPERSONATE_MODAL_ID),
+	impersonation: null,
 })
 
 /** Another tab of the same customer; a note being edited (and the composer) waits on the notes tab. */
@@ -1005,6 +1010,54 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		// The Command told the user, and kept the text for the customer, in case this page is gone.
 		FailedNoteAction: (failure) => ({ model: restoreDraft(model, draftToRestore(failure)) }),
 		RestoredNoteDraft: ({ draft }) => ({ model: restoreDraft(model, draft) }),
+
+		UpdatedIsImpersonator: ({ isImpersonator }) => ({
+			model: modifyFields(model, { isImpersonator: () => isImpersonator }),
+		}),
+		// Opens at once, asking: the link comes back into the dialog (a popup opened after the
+		// answer would be blocked), and is a real link the user follows.
+		PressedImpersonate: ({ contactId }) => {
+			const contact = model.contacts.items.find((row) => row.contact.id === contactId)?.contact
+			const organizationId = shared.organization?.id
+			if (contact === undefined || organizationId === undefined) return { model }
+			return {
+				model: modifyFields(model, {
+					impersonation: () => ({
+						contactId,
+						name: contact.name ?? contact.email ?? "this user",
+						url: null,
+						failure: null,
+					}),
+					impersonateModal: (modal) => Modal.open(modal).model,
+				}),
+				commands: [StartCustomerImpersonation({ organizationId, contactId })],
+			}
+		},
+		GotImpersonateModalMessage: ({ message: modalMessage }) => {
+			const result = Modal.update(model.impersonateModal, modalMessage)
+			const isClosed = result.outMessage?._tag === "Closed"
+			return {
+				model: modifyFields(model, {
+					impersonateModal: () => result.model,
+					impersonation: (current) => (isClosed ? null : current),
+				}),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotImpersonateModalMessage({ message: child }),
+				),
+			}
+		},
+		SucceededStartImpersonation: ({ contactId, url }) => ({
+			model: modifyFields(model, {
+				impersonation: (current) =>
+					current?.contactId === contactId ? { ...current, url } : current,
+			}),
+		}),
+		FailedStartImpersonation: ({ contactId, reason }) => ({
+			model: modifyFields(model, {
+				impersonation: (current) =>
+					current?.contactId === contactId ? { ...current, failure: reason } : current,
+			}),
+		}),
 
 		PressedCopy: ({ text, label }) => ({ model, commands: [CopyCustomerText({ text, label })] }),
 		CompletedCopy: ({ label, isCopied }) => ({

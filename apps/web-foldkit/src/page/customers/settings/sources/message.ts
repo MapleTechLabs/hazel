@@ -1,12 +1,13 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerConnectionId } from "@hazel/schema"
+import { CustomerConnectionId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
-import { MemberRow } from "../../../../customers/queries"
+import { ImpersonatorRow, MemberRow } from "../../../../customers/queries"
+import * as Menu from "../../../../ui/menu"
 import * as Modal from "../../../../ui/modal"
 import { ConnectFailure, HistoryFilter } from "./model"
-import { ConnectionRow, SyncRunRow, UnitMetricRow } from "./queries"
+import { ConnectionRow, ImpersonationRow, SyncRunRow, UnitMetricRow } from "./queries"
 
 /** Which form a config field edits: the connect modal's, or the detail's provider settings. */
 export const ConfigTarget = Schema.Literals(["connect", "settings"])
@@ -26,6 +27,10 @@ export type UnitFailure = typeof UnitFailure.Type
 /** Demo data is refused outside dev and preview stages. */
 export const SeedFailure = Schema.Union([Schema.Literals(["Refused"]), CommonReason])
 export type SeedFailure = typeof SeedFailure.Type
+
+/** `NotMember` (a grant): the member left the organization since the picker showed them. */
+export const ImpersonatorFailure = Schema.Union([Schema.Literals(["NotMember"]), CommonReason])
+export type ImpersonatorFailure = typeof ImpersonatorFailure.Type
 
 export const Message = defineMessageUnion({
 	UpdatedConnections: { connections: Schema.Array(ConnectionRow) },
@@ -106,5 +111,13 @@ export const Message = defineMessageUnion({
 	SubmittedUnit: { metricKey: Schema.String },
 	SucceededSaveUnit: {},
 	FailedSaveUnit: { reason: UnitFailure },
+
+	// Impersonation (Clerk)
+	UpdatedImpersonators: { impersonators: Schema.Array(ImpersonatorRow) },
+	UpdatedImpersonations: { impersonations: Schema.Array(ImpersonationRow) },
+	GotImpersonatorMenuMessage: { message: Menu.Message },
+	PressedRevokeImpersonator: { userId: UserId },
+	SucceededImpersonatorAction: {},
+	FailedImpersonatorAction: { reason: ImpersonatorFailure },
 })
 export type Message = typeof Message.Type

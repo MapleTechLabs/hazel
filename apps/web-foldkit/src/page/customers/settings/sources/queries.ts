@@ -1,6 +1,7 @@
 import * as Customers from "@hazel/domain/customers"
 import {
 	CustomerConnectionId,
+	CustomerImpersonationId,
 	CustomerMetricDefinitionId,
 	CustomerSyncRunId,
 	type OrganizationId,
@@ -9,7 +10,9 @@ import {
 import { and, eq } from "@tanstack/db"
 import { Schema, type Stream } from "effect"
 import {
+	customerAccountCollection,
 	customerConnectionCollection,
+	customerImpersonationCollection,
 	customerMetricDefinitionCollection,
 	customerSyncRunCollection,
 } from "~/db/collections"
@@ -64,6 +67,18 @@ export const UnitMetricRow = Schema.Struct({
 	customUnit: Schema.NullOr(Schema.String),
 })
 export type UnitMetricRow = typeof UnitMetricRow.Type
+
+/** One impersonation a member started (synced to admins, the last 30 days). */
+export const ImpersonationRow = Schema.Struct({
+	id: CustomerImpersonationId,
+	userId: UserId,
+	/** The contact's name, else email, when it started. */
+	contactLabel: Schema.NullOr(Schema.String),
+	/** Null: the customer is gone (merged or deleted). */
+	accountName: Schema.NullOr(Schema.String),
+	createdAtMs: Schema.Number,
+})
+export type ImpersonationRow = typeof ImpersonationRow.Type
 
 type JsonDate = Customers.Connection["connectedAt"]
 const msOrNull = (date: JsonDate | null): number | null => (date === null ? null : msOf(date))
@@ -162,6 +177,43 @@ export const unitMetricsStream = <Message>(
 									},
 								],
 					),
+				),
+		),
+	)
+
+/** The recent impersonations shown, newest first. */
+const IMPERSONATION_LIMIT = 20
+
+/** The last impersonations, newest first, with their customer's name. */
+export const impersonationsStream = <Message>(
+	organizationId: OrganizationId,
+	toMessage: (impersonations: ReadonlyArray<ImpersonationRow>) => Message,
+): Stream.Stream<Message> =>
+	withCustomersSource(
+		organizationId,
+		liveQueryStream<
+			{ readonly impersonation: Customers.Impersonation; readonly account?: Customers.Account },
+			Message
+		>(
+			(q) =>
+				q
+					.from({ impersonation: customerImpersonationCollection })
+					.leftJoin({ account: customerAccountCollection }, ({ impersonation, account }) =>
+						eq(impersonation.accountId, account.id),
+					)
+					.where(({ impersonation }) => eq(impersonation.organizationId, organizationId))
+					.orderBy(({ impersonation }) => impersonation.createdAt, "desc")
+					.limit(IMPERSONATION_LIMIT),
+			(rows) =>
+				toMessage(
+					rows.map(({ impersonation, account }) => ({
+						id: impersonation.id,
+						userId: impersonation.userId,
+						contactLabel: impersonation.contactLabel,
+						accountName:
+							account === undefined || account.deletedAt !== null ? null : account.name,
+						createdAtMs: msOf(impersonation.createdAt),
+					})),
 				),
 		),
 	)

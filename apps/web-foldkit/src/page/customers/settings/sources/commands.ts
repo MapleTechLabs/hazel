@@ -5,12 +5,19 @@ import type {
 	CustomersInvalidRequestError,
 	CustomersNotFoundError,
 } from "@hazel/domain/rpc"
-import { CustomerConnectionId, CustomerMetricDefinitionId, OrganizationId } from "@hazel/schema"
+import {
+	CustomerConnectionId,
+	CustomerImpersonatorId,
+	CustomerMetricDefinitionId,
+	OrganizationId,
+	UserId,
+} from "@hazel/schema"
 import { optimisticAction } from "@hazel/effect-db-collection"
 import { Effect, Redacted, Schema } from "effect"
 import { Command } from "foldkit"
 import { customerMetricDefinitionCollection } from "~/db/collections"
 import type { CommonError } from "~/lib/error-messages"
+import { grantImpersonatorAction, revokeImpersonatorAction } from "../../../../customers/actions"
 import { catchCommon } from "../../../../data/actions"
 import { HazelRpc } from "../../../../rpc"
 import { Message } from "./message"
@@ -18,7 +25,7 @@ import type { ConnectFailure } from "./model"
 
 /**
  * The Data sources Commands: connect, rotate keys, save settings, sync, disconnect, demo data, a
- * metric's unit.
+ * metric's unit, who may impersonate.
  */
 
 const org = { organizationId: OrganizationId }
@@ -274,5 +281,30 @@ export const SaveMetricUnit = Command.define("SaveMetricUnit", {
 				Effect.succeed(Message.FailedSaveUnit({ reason: "NotFound" })),
 			),
 			catchCommon((reason) => Message.FailedSaveUnit({ reason })),
+		),
+})
+
+const impersonatorMessages = [Message.SucceededImpersonatorAction, Message.FailedImpersonatorAction]
+
+export const GrantCustomerImpersonator = Command.define("GrantCustomerImpersonator", {
+	args: { ...org, userId: UserId, grantedBy: UserId },
+	messages: impersonatorMessages,
+	execute: (args) =>
+		grantImpersonatorAction(args).pipe(
+			Effect.as(Message.SucceededImpersonatorAction()),
+			Effect.catchTag("CustomersInvalidRequestError", () =>
+				Effect.succeed(Message.FailedImpersonatorAction({ reason: "NotMember" })),
+			),
+			catchCommon((reason) => Message.FailedImpersonatorAction({ reason })),
+		),
+})
+
+export const RevokeCustomerImpersonator = Command.define("RevokeCustomerImpersonator", {
+	args: { ...org, impersonatorId: CustomerImpersonatorId, userId: UserId },
+	messages: impersonatorMessages,
+	execute: (args) =>
+		revokeImpersonatorAction(args).pipe(
+			Effect.as(Message.SucceededImpersonatorAction()),
+			catchCommon((reason) => Message.FailedImpersonatorAction({ reason })),
 		),
 })

@@ -6,14 +6,22 @@ import {
 	type SyncRunStatus,
 	type SyncTrigger,
 } from "@hazel/domain/customers"
-import { CustomerSyncRunId, OrganizationMemberId } from "@hazel/schema"
+import {
+	CustomerImpersonationId,
+	CustomerImpersonatorId,
+	CustomerSyncRunId,
+	OrganizationMemberId,
+} from "@hazel/schema"
 import { Schema } from "effect"
-import { msOf } from "../../customers/queries"
+import { type ImpersonatorRow, msOf } from "../../customers/queries"
 import type { Shared } from "../../page/contract"
 import { labShared } from "../../page/customers/lab-shared"
+import type { ImpersonationRow } from "../../page/customers/settings/sources/queries"
 import {
 	CLERK_CONNECTION,
+	JONAS,
 	MAPLE_CONNECTION,
+	MAYA,
 	MAPLE_ERROR_AT,
 	NOW,
 	ORGANIZATION_ID,
@@ -136,3 +144,22 @@ export const SOURCE_SYNC_RUNS: ReadonlyArray<SyncRun> = [...SYNC_RUNS, ...CLERK_
 
 /** `customers.unmatched.list`'s `openCount` (Wonder: 5 Stripe customers and 9 Maple groups). */
 export const UNMATCHED_OPEN_COUNT = 14
+
+/** Jonas may impersonate (Maya granted it) and signed in as one of Acme's users. */
+export const IMPERSONATORS: ReadonlyArray<ImpersonatorRow> = [
+	{
+		id: Schema.decodeSync(CustomerImpersonatorId)("00000026-0000-4000-8000-000000000001"),
+		userId: JONAS.id,
+		grantedBy: MAYA.id,
+		grantedAtMs: ago(3 * DAY).getTime(),
+	},
+]
+export const IMPERSONATIONS: ReadonlyArray<ImpersonationRow> = [
+	{
+		id: Schema.decodeSync(CustomerImpersonationId)("00000027-0000-4000-8000-000000000001"),
+		userId: JONAS.id,
+		contactLabel: "Priya Shah",
+		accountName: "Acme Robotics",
+		createdAtMs: ago(2 * HOUR).getTime(),
+	},
+]

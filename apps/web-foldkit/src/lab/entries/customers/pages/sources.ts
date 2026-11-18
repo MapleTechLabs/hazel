@@ -13,6 +13,8 @@ import { labPage } from "../../../frame"
 import { ACCOUNTS, STRIPE_CONNECTION, TEAM } from "../../../fixtures/customers"
 import {
 	ADMIN_SHARED,
+	IMPERSONATIONS,
+	IMPERSONATORS,
 	MEMBER_SHARED,
 	SOURCE_CONNECTIONS,
 	SOURCE_SYNC_RUNS,
@@ -113,6 +115,8 @@ const stateModel = (state: State): Model => {
 				Message.UpdatedSyncRuns({ runs: isEmpty ? [] : SOURCE_SYNC_RUNS.map(toSyncRunRow) }),
 				Message.UpdatedAccountCount({ count: isEmpty ? 0 : ACCOUNTS.length }),
 				Message.UpdatedMembers({ members: TEAM }),
+				Message.UpdatedImpersonators({ impersonators: IMPERSONATORS }),
+				Message.UpdatedImpersonations({ impersonations: IMPERSONATIONS }),
 			],
 			shared,
 		),

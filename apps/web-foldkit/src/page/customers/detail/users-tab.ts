@@ -11,7 +11,7 @@ import { IconCopy, IconStar, IconWarning } from "../../../icons"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { Message } from "./message"
-import { type ContactFilter, contactCounts, type Model, visibleContacts } from "./model"
+import { type ContactFilter, canImpersonate, contactCounts, type Model, visibleContacts } from "./model"
 import { type Context, icon, pageFooter } from "./parts"
 
 /** The users tab: who uses the product, who went quiet, who never started. */
@@ -347,6 +347,33 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 							hideClass: "max-xl:hidden",
 							cell: (row) => heatStrip(h, row),
 						},
+						...(canImpersonate(model)
+							? [
+									{
+										key: "impersonate",
+										label: "",
+										align: "right" as const,
+										widthClass: "w-32",
+										cell: (row: Customers.ContactRow) =>
+											button(
+												h,
+												{
+													intent: "outline",
+													size: "xs",
+													attributes: [
+														h.AriaLabel(
+															`Impersonate ${row.contact.name ?? row.contact.email ?? "this user"}`,
+														),
+													],
+													onPress: Message.PressedImpersonate({
+														contactId: row.contact.id,
+													}),
+												},
+												["Impersonate"],
+											),
+									},
+								]
+							: []),
 					],
 				}),
 				...(model.contacts.status === "Loaded" && rows.length === 0

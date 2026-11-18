@@ -1,6 +1,7 @@
 import { DEFAULT_CONNECTION_CONFIG, EMPTY_SYNC_STATS } from "@hazel/domain/customers"
 import {
 	CustomerConnectionId,
+	CustomerImpersonatorId,
 	CustomerMetricDefinitionId,
 	OrganizationId,
 	OrganizationMemberId,
@@ -10,18 +11,21 @@ import { Redacted, Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
 import { AppRoute } from "../../../../route"
+import * as Menu from "../../../../ui/menu"
 import type { Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
 import { sharedDefaults } from "../../../test-shared"
 import {
 	ConnectCustomerSource,
 	DisconnectCustomerSource,
+	GrantCustomerImpersonator,
+	RevokeCustomerImpersonator,
 	SaveCustomerSourceSettings,
 	SaveCustomerWebhookSecret,
 	SyncCustomerSource,
 } from "./commands"
 import { Message } from "./message"
-import { isSettingsDirty, type Model } from "./model"
+import { grantableMembers, isSettingsDirty, type Model } from "./model"
 import type { ConnectionRow } from "./queries"
 import { init, update } from "./update"
 
@@ -30,7 +34,10 @@ vi.hoisted(() => {
 	Object.assign(globalThis, { document: globalThis.document ?? {} })
 })
 
-/** Update-loop tests for Data sources: connect, webhook secret, sync, disconnect, Maple settings. */
+/**
+ * Update-loop tests for Data sources: connect, webhook secret, sync, disconnect, Maple settings,
+ * who may impersonate.
+ */
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 const organizationId = Schema.decodeSync(OrganizationId)(uuid(1))
@@ -412,6 +419,88 @@ describe("data sources: usage units", () => {
 		// A blur after Enter finds no draft.
 		expect(
 			pageUpdate(withMetrics(), Message.SubmittedUnit({ metricKey: traces.key })).commands ?? [],
+		).toEqual([])
+	})
+})
+
+describe("data sources: impersonation", () => {
+	const grace = Schema.decodeSync(UserId)(uuid(4))
+	const members = [
+		{ id: ada, name: "Ada Lovelace", email: "ada@hazel.test", avatarUrl: null },
+		{ id: grace, name: "Grace Hopper", email: "grace@hazel.test", avatarUrl: null },
+	]
+	const graceGrant = {
+		id: Schema.decodeSync(CustomerImpersonatorId)(uuid(300)),
+		userId: grace,
+		grantedBy: ada,
+		grantedAtMs: NOW - 86_400_000,
+	}
+	const clerkDetail = () =>
+		pageUpdate(
+			loaded(AppRoute.CustomersSourceDetail({ orgSlug: "hazel", provider: "clerk" })),
+			Message.UpdatedMembers({ members }),
+		).model
+	const withGrace = () =>
+		pageUpdate(clerkDetail(), Message.UpdatedImpersonators({ impersonators: [graceGrant] })).model
+	const menu = (message: Menu.Message) => Message.GotImpersonatorMenuMessage({ message })
+
+	test("Add member offers those without a grant and grants the picked one", () => {
+		expect(grantableMembers(withGrace()).map((member) => member.id)).toEqual([ada])
+		const opened = pageUpdate(clerkDetail(), menu(Menu.Message.PressedTrigger({ pointerType: "mouse" })))
+		const picked = pageUpdate(
+			opened.model,
+			menu(Menu.Message.ClickedItem({ key: grace, entries: [Menu.item(ada), Menu.item(grace)] })),
+		)
+		expect(
+			picked.commands?.find((command) => command.name === "GrantCustomerImpersonator")?.args,
+		).toEqual(GrantCustomerImpersonator({ organizationId, userId: grace, grantedBy: ada }).args)
+	})
+
+	test("a grant answers quietly; a failed one says so", () => {
+		story(
+			pageUpdate,
+			given(clerkDetail()),
+			message(Message.SucceededImpersonatorAction()),
+			model((current) => expect(current.impersonators).toEqual([])),
+			message(Message.FailedImpersonatorAction({ reason: "NotMember" })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "Couldn't let them impersonate",
+						description: "They are no longer a member of this organization.",
+					},
+				}),
+			),
+		)
+	})
+
+	test("Remove revokes the member's grant; a failure toasts", () => {
+		story(
+			pageUpdate,
+			given(withGrace()),
+			message(Message.PressedRevokeImpersonator({ userId: grace })),
+			Command.expectHas(
+				RevokeCustomerImpersonator({ organizationId, impersonatorId: graceGrant.id, userId: grace }),
+			),
+			Command.resolve(
+				RevokeCustomerImpersonator,
+				Message.FailedImpersonatorAction({ reason: "Offline" }),
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "Connection lost",
+						description: "Check your internet connection and try again.",
+					},
+				}),
+			),
+			// The page never patches its rows: the optimistic delete and its rollback arrive as synced rows.
+			model((current) => expect(current.impersonators).toEqual([graceGrant])),
+		)
+		expect(
+			pageUpdate(clerkDetail(), Message.PressedRevokeImpersonator({ userId: grace })).commands ?? [],
 		).toEqual([])
 	})
 })

@@ -1,11 +1,11 @@
 import { OrganizationId } from "@hazel/schema"
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
-import { accountsStream, orgMembersStream } from "../../../../customers/queries"
+import { accountsStream, impersonatorsStream, orgMembersStream } from "../../../../customers/queries"
 import type { PageSubscriptionInput } from "../../../contract"
 import { Message } from "./message"
 import type { Model } from "./model"
-import { connectionsStream, syncRunsStream, unitMetricsStream } from "./queries"
+import { connectionsStream, impersonationsStream, syncRunsStream, unitMetricsStream } from "./queries"
 
 type Input = PageSubscriptionInput<Model>
 
@@ -13,8 +13,8 @@ const organization = { organizationId: Schema.NullOr(OrganizationId) }
 const organizationOf = ({ shared }: Input) => ({ organizationId: shared.organization?.id ?? null })
 
 /**
- * Connections, their runs, the account count (identity coverage), the people who connected them
- * and the sources' metrics (for their units).
+ * Connections, their runs, the account count (identity coverage), the people who connected them,
+ * the sources' metrics (for their units), and who may impersonate and did (Clerk).
  */
 export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 	connections: entry(organization, {
@@ -55,5 +55,23 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 			organizationId === null
 				? Stream.empty
 				: orgMembersStream(organizationId, (members) => Message.UpdatedMembers({ members })),
+	}),
+	impersonators: entry(organization, {
+		modelToDependencies: organizationOf,
+		dependenciesToStream: ({ organizationId }) =>
+			organizationId === null
+				? Stream.empty
+				: impersonatorsStream(organizationId, (impersonators) =>
+						Message.UpdatedImpersonators({ impersonators }),
+					),
+	}),
+	impersonations: entry(organization, {
+		modelToDependencies: organizationOf,
+		dependenciesToStream: ({ organizationId }) =>
+			organizationId === null
+				? Stream.empty
+				: impersonationsStream(organizationId, (impersonations) =>
+						Message.UpdatedImpersonations({ impersonations }),
+					),
 	}),
 }))

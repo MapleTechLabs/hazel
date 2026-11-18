@@ -3,6 +3,7 @@ import type * as Customers from "@hazel/domain/customers"
 import type { SignalEvidence } from "@hazel/domain/customers"
 import {
 	CustomerAccountId,
+	CustomerContactId,
 	CustomerEventId,
 	CustomerNoteId,
 	CustomerSignalId,
@@ -16,11 +17,13 @@ import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { snoozeUntil } from "../../../customers/ui/menus"
 import { AppRoute, type CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
+import * as Modal from "../../../ui/modal"
 import type { Shared } from "../../contract"
 import { sharedDefaults } from "../../test-shared"
 import { Message } from "./message"
 import {
 	actionEntries,
+	canImpersonate,
 	EMPTY_NOTE_DRAFTS,
 	isNotFound,
 	mergeCandidates,
@@ -41,6 +44,7 @@ import {
 	writeNoteDrafts,
 } from "./note-drafts"
 import { init, routeChanged, update } from "./update"
+import { StartCustomerImpersonation } from "./commands"
 
 /** Update-loop tests for the customer page: tab routing and loading, owner and tags, notes, signals. */
 
@@ -650,5 +654,103 @@ describe("customer page: signals", () => {
 		const patched = update(loaded(), Message.RemovedTag({ tag: "pilot" }), shared).model
 		const rolledBack = run(patched, [Message.UpdatedAccounts({ accounts: [acme, beta, gamma] })])
 		expect(rolledBack.accounts?.find((row) => row.id === beta.id)?.tags).toEqual(["pilot"])
+	})
+})
+
+describe("customer page: impersonation", () => {
+	const contactId = Schema.decodeSync(CustomerContactId)
+	const contactRow = (n: number, name: string): Customers.ContactRow => ({
+		contact: {
+			id: contactId(uuid(500 + n)),
+			accountId: beta.id,
+			email: `${name.toLowerCase()}@beta.test`,
+			name,
+			avatarUrl: null,
+			title: null,
+			role: null,
+			isBillingContact: false,
+			joinedAt: null,
+			firstActiveAt: null,
+			lastSeenAt: null,
+			lastSignInAt: null,
+			signInCount30d: 0,
+			eventCount30d: 0,
+			attributes: {},
+			fieldSources: {},
+			createdAt: new Date(NOW),
+			updatedAt: new Date(NOW),
+			deletedAt: null,
+		},
+		status: "active",
+		activity: [],
+	})
+	const linus = contactRow(1, "Linus")
+	const margaret = contactRow(2, "Margaret")
+	const users = (isImpersonator = true) =>
+		run(routeChanged(loaded(), route("users"), shared).model, [
+			Message.SucceededFetchContacts({
+				accountId: beta.id,
+				page: { items: [linus, margaret], nextCursor: null },
+			}),
+			Message.UpdatedConnectedProviders({ providers: ["clerk", "stripe"] }),
+			Message.UpdatedIsImpersonator({ isImpersonator }),
+		])
+	const impersonate = (model: Model) =>
+		update(model, Message.PressedImpersonate({ contactId: linus.contact.id }), shared)
+
+	test("Impersonate shows only to a granted user, while Clerk is connected", () => {
+		expect(canImpersonate(users(false))).toBe(false)
+		expect(canImpersonate(users())).toBe(true)
+		expect(
+			canImpersonate(run(users(), [Message.UpdatedConnectedProviders({ providers: ["stripe"] })])),
+		).toBe(false)
+	})
+
+	test("Impersonate opens the dialog at once, asking; the link lands in it; closing drops it", () => {
+		const asked = impersonate(users())
+		expect(asked.model.impersonateModal.isOpen).toBe(true)
+		expect(asked.model.impersonation).toEqual({
+			contactId: linus.contact.id,
+			name: "Linus",
+			url: null,
+			failure: null,
+		})
+		expect(
+			asked.commands?.find((command) => command.name === "StartCustomerImpersonation")?.args,
+		).toEqual(StartCustomerImpersonation({ organizationId, contactId: linus.contact.id }).args)
+		const url = "https://accounts.beta.test/v1/tickets/accept?ticket=t_1"
+		const answered = run(asked.model, [
+			Message.SucceededStartImpersonation({ contactId: linus.contact.id, url }),
+		])
+		expect(answered.impersonation?.url).toBe(url)
+		const closed = run(answered, [
+			Message.GotImpersonateModalMessage({ message: Modal.Message.RequestedClose() }),
+		])
+		expect(closed.impersonateModal.isOpen).toBe(false)
+		expect(closed.impersonation).toBeNull()
+		// An answer for a dialog closed since (or another user's) is dropped.
+		expect(
+			run(closed, [Message.SucceededStartImpersonation({ contactId: linus.contact.id, url })])
+				.impersonation,
+		).toBeNull()
+		expect(
+			run(asked.model, [Message.SucceededStartImpersonation({ contactId: margaret.contact.id, url })])
+				.impersonation?.url,
+		).toBeNull()
+	})
+
+	test("a refusal keeps the provider's explanation for the dialog", () => {
+		const refused = run(impersonate(users()).model, [
+			Message.FailedStartImpersonation({
+				contactId: linus.contact.id,
+				reason: { _tag: "Refused", message: "You have reached your monthly impersonation limit." },
+			}),
+		])
+		expect(refused.impersonateModal.isOpen).toBe(true)
+		expect(refused.impersonation?.failure).toEqual({
+			_tag: "Refused",
+			message: "You have reached your monthly impersonation limit.",
+		})
+		expect(refused.impersonation?.url).toBeNull()
 	})
 })
