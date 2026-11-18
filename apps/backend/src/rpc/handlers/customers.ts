@@ -77,7 +77,6 @@ import { inList } from "../../worker/objects/customers/sql"
 import { CLOSED_SIGNAL_WINDOW_DAYS } from "../../worker/objects/sources/customers-source"
 import { orgTarget } from "../../worker/objects/kinds"
 import { CustomerChannelCall } from "../../worker/objects/org/channel-customers"
-import { REOPEN_COOLDOWN_MS } from "../../worker/objects/customers/lifecycle"
 
 // ---------------------------------------------------------------------------
 // Shared
@@ -560,7 +559,6 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						resolvedByUserId: actor.userId,
 						outcome,
 						resolutionNote: note ?? null,
-						reopenAfter: new Date(now.getTime() + REOPEN_COOLDOWN_MS),
 					}),
 					{ outcome, note: note ?? null },
 				),
@@ -588,7 +586,6 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					outcome: null,
 					resolutionNote: null,
 					dismissReason: null,
-					reopenAfter: null,
 				})),
 
 			"customers.note.create": ({ id, accountId, body, pinned, signalId }) =>

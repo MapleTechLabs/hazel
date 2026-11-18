@@ -65,7 +65,11 @@ export const createActorToken = Effect.fn("Clerk.createActorToken")(function* (
 		Effect.timeout("10 seconds"),
 		Effect.mapError(() => fail("provider", "Could not reach Clerk")),
 	)
-	yield* Effect.annotateCurrentSpan("http.response.status_code", response.status)
+	yield* Effect.annotateCurrentSpan({
+		"peer.service": "clerk",
+		"url.template": "/actor_tokens",
+		"http.response.status_code": response.status,
+	})
 	const body = yield* response.json.pipe(Effect.orElseSucceed(() => null))
 	if (response.status >= 200 && response.status < 300) {
 		return yield* Schema.decodeUnknownEffect(ActorToken)(body).pipe(

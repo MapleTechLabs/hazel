@@ -117,7 +117,7 @@ export const SORT_MENU_ID = "attention-sort"
 export const DONE_MODAL_ID = "attention-done"
 export const SNOOZE_DATE_MODAL_ID = "attention-snooze-date"
 
-/** Done shows what was resolved in the last week. */
+/** Done shows what was resolved in the last week, and every signal still muted. */
 export const DONE_WINDOW_MS = 7 * 86_400_000
 
 // WHAT IS SHOWN
@@ -185,10 +185,15 @@ const matchesFilters = (
 	)
 }
 
-/** Done keeps the last week; the rest of a tab is its status. */
+/**
+ * Done keeps the last week, and a done or dismissed signal still true however old (it stays muted
+ * until it clears, so it must stay reachable to reopen); the rest of a tab is its status.
+ */
 const isInTab = (tab: QueueTab, viewer: Viewer, signal: SignalRowType): boolean =>
 	queueTabOf(signal) === tab &&
-	(tab !== "done" || (resolvedAtMsOf(signal) ?? 0) >= viewer.nowMs - DONE_WINDOW_MS)
+	(tab !== "done" ||
+		(signal.status !== "auto_resolved" && signal.closedAtMs === null) ||
+		(resolvedAtMsOf(signal) ?? 0) >= viewer.nowMs - DONE_WINDOW_MS)
 
 const sortedForTab = (
 	model: Model,

@@ -516,8 +516,8 @@ export type CustomerSignalRule = SQLite.SelectRowOf<typeof customerSignalRulesTa
 export type NewCustomerSignalRule = SQLite.InsertRowOf<typeof customerSignalRulesTable>
 
 /**
- * A queue item. One row per episode: open → (snoozed ↔ open) → done / dismissed (may reopen) →
- * closed once the condition clears (`closedAt`; `auto_resolved` when nobody acted). At most one
+ * A queue item. One row per episode: open → (snoozed ↔ open) → done (muted while true) /
+ * dismissed (reopens a step worse) → closed once the condition clears (`closedAt`; `auto_resolved` when nobody acted). At most one
  * unclosed signal per `(ruleId, accountId)` (`extra-indexes.ts`).
  */
 export const customerSignalsTable = SQLite.table("customer_signals", {
@@ -555,8 +555,6 @@ export const customerSignalsTable = SQLite.table("customer_signals", {
 		resolutionNote: SQLite.nullable(SQLite.text),
 		/** `baseline`: recorded silently by the first evaluation after a backfill. */
 		dismissReason: SQLite.nullable(SQLite.text),
-		/** A done signal whose condition still holds reopens at this time (7-day cooldown). */
-		reopenAfter: SQLite.nullable(timestamptz),
 		reopenCount: count(),
 		/** The episode ended (condition cleared); a recurrence opens a new row. */
 		closedAt: SQLite.nullable(timestamptz),

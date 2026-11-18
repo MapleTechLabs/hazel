@@ -1,7 +1,6 @@
 import { SignalOutcome } from "@hazel/domain/customers"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { formatDate } from "../../../customers/format"
 import { severityChip } from "../../../customers/ui/badges"
 import { companyLogo } from "../../../customers/ui/identity"
 import { IconArrowPath, IconCheck } from "../../../icons"
@@ -20,7 +19,7 @@ import {
 	type Viewer,
 } from "./model"
 
-/** "Mark signal as done" (Wonder: Queue Mark Done Dialog): outcome, note, and when it may come back. */
+/** "Mark signal as done" (Wonder: Queue Mark Done Dialog): outcome and note. */
 
 const toModalMessage = (message: Modal.Message) => Message.GotDoneModalMessage({ message })
 
@@ -30,9 +29,6 @@ const OUTCOMES = {
 	not_an_issue: ["Not an issue", "Expected or a false alarm"],
 	other: ["Other", "Explain in the note"],
 } as const satisfies Record<SignalOutcome, readonly [string, string]>
-
-/** A signal marked done reopens after this if its condition still holds (`tech-design.md` §4.5). */
-const REOPEN_AFTER_MS = 7 * 86_400_000
 
 const outcomeCard = (h: HtmlBuilder<Message>, outcome: SignalOutcome, isSelected: boolean): Html => {
 	const [label, description] = OUTCOMES[outcome]
@@ -75,7 +71,6 @@ const outcomeCard = (h: HtmlBuilder<Message>, outcome: SignalOutcome, isSelected
 const content = (
 	h: HtmlBuilder<Message>,
 	model: Model,
-	viewer: Viewer,
 	closeAttributes: ReadonlyArray<ChildAttribute>,
 ): ReadonlyArray<Html> => {
 	const form = model.doneForm
@@ -158,7 +153,7 @@ const content = (
 						],
 						[
 							IconArrowPath(h, { className: "mt-0.5 size-3.5 shrink-0" }),
-							`If this is still true on ${formatDate(new Date(viewer.nowMs + REOPEN_AFTER_MS), { now: new Date(viewer.nowMs) })}, the signal reopens and returns to the queue.`,
+							"Stays off the queue while this is true. If it clears and happens again, a new signal opens.",
 						],
 					),
 				],
@@ -174,11 +169,11 @@ const content = (
 	]
 }
 
-export const doneDialog = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =>
+export const doneDialog = (h: HtmlBuilder<Message>, model: Model): Html =>
 	Modal.controlledModal(h, {
 		model: model.doneModal,
 		toParentMessage: toModalMessage,
-		toContent: (closeAttributes) => content(h, model, viewer, closeAttributes),
+		toContent: (closeAttributes) => content(h, model, closeAttributes),
 		size: "md",
 	})
 
