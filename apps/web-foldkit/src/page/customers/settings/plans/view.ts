@@ -5,6 +5,7 @@ import { commonMessage, type CommonReason } from "~/lib/error-messages"
 import { IconArrowPath, IconCube } from "../../../../icons"
 import { button } from "../../../../ui/button"
 import { emptyState } from "../../../../ui/empty-state"
+import { label } from "../../../../ui/field"
 import { loader } from "../../../../ui/loader"
 import { switchControl } from "../../../../ui/switch"
 import type { PageViewInputs } from "../../../contract"
@@ -50,10 +51,9 @@ const overageCard = (h: HtmlBuilder<Message>, settings: SavedSettings, canEdit: 
 			h.div(
 				[h.Class("flex min-w-0 flex-col gap-0.5")],
 				[
-					h.label(
-						[h.For(OVERAGE_ID), h.Class("font-medium text-fg text-sm")],
-						["Count overage in MRR"],
-					),
+					label(h, { htmlFor: OVERAGE_ID, className: "font-medium text-fg text-sm" }, [
+						"Count overage in MRR",
+					]),
 					h.p(
 						[h.Class("text-muted-fg text-xs")],
 						[
