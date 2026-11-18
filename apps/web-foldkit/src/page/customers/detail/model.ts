@@ -143,6 +143,11 @@ export const Model = Schema.Struct({
 	/** The note the delete confirmation asks about (kept while the dialog animates out). */
 	deletingNoteId: Schema.NullOr(CustomerNoteId),
 	deleteNoteModal: Modal.Model,
+	/** "Merge another customer into this one": the search, the picked customer, an RPC on its way. */
+	mergeModal: Modal.Model,
+	mergeQuery: Schema.String,
+	mergeAccountId: Schema.NullOr(CustomerAccountId),
+	isMerging: Schema.Boolean,
 })
 export type Model = typeof Model.Type
 
@@ -157,6 +162,8 @@ export const TAG_POPOVER_ID = "customer-tag"
 export const CHANNEL_POPOVER_ID = "customer-channel"
 export const RAW_MODAL_ID = "customer-raw"
 export const DELETE_NOTE_MODAL_ID = "customer-delete-note"
+export const MERGE_MODAL_ID = "customer-merge"
+export const MERGE_SEARCH_ID = "customer-merge-search"
 export const COMPOSER_ID = "customer-note-composer"
 
 export const PAGE_SIZE = 50
@@ -196,6 +203,18 @@ export const isNotFound = (model: Model): boolean =>
 	(model.accounts !== null &&
 		accountOf(model) === undefined &&
 		(model.detail._tag !== "Success" || model.hasSeenAccount))
+
+/** Customers the merge dialog offers: the others, by name or domain. */
+export const mergeCandidates = (model: Model): ReadonlyArray<AccountRow> => {
+	const needle = model.mergeQuery.trim().toLowerCase()
+	return (model.accounts ?? []).filter(
+		(account) =>
+			account.id !== model.accountId &&
+			(needle === "" ||
+				account.name.toLowerCase().includes(needle) ||
+				(account.domain?.toLowerCase().includes(needle) ?? false)),
+	)
+}
 
 /** Open and snoozed signals on this account, highest priority first. */
 export const openSignals = (model: Model): ReadonlyArray<SignalRow> =>
@@ -282,7 +301,7 @@ export const actionEntries: ReadonlyArray<Menu.Entry> = [
 	Menu.item("recompute", { isDisabled: true, hasDescription: true }),
 	Menu.separator,
 	Menu.item("link_source", { isDisabled: true, hasDescription: true }),
-	Menu.item("merge", { isDisabled: true, hasDescription: true }),
+	Menu.item("merge"),
 	Menu.item("raw_data"),
 	Menu.separator,
 	Menu.item("archive", { isDisabled: true, intent: "Danger", hasDescription: true }),

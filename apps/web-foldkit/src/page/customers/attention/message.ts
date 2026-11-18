@@ -6,7 +6,7 @@ import { CommonReason } from "~/lib/error-messages"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
-import { Grouping, QueueKey, Tab } from "./model"
+import { Grouping, QueueKey, Sort, Tab } from "./model"
 
 /** A queue action's failure: the signal is gone, or its status no longer allows the action. */
 export const SignalActionFailure = Schema.Union([Schema.Literals(["NotFound", "Stale"]), CommonReason])
@@ -23,6 +23,8 @@ export const Message = defineMessageUnion({
 
 	ClickedTab: { tab: Tab },
 	ClickedGrouping: { grouping: Grouping },
+	/** A column header: sorts by it, or flips the direction when it is already the sort. */
+	ClickedColumnSort: { sort: Sort },
 	ChangedSearch: { value: Schema.String },
 	ClearedSearch: {},
 	/** A filter chip's remove button: `owner` resets to anyone, the rest to none. */

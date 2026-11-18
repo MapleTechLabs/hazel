@@ -508,7 +508,15 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			],
 		},
 		{
-			id: "0011_customer_settings_overage_in_mrr",
+			id: "0011_customer_merge",
+			statements: [
+				'ALTER TABLE "customer_accounts" ADD COLUMN "organizationCount" integer NOT NULL DEFAULT 0',
+				'ALTER TABLE "customer_external_refs" ADD COLUMN "name" text',
+				'ALTER TABLE "customer_external_refs" ADD COLUMN "viaAccounts" text',
+			],
+		},
+		{
+			id: "0012_customer_settings_overage_in_mrr",
 			statements: [
 				'ALTER TABLE "customer_settings" ADD COLUMN "overageInMrr" integer NOT NULL DEFAULT false',
 			],
