@@ -16,6 +16,7 @@ import { button } from "../../../../ui/button"
 import { checkbox } from "../../../../ui/checkbox"
 import { dialogClose, dialogFooter, dialogHeader } from "../../../../ui/dialog"
 import { emptyState } from "../../../../ui/empty-state"
+import * as Field from "../../../../ui/field"
 import { input } from "../../../../ui/input"
 import { link } from "../../../../ui/link"
 import { loader } from "../../../../ui/loader"
@@ -131,7 +132,24 @@ const customerPicker = (h: HtmlBuilder<Message>, model: Model, key: string): Htm
 																isSelected,
 															}),
 													},
-													account.name,
+													[
+														// One label cell of the checkbox grid: the logo beside the name.
+														Field.label(
+															h,
+															{
+																elementType: "span",
+																className: "flex min-w-0 items-center gap-2",
+															},
+															[
+																companyLogo(h, {
+																	name: account.name,
+																	logoUrl: account.logoUrl,
+																	size: "xs",
+																}),
+																h.span([h.Class("truncate")], [account.name]),
+															],
+														),
+													],
 												),
 											],
 										),
