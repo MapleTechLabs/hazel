@@ -190,6 +190,9 @@ const DesktopAuthLive = Layer.effect(
 ).pipe(
 	Layer.provide(Layer.mergeAll(BrowserLive, layerVault(KeychainStore), WebCrypto.layer)),
 	Layer.provide(FetchHttpClient.layer),
+	// The desktop session travels in headers: never cookies, never redirects (the host's
+	// `auth_http` sends no cookies and follows no redirects either).
+	Layer.provide(Layer.succeed(FetchHttpClient.RequestInit, { credentials: "omit", redirect: "error" })),
 	Layer.provide(
 		Layer.sync(FetchHttpClient.Fetch, () => {
 			const core = getTauriCore()
