@@ -142,20 +142,16 @@ const makeOrg = (objects: TestObjects, team = TEAM) =>
 				owner,
 			)
 		const connection = (yield* ok(yield* connectTo(team))) as { data: { id: SyncConnectionId } }
-		const linkChannel = (historyLimit?: number) =>
-			call(
-				org,
-				orgId,
-				"chatSync.channelLink.create",
-				{
-					organizationId: orgId,
-					syncConnectionId: connection.data.id,
-					hazelChannelId: created.data.id,
-					externalChannelId: SLACK_CHANNEL,
-					...(historyLimit === undefined ? {} : { historyLimit }),
-				},
-				owner,
-			)
+		const linkChannel = (historyLimit?: number) => {
+			const payload = {
+				organizationId: orgId,
+				syncConnectionId: connection.data.id,
+				hazelChannelId: created.data.id,
+				externalChannelId: SLACK_CHANNEL,
+			}
+			const withLimit = historyLimit === undefined ? payload : { ...payload, historyLimit }
+			return call(org, orgId, "chatSync.channelLink.create", withLimit, owner)
+		}
 		const stubs = Layer.succeed(ObjectStubs, objects.stubs)
 		const inbound = (eventId: string, event: Slack.SlackEvent, fromTeam = team) =>
 			Effect.gen(function* () {
