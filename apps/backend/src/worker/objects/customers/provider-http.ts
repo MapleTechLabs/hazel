@@ -48,15 +48,18 @@ export const WEBHOOK_REQUESTS: ProviderRequestOptions = { inlineRetries: 0, time
 
 export type ProviderQuery = ReadonlyArray<readonly [string, string]>
 
-/** The read verbs these integrations use: a REST GET, or an RPC-style POST whose body is the query. */
-export type ProviderMethod = "GET" | "POST"
+/**
+ * The verbs these integrations use: a REST GET, an RPC-style POST whose body is the query, or a
+ * PATCH (the one write Hazel makes: Clerk feature flags).
+ */
+export type ProviderMethod = "GET" | "POST" | "PATCH"
 
 /** One read: where, with which query, and (for a POST) the JSON body naming what to read. */
 interface ProviderCall<Path extends string> {
 	readonly method: ProviderMethod
 	readonly path: Path
 	readonly query?: ProviderQuery
-	/** Sent as the JSON body of a POST; ignored on a GET. */
+	/** Sent as the JSON body of a POST or PATCH; ignored on a GET. */
 	readonly body?: unknown
 }
 
@@ -199,9 +202,9 @@ const makeProviderCall = <Path extends string, Refusal>(
 		const request = (
 			call.method === "GET"
 				? HttpClientRequest.get(url, { urlParams })
-				: HttpClientRequest.post(url, { urlParams }).pipe(
-						HttpClientRequest.bodyJsonUnsafe(call.body ?? {}),
-					)
+				: (call.method === "POST" ? HttpClientRequest.post : HttpClientRequest.patch)(url, {
+						urlParams,
+					}).pipe(HttpClientRequest.bodyJsonUnsafe(call.body ?? {}))
 		).pipe(
 			HttpClientRequest.bearerToken(apiKey),
 			HttpClientRequest.acceptJson,
@@ -271,6 +274,7 @@ const makeProviderCall = <Path extends string, Refusal>(
 	const withRetry = {
 		GET: Effect.fn(`${api.name}.get`)(attempt),
 		POST: Effect.fn(`${api.name}.post`)(attempt),
+		PATCH: Effect.fn(`${api.name}.patch`)(attempt),
 	} satisfies Record<ProviderMethod, unknown>
 
 	return <A>(call: ProviderCall<Path>, schema: Schema.Decoder<A>) =>
@@ -307,4 +311,16 @@ export const makeProviderPost = <Path extends string, Refusal>(
 	const call = makeProviderCall(api, client, apiKey, options)
 	return <A>(path: Path, body: unknown, schema: Schema.Decoder<A>) =>
 		call({ method: "POST", path, body }, schema)
+}
+
+/** A REST write: `patch(path, body, schema)` (Clerk's organization metadata). */
+export const makeProviderPatch = <Path extends string, Refusal>(
+	api: ProviderApi<Path, Refusal>,
+	client: HttpClient.HttpClient,
+	apiKey: Redacted.Redacted<string>,
+	options?: ProviderRequestOptions,
+) => {
+	const call = makeProviderCall(api, client, apiKey, options)
+	return <A>(path: Path, body: unknown, schema: Schema.Decoder<A>) =>
+		call({ method: "PATCH", path, body }, schema)
 }

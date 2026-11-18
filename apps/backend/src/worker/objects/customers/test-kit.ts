@@ -74,6 +74,7 @@ export const accountRow = (overrides: Partial<schema.CustomerAccount> = {}): sch
 	churnedAt: null,
 	tags: [],
 	attributes: {},
+	featureFlags: {},
 	fieldSources: {},
 	createdAt: NOW,
 	updatedAt: NOW,

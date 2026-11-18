@@ -139,6 +139,11 @@ export const Model = Schema.Struct({
 	channelOptions: Schema.Array(ChannelOption),
 	channelPopover: Popover.Model,
 	channelSearch: Schema.String,
+	/** The flags created in Hazel (`customer_feature_flags`); the others come from the accounts. */
+	createdFeatureFlags: Schema.Array(Schema.String),
+	flagPopover: Popover.Model,
+	/** The flags ticked in the "Add flags" picker. */
+	flagSelection: Schema.Array(Schema.String),
 	rawModal: Modal.Model,
 	/** The note the delete confirmation asks about (kept while the dialog animates out). */
 	deletingNoteId: Schema.NullOr(CustomerNoteId),
@@ -155,6 +160,7 @@ export const DONE_MENU_ID = "customer-signal-done"
 export const SIGNAL_MORE_MENU_ID = "customer-signal-more"
 export const TAG_POPOVER_ID = "customer-tag"
 export const CHANNEL_POPOVER_ID = "customer-channel"
+export const FLAG_POPOVER_ID = "customer-feature-flags"
 export const RAW_MODAL_ID = "customer-raw"
 export const DELETE_NOTE_MODAL_ID = "customer-delete-note"
 export const COMPOSER_ID = "customer-note-composer"

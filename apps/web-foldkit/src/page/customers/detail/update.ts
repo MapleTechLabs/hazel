@@ -7,6 +7,7 @@ import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
+import { featureFlagToast } from "../../../customers/feature-flags"
 import { isSnoozeKey, snoozeUntil } from "../../../customers/ui/menus"
 import { errorToastOf, successToast } from "../../../data/actions"
 import { AppRoute, type CustomerTab, customerRoute, hrefOf, type RouteOf } from "../../../route"
@@ -30,6 +31,7 @@ import {
 	FocusNoteComposer,
 	LoadNoteDrafts,
 	LinkCustomerChannel,
+	SetCustomerFeatureFlags,
 	UnlinkCustomerChannel,
 	UpdateCustomerAccount,
 	UpdateCustomerNote,
@@ -66,6 +68,7 @@ import {
 	snoozeEntries,
 	TAG_POPOVER_ID,
 	CHANNEL_POPOVER_ID,
+	FLAG_POPOVER_ID,
 	UNASSIGN,
 	userIdOfOwnerKey,
 } from "./model"
@@ -222,6 +225,9 @@ const initialModel = (route: Route): Model => ({
 	channelOptions: [],
 	channelPopover: Popover.init(CHANNEL_POPOVER_ID),
 	channelSearch: "",
+	createdFeatureFlags: [],
+	flagPopover: Popover.init(FLAG_POPOVER_ID),
+	flagSelection: [],
 	rawModal: Modal.init(RAW_MODAL_ID),
 	deletingNoteId: null,
 	deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
@@ -797,6 +803,49 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 					}),
 				),
 			),
+		}),
+		UpdatedCreatedFeatureFlags: ({ keys }) => ({
+			model: modifyFields(model, { createdFeatureFlags: () => keys }),
+		}),
+		GotFlagPopoverMessage: ({ message: popoverMessage }) => {
+			const result = Popover.update(model.flagPopover, popoverMessage)
+			return {
+				model: modifyFields(model, { flagPopover: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotFlagPopoverMessage({ message: child }),
+				),
+			}
+		},
+		ToggledFlagSelection: ({ key, isSelected }) => ({
+			model: modifyFields(model, {
+				flagSelection: (selection) =>
+					isSelected ? [...selection, key] : selection.filter((entry) => entry !== key),
+			}),
+		}),
+		PressedAddFlags: () => {
+			const args = target(model, shared)
+			const keys = model.flagSelection
+			const closed = PopoverControl.close(model.flagPopover)
+			const next = modifyFields(model, { flagSelection: () => [], flagPopover: () => closed.model })
+			const commands = Command.mapMessages(closed.commands ?? [], (child) =>
+				Message.GotFlagPopoverMessage({ message: child }),
+			)
+			if (args === null || keys.length === 0) return { model: next, commands }
+			return {
+				model: next,
+				commands: [...commands, SetCustomerFeatureFlags({ ...args, keys, enabled: true })],
+			}
+		},
+		PressedRemoveFlag: ({ key }) => {
+			const args = target(model, shared)
+			return args === null
+				? { model }
+				: { model, commands: [SetCustomerFeatureFlags({ ...args, keys: [key], enabled: false })] }
+		},
+		SucceededFeatureFlags: () => ({ model }),
+		FailedFeatureFlags: ({ failure }) => ({
+			model,
+			outMessage: toast(featureFlagToast("Couldn't change the feature flags", failure)),
 		}),
 		GotRawModalMessage: ({ message: modalMessage }) => {
 			const result = Modal.update(model.rawModal, modalMessage)

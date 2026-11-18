@@ -49,6 +49,7 @@ export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = 
 	{ table: schema.customerSettingsTable, visible: (p) => [isMember(p.userId)] },
 	{ table: schema.customerMetricDefinitionsTable, visible: (p) => [isMember(p.userId)] },
 	{ table: schema.customerConnectionsTable, visible: (p) => [isMember(p.userId)] },
+	{ table: schema.customerFeatureFlagsTable, visible: (p) => [isMember(p.userId)] },
 	{
 		table: schema.customerSyncRunsTable,
 		visible: (p, $) => [

@@ -123,6 +123,7 @@ export const customersTables = [
 	schema.customerUnmatchedRecordsTable,
 	schema.customerIgnoreRulesTable,
 	schema.customerChannelLinksTable,
+	schema.customerFeatureFlagsTable,
 	// Projection from the `OrgObject`.
 	schema.customerMembersTable,
 ] as const

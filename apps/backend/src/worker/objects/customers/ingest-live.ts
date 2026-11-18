@@ -888,6 +888,7 @@ const make = Effect.gen(function* () {
 			if (merged.length !== account.domains.length) patch.set("domains", merged)
 			if (op.attributes !== undefined)
 				patch.set("attributes", { ...account.attributes, ...op.attributes })
+			patch.set("featureFlags", op.featureFlags)
 			const createdAt = toDate(op.createdAt)
 			if (createdAt !== null && createdAt < account.firstSeenAt) patch.set("firstSeenAt", createdAt)
 			if (account.deletedAt !== null) patch.set("deletedAt", null)
@@ -923,6 +924,7 @@ const make = Effect.gen(function* () {
 						seatsUsed: op.seatsUsed ?? null,
 						seatsLimit: op.seatsLimit ?? null,
 						attributes: op.attributes ?? {},
+						featureFlags: op.featureFlags ?? {},
 						fieldSources,
 						firstSeenAt: toDate(op.createdAt) ?? session.now,
 						currency: settings.pipe(

@@ -27,9 +27,11 @@ import {
 	IconPlus,
 } from "../../../icons"
 import { type ChannelOption, channelMark, ORIGIN_LABEL, searchOptions } from "../../../customers/channels"
+import { featureFlagKeysOf, hasFlag } from "../../../customers/feature-flags"
 import { safeSourceUrl } from "../../../customers/providers"
 import { AppRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
+import { checkbox } from "../../../ui/checkbox"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
 import { input } from "../../../ui/input"
 import { link } from "../../../ui/link"
@@ -37,6 +39,7 @@ import { menuLabel } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import type { PageViewInputs } from "../../contract"
+import { isCustomersAdmin } from "../settings/shared"
 import { activityTab } from "./activity-tab"
 import { billingTab } from "./billing-tab"
 import { Message } from "./message"
@@ -690,6 +693,120 @@ const channelsSection = (h: HtmlBuilder<Message>, model: Model, context: Context
 	])
 }
 
+/** The "Add flags" picker: tick the flags this customer does not have, then add them at once. */
+const flagPicker = (h: HtmlBuilder<Message>, model: Model, candidates: ReadonlyArray<string>): Html =>
+	h.submodel({
+		slotId: model.flagPopover.id,
+		model: model.flagPopover,
+		view: Popover.view,
+		viewInputs: {
+			toTrigger: (attributes) =>
+				button(h, { intent: "outline", size: "xs", attributes: [...attributes] }, [
+					IconPlus(h, icon),
+					"Add flags",
+				]),
+			toContent: () => [
+				h.div(
+					[h.Class("flex w-64 flex-col gap-1 p-2")],
+					candidates.length === 0
+						? [
+								h.p(
+									[h.Class("px-2 py-3 text-muted-fg text-sm")],
+									["It has every flag. Create new ones under Settings → Feature flags."],
+								),
+							]
+						: [
+								h.div(
+									[h.Class("flex max-h-64 flex-col gap-1 overflow-y-auto px-1 py-1")],
+									candidates.map((key) =>
+										h.div(
+											[h.Key(key)],
+											[
+												checkbox(
+													h,
+													{
+														id: `customer-flag-${key}`,
+														isSelected: model.flagSelection.includes(key),
+														onChange: (isSelected) =>
+															Message.ToggledFlagSelection({ key, isSelected }),
+													},
+													key,
+												),
+											],
+										),
+									),
+								),
+								button(
+									h,
+									{
+										size: "sm",
+										isDisabled: model.flagSelection.length === 0,
+										onPress: Message.PressedAddFlags(),
+									},
+									[
+										model.flagSelection.length <= 1
+											? "Add flag"
+											: `Add ${formatCount(model.flagSelection.length)} flags`,
+									],
+								),
+							],
+				),
+			],
+			placement: "bottom start",
+		},
+		toParentMessage: (message) => Message.GotFlagPopoverMessage({ message }),
+	})
+
+/** The Clerk feature flags this customer has on, and (admins) adding and removing them. */
+const featureFlagsSection = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+	const on = Object.keys(context.account.featureFlags)
+		.filter((key) => hasFlag(context.account, key))
+		.sort()
+	const candidates = featureFlagKeysOf(model.createdFeatureFlags, model.accounts ?? []).filter(
+		(key) => !hasFlag(context.account, key),
+	)
+	return sidebarSection(h, "Feature flags", on.length === 0 ? null : formatCount(on.length), [
+		...(on.length === 0
+			? [h.p([h.Class("text-muted-fg text-sm")], ["No feature flags on."])]
+			: [
+					h.div(
+						[h.Class("flex flex-col gap-1")],
+						on.map((key) =>
+							h.div(
+								[
+									h.Key(key),
+									h.Class(
+										"flex min-h-8 items-center gap-2 rounded-lg border border-border px-3 py-1",
+									),
+								],
+								[
+									h.span(
+										[h.Class("min-w-0 flex-1 truncate font-mono text-fg text-sm")],
+										[key],
+									),
+									...(context.isAdmin
+										? [
+												button(
+													h,
+													{
+														intent: "plain",
+														size: "sq-xs",
+														onPress: Message.PressedRemoveFlag({ key }),
+														attributes: [h.AriaLabel(`Turn off ${key}`)],
+													},
+													[IconClose(h, icon)],
+												),
+											]
+										: []),
+								],
+							),
+						),
+					),
+				]),
+		...(context.isAdmin ? [h.div([h.Class("pt-1")], [flagPicker(h, model, candidates)])] : []),
+	])
+}
+
 const attributeValue = (value: unknown): string =>
 	typeof value === "string" || typeof value === "number" || typeof value === "boolean"
 		? String(value)
@@ -762,6 +879,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 				property(h, "Tags", tags(h, model, context)),
 			]),
 			channelsSection(h, model, context),
+			featureFlagsSection(h, model, context),
 			sidebarSection(
 				h,
 				"Attributes",
@@ -1038,6 +1156,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		account,
 		detail,
 		membersById: new Map(model.members.map((member) => [member.id, member])),
+		isAdmin: isCustomersAdmin(shared),
 	}
 	const body =
 		model.tab === "users"

@@ -8,10 +8,12 @@ import { type CommonError, failureMessage } from "~/lib/error-messages"
 import {
 	createNoteAction,
 	deleteNoteAction,
+	setFeatureFlagsAction,
 	updateAccountAction,
 	updateNoteAction,
 } from "../../../customers/actions"
 import { linkChannelAction, unlinkChannelAction } from "../../../customers/channels"
+import { settleFeatureFlags } from "../../../customers/feature-flags"
 import { catchCommon, errorToastOf } from "../../../data/actions"
 import { showBackgroundToast } from "../../../overlay/background-toasts"
 import { HazelRpc } from "../../../rpc"
@@ -184,6 +186,17 @@ export const UnlinkCustomerChannel = Command.define("UnlinkCustomerChannel", {
 				Effect.succeed(Message.FailedChannelAction({ action: "unlink", reason: "NotFound" })),
 			),
 			catchCommon((reason) => Message.FailedChannelAction({ action: "unlink", reason })),
+		),
+})
+
+/** Turn flags on (all of `keys`) or off for this customer, in Clerk. */
+export const SetCustomerFeatureFlags = Command.define("SetCustomerFeatureFlags", {
+	args: { ...target, keys: Schema.Array(Schema.String), enabled: Schema.Boolean },
+	messages: [Message.SucceededFeatureFlags, Message.FailedFeatureFlags],
+	execute: ({ accountId, ...args }) =>
+		setFeatureFlagsAction({ ...args, accountIds: [accountId] }).pipe(
+			Effect.as(Message.SucceededFeatureFlags()),
+			settleFeatureFlags((failure) => Message.FailedFeatureFlags({ failure })),
 		),
 })
 

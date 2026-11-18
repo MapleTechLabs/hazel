@@ -58,6 +58,7 @@ import {
 	CustomerConnectionId,
 	CustomerContactId,
 	CustomerEventId,
+	CustomerFeatureFlagId,
 	CustomerExternalRefId,
 	CustomerIgnoreRuleId,
 	CustomerInvoiceId,
@@ -138,6 +139,12 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		churnedAt: SQLite.nullable(timestamptz),
 		tags: SQLite.column(jsonb<ReadonlyArray<string>>(), { default: [] }),
 		attributes: SQLite.column(jsonb<Record<string, unknown>>(), { default: {} }),
+		/**
+		 * The boolean keys of the Clerk organization's `public_metadata` (`docs/customers/clerk.md`,
+		 * "Feature flags"), as last seen or written through `customers.featureFlags.set`. An account
+		 * holding several organizations shows the last one synced; Hazel writes to all of them.
+		 */
+		featureFlags: SQLite.column(jsonb<Readonly<Record<string, boolean>>>(), { default: {} }),
 		/** Field → the source that last set it (per-field precedence, `CustomerIngest`). */
 		fieldSources: SQLite.column(jsonb<Readonly<Record<string, CustomerSource>>>(), { default: {} }),
 		createdAt: createdAt(),
@@ -796,6 +803,24 @@ export const customerChannelLinksTable = SQLite.table("customer_channel_links", 
 	],
 })
 export type CustomerChannelLink = SQLite.SelectRowOf<typeof customerChannelLinksTable>
+
+/**
+ * A feature flag created in Hazel. The flags the Feature flags page lists are these plus every key
+ * in an account's `featureFlags` (what Clerk already holds), so a flag created here shows before any
+ * customer has it. Deleting a flag removes it from every customer and deletes this row.
+ */
+export const customerFeatureFlagsTable = SQLite.table("customer_feature_flags", {
+	columns: {
+		id: id(CustomerFeatureFlagId),
+		organizationId: uuid(OrganizationId),
+		key: SQLite.text,
+		createdBy: uuid(UserId),
+		createdAt: createdAt(),
+	},
+	primaryKey: ["id"],
+	indexes: [SQLite.uniqueIndex("customer_feature_flags_key_unique", ["key"])],
+})
+export type CustomerFeatureFlag = SQLite.SelectRowOf<typeof customerFeatureFlagsTable>
 
 // ---------------------------------------------------------------------------
 // Projection

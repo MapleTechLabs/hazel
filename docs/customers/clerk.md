@@ -166,6 +166,28 @@ reach every member, so other refusals name only the route and status, never Cler
 `provider` error that is not retried: the run fails with a message saying so, and the decode
 failure is logged by path and issue kind only, never with the payload.
 
+## Feature flags
+
+A customer's feature flags are the **boolean** keys of its Clerk organization's `public_metadata`
+(`{ "beta": true }`). Other metadata (strings, arrays, objects) is not read and never changed.
+
+- **Sync.** Every organization record a pull or an `organization.*` webhook brings carries its
+  metadata; ingest replaces the account's `featureFlags` with its boolean keys. The flags Hazel lists
+  are every key any customer holds plus the ones created in Hazel (`customer_feature_flags`), so a
+  new flag shows before anyone has it. A `false` key is off but still lists the flag.
+- **Writes.** `customers.featureFlags.set` (on: the key set to `true`; off: the key removed) and
+  `customers.featureFlag.delete` (the key removed from every organization holding it, then the flag
+  forgotten) call `PATCH /organizations/{id}/metadata` once per organization, 4 at a time. Clerk
+  deep-merges the body and a `null` removes a key, so nothing else in the metadata moves. Each
+  account is then written from Clerk's answer; the `organization.updated` webhook that follows
+  brings the same set. Organizations Clerk refuses leave their account unchanged and the call fails
+  with `CustomerFeatureFlagsError` naming them, after the others were written.
+- **Who.** Admins and owners. Needs an active Clerk connection; an account with no live Clerk
+  organization cannot be given a flag.
+- **Several organizations on one account.** A write goes to all of them; a sync shows the flags of
+  the organization synced last, so organizations changed apart in Clerk may read differently until
+  Hazel writes them again.
+
 ## Known gaps
 
 - **`user.deleted`** carries only `{ id, deleted }`, and the user is gone, so there is no way left

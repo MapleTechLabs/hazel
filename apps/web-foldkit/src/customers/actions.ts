@@ -10,6 +10,7 @@
 import type * as Customers from "@hazel/domain/customers"
 import {
 	type CustomerAccountId,
+	CustomerFeatureFlagId,
 	CustomerNoteId,
 	type CustomerSignalId,
 	type OrganizationId,
@@ -17,7 +18,12 @@ import {
 } from "@hazel/schema"
 import { optimisticAction } from "@hazel/effect-db-collection"
 import { Clock, Effect } from "effect"
-import { customerAccountCollection, customerNoteCollection, customerSignalCollection } from "~/db/collections"
+import {
+	customerAccountCollection,
+	customerFeatureFlagCollection,
+	customerNoteCollection,
+	customerSignalCollection,
+} from "~/db/collections"
 import { HazelRpc } from "../rpc"
 
 interface SignalTarget {
@@ -440,5 +446,122 @@ export const bulkUpdateAccountsAction = optimisticAction({
 				transactionId = result.transactionId
 			}
 			return { data: { updated }, transactionId }
+		}),
+})
+
+// FEATURE FLAGS
+
+interface FeatureFlagsChange {
+	readonly organizationId: OrganizationId
+	readonly accountIds: ReadonlyArray<CustomerAccountId>
+	readonly keys: ReadonlyArray<string>
+	/** On: `true` on each account; off: the key removed. */
+	readonly enabled: boolean
+}
+
+/**
+ * Turn `keys` on or off for every account, in Clerk then in the store (`customers.featureFlags.set`).
+ * On `CustomerFeatureFlagsError` the server kept what Clerk accepted; the stream brings it back.
+ */
+export const setFeatureFlagsAction = optimisticAction({
+	collections: [customerAccountCollection],
+	onMutate: (props: FeatureFlagsChange) => {
+		customerAccountCollection.update([...props.accountIds], (accounts) => {
+			for (const account of accounts) {
+				const next = { ...account.featureFlags }
+				for (const key of props.keys) {
+					if (props.enabled) next[key] = true
+					else delete next[key]
+				}
+				account.featureFlags = next
+			}
+		})
+		return { count: props.accountIds.length }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.featureFlags.set", {
+				organizationId: props.organizationId,
+				accountIds: props.accountIds,
+				keys: props.keys,
+				enabled: props.enabled,
+			})
+			return { data: result, transactionId: result.transactionId }
+		}),
+})
+
+const createFeatureFlag = optimisticAction({
+	collections: [customerFeatureFlagCollection],
+	onMutate: (
+		props: Stamp & {
+			readonly organizationId: OrganizationId
+			readonly id: CustomerFeatureFlagId
+			readonly key: string
+			readonly createdBy: UserId
+		},
+	) => {
+		customerFeatureFlagCollection.insert({
+			id: props.id,
+			organizationId: props.organizationId,
+			key: props.key,
+			createdBy: props.createdBy,
+			createdAt: props.at,
+		})
+		return { id: props.id }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.featureFlag.create", {
+				organizationId: props.organizationId,
+				id: props.id,
+				key: props.key,
+			})
+			return { data: result.data, transactionId: result.transactionId }
+		}),
+})
+
+/** A flag no customer holds yet (a client id, so the optimistic row is the one the server confirms). */
+export const createFeatureFlagAction = (props: {
+	readonly organizationId: OrganizationId
+	readonly key: string
+	readonly createdBy: UserId
+}) =>
+	Effect.flatMap(
+		Effect.sync(() => CustomerFeatureFlagId.make(crypto.randomUUID())),
+		(id) => stamped(createFeatureFlag)({ ...props, id }),
+	)
+
+/** Remove the flag from every customer in Clerk, then forget it (`customers.featureFlag.delete`). */
+export const deleteFeatureFlagAction = optimisticAction({
+	collections: [customerAccountCollection, customerFeatureFlagCollection],
+	onMutate: (props: { readonly organizationId: OrganizationId; readonly key: string }) => {
+		const holders = customerAccountCollection.toArray.filter((account) =>
+			Object.hasOwn(account.featureFlags, props.key),
+		)
+		if (holders.length > 0) {
+			customerAccountCollection.update(
+				holders.map((account) => account.id),
+				(accounts) => {
+					for (const account of accounts) {
+						const { [props.key]: _, ...rest } = account.featureFlags
+						account.featureFlags = rest
+					}
+				},
+			)
+		}
+		const created = customerFeatureFlagCollection.toArray.filter((flag) => flag.key === props.key)
+		if (created.length > 0) customerFeatureFlagCollection.delete(created.map((flag) => flag.id))
+		return { key: props.key }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.featureFlag.delete", {
+				organizationId: props.organizationId,
+				key: props.key,
+			})
+			return { data: result, transactionId: result.transactionId }
 		}),
 })

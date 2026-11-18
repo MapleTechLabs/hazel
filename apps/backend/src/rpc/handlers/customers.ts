@@ -53,6 +53,11 @@ import { callObject } from "../../worker/objects/calls"
 import { publishChannelCustomers } from "../../worker/objects/customers/channels"
 import { seedDemo } from "../../worker/objects/customers/demo"
 import { healthDryRun, ruleDryRun } from "../../worker/objects/customers/dry-run"
+import {
+	accountsWithFlag,
+	sendFeatureFlags,
+	writeFeatureFlags,
+} from "../../worker/objects/customers/feature-flags"
 import { CustomerIngest } from "../../worker/objects/customers/ingest"
 import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/customers/ingest-live"
 import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
@@ -1129,6 +1134,27 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 		const switchAccount = (connection: schema.CustomerConnection, now: Date) =>
 			switchProviderAccount(connection, now).pipe(Effect.provideService(CustomerIngest, ingest))
 
+		/**
+		 * Clerk first, then the accounts it accepted (and `also`) in one transaction, committed even when
+		 * Clerk refused some: the error comes after.
+		 */
+		const featureFlags = (
+			input: Parameters<typeof sendFeatureFlags>[0],
+			also: Effect.Effect<unknown, Infra, Database.Database> = Effect.void,
+		) =>
+			Effect.gen(function* () {
+				const { writes, error } = yield* sendFeatureFlags(input).pipe(
+					Effect.provideService(CustomerProviders, providers),
+					Effect.provideService(IntegrationEncryption, encryption),
+				)
+				const now = yield* currentTime
+				const answer = yield* txOnly(
+					Effect.andThen(writeFeatureFlags(writes, now), Option.isNone(error) ? also : Effect.void),
+				)
+				if (Option.isSome(error)) return yield* error.value
+				return answer
+			})
+
 		return {
 			"customers.rule.create": ({ rule, organizationId: payloadOrg }) =>
 				Effect.gen(function* () {
@@ -1589,6 +1615,55 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 							return { ignoredRecordIds: [recordId] }
 						}),
 					)
+				}).pipe(remap),
+
+			"customers.featureFlag.create": ({ id, key, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					const actor = yield* requireAdmin
+					return yield* withTx(
+						Effect.gen(function* () {
+							const [row] = yield* db.run(
+								SQLite.insertInto(schema.customerFeatureFlagsTable)
+									.values({
+										id, // `undefined`: the column's default
+										organizationId,
+										key,
+										createdBy: actor.userId,
+									})
+									.onConflictDoNothing()
+									.returning(),
+							)
+							if (row === undefined)
+								return yield* invalid(`The feature flag ${key} already exists`)
+							return row
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.featureFlag.delete": ({ key }) =>
+				Effect.gen(function* () {
+					yield* requireAdmin
+					const deleteFlag = db.run(
+						SQLite.deleteFrom(schema.customerFeatureFlagsTable).where(($) => [$.key.eq(key)]),
+					)
+					const accountIds = yield* accountsWithFlag(key)
+					if (accountIds.length === 0) return yield* txOnly(deleteFlag)
+					return yield* featureFlags(
+						{ accountIds, changes: { [key]: null }, requireClerk: false },
+						deleteFlag,
+					)
+				}).pipe(remap),
+
+			"customers.featureFlags.set": ({ accountIds, keys, enabled }) =>
+				Effect.gen(function* () {
+					yield* requireAdmin
+					for (const accountId of new Set(accountIds)) yield* requireAccount(accountId)
+					return yield* featureFlags({
+						accountIds,
+						changes: Object.fromEntries(keys.map((key) => [key, enabled ? true : null])),
+						requireClerk: true,
+					})
 				}).pipe(remap),
 
 			"customers.ignoreRule.delete": ({ ruleId }) =>

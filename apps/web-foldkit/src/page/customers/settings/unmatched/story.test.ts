@@ -100,6 +100,7 @@ const account = (n: number, name: string, domain: string): AccountRow => ({
 	customerSinceMs: null,
 	churnedAtMs: null,
 	tags: [],
+	featureFlags: {},
 })
 const northwind = account(1, "Northwind Labs", "northwind.io")
 const acme = account(2, "Acme Robotics", "acme.com")

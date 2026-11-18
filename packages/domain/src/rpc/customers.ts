@@ -14,6 +14,7 @@ import {
 	CustomerAccountId,
 	CustomerChannelLinkId,
 	CustomerConnectionId,
+	CustomerFeatureFlagId,
 	CustomerIgnoreRuleId,
 	CustomerNoteId,
 	CustomerSavedViewId,
@@ -51,6 +52,7 @@ import {
 	ChannelLink,
 	Connection,
 	Event,
+	FeatureFlag,
 	IgnoreRule,
 	Invoice,
 	Note,
@@ -75,6 +77,14 @@ const NonEmptyText = (max: number) => Schema.String.check(Schema.isMinLength(1),
 /** An account's tags: ≤ 20, each ≤ 50 characters. */
 const Tags = Schema.Array(Text(50)).check(Schema.isMaxLength(20))
 /** An ignore rule's glob: ≤ 200 characters, ≤ 5 `*`. */
+/** A new feature flag's key, as it will read in Clerk's `public_metadata`. */
+const NewFeatureFlagKey = Schema.String.check(
+	Schema.isPattern(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/, {
+		message: "Letters, digits, `_`, `.`, `:` and `-`, at most 64, starting with a letter or digit",
+	}),
+)
+/** Any flag's key: one Clerk already holds may be any metadata key. */
+const FeatureFlagKey = NonEmptyText(200)
 const GlobPattern = NonEmptyText(200).check(
 	Schema.makeFilter((pattern) => (pattern.split("*").length <= 6 ? undefined : "At most 5 wildcards")),
 )
@@ -119,6 +129,15 @@ export class CustomersInvalidRequestError extends Schema.TaggedError<CustomersIn
 export class CustomerProviderUnavailableError extends Schema.TaggedError<CustomerProviderUnavailableError>()(
 	"CustomerProviderUnavailableError",
 	{ provider: CustomerProvider },
+) {}
+
+/**
+ * Clerk refused (or could not be reached for) some customers' feature flags: those listed are
+ * unchanged, every other one was updated.
+ */
+export class CustomerFeatureFlagsError extends Schema.TaggedError<CustomerFeatureFlagsError>()(
+	"CustomerFeatureFlagsError",
+	{ message: Schema.String, failedAccountIds: Schema.Array(CustomerAccountId) },
 ) {}
 
 /** The provider refused the credentials (or could not be reached to check them). */
@@ -535,6 +554,51 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		CustomersNotFoundError,
 		/** The record is not open. */
 		CustomersInvalidRequestError,
+	),
+
+	/**
+	 * A feature flag no customer holds yet, so it can be assigned (`customers.featureFlags.set`).
+	 * A key already created is `CustomersInvalidRequestError`.
+	 */
+	write(
+		"customers.featureFlag.create",
+		{
+			/** Client-generated, for the optimistic row. */
+			id: Schema.optionalKey(CustomerFeatureFlagId),
+			key: NewFeatureFlagKey,
+		},
+		withTx(FeatureFlag.Schema),
+		CustomersInvalidRequestError,
+	),
+
+	/**
+	 * Remove the key from the `public_metadata` of every Clerk organization that holds it, then
+	 * forget the flag. With `CustomerFeatureFlagsError` the flag stays, on the customers it lists.
+	 */
+	write(
+		"customers.featureFlag.delete",
+		{ key: FeatureFlagKey },
+		Tx,
+		CustomersInvalidRequestError,
+		CustomerFeatureFlagsError,
+	),
+
+	/**
+	 * Turn every key on (`true` in each account's Clerk organizations' `public_metadata`) or off (the
+	 * key removed) for every account. An account with no live Clerk organization, or no active Clerk
+	 * connection, is `CustomersInvalidRequestError` before anything is written.
+	 */
+	write(
+		"customers.featureFlags.set",
+		{
+			accountIds: Schema.Array(CustomerAccountId).check(Schema.isMinLength(1), Schema.isMaxLength(500)),
+			keys: Schema.Array(FeatureFlagKey).check(Schema.isMinLength(1), Schema.isMaxLength(50)),
+			enabled: Schema.Boolean,
+		},
+		Tx,
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+		CustomerFeatureFlagsError,
 	),
 
 	write("customers.ignoreRule.delete", { ruleId: CustomerIgnoreRuleId }, Tx, CustomersNotFoundError),

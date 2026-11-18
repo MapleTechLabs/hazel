@@ -1,5 +1,5 @@
 {
-	"migration": "0010_customer_channel_links",
+	"migration": "0011_customer_feature_flags",
 	"entities": [
 		{
 			"kind": "table",
@@ -53,6 +53,13 @@
 		{
 			"kind": "table",
 			"name": "customer_external_refs",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_feature_flags",
 			"primaryKey": {
 				"columns": ["id"]
 			}
@@ -487,7 +494,7 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "fieldSources",
+			"name": "featureFlags",
 			"position": 35,
 			"type": "text",
 			"notNull": true,
@@ -496,16 +503,16 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "createdAt",
+			"name": "fieldSources",
 			"position": 36,
 			"type": "text",
 			"notNull": true,
-			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+			"default": "'{}'"
 		},
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "updatedAt",
+			"name": "createdAt",
 			"position": 37,
 			"type": "text",
 			"notNull": true,
@@ -514,8 +521,17 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "deletedAt",
+			"name": "updatedAt",
 			"position": 38,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "deletedAt",
+			"position": 39,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -1326,6 +1342,51 @@
 			"table": "customer_external_refs",
 			"name": "updatedAt",
 			"position": 15,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_feature_flags",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_feature_flags",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_feature_flags",
+			"name": "key",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_feature_flags",
+			"name": "createdBy",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_feature_flags",
+			"name": "createdAt",
+			"position": 4,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -3322,6 +3383,13 @@
 			"name": "customer_refs_entity_idx",
 			"unique": false,
 			"columns": ["\"entityType\"", "\"entityId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_feature_flags",
+			"name": "customer_feature_flags_key_unique",
+			"unique": true,
+			"columns": ["\"key\""]
 		},
 		{
 			"kind": "index",

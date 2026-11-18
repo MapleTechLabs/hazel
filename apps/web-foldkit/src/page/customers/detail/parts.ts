@@ -17,6 +17,8 @@ export interface Context {
 	/** `customers.account.detail`, once it answers. */
 	readonly detail: Customers.AccountDetail | null
 	readonly membersById: ReadonlyMap<string, MemberRow>
+	/** An admin or owner: may change the customer's feature flags. */
+	readonly isAdmin: boolean
 }
 
 export const icon = { attributes: { "data-slot": "icon" } }

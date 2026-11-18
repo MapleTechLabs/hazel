@@ -212,3 +212,7 @@ export const customerChannelLinkCollection = customersCollection(
 	"customer_channel_links",
 	Customers.ChannelLink.Schema,
 )
+export const customerFeatureFlagCollection = customersCollection(
+	"customer_feature_flags",
+	Customers.FeatureFlag.Schema,
+)

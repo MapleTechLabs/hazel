@@ -9,7 +9,7 @@
  * (`../credentials.ts`) and only ever decrypted to call Clerk or verify a delivery.
  *
  * Nothing here writes the store: `webhook` and `pull` produce `IngestOp`s and `CustomerIngest`
- * applies them.
+ * applies them. The one write to Clerk is `setFeatureFlags` (`../feature-flags.ts`).
  *
  * Only the connection's instance (`credentials.externalAccountId`, what `validate` found): a
  * delivery not stamped with its `instance_id` is refused (`./webhook.ts`). A secret key opens
@@ -21,11 +21,11 @@ import { HttpClient } from "effect/http"
 import { CustomerProviderError } from "../provider-errors"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../providers"
 import { WEBHOOK_REQUESTS } from "../provider-http"
-import { makeClerkGet } from "./http"
-import { onNoMatchOf } from "./map"
+import { makeClerkGet, makeClerkPatch } from "./http"
+import { featureFlagsOf, onNoMatchOf } from "./map"
 import { pullPage } from "./pull"
 import { receiveWebhook } from "./webhook"
-import { ClerkInstance, ClerkOrganizationsPage } from "./wire"
+import { ClerkInstance, ClerkOrganization, ClerkOrganizationsPage } from "./wire"
 
 /**
  * Webhooks carry every change as it happens; the sweep behind them only reconciles missed
@@ -101,6 +101,14 @@ export const makeClerkAdapter = Effect.gen(function* () {
 			}),
 
 		pullIntervalMs: CLERK_PULL_INTERVAL_MS,
+
+		// Clerk deep-merges `public_metadata`, and a `null` removes the key: other metadata is kept.
+		setFeatureFlags: (credentials, organizationId, changes) =>
+			makeClerkPatch(client, credentials.apiKey)(
+				`/organizations/${encodeURIComponent(organizationId)}/metadata`,
+				{ public_metadata: changes },
+				ClerkOrganization,
+			).pipe(Effect.map((org) => featureFlagsOf(org.public_metadata ?? {}))),
 	}
 	return adapter
 })

@@ -3,7 +3,7 @@
  * stream and the RPCs carry them: timestamps as `JsonDate`, JSON columns parsed.
  *
  * Synced (client collections): `Account`, `Signal`, `SignalRule`, `Note`, `SavedView`, `Settings`,
- * `MetricDefinition`, `Connection`, `SyncRun`, `ChannelLink`. The rest travel in RPC results.
+ * `MetricDefinition`, `Connection`, `SyncRun`, `ChannelLink`, `FeatureFlag`. The rest travel in RPC results.
  */
 import {
 	ChannelId,
@@ -12,6 +12,7 @@ import {
 	CustomerConnectionId,
 	CustomerContactId,
 	CustomerEventId,
+	CustomerFeatureFlagId,
 	CustomerExternalRefId,
 	CustomerIgnoreRuleId,
 	CustomerInvoiceId,
@@ -107,6 +108,8 @@ class AccountModel extends M.Class<AccountModel>("CustomerAccount")({
 	churnedAt: NullDate,
 	tags: S.Array(S.String),
 	attributes: Attributes,
+	/** The Clerk organization's boolean `public_metadata` keys. */
+	featureFlags: S.Record(S.String, S.Boolean),
 	fieldSources: FieldSources,
 	...timestamps,
 	deletedAt: M.GeneratedByApp(NullDate),
@@ -197,6 +200,17 @@ class ChannelLinkModel extends M.Class<ChannelLinkModel>("CustomerChannelLink")(
 }) {}
 export const ChannelLink = M.expose(ChannelLinkModel)
 export type ChannelLink = typeof ChannelLink.Schema.Type
+
+/** A feature flag created in Hazel (one no customer may hold yet); see `customer_feature_flags`. */
+class FeatureFlagModel extends M.Class<FeatureFlagModel>("CustomerFeatureFlag")({
+	id: M.GeneratedOptional(CustomerFeatureFlagId),
+	organizationId: OrganizationId,
+	key: S.String,
+	createdBy: UserId,
+	createdAt: M.Generated(JsonDate),
+}) {}
+export const FeatureFlag = M.expose(FeatureFlagModel)
+export type FeatureFlag = typeof FeatureFlag.Schema.Type
 
 class SavedViewModel extends M.Class<SavedViewModel>("CustomerSavedView")({
 	id: M.GeneratedOptional(CustomerSavedViewId),

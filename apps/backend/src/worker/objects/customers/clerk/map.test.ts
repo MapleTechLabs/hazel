@@ -50,6 +50,8 @@ describe("accountOp", () => {
 			seatsUsed: 12,
 			seatsLimit: 25,
 			attributes: { slug: "acme-analytics" },
+			// `regions` is no boolean: not a flag.
+			featureFlags: {},
 			createdAt: "2026-01-14T09:12:00.000Z",
 			// Clerk *is* the shared id every other source matches on, so it claims no other.
 			sameAs: [],
@@ -64,6 +66,16 @@ describe("accountOp", () => {
 		expect(mapped.attributes).toBeUndefined()
 		// A payload without counts leaves the seats a pull established alone.
 		expect(mapped.seatsUsed).toBeUndefined()
+	})
+
+	it("reads the boolean public metadata keys as feature flags, and absent metadata as unknown", () => {
+		const flagged = org({
+			...ORG_ACME,
+			public_metadata: { beta: true, legacy: false, plan: "pro", n: 1 },
+		})
+		expect(accountOp(flagged, "create").featureFlags).toEqual({ beta: true, legacy: false })
+		const { public_metadata: _, ...bare } = ORG_ACME
+		expect(accountOp(org(bare), "create").featureFlags).toBeUndefined()
 	})
 
 	it("parks unmatched organizations when the connection may not create accounts", () => {

@@ -116,6 +116,15 @@ export interface CustomerProviderAdapter {
 	}) => Effect.Effect<PullPage, CustomerProviderError>
 	/** Scheduled pull period (webhooks cover the rest); e.g. Maple hourly, Stripe every 6 hours. */
 	readonly pullIntervalMs: number
+	/**
+	 * Merge `changes` into the account record's feature flags (`true`/`false` sets a key, `null`
+	 * removes it) and answer the record's whole set as the provider now holds it. Clerk only.
+	 */
+	readonly setFeatureFlags?: (
+		credentials: ProviderCredentials,
+		externalId: string,
+		changes: Readonly<Record<string, boolean | null>>,
+	) => Effect.Effect<Record<string, boolean>, CustomerProviderError>
 }
 
 export interface CustomerProvidersApi {

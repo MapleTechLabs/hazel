@@ -18,6 +18,7 @@ import { DateTime, Effect, Schema, Stream } from "effect"
 import {
 	customerAccountCollection,
 	customerConnectionCollection,
+	customerFeatureFlagCollection,
 	customerSavedViewCollection,
 	customerSettingsCollection,
 	customerSignalCollection,
@@ -59,6 +60,8 @@ export const AccountRow = Schema.Struct({
 	customerSinceMs: Schema.NullOr(Schema.Number),
 	churnedAtMs: Schema.NullOr(Schema.Number),
 	tags: Schema.Array(Schema.String),
+	/** The Clerk organization's flags: on when `true`; a `false` key is off. */
+	featureFlags: Schema.Record(Schema.String, Schema.Boolean),
 })
 export type AccountRow = typeof AccountRow.Type
 
@@ -136,6 +139,7 @@ export const toAccountRow = (account: Customers.Account): AccountRow => ({
 	customerSinceMs: msOrNull(account.customerSince),
 	churnedAtMs: msOrNull(account.churnedAt),
 	tags: account.tags,
+	featureFlags: account.featureFlags,
 })
 
 export const toSignalRow = (signal: Customers.Signal): SignalRow => ({
@@ -392,3 +396,19 @@ export const queueTabOf = (signal: SignalRow): QueueTab =>
 
 /** When a resolved signal was resolved: by a person, or (auto-resolved) when it closed. */
 export const resolvedAtMsOf = (signal: SignalRow): number | null => signal.resolvedAtMs ?? signal.closedAtMs
+
+/** The keys of the feature flags created in Hazel (`customer_feature_flags`). */
+export const createdFeatureFlagsStream = <Message>(
+	organizationId: OrganizationId,
+	toMessage: (keys: ReadonlyArray<string>) => Message,
+): Stream.Stream<Message> =>
+	withCustomersSource(
+		organizationId,
+		liveQueryStream<Customers.FeatureFlag, Message>(
+			(q) =>
+				q
+					.from({ flag: customerFeatureFlagCollection })
+					.where(({ flag }) => eq(flag.organizationId, organizationId)),
+			(rows) => toMessage(rows.map((row) => row.key)),
+		),
+	)
