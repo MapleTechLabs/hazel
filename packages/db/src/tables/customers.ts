@@ -121,6 +121,11 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		seatsUsed: SQLite.nullable(SQLite.integer),
 		seatsLimit: SQLite.nullable(SQLite.integer),
 		contactCount: count(),
+		/**
+		 * Live Clerk organizations it holds: more than one after a merge (`customers.account.merge`) or
+		 * a link. Kept by the merge and by compute.
+		 */
+		organizationCount: count(),
 		activeUsers30d: count(),
 		/** 7-day average of daily active users vs the 28 days before, percent; null without a baseline. */
 		activeUsersTrendPct: SQLite.nullable(SQLite.real),
@@ -196,6 +201,15 @@ export type NewCustomerContact = SQLite.InsertRowOf<typeof customerContactsTable
  * `(provider, externalId)` for accounts, and per `(provider, externalId, accountId)` for contacts
  * (one Clerk user is a contact of each org it belongs to): partial indexes, `extra-indexes.ts`.
  */
+/**
+ * One membership of a contact ref: when it was last seen (ISO), and when it was left (the removal's
+ * `observedAt`, else when it arrived): an op observed at or before that is a late delivery.
+ */
+export interface ContactMembership {
+	readonly seenAt: string
+	readonly leftAt?: string
+}
+
 export const customerExternalRefsTable = SQLite.table("customer_external_refs", {
 	columns: {
 		id: id(CustomerExternalRefId),
@@ -207,6 +221,15 @@ export const customerExternalRefsTable = SQLite.table("customer_external_refs", 
 		/** The account itself, or the contact's account. */
 		accountId: uuid(CustomerAccountId),
 		externalId: SQLite.text,
+		/** The provider record's own name (an account ref's organization or customer name), as last seen. */
+		name: SQLite.nullable(SQLite.text),
+		/**
+		 * A contact ref's memberships: each account record (Clerk organization) it is a member through
+		 * (`ContactMembership`). After a merge one ref may stand for several; leaving one keeps it live,
+		 * and a full sweep drops the ones it did not see. Null before it was known, and once the ref is
+		 * stale.
+		 */
+		viaAccounts: SQLite.nullable(jsonb<Readonly<Record<string, ContactMembership>>>()),
 		/** Deep link to the provider's dashboard. */
 		externalUrl: SQLite.nullable(SQLite.text),
 		matchMethod: textEnum(MatchMethod.literals),

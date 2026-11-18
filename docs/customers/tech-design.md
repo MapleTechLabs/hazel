@@ -199,6 +199,13 @@ Rules:
 - **Ignored accounts:** an account no customer holds that an ignore rule matches by id, or whose
   unmatched record was ignored by hand, takes its members, billing and usage with it (`Ignored`,
   nothing parked). A `removed` contact of an unknown account is `Unchanged`, never parked.
+- **Merged customers** (`customers.account.merge`, admins, `worker/objects/customers/merge.ts`): one
+  account can hold several Clerk organizations, each keeping its own ids at Clerk, Stripe and
+  Autumn. The merged account's refs, contacts (a person in both folds into one: same contact ref,
+  else same email), billing, events, notes, signals and channel links move to the kept one; it is
+  soft-deleted, the kept name becomes manual (`hazel`), and the last year's MRR movements are
+  rebuilt. `organizationCount` (live Clerk refs; kept by the merge and by compute) marks such a
+  customer in the UI; each ref keeps its provider record's `name`.
 - **Field precedence:** `FIELD_PRECEDENCE` (`hazel` manual edit > clerk > stripe > autumn > maple for
   name; per field), recorded in `fieldSources`; domains merge (never removed); fixed in v1.
 - **Deletes:** `account.deleted` / `contact.removed` → ref `staleAt` (+ the op's `observedAt` as

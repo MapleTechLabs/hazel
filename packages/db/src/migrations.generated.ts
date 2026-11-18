@@ -507,5 +507,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_channel_links_channel_unique" ON "customer_channel_links" ("channelId") WHERE "deletedAt" IS NULL',
 			],
 		},
+		{
+			id: "0011_customer_merge",
+			statements: [
+				'ALTER TABLE "customer_accounts" ADD COLUMN "organizationCount" integer NOT NULL DEFAULT 0',
+				'ALTER TABLE "customer_external_refs" ADD COLUMN "name" text',
+				'ALTER TABLE "customer_external_refs" ADD COLUMN "viaAccounts" text',
+			],
+		},
 	],
 }

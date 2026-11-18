@@ -8,6 +8,7 @@ import { type CommonError, failureMessage } from "~/lib/error-messages"
 import {
 	createNoteAction,
 	deleteNoteAction,
+	mergeAccountAction,
 	updateAccountAction,
 	updateNoteAction,
 } from "../../../customers/actions"
@@ -185,6 +186,25 @@ export const UnlinkCustomerChannel = Command.define("UnlinkCustomerChannel", {
 			),
 			catchCommon((reason) => Message.FailedChannelAction({ action: "unlink", reason })),
 		),
+})
+
+/** Merge `accountId` into this customer (`intoAccountId`); `name` is the merged one's, for the toast. */
+export const MergeCustomerAccount = Command.define("MergeCustomerAccount", {
+	args: { ...target, intoAccountId: CustomerAccountId, name: Schema.String },
+	messages: [Message.SucceededMerge, Message.FailedMerge],
+	execute: ({ name, ...args }) => {
+		const accountId = args.intoAccountId
+		return mergeAccountAction(args).pipe(
+			Effect.as(Message.SucceededMerge({ accountId, name })),
+			Effect.catchTags({
+				CustomersNotFoundError: () =>
+					Effect.succeed(Message.FailedMerge({ accountId, reason: "NotFound" })),
+				CustomersInvalidRequestError: () =>
+					Effect.succeed(Message.FailedMerge({ accountId, reason: "Stale" })),
+			}),
+			catchCommon((reason) => Message.FailedMerge({ accountId, reason })),
+		)
+	},
 })
 
 // NOTES
