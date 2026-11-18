@@ -462,7 +462,7 @@ const make = Effect.gen(function* () {
 			/** The provider record's own name (account refs). */
 			readonly name?: string | null | undefined
 			/** The account records a contact ref is a member through. */
-			readonly viaAccounts?: Readonly<Record<string, string>> | null
+			readonly viaAccounts?: Readonly<Record<string, schema.ContactMembership>> | null
 		},
 	) =>
 		Effect.gen(function* () {
@@ -1173,14 +1173,24 @@ const make = Effect.gen(function* () {
 			if (op.removed === true) {
 				if (Option.isNone(known) || alreadyRemoved(op.observedAt, known.value))
 					return outcome.unchanged(op.externalId)
-				// A merged customer's member through another of its organizations stays.
+				// A merged customer's member through another of its organizations stays; this one is
+				// marked left, so a late update from before it cannot add it back.
 				const via = known.value.viaAccounts ?? {}
-				const { [op.account.externalId]: left, ...rest } = via
-				if (Object.keys(rest).length > 0) {
-					if (left === undefined) return outcome.unchanged(known.value.entityId)
+				const org = op.account.externalId
+				const others = Object.entries(via).filter(
+					([key, membership]) => key !== org && membership.leftAt === undefined,
+				)
+				if (others.length > 0) {
+					const current = via[org]
+					if (current === undefined || current.leftAt !== undefined)
+						return outcome.unchanged(known.value.entityId)
+					const leftAt = op.observedAt ?? session.now.toISOString()
 					yield* db.run(
 						SQLite.update(schema.customerExternalRefsTable)
-							.set({ viaAccounts: rest, updatedAt: session.now })
+							.set({
+								viaAccounts: { ...via, [org]: { ...current, leftAt } },
+								updatedAt: session.now,
+							})
 							.where(($) => [$.id.eq(known.value.id)]),
 					)
 					return outcome.updated(known.value.entityId)
@@ -1190,6 +1200,17 @@ const make = Effect.gen(function* () {
 			}
 			// Removed after the source last changed it: a late delivery.
 			if (Option.isSome(known) && observedBefore(op.observedAt, known.value))
+				return outcome.unchanged(known.value.entityId)
+			// The same for one membership of a merged customer's person.
+			const leftAt = Option.isSome(known)
+				? known.value.viaAccounts?.[op.account.externalId]?.leftAt
+				: undefined
+			if (
+				Option.isSome(known) &&
+				leftAt !== undefined &&
+				op.observedAt !== undefined &&
+				new Date(op.observedAt) <= new Date(leftAt)
+			)
 				return outcome.unchanged(known.value.entityId)
 			let contactId = Option.isSome(known) ? (known.value.entityId as CustomerContactId) : undefined
 			let created = false
@@ -1233,7 +1254,7 @@ const make = Effect.gen(function* () {
 					accountId: accountId.value,
 					matchMethod: created ? "created" : "existing",
 					externalUrl: providerLink(session.context.provider, op.externalUrl),
-					viaAccounts: { [op.account.externalId]: session.now.toISOString() },
+					viaAccounts: { [op.account.externalId]: { seenAt: session.now.toISOString() } },
 				})
 			}
 			const id = contactId
@@ -1252,7 +1273,12 @@ const make = Effect.gen(function* () {
 				const via = known.value.staleAt === null ? (known.value.viaAccounts ?? {}) : {}
 				yield* db.run(
 					SQLite.update(schema.customerExternalRefsTable)
-						.set({ viaAccounts: { ...via, [op.account.externalId]: session.now.toISOString() } })
+						.set({
+							viaAccounts: {
+								...via,
+								[op.account.externalId]: { seenAt: session.now.toISOString() },
+							},
+						})
 						.where(($) => [$.id.eq(known.value.id)]),
 				)
 			}
@@ -2349,11 +2375,14 @@ const make = Effect.gen(function* () {
 					if (entityType === "contact")
 						yield* db.query(
 							Database.sql`UPDATE "customer_external_refs" SET "viaAccounts" = (
-								SELECT json_group_object("key", "value") FROM json_each("viaAccounts")
-								WHERE "value" >= ${since.toISOString()})
+								SELECT json_group_object("key", json("value")) FROM json_each("viaAccounts")
+								WHERE json_extract("value", '$.leftAt') IS NOT NULL
+									OR json_extract("value", '$.seenAt') >= ${since.toISOString()})
 							WHERE "connectionId" = ${connectionId} AND "entityType" = 'contact'
 								AND "staleAt" IS NULL AND "viaAccounts" IS NOT NULL
-								AND EXISTS (SELECT 1 FROM json_each("viaAccounts") WHERE "value" < ${since.toISOString()})`,
+								AND EXISTS (SELECT 1 FROM json_each("viaAccounts")
+									WHERE json_extract("value", '$.leftAt') IS NULL
+										AND json_extract("value", '$.seenAt') < ${since.toISOString()})`,
 						)
 				}
 				if (entityTypes.includes("subscription")) {

@@ -201,6 +201,15 @@ export type NewCustomerContact = SQLite.InsertRowOf<typeof customerContactsTable
  * `(provider, externalId)` for accounts, and per `(provider, externalId, accountId)` for contacts
  * (one Clerk user is a contact of each org it belongs to): partial indexes, `extra-indexes.ts`.
  */
+/**
+ * One membership of a contact ref: when it was last seen (ISO), and when it was left (the removal's
+ * `observedAt`, else when it arrived): an op observed at or before that is a late delivery.
+ */
+export interface ContactMembership {
+	readonly seenAt: string
+	readonly leftAt?: string
+}
+
 export const customerExternalRefsTable = SQLite.table("customer_external_refs", {
 	columns: {
 		id: id(CustomerExternalRefId),
@@ -215,12 +224,12 @@ export const customerExternalRefsTable = SQLite.table("customer_external_refs", 
 		/** The provider record's own name (an account ref's organization or customer name), as last seen. */
 		name: SQLite.nullable(SQLite.text),
 		/**
-		 * A contact ref's memberships: each account record (Clerk organization) it is a member through,
-		 * with when it was last seen there (ISO). After a merge one ref may stand for several; leaving
-		 * one keeps it live, and a full sweep drops the ones it did not see. Null before it was known,
-		 * and once the ref is stale.
+		 * A contact ref's memberships: each account record (Clerk organization) it is a member through
+		 * (`ContactMembership`). After a merge one ref may stand for several; leaving one keeps it live,
+		 * and a full sweep drops the ones it did not see. Null before it was known, and once the ref is
+		 * stale.
 		 */
-		viaAccounts: SQLite.nullable(jsonb<Readonly<Record<string, string>>>()),
+		viaAccounts: SQLite.nullable(jsonb<Readonly<Record<string, ContactMembership>>>()),
 		/** Deep link to the provider's dashboard. */
 		externalUrl: SQLite.nullable(SQLite.text),
 		matchMethod: textEnum(MatchMethod.literals),

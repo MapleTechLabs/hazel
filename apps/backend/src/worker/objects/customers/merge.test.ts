@@ -392,4 +392,47 @@ describe("customers.account.merge", () => {
 				expect(ada()).toEqual([{ deleted: 1 }])
 			}),
 		))
+
+	it("ignores a late update of a membership already left", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					clerkOrg("org_1", "Acme"),
+					clerkOrg("org_2", "Acme EU"),
+					member("user_a", "org_1", "ada@acme.com"),
+					member("user_a", "org_2", "ada@acme.com"),
+				])
+				const idOf = (name: string) =>
+					world.rows<{ id: CustomerAccountId }>(
+						`SELECT id FROM customer_accounts WHERE name = ?`,
+						name,
+					)[0]!.id
+				const kept = idOf("Acme")
+				yield* world.call(
+					"customers.account.merge",
+					{ accountId: idOf("Acme EU"), intoAccountId: kept },
+					world.owner,
+				)
+				const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000).toISOString()
+				yield* world.ingest("clerk", [
+					{ ...member("user_a", "org_2", "ada@acme.com"), removed: true, observedAt: at(10) },
+				])
+				// An update read before she left Acme EU arrives late: it does not bring the membership back.
+				yield* world.ingest("clerk", [
+					{ ...member("user_a", "org_2", "ada@acme.com"), observedAt: at(5) },
+				])
+				yield* world.ingest("clerk", [
+					{ ...member("user_a", "org_1", "ada@acme.com"), removed: true, observedAt: at(20) },
+				])
+				expect(
+					world.rows(
+						`SELECT c.deletedAt IS NOT NULL AS deleted FROM customer_contacts AS c
+						JOIN customer_external_refs AS r ON r.entityId = c.id
+						WHERE r.entityType = 'contact' AND r.externalId = 'user_a' AND r.accountId = ?`,
+						kept,
+					),
+				).toEqual([{ deleted: 1 }])
+			}),
+		))
 })

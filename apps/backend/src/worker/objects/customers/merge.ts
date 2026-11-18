@@ -228,7 +228,7 @@ export const mergeAccounts = Effect.fn("Customers.mergeAccounts")(function* (
 	// Contact refs from before memberships were recorded: their account's own records of that source.
 	yield* db.query(
 		Database.sql`UPDATE "customer_external_refs" SET "viaAccounts" = (
-			SELECT json_group_object("a"."externalId", ${now.toISOString()}) FROM "customer_external_refs" AS "a"
+			SELECT json_group_object("a"."externalId", json_object('seenAt', ${now.toISOString()})) FROM "customer_external_refs" AS "a"
 			WHERE "a"."entityType" = 'account' AND "a"."accountId" = "customer_external_refs"."accountId"
 				AND "a"."provider" = "customer_external_refs"."provider")
 		WHERE "entityType" = 'contact' AND "viaAccounts" IS NULL AND "staleAt" IS NULL
