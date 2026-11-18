@@ -376,6 +376,7 @@ describe("customer page: feature flags", () => {
 	test("the ticked flags turn on at once, and one turns off", () => {
 		const added = update(
 			run(loaded(), [
+				Message.UpdatedCreatedFeatureFlags({ keys: ["beta", "new_nav"] }),
 				Message.ToggledFlagSelection({ key: "beta", isSelected: true }),
 				Message.ToggledFlagSelection({ key: "new_nav", isSelected: true }),
 			]),

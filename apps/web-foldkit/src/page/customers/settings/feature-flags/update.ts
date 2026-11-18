@@ -105,8 +105,14 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 
 		GotCustomerPopoverMessage: ({ message: popoverMessage }) => {
 			const result = Popover.update(model.customerPopover, popoverMessage)
+			// Closed without adding: the ticks and the search are dropped.
+			const isOpen = result.model.isOpen
 			return {
-				model: modifyFields(model, { customerPopover: () => result.model }),
+				model: modifyFields(model, {
+					customerPopover: () => result.model,
+					customerSelection: (selection) => (isOpen ? selection : []),
+					customerSearch: (search) => (isOpen ? search : ""),
+				}),
 				commands: Command.mapMessages(result.commands ?? [], (child) =>
 					Message.GotCustomerPopoverMessage({ message: child }),
 				),

@@ -809,8 +809,12 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		}),
 		GotFlagPopoverMessage: ({ message: popoverMessage }) => {
 			const result = Popover.update(model.flagPopover, popoverMessage)
+			// Closed without adding: the ticks are dropped, so the next open starts clean.
 			return {
-				model: modifyFields(model, { flagPopover: () => result.model }),
+				model: modifyFields(model, {
+					flagPopover: () => result.model,
+					flagSelection: (selection) => (result.model.isOpen ? selection : []),
+				}),
 				commands: Command.mapMessages(result.commands ?? [], (child) =>
 					Message.GotFlagPopoverMessage({ message: child }),
 				),

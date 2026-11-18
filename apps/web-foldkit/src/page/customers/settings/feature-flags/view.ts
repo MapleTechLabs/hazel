@@ -104,7 +104,14 @@ const customerPicker = (h: HtmlBuilder<Message>, model: Model, key: string): Htm
 							],
 						}),
 						candidates.length === 0
-							? h.p([h.Class("px-2 py-3 text-muted-fg text-sm")], ["No customer matches."])
+							? h.p(
+									[h.Class("px-2 py-3 text-muted-fg text-sm")],
+									[
+										search === ""
+											? "Every customer already has this flag."
+											: "No customer matches.",
+									],
+								)
 							: h.div(
 									[h.Class("flex max-h-64 flex-col gap-1 overflow-y-auto px-1 py-1")],
 									candidates.map((account) =>
