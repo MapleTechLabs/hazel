@@ -15,16 +15,28 @@ import * as CurrentUser from "../current-user"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { RequiredScopes } from "../scopes/required-scopes"
 
-/** What an agent may do: read only, or read and write (send, reply, react, edit, delete). */
-export const AgentScope = Schema.Literals(["messages:read", "messages:write"])
+/**
+ * What an agent may do: read messages, or read and write them (send, reply, react, edit, delete),
+ * through the MCP server; or read the Customers area of the user's organizations (`customers:read`:
+ * the Customers read RPCs and the `/sync/customers` stream, e.g. the Raycast extension).
+ */
+export const AgentScope = Schema.Literals(["messages:read", "messages:write", "customers:read"])
 export type AgentScope = typeof AgentScope.Type
 
-export const ALL_AGENT_SCOPES: ReadonlyArray<AgentScope> = ["messages:read", "messages:write"]
+/** What a client that names no scope gets: the MCP server's (never Customers unless asked). */
+export const DEFAULT_AGENT_SCOPES: ReadonlyArray<AgentScope> = ["messages:read", "messages:write"]
 
-/** Parse an OAuth `scope` string; unknown scopes are dropped, none means every scope. */
+/**
+ * The scopes a stored grant, code or token holds: the known ones, never a default (a scope this
+ * version does not know grants nothing, so a rollback cannot widen a grant).
+ */
+export const storedAgentScopes = (scopes: ReadonlyArray<string>): ReadonlyArray<AgentScope> =>
+	scopes.filter((s): s is AgentScope => Schema.is(AgentScope)(s))
+
+/** Parse a client's OAuth `scope` request; unknown scopes are dropped, none means the default ones. */
 export const parseAgentScopes = (scope: string | null | undefined): ReadonlyArray<AgentScope> => {
 	const requested = (scope ?? "").split(/\s+/).filter((s): s is AgentScope => Schema.is(AgentScope)(s))
-	return requested.length === 0 ? ALL_AGENT_SCOPES : [...new Set(requested)]
+	return requested.length === 0 ? DEFAULT_AGENT_SCOPES : [...new Set(requested)]
 }
 
 export class AgentClientInfo extends Schema.Class<AgentClientInfo>("AgentClientInfo")({

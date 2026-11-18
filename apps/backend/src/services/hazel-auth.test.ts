@@ -24,6 +24,8 @@ import {
 import type { SuccessValue } from "effect/rpc/RpcMiddleware"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { AuthMiddlewareLive } from "../rpc/middleware/auth"
+import { AgentAccess } from "./agent-access"
+import { Directory } from "./directory"
 import { createChatSyncDbHarness, type ChatSyncDbHarness } from "../test/chat-sync-db-harness"
 import { AuthorizationLive } from "./auth"
 import { HazelAuthInstance, HazelAuthRoutes, HazelAuthServicesLive } from "./hazel-auth"
@@ -147,6 +149,7 @@ describe("Hazel sign-in in the backend", () => {
 			Layer.provideMerge(HazelSession.layer),
 			Layer.provideMerge(HazelAuthServicesLive),
 			Layer.provideMerge(HazelAuthInstance.layer),
+			Layer.provideMerge(AgentAccess.layer.pipe(Layer.provide(Directory.layerDatabase))),
 		)
 
 		web = HttpRouter.toWebHandler(

@@ -84,7 +84,6 @@ back on failure. Call them from a Command, then `Effect.catchTags` for the RPC's
 | `assignSignalAction`       | `signalId`, `assigneeUserId \| null`                                     |
 | `snoozeSignalAction`       | `signalId`, `userId`, `until: Date`, `note?`                             |
 | `markSignalDoneAction`     | `signalId`, `userId`, `outcome: SignalOutcome`, `note?`                  |
-| `dismissSignalAction`      | `signalId`, `userId`, `reason?`                                          |
 | `reopenSignalAction`       | `signalId`                                                               |
 | `createNoteAction`         | `accountId`, `authorUserId`, `body`, `pinned?`, `signalId?`              |
 | `updateNoteAction`         | `noteId`, `body?`, `pinned?`                                             |

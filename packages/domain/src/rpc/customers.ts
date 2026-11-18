@@ -608,3 +608,29 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 ) {}
 
 export const CustomerRpcs = CustomerReadRpcs.merge(CustomerQueueRpcs, CustomerAdminRpcs)
+
+// ---------------------------------------------------------------------------
+// The caller's organizations (the directory, not an org's object)
+// ---------------------------------------------------------------------------
+
+export const CustomerOrganization = Schema.Struct({
+	id: OrganizationId,
+	name: Schema.String,
+	slug: Schema.NullOr(Schema.String),
+})
+export type CustomerOrganization = typeof CustomerOrganization.Type
+
+/**
+ * `customers.organizations`: the organizations the caller is a member of (`membership_index`,
+ * `org_index`), by name, for a client that picks whose customers to show before it can name one
+ * (the Raycast extension). The api Worker answers it over the directory.
+ */
+export class CustomerDirectoryRpcs extends RpcGroup.make(
+	Rpc.make("customers.organizations", {
+		payload: Schema.Struct({}),
+		success: Schema.Struct({ organizations: Schema.Array(CustomerOrganization) }),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["customers:read"])
+		.middleware(AuthMiddleware),
+) {}

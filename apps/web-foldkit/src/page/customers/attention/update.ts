@@ -14,7 +14,6 @@ import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
 import {
 	AssignSignal,
 	CopyAttentionEmail,
-	DismissSignal,
 	FetchAccountDetail,
 	FocusAttentionSearch,
 	MarkSignalDone,
@@ -35,7 +34,6 @@ import {
 	DONE_MODAL_ID,
 	FILTER_MENU_ID,
 	isSelectionVisible,
-	MORE_MENU_ID,
 	type Model,
 	type QueueKey,
 	rowIds,
@@ -82,7 +80,6 @@ export const init = (): Return => ({
 		detail: null,
 		assignMenu: Menu.init({ id: ASSIGN_MENU_ID, placement: "bottom end" }),
 		snoozeMenu: Menu.init({ id: SNOOZE_MENU_ID, placement: "bottom end" }),
-		moreMenu: Menu.init({ id: MORE_MENU_ID, placement: "bottom end" }),
 		filterMenu: Menu.init({ id: FILTER_MENU_ID }),
 		sortMenu: Menu.init({ id: SORT_MENU_ID, placement: "bottom end", selectionMode: "Single" }),
 		doneModal: Modal.init(DONE_MODAL_ID),
@@ -224,23 +221,6 @@ const snooze = (model: Model, shared: Shared, signal: SignalRow, untilMs: number
 	)
 }
 
-const dismiss = (model: Model, shared: Shared, signal: SignalRow): Return => {
-	const actor = actorOf(shared)
-	if (actor === undefined || signal.status !== "open") return { model }
-	return act(
-		model,
-		shared,
-		signal,
-		(row) => ({
-			...row,
-			status: "dismissed",
-			resolvedAtMs: shared.nowMs,
-			resolvedByUserId: actor.userId,
-		}),
-		DismissSignal({ ...actor, signalId: signal.id }),
-	)
-}
-
 const reopen = (model: Model, shared: Shared, signal: SignalRow): Return => {
 	const organizationId = shared.organization?.id
 	if (organizationId === undefined || !canReopen(signal)) return { model }
@@ -359,13 +339,12 @@ const ACTION_VERB = {
 	assign: "assign",
 	snooze: "snooze",
 	done: "mark done",
-	dismiss: "dismiss",
 	reopen: "reopen",
 } as const satisfies Record<SignalAction, string>
 
 // MENUS
 
-type MenuField = "assignMenu" | "snoozeMenu" | "moreMenu" | "filterMenu" | "sortMenu"
+type MenuField = "assignMenu" | "snoozeMenu" | "filterMenu" | "sortMenu"
 
 type MenuCommands = NonNullable<ReturnType<typeof Menu.update>["commands"]>
 
@@ -375,8 +354,6 @@ const mapMenuCommands = (field: MenuField, commands: MenuCommands): Commands => 
 			return Command.mapMessages(commands, (message) => Message.GotAssignMenuMessage({ message }))
 		case "snoozeMenu":
 			return Command.mapMessages(commands, (message) => Message.GotSnoozeMenuMessage({ message }))
-		case "moreMenu":
-			return Command.mapMessages(commands, (message) => Message.GotMoreMenuMessage({ message }))
 		case "filterMenu":
 			return Command.mapMessages(commands, (message) => Message.GotFilterMenuMessage({ message }))
 		case "sortMenu":
@@ -390,8 +367,6 @@ const withMenu = (model: Model, field: MenuField, menu: Menu.Model): Model => {
 			return modifyFields(model, { assignMenu: () => menu })
 		case "snoozeMenu":
 			return modifyFields(model, { snoozeMenu: () => menu })
-		case "moreMenu":
-			return modifyFields(model, { moreMenu: () => menu })
 		case "filterMenu":
 			return modifyFields(model, { filterMenu: () => menu })
 		case "sortMenu":
@@ -462,6 +437,10 @@ const onKey = (model: Model, shared: Shared, key: QueueKey): Return => {
 							? openMenu(next, "assignMenu", assignEntries(next.members, viewer))
 							: { model: next },
 					)
+		case "assignToMe":
+			return model.tab !== "open"
+				? { model }
+				: withSelected(model, shared, (next, signal) => assign(next, shared, signal, ASSIGN_ME))
 		case "snooze":
 			return model.tab === "done"
 				? { model }
@@ -472,8 +451,6 @@ const onKey = (model: Model, shared: Shared, key: QueueKey): Return => {
 					)
 		case "done":
 			return withSelected(model, shared, openDoneDialog)
-		case "dismiss":
-			return withSelected(model, shared, (next, signal) => dismiss(next, shared, signal))
 		case "reopen":
 			return withSelected(model, shared, (next, signal) => reopen(next, shared, signal))
 	}
@@ -524,12 +501,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ClickedRowActions: () => ({ model }),
 		ClosedPreview: () => ({ model: modifyFields(model, { isPreviewOpen: () => false }) }),
 		PressedQueueKey: ({ key }) => onKey(model, shared, key),
-		PressedOpenCustomer: ({ accountId }) => ({
-			model,
-			outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
-				customerRoute(orgSlug, accountId),
-			),
-		}),
 		PressedMarkDone: ({ signalId }) => {
 			const signal = signalById(model, signalId)
 			return signal === undefined ? { model } : openDoneDialog(model, signal)
@@ -552,12 +523,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				return isSnoozeOption(key)
 					? snooze(next, shared, signal, snoozeUntilMs(key, shared.nowMs, signal))
 					: { model: next }
-			}),
-		GotMoreMenuMessage: ({ message: menuMessage }) =>
-			updateMenu(model, "moreMenu", menuMessage, (next, key) => {
-				const signal = selectedSignal(next)
-				if (signal === undefined) return { model: next }
-				return key === "dismiss" ? dismiss(next, shared, signal) : openCustomer(next, shared, signal)
 			}),
 		GotFilterMenuMessage: ({ message: menuMessage }) =>
 			updateMenu(model, "filterMenu", menuMessage, (next, key) => ({
