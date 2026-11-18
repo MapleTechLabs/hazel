@@ -142,7 +142,11 @@ export const decodeResponse = <A>(body: string): A => {
 		if (fail !== undefined && fail._tag === "Fail") {
 			throw new RpcError(fail.error._tag ?? "Error", fail.error.message ?? "Hazel refused the request")
 		}
-		throw new RpcError("Defect", "Hazel failed to answer")
+		const die = message.exit.cause.find((reason) => reason._tag === "Die")
+		throw new RpcError(
+			"Defect",
+			die !== undefined && die._tag === "Die" ? String(die.defect) : "Hazel failed to answer",
+		)
 	}
 	throw new RpcError("Defect", "Hazel sent no answer")
 }

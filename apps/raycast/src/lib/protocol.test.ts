@@ -89,6 +89,18 @@ describe("decodeResponse", () => {
 		}
 	})
 
+	it("throws a died request's defect, e.g. an RPC the API does not know", () => {
+		const body = JSON.stringify({
+			_tag: "Exit",
+			requestId: "1",
+			exit: {
+				_tag: "Failure",
+				cause: [{ _tag: "Die", defect: "Unknown request tag: customers.organizations" }],
+			},
+		})
+		expect(() => decodeResponse(body)).toThrowError("Unknown request tag: customers.organizations")
+	})
+
 	it("throws on a defect or no answer", () => {
 		expect(() => decodeResponse(JSON.stringify({ _tag: "Defect", defect: "boom" }))).toThrowError("boom")
 		expect(() => decodeResponse("")).toThrowError("no answer")
