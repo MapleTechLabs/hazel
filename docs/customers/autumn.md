@@ -362,7 +362,9 @@ Svix's `svix-id` — so a redelivery writes one entry.
   `customerSince`; `churned` once the plan ends), but it adds nothing to the MRR, its movements or
   the paying-accounts count. The usage _is_ synced, as `autumn.<feature>` metrics. A plan with a
   base price or flat prepaid units is not marked: its MRR already makes it paying, and its usage
-  overage is left out.
+  overage is left out. Unless **Count overage in MRR** is on (Customers › Settings › Plans): then
+  an account with a paid Stripe invoice takes its MRR from its Stripe subscriptions' last paid
+  invoices, per month, usage included (`tech-design.md` §4.2).
 - **Tiered prepaid prices** (graduated / volume, no flat `amount`) add nothing to the MRR. Units
   bought at one on a plan with no other MRR mark the subscription `billsByUsage` like a usage price.
 - **Ended plans are priced from the plan's active version**: `subscriptions.list` cannot expand a

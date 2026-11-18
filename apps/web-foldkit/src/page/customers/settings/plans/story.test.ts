@@ -3,7 +3,7 @@ import { Schema } from "effect"
 import { describe, expect, test, vi } from "vitest"
 import type { Shared } from "../../../contract"
 import { sharedDefaults } from "../../../test-shared"
-import { FetchPlans, SaveAddOnPlans } from "./commands"
+import { FetchPlans, SaveSettings } from "./commands"
 import { Message } from "./message"
 import { type Model, planNamesOf } from "./model"
 import { init, update } from "./update"
@@ -13,7 +13,7 @@ vi.hoisted(() => {
 	Object.assign(globalThis, { document: globalThis.document ?? {} })
 })
 
-/** Update-loop tests for the plans settings: the listed plans, and marking add-ons. */
+/** Update-loop tests for the plans settings: the listed plans, marking add-ons, overage in MRR. */
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 const organizationId = Schema.decodeSync(OrganizationId)(uuid(1))
@@ -39,7 +39,7 @@ const admin = sharedAs("admin")
 
 const loaded = (addOnPlans: ReadonlyArray<string> = []): Model =>
 	[
-		Message.UpdatedSettings({ settings: { id: settingsId, addOnPlans } }),
+		Message.UpdatedSettings({ settings: { id: settingsId, addOnPlans, overageInMrr: false } }),
 		Message.SucceededFetchPlans({ plans: ["Starter", "BYOK", "Pro"] }),
 	].reduce((current, next) => update(current, next, admin).model, init(null, admin).model)
 
@@ -60,15 +60,29 @@ describe("plans settings", () => {
 		)
 		expect(marked.model.settings?.addOnPlans).toEqual(["Legacy add-on", "BYOK"])
 		expect(marked.commands?.[0]).toMatchObject({
-			name: SaveAddOnPlans.name,
-			args: { organizationId, settingsId, addOnPlans: ["Legacy add-on", "BYOK"] },
+			name: SaveSettings.name,
+			args: { organizationId, settingsId, change: { addOnPlans: ["Legacy add-on", "BYOK"] } },
 		})
 		expect(
 			update(marked.model, Message.ToggledAddOn({ plan: "Pro", isAddOn: true }), admin).commands ?? [],
 		).toHaveLength(0)
-		const saved = update(marked.model, Message.SucceededSaveAddOnPlans(), admin).model
+		const saved = update(marked.model, Message.SucceededSaveSettings(), admin).model
 		const unmarked = update(saved, Message.ToggledAddOn({ plan: "Legacy add-on", isAddOn: false }), admin)
-		expect(unmarked.commands?.[0]).toMatchObject({ args: { addOnPlans: ["BYOK"] } })
+		expect(unmarked.commands?.[0]).toMatchObject({ args: { change: { addOnPlans: ["BYOK"] } } })
+	})
+
+	test("the overage switch saves just that setting", () => {
+		const toggled = update(loaded(["BYOK"]), Message.ToggledOverageInMrr({ isOn: true }), admin)
+		expect(toggled.model.settings).toEqual({ id: settingsId, addOnPlans: ["BYOK"], overageInMrr: true })
+		expect(toggled.model.isSaving).toBe(true)
+		expect(toggled.commands?.[0]).toMatchObject({
+			name: SaveSettings.name,
+			args: { organizationId, settingsId, change: { overageInMrr: true } },
+		})
+		expect(toggled.commands?.[0]?.args).not.toHaveProperty("change.addOnPlans")
+		expect(
+			update(loaded(), Message.ToggledOverageInMrr({ isOn: true }), sharedAs("member")).commands ?? [],
+		).toHaveLength(0)
 	})
 
 	test("members cannot change add-ons", () => {

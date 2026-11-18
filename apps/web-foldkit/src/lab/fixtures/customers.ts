@@ -1117,6 +1117,7 @@ export const SETTINGS: Settings = {
 	health: DEFAULT_HEALTH_SETTINGS,
 	reportingCurrency: CURRENCY,
 	addOnPlans: [],
+	overageInMrr: false,
 	lastComputedAt: ago(HOUR),
 	updatedBy: null,
 	createdAt: daysAgo(120),
