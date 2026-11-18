@@ -121,6 +121,11 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		seatsUsed: SQLite.nullable(SQLite.integer),
 		seatsLimit: SQLite.nullable(SQLite.integer),
 		contactCount: count(),
+		/**
+		 * Live Clerk organizations it holds: more than one after a merge (`customers.account.merge`) or
+		 * a link. Kept by the merge and by compute.
+		 */
+		organizationCount: count(),
 		activeUsers30d: count(),
 		/** 7-day average of daily active users vs the 28 days before, percent; null without a baseline. */
 		activeUsersTrendPct: SQLite.nullable(SQLite.real),
@@ -207,6 +212,8 @@ export const customerExternalRefsTable = SQLite.table("customer_external_refs", 
 		/** The account itself, or the contact's account. */
 		accountId: uuid(CustomerAccountId),
 		externalId: SQLite.text,
+		/** The provider record's own name (an account ref's organization or customer name), as last seen. */
+		name: SQLite.nullable(SQLite.text),
 		/** Deep link to the provider's dashboard. */
 		externalUrl: SQLite.nullable(SQLite.text),
 		matchMethod: textEnum(MatchMethod.literals),

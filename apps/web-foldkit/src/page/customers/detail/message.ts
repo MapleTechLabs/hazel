@@ -128,6 +128,15 @@ export const Message = defineMessageUnion({
 	PressedDeleteNote: { noteId: CustomerNoteId },
 	GotDeleteNoteModalMessage: { message: Modal.Message },
 	PressedConfirmDeleteNote: {},
+
+	GotMergeModalMessage: { message: Modal.Message },
+	ChangedMergeQuery: { value: Schema.String },
+	ClearedMergeQuery: {},
+	/** Not `accountId`: a message naming another account is dropped (`isForOtherAccount`). */
+	PickedMergeAccount: { pickedId: Schema.String },
+	PressedConfirmMerge: {},
+	SucceededMerge: { name: Schema.String },
+	FailedMerge: { reason: ActionFailure },
 	SucceededNoteAction: { action: NoteAction },
 	FailedNoteAction: { action: NoteAction, reason: ActionFailure, draft: Schema.NullOr(NoteDraft) },
 

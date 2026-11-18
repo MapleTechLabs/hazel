@@ -500,6 +500,20 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		CustomerProviderUnavailableError,
 	),
 
+	/**
+	 * Merge `accountId` into `intoAccountId`: its provider records (Clerk organizations, Stripe and
+	 * Autumn customers, …), users, billing, usage, notes, signals and channels move there and it is
+	 * deleted. The providers keep their separate ids; later syncs land on the merged customer. Its
+	 * name is kept as a manual one. Merging an account into itself is `CustomersInvalidRequestError`.
+	 */
+	write(
+		"customers.account.merge",
+		{ accountId: CustomerAccountId, intoAccountId: CustomerAccountId },
+		Tx,
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+	),
+
 	/** Link to an account (records a `manual` ref) and replay the record's data. */
 	write(
 		"customers.unmatched.link",

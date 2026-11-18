@@ -89,6 +89,7 @@ const account = (n: number, name: string, domain: string): AccountRow => ({
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 0,
+	organizationCount: 1,
 	activeUsers30d: 0,
 	activeUsersTrendPct: null,
 	openRiskHigh: 0,

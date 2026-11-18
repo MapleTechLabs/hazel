@@ -459,6 +459,8 @@ const make = Effect.gen(function* () {
 			readonly matchMethod: schema.CustomerExternalRef["matchMethod"]
 			readonly externalUrl?: string | null | undefined
 			readonly matchedByUserId?: UserId | null
+			/** The provider record's own name (account refs). */
+			readonly name?: string | null | undefined
 		},
 	) =>
 		Effect.gen(function* () {
@@ -470,6 +472,7 @@ const make = Effect.gen(function* () {
 					entityId: ref.entityId,
 					accountId: ref.accountId,
 					externalId: ref.externalId,
+					name: ref.name ?? null,
 					externalUrl: ref.externalUrl ?? null,
 					matchMethod: ref.matchMethod,
 					matchedByUserId: ref.matchedByUserId ?? null,
@@ -488,11 +491,12 @@ const make = Effect.gen(function* () {
 			yield* replayUnblocked(session, ref.provider, ref.entityType, ref.externalId)
 		})
 
-	/** A ref seen again: refresh its link and sync time, and mark it live. */
+	/** A ref seen again: refresh its link, name (`undefined` keeps it) and sync time, and mark it live. */
 	const touchRef = (
 		session: Session,
 		ref: schema.CustomerExternalRef,
 		externalUrl: string | null | undefined,
+		name?: string | undefined,
 	) =>
 		db.run(
 			SQLite.update(schema.customerExternalRefsTable)
@@ -501,6 +505,7 @@ const make = Effect.gen(function* () {
 					staleAt: null,
 					deletedObservedAt: null,
 					externalUrl,
+					name,
 					updatedAt: session.now,
 				})
 				.where(($) => [$.id.eq(ref.id)]),
@@ -987,7 +992,12 @@ const make = Effect.gen(function* () {
 			if (Option.isSome(ref)) {
 				// Deleted after the source last changed it: a late delivery.
 				if (observedBefore(op.observedAt, ref.value)) return outcome.unchanged(ref.value.accountId)
-				yield* touchRef(session, ref.value, providerLink(session.context.provider, op.externalUrl))
+				yield* touchRef(
+					session,
+					ref.value,
+					providerLink(session.context.provider, op.externalUrl),
+					op.name,
+				)
 				const changed = yield* applyAccountFields(session, ref.value.accountId, op, domains)
 				return changed ? outcome.updated(ref.value.accountId) : outcome.unchanged(ref.value.accountId)
 			}
@@ -1003,6 +1013,7 @@ const make = Effect.gen(function* () {
 					accountId: match.accountId,
 					matchMethod: match.method,
 					externalUrl: providerLink(session.context.provider, op.externalUrl),
+					name: op.name,
 				})
 				return outcome.updated(match.accountId)
 			}
@@ -1048,6 +1059,7 @@ const make = Effect.gen(function* () {
 				accountId,
 				matchMethod: "created",
 				externalUrl: providerLink(session.context.provider, op.externalUrl),
+				name: op.name,
 			})
 			return outcome.created(accountId)
 		})
@@ -2168,6 +2180,7 @@ const make = Effect.gen(function* () {
 				accountId,
 				matchMethod: "manual",
 				matchedByUserId: by,
+				name: record.entityType === "account" ? record.label : null,
 			})
 		}
 		yield* db.run(

@@ -30,6 +30,7 @@ import {
 	FocusNoteComposer,
 	LoadNoteDrafts,
 	LinkCustomerChannel,
+	MergeCustomerAccount,
 	UnlinkCustomerChannel,
 	UpdateCustomerAccount,
 	UpdateCustomerNote,
@@ -49,6 +50,8 @@ import {
 	EVENT_TYPE_MENU_ID,
 	EVENT_TYPE_PREFIXES,
 	EventType,
+	MERGE_MODAL_ID,
+	mergeCandidates,
 	METRIC_MENU_ID,
 	type Model,
 	type NoteRow,
@@ -225,6 +228,10 @@ const initialModel = (route: Route): Model => ({
 	rawModal: Modal.init(RAW_MODAL_ID),
 	deletingNoteId: null,
 	deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
+	mergeModal: Modal.init(MERGE_MODAL_ID),
+	mergeQuery: "",
+	mergeAccountId: null,
+	isMerging: false,
 })
 
 /** Another tab of the same customer; a note being edited (and the composer) waits on the notes tab. */
@@ -334,6 +341,14 @@ const onAction = (model: Model, shared: Shared, key: string): Return => {
 			return openMenu(model, "ownerMenu", ownerEntries(model.members))
 		case "raw_data":
 			return { model: modifyFields(model, { rawModal: (modal) => Modal.open(modal).model }) }
+		case "merge":
+			return {
+				model: modifyFields(model, {
+					mergeModal: (modal) => Modal.open(modal).model,
+					mergeQuery: () => "",
+					mergeAccountId: () => null,
+				}),
+			}
 		default:
 			return { model }
 	}
@@ -915,6 +930,71 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				commands: [DeleteCustomerNote({ ...args, noteId })],
 			}
 		},
+		GotMergeModalMessage: ({ message: modalMessage }) => {
+			const result = Modal.update(model.mergeModal, modalMessage)
+			return {
+				model: modifyFields(model, { mergeModal: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotMergeModalMessage({ message: child }),
+				),
+			}
+		},
+		ChangedMergeQuery: ({ value }) => ({ model: modifyFields(model, { mergeQuery: () => value }) }),
+		ClearedMergeQuery: () => ({ model: modifyFields(model, { mergeQuery: () => "" }) }),
+		PickedMergeAccount: ({ pickedId }) => ({
+			model: modifyFields(model, {
+				mergeAccountId: () =>
+					mergeCandidates(model).find((account) => account.id === pickedId)?.id ?? null,
+			}),
+		}),
+		PressedConfirmMerge: () => {
+			const args = target(model, shared)
+			const merged = model.accounts?.find((account) => account.id === model.mergeAccountId)
+			if (!model.mergeModal.isOpen || model.isMerging || args === null || merged === undefined)
+				return { model }
+			return {
+				model: modifyFields(model, { isMerging: () => true }),
+				commands: [
+					MergeCustomerAccount({
+						organizationId: args.organizationId,
+						accountId: merged.id,
+						intoAccountId: model.accountId,
+						name: merged.name,
+					}),
+				],
+			}
+		},
+		SucceededMerge: ({ name }) => {
+			// Its records are this customer's now: the sidebar's linked records come back with them.
+			const reloaded = load(
+				modifyFields(model, {
+					isMerging: () => false,
+					mergeAccountId: () => null,
+					mergeModal: (modal) => Modal.close(modal).model,
+					detail: () => AsyncData.Idle(),
+				}),
+				shared,
+			)
+			return { ...reloaded, outMessage: toast(successToast(`Merged ${name} into this customer`)) }
+		},
+		FailedMerge: ({ reason }) => ({
+			model: modifyFields(model, { isMerging: () => false }),
+			outMessage: toast(
+				errorToastOf(
+					failureMessage(reason, {
+						NotFound: {
+							title: "Couldn't merge the customers",
+							description: "One of them is no longer available.",
+						},
+						Stale: {
+							title: "Couldn't merge the customers",
+							description: "A customer can't be merged into itself.",
+						},
+					}),
+				),
+			),
+		}),
+
 		SucceededNoteAction: ({ action }) =>
 			action === "create" ? { model, outMessage: toast(successToast("Note saved")) } : { model },
 		// The Command told the user, and kept the text for the customer, in case this page is gone.
