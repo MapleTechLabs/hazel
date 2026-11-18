@@ -1,5 +1,5 @@
 import { type DesktopAuth, layerVault, makeDesktopAuth } from "@hazel/auth/desktop"
-import { getTauriCore, getTauriDeepLink, getTauriOpener } from "./tauri"
+import { getTauriCore, getTauriDeepLink, getTauriOpener, type TauriCoreApi } from "./tauri"
 import { BrowserLogin } from "@yielded/auth"
 import * as WebCrypto from "@yielded/auth/WebCrypto"
 import { Context, Effect, Exit, Layer, ManagedRuntime, Option, Schema, SynchronizedRef } from "effect"
@@ -145,6 +145,32 @@ const hostedUrl = () => {
 	return `${new URL(appOrigin).origin}/auth/desktop`
 }
 
+type HostResponse = { status: number; headers: Array<[string, string]>; body: string }
+
+/**
+ * The auth API's native mode refuses any request a browser could have sent, and the webview's
+ * fetch always sends `Origin: tauri://localhost`: the desktop host (`auth_http`) makes the request
+ * instead, without the browser's headers, cookies or redirects.
+ */
+const hostFetch =
+	(core: TauriCoreApi): typeof globalThis.fetch =>
+	async (input, init) => {
+		const request = new Request(input, init)
+		const response = await core.invoke<HostResponse>("auth_http", {
+			request: {
+				method: request.method,
+				url: request.url,
+				headers: [...request.headers],
+				body: request.body === null ? null : await request.text(),
+			},
+		})
+		const hasBody = ![101, 204, 205, 304].includes(response.status)
+		return new Response(hasBody ? response.body : null, {
+			status: response.status,
+			headers: response.headers,
+		})
+	}
+
 const DesktopAuthLive = Layer.effect(
 	DesktopAuthService,
 	makeDesktopAuth({
@@ -155,8 +181,12 @@ const DesktopAuthLive = Layer.effect(
 ).pipe(
 	Layer.provide(Layer.mergeAll(BrowserLive, layerVault(KeychainStore), WebCrypto.layer)),
 	Layer.provide(FetchHttpClient.layer),
-	// The desktop session travels in headers: never cookies, never redirects.
-	Layer.provide(Layer.succeed(FetchHttpClient.RequestInit, { credentials: "omit", redirect: "error" })),
+	Layer.provide(
+		Layer.sync(FetchHttpClient.Fetch, () => {
+			const core = getTauriCore()
+			return core === undefined ? globalThis.fetch : hostFetch(core)
+		}),
+	),
 )
 
 /** The desktop auth runtime could not be built (keychain, crypto or deep link setup failed). */

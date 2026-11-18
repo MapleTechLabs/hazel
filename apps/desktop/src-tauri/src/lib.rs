@@ -42,6 +42,85 @@ fn auth_vault_write(record: String) -> Result<(), String> {
     }
 }
 
+#[derive(serde::Deserialize)]
+struct AuthRequest {
+    method: String,
+    url: String,
+    headers: Vec<(String, String)>,
+    body: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+struct AuthResponse {
+    status: u16,
+    headers: Vec<(String, String)>,
+    body: String,
+}
+
+/// The auth API's native mode (`@yielded/auth`) refuses any request a browser could have sent: one
+/// with an `Origin`, `Sec-Fetch-*` or cookies. The webview's fetch always sends
+/// `Origin: tauri://localhost`, so the desktop sign-in and session calls go out from here instead,
+/// without those headers, cookies or redirects. Only the API's `/auth/` routes.
+#[command]
+async fn auth_http(request: AuthRequest) -> Result<AuthResponse, String> {
+    #[cfg(desktop)]
+    {
+        use std::sync::OnceLock;
+        static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+        let url = reqwest::Url::parse(&request.url).map_err(|error| error.to_string())?;
+        let is_local = matches!(url.host_str(), Some("localhost" | "127.0.0.1"));
+        if !(url.scheme() == "https" || (cfg!(debug_assertions) && is_local))
+            || !url.path().starts_with("/auth/")
+        {
+            return Err(format!("not an auth API URL: {url}"));
+        }
+
+        let client = match CLIENT.get() {
+            Some(client) => client,
+            None => {
+                if rustls::crypto::CryptoProvider::get_default().is_none() {
+                    let _ = rustls::crypto::ring::default_provider().install_default();
+                }
+                let client = reqwest::Client::builder()
+                    .redirect(reqwest::redirect::Policy::none())
+                    .build()
+                    .map_err(|error| error.to_string())?;
+                CLIENT.get_or_init(|| client)
+            }
+        };
+
+        let method = reqwest::Method::from_bytes(request.method.as_bytes())
+            .map_err(|error| error.to_string())?;
+        let mut builder = client.request(method, url);
+        for (name, value) in request.headers {
+            let lower = name.to_ascii_lowercase();
+            if lower == "origin" || lower == "cookie" || lower == "host" || lower.starts_with("sec-") {
+                continue;
+            }
+            builder = builder.header(name, value);
+        }
+        if let Some(body) = request.body {
+            builder = builder.body(body);
+        }
+
+        let response = builder.send().await.map_err(|error| error.to_string())?;
+        let status = response.status().as_u16();
+        let headers = response
+            .headers()
+            .iter()
+            .filter_map(|(name, value)| Some((name.to_string(), value.to_str().ok()?.to_string())))
+            .collect();
+        let body = response.text().await.map_err(|error| error.to_string())?;
+        Ok(AuthResponse { status, headers, body })
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = request;
+        Err("unsupported".into())
+    }
+}
+
 /// Holding a key should open the macOS accent picker (e.g. hold "s" for "ß") instead of
 /// repeating it. The webview doesn't turn this on by itself, so register it as the app default.
 /// A user's own `defaults write` setting still wins over this.
@@ -79,7 +158,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![auth_vault_read, auth_vault_write]);
+        .invoke_handler(tauri::generate_handler![auth_vault_read, auth_vault_write, auth_http]);
 
     #[cfg(desktop)]
     let builder = builder

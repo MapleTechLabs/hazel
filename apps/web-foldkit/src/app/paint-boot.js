@@ -9,6 +9,8 @@
 export function hazelPaintBoot(win) {
 	var KEY = "hazel:paint"
 	var USER_KEY = "hazel:last-user"
+	// A sign-in that started elsewhere lands on `/` to go back there (`auth/return-to.ts`): not resumed.
+	var RETURN_TO_KEY = "hazel:auth:return-to"
 	var VERSION = 1
 	var MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 	// The longest the paint stays up, from when it appears: whatever the app's script does, a slow
@@ -39,6 +41,7 @@ export function hazelPaintBoot(win) {
 			if (stored.isSystemDark !== matches("(prefers-color-scheme: dark)")) return null
 			var path = win.location.pathname
 			if (path !== stored.path && path !== "/") return null
+			if (path === "/" && win.sessionStorage.getItem(RETURN_TO_KEY) !== null) return null
 			return stored
 		} catch (error) {
 			return null

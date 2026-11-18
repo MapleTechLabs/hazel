@@ -137,6 +137,15 @@ describe("drawing the paint on the next load", () => {
 		expect(window.location.search).toBe("?from=pwa")
 	})
 
+	test("`/` stays put while a sign-in goes back to where it started", () => {
+		savePaint(document, localStorage)
+		sessionStorage.setItem("hazel:auth:return-to", "/auth/desktop?attempt=a")
+		window.history.replaceState(null, "", "/")
+		expect(load()).toBeNull()
+		expect(window.location.pathname).toBe("/")
+		sessionStorage.clear()
+	})
+
 	test("not on another page, for another user, at another layout or system theme", () => {
 		savePaint(document, localStorage)
 		window.history.replaceState(null, "", "/acme/settings")

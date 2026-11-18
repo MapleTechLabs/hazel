@@ -637,6 +637,74 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 		60_000,
 	)
 
+	test("a sign-in left waiting (the app quit mid-way) does not leave the app busy", async () => {
+		githubUserId = 7780
+		const browser = jar()
+		await register(browser, await signInWithGitHub(browser))
+
+		const DesktopHttp = Layer.succeed(
+			HttpClient.HttpClient,
+			HttpClient.make((request, url) =>
+				Effect.promise(async () => {
+					const body =
+						request.body._tag === "Uint8Array"
+							? new TextDecoder().decode(request.body.body)
+							: undefined
+					const response = await send(
+						new Request(url.href, { method: request.method, headers: request.headers, body }),
+					)
+					return HttpClientResponse.fromWeb(request, response)
+				}),
+			),
+		)
+
+		// The first open never comes back (the app quits while waiting); the second completes.
+		let opens = 0
+		const FakeBrowser = Layer.succeed(BrowserLogin.Browser, {
+			open: ({ url }) => {
+				opens += 1
+				if (opens === 1) return Effect.never
+				return Effect.promise(async () => {
+					const attemptId = new URL(url).searchParams.get("attempt")!
+					await signInWithGitHub(browser)
+					const session = await (await call(browser, "POST", "/auth/getSession")).json()
+					const authorized = await call(browser, "POST", desktopLogin.routes.authorize.path, {
+						attemptId,
+						decision: "continue",
+						expectedSessionId: session.value.sessionId,
+					})
+					return (await authorized.json()).value.callbackUrl as string
+				})
+			},
+		})
+
+		let stored: string | null = null
+		const MemoryVault = layerVault({
+			read: Effect.sync(() => stored),
+			write: (json) => Effect.sync(() => void (stored = json)),
+		})
+
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const desktop = yield* makeDesktopAuth({
+					apiOrigin: origin,
+					hostedUrl: `${webOrigin}/auth/desktop`,
+					client: nativeClient,
+				})
+				yield* Effect.ignore(Effect.timeout(desktop.signIn, "50 millis"))
+				expect((yield* desktop.pendingAttempt)?.phase).toBe("Waiting")
+
+				yield* desktop.signIn
+				expect((yield* desktop.session)?.claims.displayName).toBe("Octo Cat")
+				expect(yield* desktop.pendingAttempt).toBeUndefined()
+				expect(opens).toBe(2)
+			}).pipe(
+				Effect.provide(Layer.mergeAll(FakeBrowser, MemoryVault, DesktopHttp, CryptoLive)),
+				Effect.scoped,
+			),
+		)
+	}, 60_000)
+
 	test("a sign-in whose exchange failed does not leave the app busy: the next one works", async () => {
 		githubUserId = 7779
 		const browser = jar()
