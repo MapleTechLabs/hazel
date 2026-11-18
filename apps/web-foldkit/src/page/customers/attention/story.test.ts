@@ -92,6 +92,7 @@ const account = (
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 10,
+	organizationCount: 1,
 	activeUsers30d: 5,
 	activeUsersTrendPct: null,
 	openRiskHigh: 0,
@@ -310,6 +311,18 @@ describe("needs attention: what shows", () => {
 	test("sorting by MRR puts the biggest account first", () => {
 		const current = { ...loaded(), sort: "mrr" as const }
 		expect(ids(visibleSignals(current, viewer))).toEqual(ids([paymentFailed, usageDown, stoppedLogging]))
+	})
+
+	test("a column header sorts by it, and a second click flips the direction", () => {
+		const byAge = pageUpdate(loaded(), Message.ClickedColumnSort({ sort: "age" })).model
+		expect(byAge.sort).toBe("age")
+		expect(byAge.isSortReversed).toBe(false)
+		const reversed = pageUpdate(byAge, Message.ClickedColumnSort({ sort: "age" })).model
+		expect(reversed.isSortReversed).toBe(true)
+		expect(ids(visibleSignals(reversed, viewer))).toEqual(ids(visibleSignals(byAge, viewer)).toReversed())
+		expect(pageUpdate(reversed, Message.ClickedColumnSort({ sort: "health" })).model.isSortReversed).toBe(
+			false,
+		)
 	})
 
 	test("grouping by account steps through each account's lead signal", () => {

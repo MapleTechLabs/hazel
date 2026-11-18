@@ -187,7 +187,7 @@ A customer's feature flags are the **boolean** keys of its Clerk organization's 
 - **Who.** Admins and owners. Needs an active Clerk connection; an account with no live Clerk
   organization cannot be given a flag.
 - **Several organizations on one account.** A write goes to all of them; a sync shows the flags of
-  the organization synced last, so organizations changed apart in Clerk may read differently until
+  the organization synced last (a merge keeps both sets until then), so organizations changed apart in Clerk may read differently until
   Hazel writes them again.
 
 ## Known gaps

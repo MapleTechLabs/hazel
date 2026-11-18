@@ -384,6 +384,40 @@ export const updateAccountAction = optimisticAction({
 		}),
 })
 
+interface AccountMerge {
+	readonly organizationId: OrganizationId
+	readonly accountId: CustomerAccountId
+	readonly intoAccountId: CustomerAccountId
+	readonly at: Date
+}
+
+/** `customers.account.merge`: the merged account leaves the list, its organizations count on the kept one. */
+const mergeAccount = optimisticAction({
+	collections: [customerAccountCollection],
+	onMutate: (props: AccountMerge) => {
+		const merged = customerAccountCollection.get(props.accountId)
+		customerAccountCollection.update(props.intoAccountId, (account) => {
+			account.organizationCount += merged?.organizationCount ?? 0
+		})
+		customerAccountCollection.update(props.accountId, (account) => {
+			account.deletedAt = props.at
+		})
+		return { accountId: props.intoAccountId }
+	},
+	mutate: ({ at: _at, ...payload }) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.account.merge", payload)
+			return { data: result, transactionId: result.transactionId }
+		}),
+})
+
+export const mergeAccountAction = (props: Omit<AccountMerge, "at">) =>
+	Effect.gen(function* () {
+		const at = new Date(yield* Clock.currentTimeMillis)
+		return yield* mergeAccount({ ...props, at })
+	})
+
 /** `customers.account.bulkUpdate`'s limit on ids per call. */
 export const BULK_BATCH = 500
 

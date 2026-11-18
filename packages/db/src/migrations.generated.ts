@@ -508,7 +508,15 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			],
 		},
 		{
-			id: "0011_customer_feature_flags",
+			id: "0011_customer_merge",
+			statements: [
+				'ALTER TABLE "customer_accounts" ADD COLUMN "organizationCount" integer NOT NULL DEFAULT 0',
+				'ALTER TABLE "customer_external_refs" ADD COLUMN "name" text',
+				'ALTER TABLE "customer_external_refs" ADD COLUMN "viaAccounts" text',
+			],
+		},
+		{
+			id: "0012_customer_feature_flags",
 			statements: [
 				'ALTER TABLE "customer_accounts" ADD COLUMN "featureFlags" text NOT NULL DEFAULT \'{}\'',
 				"CREATE TABLE IF NOT EXISTS \"customer_feature_flags\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"organizationId\" text NOT NULL,\n\t\"key\" text NOT NULL,\n\t\"createdBy\" text NOT NULL,\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))\n)",

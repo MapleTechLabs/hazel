@@ -9,6 +9,7 @@ import {
 	createNoteAction,
 	deleteNoteAction,
 	setFeatureFlagsAction,
+	mergeAccountAction,
 	updateAccountAction,
 	updateNoteAction,
 } from "../../../customers/actions"
@@ -198,6 +199,25 @@ export const SetCustomerFeatureFlags = Command.define("SetCustomerFeatureFlags",
 			Effect.as(Message.SucceededFeatureFlags()),
 			settleFeatureFlags((failure) => Message.FailedFeatureFlags({ failure })),
 		),
+})
+
+/** Merge `accountId` into this customer (`intoAccountId`); `name` is the merged one's, for the toast. */
+export const MergeCustomerAccount = Command.define("MergeCustomerAccount", {
+	args: { ...target, intoAccountId: CustomerAccountId, name: Schema.String },
+	messages: [Message.SucceededMerge, Message.FailedMerge],
+	execute: ({ name, ...args }) => {
+		const accountId = args.intoAccountId
+		return mergeAccountAction(args).pipe(
+			Effect.as(Message.SucceededMerge({ accountId, name })),
+			Effect.catchTags({
+				CustomersNotFoundError: () =>
+					Effect.succeed(Message.FailedMerge({ accountId, reason: "NotFound" })),
+				CustomersInvalidRequestError: () =>
+					Effect.succeed(Message.FailedMerge({ accountId, reason: "Stale" })),
+			}),
+			catchCommon((reason) => Message.FailedMerge({ accountId, reason })),
+		)
+	},
 })
 
 // NOTES

@@ -245,17 +245,19 @@ if (grantedAps !== apsEnvironment)
 			"enable Push Notifications for the App ID and download the profile again",
 	)
 const entitlements = `${out}/build/entitlements.plist`
+const entitlementValues = {
+	"application-identifier": appId,
+	"com.apple.developer.team-identifier": team,
+	"keychain-access-groups": [appId],
+	"aps-environment": apsEnvironment,
+	"get-task-allow": false,
+	"beta-reports-active": true,
+}
 writeFileSync(
 	`${out}/build/entitlements.json`,
-	JSON.stringify({
-		"application-identifier": appId,
-		"com.apple.developer.team-identifier": team,
-		"keychain-access-groups": [appId],
-		"aps-environment": apsEnvironment,
-		...(communication ? { [communicationEntitlement]: true } : {}),
-		"get-task-allow": false,
-		"beta-reports-active": true,
-	}),
+	JSON.stringify(
+		communication ? { ...entitlementValues, [communicationEntitlement]: true } : entitlementValues,
+	),
 )
 run("plutil", ["-convert", "xml1", "-o", entitlements, `${out}/build/entitlements.json`])
 run("codesign", [

@@ -62,6 +62,7 @@ import { CustomerIngest } from "../../worker/objects/customers/ingest"
 import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/customers/ingest-live"
 import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
 import { configProblem as mapleConfigProblem } from "../../worker/objects/customers/maple/pull"
+import { mergeAccounts } from "../../worker/objects/customers/merge"
 import { CustomerProviders } from "../../worker/objects/customers/providers"
 import { CustomersServicesLive } from "../../worker/objects/customers/services"
 import {
@@ -1506,6 +1507,24 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 									.set({ nextSyncAt: now, updatedAt: now })
 									.where(($) => [$.id.eq(connectionId)]),
 							)
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.account.merge": ({ accountId, intoAccountId }) =>
+				Effect.gen(function* () {
+					const actor = yield* requireAdmin
+					if (accountId === intoAccountId)
+						return yield* invalid("A customer cannot be merged into itself")
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.gen(function* () {
+							const from = yield* requireAccount(accountId)
+							const into = yield* requireAccount(intoAccountId)
+							yield* mergeAccounts(from, into, actor.userId, now)
+							yield* refreshCounters(intoAccountId, now)
+							// Chat shows linked channels' customer by name.
+							yield* publishChannelCustomers(into.organizationId)
 						}),
 					)
 				}).pipe(remap),

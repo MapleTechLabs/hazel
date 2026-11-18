@@ -926,6 +926,20 @@ export const mrrHistory = (
 	)
 }
 
+/** Live Clerk organizations per account, for the accounts whose stored count is off. */
+export const syncOrganizationCounts = Effect.flatMap(Database.Database, (db) =>
+	db.query(
+		Database.sql`UPDATE "customer_accounts" SET "organizationCount" = (
+			SELECT COUNT(*) FROM "customer_external_refs" AS "r"
+			WHERE "r"."accountId" = "customer_accounts"."id" AND "r"."entityType" = 'account'
+				AND "r"."provider" = 'clerk' AND "r"."staleAt" IS NULL)
+		WHERE "deletedAt" IS NULL AND "organizationCount" <> (
+			SELECT COUNT(*) FROM "customer_external_refs" AS "r"
+			WHERE "r"."accountId" = "customer_accounts"."id" AND "r"."entityType" = 'account'
+				AND "r"."provider" = 'clerk' AND "r"."staleAt" IS NULL)`,
+	),
+)
+
 /**
  * The last year rebuilt from the sources (after a connection's first backfill or the demo seed):
  * MRR movements of the accounts without any in that year before today (today's replaced; their MRR set to where
@@ -1251,6 +1265,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	}
 	yield* finishSignals(now, base.rules, signals)
 	yield* writeOrgDay(base, totals)
+	yield* syncOrganizationCounts
 	yield* prune(now)
 	yield* db.run(
 		SQLite.update(schema.customerSettingsTable)
