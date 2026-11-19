@@ -25,7 +25,11 @@ struct WebSlot: UIViewRepresentable {
     private func take(into slot: SlotView) {
         let webView = bridge.webView
         guard isActive, webView.superview !== slot else { return }
+        // The slot it leaves (the page under a pushed one) keeps a picture of it: the page under
+        // stays drawn while the one over it slides in or is swiped away.
+        (webView.superview as? SlotView)?.keepPicture(of: webView)
         webView.removeFromSuperview()
+        slot.dropPicture()
         slot.addSubview(webView)
         slot.setNeedsLayout()
     }
@@ -37,6 +41,20 @@ struct WebSlot: UIViewRepresentable {
 /// status bar, is held off.
 final class SlotView: UIView {
     private var keyboardOverlap: CGFloat = 0
+    private var picture: UIView?
+
+    func keepPicture(of webView: UIView) {
+        dropPicture()
+        guard let picture = webView.snapshotView(afterScreenUpdates: false) else { return }
+        picture.frame = webView.frame
+        addSubview(picture)
+        self.picture = picture
+    }
+
+    func dropPicture() {
+        picture?.removeFromSuperview()
+        picture = nil
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)

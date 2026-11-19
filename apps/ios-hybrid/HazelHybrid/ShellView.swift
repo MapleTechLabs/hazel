@@ -20,11 +20,38 @@ struct ShellView: View {
     var body: some View {
         NavigationStack(path: $path) {
             rootContent
-                .navigationDestination(for: String.self) { _ in
+                .navigationDestination(for: String.self) { route in
+                    if route == "thread" {
+                        // A thread, over its channel in the page: the page itself, as a page of
+                        // its own (the system's swipe pops it, and the page closes the thread).
+                        WebSlot(bridge: bridge, isActive: path.last == "thread")
+                            .ignoresSafeArea()
+                            .background(Color(uiColor: .systemBackground))
+                            .toolbar(.hidden, for: .navigationBar)
+                    } else {
+                        channelPage
+                    }
+                }
+        }
+        .tint(Self.brand)
+        .onChange(of: bridge.screen) { _, screen in follow(screen: screen, tabs: bridge.tabs) }
+        .onChange(of: bridge.tabs) { _, tabs in follow(screen: bridge.screen, tabs: tabs) }
+        .onChange(of: bridge.isThreadOpen) { _, isOpen in followThread(isOpen) }
+        .onChange(of: path) { old, new in
+            // The user popped the page (the back button or the swipe): the page goes back too.
+            if new.isEmpty, !old.isEmpty, bridge.screen == nil { bridge.swipeBack() }
+            // The user popped the thread: the page closes it (its swipe-back closes the panel).
+            else if old.last == "thread", new.last != "thread", bridge.isThreadOpen { bridge.swipeBack() }
+        }
+    }
+
+    /// A conversation: the page's header, the native message list and composer over the page.
+    @ViewBuilder
+    private var channelPage: some View {
                     // The page's own header (title, back chevron) is the bar: one header, the web's.
                     // The system's swipe still pops it.
                     ZStack(alignment: .topLeading) {
-                        WebSlot(bridge: bridge, isActive: true)
+                        WebSlot(bridge: bridge, isActive: path.last == "page")
                             .ignoresSafeArea()
                         if let frame = bridge.listFrame, let composer = bridge.composer {
                             // The message list and the composer, natively: from under the page's
@@ -70,15 +97,6 @@ struct ShellView: View {
                         }
                     }
                     .toolbar(.hidden, for: .navigationBar)
-                }
-        }
-        .tint(Self.brand)
-        .onChange(of: bridge.screen) { _, screen in follow(screen: screen, tabs: bridge.tabs) }
-        .onChange(of: bridge.tabs) { _, tabs in follow(screen: bridge.screen, tabs: tabs) }
-        .onChange(of: path) { old, new in
-            // The user popped the page (the back button or the swipe): the page goes back too.
-            if new.isEmpty, !old.isEmpty, bridge.screen == nil { bridge.swipeBack() }
-        }
     }
 
     @ViewBuilder
@@ -105,6 +123,12 @@ struct ShellView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+    }
+
+    /// The page opened or closed a thread: it is pushed over its channel, or popped.
+    private func followThread(_ isOpen: Bool) {
+        if isOpen, path.last == "page" { path.append("thread") }
+        else if !isOpen, path.last == "thread" { path.removeLast() }
     }
 
     private func follow(screen: SemanticNode?, tabs: [WebTab]) {

@@ -28,6 +28,7 @@ type ShellMessage =
 	| { type: "haptic"; kind: string }
 	| { type: "swipeBack"; enabled: boolean }
 	| { type: "overlay"; open: boolean }
+	| { type: "thread"; open: boolean }
 	| { type: "ready" }
 	| { type: "screen"; screen: TreeNode | null }
 	| { type: "icons"; icons: Record<string, string> }
@@ -178,6 +179,12 @@ const overlayIsOpen = () =>
 		element.checkVisibility({ checkVisibilityCSS: true }),
 	)
 
+/** The thread panel covers its channel (on a phone it is the whole page). */
+const threadIsOpen = () =>
+	Array.from(document.querySelectorAll("[data-thread-panel]")).some((element) =>
+		element.checkVisibility({ checkVisibilityCSS: true }),
+	)
+
 export const installBridge = () => {
 	proxyPictures()
 	// The island keeps its room (the page lays out as it would with its own bar), the shell's
@@ -187,7 +194,7 @@ export const installBridge = () => {
 	// laid out underneath, unseen.
 	style.textContent = `${TAB_BAR} { visibility: hidden !important; }
 		:root:not([data-shell-overlay]) [data-list-count] { visibility: hidden !important; }
-		:root:not([data-shell-overlay]) [data-ui="composer"] { opacity: 0 !important; pointer-events: none !important; }
+		:root:not([data-shell-overlay]) [data-ui="composer"]:not([data-thread-panel] *) { opacity: 0 !important; pointer-events: none !important; }
 		* { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }`
 	document.head.appendChild(style)
 
@@ -210,6 +217,7 @@ export const installBridge = () => {
 	let lastListCount = -1
 	let lastScreen = ""
 	let wasOverlayOpen = false
+	let wasThreadOpen = false
 	let hasShown = false
 	let settle: ReturnType<typeof setTimeout> | undefined
 	let scheduled = false
@@ -219,6 +227,12 @@ export const installBridge = () => {
 		const screen = readScreen()
 		const list = readList()
 		const composer = JSON.stringify(readComposer())
+		// A thread over its channel: the shell shows it as a page of its own (pushed, swiped back).
+		const isThreadOpen = threadIsOpen()
+		if (isThreadOpen !== wasThreadOpen) {
+			wasThreadOpen = isThreadOpen
+			post({ type: "thread", open: isThreadOpen })
+		}
 		const isOverlayOpen = overlayIsOpen()
 		if (isOverlayOpen !== wasOverlayOpen) {
 			wasOverlayOpen = isOverlayOpen
