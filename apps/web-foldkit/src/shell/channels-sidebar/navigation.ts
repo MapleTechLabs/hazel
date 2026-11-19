@@ -1,18 +1,21 @@
 import type { ChannelId } from "@hazel/schema"
+import { splitCustomerChannels } from "./customer-channels"
 import type { Model } from "./model"
 
 /**
  * Discord's Alt+ArrowUp / Alt+ArrowDown (and with Shift, unread channels only): the sidebar's
  * channels in the order it shows them, favorites first, then the default section, the custom
- * sections, and the direct messages. A favorite listed again in its section is visited once.
+ * sections, the customer channels, and the direct messages. A favorite listed again in its section is visited once.
  */
 export const navigationOrder = (model: Model): ReadonlyArray<ChannelId> => {
+	const { sectionChannels, customerChannels } = splitCustomerChannels(model)
 	const ids = [
 		...model.favorites.map((entry) => entry.channel.id),
-		...(model.sectionChannels["default"] ?? []).map((entry) => entry.channel.id),
+		...(sectionChannels["default"] ?? []).map((entry) => entry.channel.id),
 		...model.sections.flatMap((section) =>
-			(model.sectionChannels[section.id] ?? []).map((entry) => entry.channel.id),
+			(sectionChannels[section.id] ?? []).map((entry) => entry.channel.id),
 		),
+		...customerChannels.map(({ entry }) => entry.channel.id),
 		...model.dmChannelIds.filter((channelId) => model.dmChannels[channelId] != null),
 	]
 	return [...new Set(ids)]

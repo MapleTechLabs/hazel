@@ -75,6 +75,8 @@ export const ChannelCustomerEntry = Schema.Struct({
 	channelId: ChannelId,
 	accountId: CustomerAccountId,
 	accountName: Schema.String,
+	/** Optional: snapshots queued before logos were sent have none. */
+	accountLogoUrl: Schema.optional(Schema.NullOr(Schema.String)),
 })
 export type ChannelCustomerEntry = typeof ChannelCustomerEntry.Type
 
@@ -114,13 +116,20 @@ const applyChannelCustomers = Effect.fn("OrgObject.applyChannelCustomers")(funct
 	const held = new Map(current.map((row) => [row.channelId, row]))
 	for (const link of payload.links) {
 		const row = held.get(link.channelId)
-		if (row !== undefined && row.accountId === link.accountId && row.accountName === link.accountName) {
+		const accountLogoUrl = link.accountLogoUrl ?? null
+		if (
+			row !== undefined &&
+			row.accountId === link.accountId &&
+			row.accountName === link.accountName &&
+			(row.accountLogoUrl ?? null) === accountLogoUrl
+		) {
 			continue
 		}
 		const values = {
 			organizationId: payload.organizationId,
 			accountId: link.accountId,
 			accountName: link.accountName,
+			accountLogoUrl,
 			updatedAt: now,
 		}
 		yield* db.run(
