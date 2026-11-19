@@ -716,7 +716,7 @@ describe("image viewer", () => {
 		)
 	})
 
-	test("right-clicking an attachment image offers Copy Image, which copies that image", () => {
+	test("right-clicking an attachment image offers Copy Image and Copy Image Address", () => {
 		const url = "https://cdn.hazel.sh/photo-1.png"
 		const facts = { isOwnMessage: () => false, isPinned: () => false, canStartThread: () => false }
 		const opened = Overlays.update(
@@ -733,18 +733,22 @@ describe("image viewer", () => {
 		const entries = Overlays.contextMenuEntries(facts, graceMessageId, url)
 		const keysOf = (all: ReadonlyArray<Menu.Entry>) =>
 			all.flatMap((entry) => (entry._tag === "Item" ? [entry.item.key] : []))
-		expect(keysOf(entries)).toContain(Overlays.COPY_IMAGE)
-		expect(keysOf(Overlays.contextMenuEntries(facts, graceMessageId, null))).not.toContain(
-			Overlays.COPY_IMAGE,
-		)
-		const chosen = Overlays.update(
-			opened,
-			Overlays.Message.GotContextMenuMessage({
-				message: Menu.Message.ClickedItem({ key: Overlays.COPY_IMAGE, entries }),
-			}),
-		)
-		expect(chosen.outMessage).toEqual(
+		const imageKeys = [Overlays.COPY_IMAGE, Overlays.COPY_IMAGE_URL]
+		expect(keysOf(entries)).toEqual(expect.arrayContaining(imageKeys))
+		const plainKeys = keysOf(Overlays.contextMenuEntries(facts, graceMessageId, null))
+		for (const key of imageKeys) expect(plainKeys).not.toContain(key)
+		const choose = (key: string) =>
+			Overlays.update(
+				opened,
+				Overlays.Message.GotContextMenuMessage({
+					message: Menu.Message.ClickedItem({ key, entries }),
+				}),
+			).outMessage
+		expect(choose(Overlays.COPY_IMAGE)).toEqual(
 			Overlays.OutMessage.RequestedViewerAction({ action: "copyImage", url, fileName: "" }),
+		)
+		expect(choose(Overlays.COPY_IMAGE_URL)).toEqual(
+			Overlays.OutMessage.RequestedViewerAction({ action: "copyUrl", url, fileName: "" }),
 		)
 	})
 

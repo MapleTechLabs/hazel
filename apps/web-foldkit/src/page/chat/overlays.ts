@@ -292,8 +292,14 @@ export const moreMenuEntries = (facts: MessageFacts, messageId: MessageId): Read
 	Menu.item("pin"),
 ]
 
-/** The context menu's item on an attachment image (not a `MessageAction`: it needs the image). */
+/** The context menu's items on an attachment image (not `MessageAction`s: they need the image). */
 export const COPY_IMAGE = "copy-image"
+export const COPY_IMAGE_URL = "copy-image-url"
+
+const IMAGE_ACTIONS = new Map<string, ViewerAction>([
+	[COPY_IMAGE, "copyImage"],
+	[COPY_IMAGE_URL, "copyUrl"],
+])
 
 /** A message's context menu; the words are what the system's menu shows (`textValue`). */
 export const contextMenuEntries = (
@@ -309,7 +315,12 @@ export const contextMenuEntries = (
 	...(facts.canStartThread(messageId) ? [Menu.item("thread", { textValue: "Reply in Thread" })] : []),
 	Menu.separator,
 	Menu.item("copy", { textValue: "Copy Text" }),
-	...(imageUrl === null ? [] : [Menu.item(COPY_IMAGE, { textValue: "Copy Image" })]),
+	...(imageUrl === null
+		? []
+		: [
+				Menu.item(COPY_IMAGE, { textValue: "Copy Image" }),
+				Menu.item(COPY_IMAGE_URL, { textValue: "Copy Image Address" }),
+			]),
 	Menu.item("pin", { textValue: facts.isPinned(messageId) ? "Unpin Message" : "Pin Message" }),
 	Menu.separator,
 	...(facts.isOwnMessage(messageId)
@@ -515,11 +526,12 @@ const updateOverlays = (model: Model, message: Message): OverlaysReturn =>
 				wrap: (inner) => Message.GotContextMenuMessage({ message: inner }),
 			})
 			const chosen = result.outMessage
-			if (chosen?._tag === "SelectedItem" && chosen.key === COPY_IMAGE && current.imageUrl !== null)
+			const imageAction = chosen?._tag === "SelectedItem" ? IMAGE_ACTIONS.get(chosen.key) : undefined
+			if (imageAction !== undefined && current.imageUrl !== null)
 				return {
 					...next,
 					outMessage: OutMessage.RequestedViewerAction({
-						action: "copyImage",
+						action: imageAction,
 						url: current.imageUrl,
 						fileName: "",
 					}),
