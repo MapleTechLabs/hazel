@@ -69,6 +69,8 @@ const account = (n: number, featureFlags: Record<string, boolean>): AccountRow =
 	churnedAtMs: null,
 	tags: [],
 	featureFlags,
+	primaryAccountId: null,
+	environment: null,
 })
 const one = account(1, { beta: true, legacy: false })
 const two = account(2, {})

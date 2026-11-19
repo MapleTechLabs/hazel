@@ -3,6 +3,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { badge } from "../../ui/badge"
 import { formatDaysLeft } from "../format"
+import { environmentsHintOf } from "../groups"
 import { IconOpportunity, IconRisk } from "./icons"
 
 /**
@@ -264,4 +265,24 @@ export const signalCounts = <M>(
 				: []),
 		],
 	)
+}
+
+// ENVIRONMENT
+
+/** `EU`: an account's environment, beside its name; a long name truncates. */
+export const environmentBadge = <M>(
+	h: HtmlBuilder<M>,
+	environment: string,
+	options: Readonly<{ className?: string }> = {},
+): Html =>
+	badge(h, { intent: "secondary", className: twMerge("min-w-0 max-w-32 shrink-0", options.className) }, [
+		h.span([h.Class("min-w-0 truncate"), h.Title(environment)], [environment]),
+	])
+
+/** `+2 environments` beside a primary's name, muted; nothing for an account without environments. */
+export const environmentsHint = <M>(h: HtmlBuilder<M>, count: number): ReadonlyArray<Html> => {
+	const hint = environmentsHintOf(count)
+	return hint === null
+		? []
+		: [h.span([h.Class("shrink-0 whitespace-nowrap font-normal text-muted-fg text-xs")], [hint])]
 }

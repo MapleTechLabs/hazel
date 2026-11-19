@@ -64,6 +64,10 @@ export const AccountRow = Schema.Struct({
 	tags: Schema.Array(Schema.String),
 	/** The Clerk organization's flags: on when `true`; a `false` key is off. */
 	featureFlags: Schema.Record(Schema.String, Schema.Boolean),
+	/** The primary of the customer it is an environment of; null when standalone or a primary (`groups.ts`). */
+	primaryAccountId: Schema.NullOr(CustomerAccountId),
+	/** What the team calls this environment (`US`, `EU`). */
+	environment: Schema.NullOr(Schema.String),
 })
 export type AccountRow = typeof AccountRow.Type
 
@@ -142,6 +146,8 @@ export const toAccountRow = (account: Customers.Account): AccountRow => ({
 	churnedAtMs: msOrNull(account.churnedAt),
 	tags: account.tags,
 	featureFlags: account.featureFlags,
+	primaryAccountId: account.primaryAccountId,
+	environment: account.environment,
 })
 
 export const toSignalRow = (signal: Customers.Signal): SignalRow => ({

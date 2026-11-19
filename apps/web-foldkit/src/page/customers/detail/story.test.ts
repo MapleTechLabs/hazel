@@ -101,6 +101,8 @@ const account = (n: number, name: string): AccountRow => ({
 	churnedAtMs: null,
 	tags: ["pilot"],
 	featureFlags: {},
+	primaryAccountId: null,
+	environment: null,
 })
 const acme = account(1, "Acme")
 const beta = account(2, "Beta")

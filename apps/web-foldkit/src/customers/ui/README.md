@@ -51,6 +51,7 @@ string, so a title, a table head or a link reads the same on every page.
 - `severityChip(h, severity)` / `severityGlyph(h, severity)` — bars; the glyph alone has a title.
 - `kindChip(h, kind)` — `! Risk` / `↗ Opportunity`.
 - `stageBadge(h, stage, { trialDaysLeft? })` — square, no dot.
+- `environmentBadge(h, environment)` — an account's environment (`EU`) beside its name; `environmentsHint(h, count)` — `+2 environments`, muted.
 - `signalCounts(h, { high, medium, low, opportunities })` — the list's open-signals cell.
 - Labels/fills: `HEALTH_LABEL`, `HEALTH_FILL`, `SEVERITY_LABEL`, `KIND_LABEL`, `STAGE_LABEL`.
 
@@ -90,7 +91,7 @@ Charts fill their container's width (no measuring); set the height with `heightC
 - `dataTable(h, { ariaLabel, id, columns, rows, rowKey, sort?, onSort?, selection?, onRowPress?, focusedKey?, rowActions?, loadingRows?, stickyHeader? })`
   — `Column = { key, label, align?, sortable?, widthClass?, hideClass?, cell, footer? }`; a footer row renders when any column has `footer`.
   `selection = { selected: ReadonlySet<string>, onToggle(key, isSelected), onToggleAll(isSelected) }`.
-- `primaryCell(h, { leading?, title, subtitle?, href? })` — logo + name + domain.
+- `primaryCell(h, { leading?, title, subtitle?, href?, badge?, isNested? })` — logo + name + domain; `isNested` indents an environment under its primary.
 - `queueRow(h, { id, rank, account, signal, evidence, age, assignee, health, isFocused?, isSelected?, run?, onPress?, actions? })`,
   `queueList(h, { ariaLabel }, rows)`, `queueAction(h, { label, icon?, onPress?, iconOnly?, shortcut?, attributes?, overlay? })`, `planLine(account)`,
   `accountMark(h, account, run?)` (the logo, joined by a line to the same account's rows).

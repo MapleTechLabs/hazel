@@ -4,8 +4,9 @@ import { Submodel } from "foldkit"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { formatCount, formatDeltaPct, formatMoney, formatRelative } from "../../../customers/format"
+import { nestedIdsOf } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
-import { healthBadge, severityGlyph } from "../../../customers/ui/badges"
+import { environmentBadge, healthBadge, severityGlyph } from "../../../customers/ui/badges"
 import { connectCard } from "../../../customers/ui/connect-card"
 import { dataTable } from "../../../customers/ui/data-table"
 import { noResultsState } from "../../../customers/ui/empty-states"
@@ -346,7 +347,18 @@ const hoverCard = (h: HtmlBuilder<Message>, model: Model, account: AccountRow, v
 					h.div(
 						[h.Class("flex min-w-0 flex-1 flex-col")],
 						[
-							h.span([h.Class("truncate font-semibold text-base text-fg")], [account.name]),
+							h.span(
+								[h.Class("flex min-w-0 items-center gap-2")],
+								[
+									h.span(
+										[h.Class("truncate font-semibold text-base text-fg")],
+										[account.name],
+									),
+									...(account.environment === null
+										? []
+										: [environmentBadge(h, account.environment)]),
+								],
+							),
 							h.span(
 								[h.Class("truncate text-muted-fg text-xs")],
 								[
@@ -765,6 +777,7 @@ const table = (
 		nowMs: viewer.nowMs,
 		membersById: new Map(model.members.map((member) => [member.id, member])),
 		sparklines: model.sparklines,
+		nestedIds: nestedIdsOf(rows),
 		nameCell: (account, cell) =>
 			h.div(
 				[

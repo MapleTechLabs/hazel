@@ -1,6 +1,7 @@
 import * as Customers from "@hazel/domain/customers"
 import { CustomerAccountId, CustomerSavedViewId, UserId } from "@hazel/schema"
 import { Array, Order, Schema } from "effect"
+import { groupRows } from "../../../customers/groups"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
@@ -271,6 +272,7 @@ export const matchesFilters = (
 			account.lastActiveAtMs < viewer.nowMs - filters.inactiveForDays * DAY_MS) &&
 		(query === "" ||
 			account.name.toLowerCase().includes(query) ||
+			(account.environment ?? "").toLowerCase().includes(query) ||
 			(account.domain ?? "").toLowerCase().includes(query))
 	)
 }
@@ -368,7 +370,7 @@ const memoLast = <A>() => {
 
 const visibleMemo = memoLast<ReadonlyArray<AccountRow>>()
 
-/** The rows the table shows, in order. */
+/** The rows the table shows, in order: sorted, then each customer's environments kept together. */
 export const visibleAccounts = (model: Model, viewer: Viewer): ReadonlyArray<AccountRow> =>
 	visibleMemo(
 		[
@@ -380,14 +382,17 @@ export const visibleAccounts = (model: Model, viewer: Viewer): ReadonlyArray<Acc
 			viewer.userId,
 			viewer.nowMs,
 		],
-		() =>
-			sortAccounts(
-				(model.accounts ?? []).filter((account) =>
-					matchesFilters(effectiveFilters(model), account, viewer),
+		() => {
+			const accounts = model.accounts ?? []
+			return groupRows(
+				sortAccounts(
+					accounts.filter((account) => matchesFilters(effectiveFilters(model), account, viewer)),
+					model.draft.sort,
+					model.members,
 				),
-				model.draft.sort,
-				model.members,
-			),
+				new Set(accounts.map((account) => account.id)),
+			)
+		},
 	)
 
 const tabCountsMemo = memoLast<ReadonlyMap<string | null, number>>()

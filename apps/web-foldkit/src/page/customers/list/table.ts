@@ -12,6 +12,7 @@ import {
 } from "../../../customers/format"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
 import {
+	environmentBadge,
 	HEALTH_LABEL,
 	healthBadge,
 	STAGE_LABEL,
@@ -33,6 +34,8 @@ export interface TableContext {
 	readonly nowMs: number
 	readonly membersById: ReadonlyMap<string, MemberRow>
 	readonly sparklines: Readonly<Record<string, ReadonlyArray<number>>>
+	/** Environments shown under their primary (`nestedIdsOf`). */
+	readonly nestedIds: ReadonlySet<string>
 	/** Wraps the name cell: the hover card's anchor. */
 	readonly nameCell: (account: AccountRow, cell: Html) => Html
 }
@@ -111,18 +114,20 @@ const escapeCsv = (raw: string) => {
 	return /[",\n\r]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value
 }
 
-/** The rows as CSV, one column per shown column (plus the domain after the name). */
+/** The rows as CSV, one column per shown column (plus the domain and environment after the name). */
 export const toCsv = (
 	accounts: ReadonlyArray<AccountRow>,
 	columns: ReadonlyArray<Customers.ListColumn>,
 	context: Pick<TableContext, "membersById" | "nowMs">,
 ): string => {
 	const header = columns.flatMap((column) =>
-		column === "name" ? ["Customer", "Domain"] : [COLUMN_LABEL[column]],
+		column === "name" ? ["Customer", "Domain", "Environment"] : [COLUMN_LABEL[column]],
 	)
 	const rows = accounts.map((account) =>
 		columns.flatMap((column) =>
-			column === "name" ? [account.name, account.domain ?? ""] : [csvValue(column, account, context)],
+			column === "name"
+				? [account.name, account.domain ?? "", account.environment ?? ""]
+				: [csvValue(column, account, context)],
 		),
 	)
 	return [header, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n")
@@ -183,10 +188,17 @@ const cellOf = <M>(
 			return context.nameCell(
 				account,
 				primaryCell(h, {
-					leading: companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "sm" }),
+					leading: companyLogo(h, {
+						name: account.name,
+						logoUrl: account.logoUrl,
+						size: context.nestedIds.has(account.id) ? "xs" : "sm",
+					}),
 					title: account.name,
 					subtitle: account.domain,
 					href: hrefOf(customerRoute(context.orgSlug, account.id)),
+					badge:
+						account.environment === null ? undefined : environmentBadge(h, account.environment),
+					isNested: context.nestedIds.has(account.id),
 				}),
 			)
 		case "owner": {

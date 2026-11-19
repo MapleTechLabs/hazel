@@ -86,6 +86,8 @@ const account = (n: number, name: string, fields: Partial<AccountRow> = {}): Acc
 	churnedAtMs: null,
 	tags: [],
 	featureFlags: {},
+	primaryAccountId: null,
+	environment: null,
 	...fields,
 })
 
@@ -248,6 +250,37 @@ describe("customers list: sort and columns", () => {
 			column: "name",
 			direction: "asc",
 		})
+	})
+
+	test("a customer's environments stay together, primary first, where its first one sorts", () => {
+		// Acme's EU environment is the smallest, Kestrel the largest; Acme sits where its first row sorts.
+		const acmeEu = account(6, "Acme Robotics", {
+			primaryAccountId: acme.id,
+			environment: "EU",
+			mrrMinor: 5_000,
+			healthStatus: "healthy",
+		})
+		const model = run(loaded(), [Message.UpdatedAccounts({ accounts: [...accounts, acmeEu] })])
+		const ids = (current: Model) => visibleAccounts(current, viewer).map((row) => row.id)
+		expect(ids(run(model, [Message.ClickedSortHeader({ column: "mrr" })]))).toEqual([
+			northwind.id,
+			acme.id,
+			acmeEu.id,
+			kestrel.id,
+			brightfield.id,
+		])
+		// Ascending: the EU environment sorts first, and its primary comes with it, ahead of it.
+		const ascending = run(model, [
+			Message.ClickedSortHeader({ column: "mrr" }),
+			Message.ClickedSortHeader({ column: "mrr" }),
+		])
+		expect(ids(ascending).slice(0, 3)).toEqual([brightfield.id, acme.id, acmeEu.id])
+		// A search that drops the primary keeps the environment, on its own.
+		expect(ids(run(model, [Message.ChangedSearch({ value: "eu" })]))).toEqual([acmeEu.id])
+		const atRiskOnly = run(init(route("at_risk")).model, [
+			Message.UpdatedAccounts({ accounts: [...accounts, acmeEu] }),
+		])
+		expect(ids(atRiskOnly)).toEqual([acme.id, kestrel.id])
 	})
 
 	test("health sorts unscored accounts last either way", () => {
@@ -466,7 +499,7 @@ describe("customers list: CSV", () => {
 			["name", "tags", "mrr"],
 			{ membersById: new Map(), nowMs: NOW },
 		)
-		expect(csv.split("\n")[1]).toBe(`'=HYPERLINK(1),'@evil,"'+x; a\rb",2150.00`)
+		expect(csv.split("\n")[1]).toBe(`'=HYPERLINK(1),'@evil,,"'+x; a\rb",2150.00`)
 		expect(
 			toCsv([{ ...acme, mrrMinor: -500 }], ["mrr"], { membersById: new Map(), nowMs: NOW }),
 		).toContain("-5.00")
