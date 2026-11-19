@@ -248,3 +248,31 @@ export const metricSourceProblem = (
 		}
 	}
 }
+
+/** SQL with its whitespace collapsed outside string literals: `'a  b'` stays a different value. */
+const collapsedSql = (sql: string): string =>
+	sql
+		.trim()
+		.replace(/;\s*$/, "")
+		.split(/('(?:[^'\\]|\\.)*')/)
+		.map((part, index) => (index % 2 === 1 ? part : part.replace(/\s+/g, " ")))
+		.join("")
+
+/** A source as the data it makes: SQL and formulas whitespace-collapsed, events trimmed and sorted. */
+const dataOf = (source: MetricSource): string => {
+	switch (source._tag) {
+		case "maple_query":
+			return `maple_query\n${collapsedSql(source.sql)}`
+		case "product_event":
+			return `product_event\n${[...new Set(source.events.map((event) => event.trim()))].sort().join("\n")}`
+		case "formula":
+			return `formula\n${source.expression.replace(/\s+/g, "")}`
+	}
+}
+
+/**
+ * Two sources make the same daily values: the one rule for both a save (the same data keeps its
+ * stored days and backfill) and a pull (a page read under the same data still lands).
+ */
+export const sameMetricData = (a: MetricSource | null, b: MetricSource | null): boolean =>
+	a !== null && b !== null && dataOf(a) === dataOf(b)

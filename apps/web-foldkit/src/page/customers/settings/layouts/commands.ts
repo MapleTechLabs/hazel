@@ -7,7 +7,7 @@ import { awaitSynced } from "../../../../customers/await-synced"
 import { catchCommon } from "../../../../data/actions"
 import { HazelRpc } from "../../../../rpc"
 import { type LayoutWriteFailure, Message } from "./message"
-import { DRY_RUN_DEBOUNCE_MS } from "./model"
+import { DRY_RUN_DEBOUNCE_MS, EditorMove } from "./model"
 
 /**
  * The layout pages' Commands: layout writes (each waits until its change has synced, so the list and
@@ -49,19 +49,22 @@ export const UpdateOverviewLayout = Command.define("UpdateOverviewLayout", {
 	args: {
 		organizationId: OrganizationId,
 		layoutId: CustomerOverviewLayoutId,
+		saveId: Schema.Int,
 		layout: Customers.LayoutDraft,
 	},
 	messages: [Message.SucceededUpdateLayout, Message.FailedUpdateLayout],
-	execute: (args) => {
-		const failed = failWith((reason) => Message.FailedUpdateLayout({ layoutId: args.layoutId, reason }))
+	execute: ({ saveId, ...args }) => {
+		const failed = failWith((reason) =>
+			Message.FailedUpdateLayout({ layoutId: args.layoutId, saveId, reason }),
+		)
 		return HazelRpc.use((rpc) => rpc("customers.layout.update", args)).pipe(
 			Effect.tap((result) => awaitSynced(customerOverviewLayoutCollection, result.transactionId)),
-			Effect.as(Message.SucceededUpdateLayout({ layoutId: args.layoutId })),
+			Effect.as(Message.SucceededUpdateLayout({ layoutId: args.layoutId, saveId })),
 			Effect.catchTags({
 				CustomersNotFoundError: () => failed("NotFound"),
 				CustomersInvalidRequestError: () => failed("Invalid"),
 			}),
-			catchCommon((reason) => Message.FailedUpdateLayout({ layoutId: args.layoutId, reason })),
+			catchCommon((reason) => Message.FailedUpdateLayout({ layoutId: args.layoutId, saveId, reason })),
 		)
 	},
 })
@@ -71,7 +74,7 @@ export const ReorderOverviewLayouts = Command.define("ReorderOverviewLayouts", {
 	args: {
 		organizationId: OrganizationId,
 		layoutIds: Schema.Array(CustomerOverviewLayoutId),
-		move: Schema.NullOr(CustomerOverviewLayoutId),
+		move: Schema.NullOr(EditorMove),
 	},
 	messages: [Message.SucceededReorderLayouts, Message.FailedReorderLayouts],
 	execute: ({ move, ...args }) =>

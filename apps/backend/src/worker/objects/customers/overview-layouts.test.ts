@@ -24,7 +24,7 @@ import { fakeMapleHttpClient, makeFakeMaple } from "./maple/testing"
 import { previewMetric } from "./metric-preview"
 import { loadDefinitions } from "./metric-values"
 import { decodeCursor } from "./maple/pull"
-import { type CustomerProviderAdapter, CustomerProviders, type UserMetric } from "./providers"
+import { type CustomerProviderAdapter, CustomerProviders, type PullPage, type UserMetric } from "./providers"
 import { type CustomersWorld, makeCustomersWorld, NOW, ok, tagOf, TODAY } from "./test-kit"
 import { addDays } from "./time"
 
@@ -890,13 +890,98 @@ const addRef = (world: CustomersWorld, provider: "clerk" | "maple", externalId: 
 		)
 		.run(crypto.randomUUID(), world.connection(provider), provider, accountId, accountId, externalId)
 
+/** The Maple connection with a key and a validated account, as a pull needs it. */
+const withMapleKey = (world: CustomersWorld) =>
+	Effect.gen(function* () {
+		const maple = world.connection("maple")
+		world.object.storage.db
+			.prepare(`UPDATE customer_connections SET externalAccountId = 'org:us' WHERE id = ?`)
+			.run(maple)
+		yield* world.object
+			.run(
+				Effect.gen(function* () {
+					yield* storeSecrets(maple, yield* encryptSecrets("maple_ak_test", null))
+				}).pipe(Effect.provide(encryption)),
+			)
+			.pipe(Effect.orDie)
+	})
+
+/** Run the due pulls now, the Maple connection's pages answered by `page`. */
+const pullMaple = (world: CustomersWorld, page: () => PullPage) =>
+	Effect.gen(function* () {
+		world.object.storage.db
+			.prepare(`UPDATE customer_connections SET nextSyncAt = '2000-01-01 00:00:00.000' WHERE id = ?`)
+			.run(world.connection("maple"))
+		const adapter: CustomerProviderAdapter = {
+			provider: "maple",
+			validate: () => Effect.succeed({ externalAccountId: "org:us", externalAccountName: null }),
+			webhook: () => Effect.succeed([]),
+			pull: () => Effect.sync(page),
+			pullIntervalMs: 60 * 60_000,
+		}
+		const services = Layer.mergeAll(
+			CustomerIngest.layer,
+			encryption,
+			Layer.succeed(
+				CustomerProviders,
+				CustomerProviders.of({
+					get: (provider) => (provider === "maple" ? Option.some(adapter) : Option.none()),
+				}),
+			),
+		)
+		yield* world.object.run(runDuePullsWith(services)(new Date())).pipe(Effect.orDie)
+	})
+
+/** Maple's value of `spans` today for the customer with this Clerk id. */
+const spansOf = (externalId: string, value: number): IngestOp => ({
+	_tag: "metric",
+	account: { provider: "clerk", externalId },
+	metricKey: "spans",
+	day: TODAY,
+	value,
+})
+
 describe("Customer Overview: reads, writes and pulls agree", () => {
-	it("drops a page's values of a metric whose source changed while the page was out", () =>
+	it("drops a page's values when its metric's data changed while the page was out, not on a reformat", () =>
+		run(
+			Effect.gen(function* () {
+				for (const [edit, landed] of [
+					[query("b"), 0],
+					// Only whitespace: the same data, as the save path also treats it (no backfill restart).
+					[{ ...query("a"), sql: `  ${SQL("a").replace(/\n/g, "\n\t")}  ` }, 1],
+				] as const) {
+					const world = yield* makeCustomersWorld
+					yield* accounts(world, ["Acme"])
+					ok(
+						yield* world.call(
+							"customers.metric.create",
+							{ key: "spans", metric: draft(query("a")) },
+							world.owner,
+						),
+					)
+					yield* withMapleKey(world)
+					yield* pullMaple(world, () => {
+						// Someone saves the metric while Maple answers the old query.
+						world.object.storage.db
+							.prepare(`UPDATE customer_metric_definitions SET source = ? WHERE key = 'spans'`)
+							.run(JSON.stringify(edit))
+						return {
+							ops: [spansOf("org_Acme", 5)],
+							nextCursor: null,
+							progress: { step: "queries", done: 1, total: null },
+						}
+					})
+					expect(world.rows(`SELECT count(*) AS n FROM customer_metric_daily`)).toEqual([
+						{ n: landed },
+					])
+				}
+			}),
+		))
+
+	it("keeps a run's first refused day on the metric until a later run reads it", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
-				yield* accounts(world, ["Acme"])
-				const maple = world.connection("maple")
 				ok(
 					yield* world.call(
 						"customers.metric.create",
@@ -904,57 +989,33 @@ describe("Customer Overview: reads, writes and pulls agree", () => {
 						world.owner,
 					),
 				)
-				world.object.storage.db
-					.prepare(`UPDATE customer_connections SET externalAccountId = 'org:us' WHERE id = ?`)
-					.run(maple)
-				yield* world.object
-					.run(
-						Effect.gen(function* () {
-							yield* storeSecrets(maple, yield* encryptSecrets("maple_ak_test", null))
-						}).pipe(Effect.provide(encryption)),
-					)
-					.pipe(Effect.orDie)
-				const adapter: CustomerProviderAdapter = {
-					provider: "maple",
-					validate: () =>
-						Effect.succeed({ externalAccountId: "org:us", externalAccountName: null }),
-					webhook: () => Effect.succeed([]),
-					pull: () =>
-						Effect.sync(() => {
-							// Someone saves another query while Maple answers the old one.
-							world.object.storage.db
-								.prepare(
-									`UPDATE customer_metric_definitions SET source = ? WHERE key = 'spans'`,
-								)
-								.run(JSON.stringify(query("b")))
-							return {
-								ops: [
-									{
-										_tag: "metric",
-										account: { provider: "clerk", externalId: "org_Acme" },
-										metricKey: "spans",
-										day: TODAY,
-										value: 5,
-									},
-								],
-								nextCursor: null,
-								progress: { step: "queries", done: 1, total: null },
-							}
-						}),
-					pullIntervalMs: 60 * 60_000,
-				}
-				const services = Layer.mergeAll(
-					CustomerIngest.layer,
-					encryption,
-					Layer.succeed(
-						CustomerProviders,
-						CustomerProviders.of({
-							get: (provider) => (provider === "maple" ? Option.some(adapter) : Option.none()),
-						}),
-					),
-				)
-				yield* world.object.run(runDuePullsWith(services)(NOW)).pipe(Effect.orDie)
-				expect(world.rows(`SELECT count(*) AS n FROM customer_metric_daily`)).toEqual([{ n: 0 }])
+				// The metric's own backfill run is not the one this test walks.
+				world.object.storage.db.prepare(`DELETE FROM customer_sync_runs`).run()
+				yield* withMapleKey(world)
+				const lastError = () =>
+					world.rows<{ lastError: string | null }>(
+						`SELECT lastError FROM customer_metric_definitions WHERE key = 'spans'`,
+					)[0]!.lastError
+				const pages: Array<string | null> = ["Maple could not run this query", null]
+				yield* pullMaple(world, () => {
+					const error = pages.shift() ?? null
+					return {
+						ops: [],
+						nextCursor: pages.length > 0 ? "next" : null,
+						progress: { step: "queries", done: 0, total: null },
+						metricRuns: [{ key: "spans", error }],
+					}
+				})
+				expect(lastError()).toBe("Maple could not run this query")
+				// The next run reads it cleanly: the failure was an earlier run's.
+				vi.setSystemTime(NOW.getTime() + 2 * 60 * 60_000)
+				yield* pullMaple(world, () => ({
+					ops: [],
+					nextCursor: null,
+					progress: { step: "queries", done: 0, total: null },
+					metricRuns: [{ key: "spans", error: null }],
+				}))
+				expect(lastError()).toBeNull()
 			}),
 		))
 

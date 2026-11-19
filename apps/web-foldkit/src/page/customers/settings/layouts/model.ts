@@ -56,6 +56,14 @@ export const Editor = Schema.Struct({
 })
 export type Editor = typeof Editor.Type
 
+/** An editor's "Move above" being saved: whose, by which save, and where to. */
+export const EditorMove = Schema.Struct({
+	layoutId: CustomerOverviewLayoutId,
+	saveId: Schema.Int,
+	before: CustomerOverviewLayoutId,
+})
+export type EditorMove = typeof EditorMove.Type
+
 // THE NEW LAYOUT DIALOG
 
 /** `blank`, `copy` (of `copyOf`), or a starter's key. */

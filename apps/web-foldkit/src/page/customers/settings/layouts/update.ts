@@ -1,5 +1,5 @@
 import * as Customers from "@hazel/domain/customers"
-import { type CustomerAccountId, CustomerOverviewLayoutId } from "@hazel/schema"
+import { type CustomerAccountId, CustomerOverviewLayoutId, type OrganizationId } from "@hazel/schema"
 import { Match, Option, Result, Schema } from "effect"
 import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
@@ -38,6 +38,7 @@ import {
 	draftPosition,
 	EMPTY_NEW_LAYOUT,
 	type Editor,
+	type EditorMove,
 	isDefaultEditor,
 	isDirty,
 	isValidDraft,
@@ -437,15 +438,12 @@ const savedToast = (model: Model, editor: Editor, name: string): ToastRequest =>
 }
 
 /** The order with the edited layout where "Move above" put it. */
-const reorderToMove = (
-	model: Model,
-	editor: Editor,
-	move: CustomerOverviewLayoutId,
-	organization: NonNullable<Shared["organization"]>,
-) =>
+const reorderToMove = (model: Model, editor: Editor, move: EditorMove, organizationId: OrganizationId) =>
 	ReorderOverviewLayouts({
-		organizationId: organization.id,
-		layoutIds: draftOrder(model, { ...editor, before: move }).flatMap((id) => (id === null ? [] : [id])),
+		organizationId,
+		layoutIds: draftOrder(model, { ...editor, before: move.before }).flatMap((id) =>
+			id === null ? [] : [id],
+		),
 		move,
 	})
 
@@ -480,7 +478,7 @@ const save = (model: Model, shared: Shared): Return => {
 						layout,
 						position: draftPosition(model, editor) ?? null,
 					})
-				: UpdateOverviewLayout({ organizationId, layoutId: editor.layoutId, layout }),
+				: UpdateOverviewLayout({ organizationId, layoutId: editor.layoutId, saveId, layout }),
 		],
 	}
 }
@@ -642,7 +640,11 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				move === null
 					? { ...model, pendingOrder: null }
 					: withEditor(model, (editor) =>
-							editor.before === move ? { ...editor, before: null } : editor,
+							editor.layoutId === move.layoutId &&
+							editor.saveId === move.saveId &&
+							editor.before === move.before
+								? { ...editor, before: null }
+								: editor,
 						),
 		}),
 		FailedReorderLayouts: ({ move, reason }) => ({
@@ -746,11 +748,17 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			),
 			outMessage: writeFailure("Couldn't create the layout", reason),
 		}),
-		SucceededUpdateLayout: ({ layoutId }) => {
+		SucceededUpdateLayout: ({ layoutId, saveId }) => {
 			const editor = model.editor
-			if (editor === null || editor.layoutId !== layoutId)
+			// Another save's answer (or another editor's): it saved, but this draft is not what it sent.
+			if (
+				editor === null ||
+				editor.layoutId !== layoutId ||
+				editor.saveId !== saveId ||
+				!editor.isSaving
+			)
 				return { model, outMessage: toast(successToast("Layout saved")) }
-			const organization = shared.organization
+			const organizationId = shared.organization?.id
 			const saved: Return = {
 				model: {
 					...model,
@@ -760,20 +768,25 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 						saved: editor.savingDraft,
 						savingDraft: null,
 						savingBefore: null,
-						saveId: null,
 					},
 				},
 				outMessage: toast(savedToast(model, editor, editor.savingDraft?.name ?? "Layout")),
 			}
-			// Moved with "Move above" when saved: that place is saved once its update landed.
-			const move = editor.savingBefore
-			return move === null || organization === null
+			// Moved with "Move above" when saved: that place is saved once its update landed. The save's
+			// id stays on the editor, so the reorder's answer knows it is this save's.
+			const before = editor.savingBefore
+			return before === null || organizationId === undefined
 				? saved
-				: { ...saved, commands: [reorderToMove(model, editor, move, organization)] }
+				: {
+						...saved,
+						commands: [
+							reorderToMove(model, editor, { layoutId, saveId, before }, organizationId),
+						],
+					}
 		},
-		FailedUpdateLayout: ({ layoutId, reason }) => ({
+		FailedUpdateLayout: ({ layoutId, saveId, reason }) => ({
 			model: withEditor(model, (editor) =>
-				editor.layoutId === layoutId
+				editor.layoutId === layoutId && editor.saveId === saveId
 					? { ...editor, isSaving: false, savingDraft: null, savingBefore: null, saveId: null }
 					: editor,
 			),

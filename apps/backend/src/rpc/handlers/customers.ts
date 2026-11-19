@@ -95,6 +95,7 @@ import {
 	loadDefinitions,
 	metricCoverage,
 	metricSourceProblem,
+	sameMetricData,
 } from "../../worker/objects/customers/metric-values"
 import { CustomerProviders } from "../../worker/objects/customers/providers"
 import { CustomersServicesLive } from "../../worker/objects/customers/services"
@@ -1240,16 +1241,6 @@ const productEventOverlap = (key: string, source: MetricSource, definitions: Def
 		return taken.length === 0 ? null : `An event counts toward one metric only: ${taken.join(", ")}`
 	})
 
-/** Same SQL, or the same events: the stored days still hold. */
-const sameData = (before: MetricSource | null, after: MetricSource) => {
-	if (before === null || before._tag !== after._tag) return false
-	if (before._tag === "maple_query" && after._tag === "maple_query")
-		return before.sql.trim() === after.sql.trim()
-	if (before._tag === "product_event" && after._tag === "product_event")
-		return [...before.events].sort().join("\n") === [...after.events].sort().join("\n")
-	return true
-}
-
 /** A metric draft's fields every metric takes (a source's own and the built-ins only these). */
 const metricBasics = (draft: MetricDraft) => ({
 	name: draft.name.trim(),
@@ -2230,7 +2221,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 								return yield* invalid(
 									`A formula uses ${metricKey}, and formulas cannot use formulas`,
 								)
-							const refill = !sameData(existing.source, source)
+							const refill = !sameMetricData(existing.source, source)
 							const [row] = yield* db.run(
 								SQLite.update(schema.customerMetricDefinitionsTable)
 									.set({

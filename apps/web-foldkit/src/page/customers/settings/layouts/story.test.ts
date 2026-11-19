@@ -163,22 +163,29 @@ describe("layouts: the editor", () => {
 		const saving = update(moved, Message.PressedSave(), shared)
 		expect(names(saving)).toContain("UpdateOverviewLayout")
 		expect(names(saving)).not.toContain("ReorderOverviewLayouts")
+		const saveId = saving.model.editor!.saveId!
 		const updated = update(
 			saving.model,
-			Message.SucceededUpdateLayout({ layoutId: SELF_SERVE.id }),
+			Message.SucceededUpdateLayout({ layoutId: SELF_SERVE.id, saveId }),
 			shared,
 		)
+		const move = { layoutId: SELF_SERVE.id, saveId, before: OBSERVABILITY.id }
 		expect(
 			updated.commands?.find((command) => command.name === "ReorderOverviewLayouts")?.args,
-		).toMatchObject({ layoutIds: [SELF_SERVE.id, OBSERVABILITY.id, TRIAL_ONBOARDING.id] })
+		).toMatchObject({ layoutIds: [SELF_SERVE.id, OBSERVABILITY.id, TRIAL_ONBOARDING.id], move })
 		expect(updated.model.editor?.before).toBe(OBSERVABILITY.id)
-		// The list's own reorder never ends the editor's move.
-		expect(run(updated.model, [Message.SucceededReorderLayouts({ move: null })]).editor?.before).toBe(
+		const beforeAfter = (answer: Message) => run(updated.model, [answer]).editor?.before
+		// The list's own reorder, another layout's or another save's never ends this move.
+		expect(beforeAfter(Message.SucceededReorderLayouts({ move: null }))).toBe(OBSERVABILITY.id)
+		expect(
+			beforeAfter(
+				Message.SucceededReorderLayouts({ move: { ...move, layoutId: TRIAL_ONBOARDING.id } }),
+			),
+		).toBe(OBSERVABILITY.id)
+		expect(beforeAfter(Message.SucceededReorderLayouts({ move: { ...move, saveId: saveId + 1 } }))).toBe(
 			OBSERVABILITY.id,
 		)
-		expect(
-			run(updated.model, [Message.SucceededReorderLayouts({ move: OBSERVABILITY.id })]).editor?.before,
-		).toBeNull()
+		expect(beforeAfter(Message.SucceededReorderLayouts({ move }))).toBeNull()
 	})
 
 	test("a move made while a save runs is not the one it saves, and stays to be saved", () => {
@@ -187,15 +194,18 @@ describe("layouts: the editor", () => {
 			Message.PressedMoveAbove({ layoutId: OBSERVABILITY.id }),
 			Message.PressedSave(),
 		])
+		const saveId = saving.editor!.saveId!
 		const movedAgain = run(saving, [Message.PressedMoveAbove({ layoutId: TRIAL_ONBOARDING.id })])
-		const updated = update(movedAgain, Message.SucceededUpdateLayout({ layoutId: SELF_SERVE.id }), shared)
+		const updated = update(
+			movedAgain,
+			Message.SucceededUpdateLayout({ layoutId: SELF_SERVE.id, saveId }),
+			shared,
+		)
+		const move = { layoutId: SELF_SERVE.id, saveId, before: OBSERVABILITY.id }
 		expect(
 			updated.commands?.find((command) => command.name === "ReorderOverviewLayouts")?.args,
-		).toMatchObject({
-			move: OBSERVABILITY.id,
-			layoutIds: [SELF_SERVE.id, OBSERVABILITY.id, TRIAL_ONBOARDING.id],
-		})
-		const reordered = run(updated.model, [Message.SucceededReorderLayouts({ move: OBSERVABILITY.id })])
+		).toMatchObject({ move, layoutIds: [SELF_SERVE.id, OBSERVABILITY.id, TRIAL_ONBOARDING.id] })
+		const reordered = run(updated.model, [Message.SucceededReorderLayouts({ move })])
 		expect(reordered.editor?.before).toBe(TRIAL_ONBOARDING.id)
 		expect(isDirty(reordered.editor!)).toBe(true)
 	})
@@ -217,12 +227,22 @@ describe("layouts: the editor", () => {
 			Message.ChangedName({ value: "Self-serve teams" }),
 			Message.PressedSave(),
 		])
-		const landed = run(saving, [
-			Message.ChangedName({ value: "Self-serve teams (EU)" }),
-			Message.SucceededUpdateLayout({ layoutId: SELF_SERVE.id }),
+		const saveId = saving.editor!.saveId!
+		const edited = run(saving, [Message.ChangedName({ value: "Self-serve teams (EU)" })])
+		// Another save's answers change nothing of this one.
+		const stale = run(edited, [
+			Message.SucceededUpdateLayout({ layoutId: SELF_SERVE.id, saveId: saveId - 1 }),
+			Message.FailedUpdateLayout({ layoutId: SELF_SERVE.id, saveId: saveId - 1, reason: "Offline" }),
 		])
+		expect(stale.editor).toMatchObject({ isSaving: true, savingDraft: { name: "Self-serve teams" } })
+		expect(stale.editor?.saved?.name).toBe("Self-serve")
+		const landed = run(edited, [Message.SucceededUpdateLayout({ layoutId: SELF_SERVE.id, saveId })])
 		expect(landed.editor?.saved?.name).toBe("Self-serve teams")
 		expect(isDirty(landed.editor!)).toBe(true)
+		const failed = run(edited, [
+			Message.FailedUpdateLayout({ layoutId: SELF_SERVE.id, saveId, reason: "Offline" }),
+		])
+		expect(failed.editor).toMatchObject({ isSaving: false, savingDraft: null })
 	})
 
 	test("a member sees the layout read-only: no dry run, no save, no selection", () => {

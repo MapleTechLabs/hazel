@@ -199,19 +199,26 @@ const load = (model: Model, shared: Shared): Return => {
 }
 
 /**
- * The layout (or the one the account gets) may have changed: a chart whose configured range
- * changed opens at the new one; the viewer's other range picks stay. Then loads what is new.
+ * The layout (or the one the account gets) may have changed. A chart keeps the viewer's range only
+ * while it stays in the active layout with the same configured range (a rename keeps it); any other
+ * chart state (one that left, or changed its range) is dropped. Then loads what is new.
  */
 const layoutChanged = (previous: Model, next: Model, shared: Shared): Return => {
 	const before = new Map(overviewLayoutOf(previous).widgets.map((widget) => [widget.id, widget]))
-	const moved = overviewLayoutOf(next).widgets.filter((widget) => {
-		const old = before.get(widget.id)
-		return widget._tag === "chart" && old?._tag === "chart" && old.range !== widget.range
-	})
+	const kept = new Set(
+		overviewLayoutOf(next).widgets.flatMap((widget) => {
+			const old = before.get(widget.id)
+			return widget._tag === "chart" && old?._tag === "chart" && old.range === widget.range
+				? [widget.id]
+				: []
+		}),
+	)
 	return loadOverview(
 		modifyFields(next, {
 			overview: (overview) =>
-				moved.reduce((data, widget) => OverviewData.forgetChart(data, widget.id), overview),
+				Object.keys(overview.charts)
+					.filter((id) => !kept.has(id))
+					.reduce((data, id) => OverviewData.forgetChart(data, id), overview),
 		}),
 		shared,
 	)

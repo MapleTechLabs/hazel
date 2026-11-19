@@ -70,9 +70,10 @@ export type StackedBarChartOptions<M> = Readonly<{
 export const stackedBarChart = <M>(h: HtmlBuilder<M>, options: StackedBarChartOptions<M>): Html => {
 	const count = options.bars.length
 	const values = options.bars.map((bar) => options.stacks.map((stack) => bar.values[stack.key] ?? 0))
+	const nets = options.netLabel ? options.bars.map((bar) => bar.net) : []
 	const [lo, hi] = options.grouped
-		? [Math.min(0, ...values.flat()), Math.max(0, ...values.flat())]
-		: stackExtent(values, options.netLabel ? options.bars.map((bar) => bar.net) : [])
+		? [Math.min(0, ...values.flat(), ...nets), Math.max(0, ...values.flat(), ...nets)]
+		: stackExtent(values, nets)
 	const domain = niceTicks(lo, hi, 5, { integer: options.integerTicks })
 	const y = scaleLinear([domain.min, domain.max], [100, 0])
 	const formatAxis = options.formatAxis ?? options.formatValue

@@ -245,14 +245,17 @@ const chartBody = <M>(
 		const metric = metricOf(context, key) ?? PLAIN
 		return (value: number) => formatMetric(value, metric, context.currency)
 	}
+	// A number in minor units reads as money, as `formatMetric` reads it.
+	const readingOf = (metric: Pick<MetricDef, "format" | "unit">) =>
+		metric.unit === "minor" ? "money" : metric.format
 	const formats = new Set(
 		shown.map((entry) => {
 			const metric = metricOf(context, entry.metricKey) ?? PLAIN
-			return `${metric.format}:${metric.unit ?? ""}`
+			return `${readingOf(metric)}:${metric.unit ?? ""}`
 		}),
 	)
 	const first = metricOf(context, shown[0]?.metricKey ?? "") ?? PLAIN
-	const isShared = formats.size === 1 && first.format !== "number"
+	const isShared = formats.size === 1 && readingOf(first) !== "number"
 	const formatValue = formatOf(shown[0]?.metricKey ?? "")
 	const formatAxis = (value: number) =>
 		isShared

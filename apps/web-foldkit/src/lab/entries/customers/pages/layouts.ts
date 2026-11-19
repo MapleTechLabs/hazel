@@ -7,7 +7,7 @@ import type { LayoutRow } from "../../../../customers/overview/rows"
 import { type AccountRow, toAccountRow, toSignalRow } from "../../../../customers/queries"
 import { labShared } from "../../../../page/customers/lab-shared"
 import { Message } from "../../../../page/customers/settings/layouts/message"
-import { Model } from "../../../../page/customers/settings/layouts/model"
+import { EditorMove, Model } from "../../../../page/customers/settings/layouts/model"
 import {
 	init,
 	type LayoutsRoute,
@@ -185,9 +185,12 @@ const answer = (command: AnyCommand): Message | null | "local" => {
 		case "UpdateOverviewLayout":
 			return Message.SucceededUpdateLayout({
 				layoutId: Schema.decodeUnknownSync(CustomerOverviewLayoutId)(args.layoutId),
+				saveId: Number(args.saveId),
 			})
 		case "ReorderOverviewLayouts":
-			return Message.SucceededReorderLayouts({ move: asLayoutIdOrNull(args.move) })
+			return Message.SucceededReorderLayouts({
+				move: Schema.decodeUnknownSync(Schema.NullOr(EditorMove))(args.move),
+			})
 		case "DeleteOverviewLayout":
 			return null
 		default:

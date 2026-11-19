@@ -243,9 +243,7 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 	const backfillKey = connection.provider === "maple" ? metricBackfillKey(run.cursor) : undefined
 	const pull = Effect.gen(function* () {
 		const metrics = connection.provider === "maple" ? yield* userMetrics : []
-		const userMetricSources = new Map(
-			metrics.map((metric) => [metric.key, JSON.stringify(metric.source)]),
-		)
+		const userMetricSources = new Map(metrics.map((metric) => [metric.key, metric.source]))
 		const credentials = yield* loadCredentials(connection)
 		if (Option.isNone(credentials)) {
 			return yield* new PullFailure({
@@ -269,9 +267,20 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 			yield* ingest.apply({ ...context, userMetricSources }, ops)
 			for (const { key, error } of metricRuns ?? []) {
 				const ranAt = new Date(yield* Clock.currentTimeMillis)
+				// A day this run could not read stays visible: a later day that ran clears only a
+				// failure an earlier run recorded.
+				if (error === null)
+					yield* db.run(
+						SQLite.update(schema.customerMetricDefinitionsTable)
+							.set({ lastError: null })
+							.where(($) => [
+								$.key.eq(key),
+								SQLite.or($.lastRunAt.isNull(), $.lastRunAt.lt(run.startedAt)),
+							]),
+					)
 				yield* db.run(
 					SQLite.update(schema.customerMetricDefinitionsTable)
-						.set({ lastRunAt: ranAt, lastError: error, updatedAt: ranAt })
+						.set(error === null ? { lastRunAt: ranAt } : { lastRunAt: ranAt, lastError: error })
 						.where(($) => [$.key.eq(key)]),
 				)
 			}

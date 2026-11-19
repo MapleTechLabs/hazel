@@ -308,6 +308,25 @@ describe("customer page: tabs", () => {
 		expect(commandNames(changed)).toContain("FetchOverviewChartSeries")
 	})
 
+	test("a chart that leaves the active layout drops its state; coming back opens at its own range", () => {
+		const base = layout(2, "Default", true)
+		const other = { ...layout(1, "Observability", false), widgets: [] }
+		const picked = run(loaded(), [
+			Message.UpdatedLayouts({ layouts: [other, base] }),
+			Message.GotOverviewDataMessage({
+				message: OverviewData.Message.ClickedChartRange({ widgetId: "usage", range: "7d" }),
+			}),
+		])
+		const away = run(picked, [
+			Message.UpdatedAccounts({ accounts: [acme, { ...beta, layoutId: other.id }, gamma] }),
+		])
+		expect(away.overview.charts.usage).toBeUndefined()
+		const back = run(away, [
+			Message.UpdatedAccounts({ accounts: [acme, { ...beta, layoutId: base.id }, gamma] }),
+		])
+		expect(back.overview.charts.usage?.range).toBe("30d")
+	})
+
 	test("a chart's answer for a range the user left is dropped", () => {
 		const series = (asked: string) =>
 			Message.GotOverviewDataMessage({

@@ -65,6 +65,7 @@ import {
 import { Clock, Context, Effect, Layer, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import { METRIC_PREFIX } from "./maple/wire"
+import { sameMetricData } from "./metric-values"
 import type { CustomerIngestApi, IngestContext, RunResult } from "./ingest"
 import { requestCompute, requestComputeAfterIngest, requestHistoryRebuild, setBaselineFor } from "./schedule"
 
@@ -1783,7 +1784,7 @@ const make = Effect.gen(function* () {
 			if (
 				userSource !== null &&
 				read !== undefined &&
-				read.get(op.metricKey) !== JSON.stringify(userSource)
+				!sameMetricData(read.get(op.metricKey) ?? null, userSource)
 			)
 				return yield* reject(index, op, `${op.metricKey} changed since the page was read`)
 			// A person's query names a customer by its Clerk organization id: its Clerk ref, else the

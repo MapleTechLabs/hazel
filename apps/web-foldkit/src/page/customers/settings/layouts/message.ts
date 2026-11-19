@@ -9,6 +9,7 @@ import { AccountRow, MemberRow, SettingsSummary, SignalRow } from "../../../../c
 import * as Modal from "../../../../ui/modal"
 import * as Popover from "../../../../ui/popover"
 import { NoteRow } from "../../detail/model"
+import { EditorMove } from "./model"
 
 /** A layout write's failure: the layout is gone, or the store refused the draft or order. */
 export const LayoutWriteFailure = Schema.Union([Schema.Literals(["NotFound", "Invalid"]), CommonReason])
@@ -26,8 +27,8 @@ export const Message = defineMessageUnion({
 	// The list
 	PressedMoveLayout: { layoutId: CustomerOverviewLayoutId, step: Schema.Literals([-1, 1]) },
 	/** `move` is the editor's "Move above" it saves (null: the list's own reorder). */
-	SucceededReorderLayouts: { move: Schema.NullOr(CustomerOverviewLayoutId) },
-	FailedReorderLayouts: { move: Schema.NullOr(CustomerOverviewLayoutId), reason: LayoutWriteFailure },
+	SucceededReorderLayouts: { move: Schema.NullOr(EditorMove) },
+	FailedReorderLayouts: { move: Schema.NullOr(EditorMove), reason: LayoutWriteFailure },
 	PressedDeleteLayout: { layoutId: CustomerOverviewLayoutId },
 	GotDeleteModalMessage: { message: Modal.Message },
 	PressedConfirmDelete: {},
@@ -49,8 +50,12 @@ export const Message = defineMessageUnion({
 	/** `saveId` names the save it answers (`Editor.saveId`). */
 	SucceededCreateLayout: { saveId: Schema.Int },
 	FailedCreateLayout: { saveId: Schema.Int, reason: LayoutWriteFailure },
-	SucceededUpdateLayout: { layoutId: CustomerOverviewLayoutId },
-	FailedUpdateLayout: { layoutId: CustomerOverviewLayoutId, reason: LayoutWriteFailure },
+	SucceededUpdateLayout: { layoutId: CustomerOverviewLayoutId, saveId: Schema.Int },
+	FailedUpdateLayout: {
+		layoutId: CustomerOverviewLayoutId,
+		saveId: Schema.Int,
+		reason: LayoutWriteFailure,
+	},
 
 	// The canvas and the selected widget
 	ClickedWidget: { widgetId: Schema.String },
