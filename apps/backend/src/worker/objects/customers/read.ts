@@ -41,15 +41,16 @@ export const rankMovers = (
 ): { gainers: Array<RankedMover>; decliners: Array<RankedMover> } => {
 	const round1 = (value: number) => Math.round(value * 10) / 10
 	const changes = rows.flatMap((row) => {
-		const previous = Number(row.previous) / days
-		const current = Number(row.current) / days
+		// The percentage comes from the averages the row shows, so a pair that rounds flat drops out.
+		const previous = round1(Number(row.previous) / days)
+		const current = round1(Number(row.current) / days)
 		return previous < MOVER_MIN_BASELINE || current === previous
 			? []
 			: [
 					{
 						accountId: row.accountId,
-						previousAvg: round1(previous),
-						currentAvg: round1(current),
+						previousAvg: previous,
+						currentAvg: current,
 						changePct: round1(((current - previous) / previous) * 100),
 					},
 				]

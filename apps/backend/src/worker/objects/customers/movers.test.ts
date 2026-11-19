@@ -17,9 +17,9 @@ describe("rankMovers", () => {
 	})
 
 	it("leaves out accounts under the baseline, and flat ones", () => {
-		// 1 user-day to 9 in 30 days is not +800%; 0 to 0 is no move.
+		// 1 user-day to 9 in 30 days is not +800%; 1 → 1 (30 to 31 user-days) shows no move.
 		const { gainers, decliners } = rankMovers(
-			[row("noise", 1, 9), row("gone", 20, 0), row("flat", 60, 60)],
+			[row("noise", 1, 9), row("gone", 20, 0), row("flat", 60, 60), row("rounds-flat", 30, 31)],
 			30,
 		)
 		expect(gainers).toEqual([])
