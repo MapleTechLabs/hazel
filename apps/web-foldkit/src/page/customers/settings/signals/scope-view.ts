@@ -92,7 +92,7 @@ const mrrInput = (
 	inputGroup(
 		h,
 		{
-			className: "w-44 [--input-gutter-end:--spacing(17)] [--input-gutter-start:--spacing(5)]",
+			className: "w-44 [--input-gutter-end:--spacing(17)]",
 			isInvalid: error !== undefined,
 			isDisabled: !isAdmin,
 		},

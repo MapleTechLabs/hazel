@@ -127,7 +127,7 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 							[
 								h.div(
 									// A narrow tile wraps the detail under the value instead of cutting it off; the
-									// value keeps its width and the trend gives way.
+									// value keeps its width and the trend gives way, down to hidden on a tile too narrow.
 									[
 										h.Class(
 											"flex min-w-0 max-w-full shrink-0 flex-wrap items-baseline gap-x-2",

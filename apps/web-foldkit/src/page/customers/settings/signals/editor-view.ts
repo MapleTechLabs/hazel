@@ -168,8 +168,11 @@ const ruleCard = (h: H, form: RuleForm, status: EditorStatus, isAdmin: boolean):
 						[
 							templateTile(h, form.template, "size-5 bg-transparent"),
 							h.span([h.Class("min-w-0 flex-1 truncate")], [meta.name]),
-							h.code([h.Class("font-mono text-muted-fg text-xs")], [form.template]),
-							IconLock(h, { className: "size-3.5 text-muted-fg" }),
+							h.code(
+								[h.Class("min-w-0 truncate font-mono text-muted-fg text-xs")],
+								[form.template],
+							),
+							IconLock(h, { className: "size-3.5 shrink-0 text-muted-fg" }),
 						],
 					),
 					help(h, "Fixed after creation. Start a new rule to use another template."),
