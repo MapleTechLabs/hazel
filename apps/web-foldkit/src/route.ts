@@ -19,7 +19,8 @@ export type CustomerTab = typeof CustomerTab.Type
 /** Flat route union mirroring the 39 legacy TanStack routes, plus NotFound. */
 export const AppRoute = defineRouteUnion({
 	Root: {},
-	SignIn: { redirectUrl: Schema.Option(Schema.String) },
+	/** `?error=`: why the OAuth callback sent the visitor back (the API's redirect on a failed callback). */
+	SignIn: { redirectUrl: Schema.Option(Schema.String), error: Schema.Option(Schema.String) },
 	SignUp: { redirectUrl: Schema.Option(Schema.String) },
 	/** Where the OAuth callback sends a first-time user to pick their name (`?flowId=&reference=`). */
 	AuthRegister: { flowId: Schema.Option(Schema.String), reference: Schema.Option(Schema.String) },
@@ -136,6 +137,10 @@ export type RouteOf<Tag extends RouteTag> = Extract<AppRoute, { readonly _tag: T
 const RedirectQuery = Schema.Struct({ redirectUrl: Schema.OptionFromOptional(Schema.String) }).pipe(
 	Schema.encodeKeys({ redirectUrl: "redirect_url" }),
 )
+const SignInQuery = Schema.Struct({
+	redirectUrl: Schema.OptionFromOptional(Schema.String),
+	error: Schema.OptionFromOptional(Schema.String),
+}).pipe(Schema.encodeKeys({ redirectUrl: "redirect_url" }))
 const RegisterQuery = Schema.Struct({
 	flowId: Schema.OptionFromOptional(Schema.String),
 	reference: Schema.OptionFromOptional(Schema.String),
@@ -201,7 +206,7 @@ const channelSettings = (...segments: ReadonlyArray<string>) =>
 /** One router per route tag, used to parse URLs and to build them back (`hrefOf`). */
 const routers = {
 	Root: pipe(Route.root, Route.mapTo(AppRoute.Root)),
-	SignIn: pipe(literal("sign-in"), query(RedirectQuery), Route.mapTo(AppRoute.SignIn)),
+	SignIn: pipe(literal("sign-in"), query(SignInQuery), Route.mapTo(AppRoute.SignIn)),
 	SignUp: pipe(literal("sign-up"), query(RedirectQuery), Route.mapTo(AppRoute.SignUp)),
 	AuthRegister: pipe(
 		literal("auth"),
@@ -626,7 +631,7 @@ export const onboardingHref = (orgId: OrganizationId | null, step: string): stri
 
 /** `/sign-in?redirect_url=`: where a signed-out visitor goes, coming back to `returnTo` afterwards. */
 export const signInHref = (returnTo: string): string =>
-	hrefOf(AppRoute.SignIn({ redirectUrl: Option.some(returnTo) }))
+	hrefOf(AppRoute.SignIn({ redirectUrl: Option.some(returnTo), error: Option.none() }))
 
 /**
  * Where entering an organization lands, or its slug setup step while it has no slug yet. On a phone

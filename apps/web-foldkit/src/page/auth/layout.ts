@@ -111,7 +111,7 @@ export const signInLink = <M>(h: HtmlBuilder<M>, label: string): Html =>
 	h.a(
 		[
 			h.Class("text-fg text-sm underline underline-offset-2"),
-			h.Href(hrefOf(AppRoute.SignIn({ redirectUrl: Option.none() }))),
+			h.Href(hrefOf(AppRoute.SignIn({ redirectUrl: Option.none(), error: Option.none() }))),
 		],
 		[label],
 	)

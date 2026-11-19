@@ -311,4 +311,18 @@ describe("Hazel sign-in in the backend", () => {
 		expect(await rpc.json()).toEqual({ email: "Clerk.User@Example.com" })
 		expect(existing).toBeDefined()
 	}, 60_000)
+
+	it("a failed callback sends the browser back to the sign-in page with the reason", async () => {
+		const begin = await post("/auth/signIn", { provider: "github", returnTarget: "/" })
+		const state = new URL((await begin.json()).value.authorizationUrl).searchParams.get("state")!
+		const path = `/auth/github/callback?${new URLSearchParams({ code: "c", state, iss: "https://github.com/login/oauth" })}`
+
+		expect((await send(path, { origin: null })).status).toBe(303)
+		// A reload replays the spent state: no JSON dead end, the sign-in page explains it.
+		const replay = await send(path, { origin: null })
+		expect(replay.status).toBe(303)
+		const location = new URL(replay.headers.get("location")!)
+		expect(`${location.origin}${location.pathname}`).toBe(`${app}/sign-in`)
+		expect(location.searchParams.get("error")).toBe("Expired")
+	}, 60_000)
 })

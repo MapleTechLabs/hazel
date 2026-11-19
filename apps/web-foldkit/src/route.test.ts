@@ -284,11 +284,12 @@ describe("hrefOf", () => {
 	const examples: { readonly [Tag in RouteTag]: ReadonlyArray<readonly [AppRoute, string]> } = {
 		Root: [[AppRoute.Root(), "/"]],
 		SignIn: [
-			[AppRoute.SignIn({ redirectUrl: none }), "/sign-in"],
+			[AppRoute.SignIn({ redirectUrl: none, error: none }), "/sign-in"],
 			[
-				AppRoute.SignIn({ redirectUrl: Option.some("/hazel/chat") }),
+				AppRoute.SignIn({ redirectUrl: Option.some("/hazel/chat"), error: none }),
 				"/sign-in?redirect_url=%2Fhazel%2Fchat",
 			],
+			[AppRoute.SignIn({ redirectUrl: none, error: Option.some("Expired") }), "/sign-in?error=Expired"],
 		],
 		SignUp: [[AppRoute.SignUp({ redirectUrl: none }), "/sign-up"]],
 		AuthRegister: [
