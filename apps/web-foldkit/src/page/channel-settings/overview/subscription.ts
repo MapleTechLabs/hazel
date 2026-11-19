@@ -4,6 +4,7 @@ import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import { channelCollection } from "~/db/collections"
 import { channelCustomerStream } from "../../../customers/channels"
+import { groupIdOf } from "../../../customers/groups"
 import { accountsStream } from "../../../customers/queries"
 import { liveQueryStream } from "../../../data/live-query"
 import type { PageSubscriptionInput } from "../../contract"
@@ -62,14 +63,15 @@ const own = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) =
 			dependenciesToStream: ({ organizationId }) =>
 				organizationId === null
 					? Stream.empty
-					: accountsStream(organizationId, (accounts) =>
-							Message.UpdatedCustomers({
-								customers: accounts.map((account) => ({
-									id: account.id,
-									name: account.name,
-								})),
-							}),
-						),
+					: accountsStream(organizationId, (accounts) => {
+							// A channel is linked to a customer, not one of its environments.
+							const liveIds = new Set<string>(accounts.map((account) => account.id))
+							return Message.UpdatedCustomers({
+								customers: accounts
+									.filter((account) => groupIdOf(account, liveIds) === account.id)
+									.map((account) => ({ id: account.id, name: account.name })),
+							})
+						}),
 		},
 	),
 }))

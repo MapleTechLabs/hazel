@@ -58,6 +58,7 @@ import {
 	ENVIRONMENT_MODAL_ID,
 	EVENT_TYPE_MENU_ID,
 	EVENT_TYPE_PREFIXES,
+	customerOfAccount,
 	EventType,
 	groupOfModel,
 	IMPERSONATE_MODAL_ID,
@@ -888,7 +889,16 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			if (args === null || userId === undefined) return { model: next, commands }
 			return {
 				model: next,
-				commands: [...commands, LinkCustomerChannel({ ...args, channelId, userId })],
+				commands: [
+					...commands,
+					// Stored on the customer's primary, as the server does.
+					LinkCustomerChannel({
+						...args,
+						accountId: customerOfAccount(model)(args.accountId),
+						channelId,
+						userId,
+					}),
+				],
 			}
 		},
 		PressedUnlinkChannel: ({ channelId }) => {

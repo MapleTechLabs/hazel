@@ -52,7 +52,7 @@ import {
 	switchProviderAccount,
 } from "../../worker/objects/customers/credentials"
 import { callObject } from "../../worker/objects/calls"
-import { publishChannelCustomers } from "../../worker/objects/customers/channels"
+import { linkOwnerOf, publishChannelCustomers } from "../../worker/objects/customers/channels"
 import { seedDemo } from "../../worker/objects/customers/demo"
 import { healthDryRun, ruleDryRun } from "../../worker/objects/customers/dry-run"
 import {
@@ -799,14 +799,16 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					const now = yield* currentTime
 					return yield* withTx(
 						Effect.gen(function* () {
-							yield* requireAccount(accountId)
+							// The link is the customer's: stored on its group's primary, whichever
+							// environment it was linked from.
+							const owner = yield* linkOwnerOf(yield* requireAccount(accountId))
 							const current = yield* db.first(
 								SQLite.from(schema.customerChannelLinksTable)
 									.select()
 									.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()])
 									.limit(1),
 							)
-							if (Option.isSome(current) && current.value.accountId === accountId) {
+							if (Option.isSome(current) && current.value.accountId === owner) {
 								return current.value
 							}
 							// A channel has one customer: linking it here moves it from the other.
@@ -821,7 +823,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 									actor.userId,
 									"channel.unlinked",
 									"Channel unlinked",
-									{ channelId, movedTo: accountId },
+									{ channelId, movedTo: owner },
 									now,
 								)
 							}
@@ -830,14 +832,14 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 									.values({
 										id, // `undefined`: the column's default
 										organizationId,
-										accountId,
+										accountId: owner,
 										channelId,
 										linkedBy: actor.userId,
 									})
 									.returning(),
 							)
 							yield* hazelEvent(
-								accountId,
+								owner,
 								actor.userId,
 								"channel.linked",
 								"Channel linked",

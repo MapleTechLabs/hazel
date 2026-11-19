@@ -126,6 +126,71 @@ describe("Customer channel links", () => {
 			}),
 		))
 
+	it("links channels to the customer's group, not one environment", () =>
+		run(
+			Effect.gen(function* () {
+				const t = yield* setup
+				const acme = t.accountId("Acme")
+				const globex = t.accountId("Globex")
+				const before = t.channel("public", [t.world.member])
+				const after = t.channel("public", [t.world.member])
+				yield* t.link("Globex", before)
+				const group = (accountId: string, primaryAccountId: string) =>
+					t.world.call("customers.account.link", { accountId, primaryAccountId }, t.world.owner)
+				// Globex becomes an environment of Acme: its channel moves to the customer.
+				expect(tagOf(yield* group(globex, acme))).toBe("Success")
+				expect(t.liveLinks()).toEqual([{ channelId: before, accountId: acme }])
+				// Linked from an environment, a channel is stored on the primary.
+				expect(tagOf(yield* t.link("Globex", after))).toBe("Success")
+				// Linking it from another environment of the same customer changes nothing.
+				expect(tagOf(yield* t.link("Acme", after))).toBe("Success")
+				const byChannel = (rows: ReadonlyArray<{ channelId: string; accountId: string }>) =>
+					[...rows].sort((a, b) => a.channelId.localeCompare(b.channelId))
+				expect(byChannel(t.liveLinks())).toEqual(
+					byChannel([
+						{ channelId: before, accountId: acme },
+						{ channelId: after, accountId: acme },
+					]),
+				)
+				expect(t.projected().map((row) => row.accountName)).toEqual(["Acme", "Acme"])
+
+				// A new primary takes the customer's channels.
+				const primary = yield* t.world.call(
+					"customers.account.setPrimary",
+					{ accountId: globex },
+					t.world.owner,
+				)
+				expect(tagOf(primary)).toBe("Success")
+				expect(t.liveLinks().every((row) => row.accountId === globex)).toBe(true)
+				expect(t.projected().map((row) => row.accountName)).toEqual(["Globex", "Globex"])
+
+				// A link left on an environment (stored before links were the customer's) shows
+				// under its primary, and stays with the customer when the environment leaves.
+				t.world.rows(
+					`UPDATE customer_channel_links SET accountId = ? WHERE channelId = ?`,
+					acme,
+					after,
+				)
+				const rename = yield* t.world.call(
+					"customers.account.update",
+					{ accountId: globex, name: "Globex Corp" },
+					t.world.owner,
+				)
+				expect(tagOf(rename)).toBe("Success")
+				expect(t.projected().map((row) => [row.accountId, row.accountName])).toEqual([
+					[globex, "Globex Corp"],
+					[globex, "Globex Corp"],
+				])
+				const leave = yield* t.world.call(
+					"customers.account.unlink",
+					{ accountId: acme },
+					t.world.owner,
+				)
+				expect(tagOf(leave)).toBe("Success")
+				expect(t.liveLinks().every((row) => row.accountId === globex)).toBe(true)
+			}),
+		))
+
 	it("refuses to unlink a channel the member cannot see", () =>
 		run(
 			Effect.gen(function* () {
