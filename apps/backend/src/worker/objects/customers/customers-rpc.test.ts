@@ -396,6 +396,22 @@ describe("Customers RPCs", () => {
 					)
 					expect(contacts.items).toHaveLength(2)
 					expect(contacts.nextCursor).toBe("2")
+					const first = contacts.items[0].contact
+					const found = ok(
+						yield* world.call(
+							"customers.contacts.search",
+							{ query: (first.email ?? first.name).slice(0, 6) },
+							world.member,
+						),
+					)
+					expect(found.contacts.map((contact: { id: string }) => contact.id)).toContain(first.id)
+					// `%` is literal and a blank query matches nothing.
+					for (const query of ["%", "   "]) {
+						const none = ok(
+							yield* world.call("customers.contacts.search", { query }, world.member),
+						)
+						expect(none.contacts).toEqual([])
+					}
 					const sparklines = ok(
 						yield* world.call(
 							"customers.sparklines",

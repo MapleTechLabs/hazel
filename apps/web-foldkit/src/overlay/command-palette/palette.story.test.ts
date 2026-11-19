@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ChannelId, CustomerAccountId, MessageId } from "@hazel/schema"
+import { ChannelId, CustomerAccountId, CustomerContactId, MessageId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
@@ -292,6 +292,55 @@ describe("home actions", () => {
 			model((m) => expect(customerItems(m)).toEqual([`customer:${accountId}`])),
 			message(item(`customer:${accountId}`)),
 			expectOutMessage(OutMessage.Completed({ href: `/hazel/customers/${accountId}`, toast: null })),
+		)
+	})
+
+	test("customers' users show below customers and open their customer's users tab", () => {
+		const accountId = Schema.decodeSync(CustomerAccountId)("00000000-0000-4000-8000-0000000000a1")
+		const contactId = Schema.decodeSync(CustomerContactId)("00000000-0000-4000-8000-0000000000b1")
+		const sectionLabels = (m: Model) =>
+			CommandMenu.visibleSections(m.menu).flatMap((section) =>
+				section.label._tag === "Some" ? [section.label.value] : [],
+			)
+		story(
+			run,
+			given(opened),
+			message(
+				Message.UpdatedCustomers({
+					customers: [
+						{
+							id: accountId,
+							name: "Acme",
+							domains: ["acme.dev"],
+							logoUrl: null,
+							primaryAccountId: null,
+							environment: null,
+						},
+					],
+				}),
+			),
+			message(searched("acme")),
+			message(
+				Message.UpdatedCustomerUsers({
+					customerUsers: [
+						{
+							id: contactId,
+							accountId,
+							name: "Grace Hopper",
+							email: "grace@acme.dev",
+							avatarUrl: null,
+						},
+					],
+				}),
+			),
+			model((m) => {
+				const labels = sectionLabels(m)
+				expect(labels.indexOf("Users")).toBe(labels.indexOf("Customers") + 1)
+			}),
+			message(item(`customer-user:${contactId}`)),
+			expectOutMessage(
+				OutMessage.Completed({ href: `/hazel/customers/${accountId}?tab=users`, toast: null }),
+			),
 		)
 	})
 

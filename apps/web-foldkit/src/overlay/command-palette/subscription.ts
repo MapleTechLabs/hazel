@@ -1,7 +1,7 @@
 import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import type * as Customers from "@hazel/domain/customers"
 import { and, eq, inArray, isNull, not, or } from "@tanstack/db"
-import { Schema, Stream } from "effect"
+import { Effect, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import {
 	channelCollection,
@@ -12,13 +12,16 @@ import {
 import { getEffectivePresenceStatus } from "~/utils/presence"
 import { groupRows } from "../../customers/groups"
 import { withCustomersSource } from "../../customers/queries"
+import { catchCommon } from "../../data/actions"
 import { liveQueryStream } from "../../data/live-query"
+import { HazelRpc } from "../../rpc"
 import type { Shared } from "../../page/contract"
 import { channelMemberWithUserCollection } from "../data"
 import { readRecentChannelIds } from "./commands"
 import { searchSubscriptions } from "./search-subscription"
 import { Message } from "./message"
-import type { ChannelSummary, DmChannel, Model } from "./model"
+import type { ChannelSummary, CustomerUserSummary, DmChannel, Model } from "./model"
+import { SERVER_SEARCH_DELAY } from "./server-search"
 
 /** The palette pages' `useLiveQuery` calls, open only while their page shows. */
 
@@ -86,7 +89,7 @@ const contextOf = (input: Input, page: Model["page"]["_tag"]) =>
 			}
 		: { organizationId: null, userId: null }
 
-const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
+const pageSubscriptions = Subscription.make<Input, Message, HazelRpc>()((entry) => ({
 	homeChannels: entry(Context, {
 		modelToDependencies: (input) => contextOf(input, "Home"),
 		dependenciesToStream: ({ organizationId, userId }) =>
@@ -169,6 +172,44 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 											new Set(rows.map((account) => account.id)),
 										),
 									}),
+							),
+						),
+		},
+	),
+	/** Customers' users matching the typed text (`customers.contacts.search`), debounced. */
+	homeCustomerUsers: entry(
+		{ organizationId: Schema.NullOr(OrganizationId), query: Schema.String },
+		{
+			modelToDependencies: (input) => ({
+				// Orgs without customers never ask; one letter matches too much to be useful.
+				organizationId:
+					input.model.customers.length > 0 ? contextOf(input, "Home").organizationId : null,
+				query: input.model.menu.inputValue.trim(),
+			}),
+			dependenciesToStream: ({ organizationId, query }) =>
+				organizationId === null || query.length < 2
+					? Stream.succeed(Message.UpdatedCustomerUsers({ customerUsers: [] }))
+					: Stream.fromEffect(
+							Effect.sleep(SERVER_SEARCH_DELAY).pipe(
+								Effect.andThen(
+									HazelRpc.use((rpc) =>
+										rpc("customers.contacts.search", { organizationId, query }),
+									),
+								),
+								Effect.map(({ contacts }) =>
+									contacts.map((contact): CustomerUserSummary => ({
+										id: contact.id,
+										accountId: contact.accountId,
+										name: contact.name,
+										email: contact.email,
+										avatarUrl: contact.avatarUrl,
+									})),
+								),
+								catchCommon((): ReadonlyArray<CustomerUserSummary> => []),
+								Effect.map((customerUsers) =>
+									Message.UpdatedCustomerUsers({ customerUsers }),
+								),
+								Effect.withSpan("CommandPalette.customerUserSearch"),
 							),
 						),
 		},

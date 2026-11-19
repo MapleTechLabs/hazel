@@ -53,6 +53,7 @@ import { HealthSettings } from "../customers/health"
 import {
 	ChannelLink,
 	Connection,
+	Contact,
 	Event,
 	FeatureFlag,
 	IgnoreRule,
@@ -243,6 +244,16 @@ export class CustomerReadRpcs extends RpcGroup.make(
 		},
 		Page(ContactRow),
 		CustomersNotFoundError,
+	),
+
+	/** Contacts of any account whose name or email contains `query`: the command palette. */
+	read(
+		"customers.contacts.search",
+		{
+			query: NonEmptyText(200),
+			limit: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 50 }))),
+		},
+		Schema.Struct({ contacts: Schema.Array(Contact.Schema) }),
 	),
 
 	read("customers.invoices.list", { accountId: CustomerAccountId, ...PageRequest }, Page(Invoice.Schema)),

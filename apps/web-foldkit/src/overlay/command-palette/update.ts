@@ -33,6 +33,7 @@ export const init = (): Model => ({
 	channels: [],
 	dmChannels: [],
 	customers: [],
+	customerUsers: [],
 	recentChannelIds: [],
 	recentChannels: [],
 	memberChannelIds: null,
@@ -174,6 +175,22 @@ const selectedItem = (model: Model, key: string, shared: Shared, current: PageSt
 					null,
 				),
 		})
+	if (kind === "customer-user") {
+		const user = model.customerUsers.find((candidate) => candidate.id === value)
+		return user === undefined
+			? closedWith(model, null, null)
+			: closedWith(
+					model,
+					orgHrefOf(shared.orgSlug, (orgSlug) =>
+						AppRoute.CustomerDetail({
+							orgSlug,
+							accountId: user.accountId,
+							tab: Option.some("users"),
+						}),
+					),
+					null,
+				)
+	}
 	const link = [...NAVIGATION, ...SETTINGS].find((entry) => entry.key === key)
 	if (link !== undefined)
 		return closedWith(
@@ -250,6 +267,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}),
 			UpdatedCustomers: ({ customers }) => ({
 				model: modifyFields(model, { customers: () => customers }),
+			}),
+			UpdatedCustomerUsers: ({ customerUsers }) => ({
+				model: modifyFields(model, { customerUsers: () => customerUsers }),
 			}),
 			UpdatedRecentChannelIds: ({ channelIds }) => ({
 				model: modifyFields(model, { recentChannelIds: () => channelIds }),

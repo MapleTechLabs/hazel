@@ -97,6 +97,10 @@ const recentItem = (model: Model, channel: ChannelSummary) => {
 	return CommandMenu.item(`recent:${channel.id}`, dm ? dmDisplayName(dm) : channel.name)
 }
 
+/** The name of a customer user's account, if the palette has it. */
+export const accountNameOf = (model: Model, accountId: string): string | null =>
+	model.customers.find((customer) => customer.id === accountId)?.name ?? null
+
 const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 	const recent = recentChannelsOf(model)
 	// Only once the user types: an org can have thousands of customers.
@@ -150,6 +154,21 @@ const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 							CommandMenu.item(
 								`customer:${customer.id}`,
 								[customer.name, customer.environment, ...customer.domains]
+									.filter((part) => part !== null)
+									.join(" "),
+							),
+						),
+					),
+				]
+			: []),
+		...(showCustomers && model.customerUsers.length > 0
+			? [
+					CommandMenu.section(
+						"Users",
+						model.customerUsers.map((user) =>
+							CommandMenu.item(
+								`customer-user:${user.id}`,
+								[user.name, user.email, accountNameOf(model, user.accountId)]
 									.filter((part) => part !== null)
 									.join(" "),
 							),

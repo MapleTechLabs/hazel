@@ -287,6 +287,30 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 					return yield* contactsPage(accountId, { cursor, limit }, yield* currentTime)
 				}).pipe(remap),
 
+			"customers.contacts.search": ({ query, limit }) =>
+				Effect.gen(function* () {
+					yield* requireMember
+					const text = query.trim()
+					if (text === "") return { contacts: [] }
+					// effect-orm adds `ESCAPE '\'` on SQLite: typed `%` and `_` match themselves.
+					const pattern = `%${text.replace(/[\\%_]/g, "\\$&")}%`
+					const contacts = yield* db.run(
+						SQLite.from(schema.customerContactsTable)
+							.select()
+							.where(($) => [
+								$.deletedAt.isNull(),
+								SQLite.or($.name.like(pattern), $.email.like(pattern)),
+							])
+							.orderBy(($) => [
+								[$.lastSeenAt, "desc"],
+								[$.name, "asc"],
+								[$.id, "asc"],
+							])
+							.limit(limit ?? 20),
+					)
+					return { contacts }
+				}).pipe(remap),
+
 			"customers.invoices.list": ({ accountId, ...request }) =>
 				Effect.gen(function* () {
 					yield* requireMember
