@@ -37,7 +37,7 @@ export interface Account {
 	readonly openRiskLow: number
 	readonly openOpportunities: number
 	readonly lastActiveAt: string | null
-	readonly customerSince: string | null
+	readonly firstSeenAt: string
 	readonly churnedAt: string | null
 	readonly tags: ReadonlyArray<string>
 }

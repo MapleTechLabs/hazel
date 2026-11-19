@@ -96,9 +96,7 @@ export const csvValue = (
 					account.openOpportunities,
 			)
 		case "customer_since":
-			return account.customerSinceMs === null
-				? ""
-				: new Date(account.customerSinceMs).toISOString().slice(0, 10)
+			return new Date(account.firstSeenAtMs).toISOString().slice(0, 10)
 		case "tags":
 			return account.tags.join("; ")
 	}
@@ -258,9 +256,7 @@ const cellOf = <M>(
 				opportunities: account.openOpportunities,
 			})
 		case "customer_since":
-			return account.customerSinceMs === null
-				? muted(h, "—")
-				: h.span([h.Class("text-muted-fg")], [monthYear.format(account.customerSinceMs)])
+			return h.span([h.Class("text-muted-fg")], [monthYear.format(account.firstSeenAtMs)])
 		case "tags":
 			return account.tags.length === 0
 				? muted(h, "—")

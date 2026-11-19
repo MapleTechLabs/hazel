@@ -293,9 +293,7 @@ export const previewPanel = (
 								[
 									[
 										account.domain,
-										account.customerSinceMs === null
-											? null
-											: `since ${formatDate(new Date(account.customerSinceMs), { withYear: true })}`,
+										`since ${formatDate(new Date(account.firstSeenAtMs), { withYear: true })}`,
 									]
 										.filter((part) => part !== null)
 										.join(" · "),
