@@ -28,6 +28,8 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
     private(set) var canSwipeBack = false
     /// A web overlay is open (the command palette, a dialog): the page shows, not the native screen.
     private(set) var isOverlayOpen = false
+    /// A thread is open over its channel: the shell shows it as a page of its own.
+    private(set) var isThreadOpen = false
     /// The screen the page shows, in semantic nodes; `nil` when it has none (not converted).
     private(set) var screen: SemanticNode?
     /// The page has settled once and said what it shows (a native screen, or none): until then the
@@ -212,6 +214,8 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
                 canSwipeBack = enabled ?? false
             case "overlay":
                 isOverlayOpen = open ?? false
+            case "thread":
+                isThreadOpen = open ?? false
             case "haptic":
                 Self.play(kind ?? "")
             case "log":
