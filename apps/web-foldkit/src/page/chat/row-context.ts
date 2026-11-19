@@ -170,9 +170,12 @@ const rowLongPress = (
 		isPinned: () => isPinned,
 		canStartThread: () => canStartThreadIn(channel.type, channel.id, row.message.channelId),
 	}
-	const items = Menu.nativeMenuItems(UNSELECTED_MENU, Overlays.contextMenuEntries(facts, id), {
-		symbols: nativeSymbols(isPinned),
-	})
+	const items = Menu.nativeMenuItems(
+		UNSELECTED_MENU,
+		Overlays.contextMenuEntries(facts, id),
+		{ symbols: nativeSymbols(isPinned) },
+		contextMenuContent(h, isPinned),
+	)
 	return Option.match(items, {
 		onNone: () => [],
 		onSome: (found) =>

@@ -24,6 +24,7 @@ import {
 } from "./channels-sidebar/menu-update"
 import { sectionActionLabel, sectionMenuEntries, sectionMenuView } from "./channels-sidebar/menus"
 import { dragDescription, sectionPlusButton } from "./channels-sidebar/tree"
+import { semantic } from "../ui/semantic"
 import { sectionGroupContent } from "./channels-sidebar/view"
 
 /**
@@ -277,35 +278,49 @@ const sidebarBody = <ParentMessage>(
 		paletteKey,
 		createChannelKey,
 	}
-	return sidebarStatic(h, "flex flex-1", [
-		// Until the channel lists arrive, the last screen's paint stays up (`app/paint.ts`).
-		...(isLoading(model)
-			? [h.div([h.Attribute("data-paint", "loading"), h.Attribute("hidden", "")])]
-			: []),
-		orgSwitcherHeader(h, orgSwitcher, orgSwitcherEntries, shell, organizations, toOrgSwitcherMessage),
-		sidebarContent(h, { state: "expanded" }, [
-			sidebarSectionGroup(
+	return sidebarStatic(
+		h,
+		"flex flex-1",
+		[
+			// Until the channel lists arrive, the last screen's paint stays up (`app/paint.ts`).
+			...(isLoading(model)
+				? [h.div([h.Attribute("data-paint", "loading"), h.Attribute("hidden", "")])]
+				: []),
+			orgSwitcherHeader(h, orgSwitcher, orgSwitcherEntries, shell, organizations, toOrgSwitcherMessage),
+			sidebarContent(h, { state: "expanded" }, [
+				sidebarSectionGroup(
+					h,
+					sectionGroupContent(h, model, {
+						orgSlug,
+						route,
+						activeChannelId,
+						nowMs,
+						paletteKey,
+						createChannelKey,
+						onActiveMount: h.OnMount(Mount.mapMessage(ScrollActiveIntoView(), toParentMessage)),
+						onBrowseChannels: h.OnClick(toParentMessage(Message.ClickedBrowseChannels())),
+						onDismissCreateChannelHint: h.OnClick(
+							toParentMessage(Message.ClickedDismissCreateChannelHint()),
+						),
+						toParentMessage,
+						sectionAction: (sectionKey) =>
+							sectionActionView(h, model, sectionKey, toParentMessage),
+					}),
+				),
+			]),
+			userMenuFooter(
 				h,
-				sectionGroupContent(h, model, {
-					orgSlug,
-					route,
-					activeChannelId,
-					nowMs,
-					paletteKey,
-					createChannelKey,
-					onActiveMount: h.OnMount(Mount.mapMessage(ScrollActiveIntoView(), toParentMessage)),
-					onBrowseChannels: h.OnClick(toParentMessage(Message.ClickedBrowseChannels())),
-					onDismissCreateChannelHint: h.OnClick(
-						toParentMessage(Message.ClickedDismissCreateChannelHint()),
-					),
-					toParentMessage,
-					sectionAction: (sectionKey) => sectionActionView(h, model, sectionKey, toParentMessage),
-				}),
+				userMenu,
+				userMenuEntries,
+				shell,
+				toUserMenuMessage,
+				userStatus,
+				statusExpiration,
 			),
-		]),
-		userMenuFooter(h, userMenu, userMenuEntries, shell, toUserMenuMessage, userStatus, statusExpiration),
-		dragDescription(h),
-	])
+			dragDescription(h),
+		],
+		semantic(h, { kind: "screen", title: orgName ?? "Chats" }),
+	)
 }
 
 /** A single action is a plain "+" button; several actions or a deletable section open a menu. */

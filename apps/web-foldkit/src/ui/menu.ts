@@ -3,7 +3,8 @@ import { Command, type Update } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
-import type { NativeMenuItem, NativeMenuLook } from "../platform/native-island"
+import type { Html } from "foldkit/html"
+import { iconOf, type NativeMenuItem, type NativeMenuLook } from "../platform/native-island"
 import { Placement } from "./aria/placement"
 
 /**
@@ -253,12 +254,15 @@ export const nativeMenuItems = (
 	model: Model,
 	entries: ReadonlyArray<Entry>,
 	look: NativeMenuLook = {},
+	/** The web's own item children (`ViewInputs.content`): each native item shows their icon. */
+	content?: (key: string) => ReadonlyArray<Html | string>,
 ): Option.Option<ReadonlyArray<NativeMenuItem>> => {
 	const leafOf = (leaf: Leaf): Option.Option<NativeMenuItem> =>
 		Option.map(leaf.textValue, (label) => ({
 			key: leaf.key,
 			label,
 			symbol: look.symbols?.[leaf.key],
+			icon: content === undefined ? undefined : iconOf(content(leaf.key)),
 			disabled: leaf.isDisabled ? (true as const) : undefined,
 			destructive:
 				Option.contains(leaf.intent, "Danger") || look.destructive?.includes(leaf.key) === true

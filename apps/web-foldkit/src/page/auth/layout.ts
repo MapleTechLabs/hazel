@@ -39,7 +39,12 @@ export const authShell = <M>(
 					: [panelCard(h, [h.p([h.Class("text-lg text-white")], [tagline])])]),
 			]),
 			h.div(
-				[h.Class("flex h-full flex-col p-6 lg:p-12")],
+				// Clear of the status bar and home indicator where the page runs edge to edge (iOS).
+				[
+					h.Class(
+						"flex h-full flex-col p-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:p-12",
+					),
+				],
 				[
 					h.div(
 						[h.Class("mb-8 lg:hidden")],

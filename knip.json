@@ -50,6 +50,10 @@
 			// macOS's plist tool, for the app bundle and iOS scripts.
 			"ignoreBinaries": ["plutil"]
 		},
+		"apps/ios-hybrid": {
+			// web-foldkit's Vite config (which this package's spreads) imports these, resolved here.
+			"ignoreDependencies": ["effect", "foldkit", "@foldkit/vite-plugin"]
+		},
 		"apps/raycast": {
 			// Raycast provides React to extensions at runtime.
 			"ignoreDependencies": ["react"]

@@ -98,7 +98,9 @@ export const placeholderPlugin = (text: string) =>
 			decorations: (state) =>
 				showsPlaceholder(state)
 					? DecorationSet.create(state.doc, [
-							Decoration.widget(1, placeholderElement(text), { side: 1, key: "placeholder" }),
+							// Before the empty paragraph, not in it: iOS WebKit inserts no text at a caret
+							// whose block holds only a non-editable inline, so typing did nothing there.
+							Decoration.widget(0, placeholderElement(text), { side: 1, key: "placeholder" }),
 						])
 					: DecorationSet.empty,
 			handleDOMEvents: {

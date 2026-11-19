@@ -98,9 +98,15 @@ export const sidebarDock = <Message>(
 	)
 
 /** `<Sidebar collapsible="none">` */
-export const sidebarStatic = <Message>(h: HtmlBuilder<Message>, className: string, children: Html[]): Html =>
+export const sidebarStatic = <Message>(
+	h: HtmlBuilder<Message>,
+	className: string,
+	children: Html[],
+	attributes: ReadonlyArray<Attribute<Message>> = [],
+): Html =>
 	h.div(
 		[
+			...attributes,
 			h.Attribute("data-intent", "default"),
 			h.Attribute("data-collapsible", "none"),
 			h.Attribute("data-slot", "sidebar"),

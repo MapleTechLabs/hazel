@@ -72,7 +72,8 @@ const placeholderPlugin = (initial: string) =>
 				const text = placeholderKey.getState(state) ?? ""
 				return state.doc.textContent === ""
 					? DecorationSet.create(state.doc, [
-							Decoration.widget(1, placeholderSpan(text), {
+							// Before the paragraph, not in it (iOS WebKit: see `editor/plugins.ts`).
+							Decoration.widget(0, placeholderSpan(text), {
 								side: 1,
 								key: `placeholder:${text}`,
 							}),

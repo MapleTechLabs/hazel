@@ -6,6 +6,10 @@ import { defineMessageUnion } from "foldkit/message"
 import { defineTaggedUnion } from "foldkit/schema"
 import { modifyFields } from "foldkit/struct"
 import { calculate, emptyPool, Pool } from "./message-list-pool"
+import { shellDrawsLists } from "../platform/system-ui"
+
+/** A native shell draws the message list from every laid-out row. */
+const drawsLists = shellDrawsLists()
 
 /**
  * Bottom-anchored virtual list for chat (the `@legendapp/list` replacement, plan §3.4).
@@ -922,16 +926,24 @@ export const view = <Item, ParentMessage>(
 		if (kept !== undefined) for (let index = kept.from; index <= kept.to; index++) indexes.add(index)
 		return [...[...indexes].sort((a, b) => a - b).map(row), ...empty.map(emptyContainer)]
 	}
+	// A shell that draws the list itself needs every row laid out, wherever this list scrolled.
+	const everyRow = () => inputs.items.map((_, index) => row(index))
 	const rows =
 		model.viewportHeight === 0
 			? []
-			: model.scrollPhase._tag === "Scrolling"
-				? overscanRows()
-				: containerRows()
+			: drawsLists
+				? everyRow()
+				: model.scrollPhase._tag === "Scrolling"
+					? overscanRows()
+					: containerRows()
 
 	return h.div(
 		[
 			h.Id(model.id),
+			// How many rows the list has, rendered or not: a native list mirroring this one sizes by it.
+			h.Attribute("data-list-count", `${model.keys.length}`),
+			// Whether the window reaches the newest row (a shell drawing the list follows it then).
+			h.Attribute("data-list-follows-end", model.canFollowEnd ? "true" : "false"),
 			h.OnMount(Mount.mapMessage(ObserveMessageList({ id: model.id }), inputs.toParentMessage)),
 			// Frames inside ignore the pointer while this is set (`styles.css`), so a scroll never
 			// lands in an HTML render that slides under the pointer.

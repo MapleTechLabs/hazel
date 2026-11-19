@@ -23,6 +23,11 @@ export type SystemUi = Readonly<{
 	 * of going back, until the function this returns runs. An image viewer's slides.
 	 */
 	setSwipePager?: (onPage: (step: -1 | 1) => void) => () => void
+	/**
+	 * The shell draws message lists itself from the rows the page lays out (the iOS shell's native
+	 * list): the page renders every row it holds, not only those near its own (unseen) scroll.
+	 */
+	drawsLists?: true
 }>
 
 /** The global a shell installs its controls as. */
@@ -32,3 +37,9 @@ type SystemUiGlobal = typeof globalThis & { [SYSTEM_UI_GLOBAL]?: SystemUi }
 
 /** The shell's controls, or `undefined` in a browser. */
 export const systemUi = (): SystemUi | undefined => (globalThis as SystemUiGlobal)[SYSTEM_UI_GLOBAL]
+
+/**
+ * Whether a native shell draws the message lists from the rows the page lays out
+ * (`SystemUi.drawsLists`). Fixed for the page's life: read it once, at module load.
+ */
+export const shellDrawsLists = (): boolean => systemUi()?.drawsLists === true
