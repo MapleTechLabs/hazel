@@ -18,6 +18,8 @@ import {
 	formatRelative,
 	currencySymbol,
 	formatMajor,
+	formatBytes,
+	formatMetric,
 	formatMetricValue,
 	toMajor,
 	toMinor,
@@ -142,5 +144,19 @@ describe("time", () => {
 		expect(bucketLabels("day", "2026-10-12")).toEqual({ tick: "Oct 12", heading: "Mon, Oct 12" })
 		expect(bucketLabels("week", "2026-10-12")).toEqual({ tick: "Oct 12", heading: "Week of Oct 12" })
 		expect(bucketLabels("month", "2026-10-01")).toEqual({ tick: "Oct", heading: "October 2026" })
+	})
+})
+
+describe("formatBytes and formatMetric", () => {
+	it("bytes promote on the rounded value", () => {
+		expect(formatBytes(512)).toBe("512 B")
+		expect(formatBytes(999_999)).toBe("1 MB")
+		expect(formatBytes(3_860_000_000)).toBe("3.9 GB")
+		expect(formatBytes(999_950)).toBe("1 MB")
+	})
+
+	it("a built-in MRR in minor units reads as money", () => {
+		expect(formatMetric(120_000, { format: "number", unit: "minor" })).toBe("$1,200")
+		expect(formatMetric(12_400, { format: "number", unit: "spans" })).toBe("12.4K spans")
 	})
 })

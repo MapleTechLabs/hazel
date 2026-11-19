@@ -130,14 +130,15 @@ const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"] as const
 export const formatBytes = (value: number): string => {
 	let scaled = Math.abs(value)
 	let unit = 0
-	while (scaled >= 1000 && unit < BYTE_UNITS.length - 1) {
+	const digitsOf = () => (scaled < 10 && unit > 0 ? 1 : 0)
+	// Promote on the rounded value, so 999,999 B reads 1 MB rather than 1,000 KB.
+	while (unit < BYTE_UNITS.length - 1 && roundTo(scaled, digitsOf()) >= 1000) {
 		scaled /= 1000
 		unit++
 	}
-	const digits = scaled < 10 && unit > 0 ? 1 : 0
 	return withSign(
 		value,
-		`${numberFormat({ maximumFractionDigits: digits }).format(scaled)} ${BYTE_UNITS[unit]}`,
+		`${numberFormat({ maximumFractionDigits: digitsOf() }).format(scaled)} ${BYTE_UNITS[unit]}`,
 		false,
 	)
 }
