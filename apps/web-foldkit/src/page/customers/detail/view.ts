@@ -40,7 +40,7 @@ import { input } from "../../../ui/input"
 import { radioGroup } from "../../../ui/radio"
 import { searchField } from "../../../ui/search-field"
 import { link } from "../../../ui/link"
-import { menuLabel } from "../../../ui/menu-view"
+import { menuDescription, menuLabel } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import type { PageViewInputs } from "../../contract"
@@ -410,12 +410,12 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 										...(reason === undefined
 											? []
 											: [
-													h.span(
-														[
-															h.Attribute("slot", "description"),
-															h.Class("text-muted-fg text-xs"),
-														],
-														[reason],
+													menuDescription(
+														h,
+														model.actionsMenu.id,
+														key,
+														reason,
+														"text-xs",
 													),
 												]),
 									]
