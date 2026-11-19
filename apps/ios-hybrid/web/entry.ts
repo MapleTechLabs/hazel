@@ -98,15 +98,22 @@ const installOffline = async () => {
 		)
 	}
 	const emptyChannel = fixture.channelRows[1]?.id ?? ""
-	globalThis.fetch = makeOfflineFetch({
+	const network = globalThis.fetch.bind(globalThis)
+	const offlineFetch = makeOfflineFetch({
 		htmlRenderUrl: renderUrl,
 		backendUrl: BACKEND_URL,
-		unfurls: globalThis.fetch.bind(globalThis),
+		unfurls: network,
 		server,
 		user: offline.currentUser,
 		onUnknownRpc: (tag) => console.warn(`[offline] rpc ${tag} has no offline answer`),
 		onRequest: (method, path) => console.info(`[offline] ${method} ${path}`),
 	})
+	// The backend is the fixture; the rest of the internet (the emoji picker's CDN) is itself.
+	globalThis.fetch = (input, init) => {
+		const url = new Request(input, init).url
+		if (new URL(url).origin === new URL(BACKEND_URL).origin) return offlineFetch(input, init)
+		return network(input, init)
+	}
 	Object.assign(globalThis, {
 		WebSocket: makeFixtureWebSocket({
 			server,

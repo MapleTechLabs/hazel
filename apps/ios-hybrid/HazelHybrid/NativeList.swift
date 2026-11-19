@@ -154,7 +154,8 @@ final class NativeListView: UIView, UIScrollViewDelegate, UIContextMenuInteracti
             images = [:]
             for layer in layers.values { recycle(layer) }
             layers = [:]
-            scroll.contentOffset = .zero
+            // At the end: the newest row just above the composer (the inset is the list's bottom).
+            scroll.contentOffset = CGPoint(x: 0, y: -scroll.contentInset.top)
         }
         count = update.count
         followsEnd = update.followsEnd
