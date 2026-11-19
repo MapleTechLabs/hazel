@@ -7,15 +7,19 @@
  * primary, so its other environments hold no unclosed signal.
  *
  * Each runs inside the caller's transaction, records a `hazel` event on the accounts it changes and
- * asks for a compute.
+ * asks for a compute. A change of group drops a compute's saved progress (it walks groups by their
+ * primary's id): the next turn starts over.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { CustomerGroupError } from "@hazel/domain/rpc"
 import type { CustomerAccountId, UserId } from "@hazel/schema"
 import { Effect } from "effect"
-import { requestCompute } from "./schedule"
+import { clearComputeProgress, requestCompute } from "./schedule"
 
 const ZERO_COUNTERS = { openRiskHigh: 0, openRiskMedium: 0, openRiskLow: 0, openOpportunities: 0 }
+
+/** Groups changed: a compute under way starts over, and one runs soon. */
+const regroup = Effect.andThen(clearComputeProgress, requestCompute)
 
 const recordEvent = (
 	accountId: CustomerAccountId,
@@ -96,7 +100,7 @@ export const linkAccounts = Effect.fn("Customers.linkAccounts")(function* (
 		now,
 	)
 	yield* Effect.annotateCurrentSpan({ "customers.linked_accounts": ids.length })
-	yield* requestCompute
+	yield* regroup
 })
 
 /**
@@ -144,7 +148,7 @@ export const unlinkAccount = Effect.fn("Customers.unlinkAccount")(function* (
 		actor,
 		now,
 	)
-	yield* requestCompute
+	yield* regroup
 })
 
 /**
@@ -202,7 +206,7 @@ export const setPrimaryAccount = Effect.fn("Customers.setPrimaryAccount")(functi
 		actor,
 		now,
 	)
-	yield* requestCompute
+	yield* regroup
 })
 
 /** Name the account's environment; blank or null clears it. */

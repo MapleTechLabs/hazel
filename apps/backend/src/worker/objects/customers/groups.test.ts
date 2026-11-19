@@ -3,7 +3,7 @@
  * stay their own rows and link into a group with one primary, whose signals stand for the group.
  */
 import type { UpsertAccount } from "@hazel/domain/customers"
-import type { CustomerAccountId } from "@hazel/schema"
+import type { CustomerAccountId, CustomerSignalId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { runCompute } from "./compute"
@@ -44,8 +44,8 @@ const groupOf = (world: CustomersWorld) =>
 			.map((row) => [row.name, row.primary]),
 	)
 
-const signal = (world: CustomersWorld, accountId: string, status = "open") => {
-	const id = uuid()
+const signal = (world: CustomersWorld, accountId: CustomerAccountId, status = "open") => {
+	const id = uuid() as CustomerSignalId
 	world.rows(
 		`INSERT INTO customer_signals (id, organizationId, accountId, ruleId, template, kind, severity,
 		status, title, reason, evidence, openingEvidence) VALUES (?, ?, ?, ?, 'inactive', 'risk', 'high', ?,
@@ -59,7 +59,7 @@ const signal = (world: CustomersWorld, accountId: string, status = "open") => {
 	return id
 }
 
-const signalOf = (world: CustomersWorld, id: string) =>
+const signalOf = (world: CustomersWorld, id: CustomerSignalId) =>
 	world.rows(
 		`SELECT accountId, status, closedAt IS NOT NULL AS closed, resolvedAt IS NOT NULL AS resolved
 		FROM customer_signals WHERE id = ?`,
@@ -223,6 +223,35 @@ describe("customer groups", () => {
 				expect(
 					tagOf(yield* world.call("customers.account.unlink", { accountId: us }, world.owner)),
 				).toBe("Success")
+			}),
+		))
+
+	it("drops a compute's saved progress on every change of group", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, us, eu } = yield* setup
+				world.rows(
+					`CREATE TABLE IF NOT EXISTS _object_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+				)
+				const saved = () => {
+					world.rows(
+						`INSERT OR REPLACE INTO _object_meta (key, value) VALUES ('computeProgress', '{}')`,
+					)
+					return () => world.rows(`SELECT key FROM _object_meta WHERE key = 'computeProgress'`)
+				}
+				let progress = saved()
+				yield* world.call(
+					"customers.account.link",
+					{ accountId: eu, primaryAccountId: us },
+					world.owner,
+				)
+				expect(progress()).toEqual([])
+				progress = saved()
+				yield* world.call("customers.account.setPrimary", { accountId: eu }, world.owner)
+				expect(progress()).toEqual([])
+				progress = saved()
+				yield* world.call("customers.account.unlink", { accountId: us }, world.owner)
+				expect(progress()).toEqual([])
 			}),
 		))
 
