@@ -788,6 +788,14 @@ const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, con
 
 const PROVIDERS: ReadonlyArray<Customers.CustomerProvider> = ["clerk", "stripe", "autumn", "maple"]
 
+/** What each source brings, in a line: how it matches records is the Sources settings' to explain. */
+const SETUP_SUMMARY = {
+	clerk: "Your customer list: accounts and their contacts.",
+	stripe: "Subscriptions, invoices and MRR.",
+	autumn: "Plans, metered features and limits.",
+	maple: "Product usage and active users.",
+} as const satisfies Record<Customers.CustomerProvider, string>
+
 const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 	h.div(
 		[h.Class("flex flex-col gap-6")],
@@ -795,14 +803,10 @@ const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 			h.div(
 				[h.Class("flex flex-col gap-1")],
 				[
-					heading(h, { variant: "title" }, [
-						"Connect a source to see how your customers are doing",
-					]),
+					heading(h, { variant: "title" }, ["Connect a data source"]),
 					h.p(
 						[h.Class("max-w-2xl text-muted-fg text-sm")],
-						[
-							"Hazel merges records from every source into one customer per company. Start with Clerk to create your customer list, then add billing and product usage.",
-						],
+						["Start with Clerk for your customer list, then add billing and usage."],
 					),
 				],
 			),
@@ -811,6 +815,7 @@ const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 				PROVIDERS.map((provider) =>
 					connectCard(h, {
 						provider,
+						description: SETUP_SUMMARY[provider],
 						now: new Date(nowMs),
 						status: { _tag: "NotConnected", onConnect: Message.PressedConnect({ provider }) },
 						className: provider === "clerk" ? "border-primary" : undefined,
@@ -890,7 +895,11 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			h.div(
 				[h.Class("mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 lg:px-8")],
 				[
-					header(h, model, result, shared.nowMs),
+					// On a phone the top bar names the section; with nothing connected the header holds no
+					// controls, only its title and a subtitle the setup below says again.
+					...(shared.isMobile && isUnconnected(model)
+						? []
+						: [header(h, model, result, shared.nowMs)]),
 					...(isUnconnected(model)
 						? [setup(h, shared.nowMs)]
 						: dashboard(h, model, context, shared.currentUser?.id ?? null)),
