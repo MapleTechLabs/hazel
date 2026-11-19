@@ -5,7 +5,7 @@
  */
 import { Schema } from "effect"
 import {
-	type CustomerProvider,
+	CustomerProvider,
 	type EvidenceViz,
 	LifecycleStage,
 	type SignalKind,
@@ -90,6 +90,11 @@ export const SeatGrowthConfig = Schema.TaggedStruct("seat_growth", {
 	minActiveUsers: Count,
 })
 
+/** The account churned within the last `windowDays`: its last Needs attention entry. */
+export const ChurnedConfig = Schema.TaggedStruct("churned", {
+	windowDays: Days,
+})
+
 /** A rule's thresholds; the `_tag` is its template. */
 export const RuleConfig = Schema.Union([
 	InactiveConfig,
@@ -102,6 +107,7 @@ export const RuleConfig = Schema.Union([
 	ChampionInactiveConfig,
 	NearLimitConfig,
 	SeatGrowthConfig,
+	ChurnedConfig,
 ])
 export type RuleConfig = typeof RuleConfig.Type
 
@@ -119,6 +125,28 @@ export const RuleScope = Schema.Struct({
 	),
 })
 export type RuleScope = typeof RuleScope.Type
+
+/** The stages Needs attention can cover: a churned customer's one entry is the churn itself (`churned`). */
+export const AttentionStage = Schema.Literals(["lead", "trialing", "active", "past_due"])
+export type AttentionStage = typeof AttentionStage.Type
+
+/**
+ * Which customers Needs attention covers, for every rule (org-wide, before each rule's own scope).
+ * Any other account is not evaluated: its signals close and none open.
+ */
+export const AttentionSettings = Schema.Struct({
+	/** Empty: none (only `churned` still opens). */
+	stages: Schema.Array(AttentionStage),
+	/** Only customers with a record from one of these sources (a customer or subscription); empty: any. */
+	requiredSources: Schema.Array(CustomerProvider),
+})
+export type AttentionSettings = typeof AttentionSettings.Type
+
+/** Customers that have not churned and have a Stripe customer. */
+export const DEFAULT_ATTENTION_SETTINGS: AttentionSettings = {
+	stages: AttentionStage.literals,
+	requiredSources: ["stripe"],
+}
 
 /** A rule as the editor submits it (create, update, dry-run). */
 export const RuleDraft = Schema.Struct({
@@ -288,6 +316,18 @@ export const TEMPLATES: TemplateTable = {
 		requiredSources: ACTIVITY,
 		viz: "delta",
 		baselineOnBackfill: true,
+		excludedFromHealth: true,
+	},
+	churned: {
+		template: "churned",
+		kind: "risk",
+		name: "Churned",
+		description: "Churned in the last {windowDays} days",
+		defaultSeverity: "medium",
+		defaultConfig: { _tag: "churned", windowDays: 14 },
+		requiredSources: BILLING,
+		viz: "delta",
+		baselineOnBackfill: false,
 		excludedFromHealth: true,
 	},
 }

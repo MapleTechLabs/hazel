@@ -193,10 +193,12 @@ export const groupFacts = (
 			firstSeenAt:
 				earliest(accounts.map((account) => account.firstSeenAt)) ?? primary.account.firstSeenAt,
 			customerSince: earliest(accounts.map((account) => account.customerSince)),
+			churnedAt: latest(accounts.map((account) => account.churnedAt)),
 			lastActiveAt: latest(accounts.map((account) => account.lastActiveAt)),
 			tags: [...new Set(accounts.flatMap((account) => account.tags))],
 		},
 		stage,
+		providers: new Set(group.flatMap((facts) => [...facts.providers])),
 		contacts,
 		activity,
 		lastActiveDay,

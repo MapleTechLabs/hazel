@@ -42,6 +42,7 @@ export interface RuleInput {
 
 export type NonMatchReason =
 	| "Churned"
+	| "Not covered by Needs attention"
 	| "Out of scope"
 	| "Missing data source"
 	| "No data"
@@ -103,6 +104,15 @@ export const inScope = (scope: RuleScope, facts: AccountFacts): boolean => {
 		return false
 	}
 	return true
+}
+
+/** Whether Needs attention covers the account (`AttentionSettings`); a churned one only for its churn. */
+export const covered = (facts: AccountFacts, org: OrgFacts): boolean => {
+	const { stages, requiredSources } = org.attention
+	return (
+		(facts.stage === "churned" || stages.some((stage) => stage === facts.stage)) &&
+		(requiredSources.length === 0 || requiredSources.some((provider) => facts.providers.has(provider)))
+	)
 }
 
 type Found = { readonly step: EvidenceStep; readonly reason: string; readonly evidence: SignalEvidence }
@@ -533,8 +543,43 @@ const checkOf = (config: RuleConfig): Check => {
 			return nearLimit(config)
 		case "seat_growth":
 			return seatGrowth(config)
+		case "churned":
+			return churned(config)
 	}
 }
+
+const churned =
+	(config: Extract<RuleConfig, { _tag: "churned" }>): Check =>
+	(facts, org) => {
+		const churnedAt = facts.account.churnedAt
+		if (facts.stage !== "churned" || churnedAt === null) return "Below threshold"
+		const days = daysSince(churnedAt, org.now)
+		if (days >= config.windowDays) return "Below threshold"
+		const churn = [...facts.movements].reverse().find((movement) => movement.type === "churn")
+		const canceled = [...facts.subscriptions]
+			.filter((sub) => sub.canceledAt !== null)
+			.sort((a, b) => (b.canceledAt?.getTime() ?? 0) - (a.canceledAt?.getTime() ?? 0))[0]
+		const lost = churn?.fromMrrMinor ?? canceled?.mrrMinor ?? 0
+		const currency = churn?.currency ?? canceled?.currency ?? org.currency
+		return {
+			step: 0,
+			reason: `${lost > 0 ? `Lost ${formatMoney(lost, currency)}/mo ` : ""}${days === 0 ? "today" : `${plural(days, "day")} ago`}`,
+			evidence: {
+				_tag: "delta",
+				step: 0,
+				unit: "minor",
+				from: lost,
+				to: 0,
+				changePct: lost === 0 ? null : -100,
+				currency,
+				effectiveAt: iso(churnedAt),
+				fromLabel: canceled?.planName ?? null,
+				toLabel: "Churned",
+				reason: canceled?.cancellationReason ?? null,
+				series: mrrSeries(facts.movements, facts.account.mrrMinor, org.today, 30),
+			},
+		}
+	}
 
 /** The template needs one of its sources connected. */
 export const missingSources = (template: SignalTemplate, org: OrgFacts): ReadonlyArray<CustomerProvider> => {
@@ -543,7 +588,9 @@ export const missingSources = (template: SignalTemplate, org: OrgFacts): Readonl
 }
 
 export const evaluate = (rule: RuleInput, facts: AccountFacts, org: OrgFacts): Evaluation => {
-	if (facts.stage === "churned") return noMatch("Churned")
+	// Churn is a customer's last entry: no other rule evaluates it after.
+	if (facts.stage === "churned" && rule.template !== "churned") return noMatch("Churned")
+	if (!covered(facts, org)) return noMatch("Not covered by Needs attention")
 	if (!inScope(rule.scope, facts)) return noMatch("Out of scope")
 	if (missingSources(rule.template, org).length > 0) return noMatch("Missing data source")
 	const found = checkOf(rule.config)(facts, org)

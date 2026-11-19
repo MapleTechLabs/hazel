@@ -1,5 +1,5 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerAccountId, CustomerSignalRuleId } from "@hazel/schema"
+import { CustomerAccountId, CustomerSettingsId, CustomerSignalRuleId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
@@ -41,6 +41,13 @@ export const MetricRow = Schema.Struct({
 	description: Schema.NullOr(Schema.String),
 })
 export type MetricRow = typeof MetricRow.Type
+
+/** Who Needs attention covers, with the settings row it is saved to. */
+export const AttentionRow = Schema.Struct({
+	settingsId: CustomerSettingsId,
+	attention: Customers.AttentionSettings,
+})
+export type AttentionRow = typeof AttentionRow.Type
 
 // THE EDITOR'S FORM
 
@@ -116,6 +123,10 @@ export const Model = Schema.Struct({
 	settings: Schema.NullOr(SettingsSummary),
 	/** The settings query answered (null settings then: no row yet, USD). A rule's form waits for it. */
 	hasSettings: Schema.Boolean,
+	/** Null until the settings row syncs. */
+	attention: Schema.NullOr(AttentionRow),
+	/** One save at a time, so saves cannot land out of order. */
+	isSavingAttention: Schema.Boolean,
 	metrics: Schema.Array(MetricRow),
 	/** Null: the rules list. */
 	editor: Schema.NullOr(Editor),

@@ -83,6 +83,9 @@ const live = (model: Model, shared: Shared): Model =>
 				reportingCurrency: SETTINGS.reportingCurrency,
 			},
 		}),
+		Message.UpdatedAttention({
+			attention: { settingsId: SETTINGS.id, attention: SETTINGS.attention },
+		}),
 		Message.UpdatedMetrics({
 			metrics: METRIC_DEFINITIONS.map((metric) => ({
 				key: metric.key,

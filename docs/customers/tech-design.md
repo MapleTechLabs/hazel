@@ -352,7 +352,7 @@ Rules:
     - `billing` = min of applicable: past_due/unpaid 20, invoice > 7 d overdue 30, overdue 60,
       cancel scheduled 40, else 100. Excluded without a billing source or with no subscription.
     - `signals` = 100 − Σ deduction per open risk signal (high 30 / medium 15 / low 5), floor 0;
-      templates in `excludedTemplates` ignored (default `health_drop`, `near_limit`, `seat_growth`).
+      templates in `excludedTemplates` ignored (default `health_drop`, `near_limit`, `seat_growth`, `churned`).
 - Redistribution: `effectiveWeight_i = w_i / Σ w_available × 100`. Score = round(Σ eff × score).
   No score (status `unknown`) when only `signals` is available, or the account is not a customer
   (stage **lead** or **churned**: nothing to retain).
@@ -362,7 +362,10 @@ Rules:
 
 ### 4.4 Signal evaluation (`packages/domain/src/customers/rules.ts`, `evidence.ts`)
 
-Every enabled rule × every in-scope, non-churned account (silent accounts included). A template
+Every enabled rule × every in-scope, non-churned account (silent accounts included) that Needs
+attention covers (`customer_settings.attention`: its stage is one of `stages`, and it has an account
+record (account ref or subscription) from one of `requiredSources`, empty = any; default every non-churned stage, Stripe). A churned
+account is evaluated by `churned` alone, so churn is its last entry. A template
 needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run reports it).
 Connected = `active`; an activity source (Clerk, Maple) also needs to be delivering: one that pulls
 (`nextSyncAt` set) and has not succeeded for 30 h (a day plus the longest pull interval), or not yet
@@ -382,6 +385,7 @@ signals stay as they are (nothing opens or auto-resolves), as with a source in e
 | `champion_inactive`           | champion (30 d) inactive 14 d                           | `last_active`           | as `inactive`                       |
 | `near_limit`                  | metered metric ≥ 90% of limit                           | `limit`                 | ≥ 100% / ≥ 120%                     |
 | `seat_growth`                 | activeUsers30d +50% vs 30 d ago, from ≥ 3               | `delta` (users)         | +100% / +200%                       |
+| `churned`                     | stage churned, `churnedAt` within 14 d                  | `delta` (minor, lost)   | — / —                               |
 
 - Severity = `escalate(rule.severity, step)` (rule severity is the floor).
 - Title = template name (or the rule's name if renamed); reason = one plain sentence from evidence

@@ -32,6 +32,7 @@ const CONFIG_FIELDS = {
 	champion_inactive: Customers.ChampionInactiveConfig.fields,
 	near_limit: Customers.NearLimitConfig.fields,
 	seat_growth: Customers.SeatGrowthConfig.fields,
+	churned: Customers.ChurnedConfig.fields,
 } satisfies Record<Customers.SignalTemplate, Schema.Struct.Fields>
 
 /** How a numeric config field reads in its error (the bounds of `rules.ts`'s `Days`, `AgeDays`, `Pct`, `Count`). */

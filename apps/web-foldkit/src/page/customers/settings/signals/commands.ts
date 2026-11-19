@@ -1,15 +1,16 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerSignalRuleId, OrganizationId } from "@hazel/schema"
+import { CustomerSettingsId, CustomerSignalRuleId, OrganizationId } from "@hazel/schema"
 import { Duration, Effect, Schema } from "effect"
+import { optimisticAction } from "@hazel/effect-db-collection"
 import { Command } from "foldkit"
-import { customerSignalRuleCollection } from "~/db/collections"
+import { customerSettingsCollection, customerSignalRuleCollection } from "~/db/collections"
 import { catchCommon } from "../../../../data/actions"
 import { HazelRpc } from "../../../../rpc"
 import { deleteRuleAction, updateRuleAction } from "./actions"
 import { Message } from "./message"
 import { DRY_RUN_DEBOUNCE_MS } from "./model"
 
-/** The signals page's Commands: rule writes, and the debounced dry run behind the live preview. */
+/** The signals page's Commands: rule writes, who Needs attention covers, and the debounced dry run behind the live preview. */
 
 const target = { organizationId: OrganizationId, ruleId: CustomerSignalRuleId }
 
@@ -114,4 +115,44 @@ export const FetchRuleDryRun = Command.define("FetchRuleDryRun", {
 			catchCommon((reason) => Message.FailedFetchDryRun({ version, reason })),
 		)
 	},
+})
+
+interface SaveAttentionProps {
+	readonly organizationId: OrganizationId
+	readonly settingsId: CustomerSettingsId
+	readonly attention: Customers.AttentionSettings
+}
+
+/** The settings row takes it at once; the next compute closes or opens signals to match. */
+const saveAttentionAction = optimisticAction({
+	collections: [customerSettingsCollection],
+	onMutate: (props: SaveAttentionProps) => {
+		customerSettingsCollection.update(props.settingsId, (row) => {
+			Object.assign(row, { attention: props.attention })
+		})
+		return { settingsId: props.settingsId }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.settings.update", {
+				organizationId: props.organizationId,
+				attention: props.attention,
+			})
+			return { data: result, transactionId: result.transactionId }
+		}),
+})
+
+export const SaveAttention = Command.define("SaveAttention", {
+	args: {
+		organizationId: OrganizationId,
+		settingsId: CustomerSettingsId,
+		attention: Customers.AttentionSettings,
+	},
+	messages: [Message.SucceededSaveAttention, Message.FailedSaveAttention],
+	execute: (args) =>
+		saveAttentionAction(args).pipe(
+			Effect.as(Message.SucceededSaveAttention()),
+			catchCommon((reason) => Message.FailedSaveAttention({ reason })),
+		),
 })

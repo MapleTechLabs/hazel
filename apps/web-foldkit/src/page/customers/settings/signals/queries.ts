@@ -2,12 +2,16 @@ import type * as Customers from "@hazel/domain/customers"
 import type { OrganizationId } from "@hazel/schema"
 import { and, eq, isNull } from "@tanstack/db"
 import type { Stream } from "effect"
-import { customerMetricDefinitionCollection, customerSignalRuleCollection } from "~/db/collections"
+import {
+	customerMetricDefinitionCollection,
+	customerSettingsCollection,
+	customerSignalRuleCollection,
+} from "~/db/collections"
 import { msOf, withCustomersSource } from "../../../../customers/queries"
 import { liveQueryStream } from "../../../../data/live-query"
-import type { MetricRow, RuleRow } from "./model"
+import type { AttentionRow, MetricRow, RuleRow } from "./model"
 
-/** The page's own live queries over the `customers:<org>` collections: the rules and the metrics. */
+/** The page's own live queries over the `customers:<org>` collections: the rules, the metrics, who Needs attention covers. */
 
 const toRuleRow = (rule: Customers.SignalRule): RuleRow => ({
 	id: rule.id,
@@ -65,5 +69,25 @@ export const metricsStream = <Message>(
 							description: row.description,
 						})),
 				),
+		),
+	)
+
+/** Who Needs attention covers; null until the object has seeded its settings row. */
+export const attentionStream = <Message>(
+	organizationId: OrganizationId,
+	toMessage: (attention: AttentionRow | null) => Message,
+): Stream.Stream<Message> =>
+	withCustomersSource(
+		organizationId,
+		liveQueryStream<Customers.Settings, Message>(
+			(q) =>
+				q
+					.from({ settings: customerSettingsCollection })
+					.where(({ settings }) => eq(settings.organizationId, organizationId))
+					.findOne(),
+			(rows) => {
+				const row = rows[0]
+				return toMessage(row === undefined ? null : { settingsId: row.id, attention: row.attention })
+			},
 		),
 	)

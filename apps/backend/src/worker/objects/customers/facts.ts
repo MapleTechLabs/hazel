@@ -5,6 +5,7 @@
  */
 import type { schema } from "@hazel/db"
 import type {
+	AttentionSettings,
 	CustomerProvider,
 	Day,
 	HealthStatus,
@@ -41,6 +42,8 @@ export interface AccountFacts {
 	readonly account: schema.CustomerAccount
 	/** Effective: the override, else derived. */
 	readonly stage: LifecycleStage
+	/** The sources holding a record of the account: its account refs (stale ones too) and subscriptions. */
+	readonly providers: ReadonlySet<CustomerProvider>
 	/** Live contacts. */
 	readonly contacts: ReadonlyArray<ContactFacts>
 	/** Active contacts per day, with their event counts, over the loaded window. */
@@ -73,6 +76,8 @@ export interface OrgFacts {
 	/** Metrics whose source is connected but has stopped delivering: their recent days read empty. */
 	readonly staleMetrics: ReadonlySet<string>
 	readonly currency: string
+	/** Which accounts the rules evaluate at all. */
+	readonly attention: AttentionSettings
 }
 
 /** Distinct contacts active on any day of `[from, to]`. */

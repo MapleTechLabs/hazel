@@ -6,7 +6,9 @@ import type { schema } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
 import type { ApiScope } from "@hazel/domain/scopes"
 import {
+	type CustomerProvider,
 	type Day,
+	DEFAULT_ATTENTION_SETTINGS,
 	DEFAULT_CONNECTION_CONFIG,
 	type IngestOp,
 	type SignalEvidence,
@@ -99,6 +101,8 @@ export interface FactsInput {
 	readonly movements?: ReadonlyArray<Partial<schema.CustomerMrrMovement>>
 	readonly health?: AccountFacts["health"]
 	readonly priorActive?: ReadonlyArray<readonly [number, number]>
+	/** Default: a Clerk organization with a Stripe customer. */
+	readonly providers?: ReadonlyArray<CustomerProvider>
 }
 
 const contactId = (name: string) => `contact-${name}` as CustomerContactId
@@ -149,6 +153,7 @@ export const factsOf = (input: FactsInput = {}): AccountFacts => {
 	return {
 		account,
 		stage: account.lifecycleStageOverride ?? account.lifecycleStage,
+		providers: new Set(input.providers ?? ["clerk", "stripe"]),
 		contacts,
 		activity,
 		lastActiveDay,
@@ -227,6 +232,7 @@ export const orgFacts = (overrides: Partial<OrgFacts> = {}): OrgFacts => ({
 	metricAggregations: new Map(),
 	staleMetrics: new Set(),
 	currency: "usd",
+	attention: DEFAULT_ATTENTION_SETTINGS,
 	...overrides,
 })
 

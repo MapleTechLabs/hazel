@@ -104,6 +104,12 @@ Built-in templates (seeded per org, editable):
 | `champion_inactive`           | Most active contact of last 30 days inactive 14 days                       | risk        |
 | `near_limit`                  | A metered feature ≥ 90% of plan limit (Autumn)                             | opportunity |
 | `seat_growth`                 | Active users up ≥50% in 30 days                                            | opportunity |
+| `churned`                     | Churned in the last 14 days: the customer's last entry                     | risk        |
+
+Who Needs attention covers is org-wide (`customer_settings.attention`, edited on the Signals page):
+the lifecycle stages (default all but churned) and the sources a customer must have a record in
+(default Stripe; none = any). Rules skip every other account. A churned customer is covered only by
+`churned`.
 
 **`customer_signals`** (`CustomerSignalId`): the queue items
 

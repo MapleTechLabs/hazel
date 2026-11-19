@@ -312,6 +312,18 @@ const sentenceRows = (h: H, context: ConditionContext): ReadonlyArray<Html> => {
 					),
 				]),
 			]
+		case "churned":
+			return [
+				rows(h, [
+					row(
+						h,
+						context,
+						"Window",
+						["Churned in the last", num(h, context, "windowDays", "Window in days"), "days"],
+						["windowDays"],
+					),
+				]),
+			]
 	}
 }
 

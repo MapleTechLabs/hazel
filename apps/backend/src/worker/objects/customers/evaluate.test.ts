@@ -431,4 +431,81 @@ describe("signal evaluation", () => {
 		)
 		expect(renamed).toMatchObject({ _tag: "Match", title: "Gone dark", severity: "high" })
 	})
+
+	it("only covers the customers Needs attention is set to: by stage and by source", () => {
+		const quiet: FactsInput = { activity: { ann: [-20] }, priorActive: [[30, 2]] }
+		const notCovered = { _tag: "NoMatch", reason: "Not covered by Needs attention" }
+		// Signed up through Clerk, never a Stripe customer: not someone to act on.
+		expect(run("inactive", { ...quiet, providers: ["clerk"] })).toEqual(notCovered)
+		expect(
+			run(
+				"inactive",
+				{ ...quiet, providers: ["clerk"] },
+				orgFacts({
+					attention: { stages: ["active"], requiredSources: [] },
+				}),
+			)._tag,
+		).toBe("Match")
+		expect(
+			run(
+				"inactive",
+				{ ...quiet, providers: ["clerk", "autumn"] },
+				orgFacts({
+					attention: { stages: ["active"], requiredSources: ["stripe", "autumn"] },
+				}),
+			)._tag,
+		).toBe("Match")
+		expect(
+			run(
+				"inactive",
+				{ ...quiet, account: { lifecycleStage: "lead" } },
+				orgFacts({
+					attention: { stages: ["active", "trialing"], requiredSources: ["stripe"] },
+				}),
+			),
+		).toEqual(notCovered)
+	})
+
+	it("churned: the customer's last entry, for the window after it churned", () => {
+		const churned = (days: number, input: FactsInput = {}): FactsInput => ({
+			account: {
+				lifecycleStage: "churned",
+				mrrMinor: 0,
+				churnedAt: new Date(NOW.getTime() - days * 86_400_000),
+			},
+			movements: [{ type: "churn", fromMrrMinor: 19_900, toMrrMinor: 0, day: addDays(TODAY, -days) }],
+			subscriptions: [
+				{
+					status: "canceled",
+					planName: "Team",
+					canceledAt: new Date(NOW.getTime() - days * 86_400_000),
+					cancellationReason: "too_expensive",
+				},
+			],
+			...input,
+		})
+		const found = match("churned", churned(3))
+		expect(found.reason).toBe(`Lost ${formatMoney(19_900, "usd")}/mo 3 days ago`)
+		expect(found.evidence).toMatchObject({
+			_tag: "delta",
+			unit: "minor",
+			from: 19_900,
+			to: 0,
+			fromLabel: "Team",
+			toLabel: "Churned",
+			reason: "too_expensive",
+		})
+		expect(run("churned", churned(20))).toEqual({ _tag: "NoMatch", reason: "Below threshold" })
+		expect(run("churned", {})).toEqual({ _tag: "NoMatch", reason: "Below threshold" })
+		// Still needs the source: a churned org that was never in Stripe is not covered.
+		expect(run("churned", churned(3, { providers: ["clerk"] }))).toEqual({
+			_tag: "NoMatch",
+			reason: "Not covered by Needs attention",
+		})
+		// …but not a stage: churn is covered even with no stage picked.
+		expect(
+			run("churned", churned(3), orgFacts({ attention: { stages: [], requiredSources: ["stripe"] } }))
+				._tag,
+		).toBe("Match")
+	})
 })

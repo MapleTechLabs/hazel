@@ -4,7 +4,12 @@
  * and usage data that stops counting once its source is gone.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import type { IngestOp, ProviderRef, UpsertSubscription } from "@hazel/domain/customers"
+import {
+	DEFAULT_ATTENTION_SETTINGS,
+	type IngestOp,
+	type ProviderRef,
+	type UpsertSubscription,
+} from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerSignalRuleId, OrganizationId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
@@ -39,8 +44,16 @@ const day = (offset: number) => addDays(dayOf(NOW), offset)
 /** A stored timestamp (`YYYY-MM-DD HH:MM:SS.sss`, UTC) as epoch milliseconds. */
 const epoch = (text: string) => new Date(`${text.replace(" ", "T")}Z`).getTime()
 
+/** Needs attention covers every customer, not only Stripe ones: the activity tests' orgs are Clerk only. */
+const coverAnyCustomer = (world: CustomersWorld) =>
+	world.rows(
+		`UPDATE customer_settings SET attention = '{"stages":["lead","trialing","active","past_due"],"requiredSources":[]}'`,
+	)
+
+/** A Clerk organization quiet for 21 days after two active users; Needs attention covers it. */
 const quietOrg = (world: CustomersWorld) =>
 	Effect.gen(function* () {
+		coverAnyCustomer(world)
 		yield* world.ingest("clerk", [
 			{
 				_tag: "account",
@@ -72,7 +85,7 @@ const quietOrg = (world: CustomersWorld) =>
 		return world.rows<{ id: CustomerAccountId }>(`SELECT id FROM customer_accounts`)[0]!.id
 	})
 
-/** A Clerk organization whose users were active on the given day offsets; its account id. */
+/** A Clerk organization whose users were active on the given day offsets (Needs attention covers it); its account id. */
 const activeOrg = (
 	world: CustomersWorld,
 	org: string,
@@ -80,6 +93,7 @@ const activeOrg = (
 	offsets: ReadonlyArray<number>,
 ) =>
 	Effect.gen(function* () {
+		coverAnyCustomer(world)
 		yield* world.ingest("clerk", [
 			{ _tag: "account", externalId: org, name: org, sameAs: [], onNoMatch: "create" },
 			...users.map((user): IngestOp => ({
@@ -1094,6 +1108,20 @@ describe("Customers compute and sync loop", () => {
 				yield* world.object.run(runDuePullsWith(services)(NOW)).pipe(Effect.orDie)
 				expect(connection()).toMatchObject({ status: "error", nextSyncAt: null })
 				expect(JSON.parse(connection().lastError!)).toMatchObject({ code: "auth" })
+			}),
+		))
+
+	it("leaves out a customer that was never in Stripe by default", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				world.rows(
+					`UPDATE customer_settings SET attention = ?`,
+					JSON.stringify(DEFAULT_ATTENTION_SETTINGS),
+				)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(quietSignals(world)).toEqual([])
 			}),
 		))
 

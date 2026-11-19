@@ -1,5 +1,5 @@
 {
-	"migration": "0019_customer_view_layouts",
+	"migration": "0020_customer_attention_settings",
 	"entities": [
 		{
 			"kind": "table",
@@ -2540,8 +2540,17 @@
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "reportingCurrency",
+			"name": "attention",
 			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "'{\"stages\":[\"lead\",\"trialing\",\"active\",\"past_due\"],\"requiredSources\":[\"stripe\"]}'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "reportingCurrency",
+			"position": 4,
 			"type": "text",
 			"notNull": true,
 			"default": "'usd'"
@@ -2550,7 +2559,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "addOnPlans",
-			"position": 4,
+			"position": 5,
 			"type": "text",
 			"notNull": true,
 			"default": "'[]'"
@@ -2559,7 +2568,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "overageInMrr",
-			"position": 5,
+			"position": 6,
 			"type": "integer",
 			"notNull": true,
 			"default": "false"
@@ -2568,15 +2577,6 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "lastComputedAt",
-			"position": 6,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_settings",
-			"name": "updatedBy",
 			"position": 7,
 			"type": "text",
 			"notNull": false,
@@ -2585,8 +2585,17 @@
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "createdAt",
+			"name": "updatedBy",
 			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "createdAt",
+			"position": 9,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2595,7 +2604,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "updatedAt",
-			"position": 9,
+			"position": 10,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

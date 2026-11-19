@@ -15,7 +15,8 @@
  * `went_quiet` (inactive), `usage_drop`, `payment_failed`, `cancel_scheduled` and `downgraded`
  * (cancel_scheduled), `trial_ending_low` (trial_ending_low_activation), `onboarding_stalled`,
  * `champion_left` (champion_inactive), `near_limit`, `seat_growth`; `healthy_*`, `trial_healthy`,
- * `churned` and `lead` fill out the book (and `health_drop` follows from the risky ones).
+ * `churned` (a recent few: churned) and `lead` fill out the book (and `health_drop` follows from the
+ * risky ones).
  */
 import type {
 	CustomerProvider,
@@ -516,6 +517,7 @@ const planAccounts = (
 	const emails = new Set<string>()
 	let contactSeq = 0
 	let subSeq = 0
+	let churnSeq = 0
 
 	return archetypes.map((archetype, index) => {
 		const { name, domain } = names[index]
@@ -605,7 +607,8 @@ const planAccounts = (
 					break
 				}
 				case "churned": {
-					const cancelAgo = rng.int(30, 300)
+					// Every fourth churned in the last days: a Churned entry in Needs attention.
+					const cancelAgo = churnSeq++ % 4 === 0 ? rng.int(2, 12) : rng.int(30, 300)
 					const startAgo = Math.min(364, cancelAgo + rng.int(45, 240))
 					createdAgo = startAgo + rng.int(0, 21)
 					sub({

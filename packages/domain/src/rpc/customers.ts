@@ -64,7 +64,7 @@ import {
 	SignalRule,
 	UnmatchedRecord,
 } from "../customers/models"
-import { RuleDraft } from "../customers/rules"
+import { AttentionSettings, RuleDraft } from "../customers/rules"
 import { ViewDraft, ViewLayoutDraft } from "../customers/views"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { RateLimitExceededError } from "../rate-limit-errors"
@@ -489,11 +489,12 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	/** Its open signals close (`auto_resolved`). */
 	write("customers.rule.delete", { ruleId: CustomerSignalRuleId }, Tx, CustomersNotFoundError),
 
-	/** Health weights, bands, steps; the reporting currency; add-on plans. Recomputes soon. */
+	/** Health weights, bands, steps; who Needs attention covers; the reporting currency; add-on plans. Recomputes soon. */
 	write(
 		"customers.settings.update",
 		{
 			health: Schema.optionalKey(HealthSettings),
+			attention: Schema.optionalKey(AttentionSettings),
 			/** An ISO 4217 code, e.g. `usd`. */
 			reportingCurrency: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[A-Za-z]{3}$/))),
 			/** The whole list of add-on plan names. */

@@ -4,16 +4,18 @@ import { Match, Option, Result } from "effect"
 import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { failureMessage } from "~/lib/error-messages"
-import { errorToastOf, successToast } from "../../../../data/actions"
+import { errorToastOf, reasonToast, successToast } from "../../../../data/actions"
 import type { ToastRequest } from "../../../../overlay/toasts"
 import { AppRoute, type RouteOf } from "../../../../route"
 import * as Modal from "../../../../ui/modal"
 import type { PageReturn, Shared } from "../../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../../out-message"
+import { isCustomersAdmin } from "../shared"
 import {
 	CreateSignalRule,
 	DeleteSignalRule,
 	FetchRuleDryRun,
+	SaveAttention,
 	ToggleSignalRule,
 	UpdateSignalRule,
 	WaitForRuleDryRunDelay,
@@ -104,6 +106,8 @@ export const init = (route: SignalsRoute, shared: Shared): Return =>
 			connectedProviders: null,
 			settings: null,
 			hasSettings: false,
+			attention: null,
+			isSavingAttention: false,
 			metrics: [],
 			editor: null,
 			lastVersion: 0,
@@ -232,6 +236,23 @@ const writeFailure = (title: string, reason: RuleWriteFailure) =>
 
 // LIST
 
+/** An admin's change to who Needs attention covers, saved at once. */
+const savedAttention = (
+	model: Model,
+	shared: Shared,
+	change: (attention: Customers.AttentionSettings) => Customers.AttentionSettings,
+): Return => {
+	const organizationId = shared.organization?.id
+	const { attention: row } = model
+	if (row === null || organizationId === undefined || model.isSavingAttention || !isCustomersAdmin(shared))
+		return { model }
+	const attention = change(row.attention)
+	return {
+		model: { ...model, attention: { ...row, attention }, isSavingAttention: true },
+		commands: [SaveAttention({ organizationId, settingsId: row.settingsId, attention })],
+	}
+}
+
 const withRuleEnabled = (model: Model, ruleId: CustomerSignalRuleId, enabled: boolean): Model => ({
 	...model,
 	rules: model.rules?.map((rule) => (rule.id === ruleId ? { ...rule, enabled } : rule)) ?? null,
@@ -309,6 +330,24 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				? settingsChanged(model, settings)
 				: hydrateEditor({ ...model, settings, hasSettings: true }, shared),
 		UpdatedMetrics: ({ metrics }) => ({ model: { ...model, metrics } }),
+		UpdatedAttention: ({ attention }) => ({ model: { ...model, attention } }),
+
+		ToggledAttentionStage: ({ stage }) =>
+			savedAttention(model, shared, (attention) => ({
+				...attention,
+				stages: toggled(attention.stages, stage),
+			})),
+		ToggledAttentionSource: ({ provider }) =>
+			savedAttention(model, shared, (attention) => ({
+				...attention,
+				requiredSources: toggled(attention.requiredSources, provider),
+			})),
+		SucceededSaveAttention: () => ({ model: { ...model, isSavingAttention: false } }),
+		// The collection rolls the row back, and the stream with it.
+		FailedSaveAttention: ({ reason }) => ({
+			model: { ...model, isSavingAttention: false },
+			outMessage: toast(reasonToast(reason)),
+		}),
 
 		ToggledRule: ({ ruleId, enabled }) => toggleRule(model, shared, ruleId, enabled),
 		SucceededToggleRule: () => ({ model }),

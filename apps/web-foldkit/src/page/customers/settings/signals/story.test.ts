@@ -1,5 +1,5 @@
-import type { RuleDryRunResult } from "@hazel/domain/customers"
-import { CustomerSignalRuleId, OrganizationId, OrganizationMemberId } from "@hazel/schema"
+import { DEFAULT_ATTENTION_SETTINGS, type RuleDryRunResult } from "@hazel/domain/customers"
+import { CustomerSettingsId, CustomerSignalRuleId, OrganizationId, OrganizationMemberId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
@@ -10,6 +10,7 @@ import { sharedDefaults } from "../../../test-shared"
 import {
 	CreateSignalRule,
 	FetchRuleDryRun,
+	SaveAttention,
 	ToggleSignalRule,
 	UpdateSignalRule,
 	WaitForRuleDryRunDelay,
@@ -495,6 +496,32 @@ describe("signals: the list", () => {
 		expect(picking.pickerModal.isOpen).toBe(true)
 		expect(pageUpdate(picking, Message.PressedSetUpTemplate()).outMessage).toEqual(
 			PageOutMessage.RequestedNavigation({ route: newRoute("health_drop"), replace: false }),
+		)
+	})
+
+	test("who needs attention: a pressed source saves at once; one save at a time", () => {
+		const settingsId = Schema.decodeSync(CustomerSettingsId)(uuid(5))
+		const listed = pageUpdate(
+			withRules(listRoute),
+			Message.UpdatedAttention({ attention: { settingsId, attention: DEFAULT_ATTENTION_SETTINGS } }),
+		).model
+		const anyone = { ...DEFAULT_ATTENTION_SETTINGS, requiredSources: [] }
+		// While one saves, another press waits.
+		const saving = pageUpdate(listed, Message.ToggledAttentionSource({ provider: "stripe" })).model
+		const second = pageUpdate(saving, Message.ToggledAttentionStage({ stage: "lead" }))
+		expect(second.model.attention?.attention).toEqual(anyone)
+		expect(second.commands ?? []).toEqual([])
+		story(
+			pageUpdate,
+			given(listed),
+			message(Message.ToggledAttentionSource({ provider: "stripe" })),
+			model((current) => {
+				expect(current.attention?.attention).toEqual(anyone)
+				expect(current.isSavingAttention).toBe(true)
+			}),
+			Command.expectExact(SaveAttention({ organizationId, settingsId, attention: anyone })),
+			Command.resolve(SaveAttention, Message.SucceededSaveAttention()),
+			model((current) => expect(current.isSavingAttention).toBe(false)),
 		)
 	})
 })

@@ -487,6 +487,7 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 					.map((definition) => definition.key),
 			),
 			currency,
+			attention: settings.attention,
 		},
 		settings,
 		health: settings.health,
@@ -643,6 +644,19 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.select()
 			.where(($) => [inList($.accountId, ids), $.closedAt.isNull()]),
 	)
+	const refs = yield* db.run(
+		SQLite.from(schema.customerExternalRefsTable)
+			.select("accountId", "provider")
+			.where(($) => [inList($.accountId, ids), $.entityType.eq("account")]),
+	)
+	// The sources holding a record of each account: its refs, and its subscriptions (Autumn's are
+	// keyed to the Clerk organization, with no ref of their own).
+	const providersBy = new Map<CustomerAccountId, Set<CustomerProvider>>()
+	for (const { accountId, provider } of [...refs, ...subscriptions]) {
+		const providers = providersBy.get(accountId) ?? new Set<CustomerProvider>()
+		providers.add(provider)
+		providersBy.set(accountId, providers)
+	}
 
 	const billingBy = billingByAccount(
 		base.autumnReady,
@@ -705,6 +719,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			facts: {
 				account,
 				stage: rollup.lifecycleStage,
+				providers: providersBy.get(stored.id) ?? new Set(),
 				contacts: accountContacts,
 				activity: byDay,
 				lastActiveDay,

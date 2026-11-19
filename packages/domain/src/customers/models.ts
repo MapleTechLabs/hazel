@@ -62,7 +62,7 @@ import {
 } from "./enums"
 import { SignalEvidence } from "./evidence"
 import { HealthSettings } from "./health"
-import { RuleConfig, RuleScope } from "./rules"
+import { AttentionSettings, RuleConfig, RuleScope } from "./rules"
 import { ListColumn, ViewColor, ViewFilters, ViewIcon, ViewLayoutKey, ViewSort } from "./views"
 
 const NullDate = S.NullOr(JsonDate)
@@ -287,6 +287,8 @@ class SettingsModel extends M.Class<SettingsModel>("CustomerSettings")({
 	id: M.Generated(CustomerSettingsId),
 	organizationId: OrganizationId,
 	health: HealthSettings,
+	/** Which customers Needs attention covers. */
+	attention: AttentionSettings,
 	reportingCurrency: S.String,
 	/** Plan names billed on top of a base plan, never shown as an account's plan while it has one. */
 	addOnPlans: S.Array(S.String),

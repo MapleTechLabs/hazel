@@ -457,6 +457,7 @@ const accountFacts = (account: schema.CustomerAccount, days: number, now: Date) 
 		return {
 			account,
 			stage: account.lifecycleStage,
+			providers: new Set(),
 			contacts: [],
 			activity: byDay,
 			lastActiveDay: null,
