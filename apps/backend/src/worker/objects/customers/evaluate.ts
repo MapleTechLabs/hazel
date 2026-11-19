@@ -26,6 +26,7 @@ import {
 	formatMoney,
 	mrrSeries,
 	type OrgFacts,
+	pays,
 	rollingActiveSeries,
 	seriesOf,
 } from "./facts"
@@ -565,13 +566,20 @@ const churned =
 			.filter((sub) => sub.canceledAt !== null)
 			.sort((a, b) => (b.canceledAt?.getTime() ?? 0) - (a.canceledAt?.getTime() ?? 0))
 		const last = canceled[0]
-		// Before this compute's movement is loaded: every subscription canceled that same day.
+		// Before this compute's movement is loaded: the MRR of every paid subscription canceled that
+		// same day, in the reporting currency (as the rollup counts it).
 		const lost =
 			churn?.fromMrrMinor ??
 			canceled
-				.filter((sub) => sub.canceledAt !== null && dayOf(sub.canceledAt) === dayOf(churnedAt))
+				.filter(
+					(sub) =>
+						pays(sub) &&
+						sub.currency === org.currency &&
+						sub.canceledAt !== null &&
+						dayOf(sub.canceledAt) === dayOf(churnedAt),
+				)
 				.reduce((sum, sub) => sum + sub.mrrMinor, 0)
-		const currency = churn?.currency ?? last?.currency ?? org.currency
+		const currency = churn?.currency ?? org.currency
 		return {
 			step: 0,
 			reason: `${lost > 0 ? `Lost ${formatMoney(lost, currency)}/mo ` : ""}${days === 0 ? "today" : `${plural(days, "day")} ago`}`,

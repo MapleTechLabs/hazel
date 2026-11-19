@@ -533,6 +533,25 @@ describe("signal evaluation", () => {
 				}),
 			).evidence,
 		).toMatchObject({ from: 15_000 })
+		// …only paid ones in the reporting currency: not a trial that never converted, not EUR.
+		expect(
+			match(
+				"churned",
+				churned(3, {
+					movements: [],
+					subscriptions: [
+						{ ...twoSubs(3), mrrMinor: 10_000 },
+						{
+							...twoSubs(3),
+							mrrMinor: 50_000,
+							trialEndsAt: new Date(NOW.getTime() + 86_400_000),
+							currentPeriodEnd: null,
+						},
+						{ ...twoSubs(3), mrrMinor: 5_000, currency: "eur" },
+					],
+				}),
+			).evidence,
+		).toMatchObject({ from: 10_000, currency: "usd" })
 		// The compute that sees the churn has not written its movement yet: the series still ends at 0.
 		const unseen = match(
 			"churned",

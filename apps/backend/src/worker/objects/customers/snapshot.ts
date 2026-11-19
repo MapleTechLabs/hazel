@@ -27,6 +27,7 @@ import {
 	type HealthPoint,
 	type MetricPoint,
 	type OrgFacts,
+	pays,
 } from "./facts"
 import { inList } from "./sql"
 import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
@@ -111,24 +112,6 @@ export interface Snapshot extends SnapshotBase {
 const sum = (values: ReadonlyArray<number>) => values.reduce((total, value) => total + value, 0)
 
 const startOf = (day: Day) => new Date(`${day}T00:00:00.000Z`)
-
-/**
- * Canceled before its trial ended and never billed past it: it never converted, so never paid. A
- * billing period ending after the trial (`currentPeriodEnd`) is one it was billed for, even when
- * the cancellation was asked for during the trial (Stripe's `cancel_at` a later date).
- */
-const unconverted = (sub: schema.CustomerSubscription) =>
-	sub.status === "canceled" &&
-	sub.trialEndsAt !== null &&
-	sub.canceledAt !== null &&
-	sub.canceledAt <= sub.trialEndsAt &&
-	(sub.currentPeriodEnd === null || sub.currentPeriodEnd <= sub.trialEndsAt)
-
-/**
- * A paid subscription: it has MRR, or bills on usage MRR cannot capture (`billsByUsage`); not a
- * trial canceled before converting (a card-backed one carries its plan's MRR).
- */
-const pays = (sub: schema.CustomerSubscription) => (sub.mrrMinor > 0 || sub.billsByUsage) && !unconverted(sub)
 
 /** The plan to show among `subs` (live): the billed one with the most MRR, else a trial, else any. */
 const topOf = (subs: ReadonlyArray<schema.CustomerSubscription>) =>

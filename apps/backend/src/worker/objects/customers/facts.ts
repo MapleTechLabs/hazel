@@ -187,3 +187,22 @@ export const formatMoney = (minor: number, currency: string) => {
 /** Billed now: active, or owing (past due, unpaid). */
 export const billed = (sub: schema.CustomerSubscription) =>
 	sub.status === "active" || sub.status === "past_due" || sub.status === "unpaid"
+
+/**
+ * Canceled before its trial ended and never billed past it: it never converted, so never paid. A
+ * billing period ending after the trial (`currentPeriodEnd`) is one it was billed for, even when
+ * the cancellation was asked for during the trial (Stripe's `cancel_at` a later date).
+ */
+const unconverted = (sub: schema.CustomerSubscription) =>
+	sub.status === "canceled" &&
+	sub.trialEndsAt !== null &&
+	sub.canceledAt !== null &&
+	sub.canceledAt <= sub.trialEndsAt &&
+	(sub.currentPeriodEnd === null || sub.currentPeriodEnd <= sub.trialEndsAt)
+
+/**
+ * A paid subscription: it has MRR, or bills on usage MRR cannot capture (`billsByUsage`); not a
+ * trial canceled before converting (a card-backed one carries its plan's MRR).
+ */
+export const pays = (sub: schema.CustomerSubscription) =>
+	(sub.mrrMinor > 0 || sub.billsByUsage) && !unconverted(sub)
