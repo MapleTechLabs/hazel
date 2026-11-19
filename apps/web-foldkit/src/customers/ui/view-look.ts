@@ -50,10 +50,7 @@ const ICONS = {
 	envelope: IconEnvelope,
 	user: IconUser,
 	users: IconUsers,
-} as const satisfies Record<
-	Customers.ViewIcon,
-	<M>(h: HtmlBuilder<M>, options?: IconOptions) => Html
->
+} as const satisfies Record<Customers.ViewIcon, <M>(h: HtmlBuilder<M>, options?: IconOptions) => Html>
 
 /** Important: sidebar rows and tabs tint every `data-slot="icon"` their own way. */
 const TEXT = {
@@ -154,7 +151,10 @@ export const viewGlyph = <M>(h: HtmlBuilder<M>, look: ViewLook, className?: stri
 				[
 					h.span([
 						h.Class(
-							twMerge("size-2 rounded-full", look.color === null ? "bg-muted-fg/60" : FILL[look.color]),
+							twMerge(
+								"size-2 rounded-full",
+								look.color === null ? "bg-muted-fg/60" : FILL[look.color],
+							),
 						),
 					]),
 				],

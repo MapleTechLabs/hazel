@@ -9,7 +9,10 @@ import { labShared } from "../../../../page/customers/lab-shared"
 import type { CreateSavedView, UpdateSavedView } from "../../../../page/customers/list/commands"
 import { Message as ListMessage } from "../../../../page/customers/list/message"
 import { Model as ListModel, type ViewRow } from "../../../../page/customers/list/model"
-import { subscriptions as listSubscriptions, tabDragSubscriptions } from "../../../../page/customers/list/subscription"
+import {
+	subscriptions as listSubscriptions,
+	tabDragSubscriptions,
+} from "../../../../page/customers/list/subscription"
 import { routeChanged } from "../../../../page/customers/list/update"
 import { view as listView } from "../../../../page/customers/list/view"
 import { AppRoute } from "../../../../route"
@@ -71,7 +74,10 @@ const withViews = (model: Model, views: ReadonlyArray<ViewRow>): Model => {
 	const list = stepList(model.list, ListMessage.UpdatedViews({ views })).model
 	const sidebar = Sidebar.update(
 		model.sidebar,
-		Sidebar.Message.UpdatedSavedViews({ organizationId: ORGANIZATION_ID, views: views.map(toSidebarRow) }),
+		Sidebar.Message.UpdatedSavedViews({
+			organizationId: ORGANIZATION_ID,
+			views: views.map(toSidebarRow),
+		}),
 		ME.id,
 	).model
 	return { ...model, list, sidebar }
@@ -167,7 +173,8 @@ const update = (model: Model, message: Message): Result =>
 			return { ...result, model: shareLayout(model, result.model) }
 		},
 		GotListMessage: ({ message: child }) => listStep(model, child),
-		ClickedSidebarView: ({ key }) => update(model, Message.GotListMessage({ message: ListMessage.ClickedViewTab({ key }) })),
+		ClickedSidebarView: ({ key }) =>
+			update(model, Message.GotListMessage({ message: ListMessage.ClickedViewTab({ key }) })),
 		Ignored: () => ({ model }),
 	})
 
@@ -238,10 +245,12 @@ const sidebarDrag = Subscription.lift(Sidebar.dragSubscriptions)<Model, Message>
 	toParentMessage: (message) => Message.GotSidebarMessage({ message }),
 })
 
-const listLive = Subscription.lift({ keys: listSubscriptions.keys, ...tabDragSubscriptions })<Model, Message>({
-	read: (model) => Option.some({ model: model.list, shared: labShared }),
-	toParentMessage: (message) => Message.GotListMessage({ message }),
-})
+const listLive = Subscription.lift({ keys: listSubscriptions.keys, ...tabDragSubscriptions })<Model, Message>(
+	{
+		read: (model) => Option.some({ model: model.list, shared: labShared }),
+		toParentMessage: (message) => Message.GotListMessage({ message }),
+	},
+)
 
 // VIEW
 
@@ -262,13 +271,19 @@ const currentState = () => new URLSearchParams(window.location.search).get("stat
 const view = (model: Model, h: HtmlBuilder<Message>): Html =>
 	labPage(
 		h,
-		{ title: "Customers saved views", switches: [{ name: "state", values: STATES, current: currentState() }] },
+		{
+			title: "Customers saved views",
+			switches: [{ name: "state", values: STATES, current: currentState() }],
+		},
 		[
 			h.div(
 				[h.Class("flex h-[calc(100dvh-57px)] border-border border-t")],
 				[
 					h.div(
-						[h.Attribute("data-lab-sidebar", ""), h.Class("flex w-64 shrink-0 border-border border-r bg-sidebar")],
+						[
+							h.Attribute("data-lab-sidebar", ""),
+							h.Class("flex w-64 shrink-0 border-border border-r bg-sidebar"),
+						],
 						[
 							Sidebar.view(
 								h,
@@ -295,7 +310,8 @@ const view = (model: Model, h: HtmlBuilder<Message>): Html =>
 								model: model.list,
 								view: listView,
 								viewInputs: { shared: labShared },
-								toParentMessage: (message: ListMessage) => Message.GotListMessage({ message }),
+								toParentMessage: (message: ListMessage) =>
+									Message.GotListMessage({ message }),
 							}),
 						],
 					),

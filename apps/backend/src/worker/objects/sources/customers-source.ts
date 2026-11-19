@@ -50,7 +50,10 @@ export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = 
 			SQLite.sql.cond`(${$.ownerUserId} IS NULL OR ${$.ownerUserId} = ${p.userId})`,
 		],
 	},
-	{ table: schema.customerViewLayoutsTable, visible: (p, $) => [isMember(p.userId), $.userId.eq(p.userId)] },
+	{
+		table: schema.customerViewLayoutsTable,
+		visible: (p, $) => [isMember(p.userId), $.userId.eq(p.userId)],
+	},
 	{ table: schema.customerSettingsTable, visible: (p) => [isMember(p.userId)] },
 	{ table: schema.customerMetricDefinitionsTable, visible: (p) => [isMember(p.userId)] },
 	{ table: schema.customerConnectionsTable, visible: (p) => [isMember(p.userId)] },

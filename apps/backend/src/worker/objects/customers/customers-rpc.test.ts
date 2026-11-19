@@ -156,7 +156,9 @@ describe("Customers RPCs", () => {
 				const layout = { order: ["all", "current", created.id], sidebarHidden: ["paying"] }
 				ok(yield* world.call("customers.view.layout", { layout }, world.member))
 				const replaced = { order: [created.id, "current"], sidebarHidden: [] }
-				const saved = ok(yield* world.call("customers.view.layout", { layout: replaced }, world.member))
+				const saved = ok(
+					yield* world.call("customers.view.layout", { layout: replaced }, world.member),
+				)
 				expect([saved.data.userId, saved.data.order, saved.data.sidebarHidden]).toEqual([
 					world.member,
 					replaced.order,
@@ -171,9 +173,9 @@ describe("Customers RPCs", () => {
 					{ userId: world.member, order: JSON.stringify(replaced.order) },
 					{ userId: world.owner, order: JSON.stringify(layout.order) },
 				])
-				expect(
-					tagOf(yield* world.call("customers.view.layout", { layout }, world.stranger)),
-				).toBe("UnauthorizedError")
+				expect(tagOf(yield* world.call("customers.view.layout", { layout }, world.stranger))).toBe(
+					"UnauthorizedError",
+				)
 			}),
 		))
 

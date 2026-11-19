@@ -18,7 +18,9 @@ export const ALL_KEY = "all"
 
 /** The layout in effect (just its keys): the saved one, else the default. */
 export const layoutOf = (saved: Customers.ViewLayoutDraft | null): Customers.ViewLayoutDraft =>
-	saved === null ? Customers.DEFAULT_VIEW_LAYOUT : { order: saved.order, sidebarHidden: saved.sidebarHidden }
+	saved === null
+		? Customers.DEFAULT_VIEW_LAYOUT
+		: { order: saved.order, sidebarHidden: saved.sidebarHidden }
 
 /**
  * `items` (in their default order) in the layout's order. One the order leaves out (a view made
@@ -42,11 +44,7 @@ export const arrange = <A>(
 }
 
 /** `key` moved to `toIndex` among the other keys (the drop index `DragAndDrop` answers). */
-export const moveKey = (
-	keys: ReadonlyArray<string>,
-	key: string,
-	toIndex: number,
-): ReadonlyArray<string> => {
+export const moveKey = (keys: ReadonlyArray<string>, key: string, toIndex: number): ReadonlyArray<string> => {
 	const others = keys.filter((entry) => entry !== key)
 	return [...others.slice(0, toIndex), key, ...others.slice(toIndex)]
 }

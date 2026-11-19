@@ -230,7 +230,8 @@ export const update = (model: Model, message: Message, userId: UserId | null): R
 					: model,
 		}),
 		UpdatedSavedViews: ({ organizationId, views }) => ({
-			model: organizationId === model.organizationId ? modifyFields(model, { views: () => views }) : model,
+			model:
+				organizationId === model.organizationId ? modifyFields(model, { views: () => views }) : model,
 		}),
 		UpdatedViewLayout: ({ organizationId, layout }) => ({
 			model:
@@ -251,7 +252,8 @@ export const update = (model: Model, message: Message, userId: UserId | null): R
 					Message.GotDragMessage({ message: child }),
 				),
 			),
-		PressedHideView: ({ key }) => withLayout(model, userId, withSidebar(layoutOf(model.layout), key, false)),
+		PressedHideView: ({ key }) =>
+			withLayout(model, userId, withSidebar(layoutOf(model.layout), key, false)),
 		CompletedSaveLayout: () => ({ model }),
 		FailedSaveLayout: ({ reason }) => ({
 			model,
@@ -345,58 +347,54 @@ const viewsSection = <ParentMessage>(
 	listView: string | undefined,
 	toParentMessage: (message: Message) => ParentMessage,
 ): Html => {
-	const dragged = views.find((view) => view.key === Option.getOrNull(DragAndDrop.maybeDraggedItemId(model.drag)))
-	return sidebarSection(
-		h,
-		{ label: "Views", listAttributes: [sortableList(h, VIEWS_LIST_ID)] },
-		[
-			...views.map((view, index) => {
-				const isCurrent = listView === view.key
-				const row = sortableRow(h, {
-					drag: model.drag,
-					containerId: VIEWS_LIST_ID,
-					itemId: view.key,
-					index,
-					count: views.length,
-					orientation: "Vertical",
-					toDragMessage: (message) => toParentMessage(Message.GotDragMessage({ message })),
-					onStep: (step) => toParentMessage(Message.SteppedView({ key: view.key, step })),
-				})
-				return sidebarItem(h, { isCurrent, attributes: [h.Key(view.key)] }, [
-					sidebarLink(
-						h,
-						{
-							href: hrefOf(
-								customersListRoute(orgSlug, view.key === CURRENT_KEY ? null : view.key),
-							),
-							isActive: isCurrent,
-							activeClassName: SECTION_ACTIVE,
-							className: row.className,
-							attributes: row.attributes,
-						},
-						[viewGlyph(h, view.look), sidebarLabel(h, [view.name])],
-					),
-					button(
-						h,
-						{
-							intent: "plain",
-							size: "xs",
-							onPress: toParentMessage(Message.PressedHideView({ key: view.key })),
-							attributes: [
-								h.Attribute("data-slot", "menu-trigger"),
-								h.AriaLabel(`Hide ${view.name} from the sidebar`),
-								h.Title("Hide from sidebar"),
-							],
-						},
-						[IconEyeSlash(h, { className: "size-4" })],
-					),
-				])
-			}),
-			dragged === undefined
-				? h.empty
-				: dragGhost(h, model.drag, [viewGlyph(h, dragged.look), h.span([], [dragged.name])]),
-		],
+	const dragged = views.find(
+		(view) => view.key === Option.getOrNull(DragAndDrop.maybeDraggedItemId(model.drag)),
 	)
+	return sidebarSection(h, { label: "Views", listAttributes: [sortableList(h, VIEWS_LIST_ID)] }, [
+		...views.map((view, index) => {
+			const isCurrent = listView === view.key
+			const row = sortableRow(h, {
+				drag: model.drag,
+				containerId: VIEWS_LIST_ID,
+				itemId: view.key,
+				index,
+				count: views.length,
+				orientation: "Vertical",
+				toDragMessage: (message) => toParentMessage(Message.GotDragMessage({ message })),
+				onStep: (step) => toParentMessage(Message.SteppedView({ key: view.key, step })),
+			})
+			return sidebarItem(h, { isCurrent, attributes: [h.Key(view.key)] }, [
+				sidebarLink(
+					h,
+					{
+						href: hrefOf(customersListRoute(orgSlug, view.key === CURRENT_KEY ? null : view.key)),
+						isActive: isCurrent,
+						activeClassName: SECTION_ACTIVE,
+						className: row.className,
+						attributes: row.attributes,
+					},
+					[viewGlyph(h, view.look), sidebarLabel(h, [view.name])],
+				),
+				button(
+					h,
+					{
+						intent: "plain",
+						size: "xs",
+						onPress: toParentMessage(Message.PressedHideView({ key: view.key })),
+						attributes: [
+							h.Attribute("data-slot", "menu-trigger"),
+							h.AriaLabel(`Hide ${view.name} from the sidebar`),
+							h.Title("Hide from sidebar"),
+						],
+					},
+					[IconEyeSlash(h, { className: "size-4" })],
+				),
+			])
+		}),
+		dragged === undefined
+			? h.empty
+			: dragGhost(h, model.drag, [viewGlyph(h, dragged.look), h.span([], [dragged.name])]),
+	])
 }
 
 export const view = <ParentMessage>(

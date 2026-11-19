@@ -93,7 +93,17 @@ export const ViewIcon = Schema.Literals([
 export type ViewIcon = typeof ViewIcon.Type
 
 /** What tints the icon or the dot; none is the muted foreground. */
-export const ViewColor = Schema.Literals(["gray", "red", "orange", "yellow", "green", "teal", "blue", "purple", "pink"])
+export const ViewColor = Schema.Literals([
+	"gray",
+	"red",
+	"orange",
+	"yellow",
+	"green",
+	"teal",
+	"blue",
+	"purple",
+	"pink",
+])
 export type ViewColor = typeof ViewColor.Type
 
 export const ViewDraft = Schema.Struct({

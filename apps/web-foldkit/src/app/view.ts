@@ -142,7 +142,8 @@ const secondarySidebar = (model: Model, h: HtmlBuilder<Message>, context: ShellC
 	const section = orgSectionOf(model.route)
 	if (section === "Settings") return settingsSidebar(h, context, chrome)
 	if (section === "MySettings") return mySettingsSidebar(h, context, chrome)
-	if (section === "Customers") return CustomersSidebar.view(h, shell.customersSidebar, context, chrome, toCustomersSidebarMessage)
+	if (section === "Customers")
+		return CustomersSidebar.view(h, shell.customersSidebar, context, chrome, toCustomersSidebarMessage)
 	if (section === "Notifications")
 		return notificationsSidebar(h, context, chrome, {
 			unreadCount: Notifications.unreadIdsOf(shell.notifications).length,

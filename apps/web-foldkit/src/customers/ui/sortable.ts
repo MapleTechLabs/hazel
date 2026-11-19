@@ -113,7 +113,11 @@ export const sortableRow = <M>(
 }
 
 /** The row under the pointer while dragging; nothing otherwise. */
-export const dragGhost = <M>(h: HtmlBuilder<M>, drag: DragAndDrop.Model, content: ReadonlyArray<Html>): Html =>
+export const dragGhost = <M>(
+	h: HtmlBuilder<M>,
+	drag: DragAndDrop.Model,
+	content: ReadonlyArray<Html>,
+): Html =>
 	Option.match(DragAndDrop.ghostStyle(drag), {
 		onNone: () => h.empty,
 		onSome: (style) =>
