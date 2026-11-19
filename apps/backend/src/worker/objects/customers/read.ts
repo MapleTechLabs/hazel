@@ -16,6 +16,7 @@ import type {
 	Mover,
 	MrrMovementBucket,
 	MrrMovementType,
+	NewTrial,
 	OverviewResult,
 } from "@hazel/domain/customers"
 import { HealthStatus } from "@hazel/domain/customers"
@@ -318,6 +319,29 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		.map((movement) => brief(movement, movement.toMrrMinor))
 		.filter((row) => row !== null)
 		.slice(0, 5)
+	// Trials started in the range, newest first, one per account.
+	const trials = yield* db.run(
+		SQLite.from(schema.customerSubscriptionsTable)
+			.select("accountId", "status", "listMrrMinor", "startedAt")
+			.where(($) => [$.trialEndsAt.isNotNull(), $.startedAt.gte(rangeStart), $.startedAt.lte(now)])
+			.orderBy(($) => [[$.startedAt, "desc"]]),
+	)
+	const trialed = new Set<CustomerAccountId>()
+	const newTrials: Array<NewTrial> = []
+	for (const trial of trials) {
+		const account = accountById.get(trial.accountId)
+		if (account === undefined || trial.startedAt === null || trialed.has(account.id)) continue
+		trialed.add(account.id)
+		newTrials.push({
+			accountId: account.id,
+			name: account.name,
+			logoUrl: account.logoUrl,
+			planName: account.planName,
+			mrrMinor: trial.listMrrMinor ?? 0,
+			at: trial.startedAt,
+			status: trial.status,
+		})
+	}
 
 	const anyActivity = yield* db.first(SQLite.from(schema.customerActivityDailyTable).select("day").limit(1))
 	const anyBilling = yield* db.first(SQLite.from(schema.customerSubscriptionsTable).select("id").limit(1))
@@ -343,6 +367,7 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		topMovers: { gainers, decliners },
 		recentChurn,
 		recentNew,
+		newTrials: newTrials.slice(0, 5),
 		hasData: { activity: Option.isSome(anyActivity), billing: Option.isSome(anyBilling) },
 	} satisfies OverviewResult
 })

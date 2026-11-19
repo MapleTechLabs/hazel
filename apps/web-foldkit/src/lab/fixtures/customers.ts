@@ -1435,6 +1435,10 @@ export const overviewFixture = (
 		},
 		recentChurn: [brief("oakridge", daysAgo(20))],
 		recentNew: [brief("tidewater", daysAgo(12)), brief("juniper", daysAgo(26))],
+		newTrials: [
+			{ ...brief("quarry", daysAgo(3)), status: "trialing" },
+			{ ...brief("tidewater", daysAgo(19)), status: "active" },
+		],
 		hasData: { activity: true, billing },
 	}
 }

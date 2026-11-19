@@ -1495,6 +1495,26 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("lists the trials started in the range, at list price, with their status now", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				const trial = (externalId: string, startedDaysAgo: number): UpsertSubscription => ({
+					...subscription(startedDaysAgo),
+					externalId,
+					status: "trialing",
+					mrrMinor: 0,
+					listMrrMinor: 3_900,
+					trialEndsAt: new Date(NOW.getTime() + 7 * DAY).toISOString(),
+				})
+				// Not a trial, and a trial started before the range: neither is listed.
+				yield* world.ingest("stripe", [subscription(3), trial("sub_old", 45), trial("sub_new", 5)])
+				const result = yield* world.object.run(overview("30d", NOW)).pipe(Effect.orDie)
+				expect(result.newTrials).toMatchObject([{ mrrMinor: 3_900, status: "trialing" }])
+			}),
+		))
+
 	it("keeps a Stripe payer on Stripe through an Autumn trial; its conversion is a switch, not revenue", () =>
 		run(
 			Effect.gen(function* () {

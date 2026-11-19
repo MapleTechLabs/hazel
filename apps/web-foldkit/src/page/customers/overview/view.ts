@@ -661,6 +661,10 @@ const listCard = (
 			: h.ul([h.Class("flex flex-col")], [...options.rows]),
 	])
 
+/** A trial's subscription that went on to bill (anything but still trialing, paused or canceled). */
+const isConverted = (status: Customers.SubscriptionStatus) =>
+	status === "active" || status === "past_due" || status === "unpaid"
+
 const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, context: Context): Html => {
 	if (!result.hasData.billing) {
 		const fresh = newAccounts(model, context.nowMs, 5)
@@ -723,8 +727,9 @@ const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, con
 		})
 	const newMrr = result.recentNew.reduce((sum, entry) => sum + entry.mrrMinor, 0)
 	const lostMrr = result.recentChurn.reduce((sum, entry) => sum + entry.mrrMinor, 0)
+	const converted = result.newTrials.filter((trial) => isConverted(trial.status)).length
 	return h.div(
-		[h.Class("grid gap-4 lg:grid-cols-2")],
+		[h.Class("grid gap-4 lg:grid-cols-3")],
 		[
 			listCard(h, {
 				title: "New customers",
@@ -734,6 +739,22 @@ const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, con
 					brief(entry, formatMoney(entry.mrrMinor, result.currency)),
 				),
 				empty: "No new paying customers in this period.",
+			}),
+			listCard(h, {
+				title: "New trials",
+				description: `${accountsLabel(result.newTrials.length)} · ${formatCount(converted)} converted`,
+				aside: link(h, hrefOf(customersListRoute(context.orgSlug, "trialing")), "View trials"),
+				rows: result.newTrials.map((trial) =>
+					brief(
+						trial,
+						trial.status === "trialing"
+							? formatMoney(trial.mrrMinor, result.currency)
+							: isConverted(trial.status)
+								? h.span([h.Class("text-success-subtle-fg")], ["Converted"])
+								: h.span([h.Class("text-muted-fg")], ["Ended"]),
+					),
+				),
+				empty: "No trials started in this period.",
 			}),
 			listCard(h, {
 				title: "Recent churn",
