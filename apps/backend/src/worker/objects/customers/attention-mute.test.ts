@@ -1,4 +1,5 @@
 import type { UpsertAccount } from "@hazel/domain/customers"
+import type { CustomerAccountId, UserId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { unmuteExpired } from "./compute"
@@ -17,11 +18,11 @@ const clerkOrg = (id: string, name: string): UpsertAccount => ({
 })
 
 interface MuteRow {
-	readonly id: string
+	readonly id: CustomerAccountId
 	readonly name: string
 	readonly attentionMutedAt: string | null
 	readonly attentionMutedUntil: string | null
-	readonly attentionMutedByUserId: string | null
+	readonly attentionMutedByUserId: UserId | null
 }
 
 const muteOf = (world: CustomersWorld, name: string) =>
