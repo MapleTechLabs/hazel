@@ -101,6 +101,9 @@ const account = (n: number, name: string): AccountRow => ({
 	churnedAtMs: null,
 	tags: ["pilot"],
 	featureFlags: {},
+	attentionMutedAtMs: null,
+	attentionMutedUntilMs: null,
+	attentionMutedByUserId: null,
 })
 const acme = account(1, "Acme")
 const beta = account(2, "Beta")
@@ -449,6 +452,32 @@ describe("customer page: notes", () => {
 		expect(deleted.model.notes?.map((row) => row.id)).not.toContain(target)
 		expect(deleted.model.editingNote).toBeNull()
 		expect(commandNames(deleted)).toEqual(["DeleteCustomerNote"])
+	})
+
+	test("Mute in Needs attention mutes until unmuted; Unmute brings the customer back", () => {
+		const wrap = (message: Menu.Message) => Message.GotActionsMenuMessage({ message })
+		const opened = run(loaded(), [
+			wrap(Menu.Message.PressedTrigger({ pointerType: "mouse" })),
+			wrap(Menu.Message.ClickedItem({ key: "mute_attention", entries: actionEntries(false) })),
+		])
+		const muting = update(
+			opened,
+			wrap(Menu.Message.ClickedItem({ key: "mute:forever", entries: actionEntries(false) })),
+			shared,
+		)
+		const accountOf = (current: Model) => current.accounts?.find((row) => row.id === current.accountId)
+		expect(accountOf(muting.model)).toMatchObject({
+			attentionMutedAtMs: NOW,
+			attentionMutedUntilMs: null,
+			attentionMutedByUserId: ada,
+		})
+		expect(commandNames(muting)).toEqual(["SetCustomerAttentionMute"])
+		const unmuting = pick(muting.model, wrap, "unmute_attention", actionEntries(true))
+		expect(accountOf(unmuting.model)).toMatchObject({
+			attentionMutedAtMs: null,
+			attentionMutedByUserId: null,
+		})
+		expect(commandNames(unmuting)).toEqual(["SetCustomerAttentionMute"])
 	})
 
 	test("a failed save or edit puts the text back", () => {

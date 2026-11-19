@@ -86,6 +86,9 @@ const account = (n: number, name: string, fields: Partial<AccountRow> = {}): Acc
 	churnedAtMs: null,
 	tags: [],
 	featureFlags: {},
+	attentionMutedAtMs: null,
+	attentionMutedUntilMs: null,
+	attentionMutedByUserId: null,
 	...fields,
 })
 

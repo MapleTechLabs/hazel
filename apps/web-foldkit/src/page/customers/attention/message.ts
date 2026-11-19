@@ -58,6 +58,9 @@ export const Message = defineMessageUnion({
 	SucceededSignalAction: { signalId: CustomerSignalId, action: SignalAction },
 	FailedSignalAction: { signalId: CustomerSignalId, action: SignalAction, reason: SignalActionFailure },
 
+	SucceededMuteAccount: {},
+	FailedMuteAccount: { reason: SignalActionFailure },
+
 	SucceededFetchDetail: { accountId: CustomerAccountId, detail: Customers.AccountDetail },
 	FailedFetchDetail: { accountId: CustomerAccountId, reason: CommonReason },
 

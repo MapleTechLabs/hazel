@@ -16,6 +16,7 @@ import {
 	createNoteAction,
 	deleteNoteAction,
 	setFeatureFlagsAction,
+	setAttentionMuteAction,
 	updateAccountAction,
 	updateNoteAction,
 } from "../../../customers/actions"
@@ -158,6 +159,30 @@ export const UpdateCustomerAccount = Command.define("UpdateCustomerAccount", {
 				CustomersNotFoundError: () =>
 					Effect.succeed(Message.FailedAccountUpdate({ reason: "NotFound" })),
 				// The owner left the organization since the menu showed them.
+				CustomersInvalidRequestError: () =>
+					Effect.succeed(Message.FailedAccountUpdate({ reason: "Stale" })),
+			}),
+			catchCommon((reason) => Message.FailedAccountUpdate({ reason })),
+		),
+})
+
+/** Mute the customer in Needs attention until `untilMs` (null: until unmuted), or unmute it (`mute` null). */
+export const SetCustomerAttentionMute = Command.define("SetCustomerAttentionMute", {
+	args: {
+		...target,
+		userId: UserId,
+		mute: Schema.NullOr(Schema.Struct({ untilMs: Schema.NullOr(Schema.Number) })),
+	},
+	messages: [Message.SucceededAccountUpdate, Message.FailedAccountUpdate],
+	execute: ({ mute, ...args }) =>
+		setAttentionMuteAction({
+			...args,
+			mute: mute === null ? null : { until: mute.untilMs === null ? null : new Date(mute.untilMs) },
+		}).pipe(
+			Effect.as(Message.SucceededAccountUpdate()),
+			Effect.catchTags({
+				CustomersNotFoundError: () =>
+					Effect.succeed(Message.FailedAccountUpdate({ reason: "NotFound" })),
 				CustomersInvalidRequestError: () =>
 					Effect.succeed(Message.FailedAccountUpdate({ reason: "Stale" })),
 			}),

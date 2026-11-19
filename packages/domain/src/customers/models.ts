@@ -113,6 +113,10 @@ class AccountModel extends M.Class<AccountModel>("CustomerAccount")({
 	attributes: Attributes,
 	/** The Clerk organization's boolean `public_metadata` keys. */
 	featureFlags: S.Record(S.String, S.Boolean),
+	/** Set while Needs attention leaves the account out; `attentionMutedUntil` null: until unmuted. */
+	attentionMutedAt: NullDate,
+	attentionMutedUntil: NullDate,
+	attentionMutedByUserId: S.NullOr(UserId),
 	fieldSources: FieldSources,
 	/**
 	 * The primary of the customer it is an environment of (`customers.account.link`); null on a

@@ -29,6 +29,7 @@ import {
 } from "~/db/collections"
 import { openCustomersSource } from "~/db/sync"
 import { liveQueryStream } from "../data/live-query"
+import { formatDate } from "./format"
 
 // ROWS
 
@@ -64,8 +65,27 @@ export const AccountRow = Schema.Struct({
 	tags: Schema.Array(Schema.String),
 	/** The Clerk organization's flags: on when `true`; a `false` key is off. */
 	featureFlags: Schema.Record(Schema.String, Schema.Boolean),
+	/** Set while Needs attention leaves it out (`isAttentionMuted`); `attentionMutedUntilMs` null: until unmuted. */
+	attentionMutedAtMs: Schema.NullOr(Schema.Number),
+	attentionMutedUntilMs: Schema.NullOr(Schema.Number),
+	attentionMutedByUserId: Schema.NullOr(UserId),
 })
 export type AccountRow = typeof AccountRow.Type
+
+/** Needs attention leaves the account out (the server unmutes it once a timed mute ends). */
+export const isAttentionMuted = (account: Pick<AccountRow, "attentionMutedAtMs">): boolean =>
+	account.attentionMutedAtMs !== null
+
+/** "Muted until Dec 3" / "Muted until unmuted", or null when not muted. */
+export const attentionMuteLabel = (
+	account: Pick<AccountRow, "attentionMutedAtMs" | "attentionMutedUntilMs">,
+	nowMs: number,
+): string | null =>
+	!isAttentionMuted(account)
+		? null
+		: account.attentionMutedUntilMs === null
+			? "Muted until unmuted"
+			: `Muted until ${formatDate(new Date(account.attentionMutedUntilMs), { now: new Date(nowMs) })}`
 
 /** A queue item as pages keep it. */
 export const SignalRow = Schema.Struct({
@@ -142,6 +162,9 @@ export const toAccountRow = (account: Customers.Account): AccountRow => ({
 	churnedAtMs: msOrNull(account.churnedAt),
 	tags: account.tags,
 	featureFlags: account.featureFlags,
+	attentionMutedAtMs: msOrNull(account.attentionMutedAt),
+	attentionMutedUntilMs: msOrNull(account.attentionMutedUntil),
+	attentionMutedByUserId: account.attentionMutedByUserId,
 })
 
 export const toSignalRow = (signal: Customers.Signal): SignalRow => ({
@@ -236,7 +259,7 @@ export const signalsStream = <Message>(
 		),
 	)
 
-/** The "Needs attention" badge: open signals on accounts `userId` owns. */
+/** The "Needs attention" badge: open signals on accounts `userId` owns, but not muted ones. */
 export const myOpenSignalCountStream = <Message>(
 	organizationId: OrganizationId,
 	userId: UserId,
@@ -257,6 +280,7 @@ export const myOpenSignalCountStream = <Message>(
 							eq(signal.status, "open"),
 							eq(account.ownerUserId, userId),
 							isNull(account.deletedAt),
+							isNull(account.attentionMutedAt),
 						),
 					)
 					.select(({ signal }) => ({ id: signal.id })),

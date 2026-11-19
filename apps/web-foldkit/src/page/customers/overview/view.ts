@@ -47,7 +47,7 @@ import {
 	previousPeriodOf,
 	QUIET_AFTER_DAYS,
 	quietAccounts,
-	topOpenSignals,
+	openSignals,
 } from "./model"
 import { heading } from "../../../ui/heading"
 
@@ -390,8 +390,8 @@ const attentionCard = (
 	context: Context,
 	userId: string | null,
 ): Html => {
-	const open = (model.signals ?? []).filter((signal) => signal.status === "open")
-	const top = topOpenSignals(model, 5)
+	const open = openSignals(model)
+	const top = open.slice(0, 5)
 	const risks = open.filter((signal) => signal.kind === "risk").length
 	// "Mine" as the queue and the sidebar badge count it: signals on accounts I own.
 	const mine = open.filter(

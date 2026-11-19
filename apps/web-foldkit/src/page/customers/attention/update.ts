@@ -8,7 +8,7 @@ import { errorToastOf, successToast } from "../../../data/actions"
 import { customerRoute } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
-import { PICK_DATE_KEY } from "../../../customers/ui/menus"
+import { isMuteKey, MUTE_LABEL, type MuteKey, muteUntil, PICK_DATE_KEY } from "../../../customers/ui/menus"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
 import {
@@ -17,6 +17,7 @@ import {
 	FetchAccountDetail,
 	FocusAttentionSearch,
 	MarkSignalDone,
+	MuteAccountAttention,
 	ReopenSignal,
 	SnoozeSignal,
 } from "./commands"
@@ -156,6 +157,29 @@ const patchSignal = (
 			signals?.map((signal) => (signal.id === signalId ? patch(signal) : signal)) ?? null,
 	})
 
+/** `patched` replaces `model`; when `signal`'s row leaves the tab, the selection moves to its neighbour. */
+const actOn = (
+	model: Model,
+	patched: Model,
+	shared: Shared,
+	signal: SignalRow,
+	command: Commands[number],
+): Return => {
+	const viewer = viewerOf(shared)
+	const before = rowIds(model, viewer)
+	const after = rowIds(patched, viewer)
+	const index = before.indexOf(signal.id)
+	const shown = new Set(after)
+	// The row now at its place, less the rows above it that left too (a mute removes several).
+	const neighbourOf = () => {
+		const removedAbove = before.slice(0, Math.max(index, 0)).filter((id) => !shown.has(id)).length
+		return after[Math.min(index - removedAbove, after.length - 1)] ?? null
+	}
+	const neighbour = shown.has(signal.id) ? signal.id : neighbourOf()
+	const next = model.selectedId === signal.id ? select(patched, shared, neighbour) : { model: patched }
+	return { ...next, commands: [...(next.commands ?? []), command] }
+}
+
 /**
  * Applies an action to the row at once (the collection confirms or rolls it back) and, when the row
  * leaves the tab, selects its neighbour so the keyboard keeps going.
@@ -166,17 +190,7 @@ const act = (
 	signal: SignalRow,
 	patch: (signal: SignalRow) => SignalRow,
 	command: Commands[number],
-): Return => {
-	const viewer = viewerOf(shared)
-	const before = rowIds(model, viewer)
-	const patched = patchSignal(model, signal.id, patch)
-	const after = rowIds(patched, viewer)
-	const index = before.indexOf(signal.id)
-	const stays = after.includes(signal.id)
-	const neighbour = stays ? signal.id : (after[Math.min(index, after.length - 1)] ?? null)
-	const next = model.selectedId === signal.id ? select(patched, shared, neighbour) : { model: patched }
-	return { ...next, commands: [...(next.commands ?? []), command] }
-}
+): Return => actOn(model, patchSignal(model, signal.id, patch), shared, signal, command)
 
 const actorOf = (shared: Shared) => {
 	const organizationId = shared.organization?.id
@@ -219,6 +233,42 @@ const snooze = (model: Model, shared: Shared, signal: SignalRow, untilMs: number
 		}),
 		SnoozeSignal({ ...actor, signalId: signal.id, untilMs }),
 	)
+}
+
+/** Mutes the signal's customer: all its rows leave the queue. */
+const muteAccount = (model: Model, shared: Shared, signal: SignalRow, key: MuteKey): Return => {
+	const actor = actorOf(shared)
+	if (actor === undefined) return { model }
+	const untilMs = muteUntil(key, new Date(shared.nowMs))?.getTime() ?? null
+	const patched = modifyFields(model, {
+		accounts: (accounts) =>
+			accounts?.map((account) =>
+				account.id === signal.accountId
+					? {
+							...account,
+							attentionMutedAtMs: shared.nowMs,
+							attentionMutedUntilMs: untilMs,
+							attentionMutedByUserId: actor.userId,
+						}
+					: account,
+			) ?? null,
+	})
+	const name = model.accounts?.find((account) => account.id === signal.accountId)?.name ?? "Customer"
+	return {
+		...actOn(
+			model,
+			patched,
+			shared,
+			signal,
+			MuteAccountAttention({ ...actor, accountId: signal.accountId, untilMs }),
+		),
+		outMessage: toast(
+			successToast(
+				`Muted ${name} ${MUTE_LABEL[key].toLowerCase()}`,
+				"Unmute it from the customer's page.",
+			),
+		),
+	}
 }
 
 const reopen = (model: Model, shared: Shared, signal: SignalRow): Return => {
@@ -520,6 +570,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				const signal = selectedSignal(next)
 				if (signal === undefined) return { model: next }
 				if (key === PICK_DATE_KEY) return openSnoozeDate(next, shared, signal)
+				if (isMuteKey(key)) return muteAccount(next, shared, signal, key)
 				return isSnoozeOption(key)
 					? snooze(next, shared, signal, snoozeUntilMs(key, shared.nowMs, signal))
 					: { model: next }
@@ -567,6 +618,18 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 		SubmittedSnoozeDate: () => submitSnoozeDate(model, shared),
 
+		SucceededMuteAccount: () => ({ model }),
+		FailedMuteAccount: ({ reason }) => ({
+			model,
+			outMessage: toast(
+				errorToastOf(
+					failureMessage(reason, {
+						NotFound: { title: "Couldn't mute the customer", description: "It was removed." },
+						Stale: { title: "Couldn't mute the customer" },
+					}),
+				),
+			),
+		}),
 		SucceededSignalAction: () => ({ model }),
 		FailedSignalAction: ({ action, reason }) => ({
 			model,

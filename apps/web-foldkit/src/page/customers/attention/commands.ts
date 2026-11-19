@@ -13,6 +13,7 @@ import {
 	assignSignalAction,
 	markSignalDoneAction,
 	reopenSignalAction,
+	setAttentionMuteAction,
 	snoozeSignalAction,
 } from "../../../customers/actions"
 import { catchCommon } from "../../../data/actions"
@@ -65,6 +66,31 @@ export const SnoozeSignal = Command.define("SnoozeSignal", {
 	messages: signalMessages,
 	execute: ({ untilMs, ...args }) =>
 		snoozeSignalAction({ ...args, until: new Date(untilMs) }).pipe(settle(args.signalId, "snooze")),
+})
+
+/** Mute the signal's customer in Needs attention until `untilMs` (null: until unmuted). */
+export const MuteAccountAttention = Command.define("MuteAccountAttention", {
+	args: {
+		organizationId: OrganizationId,
+		accountId: CustomerAccountId,
+		userId: UserId,
+		untilMs: Schema.NullOr(Schema.Number),
+	},
+	messages: [Message.SucceededMuteAccount, Message.FailedMuteAccount],
+	execute: ({ untilMs, ...args }) =>
+		setAttentionMuteAction({
+			...args,
+			mute: { until: untilMs === null ? null : new Date(untilMs) },
+		}).pipe(
+			Effect.as(Message.SucceededMuteAccount()),
+			Effect.catchTags({
+				CustomersNotFoundError: () =>
+					Effect.succeed(Message.FailedMuteAccount({ reason: "NotFound" })),
+				CustomersInvalidRequestError: () =>
+					Effect.succeed(Message.FailedMuteAccount({ reason: "Stale" })),
+			}),
+			catchCommon((reason) => Message.FailedMuteAccount({ reason })),
+		),
 })
 
 export const MarkSignalDone = Command.define("MarkSignalDone", {

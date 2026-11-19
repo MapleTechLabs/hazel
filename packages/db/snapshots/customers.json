@@ -1,5 +1,5 @@
 {
-	"migration": "0017_customer_environments",
+	"migration": "0018_customer_environments",
 	"entities": [
 		{
 			"kind": "table",
@@ -517,16 +517,16 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "fieldSources",
+			"name": "attentionMutedAt",
 			"position": 36,
 			"type": "text",
-			"notNull": true,
-			"default": "'{}'"
+			"notNull": false,
+			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "primaryAccountId",
+			"name": "attentionMutedUntil",
 			"position": 37,
 			"type": "text",
 			"notNull": false,
@@ -535,7 +535,7 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "environment",
+			"name": "attentionMutedByUserId",
 			"position": 38,
 			"type": "text",
 			"notNull": false,
@@ -544,8 +544,35 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "createdAt",
+			"name": "fieldSources",
 			"position": 39,
+			"type": "text",
+			"notNull": true,
+			"default": "'{}'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "primaryAccountId",
+			"position": 40,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "environment",
+			"position": 41,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "createdAt",
+			"position": 42,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -554,7 +581,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "updatedAt",
-			"position": 40,
+			"position": 43,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -563,7 +590,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "deletedAt",
-			"position": 41,
+			"position": 44,
 			"type": "text",
 			"notNull": false,
 			"default": null

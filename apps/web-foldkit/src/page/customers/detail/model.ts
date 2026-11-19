@@ -5,7 +5,7 @@ import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
 import { AccountRow, MemberRow, msOf, SignalRow } from "../../../customers/queries"
-import { SNOOZE_KEYS } from "../../../customers/ui/menus"
+import { muteLeaves, SNOOZE_KEYS } from "../../../customers/ui/menus"
 import { CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
@@ -307,6 +307,8 @@ export const ownerEntries = (members: ReadonlyArray<MemberRow>): ReadonlyArray<M
 export const ActionKey = Schema.Literals([
 	"copy_link",
 	"change_owner",
+	"mute_attention",
+	"unmute_attention",
 	"recompute",
 	"link_source",
 	"merge",
@@ -315,10 +317,16 @@ export const ActionKey = Schema.Literals([
 ])
 export type ActionKey = typeof ActionKey.Type
 
-/** What the RPCs support runs; the rest shows, disabled, with why. */
-export const actionEntries: ReadonlyArray<Menu.Entry> = [
+/**
+ * What the RPCs support runs; the rest shows, disabled, with why. A muted customer offers Unmute
+ * (described with until when); else Mute ▸ For a week · For a month · Until unmuted.
+ */
+export const actionEntries = (isMuted: boolean): ReadonlyArray<Menu.Entry> => [
 	Menu.item("copy_link"),
 	Menu.item("change_owner"),
+	isMuted
+		? Menu.item("unmute_attention", { hasDescription: true })
+		: Menu.item("mute_attention", { submenu: muteLeaves }),
 	Menu.item("recompute", { isDisabled: true, hasDescription: true }),
 	Menu.separator,
 	Menu.item("link_source", { isDisabled: true, hasDescription: true }),
