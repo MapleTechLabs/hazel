@@ -502,6 +502,37 @@ describe("signal evaluation", () => {
 			_tag: "NoMatch",
 			reason: "Not covered by Needs attention",
 		})
+		// A scheduled cancellation: requested 29 days ago, ended (the movement) 2 days ago.
+		expect(
+			match(
+				"churned",
+				churned(29, {
+					movements: [
+						{ type: "churn", fromMrrMinor: 19_900, toMrrMinor: 0, day: addDays(TODAY, -2) },
+					],
+				}),
+			).reason,
+		).toBe(`Lost ${formatMoney(19_900, "usd")}/mo 2 days ago`)
+		// A past episode's movement is not this churn's; before the movement loads, every
+		// subscription canceled that day counts.
+		const twoSubs = (days: number) => ({
+			status: "canceled" as const,
+			canceledAt: new Date(NOW.getTime() - days * 86_400_000),
+		})
+		expect(
+			match(
+				"churned",
+				churned(3, {
+					movements: [
+						{ type: "churn", fromMrrMinor: 99_000, toMrrMinor: 0, day: addDays(TODAY, -200) },
+					],
+					subscriptions: [
+						{ ...twoSubs(3), mrrMinor: 10_000 },
+						{ ...twoSubs(3), mrrMinor: 5_000 },
+					],
+				}),
+			).evidence,
+		).toMatchObject({ from: 15_000 })
 		// …but not a stage: churn is covered even with no stage picked.
 		expect(
 			run("churned", churned(3), orgFacts({ attention: { stages: [], requiredSources: ["stripe"] } }))

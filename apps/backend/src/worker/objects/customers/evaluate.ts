@@ -29,7 +29,7 @@ import {
 	rollingActiveSeries,
 	seriesOf,
 } from "./facts"
-import { addDays, DAY_MS, daysBetween, daysSince } from "./time"
+import { addDays, DAY_MS, dayOf, daysBetween, daysSince } from "./time"
 
 /** The parts of a rule evaluation reads. */
 export interface RuleInput {
@@ -553,14 +553,25 @@ const churned =
 	(facts, org) => {
 		const churnedAt = facts.account.churnedAt
 		if (facts.stage !== "churned" || churnedAt === null) return "Below threshold"
-		const days = daysSince(churnedAt, org.now)
+		// This episode's churn movement, dated the day compute saw the MRR end (a scheduled
+		// cancellation's `canceledAt`, and so `churnedAt`, is the day it was requested). An older one
+		// is a past episode's: an account churning off a zero-MRR usage plan writes none.
+		const churn = [...facts.movements]
+			.reverse()
+			.find((movement) => movement.type === "churn" && movement.day >= dayOf(churnedAt))
+		const days = daysBetween(churn?.day ?? dayOf(churnedAt), org.today)
 		if (days >= config.windowDays) return "Below threshold"
-		const churn = [...facts.movements].reverse().find((movement) => movement.type === "churn")
 		const canceled = [...facts.subscriptions]
 			.filter((sub) => sub.canceledAt !== null)
-			.sort((a, b) => (b.canceledAt?.getTime() ?? 0) - (a.canceledAt?.getTime() ?? 0))[0]
-		const lost = churn?.fromMrrMinor ?? canceled?.mrrMinor ?? 0
-		const currency = churn?.currency ?? canceled?.currency ?? org.currency
+			.sort((a, b) => (b.canceledAt?.getTime() ?? 0) - (a.canceledAt?.getTime() ?? 0))
+		const last = canceled[0]
+		// Before this compute's movement is loaded: every subscription canceled that same day.
+		const lost =
+			churn?.fromMrrMinor ??
+			canceled
+				.filter((sub) => sub.canceledAt !== null && dayOf(sub.canceledAt) === dayOf(churnedAt))
+				.reduce((sum, sub) => sum + sub.mrrMinor, 0)
+		const currency = churn?.currency ?? last?.currency ?? org.currency
 		return {
 			step: 0,
 			reason: `${lost > 0 ? `Lost ${formatMoney(lost, currency)}/mo ` : ""}${days === 0 ? "today" : `${plural(days, "day")} ago`}`,
@@ -573,9 +584,9 @@ const churned =
 				changePct: lost === 0 ? null : -100,
 				currency,
 				effectiveAt: iso(churnedAt),
-				fromLabel: canceled?.planName ?? null,
+				fromLabel: last?.planName ?? null,
 				toLabel: "Churned",
-				reason: canceled?.cancellationReason ?? null,
+				reason: last?.cancellationReason ?? null,
 				series: mrrSeries(facts.movements, facts.account.mrrMinor, org.today, 30),
 			},
 		}
