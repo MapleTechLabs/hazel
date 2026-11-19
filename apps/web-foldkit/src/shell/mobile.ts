@@ -21,7 +21,7 @@ import { button } from "../ui/button"
 import * as Modal from "../ui/modal"
 import * as Sheet from "../ui/sheet"
 import type { ShellContext } from "./context"
-import { heading } from "../ui/heading"
+import { mobileTopBar as topBar } from "../ui/mobile-top-bar"
 
 /** The phone shell (`useSidebar().isMobile`): tab bar, top bars, the sidebar sheet and its buttons. */
 
@@ -172,26 +172,18 @@ export const mobileChromeOf = (route: AppRoute): MobileChrome => {
 	return { hasTabBar: true, topBar: { _tag: "Section", title: SECTION_TITLES[section] } }
 }
 
-const TOP_BAR = "flex h-12 shrink-0 items-center gap-1 border-border border-b bg-bg px-2"
-
-/** The top bar a page without its own header gets on a phone. */
+/** The top bar a page without its own header gets on a phone (the kit's, as every tab's screen has). */
 export const mobileTopBar = <Message>(
 	h: HtmlBuilder<Message>,
 	bar: MobileTopBar,
 	onMenu: Attribute<Message>,
 ): Html =>
-	h.header(
-		[h.Class(TOP_BAR)],
-		bar._tag === "Back"
-			? [
-					mobileBackLink(h, bar.href, "Chats"),
-					h.h1(
-						[h.Class("min-w-0 flex-1 truncate pr-11 text-center font-semibold text-base")],
-						[bar.title],
-					),
-				]
-			: [
-					button(
+	topBar(h, {
+		title: bar.title,
+		leading:
+			bar._tag === "Back"
+				? mobileBackLink(h, bar.href, "Chats")
+				: button(
 						h,
 						{
 							intent: "plain",
@@ -201,11 +193,7 @@ export const mobileTopBar = <Message>(
 						},
 						[IconMenu(h, { className: "size-5" })],
 					),
-					heading(h, { variant: "section", level: 1, className: "min-w-0 flex-1 truncate" }, [
-						bar.title,
-					]),
-				],
-	)
+	})
 
 /**
  * While a back chevron is on screen, the swipe from the screen's left edge goes where it leads, as
