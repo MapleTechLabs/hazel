@@ -607,7 +607,8 @@ const churned =
 				to: 0,
 				changePct: lost === 0 ? null : -100,
 				currency,
-				effectiveAt: iso(churnedAt),
+				// When it ended (a scheduled cancellation's period end), not when it was asked for.
+				effectiveAt: iso(ended),
 				fromLabel: last?.planName ?? null,
 				toLabel: "Churned",
 				reason: last?.cancellationReason ?? null,
