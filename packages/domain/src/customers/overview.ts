@@ -679,6 +679,8 @@ export const MetricPreviewResult = Schema.Struct({
 	totalAccounts: Schema.Int,
 	/** Rows Maple answered that name no known customer. */
 	unmatchedRows: Schema.Int,
+	/** Some day's answer had more rows than one page: counts and top customers may leave some out. */
+	partial: Schema.Boolean,
 	/** The highest values over the days, summed by the metric's aggregation. */
 	top: Schema.Array(
 		Schema.Struct({ accountId: CustomerAccountId, name: Schema.String, value: Schema.Number }),
