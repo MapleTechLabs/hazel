@@ -109,6 +109,7 @@ Charts fill their container's width (no measuring); set the height with `heightC
 ## Menus — `ui/menus.ts` (for the app's `ui/menu` Submodel)
 
 - Snooze: `snoozeMenuEntries`, `snoozeMenuContent(h, menuId, now)`, `snoozeUntil(key, now)`, `SNOOZE_KEYS`, `PICK_DATE_KEY`.
+- Mute (a customer out of Needs attention): `muteLeaves` (a submenu), `MUTE_LABEL`, `isMuteKey`, `muteUntil(key, now)`.
 - Row actions: `rowActionsEntries({ championEmail })`, `rowActionsContent(h, menuId, now)` (Snooze is a submenu: leaf keys `snooze:<key>`),
   `snoozeKeyOfLeaf(key)`, `snoozeInstantOf(key, now)`.
 

@@ -8,7 +8,7 @@ import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { featureFlagKeysOf, featureFlagToast } from "../../../customers/feature-flags"
-import { isSnoozeKey, snoozeUntil } from "../../../customers/ui/menus"
+import { isMuteKey, MUTE_LABEL, muteUntil, isSnoozeKey, snoozeUntil } from "../../../customers/ui/menus"
 import { errorToastOf, successToast } from "../../../data/actions"
 import { AppRoute, type CustomerTab, customerRoute, hrefOf, type RouteOf } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -36,6 +36,7 @@ import {
 	SetRecordEnvironment,
 	StartCustomerImpersonation,
 	UnlinkCustomerChannel,
+	SetCustomerAttentionMute,
 	UpdateCustomerAccount,
 	UpdateCustomerNote,
 } from "./commands"
@@ -342,8 +343,47 @@ const setTags = (model: Model, shared: Shared, tags: ReadonlyArray<string>): Ret
 	}
 }
 
+/** Mute the customer in Needs attention until `untilMs` (null: until unmuted), or unmute it (`mute` null). */
+const setAttentionMute = (
+	model: Model,
+	shared: Shared,
+	mute: { readonly untilMs: number | null; readonly label: string } | null,
+): Return => {
+	const args = target(model, shared)
+	const userId = shared.currentUser?.id
+	if (args === null || userId === undefined) return { model }
+	return {
+		model: patchAccount(model, (account) => ({
+			...account,
+			attentionMutedAtMs: mute === null ? null : shared.nowMs,
+			attentionMutedUntilMs: mute?.untilMs ?? null,
+			attentionMutedByUserId: mute === null ? null : userId,
+		})),
+		commands: [
+			SetCustomerAttentionMute({
+				...args,
+				userId,
+				mute: mute === null ? null : { untilMs: mute.untilMs },
+			}),
+		],
+		outMessage: toast(
+			successToast(
+				mute === null
+					? "Back in Needs attention"
+					: `Muted in Needs attention ${mute.label.toLowerCase()}`,
+			),
+		),
+	}
+}
+
 const onAction = (model: Model, shared: Shared, key: string): Return => {
+	if (isMuteKey(key)) {
+		const until = muteUntil(key, new Date(shared.nowMs))
+		return setAttentionMute(model, shared, { untilMs: until?.getTime() ?? null, label: MUTE_LABEL[key] })
+	}
 	switch (ActionKey.literals.find((literal) => literal === key)) {
+		case "unmute_attention":
+			return setAttentionMute(model, shared, null)
 		case "copy_link":
 			return {
 				model,

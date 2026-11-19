@@ -687,14 +687,35 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.account.update": ({ accountId, ownerUserId, tags, lifecycleStageOverride, name }) =>
+			"customers.account.update": ({
+				accountId,
+				ownerUserId,
+				tags,
+				lifecycleStageOverride,
+				name,
+				attentionMute,
+			}) =>
 				Effect.gen(function* () {
-					// Owner and tags are queue work; the name and the stage change what everyone sees.
+					// Owner, tags and the mute are queue work; the name and the stage change what everyone sees.
 					const actor = yield* name !== undefined || lifecycleStageOverride !== undefined
 						? requireAdmin
 						: requireMember
 					yield* requirePerson(ownerUserId)
 					const now = yield* currentTime
+					// The mute's columns: absent leaves them, null unmutes.
+					const mute =
+						attentionMute === undefined
+							? undefined
+							: attentionMute === null
+								? { at: null, until: null, by: null }
+								: {
+										at: now,
+										until:
+											attentionMute.until === null
+												? null
+												: instant(attentionMute.until),
+										by: actor.userId,
+									}
 					return yield* txOnly(
 						Effect.gen(function* () {
 							const account = yield* requireAccount(accountId)
@@ -712,10 +733,36 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 											name === undefined
 												? undefined
 												: { ...account.fieldSources, name: "hazel" as const },
+										attentionMutedAt: mute?.at,
+										attentionMutedUntil: mute?.until,
+										attentionMutedByUserId: mute?.by,
 										updatedAt: now,
 									})
 									.where(($) => [$.id.eq(accountId)]),
 							)
+							// Unmuting an account that is not muted (a stale tab) changes nothing to log.
+							if (
+								mute !== undefined &&
+								(mute.at !== null || account.attentionMutedAt !== null)
+							) {
+								yield* mute.at === null
+									? hazelEvent(
+											accountId,
+											actor.userId,
+											"account.attention_unmuted",
+											"Needs attention unmuted",
+											{},
+											now,
+										)
+									: hazelEvent(
+											accountId,
+											actor.userId,
+											"account.attention_muted",
+											"Needs attention muted",
+											{ until: mute.until?.toISOString() ?? null },
+											now,
+										)
+							}
 							if (ownerUserId !== undefined && ownerUserId !== account.ownerUserId) {
 								yield* hazelEvent(
 									accountId,

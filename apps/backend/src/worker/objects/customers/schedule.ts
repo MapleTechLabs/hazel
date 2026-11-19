@@ -13,6 +13,7 @@
  *   last, so a run that fails, or that the runtime kills, cannot keep the alarm firing, and ingest
  *   does not bring a failing compute closer;
  * - the earliest `snoozedUntil` (wake);
+ * - the earliest `attentionMutedUntil` (unmute);
  * - each active connection's `nextSyncAt` (scheduled pulls).
  */
 import { Database, SQLite, schema } from "@hazel/db"
@@ -174,6 +175,13 @@ export const customersDeadlines = Effect.gen(function* () {
 			.orderBy(($) => [[$.snoozedUntil, "asc"]])
 			.limit(1),
 	)
+	const muted = yield* db.first(
+		SQLite.from(schema.customerAccountsTable)
+			.select("attentionMutedUntil")
+			.where(($) => [$.attentionMutedUntil.isNotNull()])
+			.orderBy(($) => [[$.attentionMutedUntil, "asc"]])
+			.limit(1),
+	)
 	const pull = yield* db.first(
 		SQLite.from(schema.customerConnectionsTable)
 			.select("nextSyncAt")
@@ -185,6 +193,9 @@ export const customersDeadlines = Effect.gen(function* () {
 		Option.getOrUndefined(compute),
 		Option.getOrUndefined(
 			Option.flatMap(snoozed, (row) => Option.fromNullishOr(row.snoozedUntil?.getTime())),
+		),
+		Option.getOrUndefined(
+			Option.flatMap(muted, (row) => Option.fromNullishOr(row.attentionMutedUntil?.getTime())),
 		),
 		Option.getOrUndefined(Option.flatMap(pull, (row) => Option.fromNullishOr(row.nextSyncAt?.getTime()))),
 	]

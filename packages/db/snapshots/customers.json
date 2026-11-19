@@ -1,5 +1,5 @@
 {
-	"migration": "0016_customer_ref_environment",
+	"migration": "0017_customer_attention_mute",
 	"entities": [
 		{
 			"kind": "table",
@@ -526,8 +526,35 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "fieldSources",
+			"name": "attentionMutedAt",
 			"position": 37,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "attentionMutedUntil",
+			"position": 38,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "attentionMutedByUserId",
+			"position": 39,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "fieldSources",
+			"position": 40,
 			"type": "text",
 			"notNull": true,
 			"default": "'{}'"
@@ -536,7 +563,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "createdAt",
-			"position": 38,
+			"position": 41,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -545,7 +572,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "updatedAt",
-			"position": 39,
+			"position": 42,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -554,7 +581,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "deletedAt",
-			"position": 40,
+			"position": 43,
 			"type": "text",
 			"notNull": false,
 			"default": null

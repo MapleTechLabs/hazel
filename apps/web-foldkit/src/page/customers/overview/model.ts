@@ -2,7 +2,7 @@ import * as Customers from "@hazel/domain/customers"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
-import { AccountRow, SettingsSummary, SignalRow } from "../../../customers/queries"
+import { AccountRow, isAttentionMuted, SettingsSummary, SignalRow } from "../../../customers/queries"
 
 /** The Customers overview (`docs/customers/spec.md` §1): KPIs, charts and lists over a range. */
 
@@ -51,9 +51,13 @@ export const previousPeriodOf = (
 	return { startMs: nowMs - 2 * days, endMs: nowMs - days }
 }
 
-/** The queue preview: open signals, highest priority first. */
-export const topOpenSignals = (model: Model, count: number): ReadonlyArray<typeof SignalRow.Type> =>
-	(model.signals ?? []).filter((signal) => signal.status === "open").slice(0, count)
+/** Open signals as the queue shows them (not on muted customers), highest priority first. */
+export const openSignals = (model: Model): ReadonlyArray<typeof SignalRow.Type> => {
+	const muted = new Set(
+		(model.accounts ?? []).filter((account) => isAttentionMuted(account)).map((account) => account.id),
+	)
+	return (model.signals ?? []).filter((signal) => signal.status === "open" && !muted.has(signal.accountId))
+}
 
 /** Accounts first seen in the range (partial state: no billing to say who started paying). */
 export const newAccounts = (

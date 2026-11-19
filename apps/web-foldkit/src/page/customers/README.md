@@ -91,6 +91,7 @@ back on failure. Call them from a Command, then `Effect.catchTags` for the RPC's
 | `deleteNoteAction`         | `noteId`                                                                 |
 | `updateAccountAction`      | `accountId`, `ownerUserId?`, `tags?`, `lifecycleStageOverride?`, `name?` |
 | `bulkUpdateAccountsAction` | `accountIds`, `ownerUserId?`, `addTags?`, `removeTags?`                  |
+| `setAttentionMuteAction`   | `accountId`, `userId`, `mute: { until: Date \| null } \| null`           |
 | `grantImpersonatorAction`  | `userId`, `grantedBy`                                                    |
 | `revokeImpersonatorAction` | `impersonatorId`, `userId`                                               |
 

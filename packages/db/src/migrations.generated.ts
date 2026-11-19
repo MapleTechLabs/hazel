@@ -546,5 +546,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0016_customer_ref_environment",
 			statements: ['ALTER TABLE "customer_external_refs" ADD COLUMN "environment" text'],
 		},
+		{
+			id: "0017_customer_attention_mute",
+			statements: [
+				'ALTER TABLE "customer_accounts" ADD COLUMN "attentionMutedAt" text',
+				'ALTER TABLE "customer_accounts" ADD COLUMN "attentionMutedUntil" text',
+				'ALTER TABLE "customer_accounts" ADD COLUMN "attentionMutedByUserId" text',
+			],
+		},
 	],
 }

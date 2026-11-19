@@ -152,6 +152,14 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		 * holding several organizations shows the last one synced; Hazel writes to all of them.
 		 */
 		featureFlags: SQLite.column(jsonb<Readonly<Record<string, boolean>>>(), { default: {} }),
+		/**
+		 * Set while Needs attention leaves the account out (a dev environment, an internal org); its
+		 * signals are still evaluated. `attentionMutedUntil` null: until someone unmutes it; else the
+		 * object's alarm unmutes it then (`unmuteExpired`).
+		 */
+		attentionMutedAt: SQLite.nullable(timestamptz),
+		attentionMutedUntil: SQLite.nullable(timestamptz),
+		attentionMutedByUserId: SQLite.nullable(uuid(UserId)),
 		/** Field → the source that last set it (per-field precedence, `CustomerIngest`). */
 		fieldSources: SQLite.column(jsonb<Readonly<Record<string, CustomerSource>>>(), { default: {} }),
 		createdAt: createdAt(),

@@ -1278,6 +1278,30 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	yield* scheduleComputeAt(now.getTime() + (again ? COMPUTE_DEBOUNCE_MS : COMPUTE_INTERVAL_MS))
 })
 
+/** Needs attention mutes whose time ended: the accounts' signals show in the queue again. */
+export const unmuteExpired = Effect.fn("Customers.unmuteExpired")(function* (now: Date) {
+	const db = yield* Database.Database
+	const due = yield* db.run(
+		SQLite.from(schema.customerAccountsTable)
+			.select("id")
+			.where(($) => [$.attentionMutedUntil.lte(now)]),
+	)
+	for (const account of due) {
+		yield* db.run(
+			SQLite.update(schema.customerAccountsTable)
+				.set({
+					attentionMutedAt: null,
+					attentionMutedUntil: null,
+					attentionMutedByUserId: null,
+					updatedAt: now,
+				})
+				.where(($) => [$.id.eq(account.id)]),
+		)
+		yield* hazelEvent(account.id, "account.attention_unmuted", "Needs attention mute ended", now, {})
+	}
+	return due.length
+})
+
 /** Snoozes that ended open again (between computes). */
 export const wakeSnoozed = Effect.fn("Customers.wakeSnoozed")(function* (now: Date) {
 	const db = yield* Database.Database
