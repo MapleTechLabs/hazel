@@ -590,7 +590,13 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 			],
 		)
 	return card(h, "", [
-		cardHeader(h, "Top movers", "Average daily active users, this period vs the previous one"),
+		cardHeader(
+			h,
+			"Top movers",
+			result.range === "12m"
+				? "Average daily active users, last 90 days vs the 90 before"
+				: "Average daily active users, this period vs the previous one",
+		),
 		h.div(
 			[h.Class("grid gap-6 lg:grid-cols-2")],
 			[
