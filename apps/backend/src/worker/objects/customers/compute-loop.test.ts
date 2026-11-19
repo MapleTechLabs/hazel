@@ -27,7 +27,7 @@ import {
 	takeComputeLease,
 } from "./schedule"
 import { loadBase } from "./snapshot"
-import { type CustomersWorld, makeCustomersWorld, NOW, ok } from "./test-kit"
+import { type CustomersWorld, makeCustomersWorld, NOW, ok, uuid } from "./test-kit"
 import { addDays, dayOf } from "./time"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
@@ -783,8 +783,29 @@ describe("Customers compute and sync loop", () => {
 					{ accountId: eu, primaryAccountId: us },
 					world.owner,
 				)
+				// A removed person active after the group went quiet is not in the window before it.
+				const [{ id: di }] = world.rows<{ id: string }>(
+					`SELECT id FROM customer_contacts WHERE email = 'di@acme.com'`,
+				)
+				world.rows(
+					`UPDATE customer_contacts SET deletedAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
+					di,
+				)
+				const ed = uuid()
+				world.rows(
+					`INSERT INTO customer_contacts (id, accountId, email, deletedAt) VALUES (?, ?, 'ed@acme.com', '2026-01-01 00:00:00.000')`,
+					ed,
+					eu,
+				)
+				world.rows(
+					`INSERT INTO customer_activity_daily (contactId, day, accountId, eventCount, sessionCount, signedIn)
+					VALUES (?, ?, ?, 5, 0, 0)`,
+					ed,
+					day(-200),
+					eu,
+				)
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
-				// Ada, Bo, Cy and Di: four people, Ada in both environments counted once.
+				// Ada, Bo, Cy and Di (removed since): four people, Ada in both environments counted once.
 				expect(
 					world.rows(
 						`SELECT json_extract(evidence, '$.priorActiveUsers') AS prior FROM customer_signals

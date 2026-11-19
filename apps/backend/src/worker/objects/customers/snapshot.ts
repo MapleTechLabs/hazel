@@ -746,7 +746,8 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	// people (as `groupFacts` counts them: a live contact's email, else the contact) from the store.
 	const olderGroupPrior = new Map<CustomerAccountId, Map<number, number>>()
 	for (const days of priorWindows) {
-		const older: Record<string, { after: Day; accounts: ReadonlyArray<CustomerAccountId> }> = {}
+		const older: Record<string, { after: Day; last: Day; accounts: ReadonlyArray<CustomerAccountId> }> =
+			{}
 		for (const [primaryId, environments] of environmentsBy) {
 			if (primaryId === null) continue
 			const accounts = [primaryId, ...environments.map((environment) => environment.stored.id)]
@@ -757,7 +758,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 					null,
 				)
 			if (last !== null && addDays(last, -(days - 1)) < from)
-				older[primaryId] = { after: addDays(last, -days), accounts }
+				older[primaryId] = { after: addDays(last, -days), last, accounts }
 		}
 		if (Object.keys(older).length === 0) continue
 		const rows = (yield* db.query(
@@ -767,7 +768,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 				FROM json_each(${JSON.stringify(older)}) g
 				JOIN json_each(json_extract(g.value, '$.accounts')) m
 				JOIN "customer_activity_daily" a ON a."accountId" = m.value
-					AND a."day" > json_extract(g.value, '$.after')
+					AND a."day" > json_extract(g.value, '$.after') AND a."day" <= json_extract(g.value, '$.last')
 				LEFT JOIN "customer_contacts" c ON c."id" = a."contactId"
 				WHERE (a."eventCount" > 0 OR a."sessionCount" > 0 OR a."signedIn" = 1)
 				GROUP BY g.key`,
