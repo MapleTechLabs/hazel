@@ -18,13 +18,13 @@ A metric is a daily value per account in `customer_metric_daily`, with a definit
 `customer_metric_definitions` (synced). Over a window its days combine by `aggregation`: `sum`,
 `max`, or `last`.
 
-| Kind | `source` | `provider` | Written by |
-|---|---|---|---|
-| Built-in (`active_users`, `active_users_30d`, `mrr`, `health_score`) | null | null | derived at read time (`facts.ts`) |
-| A source's own (Autumn features, Maple event mappings in the connection config) | null | the provider | that provider's pull |
-| **Maple query** | `maple_query` | `maple` | the Maple pull's `queries` phase |
-| **Product event** | `product_event` | `maple` | the Maple pull's `metrics` phase (joined to the config's mappings) |
-| **Formula** | `formula` | null | nothing: evaluated at read time over its operands |
+| Kind                                                                            | `source`        | `provider`   | Written by                                                         |
+| ------------------------------------------------------------------------------- | --------------- | ------------ | ------------------------------------------------------------------ |
+| Built-in (`active_users`, `active_users_30d`, `mrr`, `health_score`)            | null            | null         | derived at read time (`facts.ts`)                                  |
+| A source's own (Autumn features, Maple event mappings in the connection config) | null            | the provider | that provider's pull                                               |
+| **Maple query**                                                                 | `maple_query`   | `maple`      | the Maple pull's `queries` phase                                   |
+| **Product event**                                                               | `product_event` | `maple`      | the Maple pull's `metrics` phase (joined to the config's mappings) |
+| **Formula**                                                                     | `formula`       | null         | nothing: evaluated at read time over its operands                  |
 
 - User-defined keys are created with the metric (`UserMetricKey`), never change, and are written
   to `customer_metric_daily` under that key. Maple-sourced user keys need no `maple.` prefix of
@@ -43,20 +43,21 @@ A metric is a daily value per account in `customer_metric_daily`, with a definit
   (`MapleQueryBuilder` → `mapleBuilderSql`) writes the same SQL; the builder is kept so the editor
   reopens it. Example, logs ingested per customer:
 
-  ```sql
-  SELECT Attributes['org_id'] AS account, sum(Value) AS value
-  FROM metrics_sum
-  WHERE $__orgFilter
-    AND $__timeFilter(TimeUnix)
-    AND Attributes['org_id'] != ''
-    AND MetricName = 'maple_ingest_org_bytes_total'
-    AND Attributes['signal'] = 'logs'
-  GROUP BY account
-  ```
+    ```sql
+    SELECT Attributes['org_id'] AS account, sum(Value) AS value
+    FROM metrics_sum
+    WHERE $__orgFilter
+      AND $__timeFilter(TimeUnix)
+      AND Attributes['org_id'] != ''
+      AND MetricName = 'maple_ingest_org_bytes_total'
+      AND Attributes['signal'] = 'logs'
+    GROUP BY account
+    ```
 
-  `lastRunAt`/`lastError` on the definition record the last page run for it (error text is Hazel's
-  own, never Maple's internals). A created or changed query is backfilled over the connection's
-  `lookbackDays` by a Maple sync run started on save.
+    `lastRunAt`/`lastError` on the definition record the last page run for it (error text is Hazel's
+    own, never Maple's internals). A created or changed query is backfilled over the connection's
+    `lookbackDays` by a Maple sync run started on save.
+
 - **Product event.** Counts of the listed Maple product events per account and day. The Maple pull's
   metric map is the connection config's `metricMappings` plus every `product_event` definition.
 - **Formula.** `{key}` operands, numbers, `+ - * /`, parentheses (`parseFormula`). Over a window
