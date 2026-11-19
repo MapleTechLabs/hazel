@@ -1356,11 +1356,18 @@ const brief = (key: NamedAccount, at: Date) => {
 	}
 }
 
-const mover = (key: NamedAccount, changePct: number, values: ReadonlyArray<number>) => ({
+const mover = (
+	key: NamedAccount,
+	previousAvg: number,
+	currentAvg: number,
+	values: ReadonlyArray<number>,
+) => ({
 	accountId: ACCOUNTS_BY_KEY[key].id,
 	name: ACCOUNTS_BY_KEY[key].name,
 	logoUrl: null,
-	changePct,
+	previousAvg,
+	currentAvg,
+	changePct: Math.round(((currentAvg - previousAvg) / previousAvg) * 1000) / 10,
 	series: series(values),
 })
 
@@ -1423,14 +1430,14 @@ export const overviewFixture = (
 		healthDistribution: HEALTH_DISTRIBUTION,
 		topMovers: {
 			gainers: [
-				mover("quarry", 150, [8, 9, 9, 11, 12, 14, 15, 17, 18, 20]),
-				mover("northwind", 12.4, [36, 37, 37, 38, 39, 40, 40, 41, 42, 42]),
-				mover("halcyon", 4.2, [158, 160, 161, 160, 163, 164, 165, 166, 167, 168]),
+				mover("quarry", 5.6, 14, [8, 9, 9, 11, 12, 14, 15, 17, 18, 20]),
+				mover("northwind", 35.2, 39.6, [36, 37, 37, 38, 39, 40, 40, 41, 42, 42]),
+				mover("halcyon", 157.8, 164.4, [158, 160, 161, 160, 163, 164, 165, 166, 167, 168]),
 			],
 			decliners: [
-				mover("kestrel", -64, [12, 12, 11, 9, 7, 6, 5, 4, 3, 2]),
-				mover("fernway", -55, [5, 5, 4, 4, 3, 3, 2, 2, 2, 2]),
-				mover("consolidated", -42.5, [12, 13, 12, 11, 10, 9, 9, 8, 7, 7]),
+				mover("kestrel", 19.4, 7, [12, 12, 11, 9, 7, 6, 5, 4, 3, 2]),
+				mover("fernway", 7.6, 3.4, [5, 5, 4, 4, 3, 3, 2, 2, 2, 2]),
+				mover("consolidated", 16.8, 9.7, [12, 13, 12, 11, 10, 9, 9, 8, 7, 7]),
 			],
 		},
 		recentChurn: [brief("oakridge", daysAgo(20))],

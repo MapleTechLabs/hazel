@@ -15,6 +15,7 @@ import {
 	formatDate,
 	formatDeltaCount,
 	formatDeltaPct,
+	formatMetricValue,
 	formatMoney,
 	formatPct,
 	formatRelative,
@@ -549,11 +550,11 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 												h.span(
 													[
 														h.Class(
-															"w-20 shrink-0 text-right text-muted-fg text-xs tabular-nums max-sm:hidden",
+															"w-24 shrink-0 text-right text-muted-fg text-xs tabular-nums max-sm:hidden",
 														),
 													],
 													[
-														`${formatCount(values[0] ?? 0)} → ${formatCount(values[values.length - 1] ?? 0)}`,
+														`${formatMetricValue(mover.previousAvg, null)} → ${formatMetricValue(mover.currentAvg, null)}`,
 													],
 												),
 												deltaPill(
@@ -590,7 +591,13 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 			],
 		)
 	return card(h, "", [
-		cardHeader(h, "Top movers", "Active users, this period vs the previous one"),
+		cardHeader(
+			h,
+			"Top movers",
+			result.range === "12m"
+				? "Average daily active users, last 90 days vs the 90 before"
+				: "Average daily active users, this period vs the previous one",
+		),
 		h.div(
 			[h.Class("grid gap-6 lg:grid-cols-2")],
 			[

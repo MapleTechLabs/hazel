@@ -28,6 +28,46 @@ import { addDays, dayOf, dayRange } from "./time"
 
 const ACTIVE = Database.sql`("eventCount" > 0 OR "sessionCount" > 0 OR "signedIn" = 1)`
 
+/** A mover needs a baseline: this many average daily active users in the previous window. Below
+ * it a percentage is noise (1 user-day to 9 reads +800%). */
+export const MOVER_MIN_BASELINE = 1
+
+type RankedMover = Pick<Mover, "accountId" | "previousAvg" | "currentAvg" | "changePct">
+
+/** The five biggest gains and drops in average daily active users, from each account's active
+ * user-days per window of `days`; accounts under the baseline are left out. */
+export const rankMovers = (
+	rows: ReadonlyArray<{ accountId: CustomerAccountId; current: number; previous: number }>,
+	days: number,
+): { gainers: Array<RankedMover>; decliners: Array<RankedMover> } => {
+	const round1 = (value: number) => Math.round(value * 10) / 10
+	const changes = rows.flatMap((row) => {
+		// The percentage comes from the averages the row shows, so a pair that rounds flat drops out.
+		const previous = round1(Number(row.previous) / days)
+		const current = round1(Number(row.current) / days)
+		return previous < MOVER_MIN_BASELINE || current === previous
+			? []
+			: [
+					{
+						accountId: row.accountId,
+						previousAvg: previous,
+						currentAvg: current,
+						changePct: round1(((current - previous) / previous) * 100),
+					},
+				]
+	})
+	return {
+		gainers: changes
+			.filter((row) => row.changePct > 0)
+			.sort((a, b) => b.changePct - a.changePct)
+			.slice(0, 5),
+		decliners: changes
+			.filter((row) => row.changePct < 0)
+			.sort((a, b) => a.changePct - b.changePct)
+			.slice(0, 5),
+	}
+}
+
 export const RANGE_DAYS = { "7d": 7, "30d": 30, "90d": 90, "12m": 365 } satisfies Record<
 	CustomersRange,
 	number
@@ -248,52 +288,36 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 	const sums = (yield* db.query(
 		Database.sql`SELECT "accountId", sum("day" >= ${moverStart}) AS "current", sum("day" < ${moverStart}) AS "previous"
 			FROM "customer_activity_daily" WHERE "day" >= ${moverPrevious} AND ${ACTIVE}
-			GROUP BY "accountId" HAVING "previous" > 0`,
+			GROUP BY "accountId" HAVING "previous" >= ${moverDays * MOVER_MIN_BASELINE}`,
 	)) as ReadonlyArray<{ accountId: CustomerAccountId; current: number; previous: number }>
-	const changes = sums.flatMap((row) => {
-		const account = accountById.get(row.accountId)
-		const previous = Number(row.previous)
-		return account === undefined
-			? []
-			: [{ account, changePct: Math.round(((Number(row.current) - previous) / previous) * 1000) / 10 }]
-	})
-	const shown = [
-		...changes
-			.filter((row) => row.changePct > 0)
-			.sort((a, b) => b.changePct - a.changePct)
-			.slice(0, 5),
-		...changes
-			.filter((row) => row.changePct < 0)
-			.sort((a, b) => a.changePct - b.changePct)
-			.slice(0, 5),
-	]
+	const ranked = rankMovers(
+		sums.filter((row) => accountById.has(row.accountId)),
+		moverDays,
+	)
+	const shown = [...ranked.gainers, ...ranked.decliners]
 	const shownDaily =
 		shown.length === 0
 			? []
 			: ((yield* db.query(
 					Database.sql`SELECT "accountId", "day", count(*) AS "users" FROM "customer_activity_daily"
-						WHERE "accountId" IN (SELECT value FROM json_each(${JSON.stringify(shown.map((row) => row.account.id))}))
+						WHERE "accountId" IN (SELECT value FROM json_each(${JSON.stringify(shown.map((row) => row.accountId))}))
 						AND "day" >= ${moverStart} AND ${ACTIVE} GROUP BY "accountId", "day"`,
 				)) as ReadonlyArray<{ accountId: CustomerAccountId; day: Day; users: number }>)
 	const usersOn = new Map(shownDaily.map((row) => [`${row.accountId}:${row.day}`, Number(row.users)]))
-	const movers: Array<Mover> = shown.map(({ account, changePct }) => ({
-		accountId: account.id,
-		name: account.name,
-		logoUrl: account.logoUrl,
-		changePct,
-		series: dayRange(today, moverDays).map((day) => ({
-			day,
-			value: usersOn.get(`${account.id}:${day}`) ?? 0,
-		})),
-	}))
-	const gainers = movers
-		.filter((mover) => mover.changePct > 0)
-		.sort((a, b) => b.changePct - a.changePct)
-		.slice(0, 5)
-	const decliners = movers
-		.filter((mover) => mover.changePct < 0)
-		.sort((a, b) => a.changePct - b.changePct)
-		.slice(0, 5)
+	const moverOf = (row: RankedMover): Mover => {
+		const account = accountById.get(row.accountId)
+		return {
+			...row,
+			name: account?.name ?? "",
+			logoUrl: account?.logoUrl ?? null,
+			series: dayRange(today, moverDays).map((day) => ({
+				day,
+				value: usersOn.get(`${row.accountId}:${day}`) ?? 0,
+			})),
+		}
+	}
+	const gainers = ranked.gainers.map(moverOf)
+	const decliners = ranked.decliners.map(moverOf)
 
 	const brief = (movement: schema.CustomerMrrMovement, mrrMinor: number): AccountBrief | null => {
 		const account = accountById.get(movement.accountId)

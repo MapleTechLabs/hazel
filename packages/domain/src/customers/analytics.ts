@@ -111,11 +111,14 @@ export const NewTrial = Schema.Struct({
 })
 export type NewTrial = typeof NewTrial.Type
 
-/** An account whose usage (active users) moved most over the range. */
+/** An account whose usage (average daily active users) moved most over the range. */
 export const Mover = Schema.Struct({
 	accountId: CustomerAccountId,
 	name: Schema.String,
 	logoUrl: Schema.NullOr(Schema.String),
+	/** Average daily active users in the previous window, and in the range. */
+	previousAvg: Schema.Number,
+	currentAvg: Schema.Number,
 	changePct: Schema.Number,
 	series: Schema.Array(SeriesPoint),
 })
