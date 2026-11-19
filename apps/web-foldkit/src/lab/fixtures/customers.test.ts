@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { ACCOUNTS, HEALTH_TOTALS, OPEN_SIGNALS, SIGNALS, overviewFixture } from "./customers"
+import { ACCOUNTS, ACCOUNTS_BY_KEY, HEALTH_TOTALS, OPEN_SIGNALS, SIGNALS, overviewFixture } from "./customers"
 
 describe("customers fixtures", () => {
 	it("add up to the designs' book: 214 accounts, $48,210 MRR", () => {
@@ -27,6 +27,20 @@ describe("customers fixtures", () => {
 		expect(OPEN_SIGNALS.map((signal) => signal.priorityScore)).toEqual(
 			[...OPEN_SIGNALS.map((signal) => signal.priorityScore)].sort((a, b) => b - a),
 		)
+	})
+
+	it("group Acme and Halcyon into environments that hold no signals", () => {
+		const { acme, acmeEu, halcyon, halcyonEu, halcyonStaging } = ACCOUNTS_BY_KEY
+		expect([acme.primaryAccountId, acmeEu.primaryAccountId]).toEqual([null, acme.id])
+		expect([halcyonEu.primaryAccountId, halcyonStaging.primaryAccountId]).toEqual([
+			halcyon.id,
+			halcyon.id,
+		])
+		const environmentIds = new Set(
+			ACCOUNTS.filter((account) => account.primaryAccountId !== null).map((account) => account.id),
+		)
+		expect(environmentIds.size).toBe(3)
+		expect(SIGNALS.some((signal) => environmentIds.has(signal.accountId))).toBe(false)
 	})
 
 	it("bucket the overview by range", () => {
