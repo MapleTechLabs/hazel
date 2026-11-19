@@ -4,7 +4,8 @@ import { twMerge } from "tailwind-merge"
 import { IconChevronDown } from "../../icons"
 import { ariaButton, button } from "../../ui/button"
 import { formatMoney } from "../format"
-import { environmentsHint, healthBadge, kindChip, severityChip } from "./badges"
+import { environmentsHintOf } from "../groups"
+import { healthBadge, kindChip, severityChip } from "./badges"
 import { companyLogo, personAvatar } from "./identity"
 import { kbd } from "./shortcuts"
 
@@ -81,9 +82,14 @@ export const accountMark = <M>(
 /** A continuing row's top border: the account's rows read as one block. */
 export const RUN_CONTINUES_CLASS = "border-t-transparent"
 
-/** `Growth · $2,150/mo`, `Trial · $0/mo`. */
-export const planLine = (account: QueueRowOptions<never>["account"]): string =>
-	`${account.planName ?? "No plan"} · ${formatMoney(account.mrrMinor, account.currency)}/mo`
+/** `Growth · $2,150/mo`, `Trial · $0/mo`; a primary's `· +1 environment` after it. */
+export const planLine = (account: QueueRowOptions<never>["account"], environmentCount = 0): string =>
+	[
+		`${account.planName ?? "No plan"} · ${formatMoney(account.mrrMinor, account.currency)}/mo`,
+		environmentsHintOf(environmentCount),
+	]
+		.filter((part) => part !== null)
+		.join(" · ")
 
 export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Html =>
 	h.div(
@@ -132,18 +138,12 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 									[h.Class("flex min-w-0 flex-col")],
 									[
 										h.span(
-											[h.Class("flex min-w-0 items-baseline gap-2")],
-											[
-												h.span(
-													[h.Class("truncate font-medium text-fg text-sm")],
-													[options.account.name],
-												),
-												...environmentsHint(h, options.environmentCount ?? 0),
-											],
+											[h.Class("truncate font-medium text-fg text-sm")],
+											[options.account.name],
 										),
 										h.span(
 											[h.Class("truncate text-muted-fg text-xs tabular-nums")],
-											[planLine(options.account)],
+											[planLine(options.account, options.environmentCount)],
 										),
 									],
 								),

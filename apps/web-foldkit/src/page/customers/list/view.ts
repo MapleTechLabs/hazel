@@ -139,7 +139,7 @@ const header = (
 		model.accounts === null
 			? "Loading…"
 			: tab.key === null
-				? "Every account from Clerk, Stripe, Autumn and Maple, merged into one list."
+				? "Every account from Clerk, Stripe, Autumn and Maple, in one list."
 				: `${formatCount(rows.length)} account${rows.length === 1 ? "" : "s"} in ${tab.name}, worth ${formatMoney(mrr, model.reportingCurrency)} MRR.`
 	return pageHeader(h, {
 		title: "Customers",

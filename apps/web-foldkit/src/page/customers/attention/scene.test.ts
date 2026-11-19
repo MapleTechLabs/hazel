@@ -30,7 +30,7 @@ describe("Needs attention: customers with environments", () => {
 				[FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()],
 				[FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()],
 			),
-			Scene.expect(Scene.text("+1 environment")).toExist(),
+			Scene.expect(Scene.text(/· \+1 environment$/)).toExist(),
 		)
 	})
 })

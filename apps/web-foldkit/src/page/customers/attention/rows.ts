@@ -81,22 +81,10 @@ const accountCell = (
 						h.div(
 							[h.Class("flex min-w-0 flex-col")],
 							[
-								h.span(
-									[h.Class("flex min-w-0 items-baseline gap-2")],
-									[
-										h.span(
-											[h.Class("truncate font-medium text-fg text-sm")],
-											[account.name],
-										),
-										...environmentsHint(
-											h,
-											context.environmentCounts.get(account.id) ?? 0,
-										),
-									],
-								),
+								h.span([h.Class("truncate font-medium text-fg text-sm")], [account.name]),
 								h.span(
 									[h.Class("truncate text-muted-fg text-xs tabular-nums")],
-									[planLine(account)],
+									[planLine(account, context.environmentCounts.get(account.id))],
 								),
 							],
 						),
@@ -264,10 +252,12 @@ export const accountGroupRow = (
 											),
 										]
 									: []),
-								...environmentsHint(h, context.environmentCounts.get(account.id) ?? 0),
 							],
 						),
-						h.span([h.Class("truncate text-muted-fg text-xs tabular-nums")], [planLine(account)]),
+						h.span(
+							[h.Class("truncate text-muted-fg text-xs tabular-nums")],
+							[planLine(account, context.environmentCounts.get(account.id))],
+						),
 					],
 				),
 			],
