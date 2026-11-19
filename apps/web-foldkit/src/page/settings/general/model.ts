@@ -45,7 +45,7 @@ export type DeleteWorkspaceFailure = typeof DeleteWorkspaceFailure.Type
 
 export const Model = Schema.Struct({
 	orgSlug: Schema.String,
-	/** `window.location.origin`, read once by `ReadOrigin` (the legacy page reads it on every render). */
+	/** Where shared links point (`shareOrigin`), read once by `ReadOrigin` (the legacy page reads it on every render). */
 	origin: Schema.String,
 	/** Draft of the organization name. */
 	name: Schema.String,

@@ -81,6 +81,21 @@ const sameAutocomplete = (a: AutocompleteState, b: AutocompleteState) =>
 const initialBlocks = (markdown: string) =>
 	markdown.trim() === "" ? createEmptyValue() : deserializeFromMarkdown(markdown)
 
+/** Each composer editor by its editable element, for code that holds only the element. */
+const editorsByElement = new WeakMap<Element, EditorView>()
+
+/** The composer editor whose editable element this is. */
+export const composerEditorOf = (element: Element): EditorView | undefined => editorsByElement.get(element)
+
+/**
+ * Replaces the draft with `markdown` through the editor's own transaction path (the app hears it as
+ * it hears typing), without focusing it: a native composer types into it this way.
+ */
+export const replaceDraft = (view: EditorView, markdown: string) => {
+	const doc = toDoc(initialBlocks(markdown))
+	view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, doc.content))
+}
+
 export const createComposerEditor = (element: HTMLElement, options: EditorOptions): EditorView => {
 	const state = EditorState.create({
 		doc: toDoc(initialBlocks(options.initialMarkdown)),
@@ -137,6 +152,7 @@ export const createComposerEditor = (element: HTMLElement, options: EditorOption
 			},
 		},
 	)
+	editorsByElement.set(view.dom, view)
 	return view
 }
 

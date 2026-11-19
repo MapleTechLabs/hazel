@@ -3,6 +3,9 @@ import { ChannelId, ChannelMemberId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import type { HtmlBuilder } from "foldkit/html"
 import * as Scene from "foldkit/scene"
+import { inertHtml } from "foldkit/html"
+import { IconClose, IconGear, IconLeave, IconStar, IconVolumeMute } from "../../icons"
+import { iconOf } from "../../platform/native-island"
 import { describe, test } from "vitest"
 import { AppRoute } from "../../route"
 import * as Menu from "../../ui/menu"
@@ -70,22 +73,39 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 const update = (model: Model) => ({ model, commands: [] })
 const triggerMounted = Scene.Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress())
 
-// What the host's `context_menu.rs` reads: the row's own entries as words, symbols and danger.
+// What the host's `context_menu.rs` reads: the row's own entries as words, symbols, the icons the
+// web's items draw, and danger.
+const icon = (render: typeof IconGear) => iconOf([render(inertHtml)])
 const toggles = [
-	{ key: "mute", label: "Mute", symbol: "bell.slash" },
-	{ key: "favorite", label: "Favorite", symbol: "star" },
+	{ key: "mute", label: "Mute", symbol: "bell.slash", icon: icon(IconVolumeMute) },
+	{ key: "favorite", label: "Favorite", symbol: "star", icon: icon(IconStar) },
 	{ separator: true },
 ]
 const channelMenu = JSON.stringify({
 	items: [
 		...toggles,
-		{ key: "settings", label: "Settings", symbol: "gearshape" },
+		{ key: "settings", label: "Settings", symbol: "gearshape", icon: icon(IconGear) },
 		{ separator: true },
-		{ key: "leave", label: "Leave", symbol: "rectangle.portrait.and.arrow.right", destructive: true },
+		{
+			key: "leave",
+			label: "Leave",
+			symbol: "rectangle.portrait.and.arrow.right",
+			icon: icon(IconLeave),
+			destructive: true,
+		},
 	],
 })
 const dmMenu = JSON.stringify({
-	items: [...toggles, { key: "hide", label: "Hide conversation", symbol: "eye.slash", destructive: true }],
+	items: [
+		...toggles,
+		{
+			key: "hide",
+			label: "Hide conversation",
+			symbol: "eye.slash",
+			icon: icon(IconClose),
+			destructive: true,
+		},
+	],
 })
 // The long press's island, not the dots trigger's `menu` island, which carries the same items.
 const rowsWith = (props: string) =>

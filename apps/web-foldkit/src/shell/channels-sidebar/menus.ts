@@ -19,6 +19,7 @@ import { button } from "../../ui/button"
 import * as Menu from "../../ui/menu"
 import { longPressMenu, menuLabel, view as menuView } from "../../ui/menu-view"
 import { SectionAction } from "./model"
+import { semantic } from "../../ui/semantic"
 import type { ChannelEntry, Section, SidebarMember } from "./rows"
 
 /** The channel row "dots" menu (`ChannelItem`) and the section "+" menu (`SectionGroup`). */
@@ -221,7 +222,12 @@ const rowMenu = <M>(options: RowMenuOptions<M>) => ({
 
 /** A long press on a channel row opens its menu as the system's (iOS). */
 export const rowLongPress = <M>(h: HtmlBuilder<M>, options: RowMenuOptions<M>): ReadonlyArray<Attribute<M>> =>
-	longPressMenu(h, { menu: options.menu, ...rowMenu(options), toParentMessage: options.toMessage })
+	longPressMenu(h, {
+		menu: options.menu,
+		...rowMenu(options),
+		content: rowMenuContent(h, options.entry, options.sections),
+		toParentMessage: options.toMessage,
+	})
 
 /** `ChannelItem`'s `<Menu>`: the dots trigger and `MenuContent placement="right top" className="w-42"`. */
 export const rowMenuView = <M>(h: HtmlBuilder<M>, options: RowMenuOptions<M>): Html =>
@@ -258,9 +264,27 @@ const dmMenu = <M>(options: DmMenuOptions<M>) => ({
 	native: { symbols: rowSymbols(options.member) },
 })
 
+/** A DM row menu's items: what the dots' menu draws, and the icons the system's menu takes. */
+const dmMenuContent =
+	<M>(h: HtmlBuilder<M>, options: DmMenuOptions<M>) =>
+	(key: string): ReadonlyArray<Html | string> => {
+		const text = (value: string, className?: string) =>
+			menuLabel(h, rowMenuId(options.channelId), key, value, className)
+		const memberItem = memberItemContent(h, options.member, key, text)
+		if (memberItem !== null) return memberItem
+		if (key === "hide")
+			return [IconClose(h, { className: "size-4" }), text("Hide conversation", "text-danger-subtle-fg")]
+		return []
+	}
+
 /** A long press on a DM row opens its menu as the system's (iOS). */
 export const dmLongPress = <M>(h: HtmlBuilder<M>, options: DmMenuOptions<M>): ReadonlyArray<Attribute<M>> =>
-	longPressMenu(h, { menu: options.menu, ...dmMenu(options), toParentMessage: options.toMessage })
+	longPressMenu(h, {
+		menu: options.menu,
+		...dmMenu(options),
+		content: dmMenuContent(h, options),
+		toParentMessage: options.toMessage,
+	})
 
 /** `DmChannelItem`'s `<Menu>`: Mute, Favorite and Hide conversation, on the same dots trigger. */
 export const dmMenuView = <M>(h: HtmlBuilder<M>, options: DmMenuOptions<M>): Html =>
@@ -271,18 +295,7 @@ export const dmMenuView = <M>(h: HtmlBuilder<M>, options: DmMenuOptions<M>): Htm
 		viewInputs: {
 			...dmMenu(options),
 			toTrigger: rowMenuTrigger(h, "Conversation options"),
-			content: (key: string): ReadonlyArray<Html | string> => {
-				const text = (value: string, className?: string) =>
-					menuLabel(h, rowMenuId(options.channelId), key, value, className)
-				const memberItem = memberItemContent(h, options.member, key, text)
-				if (memberItem !== null) return memberItem
-				if (key === "hide")
-					return [
-						IconClose(h, { className: "size-4" }),
-						text("Hide conversation", "text-danger-subtle-fg"),
-					]
-				return []
-			},
+			content: dmMenuContent(h, options),
 			className: "w-48",
 		},
 		toParentMessage: options.toMessage,
@@ -330,7 +343,11 @@ export const sectionMenuView = <M>(
 						intent: "plain",
 						isCircle: true,
 						size: "sq-xs",
-						attributes: [h.AriaLabel("Section actions"), ...attributes],
+						attributes: [
+							h.AriaLabel("Section actions"),
+							...semantic(h, { kind: "action", label: "Section actions", symbol: "plus" }),
+							...attributes,
+						],
 					},
 					[IconPlus(h), overlay],
 				),

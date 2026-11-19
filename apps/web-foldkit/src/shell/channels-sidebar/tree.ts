@@ -2,6 +2,7 @@ import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconChevronDown, IconDots, IconPlus } from "../../icons"
 import { button } from "../../ui/button"
+import { semantic } from "../../ui/semantic"
 
 /**
  * React Aria `Tree` markup as `SidebarSection tree={...}` and `SidebarTreeItem` render it
@@ -50,7 +51,11 @@ export const sectionPlusButton = <M>(
 			intent: "plain",
 			isCircle: true,
 			size: "sq-xs",
-			attributes: [h.AriaLabel(label), ...attributes],
+			attributes: [
+				h.AriaLabel(label),
+				...semantic(h, { kind: "action", label, symbol: "plus" }),
+				...attributes,
+			],
 		},
 		[IconPlus(h)],
 	)
@@ -85,6 +90,8 @@ export const strong = <M>(h: HtmlBuilder<M>, children: Array<Html | string>, cla
 
 export interface TreeSectionOptions {
 	readonly id: string
+	/** What the section is called (its header's text). */
+	readonly title: string
 	readonly ariaLabel: string
 	readonly header: Html
 	readonly allowsDragging: boolean
@@ -96,6 +103,7 @@ export const treeSection = <M>(h: HtmlBuilder<M>, options: TreeSectionOptions): 
 	const isEmpty = options.rows.length === 0
 	return h.div(
 		[
+			...semantic(h, { kind: "section", title: options.title }),
 			h.Attribute("data-slot", "sidebar-section"),
 			h.Class(
 				twMerge(

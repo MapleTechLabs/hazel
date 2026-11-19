@@ -3,6 +3,7 @@ import { twMerge } from "tailwind-merge"
 import { keyboardStyles } from "~/components/ui/keyboard.styles"
 import { IconClose, IconLightbulb } from "../../icons"
 import { button } from "../../ui/button"
+import { semantic } from "../../ui/semantic"
 import { hotkeyLabel } from "./hotkey-label"
 
 /** `CreateChannelHint`: under the Channels section while it is empty, until dismissed. */
@@ -13,6 +14,11 @@ export const createChannelHint = <M>(
 ): Html =>
 	h.div(
 		[
+			...semantic(h, {
+				kind: "item",
+				title: "Create your first channel with the + next to Channels.",
+				symbol: "lightbulb",
+			}),
 			h.Class(
 				"mx-2 mb-1 flex items-center gap-2 rounded-md bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-fg",
 			),
@@ -41,7 +47,11 @@ export const createChannelHint = <M>(
 					intent: "plain",
 					size: "sq-xs",
 					className: "size-5",
-					attributes: [h.AriaLabel("Dismiss"), onDismiss],
+					attributes: [
+						h.AriaLabel("Dismiss"),
+						...semantic(h, { kind: "action", label: "Dismiss", symbol: "xmark" }),
+						onDismiss,
+					],
 				},
 				[IconClose(h, { className: "size-3" })],
 			),

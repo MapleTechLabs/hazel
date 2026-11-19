@@ -5,6 +5,7 @@ import * as Dom from "foldkit/dom"
 import { modifyFields } from "foldkit/struct"
 import { setPublicModeAction, updateOrganizationAction } from "~/db/actions"
 import { failureMessage, type UserErrorMessage } from "~/lib/error-messages"
+import { shareOrigin } from "~/utils/share-origin"
 import { catchCommon, errorToast, errorToastOf, successToast } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
 import { AppRoute, type RouteOf } from "../../../route"
@@ -96,7 +97,7 @@ export const OpenLogoPicker = Command.define("OpenLogoPicker", {
 
 export const ReadOrigin = Command.define("ReadOrigin", {
 	messages: [Message.ResolvedOrigin],
-	execute: Effect.sync(() => Message.ResolvedOrigin({ origin: window.location.origin })),
+	execute: Effect.sync(() => Message.ResolvedOrigin({ origin: shareOrigin() })),
 })
 
 export const UploadLogo = Command.define("UploadLogo", {

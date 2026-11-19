@@ -4,6 +4,7 @@ import { type Attribute, createKeyedLazy, type Html, type HtmlBuilder } from "fo
 import { twMerge } from "tailwind-merge"
 import { IconMagnifier3, IconUsers } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
+import { semantic } from "../../ui/semantic"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
 import type * as Menu from "../../ui/menu"
 import { canOn, openRowMenu } from "./menu-update"
@@ -291,6 +292,7 @@ const gotoSection = <M>(h: HtmlBuilder<M>, context: SectionsContext<M>): Html =>
 	const membersHref = hrefOf(AppRoute.OrgHome({ orgSlug: context.orgSlug }))
 	return h.div(
 		[
+			...semantic(h, { kind: "section", title: "" }),
 			h.Attribute("aria-label", "Goto"),
 			h.Attribute("data-slot", "sidebar-section"),
 			h.Class(
@@ -308,38 +310,62 @@ const gotoSection = <M>(h: HtmlBuilder<M>, context: SectionsContext<M>): Html =>
 					h.Class("grid grid-cols-[auto_1fr] gap-y-0.5 in-data-[state=collapsed]:gap-y-1.5"),
 				],
 				[
-					sidebarItem(h, { attributes: [context.onBrowseChannels] }, [
-						IconMagnifier3(h),
-						label(h, ["Browse channels"]),
-						...(context.paletteKey === null
-							? []
-							: [
-									h.kbd(
-										[
-											h.Attribute("data-slot", "keyboard"),
-											h.Attribute("dir", "ltr"),
-											h.Class(
-												twMerge(
-													"hidden font-mono text-[0.80rem]/6 text-current/60 group-hover:text-fg group-focus:text-fg group-focus:opacity-90 group-disabled:opacity-50 lg:inline forced-colors:group-focus:text-[HighlightText]",
-													"absolute top-1/2 right-2 -translate-y-1/2 font-mono text-muted-fg text-xs",
+					sidebarItem(
+						h,
+						{
+							attributes: [
+								context.onBrowseChannels,
+								...semantic(h, {
+									kind: "item",
+									title: "Browse channels",
+									symbol: "magnifyingglass",
+								}),
+							],
+						},
+						[
+							IconMagnifier3(h),
+							label(h, ["Browse channels"]),
+							...(context.paletteKey === null
+								? []
+								: [
+										h.kbd(
+											[
+												h.Attribute("data-slot", "keyboard"),
+												h.Attribute("dir", "ltr"),
+												h.Class(
+													twMerge(
+														"hidden font-mono text-[0.80rem]/6 text-current/60 group-hover:text-fg group-focus:text-fg group-focus:opacity-90 group-disabled:opacity-50 lg:inline forced-colors:group-focus:text-[HighlightText]",
+														"absolute top-1/2 right-2 -translate-y-1/2 font-mono text-muted-fg text-xs",
+													),
 												),
-											),
-										],
-										[hotkeyLabel(context.paletteKey)],
-									),
-								]),
-					]),
-					sidebarItem(h, {}, [
-						sidebarLink(
-							h,
-							{
-								href: membersHref,
-								isActive: context.isMembersActive,
-								activeClassName: CHANNEL_ACTIVE,
-							},
-							[IconUsers(h), label(h, ["Members"])],
-						),
-					]),
+											],
+											[hotkeyLabel(context.paletteKey)],
+										),
+									]),
+						],
+					),
+					sidebarItem(
+						h,
+						{
+							attributes: semantic(h, {
+								kind: "item",
+								title: "Members",
+								symbol: "person.2",
+								isSelected: context.isMembersActive || undefined,
+							}),
+						},
+						[
+							sidebarLink(
+								h,
+								{
+									href: membersHref,
+									isActive: context.isMembersActive,
+									activeClassName: CHANNEL_ACTIVE,
+								},
+								[IconUsers(h), label(h, ["Members"])],
+							),
+						],
+					),
 				],
 			),
 		],
@@ -360,6 +386,7 @@ const favoritesSection = <M>(h: HtmlBuilder<M>, model: Model, context: SectionsC
 	return [
 		treeSection(h, {
 			id: "sidebar-tree-favorites",
+			title: "Favorites",
 			ariaLabel: "Favorite channels",
 			header: h.div(
 				[
@@ -387,6 +414,7 @@ const channelSection = <M>(
 	const treeId = `sidebar-tree-${options.key}`
 	return treeSection(h, {
 		id: treeId,
+		title: options.name,
 		ariaLabel: `${options.name} channels`,
 		header: sectionGroupHeader(h, {
 			name: options.name,
@@ -537,6 +565,7 @@ export const sectionGroupContent = <M>(
 					),
 					treeSection(h, {
 						id: "sidebar-tree-dms",
+						title: "Direct Messages",
 						ariaLabel: "Direct Messages channels",
 						header: sectionGroupHeader(h, {
 							name: "Direct Messages",

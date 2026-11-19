@@ -15,6 +15,18 @@ import {
 	draft,
 } from "../../../test/chat-fixtures"
 import * as Menu from "../../../ui/menu"
+import { inertHtml } from "foldkit/html"
+import {
+	IconCopy,
+	IconEdit,
+	IconEmojiAdd,
+	IconHashtag,
+	IconReply,
+	IconStar,
+	IconThread,
+	IconTrash,
+} from "../../../icons"
+import { iconOf } from "../../../platform/native-island"
 import * as Draft from "../../../composer/draft"
 import { DragState, DropEvent, TrackFileDrop } from "../../../composer/drop"
 import { MountEditor } from "../../../composer/composer"
@@ -245,8 +257,24 @@ describe("hover toolbar", () => {
 	})
 
 	// The contract with the iOS host's `context_menu.rs`: `items` as a `menu` island's, `quick` above.
-	test("a long press on a message opens its context menu natively, words, symbols and quick reactions", () => {
-		const item = (key: string, label: string, symbol: string) => ({ key, label, symbol })
+	test("a long press on a message opens its context menu natively, words, icons and quick reactions", () => {
+		// Each item also carries the icon the web's own item draws.
+		const icons = {
+			"add-reaction": IconEmojiAdd,
+			reply: IconReply,
+			edit: IconEdit,
+			thread: IconThread,
+			copy: IconCopy,
+			pin: IconStar,
+			delete: IconTrash,
+			"copy-id": IconHashtag,
+		} satisfies Record<string, typeof IconCopy>
+		const item = (key: keyof typeof icons, label: string, symbol: string) => ({
+			key,
+			label,
+			symbol,
+			icon: iconOf([icons[key](inertHtml, { attributes: { "data-slot": "icon" } })]),
+		})
 		const separator = { separator: true }
 		const props = (own: boolean) =>
 			JSON.stringify({
