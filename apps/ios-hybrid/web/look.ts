@@ -219,7 +219,8 @@ export const lookOf = (
 	const icon =
 		row.querySelector('[data-slot="avatar"]') ??
 		row.querySelector('[data-slot="icon"]') ??
-		row.querySelector('svg:not([data-slot="thread-branch"])')
+		// Not a thread's line to its channel, nor the SVG nested in it (`branch`, below).
+		row.querySelector('svg:not([data-slot="thread-branch"], [data-slot="thread-branch"] svg)')
 	if (icon !== null) {
 		const style = getComputedStyle(icon)
 		look.icon = {
