@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ChannelId, OrganizationMemberId } from "@hazel/schema"
+import { ChannelId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
@@ -83,6 +83,73 @@ describe("chat index scene", () => {
 			Scene.Command.resolve(Tabs.FocusTab, Tabs.Message.CompletedFocusTab()),
 			Scene.expect(Scene.text("No private channels")).toExist(),
 			Scene.expect(Scene.role("button", { name: /Create a private channel$/ })).toBeAbsent(),
+		)
+	})
+
+	test("ChatDms shows only the direct messages, with New message and no channel tabs", () => {
+		const dm: ChannelSummary = {
+			...channel(3, "dm", "single"),
+			memberCount: 2,
+			members: [
+				{
+					userId: memberShared.currentUser!.id,
+					firstName: "Me",
+					lastName: "Self",
+					avatarUrl: null,
+				},
+				{
+					userId: Schema.decodeSync(UserId)("00000000-0000-4000-8000-000000000301"),
+					firstName: "Grace",
+					lastName: "Hopper",
+					avatarUrl: null,
+				},
+			],
+		}
+		Scene.scene(
+			config,
+			Scene.given(init(AppRoute.ChatDms({ orgSlug: "hazel" })).model),
+			Scene.Subscription.emit(Message.UpdatedChannels({ groups: { ...groups, dmChannels: [dm] } })),
+			Scene.expect(Scene.role("heading", { name: "Direct messages" })).toExist(),
+			Scene.expect(Scene.text("Grace Hopper")).toExist(),
+			Scene.expect(Scene.text("general")).toBeAbsent(),
+			Scene.expect(Scene.role("tab", { name: /Public/ })).toBeAbsent(),
+			Scene.click(Scene.role("button", { name: /New message$/ })),
+			Scene.expectOutMessage(PageOutMessage.RequestedModal({ modal: { _tag: "CreateDm" } })),
+		)
+	})
+
+	test("on a phone, ChatDms sits under the top bar, whose compose button starts a DM", () => {
+		const dm: ChannelSummary = {
+			...channel(3, "dm", "single"),
+			memberCount: 2,
+			members: [
+				{
+					userId: memberShared.currentUser!.id,
+					firstName: "Me",
+					lastName: "Self",
+					avatarUrl: null,
+				},
+				{
+					userId: Schema.decodeSync(UserId)("00000000-0000-4000-8000-000000000301"),
+					firstName: "Grace",
+					lastName: "Hopper",
+					avatarUrl: null,
+				},
+			],
+		}
+		Scene.scene(
+			sceneFor({ ...memberShared, isMobile: true }),
+			Scene.given(init(AppRoute.ChatDms({ orgSlug: "hazel" })).model),
+			Scene.Subscription.emit(Message.UpdatedChannels({ groups: { ...groups, dmChannels: [dm] } })),
+			Scene.expect(Scene.role("banner")).toExist(),
+			Scene.expect(Scene.role("heading", { name: "Direct messages", level: 1 })).toExist(),
+			// The compose icon, not the desktop header's labelled pill.
+			Scene.expect(Scene.text("New message")).toBeAbsent(),
+			Scene.expect(Scene.text("Grace Hopper")).toExist(),
+			Scene.expect(Scene.text("general")).toBeAbsent(),
+			Scene.expect(Scene.role("tab", { name: /Public/ })).toBeAbsent(),
+			Scene.click(Scene.role("button", { name: "New message" })),
+			Scene.expectOutMessage(PageOutMessage.RequestedModal({ modal: { _tag: "CreateDm" } })),
 		)
 	})
 })

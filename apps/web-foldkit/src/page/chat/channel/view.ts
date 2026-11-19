@@ -328,7 +328,7 @@ const headerView = (
 		}),
 		isHiddenDm: currentMember?.isHidden ?? false,
 		dmPresence,
-		// A phone opens a conversation from the chat list; a thread from its channel.
+		// A phone opens a conversation from the chat list, a DM from the DMs tab; a thread from its channel.
 		mobileBack:
 			isMobile && orgSlug !== null
 				? channel?.type === "thread" && channel.parentChannelId
@@ -338,7 +338,10 @@ const headerView = (
 							parentChannel?.name ?? "channel",
 							"-ml-3 -mr-1",
 						)
-					: mobileBackLink(h, hrefOf(AppRoute.ChatIndex({ orgSlug })), "Chats", "-ml-3 -mr-1")
+					: channel?.type === "direct" || channel?.type === "single"
+						? // A DM leads back to the DMs tab's list.
+							mobileBackLink(h, hrefOf(AppRoute.ChatDms({ orgSlug })), "DMs", "-ml-3 -mr-1")
+						: mobileBackLink(h, hrefOf(AppRoute.ChatIndex({ orgSlug })), "Chats", "-ml-3 -mr-1")
 				: h.empty,
 		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, toPinnedMessage),
 		customer:

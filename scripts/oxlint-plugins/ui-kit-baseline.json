@@ -136,8 +136,7 @@
 		"apps/web-foldkit/src/page/onboarding/steps/welcome.ts": 1,
 		"apps/web-foldkit/src/page/onboarding/timezone/city-card.ts": 1,
 		"apps/web-foldkit/src/page/settings/general/view.ts": 1,
-		"apps/web-foldkit/src/shell/layouts.ts": 1,
-		"apps/web-foldkit/src/shell/mobile.ts": 1
+		"apps/web-foldkit/src/shell/layouts.ts": 1
 	},
 	"no-raw-shadow": {
 		"apps/web-foldkit/src/chat/video-player.ts": 2,
