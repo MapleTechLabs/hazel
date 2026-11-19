@@ -241,7 +241,10 @@ const tabsRow = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =>
 					: []),
 				dragged === undefined
 					? h.empty
-					: dragGhost(h, model.tabDrag, [viewGlyph(h, dragged.look, "size-3.5"), h.span([], [dragged.name])]),
+					: dragGhost(h, model.tabDrag, [
+							viewGlyph(h, dragged.look, "size-3.5"),
+							h.span([], [dragged.name]),
+						]),
 				menu(h, model.viewMenu, {
 					entries: viewMenuEntries(model, viewer),
 					trigger: (attributes, overlay) =>
@@ -697,6 +700,34 @@ const saveDialog = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html
 		},
 	})
 
+// DELETE DIALOG
+
+const deleteDialog = (h: HtmlBuilder<Message>, model: Model): Html =>
+	Modal.controlledModal(h, {
+		model: model.deleteModal,
+		toParentMessage: (message) => Message.GotDeleteModalMessage({ message }),
+		role: "alertdialog",
+		size: "sm",
+		toContent: (closeAttributes) => {
+			const tab = currentTab(model)
+			return [
+				dialogHeader(h, {
+					title: { id: Modal.titleId(model.deleteModal.id), text: `Delete ${tab.name}?` },
+					description:
+						tab.row?.ownerUserId === null
+							? "It goes for everyone in the workspace. This can't be undone."
+							: "This can't be undone.",
+				}),
+				dialogFooter(h, [
+					dialogClose(h, closeAttributes, ["Cancel"]),
+					button(h, { intent: "danger", onPress: Message.PressedConfirmDeleteView() }, [
+						"Delete view",
+					]),
+				]),
+			]
+		},
+	})
+
 // BODY
 
 const firstRun = (h: HtmlBuilder<Message>, orgSlug: string, nowMs: number): Html =>
@@ -924,6 +955,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			// A tap fires mouseenter too; a phone has no hover to preview with.
 			...(hovered === undefined || shared.isMobile ? [] : [hoverCard(h, model, hovered, viewer)]),
 			saveDialog(h, model, viewer),
+			deleteDialog(h, model),
 		],
 	)
 })

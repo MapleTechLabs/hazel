@@ -353,15 +353,33 @@ describe("customers list: saving views", () => {
 		expect(done.outMessage?._tag).toBe("RequestedNavigation")
 	})
 
-	test("Save changes updates the current view; deleting goes back to All", () => {
+	test("Save changes updates the current view; deleting asks first, then goes back to Current", () => {
 		const edited = run(loaded(mine.id), [Message.ClickedSortHeader({ column: "mrr" })])
 		const entries = [Menu.item("save"), Menu.item("delete")]
 		const toViewMenu = (message: Menu.Message) => Message.GotViewMenuMessage({ message })
 		const saved = pick(edited, toViewMenu, "save", entries)
 		expect(commandNames(saved)).toContain("UpdateSavedView")
-		const deleted = pick(edited, toViewMenu, "delete", entries)
+		const asked = pick(edited, toViewMenu, "delete", entries)
+		expect(asked.model.deleteModal.isOpen).toBe(true)
+		expect(commandNames(asked)).not.toContain("DeleteSavedView")
+		const deleted = update(asked.model, Message.PressedConfirmDeleteView(), shared)
 		expect(commandNames(deleted)).toContain("DeleteSavedView")
 		expect(deleted.outMessage?._tag).toBe("RequestedNavigation")
+		expect(deleted.model.deleteModal.isOpen).toBe(false)
+		// A second press while the dialog closes deletes nothing.
+		expect(commandNames(update(deleted.model, Message.PressedConfirmDeleteView(), shared))).not.toContain(
+			"DeleteSavedView",
+		)
+	})
+
+	test("a built-in view offers no delete", () => {
+		const asked = pick(
+			loaded("at_risk"),
+			(message) => Message.GotViewMenuMessage({ message }),
+			"delete",
+			[Menu.item("delete")],
+		)
+		expect(asked.model.deleteModal.isOpen).toBe(false)
 	})
 })
 
@@ -387,9 +405,17 @@ describe("customers list: arranging the views", () => {
 			}),
 			DragAndDrop.Message.ReleasedPointer(),
 		]
-		const dragged = run(start, steps.slice(0, 2).map((message) => Message.GotTabDragMessage({ message })))
+		const dragged = run(
+			start,
+			steps.slice(0, 2).map((message) => Message.GotTabDragMessage({ message })),
+		)
 		const dropped = update(dragged, Message.GotTabDragMessage({ message: steps[2]! }), shared)
-		expect(tabNames(dropped.model)).toEqual(["All customers", "Current customers", "At risk", "Scale accounts"])
+		expect(tabNames(dropped.model)).toEqual([
+			"All customers",
+			"Current customers",
+			"At risk",
+			"Scale accounts",
+		])
 		expect(commandNames(dropped)).toContain("SaveListLayout")
 		expect(dropped.commands?.[0]?.args).toMatchObject({
 			layoutId: null,
@@ -397,13 +423,23 @@ describe("customers list: arranging the views", () => {
 		})
 
 		const stepped = update(dropped.model, Message.SteppedViewTab({ key: mine.id, step: -1 }), shared)
-		expect(tabNames(stepped.model)).toEqual(["All customers", "Current customers", "Scale accounts", "At risk"])
+		expect(tabNames(stepped.model)).toEqual([
+			"All customers",
+			"Current customers",
+			"Scale accounts",
+			"At risk",
+		])
 		expect(commandNames(stepped)).toContain("SaveListLayout")
 	})
 
 	test("the view menu shows a view in the sidebar or hides it", () => {
 		const model = loaded()
-		const shown = pick(model, (message) => Message.GotViewMenuMessage({ message }), "sidebar", viewMenuEntries(model, viewer))
+		const shown = pick(
+			model,
+			(message) => Message.GotViewMenuMessage({ message }),
+			"sidebar",
+			viewMenuEntries(model, viewer),
+		)
 		expect(shown.model.layout?.sidebarHidden).toEqual([])
 		const hidden = pick(
 			loaded("at_risk"),
@@ -416,8 +452,18 @@ describe("customers list: arranging the views", () => {
 
 	test("editing a view sends its name and its new icon and colour", () => {
 		const model = loaded(mine.id)
-		const opened = pick(model, (message) => Message.GotViewMenuMessage({ message }), "edit", viewMenuEntries(model, viewer))
-		expect(opened.model.saveForm).toMatchObject({ mode: "edit", name: "Scale accounts", icon: null, color: null })
+		const opened = pick(
+			model,
+			(message) => Message.GotViewMenuMessage({ message }),
+			"edit",
+			viewMenuEntries(model, viewer),
+		)
+		expect(opened.model.saveForm).toMatchObject({
+			mode: "edit",
+			name: "Scale accounts",
+			icon: null,
+			color: null,
+		})
 		const saved = update(
 			run(opened.model, [Message.PickedSaveLook({ icon: "star", color: "pink" })]),
 			Message.SubmittedSave(),

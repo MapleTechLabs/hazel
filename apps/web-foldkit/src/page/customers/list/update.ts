@@ -34,10 +34,12 @@ import { Message, type ViewAction } from "./message"
 import {
 	activeFields,
 	builtInDefaultOf,
+	canDeleteView,
 	canUpdateView,
 	clearField,
 	COLUMNS_POPOVER_ID,
 	currentTab,
+	DELETE_MODAL_ID,
 	type Draft,
 	FILTER_POPOVER_ID,
 	type ListKey,
@@ -117,6 +119,7 @@ export const init = (route: Route): Return => {
 			ownerMenu: Menu.init({ id: OWNER_MENU_ID, placement: "top start" }),
 			saveModal: Modal.init(SAVE_MODAL_ID),
 			saveForm: null,
+			deleteModal: Modal.init(DELETE_MODAL_ID),
 		},
 	}
 }
@@ -277,12 +280,9 @@ const onViewMenu = (model: Model, shared: Shared, key: string): Return => {
 			}
 		}
 		case "delete":
-			return tab.row === null || organizationId === undefined
-				? { model }
-				: {
-						...navigateToView(model, shared, null),
-						commands: [DeleteSavedView({ organizationId, viewId: tab.row.id })],
-					}
+			return canDeleteView(tab, viewerOf(shared))
+				? { model: modifyFields(model, { deleteModal: (modal) => Modal.open(modal).model }) }
+				: { model }
 		case undefined:
 			return { model }
 	}
@@ -302,10 +302,7 @@ const withLayout = (
 	if (organizationId === undefined || userId === undefined) return { model, commands }
 	return {
 		model: modifyFields(model, { layout: () => layout }),
-		commands: [
-			...commands,
-			SaveListLayout({ organizationId, userId, layoutId: model.layoutId, layout }),
-		],
+		commands: [...commands, SaveListLayout({ organizationId, userId, layoutId: model.layoutId, layout })],
 	}
 }
 
@@ -682,6 +679,27 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}),
 		}),
 		SubmittedSave: () => submitSave(model, shared),
+		GotDeleteModalMessage: ({ message: modalMessage }) => {
+			const result = Modal.update(model.deleteModal, modalMessage)
+			return {
+				model: modifyFields(model, { deleteModal: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotDeleteModalMessage({ message: child }),
+				),
+			}
+		},
+		PressedConfirmDeleteView: () => {
+			const tab = currentTab(model)
+			const organizationId = shared.organization?.id
+			// The dialog may be closing already (a second press while it animates out).
+			if (!model.deleteModal.isOpen || tab.row === null || organizationId === undefined)
+				return { model }
+			const closed = modifyFields(model, { deleteModal: (modal) => Modal.close(modal).model })
+			return {
+				...navigateToView(closed, shared, null),
+				commands: [DeleteSavedView({ organizationId, viewId: tab.row.id })],
+			}
+		},
 		SucceededViewAction: ({ action, viewId }) =>
 			action === "create"
 				? navigateToView(model, shared, viewId)

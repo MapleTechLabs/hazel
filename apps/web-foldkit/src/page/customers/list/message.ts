@@ -60,6 +60,8 @@ export const Message = defineMessageUnion({
 	PickedSaveLook: { icon: Schema.NullOr(Customers.ViewIcon), color: Schema.NullOr(Customers.ViewColor) },
 	ToggledSaveShared: { isShared: Schema.Boolean },
 	SubmittedSave: {},
+	GotDeleteModalMessage: { message: Modal.Message },
+	PressedConfirmDeleteView: {},
 	SucceededViewAction: { action: ViewAction, viewId: CustomerSavedViewId },
 	FailedViewAction: { action: ViewAction, reason: ViewFailure },
 

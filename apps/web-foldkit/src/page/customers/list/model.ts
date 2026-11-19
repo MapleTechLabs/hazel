@@ -113,6 +113,8 @@ export const Model = Schema.Struct({
 	ownerMenu: Menu.Model,
 	saveModal: Modal.Model,
 	saveForm: Schema.NullOr(SaveForm),
+	/** "Delete view" asks first; it deletes the current view. */
+	deleteModal: Modal.Model,
 })
 export type Model = typeof Model.Type
 
@@ -124,6 +126,7 @@ export const SORT_MENU_ID = "customers-list-sort"
 export const VIEW_MENU_ID = "customers-list-view"
 export const OWNER_MENU_ID = "customers-list-owner"
 export const SAVE_MODAL_ID = "customers-list-save"
+export const DELETE_MODAL_ID = "customers-list-delete-view"
 export const TAB_LIST_ID = "customers-list-tabs"
 export const HOVER_CARD_ID = "customers-list-hover-card"
 
@@ -201,7 +204,13 @@ const tabOfRow = (row: ViewRow): ViewTab => ({
 
 /** Every tab, in order: Current, the synced views (or the built-ins until they sync), then All. */
 export const viewTabsOf = (views: ReadonlyArray<ViewRow> | null): ReadonlyArray<ViewTab> => [
-	{ key: null, name: "Current customers", draft: CURRENT_DRAFT, row: null, look: lookOf(CURRENT_KEY, null) },
+	{
+		key: null,
+		name: "Current customers",
+		draft: CURRENT_DRAFT,
+		row: null,
+		look: lookOf(CURRENT_KEY, null),
+	},
 	...(views === null ? builtInFallbackTabs : views.map(tabOfRow)),
 	{ key: ALL_VIEW_KEY, name: "All customers", draft: ALL_DRAFT, row: null, look: lookOf(ALL_KEY, null) },
 ]

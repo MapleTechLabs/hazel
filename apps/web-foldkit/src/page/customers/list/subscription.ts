@@ -56,6 +56,7 @@ export const listKeyOf = (event: {
 
 const holdsKeyboard = (model: Model) =>
 	model.saveModal.isOpen ||
+	model.deleteModal.isOpen ||
 	model.filterPopover.isOpen ||
 	model.columnsPopover.isOpen ||
 	model.tagPopover.isOpen ||
