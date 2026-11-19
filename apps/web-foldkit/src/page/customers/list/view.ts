@@ -42,6 +42,7 @@ import {
 	canDeleteView,
 	canUpdateView,
 	COLUMN_NAME,
+	ALL_VIEW_KEY,
 	currentTab,
 	effectiveFilters,
 	HOVER_CARD_ID,
@@ -137,7 +138,7 @@ const header = (
 	const subtitle =
 		model.accounts === null
 			? "Loading…"
-			: tab.key === null
+			: tab.key === ALL_VIEW_KEY
 				? "Every account from Clerk, Stripe, Autumn and Maple, merged into one list."
 				: `${formatCount(rows.length)} account${rows.length === 1 ? "" : "s"} in ${tab.name}, worth ${formatMoney(mrr, model.reportingCurrency)} MRR.`
 	return pageHeader(h, {
