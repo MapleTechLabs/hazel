@@ -62,7 +62,7 @@ export const SaveForm = Schema.Struct({
 export type SaveForm = typeof SaveForm.Type
 
 export const Model = Schema.Struct({
-	/** `?view=`: a built-in key or a saved view's id; none is "All customers". */
+	/** `?view=`: a built-in key, a saved view's id or `all`; none is "Current customers". */
 	view: Schema.NullOr(Schema.String),
 	draft: Draft,
 	/** Typing narrows the table but is not part of a view. */
@@ -142,12 +142,25 @@ export const ALL_DRAFT: Draft = {
 	columns: Customers.DEFAULT_LIST_COLUMNS,
 }
 
-/** A tab: "All customers" (key null), a saved view, or a built-in before the views sync. */
+/** The default tab: paying and trialing accounts (the backend's "customer", `compute.ts` health inputs). */
+export const CURRENT_DRAFT: Draft = {
+	filters: { lifecycleStages: ["trialing", "active", "past_due"] },
+	sort: { column: "mrr", direction: "desc" },
+	columns: Customers.DEFAULT_LIST_COLUMNS,
+}
+
+/** `?view=` of the "All customers" tab. */
+export const ALL_VIEW_KEY = "all"
+
+/**
+ * A tab: "Current customers" (key null, the default), a saved view, a built-in before the views
+ * sync, or "All customers" (`ALL_VIEW_KEY`).
+ */
 export interface ViewTab {
 	readonly key: string | null
 	readonly name: string
 	readonly draft: Draft
-	/** The synced row; none for "All" and the fallbacks. */
+	/** The synced row; none for "Current", "All" and the fallbacks. */
 	readonly row: ViewRow | null
 }
 
@@ -165,13 +178,14 @@ const tabOfRow = (row: ViewRow): ViewTab => ({
 	row,
 })
 
-/** Every tab, in order: All, then the synced views (or the built-ins until they sync). */
+/** Every tab, in order: Current, the synced views (or the built-ins until they sync), then All. */
 export const viewTabsOf = (views: ReadonlyArray<ViewRow> | null): ReadonlyArray<ViewTab> => [
-	{ key: null, name: "All customers", draft: ALL_DRAFT, row: null },
+	{ key: null, name: "Current customers", draft: CURRENT_DRAFT, row: null },
 	...(views === null ? builtInFallbackTabs : views.map(tabOfRow)),
+	{ key: ALL_VIEW_KEY, name: "All customers", draft: ALL_DRAFT, row: null },
 ]
 
-/** The tab `?view=` names; an unknown id is "All". */
+/** The tab `?view=` names; an unknown id is "Current". */
 export const currentTab = (model: Pick<Model, "view" | "views">): ViewTab => {
 	const tabs = viewTabsOf(model.views)
 	return (

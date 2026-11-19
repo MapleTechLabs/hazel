@@ -8,6 +8,7 @@ import type { Shared } from "../../contract"
 import { sharedDefaults } from "../../test-shared"
 import { Message } from "./message"
 import {
+	ALL_VIEW_KEY,
 	bestFilterToRemove,
 	isEdited,
 	matchesFilters,
@@ -18,6 +19,7 @@ import {
 	toggleColumn,
 	type ViewRow,
 	viewMenuEntries,
+	viewTabsOf,
 	visibleAccounts,
 } from "./model"
 import { listKeyOf } from "./subscription"
@@ -141,7 +143,7 @@ const route = (view: string | null) =>
 	AppRoute.CustomersList({ orgSlug: "hazel", view: Option.fromNullishOr(view) })
 const run = (model: Model, messages: ReadonlyArray<Message>) =>
 	messages.reduce((current, message) => update(current, message, shared).model, model)
-const loaded = (view: string | null = null): Model =>
+const loaded = (view: string | null = ALL_VIEW_KEY): Model =>
 	run(init(route(view)).model, [
 		Message.UpdatedViews({ views: [atRisk, mine] }),
 		Message.UpdatedAccounts({ accounts }),
@@ -165,6 +167,22 @@ const commandNames = (result: ReturnType<typeof update>) =>
 describe("customers list: filters and views", () => {
 	test("All customers lists every account by name", () => {
 		expect(names(loaded())).toEqual(["Acme Robotics", "Brightfield", "Kestrel Systems", "Northwind Labs"])
+	})
+
+	test("the default tab is Current customers (paying and trialing, by MRR), All customers the last", () => {
+		const churned = account(5, "Zephyr", { lifecycleStage: "churned", mrrMinor: 0 })
+		const lead = account(6, "Yonder", { lifecycleStage: "lead", mrrMinor: 0 })
+		const model = run(init(route(null)).model, [
+			Message.UpdatedViews({ views: [atRisk, mine] }),
+			Message.UpdatedAccounts({ accounts: [...accounts, churned, lead] }),
+		])
+		expect(names(model)).toEqual(["Northwind Labs", "Acme Robotics", "Kestrel Systems", "Brightfield"])
+		expect(viewTabsOf(model.views).map((tab) => tab.name)).toEqual([
+			"Current customers",
+			"At risk",
+			"Scale accounts",
+			"All customers",
+		])
 	})
 
 	test("a built-in view applies its filters and sort, before and after the views sync", () => {
