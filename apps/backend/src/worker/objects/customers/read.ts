@@ -345,6 +345,8 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 
 	const anyActivity = yield* db.first(SQLite.from(schema.customerActivityDailyTable).select("day").limit(1))
 	const anyBilling = yield* db.first(SQLite.from(schema.customerSubscriptionsTable).select("id").limit(1))
+	// One-off invoices without any subscription are billing data too (the Revenue tile).
+	const anyInvoice = yield* db.first(SQLite.from(schema.customerInvoicesTable).select("id").limit(1))
 
 	return {
 		range,
@@ -368,7 +370,10 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		recentChurn,
 		recentNew,
 		newTrials: newTrials.slice(0, 5),
-		hasData: { activity: Option.isSome(anyActivity), billing: Option.isSome(anyBilling) },
+		hasData: {
+			activity: Option.isSome(anyActivity),
+			billing: Option.isSome(anyBilling) || Option.isSome(anyInvoice),
+		},
 	} satisfies OverviewResult
 })
 
