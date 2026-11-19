@@ -5,6 +5,7 @@
  */
 import type { schema } from "@hazel/db"
 import type {
+	AttentionSettings,
 	CustomerProvider,
 	Day,
 	HealthStatus,
@@ -41,6 +42,8 @@ export interface AccountFacts {
 	readonly account: schema.CustomerAccount
 	/** Effective: the override, else derived. */
 	readonly stage: LifecycleStage
+	/** The sources holding a record of the account: its account refs (stale ones too) and subscriptions. */
+	readonly providers: ReadonlySet<CustomerProvider>
 	/** Live contacts. */
 	readonly contacts: ReadonlyArray<ContactFacts>
 	/** Active contacts per day, with their event counts, over the loaded window. */
@@ -73,6 +76,8 @@ export interface OrgFacts {
 	/** Metrics whose source is connected but has stopped delivering: their recent days read empty. */
 	readonly staleMetrics: ReadonlySet<string>
 	readonly currency: string
+	/** Which accounts the rules evaluate at all. */
+	readonly attention: AttentionSettings
 }
 
 /** Distinct contacts active on any day of `[from, to]`. */
@@ -182,3 +187,22 @@ export const formatMoney = (minor: number, currency: string) => {
 /** Billed now: active, or owing (past due, unpaid). */
 export const billed = (sub: schema.CustomerSubscription) =>
 	sub.status === "active" || sub.status === "past_due" || sub.status === "unpaid"
+
+/**
+ * Canceled before its trial ended and never billed past it: it never converted, so never paid. A
+ * billing period ending after the trial (`currentPeriodEnd`) is one it was billed for, even when
+ * the cancellation was asked for during the trial (Stripe's `cancel_at` a later date).
+ */
+const unconverted = (sub: schema.CustomerSubscription) =>
+	sub.status === "canceled" &&
+	sub.trialEndsAt !== null &&
+	sub.canceledAt !== null &&
+	sub.canceledAt <= sub.trialEndsAt &&
+	(sub.currentPeriodEnd === null || sub.currentPeriodEnd <= sub.trialEndsAt)
+
+/**
+ * A paid subscription: it has MRR, or bills on usage MRR cannot capture (`billsByUsage`); not a
+ * trial canceled before converting (a card-backed one carries its plan's MRR).
+ */
+export const pays = (sub: schema.CustomerSubscription) =>
+	(sub.mrrMinor > 0 || sub.billsByUsage) && !unconverted(sub)

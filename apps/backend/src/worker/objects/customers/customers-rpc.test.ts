@@ -546,6 +546,10 @@ describe("Customers RPCs", () => {
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
+				// Billed through Autumn, no Stripe customer: Needs attention set to cover Autumn's.
+				world.rows(
+					`UPDATE customer_settings SET attention = '{"stages":["active","past_due"],"requiredSources":["autumn"]}'`,
+				)
 				const day = (offset: number) =>
 					new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10)
 				yield* world.ingest("clerk", [

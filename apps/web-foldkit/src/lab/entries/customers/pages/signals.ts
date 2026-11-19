@@ -83,6 +83,9 @@ const live = (model: Model, shared: Shared): Model =>
 				reportingCurrency: SETTINGS.reportingCurrency,
 			},
 		}),
+		Message.UpdatedAttention({
+			attention: { settingsId: SETTINGS.id, attention: SETTINGS.attention },
+		}),
 		Message.UpdatedMetrics({
 			metrics: METRIC_DEFINITIONS.map((metric) => ({
 				key: metric.key,
@@ -127,18 +130,20 @@ const withFixturePreview = (model: Model): Model => {
 	})
 }
 
-/** One page step: the debounce elapses at once, the dry run answers, navigation inside the page is followed. */
+/**
+ * One page step: the debounce elapses at once, the dry run answers, an attention save succeeds,
+ * navigation inside the page is followed.
+ */
 const step = (model: Model, message: Message, shared: Shared): Model => {
 	const result = update(model, message, shared)
-	const waited = (result.commands ?? []).some((command) => command.name === "WaitForRuleDryRunDelay")
+	const ran = (name: string) => (result.commands ?? []).some((command) => command.name === name)
+	const saved = ran("SaveAttention")
+		? update(result.model, Message.SucceededSaveAttention(), shared).model
+		: result.model
 	const elapsed =
-		waited && result.model.editor !== null
-			? update(
-					result.model,
-					Message.ElapsedRuleDryRunDelay({ version: result.model.editor.version }),
-					shared,
-				).model
-			: result.model
+		ran("WaitForRuleDryRunDelay") && saved.editor !== null
+			? update(saved, Message.ElapsedRuleDryRunDelay({ version: saved.editor.version }), shared).model
+			: saved
 	const outMessage = result.outMessage
 	const navigated =
 		outMessage?._tag === "RequestedNavigation" &&

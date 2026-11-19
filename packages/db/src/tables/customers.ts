@@ -11,6 +11,7 @@
  * client filters by; internal ones do not (the store is the org).
  */
 import type {
+	AttentionSettings,
 	ConnectionConfig,
 	HealthBreakdown,
 	HealthSettings,
@@ -27,6 +28,7 @@ import type {
 	ViewLayoutKey,
 } from "@hazel/domain/customers"
 import {
+	DEFAULT_ATTENTION_SETTINGS,
 	EMPTY_SYNC_STATS,
 	BillingInterval,
 	BuiltInViewKey,
@@ -606,6 +608,8 @@ export const customerSettingsTable = SQLite.table("customer_settings", {
 		id: id(CustomerSettingsId),
 		organizationId: uuid(OrganizationId),
 		health: jsonb<HealthSettings>(),
+		/** Which customers Needs attention covers (`AttentionSettings`). */
+		attention: SQLite.column(jsonb<AttentionSettings>(), { default: DEFAULT_ATTENTION_SETTINGS }),
 		/** MRR in other currencies is left out of org totals (no FX in v1). */
 		reportingCurrency: SQLite.column(SQLite.text, { default: "usd" }),
 		/** Plan names billed on top of a base plan: not an account's `planName` while it has one. */

@@ -5,7 +5,7 @@ import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import { AccountRow, SettingsSummary, SignalRow } from "../../../../customers/queries"
 import * as Modal from "../../../../ui/modal"
-import { MetricRow, PickerKind, RuleRow, ScopeCondition } from "./model"
+import { AttentionRow, MetricRow, PickerKind, RuleRow, ScopeCondition } from "./model"
 
 /** A rule write's failure: the rule is gone, or the store refused the draft. */
 export const RuleWriteFailure = Schema.Union([Schema.Literals(["NotFound", "Invalid"]), CommonReason])
@@ -18,6 +18,13 @@ export const Message = defineMessageUnion({
 	UpdatedConnectedProviders: { providers: Schema.Array(Customers.CustomerProvider) },
 	UpdatedSettings: { settings: Schema.NullOr(SettingsSummary) },
 	UpdatedMetrics: { metrics: Schema.Array(MetricRow) },
+	UpdatedAttention: { attention: Schema.NullOr(AttentionRow) },
+
+	// Who Needs attention covers
+	ToggledAttentionStage: { stage: Customers.AttentionStage },
+	ToggledAttentionSource: { provider: Customers.CustomerProvider },
+	SucceededSaveAttention: {},
+	FailedSaveAttention: { reason: CommonReason },
 
 	// The list
 	ToggledRule: { ruleId: CustomerSignalRuleId, enabled: Schema.Boolean },

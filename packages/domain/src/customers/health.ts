@@ -116,7 +116,7 @@ export const DEFAULT_HEALTH_SETTINGS: HealthSettings = {
 		billing: { pastDue: 20, overdueOverWeek: 30, overdue: 60, cancelScheduled: 40, ok: 100 },
 		signals: { high: 30, medium: 15, low: 5 },
 	},
-	excludedTemplates: ["health_drop", "near_limit", "seat_growth"],
+	excludedTemplates: ["health_drop", "near_limit", "seat_growth", "churned"],
 }
 
 /** One component of an account's score, and why. */

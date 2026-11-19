@@ -574,5 +574,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_view_layouts_user_unique" ON "customer_view_layouts" ("userId")',
 			],
 		},
+		{
+			id: "0020_customer_attention_settings",
+			statements: [
+				'ALTER TABLE "customer_settings" ADD COLUMN "attention" text NOT NULL DEFAULT \'{"stages":["lead","trialing","active","past_due"],"requiredSources":["stripe"]}\'',
+				'INSERT INTO "customer_signal_rules" ("organizationId", "name", "template", "kind", "severity", "config", "scope", "enabled") SELECT "organizationId", \'Churned\', \'churned\', \'risk\', \'medium\', \'{"_tag":"churned","windowDays":14}\', \'{}\', 1 FROM "customer_settings" WHERE NOT EXISTS (SELECT 1 FROM "customer_signal_rules" WHERE "template" = \'churned\')',
+				'UPDATE "customer_settings" SET "health" = json_insert("health", \'$.excludedTemplates[#]\', \'churned\') WHERE NOT EXISTS (SELECT 1 FROM json_each("customer_settings"."health", \'$.excludedTemplates\') WHERE "value" = \'churned\')',
+			],
+		},
 	],
 }

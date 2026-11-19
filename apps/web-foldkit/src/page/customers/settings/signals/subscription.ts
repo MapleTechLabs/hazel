@@ -10,7 +10,7 @@ import {
 import type { PageSubscriptionInput } from "../../../contract"
 import { Message } from "./message"
 import type { Model } from "./model"
-import { metricsStream, rulesStream } from "./queries"
+import { attentionStream, metricsStream, rulesStream } from "./queries"
 
 type Input = PageSubscriptionInput<Model>
 
@@ -22,7 +22,7 @@ const live =
 	({ organizationId }: { readonly organizationId: OrganizationId | null }) =>
 		organizationId === null ? Stream.empty : stream(organizationId)
 
-/** The rules, their signals, the accounts (scope counts, plan names), sources, settings and metrics. */
+/** The rules, their signals, the accounts (scope counts, plan names), sources, settings, who Needs attention covers, and metrics. */
 export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 	rules: entry(organization, {
 		modelToDependencies: organizationOf,
@@ -50,6 +50,12 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 		modelToDependencies: organizationOf,
 		dependenciesToStream: live((id) =>
 			settingsSummaryStream(id, (settings) => Message.UpdatedSettings({ settings })),
+		),
+	}),
+	attention: entry(organization, {
+		modelToDependencies: organizationOf,
+		dependenciesToStream: live((id) =>
+			attentionStream(id, (attention) => Message.UpdatedAttention({ attention })),
 		),
 	}),
 	metrics: entry(organization, {

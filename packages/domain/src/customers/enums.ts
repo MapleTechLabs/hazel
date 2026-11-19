@@ -60,6 +60,7 @@ export const SignalTemplate = Schema.Literals([
 	"champion_inactive",
 	"near_limit",
 	"seat_growth",
+	"churned",
 ])
 export type SignalTemplate = typeof SignalTemplate.Type
 

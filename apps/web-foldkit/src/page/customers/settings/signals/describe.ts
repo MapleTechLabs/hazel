@@ -7,6 +7,7 @@ import {
 	IconCirclePause,
 	IconClock,
 	IconHeart,
+	IconLeave,
 	IconLoader,
 	IconPresentationChart,
 	IconRocket,
@@ -36,6 +37,7 @@ export const TEMPLATE_ICON = {
 	champion_inactive: IconStar,
 	near_limit: IconChartBar,
 	seat_growth: IconUsers,
+	churned: IconLeave,
 } as const satisfies Record<Customers.SignalTemplate, Icon>
 
 /** The picker card's one-liner. */
@@ -50,6 +52,7 @@ export const TEMPLATE_BLURB = {
 	champion_inactive: "The account's most active person stops showing up",
 	near_limit: "A metered feature is close to the plan's limit",
 	seat_growth: "Active users growing fast: a good moment to talk expansion",
+	churned: "A customer stopped paying: its last entry, for a win-back or an exit call",
 } as const satisfies Record<Customers.SignalTemplate, string>
 
 /** A sentence in pieces: `Bold` pieces are the values a reader scans for. */
@@ -166,6 +169,8 @@ export const conditionParts = (
 				", from at least ",
 				bold(v("minActiveUsers")),
 			]
+		case "churned":
+			return ["Churned in the last ", bold(counted(config.windowDays, "day"))]
 	}
 }
 

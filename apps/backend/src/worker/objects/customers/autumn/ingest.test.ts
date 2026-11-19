@@ -217,6 +217,10 @@ describe("Autumn ops through CustomerIngest", () => {
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
+				// Billed through Autumn, no Stripe customer: Needs attention set to cover Autumn's.
+				world.rows(
+					`UPDATE customer_settings SET attention = '{"stages":["lead","trialing","active","past_due"],"requiredSources":["autumn"]}'`,
+				)
 				yield* world.ingest("clerk", clerkBefore)
 				yield* world.ingest("autumn", backfill)
 				markBackfilled(world, "autumn")

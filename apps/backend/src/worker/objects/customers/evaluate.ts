@@ -26,10 +26,11 @@ import {
 	formatMoney,
 	mrrSeries,
 	type OrgFacts,
+	pays,
 	rollingActiveSeries,
 	seriesOf,
 } from "./facts"
-import { addDays, DAY_MS, daysBetween, daysSince } from "./time"
+import { addDays, DAY_MS, dayOf, daysBetween, daysSince } from "./time"
 
 /** The parts of a rule evaluation reads. */
 export interface RuleInput {
@@ -42,6 +43,7 @@ export interface RuleInput {
 
 export type NonMatchReason =
 	| "Churned"
+	| "Not covered by Needs attention"
 	| "Out of scope"
 	| "Missing data source"
 	| "No data"
@@ -103,6 +105,15 @@ export const inScope = (scope: RuleScope, facts: AccountFacts): boolean => {
 		return false
 	}
 	return true
+}
+
+/** Whether Needs attention covers the account (`AttentionSettings`); a churned one only for its churn. */
+export const covered = (facts: AccountFacts, org: OrgFacts): boolean => {
+	const { stages, requiredSources } = org.attention
+	return (
+		(facts.stage === "churned" || stages.some((stage) => stage === facts.stage)) &&
+		(requiredSources.length === 0 || requiredSources.some((provider) => facts.providers.has(provider)))
+	)
 }
 
 type Found = { readonly step: EvidenceStep; readonly reason: string; readonly evidence: SignalEvidence }
@@ -533,8 +544,83 @@ const checkOf = (config: RuleConfig): Check => {
 			return nearLimit(config)
 		case "seat_growth":
 			return seatGrowth(config)
+		case "churned":
+			return churned(config)
 	}
 }
+
+const churned =
+	(config: Extract<RuleConfig, { _tag: "churned" }>): Check =>
+	(facts, org) => {
+		const churnedAt = facts.account.churnedAt
+		if (facts.stage !== "churned" || churnedAt === null) return "Below threshold"
+		// This episode's churn movement, dated the day compute saw the MRR end (a scheduled
+		// cancellation's `canceledAt`, and so `churnedAt`, is the day it was requested). An older one
+		// is a past episode's: an account churning off a zero-MRR usage plan writes none.
+		const churn = [...facts.movements]
+			.reverse()
+			.find((movement) => movement.type === "churn" && movement.day >= dayOf(churnedAt))
+		// Before this compute's movement is loaded, the day it ended: a scheduled cancellation's period
+		// end once passed (an immediate one keeps a later period end it never reached), else
+		// `canceledAt`.
+		const ended = facts.subscriptions
+			.flatMap((sub) =>
+				sub.canceledAt === null
+					? []
+					: [
+							sub.cancelAtPeriodEnd &&
+							sub.currentPeriodEnd !== null &&
+							sub.currentPeriodEnd > sub.canceledAt &&
+							sub.currentPeriodEnd <= org.now
+								? sub.currentPeriodEnd
+								: sub.canceledAt,
+						],
+			)
+			.reduce<Date>((latest, date) => (date > latest ? date : latest), churnedAt)
+		const churnDay = churn?.day ?? dayOf(ended)
+		const days = daysBetween(churnDay, org.today)
+		if (days >= config.windowDays) return "Below threshold"
+		const canceled = [...facts.subscriptions]
+			.filter((sub) => sub.canceledAt !== null)
+			.sort((a, b) => (b.canceledAt?.getTime() ?? 0) - (a.canceledAt?.getTime() ?? 0))
+		const last = canceled[0]
+		// Before this compute's movement is loaded: the MRR of every paid subscription canceled that
+		// same day, in the reporting currency (as the rollup counts it).
+		const lost =
+			churn?.fromMrrMinor ??
+			canceled
+				.filter(
+					(sub) =>
+						pays(sub) &&
+						sub.currency === org.currency &&
+						sub.canceledAt !== null &&
+						dayOf(sub.canceledAt) === dayOf(churnedAt),
+				)
+				.reduce((sum, sub) => sum + sub.mrrMinor, 0)
+		const currency = churn?.currency ?? org.currency
+		return {
+			step: 0,
+			reason: `${lost > 0 ? `Lost ${formatMoney(lost, currency)}/mo ` : ""}${days === 0 ? "today" : `${plural(days, "day")} ago`}`,
+			evidence: {
+				_tag: "delta",
+				step: 0,
+				unit: "minor",
+				from: lost,
+				to: 0,
+				changePct: lost === 0 ? null : -100,
+				currency,
+				// When it ended (a scheduled cancellation's period end), not when it was asked for.
+				effectiveAt: iso(ended),
+				fromLabel: last?.planName ?? null,
+				toLabel: "Churned",
+				reason: last?.cancellationReason ?? null,
+				// MRR is 0 from the churn on: today's churn movement is written after the facts load.
+				series: mrrSeries(facts.movements, facts.account.mrrMinor, org.today, 30).map((point) =>
+					point.day >= (churn?.day ?? org.today) ? { ...point, value: 0 } : point,
+				),
+			},
+		}
+	}
 
 /** The template needs one of its sources connected. */
 export const missingSources = (template: SignalTemplate, org: OrgFacts): ReadonlyArray<CustomerProvider> => {
@@ -543,7 +629,9 @@ export const missingSources = (template: SignalTemplate, org: OrgFacts): Readonl
 }
 
 export const evaluate = (rule: RuleInput, facts: AccountFacts, org: OrgFacts): Evaluation => {
-	if (facts.stage === "churned") return noMatch("Churned")
+	// Churn is a customer's last entry: no other rule evaluates it after.
+	if (facts.stage === "churned" && rule.template !== "churned") return noMatch("Churned")
+	if (!covered(facts, org)) return noMatch("Not covered by Needs attention")
 	if (!inScope(rule.scope, facts)) return noMatch("Out of scope")
 	if (missingSources(rule.template, org).length > 0) return noMatch("Missing data source")
 	const found = checkOf(rule.config)(facts, org)

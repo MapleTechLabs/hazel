@@ -11,6 +11,7 @@ import { button } from "../../../../ui/button"
 import { switchControl } from "../../../../ui/switch"
 import type { Shared } from "../../../contract"
 import { isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
+import { attentionCard } from "./attention-view"
 import { conditionParts, plainText, scopeSummary } from "./describe"
 import { configFormOf } from "./draft"
 import { Message } from "./message"
@@ -299,6 +300,9 @@ export const listView = (h: H, model: Model, shared: Shared): Html => {
 						]
 					: [
 							summary(h, model, rules, shared.nowMs),
+							...(model.attention === null
+								? []
+								: [attentionCard(h, model.attention, !isAdmin || model.isSavingAttention)]),
 							...group(
 								h,
 								model,

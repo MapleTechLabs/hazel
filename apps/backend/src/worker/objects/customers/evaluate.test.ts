@@ -431,4 +431,182 @@ describe("signal evaluation", () => {
 		)
 		expect(renamed).toMatchObject({ _tag: "Match", title: "Gone dark", severity: "high" })
 	})
+
+	it("only covers the customers Needs attention is set to: by stage and by source", () => {
+		const quiet: FactsInput = { activity: { ann: [-20] }, priorActive: [[30, 2]] }
+		const notCovered = { _tag: "NoMatch", reason: "Not covered by Needs attention" }
+		// Signed up through Clerk, never a Stripe customer: not someone to act on.
+		expect(run("inactive", { ...quiet, providers: ["clerk"] })).toEqual(notCovered)
+		expect(
+			run(
+				"inactive",
+				{ ...quiet, providers: ["clerk"] },
+				orgFacts({
+					attention: { stages: ["active"], requiredSources: [] },
+				}),
+			)._tag,
+		).toBe("Match")
+		expect(
+			run(
+				"inactive",
+				{ ...quiet, providers: ["clerk", "autumn"] },
+				orgFacts({
+					attention: { stages: ["active"], requiredSources: ["stripe", "autumn"] },
+				}),
+			)._tag,
+		).toBe("Match")
+		expect(
+			run(
+				"inactive",
+				{ ...quiet, account: { lifecycleStage: "lead" } },
+				orgFacts({
+					attention: { stages: ["active", "trialing"], requiredSources: ["stripe"] },
+				}),
+			),
+		).toEqual(notCovered)
+	})
+
+	it("churned: the customer's last entry, for the window after it churned", () => {
+		const churned = (days: number, input: FactsInput = {}): FactsInput => ({
+			account: {
+				lifecycleStage: "churned",
+				mrrMinor: 0,
+				churnedAt: new Date(NOW.getTime() - days * 86_400_000),
+			},
+			movements: [{ type: "churn", fromMrrMinor: 19_900, toMrrMinor: 0, day: addDays(TODAY, -days) }],
+			subscriptions: [
+				{
+					status: "canceled",
+					planName: "Team",
+					canceledAt: new Date(NOW.getTime() - days * 86_400_000),
+					cancellationReason: "too_expensive",
+				},
+			],
+			...input,
+		})
+		const found = match("churned", churned(3))
+		expect(found.reason).toBe(`Lost ${formatMoney(19_900, "usd")}/mo 3 days ago`)
+		expect(found.evidence).toMatchObject({
+			_tag: "delta",
+			unit: "minor",
+			from: 19_900,
+			to: 0,
+			fromLabel: "Team",
+			toLabel: "Churned",
+			reason: "too_expensive",
+		})
+		expect(run("churned", churned(20))).toEqual({ _tag: "NoMatch", reason: "Below threshold" })
+		expect(run("churned", {})).toEqual({ _tag: "NoMatch", reason: "Below threshold" })
+		// Still needs the source: a churned org that was never in Stripe is not covered.
+		expect(run("churned", churned(3, { providers: ["clerk"] }))).toEqual({
+			_tag: "NoMatch",
+			reason: "Not covered by Needs attention",
+		})
+		// A scheduled cancellation: requested 29 days ago, ended (the movement) 2 days ago.
+		expect(
+			match(
+				"churned",
+				churned(29, {
+					movements: [
+						{ type: "churn", fromMrrMinor: 19_900, toMrrMinor: 0, day: addDays(TODAY, -2) },
+					],
+				}),
+			).reason,
+		).toBe(`Lost ${formatMoney(19_900, "usd")}/mo 2 days ago`)
+		// …and before that movement loads: the canceled subscription's period end, 2 days ago.
+		const scheduled = match(
+			"churned",
+			churned(29, {
+				movements: [],
+				subscriptions: [
+					{
+						status: "canceled",
+						mrrMinor: 19_900,
+						cancelAtPeriodEnd: true,
+						canceledAt: new Date(NOW.getTime() - 29 * 86_400_000),
+						currentPeriodEnd: new Date(NOW.getTime() - 2 * 86_400_000),
+					},
+				],
+			}),
+		)
+		expect(scheduled.reason).toBe(`Lost ${formatMoney(19_900, "usd")}/mo 2 days ago`)
+		expect(scheduled.evidence).toMatchObject({
+			effectiveAt: new Date(NOW.getTime() - 2 * 86_400_000).toISOString(),
+		})
+		// Canceled at once 30 days ago: the period end Stripe keeps (passed yesterday) is not when it ended.
+		expect(
+			run(
+				"churned",
+				churned(30, {
+					movements: [],
+					subscriptions: [
+						{
+							status: "canceled",
+							mrrMinor: 0,
+							billsByUsage: true,
+							cancelAtPeriodEnd: false,
+							canceledAt: new Date(NOW.getTime() - 30 * 86_400_000),
+							currentPeriodEnd: new Date(NOW.getTime() - 86_400_000),
+						},
+					],
+				}),
+			),
+		).toEqual({ _tag: "NoMatch", reason: "Below threshold" })
+		// A past episode's movement is not this churn's; before the movement loads, every
+		// subscription canceled that day counts.
+		const twoSubs = (days: number) => ({
+			status: "canceled" as const,
+			canceledAt: new Date(NOW.getTime() - days * 86_400_000),
+		})
+		expect(
+			match(
+				"churned",
+				churned(3, {
+					movements: [
+						{ type: "churn", fromMrrMinor: 99_000, toMrrMinor: 0, day: addDays(TODAY, -200) },
+					],
+					subscriptions: [
+						{ ...twoSubs(3), mrrMinor: 10_000 },
+						{ ...twoSubs(3), mrrMinor: 5_000 },
+					],
+				}),
+			).evidence,
+		).toMatchObject({ from: 15_000 })
+		// …only paid ones in the reporting currency: not a trial that never converted, not EUR.
+		expect(
+			match(
+				"churned",
+				churned(3, {
+					movements: [],
+					subscriptions: [
+						{ ...twoSubs(3), mrrMinor: 10_000 },
+						{
+							...twoSubs(3),
+							mrrMinor: 50_000,
+							trialEndsAt: new Date(NOW.getTime() + 86_400_000),
+							currentPeriodEnd: null,
+						},
+						{ ...twoSubs(3), mrrMinor: 5_000, currency: "eur" },
+					],
+				}),
+			).evidence,
+		).toMatchObject({ from: 10_000, currency: "usd" })
+		// The compute that sees the churn has not written its movement yet: the series still ends at 0.
+		const unseen = match(
+			"churned",
+			churned(0, {
+				movements: [{ type: "new", fromMrrMinor: 0, toMrrMinor: 19_900, day: addDays(TODAY, -60) }],
+				subscriptions: [{ ...twoSubs(0), mrrMinor: 19_900 }],
+			}),
+		).evidence
+		if (unseen._tag !== "delta") throw new Error("delta evidence")
+		expect(unseen.from).toBe(19_900)
+		expect(unseen.series.at(-1)).toEqual({ day: TODAY, value: 0 })
+		expect(unseen.series.at(-2)?.value).toBe(19_900)
+		// …but not a stage: churn is covered even with no stage picked.
+		expect(
+			run("churned", churned(3), orgFacts({ attention: { stages: [], requiredSources: ["stripe"] } }))
+				._tag,
+		).toBe("Match")
+	})
 })
