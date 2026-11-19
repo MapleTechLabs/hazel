@@ -49,11 +49,12 @@ const statusLine = <M>(
 	rest: string | null,
 ): Html =>
 	h.p(
-		[h.Class("flex items-center gap-1.5 text-sm")],
+		// Wraps between its parts, never inside one ("Sync failed", "· 2h ago").
+		[h.Class("flex flex-wrap items-center gap-x-1.5 text-sm")],
 		[
 			h.span([h.AriaHidden(true), h.Class(twMerge("size-1.5 shrink-0 rounded-full", dotClass))]),
-			h.span([h.Class(labelClass)], [label]),
-			...(rest === null ? [] : [h.span([h.Class("text-muted-fg")], [`· ${rest}`])]),
+			h.span([h.Class(twMerge("whitespace-nowrap", labelClass))], [label]),
+			...(rest === null ? [] : [h.span([h.Class("whitespace-nowrap text-muted-fg")], [`· ${rest}`])]),
 		],
 	)
 
@@ -159,7 +160,7 @@ export const connectCard = <M>(
 			h.AriaLabel(SOURCE_LABEL[options.provider]),
 			h.Class(
 				twMerge(
-					"flex flex-col gap-4 rounded-xl border border-border bg-bg p-4 sm:p-5",
+					"flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-bg p-4 sm:p-5",
 					options.className,
 				),
 			),

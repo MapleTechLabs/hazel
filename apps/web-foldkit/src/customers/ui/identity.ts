@@ -255,6 +255,16 @@ export const personAvatar = <M>(
 			)
 }
 
+/** `personAvatar` leading a menu item: the dropdown's `avatar` slot sizes it (an `icon` slot is too small). */
+export const menuAvatar = <M>(
+	h: HtmlBuilder<M>,
+	person: Readonly<{ name: string; avatarUrl?: string | null }> | null,
+): Html =>
+	h.span(
+		[h.DataAttribute("slot", "avatar"), h.Class("inline-flex size-(--avatar-size)")],
+		[personAvatar(h, person, { className: "size-full" })],
+	)
+
 /** Avatar plus name; `null` reads "Unassigned". */
 export const personLabel = <M>(
 	h: HtmlBuilder<M>,

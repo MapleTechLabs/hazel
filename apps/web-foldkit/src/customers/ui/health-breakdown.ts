@@ -172,7 +172,8 @@ export const healthBreakdown = <M>(
 									h.th(
 										[
 											h.Scope("col"),
-											h.Class("w-32 px-3 text-right max-sm:w-auto max-sm:px-2"),
+											// A phone keeps the points (they sum to the score) and drops the score and weight.
+											h.Class("w-32 px-3 text-right max-sm:hidden"),
 										],
 										["Score"],
 									),
@@ -239,7 +240,7 @@ export const healthBreakdown = <M>(
 										],
 									),
 									h.td(
-										[h.Class("px-3 text-right max-sm:px-2")],
+										[h.Class("px-3 text-right max-sm:hidden")],
 										[
 											component.score === null
 												? h.span(
@@ -260,7 +261,7 @@ export const healthBreakdown = <M>(
 															h.span(
 																[
 																	h.Class(
-																		"block h-1 w-10 overflow-hidden rounded-full bg-secondary max-sm:hidden",
+																		"block h-1 w-10 overflow-hidden rounded-full bg-secondary",
 																	),
 																],
 																[

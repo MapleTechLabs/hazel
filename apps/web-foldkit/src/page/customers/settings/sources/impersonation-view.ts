@@ -2,7 +2,7 @@ import type { UserId } from "@hazel/schema"
 import type { Html } from "foldkit/html"
 import { formatDate, formatRelative } from "../../../../customers/format"
 import type { MemberRow } from "../../../../customers/queries"
-import { personAvatar } from "../../../../customers/ui/identity"
+import { menuAvatar, personAvatar } from "../../../../customers/ui/identity"
 import { IconPlus } from "../../../../icons"
 import { button } from "../../../../ui/button"
 import { heading } from "../../../../ui/heading"
@@ -35,10 +35,7 @@ const addMemberMenu = (h: H, model: Model, members: ReadonlyArray<MemberRow>): H
 			content: (key) => {
 				const member = members.find((entry) => entry.id === key) ?? null
 				return [
-					h.span(
-						[h.DataAttribute("slot", "icon"), h.Class("inline-flex")],
-						[personAvatar(h, member)],
-					),
+					menuAvatar(h, member),
 					menuLabel(h, model.impersonatorMenu.id, key, member?.name ?? key),
 				]
 			},

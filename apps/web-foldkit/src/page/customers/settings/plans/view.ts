@@ -33,6 +33,7 @@ const planRow = (h: HtmlBuilder<Message>, plan: string, isAddOn: boolean, canEdi
 					isSelected: isAddOn,
 					isDisabled: !canEdit,
 					onChange: (isSelected) => Message.ToggledAddOn({ plan, isAddOn: isSelected }),
+					className: "shrink-0",
 				},
 				"Add-on",
 			),

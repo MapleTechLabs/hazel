@@ -56,7 +56,11 @@ const row = (
 	keys: ReadonlyArray<string>,
 ): Html =>
 	h.div(
-		[h.Class("grid gap-1 px-3 py-2.5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center sm:gap-4")],
+		[
+			h.Class(
+				"grid grid-cols-1 gap-1 px-3 py-2.5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center sm:gap-4",
+			),
+		],
 		[
 			h.span([h.Class("text-muted-fg text-sm")], [label]),
 			h.div(
@@ -377,23 +381,28 @@ const metricRow = (h: H, context: ConditionContext, metric: MetricRow, selected:
 	]
 	if (!available && metric.provider !== null) {
 		return h.div(
-			[h.Class("flex items-center gap-3 px-3 py-2.5")],
+			[h.Class("flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5")],
 			[
-				h.span([h.Class("flex min-w-0 flex-1 items-center gap-3 opacity-50")], body),
-				h.span([h.Class("text-muted-fg text-xs")], [`Requires ${PROVIDERS[metric.provider].name}`]),
-				h.a(
+				h.span([h.Class("flex min-w-0 flex-[1_1_14rem] items-center gap-3 opacity-50")], body),
+				h.span(
+					[h.Class("flex shrink-0 items-center gap-3 text-xs max-sm:pl-7")],
 					[
-						h.Href(
-							hrefOf(
-								AppRoute.CustomersSourceDetail({
-									orgSlug: context.orgSlug,
-									provider: metric.provider,
-								}),
-							),
+						h.span([h.Class("text-muted-fg")], [`Requires ${PROVIDERS[metric.provider].name}`]),
+						h.a(
+							[
+								h.Href(
+									hrefOf(
+										AppRoute.CustomersSourceDetail({
+											orgSlug: context.orgSlug,
+											provider: metric.provider,
+										}),
+									),
+								),
+								h.Class("font-medium text-primary hover:underline"),
+							],
+							["Connect"],
 						),
-						h.Class("font-medium text-primary text-xs hover:underline"),
 					],
-					["Connect"],
 				),
 			],
 		)
@@ -462,21 +471,19 @@ const windowsBar = (h: H, context: ConditionContext): ReadonlyArray<Html> => {
 					[
 						h.span(
 							[
-								h.Class(
-									"flex items-center justify-center truncate bg-secondary px-2 text-fg-2",
-								),
+								h.Class("flex items-center justify-center bg-secondary px-2 text-fg-2"),
 								h.Style({ width: `${share}%` }),
 							],
-							[`Baseline · previous ${baseline} days`],
+							[h.span([h.Class("truncate")], [`Baseline · previous ${baseline} days`])],
 						),
 						h.span(
 							[
 								h.Class(
-									"flex items-center justify-center truncate bg-warning-subtle px-2 text-warning-subtle-fg",
+									"flex items-center justify-center bg-warning-subtle px-2 text-warning-subtle-fg",
 								),
 								h.Style({ width: `${100 - share}%` }),
 							],
-							[`Last ${recent} days`],
+							[h.span([h.Class("truncate")], [`Last ${recent} days`])],
 						),
 					],
 				),
@@ -488,7 +495,11 @@ const windowsBar = (h: H, context: ConditionContext): ReadonlyArray<Html> => {
 							[day(lastMs - (baseline + recent - 1) * DAY_MS)],
 						),
 						h.span(
-							[h.Class("absolute -translate-x-1/2"), h.Style({ left: `${share}%` })],
+							// Hidden on phones, where it would run into the last day.
+							[
+								h.Class("absolute -translate-x-1/2 max-sm:hidden"),
+								h.Style({ left: `${share}%` }),
+							],
 							[day(lastMs - (recent - 1) * DAY_MS)],
 						),
 						h.span([h.Class("absolute right-0")], [day(lastMs)]),

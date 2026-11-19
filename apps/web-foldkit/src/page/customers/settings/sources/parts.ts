@@ -145,7 +145,8 @@ export const callout = (
 		[
 			IconWarning(h, { className: "mt-0.5 size-4 shrink-0" }),
 			h.div(
-				[h.Class("flex min-w-0 flex-1 flex-col gap-1")],
+				// A basis, so a narrow callout wraps its actions under the text instead of squeezing it.
+				[h.Class("flex min-w-0 flex-1 basis-48 flex-col gap-1")],
 				[
 					h.p([h.Class("font-medium text-sm")], [options.message.title]),
 					...(options.message.description === undefined
@@ -156,7 +157,7 @@ export const callout = (
 			),
 			...(options.actions === undefined || options.actions.length === 0
 				? []
-				: [h.div([h.Class("flex shrink-0 items-center gap-2")], [...options.actions])]),
+				: [h.div([h.Class("flex flex-wrap items-center gap-2")], [...options.actions])]),
 		],
 	)
 }
@@ -178,10 +179,11 @@ export const card = (h: H, children: ReadonlyArray<Html>, className?: string): H
 
 export const cardHeader = (h: H, title: string, description?: string, aside?: Html): Html =>
 	h.header(
-		[h.Class("flex items-start justify-between gap-4")],
+		// Wraps, so a narrow card puts the aside under a long description instead of squeezing it.
+		[h.Class("flex flex-wrap items-start justify-between gap-x-4 gap-y-3")],
 		[
 			h.div(
-				[h.Class("flex min-w-0 flex-col gap-0.5")],
+				[h.Class("flex min-w-0 flex-1 basis-64 flex-col gap-0.5")],
 				[
 					heading(h, { variant: "section" }, [title]),
 					...(description === undefined
@@ -252,7 +254,9 @@ export const formField = (
 					h.Attribute("spellcheck", "false"),
 				],
 			}),
-			...(options.description === undefined ? [] : [parts.description([options.description])]),
+			...(options.description === undefined
+				? []
+				: [parts.description([options.description], { className: "text-xs/5" })]),
 		],
 	)
 

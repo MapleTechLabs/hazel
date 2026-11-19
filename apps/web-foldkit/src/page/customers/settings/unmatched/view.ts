@@ -138,7 +138,7 @@ const controls = (h: HtmlBuilder<Message>, model: Model, isMobile: boolean): Rea
 		trailing: isMobile
 			? undefined
 			: h.div(
-					[h.Class("ml-auto flex items-center gap-2 pb-1 max-sm:hidden")],
+					[h.Class("ml-auto flex shrink-0 items-center gap-2 pb-1 max-sm:hidden")],
 					searchAndSort(h, model, "w-56"),
 				),
 	}),
@@ -291,8 +291,8 @@ const openTab = (h: HtmlBuilder<Message>, model: Model, shared: Shared): Readonl
 		const ignored = itemsOf(model.ignored).length
 		return [
 			h.div(
-				// A phone scrolls the table sideways inside the card.
-				[h.Class(`${card} max-md:overflow-x-auto`)],
+				// The table's columns follow the card's width.
+				[h.Class(`${card} @container`)],
 				[
 					recordsTable(h, model, groupsOf(records), {
 						id: "unmatched-open",
@@ -431,8 +431,8 @@ const ignoredTab = (h: HtmlBuilder<Message>, model: Model, shared: Shared): Read
 			]
 		return [
 			h.div(
-				// A phone scrolls the table sideways inside the card.
-				[h.Class(`${card} max-md:overflow-x-auto`)],
+				// The table's columns follow the card's width.
+				[h.Class(`${card} @container`)],
 				[
 					recordsTable(h, model, groupsOf(records), {
 						id: "unmatched-ignored",

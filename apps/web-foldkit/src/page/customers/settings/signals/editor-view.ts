@@ -138,9 +138,9 @@ const plainWordsCard = (h: H, model: Model, form: RuleForm): Html =>
 const ruleCard = (h: H, form: RuleForm, status: EditorStatus, isAdmin: boolean): Html => {
 	const meta = Customers.TEMPLATES[form.template]
 	const nameError = status.errors.name
-	return card(h, { title: "Rule" }, [
+	return card(h, { title: "Rule", className: "@container" }, [
 		h.div(
-			[h.Class("grid gap-5 sm:grid-cols-2")],
+			[h.Class("grid grid-cols-1 gap-5 @lg:grid-cols-2")],
 			[
 				field(h, [
 					label(h, "Name", NAME_ID),

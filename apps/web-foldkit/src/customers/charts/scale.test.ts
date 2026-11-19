@@ -75,6 +75,7 @@ describe("positions", () => {
 		expect(tickIndexes(3, 5)).toEqual([0, 1, 2])
 		expect(tickIndexes(30, 5)).toEqual([1, 8, 15, 22, 29])
 		expect(tickIndexes(12, 12)).toHaveLength(12)
+		expect(tickIndexes(13, 12)).toEqual([0, 2, 4, 6, 8, 10, 12])
 		expect(tickIndexes(0, 5)).toEqual([])
 	})
 

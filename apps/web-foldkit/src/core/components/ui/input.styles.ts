@@ -27,12 +27,12 @@ export const inputGroupStyles = [
 	"[&>[data-slot=loader]:first-child]:left-3 sm:[&>[data-slot=loader]:first-child]:left-2.5 [&>[data-slot=loader]:last-child]:right-3 sm:[&>[data-slot=loader]:last-child]:right-2.5",
 
 	// text
-	"has-[[data-slot=text]:last-child]:[&_input]:pr-[calc(var(--input-gutter-end)+--spacing(2))] has-[[data-slot=text]:first-child]:[&_input]:pl-[calc(var(--input-gutter-start)+--spacing(2))] sm:has-[[data-slot=text]:last-child]:[&_input]:pr-(--input-gutter-end,--spacing(10)) sm:has-[[data-slot=text]:first-child]:[&_input]:pl-(--input-gutter-start,--spacing(10))",
+	"has-[[data-slot=text]:last-child]:[&_input]:pr-[calc(var(--input-gutter-end,--spacing(10))+--spacing(2))] has-[[data-slot=text]:first-child]:[&_input]:pl-[calc(var(--input-gutter-start,--spacing(10))+--spacing(2))] sm:has-[[data-slot=text]:last-child]:[&_input]:pr-(--input-gutter-end,--spacing(10)) sm:has-[[data-slot=text]:first-child]:[&_input]:pl-(--input-gutter-start,--spacing(10))",
 	"*:data-[slot=text]:absolute *:data-[slot=text]:top-0 *:data-[slot=text]:z-10 *:data-[slot=text]:h-full *:data-[slot=text]:max-w-fit *:data-[slot=text]:grow *:data-[slot=text]:content-center [&>[data-slot='text']:not([class*='pointer-events'])]:pointer-events-none",
 	"[&>[data-slot=text]:first-child:not([class*='left-'])]:left-3 sm:[&>[data-slot=text]:first-child:not([class*='left-'])]:left-2.5 [&>[data-slot=text]:last-child:not([class*='right-'])]:right-3 sm:[&>[data-slot=text]:last-child:not([class*='right-'])]:right-2.5",
 
 	// keyboard
-	"has-[[data-slot=keyboard]:last-child]:[&_input]:pr-[calc(var(--input-gutter-end)+--spacing(2))] has-[[data-slot=keyboard]:first-child]:[&_input]:pl-[calc(var(--input-gutter-start)+--spacing(2))] sm:has-[[data-slot=keyboard]:last-child]:[&_input]:pr-(--input-gutter-end,--spacing(10)) sm:has-[[data-slot=keyboard]:first-child]:[&_input]:pl-(--input-gutter-start,--spacing(10))",
+	"has-[[data-slot=keyboard]:last-child]:[&_input]:pr-[calc(var(--input-gutter-end,--spacing(10))+--spacing(2))] has-[[data-slot=keyboard]:first-child]:[&_input]:pl-[calc(var(--input-gutter-start,--spacing(10))+--spacing(2))] sm:has-[[data-slot=keyboard]:last-child]:[&_input]:pr-(--input-gutter-end,--spacing(10)) sm:has-[[data-slot=keyboard]:first-child]:[&_input]:pl-(--input-gutter-start,--spacing(10))",
 	"*:data-[slot=keyboard]:absolute *:data-[slot=keyboard]:top-0 *:data-[slot=keyboard]:z-10 *:data-[slot=keyboard]:h-full *:data-[slot=keyboard]:max-w-fit *:data-[slot=keyboard]:grow *:data-[slot=keyboard]:content-center [&>[data-slot='keyboard']:not([class*='pointer-events'])]:pointer-events-none",
 	"[&>[data-slot=keyboard]:first-child:not([class*='left-'])]:left-3 sm:[&>[data-slot=keyboard]:first-child:not([class*='left-'])]:left-2.5 [&>[data-slot=keyboard]:last-child:not([class*='right-'])]:right-3 sm:[&>[data-slot=keyboard]:last-child:not([class*='right-'])]:right-2.5",
 

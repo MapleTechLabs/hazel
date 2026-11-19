@@ -18,7 +18,10 @@ export type Column<Row, K extends string = string> = Readonly<{
 	label: string
 	align?: "left" | "right"
 	sortable?: boolean
-	/** Header and cell width, e.g. `w-40`; one column without a width takes the rest. */
+	/**
+	 * Header and cell width, e.g. `w-40`. When only one column has none, it takes the rest and its
+	 * content truncates (down to `min-w-40`, past which the table scrolls); several share by content.
+	 */
 	widthClass?: string
 	/** Hide below a breakpoint, e.g. `max-lg:hidden`. */
 	hideClass?: string
@@ -72,6 +75,9 @@ export const dataTable = <Row, M, K extends string = string>(
 	const allSelected = options.rows.length > 0 && selectedCount === options.rows.length
 	const hasFooter = options.columns.some((column) => column.footer !== undefined)
 	const cellPad = "px-3 first:pl-4 last:pr-4"
+	const widthless = options.columns.filter((column) => column.widthClass === undefined)
+	const widthOf = (column: Column<Row, K>) =>
+		widthless.length === 1 && widthless[0] === column ? "w-full max-w-0 min-w-40" : column.widthClass
 
 	const header = (column: Column<Row, K>): Html => {
 		const direction = options.sort && options.sort.key === column.key ? options.sort.direction : null
@@ -85,6 +91,8 @@ export const dataTable = <Row, M, K extends string = string>(
 								twMerge(
 									"inline-flex cursor-pointer items-center gap-1 rounded outline-hidden hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
 									isSorted && "text-fg",
+									// The chevron's slot sits on the inner side, so the label lines up with the cells.
+									column.align === "right" && "flex-row-reverse",
 								),
 							),
 							h.OnClick(options.onSort(column.key)),
@@ -119,7 +127,7 @@ export const dataTable = <Row, M, K extends string = string>(
 						tableHeadClass,
 						cellPad,
 						alignClass(column.align),
-						column.widthClass,
+						widthOf(column),
 						column.hideClass,
 					),
 				),
@@ -197,7 +205,7 @@ export const dataTable = <Row, M, K extends string = string>(
 									"h-13 text-fg text-sm tabular-nums",
 									cellPad,
 									alignClass(column.align),
-									column.widthClass,
+									widthOf(column),
 									column.hideClass,
 									columnIndex === lastIndex && options.rowActions && "relative",
 								),
@@ -238,7 +246,7 @@ export const dataTable = <Row, M, K extends string = string>(
 					: []),
 				...options.columns.map((column) =>
 					h.td(
-						[h.Class(twMerge("h-13", cellPad, column.widthClass, column.hideClass))],
+						[h.Class(twMerge("h-13", cellPad, widthOf(column), column.hideClass))],
 						[
 							h.span([
 								h.Class(
@@ -304,7 +312,7 @@ export const dataTable = <Row, M, K extends string = string>(
 																	"h-11 font-medium text-fg text-sm tabular-nums",
 																	cellPad,
 																	alignClass(column.align),
-																	column.widthClass,
+																	widthOf(column),
 																	column.hideClass,
 																),
 															),
