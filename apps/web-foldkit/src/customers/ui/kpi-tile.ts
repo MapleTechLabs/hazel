@@ -126,8 +126,13 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 							[h.Class("flex items-end justify-between gap-4")],
 							[
 								h.div(
-									// A narrow tile wraps the detail under the value instead of cutting it off.
-									[h.Class("flex min-w-0 flex-wrap items-baseline gap-x-2")],
+									// A narrow tile wraps the detail under the value instead of cutting it off; the
+									// value keeps its width and the trend gives way, down to hidden on a tile too narrow.
+									[
+										h.Class(
+											"flex min-w-0 max-w-full shrink-0 flex-wrap items-baseline gap-x-2",
+										),
+									],
 									[
 										h.span(
 											[
@@ -151,7 +156,14 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 											: []),
 									],
 								),
-								...(options.trend ? [options.trend] : []),
+								...(options.trend
+									? [
+											h.div(
+												[h.Class("flex min-w-0 justify-end *:min-w-0 *:shrink")],
+												[options.trend],
+											),
+										]
+									: []),
 							],
 						),
 						...(options.delta || options.comparison

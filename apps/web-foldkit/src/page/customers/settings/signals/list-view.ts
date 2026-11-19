@@ -79,7 +79,7 @@ const summary = (h: H, model: Model, rules: ReadonlyArray<RuleRow>, nowMs: numbe
 // ROWS
 
 const COLUMNS =
-	"grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 px-4 md:grid-cols-[auto_minmax(0,1fr)_7rem_9rem_7rem_9.5rem]"
+	"grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 px-4 @4xl:grid-cols-[auto_minmax(0,1fr)_7rem_9rem_7rem_9.5rem]"
 
 const headerRow = (h: H): Html =>
 	h.div(
@@ -90,9 +90,9 @@ const headerRow = (h: H): Html =>
 		[
 			h.span([], ["On"]),
 			h.span([], ["Rule"]),
-			h.span([h.Class("hidden md:block")], ["Severity"]),
-			h.span([h.Class("hidden md:block")], ["Applies to"]),
-			h.span([h.Class("hidden text-right md:block")], ["Matching now"]),
+			h.span([h.Class("hidden @4xl:block")], ["Severity"]),
+			h.span([h.Class("hidden @4xl:block")], ["Applies to"]),
+			h.span([h.Class("hidden text-right @4xl:block")], ["Matching now"]),
 			h.span([h.Class("text-right")], ["Last triggered"]),
 		],
 	)
@@ -101,7 +101,7 @@ const requires = (h: H, rule: RuleRow, orgSlug: string): Html => {
 	const required = Customers.TEMPLATES[rule.template].requiredSources
 	const first = required[0]
 	return h.span(
-		[h.Class("col-span-2 hidden items-center justify-end gap-2 text-muted-fg text-sm md:flex")],
+		[h.Class("col-span-2 hidden items-center justify-end gap-2 text-muted-fg text-sm @4xl:flex")],
 		[
 			"Requires",
 			h.span(
@@ -182,15 +182,15 @@ const ruleRow = (h: H, model: Model, rule: RuleRow, shared: Shared): Html => {
 					),
 				],
 			),
-			h.span([h.Class(twMerge("hidden md:block", muted))], [severityChip(h, rule.severity)]),
+			h.span([h.Class(twMerge("hidden @4xl:block", muted))], [severityChip(h, rule.severity)]),
 			h.span(
-				[h.Class(twMerge("hidden truncate text-fg-2 text-sm md:block", muted))],
+				[h.Class(twMerge("hidden truncate text-fg-2 text-sm @4xl:block", muted))],
 				[scopeSummary(rule.scope, currencyOf(model))],
 			),
 			...(isAvailable(model, rule.template)
 				? [
 						h.span(
-							[h.Class("hidden text-right text-sm md:block")],
+							[h.Class("hidden text-right text-sm @4xl:block")],
 							[
 								!rule.enabled
 									? h.span([h.Class("text-muted-fg")], ["—"])
@@ -249,7 +249,7 @@ const group = (
 							],
 						),
 						h.div(
-							[h.Class("overflow-hidden rounded-xl border border-border bg-bg")],
+							[h.Class("@container overflow-hidden rounded-xl border border-border bg-bg")],
 							[
 								headerRow(h),
 								h.ul(

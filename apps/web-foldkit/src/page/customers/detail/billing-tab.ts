@@ -94,15 +94,14 @@ const banner = (h: HtmlBuilder<Message>, context: Context, detail: Customers.Acc
 						[h.Class("flex min-w-0 flex-col gap-1")],
 						[
 							h.span([h.Class("font-semibold text-fg")], [title.replace("  ", " ")]),
-							...(details.length === 0
-								? []
-								: [h.p([h.Class("text-fg-2 text-sm")], [details.join(" ")])]),
+							// A line each: the decline reason is the provider's, without a full stop.
+							...details.map((part) => h.p([h.Class("text-fg-2 text-sm")], [part])),
 						],
 					),
 				],
 			),
 			h.div(
-				[h.Class("flex shrink-0 items-center gap-2")],
+				[h.Class("flex min-w-0 flex-wrap items-center gap-2")],
 				[
 					...(billingEmail === null
 						? []
@@ -156,14 +155,14 @@ const subscriptionCard = (
 				[h.Class("flex items-start justify-between gap-4 p-4 sm:px-5")],
 				[
 					h.div(
-						[h.Class("flex flex-col gap-1")],
+						[h.Class("flex min-w-0 flex-col gap-1")],
 						[
 							h.span([h.Class("text-muted-fg text-xs")], ["Subscription"]),
 							h.div(
-								[h.Class("flex items-center gap-2")],
+								[h.Class("flex flex-wrap items-center gap-x-2 gap-y-1")],
 								[
 									h.span(
-										[h.Class("font-semibold text-fg text-lg")],
+										[h.Class("wrap-anywhere font-semibold text-fg text-lg")],
 										[subscription.planName ?? "Unnamed plan"],
 									),
 									badge(h, { intent: statusIntent }, [statusLabel]),
@@ -172,10 +171,10 @@ const subscriptionCard = (
 						],
 					),
 					h.div(
-						[h.Class("flex flex-col items-end gap-0.5")],
+						[h.Class("flex shrink-0 flex-col items-end gap-0.5")],
 						[
 							h.span(
-								[h.Class("font-semibold text-fg text-xl tabular-nums")],
+								[h.Class("whitespace-nowrap font-semibold text-fg text-xl tabular-nums")],
 								[
 									formatMoney(subscription.mrrMinor, subscription.currency),
 									h.span([h.Class("font-normal text-muted-fg text-xs")], [" MRR"]),
@@ -297,7 +296,8 @@ const mrrHistoryCard = (h: HtmlBuilder<Message>, model: Model, context: Context)
 									],
 								),
 								h.div(
-									[h.Class("min-w-0 flex-1")],
+									// Under the net change once the card is too narrow for both (a phone).
+									[h.Class("min-w-0 flex-1 basis-64")],
 									[
 										stackedBarChart(h, {
 											ariaLabel: "MRR at the end of each month, last 12 months",
@@ -355,16 +355,28 @@ const invoicesCard = (
 				{
 					key: "number",
 					label: "Invoice",
-					widthClass: "w-28",
-					cell: (invoice) =>
-						invoice.status === "upcoming"
-							? h.span([h.Class("text-muted-fg")], ["Upcoming"])
-							: (invoice.number ?? "—"),
+					// The number opens the invoice in its provider: no link column a phone has no room for.
+					cell: (invoice) => {
+						if (invoice.status === "upcoming")
+							return h.span([h.Class("text-muted-fg")], ["Upcoming"])
+						const href = safeSourceUrl(invoice.provider, invoice.hostedUrl)
+						const number = invoice.number ?? "—"
+						return href === null
+							? h.span([h.Class("whitespace-nowrap")], [number])
+							: h.a(
+									[
+										h.Href(href),
+										h.Attribute("target", "_blank"),
+										h.Attribute("rel", "noreferrer"),
+										h.Class(twMerge(linkClass, "whitespace-nowrap")),
+									],
+									[number],
+								)
+					},
 				},
 				{
 					key: "status",
 					label: "Status",
-					widthClass: "w-28",
 					cell: (invoice) =>
 						badge(h, { intent: INVOICE_STATUS[invoice.status][1] }, [
 							INVOICE_STATUS[invoice.status][0],
@@ -381,18 +393,22 @@ const invoicesCard = (
 					key: "issued",
 					label: "Issued",
 					widthClass: "w-32",
-					hideClass: "max-md:hidden",
+					// Beside the sidebar (lg) the table has the width of a tablet.
+					hideClass: "max-xl:hidden",
 					cell: (invoice) => h.span([h.Class("whitespace-nowrap")], [date(invoice.issuedAt)]),
 				},
 				{
 					key: "due",
 					label: "Due",
 					widthClass: "w-28",
+					// A phone keeps the invoice, its status, amount and link.
+					hideClass: "max-sm:hidden",
 					cell: (invoice) => h.span([h.Class("whitespace-nowrap")], [date(invoice.dueAt)]),
 				},
 				{
 					key: "paid",
 					label: "Paid",
+					hideClass: "max-sm:hidden",
 					cell: (invoice) =>
 						invoice.paidAt !== null
 							? h.span(
@@ -409,27 +425,6 @@ const invoicesCard = (
 										],
 									)
 								: h.span([h.Class("text-muted-fg")], ["—"]),
-				},
-				{
-					key: "link",
-					label: "",
-					align: "right",
-					widthClass: "w-16",
-					cell: (invoice) => {
-						const href = safeSourceUrl(invoice.provider, invoice.hostedUrl)
-						return href === null
-							? ""
-							: h.a(
-									[
-										h.Href(href),
-										h.Attribute("target", "_blank"),
-										h.Attribute("rel", "noreferrer"),
-										h.AriaLabel(`Open invoice ${invoice.number ?? ""}`),
-										h.Class(linkClass),
-									],
-									["View"],
-								)
-					},
 				},
 			],
 		}),

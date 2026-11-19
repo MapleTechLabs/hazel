@@ -57,7 +57,7 @@ export const healthBadge = <M>(
 		{
 			intent: HEALTH_INTENT[options.status],
 			className: twMerge(
-				"rounded-full px-2",
+				"shrink-0 whitespace-nowrap rounded-full px-2",
 				options.status === "unknown" && "[--badge-fg:var(--color-muted-fg)]",
 				options.className,
 			),
@@ -147,10 +147,11 @@ export const severityChip = <M>(
 	severity: SignalSeverity,
 	options: Readonly<{ className?: string }> = {},
 ): Html =>
-	badge(h, { intent: "outline", className: twMerge("text-fg", options.className) }, [
-		severityGlyph(h, severity, { labelled: false }),
-		SEVERITY_LABEL[severity],
-	])
+	badge(
+		h,
+		{ intent: "outline", className: twMerge("shrink-0 whitespace-nowrap text-fg", options.className) },
+		[severityGlyph(h, severity, { labelled: false }), SEVERITY_LABEL[severity]],
+	)
 
 // KIND
 
@@ -167,7 +168,10 @@ export const kindChip = <M>(
 ): Html =>
 	badge(
 		h,
-		{ intent: kind === "risk" ? "danger" : "info", className: twMerge("gap-x-1", options.className) },
+		{
+			intent: kind === "risk" ? "danger" : "info",
+			className: twMerge("shrink-0 gap-x-1 whitespace-nowrap", options.className),
+		},
 		[
 			kind === "risk"
 				? IconRisk(h, { className: "size-3" })
@@ -205,7 +209,7 @@ export const stageBadge = <M>(
 		{
 			intent: STAGE_INTENT[stage],
 			className: twMerge(
-				"gap-x-1",
+				"shrink-0 gap-x-1 whitespace-nowrap",
 				stage === "churned" && "text-muted-fg",
 				stage === "lead" && "[--badge-fg:var(--color-secondary-fg)]",
 				options.className,

@@ -94,7 +94,7 @@ export const ruleRow = (
 			),
 		],
 		[
-			h.span([h.Class("flex min-w-0 flex-wrap items-center gap-1.5")], [...condition]),
+			h.span([h.Class("flex min-w-0 items-center gap-1.5")], [...condition]),
 			h.span([h.Class("flex shrink-0 items-center gap-1 text-muted-fg")], [...points]),
 		],
 	)

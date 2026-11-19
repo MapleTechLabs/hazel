@@ -7,7 +7,7 @@ import { msOf } from "../../../customers/queries"
 import { dataTable } from "../../../customers/ui/data-table"
 import { searchBox, segmented } from "../../../customers/ui/filter-bar"
 import { personAvatar } from "../../../customers/ui/identity"
-import { IconCopy, IconStar, IconWarning } from "../../../icons"
+import { IconCircleDottedUser, IconCopy, IconStar, IconWarning } from "../../../icons"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { Message } from "./message"
@@ -95,7 +95,8 @@ const summary = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 				? []
 				: [
 						h.div(
-							[h.Class("flex flex-col items-end")],
+							// Right-aligned beside the bar; on its own line (a phone) it starts left.
+							[h.Class("flex flex-col sm:items-end")],
 							[
 								h.span([h.Class("text-muted-fg text-xs")], ["Seats"]),
 								h.span(
@@ -134,7 +135,7 @@ const championCallout = (h: HtmlBuilder<Message>, model: Model, context: Context
 		],
 		[
 			h.p(
-				[h.Class("flex min-w-0 flex-1 items-start gap-2 text-sm text-warning-subtle-fg")],
+				[h.Class("flex min-w-0 flex-1 basis-64 items-start gap-2 text-sm text-warning-subtle-fg")],
 				[
 					IconWarning(h, { className: "mt-0.5 size-4 shrink-0" }),
 					h.span(
@@ -181,7 +182,7 @@ const lastSeen = (h: HtmlBuilder<Message>, contact: Customers.Contact, nowMs: nu
 					? []
 					: [
 							h.span(
-								[h.Class("text-muted-fg text-xs")],
+								[h.Class("whitespace-nowrap text-muted-fg text-xs")],
 								[`Joined ${formatDate(contact.joinedAt, { now })}`],
 							),
 						]),
@@ -229,6 +230,8 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 					})),
 					selected: model.contactFilter,
 					onSelect: (filter) => Message.ClickedContactFilter({ filter }),
+					// Four segments outgrow a phone: they wrap, like the activity tab's sources.
+					className: "flex-wrap",
 				}),
 			],
 		),
@@ -249,6 +252,8 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 						{
 							key: "user",
 							label: "User",
+							// The column without a width: it takes the rest and truncates.
+							widthClass: "w-full max-w-0",
 							cell: (row) =>
 								h.div(
 									[h.Class("flex min-w-0 items-center gap-3")],
@@ -259,7 +264,8 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 												name: row.contact.name ?? row.contact.email ?? "?",
 												avatarUrl: row.contact.avatarUrl,
 											},
-											{ size: "md" },
+											// A phone gives the name the avatar's width.
+											{ size: "md", className: "max-sm:hidden" },
 										),
 										h.div(
 											[h.Class("flex min-w-0 flex-col")],
@@ -267,24 +273,35 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 												h.span(
 													[
 														h.Class(
-															"flex items-center gap-2 truncate font-medium text-fg",
+															"flex min-w-0 items-center gap-2 font-medium text-fg",
 														),
 													],
 													[
-														row.contact.name ?? row.contact.email ?? "Unknown",
+														h.span(
+															[h.Class("truncate")],
+															[
+																row.contact.name ??
+																	row.contact.email ??
+																	"Unknown",
+															],
+														),
 														...(row.contact.id === championId
 															? [
 																	badge(
 																		h,
 																		{
 																			intent: "warning",
-																			className: "gap-x-1",
+																			className: "shrink-0 gap-x-1",
 																		},
 																		[
 																			IconStar(h, {
 																				className: "size-3",
 																			}),
-																			"Champion",
+																			// A phone keeps the star: the name needs the width.
+																			h.span(
+																				[h.Class("max-sm:sr-only")],
+																				["Champion"],
+																			),
 																		],
 																	),
 																]
@@ -295,8 +312,25 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 													? []
 													: [
 															h.span(
-																[h.Class("truncate text-muted-fg text-xs")],
+																[
+																	h.Class(
+																		"truncate text-muted-fg text-xs max-lg:hidden",
+																	),
+																],
 																[row.contact.title],
+															),
+														]),
+												// Below lg the email column is hidden: the email takes the title's line.
+												...(row.contact.email === null
+													? []
+													: [
+															h.span(
+																[
+																	h.Class(
+																		"truncate text-muted-fg text-xs lg:hidden",
+																	),
+																],
+																[row.contact.email],
 															),
 														]),
 											],
@@ -307,14 +341,21 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 						{
 							key: "email",
 							label: "Email",
-							hideClass: "max-md:hidden",
-							cell: (row) => row.contact.email ?? "—",
+							widthClass: "w-60",
+							hideClass: "max-lg:hidden",
+							cell: (row) =>
+								row.contact.email === null
+									? "—"
+									: h.span(
+											[h.Class("block max-w-56 truncate"), h.Title(row.contact.email)],
+											[row.contact.email],
+										),
 						},
 						{
 							key: "role",
 							label: "Role",
 							widthClass: "w-24",
-							hideClass: "max-lg:hidden",
+							hideClass: "max-xl:hidden",
 							cell: (row) => row.contact.role ?? "—",
 						},
 						{
@@ -324,12 +365,14 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 							// A phone keeps the user and when they were last seen.
 							hideClass: "max-md:hidden",
 							cell: (row) =>
-								badge(h, { intent: STATUS[row.status][1] }, [STATUS[row.status][0]]),
+								badge(h, { intent: STATUS[row.status][1], className: "whitespace-nowrap" }, [
+									STATUS[row.status][0],
+								]),
 						},
 						{
 							key: "seen",
 							label: "Last seen",
-							widthClass: "w-32",
+							widthClass: "w-24",
 							cell: (row) => lastSeen(h, row.contact, context.nowMs),
 						},
 						{
@@ -337,14 +380,14 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 							label: "Sign-ins 30d",
 							align: "right",
 							widthClass: "w-28",
-							hideClass: "max-md:hidden",
+							hideClass: "max-2xl:hidden",
 							cell: (row) => formatCount(row.contact.signInCount30d),
 						},
 						{
 							key: "activity",
 							label: "Activity, last 30 days",
-							widthClass: "w-48",
-							hideClass: "max-xl:hidden",
+							widthClass: "w-44",
+							hideClass: "max-2xl:hidden",
 							cell: (row) => heatStrip(h, row),
 						},
 						...(canImpersonate(model)
@@ -353,13 +396,15 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 										key: "impersonate",
 										label: "",
 										align: "right" as const,
-										widthClass: "w-32",
+										// A phone shows the icon alone: the user's name needs the width.
+										widthClass: "w-12 sm:w-32",
 										cell: (row: Customers.ContactRow) =>
 											button(
 												h,
 												{
 													intent: "outline",
 													size: "xs",
+													className: "max-sm:px-1.5",
 													attributes: [
 														h.AriaLabel(
 															`Impersonate ${row.contact.name ?? row.contact.email ?? "this user"}`,
@@ -369,7 +414,12 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 														contactId: row.contact.id,
 													}),
 												},
-												["Impersonate"],
+												[
+													IconCircleDottedUser(h, {
+														className: "size-3.5 sm:hidden",
+													}),
+													h.span([h.Class("max-sm:hidden")], ["Impersonate"]),
+												],
 											),
 									},
 								]

@@ -138,9 +138,9 @@ const plainWordsCard = (h: H, model: Model, form: RuleForm): Html =>
 const ruleCard = (h: H, form: RuleForm, status: EditorStatus, isAdmin: boolean): Html => {
 	const meta = Customers.TEMPLATES[form.template]
 	const nameError = status.errors.name
-	return card(h, { title: "Rule" }, [
+	return card(h, { title: "Rule", className: "@container" }, [
 		h.div(
-			[h.Class("grid gap-5 sm:grid-cols-2")],
+			[h.Class("grid grid-cols-1 gap-5 @lg:grid-cols-2")],
 			[
 				field(h, [
 					label(h, "Name", NAME_ID),
@@ -168,8 +168,11 @@ const ruleCard = (h: H, form: RuleForm, status: EditorStatus, isAdmin: boolean):
 						[
 							templateTile(h, form.template, "size-5 bg-transparent"),
 							h.span([h.Class("min-w-0 flex-1 truncate")], [meta.name]),
-							h.code([h.Class("font-mono text-muted-fg text-xs")], [form.template]),
-							IconLock(h, { className: "size-3.5 text-muted-fg" }),
+							h.code(
+								[h.Class("min-w-0 truncate font-mono text-muted-fg text-xs")],
+								[form.template],
+							),
+							IconLock(h, { className: "size-3.5 shrink-0 text-muted-fg" }),
 						],
 					),
 					help(h, "Fixed after creation. Start a new rule to use another template."),

@@ -148,8 +148,9 @@ export const pageHeader = <M>(
 				[h.Class("flex flex-wrap items-start justify-between gap-x-4 gap-y-3")],
 				[
 					h.div(
-						// A basis: a long subtitle wraps before the actions drop under the title.
-						[h.Class("flex min-w-0 flex-1 basis-72 items-center gap-3")],
+						// A basis: a long subtitle wraps before the actions drop under the title. Top-aligned, so
+						// the mark stays by the title when it does.
+						[h.Class("flex min-w-0 flex-1 basis-72 items-start gap-3")],
 						[
 							...(options.leading === undefined ? [] : [options.leading]),
 							h.div(

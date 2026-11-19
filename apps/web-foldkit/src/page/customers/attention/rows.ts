@@ -191,8 +191,14 @@ export const compactRow = (
 					[h.Class("flex min-w-0 items-center gap-1.5 text-xs")],
 					[
 						severityGlyph(h, signal.severity),
-						h.span([h.Class("shrink-0 font-medium text-fg")], [signal.title]),
-						h.span([h.Class("truncate text-muted-fg")], [signal.reason]),
+						// One truncating line: the reason is cut first, the title only when it alone overflows.
+						h.span(
+							[h.Class("min-w-0 truncate")],
+							[
+								h.span([h.Class("font-medium text-fg")], [signal.title]),
+								h.span([h.Class("ml-1.5 text-muted-fg")], [signal.reason]),
+							],
+						),
 					],
 				),
 			],
@@ -237,15 +243,15 @@ export const accountGroupRow = (
 					[h.Class("flex min-w-0 flex-col")],
 					[
 						h.span(
-							[h.Class("flex items-center gap-1.5 truncate font-medium text-fg text-sm")],
+							[h.Class("flex min-w-0 items-center gap-1.5 font-medium text-fg text-sm")],
 							[
-								account.name,
+								h.span([h.Class("truncate")], [account.name]),
 								...(group.signals.length > 1
 									? [
 											h.span(
 												[
 													h.Class(
-														"rounded bg-secondary px-1 text-2xs text-muted-fg tabular-nums",
+														"shrink-0 rounded bg-secondary px-1 text-2xs text-muted-fg tabular-nums",
 													),
 												],
 												[String(group.signals.length)],
@@ -272,8 +278,14 @@ export const accountGroupRow = (
 						...(signal.kind === "opportunity"
 							? [kindChip(h, "opportunity", { className: "py-0 text-2xs/5" })]
 							: []),
-						h.span([h.Class("shrink-0 font-medium text-fg")], [signal.title]),
-						h.span([h.Class("truncate text-muted-fg text-xs")], [signal.reason]),
+						// One truncating line: the reason is cut first, the title only when it alone overflows.
+						h.span(
+							[h.Class("min-w-0 truncate")],
+							[
+								h.span([h.Class("font-medium text-fg")], [signal.title]),
+								h.span([h.Class("ml-2 text-muted-fg text-xs")], [signal.reason]),
+							],
+						),
 						h.span(
 							[h.Class("ml-auto shrink-0 max-lg:hidden")],
 							[evidenceViz(h, signal.evidence)],

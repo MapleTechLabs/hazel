@@ -16,6 +16,7 @@ import {
 	environmentBadge,
 	HEALTH_LABEL,
 	healthBadge,
+	healthDot,
 	STAGE_LABEL,
 	signalCounts,
 	stageBadge,
@@ -206,7 +207,7 @@ const cellOf = <M>(
 			const owner =
 				account.ownerUserId === null ? null : (context.membersById.get(account.ownerUserId) ?? null)
 			return h.span(
-				[h.Class("inline-flex min-w-0 items-center gap-2")],
+				[h.Class("flex min-w-0 max-w-40 items-center gap-2")],
 				[
 					personAvatar(h, owner),
 					h.span(
@@ -219,7 +220,9 @@ const cellOf = <M>(
 		case "stage":
 			return stageBadge(h, account.lifecycleStage, { className: "whitespace-nowrap" })
 		case "plan":
-			return account.planName ?? muted(h, "—")
+			return account.planName === null
+				? muted(h, "—")
+				: h.span([h.Class("block max-w-40 truncate"), h.Title(account.planName)], [account.planName])
 		case "mrr":
 			return account.mrrMinor === 0 && account.lifecycleStage === "lead"
 				? muted(h, "—")
@@ -230,7 +233,22 @@ const cellOf = <M>(
 		case "health":
 			return account.lifecycleStage === "churned"
 				? muted(h, "—")
-				: healthBadge(h, { status: account.healthStatus, score: account.healthScore })
+				: // A phone's table: the dot and score, so the name keeps the width.
+					h.span(
+						[],
+						[
+							healthBadge(h, {
+								status: account.healthStatus,
+								score: account.healthScore,
+								className: "@max-xl:hidden",
+							}),
+							healthDot(h, {
+								status: account.healthStatus,
+								score: account.healthScore,
+								className: "@xl:hidden",
+							}),
+						],
+					)
 		case "active_users_30d": {
 			const values = context.sparklines[account.id]
 			return h.span(
@@ -257,7 +275,7 @@ const cellOf = <M>(
 			)
 		}
 		case "last_active":
-			return h.span([h.Class("text-muted-fg")], [lastActive(account, context.nowMs)])
+			return h.span([h.Class("whitespace-nowrap text-muted-fg")], [lastActive(account, context.nowMs)])
 		case "open_signals":
 			return signalCounts(h, {
 				high: account.openRiskHigh,
@@ -266,7 +284,10 @@ const cellOf = <M>(
 				opportunities: account.openOpportunities,
 			})
 		case "customer_since":
-			return h.span([h.Class("text-muted-fg")], [monthYear.format(account.firstSeenAtMs)])
+			return h.span(
+				[h.Class("whitespace-nowrap text-muted-fg")],
+				[monthYear.format(account.firstSeenAtMs)],
+			)
 		case "tags":
 			return account.tags.length === 0
 				? muted(h, "—")
@@ -295,7 +316,7 @@ const COLUMN_LAYOUT = {
 	stage: { widthClass: "w-24", hideClass: "@max-2xl:hidden" },
 	plan: { widthClass: "w-18", hideClass: "@max-3xl:hidden" },
 	mrr: { align: "right", widthClass: "w-20" },
-	health: { widthClass: "w-28" },
+	health: { widthClass: "w-28 @max-xl:w-14" },
 	active_users_30d: { align: "right", widthClass: "w-28", hideClass: "@max-7xl:hidden" },
 	usage_trend: { align: "right", widthClass: "w-16", hideClass: "@max-5xl:hidden" },
 	last_active: { align: "right", widthClass: "w-22", hideClass: "@max-4xl:hidden" },
@@ -319,5 +340,6 @@ export const tableColumns = <M>(
 		sortable: true,
 		...COLUMN_LAYOUT[column],
 		cell: (account) => cellOf(h, column, account, context),
-		footer: footerOf(h, column, accounts, context.currency),
+		// No rows, no totals: "0 customers · $0" under an empty table is noise.
+		footer: accounts.length === 0 ? undefined : footerOf(h, column, accounts, context.currency),
 	}))

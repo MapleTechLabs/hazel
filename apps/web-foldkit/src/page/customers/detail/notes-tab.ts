@@ -110,10 +110,19 @@ const noteCard = (h: HtmlBuilder<Message>, model: Model, note: NoteRow, context:
 					h.div(
 						[h.Class("flex min-w-0 flex-wrap items-center gap-2 text-sm")],
 						[
-							personAvatar(h, author),
-							h.span([h.Class("font-medium text-fg")], [author?.name ?? "Someone"]),
+							// The avatar stays with the name; a long name truncates rather than wrapping.
 							h.span(
-								[h.Class("text-muted-fg text-xs")],
+								[h.Class("flex min-w-0 items-center gap-2")],
+								[
+									personAvatar(h, author),
+									h.span(
+										[h.Class("truncate font-medium text-fg")],
+										[author?.name ?? "Someone"],
+									),
+								],
+							),
+							h.span(
+								[h.Class("whitespace-nowrap text-muted-fg text-xs")],
 								[
 									[
 										formatDate(new Date(note.createdAtMs), { now, withYear: true }),
@@ -131,7 +140,7 @@ const noteCard = (h: HtmlBuilder<Message>, model: Model, note: NoteRow, context:
 										h.span(
 											[
 												h.Class(
-													"rounded border border-border px-1.5 py-0.5 text-muted-fg text-xs",
+													"max-w-full truncate rounded border border-border px-1.5 py-0.5 text-muted-fg text-xs",
 												),
 											],
 											[`On signal: ${signal.title}`],
@@ -140,7 +149,7 @@ const noteCard = (h: HtmlBuilder<Message>, model: Model, note: NoteRow, context:
 						],
 					),
 					h.div(
-						[h.Class("flex items-center gap-0.5")],
+						[h.Class("flex shrink-0 items-center gap-0.5")],
 						[
 							iconButton(
 								h,

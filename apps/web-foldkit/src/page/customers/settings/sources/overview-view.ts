@@ -306,7 +306,8 @@ const lastSyncColumn = (h: H, model: Model, connection: ConnectionRow, context: 
 export const syncModeLines = (h: H, connection: ConnectionRow): ReadonlyArray<Html> => {
 	const descriptor = providerOf(connection.provider)
 	return [
-		value(h, descriptor.syncMode),
+		// Wraps: a sentence, not a value to clip.
+		h.p([h.Class("font-medium text-fg text-sm")], [descriptor.syncMode]),
 		descriptor.webhook === null
 			? detail(h, "No webhooks")
 			: h.p(
@@ -449,11 +450,23 @@ export const connectButton = (
 ): Html => {
 	const descriptor = providerOf(provider)
 	return descriptor.isAvailable
-		? button(h, { intent: "outline", size: "sm", onPress: Message.PressedConnect({ provider }) }, [
-				IconPlus(h, { attributes: { "data-slot": "icon" } }),
-				`${connection === undefined ? "Connect" : "Reconnect"} ${descriptor.name}`,
+		? button(
+				h,
+				{
+					intent: "outline",
+					size: "sm",
+					// The overview card's grid would otherwise stretch it across a narrow card.
+					className: "justify-self-start",
+					onPress: Message.PressedConnect({ provider }),
+				},
+				[
+					IconPlus(h, { attributes: { "data-slot": "icon" } }),
+					`${connection === undefined ? "Connect" : "Reconnect"} ${descriptor.name}`,
+				],
+			)
+		: button(h, { intent: "outline", size: "sm", className: "justify-self-start", isDisabled: true }, [
+				"Coming soon",
 			])
-		: button(h, { intent: "outline", size: "sm", isDisabled: true }, ["Coming soon"])
 }
 
 const notConnectedCard = (

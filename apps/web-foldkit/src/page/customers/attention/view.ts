@@ -137,18 +137,25 @@ const signalActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): R
 		entries: assignEntries(model.members, viewer),
 		trigger: (attributes, overlay) =>
 			queueAction(h, { label: "Assign", icon: IconUser(h, icon), shortcut: "A", attributes, overlay }),
+		// The shortcut sits inside the label: a sibling would wrap onto its own row of the menu's grid.
 		content: (key) => [
-			menuLabel(
-				h,
-				model.assignMenu.id,
-				key,
-				key === ASSIGN_ME
-					? "Assign to me"
-					: key === ASSIGN_NONE
-						? "Unassign"
-						: (model.members.find((member) => member.id === userIdOfAssignKey(key))?.name ?? key),
-			),
-			...(key === ASSIGN_ME ? [kbd(h, "I", "ml-auto")] : []),
+			key === ASSIGN_ME
+				? menuLabel(
+						h,
+						model.assignMenu.id,
+						key,
+						["Assign to me", kbd(h, "I")],
+						"flex items-center justify-between gap-4",
+					)
+				: menuLabel(
+						h,
+						model.assignMenu.id,
+						key,
+						key === ASSIGN_NONE
+							? "Unassign"
+							: (model.members.find((member) => member.id === userIdOfAssignKey(key))?.name ??
+									key),
+					),
 		],
 		toMessage: toAssignMenuMessage,
 	})

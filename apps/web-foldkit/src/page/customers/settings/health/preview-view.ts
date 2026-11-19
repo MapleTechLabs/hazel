@@ -231,10 +231,13 @@ export const transitionsText = (result: Customers.HealthDryRunResult): string =>
 	return `${formatCount(moved)} ${moved === 1 ? "customer changes" : "customers change"} band: ${parts.join(", ")}.`
 }
 
+/** A table that scrolls sideways when the card is narrower than its columns (phones). */
+const scrolling = (h: H, table: Html): Html => h.div([h.Class("overflow-x-auto")], [table])
+
 const th = (h: H, label: string, className = "text-right") =>
-	h.th([h.Class(twMerge("py-2 font-medium text-xs", className))], [label])
+	h.th([h.Class(twMerge("whitespace-nowrap py-2 pl-3 font-medium text-xs first:pl-0", className))], [label])
 const td = (h: H, text: string, className = "") =>
-	h.td([h.Class(twMerge("py-2 text-right text-fg tabular-nums", className))], [text])
+	h.td([h.Class(twMerge("whitespace-nowrap py-2 pl-3 text-right text-fg tabular-nums", className))], [text])
 
 const distributionTable = (
 	h: H,
@@ -274,7 +277,11 @@ const distributionTable = (
 							h.span(
 								[h.Class("inline-flex items-center gap-2")],
 								[
-									h.span([h.Class(twMerge("size-2.5 rounded-[2px]", HEALTH_FILL[status]))]),
+									h.span([
+										h.Class(
+											twMerge("size-2.5 shrink-0 rounded-[2px]", HEALTH_FILL[status]),
+										),
+									]),
 									h.span([h.Class("text-fg")], [HEALTH_LABEL[status]]),
 									h.span([h.Class("text-muted-fg text-xs")], [bandText(status, bands)]),
 								],
@@ -368,7 +375,7 @@ export const distributionCard = (
 		const saved = distributionOf(accounts)
 		return frame(`${totals(saved)} · as saved`, [
 			bar(h, "Saved", saved, model.previewMetric),
-			distributionTable(h, saved, null, context.saved.bands, currency),
+			scrolling(h, distributionTable(h, saved, null, context.saved.bands, currency)),
 		])
 	}
 	if (!isValid) {
@@ -435,7 +442,10 @@ const previewResult = (
 							bar(h, "With changes", result.proposed, model.previewMetric),
 						],
 					),
-					distributionTable(h, result.current, result.proposed, context.draft.bands, currency),
+					scrolling(
+						h,
+						distributionTable(h, result.current, result.proposed, context.draft.bands, currency),
+					),
 					h.p(
 						[h.Class("rounded-lg bg-warning-subtle/60 px-3 py-2 text-fg text-xs")],
 						[transitionsText(result)],
@@ -474,9 +484,9 @@ const breakdownTable = (h: H, breakdown: Customers.HealthBreakdown): Html =>
 					h.tr(
 						[h.Class("border-border border-b")],
 						[
-							h.td([h.Class("py-2 pr-3 text-fg")], [COMPONENT_LABEL[part.key]]),
+							h.td([h.Class("py-2 text-fg")], [COMPONENT_LABEL[part.key]]),
 							h.td(
-								[h.Class("py-2 pr-3 text-muted-fg text-xs")],
+								[h.Class("py-2 pl-3 text-muted-fg text-xs")],
 								[part.excluded ? `${part.why} · no data, weight shared` : part.why],
 							),
 							td(h, part.score === null ? "—" : String(part.score)),
@@ -503,7 +513,7 @@ const breakdownTable = (h: H, breakdown: Customers.HealthBreakdown): Html =>
 									"Rounded to the nearest whole number. The same table appears on every customer page.",
 								],
 							),
-							h.td([h.Class("py-2 text-right text-muted-fg text-xs")], ["Score"]),
+							h.td([h.Class("py-2 pl-3 text-right text-muted-fg text-xs")], ["Score"]),
 							td(h, breakdown.score === null ? "—" : String(breakdown.score), "font-semibold"),
 						],
 					),
@@ -550,7 +560,7 @@ export const checkCard = (h: H, model: Model, context: Context): Html => {
 			return [
 				h.p([h.Class("text-muted-fg text-sm")], ["Pick a customer to see how its score is built."]),
 			]
-		if (sample !== null) return [breakdownTable(h, sample.proposed)]
+		if (sample !== null) return [scrolling(h, breakdownTable(h, sample.proposed))]
 		return AsyncData.match(model.check.saved, {
 			onIdle: () => [],
 			onLoading: () => [h.p([h.Class("text-muted-fg text-sm")], ["Loading…"])],
@@ -595,7 +605,7 @@ const breakdownOrNone = (
 				[h.Class("text-muted-fg text-sm")],
 				["Not scored yet: it gets a breakdown on the next compute."],
 			)
-		: breakdownTable(h, health),
+		: scrolling(h, breakdownTable(h, health)),
 ]
 
 // UNSAVED CHANGES

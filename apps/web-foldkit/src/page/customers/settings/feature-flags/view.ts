@@ -33,6 +33,8 @@ const SUBTITLE =
 const CARD = "flex flex-col rounded-xl border border-border bg-bg"
 const icon = { attributes: { "data-slot": "icon" } }
 
+const KEY_ERROR_ID = "feature-flag-new-key-error"
+
 const createForm = (h: HtmlBuilder<Message>, model: Model): Html => {
 	const key = model.newKey.trim()
 	const isInvalid = key !== "" && !FEATURE_FLAG_KEY.test(key)
@@ -44,10 +46,12 @@ const createForm = (h: HtmlBuilder<Message>, model: Model): Html => {
 				[
 					input(h, {
 						placeholder: "new_flag_key",
+						isInvalid,
 						attributes: [
 							h.AriaLabel("New feature flag key"),
 							h.Value(model.newKey),
 							h.OnInput((value) => Message.ChangedNewKey({ value })),
+							...(isInvalid ? [h.AriaDescribedBy(KEY_ERROR_ID)] : []),
 						],
 					}),
 					button(
@@ -60,7 +64,7 @@ const createForm = (h: HtmlBuilder<Message>, model: Model): Html => {
 			...(isInvalid
 				? [
 						h.p(
-							[h.Class("text-danger text-xs")],
+							[h.Id(KEY_ERROR_ID), h.Class("text-danger-subtle-fg text-xs")],
 							[
 								"Use letters, digits, _ . : or -, at most 64 characters, starting with a letter or digit.",
 							],
@@ -304,6 +308,8 @@ const deleteDialog = (h: HtmlBuilder<Message>, model: Model): Html => {
 		size: "sm",
 		toContent: (closeAttributes) => [
 			dialogHeader(h, {
+				// A key is one word up to 64 characters: it breaks rather than widening the dialog.
+				className: "wrap-anywhere",
 				title: { id: Modal.titleId(model.deleteModal.id), text: `Delete ${key}?` },
 				description:
 					count === 0
