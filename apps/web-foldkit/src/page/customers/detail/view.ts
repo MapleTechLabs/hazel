@@ -1,5 +1,4 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerAccountId } from "@hazel/schema"
 import { Option } from "effect"
 import { Submodel } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
@@ -30,16 +29,11 @@ import {
 import { type ChannelOption, channelMark, ORIGIN_LABEL, searchOptions } from "../../../customers/channels"
 import { featureFlagKeysOf, hasFlag } from "../../../customers/feature-flags"
 import { safeSourceUrl } from "../../../customers/providers"
-import { organizationsLabel } from "../../../customers/queries"
 import { AppRoute, hrefOf } from "../../../route"
-import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { checkbox } from "../../../ui/checkbox"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
 import { input } from "../../../ui/input"
-import { radioGroup } from "../../../ui/radio"
-import { searchField } from "../../../ui/search-field"
-import { textField } from "../../../ui/text-field"
 import { link } from "../../../ui/link"
 import { menuDescription, menuLabel } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
@@ -54,10 +48,7 @@ import {
 	accountOf,
 	type ActionKey,
 	actionEntries,
-	ENVIRONMENT_INPUT_ID,
 	isNotFound,
-	mergeCandidates,
-	MERGE_SEARCH_ID,
 	type Model,
 	OWNER_NONE,
 	ownerEntries,
@@ -66,7 +57,7 @@ import {
 } from "./model"
 import { notesTab } from "./notes-tab"
 import { overviewTab } from "./overview-tab"
-import { type Context, icon, memberOf, menu, recordName } from "./parts"
+import { type Context, icon, memberOf, menu } from "./parts"
 import { usersTab } from "./users-tab"
 import { heading } from "../../../ui/heading"
 
@@ -77,7 +68,7 @@ const ACTION_LABEL = {
 	change_owner: "Change owner…",
 	recompute: "Recompute health and signals",
 	link_source: "Link a source record…",
-	merge: "Merge another customer into this one…",
+	merge: "Merge with another account…",
 	raw_data: "View raw data",
 	archive: "Archive customer…",
 } as const satisfies Record<ActionKey, string>
@@ -85,6 +76,7 @@ const ACTION_LABEL = {
 const ACTION_REASON = new Map<ActionKey, string>([
 	["recompute", "Runs on its own every hour; no manual trigger yet."],
 	["link_source", "Link records from Data sources › Unmatched for now."],
+	["merge", "Not available yet."],
 	["archive", "Not available yet."],
 ])
 
@@ -105,21 +97,12 @@ const MATCH_LABEL = {
 
 // LINKS
 
-/** "2 organizations" beside the name, for a customer holding several Clerk organizations. */
-const organizationsBadge = (h: HtmlBuilder<Message>, account: Context["account"]): ReadonlyArray<Html> => {
-	const label = organizationsLabel(account)
-	return label === null ? [] : [badge(h, { intent: "secondary" }, [label])]
-}
-
-/**
- * A source chip's label: the source, and the record's environment or name when it has one or the
- * source has several (merged).
- */
+/** A source chip's label: the source, and the record's name when the source has several. */
 const refLabel = (ref: Customers.ExternalRef, refs: ReadonlyArray<Customers.ExternalRef>): string => {
 	const several =
 		refs.filter((other) => other.entityType === "account" && other.provider === ref.provider).length > 1
-	return several || ref.environment !== null
-		? `${SOURCE_LABEL[ref.provider]} · ${recordName(ref)}`
+	return several
+		? `${SOURCE_LABEL[ref.provider]} · ${ref.name ?? ref.externalId}`
 		: SOURCE_LABEL[ref.provider]
 }
 
@@ -316,7 +299,6 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 												status: account.healthStatus,
 												score: account.healthScore,
 											}),
-											...organizationsBadge(h, account),
 										],
 									),
 									// Each part's dot sits in the gap before it, so a wrapped line starts
@@ -994,62 +976,6 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 										...recordLink(h, ref),
 									],
 								),
-								// Its environment, and for an admin the button that names it: on its own row,
-								// so the record's title keeps one line in the narrow sidebar.
-								...(ref.environment === null && !context.isAdmin
-									? []
-									: [
-											h.div(
-												[h.Class("flex min-w-0 items-center gap-2 pt-0.5")],
-												[
-													...(ref.environment === null
-														? []
-														: [
-																badge(
-																	h,
-																	{
-																		intent: "secondary",
-																		className: "min-w-0",
-																	},
-																	[
-																		h.span(
-																			[
-																				h.Class("min-w-0 truncate"),
-																				h.Title(ref.environment),
-																			],
-																			[ref.environment],
-																		),
-																	],
-																),
-															]),
-													...(context.isAdmin
-														? [
-																button(
-																	h,
-																	{
-																		intent: "plain",
-																		size: "xs",
-																		// Beside the badge on the right; alone, under the title.
-																		className:
-																			ref.environment === null
-																				? "-mx-2 -my-1 shrink-0"
-																				: "-my-1 ml-auto shrink-0",
-																		onPress:
-																			Message.PressedNameEnvironment({
-																				refId: ref.id,
-																			}),
-																	},
-																	[
-																		ref.environment === null
-																			? "Name environment"
-																			: "Rename",
-																	],
-																),
-															]
-														: []),
-												],
-											),
-										]),
 								...(ref.name === null
 									? []
 									: [h.span([h.Class("truncate text-fg text-sm")], [ref.name])]),
@@ -1203,171 +1129,6 @@ const deleteNoteDialog = (h: HtmlBuilder<Message>, model: Model): Html =>
 		],
 	})
 
-const mergeDialog = (h: HtmlBuilder<Message>, model: Model, context: Context | null): Html => {
-	const candidates = mergeCandidates(model)
-	const picked = candidates.find((account) => account.id === model.mergeAccountId) ?? null
-	const name = context?.account.name ?? "this customer"
-	return Modal.controlledModal(h, {
-		model: model.mergeModal,
-		toParentMessage: (message) => Message.GotMergeModalMessage({ message }),
-		size: "md",
-		toContent: (closeAttributes) => [
-			dialogHeader(h, {
-				title: { id: Modal.titleId(model.mergeModal.id), text: `Merge into ${name}` },
-				description:
-					"The customer you pick joins this one: its organizations, billing, users, notes and signals move here, and it leaves the list. Clerk, Stripe and Autumn keep their own IDs. This can't be undone.",
-			}),
-			dialogBody(h, [
-				h.div(
-					[h.Class("flex flex-col gap-3")],
-					[
-						searchField(
-							h,
-							{
-								id: MERGE_SEARCH_ID,
-								value: model.mergeQuery,
-								onInput: (value) => Message.ChangedMergeQuery({ value }),
-								onClear: Message.ClearedMergeQuery(),
-								ariaLabel: "Search customers",
-							},
-							(parts) => [parts.searchInput({ placeholder: "Search customers…" })],
-						),
-						candidates.length === 0
-							? h.p(
-									[h.Class("px-1 py-3 text-center text-muted-fg text-sm")],
-									["No other customers match."],
-								)
-							: radioGroup(
-									h,
-									{
-										id: "customer-merge-pick",
-										value: picked?.id ?? null,
-										onChange: (value) =>
-											Message.PickedMergeAccount({
-												pickedId: CustomerAccountId.make(value),
-											}),
-										className: "max-h-72 overflow-y-auto",
-									},
-									(parts) => [
-										parts.label(["Customer to merge"], { className: "sr-only" }),
-										...candidates.slice(0, 100).map((account) =>
-											parts.radio(account.id, [
-												h.span(
-													[h.Class("flex min-w-0 items-center gap-2.5")],
-													[
-														companyLogo(h, {
-															name: account.name,
-															logoUrl: account.logoUrl,
-															size: "xs",
-														}),
-														h.span(
-															[h.Class("flex min-w-0 flex-col")],
-															[
-																h.span(
-																	[h.Class("truncate text-fg text-sm")],
-																	[account.name],
-																),
-																h.span(
-																	[
-																		h.Class(
-																			"truncate text-muted-fg text-xs",
-																		),
-																	],
-																	[
-																		[
-																			account.domain,
-																			organizationsLabel(account),
-																			account.mrrMinor > 0
-																				? `${formatMoney(account.mrrMinor, account.currency)} MRR`
-																				: null,
-																		]
-																			.filter((part) => part !== null)
-																			.join(" · ") || "No domain",
-																	],
-																),
-															],
-														),
-													],
-												),
-											]),
-										),
-									],
-								),
-					],
-				),
-			]),
-			dialogFooter(h, [
-				dialogClose(h, closeAttributes, ["Cancel"]),
-				button(
-					h,
-					{
-						intent: "primary",
-						isDisabled: picked === null,
-						isPending: model.isMerging,
-						onPress: Message.PressedConfirmMerge(),
-					},
-					[picked === null ? "Merge" : `Merge ${picked.name}`],
-				),
-			]),
-		],
-	})
-}
-
-/** Name a linked record's environment; empty clears it. */
-const environmentDialog = (h: HtmlBuilder<Message>, model: Model, context: Context | null): Html => {
-	const ref = context?.detail?.refs.find((candidate) => candidate.id === model.environmentRefId) ?? null
-	const recordLabel =
-		ref === null ? "this record" : `${SOURCE_LABEL[ref.provider]} ${ref.name ?? ref.externalId}`
-	return Modal.controlledModal(h, {
-		model: model.environmentModal,
-		toParentMessage: (message) => Message.GotEnvironmentModalMessage({ message }),
-		size: "sm",
-		toContent: (closeAttributes) => [
-			dialogHeader(h, {
-				title: { id: Modal.titleId(model.environmentModal.id), text: "Name environment" },
-				description: `How ${recordLabel} shows across the customer's pages, e.g. Production or Staging. Leave empty to show its own name.`,
-			}),
-			h.form(
-				[h.Class("contents"), h.OnSubmit(Message.SubmittedEnvironment())],
-				[
-					dialogBody(h, [
-						textField(
-							h,
-							{
-								id: ENVIRONMENT_INPUT_ID,
-								value: model.environmentDraft,
-								onInput: (value) => Message.ChangedEnvironmentDraft({ value }),
-							},
-							(parts) => [
-								parts.label(["Environment"]),
-								parts.input({
-									placeholder: "Production",
-									attributes: [
-										h.Attribute("maxlength", "60"),
-										h.Attribute("autocomplete", "off"),
-									],
-								}),
-							],
-						),
-					]),
-					dialogFooter(h, [
-						dialogClose(h, closeAttributes, ["Cancel"]),
-						button(
-							h,
-							{
-								intent: "primary",
-								isPending: model.isSavingEnvironment,
-								attributes: [h.Type("submit")],
-							},
-							["Save"],
-						),
-					]),
-				],
-			),
-		],
-	})
-}
-
 // PAGE
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
@@ -1487,8 +1248,6 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			),
 			rawDialog(h, model, context),
 			deleteNoteDialog(h, model),
-			mergeDialog(h, model, context),
-			environmentDialog(h, model, context),
 			impersonateDialog(h, model),
 		],
 	)

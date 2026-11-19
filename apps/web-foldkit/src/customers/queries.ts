@@ -51,8 +51,6 @@ export const AccountRow = Schema.Struct({
 	seatsUsed: Schema.NullOr(Schema.Int),
 	seatsLimit: Schema.NullOr(Schema.Int),
 	contactCount: Schema.Int,
-	/** Clerk organizations it holds: more than one for a merged customer. */
-	organizationCount: Schema.Int,
 	activeUsers30d: Schema.Int,
 	activeUsersTrendPct: Schema.NullOr(Schema.Number),
 	openRiskHigh: Schema.Int,
@@ -111,10 +109,6 @@ export type SavedViewRow = typeof SavedViewRow.Type
 type JsonDate = Customers.Account["firstSeenAt"]
 
 /** A synced instant in epoch ms (the collections parse ISO text to `Date`). */
-/** "2 organizations" for a customer holding several Clerk organizations (merged), else null. */
-export const organizationsLabel = (account: Pick<AccountRow, "organizationCount">): string | null =>
-	account.organizationCount > 1 ? `${account.organizationCount} organizations` : null
-
 export const msOf = (date: JsonDate): number =>
 	DateTime.isDateTime(date) ? DateTime.toEpochMillis(date) : date.getTime()
 const msOrNull = (date: JsonDate | null): number | null => (date === null ? null : msOf(date))
@@ -136,7 +130,6 @@ export const toAccountRow = (account: Customers.Account): AccountRow => ({
 	seatsUsed: account.seatsUsed,
 	seatsLimit: account.seatsLimit,
 	contactCount: account.contactCount,
-	organizationCount: account.organizationCount,
 	activeUsers30d: account.activeUsers30d,
 	activeUsersTrendPct: account.activeUsersTrendPct,
 	openRiskHigh: account.openRiskHigh,

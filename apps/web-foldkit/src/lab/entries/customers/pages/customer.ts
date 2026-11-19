@@ -3,7 +3,6 @@ import {
 	CustomerAccountId,
 	CustomerContactId,
 	CustomerEventId,
-	CustomerExternalRefId,
 	CustomerInvoiceId,
 	CustomerNoteId,
 	CustomerSubscriptionId,
@@ -36,7 +35,7 @@ import {
 // `/lab/customers/pages/customer`: the real customer page over Acme Robotics. Its update runs; every
 // read answers from the fixtures below, the mutations apply to the rows at once and go nowhere.
 // `?tab=` picks the tab, `?state=` the Wonder artboard's data, `?as=admin` signs in as an admin
-// (feature flags, naming a record's environment).
+// (feature flags).
 
 const STATES = ["default", "payment-failed", "excluded-health", "loading", "not-found"] as const
 const State = Schema.Literals(STATES)
@@ -101,13 +100,6 @@ const CONTACTS: ReadonlyArray<Customers.ContactRow> = PEOPLE.map(
 				day: dayOf(29 - day),
 				value: seenDays !== null && 29 - day >= seenDays ? (day * 7 + index * 3) % 9 : 0,
 			})),
-			// Acme holds two Clerk organizations (merged): some users are in one, some in both.
-			organizationIds:
-				index % 4 === 0
-					? ["org_2acmeRobotics", "org_2acmeRoboticsEU"]
-					: index % 3 === 2
-						? ["org_2acmeRoboticsEU"]
-						: ["org_2acmeRobotics"],
 		}
 	},
 )
@@ -439,12 +431,6 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 			})
 		case "CreateCustomerNote":
 			return null
-		case "SetRecordEnvironment":
-			return Message.SucceededSetEnvironment({
-				accountId: accountId(),
-				refId: Schema.decodeUnknownSync(CustomerExternalRefId)(args.refId),
-				environment: (args.environment as string | null) ?? null,
-			})
 		default:
 			return command.name.startsWith("Update") ||
 				command.name.startsWith("Delete") ||

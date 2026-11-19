@@ -546,5 +546,15 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0016_customer_ref_environment",
 			statements: ['ALTER TABLE "customer_external_refs" ADD COLUMN "environment" text'],
 		},
+		{
+			id: "0017_customer_environments",
+			statements: [
+				'ALTER TABLE "customer_accounts" ADD COLUMN "primaryAccountId" text',
+				'ALTER TABLE "customer_accounts" ADD COLUMN "environment" text',
+				'ALTER TABLE "customer_accounts" DROP COLUMN "organizationCount"',
+				'ALTER TABLE "customer_external_refs" DROP COLUMN "environment"',
+				'CREATE INDEX IF NOT EXISTS "customer_accounts_primary_idx" ON "customer_accounts" ("primaryAccountId")',
+			],
+		},
 	],
 }

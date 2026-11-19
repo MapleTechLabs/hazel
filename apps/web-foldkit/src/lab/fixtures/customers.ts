@@ -118,8 +118,6 @@ type AccountSeed = Readonly<{
 	stage?: LifecycleStage
 	owner?: TeamMember | null
 	contacts?: number
-	/** Clerk organizations it holds (merged customers have several). */
-	organizations?: number
 	active30d?: number
 	trendPct?: number | null
 	lastActiveHours?: number | null
@@ -162,7 +160,6 @@ const makeAccount = (seed: AccountSeed, n: number): Account => {
 		seatsUsed: seed.seats?.[0] ?? null,
 		seatsLimit: seed.seats?.[1] ?? null,
 		contactCount: seed.contacts ?? 8,
-		organizationCount: seed.organizations ?? 1,
 		activeUsers30d: seed.active30d ?? 4,
 		activeUsersTrendPct: seed.trendPct === undefined ? 0 : seed.trendPct,
 		openRiskHigh: high,
@@ -187,6 +184,8 @@ const makeAccount = (seed: AccountSeed, n: number): Account => {
 		attributes: {},
 		featureFlags: {},
 		fieldSources: { name: "clerk", mrrMinor: "stripe", lastActiveAt: "maple" },
+		primaryAccountId: null,
+		environment: null,
 		createdAt: firstSeen,
 		updatedAt: ago(HOUR),
 		deletedAt: null,
@@ -221,7 +220,6 @@ const NAMED_SEEDS = {
 		stage: "past_due",
 		owner: JONAS,
 		contacts: 24,
-		organizations: 2,
 		active30d: 18,
 		trendPct: -21.5,
 		lastActiveHours: 72,
@@ -1411,12 +1409,6 @@ const contactRow = (
 			lastSeenDays !== null && 29 - index >= lastSeenDays ? (index * 7 + n * 3) % 9 : 0,
 		),
 	),
-	organizationIds:
-		n % 3 === 0
-			? ["org_2acmeRobotics", "org_2acmeRoboticsEU"]
-			: n % 3 === 1
-				? ["org_2acmeRobotics"]
-				: ["org_2acmeRoboticsEU"],
 })
 
 export const ACME_DETAIL: AccountDetail = {
@@ -1431,7 +1423,6 @@ export const ACME_DETAIL: AccountDetail = {
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			externalId: "org_2acmeRobotics",
 			name: "Acme Robotics",
-			environment: "Production",
 			externalUrl:
 				"https://dashboard.clerk.com/apps/app_hazel/instances/ins_prod/organizations/org_2acmeRobotics",
 			matchMethod: "created",
@@ -1451,7 +1442,6 @@ export const ACME_DETAIL: AccountDetail = {
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			externalId: "cus_Q8f2Lk",
 			name: "Acme Robotics Inc.",
-			environment: null,
 			externalUrl: "https://dashboard.stripe.com/customers/cus_Q8f2Lk",
 			matchMethod: "shared_id",
 			matchedByUserId: null,
@@ -1460,26 +1450,6 @@ export const ACME_DETAIL: AccountDetail = {
 			staleAt: null,
 			createdAt: daysAgo(400),
 			updatedAt: ago(2 * 60_000),
-		},
-		{
-			id: Schema.decodeSync(CustomerExternalRefId)(uuid(31, 3)),
-			connectionId: CLERK_CONNECTION.id,
-			provider: "clerk",
-			entityType: "account",
-			entityId: ACCOUNTS_BY_KEY.acme.id,
-			accountId: ACCOUNTS_BY_KEY.acme.id,
-			externalId: "org_2acmeRoboticsEU",
-			name: "Acme Robotics EU",
-			environment: "EU",
-			externalUrl:
-				"https://dashboard.clerk.com/apps/app_hazel/instances/ins_prod/organizations/org_2acmeRoboticsEU",
-			matchMethod: "manual",
-			matchedByUserId: null,
-			matchedAt: daysAgo(30),
-			lastSyncedAt: ago(4 * 60_000),
-			staleAt: null,
-			createdAt: daysAgo(30),
-			updatedAt: ago(4 * 60_000),
 		},
 	],
 	subscriptions: [

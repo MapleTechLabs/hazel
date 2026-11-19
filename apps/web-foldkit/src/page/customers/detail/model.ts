@@ -1,13 +1,6 @@
 import * as Customers from "@hazel/domain/customers"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
-import {
-	CustomerAccountId,
-	CustomerContactId,
-	CustomerExternalRefId,
-	CustomerNoteId,
-	CustomerSignalId,
-	UserId,
-} from "@hazel/schema"
+import { CustomerAccountId, CustomerContactId, CustomerNoteId, CustomerSignalId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
@@ -177,16 +170,6 @@ export const Model = Schema.Struct({
 	/** The note the delete confirmation asks about (kept while the dialog animates out). */
 	deletingNoteId: Schema.NullOr(CustomerNoteId),
 	deleteNoteModal: Modal.Model,
-	/** "Merge another customer into this one": the search, the picked customer, an RPC on its way. */
-	mergeModal: Modal.Model,
-	mergeQuery: Schema.String,
-	mergeAccountId: Schema.NullOr(CustomerAccountId),
-	isMerging: Schema.Boolean,
-	/** "Name the environment" of one linked record: which, the text, an RPC on its way. */
-	environmentModal: Modal.Model,
-	environmentRefId: Schema.NullOr(CustomerExternalRefId),
-	environmentDraft: Schema.String,
-	isSavingEnvironment: Schema.Boolean,
 	/** The user may sign in as this customer's users (an admin granted it, `customer_impersonators`). */
 	isImpersonator: Schema.Boolean,
 	/** Presses of Impersonate so far: each dialog is one attempt. */
@@ -209,10 +192,6 @@ export const CHANNEL_POPOVER_ID = "customer-channel"
 export const FLAG_POPOVER_ID = "customer-feature-flags"
 export const RAW_MODAL_ID = "customer-raw"
 export const DELETE_NOTE_MODAL_ID = "customer-delete-note"
-export const MERGE_MODAL_ID = "customer-merge"
-export const MERGE_SEARCH_ID = "customer-merge-search"
-export const ENVIRONMENT_MODAL_ID = "customer-environment"
-export const ENVIRONMENT_INPUT_ID = "customer-environment-name"
 export const IMPERSONATE_MODAL_ID = "customer-impersonate"
 export const COMPOSER_ID = "customer-note-composer"
 
@@ -253,18 +232,6 @@ export const isNotFound = (model: Model): boolean =>
 	(model.accounts !== null &&
 		accountOf(model) === undefined &&
 		(model.detail._tag !== "Success" || model.hasSeenAccount))
-
-/** Customers the merge dialog offers: the others, by name or domain. */
-export const mergeCandidates = (model: Model): ReadonlyArray<AccountRow> => {
-	const needle = model.mergeQuery.trim().toLowerCase()
-	return (model.accounts ?? []).filter(
-		(account) =>
-			account.id !== model.accountId &&
-			(needle === "" ||
-				account.name.toLowerCase().includes(needle) ||
-				(account.domain?.toLowerCase().includes(needle) ?? false)),
-	)
-}
 
 /** Open and snoozed signals on this account, highest priority first. */
 export const openSignals = (model: Model): ReadonlyArray<SignalRow> =>
@@ -355,7 +322,7 @@ export const actionEntries: ReadonlyArray<Menu.Entry> = [
 	Menu.item("recompute", { isDisabled: true, hasDescription: true }),
 	Menu.separator,
 	Menu.item("link_source", { isDisabled: true, hasDescription: true }),
-	Menu.item("merge"),
+	Menu.item("merge", { isDisabled: true, hasDescription: true }),
 	Menu.item("raw_data"),
 	Menu.separator,
 	Menu.item("archive", { isDisabled: true, intent: "Danger", hasDescription: true }),

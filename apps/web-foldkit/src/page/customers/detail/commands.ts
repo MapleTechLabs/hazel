@@ -4,7 +4,6 @@ import {
 	ChannelId,
 	CustomerAccountId,
 	CustomerContactId,
-	CustomerExternalRefId,
 	CustomerNoteId,
 	OrganizationId,
 	UserId,
@@ -17,7 +16,6 @@ import {
 	createNoteAction,
 	deleteNoteAction,
 	setFeatureFlagsAction,
-	mergeAccountAction,
 	updateAccountAction,
 	updateNoteAction,
 } from "../../../customers/actions"
@@ -206,41 +204,6 @@ export const SetCustomerFeatureFlags = Command.define("SetCustomerFeatureFlags",
 		setFeatureFlagsAction({ ...args, accountIds: [accountId] }).pipe(
 			Effect.as(Message.SucceededFeatureFlags()),
 			settleFeatureFlags((failure) => Message.FailedFeatureFlags({ failure })),
-		),
-})
-
-/** Merge `accountId` into this customer (`intoAccountId`); `name` is the merged one's, for the toast. */
-export const MergeCustomerAccount = Command.define("MergeCustomerAccount", {
-	args: { ...target, intoAccountId: CustomerAccountId, name: Schema.String },
-	messages: [Message.SucceededMerge, Message.FailedMerge],
-	execute: ({ name, ...args }) => {
-		const accountId = args.intoAccountId
-		return mergeAccountAction(args).pipe(
-			Effect.as(Message.SucceededMerge({ accountId, name })),
-			Effect.catchTags({
-				CustomersNotFoundError: () =>
-					Effect.succeed(Message.FailedMerge({ accountId, reason: "NotFound" })),
-				CustomersInvalidRequestError: () =>
-					Effect.succeed(Message.FailedMerge({ accountId, reason: "Stale" })),
-			}),
-			catchCommon((reason) => Message.FailedMerge({ accountId, reason })),
-		)
-	},
-})
-
-/** Name a linked record's environment (`Production`), or clear it with null. */
-export const SetRecordEnvironment = Command.define("SetRecordEnvironment", {
-	args: { ...target, refId: CustomerExternalRefId, environment: Schema.NullOr(Schema.String) },
-	messages: [Message.SucceededSetEnvironment, Message.FailedSetEnvironment],
-	execute: ({ organizationId, accountId, refId, environment }) =>
-		HazelRpc.use((rpc) =>
-			rpc("customers.ref.setEnvironment", { organizationId, refId, environment }),
-		).pipe(
-			Effect.as(Message.SucceededSetEnvironment({ accountId, refId, environment })),
-			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(Message.FailedSetEnvironment({ accountId, reason: "NotFound" })),
-			),
-			catchCommon((reason) => Message.FailedSetEnvironment({ accountId, reason })),
 		),
 })
 

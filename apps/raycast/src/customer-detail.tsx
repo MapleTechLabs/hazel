@@ -225,7 +225,7 @@ export function CustomerDetail(props: {
 						<Detail.Metadata.Link
 							key={`${link.provider}:${link.externalId}`}
 							title={SOURCE[link.provider].label}
-							text={link.environment ?? link.externalId}
+							text={link.externalId}
 							target={link.url}
 						/>
 					))}

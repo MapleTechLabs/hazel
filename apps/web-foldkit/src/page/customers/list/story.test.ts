@@ -74,7 +74,6 @@ const account = (n: number, name: string, fields: Partial<AccountRow> = {}): Acc
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 10,
-	organizationCount: 1,
 	activeUsers30d: 5,
 	activeUsersTrendPct: 0,
 	openRiskHigh: 0,

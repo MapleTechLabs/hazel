@@ -12,7 +12,7 @@ import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { Message } from "./message"
 import { type ContactFilter, canImpersonate, contactCounts, type Model, visibleContacts } from "./model"
-import { type Context, icon, pageFooter, recordName } from "./parts"
+import { type Context, icon, pageFooter } from "./parts"
 
 /** The users tab: who uses the product, who went quiet, who never started. */
 
@@ -190,11 +190,8 @@ const lastSeen = (h: HtmlBuilder<Message>, contact: Customers.Contact, nowMs: nu
 	return h.div(
 		[h.Class("flex flex-col")],
 		[
-			h.span([h.Class("whitespace-nowrap text-fg")], [formatRelative(contact.lastSeenAt, now)]),
-			h.span(
-				[h.Class("whitespace-nowrap text-muted-fg text-xs")],
-				[formatDate(contact.lastSeenAt, { now })],
-			),
+			h.span([h.Class("text-fg")], [formatRelative(contact.lastSeenAt, now)]),
+			h.span([h.Class("text-muted-fg text-xs")], [formatDate(contact.lastSeenAt, { now })]),
 		],
 	)
 }
@@ -204,12 +201,6 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 	const rows = visibleContacts(model)
 	const championId = context.detail?.account.championContactId ?? null
 	const callout = championCallout(h, model, context)
-	// A merged customer's organizations: which each user is in, by environment.
-	const organizations = (context.detail?.refs ?? []).filter(
-		(ref) => ref.entityType === "account" && ref.provider === "clerk",
-	)
-	const environmentsOf = (row: Customers.ContactRow) =>
-		organizations.filter((ref) => row.organizationIds.includes(ref.externalId))
 	const footer = pageFooter(h, {
 		status: model.contacts.status,
 		hasMore: model.contacts.nextCursor !== null,
@@ -313,39 +304,6 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 									],
 								),
 						},
-						...(organizations.length > 1
-							? [
-									{
-										key: "environment",
-										label: "Environment",
-										widthClass: "w-44",
-										hideClass: "max-md:hidden",
-										cell: (row: Customers.ContactRow) =>
-											h.span(
-												[h.Class("flex min-w-0 flex-wrap gap-1")],
-												// Truncated like the sidebar's: a name may be 60 characters.
-												environmentsOf(row).map((ref) =>
-													badge(
-														h,
-														{
-															intent: "secondary",
-															className: "min-w-0 max-w-full",
-														},
-														[
-															h.span(
-																[
-																	h.Class("min-w-0 truncate"),
-																	h.Title(recordName(ref)),
-																],
-																[recordName(ref)],
-															),
-														],
-													),
-												),
-											),
-									},
-								]
-							: []),
 						{
 							key: "email",
 							label: "Email",

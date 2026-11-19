@@ -32,8 +32,6 @@ import {
 	LoadNoteDrafts,
 	LinkCustomerChannel,
 	SetCustomerFeatureFlags,
-	MergeCustomerAccount,
-	SetRecordEnvironment,
 	StartCustomerImpersonation,
 	UnlinkCustomerChannel,
 	UpdateCustomerAccount,
@@ -50,13 +48,10 @@ import {
 	doneEntries,
 	EMPTY_NOTE_DRAFTS,
 	EMPTY_PAGE,
-	ENVIRONMENT_MODAL_ID,
 	EVENT_TYPE_MENU_ID,
 	EVENT_TYPE_PREFIXES,
 	EventType,
 	IMPERSONATE_MODAL_ID,
-	MERGE_MODAL_ID,
-	mergeCandidates,
 	METRIC_MENU_ID,
 	type Model,
 	type NoteRow,
@@ -237,14 +232,6 @@ const initialModel = (route: Route): Model => ({
 	rawModal: Modal.init(RAW_MODAL_ID),
 	deletingNoteId: null,
 	deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
-	mergeModal: Modal.init(MERGE_MODAL_ID),
-	mergeQuery: "",
-	mergeAccountId: null,
-	isMerging: false,
-	environmentModal: Modal.init(ENVIRONMENT_MODAL_ID),
-	environmentRefId: null,
-	environmentDraft: "",
-	isSavingEnvironment: false,
 	isImpersonator: false,
 	impersonationAttempts: 0,
 	impersonateModal: Modal.init(IMPERSONATE_MODAL_ID),
@@ -358,14 +345,6 @@ const onAction = (model: Model, shared: Shared, key: string): Return => {
 			return openMenu(model, "ownerMenu", ownerEntries(model.members))
 		case "raw_data":
 			return { model: modifyFields(model, { rawModal: (modal) => Modal.open(modal).model }) }
-		case "merge":
-			return {
-				model: modifyFields(model, {
-					mergeModal: (modal) => Modal.open(modal).model,
-					mergeQuery: () => "",
-					mergeAccountId: () => null,
-				}),
-			}
 		default:
 			return { model }
 	}
@@ -985,152 +964,6 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				commands: [DeleteCustomerNote({ ...args, noteId })],
 			}
 		},
-		GotMergeModalMessage: ({ message: modalMessage }) => {
-			const result = Modal.update(model.mergeModal, modalMessage)
-			return {
-				model: modifyFields(model, { mergeModal: () => result.model }),
-				commands: Command.mapMessages(result.commands ?? [], (child) =>
-					Message.GotMergeModalMessage({ message: child }),
-				),
-			}
-		},
-		ChangedMergeQuery: ({ value }) => ({ model: modifyFields(model, { mergeQuery: () => value }) }),
-		ClearedMergeQuery: () => ({ model: modifyFields(model, { mergeQuery: () => "" }) }),
-		PickedMergeAccount: ({ pickedId }) => ({
-			model: modifyFields(model, {
-				mergeAccountId: () =>
-					mergeCandidates(model).find((account) => account.id === pickedId)?.id ?? null,
-			}),
-		}),
-		PressedConfirmMerge: () => {
-			const args = target(model, shared)
-			const merged = model.accounts?.find((account) => account.id === model.mergeAccountId)
-			if (!model.mergeModal.isOpen || model.isMerging || args === null || merged === undefined)
-				return { model }
-			return {
-				model: modifyFields(model, { isMerging: () => true }),
-				commands: [
-					MergeCustomerAccount({
-						organizationId: args.organizationId,
-						accountId: merged.id,
-						intoAccountId: model.accountId,
-						name: merged.name,
-					}),
-				],
-			}
-		},
-		SucceededMerge: ({ name }) => {
-			// Its records are this customer's now: the sidebar's linked records come back with them.
-			const reloaded = load(
-				modifyFields(model, {
-					isMerging: () => false,
-					mergeAccountId: () => null,
-					mergeModal: (modal) => Modal.close(modal).model,
-					detail: () => AsyncData.Idle(),
-					usage: () => AsyncData.Idle(),
-					mrrHistory: () => AsyncData.Idle(),
-					contacts: () => EMPTY_PAGE,
-					invoices: () => EMPTY_PAGE,
-					events: () => EMPTY_PAGE,
-				}),
-				shared,
-			)
-			return { ...reloaded, outMessage: toast(successToast(`Merged ${name} into this customer`)) }
-		},
-		FailedMerge: ({ reason }) => ({
-			model: modifyFields(model, { isMerging: () => false }),
-			outMessage: toast(
-				errorToastOf(
-					failureMessage(reason, {
-						NotFound: {
-							title: "Couldn't merge the customers",
-							description: "One of them is no longer available.",
-						},
-						Stale: {
-							title: "Couldn't merge the customers",
-							description: "A customer can't be merged into itself.",
-						},
-					}),
-				),
-			),
-		}),
-
-		PressedNameEnvironment: ({ refId }) => {
-			const detail = Option.getOrNull(AsyncData.getData(model.detail))
-			const ref = detail?.refs.find((candidate) => candidate.id === refId)
-			// A save on its way closes the dialog when it lands: no other one opens meanwhile.
-			if (ref === undefined || model.isSavingEnvironment) return { model }
-			return {
-				model: modifyFields(model, {
-					environmentModal: (modal) => Modal.open(modal).model,
-					environmentRefId: () => refId,
-					environmentDraft: () => ref.environment ?? "",
-				}),
-			}
-		},
-		GotEnvironmentModalMessage: ({ message: modalMessage }) => {
-			const result = Modal.update(model.environmentModal, modalMessage)
-			return {
-				model: modifyFields(model, { environmentModal: () => result.model }),
-				commands: Command.mapMessages(result.commands ?? [], (child) =>
-					Message.GotEnvironmentModalMessage({ message: child }),
-				),
-			}
-		},
-		ChangedEnvironmentDraft: ({ value }) => ({
-			model: modifyFields(model, { environmentDraft: () => value }),
-		}),
-		SubmittedEnvironment: () => {
-			const args = target(model, shared)
-			const refId = model.environmentRefId
-			if (
-				!model.environmentModal.isOpen ||
-				model.isSavingEnvironment ||
-				args === null ||
-				refId === null
-			)
-				return { model }
-			const environment = model.environmentDraft.trim().slice(0, 60) || null
-			return {
-				model: modifyFields(model, { isSavingEnvironment: () => true }),
-				commands: [SetRecordEnvironment({ ...args, refId, environment })],
-			}
-		},
-		SucceededSetEnvironment: ({ refId, environment }) => {
-			const detail = Option.getOrNull(AsyncData.getData(model.detail))
-			const patched =
-				detail === null
-					? null
-					: {
-							...detail,
-							refs: detail.refs.map((ref) =>
-								ref.id === refId ? { ...ref, environment } : ref,
-							),
-						}
-			return {
-				model: modifyFields(model, {
-					isSavingEnvironment: () => false,
-					environmentModal: (modal) => Modal.close(modal).model,
-					detail: (current) =>
-						patched === null ? current : settle(current, Result.succeed(patched)),
-				}),
-			}
-		},
-		FailedSetEnvironment: ({ reason }) => ({
-			model: modifyFields(model, { isSavingEnvironment: () => false }),
-			outMessage: toast(
-				errorToastOf(
-					failureMessage(reason, {
-						NotFound: {
-							title: "Couldn't name the environment",
-							description: "That record is no longer linked to this customer.",
-						},
-						Stale: { title: "Couldn't name the environment" },
-					}),
-				),
-			),
-		}),
-
 		SucceededNoteAction: ({ action }) =>
 			action === "create" ? { model, outMessage: toast(successToast("Note saved")) } : { model },
 		// The Command told the user, and kept the text for the customer, in case this page is gone.

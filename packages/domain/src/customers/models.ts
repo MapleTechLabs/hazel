@@ -96,7 +96,6 @@ class AccountModel extends M.Class<AccountModel>("CustomerAccount")({
 	seatsUsed: S.NullOr(S.Int),
 	seatsLimit: S.NullOr(S.Int),
 	contactCount: S.Int,
-	organizationCount: S.Int,
 	activeUsers30d: S.Int,
 	activeUsersTrendPct: S.NullOr(S.Number),
 	openRiskHigh: S.Int,
@@ -115,6 +114,13 @@ class AccountModel extends M.Class<AccountModel>("CustomerAccount")({
 	/** The Clerk organization's boolean `public_metadata` keys. */
 	featureFlags: S.Record(S.String, S.Boolean),
 	fieldSources: FieldSources,
+	/**
+	 * The primary of the customer it is an environment of (`customers.account.link`); null on a
+	 * standalone account and on a primary. Never a non-primary account (no chains).
+	 */
+	primaryAccountId: S.NullOr(CustomerAccountId),
+	/** What the team calls this environment (`US`, `EU`): set in Hazel, never by a sync. */
+	environment: S.NullOr(S.String),
 	...timestamps,
 	deletedAt: M.GeneratedByApp(NullDate),
 }) {}
@@ -370,8 +376,6 @@ class ExternalRefModel extends M.Class<ExternalRefModel>("CustomerExternalRef")(
 	accountId: CustomerAccountId,
 	externalId: S.String,
 	name: S.NullOr(S.String),
-	/** What the team calls the record (`Production`): set in Hazel, shown for it everywhere. */
-	environment: S.NullOr(S.String),
 	externalUrl: S.NullOr(S.String),
 	matchMethod: MatchMethod,
 	matchedByUserId: S.NullOr(UserId),

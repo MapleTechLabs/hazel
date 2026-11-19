@@ -92,7 +92,6 @@ const account = (
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 10,
-	organizationCount: 1,
 	activeUsers30d: 5,
 	activeUsersTrendPct: null,
 	openRiskHigh: 0,

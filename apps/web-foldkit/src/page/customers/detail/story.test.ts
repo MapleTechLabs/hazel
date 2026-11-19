@@ -26,7 +26,6 @@ import {
 	canImpersonate,
 	EMPTY_NOTE_DRAFTS,
 	isNotFound,
-	mergeCandidates,
 	type Model,
 	type NoteRow,
 	ownerEntries,
@@ -44,8 +43,7 @@ import {
 	writeNoteDrafts,
 } from "./note-drafts"
 import { init, routeChanged, update } from "./update"
-import { ACME_DETAIL } from "../../../lab/fixtures/customers"
-import { SetRecordEnvironment, StartCustomerImpersonation } from "./commands"
+import { StartCustomerImpersonation } from "./commands"
 
 /** Update-loop tests for the customer page: tab routing and loading, owner and tags, notes, signals. */
 
@@ -91,7 +89,6 @@ const account = (n: number, name: string): AccountRow => ({
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 10,
-	organizationCount: 1,
 	activeUsers30d: 5,
 	activeUsersTrendPct: 0,
 	openRiskHigh: 0,
@@ -454,82 +451,6 @@ describe("customer page: notes", () => {
 		expect(commandNames(deleted)).toEqual(["DeleteCustomerNote"])
 	})
 
-	test("merging picks another customer into this one, once", () => {
-		const opened = pick(
-			loaded(),
-			(message) => Message.GotActionsMenuMessage({ message }),
-			"merge",
-			actionEntries,
-		).model
-		expect(opened.mergeModal.isOpen).toBe(true)
-		expect(mergeCandidates(opened).map((row) => row.name)).toEqual(["Acme", "Gamma"])
-		const searched = run(opened, [Message.ChangedMergeQuery({ value: "gam" })])
-		expect(mergeCandidates(searched).map((row) => row.name)).toEqual(["Gamma"])
-		// Nothing picked yet: nothing to merge; this customer itself cannot be picked.
-		expect(commandNames(update(searched, Message.PressedConfirmMerge(), shared))).toEqual([])
-		expect(run(searched, [Message.PickedMergeAccount({ pickedId: beta.id })]).mergeAccountId).toBeNull()
-		const picked = run(searched, [Message.PickedMergeAccount({ pickedId: gamma.id })])
-		const merging = update(picked, Message.PressedConfirmMerge(), shared)
-		expect(commandNames(merging)).toEqual(["MergeCustomerAccount"])
-		expect(commandNames(update(merging.model, Message.PressedConfirmMerge(), shared))).toEqual([])
-		// Another customer's merge finishing (its page was left) changes nothing here.
-		expect(
-			update(merging.model, Message.SucceededMerge({ accountId: acme.id, name: "Gamma" }), shared).model
-				.isMerging,
-		).toBe(true)
-		const merged = update(
-			merging.model,
-			Message.SucceededMerge({ accountId: beta.id, name: "Gamma" }),
-			shared,
-		)
-		expect(merged.model.mergeModal.isOpen).toBe(false)
-		expect(merged.model.isMerging).toBe(false)
-		expect(commandNames(merged)).toContain("FetchCustomerDetail")
-	})
-
-	test("naming a linked record's environment saves the trimmed text and shows it", () => {
-		const withDetail = run(loaded(), [
-			Message.SucceededFetchDetail({ accountId: beta.id, detail: ACME_DETAIL }),
-		])
-		const [production, , eu] = ACME_DETAIL.refs
-		const opened = update(withDetail, Message.PressedNameEnvironment({ refId: eu!.id }), shared).model
-		expect(opened.environmentModal.isOpen).toBe(true)
-		expect(opened.environmentDraft).toBe("EU")
-		const saving = update(
-			run(opened, [Message.ChangedEnvironmentDraft({ value: "  Europe " })]),
-			Message.SubmittedEnvironment(),
-			shared,
-		)
-		expect(saving.commands?.map((command) => command.name)).toEqual([SetRecordEnvironment.name])
-		expect(saving.commands?.[0]?.args).toMatchObject({ refId: eu!.id, environment: "Europe" })
-		expect(commandNames(update(saving.model, Message.SubmittedEnvironment(), shared))).toEqual([])
-		// Closed while saving: another record's dialog waits for the save.
-		expect(
-			run(saving.model, [
-				Message.GotEnvironmentModalMessage({ message: Modal.Message.RequestedClose() }),
-				Message.PressedNameEnvironment({ refId: production!.id }),
-			]).environmentRefId,
-		).toBe(eu!.id)
-		const saved = run(saving.model, [
-			Message.SucceededSetEnvironment({ accountId: beta.id, refId: eu!.id, environment: "Europe" }),
-		])
-		expect(saved.environmentModal.isOpen).toBe(false)
-		expect(saved.isSavingEnvironment).toBe(false)
-		const refs = saved.detail._tag === "Success" ? saved.detail.data.refs : []
-		expect(refs.map((ref) => ref.environment)).toEqual([production!.environment, null, "Europe"])
-
-		// Empty clears it.
-		const cleared = update(
-			run(saved, [
-				Message.PressedNameEnvironment({ refId: production!.id }),
-				Message.ChangedEnvironmentDraft({ value: "   " }),
-			]),
-			Message.SubmittedEnvironment(),
-			shared,
-		)
-		expect(cleared.commands?.[0]?.args).toMatchObject({ refId: production!.id, environment: null })
-	})
-
 	test("a failed save or edit puts the text back", () => {
 		const saved = update(
 			run(loaded("notes"), [Message.ChangedComposer({ value: "Call booked" })]),
@@ -753,7 +674,6 @@ describe("customer page: impersonation", () => {
 		},
 		status: "active",
 		activity: [],
-		organizationIds: [],
 	})
 	const linus = contactRow(1, "Linus")
 	const margaret = contactRow(2, "Margaret")

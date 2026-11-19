@@ -124,11 +124,6 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		seatsUsed: SQLite.nullable(SQLite.integer),
 		seatsLimit: SQLite.nullable(SQLite.integer),
 		contactCount: count(),
-		/**
-		 * Live Clerk organizations it holds: more than one after a merge (`customers.account.merge`) or
-		 * a link. Kept by the merge and by compute.
-		 */
-		organizationCount: count(),
 		activeUsers30d: count(),
 		/** 7-day average of daily active users vs the 28 days before, percent; null without a baseline. */
 		activeUsersTrendPct: SQLite.nullable(SQLite.real),
@@ -154,12 +149,22 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		featureFlags: SQLite.column(jsonb<Readonly<Record<string, boolean>>>(), { default: {} }),
 		/** Field → the source that last set it (per-field precedence, `CustomerIngest`). */
 		fieldSources: SQLite.column(jsonb<Readonly<Record<string, CustomerSource>>>(), { default: {} }),
+		/**
+		 * The primary of the customer it is an environment of (`customers.account.link`): accounts are
+		 * never merged, each Clerk organization stays its own account, and a group of them is one
+		 * customer whose signals are evaluated over the group and land on the primary. Null on a
+		 * standalone account and on a primary; never a non-primary one (no chains).
+		 */
+		primaryAccountId: SQLite.nullable(uuid(CustomerAccountId)),
+		/** What the team calls this environment of its customer (`US`, `EU`): set in Hazel, never by a sync. */
+		environment: SQLite.nullable(SQLite.text),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
+		SQLite.index("customer_accounts_primary_idx", ["primaryAccountId"]),
 		SQLite.index("customer_accounts_owner_idx", ["ownerUserId"]),
 		SQLite.index("customer_accounts_stage_idx", ["lifecycleStage"]),
 		SQLite.index("customer_accounts_health_idx", ["healthStatus"]),
@@ -232,11 +237,6 @@ export const customerExternalRefsTable = SQLite.table("customer_external_refs", 
 		externalId: SQLite.text,
 		/** The provider record's own name (an account ref's organization or customer name), as last seen. */
 		name: SQLite.nullable(SQLite.text),
-		/**
-		 * What the team calls an account ref's record (`Production`, `Staging`), set in Hazel and never
-		 * by a sync: how a merged customer's organizations tell apart across the dashboard.
-		 */
-		environment: SQLite.nullable(SQLite.text),
 		/**
 		 * A contact ref's memberships: each account record (Clerk organization) it is a member through
 		 * (`ContactMembership`). After a merge one ref may stand for several; leaving one keeps it live,
