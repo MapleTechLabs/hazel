@@ -934,6 +934,40 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("redoes recorded days' user counts from activity backfilled after them", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				// Recorded before the activity came in: no users.
+				const stale = world.object.storage.db.prepare(
+					`INSERT OR REPLACE INTO customer_org_daily (day, mrrMinor, dau, wau, mau, activeAccounts)
+					VALUES (?, 12345, 0, 0, 0, 0)`,
+				)
+				const counts = (offset: number) =>
+					world.rows(
+						`SELECT mrrMinor, dau, wau, mau, activeAccounts FROM customer_org_daily WHERE day = ?`,
+						day(offset),
+					)
+				const fixed = { mrrMinor: 12345, dau: 2, wau: 2, mau: 2, activeAccounts: 1 }
+				stale.run(day(-25))
+				// The first compute redoes them once.
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(counts(-25)).toEqual([fixed])
+				// The history rebuild redoes them too, keeping the recorded billing columns.
+				stale.run(day(-21))
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							yield* requestHistoryRebuild
+							yield* runComputeStep(NOW)
+						}),
+					)
+					.pipe(Effect.orDie)
+				expect(counts(-21)).toEqual([fixed])
+			}),
+		))
+
 	it("stops counting usage once its sources are disconnected or failing", () =>
 		run(
 			Effect.gen(function* () {
