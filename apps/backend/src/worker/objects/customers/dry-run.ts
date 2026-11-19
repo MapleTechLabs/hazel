@@ -2,8 +2,9 @@
  * Dry runs (`docs/customers/tech-design.md` §4.8): a draft rule or draft health settings evaluated
  * over the current data with the same pure functions compute uses, without writing. Admins only
  * (they read the accounts); accounts load in chunks, a rule's with only the activity its own
- * window needs. One RPC evaluates at most `MAX_CHUNKS` chunks, and none after `BUDGET_MS`: past
- * that the result is partial (`evaluatedAccounts` of `totalAccounts`, accounts in id order).
+ * window needs, and a group of linked accounts evaluates over its combined facts. One RPC
+ * evaluates at most `MAX_CHUNKS` chunks, and none after `BUDGET_MS`: past that the result is
+ * partial (`evaluatedAccounts` of `totalAccounts`, groups in their primary's id order).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
@@ -20,7 +21,7 @@ import { Clock, Effect } from "effect"
 import { scoreAll } from "./compute"
 import { evaluate, missingSources, type RuleInput } from "./evaluate"
 import { priorityScore, valueOf } from "./lifecycle"
-import { accountChunks, loadAccounts, loadBase, type SnapshotBase } from "./snapshot"
+import { groupChunks, loadAccounts, loadBase, type SnapshotBase } from "./snapshot"
 
 const MAX_CHUNKS = 8
 const BUDGET_MS = 5_000
@@ -29,7 +30,9 @@ const BUDGET_MS = 5_000
 const chunksWithinBudget = (base: SnapshotBase, budgetMs: number) =>
 	Effect.gen(function* () {
 		const started = yield* Clock.currentTimeMillis
-		const chunks = accountChunks(base.accountIds).slice(0, MAX_CHUNKS)
+		const chunks = groupChunks(base.groups)
+			.slice(0, MAX_CHUNKS)
+			.map((groups) => groups.flat())
 		return {
 			chunks,
 			more: (done: number) =>
@@ -66,8 +69,11 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 	const { chunks, more } = yield* chunksWithinBudget(base, budgetMs)
 	for (let done = 0; yield* more(done); done++) {
 		const snapshot = yield* loadAccounts(base, chunks[done])
-		for (const { facts } of snapshot.accounts) {
-			evaluated.add(facts.account.id)
+		// A primary with environments over its group's facts, as compute evaluates it; its environments
+		// are covered by it.
+		for (const { stored, evaluated: facts } of snapshot.accounts) {
+			evaluated.add(stored.id)
+			if (facts === null) continue
 			const result = evaluate(rule, facts, snapshot.org)
 			if (result._tag === "NoMatch") {
 				reasons.set(result.reason, (reasons.get(result.reason) ?? 0) + 1)

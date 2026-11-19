@@ -71,6 +71,48 @@ const quietOrg = (world: CustomersWorld) =>
 		return world.rows<{ id: CustomerAccountId }>(`SELECT id FROM customer_accounts`)[0]!.id
 	})
 
+/** A Clerk organization whose users were active on the given day offsets; its account id. */
+const activeOrg = (
+	world: CustomersWorld,
+	org: string,
+	users: ReadonlyArray<string>,
+	offsets: ReadonlyArray<number>,
+) =>
+	Effect.gen(function* () {
+		yield* world.ingest("clerk", [
+			{ _tag: "account", externalId: org, name: org, sameAs: [], onNoMatch: "create" },
+			...users.map((user): IngestOp => ({
+				_tag: "contact",
+				externalId: user,
+				account: { provider: "clerk", externalId: org },
+				email: `${user}@acme.com`,
+			})),
+		])
+		yield* world.ingest(
+			"maple",
+			offsets.flatMap((offset) =>
+				users.map((user): IngestOp => ({
+					_tag: "activity",
+					contact: { provider: "clerk", externalId: user },
+					account: { provider: "clerk", externalId: org },
+					day: day(offset),
+					eventCount: 20,
+				})),
+			),
+		)
+		return world.rows<{ id: CustomerAccountId }>(
+			`SELECT id FROM customer_accounts WHERE name = ?`,
+			org,
+		)[0]!.id
+	})
+
+/** The inactivity signals (logins stopped, champion gone quiet) per account name. */
+const quietSignals = (world: CustomersWorld) =>
+	world.rows(
+		`SELECT a.name, s.template FROM customer_signals AS s JOIN customer_accounts AS a ON a.id = s.accountId
+		WHERE s.template IN ('inactive', 'champion_inactive') AND s.closedAt IS NULL ORDER BY a.name, s.template`,
+	)
+
 /** `count` Clerk organizations: more than one chunk of accounts (250). */
 const manyAccounts = (count: number) =>
 	Array.from({ length: count }, (_, index): IngestOp => ({
@@ -646,6 +688,133 @@ describe("Customers compute and sync loop", () => {
 					world.rows(`SELECT status, closedAt IS NOT NULL AS closed FROM customer_signals`),
 				).toEqual([{ status: "done", closed: 1 }])
 				expect(Number(meta(world, "computeDueAt"))).toBe(now.getTime() + 60 * 60_000)
+			}),
+		))
+
+	it("alerts on a customer's environments as one: a quiet one with a busy sibling raises nothing", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const us = yield* activeOrg(world, "acme-us", ["ada", "bo"], [-40, -35, -30, -25, -21])
+				// EU's people are the customer's most active ones: its champion is one of them.
+				const eu = yield* activeOrg(
+					world,
+					"acme-eu",
+					["cy", "di"],
+					[-38, -36, -32, -28, -24, -20, -16, -10, -2, -1],
+				)
+				yield* world.call(
+					"customers.account.link",
+					{ accountId: eu, primaryAccountId: us },
+					world.owner,
+				)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(quietSignals(world)).toEqual([])
+				// Each environment keeps its own numbers.
+				expect(
+					world.rows(`SELECT name, activeUsers30d FROM customer_accounts ORDER BY name`),
+				).toEqual([
+					{ name: "acme-eu", activeUsers30d: 2 },
+					{ name: "acme-us", activeUsers30d: 2 },
+				])
+			}),
+		))
+
+	it("alerts on a quiet account whose busy sibling is not linked to it", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* activeOrg(world, "acme-us", ["ada", "bo"], [-40, -35, -30, -25, -21])
+				yield* activeOrg(world, "acme-eu", ["cy", "di"], [-30, -20, -10, -2, -1])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(quietSignals(world)).toContainEqual({ name: "acme-us", template: "inactive" })
+				expect(quietSignals(world).filter((row) => row.name === "acme-eu")).toEqual([])
+			}),
+		))
+
+	it("writes a quiet group's signals on its primary only, whichever environment is primary", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const us = yield* activeOrg(world, "acme-us", ["ada", "bo"], [-40, -35, -30, -25, -21])
+				const eu = yield* activeOrg(world, "acme-eu", ["ada", "cy"], [-40, -30, -22])
+				yield* world.call(
+					"customers.account.link",
+					{ accountId: eu, primaryAccountId: us },
+					world.owner,
+				)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				const signalsOf = () =>
+					world.rows<{ name: string }>(
+						`SELECT a.name FROM customer_signals AS s JOIN customer_accounts AS a ON a.id = s.accountId
+						WHERE s.closedAt IS NULL`,
+					)
+				expect(quietSignals(world)).toContainEqual({ name: "acme-us", template: "inactive" })
+				expect(signalsOf().every((row) => row.name === "acme-us")).toBe(true)
+				// Three people across both (Ada in each counts once) before the group went quiet.
+				expect(
+					world.rows(
+						`SELECT json_extract(evidence, '$.priorActiveUsers') AS prior FROM customer_signals
+						WHERE template = 'inactive' AND closedAt IS NULL`,
+					),
+				).toEqual([{ prior: 3 }])
+
+				// EU made primary: the signals move there and stay there through the next compute.
+				yield* world.call("customers.account.setPrimary", { accountId: eu }, world.owner)
+				yield* world.object.run(runCompute(new Date(NOW.getTime() + 60 * 60_000))).pipe(Effect.orDie)
+				expect(signalsOf().length).toBeGreaterThan(0)
+				expect(signalsOf().every((row) => row.name === "acme-eu")).toBe(true)
+				expect(
+					world.rows(
+						`SELECT count(*) AS n FROM customer_signals WHERE template = 'inactive' AND closedAt IS NULL`,
+					),
+				).toEqual([{ n: 1 }])
+			}),
+		))
+
+	it("keeps a group in one chunk of a compute spread over turns", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", manyAccounts(260))
+				const us = yield* activeOrg(world, "acme-us", ["ada", "bo"], [-40, -35, -30, -25, -21])
+				const eu = yield* activeOrg(
+					world,
+					"acme-eu",
+					["cy"],
+					[-38, -36, -32, -28, -24, -20, -16, -10, -2, -1],
+				)
+				// The group's ids sort apart: an id order would put them in different chunks.
+				const [first, last] = [us, eu].sort()
+				const low = "00000000-0000-4000-8000-000000000000" as CustomerAccountId
+				const high = "ffffffff-ffff-4fff-bfff-ffffffffffff" as CustomerAccountId
+				const renumber = (from: string, to: string) => {
+					world.rows(`UPDATE customer_accounts SET id = ? WHERE id = ?`, to, from)
+					world.rows(`UPDATE customer_external_refs SET entityId = ? WHERE entityId = ?`, to, from)
+					for (const table of [
+						"customer_contacts",
+						"customer_activity_daily",
+						"customer_external_refs",
+					])
+						world.rows(`UPDATE ${table} SET accountId = ? WHERE accountId = ?`, to, from)
+				}
+				renumber(first!, low)
+				renumber(last!, high)
+				const quiet = first === us ? low : high
+				yield* world.call(
+					"customers.account.link",
+					{ accountId: quiet === low ? high : low, primaryAccountId: quiet },
+					world.owner,
+				)
+				const base = yield* world.object.run(loadBase(NOW)).pipe(Effect.orDie)
+				expect(base.groups.find((group) => group.length > 1)).toEqual([
+					quiet,
+					quiet === low ? high : low,
+				])
+				yield* world.object.run(runCompute(NOW, 0)).pipe(Effect.orDie)
+				yield* world.object.run(runCompute(NOW, 0)).pipe(Effect.orDie)
+				expect(meta(world, "computeProgress")).toBeUndefined()
+				expect(quietSignals(world)).toEqual([])
 			}),
 		))
 
