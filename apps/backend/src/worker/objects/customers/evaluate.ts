@@ -560,7 +560,23 @@ const churned =
 		const churn = [...facts.movements]
 			.reverse()
 			.find((movement) => movement.type === "churn" && movement.day >= dayOf(churnedAt))
-		const days = daysBetween(churn?.day ?? dayOf(churnedAt), org.today)
+		// Before this compute's movement is loaded, the day it ended: the last canceled subscription's
+		// period end, when that came after the cancellation and has passed.
+		const ended = facts.subscriptions
+			.flatMap((sub) =>
+				sub.canceledAt === null
+					? []
+					: [
+							sub.currentPeriodEnd !== null &&
+							sub.currentPeriodEnd > sub.canceledAt &&
+							sub.currentPeriodEnd <= org.now
+								? sub.currentPeriodEnd
+								: sub.canceledAt,
+						],
+			)
+			.reduce<Date>((latest, date) => (date > latest ? date : latest), churnedAt)
+		const churnDay = churn?.day ?? dayOf(ended)
+		const days = daysBetween(churnDay, org.today)
 		if (days >= config.windowDays) return "Below threshold"
 		const canceled = [...facts.subscriptions]
 			.filter((sub) => sub.canceledAt !== null)

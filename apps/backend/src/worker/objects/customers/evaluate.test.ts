@@ -513,6 +513,23 @@ describe("signal evaluation", () => {
 				}),
 			).reason,
 		).toBe(`Lost ${formatMoney(19_900, "usd")}/mo 2 days ago`)
+		// …and before that movement loads: the canceled subscription's period end, 2 days ago.
+		expect(
+			match(
+				"churned",
+				churned(29, {
+					movements: [],
+					subscriptions: [
+						{
+							status: "canceled",
+							mrrMinor: 19_900,
+							canceledAt: new Date(NOW.getTime() - 29 * 86_400_000),
+							currentPeriodEnd: new Date(NOW.getTime() - 2 * 86_400_000),
+						},
+					],
+				}),
+			).reason,
+		).toBe(`Lost ${formatMoney(19_900, "usd")}/mo 2 days ago`)
 		// A past episode's movement is not this churn's; before the movement loads, every
 		// subscription canceled that day counts.
 		const twoSubs = (days: number) => ({
