@@ -198,6 +198,10 @@ export const customerSavedViewCollection = customersCollection(
 	"customer_saved_views",
 	Customers.SavedView.Schema,
 )
+export const customerViewLayoutCollection = customersCollection(
+	"customer_view_layouts",
+	Customers.ViewLayout.Schema,
+)
 export const customerSettingsCollection = customersCollection("customer_settings", Customers.Settings.Schema)
 export const customerMetricDefinitionCollection = customersCollection(
 	"customer_metric_definitions",

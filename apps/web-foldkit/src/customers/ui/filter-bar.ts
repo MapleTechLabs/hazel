@@ -17,7 +17,13 @@ import { kbd } from "./shortcuts"
 
 // VIEW TABS
 
-export type ViewTab<K extends string> = Readonly<{ key: K; label: string; count?: number }>
+export type ViewTab<K extends string> = Readonly<{
+	key: K
+	label: string
+	count?: number
+	/** Before the label, e.g. a saved view's icon. */
+	leading?: Html
+}>
 
 /**
  * `Open 12 · Snoozed 4 · Done`, underlined like the app's tabs; `trailing` follows them
@@ -32,6 +38,13 @@ export const viewTabs = <M, K extends string>(
 		onSelect: (key: K) => M
 		trailing?: Html
 		className?: string
+		/** On the tab list (e.g. a drop target). */
+		listAttributes?: ReadonlyArray<Attribute<M>>
+		/** Per tab, e.g. dragging to reorder (`sortable.ts`). */
+		tabProps?: (
+			tab: ViewTab<K>,
+			index: number,
+		) => Readonly<{ attributes: ReadonlyArray<Attribute<M>>; className: string }>
 	}>,
 ): Html =>
 	h.div(
@@ -43,6 +56,7 @@ export const viewTabs = <M, K extends string>(
 		[
 			h.div(
 				[
+					...(options.listAttributes ?? []),
 					h.Role("tablist"),
 					h.AriaLabel(options.ariaLabel),
 					// A phone scrolls the tabs sideways, not the page or `trailing`. The extra pixel of padding
@@ -52,20 +66,28 @@ export const viewTabs = <M, K extends string>(
 						"flex items-center gap-x-1 py-1 max-md:-mb-px max-md:min-w-0 max-md:overflow-x-auto max-md:pr-6 max-md:pb-1.25 max-md:mask-r-from-[calc(100%-1.5rem)] max-md:[scrollbar-width:none]",
 					),
 				],
-				options.tabs.map((tab) => {
+				options.tabs.map((tab, index) => {
 					const isSelected = tab.key === options.selected
+					const extra = options.tabProps?.(tab, index)
 					return h.button(
 						[
+							...(extra?.attributes ?? []),
+							h.Key(tab.key),
 							h.Type("button"),
 							h.Role("tab"),
 							h.AriaSelected(isSelected),
 							...(isSelected ? [h.DataAttribute("selected", "true")] : []),
 							h.Class(
-								twMerge(...tabsStyles.tab("horizontal", false), "cursor-pointer gap-1.5"),
+								twMerge(
+									...tabsStyles.tab("horizontal", false),
+									"cursor-pointer gap-1.5",
+									extra?.className,
+								),
 							),
 							h.OnClick(options.onSelect(tab.key)),
 						],
 						[
+							...(tab.leading === undefined ? [] : [tab.leading]),
 							tab.label,
 							...(tab.count === undefined
 								? []

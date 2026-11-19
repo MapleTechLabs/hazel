@@ -61,6 +61,8 @@ const builtIn = (
 	filters,
 	sort: { column: "mrr", direction: "desc" },
 	columns: ALL_DRAFT.columns,
+	icon: null,
+	color: null,
 })
 
 /** The seeded built-ins and one personal view. */
@@ -79,6 +81,8 @@ export const LIST_VIEWS: ReadonlyArray<ViewRow> = [
 		filters: { planNames: ["Scale"] },
 		sort: { column: "customer_since", direction: "asc" },
 		columns: ["name", "owner", "mrr", "health", "last_active", "customer_since", "tags"],
+		icon: "rocket",
+		color: "teal",
 	},
 ]
 
@@ -108,17 +112,28 @@ const NETWORK = new Set([
 	"DeleteSavedView",
 	"BulkAssignOwner",
 	"BulkAddTag",
+	"SaveListLayout",
 ])
 
+interface Step {
+	readonly model: Model
+	readonly commands: ReadonlyArray<AnyCommand>
+	/** The network Commands it dropped (a lab may act them out). */
+	readonly dropped: ReadonlyArray<AnyCommand>
+}
+
 /** Runs the page's update; sparklines answer from the fixtures, other network Commands drop. */
-const step = (model: Model, message: Message): { model: Model; commands: ReadonlyArray<AnyCommand> } => {
+export const stepList = (model: Model, message: Message): Step => {
 	const result = update(model, message, labShared)
 	const fetches = (result.commands ?? []).filter(isSparklineFetch)
 	const local = (result.commands ?? []).filter((command) => !NETWORK.has(command.name))
-	return fetches.reduce<{ model: Model; commands: ReadonlyArray<AnyCommand> }>(
+	const dropped = (result.commands ?? []).filter(
+		(command) => NETWORK.has(command.name) && !isSparklineFetch(command),
+	)
+	return fetches.reduce<Step>(
 		(current, fetch) => {
 			const ids = (fetch.args?.accountIds ?? []) as ReadonlyArray<string>
-			const answered = step(
+			const answered = stepList(
 				current.model,
 				Message.SucceededFetchSparklines({
 					sparklines: ACCOUNTS.filter((account) => ids.includes(account.id)).map((account) => ({
@@ -127,9 +142,13 @@ const step = (model: Model, message: Message): { model: Model; commands: Readonl
 					})),
 				}),
 			)
-			return { model: answered.model, commands: [...current.commands, ...answered.commands] }
+			return {
+				model: answered.model,
+				commands: [...current.commands, ...answered.commands],
+				dropped: [...current.dropped, ...answered.dropped],
+			}
 		},
-		{ model: result.model, commands: local },
+		{ model: result.model, commands: local, dropped },
 	)
 }
 
@@ -137,7 +156,7 @@ const run = (model: Model, messages: ReadonlyArray<Message>) => {
 	let current = model
 	const commands: Array<AnyCommand> = []
 	for (const message of messages) {
-		const next = step(current, message)
+		const next = stepList(current, message)
 		current = next.model
 		commands.push(...next.commands)
 	}
@@ -147,7 +166,7 @@ const run = (model: Model, messages: ReadonlyArray<Message>) => {
 const routeOf = (view: string | null) =>
 	AppRoute.CustomersList({ orgSlug: "lab", view: Option.fromNullishOr(view) })
 
-const loaded = (view: string | null, empty = false) =>
+export const loadedList = (view: string | null, empty = false) =>
 	run(init(routeOf(view)).model, [
 		Message.UpdatedMembers({ members: TEAM }),
 		Message.UpdatedViews({ views: LIST_VIEWS }),
@@ -168,22 +187,22 @@ const stateOf = (state: typeof State.Type) => {
 		case "loading":
 			return run(init(routeOf(null)).model, [])
 		case "first-run":
-			return loaded(null, true)
+			return loadedList(null, true)
 		case "at-risk":
-			return loaded("at_risk")
+			return loadedList("at_risk")
 		case "filter": {
-			const base = loaded(null)
+			const base = loadedList(null)
 			return run(base.model, [
 				Message.PressedEditFilter({ field: "last_active" }),
 				Message.ChangedPendingFilters({ filters: { inactiveForDays: 14 } }),
 			])
 		}
 		case "columns":
-			return run(loaded(null).model, [
+			return run(loadedList(null).model, [
 				Message.GotColumnsPopoverMessage({ message: Popover.Message.RequestedOpen() }),
 			])
 		case "bulk": {
-			const base = loaded(null)
+			const base = loadedList(null)
 			const picked = [
 				ACCOUNTS_BY_KEY.brightfield.id,
 				ACCOUNTS_BY_KEY.halcyon.id,
@@ -197,11 +216,11 @@ const stateOf = (state: typeof State.Type) => {
 			])
 		}
 		case "hover": {
-			const base = loaded(null)
+			const base = loadedList(null)
 			return { model: { ...base.model, hoveredId: ACCOUNTS_BY_KEY.acme.id }, commands: base.commands }
 		}
 		case "no-results": {
-			const base = loaded(null)
+			const base = loadedList(null)
 			return {
 				model: {
 					...base.model,
@@ -214,7 +233,7 @@ const stateOf = (state: typeof State.Type) => {
 			}
 		}
 		case "all":
-			return loaded(null)
+			return loadedList(null)
 	}
 }
 
@@ -258,7 +277,7 @@ export const lab = defineLabWithFlags("Customers list", {
 			? run(routeChanged(model, routeOf(message.key)).model, [
 					Message.UpdatedViews({ views: model.views ?? [] }),
 				])
-			: step(model, message),
+			: stepList(model, message),
 	view: labView,
 	subscriptions: keys,
 })

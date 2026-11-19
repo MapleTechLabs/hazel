@@ -167,11 +167,12 @@ const channelsSidebar = Subscription.lift(ChannelsSidebar.subscriptions)<Input, 
 
 /** Only on customers routes: entering the area opens the org's customers source (and keeps it). */
 const customersSidebar = Subscription.lift(CustomersSidebar.subscriptions)<Input, Message>({
-	read: ({ route, shared }) =>
+	read: ({ model, route, shared }) =>
 		orgSectionOf(route) === "Customers"
 			? Option.some({
 					organizationId: shared.organization?.id ?? null,
 					userId: shared.currentUser?.id ?? null,
+					drag: model.customersSidebar.drag,
 				})
 			: Option.none(),
 	toParentMessage: (message) => Message.GotCustomersSidebarMessage({ message }),

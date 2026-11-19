@@ -964,6 +964,8 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 										filters: view.filters,
 										sort: view.sort,
 										columns: view.columns,
+										icon: view.icon ?? null,
+										color: view.color ?? null,
 										position: Option.match(last, {
 											onNone: () => 0,
 											onSome: (row) => row.position + 1,
@@ -983,7 +985,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					const now = yield* currentTime
 					return yield* withTx(
 						Effect.gen(function* () {
-							yield* requireView(viewId, actor)
+							const current = yield* requireView(viewId, actor)
 							const [row] = yield* db.run(
 								SQLite.update(schema.customerSavedViewsTable)
 									.set({
@@ -991,6 +993,9 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 										filters: view.filters,
 										sort: view.sort,
 										columns: view.columns,
+										// Absent: unchanged.
+										icon: view.icon === undefined ? current.icon : view.icon,
+										color: view.color === undefined ? current.color : view.color,
 										updatedAt: now,
 									})
 									.where(($) => [$.id.eq(viewId)])
@@ -1019,31 +1024,32 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.view.reorder": ({ viewIds }) =>
+			"customers.view.layout": ({ layout, organizationId: payloadOrg }) =>
 				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
 					const actor = yield* requireMember
 					const now = yield* currentTime
-					return yield* txOnly(
+					return yield* withTx(
 						Effect.gen(function* () {
-							const views = yield* db.run(
-								SQLite.from(schema.customerSavedViewsTable)
-									.select()
-									.where(($) => [inList($.id, viewIds), $.deletedAt.isNull()]),
+							const [row] = yield* db.run(
+								SQLite.insertInto(schema.customerViewLayoutsTable)
+									.values({
+										organizationId,
+										userId: actor.userId,
+										order: layout.order,
+										sidebarHidden: layout.sidebarHidden,
+									})
+									.onConflictDoUpdate({
+										target: ["userId"],
+										set: {
+											order: layout.order,
+											sidebarHidden: layout.sidebarHidden,
+											updatedAt: now,
+										},
+									})
+									.returning(),
 							)
-							const editable = new Map(
-								views
-									.filter((view) => canEditView(view, actor))
-									.map((view) => [view.id, view]),
-							)
-							for (const [position, viewId] of viewIds.entries()) {
-								const view = editable.get(viewId)
-								if (view === undefined || view.position === position) continue
-								yield* db.run(
-									SQLite.update(schema.customerSavedViewsTable)
-										.set({ position, updatedAt: now })
-										.where(($) => [$.id.eq(viewId)]),
-								)
-							}
+							return row
 						}),
 					)
 				}).pipe(remap),

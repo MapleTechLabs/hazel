@@ -9,6 +9,7 @@ import {
 	CustomerAccountId,
 	CustomerImpersonatorId,
 	CustomerSavedViewId,
+	CustomerViewLayoutId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
 	type OrganizationId,
@@ -22,6 +23,7 @@ import {
 	customerFeatureFlagCollection,
 	customerImpersonatorCollection,
 	customerSavedViewCollection,
+	customerViewLayoutCollection,
 	customerSettingsCollection,
 	customerSignalCollection,
 	organizationMemberCollection,
@@ -127,8 +129,18 @@ export const SavedViewRow = Schema.Struct({
 	/** Null: shared with the org. */
 	ownerUserId: Schema.NullOr(UserId),
 	position: Schema.Number,
+	icon: Schema.NullOr(Customers.ViewIcon),
+	color: Schema.NullOr(Customers.ViewColor),
 })
 export type SavedViewRow = typeof SavedViewRow.Type
+
+/** The signed-in person's saved view layout. */
+export const ViewLayoutRow = Schema.Struct({
+	id: CustomerViewLayoutId,
+	order: Schema.Array(Schema.String),
+	sidebarHidden: Schema.Array(Schema.String),
+})
+export type ViewLayoutRow = typeof ViewLayoutRow.Type
 
 type JsonDate = Customers.Account["firstSeenAt"]
 
@@ -205,6 +217,8 @@ const toSavedViewRow = (view: Customers.SavedView): SavedViewRow => ({
 	builtInKey: view.builtInKey,
 	ownerUserId: view.ownerUserId,
 	position: view.position,
+	icon: view.icon,
+	color: view.color,
 })
 
 // SOURCE
@@ -315,6 +329,32 @@ export const savedViewsStream = <Message>(
 					)
 					.orderBy(({ view }) => view.position, "asc"),
 			(rows) => toMessage(rows.map(toSavedViewRow)),
+		),
+	)
+
+/** `userId`'s view layout; null until they arrange the views. */
+export const viewLayoutStream = <Message>(
+	organizationId: OrganizationId,
+	userId: UserId,
+	toMessage: (layout: ViewLayoutRow | null) => Message,
+): Stream.Stream<Message> =>
+	withCustomersSource(
+		organizationId,
+		liveQueryStream<Customers.ViewLayout, Message>(
+			(q) =>
+				q
+					.from({ layout: customerViewLayoutCollection })
+					.where(({ layout }) =>
+						and(eq(layout.organizationId, organizationId), eq(layout.userId, userId)),
+					),
+			(rows) => {
+				const row = rows[0]
+				return toMessage(
+					row === undefined
+						? null
+						: { id: row.id, order: row.order, sidebarHidden: row.sidebarHidden },
+				)
+			},
 		),
 	)
 

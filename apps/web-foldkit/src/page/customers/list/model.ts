@@ -1,8 +1,11 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerAccountId, CustomerSavedViewId, UserId } from "@hazel/schema"
+import { DragAndDrop } from "@foldkit/ui"
+import { CustomerAccountId, CustomerSavedViewId, CustomerViewLayoutId, UserId } from "@hazel/schema"
 import { Array, Order, Schema } from "effect"
 import { groupRows } from "../../../customers/groups"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
+import { lookOf, type ViewLook } from "../../../customers/ui/view-look"
+import { ALL_KEY, arrange, CURRENT_KEY } from "../../../customers/view-layout"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
@@ -26,6 +29,8 @@ export const ViewRow = Schema.Struct({
 	filters: Customers.ViewFilters,
 	sort: Customers.ViewSort,
 	columns: Schema.Array(Customers.ListColumn),
+	icon: Schema.NullOr(Customers.ViewIcon),
+	color: Schema.NullOr(Customers.ViewColor),
 })
 export type ViewRow = typeof ViewRow.Type
 
@@ -55,9 +60,11 @@ export const Builder = Schema.Struct({ field: FilterField, pending: Customers.Vi
 export type Builder = typeof Builder.Type
 
 export const SaveForm = Schema.Struct({
-	/** Update the current view instead of creating one. */
-	mode: Schema.Literals(["create", "rename"]),
+	/** "edit": the current view's name and look instead of a new view. */
+	mode: Schema.Literals(["create", "edit"]),
 	name: Schema.String,
+	icon: Schema.NullOr(Customers.ViewIcon),
+	color: Schema.NullOr(Customers.ViewColor),
 	isShared: Schema.Boolean,
 })
 export type SaveForm = typeof SaveForm.Type
@@ -72,6 +79,12 @@ export const Model = Schema.Struct({
 	accounts: Schema.NullOr(Schema.Array(AccountRow)),
 	signals: Schema.NullOr(Schema.Array(SignalRow)),
 	views: Schema.NullOr(Schema.Array(ViewRow)),
+	/** My order of the tabs and the views the sidebar leaves out; null: the default. */
+	layout: Schema.NullOr(Customers.ViewLayoutDraft),
+	/** Its synced row's id: null before the first save. */
+	layoutId: Schema.NullOr(CustomerViewLayoutId),
+	/** Dragging a tab to reorder the tabs (and the sidebar's views). */
+	tabDrag: DragAndDrop.Model,
 	members: Schema.Array(MemberRow),
 	connectedProviders: Schema.NullOr(Schema.Array(Customers.CustomerProvider)),
 	lastComputedAtMs: Schema.NullOr(Schema.Number),
@@ -100,6 +113,8 @@ export const Model = Schema.Struct({
 	ownerMenu: Menu.Model,
 	saveModal: Modal.Model,
 	saveForm: Schema.NullOr(SaveForm),
+	/** "Delete view" asks first; it deletes the current view. */
+	deleteModal: Modal.Model,
 })
 export type Model = typeof Model.Type
 
@@ -111,6 +126,8 @@ export const SORT_MENU_ID = "customers-list-sort"
 export const VIEW_MENU_ID = "customers-list-view"
 export const OWNER_MENU_ID = "customers-list-owner"
 export const SAVE_MODAL_ID = "customers-list-save"
+export const DELETE_MODAL_ID = "customers-list-delete-view"
+export const TAB_LIST_ID = "customers-list-tabs"
 export const HOVER_CARD_ID = "customers-list-hover-card"
 
 /** Rows rendered at a time: thousands of rows make every keystroke slow. */
@@ -151,7 +168,7 @@ export const CURRENT_DRAFT: Draft = {
 }
 
 /** `?view=` of the "All customers" tab. */
-export const ALL_VIEW_KEY = "all"
+export const ALL_VIEW_KEY = ALL_KEY
 
 /**
  * A tab: "Current customers" (key null, the default), a saved view, a built-in before the views
@@ -163,13 +180,18 @@ export interface ViewTab {
 	readonly draft: Draft
 	/** The synced row; none for "Current", "All" and the fallbacks. */
 	readonly row: ViewRow | null
+	readonly look: ViewLook
 }
+
+/** The tab's key in the view layout (`customers/view-layout.ts`). */
+export const layoutKeyOf = (tab: ViewTab): string => tab.key ?? CURRENT_KEY
 
 const builtInFallbackTabs: ReadonlyArray<ViewTab> = BUILT_IN_FALLBACK.map((view) => ({
 	key: view.key,
 	name: view.name,
 	draft: { filters: view.filters, sort: { column: "mrr", direction: "desc" }, columns: ALL_DRAFT.columns },
 	row: null,
+	look: lookOf(view.key, null),
 }))
 
 const tabOfRow = (row: ViewRow): ViewTab => ({
@@ -177,14 +199,25 @@ const tabOfRow = (row: ViewRow): ViewTab => ({
 	name: row.name,
 	draft: { filters: row.filters, sort: row.sort, columns: row.columns },
 	row,
+	look: lookOf(row.builtInKey ?? row.id, row),
 })
 
 /** Every tab, in order: Current, the synced views (or the built-ins until they sync), then All. */
 export const viewTabsOf = (views: ReadonlyArray<ViewRow> | null): ReadonlyArray<ViewTab> => [
-	{ key: null, name: "Current customers", draft: CURRENT_DRAFT, row: null },
+	{
+		key: null,
+		name: "Current customers",
+		draft: CURRENT_DRAFT,
+		row: null,
+		look: lookOf(CURRENT_KEY, null),
+	},
 	...(views === null ? builtInFallbackTabs : views.map(tabOfRow)),
-	{ key: ALL_VIEW_KEY, name: "All customers", draft: ALL_DRAFT, row: null },
+	{ key: ALL_VIEW_KEY, name: "All customers", draft: ALL_DRAFT, row: null, look: lookOf(ALL_KEY, null) },
 ]
+
+/** The tabs in my order (the layout's), as the tab bar shows them. */
+export const orderedTabsOf = (model: Pick<Model, "views" | "layout">): ReadonlyArray<ViewTab> =>
+	arrange(viewTabsOf(model.views), layoutKeyOf, (model.layout ?? Customers.DEFAULT_VIEW_LAYOUT).order)
 
 /** The tab `?view=` names; an unknown id is "Current". */
 export const currentTab = (model: Pick<Model, "view" | "views">): ViewTab => {
@@ -653,7 +686,8 @@ export const ownerEntries = (
 export const ViewMenuKey = Schema.Literals([
 	"save",
 	"save_as",
-	"rename",
+	"edit",
+	"sidebar",
 	"reset",
 	"restore_default",
 	"delete",
@@ -666,7 +700,8 @@ export const viewMenuEntries = (model: Model, viewer: Viewer): ReadonlyArray<Men
 	return [
 		Menu.item("save", { isDisabled: !edited || !canUpdateView(tab, viewer) }),
 		Menu.item("save_as"),
-		Menu.item("rename", { isDisabled: !canUpdateView(tab, viewer) || tab.row?.builtInKey !== null }),
+		Menu.item("edit", { isDisabled: !canUpdateView(tab, viewer) }),
+		Menu.item("sidebar"),
 		Menu.item("reset", { isDisabled: !edited }),
 		...(builtInDefaultOf(tab) === undefined
 			? []

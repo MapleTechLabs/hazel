@@ -213,6 +213,17 @@ const foldChannelsSidebar = Update.foldChild({
 	toParentOutMessage: (outMessage: PageOutMessage) => outMessage,
 })
 
+/** The sidebar's Commands (saving the view layout), plus its toasts for the root. */
+const foldCustomersSidebar = (context: Context) =>
+	Update.foldChild({
+		update: (sidebar: CustomersSidebar.Model, message: CustomersSidebar.Message) =>
+			CustomersSidebar.update(sidebar, message, context.currentUserId),
+		read: (model: Model) => Option.some(model.customersSidebar),
+		write: (model, customersSidebar) => modifyFields(model, { customersSidebar: () => customersSidebar }),
+		toParentMessage: (message) => Message.GotCustomersSidebarMessage({ message }),
+		toParentOutMessage: (outMessage: PageOutMessage) => outMessage,
+	})
+
 const foldNotifications = Update.foldChild({
 	update: Notifications.update,
 	read: (model: Model) => Option.some(model.notifications),
@@ -238,11 +249,7 @@ export const update = (model: Model, message: Message, context: Context): ShellR
 		}),
 		UpdatedUserStatus: ({ status }) => ({ model: modifyFields(model, { userStatus: () => status }) }),
 		GotNotificationsMessage: ({ message }) => foldNotifications(model, message),
-		GotCustomersSidebarMessage: ({ message }) => ({
-			model: modifyFields(model, {
-				customersSidebar: (sidebar) => CustomersSidebar.update(sidebar, message).model,
-			}),
-		}),
+		GotCustomersSidebarMessage: ({ message }) => foldCustomersSidebar(context)(model, message),
 		UpdatedSettingsChannel: ({ channel }) => ({
 			model: modifyFields(model, { settingsChannel: () => channel }),
 		}),

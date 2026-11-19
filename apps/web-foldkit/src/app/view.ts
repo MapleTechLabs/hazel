@@ -41,6 +41,8 @@ import { type Model, OrgState, Session, sharedOf } from "./model"
 const toShellMessage = (message: Shell.Message): Message => ({ _tag: "GotShellMessage", message })
 const toChannelsSidebarMessage = (message: ChannelsSidebar.Message) =>
 	toShellMessage({ _tag: "GotChannelsSidebarMessage", message })
+const toCustomersSidebarMessage = (message: CustomersSidebar.Message) =>
+	toShellMessage(Shell.Message.GotCustomersSidebarMessage({ message }))
 const toUserMenuMessage = (message: Menu.Message) =>
 	toShellMessage(Shell.Message.GotUserMenuMessage({ message }))
 const toOrgSwitcherMessage = (message: Menu.Message) =>
@@ -140,7 +142,8 @@ const secondarySidebar = (model: Model, h: HtmlBuilder<Message>, context: ShellC
 	const section = orgSectionOf(model.route)
 	if (section === "Settings") return settingsSidebar(h, context, chrome)
 	if (section === "MySettings") return mySettingsSidebar(h, context, chrome)
-	if (section === "Customers") return CustomersSidebar.view(h, shell.customersSidebar, context, chrome)
+	if (section === "Customers")
+		return CustomersSidebar.view(h, shell.customersSidebar, context, chrome, toCustomersSidebarMessage)
 	if (section === "Notifications")
 		return notificationsSidebar(h, context, chrome, {
 			unreadCount: Notifications.unreadIdsOf(shell.notifications).length,
