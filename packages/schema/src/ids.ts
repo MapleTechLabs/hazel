@@ -394,6 +394,14 @@ export const CustomerViewLayoutId = Schema.String.check(Schema.isUUID())
 	})
 export type CustomerViewLayoutId = Schema.Schema.Type<typeof CustomerViewLayoutId>
 
+export const CustomerOverviewLayoutId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerOverviewLayoutId"))
+	.annotate({
+		description: "The ID of a layout of the customer page's Overview",
+		title: "Customer Overview Layout ID",
+	})
+export type CustomerOverviewLayoutId = Schema.Schema.Type<typeof CustomerOverviewLayoutId>
+
 export const CustomerSettingsId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/CustomerSettingsId"))
 	.annotate({

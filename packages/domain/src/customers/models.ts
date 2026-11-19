@@ -3,7 +3,7 @@
  * stream and the RPCs carry them: timestamps as `JsonDate`, JSON columns parsed.
  *
  * Synced (client collections): `Account`, `Signal`, `SignalRule`, `Note`, `SavedView`, `ViewLayout`, `Settings`,
- * `MetricDefinition`, `Connection`, `SyncRun`, `ChannelLink`, `FeatureFlag`, `Impersonator`,
+ * `MetricDefinition`, `OverviewLayout`, `Connection`, `SyncRun`, `ChannelLink`, `FeatureFlag`, `Impersonator`,
  * `Impersonation` (admins only). The rest travel in RPC results.
  */
 import {
@@ -21,6 +21,7 @@ import {
 	CustomerInvoiceId,
 	CustomerMetricDefinitionId,
 	CustomerNoteId,
+	CustomerOverviewLayoutId,
 	CustomerSavedViewId,
 	CustomerSettingsId,
 	CustomerSignalId,
@@ -62,6 +63,7 @@ import {
 } from "./enums"
 import { SignalEvidence } from "./evidence"
 import { HealthSettings } from "./health"
+import { LayoutRule, MetricFormat, MetricSource, OverviewWidget } from "./overview"
 import { AttentionSettings, RuleConfig, RuleScope } from "./rules"
 import { ListColumn, ViewColor, ViewFilters, ViewIcon, ViewLayoutKey, ViewSort } from "./views"
 
@@ -126,6 +128,10 @@ class AccountModel extends M.Class<AccountModel>("CustomerAccount")({
 	primaryAccountId: S.NullOr(CustomerAccountId),
 	/** What the team calls this environment (`US`, `EU`): set in Hazel, never by a sync. */
 	environment: S.NullOr(S.String),
+	/** The Overview layout someone pinned this customer to; null: its rule decides. */
+	pinnedLayoutId: S.NullOr(CustomerOverviewLayoutId),
+	/** The layout it gets (pin, else the first matching rule, else the default), kept by Hazel. */
+	layoutId: S.NullOr(CustomerOverviewLayoutId),
 	...timestamps,
 	deletedAt: M.GeneratedByApp(NullDate),
 }) {}
@@ -313,10 +319,37 @@ class MetricDefinitionModel extends M.Class<MetricDefinitionModel>("CustomerMetr
 	provider: S.NullOr(CustomerProvider),
 	description: S.NullOr(S.String),
 	builtIn: S.Boolean,
+	/** The catalog's section and a metric table's rows. */
+	group: S.NullOr(S.String),
+	format: MetricFormat,
+	/** How a user-defined metric is made; null for a source's own and the built-ins. */
+	source: S.NullOr(MetricSource),
+	/** A Maple query metric's last run, and why it failed (null: it did not). */
+	lastRunAt: NullDate,
+	lastError: S.NullOr(S.String),
 	...timestamps,
 }) {}
 export const MetricDefinition = M.expose(MetricDefinitionModel)
 export type MetricDefinition = typeof MetricDefinition.Schema.Type
+
+class OverviewLayoutModel extends M.Class<OverviewLayoutModel>("CustomerOverviewLayout")({
+	id: M.Generated(CustomerOverviewLayoutId),
+	organizationId: OrganizationId,
+	name: S.String,
+	/** Rules are tried in this order; the default is always last. */
+	position: S.Number,
+	isDefault: S.Boolean,
+	rule: LayoutRule,
+	widgets: S.Array(OverviewWidget),
+	/** Accounts that get it (pins included), as of the last assignment. */
+	accountCount: S.Int,
+	createdBy: S.NullOr(UserId),
+	updatedBy: S.NullOr(UserId),
+	...timestamps,
+	deletedAt: M.GeneratedByApp(NullDate),
+}) {}
+export const OverviewLayout = M.expose(OverviewLayoutModel)
+export type OverviewLayout = typeof OverviewLayout.Schema.Type
 
 class ConnectionModel extends M.Class<ConnectionModel>("CustomerConnection")({
 	id: M.Generated(CustomerConnectionId),

@@ -207,6 +207,10 @@ export const customerMetricDefinitionCollection = customersCollection(
 	"customer_metric_definitions",
 	Customers.MetricDefinition.Schema,
 )
+export const customerOverviewLayoutCollection = customersCollection(
+	"customer_overview_layouts",
+	Customers.OverviewLayout.Schema,
+)
 export const customerConnectionCollection = customersCollection(
 	"customer_connections",
 	Customers.Connection.Schema,

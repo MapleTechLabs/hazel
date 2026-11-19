@@ -582,5 +582,18 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'UPDATE "customer_settings" SET "health" = json_insert("health", \'$.excludedTemplates[#]\', \'churned\') WHERE NOT EXISTS (SELECT 1 FROM json_each("customer_settings"."health", \'$.excludedTemplates\') WHERE "value" = \'churned\')',
 			],
 		},
+		{
+			id: "0021_customer_overview_layouts",
+			statements: [
+				'ALTER TABLE "customer_accounts" ADD COLUMN "pinnedLayoutId" text',
+				'ALTER TABLE "customer_accounts" ADD COLUMN "layoutId" text',
+				'ALTER TABLE "customer_metric_definitions" ADD COLUMN "group" text',
+				'ALTER TABLE "customer_metric_definitions" ADD COLUMN "format" text NOT NULL DEFAULT \'number\'',
+				'ALTER TABLE "customer_metric_definitions" ADD COLUMN "source" text',
+				'ALTER TABLE "customer_metric_definitions" ADD COLUMN "lastRunAt" text',
+				'ALTER TABLE "customer_metric_definitions" ADD COLUMN "lastError" text',
+				'CREATE TABLE IF NOT EXISTS "customer_overview_layouts" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"organizationId" text NOT NULL,\n\t"name" text NOT NULL,\n\t"position" real NOT NULL DEFAULT 0,\n\t"isDefault" integer NOT NULL DEFAULT false,\n\t"rule" text NOT NULL DEFAULT \'{"match":"all","conditions":[]}\',\n\t"widgets" text NOT NULL DEFAULT \'[]\',\n\t"accountCount" integer NOT NULL DEFAULT 0,\n\t"createdBy" text,\n\t"updatedBy" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"deletedAt" text\n)',
+			],
+		},
 	],
 }

@@ -1,3 +1,4 @@
+import type * as Customers from "@hazel/domain/customers"
 import type { DateTime } from "effect"
 import { toEpochMs } from "~/lib/utils"
 
@@ -121,6 +122,57 @@ export const formatCount = (value: number): string => numberFormat({ maximumFrac
 export const formatMetricValue = (value: number, unit: string | null): string => {
 	const text = numberFormat({ maximumFractionDigits: 2 }).format(value)
 	return unit === null ? text : `${text} ${unit}`
+}
+
+const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"] as const
+
+/** `38.6 GB`, `512 B` (decimal units, as Maple bills). */
+export const formatBytes = (value: number): string => {
+	let scaled = Math.abs(value)
+	let unit = 0
+	while (scaled >= 1000 && unit < BYTE_UNITS.length - 1) {
+		scaled /= 1000
+		unit++
+	}
+	const digits = scaled < 10 && unit > 0 ? 1 : 0
+	return withSign(value, `${numberFormat({ maximumFractionDigits: digits }).format(scaled)} ${BYTE_UNITS[unit]}`, false)
+}
+
+/** `850 ms`, `1.4 s`, `3.2 min`. */
+const formatDurationMs = (value: number): string => {
+	const abs = Math.abs(value)
+	const text =
+		abs < 1000
+			? `${numberFormat({ maximumFractionDigits: 0 }).format(abs)} ms`
+			: abs < 60_000
+				? `${numberFormat({ maximumFractionDigits: 1 }).format(abs / 1000)} s`
+				: `${numberFormat({ maximumFractionDigits: 1 }).format(abs / 60_000)} min`
+	return withSign(value, text, false)
+}
+
+/**
+ * A metric's value as its `MetricFormat` reads (`docs/customers/overview-layouts.md`): compact
+ * numbers with the unit, bytes, percent, money in minor units of `currency`, durations.
+ */
+export const formatMetric = (
+	value: number,
+	metric: Readonly<{ format: Customers.MetricFormat; unit: string | null }>,
+	currency = "USD",
+): string => {
+	switch (metric.format) {
+		case "bytes":
+			return formatBytes(value)
+		case "percent":
+			return formatPct(value)
+		case "money":
+			return formatMoney(Math.round(value), currency)
+		case "duration_ms":
+			return formatDurationMs(value)
+		case "number": {
+			const text = Math.abs(value) >= 10_000 ? formatCompact(value) : numberFormat({ maximumFractionDigits: 2 }).format(value)
+			return metric.unit === null || metric.unit === "minor" ? text : `${text} ${metric.unit}`
+		}
+	}
 }
 
 /** `461K`, `1.2M`, `980`. */

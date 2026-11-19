@@ -118,6 +118,7 @@ export const customersTables = [
 	schema.customerNotesTable,
 	schema.customerSavedViewsTable,
 	schema.customerViewLayoutsTable,
+	schema.customerOverviewLayoutsTable,
 	schema.customerConnectionsTable,
 	schema.customerConnectionSecretsTable,
 	schema.customerSyncRunsTable,

@@ -18,7 +18,9 @@ import {
 	CustomerContactId,
 	CustomerIgnoreRuleId,
 	CustomerImpersonatorId,
+	CustomerMetricDefinitionId,
 	CustomerNoteId,
+	CustomerOverviewLayoutId,
 	CustomerSavedViewId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
@@ -51,6 +53,16 @@ import {
 } from "../customers/enums"
 import { HealthSettings } from "../customers/health"
 import {
+	LayoutDraft,
+	LayoutDryRunResult,
+	LayoutRule,
+	MetricDraft,
+	MetricPreviewResult,
+	MetricSource,
+	MetricWindow,
+	UserMetricKey,
+} from "../customers/overview"
+import {
 	ChannelLink,
 	Connection,
 	Contact,
@@ -58,7 +70,9 @@ import {
 	FeatureFlag,
 	IgnoreRule,
 	Invoice,
+	MetricDefinition,
 	Note,
+	OverviewLayout,
 	SavedView,
 	ViewLayout,
 	Signal,
@@ -111,6 +125,7 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"unmatched_record",
 			"ignore_rule",
 			"metric",
+			"layout",
 			"contact",
 			/** No such channel in the org, or one the caller cannot see. */
 			"channel",
@@ -223,6 +238,37 @@ export class CustomerReadRpcs extends RpcGroup.make(
 		{ accountId: CustomerAccountId, metricKeys: Schema.Array(Schema.String), range: CustomersRange },
 		Schema.Struct({ series: Schema.Array(MetricSeries) }),
 		CustomersNotFoundError,
+	),
+
+	/**
+	 * Metrics over windows for one account: the Overview's stats and metric tables. Formula metrics
+	 * are evaluated over each window's operands; a key Hazel does not know answers nulls.
+	 */
+	read(
+		"customers.account.metricWindows",
+		{
+			accountId: CustomerAccountId,
+			windows: Schema.Array(
+				Schema.Struct({
+					metricKey: Schema.String,
+					days: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })),
+				}),
+			).check(Schema.isMaxLength(80)),
+		},
+		Schema.Struct({ windows: Schema.Array(MetricWindow) }),
+		CustomersNotFoundError,
+	),
+
+	/** Who a draft layout rule matches at `position` (a new layout: first), and who earlier layouts take. */
+	read(
+		"customers.layout.dryRun",
+		{
+			layoutId: Schema.optionalKey(CustomerOverviewLayoutId),
+			rule: LayoutRule,
+			/** Where it would sit; absent: where `layoutId` is, else first. */
+			position: Schema.optionalKey(Schema.Number),
+		},
+		LayoutDryRunResult,
 	),
 
 	/** One metric's last `days` daily values for many accounts: list and queue sparklines. */
@@ -475,6 +521,14 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 
 	/** The caller's own order of the views and what the sidebar leaves out (replaces the last one). */
 	write("customers.view.layout", { layout: ViewLayoutDraft }, withTx(ViewLayout.Schema)),
+
+	/** Pin the customer to an Overview layout; null: its layouts' rules decide again. */
+	write(
+		"customers.account.setLayout",
+		{ accountId: CustomerAccountId, layoutId: Schema.NullOr(CustomerOverviewLayoutId) },
+		Tx,
+		CustomersNotFoundError,
+	),
 ) {}
 
 // ---------------------------------------------------------------------------
@@ -688,6 +742,90 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	),
 
 	write("customers.ignoreRule.delete", { ruleId: CustomerIgnoreRuleId }, Tx, CustomersNotFoundError),
+
+	/**
+	 * A metric of the org's own (`MetricDraft`, its `source` required). A Maple query or product event
+	 * metric is backfilled by the next Maple pull, which starts now.
+	 */
+	write(
+		"customers.metric.create",
+		{ id: Schema.optionalKey(CustomerMetricDefinitionId), key: UserMetricKey, metric: MetricDraft },
+		withTx(MetricDefinition.Schema),
+		CustomersInvalidRequestError,
+	),
+
+	/**
+	 * A user-defined metric's whole draft; a source's own or a built-in takes only its name,
+	 * description, group, unit and format (`source` null). A changed query refills its days.
+	 */
+	write(
+		"customers.metric.update",
+		{ metricKey: NonEmptyText(200), metric: MetricDraft },
+		withTx(MetricDefinition.Schema),
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+	),
+
+	/** A user-defined metric and its daily values. Widgets naming it show it as not set up. */
+	write(
+		"customers.metric.delete",
+		{ metricKey: NonEmptyText(200) },
+		Tx,
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+	),
+
+	/**
+	 * Run a source over the last `days` days without saving it: a Maple query through the Maple
+	 * connection's key, a product event count, a formula over stored values.
+	 */
+	write(
+		"customers.metric.preview",
+		{
+			source: MetricSource,
+			aggregation: Schema.Literals(["sum", "max", "last"]),
+			days: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 14 })),
+		},
+		MetricPreviewResult,
+		CustomersInvalidRequestError,
+	),
+
+	/** A new Overview layout, first in the order unless `position` is given. Customers are reassigned. */
+	write(
+		"customers.layout.create",
+		{
+			id: Schema.optionalKey(CustomerOverviewLayoutId),
+			layout: LayoutDraft,
+			position: Schema.optionalKey(Schema.Number),
+		},
+		withTx(OverviewLayout.Schema),
+		CustomersInvalidRequestError,
+	),
+
+	/** The default layout's rule is ignored. Customers are reassigned. */
+	write(
+		"customers.layout.update",
+		{ layoutId: CustomerOverviewLayoutId, layout: LayoutDraft },
+		withTx(OverviewLayout.Schema),
+		CustomersNotFoundError,
+	),
+
+	/** Not the default. Its pinned customers are unpinned. */
+	write(
+		"customers.layout.delete",
+		{ layoutId: CustomerOverviewLayoutId },
+		Tx,
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+	),
+
+	/** The non-default layouts in their new order (all of them). */
+	write(
+		"customers.layout.reorder",
+		{ layoutIds: Schema.Array(CustomerOverviewLayoutId).check(Schema.isMaxLength(100)) },
+		Tx,
+		CustomersInvalidRequestError,
+	),
 
 	/** The unit a source's metric is shown in (`8.27 GB`); null: the source's own. Not for built-ins. */
 	write(

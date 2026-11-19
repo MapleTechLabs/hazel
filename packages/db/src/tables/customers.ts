@@ -2,7 +2,7 @@
  * The `customers` store: one `CustomersObject` per organization (`docs/customers/tech-design.md`).
  *
  * Synced to the org's members (`customers-source.ts`): accounts, signals, signal rules, notes,
- * saved views, settings, metric definitions, connections and sync runs. The rest is read through
+ * saved views, settings, metric definitions, overview layouts, connections and sync runs. The rest is read through
  * RPCs (contacts, refs, billing, daily series, events, unmatched records) or internal
  * (`customer_members`, `customer_connection_secrets`).
  *
@@ -25,10 +25,14 @@ import type {
 	ViewSort,
 	ListColumn,
 	CustomerSource,
+	LayoutRule,
+	MetricSource,
+	OverviewWidget,
 	ViewLayoutKey,
 } from "@hazel/domain/customers"
 import {
 	DEFAULT_ATTENTION_SETTINGS,
+	EMPTY_LAYOUT_RULE,
 	EMPTY_SYNC_STATS,
 	BillingInterval,
 	BuiltInViewKey,
@@ -41,6 +45,7 @@ import {
 	LifecycleStage,
 	MatchMethod,
 	MetricAggregation,
+	MetricFormat,
 	MrrMovementType,
 	RefEntityType,
 	SignalKind,
@@ -72,6 +77,7 @@ import {
 	CustomerMetricDefinitionId,
 	CustomerMrrMovementId,
 	CustomerNoteId,
+	CustomerOverviewLayoutId,
 	CustomerSavedViewId,
 	CustomerSettingsId,
 	CustomerSignalId,
@@ -172,6 +178,10 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		primaryAccountId: SQLite.nullable(uuid(CustomerAccountId)),
 		/** What the team calls this environment of its customer (`US`, `EU`): set in Hazel, never by a sync. */
 		environment: SQLite.nullable(SQLite.text),
+		/** The Overview layout someone pinned it to; null: the layouts' rules decide. */
+		pinnedLayoutId: SQLite.nullable(uuid(CustomerOverviewLayoutId)),
+		/** The layout it gets: the pin, else the first rule that matches, else the default (`layouts.ts`). */
+		layoutId: SQLite.nullable(uuid(CustomerOverviewLayoutId)),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 		deletedAt: SQLite.nullable(timestamptz),
@@ -412,6 +422,14 @@ export const customerMetricDefinitionsTable = SQLite.table("customer_metric_defi
 		provider: SQLite.nullable(textEnum(CustomerProvider.literals)),
 		description: SQLite.nullable(SQLite.text),
 		builtIn: SQLite.column(SQLite.boolean, { default: false }),
+		/** The catalog's section and a metric table's rows ("Ingest", "Feature usage"). */
+		group: SQLite.nullable(SQLite.text),
+		format: SQLite.column(textEnum(MetricFormat.literals), { default: "number" }),
+		/** How a user-defined metric is made (`MetricSource`); null for a source's own and the built-ins. */
+		source: SQLite.nullable(jsonb<MetricSource>()),
+		/** A Maple query metric's last run, and why it failed. */
+		lastRunAt: SQLite.nullable(timestamptz),
+		lastError: SQLite.nullable(SQLite.text),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},
@@ -457,6 +475,33 @@ export const customerOrgDailyTable = SQLite.table("customer_org_daily", {
 	primaryKey: ["day"],
 })
 export type CustomerOrgDay = SQLite.SelectRowOf<typeof customerOrgDailyTable>
+
+/**
+ * A layout of the customer page's Overview (`docs/customers/overview-layouts.md`): its widgets and
+ * the rule saying which customers get it. Tried in `position` order; exactly one live `isDefault`,
+ * the fallback, which has no rule of its own.
+ */
+export const customerOverviewLayoutsTable = SQLite.table("customer_overview_layouts", {
+	columns: {
+		id: id(CustomerOverviewLayoutId),
+		organizationId: uuid(OrganizationId),
+		name: SQLite.text,
+		position: SQLite.column(SQLite.real, { default: 0 }),
+		isDefault: SQLite.column(SQLite.boolean, { default: false }),
+		rule: SQLite.column(jsonb<LayoutRule>(), { default: EMPTY_LAYOUT_RULE }),
+		widgets: SQLite.column(jsonb<ReadonlyArray<OverviewWidget>>(), { default: [] }),
+		/** Accounts that get it, as of the last assignment. */
+		accountCount: count(),
+		createdBy: SQLite.nullable(uuid(UserId)),
+		updatedBy: SQLite.nullable(uuid(UserId)),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+		deletedAt: SQLite.nullable(timestamptz),
+	},
+	primaryKey: ["id"],
+})
+export type CustomerOverviewLayout = SQLite.SelectRowOf<typeof customerOverviewLayoutsTable>
+export type NewCustomerOverviewLayout = SQLite.InsertRowOf<typeof customerOverviewLayoutsTable>
 
 // ---------------------------------------------------------------------------
 // Timeline
