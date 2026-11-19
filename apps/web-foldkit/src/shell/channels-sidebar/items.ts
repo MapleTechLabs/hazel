@@ -219,8 +219,9 @@ const threadItem = <M>(
 							? "before:-top-2.5"
 							: "before:-top-[17px] sm:before:-top-4",
 					"before:rounded-bl-md before:border-fg/15 before:border-b-[1.5px] before:border-l-[1.5px]",
+					// The spine carries on from where the branch's rounded corner (6px) leaves it.
 					!isLast &&
-						"after:pointer-events-none after:absolute after:top-1/2 after:bottom-0 after:-left-[11px] after:border-fg/15 after:border-l-[1.5px]",
+						"after:pointer-events-none after:absolute after:top-[calc(50%-6px)] after:bottom-0 after:-left-[11px] after:border-fg/15 after:border-l-[1.5px]",
 					isActive && CHANNEL_ACTIVE,
 					count > 0 && "font-medium text-fg",
 				),
