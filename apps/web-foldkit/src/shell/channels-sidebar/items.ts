@@ -205,13 +205,14 @@ const threadBranch = <M>(h: HtmlBuilder<M>, hasEmojiIcon: boolean, isFirst: bool
 			h.path([
 				h.Attribute(
 					"d",
-					isLast
-						? "M1.75 100V22A6 6 0 0 1 7.75 16H9"
-						: "M1.75 0V100M1.75 22A6 6 0 0 1 7.75 16H9",
+					// The branch eases off the spine over 11px (a cubic, softer than a circular corner).
+					isLast ? "M1.75 100V27C1.75 20 4 16 11 16" : "M1.75 0V100M1.75 27C1.75 20 4 16 11 16",
 				),
 				h.Attribute("fill", "none"),
 				h.Attribute("stroke", "currentColor"),
 				h.Attribute("stroke-width", "1.5"),
+				// The SVG clips the caps where the spine meets the next row, so only the branch's tip is round.
+				h.Attribute("stroke-linecap", "round"),
 			]),
 		],
 	)
