@@ -13,6 +13,7 @@ import {
 	ChannelId,
 	CustomerAccountId,
 	CustomerChannelLinkId,
+	CustomerChannelSuggestionId,
 	CustomerConnectionId,
 	CustomerFeatureFlagId,
 	CustomerContactId,
@@ -40,6 +41,7 @@ import {
 	RuleDryRunResult,
 	Sparkline,
 } from "../customers/analytics"
+import { ChannelSuggestion } from "../customers/channel-suggestions"
 import { ConnectionConfig } from "../customers/connections"
 import {
 	CustomerProvider,
@@ -114,6 +116,8 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"contact",
 			/** No such channel in the org, or one the caller cannot see. */
 			"channel",
+			/** No open suggestion with this id. */
+			"suggestion",
 		]),
 		id: Schema.String,
 	},
@@ -306,6 +310,18 @@ export class CustomerReadRpcs extends RpcGroup.make(
 
 	/** Every plan name the org's subscriptions carry, any status, by name. */
 	read("customers.plans.list", {}, Schema.Struct({ plans: Schema.Array(Schema.String) })),
+
+	/**
+	 * Open suggested channel links (`docs/customers/channels.md`), best first, only for channels
+	 * the caller sees: all of them, one account's, or one channel's. With `channelId` the channel
+	 * is scored again first (a channel shared a moment ago has no suggestion yet), which can also
+	 * auto-link it.
+	 */
+	read(
+		"customers.channel.suggestions",
+		{ accountId: Schema.optionalKey(CustomerAccountId), channelId: Schema.optionalKey(ChannelId) },
+		Schema.Struct({ items: Schema.Array(ChannelSuggestion) }),
+	),
 ) {}
 
 // ---------------------------------------------------------------------------
@@ -430,6 +446,26 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 	 * see the channel, as for linking.
 	 */
 	write("customers.channel.unlink", { channelId: ChannelId }, Tx, CustomersNotFoundError),
+
+	/**
+	 * Accept a suggested link: links the channel as `customers.channel.link` does (same checks;
+	 * a suggestion no longer open, or for a channel the caller cannot see, is `not_found`).
+	 */
+	write(
+		"customers.channel.suggestion.accept",
+		{ suggestionId: CustomerChannelSuggestionId },
+		withTx(ChannelLink.Schema),
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+	),
+
+	/** Dismiss a suggestion: that account is never suggested for that channel again. */
+	write(
+		"customers.channel.suggestion.dismiss",
+		{ suggestionId: CustomerChannelSuggestionId },
+		Tx,
+		CustomersNotFoundError,
+	),
 
 	/** The list's bulk actions. */
 	write(
