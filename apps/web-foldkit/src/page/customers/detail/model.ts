@@ -257,6 +257,20 @@ export const isNotFound = (model: Model): boolean =>
 export const groupOfModel = (model: Model): ReadonlyArray<AccountRow> =>
 	groupOf(model.accounts ?? [], model.accountId)
 
+/**
+ * The customer an account belongs to: its group's live primary, else itself. Linked channels are
+ * the customer's, stored on the primary (`docs/customers/channels.md`).
+ */
+export const customerOfAccount = (model: Model): ((accountId: CustomerAccountId) => CustomerAccountId) => {
+	const accounts = model.accounts ?? []
+	const liveIds = new Set<string>(accounts.map((account) => account.id))
+	const byId = new Map(accounts.map((account) => [account.id, account]))
+	return (accountId) => {
+		const account = byId.get(accountId)
+		return account === undefined ? accountId : groupIdOf(account, liveIds)
+	}
+}
+
 /** The primary this account is an environment of; null for a primary or a standalone account. */
 export const primaryOf = (model: Model): AccountRow | null => {
 	const [primary] = groupOfModel(model)

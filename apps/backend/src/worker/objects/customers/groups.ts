@@ -6,6 +6,10 @@
  * evaluated over the group's combined facts (`./group-facts.ts`) and are only ever written on the
  * primary, so its other environments hold no unclosed signal.
  *
+ * Linked channels are the customer's (`./channels.ts`): they stay on the group's primary, so linking
+ * into a group or changing its primary moves them, and unlinking an environment leaves them with
+ * the customer.
+ *
  * Each runs inside the caller's transaction, records a `hazel` event on the accounts it changes and
  * asks for a compute. A change of group drops a compute's saved progress (it walks groups by their
  * primary's id): the next turn starts over.
@@ -14,12 +18,23 @@ import { Database, SQLite, schema } from "@hazel/db"
 import { CustomerGroupError } from "@hazel/domain/rpc"
 import type { CustomerAccountId, UserId } from "@hazel/schema"
 import { Effect } from "effect"
+import { publishChannelCustomers } from "./channels"
 import { clearComputeProgress, requestCompute } from "./schedule"
 
 const ZERO_COUNTERS = { openRiskHigh: 0, openRiskMedium: 0, openRiskLow: 0, openOpportunities: 0 }
 
 /** Groups changed: a compute under way starts over, and one runs soon. */
 const regroup = Effect.andThen(clearComputeProgress, requestCompute)
+
+/** The live channel links of `from` move to `to`, the group's primary. */
+const moveChannelLinks = (from: ReadonlyArray<CustomerAccountId>, to: CustomerAccountId, now: Date) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.run(
+			SQLite.update(schema.customerChannelLinksTable)
+				.set({ accountId: to, updatedAt: now })
+				.where(($) => [$.accountId.in_(...from), $.deletedAt.isNull()]),
+		),
+	)
 
 const recordEvent = (
 	accountId: CustomerAccountId,
@@ -99,6 +114,8 @@ export const linkAccounts = Effect.fn("Customers.linkAccounts")(function* (
 		actor,
 		now,
 	)
+	yield* moveChannelLinks(ids, primary.id, now)
+	yield* publishChannelCustomers(primary.organizationId)
 	yield* Effect.annotateCurrentSpan({ "customers.linked_accounts": ids.length })
 	yield* regroup
 })
@@ -132,6 +149,9 @@ export const unlinkAccount = Effect.fn("Customers.unlinkAccount")(function* (
 			.set({ primaryAccountId: null, updatedAt: now })
 			.where(($) => [$.id.eq(account.id)]),
 	)
+	// A link stored on the environment (from before links were the customer's) stays with it.
+	yield* moveChannelLinks([account.id], primaryId, now)
+	yield* publishChannelCustomers(account.organizationId)
 	yield* recordEvent(
 		account.id,
 		"account.unlinked",
@@ -190,6 +210,8 @@ export const setPrimaryAccount = Effect.fn("Customers.setPrimaryAccount")(functi
 			.set({ primaryAccountId: null, ...counters, updatedAt: now })
 			.where(($) => [$.id.eq(account.id)]),
 	)
+	yield* moveChannelLinks([oldId], account.id, now)
+	yield* publishChannelCustomers(account.organizationId)
 	yield* recordEvent(
 		account.id,
 		"account.primary_changed",

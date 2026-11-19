@@ -58,6 +58,7 @@ import {
 	accountOf,
 	type ActionKey,
 	actionEntries,
+	customerOfAccount,
 	ENVIRONMENT_INPUT_ID,
 	environmentEntries,
 	groupOfModel,
@@ -723,7 +724,8 @@ const linkedChannelRow = (
 
 /** The channel picker: search the org's channels; one linked elsewhere says where (it moves here). */
 const channelPicker = (h: HtmlBuilder<Message>, model: Model, linkedHere: ReadonlySet<string>): Html => {
-	const owners = new Map(model.channelLinks.map((entry) => [entry.channelId, entry.accountId]))
+	const customerOf = customerOfAccount(model)
+	const owners = new Map(model.channelLinks.map((entry) => [entry.channelId, customerOf(entry.accountId)]))
 	const names = new Map((model.accounts ?? []).map((account) => [account.id, account.name]))
 	const candidates = searchOptions(
 		model.channelOptions.filter((channel) => !linkedHere.has(channel.id)),
@@ -800,9 +802,14 @@ const channelPicker = (h: HtmlBuilder<Message>, model: Model, linkedHere: Readon
 	})
 }
 
-/** Where the team talks to this customer: Hazel, Slack, Discord or Connect channels. */
+/**
+ * Where the team talks to this customer: Hazel, Slack, Discord or Connect channels. They are the
+ * customer's, so every environment of it shows the same ones.
+ */
 const channelsSection = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
-	const linked = model.channelLinks.filter((entry) => entry.accountId === context.account.id)
+	const customerOf = customerOfAccount(model)
+	const customer = customerOf(context.account.id)
+	const linked = model.channelLinks.filter((entry) => customerOf(entry.accountId) === customer)
 	const linkedHere = new Set<string>(linked.map((entry) => entry.channelId))
 	const options = new Map(model.channelOptions.map((channel) => [channel.id, channel]))
 	return sidebarSection(h, "Channels", linked.length === 0 ? null : formatCount(linked.length), [

@@ -6,9 +6,12 @@
  * The snapshot is sent when it changes: after a link or unlink, after a rename by hand, and at
  * the end of every compute (which catches names set by a source, and accounts a source deleted).
  * Only live links of live accounts are projected.
+ *
+ * A link belongs to the customer, not to one environment: it is stored on the group's primary
+ * (`linkOwnerOf`), regrouping moves it (`./groups.ts`), and the snapshot names the primary.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import type { OrganizationId } from "@hazel/schema"
+import type { CustomerAccountId, OrganizationId } from "@hazel/schema"
 import { Clock, Effect, Option } from "effect"
 import { enqueueEffect } from "../effects/registry"
 import { orgTarget } from "../kinds"
@@ -19,7 +22,27 @@ import { type ChannelCustomerEntry, ChannelCustomerOrgEffects } from "../org/cha
 const SENT_KEY = "channelCustomersSent"
 const VERSION_KEY = "channelCustomersVersion"
 
-/** Every live link of a live account, ordered by channel (a stable fingerprint). */
+/**
+ * The account a link of `account`'s customer is stored on: its group's live primary, else itself
+ * (standalone, a primary, or an environment whose primary is gone).
+ */
+export const linkOwnerOf = (account: Pick<schema.CustomerAccount, "id" | "primaryAccountId">) =>
+	Effect.gen(function* () {
+		const primaryId = account.primaryAccountId
+		if (primaryId === null) return account.id
+		const db = yield* Database.Database
+		const primary = yield* db.first(
+			SQLite.from(schema.customerAccountsTable)
+				.select("id")
+				.where(($) => [$.id.eq(primaryId), $.deletedAt.isNull()]),
+		)
+		return Option.match(primary, { onNone: () => account.id, onSome: (row) => row.id })
+	})
+
+/**
+ * Every live link of a live account, under its customer (the group's live primary), ordered by
+ * channel (a stable fingerprint). A link still stored on an environment shows under its primary too.
+ */
 export const channelCustomerSnapshot = Effect.gen(function* () {
 	const db = yield* Database.Database
 	const rows = yield* db.run(
@@ -27,10 +50,34 @@ export const channelCustomerSnapshot = Effect.gen(function* () {
 			.innerJoin(schema.customerAccountsTable, "a", (l, a) =>
 				SQLite.and(a.id.eq(l.accountId), a.deletedAt.isNull()),
 			)
-			.select(($) => ({ channelId: $.channelId, accountId: $.accountId, accountName: $.a.name }))
+			.select(($) => ({
+				channelId: $.channelId,
+				accountId: $.accountId,
+				accountName: $.a.name,
+				primaryAccountId: $.a.primaryAccountId,
+			}))
 			.where(($) => [$.deletedAt.isNull()]),
 	)
-	return [...rows].sort((a, b) => (a.channelId < b.channelId ? -1 : a.channelId > b.channelId ? 1 : 0))
+	const primaryIds = [
+		...new Set(rows.flatMap((row) => (row.primaryAccountId === null ? [] : [row.primaryAccountId]))),
+	]
+	const primaries = new Map<CustomerAccountId, string>(
+		primaryIds.length === 0
+			? []
+			: (yield* db.run(
+					SQLite.from(schema.customerAccountsTable)
+						.select("id", "name")
+						.where(($) => [$.id.in_(...primaryIds), $.deletedAt.isNull()]),
+				)).map((row) => [row.id, row.name] as const),
+	)
+	const links: Array<ChannelCustomerEntry> = rows.map((row) => {
+		const primaryId = row.primaryAccountId
+		const primaryName = primaryId === null ? undefined : primaries.get(primaryId)
+		return primaryId === null || primaryName === undefined
+			? { channelId: row.channelId, accountId: row.accountId, accountName: row.accountName }
+			: { channelId: row.channelId, accountId: primaryId, accountName: primaryName }
+	})
+	return links.sort((a, b) => (a.channelId < b.channelId ? -1 : a.channelId > b.channelId ? 1 : 0))
 })
 
 const fingerprint = (links: ReadonlyArray<ChannelCustomerEntry>) =>

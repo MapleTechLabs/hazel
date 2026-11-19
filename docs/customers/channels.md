@@ -8,6 +8,13 @@ all of them.
 
 ## Rules
 
+- Links are per customer, not per environment: for a customer with several environments (a US
+  and an EU org, `customers.account.link`) a channel is linked to the group. The link is stored on
+  the group's primary whichever environment it was linked from, every environment's page shows
+  the same channels, and chat names the primary. Linking an account into a group, or making
+  another environment primary, moves the links to the new primary; unlinking an environment
+  leaves them with the customer. A link stored on an environment before this still shows under
+  its primary.
 - An account has any number of channels; a channel has at most one customer. Linking a channel
   that belongs to another account moves it (both accounts get a `hazel` timeline event:
   `channel.unlinked`, `channel.linked`).
@@ -32,9 +39,9 @@ all of them.
    is linkable and visible to the caller (`ok | not_found | not_linkable`).
 2. In one transaction: the old live link of the channel (if any) is soft-deleted, the new one
    inserted, events written, and `publishChannelCustomers` enqueues `org.setChannelCustomers`.
-3. `org.setChannelCustomers` is a full snapshot of every live link of a live account, versioned
-   like `customers.setMembers` (an older version is dropped); the receiver writes only what
-   changed. Its sender guard accepts only the org's own customers object.
+3. `org.setChannelCustomers` is a full snapshot of every live link of a live account (named by
+   its group's live primary), versioned like `customers.setMembers` (an older version is
+   dropped); the receiver writes only what changed. Its sender guard accepts only the org's own customers object.
 4. The snapshot is sent only when its SHA-256 fingerprint changed: after link / unlink, after an
    account renamed by hand, and at the end of every compute (names set by a source, accounts a
    source deleted).
