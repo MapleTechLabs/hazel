@@ -15,6 +15,7 @@ import {
 	StartPasskeySignIn,
 } from "./sign-in/command"
 import { Message as SignInMessage } from "./sign-in/message"
+import { Submission } from "./sign-in/model"
 import { init as initSignIn, update as updateSignIn } from "./sign-in/update"
 import { view as signInView } from "./sign-in/view"
 
@@ -24,7 +25,8 @@ const signedOut = makeShared({ auth: "SignedOut", currentUser: null, organizatio
 const github = Scene.role("button", { name: "Continue with GitHub" })
 const passkey = Scene.role("button", { name: "Sign in with a passkey" })
 
-const signIn = (redirectUrl: Option.Option<string>) => initSignIn(AppRoute.SignIn.make({ redirectUrl })).model
+const signIn = (redirectUrl: Option.Option<string>) =>
+	initSignIn(AppRoute.SignIn.make({ redirectUrl, error: Option.none() })).model
 
 describe("sign in", () => {
 	test("a provider starts OAuth with the route's redirect, and disables the other choices", () => {
@@ -63,6 +65,19 @@ describe("sign in", () => {
 			Scene.Command.resolve(StartPasskeySignIn, SignInMessage.FailedSignIn({ reason: "Cancelled" })),
 			Scene.expect(Scene.role("alert")).toBeAbsent(),
 		)
+	})
+
+	test("a failed OAuth callback lands with ?error= and says why; an unknown reason stays generic", () => {
+		const landed = (error: string) =>
+			initSignIn(AppRoute.SignIn.make({ redirectUrl: Option.none(), error: Option.some(error) })).model
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(landed("Expired")),
+			Scene.expect(Scene.role("alert")).toHaveText(
+				"That sign-in expired or was already used. Please start again.",
+			),
+		)
+		expect(landed("<script>").submission).toEqual(Submission.Failed({ reason: "Unexpected" }))
 	})
 
 	test("/sign-up offers the same choices and links back to sign-in", () => {

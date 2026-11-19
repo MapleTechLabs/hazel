@@ -24,7 +24,7 @@ export const routeRedirect = (
 /** `_app/layout.tsx` `Gate`: a signed-out visitor on an app route goes to sign-in, then back. */
 export const authRedirect = (route: AppRoute, auth: Auth, currentUrl: string): Option.Option<AppRoute> =>
 	auth === "SignedOut" && !isPublicRoute(route)
-		? Option.some(AppRoute.SignIn({ redirectUrl: Option.some(currentUrl) }))
+		? Option.some(AppRoute.SignIn({ redirectUrl: Option.some(currentUrl), error: Option.none() }))
 		: Option.none()
 
 export interface RootMembership {

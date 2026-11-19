@@ -81,16 +81,16 @@ const choices = (h: HtmlBuilder<Message>, pending: Attempt | null): Html =>
 
 const switchLink = (h: HtmlBuilder<Message>, model: Model): Html => {
 	const isSignIn = model.mode === "SignIn"
-	const target = isSignIn ? AppRoute.SignUp : AppRoute.SignIn
+	const redirectUrl = Option.fromNullishOr(model.redirectUrl)
+	const target = isSignIn
+		? AppRoute.SignUp({ redirectUrl })
+		: AppRoute.SignIn({ redirectUrl, error: Option.none() })
 	return h.p(
 		[h.Class("mt-8 text-muted-fg text-sm")],
 		[
 			isSignIn ? "New to Hazel? " : "Already have an account? ",
 			h.a(
-				[
-					h.Class("text-fg underline underline-offset-2"),
-					h.Href(hrefOf(target({ redirectUrl: Option.fromNullishOr(model.redirectUrl) }))),
-				],
+				[h.Class("text-fg underline underline-offset-2"), h.Href(hrefOf(target))],
 				[isSignIn ? "Create an account" : "Sign in"],
 			),
 		],

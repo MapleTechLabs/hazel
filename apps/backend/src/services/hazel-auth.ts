@@ -6,7 +6,7 @@ import {
 	makeDesktopLoginRoutes,
 	makeHazelAuthLive,
 } from "@hazel/auth/server"
-import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Config, Context, Effect, Layer, Option, Redacted, Schema, Stream } from "effect"
 import { Base64Url } from "effect/encoding"
 import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { NonProductionStage } from "../lib/stage"
@@ -225,6 +225,75 @@ const accessTokenRoutes = (issuerOrigin: string, key: AccessToken.SigningKey) =>
 		}),
 	)
 
+const CALLBACK_PATH = /^\/auth\/[^/]+\/callback$/
+
+/** The two bodies a failed callback carries: the operation's failure, or the transport's refusal. */
+const CallbackFailure = Schema.fromJsonString(
+	Schema.Union([
+		Schema.Struct({ _tag: Schema.Literal("Failure"), error: Schema.Struct({ _tag: Schema.String }) }),
+		Schema.Struct({ _tag: Schema.Literal("TransportFailure"), reason: Schema.String }),
+	]),
+)
+type CallbackFailure = typeof CallbackFailure.Type
+
+/** The sign-in page's reason (`AuthFailure` in the web app) for a failed callback. */
+const signInReason = (failure: CallbackFailure): string => {
+	if (failure._tag === "TransportFailure")
+		// The flow's binding cookie is gone: the callback was already used, or it expired.
+		return failure.reason === "credentials" ? "Expired" : "Unexpected"
+	switch (failure.error._tag) {
+		case "OAuthRejected":
+			return "Rejected"
+		case "HookDenied":
+			return "Denied"
+		case "IdentityConflict":
+			return "AccountConflict"
+		case "OAuthUnavailable":
+		case "OAuthMethodUnsupported":
+			return "Unavailable"
+		default:
+			return "Unexpected"
+	}
+}
+
+/**
+ * The provider redirects the browser to the API, where a failed callback answers with the
+ * operation's JSON failure: a dead end, and a reload replays the spent `state`. Send the visitor
+ * back to the app's sign-in page, which explains the reason and starts a fresh attempt.
+ */
+const callbackFailureRedirect = (appOrigin: string) =>
+	HttpRouter.middleware((httpEffect) =>
+		Effect.gen(function* () {
+			const response = yield* httpEffect
+			const request = yield* HttpServerRequest.HttpServerRequest
+			const path = new URL(request.url, appOrigin).pathname
+			if (
+				request.method !== "GET" ||
+				response.status !== 400 ||
+				!CALLBACK_PATH.test(path) ||
+				response.body._tag !== "Stream"
+			)
+				return response
+			const failure = yield* Stream.mkString(Stream.decodeText(response.body.stream)).pipe(
+				Effect.flatMap((body) => Schema.decodeUnknownEffect(CallbackFailure)(body)),
+				Effect.option,
+			)
+			const reason = Option.match(failure, { onNone: () => "Unexpected", onSome: signInReason })
+			yield* Effect.logWarning("[auth] OAuth callback failed", {
+				path,
+				reason,
+				failure: Option.getOrUndefined(failure),
+			})
+			const target = new URL("/sign-in", appOrigin)
+			target.searchParams.set("error", reason)
+			return HttpServerResponse.redirect(target, {
+				status: 303,
+				cookies: response.cookies,
+				headers: { "cache-control": "no-store" },
+			})
+		}),
+	).layer
+
 /** `/auth/*` routes. Needs `HazelAuthServicesLive` below it. Empty when disabled. */
 export const HazelAuthRoutes = Layer.unwrap(
 	Effect.map(Effect.service(HazelAuthInstance), (instance) =>
@@ -232,7 +301,7 @@ export const HazelAuthRoutes = Layer.unwrap(
 			onNone: () => Layer.empty,
 			onSome: ({ http, config, accessTokens }) =>
 				Layer.mergeAll(
-					http.routes(),
+					http.routes().pipe(Layer.provide(callbackFailureRedirect(config.appOrigin))),
 					makeDesktopLoginRoutes(config),
 					Option.match(accessTokens, {
 						onNone: () => Layer.empty,
