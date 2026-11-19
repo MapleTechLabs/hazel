@@ -234,6 +234,7 @@ const initialModel = (route: Route): Model => ({
 	mergeAccountId: null,
 	isMerging: false,
 	isImpersonator: false,
+	impersonationAttempts: 0,
 	impersonateModal: Modal.init(IMPERSONATE_MODAL_ID),
 	impersonation: null,
 })
@@ -1008,9 +1009,12 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			const contact = model.contacts.items.find((row) => row.contact.id === contactId)?.contact
 			const organizationId = shared.organization?.id
 			if (contact === undefined || organizationId === undefined) return { model }
+			const attempt = model.impersonationAttempts + 1
 			return {
 				model: modifyFields(model, {
+					impersonationAttempts: () => attempt,
 					impersonation: () => ({
+						attempt,
 						contactId,
 						name: contact.name ?? contact.email ?? "this user",
 						url: null,
@@ -1018,7 +1022,7 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 					}),
 					impersonateModal: (modal) => Modal.open(modal).model,
 				}),
-				commands: [StartCustomerImpersonation({ organizationId, contactId })],
+				commands: [StartCustomerImpersonation({ organizationId, contactId, attempt })],
 			}
 		},
 		GotImpersonateModalMessage: ({ message: modalMessage }) => {
@@ -1034,16 +1038,15 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				),
 			}
 		},
-		SucceededStartImpersonation: ({ contactId, url }) => ({
+		SucceededStartImpersonation: ({ attempt, url }) => ({
 			model: modifyFields(model, {
-				impersonation: (current) =>
-					current?.contactId === contactId ? { ...current, url } : current,
+				impersonation: (current) => (current?.attempt === attempt ? { ...current, url } : current),
 			}),
 		}),
-		FailedStartImpersonation: ({ contactId, reason }) => ({
+		FailedStartImpersonation: ({ attempt, reason }) => ({
 			model: modifyFields(model, {
 				impersonation: (current) =>
-					current?.contactId === contactId ? { ...current, failure: reason } : current,
+					current?.attempt === attempt ? { ...current, failure: reason } : current,
 			}),
 		}),
 

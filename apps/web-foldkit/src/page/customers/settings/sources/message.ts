@@ -117,7 +117,7 @@ export const Message = defineMessageUnion({
 	UpdatedImpersonations: { impersonations: Schema.Array(ImpersonationRow) },
 	GotImpersonatorMenuMessage: { message: Menu.Message },
 	PressedRevokeImpersonator: { userId: UserId },
-	SucceededImpersonatorAction: {},
-	FailedImpersonatorAction: { reason: ImpersonatorFailure },
+	SucceededImpersonatorAction: { userId: UserId },
+	FailedImpersonatorAction: { userId: UserId, reason: ImpersonatorFailure },
 })
 export type Message = typeof Message.Type

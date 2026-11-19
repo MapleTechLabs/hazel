@@ -291,11 +291,13 @@ export const GrantCustomerImpersonator = Command.define("GrantCustomerImpersonat
 	messages: impersonatorMessages,
 	execute: (args) =>
 		grantImpersonatorAction(args).pipe(
-			Effect.as(Message.SucceededImpersonatorAction()),
+			Effect.as(Message.SucceededImpersonatorAction({ userId: args.userId })),
 			Effect.catchTag("CustomersInvalidRequestError", () =>
-				Effect.succeed(Message.FailedImpersonatorAction({ reason: "NotMember" })),
+				Effect.succeed(
+					Message.FailedImpersonatorAction({ userId: args.userId, reason: "NotMember" }),
+				),
 			),
-			catchCommon((reason) => Message.FailedImpersonatorAction({ reason })),
+			catchCommon((reason) => Message.FailedImpersonatorAction({ userId: args.userId, reason })),
 		),
 })
 
@@ -304,7 +306,7 @@ export const RevokeCustomerImpersonator = Command.define("RevokeCustomerImperson
 	messages: impersonatorMessages,
 	execute: (args) =>
 		revokeImpersonatorAction(args).pipe(
-			Effect.as(Message.SucceededImpersonatorAction()),
-			catchCommon((reason) => Message.FailedImpersonatorAction({ reason })),
+			Effect.as(Message.SucceededImpersonatorAction({ userId: args.userId })),
+			catchCommon((reason) => Message.FailedImpersonatorAction({ userId: args.userId, reason })),
 		),
 })

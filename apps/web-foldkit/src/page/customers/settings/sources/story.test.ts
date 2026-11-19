@@ -454,15 +454,21 @@ describe("data sources: impersonation", () => {
 		expect(
 			picked.commands?.find((command) => command.name === "GrantCustomerImpersonator")?.args,
 		).toEqual(GrantCustomerImpersonator({ organizationId, userId: grace, grantedBy: ada }).args)
+		// Its Remove waits for the answer: a revoke could reach the server before the grant.
+		expect(picked.model.pendingGrants).toEqual([grace])
+		expect(
+			pageUpdate(picked.model, Message.SucceededImpersonatorAction({ userId: grace })).model
+				.pendingGrants,
+		).toEqual([])
 	})
 
 	test("a grant answers quietly; a failed one says so", () => {
 		story(
 			pageUpdate,
 			given(clerkDetail()),
-			message(Message.SucceededImpersonatorAction()),
+			message(Message.SucceededImpersonatorAction({ userId: grace })),
 			model((current) => expect(current.impersonators).toEqual([])),
-			message(Message.FailedImpersonatorAction({ reason: "NotMember" })),
+			message(Message.FailedImpersonatorAction({ userId: grace, reason: "NotMember" })),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
 					toast: {
@@ -485,7 +491,7 @@ describe("data sources: impersonation", () => {
 			),
 			Command.resolve(
 				RevokeCustomerImpersonator,
-				Message.FailedImpersonatorAction({ reason: "Offline" }),
+				Message.FailedImpersonatorAction({ userId: grace, reason: "Offline" }),
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({

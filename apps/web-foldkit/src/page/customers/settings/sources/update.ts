@@ -1,5 +1,5 @@
 import type * as Customers from "@hazel/domain/customers"
-import type { CustomerConnectionId } from "@hazel/schema"
+import type { CustomerConnectionId, UserId } from "@hazel/schema"
 import { Record, Redacted, Result } from "effect"
 import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
@@ -132,6 +132,7 @@ export const init = (route: Route, shared: Shared): Return =>
 			impersonators: [],
 			impersonations: [],
 			impersonatorMenu: Menu.init({ id: IMPERSONATOR_MENU_ID, placement: "bottom end" }),
+			pendingGrants: [],
 		},
 		shared,
 	)
@@ -238,6 +239,12 @@ const cleaned = (config: Customers.ConnectionConfig): Customers.ConnectionConfig
 			}
 		: config
 
+/** The grant (or revoke) for `userId` was answered. */
+const settled = (model: Model, userId: UserId): Model => ({
+	...model,
+	pendingGrants: model.pendingGrants.filter((id) => id !== userId),
+})
+
 /** "Add member": grants the picked member, if still without a grant. */
 const grantImpersonator = (model: Model, shared: Shared, key: string): Return => {
 	const member = grantableMembers(model).find((entry) => entry.id === key)
@@ -245,7 +252,10 @@ const grantImpersonator = (model: Model, shared: Shared, key: string): Return =>
 	const grantedBy = shared.currentUser?.id
 	return member === undefined || organizationId === undefined || grantedBy === undefined
 		? { model }
-		: { model, commands: [GrantCustomerImpersonator({ organizationId, userId: member.id, grantedBy })] }
+		: {
+				model: { ...model, pendingGrants: [...model.pendingGrants, member.id] },
+				commands: [GrantCustomerImpersonator({ organizationId, userId: member.id, grantedBy })],
+			}
 }
 
 const syncNow = (
@@ -687,9 +697,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						],
 					}
 		},
-		SucceededImpersonatorAction: () => ({ model }),
-		FailedImpersonatorAction: ({ reason }) => ({
-			model,
+		SucceededImpersonatorAction: ({ userId }) => ({ model: settled(model, userId) }),
+		FailedImpersonatorAction: ({ userId, reason }) => ({
+			model: settled(model, userId),
 			outMessage: toast(errorToastOf(impersonatorFailureMessage(reason))),
 		}),
 	})

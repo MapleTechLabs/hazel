@@ -1,5 +1,5 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerConnectionId } from "@hazel/schema"
+import { CustomerConnectionId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason, failureMessage, type UserErrorMessage } from "~/lib/error-messages"
@@ -119,6 +119,8 @@ export const Model = Schema.Struct({
 	impersonators: Schema.Array(ImpersonatorRow),
 	impersonations: Schema.Array(ImpersonationRow),
 	impersonatorMenu: Menu.Model,
+	/** Grants asked and not answered yet: their Remove waits (a revoke could land before the grant). */
+	pendingGrants: Schema.Array(UserId),
 })
 export type Model = typeof Model.Type
 

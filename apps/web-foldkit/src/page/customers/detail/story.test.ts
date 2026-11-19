@@ -710,6 +710,7 @@ describe("customer page: impersonation", () => {
 		const asked = impersonate(users())
 		expect(asked.model.impersonateModal.isOpen).toBe(true)
 		expect(asked.model.impersonation).toEqual({
+			attempt: 1,
 			contactId: linus.contact.id,
 			name: "Linus",
 			url: null,
@@ -717,32 +718,43 @@ describe("customer page: impersonation", () => {
 		})
 		expect(
 			asked.commands?.find((command) => command.name === "StartCustomerImpersonation")?.args,
-		).toEqual(StartCustomerImpersonation({ organizationId, contactId: linus.contact.id }).args)
+		).toEqual(
+			StartCustomerImpersonation({ organizationId, contactId: linus.contact.id, attempt: 1 }).args,
+		)
 		const url = "https://accounts.beta.test/v1/tickets/accept?ticket=t_1"
-		const answered = run(asked.model, [
-			Message.SucceededStartImpersonation({ contactId: linus.contact.id, url }),
-		])
+		const answered = run(asked.model, [Message.SucceededStartImpersonation({ attempt: 1, url })])
 		expect(answered.impersonation?.url).toBe(url)
 		const closed = run(answered, [
 			Message.GotImpersonateModalMessage({ message: Modal.Message.RequestedClose() }),
 		])
 		expect(closed.impersonateModal.isOpen).toBe(false)
 		expect(closed.impersonation).toBeNull()
-		// An answer for a dialog closed since (or another user's) is dropped.
+		// An answer for a dialog closed since is dropped.
 		expect(
-			run(closed, [Message.SucceededStartImpersonation({ contactId: linus.contact.id, url })])
-				.impersonation,
+			run(closed, [Message.SucceededStartImpersonation({ attempt: 1, url })]).impersonation,
 		).toBeNull()
-		expect(
-			run(asked.model, [Message.SucceededStartImpersonation({ contactId: margaret.contact.id, url })])
-				.impersonation?.url,
-		).toBeNull()
+	})
+
+	test("an earlier attempt's late answer never lands in the reopened dialog for the same user", () => {
+		const first = impersonate(users()).model
+		const closed = run(first, [
+			Message.GotImpersonateModalMessage({ message: Modal.Message.RequestedClose() }),
+		])
+		const reopened = impersonate(closed).model
+		expect(reopened.impersonation?.attempt).toBe(2)
+		const url = "https://accounts.beta.test/v1/tickets/accept?ticket=t_2"
+		const late = run(reopened, [
+			Message.SucceededStartImpersonation({ attempt: 2, url }),
+			Message.FailedStartImpersonation({ attempt: 1, reason: "Offline" }),
+			Message.SucceededStartImpersonation({ attempt: 1, url: "https://stale.test" }),
+		])
+		expect(late.impersonation).toMatchObject({ attempt: 2, url, failure: null })
 	})
 
 	test("a refusal keeps the provider's explanation for the dialog", () => {
 		const refused = run(impersonate(users()).model, [
 			Message.FailedStartImpersonation({
-				contactId: linus.contact.id,
+				attempt: 1,
 				reason: { _tag: "Refused", message: "You have reached your monthly impersonation limit." },
 			}),
 		])

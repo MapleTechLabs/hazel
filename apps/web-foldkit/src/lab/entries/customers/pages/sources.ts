@@ -1,3 +1,4 @@
+import { CustomerImpersonatorId, type UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -10,7 +11,7 @@ import { view } from "../../../../page/customers/settings/sources/view"
 import { AppRoute } from "../../../../route"
 import { defineLabWithFlags, queryParam } from "../../../define"
 import { labPage } from "../../../frame"
-import { ACCOUNTS, STRIPE_CONNECTION, TEAM } from "../../../fixtures/customers"
+import { ACCOUNTS, NOW, STRIPE_CONNECTION, TEAM } from "../../../fixtures/customers"
 import {
 	ADMIN_SHARED,
 	IMPERSONATIONS,
@@ -46,6 +47,38 @@ const currentState = () => new URLSearchParams(window.location.search).get("stat
 const step = (model: Model, message: Message, shared: Shared): Model => update(model, message, shared).model
 const steps = (model: Model, messages: ReadonlyArray<Message>, shared: Shared): Model =>
 	messages.reduce((current, message) => step(current, message, shared), model)
+
+/** Add member and Remove change the grants at once, as their synced rows would. */
+const impersonatorsAnswered = (
+	model: Model,
+	commands: ReadonlyArray<{ readonly name: string; readonly args?: unknown }>,
+	shared: Shared,
+): Model => {
+	let rows = model.impersonators
+	const answers: Array<Message> = []
+	for (const command of commands) {
+		const args = command.args as { readonly userId: UserId; readonly grantedBy: UserId }
+		if (command.name === "GrantCustomerImpersonator") {
+			rows = [
+				...rows,
+				{
+					id: Schema.decodeSync(CustomerImpersonatorId)(
+						`00000026-0000-4000-8000-${String(100 + rows.length).padStart(12, "0")}`,
+					),
+					userId: args.userId,
+					grantedBy: args.grantedBy,
+					grantedAtMs: NOW.getTime(),
+				},
+			]
+		} else if (command.name === "RevokeCustomerImpersonator") {
+			rows = rows.filter((row) => row.userId !== args.userId)
+		} else continue
+		answers.push(Message.SucceededImpersonatorAction({ userId: args.userId }))
+	}
+	return answers.length === 0
+		? model
+		: steps(model, [Message.UpdatedImpersonators({ impersonators: rows }), ...answers], shared)
+}
 
 /** Answers whatever the last update left pending, as the RPCs would on success. */
 const answered = (model: Model, shared: Shared): Model => {
@@ -198,7 +231,10 @@ export const lab = defineLabWithFlags("Data sources", {
 	init: ({ state }) => ({ model: stateModel(state) }),
 	update: (model: Model, message: Message) => {
 		const shared = sharedOf(currentState())
-		return { model: answered(step(model, message, shared), shared) }
+		const result = update(model, message, shared)
+		return {
+			model: answered(impersonatorsAnswered(result.model, result.commands ?? [], shared), shared),
+		}
 	},
 	view: labView,
 })

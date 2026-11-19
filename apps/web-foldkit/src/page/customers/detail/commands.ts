@@ -309,25 +309,25 @@ export const LoadNoteDrafts = Command.define("LoadNoteDrafts", {
  * is caught before `catchCommon`: here it means no grant, not a lost session.
  */
 export const StartCustomerImpersonation = Command.define("StartCustomerImpersonation", {
-	args: { organizationId: OrganizationId, contactId: CustomerContactId },
+	args: { organizationId: OrganizationId, contactId: CustomerContactId, attempt: Schema.Number },
 	messages: [Message.SucceededStartImpersonation, Message.FailedStartImpersonation],
-	execute: ({ organizationId, contactId }) =>
+	execute: ({ organizationId, contactId, attempt }) =>
 		HazelRpc.use((rpc) => rpc("customers.impersonation.start", { organizationId, contactId })).pipe(
-			Effect.map(({ data }) => Message.SucceededStartImpersonation({ contactId, url: data.url })),
+			Effect.map(({ data }) => Message.SucceededStartImpersonation({ attempt, url: data.url })),
 			Effect.catchTags({
 				CustomerImpersonationError: ({ message }) =>
 					Effect.succeed(
 						Message.FailedStartImpersonation({
-							contactId,
+							attempt,
 							reason: { _tag: "Refused", message },
 						}),
 					),
 				UnauthorizedError: () =>
-					Effect.succeed(Message.FailedStartImpersonation({ contactId, reason: "NotAllowed" })),
+					Effect.succeed(Message.FailedStartImpersonation({ attempt, reason: "NotAllowed" })),
 				CustomersNotFoundError: () =>
-					Effect.succeed(Message.FailedStartImpersonation({ contactId, reason: "NotFound" })),
+					Effect.succeed(Message.FailedStartImpersonation({ attempt, reason: "NotFound" })),
 			}),
-			catchCommon((reason) => Message.FailedStartImpersonation({ contactId, reason })),
+			catchCommon((reason) => Message.FailedStartImpersonation({ attempt, reason })),
 		),
 })
 

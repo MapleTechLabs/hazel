@@ -415,7 +415,7 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 		}
 		case "StartCustomerImpersonation":
 			return Message.SucceededStartImpersonation({
-				contactId: Schema.decodeUnknownSync(CustomerContactId)(args.contactId),
+				attempt: Number(args.attempt),
 				url: "https://accounts.example.com/v1/tickets/accept?ticket=lab",
 			})
 		case "CreateCustomerNote":

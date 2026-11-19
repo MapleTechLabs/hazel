@@ -159,8 +159,8 @@ export const Message = defineMessageUnion({
 	PressedImpersonate: { contactId: CustomerContactId },
 	GotImpersonateModalMessage: { message: Modal.Message },
 	/** `contactId` names the dialog it was asked from: an answer for one closed since is dropped. */
-	SucceededStartImpersonation: { contactId: CustomerContactId, url: Schema.String },
-	FailedStartImpersonation: { contactId: CustomerContactId, reason: ImpersonationFailure },
+	SucceededStartImpersonation: { attempt: Schema.Number, url: Schema.String },
+	FailedStartImpersonation: { attempt: Schema.Number, reason: ImpersonationFailure },
 
 	PressedCopy: { text: Schema.String, label: Schema.String },
 	CompletedCopy: { label: Schema.String, isCopied: Schema.Boolean },

@@ -91,6 +91,7 @@ export const impersonationCard = (h: H, model: Model, nowMs: number): Html => {
 									{
 										intent: "plain",
 										size: "xs",
+										isDisabled: model.pendingGrants.includes(row.userId),
 										attributes: [h.AriaLabel(`Remove ${name}`)],
 										onPress: Message.PressedRevokeImpersonator({ userId: row.userId }),
 									},

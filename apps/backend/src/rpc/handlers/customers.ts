@@ -1726,6 +1726,18 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 						"customers.provider": target.connection.provider,
 						"customers.contact_id": contactId,
 					})
+					// The grant or the contact may have gone while Clerk answered: then no link (the token
+					// expires unused).
+					yield* requireImpersonator
+					const still = yield* db.first(
+						SQLite.from(schema.customerContactsTable)
+							.select("id")
+							.where(($) => [$.id.eq(contactId), $.deletedAt.isNull()])
+							.limit(1),
+					)
+					if (Option.isNone(still) || Option.isNone(yield* liveAccount(contact.value.accountId))) {
+						return yield* notFound("contact", contactId)
+					}
 					return yield* withTx(
 						Effect.as(
 							db.run(

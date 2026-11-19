@@ -61,16 +61,23 @@ export const createActorToken = Effect.fn("Clerk.createActorToken")(function* (
 			session_max_duration_in_seconds: IMPERSONATION_SESSION_SECONDS,
 		}),
 	)
+	// One timeout over the request and its body: Clerk may answer the headers and stall the body.
 	const response = yield* client.execute(request).pipe(
+		Effect.flatMap((response) =>
+			Effect.map(response.json.pipe(Effect.orElseSucceed(() => null)), (body) => ({
+				status: response.status,
+				body,
+			})),
+		),
 		Effect.timeout("10 seconds"),
 		Effect.mapError(() => fail("provider", "Could not reach Clerk")),
 	)
+	const { body } = response
 	yield* Effect.annotateCurrentSpan({
 		"peer.service": "clerk",
 		"url.template": "/actor_tokens",
 		"http.response.status_code": response.status,
 	})
-	const body = yield* response.json.pipe(Effect.orElseSucceed(() => null))
 	if (response.status >= 200 && response.status < 300) {
 		return yield* Schema.decodeUnknownEffect(ActorToken)(body).pipe(
 			Effect.mapError(() => fail("provider", "Clerk answered with an actor token Hazel cannot read")),
