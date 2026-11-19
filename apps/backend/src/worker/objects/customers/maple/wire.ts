@@ -88,6 +88,10 @@ export const MapleMetricRow = Schema.Struct({
 })
 export type MapleMetricRow = typeof MapleMetricRow.Type
 
+/** One row of a Maple query metric's SQL: a customer (its Clerk organization id) and its day's value. */
+export const MapleQueryRow = Schema.Struct({ account: Schema.String, value: WireCount })
+export type MapleQueryRow = typeof MapleQueryRow.Type
+
 /** `run_sql`'s typed output (its declared `outputSchema`), with the rows read as `row`. */
 const RunSqlOutput = <S extends Schema.ConstraintDecoder<unknown>>(row: S) =>
 	Schema.Struct({

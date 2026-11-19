@@ -9,7 +9,9 @@
  *   (`api_calls`, `projects`, `storage_gb`) is a daily metric with the plan's limit.
  * - Stripe: a customer per billed account (`metadata.clerk_org_id` → `sameAs`) and its invoices,
  *   plus a few customers that resolve by domain, match nothing, or match two accounts.
- * - Maple: one activity row per contact per active day, weekday-heavy, with a clear champion.
+ * - Maple: one activity row per contact per active day, weekday-heavy, with a clear champion; and
+ *   for one in three accounts active in the last 30 days, the org's own metrics
+ *   (`DEMO_USER_METRICS`: data ingested, feature events) over those days.
  *
  * Each account gets an archetype that shapes its history so every signal template has matches:
  * `went_quiet` (inactive), `usage_drop`, `payment_failed`, `cancel_scheduled` and `downgraded`
@@ -18,12 +20,15 @@
  * `churned` (a recent few: churned) and `lead` fill out the book (and `health_drop` follows from the
  * risky ones).
  */
-import type {
-	CustomerProvider,
-	IngestOp,
-	ProviderRef,
-	UpsertAccount,
-	UpsertContact,
+import {
+	type CustomerProvider,
+	type IngestOp,
+	type LayoutDraft,
+	mapleBuilderSql,
+	type MetricDraft,
+	type ProviderRef,
+	type UpsertAccount,
+	type UpsertContact,
 } from "@hazel/domain/customers"
 import { DAY_MS, dayOf } from "./time"
 
@@ -1227,6 +1232,217 @@ const unmatchedStripeOps = (
 		]
 	})
 
+/** Days of the org's own metrics (`DEMO_USER_METRICS`). */
+const USER_METRIC_DAYS = 30
+
+const ingestMetric = (
+	key: string,
+	name: string,
+	metricName: string,
+	signal: string,
+	format: MetricDraft["format"],
+	unit: string | null,
+): { readonly key: string; readonly draft: MetricDraft } => {
+	const builder = {
+		table: "metrics_sum",
+		filters: [
+			{ field: "MetricName", op: "eq", value: metricName },
+			{ field: "Attributes.signal", op: "eq", value: signal },
+		],
+		value: "sum",
+		customerField: "Attributes.org_id",
+	} as const
+	return {
+		key,
+		draft: {
+			name,
+			description: null,
+			group: "Ingest",
+			unit,
+			format,
+			aggregation: "sum",
+			source: { _tag: "maple_query", sql: mapleBuilderSql(builder), builder },
+		},
+	}
+}
+
+const eventMetric = (key: string, name: string, event: string) => ({
+	key,
+	draft: {
+		name,
+		description: null,
+		group: "Feature usage",
+		unit: null,
+		format: "number",
+		aggregation: "sum",
+		source: { _tag: "product_event", events: [event] },
+	} satisfies MetricDraft,
+})
+
+/**
+ * The org's own metrics the demo defines (the keys the web app's layout starters suggest): Maple
+ * queries over ingest, product event counts, and a formula over two of them.
+ */
+export const DEMO_USER_METRICS: ReadonlyArray<{ readonly key: string; readonly draft: MetricDraft }> = [
+	ingestMetric(
+		"spans_ingested",
+		"Spans ingested",
+		"maple_ingest_org_items_total",
+		"traces",
+		"number",
+		"spans",
+	),
+	ingestMetric(
+		"traces_ingested_bytes",
+		"Traces ingested",
+		"maple_ingest_org_bytes_total",
+		"traces",
+		"bytes",
+		null,
+	),
+	ingestMetric(
+		"logs_ingested_bytes",
+		"Logs ingested",
+		"maple_ingest_org_bytes_total",
+		"logs",
+		"bytes",
+		null,
+	),
+	ingestMetric(
+		"metric_points_ingested",
+		"Metric points",
+		"maple_ingest_org_items_total",
+		"metrics",
+		"number",
+		"points",
+	),
+	eventMetric("mcp_tool_calls", "MCP tool calls", "mcp_tool_called"),
+	eventMetric("api_keys_created", "API keys created", "api_key_created"),
+	eventMetric("dashboards_created", "Dashboards created", "dashboard_created"),
+	{
+		key: "bytes_per_span",
+		draft: {
+			name: "Bytes per span",
+			description: "Trace bytes over spans ingested",
+			group: "Ingest",
+			unit: null,
+			format: "bytes",
+			aggregation: "sum",
+			source: { _tag: "formula", expression: "{traces_ingested_bytes} / {spans_ingested}" },
+		},
+	},
+]
+
+/** The demo's own Overview layout: customers sending telemetry see their ingest and feature use. */
+export const DEMO_LAYOUT: LayoutDraft = {
+	name: "Observability",
+	rule: {
+		match: "all",
+		conditions: [{ _tag: "metric", metricKey: "spans_ingested", windowDays: 30, op: "gt", value: 0 }],
+	},
+	widgets: [
+		{
+			_tag: "stat",
+			id: "spans",
+			span: 1,
+			metricKey: "spans_ingested",
+			label: null,
+			windowDays: 30,
+			compare: "previous",
+			goodDirection: "up",
+			hideWhenEmpty: false,
+		},
+		{
+			_tag: "stat",
+			id: "logs",
+			span: 1,
+			metricKey: "logs_ingested_bytes",
+			label: null,
+			windowDays: 30,
+			compare: "previous",
+			goodDirection: "up",
+			hideWhenEmpty: false,
+		},
+		{
+			_tag: "stat",
+			id: "bytes-per-span",
+			span: 1,
+			metricKey: "bytes_per_span",
+			label: "Bytes per span",
+			windowDays: 30,
+			compare: "previous",
+			goodDirection: "neutral",
+			hideWhenEmpty: true,
+		},
+		{ _tag: "built_in", id: "last-active", span: 1, kind: "last_active" },
+		{
+			_tag: "chart",
+			id: "ingest",
+			span: 4,
+			title: "Data ingested",
+			metricKeys: ["traces_ingested_bytes", "logs_ingested_bytes"],
+			style: "stacked",
+			range: "30d",
+		},
+		{
+			_tag: "metric_table",
+			id: "features",
+			span: 2,
+			title: "Feature usage",
+			rows: { _tag: "group", group: "Feature usage" },
+			windowDays: 30,
+			usedAtLeast: 1,
+			unused: "show",
+			order: "value",
+			columns: { trend: true, lastUsed: true },
+			exclude: [],
+		},
+		{ _tag: "built_in", id: "health", span: 2, kind: "health" },
+		{ _tag: "built_in", id: "signals", span: 2, kind: "signals" },
+		{ _tag: "built_in", id: "subscription", span: 2, kind: "subscription" },
+	],
+}
+
+/**
+ * One in three accounts active in the last 30 days sends telemetry every day of them (more on days
+ * more of their people are active) and use features on active days.
+ */
+const userMetricOps = (
+	clock: Clock,
+	account: AccountSpec,
+	activeByAgo: ReadonlyArray<number>,
+): Array<IngestOp> => {
+	const recent = activeByAgo.slice(0, USER_METRIC_DAYS)
+	if (account.index % 3 !== 0 || recent.every((users) => users === 0)) return []
+	const rng = makeRng(account.index + 7_919)
+	const scale = account.contacts.length * rng.between(0.5, 2)
+	const ops: Array<IngestOp> = []
+	const record = (metricKey: string, ago: number, value: number) => {
+		if (value > 0)
+			ops.push({
+				_tag: "metric",
+				account: clerkRef(account.clerkOrgId),
+				metricKey,
+				day: dayKey(dayAt(clock, ago)),
+				value: Math.round(value),
+			})
+	}
+	for (let ago = 0; ago < USER_METRIC_DAYS; ago++) {
+		const users = recent[ago] ?? 0
+		const load = scale * (0.6 + 0.2 * users) * rng.between(0.8, 1.2)
+		const spans = load * 40_000
+		record("spans_ingested", ago, spans)
+		record("traces_ingested_bytes", ago, spans * rng.between(450, 650))
+		record("logs_ingested_bytes", ago, load * 2_500_000)
+		record("metric_points_ingested", ago, load * 18_000)
+		if (users === 0) continue
+		record("mcp_tool_calls", ago, rng.chance(0.5) ? users * rng.int(1, 6) : 0)
+		record("api_keys_created", ago, rng.chance(0.05) ? 1 : 0)
+		record("dashboards_created", ago, rng.chance(0.15) ? rng.int(1, 2) : 0)
+	}
+	return ops
+}
+
 const mapleOps = (
 	clock: Clock,
 	account: AccountSpec,
@@ -1322,7 +1538,10 @@ export const generateDemoSeed = (options: DemoSeedOptions): DemoSeed => {
 			},
 			{
 				provider: "maple",
-				ops: accounts.flatMap((account) => mapleOps(clock, account, activity, activityDays)),
+				ops: accounts.flatMap((account) => [
+					...mapleOps(clock, account, activity, activityDays),
+					...userMetricOps(clock, account, activeByAgo(account)),
+				]),
 			},
 		],
 		accounts: accounts.map(({ clerkOrgId, name, archetype }) => ({ clerkOrgId, name, archetype })),

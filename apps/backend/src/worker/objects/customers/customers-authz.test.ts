@@ -45,6 +45,17 @@ const viewDraft = {
 	columns: ["name"],
 }
 
+const metricDraft = {
+	name: "Spans",
+	description: null,
+	group: null,
+	unit: null,
+	format: "number",
+	aggregation: "sum",
+	source: { _tag: "product_event", events: ["span_ingested"] },
+}
+const layoutDraft = { name: "Observability", rule: { match: "all", conditions: [] }, widgets: [] }
+
 /** A well-formed payload per method (ids of rows that need not exist: refusals come first). */
 const PAYLOADS = {
 	"customers.overview": { range: "30d" },
@@ -102,6 +113,22 @@ const PAYLOADS = {
 	"customers.featureFlag.delete": { key: "beta" },
 	"customers.featureFlags.set": { accountIds: [uuid()], keys: ["beta"], enabled: true },
 	"customers.metric.setUnit": { metricKey: "autumn.traces", unit: "GB" },
+	"customers.account.metricWindows": { accountId: uuid(), windows: [{ metricKey: "mrr", days: 30 }] },
+	"customers.metrics.coverage": {},
+	"customers.layout.dryRun": { rule: { match: "all", conditions: [] } },
+	"customers.account.setLayout": { accountId: uuid(), layoutId: null },
+	"customers.metric.create": { key: "spans", metric: metricDraft },
+	"customers.metric.update": { metricKey: "spans", metric: metricDraft },
+	"customers.metric.delete": { metricKey: "spans" },
+	"customers.metric.preview": {
+		source: { _tag: "formula", expression: "{mrr} / 2" },
+		aggregation: "sum",
+		days: 7,
+	},
+	"customers.layout.create": { layout: layoutDraft },
+	"customers.layout.update": { layoutId: uuid(), layout: layoutDraft },
+	"customers.layout.delete": { layoutId: uuid() },
+	"customers.layout.reorder": { layoutIds: [] },
 	"customers.demo.seed": { accounts: 1 },
 	"customers.impersonator.grant": { userId: uuid() },
 	"customers.impersonator.revoke": { userId: uuid() },
@@ -135,6 +162,15 @@ const ADMIN_ONLY = new Set([
 	"customers.featureFlag.delete",
 	"customers.featureFlags.set",
 	"customers.metric.setUnit",
+	"customers.layout.dryRun",
+	"customers.metric.create",
+	"customers.metric.update",
+	"customers.metric.delete",
+	"customers.metric.preview",
+	"customers.layout.create",
+	"customers.layout.update",
+	"customers.layout.delete",
+	"customers.layout.reorder",
 	"customers.demo.seed",
 	"customers.impersonator.grant",
 	"customers.impersonator.revoke",

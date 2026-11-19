@@ -11,21 +11,15 @@ import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
 import { FeatureFlagFailure } from "../../../customers/feature-flags"
+import * as OverviewData from "../../../customers/overview/data"
+import { LayoutRow, MetricDef } from "../../../customers/overview/rows"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import { SignalAction, SignalActionFailure } from "../attention/message"
-import {
-	ContactFilter,
-	DetailFailure,
-	ImpersonationFailure,
-	MetricRow,
-	NoteDrafts,
-	NoteRow,
-	SignalMenu,
-} from "./model"
+import { ContactFilter, DetailFailure, ImpersonationFailure, NoteDrafts, NoteRow, SignalMenu } from "./model"
 
 /** A note or signal action: the row is gone, its status moved on, or a common reason. */
 export const ActionFailure = Schema.Union([Schema.Literals(["NotFound", "Stale"]), CommonReason])
@@ -51,7 +45,8 @@ export const Message = defineMessageUnion({
 	UpdatedSignals: { signals: Schema.Array(SignalRow) },
 	UpdatedNotes: { notes: Schema.Array(NoteRow) },
 	UpdatedMembers: { members: Schema.Array(MemberRow) },
-	UpdatedMetrics: { metrics: Schema.Array(MetricRow) },
+	UpdatedMetrics: { metrics: Schema.Array(MetricDef) },
+	UpdatedLayouts: { layouts: Schema.Array(LayoutRow) },
 	UpdatedConnectedProviders: { providers: Schema.Array(Customers.CustomerProvider) },
 	UpdatedBands: { bands: Customers.HealthBands },
 
@@ -65,21 +60,11 @@ export const Message = defineMessageUnion({
 	SucceededFetchDetail: { accountId: CustomerAccountId, detail: Customers.AccountDetail },
 	FailedFetchDetail: { accountId: CustomerAccountId, reason: DetailFailure },
 
-	GotMetricMenuMessage: { message: Menu.Message },
-	ClickedUsageRange: { range: Customers.CustomersRange },
-	HoveredUsage: { index: Schema.NullOr(Schema.Int) },
-	SucceededFetchUsage: {
-		accountId: CustomerAccountId,
-		metricKey: Schema.String,
-		range: Customers.CustomersRange,
-		series: Schema.Array(Customers.MetricSeries),
-	},
-	FailedFetchUsage: {
-		accountId: CustomerAccountId,
-		metricKey: Schema.String,
-		range: Customers.CustomersRange,
-		reason: CommonReason,
-	},
+	GotOverviewDataMessage: { message: OverviewData.Message },
+	GotLayoutMenuMessage: { message: Menu.Message },
+	SucceededSetLayout: { accountId: CustomerAccountId },
+	/** The collection put the pin back. */
+	FailedSetLayout: { accountId: CustomerAccountId, reason: ActionFailure },
 	SucceededFetchMrrHistory: { accountId: CustomerAccountId, series: Schema.Array(Customers.MetricSeries) },
 	FailedFetchMrrHistory: { accountId: CustomerAccountId, reason: CommonReason },
 	HoveredMrr: { index: Schema.NullOr(Schema.Int) },

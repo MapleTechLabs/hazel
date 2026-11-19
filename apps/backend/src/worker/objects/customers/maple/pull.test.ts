@@ -6,7 +6,7 @@
  * failure (Maple's warehouse having a bad moment) is retried.
  */
 import type { ConnectionConfig } from "@hazel/domain/customers"
-import { Effect, Fiber, Redacted, Schema } from "effect"
+import { Effect, Fiber, Option, Redacted, Schema } from "effect"
 import { HttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { describe, expect, it } from "vitest"
@@ -22,7 +22,7 @@ import {
 	USER_ADA,
 } from "./fixtures"
 import { makeMapleApi } from "./http"
-import { decodeCursor, encodeCursor, firstDayOf, pullPage } from "./pull"
+import { backfillCursor, decodeCursor, encodeCursor, firstDayOf, pullPage, type UserMetric } from "./pull"
 import { fakeMapleHttpClient, type FakeMapleState, type MapleEvent, makeFakeMaple, originOf } from "./testing"
 import { MapleActivityRow, RunSqlAnswer, RUN_SQL_ROW_CAP } from "./wire"
 
@@ -46,6 +46,7 @@ const pageOf = (
 		readonly since?: Date | null
 		readonly config?: Extract<ConnectionConfig, { _tag: "maple" }>
 		readonly apiKey?: string
+		readonly metrics?: ReadonlyArray<UserMetric>
 	} = {},
 ) =>
 	Effect.gen(function* () {
@@ -59,6 +60,7 @@ const pageOf = (
 			config: options.config ?? config(),
 			cursor: options.cursor ?? null,
 			since: options.since ?? null,
+			metrics: options.metrics ?? [],
 		})
 	}).pipe(Effect.provide(fakeMapleHttpClient(fake)))
 
@@ -343,6 +345,145 @@ describe("Maple pull", () => {
 		const decoded = Schema.decodeUnknownSync(RunSqlAnswer(MapleActivityRow))(RUN_SQL_ANSWER)
 		expect(decoded.result?.structuredContent?.rows.map((row) => row.events)).toEqual([26, 21])
 		expect(decoded.result?.structuredContent?.expandedSql).toContain("OrgId = 'org_")
+	})
+})
+
+describe("Maple pull: user metrics", () => {
+	const SQL = (signal: string) =>
+		[
+			"SELECT Attributes['org_id'] AS account, sum(Value) AS value",
+			"FROM metrics_sum",
+			"WHERE $__orgFilter",
+			"  AND $__timeFilter(TimeUnix)",
+			`  AND Attributes['signal'] = '${signal}'`,
+			"GROUP BY account",
+		].join("\n")
+	const query = (key: string, signal = key): UserMetric => ({
+		key,
+		source: { _tag: "maple_query", sql: SQL(signal), builder: null },
+	})
+	const days = [
+		{ day: "2026-06-14", account: ORG_ACME, value: 1_500.5 },
+		{ day: "2026-06-14", account: ORG_GLOBEX, value: 20 },
+		{ day: "2026-06-15", account: ORG_ACME, value: 7 },
+	]
+
+	it("runs each query metric after the metric phase, in key order, with the day and a page clause", async () => {
+		const fake = organization({ events: DAY_ONE, metricDays: days })
+		const pages = await at(
+			walk(fake, {
+				config: config({ lookbackDays: 1 }),
+				since: new Date("2026-06-14T00:00:00.000Z"),
+				metrics: [
+					query("spans"),
+					query("logs"),
+					{ key: "dashboards", source: { _tag: "product_event", events: ["dashboard_created"] } },
+				],
+			}),
+		)
+		expect(pages.map((page) => [page.progress.step, decodeCursor(page.nextCursor ?? "")])).toMatchObject([
+			["activity", { value: { phase: "metrics" } }],
+			["metrics", { value: { phase: "queries", query: "logs" } }],
+			["queries", { value: { phase: "queries", query: "spans" } }],
+			["queries", { value: { day: "2026-06-15", phase: "activity" } }],
+			["activity", { value: { phase: "metrics" } }],
+			["metrics", { value: { phase: "queries", query: "logs" } }],
+			["queries", { value: { phase: "queries", query: "spans" } }],
+			["queries", { _tag: "None" }],
+		])
+		const statement = fake.calls[2]!
+		expect(statement.sql).toBe(`${SQL("logs")}\nORDER BY account\nLIMIT ${RUN_SQL_ROW_CAP + 1} OFFSET 0`)
+		expect([statement.start, statement.end]).toEqual(["2026-06-14 00:00:00", "2026-06-15 00:00:00"])
+		// A product event metric counts under its own key, and is defined by its person, not the pull.
+		expect(fake.calls[1]?.sql).toContain("transform(EventName, ['dashboard_created'], ['dashboards'])")
+		expect(opsOf(pages).filter((op) => op._tag === "metric_definition")).toEqual([])
+		expect(metricsOf(pages).filter((metric) => metric.key !== "dashboards")).toEqual([
+			{ day: "2026-06-14", account: ORG_GLOBEX, key: "logs", value: 20 },
+			{ day: "2026-06-14", account: ORG_ACME, key: "logs", value: 1_500.5 },
+			{ day: "2026-06-14", account: ORG_GLOBEX, key: "spans", value: 20 },
+			{ day: "2026-06-14", account: ORG_ACME, key: "spans", value: 1_500.5 },
+			{ day: "2026-06-15", account: ORG_ACME, key: "logs", value: 7 },
+			{ day: "2026-06-15", account: ORG_ACME, key: "spans", value: 7 },
+		])
+		expect(metricsOf(pages).filter((metric) => metric.key === "dashboards")).toEqual([
+			{ day: "2026-06-14", account: ORG_ACME, key: "dashboards", value: 1 },
+		])
+		// Each account is declared before its values, like the other phases' groups.
+		expect(pages[2]?.ops[0]).toMatchObject({ _tag: "account", externalId: ORG_GLOBEX })
+		expect(pages[2]?.metricRuns).toEqual([{ key: "logs", error: null }])
+	})
+
+	it("records a query Maple refuses on its metric and walks on", async () => {
+		const fake = organization({ metricDays: days, refusedSql: "'logs'" })
+		const pages = await at(
+			walk(fake, { config: config({ lookbackDays: 1 }), metrics: [query("logs"), query("spans")] }),
+		)
+		expect(pages.map((page) => page.metricRuns ?? [])).toEqual([
+			[],
+			[{ key: "logs", error: expect.stringMatching(/^Maple could not run this query/) }],
+			[{ key: "spans", error: null }],
+		])
+		expect(pages.at(-1)?.nextCursor).toBeNull()
+	})
+
+	it("goes on to the next query when the cursor's was deleted mid-walk", async () => {
+		const fake = organization({ metricDays: days })
+		const cursor = encodeCursor({
+			day: "2026-06-15",
+			phase: "queries",
+			query: "logs",
+			until: "2026-06-15",
+		})
+		const page = await at(pageOf(fake, { cursor, metrics: [query("spans")] }))
+		expect(page.metricRuns).toEqual([{ key: "spans", error: null }])
+		expect(page.nextCursor).toBeNull()
+	})
+
+	it("backfills one metric: its phase only, every day of the lookback", async () => {
+		const fake = organization({ events: [...DAY_ONE, ...DAY_TWO], metricDays: days })
+		const metrics = [
+			query("logs"),
+			query("spans"),
+			{ key: "dashboards", source: { _tag: "product_event", events: ["dashboard_created"] } } as const,
+		]
+		const spans = await at(
+			walk(fake, {
+				metrics,
+				cursor: Option.getOrThrow(backfillCursor(query("spans"), 2, "2026-06-15")),
+			}),
+		)
+		expect(spans.map((page) => page.metricRuns)).toEqual([
+			[{ key: "spans", error: null }],
+			[{ key: "spans", error: null }],
+		])
+		expect(new Set(metricsOf(spans).map((metric) => metric.key))).toEqual(new Set(["spans"]))
+		const before = fake.calls.length
+		const dashboards = await at(
+			walk(fake, { metrics, cursor: Option.getOrThrow(backfillCursor(metrics[2]!, 2, "2026-06-15")) }),
+		)
+		expect(dashboards.map((page) => page.progress.step)).toEqual(["metrics", "metrics"])
+		expect(fake.calls.slice(before).every((call) => call.sql.includes("['dashboards']"))).toBe(true)
+		expect(metricsOf(dashboards)).toEqual([
+			{ day: "2026-06-14", account: ORG_ACME, key: "dashboards", value: 1 },
+			{ day: "2026-06-15", account: ORG_ACME, key: "dashboards", value: 1 },
+		])
+		// A formula has nothing in Maple to fill.
+		expect(
+			backfillCursor({ key: "f", source: { _tag: "formula", expression: "{a}" } }, 2, "2026-06-15"),
+		).toEqual(Option.none())
+	})
+
+	it("still reads a cursor from before the queries phase existed", () => {
+		const old = JSON.stringify({
+			day: "2026-06-14",
+			phase: "metrics",
+			offset: 100,
+			done: 300,
+			until: "2026-06-15",
+		})
+		expect(decodeCursor(old)).toEqual(
+			Option.some({ day: "2026-06-14", phase: "metrics", offset: 100, done: 300, until: "2026-06-15" }),
+		)
 	})
 })
 

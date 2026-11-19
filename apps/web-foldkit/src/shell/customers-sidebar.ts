@@ -30,7 +30,9 @@ import {
 } from "../customers/view-layout"
 import { catchCommon, reasonToast } from "../data/actions"
 import {
+	IconChartBar,
 	IconCube,
+	IconDashboard,
 	IconEyeSlash,
 	IconHeart,
 	IconLightbulb,
@@ -477,6 +479,26 @@ export const view = <ParentMessage>(
 						hrefOf(AppRoute.CustomersSettingsPlans({ orgSlug })),
 						on("CustomersSettingsPlans"),
 						icon(IconCube),
+					),
+					item(
+						"Metrics",
+						hrefOf(AppRoute.CustomersSettingsMetrics({ orgSlug })),
+						on(
+							"CustomersSettingsMetrics",
+							"CustomersSettingsMetricNew",
+							"CustomersSettingsMetric",
+						),
+						icon(IconChartBar),
+					),
+					item(
+						"Overview layouts",
+						hrefOf(AppRoute.CustomersSettingsLayouts({ orgSlug })),
+						on(
+							"CustomersSettingsLayouts",
+							"CustomersSettingsLayoutNew",
+							"CustomersSettingsLayout",
+						),
+						icon(IconDashboard),
 					),
 					item(
 						"Feature flags",

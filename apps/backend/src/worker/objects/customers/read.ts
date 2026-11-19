@@ -17,12 +17,21 @@ import type {
 	MrrMovementBucket,
 	MrrMovementType,
 	NewTrial,
+	MetricWindow,
 	OverviewResult,
 } from "@hazel/domain/customers"
-import { HealthStatus } from "@hazel/domain/customers"
+import { evaluateFormula, HealthStatus } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId } from "@hazel/schema"
 import { Effect, Option } from "effect"
-import { type AccountFacts, type HealthPoint, type MetricPoint, mrrSeries, seriesOf } from "./facts"
+import {
+	type AccountFacts,
+	DERIVED_METRICS,
+	type HealthPoint,
+	type MetricPoint,
+	mrrSeries,
+	seriesOf,
+} from "./facts"
+import { aggregate, dataKeysOf, formulaOf, loadDefinitions, windowValue } from "./metric-values"
 import { inList } from "./sql"
 import { addDays, dayOf, dayRange } from "./time"
 
@@ -477,22 +486,128 @@ export const accountSeries = Effect.fn("Customers.accountSeries")(function* (
 	range: CustomersRange,
 	now: Date,
 ) {
-	const db = yield* Database.Database
 	const days = RANGE_DAYS[range]
 	const facts = yield* accountFacts(account, days, now)
-	const definitions = yield* db.run(SQLite.from(schema.customerMetricDefinitionsTable).select())
+	const definitions = yield* loadDefinitions
 	const today = dayOf(now)
+	const series = (key: string) => seriesOf(facts, key, today, days, definitions.get(key)?.aggregation)
 	return metricKeys.map((key): MetricSeries => {
-		const definition = definitions.find((row) => row.key === key)
+		const definition = definitions.get(key)
+		const formula = formulaOf(definition)
 		const limits = (facts.metrics.get(key) ?? []).filter((point) => point.limitValue !== null)
+		// A formula applies day by day; a day it has no value for (a zero divisor) reads 0.
+		const operands = new Map(formula?.keys.map((operand) => [operand, series(operand)]))
 		return {
 			metricKey: key,
 			name: definition?.name ?? key,
 			unit: definition?.customUnit ?? definition?.unit ?? null,
-			points: seriesOf(facts, key, today, days, definition?.aggregation),
+			points:
+				formula === undefined
+					? series(key)
+					: dayRange(today, days).map((day, index) => ({
+							day,
+							value:
+								evaluateFormula(formula.node, (operand) =>
+									definitions.has(operand)
+										? (operands.get(operand)?.[index]?.value ?? null)
+										: null,
+								) ?? 0,
+						})),
 			limit: limits[limits.length - 1]?.limitValue ?? null,
 		}
 	})
+})
+
+/** A built-in's days with a value: every day, but a health score only on the days it was scored. */
+const builtInPoints = (facts: AccountFacts, key: string, today: Day, days: number): Map<Day, number> =>
+	key === "health_score"
+		? new Map(
+				facts.health.flatMap((point) =>
+					point.score === null || point.day > today ? [] : [[point.day, point.score] as const],
+				),
+			)
+		: new Map(seriesOf(facts, key, today, days).map((point) => [point.day, point.value]))
+
+/** How far back a metric counts as last seen. */
+const LAST_SEEN_DAYS = 365
+
+/**
+ * One account's metrics over windows ending today, each with the window before it and the last day
+ * it was above 0: the stored values of every key asked for (a formula's operands) in one query, and
+ * the built-ins from the account's facts over the longest window pair. A formula's window is its
+ * operands' windows, each by its own aggregation; its last day above 0 is evaluated day by day.
+ */
+export const accountMetricWindows = Effect.fn("Customers.accountMetricWindows")(function* (
+	account: schema.CustomerAccount,
+	windows: ReadonlyArray<{ readonly metricKey: string; readonly days: number }>,
+	now: Date,
+) {
+	const db = yield* Database.Database
+	const today = dayOf(now)
+	const definitions = yield* loadDefinitions
+	const keys = dataKeysOf(
+		windows.map((window) => window.metricKey),
+		definitions,
+	)
+	const points = new Map<string, Map<Day, number>>()
+	const stored = keys.filter((key) => !DERIVED_METRICS.has(key))
+	if (stored.length > 0) {
+		const span = Math.max(LAST_SEEN_DAYS, ...windows.map((window) => 2 * window.days))
+		const rows = yield* db.run(
+			SQLite.from(schema.customerMetricDailyTable)
+				.select("metricKey", "day", "value")
+				.where(($) => [
+					$.accountId.eq(account.id),
+					inList($.metricKey, stored),
+					$.day.gte(addDays(today, -(span - 1))),
+					$.day.lte(today),
+				]),
+		)
+		for (const row of rows) {
+			const own = points.get(row.metricKey)
+			if (own === undefined) points.set(row.metricKey, new Map([[row.day, row.value]]))
+			else own.set(row.day, row.value)
+		}
+	}
+	const builtIns = keys.filter((key) => DERIVED_METRICS.has(key))
+	if (builtIns.length > 0) {
+		const span = Math.max(...windows.map((window) => 2 * window.days))
+		const facts = yield* accountFacts(account, span, now)
+		for (const key of builtIns) points.set(key, builtInPoints(facts, key, today, span))
+	}
+	const over = (key: string, last: Day, days: number) =>
+		windowValue(key, definitions, (operand, aggregation) =>
+			aggregate(
+				dayRange(last, days).flatMap((day) => {
+					const value = points.get(operand)?.get(day)
+					return value === undefined ? [] : [value]
+				}),
+				aggregation,
+			),
+		)
+	const lastSeen = (key: string): Day | null => {
+		const from = addDays(today, -(LAST_SEEN_DAYS - 1))
+		const formula = formulaOf(definitions.get(key))
+		if (formula === undefined) {
+			let found: Day | null = null
+			for (const [day, value] of points.get(key) ?? []) {
+				if (value > 0 && day >= from && (found === null || day > found)) found = day
+			}
+			return found
+		}
+		for (const day of dayRange(today, LAST_SEEN_DAYS).reverse()) {
+			const value = evaluateFormula(formula.node, (operand) => points.get(operand)?.get(day) ?? null)
+			if (value !== null && value > 0) return day
+		}
+		return null
+	}
+	return windows.map(({ metricKey, days }): MetricWindow => ({
+		metricKey,
+		days,
+		value: over(metricKey, today, days),
+		previous: over(metricKey, addDays(today, -days), days),
+		lastSeenDay: definitions.has(metricKey) ? lastSeen(metricKey) : null,
+	}))
 })
 
 /** Contacts with their activity status and 30 days of events + sessions. */

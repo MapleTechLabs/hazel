@@ -26,11 +26,22 @@ export interface MapleEvent {
 	readonly eventName: string
 }
 
+/** One customer's day of a `metrics_sum` series: what a Maple query metric's SQL sums. */
+export interface MapleMetricDay {
+	readonly day: string
+	readonly account: string
+	readonly value: number
+}
+
 export interface FakeMapleState {
 	readonly apiKey: string
 	/** The organization `$__orgFilter` expands to. */
 	readonly organizationId: string
 	readonly events: ReadonlyArray<MapleEvent>
+	/** Answers to a statement over `metrics_sum` (a user's Maple query): already summed per day. */
+	readonly metricDays: ReadonlyArray<MapleMetricDay>
+	/** The tool refuses any statement containing this text (a user's query Maple cannot run). */
+	refusedSql: string | null
 	/** `true`: every call is answered 403, the way a key without the MCP scopes is. */
 	forbidden: boolean
 	/** `true`: 503, Maple having a bad moment. */
@@ -63,6 +74,8 @@ export const makeFakeMaple = (options: Partial<FakeMapleState> = {}): FakeMapleS
 	apiKey: "maple_ak_fake0000000000000000",
 	organizationId: "org_39lDNgEjuXrOi0obeLpFSfyVSDo",
 	events: [],
+	metricDays: [],
+	refusedSql: null,
 	forbidden: false,
 	failing: false,
 	invalid: false,
@@ -109,6 +122,16 @@ const numberAfter = (sql: string, keyword: string): number =>
 
 /** The rows the query asks for, aggregated as ClickHouse would (before Maple's own caps). */
 const rowsOf = (fake: FakeMapleState, sql: string, start: string, end: string) => {
+	const offset = numberAfter(sql, "OFFSET")
+	// Maple wraps the statement in `LIMIT 1000` whatever it asked for.
+	const limit = Math.min(numberAfter(sql, "LIMIT") || 1000, 1000)
+	if (sql.includes("FROM metrics_sum")) {
+		return fake.metricDays
+			.filter((row) => row.day === start.slice(0, 10))
+			.map((row) => ({ account: row.account, value: row.value }))
+			.sort((a, b) => (a.account < b.account ? -1 : a.account > b.account ? 1 : 0))
+			.slice(offset, offset + limit)
+	}
 	const allowlist = allowlistOf(sql)
 	const metricKeys = metricKeysOf(sql)
 	const from = start.slice(0, 10)
@@ -158,9 +181,6 @@ const rowsOf = (fake: FakeMapleState, sql: string, start: string, end: string) =
 	const ordered = [...grouped.entries()]
 		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
 		.map(([, row]) => row)
-	const offset = numberAfter(sql, "OFFSET")
-	// Maple wraps the statement in `LIMIT 1000` whatever it asked for.
-	const limit = Math.min(numberAfter(sql, "LIMIT") || 1000, 1000)
 	return ordered.slice(offset, offset + limit)
 }
 
@@ -180,7 +200,7 @@ const answer = (fake: FakeMapleState, body: Record<string, unknown>) => {
 			error: { code: -32601, message: "Unknown tool run_sql" },
 		})
 	}
-	if (fake.toolError) {
+	if (fake.toolError || (fake.refusedSql !== null && sql.includes(fake.refusedSql))) {
 		return json(200, {
 			jsonrpc: "2.0",
 			id: 1,

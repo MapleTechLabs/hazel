@@ -5,6 +5,7 @@ import {
 	CustomerAccountId,
 	CustomerContactId,
 	CustomerNoteId,
+	CustomerOverviewLayoutId,
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
@@ -18,6 +19,7 @@ import {
 	linkAccountAction,
 	setEnvironmentAction,
 	setFeatureFlagsAction,
+	setLayoutAction,
 	setPrimaryAccountAction,
 	unlinkAccountAction,
 	setAttentionMuteAction,
@@ -50,24 +52,6 @@ export const FetchCustomerDetail = Command.define("FetchCustomerDetail", {
 			),
 			catchCommon((reason) => Message.FailedFetchDetail({ accountId: args.accountId, reason })),
 		),
-})
-
-export const FetchCustomerUsage = Command.define("FetchCustomerUsage", {
-	args: { ...target, metricKey: Schema.String, range: Customers.CustomersRange },
-	messages: [Message.SucceededFetchUsage, Message.FailedFetchUsage],
-	execute: ({ metricKey, range, ...args }) => {
-		const asked = { accountId: args.accountId, metricKey, range }
-		return HazelRpc.use((rpc) =>
-			rpc("customers.account.series", { ...args, metricKeys: [metricKey], range }),
-		).pipe(
-			Effect.map(({ series }) => Message.SucceededFetchUsage({ ...asked, series })),
-			// A deleted account shows its not-found state from the detail call; the chart only retries.
-			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(Message.FailedFetchUsage({ ...asked, reason: "Unexpected" })),
-			),
-			catchCommon((reason) => Message.FailedFetchUsage({ ...asked, reason })),
-		)
-	},
 })
 
 export const FetchCustomerMrrHistory = Command.define("FetchCustomerMrrHistory", {
@@ -224,6 +208,20 @@ export const SetCustomerEnvironment = Command.define("SetCustomerEnvironment", {
 	args: { ...target, environment: Schema.NullOr(Schema.String) },
 	messages: [Message.SucceededGroupAction, Message.FailedGroupAction],
 	execute: (args) => setEnvironmentAction(args).pipe(settleGroup("set_environment", args.accountId)),
+})
+
+/** Pin the customer to an Overview layout; null: back to its layouts' rules. */
+export const SetCustomerLayout = Command.define("SetCustomerLayout", {
+	args: { ...target, layoutId: Schema.NullOr(CustomerOverviewLayoutId) },
+	messages: [Message.SucceededSetLayout, Message.FailedSetLayout],
+	execute: (args) =>
+		setLayoutAction(args).pipe(
+			Effect.as(Message.SucceededSetLayout({ accountId: args.accountId })),
+			Effect.catchTag("CustomersNotFoundError", () =>
+				Effect.succeed(Message.FailedSetLayout({ accountId: args.accountId, reason: "NotFound" })),
+			),
+			catchCommon((reason) => Message.FailedSetLayout({ accountId: args.accountId, reason })),
+		),
 })
 
 /** Mute the customer in Needs attention until `untilMs` (null: until unmuted), or unmute it (`mute` null). */

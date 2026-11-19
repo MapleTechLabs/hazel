@@ -40,6 +40,7 @@ import { publishChannelCustomersAfterCompute } from "./channels"
 import { evaluate, type Match } from "./evaluate"
 import type { AccountFacts } from "./facts"
 import { type HealthInputs, scoreHealth } from "./health"
+import { assignLayouts } from "./layouts"
 import { type LifecycleEvent, transition, valueOf, wakeDue } from "./lifecycle"
 import {
 	baselineConnections,
@@ -1276,6 +1277,8 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	yield* writeOrgDay(base, totals)
 	yield* releaseOrphanedEnvironments
 	yield* prune(now)
+	// Metric values and health moved: so may the accounts' Overview layouts.
+	yield* assignLayouts(now)
 	yield* db.run(
 		SQLite.update(schema.customerSettingsTable)
 			.set({ lastComputedAt: now, updatedAt: now })

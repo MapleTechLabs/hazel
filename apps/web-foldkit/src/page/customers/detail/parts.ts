@@ -1,9 +1,8 @@
 import type * as Customers from "@hazel/domain/customers"
 import type { UserId } from "@hazel/schema"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
-import { twMerge } from "tailwind-merge"
+import { sectionCard } from "../../../customers/overview/built-ins"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
-import { heading } from "../../../ui/heading"
 import type * as Menu from "../../../ui/menu"
 import { view as menuView } from "../../../ui/menu-view"
 import type { Message } from "./message"
@@ -27,44 +26,7 @@ export const memberOf = (context: Context, id: UserId | null): MemberRow | null 
 	id === null ? null : (context.membersById.get(id) ?? null)
 
 /** A bordered section with a title row. */
-export const card = (
-	h: HtmlBuilder<Message>,
-	options: Readonly<{
-		title: string
-		count?: number
-		aside?: Html
-		className?: string
-		bodyClassName?: string
-	}>,
-	children: ReadonlyArray<Html>,
-): Html =>
-	h.section(
-		[h.Class(twMerge("flex min-w-0 flex-col rounded-xl border border-border bg-bg", options.className))],
-		[
-			h.header(
-				[h.Class("flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 pt-4 sm:px-5")],
-				[
-					heading(
-						h,
-						{ variant: "section", className: "flex items-baseline gap-2 whitespace-nowrap" },
-						[
-							options.title,
-							...(options.count === undefined
-								? []
-								: [
-										h.span(
-											[h.Class("font-normal text-muted-fg text-sm tabular-nums")],
-											[String(options.count)],
-										),
-									]),
-						],
-					),
-					...(options.aside ? [options.aside] : []),
-				],
-			),
-			h.div([h.Class(twMerge("flex flex-col p-4 sm:px-5", options.bodyClassName))], [...children]),
-		],
-	)
+export const card = sectionCard
 
 /** A text link-button in a card header (`View billing`, `All notes`). */
 export const headerLink = (h: HtmlBuilder<Message>, label: string, onPress: Message): Html =>

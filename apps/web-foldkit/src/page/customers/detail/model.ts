@@ -6,6 +6,8 @@ import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
 import { groupIdOf, groupOf } from "../../../customers/groups"
 import { AccountRow, MemberRow, msOf, SignalRow } from "../../../customers/queries"
+import * as OverviewData from "../../../customers/overview/data"
+import { LayoutRow, MetricDef, orderedLayouts } from "../../../customers/overview/rows"
 import { muteLeaves, SNOOZE_KEYS } from "../../../customers/ui/menus"
 import { CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -32,15 +34,6 @@ export const NoteRow = Schema.Struct({
 	createdAtMs: Schema.Number,
 })
 export type NoteRow = typeof NoteRow.Type
-
-/** A metric the usage chart can show; `unit` is the one set by hand, else the source's. */
-export const MetricRow = Schema.Struct({
-	key: Schema.String,
-	name: Schema.String,
-	unit: Schema.NullOr(Schema.String),
-	provider: Schema.NullOr(Customers.CustomerProvider),
-})
-export type MetricRow = typeof MetricRow.Type
 
 export const DetailFailure = Schema.Union([Schema.Literal("NotFound"), CommonReason])
 export type DetailFailure = typeof DetailFailure.Type
@@ -122,15 +115,17 @@ export const Model = Schema.Struct({
 	signals: Schema.NullOr(Schema.Array(SignalRow)),
 	notes: Schema.NullOr(Schema.Array(NoteRow)),
 	members: Schema.Array(MemberRow),
-	metrics: Schema.Array(MetricRow),
+	/** The org's metric definitions and Overview layouts; null until each query answers. */
+	metrics: Schema.NullOr(Schema.Array(MetricDef)),
+	layouts: Schema.NullOr(Schema.Array(LayoutRow)),
 	connectedProviders: Schema.Array(Customers.CustomerProvider),
 	/** The org's health bands (the breakdown's colors and "At risk is 40–69"). */
 	bands: Customers.HealthBands,
 	detail: Detail.schema,
-	usageMetric: Schema.String,
-	usageRange: Customers.CustomersRange,
-	usage: Series.schema,
-	hoveredUsage: Schema.NullOr(Schema.Int),
+	/** What the Overview's widgets read (`customers/overview/data.ts`). */
+	overview: OverviewData.Model,
+	/** Pins the customer to a layout, or back to its rules. */
+	layoutMenu: Menu.Model,
 	mrrHistory: Series.schema,
 	hoveredMrr: Schema.NullOr(Schema.Int),
 	contacts: Contacts,
@@ -147,7 +142,6 @@ export const Model = Schema.Struct({
 	isSidebarOpen: Schema.Boolean,
 	ownerMenu: Menu.Model,
 	actionsMenu: Menu.Model,
-	metricMenu: Menu.Model,
 	eventTypeMenu: Menu.Model,
 	/** The open signal whose action menus show (each signal row has its own buttons). */
 	activeSignalId: Schema.NullOr(CustomerSignalId),
@@ -195,7 +189,7 @@ export type Model = typeof Model.Type
 
 export const OWNER_MENU_ID = "customer-owner"
 export const ACTIONS_MENU_ID = "customer-actions"
-export const METRIC_MENU_ID = "customer-metric"
+export const LAYOUT_MENU_ID = "customer-layout"
 export const EVENT_TYPE_MENU_ID = "customer-event-type"
 export const SNOOZE_MENU_ID = "customer-signal-snooze"
 export const DONE_MENU_ID = "customer-signal-done"
@@ -430,11 +424,30 @@ export const environmentEntries = (model: Model): ReadonlyArray<Menu.Entry> =>
 		Menu.item(account.id, { textValue: account.environment ?? account.name }),
 	)
 
-export const metricEntries = (metrics: ReadonlyArray<MetricRow>): ReadonlyArray<Menu.Entry> =>
-	(metrics.length === 0
-		? [{ key: "active_users", name: "Active users", unit: null, provider: null }]
-		: metrics
-	).map((metric) => Menu.item(metric.key, { textValue: metric.name }))
+// OVERVIEW
+
+/**
+ * The layout the Overview draws: the one Hazel assigned the account, else the default; while the
+ * layouts sync, what the default starts as.
+ */
+export const overviewLayoutOf = (
+	model: Model,
+): Readonly<{ layout: LayoutRow | null; widgets: ReadonlyArray<Customers.OverviewWidget> }> => {
+	const layoutId = accountOf(model)?.layoutId ?? null
+	const layouts = model.layouts ?? []
+	const layout =
+		layouts.find((each) => each.id === layoutId) ?? layouts.find((each) => each.isDefault) ?? null
+	return { layout, widgets: layout?.widgets ?? Customers.DEFAULT_LAYOUT_WIDGETS }
+}
+
+export const AUTOMATIC_LAYOUT = "automatic"
+
+/** "Automatic (by rules)", then every layout in the order rules are tried. */
+export const layoutEntries = (layouts: ReadonlyArray<LayoutRow>): ReadonlyArray<Menu.Entry> => [
+	Menu.item(AUTOMATIC_LAYOUT, { textValue: "Automatic (by rules)" }),
+	Menu.separator,
+	...orderedLayouts(layouts).map((layout) => Menu.item(layout.id, { textValue: layout.name })),
+]
 
 export const eventTypeEntries: ReadonlyArray<Menu.Entry> = EventType.literals.map((type) => Menu.item(type))
 

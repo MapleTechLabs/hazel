@@ -123,6 +123,7 @@ describe("Maple adapter", () => {
 				},
 				cursor: encodeCursor({ day: "2026-06-14", phase: "activity", until: "2026-06-14" }),
 				since: null,
+				metrics: [],
 			})
 		}).pipe(Effect.provide(fakeMapleHttpClient(fake)))
 

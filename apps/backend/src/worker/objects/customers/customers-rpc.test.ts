@@ -343,6 +343,18 @@ describe("Customers RPCs", () => {
 					expect(
 						world.rows<{ n: number }>(`SELECT count(*) AS n FROM customer_mrr_movements`)[0]!.n,
 					).toBeGreaterThan(60)
+					// The org's own metrics have days, and the accounts sending telemetry get its layout.
+					expect(
+						world.rows(
+							`SELECT DISTINCT metricKey FROM customer_metric_daily WHERE metricKey IN ('spans_ingested', 'logs_ingested_bytes') ORDER BY metricKey`,
+						),
+					).toEqual([{ metricKey: "logs_ingested_bytes" }, { metricKey: "spans_ingested" }])
+					const layouts = world.rows<{ name: string; accountCount: number }>(
+						`SELECT name, accountCount FROM customer_overview_layouts ORDER BY position`,
+					)
+					expect(layouts.map((layout) => layout.name)).toEqual(["Observability", "Default"])
+					expect(layouts.every((layout) => layout.accountCount > 0)).toBe(true)
+					expect(layouts.reduce((sum, layout) => sum + layout.accountCount, 0)).toBe(accounts)
 
 					const overview = ok(
 						yield* world.call("customers.overview", { range: "90d" }, world.member),

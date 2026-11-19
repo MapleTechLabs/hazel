@@ -823,6 +823,7 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		{ layoutId: CustomerOverviewLayoutId, layout: LayoutDraft },
 		withTx(OverviewLayout.Schema),
 		CustomersNotFoundError,
+		CustomersInvalidRequestError,
 	),
 
 	/** Not the default. Its pinned customers are unpinned. */

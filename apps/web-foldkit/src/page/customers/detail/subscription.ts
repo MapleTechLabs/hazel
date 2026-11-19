@@ -13,14 +13,15 @@ import {
 } from "../../../customers/queries"
 import { channelLinksStream, channelOptionsStream } from "../../../customers/channels"
 import type { PageSubscriptionInput } from "../../contract"
-import { metricsStream, notesStream } from "./data"
+import { layoutsStream, metricDefsStream } from "../../../customers/overview/rows"
+import { notesStream } from "./data"
 import { Message } from "./message"
 import { type Model, NoteDrafts } from "./model"
 import { restoredNoteDrafts, writeNoteDrafts } from "./note-drafts"
 
 /**
  * The customer page's live rows: every account (prev/next and this one), signals, notes, people,
- * and whether the user may impersonate.
+ * metrics and Overview layouts, and whether the user may impersonate.
  */
 
 type Input = PageSubscriptionInput<Model>
@@ -92,7 +93,14 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 		dependenciesToStream: ({ organizationId }) =>
 			organizationId === null
 				? Stream.empty
-				: metricsStream(organizationId, (metrics) => Message.UpdatedMetrics({ metrics })),
+				: metricDefsStream(organizationId, (metrics) => Message.UpdatedMetrics({ metrics })),
+	}),
+	layouts: entry(organization, {
+		modelToDependencies: organizationOf,
+		dependenciesToStream: ({ organizationId }) =>
+			organizationId === null
+				? Stream.empty
+				: layoutsStream(organizationId, (layouts) => Message.UpdatedLayouts({ layouts })),
 	}),
 	bands: entry(organization, {
 		modelToDependencies: organizationOf,

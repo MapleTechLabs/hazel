@@ -23,6 +23,8 @@
  *   itself, so a (day, account, key) is one row and never split across pages: ingest replaces a
  *   day's metric value, which makes a re-read idempotent but would let a later page's partial sum
  *   overwrite an earlier one's.
+ * - **A Maple query metric's row → that metric's day** for the account its `account` names (the
+ *   Clerk organization id, declared like the other phases' groups), the value as Maple summed it.
  * - **No events, no sweeps.** Maple is authoritative for nothing: no account, contact or
  *   subscription is ever removed from what a Maple pull did or did not see.
  */
@@ -40,6 +42,7 @@ import {
 	isMetricKey,
 	type MapleActivityRow,
 	type MapleMetricRow,
+	type MapleQueryRow,
 	METRIC_PREFIX,
 	metricKeyOf,
 	type WireCount,
@@ -183,6 +186,47 @@ export const metricOps = (
 			metricKey: row.metric,
 			day: row.day,
 			value: events,
+		} satisfies RecordMetric)
+	}
+	return { ops, skipped }
+}
+
+/** A metric value: any finite number; `null` for one Hazel cannot read as a number. */
+export const metricValueOf = (value: WireCount): number | null => {
+	if (typeof value === "string" && value.trim() === "") return null
+	const number = typeof value === "number" ? value : Number(value)
+	return Number.isFinite(number) ? number : null
+}
+
+/**
+ * A page of a Maple query metric's rows (one day): each account declared once, then its value under
+ * `key`. A row without an account or a readable value is skipped.
+ */
+export const queryOps = (
+	rows: ReadonlyArray<MapleQueryRow>,
+	key: string,
+	day: string,
+	observedAt: IsoTimestamp,
+): Mapped => {
+	const accounts = new Set<string>()
+	const ops: Array<IngestOp> = []
+	let skipped = 0
+	for (const row of rows) {
+		const value = metricValueOf(row.value)
+		if (row.account.trim() === "" || value === null) {
+			skipped += 1
+			continue
+		}
+		if (!accounts.has(row.account)) {
+			accounts.add(row.account)
+			ops.push(accountRefOp(row.account, observedAt))
+		}
+		ops.push({
+			_tag: "metric",
+			account: mapleRef(row.account),
+			metricKey: key,
+			day,
+			value,
 		} satisfies RecordMetric)
 	}
 	return { ops, skipped }

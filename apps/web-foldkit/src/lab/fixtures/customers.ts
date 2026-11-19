@@ -190,6 +190,8 @@ const makeAccount = (seed: AccountSeed, n: number): Account => {
 		fieldSources: { name: "clerk", mrrMinor: "stripe", lastActiveAt: "maple" },
 		primaryAccountId: null,
 		environment: null,
+		pinnedLayoutId: null,
+		layoutId: null,
 		createdAt: firstSeen,
 		updatedAt: ago(HOUR),
 		deletedAt: null,

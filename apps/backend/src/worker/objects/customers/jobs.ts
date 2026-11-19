@@ -43,10 +43,13 @@ import { runComputeStep, unmuteExpired, wakeSnoozed } from "./compute"
 import { loadCredentials } from "./credentials"
 import { installDefaults } from "./defaults"
 import { CustomerIngest } from "./ingest"
+import { ensureDefaultLayout } from "./layouts"
+import { backfillCursor, type UserMetric } from "./maple/pull"
 import type { CustomerProviderAdapter, CustomerProviderError } from "./providers"
 import { CustomerProviders } from "./providers"
 import { computeDueAt, LEASE_MS, scheduleComputeAt, takeComputeLease } from "./schedule"
 import { CustomersServicesLive } from "./services"
+import { dayOf } from "./time"
 
 const DEFAULTS_KEY = "defaultsInstalled"
 /** Pages per connection per alarm; the rest resumes on the next one. */
@@ -108,6 +111,11 @@ export const bootstrap = Effect.fn("CustomersObject.bootstrap")(function* (paylo
 				}),
 			)
 		}
+	}
+	// Defaults installed before Overview layouts had none.
+	if (Option.isSome(yield* readObjectMeta(DEFAULTS_KEY))) {
+		const now = new Date(yield* Clock.currentTimeMillis)
+		yield* db.transaction(ensureDefaultLayout(payload.organizationId, now))
 	}
 	return { ready: true }
 }, Effect.orDie)
@@ -229,6 +237,7 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 	let failures = connection.consecutiveFailures
 	let attempts = run.failedAttempts
 	const pull = Effect.gen(function* () {
+		const metrics = yield* userMetrics
 		const credentials = yield* loadCredentials(connection)
 		if (Option.isNone(credentials)) {
 			return yield* new PullFailure({
@@ -239,15 +248,24 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 		}
 		let cursor = run.cursor
 		while (pages < PAGES_PER_TICK) {
-			const { ops, nextCursor, progress, sweep } = yield* adapter.pull({
+			const { ops, nextCursor, progress, sweep, metricRuns } = yield* adapter.pull({
 				credentials: credentials.value,
 				cursor,
 				since,
+				metrics,
 			})
 			pages++
 			// Disconnected (or the org deleted) while the page was out: drop it, the run is over.
 			if (!(yield* stillPulling(connection.id, run.id))) return
 			yield* ingest.apply(context, ops)
+			for (const { key, error } of metricRuns ?? []) {
+				const ranAt = new Date(yield* Clock.currentTimeMillis)
+				yield* db.run(
+					SQLite.update(schema.customerMetricDefinitionsTable)
+						.set({ lastRunAt: ranAt, lastError: error, updatedAt: ranAt })
+						.where(($) => [$.key.eq(key)]),
+				)
+			}
 			yield* ingest.progress(run.id, progress)
 			yield* db.run(
 				SQLite.update(schema.customerSyncRunsTable)
@@ -329,6 +347,45 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 		),
 	)
 	yield* Effect.annotateCurrentSpan({ "customers.pages": pages })
+})
+
+/** The org's user-defined metrics, for the pulls that read them (Maple). */
+const userMetrics = Effect.gen(function* () {
+	const db = yield* Database.Database
+	const rows = yield* db.run(
+		SQLite.from(schema.customerMetricDefinitionsTable)
+			.select("key", "source")
+			.where(($) => [$.source.isNotNull()]),
+	)
+	return rows.flatMap((row) => (row.source === null ? [] : [{ key: row.key, source: row.source }]))
+})
+
+/**
+ * Fill a created or changed Maple-sourced user metric: a run over the Maple connection's
+ * `lookbackDays` of that metric alone (`backfillCursor`), pulled from the next alarm on. Without an
+ * active Maple connection (or for a formula) nothing runs: the metric fills once one pulls.
+ */
+export const startMetricBackfill = Effect.fn("Customers.startMetricBackfill")(function* (
+	metric: UserMetric,
+	now: Date,
+) {
+	const db = yield* Database.Database
+	const connection = yield* db.first(
+		SQLite.from(schema.customerConnectionsTable)
+			.select()
+			.where(($) => [$.provider.eq("maple"), $.status.eq("active")])
+			.limit(1),
+	)
+	if (Option.isNone(connection) || connection.value.config._tag !== "maple") return
+	const cursor = backfillCursor(metric, connection.value.config.lookbackDays, dayOf(now))
+	if (Option.isNone(cursor)) return
+	const run = yield* (yield* CustomerIngest).startRun(connection.value.id, "manual")
+	yield* db.run(
+		SQLite.update(schema.customerSyncRunsTable)
+			.set({ cursor: cursor.value })
+			.where(($) => [$.id.eq(run.id)]),
+	)
+	yield* setNextSync(connection.value.id, now, now)
 })
 
 /** The due connections' pulls, with `services` (the adapters and the credentials' encryption). */

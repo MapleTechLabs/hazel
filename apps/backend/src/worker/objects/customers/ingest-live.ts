@@ -1838,6 +1838,9 @@ const make = Effect.gen(function* () {
 			// Two providers never share a key.
 			if (Option.isSome(existing) && existing.value.provider !== values.provider)
 				return yield* otherOwner(session, index, op, op.key, existing.value.provider)
+			// A person's metric (`source`) is theirs to define: the source only writes its days.
+			if (Option.isSome(existing) && existing.value.source !== null)
+				return outcome.unchanged(existing.value.id)
 			if (Option.isNone(existing)) {
 				const settings = yield* db.first(
 					SQLite.from(schema.customerSettingsTable).select("organizationId").limit(1),
@@ -1851,13 +1854,19 @@ const make = Effect.gen(function* () {
 				)
 				return outcome.created(row.id)
 			}
+			// A person may rename a source's metric (`customers.metric.update`): the source's name and
+			// description only replace the placeholders a metric gets when its days came first.
+			const named =
+				existing.value.name === existing.value.key
+					? values
+					: { ...values, name: existing.value.name, description: existing.value.description }
 			const row: Record<string, unknown> = existing.value
-			if (Object.entries(values).every(([field, value]) => row[field] === value)) {
+			if (Object.entries(named).every(([field, value]) => row[field] === value)) {
 				return outcome.unchanged(existing.value.id)
 			}
 			yield* db.run(
 				SQLite.update(schema.customerMetricDefinitionsTable)
-					.set({ ...values, updatedAt: session.now })
+					.set({ ...named, updatedAt: session.now })
 					.where(($) => [$.id.eq(existing.value.id)]),
 			)
 			return outcome.updated(existing.value.id)

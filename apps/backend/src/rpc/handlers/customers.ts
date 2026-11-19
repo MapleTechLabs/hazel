@@ -11,7 +11,17 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { InternalServerError } from "@hazel/domain"
-import { type ConnectionConfig, type CustomerProvider, MAX_VIEWS, TEMPLATES } from "@hazel/domain/customers"
+import {
+	type ConnectionConfig,
+	type CustomerProvider,
+	EMPTY_LAYOUT_RULE,
+	type LayoutDraft,
+	MAX_VIEWS,
+	type MetricDraft,
+	type MetricSource,
+	parseFormula,
+	TEMPLATES,
+} from "@hazel/domain/customers"
 import {
 	CustomerAdminRpcs,
 	CustomerConnectionCredentialsError,
@@ -33,6 +43,7 @@ import type {
 	UserId,
 } from "@hazel/schema"
 import { Clock, DateTime, Effect, Layer, Option, Predicate, Redacted } from "effect"
+import { FetchHttpClient, HttpClient } from "effect/http"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { NonProductionStage } from "../../lib/stage"
 import { IntegrationEncryption } from "../../services/integration-encryption"
@@ -66,14 +77,24 @@ import {
 	setPrimaryAccount,
 	unlinkAccount,
 } from "../../worker/objects/customers/groups"
+import { isBuiltInMetric } from "../../worker/objects/customers/defaults"
 import { CustomerIngest } from "../../worker/objects/customers/ingest"
 import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/customers/ingest-live"
+import { startMetricBackfill } from "../../worker/objects/customers/jobs"
+import { assignLayouts, layoutDryRun, liveLayouts } from "../../worker/objects/customers/layouts"
 import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
 import { configProblem as mapleConfigProblem } from "../../worker/objects/customers/maple/pull"
+import { previewMetric } from "../../worker/objects/customers/metric-preview"
+import {
+	loadDefinitions,
+	metricCoverage,
+	metricSourceProblem,
+} from "../../worker/objects/customers/metric-values"
 import { CustomerProviders } from "../../worker/objects/customers/providers"
 import { CustomersServicesLive } from "../../worker/objects/customers/services"
 import {
 	accountDetail,
+	accountMetricWindows,
 	accountSeries,
 	contactsPage,
 	liveAccount,
@@ -272,6 +293,26 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 							yield* currentTime,
 						),
 					}
+				}).pipe(remap),
+
+			"customers.account.metricWindows": ({ accountId, windows }) =>
+				Effect.gen(function* () {
+					yield* requireMember
+					const account = yield* requireAccount(accountId)
+					return { windows: yield* accountMetricWindows(account, windows, yield* currentTime) }
+				}).pipe(remap),
+
+			"customers.metrics.coverage": () =>
+				Effect.gen(function* () {
+					yield* requireMember
+					return { metrics: yield* metricCoverage(yield* currentTime) }
+				}).pipe(remap),
+
+			// Admins only, like the other dry runs: it reads every account (the layout editor is theirs).
+			"customers.layout.dryRun": ({ layoutId, rule, position }) =>
+				Effect.gen(function* () {
+					yield* requireAdmin
+					return yield* layoutDryRun({ layoutId, rule, position }, yield* currentTime)
 				}).pipe(remap),
 
 			"customers.sparklines": ({ accountIds, metricKey, days }) =>
@@ -1079,9 +1120,96 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						}),
 					)
 				}).pipe(remap),
+
+			"customers.account.setLayout": ({ accountId, layoutId }) =>
+				Effect.gen(function* () {
+					yield* requireMember
+					yield* requireAccount(accountId)
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.gen(function* () {
+							if (layoutId !== null) yield* requireLayout(layoutId)
+							yield* db.run(
+								SQLite.update(schema.customerAccountsTable)
+									.set({ pinnedLayoutId: layoutId, updatedAt: now })
+									.where(($) => [$.id.eq(accountId)]),
+							)
+							yield* assignLayouts(now)
+						}),
+					)
+				}).pipe(remap),
 		}
 	}),
 )
+
+// ---------------------------------------------------------------------------
+// Overview layouts and metrics
+// ---------------------------------------------------------------------------
+
+const requireLayout = (layoutId: schema.CustomerOverviewLayout["id"]) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.first(
+			SQLite.from(schema.customerOverviewLayoutsTable)
+				.select()
+				.where(($) => [$.id.eq(layoutId), $.deletedAt.isNull()])
+				.limit(1),
+		),
+	).pipe(
+		Effect.flatMap(
+			Option.match({
+				onNone: () => Effect.fail(notFound("layout", layoutId)),
+				onSome: Effect.succeed,
+			}),
+		),
+	)
+
+/** A layout just written, as assignment left it (its `accountCount`). */
+const layoutById = (layoutId: schema.CustomerOverviewLayout["id"]) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.first(
+			SQLite.from(schema.customerOverviewLayoutsTable)
+				.select()
+				.where(($) => [$.id.eq(layoutId)])
+				.limit(1),
+		),
+	).pipe(Effect.map(Option.getOrThrow))
+
+/** Widget ids name a widget within its layout: no two alike. */
+const checkLayout = (layout: LayoutDraft) => {
+	const ids = layout.widgets.map((widget) => widget.id)
+	return new Set(ids).size === ids.length ? Effect.void : Effect.fail(invalid("Two widgets share an id"))
+}
+
+/** The provider a user metric's days come from: Maple for its queries and events, none for a formula. */
+const providerOf = (source: MetricSource) => (source._tag === "formula" ? null : ("maple" as const))
+
+/** The formula metrics whose expression reads `key`. */
+const formulasReading = (key: string) =>
+	Effect.map(loadDefinitions, (definitions) =>
+		[...definitions.values()].filter((definition) => {
+			if (definition.source?._tag !== "formula") return false
+			const parsed = parseFormula(definition.source.expression)
+			return parsed.ok && parsed.keys.includes(key)
+		}),
+	)
+
+/** Same SQL, or the same events: the stored days still hold. */
+const sameData = (before: MetricSource | null, after: MetricSource) => {
+	if (before === null || before._tag !== after._tag) return false
+	if (before._tag === "maple_query" && after._tag === "maple_query")
+		return before.sql.trim() === after.sql.trim()
+	if (before._tag === "product_event" && after._tag === "product_event")
+		return [...before.events].sort().join("\n") === [...after.events].sort().join("\n")
+	return true
+}
+
+/** A metric draft's fields every metric takes (a source's own and the built-ins only these). */
+const metricBasics = (draft: MetricDraft) => ({
+	name: draft.name.trim(),
+	description: draft.description?.trim() || null,
+	group: draft.group?.trim() || null,
+	format: draft.format,
+})
 
 // ---------------------------------------------------------------------------
 // Settings and data sources
@@ -1139,6 +1267,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 		const ingest = yield* CustomerIngest
 		const providers = yield* CustomerProviders
 		const encryption = yield* IntegrationEncryption
+		const httpClient = yield* HttpClient.HttpClient
 
 		const adapterOf = (provider: CustomerProvider) =>
 			Option.match(providers.get(provider), {
@@ -1948,6 +2077,266 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
+			"customers.metric.create": ({ id, key, metric, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					yield* requireAdmin
+					const source = metric.source
+					if (source === null) return yield* invalid("Choose how the metric is made")
+					if (isBuiltInMetric(key)) return yield* invalid(`${key} is one of Hazel's own metrics`)
+					const now = yield* currentTime
+					return yield* withTx(
+						Effect.gen(function* () {
+							const definitions = yield* loadDefinitions
+							if (definitions.has(key)) return yield* invalid(`A metric ${key} already exists`)
+							const problem = metricSourceProblem(key, source, definitions)
+							if (problem !== null) return yield* invalid(problem)
+							const [row] = yield* db.run(
+								SQLite.insertInto(schema.customerMetricDefinitionsTable)
+									.values({
+										id, // `undefined`: the column's default
+										organizationId,
+										key,
+										...metricBasics(metric),
+										unit: metric.unit?.trim() || null,
+										aggregation: metric.aggregation,
+										provider: providerOf(source),
+										source,
+									})
+									.returning(),
+							)
+							yield* startMetricBackfill({ key, source }, now).pipe(
+								Effect.provideService(CustomerIngest, ingest),
+							)
+							// A formula has values at once, and a rule may name the metric already.
+							yield* assignLayouts(now)
+							return row
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.metric.update": ({ metricKey, metric }) =>
+				Effect.gen(function* () {
+					yield* requireAdmin
+					const now = yield* currentTime
+					return yield* withTx(
+						Effect.gen(function* () {
+							const definitions = yield* loadDefinitions
+							const existing = definitions.get(metricKey)
+							if (existing === undefined) return yield* notFound("metric", metricKey)
+							const source = metric.source
+							// A source's own metric or a built-in: Hazel does not define its data.
+							if (existing.source === null) {
+								if (source !== null)
+									return yield* invalid("Only a metric made in Hazel takes a source")
+								const [row] = yield* db.run(
+									SQLite.update(schema.customerMetricDefinitionsTable)
+										.set({
+											...metricBasics(metric),
+											// The unit shown over the source's own (`customUnit`, never written by ingest).
+											...(existing.builtIn
+												? { unit: metric.unit?.trim() || null }
+												: { customUnit: metric.unit?.trim() || null }),
+											updatedAt: now,
+										})
+										.where(($) => [$.id.eq(existing.id)])
+										.returning(),
+								)
+								return row
+							}
+							if (source === null) return yield* invalid("Choose how the metric is made")
+							const problem = metricSourceProblem(metricKey, source, definitions)
+							if (problem !== null) return yield* invalid(problem)
+							if (source._tag === "formula" && (yield* formulasReading(metricKey)).length > 0)
+								return yield* invalid(
+									`A formula uses ${metricKey}, and formulas cannot use formulas`,
+								)
+							const refill = !sameData(existing.source, source)
+							const [row] = yield* db.run(
+								SQLite.update(schema.customerMetricDefinitionsTable)
+									.set({
+										...metricBasics(metric),
+										unit: metric.unit?.trim() || null,
+										aggregation: metric.aggregation,
+										provider: providerOf(source),
+										source,
+										lastRunAt: refill ? null : existing.lastRunAt,
+										lastError: refill ? null : existing.lastError,
+										updatedAt: now,
+									})
+									.where(($) => [$.id.eq(existing.id)])
+									.returning(),
+							)
+							if (refill) {
+								yield* db.run(
+									SQLite.deleteFrom(schema.customerMetricDailyTable).where(($) => [
+										$.metricKey.eq(metricKey),
+									]),
+								)
+								yield* startMetricBackfill({ key: metricKey, source }, now).pipe(
+									Effect.provideService(CustomerIngest, ingest),
+								)
+							}
+							// Its values moved (or went): layout rules reading it may resolve otherwise.
+							yield* assignLayouts(now)
+							return row
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.metric.delete": ({ metricKey }) =>
+				Effect.gen(function* () {
+					yield* requireAdmin
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.gen(function* () {
+							const definitions = yield* loadDefinitions
+							const existing = definitions.get(metricKey)
+							if (existing === undefined) return yield* notFound("metric", metricKey)
+							if (existing.source === null)
+								return yield* invalid("Only a metric made in Hazel can be deleted")
+							const readers = yield* formulasReading(metricKey)
+							if (readers.length > 0)
+								return yield* invalid(
+									`${readers.map((reader) => reader.name).join(", ")} uses it; change that formula first`,
+								)
+							yield* db.run(
+								SQLite.deleteFrom(schema.customerMetricDailyTable).where(($) => [
+									$.metricKey.eq(metricKey),
+								]),
+							)
+							yield* db.run(
+								SQLite.deleteFrom(schema.customerMetricDefinitionsTable).where(($) => [
+									$.id.eq(existing.id),
+								]),
+							)
+							yield* assignLayouts(now)
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.metric.preview": ({ source, aggregation, days }) =>
+				Effect.gen(function* () {
+					yield* requireAdmin
+					return yield* previewMetric(
+						{ source, aggregation, days },
+						yield* loadDefinitions,
+						httpClient,
+						yield* currentTime,
+					).pipe(Effect.provideService(IntegrationEncryption, encryption))
+				}).pipe(remap),
+
+			"customers.layout.create": ({ id, layout, position, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					const actor = yield* requireAdmin
+					yield* checkLayout(layout)
+					const now = yield* currentTime
+					return yield* withTx(
+						Effect.gen(function* () {
+							const others = (yield* liveLayouts).filter((row) => !row.isDefault)
+							// First unless told: before every other rule.
+							const first =
+								others.length === 0 ? 0 : Math.min(...others.map((row) => row.position)) - 1
+							const [row] = yield* db.run(
+								SQLite.insertInto(schema.customerOverviewLayoutsTable)
+									.values({
+										id, // `undefined`: the column's default
+										organizationId,
+										name: layout.name.trim(),
+										position: position ?? first,
+										rule: layout.rule,
+										widgets: layout.widgets,
+										createdBy: actor.userId,
+										updatedBy: actor.userId,
+									})
+									.returning(),
+							)
+							yield* assignLayouts(now)
+							return yield* layoutById(row.id)
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.layout.update": ({ layoutId, layout }) =>
+				Effect.gen(function* () {
+					const actor = yield* requireAdmin
+					const now = yield* currentTime
+					return yield* withTx(
+						Effect.gen(function* () {
+							const existing = yield* requireLayout(layoutId)
+							yield* checkLayout(layout)
+							yield* db.run(
+								SQLite.update(schema.customerOverviewLayoutsTable)
+									.set({
+										name: layout.name.trim(),
+										// The default is the fallback: it has no rule of its own.
+										rule: existing.isDefault ? EMPTY_LAYOUT_RULE : layout.rule,
+										widgets: layout.widgets,
+										updatedBy: actor.userId,
+										updatedAt: now,
+									})
+									.where(($) => [$.id.eq(layoutId)]),
+							)
+							yield* assignLayouts(now)
+							return yield* layoutById(layoutId)
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.layout.delete": ({ layoutId }) =>
+				Effect.gen(function* () {
+					yield* requireAdmin
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.gen(function* () {
+							const existing = yield* requireLayout(layoutId)
+							if (existing.isDefault)
+								return yield* invalid("The default layout cannot be deleted")
+							yield* db.run(
+								SQLite.update(schema.customerOverviewLayoutsTable)
+									.set({ deletedAt: now, updatedAt: now })
+									.where(($) => [$.id.eq(layoutId)]),
+							)
+							yield* db.run(
+								SQLite.update(schema.customerAccountsTable)
+									.set({ pinnedLayoutId: null, updatedAt: now })
+									.where(($) => [$.pinnedLayoutId.eq(layoutId)]),
+							)
+							yield* assignLayouts(now)
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.layout.reorder": ({ layoutIds }) =>
+				Effect.gen(function* () {
+					yield* requireAdmin
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.gen(function* () {
+							const layouts = (yield* liveLayouts).filter((row) => !row.isDefault)
+							const live = new Set(layouts.map((row) => row.id))
+							if (
+								new Set(layoutIds).size !== layoutIds.length ||
+								layoutIds.length !== live.size ||
+								!layoutIds.every((layoutId) => live.has(layoutId))
+							) {
+								return yield* invalid("List every layout but the default, each once")
+							}
+							for (const [position, layoutId] of layoutIds.entries()) {
+								if (layouts.find((row) => row.id === layoutId)?.position === position)
+									continue
+								yield* db.run(
+									SQLite.update(schema.customerOverviewLayoutsTable)
+										.set({ position, updatedAt: now })
+										.where(($) => [$.id.eq(layoutId)]),
+								)
+							}
+							yield* assignLayouts(now)
+						}),
+					)
+				}).pipe(remap),
+
 			"customers.metric.setUnit": ({ metricKey, unit }) =>
 				Effect.gen(function* () {
 					yield* requireAdmin
@@ -1982,4 +2371,4 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 				}).pipe(remap),
 		}
 	}),
-).pipe(Layer.provide(CustomersServicesLive))
+).pipe(Layer.provide(Layer.mergeAll(CustomersServicesLive, FetchHttpClient.layer)))

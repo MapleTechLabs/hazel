@@ -9,6 +9,8 @@ import { failureMessage } from "~/lib/error-messages"
 import { accountLabelOf, linkedTo, madePrimary, unlinked } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { featureFlagKeysOf, featureFlagToast } from "../../../customers/feature-flags"
+import * as OverviewData from "../../../customers/overview/data"
+import { groupKeysOf } from "../../../customers/overview/rows"
 import { isMuteKey, MUTE_LABEL, muteUntil, isSnoozeKey, snoozeUntil } from "../../../customers/ui/menus"
 import { errorToastOf, successToast } from "../../../data/actions"
 import { AppRoute, type CustomerTab, customerRoute, hrefOf, type RouteOf } from "../../../route"
@@ -28,13 +30,13 @@ import {
 	FetchCustomerEvents,
 	FetchCustomerInvoices,
 	FetchCustomerMrrHistory,
-	FetchCustomerUsage,
 	FocusNoteComposer,
 	LoadNoteDrafts,
 	LinkCustomerAccount,
 	LinkCustomerChannel,
 	SetCustomerEnvironment,
 	SetCustomerFeatureFlags,
+	SetCustomerLayout,
 	SetCustomerPrimary,
 	StartCustomerImpersonation,
 	UnlinkCustomerAccount,
@@ -63,8 +65,10 @@ import {
 	groupOfModel,
 	IMPERSONATE_MODAL_ID,
 	LINK_MODAL_ID,
+	AUTOMATIC_LAYOUT,
+	LAYOUT_MENU_ID,
 	linkCandidates,
-	METRIC_MENU_ID,
+	overviewLayoutOf,
 	type Model,
 	type NoteRow,
 	OPEN_QUEUE,
@@ -133,15 +137,23 @@ const fetchEvents = (model: Model, shared: Shared, cursor: string | null): Retur
 	}
 }
 
-const fetchUsage = (model: Model, shared: Shared): Return => {
+const toOverviewData = (message: OverviewData.Message) => Message.GotOverviewDataMessage({ message })
+
+const overviewInputs = (model: Model, shared: Shared): OverviewData.Inputs | null => {
 	const args = target(model, shared)
-	if (args === null) return { model }
+	return args === null
+		? null
+		: { ...args, widgets: overviewLayoutOf(model).widgets, groupKeys: groupKeysOf(model.metrics) }
+}
+
+/** The Overview's widgets ask for what they read and was not asked for yet (on the Overview only). */
+const loadOverview = (model: Model, shared: Shared): Return => {
+	const inputs = overviewInputs(model, shared)
+	if (inputs === null || model.tab !== "overview") return { model }
+	const loaded = OverviewData.load(model.overview, inputs)
 	return {
-		model: modifyFields(model, {
-			usage: (usage) => Option.getOrElse(AsyncData.revalidateOrLoad(usage), () => usage),
-			hoveredUsage: () => null,
-		}),
-		commands: [FetchCustomerUsage({ ...args, metricKey: model.usageMetric, range: model.usageRange })],
+		model: modifyFields(model, { overview: () => loaded.model }),
+		commands: Command.mapMessages(loaded.commands ?? [], toOverviewData),
 	}
 }
 
@@ -155,8 +167,8 @@ const load = (model: Model, shared: Shared): Return => {
 		next = modifyFields(next, { detail: () => AsyncData.Loading() })
 		commands.push(FetchCustomerDetail(args))
 	}
-	if (next.tab === "overview" && AsyncData.isIdle(next.usage)) {
-		const fetched = fetchUsage(next, shared)
+	if (next.tab === "overview") {
+		const fetched = loadOverview(next, shared)
 		next = fetched.model
 		commands.push(...(fetched.commands ?? []))
 	}
@@ -205,14 +217,13 @@ const initialModel = (route: Route): Model => ({
 	signals: null,
 	notes: null,
 	members: [],
-	metrics: [],
+	metrics: null,
+	layouts: null,
 	connectedProviders: [],
 	bands: Customers.DEFAULT_HEALTH_SETTINGS.bands,
 	detail: AsyncData.Idle(),
-	usageMetric: "active_users",
-	usageRange: "30d",
-	usage: AsyncData.Idle(),
-	hoveredUsage: null,
+	overview: OverviewData.init(),
+	layoutMenu: Menu.init({ id: LAYOUT_MENU_ID, placement: "bottom end", selectionMode: "Single" }),
 	mrrHistory: AsyncData.Idle(),
 	hoveredMrr: null,
 	contacts: EMPTY_PAGE,
@@ -227,7 +238,6 @@ const initialModel = (route: Route): Model => ({
 	isSidebarOpen: true,
 	ownerMenu: Menu.init({ id: OWNER_MENU_ID }),
 	actionsMenu: Menu.init({ id: ACTIONS_MENU_ID, placement: "bottom end" }),
-	metricMenu: Menu.init({ id: METRIC_MENU_ID, placement: "bottom end", selectionMode: "Single" }),
 	eventTypeMenu: Menu.init({ id: EVENT_TYPE_MENU_ID, selectionMode: "Single" }),
 	activeSignalId: null,
 	snoozeMenu: Menu.init({ id: SNOOZE_MENU_ID }),
@@ -279,7 +289,7 @@ const navigateToTab = (model: Model, shared: Shared, tab: CustomerTab): Return =
 type MenuField =
 	| "ownerMenu"
 	| "actionsMenu"
-	| "metricMenu"
+	| "layoutMenu"
 	| "eventTypeMenu"
 	| "snoozeMenu"
 	| "doneMenu"
@@ -290,7 +300,7 @@ type MenuCommands = NonNullable<ReturnType<typeof Menu.update>["commands"]>
 const MENU_MESSAGE = {
 	ownerMenu: (message: Menu.Message) => Message.GotOwnerMenuMessage({ message }),
 	actionsMenu: (message: Menu.Message) => Message.GotActionsMenuMessage({ message }),
-	metricMenu: (message: Menu.Message) => Message.GotMetricMenuMessage({ message }),
+	layoutMenu: (message: Menu.Message) => Message.GotLayoutMenuMessage({ message }),
 	eventTypeMenu: (message: Menu.Message) => Message.GotEventTypeMenuMessage({ message }),
 	snoozeMenu: (message: Menu.Message) => Message.GotSnoozeMenuMessage({ message }),
 	doneMenu: (message: Menu.Message) => Message.GotDoneMenuMessage({ message }),
@@ -649,16 +659,23 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 
 const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		UpdatedAccounts: ({ accounts }) => ({
-			model: modifyFields(model, {
-				accounts: () => accounts,
-				hasSeenAccount: (seen) => seen || accounts.some((account) => account.id === model.accountId),
-			}),
-		}),
+		// The account's assigned layout may have changed with it.
+		UpdatedAccounts: ({ accounts }) =>
+			loadOverview(
+				modifyFields(model, {
+					accounts: () => accounts,
+					hasSeenAccount: (seen) =>
+						seen || accounts.some((account) => account.id === model.accountId),
+				}),
+				shared,
+			),
 		UpdatedSignals: ({ signals }) => ({ model: modifyFields(model, { signals: () => signals }) }),
 		UpdatedNotes: ({ notes }) => ({ model: modifyFields(model, { notes: () => notes }) }),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
-		UpdatedMetrics: ({ metrics }) => ({ model: modifyFields(model, { metrics: () => metrics }) }),
+		UpdatedMetrics: ({ metrics }) =>
+			loadOverview(modifyFields(model, { metrics: () => metrics }), shared),
+		UpdatedLayouts: ({ layouts }) =>
+			loadOverview(modifyFields(model, { layouts: () => layouts }), shared),
 		UpdatedConnectedProviders: ({ providers }) => ({
 			model: modifyFields(model, { connectedProviders: () => providers }),
 		}),
@@ -692,36 +709,38 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			model: modifyFields(model, { detail: (current) => settle(current, Result.fail(reason)) }),
 		}),
 
-		GotMetricMenuMessage: ({ message: menuMessage }) =>
-			updateMenu(model, "metricMenu", menuMessage, (next, key) =>
-				key === next.usageMetric
+		GotOverviewDataMessage: ({ message: dataMessage }) => {
+			const inputs = overviewInputs(model, shared)
+			if (inputs === null) return { model }
+			const result = OverviewData.update(model.overview, dataMessage, inputs)
+			return {
+				model: modifyFields(model, { overview: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], toOverviewData),
+			}
+		},
+		GotLayoutMenuMessage: ({ message: menuMessage }) =>
+			updateMenu(model, "layoutMenu", menuMessage, (next, key) => {
+				const args = target(next, shared)
+				const layoutId =
+					key === AUTOMATIC_LAYOUT
+						? null
+						: (next.layouts?.find((layout) => layout.id === key)?.id ?? null)
+				return args === null || layoutId === (accountOf(next)?.pinnedLayoutId ?? null)
 					? { model: next }
-					: fetchUsage(
-							modifyFields(next, {
-								usageMetric: () => key,
-								metricMenu: (menu) => modifyFields(menu, { selectedKeys: () => [key] }),
-							}),
-							shared,
-						),
+					: { model: next, commands: [SetCustomerLayout({ ...args, layoutId })] }
+			}),
+		SucceededSetLayout: () => ({ model }),
+		FailedSetLayout: ({ reason }) => ({
+			model,
+			outMessage: toast(
+				errorToastOf(
+					failureMessage(reason, {
+						NotFound: { title: "Couldn't change the layout", description: "It was deleted." },
+						Stale: { title: "Couldn't change the layout" },
+					}),
+				),
 			),
-		ClickedUsageRange: ({ range }) =>
-			range === model.usageRange
-				? { model }
-				: fetchUsage(modifyFields(model, { usageRange: () => range }), shared),
-		HoveredUsage: ({ index }) => ({ model: modifyFields(model, { hoveredUsage: () => index }) }),
-		// An answer for a metric or range the user already left is dropped.
-		SucceededFetchUsage: ({ metricKey, range, series }) =>
-			metricKey === model.usageMetric && range === model.usageRange
-				? {
-						model: modifyFields(model, {
-							usage: (current) => settle(current, Result.succeed(series)),
-						}),
-					}
-				: { model },
-		FailedFetchUsage: ({ metricKey, range, reason }) =>
-			metricKey === model.usageMetric && range === model.usageRange
-				? { model: modifyFields(model, { usage: (current) => settle(current, Result.fail(reason)) }) }
-				: { model },
+		}),
 		SucceededFetchMrrHistory: ({ series }) => ({
 			model: modifyFields(model, { mrrHistory: (current) => settle(current, Result.succeed(series)) }),
 		}),

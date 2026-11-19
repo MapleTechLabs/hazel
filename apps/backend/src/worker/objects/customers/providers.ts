@@ -47,6 +47,7 @@ import { FetchHttpClient } from "effect/http"
 import { makeAutumnAdapter } from "./autumn/adapter"
 import { makeClerkAdapter } from "./clerk/adapter"
 import { makeMapleAdapter } from "./maple/adapter"
+import type { UserMetric } from "./maple/pull"
 import { makeStripeAdapter } from "./stripe/adapter"
 import { CustomerProviderError, CustomerWebhookRejectedError } from "./provider-errors"
 
@@ -81,6 +82,11 @@ export interface PullPage {
 	 * ends early (a cursor dropped too soon) cannot wipe live records.
 	 */
 	readonly sweep?: ReadonlyArray<SweepEntityType>
+	/**
+	 * The user metrics (`UserMetric`) this page ran a query of, with why it failed (null: it ran):
+	 * core records it on the definition (`lastRunAt`, `lastError`). Maple only.
+	 */
+	readonly metricRuns?: ReadonlyArray<{ readonly key: string; readonly error: string | null }>
 }
 
 export interface CustomerProviderAdapter {
@@ -115,6 +121,8 @@ export interface CustomerProviderAdapter {
 		readonly credentials: ProviderCredentials
 		readonly cursor: string | null
 		readonly since: Date | null
+		/** The org's user-defined metrics (Maple reads their queries and events; the rest ignore them). */
+		readonly metrics: ReadonlyArray<UserMetric>
 	}) => Effect.Effect<PullPage, CustomerProviderError>
 	/** Scheduled pull period (webhooks cover the rest); e.g. Maple hourly, Stripe every 6 hours. */
 	readonly pullIntervalMs: number

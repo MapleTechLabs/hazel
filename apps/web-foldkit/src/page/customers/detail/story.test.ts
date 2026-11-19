@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import type * as Customers from "@hazel/domain/customers"
+import * as Customers from "@hazel/domain/customers"
 import type { SignalEvidence } from "@hazel/domain/customers"
 import {
 	CustomerAccountId,
 	CustomerContactId,
 	CustomerEventId,
 	CustomerNoteId,
+	CustomerOverviewLayoutId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
 	OrganizationId,
@@ -13,6 +14,8 @@ import {
 } from "@hazel/schema"
 import { Effect, Fiber, Option, Schema, Stream } from "effect"
 import { describe, expect, test } from "vitest"
+import * as OverviewData from "../../../customers/overview/data"
+import type { LayoutRow } from "../../../customers/overview/rows"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { snoozeUntil } from "../../../customers/ui/menus"
 import { AppRoute, type CustomerTab } from "../../../route"
@@ -23,14 +26,17 @@ import { sharedDefaults } from "../../test-shared"
 import { Message } from "./message"
 import {
 	actionEntries,
+	AUTOMATIC_LAYOUT,
 	canImpersonate,
 	EMPTY_NOTE_DRAFTS,
 	environmentEntries,
 	isNotFound,
+	layoutEntries,
 	linkCandidates,
 	type Model,
 	type NoteRow,
 	openSignals,
+	overviewLayoutOf,
 	ownerEntries,
 	positionOf,
 	signalMoreEntries,
@@ -109,6 +115,8 @@ const account = (n: number, name: string): AccountRow => ({
 	attentionMutedAtMs: null,
 	attentionMutedUntilMs: null,
 	attentionMutedByUserId: null,
+	pinnedLayoutId: null,
+	layoutId: null,
 })
 const acme = account(1, "Acme")
 const beta = account(2, "Beta")
@@ -162,6 +170,18 @@ const note = (n: number, fields: Partial<NoteRow> = {}): NoteRow => ({
 	...fields,
 })
 
+const layout = (n: number, name: string, isDefault: boolean): LayoutRow => ({
+	id: Schema.decodeSync(CustomerOverviewLayoutId)(uuid(500 + n)),
+	name,
+	position: n,
+	isDefault,
+	rule: Customers.EMPTY_LAYOUT_RULE,
+	widgets: Customers.DEFAULT_LAYOUT_WIDGETS,
+	accountCount: 0,
+	updatedBy: null,
+	updatedAtMs: NOW,
+})
+
 const route = (tab: CustomerTab | null, id = beta.id) =>
 	AppRoute.CustomerDetail({ orgSlug: "hazel", accountId: id, tab: Option.fromNullishOr(tab) })
 const run = (model: Model, messages: ReadonlyArray<Message>) =>
@@ -196,7 +216,9 @@ const pick = (
 
 describe("customer page: tabs", () => {
 	test("each tab loads what it shows, once", () => {
-		expect(commandNames(init(route(null), shared))).toContain("FetchCustomerUsage")
+		expect(commandNames(init(route(null), shared))).toEqual(
+			expect.arrayContaining(["FetchOverviewMetricWindows", "FetchOverviewChartSeries"]),
+		)
 		expect(commandNames(init(route("users"), shared))).toContain("FetchCustomerContacts")
 		const billing = routeChanged(loaded(), route("billing"), shared)
 		expect(billing.model.tab).toBe("billing")
@@ -255,26 +277,45 @@ describe("customer page: tabs", () => {
 		expect(isNotFound(syncing)).toBe(false)
 	})
 
-	test("an answer for a metric the user left is dropped", () => {
-		const switched = run(loaded(), [Message.ClickedUsageRange({ range: "90d" })])
-		const stale = run(switched, [
-			Message.SucceededFetchUsage({
-				accountId: beta.id,
-				metricKey: "active_users",
-				range: "30d",
-				series: [],
+	test("a chart's answer for a range the user left is dropped", () => {
+		const series = (asked: string) =>
+			Message.GotOverviewDataMessage({
+				message: OverviewData.Message.SucceededFetchChartSeries({
+					accountId: beta.id,
+					widgetId: "usage",
+					asked,
+					series: [],
+				}),
+			})
+		const switched = run(loaded(), [
+			Message.GotOverviewDataMessage({
+				message: OverviewData.Message.ClickedChartRange({ widgetId: "usage", range: "90d" }),
 			}),
 		])
-		expect(stale.usage._tag).toBe("Loading")
-		const fresh = run(switched, [
-			Message.SucceededFetchUsage({
-				accountId: beta.id,
-				metricKey: "active_users",
-				range: "90d",
-				series: [],
-			}),
+		expect(run(switched, [series("active_users@30d")]).overview.charts.usage?.series._tag).toBe("Loading")
+		expect(run(switched, [series("active_users@90d")]).overview.charts.usage?.series._tag).toBe("Success")
+	})
+
+	test("the Overview draws the layout Hazel assigned, else the default", () => {
+		const layouts = [layout(1, "Observability", false), layout(2, "Default", true)]
+		const withLayouts = run(loaded(), [Message.UpdatedLayouts({ layouts })])
+		expect(overviewLayoutOf(withLayouts).layout?.name).toBe("Default")
+		const assigned = run(withLayouts, [
+			Message.UpdatedAccounts({ accounts: [acme, { ...beta, layoutId: layouts[0]!.id }, gamma] }),
 		])
-		expect(fresh.usage._tag).toBe("Success")
+		expect(overviewLayoutOf(assigned).layout?.name).toBe("Observability")
+		expect(overviewLayoutOf(loaded()).widgets).toEqual(Customers.DEFAULT_LAYOUT_WIDGETS)
+	})
+
+	test("the layout menu pins the customer, or hands it back to the rules", () => {
+		const layouts = [layout(1, "Observability", false), layout(2, "Default", true)]
+		const withLayouts = run(loaded(), [Message.UpdatedLayouts({ layouts })])
+		const wrap = (message: Menu.Message) => Message.GotLayoutMenuMessage({ message })
+		const pinned = pick(withLayouts, wrap, layouts[0]!.id, layoutEntries(layouts))
+		expect(commandNames(pinned)).toEqual(["SetCustomerLayout"])
+		expect(pinned.commands?.[0]?.args).toMatchObject({ layoutId: layouts[0]!.id })
+		const automatic = pick(withLayouts, wrap, AUTOMATIC_LAYOUT, layoutEntries(layouts))
+		expect(commandNames(automatic)).toEqual([])
 	})
 
 	test("an activity filter restarts the timeline and drops answers for the old one", () => {
@@ -296,15 +337,17 @@ describe("customer page: tabs", () => {
 		const fresh = init(route(null, gamma.id), shared).model
 		const stale = run(fresh, [
 			Message.FailedFetchDetail({ accountId: beta.id, reason: "NotFound" }),
-			Message.SucceededFetchUsage({
-				accountId: beta.id,
-				metricKey: "active_users",
-				range: "30d",
-				series: [],
+			Message.GotOverviewDataMessage({
+				message: OverviewData.Message.SucceededFetchChartSeries({
+					accountId: beta.id,
+					widgetId: "usage",
+					asked: "active_users@30d",
+					series: [],
+				}),
 			}),
 		])
 		expect(stale.detail._tag).toBe("Loading")
-		expect(stale.usage._tag).toBe("Loading")
+		expect(stale.overview.charts.usage?.series._tag).toBe("Loading")
 	})
 
 	test("a page appends without repeating rows, and a failed first page can be asked for again", () => {

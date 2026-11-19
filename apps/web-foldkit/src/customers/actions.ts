@@ -13,6 +13,7 @@ import {
 	CustomerFeatureFlagId,
 	CustomerImpersonatorId,
 	CustomerNoteId,
+	type CustomerOverviewLayoutId,
 	type CustomerSignalId,
 	type OrganizationId,
 	type UserId,
@@ -534,6 +535,27 @@ export const setEnvironmentAction = optimisticAction({
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
 			const result = yield* client("customers.account.setEnvironment", props)
+			return { data: result, transactionId: result.transactionId }
+		}),
+})
+
+/**
+ * `customers.account.setLayout`: pins the account to an Overview layout (it gets it at once); null
+ * unpins it, and the server picks its layout by the rules again.
+ */
+export const setLayoutAction = optimisticAction({
+	collections: [customerAccountCollection],
+	onMutate: (props: AccountTarget & { readonly layoutId: CustomerOverviewLayoutId | null }) => {
+		customerAccountCollection.update(props.accountId, (account) => {
+			account.pinnedLayoutId = props.layoutId
+			if (props.layoutId !== null) account.layoutId = props.layoutId
+		})
+		return { accountId: props.accountId }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.account.setLayout", props)
 			return { data: result, transactionId: result.transactionId }
 		}),
 })

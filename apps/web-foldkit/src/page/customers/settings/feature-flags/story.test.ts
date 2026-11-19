@@ -74,6 +74,8 @@ const account = (n: number, featureFlags: Record<string, boolean>): AccountRow =
 	attentionMutedAtMs: null,
 	attentionMutedUntilMs: null,
 	attentionMutedByUserId: null,
+	pinnedLayoutId: null,
+	layoutId: null,
 })
 const one = account(1, { beta: true, legacy: false })
 const two = account(2, {})

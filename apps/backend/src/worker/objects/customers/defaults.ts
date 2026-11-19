@@ -14,6 +14,7 @@ import {
 } from "@hazel/domain/customers"
 import type { OrganizationId } from "@hazel/schema"
 import { Effect } from "effect"
+import { defaultLayoutRow } from "./layouts"
 
 /** Metric keys Hazel computes; sources may not write them. */
 export const BUILT_IN_METRICS = [
@@ -89,5 +90,8 @@ export const installDefaults = Effect.fn("Customers.installDefaults")(function* 
 				builtIn: true,
 			})),
 		),
+	)
+	yield* db.run(
+		SQLite.insertInto(schema.customerOverviewLayoutsTable).values(defaultLayoutRow(organizationId)),
 	)
 })
