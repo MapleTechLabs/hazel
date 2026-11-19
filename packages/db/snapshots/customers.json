@@ -1,5 +1,5 @@
 {
-	"migration": "0015_customer_feature_flags",
+	"migration": "0016_customer_ref_environment",
 	"entities": [
 		{
 			"kind": "table",
@@ -1300,7 +1300,7 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "viaAccounts",
+			"name": "environment",
 			"position": 8,
 			"type": "text",
 			"notNull": false,
@@ -1309,7 +1309,7 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "externalUrl",
+			"name": "viaAccounts",
 			"position": 9,
 			"type": "text",
 			"notNull": false,
@@ -1318,8 +1318,17 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "matchMethod",
+			"name": "externalUrl",
 			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "matchMethod",
+			"position": 11,
 			"type": "text",
 			"notNull": true,
 			"default": null
@@ -1328,7 +1337,7 @@
 			"kind": "column",
 			"table": "customer_external_refs",
 			"name": "matchedByUserId",
-			"position": 11,
+			"position": 12,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -1337,7 +1346,7 @@
 			"kind": "column",
 			"table": "customer_external_refs",
 			"name": "matchedAt",
-			"position": 12,
+			"position": 13,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1346,15 +1355,6 @@
 			"kind": "column",
 			"table": "customer_external_refs",
 			"name": "lastSyncedAt",
-			"position": 13,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_external_refs",
-			"name": "staleAt",
 			"position": 14,
 			"type": "text",
 			"notNull": false,
@@ -1363,7 +1363,7 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "deletedObservedAt",
+			"name": "staleAt",
 			"position": 15,
 			"type": "text",
 			"notNull": false,
@@ -1372,8 +1372,17 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "createdAt",
+			"name": "deletedObservedAt",
 			"position": 16,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "createdAt",
+			"position": 17,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1382,7 +1391,7 @@
 			"kind": "column",
 			"table": "customer_external_refs",
 			"name": "updatedAt",
-			"position": 17,
+			"position": 18,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

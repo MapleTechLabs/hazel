@@ -33,6 +33,7 @@ import {
 	LinkCustomerChannel,
 	SetCustomerFeatureFlags,
 	MergeCustomerAccount,
+	SetRecordEnvironment,
 	StartCustomerImpersonation,
 	UnlinkCustomerChannel,
 	UpdateCustomerAccount,
@@ -49,6 +50,7 @@ import {
 	doneEntries,
 	EMPTY_NOTE_DRAFTS,
 	EMPTY_PAGE,
+	ENVIRONMENT_MODAL_ID,
 	EVENT_TYPE_MENU_ID,
 	EVENT_TYPE_PREFIXES,
 	EventType,
@@ -239,6 +241,10 @@ const initialModel = (route: Route): Model => ({
 	mergeQuery: "",
 	mergeAccountId: null,
 	isMerging: false,
+	environmentModal: Modal.init(ENVIRONMENT_MODAL_ID),
+	environmentRefId: null,
+	environmentDraft: "",
+	isSavingEnvironment: false,
 	isImpersonator: false,
 	impersonationAttempts: 0,
 	impersonateModal: Modal.init(IMPERSONATE_MODAL_ID),
@@ -1044,6 +1050,82 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 							title: "Couldn't merge the customers",
 							description: "A customer can't be merged into itself.",
 						},
+					}),
+				),
+			),
+		}),
+
+		PressedNameEnvironment: ({ refId }) => {
+			const detail = Option.getOrNull(AsyncData.getData(model.detail))
+			const ref = detail?.refs.find((candidate) => candidate.id === refId)
+			// A save on its way closes the dialog when it lands: no other one opens meanwhile.
+			if (ref === undefined || model.isSavingEnvironment) return { model }
+			return {
+				model: modifyFields(model, {
+					environmentModal: (modal) => Modal.open(modal).model,
+					environmentRefId: () => refId,
+					environmentDraft: () => ref.environment ?? "",
+				}),
+			}
+		},
+		GotEnvironmentModalMessage: ({ message: modalMessage }) => {
+			const result = Modal.update(model.environmentModal, modalMessage)
+			return {
+				model: modifyFields(model, { environmentModal: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotEnvironmentModalMessage({ message: child }),
+				),
+			}
+		},
+		ChangedEnvironmentDraft: ({ value }) => ({
+			model: modifyFields(model, { environmentDraft: () => value }),
+		}),
+		SubmittedEnvironment: () => {
+			const args = target(model, shared)
+			const refId = model.environmentRefId
+			if (
+				!model.environmentModal.isOpen ||
+				model.isSavingEnvironment ||
+				args === null ||
+				refId === null
+			)
+				return { model }
+			const environment = model.environmentDraft.trim().slice(0, 60) || null
+			return {
+				model: modifyFields(model, { isSavingEnvironment: () => true }),
+				commands: [SetRecordEnvironment({ ...args, refId, environment })],
+			}
+		},
+		SucceededSetEnvironment: ({ refId, environment }) => {
+			const detail = Option.getOrNull(AsyncData.getData(model.detail))
+			const patched =
+				detail === null
+					? null
+					: {
+							...detail,
+							refs: detail.refs.map((ref) =>
+								ref.id === refId ? { ...ref, environment } : ref,
+							),
+						}
+			return {
+				model: modifyFields(model, {
+					isSavingEnvironment: () => false,
+					environmentModal: (modal) => Modal.close(modal).model,
+					detail: (current) =>
+						patched === null ? current : settle(current, Result.succeed(patched)),
+				}),
+			}
+		},
+		FailedSetEnvironment: ({ reason }) => ({
+			model: modifyFields(model, { isSavingEnvironment: () => false }),
+			outMessage: toast(
+				errorToastOf(
+					failureMessage(reason, {
+						NotFound: {
+							title: "Couldn't name the environment",
+							description: "That record is no longer linked to this customer.",
+						},
+						Stale: { title: "Couldn't name the environment" },
 					}),
 				),
 			),

@@ -1529,6 +1529,24 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
+			"customers.ref.setEnvironment": ({ refId, environment }) =>
+				Effect.gen(function* () {
+					// What everyone sees the record as, like the customer's name.
+					yield* requireAdmin
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.gen(function* () {
+							const [ref] = yield* db.run(
+								SQLite.update(schema.customerExternalRefsTable)
+									.set({ environment: environment?.trim() || null, updatedAt: now })
+									.where(($) => [$.id.eq(refId), $.entityType.eq("account")])
+									.returning("id"),
+							)
+							if (ref === undefined) return yield* notFound("ref", refId)
+						}),
+					)
+				}).pipe(remap),
+
 			"customers.unmatched.link": ({ recordId, accountId }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireAdmin

@@ -4,6 +4,7 @@ import {
 	ChannelId,
 	CustomerAccountId,
 	CustomerContactId,
+	CustomerExternalRefId,
 	CustomerNoteId,
 	OrganizationId,
 	UserId,
@@ -225,6 +226,22 @@ export const MergeCustomerAccount = Command.define("MergeCustomerAccount", {
 			catchCommon((reason) => Message.FailedMerge({ accountId, reason })),
 		)
 	},
+})
+
+/** Name a linked record's environment (`Production`), or clear it with null. */
+export const SetRecordEnvironment = Command.define("SetRecordEnvironment", {
+	args: { ...target, refId: CustomerExternalRefId, environment: Schema.NullOr(Schema.String) },
+	messages: [Message.SucceededSetEnvironment, Message.FailedSetEnvironment],
+	execute: ({ organizationId, accountId, refId, environment }) =>
+		HazelRpc.use((rpc) =>
+			rpc("customers.ref.setEnvironment", { organizationId, refId, environment }),
+		).pipe(
+			Effect.as(Message.SucceededSetEnvironment({ accountId, refId, environment })),
+			Effect.catchTag("CustomersNotFoundError", () =>
+				Effect.succeed(Message.FailedSetEnvironment({ accountId, reason: "NotFound" })),
+			),
+			catchCommon((reason) => Message.FailedSetEnvironment({ accountId, reason })),
+		),
 })
 
 // NOTES

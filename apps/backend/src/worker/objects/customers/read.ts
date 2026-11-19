@@ -444,6 +444,30 @@ const contactRows = (contacts: ReadonlyArray<schema.CustomerContact>, now: Date)
 					$.day.gte(from),
 				]),
 		)
+		// The organizations each is a member through: its live refs' memberships not left.
+		const refs = yield* db.run(
+			SQLite.from(schema.customerExternalRefsTable)
+				.select("entityId", "viaAccounts")
+				.where(($) => [
+					$.entityType.eq("contact"),
+					inList(
+						$.entityId,
+						contacts.map((contact) => contact.id),
+					),
+					$.staleAt.isNull(),
+				]),
+		)
+		const organizationsOf = (contactId: string) => [
+			...new Set(
+				refs
+					.filter((ref) => ref.entityId === contactId)
+					.flatMap((ref) =>
+						Object.entries(ref.viaAccounts ?? {})
+							.filter(([, membership]) => membership.leftAt === undefined)
+							.map(([organizationId]) => organizationId),
+					),
+			),
+		]
 		return contacts.map((contact): ContactRow => {
 			const own = rows.filter((row) => row.contactId === contact.id)
 			const values = new Map(own.map((row) => [row.day, row.eventCount + row.sessionCount]))
@@ -452,6 +476,7 @@ const contactRows = (contacts: ReadonlyArray<schema.CustomerContact>, now: Date)
 				contact,
 				status: active ? "active" : contact.firstActiveAt !== null ? "dormant" : "never_active",
 				activity: dayRange(today, 30).map((day) => ({ day, value: values.get(day) ?? 0 })),
+				organizationIds: organizationsOf(contact.id),
 			}
 		})
 	})

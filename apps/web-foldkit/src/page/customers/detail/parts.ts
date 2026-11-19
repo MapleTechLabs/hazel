@@ -23,6 +23,10 @@ export interface Context {
 
 export const icon = { attributes: { "data-slot": "icon" } }
 
+/** What a linked record shows as: its environment, else the provider's name for it, else its id. */
+export const recordName = (ref: Customers.ExternalRef): string =>
+	ref.environment ?? ref.name ?? ref.externalId
+
 export const memberOf = (context: Context, id: UserId | null): MemberRow | null =>
 	id === null ? null : (context.membersById.get(id) ?? null)
 

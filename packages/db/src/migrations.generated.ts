@@ -542,5 +542,9 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_feature_flags_key_unique" ON "customer_feature_flags" ("key")',
 			],
 		},
+		{
+			id: "0016_customer_ref_environment",
+			statements: ['ALTER TABLE "customer_external_refs" ADD COLUMN "environment" text'],
+		},
 	],
 }

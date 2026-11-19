@@ -44,7 +44,8 @@ import {
 	writeNoteDrafts,
 } from "./note-drafts"
 import { init, routeChanged, update } from "./update"
-import { StartCustomerImpersonation } from "./commands"
+import { ACME_DETAIL } from "../../../lab/fixtures/customers"
+import { SetRecordEnvironment, StartCustomerImpersonation } from "./commands"
 
 /** Update-loop tests for the customer page: tab routing and loading, owner and tags, notes, signals. */
 
@@ -486,6 +487,49 @@ describe("customer page: notes", () => {
 		expect(commandNames(merged)).toContain("FetchCustomerDetail")
 	})
 
+	test("naming a linked record's environment saves the trimmed text and shows it", () => {
+		const withDetail = run(loaded(), [
+			Message.SucceededFetchDetail({ accountId: beta.id, detail: ACME_DETAIL }),
+		])
+		const [production, , eu] = ACME_DETAIL.refs
+		const opened = update(withDetail, Message.PressedNameEnvironment({ refId: eu!.id }), shared).model
+		expect(opened.environmentModal.isOpen).toBe(true)
+		expect(opened.environmentDraft).toBe("EU")
+		const saving = update(
+			run(opened, [Message.ChangedEnvironmentDraft({ value: "  Europe " })]),
+			Message.SubmittedEnvironment(),
+			shared,
+		)
+		expect(saving.commands?.map((command) => command.name)).toEqual([SetRecordEnvironment.name])
+		expect(saving.commands?.[0]?.args).toMatchObject({ refId: eu!.id, environment: "Europe" })
+		expect(commandNames(update(saving.model, Message.SubmittedEnvironment(), shared))).toEqual([])
+		// Closed while saving: another record's dialog waits for the save.
+		expect(
+			run(saving.model, [
+				Message.GotEnvironmentModalMessage({ message: Modal.Message.RequestedClose() }),
+				Message.PressedNameEnvironment({ refId: production!.id }),
+			]).environmentRefId,
+		).toBe(eu!.id)
+		const saved = run(saving.model, [
+			Message.SucceededSetEnvironment({ accountId: beta.id, refId: eu!.id, environment: "Europe" }),
+		])
+		expect(saved.environmentModal.isOpen).toBe(false)
+		expect(saved.isSavingEnvironment).toBe(false)
+		const refs = saved.detail._tag === "Success" ? saved.detail.data.refs : []
+		expect(refs.map((ref) => ref.environment)).toEqual([production!.environment, null, "Europe"])
+
+		// Empty clears it.
+		const cleared = update(
+			run(saved, [
+				Message.PressedNameEnvironment({ refId: production!.id }),
+				Message.ChangedEnvironmentDraft({ value: "   " }),
+			]),
+			Message.SubmittedEnvironment(),
+			shared,
+		)
+		expect(cleared.commands?.[0]?.args).toMatchObject({ refId: production!.id, environment: null })
+	})
+
 	test("a failed save or edit puts the text back", () => {
 		const saved = update(
 			run(loaded("notes"), [Message.ChangedComposer({ value: "Call booked" })]),
@@ -709,6 +753,7 @@ describe("customer page: impersonation", () => {
 		},
 		status: "active",
 		activity: [],
+		organizationIds: [],
 	})
 	const linus = contactRow(1, "Linus")
 	const margaret = contactRow(2, "Margaret")
