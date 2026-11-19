@@ -186,6 +186,7 @@ const threadItem = <M>(
 	h: HtmlBuilder<M>,
 	thread: SidebarThread,
 	isActive: boolean,
+	isFirst: boolean,
 	isLast: boolean,
 	orgSlug: string,
 ): Html => {
@@ -208,7 +209,9 @@ const threadItem = <M>(
 				cx(
 					"relative ml-[26px] flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-fg-3 text-sm/5",
 					"outline-hidden hover:bg-wash hover:text-fg focus-visible:bg-wash",
-					"before:pointer-events-none before:absolute before:top-0 before:-left-[11px] before:h-1/2 before:w-2",
+					"before:pointer-events-none before:absolute before:bottom-1/2 before:-left-[11px] before:w-2",
+					// The first branch reaches up through the channel row's bottom padding to its icon.
+					isFirst ? "before:-top-2" : "before:top-0",
 					"before:rounded-bl-md before:border-fg/15 before:border-b-[1.5px] before:border-l-[1.5px]",
 					!isLast &&
 						"after:pointer-events-none after:absolute after:top-1/2 after:bottom-0 after:-left-[11px] after:border-fg/15 after:border-l-[1.5px]",
@@ -249,6 +252,7 @@ export const threadItems = <M>(
 						h,
 						thread,
 						thread.id === activeThreadId,
+						index === 0,
 						index === threads.length - 1,
 						orgSlug,
 					),
