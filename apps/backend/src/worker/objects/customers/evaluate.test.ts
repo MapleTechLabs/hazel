@@ -533,6 +533,18 @@ describe("signal evaluation", () => {
 				}),
 			).evidence,
 		).toMatchObject({ from: 15_000 })
+		// The compute that sees the churn has not written its movement yet: the series still ends at 0.
+		const unseen = match(
+			"churned",
+			churned(0, {
+				movements: [{ type: "new", fromMrrMinor: 0, toMrrMinor: 19_900, day: addDays(TODAY, -60) }],
+				subscriptions: [{ ...twoSubs(0), mrrMinor: 19_900 }],
+			}),
+		).evidence
+		if (unseen._tag !== "delta") throw new Error("delta evidence")
+		expect(unseen.from).toBe(19_900)
+		expect(unseen.series.at(-1)).toEqual({ day: TODAY, value: 0 })
+		expect(unseen.series.at(-2)?.value).toBe(19_900)
 		// …but not a stage: churn is covered even with no stage picked.
 		expect(
 			run("churned", churned(3), orgFacts({ attention: { stages: [], requiredSources: ["stripe"] } }))

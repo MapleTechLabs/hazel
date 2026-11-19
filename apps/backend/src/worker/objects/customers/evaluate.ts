@@ -587,7 +587,10 @@ const churned =
 				fromLabel: last?.planName ?? null,
 				toLabel: "Churned",
 				reason: last?.cancellationReason ?? null,
-				series: mrrSeries(facts.movements, facts.account.mrrMinor, org.today, 30),
+				// MRR is 0 from the churn on: today's churn movement is written after the facts load.
+				series: mrrSeries(facts.movements, facts.account.mrrMinor, org.today, 30).map((point) =>
+					point.day >= (churn?.day ?? org.today) ? { ...point, value: 0 } : point,
+				),
 			},
 		}
 	}
