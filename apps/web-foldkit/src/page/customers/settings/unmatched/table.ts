@@ -124,11 +124,20 @@ const valueCell = (h: HtmlBuilder<Message>, record: RecordRow): Html => {
 }
 
 const confidenceBadge = (h: HtmlBuilder<Message>, record: RecordRow, confidence: Confidence): Html =>
-	badge(h, { intent: CONFIDENCE_INTENT[confidence], size: "sm", isPill: true }, [
-		record.confidence === null
-			? CONFIDENCE_LABEL[confidence]
-			: `${CONFIDENCE_LABEL[confidence]} · ${Math.round(record.confidence * 100)}%`,
-	])
+	badge(
+		h,
+		{
+			intent: CONFIDENCE_INTENT[confidence],
+			size: "sm",
+			isPill: true,
+			className: "shrink-0 whitespace-nowrap",
+		},
+		[
+			record.confidence === null
+				? CONFIDENCE_LABEL[confidence]
+				: `${CONFIDENCE_LABEL[confidence]} · ${Math.round(record.confidence * 100)}%`,
+		],
+	)
 
 const suggestionCell = (
 	h: HtmlBuilder<Message>,
@@ -389,6 +398,14 @@ export interface TableContext {
 }
 
 const cell = "px-3 first:pl-4 last:pr-4"
+/**
+ * By the card's width (an `@container`, the shell's sidebars take a share): Value folds first, then
+ * the suggestion. The fixed layout folds a column to zero width rather than dropping it, as a group
+ * row's `colspan` would leave an empty column taking half the record's space; a card narrow enough
+ * for the auto layout drops it.
+ */
+const valueFold = "@max-4xl:invisible @max-4xl:w-0 @max-4xl:p-0 @max-4xl:*:hidden @max-lg:hidden"
+const suggestionFold = "@max-2xl:invisible @max-2xl:w-0 @max-2xl:p-0 @max-2xl:*:hidden @max-lg:hidden"
 /** Fits Create or Link, Link to… and ⋯ on one line; the source column takes the rest and truncates. */
 const actionsWidth = "w-60"
 
@@ -469,9 +486,9 @@ export const recordsTable = (
 						]
 					: []),
 				h.td([h.Class(twMerge("py-3", cell))], [sourceCell(h, record)]),
-				h.td([h.Class(twMerge("w-32 py-3 text-right max-md:hidden", cell))], [valueCell(h, record)]),
+				h.td([h.Class(twMerge(`w-32 py-3 text-right ${valueFold}`, cell))], [valueCell(h, record)]),
 				h.td(
-					[h.Class(twMerge("w-[34%] py-3 max-md:hidden", cell))],
+					[h.Class(twMerge(`w-[34%] py-3 ${suggestionFold}`, cell))],
 					[suggestionCell(h, record, context.accountsById.get(record.suggestedAccountId ?? ""))],
 				),
 				...(context.isAdmin
@@ -480,13 +497,14 @@ export const recordsTable = (
 			],
 		)
 	}
-	return h.table(
+	// A narrow card scrolls the table sideways.
+	const table = h.table(
 		[
 			h.AriaLabel(context.ariaLabel),
-			// A phone keeps the record and its actions, at a width its card scrolls sideways to; the
-			// layout follows the content there, so the record's name is never squeezed out.
+			// A narrow card keeps the record and its actions, at a width it scrolls sideways to; the layout
+			// follows the content there, so the record's name is never squeezed out.
 			h.Class(
-				"w-full table-fixed border-separate border-spacing-0 max-md:table-auto max-md:min-w-[28rem]",
+				"w-full table-fixed border-separate border-spacing-0 @max-lg:table-auto @max-lg:min-w-[28rem]",
 			),
 		],
 		[
@@ -522,8 +540,8 @@ export const recordsTable = (
 									]
 								: []),
 							header("Source record", "text-left"),
-							header("Value", "w-32 text-right max-md:hidden"),
-							header("Suggested account", "w-[34%] text-left max-md:hidden"),
+							header("Value", `w-32 text-right ${valueFold}`),
+							header("Suggested account", `w-[34%] text-left ${suggestionFold}`),
 							...(context.isAdmin ? [header("", actionsWidth)] : []),
 						],
 					),
@@ -557,6 +575,7 @@ export const recordsTable = (
 			),
 		],
 	)
+	return h.div([h.Class("@max-lg:overflow-x-auto")], [table])
 }
 
 /** Skeleton rows while the first page loads. */

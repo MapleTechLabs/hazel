@@ -305,7 +305,7 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 		),
 		// A system menu on iOS, opened from this trigger as drawn, where its entries are all words;
 		// its choice is a `change` here.
-		...Option.match(nativeMenuItems(model, viewInputs.entries, viewInputs.native), {
+		...Option.match(nativeMenuItems(model, viewInputs.entries, viewInputs.native, viewInputs.content), {
 			onNone: () => [],
 			onSome: (items) => [
 				...nativeIsland(h, "menu", {
@@ -335,10 +335,12 @@ export const longPressMenu = <ParentMessage>(
 		menu: Model
 		entries: ReadonlyArray<Entry>
 		native?: NativeMenuLook
+		/** The menu's item children, as its `ViewInputs.content`: the native items take their icons. */
+		content?: (key: string) => ReadonlyArray<Html | string>
 		toParentMessage: (message: Message) => ParentMessage
 	}>,
 ): ReadonlyArray<Attribute<ParentMessage>> =>
-	Option.match(nativeMenuItems(options.menu, options.entries, options.native), {
+	Option.match(nativeMenuItems(options.menu, options.entries, options.native, options.content), {
 		onNone: () => [],
 		onSome: (items) =>
 			nativeContextMenu(h, { items }, (key) =>

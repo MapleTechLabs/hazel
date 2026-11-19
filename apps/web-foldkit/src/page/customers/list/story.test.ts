@@ -1,4 +1,5 @@
 import { CustomerAccountId, CustomerSavedViewId, OrganizationId, UserId } from "@hazel/schema"
+import { DragAndDrop } from "@foldkit/ui"
 import { Option, Schema } from "effect"
 import { describe, expect, test, vi } from "vitest"
 import type { AccountRow } from "../../../customers/queries"
@@ -15,6 +16,7 @@ import {
 	type Model,
 	moveColumn,
 	nextSort,
+	orderedTabsOf,
 	ownerEntries,
 	toggleColumn,
 	type ViewRow,
@@ -128,6 +130,8 @@ const atRisk: ViewRow = {
 	filters: { healthStatuses: ["at_risk", "critical"] },
 	sort: { column: "mrr", direction: "desc" },
 	columns: ["name", "owner", "mrr", "health"],
+	icon: null,
+	color: null,
 }
 const mine: ViewRow = {
 	...atRisk,
@@ -349,15 +353,127 @@ describe("customers list: saving views", () => {
 		expect(done.outMessage?._tag).toBe("RequestedNavigation")
 	})
 
-	test("Save changes updates the current view; deleting goes back to All", () => {
+	test("Save changes updates the current view; deleting asks first, then goes back to Current", () => {
 		const edited = run(loaded(mine.id), [Message.ClickedSortHeader({ column: "mrr" })])
 		const entries = [Menu.item("save"), Menu.item("delete")]
 		const toViewMenu = (message: Menu.Message) => Message.GotViewMenuMessage({ message })
 		const saved = pick(edited, toViewMenu, "save", entries)
 		expect(commandNames(saved)).toContain("UpdateSavedView")
-		const deleted = pick(edited, toViewMenu, "delete", entries)
+		const asked = pick(edited, toViewMenu, "delete", entries)
+		expect(asked.model.deleteModal.isOpen).toBe(true)
+		expect(commandNames(asked)).not.toContain("DeleteSavedView")
+		const deleted = update(asked.model, Message.PressedConfirmDeleteView(), shared)
 		expect(commandNames(deleted)).toContain("DeleteSavedView")
 		expect(deleted.outMessage?._tag).toBe("RequestedNavigation")
+		expect(deleted.model.deleteModal.isOpen).toBe(false)
+		// A second press while the dialog closes deletes nothing.
+		expect(commandNames(update(deleted.model, Message.PressedConfirmDeleteView(), shared))).not.toContain(
+			"DeleteSavedView",
+		)
+	})
+
+	test("a built-in view offers no delete", () => {
+		const asked = pick(
+			loaded("at_risk"),
+			(message) => Message.GotViewMenuMessage({ message }),
+			"delete",
+			[Menu.item("delete")],
+		)
+		expect(asked.model.deleteModal.isOpen).toBe(false)
+	})
+})
+
+describe("customers list: arranging the views", () => {
+	const tabNames = (model: Model) => orderedTabsOf(model).map((tab) => tab.name)
+
+	test("dragging a tab moves it and saves my order; Alt+arrow moves it one place", () => {
+		const start = loaded()
+		const steps = [
+			DragAndDrop.Message.PressedDraggable({
+				itemId: "all",
+				containerId: "customers-list-tabs",
+				index: 3,
+				screenX: 0,
+				screenY: 0,
+			}),
+			DragAndDrop.Message.MovedPointer({
+				screenX: -200,
+				screenY: 0,
+				clientX: 0,
+				clientY: 0,
+				maybeDropTarget: Option.some({ containerId: "customers-list-tabs", index: 0 }),
+			}),
+			DragAndDrop.Message.ReleasedPointer(),
+		]
+		const dragged = run(
+			start,
+			steps.slice(0, 2).map((message) => Message.GotTabDragMessage({ message })),
+		)
+		const dropped = update(dragged, Message.GotTabDragMessage({ message: steps[2]! }), shared)
+		expect(tabNames(dropped.model)).toEqual([
+			"All customers",
+			"Current customers",
+			"At risk",
+			"Scale accounts",
+		])
+		expect(commandNames(dropped)).toContain("SaveListLayout")
+		expect(dropped.commands?.[0]?.args).toMatchObject({
+			layoutId: null,
+			layout: { order: ["all", "current", "at_risk", mine.id], sidebarHidden: ["all"] },
+		})
+
+		const stepped = update(dropped.model, Message.SteppedViewTab({ key: mine.id, step: -1 }), shared)
+		expect(tabNames(stepped.model)).toEqual([
+			"All customers",
+			"Current customers",
+			"Scale accounts",
+			"At risk",
+		])
+		expect(commandNames(stepped)).toContain("SaveListLayout")
+	})
+
+	test("the view menu shows a view in the sidebar or hides it", () => {
+		const model = loaded()
+		const shown = pick(
+			model,
+			(message) => Message.GotViewMenuMessage({ message }),
+			"sidebar",
+			viewMenuEntries(model, viewer),
+		)
+		expect(shown.model.layout?.sidebarHidden).toEqual([])
+		const hidden = pick(
+			loaded("at_risk"),
+			(message) => Message.GotViewMenuMessage({ message }),
+			"sidebar",
+			viewMenuEntries(loaded("at_risk"), viewer),
+		)
+		expect(hidden.model.layout?.sidebarHidden).toEqual(["all", "at_risk"])
+	})
+
+	test("editing a view sends its name and its new icon and colour", () => {
+		const model = loaded(mine.id)
+		const opened = pick(
+			model,
+			(message) => Message.GotViewMenuMessage({ message }),
+			"edit",
+			viewMenuEntries(model, viewer),
+		)
+		expect(opened.model.saveForm).toMatchObject({
+			mode: "edit",
+			name: "Scale accounts",
+			icon: null,
+			color: null,
+		})
+		const saved = update(
+			run(opened.model, [Message.PickedSaveLook({ icon: "star", color: "pink" })]),
+			Message.SubmittedSave(),
+			shared,
+		)
+		expect(commandNames(saved)).toEqual(["UpdateSavedView"])
+		expect(saved.commands?.[0]?.args).toMatchObject({
+			viewId: mine.id,
+			view: { name: "Scale accounts", icon: "star", color: "pink" },
+		})
 	})
 })
 

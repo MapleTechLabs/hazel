@@ -17,11 +17,17 @@ import { kbd } from "./shortcuts"
 
 // VIEW TABS
 
-export type ViewTab<K extends string> = Readonly<{ key: K; label: string; count?: number }>
+export type ViewTab<K extends string> = Readonly<{
+	key: K
+	label: string
+	count?: number
+	/** Before the label, e.g. a saved view's icon. */
+	leading?: Html
+}>
 
 /**
- * `Open 12 · Snoozed 4 · Done`, underlined like the app's tabs; `trailing` follows them (e.g. `+`).
- * Stateless, so no roving focus: every tab is a button in the Tab order.
+ * `Open 12 · Snoozed 4 · Done`, underlined like the app's tabs; `trailing` follows them
+ * (give it `shrink-0`). Stateless, so no roving focus: every tab is a button in the Tab order.
  */
 export const viewTabs = <M, K extends string>(
 	h: HtmlBuilder<M>,
@@ -32,40 +38,56 @@ export const viewTabs = <M, K extends string>(
 		onSelect: (key: K) => M
 		trailing?: Html
 		className?: string
+		/** On the tab list (e.g. a drop target). */
+		listAttributes?: ReadonlyArray<Attribute<M>>
+		/** Per tab, e.g. dragging to reorder (`sortable.ts`). */
+		tabProps?: (
+			tab: ViewTab<K>,
+			index: number,
+		) => Readonly<{ attributes: ReadonlyArray<Attribute<M>>; className: string }>
 	}>,
 ): Html =>
 	h.div(
 		[
 			h.Class(
-				twMerge(
-					// A phone scrolls the tabs sideways rather than the page; the pixel of padding keeps the
-					// selected tab's underline (1px past the tab list) inside the scroller.
-					"flex items-center gap-1 border-border border-b max-md:overflow-x-auto max-md:pb-px max-md:[scrollbar-width:none]",
-					options.className,
-				),
+				twMerge("flex items-center gap-1 border-border border-b max-md:min-w-0", options.className),
 			),
 		],
 		[
 			h.div(
 				[
+					...(options.listAttributes ?? []),
 					h.Role("tablist"),
 					h.AriaLabel(options.ariaLabel),
-					h.Class("flex items-center gap-x-1 py-1 max-md:shrink-0"),
+					// A phone scrolls the tabs sideways, not the page or `trailing`. The extra pixel of padding
+					// keeps the selected tab's underline (1px past the tabs) inside the scroller and `-mb-px`
+					// lays it back on the border; the end fades over padding that is empty once scrolled.
+					h.Class(
+						"flex items-center gap-x-1 py-1 max-md:-mb-px max-md:min-w-0 max-md:overflow-x-auto max-md:pr-6 max-md:pb-1.25 max-md:mask-r-from-[calc(100%-1.5rem)] max-md:[scrollbar-width:none]",
+					),
 				],
-				options.tabs.map((tab) => {
+				options.tabs.map((tab, index) => {
 					const isSelected = tab.key === options.selected
+					const extra = options.tabProps?.(tab, index)
 					return h.button(
 						[
+							...(extra?.attributes ?? []),
+							h.Key(tab.key),
 							h.Type("button"),
 							h.Role("tab"),
 							h.AriaSelected(isSelected),
 							...(isSelected ? [h.DataAttribute("selected", "true")] : []),
 							h.Class(
-								twMerge(...tabsStyles.tab("horizontal", false), "cursor-pointer gap-1.5"),
+								twMerge(
+									...tabsStyles.tab("horizontal", false),
+									"cursor-pointer gap-1.5",
+									extra?.className,
+								),
 							),
 							h.OnClick(options.onSelect(tab.key)),
 						],
 						[
+							...(tab.leading === undefined ? [] : [tab.leading]),
 							tab.label,
 							...(tab.count === undefined
 								? []
@@ -154,7 +176,7 @@ export const rangePicker = <M>(
 	}>,
 ): Html =>
 	h.div(
-		[h.Class("flex items-center gap-3")],
+		[h.Class("flex flex-wrap items-center gap-x-3 gap-y-2")],
 		[
 			...(options.caption === null
 				? []
@@ -233,7 +255,7 @@ export const filterChip = <M>(
 	h.span(
 		[
 			h.Class(
-				"inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-border bg-secondary/50 text-sm max-md:h-10",
+				"inline-flex h-8 max-w-full items-stretch rounded-lg border border-border bg-secondary/50 text-sm max-md:h-10",
 			),
 		],
 		[
@@ -241,13 +263,17 @@ export const filterChip = <M>(
 				[
 					h.Type("button"),
 					h.Class(
-						"inline-flex cursor-pointer items-center gap-1 px-2.5 outline-hidden hover:bg-secondary focus-visible:bg-secondary",
+						"inline-flex min-w-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-l-lg px-2.5 outline-hidden hover:bg-secondary focus-visible:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70",
 					),
 					...(options.attributes ?? []),
 				],
 				[
-					h.span([h.Class("text-muted-fg")], [`${options.field} ${options.operator}`]),
-					h.span([h.Class("font-medium text-fg")], [options.value]),
+					h.span([h.Class("shrink-0 text-muted-fg")], [`${options.field} ${options.operator}`]),
+					// A long value (`High, Medium, Low, …`) truncates on one line; the chip's height is fixed.
+					h.span(
+						[h.Class("truncate font-medium text-fg"), h.Title(options.value)],
+						[options.value],
+					),
 					...(options.overlay ? [options.overlay] : []),
 				],
 			),
@@ -256,7 +282,7 @@ export const filterChip = <M>(
 					h.Type("button"),
 					h.AriaLabel(`Remove filter: ${options.field} ${options.operator} ${options.value}`),
 					h.Class(
-						"inline-flex w-7 cursor-pointer items-center justify-center border-border border-l text-muted-fg outline-hidden hover:bg-secondary hover:text-fg focus-visible:bg-secondary max-md:w-10",
+						"inline-flex w-7 shrink-0 cursor-pointer items-center justify-center rounded-r-lg border-border border-l text-muted-fg outline-hidden hover:bg-secondary hover:text-fg focus-visible:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70 max-md:w-10",
 					),
 					h.OnClick(options.onRemove),
 				],

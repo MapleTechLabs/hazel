@@ -24,6 +24,7 @@ import { menuLabel, menuTriggerClassName, view as menuView } from "../ui/menu-vi
 import { sidebarFooter, sidebarHeader, sidebarLabel } from "../ui/sidebar"
 import type { ShellContext } from "./context"
 import type { SwitcherOrg, UserStatus } from "./model"
+import { initialsOf, semantic } from "../ui/semantic"
 import { sidebarHeaderHeightClass } from "../platform/desktop"
 
 /** The user menu (`sidebar/user-menu.tsx`) and the org switcher (`channels-sidebar.tsx` header). */
@@ -312,6 +313,17 @@ export const userMenuFooter = <M>(
 					h.button(
 						[
 							...attributes,
+							...semantic(h, {
+								kind: "item",
+								title: displayName,
+								subtitle: context.currentUser?.email,
+								avatar: {
+									url: context.currentUser?.avatarUrl ?? null,
+									initials: initialsOf(displayName),
+								},
+								trailingSymbol: "chevron.up.chevron.down",
+								pin: "bottom",
+							}),
 							h.Attribute("data-slot", "menu-trigger"),
 							h.Class(
 								menuTriggerClassName(
@@ -450,6 +462,16 @@ export const orgSwitcherHeader = <M>(
 					h.button(
 						[
 							...attributes,
+							...semantic(h, {
+								kind: "item",
+								title: context.organization?.name ?? "",
+								avatar: {
+									url: context.organization?.logoUrl ?? null,
+									initials: initialsOf(context.organization?.name ?? ""),
+								},
+								trailingSymbol: "chevron.up.chevron.down",
+								pin: "top",
+							}),
 							h.Class(
 								"group/switcher relative flex items-center justify-between gap-x-2 font-semibold outline-hidden text-fg/80 hover:text-fg transition-colors focus-visible:ring focus-visible:ring-primary",
 							),

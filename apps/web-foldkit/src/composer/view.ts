@@ -13,6 +13,7 @@ import { button } from "../ui/button"
 import { ACCEPT_ATTRIBUTE } from "../editor/file-types"
 import { autocompletePopover } from "./autocomplete-view"
 import { commandInputPanel } from "./trigger-views"
+import { semantic } from "../ui/semantic"
 import { KEEPS_EDITOR_FOCUS, Message, type Model, MountEditor } from "./composer"
 
 /** Port of `SlateMessageComposer`: DropZone > (previews, indicators) > Frame > (Editor, Actions). */
@@ -125,7 +126,15 @@ const actions = <M>(h: HtmlBuilder<M>, model: Model, extras: BoxExtras<M>): Arra
 /** The whole composer box for a composer Model, in the parent's Message type. */
 export const composerBoxView = <M>(h: HtmlBuilder<M>, model: Model, extras: BoxExtras<M>): Html =>
 	h.div(
-		[h.Class("relative"), ...(extras.dropZoneAttributes ?? [])],
+		[
+			h.Class("relative"),
+			...semantic(h, {
+				kind: "composer",
+				placeholder: model.placeholder,
+				hasContent: model.markdown.trim() !== "" || (extras.hasTopContent ?? false),
+			}),
+			...(extras.dropZoneAttributes ?? []),
+		],
 		[
 			h.div(
 				[h.Class("relative flex h-max items-center gap-3")],

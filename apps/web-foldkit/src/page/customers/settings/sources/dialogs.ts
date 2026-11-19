@@ -80,7 +80,7 @@ const keyStep = (h: H, form: ConnectForm): Html => {
 	const descriptor = providerOf(form.provider)
 	return step(h, 1, form.connected !== null, descriptor.apiKey.label, [
 		h.div(
-			[h.Class("flex items-center justify-between gap-3")],
+			[h.Class("flex flex-col items-start gap-1.5")],
 			[
 				h.p([h.Class("text-muted-fg text-xs")], [descriptor.apiKey.help]),
 				h.a(
@@ -89,7 +89,7 @@ const keyStep = (h: H, form: ConnectForm): Html => {
 						h.Target("_blank"),
 						h.Rel("noreferrer"),
 						h.Class(
-							"inline-flex shrink-0 items-center gap-1 font-medium text-primary text-xs hover:underline",
+							"inline-flex items-center gap-1 rounded-sm font-medium text-primary text-xs outline-hidden hover:underline focus-visible:ring-2 focus-visible:ring-ring/70",
 						),
 					],
 					[`Create key in ${descriptor.name}`],

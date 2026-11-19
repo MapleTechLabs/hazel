@@ -48,16 +48,6 @@ export const snoozeMenuEntries: ReadonlyArray<Menu.Entry> = [
 	Menu.item(PICK_DATE_KEY, { textValue: "Pick date" }),
 ]
 
-/** Right-aligned hint in a menu item (a time, a key). */
-const hint = <M>(h: HtmlBuilder<M>, text: string): Html =>
-	h.span(
-		[
-			h.Attribute("data-slot", "keyboard"),
-			h.Class(twMerge(keyboardStyles, dropdownKeyboardBase, "font-sans text-xs")),
-		],
-		[text],
-	)
-
 const keyHint = <M>(h: HtmlBuilder<M>, text: string): Html =>
 	h.kbd(
 		[h.Attribute("data-slot", "keyboard"), h.Class(twMerge(keyboardStyles, dropdownKeyboardBase))],
@@ -70,8 +60,21 @@ export const snoozeMenuContent =
 	(key: string): ReadonlyArray<Html | string> =>
 		isSnoozeKey(key)
 			? [
-					menuLabel(h, menuId, key, SNOOZE_LABEL[key]),
-					hint(h, formatWeekdayTime(snoozeUntil(key, now), options)),
+					// The time sits in the label's cell, not the kit's absolute key-hint spot: the menu
+					// widens to fit it instead of drawing it over the label.
+					h.span(
+						[h.Class("col-start-2 flex items-baseline justify-between gap-4")],
+						[
+							menuLabel(h, menuId, key, SNOOZE_LABEL[key]),
+							h.span(
+								[
+									h.Attribute("data-slot", "keyboard"),
+									h.Class(twMerge(keyboardStyles, "font-sans text-xs")),
+								],
+								[formatWeekdayTime(snoozeUntil(key, now), options)],
+							),
+						],
+					),
 				]
 			: [menuLabel(h, menuId, key, "Pick date…")]
 

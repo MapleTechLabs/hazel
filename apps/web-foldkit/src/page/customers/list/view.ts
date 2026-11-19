@@ -1,5 +1,5 @@
 import { CustomerAccountId } from "@hazel/schema"
-import { Schema } from "effect"
+import { Option, Schema } from "effect"
 import { Submodel } from "foldkit"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
@@ -9,7 +9,6 @@ import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { environmentBadge, healthBadge, severityGlyph } from "../../../customers/ui/badges"
 import { connectCard } from "../../../customers/ui/connect-card"
 import { dataTable } from "../../../customers/ui/data-table"
-import { noResultsState } from "../../../customers/ui/empty-states"
 import {
 	addFilterButton,
 	filterBar,
@@ -18,10 +17,23 @@ import {
 	sortTrigger,
 	viewTabs,
 } from "../../../customers/ui/filter-bar"
-import { companyLogo, personAvatar, personLabel } from "../../../customers/ui/identity"
+import { companyLogo, menuAvatar, personLabel } from "../../../customers/ui/identity"
 import { kbd } from "../../../customers/ui/shortcuts"
+import { dragGhost, sortableList, sortableRow } from "../../../customers/ui/sortable"
+import { lookPicker, viewGlyph } from "../../../customers/ui/view-look"
+import { isInSidebar, layoutOf } from "../../../customers/view-layout"
+import * as Customers from "@hazel/domain/customers"
+import { DragAndDrop } from "@foldkit/ui"
 import { freshness, pageHeader } from "../../../customers/ui/surface"
-import { IconClose, IconDots, IconDownload, IconOffice, IconPlus, IconUser } from "../../../icons"
+import {
+	IconClose,
+	IconDots,
+	IconDownload,
+	IconMagnifier3,
+	IconOffice,
+	IconPlus,
+	IconUser,
+} from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
 import { button, buttonClassName } from "../../../ui/button"
 import { checkbox } from "../../../ui/checkbox"
@@ -48,13 +60,16 @@ import {
 	effectiveFilters,
 	HOVER_CARD_ID,
 	isEdited,
+	layoutKeyOf,
 	type Model,
+	orderedTabsOf,
 	OWNER_ME,
 	OWNER_NONE,
 	ownerEntries,
 	parseSortKey,
 	ROW_PAGE,
 	SEARCH_ID,
+	TAB_LIST_ID,
 	shownColumns,
 	sortEntries,
 	sortLabel,
@@ -62,7 +77,6 @@ import {
 	viewMenuEntries,
 	type Viewer,
 	viewTabCounts,
-	viewTabsOf,
 	visibleAccounts,
 } from "./model"
 import { shortName, type TableContext, tableColumns } from "./table"
@@ -170,28 +184,51 @@ const header = (
 const VIEW_MENU_LABEL = {
 	save: "Save changes to this view",
 	save_as: "Save as a new view…",
-	rename: "Rename…",
+	edit: "Edit name and icon…",
 	reset: "Discard changes",
 	restore_default: "Reset to default",
 	delete: "Delete view",
 } as const
 
+const viewMenuLabel = (model: Model, key: string): string =>
+	key === "sidebar"
+		? isInSidebar(layoutOf(model.layout), layoutKeyOf(currentTab(model)))
+			? "Hide from sidebar"
+			: "Show in sidebar"
+		: (VIEW_MENU_LABEL[key as keyof typeof VIEW_MENU_LABEL] ?? key)
+
+/** The view tabs, in my order: drag one (or Alt+←/→) to move it; the sidebar follows. */
 const tabsRow = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 	const counts = viewTabCounts(model, viewer)
-	const tabs = viewTabsOf(model.views)
+	const tabs = orderedTabsOf(model)
 	const current = currentTab(model)
 	const edited = isEdited(model)
-	const hasViewMenu = edited || current.row !== null
+	const draggedKey = Option.getOrNull(DragAndDrop.maybeDraggedItemId(model.tabDrag))
+	const dragged = tabs.find((tab) => layoutKeyOf(tab) === draggedKey)
 	return viewTabs(h, {
 		ariaLabel: "Saved views",
 		tabs: tabs.map((tab) => ({
-			key: tab.key ?? "",
+			key: layoutKeyOf(tab),
 			label: tab.name,
 			count: model.accounts === null ? undefined : counts.get(tab.key),
+			leading: viewGlyph(h, tab.look, "size-3.5"),
 		})),
-		selected: current.key ?? "",
-		onSelect: (key) => Message.ClickedViewTab({ key: key === "" ? null : key }),
+		selected: layoutKeyOf(current),
+		onSelect: (key) =>
+			Message.ClickedViewTab({ key: tabs.find((tab) => layoutKeyOf(tab) === key)?.key ?? null }),
 		className: "overflow-x-auto",
+		listAttributes: [sortableList(h, TAB_LIST_ID)],
+		tabProps: (tab, index) =>
+			sortableRow(h, {
+				drag: model.tabDrag,
+				containerId: TAB_LIST_ID,
+				itemId: tab.key,
+				index,
+				count: tabs.length,
+				orientation: "Horizontal",
+				toDragMessage: (message) => Message.GotTabDragMessage({ message }),
+				onStep: (step) => Message.SteppedViewTab({ key: tab.key, step }),
+			}),
 		trailing: h.div(
 			[h.Class("flex shrink-0 items-center gap-1")],
 			[
@@ -209,34 +246,29 @@ const tabsRow = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =>
 							),
 						]
 					: []),
-				...(hasViewMenu
-					? [
-							menu(h, model.viewMenu, {
-								entries: viewMenuEntries(model, viewer),
-								trigger: (attributes, overlay) =>
-									button(
-										h,
-										{
-											intent: "plain",
-											size: "xs",
-											className: "size-7 p-0",
-											attributes: [...attributes, h.AriaLabel("View actions")],
-										},
-										[IconDots(h, icon), overlay],
-									),
-								content: (key) => [
-									menuLabel(
-										h,
-										model.viewMenu.id,
-										key,
-										VIEW_MENU_LABEL[key as keyof typeof VIEW_MENU_LABEL] ?? key,
-									),
-								],
-								toMessage: (message) => Message.GotViewMenuMessage({ message }),
-								className: "min-w-56",
-							}),
-						]
-					: []),
+				dragged === undefined
+					? h.empty
+					: dragGhost(h, model.tabDrag, [
+							viewGlyph(h, dragged.look, "size-3.5"),
+							h.span([], [dragged.name]),
+						]),
+				menu(h, model.viewMenu, {
+					entries: viewMenuEntries(model, viewer),
+					trigger: (attributes, overlay) =>
+						button(
+							h,
+							{
+								intent: "plain",
+								size: "xs",
+								className: "size-7 p-0",
+								attributes: [...attributes, h.AriaLabel("View actions")],
+							},
+							[IconDots(h, icon), overlay],
+						),
+					content: (key) => [menuLabel(h, model.viewMenu.id, key, viewMenuLabel(model, key))],
+					toMessage: (message) => Message.GotViewMenuMessage({ message }),
+					className: "min-w-56",
+				}),
 			],
 		),
 	})
@@ -471,7 +503,7 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 			h.span(
 				[
 					h.Class(
-						"rounded-md bg-primary-subtle px-2 py-1 font-medium text-primary-subtle-fg tabular-nums",
+						"whitespace-nowrap rounded-md bg-primary-subtle px-2 py-1 font-medium text-primary-subtle-fg tabular-nums",
 					),
 				],
 				[`${formatCount(model.selected.length)} selected`],
@@ -483,7 +515,7 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 						]),
 					]
 				: []),
-			h.span([h.Class("mx-1 h-5 w-px bg-border")]),
+			h.span([h.Class("mx-1 h-5 w-px bg-border max-md:hidden")]),
 			menu(h, model.ownerMenu, {
 				entries: ownerEntries(model.members, viewer),
 				trigger: (attributes, overlay) =>
@@ -503,10 +535,7 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 							key === OWNER_ME ? viewer.userId : (member?.id ?? null),
 						) ?? 0
 					return [
-						h.span(
-							[h.DataAttribute("slot", "icon"), h.Class("inline-flex")],
-							[personAvatar(h, key === OWNER_NONE ? null : person)],
-						),
+						menuAvatar(h, key === OWNER_NONE ? null : person),
 						menuLabel(
 							h,
 							model.ownerMenu.id,
@@ -590,8 +619,9 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 					h.Type("button"),
 					h.AriaLabel("Clear selection"),
 					h.OnClick(Message.ClearedSelection()),
+					// A phone: first, beside the count, so the wrapped bar takes two rows, not three.
 					h.Class(
-						"inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-fg hover:bg-secondary hover:text-fg max-md:size-9",
+						"inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-fg hover:bg-secondary hover:text-fg max-md:order-first max-md:size-9",
 					),
 				],
 				[IconClose(h, { className: "size-3.5" })],
@@ -609,14 +639,14 @@ const saveDialog = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html
 		toContent: (closeAttributes) => {
 			const form = model.saveForm
 			if (form === null) return []
-			const isRename = form.mode === "rename"
+			const isEdit = form.mode === "edit"
 			return [
 				dialogHeader(h, {
 					title: {
 						id: Modal.titleId(model.saveModal.id),
-						text: isRename ? "Rename view" : "Save view",
+						text: isEdit ? "Edit view" : "Save view",
 					},
-					description: isRename
+					description: isEdit
 						? undefined
 						: "Keeps these filters, the sort and the columns as a tab and in the sidebar.",
 				}),
@@ -637,7 +667,13 @@ const saveDialog = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html
 									h.OnInput((value) => Message.ChangedSaveName({ value })),
 								],
 							}),
-							...(isRename || !viewer.isAdmin
+							lookPicker(h, {
+								look: { icon: form.icon, color: form.color },
+								icons: Customers.ViewIcon.literals,
+								colors: Customers.ViewColor.literals,
+								onPick: (look) => Message.PickedSaveLook(look),
+							}),
+							...(isEdit || !viewer.isAdmin
 								? []
 								: [
 										checkbox(
@@ -662,8 +698,36 @@ const saveDialog = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html
 							isDisabled: form.name.trim() === "",
 							attributes: [h.Type("submit"), h.Attribute("form", "customers-save-view")],
 						},
-						[isRename ? "Rename" : "Save view"],
+						[isEdit ? "Save" : "Save view"],
 					),
+				]),
+			]
+		},
+	})
+
+// DELETE DIALOG
+
+const deleteDialog = (h: HtmlBuilder<Message>, model: Model): Html =>
+	Modal.controlledModal(h, {
+		model: model.deleteModal,
+		toParentMessage: (message) => Message.GotDeleteModalMessage({ message }),
+		role: "alertdialog",
+		size: "sm",
+		toContent: (closeAttributes) => {
+			const tab = currentTab(model)
+			return [
+				dialogHeader(h, {
+					title: { id: Modal.titleId(model.deleteModal.id), text: `Delete ${tab.name}?` },
+					description:
+						tab.row?.ownerUserId === null
+							? "It goes for everyone in the workspace. This can't be undone."
+							: "This can't be undone.",
+				}),
+				dialogFooter(h, [
+					dialogClose(h, closeAttributes, ["Cancel"]),
+					button(h, { intent: "danger", onPress: Message.PressedConfirmDeleteView() }, [
+						"Delete view",
+					]),
 				]),
 			]
 		},
@@ -724,45 +788,41 @@ const noResults = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html 
 	const chip =
 		best === null ? null : chipOf(best.field, model.draft.filters, model.members, model.reportingCurrency)
 	const label = chip === null ? null : `${chip.field} ${chip.operator} ${chip.value}`.replace(/\s+/g, " ")
-	return h.div(
-		[h.Class("flex flex-col items-center gap-4 py-16")],
-		[
-			noResultsState(h, {
-				framed: false,
-				description:
-					model.search.trim() === ""
-						? "No account matches every filter. Remove one to widen the list."
-						: `Nothing matches “${model.search.trim()}” with these filters. Try a domain instead of a name.`,
-			}),
-			h.div(
-				[h.Class("flex items-center gap-2")],
-				[
-					...(best === null || label === null
-						? []
-						: [
-								button(
-									h,
-									{
-										intent: "outline",
-										size: "sm",
-										onPress: Message.ClearedFilter({ field: best.field }),
-									},
-									[
-										`Remove “${label}”`,
-										h.span(
-											[h.Class("text-muted-fg tabular-nums")],
-											[formatCount(best.count)],
-										),
-									],
-								),
-							]),
-					button(h, { intent: "plain", size: "sm", onPress: Message.ClearedFilters() }, [
-						"Clear filters",
-					]),
-				],
-			),
-		],
-	)
+	return emptyState(h, {
+		title: "No customers match",
+		icon: (className) => IconMagnifier3(h, { className }),
+		description:
+			model.search.trim() === ""
+				? "No account matches every filter. Remove one to widen the list."
+				: `Nothing matches “${model.search.trim()}” with these filters. Try a domain instead of a name.`,
+		action: h.div(
+			[h.Class("flex flex-wrap items-center justify-center gap-2")],
+			[
+				...(best === null || label === null
+					? []
+					: [
+							button(
+								h,
+								{
+									intent: "outline",
+									size: "sm",
+									onPress: Message.ClearedFilter({ field: best.field }),
+								},
+								[
+									`Remove “${label}”`,
+									h.span(
+										[h.Class("text-muted-fg tabular-nums")],
+										[formatCount(best.count)],
+									),
+								],
+							),
+						]),
+				button(h, { intent: "plain", size: "sm", onPress: Message.ClearedFilters() }, [
+					"Clear filters",
+				]),
+			],
+		),
+	})
 }
 
 const table = (
@@ -896,6 +956,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			// A tap fires mouseenter too; a phone has no hover to preview with.
 			...(hovered === undefined || shared.isMobile ? [] : [hoverCard(h, model, hovered, viewer)]),
 			saveDialog(h, model, viewer),
+			deleteDialog(h, model),
 		],
 	)
 })

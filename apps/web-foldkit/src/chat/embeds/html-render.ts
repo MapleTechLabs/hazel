@@ -7,6 +7,7 @@ import { IconMaximize } from "../../icons"
 import { controlledModal, titleId } from "../../ui/modal"
 import * as HtmlRender from "../html-render"
 import type { EmbedType } from "./types"
+import { shellDrawsLists } from "../../platform/system-ui"
 
 /**
  * An HTML render embed (`MessageEmbed.html`): the bot's page in a sandboxed frame. `allow-scripts`
@@ -27,6 +28,13 @@ export interface HtmlRenderContext<M> {
 
 const styles = htmlRenderStyles()
 
+/**
+ * Inline frames load when near the screen, except where a native shell draws the list from the
+ * page's (unseen) rows: there every frame loads, so each reports its height and the shell's row
+ * has it.
+ */
+const inlineLoading = shellDrawsLists() ? "eager" : "lazy"
+
 /** The sandboxed frame's attributes, shared by the inline and fullscreen frames. */
 const frameAttributes = <M>(
 	h: HtmlBuilder<M>,
@@ -36,7 +44,7 @@ const frameAttributes = <M>(
 	mode: HtmlRender.FrameMode,
 	toMessage: (message: HtmlRender.Message) => M,
 ) => [
-	h.Attribute("loading", mode === "fullscreen" ? "eager" : "lazy"),
+	h.Attribute("loading", mode === "fullscreen" ? "eager" : inlineLoading),
 	h.Attribute("sandbox", "allow-scripts"),
 	h.Attribute("referrerpolicy", "no-referrer"),
 	h.Attribute("title", title),

@@ -2,7 +2,7 @@
  * Row models of the `customers` store (`@hazel/db` `tables/customers.ts`), in the shape the sync
  * stream and the RPCs carry them: timestamps as `JsonDate`, JSON columns parsed.
  *
- * Synced (client collections): `Account`, `Signal`, `SignalRule`, `Note`, `SavedView`, `Settings`,
+ * Synced (client collections): `Account`, `Signal`, `SignalRule`, `Note`, `SavedView`, `ViewLayout`, `Settings`,
  * `MetricDefinition`, `Connection`, `SyncRun`, `ChannelLink`, `FeatureFlag`, `Impersonator`,
  * `Impersonation` (admins only). The rest travel in RPC results.
  */
@@ -28,6 +28,7 @@ import {
 	CustomerSubscriptionId,
 	CustomerSyncRunId,
 	CustomerUnmatchedRecordId,
+	CustomerViewLayoutId,
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
@@ -62,7 +63,7 @@ import {
 import { SignalEvidence } from "./evidence"
 import { HealthSettings } from "./health"
 import { RuleConfig, RuleScope } from "./rules"
-import { ListColumn, ViewFilters, ViewSort } from "./views"
+import { ListColumn, ViewColor, ViewFilters, ViewIcon, ViewLayoutKey, ViewSort } from "./views"
 
 const NullDate = S.NullOr(JsonDate)
 const FieldSources = S.Record(S.String, CustomerSource)
@@ -262,12 +263,25 @@ class SavedViewModel extends M.Class<SavedViewModel>("CustomerSavedView")({
 	sort: ViewSort,
 	columns: S.Array(ListColumn),
 	position: S.Number,
+	icon: S.NullOr(ViewIcon),
+	color: S.NullOr(ViewColor),
 	createdBy: S.NullOr(UserId),
 	...timestamps,
 	deletedAt: M.GeneratedByApp(NullDate),
 }) {}
 export const SavedView = M.expose(SavedViewModel)
 export type SavedView = typeof SavedView.Schema.Type
+
+class ViewLayoutModel extends M.Class<ViewLayoutModel>("CustomerViewLayout")({
+	id: M.GeneratedOptional(CustomerViewLayoutId),
+	organizationId: OrganizationId,
+	userId: UserId,
+	order: S.Array(ViewLayoutKey),
+	sidebarHidden: S.Array(ViewLayoutKey),
+	...timestamps,
+}) {}
+export const ViewLayout = M.expose(ViewLayoutModel)
+export type ViewLayout = typeof ViewLayout.Schema.Type
 
 class SettingsModel extends M.Class<SettingsModel>("CustomerSettings")({
 	id: M.Generated(CustomerSettingsId),
@@ -276,7 +290,7 @@ class SettingsModel extends M.Class<SettingsModel>("CustomerSettings")({
 	reportingCurrency: S.String,
 	/** Plan names billed on top of a base plan, never shown as an account's plan while it has one. */
 	addOnPlans: S.Array(S.String),
-	/** MRR from each Stripe subscription's last paid invoice (usage overage, discounts) once one exists. */
+	/** Unused: MRR always adds usage billing now (the backend's `usageMrrOf`); the column stays. */
 	overageInMrr: S.Boolean,
 	lastComputedAt: NullDate,
 	updatedBy: S.NullOr(UserId),

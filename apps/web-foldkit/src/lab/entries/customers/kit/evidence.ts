@@ -21,7 +21,7 @@ export const lab = defineStaticLab("Evidence", (h) =>
 				h.div(
 					[
 						h.Class(
-							"grid grid-cols-[1fr_9rem_20rem] items-start gap-6 rounded-xl border border-border p-4",
+							"grid items-start gap-6 rounded-xl border border-border p-4 lg:grid-cols-[1fr_9rem_20rem]",
 						),
 					],
 					[
@@ -29,7 +29,7 @@ export const lab = defineStaticLab("Evidence", (h) =>
 							[h.Class("flex min-w-0 flex-col gap-1")],
 							[
 								h.span(
-									[h.Class("flex items-center gap-2 text-sm")],
+									[h.Class("flex flex-wrap items-center gap-2 text-sm")],
 									[
 										kindChip(h, signal.kind),
 										h.span([h.Class("font-medium")], [signal.title]),

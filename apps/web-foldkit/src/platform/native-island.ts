@@ -1,4 +1,4 @@
-import type { Attribute, HtmlBuilder } from "foldkit/html"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 
 /**
  * Native islands: marks an element the Rune-native app may show or drive with a real platform
@@ -51,8 +51,10 @@ export type NativeMenuItem =
 			disabled?: true | undefined
 			destructive?: true | undefined
 			checked?: true | undefined
-			/** An SF Symbol name. */
+			/** An SF Symbol name: what the shell shows when the item has no `icon`. */
 			symbol?: string | undefined
+			/** The icon the web's item draws, as SVG markup (`iconOf`): the native item shows it too. */
+			icon?: string | undefined
 	  }>
 	| Readonly<{ label: string; items: ReadonlyArray<NativeMenuItem> }>
 	| Readonly<{ separator: true }>
@@ -87,3 +89,47 @@ export const nativeContextMenu = <Message>(
 	menu: NativeContextMenu,
 	onChoose: (key: string) => Message,
 ): ReadonlyArray<Attribute<Message>> => [...nativeIsland(h, "context-menu", menu), h.OnChange(onChoose)]
+
+/** Escaped for an attribute's double quotes or for text. */
+const escapeMarkup = (value: string) =>
+	value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+
+type MarkupNode = Readonly<{
+	sel?: string
+	text?: string
+	data?: Readonly<{ attrs?: Readonly<Record<string, string | number | boolean>> }>
+	children?: ReadonlyArray<MarkupNode | string>
+}>
+
+const isNode = (value: unknown): value is MarkupNode => typeof value === "object" && value !== null
+
+/** An SVG node as markup: its tag, attributes and children (classes and handlers dropped). */
+const svgMarkup = (node: MarkupNode | string): string => {
+	if (typeof node === "string") return escapeMarkup(node)
+	const tag = node.sel?.split(/[.#]/)[0]
+	if (tag === undefined || tag === "") return escapeMarkup(node.text ?? "")
+	const attributes = Object.entries(node.data?.attrs ?? {})
+		.filter(([, value]) => value !== false)
+		.map(([name, value]) => ` ${name}="${escapeMarkup(String(value))}"`)
+		.join("")
+	const children = (node.children ?? []).map(svgMarkup).join("") + escapeMarkup(node.text ?? "")
+	return `<${tag}${attributes}>${children}</${tag}>`
+}
+
+/**
+ * The first icon among an item's children (`ViewInputs.content`), as SVG markup: the native menu
+ * shows the icon the web's item draws, from the same view.
+ */
+export const iconOf = (children: ReadonlyArray<Html | string>): string | undefined => {
+	const find = (nodes: ReadonlyArray<unknown>): MarkupNode | undefined => {
+		for (const node of nodes) {
+			if (!isNode(node)) continue
+			if (node.sel?.startsWith("svg") === true) return node
+			const found = find(node.children ?? [])
+			if (found !== undefined) return found
+		}
+		return undefined
+	}
+	const svg = find(children)
+	return svg === undefined ? undefined : svgMarkup(svg)
+}

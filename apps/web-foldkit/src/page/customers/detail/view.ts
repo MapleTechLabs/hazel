@@ -13,7 +13,7 @@ import { viewTabs } from "../../../customers/ui/filter-bar"
 import { linkClass } from "../../../customers/ui/surface"
 import {
 	companyLogo,
-	personAvatar,
+	menuAvatar,
 	personLabel,
 	SOURCE_LABEL,
 	sourceLinkChip,
@@ -136,7 +136,7 @@ const domainLink = (h: HtmlBuilder<Message>, domain: string): Html => {
 		Option.map((url) => url.href),
 	)
 	return Option.match(href, {
-		onNone: () => h.span([h.Class("text-fg-2")], [domain]),
+		onNone: () => h.span([h.Class("block truncate text-fg-2")], [domain]),
 		onSome: (site) =>
 			h.a(
 				[
@@ -144,8 +144,9 @@ const domainLink = (h: HtmlBuilder<Message>, domain: string): Html => {
 					h.Attribute("target", "_blank"),
 					h.Attribute("rel", "noreferrer"),
 					h.Class(
-						"rounded-sm text-fg-2 outline-hidden hover:text-fg hover:underline focus-visible:ring-2 focus-visible:ring-ring/70",
+						"block truncate rounded-sm text-fg-2 outline-hidden hover:text-fg hover:underline focus-visible:ring-2 focus-visible:ring-ring/70",
 					),
+					h.Title(domain),
 				],
 				[domain],
 			),
@@ -256,6 +257,8 @@ const ownerMenu = (h: HtmlBuilder<Message>, model: Model, context: Context): Htm
 				{
 					intent: "outline",
 					size: "xs",
+					// A long owner name truncates in the button, not past the page's edge.
+					className: "max-w-full",
 					attributes: [...attributes, h.AriaLabel("Owner")],
 				},
 				[
@@ -267,10 +270,7 @@ const ownerMenu = (h: HtmlBuilder<Message>, model: Model, context: Context): Htm
 		content: (key) => {
 			const member = model.members.find((entry) => entry.id === userIdOfOwnerKey(key)) ?? null
 			return [
-				h.span(
-					[h.DataAttribute("slot", "icon"), h.Class("inline-flex")],
-					[personAvatar(h, key === OWNER_NONE ? null : member)],
-				),
+				menuAvatar(h, key === OWNER_NONE ? null : member),
 				menuLabel(
 					h,
 					model.ownerMenu.id,
@@ -323,13 +323,17 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 				],
 			),
 			h.div(
-				[h.Class("flex items-center gap-1")],
+				[h.Class("flex shrink-0 items-center gap-1")],
 				[
 					...(position === null
 						? []
 						: [
 								h.span(
-									[h.Class("pr-1 text-muted-fg text-xs tabular-nums max-md:hidden")],
+									[
+										h.Class(
+											"whitespace-nowrap pr-1 text-muted-fg text-xs tabular-nums max-md:hidden",
+										),
+									],
 									[`${formatCount(position.index + 1)} of ${formatCount(position.total)}`],
 								),
 								navButton(-1, "Previous customer", position.previous === null),
@@ -372,7 +376,11 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 		[h.Class("flex flex-col gap-4 px-4 pt-6 lg:px-6")],
 		[
 			h.div(
-				[h.Class("flex items-start justify-between gap-4 max-md:flex-col max-md:gap-3")],
+				[
+					h.Class(
+						"flex items-start justify-between gap-4 max-md:flex-col max-md:items-stretch max-md:gap-3",
+					),
+				],
 				[
 					h.div(
 						[h.Class("flex min-w-0 gap-3.5")],
@@ -384,9 +392,14 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-2")],
 										[
-											heading(h, { variant: "display", className: "max-md:text-xl" }, [
-												account.name,
-											]),
+											heading(
+												h,
+												{
+													variant: "display",
+													className: "wrap-anywhere max-md:text-xl",
+												},
+												[account.name],
+											),
 											...environmentSwitch(h, model, context),
 											stageBadge(h, account.lifecycleStage),
 											healthBadge(h, {
@@ -398,11 +411,12 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 									),
 									// Each part's dot sits in the gap before it, so a wrapped line starts
 									// with a part, not a dot: the dot of a line's first part is clipped.
+									// `pr-4` keeps a part's `max-w-full` inside: a long domain truncates.
 									h.div(
 										[h.Class("overflow-hidden text-muted-fg text-sm")],
 										[
 											h.p(
-												[h.Class("-ml-4 flex flex-wrap items-center")],
+												[h.Class("-ml-4 flex flex-wrap items-center pr-4")],
 												[
 													...(account.domain === null
 														? []
@@ -412,7 +426,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 													h.span(
 														[
 															h.Class(
-																"relative ml-4 whitespace-nowrap before:absolute before:-left-2.5 before:content-['·']",
+																"relative ml-4 max-w-full whitespace-nowrap before:absolute before:-left-2.5 before:content-['·']",
 															),
 														],
 														[part],
@@ -425,7 +439,11 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 										[h.Class("flex flex-wrap items-center gap-1.5 pt-2")],
 										[
 											ownerMenu(h, model, context),
-											h.span([h.AriaHidden(true), h.Class("mx-1 h-4 w-px bg-border")]),
+											// A phone wraps the chips: the divider would end a line.
+											h.span([
+												h.AriaHidden(true),
+												h.Class("mx-1 h-4 w-px bg-border max-md:hidden"),
+											]),
 											...refs
 												.filter(
 													(ref) =>
@@ -960,7 +978,11 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 		],
 		[
 			sidebarSection(h, "Properties", null, [
-				property(h, "Owner", personLabel(h, memberOf(context, account.ownerUserId))),
+				property(
+					h,
+					"Owner",
+					personLabel(h, memberOf(context, account.ownerUserId), { className: "max-w-full" }),
+				),
 				property(
 					h,
 					"Stage",

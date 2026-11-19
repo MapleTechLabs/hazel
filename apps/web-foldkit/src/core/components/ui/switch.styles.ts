@@ -1,8 +1,8 @@
 import type { ClassNameValue } from "tailwind-merge"
 
 export const switchStyles = [
-	"[--switch-bg-ring:var(--color-blue-700)]/90 [--switch-bg:var(--color-blue-600)] dark:[--switch-bg-ring:transparent]",
-	"[--switch-ring:var(--color-blue-700)]/90 [--switch-shadow:var(--color-blue-900)]/20 [--switch:white]",
+	"[--switch-bg-ring:var(--color-primary)]/90 [--switch-bg:var(--color-primary)] dark:[--switch-bg-ring:transparent]",
+	"[--switch-ring:var(--color-primary)]/90 [--switch-shadow:var(--color-primary)]/20 [--switch:white]",
 	"group relative grid cursor-default grid-cols-[1fr_auto] gap-x-6 gap-y-1 data-disabled:opacity-50 *:data-[slot=indicator]:col-start-2 *:data-[slot=label]:col-start-1 *:data-[slot=label]:row-start-1 *:data-[slot=indicator]:self-start has-[[slot=description]]:**:data-[slot=label]:font-medium sm:*:data-[slot=indicator]:mt-0.5 *:[[slot=description]]:col-start-1 *:[[slot=description]]:row-start-2",
 ]
 

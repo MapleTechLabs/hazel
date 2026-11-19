@@ -1,9 +1,10 @@
 import * as Customers from "@hazel/domain/customers"
+import { DragAndDrop } from "@foldkit/ui"
 import { CustomerAccountId, CustomerSavedViewId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
-import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
+import { AccountRow, MemberRow, SignalRow, ViewLayoutRow } from "../../../customers/queries"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
@@ -23,11 +24,17 @@ export const Message = defineMessageUnion({
 	UpdatedAccounts: { accounts: Schema.Array(AccountRow) },
 	UpdatedSignals: { signals: Schema.Array(SignalRow) },
 	UpdatedViews: { views: Schema.Array(ViewRow) },
+	UpdatedViewLayout: { layout: Schema.NullOr(ViewLayoutRow) },
 	UpdatedMembers: { members: Schema.Array(MemberRow) },
 	UpdatedConnectedProviders: { providers: Schema.Array(Customers.CustomerProvider) },
 	UpdatedSettings: { lastComputedAtMs: Schema.NullOr(Schema.Number), reportingCurrency: Schema.String },
 
 	ClickedViewTab: { key: Schema.NullOr(Schema.String) },
+	GotTabDragMessage: { message: DragAndDrop.Message },
+	/** Alt+arrow on a tab: one place back or on. */
+	SteppedViewTab: { key: Schema.String, step: Schema.Literals([-1, 1]) },
+	CompletedSaveLayout: {},
+	FailedSaveLayout: { reason: CommonReason },
 	ChangedSearch: { value: Schema.String },
 	ClearedSearch: {},
 	ClickedSortHeader: { column: Customers.ListColumn },
@@ -50,8 +57,11 @@ export const Message = defineMessageUnion({
 	PressedSaveView: {},
 	GotSaveModalMessage: { message: Modal.Message },
 	ChangedSaveName: { value: Schema.String },
+	PickedSaveLook: { icon: Schema.NullOr(Customers.ViewIcon), color: Schema.NullOr(Customers.ViewColor) },
 	ToggledSaveShared: { isShared: Schema.Boolean },
 	SubmittedSave: {},
+	GotDeleteModalMessage: { message: Modal.Message },
+	PressedConfirmDeleteView: {},
 	SucceededViewAction: { action: ViewAction, viewId: CustomerSavedViewId },
 	FailedViewAction: { action: ViewAction, reason: ViewFailure },
 

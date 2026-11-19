@@ -117,6 +117,68 @@ describe("Customers RPCs", () => {
 			}),
 		))
 
+	it("keeps a view's icon and colour, and each person's own view layout", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const view = {
+					name: "Renewals",
+					filters: {},
+					sort: { column: "mrr", direction: "desc" },
+					columns: ["name"],
+					icon: "rocket",
+					color: "teal",
+				}
+				const created = ok(
+					yield* world.call("customers.view.create", { view, shared: false }, world.member),
+				).data
+				expect([created.icon, created.color]).toEqual(["rocket", "teal"])
+				// An update without them keeps them; null clears one.
+				const { icon: _icon, color: _color, ...plain } = view
+				const kept = ok(
+					yield* world.call(
+						"customers.view.update",
+						{ viewId: created.id, view: { ...plain, name: "Q1 renewals" } },
+						world.member,
+					),
+				).data
+				expect([kept.name, kept.icon, kept.color]).toEqual(["Q1 renewals", "rocket", "teal"])
+				const cleared = ok(
+					yield* world.call(
+						"customers.view.update",
+						{ viewId: created.id, view: { ...plain, icon: null } },
+						world.member,
+					),
+				).data
+				expect([cleared.icon, cleared.color]).toEqual([null, "teal"])
+
+				// A second call replaces the caller's layout; another person's stays theirs.
+				const layout = { order: ["all", "current", created.id], sidebarHidden: ["paying"] }
+				ok(yield* world.call("customers.view.layout", { layout }, world.member))
+				const replaced = { order: [created.id, "current"], sidebarHidden: [] }
+				const saved = ok(
+					yield* world.call("customers.view.layout", { layout: replaced }, world.member),
+				)
+				expect([saved.data.userId, saved.data.order, saved.data.sidebarHidden]).toEqual([
+					world.member,
+					replaced.order,
+					[],
+				])
+				ok(yield* world.call("customers.view.layout", { layout }, world.owner))
+				expect(
+					world.rows<{ userId: string; order: string }>(
+						`SELECT userId, "order" FROM customer_view_layouts ORDER BY userId = '${world.member}' DESC`,
+					),
+				).toEqual([
+					{ userId: world.member, order: JSON.stringify(replaced.order) },
+					{ userId: world.owner, order: JSON.stringify(layout.order) },
+				])
+				expect(tagOf(yield* world.call("customers.view.layout", { layout }, world.stranger))).toBe(
+					"UnauthorizedError",
+				)
+			}),
+		))
+
 	it("keeps a metric's unit set by hand when the source defines the metric again", () =>
 		run(
 			Effect.gen(function* () {

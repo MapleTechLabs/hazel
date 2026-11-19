@@ -1,12 +1,15 @@
 import type * as Customers from "@hazel/domain/customers"
 import { MAX_VIEWS } from "@hazel/domain/customers"
+import { DragAndDrop } from "@foldkit/ui"
 import type { CustomerAccountId, UserId } from "@hazel/schema"
 import { Option } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { commonMessage, failureMessage } from "~/lib/error-messages"
 import type { AccountRow } from "../../../customers/queries"
-import { errorToastOf, successToast } from "../../../data/actions"
+import type { ViewLook } from "../../../customers/ui/view-look"
+import { layoutOf, moveKey, stepKey, withSidebar, isInSidebar } from "../../../customers/view-layout"
+import { errorToastOf, reasonToast, successToast } from "../../../data/actions"
 import { AppRoute, customerRoute, customersListRoute, type RouteOf } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
@@ -22,6 +25,7 @@ import {
 	ExportCustomersCsv,
 	FetchListSparklines,
 	FocusListSearch,
+	SaveListLayout,
 	UpdateSavedView,
 	WaitBeforeHoverCard,
 	WaitBeforeSparklineRetry,
@@ -30,14 +34,17 @@ import { Message, type ViewAction } from "./message"
 import {
 	activeFields,
 	builtInDefaultOf,
+	canDeleteView,
 	canUpdateView,
 	clearField,
 	COLUMNS_POPOVER_ID,
 	currentTab,
+	DELETE_MODAL_ID,
 	type Draft,
 	FILTER_POPOVER_ID,
 	type ListKey,
 	keepVisibleSelection,
+	layoutKeyOf,
 	missingSparklines,
 	type Model,
 	moveColumn,
@@ -46,11 +53,13 @@ import {
 	OWNER_MENU_ID,
 	OWNER_NONE,
 	parseSortKey,
+	orderedTabsOf,
 	ROW_PAGE,
 	SAVE_MODAL_ID,
 	sameDraft,
 	SORT_MENU_ID,
 	shownColumns,
+	TAB_LIST_ID,
 	TAG_POPOVER_ID,
 	toggleColumn,
 	userIdOfOwnerKey,
@@ -86,6 +95,9 @@ export const init = (route: Route): Return => {
 			accounts: null,
 			signals: null,
 			views: null,
+			layout: null,
+			layoutId: null,
+			tabDrag: DragAndDrop.init({ id: TAB_LIST_ID, orientation: "Horizontal" }),
 			members: [],
 			connectedProviders: null,
 			lastComputedAtMs: null,
@@ -107,6 +119,7 @@ export const init = (route: Route): Return => {
 			ownerMenu: Menu.init({ id: OWNER_MENU_ID, placement: "top start" }),
 			saveModal: Modal.init(SAVE_MODAL_ID),
 			saveForm: null,
+			deleteModal: Modal.init(DELETE_MODAL_ID),
 		},
 	}
 }
@@ -160,19 +173,28 @@ const navigateToView = (model: Model, shared: Shared, key: string | null): Retur
 	outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) => customersListRoute(orgSlug, key)),
 })
 
-const viewDraftOf = (name: string, draft: Draft): Customers.ViewDraft => ({
-	name,
-	filters: draft.filters,
-	sort: draft.sort,
-	columns: shownColumns(draft.columns),
-})
+/** `look` absent: the view keeps its own. */
+const viewDraftOf = (name: string, draft: Draft, look?: ViewLook): Customers.ViewDraft => {
+	const base = { name, filters: draft.filters, sort: draft.sort, columns: shownColumns(draft.columns) }
+	return look === undefined ? base : { ...base, icon: look.icon, color: look.color }
+}
 
-const openSaveModal = (model: Model, mode: "create" | "rename"): Return => ({
-	model: modifyFields(model, {
-		saveForm: () => ({ mode, name: mode === "rename" ? currentTab(model).name : "", isShared: false }),
-		saveModal: (modal) => Modal.open(modal).model,
-	}),
-})
+const openSaveModal = (model: Model, mode: "create" | "edit"): Return => {
+	const tab = currentTab(model)
+	const look = mode === "edit" ? tab.look : { icon: null, color: null }
+	return {
+		model: modifyFields(model, {
+			saveForm: () => ({
+				mode,
+				name: mode === "edit" ? tab.name : "",
+				icon: look.icon,
+				color: look.color,
+				isShared: false,
+			}),
+			saveModal: (modal) => Modal.open(modal).model,
+		}),
+	}
+}
 
 const closeSaveModal = (model: Model): Model =>
 	modifyFields(model, { saveForm: () => null, saveModal: (modal) => Modal.close(modal).model })
@@ -184,11 +206,16 @@ const submitSave = (model: Model, shared: Shared): Return => {
 	const name = form?.name.trim() ?? ""
 	if (form === null || name === "" || organizationId === undefined || userId === undefined) return { model }
 	const tab = currentTab(model)
-	if (form.mode === "rename" && tab.row !== null)
+	const look = { icon: form.icon, color: form.color }
+	if (form.mode === "edit" && tab.row !== null)
 		return {
 			model: closeSaveModal(model),
 			commands: [
-				UpdateSavedView({ organizationId, viewId: tab.row.id, view: viewDraftOf(name, tab.draft) }),
+				UpdateSavedView({
+					organizationId,
+					viewId: tab.row.id,
+					view: viewDraftOf(name, tab.draft, look),
+				}),
 			],
 		}
 	const position = Math.max(0, ...(model.views ?? []).map((view) => view.position)) + 1
@@ -198,7 +225,7 @@ const submitSave = (model: Model, shared: Shared): Return => {
 			CreateSavedView({
 				organizationId,
 				userId,
-				view: viewDraftOf(name, model.draft),
+				view: viewDraftOf(name, model.draft, look),
 				isShared: form.isShared && viewerOf(shared).isAdmin,
 				position,
 			}),
@@ -226,8 +253,13 @@ const onViewMenu = (model: Model, shared: Shared, key: string): Return => {
 					}
 		case "save_as":
 			return openSaveModal(model, "create")
-		case "rename":
-			return openSaveModal(model, "rename")
+		case "edit":
+			return openSaveModal(model, "edit")
+		case "sidebar": {
+			const layout = layoutOf(model.layout)
+			const key = layoutKeyOf(tab)
+			return withLayout(model, shared, withSidebar(layout, key, !isInSidebar(layout, key)))
+		}
 		case "reset":
 			return withDraft(model, shared, () => tab.draft)
 		case "restore_default": {
@@ -241,21 +273,59 @@ const onViewMenu = (model: Model, shared: Shared, key: string): Return => {
 					UpdateSavedView({
 						organizationId,
 						viewId: tab.row.id,
-						view: viewDraftOf(fallback.name, fallback.draft),
+						// Its shipped look is no look of its own.
+						view: viewDraftOf(fallback.name, fallback.draft, { icon: null, color: null }),
 					}),
 				],
 			}
 		}
 		case "delete":
-			return tab.row === null || organizationId === undefined
-				? { model }
-				: {
-						...navigateToView(model, shared, null),
-						commands: [DeleteSavedView({ organizationId, viewId: tab.row.id })],
-					}
+			return canDeleteView(tab, viewerOf(shared))
+				? { model: modifyFields(model, { deleteModal: (modal) => Modal.open(modal).model }) }
+				: { model }
 		case undefined:
 			return { model }
 	}
+}
+
+// LAYOUT
+
+/** The layout shown at once and saved (the sidebar follows through the synced row). */
+const withLayout = (
+	model: Model,
+	shared: Shared,
+	layout: Customers.ViewLayoutDraft,
+	commands: Commands = [],
+): Return => {
+	const organizationId = shared.organization?.id
+	const userId = shared.currentUser?.id
+	if (organizationId === undefined || userId === undefined) return { model, commands }
+	return {
+		model: modifyFields(model, { layout: () => layout }),
+		commands: [...commands, SaveListLayout({ organizationId, userId, layoutId: model.layoutId, layout })],
+	}
+}
+
+const reorderTabs = (
+	model: Model,
+	shared: Shared,
+	change: (keys: ReadonlyArray<string>) => ReadonlyArray<string>,
+	commands: Commands = [],
+): Return => {
+	const keys = orderedTabsOf(model).map(layoutKeyOf)
+	return withLayout(model, shared, { ...layoutOf(model.layout), order: change(keys) }, commands)
+}
+
+const updateTabDrag = (model: Model, shared: Shared, message: DragAndDrop.Message): Return => {
+	const result = DragAndDrop.update(model.tabDrag, message)
+	const next = modifyFields(model, { tabDrag: () => result.model })
+	const commands = Command.mapMessages(result.commands ?? [], (child) =>
+		Message.GotTabDragMessage({ message: child }),
+	)
+	const out = result.outMessage
+	return out?._tag === "Reordered" && out.fromIndex !== out.toIndex
+		? reorderTabs(next, shared, (keys) => moveKey(keys, out.itemId, out.toIndex), commands)
+		: { model: next, commands }
 }
 
 const VIEW_VERB = { create: "save", update: "update", delete: "delete" } as const satisfies Record<
@@ -484,6 +554,12 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				shared,
 			)
 		},
+		UpdatedViewLayout: ({ layout }) => ({
+			model: modifyFields(model, {
+				layout: () => (layout === null ? null : layoutOf(layout)),
+				layoutId: () => layout?.id ?? null,
+			}),
+		}),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
 		UpdatedConnectedProviders: ({ providers }) => ({
 			model: modifyFields(model, { connectedProviders: () => providers }),
@@ -496,6 +572,18 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 
 		ClickedViewTab: ({ key }) => navigateToView(model, shared, key),
+		GotTabDragMessage: ({ message: dragMessage }) => updateTabDrag(model, shared, dragMessage),
+		SteppedViewTab: ({ key, step }) =>
+			reorderTabs(
+				model,
+				shared,
+				(keys) => stepKey(keys, key, step),
+				Command.mapMessages([DragAndDrop.FocusItem({ itemId: key })], (child) =>
+					Message.GotTabDragMessage({ message: child }),
+				),
+			),
+		CompletedSaveLayout: () => ({ model }),
+		FailedSaveLayout: ({ reason }) => ({ model, outMessage: toast(reasonToast(reason)) }),
 		ChangedSearch: ({ value }) => withRows(modifyFields(model, { search: () => value }), shared),
 		ClearedSearch: () => withRows(modifyFields(model, { search: () => "" }), shared),
 		ClickedSortHeader: ({ column }) =>
@@ -580,12 +668,38 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				saveForm: (form) => (form === null ? null : { ...form, name: value }),
 			}),
 		}),
+		PickedSaveLook: ({ icon, color }) => ({
+			model: modifyFields(model, {
+				saveForm: (form) => (form === null ? null : { ...form, icon, color }),
+			}),
+		}),
 		ToggledSaveShared: ({ isShared }) => ({
 			model: modifyFields(model, {
 				saveForm: (form) => (form === null ? null : { ...form, isShared }),
 			}),
 		}),
 		SubmittedSave: () => submitSave(model, shared),
+		GotDeleteModalMessage: ({ message: modalMessage }) => {
+			const result = Modal.update(model.deleteModal, modalMessage)
+			return {
+				model: modifyFields(model, { deleteModal: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotDeleteModalMessage({ message: child }),
+				),
+			}
+		},
+		PressedConfirmDeleteView: () => {
+			const tab = currentTab(model)
+			const organizationId = shared.organization?.id
+			// The dialog may be closing already (a second press while it animates out).
+			if (!model.deleteModal.isOpen || tab.row === null || organizationId === undefined)
+				return { model }
+			const closed = modifyFields(model, { deleteModal: (modal) => Modal.close(modal).model })
+			return {
+				...navigateToView(closed, shared, null),
+				commands: [DeleteSavedView({ organizationId, viewId: tab.row.id })],
+			}
+		},
 		SucceededViewAction: ({ action, viewId }) =>
 			action === "create"
 				? navigateToView(model, shared, viewId)

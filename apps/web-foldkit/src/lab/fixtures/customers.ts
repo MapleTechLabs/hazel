@@ -1420,7 +1420,7 @@ export const overviewFixture = (
 			activeCustomers: kpi(168, 168),
 			wau: kpi(978, 951),
 			mau: kpi(1_611, 1_602),
-			stickinessPct: { value: 61, previous: 59, deltaPct: 2 },
+			revenueMinor: kpi(billing ? 5_310_400 : 0, billing ? 4_987_200 : 0),
 			logoChurn: { value: 2.8, previous: 1.9, deltaPct: 0.9 },
 			atRiskMrrMinor: kpi(billing ? 545_000 : 0, billing ? 612_000 : 0),
 			nrrPct: billing ? kpi(104.2, 101.8) : null,
@@ -1442,6 +1442,10 @@ export const overviewFixture = (
 		},
 		recentChurn: [brief("oakridge", daysAgo(20))],
 		recentNew: [brief("tidewater", daysAgo(12)), brief("juniper", daysAgo(26))],
+		newTrials: [
+			{ ...brief("quarry", daysAgo(3)), status: "trialing" },
+			{ ...brief("tidewater", daysAgo(19)), status: "active" },
+		],
 		hasData: { activity: true, billing },
 	}
 }

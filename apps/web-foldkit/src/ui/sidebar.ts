@@ -98,9 +98,15 @@ export const sidebarDock = <Message>(
 	)
 
 /** `<Sidebar collapsible="none">` */
-export const sidebarStatic = <Message>(h: HtmlBuilder<Message>, className: string, children: Html[]): Html =>
+export const sidebarStatic = <Message>(
+	h: HtmlBuilder<Message>,
+	className: string,
+	children: Html[],
+	attributes: ReadonlyArray<Attribute<Message>> = [],
+): Html =>
 	h.div(
 		[
+			...attributes,
 			h.Attribute("data-intent", "default"),
 			h.Attribute("data-collapsible", "none"),
 			h.Attribute("data-slot", "sidebar"),
@@ -181,7 +187,12 @@ export const sidebarSectionGroup = <Message>(h: HtmlBuilder<Message>, children: 
 
 export const sidebarSection = <Message>(
 	h: HtmlBuilder<Message>,
-	options: { readonly label?: string; readonly className?: string },
+	options: {
+		readonly label?: string
+		readonly className?: string
+		/** On the list of items (e.g. a drop target). */
+		readonly listAttributes?: ReadonlyArray<Attribute<Message>>
+	},
 	children: Html[],
 ): Html =>
 	h.div(
@@ -212,6 +223,7 @@ export const sidebarSection = <Message>(
 				: []),
 			h.div(
 				[
+					...(options.listAttributes ?? []),
 					h.Attribute("data-slot", "sidebar-section-inner"),
 					h.Class("grid grid-cols-[auto_1fr] gap-y-0.5 in-data-[state=collapsed]:gap-y-1.5"),
 				],
@@ -277,11 +289,18 @@ export const sidebarItem = <Message>(
 /** `<SidebarLink>`: TanStack `createLink` over React Aria Link, with `activeProps`. */
 export const sidebarLink = <Message>(
 	h: HtmlBuilder<Message>,
-	options: { readonly href: string; readonly isActive: boolean; readonly activeClassName: string },
+	options: {
+		readonly href: string
+		readonly isActive: boolean
+		readonly activeClassName: string
+		readonly className?: string
+		readonly attributes?: ReadonlyArray<Attribute<Message>>
+	},
 	children: Html[],
 ): Html =>
 	h.a(
 		[
+			...(options.attributes ?? []),
 			...(options.isActive ? [h.Attribute("data-status", "active")] : []),
 			h.Class(
 				linkClassName({
@@ -290,6 +309,7 @@ export const sidebarLink = <Message>(
 						"col-span-full min-w-0 shrink-0 items-center p-2 focus:outline-hidden",
 						"grid grid-cols-[auto_1fr_1.5rem_0.5rem_auto] supports-[grid-template-columns:subgrid]:grid-cols-subgrid",
 						options.isActive ? options.activeClassName : undefined,
+						options.className,
 					),
 				}),
 			),

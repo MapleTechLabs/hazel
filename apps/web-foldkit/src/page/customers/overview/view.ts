@@ -15,7 +15,6 @@ import {
 	formatDate,
 	formatDeltaCount,
 	formatDeltaPct,
-	formatDeltaPoints,
 	formatMetricValue,
 	formatMoney,
 	formatPct,
@@ -149,11 +148,11 @@ const kpiRow = (
 		return grid(
 			loadingTiles(h, [
 				"MRR",
+				"Revenue",
 				"Paying customers",
 				"Logo churn",
 				"At-risk MRR",
 				"Active customers",
-				"Stickiness",
 			]),
 		)
 	const { kpis, currency } = result
@@ -169,21 +168,13 @@ const kpiRow = (
 			delta: pctDelta(model, kpis.activeCustomers),
 			comparison,
 		}),
-		kpiTile(h, {
-			id: "kpi-stickiness",
-			label: "Stickiness",
-			definition: `Weekly active users divided by monthly active users: ${formatCount(kpis.wau.value)} of ${formatCount(kpis.mau.value)}.`,
-			value: formatPct(kpis.stickinessPct.value, { digits: 0 }),
-			delta: kpiDelta(model, kpis.stickinessPct, (value) => formatDeltaPoints(value)),
-			comparison,
-		}),
 	]
 	if (!result.hasData.billing)
 		return grid([
 			h.div(
 				[
 					h.Class(
-						"col-span-2 flex items-center justify-between gap-4 rounded-xl border border-border border-dashed p-4 max-md:flex-col max-md:items-start max-md:gap-3 md:col-span-3 xl:col-span-4",
+						"col-span-2 flex items-center justify-between gap-4 rounded-xl border border-border border-dashed p-4 max-md:flex-col max-md:items-start max-md:gap-3 md:col-span-2 xl:col-span-5",
 					),
 				],
 				[
@@ -192,7 +183,7 @@ const kpiRow = (
 						[
 							h.span(
 								[h.Class("text-muted-fg text-xs")],
-								["MRR · Paying customers · Logo churn · At-risk MRR"],
+								["MRR · Revenue · Paying customers · Logo churn · At-risk MRR"],
 							),
 							h.span(
 								[h.Class("font-medium text-fg text-sm")],
@@ -222,9 +213,19 @@ const kpiRow = (
 		kpiTile(h, {
 			id: "kpi-mrr",
 			label: "MRR",
-			definition: "Monthly recurring revenue of every active subscription, in the reporting currency.",
+			definition:
+				"Monthly recurring revenue of every active subscription, plus usage billing averaged over the last 3 months, in the reporting currency.",
 			value: formatMoney(kpis.mrrMinor.value, currency),
 			delta: pctDelta(model, kpis.mrrMinor),
+			comparison,
+		}),
+		kpiTile(h, {
+			id: "kpi-revenue",
+			label: "Revenue",
+			definition:
+				"Revenue collected in the period from paid invoices, recurring and one-off, in the reporting currency.",
+			value: formatMoney(kpis.revenueMinor.value, currency),
+			delta: pctDelta(model, kpis.revenueMinor),
 			comparison,
 		}),
 		kpiTile(h, {
@@ -667,6 +668,10 @@ const listCard = (
 			: h.ul([h.Class("flex flex-col")], [...options.rows]),
 	])
 
+/** A trial's subscription that went on to bill (anything but still trialing, paused or canceled). */
+const isConverted = (status: Customers.SubscriptionStatus) =>
+	status === "active" || status === "past_due" || status === "unpaid"
+
 const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, context: Context): Html => {
 	if (!result.hasData.billing) {
 		const fresh = newAccounts(model, context.nowMs, 5)
@@ -729,8 +734,9 @@ const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, con
 		})
 	const newMrr = result.recentNew.reduce((sum, entry) => sum + entry.mrrMinor, 0)
 	const lostMrr = result.recentChurn.reduce((sum, entry) => sum + entry.mrrMinor, 0)
+	const converted = result.newTrials.filter((trial) => isConverted(trial.status)).length
 	return h.div(
-		[h.Class("grid gap-4 lg:grid-cols-2")],
+		[h.Class("grid gap-4 lg:grid-cols-3")],
 		[
 			listCard(h, {
 				title: "New customers",
@@ -740,6 +746,22 @@ const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, con
 					brief(entry, formatMoney(entry.mrrMinor, result.currency)),
 				),
 				empty: "No new paying customers in this period.",
+			}),
+			listCard(h, {
+				title: "New trials",
+				description: `${accountsLabel(result.newTrials.length)} · ${formatCount(converted)} converted`,
+				aside: link(h, hrefOf(customersListRoute(context.orgSlug, "trialing")), "View trials"),
+				rows: result.newTrials.map((trial) =>
+					brief(
+						trial,
+						trial.status === "trialing"
+							? formatMoney(trial.mrrMinor, result.currency)
+							: isConverted(trial.status)
+								? h.span([h.Class("text-success-subtle-fg")], ["Converted"])
+								: h.span([h.Class("text-muted-fg")], ["Ended"]),
+					),
+				),
+				empty: "No trials started in this period.",
 			}),
 			listCard(h, {
 				title: "Recent churn",

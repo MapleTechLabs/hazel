@@ -93,6 +93,8 @@ const CLOSED_SIGNAL_RETENTION_MS = 180 * DAY_MS
 const SYNC_RUN_RETENTION_MS = 30 * DAY_MS
 
 const PRUNED_KEY = "prunedOn"
+/** Set once the recorded days' user counts were redone from activity (rows written before it was backfilled). */
+const USER_COUNTS_REDONE_KEY = "userCountsRedone"
 
 const meta = <A, R>(effect: Effect.Effect<A, SqlError, R>) =>
 	effect.pipe(Effect.mapError(Database.toDatabaseError))
@@ -846,6 +848,19 @@ const addTotals = (
 	}
 }
 
+/** The user counts (DAU/WAU/MAU, active accounts) of the recorded days in `[from, to]`, from activity. */
+const redoUserCounts = Effect.fn("Customers.redoUserCounts")(function* (from: Day, to: Day) {
+	const db = yield* Database.Database
+	const users = yield* activeCounts(from, to)
+	const days = dayRange(to, daysBetween(from, to) + 1).map((day) => ({ day, ...users(day) }))
+	yield* db.query(
+		Database.sql`UPDATE "customer_org_daily" SET "activeAccounts" = json_extract(value, '$.activeAccounts'),
+			"dau" = json_extract(value, '$.dau'), "wau" = json_extract(value, '$.wau'),
+			"mau" = json_extract(value, '$.mau')
+		FROM json_each(${JSON.stringify(days)}) WHERE "customer_org_daily"."day" = json_extract(value, '$.day')`,
+	)
+})
+
 const writeOrgDay = (base: SnapshotBase, totals: OrgTotals) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
@@ -858,6 +873,11 @@ const writeOrgDay = (base: SnapshotBase, totals: OrgTotals) =>
 				.values({ day: today, ...values })
 				.onConflictDoUpdate({ target: ["day"], set: values }),
 		)
+		// Rows recorded before activity was backfilled kept their counts: redone once, from activity.
+		if (Option.isNone(yield* meta(readObjectMeta(USER_COUNTS_REDONE_KEY)))) {
+			yield* redoUserCounts(addDays(today, -HISTORY_DAYS), addDays(yesterday, -1))
+			yield* meta(writeObjectMeta(USER_COUNTS_REDONE_KEY, "1"))
+		}
 		// Yesterday's activity keeps arriving after midnight: its row's user counts are redone.
 		const stored = yield* db.first(
 			SQLite.from(schema.customerOrgDailyTable)
@@ -996,25 +1016,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 		}
 		const current = series[series.length - 1]
 		if (current === account.mrrMinor) continue
-		if (!base.settings.overageInMrr) {
-			mrrNow.push({ id: account.id, mrrMinor: current })
-			continue
-		}
-		// With `overageInMrr`, today's MRR is the invoices' (compute's): today's movement (one per day)
-		// ends there instead of at the plans' series end.
-		const last = movements.at(-1)
-		const own = last?.accountId === account.id && last.day === today ? movements.pop() : undefined
-		const from = own === undefined ? current : (own.fromMrrMinor as number)
-		if (from !== account.mrrMinor)
-			movements.push({
-				accountId: account.id,
-				day: today,
-				type: movementType(from, account.mrrMinor, everPaid),
-				deltaMinor: account.mrrMinor - from,
-				fromMrrMinor: from,
-				toMrrMinor: account.mrrMinor,
-				currency,
-			})
+		mrrNow.push({ id: account.id, mrrMinor: current })
 	}
 	const users = yield* activeCounts(first, today)
 	const health = new Map(
@@ -1061,8 +1063,9 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 						.where(($) => [$.id.eq(account.id)]),
 				)
 			}
-			// One statement, the days as one JSON parameter. Recorded days keep their values, except
-			// billing columns still empty (recorded before any billing data came in).
+			// One statement, the days as one JSON parameter. Recorded days get their user counts again
+			// (activity may have been backfilled since), and their billing columns while still empty
+			// (recorded before any billing data came in).
 			yield* db.query(
 				Database.sql`INSERT INTO "customer_org_daily" ("day", "mrrMinor", "payingAccounts", "trialingAccounts",
 					"activeAccounts", "dau", "wau", "mau", "healthy", "atRisk", "critical", "atRiskMrrMinor")
@@ -1072,9 +1075,14 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 					json_extract(value, '$.mau'), json_extract(value, '$.healthy'), json_extract(value, '$.atRisk'),
 					json_extract(value, '$.critical'), json_extract(value, '$.atRiskMrrMinor')
 				FROM json_each(${JSON.stringify(orgDays)}) WHERE true
-				ON CONFLICT ("day") DO UPDATE SET "mrrMinor" = excluded."mrrMinor",
-					"payingAccounts" = excluded."payingAccounts", "trialingAccounts" = excluded."trialingAccounts"
-				WHERE "customer_org_daily"."mrrMinor" = 0 AND "customer_org_daily"."payingAccounts" = 0`,
+				ON CONFLICT ("day") DO UPDATE SET "activeAccounts" = excluded."activeAccounts",
+					"dau" = excluded."dau", "wau" = excluded."wau", "mau" = excluded."mau",
+					"mrrMinor" = iif("customer_org_daily"."mrrMinor" = 0 AND "customer_org_daily"."payingAccounts" = 0,
+						excluded."mrrMinor", "customer_org_daily"."mrrMinor"),
+					"payingAccounts" = iif("customer_org_daily"."mrrMinor" = 0 AND "customer_org_daily"."payingAccounts" = 0,
+						excluded."payingAccounts", "customer_org_daily"."payingAccounts"),
+					"trialingAccounts" = iif("customer_org_daily"."mrrMinor" = 0 AND "customer_org_daily"."payingAccounts" = 0,
+						excluded."trialingAccounts", "customer_org_daily"."trialingAccounts")`,
 			)
 		}),
 	)
@@ -1132,6 +1140,8 @@ export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now:
 		if (attempts < MAX_REBUILD_ATTEMPTS) {
 			yield* rebuildHistory(yield* loadBase(now))
 			yield* clearHistoryRebuild
+			// It reset MRR to the plans': a compute spread over turns starts over to add usage to all.
+			yield* clearComputeProgress
 			yield* resetComputeFailures
 			return yield* scheduleComputeAt(now.getTime())
 		}

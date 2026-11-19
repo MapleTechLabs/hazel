@@ -77,7 +77,8 @@ export const bandWidth = (count: number): number => (count <= 0 ? 0 : 100 / coun
 export const tickIndexes = (count: number, max: number): ReadonlyArray<number> => {
 	if (count <= 0) return []
 	if (count <= max) return Array.from({ length: count }, (_, index) => index)
-	const every = Math.max(1, Math.round((count - 1) / Math.max(max - 1, 1)))
+	// At least every other one: one past `max` (13 months for 12) would otherwise label them all.
+	const every = Math.max(2, Math.round((count - 1) / Math.max(max - 1, 1)))
 	const indexes: Array<number> = []
 	for (let index = count - 1; index >= 0; index -= every) indexes.unshift(index)
 	return indexes

@@ -516,15 +516,16 @@ export const filterBuilder = (
 				h.nav(
 					[
 						h.AriaLabel("Filter by"),
+						// A phone: the fields wrap as a row of chips, so the editor and Apply stay in view.
 						h.Class(
-							"flex w-56 shrink-0 flex-col gap-2 border-border border-r p-2 max-sm:w-full max-sm:border-r-0 max-sm:border-b",
+							"flex w-56 shrink-0 flex-col gap-2 border-border border-r p-2 max-sm:w-full max-sm:flex-row max-sm:flex-wrap max-sm:gap-1 max-sm:border-r-0 max-sm:border-b",
 						),
 					],
 					FIELD_GROUPS.map(([group, fields]) =>
 						h.div(
-							[h.Class("flex flex-col")],
+							[h.Class("flex flex-col max-sm:contents")],
 							[
-								h.span([h.Class("px-2 py-1 text-muted-fg text-xs")], [group]),
+								h.span([h.Class("px-2 py-1 text-muted-fg text-xs max-sm:hidden")], [group]),
 								...fields.map((field) =>
 									h.button(
 										[
@@ -543,7 +544,7 @@ export const filterBuilder = (
 											h.span(
 												[
 													h.Class(
-														"inline-flex items-center gap-1 text-muted-fg text-xs",
+														"inline-flex items-center gap-1 text-muted-fg text-xs max-sm:hidden",
 													),
 												],
 												[
@@ -591,13 +592,9 @@ export const filterBuilder = (
 						h.div(
 							[h.Class("flex justify-end gap-2")],
 							[
-								h.button(
-									[
-										...options.closeAttributes,
-										h.Class(
-											"h-8 cursor-pointer rounded-lg px-3 text-fg text-sm hover:bg-wash",
-										),
-									],
+								button(
+									h,
+									{ intent: "plain", size: "sm", attributes: options.closeAttributes },
 									["Cancel"],
 								),
 								button(h, { size: "sm", onPress: Message.AppliedFilter() }, ["Apply filter"]),

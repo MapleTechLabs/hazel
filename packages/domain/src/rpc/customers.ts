@@ -59,12 +59,13 @@ import {
 	Invoice,
 	Note,
 	SavedView,
+	ViewLayout,
 	Signal,
 	SignalRule,
 	UnmatchedRecord,
 } from "../customers/models"
 import { RuleDraft } from "../customers/rules"
-import { MAX_VIEWS, ViewDraft } from "../customers/views"
+import { ViewDraft, ViewLayoutDraft } from "../customers/views"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { RateLimitExceededError } from "../rate-limit-errors"
 import { JsonDate } from "../models/utils"
@@ -461,12 +462,8 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 		CustomersInvalidRequestError,
 	),
 
-	/** The caller's tab order: personal views, and (admins) shared ones. */
-	write(
-		"customers.view.reorder",
-		{ viewIds: Schema.Array(CustomerSavedViewId).check(Schema.isMaxLength(2 * MAX_VIEWS)) },
-		Tx,
-	),
+	/** The caller's own order of the views and what the sidebar leaves out (replaces the last one). */
+	write("customers.view.layout", { layout: ViewLayoutDraft }, withTx(ViewLayout.Schema)),
 ) {}
 
 // ---------------------------------------------------------------------------
@@ -492,7 +489,7 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	/** Its open signals close (`auto_resolved`). */
 	write("customers.rule.delete", { ruleId: CustomerSignalRuleId }, Tx, CustomersNotFoundError),
 
-	/** Health weights, bands, steps; the reporting currency; add-on plans; overage in MRR. Recomputes soon. */
+	/** Health weights, bands, steps; the reporting currency; add-on plans. Recomputes soon. */
 	write(
 		"customers.settings.update",
 		{
@@ -501,8 +498,6 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 			reportingCurrency: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[A-Za-z]{3}$/))),
 			/** The whole list of add-on plan names. */
 			addOnPlans: Schema.optionalKey(Schema.Array(Schema.String)),
-			/** MRR from paid Stripe invoices (`Settings.overageInMrr`). */
-			overageInMrr: Schema.optionalKey(Schema.Boolean),
 		},
 		Tx,
 	),

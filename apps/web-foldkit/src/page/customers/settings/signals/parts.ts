@@ -124,15 +124,16 @@ export const toggleChip = (
 		[
 			h.Type("button"),
 			h.AriaPressed(options.isPressed ? "true" : "false"),
+			h.Title(options.label),
 			...(options.isDisabled ? [h.Disabled(true)] : [h.OnClick(options.onPress)]),
 			h.Class(
 				twMerge(
-					"inline-flex h-7 cursor-pointer items-center rounded-md border border-border px-2 font-medium text-sm outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-default",
+					"inline-flex h-7 max-w-full cursor-pointer items-center rounded-md border border-border px-2 font-medium text-sm outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-default",
 					options.isPressed
 						? "border-primary/50 bg-primary-subtle/50 text-fg"
 						: "text-muted-fg hover:bg-secondary hover:text-fg",
 				),
 			),
 		],
-		[options.label],
+		[h.span([h.Class("truncate")], [options.label])],
 	)

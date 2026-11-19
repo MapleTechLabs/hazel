@@ -66,7 +66,7 @@ const runRecords = (h: H, run: SyncRunRow, name: string): Html => {
 				? `${run.progress.step} ${formatCount(run.progress.done)}${run.progress.total === null ? "" : ` of ${formatCount(run.progress.total)}`}`
 				: null
 	return h.div(
-		[h.Class("flex min-w-0 flex-col")],
+		[h.Class("flex min-w-40 flex-col")],
 		[
 			h.span(
 				[
@@ -167,13 +167,20 @@ const historyCard = (h: H, model: Model, connection: ConnectionRow): Html => {
 							align: "right",
 							widthClass: "w-20",
 							cell: (run) =>
-								run.finishedAtMs === null
-									? "—"
-									: formatDuration(run.finishedAtMs - run.startedAtMs),
+								h.span(
+									[h.Class("whitespace-nowrap")],
+									[
+										run.finishedAtMs === null
+											? "—"
+											: formatDuration(run.finishedAtMs - run.startedAtMs),
+									],
+								),
 						},
 						{
 							key: "records",
 							label: "Records",
+							// `max-w-0` lets the column take only the space left, so its text truncates.
+							widthClass: "max-w-0",
 							cell: (run) => runRecords(h, run, name),
 						},
 					],
@@ -332,12 +339,18 @@ const mappingCard = (h: H, provider: CustomerProvider): Html => {
 								h.tr(
 									[h.Class("border-border border-t")],
 									[
-										h.td([h.Class("py-1.5 font-mono text-fg text-xs")], [field.from]),
+										h.td(
+											[h.Class("wrap-anywhere py-1.5 font-mono text-fg text-xs")],
+											[field.from],
+										),
 										h.td(
 											[h.Class("py-1.5 text-muted-fg")],
 											[IconChevronRight(h, { className: "size-3.5" })],
 										),
-										h.td([h.Class("py-1.5 font-mono text-fg text-xs")], [field.to]),
+										h.td(
+											[h.Class("wrap-anywhere py-1.5 font-mono text-fg text-xs")],
+											[field.to],
+										),
 									],
 								),
 							),
@@ -491,7 +504,7 @@ export const detailView = (h: H, model: Model, provider: CustomerProvider, conte
 				? [notConnectedCard(h, provider, connection, context), mappingCard(h, provider)]
 				: [
 						h.div(
-							[h.Class("grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]")],
+							[h.Class("grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]")],
 							[
 								h.div(
 									[h.Class("flex min-w-0 flex-col gap-5")],

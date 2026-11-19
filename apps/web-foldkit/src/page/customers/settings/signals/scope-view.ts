@@ -89,23 +89,31 @@ const mrrInput = (
 	isAdmin: boolean,
 	currency: string,
 ): ReadonlyArray<Html> => [
-	inputGroup(h, { className: "w-44", isInvalid: error !== undefined, isDisabled: !isAdmin }, [
-		h.span([h.DataAttribute("slot", "text"), h.Class("text-muted-fg")], [currencySymbol(currency)]),
-		inputElement(h, {
+	inputGroup(
+		h,
+		{
+			className: "w-44 [--input-gutter-end:--spacing(17)]",
 			isInvalid: error !== undefined,
 			isDisabled: !isAdmin,
-			className: "tabular-nums",
-			attributes: [
-				h.Id(MRR_ID),
-				h.AriaLabel("Minimum MRR per month"),
-				h.InputMode("decimal"),
-				h.Value(scope.minMrr ?? ""),
-				h.OnInput(toMrr),
-				...(error === undefined ? [] : [h.AriaDescribedBy(errorIdOf(MRR_ID))]),
-			],
-		}),
-		h.span([h.DataAttribute("slot", "text"), h.Class("text-muted-fg text-xs")], ["per month"]),
-	]),
+		},
+		[
+			h.span([h.DataAttribute("slot", "text"), h.Class("text-muted-fg")], [currencySymbol(currency)]),
+			inputElement(h, {
+				isInvalid: error !== undefined,
+				isDisabled: !isAdmin,
+				className: "tabular-nums",
+				attributes: [
+					h.Id(MRR_ID),
+					h.AriaLabel("Minimum MRR per month"),
+					h.InputMode("decimal"),
+					h.Value(scope.minMrr ?? ""),
+					h.OnInput(toMrr),
+					...(error === undefined ? [] : [h.AriaDescribedBy(errorIdOf(MRR_ID))]),
+				],
+			}),
+			h.span([h.DataAttribute("slot", "text"), h.Class("text-muted-fg text-xs")], ["per month"]),
+		],
+	),
 	...fieldError(h, MRR_ID, error),
 ]
 

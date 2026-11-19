@@ -20,6 +20,7 @@ import type {
 	SidebarThread,
 	SyncProvider,
 } from "./rows"
+import { initialsOf, semantic } from "../../ui/semantic"
 import { dotsMenuTrigger } from "./tree"
 
 /** `ChannelItem`, `DmChannelItem` and `DiscoverableChannelItem` (`components/sidebar/*`). */
@@ -76,6 +77,10 @@ const sidebarBadge = <M>(h: HtmlBuilder<M>, count: number): Html =>
 	)
 
 const badgeIf = <M>(h: HtmlBuilder<M>, count: number): Html[] => (count > 0 ? [sidebarBadge(h, count)] : [])
+
+/** The SF Symbol a channel without its own emoji shows natively. */
+const channelSymbol = (type: ChannelEntry["channel"]["type"]): string =>
+	type === "private" ? "lock" : "number"
 
 /** `components/channel-icon.tsx`. */
 const channelIcon = <M>(h: HtmlBuilder<M>, icon: string | null): Html =>
@@ -147,7 +152,17 @@ export const channelItem = <M>(
 	const href = chatHref(context, entry.channel.id)
 	const syncProvider = context.syncProvider ?? null
 	const hasPartners = partners.length > 0
-	return sidebarItem(h, { attributes: longPress }, [
+	const ui = semantic(h, {
+		kind: "item",
+		title: entry.channel.name,
+		...(entry.channel.icon
+			? { emoji: entry.channel.icon }
+			: { symbol: channelSymbol(entry.channel.type) }),
+		badge: notificationCount > 0 ? notificationCount : undefined,
+		isSelected: context.isActive || undefined,
+		isEmphasized: notificationCount > 0 || undefined,
+	})
+	return sidebarItem(h, { attributes: [...longPress, ...ui] }, [
 		sidebarLink(h, { href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE }, [
 			h.span(
 				// Positioned only for the marks: needless positioned spans slow every hit test.
@@ -177,6 +192,15 @@ const threadItem = <M>(
 	const count = thread.notificationCount
 	return h.a(
 		[
+			...semantic(h, {
+				kind: "item",
+				title: thread.name,
+				symbol: "arrow.turn.down.right",
+				level: 1,
+				badge: count > 0 ? count : undefined,
+				isSelected: isActive || undefined,
+				isEmphasized: count > 0 || undefined,
+			}),
 			h.Href(chatHref({ orgSlug }, thread.id)),
 			h.Attribute("data-react-aria-pressable", "true"),
 			...(isActive ? [h.Attribute("aria-current", "page"), h.Attribute("data-current", "true")] : []),
@@ -374,7 +398,19 @@ export const dmItem = <M>(
 	const href = chatHref(context, channel.id)
 	const partners = dmPartners(channel, context.currentUserId)
 	const only = partners[0]
-	return sidebarItem(h, { attributes: longPress }, [
+	const title = dmDisplayName(channel, partners)
+	const ui = semantic(h, {
+		kind: "item",
+		title,
+		avatar: {
+			url: channel.type === "single" && only !== undefined ? only.avatarUrl : null,
+			initials: initialsOf(title),
+		},
+		badge: notificationCount > 0 ? notificationCount : undefined,
+		isSelected: context.isActive || undefined,
+		isEmphasized: notificationCount > 0 || undefined,
+	})
+	return sidebarItem(h, { attributes: [...longPress, ...ui] }, [
 		sidebarLink(
 			h,
 			{ href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE },

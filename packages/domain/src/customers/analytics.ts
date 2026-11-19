@@ -11,6 +11,7 @@ import {
 	CustomersRange,
 	HealthStatus,
 	SignalSeverity,
+	SubscriptionStatus,
 } from "./enums"
 import { Day, SeriesPoint, SignalEvidence } from "./evidence"
 import { HealthBreakdown } from "./health"
@@ -45,8 +46,8 @@ export const OverviewKpis = Schema.Struct({
 	activeCustomers: Kpi,
 	wau: Kpi,
 	mau: Kpi,
-	/** WAU ÷ MAU, percent. */
-	stickinessPct: Kpi,
+	/** Revenue collected in the range (paid invoices, recurring and one-off), minor units. */
+	revenueMinor: Kpi,
 	/** Accounts that churned in the range. */
 	logoChurn: Kpi,
 	/** MRR of accounts with an open high-severity risk signal (now; `previous` from `customer_org_daily`). */
@@ -102,6 +103,14 @@ export const AccountBrief = Schema.Struct({
 })
 export type AccountBrief = typeof AccountBrief.Type
 
+/** A trial started in the range: `mrrMinor` is the plan's list price, `at` the trial start. */
+export const NewTrial = Schema.Struct({
+	...AccountBrief.fields,
+	/** The trial's subscription now: still trialing, converted (active, past due, ...) or ended. */
+	status: SubscriptionStatus,
+})
+export type NewTrial = typeof NewTrial.Type
+
 /** An account whose usage (average daily active users) moved most over the range. */
 export const Mover = Schema.Struct({
 	accountId: CustomerAccountId,
@@ -128,6 +137,7 @@ export const OverviewResult = Schema.Struct({
 	topMovers: Schema.Struct({ gainers: Schema.Array(Mover), decliners: Schema.Array(Mover) }),
 	recentChurn: Schema.Array(AccountBrief),
 	recentNew: Schema.Array(AccountBrief),
+	newTrials: Schema.Array(NewTrial),
 	/** Which kinds of data exist, for the empty and partial states. */
 	hasData: Schema.Struct({ activity: Schema.Boolean, billing: Schema.Boolean }),
 })

@@ -70,12 +70,14 @@ export const filterByCategory = (
 }
 
 /** `getNotificationContext` (`components/notifications/notification-item.tsx`). */
-export const contextOf = (item: NotificationItem): string =>
-	item.resourceType === "message" && item.channel !== null
-		? `New message in #${item.channel.name}`
-		: item.channel !== null
-			? `Activity in #${item.channel.name}`
-			: "New notification"
+export const contextOf = (item: NotificationItem): string => {
+	if (item.channel === null) return "New notification"
+	const isMessage = item.resourceType === "message"
+	// A direct message's channel has no name of its own.
+	if (item.channel.type === "direct" || item.channel.type === "single" || item.channel.name === "")
+		return isMessage ? "New direct message" : "Activity in a direct message"
+	return isMessage ? `New message in #${item.channel.name}` : `Activity in #${item.channel.name}`
+}
 
 /** `getMessagePreview`. */
 export const previewOf = (item: NotificationItem, maxLength = 80): string => {

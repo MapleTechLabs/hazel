@@ -20,6 +20,8 @@ const toViewRow = (view: Customers.SavedView): ViewRow => ({
 	filters: view.filters,
 	sort: view.sort,
 	columns: view.columns,
+	icon: view.icon,
+	color: view.color,
 })
 
 /** Shared views (built-ins included) and `userId`'s own, in tab order. */
@@ -69,6 +71,8 @@ const createView = optimisticAction({
 			sort: props.view.sort,
 			columns: [...props.view.columns],
 			position: props.position,
+			icon: props.view.icon ?? null,
+			color: props.view.color ?? null,
 			createdBy: props.userId,
 			createdAt: props.at,
 			updatedAt: props.at,

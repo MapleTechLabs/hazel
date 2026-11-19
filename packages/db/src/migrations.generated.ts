@@ -565,5 +565,14 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "customer_accounts_primary_idx" ON "customer_accounts" ("primaryAccountId")',
 			],
 		},
+		{
+			id: "0019_customer_view_layouts",
+			statements: [
+				'ALTER TABLE "customer_saved_views" ADD COLUMN "icon" text',
+				'ALTER TABLE "customer_saved_views" ADD COLUMN "color" text',
+				"CREATE TABLE IF NOT EXISTS \"customer_view_layouts\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"organizationId\" text NOT NULL,\n\t\"userId\" text NOT NULL,\n\t\"order\" text NOT NULL DEFAULT '[]',\n\t\"sidebarHidden\" text NOT NULL DEFAULT '[]',\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"updatedAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))\n)",
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_view_layouts_user_unique" ON "customer_view_layouts" ("userId")',
+			],
+		},
 	],
 }

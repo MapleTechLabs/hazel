@@ -1,5 +1,6 @@
+import { DragAndDrop } from "@foldkit/ui"
 import { OrganizationId, UserId } from "@hazel/schema"
-import { Effect, Queue, Schema, Stream } from "effect"
+import { Effect, Option, Queue, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import {
 	accountsStream,
@@ -7,6 +8,7 @@ import {
 	orgMembersStream,
 	settingsSummaryStream,
 	signalsStream,
+	viewLayoutStream,
 } from "../../../customers/queries"
 import type { PageSubscriptionInput } from "../../contract"
 import { viewRowsStream } from "./data"
@@ -54,6 +56,7 @@ export const listKeyOf = (event: {
 
 const holdsKeyboard = (model: Model) =>
 	model.saveModal.isOpen ||
+	model.deleteModal.isOpen ||
 	model.filterPopover.isOpen ||
 	model.columnsPopover.isOpen ||
 	model.tagPopover.isOpen ||
@@ -62,7 +65,13 @@ const holdsKeyboard = (model: Model) =>
 const organization = { organizationId: Schema.NullOr(OrganizationId) }
 const organizationOf = ({ shared }: Input) => ({ organizationId: shared.organization?.id ?? null })
 
-export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
+const viewer = { organizationId: Schema.NullOr(OrganizationId), userId: Schema.NullOr(UserId) }
+const viewerOf = ({ shared }: Input) => ({
+	organizationId: shared.organization?.id ?? null,
+	userId: shared.currentUser?.id ?? null,
+})
+
+const live = Subscription.make<Input, Message>()((entry) => ({
 	accounts: entry(organization, {
 		modelToDependencies: organizationOf,
 		dependenciesToStream: ({ organizationId }) =>
@@ -77,19 +86,20 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 				? Stream.empty
 				: signalsStream(organizationId, (signals) => Message.UpdatedSignals({ signals })),
 	}),
-	views: entry(
-		{ organizationId: Schema.NullOr(OrganizationId), userId: Schema.NullOr(UserId) },
-		{
-			modelToDependencies: ({ shared }) => ({
-				organizationId: shared.organization?.id ?? null,
-				userId: shared.currentUser?.id ?? null,
-			}),
-			dependenciesToStream: ({ organizationId, userId }) =>
-				organizationId === null || userId === null
-					? Stream.empty
-					: viewRowsStream(organizationId, userId, (views) => Message.UpdatedViews({ views })),
-		},
-	),
+	views: entry(viewer, {
+		modelToDependencies: viewerOf,
+		dependenciesToStream: ({ organizationId, userId }) =>
+			organizationId === null || userId === null
+				? Stream.empty
+				: viewRowsStream(organizationId, userId, (views) => Message.UpdatedViews({ views })),
+	}),
+	viewLayout: entry(viewer, {
+		modelToDependencies: viewerOf,
+		dependenciesToStream: ({ organizationId, userId }) =>
+			organizationId === null || userId === null
+				? Stream.empty
+				: viewLayoutStream(organizationId, userId, (layout) => Message.UpdatedViewLayout({ layout })),
+	}),
 	members: entry(organization, {
 		modelToDependencies: organizationOf,
 		dependenciesToStream: ({ organizationId }) =>
@@ -146,3 +156,17 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 		},
 	),
 }))
+
+const tabDrag = Subscription.lift(DragAndDrop.subscriptions)<Input, Message>({
+	read: ({ model }) => Option.some(model.tabDrag),
+	toParentMessage: (message) => Message.GotTabDragMessage({ message }),
+})
+
+/** The tab drag's document listeners. */
+export const tabDragSubscriptions = {
+	tabDragPointer: tabDrag.documentPointer,
+	tabDragEscape: tabDrag.documentEscape,
+	tabDragScroll: tabDrag.autoScroll,
+}
+
+export const subscriptions = Subscription.aggregate(live, tabDragSubscriptions)

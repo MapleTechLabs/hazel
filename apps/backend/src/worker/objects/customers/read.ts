@@ -16,6 +16,7 @@ import type {
 	Mover,
 	MrrMovementBucket,
 	MrrMovementType,
+	NewTrial,
 	OverviewResult,
 } from "@hazel/domain/customers"
 import { HealthStatus } from "@hazel/domain/customers"
@@ -174,7 +175,24 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 	const nrrBefore = nrr(inPrevious, previousStartMrr)
 	const wau = value(current, "wau")
 	const mau = value(current, "mau")
-	const stickiness = (w: number, m: number) => (m === 0 ? 0 : Math.round((w / m) * 1000) / 10)
+	// Revenue collected: paid invoices in the reporting currency, recurring and one-off alike.
+	const rangeStart = new Date(`${start}T00:00:00.000Z`)
+	const paid = yield* db.run(
+		SQLite.from(schema.customerInvoicesTable)
+			.select("amountPaidMinor", "paidAt")
+			.where(($) => [
+				$.status.eq("paid"),
+				$.currency.eq(currency),
+				$.paidAt.gte(new Date(`${previousStart}T00:00:00.000Z`)),
+				$.paidAt.lte(now),
+			]),
+	)
+	const revenue = { current: 0, previous: 0 }
+	for (const invoice of paid) {
+		if (invoice.paidAt === null) continue
+		if (invoice.paidAt >= rangeStart) revenue.current += invoice.amountPaidMinor
+		else revenue.previous += invoice.amountPaidMinor
+	}
 
 	// MRR movements per bucket.
 	const buckets = new Map<Day, MrrMovementBucket>()
@@ -325,9 +343,34 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		.map((movement) => brief(movement, movement.toMrrMinor))
 		.filter((row) => row !== null)
 		.slice(0, 5)
+	// Trials started in the range, newest first, one per account.
+	const trials = yield* db.run(
+		SQLite.from(schema.customerSubscriptionsTable)
+			.select("accountId", "status", "listMrrMinor", "startedAt")
+			.where(($) => [$.trialEndsAt.isNotNull(), $.startedAt.gte(rangeStart), $.startedAt.lte(now)])
+			.orderBy(($) => [[$.startedAt, "desc"]]),
+	)
+	const trialed = new Set<CustomerAccountId>()
+	const newTrials: Array<NewTrial> = []
+	for (const trial of trials) {
+		const account = accountById.get(trial.accountId)
+		if (account === undefined || trial.startedAt === null || trialed.has(account.id)) continue
+		trialed.add(account.id)
+		newTrials.push({
+			accountId: account.id,
+			name: account.name,
+			logoUrl: account.logoUrl,
+			planName: account.planName,
+			mrrMinor: trial.listMrrMinor ?? 0,
+			at: trial.startedAt,
+			status: trial.status,
+		})
+	}
 
 	const anyActivity = yield* db.first(SQLite.from(schema.customerActivityDailyTable).select("day").limit(1))
 	const anyBilling = yield* db.first(SQLite.from(schema.customerSubscriptionsTable).select("id").limit(1))
+	// One-off invoices without any subscription are billing data too (the Revenue tile).
+	const anyInvoice = yield* db.first(SQLite.from(schema.customerInvoicesTable).select("id").limit(1))
 
 	return {
 		range,
@@ -339,10 +382,7 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 			activeCustomers: kpi(value(current, "activeAccounts"), prior("activeAccounts")),
 			wau: kpi(wau, prior("wau")),
 			mau: kpi(mau, prior("mau")),
-			stickinessPct: kpi(
-				stickiness(wau, mau),
-				previous === null ? null : stickiness(previous.wau, previous.mau),
-			),
+			revenueMinor: kpi(revenue.current, revenue.previous),
 			logoChurn: kpi(churnCount(inCurrent), churnCount(inPrevious)),
 			atRiskMrrMinor: kpi(value(current, "atRiskMrrMinor"), prior("atRiskMrrMinor")),
 			nrrPct: nrrNow === null ? null : kpi(nrrNow, nrrBefore),
@@ -353,7 +393,11 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		topMovers: { gainers, decliners },
 		recentChurn,
 		recentNew,
-		hasData: { activity: Option.isSome(anyActivity), billing: Option.isSome(anyBilling) },
+		newTrials: newTrials.slice(0, 5),
+		hasData: {
+			activity: Option.isSome(anyActivity),
+			billing: Option.isSome(anyBilling) || Option.isSome(anyInvoice),
+		},
 	} satisfies OverviewResult
 })
 

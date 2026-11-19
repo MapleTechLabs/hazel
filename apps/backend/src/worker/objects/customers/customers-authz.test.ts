@@ -75,7 +75,7 @@ const PAYLOADS = {
 	"customers.view.create": { view: viewDraft, shared: true },
 	"customers.view.update": { viewId: uuid(), view: viewDraft },
 	"customers.view.delete": { viewId: uuid() },
-	"customers.view.reorder": { viewIds: [] },
+	"customers.view.layout": { layout: { order: ["current", "all"], sidebarHidden: [] } },
 	"customers.rule.create": { rule: ruleDraft },
 	"customers.rule.update": { ruleId: uuid(), rule: ruleDraft },
 	"customers.rule.delete": { ruleId: uuid() },

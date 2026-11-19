@@ -51,7 +51,7 @@ const stat = (h: HtmlBuilder<Message>, label: string, value: Html | string, deta
 		[
 			h.span([h.Class("text-muted-fg text-xs")], [label]),
 			typeof value === "string"
-				? h.span([h.Class("font-medium text-fg text-sm tabular-nums")], [value])
+				? h.span([h.Class("truncate font-medium text-fg text-sm tabular-nums")], [value])
 				: value,
 			...(detail === null ? [] : [h.span([h.Class("truncate text-muted-fg text-xs")], [detail])]),
 		],
@@ -313,10 +313,11 @@ export const previewPanel = (
 				[h.Class("flex flex-col gap-3 border-border border-t px-5 py-4")],
 				[
 					h.div(
-						[h.Class("flex items-center gap-2")],
+						// A long title wraps; the chips stay on its first line.
+						[h.Class("flex items-start gap-2")],
 						[
 							kindChip(h, signal.kind),
-							h.h3([h.Class("min-w-0 flex-1 truncate font-semibold text-fg")], [signal.title]),
+							h.h3([h.Class("min-w-0 flex-1 font-semibold text-fg")], [signal.title]),
 							severityChip(h, signal.severity),
 						],
 					),
