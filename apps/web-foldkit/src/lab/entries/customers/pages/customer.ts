@@ -16,6 +16,7 @@ import { Message } from "../../../../page/customers/detail/message"
 import { Model, type NoteRow } from "../../../../page/customers/detail/model"
 import { init, routeChanged, update } from "../../../../page/customers/detail/update"
 import { view } from "../../../../page/customers/detail/view"
+import * as Modal from "../../../../ui/modal"
 import { AppRoute, CustomerTab } from "../../../../route"
 import { defineLabWithFlags, queryParam } from "../../../define"
 import { labPage } from "../../../frame"
@@ -36,17 +37,19 @@ import {
 // read answers from the fixtures below, the mutations apply to the rows at once and go nowhere.
 // `?tab=` picks the tab, `?state=` the Wonder artboard's data, `?as=admin` signs in as an admin
 // (feature flags, the grouping actions), `?account=eu` shows Acme's EU environment instead of its US
-// primary.
+// primary, `?dialog=` opens the link or environment dialog.
 
 const STATES = ["default", "payment-failed", "excluded-health", "loading", "not-found"] as const
 const State = Schema.Literals(STATES)
 const ROLES = ["member", "admin"] as const
 const VIEWED = ["us", "eu"] as const
+const DIALOGS = ["none", "link", "environment"] as const
 const Flags = Schema.Struct({
 	tab: CustomerTab,
 	state: State,
 	as: Schema.Literals(ROLES),
 	account: Schema.Literals(VIEWED),
+	dialog: Schema.Literals(DIALOGS),
 })
 
 const DAY = 86_400_000
@@ -533,7 +536,20 @@ const initial = (flags: typeof Flags.Type) => {
 		connectedProviders: CONNECTIONS.map((connection) => connection.provider),
 		isImpersonator: true,
 	}
-	return settle(live, started.commands ?? [])
+	const settled = settle(live, started.commands ?? [])
+	return {
+		...settled,
+		model: {
+			...settled.model,
+			linkModal:
+				flags.dialog === "link" ? Modal.open(settled.model.linkModal).model : settled.model.linkModal,
+			environmentModal:
+				flags.dialog === "environment"
+					? Modal.open(settled.model.environmentModal).model
+					: settled.model.environmentModal,
+			environmentDraft: viewed().environment ?? "",
+		},
+	}
 }
 
 const labView = (model: Model, h: HtmlBuilder<Message>): Html => {
@@ -547,6 +563,7 @@ const labView = (model: Model, h: HtmlBuilder<Message>): Html => {
 				{ name: "state", values: STATES, current: params.get("state") ?? "default" },
 				{ name: "as", values: ROLES, current: params.get("as") ?? "member" },
 				{ name: "account", values: VIEWED, current: params.get("account") ?? "us" },
+				{ name: "dialog", values: DIALOGS, current: params.get("dialog") ?? "none" },
 			],
 		},
 		[
@@ -574,6 +591,7 @@ export const lab = defineLabWithFlags("Customer", {
 		state: queryParam("state", STATES, "default"),
 		as: queryParam("as", ROLES, "member"),
 		account: queryParam("account", VIEWED, "us"),
+		dialog: queryParam("dialog", DIALOGS, "none"),
 	}),
 	init: initial,
 	// Tabs navigate in the app; here they switch in place. Prev/next stay on Acme.
