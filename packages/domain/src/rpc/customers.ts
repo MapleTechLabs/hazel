@@ -373,7 +373,10 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 	/** The author or an admin. */
 	write("customers.note.delete", { noteId: CustomerNoteId }, Tx, CustomersNotFoundError),
 
-	/** Owner, tags, stage override (null clears it), name (a manual name beats every source). */
+	/**
+	 * Owner, tags, stage override (null clears it), name (a manual name beats every source), and
+	 * the Needs attention mute: `{ until }` mutes (`until` null: until unmuted), null unmutes.
+	 */
 	write(
 		"customers.account.update",
 		{
@@ -382,6 +385,9 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 			tags: Schema.optionalKey(Tags),
 			lifecycleStageOverride: Schema.optionalKey(Schema.NullOr(LifecycleStage)),
 			name: Schema.optionalKey(NonEmptyText(200)),
+			attentionMute: Schema.optionalKey(
+				Schema.NullOr(Schema.Struct({ until: Schema.NullOr(JsonDate) })),
+			),
 		},
 		Tx,
 		CustomersNotFoundError,

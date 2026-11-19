@@ -39,7 +39,7 @@ import { applyMembers, CUSTOMERS_MEMBERS_VERSION_KEY } from "../effects/customer
 import { orgTarget } from "../kinds"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 import { CustomerMembersCall } from "../org/customer-members"
-import { runComputeStep, wakeSnoozed } from "./compute"
+import { runComputeStep, unmuteExpired, wakeSnoozed } from "./compute"
 import { loadCredentials } from "./credentials"
 import { installDefaults } from "./defaults"
 import { CustomerIngest } from "./ingest"
@@ -446,7 +446,7 @@ export const tick = Effect.fn("CustomersObject.tick")(function* () {
 		return { computed: true }
 	}
 	yield* runDuePulls(now)
-	yield* db.transaction(wakeSnoozed(now))
+	yield* db.transaction(Effect.andThen(wakeSnoozed(now), unmuteExpired(now)))
 	return { computed: false }
 }, Effect.orDie)
 

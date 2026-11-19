@@ -15,7 +15,7 @@ import {
 	sortTrigger,
 	viewTabs,
 } from "../../../customers/ui/filter-bar"
-import { snoozeMenuContent } from "../../../customers/ui/menus"
+import { isMuteKey, MUTE_LABEL, snoozeMenuContent } from "../../../customers/ui/menus"
 import { queueAction, queueColumnHeader, type QueueColumn, queueList } from "../../../customers/ui/queue-row"
 import { kbd, shortcutBar, type Shortcut } from "../../../customers/ui/shortcuts"
 import { freshness, pageHeader } from "../../../customers/ui/surface"
@@ -41,6 +41,7 @@ import {
 	type Model,
 	SEARCH_ID,
 	selectedSignal,
+	MUTE_CUSTOMER,
 	snoozeEntries,
 	snoozeUntilMs,
 	NEXT_RETRY,
@@ -162,15 +163,23 @@ const signalActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): R
 				overlay,
 			}),
 		content: (key) =>
-			key === NEXT_RETRY
-				? [
-						menuLabel(h, model.snoozeMenu.id, key, "After next retry"),
-						h.span(
-							[h.Class("ml-auto pl-4 text-muted-fg text-xs tabular-nums")],
-							[formatWeekdayTime(new Date(snoozeUntilMs(NEXT_RETRY, viewer.nowMs, signal)))],
-						),
-					]
-				: snoozeMenuContent(h, model.snoozeMenu.id, new Date(viewer.nowMs))(key),
+			key === MUTE_CUSTOMER
+				? [menuLabel(h, model.snoozeMenu.id, key, "Mute customer")]
+				: isMuteKey(key)
+					? [menuLabel(h, model.snoozeMenu.id, key, MUTE_LABEL[key])]
+					: key === NEXT_RETRY
+						? [
+								menuLabel(h, model.snoozeMenu.id, key, "After next retry"),
+								h.span(
+									[h.Class("ml-auto pl-4 text-muted-fg text-xs tabular-nums")],
+									[
+										formatWeekdayTime(
+											new Date(snoozeUntilMs(NEXT_RETRY, viewer.nowMs, signal)),
+										),
+									],
+								),
+							]
+						: snoozeMenuContent(h, model.snoozeMenu.id, new Date(viewer.nowMs))(key),
 		toMessage: toSnoozeMenuMessage,
 		className: "min-w-64",
 	})

@@ -75,6 +75,28 @@ export const snoozeMenuContent =
 				]
 			: [menuLabel(h, menuId, key, "Pick date…")]
 
+// MUTE (a customer out of Needs attention)
+
+/** Leaf keys of a "Mute in Needs attention" submenu. */
+const MUTE_KEYS = ["mute:week", "mute:month", "mute:forever"] as const
+export type MuteKey = (typeof MUTE_KEYS)[number]
+
+export const MUTE_LABEL = {
+	"mute:week": "For a week",
+	"mute:month": "For a month",
+	"mute:forever": "Until unmuted",
+} as const satisfies Record<MuteKey, string>
+
+export const isMuteKey = (key: string): key is MuteKey => (MUTE_KEYS as ReadonlyArray<string>).includes(key)
+
+export const muteLeaves: ReadonlyArray<Menu.Leaf> = MUTE_KEYS.map((key) =>
+	Menu.leaf(key, { textValue: MUTE_LABEL[key] }),
+)
+
+/** When the mute ends: 7 or 30 days from now, or never (null). */
+export const muteUntil = (key: MuteKey, now: Date): Date | null =>
+	key === "mute:forever" ? null : new Date(now.getTime() + (key === "mute:week" ? 7 : 30) * 86_400_000)
+
 // ROW ACTIONS
 
 export const ROW_ACTION_KEYS = ["assign", "snooze", "done", "dismiss", "open", "copy_email"] as const

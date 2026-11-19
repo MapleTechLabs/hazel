@@ -15,7 +15,13 @@ import * as Menu from "../../../ui/menu"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { sharedDefaults } from "../../test-shared"
-import { AssignSignal, FetchAccountDetail, MarkSignalDone, SnoozeSignal } from "./commands"
+import {
+	AssignSignal,
+	FetchAccountDetail,
+	MarkSignalDone,
+	MuteAccountAttention,
+	SnoozeSignal,
+} from "./commands"
 import { Message } from "./message"
 import {
 	accountGroups,
@@ -23,6 +29,7 @@ import {
 	filterEntries,
 	isNarrowed,
 	type Model,
+	MUTE_CUSTOMER,
 	rowIds,
 	snoozeEntries,
 	snoozeUntilMs,
@@ -106,6 +113,9 @@ const account = (
 	featureFlags: {},
 	primaryAccountId: null,
 	environment: null,
+	attentionMutedAtMs: null,
+	attentionMutedUntilMs: null,
+	attentionMutedByUserId: null,
 })
 const acme = account(1, "Acme Robotics", ada, 215_000, "Growth")
 const kestrel = account(2, "Kestrel Systems", ada, 132_000, "Scale")
@@ -231,6 +241,15 @@ describe("needs attention: what shows", () => {
 		expect(current.filters.owner).toBe("mine_or_unowned")
 		expect(ids(visibleSignals(current, viewer))).toEqual(ids([paymentFailed, usageDown, stoppedLogging]))
 		expect(tabCounts(current, viewer)).toEqual({ open: 3, snoozed: 1, done: 1 })
+	})
+
+	test("a muted customer's signals stay out of every tab", () => {
+		const muted = {
+			...loaded(),
+			accounts: [{ ...acme, attentionMutedAtMs: NOW - DAY }, kestrel, northwind],
+		}
+		expect(ids(visibleSignals(muted, viewer))).toEqual(ids([stoppedLogging]))
+		expect(tabCounts(muted, viewer)).toEqual({ open: 1, snoozed: 0, done: 1 })
 	})
 
 	test("an unowned account's signals show by default, but not under Mine", () => {
@@ -498,6 +517,60 @@ describe("needs attention: actions", () => {
 			),
 			expectNoOutMessage(),
 		)
+	})
+
+	test("muting the customer from the snooze menu hides all its rows and selects the next", () => {
+		const entries = snoozeEntries(paymentFailed)
+		const opened = pageUpdate(withSelection(paymentFailed), key("snooze")).model
+		const current = pageUpdate(
+			opened,
+			Message.GotSnoozeMenuMessage({
+				message: Menu.Message.ClickedItem({ key: MUTE_CUSTOMER, entries }),
+			}),
+		).model
+		story(
+			pageUpdate,
+			given(current),
+			message(
+				Message.GotSnoozeMenuMessage({
+					message: Menu.Message.ClickedItem({ key: "mute:month", entries }),
+				}),
+			),
+			model((next) => {
+				const muted = next.accounts?.find((row) => row.id === acme.id)
+				expect(muted?.attentionMutedAtMs).toBe(NOW)
+				expect(muted?.attentionMutedUntilMs).toBe(NOW + 30 * DAY)
+				expect(muted?.attentionMutedByUserId).toBe(ada)
+				// Its signals keep their status; they just leave the queue.
+				expect(statusOf(next, paymentFailed.id)).toBe("open")
+				expect(next.selectedId).toBe(stoppedLogging.id)
+				expect(tabCounts(next, viewer)).toEqual({ open: 1, snoozed: 0, done: 1 })
+			}),
+			Command.resolve(MuteAccountAttention, Message.SucceededMuteAccount()),
+		)
+	})
+
+	test("muting from a customer's second row selects the next customer's first row", () => {
+		const seats = signal(8, kestrel, { title: "Seats near limit", priorityScore: 7 })
+		const base = pageUpdate(loaded(), Message.UpdatedSignals({ signals: [...signals, seats] })).model
+		expect(ids(visibleSignals(base, viewer))).toEqual(
+			ids([paymentFailed, usageDown, stoppedLogging, seats]),
+		)
+		const entries = snoozeEntries(usageDown)
+		const muted = [
+			key("snooze"),
+			Message.GotSnoozeMenuMessage({
+				message: Menu.Message.ClickedItem({ key: MUTE_CUSTOMER, entries }),
+			}),
+			Message.GotSnoozeMenuMessage({
+				message: Menu.Message.ClickedItem({ key: "mute:week", entries }),
+			}),
+		].reduce<Model>((current, step) => pageUpdate(current, step).model, {
+			...base,
+			selectedId: usageDown.id,
+		})
+		expect(ids(visibleSignals(muted, viewer))).toEqual(ids([stoppedLogging, seats]))
+		expect(muted.selectedId).toBe(stoppedLogging.id)
 	})
 
 	test("snooze options: 9:00 local, next week on Monday, a payment's next retry", () => {

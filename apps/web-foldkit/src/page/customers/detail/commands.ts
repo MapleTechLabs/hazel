@@ -20,6 +20,7 @@ import {
 	setFeatureFlagsAction,
 	setPrimaryAccountAction,
 	unlinkAccountAction,
+	setAttentionMuteAction,
 	updateAccountAction,
 	updateNoteAction,
 } from "../../../customers/actions"
@@ -223,6 +224,30 @@ export const SetCustomerEnvironment = Command.define("SetCustomerEnvironment", {
 	args: { ...target, environment: Schema.NullOr(Schema.String) },
 	messages: [Message.SucceededGroupAction, Message.FailedGroupAction],
 	execute: (args) => setEnvironmentAction(args).pipe(settleGroup("set_environment", args.accountId)),
+})
+
+/** Mute the customer in Needs attention until `untilMs` (null: until unmuted), or unmute it (`mute` null). */
+export const SetCustomerAttentionMute = Command.define("SetCustomerAttentionMute", {
+	args: {
+		...target,
+		userId: UserId,
+		mute: Schema.NullOr(Schema.Struct({ untilMs: Schema.NullOr(Schema.Number) })),
+	},
+	messages: [Message.SucceededAccountUpdate, Message.FailedAccountUpdate],
+	execute: ({ mute, ...args }) =>
+		setAttentionMuteAction({
+			...args,
+			mute: mute === null ? null : { until: mute.untilMs === null ? null : new Date(mute.untilMs) },
+		}).pipe(
+			Effect.as(Message.SucceededAccountUpdate()),
+			Effect.catchTags({
+				CustomersNotFoundError: () =>
+					Effect.succeed(Message.FailedAccountUpdate({ reason: "NotFound" })),
+				CustomersInvalidRequestError: () =>
+					Effect.succeed(Message.FailedAccountUpdate({ reason: "Stale" })),
+			}),
+			catchCommon((reason) => Message.FailedAccountUpdate({ reason })),
+		),
 })
 
 // CHANNELS

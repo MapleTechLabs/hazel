@@ -353,6 +353,104 @@ export const updateAccountAction = optimisticAction({
 		}),
 })
 
+/** `mute`: until `until` (null: until unmuted); null unmutes. */
+type AttentionMuteProps = Readonly<{
+	organizationId: OrganizationId
+	accountId: CustomerAccountId
+	userId: UserId
+	mute: Readonly<{ until: Date | null }> | null
+}>
+
+/** `customers.account.update`'s Needs attention mute: the account leaves the queue, or comes back. */
+const setAttentionMute = optimisticAction({
+	collections: [customerAccountCollection],
+	onMutate: (props: AttentionMuteProps & Stamp) => {
+		customerAccountCollection.update(props.accountId, (account) => {
+			account.attentionMutedAt = props.mute === null ? null : props.at
+			account.attentionMutedUntil = props.mute?.until ?? null
+			account.attentionMutedByUserId = props.mute === null ? null : props.userId
+		})
+		return { accountId: props.accountId }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.account.update", {
+				organizationId: props.organizationId,
+				accountId: props.accountId,
+				attentionMute: props.mute,
+			})
+			return { data: result, transactionId: result.transactionId }
+		}),
+})
+
+export const setAttentionMuteAction = stamped(setAttentionMute)
+
+/** `customers.account.bulkUpdate`'s limit on ids per call. */
+export const BULK_BATCH = 500
+
+interface BulkUpdate {
+	readonly organizationId: OrganizationId
+	readonly accountIds: ReadonlyArray<CustomerAccountId>
+	readonly ownerUserId?: UserId | null
+	readonly addTags?: ReadonlyArray<string>
+	readonly removeTags?: ReadonlyArray<string>
+}
+
+/** `customers.account.bulkUpdate`'s payloads: BULK_BATCH ids each, only the fields given. */
+export const bulkUpdatePayloads = (
+	props: BulkUpdate,
+): readonly [BulkUpdatePayload, ...Array<BulkUpdatePayload>] => {
+	const payloadOf = (start: number): BulkUpdatePayload => {
+		const payload: BulkUpdatePayload = {
+			organizationId: props.organizationId,
+			accountIds: props.accountIds.slice(start, start + BULK_BATCH),
+		}
+		if (props.ownerUserId !== undefined) payload.ownerUserId = props.ownerUserId
+		if (props.addTags !== undefined) payload.addTags = props.addTags
+		if (props.removeTags !== undefined) payload.removeTags = props.removeTags
+		return payload
+	}
+	const rest: Array<BulkUpdatePayload> = []
+	for (let start = BULK_BATCH; start < props.accountIds.length; start += BULK_BATCH)
+		rest.push(payloadOf(start))
+	return [payloadOf(0), ...rest]
+}
+
+/**
+ * The list's bulk actions: one owner (null: unassign) and/or tags added and removed, in batches of
+ * BULK_BATCH run in order; `data.updated` is how many the server changed, and the last batch's
+ * transaction is awaited (the org's stream delivers them in order).
+ */
+export const bulkUpdateAccountsAction = optimisticAction({
+	collections: [customerAccountCollection],
+	onMutate: (props: BulkUpdate) => {
+		const removed = new Set(props.removeTags ?? [])
+		customerAccountCollection.update([...props.accountIds], (accounts) => {
+			for (const account of accounts) {
+				if (props.ownerUserId !== undefined) account.ownerUserId = props.ownerUserId
+				if (props.addTags !== undefined || props.removeTags !== undefined) {
+					const tags = new Set([...account.tags, ...(props.addTags ?? [])])
+					account.tags = [...tags].filter((tag) => !removed.has(tag))
+				}
+			}
+		})
+		return { count: props.accountIds.length }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const [first, ...rest] = bulkUpdatePayloads(props)
+			let { updated, transactionId } = yield* client("customers.account.bulkUpdate", first)
+			for (const payload of rest) {
+				const result = yield* client("customers.account.bulkUpdate", payload)
+				updated += result.updated
+				transactionId = result.transactionId
+			}
+			return { data: { updated }, transactionId }
+		}),
+})
+
 // GROUPS
 
 interface AccountTarget {
@@ -437,71 +535,6 @@ export const setEnvironmentAction = optimisticAction({
 			const client = yield* HazelRpc
 			const result = yield* client("customers.account.setEnvironment", props)
 			return { data: result, transactionId: result.transactionId }
-		}),
-})
-
-/** `customers.account.bulkUpdate`'s limit on ids per call. */
-export const BULK_BATCH = 500
-
-interface BulkUpdate {
-	readonly organizationId: OrganizationId
-	readonly accountIds: ReadonlyArray<CustomerAccountId>
-	readonly ownerUserId?: UserId | null
-	readonly addTags?: ReadonlyArray<string>
-	readonly removeTags?: ReadonlyArray<string>
-}
-
-/** `customers.account.bulkUpdate`'s payloads: BULK_BATCH ids each, only the fields given. */
-export const bulkUpdatePayloads = (
-	props: BulkUpdate,
-): readonly [BulkUpdatePayload, ...Array<BulkUpdatePayload>] => {
-	const payloadOf = (start: number): BulkUpdatePayload => {
-		const payload: BulkUpdatePayload = {
-			organizationId: props.organizationId,
-			accountIds: props.accountIds.slice(start, start + BULK_BATCH),
-		}
-		if (props.ownerUserId !== undefined) payload.ownerUserId = props.ownerUserId
-		if (props.addTags !== undefined) payload.addTags = props.addTags
-		if (props.removeTags !== undefined) payload.removeTags = props.removeTags
-		return payload
-	}
-	const rest: Array<BulkUpdatePayload> = []
-	for (let start = BULK_BATCH; start < props.accountIds.length; start += BULK_BATCH)
-		rest.push(payloadOf(start))
-	return [payloadOf(0), ...rest]
-}
-
-/**
- * The list's bulk actions: one owner (null: unassign) and/or tags added and removed, in batches of
- * BULK_BATCH run in order; `data.updated` is how many the server changed, and the last batch's
- * transaction is awaited (the org's stream delivers them in order).
- */
-export const bulkUpdateAccountsAction = optimisticAction({
-	collections: [customerAccountCollection],
-	onMutate: (props: BulkUpdate) => {
-		const removed = new Set(props.removeTags ?? [])
-		customerAccountCollection.update([...props.accountIds], (accounts) => {
-			for (const account of accounts) {
-				if (props.ownerUserId !== undefined) account.ownerUserId = props.ownerUserId
-				if (props.addTags !== undefined || props.removeTags !== undefined) {
-					const tags = new Set([...account.tags, ...(props.addTags ?? [])])
-					account.tags = [...tags].filter((tag) => !removed.has(tag))
-				}
-			}
-		})
-		return { count: props.accountIds.length }
-	},
-	mutate: (props) =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			const [first, ...rest] = bulkUpdatePayloads(props)
-			let { updated, transactionId } = yield* client("customers.account.bulkUpdate", first)
-			for (const payload of rest) {
-				const result = yield* client("customers.account.bulkUpdate", payload)
-				updated += result.updated
-				transactionId = result.transactionId
-			}
-			return { data: { updated }, transactionId }
 		}),
 })
 

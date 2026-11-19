@@ -106,6 +106,9 @@ const account = (n: number, name: string): AccountRow => ({
 	featureFlags: {},
 	primaryAccountId: null,
 	environment: null,
+	attentionMutedAtMs: null,
+	attentionMutedUntilMs: null,
+	attentionMutedByUserId: null,
 })
 const acme = account(1, "Acme")
 const beta = account(2, "Beta")
@@ -456,6 +459,42 @@ describe("customer page: notes", () => {
 		expect(commandNames(deleted)).toEqual(["DeleteCustomerNote"])
 	})
 
+	test("Mute in Needs attention mutes until unmuted; Unmute brings the customer back", () => {
+		const wrap = (message: Menu.Message) => Message.GotActionsMenuMessage({ message })
+		const opened = run(loaded(), [
+			wrap(Menu.Message.PressedTrigger({ pointerType: "mouse" })),
+			wrap(
+				Menu.Message.ClickedItem({
+					key: "mute_attention",
+					entries: actionEntries(loaded(), false, false),
+				}),
+			),
+		])
+		const muting = update(
+			opened,
+			wrap(
+				Menu.Message.ClickedItem({
+					key: "mute:forever",
+					entries: actionEntries(loaded(), false, false),
+				}),
+			),
+			shared,
+		)
+		const accountOf = (current: Model) => current.accounts?.find((row) => row.id === current.accountId)
+		expect(accountOf(muting.model)).toMatchObject({
+			attentionMutedAtMs: NOW,
+			attentionMutedUntilMs: null,
+			attentionMutedByUserId: ada,
+		})
+		expect(commandNames(muting)).toEqual(["SetCustomerAttentionMute"])
+		const unmuting = pick(muting.model, wrap, "unmute_attention", actionEntries(loaded(), false, true))
+		expect(accountOf(unmuting.model)).toMatchObject({
+			attentionMutedAtMs: null,
+			attentionMutedByUserId: null,
+		})
+		expect(commandNames(unmuting)).toEqual(["SetCustomerAttentionMute"])
+	})
+
 	test("a failed save or edit puts the text back", () => {
 		const saved = update(
 			run(loaded("notes"), [Message.ChangedComposer({ value: "Call booked" })]),
@@ -781,7 +820,12 @@ describe("customer page: environments", () => {
 		entries.flatMap((entry) => (entry._tag === "Item" ? [entry.item.key] : []))
 	const accountIn = (model: Model, id: CustomerAccountId) => model.accounts?.find((row) => row.id === id)
 	const action = (model: Model, key: string) =>
-		pick(model, (message) => Message.GotActionsMenuMessage({ message }), key, actionEntries(model, true))
+		pick(
+			model,
+			(message) => Message.GotActionsMenuMessage({ message }),
+			key,
+			actionEntries(model, true, false),
+		)
 
 	test("a grouped account lists its environments, primary first, and opens another", () => {
 		const onEu = loadedOn(deltaEu.id)
@@ -804,7 +848,7 @@ describe("customer page: environments", () => {
 	test("grouping is for admins; make primary and unlink only on an environment", () => {
 		const grouping = ["link_customer", "make_primary", "unlink", "name_environment"]
 		const shown = (model: Model, isAdmin: boolean) =>
-			keysOf(actionEntries(model, isAdmin)).filter((key) => grouping.includes(key))
+			keysOf(actionEntries(model, isAdmin, false)).filter((key) => grouping.includes(key))
 		expect(shown(loadedOn(deltaEu.id), false)).toEqual([])
 		expect(shown(loadedOn(deltaEu.id), true)).toEqual(grouping)
 		expect(shown(loadedOn(delta.id), true)).toEqual(["link_customer", "name_environment"])

@@ -6,6 +6,7 @@ import { CommonReason } from "~/lib/error-messages"
 import {
 	AccountRow,
 	type AccountRow as AccountRowType,
+	isAttentionMuted,
 	MemberRow,
 	type QueueTab,
 	queueTabOf,
@@ -15,6 +16,7 @@ import {
 } from "../../../customers/queries"
 import {
 	isSnoozeKey,
+	muteLeaves,
 	PICK_DATE_KEY,
 	SNOOZE_KEYS,
 	type SnoozeKey,
@@ -170,7 +172,8 @@ const matchesFilters = (
 	signal: SignalRowType,
 ): boolean => {
 	const account = accountsById.get(signal.accountId)
-	if (account === undefined) return false
+	// A muted customer stays out of every tab until it is unmuted (its page shows its signals).
+	if (account === undefined || isAttentionMuted(account)) return false
 	const { filters } = model
 	const query = model.search.trim().toLowerCase()
 	return (
@@ -368,7 +371,13 @@ export const nextRetryMsOf = (signal: SignalRowType): number | null =>
 		? Date.parse(signal.evidence.nextRetryAt)
 		: null
 
-/** `Snooze until` · Tomorrow · In 3 days · Next week (· After next retry) · ─ · Pick date… */
+/** The snooze menu's item that mutes the whole customer (`muteLeaves` under it). */
+export const MUTE_CUSTOMER = "mute_customer"
+
+/**
+ * `Snooze until` · Tomorrow · In 3 days · Next week (· After next retry) · ─ · Pick date… · ─ ·
+ * Mute customer ▸ (a dev environment, an internal org: out of every tab).
+ */
 export const snoozeEntries = (signal: SignalRowType | undefined): ReadonlyArray<Menu.Entry> => [
 	Menu.section("Snooze until", [
 		...SNOOZE_KEYS.map((key) => Menu.item(key)),
@@ -378,6 +387,8 @@ export const snoozeEntries = (signal: SignalRowType | undefined): ReadonlyArray<
 	]),
 	Menu.separator,
 	Menu.item(PICK_DATE_KEY, { textValue: "Pick date" }),
+	Menu.separator,
+	Menu.item(MUTE_CUSTOMER, { textValue: "Mute customer", submenu: muteLeaves }),
 ]
 
 /** A retry already past (the evidence is as old as the last compute) snoozes until tomorrow instead. */

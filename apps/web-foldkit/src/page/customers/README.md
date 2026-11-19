@@ -99,6 +99,7 @@ back on failure. Call them from a Command, then `Effect.catchTags` for the RPC's
 | `unlinkAccountAction`      | `accountId`                                                              |
 | `setPrimaryAccountAction`  | `accountId`                                                              |
 | `setEnvironmentAction`     | `accountId`, `environment \| null`                                       |
+| `setAttentionMuteAction`   | `accountId`, `userId`, `mute: { until: Date \| null } \| null`           |
 | `grantImpersonatorAction`  | `userId`, `grantedBy`                                                    |
 | `revokeImpersonatorAction` | `impersonatorId`, `userId`                                               |
 

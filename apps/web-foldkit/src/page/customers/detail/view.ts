@@ -32,7 +32,10 @@ import {
 import { type ChannelOption, channelMark, ORIGIN_LABEL, searchOptions } from "../../../customers/channels"
 import { featureFlagKeysOf, hasFlag } from "../../../customers/feature-flags"
 import { safeSourceUrl } from "../../../customers/providers"
+import { attentionMuteLabel, isAttentionMuted } from "../../../customers/queries"
+import { isMuteKey, MUTE_LABEL } from "../../../customers/ui/menus"
 import { AppRoute, hrefOf } from "../../../route"
+import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { checkbox } from "../../../ui/checkbox"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
@@ -78,6 +81,8 @@ import { heading } from "../../../ui/heading"
 const ACTION_LABEL = {
 	copy_link: "Copy link to customer",
 	change_owner: "Change owner…",
+	mute_attention: "Mute in Needs attention",
+	unmute_attention: "Unmute in Needs attention",
 	recompute: "Recompute health and signals",
 	link_source: "Link a source record…",
 	link_customer: "Link to another customer…",
@@ -110,6 +115,9 @@ const MATCH_LABEL = {
 } as const satisfies Record<Customers.MatchMethod, string>
 
 // LINKS
+
+const attentionMutedBadge = (h: HtmlBuilder<Message>, account: Context["account"]): ReadonlyArray<Html> =>
+	isAttentionMuted(account) ? [badge(h, { intent: "secondary" }, ["Attention muted"])] : []
 
 /** A source chip's label: the source, and the record's name when the source has several. */
 const refLabel = (ref: Customers.ExternalRef, refs: ReadonlyArray<Customers.ExternalRef>): string => {
@@ -384,6 +392,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 												status: account.healthStatus,
 												score: account.healthScore,
 											}),
+											...attentionMutedBadge(h, account),
 										],
 									),
 									// Each part's dot sits in the gap before it, so a wrapped line starts
@@ -456,7 +465,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 								"Add note",
 							]),
 							menu(h, model.actionsMenu, {
-								entries: actionEntries(model, context.isAdmin),
+								entries: actionEntries(model, context.isAdmin, isAttentionMuted(account)),
 								trigger: (attributes, overlay) =>
 									button(
 										h,
@@ -469,7 +478,13 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 										[IconDots(h, icon), overlay],
 									),
 								content: (key) => {
-									const reason = ACTION_REASON.get(key as ActionKey)
+									if (isMuteKey(key)) {
+										return [menuLabel(h, model.actionsMenu.id, key, MUTE_LABEL[key])]
+									}
+									const reason =
+										key === "unmute_attention"
+											? (attentionMuteLabel(account, context.nowMs) ?? undefined)
+											: ACTION_REASON.get(key as ActionKey)
 									return [
 										menuLabel(
 											h,
