@@ -404,6 +404,17 @@
 	--color-severity-medium: var(--severity-medium);
 	--color-severity-low: var(--severity-low);
 	--color-severity-off: var(--severity-off);
+
+	/* A saved view's icon or dot (`ViewColor`). */
+	--color-view-gray: var(--view-gray);
+	--color-view-red: var(--view-red);
+	--color-view-orange: var(--view-orange);
+	--color-view-yellow: var(--view-yellow);
+	--color-view-green: var(--view-green);
+	--color-view-teal: var(--view-teal);
+	--color-view-blue: var(--view-blue);
+	--color-view-purple: var(--view-purple);
+	--color-view-pink: var(--view-pink);
 }
 
 :root {
@@ -427,6 +438,16 @@
 	--severity-medium: var(--warning-subtle-fg);
 	--severity-low: var(--muted-fg);
 	--severity-off: var(--secondary);
+
+	--view-gray: var(--chart-neutral);
+	--view-red: var(--color-error-500);
+	--view-orange: var(--color-orange-500);
+	--view-yellow: var(--color-warning-500);
+	--view-green: var(--color-success-500);
+	--view-teal: var(--color-teal-500);
+	--view-blue: var(--color-blue-500);
+	--view-purple: var(--color-purple-500);
+	--view-pink: var(--color-pink-500);
 }
 
 .dark {
@@ -438,4 +459,14 @@
 	--chart-series-1: rgb(105 56 239);
 	--chart-series-2: rgb(155 138 251);
 	--chart-series-3: rgb(217 214 254);
+
+	--view-gray: oklch(0.6 0.016 285.9);
+	--view-red: var(--color-error-400);
+	--view-orange: var(--color-orange-400);
+	--view-yellow: var(--color-warning-400);
+	--view-green: var(--color-success-400);
+	--view-teal: var(--color-teal-400);
+	--view-blue: var(--color-blue-400);
+	--view-purple: var(--color-purple-400);
+	--view-pink: var(--color-pink-400);
 }

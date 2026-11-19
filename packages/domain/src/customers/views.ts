@@ -71,10 +71,57 @@ export type ViewSort = typeof ViewSort.Type
 /** Saved views a person may own, and shared ones an org may have. */
 export const MAX_VIEWS = 50
 
+/** The glyph a view shows in its tab and the sidebar; none is a dot. */
+export const ViewIcon = Schema.Literals([
+	"star",
+	"heart",
+	"rocket",
+	"lightbulb",
+	"sparkles",
+	"warning",
+	"clock",
+	"chart",
+	"office",
+	"shop",
+	"cube",
+	"pin",
+	"megaphone",
+	"envelope",
+	"user",
+	"users",
+])
+export type ViewIcon = typeof ViewIcon.Type
+
+/** What tints the icon or the dot; none is the muted foreground. */
+export const ViewColor = Schema.Literals(["gray", "red", "orange", "yellow", "green", "teal", "blue", "purple", "pink"])
+export type ViewColor = typeof ViewColor.Type
+
 export const ViewDraft = Schema.Struct({
 	name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80)),
 	filters: ViewFilters,
 	sort: ViewSort,
 	columns: Schema.Array(ListColumn).check(Schema.isMaxLength(50)),
+	/** Absent: unchanged (on update), none (on create). */
+	icon: Schema.optionalKey(Schema.NullOr(ViewIcon)),
+	color: Schema.optionalKey(Schema.NullOr(ViewColor)),
 })
 export type ViewDraft = typeof ViewDraft.Type
+
+/**
+ * A person's arrangement of the list's tabs and the sidebar's views. Keys: `current` ("Current
+ * customers"), `all` ("All customers"), a built-in view's key, or a view's id. A key `order` leaves
+ * out follows the ordered ones, in the default order; one gone from the list is ignored.
+ */
+export const ViewLayoutKey = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64))
+export type ViewLayoutKey = typeof ViewLayoutKey.Type
+const LayoutKeys = Schema.Array(ViewLayoutKey).check(Schema.isMaxLength(2 * MAX_VIEWS + 10))
+
+export const ViewLayoutDraft = Schema.Struct({
+	order: LayoutKeys,
+	/** Views left out of the sidebar (the list still shows them). */
+	sidebarHidden: LayoutKeys,
+})
+export type ViewLayoutDraft = typeof ViewLayoutDraft.Type
+
+/** Before a person arranges anything: "All customers" stays out of the sidebar. */
+export const DEFAULT_VIEW_LAYOUT: ViewLayoutDraft = { order: [], sidebarHidden: ["all"] }

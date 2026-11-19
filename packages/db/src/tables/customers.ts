@@ -24,6 +24,7 @@ import type {
 	ViewSort,
 	ListColumn,
 	CustomerSource,
+	ViewLayoutKey,
 } from "@hazel/domain/customers"
 import {
 	EMPTY_SYNC_STATS,
@@ -50,6 +51,8 @@ import {
 	SyncTrigger,
 	UnmatchedEntityType,
 	UnmatchedStatus,
+	ViewColor,
+	ViewIcon,
 } from "@hazel/domain/customers"
 import {
 	ChannelId,
@@ -74,6 +77,7 @@ import {
 	CustomerSubscriptionId,
 	CustomerSyncRunId,
 	CustomerUnmatchedRecordId,
+	CustomerViewLayoutId,
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
@@ -669,6 +673,9 @@ export const customerSavedViewsTable = SQLite.table("customer_saved_views", {
 		sort: jsonb<ViewSort>(),
 		columns: jsonb<ReadonlyArray<ListColumn>>(),
 		position: SQLite.column(SQLite.real, { default: 0 }),
+		/** Both null on a built-in: its shipped look (the web app's `view-look.ts`). */
+		icon: SQLite.nullable(textEnum(ViewIcon.literals)),
+		color: SQLite.nullable(textEnum(ViewColor.literals)),
 		createdBy: SQLite.nullable(uuid(UserId)),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
@@ -679,6 +686,22 @@ export const customerSavedViewsTable = SQLite.table("customer_saved_views", {
 })
 export type CustomerSavedView = SQLite.SelectRowOf<typeof customerSavedViewsTable>
 export type NewCustomerSavedView = SQLite.InsertRowOf<typeof customerSavedViewsTable>
+
+/** A person's order of the list's views and which ones the sidebar leaves out (`ViewLayoutDraft`). */
+export const customerViewLayoutsTable = SQLite.table("customer_view_layouts", {
+	columns: {
+		id: id(CustomerViewLayoutId),
+		organizationId: uuid(OrganizationId),
+		userId: uuid(UserId),
+		order: SQLite.column(jsonb<ReadonlyArray<ViewLayoutKey>>(), { default: [] }),
+		sidebarHidden: SQLite.column(jsonb<ReadonlyArray<ViewLayoutKey>>(), { default: [] }),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	primaryKey: ["id"],
+	indexes: [SQLite.uniqueIndex("customer_view_layouts_user_unique", ["userId"])],
+})
+export type CustomerViewLayout = SQLite.SelectRowOf<typeof customerViewLayoutsTable>
 
 // ---------------------------------------------------------------------------
 // Data sources

@@ -59,12 +59,13 @@ import {
 	Invoice,
 	Note,
 	SavedView,
+	ViewLayout,
 	Signal,
 	SignalRule,
 	UnmatchedRecord,
 } from "../customers/models"
 import { RuleDraft } from "../customers/rules"
-import { MAX_VIEWS, ViewDraft } from "../customers/views"
+import { ViewDraft, ViewLayoutDraft } from "../customers/views"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { RateLimitExceededError } from "../rate-limit-errors"
 import { JsonDate } from "../models/utils"
@@ -461,12 +462,8 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 		CustomersInvalidRequestError,
 	),
 
-	/** The caller's tab order: personal views, and (admins) shared ones. */
-	write(
-		"customers.view.reorder",
-		{ viewIds: Schema.Array(CustomerSavedViewId).check(Schema.isMaxLength(2 * MAX_VIEWS)) },
-		Tx,
-	),
+	/** The caller's own order of the views and what the sidebar leaves out (replaces the last one). */
+	write("customers.view.layout", { layout: ViewLayoutDraft }, withTx(ViewLayout.Schema)),
 ) {}
 
 // ---------------------------------------------------------------------------

@@ -1,9 +1,16 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerAccountId, CustomerSavedViewId, OrganizationId, UserId } from "@hazel/schema"
+import {
+	CustomerAccountId,
+	CustomerSavedViewId,
+	CustomerViewLayoutId,
+	OrganizationId,
+	UserId,
+} from "@hazel/schema"
 import { Duration, Effect, Schema } from "effect"
 import { Command, Mount } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { BULK_BATCH, bulkUpdateAccountsAction } from "../../../customers/actions"
+import { saveLayoutAction } from "../../../customers/view-layout"
 import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
 import { searchFieldIds } from "../../../ui/search-field"
@@ -38,6 +45,22 @@ export const WaitBeforeSparklineRetry = Command.define("WaitBeforeSparklineRetry
 	messages: [Message.ElapsedSparklineRetry],
 	execute: ({ accountIds }) =>
 		Effect.sleep(SPARKLINE_RETRY).pipe(Effect.as(Message.ElapsedSparklineRetry({ accountIds }))),
+})
+
+/** My tab order and sidebar choice (`customers/view-layout.ts`); the sidebar shows it too. */
+export const SaveListLayout = Command.define("SaveListLayout", {
+	args: {
+		organizationId: OrganizationId,
+		userId: UserId,
+		layoutId: Schema.NullOr(CustomerViewLayoutId),
+		layout: Customers.ViewLayoutDraft,
+	},
+	messages: [Message.CompletedSaveLayout, Message.FailedSaveLayout],
+	execute: (args) =>
+		saveLayoutAction(args).pipe(
+			Effect.as(Message.CompletedSaveLayout()),
+			catchCommon((reason) => Message.FailedSaveLayout({ reason })),
+		),
 })
 
 const viewMessages = [Message.SucceededViewAction, Message.FailedViewAction]

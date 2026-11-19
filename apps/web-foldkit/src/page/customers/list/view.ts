@@ -1,5 +1,5 @@
 import { CustomerAccountId } from "@hazel/schema"
-import { Schema } from "effect"
+import { Option, Schema } from "effect"
 import { Submodel } from "foldkit"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
@@ -20,6 +20,11 @@ import {
 } from "../../../customers/ui/filter-bar"
 import { companyLogo, personAvatar, personLabel } from "../../../customers/ui/identity"
 import { kbd } from "../../../customers/ui/shortcuts"
+import { dragGhost, sortableList, sortableRow } from "../../../customers/ui/sortable"
+import { lookPicker, viewGlyph } from "../../../customers/ui/view-look"
+import { isInSidebar, layoutOf } from "../../../customers/view-layout"
+import * as Customers from "@hazel/domain/customers"
+import { DragAndDrop } from "@foldkit/ui"
 import { freshness, pageHeader } from "../../../customers/ui/surface"
 import { IconClose, IconDots, IconDownload, IconOffice, IconPlus, IconUser } from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
@@ -48,13 +53,16 @@ import {
 	effectiveFilters,
 	HOVER_CARD_ID,
 	isEdited,
+	layoutKeyOf,
 	type Model,
+	orderedTabsOf,
 	OWNER_ME,
 	OWNER_NONE,
 	ownerEntries,
 	parseSortKey,
 	ROW_PAGE,
 	SEARCH_ID,
+	TAB_LIST_ID,
 	shownColumns,
 	sortEntries,
 	sortLabel,
@@ -62,7 +70,6 @@ import {
 	viewMenuEntries,
 	type Viewer,
 	viewTabCounts,
-	viewTabsOf,
 	visibleAccounts,
 } from "./model"
 import { shortName, type TableContext, tableColumns } from "./table"
@@ -170,28 +177,51 @@ const header = (
 const VIEW_MENU_LABEL = {
 	save: "Save changes to this view",
 	save_as: "Save as a new view…",
-	rename: "Rename…",
+	edit: "Edit name and icon…",
 	reset: "Discard changes",
 	restore_default: "Reset to default",
 	delete: "Delete view",
 } as const
 
+const viewMenuLabel = (model: Model, key: string): string =>
+	key === "sidebar"
+		? isInSidebar(layoutOf(model.layout), layoutKeyOf(currentTab(model)))
+			? "Hide from sidebar"
+			: "Show in sidebar"
+		: (VIEW_MENU_LABEL[key as keyof typeof VIEW_MENU_LABEL] ?? key)
+
+/** The view tabs, in my order: drag one (or Alt+←/→) to move it; the sidebar follows. */
 const tabsRow = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 	const counts = viewTabCounts(model, viewer)
-	const tabs = viewTabsOf(model.views)
+	const tabs = orderedTabsOf(model)
 	const current = currentTab(model)
 	const edited = isEdited(model)
-	const hasViewMenu = edited || current.row !== null
+	const draggedKey = Option.getOrNull(DragAndDrop.maybeDraggedItemId(model.tabDrag))
+	const dragged = tabs.find((tab) => layoutKeyOf(tab) === draggedKey)
 	return viewTabs(h, {
 		ariaLabel: "Saved views",
 		tabs: tabs.map((tab) => ({
-			key: tab.key ?? "",
+			key: layoutKeyOf(tab),
 			label: tab.name,
 			count: model.accounts === null ? undefined : counts.get(tab.key),
+			leading: viewGlyph(h, tab.look, "size-3.5"),
 		})),
-		selected: current.key ?? "",
-		onSelect: (key) => Message.ClickedViewTab({ key: key === "" ? null : key }),
+		selected: layoutKeyOf(current),
+		onSelect: (key) =>
+			Message.ClickedViewTab({ key: tabs.find((tab) => layoutKeyOf(tab) === key)?.key ?? null }),
 		className: "overflow-x-auto",
+		listAttributes: [sortableList(h, TAB_LIST_ID)],
+		tabProps: (tab, index) =>
+			sortableRow(h, {
+				drag: model.tabDrag,
+				containerId: TAB_LIST_ID,
+				itemId: tab.key,
+				index,
+				count: tabs.length,
+				orientation: "Horizontal",
+				toDragMessage: (message) => Message.GotTabDragMessage({ message }),
+				onStep: (step) => Message.SteppedViewTab({ key: tab.key, step }),
+			}),
 		trailing: h.div(
 			[h.Class("flex shrink-0 items-center gap-1")],
 			[
@@ -209,34 +239,26 @@ const tabsRow = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =>
 							),
 						]
 					: []),
-				...(hasViewMenu
-					? [
-							menu(h, model.viewMenu, {
-								entries: viewMenuEntries(model, viewer),
-								trigger: (attributes, overlay) =>
-									button(
-										h,
-										{
-											intent: "plain",
-											size: "xs",
-											className: "size-7 p-0",
-											attributes: [...attributes, h.AriaLabel("View actions")],
-										},
-										[IconDots(h, icon), overlay],
-									),
-								content: (key) => [
-									menuLabel(
-										h,
-										model.viewMenu.id,
-										key,
-										VIEW_MENU_LABEL[key as keyof typeof VIEW_MENU_LABEL] ?? key,
-									),
-								],
-								toMessage: (message) => Message.GotViewMenuMessage({ message }),
-								className: "min-w-56",
-							}),
-						]
-					: []),
+				dragged === undefined
+					? h.empty
+					: dragGhost(h, model.tabDrag, [viewGlyph(h, dragged.look, "size-3.5"), h.span([], [dragged.name])]),
+				menu(h, model.viewMenu, {
+					entries: viewMenuEntries(model, viewer),
+					trigger: (attributes, overlay) =>
+						button(
+							h,
+							{
+								intent: "plain",
+								size: "xs",
+								className: "size-7 p-0",
+								attributes: [...attributes, h.AriaLabel("View actions")],
+							},
+							[IconDots(h, icon), overlay],
+						),
+					content: (key) => [menuLabel(h, model.viewMenu.id, key, viewMenuLabel(model, key))],
+					toMessage: (message) => Message.GotViewMenuMessage({ message }),
+					className: "min-w-56",
+				}),
 			],
 		),
 	})
@@ -609,14 +631,14 @@ const saveDialog = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html
 		toContent: (closeAttributes) => {
 			const form = model.saveForm
 			if (form === null) return []
-			const isRename = form.mode === "rename"
+			const isEdit = form.mode === "edit"
 			return [
 				dialogHeader(h, {
 					title: {
 						id: Modal.titleId(model.saveModal.id),
-						text: isRename ? "Rename view" : "Save view",
+						text: isEdit ? "Edit view" : "Save view",
 					},
-					description: isRename
+					description: isEdit
 						? undefined
 						: "Keeps these filters, the sort and the columns as a tab and in the sidebar.",
 				}),
@@ -637,7 +659,13 @@ const saveDialog = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html
 									h.OnInput((value) => Message.ChangedSaveName({ value })),
 								],
 							}),
-							...(isRename || !viewer.isAdmin
+							lookPicker(h, {
+								look: { icon: form.icon, color: form.color },
+								icons: Customers.ViewIcon.literals,
+								colors: Customers.ViewColor.literals,
+								onPick: (look) => Message.PickedSaveLook(look),
+							}),
+							...(isEdit || !viewer.isAdmin
 								? []
 								: [
 										checkbox(
@@ -662,7 +690,7 @@ const saveDialog = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html
 							isDisabled: form.name.trim() === "",
 							attributes: [h.Type("submit"), h.Attribute("form", "customers-save-view")],
 						},
-						[isRename ? "Rename" : "Save view"],
+						[isEdit ? "Save" : "Save view"],
 					),
 				]),
 			]

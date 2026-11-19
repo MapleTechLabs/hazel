@@ -1,5 +1,5 @@
 {
-	"migration": "0018_customer_environments",
+	"migration": "0019_customer_view_layouts",
 	"entities": [
 		{
 			"kind": "table",
@@ -186,6 +186,13 @@
 		{
 			"kind": "table",
 			"name": "customer_unmatched_records",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_view_layouts",
 			"primaryKey": {
 				"columns": ["id"]
 			}
@@ -2452,7 +2459,7 @@
 		{
 			"kind": "column",
 			"table": "customer_saved_views",
-			"name": "createdBy",
+			"name": "icon",
 			"position": 9,
 			"type": "text",
 			"notNull": false,
@@ -2461,8 +2468,26 @@
 		{
 			"kind": "column",
 			"table": "customer_saved_views",
-			"name": "createdAt",
+			"name": "color",
 			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "createdBy",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_saved_views",
+			"name": "createdAt",
+			"position": 12,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2471,7 +2496,7 @@
 			"kind": "column",
 			"table": "customer_saved_views",
 			"name": "updatedAt",
-			"position": 11,
+			"position": 13,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2480,7 +2505,7 @@
 			"kind": "column",
 			"table": "customer_saved_views",
 			"name": "deletedAt",
-			"position": 12,
+			"position": 14,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -3503,6 +3528,69 @@
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
 		},
 		{
+			"kind": "column",
+			"table": "customer_view_layouts",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_view_layouts",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_view_layouts",
+			"name": "userId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_view_layouts",
+			"name": "order",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_view_layouts",
+			"name": "sidebarHidden",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_view_layouts",
+			"name": "createdAt",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_view_layouts",
+			"name": "updatedAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
 			"kind": "index",
 			"table": "customer_accounts",
 			"name": "customer_accounts_deleted_at_idx",
@@ -3795,6 +3883,13 @@
 			"name": "customer_unmatched_status_idx",
 			"unique": false,
 			"columns": ["\"status\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_view_layouts",
+			"name": "customer_view_layouts_user_unique",
+			"unique": true,
+			"columns": ["\"userId\""]
 		}
 	],
 	"extraIndexes": [
