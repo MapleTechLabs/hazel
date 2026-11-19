@@ -159,6 +159,27 @@ const panels = (
 	]
 }
 
+/** `ChatDms`: the direct messages alone, with "New message" in the header (a phone's DMs tab). */
+const dmList = (h: HtmlBuilder<Message>, model: Model, groups: ChannelGroups, shared: Shared): Html =>
+	h.div(
+		[h.Class("flex flex-col gap-6 px-4 py-6 lg:px-8")],
+		[
+			sectionHeaderRoot(h, { className: "border-none pb-0" }, [
+				h.div(
+					[h.Class("flex items-center justify-between gap-4")],
+					[
+						sectionHeaderHeading(h, { size: "xl" }, ["Direct messages"]),
+						createButton(h, "New message", Message.PressedStartConversation()),
+					],
+				),
+			]),
+			...(shared.orgSlug === null
+				? []
+				: (panels(h, model, groups, shared, shared.orgSlug).find((panel) => panel.key === "dms")
+						?.content ?? [])),
+		],
+	)
+
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
 	if (model.channels._tag === "Loading") {
 		return h.div(
@@ -167,6 +188,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		)
 	}
 	const { groups } = model.channels
+	if (model.isDmList) return dmList(h, model, groups, shared)
 	return h.div(
 		[h.Class("flex flex-col gap-6 px-4 py-6 lg:px-8")],
 		[

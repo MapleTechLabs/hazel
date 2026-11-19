@@ -2,7 +2,7 @@ import { Effect, Schema, Stream } from "effect"
 import { Mount } from "foldkit"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { IconBell, IconChevronLeft, IconGear, IconMenu, IconMsgs, IconOffice } from "../icons"
+import { IconBell, IconChevronLeft, IconGear, IconMenu, IconChatBubble, IconMsgs, IconOffice } from "../icons"
 import {
 	AppRoute,
 	channelSettingsTabOf,
@@ -10,9 +10,7 @@ import {
 	isChannelChatRoute,
 	isChatRoute,
 	isCustomersRoute,
-	isMySettingsRoute,
 	isNotificationsRoute,
-	isSettingsRoute,
 	type OrgSection,
 	orgSectionOf,
 	orgSlugOf,
@@ -37,9 +35,10 @@ const NAV_ITEM =
 	"flex min-h-12 flex-1 flex-col items-center justify-center gap-1 pt-1.5 pb-1 transition-opacity duration-100 active:opacity-60"
 
 /**
- * The tab bar: Chats, Activity, Customers and Settings, as a phone app's tabs. Chats is the channel
- * list (`ChatIndex` on a phone) and the pages it opens; the bar is not shown inside a
- * conversation, whose header leads back. Its own background runs under the home indicator.
+ * The tab bar: Chats, DMs, Activity and Customers, as a phone app's tabs. Chats is the channel
+ * list (`ChatIndex` on a phone) and the pages it opens, DMs the direct messages (`ChatDms`);
+ * Settings is the gear in the chat list's header. The bar is not shown inside a conversation,
+ * whose header leads back. Its own background runs under the home indicator.
  */
 export const mobileNav = <Message>(
 	h: HtmlBuilder<Message>,
@@ -102,9 +101,16 @@ export const mobileNav = <Message>(
 					link(
 						"Chats",
 						hrefOf(AppRoute.ChatIndex({ orgSlug })),
-						isChatRoute(route) || route._tag === "OrgHome",
+						(isChatRoute(route) && route._tag !== "ChatDms") || route._tag === "OrgHome",
 						IconMsgs(h, { className: "size-6" }),
 						"bubble.left.and.bubble.right",
+					),
+					link(
+						"DMs",
+						hrefOf(AppRoute.ChatDms({ orgSlug })),
+						route._tag === "ChatDms",
+						IconChatBubble(h, { className: "size-6" }),
+						"bubble.left",
 					),
 					link(
 						"Activity",
@@ -120,13 +126,6 @@ export const mobileNav = <Message>(
 						isCustomersRoute(route),
 						IconOffice(h, { className: "size-6" }),
 						"building.2",
-					),
-					link(
-						"Settings",
-						hrefOf(AppRoute.SettingsGeneral({ orgSlug })),
-						isSettingsRoute(route) || isMySettingsRoute(route),
-						IconGear(h, { className: "size-6" }),
-						"gearshape",
 					),
 				],
 			),

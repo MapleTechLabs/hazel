@@ -358,6 +358,7 @@ describe("hrefOf", () => {
 		SelectOrganization: [[AppRoute.SelectOrganization(), "/select-organization"]],
 		OrgHome: [[AppRoute.OrgHome({ orgSlug }), "/hazel"]],
 		ChatIndex: [[AppRoute.ChatIndex({ orgSlug }), "/hazel/chat"]],
+		ChatDms: [[AppRoute.ChatDms({ orgSlug }), "/hazel/chat/dms"]],
 		ChatChannel: [[AppRoute.ChatChannel({ orgSlug, channelId: channel }), `/hazel/chat/${channelId}`]],
 		ChatFiles: [[AppRoute.ChatFiles({ orgSlug, channelId: channel }), `/hazel/chat/${channelId}/files`]],
 		ChatFilesMedia: [
