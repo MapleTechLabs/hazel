@@ -290,7 +290,10 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 			"customers.contacts.search": ({ query, limit }) =>
 				Effect.gen(function* () {
 					yield* requireMember
-					const pattern = `%${query.trim()}%`
+					const text = query.trim()
+					if (text === "") return { contacts: [] }
+					// effect-orm adds `ESCAPE '\'` on SQLite: typed `%` and `_` match themselves.
+					const pattern = `%${text.replace(/[\\%_]/g, "\\$&")}%`
 					const contacts = yield* db.run(
 						SQLite.from(schema.customerContactsTable)
 							.select()
