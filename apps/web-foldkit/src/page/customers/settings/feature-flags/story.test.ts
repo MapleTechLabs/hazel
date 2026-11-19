@@ -69,6 +69,8 @@ const account = (n: number, featureFlags: Record<string, boolean>): AccountRow =
 	churnedAtMs: null,
 	tags: [],
 	featureFlags,
+	primaryAccountId: null,
+	environment: null,
 	attentionMutedAtMs: null,
 	attentionMutedUntilMs: null,
 	attentionMutedByUserId: null,

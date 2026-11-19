@@ -4,6 +4,7 @@ import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { formatCount, formatDate, formatMoney, formatRelative } from "../../../customers/format"
+import { environmentCounts, environmentsHintOf } from "../../../customers/groups"
 import { healthBadge, kindChip, severityChip, STAGE_LABEL } from "../../../customers/ui/badges"
 import { evidenceDetail } from "../../../customers/ui/evidence"
 import { companyLogo, personLabel, sourceMark } from "../../../customers/ui/identity"
@@ -228,9 +229,11 @@ export const previewPanel = (
 	const others = (model.signals ?? []).filter(
 		(other) => other.accountId === signal.accountId && other.id !== signal.id && other.status === "open",
 	)
+	const counts = environmentCounts(model.accounts ?? [])
 	const context: RowContext = {
 		nowMs: viewer.nowMs,
 		accountsById,
+		environmentCounts: counts,
 		membersById,
 		selectedId: signal.id,
 		actions: [],
@@ -293,6 +296,7 @@ export const previewPanel = (
 								[
 									[
 										account.domain,
+										environmentsHintOf(counts.get(account.id) ?? 0),
 										`since ${formatDate(new Date(account.firstSeenAtMs), { withYear: true })}`,
 									]
 										.filter((part) => part !== null)

@@ -65,6 +65,10 @@ export const AccountRow = Schema.Struct({
 	tags: Schema.Array(Schema.String),
 	/** The Clerk organization's flags: on when `true`; a `false` key is off. */
 	featureFlags: Schema.Record(Schema.String, Schema.Boolean),
+	/** The primary of the customer it is an environment of; null when standalone or a primary (`groups.ts`). */
+	primaryAccountId: Schema.NullOr(CustomerAccountId),
+	/** What the team calls this environment (`US`, `EU`). */
+	environment: Schema.NullOr(Schema.String),
 	/** Set while Needs attention leaves it out (`isAttentionMuted`); `attentionMutedUntilMs` null: until unmuted. */
 	attentionMutedAtMs: Schema.NullOr(Schema.Number),
 	attentionMutedUntilMs: Schema.NullOr(Schema.Number),
@@ -162,6 +166,8 @@ export const toAccountRow = (account: Customers.Account): AccountRow => ({
 	churnedAtMs: msOrNull(account.churnedAt),
 	tags: account.tags,
 	featureFlags: account.featureFlags,
+	primaryAccountId: account.primaryAccountId,
+	environment: account.environment,
 	attentionMutedAtMs: msOrNull(account.attentionMutedAt),
 	attentionMutedUntilMs: msOrNull(account.attentionMutedUntil),
 	attentionMutedByUserId: account.attentionMutedByUserId,

@@ -465,14 +465,81 @@ const NAMED_SEEDS = {
 		trendPct: 6,
 		lastActiveHours: 8,
 	},
+	// Environments of Acme and Halcyon (`ENVIRONMENTS`): each its own account with its own numbers.
+	acmeEu: {
+		name: "Acme Robotics",
+		domain: "acmerobotics.io",
+		plan: "Growth",
+		mrr: 640,
+		health: "healthy",
+		score: 78,
+		owner: JONAS,
+		contacts: 9,
+		active30d: 8,
+		trendPct: 6.5,
+		lastActiveHours: 5,
+		sinceDays: 120,
+		tags: ["enterprise-pilot"],
+	},
+	halcyonEu: {
+		name: "Halcyon Health",
+		domain: "halcyonhealth.com",
+		plan: "Enterprise",
+		mrr: 3_200,
+		health: "healthy",
+		score: 86,
+		owner: DANA,
+		contacts: 64,
+		active30d: 51,
+		trendPct: 9.1,
+		lastActiveHours: 2,
+		seats: [51, 80],
+		sinceDays: 400,
+		tags: ["enterprise"],
+	},
+	halcyonStaging: {
+		name: "Halcyon Health",
+		domain: "halcyonhealth.com",
+		plan: null,
+		mrr: 0,
+		health: "unknown",
+		score: null,
+		stage: "lead",
+		owner: DANA,
+		contacts: 6,
+		active30d: 3,
+		trendPct: null,
+		lastActiveHours: 30,
+		firstSeenDays: 300,
+	},
 } satisfies Record<string, AccountSeed>
 
 export type NamedAccount = keyof typeof NAMED_SEEDS
 
+/**
+ * Customers with several environments: Acme (US primary, EU) and Halcyon (an unnamed primary, EU,
+ * Staging). Each account's environment, and the primary of the ones that are environments.
+ */
+const ENVIRONMENTS = [
+	["acme", "US", null],
+	["acmeEu", "EU", "acme"],
+	["halcyonEu", "EU", "halcyon"],
+	["halcyonStaging", "Staging", "halcyon"],
+] as const satisfies ReadonlyArray<readonly [NamedAccount, string, NamedAccount | null]>
+
 /** The named accounts, by key (`ACCOUNTS_BY_KEY.acme`). */
-export const ACCOUNTS_BY_KEY = Object.fromEntries(
-	Object.entries(NAMED_SEEDS).map(([key, seed], index) => [key, makeAccount(seed, index + 1)]),
-) as Readonly<Record<NamedAccount, Account>>
+export const ACCOUNTS_BY_KEY = (() => {
+	const built = Object.fromEntries(
+		Object.entries(NAMED_SEEDS).map(([key, seed], index) => [key, makeAccount(seed, index + 1)]),
+	) as Record<NamedAccount, Account>
+	for (const [key, environment, primary] of ENVIRONMENTS)
+		built[key] = {
+			...built[key],
+			environment,
+			primaryAccountId: primary === null ? null : built[primary].id,
+		}
+	return built as Readonly<Record<NamedAccount, Account>>
+})()
 
 const PREFIXES = [
 	"Atlas",

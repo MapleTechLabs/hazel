@@ -4,6 +4,7 @@ import { CustomerAccountId, CustomerContactId, CustomerNoteId, CustomerSignalId,
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
+import { groupIdOf, groupOf } from "../../../customers/groups"
 import { AccountRow, MemberRow, msOf, SignalRow } from "../../../customers/queries"
 import { muteLeaves, SNOOZE_KEYS } from "../../../customers/ui/menus"
 import { CustomerTab } from "../../../route"
@@ -167,6 +168,18 @@ export const Model = Schema.Struct({
 	/** The flags ticked in the "Add flags" picker. */
 	flagSelection: Schema.Array(Schema.String),
 	rawModal: Modal.Model,
+	/** Switches to the customer's other environments. */
+	environmentMenu: Menu.Model,
+	/** "Link to another customer": the search, the picked primary, an RPC on its way, the store's refusal. */
+	linkModal: Modal.Model,
+	linkQuery: Schema.String,
+	linkPrimaryId: Schema.NullOr(CustomerAccountId),
+	isLinking: Schema.Boolean,
+	linkError: Schema.NullOr(Schema.String),
+	/** "Name environment": the text, an RPC on its way. */
+	environmentModal: Modal.Model,
+	environmentDraft: Schema.String,
+	isSavingEnvironment: Schema.Boolean,
 	/** The note the delete confirmation asks about (kept while the dialog animates out). */
 	deletingNoteId: Schema.NullOr(CustomerNoteId),
 	deleteNoteModal: Modal.Model,
@@ -191,6 +204,11 @@ export const TAG_POPOVER_ID = "customer-tag"
 export const CHANNEL_POPOVER_ID = "customer-channel"
 export const FLAG_POPOVER_ID = "customer-feature-flags"
 export const RAW_MODAL_ID = "customer-raw"
+export const ENVIRONMENT_MENU_ID = "customer-environments"
+export const LINK_MODAL_ID = "customer-link"
+export const LINK_SEARCH_ID = "customer-link-search"
+export const ENVIRONMENT_MODAL_ID = "customer-environment"
+export const ENVIRONMENT_INPUT_ID = "customer-environment-name"
 export const DELETE_NOTE_MODAL_ID = "customer-delete-note"
 export const IMPERSONATE_MODAL_ID = "customer-impersonate"
 export const COMPOSER_ID = "customer-note-composer"
@@ -233,12 +251,50 @@ export const isNotFound = (model: Model): boolean =>
 		accountOf(model) === undefined &&
 		(model.detail._tag !== "Success" || model.hasSeenAccount))
 
-/** Open and snoozed signals on this account, highest priority first. */
-export const openSignals = (model: Model): ReadonlyArray<SignalRow> =>
-	(model.signals ?? []).filter(
-		(signal) =>
-			signal.accountId === model.accountId && (signal.status === "open" || signal.status === "snoozed"),
+// GROUP
+
+/** This customer's environments, primary first; empty when it stands alone (`groups.ts`). */
+export const groupOfModel = (model: Model): ReadonlyArray<AccountRow> =>
+	groupOf(model.accounts ?? [], model.accountId)
+
+/** The primary this account is an environment of; null for a primary or a standalone account. */
+export const primaryOf = (model: Model): AccountRow | null => {
+	const [primary] = groupOfModel(model)
+	return primary === undefined || primary.id === model.accountId ? null : primary
+}
+
+/**
+ * The customers this one can join: the other customers' primaries and standalone accounts (an
+ * environment can't lead), by name or domain, not its own group.
+ */
+export const linkCandidates = (model: Model): ReadonlyArray<AccountRow> => {
+	const accounts = model.accounts ?? []
+	const liveIds = new Set(accounts.map((account) => account.id))
+	const own = accountOf(model)
+	const ownGroupId = own === undefined ? model.accountId : groupIdOf(own, liveIds)
+	const needle = model.linkQuery.trim().toLowerCase()
+	return accounts.filter(
+		(account) =>
+			groupIdOf(account, liveIds) === account.id &&
+			account.id !== ownGroupId &&
+			(needle === "" ||
+				account.name.toLowerCase().includes(needle) ||
+				(account.environment?.toLowerCase().includes(needle) ?? false) ||
+				(account.domain?.toLowerCase().includes(needle) ?? false)),
 	)
+}
+
+/**
+ * Open and snoozed signals of this customer, highest priority first: an environment's are its
+ * primary's (signals are raised for the whole customer, on the primary).
+ */
+export const openSignals = (model: Model): ReadonlyArray<SignalRow> => {
+	const accountId = primaryOf(model)?.id ?? model.accountId
+	return (model.signals ?? []).filter(
+		(signal) =>
+			signal.accountId === accountId && (signal.status === "open" || signal.status === "snoozed"),
+	)
+}
 
 /** Pinned first, then newest. */
 export const sortedNotes = (model: Model): ReadonlyArray<NoteRow> =>
@@ -311,7 +367,10 @@ export const ActionKey = Schema.Literals([
 	"unmute_attention",
 	"recompute",
 	"link_source",
-	"merge",
+	"link_customer",
+	"make_primary",
+	"unlink",
+	"name_environment",
 	"raw_data",
 	"archive",
 ])
@@ -319,22 +378,43 @@ export type ActionKey = typeof ActionKey.Type
 
 /**
  * What the RPCs support runs; the rest shows, disabled, with why. A muted customer offers Unmute
- * (described with until when); else Mute ▸ For a week · For a month · Until unmuted.
+ * (described with until when); else Mute ▸ For a week · For a month · Until unmuted. Grouping is for
+ * admins: linking to another customer, naming the environment, and for an environment making it
+ * primary or unlinking it.
  */
-export const actionEntries = (isMuted: boolean): ReadonlyArray<Menu.Entry> => [
-	Menu.item("copy_link"),
-	Menu.item("change_owner"),
-	isMuted
-		? Menu.item("unmute_attention", { hasDescription: true })
-		: Menu.item("mute_attention", { submenu: muteLeaves }),
-	Menu.item("recompute", { isDisabled: true, hasDescription: true }),
-	Menu.separator,
-	Menu.item("link_source", { isDisabled: true, hasDescription: true }),
-	Menu.item("merge", { isDisabled: true, hasDescription: true }),
-	Menu.item("raw_data"),
-	Menu.separator,
-	Menu.item("archive", { isDisabled: true, intent: "Danger", hasDescription: true }),
-]
+export const actionEntries = (
+	model: Model,
+	isAdmin: boolean,
+	isMuted: boolean,
+): ReadonlyArray<Menu.Entry> => {
+	const isEnvironment = primaryOf(model) !== null
+	return [
+		Menu.item("copy_link"),
+		Menu.item("change_owner"),
+		isMuted
+			? Menu.item("unmute_attention", { hasDescription: true })
+			: Menu.item("mute_attention", { submenu: muteLeaves }),
+		Menu.item("recompute", { isDisabled: true, hasDescription: true }),
+		Menu.separator,
+		Menu.item("link_source", { isDisabled: true, hasDescription: true }),
+		...(isAdmin
+			? [
+					Menu.item("link_customer"),
+					...(isEnvironment ? [Menu.item("make_primary"), Menu.item("unlink")] : []),
+					Menu.item("name_environment"),
+				]
+			: []),
+		Menu.item("raw_data"),
+		Menu.separator,
+		Menu.item("archive", { isDisabled: true, intent: "Danger", hasDescription: true }),
+	]
+}
+
+/** The environment menu: the customer's accounts, primary first. */
+export const environmentEntries = (model: Model): ReadonlyArray<Menu.Entry> =>
+	groupOfModel(model).map((account) =>
+		Menu.item(account.id, { textValue: account.environment ?? account.name }),
+	)
 
 export const metricEntries = (metrics: ReadonlyArray<MetricRow>): ReadonlyArray<Menu.Entry> =>
 	(metrics.length === 0

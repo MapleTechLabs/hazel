@@ -324,27 +324,53 @@ export const dataTable = <Row, M, K extends string = string>(
 	)
 }
 
-/** `Name` over `domain` with a logo: the customer cell. */
+/**
+ * `Name` over `domain` with a logo: the customer cell. `badge` sits beside the name (an
+ * environment); `isNested` indents the row under the one above with a connector (an environment
+ * under its primary) and quiets the name.
+ */
 export const primaryCell = <M>(
 	h: HtmlBuilder<M>,
-	options: Readonly<{ leading?: Html; title: string; subtitle?: string | null; href?: string }>,
-): Html =>
-	h.div(
-		[h.Class("flex min-w-0 items-center gap-3")],
+	options: Readonly<{
+		leading?: Html
+		title: string
+		subtitle?: string | null
+		href?: string
+		badge?: Html
+		isNested?: boolean
+	}>,
+): Html => {
+	const titleClass = twMerge("truncate font-medium text-fg", options.isNested && "font-normal text-fg-2")
+	return h.div(
+		[h.Class(twMerge("flex min-w-0 items-center gap-3", options.isNested && "gap-2.5 pl-3.5"))],
 		[
+			...(options.isNested
+				? [
+						h.span([
+							h.AriaHidden(true),
+							h.Class("-mt-3 h-4 w-2.5 shrink-0 rounded-bl-sm border-border border-b border-l"),
+						]),
+					]
+				: []),
 			...(options.leading ? [options.leading] : []),
 			h.div(
 				[h.Class("flex min-w-0 flex-col")],
 				[
-					options.href
-						? h.a(
-								[
-									h.Href(options.href),
-									h.Class("truncate font-medium text-fg hover:underline"),
-								],
-								[options.title],
-							)
-						: h.span([h.Class("truncate font-medium text-fg")], [options.title]),
+					h.span(
+						[h.Class("flex min-w-0 items-center gap-2")],
+						[
+							options.href
+								? h.a(
+										[
+											h.Href(options.href),
+											h.Class(twMerge(titleClass, "hover:underline")),
+										],
+										[options.title],
+									)
+								: h.span([h.Class(titleClass)], [options.title]),
+							...(options.badge ? [options.badge] : []),
+						],
+					),
 					...(options.subtitle
 						? [h.span([h.Class("truncate text-muted-fg text-xs")], [options.subtitle])]
 						: []),
@@ -352,3 +378,4 @@ export const primaryCell = <M>(
 			),
 		],
 	)
+}

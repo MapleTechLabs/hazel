@@ -272,11 +272,23 @@ describe("home actions", () => {
 			given(opened),
 			message(
 				Message.UpdatedCustomers({
-					customers: [{ id: accountId, name: "Acme", domains: ["acme.dev"], logoUrl: null }],
+					customers: [
+						{
+							id: accountId,
+							name: "Acme",
+							domains: ["acme.dev"],
+							logoUrl: null,
+							primaryAccountId: null,
+							environment: null,
+						},
+					],
 				}),
 			),
 			model((m) => expect(customerItems(m)).toEqual([])),
 			message(searched("acme.d")),
+			model((m) => expect(customerItems(m)).toEqual([`customer:${accountId}`])),
+			// Name and domain together, with no environment between them.
+			message(searched("acme acme.dev")),
 			model((m) => expect(customerItems(m)).toEqual([`customer:${accountId}`])),
 			message(item(`customer:${accountId}`)),
 			expectOutMessage(OutMessage.Completed({ href: `/hazel/customers/${accountId}`, toast: null })),

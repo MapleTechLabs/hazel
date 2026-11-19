@@ -27,6 +27,7 @@ import {
 	customerSignalCollection,
 } from "~/db/collections"
 import { HazelRpc } from "../rpc"
+import { linkedTo, madePrimary, unlinked } from "./groups"
 
 interface SignalTarget {
 	readonly organizationId: OrganizationId
@@ -447,6 +448,93 @@ export const bulkUpdateAccountsAction = optimisticAction({
 				transactionId = result.transactionId
 			}
 			return { data: { updated }, transactionId }
+		}),
+})
+
+// GROUPS
+
+interface AccountTarget {
+	readonly organizationId: OrganizationId
+	readonly accountId: CustomerAccountId
+}
+
+/** Points the org's live accounts at their primaries as `regroup` (`groups.ts`) says the store will. */
+const applyGrouping = (
+	organizationId: OrganizationId,
+	regroup: (accounts: ReadonlyArray<Customers.Account>) => ReadonlyArray<Customers.Account>,
+) => {
+	const accounts = customerAccountCollection.toArray.filter(
+		(account) => account.organizationId === organizationId && account.deletedAt === null,
+	)
+	regroup(accounts).forEach((next, index) => {
+		if (next.primaryAccountId !== accounts[index]?.primaryAccountId)
+			customerAccountCollection.update(next.id, (account) => {
+				account.primaryAccountId = next.primaryAccountId
+			})
+	})
+}
+
+/** `customers.account.link`: the account (and its environments) join `primaryAccountId`'s customer. */
+export const linkAccountAction = optimisticAction({
+	collections: [customerAccountCollection],
+	onMutate: (props: AccountTarget & { readonly primaryAccountId: CustomerAccountId }) => {
+		applyGrouping(props.organizationId, (accounts) =>
+			linkedTo(accounts, props.accountId, props.primaryAccountId),
+		)
+		return { accountId: props.accountId }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.account.link", props)
+			return { data: result, transactionId: result.transactionId }
+		}),
+})
+
+/** `customers.account.unlink`: an environment stands alone again. */
+export const unlinkAccountAction = optimisticAction({
+	collections: [customerAccountCollection],
+	onMutate: (props: AccountTarget) => {
+		applyGrouping(props.organizationId, (accounts) => unlinked(accounts, props.accountId))
+		return { accountId: props.accountId }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.account.unlink", props)
+			return { data: result, transactionId: result.transactionId }
+		}),
+})
+
+/** `customers.account.setPrimary`: an environment becomes its customer's primary. */
+export const setPrimaryAccountAction = optimisticAction({
+	collections: [customerAccountCollection],
+	onMutate: (props: AccountTarget) => {
+		applyGrouping(props.organizationId, (accounts) => madePrimary(accounts, props.accountId))
+		return { accountId: props.accountId }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.account.setPrimary", props)
+			return { data: result, transactionId: result.transactionId }
+		}),
+})
+
+/** `customers.account.setEnvironment`: names the account's environment; null clears it. */
+export const setEnvironmentAction = optimisticAction({
+	collections: [customerAccountCollection],
+	onMutate: (props: AccountTarget & { readonly environment: string | null }) => {
+		customerAccountCollection.update(props.accountId, (account) => {
+			account.environment = props.environment
+		})
+		return { accountId: props.accountId }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.account.setEnvironment", props)
+			return { data: result, transactionId: result.transactionId }
 		}),
 })
 

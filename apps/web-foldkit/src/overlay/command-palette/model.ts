@@ -92,6 +92,9 @@ export const CustomerSummary = Schema.Struct({
 	name: Schema.String,
 	domains: Schema.Array(Schema.String),
 	logoUrl: Schema.NullOr(Schema.String),
+	/** Its customer's primary when it is an environment of one (`customers/groups.ts`). */
+	primaryAccountId: Schema.NullOr(CustomerAccountId),
+	environment: Schema.NullOr(Schema.String),
 })
 export type CustomerSummary = typeof CustomerSummary.Type
 

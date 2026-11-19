@@ -21,7 +21,8 @@ import {
 	formatRelative,
 } from "../../../customers/format"
 import { type AccountRow, msOf, type SignalRow } from "../../../customers/queries"
-import { healthDot, severityGlyph } from "../../../customers/ui/badges"
+import { environmentsHint, healthDot, severityGlyph } from "../../../customers/ui/badges"
+import { environmentCounts } from "../../../customers/groups"
 import { connectCard } from "../../../customers/ui/connect-card"
 import { companyLogo } from "../../../customers/ui/identity"
 import { deltaPill, type Delta, kpiTile } from "../../../customers/ui/kpi-tile"
@@ -65,6 +66,8 @@ interface Context {
 	readonly orgSlug: string
 	readonly nowMs: number
 	readonly accountsById: ReadonlyMap<string, AccountRow>
+	/** Each primary's environments: a signal's customer is the primary. */
+	readonly environmentCounts: ReadonlyMap<string, number>
 }
 
 const link = moreLink
@@ -419,8 +422,17 @@ const attentionCard = (
 									[h.Class("flex items-center justify-between gap-2")],
 									[
 										h.span(
-											[h.Class("truncate font-medium text-fg text-sm")],
-											[account.name],
+											[h.Class("flex min-w-0 items-baseline gap-2")],
+											[
+												h.span(
+													[h.Class("truncate font-medium text-fg text-sm")],
+													[account.name],
+												),
+												...environmentsHint(
+													h,
+													context.environmentCounts.get(account.id) ?? 0,
+												),
+											],
 										),
 										h.span(
 											[h.Class("shrink-0 text-muted-fg text-xs tabular-nums")],
@@ -840,6 +852,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		orgSlug,
 		nowMs: shared.nowMs,
 		accountsById: new Map((model.accounts ?? []).map((account) => [account.id, account])),
+		environmentCounts: environmentCounts(model.accounts ?? []),
 	}
 	const result = Option.getOrUndefined(AsyncData.getData(model.overview))
 	return h.div(

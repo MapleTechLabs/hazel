@@ -48,7 +48,9 @@ Helpers: `defineLab` (no flags), `defineLabWithFlags`, `defineStaticLab` (a view
 ## Fixtures — `fixtures/customers.ts`
 
 Fixed `NOW` (Tue 10 Nov 2026 12:00 UTC). `ACCOUNTS` (214, $48,210 MRR, health split 142/41/18/13),
-`ACCOUNTS_BY_KEY.<acme|northwind|kestrel|brightfield|halcyon|oakridge|consolidated|pinecone|…>`,
+`ACCOUNTS_BY_KEY.<acme|northwind|kestrel|brightfield|halcyon|oakridge|consolidated|pinecone|…>`
+(customers with several environments: Acme is the US primary of `acmeEu`; Halcyon an unnamed primary
+of `halcyonEu` and `halcyonStaging`),
 `SIGNALS` / `OPEN_SIGNALS` (every evidence viz and status), `RULES`, `SETTINGS`, `CONNECTIONS`,
 `SYNC_RUNS`, `overviewFixture(range, { partial })`, `EMPTY_OVERVIEW`, `ACME_DETAIL` (account detail),
 `TEAM` / `ME` / `memberOf(userId)`, `accountOf(signal)`. `fixtures/customers.test.ts` keeps the totals

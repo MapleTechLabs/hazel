@@ -4,6 +4,7 @@ import { twMerge } from "tailwind-merge"
 import { IconChevronDown } from "../../icons"
 import { ariaButton, button } from "../../ui/button"
 import { formatMoney } from "../format"
+import { environmentsHintOf } from "../groups"
 import { healthBadge, kindChip, severityChip } from "./badges"
 import { companyLogo, personAvatar } from "./identity"
 import { kbd } from "./shortcuts"
@@ -36,6 +37,8 @@ export type QueueRowOptions<M> = Readonly<{
 	isSelected?: boolean
 	/** The account's other signals in the rows next to this one (`accountMark`). */
 	run?: AccountRunMark
+	/** The customer's other environments: `+2 environments` beside the name. */
+	environmentCount?: number
 	/** A press on the row: select it (the side panel preview). */
 	onPress?: M
 	/** Shown in place of evidence…assignee on hover/focus: `queueAction`s and the `⋯` menu. */
@@ -79,9 +82,14 @@ export const accountMark = <M>(
 /** A continuing row's top border: the account's rows read as one block. */
 export const RUN_CONTINUES_CLASS = "border-t-transparent"
 
-/** `Growth · $2,150/mo`, `Trial · $0/mo`. */
-export const planLine = (account: QueueRowOptions<never>["account"]): string =>
-	`${account.planName ?? "No plan"} · ${formatMoney(account.mrrMinor, account.currency)}/mo`
+/** `Growth · $2,150/mo`, `Trial · $0/mo`; a primary's `· +1 environment` after it. */
+export const planLine = (account: QueueRowOptions<never>["account"], environmentCount = 0): string =>
+	[
+		`${account.planName ?? "No plan"} · ${formatMoney(account.mrrMinor, account.currency)}/mo`,
+		environmentsHintOf(environmentCount),
+	]
+		.filter((part) => part !== null)
+		.join(" · ")
 
 export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Html =>
 	h.div(
@@ -135,7 +143,7 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 										),
 										h.span(
 											[h.Class("truncate text-muted-fg text-xs tabular-nums")],
-											[planLine(options.account)],
+											[planLine(options.account, options.environmentCount)],
 										),
 									],
 								),

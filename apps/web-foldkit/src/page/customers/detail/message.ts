@@ -35,6 +35,10 @@ export type ActionFailure = typeof ActionFailure.Type
 export const ChannelAction = Schema.Literals(["link", "unlink"])
 export type ChannelAction = typeof ChannelAction.Type
 
+/** Linking this customer to another, unlinking an environment, making it primary, naming its environment. */
+export const GroupAction = Schema.Literals(["link", "unlink", "set_primary", "set_environment"])
+export type GroupAction = typeof GroupAction.Type
+
 export const NoteAction = Schema.Literals(["create", "update", "delete"])
 export type NoteAction = typeof NoteAction.Type
 
@@ -111,6 +115,26 @@ export const Message = defineMessageUnion({
 	SucceededAccountUpdate: {},
 	FailedAccountUpdate: { reason: ActionFailure },
 	GotRawModalMessage: { message: Modal.Message },
+
+	GotEnvironmentMenuMessage: { message: Menu.Message },
+	GotLinkModalMessage: { message: Modal.Message },
+	ChangedLinkQuery: { value: Schema.String },
+	ClearedLinkQuery: {},
+	/** Not `accountId`: a message naming another account is dropped (`isForOtherAccount`). */
+	PickedLinkPrimary: { pickedId: CustomerAccountId },
+	PressedConfirmLink: {},
+	GotEnvironmentModalMessage: { message: Modal.Message },
+	ChangedEnvironmentDraft: { value: Schema.String },
+	SubmittedEnvironment: {},
+	/** `accountId` is the account acted on: another customer's page drops the answer. */
+	SucceededGroupAction: { accountId: CustomerAccountId, action: GroupAction },
+	/** `message` is the store's reason it refused (`CustomerGroupError`), shown as is. */
+	FailedGroupAction: {
+		accountId: CustomerAccountId,
+		action: GroupAction,
+		reason: ActionFailure,
+		message: Schema.NullOr(Schema.String),
+	},
 
 	UpdatedChannelLinks: { links: Schema.Array(ChannelLinkRow) },
 	UpdatedChannelOptions: { channels: Schema.Array(ChannelOption) },

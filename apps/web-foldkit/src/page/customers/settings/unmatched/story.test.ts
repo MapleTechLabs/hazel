@@ -101,6 +101,8 @@ const account = (n: number, name: string, domain: string): AccountRow => ({
 	churnedAtMs: null,
 	tags: [],
 	featureFlags: {},
+	primaryAccountId: null,
+	environment: null,
 	attentionMutedAtMs: null,
 	attentionMutedUntilMs: null,
 	attentionMutedByUserId: null,

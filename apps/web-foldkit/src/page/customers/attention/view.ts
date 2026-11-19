@@ -3,6 +3,7 @@ import { Submodel } from "foldkit"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { formatMoney, formatRelative, formatWeekdayTime } from "../../../customers/format"
+import { environmentCounts } from "../../../customers/groups"
 import { KIND_LABEL, SEVERITY_LABEL } from "../../../customers/ui/badges"
 import { companyLogo } from "../../../customers/ui/identity"
 import {
@@ -601,6 +602,7 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 	const context: RowContext = {
 		nowMs: viewer.nowMs,
 		accountsById: accountsByIdOfModel(model),
+		environmentCounts: environmentCounts(model.accounts ?? []),
 		membersById: new Map(model.members.map((member) => [member.id, member])),
 		selectedId: model.selectedId,
 		actions: model.isPreviewOpen ? [] : inRow(h, signalActions(h, model, viewer)),

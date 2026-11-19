@@ -111,6 +111,8 @@ const account = (
 	churnedAtMs: null,
 	tags: [],
 	featureFlags: {},
+	primaryAccountId: null,
+	environment: null,
 	attentionMutedAtMs: null,
 	attentionMutedUntilMs: null,
 	attentionMutedByUserId: null,

@@ -18,6 +18,7 @@ import {
 	formatMoney,
 	formatRelative,
 } from "../../../customers/format"
+import { accountLabelOf } from "../../../customers/groups"
 import { msOf, type SignalRow } from "../../../customers/queries"
 import { severityChip } from "../../../customers/ui/badges"
 import { evidenceViz } from "../../../customers/ui/evidence"
@@ -27,7 +28,8 @@ import { snoozeMenuContent } from "../../../customers/ui/menus"
 import { queueAction } from "../../../customers/ui/queue-row"
 import { markdownView } from "../../../chat/markdown/markdown-view"
 import { IconCheck, IconChevronDown, IconChevronRight, IconClock, IconDots } from "../../../icons"
-import { AppRoute, hrefOf } from "../../../route"
+import { linkClass } from "../../../customers/ui/surface"
+import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
 import { menuLabel } from "../../../ui/menu-view"
 import { Message } from "./message"
@@ -38,6 +40,7 @@ import {
 	type Model,
 	OPEN_QUEUE,
 	openSignals,
+	primaryOf,
 	snoozeEntries,
 	signalMoreEntries,
 	sortedNotes,
@@ -428,6 +431,26 @@ const signalButtons = (
 	]
 }
 
+/** On an environment's page: its signals are the customer's, raised on the primary. */
+const primaryNote = (h: HtmlBuilder<Message>, model: Model, context: Context): ReadonlyArray<Html> => {
+	const primary = primaryOf(model)
+	return primary === null
+		? []
+		: [
+				h.p(
+					[h.Class("px-4 pb-3 text-muted-fg text-sm sm:px-5")],
+					[
+						"Signals are raised for the whole customer, on its primary, ",
+						h.a(
+							[h.Href(hrefOf(customerRoute(context.orgSlug, primary.id))), h.Class(linkClass)],
+							[accountLabelOf(primary)],
+						),
+						".",
+					],
+				),
+			]
+}
+
 const signalsCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
 	const signals = openSignals(model)
 	return card(
@@ -446,56 +469,61 @@ const signalsCard = (h: HtmlBuilder<Message>, model: Model, context: Context): H
 			),
 			bodyClassName: "p-0 sm:px-0",
 		},
-		signals.length === 0
-			? [
-					h.p(
-						[h.Class("px-4 pb-4 text-muted-fg text-sm sm:px-5")],
-						["Nothing needs attention on this account."],
-					),
-				]
-			: signals.map((signal) =>
-					h.div(
-						[
-							h.Key(signal.id),
-							h.Class("flex gap-4 border-border border-t px-4 py-4 first:border-t-0 sm:px-5"),
-						],
-						[
-							h.div(
-								[h.Class("flex min-w-0 flex-1 flex-col gap-2")],
-								[
-									h.div(
-										[h.Class("flex flex-wrap items-center gap-2")],
-										[
-											severityChip(h, signal.severity),
-											h.span([h.Class("font-medium text-fg")], [signal.title]),
-											h.span(
-												[h.Class("text-muted-fg text-xs")],
-												[
-													signal.status === "snoozed" &&
-													signal.snoozedUntilMs !== null
-														? `snoozed until ${formatDate(new Date(signal.snoozedUntilMs), { now: new Date(context.nowMs) })}`
-														: `· opened ${formatDate(new Date(signal.openedAtMs), { now: new Date(context.nowMs) })}`,
-												],
-											),
-										],
-									),
-									h.p([h.Class("text-fg-2 text-sm")], [signal.reason]),
-									h.div(
-										[h.Class("flex flex-wrap items-center gap-1.5")],
-										signalButtons(h, model, signal, context.nowMs),
-									),
-								],
-							),
-							h.div(
-								[h.Class("flex shrink-0 flex-col items-end gap-2 max-sm:hidden")],
-								[
-									evidenceViz(h, signal.evidence),
-									personLabel(h, memberOf(context, signal.assigneeUserId)),
-								],
-							),
-						],
-					),
-				),
+		[
+			...primaryNote(h, model, context),
+			...(signals.length === 0
+				? [
+						h.p(
+							[h.Class("px-4 pb-4 text-muted-fg text-sm sm:px-5")],
+							["Nothing needs attention on this account."],
+						),
+					]
+				: signals.map((signal) =>
+						h.div(
+							[
+								h.Key(signal.id),
+								h.Class(
+									"flex gap-4 border-border border-t px-4 py-4 first:border-t-0 sm:px-5",
+								),
+							],
+							[
+								h.div(
+									[h.Class("flex min-w-0 flex-1 flex-col gap-2")],
+									[
+										h.div(
+											[h.Class("flex flex-wrap items-center gap-2")],
+											[
+												severityChip(h, signal.severity),
+												h.span([h.Class("font-medium text-fg")], [signal.title]),
+												h.span(
+													[h.Class("text-muted-fg text-xs")],
+													[
+														signal.status === "snoozed" &&
+														signal.snoozedUntilMs !== null
+															? `snoozed until ${formatDate(new Date(signal.snoozedUntilMs), { now: new Date(context.nowMs) })}`
+															: `· opened ${formatDate(new Date(signal.openedAtMs), { now: new Date(context.nowMs) })}`,
+													],
+												),
+											],
+										),
+										h.p([h.Class("text-fg-2 text-sm")], [signal.reason]),
+										h.div(
+											[h.Class("flex flex-wrap items-center gap-1.5")],
+											signalButtons(h, model, signal, context.nowMs),
+										),
+									],
+								),
+								h.div(
+									[h.Class("flex shrink-0 flex-col items-end gap-2 max-sm:hidden")],
+									[
+										evidenceViz(h, signal.evidence),
+										personLabel(h, memberOf(context, signal.assigneeUserId)),
+									],
+								),
+							],
+						),
+					)),
+		],
 	)
 }
 
