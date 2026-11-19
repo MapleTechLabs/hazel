@@ -564,7 +564,10 @@ describe("needs attention: actions", () => {
 			Message.GotSnoozeMenuMessage({
 				message: Menu.Message.ClickedItem({ key: "mute:week", entries }),
 			}),
-		].reduce((current, step) => pageUpdate(current, step).model, { ...base, selectedId: usageDown.id })
+		].reduce<Model>((current, step) => pageUpdate(current, step).model, {
+			...base,
+			selectedId: usageDown.id,
+		})
 		expect(ids(visibleSignals(muted, viewer))).toEqual(ids([stoppedLogging, seats]))
 		expect(muted.selectedId).toBe(stoppedLogging.id)
 	})
