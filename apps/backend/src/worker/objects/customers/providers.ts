@@ -40,6 +40,8 @@ import type {
 	SweepEntityType,
 	SyncProgress,
 } from "@hazel/domain/customers"
+import type { CustomerImpersonationError } from "@hazel/domain/rpc"
+import type { UserId } from "@hazel/schema"
 import { Context, Effect, Layer, Option, type Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { makeAutumnAdapter } from "./autumn/adapter"
@@ -116,6 +118,14 @@ export interface CustomerProviderAdapter {
 	}) => Effect.Effect<PullPage, CustomerProviderError>
 	/** Scheduled pull period (webhooks cover the rest); e.g. Maple hourly, Stripe every 6 hours. */
 	readonly pullIntervalMs: number
+	/**
+	 * A one-time link signing the Hazel member (`actorUserId`) in as the provider's user, for the
+	 * providers that hold the customer's sign-in (Clerk). Absent: the provider cannot impersonate.
+	 */
+	readonly impersonate?: (
+		credentials: ProviderCredentials,
+		input: { readonly externalUserId: string; readonly actorUserId: UserId },
+	) => Effect.Effect<{ readonly url: string; readonly tokenId: string }, CustomerImpersonationError>
 }
 
 export interface CustomerProvidersApi {

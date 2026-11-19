@@ -10,6 +10,7 @@
 import type * as Customers from "@hazel/domain/customers"
 import {
 	type CustomerAccountId,
+	CustomerImpersonatorId,
 	CustomerNoteId,
 	type CustomerSignalId,
 	type OrganizationId,
@@ -17,7 +18,12 @@ import {
 } from "@hazel/schema"
 import { optimisticAction } from "@hazel/effect-db-collection"
 import { Clock, Effect } from "effect"
-import { customerAccountCollection, customerNoteCollection, customerSignalCollection } from "~/db/collections"
+import {
+	customerAccountCollection,
+	customerImpersonatorCollection,
+	customerNoteCollection,
+	customerSignalCollection,
+} from "~/db/collections"
 import { HazelRpc } from "../rpc"
 
 interface SignalTarget {
@@ -440,5 +446,69 @@ export const bulkUpdateAccountsAction = optimisticAction({
 				transactionId = result.transactionId
 			}
 			return { data: { updated }, transactionId }
+		}),
+})
+
+// IMPERSONATION
+
+interface ImpersonatorGrant {
+	readonly organizationId: OrganizationId
+	readonly userId: UserId
+	/** The admin granting: recorded on the optimistic row like the server records it. */
+	readonly grantedBy: UserId
+}
+
+/** The server keeps the client's id, so the synced row replaces the optimistic one. */
+const grantImpersonator = optimisticAction({
+	collections: [customerImpersonatorCollection],
+	onMutate: (props: ImpersonatorGrant & Stamp & { readonly id: CustomerImpersonatorId }) => {
+		customerImpersonatorCollection.insert({
+			id: props.id,
+			organizationId: props.organizationId,
+			userId: props.userId,
+			grantedBy: props.grantedBy,
+			createdAt: props.at,
+			updatedAt: props.at,
+		})
+		return { id: props.id }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.impersonator.grant", {
+				id: props.id,
+				organizationId: props.organizationId,
+				userId: props.userId,
+			})
+			return { data: result, transactionId: result.transactionId }
+		}),
+})
+
+/** Let a member sign in as customers' users (Clerk impersonation). */
+export const grantImpersonatorAction = (props: ImpersonatorGrant) =>
+	Effect.flatMap(
+		Effect.sync(() => CustomerImpersonatorId.make(crypto.randomUUID())),
+		(id) => stamped(grantImpersonator)({ ...props, id }),
+	)
+
+/** Take a member's grant back. */
+export const revokeImpersonatorAction = optimisticAction({
+	collections: [customerImpersonatorCollection],
+	onMutate: (props: {
+		readonly organizationId: OrganizationId
+		readonly impersonatorId: CustomerImpersonatorId
+		readonly userId: UserId
+	}) => {
+		customerImpersonatorCollection.delete(props.impersonatorId)
+		return { impersonatorId: props.impersonatorId }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.impersonator.revoke", {
+				organizationId: props.organizationId,
+				userId: props.userId,
+			})
+			return { data: result, transactionId: result.transactionId }
 		}),
 })

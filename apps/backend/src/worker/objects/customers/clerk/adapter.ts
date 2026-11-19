@@ -22,6 +22,7 @@ import { CustomerProviderError } from "../provider-errors"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../providers"
 import { WEBHOOK_REQUESTS } from "../provider-http"
 import { makeClerkGet } from "./http"
+import { createActorToken } from "./impersonate"
 import { onNoMatchOf } from "./map"
 import { pullPage } from "./pull"
 import { receiveWebhook } from "./webhook"
@@ -101,6 +102,12 @@ export const makeClerkAdapter = Effect.gen(function* () {
 			}),
 
 		pullIntervalMs: CLERK_PULL_INTERVAL_MS,
+
+		impersonate: (credentials, input) =>
+			createActorToken(client, credentials.apiKey, {
+				clerkUserId: input.externalUserId,
+				actorUserId: input.actorUserId,
+			}).pipe(Effect.map((token) => ({ url: token.url, tokenId: token.id }))),
 	}
 	return adapter
 })

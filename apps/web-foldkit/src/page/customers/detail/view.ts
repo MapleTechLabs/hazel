@@ -44,6 +44,7 @@ import * as Popover from "../../../ui/popover"
 import type { PageViewInputs } from "../../contract"
 import { activityTab } from "./activity-tab"
 import { billingTab } from "./billing-tab"
+import { impersonateDialog } from "./impersonate-dialog"
 import { Message } from "./message"
 import {
 	accountOf,
@@ -1240,6 +1241,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			rawDialog(h, model, context),
 			deleteNoteDialog(h, model),
 			mergeDialog(h, model, context),
+			impersonateDialog(h, model),
 		],
 	)
 })

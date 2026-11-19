@@ -14,7 +14,9 @@ import {
 	CustomerAccountId,
 	CustomerChannelLinkId,
 	CustomerConnectionId,
+	CustomerContactId,
 	CustomerIgnoreRuleId,
+	CustomerImpersonatorId,
 	CustomerNoteId,
 	CustomerSavedViewId,
 	CustomerSignalId,
@@ -62,6 +64,7 @@ import {
 import { RuleDraft } from "../customers/rules"
 import { MAX_VIEWS, ViewDraft } from "../customers/views"
 import { InternalServerError, UnauthorizedError } from "../errors"
+import { RateLimitExceededError } from "../rate-limit-errors"
 import { JsonDate } from "../models/utils"
 import { RequiredScopes } from "../scopes/required-scopes"
 import { AuthMiddleware } from "./middleware"
@@ -96,6 +99,7 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"unmatched_record",
 			"ignore_rule",
 			"metric",
+			"contact",
 			/** No such channel in the org, or one the caller cannot see. */
 			"channel",
 		]),
@@ -125,6 +129,20 @@ export class CustomerProviderUnavailableError extends Schema.TaggedError<Custome
 export class CustomerConnectionCredentialsError extends Schema.TaggedError<CustomerConnectionCredentialsError>()(
 	"CustomerConnectionCredentialsError",
 	{ provider: CustomerProvider, message: Schema.String, retryable: Schema.Boolean },
+) {}
+
+/**
+ * The provider would not start an impersonation: no live connection that can impersonate
+ * (`unavailable`), the contact has no user there (`no_user`), impersonation is off in the
+ * provider's settings (`disabled`), or the provider refused or failed (`provider`, its own
+ * explanation in `message`, e.g. the monthly allowance used up).
+ */
+export class CustomerImpersonationError extends Schema.TaggedError<CustomerImpersonationError>()(
+	"CustomerImpersonationError",
+	{
+		reason: Schema.Literals(["unavailable", "no_user", "disabled", "provider"]),
+		message: Schema.String,
+	},
 ) {}
 
 const Tx = Schema.Struct({ transactionId: TransactionId })
@@ -561,6 +579,37 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		{ metricKey: NonEmptyText(200), unit: Schema.NullOr(NonEmptyText(40)) },
 		Tx,
 		CustomersNotFoundError,
+	),
+
+	/** Let a member sign in as customers' users (Clerk impersonation). Admins and owners. */
+	write(
+		"customers.impersonator.grant",
+		{
+			/** Client-generated, for the optimistic row. */
+			id: Schema.optionalKey(CustomerImpersonatorId),
+			userId: UserId,
+		},
+		Tx,
+		CustomersInvalidRequestError,
+	),
+
+	/**
+	 * Take the grant back. A link already handed out still works for its minute, and a session it
+	 * opened for at most 15 minutes.
+	 */
+	write("customers.impersonator.revoke", { userId: UserId }, Tx),
+
+	/**
+	 * Sign in as the contact's user in the customer's app: answers the provider's one-time sign-in
+	 * URL (valid for a minute), for the caller only. Members with a grant, not admins as such.
+	 */
+	write(
+		"customers.impersonation.start",
+		{ contactId: CustomerContactId },
+		withTx(Schema.Struct({ url: Schema.String })),
+		CustomersNotFoundError,
+		CustomerImpersonationError,
+		RateLimitExceededError,
 	),
 
 	/**

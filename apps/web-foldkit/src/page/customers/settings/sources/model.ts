@@ -1,12 +1,13 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerConnectionId } from "@hazel/schema"
+import { CustomerConnectionId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason, failureMessage, type UserErrorMessage } from "~/lib/error-messages"
 import { providerOf } from "../../../../customers/providers"
-import { MemberRow } from "../../../../customers/queries"
+import { ImpersonatorRow, MemberRow } from "../../../../customers/queries"
+import * as Menu from "../../../../ui/menu"
 import * as Modal from "../../../../ui/modal"
-import { ConnectionRow, SyncRunRow, UnitMetricRow } from "./queries"
+import { ConnectionRow, ImpersonationRow, SyncRunRow, UnitMetricRow } from "./queries"
 
 /**
  * Data sources (`docs/customers/spec.md` §5): every provider's connection, its sync runs and
@@ -114,12 +115,19 @@ export const Model = Schema.Struct({
 	unitMetrics: Schema.NullOr(Schema.Array(UnitMetricRow)),
 	/** A metric's unit while typed, by key; saved on Enter or blur. */
 	unitDrafts: Schema.Record(Schema.String, Schema.String),
+	/** Clerk's impersonation section: who may, the recent sign-ins, the "Add member" picker. */
+	impersonators: Schema.Array(ImpersonatorRow),
+	impersonations: Schema.Array(ImpersonationRow),
+	impersonatorMenu: Menu.Model,
+	/** Grants asked and not answered yet: their Remove waits (a revoke could land before the grant). */
+	pendingGrants: Schema.Array(UserId),
 })
 export type Model = typeof Model.Type
 
 export const CONNECT_MODAL_ID = "customers-source-connect"
 export const KEYS_MODAL_ID = "customers-source-keys"
 export const DISCONNECT_MODAL_ID = "customers-source-disconnect"
+export const IMPERSONATOR_MENU_ID = "customers-impersonator-add"
 
 // WHAT IS SHOWN
 
@@ -149,6 +157,10 @@ export const statusOf = (model: Model, connection: ConnectionRow): SourceStatus 
 
 export const visibleRuns = (model: Model, connectionId: CustomerConnectionId): ReadonlyArray<SyncRunRow> =>
 	runsOf(model, connectionId).filter((run) => model.historyFilter === "all" || run.status === "failed")
+
+/** The members "Add member" offers: those without a grant. */
+export const grantableMembers = (model: Model): ReadonlyArray<MemberRow> =>
+	model.members.filter((member) => !model.impersonators.some((row) => row.userId === member.id))
 
 const isSameConfig = Schema.toEquivalence(Customers.ConnectionConfig)
 
