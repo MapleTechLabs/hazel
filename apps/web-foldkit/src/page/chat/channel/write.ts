@@ -19,6 +19,7 @@ import {
 	ActionMessage,
 	type CopiedContent,
 	type MessageActionFailure,
+	CopyImage,
 	CopyText,
 	CreateThread,
 	DownloadImage,
@@ -469,6 +470,7 @@ export const viewerAction = (
 			commands: actionCommands([DownloadImage({ url, fileName })]),
 			outMessage: toast(successToast("Image downloaded", "Your image has been downloaded.")),
 		})),
+		Match.when("copyImage", () => ({ model, commands: actionCommands([CopyImage({ url })]) })),
 		Match.when("copyUrl", () => copy(model, url, "ImageUrl")),
 		Match.when("openInBrowser", () => ({ model, commands: actionCommands([OpenUrl({ url })]) })),
 		Match.exhaustive,
@@ -639,6 +641,10 @@ export const handleActionMessage = (model: Model, message: ActionMessage): PageR
 		SucceededCopyText: ({ content }) => withToast(model, copiedToast(content)),
 		FailedCopyText: () =>
 			withToast(model, errorToast("Couldn't copy", "Your browser blocked access to the clipboard.")),
+		SucceededCopyImage: () =>
+			withToast(model, successToast("Image copied", "The image has been copied to your clipboard.")),
+		FailedCopyImage: () =>
+			withToast(model, errorToast("Couldn't copy image", "Try downloading it instead.")),
 		CompletedDownloadImage: () => ({ model }),
 		CompletedOpenUrl: () => ({ model }),
 		SucceededGenerateThreadName: ({ threadChannelId }) => ({

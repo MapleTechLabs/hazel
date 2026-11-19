@@ -37,6 +37,9 @@ export const mosaicLayout = (count: number): "single" | "feature" | ReadonlyArra
 
 const GRID_COLUMNS: Record<number, string> = { 1: "grid-cols-1", 2: "grid-cols-2", 3: "grid-cols-3" }
 
+/** Marks an attachment image, so a right-click on it offers "Copy Image". */
+export const MESSAGE_IMAGE_ATTRIBUTE = "message-image"
+
 /** A row's cell shape: a lone image is a wide band, two are 4:3, three are squares. */
 const ROW_ASPECT: Record<number, string> = { 1: "aspect-[2/1]", 2: "aspect-[4/3]", 3: "aspect-square" }
 
@@ -52,6 +55,7 @@ const cell = <M>(h: HtmlBuilder<M>, image: MosaicImage<M>, className: string, hi
 		h.Attribute("alt", image.alt),
 		h.Attribute("loading", "lazy"),
 		h.Attribute("draggable", "false"),
+		h.DataAttribute(MESSAGE_IMAGE_ATTRIBUTE, ""),
 		h.Class("size-full object-cover"),
 	])
 	return image.onOpen === undefined
@@ -85,6 +89,7 @@ const singleView = <M>(h: HtmlBuilder<M>, image: MosaicImage<M>): Html => {
 		h.Src(image.url),
 		h.Attribute("alt", image.alt),
 		h.Attribute("loading", "lazy"),
+		h.DataAttribute(MESSAGE_IMAGE_ATTRIBUTE, ""),
 		h.Class("block h-auto max-h-[300px] w-auto max-w-full"),
 	])
 	const frame = "block w-fit max-w-full overflow-hidden rounded-md border border-border"

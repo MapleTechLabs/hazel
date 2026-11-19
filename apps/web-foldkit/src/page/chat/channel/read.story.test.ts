@@ -12,7 +12,7 @@ import * as Typing from "../../../composer/typing"
 import * as MessageList from "../../../mount/message-list"
 import { chatMessageOf, imageAttachmentOf, liveEmbeds } from "../../../test/chat-messages"
 import { PageOutMessage } from "../../out-message"
-import { ActionMessage, CopyText, GenerateThreadName, OpenUrl } from "../message-actions"
+import { ActionMessage, CopyImage, CopyText, GenerateThreadName, OpenUrl } from "../message-actions"
 import * as Menu from "../../../ui/menu"
 import * as Overlays from "../overlays"
 import { PAGE_SIZE } from "../queries"
@@ -682,6 +682,73 @@ describe("image viewer", () => {
 			),
 			Command.expectExact(OpenUrl({ url })),
 			Command.resolve(OpenUrl, ActionMessage.CompletedOpenUrl()),
+		)
+	})
+
+	test("Copy image copies the image itself with a toast", () => {
+		const url = "https://cdn.hazel.sh/photo-1.png"
+		story(
+			updateWithShared,
+			given(withImages()),
+			message(
+				overlays(Overlays.Message.ClickedAttachmentImage({ messageId: graceMessageId, index: 0 })),
+			),
+			message(
+				overlays(
+					Overlays.Message.ClickedViewerAction({
+						action: "copyImage",
+						url,
+						fileName: "photo-1.png",
+					}),
+				),
+			),
+			Command.expectExact(CopyImage({ url })),
+			Command.resolve(CopyImage, ActionMessage.SucceededCopyImage()),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "success",
+						title: "Image copied",
+						description: "The image has been copied to your clipboard.",
+					},
+				}),
+			),
+		)
+	})
+
+	test("right-clicking an attachment image offers Copy Image and Copy Image Address", () => {
+		const url = "https://cdn.hazel.sh/photo-1.png"
+		const facts = { isOwnMessage: () => false, isPinned: () => false, canStartThread: () => false }
+		const opened = Overlays.update(
+			Overlays.init(),
+			Overlays.Message.RightClickedMessage({
+				messageId: graceMessageId,
+				offset: 0,
+				crossOffset: 0,
+				imageUrl: url,
+			}),
+		).model
+		const menu = Overlays.contextMenuOf(opened)
+		expect(menu?.imageUrl).toBe(url)
+		const entries = Overlays.contextMenuEntries(facts, graceMessageId, url)
+		const keysOf = (all: ReadonlyArray<Menu.Entry>) =>
+			all.flatMap((entry) => (entry._tag === "Item" ? [entry.item.key] : []))
+		const imageKeys = [Overlays.COPY_IMAGE, Overlays.COPY_IMAGE_URL]
+		expect(keysOf(entries)).toEqual(expect.arrayContaining(imageKeys))
+		const plainKeys = keysOf(Overlays.contextMenuEntries(facts, graceMessageId, null))
+		for (const key of imageKeys) expect(plainKeys).not.toContain(key)
+		const choose = (key: string) =>
+			Overlays.update(
+				opened,
+				Overlays.Message.GotContextMenuMessage({
+					message: Menu.Message.ClickedItem({ key, entries }),
+				}),
+			).outMessage
+		expect(choose(Overlays.COPY_IMAGE)).toEqual(
+			Overlays.OutMessage.RequestedViewerAction({ action: "copyImage", url, fileName: "" }),
+		)
+		expect(choose(Overlays.COPY_IMAGE_URL)).toEqual(
+			Overlays.OutMessage.RequestedViewerAction({ action: "copyUrl", url, fileName: "" }),
 		)
 	})
 
