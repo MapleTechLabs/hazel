@@ -151,9 +151,10 @@ describe("MRR: the plans plus usage billing", () => {
 				{ subscriptionId: team.id, amountPaidMinor: 22_900, paidAt: paidDaysAgo(70) },
 				{ subscriptionId: team.id, amountPaidMinor: 19_900, paidAt: paidDaysAgo(40) },
 				{ subscriptionId: team.id, amountPaidMinor: 25_900, paidAt: paidDaysAgo(10) },
+				{ subscriptionId: team.id, amountPaidMinor: 50_000, paidAt: paidDaysAgo(-2) },
 			],
 		)
-		// (3_000 + 0 + 6_000) / 3; the invoice 100 days ago is out of the window.
+		// (3_000 + 0 + 6_000) / 3; the invoices 100 days ago and 2 days ahead are out of the window.
 		expect(rollup.mrrMinor).toBe(22_900)
 		expect(rollup.lifecycleStage).toBe("active")
 	})

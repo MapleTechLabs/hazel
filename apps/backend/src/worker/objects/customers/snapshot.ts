@@ -168,6 +168,7 @@ export const usageMrrOf = (
 					invoice.subscriptionId === sub.id &&
 					invoice.currency === sub.currency &&
 					invoice.paidAt !== null &&
+					invoice.paidAt <= now &&
 					now.getTime() - invoice.paidAt.getTime() <= USAGE_WINDOW_DAYS * DAY_MS,
 			)
 			.sort((a, b) => Number(b.paidAt) - Number(a.paidAt))
