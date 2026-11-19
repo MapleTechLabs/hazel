@@ -560,13 +560,15 @@ const churned =
 		const churn = [...facts.movements]
 			.reverse()
 			.find((movement) => movement.type === "churn" && movement.day >= dayOf(churnedAt))
-		// Before this compute's movement is loaded, the day it ended: the last canceled subscription's
-		// period end, when that came after the cancellation and has passed.
+		// Before this compute's movement is loaded, the day it ended: a scheduled cancellation's period
+		// end once passed (an immediate one keeps a later period end it never reached), else
+		// `canceledAt`.
 		const ended = facts.subscriptions
 			.flatMap((sub) =>
 				sub.canceledAt === null
 					? []
 					: [
+							sub.cancelAtPeriodEnd &&
 							sub.currentPeriodEnd !== null &&
 							sub.currentPeriodEnd > sub.canceledAt &&
 							sub.currentPeriodEnd <= org.now

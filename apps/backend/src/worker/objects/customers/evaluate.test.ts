@@ -522,6 +522,7 @@ describe("signal evaluation", () => {
 					{
 						status: "canceled",
 						mrrMinor: 19_900,
+						cancelAtPeriodEnd: true,
 						canceledAt: new Date(NOW.getTime() - 29 * 86_400_000),
 						currentPeriodEnd: new Date(NOW.getTime() - 2 * 86_400_000),
 					},
@@ -532,6 +533,25 @@ describe("signal evaluation", () => {
 		expect(scheduled.evidence).toMatchObject({
 			effectiveAt: new Date(NOW.getTime() - 2 * 86_400_000).toISOString(),
 		})
+		// Canceled at once 30 days ago: the period end Stripe keeps (passed yesterday) is not when it ended.
+		expect(
+			run(
+				"churned",
+				churned(30, {
+					movements: [],
+					subscriptions: [
+						{
+							status: "canceled",
+							mrrMinor: 0,
+							billsByUsage: true,
+							cancelAtPeriodEnd: false,
+							canceledAt: new Date(NOW.getTime() - 30 * 86_400_000),
+							currentPeriodEnd: new Date(NOW.getTime() - 86_400_000),
+						},
+					],
+				}),
+			),
+		).toEqual({ _tag: "NoMatch", reason: "Below threshold" })
 		// A past episode's movement is not this churn's; before the movement loads, every
 		// subscription canceled that day counts.
 		const twoSubs = (days: number) => ({
