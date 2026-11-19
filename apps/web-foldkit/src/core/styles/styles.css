@@ -374,11 +374,6 @@ If you want to use the typography plugin, uncomment the line below.
 	--radius-2xl: calc(var(--radius-lg) * 2);
 	--radius-3xl: calc(var(--radius-lg) * 3);
 	--radius-4xl: calc(var(--radius-lg) * 4);
-
-	::selection {
-		background-color: var(--selection-bg);
-		color: var(--selection-fg);
-	}
 }
 
 .dark {
@@ -471,7 +466,11 @@ If you want to use the typography plugin, uncomment the line below.
 	--selection-bg: var(--color-brand-900);
 	--selection-fg: var(--color-brand-200);
 	--overlay-backdrop: oklch(0 0 0 / 0.5);
+}
 
+/* A touch screen draws its own selection highlight over the page (iOS's WKWebView, Safari): a
+   ::selection of ours paints a second, recoloured one under it, offset, so the text looks doubled. */
+@media (pointer: fine) {
 	::selection {
 		background-color: var(--selection-bg);
 		color: var(--selection-fg);
