@@ -36,7 +36,6 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 												: {
 														id: row.id,
 														addOnPlans: row.addOnPlans,
-														overageInMrr: row.overageInMrr,
 													},
 									})
 								},

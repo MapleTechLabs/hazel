@@ -45,8 +45,8 @@ export const OverviewKpis = Schema.Struct({
 	activeCustomers: Kpi,
 	wau: Kpi,
 	mau: Kpi,
-	/** WAU ÷ MAU, percent. */
-	stickinessPct: Kpi,
+	/** Revenue collected in the range (paid invoices, recurring and one-off), minor units. */
+	revenueMinor: Kpi,
 	/** Accounts that churned in the range. */
 	logoChurn: Kpi,
 	/** MRR of accounts with an open high-severity risk signal (now; `previous` from `customer_org_daily`). */

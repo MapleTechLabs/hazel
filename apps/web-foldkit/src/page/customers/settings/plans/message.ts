@@ -6,7 +6,6 @@ import { SavedSettings } from "./model"
 export const Message = defineMessageUnion({
 	UpdatedSettings: { settings: Schema.NullOr(SavedSettings) },
 	ToggledAddOn: { plan: Schema.String, isAddOn: Schema.Boolean },
-	ToggledOverageInMrr: { isOn: Schema.Boolean },
 	PressedRetry: {},
 
 	SucceededFetchPlans: { plans: Schema.Array(Schema.String) },

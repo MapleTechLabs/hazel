@@ -1377,7 +1377,7 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
-	it("counts a subscription's last paid Stripe invoice, overage included, while overage counts in MRR", () =>
+	it("adds a subscription's average usage overage over its last 3 months' paid Stripe invoices to MRR", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
@@ -1404,30 +1404,25 @@ describe("Customers compute and sync loop", () => {
 					})),
 				])
 				const mrr = () => world.rows(`SELECT mrrMinor FROM customer_accounts`)
+				// 19_900 + (1_100 + 4_450) / 2.
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
-				expect(mrr()).toEqual([{ mrrMinor: 19_900 }])
+				expect(mrr()).toEqual([{ mrrMinor: 22_675 }])
 
-				ok(yield* world.call("customers.settings.update", { overageInMrr: true }, world.owner))
-				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
-				expect(mrr()).toEqual([{ mrrMinor: 24_350 }])
-
-				// A history rebuild leaves the invoices' MRR to compute; today's movement ends the plans' series there.
+				// A history rebuild ends at the plans' MRR; the compute after it adds the usage back as
+				// today's movement.
 				yield* world.object.run(requestHistoryRebuild).pipe(Effect.orDie)
 				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
 				expect(meta(world, "rebuildHistory")).toBeUndefined()
-				expect(mrr()).toEqual([{ mrrMinor: 24_350 }])
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				expect(mrr()).toEqual([{ mrrMinor: 22_675 }])
 				expect(
 					world.rows(
 						`SELECT day, type, fromMrrMinor, toMrrMinor FROM customer_mrr_movements ORDER BY day`,
 					),
 				).toEqual([
 					{ day: day(-60), type: "new", fromMrrMinor: 0, toMrrMinor: 19_900 },
-					{ day: day(0), type: "expansion", fromMrrMinor: 19_900, toMrrMinor: 24_350 },
+					{ day: day(0), type: "expansion", fromMrrMinor: 19_900, toMrrMinor: 22_675 },
 				])
-
-				ok(yield* world.call("customers.settings.update", { overageInMrr: false }, world.owner))
-				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
-				expect(mrr()).toEqual([{ mrrMinor: 19_900 }])
 			}),
 		))
 

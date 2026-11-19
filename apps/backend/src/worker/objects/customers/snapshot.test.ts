@@ -1,12 +1,12 @@
 /**
  * The pure account rollup (`rollupAccount`): which subscription names the plan when some plans are
- * add-ons, that add-ons still count for MRR, and MRR from paid Stripe invoices (`overageInMrr`).
+ * add-ons, that add-ons still count for MRR, and usage billing on top (`usageMrrOf`).
  */
 import type { schema } from "@hazel/db"
 import type { CustomerProvider } from "@hazel/domain/customers"
 import type { CustomerSubscriptionId } from "@hazel/schema"
 import { describe, expect, it } from "vitest"
-import { invoiceMrrOf, rollupAccount } from "./snapshot"
+import { rollupAccount, usageMrrOf } from "./snapshot"
 import { factsOf, NOW, TODAY } from "./test-kit"
 
 const rollupOf = (
@@ -19,7 +19,7 @@ const rollupOf = (
 		subscriptions: facts.subscriptions,
 		mrrSource: "autumn",
 		addOnPlans,
-		invoiceMrr: [],
+		usageMrr: [],
 		contacts: facts.contacts,
 		activity: facts.activity,
 		lastActiveDay: facts.lastActiveDay,
@@ -109,10 +109,10 @@ const paidDaysAgo = (days: number) => new Date(NOW.getTime() - days * DAY)
 const subId = (name: string) => `sub-${name}` as CustomerSubscriptionId
 
 /**
- * With `overageInMrr` on: `invoices` are paid Stripe ones (`subscriptionId` a sub's `id`); the
- * rollup gets `mrrSource`'s subscriptions, the invoices all of them.
+ * `invoices` are paid Stripe ones (`subscriptionId` a sub's `id`); the rollup gets `mrrSource`'s
+ * subscriptions, the usage all of them.
  */
-const invoiceRollupOf = (
+const usageRollupOf = (
 	subscriptions: ReadonlyArray<Partial<schema.CustomerSubscription>>,
 	invoices: ReadonlyArray<Partial<schema.CustomerInvoice>>,
 	mrrSource: CustomerProvider = "stripe",
@@ -126,7 +126,7 @@ const invoiceRollupOf = (
 		subscriptions: facts.subscriptions.filter((sub) => sub.provider === mrrSource),
 		mrrSource,
 		addOnPlans: [],
-		invoiceMrr: invoiceMrrOf(facts.subscriptions, facts.openInvoices, NOW),
+		usageMrr: usageMrrOf(facts.subscriptions, facts.openInvoices, NOW),
 		contacts: facts.contacts,
 		activity: facts.activity,
 		lastActiveDay: facts.lastActiveDay,
@@ -136,71 +136,68 @@ const invoiceRollupOf = (
 	})
 }
 
-describe("MRR from paid Stripe invoices", () => {
+describe("MRR: the plans plus usage billing", () => {
 	const team = { id: subId("team"), mrrMinor: 19_900 }
 
-	it("keeps the plans' MRR without counted invoices (the setting off, or none paid yet)", () => {
-		expect(rollupOf([team]).mrrMinor).toBe(19_900)
-		expect(invoiceRollupOf([team], []).mrrMinor).toBe(19_900)
+	it("is the plans' MRR without paid invoices", () => {
+		expect(usageRollupOf([team], []).mrrMinor).toBe(19_900)
 	})
 
-	it("counts a monthly subscription's last paid invoice, overage included", () => {
-		const rollup = invoiceRollupOf(
+	it("adds the last 3 months' average overage above the plan", () => {
+		const rollup = usageRollupOf(
 			[team],
 			[
-				{ subscriptionId: team.id, amountPaidMinor: 21_000, paidAt: paidDaysAgo(40) },
-				{ subscriptionId: team.id, amountPaidMinor: 24_350, paidAt: paidDaysAgo(10) },
+				{ subscriptionId: team.id, amountPaidMinor: 99_000, paidAt: paidDaysAgo(100) },
+				{ subscriptionId: team.id, amountPaidMinor: 22_900, paidAt: paidDaysAgo(70) },
+				{ subscriptionId: team.id, amountPaidMinor: 19_900, paidAt: paidDaysAgo(40) },
+				{ subscriptionId: team.id, amountPaidMinor: 25_900, paidAt: paidDaysAgo(10) },
 			],
 		)
-		expect(rollup.mrrMinor).toBe(24_350)
+		// (3_000 + 0 + 6_000) / 3; the invoice 100 days ago is out of the window.
+		expect(rollup.mrrMinor).toBe(22_900)
 		expect(rollup.lifecycleStage).toBe("active")
 	})
 
-	it("counts a yearly invoice per month", () => {
-		const yearly = { id: subId("yearly"), interval: "year" as const, mrrMinor: 15_000 }
+	it("averages over the invoices there are when fewer than 3", () => {
 		expect(
-			invoiceRollupOf(
-				[yearly],
-				[{ subscriptionId: yearly.id, amountPaidMinor: 190_000, paidAt: paidDaysAgo(300) }],
-			).mrrMinor,
-		).toBe(15_833)
-	})
-
-	it("falls back to the plans' MRR once the last paid invoice is past its interval and grace", () => {
-		expect(
-			invoiceRollupOf(
+			usageRollupOf(
 				[team],
-				[{ subscriptionId: team.id, amountPaidMinor: 24_350, paidAt: paidDaysAgo(39) }],
-			).mrrMinor,
-		).toBe(19_900)
-	})
-
-	it("ignores a canceled subscription's invoices", () => {
-		const old = { id: subId("old"), status: "canceled" as const, mrrMinor: 9_900 }
-		expect(
-			invoiceRollupOf(
-				[team, old],
 				[
-					{ subscriptionId: team.id, amountPaidMinor: 20_500, paidAt: paidDaysAgo(5) },
-					{ subscriptionId: old.id, amountPaidMinor: 9_900, paidAt: paidDaysAgo(5) },
+					{ subscriptionId: team.id, amountPaidMinor: 21_900, paidAt: paidDaysAgo(40) },
+					{ subscriptionId: team.id, amountPaidMinor: 25_900, paidAt: paidDaysAgo(10) },
 				],
 			).mrrMinor,
-		).toBe(20_500)
+		).toBe(23_900)
 	})
 
-	it("ignores a paused subscription's invoices, as its plan MRR is", () => {
-		const paused = { id: subId("paused"), status: "paused" as const, mrrMinor: 10_000 }
+	it("counts a usage-only subscription's whole invoices", () => {
+		const metered = { id: subId("metered"), mrrMinor: 0, billsByUsage: true }
 		expect(
-			invoiceRollupOf(
-				[{ id: subId("plan"), mrrMinor: 10_000 }, paused],
-				[{ subscriptionId: paused.id, amountPaidMinor: 20_000, paidAt: paidDaysAgo(5) }],
+			usageRollupOf(
+				[metered],
+				[{ subscriptionId: metered.id, amountPaidMinor: 4_200, paidAt: paidDaysAgo(12) }],
 			).mrrMinor,
-		).toBe(10_000)
+		).toBe(4_200)
 	})
 
-	it("adds only reporting-currency invoices", () => {
+	it("adds nothing for a discount, a yearly plan, or a canceled subscription", () => {
+		const yearly = { id: subId("yearly"), interval: "year" as const, mrrMinor: 15_000 }
+		const old = { id: subId("old"), status: "canceled" as const, mrrMinor: 9_900 }
+		expect(
+			usageRollupOf(
+				[team, yearly, old],
+				[
+					{ subscriptionId: team.id, amountPaidMinor: 15_000, paidAt: paidDaysAgo(5) },
+					{ subscriptionId: yearly.id, amountPaidMinor: 190_000, paidAt: paidDaysAgo(20) },
+					{ subscriptionId: old.id, amountPaidMinor: 50_000, paidAt: paidDaysAgo(5) },
+				],
+			).mrrMinor,
+		).toBe(34_900)
+	})
+
+	it("adds only reporting-currency usage", () => {
 		const euro = { id: subId("euro"), currency: "eur", mrrMinor: 5_000 }
-		const rollup = invoiceRollupOf(
+		const rollup = usageRollupOf(
 			[team, euro],
 			[
 				{ subscriptionId: team.id, amountPaidMinor: 20_500, paidAt: paidDaysAgo(5) },
@@ -211,26 +208,8 @@ describe("MRR from paid Stripe invoices", () => {
 		expect(rollup.attributes.foreignMrr).toEqual({ eur: 5_000 })
 	})
 
-	it("keeps the plan MRR when only another currency's invoice counts", () => {
-		const rollup = invoiceRollupOf(
-			[team],
-			[{ subscriptionId: team.id, amountPaidMinor: 7_000, currency: "eur", paidAt: paidDaysAgo(5) }],
-		)
-		expect(rollup.mrrMinor).toBe(team.mrrMinor)
-	})
-
-	it("keeps an uninvoiced subscription's plan MRR next to an invoiced one", () => {
-		const addOn = { id: subId("addon"), mrrMinor: 5_000 }
-		expect(
-			invoiceRollupOf(
-				[team, addOn],
-				[{ subscriptionId: team.id, amountPaidMinor: 24_350, paidAt: paidDaysAgo(5) }],
-			).mrrMinor,
-		).toBe(29_350)
-	})
-
-	it("counts an Autumn-sourced account's Stripe subscriptions' invoices", () => {
-		const rollup = invoiceRollupOf(
+	it("adds an Autumn-sourced account's Stripe usage on top of its Autumn plan", () => {
+		const rollup = usageRollupOf(
 			[
 				{ provider: "autumn", planName: "Pro", mrrMinor: 4_900 },
 				{ id: subId("stripe"), provider: "stripe", planName: "Pro", mrrMinor: 4_900 },
@@ -250,7 +229,7 @@ describe("champion inactivity", () => {
 			subscriptions: facts.subscriptions,
 			mrrSource: "autumn",
 			addOnPlans: [],
-			invoiceMrr: [],
+			usageMrr: [],
 			contacts: facts.contacts,
 			activity: facts.activity,
 			lastActiveDay: facts.lastActiveDay,

@@ -48,7 +48,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				const others = settings.addOnPlans.filter((name) => name !== plan)
 				return { addOnPlans: isAddOn ? [...others, plan] : others }
 			}),
-		ToggledOverageInMrr: ({ isOn }) => saved(model, shared, () => ({ overageInMrr: isOn })),
 		PressedRetry: () => fetched(model, shared),
 
 		SucceededFetchPlans: ({ plans }) => ({

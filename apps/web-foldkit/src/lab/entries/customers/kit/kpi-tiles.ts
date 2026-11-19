@@ -70,13 +70,12 @@ export const lab = defineStaticLab("KPI tiles", (h) =>
 					}),
 				}),
 				kpiTile(h, {
-					id: "stickiness",
-					label: "Stickiness (WAU ÷ MAU)",
+					id: "revenue",
+					label: "Revenue",
 					definition:
-						"Weekly active users divided by monthly active users: how often monthly users come back.",
-					value: formatPct(overview.kpis.stickinessPct.value),
-					detail: `${formatCount(overview.kpis.wau.value)} / ${formatCount(overview.kpis.mau.value)}`,
-					delta: { value: 2, text: formatDeltaPoints(2) },
+						"Revenue collected in the period from paid invoices, recurring and one-off, in the reporting currency.",
+					value: formatMoney(overview.kpis.revenueMinor.value),
+					delta: { value: 6.5, text: "+6.5%" },
 					comparison: "vs previous 30 days",
 				}),
 				kpiTile(h, { id: "paying", label: "Paying customers", state: "loading" }),
