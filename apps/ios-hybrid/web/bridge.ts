@@ -29,6 +29,7 @@ type ShellMessage =
 	| { type: "swipeBack"; enabled: boolean }
 	| { type: "overlay"; open: boolean }
 	| { type: "thread"; open: boolean }
+	| { type: "location"; text: string }
 	| { type: "ready" }
 	| { type: "screen"; screen: TreeNode | null }
 	| { type: "icons"; icons: Record<string, string> }
@@ -218,6 +219,7 @@ export const installBridge = () => {
 	let lastScreen = ""
 	let wasOverlayOpen = false
 	let wasThreadOpen = false
+	let lastLocation = ""
 	let hasShown = false
 	let settle: ReturnType<typeof setTimeout> | undefined
 	let scheduled = false
@@ -227,6 +229,10 @@ export const installBridge = () => {
 		const screen = readScreen()
 		const list = readList()
 		const composer = JSON.stringify(readComposer())
+		if (location.pathname !== lastLocation) {
+			lastLocation = location.pathname
+			post({ type: "location", text: location.pathname })
+		}
 		// A thread over its channel: the shell shows it as a page of its own (pushed, swiped back).
 		const isThreadOpen = threadIsOpen()
 		if (isThreadOpen !== wasThreadOpen) {

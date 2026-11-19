@@ -37,6 +37,9 @@ struct ShellView: View {
         .onChange(of: bridge.screen) { _, screen in follow(screen: screen, tabs: bridge.tabs) }
         .onChange(of: bridge.tabs) { _, tabs in follow(screen: bridge.screen, tabs: tabs) }
         .onChange(of: bridge.isThreadOpen) { _, isOpen in followThread(isOpen) }
+        // The page went somewhere without a native screen or tab bar changing (back from a thread
+        // opened as a page to its channel): a conversation is pushed again.
+        .onChange(of: bridge.location) { _, _ in follow(screen: bridge.screen, tabs: bridge.tabs) }
         .onChange(of: path) { old, new in
             // The user popped the page (the back button or the swipe): the page goes back too.
             if new.isEmpty, !old.isEmpty, bridge.screen == nil { bridge.swipeBack() }
