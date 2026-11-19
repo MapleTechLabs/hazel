@@ -2,7 +2,7 @@ import { Effect, Schema, Stream } from "effect"
 import { Mount } from "foldkit"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { IconBell, IconChevronLeft, IconGear, IconMenu, IconChatBubble, IconMsgs, IconOffice } from "../icons"
+import { IconBell, IconChevronLeft, IconGear, IconMenu, IconMsgs, IconMsgUser, IconOffice } from "../icons"
 import {
 	AppRoute,
 	channelSettingsTabOf,
@@ -109,7 +109,7 @@ export const mobileNav = <Message>(
 						"DMs",
 						hrefOf(AppRoute.ChatDms({ orgSlug })),
 						route._tag === "ChatDms",
-						IconChatBubble(h, { className: "size-6" }),
+						IconMsgUser(h, { className: "size-6" }),
 						"bubble.left",
 					),
 					link(
