@@ -284,6 +284,10 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "channel_customers_account_idx" ON "channel_customers" ("accountId")',
 			],
 		},
+		{
+			id: "0007_channel_customers_logo",
+			statements: ['ALTER TABLE "channel_customers" ADD COLUMN "accountLogoUrl" text'],
+		},
 	],
 	channel: [
 		{

@@ -5,6 +5,7 @@ import { defineTaggedUnion } from "foldkit/schema"
 import { CommonReason } from "~/lib/error-messages"
 import * as Menu from "../../ui/menu"
 import {
+	ChannelCustomer,
 	ChannelEntry,
 	ConnectMount,
 	DiscoverableChannel,
@@ -36,6 +37,8 @@ export const Model = Schema.Struct({
 	/** Keyed by section id, `"default"` for channels without a section. */
 	sectionChannels: Schema.Record(Schema.String, Schema.Array(ChannelEntry)),
 	favorites: Schema.Array(ChannelEntry),
+	/** Channels linked to a customer: listed under Customers, not in their section. */
+	channelCustomers: Schema.Array(ChannelCustomer),
 	/** Joined threads, nested under their parent channel's row. */
 	threads: Schema.Array(SidebarThread),
 	dmChannelIds: Schema.Array(ChannelId),
@@ -51,6 +54,7 @@ export const Model = Schema.Struct({
 	loaded: Schema.Struct({
 		sections: Schema.Boolean,
 		favorites: Schema.Boolean,
+		channelCustomers: Schema.Boolean,
 		dmChannelIds: Schema.Boolean,
 	}),
 	/** `useFeatureHint("create-channel")`, persisted across organizations. */
@@ -92,6 +96,7 @@ export const Message = defineMessageUnion({
 	UpdatedSections: { sections: Schema.Array(Section) },
 	UpdatedSectionChannels: { sectionKey: Schema.String, channels: Schema.Array(ChannelEntry) },
 	UpdatedFavorites: { channels: Schema.Array(ChannelEntry) },
+	UpdatedChannelCustomers: { customers: Schema.Array(ChannelCustomer) },
 	UpdatedThreads: { threads: Schema.Array(SidebarThread) },
 	UpdatedDmChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedDmChannel: { channelId: ChannelId, channel: Schema.NullOr(DmChannel) },
@@ -122,6 +127,7 @@ export const emptyData = {
 	sections: [],
 	sectionChannels: {},
 	favorites: [],
+	channelCustomers: [],
 	threads: [],
 	dmChannelIds: [],
 	dmChannels: {},
@@ -132,7 +138,7 @@ export const emptyData = {
 	syncedChannels: [],
 	memberChannelIds: null,
 	discoverableChannels: [],
-	loaded: { sections: false, favorites: false, dmChannelIds: false },
+	loaded: { sections: false, favorites: false, channelCustomers: false, dmChannelIds: false },
 	openMenu: null,
 } satisfies Omit<Model, "organizationId" | "currentUserId" | "isCreateChannelHintDismissed">
 
@@ -145,6 +151,7 @@ export const isLoading = (model: Model): boolean =>
 	model.memberChannelIds === null ||
 	!model.loaded.sections ||
 	!model.loaded.favorites ||
+	!model.loaded.channelCustomers ||
 	!model.loaded.dmChannelIds ||
 	!("default" in model.sectionChannels) ||
 	model.sections.some((section) => !(section.id in model.sectionChannels)) ||

@@ -27,10 +27,10 @@ all of them.
 
 ## Data
 
-| Where                           | Table                    | What                                                                                                                                            |
-| ------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CustomersObject` (`customers`) | `customer_channel_links` | The link (authoritative). `accountId`, `channelId`, `linkedBy`, soft delete; partial unique index on `channelId` while live. Synced to members. |
-| `OrgObject` (`org`), projection | `channel_customers`      | `channelId` → `accountId`, `accountName`. Written only by `org.setChannelCustomers`. Synced with `byChannel` (members who see it).              |
+| Where                           | Table                    | What                                                                                                                                                 |
+| ------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CustomersObject` (`customers`) | `customer_channel_links` | The link (authoritative). `accountId`, `channelId`, `linkedBy`, soft delete; partial unique index on `channelId` while live. Synced to members.      |
+| `OrgObject` (`org`), projection | `channel_customers`      | `channelId` → `accountId`, `accountName`, `accountLogoUrl`. Written only by `org.setChannelCustomers`. Synced with `byChannel` (members who see it). |
 
 ## Flow
 
@@ -60,6 +60,11 @@ account and sends a new snapshot.
   `linkChannelAction` / `unlinkChannelAction`, and `channelMark`.
 - Customer page sidebar: a **Channels** section (linked channels with their platform mark, open in
   chat, unlink; a searchable "Link channel" picker that says when a channel is linked elsewhere).
+- Chat sidebar: a **Customers** section (after the custom sections, before DMs) lists the linked
+  channels the user joined, by customer name then channel name; they leave their own section,
+  and a favorite stays only in Favorites. Each row shows the customer's logo in place of its `#`
+  (its initial on a tint when it has none; a lock badge on private channels). It reads `channel_customers`, so it needs no Customers
+  source (`shell/channels-sidebar/customer-channels.ts`). Keyboard channel navigation follows the same order.
 - Chat header: a quiet customer chip beside the channel name, opening the customer page.
 - Channel settings → Overview: a **Customer** section to link, change or unlink. The customers list
   loads (opening the Customers source) only while its picker is open.

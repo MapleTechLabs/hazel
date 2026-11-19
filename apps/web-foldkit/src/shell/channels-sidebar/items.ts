@@ -4,7 +4,8 @@ import { twMerge } from "tailwind-merge"
 import { styles as avatarStyles } from "~/components/ui/avatar/styles"
 import { cx } from "~/utils/cx"
 import { getEffectivePresenceStatus } from "~/utils/presence"
-import { IconHashtag } from "../../icons"
+import { companyLogo } from "../../customers/ui/identity"
+import { IconHashtag, IconLock } from "../../icons"
 import { discordLogo, slackLogo } from "../../page/settings/chat-sync/brand-icons"
 import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
@@ -17,6 +18,7 @@ import type {
 	DmMember,
 	PartnerOrg,
 	Presence,
+	RowCustomer,
 	SidebarThread,
 	SyncProvider,
 } from "./rows"
@@ -45,6 +47,8 @@ export interface RowLinkContext {
 	readonly isActive: boolean
 	/** The platform the channel is bridged to by chat sync, marked on its icon. */
 	readonly syncProvider?: SyncProvider | null
+	/** The customer the channel is linked to: its logo replaces the `#` (Customers section only). */
+	readonly customer?: RowCustomer | null
 }
 
 /** `SidebarLabel` with a `className`. */
@@ -124,6 +128,19 @@ const partnerOrgMarks = <M>(h: HtmlBuilder<M>, partners: ReadonlyArray<PartnerOr
 	]
 }
 
+/** A private customer channel's lock, on the logo's bottom-left (the platform marks take the right). */
+const lockMark = <M>(h: HtmlBuilder<M>): Html =>
+	h.span(
+		[
+			h.Class(
+				"absolute -bottom-0.5 -left-1 flex size-3 items-center justify-center rounded-full bg-sidebar",
+			),
+			h.Attribute("title", "Private channel"),
+		],
+		// `!`: the sidebar sizes every `data-slot=icon` (the lock is one) like the row icon.
+		[IconLock(h, { className: "size-2!" })],
+	)
+
 /** The Slack or Discord mark on a synced channel's icon; top corner when partner marks take the bottom. */
 const syncMark = <M>(h: HtmlBuilder<M>, provider: SyncProvider, hasPartners: boolean): Html =>
 	h.span(
@@ -151,7 +168,9 @@ export const channelItem = <M>(
 ): Html => {
 	const href = chatHref(context, entry.channel.id)
 	const syncProvider = context.syncProvider ?? null
+	const customer = context.customer ?? null
 	const hasPartners = partners.length > 0
+	const isPrivateCustomer = customer !== null && entry.channel.type === "private"
 	const ui = semantic(h, {
 		kind: "item",
 		title: entry.channel.name,
@@ -166,9 +185,22 @@ export const channelItem = <M>(
 		sidebarLink(h, { href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE }, [
 			h.span(
 				// Positioned only for the marks: needless positioned spans slow every hit test.
-				[h.Class(hasPartners || syncProvider ? "relative shrink-0" : "shrink-0")],
 				[
-					channelIcon(h, entry.channel.icon),
+					h.Class(
+						hasPartners || syncProvider || isPrivateCustomer ? "relative shrink-0" : "shrink-0",
+					),
+				],
+				[
+					customer === null
+						? channelIcon(h, entry.channel.icon)
+						: companyLogo(h, {
+								name: customer.name,
+								logoUrl: customer.logoUrl,
+								size: "2xs",
+								// The `#` it replaces: 20px on phones, 16px from `sm`.
+								className: "size-5 sm:size-4",
+							}),
+					...(isPrivateCustomer ? [lockMark(h)] : []),
 					...partnerOrgMarks(h, partners),
 					...(syncProvider ? [syncMark(h, syncProvider, hasPartners)] : []),
 				],

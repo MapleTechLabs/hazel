@@ -37,6 +37,7 @@ const sidebar: Model = {
 	sections: [],
 	sectionChannels: { default: [generalEntry] },
 	favorites: [],
+	channelCustomers: [],
 	threads: [],
 	dmChannelIds: [dmGrace],
 	dmChannels: { [dmGrace]: { id: dmGrace, type: "single", members: [], currentUser: member(2) } },
@@ -47,7 +48,7 @@ const sidebar: Model = {
 	syncedChannels: [],
 	memberChannelIds: [general, dmGrace],
 	discoverableChannels: [],
-	loaded: { sections: true, favorites: true, dmChannelIds: true },
+	loaded: { sections: true, favorites: true, channelCustomers: true, dmChannelIds: true },
 	isCreateChannelHintDismissed: true,
 	openMenu: null,
 }

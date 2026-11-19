@@ -54,6 +54,7 @@ export const channelCustomerSnapshot = Effect.gen(function* () {
 				channelId: $.channelId,
 				accountId: $.accountId,
 				accountName: $.a.name,
+				accountLogoUrl: $.a.logoUrl,
 				primaryAccountId: $.a.primaryAccountId,
 			}))
 			.where(($) => [$.deletedAt.isNull()]),
@@ -61,21 +62,32 @@ export const channelCustomerSnapshot = Effect.gen(function* () {
 	const primaryIds = [
 		...new Set(rows.flatMap((row) => (row.primaryAccountId === null ? [] : [row.primaryAccountId]))),
 	]
-	const primaries = new Map<CustomerAccountId, string>(
+	const primaries = new Map<CustomerAccountId, { readonly name: string; readonly logoUrl: string | null }>(
 		primaryIds.length === 0
 			? []
 			: (yield* db.run(
 					SQLite.from(schema.customerAccountsTable)
-						.select("id", "name")
+						.select("id", "name", "logoUrl")
 						.where(($) => [$.id.in_(...primaryIds), $.deletedAt.isNull()]),
-				)).map((row) => [row.id, row.name] as const),
+				)).map((row) => [row.id, { name: row.name, logoUrl: row.logoUrl ?? null }] as const),
 	)
+	// Named and pictured by the group's primary: its logo, else the environment's own.
 	const links: Array<ChannelCustomerEntry> = rows.map((row) => {
 		const primaryId = row.primaryAccountId
-		const primaryName = primaryId === null ? undefined : primaries.get(primaryId)
-		return primaryId === null || primaryName === undefined
-			? { channelId: row.channelId, accountId: row.accountId, accountName: row.accountName }
-			: { channelId: row.channelId, accountId: primaryId, accountName: primaryName }
+		const primary = primaryId === null ? undefined : primaries.get(primaryId)
+		return primaryId === null || primary === undefined
+			? {
+					channelId: row.channelId,
+					accountId: row.accountId,
+					accountName: row.accountName,
+					accountLogoUrl: row.accountLogoUrl ?? null,
+				}
+			: {
+					channelId: row.channelId,
+					accountId: primaryId,
+					accountName: primary.name,
+					accountLogoUrl: primary.logoUrl ?? row.accountLogoUrl ?? null,
+				}
 	})
 	return links.sort((a, b) => (a.channelId < b.channelId ? -1 : a.channelId > b.channelId ? 1 : 0))
 })
@@ -85,7 +97,14 @@ const fingerprint = (links: ReadonlyArray<ChannelCustomerEntry>) =>
 		crypto.subtle.digest(
 			"SHA-256",
 			new TextEncoder().encode(
-				JSON.stringify(links.map((link) => [link.channelId, link.accountId, link.accountName])),
+				JSON.stringify(
+					links.map((link) => [
+						link.channelId,
+						link.accountId,
+						link.accountName,
+						link.accountLogoUrl,
+					]),
+				),
 			),
 		),
 	).pipe(

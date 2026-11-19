@@ -11,6 +11,8 @@ export const Schema = S.Struct({
 	organizationId: OrganizationId,
 	accountId: CustomerAccountId,
 	accountName: S.String,
+	/** Optional: rows synced or cached before logos were projected have none. */
+	accountLogoUrl: S.optional(S.NullOr(S.String)),
 	updatedAt: JsonDate,
 })
 export type Type = typeof Schema.Type

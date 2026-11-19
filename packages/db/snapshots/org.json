@@ -1,5 +1,5 @@
 {
-	"migration": "0006_customer_channel_links",
+	"migration": "0007_channel_customers_logo",
 	"entities": [
 		{
 			"kind": "table",
@@ -627,8 +627,17 @@
 		{
 			"kind": "column",
 			"table": "channel_customers",
-			"name": "updatedAt",
+			"name": "accountLogoUrl",
 			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "updatedAt",
+			"position": 5,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

@@ -233,6 +233,33 @@ describe("Customer channel links", () => {
 			}),
 		))
 
+	it("projects the customer's logo, and a new one after the next compute", () =>
+		run(
+			Effect.gen(function* () {
+				const t = yield* setup
+				const general = t.channel("public", [t.world.member])
+				yield* t.link("Acme", general)
+				const logo = () =>
+					t.org.storage.db
+						.prepare(`SELECT accountLogoUrl FROM channel_customers WHERE channelId = ?`)
+						.get(general) as { accountLogoUrl: string | null }
+				expect(logo()).toEqual({ accountLogoUrl: null })
+				yield* t.world.ingest("clerk", [
+					{
+						_tag: "account",
+						externalId: "org_acme",
+						name: "Acme",
+						logoUrl: "https://img.clerk.com/acme.png",
+						sameAs: [],
+						onNoMatch: "create",
+					},
+				])
+				yield* t.world.object.run(runCompute(new Date())).pipe(Effect.orDie)
+				yield* t.world.object.alarm.pipe(Effect.orDie)
+				expect(logo()).toEqual({ accountLogoUrl: "https://img.clerk.com/acme.png" })
+			}),
+		))
+
 	it("drops a deleted account's channels from the projection on the next compute", () =>
 		run(
 			Effect.gen(function* () {

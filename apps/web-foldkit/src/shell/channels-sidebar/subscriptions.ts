@@ -103,6 +103,18 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 			),
 		),
 	}),
+	sidebarChannelCustomers: entry(
+		{ organizationId: Schema.NullOr(OrganizationId) },
+		{
+			modelToDependencies: (model) => ({ organizationId: model.organizationId }),
+			dependenciesToStream: ({ organizationId }) =>
+				organizationId === null
+					? Stream.empty
+					: Data.channelCustomersStream(organizationId, (customers) =>
+							Message.UpdatedChannelCustomers({ customers }),
+						),
+		},
+	),
 	sidebarThreads: entry(Scope, {
 		modelToDependencies: scopeOf,
 		dependenciesToStream: scoped((organizationId, userId) =>
