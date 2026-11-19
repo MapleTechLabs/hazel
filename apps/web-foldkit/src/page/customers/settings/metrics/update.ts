@@ -216,7 +216,8 @@ const save = (model: Model, shared: Shared): Return => {
 		return { model }
 	const form = editor.form
 	const metric = metricByKey(model, editor.metricKey)
-	if (editor.metricKey !== null && metric === undefined) return { model }
+	if (editor.metricKey !== null && metric === undefined)
+		return { model, outMessage: writeFailure("Couldn't save the metric", "NotFound", null) }
 	const editability = editabilityOf(metric)
 	const errors = errorsOf(form, {
 		isNew: editor.metricKey === null,
@@ -308,10 +309,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			})),
 		PressedRemoveFilter: ({ index }) =>
 			editBuilder(model, (builder) => ({ ...builder, filters: removed(builder.filters, index) })),
-		// The SQL starts from what the builder writes; the builder is then left as it was.
-		PressedEditSql: () => edit(model, (form) => ({ ...form, sql: sqlOf(form), isSqlMode: true })),
+		// The SQL starts from what the admin last wrote, else from what the builder writes.
+		PressedEditSql: () =>
+			edit(model, (form) => ({ ...form, sql: form.typedSql ?? sqlOf(form), isSqlMode: true })),
 		PressedUseBuilder: () => edit(model, (form) => ({ ...form, isSqlMode: false })),
-		ChangedSql: ({ value }) => edit(model, (form) => ({ ...form, sql: value })),
+		ChangedSql: ({ value }) => edit(model, (form) => ({ ...form, sql: value, typedSql: value })),
 		PressedAddEvent: () =>
 			edit(model, (form) =>
 				form.events.length >= MAX_EVENTS ? form : { ...form, events: [...form.events, ""] },

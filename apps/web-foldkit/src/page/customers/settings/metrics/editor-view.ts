@@ -106,6 +106,7 @@ const basicsCard = (
 					label: "Description",
 					value: form.description,
 					onInput: (value) => Message.ChangedDescription({ value }),
+					error: errors.description,
 					isDisabled,
 					placeholder: "Bytes of logs each customer sent per day",
 					className: "@lg:col-span-2",

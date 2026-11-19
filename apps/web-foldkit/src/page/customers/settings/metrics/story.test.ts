@@ -150,6 +150,39 @@ describe("metric editor", () => {
 		expect(sqlArgs).toMatchObject({ metric: { source: { _tag: "maple_query", builder: null } } })
 	})
 
+	test("SQL typed by hand survives a visit to the builder; a long description is refused", () => {
+		const typed = `${mapleBuilderSql({
+			table: "logs",
+			filters: [],
+			value: "count",
+			customerField: "ResourceAttributes.org_id",
+		})}`
+		const sql = run(open(newRoute(null)), [
+			Message.ChangedName({ value: "Log lines" }),
+			Message.PressedEditSql(),
+			Message.ChangedSql({ value: typed }),
+			Message.PressedUseBuilder(),
+			Message.PressedEditSql(),
+		])
+		expect(formOf(sql)?.sql).toBe(typed)
+
+		const long = run(sql, [Message.ChangedDescription({ value: "x".repeat(501) })])
+		expect(commandsOf(long, Message.PressedSave())).toEqual([])
+	})
+
+	test("saving a metric deleted meanwhile says so instead of doing nothing", () => {
+		const editing = open(metricRoute("services_reporting"))
+		expect(formOf(editing)).not.toBeNull()
+		const gone = run(editing, [
+			Message.UpdatedMetrics({
+				metrics: METRICS.filter((metric) => metric.key !== "services_reporting"),
+			}),
+		])
+		const result = update(gone, Message.PressedSave(), admin)
+		expect(result.commands ?? []).toEqual([])
+		expect(result.outMessage?._tag).toBe("RequestedToast")
+	})
+
 	test("a product event metric drops blank names; a formula refuses unknown metrics", () => {
 		const events = run(open(newRoute(null, "product_event")), [
 			Message.ChangedName({ value: "Exports" }),

@@ -81,6 +81,8 @@ export const MetricForm = Schema.Struct({
 	isSqlMode: Schema.Boolean,
 	builder: BuilderForm,
 	sql: Schema.String,
+	/** SQL the admin wrote: "Edit SQL" brings it back after a visit to the builder. */
+	typedSql: Schema.NullOr(Schema.String),
 	events: Schema.Array(Schema.String),
 	expression: Schema.String,
 })

@@ -36,6 +36,7 @@ export const blankForm = (kind: MetricSourceKind): MetricForm => ({
 	isSqlMode: false,
 	builder: DEFAULT_BUILDER,
 	sql: Customers.mapleBuilderSql(builderOf(DEFAULT_BUILDER)),
+	typedSql: null,
 	events: [""],
 	expression: "",
 })
@@ -73,6 +74,7 @@ export const formOfDraft = (
 			isSqlMode: source.builder === null,
 			builder: source.builder === null ? base.builder : builderFormOf(source.builder),
 			sql: source.sql,
+			typedSql: source.builder === null ? source.sql : null,
 		}),
 		product_event: (source): MetricForm => ({ ...base, kind: "product_event", events: source.events }),
 		formula: (source): MetricForm => ({ ...base, kind: "formula", expression: source.expression }),
@@ -121,7 +123,10 @@ export const sqlOf = (form: MetricForm): string =>
 // CHECKS
 
 export type FormErrors = Partial<
-	Record<"name" | "key" | "group" | "unit" | "builder" | "sql" | "events" | "expression", string>
+	Record<
+		"name" | "key" | "description" | "group" | "unit" | "builder" | "sql" | "events" | "expression",
+		string
+	>
 >
 
 /** A formula's operands against the org's metrics. */
@@ -178,6 +183,7 @@ export const errorsOf = (
 		else if (context.metrics.some((metric) => metric.key === form.key))
 			errors.key = "Another metric has this key"
 	}
+	if (form.description.trim().length > 500) errors.description = "At most 500 characters"
 	if (form.group.trim().length > 80) errors.group = "At most 80 characters"
 	if (form.unit.trim().length > 40) errors.unit = "At most 40 characters"
 	if (context.editability === "basics") return errors
