@@ -38,6 +38,7 @@ import type { SqlError } from "effect/sql/SqlError"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 import { publishChannelCustomersAfterCompute } from "./channels"
 import { evaluate, type Match } from "./evaluate"
+import type { AccountFacts } from "./facts"
 import { type HealthInputs, scoreHealth } from "./health"
 import { type LifecycleEvent, transition, valueOf, wakeDue } from "./lifecycle"
 import {
@@ -61,6 +62,7 @@ import {
 	accountChunks,
 	billingByAccount,
 	billsNow,
+	groupChunks,
 	loadAccounts,
 	loadBase,
 	type Rollup,
@@ -377,7 +379,7 @@ const writeHealth = Effect.fn("Customers.writeHealth")(function* (
 	)
 })
 
-/** The facts with today's health in place, for `health_drop`. */
+/** The facts with today's health in place, for `health_drop` (a group's are its primary's). */
 const withTodayHealth = (
 	snapshot: Snapshot,
 	scores: ReadonlyMap<CustomerAccountId, HealthBreakdown>,
@@ -387,20 +389,24 @@ const withTodayHealth = (
 		const breakdown = scores.get(account.stored.id)
 		// `scoreAll` scores every account of the snapshot.
 		if (breakdown === undefined) return account
+		const scored = (facts: AccountFacts): AccountFacts => ({
+			...facts,
+			account: { ...facts.account, healthScore: breakdown.score, healthStatus: breakdown.status },
+			health: [
+				...facts.health.filter((point) => point.day !== snapshot.org.today),
+				{ day: snapshot.org.today, score: breakdown.score, status: breakdown.status },
+			],
+		})
+		const facts = scored(account.facts)
 		return {
 			...account,
-			facts: {
-				...account.facts,
-				account: {
-					...account.facts.account,
-					healthScore: breakdown.score,
-					healthStatus: breakdown.status,
-				},
-				health: [
-					...account.facts.health.filter((point) => point.day !== snapshot.org.today),
-					{ day: snapshot.org.today, score: breakdown.score, status: breakdown.status },
-				],
-			},
+			facts,
+			evaluated:
+				account.evaluated === null
+					? null
+					: account.evaluated === account.facts
+						? facts
+						: scored(account.evaluated),
 		}
 	}),
 })
@@ -516,8 +522,9 @@ const closedForGood = (signal: Pick<schema.CustomerSignal, "status">, now: Date)
 		: { closedAt: now, lastEvaluatedAt: now }
 
 /**
- * Every rule against the chunk's accounts, then their counters (their signals are final). Returns
- * the chunk's unclosed signals.
+ * Every rule against the chunk's accounts (a primary with environments over its group's facts, its
+ * environments not at all), then their counters (their signals are final). Returns the chunk's
+ * unclosed signals.
  */
 const writeSignals = Effect.fn("Customers.writeSignals")(function* (snapshot: Snapshot, run: SignalRun) {
 	const db = yield* Database.Database
@@ -534,8 +541,9 @@ const writeSignals = Effect.fn("Customers.writeSignals")(function* (snapshot: Sn
 		yield* db.transaction(
 			Effect.forEach(
 				snapshot.accounts,
-				({ stored, facts }) =>
+				({ stored, evaluated: facts }) =>
 					Effect.gen(function* () {
+						if (facts === null) return
 						const key = `${rule.id}:${stored.id}`
 						const result = evaluate(rule, facts, snapshot.org)
 						const signal = unclosed.get(key) ?? null
@@ -867,6 +875,14 @@ const writeOrgDay = (base: SnapshotBase, totals: OrgTotals) =>
 		)
 	})
 
+/** Environments whose primary is gone (deleted by a sync) stand alone again. */
+const releaseOrphanedEnvironments = Effect.flatMap(Database.Database, (db) =>
+	db.query(
+		Database.sql`UPDATE "customer_accounts" SET "primaryAccountId" = NULL
+		WHERE "primaryAccountId" IN (SELECT "id" FROM "customer_accounts" WHERE "deletedAt" IS NOT NULL)`,
+	),
+)
+
 /** An account's MRR per day from its subscriptions' paid periods (trials and cancellations end them). */
 export const mrrHistory = (
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
@@ -903,20 +919,6 @@ export const mrrHistory = (
 		),
 	)
 }
-
-/** Live Clerk organizations per account, for the accounts whose stored count is off. */
-export const syncOrganizationCounts = Effect.flatMap(Database.Database, (db) =>
-	db.query(
-		Database.sql`UPDATE "customer_accounts" SET "organizationCount" = (
-			SELECT COUNT(*) FROM "customer_external_refs" AS "r"
-			WHERE "r"."accountId" = "customer_accounts"."id" AND "r"."entityType" = 'account'
-				AND "r"."provider" = 'clerk' AND "r"."staleAt" IS NULL)
-		WHERE "deletedAt" IS NULL AND "organizationCount" <> (
-			SELECT COUNT(*) FROM "customer_external_refs" AS "r"
-			WHERE "r"."accountId" = "customer_accounts"."id" AND "r"."entityType" = 'account'
-				AND "r"."provider" = 'clerk' AND "r"."staleAt" IS NULL)`,
-	),
-)
 
 /**
  * The last year rebuilt from the sources (after a connection's first backfill or the demo seed):
@@ -1146,7 +1148,7 @@ const ComputeProgress = Schema.Struct({
 	startedAt: Schema.Number,
 	day: Day,
 	autumnReady: Schema.Boolean,
-	/** The last account done (accounts go in id order). */
+	/** The primary of the last group of accounts done (groups go in their primary's id order). */
 	after: CustomerAccountId,
 	armed: Schema.Array(Schema.String),
 	totals: Schema.Struct({
@@ -1205,13 +1207,13 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 					atRiskMrrMinor: 0,
 				}
 			: { ...progress.totals }
-	const chunks = accountChunks(
-		progress === undefined ? base.accountIds : base.accountIds.filter((id) => id > progress.after),
+	const chunks = groupChunks(
+		progress === undefined ? base.groups : base.groups.filter(([primary]) => primary > progress.after),
 	)
 	let done = 0
 	let switched = 0
-	for (const ids of chunks) {
-		const snapshot = yield* loadAccounts(base, ids)
+	for (const groups of chunks) {
+		const snapshot = yield* loadAccounts(base, groups.flat())
 		switched += yield* writeRollups(snapshot, importing, rebuildPending)
 		const scores = scoreAll(snapshot)
 		yield* writeHealth(snapshot, scores)
@@ -1244,7 +1246,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 				startedAt: progress?.startedAt ?? now.getTime(),
 				day: base.org.today,
 				autumnReady: base.autumnReady,
-				after: last[last.length - 1],
+				after: last[last.length - 1][0],
 				armed: signals.armed,
 				totals,
 				matches: Object.fromEntries(signals.matches),
@@ -1262,7 +1264,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	}
 	yield* finishSignals(now, base.rules, signals)
 	yield* writeOrgDay(base, totals)
-	yield* syncOrganizationCounts
+	yield* releaseOrphanedEnvironments
 	yield* prune(now)
 	yield* db.run(
 		SQLite.update(schema.customerSettingsTable)

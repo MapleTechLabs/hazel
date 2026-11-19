@@ -16,7 +16,6 @@ import {
 	CustomerConnectionId,
 	CustomerFeatureFlagId,
 	CustomerContactId,
-	CustomerExternalRefId,
 	CustomerIgnoreRuleId,
 	CustomerImpersonatorId,
 	CustomerNoteId,
@@ -111,8 +110,6 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"ignore_rule",
 			"metric",
 			"contact",
-			/** A provider record (an external ref). */
-			"ref",
 			/** No such channel in the org, or one the caller cannot see. */
 			"channel",
 		]),
@@ -131,6 +128,16 @@ export class CustomersInvalidRequestError extends Schema.TaggedError<CustomersIn
 	"CustomersInvalidRequestError",
 	{ message: Schema.String },
 ) {}
+
+/**
+ * A grouping of accounts the store refuses: linking an account to itself (`same_account`), to an
+ * environment of another primary (`primary_is_environment`: no chains), or unlinking a primary
+ * that has environments (`primary_has_environments`).
+ */
+export class CustomerGroupError extends Schema.TaggedError<CustomerGroupError>()("CustomerGroupError", {
+	reason: Schema.Literals(["same_account", "primary_is_environment", "primary_has_environments"]),
+	message: Schema.String,
+}) {}
 
 /** The provider has no integration yet (its adapter is not registered). */
 export class CustomerProviderUnavailableError extends Schema.TaggedError<CustomerProviderUnavailableError>()(
@@ -549,27 +556,43 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	),
 
 	/**
-	 * Merge `accountId` into `intoAccountId`: its provider records (Clerk organizations, Stripe and
-	 * Autumn customers, …), users, billing, usage, notes, signals and channels move there and it is
-	 * deleted. The providers keep their separate ids; later syncs land on the merged customer. Its
-	 * name is kept as a manual one. Merging an account into itself is `CustomersInvalidRequestError`.
+	 * Make `accountId` an environment of `primaryAccountId`'s customer: it and the environments it
+	 * is primary of join that group (accounts are never merged; each stays its own row). Both must
+	 * be live and distinct, and `primaryAccountId` must not be an environment of another primary.
+	 * The joining accounts' unclosed signals close: the group's are evaluated on the primary.
 	 */
 	write(
-		"customers.account.merge",
-		{ accountId: CustomerAccountId, intoAccountId: CustomerAccountId },
+		"customers.account.link",
+		{ accountId: CustomerAccountId, primaryAccountId: CustomerAccountId },
 		Tx,
 		CustomersNotFoundError,
-		CustomersInvalidRequestError,
+		CustomerGroupError,
 	),
 
 	/**
-	 * Name one of a customer's provider records (an account ref: a Clerk organization, a Stripe
-	 * customer, …) by its environment, e.g. `Production`, or clear it with null. A merged customer's
-	 * organizations show by it. Blank clears it too. Never overwritten by a sync.
+	 * A non-primary environment leaves its group and stands alone. A primary with environments is
+	 * refused (`primary_has_environments`: make another one primary first); a standalone account is
+	 * left as it is.
 	 */
 	write(
-		"customers.ref.setEnvironment",
-		{ refId: CustomerExternalRefId, environment: Schema.NullOr(Text(60)) },
+		"customers.account.unlink",
+		{ accountId: CustomerAccountId },
+		Tx,
+		CustomersNotFoundError,
+		CustomerGroupError,
+	),
+
+	/**
+	 * Make an environment the primary of its group: the old primary and the other environments point
+	 * at it, and the group's unclosed signals move to it. Nothing changes for a primary or a
+	 * standalone account.
+	 */
+	write("customers.account.setPrimary", { accountId: CustomerAccountId }, Tx, CustomersNotFoundError),
+
+	/** Name an account's environment (`US`, `EU`), or clear it with null; blank clears it too. */
+	write(
+		"customers.account.setEnvironment",
+		{ accountId: CustomerAccountId, environment: Schema.NullOr(Text(60)) },
 		Tx,
 		CustomersNotFoundError,
 	),

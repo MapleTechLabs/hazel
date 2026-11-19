@@ -60,11 +60,16 @@ import {
 	sendFeatureFlags,
 	writeFeatureFlags,
 } from "../../worker/objects/customers/feature-flags"
+import {
+	linkAccounts,
+	setEnvironment,
+	setPrimaryAccount,
+	unlinkAccount,
+} from "../../worker/objects/customers/groups"
 import { CustomerIngest } from "../../worker/objects/customers/ingest"
 import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/customers/ingest-live"
 import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
 import { configProblem as mapleConfigProblem } from "../../worker/objects/customers/maple/pull"
-import { mergeAccounts } from "../../worker/objects/customers/merge"
 import { CustomerProviders } from "../../worker/objects/customers/providers"
 import { CustomersServicesLive } from "../../worker/objects/customers/services"
 import {
@@ -1558,39 +1563,50 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.account.merge": ({ accountId, intoAccountId }) =>
+			"customers.account.link": ({ accountId, primaryAccountId }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireAdmin
-					if (accountId === intoAccountId)
-						return yield* invalid("A customer cannot be merged into itself")
 					const now = yield* currentTime
 					return yield* txOnly(
 						Effect.gen(function* () {
-							const from = yield* requireAccount(accountId)
-							const into = yield* requireAccount(intoAccountId)
-							yield* mergeAccounts(from, into, actor.userId, now)
-							yield* refreshCounters(intoAccountId, now)
-							// Chat shows linked channels' customer by name.
-							yield* publishChannelCustomers(into.organizationId)
+							const source = yield* requireAccount(accountId)
+							const primary = yield* requireAccount(primaryAccountId)
+							yield* linkAccounts(source, primary, actor.userId, now)
 						}),
 					)
 				}).pipe(remap),
 
-			"customers.ref.setEnvironment": ({ refId, environment }) =>
+			"customers.account.unlink": ({ accountId }) =>
 				Effect.gen(function* () {
-					// What everyone sees the record as, like the customer's name.
-					yield* requireAdmin
+					const actor = yield* requireAdmin
 					const now = yield* currentTime
 					return yield* txOnly(
-						Effect.gen(function* () {
-							const [ref] = yield* db.run(
-								SQLite.update(schema.customerExternalRefsTable)
-									.set({ environment: environment?.trim() || null, updatedAt: now })
-									.where(($) => [$.id.eq(refId), $.entityType.eq("account")])
-									.returning("id"),
-							)
-							if (ref === undefined) return yield* notFound("ref", refId)
-						}),
+						Effect.flatMap(requireAccount(accountId), (account) =>
+							unlinkAccount(account, actor.userId, now),
+						),
+					)
+				}).pipe(remap),
+
+			"customers.account.setPrimary": ({ accountId }) =>
+				Effect.gen(function* () {
+					const actor = yield* requireAdmin
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.flatMap(requireAccount(accountId), (account) =>
+							setPrimaryAccount(account, actor.userId, now),
+						),
+					)
+				}).pipe(remap),
+
+			"customers.account.setEnvironment": ({ accountId, environment }) =>
+				Effect.gen(function* () {
+					// What everyone sees the environment as, like the customer's name.
+					const actor = yield* requireAdmin
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.flatMap(requireAccount(accountId), (account) =>
+							setEnvironment(account, environment, actor.userId, now),
+						),
 					)
 				}).pipe(remap),
 

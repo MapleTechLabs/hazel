@@ -10,7 +10,7 @@ import {
 	formatMoney,
 	formatRelative,
 } from "../../../customers/format"
-import { type AccountRow, type MemberRow, organizationsLabel } from "../../../customers/queries"
+import type { AccountRow, MemberRow } from "../../../customers/queries"
 import {
 	HEALTH_LABEL,
 	healthBadge,
@@ -185,10 +185,7 @@ const cellOf = <M>(
 				primaryCell(h, {
 					leading: companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "sm" }),
 					title: account.name,
-					subtitle:
-						[account.domain, organizationsLabel(account)]
-							.filter((part) => part !== null)
-							.join(" · ") || null,
+					subtitle: account.domain,
 					href: hrefOf(customerRoute(context.orgSlug, account.id)),
 				}),
 			)

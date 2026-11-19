@@ -2,7 +2,9 @@
  * Loads what compute and the dry runs evaluate (`./facts.ts`): the org-wide part once
  * (`loadBase`), then the live accounts in chunks (`loadAccounts`), each with its contacts,
  * activity over the window the rules need, billing, metrics, MRR movements and a month of health
- * history, plus the account fields compute derives from them (`rollupAccount`, §4.2).
+ * history, plus the account fields compute derives from them (`rollupAccount`, §4.2). A chunk holds
+ * whole groups of linked accounts (`./groups.ts`): a primary's signals evaluate its group's
+ * combined facts (`./group-facts.ts`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
@@ -16,6 +18,7 @@ import {
 import type { CustomerAccountId, CustomerContactId, CustomerSubscriptionId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { type RuleInput, activityWindowDays } from "./evaluate"
+import { groupFacts } from "./group-facts"
 import {
 	type AccountFacts,
 	activeUsersIn,
@@ -58,6 +61,11 @@ export interface AccountSnapshot {
 	readonly rollup: Rollup
 	/** Facts over the rolled-up account. */
 	readonly facts: AccountFacts
+	/**
+	 * What signals evaluate: its own facts, its group's on a primary with environments, null on an
+	 * environment of a primary (its primary's signals stand for it).
+	 */
+	readonly evaluated: AccountFacts | null
 }
 
 /** What a snapshot knows about the whole org. */
@@ -80,6 +88,11 @@ export interface SnapshotBase {
 	readonly autumnReady: boolean
 	/** The live accounts, loaded in chunks (`loadAccounts`). */
 	readonly accountIds: ReadonlyArray<CustomerAccountId>
+	/**
+	 * The live accounts by customer: each group's primary first, then its environments; groups in
+	 * their primary's id order. An environment whose primary is gone stands alone.
+	 */
+	readonly groups: ReadonlyArray<ReadonlyArray<CustomerAccountId>>
 	/** The first day of activity loaded (the rules' window). */
 	readonly from: Day
 	/** `inactive` rules' prior windows (days). */
@@ -381,6 +394,23 @@ export const accountChunks = <A>(items: ReadonlyArray<A>, size = ACCOUNT_CHUNK) 
 		items.slice(index * size, (index + 1) * size),
 	)
 
+/** Whole groups (`SnapshotBase.groups`) packed into chunks of up to `size` accounts (a larger group alone). */
+export const groupChunks = (groups: SnapshotBase["groups"], size = ACCOUNT_CHUNK) => {
+	const chunks: Array<Array<ReadonlyArray<CustomerAccountId>>> = []
+	let count = 0
+	for (const group of groups) {
+		const last = chunks[chunks.length - 1]
+		if (last === undefined || count + group.length > size) {
+			chunks.push([group])
+			count = group.length
+		} else {
+			last.push(group)
+			count += group.length
+		}
+	}
+	return chunks
+}
+
 /**
  * The org-wide part of a snapshot, and the live accounts' ids: the accounts themselves load in
  * chunks (`loadAccounts`), so memory holds one chunk's activity at a time.
@@ -427,12 +457,19 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 			.where(($) => [$.deletedAt.isNull(), $.enabled.eq(true)]),
 	)
 	const windowRules: ReadonlyArray<RuleInput> = options?.windowRules ?? rules
-	const accountIds = (yield* db.run(
+	const accounts = yield* db.run(
 		SQLite.from(schema.customerAccountsTable)
-			.select("id")
+			.select("id", "primaryAccountId")
 			.where(($) => [$.deletedAt.isNull()])
 			.orderBy(($) => [[$.id, "asc"]]),
-	)).map((row) => row.id)
+	)
+	const accountIds = accounts.map((row) => row.id)
+	const live = new Set(accountIds)
+	const groups = new Map<CustomerAccountId, Array<CustomerAccountId>>()
+	for (const { id, primaryAccountId } of accounts) {
+		const primary = primaryAccountId !== null && live.has(primaryAccountId) ? primaryAccountId : id
+		groups.set(primary, [...(groups.get(primary) ?? []), id])
+	}
 	const definitions = yield* db.run(
 		SQLite.from(schema.customerMetricDefinitionsTable).select("key", "name", "aggregation", "provider"),
 	)
@@ -480,6 +517,9 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 				(connection.lastSuccessAt === null || connection.lastSuccessAt >= connection.connectedAt),
 		),
 		accountIds,
+		groups: [...groups]
+			.sort(([a], [b]) => (a < b ? -1 : 1))
+			.map(([primary, ids]) => [primary, ...ids.filter((id) => id !== primary)]),
 		from: addDays(today, -(activityWindowDays(windowRules) - 1)),
 		priorWindows: [
 			...new Set(
@@ -628,7 +668,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	const movementsBy = groupBy(movements, (row) => row.accountId)
 	const healthBy = groupBy(health, (row) => row.accountId)
 
-	const snapshots = accounts.map((stored): AccountSnapshot => {
+	const snapshots = accounts.map((stored): Omit<AccountSnapshot, "evaluated"> => {
 		const own = contactsBy.get(stored.id) ?? []
 		const accountContacts: Array<ContactFacts> = own.map((contact) => ({
 			id: contact.id,
@@ -696,9 +736,74 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			},
 		}
 	})
+	// The chunk holds whole groups: an environment whose primary is not in it stands alone.
+	const loaded = new Set(accounts.map((account) => account.id))
+	const primaryOf = (account: schema.CustomerAccount) =>
+		account.primaryAccountId !== null && loaded.has(account.primaryAccountId)
+			? account.primaryAccountId
+			: null
+	const environmentsBy = groupBy(
+		snapshots.filter((snapshot) => primaryOf(snapshot.stored) !== null),
+		(snapshot) => primaryOf(snapshot.stored),
+	)
+	// `inactive`'s prior windows of a group quiet for longer than the loaded activity: its distinct
+	// people (as `groupFacts` counts them: a live contact's email, else the contact) from the store.
+	const olderGroupPrior = new Map<CustomerAccountId, Map<number, number>>()
+	for (const days of priorWindows) {
+		const older: Record<string, { after: Day; last: Day; accounts: ReadonlyArray<CustomerAccountId> }> =
+			{}
+		for (const [primaryId, environments] of environmentsBy) {
+			if (primaryId === null) continue
+			const accounts = [primaryId, ...environments.map((environment) => environment.stored.id)]
+			const last = accounts
+				.map((id) => lastActiveDayBy.get(id) ?? null)
+				.reduce<Day | null>(
+					(max, day) => (day !== null && (max === null || day > max) ? day : max),
+					null,
+				)
+			if (last !== null && addDays(last, -(days - 1)) < from)
+				older[primaryId] = { after: addDays(last, -days), last, accounts }
+		}
+		if (Object.keys(older).length === 0) continue
+		const rows = (yield* db.query(
+			Database.sql`SELECT g.key AS "primaryId", count(DISTINCT CASE
+					WHEN c."deletedAt" IS NULL AND trim(coalesce(c."email", '')) <> '' THEN lower(trim(c."email"))
+					ELSE a."contactId" END) AS "count"
+				FROM json_each(${JSON.stringify(older)}) g
+				JOIN json_each(json_extract(g.value, '$.accounts')) m
+				JOIN "customer_activity_daily" a ON a."accountId" = m.value
+					AND a."day" > json_extract(g.value, '$.after') AND a."day" <= json_extract(g.value, '$.last')
+				LEFT JOIN "customer_contacts" c ON c."id" = a."contactId"
+				WHERE (a."eventCount" > 0 OR a."sessionCount" > 0 OR a."signedIn" = 1)
+				GROUP BY g.key`,
+		)) as ReadonlyArray<{ primaryId: CustomerAccountId; count: number }>
+		for (const row of rows) {
+			const counts = olderGroupPrior.get(row.primaryId) ?? new Map<number, number>()
+			counts.set(days, Number(row.count))
+			olderGroupPrior.set(row.primaryId, counts)
+		}
+	}
+	const withEvaluated = snapshots.map((snapshot): AccountSnapshot => {
+		const environments = environmentsBy.get(snapshot.stored.id)
+		return {
+			...snapshot,
+			evaluated:
+				primaryOf(snapshot.stored) !== null
+					? null
+					: environments === undefined
+						? snapshot.facts
+						: groupFacts(
+								snapshot.facts,
+								environments.map((environment) => environment.facts),
+								from,
+								olderGroupPrior.get(snapshot.stored.id),
+							),
+		}
+	})
+	yield* Effect.annotateCurrentSpan({ "customers.groups": environmentsBy.size })
 	return {
 		...base,
-		accounts: snapshots,
+		accounts: withEvaluated,
 		signals,
 		todayHealth: new Map(todayHealth.map((row) => [row.accountId, row.breakdown])),
 	} satisfies Snapshot

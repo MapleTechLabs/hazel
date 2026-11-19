@@ -554,5 +554,16 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "customer_accounts" ADD COLUMN "attentionMutedByUserId" text',
 			],
 		},
+		{
+			id: "0018_customer_environments",
+			statements: [
+				'ALTER TABLE "customer_accounts" ADD COLUMN "primaryAccountId" text',
+				'ALTER TABLE "customer_accounts" ADD COLUMN "environment" text',
+				'ALTER TABLE "customer_accounts" DROP COLUMN "organizationCount"',
+				'UPDATE "customer_accounts" SET "environment" = (SELECT "r"."environment" FROM "customer_external_refs" AS "r" WHERE "r"."entityType" = \'account\' AND "r"."accountId" = "customer_accounts"."id" AND "r"."environment" IS NOT NULL ORDER BY "r"."provider" = \'clerk\' DESC, "r"."updatedAt" DESC LIMIT 1)',
+				'ALTER TABLE "customer_external_refs" DROP COLUMN "environment"',
+				'CREATE INDEX IF NOT EXISTS "customer_accounts_primary_idx" ON "customer_accounts" ("primaryAccountId")',
+			],
+		},
 	],
 }

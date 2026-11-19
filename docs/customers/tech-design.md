@@ -205,13 +205,18 @@ Rules:
 - **Ignored accounts:** an account no customer holds that an ignore rule matches by id, or whose
   unmatched record was ignored by hand, takes its members, billing and usage with it (`Ignored`,
   nothing parked). A `removed` contact of an unknown account is `Unchanged`, never parked.
-- **Merged customers** (`customers.account.merge`, admins, `worker/objects/customers/merge.ts`): one
-  account can hold several Clerk organizations, each keeping its own ids at Clerk, Stripe and
-  Autumn. The merged account's refs, contacts (a person in both folds into one: same contact ref,
-  else same email), billing, events, notes, signals and channel links move to the kept one; it is
-  soft-deleted, the kept name becomes manual (`hazel`), and the last year's MRR movements are
-  rebuilt. `organizationCount` (live Clerk refs; kept by the merge and by compute) marks such a
-  customer in the UI; each ref keeps its provider record's `name`.
+- **Customers with several environments** (`customers.account.link` / `unlink` / `setPrimary` /
+  `setEnvironment`, admins, `worker/objects/customers/groups.ts`): accounts are never merged. Each
+  Clerk organization stays its own account (an environment, e.g. a US and an EU region, named by
+  `customer_accounts.environment`, set in Hazel only), and accounts link into a group with one
+  primary (`primaryAccountId` on the others; no chains, a primary with environments cannot be
+  unlinked). Rollups and health stay per account. Signals are evaluated per group: an environment
+  is skipped, and its primary is evaluated over the group's combined facts (`group-facts.ts`:
+  contacts and activity unioned with a person in several environments counted once by email,
+  billing together, metrics summed per day, the most advanced stage, the primary's health), so
+  "logins stopped" does not fire for one environment while another still has logins. Signals are
+  only written on the primary: linking closes the joining accounts' unclosed signals, `setPrimary`
+  moves the group's to the new primary. Compute and the dry runs load whole groups per chunk.
 - **Field precedence:** `FIELD_PRECEDENCE` (`hazel` manual edit > clerk > stripe > autumn > maple for
   name; per field), recorded in `fieldSources`; domains merge (never removed); fixed in v1.
 - **Deletes:** `account.deleted` / `contact.removed` → ref `staleAt` (+ the op's `observedAt` as
