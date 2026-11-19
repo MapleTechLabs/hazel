@@ -875,6 +875,14 @@ const writeOrgDay = (base: SnapshotBase, totals: OrgTotals) =>
 		)
 	})
 
+/** Environments whose primary is gone (deleted by a sync) stand alone again. */
+const releaseOrphanedEnvironments = Effect.flatMap(Database.Database, (db) =>
+	db.query(
+		Database.sql`UPDATE "customer_accounts" SET "primaryAccountId" = NULL
+		WHERE "primaryAccountId" IN (SELECT "id" FROM "customer_accounts" WHERE "deletedAt" IS NOT NULL)`,
+	),
+)
+
 /** An account's MRR per day from its subscriptions' paid periods (trials and cancellations end them). */
 export const mrrHistory = (
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
@@ -1256,6 +1264,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	}
 	yield* finishSignals(now, base.rules, signals)
 	yield* writeOrgDay(base, totals)
+	yield* releaseOrphanedEnvironments
 	yield* prune(now)
 	yield* db.run(
 		SQLite.update(schema.customerSettingsTable)

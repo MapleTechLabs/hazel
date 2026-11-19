@@ -6,6 +6,7 @@ import type { UpsertAccount } from "@hazel/domain/customers"
 import type { CustomerAccountId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
+import { runCompute } from "./compute"
 import { type CustomersWorld, makeCustomersWorld, tagOf, uuid } from "./test-kit"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
@@ -222,6 +223,24 @@ describe("customer groups", () => {
 				expect(
 					tagOf(yield* world.call("customers.account.unlink", { accountId: us }, world.owner)),
 				).toBe("Success")
+			}),
+		))
+
+	it("releases the environments of a primary a sync deleted at the next compute", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, us, eu } = yield* setup
+				yield* world.call(
+					"customers.account.link",
+					{ accountId: eu, primaryAccountId: us },
+					world.owner,
+				)
+				world.rows(
+					`UPDATE customer_accounts SET deletedAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
+					us,
+				)
+				yield* world.object.run(runCompute(new Date())).pipe(Effect.orDie)
+				expect(groupOf(world)).toEqual({ "Acme AP": null, "Acme EU": null, "Acme US": null })
 			}),
 		))
 
