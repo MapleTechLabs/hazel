@@ -2,13 +2,19 @@
  * `customers.account.merge` on node SQLite: two Clerk organizations (each with its Stripe customer)
  * become one customer; the providers keep their ids and later syncs land on the kept account.
  */
-import type { UpsertAccount, UpsertContact, UpsertSubscription } from "@hazel/domain/customers"
-import type { CustomerAccountId } from "@hazel/schema"
+import type {
+	AccountDetail,
+	ContactRow,
+	UpsertAccount,
+	UpsertContact,
+	UpsertSubscription,
+} from "@hazel/domain/customers"
+import type { CustomerAccountId, CustomerExternalRefId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { CustomerIngest } from "./ingest"
 import { addDays } from "./time"
-import { makeCustomersWorld, NOW, TODAY, uuid } from "./test-kit"
+import { makeCustomersWorld, NOW, ok, TODAY, tagOf, uuid } from "./test-kit"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
@@ -440,6 +446,83 @@ describe("customers.account.merge", () => {
 						kept,
 					),
 				).toEqual([{ deleted: 1 }])
+			}),
+		))
+
+	it("names each organization's environment, kept against syncs, and says which each user is in", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					clerkOrg("org_1", "Acme"),
+					clerkOrg("org_2", "Acme"),
+					member("user_a", "org_1", "ada@acme.com"),
+					member("user_a", "org_2", "ada@acme.com"),
+					member("user_b", "org_2", "bo@acme.com"),
+				])
+				const [kept, merged] = world.rows<{ id: CustomerAccountId }>(
+					`SELECT accountId AS id FROM customer_external_refs
+					WHERE entityType = 'account' ORDER BY externalId`,
+				)
+				ok(
+					yield* world.call(
+						"customers.account.merge",
+						{ accountId: merged!.id, intoAccountId: kept!.id },
+						world.owner,
+					),
+				)
+				const refOf = (externalId: string) =>
+					world.rows<{ id: CustomerExternalRefId }>(
+						`SELECT id FROM customer_external_refs WHERE externalId = ?`,
+						externalId,
+					)[0]!.id
+				const environments = () =>
+					world.rows(
+						`SELECT externalId, environment FROM customer_external_refs
+						WHERE entityType = 'account' ORDER BY externalId`,
+					)
+
+				const name = (externalId: string, environment: string | null, user = world.owner) =>
+					world.call(
+						"customers.ref.setEnvironment",
+						{ refId: refOf(externalId), environment },
+						user,
+					)
+				expect(tagOf(yield* name("org_1", "Production", world.member))).toBe("UnauthorizedError")
+				ok(yield* name("org_1", "  Production "))
+				ok(yield* name("org_2", "EU"))
+				// Only a customer's own records are named, not its users'.
+				expect(tagOf(yield* name("user_b", "EU"))).toBe("CustomersNotFoundError")
+				expect(environments()).toEqual([
+					{ externalId: "org_1", environment: "Production" },
+					{ externalId: "org_2", environment: "EU" },
+				])
+
+				// A sync renames the record, never its environment.
+				yield* world.ingest("clerk", [clerkOrg("org_1", "Acme Inc")])
+				const detail: AccountDetail = ok(
+					yield* world.call("customers.account.detail", { accountId: kept!.id }, world.member),
+				)
+				expect(detail.refs.map((ref) => [ref.externalId, ref.name, ref.environment]).sort()).toEqual([
+					["org_1", "Acme Inc", "Production"],
+					["org_2", "Acme", "EU"],
+				])
+
+				const users: { readonly items: ReadonlyArray<ContactRow> } = ok(
+					yield* world.call("customers.contacts.list", { accountId: kept!.id }, world.member),
+				)
+				expect(
+					users.items.map((row) => [row.contact.email, [...row.organizationIds].sort()]).sort(),
+				).toEqual([
+					["ada@acme.com", ["org_1", "org_2"]],
+					["bo@acme.com", ["org_2"]],
+				])
+
+				ok(yield* name("org_2", null))
+				expect(environments()).toEqual([
+					{ externalId: "org_1", environment: "Production" },
+					{ externalId: "org_2", environment: null },
+				])
 			}),
 		))
 })

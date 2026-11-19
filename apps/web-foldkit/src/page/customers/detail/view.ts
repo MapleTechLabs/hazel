@@ -39,6 +39,7 @@ import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui
 import { input } from "../../../ui/input"
 import { radioGroup } from "../../../ui/radio"
 import { searchField } from "../../../ui/search-field"
+import { textField } from "../../../ui/text-field"
 import { link } from "../../../ui/link"
 import { menuDescription, menuLabel } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
@@ -53,6 +54,7 @@ import {
 	accountOf,
 	type ActionKey,
 	actionEntries,
+	ENVIRONMENT_INPUT_ID,
 	isNotFound,
 	mergeCandidates,
 	MERGE_SEARCH_ID,
@@ -64,7 +66,7 @@ import {
 } from "./model"
 import { notesTab } from "./notes-tab"
 import { overviewTab } from "./overview-tab"
-import { type Context, icon, memberOf, menu } from "./parts"
+import { type Context, icon, memberOf, menu, recordName } from "./parts"
 import { usersTab } from "./users-tab"
 import { heading } from "../../../ui/heading"
 
@@ -109,12 +111,15 @@ const organizationsBadge = (h: HtmlBuilder<Message>, account: Context["account"]
 	return label === null ? [] : [badge(h, { intent: "secondary" }, [label])]
 }
 
-/** A source chip's label: the source, and the record's name when the source has several (merged). */
+/**
+ * A source chip's label: the source, and the record's environment or name when it has one or the
+ * source has several (merged).
+ */
 const refLabel = (ref: Customers.ExternalRef, refs: ReadonlyArray<Customers.ExternalRef>): string => {
 	const several =
 		refs.filter((other) => other.entityType === "account" && other.provider === ref.provider).length > 1
-	return several
-		? `${SOURCE_LABEL[ref.provider]} · ${ref.name ?? ref.externalId}`
+	return several || ref.environment !== null
+		? `${SOURCE_LABEL[ref.provider]} · ${recordName(ref)}`
 		: SOURCE_LABEL[ref.provider]
 }
 
@@ -988,9 +993,42 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 											],
 											[sourceLogo(h, ref.provider), LINK_LABEL[ref.provider]],
 										),
-										...recordLink(h, ref),
+										h.span(
+											[h.Class("flex shrink-0 items-center gap-2")],
+											[
+												...(context.isAdmin
+													? [
+															button(
+																h,
+																{
+																	intent: "plain",
+																	size: "xs",
+																	className: "-my-1",
+																	onPress: Message.PressedNameEnvironment({
+																		refId: ref.id,
+																	}),
+																},
+																[
+																	ref.environment === null
+																		? "Name environment"
+																		: "Rename",
+																],
+															),
+														]
+													: []),
+												...recordLink(h, ref),
+											],
+										),
 									],
 								),
+								...(ref.environment === null
+									? []
+									: [
+											h.span(
+												[h.Class("flex min-w-0 items-center gap-2 pt-0.5")],
+												[badge(h, { intent: "secondary" }, [ref.environment])],
+											),
+										]),
 								...(ref.name === null
 									? []
 									: [h.span([h.Class("truncate text-fg text-sm")], [ref.name])]),
@@ -1254,6 +1292,61 @@ const mergeDialog = (h: HtmlBuilder<Message>, model: Model, context: Context | n
 	})
 }
 
+/** Name a linked record's environment; empty clears it. */
+const environmentDialog = (h: HtmlBuilder<Message>, model: Model, context: Context | null): Html => {
+	const ref = context?.detail?.refs.find((candidate) => candidate.id === model.environmentRefId) ?? null
+	const recordLabel =
+		ref === null ? "this record" : `${SOURCE_LABEL[ref.provider]} ${ref.name ?? ref.externalId}`
+	return Modal.controlledModal(h, {
+		model: model.environmentModal,
+		toParentMessage: (message) => Message.GotEnvironmentModalMessage({ message }),
+		size: "sm",
+		toContent: (closeAttributes) => [
+			dialogHeader(h, {
+				title: { id: Modal.titleId(model.environmentModal.id), text: "Name environment" },
+				description: `How ${recordLabel} shows across the customer's pages, e.g. Production or Staging. Leave empty to show its own name.`,
+			}),
+			h.form(
+				[h.Class("contents"), h.OnSubmit(Message.SubmittedEnvironment())],
+				[
+					dialogBody(h, [
+						textField(
+							h,
+							{
+								id: ENVIRONMENT_INPUT_ID,
+								value: model.environmentDraft,
+								onInput: (value) => Message.ChangedEnvironmentDraft({ value }),
+							},
+							(parts) => [
+								parts.label(["Environment"]),
+								parts.input({
+									placeholder: "Production",
+									attributes: [
+										h.Attribute("maxlength", "60"),
+										h.Attribute("autocomplete", "off"),
+									],
+								}),
+							],
+						),
+					]),
+					dialogFooter(h, [
+						dialogClose(h, closeAttributes, ["Cancel"]),
+						button(
+							h,
+							{
+								intent: "primary",
+								isPending: model.isSavingEnvironment,
+								attributes: [h.Type("submit")],
+							},
+							["Save"],
+						),
+					]),
+				],
+			),
+		],
+	})
+}
+
 // PAGE
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
@@ -1374,6 +1467,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			rawDialog(h, model, context),
 			deleteNoteDialog(h, model),
 			mergeDialog(h, model, context),
+			environmentDialog(h, model, context),
 			impersonateDialog(h, model),
 		],
 	)

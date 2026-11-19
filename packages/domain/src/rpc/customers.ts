@@ -16,6 +16,7 @@ import {
 	CustomerConnectionId,
 	CustomerFeatureFlagId,
 	CustomerContactId,
+	CustomerExternalRefId,
 	CustomerIgnoreRuleId,
 	CustomerImpersonatorId,
 	CustomerNoteId,
@@ -110,6 +111,8 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"ignore_rule",
 			"metric",
 			"contact",
+			/** A provider record (an external ref). */
+			"ref",
 			/** No such channel in the org, or one the caller cannot see. */
 			"channel",
 		]),
@@ -551,6 +554,18 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		Tx,
 		CustomersNotFoundError,
 		CustomersInvalidRequestError,
+	),
+
+	/**
+	 * Name one of a customer's provider records (an account ref: a Clerk organization, a Stripe
+	 * customer, …) by its environment, e.g. `Production`, or clear it with null. A merged customer's
+	 * organizations show by it. Never overwritten by a sync.
+	 */
+	write(
+		"customers.ref.setEnvironment",
+		{ refId: CustomerExternalRefId, environment: Schema.NullOr(NonEmptyText(60)) },
+		Tx,
+		CustomersNotFoundError,
 	),
 
 	/** Link to an account (records a `manual` ref) and replay the record's data. */

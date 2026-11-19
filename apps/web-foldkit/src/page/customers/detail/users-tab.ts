@@ -12,7 +12,7 @@ import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { Message } from "./message"
 import { type ContactFilter, canImpersonate, contactCounts, type Model, visibleContacts } from "./model"
-import { type Context, icon, pageFooter } from "./parts"
+import { type Context, icon, pageFooter, recordName } from "./parts"
 
 /** The users tab: who uses the product, who went quiet, who never started. */
 
@@ -201,6 +201,12 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 	const rows = visibleContacts(model)
 	const championId = context.detail?.account.championContactId ?? null
 	const callout = championCallout(h, model, context)
+	// A merged customer's organizations: which each user is in, by environment.
+	const organizations = (context.detail?.refs ?? []).filter(
+		(ref) => ref.entityType === "account" && ref.provider === "clerk",
+	)
+	const environmentsOf = (row: Customers.ContactRow) =>
+		organizations.filter((ref) => row.organizationIds.includes(ref.externalId))
 	const footer = pageFooter(h, {
 		status: model.contacts.status,
 		hasMore: model.contacts.nextCursor !== null,
@@ -304,6 +310,22 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 									],
 								),
 						},
+						...(organizations.length > 1
+							? [
+									{
+										key: "environment",
+										label: "Environment",
+										hideClass: "max-md:hidden",
+										cell: (row: Customers.ContactRow) =>
+											h.span(
+												[h.Class("flex flex-wrap gap-1")],
+												environmentsOf(row).map((ref) =>
+													badge(h, { intent: "secondary" }, [recordName(ref)]),
+												),
+											),
+									},
+								]
+							: []),
 						{
 							key: "email",
 							label: "Email",

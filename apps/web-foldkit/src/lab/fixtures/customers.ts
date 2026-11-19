@@ -1411,6 +1411,12 @@ const contactRow = (
 			lastSeenDays !== null && 29 - index >= lastSeenDays ? (index * 7 + n * 3) % 9 : 0,
 		),
 	),
+	organizationIds:
+		n % 3 === 0
+			? ["org_2acmeRobotics", "org_2acmeRoboticsEU"]
+			: n % 3 === 1
+				? ["org_2acmeRobotics"]
+				: ["org_2acmeRoboticsEU"],
 })
 
 export const ACME_DETAIL: AccountDetail = {
@@ -1425,6 +1431,7 @@ export const ACME_DETAIL: AccountDetail = {
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			externalId: "org_2acmeRobotics",
 			name: "Acme Robotics",
+			environment: "Production",
 			externalUrl:
 				"https://dashboard.clerk.com/apps/app_hazel/instances/ins_prod/organizations/org_2acmeRobotics",
 			matchMethod: "created",
@@ -1444,6 +1451,7 @@ export const ACME_DETAIL: AccountDetail = {
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			externalId: "cus_Q8f2Lk",
 			name: "Acme Robotics Inc.",
+			environment: null,
 			externalUrl: "https://dashboard.stripe.com/customers/cus_Q8f2Lk",
 			matchMethod: "shared_id",
 			matchedByUserId: null,
@@ -1462,6 +1470,7 @@ export const ACME_DETAIL: AccountDetail = {
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			externalId: "org_2acmeRoboticsEU",
 			name: "Acme Robotics EU",
+			environment: "EU",
 			externalUrl:
 				"https://dashboard.clerk.com/apps/app_hazel/instances/ins_prod/organizations/org_2acmeRoboticsEU",
 			matchMethod: "manual",

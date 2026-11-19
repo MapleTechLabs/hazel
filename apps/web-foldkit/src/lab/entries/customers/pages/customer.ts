@@ -97,6 +97,7 @@ const CONTACTS: ReadonlyArray<Customers.ContactRow> = PEOPLE.map(
 				day: dayOf(29 - day),
 				value: seenDays !== null && 29 - day >= seenDays ? (day * 7 + index * 3) % 9 : 0,
 			})),
+			organizationIds: [],
 		}
 	},
 )

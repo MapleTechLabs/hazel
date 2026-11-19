@@ -17,7 +17,9 @@ const PROVIDER_SHORTCUT = {
 export const providerLinks = (detail: AccountDetail | undefined) =>
 	(detail?.refs ?? []).flatMap((ref) => {
 		const url = ref.entityType === "account" ? safeSourceUrl(ref.provider, ref.externalUrl) : null
-		return url === null ? [] : [{ provider: ref.provider, externalId: ref.externalId, url }]
+		return url === null
+			? []
+			: [{ provider: ref.provider, externalId: ref.externalId, environment: ref.environment, url }]
 	})
 
 export const channelUrl = (organization: Organization, link: ChannelLink) =>
@@ -87,7 +89,7 @@ export function CustomerActions(props: {
 				{providerLinks(detail).map((link) => (
 					<Action.OpenInBrowser
 						key={`${link.provider}:${link.externalId}`}
-						title={`Open in ${SOURCE[link.provider].label}`}
+						title={`Open in ${SOURCE[link.provider].label}${link.environment === null ? "" : ` · ${link.environment}`}`}
 						icon={getFavicon(`https://${SOURCE[link.provider].domain}`)}
 						url={link.url}
 						shortcut={{ modifiers: ["cmd", "opt"], key: PROVIDER_SHORTCUT[link.provider] }}

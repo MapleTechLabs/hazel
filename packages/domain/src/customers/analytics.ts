@@ -139,6 +139,11 @@ export const ContactRow = Schema.Struct({
 	contact: Contact.Schema,
 	status: ContactActivityStatus,
 	activity: Schema.Array(SeriesPoint),
+	/**
+	 * The account records (Clerk organization ids) it is a member through, for a customer holding
+	 * several: matched to `AccountDetail.refs` by `externalId`. Empty when not known.
+	 */
+	organizationIds: Schema.Array(Schema.String),
 })
 export type ContactRow = typeof ContactRow.Type
 

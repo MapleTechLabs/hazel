@@ -65,6 +65,8 @@ export interface ExternalRef {
 	readonly provider: Exclude<CustomerSource, "hazel">
 	readonly entityType: "account" | "contact"
 	readonly externalId: string
+	/** What the team calls the record (`Production`), set in Hazel. */
+	readonly environment: string | null
 	readonly externalUrl: string | null
 }
 

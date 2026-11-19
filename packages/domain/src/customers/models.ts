@@ -370,6 +370,8 @@ class ExternalRefModel extends M.Class<ExternalRefModel>("CustomerExternalRef")(
 	accountId: CustomerAccountId,
 	externalId: S.String,
 	name: S.NullOr(S.String),
+	/** What the team calls the record (`Production`): set in Hazel, shown for it everywhere. */
+	environment: S.NullOr(S.String),
 	externalUrl: S.NullOr(S.String),
 	matchMethod: MatchMethod,
 	matchedByUserId: S.NullOr(UserId),

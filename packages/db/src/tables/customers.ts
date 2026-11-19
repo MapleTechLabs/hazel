@@ -233,6 +233,11 @@ export const customerExternalRefsTable = SQLite.table("customer_external_refs", 
 		/** The provider record's own name (an account ref's organization or customer name), as last seen. */
 		name: SQLite.nullable(SQLite.text),
 		/**
+		 * What the team calls an account ref's record (`Production`, `Staging`), set in Hazel and never
+		 * by a sync: how a merged customer's organizations tell apart across the dashboard.
+		 */
+		environment: SQLite.nullable(SQLite.text),
+		/**
 		 * A contact ref's memberships: each account record (Clerk organization) it is a member through
 		 * (`ContactMembership`). After a merge one ref may stand for several; leaving one keeps it live,
 		 * and a full sweep drops the ones it did not see. Null before it was known, and once the ref is

@@ -1,6 +1,13 @@
 import * as Customers from "@hazel/domain/customers"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
-import { CustomerAccountId, CustomerContactId, CustomerNoteId, CustomerSignalId, UserId } from "@hazel/schema"
+import {
+	CustomerAccountId,
+	CustomerContactId,
+	CustomerExternalRefId,
+	CustomerNoteId,
+	CustomerSignalId,
+	UserId,
+} from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
@@ -175,6 +182,11 @@ export const Model = Schema.Struct({
 	mergeQuery: Schema.String,
 	mergeAccountId: Schema.NullOr(CustomerAccountId),
 	isMerging: Schema.Boolean,
+	/** "Name the environment" of one linked record: which, the text, an RPC on its way. */
+	environmentModal: Modal.Model,
+	environmentRefId: Schema.NullOr(CustomerExternalRefId),
+	environmentDraft: Schema.String,
+	isSavingEnvironment: Schema.Boolean,
 	/** The user may sign in as this customer's users (an admin granted it, `customer_impersonators`). */
 	isImpersonator: Schema.Boolean,
 	/** Presses of Impersonate so far: each dialog is one attempt. */
@@ -199,6 +211,8 @@ export const RAW_MODAL_ID = "customer-raw"
 export const DELETE_NOTE_MODAL_ID = "customer-delete-note"
 export const MERGE_MODAL_ID = "customer-merge"
 export const MERGE_SEARCH_ID = "customer-merge-search"
+export const ENVIRONMENT_MODAL_ID = "customer-environment"
+export const ENVIRONMENT_INPUT_ID = "customer-environment-name"
 export const IMPERSONATE_MODAL_ID = "customer-impersonate"
 export const COMPOSER_ID = "customer-note-composer"
 
