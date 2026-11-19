@@ -342,18 +342,13 @@ const queryPage = Effect.fnUntraced(function* (
 		.pipe(
 			Effect.map((result) => {
 				const mapped = queryOps(result.rows, query.key, cursor.day)
-				// Not one row Hazel can read: the query's fault, recorded, and the walk moves on.
-				if (result.rows.length > 0 && mapped.ops.length === 0)
-					return {
-						...NO_ROWS,
-						skipped: mapped.skipped,
-						metricRuns: [{ key: query.key, error: UNREADABLE_QUERY_ROWS }],
-					}
+				// Not one row Hazel can read: the query's fault, recorded; the walk still pages on.
+				const unreadable = result.rows.length > 0 && mapped.ops.length === 0
 				return {
 					rows: result.rows.length,
 					more: result.truncated || result.rows.length >= PAGE_LIMIT,
 					...mapped,
-					metricRuns: [{ key: query.key, error: null }],
+					metricRuns: [{ key: query.key, error: unreadable ? UNREADABLE_QUERY_ROWS : null }],
 				}
 			}),
 			Effect.catchTag("CustomerProviderError", (error) =>

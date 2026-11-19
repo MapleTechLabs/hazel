@@ -1777,11 +1777,25 @@ const make = Effect.gen(function* () {
 				!op.metricKey.startsWith(METRIC_PREFIX)
 			)
 				return yield* reject(index, op, `${op.metricKey} is no longer defined`)
-			const accountId = yield* resolveAccount(session, op.account)
-			// A person's query names customers by id: one Hazel does not know is skipped (counted),
+			const userSource = Option.isSome(definition) ? definition.value.source : null
+			// Read under a source the metric no longer has: its days are the new source's to fill.
+			const read = session.context.userMetricSources
+			if (
+				userSource !== null &&
+				read !== undefined &&
+				read.get(op.metricKey) !== JSON.stringify(userSource)
+			)
+				return yield* reject(index, op, `${op.metricKey} changed since the page was read`)
+			// A person's query names a customer by its Clerk organization id: its Clerk ref, else the
+			// Maple ref of the same id (none is created). One Hazel does not know is skipped (counted),
 			// not parked for linking.
+			const direct = yield* resolveAccount(session, op.account)
+			const accountId =
+				Option.isNone(direct) && userSource !== null && op.account.provider === "clerk"
+					? yield* resolveAccount(session, { provider: "maple", externalId: op.account.externalId })
+					: direct
 			if (Option.isNone(accountId))
-				return Option.isSome(definition) && definition.value.source !== null
+				return userSource !== null
 					? yield* reject(index, op, "No customer has this id")
 					: yield* parkUnknownAccount(session, op.account)
 			if (Option.isNone(definition)) {

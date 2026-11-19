@@ -82,7 +82,9 @@ describe("layouts: the list", () => {
 			"Trial onboarding",
 			"Default",
 		])
-		expect(listOrder(run(moved.model, [Message.SucceededReorderLayouts()])).at(-1)?.isDefault).toBe(true)
+		expect(
+			listOrder(run(moved.model, [Message.SucceededReorderLayouts({ move: null })])).at(-1)?.isDefault,
+		).toBe(true)
 	})
 
 	test("Create and edit opens the editor for the picked start, saving nothing yet", () => {
@@ -108,7 +110,12 @@ describe("layouts: the editor", () => {
 		expect(isDirty(opened.editor!)).toBe(true)
 		const saving = update(opened, Message.PressedSave(), shared)
 		expect(names(saving)).toEqual(["CreateOverviewLayout"])
-		const saved = update(saving.model, Message.SucceededCreateLayout(), shared)
+		const saveId = saving.model.editor!.saveId!
+		// Another save's answer is not this one's: the editor stays.
+		expect(
+			update(saving.model, Message.SucceededCreateLayout({ saveId: saveId + 1 }), shared).outMessage,
+		).not.toMatchObject({ _tag: "RequestedNavigation" })
+		const saved = update(saving.model, Message.SucceededCreateLayout({ saveId }), shared)
 		expect(saved.outMessage).toMatchObject({ _tag: "RequestedNavigation", route: listRoute })
 	})
 
@@ -165,7 +172,43 @@ describe("layouts: the editor", () => {
 			updated.commands?.find((command) => command.name === "ReorderOverviewLayouts")?.args,
 		).toMatchObject({ layoutIds: [SELF_SERVE.id, OBSERVABILITY.id, TRIAL_ONBOARDING.id] })
 		expect(updated.model.editor?.before).toBe(OBSERVABILITY.id)
-		expect(run(updated.model, [Message.SucceededReorderLayouts()]).editor?.before).toBeNull()
+		// The list's own reorder never ends the editor's move.
+		expect(run(updated.model, [Message.SucceededReorderLayouts({ move: null })]).editor?.before).toBe(
+			OBSERVABILITY.id,
+		)
+		expect(
+			run(updated.model, [Message.SucceededReorderLayouts({ move: OBSERVABILITY.id })]).editor?.before,
+		).toBeNull()
+	})
+
+	test("a move made while a save runs is not the one it saves, and stays to be saved", () => {
+		const opened = synced(editRoute(SELF_SERVE))
+		const saving = run(opened, [
+			Message.PressedMoveAbove({ layoutId: OBSERVABILITY.id }),
+			Message.PressedSave(),
+		])
+		const movedAgain = run(saving, [Message.PressedMoveAbove({ layoutId: TRIAL_ONBOARDING.id })])
+		const updated = update(movedAgain, Message.SucceededUpdateLayout({ layoutId: SELF_SERVE.id }), shared)
+		expect(
+			updated.commands?.find((command) => command.name === "ReorderOverviewLayouts")?.args,
+		).toMatchObject({
+			move: OBSERVABILITY.id,
+			layoutIds: [SELF_SERVE.id, OBSERVABILITY.id, TRIAL_ONBOARDING.id],
+		})
+		const reordered = run(updated.model, [Message.SucceededReorderLayouts({ move: OBSERVABILITY.id })])
+		expect(reordered.editor?.before).toBe(TRIAL_ONBOARDING.id)
+		expect(isDirty(reordered.editor!)).toBe(true)
+	})
+
+	test("at the widget limit a copy changes nothing", () => {
+		const full = run(
+			synced(newRoute("blank")),
+			Array.from({ length: 40 }, () => Message.PressedAddWidget({ kind: "stat" })),
+		)
+		expect(full.editor?.draft?.widgets).toHaveLength(40)
+		const copied = run(full, [Message.PressedDuplicateWidget()])
+		expect(copied.editor?.draft).toEqual(full.editor?.draft)
+		expect(copied.editor?.selectedId).toBe(full.editor?.selectedId)
 	})
 
 	test("a save marks saved what it sent, not edits made while it ran", () => {

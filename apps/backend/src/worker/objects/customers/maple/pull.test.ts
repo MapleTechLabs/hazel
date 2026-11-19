@@ -480,6 +480,34 @@ describe("Maple pull: user metrics", () => {
 		})
 	})
 
+	it("pages on through a query's unreadable rows, recording them", async () => {
+		const cursor = encodeCursor({
+			day: "2026-06-15",
+			phase: "queries",
+			query: "logs",
+			until: "2026-06-15",
+		})
+		const fake = organization({
+			metricDays: Array.from({ length: RUN_SQL_ROW_CAP + 1 }, (_, index) => ({
+				day: "2026-06-15",
+				account: `org_${String(index).padStart(4, "0")}`,
+				value: index === RUN_SQL_ROW_CAP ? 1 : [index],
+			})),
+		})
+		const first = await at(pageOf(fake, { cursor, metrics: [query("logs")] }))
+		expect(first.metricRuns).toEqual([
+			{ key: "logs", error: expect.stringMatching(/^Maple answered rows/) },
+		])
+		expect(decodeCursor(first.nextCursor ?? "")).toMatchObject({
+			value: { phase: "queries", query: "logs", offset: RUN_SQL_ROW_CAP },
+		})
+		const second = await at(pageOf(fake, { cursor: first.nextCursor, metrics: [query("logs")] }))
+		expect(metricsOf([second])).toEqual([
+			{ day: "2026-06-15", account: "org_0100", key: "logs", value: 1 },
+		])
+		expect(second.metricRuns).toEqual([{ key: "logs", error: null }])
+	})
+
 	it("fails the page, to retry its day, when Maple answers a query with an HTTP error", async () => {
 		const fake = organization({ metricDays: days, failingSql: "'logs'" })
 		const cursor = encodeCursor({

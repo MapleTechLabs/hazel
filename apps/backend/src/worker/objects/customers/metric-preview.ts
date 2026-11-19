@@ -8,7 +8,6 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
-	checkMapleSql,
 	type Day,
 	evaluateFormula,
 	type MetricAggregation,
@@ -36,11 +35,14 @@ const TOP = 5
 
 const STEP = "metric preview"
 
-/** One day's rows of a source, as `account` (a Clerk organization id) and its value. */
-type DayRows = (
-	api: MapleApi,
-	day: Day,
-) => Effect.Effect<ReadonlyArray<{ readonly account: string; readonly value: number }>, CustomerProviderError>
+/** One day's first page of a source: `account` (a Clerk organization id) and its value. */
+interface DayPage {
+	readonly rows: ReadonlyArray<{ readonly account: string; readonly value: number }>
+	/** Maple held more than the page: the preview shows part of the day. */
+	readonly truncated: boolean
+}
+
+type DayRows = (api: MapleApi, day: Day) => Effect.Effect<DayPage, CustomerProviderError>
 
 /** A Maple query's first page of a day, as the pull runs it; not one row readable is its error. */
 const queryRows =
@@ -62,7 +64,7 @@ const queryRows =
 								retryAfterMs: null,
 							}),
 						)
-					: Effect.succeed(rows)
+					: Effect.succeed({ rows, truncated: result.truncated })
 			},
 		)
 
@@ -72,24 +74,37 @@ const eventRows = (events: ReadonlyArray<string>): DayRows => {
 	return (api, day) =>
 		Effect.map(
 			api.runSql({ step: STEP, sql: metricsSql(map, 0), window: windowOf(day), row: MapleMetricRow }),
-			(result) =>
-				result.rows.flatMap((row) => {
+			(result) => ({
+				rows: result.rows.flatMap((row) => {
 					const value = countOf(row.events)
 					return row.account.trim() === "" || value === null
 						? []
 						: [{ account: row.account, value }]
 				}),
+				truncated: result.truncated,
+			}),
 		)
 }
 
-/** Daily values per Hazel account, plus the rows that named no customer. */
+/** Daily values per Hazel account, the rows that named no customer, and whether a day was cut. */
 interface Daily {
 	readonly values: ReadonlyMap<CustomerAccountId, ReadonlyMap<Day, number>>
 	readonly unmatchedRows: number
+	readonly partial: boolean
 }
 
-/** Maple's rows for each day, through the connection's key; `string`: why they cannot be read. */
-const mapleDaily = (rowsOf: DayRows, days: ReadonlyArray<Day>, client: HttpClient.HttpClient) =>
+/**
+ * Maple's rows for each day, through the connection's key; `string`: why they cannot be read.
+ * A row's id resolves through the providers' live account refs in `order`, the way ingest resolves
+ * it: a query's through Clerk then Maple, a product event's through Maple then Clerk (the Maple
+ * ref its account op ties to the Clerk organization).
+ */
+const mapleDaily = (
+	rowsOf: DayRows,
+	order: readonly ["clerk", "maple"] | readonly ["maple", "clerk"],
+	days: ReadonlyArray<Day>,
+	client: HttpClient.HttpClient,
+) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
 		const connection = yield* db.first(
@@ -105,26 +120,41 @@ const mapleDaily = (rowsOf: DayRows, days: ReadonlyArray<Day>, client: HttpClien
 		if (region === null || Option.isNone(credentials)) return "The Maple connection needs reconnecting"
 		const api = makeMapleApi(client, credentials.value.apiKey, region)
 		const rows: Array<{ readonly day: Day; readonly account: string; readonly value: number }> = []
+		let partial = false
 		for (const day of days) {
-			for (const row of yield* rowsOf(api, day)) rows.push({ day, ...row })
+			const page = yield* rowsOf(api, day)
+			partial ||= page.truncated
+			for (const row of page.rows) rows.push({ day, ...row })
 		}
-		// Maple names a customer by its Clerk organization id, which its Maple ref shares.
 		const ids = [...new Set(rows.map((row) => row.account))]
 		const refs = yield* db.run(
 			SQLite.from(schema.customerExternalRefsTable)
-				.select("externalId", "accountId")
+				.select("provider", "externalId", "accountId")
 				.where(($) => [
 					$.entityType.eq("account"),
-					$.provider.in_("clerk", "maple"),
+					$.provider.in_(...order),
 					$.staleAt.isNull(),
 					inList($.externalId, ids),
 				]),
 		)
-		const accountOf = new Map(refs.map((ref) => [ref.externalId, ref.accountId]))
+		const byProvider = new Map(
+			order.map((provider) => [
+				provider,
+				new Map(
+					refs
+						.filter((ref) => ref.provider === provider)
+						.map((ref) => [ref.externalId, ref.accountId]),
+				),
+			]),
+		)
+		const accountOf = (id: string) =>
+			order
+				.map((provider) => byProvider.get(provider)?.get(id))
+				.find((accountId) => accountId !== undefined)
 		const values = new Map<CustomerAccountId, Map<Day, number>>()
 		let unmatchedRows = 0
 		for (const row of rows) {
-			const accountId = accountOf.get(row.account)
+			const accountId = accountOf(row.account)
 			if (accountId === undefined) {
 				unmatchedRows += 1
 				continue
@@ -133,7 +163,7 @@ const mapleDaily = (rowsOf: DayRows, days: ReadonlyArray<Day>, client: HttpClien
 			own.set(row.day, row.value)
 			values.set(accountId, own)
 		}
-		return { values, unmatchedRows } satisfies Daily
+		return { values, unmatchedRows, partial } satisfies Daily
 	}).pipe(
 		Effect.catchTags({
 			CustomerProviderError: (error) =>
@@ -225,7 +255,12 @@ export const previewMetric = Effect.fn("Customers.previewMetric")(function* (
 			.where(($) => [$.deletedAt.isNull()]),
 	)
 	const names = new Map(accounts.map((account) => [account.id, account.name]))
-	const result = (daily: Daily | string, valueOf: (accountId: CustomerAccountId) => number | null) => {
+	/** `candidates` rank by their value over the days (`valueOf`); the daily values make the rest. */
+	const result = (
+		daily: Daily | string,
+		candidates: Iterable<CustomerAccountId>,
+		valueOf: (accountId: CustomerAccountId) => number | null,
+	) => {
 		if (typeof daily === "string")
 			return {
 				error: daily,
@@ -233,10 +268,11 @@ export const previewMetric = Effect.fn("Customers.previewMetric")(function* (
 				accountsWithData: 0,
 				totalAccounts: accounts.length,
 				unmatchedRows: 0,
+				partial: false,
 				top: [],
 				sample: null,
 			} satisfies MetricPreviewResult
-		const top = [...daily.values.keys()]
+		const top = [...candidates]
 			.flatMap((accountId) => {
 				const value = valueOf(accountId)
 				const name = names.get(accountId)
@@ -251,6 +287,7 @@ export const previewMetric = Effect.fn("Customers.previewMetric")(function* (
 			accountsWithData: [...daily.values.keys()].filter((accountId) => names.has(accountId)).length,
 			totalAccounts: accounts.length,
 			unmatchedRows: daily.unmatchedRows,
+			partial: daily.partial,
 			top,
 			sample:
 				sample === undefined
@@ -267,18 +304,13 @@ export const previewMetric = Effect.fn("Customers.previewMetric")(function* (
 	}
 	const source = input.source
 	if (source._tag !== "formula") {
-		const problem =
-			source._tag === "maple_query"
-				? checkMapleSql(source.sql)
-				: metricSourceProblem("", source, definitions)
+		const problem = metricSourceProblem("", source, definitions)
 		const daily =
 			problem ??
-			(yield* mapleDaily(
-				source._tag === "maple_query" ? queryRows(source.sql) : eventRows(source.events),
-				days,
-				client,
-			))
-		return result(daily, (accountId) =>
+			(source._tag === "maple_query"
+				? yield* mapleDaily(queryRows(source.sql), ["clerk", "maple"], days, client)
+				: yield* mapleDaily(eventRows(source.events), ["maple", "clerk"], days, client))
+		return result(daily, typeof daily === "string" ? [] : daily.values.keys(), (accountId) =>
 			typeof daily === "string"
 				? null
 				: aggregate(
@@ -294,7 +326,7 @@ export const previewMetric = Effect.fn("Customers.previewMetric")(function* (
 	// applies it day by day.
 	const problem = metricSourceProblem("", source, definitions)
 	const parsed = parseFormula(source.expression)
-	if (problem !== null || !parsed.ok) return result(problem ?? "The formula cannot be read", () => null)
+	if (problem !== null || !parsed.ok) return result(problem ?? "The formula cannot be read", [], () => null)
 	const operands = yield* operandDays(parsed.keys, accounts, days)
 	const valueOn = (accountId: CustomerAccountId, day: Day) =>
 		evaluateFormula(parsed.node, (key) => operands.get(accountId)?.get(key)?.get(day) ?? null)
@@ -307,7 +339,9 @@ export const previewMetric = Effect.fn("Customers.previewMetric")(function* (
 		}
 		if (own.size > 0) values.set(accountId, own)
 	}
-	return result({ values, unmatchedRows: 0 }, (accountId) =>
+	// Ranked over every account with an operand's data: a ratio over the days can have a value
+	// where no single day does.
+	return result({ values, unmatchedRows: 0, partial: false }, operands.keys(), (accountId) =>
 		evaluateFormula(parsed.node, (key) =>
 			aggregate(
 				days.flatMap((day) => {

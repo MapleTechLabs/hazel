@@ -220,16 +220,46 @@ const chartBody = <M>(
 		return days.map((day) => byDay.get(day) ?? 0)
 	}
 	const all = shown.flatMap(valuesOf)
+	const missing = widget.metricKeys.filter((key) => isMissing(context, key))
+	const missingNotes = missing.map((key) =>
+		h.p(
+			[h.Key(key), h.Class("flex items-center gap-2 text-muted-fg text-xs")],
+			[
+				IconWarning(h, { className: "size-3.5 shrink-0 text-warning-subtle-fg" }),
+				h.code([], [key]),
+				"is not set up",
+				createLink(h, context, key),
+			],
+		),
+	)
 	if (all.every((value) => value === 0))
-		return h.p([h.Class("py-12 text-center text-muted-fg text-sm")], ["No data in this range."])
+		return h.div(
+			[h.Class("flex flex-col gap-3")],
+			[
+				h.p([h.Class("py-12 text-center text-muted-fg text-sm")], ["No data in this range."]),
+				...missingNotes,
+			],
+		)
+	// Each series reads in its own format; the axis shares one only when every series has it.
+	const formatOf = (key: string) => {
+		const metric = metricOf(context, key) ?? PLAIN
+		return (value: number) => formatMetric(value, metric, context.currency)
+	}
+	const formats = new Set(
+		shown.map((entry) => {
+			const metric = metricOf(context, entry.metricKey) ?? PLAIN
+			return `${metric.format}:${metric.unit ?? ""}`
+		}),
+	)
 	const first = metricOf(context, shown[0]?.metricKey ?? "") ?? PLAIN
-	const formatValue = (value: number) => formatMetric(value, first, context.currency)
+	const isShared = formats.size === 1 && first.format !== "number"
+	const formatValue = formatOf(shown[0]?.metricKey ?? "")
 	const formatAxis = (value: number) =>
-		first.format === "number"
-			? Math.abs(value) < 1
-				? formatValue(value)
+		isShared
+			? formatValue(value)
+			: Math.abs(value) < 1
+				? formatMetric(value, PLAIN)
 				: formatCompact(value)
-			: formatValue(value)
 	const label = (entry: Customers.MetricSeries) => metricOf(context, entry.metricKey)?.name ?? entry.name
 	const colorOf = (index: number): ChartColor => CHART_COLORS[index % CHART_COLORS.length] ?? "series-1"
 	const hovered = context.data.hovered?.widgetId === widget.id ? context.data.hovered.index : null
@@ -245,6 +275,7 @@ const chartBody = <M>(
 						label: label(entry),
 						color: colorOf(index),
 						values: valuesOf(entry),
+						formatValue: formatOf(entry.metricKey),
 					})),
 					xLabels: days.map(formatDay),
 					headings: days.map(formatDayLong),
@@ -258,10 +289,13 @@ const chartBody = <M>(
 				})
 			: stackedBarChart(h, {
 					ariaLabel,
+					// Bars of several metrics stand side by side; only "stacked" adds them up.
+					grouped: widget.style === "bars",
 					stacks: shown.map((entry, index) => ({
 						key: entry.metricKey,
 						label: label(entry),
 						color: colorOf(index),
+						formatValue: formatOf(entry.metricKey),
 					})),
 					bars: days.map((day, index) => {
 						const values = Object.fromEntries(
@@ -282,7 +316,6 @@ const chartBody = <M>(
 					maxXTicks: 6,
 					heightClass: "h-48",
 				})
-	const missing = widget.metricKeys.filter((key) => isMissing(context, key))
 	return h.div(
 		[h.Class("flex flex-col gap-3")],
 		[
@@ -295,17 +328,7 @@ const chartBody = <M>(
 						),
 					]
 				: []),
-			...missing.map((key) =>
-				h.p(
-					[h.Key(key), h.Class("flex items-center gap-2 text-muted-fg text-xs")],
-					[
-						IconWarning(h, { className: "size-3.5 shrink-0 text-warning-subtle-fg" }),
-						h.code([], [key]),
-						"is not set up",
-						createLink(h, context, key),
-					],
-				),
-			),
+			...missingNotes,
 		],
 	)
 }
@@ -464,11 +487,19 @@ const tableView = <M>(
 				),
 				...(isMissingRow
 					? [
-							cell("font-medium text-warning-subtle-fg", ["Metric not set up"]),
-							...(columns.trend || columns.lastUsed
-								? [h.span([h.Class("flex justify-end")], [createLink(h, context, entry.key)])]
-								: []),
-							...(columns.trend && columns.lastUsed ? [h.span([])] : []),
+							// The link sits with the notice, so it shows whichever columns the table has.
+							h.span(
+								[h.Class("flex flex-wrap items-center gap-x-2 text-sm")],
+								[
+									h.span(
+										[h.Class("font-medium text-warning-subtle-fg")],
+										["Metric not set up"],
+									),
+									createLink(h, context, entry.key),
+								],
+							),
+							...(columns.trend ? [h.span([])] : []),
+							...(columns.lastUsed ? [h.span([])] : []),
 						]
 					: [
 							cell(
@@ -485,7 +516,14 @@ const tableView = <M>(
 															value,
 															entry.metric === undefined
 																? PLAIN
-																: { ...entry.metric, unit: null },
+																: // The unit shows beside it; minor units stay: they format as money.
+																	{
+																		...entry.metric,
+																		unit:
+																			unit === null
+																				? entry.metric.unit
+																				: null,
+																	},
 															context.currency,
 														),
 													],

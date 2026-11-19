@@ -98,20 +98,28 @@ export type MetricSource = typeof MetricSource.Type
  * Why a Maple query metric's SQL cannot run as the pull runs it, or `null`. The pull appends
  * `ORDER BY account LIMIT … OFFSET …` to it, so it must be one plain SELECT (no subquery or UNION,
  * whose `$__orgFilter` Maple would not see as top-level, and no comment the clause could fall
- * into) ending in its `GROUP BY account` (a `HAVING` may follow).
+ * into) ending in its `GROUP BY account` (a `HAVING` may follow), whose WHERE starts with
+ * `$__orgFilter` and joins its conditions with AND.
  */
 export const checkMapleSql = (sql: string): string | null => {
-	// Clauses are looked for outside string literals.
+	// Clauses are looked for outside string literals and quoted identifiers (`"limit"`, `` `order` ``).
 	const code = sql
 		.trim()
 		.replace(/;\s*$/, "")
-		.replace(/'(?:[^'\\]|\\.)*'/g, "''")
+		.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g, "''")
 	if (!/^select\b/i.test(code)) return "Start with SELECT"
 	if (code.includes(";")) return "One statement only"
 	if (/--|\/\*|#/.test(code)) return "Leave out comments"
 	if ((code.match(/\bselect\b/gi) ?? []).length > 1 || /\bunion\b/i.test(code))
 		return "One SELECT only: no subqueries or UNION"
 	if (!code.includes("$__orgFilter")) return "AND in $__orgFilter"
+	// The organization filter scopes the whole result only as the first conjunct of WHERE, with no
+	// top-level OR beside it (Maple refuses an OR-ed one too).
+	if (!/\bwhere\s+\$__orgFilter(\(\w+\))?\s+(and|group\s+by)\b/i.test(code))
+		return "Start WHERE with $__orgFilter, then AND the other conditions"
+	let where = /\bwhere\b([\s\S]*?)\bgroup\s+by\b/i.exec(code)?.[1] ?? ""
+	while (/\([^()]*\)/.test(where)) where = where.replace(/\([^()]*\)/g, "")
+	if (/\bor\b/i.test(where)) return "Join WHERE's conditions with AND; put an OR inside parentheses"
 	if (!/\$__timeFilter\(|\$__startTime/.test(code)) return "Filter time with $__timeFilter(<column>)"
 	if (!/\baccount\b/i.test(code) || !/\bvalue\b/i.test(code)) return "Select `account` and `value`"
 	if (/\b(order\s+by|limit|settings)\b/i.test(code))
@@ -142,7 +150,33 @@ const TIME_COLUMN = {
 
 const literal = (value: string) => `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`
 
-/** The SQL a builder stands for (`MapleQuerySource.sql`). */
+/** An `in` filter's values: comma-separated, blanks dropped. */
+const inValues = (value: string) =>
+	value
+		.split(",")
+		.map((part) => part.trim())
+		.filter((part) => part !== "")
+
+/**
+ * Why a builder cannot stand for a query, or `null`: every field must be one Hazel puts in SQL
+ * (`isBuilderField`) and an `in` filter needs at least one value. Check it before `mapleBuilderSql`.
+ */
+export const builderProblem = (builder: MapleQueryBuilder): string | null => {
+	const fields = [
+		builder.customerField,
+		...(builder.valueField === undefined ? [] : [builder.valueField]),
+		...builder.filters.map((filter) => filter.field),
+	]
+	const bad = fields.filter((field) => !isBuilderField(field))
+	if (bad.length > 0) return `Not a column Hazel can query: ${bad.join(", ")}`
+	const empty = builder.filters.filter(
+		(filter) => filter.op === "in" && inValues(filter.value).length === 0,
+	)
+	if (empty.length > 0) return `Give ${empty.map((filter) => filter.field).join(", ")} at least one value`
+	return null
+}
+
+/** The SQL a builder stands for (`MapleQuerySource.sql`); its `builderProblem` must be null. */
 export const mapleBuilderSql = (builder: MapleQueryBuilder): string => {
 	const value =
 		builder.value === "sum"
@@ -152,13 +186,7 @@ export const mapleBuilderSql = (builder: MapleQueryBuilder): string => {
 				: `uniqExact(${columnOf(builder.valueField ?? "TraceId")})`
 	const filters = builder.filters.map((filter) => {
 		const column = columnOf(filter.field)
-		if (filter.op === "in") {
-			const values = filter.value
-				.split(",")
-				.map((part) => part.trim())
-				.filter((part) => part !== "")
-			return `${column} IN (${values.map(literal).join(", ")})`
-		}
+		if (filter.op === "in") return `${column} IN (${inValues(filter.value).map(literal).join(", ")})`
 		return `${column} ${filter.op === "eq" ? "=" : "!="} ${literal(filter.value)}`
 	})
 	const customer = columnOf(builder.customerField)
@@ -216,7 +244,9 @@ export const parseFormula = (expression: string): FormulaParse => {
 		} else if (/[0-9.]/.test(char)) {
 			const match = /^[0-9]*\.?[0-9]+([eE][+-]?[0-9]+)?/.exec(expression.slice(index))
 			if (match === null) return { ok: false, error: `Not a number at ${index + 1}` }
-			tokens.push({ kind: "number", value: Number(match[0]) })
+			const value = Number(match[0])
+			if (!Number.isFinite(value)) return { ok: false, error: `${match[0]} is too large a number` }
+			tokens.push({ kind: "number", value })
 			index += match[0].length
 		} else if ("+-*/()".includes(char)) {
 			tokens.push({ kind: "op", op: char as "+" })
@@ -281,7 +311,9 @@ export const parseFormula = (expression: string): FormulaParse => {
 	return { ok: true, node, keys: [...keys] }
 }
 
-/** The formula's value; `null` when a metric has no value or it divides by zero. */
+const finite = (value: number | null) => (value !== null && Number.isFinite(value) ? value : null)
+
+/** The formula's value; `null` when a metric has no value, it divides by zero, or it overflows. */
 export const evaluateFormula = (
 	node: FormulaNode,
 	valueOf: (key: string) => number | null,
@@ -290,7 +322,7 @@ export const evaluateFormula = (
 		case "number":
 			return node.value
 		case "metric":
-			return valueOf(node.key)
+			return finite(valueOf(node.key))
 		case "negate": {
 			const value = evaluateFormula(node.operand, valueOf)
 			return value === null ? null : -value
@@ -299,10 +331,10 @@ export const evaluateFormula = (
 			const left = evaluateFormula(node.left, valueOf)
 			const right = evaluateFormula(node.right, valueOf)
 			if (left === null || right === null) return null
-			if (node.op === "+") return left + right
-			if (node.op === "-") return left - right
-			if (node.op === "*") return left * right
-			return right === 0 ? null : left / right
+			if (node.op === "+") return finite(left + right)
+			if (node.op === "-") return finite(left - right)
+			if (node.op === "*") return finite(left * right)
+			return right === 0 ? null : finite(left / right)
 		}
 	}
 }
@@ -409,9 +441,10 @@ export const widgetMetricKeys = (
 		case "chart":
 			return widget.metricKeys
 		case "metric_table":
-			return (
-				widget.rows._tag === "group" ? groupKeys(widget.rows.group) : widget.rows.metricKeys
-			).filter((key) => !widget.exclude.includes(key))
+			// `exclude` trims a group; a hand-picked list is what it lists.
+			return widget.rows._tag === "group"
+				? groupKeys(widget.rows.group).filter((key) => !widget.exclude.includes(key))
+				: widget.rows.metricKeys
 		case "built_in":
 			return []
 	}
@@ -421,7 +454,7 @@ export const widgetMetricKeys = (
 export const statLabel = (widget: StatWidget, metricName: string): string =>
 	(widget.label ?? "{metric} · {window}")
 		.replaceAll("{window}", `${widget.windowDays}d`)
-		.replaceAll("{metric}", metricName)
+		.replaceAll("{metric}", () => metricName)
 		.replace(/\s+/g, " ")
 		.trim()
 
@@ -588,7 +621,10 @@ export const conditionMatches = (condition: LayoutCondition, facts: LayoutFacts)
 				? facts.mrrMinor >= condition.valueMinor
 				: facts.mrrMinor < condition.valueMinor
 		case "attribute": {
-			const value = attributeText(facts.attributes[condition.key])
+			// Own keys only: `toString` is no attribute of `{}`.
+			const value = attributeText(
+				Object.hasOwn(facts.attributes, condition.key) ? facts.attributes[condition.key] : undefined,
+			)
 			if (condition.op === "exists") return value !== null && value !== ""
 			if (condition.op === "eq") return value === condition.value
 			return value !== condition.value
@@ -612,11 +648,15 @@ export const ruleMatches = (rule: LayoutRule, facts: LayoutFacts): boolean =>
  * `position`) whose rule matches, else the default.
  */
 export const resolveLayout = <
-	L extends { readonly id: string; readonly isDefault: boolean; readonly rule: LayoutRule },
+	L extends {
+		readonly id: CustomerOverviewLayoutId
+		readonly isDefault: boolean
+		readonly rule: LayoutRule
+	},
 >(
 	layouts: ReadonlyArray<L>,
 	facts: LayoutFacts,
-	pinnedLayoutId: string | null,
+	pinnedLayoutId: CustomerOverviewLayoutId | null,
 ): L | undefined => {
 	const pinned =
 		pinnedLayoutId === null ? undefined : layouts.find((layout) => layout.id === pinnedLayoutId)

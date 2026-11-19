@@ -13,6 +13,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
+	builderProblem,
 	checkMapleSql,
 	type Day,
 	evaluateFormula,
@@ -85,19 +86,36 @@ export const windowValue = (
 	})
 }
 
-/** The account fields the built-ins read for a window ending today (all `last` levels but DAU). */
-export type BuiltInAccount = Pick<
-	schema.CustomerAccount,
-	"id" | "activeUsers30d" | "mrrMinor" | "healthScore"
->
+/** The account fields the `last`-level built-ins read for a window ending today. */
+export type BuiltInAccount = Pick<schema.CustomerAccount, "id" | "activeUsers30d" | "mrrMinor">
+
+/** A window's aggregates of one account's days, the latest riding on its day (`YYYY-MM-DD` orders as text). */
+type StoredWindowRow = {
+	accountId: CustomerAccountId
+	total: number
+	high: number
+	latest: string
+}
+
+interface StoredWindow {
+	readonly sum: number
+	readonly max: number
+	readonly last: number
+}
+
+const windowOfRow = (row: StoredWindowRow): StoredWindow => ({
+	sum: Number(row.total),
+	max: Number(row.high),
+	last: Number(row.latest.slice(row.latest.indexOf("|") + 1)),
+})
 
 const ACTIVE = Database.sql`("eventCount" > 0 OR "sessionCount" > 0 OR "signedIn" = 1)`
 
 /**
  * Every account's value of each `(metricKey, windowDays)` window ending today, keyed
- * `metricWindowKey`. Stored metrics aggregate in SQL per window length; `active_users` is the
- * window's highest daily count; the other built-ins are `last` levels, so the account's current
- * value. Formulas evaluate over their operands' windows.
+ * `metricWindowKey`. Stored metrics and the health score (its scored days) aggregate in SQL per
+ * window length; `active_users` is the window's highest daily count; MRR and 30-day active users
+ * are `last` levels, so the account's current value. Formulas evaluate over their operands' windows.
  */
 export const ruleWindowValues = Effect.fn("Customers.ruleWindowValues")(function* (
 	windows: ReadonlyArray<{ readonly metricKey: string; readonly windowDays: number }>,
@@ -110,8 +128,8 @@ export const ruleWindowValues = Effect.fn("Customers.ruleWindowValues")(function
 	const definitions = yield* loadDefinitions
 	const lengths = [...new Set(windows.map((window) => window.windowDays))]
 	/** Window length → account → key → that window's sum, max and last. */
-	const stored = new Map<number, Map<string, { sum: number; max: number; last: number }>>()
-	const dau = new Map<number, Map<string, number>>()
+	const stored = new Map<number, Map<string, StoredWindow>>()
+	const dau = new Map<number, Map<CustomerAccountId, number>>()
 	for (const days of lengths) {
 		const keys = dataKeysOf(
 			windows.filter((window) => window.windowDays === days).map((window) => window.metricKey),
@@ -126,26 +144,22 @@ export const ruleWindowValues = Effect.fn("Customers.ruleWindowValues")(function
 					max("day" || '|' || "value") AS "latest" FROM "customer_metric_daily"
 					WHERE "metricKey" IN (SELECT value FROM json_each(${JSON.stringify(plain)}))
 					AND "day" >= ${from} AND "day" <= ${today} GROUP BY "accountId", "metricKey"`,
-			)) as ReadonlyArray<{
-				accountId: string
-				metricKey: string
-				total: number
-				high: number
-				latest: string
-			}>
+			)) as ReadonlyArray<StoredWindowRow & { metricKey: string }>
 			stored.set(
 				days,
-				new Map(
-					rows.map((row) => [
-						`${row.accountId}:${row.metricKey}`,
-						{
-							sum: Number(row.total),
-							max: Number(row.high),
-							last: Number(row.latest.slice(row.latest.indexOf("|") + 1)),
-						},
-					]),
-				),
+				new Map(rows.map((row) => [`${row.accountId}:${row.metricKey}`, windowOfRow(row)])),
 			)
+		}
+		// Health as the Overview reads it: the scored days only (an unscored day is no data).
+		if (keys.includes("health_score")) {
+			const rows = (yield* db.query(
+				Database.sql`SELECT "accountId", sum("score") AS "total", max("score") AS "high",
+					max("day" || '|' || "score") AS "latest" FROM "customer_health_daily"
+					WHERE "score" IS NOT NULL AND "day" >= ${from} AND "day" <= ${today} GROUP BY "accountId"`,
+			)) as ReadonlyArray<StoredWindowRow>
+			const own = stored.get(days) ?? new Map<string, StoredWindow>()
+			for (const row of rows) own.set(`${row.accountId}:health_score`, windowOfRow(row))
+			stored.set(days, own)
 		}
 		if (keys.includes("active_users")) {
 			const rows = (yield* db.query(
@@ -153,7 +167,7 @@ export const ruleWindowValues = Effect.fn("Customers.ruleWindowValues")(function
 					SELECT "accountId", "day", count(*) AS "users" FROM "customer_activity_daily"
 					WHERE "day" >= ${from} AND "day" <= ${today} AND ${ACTIVE} GROUP BY "accountId", "day"
 				) GROUP BY "accountId"`,
-			)) as ReadonlyArray<{ accountId: string; users: number }>
+			)) as ReadonlyArray<{ accountId: CustomerAccountId; users: number }>
 			dau.set(days, new Map(rows.map((row) => [row.accountId, Number(row.users)])))
 		}
 	}
@@ -170,8 +184,6 @@ export const ruleWindowValues = Effect.fn("Customers.ruleWindowValues")(function
 							return account.activeUsers30d
 						case "mrr":
 							return account.mrrMinor
-						case "health_score":
-							return account.healthScore
 					}
 					const row = stored.get(windowDays)?.get(`${account.id}:${key}`)
 					return row === undefined ? null : row[aggregation]
@@ -212,7 +224,9 @@ export const metricSourceProblem = (
 ): string | null => {
 	switch (source._tag) {
 		case "maple_query":
-			return checkMapleSql(source.sql)
+			return (
+				(source.builder === null ? null : builderProblem(source.builder)) ?? checkMapleSql(source.sql)
+			)
 		case "product_event": {
 			const bad = source.events.filter((event) => !isEventName(event.trim()))
 			return bad.length === 0

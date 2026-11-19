@@ -277,6 +277,37 @@ describe("customer page: tabs", () => {
 		expect(isNotFound(syncing)).toBe(false)
 	})
 
+	test("a layout's new chart range replaces the viewer's pick; other picks stay", () => {
+		const usage = Customers.DEFAULT_LAYOUT_WIDGETS.find((widget) => widget.id === "usage")
+		if (usage?._tag !== "chart") throw new Error("the default layout has a usage chart")
+		const base = layout(2, "Default", true)
+		const picked = run(loaded(), [
+			Message.UpdatedLayouts({ layouts: [base] }),
+			Message.GotOverviewDataMessage({
+				message: OverviewData.Message.ClickedChartRange({ widgetId: "usage", range: "7d" }),
+			}),
+		])
+		expect(picked.overview.charts.usage?.range).toBe("7d")
+		const same = run(picked, [Message.UpdatedLayouts({ layouts: [{ ...base, name: "Renamed" }] })])
+		expect(same.overview.charts.usage?.range).toBe("7d")
+		const changed = update(
+			picked,
+			Message.UpdatedLayouts({
+				layouts: [
+					{
+						...base,
+						widgets: base.widgets.map((widget) =>
+							widget.id === "usage" ? { ...usage, range: "90d" as const } : widget,
+						),
+					},
+				],
+			}),
+			shared,
+		)
+		expect(changed.model.overview.charts.usage?.range).toBe("90d")
+		expect(commandNames(changed)).toContain("FetchOverviewChartSeries")
+	})
+
 	test("a chart's answer for a range the user left is dropped", () => {
 		const series = (asked: string) =>
 			Message.GotOverviewDataMessage({

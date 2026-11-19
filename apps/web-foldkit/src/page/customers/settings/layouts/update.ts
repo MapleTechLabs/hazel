@@ -1,6 +1,6 @@
 import * as Customers from "@hazel/domain/customers"
-import type { CustomerAccountId, CustomerOverviewLayoutId } from "@hazel/schema"
-import { Match, Option, Result } from "effect"
+import { type CustomerAccountId, CustomerOverviewLayoutId } from "@hazel/schema"
+import { Match, Option, Result, Schema } from "effect"
 import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { failureMessage } from "~/lib/error-messages"
@@ -95,6 +95,8 @@ const editorOf = (
 	dryRun: AsyncData.Idle(),
 	isSaving: false,
 	savingDraft: null,
+	savingBefore: null,
+	saveId: null,
 	pickerSearch: "",
 	previewSearch: "",
 	ruleMetricIndex: null,
@@ -193,6 +195,8 @@ export const sharedChanged = (model: Model, shared: Shared): Return => hydrate(m
 
 // HYDRATING
 
+const isLayoutId = Schema.is(CustomerOverviewLayoutId)
+
 /**
  * Fills the editor once what it needs has synced (the layout it edits or copies), then asks who the
  * rule matches and loads the previewed customer. Safe to call on every update of the rows.
@@ -202,7 +206,8 @@ const hydrate = (model: Model, shared: Shared): Return => {
 	if (editor === null) return { model }
 	if (editor.draft !== null) return ensurePreview(fetchDryRunOnce(model, shared), shared)
 	const edited = layoutById(model, editor.layoutId)
-	const copied = layoutById(model, editor.from)
+	// `?from=` names a layout to copy when it is a layout's id (else a starter's key, already applied).
+	const copied = layoutById(model, isLayoutId(editor.from) ? editor.from : null)
 	const source = edited ?? copied
 	if (source === undefined) return { model }
 	const draft: Customers.LayoutDraft = {
@@ -334,12 +339,16 @@ const editWidgets = (
 	shared: Shared,
 	change: (widgets: ReadonlyArray<Customers.OverviewWidget>) => ReadonlyArray<Customers.OverviewWidget>,
 	selectedId?: string | null,
-): Return =>
-	editDraft(
+): Return => {
+	const widgets = change(model.editor?.draft?.widgets ?? [])
+	// At the limit an add or a copy changes nothing: no widget is dropped to make room.
+	if (widgets.length > Customers.MAX_WIDGETS) return { model }
+	return editDraft(
 		selectedId === undefined ? model : withEditor(model, (editor) => ({ ...editor, selectedId })),
 		shared,
-		(draft) => ({ ...draft, widgets: change(draft.widgets).slice(0, Customers.MAX_WIDGETS) }),
+		(draft) => ({ ...draft, widgets }),
 	)
+}
 
 const takenIds = (model: Model) => new Set((model.editor?.draft?.widgets ?? []).map((widget) => widget.id))
 
@@ -428,10 +437,16 @@ const savedToast = (model: Model, editor: Editor, name: string): ToastRequest =>
 }
 
 /** The order with the edited layout where "Move above" put it. */
-const reorderToDraft = (model: Model, editor: Editor, organization: NonNullable<Shared["organization"]>) =>
+const reorderToMove = (
+	model: Model,
+	editor: Editor,
+	move: CustomerOverviewLayoutId,
+	organization: NonNullable<Shared["organization"]>,
+) =>
 	ReorderOverviewLayouts({
 		organizationId: organization.id,
-		layoutIds: draftOrder(model, editor).flatMap((id) => (id === null ? [] : [id])),
+		layoutIds: draftOrder(model, { ...editor, before: move }).flatMap((id) => (id === null ? [] : [id])),
+		move,
 	})
 
 /** Creates or updates the layout; a moved existing one is reordered once its update landed. */
@@ -448,12 +463,20 @@ const save = (model: Model, shared: Shared): Return => {
 		return { model }
 	const layout = editor.draft
 	if (!isValidDraft(layout) || !isDirty(editor)) return { model }
+	const saveId = model.lastVersion + 1
 	return {
-		model: withEditor(model, (current) => ({ ...current, isSaving: true, savingDraft: layout })),
+		model: withEditor({ ...model, lastVersion: saveId }, (current) => ({
+			...current,
+			isSaving: true,
+			savingDraft: layout,
+			savingBefore: current.before,
+			saveId,
+		})),
 		commands: [
 			editor.layoutId === null
 				? CreateOverviewLayout({
 						organizationId,
+						saveId,
 						layout,
 						position: draftPosition(model, editor) ?? null,
 					})
@@ -482,7 +505,7 @@ const reorder = (model: Model, shared: Shared, layoutId: CustomerOverviewLayoutI
 	if (organizationId === undefined || order === ids) return { model }
 	return {
 		model: { ...model, pendingOrder: order },
-		commands: [ReorderOverviewLayouts({ organizationId, layoutIds: order })],
+		commands: [ReorderOverviewLayouts({ organizationId, layoutIds: order, move: null })],
 	}
 }
 
@@ -612,11 +635,18 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 
 		PressedMoveLayout: ({ layoutId, step }) => reorder(model, shared, layoutId, step),
 		// A moved layout's place is saved: "Move above" is done.
-		SucceededReorderLayouts: () => ({
-			model: withEditor({ ...model, pendingOrder: null }, (editor) => ({ ...editor, before: null })),
+		// The list's reorder ends its pending order; the editor's ends its own move only (a later
+		// "Move above" stays to be saved).
+		SucceededReorderLayouts: ({ move }) => ({
+			model:
+				move === null
+					? { ...model, pendingOrder: null }
+					: withEditor(model, (editor) =>
+							editor.before === move ? { ...editor, before: null } : editor,
+						),
 		}),
-		FailedReorderLayouts: ({ reason }) => ({
-			model: { ...model, pendingOrder: null },
+		FailedReorderLayouts: ({ move, reason }) => ({
+			model: move === null ? { ...model, pendingOrder: null } : model,
 			outMessage: writeFailure("Couldn't change the order", reason),
 		}),
 		PressedDeleteLayout: ({ layoutId }) => ({
@@ -692,20 +722,28 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		ChangedName: ({ value }) => editDraft(model, shared, (draft) => ({ ...draft, name: value })),
 		PressedDiscard: () => ({ model, outMessage: toList(shared) }),
 		PressedSave: () => save(model, shared),
-		SucceededCreateLayout: () => {
+		SucceededCreateLayout: ({ saveId }) => {
 			const editor = model.editor
-			const name = editor?.savingDraft?.name ?? "Layout"
-			const saved = editor === null ? successToast(`${name} saved`) : savedToast(model, editor, name)
-			// Only the editor still saving leaves for the list; one left meanwhile just says so.
-			return editor?.isSaving === true && editor.layoutId === null
+			const isThisSave = editor?.saveId === saveId
+			const name = (isThisSave ? editor?.savingDraft?.name : undefined) ?? "Layout"
+			const saved =
+				editor === null || !isThisSave
+					? successToast(`${name} saved`)
+					: savedToast(model, editor, name)
+			// Only the editor whose save this is leaves for the list; one left meanwhile just says so.
+			return isThisSave && editor?.isSaving === true && editor.layoutId === null
 				? {
 						model: withEditor(model, (current) => ({ ...current, isSaving: false })),
 						outMessage: toList(shared, saved),
 					}
 				: { model, outMessage: toast(saved) }
 		},
-		FailedCreateLayout: ({ reason }) => ({
-			model: withEditor(model, (editor) => ({ ...editor, isSaving: false, savingDraft: null })),
+		FailedCreateLayout: ({ saveId, reason }) => ({
+			model: withEditor(model, (editor) =>
+				editor.saveId === saveId
+					? { ...editor, isSaving: false, savingDraft: null, savingBefore: null, saveId: null }
+					: editor,
+			),
 			outMessage: writeFailure("Couldn't create the layout", reason),
 		}),
 		SucceededUpdateLayout: ({ layoutId }) => {
@@ -716,18 +754,28 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			const saved: Return = {
 				model: {
 					...model,
-					editor: { ...editor, isSaving: false, saved: editor.savingDraft, savingDraft: null },
+					editor: {
+						...editor,
+						isSaving: false,
+						saved: editor.savingDraft,
+						savingDraft: null,
+						savingBefore: null,
+						saveId: null,
+					},
 				},
 				outMessage: toast(savedToast(model, editor, editor.savingDraft?.name ?? "Layout")),
 			}
-			// Moved with "Move above": its place is saved once its update landed.
-			return editor.before === null || organization === null
+			// Moved with "Move above" when saved: that place is saved once its update landed.
+			const move = editor.savingBefore
+			return move === null || organization === null
 				? saved
-				: { ...saved, commands: [reorderToDraft(model, editor, organization)] }
+				: { ...saved, commands: [reorderToMove(model, editor, move, organization)] }
 		},
 		FailedUpdateLayout: ({ layoutId, reason }) => ({
 			model: withEditor(model, (editor) =>
-				editor.layoutId === layoutId ? { ...editor, isSaving: false, savingDraft: null } : editor,
+				editor.layoutId === layoutId
+					? { ...editor, isSaving: false, savingDraft: null, savingBefore: null, saveId: null }
+					: editor,
 			),
 			outMessage: writeFailure("Couldn't save the layout", reason),
 		}),

@@ -11,6 +11,7 @@ import type { CustomerConnectionId, OrganizationId, UserId } from "@hazel/schema
 import { Effect, Option } from "effect"
 import { rebuildHistory, runCompute } from "./compute"
 import { CustomerIngest } from "./ingest"
+import { firstPosition, liveLayouts } from "./layouts"
 import { loadBase } from "./snapshot"
 import { clearComputeProgress } from "./schedule"
 import { DEMO_LAYOUT, DEMO_USER_METRICS, generateDemoSeed } from "./seed"
@@ -84,18 +85,13 @@ const seedOverview = (organizationId: OrganizationId, by: UserId) =>
 					.onConflictDoNothing(),
 			)
 		}
-		const layout = yield* db.first(
-			SQLite.from(schema.customerOverviewLayoutsTable)
-				.select("id")
-				.where(($) => [$.name.eq(DEMO_LAYOUT.name), $.deletedAt.isNull()])
-				.limit(1),
-		)
-		if (Option.isNone(layout)) {
+		const layouts = yield* liveLayouts
+		if (!layouts.some((layout) => layout.name === DEMO_LAYOUT.name)) {
 			yield* db.run(
 				SQLite.insertInto(schema.customerOverviewLayoutsTable).values({
 					organizationId,
 					name: DEMO_LAYOUT.name,
-					position: 0,
+					position: firstPosition(layouts),
 					rule: DEMO_LAYOUT.rule,
 					widgets: DEMO_LAYOUT.widgets,
 					createdBy: by,

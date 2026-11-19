@@ -1,5 +1,5 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerOverviewLayoutId } from "@hazel/schema"
+import { type CustomerAccountId, CustomerOverviewLayoutId } from "@hazel/schema"
 import { Schema } from "effect"
 import type { ChartRange } from "../../customers/overview/data"
 import type { LayoutRow, MetricDef } from "../../customers/overview/rows"
@@ -153,12 +153,12 @@ const DAILY = new Map<string, number>([
 const GAUGES = new Set(["mrr", "health_score", "active_users_30d"])
 
 /** No logs at all from Acme (US) and Kestrel: their "Logs ingested" stat hides. */
-export const WITHOUT_LOGS: ReadonlySet<string> = new Set([
+export const WITHOUT_LOGS: ReadonlySet<CustomerAccountId> = new Set([
 	ACCOUNTS_BY_KEY.acme.id,
 	ACCOUNTS_BY_KEY.kestrel.id,
 ])
 
-const dayValue = (key: string, accountId: string, day: number): number => {
+const dayValue = (key: string, accountId: CustomerAccountId, day: number): number => {
 	if (key === "logs_ingested_bytes" && WITHOUT_LOGS.has(accountId)) return 0
 	const base = DAILY.get(key) ?? 0
 	const wobble = 0.75 + 0.5 * seed(`${key}:${accountId}:${day}`)
@@ -166,7 +166,7 @@ const dayValue = (key: string, accountId: string, day: number): number => {
 }
 
 export const metricWindowsFor = (
-	accountId: string,
+	accountId: CustomerAccountId,
 	asks: ReadonlyArray<Readonly<{ metricKey: string; days: number }>>,
 ): ReadonlyArray<Customers.MetricWindow> =>
 	asks.map(({ metricKey, days }) => {
@@ -194,7 +194,7 @@ export const metricWindowsFor = (
 const RANGE_DAYS = { "7d": 7, "30d": 30, "90d": 90 } as const satisfies Record<ChartRange, number>
 
 export const seriesFor = (
-	accountId: string,
+	accountId: CustomerAccountId,
 	metricKeys: ReadonlyArray<string>,
 	range: ChartRange,
 ): ReadonlyArray<Customers.MetricSeries> =>

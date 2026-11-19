@@ -204,6 +204,8 @@ export const previewOf = (source: MetricSource, days: number): MetricPreviewResu
 	return {
 		error: null,
 		days,
+		// A Maple query's busiest days run past one page: the editor says counts may be low.
+		partial: source._tag === "maple_query",
 		accountsWithData: 168,
 		totalAccounts: ACCOUNTS.length,
 		unmatchedRows: source._tag === "maple_query" ? 9 : 0,
@@ -227,6 +229,7 @@ export const previewOf = (source: MetricSource, days: number): MetricPreviewResu
 export const PREVIEW_REFUSED: MetricPreviewResult = {
 	error: "Maple refused the query: unknown table metric_sum. Did you mean metrics_sum?",
 	days: 7,
+	partial: false,
 	accountsWithData: 0,
 	totalAccounts: ACCOUNTS.length,
 	unmatchedRows: 0,

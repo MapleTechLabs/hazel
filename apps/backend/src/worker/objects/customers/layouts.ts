@@ -47,10 +47,17 @@ export const liveLayouts = Effect.flatMap(Database.Database, (db) =>
 			.where(($) => [$.deletedAt.isNull()])
 			.orderBy(($) => [
 				[$.position, "asc"],
-				[$.createdAt, "asc"],
+				// Positions are unique (create refuses a taken one); a tie still orders one way.
+				[$.id, "asc"],
 			]),
 	),
 )
+
+/** Where a new layout goes by default: before every other rule (the default aside). */
+export const firstPosition = (layouts: ReadonlyArray<schema.CustomerOverviewLayout>) => {
+	const others = layouts.filter((layout) => !layout.isDefault)
+	return others.length === 0 ? 0 : Math.min(...others.map((layout) => layout.position)) - 1
+}
 
 /** The live accounts, each with what layout rules read (the metric windows `rules` need). */
 const layoutInputs = (rules: ReadonlyArray<LayoutRule>, now: Date) =>
@@ -66,7 +73,6 @@ const layoutInputs = (rules: ReadonlyArray<LayoutRule>, now: Date) =>
 					"planName",
 					"tags",
 					"healthStatus",
-					"healthScore",
 					"mrrMinor",
 					"activeUsers30d",
 					"attributes",
@@ -172,8 +178,13 @@ export const layoutDryRun = Effect.fn("Customers.layoutDryRun")(function* (
 		input.position ??
 		layouts.find((layout) => layout.id === input.layoutId)?.position ??
 		Number.NEGATIVE_INFINITY
+	// Before it in the order assignment uses: position, then id (a new draft goes after a tie).
 	const earlier = layouts.filter(
-		(layout) => !layout.isDefault && layout.id !== input.layoutId && layout.position < position,
+		(layout) =>
+			!layout.isDefault &&
+			layout.id !== input.layoutId &&
+			(layout.position < position ||
+				(layout.position === position && layout.id < (input.layoutId ?? "\uffff"))),
 	)
 	const inputs = yield* layoutInputs([input.rule, ...earlier.map((layout) => layout.rule)], now)
 	const names = new Map(layouts.map((layout) => [layout.id, layout.name]))

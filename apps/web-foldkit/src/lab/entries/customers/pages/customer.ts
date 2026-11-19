@@ -1,17 +1,17 @@
-import type * as Customers from "@hazel/domain/customers"
+import * as Customers from "@hazel/domain/customers"
 import {
 	CustomerAccountId,
 	CustomerContactId,
 	CustomerEventId,
 	CustomerInvoiceId,
 	CustomerNoteId,
-	CustomerSubscriptionId,
+	CustomerOverviewLayoutId,
 	OrganizationMemberId,
 } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import * as OverviewData from "../../../../customers/overview/data"
-import { toAccountRow, toSignalRow } from "../../../../customers/queries"
+import { type AccountRow, toAccountRow, toSignalRow } from "../../../../customers/queries"
 import { labShared } from "../../../../page/customers/lab-shared"
 import { Message } from "../../../../page/customers/detail/message"
 import { Model, type NoteRow } from "../../../../page/customers/detail/model"
@@ -366,6 +366,16 @@ const detailFor = (state: typeof State.Type): Customers.AccountDetail => {
 
 // PROGRAM
 
+const factsOf = (account: AccountRow): Customers.LayoutFacts => ({
+	lifecycleStage: account.lifecycleStage,
+	planName: account.planName,
+	tags: account.tags,
+	healthStatus: account.healthStatus,
+	mrrMinor: account.mrrMinor,
+	attributes: {},
+	metricWindows: new Map(),
+})
+
 type Return = ReturnType<typeof update>
 type AnyCommand = NonNullable<Return["commands"]>[number]
 
@@ -528,6 +538,29 @@ const settle = (
 	let current = model
 	const kept: Array<AnyCommand> = []
 	for (const command of commands) {
+		// A pin lands on the synced account (pinned: that layout; unpinned: what its rules give).
+		if (command.name === "SetCustomerLayout") {
+			const args = (command.args ?? {}) as { accountId?: unknown; layoutId?: unknown }
+			const accountId = Schema.decodeUnknownSync(CustomerAccountId)(args.accountId)
+			const layoutId = Schema.decodeUnknownSync(Schema.NullOr(CustomerOverviewLayoutId))(args.layoutId)
+			const accounts = (current.accounts ?? []).map((account) =>
+				account.id === accountId
+					? {
+							...account,
+							pinnedLayoutId: layoutId,
+							layoutId:
+								layoutId ??
+								Customers.resolveLayout(LAYOUTS, factsOf(account), null)?.id ??
+								null,
+						}
+					: account,
+			)
+			current = step(
+				step(current, Message.UpdatedAccounts({ accounts })).model,
+				Message.SucceededSetLayout({ accountId }),
+			).model
+			continue
+		}
 		if (command.name === "CreateCustomerNote") {
 			const args = (command.args ?? {}) as { body?: string; pinned?: boolean }
 			const note: NoteRow = {

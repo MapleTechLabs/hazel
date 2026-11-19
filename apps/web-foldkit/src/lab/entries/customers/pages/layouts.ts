@@ -61,15 +61,28 @@ const ENTERPRISE: Customers.LayoutRule = {
 
 // THE DRY RUN, OVER THE FIXTURES
 
-const factsOf = (account: AccountRow): Customers.LayoutFacts => ({
-	lifecycleStage: account.lifecycleStage,
-	planName: account.planName,
-	tags: account.tags,
-	healthStatus: account.healthStatus,
-	mrrMinor: account.mrrMinor,
-	attributes: {},
-	metricWindows: new Map(),
-})
+/** An account's facts, with the fixture values of every metric window the rules read. */
+const factsOf = (account: AccountRow, rules: ReadonlyArray<Customers.LayoutRule>): Customers.LayoutFacts => {
+	const asks = rules
+		.flatMap(Customers.ruleMetricWindows)
+		.map((window) => ({ metricKey: window.metricKey, days: window.windowDays }))
+	return {
+		lifecycleStage: account.lifecycleStage,
+		planName: account.planName,
+		tags: account.tags,
+		healthStatus: account.healthStatus,
+		mrrMinor: account.mrrMinor,
+		attributes: {},
+		metricWindows: new Map(
+			metricWindowsFor(account.id, asks).map((window) => [
+				Customers.metricWindowKey(window.metricKey, window.days),
+				window.value,
+			]),
+		),
+	}
+}
+
+const LAYOUT_RULES = LAYOUTS.map((layout) => layout.rule)
 
 const ordered = LAYOUTS.filter((layout) => !layout.isDefault).sort(
 	(left, right) => left.position - right.position,
@@ -78,21 +91,22 @@ const ordered = LAYOUTS.filter((layout) => !layout.isDefault).sort(
 /** Each fixture customer gets the first layout that matches, else the default. */
 const ACCOUNT_ROWS: ReadonlyArray<AccountRow> = ACCOUNTS.map(toAccountRow).map((account) => ({
 	...account,
-	layoutId: Customers.resolveLayout(LAYOUTS, factsOf(account), null)?.id ?? null,
+	layoutId: Customers.resolveLayout(LAYOUTS, factsOf(account, LAYOUT_RULES), null)?.id ?? null,
 }))
 
 const dryRun = (
 	rule: Customers.LayoutRule,
-	layoutId: string | null,
+	layoutId: CustomerOverviewLayoutId | null,
 	position: number | null,
 ): Customers.LayoutDryRunResult => {
+	const facts = (account: AccountRow) => factsOf(account, [rule, ...LAYOUT_RULES])
 	const at =
 		position ?? ordered.find((layout) => layout.id === layoutId)?.position ?? Number.NEGATIVE_INFINITY
 	const earlier = ordered.filter((layout) => layout.id !== layoutId && layout.position < at)
-	const matching = ACCOUNT_ROWS.filter((account) => Customers.ruleMatches(rule, factsOf(account)))
+	const matching = ACCOUNT_ROWS.filter((account) => Customers.ruleMatches(rule, facts(account)))
 	const taken = new Map<LayoutRow, number>()
 	for (const account of matching) {
-		const first = earlier.find((layout) => Customers.ruleMatches(layout.rule, factsOf(account)))
+		const first = earlier.find((layout) => Customers.ruleMatches(layout.rule, facts(account)))
 		if (first !== undefined) taken.set(first, (taken.get(first) ?? 0) + 1)
 	}
 	const takenCount = [...taken.values()].reduce((sum, count) => sum + count, 0)
@@ -115,6 +129,8 @@ type Return = ReturnType<typeof update>
 type AnyCommand = NonNullable<Return["commands"]>[number]
 
 const asAccountId = (value: unknown) => Schema.decodeUnknownSync(CustomerAccountId)(value)
+const asLayoutIdOrNull = (value: unknown) =>
+	Schema.decodeUnknownSync(Schema.NullOr(CustomerOverviewLayoutId))(value)
 
 /** The fixture answer to a Command; "local" for one that stays in the browser, null for a write. */
 const answer = (command: AnyCommand): Message | null | "local" => {
@@ -125,7 +141,7 @@ const answer = (command: AnyCommand): Message | null | "local" => {
 				version: Number(args.version),
 				result: dryRun(
 					args.rule as Customers.LayoutRule,
-					(args.layoutId as string | null) ?? null,
+					asLayoutIdOrNull(args.layoutId ?? null),
 					(args.position as number | null) ?? null,
 				),
 			})
@@ -165,12 +181,13 @@ const answer = (command: AnyCommand): Message | null | "local" => {
 			})
 		}
 		case "CreateOverviewLayout":
-			return Message.SucceededCreateLayout()
+			return Message.SucceededCreateLayout({ saveId: Number(args.saveId) })
 		case "UpdateOverviewLayout":
 			return Message.SucceededUpdateLayout({
 				layoutId: Schema.decodeUnknownSync(CustomerOverviewLayoutId)(args.layoutId),
 			})
 		case "ReorderOverviewLayouts":
+			return Message.SucceededReorderLayouts({ move: asLayoutIdOrNull(args.move) })
 		case "DeleteOverviewLayout":
 			return null
 		default:

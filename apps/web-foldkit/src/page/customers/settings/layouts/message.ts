@@ -25,8 +25,9 @@ export const Message = defineMessageUnion({
 
 	// The list
 	PressedMoveLayout: { layoutId: CustomerOverviewLayoutId, step: Schema.Literals([-1, 1]) },
-	SucceededReorderLayouts: {},
-	FailedReorderLayouts: { reason: LayoutWriteFailure },
+	/** `move` is the editor's "Move above" it saves (null: the list's own reorder). */
+	SucceededReorderLayouts: { move: Schema.NullOr(CustomerOverviewLayoutId) },
+	FailedReorderLayouts: { move: Schema.NullOr(CustomerOverviewLayoutId), reason: LayoutWriteFailure },
 	PressedDeleteLayout: { layoutId: CustomerOverviewLayoutId },
 	GotDeleteModalMessage: { message: Modal.Message },
 	PressedConfirmDelete: {},
@@ -45,8 +46,9 @@ export const Message = defineMessageUnion({
 	ChangedName: { value: Schema.String },
 	PressedDiscard: {},
 	PressedSave: {},
-	SucceededCreateLayout: {},
-	FailedCreateLayout: { reason: LayoutWriteFailure },
+	/** `saveId` names the save it answers (`Editor.saveId`). */
+	SucceededCreateLayout: { saveId: Schema.Int },
+	FailedCreateLayout: { saveId: Schema.Int, reason: LayoutWriteFailure },
 	SucceededUpdateLayout: { layoutId: CustomerOverviewLayoutId },
 	FailedUpdateLayout: { layoutId: CustomerOverviewLayoutId, reason: LayoutWriteFailure },
 

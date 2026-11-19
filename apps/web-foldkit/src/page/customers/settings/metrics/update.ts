@@ -63,7 +63,8 @@ const writeFailure = (title: string, reason: MetricWriteFailure, detail: string 
 
 // ROUTES
 
-const editorOf = (metricKey: string | null, form: MetricForm | null): Editor => ({
+const editorOf = (editorId: number, metricKey: string | null, form: MetricForm | null): Editor => ({
+	editorId,
 	metricKey,
 	form,
 	preview: AsyncData.Idle(),
@@ -106,18 +107,19 @@ const fetchCoverage = (model: Model, shared: Shared): Return => {
 }
 
 const openRoute = (model: Model, route: MetricsRoute, shared: Shared): Return => {
-	const base = { ...model, deleteModal: Modal.close(model.deleteModal).model }
+	const editorId = model.lastEditorId + 1
+	const base = { ...model, deleteModal: Modal.close(model.deleteModal).model, lastEditorId: editorId }
 	return Match.valueTags(route, {
 		CustomersSettingsMetrics: (): Return => fetchCoverage({ ...base, editor: null }, shared),
 		CustomersSettingsMetricNew: ({ key, source }): Return => ({
-			model: { ...base, editor: editorOf(null, newForm(key, source)) },
+			model: { ...base, editor: editorOf(editorId, null, newForm(key, source)) },
 		}),
 		CustomersSettingsMetric: ({ metricKey }): Return => {
 			const metric = metricByKey(base, metricKey)
 			return {
 				model: {
 					...base,
-					editor: editorOf(metricKey, metric === undefined ? null : formOfMetric(metric)),
+					editor: editorOf(editorId, metricKey, metric === undefined ? null : formOfMetric(metric)),
 				},
 			}
 		},
@@ -132,6 +134,7 @@ export const init = (route: MetricsRoute, shared: Shared): Return =>
 			coverage: AsyncData.Idle(),
 			editor: null,
 			lastRun: 0,
+			lastEditorId: 0,
 			deleteModal: Modal.init(DELETE_MODAL_ID),
 		},
 		route,
@@ -230,7 +233,7 @@ const save = (model: Model, shared: Shared): Return => {
 		model: { ...model, editor: { ...editor, isSaving: true } },
 		commands: [
 			editor.metricKey === null
-				? CreateMetric({ organizationId, key: form.key, metric: draft })
+				? CreateMetric({ organizationId, editorId: editor.editorId, key: form.key, metric: draft })
 				: UpdateMetric({ organizationId, metricKey: editor.metricKey, metric: draft }),
 		],
 	}
@@ -353,10 +356,14 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 
 		PressedSave: () => save(model, shared),
-		SucceededCreateMetric: ({ metricKey }) => {
-			const created = successToast("Metric created", savedDescription(model.editor?.form ?? null))
-			// Only the editor that is still saving opens the new metric; one left meanwhile just says so.
-			return model.editor?.isSaving === true && model.editor.metricKey === null
+		SucceededCreateMetric: ({ editorId, metricKey }) => {
+			const isAsker = model.editor?.editorId === editorId
+			const created = successToast(
+				"Metric created",
+				savedDescription(isAsker ? (model.editor?.form ?? null) : null),
+			)
+			// Only the editor that asked opens the new metric; one left meanwhile just says so.
+			return isAsker
 				? {
 						model: withEditor(model, (editor) => ({ ...editor, isSaving: false })),
 						outMessage: requestedOrgNavigation(
@@ -367,15 +374,20 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					}
 				: { model, outMessage: toast(created) }
 		},
-		FailedCreateMetric: ({ reason, detail }) => ({
+		FailedCreateMetric: ({ editorId, reason, detail }) => ({
 			model: withEditor(model, (editor) =>
-				editor.metricKey === null ? { ...editor, isSaving: false } : editor,
+				editor.editorId === editorId ? { ...editor, isSaving: false } : editor,
 			),
 			outMessage: writeFailure("Couldn't create the metric", reason, detail),
 		}),
 		SucceededUpdateMetric: ({ metricKey }) => ({
 			model: withMetricEditor(model, metricKey, (editor) => ({ ...editor, isSaving: false })),
-			outMessage: toast(successToast("Metric saved", savedDescription(model.editor?.form ?? null))),
+			outMessage: toast(
+				successToast(
+					"Metric saved",
+					savedDescription(model.editor?.metricKey === metricKey ? model.editor.form : null),
+				),
+			),
 		}),
 		FailedUpdateMetric: ({ metricKey, reason, detail }) => ({
 			model: withMetricEditor(model, metricKey, (editor) => ({ ...editor, isSaving: false })),

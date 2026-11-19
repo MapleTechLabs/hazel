@@ -56,8 +56,12 @@ export const Message = defineMessageUnion({
 
 	// Actions
 	PressedSave: {},
-	SucceededCreateMetric: { metricKey: Schema.String },
-	FailedCreateMetric: { reason: MetricWriteFailure, detail: Schema.NullOr(Schema.String) },
+	SucceededCreateMetric: { editorId: Schema.Int, metricKey: Schema.String },
+	FailedCreateMetric: {
+		editorId: Schema.Int,
+		reason: MetricWriteFailure,
+		detail: Schema.NullOr(Schema.String),
+	},
 	SucceededUpdateMetric: { metricKey: Schema.String },
 	FailedUpdateMetric: {
 		metricKey: Schema.String,

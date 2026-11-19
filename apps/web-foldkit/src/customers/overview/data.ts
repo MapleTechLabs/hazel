@@ -81,7 +81,7 @@ export type Message = typeof Message.Type
 
 // WHAT THE WIDGETS READ
 
-/** The RPC takes at most this many windows; a layout asking for more shows the rest as no data. */
+/** The RPC takes at most this many windows a call. */
 const MAX_WINDOWS = 80
 
 type WindowAsk = Readonly<{ metricKey: string; days: number }>
@@ -100,10 +100,7 @@ export const windowsOf = (
 				days: widget.windowDays,
 			})
 	}
-	return [...asks.entries()]
-		.sort(([left], [right]) => left.localeCompare(right))
-		.slice(0, MAX_WINDOWS)
-		.map(([, ask]) => ask)
+	return [...asks.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([, ask]) => ask)
 }
 
 const windowsKey = (asks: ReadonlyArray<WindowAsk>) =>
@@ -136,9 +133,28 @@ const FetchOverviewMetricWindows = Command.define("FetchOverviewMetricWindows", 
 	execute: ({ asked, ...args }) => {
 		const failed = (reason: CommonReason) =>
 			Message.FailedFetchMetricWindows({ accountId: args.accountId, asked, reason })
-		return HazelRpc.use((rpc) => rpc("customers.account.metricWindows", args)).pipe(
-			Effect.map(({ windows }) =>
-				Message.SucceededFetchMetricWindows({ accountId: args.accountId, asked, windows }),
+		// The RPC takes at most `MAX_WINDOWS` per call: a large layout asks in batches, together.
+		const batches = Array.from({ length: Math.ceil(args.windows.length / MAX_WINDOWS) }, (_, index) =>
+			args.windows.slice(index * MAX_WINDOWS, (index + 1) * MAX_WINDOWS),
+		)
+		return Effect.forEach(
+			batches,
+			(windows) =>
+				HazelRpc.use((rpc) =>
+					rpc("customers.account.metricWindows", {
+						organizationId: args.organizationId,
+						accountId: args.accountId,
+						windows,
+					}),
+				),
+			{ concurrency: 4 },
+		).pipe(
+			Effect.map((answers) =>
+				Message.SucceededFetchMetricWindows({
+					accountId: args.accountId,
+					asked,
+					windows: answers.flatMap((answer) => answer.windows),
+				}),
 			),
 			// A deleted account shows its not-found state from the page; the widgets only retry.
 			Effect.catchTag("CustomersNotFoundError", () => Effect.succeed(failed("Unexpected"))),

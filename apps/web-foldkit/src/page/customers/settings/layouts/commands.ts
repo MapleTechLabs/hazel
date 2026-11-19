@@ -24,12 +24,13 @@ const failWith =
 export const CreateOverviewLayout = Command.define("CreateOverviewLayout", {
 	args: {
 		organizationId: OrganizationId,
+		saveId: Schema.Int,
 		layout: Customers.LayoutDraft,
 		position: Schema.NullOr(Schema.Number),
 	},
 	messages: [Message.SucceededCreateLayout, Message.FailedCreateLayout],
-	execute: ({ organizationId, layout, position }) => {
-		const failed = failWith((reason) => Message.FailedCreateLayout({ reason }))
+	execute: ({ organizationId, saveId, layout, position }) => {
+		const failed = failWith((reason) => Message.FailedCreateLayout({ saveId, reason }))
 		return HazelRpc.use((rpc) =>
 			rpc(
 				"customers.layout.create",
@@ -37,9 +38,9 @@ export const CreateOverviewLayout = Command.define("CreateOverviewLayout", {
 			),
 		).pipe(
 			Effect.tap((result) => awaitSynced(customerOverviewLayoutCollection, result.transactionId)),
-			Effect.as(Message.SucceededCreateLayout()),
+			Effect.as(Message.SucceededCreateLayout({ saveId })),
 			Effect.catchTag("CustomersInvalidRequestError", () => failed("Invalid")),
-			catchCommon((reason) => Message.FailedCreateLayout({ reason })),
+			catchCommon((reason) => Message.FailedCreateLayout({ saveId, reason })),
 		)
 	},
 })
@@ -67,16 +68,20 @@ export const UpdateOverviewLayout = Command.define("UpdateOverviewLayout", {
 
 /** Every non-default layout, in the new order. */
 export const ReorderOverviewLayouts = Command.define("ReorderOverviewLayouts", {
-	args: { organizationId: OrganizationId, layoutIds: Schema.Array(CustomerOverviewLayoutId) },
+	args: {
+		organizationId: OrganizationId,
+		layoutIds: Schema.Array(CustomerOverviewLayoutId),
+		move: Schema.NullOr(CustomerOverviewLayoutId),
+	},
 	messages: [Message.SucceededReorderLayouts, Message.FailedReorderLayouts],
-	execute: (args) =>
+	execute: ({ move, ...args }) =>
 		HazelRpc.use((rpc) => rpc("customers.layout.reorder", args)).pipe(
 			Effect.tap((result) => awaitSynced(customerOverviewLayoutCollection, result.transactionId)),
-			Effect.as(Message.SucceededReorderLayouts()),
+			Effect.as(Message.SucceededReorderLayouts({ move })),
 			Effect.catchTag("CustomersInvalidRequestError", () =>
-				Effect.succeed(Message.FailedReorderLayouts({ reason: "Invalid" })),
+				Effect.succeed(Message.FailedReorderLayouts({ move, reason: "Invalid" })),
 			),
-			catchCommon((reason) => Message.FailedReorderLayouts({ reason })),
+			catchCommon((reason) => Message.FailedReorderLayouts({ move, reason })),
 		),
 })
 

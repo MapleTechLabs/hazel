@@ -49,6 +49,11 @@ export interface IngestContext {
 	/** Null for a webhook delivery applied outside a run. */
 	readonly runId: CustomerSyncRunId | null
 	readonly trigger: SyncTrigger
+	/**
+	 * The user metrics' sources (as JSON, by key) a pull's page was read under: a value of one whose
+	 * source changed or which was deleted since is dropped, checked in the write's own transaction.
+	 */
+	readonly userMetricSources?: ReadonlyMap<string, string>
 }
 
 export type RunResult =

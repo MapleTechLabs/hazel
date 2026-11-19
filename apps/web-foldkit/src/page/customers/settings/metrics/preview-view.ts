@@ -63,6 +63,14 @@ const coverageBar = (h: H, result: Customers.MetricPreviewResult): Html => {
 							],
 						),
 					]),
+			...(result.partial
+				? [
+						h.p(
+							[h.Class("text-muted-fg text-xs")],
+							["Maple answered more rows than one page for some days; counts may be low."],
+						),
+					]
+				: []),
 		],
 	)
 }

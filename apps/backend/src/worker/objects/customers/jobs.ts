@@ -243,6 +243,9 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 	const backfillKey = connection.provider === "maple" ? metricBackfillKey(run.cursor) : undefined
 	const pull = Effect.gen(function* () {
 		const metrics = connection.provider === "maple" ? yield* userMetrics : []
+		const userMetricSources = new Map(
+			metrics.map((metric) => [metric.key, JSON.stringify(metric.source)]),
+		)
 		const credentials = yield* loadCredentials(connection)
 		if (Option.isNone(credentials)) {
 			return yield* new PullFailure({
@@ -262,7 +265,8 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 			pages++
 			// Disconnected (or the org deleted) while the page was out: drop it, the run is over.
 			if (!(yield* stillPulling(connection.id, run.id))) return
-			yield* ingest.apply(context, ops)
+			// Values of a metric whose source changed while the page was out are dropped in the write.
+			yield* ingest.apply({ ...context, userMetricSources }, ops)
 			for (const { key, error } of metricRuns ?? []) {
 				const ranAt = new Date(yield* Clock.currentTimeMillis)
 				yield* db.run(

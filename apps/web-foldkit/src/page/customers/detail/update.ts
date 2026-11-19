@@ -198,6 +198,25 @@ const load = (model: Model, shared: Shared): Return => {
 	return { model: next, commands }
 }
 
+/**
+ * The layout (or the one the account gets) may have changed: a chart whose configured range
+ * changed opens at the new one; the viewer's other range picks stay. Then loads what is new.
+ */
+const layoutChanged = (previous: Model, next: Model, shared: Shared): Return => {
+	const before = new Map(overviewLayoutOf(previous).widgets.map((widget) => [widget.id, widget]))
+	const moved = overviewLayoutOf(next).widgets.filter((widget) => {
+		const old = before.get(widget.id)
+		return widget._tag === "chart" && old?._tag === "chart" && old.range !== widget.range
+	})
+	return loadOverview(
+		modifyFields(next, {
+			overview: (overview) =>
+				moved.reduce((data, widget) => OverviewData.forgetChart(data, widget.id), overview),
+		}),
+		shared,
+	)
+}
+
 // INIT
 
 /** The drafts kept for this customer come back with `LoadedNoteDrafts`. */
@@ -661,7 +680,8 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		// The account's assigned layout may have changed with it.
 		UpdatedAccounts: ({ accounts }) =>
-			loadOverview(
+			layoutChanged(
+				model,
 				modifyFields(model, {
 					accounts: () => accounts,
 					hasSeenAccount: (seen) =>
@@ -675,7 +695,7 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		UpdatedMetrics: ({ metrics }) =>
 			loadOverview(modifyFields(model, { metrics: () => metrics }), shared),
 		UpdatedLayouts: ({ layouts }) =>
-			loadOverview(modifyFields(model, { layouts: () => layouts }), shared),
+			layoutChanged(model, modifyFields(model, { layouts: () => layouts }), shared),
 		UpdatedConnectedProviders: ({ providers }) => ({
 			model: modifyFields(model, { connectedProviders: () => providers }),
 		}),

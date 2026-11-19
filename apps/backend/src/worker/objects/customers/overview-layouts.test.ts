@@ -11,23 +11,36 @@ import {
 	type MetricDraft,
 } from "@hazel/domain/customers"
 import { Cause, ConfigProvider, Effect, type Exit, Layer, Option, type Scope } from "effect"
-import { describe, expect, it } from "vitest"
+import { HttpClient } from "effect/http"
+import { CustomerOverviewLayoutId, type CustomerAccountId } from "@hazel/schema"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { IntegrationEncryption } from "../../../services/integration-encryption"
 import { encryptSecrets, storeSecrets } from "./credentials"
 import { ensureBuiltInFormats } from "./defaults"
 import { CustomerIngest } from "./ingest"
 import { runDuePullsWith } from "./jobs"
 import { ensureDefaultLayout } from "./layouts"
+import { fakeMapleHttpClient, makeFakeMaple } from "./maple/testing"
+import { previewMetric } from "./metric-preview"
+import { loadDefinitions } from "./metric-values"
 import { decodeCursor } from "./maple/pull"
 import { type CustomerProviderAdapter, CustomerProviders, type UserMetric } from "./providers"
-import { type CustomersWorld, makeCustomersWorld, ok, tagOf } from "./test-kit"
-import { addDays, dayOf } from "./time"
+import { type CustomersWorld, makeCustomersWorld, NOW, ok, tagOf, TODAY } from "./test-kit"
+import { addDays } from "./time"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
 
-/** The handlers read the real clock. */
-const TODAY = dayOf(new Date())
+/**
+ * One clock for the fixtures and the RPCs: `Date` (what Effect's clock reads) is fixed at `NOW` in
+ * every test, so no day boundary passes between a fixture and the handler reading it.
+ */
+beforeEach(() => {
+	vi.useFakeTimers({ toFake: ["Date"], now: NOW })
+})
+afterEach(() => {
+	vi.useRealTimers()
+})
 
 const SQL = (signal: string) =>
 	[
@@ -78,7 +91,7 @@ const accounts = (world: CustomersWorld, names: ReadonlyArray<string>) =>
 			world
 				.rows<{ id: string; name: string }>(`SELECT id, name FROM customer_accounts`)
 				.map((row) => [row.name, row.id]),
-		) as Record<string, string>
+		) as Record<string, CustomerAccountId>
 	})
 
 /** Maple's daily values: `[account name, key, days ago, value]`. */
@@ -252,6 +265,7 @@ describe("Customer Overview metrics", () => {
 					accountsWithData: 1,
 					totalAccounts: 2,
 					unmatchedRows: 0,
+					partial: false,
 					top: [{ accountId: ids.Acme, name: "Acme", value: 50 }],
 					sample: {
 						accountId: ids.Acme,
@@ -421,7 +435,7 @@ describe("Customer Overview layouts", () => {
 				expect(JSON.parse(defaults[0]!.widgets)).toEqual(DEFAULT_LAYOUT_WIDGETS)
 				yield* accounts(world, ["Acme"])
 				world.object.storage.db.prepare(`DELETE FROM customer_overview_layouts`).run()
-				const ensure = ensureDefaultLayout(world.orgId, new Date())
+				const ensure = ensureDefaultLayout(world.orgId, NOW)
 				yield* world.object.run(ensure).pipe(Effect.orDie)
 				yield* world.object.run(ensure).pipe(Effect.orDie)
 				expect(counts(world)).toEqual({ Default: 1 })
@@ -459,7 +473,7 @@ describe("Customer Overview layouts", () => {
 				const everyone = ok(yield* create("Everyone")).data
 				expect(everyone.position).toBeLessThan(observability.position)
 				expect(layoutOf(world)).toEqual({ Acme: "Everyone", Globex: "Everyone", Initech: "Everyone" })
-				const reorder = (layoutIds: ReadonlyArray<string>) =>
+				const reorder = (layoutIds: ReadonlyArray<CustomerOverviewLayoutId>) =>
 					world.call("customers.layout.reorder", { layoutIds }, world.owner)
 				expect(tagOf(yield* reorder([everyone.id]))).toBe("CustomersInvalidRequestError")
 				expect(tagOf(yield* reorder([everyone.id, everyone.id]))).toBe("CustomersInvalidRequestError")
@@ -493,12 +507,14 @@ describe("Customer Overview layouts", () => {
 				})
 
 				// A pin wins over the rules; any member may set one, to a live layout or none.
-				const pin = (accountId: string, layoutId: string | null) =>
+				const pin = (accountId: CustomerAccountId, layoutId: CustomerOverviewLayoutId | null) =>
 					world.call("customers.account.setLayout", { accountId, layoutId }, world.member)
 				ok(yield* pin(ids.Initech, observability.id))
 				expect(layoutOf(world).Initech).toBe("Observability")
 				expect(counts(world)).toEqual({ Default: 0, Everyone: 1, Observability: 2 })
-				expect(tagOf(yield* pin(ids.Initech, crypto.randomUUID()))).toBe("CustomersNotFoundError")
+				expect(
+					tagOf(yield* pin(ids.Initech, CustomerOverviewLayoutId.make(crypto.randomUUID()))),
+				).toBe("CustomersNotFoundError")
 				expect(ok(yield* dryRun())).toMatchObject({
 					matchingCount: 1,
 					effectiveCount: 1,
@@ -524,7 +540,7 @@ describe("Customer Overview layouts", () => {
 				ok(yield* pin(ids.Acme, null))
 
 				// The default's rule is its fallback's: empty, whatever the draft says.
-				const fallback = world.rows<{ id: string }>(
+				const fallback = world.rows<{ id: CustomerOverviewLayoutId }>(
 					`SELECT id FROM customer_overview_layouts WHERE isDefault = 1`,
 				)[0]!
 				const updated = ok(
@@ -555,7 +571,7 @@ describe("Customer Overview layouts", () => {
 				).toBe("CustomersInvalidRequestError")
 
 				// Deleting a layout unpins its customers; the default stays.
-				const remove = (layoutId: string) =>
+				const remove = (layoutId: CustomerOverviewLayoutId) =>
 					world.call("customers.layout.delete", { layoutId }, world.owner)
 				expect(tagOf(yield* remove(fallback.id))).toBe("CustomersInvalidRequestError")
 				ok(yield* remove(observability.id))
@@ -807,7 +823,7 @@ describe("Customer Overview metrics: sources and their data", () => {
 				expect(runs().map((row) => row.status)).toEqual(["failed", "running", "failed"])
 
 				// The pull runs the backfill: the connection's own watermark and schedule do not move.
-				const lastSuccessAt = new Date(Date.now() - 10 * 60_000)
+				const lastSuccessAt = new Date(NOW.getTime() - 10 * 60_000)
 				world.object.storage.db
 					.prepare(`UPDATE customer_connections SET lastSuccessAt = ? WHERE id = ?`)
 					.run(lastSuccessAt.toISOString(), maple)
@@ -845,7 +861,7 @@ describe("Customer Overview metrics: sources and their data", () => {
 						}),
 					),
 				)
-				yield* world.object.run(runDuePullsWith(services)(new Date())).pipe(Effect.orDie)
+				yield* world.object.run(runDuePullsWith(services)(NOW)).pipe(Effect.orDie)
 				expect(asked).toHaveLength(1)
 				expect(decodeCursor(asked[0]!.cursor ?? "")).toMatchObject({ value: { only: "spans" } })
 				expect(asked[0]!.metrics.map((metric) => metric.key)).toEqual(["spans"])
@@ -861,6 +877,296 @@ describe("Customer Overview metrics: sources and their data", () => {
 						`SELECT lastRunAt FROM customer_metric_definitions WHERE key = 'spans'`,
 					)[0]!.lastRunAt,
 				).not.toBeNull()
+			}),
+		))
+})
+
+/** An account ref Maple's metrics resolve through (`provider` × `externalId` → the account). */
+const addRef = (world: CustomersWorld, provider: "clerk" | "maple", externalId: string, accountId: string) =>
+	world.object.storage.db
+		.prepare(
+			`INSERT INTO customer_external_refs (id, connectionId, provider, entityType, entityId, accountId, externalId, matchMethod)
+			 VALUES (?, ?, ?, 'account', ?, ?, ?, 'manual')`,
+		)
+		.run(crypto.randomUUID(), world.connection(provider), provider, accountId, accountId, externalId)
+
+describe("Customer Overview: reads, writes and pulls agree", () => {
+	it("drops a page's values of a metric whose source changed while the page was out", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* accounts(world, ["Acme"])
+				const maple = world.connection("maple")
+				ok(
+					yield* world.call(
+						"customers.metric.create",
+						{ key: "spans", metric: draft(query("a")) },
+						world.owner,
+					),
+				)
+				world.object.storage.db
+					.prepare(`UPDATE customer_connections SET externalAccountId = 'org:us' WHERE id = ?`)
+					.run(maple)
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							yield* storeSecrets(maple, yield* encryptSecrets("maple_ak_test", null))
+						}).pipe(Effect.provide(encryption)),
+					)
+					.pipe(Effect.orDie)
+				const adapter: CustomerProviderAdapter = {
+					provider: "maple",
+					validate: () =>
+						Effect.succeed({ externalAccountId: "org:us", externalAccountName: null }),
+					webhook: () => Effect.succeed([]),
+					pull: () =>
+						Effect.sync(() => {
+							// Someone saves another query while Maple answers the old one.
+							world.object.storage.db
+								.prepare(
+									`UPDATE customer_metric_definitions SET source = ? WHERE key = 'spans'`,
+								)
+								.run(JSON.stringify(query("b")))
+							return {
+								ops: [
+									{
+										_tag: "metric",
+										account: { provider: "clerk", externalId: "org_Acme" },
+										metricKey: "spans",
+										day: TODAY,
+										value: 5,
+									},
+								],
+								nextCursor: null,
+								progress: { step: "queries", done: 1, total: null },
+							}
+						}),
+					pullIntervalMs: 60 * 60_000,
+				}
+				const services = Layer.mergeAll(
+					CustomerIngest.layer,
+					encryption,
+					Layer.succeed(
+						CustomerProviders,
+						CustomerProviders.of({
+							get: (provider) => (provider === "maple" ? Option.some(adapter) : Option.none()),
+						}),
+					),
+				)
+				yield* world.object.run(runDuePullsWith(services)(NOW)).pipe(Effect.orDie)
+				expect(world.rows(`SELECT count(*) AS n FROM customer_metric_daily`)).toEqual([{ n: 0 }])
+			}),
+		))
+
+	it("resolves a query's customer through its Clerk ref, else the Maple ref of the same id", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const ids = yield* accounts(world, ["Acme", "Globex"])
+				ok(
+					yield* world.call(
+						"customers.metric.create",
+						{ key: "spans", metric: draft(query("a")) },
+						world.owner,
+					),
+				)
+				addRef(world, "maple", "grp_globex", ids.Globex)
+				const report = yield* world.ingest("maple", [
+					{
+						_tag: "metric",
+						account: { provider: "clerk", externalId: "grp_globex" },
+						metricKey: "spans",
+						day: TODAY,
+						value: 7,
+					},
+				])
+				expect(report.outcomes.map((outcome: { _tag: string }) => outcome._tag)).toEqual(["Created"])
+				expect(world.rows(`SELECT accountId, value FROM customer_metric_daily`)).toEqual([
+					{ accountId: ids.Globex, value: 7 },
+				])
+			}),
+		))
+
+	it("previews a Maple query through the connection's key: ids resolved as ingest does, a cut day marked partial", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const ids = yield* accounts(world, ["Acme", "Globex"])
+				const maple = world.connection("maple")
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET externalAccountId = 'org_maple:us' WHERE id = ?`,
+					)
+					.run(maple)
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							yield* storeSecrets(
+								maple,
+								yield* encryptSecrets("maple_ak_fake0000000000000000", null),
+							)
+						}).pipe(Effect.provide(encryption)),
+					)
+					.pipe(Effect.orDie)
+				// A Maple ref of Acme's Clerk id names Globex: the query's id is Clerk's, so Acme.
+				addRef(world, "maple", "org_Acme", ids.Globex)
+				addRef(world, "maple", "grp_globex", ids.Globex)
+				const fake = makeFakeMaple({
+					renderedRows: 2,
+					metricDays: [
+						{ day: TODAY, account: "org_Acme", value: 10 },
+						{ day: TODAY, account: "grp_globex", value: 5 },
+						{ day: TODAY, account: "org_none", value: 1 },
+					],
+				})
+				const preview = yield* world.object
+					.run(
+						Effect.gen(function* () {
+							return yield* previewMetric(
+								{ source: query("a"), aggregation: "sum", days: 1 },
+								yield* loadDefinitions,
+								yield* HttpClient.HttpClient,
+								NOW,
+							)
+						}).pipe(Effect.provide(fakeMapleHttpClient(fake)), Effect.provide(encryption)),
+					)
+					.pipe(Effect.orDie)
+				expect(preview).toMatchObject({
+					error: null,
+					partial: true,
+					accountsWithData: 2,
+					unmatchedRows: 0,
+					top: [
+						{ accountId: ids.Acme, value: 10 },
+						{ accountId: ids.Globex, value: 5 },
+					],
+				})
+			}),
+		))
+
+	it("ranks a formula preview by its ratio over the days, even with no day holding both operands", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const ids = yield* accounts(world, ["Acme"])
+				for (const [key, source] of [
+					["spans", query("a")],
+					["bytes", query("b")],
+				] as const)
+					ok(
+						yield* world.call(
+							"customers.metric.create",
+							{ key, metric: draft(source) },
+							world.owner,
+						),
+					)
+				yield* values(world, [
+					["Acme", "bytes", 0, 100],
+					["Acme", "spans", 1, 4],
+				])
+				const preview = ok(
+					yield* world.call(
+						"customers.metric.preview",
+						{ source: formula("{bytes} / {spans}"), aggregation: "sum", days: 2 },
+						world.owner,
+					),
+				)
+				expect(preview).toMatchObject({
+					accountsWithData: 0,
+					top: [{ accountId: ids.Acme, value: 25 }],
+					partial: false,
+				})
+			}),
+		))
+
+	it("reads a health score rule from the scored days, as the Overview does", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const ids = yield* accounts(world, ["Acme", "Globex"])
+				const score = world.object.storage.db.prepare(
+					`INSERT INTO customer_health_daily (accountId, day, score, status, breakdown) VALUES (?, ?, ?, 'healthy', '{}')`,
+				)
+				score.run(ids.Acme, addDays(TODAY, -3), 80)
+				score.run(ids.Globex, addDays(TODAY, -2), 90)
+				score.run(ids.Globex, addDays(TODAY, -1), 40)
+				// Health stays on the account's own column too; the rule reads the days.
+				world.object.storage.db.prepare(`UPDATE customer_accounts SET healthScore = 99`).run()
+				const healthy = {
+					match: "all",
+					conditions: [
+						{ _tag: "metric", metricKey: "health_score", windowDays: 7, op: "gt", value: 50 },
+					],
+				}
+				ok(
+					yield* world.call(
+						"customers.layout.create",
+						{ layout: layoutDraft("Healthy", healthy) },
+						world.owner,
+					),
+				)
+				expect(layoutOf(world)).toEqual({ Acme: "Healthy", Globex: "Default" })
+			}),
+		))
+
+	it("keeps layout positions apart and at most 100 layouts besides the default", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const create = (name: string, position?: number) =>
+					world.call(
+						"customers.layout.create",
+						position === undefined
+							? { layout: layoutDraft(name) }
+							: { layout: layoutDraft(name), position },
+						world.owner,
+					)
+				ok(yield* create("First", 5))
+				expect(tagOf(yield* create("Same", 5))).toBe("CustomersInvalidRequestError")
+				const insert = world.object.storage.db.prepare(
+					`INSERT INTO customer_overview_layouts (id, organizationId, name, position) VALUES (?, ?, ?, ?)`,
+				)
+				for (let index = 0; index < 99; index++)
+					insert.run(crypto.randomUUID(), world.orgId, `L${index}`, 10 + index)
+				expect(tagOf(yield* create("One too many"))).toBe("CustomersInvalidRequestError")
+			}),
+		))
+
+	it("asks for a compute when tags change, so layouts follow", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const ids = yield* accounts(world, ["Acme"])
+				const due = () =>
+					Number(
+						world.rows<{ value: string }>(
+							`SELECT value FROM _object_meta WHERE key = 'computeDueAt'`,
+						)[0]?.value,
+					)
+				const later = () =>
+					world.object.storage.db
+						.prepare(
+							`INSERT OR REPLACE INTO _object_meta (key, value) VALUES ('computeDueAt', ?)`,
+						)
+						.run(String(NOW.getTime() + 86_400_000))
+				later()
+				ok(
+					yield* world.call(
+						"customers.account.update",
+						{ accountId: ids.Acme, tags: ["observability"] },
+						world.member,
+					),
+				)
+				expect(due()).toBeLessThanOrEqual(NOW.getTime() + 2 * 60_000)
+				later()
+				ok(
+					yield* world.call(
+						"customers.account.bulkUpdate",
+						{ accountIds: [ids.Acme], removeTags: ["observability"] },
+						world.member,
+					),
+				)
+				expect(due()).toBeLessThanOrEqual(NOW.getTime() + 2 * 60_000)
 			}),
 		))
 })

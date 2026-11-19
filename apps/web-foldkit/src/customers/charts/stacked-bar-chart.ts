@@ -31,7 +31,13 @@ import {
  * Movement): gains stack up, losses stack down, the net of each bucket is a dot on a line.
  */
 
-export type Stack = Readonly<{ key: string; label: string; color: ChartColor }>
+export type Stack = Readonly<{
+	key: string
+	label: string
+	color: ChartColor
+	/** This stack's values in the tooltip, when they read unlike the others'. */
+	formatValue?: (value: number) => string
+}>
 
 export type StackedBar = Readonly<{
 	tick: string
@@ -48,6 +54,8 @@ export type StackedBarChartOptions<M> = Readonly<{
 	bars: ReadonlyArray<StackedBar>
 	/** Draw the net line, with this label in the tooltip. */
 	netLabel?: string
+	/** Each stack's bar side by side in its bucket instead of stacked (bars of unlike metrics). */
+	grouped?: boolean
 	formatValue: (value: number) => string
 	formatAxis?: (value: number) => string
 	/** Whole-number y ticks, for counts. */
@@ -62,7 +70,9 @@ export type StackedBarChartOptions<M> = Readonly<{
 export const stackedBarChart = <M>(h: HtmlBuilder<M>, options: StackedBarChartOptions<M>): Html => {
 	const count = options.bars.length
 	const values = options.bars.map((bar) => options.stacks.map((stack) => bar.values[stack.key] ?? 0))
-	const [lo, hi] = stackExtent(values, options.netLabel ? options.bars.map((bar) => bar.net) : [])
+	const [lo, hi] = options.grouped
+		? [Math.min(0, ...values.flat()), Math.max(0, ...values.flat())]
+		: stackExtent(values, options.netLabel ? options.bars.map((bar) => bar.net) : [])
 	const domain = niceTicks(lo, hi, 5, { integer: options.integerTicks })
 	const y = scaleLinear([domain.min, domain.max], [100, 0])
 	const formatAxis = options.formatAxis ?? options.formatValue
@@ -76,7 +86,35 @@ export const stackedBarChart = <M>(h: HtmlBuilder<M>, options: StackedBarChartOp
 	const ticks = new Set(tickIndexes(count, options.maxXTicks ?? 12))
 	const colorOf = new Map(options.stacks.map((stack) => [stack.key, stack.color]))
 
+	/** One column per stack, side by side around the bucket's centre. */
+	const groupedBar = (entry: StackedBar, index: number): Html => {
+		const groupWidth = Math.min(band * 0.8, barWidth * options.stacks.length)
+		const each = groupWidth / Math.max(1, options.stacks.length)
+		return h.div(
+			[h.AriaHidden(true), h.Class("pointer-events-none absolute inset-0")],
+			options.stacks.map((stack, at) => {
+				const value = entry.values[stack.key] ?? 0
+				return h.span([
+					h.Class(
+						twMerge(
+							"absolute",
+							CHART_COLOR[stack.color].bg,
+							value >= 0 ? "rounded-t-xs" : "rounded-b-xs",
+						),
+					),
+					h.Style({
+						left: `${xAt(index) - groupWidth / 2 + at * each}%`,
+						width: `${each}%`,
+						top: `${Math.min(y(0), y(value))}%`,
+						bottom: `${100 - Math.max(y(0), y(value))}%`,
+					}),
+				])
+			}),
+		)
+	}
+
 	const bar = (entry: StackedBar, index: number): Html => {
+		if (options.grouped) return groupedBar(entry, index)
 		const segments = stackSegments(
 			options.stacks.map((stack) => ({ key: stack.key, value: entry.values[stack.key] ?? 0 })),
 		)
@@ -176,7 +214,7 @@ export const stackedBarChart = <M>(h: HtmlBuilder<M>, options: StackedBarChartOp
 												.filter((stack) => (hoveredBar.values[stack.key] ?? 0) !== 0)
 												.map((stack) => ({
 													label: stack.label,
-													value: options.formatValue(
+													value: (stack.formatValue ?? options.formatValue)(
 														hoveredBar.values[stack.key] ?? 0,
 													),
 													color: stack.color,

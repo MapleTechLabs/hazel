@@ -85,7 +85,7 @@ const lastRunCell = (h: H, metric: MetricRow, model: Model, nowMs: number): Html
 			metric.lastRunAtMs !== null
 				? formatRelative(new Date(metric.lastRunAtMs), now)
 				: lastDay !== null
-					? `Data ${formatDate(new Date(`${lastDay}T00:00:00Z`), { now })}`
+					? `Data ${formatDate(new Date(`${lastDay}T00:00:00Z`), { now, timeZone: "UTC" })}`
 					: "—",
 		],
 	)

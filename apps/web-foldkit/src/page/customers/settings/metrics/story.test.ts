@@ -117,6 +117,63 @@ describe("metric editor", () => {
 		}
 	})
 
+	test('an "in" filter needs a value besides commas; a trailing comma is fine', () => {
+		const named = run(open(newRoute(null)), [Message.ChangedName({ value: "Signals" })])
+		const withIn = (value: string) =>
+			run(named, [
+				Message.ChangedFilter({ index: 0, filter: { field: "Attributes.signal", op: "in", value } }),
+			])
+		expect(commandsOf(withIn(" , "), Message.PressedSave())).toEqual([])
+		expect(commandsOf(withIn("logs, traces,"), Message.PressedSave()).map(([name]) => name)).toEqual([
+			CreateMetric.name,
+		])
+	})
+
+	test("a create's answer reaches only the editor that asked", () => {
+		const asked = update(
+			run(open(newRoute(null, "product_event")), [
+				Message.ChangedName({ value: "Exports" }),
+				Message.ChangedEvent({ index: 0, value: "export_started" }),
+			]),
+			Message.PressedSave(),
+			admin,
+		)
+		expect(asked.commands?.[0]?.name).toBe(CreateMetric.name)
+		const editorId = (asked.commands?.[0]?.args as { editorId: number } | undefined)?.editorId ?? -1
+		expect(asked.model.editor?.isSaving).toBe(true)
+
+		// Another new-metric editor opened meanwhile: it neither navigates nor stops saving.
+		const other = routeChanged(asked.model, newRoute(null), admin).model
+		const otherSaving = {
+			...other,
+			editor: other.editor === null ? null : { ...other.editor, isSaving: true },
+		}
+		const stray = update(
+			otherSaving,
+			Message.SucceededCreateMetric({ editorId, metricKey: "exports" }),
+			admin,
+		)
+		expect(stray.outMessage).toMatchObject({ _tag: "RequestedToast" })
+		expect(stray.model.editor?.isSaving).toBe(true)
+		const strayFailure = update(
+			otherSaving,
+			Message.FailedCreateMetric({ editorId, reason: "Unexpected", detail: null }),
+			admin,
+		)
+		expect(strayFailure.model.editor?.isSaving).toBe(true)
+
+		const own = update(
+			asked.model,
+			Message.SucceededCreateMetric({ editorId, metricKey: "exports" }),
+			admin,
+		)
+		expect(own.outMessage).toMatchObject({
+			_tag: "RequestedNavigation",
+			route: { _tag: "CustomersSettingsMetric", metricKey: "exports" },
+		})
+		expect(own.model.editor?.isSaving).toBe(false)
+	})
+
 	test("creates a builder query with its SQL, and an SQL-only one without a builder", () => {
 		const filled = run(open(newRoute(null)), [
 			Message.ChangedName({ value: "Log bytes" }),

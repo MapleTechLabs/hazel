@@ -157,15 +157,15 @@ export const checkFormula = (
 	return { error, known, unknown }
 }
 
+/** Blanks first (the usual state while typing), then what the store refuses (`builderProblem`). */
 const builderError = (builder: BuilderForm): string | undefined => {
-	if (!Customers.isBuilderField(builder.customerField.trim()))
-		return "Name the customer column, e.g. Attributes.org_id"
-	if (builder.value === "uniq" && !Customers.isBuilderField(builder.valueField.trim()))
+	if (builder.customerField.trim() === "") return "Name the customer column, e.g. Attributes.org_id"
+	if (builder.value === "uniq" && builder.valueField.trim() === "")
 		return "Name the column to count distinct values of"
-	if (builder.filters.some((filter) => !Customers.isBuilderField(filter.field.trim())))
+	if (builder.filters.some((filter) => filter.field.trim() === ""))
 		return "Every filter needs a column, e.g. MetricName or Attributes.signal"
 	if (builder.filters.some((filter) => filter.value.trim() === "")) return "Every filter needs a value"
-	return undefined
+	return Customers.builderProblem(builderOf(builder)) ?? undefined
 }
 
 export const errorsOf = (

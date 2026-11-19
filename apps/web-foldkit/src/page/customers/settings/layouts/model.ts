@@ -45,6 +45,10 @@ export const Editor = Schema.Struct({
 	isSaving: Schema.Boolean,
 	/** The draft a save sent: what is saved once it lands (the draft may have moved on meanwhile). */
 	savingDraft: Schema.NullOr(Customers.LayoutDraft),
+	/** The "Move above" the save sent with it: the reorder that follows uses it, not a later move. */
+	savingBefore: Schema.NullOr(CustomerOverviewLayoutId),
+	/** Which save is on its way (`Model.lastVersion`): an answer for another is not this one's. */
+	saveId: Schema.NullOr(Schema.Int),
 	pickerSearch: Schema.String,
 	previewSearch: Schema.String,
 	/** The metric condition whose metric list is open in the rule popover. */
@@ -122,7 +126,7 @@ export const listOrder = (model: Model): ReadonlyArray<LayoutRow> => {
 export const ruleOrder = (model: Model): ReadonlyArray<LayoutRow> =>
 	listOrder(model).filter((layout) => !layout.isDefault)
 
-export const layoutById = (model: Model, id: string | null): LayoutRow | undefined =>
+export const layoutById = (model: Model, id: CustomerOverviewLayoutId | null): LayoutRow | undefined =>
 	id === null ? undefined : model.layouts?.find((layout) => layout.id === id)
 
 export const isDefaultEditor = (model: Model, editor: Editor): boolean =>

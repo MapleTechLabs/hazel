@@ -96,6 +96,8 @@ export const Preview = AsyncData.Schema(Customers.MetricPreviewResult, PreviewFa
 export type Preview = typeof Preview.schema.Type
 
 export const Editor = Schema.Struct({
+	/** A fresh one per opened editor (`Model.lastEditorId`): a create's answer reaches only its own. */
+	editorId: Schema.Int,
 	/** Null: a new metric. */
 	metricKey: Schema.NullOr(Schema.String),
 	/** Null until the metric has synced. */
@@ -122,6 +124,8 @@ export const Model = Schema.Struct({
 	editor: Schema.NullOr(Editor),
 	/** The last preview run handed out, across editors. */
 	lastRun: Schema.Int,
+	/** The last editor id handed out. */
+	lastEditorId: Schema.Int,
 	deleteModal: Modal.Model,
 })
 export type Model = typeof Model.Type

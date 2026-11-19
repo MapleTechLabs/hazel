@@ -81,7 +81,12 @@ import {
 import { CustomerIngest } from "../../worker/objects/customers/ingest"
 import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/customers/ingest-live"
 import { endMetricBackfills, startMetricBackfill } from "../../worker/objects/customers/jobs"
-import { assignLayouts, layoutDryRun, liveLayouts } from "../../worker/objects/customers/layouts"
+import {
+	assignLayouts,
+	firstPosition,
+	layoutDryRun,
+	liveLayouts,
+} from "../../worker/objects/customers/layouts"
 import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
 import { configProblem as mapleConfigProblem } from "../../worker/objects/customers/maple/pull"
 import { previewMetric } from "../../worker/objects/customers/metric-preview"
@@ -844,7 +849,9 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 									now,
 								)
 							}
-							if (lifecycleStageOverride !== undefined) yield* requestCompute
+							// The stage and tags feed health and Overview layout rules: compute (and assign) soon.
+							if (lifecycleStageOverride !== undefined || tags !== undefined)
+								yield* requestCompute
 							// Chat shows linked channels' customer by name.
 							if (name !== undefined) yield* publishChannelCustomers(account.organizationId)
 						}),
@@ -993,6 +1000,8 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 									)
 								}
 							}
+							// Tags feed Overview layout rules: compute (and assign) soon.
+							if (add.length > 0 || remove.size > 0) yield* requestCompute
 							return accounts.length
 						}),
 					)
@@ -1175,6 +1184,9 @@ const layoutById = (layoutId: schema.CustomerOverviewLayout["id"]) =>
 		),
 	).pipe(Effect.map(Option.getOrThrow))
 
+/** Live layouts besides the default: what `customers.layout.reorder` takes at once. */
+const MAX_LAYOUTS = 100
+
 /** Widget ids name a widget within its layout: no two alike. */
 const checkLayout = (layout: LayoutDraft) => {
 	const ids = layout.widgets.map((widget) => widget.id)
@@ -1288,6 +1300,16 @@ const checkConfig = (config: ConnectionConfig) =>
 		if (config._tag !== "maple") return
 		const problem = mapleConfigProblem(config)
 		if (problem !== null) return yield* invalid(problem)
+		yield* checkMappingOverlap(config)
+	})
+
+/**
+ * A Maple mapping's event that a product event metric counts. Checked up front and again in the
+ * transaction that writes the config, so a metric saved meanwhile cannot slip in between.
+ */
+const checkMappingOverlap = (config: ConnectionConfig) =>
+	Effect.gen(function* () {
+		if (config._tag !== "maple") return
 		const counted = new Map<string, string>()
 		for (const definition of (yield* loadDefinitions).values()) {
 			if (definition.source?._tag !== "product_event") continue
@@ -1559,6 +1581,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					const now = yield* currentTime
 					return yield* withTx(
 						Effect.gen(function* () {
+							yield* checkMappingOverlap(config)
 							const previous = yield* db.first(
 								SQLite.from(schema.customerConnectionsTable)
 									.select("externalAccountId", "lastSuccessAt", "backfilledAt")
@@ -1700,6 +1723,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 							) {
 								return yield* invalid("The connection changed meanwhile: try again")
 							}
+							if (config !== undefined) yield* checkMappingOverlap(config)
 							if (secrets !== undefined) yield* storeSecrets(connectionId, secrets.encrypted)
 							const switched = secrets?.switched === true
 							const current = switched ? yield* switchAccount(fresh, now) : fresh
@@ -2290,17 +2314,21 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					const now = yield* currentTime
 					return yield* withTx(
 						Effect.gen(function* () {
-							const others = (yield* liveLayouts).filter((row) => !row.isDefault)
-							// First unless told: before every other rule.
-							const first =
-								others.length === 0 ? 0 : Math.min(...others.map((row) => row.position)) - 1
+							const layouts = yield* liveLayouts
+							const others = layouts.filter((row) => !row.isDefault)
+							if (others.length >= MAX_LAYOUTS)
+								return yield* invalid(`At most ${MAX_LAYOUTS} layouts besides the default`)
+							// Positions are unique, so assignment and the dry run order alike.
+							if (position !== undefined && layouts.some((row) => row.position === position))
+								return yield* invalid("Another layout has that position")
 							const [row] = yield* db.run(
 								SQLite.insertInto(schema.customerOverviewLayoutsTable)
 									.values({
 										id, // `undefined`: the column's default
 										organizationId,
 										name: layout.name.trim(),
-										position: position ?? first,
+										// First unless told: before every other rule.
+										position: position ?? firstPosition(layouts),
 										rule: layout.rule,
 										widgets: layout.widgets,
 										createdBy: actor.userId,

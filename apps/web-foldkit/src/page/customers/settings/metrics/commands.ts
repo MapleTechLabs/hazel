@@ -46,16 +46,24 @@ export const PreviewMetric = Command.define("PreviewMetric", {
 })
 
 export const CreateMetric = Command.define("CreateMetric", {
-	args: { organizationId: OrganizationId, key: Customers.UserMetricKey, metric: Customers.MetricDraft },
+	args: {
+		organizationId: OrganizationId,
+		/** The editor that asked: only it opens the new metric. */
+		editorId: Schema.Int,
+		key: Customers.UserMetricKey,
+		metric: Customers.MetricDraft,
+	},
 	messages: [Message.SucceededCreateMetric, Message.FailedCreateMetric],
-	execute: ({ organizationId, key, metric }) =>
+	execute: ({ organizationId, editorId, key, metric }) =>
 		HazelRpc.use((rpc) => rpc("customers.metric.create", { organizationId, key, metric })).pipe(
 			Effect.tap((result) => awaitSynced(customerMetricDefinitionCollection, result.transactionId)),
-			Effect.map((result) => Message.SucceededCreateMetric({ metricKey: result.data.key })),
+			Effect.map((result) => Message.SucceededCreateMetric({ editorId, metricKey: result.data.key })),
 			Effect.catchTag("CustomersInvalidRequestError", (error) =>
-				Effect.succeed(Message.FailedCreateMetric({ reason: "Invalid", detail: error.message })),
+				Effect.succeed(
+					Message.FailedCreateMetric({ editorId, reason: "Invalid", detail: error.message }),
+				),
 			),
-			catchCommon((reason) => Message.FailedCreateMetric({ reason, detail: null })),
+			catchCommon((reason) => Message.FailedCreateMetric({ editorId, reason, detail: null })),
 		),
 })
 
