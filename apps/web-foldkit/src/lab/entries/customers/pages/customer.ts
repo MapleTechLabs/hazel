@@ -413,6 +413,11 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 				page: page(matching, args.cursor, 6),
 			})
 		}
+		case "StartCustomerImpersonation":
+			return Message.SucceededStartImpersonation({
+				attempt: Number(args.attempt),
+				url: "https://accounts.example.com/v1/tickets/accept?ticket=lab",
+			})
 		case "CreateCustomerNote":
 			return null
 		default:
@@ -490,6 +495,7 @@ const initial = (flags: typeof Flags.Type) => {
 			{ key: "api_requests", name: "API requests", unit: null, provider: "autumn" },
 		],
 		connectedProviders: CONNECTIONS.map((connection) => connection.provider),
+		isImpersonator: true,
 	}
 	return settle(live, started.commands ?? [])
 }

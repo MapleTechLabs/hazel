@@ -3,7 +3,8 @@
  * stream and the RPCs carry them: timestamps as `JsonDate`, JSON columns parsed.
  *
  * Synced (client collections): `Account`, `Signal`, `SignalRule`, `Note`, `SavedView`, `Settings`,
- * `MetricDefinition`, `Connection`, `SyncRun`, `ChannelLink`, `FeatureFlag`. The rest travel in RPC results.
+ * `MetricDefinition`, `Connection`, `SyncRun`, `ChannelLink`, `FeatureFlag`, `Impersonator`,
+ * `Impersonation` (admins only). The rest travel in RPC results.
  */
 import {
 	ChannelId,
@@ -15,6 +16,8 @@ import {
 	CustomerFeatureFlagId,
 	CustomerExternalRefId,
 	CustomerIgnoreRuleId,
+	CustomerImpersonationId,
+	CustomerImpersonatorId,
 	CustomerInvoiceId,
 	CustomerMetricDefinitionId,
 	CustomerNoteId,
@@ -211,6 +214,33 @@ class FeatureFlagModel extends M.Class<FeatureFlagModel>("CustomerFeatureFlag")(
 }) {}
 export const FeatureFlag = M.expose(FeatureFlagModel)
 export type FeatureFlag = typeof FeatureFlag.Schema.Type
+
+/** A member an admin let sign in as customers' users (Clerk impersonation). */
+class ImpersonatorModel extends M.Class<ImpersonatorModel>("CustomerImpersonator")({
+	id: M.Generated(CustomerImpersonatorId),
+	organizationId: OrganizationId,
+	userId: UserId,
+	grantedBy: UserId,
+	...timestamps,
+}) {}
+export const Impersonator = M.expose(ImpersonatorModel)
+export type Impersonator = typeof Impersonator.Schema.Type
+
+/** One impersonation a member started; synced to admins only. */
+class ImpersonationModel extends M.Class<ImpersonationModel>("CustomerImpersonation")({
+	id: M.Generated(CustomerImpersonationId),
+	organizationId: OrganizationId,
+	userId: UserId,
+	provider: CustomerProvider,
+	accountId: CustomerAccountId,
+	contactId: CustomerContactId,
+	contactLabel: S.NullOr(S.String),
+	externalUserId: S.String,
+	externalTokenId: S.String,
+	...timestamps,
+}) {}
+export const Impersonation = M.expose(ImpersonationModel)
+export type Impersonation = typeof Impersonation.Schema.Type
 
 class SavedViewModel extends M.Class<SavedViewModel>("CustomerSavedView")({
 	id: M.GeneratedOptional(CustomerSavedViewId),

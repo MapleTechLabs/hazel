@@ -1,6 +1,6 @@
 import * as Customers from "@hazel/domain/customers"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
-import { CustomerAccountId, CustomerNoteId, CustomerSignalId, UserId } from "@hazel/schema"
+import { CustomerAccountId, CustomerContactId, CustomerNoteId, CustomerSignalId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
@@ -89,6 +89,28 @@ export type NoteDrafts = typeof NoteDrafts.Type
 
 export const EMPTY_NOTE_DRAFTS: NoteDrafts = { composer: { body: "", pinned: false }, editingNote: null }
 
+/**
+ * Why signing in as a customer's user failed: the provider would not (`Refused`, with its own
+ * explanation), the user has no grant (`NotAllowed`), the contact is gone, or a common reason.
+ */
+export const ImpersonationFailure = Schema.Union([
+	Schema.Literals(["NotAllowed", "NotFound"]),
+	Schema.TaggedStruct("Refused", { message: Schema.String }),
+	CommonReason,
+])
+export type ImpersonationFailure = typeof ImpersonationFailure.Type
+
+/** The "Sign in as" dialog: asking (no url, no failure), then the one-time link or why not. */
+export const Impersonation = Schema.Struct({
+	/** Which press this dialog is for: an answer to an earlier one (closed since) is dropped. */
+	attempt: Schema.Number,
+	contactId: CustomerContactId,
+	name: Schema.String,
+	url: Schema.NullOr(Schema.String),
+	failure: Schema.NullOr(ImpersonationFailure),
+})
+export type Impersonation = typeof Impersonation.Type
+
 export const Model = Schema.Struct({
 	accountId: CustomerAccountId,
 	tab: CustomerTab,
@@ -153,6 +175,13 @@ export const Model = Schema.Struct({
 	mergeQuery: Schema.String,
 	mergeAccountId: Schema.NullOr(CustomerAccountId),
 	isMerging: Schema.Boolean,
+	/** The user may sign in as this customer's users (an admin granted it, `customer_impersonators`). */
+	isImpersonator: Schema.Boolean,
+	/** Presses of Impersonate so far: each dialog is one attempt. */
+	impersonationAttempts: Schema.Number,
+	impersonateModal: Modal.Model,
+	/** Dropped when the dialog closes: the link is good once, for a minute. */
+	impersonation: Schema.NullOr(Impersonation),
 })
 export type Model = typeof Model.Type
 
@@ -170,6 +199,7 @@ export const RAW_MODAL_ID = "customer-raw"
 export const DELETE_NOTE_MODAL_ID = "customer-delete-note"
 export const MERGE_MODAL_ID = "customer-merge"
 export const MERGE_SEARCH_ID = "customer-merge-search"
+export const IMPERSONATE_MODAL_ID = "customer-impersonate"
 export const COMPOSER_ID = "customer-note-composer"
 
 export const PAGE_SIZE = 50
@@ -245,6 +275,10 @@ export const visibleContacts = (model: Model): ReadonlyArray<Customers.ContactRo
 				(row.contact.email ?? "").toLowerCase().includes(query)),
 	)
 }
+
+/** Impersonate shows for a granted user while Clerk (the provider that can) is connected. */
+export const canImpersonate = (model: Model): boolean =>
+	model.isImpersonator && model.connectedProviders.includes("clerk")
 
 /** The loaded contacts per status. */
 export const contactCounts = (model: Model): Readonly<Record<ContactFilter, number>> => {

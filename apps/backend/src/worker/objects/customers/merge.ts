@@ -267,6 +267,12 @@ export const mergeAccounts = Effect.fn("Customers.mergeAccounts")(function* (
 			.set({ accountId: intoId, updatedAt: now })
 			.where(($) => [$.accountId.eq(fromId)]),
 	)
+	// The impersonation log keeps its contact (a folded one is deleted), and names the merged account.
+	yield* db.run(
+		SQLite.update(schema.customerImpersonationsTable)
+			.set({ accountId: intoId, updatedAt: now })
+			.where(($) => [$.accountId.eq(fromId)]),
+	)
 	yield* db.run(
 		SQLite.update(schema.customerUnmatchedRecordsTable)
 			.set({ suggestedAccountId: intoId })

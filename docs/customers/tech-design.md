@@ -101,6 +101,12 @@ Access control:
 - Read: any member (`customer_members`). Queue work (assign, snooze, done, dismiss, notes, owner,
   tags, personal views): any member. Settings, rules, shared views, built-in views, data sources,
   unmatched, an account's name and lifecycle stage: `admin`/`owner` only.
+- Impersonation (Clerk): only members in `customer_impersonators` (granted by an admin on the Clerk
+  source page; none by default, admins included) call `customers.impersonation.start`
+  (`requireImpersonator`). It mints a 60 s Clerk actor token (`actor.sub` = the Hazel user) and
+  answers its sign-in URL to the caller only, never into a synced row; each one is logged in
+  `customer_impersonations` (synced to admins, 30 days). Clerk's own "Impersonate" permission does
+  not apply: the secret key can mint tokens for anyone, so this grant is the only gate.
 - A `CustomersAccess` service in the object (`requireMember`, `requireAdmin`) replaces `OrgResolver`
   there (which reads `organization_members`, not present in this store). Scopes `customers:read` /
   `customers:write` (added to `ApiScope`, granted to every role) are declared on the RPCs.

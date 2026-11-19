@@ -216,3 +216,11 @@ export const customerFeatureFlagCollection = customersCollection(
 	"customer_feature_flags",
 	Customers.FeatureFlag.Schema,
 )
+export const customerImpersonatorCollection = customersCollection(
+	"customer_impersonators",
+	Customers.Impersonator.Schema,
+)
+export const customerImpersonationCollection = customersCollection(
+	"customer_impersonations",
+	Customers.Impersonation.Schema,
+)

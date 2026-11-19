@@ -15,6 +15,7 @@ import { type ConnectionConfig, type CustomerProvider, MAX_VIEWS, TEMPLATES } fr
 import {
 	CustomerAdminRpcs,
 	CustomerConnectionCredentialsError,
+	CustomerImpersonationError,
 	CustomerProviderUnavailableError,
 	CustomerQueueRpcs,
 	CustomerReadRpcs,
@@ -38,6 +39,7 @@ import { IntegrationEncryption } from "../../services/integration-encryption"
 import {
 	type CustomersActor,
 	requireAdmin,
+	requireImpersonator,
 	requireMember,
 	requireOwnOrganization,
 } from "../../worker/objects/customers/access"
@@ -1698,6 +1700,138 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 							)
 							if (row === undefined) return yield* notFound("ignore_rule", ruleId)
 						}),
+					)
+				}).pipe(remap),
+
+			"customers.impersonator.grant": ({ id, userId, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					const actor = yield* requireAdmin
+					const member = yield* db.first(
+						SQLite.from(schema.customerMembersTable)
+							.select("userId")
+							.where(($) => [$.userId.eq(userId)])
+							.limit(1),
+					)
+					if (Option.isNone(member)) return yield* invalid("Not a member of the organization")
+					return yield* txOnly(
+						db.run(
+							SQLite.insertInto(schema.customerImpersonatorsTable)
+								.values({ id, organizationId, userId, grantedBy: actor.userId })
+								.onConflictDoNothing({ target: ["userId"] }),
+						),
+					)
+				}).pipe(remap),
+
+			"customers.impersonator.revoke": ({ userId }) =>
+				Effect.gen(function* () {
+					yield* requireAdmin
+					return yield* txOnly(
+						db.run(
+							SQLite.deleteFrom(schema.customerImpersonatorsTable).where(($) => [
+								$.userId.eq(userId),
+							]),
+						),
+					)
+				}).pipe(remap),
+
+			"customers.impersonation.start": ({ contactId, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					const actor = yield* requireImpersonator
+					const contact = yield* db.first(
+						SQLite.from(schema.customerContactsTable)
+							.select("id", "accountId", "name", "email")
+							.where(($) => [$.id.eq(contactId), $.deletedAt.isNull()])
+							.limit(1),
+					)
+					if (Option.isNone(contact)) return yield* notFound("contact", contactId)
+					const account = yield* liveAccount(contact.value.accountId)
+					if (Option.isNone(account)) return yield* notFound("contact", contactId)
+					// The live connections whose provider can impersonate (Clerk).
+					const connections = (yield* db.run(
+						SQLite.from(schema.customerConnectionsTable)
+							.select()
+							.where(($) => [$.status.neq("disconnected")]),
+					)).flatMap((connection) => {
+						const impersonate = Option.getOrUndefined(
+							providers.get(connection.provider),
+						)?.impersonate
+						return impersonate === undefined ? [] : [{ connection, impersonate }]
+					})
+					if (connections.length === 0) {
+						return yield* new CustomerImpersonationError({
+							reason: "unavailable",
+							message: "No connected data source can sign in as a customer's user",
+						})
+					}
+					const refs = yield* db.run(
+						SQLite.from(schema.customerExternalRefsTable)
+							.select("connectionId", "externalId")
+							.where(($) => [
+								$.entityType.eq("contact"),
+								$.entityId.eq(contactId),
+								$.staleAt.isNull(),
+							]),
+					)
+					const target = connections.flatMap(({ connection, impersonate }) => {
+						const ref = refs.find((r) => r.connectionId === connection.id)
+						return ref === undefined
+							? []
+							: [{ connection, impersonate, externalUserId: ref.externalId }]
+					})[0]
+					if (target === undefined) {
+						return yield* new CustomerImpersonationError({
+							reason: "no_user",
+							message: "This contact has no user in the connected sign-in provider",
+						})
+					}
+					const credentials = yield* loadCredentials(target.connection).pipe(
+						Effect.provideService(IntegrationEncryption, encryption),
+						Effect.mapError(storeFailed),
+					)
+					if (Option.isNone(credentials)) {
+						return yield* new CustomerImpersonationError({
+							reason: "unavailable",
+							message: "The data source is disconnected",
+						})
+					}
+					const token = yield* target.impersonate(credentials.value, {
+						externalUserId: target.externalUserId,
+						actorUserId: actor.userId,
+					})
+					yield* Effect.annotateCurrentSpan({
+						"customers.provider": target.connection.provider,
+						"customers.contact_id": contactId,
+					})
+					// The grant or the contact may have gone while Clerk answered: then no link (the token
+					// expires unused).
+					yield* requireImpersonator
+					const still = yield* db.first(
+						SQLite.from(schema.customerContactsTable)
+							.select("id")
+							.where(($) => [$.id.eq(contactId), $.deletedAt.isNull()])
+							.limit(1),
+					)
+					if (Option.isNone(still) || Option.isNone(yield* liveAccount(contact.value.accountId))) {
+						return yield* notFound("contact", contactId)
+					}
+					return yield* withTx(
+						Effect.as(
+							db.run(
+								SQLite.insertInto(schema.customerImpersonationsTable).values({
+									organizationId,
+									userId: actor.userId,
+									provider: target.connection.provider,
+									accountId: contact.value.accountId,
+									contactId,
+									contactLabel: contact.value.name ?? contact.value.email,
+									externalUserId: target.externalUserId,
+									externalTokenId: token.tokenId,
+								}),
+							),
+							{ url: token.url },
+						),
 					)
 				}).pipe(remap),
 

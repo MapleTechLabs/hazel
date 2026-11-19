@@ -1,11 +1,12 @@
 import { DEFAULT_HEALTH_SETTINGS } from "@hazel/domain/customers"
-import { CustomerAccountId, OrganizationId } from "@hazel/schema"
+import { CustomerAccountId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import {
 	accountsStream,
 	connectedProvidersStream,
 	createdFeatureFlagsStream,
+	impersonatorsStream,
 	orgMembersStream,
 	settingsSummaryStream,
 	signalsStream,
@@ -17,7 +18,10 @@ import { Message } from "./message"
 import { type Model, NoteDrafts } from "./model"
 import { restoredNoteDrafts, writeNoteDrafts } from "./note-drafts"
 
-/** The customer page's live rows: every account (prev/next and this one), signals, notes, people. */
+/**
+ * The customer page's live rows: every account (prev/next and this one), signals, notes, people,
+ * and whether the user may impersonate.
+ */
 
 type Input = PageSubscriptionInput<Model>
 
@@ -133,4 +137,21 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 						Message.UpdatedConnectedProviders({ providers }),
 					),
 	}),
+	isImpersonator: entry(
+		{ organizationId: Schema.NullOr(OrganizationId), userId: Schema.NullOr(UserId) },
+		{
+			modelToDependencies: ({ shared }) => ({
+				organizationId: shared.organization?.id ?? null,
+				userId: shared.currentUser?.id ?? null,
+			}),
+			dependenciesToStream: ({ organizationId, userId }) =>
+				organizationId === null || userId === null
+					? Stream.empty
+					: impersonatorsStream(organizationId, (impersonators) =>
+							Message.UpdatedIsImpersonator({
+								isImpersonator: impersonators.some((row) => row.userId === userId),
+							}),
+						),
+		},
+	),
 }))

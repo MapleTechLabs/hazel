@@ -56,6 +56,10 @@ export const applyMembers = Effect.fn("CustomersEffects.applyMembers")(function*
 	const gone = current.filter((row) => !next.has(row.userId)).map((row) => row.userId)
 	if (gone.length > 0) {
 		yield* db.run(SQLite.deleteFrom(schema.customerMembersTable).where(($) => [inList($.userId, gone)]))
+		// A grant goes with the membership: a member invited back has to be granted again.
+		yield* db.run(
+			SQLite.deleteFrom(schema.customerImpersonatorsTable).where(($) => [inList($.userId, gone)]),
+		)
 	}
 	const roles = new Map(current.map((row) => [row.userId, row.role]))
 	for (const member of members) {
@@ -90,6 +94,8 @@ const CUSTOMER_DATA: ReadonlyArray<Parameters<typeof SQLite.deleteFrom>[0]> = [
 	schema.customerUnmatchedRecordsTable,
 	schema.customerIgnoreRulesTable,
 	schema.customerChannelLinksTable,
+	schema.customerImpersonatorsTable,
+	schema.customerImpersonationsTable,
 ]
 
 /**

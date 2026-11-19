@@ -9,7 +9,7 @@ import { CustomerRpcs } from "@hazel/domain/rpc"
 import type { OrganizationId, UserId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option, Redacted, type Scope } from "effect"
 import type { RpcGroup } from "effect/rpc"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { resolveTarget } from "../../../rpc/routing"
 import type { HazelRpcTag } from "../../../rpc/dispatch"
 import { Directory } from "../../../services/directory"
@@ -99,6 +99,9 @@ const PAYLOADS = {
 	"customers.featureFlags.set": { accountIds: [uuid()], keys: ["beta"], enabled: true },
 	"customers.metric.setUnit": { metricKey: "autumn.traces", unit: "GB" },
 	"customers.demo.seed": { accounts: 1 },
+	"customers.impersonator.grant": { userId: uuid() },
+	"customers.impersonator.revoke": { userId: uuid() },
+	"customers.impersonation.start": { contactId: uuid() },
 } satisfies Record<RpcGroup.Rpcs<typeof CustomerRpcs>["_tag"], Record<string, unknown>>
 
 /** Settings, rules and their dry runs, shared views, data sources, unmatched records, the demo seed. */
@@ -126,12 +129,20 @@ const ADMIN_ONLY = new Set([
 	"customers.featureFlags.set",
 	"customers.metric.setUnit",
 	"customers.demo.seed",
+	"customers.impersonator.grant",
+	"customers.impersonator.revoke",
+	// Not admin-only: members an admin granted it (none here).
+	"customers.impersonation.start",
 ])
 
 const meta = (rows: (query: string, key: string) => Array<{ value: string }>, key: string) =>
 	rows(`SELECT value FROM _object_meta WHERE key = ?`, key)[0]?.value
 
 describe("Customers authorization", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals()
+	})
+
 	it("refuses strangers and bots every method, and members the admin-only ones", () =>
 		run(
 			Effect.gen(function* () {
@@ -166,6 +177,171 @@ describe("Customers authorization", () => {
 					if (ADMIN_ONLY.has(tag)) expect([tag, member]).toEqual([tag, "UnauthorizedError"])
 					else expect([tag, member]).not.toEqual([tag, "UnauthorizedError"])
 				}
+			}),
+		))
+
+	it("starts an impersonation only for a member an admin granted it", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					{ _tag: "account", externalId: "org_1", name: "Acme", sameAs: [], onNoMatch: "create" },
+				])
+				const accountId = world.rows<{ id: string }>(`SELECT id FROM customer_accounts`)[0]!.id
+				const contactId = uuid()
+				world.object.storage.db
+					.prepare(`INSERT INTO customer_contacts (id, accountId, email) VALUES (?, ?, ?)`)
+					.run(contactId, accountId, "ada@acme.dev")
+				world.object.storage.db
+					.prepare(
+						`INSERT INTO customer_external_refs (id, connectionId, provider, entityType, entityId, accountId, externalId, matchMethod) VALUES (?, ?, 'clerk', 'contact', ?, ?, 'user_1', 'existing')`,
+					)
+					.run(uuid(), world.connection("clerk"), contactId, accountId)
+				const start = (user: UserId) =>
+					world.call("customers.impersonation.start", { contactId }, user).pipe(Effect.map(tagOf))
+				// Admins are not granted it by their role.
+				expect(yield* start(world.owner)).toBe("UnauthorizedError")
+				expect(yield* start(world.member)).toBe("UnauthorizedError")
+				expect(
+					tagOf(
+						yield* world.call(
+							"customers.impersonator.grant",
+							{ userId: world.stranger },
+							world.owner,
+						),
+					),
+				).toBe("CustomersInvalidRequestError")
+				const grantId = uuid()
+				ok(
+					yield* world.call(
+						"customers.impersonator.grant",
+						{ id: grantId, userId: world.member },
+						world.owner,
+					),
+				)
+				ok(yield* world.call("customers.impersonator.grant", { userId: world.member }, world.owner))
+				// The client's id is kept: the synced row replaces the optimistic one.
+				expect(world.rows(`SELECT id, userId, grantedBy FROM customer_impersonators`)).toEqual([
+					{ id: grantId, userId: world.member, grantedBy: world.owner },
+				])
+				// Granted, past the gate: the test connection holds no key, so Clerk is never called.
+				const refused = yield* world.call(
+					"customers.impersonation.start",
+					{ contactId },
+					world.member,
+				)
+				expect(refused).toMatchObject({ _tag: "Failure" })
+				expect(JSON.stringify(refused)).toContain('"reason":"unavailable"')
+				expect(
+					tagOf(
+						yield* world.call(
+							"customers.impersonation.start",
+							{ contactId: uuid() },
+							world.member,
+						),
+					),
+				).toBe("CustomersNotFoundError")
+				ok(yield* world.call("customers.impersonator.revoke", { userId: world.member }, world.owner))
+				expect(yield* start(world.member)).toBe("UnauthorizedError")
+				expect(world.rows(`SELECT id FROM customer_impersonations`)).toEqual([])
+				// A grant goes with the membership: invited back, they are not granted again.
+				ok(yield* world.call("customers.impersonator.grant", { userId: world.member }, world.owner))
+				const setMembers = (
+					members: ReadonlyArray<{ userId: UserId; role: "owner" | "member" }>,
+					version: number,
+				) =>
+					world.object.applyEffect({
+						objectId: world.orgId,
+						kind: "customers.setMembers",
+						payload: { organizationId: world.orgId, members, version },
+						key: uuid(),
+						sender: { kind: "org", id: world.orgId },
+					})
+				yield* setMembers([{ userId: world.owner, role: "owner" }], 2)
+				yield* setMembers(
+					[
+						{ userId: world.owner, role: "owner" },
+						{ userId: world.member, role: "member" },
+					],
+					3,
+				)
+				expect(yield* start(world.member)).toBe("UnauthorizedError")
+				expect(world.rows(`SELECT userId FROM customer_impersonators`)).toEqual([])
+			}),
+		))
+
+	it("a granted member's impersonation mints a Clerk actor token, logs it and answers its link", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					{ _tag: "account", externalId: "org_1", name: "Acme", sameAs: [], onNoMatch: "create" },
+				])
+				const accountId = world.rows<{ id: string }>(`SELECT id FROM customer_accounts`)[0]!.id
+				const contactId = uuid()
+				world.object.storage.db
+					.prepare(`INSERT INTO customer_contacts (id, accountId, email) VALUES (?, ?, ?)`)
+					.run(contactId, accountId, "ada@acme.dev")
+				world.object.storage.db
+					.prepare(
+						`INSERT INTO customer_external_refs (id, connectionId, provider, entityType, entityId, accountId, externalId, matchMethod) VALUES (?, ?, 'clerk', 'contact', ?, ?, 'user_1', 'existing')`,
+					)
+					.run(uuid(), world.connection("clerk"), contactId, accountId)
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							yield* storeSecrets(
+								world.connection("clerk"),
+								yield* encryptSecrets("sk_test_1", null),
+							)
+						}).pipe(Effect.provide(encryption)),
+					)
+					.pipe(Effect.orDie)
+				ok(yield* world.call("customers.impersonator.grant", { userId: world.member }, world.owner))
+				const sent: Array<{ url: string; auth: string | null; body: unknown }> = []
+				vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+					const request = new Request(input, init)
+					sent.push({
+						url: request.url,
+						auth: request.headers.get("authorization"),
+						body: await request.json(),
+					})
+					return Response.json({
+						id: "act_1",
+						url: "https://clerk.acme.dev/v1/tickets/accept?ticket=t",
+					})
+				})
+				const started = ok(
+					yield* world.call("customers.impersonation.start", { contactId }, world.member),
+				)
+				expect(started.data.url).toBe("https://clerk.acme.dev/v1/tickets/accept?ticket=t")
+				expect(sent).toEqual([
+					{
+						url: "https://api.clerk.com/v1/actor_tokens",
+						auth: "Bearer sk_test_1",
+						body: {
+							user_id: "user_1",
+							actor: { sub: world.member },
+							expires_in_seconds: 60,
+							session_max_duration_in_seconds: 900,
+						},
+					},
+				])
+				expect(
+					world.rows(
+						`SELECT userId, provider, accountId, contactId, contactLabel, externalUserId, externalTokenId FROM customer_impersonations`,
+					),
+				).toEqual([
+					{
+						userId: world.member,
+						provider: "clerk",
+						accountId,
+						contactId,
+						contactLabel: "ada@acme.dev",
+						externalUserId: "user_1",
+						externalTokenId: "act_1",
+					},
+				])
 			}),
 		))
 

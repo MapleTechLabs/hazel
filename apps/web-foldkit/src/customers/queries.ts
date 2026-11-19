@@ -7,6 +7,7 @@
 import * as Customers from "@hazel/domain/customers"
 import {
 	CustomerAccountId,
+	CustomerImpersonatorId,
 	CustomerSavedViewId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
@@ -19,6 +20,7 @@ import {
 	customerAccountCollection,
 	customerConnectionCollection,
 	customerFeatureFlagCollection,
+	customerImpersonatorCollection,
 	customerSavedViewCollection,
 	customerSettingsCollection,
 	customerSignalCollection,
@@ -392,6 +394,40 @@ export const orgMembersStream = <Message>(
 					avatarUrl: row.avatarUrl ?? null,
 				})),
 			),
+	)
+
+/** A member an admin let sign in as customers' users (Clerk impersonation). */
+export const ImpersonatorRow = Schema.Struct({
+	id: CustomerImpersonatorId,
+	userId: UserId,
+	grantedBy: UserId,
+	grantedAtMs: Schema.Number,
+})
+export type ImpersonatorRow = typeof ImpersonatorRow.Type
+
+/** Who may impersonate, oldest grant first (synced to every member). */
+export const impersonatorsStream = <Message>(
+	organizationId: OrganizationId,
+	toMessage: (impersonators: ReadonlyArray<ImpersonatorRow>) => Message,
+): Stream.Stream<Message> =>
+	withCustomersSource(
+		organizationId,
+		liveQueryStream<Customers.Impersonator, Message>(
+			(q) =>
+				q
+					.from({ impersonator: customerImpersonatorCollection })
+					.where(({ impersonator }) => eq(impersonator.organizationId, organizationId))
+					.orderBy(({ impersonator }) => impersonator.createdAt, "asc"),
+			(rows) =>
+				toMessage(
+					rows.map((row) => ({
+						id: row.id,
+						userId: row.userId,
+						grantedBy: row.grantedBy,
+						grantedAtMs: msOf(row.createdAt),
+					})),
+				),
+		),
 	)
 
 // HELPERS

@@ -29,6 +29,7 @@ import { Directory } from "../services/directory"
 import {
 	checkBotOperationRateLimit,
 	checkBotUpdateRateLimit,
+	checkImpersonationRateLimit,
 	checkMessageRateLimit,
 } from "../services/rate-limit-helpers"
 import type { RateLimiter } from "../services/rate-limiter"
@@ -364,6 +365,7 @@ export const rateLimits: Partial<
 	"bot.uninstall": (current) => checkBotOperationRateLimit(current.id),
 	"bot.installById": (current) => checkBotOperationRateLimit(current.id),
 	"bot.authorizeInstall": (current) => checkBotOperationRateLimit(current.id),
+	"customers.impersonation.start": (current) => checkImpersonationRateLimit(current.id),
 }
 
 /** Where `tag` runs for `payload` (decoded) and `user`. */

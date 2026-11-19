@@ -1,9 +1,9 @@
 /**
  * Who may do what in a `CustomersObject` (`docs/customers/tech-design.md` §1): every member of the
  * org reads and works the queue; admins and owners change settings, rules, shared views and data
- * sources. Roles come from `customer_members`, the `OrgObject`'s projection (people only: bots are
- * not projected, and a bot token is refused here whatever its scopes; V1 grants bots no Customers
- * access).
+ * sources; only the members an admin granted it sign in as customers' users. Roles come from
+ * `customer_members`, the `OrgObject`'s projection (people only: bots are not projected, and a bot
+ * token is refused here whatever its scopes; V1 grants bots no Customers access).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser, UnauthorizedError } from "@hazel/domain"
@@ -43,6 +43,23 @@ export const requireMember = Effect.gen(function* () {
 export const requireAdmin = Effect.gen(function* () {
 	const actor = yield* requireMember
 	if (!actor.isAdmin) return yield* refuse("Only admins and owners can change Customers settings")
+	return actor
+})
+
+/**
+ * The caller, a member an admin granted impersonation (`customer_impersonators`). Admins are not
+ * granted it by their role: an admin who wants it grants it to themselves.
+ */
+export const requireImpersonator = Effect.gen(function* () {
+	const actor = yield* requireMember
+	const db = yield* Database.Database
+	const grant = yield* db.first(
+		SQLite.from(schema.customerImpersonatorsTable)
+			.select("id")
+			.where(($) => [$.userId.eq(actor.userId)])
+			.limit(1),
+	)
+	if (Option.isNone(grant)) return yield* refuse("Not allowed to impersonate customers' users")
 	return actor
 })
 

@@ -11,6 +11,7 @@ import { AppRoute, hrefOf } from "../../../../route"
 import { button, buttonClassName } from "../../../../ui/button"
 import { readOnlyNotice, settingsHeader, settingsPage } from "../shared"
 import { Message } from "./message"
+import { impersonationCard } from "./impersonation-view"
 import { connectionOf, type HistoryFilter, isLive, type Model, runsOf, statusOf, visibleRuns } from "./model"
 import { addsList, type Context, connectButton, errorBanner, syncModeLines } from "./overview-view"
 import {
@@ -502,6 +503,9 @@ export const detailView = (h: H, model: Model, provider: CustomerProvider, conte
 										settingsCard(h, model, live, context.isAdmin),
 										...(provider === "autumn"
 											? [unitsCard(h, model, live, context.isAdmin)]
+											: []),
+										...(provider === "clerk" && context.isAdmin
+											? [impersonationCard(h, model, context.nowMs)]
 											: []),
 										mappingCard(h, provider),
 									],

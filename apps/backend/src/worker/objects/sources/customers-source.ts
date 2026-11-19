@@ -19,6 +19,10 @@ export const CLOSED_SIGNAL_WINDOW_DAYS = 30
 const isMember = (userId: UserId) =>
 	SQLite.sql.cond`EXISTS (SELECT 1 FROM "customer_members" cm WHERE cm."userId" = ${userId})`
 
+const isAdmin = (userId: UserId) =>
+	SQLite.sql
+		.cond`EXISTS (SELECT 1 FROM "customer_members" cm WHERE cm."userId" = ${userId} AND cm."role" <> 'member')`
+
 export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = [
 	{ table: schema.customerAccountsTable, visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)] },
 	{
@@ -50,6 +54,15 @@ export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = 
 	{ table: schema.customerMetricDefinitionsTable, visible: (p) => [isMember(p.userId)] },
 	{ table: schema.customerConnectionsTable, visible: (p) => [isMember(p.userId)] },
 	{ table: schema.customerFeatureFlagsTable, visible: (p) => [isMember(p.userId)] },
+	// Who may impersonate: every member, so each knows whether they can.
+	{ table: schema.customerImpersonatorsTable, visible: (p) => [isMember(p.userId)] },
+	{
+		table: schema.customerImpersonationsTable,
+		visible: (p, $) => [
+			isAdmin(p.userId),
+			SQLite.sql.cond`${$.createdAt} > strftime('%Y-%m-%d %H:%M:%f', 'now', '-30 days')`,
+		],
+	},
 	{
 		table: schema.customerSyncRunsTable,
 		visible: (p, $) => [

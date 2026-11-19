@@ -1,5 +1,11 @@
 import * as Customers from "@hazel/domain/customers"
-import { ChannelId, CustomerAccountId, CustomerNoteId, CustomerSignalId } from "@hazel/schema"
+import {
+	ChannelId,
+	CustomerAccountId,
+	CustomerContactId,
+	CustomerNoteId,
+	CustomerSignalId,
+} from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
@@ -11,7 +17,15 @@ import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import { SignalAction, SignalActionFailure } from "../attention/message"
-import { ContactFilter, DetailFailure, MetricRow, NoteDrafts, NoteRow, SignalMenu } from "./model"
+import {
+	ContactFilter,
+	DetailFailure,
+	ImpersonationFailure,
+	MetricRow,
+	NoteDrafts,
+	NoteRow,
+	SignalMenu,
+} from "./model"
 
 /** A note or signal action: the row is gone, its status moved on, or a common reason. */
 export const ActionFailure = Schema.Union([Schema.Literals(["NotFound", "Stale"]), CommonReason])
@@ -149,6 +163,13 @@ export const Message = defineMessageUnion({
 	FailedMerge: { accountId: CustomerAccountId, reason: ActionFailure },
 	SucceededNoteAction: { action: NoteAction },
 	FailedNoteAction: { action: NoteAction, reason: ActionFailure, draft: Schema.NullOr(NoteDraft) },
+
+	UpdatedIsImpersonator: { isImpersonator: Schema.Boolean },
+	PressedImpersonate: { contactId: CustomerContactId },
+	GotImpersonateModalMessage: { message: Modal.Message },
+	/** `contactId` names the dialog it was asked from: an answer for one closed since is dropped. */
+	SucceededStartImpersonation: { attempt: Schema.Number, url: Schema.String },
+	FailedStartImpersonation: { attempt: Schema.Number, reason: ImpersonationFailure },
 
 	PressedCopy: { text: Schema.String, label: Schema.String },
 	CompletedCopy: { label: Schema.String, isCopied: Schema.Boolean },

@@ -51,6 +51,7 @@ Synced rows become plain page rows (dates as epoch ms), the same shape the lab f
     - `connectedProvidersStream(orgId, toMessage)`: providers not disconnected.
     - `settingsSummaryStream(orgId, toMessage)`: `{ lastComputedAtMs, bands, reportingCurrency }` or null.
     - `orgMembersStream(orgId, toMessage)`: `MemberRow`s (owners, assignees); from the org source.
+    - `impersonatorsStream(orgId, toMessage)`: `ImpersonatorRow`s, the members who may impersonate.
 - "Mine" everywhere (queue filter, sidebar badge, overview) = signals on accounts I own.
 - Helpers: `queueTabOf`, `msOf`, `withCustomersSource(orgId, stream)` for a query of your own over
   the customer collections (`src/core/db/collections.ts`: `customerNoteCollection`, `customerSignalRuleCollection`,
@@ -90,6 +91,8 @@ back on failure. Call them from a Command, then `Effect.catchTags` for the RPC's
 | `deleteNoteAction`         | `noteId`                                                                 |
 | `updateAccountAction`      | `accountId`, `ownerUserId?`, `tags?`, `lifecycleStageOverride?`, `name?` |
 | `bulkUpdateAccountsAction` | `accountIds`, `ownerUserId?`, `addTags?`, `removeTags?`                  |
+| `grantImpersonatorAction`  | `userId`, `grantedBy`                                                    |
+| `revokeImpersonatorAction` | `impersonatorId`, `userId`                                               |
 
 ```ts
 const AssignSignal = Command.define("AssignSignal", {

@@ -61,6 +61,8 @@ import {
 	CustomerFeatureFlagId,
 	CustomerExternalRefId,
 	CustomerIgnoreRuleId,
+	CustomerImpersonationId,
+	CustomerImpersonatorId,
 	CustomerInvoiceId,
 	CustomerMetricDefinitionId,
 	CustomerMrrMovementId,
@@ -844,6 +846,47 @@ export const customerFeatureFlagsTable = SQLite.table("customer_feature_flags", 
 	indexes: [SQLite.uniqueIndex("customer_feature_flags_key_unique", ["key"])],
 })
 export type CustomerFeatureFlag = SQLite.SelectRowOf<typeof customerFeatureFlagsTable>
+
+/**
+ * The members an admin let sign in as their customers' users (Clerk impersonation): none by default,
+ * and being an admin grants nothing. Revoking deletes the row.
+ */
+export const customerImpersonatorsTable = SQLite.table("customer_impersonators", {
+	columns: {
+		id: id(CustomerImpersonatorId),
+		organizationId: uuid(OrganizationId),
+		userId: uuid(UserId),
+		grantedBy: uuid(UserId),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	primaryKey: ["id"],
+	indexes: [SQLite.uniqueIndex("customer_impersonators_user_unique", ["userId"])],
+})
+export type CustomerImpersonator = SQLite.SelectRowOf<typeof customerImpersonatorsTable>
+
+/** Every impersonation started: who signed in as which provider user, through which actor token. */
+export const customerImpersonationsTable = SQLite.table("customer_impersonations", {
+	columns: {
+		id: id(CustomerImpersonationId),
+		organizationId: uuid(OrganizationId),
+		userId: uuid(UserId),
+		provider: textEnum(CustomerProvider.literals),
+		accountId: uuid(CustomerAccountId),
+		contactId: uuid(CustomerContactId),
+		/** The contact's name (else email) then, so the log reads after it is gone. */
+		contactLabel: SQLite.nullable(SQLite.text),
+		/** The provider's user, e.g. the Clerk user id. */
+		externalUserId: SQLite.text,
+		/** The provider's token for it, e.g. the Clerk actor token id (to revoke it in Clerk). */
+		externalTokenId: SQLite.text,
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	primaryKey: ["id"],
+	indexes: [SQLite.index("customer_impersonations_created_idx", ["createdAt"])],
+})
+export type CustomerImpersonation = SQLite.SelectRowOf<typeof customerImpersonationsTable>
 
 // ---------------------------------------------------------------------------
 // Projection

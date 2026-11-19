@@ -526,7 +526,16 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			],
 		},
 		{
-			id: "0014_customer_feature_flags",
+			id: "0014_customer_impersonation",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "customer_impersonations" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"organizationId" text NOT NULL,\n\t"userId" text NOT NULL,\n\t"provider" text NOT NULL,\n\t"accountId" text NOT NULL,\n\t"contactId" text NOT NULL,\n\t"contactLabel" text,\n\t"externalUserId" text NOT NULL,\n\t"externalTokenId" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				"CREATE TABLE IF NOT EXISTS \"customer_impersonators\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"organizationId\" text NOT NULL,\n\t\"userId\" text NOT NULL,\n\t\"grantedBy\" text NOT NULL,\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"updatedAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))\n)",
+				'CREATE INDEX IF NOT EXISTS "customer_impersonations_created_idx" ON "customer_impersonations" ("createdAt")',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_impersonators_user_unique" ON "customer_impersonators" ("userId")',
+			],
+		},
+		{
+			id: "0015_customer_feature_flags",
 			statements: [
 				'ALTER TABLE "customer_accounts" ADD COLUMN "featureFlags" text NOT NULL DEFAULT \'{}\'',
 				"CREATE TABLE IF NOT EXISTS \"customer_feature_flags\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"organizationId\" text NOT NULL,\n\t\"key\" text NOT NULL,\n\t\"createdBy\" text NOT NULL,\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))\n)",

@@ -449,6 +449,21 @@ export const CustomerFeatureFlagId = Schema.String.check(Schema.isUUID())
 		title: "Customer Feature Flag ID",
 	})
 export type CustomerFeatureFlagId = Schema.Schema.Type<typeof CustomerFeatureFlagId>
+export const CustomerImpersonatorId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerImpersonatorId"))
+	.annotate({
+		description: "The ID of a member's grant to impersonate customers' users",
+		title: "Customer Impersonator ID",
+	})
+export type CustomerImpersonatorId = Schema.Schema.Type<typeof CustomerImpersonatorId>
+
+export const CustomerImpersonationId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerImpersonationId"))
+	.annotate({
+		description: "The ID of one impersonation a member started",
+		title: "Customer Impersonation ID",
+	})
+export type CustomerImpersonationId = Schema.Schema.Type<typeof CustomerImpersonationId>
 
 export const AgentClientId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/AgentClientId"))

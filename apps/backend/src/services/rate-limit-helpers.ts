@@ -131,6 +131,23 @@ export const checkBotOperationRateLimit = makeRateLimitCheck({
 	message: "Bot operation rate limit exceeded. Please wait before trying again.",
 })
 
+/**
+ * Customers impersonation starts: 10 per hour per user. Each one is a Clerk actor token, which
+ * counts against the customer's monthly allowance (5 without Clerk's Administration add-on).
+ */
+export const IMPERSONATION_RATE_LIMIT = {
+	limit: 10,
+	windowMs: 60 * 60 * 1000,
+}
+
+export const checkImpersonationRateLimit = makeRateLimitCheck({
+	name: "checkImpersonationRateLimit",
+	label: "Impersonation",
+	keyPrefix: "customer-impersonations:",
+	config: IMPERSONATION_RATE_LIMIT,
+	message: "Too many impersonations. Please wait before trying again.",
+})
+
 export const checkBotUpdateRateLimit = makeRateLimitCheck({
 	name: "checkBotUpdateRateLimit",
 	label: "Bot update",
