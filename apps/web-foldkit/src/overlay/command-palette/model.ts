@@ -1,4 +1,4 @@
-import { ChannelId, CustomerAccountId, UserId } from "@hazel/schema"
+import { ChannelId, CustomerAccountId, CustomerContactId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as CommandMenu from "../../ui/command-menu"
 import { RecentSearch, SearchAutocomplete, SearchData, SearchFilter, Suggestion } from "./search-data"
@@ -98,6 +98,16 @@ export const CustomerSummary = Schema.Struct({
 })
 export type CustomerSummary = typeof CustomerSummary.Type
 
+/** A customer's user (contact) matching the typed text, from `customers.contacts.search`. */
+export const CustomerUserSummary = Schema.Struct({
+	id: CustomerContactId,
+	accountId: CustomerAccountId,
+	name: Schema.NullOr(Schema.String),
+	email: Schema.NullOr(Schema.String),
+	avatarUrl: Schema.NullOr(Schema.String),
+})
+export type CustomerUserSummary = typeof CustomerUserSummary.Type
+
 export const Theme = Schema.Literals(["system", "light", "dark"])
 export type Theme = typeof Theme.Type
 
@@ -110,6 +120,7 @@ export const Model = Schema.Struct({
 	channels: Schema.Array(ChannelSummary),
 	dmChannels: Schema.Array(DmChannel),
 	customers: Schema.Array(CustomerSummary),
+	customerUsers: Schema.Array(CustomerUserSummary),
 	recentChannelIds: Schema.Array(ChannelId),
 	recentChannels: Schema.Array(ChannelSummary),
 	/** `userChannels` (every channel the user is a member of), the join page's first query. */

@@ -52,6 +52,7 @@ const PAYLOADS = {
 	"customers.account.series": { accountId: uuid(), metricKeys: ["mrr"], range: "30d" },
 	"customers.sparklines": { accountIds: [], metricKey: "mrr", days: 7 },
 	"customers.contacts.list": { accountId: uuid() },
+	"customers.contacts.search": { query: "a" },
 	"customers.invoices.list": { accountId: uuid() },
 	"customers.events.list": {},
 	"customers.signals.history": {},

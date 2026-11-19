@@ -26,6 +26,7 @@ import { commandMenuShortcut, view as commandMenuView } from "../../ui/command-m
 import { labelId } from "../../ui/menu"
 import { createChannelPage, joinChannelPage } from "./form-pages"
 import {
+	accountNameOf,
 	dmDisplayName,
 	HOTKEYS,
 	NAVIGATION,
@@ -200,6 +201,31 @@ const itemContent = (
 					]),
 				]
 			: []
+	}
+	if (kind === "customer-user") {
+		const user = model.customerUsers.find((candidate) => candidate.id === value)
+		if (!user) return []
+		const name = user.name ?? user.email ?? "Unknown user"
+		const accountName = accountNameOf(model, user.accountId)
+		return [
+			avatar(h, {
+				size: "xs",
+				className: "mr-1",
+				src: user.avatarUrl,
+				alt: name,
+				seed: name,
+				fallbackIcon: true,
+			}),
+			label(h, key, [
+				name,
+				...(user.name !== null && user.email !== null
+					? [h.span([h.Class("ml-2 text-muted-fg text-xs")], [user.email])]
+					: []),
+				...(accountName === null
+					? []
+					: [h.span([h.Class("ml-2 text-muted-fg text-xs")], [`· ${accountName}`])]),
+			]),
+		]
 	}
 	const dm = model.dmChannels.find((candidate) => candidate.id === value)
 	if (kind === "dm") return dm ? [dmIcon(h, dm), label(h, key, [dmDisplayName(dm)])] : []
