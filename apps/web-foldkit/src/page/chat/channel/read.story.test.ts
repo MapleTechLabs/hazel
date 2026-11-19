@@ -731,8 +731,11 @@ describe("image viewer", () => {
 		const menu = Overlays.contextMenuOf(opened)
 		expect(menu?.imageUrl).toBe(url)
 		const entries = Overlays.contextMenuEntries(facts, graceMessageId, url)
-		expect(Overlays.contextMenuEntries(facts, graceMessageId, null)).not.toContainEqual(
-			expect.objectContaining({ key: Overlays.COPY_IMAGE }),
+		const keysOf = (all: ReadonlyArray<Menu.Entry>) =>
+			all.flatMap((entry) => (entry._tag === "Item" ? [entry.item.key] : []))
+		expect(keysOf(entries)).toContain(Overlays.COPY_IMAGE)
+		expect(keysOf(Overlays.contextMenuEntries(facts, graceMessageId, null))).not.toContain(
+			Overlays.COPY_IMAGE,
 		)
 		const chosen = Overlays.update(
 			opened,

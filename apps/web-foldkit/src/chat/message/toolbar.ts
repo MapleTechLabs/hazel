@@ -289,7 +289,7 @@ export const TrackMessageHover = Mount.defineStream("TrackMessageHover", {
 								messageId: messageId.value,
 								offset: event.clientY - rect.bottom,
 								crossOffset: event.clientX - rect.left,
-								imageUrl: image instanceof HTMLImageElement ? image.src : null,
+								imageUrl: image?.getAttribute("src") ?? null,
 							}),
 						)
 					}
