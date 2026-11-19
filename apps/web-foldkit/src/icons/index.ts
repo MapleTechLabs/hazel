@@ -3932,3 +3932,37 @@ export const IconGoogle = <Message>(h: HtmlBuilder<Message>, options: IconOption
 			]),
 		],
 	)
+
+export const IconSidebarRight = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
+	icon(
+		h,
+		{
+			height: "18",
+			width: "18",
+			"data-slot": "icon",
+			viewBox: "0 0 18 18",
+			xmlns: "http://www.w3.org/2000/svg",
+		},
+		options,
+		[
+			h.g(
+				[
+					h.Attribute("fill", "none"),
+					h.Attribute("stroke", "currentColor"),
+					h.Attribute("stroke-linecap", "round"),
+					h.Attribute("stroke-linejoin", "round"),
+					h.Attribute("stroke-width", "1.5"),
+				],
+				[
+					h.rect([
+						h.Attribute("x", "2.25"),
+						h.Attribute("y", "2.75"),
+						h.Attribute("width", "13.5"),
+						h.Attribute("height", "12.5"),
+						h.Attribute("rx", "2"),
+					]),
+					h.path([h.Attribute("d", "M11.25 2.75V15.25")]),
+				],
+			),
+		],
+	)
