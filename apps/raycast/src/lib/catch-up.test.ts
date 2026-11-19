@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+import type { WebSocket } from "ws"
 
 import { catchUp, type CustomersStore, SyncClosedError } from "./catch-up"
 import { type CustomersState, EMPTY_STATE } from "./protocol"
@@ -46,14 +48,21 @@ const api = "https://api.test"
 const opened = () => new Promise((resolve) => setTimeout(resolve, 0))
 let memory = memoryStore()
 const sync = (organizationId: string, signal = new AbortController().signal, onCommit = vi.fn()) =>
-	catchUp({ api, organizationId, token: "hzl_oat_x", store: memory.store, onCommit, signal })
+	catchUp({
+		api,
+		organizationId,
+		token: "hzl_oat_x",
+		store: memory.store,
+		onCommit,
+		signal,
+		// SAFETY: `catchUp` uses only `addEventListener`, `send` and `close`, which `FakeSocket` has.
+		openSocket: (url, protocols) => new FakeSocket(url, protocols) as unknown as WebSocket,
+	})
 const account = (id: string, name: string) => ({ id, name, domains: [], mrrMinor: 0 })
 
 beforeEach(() => {
 	memory = memoryStore()
-	vi.stubGlobal("WebSocket", FakeSocket)
 })
-afterEach(() => vi.unstubAllGlobals())
 
 describe("catchUp", () => {
 	it("takes a snapshot to Ready, saves it, then resumes from the saved seq", async () => {

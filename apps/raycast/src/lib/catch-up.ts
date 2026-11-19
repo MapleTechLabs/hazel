@@ -4,6 +4,7 @@
  * last saved `Commit`, or takes a full snapshot (`since: null`); each `Begin … Rows … Commit` run is
  * applied whole and saved; at `Ready` the socket closes. Never reaches a provider.
  */
+import { WebSocket } from "ws"
 import { applyTransaction, CloseCode, type CustomersState, type RowsFrame } from "./protocol"
 
 /** Where an org's list is kept between catch-ups (Raycast's `Cache` in the extension). */
@@ -44,6 +45,8 @@ export const catchUp = (options: {
 	readonly store: CustomersStore
 	readonly onCommit: (state: CustomersState) => void
 	readonly signal: AbortSignal
+	/** Opens the socket; `ws` by default (Raycast's runtime has no global `WebSocket`). */
+	readonly openSocket?: (url: string, protocols: Array<string>) => WebSocket
 }) =>
 	new Promise<CustomersState | null>((resolve, reject) => {
 		// Aborted while the token was fetched: never open.
@@ -52,7 +55,8 @@ export const catchUp = (options: {
 		let state = options.store.load(organizationId)
 		let run: { reset: boolean; rows: Array<RowsFrame> } | null = null
 		const url = `${api.replace(/^http/, "ws")}/sync/customers/${encodeURIComponent(organizationId)}`
-		const socket = new WebSocket(url, ["hazel.v1", options.token])
+		const openSocket = options.openSocket ?? ((url, protocols) => new WebSocket(url, protocols))
+		const socket = openSocket(url, ["hazel.v1", options.token])
 		let settled = false
 		const settle = (finish: () => void) => {
 			if (settled) return
