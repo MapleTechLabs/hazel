@@ -56,6 +56,8 @@ export const AppRoute = defineRouteUnion({
 	SelectOrganization: {},
 	OrgHome: { orgSlug: Schema.String },
 	ChatIndex: { orgSlug: Schema.String },
+	/** The direct messages list (a phone's DMs tab). */
+	ChatDms: { orgSlug: Schema.String },
 	ChatChannel: { orgSlug: Schema.String, channelId: ChannelId },
 	ChatFiles: { orgSlug: Schema.String, channelId: ChannelId },
 	ChatFilesMedia: { orgSlug: Schema.String, channelId: ChannelId },
@@ -243,6 +245,7 @@ const routers = {
 	SelectOrganization: pipe(literal("select-organization"), Route.mapTo(AppRoute.SelectOrganization)),
 	OrgHome: pipe(org, Route.mapTo(AppRoute.OrgHome)),
 	ChatIndex: pipe(orgPath("chat"), Route.mapTo(AppRoute.ChatIndex)),
+	ChatDms: pipe(orgPath("chat"), slash(literal("dms")), Route.mapTo(AppRoute.ChatDms)),
 	ChatChannel: pipe(channel("chat"), Route.mapTo(AppRoute.ChatChannel)),
 	ChatFiles: pipe(channel("chat"), slash(literal("files")), Route.mapTo(AppRoute.ChatFiles)),
 	ChatFilesMedia: pipe(
@@ -395,6 +398,7 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.SelectOrganization,
 		routers.OrgHome,
 		routers.ChatIndex,
+		routers.ChatDms,
 		routers.ChatChannel,
 		routers.ChatFiles,
 		routers.ChatFilesMedia,
@@ -539,7 +543,13 @@ export const isCustomersRoute = AppRoute.isAnyOf([
 export const isChannelChatRoute = AppRoute.isAnyOf(["ChatChannel", "ChatFiles", "ChatFilesMedia"])
 
 /** `/$orgSlug/chat` and everything below it. */
-export const isChatRoute = AppRoute.isAnyOf(["ChatIndex", "ChatChannel", "ChatFiles", "ChatFilesMedia"])
+export const isChatRoute = AppRoute.isAnyOf([
+	"ChatIndex",
+	"ChatDms",
+	"ChatChannel",
+	"ChatFiles",
+	"ChatFilesMedia",
+])
 
 /** The integration and chat sync pages, which sit in a narrower content column. */
 export const hasContentColumn = AppRoute.isAnyOf([

@@ -112,7 +112,8 @@ describe("mobile", () => {
 			Subscription.emit(mobile),
 			// The desktop dock (and its two menus) leaves the tree.
 			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress),
-			sceneExpect(within(tabs, navItem("Settings"))).toHaveAttr("aria-current", "page"),
+			// Settings is the gear in the chat list's header, not a tab.
+			sceneExpect(within(tabs, navItem("Settings"))).toBeAbsent(),
 			sceneExpect(within(tabs, role("button", { name: /Menu/ }))).toBeAbsent(),
 			sceneExpect(role("dialog", { name: "Sidebar" })).toBeAbsent(),
 			click(role("button", { name: "Settings menu" })),
@@ -120,6 +121,19 @@ describe("mobile", () => {
 			Mount.resolve(Modal.AcquireResources, Modal.Message.SucceededAcquireResources()),
 			...menusMounted,
 			sceneExpect(within(role("dialog", { name: "Sidebar" }), navItem("Settings"))).toExist(),
+		)
+	})
+
+	test("the DMs tab is the direct messages list", () => {
+		scene(
+			rootScene,
+			given(signedIn("/hazel/chat/dms")),
+			...menusMounted,
+			Subscription.emit(mobile),
+			// The desktop dock (and its two menus) leaves the tree.
+			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress),
+			sceneExpect(within(tabs, navItem("DMs"))).toHaveAttr("aria-current", "page"),
+			sceneExpect(within(tabs, navItem("Chats"))).not.toHaveAttr("aria-current", "page"),
 		)
 	})
 

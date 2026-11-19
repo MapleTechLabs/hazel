@@ -441,72 +441,102 @@ export const orgSwitcherHeader = <M>(
 	toMenuMessage: (message: Menu.Message) => M,
 ): Html =>
 	sidebarHeader(h, { state: "expanded", className: `border-b ${sidebarHeaderHeightClass()}` }, [
-		h.submodel({
-			slotId: ORG_SWITCHER_ID,
-			model: menu,
-			view: menuView,
-			viewInputs: {
-				entries,
-				// The servers, as a phone's own sheet: pick one, or make another.
-				native: {
-					presentation: "sheet",
-					title: "Servers",
-					symbols: {
-						...SWITCHER_SYMBOLS,
-						...Object.fromEntries(
-							organizations.map((organization) => [organization.id, "building.2"]),
+		h.div(
+			[h.Class("flex items-center gap-2")],
+			[
+				h.div(
+					[h.Class("flex min-w-0 flex-1 flex-col")],
+					[orgSwitcherMenu(h, menu, entries, context, organizations, toMenuMessage)],
+				),
+				// On a phone, Settings lives here rather than in the tab bar.
+				h.a(
+					[
+						h.Href(hrefOf(AppRoute.SettingsGeneral({ orgSlug: context.orgSlug }))),
+						h.AriaLabel("Settings"),
+						...semantic(h, { kind: "action", label: "Settings", symbol: "gearshape" }),
+						h.Class(
+							"-my-2.5 -mr-2 flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-fg transition-opacity duration-100 active:opacity-60 md:hidden",
 						),
-					},
-				},
-				toTrigger: (attributes, overlay) =>
-					h.button(
-						[
-							...attributes,
-							...semantic(h, {
-								kind: "item",
-								title: context.organization?.name ?? "",
-								avatar: {
-									url: context.organization?.logoUrl ?? null,
-									initials: initialsOf(context.organization?.name ?? ""),
-								},
-								trailingSymbol: "chevron.up.chevron.down",
-								pin: "top",
-							}),
-							h.Class(
-								"group/switcher relative flex items-center justify-between gap-x-2 font-semibold outline-hidden text-fg/80 hover:text-fg transition-colors focus-visible:ring focus-visible:ring-primary",
-							),
-							h.Attribute("type", "button"),
-							h.Attribute("tabindex", "0"),
-							h.Attribute("data-react-aria-pressable", "true"),
-						],
-						[
-							h.div(
-								[h.Class("flex w-full items-center gap-1")],
-								[
-									h.span(
-										[h.Class("flex gap-x-2 font-medium text-sm/6")],
-										[
-											avatar(h, {
-												isSquare: true,
-												size: "sm",
-												src: context.organization?.logoUrl,
-												seed: context.organization?.name,
-											}),
-											context.organization?.name ?? "",
-										],
-									),
-									IconChevronUpDown(h, {
-										className:
-											"ml-auto size-4 text-muted-fg group-hover/switcher:text-fg transition-colors",
-									}),
-								],
-							),
-							overlay,
-						],
-					),
-				content: switcherContent(h, organizations),
-				className: "min-w-(--trigger-width)",
-			},
-			toParentMessage: toMenuMessage,
-		}),
+					],
+					[IconGear(h, { className: "size-5" })],
+				),
+			],
+		),
 	])
+
+const orgSwitcherMenu = <M>(
+	h: HtmlBuilder<M>,
+	menu: Menu.Model,
+	entries: ReadonlyArray<Menu.Entry>,
+	context: ShellContext,
+	organizations: ReadonlyArray<SwitcherOrg>,
+	toMenuMessage: (message: Menu.Message) => M,
+): Html =>
+	h.submodel({
+		slotId: ORG_SWITCHER_ID,
+		model: menu,
+		view: menuView,
+		viewInputs: {
+			entries,
+			// The servers, as a phone's own sheet: pick one, or make another.
+			native: {
+				presentation: "sheet",
+				title: "Servers",
+				symbols: {
+					...SWITCHER_SYMBOLS,
+					...Object.fromEntries(
+						organizations.map((organization) => [organization.id, "building.2"]),
+					),
+				},
+			},
+			toTrigger: (attributes, overlay) =>
+				h.button(
+					[
+						...attributes,
+						...semantic(h, {
+							kind: "item",
+							title: context.organization?.name ?? "",
+							avatar: {
+								url: context.organization?.logoUrl ?? null,
+								initials: initialsOf(context.organization?.name ?? ""),
+							},
+							trailingSymbol: "chevron.up.chevron.down",
+							pin: "top",
+						}),
+						h.Class(
+							"group/switcher relative flex items-center justify-between gap-x-2 font-semibold outline-hidden text-fg/80 hover:text-fg transition-colors focus-visible:ring focus-visible:ring-primary",
+						),
+						h.Attribute("type", "button"),
+						h.Attribute("tabindex", "0"),
+						h.Attribute("data-react-aria-pressable", "true"),
+					],
+					[
+						h.div(
+							[h.Class("flex w-full items-center gap-1")],
+							[
+								h.span(
+									[h.Class("flex gap-x-2 font-medium text-sm/6")],
+									[
+										avatar(h, {
+											isSquare: true,
+											size: "sm",
+											src: context.organization?.logoUrl,
+											seed: context.organization?.name,
+										}),
+										context.organization?.name ?? "",
+									],
+								),
+								IconChevronUpDown(h, {
+									className:
+										"ml-auto size-4 text-muted-fg group-hover/switcher:text-fg transition-colors",
+								}),
+							],
+						),
+						overlay,
+					],
+				),
+			content: switcherContent(h, organizations),
+			className: "min-w-(--trigger-width)",
+		},
+		toParentMessage: toMenuMessage,
+	})

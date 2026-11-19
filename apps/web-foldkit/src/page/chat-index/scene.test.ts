@@ -5,6 +5,7 @@ import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import { shared as memberShared } from "../chat/channel/fixtures.test-support"
 import type { Shared } from "../contract"
+import { AppRoute } from "../../route"
 import * as Tabs from "../../ui/tabs"
 import { PageOutMessage } from "../out-message"
 import { Message } from "./message"
@@ -51,7 +52,7 @@ describe("chat index scene", () => {
 	test("shows a loader until the channels arrive, then the public tab's channels", () => {
 		Scene.scene(
 			config,
-			Scene.given(init().model),
+			Scene.given(init(AppRoute.ChatIndex({ orgSlug: "hazel" })).model),
 			Scene.expect(Scene.role("heading", { name: "All channels" })).toBeAbsent(),
 			Scene.Subscription.emit(Message.UpdatedChannels({ groups })),
 			Scene.expect(Scene.role("heading", { name: "All channels" })).toExist(),
@@ -63,7 +64,7 @@ describe("chat index scene", () => {
 	test("an empty tab offers its action to admins, which asks the root for the legacy modal", () => {
 		Scene.scene(
 			sceneFor(admin),
-			Scene.given(init().model),
+			Scene.given(init(AppRoute.ChatIndex({ orgSlug: "hazel" })).model),
 			Scene.Subscription.emit(Message.UpdatedChannels({ groups })),
 			Scene.click(Scene.role("tab", { name: /Private/ })),
 			Scene.Command.resolve(Tabs.FocusTab, Tabs.Message.CompletedFocusTab()),
@@ -76,7 +77,7 @@ describe("chat index scene", () => {
 	test("without channel.create permission the empty state has no action", () => {
 		Scene.scene(
 			config,
-			Scene.given(init().model),
+			Scene.given(init(AppRoute.ChatIndex({ orgSlug: "hazel" })).model),
 			Scene.Subscription.emit(Message.UpdatedChannels({ groups })),
 			Scene.click(Scene.role("tab", { name: /Private/ })),
 			Scene.Command.resolve(Tabs.FocusTab, Tabs.Message.CompletedFocusTab()),

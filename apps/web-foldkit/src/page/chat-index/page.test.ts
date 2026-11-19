@@ -2,6 +2,7 @@ import { ChannelId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
+import { AppRoute } from "../../route"
 import * as Tabs from "../../ui/tabs"
 import { PageOutMessage } from "../out-message"
 import { type ChannelRow, groupChannels } from "./group"
@@ -73,7 +74,7 @@ describe("chat index update", () => {
 	test("selecting a tab stores it in the page Model", () => {
 		story(
 			update,
-			given(init().model),
+			given(init(AppRoute.ChatIndex({ orgSlug: "hazel" })).model),
 			message(
 				Message.GotTabsMessage({ message: Tabs.Message.SelectedTab({ index: 2, value: "dms" }) }),
 			),
@@ -85,7 +86,7 @@ describe("chat index update", () => {
 	test("empty-state buttons request the legacy modals", () => {
 		story(
 			update,
-			given(init().model),
+			given(init(AppRoute.ChatIndex({ orgSlug: "hazel" })).model),
 			message(Message.PressedCreateChannel()),
 			expectOutMessage(PageOutMessage.RequestedModal({ modal: { _tag: "NewChannel" } })),
 			message(Message.PressedStartConversation()),

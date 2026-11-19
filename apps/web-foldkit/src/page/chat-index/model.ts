@@ -53,6 +53,8 @@ export const Model = Schema.Struct({
 	/** `useUserPresence` for the other member of each single DM, keyed by user id. */
 	presence: Schema.Record(Schema.String, Presence),
 	tab: ChatIndexTab,
+	/** `ChatDms`: only the direct messages, without the channel tabs (a phone's DMs tab). */
+	isDmList: Schema.Boolean,
 	/** The tab list's roving focus; the selected tab is `tab`. */
 	tabs: Tabs.Model,
 })

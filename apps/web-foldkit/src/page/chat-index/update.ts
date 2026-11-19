@@ -1,13 +1,20 @@
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
+import type { RouteOf } from "../../route"
 import * as Tabs from "../../ui/tabs"
 import type { PageReturn } from "../contract"
 import { PageOutMessage } from "../out-message"
 import { Message } from "./message"
 import { Channels, ChatIndexTabs, type Model, TABS_ID } from "./model"
 
-export const init = (): PageReturn<Model, Message> => ({
-	model: { channels: Channels.Loading(), presence: {}, tab: "public", tabs: Tabs.init({ id: TABS_ID }) },
+export const init = (route: RouteOf<"ChatIndex" | "ChatDms">): PageReturn<Model, Message> => ({
+	model: {
+		channels: Channels.Loading(),
+		presence: {},
+		tab: route._tag === "ChatDms" ? "dms" : "public",
+		isDmList: route._tag === "ChatDms",
+		tabs: Tabs.init({ id: TABS_ID }),
+	},
 })
 
 export const update = (model: Model, message: Message): PageReturn<Model, Message> =>
