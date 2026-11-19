@@ -186,6 +186,7 @@ const threadItem = <M>(
 	h: HtmlBuilder<M>,
 	thread: SidebarThread,
 	isActive: boolean,
+	hasEmojiIcon: boolean,
 	isFirst: boolean,
 	isLast: boolean,
 	orgSlug: string,
@@ -210,8 +211,13 @@ const threadItem = <M>(
 					"relative ml-[26px] flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-fg-3 text-sm/5",
 					"outline-hidden hover:bg-wash hover:text-fg focus-visible:bg-wash",
 					"before:pointer-events-none before:absolute before:bottom-1/2 before:-left-[11px] before:w-2",
-					// The first branch reaches up through the channel row's bottom padding and the icon's inset to the glyph.
-					isFirst ? "before:-top-3" : "before:top-0",
+					// The first branch climbs into the channel row. Under the hashtag the line falls between its
+					// legs, so it reaches the lower bar; under an emoji it stops at the icon's bottom edge.
+					!isFirst
+						? "before:top-0"
+						: hasEmojiIcon
+							? "before:-top-2.5"
+							: "before:-top-[17px] sm:before:-top-4",
 					"before:rounded-bl-md before:border-fg/15 before:border-b-[1.5px] before:border-l-[1.5px]",
 					!isLast &&
 						"after:pointer-events-none after:absolute after:top-1/2 after:bottom-0 after:-left-[11px] after:border-fg/15 after:border-l-[1.5px]",
@@ -242,6 +248,8 @@ export const threadItems = <M>(
 	threads: ReadonlyArray<SidebarThread>,
 	activeThreadId: ChannelId | null,
 	orgSlug: string,
+	/** The channel shows an emoji instead of the hashtag, which changes where its branch meets it. */
+	hasEmojiIcon: boolean,
 ): Html =>
 	threads.length === 0
 		? h.empty
@@ -252,6 +260,7 @@ export const threadItems = <M>(
 						h,
 						thread,
 						thread.id === activeThreadId,
+						hasEmojiIcon,
 						index === 0,
 						index === threads.length - 1,
 						orgSlug,
