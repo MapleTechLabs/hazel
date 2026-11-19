@@ -52,7 +52,15 @@ import { Clock, Effect, Option, Schema } from "effect"
 import type { PullPage, UserMetric } from "../providers"
 import { addDays, dayOf } from "../time"
 import type { MapleApi } from "./http"
-import { activityOps, type MetricMap, metricDefinitionOps, metricMapOf, metricOps, queryOps } from "./map"
+import {
+	activityOps,
+	type MetricMap,
+	metricDefinitionOps,
+	metricMapOf,
+	metricOps,
+	queryOps,
+	UNREADABLE_QUERY_ROWS,
+} from "./map"
 import {
 	isEventName,
 	isMetricKey,
@@ -314,7 +322,8 @@ const metricsPage = Effect.fnUntraced(function* (
 
 /**
  * One page of a Maple query metric. Maple's tool refusing the statement (inside a 200: no HTTP
- * status, a retryable refusal) is the query's failure, recorded on it, and the walk moves on;
+ * status, a retryable refusal), or answering rows none of which Hazel can read, is the query's
+ * failure, recorded on it, and the walk moves on;
  * anything else (auth, rate limit, network, a 5xx, an answer Hazel cannot read) is the pull's, and
  * the run retries its days.
  */
@@ -331,12 +340,22 @@ const queryPage = Effect.fnUntraced(function* (
 			row: MapleQueryRow,
 		})
 		.pipe(
-			Effect.map((result) => ({
-				rows: result.rows.length,
-				more: result.truncated || result.rows.length >= PAGE_LIMIT,
-				...queryOps(result.rows, query.key, cursor.day),
-				metricRuns: [{ key: query.key, error: null }],
-			})),
+			Effect.map((result) => {
+				const mapped = queryOps(result.rows, query.key, cursor.day)
+				// Not one row Hazel can read: the query's fault, recorded, and the walk moves on.
+				if (result.rows.length > 0 && mapped.ops.length === 0)
+					return {
+						...NO_ROWS,
+						skipped: mapped.skipped,
+						metricRuns: [{ key: query.key, error: UNREADABLE_QUERY_ROWS }],
+					}
+				return {
+					rows: result.rows.length,
+					more: result.truncated || result.rows.length >= PAGE_LIMIT,
+					...mapped,
+					metricRuns: [{ key: query.key, error: null }],
+				}
+			}),
 			Effect.catchTag("CustomerProviderError", (error) =>
 				error.code === "provider" && error.httpStatus === null && error.retryable !== false
 					? Effect.succeed({

@@ -3,6 +3,7 @@ import { CustomerAccountId, CustomerOverviewLayoutId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
+import { formatCount } from "../../../../customers/format"
 import * as OverviewData from "../../../../customers/overview/data"
 import { LayoutRow, MetricDef, orderedLayouts } from "../../../../customers/overview/rows"
 import { AccountRow, MemberRow, SignalRow } from "../../../../customers/queries"
@@ -189,3 +190,27 @@ export const planNames = (model: Model): ReadonlyArray<string> =>
 
 export const tagNames = (model: Model): ReadonlyArray<string> =>
 	[...new Set((model.accounts ?? []).flatMap((account) => account.tags))].sort()
+
+// WHO IT GETS
+
+/**
+ * Who it gets, from the parts: "Matches 5 customers" when nothing else counts, else "Gets 4
+ * customers: 5 match, 2 kept by Observability, 1 pinned here".
+ */
+export const matchSummary = (result: Customers.LayoutDryRunResult): string => {
+	const customers = (count: number) => `${formatCount(count)} ${count === 1 ? "customer" : "customers"}`
+	const taken = result.takenBy.reduce((sum, entry) => sum + entry.count, 0)
+	const pinnedHere = Math.max(
+		0,
+		result.effectiveCount - (result.matchingCount - taken - result.pinnedElsewhere),
+	)
+	const parts = [
+		`${formatCount(result.matchingCount)} match`,
+		...result.takenBy.map((entry) => `${formatCount(entry.count)} kept by ${entry.name}`),
+		...(result.pinnedElsewhere === 0 ? [] : [`${formatCount(result.pinnedElsewhere)} pinned elsewhere`]),
+		...(pinnedHere === 0 ? [] : [`${formatCount(pinnedHere)} pinned here`]),
+	]
+	return parts.length === 1
+		? `Matches ${customers(result.matchingCount)}`
+		: `Gets ${customers(result.effectiveCount)}: ${parts.join(", ")}`
+}

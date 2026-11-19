@@ -89,14 +89,11 @@ export const MapleMetricRow = Schema.Struct({
 export type MapleMetricRow = typeof MapleMetricRow.Type
 
 /**
- * One row of a Maple query metric's SQL: a customer (its Clerk organization id) and its day's value.
- * A person wrote the SQL, so either may be missing or null (the row is skipped, not the page).
+ * One row of a Maple query metric's SQL, read as anything: a person wrote the SQL, so `account` and
+ * `value` may come back as any ClickHouse type. `queryRowOf` reads the ones Hazel can use; the rest
+ * are skipped, never a failure of the page (which would hold up the whole Maple pull).
  */
-export const MapleQueryRow = Schema.Struct({
-	account: Nullable(Schema.Union([Schema.String, Schema.Number])),
-	value: Nullable(WireCount),
-})
-export type MapleQueryRow = typeof MapleQueryRow.Type
+export const MapleQueryRow = Schema.Unknown
 
 /** `run_sql`'s typed output (its declared `outputSchema`), with the rows read as `row`. */
 const RunSqlOutput = <S extends Schema.ConstraintDecoder<unknown>>(row: S) =>

@@ -519,7 +519,6 @@ const tableSettings = (
 	const { rows } = widget
 	const groupMetrics =
 		rows._tag === "group" ? (model.metrics ?? []).filter((metric) => metric.group === rows.group) : []
-	const firstKey = model.metrics?.[0]?.key ?? "active_users"
 	return [
 		field(h, "Title", [
 			textInput(h, {
@@ -540,24 +539,7 @@ const tableSettings = (
 						{ key: "metrics", label: "Pick metrics" },
 					],
 					selected: rows._tag,
-					// Switching keeps what the table showed: a group's rows (less the left out) become the picks.
-					onSelect: (kind) => {
-						const picked = groupMetrics
-							.map((metric) => metric.key)
-							.filter((key) => !widget.exclude.includes(key))
-							.slice(0, 30)
-						return edited({
-							...widget,
-							exclude: [],
-							rows:
-								kind === "group"
-									? { _tag: "group", group: groups[0] ?? "Feature usage" }
-									: {
-											_tag: "metrics",
-											metricKeys: picked.length === 0 ? [firstKey] : picked,
-										},
-						})
-					},
+					onSelect: (kind) => Message.ClickedTableRows({ kind }),
 					className: "w-full *:flex-1 *:justify-center",
 				}),
 				rows._tag === "group"

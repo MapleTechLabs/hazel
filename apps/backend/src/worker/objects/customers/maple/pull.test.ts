@@ -444,6 +444,42 @@ describe("Maple pull: user metrics", () => {
 		expect(page.nextCursor).toBeNull()
 	})
 
+	it("skips rows it cannot read, and records a page of nothing but those on the query", async () => {
+		const cursor = encodeCursor({
+			day: "2026-06-15",
+			phase: "queries",
+			query: "logs",
+			until: "2026-06-15",
+		})
+		const mixed = organization({
+			metricDays: [
+				{ day: "2026-06-15", account: ORG_ACME, value: true },
+				{ day: "2026-06-15", account: ORG_GLOBEX, value: "12.5" },
+				{ day: "2026-06-15", account: ["x"], value: 3 },
+			],
+		})
+		const read = await at(pageOf(mixed, { cursor, metrics: [query("logs")] }))
+		expect(metricsOf([read])).toEqual([
+			{ day: "2026-06-15", account: ORG_GLOBEX, key: "logs", value: 12.5 },
+		])
+		expect(read.metricRuns).toEqual([{ key: "logs", error: null }])
+		const unreadable = organization({
+			metricDays: [
+				{ day: "2026-06-15", account: ORG_ACME, value: [1, 2] },
+				{ day: "2026-06-15", account: false, value: 1 },
+			],
+		})
+		const page = await at(pageOf(unreadable, { cursor, metrics: [query("logs"), query("spans")] }))
+		expect(page.ops).toEqual([])
+		expect(page.metricRuns).toEqual([
+			{ key: "logs", error: expect.stringMatching(/^Maple answered rows Hazel can't read/) },
+		])
+		// The walk goes on to the next query.
+		expect(decodeCursor(page.nextCursor ?? "")).toMatchObject({
+			value: { phase: "queries", query: "spans" },
+		})
+	})
+
 	it("fails the page, to retry its day, when Maple answers a query with an HTTP error", async () => {
 		const fake = organization({ metricDays: days, failingSql: "'logs'" })
 		const cursor = encodeCursor({

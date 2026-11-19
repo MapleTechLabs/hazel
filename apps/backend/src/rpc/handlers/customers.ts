@@ -1280,13 +1280,28 @@ const storeFailed = (cause: { readonly _tag: string }) =>
 
 /**
  * What the config schema cannot say: Maple needs names it can ask for in a query that fits
- * (`maple/pull.ts`).
+ * (`maple/pull.ts`), and an event it maps to a metric must not be one a product event metric
+ * already counts (the pull maps each event to one key).
  */
-const checkConfig = (config: ConnectionConfig) => {
-	if (config._tag !== "maple") return Effect.void
-	const problem = mapleConfigProblem(config)
-	return problem === null ? Effect.void : Effect.fail(invalid(problem))
-}
+const checkConfig = (config: ConnectionConfig) =>
+	Effect.gen(function* () {
+		if (config._tag !== "maple") return
+		const problem = mapleConfigProblem(config)
+		if (problem !== null) return yield* invalid(problem)
+		const counted = new Map<string, string>()
+		for (const definition of (yield* loadDefinitions).values()) {
+			if (definition.source?._tag !== "product_event") continue
+			for (const event of definition.source.events) counted.set(event.trim(), definition.name)
+		}
+		const taken = config.metricMappings.flatMap((mapping) => {
+			const owner = counted.get(mapping.event.trim())
+			return owner === undefined ? [] : [`${mapping.event.trim()} (counted by the metric ${owner})`]
+		})
+		if (taken.length > 0)
+			return yield* invalid(
+				`An event counts toward one metric only; remove these mappings or the metrics' events: ${taken.join(", ")}`,
+			)
+	})
 
 const credentialsError =
 	(provider: CustomerProvider) => (error: { readonly code: string; readonly message: string }) =>

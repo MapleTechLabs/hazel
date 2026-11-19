@@ -42,7 +42,6 @@ import {
 	isMetricKey,
 	type MapleActivityRow,
 	type MapleMetricRow,
-	type MapleQueryRow,
 	METRIC_PREFIX,
 	metricKeyOf,
 	type WireCount,
@@ -198,28 +197,48 @@ export const metricValueOf = (value: WireCount): number | null => {
 	return Number.isFinite(number) ? number : null
 }
 
+/** Recorded on a Maple query metric none of whose rows on a page Hazel could read. */
+export const UNREADABLE_QUERY_ROWS =
+	"Maple answered rows Hazel can't read: select `account` as text and `value` as a number"
+
+/**
+ * A query row's customer (its Clerk organization id, text or a number) and value (a number, or its
+ * digits); null for a row that does not hold them so (a Bool, an array, a missing column).
+ */
+export const queryRowOf = (row: unknown): { readonly account: string; readonly value: number } | null => {
+	if (typeof row !== "object" || row === null) return null
+	const { account, value } = row as Record<string, unknown>
+	const id =
+		typeof account === "string"
+			? account.trim()
+			: typeof account === "number" && Number.isFinite(account)
+				? String(account)
+				: ""
+	const number = typeof value === "number" || typeof value === "string" ? metricValueOf(value) : null
+	return id === "" || number === null ? null : { account: id, value: number }
+}
+
 /**
  * A page of a Maple query metric's rows (one day): each value under `key` for the account its Clerk
  * organization id names. No account reference is declared: an id Hazel does not know is counted
- * and skipped by ingest (a user's query, not a parked record). A row without an account or a
- * readable value is skipped here.
+ * and skipped by ingest (a user's query, not a parked record). A row Hazel cannot read is skipped
+ * here.
  */
-export const queryOps = (rows: ReadonlyArray<MapleQueryRow>, key: string, day: string): Mapped => {
+export const queryOps = (rows: ReadonlyArray<unknown>, key: string, day: string): Mapped => {
 	const ops: Array<IngestOp> = []
 	let skipped = 0
 	for (const row of rows) {
-		const account = row.account == null ? "" : String(row.account).trim()
-		const value = row.value == null ? null : metricValueOf(row.value)
-		if (account === "" || value === null) {
+		const read = queryRowOf(row)
+		if (read === null) {
 			skipped += 1
 			continue
 		}
 		ops.push({
 			_tag: "metric",
-			account: clerkRef(account),
+			account: clerkRef(read.account),
 			metricKey: key,
 			day,
-			value,
+			value: read.value,
 		} satisfies RecordMetric)
 	}
 	return { ops, skipped }

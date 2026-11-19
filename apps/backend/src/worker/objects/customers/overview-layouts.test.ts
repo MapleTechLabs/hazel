@@ -4,8 +4,13 @@
  * checks, windows and series over formulas, coverage, preview, layout CRUD, pins, reorder, the dry
  * run, and the assignment every change ends with.
  */
-import { DEFAULT_LAYOUT_WIDGETS, type IngestOp, type MetricDraft } from "@hazel/domain/customers"
-import { ConfigProvider, Effect, Layer, Option, type Scope } from "effect"
+import {
+	DEFAULT_CONNECTION_CONFIG,
+	DEFAULT_LAYOUT_WIDGETS,
+	type IngestOp,
+	type MetricDraft,
+} from "@hazel/domain/customers"
+import { Cause, ConfigProvider, Effect, type Exit, Layer, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { IntegrationEncryption } from "../../../services/integration-encryption"
 import { encryptSecrets, storeSecrets } from "./credentials"
@@ -653,11 +658,23 @@ describe("Customer Overview metrics: sources and their data", () => {
 				const format = () =>
 					world.rows(`SELECT format FROM customer_metric_definitions WHERE key = 'mrr'`)
 				expect(format()).toEqual([{ format: "money" }])
+				// An organization from before formats: its built-ins take theirs, once.
+				world.object.storage.db.prepare(`DELETE FROM _object_meta WHERE key = 'builtInFormats'`).run()
 				world.object.storage.db
 					.prepare(`UPDATE customer_metric_definitions SET format = 'number'`)
 					.run()
 				yield* world.object.run(ensureBuiltInFormats()).pipe(Effect.orDie)
 				expect(format()).toEqual([{ format: "money" }])
+				// An admin's choice afterwards stays, activation after activation.
+				ok(
+					yield* world.call(
+						"customers.metric.update",
+						{ metricKey: "mrr", metric: draft(null, { name: "MRR", format: "number" }) },
+						world.owner,
+					),
+				)
+				yield* world.object.run(ensureBuiltInFormats()).pipe(Effect.orDie)
+				expect(format()).toEqual([{ format: "number" }])
 			}),
 		))
 
@@ -679,6 +696,22 @@ describe("Customer Overview metrics: sources and their data", () => {
 				)
 				const mapped = yield* create("alerts_made", events("api_key_created", "alert_rule_created"))
 				expect(tagOf(mapped)).toBe("CustomersInvalidRequestError")
+				// A mapping on the connection may not take a metric's event either.
+				const refused = yield* world.call(
+					"customers.connection.update",
+					{
+						connectionId: world.connection("maple"),
+						config: {
+							...DEFAULT_CONNECTION_CONFIG.maple,
+							metricMappings: [{ event: "dashboard_created", metricKey: "made" }],
+						},
+					},
+					world.owner,
+				)
+				expect(tagOf(refused)).toBe("CustomersInvalidRequestError")
+				expect(String(Cause.squash((refused as Exit.Failure<unknown, unknown>).cause))).toContain(
+					"dashboard_created (counted by the metric A metric)",
+				)
 				// Its own events are its own.
 				ok(
 					yield* world.call(

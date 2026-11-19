@@ -56,6 +56,8 @@ export const Message = defineMessageUnion({
 	PressedMoveWidget: { step: Schema.Literals([-1, 1]) },
 	PressedDuplicateWidget: {},
 	PressedRemoveWidget: {},
+	/** A metric table's rows: a group, or hand-picked metrics (switching keeps what it showed). */
+	ClickedTableRows: { kind: Schema.Literals(["group", "metrics"]) },
 	/** A settings panel's edit: the selected widget as it is now. */
 	EditedWidget: { widget: Customers.OverviewWidget },
 

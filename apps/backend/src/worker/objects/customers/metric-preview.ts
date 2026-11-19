@@ -23,12 +23,12 @@ import { loadCredentials } from "./credentials"
 import { regionOfAccountId } from "./maple/adapter"
 import { makeMapleApi } from "./maple/http"
 import type { MapleApi } from "./maple/http"
-import { countOf, metricValueOf } from "./maple/map"
+import { countOf, queryRowOf, UNREADABLE_QUERY_ROWS } from "./maple/map"
 import { metricsSql, querySql, windowOf } from "./maple/pull"
 import { MapleMetricRow, MapleQueryRow } from "./maple/wire"
 import { DERIVED_METRICS } from "./facts"
 import { aggregate, type Definitions, metricSourceProblem } from "./metric-values"
-import type { CustomerProviderError } from "./providers"
+import { CustomerProviderError } from "./providers"
 import { inList } from "./sql"
 import { dayOf, dayRange } from "./time"
 
@@ -42,18 +42,28 @@ type DayRows = (
 	day: Day,
 ) => Effect.Effect<ReadonlyArray<{ readonly account: string; readonly value: number }>, CustomerProviderError>
 
-/** A Maple query's first page of a day, as the pull runs it. */
+/** A Maple query's first page of a day, as the pull runs it; not one row readable is its error. */
 const queryRows =
 	(sql: string): DayRows =>
 	(api, day) =>
-		Effect.map(
+		Effect.flatMap(
 			api.runSql({ step: STEP, sql: querySql(sql, 0), window: windowOf(day), row: MapleQueryRow }),
-			(result) =>
-				result.rows.flatMap((row) => {
-					const account = row.account == null ? "" : String(row.account).trim()
-					const value = row.value == null ? null : metricValueOf(row.value)
-					return account === "" || value === null ? [] : [{ account, value }]
-				}),
+			(result) => {
+				const rows = result.rows.flatMap((row) => {
+					const read = queryRowOf(row)
+					return read === null ? [] : [read]
+				})
+				return result.rows.length > 0 && rows.length === 0
+					? Effect.fail(
+							new CustomerProviderError({
+								code: "provider",
+								message: UNREADABLE_QUERY_ROWS,
+								httpStatus: null,
+								retryAfterMs: null,
+							}),
+						)
+					: Effect.succeed(rows)
+			},
 		)
 
 /** A day's counts of the events, as the pull's metric phase reads them (under one key). */
@@ -128,7 +138,9 @@ const mapleDaily = (rowsOf: DayRows, days: ReadonlyArray<Day>, client: HttpClien
 		Effect.catchTags({
 			CustomerProviderError: (error) =>
 				Effect.succeed(
-					error.code === "provider"
+					error.code === "provider" &&
+						error.httpStatus === null &&
+						error.message !== UNREADABLE_QUERY_ROWS
 						? "Maple could not run this query; check that it keeps the contract above"
 						: error.message,
 				),

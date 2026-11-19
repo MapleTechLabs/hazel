@@ -5,7 +5,7 @@ import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { failureMessage } from "~/lib/error-messages"
 import * as OverviewData from "../../../../customers/overview/data"
-import { groupKeysOf } from "../../../../customers/overview/rows"
+import { groupKeysOf, metricGroups } from "../../../../customers/overview/rows"
 import {
 	BLOCKS,
 	freshId,
@@ -534,7 +534,63 @@ const closePicker = (model: Model): Return =>
 
 // UPDATE
 
+/** What changes a layout, its draft or the order: admins only (members look, `shared.ts`). */
+const ADMIN_ONLY: ReadonlySet<Message["_tag"]> = new Set([
+	"PressedMoveLayout",
+	"PressedDeleteLayout",
+	"PressedConfirmDelete",
+	"PressedNewLayout",
+	"PressedCreateAndEdit",
+	"ChangedName",
+	"PressedSave",
+	"ClickedWidget",
+	"PressedMoveWidget",
+	"PressedDuplicateWidget",
+	"PressedRemoveWidget",
+	"EditedWidget",
+	"ClickedTableRows",
+	"PressedAddWidget",
+	"PressedAddBlock",
+	"PressedAddBuiltIn",
+	"PickedMetric",
+	"EditedRule",
+	"PressedRuleMetric",
+	"PressedMoveAbove",
+])
+
 export const update = (model: Model, message: Message, shared: Shared): Return =>
+	ADMIN_ONLY.has(message._tag) && !isCustomersAdmin(shared) ? { model } : updateOwn(model, message, shared)
+
+/**
+ * A table's rows switched between a group and picked metrics; the kind it already has changes
+ * nothing. The group's rows (less the left out) become the picks; the left out are cleared either way.
+ */
+const switchTableRows = (model: Model, shared: Shared, kind: "group" | "metrics"): Return => {
+	const widget = model.editor === null ? undefined : selectedWidget(model.editor)
+	if (widget?._tag !== "metric_table" || widget.rows._tag === kind) return { model }
+	const metrics = model.metrics ?? []
+	const rows: Customers.MetricTableRows =
+		kind === "group"
+			? { _tag: "group", group: metricGroups(metrics)[0] ?? "Feature usage" }
+			: {
+					_tag: "metrics",
+					metricKeys: (() => {
+						const { rows: current } = widget
+						const picked =
+							current._tag === "group"
+								? groupKeysOf(metrics)(current.group)
+										.filter((key) => !widget.exclude.includes(key))
+										.slice(0, 30)
+								: []
+						return picked.length === 0 ? [metrics[0]?.key ?? "active_users"] : picked
+					})(),
+				}
+	return editWidgets(model, shared, (widgets) =>
+		widgets.map((each) => (each.id === widget.id ? { ...widget, rows, exclude: [] } : each)),
+	)
+}
+
+const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedLayouts: ({ layouts }) => hydrate({ ...model, layouts }, shared),
 		UpdatedMetrics: ({ metrics }) => loadData({ ...model, metrics }, shared),
@@ -714,6 +770,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				null,
 			)
 		},
+		ClickedTableRows: ({ kind }) => switchTableRows(model, shared, kind),
 		EditedWidget: ({ widget }) => {
 			const before = model.editor?.draft?.widgets.find((each) => each.id === widget.id)
 			// A chart's opening range changed: the canvas opens it there.

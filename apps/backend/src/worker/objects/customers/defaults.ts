@@ -14,7 +14,8 @@ import {
 	type ViewFilters,
 } from "@hazel/domain/customers"
 import type { OrganizationId } from "@hazel/schema"
-import { Effect } from "effect"
+import { Effect, Option } from "effect"
+import { readObjectMeta, writeObjectMeta } from "../meta"
 import { defaultLayoutRow } from "./layouts"
 
 export const BUILT_IN_VIEWS: ReadonlyArray<{
@@ -88,11 +89,16 @@ export const installDefaults = Effect.fn("Customers.installDefaults")(function* 
 	)
 })
 
+const BUILT_IN_FORMATS_KEY = "builtInFormats"
+
 /**
  * Built-in definitions installed before they had a format read as plain numbers (MRR among them):
- * each takes its own. Idempotent; run on every activation.
+ * each takes its own, once per organization (`BUILT_IN_FORMATS_KEY`), so an admin's later choice
+ * stays.
  */
 export const ensureBuiltInFormats = Effect.fn("Customers.ensureBuiltInFormats")(function* () {
+	if (Option.isSome(yield* readObjectMeta(BUILT_IN_FORMATS_KEY))) return
+	yield* writeObjectMeta(BUILT_IN_FORMATS_KEY, "1")
 	const db = yield* Database.Database
 	for (const metric of BUILT_IN_METRICS) {
 		yield* db.run(

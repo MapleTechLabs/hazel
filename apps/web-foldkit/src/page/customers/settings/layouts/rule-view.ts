@@ -12,7 +12,7 @@ import { button } from "../../../../ui/button"
 import { input } from "../../../../ui/input"
 import * as Popover from "../../../../ui/popover"
 import { Message } from "./message"
-import { draftOrder, type Editor, layoutById, type Model, planNames, tagNames } from "./model"
+import { draftOrder, type Editor, layoutById, matchSummary, type Model, planNames, tagNames } from "./model"
 import { chipClass, numberInput } from "./panel-view"
 
 /** "Who gets this layout" (Wonder `was`): the rule's conditions, who it matches, and who earlier layouts keep. */
@@ -287,14 +287,6 @@ const conditionEditor = (
 }
 
 // WHO IT MATCHES
-
-/** "Matches 6 customers", or "Gets 0 of 6 matching customers" when earlier layouts or pins keep some. */
-export const matchSummary = (result: Customers.LayoutDryRunResult): string => {
-	const customers = (count: number) => (count === 1 ? "customer" : "customers")
-	return result.effectiveCount === result.matchingCount
-		? `Matches ${formatCount(result.matchingCount)} ${customers(result.matchingCount)}`
-		: `Gets ${formatCount(result.effectiveCount)} of ${formatCount(result.matchingCount)} matching ${customers(result.matchingCount)}`
-}
 
 const matches = (h: H, model: Model, editor: Editor): ReadonlyArray<Html> => {
 	const result = Option.getOrUndefined(AsyncData.getData(editor.dryRun))

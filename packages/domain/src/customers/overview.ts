@@ -447,8 +447,12 @@ export const BUILT_IN_METRICS = [
 
 export const isBuiltInMetric = (key: string): boolean => BUILT_IN_METRICS.some((metric) => metric.key === key)
 
-/** Keys a user metric may not take: the built-ins, and `new` (the editor's own path). */
-export const isReservedMetricKey = (key: string): boolean => key === "new" || isBuiltInMetric(key)
+/**
+ * Keys a user metric may not take: the built-ins, `new` (the editor's own path), and the prefixes
+ * sources namespace their own keys under (`maple.`, `autumn.`).
+ */
+export const isReservedMetricKey = (key: string): boolean =>
+	key === "new" || isBuiltInMetric(key) || /^(maple|autumn)\./.test(key)
 
 /** What a new organization's default layout shows: what the Overview showed before layouts. */
 export const DEFAULT_LAYOUT_WIDGETS: ReadonlyArray<OverviewWidget> = [

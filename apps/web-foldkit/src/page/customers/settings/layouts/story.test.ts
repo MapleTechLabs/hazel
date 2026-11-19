@@ -13,7 +13,7 @@ import {
 import { AppRoute } from "../../../../route"
 import { makeShared, memberWithRole } from "../../../../test/pages-fixtures"
 import { Message } from "./message"
-import { draftOrder, isDirty, listOrder, type Model } from "./model"
+import { draftOrder, isDirty, listOrder, matchSummary, type Model } from "./model"
 import { init, type LayoutsRoute, routeChanged, update } from "./update"
 
 // `ui/aria/*` names `document` when its modules load; the update loop never touches it.
@@ -193,11 +193,45 @@ describe("layouts: the editor", () => {
 			return { ...step, commands: [...(current.commands ?? []), ...(step.commands ?? [])] }
 		}, opened)
 		expect(names(synced)).not.toContain("FetchLayoutDryRun")
-		const edited = update(synced.model, Message.ChangedName({ value: "Mine" }), member).model
-		expect(names(update(edited, Message.PressedSave(), member))).toEqual([])
-		expect(
-			update(edited, Message.ClickedWidget({ widgetId: "mrr" }), member).model.editor?.selectedId,
-		).toBeNull()
+		const draft = synced.model.editor?.draft
+		const tried = [
+			Message.ChangedName({ value: "Mine" }),
+			Message.PressedAddBlock({ key: "context" }),
+			Message.PressedAddWidget({ kind: "stat" }),
+			Message.EditedRule({ rule: { match: "any", conditions: [] } }),
+			Message.ClickedWidget({ widgetId: "mrr" }),
+		].reduce((current, next) => update(current, next, member).model, synced.model)
+		expect(tried.editor?.draft).toEqual(draft)
+		expect(tried.editor?.selectedId).toBeNull()
+		expect(names(update(tried, Message.PressedSave(), member))).toEqual([])
+	})
+
+	test("a table's rows switch keeps what it showed; the kind it has changes nothing", () => {
+		const table = run(synced(newRoute("blank")), [Message.PressedAddWidget({ kind: "metric_table" })])
+		const tableOf = (model: Model) => {
+			const widget = model.editor?.draft?.widgets[0]
+			return widget?._tag === "metric_table" ? widget : undefined
+		}
+		const leftOut = run(table, [
+			Message.EditedWidget({ widget: { ...tableOf(table)!, exclude: ["mcp_tool_calls"] } }),
+		])
+		expect(run(leftOut, [Message.ClickedTableRows({ kind: "group" })])).toEqual(leftOut)
+		const picked = run(leftOut, [Message.ClickedTableRows({ kind: "metrics" })])
+		expect(tableOf(picked)?.rows).toEqual({
+			_tag: "metrics",
+			metricKeys: METRIC_DEFS.filter(
+				(metric) => metric.group === "Feature usage" && metric.key !== "mcp_tool_calls",
+			).map((metric) => metric.key),
+		})
+		expect(tableOf(picked)?.exclude).toEqual([])
+		expect(run(picked, [Message.ClickedTableRows({ kind: "metrics" })])).toEqual(picked)
+	})
+
+	test("who it gets reads from its parts", () => {
+		expect(matchSummary({ ...result, takenBy: [], effectiveCount: 9 })).toBe("Matches 9 customers")
+		expect(matchSummary({ ...result, pinnedElsewhere: 1, effectiveCount: 6 })).toBe(
+			"Gets 6 customers: 9 match, 4 kept by Observability, 1 pinned elsewhere, 2 pinned here",
+		)
 	})
 
 	test("one reorder at a time", () => {

@@ -32,12 +32,13 @@ import {
 	isDefaultEditor,
 	isDirty,
 	isValidDraft,
+	matchSummary,
 	type Model,
 	previewAccount,
 	selectedWidget,
 } from "./model"
 import { panel, SPAN_LABEL, spanOf, TYPE_LABEL, widgetTitle } from "./panel-view"
-import { matchSummary, ruleChipsView, rulePopover } from "./rule-view"
+import { ruleChipsView, rulePopover } from "./rule-view"
 
 /** The layout editor (Wonder `yez`, `bbw`, `gau`, `was`): top bar, who gets it, the canvas, the panel. */
 
@@ -327,7 +328,7 @@ const toolbar = (h: H, widget: Customers.OverviewWidget, index: number, count: n
 
 const toOverviewData = (message: OverviewData.Message) => Message.GotOverviewDataMessage({ message })
 
-const emptyCanvas = (h: H, accountName: string): Html =>
+const emptyCanvas = (h: H, accountName: string, isAdmin: boolean): Html =>
 	h.div(
 		[
 			h.Class(
@@ -348,23 +349,29 @@ const emptyCanvas = (h: H, accountName: string): Html =>
 			h.p(
 				[h.Class("max-w-sm text-muted-fg text-sm")],
 				[
-					`Add a widget from the panel, or start with a block. Each widget shows ${accountName}'s real data as you build.`,
+					isAdmin
+						? `Add a widget from the panel, or start with a block. Each widget shows ${accountName}'s real data as you build.`
+						: "An admin can add widgets to this layout.",
 				],
 			),
-			h.div(
-				[h.Class("flex flex-wrap justify-center gap-2")],
-				BLOCKS.slice(0, 2).map((block) =>
-					button(
-						h,
-						{
-							intent: "outline",
-							size: "sm",
-							onPress: Message.PressedAddBlock({ key: block.key }),
-						},
-						[IconPlus(h, icon), block.name],
-					),
-				),
-			),
+			...(isAdmin
+				? [
+						h.div(
+							[h.Class("flex flex-wrap justify-center gap-2")],
+							BLOCKS.slice(0, 2).map((block) =>
+								button(
+									h,
+									{
+										intent: "outline",
+										size: "sm",
+										onPress: Message.PressedAddBlock({ key: block.key }),
+									},
+									[IconPlus(h, icon), block.name],
+								),
+							),
+						),
+					]
+				: []),
 		],
 	)
 
@@ -387,7 +394,7 @@ const canvas = (
 						: "Loading the preview…",
 				],
 			)
-		if (draft.widgets.length === 0) return emptyCanvas(h, account.name)
+		if (draft.widgets.length === 0) return emptyCanvas(h, account.name, isAdmin)
 		const builtIn: BuiltInContext = {
 			orgSlug: shared.orgSlug ?? "",
 			nowMs: shared.nowMs,

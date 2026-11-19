@@ -29,8 +29,8 @@ export interface MapleEvent {
 /** One customer's day of a `metrics_sum` series: what a Maple query metric's SQL sums. */
 export interface MapleMetricDay {
 	readonly day: string
-	readonly account: string
-	readonly value: number
+	readonly account: unknown
+	readonly value: unknown
 }
 
 export interface FakeMapleState {
@@ -132,7 +132,10 @@ const rowsOf = (fake: FakeMapleState, sql: string, start: string, end: string) =
 		return fake.metricDays
 			.filter((row) => row.day === start.slice(0, 10))
 			.map((row) => ({ account: row.account, value: row.value }))
-			.sort((a, b) => (a.account < b.account ? -1 : a.account > b.account ? 1 : 0))
+			.sort((a, b) => {
+				const [left, right] = [JSON.stringify(a.account), JSON.stringify(b.account)]
+				return left < right ? -1 : left > right ? 1 : 0
+			})
 			.slice(offset, offset + limit)
 	}
 	const allowlist = allowlistOf(sql)
