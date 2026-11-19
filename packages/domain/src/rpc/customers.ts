@@ -559,11 +559,11 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	/**
 	 * Name one of a customer's provider records (an account ref: a Clerk organization, a Stripe
 	 * customer, …) by its environment, e.g. `Production`, or clear it with null. A merged customer's
-	 * organizations show by it. Never overwritten by a sync.
+	 * organizations show by it. Blank clears it too. Never overwritten by a sync.
 	 */
 	write(
 		"customers.ref.setEnvironment",
-		{ refId: CustomerExternalRefId, environment: Schema.NullOr(NonEmptyText(60)) },
+		{ refId: CustomerExternalRefId, environment: Schema.NullOr(Text(60)) },
 		Tx,
 		CustomersNotFoundError,
 	),

@@ -1058,7 +1058,8 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		PressedNameEnvironment: ({ refId }) => {
 			const detail = Option.getOrNull(AsyncData.getData(model.detail))
 			const ref = detail?.refs.find((candidate) => candidate.id === refId)
-			if (ref === undefined) return { model }
+			// A save on its way closes the dialog when it lands: no other one opens meanwhile.
+			if (ref === undefined || model.isSavingEnvironment) return { model }
 			return {
 				model: modifyFields(model, {
 					environmentModal: (modal) => Modal.open(modal).model,

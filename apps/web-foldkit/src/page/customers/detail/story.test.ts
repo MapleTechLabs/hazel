@@ -503,6 +503,13 @@ describe("customer page: notes", () => {
 		expect(saving.commands?.map((command) => command.name)).toEqual([SetRecordEnvironment.name])
 		expect(saving.commands?.[0]?.args).toMatchObject({ refId: eu!.id, environment: "Europe" })
 		expect(commandNames(update(saving.model, Message.SubmittedEnvironment(), shared))).toEqual([])
+		// Closed while saving: another record's dialog waits for the save.
+		expect(
+			run(saving.model, [
+				Message.GotEnvironmentModalMessage({ message: Modal.Message.RequestedClose() }),
+				Message.PressedNameEnvironment({ refId: production!.id }),
+			]).environmentRefId,
+		).toBe(eu!.id)
 		const saved = run(saving.model, [
 			Message.SucceededSetEnvironment({ accountId: beta.id, refId: eu!.id, environment: "Europe" }),
 		])
