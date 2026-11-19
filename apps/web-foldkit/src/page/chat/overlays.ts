@@ -30,7 +30,7 @@ export const ViewerUrlImage = Schema.Struct({
 export type ViewerUrlImage = typeof ViewerUrlImage.Type
 
 /** The image viewer's toolbar actions (`ImageViewerAction`). */
-export const ViewerAction = Schema.Literals(["download", "copyUrl", "openInBrowser"])
+export const ViewerAction = Schema.Literals(["download", "copyImage", "copyUrl", "openInBrowser"])
 export type ViewerAction = typeof ViewerAction.Type
 
 /** The kit Popover's id (and DOM slot) of a message's author popover. */
@@ -53,7 +53,8 @@ export type Trigger = typeof Trigger.Type
 export const OpenOverlay = defineTaggedUnion({
 	None: {},
 	MoreMenu: { messageId: MessageId, menu: Menu.Model },
-	ContextMenu: { messageId: MessageId, menu: Menu.Model },
+	/** `imageUrl`: the attachment image it opened on, which "Copy Image" copies. */
+	ContextMenu: { messageId: MessageId, menu: Menu.Model, imageUrl: Schema.NullOr(Schema.String) },
 	/** The profile popover open from a message's avatar or one of its mentions (`key`). */
 	Popover: { messageId: MessageId, key: Schema.String, popover: Popover.Model },
 	/** `urlImages` are a GIF or tweet photos (`ViewerImage` of type "url"); otherwise the attachments. */
@@ -170,7 +171,12 @@ export const Message = defineMessageUnion({
 	GotToolbarMessage: { message: Toolbar.Message },
 	GotTooltipMessage: { message: TooltipHost.Message },
 	GotMoreMenuMessage: { messageId: MessageId, message: Menu.Message },
-	RightClickedMessage: { messageId: MessageId, offset: Schema.Number, crossOffset: Schema.Number },
+	RightClickedMessage: {
+		messageId: MessageId,
+		offset: Schema.Number,
+		crossOffset: Schema.Number,
+		imageUrl: Schema.NullOr(Schema.String),
+	},
 	GotContextMenuMessage: { message: Menu.Message },
 	/**
 	 * A choice from the system menu a native shell opens on a long press of the message
@@ -286,8 +292,15 @@ export const moreMenuEntries = (facts: MessageFacts, messageId: MessageId): Read
 	Menu.item("pin"),
 ]
 
+/** The context menu's item on an attachment image (not a `MessageAction`: it needs the image). */
+export const COPY_IMAGE = "copy-image"
+
 /** A message's context menu; the words are what the system's menu shows (`textValue`). */
-export const contextMenuEntries = (facts: MessageFacts, messageId: MessageId): ReadonlyArray<Menu.Entry> => [
+export const contextMenuEntries = (
+	facts: MessageFacts,
+	messageId: MessageId,
+	imageUrl: string | null,
+): ReadonlyArray<Menu.Entry> => [
 	Menu.separator,
 	Menu.item("add-reaction", { textValue: "Add Reaction" }),
 	Menu.separator,
@@ -296,6 +309,7 @@ export const contextMenuEntries = (facts: MessageFacts, messageId: MessageId): R
 	...(facts.canStartThread(messageId) ? [Menu.item("thread", { textValue: "Reply in Thread" })] : []),
 	Menu.separator,
 	Menu.item("copy", { textValue: "Copy Text" }),
+	...(imageUrl === null ? [] : [Menu.item(COPY_IMAGE, { textValue: "Copy Image" })]),
 	Menu.item("pin", { textValue: facts.isPinned(messageId) ? "Unpin Message" : "Pin Message" }),
 	Menu.separator,
 	...(facts.isOwnMessage(messageId)
@@ -472,7 +486,7 @@ const updateOverlays = (model: Model, message: Message): OverlaysReturn =>
 				result.outMessage,
 			)
 		},
-		RightClickedMessage: ({ messageId, offset, crossOffset }) => {
+		RightClickedMessage: ({ messageId, offset, crossOffset, imageUrl }) => {
 			const menu = Menu.init({ id: "message-context-menu", anchor: "Pointer" })
 			return withChild(
 				model,
@@ -480,7 +494,7 @@ const updateOverlays = (model: Model, message: Message): OverlaysReturn =>
 				{
 					isCurrent: true,
 					isOpen: isMenuOpen,
-					toOpen: (opened) => OpenOverlay.ContextMenu({ messageId, menu: opened }),
+					toOpen: (opened) => OpenOverlay.ContextMenu({ messageId, menu: opened, imageUrl }),
 					wrap: (inner) => Message.GotContextMenuMessage({ message: inner }),
 				},
 			)
@@ -489,16 +503,28 @@ const updateOverlays = (model: Model, message: Message): OverlaysReturn =>
 			const current = contextMenuOf(model)
 			if (current === null) return { model }
 			const result = Menu.update(current.menu, menuMessage)
-			return withSelection(
-				withChild(model, result, {
-					isCurrent: true,
-					isOpen: isMenuOpen,
-					toOpen: (menu) => OpenOverlay.ContextMenu({ messageId: current.messageId, menu }),
-					wrap: (inner) => Message.GotContextMenuMessage({ message: inner }),
-				}),
-				current.messageId,
-				result.outMessage,
-			)
+			const next = withChild(model, result, {
+				isCurrent: true,
+				isOpen: isMenuOpen,
+				toOpen: (menu) =>
+					OpenOverlay.ContextMenu({
+						messageId: current.messageId,
+						menu,
+						imageUrl: current.imageUrl,
+					}),
+				wrap: (inner) => Message.GotContextMenuMessage({ message: inner }),
+			})
+			const chosen = result.outMessage
+			if (chosen?._tag === "SelectedItem" && chosen.key === COPY_IMAGE && current.imageUrl !== null)
+				return {
+					...next,
+					outMessage: OutMessage.RequestedViewerAction({
+						action: "copyImage",
+						url: current.imageUrl,
+						fileName: "",
+					}),
+				}
+			return withSelection(next, current.messageId, result.outMessage)
 		},
 		ChoseNativeAction: ({ messageId, value }) => {
 			if (value.startsWith(NATIVE_REACTION))

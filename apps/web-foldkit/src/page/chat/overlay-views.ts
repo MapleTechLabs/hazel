@@ -46,12 +46,7 @@ export const trackHoverAttribute = (h: H) =>
 					PointerEnteredMessage: ({ messageId }) =>
 						Overlays.Message.PointerEnteredMessage({ messageId }),
 					PointerLeftList: () => Overlays.Message.PointerLeftList(),
-					RightClickedMessage: ({ messageId, offset, crossOffset }) =>
-						Overlays.Message.RightClickedMessage({
-							messageId,
-							offset,
-							crossOffset,
-						}),
+					RightClickedMessage: (clicked) => Overlays.Message.RightClickedMessage(clicked),
 				}),
 			),
 		),

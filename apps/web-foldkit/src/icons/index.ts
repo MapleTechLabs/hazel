@@ -1966,6 +1966,45 @@ export const IconExternalLink = <Message>(h: HtmlBuilder<Message>, options: Icon
 		],
 	)
 
+export const IconLink = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
+	icon(
+		h,
+		{
+			height: "18",
+			width: "18",
+			"data-slot": "icon",
+			viewBox: "0 0 18 18",
+			xmlns: "http://www.w3.org/2000/svg",
+		},
+		options,
+		[
+			h.g(
+				[
+					h.Attribute("fill", "none"),
+					h.Attribute("stroke", "currentColor"),
+					h.Attribute("stroke-linecap", "round"),
+					h.Attribute("stroke-linejoin", "round"),
+					h.Attribute("stroke-width", "1.5"),
+				],
+				[
+					h.path([
+						h.Attribute(
+							"d",
+							"M8.5 4.75L9.75 3.5C11.13 2.12 13.37 2.12 14.75 3.5C16.13 4.88 16.13 7.12 14.75 8.5L13.25 10C11.87 11.38 9.63 11.38 8.25 10",
+						),
+					]),
+					h.path([
+						h.Attribute(
+							"d",
+							"M9.5 13.25L8.25 14.5C6.87 15.88 4.63 15.88 3.25 14.5C1.87 13.12 1.87 10.88 3.25 9.5L4.75 8C6.13 6.62 8.37 6.62 9.75 8",
+						),
+						h.Attribute("opacity", "0.4"),
+					]),
+				],
+			),
+		],
+	)
+
 export const IconMaximize = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
 	icon(
 		h,

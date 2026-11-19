@@ -128,6 +128,7 @@ const contextMenuContent =
 		if (key === "edit") return contextItem(h, key, "Edit Message", icon(IconEdit))
 		if (key === "thread") return contextItem(h, key, "Reply in Thread", icon(IconThread))
 		if (key === "copy") return contextItem(h, key, "Copy Text", icon(IconCopy))
+		if (key === Overlays.COPY_IMAGE) return contextItem(h, key, "Copy Image", icon(IconCopy))
 		if (key === "pin")
 			return contextItem(
 				h,
@@ -172,7 +173,7 @@ const rowLongPress = (
 	}
 	const items = Menu.nativeMenuItems(
 		UNSELECTED_MENU,
-		Overlays.contextMenuEntries(facts, id),
+		Overlays.contextMenuEntries(facts, id, null),
 		{ symbols: nativeSymbols(isPinned) },
 		contextMenuContent(h, isPinned),
 	)
@@ -294,7 +295,11 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 						model: contextMenu.menu,
 						view: contextMenuView,
 						viewInputs: {
-							entries: Overlays.contextMenuEntries(factsOf(model), row.message.id),
+							entries: Overlays.contextMenuEntries(
+								factsOf(model),
+								row.message.id,
+								contextMenu.imageUrl,
+							),
 							toTrigger: render,
 							content: contextMenuContent(h, factsOf(model).isPinned(row.message.id)),
 							className: "min-w-56",

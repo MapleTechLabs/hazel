@@ -9,6 +9,7 @@ import {
 	IconCopy,
 	IconDownload,
 	IconExternalLink,
+	IconLink,
 	IconMinus,
 	IconPlus,
 } from "../icons"
@@ -30,7 +31,7 @@ import { followSlide, originPlate, releaseOrigin, VIEWER_ATTRIBUTE } from "./vie
  * viewer (`viewer/morph.ts`). The Model holds what is open and which image; zoom is the view's own.
  */
 
-export type ImageViewerAction = "download" | "copyUrl" | "openInBrowser"
+export type ImageViewerAction = "download" | "copyImage" | "copyUrl" | "openInBrowser"
 
 /** A viewer image; an embed's has a caption (its title and description) under it. */
 export interface ImageViewerImage extends ChatAttachmentView {
@@ -48,7 +49,7 @@ export interface ImageViewerInputs<M> {
 	readonly createdAtMs: number
 	readonly toClose: () => M
 	readonly toSelect: (index: number) => M
-	/** Toolbar side effects (legacy downloads, copies the URL with a toast, or opens a tab). */
+	/** Toolbar side effects (downloads, copies the image or its URL with a toast, or opens a tab). */
 	readonly toAction?: (action: ImageViewerAction, image: ChatAttachmentView) => M
 }
 
@@ -458,7 +459,8 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 					[undefined, "Zoom in", IconPlus(h, { className: "size-4" }), "in"],
 				] as const)),
 		[act("download"), "Download", IconDownload(h, { className: "size-4" })],
-		[act("copyUrl"), "Copy image URL", IconCopy(h, { className: "size-4" })],
+		[act("copyImage"), "Copy image", IconCopy(h, { className: "size-4" })],
+		[act("copyUrl"), "Copy image URL", IconLink(h, { className: "size-4" })],
 		[act("openInBrowser"), "Open in browser", IconExternalLink(h, { className: "size-4" })],
 		[inputs.toClose(), "Close", IconClose(h, { className: "size-4" })],
 	]
