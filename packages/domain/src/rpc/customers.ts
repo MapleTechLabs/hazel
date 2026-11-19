@@ -259,6 +259,21 @@ export class CustomerReadRpcs extends RpcGroup.make(
 		CustomersNotFoundError,
 	),
 
+	/** Per stored metric: how many accounts had a value above 0 in the last 30 days, and its latest day. */
+	read(
+		"customers.metrics.coverage",
+		{},
+		Schema.Struct({
+			metrics: Schema.Array(
+				Schema.Struct({
+					metricKey: Schema.String,
+					accountsWithData: Schema.Int,
+					lastDay: Schema.NullOr(Schema.String),
+				}),
+			),
+		}),
+	),
+
 	/** Who a draft layout rule matches at `position` (a new layout: first), and who earlier layouts take. */
 	read(
 		"customers.layout.dryRun",
