@@ -993,40 +993,60 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 											],
 											[sourceLogo(h, ref.provider), LINK_LABEL[ref.provider]],
 										),
-										h.span(
-											[h.Class("flex shrink-0 items-center gap-2")],
-											[
-												...(context.isAdmin
-													? [
-															button(
-																h,
-																{
-																	intent: "plain",
-																	size: "xs",
-																	className: "-my-1",
-																	onPress: Message.PressedNameEnvironment({
-																		refId: ref.id,
-																	}),
-																},
-																[
-																	ref.environment === null
-																		? "Name environment"
-																		: "Rename",
-																],
-															),
-														]
-													: []),
-												...recordLink(h, ref),
-											],
-										),
+										...recordLink(h, ref),
 									],
 								),
-								...(ref.environment === null
+								// Its environment, and for an admin the button that names it: on its own row,
+								// so the record's title keeps one line in the narrow sidebar.
+								...(ref.environment === null && !context.isAdmin
 									? []
 									: [
-											h.span(
+											h.div(
 												[h.Class("flex min-w-0 items-center gap-2 pt-0.5")],
-												[badge(h, { intent: "secondary" }, [ref.environment])],
+												[
+													...(ref.environment === null
+														? []
+														: [
+																badge(
+																	h,
+																	{
+																		intent: "secondary",
+																		className: "min-w-0",
+																	},
+																	[
+																		h.span(
+																			[h.Class("truncate")],
+																			[ref.environment],
+																		),
+																	],
+																),
+															]),
+													...(context.isAdmin
+														? [
+																button(
+																	h,
+																	{
+																		intent: "plain",
+																		size: "xs",
+																		// Beside the badge on the right; alone, under the title.
+																		className:
+																			ref.environment === null
+																				? "-mx-2 -my-1 shrink-0"
+																				: "-my-1 ml-auto shrink-0",
+																		onPress:
+																			Message.PressedNameEnvironment({
+																				refId: ref.id,
+																			}),
+																	},
+																	[
+																		ref.environment === null
+																			? "Name environment"
+																			: "Rename",
+																	],
+																),
+															]
+														: []),
+												],
 											),
 										]),
 								...(ref.name === null

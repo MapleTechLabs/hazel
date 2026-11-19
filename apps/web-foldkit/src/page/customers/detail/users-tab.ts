@@ -190,8 +190,11 @@ const lastSeen = (h: HtmlBuilder<Message>, contact: Customers.Contact, nowMs: nu
 	return h.div(
 		[h.Class("flex flex-col")],
 		[
-			h.span([h.Class("text-fg")], [formatRelative(contact.lastSeenAt, now)]),
-			h.span([h.Class("text-muted-fg text-xs")], [formatDate(contact.lastSeenAt, { now })]),
+			h.span([h.Class("whitespace-nowrap text-fg")], [formatRelative(contact.lastSeenAt, now)]),
+			h.span(
+				[h.Class("whitespace-nowrap text-muted-fg text-xs")],
+				[formatDate(contact.lastSeenAt, { now })],
+			),
 		],
 	)
 }
@@ -315,12 +318,20 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 									{
 										key: "environment",
 										label: "Environment",
+										widthClass: "w-44",
 										hideClass: "max-md:hidden",
 										cell: (row: Customers.ContactRow) =>
 											h.span(
 												[h.Class("flex flex-wrap gap-1")],
 												environmentsOf(row).map((ref) =>
-													badge(h, { intent: "secondary" }, [recordName(ref)]),
+													badge(
+														h,
+														{
+															intent: "secondary",
+															className: "whitespace-nowrap",
+														},
+														[recordName(ref)],
+													),
 												),
 											),
 									},

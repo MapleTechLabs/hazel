@@ -3,9 +3,11 @@ import {
 	CustomerAccountId,
 	CustomerContactId,
 	CustomerEventId,
+	CustomerExternalRefId,
 	CustomerInvoiceId,
 	CustomerNoteId,
 	CustomerSubscriptionId,
+	OrganizationMemberId,
 } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -33,11 +35,13 @@ import {
 
 // `/lab/customers/pages/customer`: the real customer page over Acme Robotics. Its update runs; every
 // read answers from the fixtures below, the mutations apply to the rows at once and go nowhere.
-// `?tab=` picks the tab, `?state=` the Wonder artboard's data.
+// `?tab=` picks the tab, `?state=` the Wonder artboard's data, `?as=admin` signs in as an admin
+// (feature flags, naming a record's environment).
 
 const STATES = ["default", "payment-failed", "excluded-health", "loading", "not-found"] as const
 const State = Schema.Literals(STATES)
-const Flags = Schema.Struct({ tab: CustomerTab, state: State })
+const ROLES = ["member", "admin"] as const
+const Flags = Schema.Struct({ tab: CustomerTab, state: State, as: Schema.Literals(ROLES) })
 
 const DAY = 86_400_000
 const ago = (days: number) => new Date(NOW.getTime() - days * DAY)
@@ -97,7 +101,13 @@ const CONTACTS: ReadonlyArray<Customers.ContactRow> = PEOPLE.map(
 				day: dayOf(29 - day),
 				value: seenDays !== null && 29 - day >= seenDays ? (day * 7 + index * 3) % 9 : 0,
 			})),
-			organizationIds: [],
+			// Acme holds two Clerk organizations (merged): some users are in one, some in both.
+			organizationIds:
+				index % 4 === 0
+					? ["org_2acmeRobotics", "org_2acmeRoboticsEU"]
+					: index % 3 === 2
+						? ["org_2acmeRoboticsEU"]
+						: ["org_2acmeRobotics"],
 		}
 	},
 )
@@ -350,6 +360,14 @@ const state = (): typeof State.Type => {
 	return STATES.find((entry) => entry === value) ?? "default"
 }
 
+const shared = () =>
+	new URLSearchParams(window.location.search).get("as") === "admin"
+		? {
+				...labShared,
+				member: { id: Schema.decodeSync(OrganizationMemberId)(uuid(36, 1)), role: "admin" as const },
+			}
+		: labShared
+
 const page = <A>(items: ReadonlyArray<A>, cursor: unknown, size = 10) => {
 	const offset = typeof cursor === "string" ? Number(cursor) : 0
 	return {
@@ -421,6 +439,12 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 			})
 		case "CreateCustomerNote":
 			return null
+		case "SetRecordEnvironment":
+			return Message.SucceededSetEnvironment({
+				accountId: accountId(),
+				refId: Schema.decodeUnknownSync(CustomerExternalRefId)(args.refId),
+				environment: (args.environment as string | null) ?? null,
+			})
 		default:
 			return command.name.startsWith("Update") ||
 				command.name.startsWith("Delete") ||
@@ -433,7 +457,7 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 
 /** Runs the page's update and answers its reads from the fixtures (a new note joins the list). */
 const step = (model: Model, message: Message): { model: Model; commands: ReadonlyArray<AnyCommand> } => {
-	const result = update(model, message, labShared)
+	const result = update(model, message, shared())
 	return settle(result.model, result.commands ?? [])
 }
 
@@ -478,7 +502,7 @@ const routeOf = (tab: CustomerTab) =>
 	})
 
 const initial = (flags: typeof Flags.Type) => {
-	const started = init(routeOf(flags.tab), labShared)
+	const started = init(routeOf(flags.tab), shared())
 	const live: Model = {
 		...started.model,
 		accounts:
@@ -510,6 +534,7 @@ const labView = (model: Model, h: HtmlBuilder<Message>): Html => {
 			switches: [
 				{ name: "tab", values: CustomerTab.literals, current: params.get("tab") ?? "overview" },
 				{ name: "state", values: STATES, current: params.get("state") ?? "default" },
+				{ name: "as", values: ROLES, current: params.get("as") ?? "member" },
 			],
 		},
 		[
@@ -520,7 +545,7 @@ const labView = (model: Model, h: HtmlBuilder<Message>): Html => {
 						slotId: "customer",
 						model,
 						view,
-						viewInputs: { shared: labShared },
+						viewInputs: { shared: shared() },
 						toParentMessage: (message: Message) => message,
 					}),
 				],
@@ -535,16 +560,17 @@ export const lab = defineLabWithFlags("Customer", {
 	flags: Effect.all({
 		tab: queryParam("tab", CustomerTab.literals, "overview"),
 		state: queryParam("state", STATES, "default"),
+		as: queryParam("as", ROLES, "member"),
 	}),
 	init: initial,
 	// Tabs navigate in the app; here they switch in place. Prev/next stay on Acme.
 	update: (model: Model, message: Message) => {
 		if (message._tag === "ClickedTab") {
-			const result = routeChanged(model, routeOf(message.tab), labShared)
+			const result = routeChanged(model, routeOf(message.tab), shared())
 			return settle(result.model, result.commands ?? [])
 		}
 		if (message._tag === "PressedAddNote") {
-			const result = routeChanged(model, routeOf("notes"), labShared)
+			const result = routeChanged(model, routeOf("notes"), shared())
 			return settle(result.model, result.commands ?? [])
 		}
 		return step(model, message)
