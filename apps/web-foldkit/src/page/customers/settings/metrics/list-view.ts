@@ -3,6 +3,7 @@ import * as AsyncData from "foldkit/asyncData"
 import { Option } from "effect"
 import { twMerge } from "tailwind-merge"
 import { formatCount, formatDate, formatRelative } from "../../../../customers/format"
+import { metricGroups } from "../../../../customers/overview/rows"
 import { SUGGESTED_METRICS } from "../../../../customers/suggested-metrics"
 import { IconChartBar, IconPlus, IconWarning } from "../../../../icons"
 import { AppRoute, hrefOf } from "../../../../route"
@@ -183,11 +184,8 @@ const sectionsOf = (
 	metrics: ReadonlyArray<MetricRow>,
 ): ReadonlyArray<readonly [title: string, metrics: ReadonlyArray<MetricRow>]> => {
 	const own = metrics.filter((metric) => !metric.builtIn)
-	const groups = [...new Set(own.flatMap((metric) => (metric.group === null ? [] : [metric.group])))].sort(
-		(a, b) => a.localeCompare(b),
-	)
 	const sections: ReadonlyArray<readonly [string, ReadonlyArray<MetricRow>]> = [
-		...groups.map((group) => [group, own.filter((metric) => metric.group === group)] as const),
+		...metricGroups(own).map((group) => [group, own.filter((metric) => metric.group === group)] as const),
 		["Other", own.filter((metric) => metric.group === null)],
 		["Built-in", metrics.filter((metric) => metric.builtIn)],
 	]

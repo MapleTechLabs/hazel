@@ -10,7 +10,7 @@ import { Effect, Fiber, Option, Redacted, Schema } from "effect"
 import { HttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { describe, expect, it } from "vitest"
-import type { PullPage } from "../providers"
+import type { PullPage, UserMetric } from "../providers"
 import {
 	DAY_ONE,
 	DAY_TWO,
@@ -22,7 +22,7 @@ import {
 	USER_ADA,
 } from "./fixtures"
 import { makeMapleApi } from "./http"
-import { backfillCursor, decodeCursor, encodeCursor, firstDayOf, pullPage, type UserMetric } from "./pull"
+import { backfillCursor, decodeCursor, encodeCursor, firstDayOf, pullPage } from "./pull"
 import { fakeMapleHttpClient, type FakeMapleState, type MapleEvent, makeFakeMaple, originOf } from "./testing"
 import { MapleActivityRow, RunSqlAnswer, RUN_SQL_ROW_CAP } from "./wire"
 
@@ -408,8 +408,11 @@ describe("Maple pull: user metrics", () => {
 		expect(metricsOf(pages).filter((metric) => metric.key === "dashboards")).toEqual([
 			{ day: "2026-06-14", account: ORG_ACME, key: "dashboards", value: 1 },
 		])
-		// Each account is declared before its values, like the other phases' groups.
-		expect(pages[2]?.ops[0]).toMatchObject({ _tag: "account", externalId: ORG_GLOBEX })
+		// A query declares no account: its values name the Clerk organization, and ingest skips an
+		// id no customer has rather than parking it.
+		expect(pages[2]?.ops.every((op) => op._tag === "metric" && op.account.provider === "clerk")).toBe(
+			true,
+		)
 		expect(pages[2]?.metricRuns).toEqual([{ key: "logs", error: null }])
 	})
 
@@ -426,17 +429,31 @@ describe("Maple pull: user metrics", () => {
 		expect(pages.at(-1)?.nextCursor).toBeNull()
 	})
 
-	it("goes on to the next query when the cursor's was deleted mid-walk", async () => {
+	it("goes on to the next query, from its first row, when the cursor's was deleted mid-walk", async () => {
 		const fake = organization({ metricDays: days })
+		const cursor = encodeCursor({
+			day: "2026-06-15",
+			phase: "queries",
+			query: "logs",
+			offset: 100,
+			until: "2026-06-15",
+		})
+		const page = await at(pageOf(fake, { cursor, metrics: [query("spans")] }))
+		expect(fake.calls[0]?.sql).toMatch(/OFFSET 0$/)
+		expect(page.metricRuns).toEqual([{ key: "spans", error: null }])
+		expect(page.nextCursor).toBeNull()
+	})
+
+	it("fails the page, to retry its day, when Maple answers a query with an HTTP error", async () => {
+		const fake = organization({ metricDays: days, failingSql: "'logs'" })
 		const cursor = encodeCursor({
 			day: "2026-06-15",
 			phase: "queries",
 			query: "logs",
 			until: "2026-06-15",
 		})
-		const page = await at(pageOf(fake, { cursor, metrics: [query("spans")] }))
-		expect(page.metricRuns).toEqual([{ key: "spans", error: null }])
-		expect(page.nextCursor).toBeNull()
+		const error = await at(Effect.flip(pageOf(fake, { cursor, metrics: [query("logs")] })))
+		expect(error).toMatchObject({ code: "provider", httpStatus: 503 })
 	})
 
 	it("backfills one metric: its phase only, every day of the lookback", async () => {

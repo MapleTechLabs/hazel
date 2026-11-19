@@ -1,4 +1,4 @@
-import type * as Customers from "@hazel/domain/customers"
+import * as Customers from "@hazel/domain/customers"
 
 /**
  * Starting points for a new layout (the "New layout" dialog) and the editor's blocks: small groups of
@@ -141,8 +141,6 @@ export const STARTERS: ReadonlyArray<Starter> = [
 
 export const starterOf = (key: string): Starter | undefined => STARTERS.find((starter) => starter.key === key)
 
-const BUILT_IN_METRICS = new Set(["active_users", "active_users_30d", "mrr", "health_score"])
-
 /** The metrics a starter names that are not Hazel's built-ins. */
 export const starterMetricCount = (starter: Starter): number =>
 	[
@@ -157,7 +155,7 @@ export const starterMetricCount = (starter: Starter): number =>
 							: [],
 			),
 		),
-	].filter((key) => !BUILT_IN_METRICS.has(key)).length
+	].filter((key) => !Customers.isBuiltInMetric(key)).length
 
 /** A block: widgets the editor's library adds together. */
 export interface Block {

@@ -10,7 +10,8 @@ import * as Field from "../../../../ui/field"
 import * as Modal from "../../../../ui/modal"
 import type { Shared } from "../../../contract"
 import { type Crumb, isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
-import { editabilityOf, errorsOf, groupsOf, layoutsUsing, previewSourceOf } from "./form"
+import { metricGroups } from "../../../../customers/overview/rows"
+import { editabilityOf, errorsOf, formulasUsing, layoutsUsing, previewSourceOf } from "./form"
 import { Message } from "./message"
 import { type Editor, metricByKey, type MetricForm, type MetricRow, type Model } from "./model"
 import { card, choice, FORMAT_SEGMENTS, keyText, sourceLabelOf, textInput } from "./parts"
@@ -29,11 +30,18 @@ const AGGREGATION_SEGMENTS: ReadonlyArray<Segment<Customers.MetricAggregation>> 
 	{ key: "last", label: "Latest" },
 ]
 
-const AGGREGATION_HELP = {
-	sum: "The days add up: 30 days of spans is their total.",
-	max: "The highest day counts: peak seats over 30 days.",
-	last: "The latest day with a value counts: the plan's current size.",
-} as const satisfies Record<Customers.MetricAggregation, string>
+/** What "combine days" means for this metric, in its own words (its unit, else its name). */
+const aggregationHelp = (form: MetricForm): string => {
+	const what = form.unit.trim() || form.name.trim().toLowerCase() || "values"
+	switch (form.aggregation) {
+		case "sum":
+			return `The days add up: 30 days of ${what} is their total.`
+		case "max":
+			return `The highest day counts: the peak ${what} of the last 30 days.`
+		case "last":
+			return `The latest day with a value counts: the most recent ${what}.`
+	}
+}
 
 const catalogHref = (shared: Shared) =>
 	hrefOf(AppRoute.CustomersSettingsMetrics({ orgSlug: shared.orgSlug ?? "" }))
@@ -177,7 +185,7 @@ const windowCard = (h: H, form: MetricForm, isAdmin: boolean): Html =>
 				selected: form.aggregation,
 				onSelect: (aggregation) => Message.ClickedAggregation({ aggregation }),
 				isDisabled: !isAdmin,
-				help: AGGREGATION_HELP[form.aggregation],
+				help: aggregationHelp(form),
 			}),
 		],
 	)
@@ -220,7 +228,36 @@ const footer = (h: H, editor: Editor, canDelete: boolean, hasErrors: boolean): H
 		],
 	)
 
-const deleteModal = (h: H, model: Model, form: MetricForm, usedIn: number): Html =>
+const names = (rows: ReadonlyArray<{ readonly name: string }>): string =>
+	rows.map((row) => row.name).join(", ")
+
+/** What deleting takes with it: the layouts showing the metric, the formulas computing from it. */
+const deleteDescription = (
+	usedIn: ReadonlyArray<{ readonly name: string }>,
+	formulas: ReadonlyArray<{ readonly name: string }>,
+): string =>
+	[
+		"Its daily values are deleted too.",
+		...(usedIn.length === 0
+			? []
+			: [
+					`${usedIn.length === 1 ? "Layout" : "Layouts"} ${names(usedIn)} ${usedIn.length === 1 ? "shows" : "show"} it; their widgets will say it isn't set up.`,
+				]),
+		...(formulas.length === 0
+			? []
+			: [
+					`${formulas.length === 1 ? "Formula" : "Formulas"} ${names(formulas)} ${formulas.length === 1 ? "uses" : "use"} it and will have no value.`,
+				]),
+		"This can't be undone.",
+	].join(" ")
+
+const deleteModal = (
+	h: H,
+	model: Model,
+	form: MetricForm,
+	usedIn: ReadonlyArray<{ readonly name: string }>,
+	formulas: ReadonlyArray<{ readonly name: string }>,
+): Html =>
 	Modal.controlledModal(h, {
 		model: model.deleteModal,
 		toParentMessage: (message) => Message.GotDeleteModalMessage({ message }),
@@ -229,7 +266,7 @@ const deleteModal = (h: H, model: Model, form: MetricForm, usedIn: number): Html
 		toContent: (closeAttributes) => [
 			dialogHeader(h, {
 				title: { id: Modal.titleId(model.deleteModal.id), text: `Delete ${form.name}?` },
-				description: `Its daily values are deleted too.${usedIn === 0 ? "" : ` ${usedIn === 1 ? "1 layout shows" : `${usedIn} layouts show`} it; their widgets will say it isn't set up.`} This can't be undone.`,
+				description: deleteDescription(usedIn, formulas),
 			}),
 			dialogFooter(h, [
 				dialogClose(h, closeAttributes, ["Cancel"]),
@@ -284,7 +321,13 @@ export const editorView = (h: H, model: Model, editor: Editor, shared: Shared): 
 						h.div(
 							[h.Class("flex min-w-0 flex-col gap-5")],
 							[
-								basicsCard(h, { form, errors, isNew, isAdmin, groups: groupsOf(metrics) }),
+								basicsCard(h, {
+									form,
+									errors,
+									isNew,
+									isAdmin,
+									groups: metricGroups(metrics),
+								}),
 								sourceCard(h, { form, errors, metric, metrics, editability, isAdmin }),
 								...(editability === "full" ? [windowCard(h, form, isAdmin)] : []),
 								...(isAdmin
@@ -319,7 +362,7 @@ export const editorView = (h: H, model: Model, editor: Editor, shared: Shared): 
 					],
 				),
 			]),
-			...(isNew ? [] : [deleteModal(h, model, form, usedIn.length)]),
+			...(isNew ? [] : [deleteModal(h, model, form, usedIn, formulasUsing(metrics, form.key))]),
 		],
 	)
 }

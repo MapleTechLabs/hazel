@@ -12,7 +12,7 @@ import { button } from "../../../../ui/button"
 import { input } from "../../../../ui/input"
 import * as Popover from "../../../../ui/popover"
 import { Message } from "./message"
-import { draftOrder, type Editor, layoutById, type Model, planNames, ruleOrder, tagNames } from "./model"
+import { draftOrder, type Editor, layoutById, type Model, planNames, tagNames } from "./model"
 import { chipClass, numberInput } from "./panel-view"
 
 /** "Who gets this layout" (Wonder `was`): the rule's conditions, who it matches, and who earlier layouts keep. */
@@ -288,6 +288,14 @@ const conditionEditor = (
 
 // WHO IT MATCHES
 
+/** "Matches 6 customers", or "Gets 0 of 6 matching customers" when earlier layouts or pins keep some. */
+export const matchSummary = (result: Customers.LayoutDryRunResult): string => {
+	const customers = (count: number) => (count === 1 ? "customer" : "customers")
+	return result.effectiveCount === result.matchingCount
+		? `Matches ${formatCount(result.matchingCount)} ${customers(result.matchingCount)}`
+		: `Gets ${formatCount(result.effectiveCount)} of ${formatCount(result.matchingCount)} matching ${customers(result.matchingCount)}`
+}
+
 const matches = (h: H, model: Model, editor: Editor): ReadonlyArray<Html> => {
 	const result = Option.getOrUndefined(AsyncData.getData(editor.dryRun))
 	if (result === undefined)
@@ -306,20 +314,11 @@ const matches = (h: H, model: Model, editor: Editor): ReadonlyArray<Html> => {
 					),
 				]
 			: [h.p([h.Class("text-muted-fg text-sm")], ["Checking who it matches…"])]
-	const order = ruleOrder(model)
-	// The first layout above that keeps some of them (pins aside).
-	const overlap = result.takenBy.flatMap((entry) => {
-		const layout = order.find((each) => each.id === entry.layoutId)
-		return layout === undefined ? [] : [{ ...entry, layoutId: layout.id }]
-	})[0]
+	// The first layout above that keeps some of them.
+	const overlap = result.takenBy[0]
 	const names = result.matching.slice(0, 5)
 	return [
-		h.span(
-			[h.Class("font-medium text-fg text-sm")],
-			[
-				`Matches ${formatCount(result.matchingCount)} ${result.matchingCount === 1 ? "customer" : "customers"}`,
-			],
-		),
+		h.span([h.Class("font-medium text-fg text-sm")], [matchSummary(result)]),
 		...(names.length === 0
 			? []
 			: [
@@ -386,6 +385,16 @@ const matches = (h: H, model: Model, editor: Editor): ReadonlyArray<Html> => {
 						],
 					),
 				]),
+		...(result.pinnedElsewhere === 0
+			? []
+			: [
+					h.p(
+						[h.Class("text-muted-fg text-xs")],
+						[
+							`${formatCount(result.pinnedElsewhere)} ${result.pinnedElsewhere === 1 ? "is" : "are"} pinned to another layout.`,
+						],
+					),
+				]),
 	]
 }
 
@@ -400,6 +409,23 @@ const orderLine = (model: Model, editor: Editor): string => {
 // THE POPOVER
 
 /** The meta bar's "Applies when" chips, opening the rule's popover. */
+/** The rule as chips, read-only: what members see. */
+export const ruleChipsView = (h: H, model: Model, draft: Customers.LayoutDraft): Html => {
+	const chips = ruleChips(draft.rule, model.metrics ?? [], model.currency)
+	return h.div(
+		[h.Class("flex flex-wrap items-center gap-2 px-2 text-sm")],
+		[
+			h.span([h.Class("text-muted-fg")], ["Applies when"]),
+			...(chips.length === 0 ? ["Every customer"] : chips).map((text) =>
+				h.span(
+					[h.Key(text), h.Class("rounded-md border border-border px-1.5 py-0.5 text-fg text-xs")],
+					[text],
+				),
+			),
+		],
+	)
+}
+
 export const rulePopover = (h: H, model: Model, editor: Editor, draft: Customers.LayoutDraft): Html => {
 	const { rule } = draft
 	const chips = ruleChips(rule, model.metrics ?? [], model.currency)

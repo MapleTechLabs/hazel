@@ -1,7 +1,8 @@
 import * as Customers from "@hazel/domain/customers"
 import { Match, Option } from "effect"
+import { groupKeysOf, type LayoutRow } from "../../../../customers/overview/rows"
 import type { MetricSourceKind } from "../../../../route"
-import type { BuilderForm, LayoutRow, MetricForm, MetricRow } from "./model"
+import type { BuilderForm, MetricForm, MetricRow } from "./model"
 
 /**
  * The editor's form: built from a synced metric, a suggested draft or nothing, checked field by
@@ -172,6 +173,8 @@ export const errorsOf = (
 	if (context.isNew) {
 		if (!Customers.METRIC_KEY_PATTERN.test(form.key))
 			errors.key = "Lower-case letters, digits, _ . and -, starting with a letter"
+		else if (Customers.isReservedMetricKey(form.key))
+			errors.key = "Hazel uses this key itself; pick another"
 		else if (context.metrics.some((metric) => metric.key === form.key))
 			errors.key = "Another metric has this key"
 	}
@@ -251,15 +254,16 @@ export const layoutsUsing = (
 	metrics: ReadonlyArray<MetricRow>,
 	key: string,
 ): ReadonlyArray<LayoutRow> => {
-	const groupKeys = (group: string) =>
-		metrics.filter((metric) => metric.group === group).map((metric) => metric.key)
+	const groupKeys = groupKeysOf(metrics)
 	return layouts.filter((layout) =>
 		layout.widgets.some((widget) => Customers.widgetMetricKeys(widget, groupKeys).includes(key)),
 	)
 }
 
-/** The groups the org's metrics use, by name: the group field's suggestions. */
-export const groupsOf = (metrics: ReadonlyArray<MetricRow>): ReadonlyArray<string> =>
-	[...new Set(metrics.flatMap((metric) => (metric.group === null ? [] : [metric.group])))].sort((a, b) =>
-		a.localeCompare(b),
-	)
+/** The formula metrics whose expression names `key`. */
+export const formulasUsing = (metrics: ReadonlyArray<MetricRow>, key: string): ReadonlyArray<MetricRow> =>
+	metrics.filter((metric) => {
+		if (metric.source?._tag !== "formula") return false
+		const parsed = Customers.parseFormula(metric.source.expression)
+		return parsed.ok && parsed.keys.includes(key)
+	})

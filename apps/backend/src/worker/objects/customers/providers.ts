@@ -37,6 +37,7 @@ import type {
 	ConnectionConfig,
 	CustomerProvider,
 	IngestOp,
+	MetricSource,
 	SweepEntityType,
 	SyncProgress,
 } from "@hazel/domain/customers"
@@ -47,7 +48,6 @@ import { FetchHttpClient } from "effect/http"
 import { makeAutumnAdapter } from "./autumn/adapter"
 import { makeClerkAdapter } from "./clerk/adapter"
 import { makeMapleAdapter } from "./maple/adapter"
-import type { UserMetric } from "./maple/pull"
 import { makeStripeAdapter } from "./stripe/adapter"
 import { CustomerProviderError, CustomerWebhookRejectedError } from "./provider-errors"
 
@@ -59,6 +59,12 @@ export interface ProviderCredentials {
 	readonly config: ConnectionConfig
 	/** The provider account the connection reads (what `validate` returned); null while validating. */
 	readonly externalAccountId: string | null
+}
+
+/** A user-defined metric a pull reads (Maple): its key and how it is made. */
+export interface UserMetric {
+	readonly key: string
+	readonly source: MetricSource
 }
 
 export interface PullPage {

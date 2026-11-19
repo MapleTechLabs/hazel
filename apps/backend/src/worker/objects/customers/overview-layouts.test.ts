@@ -5,10 +5,16 @@
  * run, and the assignment every change ends with.
  */
 import { DEFAULT_LAYOUT_WIDGETS, type IngestOp, type MetricDraft } from "@hazel/domain/customers"
-import { Effect, type Scope } from "effect"
+import { ConfigProvider, Effect, Layer, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
+import { IntegrationEncryption } from "../../../services/integration-encryption"
+import { encryptSecrets, storeSecrets } from "./credentials"
+import { ensureBuiltInFormats } from "./defaults"
+import { CustomerIngest } from "./ingest"
+import { runDuePullsWith } from "./jobs"
 import { ensureDefaultLayout } from "./layouts"
 import { decodeCursor } from "./maple/pull"
+import { type CustomerProviderAdapter, CustomerProviders, type UserMetric } from "./providers"
 import { type CustomersWorld, makeCustomersWorld, ok, tagOf } from "./test-kit"
 import { addDays, dayOf } from "./time"
 
@@ -472,6 +478,7 @@ describe("Customer Overview layouts", () => {
 					matchingCount: 1,
 					matching: [{ accountId: ids.Acme, name: "Acme" }],
 					takenBy: [],
+					pinnedElsewhere: 0,
 					effectiveCount: 1,
 				})
 				expect(ok(yield* dryRun(5))).toMatchObject({
@@ -491,6 +498,25 @@ describe("Customer Overview layouts", () => {
 					matchingCount: 1,
 					effectiveCount: 1,
 				})
+				// Pins aside from the rules: one to another layout is counted on its own, one to this
+				// layout comes with it whether it matches or not.
+				ok(yield* pin(ids.Acme, everyone.id))
+				expect(ok(yield* dryRun())).toMatchObject({
+					matchingCount: 1,
+					takenBy: [],
+					pinnedElsewhere: 1,
+					effectiveCount: 0,
+				})
+				expect(
+					ok(
+						yield* world.call(
+							"customers.layout.dryRun",
+							{ layoutId: observability.id, rule: tagRule("observability") },
+							world.owner,
+						),
+					),
+				).toMatchObject({ matchingCount: 1, pinnedElsewhere: 1, effectiveCount: 1 })
+				ok(yield* pin(ids.Acme, null))
 
 				// The default's rule is its fallback's: empty, whatever the draft says.
 				const fallback = world.rows<{ id: string }>(
@@ -593,6 +619,215 @@ describe("Customer Overview layouts", () => {
 					takenBy: [{ name: "Heavy", count: 1 }],
 					effectiveCount: 1,
 				})
+			}),
+		))
+})
+
+/** The credentials' encryption with a test key. */
+const encryption = IntegrationEncryption.layer.pipe(
+	Layer.provide(
+		ConfigProvider.layer(
+			ConfigProvider.fromUnknown({ INTEGRATION_ENCRYPTION_KEY: Buffer.alloc(32).toString("base64") }),
+		),
+	),
+)
+
+/** A stored timestamp (`YYYY-MM-DD HH:MM:SS.sss` or ISO) as a `Date`. */
+const instant = (value: string) => new Date(value.includes("T") ? value : `${value.replace(" ", "T")}Z`)
+
+describe("Customer Overview metrics: sources and their data", () => {
+	it("reserves Hazel's keys and gives the built-ins their format, also for older organizations", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				for (const key of ["new", "mrr"])
+					expect(
+						tagOf(
+							yield* world.call(
+								"customers.metric.create",
+								{ key, metric: draft(query("a")) },
+								world.owner,
+							),
+						),
+					).toBe("CustomersInvalidRequestError")
+				const format = () =>
+					world.rows(`SELECT format FROM customer_metric_definitions WHERE key = 'mrr'`)
+				expect(format()).toEqual([{ format: "money" }])
+				world.object.storage.db
+					.prepare(`UPDATE customer_metric_definitions SET format = 'number'`)
+					.run()
+				yield* world.object.run(ensureBuiltInFormats()).pipe(Effect.orDie)
+				expect(format()).toEqual([{ format: "money" }])
+			}),
+		))
+
+	it("counts each product event toward one metric only", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET config = json_set(config, '$.metricMappings', json(?)) WHERE provider = 'maple'`,
+					)
+					.run(JSON.stringify([{ event: "alert_rule_created", metricKey: "alerts" }]))
+				const events = (...names: Array<string>) => draft({ _tag: "product_event", events: names })
+				const create = (key: string, metric: MetricDraft) =>
+					world.call("customers.metric.create", { key, metric }, world.owner)
+				ok(yield* create("dashboards", events("dashboard_created")))
+				expect(tagOf(yield* create("made", events("dashboard_created")))).toBe(
+					"CustomersInvalidRequestError",
+				)
+				const mapped = yield* create("alerts_made", events("api_key_created", "alert_rule_created"))
+				expect(tagOf(mapped)).toBe("CustomersInvalidRequestError")
+				// Its own events are its own.
+				ok(
+					yield* world.call(
+						"customers.metric.update",
+						{ metricKey: "dashboards", metric: events("dashboard_created", "dashboard_shared") },
+						world.owner,
+					),
+				)
+			}),
+		))
+
+	it("skips Maple values for an unknown customer or a deleted metric instead of parking or redefining them", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* accounts(world, ["Acme"])
+				ok(
+					yield* world.call(
+						"customers.metric.create",
+						{ key: "spans", metric: draft(query("a")) },
+						world.owner,
+					),
+				)
+				const report = yield* world.ingest("maple", [
+					{
+						_tag: "metric",
+						account: { provider: "clerk", externalId: "org_Acme" },
+						metricKey: "spans",
+						day: TODAY,
+						value: 5,
+					},
+					{
+						_tag: "metric",
+						account: { provider: "clerk", externalId: "org_nobody" },
+						metricKey: "spans",
+						day: TODAY,
+						value: 5,
+					},
+					{
+						_tag: "metric",
+						account: { provider: "clerk", externalId: "org_Acme" },
+						metricKey: "deleted",
+						day: TODAY,
+						value: 5,
+					},
+				])
+				expect(report.outcomes.map((outcome: { _tag: string }) => outcome._tag)).toEqual([
+					"Created",
+					"Rejected",
+					"Rejected",
+				])
+				expect(world.rows(`SELECT count(*) AS n FROM customer_unmatched_records`)).toEqual([{ n: 0 }])
+				expect(
+					world.rows(`SELECT key FROM customer_metric_definitions WHERE key = 'deleted'`),
+				).toEqual([])
+			}),
+		))
+
+	it("backfills a metric alone: a newer backfill or a delete ends the older, and the schedule stays", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const maple = world.connection("maple")
+				const runs = () =>
+					world.rows<{ status: string; cursor: string | null; error: string | null }>(
+						`SELECT status, cursor, error FROM customer_sync_runs WHERE connectionId = ? ORDER BY startedAt, rowid`,
+						maple,
+					)
+				ok(
+					yield* world.call(
+						"customers.metric.create",
+						{ key: "spans", metric: draft(query("a")) },
+						world.owner,
+					),
+				)
+				ok(
+					yield* world.call(
+						"customers.metric.update",
+						{ metricKey: "spans", metric: draft(query("b")) },
+						world.owner,
+					),
+				)
+				expect(runs().map((row) => row.status)).toEqual(["failed", "running"])
+				expect(runs()[0]!.error).toContain("spans was changed or deleted")
+				ok(
+					yield* world.call(
+						"customers.metric.create",
+						{ key: "logs", metric: draft(query("logs")) },
+						world.owner,
+					),
+				)
+				ok(yield* world.call("customers.metric.delete", { metricKey: "logs" }, world.owner))
+				expect(runs().map((row) => row.status)).toEqual(["failed", "running", "failed"])
+
+				// The pull runs the backfill: the connection's own watermark and schedule do not move.
+				const lastSuccessAt = new Date(Date.now() - 10 * 60_000)
+				world.object.storage.db
+					.prepare(`UPDATE customer_connections SET lastSuccessAt = ? WHERE id = ?`)
+					.run(lastSuccessAt.toISOString(), maple)
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							yield* storeSecrets(maple, yield* encryptSecrets("maple_ak_test", null))
+						}).pipe(Effect.provide(encryption)),
+					)
+					.pipe(Effect.orDie)
+				const asked: Array<{ cursor: string | null; metrics: ReadonlyArray<UserMetric> }> = []
+				const adapter: CustomerProviderAdapter = {
+					provider: "maple",
+					validate: () =>
+						Effect.succeed({ externalAccountId: "org:us", externalAccountName: null }),
+					webhook: () => Effect.succeed([]),
+					pull: ({ cursor, metrics }) => {
+						asked.push({ cursor, metrics })
+						return Effect.succeed({
+							ops: [],
+							nextCursor: null,
+							progress: { step: "queries", done: 0, total: null },
+							metricRuns: [{ key: "spans", error: null }],
+						})
+					},
+					pullIntervalMs: 60 * 60_000,
+				}
+				const services = Layer.mergeAll(
+					CustomerIngest.layer,
+					encryption,
+					Layer.succeed(
+						CustomerProviders,
+						CustomerProviders.of({
+							get: (provider) => (provider === "maple" ? Option.some(adapter) : Option.none()),
+						}),
+					),
+				)
+				yield* world.object.run(runDuePullsWith(services)(new Date())).pipe(Effect.orDie)
+				expect(asked).toHaveLength(1)
+				expect(decodeCursor(asked[0]!.cursor ?? "")).toMatchObject({ value: { only: "spans" } })
+				expect(asked[0]!.metrics.map((metric) => metric.key)).toEqual(["spans"])
+				expect(runs().map((row) => row.status)).toEqual(["failed", "succeeded", "failed"])
+				const connection = world.rows<{ lastSuccessAt: string; nextSyncAt: string }>(
+					`SELECT lastSuccessAt, nextSyncAt FROM customer_connections WHERE id = ?`,
+					maple,
+				)[0]!
+				expect(instant(connection.lastSuccessAt).getTime()).toBe(lastSuccessAt.getTime())
+				expect(instant(connection.nextSyncAt).getTime()).toBe(lastSuccessAt.getTime() + 60 * 60_000)
+				expect(
+					world.rows<{ lastRunAt: string | null }>(
+						`SELECT lastRunAt FROM customer_metric_definitions WHERE key = 'spans'`,
+					)[0]!.lastRunAt,
+				).not.toBeNull()
 			}),
 		))
 })

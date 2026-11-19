@@ -26,7 +26,7 @@ import { textField } from "../../../../ui/text-field"
 import type { Shared } from "../../../contract"
 import { isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
 import { Message } from "./message"
-import { layoutById, listOrder, type Model, NEW_NAME_ID, ruleOrder } from "./model"
+import { layoutById, listOrder, type Model, NEW_NAME_ID } from "./model"
 import { chipClass } from "./panel-view"
 
 /** The layouts list (Wonder `rom`): the order rules are tried in, who each gets, the default last. */
@@ -103,7 +103,8 @@ const layoutRow = (
 			{
 				intent: "plain",
 				size: "xs",
-				isDisabled: isDisabled || !isAdmin,
+				// One reorder at a time: answers landing out of order cannot scramble the list.
+				isDisabled: isDisabled || !isAdmin || model.pendingOrder !== null,
 				onPress: Message.PressedMoveLayout({ layoutId: layout.id, step }),
 				attributes: [h.AriaLabel(`${label}: ${layout.name}`)],
 				className: "px-1",
@@ -303,7 +304,7 @@ const newLayoutModal = (h: H, model: Model): Html =>
 		size: "3xl",
 		toContent: (closeAttributes) => {
 			const { newLayout } = model
-			const others = ruleOrder(model)
+			const others = listOrder(model)
 			const copied = layoutById(model, newLayout.copyOf)
 			const widgets = (count: number) => `${count} ${count === 1 ? "widget" : "widgets"}`
 			return [

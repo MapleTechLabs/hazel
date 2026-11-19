@@ -1,12 +1,15 @@
 import {
+	BUILT_IN_METRICS,
 	DEFAULT_LAYOUT_WIDGETS,
+	EMPTY_LAYOUT_RULE,
 	type MetricPreviewResult,
 	type MetricSource,
 	mapleBuilderSql,
 } from "@hazel/domain/customers"
 import { CustomerMetricDefinitionId, CustomerOverviewLayoutId } from "@hazel/schema"
 import { Schema } from "effect"
-import type { CoverageRow, LayoutRow, MetricRow } from "../../page/customers/settings/metrics/model"
+import type { LayoutRow } from "../../customers/overview/rows"
+import type { CoverageRow, MetricRow } from "../../page/customers/settings/metrics/model"
 import { SUGGESTED_METRICS } from "../../customers/suggested-metrics"
 import { ACCOUNTS, ACCOUNTS_BY_KEY, dayOf, NOW } from "./customers"
 
@@ -98,26 +101,17 @@ export const METRICS: ReadonlyArray<MetricRow> = [
 		unit: "calls",
 		provider: "autumn",
 	},
-	{
+	// The built-ins as the store seeds them: MRR reads as money (minor units), the rest as numbers.
+	...BUILT_IN_METRICS.map((metric, index): MetricRow => ({
 		...base,
-		id: metricId(9),
-		key: "active_users",
-		name: "Active users",
-		description: "Distinct contacts active per day",
-		unit: "users",
+		id: metricId(9 + index),
+		key: metric.key,
+		name: metric.name,
+		unit: metric.unit,
 		builtIn: true,
-		aggregation: "max",
-	},
-	{
-		...base,
-		id: metricId(10),
-		key: "mrr",
-		name: "MRR",
-		provider: "stripe",
-		builtIn: true,
-		format: "money",
-		aggregation: "last",
-	},
+		format: metric.format,
+		aggregation: metric.aggregation,
+	})),
 ]
 
 /** The same catalog with the services query's last run failed. */
@@ -134,10 +128,21 @@ export const METRICS_WITH_FAILURE: ReadonlyArray<MetricRow> = METRICS.map((metri
 /** Only what an org has before it defines any: a source's own and the built-ins. */
 export const METRICS_EMPTY: ReadonlyArray<MetricRow> = METRICS.filter((metric) => metric.source === null)
 
+const layout = {
+	rule: EMPTY_LAYOUT_RULE,
+	accountCount: 0,
+	updatedBy: null,
+	updatedAtMs: NOW.getTime() - 24 * HOUR,
+} as const
+
 export const LAYOUTS: ReadonlyArray<LayoutRow> = [
 	{
+		...layout,
 		id: layoutId(1),
 		name: "Observability",
+		position: 0,
+		isDefault: false,
+		accountCount: 96,
 		widgets: [
 			{
 				_tag: "stat",
@@ -174,7 +179,15 @@ export const LAYOUTS: ReadonlyArray<LayoutRow> = [
 			},
 		],
 	},
-	{ id: layoutId(2), name: "Default", widgets: DEFAULT_LAYOUT_WIDGETS },
+	{
+		...layout,
+		id: layoutId(2),
+		name: "Default",
+		position: 1,
+		isDefault: true,
+		accountCount: 118,
+		widgets: DEFAULT_LAYOUT_WIDGETS,
+	},
 ]
 
 export const COVERAGE: ReadonlyArray<CoverageRow> = METRICS.flatMap((metric, index) =>

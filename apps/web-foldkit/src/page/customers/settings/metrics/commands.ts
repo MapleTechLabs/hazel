@@ -3,6 +3,7 @@ import { OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { customerMetricDefinitionCollection } from "~/db/collections"
+import { awaitSynced } from "../../../../customers/await-synced"
 import { catchCommon } from "../../../../data/actions"
 import { HazelRpc } from "../../../../rpc"
 import { Message } from "./message"
@@ -12,10 +13,6 @@ import { PREVIEW_DAYS } from "./model"
  * The metrics page's Commands: the catalog's coverage, the preview, and the metric writes. A write
  * waits for its transaction to sync (best effort), so the editor it opens or leaves is current.
  */
-
-const awaitSynced = (
-	transactionId: Parameters<typeof customerMetricDefinitionCollection.utils.awaitSeqEffect>[0],
-) => Effect.ignore(customerMetricDefinitionCollection.utils.awaitSeqEffect(transactionId))
 
 export const FetchMetricCoverage = Command.define("FetchMetricCoverage", {
 	args: { organizationId: OrganizationId },
@@ -53,12 +50,12 @@ export const CreateMetric = Command.define("CreateMetric", {
 	messages: [Message.SucceededCreateMetric, Message.FailedCreateMetric],
 	execute: ({ organizationId, key, metric }) =>
 		HazelRpc.use((rpc) => rpc("customers.metric.create", { organizationId, key, metric })).pipe(
-			Effect.tap((result) => awaitSynced(result.transactionId)),
+			Effect.tap((result) => awaitSynced(customerMetricDefinitionCollection, result.transactionId)),
 			Effect.map((result) => Message.SucceededCreateMetric({ metricKey: result.data.key })),
-			Effect.catchTag("CustomersInvalidRequestError", () =>
-				Effect.succeed(Message.FailedCreateMetric({ reason: "Invalid" })),
+			Effect.catchTag("CustomersInvalidRequestError", (error) =>
+				Effect.succeed(Message.FailedCreateMetric({ reason: "Invalid", detail: error.message })),
 			),
-			catchCommon((reason) => Message.FailedCreateMetric({ reason })),
+			catchCommon((reason) => Message.FailedCreateMetric({ reason, detail: null })),
 		),
 })
 
@@ -67,15 +64,19 @@ export const UpdateMetric = Command.define("UpdateMetric", {
 	messages: [Message.SucceededUpdateMetric, Message.FailedUpdateMetric],
 	execute: ({ organizationId, metricKey, metric }) =>
 		HazelRpc.use((rpc) => rpc("customers.metric.update", { organizationId, metricKey, metric })).pipe(
-			Effect.tap((result) => awaitSynced(result.transactionId)),
+			Effect.tap((result) => awaitSynced(customerMetricDefinitionCollection, result.transactionId)),
 			Effect.as(Message.SucceededUpdateMetric({ metricKey })),
 			Effect.catchTags({
 				CustomersNotFoundError: () =>
-					Effect.succeed(Message.FailedUpdateMetric({ metricKey, reason: "NotFound" })),
-				CustomersInvalidRequestError: () =>
-					Effect.succeed(Message.FailedUpdateMetric({ metricKey, reason: "Invalid" })),
+					Effect.succeed(
+						Message.FailedUpdateMetric({ metricKey, reason: "NotFound", detail: null }),
+					),
+				CustomersInvalidRequestError: (error) =>
+					Effect.succeed(
+						Message.FailedUpdateMetric({ metricKey, reason: "Invalid", detail: error.message }),
+					),
 			}),
-			catchCommon((reason) => Message.FailedUpdateMetric({ metricKey, reason })),
+			catchCommon((reason) => Message.FailedUpdateMetric({ metricKey, reason, detail: null })),
 		),
 })
 
@@ -84,14 +85,18 @@ export const DeleteMetric = Command.define("DeleteMetric", {
 	messages: [Message.SucceededDeleteMetric, Message.FailedDeleteMetric],
 	execute: ({ organizationId, metricKey }) =>
 		HazelRpc.use((rpc) => rpc("customers.metric.delete", { organizationId, metricKey })).pipe(
-			Effect.tap((result) => awaitSynced(result.transactionId)),
+			Effect.tap((result) => awaitSynced(customerMetricDefinitionCollection, result.transactionId)),
 			Effect.as(Message.SucceededDeleteMetric({ metricKey })),
 			Effect.catchTags({
 				CustomersNotFoundError: () =>
-					Effect.succeed(Message.FailedDeleteMetric({ metricKey, reason: "NotFound" })),
-				CustomersInvalidRequestError: () =>
-					Effect.succeed(Message.FailedDeleteMetric({ metricKey, reason: "Invalid" })),
+					Effect.succeed(
+						Message.FailedDeleteMetric({ metricKey, reason: "NotFound", detail: null }),
+					),
+				CustomersInvalidRequestError: (error) =>
+					Effect.succeed(
+						Message.FailedDeleteMetric({ metricKey, reason: "Invalid", detail: error.message }),
+					),
 			}),
-			catchCommon((reason) => Message.FailedDeleteMetric({ metricKey, reason })),
+			catchCommon((reason) => Message.FailedDeleteMetric({ metricKey, reason, detail: null })),
 		),
 })

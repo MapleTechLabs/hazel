@@ -135,7 +135,11 @@ export const formatBytes = (value: number): string => {
 		unit++
 	}
 	const digits = scaled < 10 && unit > 0 ? 1 : 0
-	return withSign(value, `${numberFormat({ maximumFractionDigits: digits }).format(scaled)} ${BYTE_UNITS[unit]}`, false)
+	return withSign(
+		value,
+		`${numberFormat({ maximumFractionDigits: digits }).format(scaled)} ${BYTE_UNITS[unit]}`,
+		false,
+	)
 }
 
 /** `850 ms`, `1.4 s`, `3.2 min`. */
@@ -169,8 +173,13 @@ export const formatMetric = (
 		case "duration_ms":
 			return formatDurationMs(value)
 		case "number": {
-			const text = Math.abs(value) >= 10_000 ? formatCompact(value) : numberFormat({ maximumFractionDigits: 2 }).format(value)
-			return metric.unit === null || metric.unit === "minor" ? text : `${text} ${metric.unit}`
+			const text =
+				Math.abs(value) >= 10_000
+					? formatCompact(value)
+					: numberFormat({ maximumFractionDigits: 2 }).format(value)
+			// A number in minor units is money, whatever its format says.
+			if (metric.unit === "minor") return formatMoney(Math.round(value), currency)
+			return metric.unit === null ? text : `${text} ${metric.unit}`
 		}
 	}
 }

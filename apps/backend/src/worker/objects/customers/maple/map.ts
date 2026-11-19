@@ -23,8 +23,8 @@
  *   itself, so a (day, account, key) is one row and never split across pages: ingest replaces a
  *   day's metric value, which makes a re-read idempotent but would let a later page's partial sum
  *   overwrite an earlier one's.
- * - **A Maple query metric's row → that metric's day** for the account its `account` names (the
- *   Clerk organization id, declared like the other phases' groups), the value as Maple summed it.
+ * - **A Maple query metric's row → that metric's day** for the account whose Clerk organization id
+ *   its `account` is, the value as Maple summed it; an unknown id is skipped, never parked.
  * - **No events, no sweeps.** Maple is authoritative for nothing: no account, contact or
  *   subscription is ever removed from what a Maple pull did or did not see.
  */
@@ -199,31 +199,24 @@ export const metricValueOf = (value: WireCount): number | null => {
 }
 
 /**
- * A page of a Maple query metric's rows (one day): each account declared once, then its value under
- * `key`. A row without an account or a readable value is skipped.
+ * A page of a Maple query metric's rows (one day): each value under `key` for the account its Clerk
+ * organization id names. No account reference is declared: an id Hazel does not know is counted
+ * and skipped by ingest (a user's query, not a parked record). A row without an account or a
+ * readable value is skipped here.
  */
-export const queryOps = (
-	rows: ReadonlyArray<MapleQueryRow>,
-	key: string,
-	day: string,
-	observedAt: IsoTimestamp,
-): Mapped => {
-	const accounts = new Set<string>()
+export const queryOps = (rows: ReadonlyArray<MapleQueryRow>, key: string, day: string): Mapped => {
 	const ops: Array<IngestOp> = []
 	let skipped = 0
 	for (const row of rows) {
-		const value = metricValueOf(row.value)
-		if (row.account.trim() === "" || value === null) {
+		const account = row.account == null ? "" : String(row.account).trim()
+		const value = row.value == null ? null : metricValueOf(row.value)
+		if (account === "" || value === null) {
 			skipped += 1
 			continue
 		}
-		if (!accounts.has(row.account)) {
-			accounts.add(row.account)
-			ops.push(accountRefOp(row.account, observedAt))
-		}
 		ops.push({
 			_tag: "metric",
-			account: mapleRef(row.account),
+			account: clerkRef(account),
 			metricKey: key,
 			day,
 			value,

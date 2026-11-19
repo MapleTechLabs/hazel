@@ -42,6 +42,8 @@ export const Editor = Schema.Struct({
 	version: Schema.Int,
 	dryRun: DryRun.schema,
 	isSaving: Schema.Boolean,
+	/** The draft a save sent: what is saved once it lands (the draft may have moved on meanwhile). */
+	savingDraft: Schema.NullOr(Customers.LayoutDraft),
 	pickerSearch: Schema.String,
 	previewSearch: Schema.String,
 	/** The metric condition whose metric list is open in the rule popover. */
@@ -159,7 +161,9 @@ export const draftPosition = (model: Model, editor: Editor): number | undefined 
 }
 
 /** A draft the store takes: a name, valid conditions, every chart and picked table with a metric. */
-export const isValidDraft = Schema.is(Customers.LayoutDraft)
+const isLayoutDraft = Schema.is(Customers.LayoutDraft)
+export const isValidDraft = (draft: Customers.LayoutDraft): boolean =>
+	draft.name.trim() !== "" && isLayoutDraft(draft)
 
 export const isDirty = (editor: Editor): boolean =>
 	editor.draft !== null &&
@@ -185,8 +189,3 @@ export const planNames = (model: Model): ReadonlyArray<string> =>
 
 export const tagNames = (model: Model): ReadonlyArray<string> =>
 	[...new Set((model.accounts ?? []).flatMap((account) => account.tags))].sort()
-
-export const metricGroups = (model: Model): ReadonlyArray<string> =>
-	[
-		...new Set((model.metrics ?? []).flatMap((metric) => (metric.group === null ? [] : [metric.group]))),
-	].sort()

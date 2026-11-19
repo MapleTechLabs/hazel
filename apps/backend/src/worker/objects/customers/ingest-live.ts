@@ -39,6 +39,7 @@ import {
 	FIELD_PRECEDENCE,
 	IngestOp,
 	type IngestOutcome,
+	isBuiltInMetric,
 	type ProviderRef,
 	type RecordActivity,
 	type RefEntityType,
@@ -63,7 +64,7 @@ import {
 } from "@hazel/schema"
 import { Clock, Context, Effect, Layer, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
-import { isBuiltInMetric } from "./defaults"
+import { METRIC_PREFIX } from "./maple/wire"
 import type { CustomerIngestApi, IngestContext, RunResult } from "./ingest"
 import { requestCompute, requestComputeAfterIngest, requestHistoryRebuild, setBaselineFor } from "./schedule"
 
@@ -1748,7 +1749,7 @@ const make = Effect.gen(function* () {
 	const definitionOwner = (key: string) =>
 		db.first(
 			SQLite.from(schema.customerMetricDefinitionsTable)
-				.select("provider")
+				.select("provider", "source")
 				.where(($) => [$.key.eq(key)])
 				.limit(1),
 		)
@@ -1768,8 +1769,21 @@ const make = Effect.gen(function* () {
 			const definition = yield* definitionOwner(op.metricKey)
 			if (Option.isSome(definition) && definition.value.provider !== session.context.provider)
 				return yield* otherOwner(session, index, op, op.metricKey, definition.value.provider)
+			// Maple's own keys are namespaced; any other is a person's metric, deleted while the pull
+			// was out: its days are dropped rather than defining it again.
+			if (
+				Option.isNone(definition) &&
+				session.context.provider === "maple" &&
+				!op.metricKey.startsWith(METRIC_PREFIX)
+			)
+				return yield* reject(index, op, `${op.metricKey} is no longer defined`)
 			const accountId = yield* resolveAccount(session, op.account)
-			if (Option.isNone(accountId)) return yield* parkUnknownAccount(session, op.account)
+			// A person's query names customers by id: one Hazel does not know is skipped (counted),
+			// not parked for linking.
+			if (Option.isNone(accountId))
+				return Option.isSome(definition) && definition.value.source !== null
+					? yield* reject(index, op, "No customer has this id")
+					: yield* parkUnknownAccount(session, op.account)
 			if (Option.isNone(definition)) {
 				yield* applyDefinition(session, {
 					_tag: "metric_definition",

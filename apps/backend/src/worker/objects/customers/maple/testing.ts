@@ -42,6 +42,8 @@ export interface FakeMapleState {
 	readonly metricDays: ReadonlyArray<MapleMetricDay>
 	/** The tool refuses any statement containing this text (a user's query Maple cannot run). */
 	refusedSql: string | null
+	/** Any statement containing this text is answered 503 (Maple's warehouse down for it). */
+	failingSql: string | null
 	/** `true`: every call is answered 403, the way a key without the MCP scopes is. */
 	forbidden: boolean
 	/** `true`: 503, Maple having a bad moment. */
@@ -76,6 +78,7 @@ export const makeFakeMaple = (options: Partial<FakeMapleState> = {}): FakeMapleS
 	events: [],
 	metricDays: [],
 	refusedSql: null,
+	failingSql: null,
 	forbidden: false,
 	failing: false,
 	invalid: false,
@@ -254,6 +257,16 @@ const answer = (fake: FakeMapleState, body: Record<string, unknown>) => {
 	})
 }
 
+/** The statement a `tools/call` body carries. */
+const sqlOf = (body: Record<string, unknown>) =>
+	String(
+		(
+			(body["params"] as Record<string, unknown> | undefined)?.["arguments"] as
+				| Record<string, unknown>
+				| undefined
+		)?.["sql"] ?? "",
+	)
+
 export const fakeMapleHttpClient = (fake: FakeMapleState) =>
 	Layer.succeed(
 		HttpClient.HttpClient,
@@ -287,7 +300,8 @@ export const fakeMapleHttpClient = (fake: FakeMapleState) =>
 											? {}
 											: { "retry-after": String(fake.retryAfterSeconds) },
 									)
-								: fake.failing
+								: fake.failing ||
+									  (fake.failingSql !== null && sqlOf(body).includes(fake.failingSql))
 									? json(503, { message: "Maple is having a bad moment" })
 									: fake.invalid
 										? json(400, { message: "Unparsable request" })

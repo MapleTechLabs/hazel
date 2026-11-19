@@ -1,5 +1,4 @@
 import type * as Customers from "@hazel/domain/customers"
-import type { CustomerAccountId } from "@hazel/schema"
 import { Option } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -10,7 +9,7 @@ import { button } from "../../../../ui/button"
 import { link } from "../../../../ui/link"
 import { loader } from "../../../../ui/loader"
 import { commonMessage } from "~/lib/error-messages"
-import type { LayoutRow } from "./model"
+import type { LayoutRow } from "../../../../customers/overview/rows"
 import { Message } from "./message"
 import { type Editor, type MetricForm, PREVIEW_DAYS, type PreviewFailure } from "./model"
 import { card } from "./parts"
@@ -116,8 +115,7 @@ const topList = (h: H, result: Customers.MetricPreviewResult, form: MetricForm, 
 							link(
 								h,
 								{
-									// The preview contract carries ids as plain strings; they are account ids.
-									href: hrefOf(customerRoute(orgSlug, row.accountId as CustomerAccountId)),
+									href: hrefOf(customerRoute(orgSlug, row.accountId)),
 									className: "min-w-0 truncate text-fg",
 								},
 								[row.name],

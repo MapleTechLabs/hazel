@@ -41,14 +41,15 @@ import { readObjectMeta, writeObjectMeta } from "../meta"
 import { CustomerMembersCall } from "../org/customer-members"
 import { runComputeStep, unmuteExpired, wakeSnoozed } from "./compute"
 import { loadCredentials } from "./credentials"
-import { installDefaults } from "./defaults"
+import { ensureBuiltInFormats, installDefaults } from "./defaults"
 import { CustomerIngest } from "./ingest"
 import { ensureDefaultLayout } from "./layouts"
-import { backfillCursor, type UserMetric } from "./maple/pull"
-import type { CustomerProviderAdapter, CustomerProviderError } from "./providers"
+import { backfillCursor, metricBackfillKey } from "./maple/pull"
+import type { CustomerProviderAdapter, CustomerProviderError, UserMetric } from "./providers"
 import { CustomerProviders } from "./providers"
 import { computeDueAt, LEASE_MS, scheduleComputeAt, takeComputeLease } from "./schedule"
 import { CustomersServicesLive } from "./services"
+import { inList } from "./sql"
 import { dayOf } from "./time"
 
 const DEFAULTS_KEY = "defaultsInstalled"
@@ -112,10 +113,12 @@ export const bootstrap = Effect.fn("CustomersObject.bootstrap")(function* (paylo
 			)
 		}
 	}
-	// Defaults installed before Overview layouts had none.
+	// Defaults installed before Overview layouts had no layout, and built-ins no format.
 	if (Option.isSome(yield* readObjectMeta(DEFAULTS_KEY))) {
 		const now = new Date(yield* Clock.currentTimeMillis)
-		yield* db.transaction(ensureDefaultLayout(payload.organizationId, now))
+		yield* db.transaction(
+			Effect.andThen(ensureBuiltInFormats(), ensureDefaultLayout(payload.organizationId, now)),
+		)
 	}
 	return { ready: true }
 }, Effect.orDie)
@@ -236,8 +239,10 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 	let pages = 0
 	let failures = connection.consecutiveFailures
 	let attempts = run.failedAttempts
+	// A metric's backfill reads that metric alone: it leaves the connection's schedule as it was.
+	const backfillKey = connection.provider === "maple" ? metricBackfillKey(run.cursor) : undefined
 	const pull = Effect.gen(function* () {
-		const metrics = yield* userMetrics
+		const metrics = connection.provider === "maple" ? yield* userMetrics : []
 		const credentials = yield* loadCredentials(connection)
 		if (Option.isNone(credentials)) {
 			return yield* new PullFailure({
@@ -274,6 +279,14 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 			)
 			cursor = nextCursor
 			attempts = 0
+			if (nextCursor === null && backfillKey !== undefined) {
+				yield* db.run(
+					SQLite.update(schema.customerSyncRunsTable)
+						.set({ status: "succeeded", finishedAt: now, cursor: null, error: null })
+						.where(($) => [$.id.eq(run.id), $.status.eq("running")]),
+				)
+				return yield* resumeSchedule(connection, adapter.pullIntervalMs, now)
+			}
 			if (nextCursor === null) {
 				if (sweep !== undefined)
 					yield* ingest.completeSweep(connection.id, run.startedAt, sweep, { runId: run.id })
@@ -349,15 +362,64 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 	yield* Effect.annotateCurrentSpan({ "customers.pages": pages })
 })
 
-/** The org's user-defined metrics, for the pulls that read them (Maple). */
+/**
+ * After a metric's backfill: due again as the connection's own pulls are (a run left running
+ * resumes now, else one interval after the last full pull), not as the backfill moved it.
+ */
+const resumeSchedule = (connection: schema.CustomerConnection, intervalMs: number, now: Date) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const running = yield* db.first(
+			SQLite.from(schema.customerSyncRunsTable)
+				.select("id")
+				.where(($) => [$.connectionId.eq(connection.id), $.status.eq("running")])
+				.limit(1),
+		)
+		const due =
+			Option.isSome(running) || connection.lastSuccessAt === null
+				? now.getTime()
+				: Math.max(now.getTime(), connection.lastSuccessAt.getTime() + intervalMs)
+		yield* setNextSync(connection.id, new Date(due), now)
+	})
+
+/** The org's user-defined metrics in key order, for the Maple pull. */
 const userMetrics = Effect.gen(function* () {
 	const db = yield* Database.Database
 	const rows = yield* db.run(
 		SQLite.from(schema.customerMetricDefinitionsTable)
 			.select("key", "source")
-			.where(($) => [$.source.isNotNull()]),
+			.where(($) => [$.source.isNotNull()])
+			.orderBy(($) => [[$.key, "asc"]]),
 	)
 	return rows.flatMap((row) => (row.source === null ? [] : [{ key: row.key, source: row.source }]))
+})
+
+/** End the backfills still running for `key`: the metric changed (a new one starts) or is gone. */
+export const endMetricBackfills = Effect.fn("Customers.endMetricBackfills")(function* (
+	key: string,
+	now: Date,
+) {
+	const db = yield* Database.Database
+	const running = yield* db.run(
+		SQLite.from(schema.customerSyncRunsTable)
+			.select("id", "cursor")
+			.where(($) => [$.provider.eq("maple"), $.status.eq("running")]),
+	)
+	const ended = running.filter((run) => metricBackfillKey(run.cursor) === key).map((run) => run.id)
+	if (ended.length === 0) return
+	yield* db.run(
+		SQLite.update(schema.customerSyncRunsTable)
+			.set({
+				status: "failed",
+				finishedAt: now,
+				error: {
+					code: "internal",
+					message: `Ended: the metric ${key} was changed or deleted`,
+					httpStatus: null,
+				},
+			})
+			.where(($) => [inList($.id, ended)]),
+	)
 })
 
 /**
@@ -377,6 +439,7 @@ export const startMetricBackfill = Effect.fn("Customers.startMetricBackfill")(fu
 			.limit(1),
 	)
 	if (Option.isNone(connection) || connection.value.config._tag !== "maple") return
+	yield* endMetricBackfills(metric.key, now)
 	const cursor = backfillCursor(metric, connection.value.config.lookbackDays, dayOf(now))
 	if (Option.isNone(cursor)) return
 	const run = yield* (yield* CustomerIngest).startRun(connection.value.id, "manual")

@@ -534,7 +534,7 @@ const LAST_SEEN_DAYS = 365
 /**
  * One account's metrics over windows ending today, each with the window before it and the last day
  * it was above 0: the stored values of every key asked for (a formula's operands) in one query, and
- * the built-ins from the account's facts over the longest window pair. A formula's window is its
+ * the built-ins from the account's facts over the same span. A formula's window is its
  * operands' windows, each by its own aggregation; its last day above 0 is evaluated day by day.
  */
 export const accountMetricWindows = Effect.fn("Customers.accountMetricWindows")(function* (
@@ -571,7 +571,8 @@ export const accountMetricWindows = Effect.fn("Customers.accountMetricWindows")(
 	}
 	const builtIns = keys.filter((key) => DERIVED_METRICS.has(key))
 	if (builtIns.length > 0) {
-		const span = Math.max(...windows.map((window) => 2 * window.days))
+		// As far back as a stored metric's last day is looked for.
+		const span = Math.max(LAST_SEEN_DAYS, ...windows.map((window) => 2 * window.days))
 		const facts = yield* accountFacts(account, span, now)
 		for (const key of builtIns) points.set(key, builtInPoints(facts, key, today, span))
 	}

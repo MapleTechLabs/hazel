@@ -3,6 +3,7 @@ import { CustomerAccountId, CustomerOverviewLayoutId, OrganizationId } from "@ha
 import { Duration, Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { customerOverviewLayoutCollection } from "~/db/collections"
+import { awaitSynced } from "../../../../customers/await-synced"
 import { catchCommon } from "../../../../data/actions"
 import { HazelRpc } from "../../../../rpc"
 import { type LayoutWriteFailure, Message } from "./message"
@@ -13,11 +14,6 @@ import { DRY_RUN_DEBOUNCE_MS } from "./model"
  * the editor show it at once), the debounced dry run behind "Who gets this layout", and the previewed
  * customer's detail (the built-in sections).
  */
-
-/** Best effort: the write happened either way, and the rows show it once they arrive. */
-const awaitSynced = (
-	transactionId: Parameters<typeof customerOverviewLayoutCollection.utils.awaitSeqEffect>[0],
-) => Effect.ignore(customerOverviewLayoutCollection.utils.awaitSeqEffect(transactionId))
 
 const failWith =
 	<M>(toMessage: (reason: LayoutWriteFailure) => M) =>
@@ -40,7 +36,7 @@ export const CreateOverviewLayout = Command.define("CreateOverviewLayout", {
 				position === null ? { organizationId, layout } : { organizationId, layout, position },
 			),
 		).pipe(
-			Effect.tap((result) => awaitSynced(result.transactionId)),
+			Effect.tap((result) => awaitSynced(customerOverviewLayoutCollection, result.transactionId)),
 			Effect.as(Message.SucceededCreateLayout()),
 			Effect.catchTag("CustomersInvalidRequestError", () => failed("Invalid")),
 			catchCommon((reason) => Message.FailedCreateLayout({ reason })),
@@ -58,7 +54,7 @@ export const UpdateOverviewLayout = Command.define("UpdateOverviewLayout", {
 	execute: (args) => {
 		const failed = failWith((reason) => Message.FailedUpdateLayout({ layoutId: args.layoutId, reason }))
 		return HazelRpc.use((rpc) => rpc("customers.layout.update", args)).pipe(
-			Effect.tap((result) => awaitSynced(result.transactionId)),
+			Effect.tap((result) => awaitSynced(customerOverviewLayoutCollection, result.transactionId)),
 			Effect.as(Message.SucceededUpdateLayout({ layoutId: args.layoutId })),
 			Effect.catchTags({
 				CustomersNotFoundError: () => failed("NotFound"),
@@ -75,7 +71,7 @@ export const ReorderOverviewLayouts = Command.define("ReorderOverviewLayouts", {
 	messages: [Message.SucceededReorderLayouts, Message.FailedReorderLayouts],
 	execute: (args) =>
 		HazelRpc.use((rpc) => rpc("customers.layout.reorder", args)).pipe(
-			Effect.tap((result) => awaitSynced(result.transactionId)),
+			Effect.tap((result) => awaitSynced(customerOverviewLayoutCollection, result.transactionId)),
 			Effect.as(Message.SucceededReorderLayouts()),
 			Effect.catchTag("CustomersInvalidRequestError", () =>
 				Effect.succeed(Message.FailedReorderLayouts({ reason: "Invalid" })),
@@ -90,7 +86,7 @@ export const DeleteOverviewLayout = Command.define("DeleteOverviewLayout", {
 	execute: (args) => {
 		const failed = failWith((reason) => Message.FailedDeleteLayout({ layoutId: args.layoutId, reason }))
 		return HazelRpc.use((rpc) => rpc("customers.layout.delete", args)).pipe(
-			Effect.tap((result) => awaitSynced(result.transactionId)),
+			Effect.tap((result) => awaitSynced(customerOverviewLayoutCollection, result.transactionId)),
 			Effect.as(Message.SucceededDeleteLayout({ layoutId: args.layoutId })),
 			Effect.catchTags({
 				CustomersNotFoundError: () => failed("NotFound"),

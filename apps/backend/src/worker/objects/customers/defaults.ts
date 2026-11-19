@@ -5,6 +5,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
+	BUILT_IN_METRICS,
 	type BuiltInViewKey,
 	DEFAULT_HEALTH_SETTINGS,
 	DEFAULT_LIST_COLUMNS,
@@ -15,16 +16,6 @@ import {
 import type { OrganizationId } from "@hazel/schema"
 import { Effect } from "effect"
 import { defaultLayoutRow } from "./layouts"
-
-/** Metric keys Hazel computes; sources may not write them. */
-export const BUILT_IN_METRICS = [
-	{ key: "active_users", name: "Daily active users", unit: "users", aggregation: "max" },
-	{ key: "active_users_30d", name: "Active users (30 days)", unit: "users", aggregation: "last" },
-	{ key: "mrr", name: "MRR", unit: "minor", aggregation: "last" },
-	{ key: "health_score", name: "Health score", unit: "points", aggregation: "last" },
-] as const
-
-export const isBuiltInMetric = (key: string) => BUILT_IN_METRICS.some((metric) => metric.key === key)
 
 export const BUILT_IN_VIEWS: ReadonlyArray<{
 	readonly key: BuiltInViewKey
@@ -86,6 +77,7 @@ export const installDefaults = Effect.fn("Customers.installDefaults")(function* 
 				key: metric.key,
 				name: metric.name,
 				unit: metric.unit,
+				format: metric.format,
 				aggregation: metric.aggregation,
 				builtIn: true,
 			})),
@@ -94,4 +86,19 @@ export const installDefaults = Effect.fn("Customers.installDefaults")(function* 
 	yield* db.run(
 		SQLite.insertInto(schema.customerOverviewLayoutsTable).values(defaultLayoutRow(organizationId)),
 	)
+})
+
+/**
+ * Built-in definitions installed before they had a format read as plain numbers (MRR among them):
+ * each takes its own. Idempotent; run on every activation.
+ */
+export const ensureBuiltInFormats = Effect.fn("Customers.ensureBuiltInFormats")(function* () {
+	const db = yield* Database.Database
+	for (const metric of BUILT_IN_METRICS) {
+		yield* db.run(
+			SQLite.update(schema.customerMetricDefinitionsTable)
+				.set({ format: metric.format })
+				.where(($) => [$.key.eq(metric.key), $.builtIn.eq(true), $.format.neq(metric.format)]),
+		)
+	}
 })

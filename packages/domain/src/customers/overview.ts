@@ -11,6 +11,7 @@
  *   (`LayoutRule`). The first layout whose rule matches wins; the default layout is the fallback,
  *   and a customer can be pinned to one.
  */
+import { CustomerAccountId, CustomerOverviewLayoutId } from "@hazel/schema"
 import { Schema } from "effect"
 import { HealthStatus, LifecycleStage } from "./enums"
 
@@ -34,7 +35,13 @@ export const MetricFormat = Schema.Literals(["number", "bytes", "percent", "mone
 export type MetricFormat = typeof MetricFormat.Type
 
 /** The Maple warehouse tables the query builder offers. */
-export const MapleQueryTable = Schema.Literals(["metrics_sum", "metrics_gauge", "traces", "logs", "product_events"])
+export const MapleQueryTable = Schema.Literals([
+	"metrics_sum",
+	"metrics_gauge",
+	"traces",
+	"logs",
+	"product_events",
+])
 export type MapleQueryTable = typeof MapleQueryTable.Type
 
 /** A builder filter: `<column or Attributes['key']> <op> '<value>'`. */
@@ -87,16 +94,30 @@ export const FormulaSource = Schema.TaggedStruct("formula", {
 export const MetricSource = Schema.Union([MapleQuerySource, ProductEventSource, FormulaSource])
 export type MetricSource = typeof MetricSource.Type
 
-/** Why a Maple query metric's SQL cannot run as the pull runs it, or `null`. */
+/**
+ * Why a Maple query metric's SQL cannot run as the pull runs it, or `null`. The pull appends
+ * `ORDER BY account LIMIT … OFFSET …` to it, so it must be one plain SELECT (no subquery or UNION,
+ * whose `$__orgFilter` Maple would not see as top-level, and no comment the clause could fall
+ * into) ending in its `GROUP BY account` (a `HAVING` may follow).
+ */
 export const checkMapleSql = (sql: string): string | null => {
-	const text = sql.trim().replace(/;\s*$/, "")
-	if (!/^select\b/i.test(text)) return "Start with SELECT"
-	if (text.includes(";")) return "One statement only"
-	if (!text.includes("$__orgFilter")) return "AND in $__orgFilter"
-	if (!/\$__timeFilter\(|\$__startTime/.test(text)) return "Filter time with $__timeFilter(<column>)"
-	if (!/\baccount\b/i.test(text) || !/\bvalue\b/i.test(text)) return "Select `account` and `value`"
-	if (/\b(order\s+by|limit|settings)\b/i.test(text.replace(/'[^']*'/g, "''")))
+	// Clauses are looked for outside string literals.
+	const code = sql
+		.trim()
+		.replace(/;\s*$/, "")
+		.replace(/'(?:[^'\\]|\\.)*'/g, "''")
+	if (!/^select\b/i.test(code)) return "Start with SELECT"
+	if (code.includes(";")) return "One statement only"
+	if (/--|\/\*|#/.test(code)) return "Leave out comments"
+	if ((code.match(/\bselect\b/gi) ?? []).length > 1 || /\bunion\b/i.test(code))
+		return "One SELECT only: no subqueries or UNION"
+	if (!code.includes("$__orgFilter")) return "AND in $__orgFilter"
+	if (!/\$__timeFilter\(|\$__startTime/.test(code)) return "Filter time with $__timeFilter(<column>)"
+	if (!/\baccount\b/i.test(code) || !/\bvalue\b/i.test(code)) return "Select `account` and `value`"
+	if (/\b(order\s+by|limit|settings)\b/i.test(code))
 		return "Leave out ORDER BY, LIMIT and SETTINGS: Hazel pages the result itself"
+	if (!/\bgroup\s+by\s+account\s*(\bhaving\b[\s\S]*)?$/i.test(code))
+		return "End with GROUP BY account (a HAVING may follow)"
 	return null
 }
 
@@ -111,13 +132,13 @@ const columnOf = (field: string): string => {
 export const isBuilderField = (field: string): boolean =>
 	/^[A-Za-z][A-Za-z0-9_]{0,60}(\.[A-Za-z0-9_.:/-]{1,100})?$/.test(field)
 
-const TIME_COLUMN: Record<MapleQueryTable, string> = {
+const TIME_COLUMN = {
 	metrics_sum: "TimeUnix",
 	metrics_gauge: "TimeUnix",
 	traces: "Timestamp",
 	logs: "Timestamp",
 	product_events: "Timestamp",
-}
+} satisfies Record<MapleQueryTable, string>
 
 const literal = (value: string) => `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`
 
@@ -159,7 +180,12 @@ export const mapleBuilderSql = (builder: MapleQueryBuilder): string => {
 export type FormulaNode =
 	| { readonly _tag: "number"; readonly value: number }
 	| { readonly _tag: "metric"; readonly key: string }
-	| { readonly _tag: "binary"; readonly op: "+" | "-" | "*" | "/"; readonly left: FormulaNode; readonly right: FormulaNode }
+	| {
+			readonly _tag: "binary"
+			readonly op: "+" | "-" | "*" | "/"
+			readonly left: FormulaNode
+			readonly right: FormulaNode
+	  }
 	| { readonly _tag: "negate"; readonly operand: FormulaNode }
 
 export type FormulaParse =
@@ -177,8 +203,7 @@ export const parseFormula = (expression: string): FormulaParse => {
 		| { readonly kind: "op"; readonly op: "+" | "-" | "*" | "/" | "(" | ")" }
 	const tokens: Array<Token> = []
 	let index = 0
-	while (index < expression.length) {
-		const char = expression[index]!
+	for (let char = expression.charAt(index); index < expression.length; char = expression.charAt(index)) {
 		if (/\s/.test(char)) {
 			index++
 		} else if (char === "{") {
@@ -384,9 +409,9 @@ export const widgetMetricKeys = (
 		case "chart":
 			return widget.metricKeys
 		case "metric_table":
-			return (widget.rows._tag === "group" ? groupKeys(widget.rows.group) : widget.rows.metricKeys).filter(
-				(key) => !widget.exclude.includes(key),
-			)
+			return (
+				widget.rows._tag === "group" ? groupKeys(widget.rows.group) : widget.rows.metricKeys
+			).filter((key) => !widget.exclude.includes(key))
 		case "built_in":
 			return []
 	}
@@ -399,6 +424,31 @@ export const statLabel = (widget: StatWidget, metricName: string): string =>
 		.replaceAll("{metric}", metricName)
 		.replace(/\s+/g, " ")
 		.trim()
+
+/** Metric keys Hazel computes (sources may not write them), with how their definitions read. */
+export const BUILT_IN_METRICS = [
+	{ key: "active_users", name: "Daily active users", unit: "users", format: "number", aggregation: "max" },
+	{
+		key: "active_users_30d",
+		name: "Active users (30 days)",
+		unit: "users",
+		format: "number",
+		aggregation: "last",
+	},
+	{ key: "mrr", name: "MRR", unit: "minor", format: "money", aggregation: "last" },
+	{ key: "health_score", name: "Health score", unit: "points", format: "number", aggregation: "last" },
+] as const satisfies ReadonlyArray<{
+	readonly key: string
+	readonly name: string
+	readonly unit: string
+	readonly format: MetricFormat
+	readonly aggregation: "sum" | "max" | "last"
+}>
+
+export const isBuiltInMetric = (key: string): boolean => BUILT_IN_METRICS.some((metric) => metric.key === key)
+
+/** Keys a user metric may not take: the built-ins, and `new` (the editor's own path). */
+export const isReservedMetricKey = (key: string): boolean => key === "new" || isBuiltInMetric(key)
 
 /** What a new organization's default layout shows: what the Overview showed before layouts. */
 export const DEFAULT_LAYOUT_WIDGETS: ReadonlyArray<OverviewWidget> = [
@@ -511,7 +561,9 @@ export const ruleMetricWindows = (
 	rule: LayoutRule,
 ): ReadonlyArray<{ readonly metricKey: string; readonly windowDays: number }> =>
 	rule.conditions.flatMap((condition) =>
-		condition._tag === "metric" ? [{ metricKey: condition.metricKey, windowDays: condition.windowDays }] : [],
+		condition._tag === "metric"
+			? [{ metricKey: condition.metricKey, windowDays: condition.windowDays }]
+			: [],
 	)
 
 const attributeText = (value: unknown): string | null =>
@@ -528,7 +580,9 @@ export const conditionMatches = (condition: LayoutCondition, facts: LayoutFacts)
 		case "health":
 			return condition.statuses.includes(facts.healthStatus)
 		case "mrr":
-			return condition.op === "gte" ? facts.mrrMinor >= condition.valueMinor : facts.mrrMinor < condition.valueMinor
+			return condition.op === "gte"
+				? facts.mrrMinor >= condition.valueMinor
+				: facts.mrrMinor < condition.valueMinor
 		case "attribute": {
 			const value = attributeText(facts.attributes[condition.key])
 			if (condition.op === "exists") return value !== null && value !== ""
@@ -553,12 +607,15 @@ export const ruleMatches = (rule: LayoutRule, facts: LayoutFacts): boolean =>
  * The layout an account gets: the one it is pinned to, else the first non-default layout (by
  * `position`) whose rule matches, else the default.
  */
-export const resolveLayout = <L extends { readonly id: string; readonly isDefault: boolean; readonly rule: LayoutRule }>(
+export const resolveLayout = <
+	L extends { readonly id: string; readonly isDefault: boolean; readonly rule: LayoutRule },
+>(
 	layouts: ReadonlyArray<L>,
 	facts: LayoutFacts,
 	pinnedLayoutId: string | null,
 ): L | undefined => {
-	const pinned = pinnedLayoutId === null ? undefined : layouts.find((layout) => layout.id === pinnedLayoutId)
+	const pinned =
+		pinnedLayoutId === null ? undefined : layouts.find((layout) => layout.id === pinnedLayoutId)
 	if (pinned !== undefined) return pinned
 	return (
 		layouts.find((layout) => !layout.isDefault && ruleMatches(layout.rule, facts)) ??
@@ -619,11 +676,13 @@ export const MetricPreviewResult = Schema.Struct({
 	/** Rows Maple answered that name no known customer. */
 	unmatchedRows: Schema.Int,
 	/** The highest values over the days, summed by the metric's aggregation. */
-	top: Schema.Array(Schema.Struct({ accountId: Schema.String, name: Schema.String, value: Schema.Number })),
+	top: Schema.Array(
+		Schema.Struct({ accountId: CustomerAccountId, name: Schema.String, value: Schema.Number }),
+	),
 	/** One customer's daily values, oldest first: the sample chart. */
 	sample: Schema.NullOr(
 		Schema.Struct({
-			accountId: Schema.String,
+			accountId: CustomerAccountId,
 			name: Schema.String,
 			points: Schema.Array(Schema.Struct({ day: Schema.String, value: Schema.Number })),
 		}),
@@ -635,12 +694,14 @@ export type MetricPreviewResult = typeof MetricPreviewResult.Type
 export const LayoutDryRunResult = Schema.Struct({
 	/** Accounts the rule matches (pins aside), at most 200 listed. */
 	matchingCount: Schema.Int,
-	matching: Schema.Array(Schema.Struct({ accountId: Schema.String, name: Schema.String })),
-	/** Of those, the ones a layout earlier in the order (or a pin) already takes, per layout. */
+	matching: Schema.Array(Schema.Struct({ accountId: CustomerAccountId, name: Schema.String })),
+	/** Of those, the ones a layout earlier in the order already takes, per layout (pins aside). */
 	takenBy: Schema.Array(
-		Schema.Struct({ layoutId: Schema.String, name: Schema.String, count: Schema.Int }),
+		Schema.Struct({ layoutId: CustomerOverviewLayoutId, name: Schema.String, count: Schema.Int }),
 	),
-	/** Accounts it would actually get (matching minus taken). */
+	/** Of those, the ones pinned to another layout. */
+	pinnedElsewhere: Schema.Int,
+	/** Accounts it would actually get: matching, minus taken and pinned elsewhere, plus pinned to it. */
 	effectiveCount: Schema.Int,
 })
 export type LayoutDryRunResult = typeof LayoutDryRunResult.Type

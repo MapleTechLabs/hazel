@@ -4,9 +4,10 @@ import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import { MetricSourceKind } from "../../../../route"
 import * as Modal from "../../../../ui/modal"
-import { CoverageRow, FilterForm, LayoutRow, MetricRow, PreviewFailure } from "./model"
+import { LayoutRow } from "../../../../customers/overview/rows"
+import { CoverageRow, FilterForm, MetricRow, PreviewFailure } from "./model"
 
-/** A metric write's failure: the metric is gone, or the store refused the draft. */
+/** A metric write's failure: the metric is gone, or the store refused the draft (`detail` says why). */
 export const MetricWriteFailure = Schema.Union([Schema.Literals(["NotFound", "Invalid"]), CommonReason])
 export type MetricWriteFailure = typeof MetricWriteFailure.Type
 
@@ -56,14 +57,22 @@ export const Message = defineMessageUnion({
 	// Actions
 	PressedSave: {},
 	SucceededCreateMetric: { metricKey: Schema.String },
-	FailedCreateMetric: { reason: MetricWriteFailure },
+	FailedCreateMetric: { reason: MetricWriteFailure, detail: Schema.NullOr(Schema.String) },
 	SucceededUpdateMetric: { metricKey: Schema.String },
-	FailedUpdateMetric: { metricKey: Schema.String, reason: MetricWriteFailure },
+	FailedUpdateMetric: {
+		metricKey: Schema.String,
+		reason: MetricWriteFailure,
+		detail: Schema.NullOr(Schema.String),
+	},
 	PressedCancel: {},
 	PressedDelete: {},
 	GotDeleteModalMessage: { message: Modal.Message },
 	PressedConfirmDelete: {},
 	SucceededDeleteMetric: { metricKey: Schema.String },
-	FailedDeleteMetric: { metricKey: Schema.String, reason: MetricWriteFailure },
+	FailedDeleteMetric: {
+		metricKey: Schema.String,
+		reason: MetricWriteFailure,
+		detail: Schema.NullOr(Schema.String),
+	},
 })
 export type Message = typeof Message.Type

@@ -3,7 +3,6 @@ import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { Option } from "effect"
 import { twMerge } from "tailwind-merge"
-import { formatCount } from "../../../../customers/format"
 import type { BuiltInContext } from "../../../../customers/overview/built-ins"
 import type * as OverviewData from "../../../../customers/overview/data"
 import { BLOCKS } from "../../../../customers/overview/starters"
@@ -16,6 +15,7 @@ import {
 	IconChevronRight,
 	IconCopy,
 	IconDashboard,
+	IconDots,
 	IconEye,
 	IconPlus,
 	IconTrash,
@@ -36,8 +36,8 @@ import {
 	previewAccount,
 	selectedWidget,
 } from "./model"
-import { panel, SPAN_LABEL, TYPE_LABEL } from "./panel-view"
-import { rulePopover } from "./rule-view"
+import { panel, SPAN_LABEL, spanOf, TYPE_LABEL, widgetTitle } from "./panel-view"
+import { matchSummary, ruleChipsView, rulePopover } from "./rule-view"
 
 /** The layout editor (Wonder `yez`, `bbw`, `gau`, `was`): top bar, who gets it, the canvas, the panel. */
 
@@ -47,10 +47,13 @@ const icon = { attributes: { "data-slot": "icon" } }
 
 // TOP BAR
 
+const NAME_ERROR_ID = "layout-name-error"
+
 const topBar = (h: H, model: Model, editor: Editor, draft: Customers.LayoutDraft, shared: Shared): Html => {
 	const isAdmin = isCustomersAdmin(shared)
 	const dirty = isDirty(editor)
 	const valid = isValidDraft(draft)
+	const isNameMissing = draft.name.trim() === ""
 	const status =
 		editor.layoutId === null ? "Not saved yet" : dirty ? "Unsaved changes" : "All changes saved"
 	return h.div(
@@ -73,15 +76,28 @@ const topBar = (h: H, model: Model, editor: Editor, draft: Customers.LayoutDraft
 						[
 							input(h, {
 								isDisabled: !isAdmin,
+								isInvalid: isNameMissing,
 								attributes: [
 									h.AriaLabel("Layout name"),
 									h.Value(draft.name),
 									h.Attribute("maxlength", "80"),
 									h.OnInput((value) => Message.ChangedName({ value })),
+									...(isNameMissing ? [h.AriaDescribedBy(NAME_ERROR_ID)] : []),
 								],
 							}),
 						],
 					),
+					...(isNameMissing
+						? [
+								h.span(
+									[
+										h.Id(NAME_ERROR_ID),
+										h.Class("whitespace-nowrap text-danger-subtle-fg text-xs"),
+									],
+									["Name the layout to save it"],
+								),
+							]
+						: []),
 					...(editor.layoutId === null
 						? [
 								h.span(
@@ -203,7 +219,13 @@ const previewPicker = (h: H, model: Model, editor: Editor): Html => {
 	})
 }
 
-const metaBar = (h: H, model: Model, editor: Editor, draft: Customers.LayoutDraft): Html => {
+const metaBar = (
+	h: H,
+	model: Model,
+	editor: Editor,
+	draft: Customers.LayoutDraft,
+	isAdmin: boolean,
+): Html => {
 	const result = Option.getOrUndefined(AsyncData.getData(editor.dryRun))
 	const isDefault = isDefaultEditor(model, editor)
 	return h.div(
@@ -222,19 +244,21 @@ const metaBar = (h: H, model: Model, editor: Editor, draft: Customers.LayoutDraf
 								["Fallback: every customer no other layout takes."],
 							),
 						]
-					: [
-							rulePopover(h, model, editor, draft),
-							h.span(
-								[h.Class("text-muted-fg text-sm tabular-nums")],
-								[
-									result === undefined
-										? AsyncData.isFailure(editor.dryRun)
-											? "Couldn't check matches"
-											: "Checking…"
-										: `Matches ${formatCount(result.effectiveCount)} ${result.effectiveCount === 1 ? "customer" : "customers"}`,
-								],
-							),
-						],
+					: !isAdmin
+						? [ruleChipsView(h, model, draft)]
+						: [
+								rulePopover(h, model, editor, draft),
+								h.span(
+									[h.Class("text-muted-fg text-sm tabular-nums")],
+									[
+										result === undefined
+											? AsyncData.isFailure(editor.dryRun)
+												? "Couldn't check matches"
+												: "Checking…"
+											: matchSummary(result),
+									],
+								),
+							],
 			),
 			previewPicker(h, model, editor),
 		],
@@ -291,7 +315,7 @@ const toolbar = (h: H, widget: Customers.OverviewWidget, index: number, count: n
 				selected: String(widget.span),
 				onSelect: (span) =>
 					Message.EditedWidget({
-						widget: { ...widget, span: Number(span) as Customers.WidgetSpan },
+						widget: { ...widget, span: spanOf(span) },
 					}),
 				className: "p-0 [&>*]:h-6 [&>*]:px-1.5",
 			}),
@@ -344,7 +368,14 @@ const emptyCanvas = (h: H, accountName: string): Html =>
 		],
 	)
 
-const canvas = (h: H, model: Model, editor: Editor, draft: Customers.LayoutDraft, shared: Shared): Html => {
+const canvas = (
+	h: H,
+	model: Model,
+	editor: Editor,
+	draft: Customers.LayoutDraft,
+	shared: Shared,
+	isAdmin: boolean,
+): Html => {
 	const account = previewAccount(model, editor)
 	const content = (() => {
 		if (account === undefined)
@@ -382,24 +413,48 @@ const canvas = (h: H, model: Model, editor: Editor, draft: Customers.LayoutDraft
 			showHidden: true,
 		}
 		const count = draft.widgets.length
+		if (!isAdmin) return widgetGrid(h, draft.widgets, context)
+		// The toolbar and the handle sit beside the clickable widget, not in it: their presses never select.
 		return widgetGrid(h, draft.widgets, context, (widget, index, drawn) => {
 			const isSelected = widget.id === editor.selectedId
+			const title = widgetTitle(model, widget)
 			return h.div(
 				[
 					h.Class(
 						twMerge(
-							"relative h-full cursor-pointer rounded-xl outline-hidden ring-offset-4 ring-offset-bg transition-shadow",
+							"group/widget relative h-full rounded-xl ring-offset-4 ring-offset-bg transition-shadow",
 							isSelected ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-border-hover",
 						),
 					),
-					h.OnClick(Message.ClickedWidget({ widgetId: widget.id })),
 				],
-				[...(isSelected ? [toolbar(h, widget, index, count)] : []), drawn],
+				[
+					...(isSelected ? [toolbar(h, widget, index, count)] : []),
+					ariaButton(
+						h,
+						{
+							onPress: Message.ClickedWidget({ widgetId: widget.id }),
+							className:
+								"absolute top-2 right-2 z-10 inline-flex size-6 cursor-pointer items-center justify-center rounded-md border border-border bg-bg text-muted-fg opacity-0 outline-hidden transition-opacity group-hover/widget:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/70",
+							attributes: [
+								h.AriaLabel(`Select ${title} widget`),
+								h.AriaPressed(isSelected ? "true" : "false"),
+							],
+						},
+						[IconDots(h, { className: "size-3.5" })],
+					),
+					h.div(
+						[
+							h.Class("h-full cursor-pointer"),
+							h.OnClick(Message.ClickedWidget({ widgetId: widget.id })),
+						],
+						[drawn],
+					),
+				],
 			)
 		})
 	})()
 	return h.div(
-		[h.Class("min-w-0 flex-1 overflow-y-auto px-6 py-8")],
+		[h.Class("min-w-0 flex-1 px-6 py-8 lg:overflow-y-auto")],
 		[h.div([h.Class("mx-auto max-w-5xl")], [content])],
 	)
 }
@@ -413,16 +468,20 @@ export const editorView = (h: H, model: Model, editor: Editor, shared: Shared): 
 			[h.Class("flex h-full items-center justify-center text-muted-fg text-sm")],
 			[model.layouts === null ? "Loading layout…" : "This layout no longer exists."],
 		)
+	const isAdmin = isCustomersAdmin(shared)
 	return h.div(
 		[h.Class("flex h-full min-h-0 flex-col")],
 		[
 			topBar(h, model, editor, draft, shared),
-			metaBar(h, model, editor, draft),
+			metaBar(h, model, editor, draft, isAdmin),
+			// Under lg the panel stacks under the canvas and both scroll together.
 			h.div(
-				[h.Class("flex min-h-0 flex-1")],
+				[h.Class("flex min-h-0 flex-1 max-lg:flex-col max-lg:overflow-y-auto")],
 				[
-					canvas(h, model, editor, draft, shared),
-					panel(h, model, editor, shared.orgSlug ?? "", selectedWidget(editor)),
+					canvas(h, model, editor, draft, shared, isAdmin),
+					...(isAdmin
+						? [panel(h, model, editor, shared.orgSlug ?? "", selectedWidget(editor))]
+						: []),
 				],
 			),
 		],

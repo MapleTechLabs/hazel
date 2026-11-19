@@ -1,8 +1,9 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerMetricDefinitionId, CustomerOverviewLayoutId } from "@hazel/schema"
+import { CustomerMetricDefinitionId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
+import { LayoutRow } from "../../../../customers/overview/rows"
 import { MetricSourceKind } from "../../../../route"
 import * as Modal from "../../../../ui/modal"
 
@@ -33,14 +34,6 @@ export const MetricRow = Schema.Struct({
 	lastError: Schema.NullOr(Schema.String),
 })
 export type MetricRow = typeof MetricRow.Type
-
-/** A layout, for "used in": which metrics its widgets read. */
-export const LayoutRow = Schema.Struct({
-	id: CustomerOverviewLayoutId,
-	name: Schema.String,
-	widgets: Schema.Array(Customers.OverviewWidget),
-})
-export type LayoutRow = typeof LayoutRow.Type
 
 export const CoverageRow = Schema.Struct({
 	metricKey: Schema.String,

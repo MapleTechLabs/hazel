@@ -3,7 +3,7 @@ import { Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { BUILT_IN_LABEL } from "../../../../customers/overview/built-ins"
-import type { MetricDef } from "../../../../customers/overview/rows"
+import { type MetricDef, metricGroups } from "../../../../customers/overview/rows"
 import { BLOCKS } from "../../../../customers/overview/starters"
 import { STYLE_LABEL } from "../../../../customers/overview/widgets"
 import { segmented } from "../../../../customers/ui/filter-bar"
@@ -26,7 +26,7 @@ import { input } from "../../../../ui/input"
 import * as Popover from "../../../../ui/popover"
 import { switchControl } from "../../../../ui/switch"
 import { Message } from "./message"
-import { type Editor, metricGroups, type Model } from "./model"
+import { type Editor, type Model } from "./model"
 
 /**
  * The editor's right panel: the widget library while nothing is selected, else the selected
@@ -50,6 +50,11 @@ export const TYPE_LABEL = {
 } as const satisfies Record<Widget["_tag"], string>
 
 export const SPAN_LABEL = { 1: "1/4", 2: "1/2", 3: "3/4", 4: "Full width" } as const
+
+const SPANS = [1, 2, 3, 4] as const
+
+/** A width segment's key back to its span. */
+export const spanOf = (key: string): Customers.WidgetSpan => SPANS.find((span) => String(span) === key) ?? 4
 
 const eyebrow = (h: H, text: string): Html =>
 	heading(h, { variant: "label", className: "px-5 pt-5 pb-2" }, [text])
@@ -114,7 +119,7 @@ const spanPicker = (h: H, widget: Widget): Html =>
 		ariaLabel: "Width",
 		segments: ([1, 2, 3, 4] as const).map((span) => ({ key: String(span), label: SPAN_LABEL[span] })),
 		selected: String(widget.span),
-		onSelect: (span) => edited({ ...widget, span: Number(span) as Customers.WidgetSpan }),
+		onSelect: (span) => edited({ ...widget, span: spanOf(span) }),
 		className: "w-full *:flex-1 *:justify-center",
 	})
 
@@ -135,6 +140,16 @@ const windowPicker = (h: H, widget: Customers.StatWidget | Customers.MetricTable
 	})
 
 const nameOf = (model: Model, key: string) => model.metrics?.find((metric) => metric.key === key)?.name ?? key
+
+/** What a widget is called: its title, its metric, or its section. */
+export const widgetTitle = (model: Model, widget: Widget): string =>
+	widget._tag === "stat"
+		? nameOf(model, widget.metricKey)
+		: widget._tag === "built_in"
+			? BUILT_IN_LABEL[widget.kind]
+			: widget.title === ""
+				? "Untitled"
+				: widget.title
 
 // THE METRIC PICKER
 
@@ -500,7 +515,7 @@ const tableSettings = (
 	orgSlug: string,
 	widget: Customers.MetricTableWidget,
 ): ReadonlyArray<Html> => {
-	const groups = metricGroups(model)
+	const groups = metricGroups(model.metrics)
 	const { rows } = widget
 	const groupMetrics =
 		rows._tag === "group" ? (model.metrics ?? []).filter((metric) => metric.group === rows.group) : []
@@ -525,20 +540,24 @@ const tableSettings = (
 						{ key: "metrics", label: "Pick metrics" },
 					],
 					selected: rows._tag,
-					onSelect: (kind) =>
-						edited({
+					// Switching keeps what the table showed: a group's rows (less the left out) become the picks.
+					onSelect: (kind) => {
+						const picked = groupMetrics
+							.map((metric) => metric.key)
+							.filter((key) => !widget.exclude.includes(key))
+							.slice(0, 30)
+						return edited({
 							...widget,
+							exclude: [],
 							rows:
 								kind === "group"
 									? { _tag: "group", group: groups[0] ?? "Feature usage" }
 									: {
 											_tag: "metrics",
-											metricKeys:
-												groupMetrics.length === 0
-													? [firstKey]
-													: groupMetrics.map((metric) => metric.key),
+											metricKeys: picked.length === 0 ? [firstKey] : picked,
 										},
-						}),
+						})
+					},
 					className: "w-full *:flex-1 *:justify-center",
 				}),
 				rows._tag === "group"
@@ -714,18 +733,7 @@ const settingsPanel = (
 				[h.Class("flex min-w-0 flex-col")],
 				[
 					heading(h, { variant: "label", level: 2 }, [`${TYPE_LABEL[widget._tag]} widget`]),
-					h.span(
-						[h.Class("truncate font-semibold text-fg text-sm")],
-						[
-							widget._tag === "stat"
-								? nameOf(model, widget.metricKey)
-								: widget._tag === "built_in"
-									? BUILT_IN_LABEL[widget.kind]
-									: widget.title === ""
-										? "Untitled"
-										: widget.title,
-						],
-					),
+					h.span([h.Class("truncate font-semibold text-fg text-sm")], [widgetTitle(model, widget)]),
 				],
 			),
 			button(
@@ -874,7 +882,7 @@ export const panel = (
 			h.AriaLabel(widget === undefined ? "Add widgets" : "Widget settings"),
 			h.Class(
 				twMerge(
-					"flex w-80 shrink-0 flex-col overflow-y-auto border-border border-l bg-bg max-lg:hidden",
+					"flex shrink-0 flex-col border-border bg-bg max-lg:w-full max-lg:border-t lg:w-80 lg:overflow-y-auto lg:border-l",
 				),
 			),
 		],

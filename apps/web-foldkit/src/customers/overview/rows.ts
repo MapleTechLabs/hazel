@@ -71,6 +71,10 @@ export const groupKeysOf =
 	(group: string): ReadonlyArray<string> =>
 		(metrics ?? []).filter((metric) => metric.group === group).map((metric) => metric.key)
 
+/** The groups the org's metrics are sectioned by, by name. */
+export const metricGroups = (metrics: ReadonlyArray<MetricDef> | null): ReadonlyArray<string> =>
+	[...new Set((metrics ?? []).flatMap((metric) => (metric.group === null ? [] : [metric.group])))].sort()
+
 export const layoutsStream = <Message>(
 	organizationId: OrganizationId,
 	toMessage: (layouts: ReadonlyArray<LayoutRow>) => Message,

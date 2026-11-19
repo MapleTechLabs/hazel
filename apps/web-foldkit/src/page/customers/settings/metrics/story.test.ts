@@ -109,6 +109,12 @@ describe("metric editor", () => {
 		expect(commandsOf(taken, Message.PressedSave())).toEqual([])
 		const bad = run(named, [Message.ChangedKey({ value: "9lives" })])
 		expect(commandsOf(bad, Message.PressedSave())).toEqual([])
+		// `new` is the editor's own path; `health_score` a built-in's key.
+		for (const reserved of ["new", "health_score"]) {
+			expect(
+				commandsOf(run(named, [Message.ChangedKey({ value: reserved })]), Message.PressedSave()),
+			).toEqual([])
+		}
 	})
 
 	test("creates a builder query with its SQL, and an SQL-only one without a builder", () => {
@@ -236,6 +242,22 @@ describe("metric editor", () => {
 			_tag: "RequestedNavigation",
 			route: { _tag: "CustomersSettingsMetrics" },
 		})
+
+		// A refusal shows the store's reason.
+		const refused = update(
+			deleting,
+			Message.FailedDeleteMetric({
+				metricKey: "dashboards_created",
+				reason: "Invalid",
+				detail: "Formula Ratio uses it",
+			}),
+			admin,
+		)
+		expect(refused.outMessage).toMatchObject({
+			_tag: "RequestedToast",
+			toast: { description: "Formula Ratio uses it" },
+		})
+		expect(refused.model.editor?.isDeleting).toBe(false)
 
 		expect(commandsOf(asked, Message.PressedConfirmDelete(), member)).toEqual([])
 		const renamed = run(

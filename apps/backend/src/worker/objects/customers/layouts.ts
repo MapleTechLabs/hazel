@@ -156,8 +156,8 @@ export const ensureDefaultLayout = Effect.fn("Customers.ensureDefaultLayout")(fu
 
 /**
  * Who `rule` gives a layout to at `position` (absent: where `layoutId` sits, else first): the
- * accounts it matches, those a layout earlier in the order or a pin to another layout already takes,
- * and what is left.
+ * accounts it matches, those a layout earlier in the order takes, those pinned to another layout,
+ * and what it gets: the rest, plus every account pinned to it (a pin wins over every rule).
  */
 export const layoutDryRun = Effect.fn("Customers.layoutDryRun")(function* (
 	input: {
@@ -177,19 +177,28 @@ export const layoutDryRun = Effect.fn("Customers.layoutDryRun")(function* (
 	)
 	const inputs = yield* layoutInputs([input.rule, ...earlier.map((layout) => layout.rule)], now)
 	const names = new Map(layouts.map((layout) => [layout.id, layout.name]))
+	/** A pin to a live layout: it wins over every rule. */
+	const pinOf = (account: (typeof inputs)[number]["account"]) =>
+		account.pinnedLayoutId !== null && names.has(account.pinnedLayoutId) ? account.pinnedLayoutId : null
+	const pinnedHere = (account: (typeof inputs)[number]["account"]) =>
+		input.layoutId !== undefined && pinOf(account) === input.layoutId
 	const matching = inputs.filter(({ facts }) => ruleMatches(input.rule, facts))
 	const taken = new Map<CustomerOverviewLayoutId, number>()
+	let pinnedElsewhere = 0
 	for (const { account, facts } of matching) {
-		const pinned =
-			account.pinnedLayoutId !== null &&
-			account.pinnedLayoutId !== input.layoutId &&
-			names.has(account.pinnedLayoutId)
-				? account.pinnedLayoutId
-				: undefined
-		const by = pinned ?? earlier.find((layout) => ruleMatches(layout.rule, facts))?.id
+		if (pinnedHere(account)) continue
+		if (pinOf(account) !== null) {
+			pinnedElsewhere += 1
+			continue
+		}
+		const by = earlier.find((layout) => ruleMatches(layout.rule, facts))?.id
 		if (by !== undefined) taken.set(by, (taken.get(by) ?? 0) + 1)
 	}
 	const takenCount = [...taken.values()].reduce((sum, count) => sum + count, 0)
+	// Pinned to it without matching: it gets them all the same (the matching ones are counted already).
+	const pinnedOnly = inputs.filter(
+		({ account, facts }) => pinnedHere(account) && !ruleMatches(input.rule, facts),
+	).length
 	return {
 		matchingCount: matching.length,
 		matching: matching
@@ -199,6 +208,7 @@ export const layoutDryRun = Effect.fn("Customers.layoutDryRun")(function* (
 		takenBy: [...taken]
 			.map(([layoutId, count]) => ({ layoutId, name: names.get(layoutId) ?? "", count }))
 			.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
-		effectiveCount: matching.length - takenCount,
+		pinnedElsewhere,
+		effectiveCount: matching.length - takenCount - pinnedElsewhere + pinnedOnly,
 	} satisfies LayoutDryRunResult
 })

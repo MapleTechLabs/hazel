@@ -3,6 +3,7 @@ import { CustomerAccountId, CustomerOverviewLayoutId, OrganizationMemberId } fro
 import { Effect, Option, Schema } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import * as OverviewData from "../../../../customers/overview/data"
+import type { LayoutRow } from "../../../../customers/overview/rows"
 import { type AccountRow, toAccountRow, toSignalRow } from "../../../../customers/queries"
 import { labShared } from "../../../../page/customers/lab-shared"
 import { Message } from "../../../../page/customers/settings/layouts/message"
@@ -89,20 +90,21 @@ const dryRun = (
 		position ?? ordered.find((layout) => layout.id === layoutId)?.position ?? Number.NEGATIVE_INFINITY
 	const earlier = ordered.filter((layout) => layout.id !== layoutId && layout.position < at)
 	const matching = ACCOUNT_ROWS.filter((account) => Customers.ruleMatches(rule, factsOf(account)))
-	const taken = new Map<string, number>()
+	const taken = new Map<LayoutRow, number>()
 	for (const account of matching) {
 		const first = earlier.find((layout) => Customers.ruleMatches(layout.rule, factsOf(account)))
-		if (first !== undefined) taken.set(first.id, (taken.get(first.id) ?? 0) + 1)
+		if (first !== undefined) taken.set(first, (taken.get(first) ?? 0) + 1)
 	}
 	const takenCount = [...taken.values()].reduce((sum, count) => sum + count, 0)
 	return {
 		matchingCount: matching.length,
 		matching: matching.slice(0, 200).map((account) => ({ accountId: account.id, name: account.name })),
-		takenBy: [...taken.entries()].map(([id, count]) => ({
-			layoutId: id,
-			name: LAYOUTS.find((layout) => layout.id === id)?.name ?? "",
+		takenBy: [...taken.entries()].map(([layout, count]) => ({
+			layoutId: layout.id,
+			name: layout.name,
 			count,
 		})),
+		pinnedElsewhere: 0,
 		effectiveCount: matching.length - takenCount,
 	}
 }

@@ -50,12 +50,13 @@ const toCatalog = (shared: Shared, request?: ToastRequest) =>
 		request === undefined ? {} : { toast: request },
 	)
 
-const writeFailure = (title: string, reason: MetricWriteFailure) =>
+/** A refusal reads as the store's own reason (Hazel's text, e.g. "Formula Ratio uses it"). */
+const writeFailure = (title: string, reason: MetricWriteFailure, detail: string | null) =>
 	toast(
 		errorToastOf(
 			failureMessage(reason, {
 				NotFound: { title, description: "The metric was deleted in the meantime." },
-				Invalid: { title, description: "Check the metric's fields and try again." },
+				Invalid: { title, description: detail ?? "Check the metric's fields and try again." },
 			}),
 		),
 	)
@@ -364,19 +365,19 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					}
 				: { model, outMessage: toast(created) }
 		},
-		FailedCreateMetric: ({ reason }) => ({
+		FailedCreateMetric: ({ reason, detail }) => ({
 			model: withEditor(model, (editor) =>
 				editor.metricKey === null ? { ...editor, isSaving: false } : editor,
 			),
-			outMessage: writeFailure("Couldn't create the metric", reason),
+			outMessage: writeFailure("Couldn't create the metric", reason, detail),
 		}),
 		SucceededUpdateMetric: ({ metricKey }) => ({
 			model: withMetricEditor(model, metricKey, (editor) => ({ ...editor, isSaving: false })),
 			outMessage: toast(successToast("Metric saved", savedDescription(model.editor?.form ?? null))),
 		}),
-		FailedUpdateMetric: ({ metricKey, reason }) => ({
+		FailedUpdateMetric: ({ metricKey, reason, detail }) => ({
 			model: withMetricEditor(model, metricKey, (editor) => ({ ...editor, isSaving: false })),
-			outMessage: writeFailure("Couldn't save the metric", reason),
+			outMessage: writeFailure("Couldn't save the metric", reason, detail),
 		}),
 		PressedCancel: () => ({ model, outMessage: toCatalog(shared) }),
 		PressedDelete: () => ({ model: { ...model, deleteModal: Modal.open(model.deleteModal).model } }),
@@ -408,8 +409,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				? { model, outMessage: toCatalog(shared, deleted) }
 				: { model, outMessage: toast(deleted) }
 		},
-		FailedDeleteMetric: ({ metricKey, reason }) => ({
+		FailedDeleteMetric: ({ metricKey, reason, detail }) => ({
 			model: withMetricEditor(model, metricKey, (editor) => ({ ...editor, isDeleting: false })),
-			outMessage: writeFailure("Couldn't delete the metric", reason),
+			outMessage: writeFailure("Couldn't delete the metric", reason, detail),
 		}),
 	})

@@ -4,7 +4,8 @@ import { Subscription } from "foldkit"
 import type { PageSubscriptionInput } from "../../../contract"
 import { Message } from "./message"
 import type { Model } from "./model"
-import { layoutsStream, metricsStream } from "./queries"
+import { layoutsStream } from "../../../../customers/overview/rows"
+import { metricsStream } from "./queries"
 
 type Input = PageSubscriptionInput<Model>
 

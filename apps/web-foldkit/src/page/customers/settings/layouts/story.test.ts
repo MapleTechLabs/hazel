@@ -52,6 +52,7 @@ const result: Customers.LayoutDryRunResult = {
 	matchingCount: 9,
 	matching: [],
 	takenBy: [{ layoutId: OBSERVABILITY.id, name: "Observability", count: 4 }],
+	pinnedElsewhere: 0,
 	effectiveCount: 5,
 }
 
@@ -154,11 +155,66 @@ describe("layouts: the editor", () => {
 		])
 		const saving = update(moved, Message.PressedSave(), shared)
 		expect(names(saving)).toContain("UpdateOverviewLayout")
+		expect(names(saving)).not.toContain("ReorderOverviewLayouts")
+		const updated = update(
+			saving.model,
+			Message.SucceededUpdateLayout({ layoutId: SELF_SERVE.id }),
+			shared,
+		)
 		expect(
-			saving.commands?.find((command) => command.name === "ReorderOverviewLayouts")?.args,
-		).toMatchObject({
-			layoutIds: [SELF_SERVE.id, OBSERVABILITY.id, TRIAL_ONBOARDING.id],
-		})
+			updated.commands?.find((command) => command.name === "ReorderOverviewLayouts")?.args,
+		).toMatchObject({ layoutIds: [SELF_SERVE.id, OBSERVABILITY.id, TRIAL_ONBOARDING.id] })
+		expect(updated.model.editor?.before).toBe(OBSERVABILITY.id)
+		expect(run(updated.model, [Message.SucceededReorderLayouts()]).editor?.before).toBeNull()
+	})
+
+	test("a save marks saved what it sent, not edits made while it ran", () => {
+		const opened = synced(editRoute(SELF_SERVE))
+		const saving = run(opened, [
+			Message.ChangedName({ value: "Self-serve teams" }),
+			Message.PressedSave(),
+		])
+		const landed = run(saving, [
+			Message.ChangedName({ value: "Self-serve teams (EU)" }),
+			Message.SucceededUpdateLayout({ layoutId: SELF_SERVE.id }),
+		])
+		expect(landed.editor?.saved?.name).toBe("Self-serve teams")
+		expect(isDirty(landed.editor!)).toBe(true)
+	})
+
+	test("a member sees the layout read-only: no dry run, no save, no selection", () => {
+		const member = makeShared({ member: memberWithRole("member"), nowMs: shared.nowMs })
+		const opened = init(editRoute(SELF_SERVE), member)
+		const synced = [
+			Message.UpdatedMetrics({ metrics: METRIC_DEFS }),
+			Message.UpdatedLayouts({ layouts: LAYOUTS }),
+		].reduce<Result>((current, next) => {
+			const step = update(current.model, next, member)
+			return { ...step, commands: [...(current.commands ?? []), ...(step.commands ?? [])] }
+		}, opened)
+		expect(names(synced)).not.toContain("FetchLayoutDryRun")
+		const edited = update(synced.model, Message.ChangedName({ value: "Mine" }), member).model
+		expect(names(update(edited, Message.PressedSave(), member))).toEqual([])
+		expect(
+			update(edited, Message.ClickedWidget({ widgetId: "mrr" }), member).model.editor?.selectedId,
+		).toBeNull()
+	})
+
+	test("one reorder at a time", () => {
+		const moving = update(
+			synced(listRoute),
+			Message.PressedMoveLayout({ layoutId: SELF_SERVE.id, step: -1 }),
+			shared,
+		)
+		expect(
+			names(
+				update(
+					moving.model,
+					Message.PressedMoveLayout({ layoutId: SELF_SERVE.id, step: -1 }),
+					shared,
+				),
+			),
+		).not.toContain("ReorderOverviewLayouts")
 	})
 
 	test("widgets add selected, duplicate under a fresh id, and remove", () => {

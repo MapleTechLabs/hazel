@@ -1,13 +1,16 @@
 import type * as Customers from "@hazel/domain/customers"
 import type { OrganizationId } from "@hazel/schema"
-import { and, eq, isNull } from "@tanstack/db"
+import { eq } from "@tanstack/db"
 import type { Stream } from "effect"
-import { customerMetricDefinitionCollection, customerOverviewLayoutCollection } from "~/db/collections"
+import { customerMetricDefinitionCollection } from "~/db/collections"
 import { msOf, withCustomersSource } from "../../../../customers/queries"
 import { liveQueryStream } from "../../../../data/live-query"
-import type { LayoutRow, MetricRow } from "./model"
+import type { MetricRow } from "./model"
 
-/** The page's own live queries over the `customers:<org>` collections: the metrics and the layouts. */
+/**
+ * The page's own live query: every metric definition with what the editor needs (its source, last
+ * run). The layouts come from `customers/overview/rows.ts`.
+ */
 
 export const toMetricRow = (row: Customers.MetricDefinition): MetricRow => ({
 	id: row.id,
@@ -39,24 +42,5 @@ export const metricsStream = <Message>(
 					.where(({ metric }) => eq(metric.organizationId, organizationId))
 					.orderBy(({ metric }) => metric.name, "asc"),
 			(rows) => toMessage(rows.map(toMetricRow)),
-		),
-	)
-
-/** The org's live layouts, in their order. */
-export const layoutsStream = <Message>(
-	organizationId: OrganizationId,
-	toMessage: (layouts: ReadonlyArray<LayoutRow>) => Message,
-): Stream.Stream<Message> =>
-	withCustomersSource(
-		organizationId,
-		liveQueryStream<Customers.OverviewLayout, Message>(
-			(q) =>
-				q
-					.from({ layout: customerOverviewLayoutCollection })
-					.where(({ layout }) =>
-						and(eq(layout.organizationId, organizationId), isNull(layout.deletedAt)),
-					)
-					.orderBy(({ layout }) => layout.position, "asc"),
-			(rows) => toMessage(rows.map((row) => ({ id: row.id, name: row.name, widgets: row.widgets }))),
 		),
 	)

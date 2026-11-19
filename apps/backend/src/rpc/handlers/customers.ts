@@ -15,6 +15,7 @@ import {
 	type ConnectionConfig,
 	type CustomerProvider,
 	EMPTY_LAYOUT_RULE,
+	isReservedMetricKey,
 	type LayoutDraft,
 	MAX_VIEWS,
 	type MetricDraft,
@@ -77,15 +78,15 @@ import {
 	setPrimaryAccount,
 	unlinkAccount,
 } from "../../worker/objects/customers/groups"
-import { isBuiltInMetric } from "../../worker/objects/customers/defaults"
 import { CustomerIngest } from "../../worker/objects/customers/ingest"
 import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/customers/ingest-live"
-import { startMetricBackfill } from "../../worker/objects/customers/jobs"
+import { endMetricBackfills, startMetricBackfill } from "../../worker/objects/customers/jobs"
 import { assignLayouts, layoutDryRun, liveLayouts } from "../../worker/objects/customers/layouts"
 import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
 import { configProblem as mapleConfigProblem } from "../../worker/objects/customers/maple/pull"
 import { previewMetric } from "../../worker/objects/customers/metric-preview"
 import {
+	type Definitions,
 	loadDefinitions,
 	metricCoverage,
 	metricSourceProblem,
@@ -1193,6 +1194,40 @@ const formulasReading = (key: string) =>
 		}),
 	)
 
+/**
+ * Why a product event metric cannot count its events, or null: the Maple pull maps each event to
+ * one key, so an event the Maple connection's mappings or another metric already counts is refused.
+ */
+const productEventOverlap = (key: string, source: MetricSource, definitions: Definitions) =>
+	Effect.gen(function* () {
+		if (source._tag !== "product_event") return null
+		const db = yield* Database.Database
+		const connection = yield* db.first(
+			SQLite.from(schema.customerConnectionsTable)
+				.select("config")
+				.where(($) => [$.provider.eq("maple")])
+				.limit(1),
+		)
+		const counted = new Map<string, string>()
+		if (Option.isSome(connection) && connection.value.config._tag === "maple") {
+			for (const mapping of connection.value.config.metricMappings)
+				counted.set(
+					mapping.event.trim(),
+					`the Maple connection's mapping to ${mapping.metricKey.trim()}`,
+				)
+		}
+		for (const definition of definitions.values()) {
+			if (definition.key === key || definition.source?._tag !== "product_event") continue
+			for (const event of definition.source.events)
+				counted.set(event.trim(), `the metric ${definition.name}`)
+		}
+		const taken = source.events.flatMap((event) => {
+			const owner = counted.get(event.trim())
+			return owner === undefined ? [] : [`${event.trim()} (counted by ${owner})`]
+		})
+		return taken.length === 0 ? null : `An event counts toward one metric only: ${taken.join(", ")}`
+	})
+
 /** Same SQL, or the same events: the stored days still hold. */
 const sameData = (before: MetricSource | null, after: MetricSource) => {
 	if (before === null || before._tag !== after._tag) return false
@@ -2083,13 +2118,16 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					yield* requireAdmin
 					const source = metric.source
 					if (source === null) return yield* invalid("Choose how the metric is made")
-					if (isBuiltInMetric(key)) return yield* invalid(`${key} is one of Hazel's own metrics`)
+					if (isReservedMetricKey(key))
+						return yield* invalid(`${key} is taken by Hazel; choose another key`)
 					const now = yield* currentTime
 					return yield* withTx(
 						Effect.gen(function* () {
 							const definitions = yield* loadDefinitions
 							if (definitions.has(key)) return yield* invalid(`A metric ${key} already exists`)
-							const problem = metricSourceProblem(key, source, definitions)
+							const problem =
+								metricSourceProblem(key, source, definitions) ??
+								(yield* productEventOverlap(key, source, definitions))
 							if (problem !== null) return yield* invalid(problem)
 							const [row] = yield* db.run(
 								SQLite.insertInto(schema.customerMetricDefinitionsTable)
@@ -2145,7 +2183,9 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 								return row
 							}
 							if (source === null) return yield* invalid("Choose how the metric is made")
-							const problem = metricSourceProblem(metricKey, source, definitions)
+							const problem =
+								metricSourceProblem(metricKey, source, definitions) ??
+								(yield* productEventOverlap(metricKey, source, definitions))
 							if (problem !== null) return yield* invalid(problem)
 							if (source._tag === "formula" && (yield* formulasReading(metricKey)).length > 0)
 								return yield* invalid(
@@ -2198,8 +2238,9 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 							const readers = yield* formulasReading(metricKey)
 							if (readers.length > 0)
 								return yield* invalid(
-									`${readers.map((reader) => reader.name).join(", ")} uses it; change that formula first`,
+									`${existing.name} can't be deleted while ${readers.length === 1 ? "the formula" : "the formulas"} ${readers.map((reader) => `"${reader.name}"`).join(", ")} ${readers.length === 1 ? "uses" : "use"} it. Remove {${metricKey}} from ${readers.length === 1 ? "it" : "them"} first.`,
 								)
+							yield* endMetricBackfills(metricKey, now)
 							yield* db.run(
 								SQLite.deleteFrom(schema.customerMetricDailyTable).where(($) => [
 									$.metricKey.eq(metricKey),

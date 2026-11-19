@@ -43,15 +43,13 @@
  * **No sweeps.** Maple is authoritative for nothing: what it did not see is not gone.
  */
 import {
-	checkMapleSql,
 	type ConnectionConfig,
 	type Day,
 	type IsoTimestamp,
-	type MetricSource,
 	type SyncProgress,
 } from "@hazel/domain/customers"
 import { Clock, Effect, Option, Schema } from "effect"
-import type { PullPage } from "../providers"
+import type { PullPage, UserMetric } from "../providers"
 import { addDays, dayOf } from "../time"
 import type { MapleApi } from "./http"
 import { activityOps, type MetricMap, metricDefinitionOps, metricMapOf, metricOps, queryOps } from "./map"
@@ -128,7 +126,7 @@ ORDER BY account, contact
 LIMIT ${PAGE_LIMIT} OFFSET ${offset}`
 
 /** Counts per metric key: `transform` maps each mapped event to its (namespaced) key. */
-const metricsSql = (map: MetricMap, offset: number) => `
+export const metricsSql = (map: MetricMap, offset: number) => `
 SELECT toDate(Timestamp) AS day,
        ${ACCOUNT_COLUMN} AS account,
        transform(EventName, [${quoted(map.keys())}], [${quoted(map.values())}]) AS metric,
@@ -142,19 +140,16 @@ GROUP BY day, account, metric
 ORDER BY account, metric
 LIMIT ${PAGE_LIMIT} OFFSET ${offset}`
 
-/** A Maple query metric's statement as a page runs it: its rows in a total order, one page of them. */
-const querySql = (sql: string, offset: number) =>
+/**
+ * A Maple query metric's statement as a page runs it: its rows in a total order, one page of them.
+ * Appended, not wrapped: `checkMapleSql` holds it to one plain SELECT ending in `GROUP BY account`,
+ * and Maple wants `$__orgFilter` top-level, which a wrapping subquery would hide.
+ */
+export const querySql = (sql: string, offset: number) =>
 	`${sql.trim().replace(/;\s*$/, "")}\nORDER BY account\nLIMIT ${PAGE_LIMIT} OFFSET ${offset}`
 
 /** The longest statement Maple's `run_sql` takes. */
 const MAX_SQL_LENGTH = 32_768
-
-/** Why a Maple query metric's SQL cannot run as a page runs it, or `null`. */
-export const mapleQueryProblem = (sql: string): string | null =>
-	checkMapleSql(sql) ??
-	(querySql(sql, Number.MAX_SAFE_INTEGER).length < MAX_SQL_LENGTH
-		? null
-		: "The query is too long for Maple")
 
 /**
  * Why the config cannot be saved, or `null`. A pull drops an event name or metric key it may not
@@ -182,7 +177,7 @@ export const configProblem = (config: Extract<ConnectionConfig, { _tag: "maple" 
 }
 
 /** One UTC day, half-open, as Maple takes a window. */
-const windowOf = (day: Day) => ({ start: `${day} 00:00:00`, end: `${addDays(day, 1)} 00:00:00` })
+export const windowOf = (day: Day) => ({ start: `${day} 00:00:00`, end: `${addDays(day, 1)} 00:00:00` })
 
 /**
  * The configured activity allowlist Hazel can act on; empty means every identified event counts, so
@@ -245,12 +240,6 @@ const nextCursor = (
 	return { ...carried, ...stepOf(first), day: addDays(cursor.day, 1) }
 }
 
-/** A user-defined metric the pull reads: its key and how it is made. */
-export interface UserMetric {
-	readonly key: string
-	readonly source: MetricSource
-}
-
 /**
  * The cursor of a user metric's backfill: `lookbackDays` up to today of that metric's phase only
  * (its query, or the metric phase with its events). `None` for a formula, which Maple does not hold.
@@ -270,6 +259,10 @@ export const backfillCursor = (
 		),
 	)
 }
+
+/** The user metric a run's cursor backfills alone (`backfillCursor`); undefined for a full walk. */
+export const metricBackfillKey = (cursor: string | null): string | undefined =>
+	cursor === null ? undefined : Option.getOrUndefined(decodeCursor(cursor))?.only
 
 interface PageInput {
 	readonly api: MapleApi
@@ -320,9 +313,10 @@ const metricsPage = Effect.fnUntraced(function* (
 })
 
 /**
- * One page of a Maple query metric. Maple refusing the statement (`provider`) is the query's
- * failure, recorded on it, and the walk moves on; any other (auth, rate limit, network) is the
- * pull's, and the run retries.
+ * One page of a Maple query metric. Maple's tool refusing the statement (inside a 200: no HTTP
+ * status, a retryable refusal) is the query's failure, recorded on it, and the walk moves on;
+ * anything else (auth, rate limit, network, a 5xx, an answer Hazel cannot read) is the pull's, and
+ * the run retries its days.
  */
 const queryPage = Effect.fnUntraced(function* (
 	input: PageInput,
@@ -340,11 +334,11 @@ const queryPage = Effect.fnUntraced(function* (
 			Effect.map((result) => ({
 				rows: result.rows.length,
 				more: result.truncated || result.rows.length >= PAGE_LIMIT,
-				...queryOps(result.rows, query.key, cursor.day, input.observedAt),
+				...queryOps(result.rows, query.key, cursor.day),
 				metricRuns: [{ key: query.key, error: null }],
 			})),
 			Effect.catchTag("CustomerProviderError", (error) =>
-				error.code === "provider"
+				error.code === "provider" && error.httpStatus === null && error.retryable !== false
 					? Effect.succeed({
 							...NO_ROWS,
 							metricRuns: [{ key: query.key, error: QUERY_FAILED }],
@@ -389,7 +383,7 @@ export const pullPage = Effect.fn("Maple.pullPage")(function* (input: {
 	if (input.cursor !== null && Option.isNone(decoded)) {
 		yield* Effect.logWarning("Maple pull cursor unreadable: the pull starts over")
 	}
-	const cursor = Option.getOrElse(decoded, (): MapleCursor => ({
+	const read = Option.getOrElse(decoded, (): MapleCursor => ({
 		day: firstDayOf({
 			since: input.since,
 			lookbackDays: input.config.lookbackDays,
@@ -399,8 +393,8 @@ export const pullPage = Effect.fn("Maple.pullPage")(function* (input: {
 		until: today,
 	}))
 	// A backfill reads its one metric; a walk the config's mappings and every user metric.
-	const metrics = input.metrics.filter((metric) => cursor.only === undefined || metric.key === cursor.only)
-	const configured = cursor.only === undefined ? metricMapOf(input.config.metricMappings) : new Map()
+	const metrics = input.metrics.filter((metric) => read.only === undefined || metric.key === read.only)
+	const configured = read.only === undefined ? metricMapOf(input.config.metricMappings) : new Map()
 	const map = metricMapWith(configured, metrics)
 	const queries = metrics
 		.flatMap((metric) =>
@@ -408,13 +402,17 @@ export const pullPage = Effect.fn("Maple.pullPage")(function* (input: {
 		)
 		.sort((a, b) => (a.key < b.key ? -1 : 1))
 	const steps: ReadonlyArray<Step> = [
-		...(cursor.only === undefined ? [{ phase: "activity" as const }] : []),
+		...(read.only === undefined ? [{ phase: "activity" as const }] : []),
 		...(map.size > 0 ? [{ phase: "metrics" as const }] : []),
 		...queries.map((query) => ({ phase: "queries" as const, query: query.key })),
 	]
-	// The cursor's query, or the next one when it was deleted meanwhile.
+	// The cursor's query, or the next one when it was deleted meanwhile (from its first row).
 	const query =
-		cursor.phase === "queries" ? queries.find((entry) => entry.key >= (cursor.query ?? "")) : undefined
+		read.phase === "queries" ? queries.find((entry) => entry.key >= (read.query ?? "")) : undefined
+	const cursor: MapleCursor =
+		query === undefined || query.key === read.query
+			? read
+			: { ...read, query: query.key, offset: undefined }
 	const pageInput: PageInput = { api: input.api, config: input.config, observedAt }
 	const queried = query === undefined ? undefined : yield* queryPage(pageInput, cursor, query)
 	const page =

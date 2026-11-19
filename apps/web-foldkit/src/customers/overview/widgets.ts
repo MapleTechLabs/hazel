@@ -344,7 +344,7 @@ type TableRow = Readonly<{
 export const tableRows = <M>(
 	widget: Customers.MetricTableWidget,
 	context: WidgetContext<M>,
-): ReadonlyArray<TableRow> => {
+): Readonly<{ rows: ReadonlyArray<TableRow>; used: number; defined: number }> => {
 	const keys = Customers.widgetMetricKeys(widget, groupKeysOf(context.metrics))
 	const rows = keys.map((key): TableRow => {
 		const window = OverviewData.windowOf(context.data, key, widget.windowDays)
@@ -364,11 +364,17 @@ export const tableRows = <M>(
 				? (right.window?.lastSeenDay ?? "").localeCompare(left.window?.lastSeenDay ?? "")
 				: (right.window?.value ?? 0) - (left.window?.value ?? 0)
 	const defined = rows.filter((row) => !isMissing(context, row.key))
-	return [
-		...defined.filter((row) => row.isUsed).sort(compare),
-		...(widget.unused === "show" ? defined.filter((row) => !row.isUsed).sort(compare) : []),
-		...rows.filter((row) => isMissing(context, row.key)),
-	]
+	const used = defined.filter((row) => row.isUsed)
+	return {
+		rows: [
+			...used.sort(compare),
+			...(widget.unused === "show" ? defined.filter((row) => !row.isUsed).sort(compare) : []),
+			...rows.filter((row) => isMissing(context, row.key)),
+		],
+		// Counted before unused rows are left out: "4 of 7 used" whatever the table shows.
+		used: used.length,
+		defined: defined.length,
+	}
 }
 
 const lastUsedText = (day: string | null, nowMs: number): string => {
@@ -394,10 +400,10 @@ const tableView = <M>(
 				: "grid-cols-[minmax(0,1fr)_8rem]",
 	)
 	const { windows } = context.data
-	const rows = tableRows(widget, context)
-	const definedCount = rows.filter((row) => row.metric !== undefined).length
-	const usedCount = rows.filter((row) => row.isUsed).length
-	const description = !AsyncData.hasData(windows)
+	const { rows, used: usedCount, defined: definedCount } = tableRows(widget, context)
+	// A group's rows are unknown until the definitions sync.
+	const isLoading = !AsyncData.hasData(windows) || context.metrics === null
+	const description = isLoading
 		? undefined
 		: `${usedCount} of ${definedCount} used in the last ${widget.windowDays} days.`
 	const cell = (className: string, children: ReadonlyArray<Html | string>) =>
@@ -557,22 +563,33 @@ const tableView = <M>(
 							["Couldn't load these metrics.", retryButton(h, context)],
 						),
 					]
-				: rows.length === 0
-					? [
-							h.p(
+				: widget.rows._tag === "group" && context.metrics === null
+					? Array.from({ length: 4 }, (_, index) =>
+							h.div(
 								[
-									h.Class(
-										"border-border border-t px-4 py-6 text-center text-muted-fg text-sm sm:px-5",
-									),
+									h.Key(`skeleton-${index}`),
+									h.AriaHidden(true),
+									h.Class("flex h-12 items-center border-border border-t px-4 sm:px-5"),
 								],
-								[
-									widget.rows._tag === "group"
-										? `No metrics in the ${widget.rows.group} group yet.`
-										: "No metrics picked.",
-								],
+								[skeleton(h, "h-3 w-full")],
 							),
-						]
-					: rows.map(row)),
+						)
+					: rows.length === 0
+						? [
+								h.p(
+									[
+										h.Class(
+											"border-border border-t px-4 py-6 text-center text-muted-fg text-sm sm:px-5",
+										),
+									],
+									[
+										widget.rows._tag === "group"
+											? `No metrics in the ${widget.rows.group} group yet.`
+											: "No metrics picked.",
+									],
+								),
+							]
+						: rows.map(row)),
 		],
 	)
 }
@@ -581,13 +598,19 @@ const tableView = <M>(
 
 const SPAN_CLASS = {
 	1: "col-span-4 @md:col-span-2 @2xl:col-span-1",
-	// Sections side by side only where each still has room (health's table, a chart).
-	2: "col-span-4 @4xl:col-span-2",
-	3: "col-span-4 @4xl:col-span-3",
+	// By the grid's own width (a container), so the editor's canvas lays out like the tab.
+	2: "col-span-4 @2xl:col-span-2",
+	3: "col-span-4 @2xl:col-span-3",
 	4: "col-span-4",
 } as const satisfies Record<Customers.WidgetSpan, string>
 
-export const spanClass = (span: Customers.WidgetSpan): string => SPAN_CLASS[span]
+/** The health breakdown's table needs more room than the other sections before it shares a row. */
+export const spanClass = (widget: Customers.OverviewWidget): string =>
+	widget._tag === "built_in" && widget.kind === "health" && widget.span < 4
+		? widget.span === 2
+			? "col-span-4 @5xl:col-span-2"
+			: "col-span-4 @5xl:col-span-3"
+		: SPAN_CLASS[widget.span]
 
 /** One widget; null for a stat hidden for this customer. */
 export const widgetView = <M>(
@@ -623,7 +646,7 @@ export const widgetGrid = <M>(
 						? []
 						: [
 								h.div(
-									[h.Key(widget.id), h.Class(twMerge("min-w-0", spanClass(widget.span)))],
+									[h.Key(widget.id), h.Class(twMerge("min-w-0", spanClass(widget)))],
 									[wrap === undefined ? drawn : wrap(widget, index, drawn)],
 								),
 							]

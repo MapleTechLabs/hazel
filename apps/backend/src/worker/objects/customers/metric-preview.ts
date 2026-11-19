@@ -2,11 +2,13 @@
  * `customers.metric.preview`: a metric source tried over the last days without saving it
  * (`docs/customers/overview-layouts.md`). A Maple query or product event count runs through the
  * Maple connection's key, one `run_sql` per UTC day and its first page only (the pull's paging is
- * not needed to show the shape); a formula evaluates over stored values. What it cannot run is the
+ * not needed to show the shape), with the pull's own statements; a formula evaluates over stored
+ * values and the built-ins. What it cannot run is the
  * result's `error` (Hazel's own words), never a failure of the call.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
+	checkMapleSql,
 	type Day,
 	evaluateFormula,
 	type MetricAggregation,
@@ -20,24 +22,55 @@ import type { HttpClient } from "effect/http"
 import { loadCredentials } from "./credentials"
 import { regionOfAccountId } from "./maple/adapter"
 import { makeMapleApi } from "./maple/http"
-import { metricValueOf } from "./maple/map"
-import { mapleQueryProblem } from "./maple/pull"
-import { MapleQueryRow, RUN_SQL_ROW_CAP } from "./maple/wire"
+import type { MapleApi } from "./maple/http"
+import { countOf, metricValueOf } from "./maple/map"
+import { metricsSql, querySql, windowOf } from "./maple/pull"
+import { MapleMetricRow, MapleQueryRow } from "./maple/wire"
+import { DERIVED_METRICS } from "./facts"
 import { aggregate, type Definitions, metricSourceProblem } from "./metric-values"
+import type { CustomerProviderError } from "./providers"
 import { inList } from "./sql"
-import { addDays, dayOf, dayRange } from "./time"
+import { dayOf, dayRange } from "./time"
 
 const TOP = 5
 
-/** Each day's rows of a product event count: the pull's metric phase, by account alone. */
-const productEventSql = (events: ReadonlyArray<string>) => `
-SELECT GroupId AS account, count() AS value
-FROM product_events
-WHERE $__orgFilter
-  AND Timestamp >= $__startTime AND Timestamp < $__endTime
-  AND GroupId != ''
-  AND EventName IN (${events.map((event) => `'${event.trim()}'`).join(", ")})
-GROUP BY account`
+const STEP = "metric preview"
+
+/** One day's rows of a source, as `account` (a Clerk organization id) and its value. */
+type DayRows = (
+	api: MapleApi,
+	day: Day,
+) => Effect.Effect<ReadonlyArray<{ readonly account: string; readonly value: number }>, CustomerProviderError>
+
+/** A Maple query's first page of a day, as the pull runs it. */
+const queryRows =
+	(sql: string): DayRows =>
+	(api, day) =>
+		Effect.map(
+			api.runSql({ step: STEP, sql: querySql(sql, 0), window: windowOf(day), row: MapleQueryRow }),
+			(result) =>
+				result.rows.flatMap((row) => {
+					const account = row.account == null ? "" : String(row.account).trim()
+					const value = row.value == null ? null : metricValueOf(row.value)
+					return account === "" || value === null ? [] : [{ account, value }]
+				}),
+		)
+
+/** A day's counts of the events, as the pull's metric phase reads them (under one key). */
+const eventRows = (events: ReadonlyArray<string>): DayRows => {
+	const map = new Map(events.map((event) => [event.trim(), "preview"]))
+	return (api, day) =>
+		Effect.map(
+			api.runSql({ step: STEP, sql: metricsSql(map, 0), window: windowOf(day), row: MapleMetricRow }),
+			(result) =>
+				result.rows.flatMap((row) => {
+					const value = countOf(row.events)
+					return row.account.trim() === "" || value === null
+						? []
+						: [{ account: row.account, value }]
+				}),
+		)
+}
 
 /** Daily values per Hazel account, plus the rows that named no customer. */
 interface Daily {
@@ -46,7 +79,7 @@ interface Daily {
 }
 
 /** Maple's rows for each day, through the connection's key; `string`: why they cannot be read. */
-const mapleDaily = (sql: string, days: ReadonlyArray<Day>, client: HttpClient.HttpClient) =>
+const mapleDaily = (rowsOf: DayRows, days: ReadonlyArray<Day>, client: HttpClient.HttpClient) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
 		const connection = yield* db.first(
@@ -63,17 +96,7 @@ const mapleDaily = (sql: string, days: ReadonlyArray<Day>, client: HttpClient.Ht
 		const api = makeMapleApi(client, credentials.value.apiKey, region)
 		const rows: Array<{ readonly day: Day; readonly account: string; readonly value: number }> = []
 		for (const day of days) {
-			const result = yield* api.runSql({
-				step: "metric preview",
-				sql: `${sql.trim().replace(/;\s*$/, "")}\nORDER BY account\nLIMIT ${RUN_SQL_ROW_CAP}`,
-				window: { start: `${day} 00:00:00`, end: `${addDays(day, 1)} 00:00:00` },
-				row: MapleQueryRow,
-			})
-			for (const row of result.rows) {
-				const value = metricValueOf(row.value)
-				if (row.account.trim() !== "" && value !== null)
-					rows.push({ day, account: row.account, value })
-			}
+			for (const row of yield* rowsOf(api, day)) rows.push({ day, ...row })
 		}
 		// Maple names a customer by its Clerk organization id, which its Maple ref shares.
 		const ids = [...new Set(rows.map((row) => row.account))]
@@ -114,6 +137,64 @@ const mapleDaily = (sql: string, days: ReadonlyArray<Day>, client: HttpClient.Ht
 		}),
 	)
 
+const ACTIVE = Database.sql`("eventCount" > 0 OR "sessionCount" > 0 OR "signedIn" = 1)`
+
+/**
+ * Every account's daily values of `keys` from `from` on: stored metrics as stored, and the
+ * built-ins as reads derive them (daily active users per day, scored health per day; MRR and 30-day
+ * active users at their current level, which is what a short preview shows of them).
+ */
+const operandDays = (
+	keys: ReadonlyArray<string>,
+	accounts: ReadonlyArray<Pick<schema.CustomerAccount, "id" | "mrrMinor" | "activeUsers30d">>,
+	days: ReadonlyArray<Day>,
+) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const from = days[0] ?? ""
+		const operands = new Map<CustomerAccountId, Map<string, Map<Day, number>>>()
+		const set = (accountId: CustomerAccountId, key: string, day: Day, value: number) => {
+			const own = operands.get(accountId) ?? new Map<string, Map<Day, number>>()
+			const points = own.get(key) ?? new Map<Day, number>()
+			points.set(day, value)
+			own.set(key, points)
+			operands.set(accountId, own)
+		}
+		const stored = keys.filter((key) => !DERIVED_METRICS.has(key))
+		if (stored.length > 0) {
+			const rows = yield* db.run(
+				SQLite.from(schema.customerMetricDailyTable)
+					.select("accountId", "metricKey", "day", "value")
+					.where(($) => [inList($.metricKey, stored), $.day.gte(from)]),
+			)
+			for (const row of rows) set(row.accountId, row.metricKey, row.day, row.value)
+		}
+		if (keys.includes("active_users")) {
+			const rows = (yield* db.query(
+				Database.sql`SELECT "accountId", "day", count(*) AS "users" FROM "customer_activity_daily"
+					WHERE "day" >= ${from} AND ${ACTIVE} GROUP BY "accountId", "day"`,
+			)) as ReadonlyArray<{ accountId: CustomerAccountId; day: Day; users: number }>
+			for (const row of rows) set(row.accountId, "active_users", row.day, Number(row.users))
+		}
+		if (keys.includes("health_score")) {
+			const rows = yield* db.run(
+				SQLite.from(schema.customerHealthDailyTable)
+					.select("accountId", "day", "score")
+					.where(($) => [$.day.gte(from)]),
+			)
+			for (const row of rows)
+				if (row.score !== null) set(row.accountId, "health_score", row.day, row.score)
+		}
+		for (const account of accounts) {
+			for (const day of days) {
+				if (keys.includes("mrr")) set(account.id, "mrr", day, account.mrrMinor)
+				if (keys.includes("active_users_30d"))
+					set(account.id, "active_users_30d", day, account.activeUsers30d)
+			}
+		}
+		return operands
+	})
+
 export const previewMetric = Effect.fn("Customers.previewMetric")(function* (
 	input: {
 		readonly source: MetricSource
@@ -128,11 +209,11 @@ export const previewMetric = Effect.fn("Customers.previewMetric")(function* (
 	const days = dayRange(dayOf(now), input.days)
 	const accounts = yield* db.run(
 		SQLite.from(schema.customerAccountsTable)
-			.select("id", "name")
+			.select("id", "name", "mrrMinor", "activeUsers30d")
 			.where(($) => [$.deletedAt.isNull()]),
 	)
 	const names = new Map(accounts.map((account) => [account.id, account.name]))
-	const result = (daily: Daily | string, windowOf: (accountId: CustomerAccountId) => number | null) => {
+	const result = (daily: Daily | string, valueOf: (accountId: CustomerAccountId) => number | null) => {
 		if (typeof daily === "string")
 			return {
 				error: daily,
@@ -145,7 +226,7 @@ export const previewMetric = Effect.fn("Customers.previewMetric")(function* (
 			} satisfies MetricPreviewResult
 		const top = [...daily.values.keys()]
 			.flatMap((accountId) => {
-				const value = windowOf(accountId)
+				const value = valueOf(accountId)
 				const name = names.get(accountId)
 				return value === null || name === undefined ? [] : [{ accountId, name, value }]
 			})
@@ -176,12 +257,12 @@ export const previewMetric = Effect.fn("Customers.previewMetric")(function* (
 	if (source._tag !== "formula") {
 		const problem =
 			source._tag === "maple_query"
-				? mapleQueryProblem(source.sql)
+				? checkMapleSql(source.sql)
 				: metricSourceProblem("", source, definitions)
 		const daily =
 			problem ??
 			(yield* mapleDaily(
-				source._tag === "maple_query" ? source.sql : productEventSql(source.events),
+				source._tag === "maple_query" ? queryRows(source.sql) : eventRows(source.events),
 				days,
 				client,
 			))
@@ -197,27 +278,12 @@ export const previewMetric = Effect.fn("Customers.previewMetric")(function* (
 					),
 		)
 	}
-	// A formula over stored values: each operand over the days by its own aggregation, then the
-	// formula; the sample applies it day by day.
+	// A formula: each operand over the days by its own aggregation, then the formula; the sample
+	// applies it day by day.
 	const problem = metricSourceProblem("", source, definitions)
 	const parsed = parseFormula(source.expression)
 	if (problem !== null || !parsed.ok) return result(problem ?? "The formula cannot be read", () => null)
-	const rows = yield* db.run(
-		SQLite.from(schema.customerMetricDailyTable)
-			.select("accountId", "metricKey", "day", "value")
-			.where(($) => [
-				inList($.metricKey, parsed.keys),
-				$.day.gte(addDays(dayOf(now), -(input.days - 1))),
-			]),
-	)
-	const operands = new Map<CustomerAccountId, Map<string, Map<Day, number>>>()
-	for (const row of rows) {
-		const own = operands.get(row.accountId) ?? new Map<string, Map<Day, number>>()
-		const points = own.get(row.metricKey) ?? new Map<Day, number>()
-		points.set(row.day, row.value)
-		own.set(row.metricKey, points)
-		operands.set(row.accountId, own)
-	}
+	const operands = yield* operandDays(parsed.keys, accounts, days)
 	const valueOn = (accountId: CustomerAccountId, day: Day) =>
 		evaluateFormula(parsed.node, (key) => operands.get(accountId)?.get(key)?.get(day) ?? null)
 	const values = new Map<CustomerAccountId, Map<Day, number>>()

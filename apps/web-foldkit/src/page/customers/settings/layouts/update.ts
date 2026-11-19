@@ -21,6 +21,7 @@ import * as Modal from "../../../../ui/modal"
 import * as Popover from "../../../../ui/popover"
 import type { PageReturn, Shared } from "../../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../../out-message"
+import { isCustomersAdmin } from "../shared"
 import {
 	CreateOverviewLayout,
 	DeleteOverviewLayout,
@@ -55,7 +56,6 @@ export type LayoutsRoute = RouteOf<
 >
 
 type Return = PageReturn<Model, Message>
-type Commands = NonNullable<Return["commands"]>
 
 const toast = (request: ToastRequest) => PageOutMessage.RequestedToast({ toast: request })
 
@@ -94,6 +94,7 @@ const editorOf = (
 	version,
 	dryRun: AsyncData.Idle(),
 	isSaving: false,
+	savingDraft: null,
 	pickerSearch: "",
 	previewSearch: "",
 	ruleMetricIndex: null,
@@ -226,7 +227,9 @@ const fetchDryRun = (model: Model, shared: Shared): Return => {
 		editor === null ||
 		editor.draft === null ||
 		organizationId === undefined ||
-		isDefaultEditor(model, editor)
+		isDefaultEditor(model, editor) ||
+		// The dry run is for admins; members see the rule's chips only.
+		!isCustomersAdmin(shared)
 	)
 		return { model }
 	return {
@@ -294,10 +297,19 @@ const ensurePreview = (result: Return, shared: Shared): Return =>
 	then(result, (model) => {
 		const editor = model.editor
 		if (editor === null || editor.draft === null) return { model }
-		if (editor.previewId !== null)
-			return AsyncData.isIdle(editor.previewDetail)
-				? setPreview(model, editor.previewId, shared)
-				: { model }
+		const named = editor.previewId
+		// `?preview=` naming a customer that is not there: the first one instead.
+		if (
+			named !== null &&
+			model.accounts !== null &&
+			!model.accounts.some((account) => account.id === named)
+		)
+			return ensurePreview(
+				{ model: withEditor(model, (current) => ({ ...current, previewId: null })) },
+				shared,
+			)
+		if (named !== null)
+			return AsyncData.isIdle(editor.previewDetail) ? setPreview(model, named, shared) : { model }
 		const matching = Option.getOrUndefined(AsyncData.getData(editor.dryRun))?.matching[0]?.accountId
 		const first =
 			model.accounts?.find((account) => account.id === matching) ??
@@ -384,64 +396,70 @@ const pickMetric = (model: Model, shared: Shared, metricKey: string): Return => 
 	})
 }
 
+/**
+ * The draft takes the edited rule; the open metric list closes once its condition moved or is no
+ * longer a metric condition.
+ */
+const resetRuleMetric = (editor: Editor, rule: Customers.LayoutRule): Editor => {
+	if (editor.draft === null) return editor
+	const index = editor.ruleMetricIndex
+	const before = index === null ? undefined : editor.draft.rule.conditions[index]
+	const after = index === null ? undefined : rule.conditions[index]
+	const keepsList =
+		rule.conditions.length === editor.draft.rule.conditions.length &&
+		after?._tag === "metric" &&
+		before?._tag === "metric" &&
+		after.metricKey === before.metricKey
+	return { ...editor, draft: { ...editor.draft, rule }, ruleMetricIndex: keepsList ? index : null }
+}
+
 // SAVING
 
 /** "9 customers see it now, 4 moved from Observability." */
+/** "Enterprise expansion saved · gets 9 customers". */
 const savedToast = (model: Model, editor: Editor, name: string): ToastRequest => {
 	const result = Option.getOrUndefined(AsyncData.getData(editor.dryRun))
-	if (result === undefined || isDefaultEditor(model, editor)) return successToast(`${name} saved`)
-	const taken = new Set(result.takenBy.map((entry) => entry.layoutId))
-	const matching = new Set(result.matching.map((entry) => entry.accountId))
-	const from = new Map<string, number>()
-	for (const account of model.accounts ?? [])
-		if (
-			matching.has(account.id) &&
-			account.layoutId !== null &&
-			account.layoutId !== editor.layoutId &&
-			!taken.has(account.layoutId)
-		)
-			from.set(account.layoutId, (from.get(account.layoutId) ?? 0) + 1)
-	const [fromId, count] = [...from.entries()].sort((left, right) => right[1] - left[1])[0] ?? [null, 0]
-	const fromName = layoutById(model, fromId)?.name
-	const customers = `${result.effectiveCount} ${result.effectiveCount === 1 ? "customer sees" : "customers see"} it now`
-	return successToast(
-		`${name} saved`,
-		fromName === undefined || count === 0
-			? `${customers}.`
-			: `${customers}, ${count} moved from ${fromName}.`,
-	)
+	return result === undefined || isDefaultEditor(model, editor)
+		? successToast(`${name} saved`)
+		: successToast(
+				`${name} saved`,
+				`Gets ${result.effectiveCount} ${result.effectiveCount === 1 ? "customer" : "customers"}.`,
+			)
 }
 
+/** The order with the edited layout where "Move above" put it. */
+const reorderToDraft = (model: Model, editor: Editor, organization: NonNullable<Shared["organization"]>) =>
+	ReorderOverviewLayouts({
+		organizationId: organization.id,
+		layoutIds: draftOrder(model, editor).flatMap((id) => (id === null ? [] : [id])),
+	})
+
+/** Creates or updates the layout; a moved existing one is reordered once its update landed. */
 const save = (model: Model, shared: Shared): Return => {
 	const editor = model.editor
 	const organizationId = shared.organization?.id
-	if (editor === null || editor.draft === null || organizationId === undefined || editor.isSaving)
+	if (
+		editor === null ||
+		editor.draft === null ||
+		organizationId === undefined ||
+		editor.isSaving ||
+		!isCustomersAdmin(shared)
+	)
 		return { model }
 	const layout = editor.draft
 	if (!isValidDraft(layout) || !isDirty(editor)) return { model }
-	const commands: Array<Commands[number]> =
-		editor.layoutId === null
-			? [
-					CreateOverviewLayout({
+	return {
+		model: withEditor(model, (current) => ({ ...current, isSaving: true, savingDraft: layout })),
+		commands: [
+			editor.layoutId === null
+				? CreateOverviewLayout({
 						organizationId,
 						layout,
 						position: draftPosition(model, editor) ?? null,
-					}),
-				]
-			: [
-					UpdateOverviewLayout({ organizationId, layoutId: editor.layoutId, layout }),
-					...(editor.before === null
-						? []
-						: [
-								ReorderOverviewLayouts({
-									organizationId,
-									layoutIds: draftOrder(model, editor).flatMap((id) =>
-										id === null ? [] : [id],
-									),
-								}),
-							]),
-				]
-	return { model: withEditor(model, (current) => ({ ...current, isSaving: true })), commands }
+					})
+				: UpdateOverviewLayout({ organizationId, layoutId: editor.layoutId, layout }),
+		],
+	}
 }
 
 const writeFailure = (title: string, reason: LayoutWriteFailure) =>
@@ -458,6 +476,7 @@ const writeFailure = (title: string, reason: LayoutWriteFailure) =>
 
 const reorder = (model: Model, shared: Shared, layoutId: CustomerOverviewLayoutId, step: -1 | 1): Return => {
 	const organizationId = shared.organization?.id
+	if (model.pendingOrder !== null) return { model }
 	const ids = ruleOrder(model).map((layout) => layout.id)
 	const order = moved(ids, ids.indexOf(layoutId), step)
 	if (organizationId === undefined || order === ids) return { model }
@@ -536,7 +555,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 
 		PressedMoveLayout: ({ layoutId, step }) => reorder(model, shared, layoutId, step),
-		SucceededReorderLayouts: () => ({ model: { ...model, pendingOrder: null } }),
+		// A moved layout's place is saved: "Move above" is done.
+		SucceededReorderLayouts: () => ({
+			model: withEditor({ ...model, pendingOrder: null }, (editor) => ({ ...editor, before: null })),
+		}),
 		FailedReorderLayouts: ({ reason }) => ({
 			model: { ...model, pendingOrder: null },
 			outMessage: writeFailure("Couldn't change the order", reason),
@@ -616,7 +638,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		PressedSave: () => save(model, shared),
 		SucceededCreateLayout: () => {
 			const editor = model.editor
-			const name = editor?.draft?.name ?? "Layout"
+			const name = editor?.savingDraft?.name ?? "Layout"
 			const saved = editor === null ? successToast(`${name} saved`) : savedToast(model, editor, name)
 			// Only the editor still saving leaves for the list; one left meanwhile just says so.
 			return editor?.isSaving === true && editor.layoutId === null
@@ -627,30 +649,41 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				: { model, outMessage: toast(saved) }
 		},
 		FailedCreateLayout: ({ reason }) => ({
-			model: withEditor(model, (editor) => ({ ...editor, isSaving: false })),
+			model: withEditor(model, (editor) => ({ ...editor, isSaving: false, savingDraft: null })),
 			outMessage: writeFailure("Couldn't create the layout", reason),
 		}),
 		SucceededUpdateLayout: ({ layoutId }) => {
 			const editor = model.editor
 			if (editor === null || editor.layoutId !== layoutId)
 				return { model, outMessage: toast(successToast("Layout saved")) }
-			return {
+			const organization = shared.organization
+			const saved: Return = {
 				model: {
 					...model,
-					editor: { ...editor, isSaving: false, saved: editor.draft, before: null },
+					editor: { ...editor, isSaving: false, saved: editor.savingDraft, savingDraft: null },
 				},
-				outMessage: toast(savedToast(model, editor, editor.draft?.name ?? "Layout")),
+				outMessage: toast(savedToast(model, editor, editor.savingDraft?.name ?? "Layout")),
 			}
+			// Moved with "Move above": its place is saved once its update landed.
+			return editor.before === null || organization === null
+				? saved
+				: { ...saved, commands: [reorderToDraft(model, editor, organization)] }
 		},
 		FailedUpdateLayout: ({ layoutId, reason }) => ({
 			model: withEditor(model, (editor) =>
-				editor.layoutId === layoutId ? { ...editor, isSaving: false } : editor,
+				editor.layoutId === layoutId ? { ...editor, isSaving: false, savingDraft: null } : editor,
 			),
 			outMessage: writeFailure("Couldn't save the layout", reason),
 		}),
 
+		// Only an admin selects, and only a widget the draft still has.
 		ClickedWidget: ({ widgetId }) => ({
-			model: withEditor(model, (editor) => ({ ...editor, selectedId: widgetId })),
+			model: withEditor(model, (editor) =>
+				isCustomersAdmin(shared) &&
+				editor.draft?.widgets.some((widget) => widget.id === widgetId) === true
+					? { ...editor, selectedId: widgetId }
+					: editor,
+			),
 		}),
 		ClearedSelection: () => ({ model: withEditor(model, (editor) => ({ ...editor, selectedId: null })) }),
 		PressedMoveWidget: ({ step }) =>
@@ -763,10 +796,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 
 		GotRulePopoverMessage: ({ message: popoverMessage }) =>
 			updatePopover(model, "rulePopover", popoverMessage),
-		EditedRule: ({ rule }) =>
-			ruleEdited(model, (editor) =>
-				editor.draft === null ? editor : { ...editor, draft: { ...editor.draft, rule } },
-			),
+		EditedRule: ({ rule }) => ruleEdited(model, (editor) => resetRuleMetric(editor, rule)),
 		PressedRuleMetric: ({ index }) => ({
 			model: withEditor(model, (editor) => ({ ...editor, ruleMetricIndex: index })),
 		}),

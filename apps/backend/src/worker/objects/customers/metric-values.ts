@@ -13,6 +13,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
+	checkMapleSql,
 	type Day,
 	evaluateFormula,
 	type FormulaNode,
@@ -24,7 +25,6 @@ import {
 import type { CustomerAccountId } from "@hazel/schema"
 import { Effect } from "effect"
 import { DERIVED_METRICS } from "./facts"
-import { mapleQueryProblem } from "./maple/pull"
 import { isEventName } from "./maple/wire"
 import { addDays, dayOf } from "./time"
 
@@ -212,7 +212,7 @@ export const metricSourceProblem = (
 ): string | null => {
 	switch (source._tag) {
 		case "maple_query":
-			return mapleQueryProblem(source.sql)
+			return checkMapleSql(source.sql)
 		case "product_event": {
 			const bad = source.events.filter((event) => !isEventName(event.trim()))
 			return bad.length === 0

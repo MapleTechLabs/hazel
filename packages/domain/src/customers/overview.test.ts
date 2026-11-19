@@ -77,6 +77,22 @@ GROUP BY account`
 		expect(checkMapleSql(`${valid}\nORDER BY value`)).toMatch(/^Leave out ORDER BY/)
 		expect(checkMapleSql(`${valid}\nLIMIT 5`)).toMatch(/^Leave out ORDER BY/)
 	})
+
+	it("keeps the page clause Hazel appends meaningful: one plain SELECT ending in GROUP BY account", () => {
+		const subquery = `SELECT account, sum(value) AS value FROM (${valid}) GROUP BY account`
+		expect(checkMapleSql(subquery)).toBe("One SELECT only: no subqueries or UNION")
+		expect(checkMapleSql(`${valid} UNION ALL ${valid}`)).toBe("One SELECT only: no subqueries or UNION")
+		expect(checkMapleSql(`${valid} -- by org`)).toBe("Leave out comments")
+		expect(checkMapleSql(valid.replace("FROM", "/* x */ FROM"))).toBe("Leave out comments")
+		expect(checkMapleSql(valid.replace("GROUP BY account", "GROUP BY account, ServiceName"))).toBe(
+			"End with GROUP BY account (a HAVING may follow)",
+		)
+		expect(checkMapleSql(`${valid} HAVING value > 0`)).toBeNull()
+		// Inside a literal, none of it counts.
+		expect(
+			checkMapleSql(valid.replace("GROUP BY", "AND ServiceName != 'a -- union select \\' #' GROUP BY")),
+		).toBeNull()
+	})
 })
 
 describe("mapleBuilderSql", () => {

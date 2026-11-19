@@ -42,6 +42,7 @@ const STATES = [
 	"preview-loaded",
 	"preview-error",
 	"provider-read-only",
+	"delete-confirm",
 ] as const
 type State = (typeof STATES)[number]
 const Flags = Schema.Struct({ state: Schema.Literals(STATES) })
@@ -163,6 +164,12 @@ const stateModel = (state: State): Model => {
 			)
 		case "provider-read-only":
 			return openRoute(listed, metricRoute("autumn.api_calls"), shared)
+		case "delete-confirm":
+			return step(
+				openRoute(listed, metricRoute("spans_ingested"), shared),
+				Message.PressedDelete(),
+				shared,
+			)
 	}
 }
 
