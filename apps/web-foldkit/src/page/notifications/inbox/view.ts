@@ -200,7 +200,8 @@ export const inboxView = (model: Model, { shared }: PageViewInputs, h: HtmlBuild
 	return h.div(
 		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
 		[
-			sectionHeaderRoot(h, { className: "border-none pb-0" }, [
+			// On a phone the top bar names the inbox (`shell/mobile.ts`).
+			sectionHeaderRoot(h, { className: "border-none pb-0 max-md:hidden" }, [
 				sectionHeaderGroup(h, {}, [
 					h.div(
 						[h.Class("space-y-0.5")],

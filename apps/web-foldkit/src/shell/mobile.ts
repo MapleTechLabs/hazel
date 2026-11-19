@@ -152,6 +152,18 @@ const SECTION_TITLES = {
 	Customers: "Customers",
 } as const satisfies Record<Exclude<OrgSection, "Chat">, string>
 
+/** The bar's title: the section, or for Activity the inbox shown (its page has no heading on a phone). */
+const sectionTitleOf = (route: AppRoute, section: Exclude<OrgSection, "Chat">): string =>
+	AppRoute.matchOrElse(
+		route,
+		{
+			NotificationsGeneral: () => "Channels",
+			NotificationsThreads: () => "Threads",
+			NotificationsDms: () => "Direct messages",
+		},
+		() => SECTION_TITLES[section],
+	)
+
 /**
  * The chrome a route gets on a phone. The chat list draws its own header (the org switcher); a
  * conversation and a channel's settings draw a header that leads back; Members is a page the chat
@@ -169,7 +181,7 @@ export const mobileChromeOf = (route: AppRoute): MobileChrome => {
 			topBar: { _tag: "Back", title: "Members", href: hrefOf(AppRoute.ChatIndex({ orgSlug })) },
 		}
 	if (section === "Chat") return { hasTabBar: true, topBar: null }
-	return { hasTabBar: true, topBar: { _tag: "Section", title: SECTION_TITLES[section] } }
+	return { hasTabBar: true, topBar: { _tag: "Section", title: sectionTitleOf(route, section) } }
 }
 
 /** The top bar a page without its own header gets on a phone (the kit's, as every tab's screen has). */
