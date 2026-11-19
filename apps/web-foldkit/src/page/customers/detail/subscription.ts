@@ -5,6 +5,7 @@ import { Subscription } from "foldkit"
 import {
 	accountsStream,
 	connectedProvidersStream,
+	createdFeatureFlagsStream,
 	impersonatorsStream,
 	orgMembersStream,
 	settingsSummaryStream,
@@ -116,6 +117,15 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 				? Stream.empty
 				: channelOptionsStream(organizationId, (channels) =>
 						Message.UpdatedChannelOptions({ channels }),
+					),
+	}),
+	createdFeatureFlags: entry(organization, {
+		modelToDependencies: organizationOf,
+		dependenciesToStream: ({ organizationId }) =>
+			organizationId === null
+				? Stream.empty
+				: createdFeatureFlagsStream(organizationId, (keys) =>
+						Message.UpdatedCreatedFeatureFlags({ keys }),
 					),
 	}),
 	connections: entry(organization, {

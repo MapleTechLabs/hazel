@@ -4,7 +4,7 @@
  * Verified against Clerk's Backend API OpenAPI spec, version 2026-08-20
  * (https://github.com/clerk/openapi-specs/blob/main/bapi/2026-08-20.yml): `GET /instance`,
  * `/organizations`, `/organization_memberships`, `/organization_domains`, `/users`,
- * `/users/{id}/organization_memberships`.
+ * `/users/{id}/organization_memberships`, and the one write, `PATCH /organizations/{id}/metadata`.
  *
  * Every field Hazel does not need is left out, and everything beyond `id` is optional: Clerk adds
  * fields freely and ships new webhook event types, and a decode failure here would 400 a delivery
@@ -31,6 +31,8 @@ export const ClerkOrganization = Schema.Struct({
 	members_count: Nullable(Schema.Number),
 	/** Clerk's seat cap; `0` means unlimited. */
 	max_allowed_memberships: Nullable(Schema.Number),
+	/** Its boolean keys are the organization's feature flags (`./map.ts` `featureFlagsOf`). */
+	public_metadata: Nullable(Schema.Record(Schema.String, Schema.Unknown)),
 	created_at: Nullable(Schema.Number),
 	updated_at: Nullable(Schema.Number),
 })

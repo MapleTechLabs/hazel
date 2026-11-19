@@ -86,6 +86,7 @@ const account = (n: number, name: string, fields: Partial<AccountRow> = {}): Acc
 	customerSinceMs: NOW - 300 * DAY,
 	churnedAtMs: null,
 	tags: [],
+	featureFlags: {},
 	...fields,
 })
 

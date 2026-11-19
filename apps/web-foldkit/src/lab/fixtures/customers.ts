@@ -185,6 +185,7 @@ const makeAccount = (seed: AccountSeed, n: number): Account => {
 		churnedAt: seed.churnedDaysAgo === undefined ? null : daysAgo(seed.churnedDaysAgo),
 		tags: seed.tags ?? [],
 		attributes: {},
+		featureFlags: {},
 		fieldSources: { name: "clerk", mrrMinor: "stripe", lastActiveAt: "maple" },
 		createdAt: firstSeen,
 		updatedAt: ago(HOUR),

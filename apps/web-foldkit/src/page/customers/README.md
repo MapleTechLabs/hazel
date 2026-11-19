@@ -6,20 +6,21 @@ here is an ordinary page (`definePage`), registered in `pages.ts`, the Customers
 
 ## Routes (`src/route.ts`)
 
-| Route tag                     | URL (`/$orgSlug/customers…`)      | Fields                                  | Page module           |
-| ----------------------------- | --------------------------------- | --------------------------------------- | --------------------- |
-| `CustomersOverview`           | ``                                |                                         | `overview/`           |
-| `CustomersAttention`          | `/attention`                      |                                         | `attention/`          |
-| `CustomersList`               | `/list?view=`                     | `view: Option<string>`                  | `list/`               |
-| `CustomerDetail`              | `/$accountId?tab=`                | `accountId`, `tab: Option<CustomerTab>` | `detail/`             |
-| `CustomersSettingsSignals`    | `/settings/signals`               |                                         | `settings/signals/`   |
-| `CustomersSettingsSignalNew`  | `/settings/signals/new?template=` | `template: Option<SignalTemplate>`      | `settings/signals/`   |
-| `CustomersSettingsSignalRule` | `/settings/signals/$ruleId`       | `ruleId`                                | `settings/signals/`   |
-| `CustomersSettingsHealth`     | `/settings/health`                |                                         | `settings/health/`    |
-| `CustomersSettingsPlans`      | `/settings/plans`                 |                                         | `settings/plans/`     |
-| `CustomersSettingsSources`    | `/settings/sources`               |                                         | `settings/sources/`   |
-| `CustomersSourceDetail`       | `/settings/sources/$provider`     | `provider: CustomerProvider`            | `settings/sources/`   |
-| `CustomersUnmatched`          | `/settings/sources/unmatched`     |                                         | `settings/unmatched/` |
+| Route tag                       | URL (`/$orgSlug/customers…`)      | Fields                                  | Page module               |
+| ------------------------------- | --------------------------------- | --------------------------------------- | ------------------------- |
+| `CustomersOverview`             | ``                                |                                         | `overview/`               |
+| `CustomersAttention`            | `/attention`                      |                                         | `attention/`              |
+| `CustomersList`                 | `/list?view=`                     | `view: Option<string>`                  | `list/`                   |
+| `CustomerDetail`                | `/$accountId?tab=`                | `accountId`, `tab: Option<CustomerTab>` | `detail/`                 |
+| `CustomersSettingsSignals`      | `/settings/signals`               |                                         | `settings/signals/`       |
+| `CustomersSettingsSignalNew`    | `/settings/signals/new?template=` | `template: Option<SignalTemplate>`      | `settings/signals/`       |
+| `CustomersSettingsSignalRule`   | `/settings/signals/$ruleId`       | `ruleId`                                | `settings/signals/`       |
+| `CustomersSettingsHealth`       | `/settings/health`                |                                         | `settings/health/`        |
+| `CustomersSettingsPlans`        | `/settings/plans`                 |                                         | `settings/plans/`         |
+| `CustomersSettingsFeatureFlags` | `/settings/feature-flags`         |                                         | `settings/feature-flags/` |
+| `CustomersSettingsSources`      | `/settings/sources`               |                                         | `settings/sources/`       |
+| `CustomersSourceDetail`         | `/settings/sources/$provider`     | `provider: CustomerProvider`            | `settings/sources/`       |
+| `CustomersUnmatched`            | `/settings/sources/unmatched`     |                                         | `settings/unmatched/`     |
 
 - `view` is a built-in view's key (`BuiltInViewKey`: `my_customers`, `paying`, `trialing`, `at_risk`,
   `churned`) or a saved view's id; the sidebar links built-ins by key, so they work before views sync.

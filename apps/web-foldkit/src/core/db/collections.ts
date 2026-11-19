@@ -63,7 +63,7 @@ export const parseTimestamps = (row: unknown): unknown => {
  * The local cache's version of every stored row (`./local-cache.ts`): bump it when a synced model's
  * shape changes, and the stored rows are dropped.
  */
-const CACHE_SCHEMA_VERSION = 2
+const CACHE_SCHEMA_VERSION = 3
 
 /** Keeps an eager collection's rows on disk while the local cache is on. */
 const persist =
@@ -211,6 +211,10 @@ export const customerSyncRunCollection = customersCollection("customer_sync_runs
 export const customerChannelLinkCollection = customersCollection(
 	"customer_channel_links",
 	Customers.ChannelLink.Schema,
+)
+export const customerFeatureFlagCollection = customersCollection(
+	"customer_feature_flags",
+	Customers.FeatureFlag.Schema,
 )
 export const customerImpersonatorCollection = customersCollection(
 	"customer_impersonators",

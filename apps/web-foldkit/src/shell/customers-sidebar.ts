@@ -13,6 +13,7 @@ import {
 	IconLightbulb,
 	IconOffice,
 	IconPresentationChart,
+	IconRocket,
 	IconServers,
 	IconUser,
 	IconWarning,
@@ -265,6 +266,12 @@ export const view = <ParentMessage>(
 						hrefOf(AppRoute.CustomersSettingsPlans({ orgSlug })),
 						on("CustomersSettingsPlans"),
 						icon(IconCube),
+					),
+					item(
+						"Feature flags",
+						hrefOf(AppRoute.CustomersSettingsFeatureFlags({ orgSlug })),
+						on("CustomersSettingsFeatureFlags"),
+						icon(IconRocket),
 					),
 					item(
 						"Data sources",

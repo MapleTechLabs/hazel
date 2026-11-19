@@ -10,6 +10,7 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
+import { FeatureFlagFailure } from "../../../customers/feature-flags"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -119,6 +120,14 @@ export const Message = defineMessageUnion({
 	PressedUnlinkChannel: { channelId: ChannelId },
 	SucceededChannelAction: { action: ChannelAction },
 	FailedChannelAction: { action: ChannelAction, reason: ActionFailure },
+
+	UpdatedCreatedFeatureFlags: { keys: Schema.Array(Schema.String) },
+	GotFlagPopoverMessage: { message: Popover.Message },
+	ToggledFlagSelection: { key: Schema.String, isSelected: Schema.Boolean },
+	PressedAddFlags: {},
+	PressedRemoveFlag: { key: Schema.String },
+	SucceededFeatureFlags: {},
+	FailedFeatureFlags: { failure: FeatureFlagFailure },
 
 	PressedSignalMenu: { signalId: CustomerSignalId, menu: SignalMenu },
 	GotSnoozeMenuMessage: { message: Menu.Message },

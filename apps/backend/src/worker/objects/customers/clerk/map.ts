@@ -25,6 +25,9 @@
  *   record deleted since: a webhook's is the record's `updated_at` (else the event's time), a
  *   pull's the time it asked Clerk (a listing proves the record live then). Identity ops never set
  *   `matchByDomain`: two organizations sharing a domain stay two customers.
+ * - **Feature flags.** The organization's boolean `public_metadata` keys are its feature flags
+ *   (`UpsertAccount.featureFlags`, replacing the account's); other metadata is not read. Only the
+ *   organization's own record carries them (a membership's copy names it by ref only).
  * - **Events.** Ingest raises `contact.joined` / `contact.removed` itself when a contact appears or
  *   is removed, so the only timeline entry Clerk adds is `account.created` for an organization it
  *   watched being created, keyed on the organization so a redelivery dedupes.
@@ -67,6 +70,14 @@ export const onNoMatchOf = (config: ConnectionConfig): OnNoMatch =>
 const seatsLimitOf = (max: number | null | undefined): number | null =>
 	max === null || max === undefined || max <= 0 ? null : Math.trunc(max)
 
+/** The boolean keys of an organization's `public_metadata`: its feature flags. An empty key is none. */
+export const featureFlagsOf = (metadata: Readonly<Record<string, unknown>>): Record<string, boolean> =>
+	Object.fromEntries(
+		Object.entries(metadata).filter(
+			(entry): entry is [string, boolean] => entry[0] !== "" && typeof entry[1] === "boolean",
+		),
+	)
+
 /**
  * An organization. Domains are not on the organization record — they come from
  * `/organization_domains` through {@link domainsAccountOp} and merge into the account.
@@ -89,6 +100,8 @@ export const accountOp = (
 	if (org.members_count != null) op.seatsUsed = Math.trunc(org.members_count)
 	if (org.max_allowed_memberships !== undefined) op.seatsLimit = seatsLimitOf(org.max_allowed_memberships)
 	if (org.slug != null) op.attributes = { slug: org.slug }
+	// Absent: a payload that does not carry the metadata leaves the flags as they are; null has none.
+	if (org.public_metadata !== undefined) op.featureFlags = featureFlagsOf(org.public_metadata ?? {})
 	const createdAt = isoOf(org.created_at)
 	if (createdAt !== null) op.createdAt = createdAt
 	if (observedAt !== undefined) op.observedAt = observedAt

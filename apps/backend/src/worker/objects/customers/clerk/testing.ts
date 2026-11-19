@@ -4,8 +4,8 @@
  * be told to answer 429 with a `Retry-After`. It records every call, so a test can assert how many
  * requests a page cost and that the key only ever travels in the `Authorization` header.
  */
-import { Effect, Layer } from "effect"
-import { HttpClient, HttpClientResponse, type UrlParams } from "effect/http"
+import { Effect, Layer, Schema } from "effect"
+import { type HttpBody, HttpClient, HttpClientResponse, type UrlParams } from "effect/http"
 import { CLERK_API_URL } from "./http"
 
 export interface FakeClerkState {
@@ -67,7 +67,46 @@ const pageOf = (rows: ReadonlyArray<unknown>, params: UrlParams.UrlParams) => {
 	return json(200, { data: rows.slice(offset, offset + limit), total_count: rows.length })
 }
 
-const serve = (fake: FakeClerkState, path: string, params: UrlParams.UrlParams): Response => {
+type FakeOrganization = { readonly id: string; public_metadata?: Record<string, unknown> | null }
+
+const decodePatch = Schema.decodeUnknownSync(
+	Schema.fromJsonString(
+		Schema.Struct({ public_metadata: Schema.Record(Schema.String, Schema.NullOr(Schema.Unknown)) }),
+	),
+)
+
+const organizationOf = (fake: FakeClerkState, id: string) =>
+	fake.organizations.find((candidate) => (candidate as FakeOrganization).id === id) as
+		| FakeOrganization
+		| undefined
+
+/** `PATCH /organizations/{id}/metadata`: Clerk's deep merge, one level deep, `null` removing a key. */
+const patchMetadata = (fake: FakeClerkState, organizationId: string, body: string): Response => {
+	const org = organizationOf(fake, organizationId)
+	if (org === undefined) return clerkError(404, "Organization not found")
+	const next = { ...org.public_metadata }
+	for (const [key, value] of Object.entries(decodePatch(body).public_metadata)) {
+		if (value === null) delete next[key]
+		else next[key] = value
+	}
+	org.public_metadata = next
+	return json(200, org)
+}
+
+const serve = (
+	fake: FakeClerkState,
+	method: string,
+	path: string,
+	params: UrlParams.UrlParams,
+	body: string,
+): Response => {
+	const metadata = /^\/organizations\/([^/]+)\/metadata$/.exec(path)
+	if (metadata?.[1] !== undefined && method === "PATCH") return patchMetadata(fake, metadata[1], body)
+	const organization = /^\/organizations\/([^/]+)$/.exec(path)?.[1]
+	if (organization !== undefined) {
+		const org = organizationOf(fake, organization)
+		return org === undefined ? clerkError(404, "Organization not found") : json(200, org)
+	}
 	const memberships = /^\/users\/([^/]+)\/organization_memberships$/.exec(path)
 	if (memberships !== null) {
 		const userId = memberships[1]
@@ -105,6 +144,10 @@ const serve = (fake: FakeClerkState, path: string, params: UrlParams.UrlParams):
 	}
 }
 
+/** A request's body as text (`bodyJsonUnsafe` encodes JSON as bytes); empty for a GET. */
+const bodyOf = (body: HttpBody.HttpBody): string =>
+	body._tag === "Uint8Array" ? new TextDecoder().decode(body.body) : ""
+
 export const fakeClerkHttpClient = (fake: FakeClerkState) =>
 	Layer.succeed(
 		HttpClient.HttpClient,
@@ -132,7 +175,7 @@ export const fakeClerkHttpClient = (fake: FakeClerkState) =>
 										? {}
 										: { "retry-after": String(fake.retryAfterSeconds) },
 								)
-							: serve(fake, path, request.urlParams)
+							: serve(fake, request.method, path, request.urlParams, bodyOf(request.body))
 				return HttpClientResponse.fromWeb(request, response)
 			}),
 		),

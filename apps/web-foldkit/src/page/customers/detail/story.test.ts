@@ -102,6 +102,7 @@ const account = (n: number, name: string): AccountRow => ({
 	customerSinceMs: NOW,
 	churnedAtMs: null,
 	tags: ["pilot"],
+	featureFlags: {},
 })
 const acme = account(1, "Acme")
 const beta = account(2, "Beta")
@@ -375,6 +376,31 @@ describe("customer page: owner and tags", () => {
 		expect(commandNames(duplicate)).not.toContain("UpdateCustomerAccount")
 		const removed = update(loaded(), Message.RemovedTag({ tag: "pilot" }), shared)
 		expect(removed.model.accounts?.find((row) => row.id === beta.id)?.tags).toEqual([])
+	})
+})
+
+describe("customer page: feature flags", () => {
+	test("the ticked flags turn on at once, and one turns off", () => {
+		const added = update(
+			run(loaded(), [
+				Message.UpdatedCreatedFeatureFlags({ keys: ["beta", "new_nav"] }),
+				Message.ToggledFlagSelection({ key: "beta", isSelected: true }),
+				Message.ToggledFlagSelection({ key: "new_nav", isSelected: true }),
+			]),
+			Message.PressedAddFlags(),
+			shared,
+		)
+		expect(added.model.flagSelection).toEqual([])
+		expect(added.commands?.at(-1)).toMatchObject({
+			name: "SetCustomerFeatureFlags",
+			args: { accountId: beta.id, keys: ["beta", "new_nav"], enabled: true },
+		})
+		expect(
+			update(loaded(), Message.PressedRemoveFlag({ key: "beta" }), shared).commands?.[0],
+		).toMatchObject({
+			name: "SetCustomerFeatureFlags",
+			args: { accountId: beta.id, keys: ["beta"], enabled: false },
+		})
 	})
 })
 

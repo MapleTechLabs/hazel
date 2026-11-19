@@ -9,7 +9,7 @@
  * (`../credentials.ts`) and only ever decrypted to call Clerk or verify a delivery.
  *
  * Nothing here writes the store: `webhook` and `pull` produce `IngestOp`s and `CustomerIngest`
- * applies them.
+ * applies them. The one write to Clerk is `setFeatureFlags` (`../feature-flags.ts`).
  *
  * Only the connection's instance (`credentials.externalAccountId`, what `validate` found): a
  * delivery not stamped with its `instance_id` is refused (`./webhook.ts`). A secret key opens
@@ -21,12 +21,12 @@ import { HttpClient } from "effect/http"
 import { CustomerProviderError } from "../provider-errors"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../providers"
 import { WEBHOOK_REQUESTS } from "../provider-http"
-import { makeClerkGet } from "./http"
+import { makeClerkGet, makeClerkPatch } from "./http"
 import { createActorToken } from "./impersonate"
-import { onNoMatchOf } from "./map"
+import { featureFlagsOf, onNoMatchOf } from "./map"
 import { pullPage } from "./pull"
 import { receiveWebhook } from "./webhook"
-import { ClerkInstance, ClerkOrganizationsPage } from "./wire"
+import { ClerkInstance, ClerkOrganization, ClerkOrganizationsPage } from "./wire"
 
 /**
  * Webhooks carry every change as it happens; the sweep behind them only reconciles missed
@@ -102,6 +102,35 @@ export const makeClerkAdapter = Effect.gen(function* () {
 			}),
 
 		pullIntervalMs: CLERK_PULL_INTERVAL_MS,
+
+		// Clerk deep-merges `public_metadata` and a `null` removes the key, so other metadata is kept;
+		// but a key set here replaces whatever it held, so one holding a non-boolean value is refused.
+		setFeatureFlags: Effect.fn("Clerk.setFeatureFlags")(function* (credentials, organizationId, changes) {
+			const path = `/organizations/${encodeURIComponent(organizationId)}` as const
+			const org = yield* getOf(credentials)(path, [], ClerkOrganization)
+			const metadata = org.public_metadata ?? {}
+			const nonBoolean = (key: string) =>
+				Object.hasOwn(metadata, key) && typeof metadata[key] !== "boolean"
+			// Turning a flag on over other metadata is refused; removing one leaves that metadata alone.
+			const taken = Object.keys(changes).filter((key) => changes[key] !== null && nonBoolean(key))
+			if (taken.length > 0) {
+				return yield* new CustomerProviderError({
+					code: "provider",
+					message: `${taken.join(", ")} already ${taken.length === 1 ? "holds" : "hold"} non-boolean metadata in Clerk`,
+					httpStatus: null,
+					retryAfterMs: null,
+					retryable: false,
+				})
+			}
+			const safe = Object.fromEntries(Object.entries(changes).filter(([key]) => !nonBoolean(key)))
+			if (Object.keys(safe).length === 0) return featureFlagsOf(metadata)
+			const updated = yield* makeClerkPatch(client, credentials.apiKey)(
+				`${path}/metadata`,
+				{ public_metadata: safe },
+				ClerkOrganization,
+			)
+			return featureFlagsOf(updated.public_metadata ?? {})
+		}),
 
 		impersonate: (credentials, input) =>
 			createActorToken(client, credentials.apiKey, {

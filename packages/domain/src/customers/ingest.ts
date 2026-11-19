@@ -69,6 +69,8 @@ export const UpsertAccount = Schema.TaggedStruct("account", {
 	onNoMatch: Schema.Literals(["create", "unmatched"]),
 	/** The provider deleted it: its ref goes stale; the account is soft-deleted when no live ref is left. */
 	deleted: optional(Schema.Boolean),
+	/** The record's whole set of feature flags (Clerk's boolean `public_metadata`): replaces the account's. */
+	featureFlags: optional(Schema.Record(Schema.String, Schema.Boolean)),
 	observedAt: ObservedAt,
 })
 export type UpsertAccount = typeof UpsertAccount.Type

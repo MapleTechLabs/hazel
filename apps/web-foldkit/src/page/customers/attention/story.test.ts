@@ -104,6 +104,7 @@ const account = (
 	customerSinceMs: NOW - 300 * DAY,
 	churnedAtMs: null,
 	tags: [],
+	featureFlags: {},
 })
 const acme = account(1, "Acme Robotics", ada, 215_000, "Growth")
 const kestrel = account(2, "Kestrel Systems", ada, 132_000, "Scale")

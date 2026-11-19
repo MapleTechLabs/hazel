@@ -119,6 +119,15 @@ export interface CustomerProviderAdapter {
 	/** Scheduled pull period (webhooks cover the rest); e.g. Maple hourly, Stripe every 6 hours. */
 	readonly pullIntervalMs: number
 	/**
+	 * Merge `changes` into the account record's feature flags (`true`/`false` sets a key, `null`
+	 * removes it) and answer the record's whole set as the provider now holds it. Clerk only.
+	 */
+	readonly setFeatureFlags?: (
+		credentials: ProviderCredentials,
+		externalId: string,
+		changes: Readonly<Record<string, boolean | null>>,
+	) => Effect.Effect<Record<string, boolean>, CustomerProviderError>
+	/**
 	 * A one-time link signing the Hazel member (`actorUserId`) in as the provider's user, for the
 	 * providers that hold the customer's sign-in (Clerk). Absent: the provider cannot impersonate.
 	 */

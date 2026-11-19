@@ -352,6 +352,8 @@ export const mergeAccounts = Effect.fn("Customers.mergeAccounts")(function* (
 				logoUrl: into.logoUrl ?? from.logoUrl,
 				firstSeenAt: earliest(into.firstSeenAt, from.firstSeenAt) ?? into.firstSeenAt,
 				attributes: { ...from.attributes, ...into.attributes },
+				// Both organizations' flags until the next sync shows the last one synced.
+				featureFlags: { ...from.featureFlags, ...into.featureFlags },
 				// A manual name beats every source (`FIELD_PRECEDENCE`).
 				fieldSources: { ...into.fieldSources, name: "hazel" as const },
 				organizationCount: organizations.length,

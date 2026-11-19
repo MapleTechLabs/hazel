@@ -21,12 +21,13 @@
  */
 import { type Redacted, Schema } from "effect"
 import type { HttpClient } from "effect/http"
-import { makeProviderGet, type ProviderRequestOptions } from "../provider-http"
+import { makeProviderGet, makeProviderPatch, type ProviderRequestOptions } from "../provider-http"
 
 export const CLERK_API_URL = "https://api.clerk.com/v1"
 
-/** The read endpoints this integration may call. */
+/** The endpoints this integration may call: reads, and the feature flags' metadata write. */
 export type ClerkPath =
+	| `/organizations/${string}`
 	| "/instance"
 	| "/organizations"
 	| "/organization_memberships"
@@ -48,9 +49,15 @@ const ClerkErrors = Schema.Struct({
 const CLERK = {
 	name: "Clerk",
 	baseUrl: CLERK_API_URL,
-	// A user's path keeps no user id.
+	// A user's or organization's path keeps no id.
 	routeOf: (path: ClerkPath) =>
-		path.startsWith("/users/") ? "/users/{user_id}/organization_memberships" : path,
+		path.startsWith("/users/")
+			? "/users/{user_id}/organization_memberships"
+			: path.startsWith("/organizations/")
+				? path.endsWith("/metadata")
+					? "/organizations/{organization_id}/metadata"
+					: "/organizations/{organization_id}"
+				: path,
 	refusal: ClerkErrors,
 	detailOf: ({ errors }: typeof ClerkErrors.Type) =>
 		errors?.[0]?.long_message ?? errors?.[0]?.message ?? "",
@@ -66,3 +73,9 @@ export const makeClerkGet = (
 ) => makeProviderGet(CLERK, client, apiKey, options)
 
 export type ClerkGet = ReturnType<typeof makeClerkGet>
+
+/** Writes answer an RPC: a short timeout, one short 429 waited out in place. */
+const WRITE_REQUESTS: ProviderRequestOptions = { inlineRetries: 1, timeoutMs: 10_000 }
+
+export const makeClerkPatch = (client: HttpClient.HttpClient, apiKey: Redacted.Redacted<string>) =>
+	makeProviderPatch(CLERK, client, apiKey, WRITE_REQUESTS)
