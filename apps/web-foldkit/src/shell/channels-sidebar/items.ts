@@ -181,6 +181,41 @@ export const channelItem = <M>(
 	])
 }
 
+/**
+ * The thread's piece of the spine and its branch, as one SVG path. One path is painted once, so the
+ * branch leaves the spine without the double-drawn join two translucent borders make.
+ *
+ * Pinned to the row's bottom and flipped so y counts up from it: the branch sits 16px up (the middle of
+ * the 32px row) and the spine runs past the SVG's top edge, which clips it, however tall the SVG is.
+ */
+const threadBranch = <M>(h: HtmlBuilder<M>, hasEmojiIcon: boolean, isFirst: boolean, isLast: boolean): Html =>
+	h.svg(
+		[
+			h.AriaHidden(true),
+			h.Class(
+				cx(
+					"pointer-events-none absolute bottom-0 -left-3 w-3 -scale-y-100 text-fg/15",
+					// The first branch climbs into the channel row. Under the hashtag the line falls between its
+					// legs, so it reaches the lower bar; under an emoji it stops at the icon's bottom edge.
+					!isFirst ? "h-8" : hasEmojiIcon ? "h-[42px]" : "h-[49px] sm:h-12",
+				),
+			),
+		],
+		[
+			h.path([
+				h.Attribute(
+					"d",
+					isLast
+						? "M1.75 100V22A6 6 0 0 1 7.75 16H9"
+						: "M1.75 0V100M1.75 22A6 6 0 0 1 7.75 16H9",
+				),
+				h.Attribute("fill", "none"),
+				h.Attribute("stroke", "currentColor"),
+				h.Attribute("stroke-width", "1.5"),
+			]),
+		],
+	)
+
 /** One joined thread under its channel, on a branch of the spine that runs down from the channel. */
 const threadItem = <M>(
 	h: HtmlBuilder<M>,
@@ -210,24 +245,13 @@ const threadItem = <M>(
 				cx(
 					"relative ml-[26px] flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-fg-3 text-sm/5",
 					"outline-hidden hover:bg-wash hover:text-fg focus-visible:bg-wash",
-					"before:pointer-events-none before:absolute before:bottom-1/2 before:-left-[11px] before:w-2",
-					// The first branch climbs into the channel row. Under the hashtag the line falls between its
-					// legs, so it reaches the lower bar; under an emoji it stops at the icon's bottom edge.
-					!isFirst
-						? "before:top-0"
-						: hasEmojiIcon
-							? "before:-top-2.5"
-							: "before:-top-[17px] sm:before:-top-4",
-					"before:rounded-bl-md before:border-fg/15 before:border-b-[1.5px] before:border-l-[1.5px]",
-					// The spine carries on from where the branch's rounded corner (6px) leaves it.
-					!isLast &&
-						"after:pointer-events-none after:absolute after:top-[calc(50%-6px)] after:bottom-0 after:-left-[11px] after:border-fg/15 after:border-l-[1.5px]",
 					isActive && CHANNEL_ACTIVE,
 					count > 0 && "font-medium text-fg",
 				),
 			),
 		],
 		[
+			threadBranch(h, hasEmojiIcon, isFirst, isLast),
 			h.span([h.Class("min-w-0 flex-1 truncate")], [thread.name]),
 			count > 0
 				? h.span(
