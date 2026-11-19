@@ -49,16 +49,83 @@ const installOffline = async () => {
 		render === undefined
 			? undefined
 			: () => ({ url: `${render.url().url}?n=${++minted}`, expiresAt: render.url().expiresAt })
-	globalThis.fetch = makeOfflineFetch({
+	// A thread on #general's last message, with a few replies (the offline fixture has none).
+	const fixture = await import("../../native/src/fixture/snapshot")
+	const threadId = "00000000-0000-4000-8000-0000000e0001"
+	const parent = fixture.generalMessageRows.at(-1)
+	const [template] = fixture.channelRows
+	const [membership] = fixture.channelMemberRows
+	if (parent !== undefined && template !== undefined && membership !== undefined) {
+		server.write("org", fixture.orgId, "channels", [
+			{
+				...template,
+				id: threadId,
+				name: "Benchmarks",
+				type: "thread",
+				parentChannelId: parent.channelId,
+				sectionId: null,
+			},
+		])
+		server.write("org", fixture.orgId, "channel_members", [
+			{
+				...membership,
+				id: "00000000-0000-4000-8000-0000000e0002",
+				channelId: threadId,
+				notificationCount: 0,
+			},
+		])
+		server.write("channel", parent.channelId, "messages", [{ ...parent, threadChannelId: threadId }])
+		const replies = [
+			"Which build should I use?",
+			"The release one from this morning.",
+			"Numbers in an hour.",
+		]
+		server.write(
+			"channel",
+			threadId,
+			"messages",
+			replies.map((content, index) => ({
+				...parent,
+				id: `00000000-0000-4000-8000-0000000e01${String(index).padStart(2, "0")}`,
+				channelId: threadId,
+				authorId:
+					(fixture.userRows[index % fixture.userRows.length] ?? fixture.userRows[0])?.id ??
+					parent.authorId,
+				content,
+				threadChannelId: null,
+				createdAt: new Date(Date.parse(parent.createdAt) + (index + 1) * 60_000).toISOString(),
+			})),
+		)
+	}
+	const emptyChannel = fixture.channelRows[1]?.id ?? ""
+	const network = globalThis.fetch.bind(globalThis)
+	const offlineFetch = makeOfflineFetch({
 		htmlRenderUrl: renderUrl,
 		backendUrl: BACKEND_URL,
-		unfurls: globalThis.fetch.bind(globalThis),
+		unfurls: network,
 		server,
 		user: offline.currentUser,
 		onUnknownRpc: (tag) => console.warn(`[offline] rpc ${tag} has no offline answer`),
 		onRequest: (method, path) => console.info(`[offline] ${method} ${path}`),
 	})
-	Object.assign(globalThis, { WebSocket: makeFixtureWebSocket({ server, latencyMs: 0 }) })
+	// The backend is the fixture; the rest of the internet (the emoji picker's CDN) is itself.
+	globalThis.fetch = (input, init) => {
+		const url = new Request(input, init).url
+		if (new URL(url).origin === new URL(BACKEND_URL).origin) return offlineFetch(input, init)
+		return network(input, init)
+	}
+	Object.assign(globalThis, {
+		WebSocket: makeFixtureWebSocket({
+			server,
+			latencyMs: 0,
+			// The thread's own source: a channel's tables, as an empty channel has them.
+			snapshot: (kind, sourceId) =>
+				fixture.snapshotFor(
+					kind,
+					kind === "channel" && sourceId === threadId ? emptyChannel : sourceId,
+				),
+		}),
+	})
 	if (location.pathname === "/" || location.pathname === "/index.html")
 		// The channel list: the screen this spike converts.
 		history.replaceState(null, "", offline.startPath.replace(/\/chat\/.*$/, "/chat"))

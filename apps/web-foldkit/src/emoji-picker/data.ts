@@ -191,6 +191,9 @@ const fetchEmojiData = (locale: string) =>
 		Effect.retry({ times: 2, schedule: Schedule.exponential("300 millis"), while: isRetryableError }),
 		// Fresh: the runtime's memoized `FetchHttpClient.layer` sends the RPC client's credentials.
 		Effect.provide(Layer.fresh(FetchHttpClient.layer)),
+		// No trace headers to the CDN: `traceparent`/`b3` make the request need a preflight, which
+		// the CDN refuses, so WebKit fails it (Safari, the iOS app).
+		Effect.provideService(HttpClient.TracerPropagationEnabled, false),
 	)
 
 /**
