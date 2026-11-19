@@ -28,6 +28,7 @@ import {
 	IconDots,
 	IconEdit,
 	IconPlus,
+	IconSidebarRight,
 } from "../../../icons"
 import { type ChannelOption, channelMark, ORIGIN_LABEL, searchOptions } from "../../../customers/channels"
 import { featureFlagKeysOf, hasFlag } from "../../../customers/feature-flags"
@@ -343,12 +344,12 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 							h.Class(
 								twMerge(
 									// A phone has no side panel to toggle: its details sit under the overview.
-									"ml-1 inline-flex h-7 cursor-pointer items-center rounded-md px-2 font-medium text-muted-fg text-xs outline-hidden transition-colors hover:bg-secondary hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70 max-md:hidden",
+									"ml-1 inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-fg outline-hidden transition-colors hover:bg-secondary hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70 max-md:hidden",
 									model.isSidebarOpen && "bg-secondary text-fg",
 								),
 							),
 						],
-						["Details"],
+						[IconSidebarRight(h, { className: "size-4" })],
 					),
 				],
 			),

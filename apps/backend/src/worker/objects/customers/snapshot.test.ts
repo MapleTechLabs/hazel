@@ -241,3 +241,28 @@ describe("MRR from paid Stripe invoices", () => {
 		expect(rollup).toMatchObject({ mrrMinor: 6_200, mrrSource: "autumn", planName: "Pro" })
 	})
 })
+
+describe("champion inactivity", () => {
+	const championOf = (offsets: ReadonlyArray<number>) => {
+		const facts = factsOf({ activity: { champion: offsets } })
+		return rollupAccount({
+			account: facts.account,
+			subscriptions: facts.subscriptions,
+			mrrSource: "autumn",
+			addOnPlans: [],
+			invoiceMrr: [],
+			contacts: facts.contacts,
+			activity: facts.activity,
+			lastActiveDay: facts.lastActiveDay,
+			currency: "usd",
+			now: NOW,
+			today: TODAY,
+		})
+	}
+
+	it("gives the champion a week's grace before calling them quiet", () => {
+		expect(championOf([-20, -10, -1]).championInactiveSince).toBeNull()
+		expect(championOf([-20, -10, -6]).championInactiveSince).toBeNull()
+		expect(championOf([-20, -10, -7]).championInactiveSince).not.toBeNull()
+	})
+})
