@@ -6,7 +6,8 @@
  *
  * - Contacts and activity: unioned, a person in several environments counted once (the same email,
  *   case-insensitive, else the same contact); the last active day, ever-active contacts and the
- *   `inactive` prior windows are recomputed over the union.
+ *   `inactive` prior windows are recomputed over the union (`loadAccounts` counts the windows older
+ *   than the loaded activity the same way).
  * - Billing: subscriptions and open invoices together; MRR movements become the group's total MRR
  *   on each day one of them moved.
  * - Metrics: values (and limits) summed per day.
@@ -93,13 +94,14 @@ export const groupMovements = (
 
 /**
  * The facts signals evaluate for a primary with environments. `from` is the first day of activity
- * loaded: a prior window starting before it (a group quiet for longer) is not in the union, and
- * counts as its largest environment's own.
+ * loaded: a prior window starting before it (a group quiet for longer) is not in the union, and its
+ * count comes from `olderPriorActive` (window → distinct people, read by `loadAccounts`).
  */
 export const groupFacts = (
 	primary: AccountFacts,
 	environments: ReadonlyArray<AccountFacts>,
 	from: Day,
+	olderPriorActive: ReadonlyMap<number, number> = new Map(),
 ): AccountFacts => {
 	const group = [primary, ...environments]
 
@@ -141,8 +143,7 @@ export const groupFacts = (
 		[...primary.priorActive.keys()].map((days) => {
 			if (lastActiveDay === null) return [days, 0]
 			const start = addDays(lastActiveDay, -(days - 1))
-			if (start < from)
-				return [days, Math.max(...group.map((facts) => facts.priorActive.get(days) ?? 0))]
+			if (start < from) return [days, olderPriorActive.get(days) ?? 0]
 			const users = new Set<CustomerContactId>()
 			for (const [day, active] of activity) {
 				if (day >= start && day <= lastActiveDay)

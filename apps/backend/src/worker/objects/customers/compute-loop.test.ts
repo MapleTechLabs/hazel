@@ -772,6 +772,28 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("counts a group quiet for longer than the loaded activity by its distinct people", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const us = yield* activeOrg(world, "acme-us", ["ada", "bo"], [-300, -295, -290])
+				const eu = yield* activeOrg(world, "acme-eu", ["ada", "cy", "di"], [-300, -292])
+				yield* world.call(
+					"customers.account.link",
+					{ accountId: eu, primaryAccountId: us },
+					world.owner,
+				)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				// Ada, Bo, Cy and Di: four people, Ada in both environments counted once.
+				expect(
+					world.rows(
+						`SELECT json_extract(evidence, '$.priorActiveUsers') AS prior FROM customer_signals
+						WHERE template = 'inactive' AND closedAt IS NULL`,
+					),
+				).toEqual([{ prior: 4 }])
+			}),
+		))
+
 	it("keeps a group in one chunk of a compute spread over turns", () =>
 		run(
 			Effect.gen(function* () {

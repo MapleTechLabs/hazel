@@ -742,6 +742,42 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		snapshots.filter((snapshot) => primaryOf(snapshot.stored) !== null),
 		(snapshot) => primaryOf(snapshot.stored),
 	)
+	// `inactive`'s prior windows of a group quiet for longer than the loaded activity: its distinct
+	// people (as `groupFacts` counts them: a live contact's email, else the contact) from the store.
+	const olderGroupPrior = new Map<CustomerAccountId, Map<number, number>>()
+	for (const days of priorWindows) {
+		const older: Record<string, { after: Day; accounts: ReadonlyArray<CustomerAccountId> }> = {}
+		for (const [primaryId, environments] of environmentsBy) {
+			if (primaryId === null) continue
+			const accounts = [primaryId, ...environments.map((environment) => environment.stored.id)]
+			const last = accounts
+				.map((id) => lastActiveDayBy.get(id) ?? null)
+				.reduce<Day | null>(
+					(max, day) => (day !== null && (max === null || day > max) ? day : max),
+					null,
+				)
+			if (last !== null && addDays(last, -(days - 1)) < from)
+				older[primaryId] = { after: addDays(last, -days), accounts }
+		}
+		if (Object.keys(older).length === 0) continue
+		const rows = (yield* db.query(
+			Database.sql`SELECT g.key AS "primaryId", count(DISTINCT CASE
+					WHEN c."deletedAt" IS NULL AND trim(coalesce(c."email", '')) <> '' THEN lower(trim(c."email"))
+					ELSE a."contactId" END) AS "count"
+				FROM json_each(${JSON.stringify(older)}) g
+				JOIN json_each(json_extract(g.value, '$.accounts')) m
+				JOIN "customer_activity_daily" a ON a."accountId" = m.value
+					AND a."day" > json_extract(g.value, '$.after')
+				LEFT JOIN "customer_contacts" c ON c."id" = a."contactId"
+				WHERE (a."eventCount" > 0 OR a."sessionCount" > 0 OR a."signedIn" = 1)
+				GROUP BY g.key`,
+		)) as ReadonlyArray<{ primaryId: CustomerAccountId; count: number }>
+		for (const row of rows) {
+			const counts = olderGroupPrior.get(row.primaryId) ?? new Map<number, number>()
+			counts.set(days, Number(row.count))
+			olderGroupPrior.set(row.primaryId, counts)
+		}
+	}
 	const withEvaluated = snapshots.map((snapshot): AccountSnapshot => {
 		const environments = environmentsBy.get(snapshot.stored.id)
 		return {
@@ -755,6 +791,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 								snapshot.facts,
 								environments.map((environment) => environment.facts),
 								from,
+								olderGroupPrior.get(snapshot.stored.id),
 							),
 		}
 	})
