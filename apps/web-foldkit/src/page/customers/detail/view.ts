@@ -1015,7 +1015,10 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 																	},
 																	[
 																		h.span(
-																			[h.Class("truncate")],
+																			[
+																				h.Class("min-w-0 truncate"),
+																				h.Title(ref.environment),
+																			],
 																			[ref.environment],
 																		),
 																	],

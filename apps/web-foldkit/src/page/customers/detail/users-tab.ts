@@ -322,15 +322,24 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 										hideClass: "max-md:hidden",
 										cell: (row: Customers.ContactRow) =>
 											h.span(
-												[h.Class("flex flex-wrap gap-1")],
+												[h.Class("flex min-w-0 flex-wrap gap-1")],
+												// Truncated like the sidebar's: a name may be 60 characters.
 												environmentsOf(row).map((ref) =>
 													badge(
 														h,
 														{
 															intent: "secondary",
-															className: "whitespace-nowrap",
+															className: "min-w-0 max-w-full",
 														},
-														[recordName(ref)],
+														[
+															h.span(
+																[
+																	h.Class("min-w-0 truncate"),
+																	h.Title(recordName(ref)),
+																],
+																[recordName(ref)],
+															),
+														],
 													),
 												),
 											),
