@@ -740,7 +740,11 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 									})
 									.where(($) => [$.id.eq(accountId)]),
 							)
-							if (mute !== undefined) {
+							// Unmuting an account that is not muted (a stale tab) changes nothing to log.
+							if (
+								mute !== undefined &&
+								(mute.at !== null || account.attentionMutedAt !== null)
+							) {
 								yield* mute.at === null
 									? hazelEvent(
 											accountId,

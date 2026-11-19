@@ -91,6 +91,14 @@ describe("Needs attention mute", () => {
 					attentionMutedAt: null,
 					attentionMutedByUserId: null,
 				})
+				// Unmuting again (a stale tab) logs nothing.
+				ok(
+					yield* world.call(
+						"customers.account.update",
+						{ accountId: internal.id, attentionMute: null },
+						world.member,
+					),
+				)
 				const events = world.rows<{ type: string }>(
 					`SELECT type FROM customer_events WHERE provider = 'hazel' AND type LIKE 'account.attention_%' ORDER BY rowid`,
 				)

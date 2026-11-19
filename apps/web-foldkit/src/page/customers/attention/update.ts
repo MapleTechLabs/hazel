@@ -170,7 +170,9 @@ const actOn = (
 	const after = rowIds(patched, viewer)
 	const index = before.indexOf(signal.id)
 	const stays = after.includes(signal.id)
-	const neighbour = stays ? signal.id : (after[Math.min(index, after.length - 1)] ?? null)
+	// The row now at its place, less the rows above it that left too (a mute removes several).
+	const removedAbove = before.slice(0, Math.max(index, 0)).filter((id) => !after.includes(id)).length
+	const neighbour = stays ? signal.id : (after[Math.min(index - removedAbove, after.length - 1)] ?? null)
 	const next = model.selectedId === signal.id ? select(patched, shared, neighbour) : { model: patched }
 	return { ...next, commands: [...(next.commands ?? []), command] }
 }

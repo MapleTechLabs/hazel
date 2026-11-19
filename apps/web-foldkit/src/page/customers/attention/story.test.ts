@@ -549,6 +549,26 @@ describe("needs attention: actions", () => {
 		)
 	})
 
+	test("muting from a customer's second row selects the next customer's first row", () => {
+		const seats = signal(8, kestrel, { title: "Seats near limit", priorityScore: 7 })
+		const base = pageUpdate(loaded(), Message.UpdatedSignals({ signals: [...signals, seats] })).model
+		expect(ids(visibleSignals(base, viewer))).toEqual(
+			ids([paymentFailed, usageDown, stoppedLogging, seats]),
+		)
+		const entries = snoozeEntries(usageDown)
+		const muted = [
+			key("snooze"),
+			Message.GotSnoozeMenuMessage({
+				message: Menu.Message.ClickedItem({ key: MUTE_CUSTOMER, entries }),
+			}),
+			Message.GotSnoozeMenuMessage({
+				message: Menu.Message.ClickedItem({ key: "mute:week", entries }),
+			}),
+		].reduce((current, step) => pageUpdate(current, step).model, { ...base, selectedId: usageDown.id })
+		expect(ids(visibleSignals(muted, viewer))).toEqual(ids([stoppedLogging, seats]))
+		expect(muted.selectedId).toBe(stoppedLogging.id)
+	})
+
 	test("snooze options: 9:00 local, next week on Monday, a payment's next retry", () => {
 		const tomorrow = new Date(snoozeUntilMs("tomorrow", NOW, paymentFailed))
 		expect([tomorrow.getHours(), tomorrow.getMinutes()]).toEqual([9, 0])
