@@ -253,6 +253,8 @@ export const rollupAccount = (input: {
 	const champion =
 		[...totals.entries()].sort(([, a], [, b]) => b.days - a.days || b.events - a.events)[0]?.[0] ?? null
 	const championLast = input.contacts.find((contact) => contact.id === champion)?.lastActiveDay ?? null
+	// A champion counts as gone quiet only after a week away, not a day off.
+	const championGraceDays = 7
 	const lastActive = input.contacts
 		.flatMap((contact) =>
 			contact.lastActiveDay === null ? [] : [{ id: contact.id, day: contact.lastActiveDay }],
@@ -273,7 +275,9 @@ export const rollupAccount = (input: {
 		activeUsersTrendPct: baseline === 0 ? null : Math.round(((recent - baseline) / baseline) * 1000) / 10,
 		championContactId: champion,
 		championInactiveSince:
-			championLast !== null && daysBetween(championLast, today) >= 1 ? startOf(championLast) : null,
+			championLast !== null && daysBetween(championLast, today) >= championGraceDays
+				? startOf(championLast)
+				: null,
 		lastActiveContactId: lastActive?.id ?? null,
 		lastActiveAt: input.lastActiveDay === null ? null : startOf(input.lastActiveDay),
 		customerSince,
