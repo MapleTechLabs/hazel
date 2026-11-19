@@ -11,6 +11,7 @@ import {
 import { twMerge } from "tailwind-merge"
 import {
 	dropdownCheckIndicatorClassName,
+	dropdownDescriptionBase,
 	dropdownItemStyles,
 	dropdownLabelBase,
 	dropdownSectionStyles,
@@ -221,6 +222,23 @@ export const menuLabel = <M>(
 			h.Attribute("slot", "label"),
 		],
 		typeof text === "string" ? [text] : [...text],
+	)
+
+/** `MenuDescription` (DropdownDescription): pair with `item(key, { hasDescription: true })`. */
+export const menuDescription = <M>(
+	h: HtmlBuilder<M>,
+	id: string,
+	key: string,
+	text: string,
+	className?: string,
+): Html =>
+	h.span(
+		[
+			h.Class(twMerge(dropdownDescriptionBase, className)),
+			h.Id(descriptionId(id, key)),
+			h.Attribute("slot", "description"),
+		],
+		[text],
 	)
 
 /** `MenuTrigger`'s classes, for an icon trigger that is not a `Button`. */
