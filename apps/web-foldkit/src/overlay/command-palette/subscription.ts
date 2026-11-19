@@ -10,6 +10,7 @@ import {
 	userPresenceStatusCollection,
 } from "~/db/collections"
 import { getEffectivePresenceStatus } from "~/utils/presence"
+import { groupRows } from "../../customers/groups"
 import { withCustomersSource } from "../../customers/queries"
 import { liveQueryStream } from "../../data/live-query"
 import type { Shared } from "../../page/contract"
@@ -153,14 +154,20 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 											),
 										)
 										.orderBy(({ account }) => account.name, "asc"),
+								// A customer's environments stay together, primary first.
 								(rows) =>
 									Message.UpdatedCustomers({
-										customers: rows.map((account) => ({
-											id: account.id,
-											name: account.name,
-											domains: account.domains,
-											logoUrl: account.logoUrl,
-										})),
+										customers: groupRows(
+											rows.map((account) => ({
+												id: account.id,
+												name: account.name,
+												domains: account.domains,
+												logoUrl: account.logoUrl,
+												primaryAccountId: account.primaryAccountId,
+												environment: account.environment,
+											})),
+											new Set(rows.map((account) => account.id)),
+										),
 									}),
 							),
 						),

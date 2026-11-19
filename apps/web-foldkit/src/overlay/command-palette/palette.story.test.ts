@@ -272,7 +272,16 @@ describe("home actions", () => {
 			given(opened),
 			message(
 				Message.UpdatedCustomers({
-					customers: [{ id: accountId, name: "Acme", domains: ["acme.dev"], logoUrl: null }],
+					customers: [
+						{
+							id: accountId,
+							name: "Acme",
+							domains: ["acme.dev"],
+							logoUrl: null,
+							primaryAccountId: null,
+							environment: null,
+						},
+					],
 				}),
 			),
 			model((m) => expect(customerItems(m)).toEqual([])),

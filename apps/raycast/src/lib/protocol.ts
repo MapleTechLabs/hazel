@@ -49,6 +49,8 @@ const ACCOUNT_KEYS = [
 	"firstSeenAt",
 	"churnedAt",
 	"tags",
+	"primaryAccountId",
+	"environment",
 ] as const satisfies ReadonlyArray<keyof Account>
 const SIGNAL_KEYS = [
 	"id",

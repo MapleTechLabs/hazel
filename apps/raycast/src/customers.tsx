@@ -20,10 +20,31 @@ const groupBy = <A extends { readonly accountId: string }>(rows: Readonly<Record
 	return groups
 }
 
+/**
+ * `accounts` (sorted) with each customer's environments together: a group sits where its first
+ * account is, its primary first. An account whose primary is not listed stands alone.
+ */
+const groupEnvironments = (accounts: ReadonlyArray<Account>): ReadonlyArray<Account> => {
+	const ids = new Set(accounts.map((account) => account.id))
+	const groups = new Map<string, Array<Account>>()
+	for (const account of accounts) {
+		const groupId =
+			account.primaryAccountId !== null && ids.has(account.primaryAccountId)
+				? account.primaryAccountId
+				: account.id
+		const group = groups.get(groupId)
+		if (group === undefined) groups.set(groupId, [account])
+		else if (account.id === groupId) group.unshift(account)
+		else group.push(account)
+	}
+	return [...groups.values()].flat()
+}
+
 const accessories = (account: Account): Array<List.Item.Accessory> => {
 	const open = risk(account)
 	const health = HEALTH[account.healthStatus]
 	return [
+		...(account.environment ? [{ tag: account.environment, tooltip: "Environment" }] : []),
 		...(open.count > 0
 			? [
 					{
@@ -66,8 +87,10 @@ export default function Command() {
 
 	const accounts = useMemo(
 		() =>
-			Object.values(state.accounts).sort(
-				(a, b) => b.mrrMinor - a.mrrMinor || a.name.localeCompare(b.name),
+			groupEnvironments(
+				Object.values(state.accounts).sort(
+					(a, b) => b.mrrMinor - a.mrrMinor || a.name.localeCompare(b.name),
+				),
 			),
 		[state.accounts],
 	)
@@ -147,6 +170,7 @@ export default function Command() {
 								title={account.name}
 								subtitle={account.planName ?? account.domains[0]}
 								keywords={[
+									...(account.environment ? [account.environment] : []),
 									...account.domains,
 									...account.tags,
 									...(account.planName === null ? [] : [account.planName]),

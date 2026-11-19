@@ -3,7 +3,13 @@ import { twMerge } from "tailwind-merge"
 import type { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { resolvedAtMsOf } from "../../../customers/queries"
 import { formatDate, formatMoney, formatWeekdayTime } from "../../../customers/format"
-import { healthBadge, healthDot, kindChip, severityGlyph } from "../../../customers/ui/badges"
+import {
+	environmentsHint,
+	healthBadge,
+	healthDot,
+	kindChip,
+	severityGlyph,
+} from "../../../customers/ui/badges"
 import { evidenceViz } from "../../../customers/ui/evidence"
 import { companyLogo, personAvatar, personLabel } from "../../../customers/ui/identity"
 import {
@@ -37,6 +43,8 @@ export const ageText = (fromMs: number, nowMs: number): string => {
 export interface RowContext {
 	readonly nowMs: number
 	readonly accountsById: ReadonlyMap<string, AccountRow>
+	/** Each primary's environments (`environmentCounts`): a signal's customer is the primary. */
+	readonly environmentCounts: ReadonlyMap<string, number>
 	readonly membersById: ReadonlyMap<string, MemberRow>
 	readonly selectedId: string | null
 	/** The inline actions for the selected row (only it has the menus' triggers). */
@@ -54,7 +62,12 @@ const PHONE_ACCOUNT = "max-md:w-auto max-md:min-w-0 max-md:flex-1 max-md:shrink"
 const PHONE_SECOND_LINE = "max-md:order-last max-md:basis-full max-md:pl-10"
 
 /** The account (the line alone when the row above is the same account's). */
-const accountCell = <M>(h: HtmlBuilder<M>, account: AccountRow, run: AccountRunMark): Html =>
+const accountCell = (
+	h: HtmlBuilder<Message>,
+	account: AccountRow,
+	run: AccountRunMark,
+	context: RowContext,
+): Html =>
 	h.div(
 		[
 			h.Role("cell"),
@@ -68,7 +81,19 @@ const accountCell = <M>(h: HtmlBuilder<M>, account: AccountRow, run: AccountRunM
 						h.div(
 							[h.Class("flex min-w-0 flex-col")],
 							[
-								h.span([h.Class("truncate font-medium text-fg text-sm")], [account.name]),
+								h.span(
+									[h.Class("flex min-w-0 items-baseline gap-2")],
+									[
+										h.span(
+											[h.Class("truncate font-medium text-fg text-sm")],
+											[account.name],
+										),
+										...environmentsHint(
+											h,
+											context.environmentCounts.get(account.id) ?? 0,
+										),
+									],
+								),
 								h.span(
 									[h.Class("truncate text-muted-fg text-xs tabular-nums")],
 									[planLine(account)],
@@ -131,6 +156,7 @@ export const signalRow = (
 		age: ageText(signal.openedAtMs, context.nowMs),
 		assignee: personOf(context, signal.assigneeUserId),
 		health: { status: account.healthStatus, score: account.healthScore },
+		environmentCount: context.environmentCounts.get(account.id) ?? 0,
 		isFocused: isSelected,
 		isSelected,
 		onPress: Message.ClickedRow({ signalId: signal.id }),
@@ -165,6 +191,7 @@ export const compactRow = (
 								[h.Class("flex min-w-0 items-baseline gap-2")],
 								[
 									h.span([h.Class("truncate font-medium text-fg text-sm")], [account.name]),
+									...environmentsHint(h, context.environmentCounts.get(account.id) ?? 0),
 									h.span(
 										[h.Class("shrink-0 text-muted-fg text-xs tabular-nums")],
 										[`${formatMoney(account.mrrMinor, account.currency)}/mo`],
@@ -237,6 +264,7 @@ export const accountGroupRow = (
 											),
 										]
 									: []),
+								...environmentsHint(h, context.environmentCounts.get(account.id) ?? 0),
 							],
 						),
 						h.span([h.Class("truncate text-muted-fg text-xs tabular-nums")], [planLine(account)]),
@@ -329,7 +357,7 @@ export const snoozedRow = (
 	const account = context.accountsById.get(signal.accountId)
 	if (account === undefined) return h.empty
 	return rowShell(h, signal, context, run, [
-		accountCell(h, account, run),
+		accountCell(h, account, run, context),
 		h.div(
 			[h.Role("cell"), h.Class(twMerge("flex min-w-0 flex-1 flex-col gap-0.5", PHONE_SECOND_LINE))],
 			[
@@ -422,7 +450,7 @@ export const doneRow = (
 					? signal.reason
 					: `“${signal.resolutionNote}”`
 	return rowShell(h, signal, context, run, [
-		accountCell(h, account, run),
+		accountCell(h, account, run, context),
 		h.div(
 			[h.Role("cell"), h.Class(twMerge("flex min-w-0 flex-1 flex-col gap-0.5", PHONE_SECOND_LINE))],
 			[

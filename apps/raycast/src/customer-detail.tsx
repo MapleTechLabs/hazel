@@ -157,6 +157,9 @@ export function CustomerDetail(props: {
 							color={health.color}
 						/>
 					</Detail.Metadata.TagList>
+					{account.environment && (
+						<Detail.Metadata.Label title="Environment" text={account.environment} />
+					)}
 					<Detail.Metadata.Label title="Stage" text={STAGE[account.lifecycleStage]} />
 					<Detail.Metadata.Label
 						title="MRR"

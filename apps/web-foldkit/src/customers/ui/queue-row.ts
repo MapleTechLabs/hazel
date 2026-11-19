@@ -4,7 +4,7 @@ import { twMerge } from "tailwind-merge"
 import { IconChevronDown } from "../../icons"
 import { ariaButton, button } from "../../ui/button"
 import { formatMoney } from "../format"
-import { healthBadge, kindChip, severityChip } from "./badges"
+import { environmentsHint, healthBadge, kindChip, severityChip } from "./badges"
 import { companyLogo, personAvatar } from "./identity"
 import { kbd } from "./shortcuts"
 
@@ -36,6 +36,8 @@ export type QueueRowOptions<M> = Readonly<{
 	isSelected?: boolean
 	/** The account's other signals in the rows next to this one (`accountMark`). */
 	run?: AccountRunMark
+	/** The customer's other environments: `+2 environments` beside the name. */
+	environmentCount?: number
 	/** A press on the row: select it (the side panel preview). */
 	onPress?: M
 	/** Shown in place of evidence…assignee on hover/focus: `queueAction`s and the `⋯` menu. */
@@ -130,8 +132,14 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 									[h.Class("flex min-w-0 flex-col")],
 									[
 										h.span(
-											[h.Class("truncate font-medium text-fg text-sm")],
-											[options.account.name],
+											[h.Class("flex min-w-0 items-baseline gap-2")],
+											[
+												h.span(
+													[h.Class("truncate font-medium text-fg text-sm")],
+													[options.account.name],
+												),
+												...environmentsHint(h, options.environmentCount ?? 0),
+											],
 										),
 										h.span(
 											[h.Class("truncate text-muted-fg text-xs tabular-nums")],

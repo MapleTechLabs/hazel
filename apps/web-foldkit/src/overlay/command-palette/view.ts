@@ -17,6 +17,7 @@ import {
 	IconServers,
 	IconUsersPlus,
 } from "../../icons"
+import { environmentBadge } from "../../customers/ui/badges"
 import { companyLogo } from "../../customers/ui/identity"
 import type { Shared } from "../../page/contract"
 import { avatar } from "../../ui/avatar"
@@ -190,6 +191,9 @@ const itemContent = (
 					),
 					label(h, key, [
 						customer.name,
+						...(customer.environment === null
+							? []
+							: [environmentBadge(h, customer.environment, { className: "ml-2" })]),
 						...(customer.domains[0]
 							? [h.span([h.Class("ml-2 text-muted-fg text-xs")], [customer.domains[0]])]
 							: []),

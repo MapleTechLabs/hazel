@@ -40,6 +40,10 @@ export interface Account {
 	readonly firstSeenAt: string
 	readonly churnedAt: string | null
 	readonly tags: ReadonlyArray<string>
+	/** The primary of the customer it is an environment of; null when standalone or a primary. */
+	readonly primaryAccountId: string | null
+	/** What the team calls this environment (`US`, `EU`). */
+	readonly environment: string | null
 }
 
 /** A `customer_signals` row (open ones are what the list counts). */
