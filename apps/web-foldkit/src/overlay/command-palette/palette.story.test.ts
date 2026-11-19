@@ -287,6 +287,9 @@ describe("home actions", () => {
 			model((m) => expect(customerItems(m)).toEqual([])),
 			message(searched("acme.d")),
 			model((m) => expect(customerItems(m)).toEqual([`customer:${accountId}`])),
+			// Name and domain together, with no environment between them.
+			message(searched("acme acme.dev")),
+			model((m) => expect(customerItems(m)).toEqual([`customer:${accountId}`])),
 			message(item(`customer:${accountId}`)),
 			expectOutMessage(OutMessage.Completed({ href: `/hazel/customers/${accountId}`, toast: null })),
 		)

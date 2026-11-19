@@ -149,7 +149,9 @@ const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 						model.customers.map((customer) =>
 							CommandMenu.item(
 								`customer:${customer.id}`,
-								[customer.name, customer.environment ?? "", ...customer.domains].join(" "),
+								[customer.name, customer.environment, ...customer.domains]
+									.filter((part) => part !== null)
+									.join(" "),
 							),
 						),
 					),
