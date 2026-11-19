@@ -146,10 +146,12 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 				$.paidAt.lte(now),
 			]),
 	)
-	const revenueOf = (current: boolean) =>
-		paid
-			.filter((invoice) => invoice.paidAt !== null && invoice.paidAt >= rangeStart === current)
-			.reduce((sum, invoice) => sum + invoice.amountPaidMinor, 0)
+	const revenue = { current: 0, previous: 0 }
+	for (const invoice of paid) {
+		if (invoice.paidAt === null) continue
+		if (invoice.paidAt >= rangeStart) revenue.current += invoice.amountPaidMinor
+		else revenue.previous += invoice.amountPaidMinor
+	}
 
 	// MRR movements per bucket.
 	const buckets = new Map<Day, MrrMovementBucket>()
@@ -330,7 +332,7 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 			activeCustomers: kpi(value(current, "activeAccounts"), prior("activeAccounts")),
 			wau: kpi(wau, prior("wau")),
 			mau: kpi(mau, prior("mau")),
-			revenueMinor: kpi(revenueOf(true), revenueOf(false)),
+			revenueMinor: kpi(revenue.current, revenue.previous),
 			logoChurn: kpi(churnCount(inCurrent), churnCount(inPrevious)),
 			atRiskMrrMinor: kpi(value(current, "atRiskMrrMinor"), prior("atRiskMrrMinor")),
 			nrrPct: nrrNow === null ? null : kpi(nrrNow, nrrBefore),
