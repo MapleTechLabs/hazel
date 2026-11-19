@@ -290,9 +290,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 	const meta = [
 		account.planName,
 		account.mrrMinor > 0 ? `${formatMoney(account.mrrMinor, account.currency)} MRR` : null,
-		account.customerSinceMs === null
-			? null
-			: `Customer since ${formatDate(new Date(account.customerSinceMs), { now, withYear: true })}`,
+		`Customer since ${formatDate(new Date(account.firstSeenAtMs), { now, withYear: true })}`,
 	].filter((part) => part !== null)
 	return h.div(
 		[h.Class("flex flex-col gap-4 px-4 pt-6 lg:px-6")],
@@ -901,12 +899,12 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 				),
 				property(
 					h,
-					"First seen",
+					"Customer since",
 					formatDate(new Date(account.firstSeenAtMs), { now, withYear: true }),
 				),
 				property(
 					h,
-					"Customer since",
+					"Paying since",
 					account.customerSinceMs === null
 						? "—"
 						: formatDate(new Date(account.customerSinceMs), { now, withYear: true }),

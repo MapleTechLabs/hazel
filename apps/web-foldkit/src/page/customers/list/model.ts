@@ -321,7 +321,7 @@ const sortKeyOf = (
 		case "open_signals":
 			return account.openRiskHigh * 100 + account.openRiskMedium * 10 + account.openRiskLow
 		case "customer_since":
-			return nullsLast(account.customerSinceMs, direction)
+			return account.firstSeenAtMs
 		case "tags":
 			return account.tags.length
 	}

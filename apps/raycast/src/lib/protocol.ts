@@ -46,7 +46,7 @@ const ACCOUNT_KEYS = [
 	"openRiskLow",
 	"openOpportunities",
 	"lastActiveAt",
-	"customerSince",
+	"firstSeenAt",
 	"churnedAt",
 	"tags",
 ] as const satisfies ReadonlyArray<keyof Account>

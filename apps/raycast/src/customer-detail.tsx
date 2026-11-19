@@ -195,9 +195,7 @@ export function CustomerDetail(props: {
 					{account.lastActiveAt !== null && (
 						<Detail.Metadata.Label title="Last active" text={relative(account.lastActiveAt)} />
 					)}
-					{account.customerSince !== null && (
-						<Detail.Metadata.Label title="Customer since" text={date(account.customerSince)} />
-					)}
+					<Detail.Metadata.Label title="Customer since" text={date(account.firstSeenAt)} />
 					{account.churnedAt !== null && (
 						<Detail.Metadata.Label title="Churned" text={date(account.churnedAt)} />
 					)}
