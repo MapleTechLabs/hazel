@@ -290,7 +290,7 @@ class SettingsModel extends M.Class<SettingsModel>("CustomerSettings")({
 	reportingCurrency: S.String,
 	/** Plan names billed on top of a base plan, never shown as an account's plan while it has one. */
 	addOnPlans: S.Array(S.String),
-	/** MRR from each Stripe subscription's last paid invoice (usage overage, discounts) once one exists. */
+	/** Unused: MRR always adds usage billing now (the backend's `usageMrrOf`); the column stays. */
 	overageInMrr: S.Boolean,
 	lastComputedAt: NullDate,
 	updatedBy: S.NullOr(UserId),

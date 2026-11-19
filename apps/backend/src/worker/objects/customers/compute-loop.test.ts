@@ -12,6 +12,7 @@ import { IntegrationEncryption } from "../../../services/integration-encryption"
 import { runCompute, runComputeStep } from "./compute"
 import { encryptSecrets, storeSecrets, switchProviderAccount } from "./credentials"
 import { CustomerIngest, type CustomerIngestApi } from "./ingest"
+import { overview } from "./read"
 import { runDuePullsWith } from "./jobs"
 import {
 	type CustomerProviderAdapter,
@@ -934,6 +935,40 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("redoes recorded days' user counts from activity backfilled after them", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				// Recorded before the activity came in: no users.
+				const stale = world.object.storage.db.prepare(
+					`INSERT OR REPLACE INTO customer_org_daily (day, mrrMinor, dau, wau, mau, activeAccounts)
+					VALUES (?, 12345, 0, 0, 0, 0)`,
+				)
+				const counts = (offset: number) =>
+					world.rows(
+						`SELECT mrrMinor, dau, wau, mau, activeAccounts FROM customer_org_daily WHERE day = ?`,
+						day(offset),
+					)
+				const fixed = { mrrMinor: 12345, dau: 2, wau: 2, mau: 2, activeAccounts: 1 }
+				stale.run(day(-25))
+				// The first compute redoes them once.
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(counts(-25)).toEqual([fixed])
+				// The history rebuild redoes them too, keeping the recorded billing columns.
+				stale.run(day(-21))
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							yield* requestHistoryRebuild
+							yield* runComputeStep(NOW)
+						}),
+					)
+					.pipe(Effect.orDie)
+				expect(counts(-21)).toEqual([fixed])
+			}),
+		))
+
 	it("stops counting usage once its sources are disconnected or failing", () =>
 		run(
 			Effect.gen(function* () {
@@ -1377,7 +1412,7 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
-	it("counts a subscription's last paid Stripe invoice, overage included, while overage counts in MRR", () =>
+	it("adds a subscription's average usage overage over its last 3 months' paid Stripe invoices to MRR", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
@@ -1404,30 +1439,79 @@ describe("Customers compute and sync loop", () => {
 					})),
 				])
 				const mrr = () => world.rows(`SELECT mrrMinor FROM customer_accounts`)
+				// 19_900 + (1_100 + 4_450) / 2.
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
-				expect(mrr()).toEqual([{ mrrMinor: 19_900 }])
+				expect(mrr()).toEqual([{ mrrMinor: 22_675 }])
 
-				ok(yield* world.call("customers.settings.update", { overageInMrr: true }, world.owner))
-				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
-				expect(mrr()).toEqual([{ mrrMinor: 24_350 }])
-
-				// A history rebuild leaves the invoices' MRR to compute; today's movement ends the plans' series there.
+				// A history rebuild ends at the plans' MRR; the compute after it adds the usage back as
+				// today's movement.
 				yield* world.object.run(requestHistoryRebuild).pipe(Effect.orDie)
 				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
 				expect(meta(world, "rebuildHistory")).toBeUndefined()
-				expect(mrr()).toEqual([{ mrrMinor: 24_350 }])
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				expect(mrr()).toEqual([{ mrrMinor: 22_675 }])
 				expect(
 					world.rows(
 						`SELECT day, type, fromMrrMinor, toMrrMinor FROM customer_mrr_movements ORDER BY day`,
 					),
 				).toEqual([
 					{ day: day(-60), type: "new", fromMrrMinor: 0, toMrrMinor: 19_900 },
-					{ day: day(0), type: "expansion", fromMrrMinor: 19_900, toMrrMinor: 24_350 },
+					{ day: day(0), type: "expansion", fromMrrMinor: 19_900, toMrrMinor: 22_675 },
 				])
+			}),
+		))
 
-				ok(yield* world.call("customers.settings.update", { overageInMrr: false }, world.owner))
-				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
-				expect(mrr()).toEqual([{ mrrMinor: 19_900 }])
+	it("sums the range's paid invoices as revenue, the range before as previous, reporting currency only", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				yield* world.ingest("stripe", [
+					subscription(90),
+					...[
+						{ id: "in_now", amount: 12_000, daysAgo: 3, currency: "usd" },
+						{ id: "in_edge", amount: 500, daysAgo: 29, currency: "usd" },
+						{ id: "in_before", amount: 7_000, daysAgo: 45, currency: "usd" },
+						{ id: "in_eur", amount: 9_000, daysAgo: 3, currency: "eur" },
+						{ id: "in_old", amount: 4_000, daysAgo: 70, currency: "usd" },
+					].map(({ id, amount, daysAgo, currency }): IngestOp => ({
+						_tag: "invoice",
+						externalId: id,
+						account: { provider: "clerk", externalId: "org_1" },
+						subscriptionExternalId: "sub_1",
+						number: id,
+						status: "paid",
+						amountDueMinor: amount,
+						amountPaidMinor: amount,
+						currency,
+						issuedAt: new Date(NOW.getTime() - daysAgo * DAY).toISOString(),
+						dueAt: null,
+						paidAt: new Date(NOW.getTime() - daysAgo * DAY).toISOString(),
+						attemptCount: 1,
+					})),
+				])
+				const result = yield* world.object.run(overview("30d", NOW)).pipe(Effect.orDie)
+				expect(result.kpis.revenueMinor).toMatchObject({ value: 12_500, previous: 7_000 })
+			}),
+		))
+
+	it("lists the trials started in the range, at list price, with their status now", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				const trial = (externalId: string, startedDaysAgo: number): UpsertSubscription => ({
+					...subscription(startedDaysAgo),
+					externalId,
+					status: "trialing",
+					mrrMinor: 0,
+					listMrrMinor: 3_900,
+					trialEndsAt: new Date(NOW.getTime() + 7 * DAY).toISOString(),
+				})
+				// Not a trial, and a trial started before the range: neither is listed.
+				yield* world.ingest("stripe", [subscription(3), trial("sub_old", 45), trial("sub_new", 5)])
+				const result = yield* world.object.run(overview("30d", NOW)).pipe(Effect.orDie)
+				expect(result.newTrials).toMatchObject([{ mrrMinor: 3_900, status: "trialing" }])
 			}),
 		))
 

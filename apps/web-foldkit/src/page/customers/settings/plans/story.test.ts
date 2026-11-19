@@ -39,7 +39,7 @@ const admin = sharedAs("admin")
 
 const loaded = (addOnPlans: ReadonlyArray<string> = []): Model =>
 	[
-		Message.UpdatedSettings({ settings: { id: settingsId, addOnPlans, overageInMrr: false } }),
+		Message.UpdatedSettings({ settings: { id: settingsId, addOnPlans } }),
 		Message.SucceededFetchPlans({ plans: ["Starter", "BYOK", "Pro"] }),
 	].reduce((current, next) => update(current, next, admin).model, init(null, admin).model)
 
@@ -69,20 +69,6 @@ describe("plans settings", () => {
 		const saved = update(marked.model, Message.SucceededSaveSettings(), admin).model
 		const unmarked = update(saved, Message.ToggledAddOn({ plan: "Legacy add-on", isAddOn: false }), admin)
 		expect(unmarked.commands?.[0]).toMatchObject({ args: { change: { addOnPlans: ["BYOK"] } } })
-	})
-
-	test("the overage switch saves just that setting", () => {
-		const toggled = update(loaded(["BYOK"]), Message.ToggledOverageInMrr({ isOn: true }), admin)
-		expect(toggled.model.settings).toEqual({ id: settingsId, addOnPlans: ["BYOK"], overageInMrr: true })
-		expect(toggled.model.isSaving).toBe(true)
-		expect(toggled.commands?.[0]).toMatchObject({
-			name: SaveSettings.name,
-			args: { organizationId, settingsId, change: { overageInMrr: true } },
-		})
-		expect(toggled.commands?.[0]?.args).not.toHaveProperty("change.addOnPlans")
-		expect(
-			update(loaded(), Message.ToggledOverageInMrr({ isOn: true }), sharedAs("member")).commands ?? [],
-		).toHaveLength(0)
 	})
 
 	test("members cannot change add-ons", () => {
