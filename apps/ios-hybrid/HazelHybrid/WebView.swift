@@ -135,8 +135,25 @@ extension WKWebView {
 extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
     override open func viewDidLoad() {
         super.viewDidLoad()
-        interactivePopGestureRecognizer?.delegate = self
-        interactiveContentPopGestureRecognizer?.delegate = self
+        for pop in [interactivePopGestureRecognizer, interactiveContentPopGestureRecognizer] {
+            pop?.delegate = self
+            pop?.addTarget(self, action: #selector(popBegan(_:)))
+        }
+    }
+
+    /// Once the page starts to leave, its lists stop scrolling under the finger (the two run together
+    /// until then: `shouldRecognizeSimultaneouslyWith`). Toggling a pan cancels the touch it holds.
+    @objc private func popBegan(_ pop: UIGestureRecognizer) {
+        guard pop.state == .began else { return }
+        func stop(_ view: UIView) {
+            if let scroll = view as? UIScrollView, scroll.panGestureRecognizer.isEnabled {
+                scroll.panGestureRecognizer.isEnabled = false
+                scroll.panGestureRecognizer.isEnabled = true
+                scroll.setContentOffset(scroll.contentOffset, animated: false)
+            }
+            view.subviews.forEach(stop)
+        }
+        stop(view)
     }
 
     /// SwiftUI turns the gesture off again whenever it hides the bar.
