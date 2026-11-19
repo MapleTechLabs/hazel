@@ -2,6 +2,7 @@ import { ChannelId, ChannelMemberId, ChannelSectionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test } from "vitest"
 import type { Model } from "./model"
+import { splitCustomerChannels } from "./customer-channels"
 import { adjacentChannel, navigationOrder } from "./navigation"
 import type { ChannelEntry } from "./rows"
 
@@ -80,6 +81,21 @@ describe("navigationOrder", () => {
 			],
 		})
 		expect(navigationOrder(model)).toEqual([favorite, general, launch, design, random, dmGrace])
+	})
+
+	test("a deleted section's stale list does not list its customer channels twice", () => {
+		const gone = Schema.decodeSync(ChannelSectionId)(uuid(101))
+		const model = sidebar({
+			// `design` moved to the default list when its section was deleted; the old list lingers.
+			sectionChannels: {
+				default: [entry(general, "general"), entry(design, "design")],
+				[gone]: [entry(design, "design", gone)],
+			},
+			sections: [],
+			channelCustomers: [{ channelId: design, accountName: "Acme", accountLogoUrl: null }],
+		})
+		expect(navigationOrder(model)).toEqual([favorite, general, design, dmGrace])
+		expect(splitCustomerChannels(model).customerChannels).toHaveLength(1)
 	})
 
 	test("a DM whose channel has not loaded is skipped (the sidebar does not show it yet)", () => {

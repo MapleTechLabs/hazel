@@ -76,6 +76,8 @@ const rowSlots = createKeyedLazy()
 
 const NO_PARTNERS: ReadonlyArray<PartnerOrg> = []
 const NO_THREADS: ReadonlyArray<SidebarThread> = []
+/** A Customers row has no "Move to section": the customer link, not the section, places it. */
+const NO_SECTIONS: Model["sections"] = []
 
 /** Joined threads stay listed this long after they start; an unread or open one always shows. */
 const RECENT_THREAD_MS = 7 * 24 * 60 * 60 * 1000
@@ -193,7 +195,7 @@ const channelRow = <M>(
 			// An open thread scrolls its channel's row into view.
 			id === context.activeChannelId || activeThreadId !== null ? context.onActiveMount : null,
 			openRowMenu(context.openMenu, id),
-			context.sections,
+			customer === null ? context.sections : NO_SECTIONS,
 			context.canDeleteChannels,
 			context.toParentMessage,
 			threads,

@@ -21,19 +21,33 @@ export interface SplitChannels {
 // keep their identity across renders.
 const splitMemo = new WeakMap<
 	Model["sectionChannels"],
-	{ readonly channelCustomers: Model["channelCustomers"]; readonly result: SplitChannels }
+	{
+		readonly sections: Model["sections"]
+		readonly channelCustomers: Model["channelCustomers"]
+		readonly result: SplitChannels
+	}
 >()
 
 export const splitCustomerChannels = (model: Model): SplitChannels => {
 	const cached = splitMemo.get(model.sectionChannels)
-	if (cached !== undefined && cached.channelCustomers === model.channelCustomers) return cached.result
-	const result = split(model.sectionChannels, model.channelCustomers)
-	splitMemo.set(model.sectionChannels, { channelCustomers: model.channelCustomers, result })
+	if (
+		cached !== undefined &&
+		cached.sections === model.sections &&
+		cached.channelCustomers === model.channelCustomers
+	)
+		return cached.result
+	const result = split(model.sectionChannels, model.sections, model.channelCustomers)
+	splitMemo.set(model.sectionChannels, {
+		sections: model.sections,
+		channelCustomers: model.channelCustomers,
+		result,
+	})
 	return result
 }
 
 const split = (
 	sectionChannels: Model["sectionChannels"],
+	sections: Model["sections"],
 	channelCustomers: Model["channelCustomers"],
 ): SplitChannels => {
 	if (channelCustomers.length === 0) return { sectionChannels, customerChannels: [] }
@@ -45,7 +59,11 @@ const split = (
 	)
 	const remaining: Record<string, ReadonlyArray<ChannelEntry>> = {}
 	const customers: Array<CustomerChannel> = []
-	for (const [key, entries] of Object.entries(sectionChannels)) {
+	// Only the lists the sidebar shows: a deleted section's last list stays in the model, and its
+	// channels (moved to the default section) would be listed twice.
+	for (const key of ["default", ...sections.map((section) => section.id)]) {
+		const entries = sectionChannels[key]
+		if (entries === undefined) continue
 		const kept = entries.filter((entry) => {
 			const customer = customerByChannel.get(entry.channel.id)
 			if (customer === undefined) return true
