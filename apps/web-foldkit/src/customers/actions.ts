@@ -352,6 +352,39 @@ export const updateAccountAction = optimisticAction({
 		}),
 })
 
+/** `mute`: until `until` (null: until unmuted); null unmutes. */
+type AttentionMuteProps = Readonly<{
+	organizationId: OrganizationId
+	accountId: CustomerAccountId
+	userId: UserId
+	mute: Readonly<{ until: Date | null }> | null
+}>
+
+/** `customers.account.update`'s Needs attention mute: the account leaves the queue, or comes back. */
+const setAttentionMute = optimisticAction({
+	collections: [customerAccountCollection],
+	onMutate: (props: AttentionMuteProps & Stamp) => {
+		customerAccountCollection.update(props.accountId, (account) => {
+			account.attentionMutedAt = props.mute === null ? null : props.at
+			account.attentionMutedUntil = props.mute?.until ?? null
+			account.attentionMutedByUserId = props.mute === null ? null : props.userId
+		})
+		return { accountId: props.accountId }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.account.update", {
+				organizationId: props.organizationId,
+				accountId: props.accountId,
+				attentionMute: props.mute,
+			})
+			return { data: result, transactionId: result.transactionId }
+		}),
+})
+
+export const setAttentionMuteAction = stamped(setAttentionMute)
+
 interface AccountMerge {
 	readonly organizationId: OrganizationId
 	readonly accountId: CustomerAccountId
