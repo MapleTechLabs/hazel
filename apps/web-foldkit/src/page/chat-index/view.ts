@@ -1,11 +1,12 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { IconHashtag, IconLock, IconMsgs, IconPlus } from "../../icons"
+import { IconHashtag, IconLock, IconMsgPen, IconMsgs, IconPlus } from "../../icons"
 import { badge } from "../../ui/badge"
 import { button } from "../../ui/button"
 import { card } from "../../ui/card"
 import { emptyState } from "../../ui/empty-state"
 import { loader } from "../../ui/loader"
+import { mobileTopBar } from "../../ui/mobile-top-bar"
 import {
 	sectionHeaderGroup,
 	sectionHeaderHeading,
@@ -159,9 +160,39 @@ const panels = (
 	]
 }
 
-/** `ChatDms`: the direct messages alone, with "New message" in the header (a phone's DMs tab). */
-const dmList = (h: HtmlBuilder<Message>, model: Model, groups: ChannelGroups, shared: Shared): Html =>
-	h.div(
+/**
+ * `ChatDms`: the direct messages alone. On a phone (the DMs tab) under a top bar like every tab's,
+ * with compose at its end as a phone's messages app has it; elsewhere a page header with "New message".
+ */
+const dmList = (h: HtmlBuilder<Message>, model: Model, groups: ChannelGroups, shared: Shared): Html => {
+	const list =
+		shared.orgSlug === null
+			? []
+			: (panels(h, model, groups, shared, shared.orgSlug).find((panel) => panel.key === "dms")
+					?.content ?? [])
+	if (shared.isMobile)
+		return h.div(
+			[h.Class("flex min-h-full flex-col")],
+			[
+				mobileTopBar(h, {
+					title: "Direct messages",
+					isSticky: true,
+					trailing: button(
+						h,
+						{
+							intent: "plain",
+							size: "sq-md",
+							className: "size-11 text-primary",
+							onPress: Message.PressedStartConversation(),
+							attributes: [h.AriaLabel("New message")],
+						},
+						[IconMsgPen(h, { className: "size-5" })],
+					),
+				}),
+				h.div([h.Class("flex flex-col gap-4 p-4")], list),
+			],
+		)
+	return h.div(
 		[h.Class("flex flex-col gap-6 px-4 py-6 lg:px-8")],
 		[
 			sectionHeaderRoot(h, { className: "border-none pb-0" }, [
@@ -173,12 +204,10 @@ const dmList = (h: HtmlBuilder<Message>, model: Model, groups: ChannelGroups, sh
 					],
 				),
 			]),
-			...(shared.orgSlug === null
-				? []
-				: (panels(h, model, groups, shared, shared.orgSlug).find((panel) => panel.key === "dms")
-						?.content ?? [])),
+			...list,
 		],
 	)
+}
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
 	if (model.channels._tag === "Loading") {
