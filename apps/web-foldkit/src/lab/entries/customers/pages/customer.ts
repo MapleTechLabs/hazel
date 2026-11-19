@@ -35,12 +35,19 @@ import {
 // `/lab/customers/pages/customer`: the real customer page over Acme Robotics. Its update runs; every
 // read answers from the fixtures below, the mutations apply to the rows at once and go nowhere.
 // `?tab=` picks the tab, `?state=` the Wonder artboard's data, `?as=admin` signs in as an admin
-// (feature flags).
+// (feature flags, the grouping actions), `?account=eu` shows Acme's EU environment instead of its US
+// primary.
 
 const STATES = ["default", "payment-failed", "excluded-health", "loading", "not-found"] as const
 const State = Schema.Literals(STATES)
 const ROLES = ["member", "admin"] as const
-const Flags = Schema.Struct({ tab: CustomerTab, state: State, as: Schema.Literals(ROLES) })
+const VIEWED = ["us", "eu"] as const
+const Flags = Schema.Struct({
+	tab: CustomerTab,
+	state: State,
+	as: Schema.Literals(ROLES),
+	account: Schema.Literals(VIEWED),
+})
 
 const DAY = 86_400_000
 const ago = (days: number) => new Date(NOW.getTime() - days * DAY)
@@ -352,6 +359,10 @@ const state = (): typeof State.Type => {
 	return STATES.find((entry) => entry === value) ?? "default"
 }
 
+/** The account shown: Acme's US primary, or its EU environment. */
+const viewed = (): Customers.Account =>
+	new URLSearchParams(window.location.search).get("account") === "eu" ? ACCOUNTS_BY_KEY.acmeEu : acme
+
 const shared = () =>
 	new URLSearchParams(window.location.search).get("as") === "admin"
 		? {
@@ -379,7 +390,13 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 				? null
 				: current === "not-found"
 					? Message.FailedFetchDetail({ accountId: accountId(), reason: "NotFound" })
-					: Message.SucceededFetchDetail({ accountId: accountId(), detail: detailFor(current) })
+					: Message.SucceededFetchDetail({
+							accountId: accountId(),
+							detail:
+								viewed().id === acme.id
+									? detailFor(current)
+									: { ...detailFor(current), account: viewed() },
+						})
 		case "FetchCustomerUsage": {
 			const range = args.range as Customers.CustomersRange
 			const metricKey = String(args.metricKey)
@@ -431,6 +448,14 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 			})
 		case "CreateCustomerNote":
 			return null
+		case "LinkCustomerAccount":
+			return Message.SucceededGroupAction({ accountId: accountId(), action: "link" })
+		case "UnlinkCustomerAccount":
+			return Message.SucceededGroupAction({ accountId: accountId(), action: "unlink" })
+		case "SetCustomerPrimary":
+			return Message.SucceededGroupAction({ accountId: accountId(), action: "set_primary" })
+		case "SetCustomerEnvironment":
+			return Message.SucceededGroupAction({ accountId: accountId(), action: "set_environment" })
 		default:
 			return command.name.startsWith("Update") ||
 				command.name.startsWith("Delete") ||
@@ -483,7 +508,7 @@ const settle = (
 const routeOf = (tab: CustomerTab) =>
 	AppRoute.CustomerDetail({
 		orgSlug: "lab",
-		accountId: acme.id,
+		accountId: viewed().id,
 		tab: tab === "overview" ? Option.none() : Option.some(tab),
 	})
 
@@ -521,6 +546,7 @@ const labView = (model: Model, h: HtmlBuilder<Message>): Html => {
 				{ name: "tab", values: CustomerTab.literals, current: params.get("tab") ?? "overview" },
 				{ name: "state", values: STATES, current: params.get("state") ?? "default" },
 				{ name: "as", values: ROLES, current: params.get("as") ?? "member" },
+				{ name: "account", values: VIEWED, current: params.get("account") ?? "us" },
 			],
 		},
 		[
@@ -547,6 +573,7 @@ export const lab = defineLabWithFlags("Customer", {
 		tab: queryParam("tab", CustomerTab.literals, "overview"),
 		state: queryParam("state", STATES, "default"),
 		as: queryParam("as", ROLES, "member"),
+		account: queryParam("account", VIEWED, "us"),
 	}),
 	init: initial,
 	// Tabs navigate in the app; here they switch in place. Prev/next stay on Acme.

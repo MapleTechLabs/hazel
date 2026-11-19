@@ -1,11 +1,12 @@
 import * as Customers from "@hazel/domain/customers"
-import type { CustomerNoteId, CustomerSignalId } from "@hazel/schema"
+import type { CustomerAccountId, CustomerNoteId, CustomerSignalId } from "@hazel/schema"
 import { Popover as PopoverControl } from "@foldkit/ui"
 import { Option, Result } from "effect"
 import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
+import { accountLabelOf, linkedTo, madePrimary, unlinked } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { featureFlagKeysOf, featureFlagToast } from "../../../customers/feature-flags"
 import { isSnoozeKey, snoozeUntil } from "../../../customers/ui/menus"
@@ -30,14 +31,18 @@ import {
 	FetchCustomerUsage,
 	FocusNoteComposer,
 	LoadNoteDrafts,
+	LinkCustomerAccount,
 	LinkCustomerChannel,
+	SetCustomerEnvironment,
 	SetCustomerFeatureFlags,
+	SetCustomerPrimary,
 	StartCustomerImpersonation,
+	UnlinkCustomerAccount,
 	UnlinkCustomerChannel,
 	UpdateCustomerAccount,
 	UpdateCustomerNote,
 } from "./commands"
-import { Message, type NoteDraft } from "./message"
+import { type GroupAction, Message, type NoteDraft } from "./message"
 import {
 	ACTIONS_MENU_ID,
 	accountOf,
@@ -48,10 +53,15 @@ import {
 	doneEntries,
 	EMPTY_NOTE_DRAFTS,
 	EMPTY_PAGE,
+	ENVIRONMENT_MENU_ID,
+	ENVIRONMENT_MODAL_ID,
 	EVENT_TYPE_MENU_ID,
 	EVENT_TYPE_PREFIXES,
 	EventType,
+	groupOfModel,
 	IMPERSONATE_MODAL_ID,
+	LINK_MODAL_ID,
+	linkCandidates,
 	METRIC_MENU_ID,
 	type Model,
 	type NoteRow,
@@ -61,6 +71,7 @@ import {
 	OWNER_NONE,
 	ownerEntries,
 	positionOf,
+	primaryOf,
 	RAW_MODAL_ID,
 	SIGNAL_MORE_MENU_ID,
 	type SignalMenu,
@@ -230,6 +241,15 @@ const initialModel = (route: Route): Model => ({
 	flagPopover: Popover.init(FLAG_POPOVER_ID),
 	flagSelection: [],
 	rawModal: Modal.init(RAW_MODAL_ID),
+	environmentMenu: Menu.init({ id: ENVIRONMENT_MENU_ID }),
+	linkModal: Modal.init(LINK_MODAL_ID),
+	linkQuery: "",
+	linkPrimaryId: null,
+	isLinking: false,
+	linkError: null,
+	environmentModal: Modal.init(ENVIRONMENT_MODAL_ID),
+	environmentDraft: "",
+	isSavingEnvironment: false,
 	deletingNoteId: null,
 	deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
 	isImpersonator: false,
@@ -262,6 +282,7 @@ type MenuField =
 	| "snoozeMenu"
 	| "doneMenu"
 	| "signalMoreMenu"
+	| "environmentMenu"
 type MenuCommands = NonNullable<ReturnType<typeof Menu.update>["commands"]>
 
 const MENU_MESSAGE = {
@@ -272,6 +293,7 @@ const MENU_MESSAGE = {
 	snoozeMenu: (message: Menu.Message) => Message.GotSnoozeMenuMessage({ message }),
 	doneMenu: (message: Menu.Message) => Message.GotDoneMenuMessage({ message }),
 	signalMoreMenu: (message: Menu.Message) => Message.GotSignalMoreMenuMessage({ message }),
+	environmentMenu: (message: Menu.Message) => Message.GotEnvironmentMenuMessage({ message }),
 } as const satisfies Record<MenuField, (message: Menu.Message) => Message>
 
 const mapMenuCommands = (field: MenuField, commands: MenuCommands): Commands => {
@@ -345,10 +367,71 @@ const onAction = (model: Model, shared: Shared, key: string): Return => {
 			return openMenu(model, "ownerMenu", ownerEntries(model.members))
 		case "raw_data":
 			return { model: modifyFields(model, { rawModal: (modal) => Modal.open(modal).model }) }
+		case "link_customer":
+			return {
+				model: modifyFields(model, {
+					linkModal: (modal) => Modal.open(modal).model,
+					linkQuery: () => "",
+					linkPrimaryId: () => null,
+					linkError: () => null,
+				}),
+			}
+		case "make_primary":
+			return regroup(model, shared, madePrimary, SetCustomerPrimary)
+		case "unlink":
+			return regroup(model, shared, unlinked, UnlinkCustomerAccount)
+		case "name_environment":
+			return {
+				model: modifyFields(model, {
+					environmentModal: (modal) => Modal.open(modal).model,
+					environmentDraft: () => accountOf(model)?.environment ?? "",
+				}),
+			}
 		default:
 			return { model }
 	}
 }
+
+// GROUP
+
+/** Makes this environment primary, or unlinks it: the rows change at once, the RPC follows. */
+const regroup = (
+	model: Model,
+	shared: Shared,
+	change: (accounts: ReadonlyArray<AccountRow>, accountId: CustomerAccountId) => ReadonlyArray<AccountRow>,
+	command: typeof SetCustomerPrimary | typeof UnlinkCustomerAccount,
+): Return => {
+	const args = target(model, shared)
+	if (args === null || primaryOf(model) === null) return { model }
+	return {
+		model: modifyFields(model, {
+			accounts: (accounts) => (accounts === null ? null : change(accounts, model.accountId)),
+		}),
+		commands: [command(args)],
+	}
+}
+
+const openEnvironment = (model: Model, shared: Shared, key: string): Return => {
+	const account = groupOfModel(model).find((member) => member.id === key)
+	return account === undefined || account.id === model.accountId
+		? { model }
+		: {
+				model,
+				outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
+					customerRoute(orgSlug, account.id),
+				),
+			}
+}
+
+/** The dialog's text as the store keeps it: trimmed, at most 60 characters, blank clears it. */
+const draftEnvironment = (model: Model): string | null => model.environmentDraft.trim().slice(0, 60) || null
+
+const GROUP_FAILURE = {
+	link: "Couldn't link the customers",
+	unlink: "Couldn't unlink the environment",
+	set_primary: "Couldn't make it primary",
+	set_environment: "Couldn't name the environment",
+} as const satisfies Record<GroupAction, string>
 
 // SIGNALS
 
@@ -853,6 +936,109 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				model: modifyFields(model, { rawModal: () => result.model }),
 				commands: Command.mapMessages(result.commands ?? [], (child) =>
 					Message.GotRawModalMessage({ message: child }),
+				),
+			}
+		},
+
+		GotEnvironmentMenuMessage: ({ message: menuMessage }) =>
+			updateMenu(model, "environmentMenu", menuMessage, (next, key) =>
+				openEnvironment(next, shared, key),
+			),
+		GotLinkModalMessage: ({ message: modalMessage }) => {
+			const result = Modal.update(model.linkModal, modalMessage)
+			return {
+				model: modifyFields(model, { linkModal: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotLinkModalMessage({ message: child }),
+				),
+			}
+		},
+		ChangedLinkQuery: ({ value }) => ({ model: modifyFields(model, { linkQuery: () => value }) }),
+		ClearedLinkQuery: () => ({ model: modifyFields(model, { linkQuery: () => "" }) }),
+		PickedLinkPrimary: ({ pickedId }) => ({
+			model: modifyFields(model, {
+				linkPrimaryId: () =>
+					linkCandidates(model).find((account) => account.id === pickedId)?.id ?? null,
+				linkError: () => null,
+			}),
+		}),
+		PressedConfirmLink: () => {
+			const args = target(model, shared)
+			const primaryAccountId = model.linkPrimaryId
+			if (!model.linkModal.isOpen || model.isLinking || args === null || primaryAccountId === null)
+				return { model }
+			return {
+				model: modifyFields(model, { isLinking: () => true, linkError: () => null }),
+				commands: [LinkCustomerAccount({ ...args, primaryAccountId })],
+			}
+		},
+		GotEnvironmentModalMessage: ({ message: modalMessage }) => {
+			const result = Modal.update(model.environmentModal, modalMessage)
+			return {
+				model: modifyFields(model, { environmentModal: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotEnvironmentModalMessage({ message: child }),
+				),
+			}
+		},
+		ChangedEnvironmentDraft: ({ value }) => ({
+			model: modifyFields(model, { environmentDraft: () => value }),
+		}),
+		SubmittedEnvironment: () => {
+			const args = target(model, shared)
+			if (!model.environmentModal.isOpen || model.isSavingEnvironment || args === null) return { model }
+			return {
+				model: modifyFields(model, { isSavingEnvironment: () => true }),
+				commands: [SetCustomerEnvironment({ ...args, environment: draftEnvironment(model) })],
+			}
+		},
+		SucceededGroupAction: ({ action }) => {
+			if (action === "link") {
+				const primaryAccountId = model.linkPrimaryId
+				const primary = model.accounts?.find((account) => account.id === primaryAccountId)
+				return {
+					model: modifyFields(model, {
+						isLinking: () => false,
+						linkModal: (modal) => Modal.close(modal).model,
+						accounts: (accounts) =>
+							accounts === null || primaryAccountId === null
+								? accounts
+								: linkedTo(accounts, model.accountId, primaryAccountId),
+					}),
+					outMessage: toast(
+						successToast(
+							`Linked to ${primary === undefined ? "the customer" : accountLabelOf(primary)}`,
+						),
+					),
+				}
+			}
+			if (action === "set_environment") {
+				const environment = draftEnvironment(model)
+				const closed = modifyFields(model, {
+					isSavingEnvironment: () => false,
+					environmentModal: (modal) => Modal.close(modal).model,
+				})
+				return { model: patchAccount(closed, (account) => ({ ...account, environment })) }
+			}
+			return { model }
+		},
+		FailedGroupAction: ({ action, reason, message }) => {
+			const settled = modifyFields(model, { isLinking: () => false, isSavingEnvironment: () => false })
+			// The store's refusal shows in the link dialog, beside the pick to change.
+			if (action === "link" && message !== null)
+				return { model: modifyFields(settled, { linkError: () => message }) }
+			return {
+				model: settled,
+				outMessage: toast(
+					errorToastOf(
+						failureMessage(reason, {
+							NotFound: {
+								title: GROUP_FAILURE[action],
+								description: "That customer is no longer available.",
+							},
+							Stale: { title: GROUP_FAILURE[action], description: message ?? undefined },
+						}),
+					),
 				),
 			}
 		},

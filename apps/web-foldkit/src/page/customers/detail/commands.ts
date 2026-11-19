@@ -1,5 +1,5 @@
 import * as Customers from "@hazel/domain/customers"
-import type { CustomersNotFoundError } from "@hazel/domain/rpc"
+import type { CustomerGroupError, CustomersNotFoundError } from "@hazel/domain/rpc"
 import {
 	ChannelId,
 	CustomerAccountId,
@@ -15,7 +15,11 @@ import { type CommonError, failureMessage } from "~/lib/error-messages"
 import {
 	createNoteAction,
 	deleteNoteAction,
+	linkAccountAction,
+	setEnvironmentAction,
 	setFeatureFlagsAction,
+	setPrimaryAccountAction,
+	unlinkAccountAction,
 	updateAccountAction,
 	updateNoteAction,
 } from "../../../customers/actions"
@@ -24,7 +28,7 @@ import { settleFeatureFlags } from "../../../customers/feature-flags"
 import { catchCommon, errorToastOf } from "../../../data/actions"
 import { showBackgroundToast } from "../../../overlay/background-toasts"
 import { HazelRpc } from "../../../rpc"
-import { Message, type NoteAction, type NoteDraft } from "./message"
+import { type GroupAction, Message, type NoteAction, type NoteDraft } from "./message"
 import { COMPOSER_ID, PAGE_SIZE } from "./model"
 import { draftToRestore, readNoteDrafts, restoreNoteDraft } from "./note-drafts"
 
@@ -163,6 +167,62 @@ export const UpdateCustomerAccount = Command.define("UpdateCustomerAccount", {
 			}),
 			catchCommon((reason) => Message.FailedAccountUpdate({ reason })),
 		),
+})
+
+// GROUPS
+
+type GroupAnswer = Extract<Message, { readonly _tag: "SucceededGroupAction" | "FailedGroupAction" }>
+
+/** A grouping RPC's settled answer: the store's refusal (`CustomerGroupError`) keeps its message. */
+const settleGroup =
+	(action: GroupAction, accountId: CustomerAccountId) =>
+	<A, R>(
+		effect: Effect.Effect<A, CustomersNotFoundError | CustomerGroupError | CommonError, R>,
+	): Effect.Effect<GroupAnswer, never, R> =>
+		effect.pipe(
+			Effect.as<GroupAnswer>(Message.SucceededGroupAction({ accountId, action })),
+			Effect.catchTags({
+				CustomersNotFoundError: () =>
+					Effect.succeed(
+						Message.FailedGroupAction({ accountId, action, reason: "NotFound", message: null }),
+					),
+				CustomerGroupError: (error) =>
+					Effect.succeed(
+						Message.FailedGroupAction({
+							accountId,
+							action,
+							reason: "Stale",
+							message: error.message,
+						}),
+					),
+			}),
+			catchCommon((reason) => Message.FailedGroupAction({ accountId, action, reason, message: null })),
+		)
+
+/** Make this customer (and its environments) environments of `primaryAccountId`'s customer. */
+export const LinkCustomerAccount = Command.define("LinkCustomerAccount", {
+	args: { ...target, primaryAccountId: CustomerAccountId },
+	messages: [Message.SucceededGroupAction, Message.FailedGroupAction],
+	execute: (args) => linkAccountAction(args).pipe(settleGroup("link", args.accountId)),
+})
+
+export const UnlinkCustomerAccount = Command.define("UnlinkCustomerAccount", {
+	args: target,
+	messages: [Message.SucceededGroupAction, Message.FailedGroupAction],
+	execute: (args) => unlinkAccountAction(args).pipe(settleGroup("unlink", args.accountId)),
+})
+
+export const SetCustomerPrimary = Command.define("SetCustomerPrimary", {
+	args: target,
+	messages: [Message.SucceededGroupAction, Message.FailedGroupAction],
+	execute: (args) => setPrimaryAccountAction(args).pipe(settleGroup("set_primary", args.accountId)),
+})
+
+/** Name this account's environment (`EU`); null clears it. */
+export const SetCustomerEnvironment = Command.define("SetCustomerEnvironment", {
+	args: { ...target, environment: Schema.NullOr(Schema.String) },
+	messages: [Message.SucceededGroupAction, Message.FailedGroupAction],
+	execute: (args) => setEnvironmentAction(args).pipe(settleGroup("set_environment", args.accountId)),
 })
 
 // CHANNELS

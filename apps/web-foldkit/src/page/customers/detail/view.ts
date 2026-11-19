@@ -1,4 +1,5 @@
 import * as Customers from "@hazel/domain/customers"
+import { CustomerAccountId } from "@hazel/schema"
 import { Option } from "effect"
 import { Submodel } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
@@ -6,7 +7,8 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { commonMessage } from "~/lib/error-messages"
 import { formatCount, formatDate, formatMoney, formatRelative } from "../../../customers/format"
-import { healthBadge, stageBadge } from "../../../customers/ui/badges"
+import { accountLabelOf, environmentCounts, environmentsHintOf } from "../../../customers/groups"
+import { environmentBadge, healthBadge, stageBadge } from "../../../customers/ui/badges"
 import { viewTabs } from "../../../customers/ui/filter-bar"
 import { linkClass } from "../../../customers/ui/surface"
 import {
@@ -20,6 +22,7 @@ import {
 import {
 	IconArrowPath,
 	IconChevronDown,
+	IconCheck,
 	IconChevronRight,
 	IconClose,
 	IconDots,
@@ -34,6 +37,9 @@ import { button } from "../../../ui/button"
 import { checkbox } from "../../../ui/checkbox"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
 import { input } from "../../../ui/input"
+import { radioGroup } from "../../../ui/radio"
+import { searchField } from "../../../ui/search-field"
+import { textField } from "../../../ui/text-field"
 import { link } from "../../../ui/link"
 import { menuDescription, menuLabel } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
@@ -48,11 +54,17 @@ import {
 	accountOf,
 	type ActionKey,
 	actionEntries,
+	ENVIRONMENT_INPUT_ID,
+	environmentEntries,
+	groupOfModel,
 	isNotFound,
+	LINK_SEARCH_ID,
+	linkCandidates,
 	type Model,
 	OWNER_NONE,
 	ownerEntries,
 	positionOf,
+	primaryOf,
 	userIdOfOwnerKey,
 } from "./model"
 import { notesTab } from "./notes-tab"
@@ -68,7 +80,10 @@ const ACTION_LABEL = {
 	change_owner: "Change owner…",
 	recompute: "Recompute health and signals",
 	link_source: "Link a source record…",
-	merge: "Merge with another account…",
+	link_customer: "Link to another customer…",
+	make_primary: "Make primary",
+	unlink: "Unlink from its primary",
+	name_environment: "Name environment…",
 	raw_data: "View raw data",
 	archive: "Archive customer…",
 } as const satisfies Record<ActionKey, string>
@@ -76,7 +91,6 @@ const ACTION_LABEL = {
 const ACTION_REASON = new Map<ActionKey, string>([
 	["recompute", "Runs on its own every hour; no manual trigger yet."],
 	["link_source", "Link records from Data sources › Unmatched for now."],
-	["merge", "Not available yet."],
 	["archive", "Not available yet."],
 ])
 
@@ -152,6 +166,76 @@ const recordLink = (
 }
 
 // HEADER
+
+/** An action's label; the grouping ones name what they act on. */
+const actionLabel = (model: Model, account: Context["account"], key: string): string => {
+	const primary = primaryOf(model)
+	if (key === "unlink" && primary !== null) return `Unlink from ${accountLabelOf(primary)}`
+	if (key === "name_environment" && account.environment !== null) return "Rename environment…"
+	return ACTION_LABEL[key as ActionKey] ?? key
+}
+
+/**
+ * Beside the name: the account's environment, and for a customer with several a menu of them
+ * (primary first) to switch to another.
+ */
+const environmentSwitch = (h: HtmlBuilder<Message>, model: Model, context: Context): ReadonlyArray<Html> => {
+	const group = groupOfModel(model)
+	const environment = context.account.environment
+	if (group.length === 0) return environment === null ? [] : [environmentBadge(h, environment)]
+	return [
+		menu(h, model.environmentMenu, {
+			entries: environmentEntries(model),
+			trigger: (attributes, overlay) =>
+				button(
+					h,
+					{
+						intent: "outline",
+						size: "xs",
+						className: "max-w-48",
+						attributes: [...attributes, h.AriaLabel(`Environment: ${environment ?? "unnamed"}`)],
+					},
+					[
+						h.span([h.Class("min-w-0 truncate")], [environment ?? "Environments"]),
+						IconChevronDown(h, icon),
+						overlay,
+					],
+				),
+			content: (key) => {
+				const account = group.find((member) => member.id === key)
+				if (account === undefined) return []
+				return [
+					menuLabel(h, model.environmentMenu.id, key, [
+						h.span(
+							[h.Class("flex min-w-0 items-center gap-2")],
+							[
+								h.span(
+									[
+										h.Class(
+											twMerge(
+												"truncate",
+												account.environment === null && "text-muted-fg",
+											),
+										),
+									],
+									[account.environment ?? "Unnamed environment"],
+								),
+								...(account.id === group[0]?.id
+									? [h.span([h.Class("text-muted-fg text-xs")], ["Primary"])]
+									: []),
+								...(account.id === model.accountId
+									? [IconCheck(h, { className: "ml-auto size-3.5 shrink-0" })]
+									: []),
+							],
+						),
+					]),
+				]
+			},
+			toMessage: (message) => Message.GotEnvironmentMenuMessage({ message }),
+			className: "min-w-48",
+		}),
+	]
+}
 
 /** The header's owner picker; the sidebar only shows the owner (one Menu model, one rendering). */
 const ownerMenu = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =>
@@ -294,6 +378,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 											heading(h, { variant: "display", className: "max-md:text-xl" }, [
 												account.name,
 											]),
+											...environmentSwitch(h, model, context),
 											stageBadge(h, account.lifecycleStage),
 											healthBadge(h, {
 												status: account.healthStatus,
@@ -371,7 +456,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 								"Add note",
 							]),
 							menu(h, model.actionsMenu, {
-								entries: actionEntries,
+								entries: actionEntries(model, context.isAdmin),
 								trigger: (attributes, overlay) =>
 									button(
 										h,
@@ -390,7 +475,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 											h,
 											model.actionsMenu.id,
 											key,
-											ACTION_LABEL[key as ActionKey] ?? key,
+											actionLabel(model, account, key),
 										),
 										...(reason === undefined
 											? []
@@ -1129,6 +1214,207 @@ const deleteNoteDialog = (h: HtmlBuilder<Message>, model: Model): Html =>
 		],
 	})
 
+// GROUP DIALOGS
+
+/** Link this customer to another: search, pick the customer it belongs to, confirm. */
+const linkDialog = (h: HtmlBuilder<Message>, model: Model, context: Context | null): Html => {
+	const candidates = linkCandidates(model)
+	const picked = candidates.find((account) => account.id === model.linkPrimaryId) ?? null
+	const counts = environmentCounts(model.accounts ?? [])
+	const name = context === null ? "this customer" : accountLabelOf(context.account)
+	return Modal.controlledModal(h, {
+		model: model.linkModal,
+		toParentMessage: (message) => Message.GotLinkModalMessage({ message }),
+		size: "md",
+		toContent: (closeAttributes) => [
+			dialogHeader(h, {
+				title: { id: Modal.titleId(model.linkModal.id), text: `Link ${name} to another customer` },
+				description:
+					"It becomes an environment of the customer you pick, with its own environments if it has any. Each environment keeps its own numbers, users and billing; signals are raised for the whole customer, on its primary. You can unlink it again.",
+			}),
+			dialogBody(h, [
+				h.div(
+					[h.Class("flex flex-col gap-3")],
+					[
+						searchField(
+							h,
+							{
+								id: LINK_SEARCH_ID,
+								value: model.linkQuery,
+								onInput: (value) => Message.ChangedLinkQuery({ value }),
+								onClear: Message.ClearedLinkQuery(),
+								ariaLabel: "Search customers",
+							},
+							(parts) => [parts.searchInput({ placeholder: "Search customers…" })],
+						),
+						candidates.length === 0
+							? h.p(
+									[h.Class("px-1 py-3 text-center text-muted-fg text-sm")],
+									["No other customers match."],
+								)
+							: radioGroup(
+									h,
+									{
+										id: "customer-link-pick",
+										value: picked?.id ?? null,
+										onChange: (value) =>
+											Message.PickedLinkPrimary({
+												pickedId: CustomerAccountId.make(value),
+											}),
+										className: "max-h-72 overflow-y-auto",
+									},
+									(parts) => [
+										parts.label(["Customer to join"], { className: "sr-only" }),
+										...candidates.slice(0, 100).map((account) =>
+											parts.radio(account.id, [
+												h.span(
+													[h.Class("flex min-w-0 items-center gap-2.5")],
+													[
+														companyLogo(h, {
+															name: account.name,
+															logoUrl: account.logoUrl,
+															size: "xs",
+														}),
+														h.span(
+															[h.Class("flex min-w-0 flex-col")],
+															[
+																h.span(
+																	[
+																		h.Class(
+																			"flex min-w-0 items-center gap-2",
+																		),
+																	],
+																	[
+																		h.span(
+																			[
+																				h.Class(
+																					"truncate text-fg text-sm",
+																				),
+																			],
+																			[account.name],
+																		),
+																		...(account.environment === null
+																			? []
+																			: [
+																					environmentBadge(
+																						h,
+																						account.environment,
+																					),
+																				]),
+																	],
+																),
+																h.span(
+																	[
+																		h.Class(
+																			"truncate text-muted-fg text-xs",
+																		),
+																	],
+																	[
+																		[
+																			account.domain,
+																			environmentsHintOf(
+																				counts.get(account.id) ?? 0,
+																			),
+																			account.mrrMinor > 0
+																				? `${formatMoney(account.mrrMinor, account.currency)} MRR`
+																				: null,
+																		]
+																			.filter((part) => part !== null)
+																			.join(" · ") || "No domain",
+																	],
+																),
+															],
+														),
+													],
+												),
+											]),
+										),
+									],
+								),
+						...(model.linkError === null
+							? []
+							: [
+									h.p(
+										[h.Role("alert"), h.Class("text-danger-subtle-fg text-sm")],
+										[model.linkError],
+									),
+								]),
+					],
+				),
+			]),
+			dialogFooter(h, [
+				dialogClose(h, closeAttributes, ["Cancel"]),
+				button(
+					h,
+					{
+						intent: "primary",
+						isDisabled: picked === null,
+						isPending: model.isLinking,
+						onPress: Message.PressedConfirmLink(),
+					},
+					[picked === null ? "Link" : `Link to ${accountLabelOf(picked)}`],
+				),
+			]),
+		],
+	})
+}
+
+/** Name this account's environment; empty clears it. */
+const environmentDialog = (h: HtmlBuilder<Message>, model: Model, context: Context | null): Html => {
+	const isNamed = (context?.account.environment ?? null) !== null
+	return Modal.controlledModal(h, {
+		model: model.environmentModal,
+		toParentMessage: (message) => Message.GotEnvironmentModalMessage({ message }),
+		size: "sm",
+		toContent: (closeAttributes) => [
+			dialogHeader(h, {
+				title: {
+					id: Modal.titleId(model.environmentModal.id),
+					text: isNamed ? "Rename environment" : "Name environment",
+				},
+				description: `What the team calls ${context?.account.name ?? "this customer"} here, e.g. US or EU. It shows beside the name everywhere. Leave empty to clear it.`,
+			}),
+			h.form(
+				[h.Class("contents"), h.OnSubmit(Message.SubmittedEnvironment())],
+				[
+					dialogBody(h, [
+						textField(
+							h,
+							{
+								id: ENVIRONMENT_INPUT_ID,
+								value: model.environmentDraft,
+								onInput: (value) => Message.ChangedEnvironmentDraft({ value }),
+							},
+							(parts) => [
+								parts.label(["Environment"]),
+								parts.input({
+									placeholder: "EU",
+									attributes: [
+										h.Attribute("maxlength", "60"),
+										h.Attribute("autocomplete", "off"),
+									],
+								}),
+							],
+						),
+					]),
+					dialogFooter(h, [
+						dialogClose(h, closeAttributes, ["Cancel"]),
+						button(
+							h,
+							{
+								intent: "primary",
+								isPending: model.isSavingEnvironment,
+								attributes: [h.Type("submit")],
+							},
+							["Save"],
+						),
+					]),
+				],
+			),
+		],
+	})
+}
+
 // PAGE
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
@@ -1248,6 +1534,8 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			),
 			rawDialog(h, model, context),
 			deleteNoteDialog(h, model),
+			linkDialog(h, model, context),
+			environmentDialog(h, model, context),
 			impersonateDialog(h, model),
 		],
 	)

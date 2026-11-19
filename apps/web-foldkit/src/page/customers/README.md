@@ -43,6 +43,10 @@ by their whole route. A Command's answer reaches only the instance that sent it
 Synced rows become plain page rows (dates as epoch ms), the same shape the lab fixtures convert to:
 
 - `AccountRow`, `toAccountRow(account)`; `SignalRow`, `toSignalRow(signal)`; `SavedViewRow`.
+- A customer with several environments is one account per environment, each pointing at the group's
+  primary (`primaryAccountId`, labelled by `environment`). Every surface shows each account's own
+  numbers and keeps a group's accounts together with `src/customers/groups.ts` (`groupRows`,
+  `groupOf`, `environmentCounts`); signals live on the primary only.
 - Streams for a Subscription `entry` (each opens the org's customers source first):
     - `accountsStream(orgId, toMessage)`: live accounts by name.
     - `signalsStream(orgId, toMessage)`: every synced signal (unclosed + closed ≤ 30 d), priority desc.
@@ -91,6 +95,10 @@ back on failure. Call them from a Command, then `Effect.catchTags` for the RPC's
 | `deleteNoteAction`         | `noteId`                                                                 |
 | `updateAccountAction`      | `accountId`, `ownerUserId?`, `tags?`, `lifecycleStageOverride?`, `name?` |
 | `bulkUpdateAccountsAction` | `accountIds`, `ownerUserId?`, `addTags?`, `removeTags?`                  |
+| `linkAccountAction`        | `accountId`, `primaryAccountId`                                          |
+| `unlinkAccountAction`      | `accountId`                                                              |
+| `setPrimaryAccountAction`  | `accountId`                                                              |
+| `setEnvironmentAction`     | `accountId`, `environment \| null`                                       |
 | `grantImpersonatorAction`  | `userId`, `grantedBy`                                                    |
 | `revokeImpersonatorAction` | `impersonatorId`, `userId`                                               |
 

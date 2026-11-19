@@ -25,9 +25,12 @@ import {
 	actionEntries,
 	canImpersonate,
 	EMPTY_NOTE_DRAFTS,
+	environmentEntries,
 	isNotFound,
+	linkCandidates,
 	type Model,
 	type NoteRow,
+	openSignals,
 	ownerEntries,
 	positionOf,
 	signalMoreEntries,
@@ -757,5 +760,139 @@ describe("customer page: impersonation", () => {
 			message: "You have reached your monthly impersonation limit.",
 		})
 		expect(refused.impersonation?.url).toBeNull()
+	})
+})
+
+describe("customer page: environments", () => {
+	// Delta's US primary (with a signal) and its EU environment.
+	const delta: AccountRow = { ...account(4, "Delta"), environment: "US" }
+	const deltaEu: AccountRow = { ...account(5, "Delta"), primaryAccountId: delta.id, environment: "EU" }
+	const deltaSignal: SignalRow = {
+		...signal,
+		id: Schema.decodeSync(CustomerSignalId)(uuid(210)),
+		accountId: delta.id,
+	}
+	const loadedOn = (id: CustomerAccountId): Model =>
+		run(init(route(null, id), shared).model, [
+			Message.UpdatedAccounts({ accounts: [acme, beta, gamma, delta, deltaEu] }),
+			Message.UpdatedSignals({ signals: [signal, deltaSignal] }),
+		])
+	const keysOf = (entries: ReadonlyArray<Menu.Entry>) =>
+		entries.flatMap((entry) => (entry._tag === "Item" ? [entry.item.key] : []))
+	const accountIn = (model: Model, id: CustomerAccountId) => model.accounts?.find((row) => row.id === id)
+	const action = (model: Model, key: string) =>
+		pick(model, (message) => Message.GotActionsMenuMessage({ message }), key, actionEntries(model, true))
+
+	test("a grouped account lists its environments, primary first, and opens another", () => {
+		const onEu = loadedOn(deltaEu.id)
+		expect(keysOf(environmentEntries(onEu))).toEqual([delta.id, deltaEu.id])
+		expect(environmentEntries(loadedOn(beta.id))).toEqual([])
+		const opened = pick(
+			onEu,
+			(message) => Message.GotEnvironmentMenuMessage({ message }),
+			delta.id,
+			environmentEntries(onEu),
+		)
+		expect(opened.outMessage).toMatchObject({ _tag: "RequestedNavigation", route: route(null, delta.id) })
+	})
+
+	test("an environment shows its customer's signals, raised on the primary", () => {
+		expect(openSignals(loadedOn(deltaEu.id)).map((row) => row.id)).toEqual([deltaSignal.id])
+		expect(openSignals(loadedOn(delta.id)).map((row) => row.id)).toEqual([deltaSignal.id])
+	})
+
+	test("grouping is for admins; make primary and unlink only on an environment", () => {
+		const grouping = ["link_customer", "make_primary", "unlink", "name_environment"]
+		const shown = (model: Model, isAdmin: boolean) =>
+			keysOf(actionEntries(model, isAdmin)).filter((key) => grouping.includes(key))
+		expect(shown(loadedOn(deltaEu.id), false)).toEqual([])
+		expect(shown(loadedOn(deltaEu.id), true)).toEqual(grouping)
+		expect(shown(loadedOn(delta.id), true)).toEqual(["link_customer", "name_environment"])
+	})
+
+	test("linking picks another customer's primary, once, and shows the store's refusal", () => {
+		const opened = action(loadedOn(beta.id), "link_customer").model
+		expect(opened.linkModal.isOpen).toBe(true)
+		// Not itself, not an environment: those can't lead a customer.
+		expect(linkCandidates(opened).map((row) => row.id)).toEqual([acme.id, gamma.id, delta.id])
+		const searched = run(opened, [Message.ChangedLinkQuery({ value: "us" })])
+		expect(linkCandidates(searched).map((row) => row.id)).toEqual([delta.id])
+		expect(run(searched, [Message.PickedLinkPrimary({ pickedId: deltaEu.id })]).linkPrimaryId).toBeNull()
+		const picked = run(searched, [Message.PickedLinkPrimary({ pickedId: delta.id })])
+		const linking = update(picked, Message.PressedConfirmLink(), shared)
+		expect(commandNames(linking)).toEqual(["LinkCustomerAccount"])
+		expect(linking.commands?.[0]?.args).toMatchObject({ accountId: beta.id, primaryAccountId: delta.id })
+		expect(commandNames(update(linking.model, Message.PressedConfirmLink(), shared))).toEqual([])
+
+		const refusal = "Delta is an environment of another customer: link to its primary"
+		const refused = run(linking.model, [
+			Message.FailedGroupAction({
+				accountId: beta.id,
+				action: "link",
+				reason: "Stale",
+				message: refusal,
+			}),
+		])
+		expect(refused.linkModal.isOpen).toBe(true)
+		expect(refused.linkError).toBe(refusal)
+		expect(refused.isLinking).toBe(false)
+
+		const linked = update(
+			update(refused, Message.PressedConfirmLink(), shared).model,
+			Message.SucceededGroupAction({ accountId: beta.id, action: "link" }),
+			shared,
+		)
+		expect(linked.model.linkModal.isOpen).toBe(false)
+		expect(accountIn(linked.model, beta.id)?.primaryAccountId).toBe(delta.id)
+		expect(linked.outMessage).toMatchObject({ _tag: "RequestedToast" })
+	})
+
+	test("make primary and unlink regroup at once and run their RPC", () => {
+		const promoted = action(loadedOn(deltaEu.id), "make_primary")
+		expect(commandNames(promoted)).toEqual(["SetCustomerPrimary"])
+		expect(promoted.commands?.[0]?.args).toMatchObject({ accountId: deltaEu.id })
+		expect(accountIn(promoted.model, delta.id)?.primaryAccountId).toBe(deltaEu.id)
+		expect(accountIn(promoted.model, deltaEu.id)?.primaryAccountId).toBeNull()
+
+		const unlinked = action(loadedOn(deltaEu.id), "unlink")
+		expect(commandNames(unlinked)).toEqual(["UnlinkCustomerAccount"])
+		expect(accountIn(unlinked.model, deltaEu.id)?.primaryAccountId).toBeNull()
+		const failed = update(
+			unlinked.model,
+			Message.FailedGroupAction({
+				accountId: deltaEu.id,
+				action: "unlink",
+				reason: "Offline",
+				message: null,
+			}),
+			shared,
+		)
+		expect(failed.outMessage).toMatchObject({ _tag: "RequestedToast" })
+	})
+
+	test("naming the environment saves the trimmed text; empty clears it", () => {
+		const opened = action(loadedOn(deltaEu.id), "name_environment").model
+		expect(opened.environmentModal.isOpen).toBe(true)
+		expect(opened.environmentDraft).toBe("EU")
+		const saving = update(
+			run(opened, [Message.ChangedEnvironmentDraft({ value: "  Europe " })]),
+			Message.SubmittedEnvironment(),
+			shared,
+		)
+		expect(commandNames(saving)).toEqual(["SetCustomerEnvironment"])
+		expect(saving.commands?.[0]?.args).toMatchObject({ accountId: deltaEu.id, environment: "Europe" })
+		expect(commandNames(update(saving.model, Message.SubmittedEnvironment(), shared))).toEqual([])
+		const saved = run(saving.model, [
+			Message.SucceededGroupAction({ accountId: deltaEu.id, action: "set_environment" }),
+		])
+		expect(saved.environmentModal.isOpen).toBe(false)
+		expect(accountIn(saved, deltaEu.id)?.environment).toBe("Europe")
+
+		const cleared = update(
+			run(action(saved, "name_environment").model, [Message.ChangedEnvironmentDraft({ value: "   " })]),
+			Message.SubmittedEnvironment(),
+			shared,
+		)
+		expect(cleared.commands?.[0]?.args).toMatchObject({ environment: null })
 	})
 })

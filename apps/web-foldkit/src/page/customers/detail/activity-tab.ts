@@ -36,8 +36,9 @@ const dayHeading = (ms: number, nowMs: number): readonly [string, string] => {
 	return [weekday, date]
 }
 
-/** The event's data worth showing: a note's body, or its plain values. */
+/** The event's data worth showing: a note's body, or its plain values (a grouping event's title says it all). */
 const detailOf = (event: Customers.Event): string | null => {
+	if (event.type.startsWith("account.")) return null
 	const body = event.data.body
 	if (typeof body === "string") return `“${body}”`
 	const parts = Object.entries(event.data)
