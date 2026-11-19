@@ -30,7 +30,7 @@ import {
 	UserRpcs,
 } from "@hazel/domain/rpc"
 import { AuthMiddlewareClientLive, RpcCredentialsLive } from "~/lib/rpc-auth-middleware"
-import { CustomFetchLive } from "~/lib/services/common/api-client"
+import { CustomFetchLive, withSessionFetch } from "~/lib/services/common/api-client"
 import { HazelAuthClient, HazelAuthClientLive } from "./auth/client"
 import type { NotificationSinks } from "./app/notification-sinks"
 import { MessageWindows, MessageWindowsLive } from "./data/message-windows"
@@ -75,6 +75,7 @@ export const HazelRpcLive = Layer.effect(HazelRpc, makeClient).pipe(
 
 const makeApiClient = HttpApiClient.make(HazelApi, {
 	baseUrl: import.meta.env.VITE_BACKEND_URL || "http://localhost:3003",
+	transformClient: withSessionFetch,
 })
 
 /** The legacy `HazelApiClient` (HTTP API, not RPC): same API, base URL and authenticated fetch. */
