@@ -181,11 +181,62 @@ export const channelItem = <M>(
 	])
 }
 
+// Paths from the row's bottom edge (y up is negative). The branch eases off the spine at 27px up into
+// the row's middle, 16px up, over 11px: a cubic, softer than a circular corner.
+const BRANCH = "C1.75 -20 4 -16 11 -16"
+/** A row with threads below it: the spine runs through, the branch leaves it. */
+const SPINE_THROUGH = `M1.75 0V-100M1.75 -27${BRANCH}`
+/** The last row: the spine ends in the branch. */
+const SPINE_TO_BRANCH = `M1.75 -100V-27${BRANCH}`
+
+/**
+ * The thread's piece of the spine and its branch, as one SVG path. One path is painted once, so the
+ * branch leaves the spine without the double-drawn join two translucent borders make.
+ *
+ * The inner SVG puts the origin at the outer one's bottom edge, so the branch sits 16px up (the
+ * middle of the 32px row) and the spine runs past the top edge, which clips it, however tall the
+ * outer SVG is. No CSS draws it, so iOS draws the same picture from a copy of the markup
+ * (`data-slot="thread-branch"`, `apps/ios-hybrid/web/look.ts`).
+ */
+const threadBranch = <M>(h: HtmlBuilder<M>, hasEmojiIcon: boolean, isFirst: boolean, isLast: boolean): Html =>
+	h.svg(
+		[
+			h.AriaHidden(true),
+			h.Attribute("data-slot", "thread-branch"),
+			h.Class(
+				cx(
+					"pointer-events-none absolute bottom-0 -left-3 w-3 text-fg/15",
+					// The first branch climbs into the channel row. Under the hashtag the line falls between its
+					// legs, so it reaches the lower bar; under an emoji it stops at the icon's bottom edge.
+					!isFirst ? "h-8" : hasEmojiIcon ? "h-[42px]" : "h-[49px] sm:h-12",
+				),
+			),
+		],
+		[
+			h.svg(
+				[h.Attribute("y", "100%"), h.Attribute("overflow", "visible")],
+				[
+					h.path([
+						h.Attribute("d", isLast ? SPINE_TO_BRANCH : SPINE_THROUGH),
+						h.Attribute("fill", "none"),
+						h.Attribute("stroke", "currentColor"),
+						h.Attribute("stroke-width", "1.5"),
+						// The SVG clips the caps where the spine meets the next row, so only the branch's tip
+						// is round.
+						h.Attribute("stroke-linecap", "round"),
+					]),
+				],
+			),
+		],
+	)
+
 /** One joined thread under its channel, on a branch of the spine that runs down from the channel. */
 const threadItem = <M>(
 	h: HtmlBuilder<M>,
 	thread: SidebarThread,
 	isActive: boolean,
+	hasEmojiIcon: boolean,
+	isFirst: boolean,
 	isLast: boolean,
 	orgSlug: string,
 ): Html => {
@@ -208,16 +259,13 @@ const threadItem = <M>(
 				cx(
 					"relative ml-[26px] flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-fg-3 text-sm/5",
 					"outline-hidden hover:bg-wash hover:text-fg focus-visible:bg-wash",
-					"before:pointer-events-none before:absolute before:top-0 before:-left-[11px] before:h-1/2 before:w-2",
-					"before:rounded-bl-md before:border-fg/15 before:border-b-[1.5px] before:border-l-[1.5px]",
-					!isLast &&
-						"after:pointer-events-none after:absolute after:top-1/2 after:bottom-0 after:-left-[11px] after:border-fg/15 after:border-l-[1.5px]",
 					isActive && CHANNEL_ACTIVE,
 					count > 0 && "font-medium text-fg",
 				),
 			),
 		],
 		[
+			threadBranch(h, hasEmojiIcon, isFirst, isLast),
 			h.span([h.Class("min-w-0 flex-1 truncate")], [thread.name]),
 			count > 0
 				? h.span(
@@ -239,6 +287,8 @@ export const threadItems = <M>(
 	threads: ReadonlyArray<SidebarThread>,
 	activeThreadId: ChannelId | null,
 	orgSlug: string,
+	/** The channel shows an emoji instead of the hashtag, which changes where its branch meets it. */
+	hasEmojiIcon: boolean,
 ): Html =>
 	threads.length === 0
 		? h.empty
@@ -249,6 +299,8 @@ export const threadItems = <M>(
 						h,
 						thread,
 						thread.id === activeThreadId,
+						hasEmojiIcon,
+						index === 0,
 						index === threads.length - 1,
 						orgSlug,
 					),

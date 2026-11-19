@@ -155,7 +155,7 @@ const channelRowView = <M>(
 			rowMenuView(h, menu),
 			rowLongPress(h, menu),
 		),
-		children: threadItems(h, threads, activeThreadId, orgSlug),
+		children: threadItems(h, threads, activeThreadId, orgSlug, Boolean(entry.channel.icon)),
 	})
 }
 

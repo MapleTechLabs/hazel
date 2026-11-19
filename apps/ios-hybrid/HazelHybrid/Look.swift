@@ -24,6 +24,8 @@ struct Look: Decodable, Equatable {
         let avatar: Avatar?
     }
     struct Trailing: Decodable, Equatable { let right, size: CGFloat; let color: String; let image: String? }
+    /// A thread row's line to its channel: the page's SVG, rasterized, placed outside the row's box.
+    struct Branch: Decodable, Equatable { let x, y, w, h: CGFloat; let image: String }
     /// An avatar as the web draws it: a picture, or the dithered fill (colour, pattern, initial).
     struct Avatar: Decodable, Equatable {
         struct Initial: Decodable, Equatable {
@@ -61,6 +63,7 @@ struct Look: Decodable, Equatable {
     let icon: Icon?
     let iconY: CGFloat?
     let trailing: Trailing?
+    let branch: Branch?
     let badge: Badge?
     let band: Band?
 }
