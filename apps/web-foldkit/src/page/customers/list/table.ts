@@ -10,6 +10,7 @@ import {
 	formatMoney,
 	formatRelative,
 } from "../../../customers/format"
+import { accountLabelOf } from "../../../customers/groups"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
 import {
 	environmentBadge,
@@ -240,7 +241,7 @@ const cellOf = <M>(
 						: sparkline(h, {
 								values,
 								className: "w-12",
-								ariaLabel: `${account.name}: daily active users, last 30 days`,
+								ariaLabel: `${accountLabelOf(account)}: daily active users, last 30 days`,
 							}),
 					h.span([h.Class("w-8 text-right")], [formatCount(account.activeUsers30d)]),
 				],

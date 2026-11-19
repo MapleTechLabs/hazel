@@ -4,7 +4,7 @@ import { Submodel } from "foldkit"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { formatCount, formatDeltaPct, formatMoney, formatRelative } from "../../../customers/format"
-import { nestedIdsOf } from "../../../customers/groups"
+import { accountLabelOf, nestedIdsOf } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { environmentBadge, healthBadge, severityGlyph } from "../../../customers/ui/badges"
 import { connectCard } from "../../../customers/ui/connect-card"
@@ -810,7 +810,7 @@ const table = (
 							isSelected,
 						}),
 					onToggleAll: (isSelected) => Message.ToggledAllRows({ isSelected }),
-					rowLabel: (account) => account.name,
+					rowLabel: (account) => accountLabelOf(account),
 				},
 				onRowPress: (account) => Message.ClickedRow({ accountId: account.id }),
 				focusedKey: model.focusedId,
