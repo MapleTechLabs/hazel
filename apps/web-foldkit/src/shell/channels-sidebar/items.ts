@@ -181,20 +181,31 @@ export const channelItem = <M>(
 	])
 }
 
+// Paths from the row's bottom edge (y up is negative). The branch eases off the spine at 27px up into
+// the row's middle, 16px up, over 11px: a cubic, softer than a circular corner.
+const BRANCH = "C1.75 -20 4 -16 11 -16"
+/** A row with threads below it: the spine runs through, the branch leaves it. */
+const SPINE_THROUGH = `M1.75 0V-100M1.75 -27${BRANCH}`
+/** The last row: the spine ends in the branch. */
+const SPINE_TO_BRANCH = `M1.75 -100V-27${BRANCH}`
+
 /**
  * The thread's piece of the spine and its branch, as one SVG path. One path is painted once, so the
  * branch leaves the spine without the double-drawn join two translucent borders make.
  *
- * Pinned to the row's bottom and flipped so y counts up from it: the branch sits 16px up (the middle of
- * the 32px row) and the spine runs past the SVG's top edge, which clips it, however tall the SVG is.
+ * The inner SVG puts the origin at the outer one's bottom edge, so the branch sits 16px up (the
+ * middle of the 32px row) and the spine runs past the top edge, which clips it, however tall the
+ * outer SVG is. No CSS draws it, so iOS draws the same picture from a copy of the markup
+ * (`data-slot="thread-branch"`, `apps/ios-hybrid/web/look.ts`).
  */
 const threadBranch = <M>(h: HtmlBuilder<M>, hasEmojiIcon: boolean, isFirst: boolean, isLast: boolean): Html =>
 	h.svg(
 		[
 			h.AriaHidden(true),
+			h.Attribute("data-slot", "thread-branch"),
 			h.Class(
 				cx(
-					"pointer-events-none absolute bottom-0 -left-3 w-3 -scale-y-100 text-fg/15",
+					"pointer-events-none absolute bottom-0 -left-3 w-3 text-fg/15",
 					// The first branch climbs into the channel row. Under the hashtag the line falls between its
 					// legs, so it reaches the lower bar; under an emoji it stops at the icon's bottom edge.
 					!isFirst ? "h-8" : hasEmojiIcon ? "h-[42px]" : "h-[49px] sm:h-12",
@@ -202,18 +213,20 @@ const threadBranch = <M>(h: HtmlBuilder<M>, hasEmojiIcon: boolean, isFirst: bool
 			),
 		],
 		[
-			h.path([
-				h.Attribute(
-					"d",
-					// The branch eases off the spine over 11px (a cubic, softer than a circular corner).
-					isLast ? "M1.75 100V27C1.75 20 4 16 11 16" : "M1.75 0V100M1.75 27C1.75 20 4 16 11 16",
-				),
-				h.Attribute("fill", "none"),
-				h.Attribute("stroke", "currentColor"),
-				h.Attribute("stroke-width", "1.5"),
-				// The SVG clips the caps where the spine meets the next row, so only the branch's tip is round.
-				h.Attribute("stroke-linecap", "round"),
-			]),
+			h.svg(
+				[h.Attribute("y", "100%"), h.Attribute("overflow", "visible")],
+				[
+					h.path([
+						h.Attribute("d", isLast ? SPINE_TO_BRANCH : SPINE_THROUGH),
+						h.Attribute("fill", "none"),
+						h.Attribute("stroke", "currentColor"),
+						h.Attribute("stroke-width", "1.5"),
+						// The SVG clips the caps where the spine meets the next row, so only the branch's tip
+						// is round.
+						h.Attribute("stroke-linecap", "round"),
+					]),
+				],
+			),
 		],
 	)
 

@@ -22,6 +22,8 @@ export type Look = {
 	/** A section header's glyph: how far down its box it sits. */
 	iconY?: number
 	trailing?: { right: number; size: number; color: string; image?: string }
+	/** A thread row's line to its channel (`data-slot="thread-branch"`): it hangs outside the row's box. */
+	branch?: Box & { image: string }
 	badge?: Text & { bg: string; right: number; h: number; minW: number; radius: number; padX: number }
 	/** A pinned node's band (the header or footer it sits in). */
 	band?: { box: Box; bg: string; borderTop?: string; borderBottom?: string }
@@ -217,7 +219,7 @@ export const lookOf = (
 	const icon =
 		row.querySelector('[data-slot="avatar"]') ??
 		row.querySelector('[data-slot="icon"]') ??
-		row.querySelector("svg")
+		row.querySelector('svg:not([data-slot="thread-branch"])')
 	if (icon !== null) {
 		const style = getComputedStyle(icon)
 		look.icon = {
@@ -230,6 +232,18 @@ export const lookOf = (
 		else {
 			const key = iconKey(icon)
 			if (key !== undefined) look.icon.image = key
+		}
+	}
+	const branch = row.querySelector('svg[data-slot="thread-branch"]')
+	const branchImage = branch === null ? undefined : iconKey(branch)
+	if (branch !== null && branchImage !== undefined) {
+		const rect = branch.getBoundingClientRect()
+		look.branch = {
+			x: rect.left - rowRect.left,
+			y: rect.top - rowRect.top,
+			w: rect.width,
+			h: rect.height,
+			image: branchImage,
 		}
 	}
 	const trailing =

@@ -183,6 +183,8 @@ private struct ItemView: View {
         .contextMenu(contextMenu.isEmpty ? nil : ContextMenu {
             MenuItems(entries: contextMenu, node: node, bridge: bridge)
         })
+        // Outside the row's press and long-press, so the system's menu does not lift it.
+        .overlay(alignment: .topLeading) { branch }
     }
 
     private var row: some View {
@@ -231,6 +233,18 @@ private struct ItemView: View {
         }
         .frame(width: look.box.w, height: look.box.h)
         .contentShape(.rect)
+    }
+
+    /// A thread's line to its channel, left of the row and reaching up into the channel's.
+    @ViewBuilder
+    private var branch: some View {
+        if let branch = look.branch, let image = bridge.icons[branch.image] {
+            Image(uiImage: image)
+                .resizable()
+                .frame(width: branch.w, height: branch.h)
+                .offset(x: branch.x, y: branch.y)
+                .allowsHitTesting(false)
+        }
     }
 
     private var trailingRoom: CGFloat {
