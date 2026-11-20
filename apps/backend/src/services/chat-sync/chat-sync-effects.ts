@@ -156,7 +156,12 @@ export const OrgChatSyncIngestPayload = Schema.Struct({
 	 * integration bot when the event names nobody). `externalUserId` finds a linked Hazel user.
 	 */
 	author: Schema.NullOr(
-		Schema.Struct({ externalUserId: Schema.NullOr(ExternalUserId), user: UserProjection }),
+		Schema.Struct({
+			externalUserId: Schema.NullOr(ExternalUserId),
+			/** The author's provider workspace, when known (Slack). Optional: older deliveries lack it. */
+			externalWorkspaceId: Schema.optional(Schema.NullOr(Schema.String)),
+			user: UserProjection,
+		}),
 	),
 	event: ChatSyncInboundEvent,
 })

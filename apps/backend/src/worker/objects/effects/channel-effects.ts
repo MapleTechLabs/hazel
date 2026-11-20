@@ -14,6 +14,8 @@ import { deleteObjectMeta, readObjectMeta, writeObjectMeta } from "../meta"
 import { chatSyncChannelReceivers } from "../../../services/chat-sync/chat-sync-channel"
 import { ChatSyncChannelEffects } from "../../../services/chat-sync/chat-sync-effects"
 import { exportSearchMessages } from "../channel/search-index"
+import { reportChatAuthors } from "../channel/chat-authors"
+import { CustomerChatChannelEffects } from "../customer-chat-wire"
 import { SearchChannelEffects } from "../search-wire"
 import { defineEffect, type EffectReceivers, type EffectSender, isOrgSender } from "./registry"
 
@@ -67,6 +69,8 @@ export const ChannelEffects = {
 	...ChatSyncChannelEffects,
 	/** The org's search backfill (`../channel/search-index.ts`). */
 	...SearchChannelEffects,
+	/** A linked channel's past authors, for Customers (`../channel/chat-authors.ts`). */
+	...CustomerChatChannelEffects,
 }
 
 /** Meta keys the channel's handlers read (see `../channel/channel-scope.ts`). */
@@ -226,4 +230,5 @@ export const channelReceivers = {
 	"channel.chatSyncAttachThread": (payload) =>
 		chatSyncChannelReceivers["channel.chatSyncAttachThread"](payload),
 	"channel.exportSearchMessages": (payload) => exportSearchMessages(payload),
+	"channel.reportChatAuthors": (payload) => reportChatAuthors(payload),
 } satisfies EffectReceivers<typeof ChannelEffects, Database.Database | SqlClient>

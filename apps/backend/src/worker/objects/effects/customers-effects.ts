@@ -11,6 +11,8 @@ import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import { publishChannelCustomers } from "../customers/channels"
+import { CUSTOMER_CHAT_KINDS, customerChatReceivers } from "../customers/chat"
+import { CustomerChatEffects } from "../customer-chat-wire"
 import { disconnectConnections } from "../customers/credentials"
 import { inList } from "../customers/sql"
 import { stopComputing } from "../customers/schedule"
@@ -41,6 +43,8 @@ export type ChannelDeletedPayload = typeof ChannelDeletedPayload.Type
 export const CustomersEffects = {
 	setMembers: defineEffect("customers.setMembers", "customers", SetMembersPayload),
 	channelDeleted: defineEffect("customers.channelDeleted", "customers", ChannelDeletedPayload),
+	/** Who writes in the linked channels (`../customers/chat.ts`). */
+	...CustomerChatEffects,
 }
 
 /** The `version` of the last applied `setMembers`. */
@@ -96,6 +100,7 @@ const CUSTOMER_DATA: ReadonlyArray<Parameters<typeof SQLite.deleteFrom>[0]> = [
 	schema.customerChannelLinksTable,
 	schema.customerImpersonatorsTable,
 	schema.customerImpersonationsTable,
+	schema.customerChatParticipantsTable,
 ]
 
 /**
@@ -175,12 +180,20 @@ export const customersReceivers = {
 			if (payload.organizationDeleted === true) yield* shutDown
 		}),
 	"customers.channelDeleted": (payload) => dropDeletedChannel(payload),
+	...customerChatReceivers,
 } satisfies EffectReceivers<typeof CustomersEffects, Database.Database | SqlClient>
 
-/** Only this org's `OrgObject` sends members and deleted channels, and only to its own customers object. */
+/**
+ * Only this org's `OrgObject` sends members, deleted channels and chat authors, and only to its own
+ * customers object.
+ */
 export const customersSenderRefusal = (kind: string, payload: unknown, sender: EffectSender) =>
 	Effect.gen(function* () {
-		if (kind !== CustomersEffects.setMembers.name && kind !== CustomersEffects.channelDeleted.name) {
+		if (
+			kind !== CustomersEffects.setMembers.name &&
+			kind !== CustomersEffects.channelDeleted.name &&
+			!CUSTOMER_CHAT_KINDS.has(kind)
+		) {
 			return Option.none<string>()
 		}
 		const { organizationId } = payload as { readonly organizationId: OrganizationId }

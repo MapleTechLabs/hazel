@@ -142,6 +142,8 @@ const CHANNEL_ONLY = [
 	"chatReplyTargets",
 	"chatPinned",
 	"chatCustomer",
+	// Keyed by author, not message; the open thread is linked when its channel is.
+	"chatCustomerAuthors",
 	"chatMembers",
 	"chatTyping",
 	"composerMembers",

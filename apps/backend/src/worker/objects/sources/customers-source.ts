@@ -43,6 +43,11 @@ export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = 
 		visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)],
 	},
 	{
+		table: schema.customerChatParticipantsTable,
+		key: ["accountId", "userId"],
+		visible: (p) => [isMember(p.userId)],
+	},
+	{
 		table: schema.customerSavedViewsTable,
 		visible: (p, $) => [
 			$.deletedAt.isNull(),

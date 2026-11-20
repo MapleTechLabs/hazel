@@ -1,3 +1,4 @@
+import { authorSideReasonLabel } from "@hazel/domain/customers"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { formatDistanceToNowStrict } from "date-fns"
 import { cx } from "~/utils/cx"
@@ -31,6 +32,23 @@ const agentBadge = <M>(h: HtmlBuilder<M>, agentName: string, authorName: string)
 		],
 		[IconSparkles(h, { className: "size-3" }), `via ${agentName}`],
 	)
+
+/**
+ * "Customer": in a channel linked to a customer, the author is on the customer's side. The title says
+ * why. Our team, bots and unknown authors show nothing.
+ */
+const customerBadge = <M>(h: HtmlBuilder<M>, authorSide: MessageRow["authorSide"]): Html =>
+	authorSide?.side === "customer"
+		? h.span(
+				[
+					h.Class(
+						"inline-flex items-center rounded-sm bg-secondary px-1.5 py-0.5 text-xs/4 font-medium text-muted-fg",
+					),
+					h.Attribute("title", authorSideReasonLabel[authorSide.reason]),
+				],
+				["Customer"],
+			)
+		: h.empty
 
 /** Each platform's brand color: Discord blurple with its white mark, Slack aubergine with its colored mark. */
 const SYNC_PROVIDERS = {
@@ -80,6 +98,7 @@ export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: H
 				: isMachine
 					? badge(h, { intent: "primary" }, ["APP"])
 					: h.empty,
+			customerBadge(h, row.authorSide),
 			row.agentName === null ? h.empty : agentBadge(h, row.agentName, author.displayName),
 			h.span([h.Class("text-muted-fg text-xs")], isEdited ? [time, " (edited)"] : [time]),
 			message.isPinned

@@ -33,6 +33,7 @@ import {
 	LoadNoteDrafts,
 	LinkCustomerAccount,
 	LinkCustomerChannel,
+	SetChatAuthorSide,
 	SetCustomerEnvironment,
 	SetCustomerFeatureFlags,
 	SetCustomerPrimary,
@@ -82,11 +83,13 @@ import {
 	snoozeEntries,
 	TAG_POPOVER_ID,
 	CHANNEL_POPOVER_ID,
+	CHAT_PERSON_MENU_ID,
 	FLAG_POPOVER_ID,
 	UNASSIGN,
 	userIdOfOwnerKey,
 } from "./model"
 import { draftToRestore } from "./note-drafts"
+import { CHAT_PERSON_SIDE, ChatPersonKey, chatPeopleOfModel, chatPersonEntries } from "./people-in-chat"
 
 type Return = PageReturn<Model, Message>
 type Commands = NonNullable<Return["commands"]>
@@ -239,6 +242,10 @@ const initialModel = (route: Route): Model => ({
 	channelOptions: [],
 	channelPopover: Popover.init(CHANNEL_POPOVER_ID),
 	channelSearch: "",
+	chatParticipants: [],
+	chatAuthors: [],
+	activeChatPersonId: null,
+	chatPersonMenu: Menu.init({ id: CHAT_PERSON_MENU_ID, placement: "bottom end" }),
 	createdFeatureFlags: [],
 	flagPopover: Popover.init(FLAG_POPOVER_ID),
 	flagSelection: [],
@@ -285,6 +292,7 @@ type MenuField =
 	| "doneMenu"
 	| "signalMoreMenu"
 	| "environmentMenu"
+	| "chatPersonMenu"
 type MenuCommands = NonNullable<ReturnType<typeof Menu.update>["commands"]>
 
 const MENU_MESSAGE = {
@@ -296,6 +304,7 @@ const MENU_MESSAGE = {
 	doneMenu: (message: Menu.Message) => Message.GotDoneMenuMessage({ message }),
 	signalMoreMenu: (message: Menu.Message) => Message.GotSignalMoreMenuMessage({ message }),
 	environmentMenu: (message: Menu.Message) => Message.GotEnvironmentMenuMessage({ message }),
+	chatPersonMenu: (message: Menu.Message) => Message.GotChatPersonMenuMessage({ message }),
 } as const satisfies Record<MenuField, (message: Menu.Message) => Message>
 
 const mapMenuCommands = (field: MenuField, commands: MenuCommands): Commands => {
@@ -324,6 +333,28 @@ const openMenu = (model: Model, field: MenuField, entries: ReadonlyArray<Menu.En
 	updateMenu(model, field, Menu.Message.PressedTriggerKey({ key: "ArrowDown", entries }), (next) => ({
 		model: next,
 	}))
+
+// PEOPLE IN CHAT
+
+/** A pick in a person's menu: set or clear their override. */
+const onChatPersonMenu = (model: Model, shared: Shared, key: string): Return => {
+	const pick = ChatPersonKey.literals.find((literal) => literal === key)
+	const userId = model.activeChatPersonId
+	const by = shared.currentUser?.id
+	if (pick === undefined || userId === null || shared.organization === null || by === undefined)
+		return { model }
+	return {
+		model,
+		commands: [
+			SetChatAuthorSide({
+				organizationId: shared.organization.id,
+				userId,
+				side: CHAT_PERSON_SIDE[pick],
+				by,
+			}),
+		],
+	}
+}
 
 // ACCOUNT
 
@@ -927,6 +958,39 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 							title: "Couldn't link the channel",
 							description: "Threads and direct messages can't be linked to a customer.",
 						},
+					}),
+				),
+			),
+		}),
+		UpdatedChatParticipants: ({ participants }) => ({
+			model: modifyFields(model, { chatParticipants: () => participants }),
+		}),
+		UpdatedChatAuthors: ({ authors }) => ({ model: modifyFields(model, { chatAuthors: () => authors }) }),
+		PressedChatPersonMenu: ({ userId }) => {
+			const person = chatPeopleOfModel(model).find((entry) => entry.userId === userId)
+			return person === undefined
+				? { model }
+				: openMenu(
+						modifyFields(model, { activeChatPersonId: () => userId }),
+						"chatPersonMenu",
+						chatPersonEntries(person),
+					)
+		},
+		GotChatPersonMenuMessage: ({ message: menuMessage }) =>
+			updateMenu(model, "chatPersonMenu", menuMessage, (next, key) =>
+				onChatPersonMenu(next, shared, key),
+			),
+		SucceededSetChatAuthorSide: () => ({ model }),
+		FailedSetChatAuthorSide: ({ reason }) => ({
+			model,
+			outMessage: toast(
+				errorToastOf(
+					failureMessage(reason, {
+						NotFound: {
+							title: "Couldn't change their side",
+							description: "The customer is no longer available.",
+						},
+						Stale: { title: "Couldn't change their side" },
 					}),
 				),
 			),

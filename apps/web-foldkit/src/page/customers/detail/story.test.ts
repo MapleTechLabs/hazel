@@ -13,6 +13,7 @@ import {
 } from "@hazel/schema"
 import { Effect, Fiber, Option, Schema, Stream } from "effect"
 import { describe, expect, test } from "vitest"
+import type { ChatAuthorRow, ChatParticipantRow } from "../../../customers/chat-authors"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { snoozeUntil } from "../../../customers/ui/menus"
 import { AppRoute, type CustomerTab } from "../../../route"
@@ -45,6 +46,7 @@ import {
 	restoreNoteDraft,
 	writeNoteDrafts,
 } from "./note-drafts"
+import { chatPeopleOfModel, chatPersonEntries } from "./people-in-chat"
 import { init, routeChanged, update } from "./update"
 import { StartCustomerImpersonation } from "./commands"
 
@@ -689,6 +691,94 @@ describe("customer page: signals", () => {
 		const patched = update(loaded(), Message.RemovedTag({ tag: "pilot" }), shared).model
 		const rolledBack = run(patched, [Message.UpdatedAccounts({ accounts: [acme, beta, gamma] })])
 		expect(rolledBack.accounts?.find((row) => row.id === beta.id)?.tags).toEqual(["pilot"])
+	})
+})
+
+describe("customer page: people in chat", () => {
+	const linus = Schema.decodeSync(UserId)(uuid(400))
+	const mia = Schema.decodeSync(UserId)(uuid(401))
+	const sam = Schema.decodeSync(UserId)(uuid(402))
+	const participant = (userId: UserId, name: string, fields: Partial<ChatParticipantRow> = {}) =>
+		({
+			accountId: beta.id,
+			userId,
+			side: "customer",
+			reason: "external_other_workspace",
+			contactId: null,
+			name,
+			avatarUrl: null,
+			lastMessageAtMs: NOW,
+			lastChannelId: uuid(500),
+			...fields,
+		}) as ChatParticipantRow
+	const author = (userId: UserId, fields: Partial<ChatAuthorRow> = {}): ChatAuthorRow => ({
+		userId,
+		side: "customer",
+		reason: "external_other_workspace",
+		override: null,
+		...fields,
+	})
+	const withPeople = run(loaded(), [
+		Message.UpdatedChatParticipants({
+			participants: [
+				participant(linus, "Linus", { lastMessageAtMs: NOW - 60_000 }),
+				participant(mia, "Mia", { lastMessageAtMs: NOW }),
+				participant(sam, "Sam", { side: "team", reason: "org_member" }),
+				participant(grace, "Grace", { accountId: acme.id }),
+			],
+		}),
+		Message.UpdatedChatAuthors({
+			authors: [
+				author(linus, { side: "team", reason: "override", override: "team" }),
+				author(mia),
+				author(sam, { side: "team", reason: "org_member" }),
+			],
+		}),
+	])
+
+	test("the customer's people newest first, a member marked as team kept; the author row wins", () => {
+		const people = chatPeopleOfModel(withPeople)
+		expect(people.map((person) => person.name)).toEqual(["Mia", "Linus"])
+		expect(people[1]).toMatchObject({ side: "team", override: "team" })
+		const keys = (entries: ReadonlyArray<Menu.Entry>) =>
+			entries.flatMap((entry) => (entry._tag === "Item" ? [entry.item.key] : []))
+		expect(keys(chatPersonEntries(people[0]!))).toEqual(["mark_team"])
+		expect(keys(chatPersonEntries(people[1]!))).toEqual(["mark_customer", "reset"])
+	})
+
+	test("a person's menu marks them or resets the mark", () => {
+		const opened = update(withPeople, Message.PressedChatPersonMenu({ userId: mia }), shared)
+		expect(opened.model.activeChatPersonId).toBe(mia)
+		expect(opened.model.chatPersonMenu.popup._tag).toBe("Open")
+		const marked = update(
+			opened.model,
+			Message.GotChatPersonMenuMessage({
+				message: Menu.Message.ClickedItem({ key: "mark_team", entries: [Menu.item("mark_team")] }),
+			}),
+			shared,
+		)
+		expect(marked.commands?.[0]?.name).toBe("SetChatAuthorSide")
+		expect(marked.commands?.[0]?.args).toMatchObject({
+			organizationId,
+			userId: mia,
+			side: "team",
+			by: ada,
+		})
+
+		const reopened = update(withPeople, Message.PressedChatPersonMenu({ userId: linus }), shared)
+		const reset = update(
+			reopened.model,
+			Message.GotChatPersonMenuMessage({
+				message: Menu.Message.ClickedItem({ key: "reset", entries: [Menu.item("reset")] }),
+			}),
+			shared,
+		)
+		expect(reset.commands?.[0]?.args).toMatchObject({ userId: linus, side: null })
+	})
+
+	test("a failed change says so", () => {
+		const failed = update(withPeople, Message.FailedSetChatAuthorSide({ reason: "Unexpected" }), shared)
+		expect(failed.outMessage?._tag).toBe("RequestedToast")
 	})
 })
 

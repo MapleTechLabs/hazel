@@ -531,6 +531,8 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			channelId === model.channelId ? withLookup(model, "syncedMessages", messages) : { model },
 		UpdatedAgentMarks: ({ channelId, marks }) =>
 			channelId === model.channelId ? withLookup(model, "agentMarks", marks) : { model },
+		UpdatedCustomerAuthors: ({ channelId, authors }) =>
+			channelId === model.channelId ? withLookup(model, "customerAuthors", authors) : { model },
 		UpdatedSyncProvider: ({ provider }) =>
 			provider === model.lookups.syncProvider ? { model } : withLookup(model, "syncProvider", provider),
 		UpdatedThreadChannels: ({ channels }) => withLookup(model, "threadChannels", channels),

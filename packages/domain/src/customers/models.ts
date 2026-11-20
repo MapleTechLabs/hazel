@@ -35,6 +35,7 @@ import {
 import { Schema as S } from "effect"
 import * as M from "../models/utils"
 import { JsonDate } from "../models/utils"
+import { AuthorSide, AuthorSideReason } from "./author-side"
 import { ConnectionConfig, SyncError, SyncProgress, SyncStats } from "./connections"
 import {
 	BillingInterval,
@@ -513,3 +514,24 @@ class IgnoreRuleModel extends M.Class<IgnoreRuleModel>("CustomerIgnoreRule")({
 }) {}
 export const IgnoreRule = M.expose(IgnoreRuleModel)
 export type IgnoreRule = typeof IgnoreRule.Schema.Type
+
+/**
+ * Someone who wrote in the account's linked channels (`customer_chat_participants`,
+ * `docs/customers/author-side.md`), with their side as the org classified them. Synced to members;
+ * keyed by `accountId` + `userId`.
+ */
+export const ChatParticipant = S.Struct({
+	accountId: CustomerAccountId,
+	userId: UserId,
+	organizationId: OrganizationId,
+	side: AuthorSide,
+	reason: AuthorSideReason,
+	contactId: S.NullOr(CustomerContactId),
+	name: S.String,
+	avatarUrl: S.NullOr(S.String),
+	firstMessageAt: JsonDate,
+	lastMessageAt: JsonDate,
+	lastChannelId: ChannelId,
+	updatedAt: JsonDate,
+})
+export type ChatParticipant = typeof ChatParticipant.Type

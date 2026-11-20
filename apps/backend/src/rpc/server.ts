@@ -9,6 +9,7 @@ import {
 	ConnectShareRpcs,
 	CustomEmojiRpcs,
 	CustomerAdminRpcs,
+	CustomerChatRpcs,
 	CustomerDirectoryRpcs,
 	CustomerQueueRpcs,
 	CustomerReadRpcs,
@@ -38,6 +39,7 @@ import { ChannelWebhookRpcLive } from "./handlers/channel-webhooks"
 import { ChannelRpcLive } from "./handlers/channels"
 import { ConnectShareRpcLive } from "./handlers/connect-shares"
 import { CustomEmojiRpcLive } from "./handlers/custom-emojis"
+import { CustomerChatRpcLive } from "./handlers/customer-chat"
 import { CustomerDirectoryRpcLive } from "./handlers/customer-organizations"
 import { CustomerAdminRpcLive, CustomerQueueRpcLive, CustomerReadRpcLive } from "./handlers/customers"
 import { InvitationRpcLive } from "./handlers/invitations"
@@ -100,6 +102,7 @@ export const AllRpcs = BaseRpcs.merge(
 	CustomerQueueRpcs,
 	CustomerAdminRpcs,
 	CustomerDirectoryRpcs,
+	CustomerChatRpcs,
 ).middleware(ScopeInjectionMiddleware)
 
 // Startup validation: ensure all RPCs have RequiredScopes annotations
@@ -131,6 +134,7 @@ const rpcGroups = [
 	["CustomerQueueRpcs", CustomerQueueRpcs],
 	["CustomerAdminRpcs", CustomerAdminRpcs],
 	["CustomerDirectoryRpcs", CustomerDirectoryRpcs],
+	["CustomerChatRpcs", CustomerChatRpcs],
 ] as const
 
 for (const [name, group] of rpcGroups) {
@@ -181,4 +185,5 @@ export const RpcHandlersLive = Layer.empty
 		Layer.provideMerge(CustomerQueueRpcLive),
 		Layer.provideMerge(CustomerAdminRpcLive),
 		Layer.provideMerge(CustomerDirectoryRpcLive),
+		Layer.provideMerge(CustomerChatRpcLive),
 	)

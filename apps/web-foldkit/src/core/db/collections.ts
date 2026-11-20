@@ -12,6 +12,7 @@ import {
 	ChatSyncMessageLink,
 	ConnectConversation,
 	ConnectConversationChannel,
+	CustomerChatAuthor,
 	CustomEmoji,
 	IntegrationConnection,
 	JsonDate,
@@ -177,6 +178,23 @@ export const channelCustomerCollection = createEffectCollection(
 	},
 	persist,
 )
+/**
+ * Who writes in the org's channels linked to customers (`customer_chat_authors`,
+ * `docs/customers/author-side.md`): each author's side (customer, team, bot, unknown), why, and a
+ * member's override. Keyed by `userId`; the org's members only.
+ */
+export const customerChatAuthorCollection = createEffectCollection(
+	{
+		id: "customer_chat_authors",
+		table: "customer_chat_authors",
+		schema: CustomerChatAuthor.Schema,
+		parseRow: parseTimestamps,
+		getKey: (row) => row.userId,
+		hub: syncHub,
+		sources: orgSources,
+	},
+	persist,
+)
 export const botCollection = orgCollection("bots", Bot.Schema)
 export const botCommandCollection = orgCollection("bot_commands", BotCommand.Schema)
 export const botInstallationCollection = orgCollection("bot_installations", BotInstallation.Schema)
@@ -215,6 +233,19 @@ export const customerSyncRunCollection = customersCollection("customer_sync_runs
 export const customerChannelLinkCollection = customersCollection(
 	"customer_channel_links",
 	Customers.ChannelLink.Schema,
+)
+/** Per account, who wrote in its linked channels and their side. Keyed by `accountId:userId`. */
+export const customerChatParticipantCollection = createEffectCollection(
+	{
+		id: "customer_chat_participants",
+		table: "customer_chat_participants",
+		schema: Customers.ChatParticipant,
+		parseRow: parseTimestamps,
+		getKey: (row) => `${row.accountId}:${row.userId}`,
+		hub: syncHub,
+		sources: customersSources,
+	},
+	persist,
 )
 export const customerFeatureFlagCollection = customersCollection(
 	"customer_feature_flags",

@@ -17,6 +17,7 @@ import { Effect, Option, Schema } from "effect"
 import { NotificationService } from "../../../services/notifications/notification-service"
 import { enqueueEffect, defineEffect } from "../effects/registry"
 import { MessageNotificationEffects } from "../user/message-notifications"
+import { recordCustomerChatMessage } from "./customer-chat"
 import { loadPushContent } from "./push-content"
 
 export const MessageCreatedPayload = Schema.Struct({
@@ -33,6 +34,8 @@ export const MessageCreatedPayload = Schema.Struct({
 	content: Schema.optional(Schema.String),
 	/** The message's attachments, counted when it has no text. */
 	attachmentCount: Schema.optional(Schema.Number),
+	/** ISO send time. Optional: deliveries enqueued before it have none. */
+	createdAt: Schema.optional(Schema.String),
 })
 export type MessageCreatedPayload = typeof MessageCreatedPayload.Type
 
@@ -128,6 +131,7 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 	if (channel._tag === "None") return
 	const payload = { ...input, channelId: channel.value.id }
 	const content = payload.content
+	yield* recordCustomerChatMessage(channel.value, payload)
 
 	yield* NotificationService.use((service) =>
 		service.notify(channel.value.organizationId, {

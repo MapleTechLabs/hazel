@@ -28,6 +28,7 @@ import { channelReceivers, ChannelEffects, channelSenderRefusal } from "./channe
 import { customersReceivers, CustomersEffects, customersSenderRefusal } from "./customers-effects"
 import { directoryReceivers, DirectoryEffects } from "./directory-effects"
 import { channelCustomersSenderRefusal } from "../org/channel-customers"
+import { chatAuthorsSenderRefusal } from "../org/customer-chat"
 import { connectSenderRefusal } from "../org/connect"
 import { searchSenderRefusal } from "../org/message-search"
 import { notificationCountSenderRefusal } from "../org/notification-count"
@@ -128,6 +129,11 @@ const senderGuards: Partial<Record<ObjectKind, SenderGuard>> = {
 				Option.isSome(refusal)
 					? Effect.succeed(refusal)
 					: channelCustomersSenderRefusal(kind, payload, sender),
+			),
+			Effect.flatMap((refusal) =>
+				Option.isSome(refusal)
+					? Effect.succeed(refusal)
+					: chatAuthorsSenderRefusal(kind, payload, sender),
 			),
 		),
 }

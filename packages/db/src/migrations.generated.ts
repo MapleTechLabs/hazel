@@ -284,6 +284,12 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "channel_customers_account_idx" ON "channel_customers" ("accountId")',
 			],
 		},
+		{
+			id: "0007_customer_chat",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "customer_chat_authors" (\n\t"userId" text PRIMARY KEY NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"side" text NOT NULL,\n\t"reason" text NOT NULL,\n\t"override" text,\n\t"overrideBy" text,\n\t"overrideAt" text,\n\t"externalWorkspace" text,\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+			],
+		},
 	],
 	channel: [
 		{
@@ -580,6 +586,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "customer_settings" ADD COLUMN "attention" text NOT NULL DEFAULT \'{"stages":["lead","trialing","active","past_due"],"requiredSources":["stripe"]}\'',
 				'INSERT INTO "customer_signal_rules" ("organizationId", "name", "template", "kind", "severity", "config", "scope", "enabled") SELECT "organizationId", \'Churned\', \'churned\', \'risk\', \'medium\', \'{"_tag":"churned","windowDays":14}\', \'{}\', 1 FROM "customer_settings" WHERE NOT EXISTS (SELECT 1 FROM "customer_signal_rules" WHERE "template" = \'churned\')',
 				'UPDATE "customer_settings" SET "health" = json_insert("health", \'$.excludedTemplates[#]\', \'churned\') WHERE NOT EXISTS (SELECT 1 FROM json_each("customer_settings"."health", \'$.excludedTemplates\') WHERE "value" = \'churned\')',
+			],
+		},
+		{
+			id: "0021_customer_chat",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "customer_chat_participants" (\n\t"accountId" text NOT NULL,\n\t"userId" text NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"side" text NOT NULL,\n\t"reason" text NOT NULL,\n\t"contactId" text,\n\t"name" text NOT NULL,\n\t"avatarUrl" text,\n\t"firstMessageAt" text NOT NULL,\n\t"lastMessageAt" text NOT NULL,\n\t"lastChannelId" text NOT NULL,\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("accountId", "userId")\n)',
+				'CREATE INDEX IF NOT EXISTS "customer_chat_participants_user_idx" ON "customer_chat_participants" ("userId")',
 			],
 		},
 	],
