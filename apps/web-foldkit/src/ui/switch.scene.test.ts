@@ -79,7 +79,7 @@ describe("switch scene", () => {
 			Scene.given(init()),
 			Scene.expect(control).toHaveClass("group"),
 			Scene.expect(track).toHaveClass("group-has-focus-visible:ring-2"),
-			Scene.expect(track).toHaveClass("group-hover:inset-ring-muted-fg/30"),
+			Scene.expect(track).toHaveClass("group-hover:bg-fg/20"),
 		)
 	})
 

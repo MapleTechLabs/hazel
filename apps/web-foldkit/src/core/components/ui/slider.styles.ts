@@ -9,7 +9,7 @@ export const sliderOutputStyles = "font-medium text-base/6 sm:text-sm/6"
 
 /** The thumb; `@foldkit/ui` positions it along the track with inline `left` and `translateX`. */
 export const sliderThumbStyles =
-	"top-1/2 size-5 -translate-y-1/2 cursor-grab rounded-full border border-fg/10 bg-white shadow-sm outline-hidden transition-[width,height] focus-visible:border-ring/70 focus-visible:ring-3 focus-visible:ring-ring/20 data-dragging:cursor-grabbing data-disabled:cursor-default"
+	"top-1/2 size-5 -translate-y-1/2 cursor-grab rounded-full border border-fg/10 bg-white shadow-sm outline-hidden transition-[scale,box-shadow] duration-150 ease-out focus-visible:border-ring/70 focus-visible:ring-3 focus-visible:ring-ring/20 data-dragging:scale-110 data-dragging:cursor-grabbing data-dragging:shadow-md data-disabled:cursor-default"
 
 /** Slider track: `cx(...sliderTrackStyles, className)`. */
 export const sliderTrackStyles = [

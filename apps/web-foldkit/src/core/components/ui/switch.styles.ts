@@ -15,12 +15,13 @@ export interface SwitchState {
 export const switchIndicatorStyles = (values: SwitchState): ClassNameValue[] => [
 	"relative isolate inline-flex h-6 w-10 cursor-default rounded-full p-[3px] sm:h-5 sm:w-8",
 	"transition duration-200 ease-in-out",
-	"inset-ring inset-ring-input bg-input/30",
+	// Off is a filled gray track, so the white thumb reads on any surface in both themes.
+	"inset-ring inset-ring-fg/5 bg-fg/15",
 	"forced-colors:outline forced-colors:[--switch-bg:Highlight]",
 	"group-has-focus-visible:ring-2 group-has-focus-visible:ring-ring/20",
 	!values.isSelected &&
 		!values.isDisabled &&
-		"group-hover:inset-ring-muted-fg/30 group-has-focus-visible:inset-ring-ring/70 group-has-focus-visible:bg-ring/20",
+		"group-hover:bg-fg/20 group-has-focus-visible:inset-ring-ring/70",
 	values.isSelected &&
 		"inset-ring-(--switch-shadow) bg-(--switch-bg) dark:inset-ring-(--switch-bg-ring) dark:bg-(--switch-bg)",
 	values.isDisabled &&

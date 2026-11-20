@@ -13,6 +13,7 @@ import {
 import { IconArrowPath, IconClose, IconLock, IconWarning } from "../../../icons"
 import { badge } from "../../../ui/badge"
 import { ariaButton, button } from "../../../ui/button"
+import { kbd } from "../../../ui/kbd"
 import { searchField } from "../../../ui/search-field"
 import type { PageViewInputs, Shared } from "../../contract"
 import { pageHeader } from "../shared"
@@ -26,21 +27,9 @@ type AppAction = (typeof appKeymap.actions)[number]
 
 // KEY CAPS
 
+/** A key of the combo; `live` while it is held in the recorder. */
 const cap = (h: H, label: string, tone: "default" | "live" = "default"): Html =>
-	h.kbd(
-		[
-			h.Class(
-				twJoin(
-					"inline-flex h-6 min-w-6 items-center justify-center rounded-md border px-1.5 font-mono text-xs/none",
-					"shadow-[inset_0_-1px_0_var(--color-border)]",
-					tone === "live"
-						? "border-primary/40 bg-primary/10 text-primary"
-						: "border-border bg-bg text-fg",
-				),
-			),
-		],
-		[label],
-	)
+	kbd(h, { className: tone === "live" ? "border-primary/40 bg-primary/10 text-primary" : "text-fg" }, label)
 
 const caps = (h: H, key: KeyCombo, platform: Platform): Html =>
 	h.span(

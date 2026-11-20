@@ -20,8 +20,6 @@
 		"apps/web-foldkit/src/chat/embeds/embed-markdown.ts": 1,
 		"apps/web-foldkit/src/chat/embeds/url-embeds.ts": 1,
 		"apps/web-foldkit/src/chat/video-player.ts": 1,
-		"apps/web-foldkit/src/core/components/ui/command-menu.styles.ts": 1,
-		"apps/web-foldkit/src/core/components/ui/keyboard.styles.ts": 1,
 		"apps/web-foldkit/src/customers/ui/identity.ts": 1,
 		"apps/web-foldkit/src/page/my-settings/appearance/cards.ts": 2,
 		"apps/web-foldkit/src/shell/channels-sidebar/items.ts": 2,
@@ -30,7 +28,7 @@
 	"no-kit-styles-in-pages": {
 		"apps/web-foldkit/src/chat/embeds/embed-markdown.ts": 1,
 		"apps/web-foldkit/src/customers/ui/filter-bar.ts": 1,
-		"apps/web-foldkit/src/customers/ui/menus.ts": 2,
+		"apps/web-foldkit/src/customers/ui/menus.ts": 1,
 		"apps/web-foldkit/src/overlay/command-palette/view.ts": 1,
 		"apps/web-foldkit/src/overlay/modal/delete-bot.ts": 1,
 		"apps/web-foldkit/src/overlay/modal/frame.ts": 1,
@@ -139,8 +137,7 @@
 		"apps/web-foldkit/src/shell/layouts.ts": 1
 	},
 	"no-raw-shadow": {
-		"apps/web-foldkit/src/chat/video-player.ts": 2,
-		"apps/web-foldkit/src/page/my-settings/keybinds/view.ts": 1
+		"apps/web-foldkit/src/chat/video-player.ts": 2
 	},
 	"no-transition-all": {},
 	"no-unknown-color": {}

@@ -15,4 +15,6 @@ export const datePickerTriggerClassName = twJoin(
 	"*:data-[slot=icon]:size-4.5 sm:*:data-[slot=icon]:size-4",
 )
 
-export const datePickerGroupClassName = "*:data-[slot=control]:w-full"
+/** The date keeps clear of the calendar button at the field's end. */
+export const datePickerGroupClassName =
+	"*:data-[slot=control]:w-full **:[[role=presentation]]:pr-11 sm:**:[[role=presentation]]:pr-9"

@@ -2,7 +2,6 @@ export const progressBarStyles = {
 	root: [
 		"w-full",
 		"[&>[data-slot=progress-bar-header]+[data-slot=progress-bar-track]]:mt-2",
-		"[&>[data-slot=progress-bar-header]+[data-slot=progress-bar-track]]:mt-2",
 		"[&>[data-slot=progress-bar-header]+[slot='description']]:mt-1",
 		"[&>[slot='description']+[data-slot=progress-bar-track]]:mt-2",
 		"[&>[data-slot=progress-bar-track]+[slot=description]]:mt-2",
