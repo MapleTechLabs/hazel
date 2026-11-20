@@ -1,5 +1,5 @@
 import type { ChannelId, MessageId } from "@hazel/schema"
-import { BasicIndex, coalesce, eq } from "@tanstack/db"
+import { BasicIndex, coalesce, eq, inArray } from "@tanstack/db"
 import { DateTime, Effect, PubSub, Stream } from "effect"
 import {
 	channelCollection,
@@ -169,15 +169,16 @@ export const locateMessage = (channelId: ChannelId, messageId: MessageId): Effec
 		return null
 	})
 
+/** The reactions in the shown channels: the channel's own, and the open thread's. */
 export const reactionsStream = <Message>(
-	channelId: ChannelId,
+	channelIds: ReadonlyArray<ChannelId>,
 	toMessage: (reactions: ReadonlyArray<ChatReaction>) => Message,
 ): Stream.Stream<Message> =>
 	liveQueryStream<ReactionQueryRow, Message>(
 		(q) =>
 			q
 				.from({ reactions: messageReactionCollection })
-				.where(({ reactions }) => eq(reactions.channelId, channelId)),
+				.where(({ reactions }) => inArray(reactions.channelId, [...channelIds])),
 		(rows) => toMessage(rows.map(toChatReaction)),
 	)
 

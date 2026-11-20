@@ -24,6 +24,7 @@ import {
 	toDisplayRows,
 	toThreadRows,
 	unfurlRequestsOf,
+	isLiveReactionChange,
 } from "../derive"
 import { typingNamesOf, typingUsersOf } from "../banners"
 import { emptyLookups, type Lookups } from "../lookups"
@@ -86,6 +87,7 @@ export const init = (
 	hasLoadedMessages: false,
 	messages: [],
 	reactions: [],
+	hasLoadedReactions: false,
 	lookups: emptyLookups,
 	members: null,
 	pinned: [],
@@ -255,20 +257,35 @@ const requestUnfurls = (model: Model, messages: ReadonlyArray<ChatMessage>): Pag
 }
 
 /** The thread panel's rows, re-derived from its messages and the page's lookups. */
-const withThreadRows = (model: Model): Model => {
+const withThreadRows = (model: Model, isLiveReactions: boolean): Model => {
 	const panel = model.threadPanel
 	if (panel === null) return model
-	const rows = toThreadRows(panel.messages, deriveContextOf(model), panel.rows)
+	const rows = toThreadRows(
+		panel.messages,
+		model.reactions,
+		deriveContextOf(model),
+		panel.rows,
+		isLiveReactions,
+	)
 	return rows === panel.rows
 		? model
 		: modifyFields(model, { threadPanel: () => modifyFields(panel, { rows: () => rows }) })
 }
 
-/** Re-derives the rows, then tells the list about the new keys so it can keep its anchor. */
-const deriveRows = (current: Model): PageReturn => {
+/**
+ * Re-derives the rows, then tells the list about the new keys so it can keep its anchor.
+ * `isLiveReactions`: the reactions just changed live, so their pills animate the change.
+ */
+const deriveRows = (current: Model, isLiveReactions = false): PageReturn => {
 	const requested = requestUnfurls(current, [...current.messages, ...threadMessagesOf(current)])
-	const model = withThreadRows(requested.model)
-	const rows = toDisplayRows(model.messages, model.reactions, deriveContextOf(model), model.rows)
+	const model = withThreadRows(requested.model, isLiveReactions)
+	const rows = toDisplayRows(
+		model.messages,
+		model.reactions,
+		deriveContextOf(model),
+		model.rows,
+		isLiveReactions,
+	)
 	const threadRows = model.threadPanel?.rows ?? []
 	const isShown = (messageId: MessageId) =>
 		rows.some((row) => row.key === messageId) || threadRows.some((row) => row.key === messageId)
@@ -509,7 +526,14 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 					),
 		UpdatedReactions: ({ channelId, reactions }) =>
 			channelId === model.channelId
-				? deriveRows(modifyFields(model, { reactions: () => reactions }))
+				? deriveRows(
+						modifyFields(model, {
+							reactions: () => reactions,
+							hasLoadedReactions: () => true,
+						}),
+						// The first result (and a re-subscribe's burst) is a load, not someone reacting.
+						model.hasLoadedReactions && isLiveReactionChange(model.reactions, reactions),
+					)
 				: { model },
 		UpdatedUsers: ({ users }) => {
 			const result = withLookup(model, "users", users)
@@ -585,7 +609,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				}),
 			)
 			const requested = requestUnfurls(withMessages, messages)
-			return { ...requested, model: withThreadRows(requested.model) }
+			return { ...requested, model: withThreadRows(requested.model, false) }
 		},
 		UpdatedThreadPanelPins: ({ threadChannelId, pins }) =>
 			model.threadPanel?.threadChannelId === threadChannelId
