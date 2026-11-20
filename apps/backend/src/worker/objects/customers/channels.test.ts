@@ -8,6 +8,7 @@ import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { orgTarget } from "../kinds"
 import { forgetChannelCustomer } from "../org/channel-customers"
+import { publishChannelCustomersAfterCompute } from "./channels"
 import { runCompute } from "./compute"
 import { makeCustomersWorld, tagOf, uuid } from "./test-kit"
 
@@ -52,7 +53,46 @@ const setup = Effect.gen(function* () {
 		world.rows<{ channelId: string; accountId: string }>(
 			`SELECT channelId, accountId FROM customer_channel_links WHERE deletedAt IS NULL`,
 		)
-	return { world, org, accountId, channel, link, unlink, projected, liveLinks }
+	/** The org's full row for a channel, JSON columns parsed. */
+	const glance = (channelId: string) => {
+		const row = orgRows<{
+			topSignals: string
+			sourceLinks: string
+			openSignalCount: number
+			ownerUserId: string
+		}>(`SELECT * FROM channel_customers WHERE channelId = ?`, channelId)[0]
+		if (row === undefined) throw new Error(`no channel_customers row for ${channelId}`)
+		// SAFETY: the receiver writes these columns from the decoded `ChannelCustomerEntry` arrays.
+		return {
+			...row,
+			topSignals: JSON.parse(row.topSignals) as Array<{ id: string; title: string }>,
+			// SAFETY: as above.
+			sourceLinks: JSON.parse(row.sourceLinks) as Array<{ provider: string; url: string }>,
+		}
+	}
+	/** What a compute does last, then the alarm delivers it. */
+	const publish = Effect.gen(function* () {
+		yield* world.object.run(publishChannelCustomersAfterCompute).pipe(Effect.orDie)
+		yield* world.object.alarm.pipe(Effect.orDie)
+	})
+	const signal = (account: string, title: string, priorityScore: number, status = "open") => {
+		const id = uuid()
+		world.rows(
+			`INSERT INTO customer_signals (id, organizationId, accountId, ruleId, template, kind, severity, status,
+				title, reason, evidence, openingEvidence, priorityScore)
+			 VALUES (?, ?, ?, ?, 'inactive', 'risk', 'high', ?, ?, ?, '{}', '{}', ?)`,
+			id,
+			world.orgId,
+			accountId(account),
+			uuid(),
+			status,
+			title,
+			`${title} because`,
+			priorityScore,
+		)
+		return id
+	}
+	return { world, org, accountId, channel, link, unlink, projected, liveLinks, glance, publish, signal }
 })
 
 describe("Customer channel links", () => {
@@ -303,6 +343,214 @@ describe("Customer channel links", () => {
 					expect(result._tag).toBe("Rejected")
 				}
 				expect(t.liveLinks()).toHaveLength(1)
+			}),
+		))
+
+	it("projects the customer at a glance and resends only when it changes", () =>
+		run(
+			Effect.gen(function* () {
+				const t = yield* setup
+				const general = t.channel("public", [t.world.member])
+				yield* t.link("Acme", general)
+				const acme = t.accountId("Acme")
+				// The first compute (nothing to compute from): seeded values below stay.
+				yield* t.publish
+				// No health, no signals yet.
+				expect(t.glance(general)).toMatchObject({
+					healthStatus: "unknown",
+					healthScore: null,
+					healthWhy: null,
+					openSignalCount: 0,
+					topSignals: [],
+				})
+
+				t.world.rows(
+					`UPDATE customer_accounts SET healthStatus = 'at_risk', healthScore = 48, lifecycleStage = 'active',
+						planName = 'Pro', mrrMinor = 240000, currency = 'usd', ownerUserId = ?, seatsUsed = 18,
+						seatsLimit = 25, lastActiveAt = '2026-11-17 09:30:00.000', logoUrl = 'https://acme.test/logo.png'
+					 WHERE id = ?`,
+					t.world.owner,
+					acme,
+				)
+				const day = new Date().toISOString().slice(0, 10)
+				t.world.rows(
+					`INSERT OR REPLACE INTO customer_health_daily (accountId, day, score, status, breakdown) VALUES (?, ?, 48, 'at_risk', ?)`,
+					acme,
+					day,
+					JSON.stringify({
+						score: 48,
+						status: "at_risk",
+						components: [
+							{
+								key: "usage",
+								score: 70,
+								weight: 40,
+								effectiveWeight: 40,
+								excluded: false,
+								why: "usage ok",
+							},
+							{
+								key: "engagement",
+								score: 25,
+								weight: 30,
+								effectiveWeight: 30,
+								excluded: false,
+								why: "No activity for 18 days",
+							},
+							{
+								key: "billing",
+								score: null,
+								weight: 30,
+								effectiveWeight: 0,
+								excluded: true,
+								why: "no billing",
+							},
+						],
+					}),
+				)
+				const top = t.signal("Acme", "Payment failed", 9)
+				t.signal("Acme", "Usage dropped", 5)
+				t.signal("Acme", "Champion inactive", 3)
+				t.signal("Acme", "Onboarding stalled", 1)
+				t.signal("Acme", "Snoozed one", 20, "snoozed")
+				t.world.rows(
+					`UPDATE customer_external_refs SET externalUrl = 'https://dashboard.clerk.test/org_acme' WHERE accountId = ? AND entityType = 'account'`,
+					acme,
+				)
+				yield* t.publish
+				const row = t.glance(general)
+				expect(row).toMatchObject({
+					accountName: "Acme",
+					accountLogoUrl: "https://acme.test/logo.png",
+					healthStatus: "at_risk",
+					healthScore: 48,
+					healthWhy: "No activity for 18 days",
+					lifecycleStage: "active",
+					planName: "Pro",
+					mrrMinor: 240000,
+					currency: "usd",
+					ownerUserId: t.world.owner,
+					seatsUsed: 18,
+					seatsLimit: 25,
+					lastActiveDay: "2026-11-17",
+					openSignalCount: 4,
+					sourceLinks: [{ provider: "clerk", url: "https://dashboard.clerk.test/org_acme" }],
+				})
+				expect(row.topSignals.map((signal) => signal.title)).toEqual([
+					"Payment failed",
+					"Usage dropped",
+					"Champion inactive",
+				])
+				expect(row.topSignals[0]?.id).toBe(top)
+
+				// Nothing changed: nothing is sent.
+				const before = t.world.objects.deliveries.length
+				yield* t.publish
+				expect(t.world.objects.deliveries.length).toBe(before)
+
+				// A compute that moves MRR and health resends.
+				t.world.rows(
+					`UPDATE customer_accounts SET mrrMinor = 120000, healthStatus = 'critical', healthScore = 30 WHERE id = ?`,
+					acme,
+				)
+				yield* t.publish
+				expect(t.glance(general)).toMatchObject({
+					mrrMinor: 120000,
+					healthStatus: "critical",
+					healthScore: 30,
+				})
+
+				// A person closing a signal updates the channel without waiting for a compute.
+				const done = yield* t.world.call(
+					"customers.signal.dismiss",
+					{ signalId: top, reason: "noise" },
+					t.world.member,
+				)
+				expect(tagOf(done)).toBe("Success")
+				yield* t.world.object.alarm.pipe(Effect.orDie)
+				expect(t.glance(general).openSignalCount).toBe(3)
+
+				// So does a new owner.
+				const owner = yield* t.world.call(
+					"customers.account.update",
+					{ accountId: acme, ownerUserId: t.world.member },
+					t.world.owner,
+				)
+				expect(tagOf(owner)).toBe("Success")
+				yield* t.world.object.alarm.pipe(Effect.orDie)
+				expect(t.glance(general).ownerUserId).toBe(t.world.member)
+			}),
+		))
+
+	it("rolls the customer's environments up as signals do: stage, plan, MRR, seats, activity", () =>
+		run(
+			Effect.gen(function* () {
+				const t = yield* setup
+				const acme = t.accountId("Acme")
+				const globex = t.accountId("Globex")
+				const general = t.channel("public", [t.world.member])
+				yield* t.link("Acme", general)
+				const grouped = yield* t.world.call(
+					"customers.account.link",
+					{ accountId: globex, primaryAccountId: acme },
+					t.world.owner,
+				)
+				expect(tagOf(grouped)).toBe("Success")
+				yield* t.publish
+				t.world.rows(
+					`UPDATE customer_accounts SET mrrMinor = 10000, currency = 'usd', seatsUsed = 4, seatsLimit = NULL,
+						lifecycleStage = 'lead', planName = NULL,
+						lastActiveAt = '2026-11-01 00:00:00.000' WHERE id = ?`,
+					acme,
+				)
+				t.world.rows(
+					`UPDATE customer_accounts SET mrrMinor = 5000, currency = 'usd', seatsUsed = 6, seatsLimit = 10,
+						lifecycleStage = 'active', planName = 'Scale',
+						lastActiveAt = '2026-11-19 00:00:00.000' WHERE id = ?`,
+					globex,
+				)
+				// Signals on an environment count for the customer.
+				t.signal("Globex", "Env signal", 2)
+				yield* t.publish
+				expect(t.glance(general)).toMatchObject({
+					accountId: acme,
+					// The group's rules (`group-facts.ts`): the most advanced stage, a plan from any environment.
+					lifecycleStage: "active",
+					planName: "Scale",
+					mrrMinor: 15000,
+					seatsUsed: 10,
+					seatsLimit: 10,
+					lastActiveDay: "2026-11-19",
+					openSignalCount: 1,
+				})
+			}),
+		))
+
+	it("applies a snapshot sent before the glance existed", () =>
+		run(
+			Effect.gen(function* () {
+				const t = yield* setup
+				const general = t.channel("public", [t.world.member])
+				const result = yield* t.org.applyEffect({
+					objectId: t.world.orgId,
+					kind: "org.setChannelCustomers",
+					payload: {
+						organizationId: t.world.orgId,
+						links: [{ channelId: general, accountId: t.accountId("Acme"), accountName: "Acme" }],
+						version: Date.now() * 2,
+					},
+					key: uuid(),
+					sender: { kind: "customers", id: t.world.orgId },
+				})
+				expect(result._tag).not.toBe("Rejected")
+				expect(t.glance(general)).toMatchObject({
+					accountName: "Acme",
+					healthStatus: "unknown",
+					mrrMinor: null,
+					openSignalCount: 0,
+					topSignals: [],
+					sourceLinks: [],
+				})
 			}),
 		))
 

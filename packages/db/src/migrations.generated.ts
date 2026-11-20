@@ -288,6 +288,25 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0007_channel_customers_logo",
 			statements: ['ALTER TABLE "channel_customers" ADD COLUMN "accountLogoUrl" text'],
 		},
+		{
+			id: "0008_channel_customer_glance",
+			statements: [
+				'ALTER TABLE "channel_customers" ADD COLUMN "healthStatus" text NOT NULL DEFAULT \'unknown\'',
+				'ALTER TABLE "channel_customers" ADD COLUMN "healthScore" integer',
+				'ALTER TABLE "channel_customers" ADD COLUMN "healthWhy" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "lifecycleStage" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "planName" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "mrrMinor" integer',
+				'ALTER TABLE "channel_customers" ADD COLUMN "currency" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "ownerUserId" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "seatsUsed" integer',
+				'ALTER TABLE "channel_customers" ADD COLUMN "seatsLimit" integer',
+				'ALTER TABLE "channel_customers" ADD COLUMN "lastActiveDay" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "openSignalCount" integer NOT NULL DEFAULT 0',
+				'ALTER TABLE "channel_customers" ADD COLUMN "topSignals" text NOT NULL DEFAULT \'[]\'',
+				'ALTER TABLE "channel_customers" ADD COLUMN "sourceLinks" text NOT NULL DEFAULT \'[]\'',
+			],
+		},
 	],
 	channel: [
 		{

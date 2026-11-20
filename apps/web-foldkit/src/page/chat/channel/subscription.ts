@@ -30,6 +30,7 @@ import {
 } from "../lookup-data"
 import type { PageSubscriptionInput } from "../../contract"
 import { channelCustomerStream } from "../../../customers/channels"
+import * as CustomerCard from "../customer-card"
 import * as Composer from "../../../composer/composer"
 import {
 	botCommandsStream,
@@ -426,6 +427,7 @@ const hasOpenDialog = (model: Model) =>
 	model.overlays.open._tag === "ReactionModal" ||
 	(model.overlays.open._tag === "Popover" && model.overlays.open.popover.isOpen) ||
 	model.overlays.pinned.isOpen ||
+	CustomerCard.isPinnedOf(model.customerCard) ||
 	[model.draft, model.threadPanel?.draft ?? null].some(
 		(draft) => draft !== null && (draft.emojiPicker.isOpen || draft.gifPicker.isOpen),
 	)

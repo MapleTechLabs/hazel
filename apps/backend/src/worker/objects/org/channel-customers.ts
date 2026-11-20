@@ -6,10 +6,13 @@
  *   exists here, can be linked (a public or private channel, not a thread or a DM) and is visible
  *   to the person linking it (`channel_access`).
  * - `org.setChannelCustomers` (effect): the customers object's full, versioned snapshot of its
- *   links (channel → account id and name), replacing `channel_customers`. Chat reads it to show a
+ *   links (channel → the account's id, name and its glance: health, MRR, signals…), replacing
+ *   `channel_customers`. Chat reads it to show a
  *   channel's customer to the org's members who see the channel (never to Connect guests).
  */
 import { Database, SQLite, schema } from "@hazel/db"
+import { HealthStatus, LifecycleStage } from "@hazel/domain/customers"
+import { ChannelCustomer } from "@hazel/domain/models"
 import { ChannelId, CustomerAccountId, OrganizationId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
@@ -71,14 +74,68 @@ export const customerChannel = Effect.fn("OrgObject.customerChannel")(function* 
 // Projection
 // ---------------------------------------------------------------------------
 
+/**
+ * The account at a glance (`ChannelCustomer` model). Optional on the wire: a snapshot queued before
+ * these fields existed still applies (and the next one, whose fingerprint differs, fills them).
+ */
+const glance = {
+	healthStatus: Schema.optionalKey(HealthStatus),
+	healthScore: Schema.optionalKey(Schema.NullOr(Schema.Int)),
+	healthWhy: Schema.optionalKey(Schema.NullOr(Schema.String)),
+	lifecycleStage: Schema.optionalKey(Schema.NullOr(LifecycleStage)),
+	planName: Schema.optionalKey(Schema.NullOr(Schema.String)),
+	mrrMinor: Schema.optionalKey(Schema.NullOr(Schema.Int)),
+	currency: Schema.optionalKey(Schema.NullOr(Schema.String)),
+	ownerUserId: Schema.optionalKey(Schema.NullOr(UserId)),
+	seatsUsed: Schema.optionalKey(Schema.NullOr(Schema.Int)),
+	seatsLimit: Schema.optionalKey(Schema.NullOr(Schema.Int)),
+	lastActiveDay: Schema.optionalKey(Schema.NullOr(Schema.String)),
+	openSignalCount: Schema.optionalKey(Schema.Int),
+	topSignals: Schema.optionalKey(Schema.Array(ChannelCustomer.Signal)),
+	sourceLinks: Schema.optionalKey(Schema.Array(ChannelCustomer.SourceLink)),
+}
+
 export const ChannelCustomerEntry = Schema.Struct({
 	channelId: ChannelId,
 	accountId: CustomerAccountId,
 	accountName: Schema.String,
 	/** Optional: snapshots queued before logos were sent have none. */
 	accountLogoUrl: Schema.optional(Schema.NullOr(Schema.String)),
+	...glance,
 })
 export type ChannelCustomerEntry = typeof ChannelCustomerEntry.Type
+
+/** The row's values for an entry: a field the entry lacks is null, or the column's default. */
+const rowValuesOf = (link: ChannelCustomerEntry) => ({
+	accountId: link.accountId,
+	accountName: link.accountName,
+	accountLogoUrl: link.accountLogoUrl ?? null,
+	healthStatus: link.healthStatus ?? "unknown",
+	healthScore: link.healthScore ?? null,
+	healthWhy: link.healthWhy ?? null,
+	lifecycleStage: link.lifecycleStage ?? null,
+	planName: link.planName ?? null,
+	mrrMinor: link.mrrMinor ?? null,
+	currency: link.currency ?? null,
+	ownerUserId: link.ownerUserId ?? null,
+	seatsUsed: link.seatsUsed ?? null,
+	seatsLimit: link.seatsLimit ?? null,
+	lastActiveDay: link.lastActiveDay ?? null,
+	openSignalCount: link.openSignalCount ?? 0,
+	topSignals: link.topSignals ?? [],
+	sourceLinks: link.sourceLinks ?? [],
+})
+type RowValues = ReturnType<typeof rowValuesOf>
+
+/** Whether the held row already has these values (JSON columns compared by content). */
+const sameRow = (row: schema.ChannelCustomer, values: RowValues) =>
+	(Object.keys(values) as Array<keyof RowValues>).every((key) => {
+		const held = row[key]
+		const next = values[key]
+		return typeof next === "object" && next !== null
+			? JSON.stringify(held) === JSON.stringify(next)
+			: held === next
+	})
 
 /** Every live link: a full snapshot, so a missed one is repaired by the next. */
 export const SetChannelCustomersPayload = Schema.Struct({
@@ -116,22 +173,9 @@ const applyChannelCustomers = Effect.fn("OrgObject.applyChannelCustomers")(funct
 	const held = new Map(current.map((row) => [row.channelId, row]))
 	for (const link of payload.links) {
 		const row = held.get(link.channelId)
-		const accountLogoUrl = link.accountLogoUrl ?? null
-		if (
-			row !== undefined &&
-			row.accountId === link.accountId &&
-			row.accountName === link.accountName &&
-			(row.accountLogoUrl ?? null) === accountLogoUrl
-		) {
-			continue
-		}
-		const values = {
-			organizationId: payload.organizationId,
-			accountId: link.accountId,
-			accountName: link.accountName,
-			accountLogoUrl,
-			updatedAt: now,
-		}
+		const fields = rowValuesOf(link)
+		if (row !== undefined && sameRow(row, fields)) continue
+		const values = { organizationId: payload.organizationId, ...fields, updatedAt: now }
 		yield* db.run(
 			SQLite.insertInto(schema.channelCustomersTable)
 				.values({ channelId: link.channelId, ...values })
