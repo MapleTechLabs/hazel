@@ -139,7 +139,7 @@ describe("object runtime", () => {
 			}),
 		))
 
-	it("a stale heartbeat marks the owner offline although a socket is still open", () =>
+	it("a session that stops pinging ends although its socket is still open", () =>
 		run(
 			Effect.gen(function* () {
 				const objects = yield* makeTestObjects
@@ -156,17 +156,18 @@ describe("object runtime", () => {
 						}
 					).status
 				expect(status()).toBe("online")
-				// The staleness deadline is armed while the socket is open.
+				// The session's timeout is armed while the socket is open.
 				expect(user.storage.alarm()).not.toBeNull()
 
-				// Recently seen: the alarm leaves them online.
+				// Recently pinged: the alarm leaves them online.
 				yield* user.alarm
 				expect(status()).toBe("online")
 
-				// The client went away without the socket closing here (asleep, network lost).
+				// The client went away without the socket closing here (asleep, network lost): its
+				// session stops pinging.
 				user.storage.db
-					.prepare(`UPDATE user_presence_status SET lastSeenAt = ?`)
-					.run(new Date(Date.now() - 10 * 60_000).toISOString())
+					.prepare(`UPDATE presence_sessions SET lastBeatAt = ?`)
+					.run(new Date(Date.now() - 10 * 60_000).toISOString().replace("T", " ").slice(0, 23))
 				yield* user.alarm
 				expect(status()).toBe("offline")
 			}),

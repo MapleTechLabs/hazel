@@ -844,21 +844,29 @@ describe("UserObject", () => {
 				yield* user.onClose(second)
 				expect(orgStatus()?.status).toBe("offline")
 
-				// A custom status that has expired is cleared by the alarm, in the orgs too.
+				// A custom status set while offline shows (offline); one already expired never does.
 				const updated = ok<{ transactionId: string }>(
 					yield* call(
 						user,
 						s.member,
 						"userPresenceStatus.update",
-						{ status: "busy", statusEmoji: "🎧", statusExpiresAt: new Date(Date.now() - 1_000) },
+						{ status: "busy", statusEmoji: "🎧", statusExpiresAt: new Date(Date.now() + 60_000) },
 						s.member,
 					),
 				)
 				expect(updated.transactionId).toMatch(new RegExp(`^user:${s.member}:\\d+$`))
-				// No session is open: offline, with the custom status; an older client's busy picks dnd.
 				expect(orgStatus()).toEqual({ status: "offline", statusEmoji: "🎧" })
+				// The expiry arms the alarm (the simulation covers it running, `user/presence-sim.test.ts`).
 				expect(user.storage.alarm()).not.toBeNull()
-				yield* user.alarm
+				ok(
+					yield* call(
+						user,
+						s.member,
+						"userPresenceStatus.update",
+						{ statusEmoji: "🎧", statusExpiresAt: new Date(Date.now() - 1_000) },
+						s.member,
+					),
+				)
 				expect(orgStatus()?.statusEmoji).toBeNull()
 
 				// Another user's presence RPC in this object is refused.
