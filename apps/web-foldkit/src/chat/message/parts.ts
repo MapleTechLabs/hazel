@@ -33,33 +33,42 @@ const agentBadge = <M>(h: HtmlBuilder<M>, agentName: string, authorName: string)
 		[IconSparkles(h, { className: "size-3" }), `via ${agentName}`],
 	)
 
-/** Each platform's brand color: Discord blurple with its white mark, Slack aubergine with its colored mark. */
+/** Each platform's mark: Slack's in its own colors, Discord's in blurple. */
 const SYNC_PROVIDERS = {
-	discord: { label: "Discord", icon: IconDiscord, className: "bg-discord" },
-	slack: { label: "Slack", icon: IconSlack, className: "bg-slack" },
+	discord: { label: "Discord", icon: IconDiscord, iconClassName: "text-discord" },
+	slack: { label: "Slack", icon: IconSlack, iconClassName: undefined },
 } satisfies Record<
 	SyncProvider,
-	{ readonly label: string; readonly icon: typeof IconDiscord; readonly className: string }
+	{
+		readonly label: string
+		readonly icon: typeof IconDiscord
+		readonly iconClassName: string | undefined
+	}
 >
 
 /**
- * In place of "APP" on a message (or a person) synced in from another platform: its mark and its name.
+ * In place of "APP" on a message (or a person) synced in from another platform: just its mark, named
+ * by its title and label.
  */
 export const syncBadge = <M>(h: HtmlBuilder<M>, provider: SyncProvider): Html => {
-	const { label, icon, className } = SYNC_PROVIDERS[provider]
+	const { label, icon, iconClassName } = SYNC_PROVIDERS[provider]
+	const title = `Synced from ${label}`
 	return h.span(
 		[
-			h.Class(
-				cx(
-					"inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs/5 font-medium text-white",
-					className,
-				),
-			),
-			h.Attribute("title", `Synced from ${label}`),
+			h.Class("inline-flex shrink-0 self-center"),
+			h.Role("img"),
+			h.AriaLabel(title),
+			h.Attribute("title", title),
 		],
-		[icon(h, { className: "size-3" }), label],
+		[icon(h, { className: cx("size-3.5", iconClassName) })],
 	)
 }
+
+/** On a customer's message in a linked channel: the one tinted tag; its title says why. */
+const customerTag = <M>(h: HtmlBuilder<M>, title: string): Html =>
+	badge(h, { intent: "primary", className: "self-center", attributes: [h.Attribute("title", title)] }, [
+		"Customer",
+	])
 
 /** `Message.Header`; `statusEmoji` is the tooltip-wrapped status trigger (or nothing). */
 export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: Html): Html => {
@@ -84,15 +93,7 @@ export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: H
 			// In a channel linked to a customer: its people get a tag saying why; our team, bots and
 			// unknown authors none.
 			row.authorSide?.side === "customer"
-				? badge(
-						h,
-						{
-							intent: "secondary",
-							size: "sm",
-							attributes: [h.Attribute("title", authorSideReasonLabel[row.authorSide.reason])],
-						},
-						["Customer"],
-					)
+				? customerTag(h, authorSideReasonLabel[row.authorSide.reason])
 				: h.empty,
 			row.agentName === null ? h.empty : agentBadge(h, row.agentName, author.displayName),
 			h.span([h.Class("text-muted-fg text-xs")], isEdited ? [time, " (edited)"] : [time]),
