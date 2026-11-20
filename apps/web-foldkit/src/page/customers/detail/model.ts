@@ -1,6 +1,6 @@
 import * as Customers from "@hazel/domain/customers"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
-import { ChatAuthorRow, ChatParticipantRow } from "../../../customers/chat-authors"
+import { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
 import { CustomerAccountId, CustomerContactId, CustomerNoteId, CustomerSignalId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
@@ -165,7 +165,7 @@ export const Model = Schema.Struct({
 	channelSearch: Schema.String,
 	/** Every account's chat participants (Customers source) and the org's authors (org source). */
 	chatParticipants: Schema.Array(ChatParticipantRow),
-	chatAuthors: Schema.Array(ChatAuthorRow),
+	chatAuthors: Schema.Array(CustomerAuthorInfo),
 	/** The person in "People in chat" whose menu shows (each row has its own button). */
 	activeChatPersonId: Schema.NullOr(UserId),
 	chatPersonMenu: Menu.Model,

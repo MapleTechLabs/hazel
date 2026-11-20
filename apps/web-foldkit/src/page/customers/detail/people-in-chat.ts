@@ -2,8 +2,7 @@ import * as Customers from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { twMerge } from "tailwind-merge"
-import type { ChatAuthorRow, ChatParticipantRow } from "../../../customers/chat-authors"
+import type { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
 import { formatRelative } from "../../../customers/format"
 import { personAvatar } from "../../../customers/ui/identity"
 import { IconDots } from "../../../icons"
@@ -33,18 +32,27 @@ export interface ChatPerson {
 }
 
 /**
- * The customer's people: its participants on the customer side, or marked as our team. The author
- * row (the org source) wins over the participant's copy, which follows it through the outbox.
+ * The customer's people: its participants on the customer side, or marked as our team, once each.
+ * Rows filed under any account of the customer count (`customerOf`): a link moves to a new primary,
+ * its participants stay. The author row (the org source) wins over the participant's copy, which
+ * follows it through the outbox.
  */
 export const chatPeopleOf = (
 	participants: ReadonlyArray<ChatParticipantRow>,
-	authors: ReadonlyArray<ChatAuthorRow>,
+	authors: ReadonlyArray<CustomerAuthorInfo>,
 	customerId: CustomerAccountId,
+	customerOf: (accountId: CustomerAccountId) => CustomerAccountId,
 ): ReadonlyArray<ChatPerson> => {
 	const authorsById = new Map(authors.map((author) => [author.userId, author]))
-	return participants
+	const newest = new Map<UserId, ChatParticipantRow>()
+	for (const participant of participants) {
+		if (customerOf(participant.accountId) !== customerId) continue
+		const held = newest.get(participant.userId)
+		if (held === undefined || participant.lastMessageAtMs > held.lastMessageAtMs)
+			newest.set(participant.userId, participant)
+	}
+	return [...newest.values()]
 		.flatMap((participant): ReadonlyArray<ChatPerson> => {
-			if (participant.accountId !== customerId) return []
 			const author = authorsById.get(participant.userId)
 			const side = author?.side ?? participant.side
 			const override = author?.override ?? null
@@ -66,8 +74,17 @@ export const chatPeopleOf = (
 }
 
 /** This page's customer's people (linked channels are the customer's, on its primary). */
-export const chatPeopleOfModel = (model: Model): ReadonlyArray<ChatPerson> =>
-	chatPeopleOf(model.chatParticipants, model.chatAuthors, customerOfAccount(model)(model.accountId))
+export const chatPeopleOfModel = (model: Model): ReadonlyArray<ChatPerson> => {
+	const customerOf = customerOfAccount(model)
+	return chatPeopleOf(model.chatParticipants, model.chatAuthors, customerOf(model.accountId), customerOf)
+}
+
+/** The customer has a linked channel (any of its accounts' links, as the Channels section counts). */
+const hasLinkedChannel = (model: Model): boolean => {
+	const customerOf = customerOfAccount(model)
+	const customer = customerOf(model.accountId)
+	return model.channelLinks.some((link) => customerOf(link.accountId) === customer)
+}
 
 // MENU
 
@@ -103,11 +120,11 @@ const personRow = (h: HtmlBuilder<Message>, model: Model, context: Context, pers
 		[
 			h.div(
 				[
-					h.Class(twMerge("flex min-w-0 flex-1 items-center gap-2.5", isTeam && "opacity-60")),
+					h.Class("flex min-w-0 flex-1 items-center gap-2.5"),
 					h.Title(Customers.authorSideReasonLabel[person.reason]),
 				],
 				[
-					personAvatar(h, person, { size: "md" }),
+					personAvatar(h, person, { size: "md", className: isTeam ? "opacity-60" : undefined }),
 					h.div(
 						[h.Class("flex min-w-0 flex-1 flex-col")],
 						[
@@ -143,16 +160,17 @@ const personRow = (h: HtmlBuilder<Message>, model: Model, context: Context, pers
 								},
 								[IconDots(h, icon), overlay],
 							),
-						content: (key) => [
-							menuLabel(
-								h,
-								model.chatPersonMenu.id,
-								key,
-								CHAT_PERSON_LABEL[
-									ChatPersonKey.literals.find((literal) => literal === key) ?? "reset"
-								],
-							),
-						],
+						content: (key) => {
+							const pick = ChatPersonKey.literals.find((literal) => literal === key)
+							return [
+								menuLabel(
+									h,
+									model.chatPersonMenu.id,
+									key,
+									pick === undefined ? key : CHAT_PERSON_LABEL[pick],
+								),
+							]
+						},
 						toMessage: (message) => Message.GotChatPersonMenuMessage({ message }),
 					})
 				: button(
@@ -169,19 +187,22 @@ const personRow = (h: HtmlBuilder<Message>, model: Model, context: Context, pers
 	)
 }
 
-/** The section's rows, or the empty line. */
+/** The section's rows, or why there are none. */
 export const peopleInChat = (
 	h: HtmlBuilder<Message>,
 	model: Model,
 	context: Context,
 ): ReadonlyArray<Html> => {
 	const people = chatPeopleOfModel(model)
-	return people.length === 0
-		? [
-				h.p(
-					[h.Class("text-muted-fg text-sm")],
-					["No one from this customer has written in its linked channels yet."],
-				),
-			]
-		: people.map((person) => personRow(h, model, context, person))
+	if (people.length > 0) return people.map((person) => personRow(h, model, context, person))
+	return [
+		h.p(
+			[h.Class("text-muted-fg text-sm")],
+			[
+				hasLinkedChannel(model)
+					? "No one from this customer has written in its linked channels yet."
+					: "Link a channel to see who writes there.",
+			],
+		),
+	]
 }

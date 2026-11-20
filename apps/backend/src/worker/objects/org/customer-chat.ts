@@ -80,11 +80,15 @@ export const authorFactsOf = Effect.fn("OrgObject.authorFactsOf")(function* (
 			.where(($) => [$.organizationId.eq(organizationId), $.userId.eq(userId)]),
 	)
 	if (memberships.some((row) => row.deletedAt === null)) return { _tag: "Member" } satisfies AuthorFacts
-	if (memberships.length > 0) return { _tag: "FormerMember" } satisfies AuthorFacts
+	// Someone who left and now writes from another org in a Connect channel is that org's.
 	const participant = yield* db.first(
 		SQLite.from(schema.connectParticipantsTable)
 			.select("homeOrganizationId")
-			.where(($) => [$.userId.eq(userId), $.homeOrganizationId.neq(organizationId)])
+			.where(($) => [
+				$.userId.eq(userId),
+				$.homeOrganizationId.neq(organizationId),
+				$.deletedAt.isNull(),
+			])
 			.limit(1),
 	)
 	if (Option.isSome(participant)) {
@@ -93,6 +97,7 @@ export const authorFactsOf = Effect.fn("OrgObject.authorFactsOf")(function* (
 			homeOrganizationId: participant.value.homeOrganizationId,
 		} satisfies AuthorFacts
 	}
+	if (memberships.length > 0) return { _tag: "FormerMember" } satisfies AuthorFacts
 	return { _tag: "Unknown" } satisfies AuthorFacts
 })
 
@@ -156,6 +161,22 @@ const linkOf = (channelId: ChannelId) =>
 		),
 	)
 
+/** The linked channel `channelId` belongs to: itself, or a thread's parent, when linked. */
+export const linkedChannelOf = Effect.fn("OrgObject.linkedChannelOf")(function* (channelId: ChannelId) {
+	const db = yield* Database.Database
+	const channel = yield* db.first(
+		SQLite.from(schema.channelsTable)
+			.select("parentChannelId")
+			.where(($) => [$.id.eq(channelId)])
+			.limit(1),
+	)
+	const linkedChannelId = Option.match(channel, {
+		onNone: () => channelId,
+		onSome: (row) => row.parentChannelId ?? channelId,
+	})
+	return Option.map(yield* linkOf(linkedChannelId), () => linkedChannelId)
+})
+
 const backfillKey = (channelId: ChannelId) => `customerChatBackfill:${channelId}`
 
 /**
@@ -168,7 +189,8 @@ export const requestChatAuthorsBackfill = Effect.fn("OrgObject.requestChatAuthor
 	channelId: ChannelId,
 ) {
 	if (Option.isSome(yield* readObjectMeta(backfillKey(channelId)))) return
-	yield* writeObjectMeta(backfillKey(channelId), new Date(yield* Clock.currentTimeMillis).toISOString())
+	const requestId = crypto.randomUUID()
+	yield* writeObjectMeta(backfillKey(channelId), requestId)
 	const db = yield* Database.Database
 	const mount = yield* db.first(
 		SQLite.from(schema.connectConversationChannelsTable)
@@ -180,8 +202,8 @@ export const requestChatAuthorsBackfill = Effect.fn("OrgObject.requestChatAuthor
 	yield* enqueueEffect(
 		CustomerChatChannelEffects.reportChatAuthors,
 		channelTarget(channelId),
-		{ organizationId, linkedChannelId: channelId },
-		{ id: `customer-chat-backfill:${channelId}` },
+		{ organizationId, linkedChannelId: channelId, requestId },
+		{ id: `customer-chat-backfill:${requestId}:${channelId}` },
 	)
 })
 
@@ -265,20 +287,26 @@ export const setChatAuthorOverride = Effect.fn("OrgObject.setChatAuthorOverride"
 	})
 })
 
-/** From chat sync: where a Slack author's workspace stands against the org's connected one. */
+/**
+ * From chat sync, for a message in `channelId`: where a Slack author's workspace stands against
+ * the org's connected one. Kept only for authors of linked channels; a change of side reaches the
+ * customers object.
+ */
 export const noteExternalWorkspace = Effect.fn("OrgObject.noteExternalWorkspace")(function* (
 	organizationId: OrganizationId,
+	channelId: ChannelId,
 	userId: UserId,
 	workspace: ExternalWorkspace,
 ) {
 	const db = yield* Database.Database
 	const row = yield* db.first(
 		SQLite.from(schema.customerChatAuthorsTable)
-			.select("externalWorkspace")
+			.select("externalWorkspace", "side")
 			.where(($) => [$.userId.eq(userId)])
 			.limit(1),
 	)
 	if (Option.isSome(row) && row.value.externalWorkspace === workspace) return
+	if (Option.isNone(row) && Option.isNone(yield* linkedChannelOf(channelId))) return
 	const now = new Date(yield* Clock.currentTimeMillis)
 	if (Option.isNone(row)) {
 		// Placeholder side, set right below from the facts.
@@ -299,7 +327,13 @@ export const noteExternalWorkspace = Effect.fn("OrgObject.noteExternalWorkspace"
 				.where(($) => [$.userId.eq(userId)]),
 		)
 	}
-	yield* classifyChatAuthor(organizationId, userId)
+	const author = yield* classifyChatAuthor(organizationId, userId)
+	if (Option.isSome(row) && row.value.side !== author.side) {
+		yield* enqueueEffect(CustomerChatEffects.chatAuthorChanged, customersTarget(organizationId), {
+			organizationId,
+			author,
+		})
+	}
 })
 
 /** A linked channel's (or thread's) past authors: classified, and passed on to Customers. */
@@ -341,8 +375,8 @@ export const chatAuthorsReported = Effect.fn("OrgObject.chatAuthorsReported")(fu
 			enqueueEffect(
 				CustomerChatChannelEffects.reportChatAuthors,
 				channelTarget(threadId),
-				{ organizationId, linkedChannelId: payload.linkedChannelId },
-				{ id: `customer-chat-backfill:${threadId}` },
+				{ organizationId, linkedChannelId: payload.linkedChannelId, requestId: payload.requestId },
+				{ id: `customer-chat-backfill:${payload.requestId}:${threadId}` },
 			),
 		{ discard: true },
 	)

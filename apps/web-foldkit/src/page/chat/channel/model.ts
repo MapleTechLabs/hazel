@@ -1,5 +1,6 @@
 import { ChannelHotkey } from "./hotkeys"
 import { ChannelCustomerRow } from "../../../customers/channels"
+import { CustomerAuthorInfo } from "../../../customers/chat-authors"
 import { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { File, type Update } from "foldkit"
@@ -19,7 +20,6 @@ import {
 	BotInfo,
 	ChannelMemberInfo,
 	CustomEmojiInfo,
-	CustomerAuthorInfo,
 	AgentMarkInfo,
 	SyncedMessageInfo,
 	SyncProvider,

@@ -181,7 +181,7 @@ export const channelCustomerCollection = createEffectCollection(
 /**
  * Who writes in the org's channels linked to customers (`customer_chat_authors`,
  * `docs/customers/author-side.md`): each author's side (customer, team, bot, unknown), why, and a
- * member's override. Keyed by `userId`; the org's members only.
+ * member's override. Keyed by `organizationId:userId`; the org's members only.
  */
 export const customerChatAuthorCollection = createEffectCollection(
 	{
@@ -189,7 +189,7 @@ export const customerChatAuthorCollection = createEffectCollection(
 		table: "customer_chat_authors",
 		schema: CustomerChatAuthor.Schema,
 		parseRow: parseTimestamps,
-		getKey: (row) => row.userId,
+		getKey: (row) => `${row.organizationId}:${row.userId}`,
 		hub: syncHub,
 		sources: orgSources,
 	},

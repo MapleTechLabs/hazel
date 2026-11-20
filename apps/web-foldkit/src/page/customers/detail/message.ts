@@ -11,7 +11,7 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
-import { ChatAuthorRow, ChatParticipantRow } from "../../../customers/chat-authors"
+import { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
 import { FeatureFlagFailure } from "../../../customers/feature-flags"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { CustomerTab } from "../../../route"
@@ -148,7 +148,7 @@ export const Message = defineMessageUnion({
 	FailedChannelAction: { action: ChannelAction, reason: ActionFailure },
 
 	UpdatedChatParticipants: { participants: Schema.Array(ChatParticipantRow) },
-	UpdatedChatAuthors: { authors: Schema.Array(ChatAuthorRow) },
+	UpdatedChatAuthors: { authors: Schema.Array(CustomerAuthorInfo) },
 	PressedChatPersonMenu: { userId: UserId },
 	GotChatPersonMenuMessage: { message: Menu.Message },
 	SucceededSetChatAuthorSide: {},
