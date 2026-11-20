@@ -19,16 +19,17 @@ Replies still happen in the channel or thread; the inbox links into chat.
 - **Status** (`new | waiting_on_us | waiting_on_customer | on_hold | closed`), from each message in
   the issue's thread, by who wrote it (`AuthorSide`):
 
-    | Message by | `new` | `waiting_on_us` | `waiting_on_customer` | `on_hold` | `closed` |
-    | ---------- | ----- | --------------- | --------------------- | --------- | -------- |
-    | customer   | new   | waiting_on_us   | waiting_on_us         | waiting_on_us | **reopens**: waiting_on_us, `reopenCount + 1`, `reopenedAt` |
-    | team       | waiting_on_customer | waiting_on_customer | waiting_on_customer | on_hold | closed |
-    | bot, unknown | — | — | — | — | — |
+    | Message by   | `new`               | `waiting_on_us`     | `waiting_on_customer` | `on_hold`     | `closed`                                                    |
+    | ------------ | ------------------- | ------------------- | --------------------- | ------------- | ----------------------------------------------------------- |
+    | customer     | new                 | waiting_on_us       | waiting_on_us         | waiting_on_us | **reopens**: waiting_on_us, `reopenCount + 1`, `reopenedAt` |
+    | team         | waiting_on_customer | waiting_on_customer | waiting_on_customer   | on_hold       | closed                                                      |
+    | bot, unknown | —                   | —                   | —                     | —             | —                                                           |
 
     Bots and unknown authors move only `lastMessageAt` and `messageCount`. A message older than the
     issue's last one (an out-of-order delivery) fills timestamps but never moves the status.
     A member sets any status by hand; closing records `closedAt` / `closedByUserId`, and setting a
     closed issue to anything else reopens it.
+
 - **A team top-level message** opens nothing, nor does a reply under a message that has no issue.
 - **Deleting the root** before anyone else wrote in the issue deletes the issue; one with a
   conversation stays.
@@ -47,13 +48,13 @@ them), else team for a member, else unknown. An override changing someone's side
 
 ## Data and flow
 
-| Where                               | Table / effect                    | What                                                                                                                           |
-| ----------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Where                               | Table / effect                    | What                                                                                                                          |
+| ----------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `CustomersObject` (`customers`)     | `customer_issues`                 | The issue. Partial unique `(sourceChannelId, rootMessageId)` while live. Synced to members: unclosed, and closed for 30 days. |
 | `ChannelObject` → `OrgObject`       | `org.messageCreated`              | Carries `threadRootMessageId` in a thread (optional: older deliveries have none).                                             |
-| `OrgObject` → `CustomersObject`     | `customers.chatMessage`           | The author-side relay; it now also carries `threadRootMessageId` and the text (≤ 500 characters, the issue's title).        |
-| `OrgObject` → `CustomersObject`     | `customers.supportMessageDeleted` | A root message deleted in a linked channel.                                                                                    |
-| `CustomersObject` → `ChannelObject` | call `channel.supportMessage`     | For an issue opened by hand: the message (author, time, text, thread) if the caller reads the channel.                       |
+| `OrgObject` → `CustomersObject`     | `customers.chatMessage`           | The author-side relay; it now also carries `threadRootMessageId` and the text (≤ 500 characters, the issue's title).          |
+| `OrgObject` → `CustomersObject`     | `customers.supportMessageDeleted` | A root message deleted in a linked channel.                                                                                   |
+| `CustomersObject` → `ChannelObject` | call `channel.supportMessage`     | For an issue opened by hand: the message (author, time, text, thread) if the caller reads the channel.                        |
 
 1. `customers.chatMessage` (`author-side.md`) runs `customerChatMessageHooks` in the customers
    object; `supportIssueHook` (`customers/issues.ts`) is the one after participants. It finds the
@@ -71,17 +72,17 @@ Every handler touches only its own store; nothing reads across objects.
 
 All on `customer_issues`, ISO instants in the sync stream, epoch ms in the client's `IssueRow`:
 
-| Field                    | Meaning                                                                                      |
-| ------------------------ | -------------------------------------------------------------------------------------------- |
-| `openedAt`               | The root message's time.                                                                     |
-| `firstCustomerMessageAt` | The customer's first message (the root when a customer opened it; null for an issue a member opened on a team message). |
-| `lastCustomerMessageAt`  | The customer's latest message.                                                               |
-| `firstTeamReplyAt`       | **First response**: the earliest team message in the issue (a late delivery of an earlier one moves it back). |
-| `lastTeamReplyAt`        | The team's latest message. Waiting on us since `lastCustomerMessageAt` when that is later.   |
-| `lastMessageAt`          | Either side's latest message.                                                                |
-| `closedAt`               | When it was closed; null while open.                                                         |
-| `reopenedAt`, `reopenCount` | Last reopen (resolution time counts from here on a reopened issue) and how many.          |
-| `status`, `priority`     | As above.                                                                                    |
+| Field                       | Meaning                                                                                                                 |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `openedAt`                  | The root message's time.                                                                                                |
+| `firstCustomerMessageAt`    | The customer's first message (the root when a customer opened it; null for an issue a member opened on a team message). |
+| `lastCustomerMessageAt`     | The customer's latest message.                                                                                          |
+| `firstTeamReplyAt`          | **First response**: the earliest team message in the issue (a late delivery of an earlier one moves it back).           |
+| `lastTeamReplyAt`           | The team's latest message. Waiting on us since `lastCustomerMessageAt` when that is later.                              |
+| `lastMessageAt`             | Either side's latest message.                                                                                           |
+| `closedAt`                  | When it was closed; null while open.                                                                                    |
+| `reopenedAt`, `reopenCount` | Last reopen (resolution time counts from here on a reopened issue) and how many.                                        |
+| `status`, `priority`        | As above.                                                                                                               |
 
 - First response time = `firstTeamReplyAt − openedAt` (or `− firstCustomerMessageAt`).
 - Response overdue = `status in (new, waiting_on_us)` and `now − max(lastCustomerMessageAt,
