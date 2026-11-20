@@ -1,5 +1,4 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { format } from "date-fns"
 import { IconClose, IconPin } from "../../icons"
 import { avatar } from "../../ui/avatar"
 import * as Popover from "../../ui/popover"
@@ -8,6 +7,24 @@ import type { PinnedInfo } from "./lookups"
 import { heading } from "../../ui/heading"
 
 /** Port of `PinnedMessagesModal` (a Popover from the header's pin button). */
+
+const pad = (value: number) => String(value).padStart(2, "0")
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+/** "14:05" in the local time zone. */
+const formatTime = (ms: number) => {
+	const date = new Date(ms)
+	return `${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/** "Mar 12 at 2:05 PM" in the local time zone. */
+const formatPinnedAt = (ms: number) => {
+	const date = new Date(ms)
+	const hours = date.getHours()
+	const period = hours < 12 ? "AM" : "PM"
+	return `${MONTHS[date.getMonth()]} ${date.getDate()} at ${hours % 12 || 12}:${pad(date.getMinutes())} ${period}`
+}
 
 const fullName = (pin: PinnedInfo) =>
 	pin.author ? `${pin.author.firstName} ${pin.author.lastName}` : undefined
@@ -34,7 +51,7 @@ const authorAvatar = <M>(h: HtmlBuilder<M>, pin: PinnedInfo): Html =>
 
 const pinRow = <M>(h: HtmlBuilder<M>, pin: PinnedInfo): Html => {
 	const isEdited = pin.updatedAtMs !== null && pin.updatedAtMs > pin.createdAtMs
-	const time = format(new Date(pin.createdAtMs), "HH:mm")
+	const time = formatTime(pin.createdAtMs)
 	return h.button(
 		[
 			h.Class(
@@ -78,10 +95,7 @@ const pinRow = <M>(h: HtmlBuilder<M>, pin: PinnedInfo): Html => {
 					),
 				],
 			),
-			h.div(
-				[h.Class("mt-2 text-muted-fg text-xs")],
-				["Pinned", " ", format(new Date(pin.pinnedAtMs), "MMM d 'at' h:mm a")],
-			),
+			h.div([h.Class("mt-2 text-muted-fg text-xs")], ["Pinned", " ", formatPinnedAt(pin.pinnedAtMs)]),
 		],
 	)
 }

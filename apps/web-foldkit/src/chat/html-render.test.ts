@@ -578,11 +578,17 @@ describe("htmlRenders rows", () => {
 })
 
 describe("streamingHtml", () => {
-	test("raw HTML in the stream renders as text, never as elements", () => {
+	test("raw HTML in the stream is dropped, never rendered as elements", () => {
 		const html = streamingHtml('Hi <script>alert(1)</script> <img src=x onerror="alert(1)"> done')
 		expect(html).not.toMatch(/<script/i)
 		expect(html).not.toMatch(/<img/i)
-		expect(html).toContain("&lt;script&gt;")
+		expect(html).toContain("Hi")
+		expect(html).toContain("done")
+	})
+
+	test("closes what the stream left open", () => {
+		expect(streamingHtml("still **typing")).toContain("<strong>typing</strong>")
+		expect(streamingHtml("```ts\nconst a = 1")).toMatch(/<pre[^>]*><code class="language-ts">const a = 1/)
 	})
 
 	test("text after an inline raw-text tag is escaped too", () => {
@@ -609,6 +615,33 @@ describe("streamingHtml", () => {
 		)
 		expect(html).not.toMatch(/javascript:|data:|<a |<img/i)
 		expect(html).toContain("click")
+	})
+
+	// The link and image filters rewrite Words' own markup, so these pin the shape they rely on: a
+	// Words upgrade that changes it fails here instead of letting an unsafe URL through.
+	test("encoded, reference and autolink schemes are dropped too", () => {
+		for (const payload of [
+			"[x](&#106;avascript:alert(1)) [y](java&#x73;cript:alert(1))",
+			"[r]: javascript:alert(1)\n\n[ref][r]",
+			"<javascript:alert(1)> ![b](vbscript:x)",
+			"[![img](javascript:alert(1))](https://ok.example)",
+		]) {
+			// The text may remain as words; no link or image may carry the scheme.
+			const html = streamingHtml(payload)
+			expect(html).not.toMatch(/(href|src)="[^"]*(script:|&#)/i)
+			expect(html).not.toMatch(/<a [^>]*href="(?!https:\/\/ok\.example)/i)
+			expect(html).not.toMatch(/<img/i)
+		}
+	})
+
+	test("Words' links and images keep the attributes the filters expect", () => {
+		expect(streamingHtml('<https://hazel.sh> [a](https://x.example "t\\"i<tle")')).toBe(
+			'<p><a href="https://hazel.sh" rel="noopener noreferrer" target="_blank">https://hazel.sh</a>' +
+				'<a href="https://x.example" title="t&quot;i&lt;tle" rel="noopener noreferrer" target="_blank">a</a></p>',
+		)
+		expect(streamingHtml('![a](https://ok.example/i.png "t")')).toBe(
+			'<p><img src="https://ok.example/i.png" alt="a" title="t"></p>',
+		)
 	})
 
 	test("markdown still renders, with safe links", () => {

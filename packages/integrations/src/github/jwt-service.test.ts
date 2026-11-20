@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { ConfigProvider, Effect, Exit, Layer } from "effect"
-import { GitHubAppJWTService } from "./jwt-service"
+import { generateKeyPairSync, verify } from "node:crypto"
+import { GitHubAppJWTService, generateAppJWT } from "./jwt-service"
 
 const withEnv = (env: Record<string, string>) =>
 	GitHubAppJWTService.layer.pipe(Layer.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env }))))
@@ -47,6 +48,37 @@ describe("GitHubAppJWTService", () => {
 				)
 				expect(Exit.hasDies(exit)).toBe(true)
 			}
+		}),
+	)
+})
+
+describe("generateAppJWT", () => {
+	it.effect("signs an RS256 JWT a PKCS#1 key verifies", () =>
+		Effect.gen(function* () {
+			const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 })
+			const pem = privateKey.export({ type: "pkcs1", format: "pem" }).toString()
+			const jwt = yield* generateAppJWT("12345", pem)
+			const [header, payload, signature] = jwt.split(".")
+			const decode = (part: string) => JSON.parse(Buffer.from(part, "base64url").toString())
+			expect(decode(header!)).toEqual({ alg: "RS256" })
+			const claims = decode(payload!)
+			expect(claims.iss).toBe("12345")
+			expect(claims.exp - claims.iat).toBe(630)
+			expect(
+				verify(
+					"RSA-SHA256",
+					Buffer.from(`${header}.${payload}`),
+					publicKey,
+					Buffer.from(signature!, "base64url"),
+				),
+			).toBe(true)
+		}),
+	)
+
+	it.effect("fails with GitHubAppJWTError on a malformed key", () =>
+		Effect.gen(function* () {
+			const error = yield* Effect.flip(generateAppJWT("1", "not a pem"))
+			expect(error._tag).toBe("GitHubAppJWTError")
 		}),
 	)
 })

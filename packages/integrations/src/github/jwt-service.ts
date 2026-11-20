@@ -1,7 +1,6 @@
-import { createPrivateKey } from "node:crypto"
+import { createPrivateKey, type KeyObject } from "node:crypto"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { Context, Config, Effect, Layer, Option, Redacted, Schema } from "effect"
-import { SignJWT } from "jose"
 
 // ============================================================================
 // Error Types
@@ -99,6 +98,43 @@ export const loadGitHubAppConfig = Effect.withSpan("GitHubAppJWTService.loadConf
 // JWT Generation
 // ============================================================================
 
+const RS256 = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" } as const
+
+const base64Url = (input: string | Uint8Array): string => {
+	const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input
+	let binary = ""
+	for (const byte of bytes) binary += String.fromCharCode(byte)
+	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+}
+
+/** What `signingKeyOf` reads from a private KeyObject: Node's and workerd's both have it. */
+export interface PrivateKeySource {
+	readonly toCryptoKey?: KeyObject["toCryptoKey"]
+	readonly export: (options: { format: "jwk" }) => JsonWebKey
+}
+
+/**
+ * A private KeyObject as a WebCrypto signing key: directly where the runtime can, else through a JWK.
+ * workerd defines `toCryptoKey` but throws ERR_METHOD_NOT_IMPLEMENTED, so that error takes the JWK path.
+ */
+export const signingKeyOf = async (keyObject: PrivateKeySource): Promise<CryptoKey> => {
+	if (typeof keyObject.toCryptoKey === "function") {
+		try {
+			return (await keyObject.toCryptoKey(RS256, false, ["sign"])) as CryptoKey
+		} catch (error) {
+			if ((error as { code?: unknown } | null)?.code !== "ERR_METHOD_NOT_IMPLEMENTED") throw error
+		}
+	}
+	return crypto.subtle.importKey("jwk", keyObject.export({ format: "jwk" }), RS256, false, ["sign"])
+}
+
+/**
+ * The PEM as a WebCrypto signing key. Node's `createPrivateKey` reads both PKCS#1 ("RSA PRIVATE KEY",
+ * what GitHub generates) and PKCS#8.
+ */
+const importSigningKey = (privateKeyPem: string): Promise<CryptoKey> =>
+	signingKeyOf(createPrivateKey(privateKeyPem))
+
 /**
  * Generate a JWT for authenticating as the GitHub App.
  *
@@ -114,21 +150,22 @@ export const generateAppJWT = (
 	Effect.tryPromise({
 		try: async () => {
 			const now = Math.floor(Date.now() / 1000)
-
-			// Import the private key for signing
-			// Use Node's createPrivateKey which handles both PKCS#1 (RSA PRIVATE KEY)
-			// and PKCS#8 (PRIVATE KEY) formats - GitHub generates PKCS#1 keys
-			const privateKey = createPrivateKey(privateKeyPem)
-
-			// Create and sign the JWT
-			const jwt = await new SignJWT({})
-				.setProtectedHeader({ alg: "RS256" })
-				.setIssuedAt(now - 30) // 30 seconds in the past for clock drift (security hardened)
-				.setExpirationTime(now + 600) // 10 minutes from now (max allowed by GitHub)
-				.setIssuer(appId)
-				.sign(privateKey)
-
-			return jwt
+			const header = base64Url(JSON.stringify({ alg: "RS256" }))
+			const payload = base64Url(
+				JSON.stringify({
+					iat: now - 30, // 30 seconds in the past for clock drift
+					exp: now + 600, // 10 minutes from now (max allowed by GitHub)
+					iss: appId,
+				}),
+			)
+			const signingInput = `${header}.${payload}`
+			const key = await importSigningKey(privateKeyPem)
+			const signature = await crypto.subtle.sign(
+				RS256.name,
+				key,
+				new TextEncoder().encode(signingInput),
+			)
+			return `${signingInput}.${base64Url(new Uint8Array(signature))}`
 		},
 		catch: (error) =>
 			new GitHubAppJWTError({

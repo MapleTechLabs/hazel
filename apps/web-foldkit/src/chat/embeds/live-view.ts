@@ -1,7 +1,6 @@
 import { ACTOR_SERVICE_ERROR_UI_MESSAGE, ACTOR_SERVICE_ERROR_UI_TITLE } from "@hazel/domain"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { Marked } from "marked"
-import remend from "remend"
+import { renderToHtml } from "@pierre/words/no-math"
 import { cn } from "~/lib/utils"
 import { IconBrainSparkle, IconSparkles, IconWarning } from "../../icons"
 import type { LiveActorState } from "../live-state"
@@ -120,38 +119,56 @@ const isSafeUrl = (href: string) => {
 	return scheme === undefined || ["http", "https", "mailto"].includes(scheme.toLowerCase())
 }
 
-/**
- * The bot streams this text into `InnerHTML`, so raw HTML renders as text and links and images keep
- * safe URLs only: nothing from the stream runs in the app's origin. HTML is never tokenized: after
- * an inline `<code>` tag marked emits the following text unescaped, so escaping in the `html`
- * renderer alone is not enough.
- */
-const streamingMarked = new Marked({
-	async: false,
-	gfm: true,
-	breaks: false,
-	// `undefined` (not `false`, which falls back to marked's own) leaves the HTML to the text rules.
-	tokenizer: { html: () => undefined, tag: () => undefined },
-	renderer: {
-		html: ({ text }) => escapeHtml(text),
-		link({ href, title, tokens }) {
-			const label = this.parser.parseInline(tokens)
-			if (!isSafeUrl(href)) return label
-			const titleAttribute = title ? ` title="${escapeHtml(title)}"` : ""
-			return `<a href="${escapeHtml(href)}"${titleAttribute} rel="noopener noreferrer" target="_blank">${label}</a>`
-		},
-		image({ href, title, text }) {
-			if (!isSafeUrl(href)) return escapeHtml(text)
-			const titleAttribute = title ? ` title="${escapeHtml(title)}"` : ""
-			return `<img src="${escapeHtml(href)}" alt="${escapeHtml(text)}"${titleAttribute}>`
-		},
-	},
-})
+const decodeAttribute = (value: string) =>
+	value
+		.replace(/&quot;/g, '"')
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+		.replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
+		.replace(/&amp;/g, "&")
 
-/** `StreamingMarkdown`'s HTML: remend closes what the stream left open, marked renders it. */
+/** Words percent-encodes controls in a URL; judge the decoded form too, so an obfuscated scheme still fails. */
+const isSafeRenderedUrl = (attribute: string) => {
+	const url = decodeAttribute(attribute)
+	let decoded = url
+	try {
+		decoded = decodeURIComponent(url)
+	} catch {
+		return false
+	}
+	return isSafeUrl(url) && isSafeUrl(decoded)
+}
+
+/** A link's label without its `<a>` when its URL is unsafe; safe links open in a new tab. */
+const sanitizeLinks = (html: string) =>
+	html.replace(
+		/<a href="([^"]*)"((?: title="[^"]*")?)>([\s\S]*?)<\/a>/g,
+		(_, href: string, title: string, label: string) =>
+			isSafeRenderedUrl(href)
+				? `<a href="${href}"${title} rel="noopener noreferrer" target="_blank">${label}</a>`
+				: label,
+	)
+
+/** An image's alt text in its place when its URL is unsafe. */
+const sanitizeImages = (html: string) =>
+	html.replace(
+		/<img src="([^"]*)" alt="([^"]*)"([^>]*?) ?\/?>/g,
+		(_, src: string, alt: string, rest: string) =>
+			isSafeRenderedUrl(src) ? `<img src="${src}" alt="${alt}"${rest}>` : alt,
+	)
+
+/**
+ * `StreamingMarkdown`'s HTML. The bot streams this text into `InnerHTML`, so Words drops raw HTML
+ * (`skipHtml`) and links and images keep safe URLs only: nothing from the stream runs in the app's
+ * origin. `incomplete` closes the emphasis, code and links the stream left open.
+ */
 export const streamingHtml = (text: string) =>
-	streamingMarked
-		.parse(remend(text || ""), { async: false })
+	sanitizeImages(
+		sanitizeLinks(
+			new TextDecoder().decode(renderToHtml(text || "", { incomplete: true, skipHtml: true })),
+		),
+	)
 		.replace(/<p>\s*<\/p>/g, "")
 		.replace(/>\s+</g, "><")
 		.trim()

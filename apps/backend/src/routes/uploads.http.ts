@@ -13,7 +13,7 @@ import {
 	UploadError,
 } from "@hazel/domain/http"
 import { AttachmentId, type OrganizationId, type UserId } from "@hazel/schema"
-import { v7 as randomUUIDv7 } from "uuid"
+import { uuidv7 as randomUUIDv7 } from "@hazel/domain/uuid"
 import { Effect, Match, Option, Schema } from "effect"
 import { HazelApi } from "../api"
 import { AttachmentPolicy } from "../policies/attachment-policy"

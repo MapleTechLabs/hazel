@@ -12,8 +12,7 @@
 	},
 	"dependencies": {
 		"@effect/platform-bun": "catalog:effect",
-		"effect": "catalog:effect",
-		"picocolors": "^1.1.1"
+		"effect": "catalog:effect"
 	},
 	"devDependencies": {
 		"@types/bun": "1.4.3",
