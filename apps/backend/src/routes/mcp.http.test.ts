@@ -579,9 +579,15 @@ describe("MCP server", () => {
 				const status = () =>
 					user.storage.db
 						.prepare(
-							`SELECT status, statusEmoji, customMessage, statusExpiresAt FROM user_presence_status`,
+							`SELECT statusEmoji, customMessage, statusExpiresAt FROM user_presence_status`,
 						)
 						.get() as Record<string, unknown>
+				const picked = () =>
+					(
+						user.storage.db.prepare(`SELECT status FROM user_presence_settings`).get() as {
+							status: string
+						}
+					).status
 				const set = yield* callTool(world, token, "set_status", {
 					emoji: "🌴",
 					message: "Out until Monday",
@@ -589,15 +595,20 @@ describe("MCP server", () => {
 					presence: "away",
 				})
 				expect(set.isError).toBeUndefined()
+				// `away` is the old name for Idle.
+				expect(picked()).toBe("idle")
 				expect(status()).toMatchObject({
-					status: "away",
 					statusEmoji: "🌴",
 					customMessage: "Out until Monday",
 				})
 				expect(status().statusExpiresAt).not.toBeNull()
 				const cleared = yield* callTool(world, token, "set_status", { clear: true })
 				expect(cleared.structuredContent).toEqual({ cleared: true })
-				expect(status()).toMatchObject({ status: "away", statusEmoji: null, customMessage: null })
+				expect(status()).toMatchObject({ statusEmoji: null, customMessage: null })
+				expect(picked()).toBe("idle")
+				const invisible = yield* callTool(world, token, "set_status", { presence: "invisible" })
+				expect(invisible.isError).toBeUndefined()
+				expect(picked()).toBe("invisible")
 				const bad = yield* callTool(world, token, "set_status", { presence: "offline" })
 				expect(bad.isError).toBe(true)
 			}),

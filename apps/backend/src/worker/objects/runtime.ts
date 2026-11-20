@@ -187,7 +187,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			lists.flat(),
 		)
 
-		// UserObject presence: online while a sync socket is open, expiry on the alarm.
+		// UserObject presence: one session per sync socket, expiry on the alarm.
 		const presence = kind === "user" ? makePresenceHooks(options.state, identity.current) : undefined
 
 		const synced = makeSyncedObject({
@@ -359,10 +359,10 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		 * the user is in, one cross-object call each, so they are delivered in the background
 		 * rather than holding the upgrade (the alarm is the backstop).
 		 */
-		const presenceOpened = (principal: SyncPrincipal) =>
+		const presenceOpened = (principal: SyncPrincipal, socket: SyncSocket) =>
 			presence === undefined
 				? Effect.void
-				: Effect.flatMap(run(presence.opened(principal.userId)), (changed) =>
+				: Effect.flatMap(run(presence.opened(principal.userId, socket)), (changed) =>
 						changed ? Effect.asVoid(answer) : Effect.void,
 					)
 
@@ -370,7 +370,9 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		const adopt = (socket: SyncSocket, principal: SyncPrincipal) =>
 			prepare.pipe(
 				Effect.andThen(run(synced.sync.adoptSocket(socket, principal))),
-				Effect.tap((decision) => (decision === "accepted" ? presenceOpened(principal) : Effect.void)),
+				Effect.tap((decision) =>
+					decision === "accepted" ? presenceOpened(principal, socket) : Effect.void,
+				),
 			)
 
 		/**
@@ -389,8 +391,8 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 				yield* prepare
 				return yield* run(synced.sync.upgradeSocket(request, principal.value)).pipe(
 					// A refused socket (closed with 4003/4004) must not mark the user online.
-					Effect.tap(({ result }) =>
-						result === "accepted" ? presenceOpened(principal.value) : Effect.void,
+					Effect.tap(({ result, socket }) =>
+						result === "accepted" ? presenceOpened(principal.value, socket) : Effect.void,
 					),
 					Effect.map(({ response }) => response),
 					Effect.catchTag("SyncAttachmentTooLargeError", () =>
@@ -404,7 +406,17 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 
 		// A hibernated socket's event wakes the instance too: the next entry is not its first.
 		const onMessage = (socket: SyncSocket, message: string | ArrayBuffer) =>
-			Effect.andThen(markEntry, run(synced.sync.onMessage(socket, message)))
+			markEntry.pipe(
+				Effect.andThen(run(synced.sync.onMessage(socket, message))),
+				// UserObject: a ping keeps the socket's presence session alive, `Presence` updates it.
+				Effect.andThen(
+					presence === undefined
+						? Effect.void
+						: Effect.flatMap(run(presence.message(socket, message)), (changed) =>
+								changed ? Effect.asVoid(afterCommit) : Effect.void,
+							),
+				),
+			)
 		const onClose = (socket: SyncSocket) =>
 			markEntry.pipe(
 				Effect.andThen(synced.sync.onClose(socket)),

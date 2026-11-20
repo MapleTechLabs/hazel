@@ -60,6 +60,23 @@ export interface SyncAttachment<P> {
 	readonly expiresAt: number | null
 	/** `Hello.paging`: snapshots window paged tables. Absent (older clients): they go whole. */
 	readonly paging?: boolean
+	/**
+	 * A random id for this connection, fixed when it is adopted: per-connection state an object
+	 * keeps (a presence session) is keyed by it. Absent on sockets adopted before it existed; an
+	 * object that needs it closes such a socket (1012) so its client reconnects with one.
+	 */
+	readonly session?: string
+}
+
+/** The connection id `socket` was adopted with (`SyncAttachment.session`), if any. */
+export const socketSessionId = (socket: SyncSocket): string | undefined => {
+	const attachment = socket.deserializeAttachment()
+	return typeof attachment === "object" &&
+		attachment !== null &&
+		"session" in attachment &&
+		typeof attachment.session === "string"
+		? attachment.session
+		: undefined
 }
 
 export interface SyncRuntimeOptions {
@@ -84,6 +101,8 @@ export interface UpgradeResult {
 	/** The `101` response; refused sockets are already closed with their code. */
 	readonly response: Response
 	readonly result: AdoptResult
+	/** The server end of the socket (its attachment carries the connection's `session`). */
+	readonly socket: SyncSocket
 }
 
 export interface SyncRuntime<P, R> {
@@ -789,6 +808,9 @@ export const makeSyncRuntime = <P, E, R>(options: {
 				case "LoadByIds":
 					if (!(yield* admitRequest(socket, frame, attachment.pid))) return
 					return yield* loadByIds(socket, frame)
+				case "Presence":
+					// Read by the object that wants it (the `UserObject`), before the runtime sees it.
+					return
 			}
 		})
 
@@ -805,6 +827,7 @@ export const makeSyncRuntime = <P, E, R>(options: {
 				cursor: null,
 				ready: false,
 				expiresAt: source.expiresAt?.(principal) ?? null,
+				session: crypto.randomUUID(),
 			}
 			const bytes = new TextEncoder().encode(JSON.stringify(attachment)).length
 			if (bytes > MAX_ATTACHMENT_BYTES) return yield* new SyncAttachmentTooLargeError({ bytes })
@@ -842,7 +865,7 @@ export const makeSyncRuntime = <P, E, R>(options: {
 				? { "Sec-WebSocket-Protocol": SYNC_SUBPROTOCOL }
 				: undefined
 			const response = new Response(null, { status: 101, webSocket: client, headers } as ResponseInit)
-			return { response, result } satisfies UpgradeResult
+			return { response, result, socket: pair[1] } satisfies UpgradeResult
 		})
 
 	const acceptSocket = (request: Request, principal: P) =>

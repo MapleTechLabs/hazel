@@ -1,5 +1,5 @@
 {
-	"migration": "0010_customer_chat",
+	"migration": "0011_discord_presence",
 	"entities": [
 		{
 			"kind": "table",
@@ -2869,6 +2869,42 @@
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "desktopStatus",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "webStatus",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "mobileStatus",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "afk",
+			"position": 13,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
 		},
 		{
 			"kind": "column",

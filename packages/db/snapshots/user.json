@@ -1,9 +1,16 @@
 {
-	"migration": "0003_push_devices",
+	"migration": "0004_discord_presence",
 	"entities": [
 		{
 			"kind": "table",
 			"name": "notifications",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "presence_sessions",
 			"primaryKey": {
 				"columns": ["id"]
 			}
@@ -20,6 +27,13 @@
 			"name": "user_organizations",
 			"primaryKey": {
 				"columns": ["organizationId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "user_presence_settings",
+			"primaryKey": {
+				"columns": ["userId"]
 			}
 		},
 		{
@@ -121,6 +135,78 @@
 		},
 		{
 			"kind": "column",
+			"table": "presence_sessions",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "presence_sessions",
+			"name": "clientType",
+			"position": 1,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "presence_sessions",
+			"name": "idle",
+			"position": 2,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "presence_sessions",
+			"name": "afk",
+			"position": 3,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "presence_sessions",
+			"name": "focusedChannelId",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "presence_sessions",
+			"name": "legacy",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
+		},
+		{
+			"kind": "column",
+			"table": "presence_sessions",
+			"name": "connectedAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "presence_sessions",
+			"name": "lastBeatAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
 			"table": "push_devices",
 			"name": "token",
 			"position": 0,
@@ -178,6 +264,42 @@
 			"table": "user_organizations",
 			"name": "joinedAt",
 			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_settings",
+			"name": "userId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_settings",
+			"name": "status",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": "'online'"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_settings",
+			"name": "statusExpiresAt",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_settings",
+			"name": "updatedAt",
+			"position": 3,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -271,6 +393,42 @@
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "desktopStatus",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "webStatus",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "mobileStatus",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "afk",
+			"position": 13,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
 		},
 		{
 			"kind": "index",

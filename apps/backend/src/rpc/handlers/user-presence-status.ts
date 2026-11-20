@@ -1,15 +1,26 @@
 /**
- * Runs in the caller's `UserObject`, which owns their `user_presence_status` row
- * (`worker/objects/user/presence.ts`): each change is projected to the user's orgs through the
- * outbox in the same transaction.
+ * Runs in the caller's `UserObject`, which owns their presence (`worker/objects/user/presence.ts`):
+ * each change is recomputed there and projected to the user's orgs through the outbox in the same
+ * transaction.
  */
 import { Database } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
-import { UserPresenceStatusResponse, UserPresenceStatusRpcs } from "@hazel/domain/rpc"
+import {
+	UserPresenceSettingsResponse,
+	UserPresenceStatusResponse,
+	UserPresenceStatusRpcs,
+} from "@hazel/domain/rpc"
 import { DateTime, Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { UserPresenceStatusPolicy } from "../../policies/user-presence-status-policy"
-import { defaultPresence, findPresence, markActive, savePresence } from "../../worker/objects/user/presence"
+import {
+	applyLegacyUpdate,
+	findPreference,
+	legacyHeartbeat,
+	type PresencePatch,
+	reconcile,
+	setPreferredStatus,
+} from "../../worker/objects/user/presence"
 
 const toDate = (value: Date | DateTime.Utc | null) =>
 	value === null || value instanceof Date ? value : DateTime.toDateUtc(value)
@@ -19,44 +30,69 @@ export const UserPresenceStatusRpcLive = UserPresenceStatusRpcs.toLayer(
 		const db = yield* Database.Database
 		const userPresenceStatusPolicy = yield* UserPresenceStatusPolicy
 
+		const authorized = Effect.gen(function* () {
+			const user = yield* CurrentUser.Context
+			yield* userPresenceStatusPolicy.canUpdate(user.id)
+			return user
+		})
+
 		return {
-			"userPresenceStatus.update": (payload) =>
+			"userPresenceStatus.setStatus": ({ status, expiresAt }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
-							const user = yield* CurrentUser.Context
-							yield* userPresenceStatusPolicy.canUpdate(user.id)
-							const now = new Date()
-							const existing = Option.match(yield* findPresence(user.id), {
-								onNone: () => defaultPresence(now),
-								onSome: ({ id: _id, userId: _userId, ...fields }) => fields,
-							})
-							const pick = <K extends keyof typeof payload & keyof typeof existing>(key: K) =>
-								payload[key] !== undefined ? payload[key] : existing[key]
-							const updated = yield* savePresence(user.id, {
-								status: pick("status"),
-								customMessage: pick("customMessage"),
-								statusEmoji: pick("statusEmoji"),
-								statusExpiresAt: toDate(pick("statusExpiresAt")),
-								activeChannelId: pick("activeChannelId"),
-								suppressNotifications: pick("suppressNotifications"),
-								updatedAt: now,
-								// Any status change counts as a heartbeat.
-								lastSeenAt: now,
-							})
+							const user = yield* authorized
+							yield* setPreferredStatus(user.id, status, toDate(expiresAt))
+							// What was saved: a pick that has already expired is back to online.
+							const saved = yield* findPreference(user.id)
 							const txid = yield* generateTransactionId()
-							return new UserPresenceStatusResponse({ data: updated, transactionId: txid })
+							return new UserPresenceSettingsResponse({
+								status: Option.match(saved, {
+									onNone: () => status,
+									onSome: (row) => row.status,
+								}),
+								statusExpiresAt: Option.match(saved, {
+									onNone: () => null,
+									onSome: (row) => row.statusExpiresAt,
+								}),
+								transactionId: txid,
+							})
 						}),
 					)
 					.pipe(withRemapDbErrors("UserPresenceStatus", "update")),
 
+			// The custom status and "pause notifications"; `status` and `activeChannelId` are what
+			// older clients send instead of `setStatus` and `Presence` frames.
+			"userPresenceStatus.update": (payload) =>
+				db
+					.transaction(
+						Effect.gen(function* () {
+							const user = yield* authorized
+							yield* applyLegacyUpdate(user.id, payload)
+							const patch: PresencePatch = {}
+							if (payload.customMessage !== undefined)
+								patch.customMessage = payload.customMessage
+							if (payload.statusEmoji !== undefined) patch.statusEmoji = payload.statusEmoji
+							if (payload.statusExpiresAt !== undefined) {
+								patch.statusExpiresAt = toDate(payload.statusExpiresAt)
+							}
+							if (payload.suppressNotifications !== undefined) {
+								patch.suppressNotifications = payload.suppressNotifications
+							}
+							const { row } = yield* reconcile(user.id, { patch })
+							const txid = yield* generateTransactionId()
+							return new UserPresenceStatusResponse({ data: row, transactionId: txid })
+						}),
+					)
+					.pipe(withRemapDbErrors("UserPresenceStatus", "update")),
+
+			// Older clients only: newer ones keep their session alive with the sync socket's pings.
 			"userPresenceStatus.heartbeat": () =>
 				db
 					.transaction(
 						Effect.gen(function* () {
-							const user = yield* CurrentUser.Context
-							yield* userPresenceStatusPolicy.canUpdate(user.id)
-							const row = yield* markActive(user.id)
+							const user = yield* authorized
+							const { row } = yield* legacyHeartbeat(user.id)
 							return { lastSeenAt: row.lastSeenAt }
 						}),
 					)
@@ -66,22 +102,17 @@ export const UserPresenceStatusRpcLive = UserPresenceStatusRpcs.toLayer(
 				db
 					.transaction(
 						Effect.gen(function* () {
-							const user = yield* CurrentUser.Context
-							yield* userPresenceStatusPolicy.canUpdate(user.id)
-							const now = new Date()
-							const existing = Option.getOrUndefined(yield* findPresence(user.id))
-							const updated = yield* savePresence(user.id, {
-								status: existing?.status ?? "online",
-								customMessage: null,
-								statusEmoji: null,
-								statusExpiresAt: null,
-								activeChannelId: existing?.activeChannelId ?? null,
-								suppressNotifications: false,
-								updatedAt: now,
-								lastSeenAt: now,
+							const user = yield* authorized
+							const { row } = yield* reconcile(user.id, {
+								patch: {
+									customMessage: null,
+									statusEmoji: null,
+									statusExpiresAt: null,
+									suppressNotifications: false,
+								},
 							})
 							const txid = yield* generateTransactionId()
-							return new UserPresenceStatusResponse({ data: updated, transactionId: txid })
+							return new UserPresenceStatusResponse({ data: row, transactionId: txid })
 						}),
 					)
 					.pipe(withRemapDbErrors("UserPresenceStatus", "update")),

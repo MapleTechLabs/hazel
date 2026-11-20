@@ -260,7 +260,6 @@ interface SearchResult {
 
 /** `userPresenceStatus.update`'s payload, as far as `set_status` sets it. */
 interface StatusUpdate {
-	status?: (typeof PRESENCE)[number]
 	statusEmoji?: string | null
 	customMessage?: string | null
 	statusExpiresAt?: Date | null
@@ -448,7 +447,12 @@ const decodeBase64 = (value: string) => {
 	}
 }
 
-const PRESENCE = ["online", "away", "busy", "dnd"] as const
+const PRESENCE = ["online", "idle", "dnd", "invisible"] as const
+/** Names agents may still use for the statuses: `away` is Idle, `busy` is Do Not Disturb. */
+const PRESENCE_ALIASES = [
+	["away", "idle"],
+	["busy", "dnd"],
+] as const satisfies ReadonlyArray<readonly [string, (typeof PRESENCE)[number]]>
 
 const tools: ReadonlyArray<Tool> = [
 	{
@@ -872,7 +876,7 @@ const tools: ReadonlyArray<Tool> = [
 		name: "set_status",
 		title: "Set status",
 		description:
-			'Set the user\'s status: an emoji and message (e.g. 🌴 "Out until Monday"), optionally clearing itself after some minutes, and/or their presence (online, away, busy, dnd). clear: true removes the emoji and message.',
+			'Set the user\'s status: an emoji and message (e.g. 🌴 "Out until Monday"), optionally clearing itself after some minutes, and/or their presence (online, idle, dnd = do not disturb, invisible = appear offline). clear: true removes the emoji and message.',
 		scope: "messages:write",
 		readOnly: false,
 		inputSchema: obj({
@@ -887,7 +891,7 @@ const tools: ReadonlyArray<Tool> = [
 			presence: {
 				type: "string",
 				enum: [...PRESENCE],
-				description: "online, away, busy or dnd (do not disturb)",
+				description: "online, idle, dnd (do not disturb) or invisible (appear offline)",
 			},
 			clear: { type: "boolean", description: "Remove the emoji and message" },
 		}),
@@ -898,11 +902,15 @@ const tools: ReadonlyArray<Tool> = [
 					args.presence === undefined
 						? undefined
 						: (PRESENCE.find((value) => value === args.presence) ??
-							(yield* toolError("presence must be online, away, busy or dnd")))
+							PRESENCE_ALIASES.find(([alias]) => alias === args.presence)?.[1] ??
+							(yield* toolError("presence must be online, idle, dnd or invisible")))
 				if (args.clear === true) {
 					yield* forward(target, "userPresenceStatus.clearStatus", {})
 					if (presence !== undefined)
-						yield* forward(target, "userPresenceStatus.update", { status: presence })
+						yield* forward(target, "userPresenceStatus.setStatus", {
+							status: presence,
+							expiresAt: null,
+						})
 					const cleared: StatusResult = { cleared: true }
 					if (presence !== undefined) cleared.presence = presence
 					return cleared
@@ -931,7 +939,10 @@ const tools: ReadonlyArray<Tool> = [
 				const update: StatusUpdate = {}
 				const result: StatusResult = {}
 				if (presence !== undefined) {
-					update.status = presence
+					yield* forward(target, "userPresenceStatus.setStatus", {
+						status: presence,
+						expiresAt: null,
+					})
 					result.presence = presence
 				}
 				if (custom) {
@@ -942,7 +953,7 @@ const tools: ReadonlyArray<Tool> = [
 					result.message = message ?? null
 					if (expiresAt !== null) result.expires_at = expiresAt.toISOString()
 				}
-				yield* forward(target, "userPresenceStatus.update", update)
+				if (custom) yield* forward(target, "userPresenceStatus.update", update)
 				return result
 			}),
 	},

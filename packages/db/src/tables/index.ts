@@ -32,6 +32,8 @@ export * from "./push-devices"
 export * from "./rss-subscriptions"
 export * from "./typing-indicators"
 export * from "./user-presence-status"
+export * from "./user-presence-settings"
+export * from "./presence-sessions"
 export * from "./user-organizations"
 export * from "./users"
 export {

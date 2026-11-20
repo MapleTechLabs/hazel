@@ -320,6 +320,15 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE TABLE IF NOT EXISTS "customer_chat_authors" (\n\t"userId" text PRIMARY KEY NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"side" text NOT NULL,\n\t"reason" text NOT NULL,\n\t"override" text,\n\t"overrideBy" text,\n\t"overrideAt" text,\n\t"externalWorkspace" text,\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
 			],
 		},
+		{
+			id: "0011_discord_presence",
+			statements: [
+				'ALTER TABLE "user_presence_status" ADD COLUMN "desktopStatus" text',
+				'ALTER TABLE "user_presence_status" ADD COLUMN "webStatus" text',
+				'ALTER TABLE "user_presence_status" ADD COLUMN "mobileStatus" text',
+				'ALTER TABLE "user_presence_status" ADD COLUMN "afk" integer NOT NULL DEFAULT true',
+			],
+		},
 	],
 	channel: [
 		{
@@ -416,6 +425,17 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0003_push_devices",
 			statements: [
 				'CREATE TABLE IF NOT EXISTS "push_devices" (\n\t"token" text PRIMARY KEY NOT NULL,\n\t"environment" text NOT NULL,\n\t"bundleId" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+			],
+		},
+		{
+			id: "0004_discord_presence",
+			statements: [
+				'ALTER TABLE "user_presence_status" ADD COLUMN "desktopStatus" text',
+				'ALTER TABLE "user_presence_status" ADD COLUMN "webStatus" text',
+				'ALTER TABLE "user_presence_status" ADD COLUMN "mobileStatus" text',
+				'ALTER TABLE "user_presence_status" ADD COLUMN "afk" integer NOT NULL DEFAULT true',
+				'CREATE TABLE IF NOT EXISTS "presence_sessions" (\n\t"id" text PRIMARY KEY NOT NULL,\n\t"clientType" text,\n\t"idle" integer NOT NULL DEFAULT false,\n\t"afk" integer NOT NULL DEFAULT false,\n\t"focusedChannelId" text,\n\t"legacy" integer NOT NULL DEFAULT true,\n\t"connectedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"lastBeatAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				'CREATE TABLE IF NOT EXISTS "user_presence_settings" (\n\t"userId" text PRIMARY KEY NOT NULL,\n\t"status" text NOT NULL DEFAULT \'online\',\n\t"statusExpiresAt" text,\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
 			],
 		},
 	],
