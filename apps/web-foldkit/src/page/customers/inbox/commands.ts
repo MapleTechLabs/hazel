@@ -8,7 +8,7 @@ import type { CommonError } from "~/lib/error-messages"
 import { type IssueChange, updateIssueAction } from "../../../customers/issues"
 import { catchCommon } from "../../../data/actions"
 import { searchFieldIds } from "../../../ui/search-field"
-import { type IssueAction, Message } from "./message"
+import { IssueAction, Message } from "./message"
 import { SEARCH_ID } from "./model"
 
 /** The inbox's Commands: the optimistic issue changes, focusing search, keeping the cursor on screen. */
@@ -35,7 +35,7 @@ export const UpdateInboxIssue = Command.define("UpdateInboxIssue", {
 		organizationId: OrganizationId,
 		issueId: CustomerIssueId,
 		actor: UserId,
-		action: Schema.Literals(["assign", "status", "priority"]),
+		action: IssueAction,
 		status: Schema.optionalKey(Customers.IssueStatus),
 		priority: Schema.optionalKey(Customers.IssuePriority),
 		assigneeUserId: Schema.optionalKey(Schema.NullOr(UserId)),

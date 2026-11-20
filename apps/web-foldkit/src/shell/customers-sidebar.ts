@@ -439,8 +439,13 @@ export const view = <ParentMessage>(
 		sidebarItem(h, { isCurrent }, [
 			sidebarLink(h, { href, isActive: isCurrent, activeClassName: SECTION_ACTIVE }, [
 				icon,
-				sidebarLabel(h, [label]),
-				...trailing,
+				// The row's grid has no column after the label: a badge shares the label's cell, or it wraps.
+				trailing.length === 0
+					? sidebarLabel(h, [label])
+					: h.span(
+							[h.Class("col-start-2 flex min-w-0 items-center gap-2")],
+							[sidebarLabel(h, [label]), ...trailing],
+						),
 			]),
 		])
 	const on = (...tags: ReadonlyArray<RouteTag>) => tags.includes(route._tag)

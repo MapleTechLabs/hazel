@@ -129,7 +129,7 @@ const menu = (
 		toParentMessage: options.toMessage,
 	})
 
-/** The selected issue's actions: Assign, Status, Priority, Open thread. */
+/** The selected issue's actions: Assign, Status, Priority, Open in chat. */
 const issueActions = (
 	h: HtmlBuilder<Message>,
 	model: Model,
@@ -189,7 +189,7 @@ const issueActions = (
 		toMessage: (message) => Message.GotPriorityMenuMessage({ message }),
 	}),
 	queueAction(h, {
-		label: "Open thread",
+		label: "Open in chat",
 		icon: IconExternalLink(h, icon),
 		shortcut: "↵",
 		onPress: Message.PressedInboxKey({ key: "open" }),
@@ -213,6 +213,7 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 	const channel = context.channelsById.get(issue.sourceChannelId)
 	const assignee = issue.assigneeUserId === null ? undefined : context.membersById.get(issue.assigneeUserId)
 	const isSelected = issue.id === context.selectedId
+	const hasActions = isSelected && context.actions.length > 0
 	const waiting = needsReply(issue)
 	const sla = context.slasById.get(issue.id)
 	const hasChip = slaDisplayOf(sla, context.nowMs)._tag !== "None"
@@ -319,27 +320,30 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 						: []),
 				],
 			),
-			...(isSelected && context.actions.length > 0
+			// The selected row's actions take the chips' place on a wide screen; narrower, the chips stay
+			// and the actions wrap onto a line of their own, so touch has them too.
+			h.div(
+				[h.Role("cell"), h.Class(twMerge("w-40 shrink-0 max-md:w-auto", hasActions && "lg:hidden"))],
+				[statusChip(h, issue.status)],
+			),
+			h.div(
+				[h.Role("cell"), h.Class(twMerge("w-24 shrink-0 max-md:hidden", hasActions && "lg:hidden"))],
+				[priorityLabel(h, issue.priority)],
+			),
+			...(hasActions
 				? [
 						h.div(
 							[
-								h.Class("flex shrink-0 items-center gap-1.5 max-lg:hidden"),
+								h.Class(
+									"flex shrink-0 flex-wrap items-center gap-1.5 max-lg:order-last max-lg:basis-full max-lg:pl-11",
+								),
 								h.OnClick(Message.ClickedRowActions(), { propagation: "Stop" }),
 							],
 							[...context.actions],
 						),
 					]
-				: [
-						h.div(
-							[h.Role("cell"), h.Class("w-40 shrink-0 max-md:w-auto")],
-							[statusChip(h, issue.status)],
-						),
-						h.div(
-							[h.Role("cell"), h.Class("w-24 shrink-0 max-md:hidden")],
-							[priorityLabel(h, issue.priority)],
-						),
-					]),
-			// The SLA column, on a wide list only.
+				: []),
+			// The SLA column, on a wide list only (the selected row shows its chip under the title).
 			...(isSelected
 				? []
 				: [
@@ -545,7 +549,7 @@ const SHORTCUTS: ReadonlyArray<Shortcut> = [
 	{ keys: ["S"], label: "Status" },
 	{ keys: ["P"], label: "Priority" },
 	{ keys: ["C"], label: "Close / reopen" },
-	{ keys: ["Enter"], label: "Open thread" },
+	{ keys: ["Enter"], label: "Open in chat" },
 	{ keys: ["O"], label: "Open customer" },
 ]
 
