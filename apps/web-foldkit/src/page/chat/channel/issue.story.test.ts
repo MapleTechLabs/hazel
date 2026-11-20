@@ -1,4 +1,4 @@
-import { ChannelId, CustomerAccountId, CustomerIssueId } from "@hazel/schema"
+import { ChannelId, CustomerAccountId, CustomerIssueId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
@@ -40,7 +40,28 @@ const threadChannelId = Schema.decodeSync(ChannelId)(uuid(9))
 
 const linkedModel = (): Model => ({
 	...loadedModel(),
-	customer: { channelId, accountId, accountName: "Acme" },
+	customer: {
+		channelId,
+		organizationId: Schema.decodeSync(OrganizationId)(uuid(6)),
+		accountId,
+		accountName: "Acme",
+		accountLogoUrl: null,
+		healthStatus: "unknown",
+		healthScore: null,
+		healthWhy: null,
+		lifecycleStage: null,
+		planName: null,
+		mrrMinor: null,
+		currency: null,
+		ownerUserId: null,
+		seatsUsed: null,
+		seatsLimit: null,
+		lastActiveDay: null,
+		openSignalCount: 0,
+		topSignals: [],
+		sourceLinks: [],
+		updatedAt: new Date(0),
+	},
 })
 
 const issue: IssueRow = {

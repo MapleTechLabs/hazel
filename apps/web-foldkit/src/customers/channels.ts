@@ -5,7 +5,7 @@
  * source), and the optimistic link / unlink actions.
  */
 import type * as Customers from "@hazel/domain/customers"
-import type { Channel } from "@hazel/domain/models"
+import { type Channel, ChannelCustomer } from "@hazel/domain/models"
 import {
 	ChannelId,
 	CustomerAccountId,
@@ -62,13 +62,24 @@ export const ChannelLinkRow = Schema.Struct({
 })
 export type ChannelLinkRow = typeof ChannelLinkRow.Type
 
-/** A channel's customer, as chat shows it. */
-export const ChannelCustomerRow = Schema.Struct({
+/** A channel's customer, as chat shows it: the name and the account at a glance. */
+export const ChannelCustomerRow = ChannelCustomer.Schema
+export type ChannelCustomerRow = typeof ChannelCustomerRow.Type
+
+/** Which customer a channel is linked to, without the glance: what channel settings needs. */
+export const ChannelCustomerLink = Schema.Struct({
 	channelId: ChannelId,
 	accountId: CustomerAccountId,
 	accountName: Schema.String,
 })
-export type ChannelCustomerRow = typeof ChannelCustomerRow.Type
+export type ChannelCustomerLink = typeof ChannelCustomerLink.Type
+
+/** The link part of a channel's customer row. */
+export const linkOf = (row: ChannelCustomerRow): ChannelCustomerLink => ({
+	channelId: row.channelId,
+	accountId: row.accountId,
+	accountName: row.accountName,
+})
 
 // QUERIES
 
@@ -198,12 +209,7 @@ export const channelCustomerStream = <Message>(
 		(q) =>
 			q
 				.from({ customer: channelCustomerCollection })
-				.where(({ customer }) => eq(customer.channelId, channelId))
-				.select(({ customer }) => ({
-					channelId: customer.channelId,
-					accountId: customer.accountId,
-					accountName: customer.accountName,
-				})),
+				.where(({ customer }) => eq(customer.channelId, channelId)),
 		(rows) => toMessage(rows[0] ?? null),
 	)
 

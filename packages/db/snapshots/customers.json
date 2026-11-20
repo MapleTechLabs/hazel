@@ -1,5 +1,5 @@
 {
-	"migration": "0023_customer_support",
+	"migration": "0024_customer_slas",
 	"entities": [
 		{
 			"kind": "table",

@@ -35,6 +35,7 @@ import { issueAtMessageStream } from "../../../customers/issues"
 import { issueSlaStream } from "../../../customers/sla"
 import { orgMembersStream } from "../../../customers/queries"
 import * as IssueControl from "../issue-control"
+import * as CustomerCard from "../customer-card"
 import * as Composer from "../../../composer/composer"
 import {
 	botCommandsStream,
@@ -538,6 +539,7 @@ const hasOpenDialog = (model: Model) =>
 	model.overlays.open._tag === "ReactionModal" ||
 	(model.overlays.open._tag === "Popover" && model.overlays.open.popover.isOpen) ||
 	model.overlays.pinned.isOpen ||
+	CustomerCard.isPinnedOf(model.customerCard) ||
 	[model.draft, model.threadPanel?.draft ?? null].some(
 		(draft) => draft !== null && (draft.emojiPicker.isOpen || draft.gifPicker.isOpen),
 	)
