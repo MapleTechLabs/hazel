@@ -499,7 +499,7 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 							.distinct()
 							.orderBy(["planName", "asc"]),
 					)
-					return { plans: rows.flatMap((row) => (row.planName === null ? [] : [row.planName])) }
+					return { plans: rows.map((row) => row.planName) }
 				}).pipe(remap),
 		}
 	}),

@@ -1,8 +1,7 @@
 /**
  * Typed queries over the runtime's own tables (`_outbox`, `_inbox`, `_changes`, `_sync_meta`).
- * `run` executes on the object's effect `SqlClient`, so it joins the caller's transaction;
- * `execSync` on workerd's synchronous `ctx.storage.sql`, for the bookkeeping that runs outside
- * Effect. Their DDL stays with the code that installs them: these are query schemas only
+ * `run` executes on the object's effect `SqlClient`, so it joins the caller's transaction; the
+ * bookkeeping that runs outside Effect uses `SQLite.runSync` on workerd's `ctx.storage.sql`. Their DDL stays with the code that installs them: these are query schemas only
  * (`external: true`).
  */
 import * as Orm from "@maple-dev/effect-orm/database"
@@ -10,7 +9,6 @@ import * as SQLite from "@maple-dev/effect-orm/sqlite"
 import { Effect } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import type { SqlError } from "effect/sql/SqlError"
-import type { SqlStorageLike, SqlValue } from "./sql-storage.ts"
 
 export const outboxTable = SQLite.table("_outbox", {
 	external: true,
@@ -89,16 +87,3 @@ export const run = <Q extends Orm.Runnable>(
 	Effect.flatMap(SqlClient, (sql) =>
 		Orm.fromSqlClient(sql, { dialect: SQLite.sqliteDialect }).run(query as never),
 	) as never
-
-/**
- * Compiles a built query or write and runs it on workerd's synchronous storage, decoding its rows.
- * Throws as `exec` does: on a statement SQLite refuses, or a row that does not decode.
- */
-export const execSync = <Q extends Orm.Runnable>(
-	sql: SqlStorageLike,
-	query: Q,
-): ReadonlyArray<Orm.RowOf<Q>> => {
-	const compiled = (SQLite.compileUnsafe as (query: unknown) => SQLite.CompiledQuery<Orm.RowOf<Q>>)(query)
-	const rows = sql.exec(compiled.sql, ...(compiled.parameters as Array<SqlValue>)).toArray()
-	return Effect.runSync(compiled.decodeRows(rows))
-}

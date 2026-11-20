@@ -22,7 +22,7 @@
 		"@effect/sql-sqlite-node": "catalog:effect",
 		"@hazel/domain": "workspace:*",
 		"@hazel/schema": "workspace:*",
-		"@maple-dev/effect-orm": "0.10.0",
+		"@maple-dev/effect-orm": "0.11.0",
 		"effect": "catalog:effect"
 	},
 	"devDependencies": {

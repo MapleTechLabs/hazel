@@ -12,7 +12,7 @@ import {
 	writeMeta,
 } from "./sql-storage.ts"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
-import { changesTable, execSync, sqliteMasterTable } from "./store.ts"
+import { changesTable, sqliteMasterTable } from "./store.ts"
 
 export type ChangeOp = "insert" | "update" | "delete"
 
@@ -96,7 +96,7 @@ const signatureOf = (tables: ReadonlyArray<TrackedTable>) =>
 /** Every expected trigger is in `sqlite_master` (a table rebuild drops its triggers). */
 const triggersPresent = (sql: SqlStorageLike, tables: ReadonlyArray<TrackedTable>): boolean => {
 	const present = new Set(
-		execSync(
+		SQLite.runSync(
 			sql,
 			SQLite.from(sqliteMasterTable)
 				.select("name")
@@ -140,7 +140,7 @@ export const oldestSeq = (sql: SqlStorageLike): number => readMetaNumber(sql, FL
 
 /** The newest change's seq (0 before the first change). */
 export const headSeq = (sql: SqlStorageLike): number => {
-	const head = execSync(
+	const head = SQLite.runSync(
 		sql,
 		SQLite.from(changesTable).select(($) => ({ head: SQLite.max($.seq) })),
 	)[0]?.head
@@ -158,7 +158,7 @@ export interface ChangeBatch {
 
 /** Up to `limit` raw changes after `after`, coalesced. */
 export const readChanges = (sql: SqlStorageLike, after: number, limit: number): ChangeBatch => {
-	const rows = execSync(
+	const rows = SQLite.runSync(
 		sql,
 		SQLite.from(changesTable)
 			.select("seq", "tbl", "pk", "op")
@@ -192,7 +192,7 @@ export const pruneChanges = (sql: SqlStorageLike, options: PruneOptions): number
 	const maxAgeMs = options.maxAgeMs ?? DEFAULT_RETENTION.maxAgeMs
 	const floor = oldestSeq(sql)
 	const head = headSeq(sql)
-	const aged = execSync(
+	const aged = SQLite.runSync(
 		sql,
 		SQLite.from(changesTable)
 			.select(($) => ({ seq: SQLite.max($.seq) }))
@@ -205,7 +205,7 @@ export const pruneChanges = (sql: SqlStorageLike, options: PruneOptions): number
 		options.notAfter ?? head,
 	)
 	if (cut <= floor) return floor
-	execSync(
+	SQLite.runSync(
 		sql,
 		SQLite.deleteFrom(changesTable).where(($) => [$.seq.lte(cut)]),
 	)
@@ -223,7 +223,7 @@ export const nextChangePruneAt = (
 ): number | undefined => {
 	const keepLatest = retention.keepLatest ?? DEFAULT_RETENTION.keepLatest
 	const maxAgeMs = retention.maxAgeMs ?? DEFAULT_RETENTION.maxAgeMs
-	const at = execSync(
+	const at = SQLite.runSync(
 		sql,
 		SQLite.from(changesTable)
 			.select(($) => ({ at: SQLite.min($.at) }))

@@ -4,7 +4,7 @@
  * (`./testing.ts`).
  */
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
-import { execSync, syncMetaTable } from "./store.ts"
+import { syncMetaTable } from "./store.ts"
 
 export type SqlValue = string | number | null | ArrayBuffer | Uint8Array
 
@@ -29,7 +29,7 @@ export const installMeta = (sql: SqlStorageLike): void => {
 }
 
 export const readMeta = (sql: SqlStorageLike, key: string): string | undefined =>
-	execSync(
+	SQLite.runSync(
 		sql,
 		SQLite.from(syncMetaTable)
 			.select("value")
@@ -37,7 +37,7 @@ export const readMeta = (sql: SqlStorageLike, key: string): string | undefined =
 	)[0]?.value
 
 export const writeMeta = (sql: SqlStorageLike, key: string, value: string): void => {
-	execSync(
+	SQLite.runSync(
 		sql,
 		SQLite.insertInto(syncMetaTable)
 			.values({ key, value })

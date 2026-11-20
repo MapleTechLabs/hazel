@@ -57,7 +57,6 @@ import {
 	takeRebuildAttempt,
 } from "./schedule"
 import {
-	ACTIVE,
 	type AccountSnapshot,
 	accountChunks,
 	billingByAccount,
@@ -69,7 +68,7 @@ import {
 	type Snapshot,
 	type SnapshotBase,
 } from "./snapshot"
-import { inList, rowsPerInsert } from "./sql"
+import { inList, isActive, rowsPerInsert } from "./sql"
 import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
 
 /** Days of history a rebuild covers. */
@@ -771,21 +770,58 @@ type Gaps = ReadonlyArray<{ readonly day: Day; readonly gap: number; readonly n:
 const activeCounts = Effect.fn("Customers.activeCounts")(function* (from: Day, to: Day) {
 	const db = yield* Database.Database
 	const start = addDays(from, -29)
-	const where = Database.sql`"day" >= ${start} AND "day" <= ${to} AND ${ACTIVE}
-		AND "accountId" IN (SELECT "id" FROM "customer_accounts" WHERE "deletedAt" IS NULL)`
-	const gap = Database.sql`min(coalesce(CAST(julianday("next") - julianday("day") AS INTEGER), 30), 30)`
-	const contacts = (yield* db.query(
-		Database.sql`SELECT "day", ${gap} AS "gap", count(*) AS "n" FROM (
-			SELECT "day", LEAD("day") OVER (PARTITION BY "contactId" ORDER BY "day") AS "next"
-			FROM "customer_activity_daily" WHERE ${where}
-		) GROUP BY 1, 2`,
-	)) as Gaps
-	const accounts = (yield* db.query(
-		Database.sql`SELECT "day", ${gap} AS "gap", count(*) AS "n" FROM (
-			SELECT "day", LEAD("day") OVER (PARTITION BY "accountId" ORDER BY "day") AS "next"
-			FROM (SELECT DISTINCT "accountId", "day" FROM "customer_activity_daily" WHERE ${where})
-		) GROUP BY 1, 2`,
-	)) as Gaps
+	const inWindow = <P>($: {
+		readonly day: SQLite.Expr<string, P>
+		readonly accountId: SQLite.Expr<string, P>
+		readonly eventCount: SQLite.Expr<number, P>
+		readonly sessionCount: SQLite.Expr<number, P>
+		readonly signedIn: SQLite.Expr<boolean, P>
+	}) => [
+		$.day.gte(start),
+		$.day.lte(to),
+		isActive($),
+		SQLite.inSubquery(
+			$.accountId,
+			SQLite.from(schema.customerAccountsTable)
+				.select("id")
+				.where((a) => [a.deletedAt.isNull()]),
+		),
+	]
+	// Days to the key's next active day, at most 30 (none: 30).
+	const gapOf = (day: SQLite.Expr<string, any>, next: SQLite.Expr<string | null, any>) =>
+		SQLite.least(
+			SQLite.coalesce(
+				SQLite.cast(SQLite.julianday(next).sub(SQLite.julianday(day)), SQLite.integer),
+				30,
+			),
+			30,
+		)
+	const nextDay = (day: SQLite.Expr<string, any>, key: SQLite.Expr<string, any>) =>
+		SQLite.over(SQLite.lead(day), SQLite.windowSpec({ partitionBy: [key], orderBy: [[day, "asc"]] }))
+	const contacts: Gaps = yield* db.run(
+		SQLite.fromQuery(
+			SQLite.from(schema.customerActivityDailyTable)
+				.select(($) => ({ day: $.day, next: nextDay($.day, $.contactId) }))
+				.where(inWindow),
+			"g",
+		)
+			.select(($) => ({ day: $.day, gap: gapOf($.day, $.next), n: SQLite.count() }))
+			.groupBy("day", "gap"),
+	)
+	const accounts: Gaps = yield* db.run(
+		SQLite.fromQuery(
+			SQLite.fromQuery(
+				SQLite.from(schema.customerActivityDailyTable)
+					.select("accountId", "day")
+					.where(inWindow)
+					.distinct(),
+				"d",
+			).select(($) => ({ day: $.day, next: nextDay($.day, $.accountId) })),
+			"g",
+		)
+			.select(($) => ({ day: $.day, gap: gapOf($.day, $.next), n: SQLite.count() }))
+			.groupBy("day", "gap"),
+	)
 	const span = daysBetween(start, to) + 1
 	const cover = (rows: Gaps, window: number) => {
 		const counts = Array.from({ length: span }, () => 0)
@@ -859,11 +895,21 @@ const redoUserCounts = Effect.fn("Customers.redoUserCounts")(function* (from: Da
 	const db = yield* Database.Database
 	const users = yield* activeCounts(from, to)
 	const days = dayRange(to, daysBetween(from, to) + 1).map((day) => ({ day, ...users(day) }))
-	yield* db.query(
-		Database.sql`UPDATE "customer_org_daily" SET "activeAccounts" = json_extract(value, '$.activeAccounts'),
-			"dau" = json_extract(value, '$.dau'), "wau" = json_extract(value, '$.wau'),
-			"mau" = json_extract(value, '$.mau')
-		FROM json_each(${JSON.stringify(days)}) WHERE "customer_org_daily"."day" = json_extract(value, '$.day')`,
+	// One statement, the days as one JSON parameter.
+	yield* db.run(
+		SQLite.update(schema.customerOrgDailyTable)
+			.from(
+				SQLite.jsonRows(days, {
+					day: SQLite.text,
+					activeAccounts: SQLite.integer,
+					dau: SQLite.integer,
+					wau: SQLite.integer,
+					mau: SQLite.integer,
+				}),
+				"j",
+			)
+			.set(($) => ({ activeAccounts: $.j.activeAccounts, dau: $.j.dau, wau: $.j.wau, mau: $.j.mau }))
+			.where(($) => [$.day.eq($.j.day)]),
 	)
 })
 
@@ -1087,23 +1133,47 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 			// One statement, the days as one JSON parameter. Recorded days get their user counts again
 			// (activity may have been backfilled since), and their billing columns while still empty
 			// (recorded before any billing data came in).
-			yield* db.query(
-				Database.sql`INSERT INTO "customer_org_daily" ("day", "mrrMinor", "payingAccounts", "trialingAccounts",
-					"activeAccounts", "dau", "wau", "mau", "healthy", "atRisk", "critical", "atRiskMrrMinor")
-				SELECT json_extract(value, '$.day'), json_extract(value, '$.mrrMinor'),
-					json_extract(value, '$.payingAccounts'), json_extract(value, '$.trialingAccounts'),
-					json_extract(value, '$.activeAccounts'), json_extract(value, '$.dau'), json_extract(value, '$.wau'),
-					json_extract(value, '$.mau'), json_extract(value, '$.healthy'), json_extract(value, '$.atRisk'),
-					json_extract(value, '$.critical'), json_extract(value, '$.atRiskMrrMinor')
-				FROM json_each(${JSON.stringify(orgDays)}) WHERE true
-				ON CONFLICT ("day") DO UPDATE SET "activeAccounts" = excluded."activeAccounts",
-					"dau" = excluded."dau", "wau" = excluded."wau", "mau" = excluded."mau",
-					"mrrMinor" = iif("customer_org_daily"."mrrMinor" = 0 AND "customer_org_daily"."payingAccounts" = 0,
-						excluded."mrrMinor", "customer_org_daily"."mrrMinor"),
-					"payingAccounts" = iif("customer_org_daily"."mrrMinor" = 0 AND "customer_org_daily"."payingAccounts" = 0,
-						excluded."payingAccounts", "customer_org_daily"."payingAccounts"),
-					"trialingAccounts" = iif("customer_org_daily"."mrrMinor" = 0 AND "customer_org_daily"."payingAccounts" = 0,
-						excluded."trialingAccounts", "customer_org_daily"."trialingAccounts")`,
+			yield* db.run(
+				SQLite.insertInto(schema.customerOrgDailyTable)
+					.select(
+						SQLite.jsonRows(orgDays, {
+							day: SQLite.text,
+							mrrMinor: SQLite.integer,
+							payingAccounts: SQLite.integer,
+							trialingAccounts: SQLite.integer,
+							activeAccounts: SQLite.integer,
+							dau: SQLite.integer,
+							wau: SQLite.integer,
+							mau: SQLite.integer,
+							healthy: SQLite.integer,
+							atRisk: SQLite.integer,
+							critical: SQLite.integer,
+							atRiskMrrMinor: SQLite.integer,
+						}),
+					)
+					.onConflictDoUpdate({
+						target: ["day"],
+						set: ($, excluded) => {
+							const noBilling = $.mrrMinor.eq(0).and($.payingAccounts.eq(0))
+							return {
+								activeAccounts: excluded.activeAccounts,
+								dau: excluded.dau,
+								wau: excluded.wau,
+								mau: excluded.mau,
+								mrrMinor: SQLite.iif(noBilling, excluded.mrrMinor, $.mrrMinor),
+								payingAccounts: SQLite.iif(
+									noBilling,
+									excluded.payingAccounts,
+									$.payingAccounts,
+								),
+								trialingAccounts: SQLite.iif(
+									noBilling,
+									excluded.trialingAccounts,
+									$.trialingAccounts,
+								),
+							}
+						},
+					}),
 			)
 		}),
 	)

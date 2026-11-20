@@ -13,7 +13,7 @@ import { SqlClient } from "effect/sql"
 
 import { HazelAuth, requirement } from "./auth.ts"
 import { batchCommit } from "./batch.ts"
-import { findUserByEmail, isProvider, linkIdentity, providerIssuers } from "./identities.ts"
+import { findUserByEmail, isProvider, linkIdentity, providerIssuers, STORE_ERROR_TAGS } from "./identities.ts"
 import { Registration } from "./contract.ts"
 import * as T from "./tables.ts"
 
@@ -204,12 +204,11 @@ const linkByVerifiedEmail = (intent: OAuth.OAuthRegistrationIntent) =>
 		// Linking must not quietly fall through: registering instead would create a second
 		// account for the same email (`users.email` is not unique). An unavailable sign-in the
 		// user can retry is the honest answer.
-		Effect.catchTags({
-			SqlError: (cause) =>
-				Effect.logError("[auth] verified-email linking failed", Cause.fail(cause)).pipe(
-					Effect.andThen(Effect.fail(OAuth.OAuthUnavailable.make({}))),
-				),
-		}),
+		Effect.catchTag(STORE_ERROR_TAGS, (cause) =>
+			Effect.logError("[auth] verified-email linking failed", Cause.fail(cause)).pipe(
+				Effect.andThen(Effect.fail(OAuth.OAuthUnavailable.make({}))),
+			),
+		),
 	)
 
 /**

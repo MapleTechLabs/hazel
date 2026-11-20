@@ -81,7 +81,7 @@ const metaTable = SQLite.table("bot_gateway_meta", {
  */
 export const migrate = (sql: SqlStorageLike): void => {
 	for (const statement of SCHEMA_V1) sql.exec(statement)
-	const version = SQLite.execSync(sql, metaValue("schema"))[0]?.value ?? 1
+	const version = SQLite.runSync(sql, metaValue("schema"))[0]?.value ?? 1
 	if (version >= SCHEMA_VERSION) return
 	for (const statement of SCHEMA_V2) sql.exec(statement)
 	writeMeta(sql, "schema", SCHEMA_VERSION)
@@ -93,10 +93,10 @@ const metaValue = (key: string) =>
 		.where(($) => [$.key.eq(key)])
 
 const readMeta = (sql: SqlStorageLike, key: string): number =>
-	SQLite.execSync(sql, metaValue(key))[0]?.value ?? 0
+	SQLite.runSync(sql, metaValue(key))[0]?.value ?? 0
 
 const writeMeta = (sql: SqlStorageLike, key: string, value: number): void => {
-	SQLite.execSync(
+	SQLite.runSync(
 		sql,
 		SQLite.insertInto(metaTable)
 			.values({ key, value })
@@ -108,7 +108,7 @@ const readHead = (sql: SqlStorageLike): Seq => readMeta(sql, "head")
 
 /** The log's extent as `region`'s session sees it: the global head, its own oldest event. */
 export const bounds = (sql: SqlStorageLike, region: string = DEFAULT_REGION): LogBounds => {
-	const first = SQLite.execSync(
+	const first = SQLite.runSync(
 		sql,
 		SQLite.from(eventsTable)
 			.select(($) => ({ first: SQLite.min($.seq) }))
@@ -127,7 +127,7 @@ export const append = (
 	const seq = readHead(sql) + 1
 	const regionKey = `${REGION_HEAD_PREFIX}${region}`
 	const rseq = readMeta(sql, regionKey) + 1
-	SQLite.execSync(sql, SQLite.insertInto(eventsTable).values({ seq, body, appendedAt, region, rseq }))
+	SQLite.runSync(sql, SQLite.insertInto(eventsTable).values({ seq, body, appendedAt, region, rseq }))
 	writeMeta(sql, "head", seq)
 	writeMeta(sql, regionKey, rseq)
 	return seq
@@ -140,7 +140,7 @@ export const readAfter = (
 	limit: number,
 	region: string = DEFAULT_REGION,
 ): ReadonlyArray<StoredEvent> =>
-	SQLite.execSync(
+	SQLite.runSync(
 		sql,
 		SQLite.from(eventsTable)
 			.select("seq", "body")
@@ -151,7 +151,7 @@ export const readAfter = (
 
 /** Drop every event of `region` at or before `seq` (its session acknowledged them). */
 export const trimThrough = (sql: SqlStorageLike, seq: Seq, region: string = DEFAULT_REGION): void => {
-	SQLite.execSync(
+	SQLite.runSync(
 		sql,
 		SQLite.deleteFrom(eventsTable).where(($) => [$.region.eq(region), $.seq.lte(seq)]),
 	)
@@ -163,7 +163,7 @@ export const trimThrough = (sql: SqlStorageLike, seq: Seq, region: string = DEFA
  * limit is per event, whatever its region.
  */
 export const enforceRetention = (sql: SqlStorageLike, now: number, policy: RetentionPolicy): void => {
-	const heads = SQLite.execSync(
+	const heads = SQLite.runSync(
 		sql,
 		SQLite.from(metaTable)
 			.select("key", "value")
@@ -174,20 +174,20 @@ export const enforceRetention = (sql: SqlStorageLike, now: number, policy: Reten
 		const floor = value - policy.maxEvents
 		if (floor > 0) {
 			const region = key.slice(REGION_HEAD_PREFIX.length)
-			SQLite.execSync(
+			SQLite.runSync(
 				sql,
 				SQLite.deleteFrom(eventsTable).where(($) => [$.region.eq(region), $.rseq.lte(floor)]),
 			)
 		}
 	}
-	SQLite.execSync(
+	SQLite.runSync(
 		sql,
 		SQLite.deleteFrom(eventsTable).where(($) => [$.appendedAt.lte(now - policy.maxAgeMs)]),
 	)
 }
 
 export const oldestAppendedAt = (sql: SqlStorageLike): number | undefined => {
-	const oldest = SQLite.execSync(
+	const oldest = SQLite.runSync(
 		sql,
 		SQLite.from(eventsTable).select(($) => ({ oldest: SQLite.min($.appendedAt) })),
 	)[0]?.oldest

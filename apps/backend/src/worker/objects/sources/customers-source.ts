@@ -101,14 +101,14 @@ export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = 
 		table: schema.customerImpersonationsTable,
 		visible: (p, $) => [
 			isAdmin(p.userId),
-			SQLite.sql.cond`${$.createdAt} > strftime('%Y-%m-%d %H:%M:%f', 'now', '-30 days')`,
+			$.createdAt.gt(SQLite.strftime("%Y-%m-%d %H:%M:%f", "now", "-30 days")),
 		],
 	},
 	{
 		table: schema.customerSyncRunsTable,
 		visible: (p, $) => [
 			isMember(p.userId),
-			SQLite.sql.cond`${$.startedAt} > strftime('%Y-%m-%d %H:%M:%f', 'now', '-7 days')`,
+			$.startedAt.gt(SQLite.strftime("%Y-%m-%d %H:%M:%f", "now", "-7 days")),
 		],
 	},
 ]

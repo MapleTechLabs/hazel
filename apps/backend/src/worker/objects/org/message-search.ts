@@ -20,7 +20,6 @@ import { CurrentUser, InternalServerError, UnauthorizedError } from "@hazel/doma
 import { type MessageSearchHit, type MessageSearchPayload, MessageSearchResponse } from "@hazel/domain/rpc"
 import { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option } from "effect"
-import { SqlClient } from "effect/sql/SqlClient"
 import { currentObject } from "../../../lib/current-object"
 import { CurrentEffectSender, enqueueEffect, type EffectSender } from "../effects/registry"
 import { channelTarget, orgTarget } from "../kinds"
@@ -457,14 +456,6 @@ const decodeCursor = (cursor: string | undefined) => {
 	return separator > 0 && Number.isFinite(createdAt) && id.length > 0 ? { createdAt, id } : undefined
 }
 
-interface HitRow {
-	readonly messageId: string
-	readonly channelId: string
-	readonly authorId: string
-	readonly createdAt: number
-	readonly snippet: string
-}
-
 /** `message.search`, run in the org's own object. */
 export const searchMessages = Effect.fn("OrgObject.searchMessages")(
 	function* (payload: MessageSearchPayload) {
@@ -489,7 +480,7 @@ export const searchMessages = Effect.fn("OrgObject.searchMessages")(
 				unavailable: true,
 			})
 		}
-		const sql = yield* SqlClient
+		const db = yield* Database.Database
 		const limit = payload.limit ?? DEFAULT_LIMIT
 		const fts = toFtsQuery(payload.query)
 		const cursor = decodeCursor(payload.cursor)
@@ -510,39 +501,80 @@ export const searchMessages = Effect.fn("OrgObject.searchMessages")(
 			return new MessageSearchResponse({ results: [], nextCursor: null, indexing })
 		}
 
-		const conditions = [
-			sql`s."channelId" IN (SELECT "channelId" FROM channel_access WHERE "userId" = ${user.id})`,
-			...(payload.channelId === undefined ? [] : [sql`s."channelId" = ${payload.channelId}`]),
-			...(payload.authorId === undefined ? [] : [sql`s."authorId" = ${payload.authorId}`]),
-			...(payload.before === undefined ? [] : [sql`s."createdAt" < ${payload.before.getTime()}`]),
-			...(payload.after === undefined ? [] : [sql`s."createdAt" > ${payload.after.getTime()}`]),
-			...(cursor === undefined
-				? []
-				: [
-						sql`(s."createdAt" < ${cursor.createdAt} OR (s."createdAt" = ${cursor.createdAt} AND s."messageId" < ${cursor.id}))`,
-					]),
+		// The caller's channels, the payload's filters, and the page after the cursor.
+		const visible = <P>(s: {
+			readonly channelId: SQLite.Expr<ChannelId, P>
+			readonly authorId: SQLite.Expr<UserId, P>
+			readonly createdAt: SQLite.Expr<number, P>
+			readonly messageId: SQLite.Expr<MessageId, P>
+		}) => [
+			SQLite.inSubquery(
+				s.channelId,
+				SQLite.from(schema.channelAccessTable)
+					.select("channelId")
+					.where(($) => [$.userId.eq(user.id)]),
+			),
+			SQLite.when(payload.channelId, (channelId) => s.channelId.eq(channelId)),
+			SQLite.when(payload.authorId, (authorId) => s.authorId.eq(authorId)),
+			SQLite.when(payload.before, (before) => s.createdAt.lt(before.getTime())),
+			SQLite.when(payload.after, (after) => s.createdAt.gt(after.getTime())),
+			SQLite.when(cursor, ({ createdAt, id }) =>
+				s.createdAt
+					.lt(createdAt)
+					.or(s.createdAt.eq(createdAt).and(s.messageId.lt(MessageId.make(id)))),
+			),
 		]
-		const where = sql.and(conditions)
 		const rows =
 			fts.length > 0
-				? yield* sql<HitRow>`SELECT s."messageId", s."channelId", s."authorId", s."createdAt",
-					snippet(message_search_fts, 0, char(2), char(3), '…', ${SNIPPET_TOKENS}) AS snippet
-				FROM message_search_fts JOIN message_search s ON s."id" = message_search_fts.rowid
-				WHERE message_search_fts MATCH ${fts} AND ${where}
-				ORDER BY s."createdAt" DESC, s."messageId" DESC LIMIT ${limit + 1}`
-				: yield* sql<HitRow>`SELECT s."messageId", s."channelId", s."authorId", s."createdAt",
-					substr(s."content", 1, ${PREVIEW_CHARS}) AS snippet
-				FROM message_search s WHERE ${where}
-				ORDER BY s."createdAt" DESC, s."messageId" DESC LIMIT ${limit + 1}`
+				? yield* db.run(
+						SQLite.from(schema.messageSearchFtsTable)
+							.innerJoin(schema.messageSearchTable, "s", (f, s) => s.id.eq(f.rowid))
+							.select(($) => ({
+								messageId: $.s.messageId,
+								channelId: $.s.channelId,
+								authorId: $.s.authorId,
+								createdAt: $.s.createdAt,
+								snippet: SQLite.fts5.snippet(
+									$,
+									"content",
+									MARK_START,
+									MARK_END,
+									"…",
+									SNIPPET_TOKENS,
+								),
+							}))
+							.where(($) => [SQLite.fts5.match($, fts), ...visible($.s)])
+							.orderBy(($) => [
+								[$.s.createdAt, "desc"],
+								[$.s.messageId, "desc"],
+							])
+							.limit(limit + 1),
+					)
+				: yield* db.run(
+						SQLite.from(schema.messageSearchTable, "s")
+							.select(($) => ({
+								messageId: $.messageId,
+								channelId: $.channelId,
+								authorId: $.authorId,
+								createdAt: $.createdAt,
+								snippet: SQLite.substr($.content, 1, PREVIEW_CHARS),
+							}))
+							.where(visible)
+							.orderBy(($) => [
+								[$.createdAt, "desc"],
+								[$.messageId, "desc"],
+							])
+							.limit(limit + 1),
+					)
 
 		const page = rows.slice(0, limit)
 		const results = page.map((row): MessageSearchHit => {
 			const { snippet, highlights } = parseSnippet(row.snippet)
 			return {
-				messageId: MessageId.make(row.messageId),
-				channelId: ChannelId.make(row.channelId),
-				authorId: UserId.make(row.authorId),
-				createdAt: new Date(Number(row.createdAt)),
+				messageId: row.messageId,
+				channelId: row.channelId,
+				authorId: row.authorId,
+				createdAt: new Date(row.createdAt),
 				snippet,
 				highlights,
 			}
@@ -553,12 +585,12 @@ export const searchMessages = Effect.fn("OrgObject.searchMessages")(
 			results,
 			nextCursor:
 				rows.length > limit && last !== undefined
-					? encodeCursor(Number(last.createdAt), last.messageId)
+					? encodeCursor(last.createdAt, last.messageId)
 					: null,
 			indexing,
 		})
 	},
-	Effect.catchTag(["SqlError", "DatabaseError"], (error) =>
+	Effect.catchTag("DatabaseError", (error) =>
 		Effect.fail(
 			new InternalServerError({
 				message: "Message search failed",

@@ -65,7 +65,7 @@ const conversationAccess = (userId: UserId, col: SQLite.Expr<any>) =>
 
 /** The `userId` of the membership or participant row `id`, read synchronously (`ctx.storage.sql`). */
 const userIdOf = (sql: SqlStorageLike, table: "organization_members" | "connect_participants", id: string) =>
-	SQLite.execSync(
+	SQLite.runSync(
 		sql,
 		table === "organization_members"
 			? SQLite.from(schema.organizationMembersTable)
@@ -101,7 +101,7 @@ const affectedWith =
 					const mount =
 						change.op === "delete"
 							? undefined
-							: SQLite.execSync(
+							: SQLite.runSync(
 									sql,
 									SQLite.from(schema.connectConversationChannelsTable)
 										.select("channelId")
@@ -110,7 +110,7 @@ const affectedWith =
 										]),
 								)[0]
 					if (mount === undefined) return "all"
-					const rows = SQLite.execSync(
+					const rows = SQLite.runSync(
 						sql,
 						SQLite.from(schema.channelAccessTable)
 							.select("userId")

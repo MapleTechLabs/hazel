@@ -99,11 +99,10 @@ export const selectVisible = <P>(
 /** `key IN (keys)`; a composite key matches `col1 || ':' || col2`. */
 const byKeys = (key: ReadonlyArray<string>, $: ColumnAccessors, keys: ReadonlyArray<string>) => {
 	if (key.length === 1) return $[key[0]!]!.in_(...keys)
-	const joined = SQLite.sql.join(
-		key.map((column) => $[column]!),
-		` || ':' || `,
-	)
-	return SQLite.sql.cond`(${joined}) IN (${SQLite.sql.join(keys)})`
+	const [first, ...rest] = key.map((column): SQLite.Expr<any> => $[column]!)
+	return rest
+		.reduce<SQLite.Expr<any>>((joined, column) => SQLite.concat(joined, ":", column), first!)
+		.in_(...keys)
 }
 
 /** The user ids in `channel_access` (or `channel_viewers`) changes: the key's first column. */

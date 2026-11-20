@@ -10,6 +10,7 @@ import { layerMemory } from "@hazel/db/node"
 import type { BotId } from "@hazel/schema"
 import { type FakeStorage, makeFakeState, makeFakeStorage, sqliteClientLayer } from "@hazel/sync-do/testing"
 import { ConfigProvider, Context, Deferred, Effect, type Exit, Layer, Option, Scope } from "effect"
+import { SqlClient } from "effect/sql/SqlClient"
 import { Persistence } from "effect/persistence"
 import { ApnsClient, type ApnsNotification, type ApnsResult } from "../../services/apns"
 import { BotGatewayTransport } from "../../services/bot-gateway-transport"
@@ -56,6 +57,8 @@ export interface TestObjects {
 	 */
 	readonly reactivate: (target: ObjectTarget) => Effect.Effect<TestObject>
 	readonly directory: Context.Context<Directory>
+	/** The directory database's own client, for a test's setup and checks in raw SQL. */
+	readonly directorySql: SqlClient
 	/** Envelopes appended to each bot's gateway. */
 	readonly published: Array<{
 		readonly botId: BotId
@@ -346,6 +349,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 					),
 				),
 			directory,
+			directorySql: Context.get(directoryDatabase, SqlClient),
 			published,
 			deliveries,
 			setUnreachable: (target, value) => {

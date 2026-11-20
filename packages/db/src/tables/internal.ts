@@ -63,3 +63,6 @@ export const messageSearchBackfillTable = SQLite.table("message_search_backfill"
 		done: SQLite.column(SQLite.boolean, { default: false }),
 	},
 })
+
+/** The FTS5 index over `message_search.content` (external content, `rowid` = `message_search.id`). */
+export const messageSearchFtsTable = SQLite.fts5Table("message_search_fts", { content: SQLite.text })

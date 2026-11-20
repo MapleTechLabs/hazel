@@ -4,7 +4,7 @@
  * `OrgObject`) is covered in `worker/objects/directory-path.test.ts`.
  */
 import { InvitationRepo } from "@hazel/backend-core"
-import { Database } from "@hazel/db"
+import * as SqlClient from "effect/sql/SqlClient"
 import { CurrentUser } from "@hazel/domain"
 import { CurrentRpcScopes } from "@hazel/domain/scopes"
 import type { ApiScope } from "@hazel/domain/scopes"
@@ -86,7 +86,7 @@ describe("invitations", () => {
 		await harness.reset()
 		await harness.run(
 			Effect.gen(function* () {
-				const db = yield* Database.Database
+				const sql = yield* SqlClient.SqlClient
 				const setupSql = `
 						INSERT INTO users (id, "externalId", email, "firstName", "lastName", "userType", "isOnboarded", "createdAt", "updatedAt")
 						VALUES
@@ -102,7 +102,7 @@ describe("invitations", () => {
 					`
 				yield* Effect.forEach(
 					setupSql.split(";").filter((statement) => statement.trim() !== ""),
-					(statement) => db.execute(Database.sql.raw(statement)),
+					(statement) => sql.unsafe(statement),
 				)
 			}),
 		)
@@ -147,18 +147,14 @@ describe("invitations", () => {
 		const deletedOrgId = Schema.decodeSync(OrganizationId)(id(2))
 		await harness.run(
 			Effect.gen(function* () {
-				const db = yield* Database.Database
-				yield* db.execute(
-					Database.sql.raw(
-						`INSERT INTO organizations (id, name, slug, "isPublic", "createdAt", "updatedAt", "deletedAt")
+				const sql = yield* SqlClient.SqlClient
+				yield* sql.unsafe(
+					`INSERT INTO organizations (id, name, slug, "isPublic", "createdAt", "updatedAt", "deletedAt")
 						VALUES ('${deletedOrgId}', 'Gone Labs', 'gone-labs', false, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))`,
-					),
 				)
-				yield* db.execute(
-					Database.sql.raw(
-						`INSERT INTO organization_members (id, "organizationId", "userId", role, "joinedAt", "createdAt")
+				yield* sql.unsafe(
+					`INSERT INTO organization_members (id, "organizationId", "userId", role, "joinedAt", "createdAt")
 						VALUES ('${id(22)}', '${deletedOrgId}', '${owner}', 'owner', strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))`,
-					),
 				)
 			}),
 		)

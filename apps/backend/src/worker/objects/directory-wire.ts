@@ -142,15 +142,13 @@ export const refreshDirectoryInstallCount = Effect.fn("Directory.refreshBotInsta
 		yield* directory.db.run(
 			SQLite.update(schema.botsTable)
 				.set(($) => ({
-					installCount: SQLite.subqueryExpr(
-						SQLite.from(schema.membershipIndexTable)
-							.select(() => ({ count: SQLite.count() }))
-							.where((mi) => [
-								mi.userId.eq(SQLite.outerRef("bots.userId")),
-								mi.deletedAt.isNull(),
-							]),
-						SQLite.integer,
-						(sql) => `(${sql})`,
+					installCount: SQLite.coalesce(
+						SQLite.scalar(
+							SQLite.from(schema.membershipIndexTable, "mi")
+								.select(() => ({ count: SQLite.count() }))
+								.where((mi) => [mi.userId.eq($.userId), mi.deletedAt.isNull()]),
+						),
+						0,
 					),
 				}))
 				.where(($) => [$.id.eq(payload.botId)]),

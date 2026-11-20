@@ -23,10 +23,8 @@ import { HealthStatus } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { type AccountFacts, type HealthPoint, type MetricPoint, mrrSeries, seriesOf } from "./facts"
-import { inList } from "./sql"
+import { inList, isActive } from "./sql"
 import { addDays, dayOf, dayRange } from "./time"
-
-const ACTIVE = Database.sql`("eventCount" > 0 OR "sessionCount" > 0 OR "signedIn" = 1)`
 
 /** A mover needs a baseline: this many average daily active users in the previous window. Below
  * it a percentage is noise (1 user-day to 9 reads +800%). */
@@ -285,11 +283,17 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 	const moverDays = Math.min(days, 90)
 	const moverStart = addDays(today, -(moverDays - 1))
 	const moverPrevious = addDays(moverStart, -moverDays)
-	const sums = (yield* db.query(
-		Database.sql`SELECT "accountId", sum("day" >= ${moverStart}) AS "current", sum("day" < ${moverStart}) AS "previous"
-			FROM "customer_activity_daily" WHERE "day" >= ${moverPrevious} AND ${ACTIVE}
-			GROUP BY "accountId" HAVING "previous" >= ${moverDays * MOVER_MIN_BASELINE}`,
-	)) as ReadonlyArray<{ accountId: CustomerAccountId; current: number; previous: number }>
+	const sums = yield* db.run(
+		SQLite.from(schema.customerActivityDailyTable)
+			.select(($) => ({
+				accountId: $.accountId,
+				current: SQLite.countIf($.day.gte(moverStart)),
+				previous: SQLite.countIf($.day.lt(moverStart)),
+			}))
+			.where(($) => [$.day.gte(moverPrevious), isActive($)])
+			.groupBy("accountId")
+			.having(($) => [SQLite.countIf($.day.lt(moverStart)).gte(moverDays * MOVER_MIN_BASELINE)]),
+	)
 	const ranked = rankMovers(
 		sums.filter((row) => accountById.has(row.accountId)),
 		moverDays,
@@ -298,11 +302,19 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 	const shownDaily =
 		shown.length === 0
 			? []
-			: ((yield* db.query(
-					Database.sql`SELECT "accountId", "day", count(*) AS "users" FROM "customer_activity_daily"
-						WHERE "accountId" IN (SELECT value FROM json_each(${JSON.stringify(shown.map((row) => row.accountId))}))
-						AND "day" >= ${moverStart} AND ${ACTIVE} GROUP BY "accountId", "day"`,
-				)) as ReadonlyArray<{ accountId: CustomerAccountId; day: Day; users: number }>)
+			: yield* db.run(
+					SQLite.from(schema.customerActivityDailyTable)
+						.select(($) => ({ accountId: $.accountId, day: $.day, users: SQLite.count() }))
+						.where(($) => [
+							inList(
+								$.accountId,
+								shown.map((row) => row.accountId),
+							),
+							$.day.gte(moverStart),
+							isActive($),
+						])
+						.groupBy("accountId", "day"),
+				)
 	const usersOn = new Map(shownDaily.map((row) => [`${row.accountId}:${row.day}`, Number(row.users)]))
 	const moverOf = (row: RankedMover): Mover => {
 		const account = accountById.get(row.accountId)
@@ -420,10 +432,11 @@ const accountFacts = (account: schema.CustomerAccount, days: number, now: Date) 
 	Effect.gen(function* () {
 		const db = yield* Database.Database
 		const from = addDays(dayOf(now), -(days + 30))
-		const activity = (yield* db.query(
-			Database.sql`SELECT "contactId", "day", "eventCount" FROM "customer_activity_daily"
-				WHERE "accountId" = ${account.id} AND "day" >= ${from} AND ${ACTIVE}`,
-		)) as ReadonlyArray<{ contactId: CustomerContactId; day: Day; eventCount: number }>
+		const activity = yield* db.run(
+			SQLite.from(schema.customerActivityDailyTable)
+				.select("contactId", "day", "eventCount")
+				.where(($) => [$.accountId.eq(account.id), $.day.gte(from), isActive($)]),
+		)
 		const byDay = new Map<Day, Map<CustomerContactId, number>>()
 		for (const row of activity) {
 			const map = byDay.get(row.day) ?? new Map()
@@ -642,15 +655,19 @@ export const sparklines = Effect.fn("Customers.sparklines")(function* (
 	const series = new Map<CustomerAccountId, Map<Day, number>>(ids.map((id) => [id, new Map()]))
 	const set = (accountId: CustomerAccountId, day: Day, value: number) =>
 		series.get(accountId)?.set(day, value)
-	const idList = JSON.stringify(ids)
 	switch (metricKey) {
 		case "active_users":
 		case "active_users_30d": {
 			const rolling = metricKey === "active_users_30d"
-			const rows = (yield* db.query(
-				Database.sql`SELECT "accountId", "contactId", "day" FROM "customer_activity_daily"
-					WHERE "accountId" IN (SELECT value FROM json_each(${idList})) AND "day" >= ${rolling ? addDays(from, -29) : from} AND ${ACTIVE}`,
-			)) as ReadonlyArray<{ accountId: CustomerAccountId; contactId: string; day: Day }>
+			const rows = yield* db.run(
+				SQLite.from(schema.customerActivityDailyTable)
+					.select("accountId", "contactId", "day")
+					.where(($) => [
+						inList($.accountId, ids),
+						$.day.gte(rolling ? addDays(from, -29) : from),
+						isActive($),
+					]),
+			)
 			// Per account, each day's active contacts; a 30-day window slides over them, counting
 			// each contact's active days inside it.
 			const byAccount = new Map<CustomerAccountId, Map<Day, Array<string>>>()

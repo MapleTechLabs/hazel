@@ -4,7 +4,6 @@
  * `channel_bots`, directory rows), invitation accept, notifications in the owner's object, and
  * presence (socket-driven online/offline, projections, status expiry on the alarm).
  */
-import { Database } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
 import type { BotId, ChannelId, NotificationId, OrganizationId, UserId } from "@hazel/schema"
 import { makeFakeSocket } from "@hazel/sync-do/testing"
@@ -68,9 +67,6 @@ const errorTag = (exit: Exit.Exit<unknown, unknown>) =>
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
 
-const directoryDb = (objects: TestObjects) =>
-	Effect.map(Effect.provideContext(Directory, objects.directory), (directory) => directory.db)
-
 interface Seed {
 	readonly orgId: OrganizationId
 	readonly owner: UserId
@@ -115,19 +111,13 @@ const seed = (objects: TestObjects) =>
 	}).pipe(Effect.orDie)
 
 const insertDirectoryUser = (objects: TestObjects, id: string, email: string) =>
-	Effect.flatMap(directoryDb(objects), (db) =>
-		db.execute(
-			Database_sql(
-				`INSERT INTO users (id, "externalId", email, "firstName", "lastName") VALUES ('${id}', 'ext-${id}', '${email}', 'First', 'Last')`,
-			),
-		),
+	objects.directorySql.unsafe(
+		`INSERT INTO users (id, "externalId", email, "firstName", "lastName") VALUES ('${id}', 'ext-${id}', '${email}', 'First', 'Last')`,
 	)
-
-const Database_sql = (statement: string) => Database.sql.raw(statement)
 
 /** Rows from the directory database. */
 const directoryRows = <A>(objects: TestObjects, statement: string) =>
-	Effect.flatMap(directoryDb(objects), (db) => db.query(Database_sql(statement))).pipe(
+	objects.directorySql.unsafe(statement).pipe(
 		Effect.map((rows) => rows as ReadonlyArray<A>),
 		Effect.orDie,
 	)
@@ -613,14 +603,12 @@ describe("directory path", () => {
 						),
 					),
 				)
-				yield* Effect.flatMap(directoryDb(objects), (db) =>
-					db.execute(
-						Database_sql(
-							`INSERT INTO organization_invitations (id, "organizationId", email, role, "tokenHash", "invitedBy", "expiresAt")
-							VALUES ('${uuid()}', '${s.orgId}', 'invitee@example.com', 'admin', '${hash}', '${s.owner}', '${new Date(Date.now() + 60_000).toISOString()}')`,
-						),
-					),
-				).pipe(Effect.orDie)
+				yield* objects.directorySql
+					.unsafe(
+						`INSERT INTO organization_invitations (id, "organizationId", email, role, "tokenHash", "invitedBy", "expiresAt")
+						VALUES ('${uuid()}', '${s.orgId}', 'invitee@example.com', 'admin', '${hash}', '${s.owner}', '${new Date(Date.now() + 60_000).toISOString()}')`,
+					)
+					.pipe(Effect.orDie)
 
 				const preview = ok<{ organizationName: string; status: string }>(
 					yield* objects.invokeDirectory("invitation.preview", { token }, principalOf(s.member)),
