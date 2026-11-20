@@ -58,7 +58,9 @@ export const BusinessHours = Schema.Struct({
 	days: Schema.Array(Weekday).check(Schema.isMinLength(1), Schema.isMaxLength(7)),
 	start: Clock,
 	end: Clock,
-}).check(Schema.makeFilter((hours) => (hours.start < hours.end ? undefined : "Hours must end after they start")))
+}).check(
+	Schema.makeFilter((hours) => (hours.start < hours.end ? undefined : "Hours must end after they start")),
+)
 export type BusinessHours = typeof BusinessHours.Type
 
 export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
@@ -133,11 +135,16 @@ export const policyCovers = (appliesTo: SlaAppliesTo, account: PolicyAccount): b
  * The account's policy: the first enabled one (by `position`) naming it by id, then by plan or tag,
  * then the first default one. An account named by id wins over a plan rule above it.
  */
-export const policyFor = <P extends { readonly position: number } & Pick<SlaPolicyDraft, "enabled" | "appliesTo">>(
+export const policyFor = <
+	P extends { readonly position: number } & Pick<SlaPolicyDraft, "enabled" | "appliesTo">,
+>(
 	policies: ReadonlyArray<P>,
 	account: PolicyAccount,
 ): P | undefined => {
-	const ordered = policies.filter((policy) => policy.enabled).slice().sort((a, b) => a.position - b.position)
+	const ordered = policies
+		.filter((policy) => policy.enabled)
+		.slice()
+		.sort((a, b) => a.position - b.position)
 	return (
 		ordered.find((policy) => policy.appliesTo.accountIds.includes(account.id)) ??
 		ordered.find((policy) => !isDefault(policy.appliesTo) && policyCovers(policy.appliesTo, account)) ??
@@ -149,7 +156,9 @@ export const policyFor = <P extends { readonly position: number } & Pick<SlaPoli
 // Calendar: working time between instants
 
 /** Business hours, or none (wall time). */
-export type SlaCalendar = { readonly _tag: "always" } | { readonly _tag: "business"; readonly hours: BusinessHours }
+export type SlaCalendar =
+	| { readonly _tag: "always" }
+	| { readonly _tag: "business"; readonly hours: BusinessHours }
 
 export const calendarOf = (hours: SlaHours, businessHours: BusinessHours): SlaCalendar =>
 	hours === "always" ? { _tag: "always" } : { _tag: "business", hours: businessHours }
@@ -423,7 +432,11 @@ export const stepSla = (ctx: SlaContext, state: SlaState, event: SlaEvent): SlaS
 			// The customer is waiting again: a reply is due (unless one already is), and a paused or
 			// closed issue's resolution clock runs again.
 			const reply = isOpen(state.reply) ? state.reply : startReply(ctx, state.priority, at, false)
-			return { ...state, reply, resolution: resumeResolution(ctx, state.resolution, state.priority, at) }
+			return {
+				...state,
+				reply,
+				resolution: resumeResolution(ctx, state.resolution, state.priority, at),
+			}
 		}
 		case "Status": {
 			if (event.status === "closed") {
@@ -435,12 +448,15 @@ export const stepSla = (ctx: SlaContext, state: SlaState, event: SlaEvent): SlaS
 					resolution: { ...paused, pausedAt: null, resolvedAt: state.resolution.resolvedAt ?? at },
 				}
 			}
-			if (pausing(event.status)) return { ...state, resolution: pauseResolution(ctx, state.resolution, at) }
+			if (pausing(event.status))
+				return { ...state, resolution: pauseResolution(ctx, state.resolution, at) }
 			return { ...state, resolution: resumeResolution(ctx, state.resolution, state.priority, at) }
 		}
 		case "Priority": {
 			if (event.priority === state.priority) return state
-			const reply = isOpen(state.reply) ? retargetReply(ctx, state.reply, event.priority, at) : state.reply
+			const reply = isOpen(state.reply)
+				? retargetReply(ctx, state.reply, event.priority, at)
+				: state.reply
 			const clock = state.resolution
 			const resolution =
 				clock.runningSince === null
@@ -467,7 +483,11 @@ export const stepSla = (ctx: SlaContext, state: SlaState, event: SlaEvent): SlaS
 // Deadlines the object's alarm acts on
 
 export type SlaClockKey = "reply" | "resolution"
-export type SlaAlert = { readonly clock: SlaClockKey; readonly kind: "warning" | "breach"; readonly at: number }
+export type SlaAlert = {
+	readonly clock: SlaClockKey
+	readonly kind: "warning" | "breach"
+	readonly at: number
+}
 
 /** Warnings and breaches due at or before `now` that are not yet recorded, in time order. */
 export const dueAlerts = (state: SlaState, now: number): ReadonlyArray<SlaAlert> => {
@@ -483,7 +503,11 @@ export const dueAlerts = (state: SlaState, now: number): ReadonlyArray<SlaAlert>
 	if (resolution.dueAt !== null && resolution.warnAt !== null) {
 		if (resolution.breachedAt === null && resolution.dueAt <= now)
 			alerts.push({ clock: "resolution", kind: "breach", at: resolution.dueAt })
-		else if (resolution.warnedAt === null && resolution.warnAt <= now && resolution.warnAt < resolution.dueAt)
+		else if (
+			resolution.warnedAt === null &&
+			resolution.warnAt <= now &&
+			resolution.warnAt < resolution.dueAt
+		)
 			alerts.push({ clock: "resolution", kind: "warning", at: resolution.warnAt })
 	}
 	return alerts.slice().sort((a, b) => a.at - b.at)
@@ -519,7 +543,8 @@ export const nextAlertAt = (state: SlaState): number | null => {
 	}
 	const resolution = state.resolution
 	if (resolution.dueAt !== null && resolution.warnAt !== null) {
-		if (resolution.warnedAt === null && resolution.warnAt < resolution.dueAt) candidates.push(resolution.warnAt)
+		if (resolution.warnedAt === null && resolution.warnAt < resolution.dueAt)
+			candidates.push(resolution.warnAt)
 		else if (resolution.breachedAt === null) candidates.push(resolution.dueAt)
 	}
 	return candidates.length === 0 ? null : Math.min(...candidates)
@@ -534,7 +559,12 @@ export type SlaDisplay =
 	| { readonly _tag: "DueSoon"; readonly clock: SlaClockKey; readonly dueAt: number }
 	| { readonly _tag: "Breached"; readonly clock: SlaClockKey; readonly dueAt: number }
 	| { readonly _tag: "Paused"; readonly leftMs: number }
-	| { readonly _tag: "Met"; readonly clock: SlaClockKey; readonly elapsedMs: number; readonly onTime: boolean }
+	| {
+			readonly _tag: "Met"
+			readonly clock: SlaClockKey
+			readonly elapsedMs: number
+			readonly onTime: boolean
+	  }
 
 const liveOf = (clock: SlaClockKey, dueAt: number, warnAt: number, now: number): SlaDisplay =>
 	now >= dueAt

@@ -1,5 +1,5 @@
 {
-	"migration": "0020_customer_attention_settings",
+	"migration": "0021_customer_sla_policies",
 	"entities": [
 		{
 			"kind": "table",
@@ -165,6 +165,13 @@
 		{
 			"kind": "table",
 			"name": "customer_signals",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_sla_policies",
 			"primaryKey": {
 				"columns": ["id"]
 			}
@@ -2576,16 +2583,16 @@
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "lastComputedAt",
+			"name": "businessHours",
 			"position": 7,
 			"type": "text",
-			"notNull": false,
-			"default": null
+			"notNull": true,
+			"default": "'{\"timeZone\":\"UTC\",\"days\":[1,2,3,4,5],\"start\":\"09:00\",\"end\":\"17:00\"}'"
 		},
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "updatedBy",
+			"name": "lastComputedAt",
 			"position": 8,
 			"type": "text",
 			"notNull": false,
@@ -2594,8 +2601,17 @@
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "createdAt",
+			"name": "updatedBy",
 			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "createdAt",
+			"position": 10,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2604,7 +2620,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "updatedAt",
-			"position": 10,
+			"position": 11,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -3031,6 +3047,132 @@
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "name",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "position",
+			"position": 3,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "enabled",
+			"position": 4,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "appliesTo",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "targets",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "hours",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "'business'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "warnBeforePct",
+			"position": 8,
+			"type": "integer",
+			"notNull": true,
+			"default": "25"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "createdBy",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "updatedBy",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "createdAt",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "updatedAt",
+			"position": 12,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_sla_policies",
+			"name": "deletedAt",
+			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
 		},
 		{
 			"kind": "column",

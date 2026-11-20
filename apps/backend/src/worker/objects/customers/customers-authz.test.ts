@@ -4,7 +4,12 @@
  * projects (people, not bots; none for an unknown org); the org's deletion; and the data-source
  * handlers' edge cases (disconnect, ignore rules, bulk limits, credential rotation).
  */
-import { DEFAULT_HEALTH_SETTINGS, TEMPLATES } from "@hazel/domain/customers"
+import {
+	DEFAULT_BUSINESS_HOURS,
+	DEFAULT_HEALTH_SETTINGS,
+	DEFAULT_SLA_POLICY,
+	TEMPLATES,
+} from "@hazel/domain/customers"
 import { CustomerRpcs } from "@hazel/domain/rpc"
 import type { OrganizationId, UserId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option, Redacted, type Scope } from "effect"
@@ -81,6 +86,11 @@ const PAYLOADS = {
 	"customers.rule.update": { ruleId: uuid(), rule: ruleDraft },
 	"customers.rule.delete": { ruleId: uuid() },
 	"customers.settings.update": { reportingCurrency: "eur" },
+	"customers.slaPolicy.create": { policy: DEFAULT_SLA_POLICY },
+	"customers.slaPolicy.update": { policyId: uuid(), policy: DEFAULT_SLA_POLICY },
+	"customers.slaPolicy.delete": { policyId: uuid() },
+	"customers.slaPolicy.reorder": { policyIds: [] },
+	"customers.businessHours.update": { businessHours: DEFAULT_BUSINESS_HOURS },
 	"customers.connection.connect": {
 		provider: "clerk",
 		apiKey: "sk_test",
@@ -119,6 +129,11 @@ const ADMIN_ONLY = new Set([
 	"customers.rule.update",
 	"customers.rule.delete",
 	"customers.settings.update",
+	"customers.slaPolicy.create",
+	"customers.slaPolicy.update",
+	"customers.slaPolicy.delete",
+	"customers.slaPolicy.reorder",
+	"customers.businessHours.update",
 	"customers.connection.connect",
 	"customers.connection.update",
 	"customers.connection.disconnect",

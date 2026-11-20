@@ -2,7 +2,7 @@
  * Row models of the `customers` store (`@hazel/db` `tables/customers.ts`), in the shape the sync
  * stream and the RPCs carry them: timestamps as `JsonDate`, JSON columns parsed.
  *
- * Synced (client collections): `Account`, `Signal`, `SignalRule`, `Note`, `SavedView`, `ViewLayout`, `Settings`,
+ * Synced (client collections): `Account`, `Signal`, `SignalRule`, `SlaPolicy`, `Note`, `SavedView`, `ViewLayout`, `Settings`,
  * `MetricDefinition`, `Connection`, `SyncRun`, `ChannelLink`, `FeatureFlag`, `Impersonator`,
  * `Impersonation` (admins only). The rest travel in RPC results.
  */
@@ -25,6 +25,7 @@ import {
 	CustomerSettingsId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
+	CustomerSlaPolicyId,
 	CustomerSubscriptionId,
 	CustomerSyncRunId,
 	CustomerUnmatchedRecordId,
@@ -63,6 +64,7 @@ import {
 import { SignalEvidence } from "./evidence"
 import { HealthSettings } from "./health"
 import { AttentionSettings, RuleConfig, RuleScope } from "./rules"
+import { BusinessHours, SlaAppliesTo, SlaHours, SlaTargets } from "./sla"
 import { ListColumn, ViewColor, ViewFilters, ViewIcon, ViewLayoutKey, ViewSort } from "./views"
 
 const NullDate = S.NullOr(JsonDate)
@@ -187,6 +189,24 @@ class SignalRuleModel extends M.Class<SignalRuleModel>("CustomerSignalRule")({
 export const SignalRule = M.expose(SignalRuleModel)
 export type SignalRule = typeof SignalRule.Schema.Type
 
+class SlaPolicyModel extends M.Class<SlaPolicyModel>("CustomerSlaPolicy")({
+	id: M.Generated(CustomerSlaPolicyId),
+	organizationId: OrganizationId,
+	name: S.String,
+	position: S.Int,
+	enabled: S.Boolean,
+	appliesTo: SlaAppliesTo,
+	targets: SlaTargets,
+	hours: SlaHours,
+	warnBeforePct: S.Int,
+	createdBy: S.NullOr(UserId),
+	updatedBy: S.NullOr(UserId),
+	...timestamps,
+	deletedAt: M.GeneratedByApp(NullDate),
+}) {}
+export const SlaPolicy = M.expose(SlaPolicyModel)
+export type SlaPolicy = typeof SlaPolicy.Schema.Type
+
 class NoteModel extends M.Class<NoteModel>("CustomerNote")({
 	id: M.GeneratedOptional(CustomerNoteId),
 	organizationId: OrganizationId,
@@ -294,6 +314,8 @@ class SettingsModel extends M.Class<SettingsModel>("CustomerSettings")({
 	addOnPlans: S.Array(S.String),
 	/** Unused: MRR always adds usage billing now (the backend's `usageMrrOf`); the column stays. */
 	overageInMrr: S.Boolean,
+	/** The working week of SLA policies on business hours. */
+	businessHours: BusinessHours,
 	lastComputedAt: NullDate,
 	updatedBy: S.NullOr(UserId),
 	...timestamps,

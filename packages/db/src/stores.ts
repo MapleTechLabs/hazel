@@ -114,6 +114,7 @@ export const customersTables = [
 	schema.customerSignalRulesTable,
 	schema.customerSignalsTable,
 	schema.customerSettingsTable,
+	schema.customerSlaPoliciesTable,
 	schema.customerHealthDailyTable,
 	schema.customerNotesTable,
 	schema.customerSavedViewsTable,

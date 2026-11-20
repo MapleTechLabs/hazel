@@ -50,7 +50,9 @@ describe("business hours", () => {
 	it("rejects overnight hours and unknown zones", () => {
 		const decode = Schema.decodeUnknownExit(BusinessHours)
 		expect(decode({ timeZone: "UTC", days: [1], start: "22:00", end: "06:00" })._tag).toBe("Failure")
-		expect(decode({ timeZone: "Mars/Base", days: [1], start: "09:00", end: "17:00" })._tag).toBe("Failure")
+		expect(decode({ timeZone: "Mars/Base", days: [1], start: "09:00", end: "17:00" })._tag).toBe(
+			"Failure",
+		)
 		expect(decode({ timeZone: "America/New_York", days: [1], start: "09:00", end: "17:00" })._tag).toBe(
 			"Success",
 		)
@@ -58,7 +60,11 @@ describe("business hours", () => {
 })
 
 describe("policies", () => {
-	const policy = (position: number, appliesTo: Partial<typeof DEFAULT_SLA_POLICY.appliesTo>, enabled = true) => ({
+	const policy = (
+		position: number,
+		appliesTo: Partial<typeof DEFAULT_SLA_POLICY.appliesTo>,
+		enabled = true,
+	) => ({
 		...DEFAULT_SLA_POLICY,
 		position,
 		enabled,

@@ -1,6 +1,6 @@
 /**
  * What a new `CustomersObject` starts with: the settings row, one rule per signal template (its
- * defaults), the built-in list views and the built-in metric definitions. Installed once, on the
+ * defaults), the default SLA policy, the built-in list views and the built-in metric definitions. Installed once, on the
  * object's first activation (`./bootstrap.ts`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
@@ -8,6 +8,7 @@ import {
 	type BuiltInViewKey,
 	DEFAULT_HEALTH_SETTINGS,
 	DEFAULT_LIST_COLUMNS,
+	DEFAULT_SLA_POLICY,
 	SignalTemplate,
 	TEMPLATES,
 	type ViewFilters,
@@ -64,6 +65,13 @@ export const installDefaults = Effect.fn("Customers.installDefaults")(function* 
 				}
 			}),
 		),
+	)
+	yield* db.run(
+		SQLite.insertInto(schema.customerSlaPoliciesTable).values({
+			organizationId,
+			...DEFAULT_SLA_POLICY,
+			position: 0,
+		}),
 	)
 	yield* db.run(
 		SQLite.insertInto(schema.customerSavedViewsTable).values(
