@@ -897,7 +897,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					if (yield* decidedForCustomer(found.value))
 						return yield* notFound("suggestion", suggestionId)
 					const check = yield* checkChannel(organizationId, channelId, actor.userId)
-					if (check === "not_found") return yield* notFound("channel", channelId)
+					if (check === "not_found") return yield* notFound("suggestion", suggestionId)
 					if (check === "not_linkable") {
 						return yield* invalid("Only channels can be linked to a customer, not threads or DMs")
 					}
@@ -936,7 +936,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					const found = yield* openSuggestion(suggestionId)
 					if (Option.isNone(found)) return yield* notFound("suggestion", suggestionId)
 					const check = yield* checkChannel(organizationId, found.value.channelId, actor.userId)
-					if (check === "not_found") return yield* notFound("channel", found.value.channelId)
+					if (check === "not_found") return yield* notFound("suggestion", suggestionId)
 					const now = yield* currentTime
 					return yield* txOnly(
 						Effect.gen(function* () {
