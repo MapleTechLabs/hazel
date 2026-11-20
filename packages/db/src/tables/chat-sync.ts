@@ -85,6 +85,8 @@ export type NewChatSyncConnection = SQLite.InsertRowOf<typeof chatSyncConnection
 export const chatSyncChannelAuthorsTable = SQLite.table("chat_sync_channel_authors", {
 	columns: {
 		hazelChannelId: uuid(ChannelId),
+		/** The mirror the author was last seen through: evidence reads only live links' authors. */
+		syncChannelLinkId: SQLite.nullable(uuid(SyncChannelLinkId)),
 		provider: varchar(50),
 		externalUserId: typed<ExternalUserId>()(varchar(255)),
 		externalWorkspaceId: SQLite.nullable(varchar(255)),

@@ -282,6 +282,31 @@ describe("Slack chat sync on the objects", () => {
 			}),
 		))
 
+	it("an author seen through a replaced mirror moves to the live one on their next message", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const message = (ts: string) =>
+					world.inbound(`Ev9${ts.slice(-2)}`, {
+						_tag: "MessagePosted",
+						subtype: "message",
+						message: slackMessage(`1700000000.0009${ts.slice(-2)}`, "hello", {
+							user: "U0GUEST001",
+						}),
+					})
+				yield* message("10")
+				const [link] = rows<{ id: string }>(world.org, `SELECT id FROM chat_sync_channel_links`)
+				// As if recorded through an older mirror a moment ago (within the hour the write is skipped).
+				world.org.storage.db
+					.prepare(`UPDATE chat_sync_channel_authors SET syncChannelLinkId = 'old-mirror'`)
+					.run()
+				yield* message("20")
+				expect(rows(world.org, `SELECT syncChannelLinkId FROM chat_sync_channel_authors`)).toEqual([
+					{ syncChannelLinkId: link!.id },
+				])
+			}),
+		))
+
 	it("a new link is prepared: the bot joins the Slack channel", () =>
 		run(
 			Effect.gen(function* () {

@@ -5,7 +5,7 @@
  * channel. Rows of a link that went away stay; readers keep only channels with a live link.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import type { ChannelId, ExternalUserId } from "@hazel/schema"
+import type { ChannelId, ExternalUserId, SyncChannelLinkId } from "@hazel/schema"
 import { Clock, Effect, Option } from "effect"
 
 /** How stale `lastSeenAt` may get before a message from a known author refreshes it. */
@@ -14,6 +14,8 @@ const SEEN_REFRESH_MS = 60 * 60 * 1000
 export const recordChannelAuthor = Effect.fn("OrgObject.chatSyncRecordAuthor")(function* (input: {
 	readonly provider: string
 	readonly hazelChannelId: ChannelId
+	/** The mirror the message came through. */
+	readonly syncChannelLinkId: SyncChannelLinkId
 	readonly externalUserId: ExternalUserId
 	readonly email: string | null | undefined
 	readonly externalWorkspaceId: string | null | undefined
@@ -47,6 +49,7 @@ export const recordChannelAuthor = Effect.fn("OrgObject.chatSyncRecordAuthor")(f
 			SQLite.insertInto(schema.chatSyncChannelAuthorsTable)
 				.values({
 					hazelChannelId: channelId,
+					syncChannelLinkId: input.syncChannelLinkId,
 					provider: input.provider,
 					externalUserId: input.externalUserId,
 					externalWorkspaceId: workspace,
@@ -62,6 +65,8 @@ export const recordChannelAuthor = Effect.fn("OrgObject.chatSyncRecordAuthor")(f
 	} else {
 		// Nothing new and seen within the hour: no write per message in a busy channel.
 		const learned =
+			// Seen through another mirror (a replaced link): evidence follows the live one.
+			input.syncChannelLinkId !== existing.value.syncChannelLinkId ||
 			(email !== null && email !== existing.value.email) ||
 			(workspace !== null && workspace !== existing.value.externalWorkspaceId)
 		if (!learned && now.getTime() - existing.value.lastSeenAt.getTime() < SEEN_REFRESH_MS) return
@@ -72,6 +77,7 @@ export const recordChannelAuthor = Effect.fn("OrgObject.chatSyncRecordAuthor")(f
 		SQLite.update(schema.chatSyncChannelAuthorsTable)
 			.set({
 				lastSeenAt: now,
+				syncChannelLinkId: input.syncChannelLinkId,
 				email: email ?? undefined,
 				externalWorkspaceId: workspace ?? undefined,
 			})

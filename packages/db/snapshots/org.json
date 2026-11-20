@@ -1066,16 +1066,16 @@
 		{
 			"kind": "column",
 			"table": "chat_sync_channel_authors",
-			"name": "provider",
+			"name": "syncChannelLinkId",
 			"position": 1,
 			"type": "text",
-			"notNull": true,
+			"notNull": false,
 			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "chat_sync_channel_authors",
-			"name": "externalUserId",
+			"name": "provider",
 			"position": 2,
 			"type": "text",
 			"notNull": true,
@@ -1084,16 +1084,16 @@
 		{
 			"kind": "column",
 			"table": "chat_sync_channel_authors",
-			"name": "externalWorkspaceId",
+			"name": "externalUserId",
 			"position": 3,
 			"type": "text",
-			"notNull": false,
+			"notNull": true,
 			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "chat_sync_channel_authors",
-			"name": "email",
+			"name": "externalWorkspaceId",
 			"position": 4,
 			"type": "text",
 			"notNull": false,
@@ -1102,8 +1102,17 @@
 		{
 			"kind": "column",
 			"table": "chat_sync_channel_authors",
-			"name": "firstSeenAt",
+			"name": "email",
 			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_authors",
+			"name": "firstSeenAt",
+			"position": 6,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1112,7 +1121,7 @@
 			"kind": "column",
 			"table": "chat_sync_channel_authors",
 			"name": "lastSeenAt",
-			"position": 6,
+			"position": 7,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

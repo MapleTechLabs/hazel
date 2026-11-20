@@ -632,6 +632,7 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 				yield* recordChannelAuthor({
 					provider,
 					hazelChannelId: link.hazelChannelId,
+					syncChannelLinkId: link.id,
 					externalUserId: payload.author.externalUserId,
 					email: payload.author.email,
 					externalWorkspaceId: payload.author.externalWorkspaceId,

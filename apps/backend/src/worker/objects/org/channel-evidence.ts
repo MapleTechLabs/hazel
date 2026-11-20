@@ -85,7 +85,7 @@ export const channelEvidence = Effect.fn("OrgObject.channelEvidence")(function* 
 				provider: $.connection.provider,
 				workspaceId: $.connection.externalWorkspaceId,
 				workspaceName: $.connection.externalWorkspaceName,
-				createdAt: $.createdAt,
+				linkId: $.id,
 			}))
 			.where(($) => [
 				$.isActive.eq(true),
@@ -109,13 +109,8 @@ export const channelEvidence = Effect.fn("OrgObject.channelEvidence")(function* 
 	const slackLinked = [...linksOf].flatMap(([channelId, list]) =>
 		list.some((link) => link.provider === "slack") ? [channelId] : [],
 	)
-	// Authors seen before the current mirror was made belong to a replaced one.
-	const slackSince = new Map<ChannelId, number>()
-	for (const link of links) {
-		if (link.provider !== "slack" || slackSince.has(link.channelId)) continue
-		// Ordered by `createdAt`: the first is the oldest live Slack link of the channel.
-		slackSince.set(link.channelId, link.createdAt.getTime())
-	}
+	// Only authors seen through a live Slack mirror: a replaced mirror's authors stay behind.
+	const liveSlackLinks = links.flatMap((link) => (link.provider === "slack" ? [link.linkId] : []))
 	const ownTeams = [
 		...new Set(links.flatMap((link) => (link.provider === "slack" ? [link.workspaceId] : []))),
 	]
@@ -127,6 +122,7 @@ export const channelEvidence = Effect.fn("OrgObject.channelEvidence")(function* 
 						.select("hazelChannelId", "externalWorkspaceId", "email", "lastSeenAt")
 						.where(($) => [
 							$.provider.eq("slack"),
+							inList($.syncChannelLinkId, liveSlackLinks),
 							$.externalWorkspaceId.isNotNull(),
 							SQLite.sql
 								.cond`${$.externalWorkspaceId} NOT IN (SELECT value FROM json_each(${JSON.stringify(ownTeams)}))`,
@@ -134,9 +130,7 @@ export const channelEvidence = Effect.fn("OrgObject.channelEvidence")(function* 
 						])
 						.orderBy(($) => [[$.lastSeenAt, "desc"]]),
 				)
-	const authors = authorRows.filter(
-		(author) => author.lastSeenAt.getTime() >= (slackSince.get(author.hazelChannelId) ?? Infinity),
-	)
+	const authors = authorRows
 	const externalTeamsOf = new Map<ChannelId, Set<string>>()
 	for (const author of authors) {
 		if (author.externalWorkspaceId === null) continue
