@@ -79,5 +79,7 @@ channel linked later, applies to past messages too.
   thread. First team reply: the first `team` message after a `customer` one, by `createdAt`.
 - An override changes past sides: `customers.chatAuthorChanged` is the signal to recompute what
   depends on that author.
+- Participants are history: unlinking keeps them, and the customer page lists them only while
+  the customer still has a linked channel.
 - The backfill gives participants only, not messages; history before the link does not open
   issues or SLAs.

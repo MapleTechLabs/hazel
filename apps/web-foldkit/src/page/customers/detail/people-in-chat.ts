@@ -86,6 +86,10 @@ const hasLinkedChannel = (model: Model): boolean => {
 	return model.channelLinks.some((link) => customerOf(link.accountId) === customer)
 }
 
+/** Who the section lists: participants are history, shown only while a channel is still linked. */
+export const shownChatPeople = (model: Model): ReadonlyArray<ChatPerson> =>
+	hasLinkedChannel(model) ? chatPeopleOfModel(model) : []
+
 // MENU
 
 export const ChatPersonKey = Schema.Literals(["mark_team", "mark_customer", "reset"])
@@ -193,7 +197,7 @@ export const peopleInChat = (
 	model: Model,
 	context: Context,
 ): ReadonlyArray<Html> => {
-	const people = chatPeopleOfModel(model)
+	const people = shownChatPeople(model)
 	if (people.length > 0) return people.map((person) => personRow(h, model, context, person))
 	return [
 		h.p(

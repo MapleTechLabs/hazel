@@ -46,7 +46,8 @@ import {
 	restoreNoteDraft,
 	writeNoteDrafts,
 } from "./note-drafts"
-import { chatPeopleOfModel, chatPersonEntries } from "./people-in-chat"
+import type { ChannelLinkRow } from "../../../customers/channels"
+import { chatPeopleOfModel, chatPersonEntries, shownChatPeople } from "./people-in-chat"
 import { init, routeChanged, update } from "./update"
 import { StartCustomerImpersonation } from "./commands"
 
@@ -762,6 +763,17 @@ describe("customer page: people in chat", () => {
 			["Mia", NOW],
 			["Linus", NOW - 60_000],
 		])
+	})
+
+	test("listed only while the customer still has a linked channel", () => {
+		const unlinked = run(withPeople, [Message.UpdatedChannelLinks({ links: [] })])
+		expect(shownChatPeople(unlinked)).toEqual([])
+		const linked = run(withPeople, [
+			Message.UpdatedChannelLinks({
+				links: [{ id: uuid(600), accountId: beta.id, channelId: uuid(500) } as ChannelLinkRow],
+			}),
+		])
+		expect(shownChatPeople(linked).map((person) => person.name)).toEqual(["Mia", "Linus"])
 	})
 
 	test("a person's menu marks them or resets the mark", () => {
