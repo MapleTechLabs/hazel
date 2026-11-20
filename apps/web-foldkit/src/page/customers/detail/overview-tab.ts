@@ -471,7 +471,7 @@ const environmentLink = (
 	const group = groupOfModel(model)
 	const accountId = signal.evidence._tag === "limit" ? signal.evidence.accountId : undefined
 	const account = group.find((candidate) => candidate.id === accountId)
-	return account === undefined || group.length < 2
+	return account === undefined || account.id === model.accountId || group.length < 2
 		? []
 		: [
 				h.a(
