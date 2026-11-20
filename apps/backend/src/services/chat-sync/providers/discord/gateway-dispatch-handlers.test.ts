@@ -101,6 +101,29 @@ describe("Discord gateway dispatch handlers", () => {
 		expect(harness.routed).toHaveLength(0)
 	})
 
+	it("drops system MESSAGE_CREATE notices such as a thread-created notice", async () => {
+		const harness = makeDispatchHarness()
+		await run(
+			harness.handlers.ingestMessageCreateEvent({
+				id: "223456789012345680",
+				channel_id: channelId,
+				type: 18,
+				content: "a thread's name",
+				author: { id: "323456789012345678", username: "fiws" },
+			}),
+		)
+		await run(
+			harness.handlers.ingestMessageCreateEvent({
+				id: "223456789012345681",
+				channel_id: channelId,
+				type: 19,
+				content: "a reply",
+				author: { id: "323456789012345678", username: "fiws" },
+			}),
+		)
+		expect(harness.routed).toHaveLength(1)
+	})
+
 	it("derives a hash-based MESSAGE_UPDATE dedupe key without an edited timestamp", async () => {
 		const harness = makeDispatchHarness()
 		await run(
