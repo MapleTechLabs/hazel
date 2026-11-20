@@ -435,6 +435,8 @@ export const stepSla = (ctx: SlaContext, state: SlaState, event: SlaEvent): SlaS
 		case "Opened":
 			return openSla(ctx, event.priority, at, event.customerWaiting)
 		case "TeamReply": {
+			// `isOpen` narrows a met or stopped clock away; keep the stored one for the late-delivery case.
+			const current: ReplyClock | null = state.reply
 			if (!isOpen(state.reply)) {
 				// A late delivery of an earlier reply moves the first response back.
 				const first = state.firstResponse
@@ -448,7 +450,7 @@ export const stepSla = (ctx: SlaContext, state: SlaState, event: SlaEvent): SlaS
 				return {
 					...state,
 					firstResponse: earlier,
-					reply: state.reply?.first === true ? earlier : state.reply,
+					reply: current?.first === true ? earlier : current,
 				}
 			}
 			const met: ReplyClock = {

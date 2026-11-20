@@ -41,7 +41,7 @@ An account's policy (`policyFor`): the first enabled policy naming it by id, els
 its plan or one of its tags, else the first default one; none = no SLA. Every org starts with
 **Standard** (business hours, any account): urgent 1 h / 8 h, high 2 h / 16 h, medium 4 h / 24 h,
 low 8 h / 40 h (first response / resolution, working time). Existing orgs get it from migration
-`0023_customer_sla_policies`.
+`0023_customer_slas`.
 
 RPCs (`CustomerSlaRpcs`, admins and owners): `customers.slaPolicy.create | update | delete |
 reorder` (the whole order, each live policy once) and `customers.businessHours.update`. A change

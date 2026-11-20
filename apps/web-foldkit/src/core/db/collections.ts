@@ -208,6 +208,10 @@ const customersCollection = <A extends { readonly id: string }>(table: string, s
 export const customerAccountCollection = customersCollection("customer_accounts", Customers.Account.Schema)
 export const customerSignalCollection = customersCollection("customer_signals", Customers.Signal.Schema)
 export const customerIssueCollection = customersCollection("customer_issues", Customers.Issue.Schema)
+export const customerIssueSlaCollection = customersCollection(
+	"customer_issue_slas",
+	Customers.IssueSla.Schema,
+)
 export const customerSignalRuleCollection = customersCollection(
 	"customer_signal_rules",
 	Customers.SignalRule.Schema,

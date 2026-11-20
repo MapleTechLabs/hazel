@@ -14,6 +14,7 @@ import type {
 	AttentionSettings,
 	BusinessHours,
 	SlaAppliesTo,
+	SlaState,
 	SlaTargets,
 	ConnectionConfig,
 	HealthBreakdown,
@@ -91,6 +92,7 @@ import {
 	CustomerViewLayoutId,
 	MessageId,
 	OrganizationId,
+	OrganizationMemberId,
 	UserId,
 } from "@hazel/schema"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
@@ -984,6 +986,36 @@ export const customerIssueMessagesTable = SQLite.table("customer_issue_messages"
 export type NewCustomerIssue = SQLite.InsertRowOf<typeof customerIssuesTable>
 
 /**
+ * An issue's SLA clocks (`docs/customers/sla.md` §4), one row per issue (`id` = the issue's id), written
+ * only by the hook on issue writes and the alarm. The policy's targets, hours and warning are kept as
+ * they were when the issue opened: a policy change applies to new issues.
+ */
+export const customerIssueSlasTable = SQLite.table("customer_issue_slas", {
+	columns: {
+		id: uuid(CustomerIssueId),
+		organizationId: uuid(OrganizationId),
+		accountId: uuid(CustomerAccountId),
+		/** Null once the policy was deleted (the snapshot below stays). */
+		policyId: SQLite.nullable(uuid(CustomerSlaPolicyId)),
+		policyName: SQLite.text,
+		targets: jsonb<SlaTargets>(),
+		hours: textEnum(SlaHours.literals),
+		warnBeforePct: SQLite.integer,
+		state: jsonb<SlaState>(),
+		/** The next warning or breach the alarm sends; null when none is pending. */
+		nextAlertAt: SQLite.nullable(timestamptz),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	primaryKey: ["id"],
+	indexes: [
+		SQLite.index("customer_issue_slas_next_alert_idx", ["nextAlertAt"]),
+		SQLite.index("customer_issue_slas_account_idx", ["accountId"]),
+	],
+})
+export type CustomerIssueSla = SQLite.SelectRowOf<typeof customerIssueSlasTable>
+
+/**
  * A feature flag created in Hazel. The flags the Feature flags page lists are these plus every key
  * in an account's `featureFlags` (what Clerk already holds), so a flag created here shows before any
  * customer has it. Deleting a flag removes it from every customer and deletes this row.
@@ -1054,6 +1086,8 @@ export const customerMembersTable = SQLite.table("customer_members", {
 	columns: {
 		userId: uuid(UserId),
 		role: textEnum(["owner", "admin", "member"]),
+		/** Their `organization_members` id (notifications are keyed by it); null until the next snapshot. */
+		memberId: SQLite.nullable(uuid(OrganizationMemberId)),
 	},
 	primaryKey: ["userId"],
 })

@@ -613,10 +613,14 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			],
 		},
 		{
-			id: "0023_customer_sla_policies",
+			id: "0023_customer_slas",
 			statements: [
+				'ALTER TABLE "customer_members" ADD COLUMN "memberId" text',
 				'ALTER TABLE "customer_settings" ADD COLUMN "businessHours" text NOT NULL DEFAULT \'{"timeZone":"UTC","days":[1,2,3,4,5],"start":"09:00","end":"17:00"}\'',
+				'CREATE TABLE IF NOT EXISTS "customer_issue_slas" (\n\t"id" text PRIMARY KEY NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"accountId" text NOT NULL,\n\t"policyId" text,\n\t"policyName" text NOT NULL,\n\t"targets" text NOT NULL,\n\t"hours" text NOT NULL,\n\t"warnBeforePct" integer NOT NULL,\n\t"state" text NOT NULL,\n\t"nextAlertAt" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
 				'CREATE TABLE IF NOT EXISTS "customer_sla_policies" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"organizationId" text NOT NULL,\n\t"name" text NOT NULL,\n\t"position" integer NOT NULL DEFAULT 0,\n\t"enabled" integer NOT NULL DEFAULT true,\n\t"appliesTo" text NOT NULL,\n\t"targets" text NOT NULL,\n\t"hours" text NOT NULL DEFAULT \'business\',\n\t"warnBeforePct" integer NOT NULL DEFAULT 25,\n\t"createdBy" text,\n\t"updatedBy" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"deletedAt" text\n)',
+				'CREATE INDEX IF NOT EXISTS "customer_issue_slas_account_idx" ON "customer_issue_slas" ("accountId")',
+				'CREATE INDEX IF NOT EXISTS "customer_issue_slas_next_alert_idx" ON "customer_issue_slas" ("nextAlertAt")',
 				'INSERT INTO "customer_sla_policies" ("organizationId", "name", "position", "enabled", "appliesTo", "targets", "hours", "warnBeforePct") SELECT "organizationId", \'Standard\', 0, 1, \'{"accountIds":[],"planNames":[],"tagsAny":[]}\', \'{"urgent":{"firstResponseMinutes":60,"resolutionMinutes":480},"high":{"firstResponseMinutes":120,"resolutionMinutes":960},"medium":{"firstResponseMinutes":240,"resolutionMinutes":1440},"low":{"firstResponseMinutes":480,"resolutionMinutes":2400}}\', \'business\', 25 FROM "customer_settings" WHERE NOT EXISTS (SELECT 1 FROM "customer_sla_policies")',
 			],
 		},

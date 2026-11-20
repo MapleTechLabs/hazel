@@ -2,7 +2,7 @@
  * Row models of the `customers` store (`@hazel/db` `tables/customers.ts`), in the shape the sync
  * stream and the RPCs carry them: timestamps as `JsonDate`, JSON columns parsed.
  *
- * Synced (client collections): `Account`, `Signal`, `SignalRule`, `SlaPolicy`, `Note`, `SavedView`, `ViewLayout`, `Settings`,
+ * Synced (client collections): `Account`, `Signal`, `SignalRule`, `SlaPolicy`, `IssueSla`, `Note`, `SavedView`, `ViewLayout`, `Settings`,
  * `MetricDefinition`, `Connection`, `SyncRun`, `ChannelLink`, `FeatureFlag`, `Impersonator`,
  * `Impersonation` (admins only), `Issue`. The rest travel in RPC results.
  */
@@ -69,7 +69,7 @@ import {
 import { SignalEvidence } from "./evidence"
 import { HealthSettings } from "./health"
 import { AttentionSettings, RuleConfig, RuleScope } from "./rules"
-import { BusinessHours, SlaAppliesTo, SlaHours, SlaTargets } from "./sla"
+import { BusinessHours, SlaAppliesTo, SlaHours, SlaState, SlaTargets } from "./sla"
 import { ListColumn, ViewColor, ViewFilters, ViewIcon, ViewLayoutKey, ViewSort } from "./views"
 
 const NullDate = S.NullOr(JsonDate)
@@ -275,6 +275,23 @@ class IssueModel extends M.Class<IssueModel>("CustomerIssue")({
 }) {}
 export const Issue = M.expose(IssueModel)
 export type Issue = typeof Issue.Schema.Type
+
+/** An issue's SLA clocks (`docs/customers/sla.md` §4); `id` is the issue's id. */
+class IssueSlaModel extends M.Class<IssueSlaModel>("CustomerIssueSla")({
+	id: CustomerIssueId,
+	organizationId: OrganizationId,
+	accountId: CustomerAccountId,
+	policyId: S.NullOr(CustomerSlaPolicyId),
+	policyName: S.String,
+	targets: SlaTargets,
+	hours: SlaHours,
+	warnBeforePct: S.Int,
+	state: SlaState,
+	nextAlertAt: NullDate,
+	...timestamps,
+}) {}
+export const IssueSla = M.expose(IssueSlaModel)
+export type IssueSla = typeof IssueSla.Schema.Type
 
 /** A feature flag created in Hazel (one no customer may hold yet); see `customer_feature_flags`. */
 class FeatureFlagModel extends M.Class<FeatureFlagModel>("CustomerFeatureFlag")({
