@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest"
-import { displayNameOf, PUSH_BODY_MAX, pushBody, pushConversation, pushPath, pushTitle } from "./push-content"
+import {
+	displayNameOf,
+	PUSH_AVATAR_URL_MAX,
+	PUSH_BODY_MAX,
+	pushAvatarUrl,
+	pushBody,
+	pushConversation,
+	pushPath,
+	pushTitle,
+} from "./push-content"
 import type { ChannelId } from "@hazel/schema"
 
 const names = new Map([["u-1", "Grace Hopper"]])
@@ -35,6 +44,13 @@ describe("push content", () => {
 		expect(pushConversation({ type: "thread", name: "Thread" }, { type: "single", name: "x" })).toBe(
 			"thread",
 		)
+	})
+
+	it("keeps an avatar URL only while it fits the push", () => {
+		expect(pushAvatarUrl("https://cdn.example.com/ada.png")).toBe("https://cdn.example.com/ada.png")
+		expect(pushAvatarUrl(`https://cdn.example.com/${"a".repeat(PUSH_AVATAR_URL_MAX)}`)).toBeUndefined()
+		expect(pushAvatarUrl(null)).toBeUndefined()
+		expect(pushAvatarUrl("")).toBeUndefined()
 	})
 
 	it("names users, with a fallback", () => {

@@ -18,6 +18,15 @@ import type { PushContent } from "../user/push"
 
 export const PUSH_BODY_MAX = 180
 
+/**
+ * The longest avatar URL a push carries: APNs refuses a payload over 4 KB outright (the push is
+ * lost), and a URL's length is not otherwise bounded. A longer one leaves the push without a picture.
+ */
+export const PUSH_AVATAR_URL_MAX = 1024
+
+export const pushAvatarUrl = (url: string | null | undefined) =>
+	url && url.length <= PUSH_AVATAR_URL_MAX ? url : undefined
+
 /** Mentioned users whose names are looked up (Durable Object SQLite binds at most 100 parameters). */
 const MAX_NAMED_USERS = 50
 
@@ -151,7 +160,7 @@ export const loadPushContent = Effect.fn("OrgObject.pushContent")(function* (inp
 	return {
 		title: pushTitle(authorName, channel.value, Option.getOrUndefined(parent)),
 		body: pushBody(input.content, input.attachmentCount, names),
-		sender: { id: input.authorId, name: authorName, avatarUrl: author?.avatarUrl ?? undefined },
+		sender: { id: input.authorId, name: authorName, avatarUrl: pushAvatarUrl(author?.avatarUrl) },
 		conversation: pushConversation(channel.value, Option.getOrUndefined(parent)),
 		...Option.match(
 			Option.flatMap(organization, (row) => Option.fromNullishOr(pushPath(row.slug, input.channelId))),

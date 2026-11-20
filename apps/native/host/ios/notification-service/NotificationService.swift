@@ -49,7 +49,7 @@ final class NotificationService: UNNotificationServiceExtension {
 			let avatar = sender["avatarUrl"] as? String,
 			let url = URL(string: avatar),
 			url.scheme == "https" || url.scheme == "http"
-		else { return finish(Self.content(request.content, from: from, png: nil)) }
+		else { return Self.content(request.content, from: from, png: nil, then: finish) }
 
 		var download = URLRequest(url: url)
 		download.timeoutInterval = Self.pictureTimeout
@@ -57,7 +57,7 @@ final class NotificationService: UNNotificationServiceExtension {
 			let ok = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
 			if let error { NSLog("[notification-service] picture: %@", error.localizedDescription) }
 			let png = ok ? data.flatMap(Self.squarePng) : nil
-			self.finish(Self.content(request.content, from: from, png: png))
+			Self.content(request.content, from: from, png: png, then: self.finish)
 		}
 		lock.lock()
 		self.task = task
@@ -95,15 +95,28 @@ final class NotificationService: UNNotificationServiceExtension {
 		Bundle.main.object(forInfoDictionaryKey: "HazelCommunicationNotifications") as? Bool ?? false
 	}
 
-	/// `content` as a message from `from`, or with the picture attached when it cannot be one.
-	static func content(_ content: UNNotificationContent, from: Sender, png: Data?) -> UNNotificationContent {
-		if communication {
-			do {
-				return try message(content, from: from, png: png)
-			} catch {
+	/// Hands `then` the content as a message from `from`, or with the picture attached when it
+	/// cannot be one.
+	static func content(
+		_ content: UNNotificationContent,
+		from: Sender,
+		png: Data?,
+		then: @escaping (UNNotificationContent) -> Void
+	) {
+		guard communication else { return then(attached(content, png: png)) }
+		message(content, from: from, png: png) { result in
+			switch result {
+			case .success(let message):
+				then(message)
+			case .failure(let error):
 				NSLog("[notification-service] as a message: %@", error.localizedDescription)
+				then(attached(content, png: png))
 			}
 		}
+	}
+
+	/// `content` with the picture attached, which shows beside the text.
+	private static func attached(_ content: UNNotificationContent, png: Data?) -> UNNotificationContent {
 		guard let png, let attachment = attachment(png) else { return content }
 		guard let mutable = content.mutableCopy() as? UNMutableNotificationContent else { return content }
 		mutable.attachments = [attachment]
@@ -122,11 +135,15 @@ final class NotificationService: UNNotificationServiceExtension {
 		)
 	}
 
-	/// The incoming message donated to the system, and `content` updated from it. A channel's
-	/// message is a group conversation (more than one recipient), named and pictured by the sender.
-	private static func message(_ content: UNNotificationContent, from: Sender, png: Data?) throws
-		-> UNNotificationContent
-	{
+	/// The incoming message donated to the system, then `content` updated from it once the donation
+	/// is in. A channel's message is a group conversation (more than one recipient), named and
+	/// pictured by the sender.
+	private static func message(
+		_ content: UNNotificationContent,
+		from: Sender,
+		png: Data?,
+		then: @escaping (Result<UNNotificationContent, Error>) -> Void
+	) {
 		let image = png.map { INImage(imageData: $0) }
 		let sender = person(id: from.id, name: from.name, image: image, isMe: false)
 		let groupName = from.conversation.map { INSpeakableString(spokenPhrase: $0) }
@@ -146,8 +163,10 @@ final class NotificationService: UNNotificationServiceExtension {
 		}
 		let interaction = INInteraction(intent: intent, response: nil)
 		interaction.direction = .incoming
-		interaction.donate(completion: nil)
-		return try content.updating(from: intent)
+		interaction.donate { error in
+			if let error { NSLog("[notification-service] donation: %@", error.localizedDescription) }
+			then(Result { try content.updating(from: intent) })
+		}
 	}
 
 	/// `png` as an attachment, through a file of its own (the system moves it into its store).
@@ -178,7 +197,9 @@ final class NotificationService: UNNotificationServiceExtension {
 		let format = UIGraphicsImageRendererFormat()
 		format.scale = 1
 		return UIGraphicsImageRenderer(size: CGSize(width: out, height: out), format: format).pngData { _ in
-			UIImage(cgImage: square).draw(in: CGRect(x: 0, y: 0, width: out, height: out))
+			// The crop is in the pixels' own frame; the photo's orientation (EXIF) still applies.
+			UIImage(cgImage: square, scale: 1, orientation: picture.imageOrientation)
+				.draw(in: CGRect(x: 0, y: 0, width: out, height: out))
 		}
 	}
 }
