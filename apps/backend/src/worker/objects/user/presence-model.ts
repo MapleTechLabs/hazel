@@ -13,6 +13,7 @@
  */
 import type { schema } from "@hazel/db"
 import type { ChannelId } from "@hazel/schema"
+import { Match } from "effect"
 import { SESSION_TIMEOUT_MS } from "./presence-timing"
 
 export type PreferredStatus = schema.UserPresenceSettings["status"]
@@ -69,16 +70,22 @@ export const isLive = (
 const statusOver = (
 	preferred: Exclude<PreferredStatus, "invisible">,
 	sessions: ReadonlyArray<Session>,
-): ClientStatus => {
-	switch (preferred) {
-		case "dnd":
-			return "dnd"
-		case "idle":
-			return "away"
-		case "online":
-			return sessions.some((session) => !session.idle) ? "online" : "away"
-	}
-}
+): ClientStatus =>
+	Match.value(preferred).pipe(
+		Match.withReturnType<ClientStatus>(),
+		Match.when("dnd", () => "dnd"),
+		Match.when("idle", () => "away"),
+		// Online while any session is in use, idle once every one is.
+		Match.when("online", () =>
+			Match.value(sessions.some((session) => !session.idle)).pipe(
+				Match.withReturnType<ClientStatus>(),
+				Match.when(true, () => "online"),
+				Match.when(false, () => "away"),
+				Match.exhaustive,
+			),
+		),
+		Match.exhaustive,
+	)
 
 /** The channel the user is reading: a focused session's, preferring one in use, then the latest. */
 const activeChannelOf = (sessions: ReadonlyArray<Session>): ChannelId | null => {

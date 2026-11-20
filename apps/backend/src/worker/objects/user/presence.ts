@@ -21,7 +21,7 @@ import { Database, SQLite, schema } from "@hazel/db"
 import type { SyncPresence } from "@hazel/domain/sync"
 import { ChannelId, type OrganizationId, UserId } from "@hazel/schema"
 import { type SyncObjectState, type SyncSocket, socketSessionId } from "@hazel/sync-do"
-import { Clock, Effect, Option, Schema } from "effect"
+import { Clock, Effect, Match, Option, Schema } from "effect"
 import { OrgEffects } from "../effects/org-effects"
 import { enqueueEffect } from "../effects/registry"
 import { orgTarget } from "../kinds"
@@ -335,22 +335,15 @@ export const applyLegacyUpdate = Effect.fn("UserObject.applyLegacyUpdate")(funct
 			const current = Option.getOrUndefined(yield* findPreference(userId))
 			if (current?.status !== "invisible") yield* writePreference(userId, status, null, now)
 		})
-	switch (payload.status) {
-		case "away":
-			yield* patchLegacySessions({ idle: true, afk: true })
-			break
-		case "busy":
-		case "dnd":
-			yield* pickUnlessInvisible("dnd")
-			break
-		case "online":
-			yield* patchLegacySessions({ idle: false, afk: false })
-			yield* pickUnlessInvisible("online")
-			break
-		case "offline":
-		case undefined:
-			break
-	}
+	yield* Match.value(payload.status).pipe(
+		Match.when("away", () => patchLegacySessions({ idle: true, afk: true })),
+		Match.whenOr("busy", "dnd", () => pickUnlessInvisible("dnd")),
+		Match.when("online", () =>
+			Effect.andThen(patchLegacySessions({ idle: false, afk: false }), pickUnlessInvisible("online")),
+		),
+		Match.whenOr("offline", Match.undefined, () => Effect.void),
+		Match.exhaustive,
+	)
 })
 
 /** The sendBeacon from an older client's unload: its sessions end now. */
