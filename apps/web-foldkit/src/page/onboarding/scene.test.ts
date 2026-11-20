@@ -22,6 +22,7 @@ import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
 import {
 	CompleteOnboarding,
+	ClearOnboardingAnswers,
 	LoadOnboardingHome,
 	ReplaceOnboardingStepUrl,
 	SendInvites,
@@ -198,6 +199,7 @@ describe("onboarding flow", () => {
 			Command.resolveAll(
 				[ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()],
 				[LoadOnboardingHome, Message.CompletedLoadHome()],
+				[ClearOnboardingAnswers, Message.CompletedStoreAnswers()],
 			),
 		)
 	})

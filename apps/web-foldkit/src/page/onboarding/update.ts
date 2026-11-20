@@ -13,9 +13,11 @@ import * as ChatMigration from "../shared/chat-migration"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
 import {
+	ClearOnboardingAnswers,
 	DebounceTimezoneQuery,
 	LoadOnboardingHome,
 	ReadBrowserTimezone,
+	ReadOnboardingAnswers,
 	SendInvites,
 	UpdateProfile,
 	UpdateUserTimezone,
@@ -60,10 +62,16 @@ export const init = (route: RouteOf<"Onboarding">, shared: Shared): Return => {
 		urlStep: Option.getOrNull(route.step),
 		orgId: Option.getOrNull(route.orgId),
 		phase: Phase.Starting({ membership: Option.none(), browserTimezone: Option.none() }),
+		restoredData: null,
 		interaction: Interaction.init(),
 	}
 	const redirected = redirectIfOnboarded(model, shared)
-	return { ...redirected, commands: [ReadBrowserTimezone()] }
+	// Back on the import step from a provider's OAuth: the answers given before it come back.
+	const isImport = Option.getOrNull(route.step) === "import"
+	return {
+		...redirected,
+		commands: [ReadBrowserTimezone(), ...(isImport ? [ReadOnboardingAnswers()] : [])],
+	}
 }
 
 const isStep = <Tag extends StepState["_tag"]>(step: StepState, tag: Tag): step is StepOf<Tag> =>
@@ -321,6 +329,16 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				return { ...advanced, commands: [...commands, ...(advanced.commands ?? [])] }
 			}),
 
+		RestoredAnswers: ({ data }) => {
+			if (data === null) return { model }
+			return Phase.match(model.phase, {
+				Starting: () => ({ model: modifyFields(model, { restoredData: () => data }) }),
+				Leaving: () => ({ model }),
+				Running: (running) => ({ model: withPhase(model, modifyFields(running, { data: () => data })) }),
+			})
+		},
+		CompletedStoreAnswers: () => ({ model }),
+
 		ChangedEmail: ({ rowId, value }) =>
 			withStep(model, "Invite", (form, running) => ({
 				model: setStep(
@@ -423,6 +441,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						LoadOnboardingHome({
 							href: hrefOf(slug ? AppRoute.OrgHome({ orgSlug: slug }) : AppRoute.Root()),
 						}),
+						ClearOnboardingAnswers(),
 					],
 				}
 			}),

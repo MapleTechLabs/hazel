@@ -150,8 +150,12 @@ const foldMigration = (model: Model, message: ChatMigration.Message, shared: Sha
 	const next = modifyFields(model, { migration: () => result.model })
 	const outcome = result.outcome
 	// Back from OAuth: open the modal on the step the wizard resumed at.
+	// Only a return from OAuth opens the modal by itself; a request finishing after the person
+	// closed it leaves it closed.
 	const resumed =
-		result.model.phase._tag !== "ChoosingProvider" && !model.migrationModal.isOpen
+		message._tag === "ReturnedFromProvider" &&
+		result.model.phase._tag !== "ChoosingProvider" &&
+		!model.migrationModal.isOpen
 			? openMigrationModal(next)
 			: { model: next }
 	if (outcome === undefined)
@@ -179,10 +183,15 @@ export const sharedChanged = (model: Model, shared: Shared): Return => {
 		migrationReturnTo(shared),
 	)
 	const next = modifyFields(listed.model, { migration: () => migration.model })
+	// A pending OAuth return resumes (and opens the modal); a switch to another org closes it.
+	const isResume = listed.model.migration.resumeProvider !== null
+	const isSwitch = listed.model.migration.organizationId !== null
 	const opened =
-		migration.model.phase._tag !== "ChoosingProvider" && !next.migrationModal.isOpen
+		isResume && migration.model.phase._tag !== "ChoosingProvider" && !next.migrationModal.isOpen
 			? openMigrationModal(next)
-			: { model: next }
+			: isSwitch && next.migrationModal.isOpen
+				? closeMigrationModal(next)
+				: { model: next }
 	return {
 		model: opened.model,
 		commands: [
@@ -442,8 +451,13 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			),
 		}),
 		ClickedConnect: () => submitConnection(model),
+		// A migration still running reopens as it is (its result must land); otherwise a fresh wizard.
 		ClickedImport: () =>
-			openMigrationModal(modifyFields(model, { migration: () => freshMigration(shared) })),
+			openMigrationModal(
+				ChatMigration.isBusy(model.migration)
+					? model
+					: modifyFields(model, { migration: () => freshMigration(shared) }),
+			),
 		// Closing it mid-way drops the wizard's progress (unless a request is running, which settles first).
 		GotMigrationModalMessage: ({ message: modalMessage }) => {
 			const result = foldMigrationModal(model, modalMessage)

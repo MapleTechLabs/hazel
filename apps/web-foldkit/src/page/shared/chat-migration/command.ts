@@ -50,8 +50,8 @@ export const ListChatMigrationWorkspaces = Command.define("ListChatMigrationWork
 	execute: ({ organizationId, provider }) =>
 		listResource(
 			PROVIDERS[provider].fetchWorkspaces(organizationId),
-			(workspaces) => Message.SucceededListWorkspaces({ provider, workspaces }),
-			(reason) => Message.FailedListWorkspaces({ provider, reason }),
+			(workspaces) => Message.SucceededListWorkspaces({ organizationId, provider, workspaces }),
+			(reason) => Message.FailedListWorkspaces({ organizationId, provider, reason }),
 		),
 })
 
@@ -64,7 +64,7 @@ export const PrepareChatMigrationWorkspace = Command.define("PrepareChatMigratio
 	execute: ({ organizationId, provider, workspace }) => {
 		const { name, copy } = PROVIDERS[provider]
 		const failed = (problem: Problem) =>
-			Effect.succeed(Message.FailedPrepare({ workspaceId: workspace.id, problem }))
+			Effect.succeed(Message.FailedPrepare({ organizationId, workspaceId: workspace.id, problem }))
 		// Straight from the RPC: the chat sync page's model imports this wizard.
 		const existing = HazelRpc.use((rpc) => rpc("chatSync.connection.list", { organizationId })).pipe(
 			Effect.map((response) =>
@@ -88,6 +88,7 @@ export const PrepareChatMigrationWorkspace = Command.define("PrepareChatMigratio
 				).pipe(Effect.map((response) => response.data.id)))
 			const channels = yield* PROVIDERS[provider].fetchChannels(organizationId, workspace.id)
 			return Message.SucceededPrepare({
+				organizationId,
 				workspaceId: workspace.id,
 				syncConnectionId,
 				channels: [...channels].sort((a, b) => a.name.localeCompare(b.name)),
@@ -120,7 +121,7 @@ export const PrepareChatMigrationWorkspace = Command.define("PrepareChatMigratio
 					}),
 			}),
 			catchCommon((reason) =>
-				Message.FailedPrepare({ workspaceId: workspace.id, problem: commonProblem(reason) }),
+				Message.FailedPrepare({ organizationId, workspaceId: workspace.id, problem: commonProblem(reason) }),
 			),
 		)
 	},
@@ -176,6 +177,7 @@ export const RunChatMigration = Command.define("RunChatMigration", {
 			yield* Render.afterCommit
 			const response = yield* HazelRpc.use((rpc) => rpc("chatSync.migrate", payload))
 			return Message.SucceededMigrate({
+				organizationId: payload.organizationId,
 				linked: response.linked.length,
 				created: response.linked.filter((link) => link.createdChannel).length,
 				skipped: response.skipped.length,
@@ -185,6 +187,7 @@ export const RunChatMigration = Command.define("RunChatMigration", {
 				ChatSyncConnectionNotFoundError: () =>
 					Effect.succeed(
 						Message.FailedMigrate({
+							organizationId: payload.organizationId,
 							problem: {
 								title: "Connection not found",
 								description: "The connection was removed meanwhile. Start again.",
@@ -193,6 +196,6 @@ export const RunChatMigration = Command.define("RunChatMigration", {
 						}),
 					),
 			}),
-			catchCommon((reason) => Message.FailedMigrate({ problem: commonProblem(reason) })),
+			catchCommon((reason) => Message.FailedMigrate({ organizationId: payload.organizationId, problem: commonProblem(reason) })),
 		),
 })

@@ -315,6 +315,12 @@ export const ImportHistoryPayload = Schema.Struct({
 	 * or absent: no cutoff.
 	 */
 	since: Schema.optional(Schema.NullOr(Schema.Number)),
+	/**
+	 * A migration's channels still to import once this one is done, in order: one import at a time,
+	 * so a large migration stays within the provider's rate limit. Each starts with `budget` messages.
+	 */
+	then: Schema.optional(Schema.Array(ExternalChannelId)),
+	budget: Schema.optional(Schema.Number),
 })
 export type ImportHistoryPayload = typeof ImportHistoryPayload.Type
 

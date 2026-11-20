@@ -18,7 +18,16 @@ import {
 	ReadChatMigrationOAuthReturn,
 	RedirectChatMigrationToProvider,
 } from "./command"
-import { DEFAULT_HISTORY, isBusy, isHistoryRange, Message, type Model, Phase, visibleChannels } from "./model"
+import {
+	CHAT_SYNC_MIGRATION_MAX_CHANNELS,
+	DEFAULT_HISTORY,
+	isBusy,
+	isHistoryRange,
+	Message,
+	type Model,
+	Phase,
+	visibleChannels,
+} from "./model"
 
 /** What the embedding page does after a step: nothing, a toast, or the wizard is over. */
 export type Outcome =
@@ -61,13 +70,20 @@ const prepare = (model: Model, provider: ChatSyncProvider, workspace: Workspace)
 				],
 			}
 
-/** The page's organization (and return path) as it becomes known; a pending OAuth return resumes. */
+/**
+ * The page's organization (and return path) as it becomes known; a pending OAuth return resumes.
+ * Switching to another organization starts the wizard over: nothing chosen under one carries into
+ * the other, and the earlier organization's replies are dropped (each names its organization).
+ */
 export const withOrganization = (
 	model: Model,
 	organizationId: OrganizationId | null,
 	returnTo: string,
 ): Return => {
-	const next: Model = { ...model, organizationId, returnTo }
+	const isSwitch = model.organizationId !== null && model.organizationId !== organizationId
+	const next: Model = isSwitch
+		? { ...model, organizationId, returnTo, phase: Phase.ChoosingProvider(), resumeProvider: null }
+		: { ...model, organizationId, returnTo }
 	const provider = model.resumeProvider
 	return provider !== null && organizationId !== null && model.phase._tag === "ChoosingProvider"
 		? load({ ...next, resumeProvider: null }, provider)
@@ -95,9 +111,10 @@ export const update = (model: Model, message: Message): Return =>
 		},
 		ClickedSkip: () => (isBusy(model) ? { model } : { model, outcome: { _tag: "Skipped" } }),
 
-		SucceededListWorkspaces: ({ provider, workspaces }) => {
+		SucceededListWorkspaces: ({ organizationId, provider, workspaces }) => {
 			const { phase } = model
-			if (phase._tag !== "Loading" || phase.provider !== provider) return { model }
+			if (organizationId !== model.organizationId || phase._tag !== "Loading" || phase.provider !== provider)
+				return { model }
 			const [only] = workspaces
 			if (only === undefined)
 				return {
@@ -107,9 +124,10 @@ export const update = (model: Model, message: Message): Return =>
 				return prepare(model, provider, only)
 			return { model: withPhase(model, Phase.PickingWorkspace({ provider, workspaces, search: "" })) }
 		},
-		FailedListWorkspaces: ({ provider, reason }) => {
+		FailedListWorkspaces: ({ organizationId, provider, reason }) => {
 			const { phase } = model
-			if (phase._tag !== "Loading" || phase.provider !== provider) return { model }
+			if (organizationId !== model.organizationId || phase._tag !== "Loading" || phase.provider !== provider)
+				return { model }
 			if (reason === "NotConnected")
 				return {
 					model: withPhase(model, Phase.NeedsAuthorization({ provider, isRedirecting: false })),
@@ -170,9 +188,10 @@ export const update = (model: Model, message: Message): Return =>
 				? prepare(model, model.phase.provider, workspace)
 				: { model },
 
-		SucceededPrepare: ({ workspaceId, syncConnectionId, channels }) => {
+		SucceededPrepare: ({ organizationId, workspaceId, syncConnectionId, channels }) => {
 			const { phase } = model
-			if (phase._tag !== "Preparing" || phase.workspace.id !== workspaceId) return { model }
+			if (organizationId !== model.organizationId || phase._tag !== "Preparing" || phase.workspace.id !== workspaceId)
+				return { model }
 			return {
 				model: withPhase(
 					model,
@@ -190,9 +209,10 @@ export const update = (model: Model, message: Message): Return =>
 				),
 			}
 		},
-		FailedPrepare: ({ workspaceId, problem }) => {
+		FailedPrepare: ({ organizationId, workspaceId, problem }) => {
 			const { phase } = model
-			if (phase._tag !== "Preparing" || phase.workspace.id !== workspaceId) return { model }
+			if (organizationId !== model.organizationId || phase._tag !== "Preparing" || phase.workspace.id !== workspaceId)
+				return { model }
 			return {
 				model: withPhase(
 					model,
@@ -245,6 +265,7 @@ export const update = (model: Model, message: Message): Return =>
 				phase._tag !== "PickingChannels" ||
 				phase.isSubmitting ||
 				phase.selected.length === 0 ||
+				phase.selected.length > CHAT_SYNC_MIGRATION_MAX_CHANNELS ||
 				model.organizationId === null
 			)
 				return { model }
@@ -266,9 +287,10 @@ export const update = (model: Model, message: Message): Return =>
 				],
 			}
 		},
-		SucceededMigrate: ({ linked, created, skipped }) => {
+		SucceededMigrate: ({ organizationId, linked, created, skipped }) => {
 			const { phase } = model
-			if (phase._tag !== "PickingChannels" || !phase.isSubmitting) return { model }
+			if (organizationId !== model.organizationId || phase._tag !== "PickingChannels" || !phase.isSubmitting)
+				return { model }
 			return {
 				model: withPhase(
 					model,
@@ -289,9 +311,9 @@ export const update = (model: Model, message: Message): Return =>
 				),
 			}
 		},
-		FailedMigrate: ({ problem }) => {
+		FailedMigrate: ({ organizationId, problem }) => {
 			const { phase } = model
-			if (phase._tag !== "PickingChannels") return { model }
+			if (organizationId !== model.organizationId || phase._tag !== "PickingChannels") return { model }
 			return {
 				model: withPhase(model, Phase.PickingChannels({ ...phase, isSubmitting: false })),
 				outcome: toast(errorToast(problem.title, problem.description || null)),

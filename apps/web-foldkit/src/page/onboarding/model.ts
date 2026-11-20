@@ -113,6 +113,8 @@ export const Model = Schema.Struct({
 	urlStep: Schema.NullOr(Schema.String),
 	orgId: Schema.NullOr(OrganizationId),
 	phase: Phase,
+	/** Answers kept across the import step's OAuth redirect, read before the flow starts. */
+	restoredData: Schema.NullOr(Data),
 	/** Focus and hover state for the form fields (React Aria's `data-focused` and friends). */
 	interaction: Interaction.Model,
 })

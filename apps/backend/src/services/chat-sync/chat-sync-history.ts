@@ -105,20 +105,44 @@ export const withinCutoff = (
 	return { messages: kept, reachedCutoff }
 }
 
+/** A migration's next channel, once this one is done (finished, unlinked, or failed for good). */
+const importNext = (payload: ImportHistoryPayload, delayMs: number) => {
+	const [next, ...rest] = payload.then ?? []
+	if (next === undefined) return Effect.void
+	return enqueueEffect(
+		ChatSyncHistoryEffects.importHistory,
+		{ kind: "chat-sync" },
+		{
+			provider: payload.provider,
+			externalWorkspaceId: payload.externalWorkspaceId,
+			externalChannelId: next,
+			remaining: payload.budget ?? payload.remaining,
+			cursor: null,
+			since: payload.since ?? null,
+			then: rest,
+			budget: payload.budget ?? payload.remaining,
+		},
+		{ delayMs },
+	)
+}
+
 export const importChatSyncHistory = Effect.fn("ChatSync.importHistory")(function* (
 	payload: ImportHistoryPayload,
 ) {
+	const { definition } = yield* (yield* ChatSyncProviders).get(payload.provider)
+	const done = importNext(payload, definition.history.pageDelayMs)
 	yield* Effect.annotateCurrentSpan({
 		"chat_sync.provider": payload.provider,
 		"chat_sync.external_channel_id": payload.externalChannelId,
 		"chat_sync.history.remaining": payload.remaining,
 		"chat_sync.history.first_page": payload.cursor === null,
 	})
-	if (payload.remaining <= 0) return
+	if (payload.remaining <= 0) return yield* done
 	if (!(yield* isStillLinked(payload))) {
-		return yield* Effect.annotateCurrentSpan({ "chat_sync.outcome": "unlinked" })
+		yield* Effect.annotateCurrentSpan({ "chat_sync.outcome": "unlinked" })
+		return yield* done
 	}
-	const { definition, client } = yield* (yield* ChatSyncProviders).get(payload.provider)
+	const { client } = yield* (yield* ChatSyncProviders).get(payload.provider)
 	const target = {
 		externalWorkspaceId: payload.externalWorkspaceId,
 		externalChannelId: payload.externalChannelId,
@@ -145,19 +169,25 @@ export const importChatSyncHistory = Effect.fn("ChatSync.importHistory")(functio
 					}).pipe(Effect.as(Option.none())),
 		),
 	)
-	if (Option.isNone(page)) return yield* Effect.annotateCurrentSpan({ "chat_sync.outcome": "failed" })
+	if (Option.isNone(page)) {
+		yield* Effect.annotateCurrentSpan({ "chat_sync.outcome": "failed" })
+		return yield* done
+	}
 
+	// Thread replies count too: a page never imports more than what is left of the budget (the last
+	// parent's replies are cut short when they would cross it).
 	const window = withinCutoff(page.value.messages, payload.since)
-	const payloads = yield* payloadsOf(window.messages)
+	const budgeted = window.messages.slice(0, payload.remaining)
+	const payloads = yield* payloadsOf(budgeted)
 	yield* Effect.forEach(payloads, ingestChatSyncHere, { discard: true })
 
-	const remaining = payload.remaining - limit
+	const remaining = payload.remaining - Math.max(limit, budgeted.length)
 	yield* Effect.annotateCurrentSpan({
 		"chat_sync.history.imported": payloads.length,
 		"chat_sync.history.reached_cutoff": window.reachedCutoff,
 		"chat_sync.outcome": "imported",
 	})
-	if (page.value.cursor === null || remaining <= 0 || window.reachedCutoff) return
+	if (page.value.cursor === null || remaining <= 0 || window.reachedCutoff) return yield* done
 	yield* enqueueEffect(
 		ChatSyncHistoryEffects.importHistory,
 		{ kind: "chat-sync" },

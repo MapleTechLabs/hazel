@@ -22,6 +22,7 @@ import {
 	ChatSyncProviderConfigurationError,
 	type ChatSyncLinkContext,
 	isRetryableStatus,
+	notInWorkspaceError,
 } from "../../provider"
 import { discord, discordWebhookConfigOf } from "./definition"
 import { discordHistoryInbound } from "./gateway-dispatch"
@@ -207,8 +208,15 @@ export const makeDiscordClient = Effect.gen(function* () {
 		})
 
 	const client: ChatSyncClient = {
-		// The bot is in every channel of a guild it was added to.
-		prepareLink: () => Effect.void,
+		// The bot is in every channel of a guild it was added to; the one shared bot is in other
+		// guilds too, so the channel must be this guild's own (a link names any channel id).
+		prepareLink: Effect.fn("DiscordChatSyncClient.prepareLink")(function* (link) {
+			yield* requireIds({ channelId: link.externalChannelId })
+			const channels = yield* viaBot((token) => api.listGuildChannels(link.externalWorkspaceId, token))
+			if (!channels.some((channel) => channel.id === link.externalChannelId)) {
+				return yield* notInWorkspaceError("discord")
+			}
+		}),
 		fetchHistory: Effect.fn("DiscordChatSyncClient.fetchHistory")(function* (params) {
 			yield* requireIds({ channelId: params.externalChannelId, before: params.cursor ?? undefined })
 			// Newest first; `before` the oldest one seen walks back in time.

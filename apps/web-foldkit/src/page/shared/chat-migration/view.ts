@@ -14,7 +14,7 @@ import {
 	PROVIDERS,
 	type Workspace,
 } from "../../settings/chat-sync/providers"
-import { HISTORY_OPTIONS, isBusy, Message, type Model, Phase, type Problem, visibleChannels } from "./model"
+import { CHAT_SYNC_MIGRATION_MAX_CHANNELS, historyOptions, isBusy, Message, type Model, Phase, type Problem, visibleChannels } from "./model"
 
 /**
  * The wizard as parts its page lays out: the step's title and description, its body, its Back (or
@@ -191,6 +191,7 @@ const pickingChannels = <P>(
 	const shownSelected = shown.filter((channel) => selected.has(channel.id)).length
 	const allShownSelected = shown.length > 0 && shownSelected === shown.length
 	const count = phase.selected.length
+	const isOverLimit = count > CHAT_SYNC_MIGRATION_MAX_CHANNELS
 	return {
 		title: `Choose what to bring from ${phase.workspace.name}`,
 		description: `Each ${name} channel gets a Hazel channel, kept in sync both ways from now on.`,
@@ -205,8 +206,12 @@ const pickingChannels = <P>(
 							[
 								label(h, {}, ["Channels"]),
 								h.span(
-									[h.Class("text-muted-fg text-xs")],
-									[`${count} of ${phase.channels.length} selected`],
+									[h.Class(isOverLimit ? "text-danger text-xs" : "text-muted-fg text-xs")],
+									[
+										isOverLimit
+											? `${count} selected, up to ${CHAT_SYNC_MIGRATION_MAX_CHANNELS} at a time`
+											: `${count} of ${phase.channels.length} selected`,
+									],
 								),
 							],
 						),
@@ -271,7 +276,7 @@ const pickingChannels = <P>(
 						parts.label(["History to import"]),
 						h.div(
 							[h.Class("grid grid-cols-1 gap-2 sm:grid-cols-2")],
-							HISTORY_OPTIONS.map((option) =>
+							historyOptions(phase.provider).map((option) =>
 								parts.radio(
 									option.value,
 									[
@@ -306,7 +311,7 @@ const pickingChannels = <P>(
 				h,
 				{
 					intent: "primary",
-					isDisabled: count === 0,
+					isDisabled: count === 0 || isOverLimit,
 					isPending: phase.isSubmitting,
 					onPress: wrap(Message.ClickedMigrate()),
 					attributes: [h.DataAttribute("testid", "chat-migration-go")],
@@ -316,6 +321,8 @@ const pickingChannels = <P>(
 						? "Starting..."
 						: count === 0
 							? "Pick a channel"
+							: isOverLimit
+								? `Pick up to ${CHAT_SYNC_MIGRATION_MAX_CHANNELS}`
 							: `Migrate ${count} channel${count === 1 ? "" : "s"}`,
 				],
 			),

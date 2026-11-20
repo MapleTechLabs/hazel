@@ -6,7 +6,7 @@ import * as ChatMigration from "../shared/chat-migration"
 import type { Resources } from "../../rpc"
 import * as ChoiceBox from "../../ui/choice-box"
 import type { PageReturn, Shared } from "../contract"
-import { CompleteOnboarding, ReplaceOnboardingStepUrl } from "./command"
+import { CompleteOnboarding, ReplaceOnboardingStepUrl, StoreOnboardingAnswers } from "./command"
 import { type Direction, nextStep, previousStep, type Step, stepFromUrl } from "./flow"
 import { Message } from "./message"
 import {
@@ -114,7 +114,9 @@ export const enterStep = (
 				? [ReplaceOnboardingStepUrl({ href: onboardingHref(model.orgId, step) })]
 				: []),
 			...(step === "finalization" ? [completeOnboarding(next)] : []),
-			...(next.step._tag === "Import" ? migrationStart(next.step.migration) : []),
+			...(next.step._tag === "Import"
+				? [StoreOnboardingAnswers({ data: next.data }), ...migrationStart(next.step.migration)]
+				: []),
 		],
 	}
 }
@@ -177,7 +179,7 @@ export const startWhenReady = (
 				step: StepState.Welcome(),
 				direction: "forward",
 				animatesStep: false,
-				data: { timezone: null, useCases: [], role: null },
+				data: model.restoredData ?? { timezone: null, useCases: [], role: null },
 			})
 			return enterStep(model, running, stepFromUrl(model.urlStep, userType) ?? "welcome", {
 				direction: "forward",

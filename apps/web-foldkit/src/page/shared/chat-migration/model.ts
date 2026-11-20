@@ -5,7 +5,11 @@
  * it like `SuggestionPrompt`: it keeps the `Model`, wraps the `Message`, and folds `update`, whose
  * `outcome` says when to toast, or that the migration finished or was skipped.
  */
-import { ChatSyncHistoryRange } from "@hazel/domain/rpc"
+import {
+	CHAT_SYNC_MIGRATION_MAX_CHANNELS,
+	CHAT_SYNC_MIGRATION_MAX_MESSAGES,
+	ChatSyncHistoryRange,
+} from "@hazel/domain/rpc"
 import { ExternalChannelId, OrganizationId, SyncConnectionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
@@ -17,7 +21,7 @@ import {
 	Workspace,
 } from "../../settings/chat-sync/providers"
 
-export { ChatSyncHistoryRange }
+export { CHAT_SYNC_MIGRATION_MAX_CHANNELS, ChatSyncHistoryRange }
 
 /** Why a step failed, as the wizard says it. */
 export const Problem = Schema.Struct({
@@ -86,8 +90,12 @@ export const Message = defineMessageUnion({
 	ClickedProvider: { provider: ChatSyncProvider },
 	ClickedBack: {},
 	ClickedSkip: {},
-	SucceededListWorkspaces: { provider: ChatSyncProvider, workspaces: Schema.Array(Workspace) },
-	FailedListWorkspaces: { provider: ChatSyncProvider, reason: ResourceFailure },
+	SucceededListWorkspaces: {
+		organizationId: OrganizationId,
+		provider: ChatSyncProvider,
+		workspaces: Schema.Array(Workspace),
+	},
+	FailedListWorkspaces: { organizationId: OrganizationId, provider: ChatSyncProvider, reason: ResourceFailure },
 	ClickedAuthorize: {},
 	SucceededGetOAuthUrl: { authorizationUrl: Schema.String },
 	FailedGetOAuthUrl: { problem: Problem },
@@ -95,11 +103,12 @@ export const Message = defineMessageUnion({
 	ChangedWorkspaceSearch: { value: Schema.String },
 	ClickedWorkspace: { workspace: Workspace },
 	SucceededPrepare: {
+		organizationId: OrganizationId,
 		workspaceId: Schema.String,
 		syncConnectionId: SyncConnectionId,
 		channels: Schema.Array(ExternalChannel),
 	},
-	FailedPrepare: { workspaceId: Schema.String, problem: Problem },
+	FailedPrepare: { organizationId: OrganizationId, workspaceId: Schema.String, problem: Problem },
 	ClickedRetry: {},
 	ChangedChannelSearch: { value: Schema.String },
 	ToggledChannel: { channelId: ExternalChannelId, isSelected: Schema.Boolean },
@@ -107,25 +116,36 @@ export const Message = defineMessageUnion({
 	ToggledAll: { isSelected: Schema.Boolean },
 	ClickedHistory: { history: Schema.String },
 	ClickedMigrate: {},
-	SucceededMigrate: { linked: Schema.Number, created: Schema.Number, skipped: Schema.Number },
-	FailedMigrate: { problem: Problem },
+	SucceededMigrate: {
+		organizationId: OrganizationId,
+		linked: Schema.Number,
+		created: Schema.Number,
+		skipped: Schema.Number,
+	},
+	FailedMigrate: { organizationId: OrganizationId, problem: Problem },
 	ClickedFinish: {},
 	ClickedMigrateMore: {},
 })
 export type Message = typeof Message.Type
 
-export const HISTORY_OPTIONS: ReadonlyArray<{
+export interface HistoryOption {
 	readonly value: ChatSyncHistoryRange
 	readonly label: string
 	readonly description: string
-}> = [
-	{ value: "none", label: "No history", description: "Only new messages from now on" },
-	{ value: "7d", label: "Last 7 days", description: "A quick start with recent context" },
-	{ value: "30d", label: "Last 30 days", description: "Recommended for most teams" },
-	{ value: "90d", label: "Last 90 days", description: "The last quarter of conversations" },
-	{ value: "1y", label: "Last year", description: "Takes a while on busy channels" },
-	{ value: "all", label: "Everything", description: "Up to 50,000 messages per channel" },
-]
+}
+
+/** The ranges a migration offers; every one stops at the provider's per-channel cap. */
+export const historyOptions = (provider: ChatSyncProvider): ReadonlyArray<HistoryOption> => {
+	const cap = CHAT_SYNC_MIGRATION_MAX_MESSAGES[provider].toLocaleString("en-US")
+	return [
+		{ value: "none", label: "No history", description: "Only new messages from now on" },
+		{ value: "7d", label: "Last 7 days", description: "A quick start with recent context" },
+		{ value: "30d", label: "Last 30 days", description: "Recommended for most teams" },
+		{ value: "90d", label: "Last 90 days", description: "The last quarter of conversations" },
+		{ value: "1y", label: "Last year", description: "Takes a while on busy channels" },
+		{ value: "all", label: "Everything", description: `Up to ${cap} messages per channel` },
+	]
+}
 
 export const DEFAULT_HISTORY: ChatSyncHistoryRange = "30d"
 

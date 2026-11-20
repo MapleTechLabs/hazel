@@ -89,8 +89,12 @@ export class ChatSyncChannelLinkExistsError extends Schema.TaggedError<ChatSyncC
 export const ChatSyncHistoryRange = Schema.Literals(["none", "7d", "30d", "90d", "1y", "all"])
 export type ChatSyncHistoryRange = typeof ChatSyncHistoryRange.Type
 
-/** The most messages a migration imports per channel, whatever the range. */
-export const CHAT_SYNC_MIGRATION_MAX_MESSAGES = 50_000
+/**
+ * The most messages (thread replies included) a migration imports per channel, whatever the range,
+ * per provider. A migration imports its channels one after another at the provider's pace, so the
+ * cap keeps a large workspace's import to hours, not days (Slack pages 20 messages every 1.5s).
+ */
+export const CHAT_SYNC_MIGRATION_MAX_MESSAGES = { discord: 10_000, slack: 2_000 } as const
 
 /** The most channels one `chatSync.migrate` call takes. */
 export const CHAT_SYNC_MIGRATION_MAX_CHANNELS = 500

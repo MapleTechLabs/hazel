@@ -83,6 +83,8 @@ export interface TestObjects {
 	readonly chatSyncPrepared: Array<string>
 	/** Each external channel's past messages, oldest first, for `chatSync.importHistory`. */
 	readonly chatSyncHistory: Map<string, ReadonlyArray<ChatSyncInbound>>
+	/** External channels outside their connection's workspace (`prepareLink` refuses them). */
+	readonly chatSyncForeign: Set<string>
 	/** Make provider calls fail with `status` (retryable for 429/5xx), or succeed again (undefined). */
 	readonly setChatSyncFailure: (status: number | undefined) => void
 	/** What `ThreadNamer` was asked to name, in order. */
@@ -367,6 +369,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			chatSyncCalls: chatSync.calls,
 			chatSyncPrepared: chatSync.prepared,
 			chatSyncHistory: chatSync.history,
+			chatSyncForeign: chatSync.foreign,
 			setChatSyncFailure: (status) => {
 				chatSync.control.fail = status
 			},

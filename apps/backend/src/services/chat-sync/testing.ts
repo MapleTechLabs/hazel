@@ -3,7 +3,12 @@ import type { ExternalMessageId, ExternalThreadId } from "@hazel/schema"
 import { Effect, Layer, Option } from "effect"
 import type { ChatSyncInbound } from "./chat-sync-inbound"
 import { ChatSyncProviders, chatSyncProvidersOf } from "./chat-sync-providers"
-import { type ChatSyncClient, ChatSyncProviderApiError, type ChatSyncProviderId } from "./provider"
+import {
+	type ChatSyncClient,
+	ChatSyncProviderApiError,
+	type ChatSyncProviderId,
+	notInWorkspaceError,
+} from "./provider"
 import { chatSyncProviders } from "./providers"
 
 /** One provider call a recording client saw. */
@@ -28,6 +33,8 @@ export const makeRecordingChatSyncProviders = (options?: { readonly attachmentPu
 	const history = new Map<string, ReadonlyArray<ChatSyncInbound>>()
 	/** External channels a new link prepared (kept apart: every link makes one). */
 	const prepared: Array<string> = []
+	/** External channels outside their connection's workspace: `prepareLink` refuses them. */
+	const foreign = new Set<string>()
 	const control: { fail: number | undefined } = { fail: undefined }
 	let counter = 0
 	const nextId = () => `${900000000000000000 + ++counter}`
@@ -48,7 +55,10 @@ export const makeRecordingChatSyncProviders = (options?: { readonly attachmentPu
 				return Effect.succeed(value())
 			})
 		return {
-			prepareLink: (link) => Effect.sync(() => void prepared.push(link.externalChannelId)),
+			prepareLink: (link) =>
+				foreign.has(link.externalChannelId)
+					? Effect.fail(notInWorkspaceError(provider))
+					: Effect.sync(() => void prepared.push(link.externalChannelId)),
 			fetchHistory: (params) =>
 				record({ op: "fetchHistory", externalChannelId: params.externalChannelId }, () => {
 					const all = history.get(params.externalChannelId) ?? []
@@ -130,5 +140,5 @@ export const makeRecordingChatSyncProviders = (options?: { readonly attachmentPu
 		),
 	)
 
-	return { layer, calls, prepared, control, history }
+	return { layer, calls, prepared, control, history, foreign }
 }

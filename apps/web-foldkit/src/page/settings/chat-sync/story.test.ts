@@ -4,6 +4,8 @@ import { OrganizationId, SyncConnectionId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import * as Menu from "../../../ui/menu"
+import * as Modal from "../../../ui/modal"
+import * as ChatMigration from "../../shared/chat-migration"
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
@@ -457,5 +459,27 @@ describe("chat sync providers", () => {
 				}),
 			),
 		)
+	})
+
+	test("the import wizard: a closed modal stays closed, and reopening keeps a running request", () => {
+		const migrate = (message: ChatMigration.Message) => Message.GotMigrationMessage({ message })
+		const opened = updateWithShared(init(undefined, shared).model, Message.ClickedImport())
+		expect(opened.model.migrationModal.isOpen).toBe(true)
+		const loading = updateWithShared(opened.model, migrate(ChatMigration.Message.ClickedProvider({ provider: "slack" })))
+		const closed = { ...loading.model, migrationModal: Modal.close(loading.model.migrationModal).model }
+
+		// Import again while it loads: the same wizard, still loading.
+		const reopened = updateWithShared(closed, Message.ClickedImport())
+		expect(reopened.model.migration.phase._tag).toBe("Loading")
+
+		// The answer arriving after the person closed the modal does not open it again.
+		const answered = updateWithShared(
+			closed,
+			migrate(
+				ChatMigration.Message.FailedListWorkspaces({ organizationId, provider: "slack", reason: "NotConnected" }),
+			),
+		)
+		expect(answered.model.migration.phase._tag).toBe("NeedsAuthorization")
+		expect(answered.model.migrationModal.isOpen).toBe(false)
 	})
 })

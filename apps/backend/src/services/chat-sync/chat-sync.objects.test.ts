@@ -4,7 +4,7 @@
  * through the `OrgObject` into the `ChannelObject` (dedupe, a new provider user, edits, deletes,
  * reactions); outbound `chatSync.outbound` for Hazel writes and none for inbound ones.
  */
-import { CreateThreadRequest } from "@hazel/domain/rpc"
+import { type ChatSyncMigrateResponse, CreateThreadRequest } from "@hazel/domain/rpc"
 import { SQLite, schema } from "@hazel/db"
 import type {
 	ChannelId,
@@ -307,7 +307,8 @@ describe("chat sync on the objects", () => {
 					const RECENT = "777777777777777772" as ExternalChannelId
 					const now = Date.now()
 					const day = 24 * 60 * 60 * 1000
-					// 20 messages, half a day apart, the oldest ten days ago: 14 are within the last week.
+					// 20 messages, half a day apart from ten days ago, kept off the exact 7-day cutoff (the
+					// handler reads the clock a moment later): 14 are within the last week.
 					const past = Array.from({ length: 20 }, (_, index) => {
 						const id = `80000000000000${String(index).padStart(4, "0")}`
 						const message = discordCreate(id, `recent ${index}`)
@@ -315,7 +316,7 @@ describe("chat sync on the objects", () => {
 							...message,
 							externalChannelId: RECENT,
 							dedupeKey: `discord:history:${id}`,
-							event: { ...message.event, sentAt: now - 10 * day + index * (day / 2) },
+							event: { ...message.event, sentAt: now - 10 * day + index * (day / 2) + day / 8 },
 						} as ChatSyncInbound
 					})
 					world.objects.chatSyncHistory.set(RECENT, past)
@@ -337,15 +338,7 @@ describe("chat sync on the objects", () => {
 							},
 							world.owner,
 						),
-					)) as {
-						linked: ReadonlyArray<{
-							externalChannelId: string
-							hazelChannelId: ChannelId
-							hazelChannelName: string
-							createdChannel: boolean
-						}>
-						skipped: ReadonlyArray<string>
-					}
+					)) as ChatSyncMigrateResponse
 					expect(response.skipped).toEqual([DISCORD_CHANNEL])
 					expect(
 						response.linked.map((link) => [link.hazelChannelName, link.createdChannel]),
@@ -389,12 +382,112 @@ describe("chat sync on the objects", () => {
 							},
 							world.owner,
 						),
-					)) as { linked: ReadonlyArray<unknown>; skipped: ReadonlyArray<string> }
+					)) as ChatSyncMigrateResponse
 					expect(again).toMatchObject({ linked: [], skipped: [DESIGN] })
 				}),
 			),
 		30_000,
 	)
+
+	it(
+		"a migration imports its channels one after another",
+		() =>
+			run(
+				Effect.gen(function* () {
+					const world = yield* makeWorld
+					const FIRST = "777777777777777781" as ExternalChannelId
+					const SECOND = "777777777777777782" as ExternalChannelId
+					const history = (channel: ExternalChannelId, prefix: string) =>
+						Array.from({ length: 3 }, (_, index) => {
+							const id = `${prefix}${String(index).padStart(4, "0")}`
+							const message = discordCreate(id, `${channel} ${index}`)
+							return {
+								...message,
+								externalChannelId: channel,
+								dedupeKey: `discord:history:${id}`,
+								event: { ...message.event, sentAt: Date.now() - 60_000 + index },
+							} as ChatSyncInbound
+						})
+					world.objects.chatSyncHistory.set(FIRST, history(FIRST, "81000000000000"))
+					world.objects.chatSyncHistory.set(SECOND, history(SECOND, "82000000000000"))
+
+					yield* ok(
+						yield* call(
+							world.org,
+							world.orgId,
+							"chatSync.migrate",
+							{
+								organizationId: world.orgId,
+								syncConnectionId: world.syncConnectionId,
+								channels: [
+									{ externalChannelId: FIRST, externalChannelName: "first" },
+									{ externalChannelId: SECOND, externalChannelName: "second" },
+								],
+								history: "all",
+							},
+							world.owner,
+						),
+					)
+					// One import in flight for the whole migration, never one per channel: the first
+					// channel ran right after the commit and queued the next.
+					const queued = rows<{ payload: string }>(
+						world.org,
+						`SELECT payload FROM _outbox WHERE status = 'pending' AND payload LIKE '%"remaining"%'`,
+					)
+					expect(queued).toHaveLength(1)
+					expect(queued[0]?.payload).toContain(SECOND)
+
+					for (let round = 0; round < 10; round++) {
+						world.org.storage.db.exec(`UPDATE _outbox SET next_at = 0 WHERE status = 'pending'`)
+						yield* Effect.sleep("2 millis")
+						yield* world.org.alarm
+					}
+					const fetched = world.objects.chatSyncCalls
+						.filter((entry) => entry.op === "fetchHistory")
+						.map((entry) => entry.externalChannelId)
+					expect(fetched).toEqual([FIRST, SECOND])
+				}),
+			),
+		30_000,
+	)
+
+	it("a linked channel outside the connection's server is paused and never read", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const FOREIGN = "777777777777777791" as ExternalChannelId
+				world.objects.chatSyncForeign.add(FOREIGN)
+				world.objects.chatSyncHistory.set(FOREIGN, [discordCreate("910000000000000001", "secret")])
+
+				yield* ok(
+					yield* call(
+						world.org,
+						world.orgId,
+						"chatSync.migrate",
+						{
+							organizationId: world.orgId,
+							syncConnectionId: world.syncConnectionId,
+							channels: [{ externalChannelId: FOREIGN, externalChannelName: "other-guild" }],
+							history: "all",
+						},
+						world.owner,
+					),
+				)
+				for (let round = 0; round < 5; round++) {
+					world.org.storage.db.exec(`UPDATE _outbox SET next_at = 0 WHERE status = 'pending'`)
+					yield* Effect.sleep("2 millis")
+					yield* world.org.alarm
+				}
+				expect(world.objects.chatSyncCalls.filter((entry) => entry.op === "fetchHistory")).toEqual([])
+				expect(
+					rows<{ isActive: number }>(
+						world.org,
+						`SELECT isActive FROM chat_sync_channel_links WHERE externalChannelId = ?`,
+						FOREIGN,
+					),
+				).toEqual([{ isActive: 0 }])
+			}),
+		))
 
 	it("inbound update, reactions and delete follow the message link, each once", () =>
 		run(
