@@ -8,6 +8,7 @@ import {
 	IconEdit,
 	IconEmojiAdd,
 	IconHashtag,
+	IconImage,
 	IconLink,
 	IconReply,
 	IconStar,
@@ -131,7 +132,7 @@ const contextMenuContent =
 		if (key === "thread") return contextItem(h, key, "Reply in Thread", icon(IconThread))
 		if (key === "create-issue") return contextItem(h, key, "Create Issue", icon(IconSupport))
 		if (key === "copy") return contextItem(h, key, "Copy Text", icon(IconCopy))
-		if (key === Overlays.COPY_IMAGE) return contextItem(h, key, "Copy Image", icon(IconCopy))
+		if (key === Overlays.COPY_IMAGE) return contextItem(h, key, "Copy Image", icon(IconImage))
 		if (key === Overlays.COPY_IMAGE_URL) return contextItem(h, key, "Copy Image Address", icon(IconLink))
 		if (key === "pin")
 			return contextItem(
