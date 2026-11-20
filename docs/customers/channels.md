@@ -89,26 +89,34 @@ For each live `public` / `private` channel:
   `chat_sync_channel_authors` (org store, never synced) records each chat-sync author per channel
   as messages arrive: their Slack team or Discord guild, and their email when Slack shares it.
   Slack only shares it with the `users:read.email` scope, so a workspace that installed before
-  this has no emails until it approves the new scope.
+  this has no emails until it approves the new scope. Authors seen before the channel's current
+  Slack mirror was created are ignored. `externalMemberCount` says how many there are in all.
+- **Connect, the accepting side**: an org that accepted a share holds no participants (the host
+  does). Its evidence names the share (`connect: { hostOrganizationId, conversationId }`), and the
+  `CustomersObject` asks the host once per host org with `org.connectGuestEvidence`. The host
+  answers only for conversations it hosts on which that org has an active mount, with the
+  participants of every other org (emails, newest first, at most 200, and their count).
 
 ### Scoring (`packages/domain/src/customers/channel-suggestions.ts`, pure)
 
 Matched against live accounts (name, `domains`), contact emails and the channels already linked.
 Each reason has a weight, and reasons compound (`1 - Π(1 - w)`):
 
-| Reason      | When                                                                                                                                 | Weight                               |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
-| `contacts`  | external members who are the account's contacts (exact email)                                                                        | 60 + 35 × share                      |
-| `domain`    | external members at one of the account's domains (free-mail domains never count)                                                     | 40 + 45 × share                      |
-| `workspace` | other channels of the same Slack Connect team (or of the same Discord guild, ≥ 2) are linked to this account and to no other         | Slack 75, Discord 35 + 10 each, ≤ 60 |
-| `name`      | the channel's name (or a Discord guild's / Slack Connect team's) contains the account's name or a domain's first label (≥ 4 letters) | channel 30, workspace 50             |
+| Reason      | When                                                                                                                                                      | Weight                               |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `contacts`  | external members who are the account's contacts (exact email)                                                                                             | 60 + 35 × share                      |
+| `domain`    | external members at one of the account's domains (free-mail domains never count)                                                                          | 40 + 45 × share                      |
+| `workspace` | other channels of the same Slack Connect team (or of the same Discord guild, ≥ 2) are linked to this account and to no other                              | Slack 75, Discord 35 + 10 each, ≤ 60 |
+| `name`      | the channel's name (or a Discord guild's / Slack Connect team's) contains the account's name or a domain's first label (punctuation dropped, ≥ 4 letters) | channel 30, workspace 50             |
 
 The org's own Slack workspace is never evidence. Suggestions under 30 are dropped; 75 and up are
 `strong`; at most 3 per channel.
 
 **Auto-link**: a Connect channel whose best match has at least half its guests as that account's
-contacts, with no other account matching by contact or domain. It links like a click (`linkedBy`
-null, a `channel.linked` event that says why). A channel with any link history (linked or
+contacts, with no other account matching by contact or domain, counted over every guest: a channel
+whose evidence is a sample (more guests than were sent, or a host that could not be reached) is
+only suggested. It links like a click (`linkedBy` null, a `channel.linked` event that says why,
+with reason kinds and counts but no names). A channel with any link history (linked or
 unlinked before) or a decided suggestion is never auto-linked: once someone unlinks it, it stays
 manual.
 
@@ -116,7 +124,7 @@ manual.
 
 One row per (channel, account): `score`, `reasons`, `status` `open | dismissed | accepted`,
 `decidedBy`, `decidedAt`. Refreshed at the end of every compute, and for one channel when the
-suggestions RPC names it (a channel shared a moment ago). A refresh updates open rows, deletes open rows that no
+suggestions RPC names it (a channel shared a moment ago). A refresh skips a channel a newer refresh already scored, updates open rows, deletes open rows that no
 longer score, and leaves decided rows alone: a dismissed account is never suggested for that
 channel again. Linking a channel (by hand, by accepting, or automatically) accepts that pair and
 drops the channel's other open suggestions.
