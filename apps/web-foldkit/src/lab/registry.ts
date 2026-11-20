@@ -27,6 +27,10 @@ export const labGroupOf = (path: string): string =>
 
 /** One line per page on `/lab` (optional). Page agents: ask the kit owner, or leave it out. */
 export const LAB_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
+	[
+		"/lab/kit",
+		"Every src/ui component, live: tokens, buttons, fields, selection, navigation, feedback, overlays.",
+	],
 	["/lab/customers/kit/tokens", "Chart, health and severity color tokens in light and dark."],
 	[
 		"/lab/customers/kit/badges",
