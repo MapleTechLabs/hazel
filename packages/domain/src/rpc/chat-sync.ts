@@ -125,8 +125,10 @@ export class ChatSyncMigrateResponse extends Schema.Class<ChatSyncMigrateRespons
 				createdChannel: Schema.Boolean,
 			}),
 		),
-		/** Channels the org (or another org) syncs already: left as they are. */
+		/** Channels this org syncs already: left as they are. */
 		skipped: Schema.Array(ExternalChannelId),
+		/** Channels another Hazel organization syncs (first claim wins): not linked here. */
+		takenElsewhere: Schema.Array(ExternalChannelId),
 		transactionId: TransactionId,
 	},
 ) {}

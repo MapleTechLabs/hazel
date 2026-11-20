@@ -451,6 +451,49 @@ describe("chat sync on the objects", () => {
 		30_000,
 	)
 
+	it("a channel another organization syncs is reported apart, not as already synced", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const TAKEN = "777777777777777811" as ExternalChannelId
+				yield* Effect.flatMap(Directory, (directory) =>
+					directory.db.run(
+						SQLite.insertInto(schema.chatSyncIndexTable).values({
+							id: `discord:${GUILD}:${TAKEN}`,
+							provider: "discord",
+							externalWorkspaceId: GUILD,
+							externalChannelId: TAKEN,
+							organizationId: uuid() as typeof world.orgId,
+							channelId: null,
+						}),
+					),
+				).pipe(Effect.provideContext(world.objects.directory), Effect.orDie)
+
+				const response = (yield* ok(
+					yield* call(
+						world.org,
+						world.orgId,
+						"chatSync.migrate",
+						{
+							organizationId: world.orgId,
+							syncConnectionId: world.syncConnectionId,
+							channels: [
+								{ externalChannelId: DISCORD_CHANNEL, externalChannelName: "linked" },
+								{ externalChannelId: TAKEN, externalChannelName: "theirs" },
+							],
+							history: "none",
+						},
+						world.owner,
+					),
+				)) as ChatSyncMigrateResponse
+				expect(response).toMatchObject({
+					linked: [],
+					skipped: [DISCORD_CHANNEL],
+					takenElsewhere: [TAKEN],
+				})
+			}),
+		))
+
 	it("same-named picks get distinct Hazel channels instead of twins", () =>
 		run(
 			Effect.gen(function* () {

@@ -440,6 +440,7 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 
 							const linked: Array<ChatSyncMigrateResponse["linked"][number]> = []
 							const skipped: Array<ExternalChannelId> = []
+							const takenElsewhere: Array<ExternalChannelId> = []
 							const seen = new Set<string>()
 							for (const channel of payload.channels) {
 								if (seen.has(channel.externalChannelId)) continue
@@ -448,12 +449,13 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 									connection.id,
 									channel.externalChannelId,
 								)
-								const owner = owners.get(channel.externalChannelId)
-								if (
-									Option.isSome(existingExternal) ||
-									(owner !== undefined && owner !== connection.organizationId)
-								) {
+								if (Option.isSome(existingExternal)) {
 									skipped.push(channel.externalChannelId)
+									continue
+								}
+								const owner = owners.get(channel.externalChannelId)
+								if (owner !== undefined && owner !== connection.organizationId) {
+									takenElsewhere.push(channel.externalChannelId)
 									continue
 								}
 
@@ -537,9 +539,15 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							yield* Effect.annotateCurrentSpan({
 								"chat_sync.migration.linked": linked.length,
 								"chat_sync.migration.skipped": skipped.length,
+								"chat_sync.migration.taken_elsewhere": takenElsewhere.length,
 							})
 							const txid = yield* generateTransactionId()
-							return new ChatSyncMigrateResponse({ linked, skipped, transactionId: txid })
+							return new ChatSyncMigrateResponse({
+								linked,
+								skipped,
+								takenElsewhere,
+								transactionId: txid,
+							})
 						}),
 					)
 				}).pipe(withRemapDbErrors("ChatSyncChannelLink", "create")),

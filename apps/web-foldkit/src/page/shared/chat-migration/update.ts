@@ -1,6 +1,6 @@
 import type { OrganizationId } from "@hazel/schema"
 import type { Command } from "foldkit"
-import { errorToast, successToast } from "../../../data/actions"
+import { errorToast, successToast, warningToast } from "../../../data/actions"
 import type { ToastRequest } from "../../../overlay/toasts"
 import type { Resources } from "../../../rpc"
 import {
@@ -360,7 +360,7 @@ export const update = (model: Model, message: Message): Return =>
 				],
 			}
 		},
-		SucceededMigrate: ({ organizationId, linked, created, skipped }) => {
+		SucceededMigrate: ({ organizationId, linked, created, skipped, takenElsewhere }) => {
 			const { phase } = model
 			if (
 				organizationId !== model.organizationId ||
@@ -377,12 +377,18 @@ export const update = (model: Model, message: Message): Return =>
 						linked,
 						created,
 						skipped,
+						takenElsewhere,
 						history: phase.history,
 					}),
 				),
 				outcome: toast(
 					linked === 0
-						? successToast("Those channels already sync")
+						? takenElsewhere > 0
+							? warningToast(
+									"Nothing was migrated",
+									`${plural(takenElsewhere, "channel")} already sync into another Hazel workspace.`,
+								)
+							: successToast("Those channels already sync")
 						: successToast(
 								`Migrating ${plural(linked, "channel")} from ${PROVIDERS[phase.provider].name}`,
 								phase.history === "none" ? null : "Past messages import in the background.",

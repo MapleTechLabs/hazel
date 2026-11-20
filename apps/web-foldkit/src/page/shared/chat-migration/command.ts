@@ -192,6 +192,7 @@ export const RunChatMigration = Command.define("RunChatMigration", {
 				linked: response.linked.length,
 				created: response.linked.filter((link) => link.createdChannel).length,
 				skipped: response.skipped.length,
+				takenElsewhere: response.takenElsewhere.length,
 			})
 		}).pipe(
 			Effect.catchTags({

@@ -192,7 +192,13 @@ const screens: ReadonlyArray<readonly [string, () => void]> = [
 				...[
 					...slackPicking,
 					Message.ClickedMigrate(),
-					Message.SucceededMigrate({ organizationId, linked: 7, created: 6, skipped: 0 }),
+					Message.SucceededMigrate({
+						organizationId,
+						linked: 7,
+						created: 6,
+						skipped: 0,
+						takenElsewhere: 0,
+					}),
 				].map(wrap),
 			),
 		),

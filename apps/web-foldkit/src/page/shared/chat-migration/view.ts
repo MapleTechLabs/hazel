@@ -340,6 +340,8 @@ const pickingChannels = <P>(
 	}
 }
 
+const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`
+
 const HISTORY_WINDOW = {
 	none: null,
 	"7d": "the last 7 days",
@@ -459,12 +461,14 @@ export const parts = <P>(h: Builder<P>, model: Model, options: ViewOptions<P>): 
 					: []),
 			],
 		}),
-		Done: ({ provider, workspaceName, linked, created, skipped, history }) => ({
-			title: "You're all set",
+		Done: ({ provider, workspaceName, linked, created, skipped, takenElsewhere, history }) => ({
+			title: linked === 0 && takenElsewhere > 0 ? "Nothing was migrated" : "You're all set",
 			description:
-				linked === 0
-					? `${workspaceName} already syncs with Hazel.`
-					: `${workspaceName} is on its way to Hazel.`,
+				linked > 0
+					? `${workspaceName} is on its way to Hazel.`
+					: takenElsewhere > 0
+						? `Those channels belong to another Hazel workspace.`
+						: `${workspaceName} already syncs with Hazel.`,
 			body: centered(h, [
 				h.div(
 					[
@@ -476,15 +480,18 @@ export const parts = <P>(h: Builder<P>, model: Model, options: ViewOptions<P>): 
 				),
 				h.p(
 					[h.Class("max-w-sm text-fg text-sm")],
-					linked === 0
-						? [
-								`All ${skipped} channel${skipped === 1 ? "" : "s"} you picked already sync, so nothing changed.`,
-							]
-						: [
-								`Linked ${linked} ${PROVIDERS[provider].name} channel${linked === 1 ? "" : "s"}`,
-								created === linked ? "." : ` (${created} new in Hazel).`,
-								skipped > 0 ? ` ${skipped} already synced, left as they were.` : "",
-							],
+					[
+						linked === 0
+							? "Nothing changed."
+							: `Linked ${count(linked, `${PROVIDERS[provider].name} channel`)}${created === linked ? "." : ` (${created} new in Hazel).`}`,
+						skipped > 0
+							? ` ${count(skipped, "channel")} already synced here, left as they were.`
+							: "",
+						// Another workspace's channel did not arrive: say so, never "already syncs".
+						takenElsewhere > 0
+							? ` ${count(takenElsewhere, "channel")} already sync${takenElsewhere === 1 ? "s" : ""} into another Hazel workspace, so ${takenElsewhere === 1 ? "it was" : "they were"} left out.`
+							: "",
+					],
 				),
 				// Nothing linked means nothing was queued: no import to promise.
 				...(linked === 0

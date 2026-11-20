@@ -131,7 +131,13 @@ describe("chat migration wizard", () => {
 
 		const done = update(
 			going.model,
-			Message.SucceededMigrate({ organizationId, linked: 2, created: 1, skipped: 0 }),
+			Message.SucceededMigrate({
+				organizationId,
+				linked: 2,
+				created: 1,
+				skipped: 0,
+				takenElsewhere: 0,
+			}),
 		)
 		expect(done.model.phase).toMatchObject({ _tag: "Done", linked: 2, created: 1, history: "7d" })
 		expect(done.outcome?._tag).toBe("Toast")
@@ -230,7 +236,13 @@ describe("chat migration wizard", () => {
 	test("a migration that linked nothing says so instead of promising an import", () => {
 		const done = update(
 			run(pickingSlackChannels(), Message.ClickedMigrate()).model,
-			Message.SucceededMigrate({ organizationId, linked: 0, created: 0, skipped: 3 }),
+			Message.SucceededMigrate({
+				organizationId,
+				linked: 0,
+				created: 0,
+				skipped: 3,
+				takenElsewhere: 0,
+			}),
 		)
 		expect(done.model.phase).toMatchObject({ _tag: "Done", linked: 0, skipped: 3 })
 		expect(done.outcome).toMatchObject({ _tag: "Toast", toast: { title: "Those channels already sync" } })
@@ -291,5 +303,20 @@ describe("chat migration wizard", () => {
 		)
 		expect(refused.model.phase).toMatchObject({ _tag: "NeedsAuthorization", provider: "slack" })
 		expect(refused.outcome).toMatchObject({ _tag: "Toast", toast: { title: "Couldn't connect Slack" } })
+	})
+
+	test("channels another Hazel workspace syncs are reported as left out, not as already syncing", () => {
+		const done = update(
+			run(pickingSlackChannels(), Message.ClickedMigrate()).model,
+			Message.SucceededMigrate({
+				organizationId,
+				linked: 0,
+				created: 0,
+				skipped: 0,
+				takenElsewhere: 2,
+			}),
+		)
+		expect(done.model.phase).toMatchObject({ _tag: "Done", linked: 0, takenElsewhere: 2 })
+		expect(done.outcome).toMatchObject({ _tag: "Toast", toast: { title: "Nothing was migrated" } })
 	})
 })
