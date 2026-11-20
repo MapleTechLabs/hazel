@@ -5,7 +5,6 @@ import {
 	type ChannelEvidence,
 	describeReason,
 	MAX_EVIDENCE_MEMBERS,
-	normalizeName,
 	scoreChannel,
 	type SuggestionAccount,
 } from "./channel-suggestions"
@@ -88,23 +87,11 @@ describe("scoreChannel", () => {
 		expect(scoreChannel(full, index())[0]).toMatchObject({ accountId: acme, autoLink: false })
 	})
 
-	it("squashes punctuation in domain labels for name matches", () => {
-		const hyphen = buildSuggestionIndex({
-			accounts: [{ id: acme, name: "Zq", domains: ["big-bird.io"] }],
-			contacts: [],
-			links: [],
-		})
-		const [best] = scoreChannel(evidence({ channelName: "bigbird-support" }), hyphen)
-		expect(best?.reasons).toEqual([
-			{ kind: "name", where: "channel", value: "bigbird-support", matchedOn: "bigbird" },
-		])
-		// Still at least four letters once squashed.
-		const short = buildSuggestionIndex({
-			accounts: [{ id: acme, name: "Zq", domains: ["a-b.io"] }],
-			contacts: [],
-			links: [],
-		})
-		expect(scoreChannel(evidence({ channelName: "ab-team" }), short)).toEqual([])
+	it("never suggests by name: a channel or server named after an account is not evidence", () => {
+		expect(scoreChannel(evidence({ channelName: "brandon-acme" }), index())).toEqual([])
+		const guild = { provider: "discord" as const, id: "G2", name: "Globex HQ", external: false }
+		const team = { provider: "slack" as const, id: "T2", name: "Globex HQ", external: true }
+		expect(scoreChannel(evidence({ workspaces: [guild, team] }), index())).toEqual([])
 	})
 
 	it("suggests nothing without evidence", () => {
@@ -136,9 +123,31 @@ describe("scoreChannel", () => {
 		expect(best).toMatchObject({ accountId: acme, autoLink: false })
 	})
 
-	it("does not auto-link outside Connect", () => {
-		const [best] = scoreChannel(evidence({ externalMembers: [member("ana@acme.com", "slack")] }), index())
-		expect(best).toMatchObject({ accountId: acme, autoLink: false })
+	it("auto-links any channel whose external members are all at the account's domain", () => {
+		const slack = (...emails: ReadonlyArray<string | null>) =>
+			scoreChannel(
+				evidence({ origin: "slack", externalMembers: emails.map((email) => member(email, "slack")) }),
+				index(),
+			)[0]
+		expect(slack("x@acme.com", "y@acme.com")).toMatchObject({ accountId: acme, autoLink: true })
+		// Someone else in the room, or someone whose email is unknown: only suggested.
+		expect(slack("x@acme.com", "w@other.dev")).toMatchObject({ accountId: acme, autoLink: false })
+		expect(slack("x@acme.com", null)).toMatchObject({ accountId: acme, autoLink: false })
+	})
+
+	it("does not auto-link on a domain when another account matches, or on a sample", () => {
+		// hank@gmail.com is a Globex contact: two accounts match, neither links itself.
+		const rival = scoreChannel(
+			evidence({ externalMembers: [member("x@acme.com", "slack"), member("hank@gmail.com", "slack")] }),
+			index(),
+		)
+		expect(rival.map((suggestion) => suggestion.accountId).sort()).toEqual([acme, globex].sort())
+		expect(rival.some((suggestion) => suggestion.autoLink)).toBe(false)
+		const [sampled] = scoreChannel(
+			evidence({ externalMembers: [member("x@acme.com", "slack")], externalMemberCount: 3 }),
+			index(),
+		)
+		expect(sampled).toMatchObject({ accountId: acme, autoLink: false })
 	})
 
 	it("never counts free-mail domains", () => {
@@ -165,52 +174,53 @@ describe("scoreChannel", () => {
 		)
 	})
 
-	it("uses sibling links of a Slack Connect team, never of the org's own workspace", () => {
+	it("sibling links of a Slack Connect team add to an email match, never of the org's own workspace", () => {
 		const shared = { provider: "slack" as const, id: "T_ACME", name: null, external: true }
 		const own = { provider: "slack" as const, id: "T_OWN", name: "Us", external: false }
 		const links = [{ accountId: acme, workspaces: [shared, own] }]
-		const [viaShared] = scoreChannel(evidence({ workspaces: [shared, own] }), index(links))
-		expect(viaShared).toMatchObject({ accountId: acme, score: 75, strength: "strong" })
-		expect(scoreChannel(evidence({ workspaces: [own] }), index(links))).toEqual([])
+		const people = [member("x@acme.com", "slack")]
+		const [viaShared] = scoreChannel(
+			evidence({ workspaces: [shared, own], externalMembers: people }),
+			index(links),
+		)
+		expect(viaShared).toMatchObject({ accountId: acme, score: 96, strength: "strong" })
+		expect(viaShared!.reasons.map((reason) => reason.kind)).toEqual(["domain", "workspace"])
+		const [ownOnly] = scoreChannel(evidence({ workspaces: [own], externalMembers: people }), index(links))
+		expect(ownOnly).toMatchObject({ score: 85 })
+		expect(ownOnly!.reasons.map((reason) => reason.kind)).toEqual(["domain"])
+	})
+
+	it("sibling links alone suggest nothing", () => {
+		const shared = { provider: "slack" as const, id: "T_ACME", name: null, external: true }
+		const guild = { provider: "discord" as const, id: "G1", name: "Community", external: false }
+		const links = [
+			{ accountId: acme, workspaces: [shared, guild] },
+			{ accountId: acme, workspaces: [guild] },
+		]
+		expect(scoreChannel(evidence({ workspaces: [shared, guild] }), index(links))).toEqual([])
 	})
 
 	it("needs two agreeing Discord channels, and ignores a guild split between accounts", () => {
 		const guild = { provider: "discord" as const, id: "G1", name: "Community", external: false }
-		expect(
+		const people = [member("x@acme.com", "discord")]
+		const kinds = (links: Parameters<typeof index>[0]) =>
 			scoreChannel(
-				evidence({ workspaces: [guild] }),
-				index([{ accountId: acme, workspaces: [guild] }]),
-			),
-		).toEqual([])
+				evidence({ workspaces: [guild], externalMembers: people }),
+				index(links),
+			)[0]!.reasons.map((reason) => reason.kind)
+		expect(kinds([{ accountId: acme, workspaces: [guild] }])).toEqual(["domain"])
 		const two = [
 			{ accountId: acme, workspaces: [guild] },
 			{ accountId: acme, workspaces: [guild] },
 		]
-		expect(scoreChannel(evidence({ workspaces: [guild] }), index(two))[0]).toMatchObject({
-			accountId: acme,
-			score: 55,
-		})
-		const split = [...two, { accountId: globex, workspaces: [guild] }]
-		expect(scoreChannel(evidence({ workspaces: [guild] }), index(split))).toEqual([])
-	})
-
-	it("matches names: the channel's weakly, a Discord guild's more", () => {
-		const [byChannel] = scoreChannel(evidence({ channelName: "ext-acme-support" }), index())
-		expect(byChannel).toMatchObject({ accountId: acme, score: 30, strength: "possible" })
-		const guild = { provider: "discord" as const, id: "G2", name: "Globex HQ", external: false }
-		const [byGuild] = scoreChannel(evidence({ workspaces: [guild] }), index())
-		expect(byGuild).toMatchObject({ accountId: globex, score: 50 })
+		expect(kinds(two)).toEqual(["domain", "workspace"])
+		expect(kinds([...two, { accountId: globex, workspaces: [guild] }])).toEqual(["domain"])
 	})
 
 	it("skips dismissed accounts", () => {
-		expect(scoreChannel(evidence({ channelName: "acme" }), index(), new Set([acme]))).toEqual([])
-	})
-})
-
-describe("normalizeName", () => {
-	it("drops punctuation and company suffixes", () => {
-		expect(normalizeName("Acme, Inc.")).toBe("acme")
-		expect(normalizeName("The Big Bird Labs GmbH")).toBe("bigbirdlabs")
+		expect(
+			scoreChannel(evidence({ externalMembers: [member("x@acme.com")] }), index(), new Set([acme])),
+		).toEqual([])
 	})
 })
 
@@ -260,13 +270,13 @@ describe("edge cases from review", () => {
 		})
 	})
 
-	it("never takes a free-mail domain written as www. or padded as a name token", () => {
+	it("never takes a free-mail domain written as www. or padded", () => {
 		const padded = buildSuggestionIndex({
 			accounts: [{ id: globex, name: "Globex", domains: [" www.Gmail.com "] }],
 			contacts: [],
 			links: [],
 		})
-		expect(scoreChannel(evidence({ channelName: "gmail-users" }), padded)).toEqual([])
+		expect(scoreChannel(evidence({ externalMembers: [member("someone@gmail.com")] }), padded)).toEqual([])
 	})
 })
 
@@ -289,9 +299,13 @@ describe("auto-link denominator", () => {
 })
 
 describe("name reasons", () => {
-	it("names a Discord server or Slack Connect team without calling it a workspace", () => {
-		const guild = { provider: "discord" as const, id: "G9", name: "Globex HQ", external: false }
-		const [best] = scoreChannel(evidence({ workspaces: [guild] }), index())
-		expect(describeReason(best!.reasons[0]!, "Globex")).toBe('The Globex HQ name contains "globex"')
+	it("still read on rows stored before names stopped counting", () => {
+		const reason = {
+			kind: "name" as const,
+			where: "workspace" as const,
+			value: "Globex HQ",
+			matchedOn: "globex",
+		}
+		expect(describeReason(reason, "Globex")).toBe('The workspace name "Globex HQ" contains "globex"')
 	})
 })

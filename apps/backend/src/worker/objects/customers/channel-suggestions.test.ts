@@ -18,6 +18,8 @@ const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 
 const OWN_TEAM = "T0HAZEL01"
 const GLOBEX_TEAM = "T0GLOBEX01"
+/** A Slack Connect author whose email Slack does not share: keeps a channel from linking itself. */
+const UNKNOWN = [GLOBEX_TEAM, null] as const
 
 interface SuggestionRow {
 	readonly id: string
@@ -255,7 +257,7 @@ describe("Suggested channel links", () => {
 			}),
 		))
 
-	it("suggests a Slack channel from its Slack Connect authors' domain, without linking it", () =>
+	it("links a Slack channel automatically when all its Slack Connect authors are at the account's domain", () =>
 		run(
 			Effect.gen(function* () {
 				const t = yield* setup
@@ -263,7 +265,27 @@ describe("Suggested channel links", () => {
 				t.slack(mirrored, [
 					[GLOBEX_TEAM, "gina@globex.com"],
 					[GLOBEX_TEAM, "gus@globex.com"],
+					// The org's own people are never evidence.
 					[OWN_TEAM, "me@hazel.example"],
+				])
+				const result = yield* t.refresh()
+				expect(result.autoLinked).toBe(1)
+				expect(t.links()).toMatchObject([{ channelId: mirrored, accountId: t.accountId("Globex") }])
+				expect(t.suggestions(mirrored)).toMatchObject([{ status: "accepted" }])
+				expect(t.events("channel.linked")).toHaveLength(1)
+				expect(ok(yield* t.list({})).items).toEqual([])
+			}),
+		))
+
+	it("suggests a Slack channel from its authors' domain, without linking it, when one email is unknown", () =>
+		run(
+			Effect.gen(function* () {
+				const t = yield* setup
+				const mirrored = t.channel("ext-partners", [t.world.member])
+				t.slack(mirrored, [
+					[GLOBEX_TEAM, "gina@globex.com"],
+					[GLOBEX_TEAM, "gus@globex.com"],
+					UNKNOWN,
 				])
 				const result = yield* t.refresh()
 				expect(result.autoLinked).toBe(0)
@@ -272,7 +294,7 @@ describe("Suggested channel links", () => {
 				expect(rows).toHaveLength(1)
 				expect(rows[0]).toMatchObject({ accountId: t.accountId("Globex"), status: "open" })
 				expect(JSON.parse(rows[0]!.reasons)).toEqual([
-					{ kind: "domain", domain: "globex.com", matched: 2, total: 2, members: 2 },
+					{ kind: "domain", domain: "globex.com", matched: 2, total: 2, members: 3 },
 				])
 
 				const listed = ok(yield* t.list({}))
@@ -289,7 +311,7 @@ describe("Suggested channel links", () => {
 			Effect.gen(function* () {
 				const t = yield* setup
 				const mirrored = t.channel("partners", [t.world.member])
-				t.slack(mirrored, [[GLOBEX_TEAM, "gina@globex.com"]])
+				t.slack(mirrored, [[GLOBEX_TEAM, "gina@globex.com"], UNKNOWN])
 				yield* t.refresh()
 				const [row] = t.suggestions(mirrored)
 				const dismissed = yield* t.world.call(
@@ -319,7 +341,7 @@ describe("Suggested channel links", () => {
 			Effect.gen(function* () {
 				const t = yield* setup
 				const mirrored = t.channel("partners", [t.world.member])
-				t.slack(mirrored, [[GLOBEX_TEAM, "gina@globex.com"]])
+				t.slack(mirrored, [[GLOBEX_TEAM, "gina@globex.com"], UNKNOWN])
 				// The suggestions read scores a channel it names.
 				const listed = ok(yield* t.list({ channelId: mirrored }))
 				expect(listed.items).toHaveLength(1)
@@ -345,7 +367,7 @@ describe("Suggested channel links", () => {
 			Effect.gen(function* () {
 				const t = yield* setup
 				const secret = t.channel("globex-private", [t.world.owner], "private")
-				t.slack(secret, [[GLOBEX_TEAM, "gina@globex.com"]])
+				t.slack(secret, [[GLOBEX_TEAM, "gina@globex.com"], UNKNOWN])
 				yield* t.refresh()
 				const [row] = t.suggestions(secret)
 				expect(row?.status).toBe("open")
@@ -398,7 +420,7 @@ describe("Suggested channel links", () => {
 			Effect.gen(function* () {
 				const t = yield* setup
 				const mirrored = t.channel("globex", [t.world.member])
-				t.slack(mirrored, [[GLOBEX_TEAM, "gina@globex.com"]])
+				t.slack(mirrored, [[GLOBEX_TEAM, "gina@globex.com"], UNKNOWN])
 				yield* t.world.object.run(runCompute(new Date())).pipe(Effect.orDie)
 				expect(t.suggestions(mirrored)).toMatchObject([
 					{ accountId: t.accountId("Globex"), status: "open" },
@@ -460,21 +482,15 @@ describe("Suggested channel links", () => {
 			Effect.gen(function* () {
 				const t = yield* setup
 				t.contact("Acme", "ana@acme.com")
-				// The channel name names the account (a `name` reason), and is private.
+				// The channel name is private.
 				const secret = t.channel("acme-merger-talks", [t.world.member], "private")
 				t.connect(secret, ["ana@acme.com"])
 				yield* t.refresh()
 				expect(t.links()).toHaveLength(1)
-				// SAFETY: `reasons` is the JSON array of `SuggestionReason` the refresh wrote.
-				const reasons = JSON.parse(t.suggestions(secret)[0]?.reasons ?? "[]") as Array<{
-					kind: string
-				}>
-				expect(reasons.map((reason) => reason.kind)).toContain("name")
 
 				const mirrored = t.channel("globex-war-room", [t.world.member], "private")
-				t.slack(mirrored, [[GLOBEX_TEAM, "gina@globex.com"]])
+				t.slack(mirrored, [[GLOBEX_TEAM, "gina@globex.com"], UNKNOWN])
 				const [suggestion] = ok(yield* t.list({ channelId: mirrored })).items
-				expect(suggestion?.reasons.map((reason: { kind: string }) => reason.kind)).toContain("name")
 				ok(
 					yield* t.world.call(
 						"customers.channel.suggestion.accept",
@@ -589,7 +605,7 @@ describe("Suggested channel links", () => {
 			Effect.gen(function* () {
 				const t = yield* setup
 				const mirrored = t.channel("partners", [t.world.member])
-				t.slack(mirrored, [[GLOBEX_TEAM, "gina@globex.com"]])
+				t.slack(mirrored, [[GLOBEX_TEAM, "gina@globex.com"], UNKNOWN])
 				yield* t.refresh()
 				const [row] = t.suggestions(mirrored)
 				ok(
@@ -653,12 +669,20 @@ describe("Suggested channel links", () => {
 					),
 				)
 				const second = t.channel("ops-2", [t.world.member])
-				t.slack(second, [[GLOBEX_TEAM, null]])
+				t.slack(second, [[GLOBEX_TEAM, "gina@globex.com"], UNKNOWN])
 				const listed = ok(yield* t.list({ channelId: second }))
 				expect(listed.items).toMatchObject([{ accountName: "Globex" }])
-				expect(listed.items[0]?.reasons).toEqual([
-					{ kind: "workspace", provider: "slack", workspaceName: null, linkedChannels: 1 },
-				])
+				expect(listed.items[0]?.reasons).toContainEqual({
+					kind: "workspace",
+					provider: "slack",
+					workspaceName: null,
+					linkedChannels: 1,
+				})
+
+				// The siblings alone, with no one's email to go on, suggest nothing.
+				const third = t.channel("ops-3", [t.world.member])
+				t.slack(third, [[GLOBEX_TEAM, null]])
+				expect(ok(yield* t.list({ channelId: third })).items).toEqual([])
 			}),
 		))
 })
