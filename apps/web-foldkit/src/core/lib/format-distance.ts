@@ -19,15 +19,26 @@ const withSuffix = (words: string, inFuture: boolean): string => (inFuture ? `in
 const dstOffsetMinutes = (earlierMs: number, laterMs: number): number =>
 	new Date(laterMs).getTimezoneOffset() - new Date(earlierMs).getTimezoneOffset()
 
-/** Whole calendar months from `earlierMs` to `laterMs`. */
+const isLastDayOfMonth = (date: Date): boolean =>
+	date.getDate() === new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+
+/**
+ * Whole calendar months from `earlierMs` to `laterMs` (not before it), date-fns 4's
+ * `differenceInMonths`: it shifts the later date back, so a late-February date (Feb 28 2025) still
+ * completes a month that started on a later day (Feb 29 2024).
+ */
 const differenceInMonths = (earlierMs: number, laterMs: number): number => {
 	const earlier = new Date(earlierMs)
 	const later = new Date(laterMs)
 	const months =
 		(later.getFullYear() - earlier.getFullYear()) * 12 + (later.getMonth() - earlier.getMonth())
-	const shifted = new Date(earlierMs)
-	shifted.setMonth(earlier.getMonth() + months)
-	return shifted.getTime() > laterMs ? months - 1 : months
+	if (months < 1) return 0
+	const shifted = new Date(laterMs)
+	if (shifted.getMonth() === 1 && shifted.getDate() > 27) shifted.setDate(30)
+	shifted.setMonth(shifted.getMonth() - months)
+	const lastMonthComplete =
+		shifted.getTime() >= earlierMs || (isLastDayOfMonth(later) && months === 1 && laterMs > earlierMs)
+	return lastMonthComplete ? months : months - 1
 }
 
 const looseWords = (earlierMs: number, laterMs: number): string => {

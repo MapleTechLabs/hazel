@@ -114,8 +114,14 @@ const base64Url = (input: string | Uint8Array): string => {
  */
 const importSigningKey = async (privateKeyPem: string): Promise<CryptoKey> => {
 	const keyObject = createPrivateKey(privateKeyPem)
-	if (typeof keyObject.toCryptoKey === "function")
-		return keyObject.toCryptoKey(RS256, false, ["sign"]) as CryptoKey
+	if (typeof keyObject.toCryptoKey === "function") {
+		try {
+			return (await keyObject.toCryptoKey(RS256, false, ["sign"])) as CryptoKey
+		} catch (error) {
+			// workerd defines `toCryptoKey` but throws ERR_METHOD_NOT_IMPLEMENTED: take the JWK path.
+			if ((error as { code?: unknown } | null)?.code !== "ERR_METHOD_NOT_IMPLEMENTED") throw error
+		}
+	}
 	return crypto.subtle.importKey("jwk", keyObject.export({ format: "jwk" }), RS256, false, ["sign"])
 }
 

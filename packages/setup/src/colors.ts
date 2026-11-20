@@ -1,10 +1,11 @@
 /**
  * Terminal colors for the setup CLI, the subset of picocolors it used. Plain text when `NO_COLOR` is set,
- * or when stdout is not a terminal and `FORCE_COLOR` is not set.
+ * or, unless `FORCE_COLOR` is set, when stdout is not a terminal or the terminal is `TERM=dumb`.
  */
 
 const enabled =
-	!("NO_COLOR" in process.env) && ("FORCE_COLOR" in process.env || process.stdout.isTTY === true)
+	!("NO_COLOR" in process.env) &&
+	("FORCE_COLOR" in process.env || (process.stdout.isTTY === true && process.env.TERM !== "dumb"))
 
 const style =
 	(open: number, close: number) =>

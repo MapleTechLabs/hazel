@@ -11,10 +11,13 @@ let colorProbe: CanvasRenderingContext2D | null = null
 const toRGBA = (cssColor: string): string | null => {
 	colorProbe ??= document.createElement("canvas").getContext("2d", { willReadFrequently: true })
 	if (!colorProbe) return null
-	const sentinel = "#010203"
-	colorProbe.fillStyle = sentinel
+	// An invalid color leaves fillStyle unchanged: it is invalid only if it keeps both sentinels.
+	colorProbe.fillStyle = "#000001"
 	colorProbe.fillStyle = cssColor
-	if (colorProbe.fillStyle === sentinel && cssColor.toLowerCase() !== sentinel) return null
+	const first = colorProbe.fillStyle
+	colorProbe.fillStyle = "#000002"
+	colorProbe.fillStyle = cssColor
+	if (first === "#000001" && colorProbe.fillStyle === "#000002") return null
 	colorProbe.clearRect(0, 0, 1, 1)
 	colorProbe.fillRect(0, 0, 1, 1)
 	const [r = 0, g = 0, b = 0, a = 0] = colorProbe.getImageData(0, 0, 1, 1).data

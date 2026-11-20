@@ -21,6 +21,12 @@ describe("formatDistanceToNow", () => {
 		expect(ago(400 * DAY)).toBe("about 1 year ago")
 	})
 
+	test("counts a year to a late-February anniversary as date-fns does", () => {
+		const at = (y: number, m: number, d: number) => new Date(y, m, d, 12).getTime()
+		expect(formatDistanceToNow(at(2024, 1, 29), at(2025, 1, 28))).toBe("about 1 year ago")
+		expect(formatDistanceToNow(at(2024, 2, 12), at(2025, 2, 12))).toBe("about 1 year ago")
+	})
+
 	test("takes a Date as well as a timestamp", () => {
 		expect(formatDistanceToNow(new Date(NOW - 30 * MINUTE), NOW)).toBe("30 minutes ago")
 	})

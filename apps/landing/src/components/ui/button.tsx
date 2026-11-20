@@ -31,12 +31,35 @@ const buttonVariants = cva(
 	},
 )
 
-/** Renders its one child element in its place, with this element's props and classes merged in. */
+/**
+ * Renders its one child element in its place, with this element's props merged in: the child's win,
+ * except classes, which join, and event handlers, which both run (the child's first).
+ */
 function Slot({ children, className, ...props }: React.HTMLAttributes<HTMLElement>) {
 	if (!React.isValidElement<React.HTMLAttributes<HTMLElement>>(children)) return null
+	const childProps = children.props
+	const handlers = Object.fromEntries(
+		Object.entries(props).flatMap(([name, slotHandler]) => {
+			const childHandler = childProps[name as keyof typeof childProps]
+			return /^on[A-Z]/.test(name) &&
+				typeof slotHandler === "function" &&
+				typeof childHandler === "function"
+				? [
+						[
+							name,
+							(...args: Array<unknown>) => {
+								childHandler(...args)
+								slotHandler(...args)
+							},
+						],
+					]
+				: []
+		}),
+	)
 	return React.cloneElement(children, {
 		...props,
 		...children.props,
+		...handlers,
 		className: cn(className, children.props.className),
 	})
 }
