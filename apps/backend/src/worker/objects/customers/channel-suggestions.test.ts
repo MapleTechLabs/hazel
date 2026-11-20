@@ -184,7 +184,8 @@ describe("Suggested channel links", () => {
 			Effect.gen(function* () {
 				const t = yield* setup
 				t.contact("Acme", "ana@acme.com")
-				t.contact("Acme", "Ben@Acme.com")
+				// Stored with a tab and a newline around it: still the same address.
+				t.contact("Acme", "\tBen@Acme.com\n")
 				const shared = t.channel("shared-ops", [t.world.member])
 				t.connect(shared, ["ana@acme.com", "ben@acme.com"])
 
