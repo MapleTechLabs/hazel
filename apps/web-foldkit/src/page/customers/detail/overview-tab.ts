@@ -45,6 +45,7 @@ import { Message } from "./message"
 import {
 	ASSIGN_ME,
 	doneEntries,
+	groupOfModel,
 	metricEntries,
 	type Model,
 	OPEN_QUEUE,
@@ -460,6 +461,29 @@ const primaryNote = (h: HtmlBuilder<Message>, model: Model, context: Context): R
 			]
 }
 
+/** The environment a signal is about, when not the whole customer's (a plan limit is one environment's). */
+const environmentLink = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	context: Context,
+	signal: SignalRow,
+): ReadonlyArray<Html> => {
+	const group = groupOfModel(model)
+	const accountId = signal.evidence._tag === "limit" ? signal.evidence.accountId : undefined
+	const account = group.find((candidate) => candidate.id === accountId)
+	return account === undefined || group.length < 2
+		? []
+		: [
+				h.a(
+					[
+						h.Href(hrefOf(customerRoute(context.orgSlug, account.id))),
+						h.Class(twMerge(linkClass, "text-xs")),
+					],
+					[`in ${accountLabelOf(account)}`],
+				),
+			]
+}
+
 const signalsCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
 	const signals = openSignals(model)
 	return card(
@@ -513,6 +537,7 @@ const signalsCard = (h: HtmlBuilder<Message>, model: Model, context: Context): H
 															: `· opened ${formatDate(new Date(signal.openedAtMs), { now: new Date(context.nowMs) })}`,
 													],
 												),
+												...environmentLink(h, model, context, signal),
 											],
 										),
 										h.p([h.Class("text-fg-2 text-sm")], [signal.reason]),

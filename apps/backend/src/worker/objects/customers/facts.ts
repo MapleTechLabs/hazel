@@ -75,6 +75,8 @@ export interface AccountFacts {
 	readonly health: ReadonlyArray<HealthPoint>
 	/** Open (not closed, not deleted) support issues with SLA clocks. */
 	readonly openIssueSlas: ReadonlyArray<IssueSlaFacts>
+	/** On a group's facts, each environment's own (the primary's first): plan limits are per environment. */
+	readonly environments?: ReadonlyArray<AccountFacts>
 }
 
 export interface OrgFacts {

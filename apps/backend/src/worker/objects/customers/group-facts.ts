@@ -10,7 +10,8 @@
  *   than the loaded activity the same way).
  * - Billing: subscriptions and open invoices together; MRR movements become the group's total MRR
  *   on each day one of them moved.
- * - Metrics: values (and limits) summed per day.
+ * - Metrics: values (and limits) summed per day; `near_limit` reads each environment's own
+ *   (`environments`), a plan limit being one environment's, and names the one at its limit.
  * - Health: the primary's.
  * - The account: the primary's row with MRR, trial list price and seats summed, the earliest first
  *   seen, customer since and trial end, the latest activity, the tags of all, and the most advanced
@@ -221,5 +222,6 @@ export const groupFacts = (
 		movements: groupMovements(group),
 		health: primary.health,
 		openIssueSlas: group.flatMap((facts) => facts.openIssueSlas),
+		environments: group,
 	}
 }
