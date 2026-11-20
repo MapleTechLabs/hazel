@@ -15,7 +15,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { ChannelId, NotificationId } from "@hazel/schema"
-import { Clock, Effect, Option, Schema } from "effect"
+import { Clock, Effect, Match, Option, Schema } from "effect"
 import { ApnsClient, ApnsRetryableError, type ApnsResult } from "../../../services/apns"
 import { Directory } from "../../../services/directory"
 import { CurrentEffectSender, defineEffect, enqueueEffect, type EffectReceivers } from "../effects/registry"
@@ -74,8 +74,20 @@ export const decidePush = (input: PushInput): PushDecision => {
 	if (!input.hasContent) return { _tag: "Skip", reason: "no-content" }
 	if (input.silent) return { _tag: "Skip", reason: "silent" }
 	if (input.devices === 0) return { _tag: "Skip", reason: "no-devices" }
-	if (input.preferred === "dnd") return { _tag: "Skip", reason: "dnd" }
-	return input.isActive ? { _tag: "Defer", delayMs: PUSH_IDLE_DELAY_MS } : { _tag: "Now" }
+	return Match.value(input.preferred).pipe(
+		Match.withReturnType<PushDecision>(),
+		Match.when("dnd", () => ({ _tag: "Skip", reason: "dnd" })),
+		// Invisible counts as online: they may be reading it on another client.
+		Match.whenOr("online", "idle", "invisible", () =>
+			Match.value(input.isActive).pipe(
+				Match.withReturnType<PushDecision>(),
+				Match.when(true, () => ({ _tag: "Defer", delayMs: PUSH_IDLE_DELAY_MS })),
+				Match.when(false, () => ({ _tag: "Now" })),
+				Match.exhaustive,
+			),
+		),
+		Match.exhaustive,
+	)
 }
 
 /** What to do with APNs's answer. Pure. */
