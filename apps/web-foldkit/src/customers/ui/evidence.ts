@@ -1,4 +1,4 @@
-import type { SignalEvidence } from "@hazel/domain/customers"
+import { overdueLabel, type SignalEvidence } from "@hazel/domain/customers"
 import { Match } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
@@ -144,6 +144,13 @@ export const evidenceViz = <M>(
 						: null,
 				options.className,
 			),
+		overdue: (evidence) =>
+			stack(
+				h,
+				danger(h, `${overdueLabel(evidence.overdueMs)} overdue`),
+				evidence.count === 1 ? "1 issue" : `${formatCount(evidence.count)} issues`,
+				options.className,
+			),
 	})
 }
 
@@ -265,6 +272,17 @@ export const evidenceDetail = <M>(
 					? [fact(h, "Time left", formatDaysLeft(evidence.daysLeft))]
 					: []),
 				...(evidence.ageDays !== null ? [fact(h, "Account age", formatDays(evidence.ageDays))] : []),
+			]),
+		overdue: (evidence) =>
+			facts([
+				fact(h, evidence.count === 1 ? "Issue" : "Most overdue", evidence.issueTitle),
+				fact(
+					h,
+					evidence.clock === "reply" ? "Reply was due" : "Resolution was due",
+					date(evidence.dueAt),
+				),
+				fact(h, "Overdue by", danger(h, overdueLabel(evidence.overdueMs))),
+				...(evidence.count > 1 ? [fact(h, "Overdue issues", formatCount(evidence.count))] : []),
 			]),
 	})
 }

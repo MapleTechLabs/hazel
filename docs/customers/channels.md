@@ -194,7 +194,6 @@ someone who is not an org member.
 
 ## Later
 
-- Issues from messages, SLAs and first-response times per linked channel.
-- Open support issues and SLA state in the card's `support` slot.
+- Open support issues and SLA state in the customer card's `support` slot.
 - Discord members' identity: Discord shares no emails, so Discord channels match by guild and
   name only.

@@ -1,5 +1,6 @@
 import { AttachmentId, ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
+import { CustomerAuthorInfo } from "../../customers/chat-authors"
 
 /**
  * What the channel page looks up besides its message window: people, presence, custom emoji,
@@ -103,6 +104,8 @@ export const Lookups = Schema.Struct({
 	/** The platform the channel is bridged to by an active chat sync link, marked on its header icon. */
 	syncProvider: Schema.NullOr(SyncProvider),
 	agentMarks: Schema.Array(AgentMarkInfo),
+	/** The org's customer-chat authors while the channel (or a thread's parent) is linked; else null. */
+	customerAuthors: Schema.NullOr(Schema.Array(CustomerAuthorInfo)),
 	threadChannels: Schema.Array(ThreadChannelInfo),
 	threadMessages: Schema.Array(ThreadMessageInfo),
 	replyTargets: Schema.Array(ReplyTarget),
@@ -118,6 +121,7 @@ export const emptyLookups: Lookups = {
 	syncedMessages: [],
 	syncProvider: null,
 	agentMarks: [],
+	customerAuthors: null,
 	threadChannels: [],
 	threadMessages: [],
 	replyTargets: [],

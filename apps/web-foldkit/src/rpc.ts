@@ -13,6 +13,7 @@ import {
 	ChatSyncRpcs,
 	ConnectShareRpcs,
 	CustomEmojiRpcs,
+	CustomerChatRpcs,
 	CustomerRpcs,
 	GitHubSubscriptionRpcs,
 	IntegrationRequestRpcs,
@@ -58,7 +59,7 @@ const AllRpcs = MessageRpcs.merge(
 	BotRpcs,
 	ConnectShareRpcs,
 	InvitationRpcs,
-).merge(ChatSyncRpcs, CustomerRpcs, PushDeviceRpcs)
+).merge(ChatSyncRpcs, CustomerRpcs, CustomerChatRpcs, PushDeviceRpcs)
 
 const makeClient = RpcClient.make(AllRpcs, { flatten: true })
 

@@ -17,7 +17,9 @@ import { Effect, Option, Schema } from "effect"
 import { NotificationService } from "../../../services/notifications/notification-service"
 import { enqueueEffect, defineEffect } from "../effects/registry"
 import { MessageNotificationEffects } from "../user/message-notifications"
+import { recordCustomerChatMessage } from "./customer-chat"
 import { loadPushContent } from "./push-content"
+import { relaySupportMessageDeleted } from "./support-relay"
 
 export const MessageCreatedPayload = Schema.Struct({
 	channelId: ChannelId,
@@ -33,6 +35,10 @@ export const MessageCreatedPayload = Schema.Struct({
 	content: Schema.optional(Schema.String),
 	/** The message's attachments, counted when it has no text. */
 	attachmentCount: Schema.optional(Schema.Number),
+	/** ISO send time. Optional: deliveries enqueued before it have none. */
+	createdAt: Schema.optional(Schema.String),
+	/** A thread reply's root message (in the parent channel), for support issues. */
+	threadRootMessageId: Schema.optional(Schema.NullOr(MessageId)),
 })
 export type MessageCreatedPayload = typeof MessageCreatedPayload.Type
 
@@ -128,6 +134,7 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 	if (channel._tag === "None") return
 	const payload = { ...input, channelId: channel.value.id }
 	const content = payload.content
+	yield* recordCustomerChatMessage(channel.value, payload)
 
 	yield* NotificationService.use((service) =>
 		service.notify(channel.value.organizationId, {
@@ -172,6 +179,11 @@ export const messageDeleted = Effect.fn("OrgEffects.messageDeleted")(function* (
 		),
 	)
 	if (channel._tag === "None") return
+	yield* relaySupportMessageDeleted({
+		organizationId: channel.value.organizationId,
+		channel: channel.value,
+		messageId: input.messageId,
+	})
 	const db = yield* Database.Database
 	const members = yield* db.run(
 		SQLite.from(schema.channelMembersTable)

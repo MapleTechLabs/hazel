@@ -18,6 +18,7 @@ import { Clock, Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import { defineCall } from "../calls"
 import { inList } from "../customers/sql"
+import { forgetChatAuthorsBackfill, requestChatAuthorsBackfill } from "./customer-chat"
 import { CustomersEffects } from "../effects/customers-effects"
 import { defineEffect, enqueueEffect, type EffectReceivers, type EffectSender } from "../effects/registry"
 import { customersTarget } from "../kinds"
@@ -169,12 +170,17 @@ const applyChannelCustomers = Effect.fn("OrgObject.applyChannelCustomers")(funct
 		yield* db.run(
 			SQLite.deleteFrom(schema.channelCustomersTable).where(($) => [inList($.channelId, gone)]),
 		)
+		yield* Effect.forEach(gone, forgetChatAuthorsBackfill, { discard: true })
 	}
 	const held = new Map(current.map((row) => [row.channelId, row]))
 	for (const link of payload.links) {
 		const row = held.get(link.channelId)
 		const fields = rowValuesOf(link)
 		if (row !== undefined && sameRow(row, fields)) continue
+		// Moved to another account: that account gets the channel's past authors too.
+		if (row !== undefined && row.accountId !== link.accountId) {
+			yield* forgetChatAuthorsBackfill(link.channelId)
+		}
 		const values = { organizationId: payload.organizationId, ...fields, updatedAt: now }
 		yield* db.run(
 			SQLite.insertInto(schema.channelCustomersTable)
@@ -182,6 +188,12 @@ const applyChannelCustomers = Effect.fn("OrgObject.applyChannelCustomers")(funct
 				.onConflictDoUpdate({ target: ["channelId"], set: values }),
 		)
 	}
+	// Who wrote there before the link (once per link; links from before this feature too).
+	yield* Effect.forEach(
+		payload.links,
+		(link) => requestChatAuthorsBackfill(payload.organizationId, link.channelId),
+		{ discard: true },
+	)
 })
 
 export const channelCustomerOrgReceivers = {

@@ -718,7 +718,12 @@ describe("image viewer", () => {
 
 	test("right-clicking an attachment image offers Copy Image and Copy Image Address", () => {
 		const url = "https://cdn.hazel.sh/photo-1.png"
-		const facts = { isOwnMessage: () => false, isPinned: () => false, canStartThread: () => false }
+		const facts = {
+			isOwnMessage: () => false,
+			isPinned: () => false,
+			canStartThread: () => false,
+			canCreateIssue: () => false,
+		}
 		const opened = Overlays.update(
 			Overlays.init(),
 			Overlays.Message.RightClickedMessage({

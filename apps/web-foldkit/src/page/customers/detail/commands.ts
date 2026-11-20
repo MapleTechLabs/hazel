@@ -25,8 +25,10 @@ import {
 	updateNoteAction,
 } from "../../../customers/actions"
 import { linkChannelAction, unlinkChannelAction } from "../../../customers/channels"
+import { setChatAuthorSideAction } from "../../../customers/chat-authors"
 import { fetchSuggestions } from "../../../customers/suggestions"
 import { settleFeatureFlags } from "../../../customers/feature-flags"
+import { fetchSupportReport } from "../../../customers/support-report"
 import { catchCommon, errorToastOf } from "../../../data/actions"
 import { showBackgroundToast } from "../../../overlay/background-toasts"
 import { HazelRpc } from "../../../rpc"
@@ -69,6 +71,22 @@ export const FetchCustomerUsage = Command.define("FetchCustomerUsage", {
 			catchCommon((reason) => Message.FailedFetchUsage({ ...asked, reason })),
 		)
 	},
+})
+
+/** The 30-day Support report, kept to this customer's row (the overview's Support block). */
+export const FetchCustomerSupport = Command.define("FetchCustomerSupport", {
+	args: target,
+	messages: [Message.SucceededFetchSupport, Message.FailedFetchSupport],
+	execute: ({ organizationId, accountId }) =>
+		fetchSupportReport(organizationId, "30d").pipe(
+			Effect.map((report) =>
+				Message.SucceededFetchSupport({
+					accountId,
+					row: report.byAccount.find((row) => row.key === accountId) ?? null,
+				}),
+			),
+			catchCommon((reason) => Message.FailedFetchSupport({ accountId, reason })),
+		),
 })
 
 export const FetchCustomerMrrHistory = Command.define("FetchCustomerMrrHistory", {
@@ -279,6 +297,25 @@ export const UnlinkCustomerChannel = Command.define("UnlinkCustomerChannel", {
 				Effect.succeed(Message.FailedChannelAction({ action: "unlink", reason: "NotFound" })),
 			),
 			catchCommon((reason) => Message.FailedChannelAction({ action: "unlink", reason })),
+		),
+})
+
+/** Mark someone as our team or the customer in the org's linked channels, or clear the mark. */
+export const SetChatAuthorSide = Command.define("SetChatAuthorSide", {
+	args: {
+		organizationId: OrganizationId,
+		userId: UserId,
+		side: Schema.NullOr(Customers.AuthorSideOverride),
+		by: UserId,
+	},
+	messages: [Message.SucceededSetChatAuthorSide, Message.FailedSetChatAuthorSide],
+	execute: (args) =>
+		setChatAuthorSideAction(args).pipe(
+			Effect.as(Message.SucceededSetChatAuthorSide()),
+			Effect.catchTag("CustomersNotFoundError", () =>
+				Effect.succeed(Message.FailedSetChatAuthorSide({ reason: "NotFound" })),
+			),
+			catchCommon((reason) => Message.FailedSetChatAuthorSide({ reason })),
 		),
 })
 

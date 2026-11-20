@@ -37,6 +37,7 @@ import { channelTarget } from "../../worker/objects/kinds"
 import { syncChannelAccess, syncMemberAccess } from "../../worker/objects/org/channel-access"
 import { renameChannel } from "../../worker/objects/org/channel-rename"
 import { upsertUserProjection } from "../../worker/objects/org/projections"
+import { noteExternalWorkspace } from "../../worker/objects/org/customer-chat"
 import { ChannelAccessSyncService } from "../channel-access-sync"
 import {
 	type ChannelIngestEvent,
@@ -389,6 +390,7 @@ const resolveAuthor = Effect.fn("OrgObject.chatSyncResolveAuthor")(function* (
 	provider: string,
 	organizationId: OrganizationId,
 	author: NonNullable<OrgChatSyncIngestPayload["author"]>,
+	link: { readonly hazelChannelId: ChannelId; readonly externalWorkspaceId: string },
 ) {
 	const db = yield* Database.Database
 	if (author.externalUserId !== null) {
@@ -408,6 +410,16 @@ const resolveAuthor = Effect.fn("OrgObject.chatSyncResolveAuthor")(function* (
 	}
 	const userId: UserId = author.user.id
 	yield* upsertUserProjection(author.user)
+	// Our own Slack workspace's people are our team in channels linked to customers
+	// (`customer-chat.ts`). Discord sends its server here, which both sides share.
+	if (provider === "slack" && author.externalUserId !== null && author.externalWorkspaceId) {
+		yield* noteExternalWorkspace(
+			organizationId,
+			link.hazelChannelId,
+			userId,
+			author.externalWorkspaceId === link.externalWorkspaceId ? "home" : "other",
+		)
+	}
 	const member = yield* db.first(
 		SQLite.from(schema.organizationMembersTable)
 			.select("id")
@@ -630,7 +642,7 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 	const authorId =
 		payload.author === null
 			? undefined
-			: yield* resolveAuthor(provider, link.organizationId, payload.author)
+			: yield* resolveAuthor(provider, link.organizationId, payload.author, link)
 	let forwarded: ChannelIngestEvent
 	switch (event._tag) {
 		case "MessageCreate":

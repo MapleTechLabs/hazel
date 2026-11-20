@@ -211,6 +211,7 @@ export const MessageAction = Schema.Literals([
 	"copy-id",
 	"delete",
 	"add-reaction",
+	"create-issue",
 ])
 export type MessageAction = typeof MessageAction.Type
 
@@ -227,6 +228,8 @@ export interface MessageFacts {
 	readonly isPinned: (messageId: MessageId) => boolean
 	/** A thread can start from it: a message of the channel itself, not of a thread (or the open thread panel). */
 	readonly canStartThread: (messageId: MessageId) => boolean
+	/** "Create issue": a top-level message of a channel linked to a customer, with no issue yet. */
+	readonly canCreateIssue: (messageId: MessageId) => boolean
 }
 
 // COMMAND
@@ -289,6 +292,7 @@ export const NATIVE_REACTION = "react:"
 
 export const moreMenuEntries = (facts: MessageFacts, messageId: MessageId): ReadonlyArray<Menu.Entry> => [
 	...(facts.canStartThread(messageId) ? [Menu.item("thread")] : []),
+	...(facts.canCreateIssue(messageId) ? [Menu.item("create-issue")] : []),
 	Menu.item("pin"),
 ]
 
@@ -313,6 +317,7 @@ export const contextMenuEntries = (
 	Menu.item("reply", { textValue: "Reply" }),
 	...(facts.isOwnMessage(messageId) ? [Menu.item("edit", { textValue: "Edit Message" })] : []),
 	...(facts.canStartThread(messageId) ? [Menu.item("thread", { textValue: "Reply in Thread" })] : []),
+	...(facts.canCreateIssue(messageId) ? [Menu.item("create-issue", { textValue: "Create Issue" })] : []),
 	Menu.separator,
 	Menu.item("copy", { textValue: "Copy Text" }),
 	...(imageUrl === null

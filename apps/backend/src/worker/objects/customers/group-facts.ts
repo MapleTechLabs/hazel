@@ -220,5 +220,6 @@ export const groupFacts = (
 		),
 		movements: groupMovements(group),
 		health: primary.health,
+		openIssueSlas: group.flatMap((facts) => facts.openIssueSlas),
 	}
 }

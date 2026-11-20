@@ -80,6 +80,7 @@ import {
 	userIdOfOwnerKey,
 } from "./model"
 import { notesTab } from "./notes-tab"
+import { peopleInChat } from "./people-in-chat"
 import { overviewTab } from "./overview-tab"
 import { type Context, icon, memberOf, menu } from "./parts"
 import { usersTab } from "./users-tab"
@@ -585,7 +586,7 @@ const property = (h: HtmlBuilder<Message>, label: string, value: Html | string) 
 		[h.span([h.Class("text-muted-fg")], [label]), h.div([h.Class("min-w-0 text-fg")], [value])],
 	)
 
-const sidebarSection = (
+export const sidebarSection = (
 	h: HtmlBuilder<Message>,
 	title: string,
 	aside: string | null,
@@ -1082,6 +1083,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 				property(h, "Tags", tags(h, model, context)),
 			]),
 			channelsSection(h, model, context),
+			sidebarSection(h, "People in chat", null, peopleInChat(h, model, context)),
 			featureFlagsSection(h, model, context),
 			sidebarSection(
 				h,

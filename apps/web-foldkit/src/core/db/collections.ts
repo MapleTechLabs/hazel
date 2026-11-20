@@ -12,6 +12,7 @@ import {
 	ChatSyncMessageLink,
 	ConnectConversation,
 	ConnectConversationChannel,
+	CustomerChatAuthor,
 	CustomEmoji,
 	IntegrationConnection,
 	JsonDate,
@@ -177,6 +178,23 @@ export const channelCustomerCollection = createEffectCollection(
 	},
 	persist,
 )
+/**
+ * Who writes in the org's channels linked to customers (`customer_chat_authors`,
+ * `docs/customers/author-side.md`): each author's side (customer, team, bot, unknown), why, and a
+ * member's override. Keyed by `organizationId:userId`; the org's members only.
+ */
+export const customerChatAuthorCollection = createEffectCollection(
+	{
+		id: "customer_chat_authors",
+		table: "customer_chat_authors",
+		schema: CustomerChatAuthor.Schema,
+		parseRow: parseTimestamps,
+		getKey: (row) => `${row.organizationId}:${row.userId}`,
+		hub: syncHub,
+		sources: orgSources,
+	},
+	persist,
+)
 export const botCollection = orgCollection("bots", Bot.Schema)
 export const botCommandCollection = orgCollection("bot_commands", BotCommand.Schema)
 export const botInstallationCollection = orgCollection("bot_installations", BotInstallation.Schema)
@@ -189,9 +207,18 @@ const customersCollection = <A extends { readonly id: string }>(table: string, s
 
 export const customerAccountCollection = customersCollection("customer_accounts", Customers.Account.Schema)
 export const customerSignalCollection = customersCollection("customer_signals", Customers.Signal.Schema)
+export const customerIssueCollection = customersCollection("customer_issues", Customers.Issue.Schema)
+export const customerIssueSlaCollection = customersCollection(
+	"customer_issue_slas",
+	Customers.IssueSla.Schema,
+)
 export const customerSignalRuleCollection = customersCollection(
 	"customer_signal_rules",
 	Customers.SignalRule.Schema,
+)
+export const customerSlaPolicyCollection = customersCollection(
+	"customer_sla_policies",
+	Customers.SlaPolicy.Schema,
 )
 export const customerNoteCollection = customersCollection("customer_notes", Customers.Note.Schema)
 export const customerSavedViewCollection = customersCollection(
@@ -215,6 +242,19 @@ export const customerSyncRunCollection = customersCollection("customer_sync_runs
 export const customerChannelLinkCollection = customersCollection(
 	"customer_channel_links",
 	Customers.ChannelLink.Schema,
+)
+/** Per account, who wrote in its linked channels and their side. Keyed by `accountId:userId`. */
+export const customerChatParticipantCollection = createEffectCollection(
+	{
+		id: "customer_chat_participants",
+		table: "customer_chat_participants",
+		schema: Customers.ChatParticipant,
+		parseRow: parseTimestamps,
+		getKey: (row) => `${row.accountId}:${row.userId}`,
+		hub: syncHub,
+		sources: customersSources,
+	},
+	persist,
 )
 export const customerFeatureFlagCollection = customersCollection(
 	"customer_feature_flags",

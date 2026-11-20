@@ -4,7 +4,8 @@
  *
  * Heavy or per-account data (contacts, refs, billing, daily series, events, unmatched records)
  * is not streamed: the read RPCs serve it. Closed signals stream for 30 days (the Done tab);
- * older ones page through `customers.signals.history`.
+ * older ones page through `customers.signals.history`. Support issues: unclosed, and closed ones for
+ * 30 days.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import type { SyncSource } from "@hazel/sync-do"
@@ -15,6 +16,8 @@ import { type SyncTableSpec, syncTable, userIdsOf } from "./rows"
 
 /** Closed signals stay in the stream this long. */
 export const CLOSED_SIGNAL_WINDOW_DAYS = 30
+/** Closed support issues stay in the stream this long (the inbox's Closed tab). */
+export const CLOSED_ISSUE_WINDOW_DAYS = 30
 
 const isMember = (userId: UserId) =>
 	SQLite.sql.cond`EXISTS (SELECT 1 FROM "customer_members" cm WHERE cm."userId" = ${userId})`
@@ -37,10 +40,37 @@ export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = 
 		table: schema.customerSignalRulesTable,
 		visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)],
 	},
+	{
+		table: schema.customerSlaPoliciesTable,
+		visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)],
+	},
 	{ table: schema.customerNotesTable, visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)] },
+	{
+		table: schema.customerIssuesTable,
+		visible: (p, $) => [
+			$.deletedAt.isNull(),
+			isMember(p.userId),
+			SQLite.sql
+				.cond`(${$.closedAt} IS NULL OR ${$.closedAt} > strftime('%Y-%m-%d %H:%M:%f', 'now', ${`-${CLOSED_ISSUE_WINDOW_DAYS} days`}))`,
+		],
+	},
+	{
+		// The clocks of the issues streamed above: unresolved, or resolved within the window.
+		table: schema.customerIssueSlasTable,
+		visible: (p, $) => [
+			isMember(p.userId),
+			SQLite.sql
+				.cond`(json_extract(${$.state}, '$.resolution.resolvedAt') IS NULL OR ${$.updatedAt} > strftime('%Y-%m-%d %H:%M:%f', 'now', ${`-${CLOSED_ISSUE_WINDOW_DAYS} days`}))`,
+		],
+	},
 	{
 		table: schema.customerChannelLinksTable,
 		visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)],
+	},
+	{
+		table: schema.customerChatParticipantsTable,
+		key: ["accountId", "userId"],
+		visible: (p) => [isMember(p.userId)],
 	},
 	{
 		table: schema.customerSavedViewsTable,

@@ -16,6 +16,7 @@ import {
 } from "../../chat/html-render"
 import { cachedLiveState, initialLiveState, liveEmbedOf, type LiveStates } from "../../chat/live-state"
 import { processMessageUrls } from "../../chat/message/content"
+import type { CustomerAuthorInfo } from "../../customers/chat-authors"
 import type { LikeRow } from "../../mount/message-list"
 import { linkPreviewKey, tweetKey, type Unfurls } from "../../chat/unfurl"
 import {
@@ -69,6 +70,8 @@ export interface DeriveContext {
 	readonly attachmentsByMessage: ReadonlyMap<string, ReadonlyArray<AttachmentInfo>>
 	readonly syncedFrom: ReadonlyMap<string, SyncProvider>
 	readonly agentNames: ReadonlyMap<string, string>
+	/** Authors' sides by user id while the channel is linked to a customer; null when it is not. */
+	readonly customerAuthors: ReadonlyMap<string, CustomerAuthorInfo> | null
 	readonly threadNames: ReadonlyMap<string, string>
 	readonly threadMessages: ReadonlyMap<string, ReadonlyArray<Lookups["threadMessages"][number]>>
 	readonly replyTargets: ReadonlyMap<string, Lookups["replyTargets"][number]>
@@ -123,6 +126,8 @@ export const toDeriveContext = (
 	attachmentsByMessage: groupBy(lookups.attachments, (attachment) => attachment.messageId),
 	syncedFrom: new Map(lookups.syncedMessages.map((synced) => [synced.messageId, synced.provider])),
 	agentNames: new Map(lookups.agentMarks.map((mark) => [mark.id, mark.agentName])),
+	customerAuthors:
+		lookups.customerAuthors === null ? null : byKey(lookups.customerAuthors, (author) => author.userId),
 	threadNames: new Map(lookups.threadChannels.map((channel) => [channel.id, channel.name])),
 	threadMessages: groupBy(lookups.threadMessages, (message) => message.channelId),
 	replyTargets: byKey(lookups.replyTargets, (target) => target.id),
@@ -352,6 +357,15 @@ export const htmlRendersOf = (
 	return rows.length === 0 ? NO_HTML_RENDERS : rows
 }
 
+/** A linked channel's author the org has not classified yet. */
+const UNKNOWN_SIDE: MessageRowData["authorSide"] = { side: "unknown", reason: "unknown" }
+
+const authorSideOf = (context: DeriveContext, authorId: string): MessageRowData["authorSide"] => {
+	if (context.customerAuthors === null) return null
+	const author = context.customerAuthors.get(authorId)
+	return author === undefined ? UNKNOWN_SIDE : { side: author.side, reason: author.reason }
+}
+
 const NO_HTML_RENDERS: ReadonlyArray<HtmlRenderRow> = []
 const NO_URL_EMBEDS: ReadonlyArray<UrlEmbed> = []
 const NO_REACTIONS: ReadonlyArray<ChatReaction> = []
@@ -375,6 +389,7 @@ export const messageRowData = (
 		status: statusOf(context, message.authorId),
 		syncedFrom: context.syncedFrom.get(message.id) ?? null,
 		agentName: context.agentNames.get(message.id) ?? null,
+		authorSide: authorSideOf(context, message.authorId),
 		reply: replyOf(context, message.replyToMessageId),
 		thread: threadOf(context, message.threadChannelId),
 		attachments: context.attachmentsByMessage.get(message.id) ?? NO_ATTACHMENTS,

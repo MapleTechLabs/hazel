@@ -16,7 +16,7 @@ import { successToast } from "../../../data/actions"
 import { AppRoute } from "../../../route"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
-import { FetchCustomersOverview, FetchSuggestedChannelLinks } from "./commands"
+import { FetchCustomersOverview, FetchOverviewSupport, FetchSuggestedChannelLinks } from "./commands"
 import { Message } from "./message"
 import type { Model } from "./model"
 
@@ -44,8 +44,28 @@ const fetchSuggestions = (model: Model, shared: Shared, force = false): Return =
 	}
 }
 
+/** Loads the support tiles for `model.range`, keeping what shows while it loads. */
+const fetchSupport = (model: Model, shared: Shared): Return => {
+	const organizationId = shared.organization?.id
+	if (organizationId === undefined) return { model }
+	return {
+		model: modifyFields(model, {
+			support: (support) => Option.getOrElse(AsyncData.revalidateOrLoad(support), () => support),
+		}),
+		commands: [FetchOverviewSupport({ organizationId, range: model.range })],
+	}
+}
+
+/** The overview and its support tiles. */
+const fetchAll = (model: Model, shared: Shared): Return => {
+	const overview = fetch(model, shared)
+	const support = fetchSupport(overview.model, shared)
+	return { model: support.model, commands: [...(overview.commands ?? []), ...(support.commands ?? [])] }
+}
+
+/** The overview and its support tiles (once), and the suggested channel links. */
 const both = (model: Model, shared: Shared): Return => {
-	const overview = AsyncData.isIdle(model.overview) ? fetch(model, shared) : { model }
+	const overview = AsyncData.isIdle(model.overview) ? fetchAll(model, shared) : { model }
 	const suggestions = fetchSuggestions(overview.model, shared)
 	return {
 		model: suggestions.model,
@@ -61,6 +81,7 @@ export const init = (_route: unknown, shared: Shared): Return =>
 			range: "30d",
 			isComparing: true,
 			overview: AsyncData.Idle(),
+			support: AsyncData.Idle(),
 			healthMetric: "customers",
 			hoveredMrr: null,
 			hoveredActiveUsers: null,
@@ -83,7 +104,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ClickedRange: ({ range }) =>
 			range === model.range
 				? { model }
-				: fetch(
+				: fetchAll(
 						modifyFields(model, {
 							range: () => range,
 							hoveredMrr: () => null,
@@ -102,6 +123,19 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					: modifyFields(model, { hoveredActiveUsers: () => index }),
 		}),
 		PressedRetry: () => fetch(model, shared),
+		PressedRetrySupport: () => fetchSupport(model, shared),
+		SucceededFetchSupport: ({ range, report }) =>
+			range === model.range
+				? {
+						model: modifyFields(model, {
+							support: (current) => AsyncData.settle(current, Result.succeed(report)),
+						}),
+					}
+				: { model },
+		FailedFetchSupport: ({ range, reason }) =>
+			range === model.range
+				? { model: modifyFields(model, { support: () => AsyncData.Failure({ error: reason }) }) }
+				: { model },
 		PressedConnect: ({ provider }) => ({
 			model,
 			outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>

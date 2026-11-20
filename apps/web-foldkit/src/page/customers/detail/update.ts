@@ -38,11 +38,13 @@ import {
 	FetchCustomerEvents,
 	FetchCustomerInvoices,
 	FetchCustomerMrrHistory,
+	FetchCustomerSupport,
 	FetchCustomerUsage,
 	FocusNoteComposer,
 	LoadNoteDrafts,
 	LinkCustomerAccount,
 	LinkCustomerChannel,
+	SetChatAuthorSide,
 	SetCustomerEnvironment,
 	SetCustomerFeatureFlags,
 	SetCustomerPrimary,
@@ -93,11 +95,13 @@ import {
 	snoozeEntries,
 	TAG_POPOVER_ID,
 	CHANNEL_POPOVER_ID,
+	CHAT_PERSON_MENU_ID,
 	FLAG_POPOVER_ID,
 	UNASSIGN,
 	userIdOfOwnerKey,
 } from "./model"
 import { draftToRestore } from "./note-drafts"
+import { CHAT_PERSON_SIDE, ChatPersonKey, chatPeopleOfModel, chatPersonEntries } from "./people-in-chat"
 
 type Return = PageReturn<Model, Message>
 type Commands = NonNullable<Return["commands"]>
@@ -165,6 +169,10 @@ const load = (model: Model, shared: Shared): Return => {
 	if (AsyncData.isIdle(next.detail)) {
 		next = modifyFields(next, { detail: () => AsyncData.Loading() })
 		commands.push(FetchCustomerDetail(args))
+	}
+	if (next.tab === "overview" && AsyncData.isIdle(next.support)) {
+		next = modifyFields(next, { support: () => AsyncData.Loading() })
+		commands.push(FetchCustomerSupport(args))
 	}
 	if (next.tab === "overview" && AsyncData.isIdle(next.usage)) {
 		const fetched = fetchUsage(next, shared)
@@ -247,6 +255,9 @@ const initialModel = (route: Route): Model => ({
 	hoveredUsage: null,
 	mrrHistory: AsyncData.Idle(),
 	hoveredMrr: null,
+	supportIssues: null,
+	supportSlas: [],
+	support: AsyncData.Idle(),
 	contacts: EMPTY_PAGE,
 	contactFilter: "all",
 	contactSearch: "",
@@ -271,6 +282,10 @@ const initialModel = (route: Route): Model => ({
 	channelOptions: [],
 	channelPopover: Popover.init(CHANNEL_POPOVER_ID),
 	channelSearch: "",
+	chatParticipants: [],
+	chatAuthors: [],
+	activeChatPersonId: null,
+	chatPersonMenu: Menu.init({ id: CHAT_PERSON_MENU_ID, placement: "bottom end" }),
 	suggestions: EMPTY_SUGGESTIONS,
 	suggestionsFor: null,
 	createdFeatureFlags: [],
@@ -319,6 +334,7 @@ type MenuField =
 	| "doneMenu"
 	| "signalMoreMenu"
 	| "environmentMenu"
+	| "chatPersonMenu"
 type MenuCommands = NonNullable<ReturnType<typeof Menu.update>["commands"]>
 
 const MENU_MESSAGE = {
@@ -330,6 +346,7 @@ const MENU_MESSAGE = {
 	doneMenu: (message: Menu.Message) => Message.GotDoneMenuMessage({ message }),
 	signalMoreMenu: (message: Menu.Message) => Message.GotSignalMoreMenuMessage({ message }),
 	environmentMenu: (message: Menu.Message) => Message.GotEnvironmentMenuMessage({ message }),
+	chatPersonMenu: (message: Menu.Message) => Message.GotChatPersonMenuMessage({ message }),
 } as const satisfies Record<MenuField, (message: Menu.Message) => Message>
 
 const mapMenuCommands = (field: MenuField, commands: MenuCommands): Commands => {
@@ -358,6 +375,28 @@ const openMenu = (model: Model, field: MenuField, entries: ReadonlyArray<Menu.En
 	updateMenu(model, field, Menu.Message.PressedTriggerKey({ key: "ArrowDown", entries }), (next) => ({
 		model: next,
 	}))
+
+// PEOPLE IN CHAT
+
+/** A pick in a person's menu: set or clear their override. */
+const onChatPersonMenu = (model: Model, shared: Shared, key: string): Return => {
+	const pick = ChatPersonKey.literals.find((literal) => literal === key)
+	const userId = model.activeChatPersonId
+	const by = shared.currentUser?.id
+	if (pick === undefined || userId === null || shared.organization === null || by === undefined)
+		return { model }
+	return {
+		model,
+		commands: [
+			SetChatAuthorSide({
+				organizationId: shared.organization.id,
+				userId,
+				side: CHAT_PERSON_SIDE[pick],
+				by,
+			}),
+		],
+	}
+}
 
 // ACCOUNT
 
@@ -759,6 +798,25 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			metricKey === model.usageMetric && range === model.usageRange
 				? { model: modifyFields(model, { usage: (current) => settle(current, Result.fail(reason)) }) }
 				: { model },
+		UpdatedSupportIssues: ({ issues }) => ({
+			model: modifyFields(model, { supportIssues: () => issues }),
+		}),
+		UpdatedSupportSlas: ({ slas }) => ({ model: modifyFields(model, { supportSlas: () => slas }) }),
+		SucceededFetchSupport: ({ row }) => ({
+			model: modifyFields(model, { support: (current) => settle(current, Result.succeed(row)) }),
+		}),
+		PressedRetrySupport: () => {
+			const args = target(model, shared)
+			return args === null || AsyncData.isLoading(model.support)
+				? { model }
+				: {
+						model: modifyFields(model, { support: () => AsyncData.Loading() }),
+						commands: [FetchCustomerSupport(args)],
+					}
+		},
+		FailedFetchSupport: ({ reason }) => ({
+			model: modifyFields(model, { support: (current) => settle(current, Result.fail(reason)) }),
+		}),
 		SucceededFetchMrrHistory: ({ series }) => ({
 			model: modifyFields(model, { mrrHistory: (current) => settle(current, Result.succeed(series)) }),
 		}),
@@ -964,6 +1022,39 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 							title: "Couldn't link the channel",
 							description: "Threads and direct messages can't be linked to a customer.",
 						},
+					}),
+				),
+			),
+		}),
+		UpdatedChatParticipants: ({ participants }) => ({
+			model: modifyFields(model, { chatParticipants: () => participants }),
+		}),
+		UpdatedChatAuthors: ({ authors }) => ({ model: modifyFields(model, { chatAuthors: () => authors }) }),
+		PressedChatPersonMenu: ({ userId }) => {
+			const person = chatPeopleOfModel(model).find((entry) => entry.userId === userId)
+			return person === undefined
+				? { model }
+				: openMenu(
+						modifyFields(model, { activeChatPersonId: () => userId }),
+						"chatPersonMenu",
+						chatPersonEntries(person),
+					)
+		},
+		GotChatPersonMenuMessage: ({ message: menuMessage }) =>
+			updateMenu(model, "chatPersonMenu", menuMessage, (next, key) =>
+				onChatPersonMenu(next, shared, key),
+			),
+		SucceededSetChatAuthorSide: () => ({ model }),
+		FailedSetChatAuthorSide: ({ reason }) => ({
+			model,
+			outMessage: toast(
+				errorToastOf(
+					failureMessage(reason, {
+						NotFound: {
+							title: "Couldn't change their side",
+							description: "The customer is no longer available.",
+						},
+						Stale: { title: "Couldn't change their side" },
 					}),
 				),
 			),

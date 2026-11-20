@@ -372,6 +372,8 @@ Connected = `active`; an activity source (Clerk, Maple) also needs to be deliver
 at all, is unavailable, as is a `usage_drop` on a metric whose definition's provider is. A
 connection that never pulls (the demo seed's: `nextSyncAt` null) delivers what it imported. Its
 signals stay as they are (nothing opens or auto-resolves), as with a source in error.
+The SLA templates (`response_overdue`, `resolution_overdue`, `docs/customers/sla.md` §4) skip the
+Needs attention coverage: they evaluate every non-churned account in the rule's own scope.
 
 | Template                      | Match (defaults)                                        | Evidence (`_tag` = viz) | Escalation `step` +1 / +2           |
 | ----------------------------- | ------------------------------------------------------- | ----------------------- | ----------------------------------- |
@@ -386,6 +388,8 @@ signals stay as they are (nothing opens or auto-resolves), as with a source in e
 | `near_limit`                  | metered metric ≥ 90% of limit                           | `limit`                 | ≥ 100% / ≥ 120%                     |
 | `seat_growth`                 | activeUsers30d +50% vs 30 d ago, from ≥ 3               | `delta` (users)         | +100% / +200%                       |
 | `churned`                     | stage churned, `churnedAt` within 14 d                  | `delta` (minor, lost)   | — / —                               |
+| `response_overdue`            | open issue's reply past due by ≥ grace (0 min)          | `overdue` (reply)       | ≥ 2× / ≥ 4× the reply target late   |
+| `resolution_overdue`          | open issue past its resolution due by ≥ grace (0 min)   | `overdue` (resolution)  | ≥ 2× / ≥ 4× the resolution target   |
 
 - Severity = `escalate(rule.severity, step)` (rule severity is the floor).
 - Title = template name (or the rule's name if renamed); reason = one plain sentence from evidence

@@ -2,12 +2,20 @@
  * Signal evaluation per template (`./evaluate.ts`): each fires on its condition, stays quiet below
  * it, escalates by evidence step, and honours scope, sources and churn.
  */
-import { type RuleConfig, type SignalSeverity, TEMPLATES } from "@hazel/domain/customers"
+import {
+	DEFAULT_SLA_POLICY,
+	type RuleConfig,
+	type SignalSeverity,
+	type SlaPriority,
+	TEMPLATES,
+} from "@hazel/domain/customers"
+import type { CustomerIssueId } from "@hazel/schema"
 import { describe, expect, it } from "vitest"
 import { evaluate, type Match, type RuleInput } from "./evaluate"
 import { formatMoney, metricSeries } from "./facts"
 import { billingProviderOf } from "./snapshot"
-import { factsOf, type FactsInput, NOW, orgFacts, TODAY } from "./test-kit"
+import type { IssueSlaFacts } from "./facts"
+import { factsOf, type FactsInput, NOW, orgFacts, TODAY, uuid } from "./test-kit"
 import { addDays } from "./time"
 
 const ruleOf = (config: RuleConfig, overrides: Partial<RuleInput> = {}): RuleInput => ({
@@ -608,5 +616,168 @@ describe("signal evaluation", () => {
 			run("churned", churned(3), orgFacts({ attention: { stages: [], requiredSources: ["stripe"] } }))
 				._tag,
 		).toBe("Match")
+	})
+
+	describe("SLA overdue", () => {
+		const MIN = 60_000
+		/** An open issue; `replyLate` / `resolutionLate`: minutes past due (negative: due later, null: none running). */
+		const issue = (
+			options: Readonly<{
+				title?: string
+				priority?: SlaPriority
+				replyLate?: number | null
+				resolutionLate?: number | null
+				replied?: boolean
+			}>,
+		): IssueSlaFacts => {
+			const at = (late: number) => NOW.getTime() - late * MIN
+			const replyLate = options.replyLate ?? null
+			const resolutionLate = options.resolutionLate ?? null
+			return {
+				issueId: uuid() as CustomerIssueId,
+				title: options.title ?? "Dashboard is broken",
+				targets: DEFAULT_SLA_POLICY.targets,
+				state: {
+					priority: options.priority ?? "medium",
+					reply:
+						replyLate === null
+							? null
+							: {
+									first: true,
+									startedAt: at(replyLate + 240),
+									dueAt: at(replyLate),
+									warnAt: at(replyLate + 60),
+									metAt: options.replied === true ? at(replyLate - 1) : null,
+									stoppedAt: null,
+									elapsedMs: null,
+									warnedAt: null,
+									breachedAt: null,
+								},
+					firstResponse: null,
+					resolution: {
+						runningSince: resolutionLate === null ? null : at(resolutionLate + 1440),
+						consumedMs: 0,
+						dueAt: resolutionLate === null ? null : at(resolutionLate),
+						warnAt: resolutionLate === null ? null : at(resolutionLate + 360),
+						pausedAt: resolutionLate === null ? at(10) : null,
+						resolvedAt: null,
+						warnedAt: null,
+						breachedAt: null,
+					},
+				},
+			}
+		}
+		const withIssues = (...issues: ReadonlyArray<IssueSlaFacts>): FactsInput => ({
+			openIssueSlas: issues,
+		})
+		const grace = (graceMinutes: number, overrides: Partial<RuleInput> = {}) =>
+			ruleOf({ _tag: "response_overdue", graceMinutes }, overrides)
+
+		it("response_overdue: no match without an overdue reply", () => {
+			expect(run("response_overdue", {})).toEqual({ _tag: "NoMatch", reason: "No data" })
+			expect(run("response_overdue", withIssues(issue({ replyLate: -30 })))).toEqual({
+				_tag: "NoMatch",
+				reason: "Below threshold",
+			})
+			// Answered, or only the resolution clock late.
+			expect(run("response_overdue", withIssues(issue({ replyLate: 30, replied: true })))._tag).toBe(
+				"NoMatch",
+			)
+			expect(run("response_overdue", withIssues(issue({ resolutionLate: 30 })))._tag).toBe("NoMatch")
+		})
+
+		it("response_overdue: the most overdue issue, the count, and the reason", () => {
+			const late = issue({ title: "Login fails", replyLate: 80 })
+			const found = match("response_overdue", withIssues(issue({ replyLate: 30 }), late, issue({})))
+			expect(found.severity).toBe("high")
+			expect(found.reason).toBe("2 issues waiting on a reply; the most overdue by 1h 20m")
+			expect(found.evidence).toEqual({
+				_tag: "overdue",
+				step: 0,
+				clock: "reply",
+				count: 2,
+				issueId: late.issueId,
+				issueTitle: "Login fails",
+				dueAt: new Date(NOW.getTime() - 80 * MIN).toISOString(),
+				overdueMs: 80 * MIN,
+			})
+			expect(match("response_overdue", withIssues(late)).reason).toBe(
+				'"Login fails" waiting on a reply, 1h 20m overdue',
+			)
+		})
+
+		it("response_overdue: overdue by at least the grace", () => {
+			const facts = factsOf(withIssues(issue({ replyLate: 30 }), issue({ replyLate: 90 })))
+			expect(evaluate(grace(120), facts, orgFacts())).toEqual({
+				_tag: "NoMatch",
+				reason: "Below threshold",
+			})
+			const found = evaluate(grace(60), facts, orgFacts())
+			expect(found._tag === "Match" && found.evidence).toMatchObject({ count: 1, overdueMs: 90 * MIN })
+		})
+
+		it("escalates at 2× and 4× the issue's target", () => {
+			const stepOf = (template: "response_overdue" | "resolution_overdue", late: IssueSlaFacts) =>
+				evaluate(
+					ruleOf(defaults(template), { severity: "low" }),
+					factsOf(withIssues(late)),
+					orgFacts(),
+				)
+			// Medium: 4h reply, 24h resolution; urgent: 1h reply.
+			expect(stepOf("response_overdue", issue({ replyLate: 479 }))).toMatchObject({ severity: "low" })
+			expect(stepOf("response_overdue", issue({ replyLate: 480 }))).toMatchObject({
+				severity: "medium",
+			})
+			expect(stepOf("response_overdue", issue({ replyLate: 960 }))).toMatchObject({ severity: "high" })
+			expect(stepOf("response_overdue", issue({ priority: "urgent", replyLate: 240 }))).toMatchObject({
+				severity: "high",
+			})
+			expect(stepOf("resolution_overdue", issue({ resolutionLate: 2 * 1440 }))).toMatchObject({
+				severity: "medium",
+			})
+			expect(
+				match("resolution_overdue", withIssues(issue({ resolutionLate: 4 * 1440 }))).evidence.step,
+			).toBe(2)
+		})
+
+		it("resolution_overdue: a running resolution clock past due, not a paused one", () => {
+			expect(run("resolution_overdue", withIssues(issue({ replyLate: 30 })))).toEqual({
+				_tag: "NoMatch",
+				reason: "Below threshold",
+			})
+			const found = match(
+				"resolution_overdue",
+				withIssues(issue({ resolutionLate: 45, replyLate: 10 })),
+			)
+			expect(found.severity).toBe("medium")
+			expect(found.reason).toBe('"Dashboard is broken" past the resolution target, 45m overdue')
+			expect(found.evidence).toMatchObject({ _tag: "overdue", clock: "resolution", count: 1 })
+		})
+
+		it("covers accounts outside Needs attention, but not churned or out-of-scope ones", () => {
+			const lead: FactsInput = {
+				...withIssues(issue({ replyLate: 30, resolutionLate: 30 })),
+				account: { lifecycleStage: "lead", mrrMinor: 0, tags: ["slack"] },
+				providers: ["clerk"],
+			}
+			const narrow = orgFacts({ attention: { stages: ["active"], requiredSources: ["stripe"] } })
+			expect(run("response_overdue", lead, narrow)._tag).toBe("Match")
+			expect(run("resolution_overdue", lead, narrow)._tag).toBe("Match")
+			// Other templates stay behind the coverage.
+			expect(run("health_drop", lead, narrow)).toEqual({
+				_tag: "NoMatch",
+				reason: "Not covered by Needs attention",
+			})
+			expect(
+				run("response_overdue", { ...lead, account: { ...lead.account, lifecycleStage: "churned" } }),
+			).toEqual({ _tag: "NoMatch", reason: "Churned" })
+			expect(evaluate(grace(0, { scope: { payingOnly: true } }), factsOf(lead), narrow)).toEqual({
+				_tag: "NoMatch",
+				reason: "Out of scope",
+			})
+			expect(evaluate(grace(0, { scope: { tagsAny: ["slack"] } }), factsOf(lead), narrow)._tag).toBe(
+				"Match",
+			)
+		})
 	})
 })

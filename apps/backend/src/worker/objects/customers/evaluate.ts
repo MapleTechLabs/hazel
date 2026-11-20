@@ -11,11 +11,15 @@ import {
 	escalate,
 	type EvidenceStep,
 	MAX_WINDOW_DAYS,
+	overdueLabel,
 	type RuleConfig,
 	type RuleScope,
 	type SignalEvidence,
 	type SignalSeverity,
 	type SignalTemplate,
+	SLA_TEMPLATES,
+	type SlaState,
+	type SlaTarget,
 	TEMPLATES,
 } from "@hazel/domain/customers"
 import {
@@ -522,6 +526,58 @@ const seatGrowth =
 		}
 	}
 
+type OverdueClock = "reply" | "resolution"
+
+/** The clock's running deadline (null when met, stopped, paused or resolved) and target. */
+const clockOf = (state: SlaState, clock: OverdueClock, target: SlaTarget) => {
+	if (clock === "resolution")
+		return { dueAt: state.resolution.dueAt, targetMinutes: target.resolutionMinutes }
+	const reply = state.reply
+	const running = reply !== null && reply.metAt === null && reply.stoppedAt === null
+	return { dueAt: running ? reply.dueAt : null, targetMinutes: target.firstResponseMinutes }
+}
+
+/** `response_overdue`, `resolution_overdue`: open issues past the clock's deadline by the grace. */
+const overdue =
+	(clock: OverdueClock, graceMinutes: number): Check =>
+	(facts, org) => {
+		if (facts.openIssueSlas.length === 0) return "No data"
+		const now = org.now.getTime()
+		const late = facts.openIssueSlas
+			.flatMap((issue) => {
+				const { dueAt, targetMinutes } = clockOf(
+					issue.state,
+					clock,
+					issue.targets[issue.state.priority],
+				)
+				if (dueAt === null || now - dueAt < graceMinutes * 60_000) return []
+				return [{ issue, dueAt, overdueMs: now - dueAt, targetMs: targetMinutes * 60_000 }]
+			})
+			.sort((a, b) => b.overdueMs - a.overdueMs)
+		const worst = late[0]
+		if (worst === undefined) return "Below threshold"
+		const step = stepOf(worst.overdueMs >= 4 * worst.targetMs, worst.overdueMs >= 2 * worst.targetMs)
+		const by = overdueLabel(worst.overdueMs)
+		const what = clock === "reply" ? "waiting on a reply" : "past the resolution target"
+		return {
+			step,
+			reason:
+				late.length === 1
+					? `"${worst.issue.title}" ${what}, ${by} overdue`
+					: `${plural(late.length, "issue")} ${what}; the most overdue by ${by}`,
+			evidence: {
+				_tag: "overdue",
+				step,
+				clock,
+				count: late.length,
+				issueId: worst.issue.issueId,
+				issueTitle: worst.issue.title,
+				dueAt: new Date(worst.dueAt).toISOString(),
+				overdueMs: worst.overdueMs,
+			},
+		}
+	}
+
 const checkOf = (config: RuleConfig): Check => {
 	switch (config._tag) {
 		case "inactive":
@@ -546,6 +602,10 @@ const checkOf = (config: RuleConfig): Check => {
 			return seatGrowth(config)
 		case "churned":
 			return churned(config)
+		case "response_overdue":
+			return overdue("reply", config.graceMinutes)
+		case "resolution_overdue":
+			return overdue("resolution", config.graceMinutes)
 	}
 }
 
@@ -631,7 +691,9 @@ export const missingSources = (template: SignalTemplate, org: OrgFacts): Readonl
 export const evaluate = (rule: RuleInput, facts: AccountFacts, org: OrgFacts): Evaluation => {
 	// Churn is a customer's last entry: no other rule evaluates it after.
 	if (facts.stage === "churned" && rule.template !== "churned") return noMatch("Churned")
-	if (!covered(facts, org)) return noMatch("Not covered by Needs attention")
+	// The SLA templates cover every customer: only the rule's own scope narrows them.
+	if (!SLA_TEMPLATES.includes(rule.template) && !covered(facts, org))
+		return noMatch("Not covered by Needs attention")
 	if (!inScope(rule.scope, facts)) return noMatch("Out of scope")
 	if (missingSources(rule.template, org).length > 0) return noMatch("Missing data source")
 	const found = checkOf(rule.config)(facts, org)

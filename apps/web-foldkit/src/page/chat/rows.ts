@@ -1,3 +1,4 @@
+import { AuthorSide, AuthorSideReason } from "@hazel/domain/customers"
 import { ChannelId, HtmlRenderId, MessageId, UserId } from "@hazel/schema"
 import { MessageEmbed } from "@hazel/domain/models"
 import { Schema } from "effect"
@@ -152,6 +153,8 @@ export const MessageRowData = Schema.Struct({
 	syncedFrom: Schema.NullOr(SyncProvider),
 	/** The agent that wrote the message for its author (Hazel's MCP server), if one did. */
 	agentName: Schema.NullOr(Schema.String),
+	/** In a channel linked to a customer (or its thread): the author's side and why; null elsewhere. */
+	authorSide: Schema.NullOr(Schema.Struct({ side: AuthorSide, reason: AuthorSideReason })),
 	reply: Schema.NullOr(ReplyPreview),
 	thread: Schema.NullOr(ThreadPreview),
 	attachments: Schema.Array(AttachmentInfo),
