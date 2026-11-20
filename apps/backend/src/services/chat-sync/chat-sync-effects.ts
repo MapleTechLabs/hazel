@@ -310,6 +310,17 @@ export const ImportHistoryPayload = Schema.Struct({
 	remaining: Schema.Finite,
 	/** Where this page starts (the provider's cursor); `null` on the first page. */
 	cursor: Schema.NullOr(Schema.String),
+	/**
+	 * Only messages sent at or after this (epoch ms); the import ends at the first older one. Null
+	 * or absent: no cutoff.
+	 */
+	since: Schema.optional(Schema.NullOr(Schema.Finite)),
+	/**
+	 * A migration's channels still to import once this one is done, in order: one import at a time,
+	 * so a large migration stays within the provider's rate limit. Each starts with `budget` messages.
+	 */
+	then: Schema.optional(Schema.Array(ExternalChannelId)),
+	budget: Schema.optional(Schema.Finite),
 })
 export type ImportHistoryPayload = typeof ImportHistoryPayload.Type
 

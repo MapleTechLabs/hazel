@@ -1,6 +1,6 @@
 import { Command } from "effect/cli"
 import { Console, Effect } from "effect"
-import pc from "picocolors"
+import { pc } from "../colors"
 import { Doctor, type CheckResult } from "../services/doctor.ts"
 
 const formatResult = (result: CheckResult) => {

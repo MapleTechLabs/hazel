@@ -97,6 +97,11 @@ export class IntegrationGroup extends HttpApiGroup.make("integrations")
 			},
 			query: {
 				level: Schema.optional(ConnectionLevel),
+				/**
+				 * An app path (`/onboarding?step=import`) to come back to after the provider, instead
+				 * of the integration's settings page. Only same-origin paths are honoured.
+				 */
+				returnTo: Schema.optional(Schema.String),
 			},
 			success: OAuthUrlResponse,
 			error: [UnsupportedProviderError, UnauthorizedError, InternalServerError],

@@ -13,10 +13,12 @@ import {
 	dropdownCheckIndicatorClassName,
 	dropdownDescriptionBase,
 	dropdownItemStyles,
+	dropdownKeyboardBase,
 	dropdownLabelBase,
 	dropdownSectionStyles,
 	dropdownSeparatorBase,
 } from "~/components/ui/dropdown.styles"
+import { keyboardStyles } from "~/components/ui/keyboard.styles"
 import {
 	menuChevronClassName,
 	menuContentStyles,
@@ -237,6 +239,17 @@ export const menuDescription = <M>(
 			h.Class(twMerge(dropdownDescriptionBase, className)),
 			h.Id(descriptionId(id, key)),
 			h.Attribute("slot", "description"),
+		],
+		[text],
+	)
+
+/** `MenuKeyboard` (DropdownKeyboard): the item's shortcut, as quiet text at its end. */
+export const menuKeyboard = <M>(h: HtmlBuilder<M>, text: string, className?: string): Html =>
+	h.kbd(
+		[
+			h.Class(twMerge(keyboardStyles, dropdownKeyboardBase, className)),
+			h.Attribute("data-slot", "keyboard"),
+			h.Attribute("dir", "ltr"),
 		],
 		[text],
 	)

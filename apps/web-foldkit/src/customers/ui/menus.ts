@@ -1,10 +1,9 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { dropdownKeyboardBase } from "~/components/ui/dropdown.styles"
 import { keyboardStyles } from "~/components/ui/keyboard.styles"
 import { IconCheck, IconClock, IconClose, IconCopy, IconOffice, IconUser } from "../../icons"
 import * as Menu from "../../ui/menu"
-import { menuLabel } from "../../ui/menu-view"
+import { menuKeyboard, menuLabel } from "../../ui/menu-view"
 import { formatWeekdayTime, type Instant } from "../format"
 
 /**
@@ -47,12 +46,6 @@ export const snoozeMenuEntries: ReadonlyArray<Menu.Entry> = [
 	Menu.separator,
 	Menu.item(PICK_DATE_KEY, { textValue: "Pick date" }),
 ]
-
-const keyHint = <M>(h: HtmlBuilder<M>, text: string): Html =>
-	h.kbd(
-		[h.Attribute("data-slot", "keyboard"), h.Class(twMerge(keyboardStyles, dropdownKeyboardBase))],
-		[text],
-	)
 
 /** Item content for `snoozeMenuEntries`, with each option's wake time. */
 export const snoozeMenuContent =
@@ -158,7 +151,7 @@ export const rowActionsContent =
 				action.icon(h),
 				menuLabel(h, menuId, key, action.label),
 				// The snooze item's chevron sits where a key hint would.
-				...(action.key && key !== "snooze" ? [keyHint(h, action.key)] : []),
+				...(action.key && key !== "snooze" ? [menuKeyboard(h, action.key)] : []),
 			]
 		}
 		const snooze = snoozeKeyOfLeaf(key)

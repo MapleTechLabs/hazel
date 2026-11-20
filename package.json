@@ -10,15 +10,15 @@
 		],
 		"catalogs": {
 			"effect": {
-				"effect": "4.1.1",
-				"@effect/platform-bun": "4.1.1",
-				"@effect/platform-browser": "4.1.1",
-				"@effect/platform-node": "4.1.1",
-				"@effect/sql-sqlite-node": "4.1.1",
-				"@effect/sql-sqlite-do": "4.1.1",
-				"@effect/sql-d1": "4.1.1",
-				"@effect/ai-openrouter": "4.1.1",
-				"@effect/vitest": "4.1.1"
+				"effect": "4.1.2",
+				"@effect/platform-bun": "4.1.2",
+				"@effect/platform-browser": "4.1.2",
+				"@effect/platform-node": "4.1.2",
+				"@effect/sql-sqlite-node": "4.1.2",
+				"@effect/sql-sqlite-do": "4.1.2",
+				"@effect/sql-d1": "4.1.2",
+				"@effect/ai-openrouter": "4.1.2",
+				"@effect/vitest": "4.1.2"
 			},
 			"alchemy": {
 				"@alchemy.run/cloudflare": "2.0.0-beta.85",

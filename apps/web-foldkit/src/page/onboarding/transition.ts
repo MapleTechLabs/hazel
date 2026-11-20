@@ -1,13 +1,14 @@
 import { Match, Option } from "effect"
-import type { Command } from "foldkit"
+import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { onboardingHref } from "../../route"
+import * as ChatMigration from "../shared/chat-migration"
 import type { Resources } from "../../rpc"
 import * as ChoiceBox from "../../ui/choice-box"
 import type { PageReturn, Shared } from "../contract"
-import { CompleteOnboarding, ReplaceOnboardingStepUrl } from "./command"
+import { CompleteOnboarding, ReplaceOnboardingStepUrl, StoreOnboardingAnswers } from "./command"
 import { type Direction, nextStep, previousStep, type Step, stepFromUrl } from "./flow"
-import type { Message } from "./message"
+import { Message } from "./message"
 import {
 	type Data,
 	type Membership,
@@ -58,6 +59,16 @@ const stateFor = (step: Step, running: Running, shared: Shared): StepState =>
 				}),
 			}),
 		),
+		Match.when("import", () => {
+			const organizationId = running.flow.membership?.organizationId ?? null
+			return StepState.Import({
+				migration: ChatMigration.init({
+					id: "onboarding-import",
+					organizationId,
+					returnTo: onboardingHref(organizationId, "import"),
+				}),
+			})
+		}),
 		Match.when("teamInvitation", () =>
 			StepState.Invite({
 				rows: [{ id: 0, email: "", error: Option.none() }],
@@ -103,9 +114,23 @@ export const enterStep = (
 				? [ReplaceOnboardingStepUrl({ href: onboardingHref(model.orgId, step) })]
 				: []),
 			...(step === "finalization" ? [completeOnboarding(next)] : []),
+			// Saved only when the step is reached by navigation: the URL's first step may be the OAuth
+			// return, whose saved answers are still being read back and must not be overwritten.
+			...(next.step._tag === "Import" && options.syncUrl
+				? [StoreOnboardingAnswers({ data: next.data })]
+				: []),
+			...(next.step._tag === "Import" ? migrationStart(next.step.migration) : []),
 		],
 	}
 }
+
+/** Entering the import step picks up a provider's OAuth that just came back here. */
+const migrationStart = (
+	migration: ChatMigration.Model,
+): ReadonlyArray<Command.Command<Message, never, Resources>> =>
+	Command.mapMessages(ChatMigration.start(migration).commands ?? [], (message) =>
+		Message.GotMigrationMessage({ message }),
+	)
 
 type DataTransform = Partial<{ readonly [K in keyof Data]: (value: Data[K]) => Data[K] }>
 
@@ -157,7 +182,7 @@ export const startWhenReady = (
 				step: StepState.Welcome(),
 				direction: "forward",
 				animatesStep: false,
-				data: { timezone: null, useCases: [], role: null },
+				data: model.restoredData ?? { timezone: null, useCases: [], role: null },
 			})
 			return enterStep(model, running, stepFromUrl(model.urlStep, userType) ?? "welcome", {
 				direction: "forward",

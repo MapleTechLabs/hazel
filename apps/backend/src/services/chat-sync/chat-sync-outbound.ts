@@ -43,6 +43,7 @@ import {
 	ChatSyncOrgEffects,
 	InboundChatSyncWrite,
 } from "./chat-sync-effects"
+import { publishChatSyncLinks } from "./chat-sync-org"
 import { ChatSyncProviders } from "./chat-sync-providers"
 import {
 	ChatSyncProviderApiError,
@@ -50,6 +51,7 @@ import {
 	type ChatSyncLinkContext,
 	type ChatSyncProviderDefinition,
 	isRetryableStatus,
+	NOT_IN_WORKSPACE,
 } from "./provider"
 
 /**
@@ -503,8 +505,42 @@ export const deliverChatSyncOutbound = Effect.fn("ChatSync.deliverOutbound")(fun
 })
 
 /**
+ * Pauses the org's links to an external channel that is not in their connection's workspace (a
+ * forged channel id): nothing is posted to it, and its channel stops carrying the link.
+ */
+const pauseForeignLinks = Effect.fn("ChatSync.pauseForeignLinks")(function* (payload: PrepareLinkPayload) {
+	const db = yield* Database.Database
+	const links = yield* db.run(
+		SQLite.from(schema.chatSyncChannelLinksTable, "link")
+			.innerJoin(schema.chatSyncConnectionsTable, "connection", (link, connection) =>
+				connection.id.eq(link.syncConnectionId),
+			)
+			.select(($) => ({ id: $.id, hazelChannelId: $.hazelChannelId }))
+			.where(($) => [
+				$.externalChannelId.eq(payload.externalChannelId),
+				$.deletedAt.isNull(),
+				$.connection.provider.eq(payload.provider),
+				$.connection.externalWorkspaceId.eq(payload.externalWorkspaceId),
+			]),
+	)
+	yield* Effect.forEach(
+		links,
+		(link) =>
+			db
+				.run(
+					SQLite.update(schema.chatSyncChannelLinksTable)
+						.set({ isActive: false })
+						.where(($) => [$.id.eq(link.id)]),
+				)
+				.pipe(Effect.andThen(publishChatSyncLinks(link.hazelChannelId))),
+		{ discard: true },
+	)
+})
+
+/**
  * The `chatSync.prepareLink` receiver, in the org's outbox: retried while the provider may still
- * answer, else logged (the link stays; its first sync reports the same failure).
+ * answer, else logged (the link stays; its first sync reports the same failure). A channel outside
+ * the connection's workspace pauses its link.
  */
 export const prepareChatSyncLink = Effect.fn("ChatSync.prepareLink")(function* (payload: PrepareLinkPayload) {
 	yield* Effect.annotateCurrentSpan({
@@ -515,12 +551,20 @@ export const prepareChatSyncLink = Effect.fn("ChatSync.prepareLink")(function* (
 	yield* client.prepareLink(payload).pipe(
 		Effect.catchIf(
 			(error) => !isRetryableSyncFailure(error),
-			(error) =>
-				Effect.logWarning("Chat sync link could not be prepared", {
+			Effect.fnUntraced(function* (error) {
+				if (error instanceof ChatSyncProviderApiError && error.detail === NOT_IN_WORKSPACE) {
+					yield* Effect.logWarning("Chat sync link is not in its workspace; paused", {
+						provider: payload.provider,
+						externalChannelId: payload.externalChannelId,
+					})
+					return yield* pauseForeignLinks(payload)
+				}
+				yield* Effect.logWarning("Chat sync link could not be prepared", {
 					provider: payload.provider,
 					externalChannelId: payload.externalChannelId,
 					error: error.message,
-				}),
+				})
+			}),
 		),
 	)
 })

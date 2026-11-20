@@ -35,7 +35,10 @@
 					"@effect/sql-sqlite-do",
 					"@effect/sql-sqlite-node",
 					"@effect/vitest"
-				]
+				],
+				// alchemy 2.0.0-beta.85 pins @distilled.cloud rc.18, while the backend signs uploads with
+				// aws4signer rc.20 (its signed-query fix). Upgrading alchemy to beta.87 (rc.20) removes this.
+				"allowedDuplicatedPackages": ["@distilled.cloud/aws4signer", "@distilled.cloud/core"]
 			}
 		]
 	}

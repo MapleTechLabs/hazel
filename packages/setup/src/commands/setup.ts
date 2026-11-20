@@ -1,6 +1,6 @@
 import { Command, Flag, Prompt } from "effect/cli"
 import { Console, Effect, Redacted } from "effect"
-import pc from "picocolors"
+import { pc } from "../colors"
 import { SecretGenerator } from "../services/secrets.ts"
 import { EnvWriter } from "../services/env-writer.ts"
 import { Doctor } from "../services/doctor.ts"

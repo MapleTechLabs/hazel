@@ -28,10 +28,17 @@ export const defaultOutboundIdentity = (): ChatSyncChannelLink.OutboundIdentityS
 })
 
 /** A new link's settings: the caller's, with the default outbound identity when they gave none. */
-export const normalizeChannelLinkSettings = (settings: Settings): Record<string, unknown> => ({
-	...settings,
-	outboundIdentity: settings?.outboundIdentity ?? defaultOutboundIdentity(),
-})
+/** Link settings key: Discord found the link's channel in its guild (`verifiedInGuild`). */
+export const GUILD_VERIFIED = "discordGuildVerified"
+
+/**
+ * A new link's settings from the caller. Discord's guild check (`discordGuildVerified`) is dropped:
+ * only the client sets it, after it found the channel in the guild, so every new link starts unchecked.
+ */
+export const normalizeChannelLinkSettings = (settings: Settings): Record<string, unknown> => {
+	const { [GUILD_VERIFIED]: _callerClaim, ...rest } = settings ?? {}
+	return { ...rest, outboundIdentity: settings?.outboundIdentity ?? defaultOutboundIdentity() }
+}
 
 const rawOutboundIdentity = (settings: Settings): Record<string, unknown> | undefined => {
 	const raw = settings?.outboundIdentity

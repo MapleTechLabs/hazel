@@ -26,7 +26,7 @@ export const tabsStyles = {
 		isLink ? "cursor-pointer" : "cursor-default",
 	],
 	selectionIndicator: (orientation: Orientation) => [
-		"absolute bg-primary-subtle-fg transition-[translate,width,height] duration-200",
+		"absolute rounded-full bg-primary-subtle-fg transition-[translate,width,height] duration-200 ease-out",
 		orientation === "horizontal"
 			? "right-(--tab-gutter-x) -bottom-[calc(var(--tab-gutter-y)+1px)] left-(--tab-gutter-x) h-[2px]"
 			: "top-(--tab-gutter-y) bottom-(--tab-gutter-y) -left-[calc(var(--tab-gutter-x)-var(--tab-list-gutter)+1px)] w-[2px]",

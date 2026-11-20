@@ -1,7 +1,7 @@
 import { tv } from "tailwind-variants"
 
 export const menuTriggerBase = [
-	"relative inline text-left outline-hidden focus-visible:ring-1 focus-visible:ring-primary",
+	"relative inline text-left outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70",
 	"*:data-[slot=chevron]:size-5 sm:*:data-[slot=chevron]:size-4",
 ] as const
 

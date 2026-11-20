@@ -18,13 +18,13 @@
 		"./live": "./src/live/index.ts",
 		"./html-render": "./src/html-render.ts",
 		"./bot-install": "./src/bot-install.ts",
-		"./thread-id": "./src/thread-id.ts"
+		"./thread-id": "./src/thread-id.ts",
+		"./uuid": "./src/uuid.ts"
 	},
 	"dependencies": {
 		"@hazel/integrations": "workspace:*",
 		"@hazel/schema": "workspace:*",
-		"effect": "catalog:effect",
-		"uuid": "^14.0.3"
+		"effect": "catalog:effect"
 	},
 	"devDependencies": {
 		"@types/bun": "1.4.3",

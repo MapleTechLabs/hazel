@@ -1,5 +1,6 @@
-import { AwsClient } from "aws4fetch"
+import * as AwsClient from "@distilled.cloud/aws4signer/AwsClient"
 import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { FetchHttpClient, HttpClientRequest } from "effect/http"
 
 export class ObjectStorageError extends Schema.TaggedError<
 	ObjectStorageError,
@@ -22,8 +23,8 @@ export interface PresignPutOptions {
 
 /**
  * Presigned uploads against the S3 API of the uploads bucket (R2 in every deployed stage, MinIO
- * locally). SigV4 via `aws4fetch` runs on Workers and Bun alike, unlike Bun's built-in `s3`.
- * Path-style URLs: `${S3_ENDPOINT}/${S3_BUCKET}/${key}`.
+ * locally). SigV4 via `@distilled.cloud/aws4signer` (an Effect port of `aws4fetch`'s signer) runs on
+ * Workers and Bun alike, unlike Bun's built-in `s3`. Path-style URLs: `${S3_ENDPOINT}/${S3_BUCKET}/${key}`.
  */
 export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStorage", {
 	make: Effect.gen(function* () {
@@ -33,15 +34,19 @@ export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStora
 		const accessKeyId = yield* Config.Redacted("S3_ACCESS_KEY_ID")
 		const secretAccessKey = yield* Config.Redacted("S3_SECRET_ACCESS_KEY")
 
-		const client = new AwsClient({
-			accessKeyId: Redacted.value(accessKeyId),
-			secretAccessKey: Redacted.value(secretAccessKey),
+		const signing = {
+			credentials: { accessKeyId: Redacted.value(accessKeyId), secretAccessKey },
 			service: "s3",
 			region,
-		})
+			// Signs Content-Type and the like too (skipped by default): a PUT must send the type the
+			// handler checked, so a refused type cannot be stored after all.
+			allHeaders: true,
+		} as const
+		// Built once with its transport, so a request needs nothing from the context it runs in.
+		const client = yield* AwsClient.make(signing).pipe(Effect.provide(FetchHttpClient.layer))
 
 		const urlOf = (key: string) =>
-			new URL(`${endpoint}/${bucket}/${key.split("/").map(encodeURIComponent).join("/")}`)
+			`${endpoint}/${bucket}/${key.split("/").map(encodeURIComponent).join("/")}`
 
 		/** Store `body` at `key` from the server (the MCP server's `upload_file`). */
 		const put = Effect.fn("ObjectStorage.put")(function* (
@@ -49,18 +54,20 @@ export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStora
 			body: Uint8Array<ArrayBuffer>,
 			contentType: string,
 		) {
-			const response = yield* Effect.tryPromise({
-				try: () =>
-					client.fetch(urlOf(key).toString(), {
-						method: "PUT",
+			const response = yield* client
+				.execute(
+					HttpClientRequest.put(urlOf(key)).pipe(
 						// The key is a fresh attachment id: never replace what is there.
-						headers: { "Content-Type": contentType, "If-None-Match": "*" },
-						body,
-						aws: { allHeaders: true },
-					}),
-				catch: (cause) => new ObjectStorageError({ message: "Failed to store the file", cause }),
-			})
-			if (!response.ok)
+						HttpClientRequest.setHeader("If-None-Match", "*"),
+						HttpClientRequest.bodyUint8Array(body, contentType),
+					),
+				)
+				.pipe(
+					Effect.mapError(
+						(cause) => new ObjectStorageError({ message: "Failed to store the file", cause }),
+					),
+				)
+			if (response.status < 200 || response.status >= 300)
 				return yield* new ObjectStorageError({
 					message: `The bucket refused the file (${response.status})`,
 				})
@@ -71,15 +78,18 @@ export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStora
 		 * made yet). Any other answer from the bucket is an error, not "missing".
 		 */
 		const storedSize = Effect.fn("ObjectStorage.storedSize")(function* (key: string) {
-			const response = yield* Effect.tryPromise({
-				try: () => client.fetch(urlOf(key).toString(), { method: "HEAD" }),
-				catch: (cause) => new ObjectStorageError({ message: "Failed to check the file", cause }),
-			})
+			const response = yield* client
+				.execute(HttpClientRequest.head(urlOf(key)))
+				.pipe(
+					Effect.mapError(
+						(cause) => new ObjectStorageError({ message: "Failed to check the file", cause }),
+					),
+				)
 			if (response.status === 404) return Option.none<number>()
-			if (!response.ok)
+			if (response.status < 200 || response.status >= 300)
 				return yield* new ObjectStorageError({ message: `The bucket answered ${response.status}` })
 			// The size check rests on it: no length is an error, never "0 bytes".
-			const size = Number(response.headers.get("content-length") ?? Number.NaN)
+			const size = Number(response.headers["content-length"] ?? Number.NaN)
 			if (!Number.isFinite(size) || size < 0)
 				return yield* new ObjectStorageError({ message: "The bucket gave no valid Content-Length" })
 			return Option.some(size)
@@ -89,22 +99,18 @@ export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStora
 			key: string,
 			options: PresignPutOptions,
 		) {
-			const url = new URL(`${endpoint}/${bucket}/${key.split("/").map(encodeURIComponent).join("/")}`)
-			url.searchParams.set("X-Amz-Expires", String(options.expiresIn))
-			const signed = yield* Effect.tryPromise({
-				try: () =>
-					client.sign(url.toString(), {
-						method: "PUT",
-						headers: options.createOnly
-							? { "Content-Type": options.contentType, "If-None-Match": "*" }
-							: { "Content-Type": options.contentType },
-						// `allHeaders` signs Content-Type too (aws4fetch skips it by default): the PUT must send
-						// the type the handler checked, so a refused type cannot be stored after all.
-						aws: { signQuery: true, allHeaders: true },
-					}),
-				catch: (cause) => new ObjectStorageError({ message: "Failed to presign upload URL", cause }),
-			})
-			return signed.url
+			return yield* AwsClient.presign(urlOf(key), {
+				...signing,
+				method: "PUT",
+				expiresIn: options.expiresIn,
+				headers: options.createOnly
+					? { "Content-Type": options.contentType, "If-None-Match": "*" }
+					: { "Content-Type": options.contentType },
+			}).pipe(
+				Effect.mapError(
+					(cause) => new ObjectStorageError({ message: "Failed to presign upload URL", cause }),
+				),
+			)
 		})
 
 		return { presignPut, put, storedSize } as const

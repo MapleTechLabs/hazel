@@ -16,10 +16,14 @@ style export.
 |                          | `h.textarea` / `h.select` / `h.label`      | `textarea`, the `Select` component, `label` (ui/field)                         |
 |                          | `h.dialog`                                 | the `Modal` component with `dialog` (ui/modal, ui/dialog)                      |
 | `no-raw-heading`         | `h.h1` … `h.h6`                            | `heading` (ui/heading), `cardTitle`, `dialogTitle`, `sectionHeaderHeading`     |
+|                          | `h.kbd`                                    | `kbd` / `shortcut` (ui/kbd) for key caps, `menuKeyboard` in a menu item        |
 | `no-kit-styles-in-pages` | `import … from "~/components/ui/*.styles"` | the kit wrapper in `src/ui`                                                    |
 
 If the kit lacks what you need, add the variant or option to the kit component and use it. That is
 the whole point: the next page gets it for free, and a design change lands in one place.
+
+The whole kit is drawn, live, on `/lab/kit` (`src/lab/kit/`): add a specimen there with the variant,
+and look at it in both themes before using it on a page.
 
 ### Headings
 

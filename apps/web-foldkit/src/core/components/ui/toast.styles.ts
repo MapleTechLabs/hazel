@@ -30,11 +30,11 @@ export const toastStyles = tv({
 		description: "text-fg-3",
 		action: [
 			"shrink-0 self-center rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-fg shadow-control",
-			"outline-hidden transition-[background-color,scale] duration-150 ease-out hover:bg-primary/90 active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring",
+			"outline-hidden transition-[background-color,scale] duration-150 ease-out hover:bg-primary/90 active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-overlay",
 		],
 		close: [
 			"absolute top-2 right-2 rounded-md p-1 text-fg-2 outline-hidden transition-colors",
-			"hover:bg-wash-strong hover:text-fg focus-visible:text-fg focus-visible:ring-2 focus-visible:ring-ring",
+			"hover:bg-wash-strong hover:text-fg focus-visible:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
 		],
 	},
 	variants: {

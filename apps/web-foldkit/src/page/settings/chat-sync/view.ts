@@ -3,7 +3,14 @@ import * as AsyncData from "foldkit/asyncData"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { buttonStyles } from "~/components/ui/button.styles"
 import { type CommonReason, commonMessage, isRetryableReason } from "~/lib/error-messages"
-import { IconArrowPath, IconChevronDown, IconPlus, IconTrash, IconWarning } from "../../../icons"
+import {
+	IconArrowPath,
+	IconChevronDown,
+	IconDownload,
+	IconPlus,
+	IconTrash,
+	IconWarning,
+} from "../../../icons"
 import { button } from "../../../ui/button"
 import { emptyState } from "../../../ui/empty-state"
 import { loader } from "../../../ui/loader"
@@ -23,6 +30,9 @@ import { formatSyncedAt } from "./rpc"
 import { addMenuEntries, type Connection, Message, type Model, STATUS_CONFIG } from "./model"
 import { isChatSyncProvider, PROVIDERS } from "./providers"
 import { heading } from "../../../ui/heading"
+import { dialogBody, dialogDescription, dialogFooter, dialogHeader, dialogTitle } from "../../../ui/dialog"
+import * as Modal from "../../../ui/modal"
+import * as ChatMigration from "../../shared/chat-migration"
 
 /** Port of `settings/chat-sync/index.tsx`. */
 
@@ -299,12 +309,59 @@ const failureState = (h: HtmlBuilder<Message>, reason: CommonReason): Html => {
 	})
 }
 
+const toMigrationMessage = (message: ChatMigration.Message) => Message.GotMigrationMessage({ message })
+const toMigrationModalMessage = (message: Modal.Message) => Message.GotMigrationModalMessage({ message })
+
+const importButton = (h: HtmlBuilder<Message>): Html =>
+	button(
+		h,
+		{
+			intent: "outline",
+			onPress: Message.ClickedImport(),
+			attributes: [h.DataAttribute("testid", "chat-sync-import")],
+		},
+		[IconDownload(h, { className: "size-4" }), "Import from Slack or Discord"],
+	)
+
+/** The migration wizard: its step's title, body and actions in a dialog. */
+const migrationModal = (h: HtmlBuilder<Message>, model: Model): Html =>
+	Modal.controlledModal(h, {
+		model: model.migrationModal,
+		toParentMessage: toMigrationModalMessage,
+		size: "lg",
+		toContent: () => {
+			const parts = ChatMigration.parts(h, model.migration, {
+				toParentMessage: toMigrationMessage,
+				canSkip: false,
+			})
+			return [
+				dialogHeader(h, {}, [
+					dialogTitle(h, { id: Modal.titleId(model.migrationModal.id) }, parts.title),
+					dialogDescription(h, parts.description),
+				]),
+				dialogBody(h, [parts.body], "flex flex-col gap-5"),
+				...(parts.leading.length === 0 && parts.actions.length === 0
+					? []
+					: [
+							dialogFooter(h, [
+								h.div([h.Class("mr-auto flex gap-2")], [...parts.leading]),
+								...parts.actions,
+							]),
+						]),
+			]
+		},
+	})
+
 const loaded = (h: HtmlBuilder<Message>, model: Model, connections: ReadonlyArray<Connection>): Html =>
 	fragment(h, [
-		header(h, [addConnectionDropdown(h, "add-connection", model.addMenu, toAddMenuMessage)]),
+		header(h, [
+			importButton(h),
+			addConnectionDropdown(h, "add-connection", model.addMenu, toAddMenuMessage),
+		]),
 		loadedBody(h, model, connections),
 		addConnectionModal(h, model),
 		deleteModal(h, model),
+		migrationModal(h, model),
 	])
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) =>

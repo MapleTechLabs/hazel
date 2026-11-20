@@ -14,6 +14,7 @@ import { type Model, Phase, type Running, type StepOf, StepState, stepOf } from 
 import { enterAnimation } from "./enter-animation"
 import { MOTION_END_STYLE } from "./motion"
 import { roleStep, useCaseStep } from "./steps/choice"
+import { importStep } from "./steps/import"
 import { inviteStep } from "./steps/invite"
 import { profileStep } from "./steps/profile"
 import { themeStep } from "./steps/theme"
@@ -116,6 +117,7 @@ const stepBody = (h: HtmlBuilder<Message>, model: Model, running: Running, share
 		Theme: () => themeStep(h, shared.theme),
 		UseCases: ({ box }) => useCaseStep(h, box),
 		Role: ({ box }) => roleStep(h, box),
+		Import: (form) => importStep(h, form),
 		Invite: (form) => inviteStep(h, form, interaction),
 		Finalizing: (step) => finalizationView(h, step),
 		Completed: () => finalizationView(h, StepState.Finalizing({ failure: Option.none() })),

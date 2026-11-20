@@ -7,6 +7,7 @@ import { CommonReason } from "~/lib/error-messages"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
+import * as ChatMigration from "../../shared/chat-migration"
 import * as ConfirmAction from "../../shared/confirm-action"
 import { ChatSyncProvider, PROVIDERS, ResourceFailure, Workspace, Workspaces } from "./providers"
 
@@ -71,6 +72,9 @@ export const Model = Schema.Struct({
 	deleteConfirm: ConfirmAction.Model(DeleteTarget),
 	/** Hover, press and focus of the add modal's search Input and Connect button. */
 	interaction: Interaction.Model,
+	/** "Import from Slack or Discord": the migration wizard in a modal. */
+	migrationModal: Modal.Model,
+	migration: ChatMigration.Model,
 })
 export type Model = typeof Model.Type
 
@@ -109,6 +113,9 @@ export const Message = defineMessageUnion({
 	SucceededCreateConnection: {},
 	FailedCreateConnection: { reason: CreateConnectionFailure },
 	GotInteractionMessage: { message: Interaction.Message },
+	ClickedImport: {},
+	GotMigrationModalMessage: { message: Modal.Message },
+	GotMigrationMessage: { message: ChatMigration.Message },
 })
 export type Message = typeof Message.Type
 

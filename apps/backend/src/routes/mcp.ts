@@ -22,7 +22,7 @@ import {
 } from "@hazel/domain/rpc"
 import { AttachmentId, ChannelId, MessageId, OrganizationId, type UserId } from "@hazel/schema"
 import { isActiveContentType, MAX_ATTACHMENT_SIZE } from "@hazel/domain/http"
-import { v7 as randomUUIDv7 } from "uuid"
+import { uuidv7 as randomUUIDv7 } from "@hazel/domain/uuid"
 import { Context, DateTime, Effect, Option, Schema, Stream } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { AgentAccess, type AgentPrincipal } from "../services/agent-access"

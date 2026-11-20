@@ -5,6 +5,7 @@ import { CommonReason } from "~/lib/error-messages"
 import { ThemeMode } from "../../theme"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
+import * as ChatMigration from "../shared/chat-migration"
 import { Direction, type Step, UserType } from "./flow"
 
 /** The theme step reads and requests `Shared.theme`; it keeps no theme state of its own. */
@@ -67,6 +68,8 @@ export const StepState = defineTaggedUnion({
 	Theme: {},
 	UseCases: { box: ChoiceBox.Model },
 	Role: { box: ChoiceBox.Model },
+	/** Bring channels over from Slack or Discord (optional; skippable). */
+	Import: { migration: ChatMigration.Model },
 	Invite: { rows: Schema.Array(InviteRow), nextRowId: Schema.Finite, isSending: Schema.Boolean },
 	/** `failure` once `user.finalizeOnboarding` failed; the user can retry from here. */
 	Finalizing: { failure: Schema.Option(CommonReason) },
@@ -110,6 +113,8 @@ export const Model = Schema.Struct({
 	urlStep: Schema.NullOr(Schema.String),
 	orgId: Schema.NullOr(OrganizationId),
 	phase: Phase,
+	/** Answers kept across the import step's OAuth redirect, read before the flow starts. */
+	restoredData: Schema.NullOr(Data),
 	/** Focus and hover state for the form fields (React Aria's `data-focused` and friends). */
 	interaction: Interaction.Model,
 })
@@ -124,6 +129,7 @@ export const stepOf = (state: StepState): Step =>
 		Theme: (): Step => "themeSelection",
 		UseCases: (): Step => "useCases",
 		Role: (): Step => "role",
+		Import: (): Step => "import",
 		Invite: (): Step => "teamInvitation",
 		Finalizing: (): Step => "finalization",
 		Completed: (): Step => "completed",
@@ -138,6 +144,7 @@ export const isBusy = (state: StepState): boolean =>
 		Theme: () => false,
 		UseCases: () => false,
 		Role: () => false,
+		Import: ({ migration }) => ChatMigration.isBusy(migration),
 		Invite: ({ isSending }) => isSending,
 		Finalizing: () => true,
 		Completed: () => true,
