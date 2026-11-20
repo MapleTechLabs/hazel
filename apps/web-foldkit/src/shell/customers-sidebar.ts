@@ -238,7 +238,9 @@ export const update = (model: Model, message: Message, userId: UserId | null): R
 		}),
 		UpdatedInboxCount: ({ organizationId, count }) => ({
 			model:
-				organizationId === model.organizationId ? modifyFields(model, { inboxCount: () => count }) : model,
+				organizationId === model.organizationId
+					? modifyFields(model, { inboxCount: () => count })
+					: model,
 		}),
 		UpdatedSavedViews: ({ organizationId, views }) => ({
 			model:

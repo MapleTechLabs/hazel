@@ -231,6 +231,7 @@ class IssueModel extends M.Class<IssueModel>("CustomerIssue")({
 	sourceChannelId: ChannelId,
 	rootMessageId: MessageId,
 	threadChannelId: S.NullOr(ChannelId),
+	joinedMessageIds: S.Array(MessageId),
 	openedByUserId: UserId,
 	createdByUserId: S.NullOr(UserId),
 	title: S.String,

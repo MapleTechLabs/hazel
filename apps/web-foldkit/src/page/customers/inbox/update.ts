@@ -87,7 +87,11 @@ const ensureSelection = (model: Model, shared: Shared): Model => {
  * Runs an action key on the selected row. A selection the search or filters now hide only moves to
  * the first row: a key never acts on a row the user has not seen selected.
  */
-const withSelected = (model: Model, shared: Shared, run: (model: Model, issue: IssueRow) => Return): Return => {
+const withSelected = (
+	model: Model,
+	shared: Shared,
+	run: (model: Model, issue: IssueRow) => Return,
+): Return => {
 	const isHidden = model.selectedId !== null && !isSelectionVisible(model, viewerOf(shared))
 	const next = ensureSelection(model, shared)
 	const issue = selectedIssue(next)
@@ -178,7 +182,10 @@ const setStatus = (model: Model, shared: Shared, issue: IssueRow, status: Custom
 		}),
 	)
 	return closing || issue.status === "closed"
-		? { ...result, outMessage: toast(successToast(closing ? "Issue closed" : "Issue reopened", issue.title)) }
+		? {
+				...result,
+				outMessage: toast(successToast(closing ? "Issue closed" : "Issue reopened", issue.title)),
+			}
 		: result
 }
 
@@ -212,7 +219,10 @@ const openThread = (model: Model, shared: Shared, issue: IssueRow | undefined): 
 		: {
 				model,
 				outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
-					AppRoute.ChatChannel({ orgSlug, channelId: issue.threadChannelId ?? issue.sourceChannelId }),
+					AppRoute.ChatChannel({
+						orgSlug,
+						channelId: issue.threadChannelId ?? issue.sourceChannelId,
+					}),
 				),
 			}
 

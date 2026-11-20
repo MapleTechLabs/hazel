@@ -45,11 +45,7 @@ export interface QueueKeyEvent {
  * only `repeatable` ones act while held; `pressable` ones (Enter, Space) yield to a focused control.
  */
 export const queueKeyFilter =
-	<K extends string>(
-		keys: ReadonlyMap<string, K>,
-		repeatable: ReadonlySet<K>,
-		pressable: ReadonlySet<K>,
-	) =>
+	<K extends string>(keys: ReadonlyMap<string, K>, repeatable: ReadonlySet<K>, pressable: ReadonlySet<K>) =>
 	(event: QueueKeyEvent): K | null => {
 		if (
 			event.altKey ||
@@ -63,7 +59,8 @@ export const queueKeyFilter =
 			return null
 		const key = keys.get(event.key.length === 1 ? event.key.toLowerCase() : event.key)
 		if (key === undefined) return null
-		if ((event.key === "ArrowUp" || event.key === "ArrowDown") && !isArrowForQueue(event.target)) return null
+		if ((event.key === "ArrowUp" || event.key === "ArrowDown") && !isArrowForQueue(event.target))
+			return null
 		if (event.repeat && !repeatable.has(key)) return null
 		if (pressable.has(key) && isPressable(event.target)) return null
 		return key

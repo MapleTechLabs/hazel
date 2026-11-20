@@ -132,21 +132,35 @@ const byClosed = Order.mapInput(Order.flip(Order.Number), (issue: IssueRowType) 
 const byActivity = Order.mapInput(Order.flip(Order.Number), (issue: IssueRowType) => issue.lastMessageAtMs)
 
 /** Since when the issue waits on us: the customer's last message, else when it opened. */
-export const waitingSinceMs = (issue: IssueRowType): number => issue.lastCustomerMessageAtMs ?? issue.openedAtMs
+export const waitingSinceMs = (issue: IssueRowType): number =>
+	issue.lastCustomerMessageAtMs ?? issue.openedAtMs
+
+/** Closed keeps what closed in the stream's window: an older row lingers until the next resync. */
+export const CLOSED_WINDOW_MS = 30 * 86_400_000
+
+const isShown = (issue: IssueRowType, viewer: Viewer): boolean =>
+	issue.closedAtMs === null || issue.closedAtMs >= viewer.nowMs - CLOSED_WINDOW_MS
 
 export const visibleIssues = (model: Model, viewer: Viewer): ReadonlyArray<IssueRowType> => {
 	const accountsById = accountsByIdOfModel(model)
 	const rows = (model.issues ?? []).filter(
-		(issue) => tabOf(issue) === model.tab && matchesFilters(model, viewer, accountsById, issue),
+		(issue) =>
+			tabOf(issue) === model.tab &&
+			isShown(issue, viewer) &&
+			matchesFilters(model, viewer, accountsById, issue),
 	)
-	return Array.sort(rows, model.tab === "open" ? byOpenOrder : model.tab === "closed" ? byClosed : byActivity)
+	return Array.sort(
+		rows,
+		model.tab === "open" ? byOpenOrder : model.tab === "closed" ? byClosed : byActivity,
+	)
 }
 
 export const tabCounts = (model: Model, viewer: Viewer): Readonly<Record<Tab, number>> => {
 	const accountsById = accountsByIdOfModel(model)
 	const counts = { open: 0, on_hold: 0, closed: 0 }
 	for (const issue of model.issues ?? []) {
-		if (matchesFilters(model, viewer, accountsById, issue)) counts[tabOf(issue)] += 1
+		if (isShown(issue, viewer) && matchesFilters(model, viewer, accountsById, issue))
+			counts[tabOf(issue)] += 1
 	}
 	return counts
 }
@@ -285,7 +299,10 @@ export const toggleFilter = (filters: Filters, key: string): Filters => {
 		case "waitingOnUs":
 			return { ...filters, waitingOnUs: !filters.waitingOnUs }
 		case "status":
-			return apply(Customers.IssueStatus, (status) => ({ ...filters, status: toggled(filters.status, status) }))
+			return apply(Customers.IssueStatus, (status) => ({
+				...filters,
+				status: toggled(filters.status, status),
+			}))
 		case "priority":
 			return apply(Customers.IssuePriority, (priority) => ({
 				...filters,

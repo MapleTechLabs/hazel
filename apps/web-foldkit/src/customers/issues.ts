@@ -28,6 +28,8 @@ export const IssueRow = Schema.Struct({
 	sourceChannelId: ChannelId,
 	rootMessageId: MessageId,
 	threadChannelId: Schema.NullOr(ChannelId),
+	/** Follow-ups that joined the issue: their threads are the issue's too. */
+	joinedMessageIds: Schema.Array(MessageId),
 	openedByUserId: UserId,
 	createdByUserId: Schema.NullOr(UserId),
 	title: Schema.String,
@@ -56,6 +58,7 @@ export const toIssueRow = (issue: Customers.Issue): IssueRow => ({
 	sourceChannelId: issue.sourceChannelId,
 	rootMessageId: issue.rootMessageId,
 	threadChannelId: issue.threadChannelId,
+	joinedMessageIds: issue.joinedMessageIds,
 	openedByUserId: issue.openedByUserId,
 	createdByUserId: issue.createdByUserId,
 	title: issue.title,
@@ -121,7 +124,9 @@ export const issuesStream = <Message>(
 			(q) =>
 				q
 					.from({ issue: customerIssueCollection })
-					.where(({ issue }) => and(eq(issue.organizationId, organizationId), isNull(issue.deletedAt)))
+					.where(({ issue }) =>
+						and(eq(issue.organizationId, organizationId), isNull(issue.deletedAt)),
+					)
 					.orderBy(({ issue }) => issue.lastMessageAt, "desc"),
 			(rows) => toMessage(rows.map(toIssueRow)),
 		),
@@ -154,11 +159,17 @@ export const myWaitingIssueCountStream = <Message>(
 		),
 	)
 
-/** The live issue rooted at a message of a linked channel (the thread control), or none. */
+/** Whether a top-level message is one of the issue's: its root, or a follow-up that joined it. */
+export const isIssueMessage = (
+	issue: Pick<IssueRow, "rootMessageId" | "joinedMessageIds">,
+	messageId: MessageId,
+) => issue.rootMessageId === messageId || issue.joinedMessageIds.includes(messageId)
+
+/** The live issue a top-level message of a linked channel belongs to (the thread control), or none. */
 export const issueAtMessageStream = <Message>(
 	organizationId: OrganizationId,
 	channelId: ChannelId,
-	rootMessageId: MessageId,
+	messageId: MessageId,
 	toMessage: (issue: IssueRow | null) => Message,
 ): Stream.Stream<Message> =>
 	withCustomersSource(
@@ -167,14 +178,11 @@ export const issueAtMessageStream = <Message>(
 			(q) =>
 				q
 					.from({ issue: customerIssueCollection })
-					.where(({ issue }) =>
-						and(
-							eq(issue.sourceChannelId, channelId),
-							eq(issue.rootMessageId, rootMessageId),
-							isNull(issue.deletedAt),
-						),
-					),
-			(rows) => toMessage(rows[0] === undefined ? null : toIssueRow(rows[0])),
+					.where(({ issue }) => and(eq(issue.sourceChannelId, channelId), isNull(issue.deletedAt))),
+			(rows) => {
+				const found = rows.map(toIssueRow).find((issue) => isIssueMessage(issue, messageId))
+				return toMessage(found ?? null)
+			},
 		),
 	)
 
@@ -226,10 +234,14 @@ const updateIssue = optimisticAction({
 	mutate: (props) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
-			const payload: IssueUpdatePayload = { organizationId: props.organizationId, issueId: props.issueId }
+			const payload: IssueUpdatePayload = {
+				organizationId: props.organizationId,
+				issueId: props.issueId,
+			}
 			if (props.change.status !== undefined) payload.status = props.change.status
 			if (props.change.priority !== undefined) payload.priority = props.change.priority
-			if (props.change.assigneeUserId !== undefined) payload.assigneeUserId = props.change.assigneeUserId
+			if (props.change.assigneeUserId !== undefined)
+				payload.assigneeUserId = props.change.assigneeUserId
 			if (props.change.tags !== undefined) payload.tags = props.change.tags
 			const result = yield* client("customers.issue.update", payload)
 			return { data: result, transactionId: result.transactionId }

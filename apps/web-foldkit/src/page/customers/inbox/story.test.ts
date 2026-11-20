@@ -1,4 +1,11 @@
-import { ChannelId, CustomerAccountId, CustomerIssueId, MessageId, OrganizationId, UserId } from "@hazel/schema"
+import {
+	ChannelId,
+	CustomerAccountId,
+	CustomerIssueId,
+	MessageId,
+	OrganizationId,
+	UserId,
+} from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
@@ -11,7 +18,15 @@ import { PageOutMessage } from "../../out-message"
 import { sharedDefaults } from "../../test-shared"
 import { UpdateInboxIssue } from "./commands"
 import { Message } from "./message"
-import { isNarrowed, type Model, rowIds, statusEntries, tabCounts, toggleFilter, visibleIssues } from "./model"
+import {
+	isNarrowed,
+	type Model,
+	rowIds,
+	statusEntries,
+	tabCounts,
+	toggleFilter,
+	visibleIssues,
+} from "./model"
 import { inboxKeyOf } from "./subscription"
 import { init, update, viewerOf } from "./update"
 
@@ -93,6 +108,7 @@ const issue = (n: number, overrides: Partial<IssueRow>): IssueRow => ({
 	sourceChannelId: channelId,
 	rootMessageId: Schema.decodeSync(MessageId)(uuid(300 + n)),
 	threadChannelId: null,
+	joinedMessageIds: [],
 	openedByUserId: Schema.decodeSync(UserId)(uuid(400 + n)),
 	createdByUserId: null,
 	title: `Issue ${n}`,
@@ -113,11 +129,25 @@ const issue = (n: number, overrides: Partial<IssueRow>): IssueRow => ({
 })
 
 /** Waiting on us, unassigned, oldest. */
-const sso = issue(1, { title: "SSO login fails", status: "waiting_on_us", lastCustomerMessageAtMs: NOW - 20 * HOUR })
+const sso = issue(1, {
+	title: "SSO login fails",
+	status: "waiting_on_us",
+	lastCustomerMessageAtMs: NOW - 20 * HOUR,
+})
 /** Waiting on us, urgent, mine: sorts first. */
-const outage = issue(2, { title: "Dashboard down", status: "new", priority: "urgent", assigneeUserId: ada, threadChannelId: threadId })
+const outage = issue(2, {
+	title: "Dashboard down",
+	status: "new",
+	priority: "urgent",
+	assigneeUserId: ada,
+	threadChannelId: threadId,
+})
 /** Answered, waiting on the customer. */
-const billing = issue(3, { title: "Invoice question", status: "waiting_on_customer", lastMessageAtMs: NOW - HOUR })
+const billing = issue(3, {
+	title: "Invoice question",
+	status: "waiting_on_customer",
+	lastMessageAtMs: NOW - HOUR,
+})
 /** Grace's: hidden by the default filter. */
 const graces = issue(4, { title: "Export is slow", status: "waiting_on_us", assigneeUserId: grace })
 const held = issue(5, { title: "Feature request", status: "on_hold" })
@@ -160,13 +190,19 @@ describe("support inbox: what shows", () => {
 	})
 
 	test("search matches the title or the customer", () => {
-		expect(titles(pageUpdate(loaded(), Message.ChangedSearch({ value: "sso" })).model)).toEqual(["SSO login fails"])
+		expect(titles(pageUpdate(loaded(), Message.ChangedSearch({ value: "sso" })).model)).toEqual([
+			"SSO login fails",
+		])
 		expect(titles(pageUpdate(loaded(), Message.ChangedSearch({ value: "acme" })).model)).toHaveLength(3)
 	})
 
 	test("the tabs show on hold and closed", () => {
-		expect(titles(pageUpdate(loaded(), Message.ClickedTab({ tab: "on_hold" })).model)).toEqual(["Feature request"])
-		expect(titles(pageUpdate(loaded(), Message.ClickedTab({ tab: "closed" })).model)).toEqual(["Fixed already"])
+		expect(titles(pageUpdate(loaded(), Message.ClickedTab({ tab: "on_hold" })).model)).toEqual([
+			"Feature request",
+		])
+		expect(titles(pageUpdate(loaded(), Message.ClickedTab({ tab: "closed" })).model)).toEqual([
+			"Fixed already",
+		])
 	})
 })
 
@@ -220,7 +256,10 @@ describe("support inbox: keyboard", () => {
 				expect(next.issues?.find((row) => row.id === sso.id)?.assigneeUserId).toBe(ada)
 				expect(next.selectedId).toBe(sso.id)
 			}),
-			Command.resolve(UpdateInboxIssue, Message.SucceededIssueAction({ issueId: sso.id, action: "assign" })),
+			Command.resolve(
+				UpdateInboxIssue,
+				Message.SucceededIssueAction({ issueId: sso.id, action: "assign" }),
+			),
 		)
 	})
 
@@ -234,7 +273,10 @@ describe("support inbox: keyboard", () => {
 				expect(next.selectedId).toBe(billing.id)
 				expect(rowIds(next, viewer)).not.toContain(sso.id)
 			}),
-			Command.resolve(UpdateInboxIssue, Message.SucceededIssueAction({ issueId: sso.id, action: "status" })),
+			Command.resolve(
+				UpdateInboxIssue,
+				Message.SucceededIssueAction({ issueId: sso.id, action: "status" }),
+			),
 		)
 	})
 
@@ -248,8 +290,13 @@ describe("support inbox: keyboard", () => {
 					message: Menu.Message.ClickedItem({ key: "on_hold", entries: statusEntries }),
 				}),
 			),
-			model((next) => expect(next.issues?.find((row) => row.id === billing.id)?.status).toBe("on_hold")),
-			Command.resolve(UpdateInboxIssue, Message.SucceededIssueAction({ issueId: billing.id, action: "status" })),
+			model((next) =>
+				expect(next.issues?.find((row) => row.id === billing.id)?.status).toBe("on_hold"),
+			),
+			Command.resolve(
+				UpdateInboxIssue,
+				Message.SucceededIssueAction({ issueId: billing.id, action: "status" }),
+			),
 		)
 	})
 

@@ -11,25 +11,27 @@ import { CustomersEffects } from "../effects/customers-effects"
 import { enqueueEffect } from "../effects/registry"
 import { customersTarget } from "../kinds"
 
-export const relaySupportMessageDeleted = Effect.fn("OrgObject.relaySupportMessageDeleted")(function* (input: {
-	readonly organizationId: OrganizationId
-	readonly channel: { readonly id: ChannelId; readonly parentChannelId: ChannelId | null }
-	readonly messageId: MessageId
-}) {
-	// A reply's delete changes no issue: only a root's does.
-	if (input.channel.parentChannelId !== null) return
-	const db = yield* Database.Database
-	const linked = yield* db.first(
-		SQLite.from(schema.channelCustomersTable)
-			.select("channelId")
-			.where(($) => [$.channelId.eq(input.channel.id)])
-			.limit(1),
-	)
-	if (Option.isNone(linked)) return
-	yield* enqueueEffect(
-		CustomersEffects.supportMessageDeleted,
-		customersTarget(input.organizationId),
-		{ organizationId: input.organizationId, channelId: input.channel.id, messageId: input.messageId },
-		{ id: `support-deleted:${input.messageId}` },
-	)
-})
+export const relaySupportMessageDeleted = Effect.fn("OrgObject.relaySupportMessageDeleted")(
+	function* (input: {
+		readonly organizationId: OrganizationId
+		readonly channel: { readonly id: ChannelId; readonly parentChannelId: ChannelId | null }
+		readonly messageId: MessageId
+	}) {
+		// A reply's delete changes no issue: only a root's does.
+		if (input.channel.parentChannelId !== null) return
+		const db = yield* Database.Database
+		const linked = yield* db.first(
+			SQLite.from(schema.channelCustomersTable)
+				.select("channelId")
+				.where(($) => [$.channelId.eq(input.channel.id)])
+				.limit(1),
+		)
+		if (Option.isNone(linked)) return
+		yield* enqueueEffect(
+			CustomersEffects.supportMessageDeleted,
+			customersTarget(input.organizationId),
+			{ organizationId: input.organizationId, channelId: input.channel.id, messageId: input.messageId },
+			{ id: `support-deleted:${input.messageId}` },
+		)
+	},
+)

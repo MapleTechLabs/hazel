@@ -15,7 +15,9 @@ import { SEARCH_ID } from "./model"
 
 const settle =
 	(issueId: CustomerIssueId, action: IssueAction) =>
-	<A, R>(effect: Effect.Effect<A, CustomersNotFoundError | CustomersInvalidRequestError | CommonError, R>) =>
+	<A, R>(
+		effect: Effect.Effect<A, CustomersNotFoundError | CustomersInvalidRequestError | CommonError, R>,
+	) =>
 		effect.pipe(
 			Effect.as(Message.SucceededIssueAction({ issueId, action })),
 			Effect.catchTags({

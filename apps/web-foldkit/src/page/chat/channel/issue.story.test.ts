@@ -49,6 +49,7 @@ const issue: IssueRow = {
 	sourceChannelId: channelId,
 	rootMessageId: graceMessageId,
 	threadChannelId,
+	joinedMessageIds: [],
 	openedByUserId: grace,
 	createdByUserId: null,
 	title: "Launch window confirmed",

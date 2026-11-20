@@ -40,6 +40,7 @@ const issue = (
 		sourceChannelId: channelId(channel),
 		rootMessageId: Schema.decodeSync(MessageId)(uuid(43, n)),
 		threadChannelId: null,
+		joinedMessageIds: [],
 		openedByUserId: CUSTOMER,
 		createdByUserId: null,
 		title,

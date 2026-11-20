@@ -81,7 +81,10 @@ const PRIORITY_CLASS = {
 export const priorityLabel = <M>(h: HtmlBuilder<M>, priority: Customers.IssuePriority): Html =>
 	h.span(
 		[h.Class(twMerge("inline-flex items-center gap-1.5 text-xs", PRIORITY_CLASS[priority]))],
-		[IconChartBar(h, { className: "size-3.5 shrink-0" }), priority === "none" ? "None" : PRIORITY_LABEL[priority]],
+		[
+			IconChartBar(h, { className: "size-3.5 shrink-0" }),
+			priority === "none" ? "None" : PRIORITY_LABEL[priority],
+		],
 	)
 
 const HOUR_MS = 3_600_000
@@ -124,7 +127,12 @@ const menu = (
 	})
 
 /** The selected issue's actions: Assign, Status, Priority, Open thread. */
-const issueActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, issue: IssueRow): ReadonlyArray<Html> => [
+const issueActions = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	viewer: Viewer,
+	issue: IssueRow,
+): ReadonlyArray<Html> => [
 	menu(h, model.assignMenu, {
 		entries: assignEntries(model.members, viewer),
 		trigger: (attributes, overlay) =>
@@ -144,7 +152,8 @@ const issueActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, iss
 						key,
 						key === ASSIGN_NONE
 							? "Unassign"
-							: (model.members.find((member) => member.id === userIdOfAssignKey(key))?.name ?? key),
+							: (model.members.find((member) => member.id === userIdOfAssignKey(key))?.name ??
+									key),
 					),
 		],
 		toMessage: (message) => Message.GotAssignMenuMessage({ message }),
@@ -163,7 +172,13 @@ const issueActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, iss
 	menu(h, model.priorityMenu, {
 		entries: priorityEntries,
 		trigger: (attributes, overlay) =>
-			queueAction(h, { label: "Priority", icon: IconChartBar(h, icon), shortcut: "P", attributes, overlay }),
+			queueAction(h, {
+				label: "Priority",
+				icon: IconChartBar(h, icon),
+				shortcut: "P",
+				attributes,
+				overlay,
+			}),
 		content: (key) => [
 			menuLabel(h, model.priorityMenu.id, key, PRIORITY_LABEL[key as Customers.IssuePriority]),
 			...(key === issue.priority ? [IconCheck(h, { className: "ml-auto size-4 text-primary" })] : []),
@@ -195,7 +210,12 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 	const assignee = issue.assigneeUserId === null ? undefined : context.membersById.get(issue.assigneeUserId)
 	const isSelected = issue.id === context.selectedId
 	const waiting = needsReply(issue)
-	const ageMs = issue.status === "closed" ? (issue.closedAtMs ?? issue.lastMessageAtMs) : waiting ? waitingSinceMs(issue) : issue.lastMessageAtMs
+	const ageMs =
+		issue.status === "closed"
+			? (issue.closedAtMs ?? issue.lastMessageAtMs)
+			: waiting
+				? waitingSinceMs(issue)
+				: issue.lastMessageAtMs
 	return h.keyed("div")(
 		issue.id,
 		[
@@ -216,18 +236,33 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 		[
 			// Account and channel.
 			h.div(
-				[h.Role("cell"), h.Class("flex w-52 shrink-0 items-center gap-3 max-md:w-auto max-md:min-w-0 max-md:flex-1")],
 				[
-					companyLogo(h, { name: account?.name ?? "Customer", logoUrl: account?.logoUrl ?? null, size: "sm" }),
+					h.Role("cell"),
+					h.Class(
+						"flex w-52 shrink-0 items-center gap-3 max-md:w-auto max-md:min-w-0 max-md:flex-1",
+					),
+				],
+				[
+					companyLogo(h, {
+						name: account?.name ?? "Customer",
+						logoUrl: account?.logoUrl ?? null,
+						size: "sm",
+					}),
 					h.div(
 						[h.Class("flex min-w-0 flex-col")],
 						[
-							h.span([h.Class("truncate font-medium text-fg text-sm")], [account?.name ?? "Customer"]),
+							h.span(
+								[h.Class("truncate font-medium text-fg text-sm")],
+								[account?.name ?? "Customer"],
+							),
 							h.span(
 								[h.Class("flex min-w-0 items-center gap-1 text-muted-fg text-xs")],
 								channel === undefined
 									? ["Linked channel"]
-									: [channelMark(h, channel, "size-3"), h.span([h.Class("truncate")], [channel.name])],
+									: [
+											channelMark(h, channel, "size-3"),
+											h.span([h.Class("truncate")], [channel.name]),
+										],
 							),
 						],
 					),
@@ -235,7 +270,12 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 			),
 			// Title and activity.
 			h.div(
-				[h.Role("cell"), h.Class("flex min-w-0 flex-1 flex-col gap-0.5 max-md:order-last max-md:basis-full max-md:pl-11")],
+				[
+					h.Role("cell"),
+					h.Class(
+						"flex min-w-0 flex-1 flex-col gap-0.5 max-md:order-last max-md:basis-full max-md:pl-11",
+					),
+				],
 				[
 					h.span([h.Class("truncate text-fg text-sm")], [issue.title]),
 					h.span(
@@ -253,7 +293,10 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 								],
 							),
 							...issue.tags.map((tag) =>
-								h.span([h.Class("rounded-sm bg-secondary px-1.5 py-px text-secondary-fg")], [tag]),
+								h.span(
+									[h.Class("rounded-sm bg-secondary px-1.5 py-px text-secondary-fg")],
+									[tag],
+								),
 							),
 						],
 					),
@@ -270,13 +313,23 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 						),
 					]
 				: [
-						h.div([h.Role("cell"), h.Class("w-40 shrink-0 max-md:w-auto")], [statusChip(h, issue.status)]),
-						h.div([h.Role("cell"), h.Class("w-24 shrink-0 max-md:hidden")], [priorityLabel(h, issue.priority)]),
+						h.div(
+							[h.Role("cell"), h.Class("w-40 shrink-0 max-md:w-auto")],
+							[statusChip(h, issue.status)],
+						),
+						h.div(
+							[h.Role("cell"), h.Class("w-24 shrink-0 max-md:hidden")],
+							[priorityLabel(h, issue.priority)],
+						),
 					]),
 			h.div(
 				[
 					h.Role("cell"),
-					h.Title(waiting ? "Waiting on us since the customer's last message" : "Since the last message"),
+					h.Title(
+						waiting
+							? "Waiting on us since the customer's last message"
+							: "Since the last message",
+					),
 					h.Class(
 						twMerge(
 							"w-10 shrink-0 text-right text-xs tabular-nums",
@@ -288,7 +341,14 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 			),
 			h.div(
 				[h.Role("cell"), h.Class("flex w-7 shrink-0 justify-end")],
-				[personAvatar(h, assignee === undefined ? null : { name: assignee.name, avatarUrl: assignee.avatarUrl })],
+				[
+					personAvatar(
+						h,
+						assignee === undefined
+							? null
+							: { name: assignee.name, avatarUrl: assignee.avatarUrl },
+					),
+				],
 			),
 		],
 	)
@@ -397,7 +457,9 @@ const filterItemContent = (h: HtmlBuilder<Message>, model: Model, key: string): 
 						? PRIORITY_LABEL[value as Customers.IssuePriority]
 						: (accountsByIdOfModel(model).get(value)?.name ?? value)
 	const isActive =
-		field === "waitingOnUs" ? filters.waitingOnUs : String((filters as Record<string, unknown>)[field]) === value
+		field === "waitingOnUs"
+			? filters.waitingOnUs
+			: String((filters as Record<string, unknown>)[field]) === value
 	return [
 		menuLabel(h, model.filterMenu.id, key, label),
 		...(isActive ? [IconCheck(h, { className: "ml-auto size-4 text-primary" })] : []),
@@ -446,7 +508,10 @@ const emptyState = (
 	h.div(
 		[h.Class("flex flex-col items-center gap-4 rounded-xl border border-border px-6 py-14 text-center")],
 		[
-			h.div([h.Class("flex size-11 items-center justify-center rounded-xl bg-secondary text-muted-fg")], [options.glyph]),
+			h.div(
+				[h.Class("flex size-11 items-center justify-center rounded-xl bg-secondary text-muted-fg")],
+				[options.glyph],
+			),
 			h.div(
 				[h.Class("flex flex-col gap-1")],
 				[
@@ -499,10 +564,17 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: st
 			glyph: IconMagnifier3(h, { className: "size-5" }),
 			title: "No matches",
 			body: "No issues in this tab match your search and filters.",
-			actions: [queueAction(h, { label: "Clear search and filters", onPress: Message.PressedClearNarrowing() })],
+			actions: [
+				queueAction(h, {
+					label: "Clear search and filters",
+					onPress: Message.PressedClearNarrowing(),
+				}),
+			],
 		})
 	if (issues.length === 0) {
-		const others = tabCounts({ ...model, filters: { ...model.filters, assignee: "anyone" } }, viewer)[model.tab]
+		const others = tabCounts({ ...model, filters: { ...model.filters, assignee: "anyone" } }, viewer)[
+			model.tab
+		]
 		return model.tab === "open"
 			? emptyState(h, {
 					glyph: IconCheck(h, { className: "size-5" }),

@@ -135,7 +135,15 @@ export const openedBy = (message: SupportMessage, manual: boolean): IssueActivit
 
 /** Whether a customer's top-level message joins `issue` instead of opening a new one. */
 export const joinsIssue = (
-	issue: Pick<schema.CustomerIssue, "openedByUserId" | "status" | "firstTeamReplyAt" | "lastTeamReplyAt" | "lastMessageAt" | "lastCustomerMessageAt">,
+	issue: Pick<
+		schema.CustomerIssue,
+		| "openedByUserId"
+		| "status"
+		| "firstTeamReplyAt"
+		| "lastTeamReplyAt"
+		| "lastMessageAt"
+		| "lastCustomerMessageAt"
+	>,
 	message: SupportMessage,
 ) =>
 	message.side === "customer" &&
@@ -156,7 +164,12 @@ export const titleOf = (content: string) => {
 			.find((part) => part !== "") ?? ""
 	if (line === "") return "Message with no text"
 	const chars = Array.from(line)
-	return chars.length <= TITLE_MAX ? line : `${chars.slice(0, TITLE_MAX - 1).join("").trimEnd()}…`
+	return chars.length <= TITLE_MAX
+		? line
+		: `${chars
+				.slice(0, TITLE_MAX - 1)
+				.join("")
+				.trimEnd()}…`
 }
 
 // ---------------------------------------------------------------------------
@@ -174,18 +187,39 @@ export const linkedAccountOf = (channelId: ChannelId) =>
 		),
 	)
 
-/** The live issue rooted at `(channelId, messageId)`. */
-export const issueAt = (channelId: ChannelId, rootMessageId: MessageId) =>
+/** What `customer_issue_messages` holds for a top-level message: its issue, or a tombstone. */
+const issueMessageOf = (channelId: ChannelId, messageId: MessageId) =>
 	Effect.flatMap(Database.Database, (db) =>
 		db.first(
+			SQLite.from(schema.customerIssueMessagesTable)
+				.select("issueId", "deletedAt")
+				.where(($) => [$.channelId.eq(channelId), $.messageId.eq(messageId)])
+				.limit(1),
+		),
+	)
+
+/** The live issue a top-level message of `channelId` belongs to: as its root, or a follow-up that joined it. */
+export const issueAt = (channelId: ChannelId, messageId: MessageId) =>
+	Effect.gen(function* () {
+		const entry = yield* issueMessageOf(channelId, messageId)
+		const issueId = Option.isSome(entry) ? entry.value.issueId : null
+		if (issueId === null) return Option.none<schema.CustomerIssue>()
+		const db = yield* Database.Database
+		return yield* db.first(
 			SQLite.from(schema.customerIssuesTable)
 				.select()
-				.where(($) => [
-					$.sourceChannelId.eq(channelId),
-					$.rootMessageId.eq(rootMessageId),
-					$.deletedAt.isNull(),
-				])
+				.where(($) => [$.id.eq(issueId), $.deletedAt.isNull()])
 				.limit(1),
+		)
+	})
+
+/** Record `messageId` as one of the issue's top-level messages. */
+const recordIssueMessage = (channelId: ChannelId, messageId: MessageId, issueId: CustomerIssueId) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.run(
+			SQLite.insertInto(schema.customerIssueMessagesTable)
+				.values({ channelId, messageId, issueId })
+				.onConflictDoUpdate({ target: ["channelId", "messageId"], set: { issueId } }),
 		),
 	)
 
@@ -201,6 +235,7 @@ export const insertIssueRow = (values: schema.NewCustomerIssue) =>
 		const db = yield* Database.Database
 		const [row] = yield* db.run(SQLite.insertInto(schema.customerIssuesTable).values(values).returning())
 		if (row === undefined) return yield* Effect.die(new Error("customer_issues insert returned no row"))
+		yield* recordIssueMessage(row.sourceChannelId, row.rootMessageId, row.id)
 		yield* issueWritten(null, row)
 		return row
 	})
@@ -215,14 +250,14 @@ export const updateIssueRow = (before: schema.CustomerIssue, changes: Partial<sc
 				.where(($) => [$.id.eq(before.id)])
 				.returning(),
 		)
-		if (row === undefined) return yield* Effect.die(new Error(`customer_issues ${before.id} vanished mid-update`))
+		if (row === undefined)
+			return yield* Effect.die(new Error(`customer_issues ${before.id} vanished mid-update`))
 		yield* issueWritten(before, row)
 		return row
 	})
 
 /** Insert a new issue for `message`, the root of a thread in `channelId`. */
 export const insertIssue = (input: {
-	readonly id?: CustomerIssueId
 	readonly organizationId: schema.CustomerIssue["organizationId"]
 	readonly accountId: schema.CustomerIssue["accountId"]
 	readonly channelId: ChannelId
@@ -233,7 +268,6 @@ export const insertIssue = (input: {
 	Effect.gen(function* () {
 		const db = yield* Database.Database
 		const issue = yield* insertIssueRow({
-			id: input.id,
 			organizationId: input.organizationId,
 			accountId: input.accountId,
 			sourceChannelId: input.channelId,
@@ -285,12 +319,16 @@ export const receiveSupportMessage = Effect.fn("CustomersObject.receiveSupportMe
 			const issue = yield* issueAt(input.channelId, rootMessageId)
 			// A reply under a message nobody raised as an issue (an announcement, a team note) is chat.
 			if (Option.isNone(issue)) return "ignored" as const
-			yield* updateIssueRow(issue.value, { ...foldMessage(issue.value, input.message), threadChannelId })
+			yield* updateIssueRow(issue.value, {
+				...foldMessage(issue.value, input.message),
+				threadChannelId,
+			})
 			return "updated" as const
 		}
 
-		// Redelivery of a root already recorded.
-		if (Option.isSome(yield* issueAt(input.channelId, input.message.messageId))) return "ignored" as const
+		// Redelivered, or deleted before it got here (a tombstone).
+		if (Option.isSome(yield* issueMessageOf(input.channelId, input.message.messageId)))
+			return "ignored" as const
 		if (input.message.side !== "customer") return "ignored" as const
 
 		const latest = yield* db.first(
@@ -305,7 +343,11 @@ export const receiveSupportMessage = Effect.fn("CustomersObject.receiveSupportMe
 				.limit(1),
 		)
 		if (Option.isSome(latest) && joinsIssue(latest.value, input.message)) {
-			yield* updateIssueRow(latest.value, foldMessage(latest.value, input.message))
+			yield* updateIssueRow(latest.value, {
+				...foldMessage(latest.value, input.message),
+				joinedMessageIds: [...latest.value.joinedMessageIds, input.message.messageId],
+			})
+			yield* recordIssueMessage(input.channelId, input.message.messageId, latest.value.id)
 			return "joined" as const
 		}
 		yield* insertIssue({
@@ -327,15 +369,42 @@ export const receiveSupportMessage = Effect.fn("CustomersObject.receiveSupportMe
 })
 
 /**
- * A message in a linked channel was deleted. An issue whose root went with nothing else said in it
- * goes too; one with a conversation stays (its thread still holds it).
+ * A top-level message in a linked channel was deleted. An issue whose root went with no thread and
+ * nothing else said in it goes too; one with a conversation stays. A message no issue knows yet
+ * leaves a tombstone, so its creation, delivered late, opens nothing.
  */
 export const receiveSupportMessageDeleted = Effect.fn("CustomersObject.receiveSupportMessageDeleted")(
 	function* (input: { readonly channelId: ChannelId; readonly messageId: MessageId }) {
 		const db = yield* Database.Database
+		const now = new Date(yield* Clock.currentTimeMillis)
+		const entry = yield* issueMessageOf(input.channelId, input.messageId)
+		if (Option.isNone(entry)) {
+			yield* db.run(
+				SQLite.insertInto(schema.customerIssueMessagesTable)
+					.values({
+						channelId: input.channelId,
+						messageId: input.messageId,
+						issueId: null,
+						deletedAt: now,
+					})
+					.onConflictDoNothing(),
+			)
+			return
+		}
+		yield* db.run(
+			SQLite.update(schema.customerIssueMessagesTable)
+				.set({ deletedAt: now })
+				.where(($) => [$.channelId.eq(input.channelId), $.messageId.eq(input.messageId)]),
+		)
 		const issue = yield* issueAt(input.channelId, input.messageId)
-		if (Option.isNone(issue) || issue.value.messageCount > 1) return
-		yield* updateIssueRow(issue.value, { deletedAt: new Date(yield* Clock.currentTimeMillis) })
+		if (
+			Option.isNone(issue) ||
+			issue.value.rootMessageId !== input.messageId ||
+			issue.value.threadChannelId !== null ||
+			issue.value.messageCount > 1
+		)
+			return
+		yield* updateIssueRow(issue.value, { deletedAt: now })
 	},
 )
 
@@ -354,15 +423,17 @@ export const ISSUE_STATUS_VERB = {
 
 /** What a member's change writes. */
 export type IssuePatch = {
-	-readonly [K in
-		| "status"
-		| "priority"
-		| "assigneeUserId"
-		| "tags"
-		| "closedAt"
-		| "closedByUserId"
-		| "reopenCount"
-		| "reopenedAt"]?: schema.CustomerIssue[K]
+	-readonly [
+		K in
+			| "status"
+			| "priority"
+			| "assigneeUserId"
+			| "tags"
+			| "closedAt"
+			| "closedByUserId"
+			| "reopenCount"
+			| "reopenedAt"
+	]?: schema.CustomerIssue[K]
 }
 
 /** The changes a member's `customers.issue.update` makes; only fields that differ. */
@@ -484,14 +555,79 @@ type DemoIssue = Readonly<{
 
 /** Every status, priority and SLA state: fresh, answered, overdue (waiting 30 h), reopened, closed. */
 const DEMO_ISSUES: ReadonlyArray<DemoIssue> = [
-	{ title: "Dashboards time out for the EU workspace since this morning", ageHours: 0.7, status: "new", priority: "urgent", teamReplied: null, messages: 3, tags: ["incident"] },
-	{ title: "SSO login loops back to the sign-in page", ageHours: 5, status: "waiting_on_us", priority: "high", teamReplied: [4, 4], customerLast: 3, messages: 4, tags: ["auth"] },
-	{ title: "Can we get October's invoice re-issued with our VAT number?", ageHours: 0.3, status: "new", priority: "none", teamReplied: null, messages: 1 },
-	{ title: "Exports are missing the custom fields column", ageHours: 26, status: "waiting_on_customer", priority: "medium", teamReplied: [25, 2], customerLast: 20, messages: 9 },
-	{ title: "Rate limit on the ingest API after the plan upgrade", ageHours: 30, status: "waiting_on_us", priority: "high", teamReplied: null, messages: 2 },
-	{ title: "Feature request: per-environment API keys", ageHours: 6 * 24, status: "on_hold", priority: "low", teamReplied: [140, 120], customerLast: 130, messages: 5, tags: ["feature-request"] },
-	{ title: "Webhook retries flooded our endpoint", ageHours: 48, status: "waiting_on_us", priority: "medium", teamReplied: [47, 30], customerLast: 1, reopened: true, messages: 12 },
-	{ title: "How do we add a second billing contact?", ageHours: 72, status: "closed", priority: "low", teamReplied: [71, 70], closedHoursAgo: 69, messages: 3 },
+	{
+		title: "Dashboards time out for the EU workspace since this morning",
+		ageHours: 0.7,
+		status: "new",
+		priority: "urgent",
+		teamReplied: null,
+		messages: 3,
+		tags: ["incident"],
+	},
+	{
+		title: "SSO login loops back to the sign-in page",
+		ageHours: 5,
+		status: "waiting_on_us",
+		priority: "high",
+		teamReplied: [4, 4],
+		customerLast: 3,
+		messages: 4,
+		tags: ["auth"],
+	},
+	{
+		title: "Can we get October's invoice re-issued with our VAT number?",
+		ageHours: 0.3,
+		status: "new",
+		priority: "none",
+		teamReplied: null,
+		messages: 1,
+	},
+	{
+		title: "Exports are missing the custom fields column",
+		ageHours: 26,
+		status: "waiting_on_customer",
+		priority: "medium",
+		teamReplied: [25, 2],
+		customerLast: 20,
+		messages: 9,
+	},
+	{
+		title: "Rate limit on the ingest API after the plan upgrade",
+		ageHours: 30,
+		status: "waiting_on_us",
+		priority: "high",
+		teamReplied: null,
+		messages: 2,
+	},
+	{
+		title: "Feature request: per-environment API keys",
+		ageHours: 6 * 24,
+		status: "on_hold",
+		priority: "low",
+		teamReplied: [140, 120],
+		customerLast: 130,
+		messages: 5,
+		tags: ["feature-request"],
+	},
+	{
+		title: "Webhook retries flooded our endpoint",
+		ageHours: 48,
+		status: "waiting_on_us",
+		priority: "medium",
+		teamReplied: [47, 30],
+		customerLast: 1,
+		reopened: true,
+		messages: 12,
+	},
+	{
+		title: "How do we add a second billing contact?",
+		ageHours: 72,
+		status: "closed",
+		priority: "low",
+		teamReplied: [71, 70],
+		closedHoursAgo: 69,
+		messages: 3,
+	},
 ]
 
 /**
@@ -550,7 +686,10 @@ export const seedDemoIssues = Effect.fn("Customers.seedDemoIssues")(function* (i
 			firstTeamReplyAt: demo.teamReplied === null ? null : at(demo.teamReplied[0]),
 			lastTeamReplyAt: demo.teamReplied === null ? null : at(demo.teamReplied[1]),
 			lastMessageAt: new Date(
-				Math.max(customerLast.getTime(), demo.teamReplied === null ? 0 : at(demo.teamReplied[1]).getTime()),
+				Math.max(
+					customerLast.getTime(),
+					demo.teamReplied === null ? 0 : at(demo.teamReplied[1]).getTime(),
+				),
 			),
 			closedAt: demo.closedHoursAgo === undefined ? null : at(demo.closedHoursAgo),
 			reopenCount: demo.reopened === true ? 1 : 0,

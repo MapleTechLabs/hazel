@@ -251,7 +251,8 @@ export const issueRootIdsStream = <M>(
 				q
 					.from({ issue: customerIssueCollection })
 					.where(({ issue }) => and(eq(issue.sourceChannelId, channelId), isNull(issue.deletedAt))),
-			(rows) => toMessage(rows.map((issue) => issue.rootMessageId)),
+			// Each issue's root and the follow-ups that joined it.
+			(rows) => toMessage(rows.flatMap((issue) => [issue.rootMessageId, ...issue.joinedMessageIds])),
 		),
 	)
 

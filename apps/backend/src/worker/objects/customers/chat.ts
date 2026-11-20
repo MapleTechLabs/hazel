@@ -141,7 +141,10 @@ const participantsHook: CustomerChatMessageHook = (payload) =>
 	})
 
 /** Every hook a message of a linked channel runs, in order. Support issues and SLAs go after. */
-export const customerChatMessageHooks: ReadonlyArray<CustomerChatMessageHook> = [participantsHook, supportIssueHook]
+export const customerChatMessageHooks: ReadonlyArray<CustomerChatMessageHook> = [
+	participantsHook,
+	supportIssueHook,
+]
 
 const chatMessage = Effect.fn("CustomersChat.chatMessage")(function* (payload: ChatMessagePayload) {
 	yield* Effect.annotateCurrentSpan({

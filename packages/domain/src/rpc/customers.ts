@@ -444,8 +444,6 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 	write(
 		"customers.issue.createFromMessage",
 		{
-			/** Client-generated, for the optimistic row. */
-			id: Schema.optionalKey(CustomerIssueId),
 			channelId: ChannelId,
 			messageId: MessageId,
 		},

@@ -889,6 +889,8 @@ export const customerIssuesTable = SQLite.table("customer_issues", {
 		rootMessageId: uuid(MessageId),
 		/** The root message's thread, once one exists. */
 		threadChannelId: SQLite.nullable(uuid(ChannelId)),
+		/** The customer's follow-ups that joined the issue (top-level messages of `sourceChannelId`). */
+		joinedMessageIds: SQLite.column(jsonb<ReadonlyArray<MessageId>>(), { default: [] }),
 		/** The root message's author. */
 		openedByUserId: uuid(UserId),
 		/** The member who created it by hand; null when a customer's message opened it. */
@@ -903,7 +905,7 @@ export const customerIssuesTable = SQLite.table("customer_issues", {
 		openedAt: timestamptz,
 		firstCustomerMessageAt: SQLite.nullable(timestamptz),
 		lastCustomerMessageAt: SQLite.nullable(timestamptz),
-		/** First response: the first team message after the issue opened. */
+		/** First response: the earliest team message in the issue (a late delivery of an earlier one moves it back). */
 		firstTeamReplyAt: SQLite.nullable(timestamptz),
 		lastTeamReplyAt: SQLite.nullable(timestamptz),
 		/** The last message of either side (the inbox's "updated"). */
@@ -928,6 +930,23 @@ export const customerIssuesTable = SQLite.table("customer_issues", {
 	],
 })
 export type CustomerIssue = SQLite.SelectRowOf<typeof customerIssuesTable>
+
+/**
+ * The top-level messages of each issue (its root and the follow-ups that joined it), so a reply in
+ * any of their threads finds the issue; and tombstones (`issueId` null, `deletedAt` set) for a
+ * message deleted before it reached the issues, so a late delivery opens nothing. Internal.
+ */
+export const customerIssueMessagesTable = SQLite.table("customer_issue_messages", {
+	columns: {
+		channelId: uuid(ChannelId),
+		messageId: uuid(MessageId),
+		issueId: SQLite.nullable(uuid(CustomerIssueId)),
+		deletedAt: SQLite.nullable(timestamptz),
+		createdAt: createdAt(),
+	},
+	primaryKey: ["channelId", "messageId"],
+	indexes: [SQLite.index("customer_issue_messages_issue_idx", ["issueId"])],
+})
 export type NewCustomerIssue = SQLite.InsertRowOf<typeof customerIssuesTable>
 
 /**

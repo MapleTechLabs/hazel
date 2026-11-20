@@ -35,6 +35,7 @@ import type {
 import { Clock, DateTime, Effect, Layer, Option, Predicate, Redacted } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { NonProductionStage } from "../../lib/stage"
+import { Directory } from "../../services/directory"
 import { IntegrationEncryption } from "../../services/integration-encryption"
 import {
 	type CustomersActor,
@@ -569,6 +570,7 @@ const cleanTags = (tags: ReadonlyArray<string>) => [
 export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
+		const directory = yield* Directory
 
 		return {
 			"customers.signal.assign": ({ signalId, assigneeUserId }) =>
@@ -901,14 +903,23 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 							)
 							if (Option.isNone(found)) return yield* notFound("issue", issueId)
 							const issue = found.value
-							const patch = issuePatch(issue, { status, priority, assigneeUserId, tags }, actor.userId, now)
+							const patch = issuePatch(
+								issue,
+								{ status, priority, assigneeUserId, tags },
+								actor.userId,
+								now,
+							)
 							if (Object.keys(patch).length === 0) return
 							yield* updateIssueRow(issue, patch)
 							if (patch.status !== undefined) {
 								yield* hazelEvent(
 									issue.accountId,
 									actor.userId,
-									patch.status === "closed" ? "issue.closed" : issue.status === "closed" ? "issue.reopened" : "issue.status_changed",
+									patch.status === "closed"
+										? "issue.closed"
+										: issue.status === "closed"
+											? "issue.reopened"
+											: "issue.status_changed",
 									`${ISSUE_STATUS_VERB[patch.status]}: ${issue.title}`,
 									{ issueId, from: issue.status, to: patch.status },
 									now,
@@ -928,7 +939,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.issue.createFromMessage": ({ id, channelId, messageId }) =>
+			"customers.issue.createFromMessage": ({ channelId, messageId }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireMember
 					const link = yield* linkedAccountOf(channelId)
@@ -937,12 +948,19 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					}
 					const existing = yield* issueAt(channelId, messageId)
 					if (Option.isSome(existing)) return yield* withTx(Effect.succeed(existing.value))
-					// The message, if the caller reads the channel (asked of its `ChannelObject`).
-					const message = yield* callObject(SupportMessageCall, channelTarget(channelId), {
+					// The message, if the caller reads the channel, asked of the `ChannelObject` holding it:
+					// the host channel's for a Connect guest org's mount.
+					const holder = Option.match(yield* directory.channel(channelId), {
+						onNone: () => channelId,
+						onSome: (row) => row.hostChannelId ?? channelId,
+					})
+					const message = yield* callObject(SupportMessageCall, channelTarget(holder), {
 						messageId,
 						userId: actor.userId,
 					}).pipe(
-						Effect.catchTag("MessageNotFoundError", () => Effect.fail(notFound("message", messageId))),
+						Effect.catchTag("MessageNotFoundError", () =>
+							Effect.fail(notFound("message", messageId)),
+						),
 						Effect.catchTag("ObjectCallError", (cause) =>
 							Effect.fail(
 								new InternalServerError({
@@ -960,7 +978,6 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 							const raced = yield* issueAt(channelId, messageId)
 							if (Option.isSome(raced)) return raced.value
 							return yield* insertIssue({
-								id,
 								organizationId: link.value.organizationId,
 								accountId: link.value.accountId,
 								channelId,
