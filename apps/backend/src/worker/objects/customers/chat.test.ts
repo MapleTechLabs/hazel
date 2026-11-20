@@ -297,6 +297,32 @@ describe("Author side in linked channels", () => {
 				expect(t.participants()).toEqual({})
 				yield* t.post(thread, customer)
 				expect(t.participants()[customer]).toMatchObject({ side: "customer", lastChannelId: linked })
+
+				// A Slack author seen first with no workspace, then from another one: the reason
+				// reaches Customers even though the side stays the same.
+				const slackAuthor = t.person({
+					externalId: "slack-user-ULATE",
+					userType: "machine",
+					member: "live",
+				})
+				yield* t.post(linked, slackAuthor)
+				const reasonOf = () =>
+					t.world.rows<{ reason: string }>(
+						`SELECT reason FROM customer_chat_participants WHERE userId = ?`,
+						slackAuthor,
+					)[0]?.reason
+				expect(reasonOf()).toBe("external")
+				yield* t.org.run(
+					Effect.gen(function* () {
+						const { noteExternalWorkspace } = yield* Effect.promise(
+							() => import("../org/customer-chat"),
+						)
+						yield* noteExternalWorkspace(t.world.orgId, linked, slackAuthor, "other")
+					}),
+				)
+				// \`run\` leaves its outbox for the next delivery: one in a channel with no customer.
+				yield* t.post(other, t.world.member)
+				expect(reasonOf()).toBe("external_other_workspace")
 			}),
 		))
 

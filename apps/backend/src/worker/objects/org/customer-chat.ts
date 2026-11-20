@@ -304,7 +304,7 @@ export const noteExternalWorkspace = Effect.fn("OrgObject.noteExternalWorkspace"
 	const db = yield* Database.Database
 	const row = yield* db.first(
 		SQLite.from(schema.customerChatAuthorsTable)
-			.select("externalWorkspace", "side")
+			.select("externalWorkspace", "side", "reason")
 			.where(($) => [$.userId.eq(userId)])
 			.limit(1),
 	)
@@ -331,7 +331,7 @@ export const noteExternalWorkspace = Effect.fn("OrgObject.noteExternalWorkspace"
 		)
 	}
 	const author = yield* classifyChatAuthor(organizationId, userId)
-	if (Option.isSome(row) && row.value.side !== author.side) {
+	if (Option.isSome(row) && (row.value.side !== author.side || row.value.reason !== author.reason)) {
 		yield* enqueueEffect(CustomerChatEffects.chatAuthorChanged, customersTarget(organizationId), {
 			organizationId,
 			author,
