@@ -4,6 +4,7 @@ import { Subscription } from "foldkit"
 import { channelOptionsStream } from "../../../customers/channels"
 import { issuesStream } from "../../../customers/issues"
 import { accountsStream, orgMembersStream } from "../../../customers/queries"
+import { issueSlasStream } from "../../../customers/sla"
 import { queueKeyFilter } from "../../../customers/ui/queue-keys"
 import type { PageSubscriptionInput } from "../../contract"
 import { Message } from "./message"
@@ -58,6 +59,13 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 			organizationId === null
 				? Stream.empty
 				: accountsStream(organizationId, (accounts) => Message.UpdatedAccounts({ accounts })),
+	}),
+	slas: entry(organization, {
+		modelToDependencies: organizationOf,
+		dependenciesToStream: ({ organizationId }) =>
+			organizationId === null
+				? Stream.empty
+				: issueSlasStream(organizationId, (slas) => Message.UpdatedSlas({ slas })),
 	}),
 	channels: entry(organization, {
 		modelToDependencies: organizationOf,

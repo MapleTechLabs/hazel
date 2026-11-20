@@ -161,6 +161,7 @@ describe("customers routes", () => {
 		["/hazel/customers", "CustomersOverview"],
 		["/hazel/customers/attention", "CustomersAttention"],
 		["/hazel/customers/inbox", "CustomersInbox"],
+		["/hazel/customers/support", "CustomersSupportReport"],
 		["/hazel/customers/list", "CustomersList"],
 		["/hazel/customers/list?view=at_risk", "CustomersList"],
 		[`/hazel/customers/${accountId}`, "CustomerDetail"],
@@ -170,6 +171,7 @@ describe("customers routes", () => {
 		[`/hazel/customers/settings/signals/${ruleId}`, "CustomersSettingsSignalRule"],
 		["/hazel/customers/settings/health", "CustomersSettingsHealth"],
 		["/hazel/customers/settings/plans", "CustomersSettingsPlans"],
+		["/hazel/customers/settings/sla", "CustomersSettingsSla"],
 		["/hazel/customers/settings/feature-flags", "CustomersSettingsFeatureFlags"],
 		["/hazel/customers/settings/sources", "CustomersSettingsSources"],
 		["/hazel/customers/settings/sources/stripe", "CustomersSourceDetail"],
@@ -477,6 +479,7 @@ describe("hrefOf", () => {
 		CustomersOverview: [[AppRoute.CustomersOverview({ orgSlug }), "/hazel/customers"]],
 		CustomersAttention: [[AppRoute.CustomersAttention({ orgSlug }), "/hazel/customers/attention"]],
 		CustomersInbox: [[AppRoute.CustomersInbox({ orgSlug }), "/hazel/customers/inbox"]],
+		CustomersSupportReport: [[AppRoute.CustomersSupportReport({ orgSlug }), "/hazel/customers/support"]],
 		CustomersList: [
 			[AppRoute.CustomersList({ orgSlug, view: none }), "/hazel/customers/list"],
 			[
@@ -519,6 +522,7 @@ describe("hrefOf", () => {
 		CustomersSettingsPlans: [
 			[AppRoute.CustomersSettingsPlans({ orgSlug }), "/hazel/customers/settings/plans"],
 		],
+		CustomersSettingsSla: [[AppRoute.CustomersSettingsSla({ orgSlug }), "/hazel/customers/settings/sla"]],
 		CustomersSettingsFeatureFlags: [
 			[AppRoute.CustomersSettingsFeatureFlags({ orgSlug }), "/hazel/customers/settings/feature-flags"],
 		],

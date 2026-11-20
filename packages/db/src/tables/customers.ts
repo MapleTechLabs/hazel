@@ -12,6 +12,10 @@
  */
 import type {
 	AttentionSettings,
+	BusinessHours,
+	SlaAppliesTo,
+	SlaState,
+	SlaTargets,
 	ConnectionConfig,
 	HealthBreakdown,
 	HealthSettings,
@@ -29,6 +33,8 @@ import type {
 } from "@hazel/domain/customers"
 import {
 	DEFAULT_ATTENTION_SETTINGS,
+	DEFAULT_BUSINESS_HOURS,
+	SlaHours,
 	EMPTY_SYNC_STATS,
 	BillingInterval,
 	BuiltInViewKey,
@@ -79,12 +85,14 @@ import {
 	CustomerSettingsId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
+	CustomerSlaPolicyId,
 	CustomerSubscriptionId,
 	CustomerSyncRunId,
 	CustomerUnmatchedRecordId,
 	CustomerViewLayoutId,
 	MessageId,
 	OrganizationId,
+	OrganizationMemberId,
 	UserId,
 } from "@hazel/schema"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
@@ -620,6 +628,8 @@ export const customerSettingsTable = SQLite.table("customer_settings", {
 		addOnPlans: SQLite.column(jsonb<ReadonlyArray<string>>(), { default: [] }),
 		/** MRR from each Stripe subscription's last paid invoice (usage overage, discounts) once one exists. */
 		overageInMrr: SQLite.column(SQLite.boolean, { default: false }),
+		/** The working week SLA policies on business hours count (`docs/customers/sla.md`). */
+		businessHours: SQLite.column(jsonb<BusinessHours>(), { default: DEFAULT_BUSINESS_HOURS }),
 		lastComputedAt: SQLite.nullable(timestamptz),
 		updatedBy: SQLite.nullable(uuid(UserId)),
 		createdAt: createdAt(),
@@ -628,6 +638,32 @@ export const customerSettingsTable = SQLite.table("customer_settings", {
 	primaryKey: ["id"],
 })
 export type CustomerSettings = SQLite.SelectRowOf<typeof customerSettingsTable>
+
+/**
+ * Support SLA policies (`docs/customers/sla.md`): targets per issue priority. An account gets the
+ * first enabled policy naming it by id, else by plan or tag (by `position`), else the first default
+ * one (nothing named).
+ */
+export const customerSlaPoliciesTable = SQLite.table("customer_sla_policies", {
+	columns: {
+		id: id(CustomerSlaPolicyId),
+		organizationId: uuid(OrganizationId),
+		name: SQLite.text,
+		position: SQLite.column(SQLite.integer, { default: 0 }),
+		enabled: SQLite.column(SQLite.boolean, { default: true }),
+		appliesTo: jsonb<SlaAppliesTo>(),
+		targets: jsonb<SlaTargets>(),
+		hours: SQLite.column(textEnum(SlaHours.literals), { default: "business" }),
+		warnBeforePct: SQLite.column(SQLite.integer, { default: 25 }),
+		createdBy: SQLite.nullable(uuid(UserId)),
+		updatedBy: SQLite.nullable(uuid(UserId)),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+		deletedAt: SQLite.nullable(timestamptz),
+	},
+	primaryKey: ["id"],
+})
+export type CustomerSlaPolicy = SQLite.SelectRowOf<typeof customerSlaPoliciesTable>
 
 export const customerHealthDailyTable = SQLite.table("customer_health_daily", {
 	columns: {
@@ -950,6 +986,36 @@ export const customerIssueMessagesTable = SQLite.table("customer_issue_messages"
 export type NewCustomerIssue = SQLite.InsertRowOf<typeof customerIssuesTable>
 
 /**
+ * An issue's SLA clocks (`docs/customers/sla.md` §4), one row per issue (`id` = the issue's id), written
+ * only by the hook on issue writes and the alarm. The policy's targets, hours and warning are kept as
+ * they were when the issue opened: a policy change applies to new issues.
+ */
+export const customerIssueSlasTable = SQLite.table("customer_issue_slas", {
+	columns: {
+		id: uuid(CustomerIssueId),
+		organizationId: uuid(OrganizationId),
+		accountId: uuid(CustomerAccountId),
+		/** Null once the policy was deleted (the snapshot below stays). */
+		policyId: SQLite.nullable(uuid(CustomerSlaPolicyId)),
+		policyName: SQLite.text,
+		targets: jsonb<SlaTargets>(),
+		hours: textEnum(SlaHours.literals),
+		warnBeforePct: SQLite.integer,
+		state: jsonb<SlaState>(),
+		/** The next warning or breach the alarm sends; null when none is pending. */
+		nextAlertAt: SQLite.nullable(timestamptz),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	primaryKey: ["id"],
+	indexes: [
+		SQLite.index("customer_issue_slas_next_alert_idx", ["nextAlertAt"]),
+		SQLite.index("customer_issue_slas_account_idx", ["accountId"]),
+	],
+})
+export type CustomerIssueSla = SQLite.SelectRowOf<typeof customerIssueSlasTable>
+
+/**
  * A feature flag created in Hazel. The flags the Feature flags page lists are these plus every key
  * in an account's `featureFlags` (what Clerk already holds), so a flag created here shows before any
  * customer has it. Deleting a flag removes it from every customer and deletes this row.
@@ -1020,6 +1086,8 @@ export const customerMembersTable = SQLite.table("customer_members", {
 	columns: {
 		userId: uuid(UserId),
 		role: textEnum(["owner", "admin", "member"]),
+		/** Their `organization_members` id (notifications are keyed by it); null until the next snapshot. */
+		memberId: SQLite.nullable(uuid(OrganizationMemberId)),
 	},
 	primaryKey: ["userId"],
 })

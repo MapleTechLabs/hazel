@@ -33,6 +33,7 @@ const item = (n: number, overrides: Partial<NotificationItem>): NotificationItem
 	isUnread: false,
 	createdAtMs: NOW - 3 * MINUTE,
 	resourceType: "message",
+	reason: null,
 	targetedResourceId: uuid(900),
 	targetedResourceType: "channel",
 	messageContent: `message ${n}`,
@@ -138,6 +139,38 @@ describe("notifications inbox", () => {
 			Scene.given<Model>({ category: "all", notifications: Notifications.Loading() }),
 			Scene.expect(Scene.role("progressbar")).toExist(),
 			Scene.expect(Scene.text("No notifications")).toBeAbsent(),
+		)
+	})
+})
+
+describe("support SLA alerts", () => {
+	const breach = item(5, {
+		isUnread: true,
+		resourceType: "customer_issue",
+		reason: "sla_reply_breach",
+		messageContent: null,
+		author: null,
+		channel: { name: "SSO login loops", type: "thread" },
+	})
+	const warning = item(6, {
+		...breach,
+		id: notificationId(6),
+		reason: "sla_resolution_warning",
+		channel: { name: "ext-acme", type: "public" },
+	})
+
+	test("read as the issue's state in its channel, not as a message", () => {
+		Scene.scene(
+			{ update, view: view() },
+			Scene.given<Model>({
+				category: "all",
+				notifications: Notifications.Loaded({ items: [breach, warning, unreadChannel] }),
+			}),
+			Scene.expect(Scene.text("Reply overdue in #SSO login loops")).toExist(),
+			Scene.expect(Scene.text("A support issue is past its reply deadline")).toExist(),
+			Scene.expect(Scene.text("Resolution due soon in #ext-acme")).toExist(),
+			Scene.expect(Scene.text("A support issue is close to its resolution deadline")).toExist(),
+			Scene.expect(Scene.text("New message in #general")).toExist(),
 		)
 	})
 })

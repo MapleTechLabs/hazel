@@ -445,6 +445,8 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						model.htmlRender.frames,
 						model.htmlRender.theme?.appearance ?? "dark",
 						threadRowContextFor(h, model, model.threadPanel.rows, nowMs),
+						// The SLA chip's clock: only an issue with one re-renders the panel every tick.
+						model.threadPanel.issue.sla === null ? 0 : nowMs,
 						h,
 					]) ?? h.empty),
 			// Outside the tabs: the list's frames and the thread panel's both open it.
@@ -474,6 +476,7 @@ const threadPanelOverlay = (
 	frames: HtmlRender.Model["frames"],
 	appearance: "light" | "dark",
 	rowContext: RowContext<Message>,
+	slaNowMs: number,
 	h: H,
 ): Html => {
 	// The original message's HTML renders show here too, so the panel re-renders with their state.
@@ -511,6 +514,7 @@ const threadPanelOverlay = (
 					model: panel.issue,
 					inboxHref: hrefOf(AppRoute.CustomersInbox({ orgSlug })),
 					currentUserId,
+					nowMs: slaNowMs,
 					toMessage: toIssueControlMessage,
 				})
 			: h.empty,

@@ -32,6 +32,7 @@ import { chatAuthorsSenderRefusal } from "../org/customer-chat"
 import { connectSenderRefusal } from "../org/connect"
 import { searchSenderRefusal } from "../org/message-search"
 import { notificationCountSenderRefusal } from "../org/notification-count"
+import { customerNotificationSenderRefusal } from "../user/customer-notifications"
 import { orgReceivers, OrgEffects } from "./org-effects"
 import {
 	type AnyEffectKind,
@@ -110,11 +111,11 @@ const senderGuards: Partial<Record<ObjectKind, SenderGuard>> = {
 	channel: channelSenderRefusal,
 	customers: customersSenderRefusal,
 	// Only a `UserObject`'s claim of a device token makes another user's object forget it.
-	user: (kind, _payload, sender) =>
+	user: (kind, payload, sender) =>
 		Effect.succeed(
 			kind === PushOwnershipUserEffects.forgetPushDevice.name && sender.kind !== "user"
 				? Option.some(`${kind} sent by ${sender.kind}`)
-				: Option.none(),
+				: customerNotificationSenderRefusal(kind, payload, sender),
 		),
 	// Each check refuses only the kinds it owns; the first refusal wins.
 	org: (kind, payload, sender) =>

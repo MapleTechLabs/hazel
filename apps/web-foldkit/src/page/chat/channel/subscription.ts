@@ -1,4 +1,4 @@
-import { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, CustomerIssueId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option, PubSub, Schema, Stream } from "effect"
 import { Dom, Subscription } from "foldkit"
 import * as HtmlRender from "../../../chat/html-render"
@@ -32,6 +32,7 @@ import type { PageSubscriptionInput } from "../../contract"
 import { channelCustomerStream } from "../../../customers/channels"
 import { linkedChannelAuthorsStream } from "../../../customers/chat-authors"
 import { issueAtMessageStream } from "../../../customers/issues"
+import { issueSlaStream } from "../../../customers/sla"
 import { orgMembersStream } from "../../../customers/queries"
 import * as IssueControl from "../issue-control"
 import * as Composer from "../../../composer/composer"
@@ -397,6 +398,22 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 					? Stream.empty
 					: issueAtMessageStream(organizationId, channelId, rootMessageId, (issue) =>
 							toIssueControl(IssueControl.Message.UpdatedIssue({ rootMessageId, issue })),
+						),
+		},
+	),
+	// The open thread's issue's SLA clocks (the chip beside its status).
+	chatThreadIssueSla: entry(
+		{ organizationId: Schema.NullOr(OrganizationId), issueId: Schema.NullOr(CustomerIssueId) },
+		{
+			modelToDependencies: ({ model }) => {
+				const issueId = model.threadPanel?.issue.issue?.id ?? null
+				return { organizationId: issueId === null ? null : issueOrganizationIdOf(model), issueId }
+			},
+			dependenciesToStream: ({ organizationId, issueId }) =>
+				organizationId === null || issueId === null
+					? Stream.empty
+					: issueSlaStream(organizationId, issueId, (sla) =>
+							toIssueControl(IssueControl.Message.UpdatedSla({ issueId, sla })),
 						),
 		},
 	),

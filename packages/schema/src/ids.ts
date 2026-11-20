@@ -362,6 +362,14 @@ export const CustomerSignalRuleId = Schema.String.check(Schema.isUUID())
 	})
 export type CustomerSignalRuleId = Schema.Schema.Type<typeof CustomerSignalRuleId>
 
+export const CustomerSlaPolicyId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSlaPolicyId"))
+	.annotate({
+		description: "The ID of a customer support SLA policy",
+		title: "Customer SLA Policy ID",
+	})
+export type CustomerSlaPolicyId = Schema.Schema.Type<typeof CustomerSlaPolicyId>
+
 export const CustomerSignalId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/CustomerSignalId"))
 	.annotate({

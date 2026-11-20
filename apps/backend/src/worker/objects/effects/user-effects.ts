@@ -6,6 +6,7 @@ import type { SqlClient } from "effect/sql/SqlClient"
 import type { ApnsClient } from "../../../services/apns"
 import { markOffline, projectPresenceTo } from "../user/presence"
 import { PresenceEffects } from "../user/presence-kinds"
+import { CustomerNotificationEffects, customerNotificationReceivers } from "../user/customer-notifications"
 import { MessageNotificationEffects, messageNotificationReceivers } from "../user/message-notifications"
 import { PushOwnershipUserEffects, pushOwnershipUserReceivers } from "../user/push-ownership"
 import { defineEffect, type EffectReceivers } from "./registry"
@@ -28,6 +29,7 @@ export const UserEffects = {
 	),
 	...PresenceEffects,
 	...MessageNotificationEffects,
+	...CustomerNotificationEffects,
 	...PushOwnershipUserEffects,
 }
 
@@ -62,5 +64,6 @@ export const userReceivers = {
 		),
 	"user.markOffline": (payload) => Effect.asVoid(markOffline(payload.userId)),
 	...messageNotificationReceivers,
+	...customerNotificationReceivers,
 	...pushOwnershipUserReceivers,
 } satisfies EffectReceivers<typeof UserEffects, Database.Database | SqlClient | ApnsClient>

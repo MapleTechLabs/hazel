@@ -1,6 +1,6 @@
 /**
  * What a new `CustomersObject` starts with: the settings row, one rule per signal template (its
- * defaults), the built-in list views and the built-in metric definitions. Installed once, on the
+ * defaults), the default SLA policy, the built-in list views and the built-in metric definitions. Installed once, on the
  * object's first activation (`./bootstrap.ts`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
@@ -8,6 +8,7 @@ import {
 	type BuiltInViewKey,
 	DEFAULT_HEALTH_SETTINGS,
 	DEFAULT_LIST_COLUMNS,
+	DEFAULT_SLA_POLICY,
 	SignalTemplate,
 	TEMPLATES,
 	type ViewFilters,
@@ -37,6 +38,8 @@ export const BUILT_IN_VIEWS: ReadonlyArray<{
 	{ key: "churned", name: "Churned", filters: { lifecycleStages: ["churned"] } },
 ]
 
+const RULES_PER_INSERT = 10
+
 export const installDefaults = Effect.fn("Customers.installDefaults")(function* (
 	organizationId: OrganizationId,
 ) {
@@ -48,22 +51,33 @@ export const installDefaults = Effect.fn("Customers.installDefaults")(function* 
 			reportingCurrency: "usd",
 		}),
 	)
+	const rules = SignalTemplate.literals.map((template) => {
+		const meta = TEMPLATES[template]
+		return {
+			organizationId,
+			name: meta.name,
+			template,
+			kind: meta.kind,
+			severity: meta.defaultSeverity,
+			config: meta.defaultConfig,
+			scope: {},
+			enabled: true,
+		}
+	})
+	// Durable Object SQLite binds at most 100 variables a statement (8 per rule).
+	for (let start = 0; start < rules.length; start += RULES_PER_INSERT) {
+		yield* db.run(
+			SQLite.insertInto(schema.customerSignalRulesTable).values(
+				rules.slice(start, start + RULES_PER_INSERT),
+			),
+		)
+	}
 	yield* db.run(
-		SQLite.insertInto(schema.customerSignalRulesTable).values(
-			SignalTemplate.literals.map((template) => {
-				const meta = TEMPLATES[template]
-				return {
-					organizationId,
-					name: meta.name,
-					template,
-					kind: meta.kind,
-					severity: meta.defaultSeverity,
-					config: meta.defaultConfig,
-					scope: {},
-					enabled: true,
-				}
-			}),
-		),
+		SQLite.insertInto(schema.customerSlaPoliciesTable).values({
+			organizationId,
+			...DEFAULT_SLA_POLICY,
+			position: 0,
+		}),
 	)
 	yield* db.run(
 		SQLite.insertInto(schema.customerSavedViewsTable).values(

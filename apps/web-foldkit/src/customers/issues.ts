@@ -132,6 +132,29 @@ export const issuesStream = <Message>(
 		),
 	)
 
+/** One customer's synced issues (the customer page's Support block). */
+export const accountIssuesStream = <Message>(
+	organizationId: OrganizationId,
+	accountId: CustomerAccountId,
+	toMessage: (issues: ReadonlyArray<IssueRow>) => Message,
+): Stream.Stream<Message> =>
+	withCustomersSource(
+		organizationId,
+		liveQueryStream<Customers.Issue, Message>(
+			(q) =>
+				q
+					.from({ issue: customerIssueCollection })
+					.where(({ issue }) =>
+						and(
+							eq(issue.organizationId, organizationId),
+							eq(issue.accountId, accountId),
+							isNull(issue.deletedAt),
+						),
+					),
+			(rows) => toMessage(rows.map(toIssueRow)),
+		),
+	)
+
 /** The inbox badge: issues waiting on a reply that are mine or nobody's. */
 export const myWaitingIssueCountStream = <Message>(
 	organizationId: OrganizationId,

@@ -3,7 +3,7 @@ import { Option, Schema } from "effect"
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { IconBell, IconHashtag, IconMsgs } from "../../../icons"
+import { IconBell, IconHashtag, IconMsgs, IconSupport } from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
 import { avatar } from "../../../ui/avatar"
 import { emptyState } from "../../../ui/empty-state"
@@ -16,7 +16,7 @@ import {
 } from "../../../ui/section-header"
 import type { PageViewInputs } from "../../contract"
 import { formatDistanceToNow } from "~/lib/format-distance"
-import { contextOf, filterByCategory, groupByTime, previewOf } from "./format"
+import { contextOf, filterByCategory, groupByTime, isSupportAlert, previewOf, supportAlertOf } from "./format"
 import { Message } from "./message"
 import type { Category, Model, NotificationItem } from "./model"
 import { heading } from "../../../ui/heading"
@@ -54,6 +54,20 @@ const COPY: Record<
 }
 
 const leadingVisual = (h: HtmlBuilder<Message>, item: NotificationItem): Html => {
+	if (isSupportAlert(item))
+		return h.div(
+			[
+				h.Class(
+					twMerge(
+						"flex size-10 items-center justify-center rounded-lg",
+						supportAlertOf(item).isWarning
+							? "bg-warning-subtle text-warning-subtle-fg"
+							: "bg-danger-subtle text-danger-subtle-fg",
+					),
+				),
+			],
+			[IconSupport(h, { className: "size-5" })],
+		)
 	if (item.author !== null) {
 		const fullName = `${item.author.firstName} ${item.author.lastName}`
 		return avatar(h, { size: "md", src: item.author.avatarUrl, alt: fullName, seed: fullName })

@@ -11,7 +11,7 @@ import { labShared } from "../../../../page/customers/lab-shared"
 import { defineLabWithFlags, queryParam } from "../../../define"
 import { labPage } from "../../../frame"
 import { ACCOUNTS, TEAM } from "../../../fixtures/customers"
-import { ISSUE_CHANNELS, ISSUES } from "../../../fixtures/issues"
+import { ISSUE_CHANNELS, ISSUE_SLAS, ISSUES } from "../../../fixtures/issues"
 
 // `/lab/customers/pages/inbox`: the real Support inbox over the fixtures. Its update runs; its
 // Commands do not (changes apply optimistically). The keyboard works. `?state=` picks a state.
@@ -20,6 +20,8 @@ export const INBOX_STATES = [
 	"open",
 	"selected",
 	"filtered",
+	"overdue",
+	"on-hold",
 	"closed",
 	"inbox-zero",
 	"empty",
@@ -32,6 +34,7 @@ const loaded = (issues = ISSUES): Model => ({
 	...init().model,
 	accounts: ACCOUNTS.map(toAccountRow),
 	issues,
+	slas: ISSUE_SLAS,
 	channels: ISSUE_CHANNELS,
 	members: TEAM,
 })
@@ -52,12 +55,17 @@ export const inboxStateModel = (state: typeof State.Type): Model => {
 			)
 		case "closed":
 			return { ...loaded(), tab: "closed" }
+		case "on-hold":
+			return { ...loaded(), tab: "on_hold" }
+		case "overdue":
+			return { ...loaded(), filters: { ...loaded().filters, assignee: "anyone", overdue: true } }
 		case "filtered":
 			return {
 				...loaded(),
 				filters: {
 					assignee: "anyone",
 					waitingOnUs: true,
+					overdue: false,
 					accountId: null,
 					priority: "high",
 					status: null,

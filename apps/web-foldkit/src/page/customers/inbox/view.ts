@@ -6,10 +6,12 @@ import { type ChannelOption, channelMark } from "../../../customers/channels"
 import { formatRelative } from "../../../customers/format"
 import { type IssueRow, needsReply, PRIORITY_LABEL, STATUS_LABEL } from "../../../customers/issues"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
+import { type IssueSlaRow, overdueByMs, slaDisplayOf } from "../../../customers/sla"
 import { addFilterButton, filterBar, filterChip, searchBox, viewTabs } from "../../../customers/ui/filter-bar"
 import { companyLogo, personAvatar } from "../../../customers/ui/identity"
 import { queueAction, queueColumnHeader, queueList } from "../../../customers/ui/queue-row"
 import { kbd, shortcutBar, type Shortcut } from "../../../customers/ui/shortcuts"
+import { slaChip } from "../../../customers/ui/sla-chip"
 import { pageHeader } from "../../../customers/ui/surface"
 import {
 	IconChartBar,
@@ -42,6 +44,7 @@ import {
 	priorityEntries,
 	SEARCH_ID,
 	selectedIssue,
+	slasByIdOfModel,
 	statusEntries,
 	tabCounts,
 	userIdOfAssignKey,
@@ -200,6 +203,7 @@ interface RowContext {
 	readonly accountsById: ReadonlyMap<string, AccountRow>
 	readonly channelsById: ReadonlyMap<string, ChannelOption>
 	readonly membersById: ReadonlyMap<string, MemberRow>
+	readonly slasById: ReadonlyMap<string, IssueSlaRow>
 	readonly selectedId: string | null
 	readonly actions: ReadonlyArray<Html>
 }
@@ -211,6 +215,9 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 	const isSelected = issue.id === context.selectedId
 	const hasActions = isSelected && context.actions.length > 0
 	const waiting = needsReply(issue)
+	const sla = context.slasById.get(issue.id)
+	const hasChip = slaDisplayOf(sla, context.nowMs)._tag !== "None"
+	const chip = slaChip(h, { sla, nowMs: context.nowMs, status: issue.status })
 	const ageMs =
 		issue.status === "closed"
 			? (issue.closedAtMs ?? issue.lastMessageAtMs)
@@ -303,6 +310,16 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 							),
 						],
 					),
+					// The SLA chip under the title until the list is wide enough for its column, and on
+					// the selected row, whose actions take the columns' room.
+					...(hasChip
+						? [
+								h.div(
+									[h.Class(twMerge("mt-1 flex min-w-0", !isSelected && "@6xl:hidden"))],
+									[chip],
+								),
+							]
+						: []),
 				],
 			),
 			// The selected row's actions take the chips' place on a wide screen; narrower, the chips stay
@@ -334,6 +351,15 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 						),
 					]
 				: []),
+			// The SLA column, on a wide list only (the selected row shows its chip under the title).
+			...(isSelected
+				? []
+				: [
+						h.div(
+							[h.Role("cell"), h.Class("hidden w-52 shrink-0 @6xl:flex")],
+							hasChip ? [chip] : [],
+						),
+					]),
 			h.div(
 				[
 					h.Role("cell"),
@@ -371,6 +397,10 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 const header = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: string | null): Html => {
 	const issues = visibleIssues(model, viewer)
 	const waiting = issues.filter(needsReply).length
+	const slasById = slasByIdOfModel(model)
+	const overdue = issues.filter(
+		(issue) => overdueByMs(slasById.get(issue.id), viewer.nowMs) !== null,
+	).length
 	const subtitle =
 		model.issues === null || model.accounts === null
 			? "Loading…"
@@ -379,7 +409,11 @@ const header = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: 
 				: model.tab === "open"
 					? issues.length === 0
 						? "Nothing waiting on you"
-						: `${issues.length} open issue${issues.length === 1 ? "" : "s"} · ${waiting} waiting on us`
+						: [
+								`${issues.length} open issue${issues.length === 1 ? "" : "s"}`,
+								`${waiting} waiting on us`,
+								...(overdue > 0 ? [`${overdue} overdue`] : []),
+							].join(" · ")
 					: model.tab === "on_hold"
 						? `${issues.length} on hold`
 						: `${issues.length} closed in the last 30 days`
@@ -419,6 +453,16 @@ const filterChips = (h: HtmlBuilder<Message>, model: Model, filters: Filters): R
 					operator: "is",
 					value: "On us",
 					onRemove: Message.ClearedFilter({ field: "waitingOnUs" }),
+				}),
+			]
+		: []),
+	...(filters.overdue
+		? [
+				filterChip(h, {
+					field: "SLA",
+					operator: "is",
+					value: "Overdue",
+					onRemove: Message.ClearedFilter({ field: "overdue" }),
 				}),
 			]
 		: []),
@@ -463,15 +507,19 @@ const filterItemContent = (h: HtmlBuilder<Message>, model: Model, key: string): 
 			? ASSIGNEE_LABEL[value as keyof typeof ASSIGNEE_LABEL]
 			: field === "waitingOnUs"
 				? "Waiting on us"
-				: field === "status"
-					? STATUS_LABEL[value as Customers.IssueStatus]
-					: field === "priority"
-						? PRIORITY_LABEL[value as Customers.IssuePriority]
-						: (accountsByIdOfModel(model).get(value)?.name ?? value)
+				: field === "overdue"
+					? "Overdue"
+					: field === "status"
+						? STATUS_LABEL[value as Customers.IssueStatus]
+						: field === "priority"
+							? PRIORITY_LABEL[value as Customers.IssuePriority]
+							: (accountsByIdOfModel(model).get(value)?.name ?? value)
 	const isActive =
 		field === "waitingOnUs"
 			? filters.waitingOnUs
-			: String((filters as Record<string, unknown>)[field]) === value
+			: field === "overdue"
+				? filters.overdue
+				: String((filters as Record<string, unknown>)[field]) === value
 	return [
 		menuLabel(h, model.filterMenu.id, key, label),
 		...(isActive ? [IconCheck(h, { className: "ml-auto size-4 text-primary" })] : []),
@@ -614,11 +662,13 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: st
 		accountsById: accountsByIdOfModel(model),
 		channelsById: new Map(model.channels.map((channel) => [channel.id, channel])),
 		membersById: new Map(model.members.map((member) => [member.id, member])),
+		slasById: slasByIdOfModel(model),
 		selectedId: model.selectedId,
 		actions: selected === undefined ? [] : issueActions(h, model, viewer, selected),
 	}
 	// Laid out by the list's own width (the dock and the Customers sidebar take a share of a laptop's
-	// screen): cards below 42rem, no priority column below 56rem, a selected row's actions inline from 64rem.
+	// screen): cards below 42rem, no priority column below 56rem, a selected row's actions inline from
+	// 64rem, the SLA column from 72rem (narrower, the chip sits under the title).
 	return queueList(h, { ariaLabel: "Support issues", className: "@container" }, [
 		queueColumnHeader(
 			h,
@@ -627,6 +677,7 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: st
 				{ label: "Issue", className: "flex-1" },
 				{ label: "Status", className: "w-40" },
 				{ label: "Priority", className: "w-24 @max-4xl:hidden" },
+				{ label: "SLA", className: "hidden w-52 @6xl:block" },
 				{ label: model.tab === "closed" ? "Closed" : "Waiting", className: "w-10 text-right" },
 				{ label: "", className: "w-7" },
 			],

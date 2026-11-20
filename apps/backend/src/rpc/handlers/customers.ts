@@ -111,7 +111,7 @@ const isInfra = (error: unknown): error is Infra =>
 	Predicate.isTagged(error, "SqlError")
 
 /** Storage failures become a client-safe `InternalServerError` (the cause stays server-side). */
-const remap = <A, E, R>(
+export const remap = <A, E, R>(
 	effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, Exclude<E, Infra> | InternalServerError, R> =>
 	effect.pipe(
@@ -126,18 +126,18 @@ const remap = <A, E, R>(
 		),
 	) as never
 
-const currentTime = Effect.map(Clock.currentTimeMillis, (ms) => new Date(ms))
+export const currentTime = Effect.map(Clock.currentTimeMillis, (ms) => new Date(ms))
 
 /** A `JsonDate` as a `Date`. */
 const instant = (value: Date | DateTime.Utc) => (value instanceof Date ? value : DateTime.toDate(value))
 
-const notFound = (entity: CustomersNotFoundError["entity"], id: string) =>
+export const notFound = (entity: CustomersNotFoundError["entity"], id: string) =>
 	new CustomersNotFoundError({ entity, id })
 
-const invalid = (message: string) => new CustomersInvalidRequestError({ message })
+export const invalid = (message: string) => new CustomersInvalidRequestError({ message })
 
 /** Run `body` in a transaction and answer with its write position. */
-const withTx = <A, E, R>(body: Effect.Effect<A, E, R>) =>
+export const withTx = <A, E, R>(body: Effect.Effect<A, E, R>) =>
 	Effect.flatMap(Database.Database, (db) =>
 		db.transaction(
 			Effect.gen(function* () {
@@ -147,7 +147,7 @@ const withTx = <A, E, R>(body: Effect.Effect<A, E, R>) =>
 		),
 	)
 
-const txOnly = <E, R>(body: Effect.Effect<unknown, E, R>) =>
+export const txOnly = <E, R>(body: Effect.Effect<unknown, E, R>) =>
 	Effect.map(withTx(body), ({ transactionId }) => ({ transactionId }))
 
 const hazelEvent = (

@@ -19,6 +19,7 @@ import { Database, SQLite, schema } from "@hazel/db"
 import type { AuthorSide, IssueStatus } from "@hazel/domain/customers"
 import { ChannelId, type CustomerIssueId, MessageId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option } from "effect"
+import { slaIssueWritten } from "./sla"
 import type { ChatMessagePayload } from "../customer-chat-wire"
 
 /** A customer's next top-level message joins their unanswered issue this soon after its last message. */
@@ -228,7 +229,8 @@ const recordIssueMessage = (channelId: ChannelId, messageId: MessageId, issueId:
 // (null for a new issue) and after. Derived state (SLAs) hooks in there.
 
 /** Runs after every write to an issue, in the same transaction. */
-const issueWritten = (_before: schema.CustomerIssue | null, _after: schema.CustomerIssue) => Effect.void
+const issueWritten = (before: schema.CustomerIssue | null, after: schema.CustomerIssue) =>
+	slaIssueWritten(before, after)
 
 export const insertIssueRow = (values: schema.NewCustomerIssue) =>
 	Effect.gen(function* () {

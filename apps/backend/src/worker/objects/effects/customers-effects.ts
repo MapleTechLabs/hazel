@@ -8,7 +8,7 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import { DEFAULT_CONNECTION_CONFIG } from "@hazel/domain/customers"
 import { OrganizationMember } from "@hazel/domain/models"
-import { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, MessageId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import { publishChannelCustomers } from "../customers/channels"
@@ -24,6 +24,8 @@ import { defineEffect, type EffectReceivers, type EffectSender, isOrgSender } fr
 export const CustomerMember = Schema.Struct({
 	userId: UserId,
 	role: OrganizationMember.OrganizationRole,
+	/** Their `organization_members` id; absent in snapshots sent before it was carried. */
+	memberId: Schema.optionalKey(OrganizationMemberId),
 })
 export type CustomerMember = typeof CustomerMember.Type
 
@@ -80,13 +82,15 @@ export const applyMembers = Effect.fn("CustomersEffects.applyMembers")(function*
 			SQLite.deleteFrom(schema.customerImpersonatorsTable).where(($) => [inList($.userId, gone)]),
 		)
 	}
-	const roles = new Map(current.map((row) => [row.userId, row.role]))
+	const stored = new Map(current.map((row) => [row.userId, row]))
 	for (const member of members) {
-		if (roles.get(member.userId) === member.role) continue
+		const row = stored.get(member.userId)
+		const memberId = member.memberId ?? row?.memberId ?? null
+		if (row?.role === member.role && row.memberId === memberId) continue
 		yield* db.run(
 			SQLite.insertInto(schema.customerMembersTable)
-				.values(member)
-				.onConflictDoUpdate({ target: ["userId"], set: { role: member.role } }),
+				.values({ userId: member.userId, role: member.role, memberId })
+				.onConflictDoUpdate({ target: ["userId"], set: { role: member.role, memberId } }),
 		)
 	}
 })
@@ -115,6 +119,7 @@ const CUSTOMER_DATA: ReadonlyArray<Parameters<typeof SQLite.deleteFrom>[0]> = [
 	schema.customerChannelLinksTable,
 	schema.customerIssuesTable,
 	schema.customerIssueMessagesTable,
+	schema.customerIssueSlasTable,
 	schema.customerImpersonatorsTable,
 	schema.customerImpersonationsTable,
 	schema.customerChatParticipantsTable,

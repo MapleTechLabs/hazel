@@ -13,6 +13,8 @@ import {
 } from "../../../customers/queries"
 import { channelLinksStream, channelOptionsStream } from "../../../customers/channels"
 import { chatAuthorsStream, chatParticipantsStream } from "../../../customers/chat-authors"
+import { accountIssuesStream } from "../../../customers/issues"
+import { accountIssueSlasStream } from "../../../customers/sla"
 import type { PageSubscriptionInput } from "../../contract"
 import { metricsStream, notesStream } from "./data"
 import { Message } from "./message"
@@ -55,6 +57,37 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 				organizationId === null
 					? Stream.empty
 					: notesStream(organizationId, accountId, (notes) => Message.UpdatedNotes({ notes })),
+		},
+	),
+	// The Support block's open and overdue counts.
+	supportIssues: entry(
+		{ organizationId: Schema.NullOr(OrganizationId), accountId: CustomerAccountId },
+		{
+			modelToDependencies: ({ model, shared }) => ({
+				organizationId: shared.organization?.id ?? null,
+				accountId: model.accountId,
+			}),
+			dependenciesToStream: ({ organizationId, accountId }) =>
+				organizationId === null
+					? Stream.empty
+					: accountIssuesStream(organizationId, accountId, (issues) =>
+							Message.UpdatedSupportIssues({ issues }),
+						),
+		},
+	),
+	supportSlas: entry(
+		{ organizationId: Schema.NullOr(OrganizationId), accountId: CustomerAccountId },
+		{
+			modelToDependencies: ({ model, shared }) => ({
+				organizationId: shared.organization?.id ?? null,
+				accountId: model.accountId,
+			}),
+			dependenciesToStream: ({ organizationId, accountId }) =>
+				organizationId === null
+					? Stream.empty
+					: accountIssueSlasStream(organizationId, accountId, (slas) =>
+							Message.UpdatedSupportSlas({ slas }),
+						),
 		},
 	),
 	// Keeps the unsent text for the customer's next page instance, once this one has read it back.

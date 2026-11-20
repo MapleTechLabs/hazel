@@ -40,6 +40,10 @@ export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = 
 		table: schema.customerSignalRulesTable,
 		visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)],
 	},
+	{
+		table: schema.customerSlaPoliciesTable,
+		visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)],
+	},
 	{ table: schema.customerNotesTable, visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)] },
 	{
 		table: schema.customerIssuesTable,
@@ -48,6 +52,15 @@ export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = 
 			isMember(p.userId),
 			SQLite.sql
 				.cond`(${$.closedAt} IS NULL OR ${$.closedAt} > strftime('%Y-%m-%d %H:%M:%f', 'now', ${`-${CLOSED_ISSUE_WINDOW_DAYS} days`}))`,
+		],
+	},
+	{
+		// The clocks of the issues streamed above: unresolved, or resolved within the window.
+		table: schema.customerIssueSlasTable,
+		visible: (p, $) => [
+			isMember(p.userId),
+			SQLite.sql
+				.cond`(json_extract(${$.state}, '$.resolution.resolvedAt') IS NULL OR ${$.updatedAt} > strftime('%Y-%m-%d %H:%M:%f', 'now', ${`-${CLOSED_ISSUE_WINDOW_DAYS} days`}))`,
 		],
 	},
 	{

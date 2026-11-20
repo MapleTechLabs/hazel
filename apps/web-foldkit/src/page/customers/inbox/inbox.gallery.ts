@@ -53,7 +53,7 @@ const shoot = async (name: string) => {
 	await page.screenshot({ path: `${label}${name}.png`, element: gallery })
 }
 
-const SHOWN = ["open", "selected", "filtered", "closed", "inbox-zero", "empty"] as const
+const SHOWN = ["open", "selected", "filtered", "overdue", "on-hold", "closed", "inbox-zero", "empty"] as const
 
 for (const theme of ["light", "dark"] as const) {
 	for (const state of SHOWN) {
@@ -63,6 +63,28 @@ for (const theme of ["light", "dark"] as const) {
 			render(state)
 			await shoot(`inbox-${state}-${theme}`)
 		})
+	}
+	// Rows fit their list (it clips), and the title keeps room to read, at desktop widths.
+	for (const width of [1280, 1024] as const) {
+		for (const state of ["open", "selected"] as const) {
+			test(`${state} ${width} ${theme}`, async () => {
+				if (theme === "dark") document.documentElement.classList.add("dark")
+				await page.viewport(width, 900)
+				render(state)
+				await expect.poll(() => document.querySelectorAll("[role=row]").length).toBeGreaterThan(1)
+				await document.fonts.ready
+				for (const row of document.querySelectorAll<HTMLElement>("[role=row]"))
+					expect(row.scrollWidth).toBeLessThanOrEqual(row.clientWidth)
+				// The selected row's inline actions take more room (they hide below lg).
+				for (const cell of document.querySelectorAll<HTMLElement>(
+					"[role=row] > [role=cell]:nth-child(2)",
+				))
+					expect(cell.getBoundingClientRect().width).toBeGreaterThan(
+						state === "selected" ? 140 : 200,
+					)
+				await shoot(`inbox-${state}-${theme}-${width}`)
+			})
+		}
 	}
 	test(`mobile ${theme}`, async () => {
 		if (theme === "dark") document.documentElement.classList.add("dark")

@@ -1048,3 +1048,36 @@ describe("customer page: environments", () => {
 		expect(cleared.commands?.[0]?.args).toMatchObject({ environment: null })
 	})
 })
+
+describe("customer page: support", () => {
+	test("the overview asks for the 30-day support row once; other tabs do not", () => {
+		expect(commandNames(init(route(null), shared))).toContain("FetchCustomerSupport")
+		expect(commandNames(init(route("users"), shared))).not.toContain("FetchCustomerSupport")
+		const settled = run(init(route(null), shared).model, [
+			Message.SucceededFetchSupport({ accountId: beta.id, row: null }),
+		])
+		expect(settled.support._tag).toBe("Success")
+		expect(
+			commandNames(
+				routeChanged(routeChanged(settled, route("users"), shared).model, route(null), shared),
+			),
+		).not.toContain("FetchCustomerSupport")
+	})
+
+	test("a failed support row retries on request", () => {
+		const failed = run(init(route(null), shared).model, [
+			Message.FailedFetchSupport({ accountId: beta.id, reason: "Offline" }),
+		])
+		expect(failed.support._tag).toBe("Failure")
+		const retried = update(failed, Message.PressedRetrySupport(), shared)
+		expect(commandNames(retried)).toContain("FetchCustomerSupport")
+		expect(retried.model.support._tag).toBe("Loading")
+	})
+
+	test("another customer's answer is dropped", () => {
+		const model = run(init(route(null), shared).model, [
+			Message.SucceededFetchSupport({ accountId: acme.id, row: null }),
+		])
+		expect(model.support._tag).toBe("Loading")
+	})
+})

@@ -231,6 +231,7 @@ const KEYED_BY_CHANNEL_DATA = [
 	"chatThreadPanelPins",
 	"threadMembership",
 	"chatIssueMembers",
+	"chatThreadIssueSla",
 	"filesAttachments",
 ]
 

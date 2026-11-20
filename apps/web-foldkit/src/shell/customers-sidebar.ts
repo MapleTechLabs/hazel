@@ -30,6 +30,8 @@ import {
 } from "../customers/view-layout"
 import { catchCommon, reasonToast } from "../data/actions"
 import {
+	IconChartBar,
+	IconClock,
 	IconCube,
 	IconEyeSlash,
 	IconHeart,
@@ -481,6 +483,12 @@ export const view = <ParentMessage>(
 						inboxCount > 0 ? [badge(h, inboxCount)] : [],
 					),
 					item(
+						"Support report",
+						hrefOf(AppRoute.CustomersSupportReport({ orgSlug })),
+						on("CustomersSupportReport"),
+						icon(IconChartBar),
+					),
+					item(
 						"Customers",
 						hrefOf(customersListRoute(orgSlug)),
 						// The list's view lights its own row; a hidden one lights this.
@@ -506,6 +514,12 @@ export const view = <ParentMessage>(
 						hrefOf(AppRoute.CustomersSettingsHealth({ orgSlug })),
 						on("CustomersSettingsHealth"),
 						icon(IconHeart),
+					),
+					item(
+						"Support SLAs",
+						hrefOf(AppRoute.CustomersSettingsSla({ orgSlug })),
+						on("CustomersSettingsSla"),
+						icon(IconClock),
 					),
 					item(
 						"Plans",
