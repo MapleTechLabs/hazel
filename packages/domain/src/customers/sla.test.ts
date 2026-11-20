@@ -4,12 +4,14 @@ import {
 	addWorkingTime,
 	BusinessHours,
 	DEFAULT_SLA_POLICY,
+	openSla,
 	outcomeOf,
 	policyFor,
 	quantile,
 	type SlaCalendar,
 	type SlaContext,
 	slaDisplay,
+	stepSla,
 	workingTimeBetween,
 } from "./sla"
 import { replay, wallTime } from "./sla-replay"
@@ -196,6 +198,30 @@ describe("replay", () => {
 		// Resolved after 1h, reopened for 1h: 2h.
 		expect(outcomeOf(last, ctx.targets).resolutionMs).toBe(120 * MIN)
 		expect(last.firstResponse?.elapsedMs).toBe(20 * MIN)
+	})
+})
+
+describe("issue shapes", () => {
+	it("an issue a member opened on a team message waits for no reply until the customer writes", () => {
+		const opened = openSla(ctx, "medium", at("2026-11-23 09:00"), false)
+		expect(opened.reply).toBeNull()
+		const wrote = stepSla(ctx, opened, { _tag: "CustomerMessage", at: at("2026-11-23 10:00") })
+		expect(wrote.reply).toMatchObject({ first: true, dueAt: at("2026-11-23 14:00") })
+	})
+
+	it("a late delivery of an earlier team reply moves the first response back", () => {
+		const [, replied] = replay(
+			ctx,
+			"Europe/Berlin",
+			[
+				["2026-11-23 09:00", "open", "medium"],
+				["2026-11-23 11:00", "reply"],
+			],
+			"2026-11-23 11:00",
+		)
+		const earlier = stepSla(ctx, replied!.state, { _tag: "TeamReply", at: at("2026-11-23 09:30") })
+		expect(earlier.firstResponse?.elapsedMs).toBe(30 * MIN)
+		expect(earlier.reply?.metAt).toBe(at("2026-11-23 09:30"))
 	})
 })
 

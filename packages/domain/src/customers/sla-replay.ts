@@ -46,7 +46,7 @@ export const wallTime = (text: string, timeZone: string): number => {
 const eventOf = (line: ReplayLine, at: number): SlaEvent => {
 	switch (line[1]) {
 		case "open":
-			return { _tag: "Opened", at, priority: line[2] }
+			return { _tag: "Opened", at, priority: line[2], customerWaiting: true }
 		case "customer":
 			return { _tag: "CustomerMessage", at }
 		case "reply":

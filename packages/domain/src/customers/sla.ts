@@ -311,7 +311,13 @@ export type SlaState = typeof SlaState.Type
 export type SlaIssueStatus = "new" | "waiting_on_us" | "waiting_on_customer" | "on_hold" | "closed"
 
 export type SlaEvent =
-	| { readonly _tag: "Opened"; readonly at: number; readonly priority: SlaPriority }
+	/** `customerWaiting`: a customer's message opened it (an issue a member opened on a team message waits for no reply). */
+	| {
+			readonly _tag: "Opened"
+			readonly at: number
+			readonly priority: SlaPriority
+			readonly customerWaiting: boolean
+	  }
 	| { readonly _tag: "CustomerMessage"; readonly at: number }
 	| { readonly _tag: "TeamReply"; readonly at: number }
 	| { readonly _tag: "Status"; readonly at: number; readonly status: SlaIssueStatus }
@@ -402,9 +408,14 @@ const isOpen = (clock: ReplyClock | null): clock is ReplyClock =>
 	clock !== null && clock.metAt === null && clock.stoppedAt === null
 
 /** The state of a new issue. */
-export const openSla = (ctx: SlaContext, priority: SlaPriority, at: number): SlaState => ({
+export const openSla = (
+	ctx: SlaContext,
+	priority: SlaPriority,
+	at: number,
+	customerWaiting = true,
+): SlaState => ({
 	priority,
-	reply: startReply(ctx, priority, at, true),
+	reply: customerWaiting ? startReply(ctx, priority, at, true) : null,
 	firstResponse: null,
 	resolution: {
 		runningSince: at,
@@ -422,9 +433,19 @@ export const stepSla = (ctx: SlaContext, state: SlaState, event: SlaEvent): SlaS
 	const at = event.at
 	switch (event._tag) {
 		case "Opened":
-			return openSla(ctx, event.priority, at)
+			return openSla(ctx, event.priority, at, event.customerWaiting)
 		case "TeamReply": {
-			if (!isOpen(state.reply)) return state
+			if (!isOpen(state.reply)) {
+				// A late delivery of an earlier reply moves the first response back.
+				const first = state.firstResponse
+				if (first === null || first.metAt === null || at >= first.metAt || at < first.startedAt) return state
+				const earlier = { ...first, metAt: at, elapsedMs: workingTimeBetween(ctx.calendar, first.startedAt, at) }
+				return {
+					...state,
+					firstResponse: earlier,
+					reply: state.reply?.first === true ? earlier : state.reply,
+				}
+			}
 			const met: ReplyClock = {
 				...state.reply,
 				metAt: at,
@@ -435,7 +456,9 @@ export const stepSla = (ctx: SlaContext, state: SlaState, event: SlaEvent): SlaS
 		case "CustomerMessage": {
 			// The customer is waiting again: a reply is due (unless one already is), and a paused or
 			// closed issue's resolution clock runs again.
-			const reply = isOpen(state.reply) ? state.reply : startReply(ctx, state.priority, at, false)
+			// The first customer message of an issue a member opened is its first response's start.
+			const first = state.reply === null && state.firstResponse === null
+			const reply = isOpen(state.reply) ? state.reply : startReply(ctx, state.priority, at, first)
 			return {
 				...state,
 				reply,
