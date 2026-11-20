@@ -1,5 +1,5 @@
 {
-	"migration": "0007_channel_customers_logo",
+	"migration": "0008_customer_channel_suggestions",
 	"entities": [
 		{
 			"kind": "table",
@@ -69,6 +69,13 @@
 			"name": "channels",
 			"primaryKey": {
 				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "chat_sync_channel_authors",
+			"primaryKey": {
+				"columns": ["hazelChannelId", "provider", "externalUserId"]
 			}
 		},
 		{
@@ -1046,6 +1053,69 @@
 			"type": "text",
 			"notNull": false,
 			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_authors",
+			"name": "hazelChannelId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_authors",
+			"name": "provider",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_authors",
+			"name": "externalUserId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_authors",
+			"name": "externalWorkspaceId",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_authors",
+			"name": "email",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_authors",
+			"name": "firstSeenAt",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_authors",
+			"name": "lastSeenAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
 		},
 		{
 			"kind": "column",
@@ -2935,6 +3005,13 @@
 			"name": "channels_type_idx",
 			"unique": false,
 			"columns": ["\"type\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_channel_authors",
+			"name": "chat_sync_channel_authors_channel_idx",
+			"unique": false,
+			"columns": ["\"hazelChannelId\""]
 		},
 		{
 			"kind": "index",

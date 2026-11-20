@@ -44,6 +44,32 @@ const index = (links: Parameters<typeof buildSuggestionIndex>[0]["links"] = []) 
 	})
 
 describe("scoreChannel", () => {
+	it("counts only Connect guests for auto-linking a channel that is also mirrored from Slack", () => {
+		const mirrored = (slackEmails: ReadonlyArray<string>) =>
+			evidence({
+				origin: "connect",
+				externalMembers: [
+					member("ana@acme.com"),
+					...slackEmails.map((email) => member(email, "slack")),
+				],
+			})
+		// One Connect guest, a contact: half or more of the guests, whatever Slack adds.
+		const [linked] = scoreChannel(
+			mirrored(["x1@other.example", "x2@other.example", "x3@other.example"]),
+			index(),
+		)
+		expect(linked).toMatchObject({ accountId: acme, autoLink: true })
+		// The contact seen only through Slack: no Connect guest is a contact.
+		const [notLinked] = scoreChannel(
+			evidence({
+				origin: "connect",
+				externalMembers: [member("zed@elsewhere.example"), member("ana@acme.com", "slack")],
+			}),
+			index(),
+		)
+		expect(notLinked).toMatchObject({ accountId: acme, autoLink: false })
+	})
+
 	it("suggests nothing without evidence", () => {
 		expect(scoreChannel(evidence({}), index())).toEqual([])
 	})
@@ -111,7 +137,12 @@ describe("scoreChannel", () => {
 
 	it("needs two agreeing Discord channels, and ignores a guild split between accounts", () => {
 		const guild = { provider: "discord" as const, id: "G1", name: "Community", external: false }
-		expect(scoreChannel(evidence({ workspaces: [guild] }), index([{ accountId: acme, workspaces: [guild] }]))).toEqual([])
+		expect(
+			scoreChannel(
+				evidence({ workspaces: [guild] }),
+				index([{ accountId: acme, workspaces: [guild] }]),
+			),
+		).toEqual([])
 		const two = [
 			{ accountId: acme, workspaces: [guild] },
 			{ accountId: acme, workspaces: [guild] },

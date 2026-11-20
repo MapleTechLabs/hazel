@@ -58,6 +58,8 @@ describe("Discord gateway dispatch handlers", () => {
 			externalUserId: "778899",
 			displayName: "alice",
 			avatarUrl: "https://cdn.discordapp.com/avatars/778899/abc.png",
+			email: null,
+			externalWorkspaceId: null,
 		})
 		expect(inbound?.event).toMatchObject({
 			_tag: "MessageCreate",

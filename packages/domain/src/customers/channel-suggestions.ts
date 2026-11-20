@@ -139,6 +139,8 @@ export interface SuggestionIndex {
 	readonly domains: ReadonlyMap<string, ReadonlyArray<CustomerAccountId>>
 	/** `${provider}:${workspaceId}` → the account each already linked channel of it belongs to. */
 	readonly workspaceLinks: ReadonlyMap<string, ReadonlyArray<CustomerAccountId>>
+	/** Each account's name tokens (`accountTokens`), computed once per index. */
+	readonly nameTokens: ReadonlyMap<CustomerAccountId, ReadonlyArray<string>>
 }
 
 /** Free-mail domains never identify a company. */
@@ -200,7 +202,10 @@ export const buildSuggestionIndex = (input: {
 	const domains = new Map<string, Array<CustomerAccountId>>()
 	for (const account of input.accounts) {
 		for (const domain of account.domains) {
-			const normal = domain.trim().toLowerCase().replace(/^www\./, "")
+			const normal = domain
+				.trim()
+				.toLowerCase()
+				.replace(/^www\./, "")
 			if (normal.length > 0 && !FREE_MAIL_DOMAINS.has(normal)) push(domains, normal, account.id)
 		}
 	}
@@ -215,7 +220,8 @@ export const buildSuggestionIndex = (input: {
 			else list.push(link.accountId)
 		}
 	}
-	return { accounts, contactEmails, domains, workspaceLinks }
+	const nameTokens = new Map(input.accounts.map((account) => [account.id, accountTokens(account)] as const))
+	return { accounts, contactEmails, domains, workspaceLinks, nameTokens }
 }
 
 // ---------------------------------------------------------------------------
@@ -254,17 +260,22 @@ const accountTokens = (account: SuggestionAccount): ReadonlyArray<string> => {
 	const name = normalizeName(account.name)
 	if (name.length >= 4) tokens.add(name)
 	for (const domain of account.domains) {
-		const label = domain.toLowerCase().replace(/^www\./, "").split(".")[0] ?? ""
+		const label =
+			domain
+				.toLowerCase()
+				.replace(/^www\./, "")
+				.split(".")[0] ?? ""
 		if (label.length >= 4 && !FREE_MAIL_DOMAINS.has(domain.toLowerCase())) tokens.add(label)
 	}
 	return [...tokens]
 }
 
-/** The token of the account `value` contains (squashed), if any. */
-const nameHit = (value: string, account: SuggestionAccount): string | null => {
-	const squashed = value.toLowerCase().replace(/[^a-z0-9]+/g, "")
-	return accountTokens(account).find((token) => squashed.includes(token)) ?? null
-}
+/** A name lower-cased with everything but letters and digits removed. */
+const squash = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "")
+
+/** The token of the account the squashed name contains, if any. */
+const nameHit = (squashed: string, tokens: ReadonlyArray<string>): string | null =>
+	tokens.find((token) => squashed.includes(token)) ?? null
 
 // ---------------------------------------------------------------------------
 // Scoring
@@ -338,8 +349,8 @@ export const scoreChannel = (
 			add(accountId, { kind: "contacts", matched: hits.length, total, sample: hits.slice(0, 3) })
 		}
 		for (const [accountId, counts] of domainHits) {
-			const [domain, matched] = [...counts].sort((a, b) => b[1] - a[1])[0]!
-			add(accountId, { kind: "domain", domain, matched, total })
+			const top = [...counts].sort((a, b) => b[1] - a[1])[0]
+			if (top !== undefined) add(accountId, { kind: "domain", domain: top[0], matched: top[1], total })
 		}
 	}
 
@@ -348,12 +359,11 @@ export const scoreChannel = (
 		// The org's own Slack workspace says nothing about a customer.
 		if (workspace.provider === "slack" && !workspace.external) continue
 		const linked = index.workspaceLinks.get(workspaceKey(workspace.provider, workspace.id)) ?? []
-		const owners = new Set(linked)
-		if (owners.size !== 1) continue
-		const [accountId] = owners
+		const accountId = linked[0]
+		if (accountId === undefined || linked.some((other) => other !== accountId)) continue
 		// A Discord guild needs two agreeing channels: one could be a coincidence.
 		if (workspace.provider === "discord" && linked.length < 2) continue
-		add(accountId!, {
+		add(accountId, {
 			kind: "workspace",
 			provider: workspace.provider,
 			workspaceName: workspace.name,
@@ -362,14 +372,25 @@ export const scoreChannel = (
 	}
 
 	// Names: the channel's, and a Discord guild's or Slack Connect team's.
+	const channelSquashed = squash(evidence.channelName)
+	const namedWorkspaces = evidence.workspaces.flatMap((workspace) =>
+		workspace.name === null || (workspace.provider === "slack" && !workspace.external)
+			? []
+			: [{ name: workspace.name, squashed: squash(workspace.name) }],
+	)
 	for (const account of index.accounts.values()) {
-		const channelHit = nameHit(evidence.channelName, account)
+		const tokens = index.nameTokens.get(account.id) ?? accountTokens(account)
+		const channelHit = nameHit(channelSquashed, tokens)
 		if (channelHit !== null) {
-			add(account.id, { kind: "name", where: "channel", value: evidence.channelName, matchedOn: channelHit })
+			add(account.id, {
+				kind: "name",
+				where: "channel",
+				value: evidence.channelName,
+				matchedOn: channelHit,
+			})
 		}
-		for (const workspace of evidence.workspaces) {
-			if (workspace.name === null || (workspace.provider === "slack" && !workspace.external)) continue
-			const hit = nameHit(workspace.name, account)
+		for (const workspace of namedWorkspaces) {
+			const hit = nameHit(workspace.squashed, tokens)
 			if (hit !== null) {
 				add(account.id, { kind: "name", where: "workspace", value: workspace.name, matchedOn: hit })
 				break
@@ -393,15 +414,27 @@ export const scoreChannel = (
 		.sort((a, b) => b.score - a.score || (a.accountId < b.accountId ? -1 : 1))
 		.slice(0, MAX_SUGGESTIONS_PER_CHANNEL)
 
-	// Auto-link: a Connect channel, half the guests or more are one account's contacts, and no
-	// other account has a contact or domain match.
+	// Auto-link: a Connect channel, half its Connect guests or more are one account's contacts
+	// (members from a mirror of the same channel do not count), and no other account has a
+	// contact or domain match.
 	const best = ranked[0]
 	if (best === undefined || evidence.origin !== "connect") return ranked
 	const byEmail = (suggestion: ScoredSuggestion) =>
 		suggestion.reasons.some((reason) => reason.kind === "contacts" || reason.kind === "domain")
-	const contacts = best.reasons.find((reason) => reason.kind === "contacts")
+	const guests = [
+		...new Set(
+			evidence.externalMembers.flatMap((member) =>
+				member.source !== "connect" || member.email === null
+					? []
+					: [member.email.trim().toLowerCase()],
+			),
+		),
+	]
+	const guestContacts = guests.filter((email) =>
+		(index.contactEmails.get(email) ?? []).includes(best.accountId),
+	).length
 	const rivals = scored.some((other) => other.accountId !== best.accountId && byEmail(other))
-	const autoLink = contacts !== undefined && contacts.matched * 2 >= contacts.total && !rivals
+	const autoLink = guestContacts > 0 && guestContacts * 2 >= guests.length && !rivals
 	return autoLink ? [{ ...best, autoLink }, ...ranked.slice(1)] : ranked
 }
 

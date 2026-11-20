@@ -321,6 +321,8 @@ export class CustomerReadRpcs extends RpcGroup.make(
 		"customers.channel.suggestions",
 		{ accountId: Schema.optionalKey(CustomerAccountId), channelId: Schema.optionalKey(ChannelId) },
 		Schema.Struct({ items: Schema.Array(ChannelSuggestion) }),
+		/** `channelId` names a channel that does not exist or the caller cannot see. */
+		CustomersNotFoundError,
 	),
 ) {}
 

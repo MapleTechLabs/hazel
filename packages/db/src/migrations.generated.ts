@@ -288,6 +288,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0007_channel_customers_logo",
 			statements: ['ALTER TABLE "channel_customers" ADD COLUMN "accountLogoUrl" text'],
 		},
+		{
+			id: "0008_customer_channel_suggestions",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "chat_sync_channel_authors" (\n\t"hazelChannelId" text NOT NULL,\n\t"provider" text NOT NULL,\n\t"externalUserId" text NOT NULL,\n\t"externalWorkspaceId" text,\n\t"email" text,\n\t"firstSeenAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"lastSeenAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("hazelChannelId", "provider", "externalUserId")\n)',
+				'CREATE INDEX IF NOT EXISTS "chat_sync_channel_authors_channel_idx" ON "chat_sync_channel_authors" ("hazelChannelId")',
+			],
+		},
 	],
 	channel: [
 		{
@@ -584,6 +591,22 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "customer_settings" ADD COLUMN "attention" text NOT NULL DEFAULT \'{"stages":["lead","trialing","active","past_due"],"requiredSources":["stripe"]}\'',
 				'INSERT INTO "customer_signal_rules" ("organizationId", "name", "template", "kind", "severity", "config", "scope", "enabled") SELECT "organizationId", \'Churned\', \'churned\', \'risk\', \'medium\', \'{"_tag":"churned","windowDays":14}\', \'{}\', 1 FROM "customer_settings" WHERE NOT EXISTS (SELECT 1 FROM "customer_signal_rules" WHERE "template" = \'churned\')',
 				'UPDATE "customer_settings" SET "health" = json_insert("health", \'$.excludedTemplates[#]\', \'churned\') WHERE NOT EXISTS (SELECT 1 FROM json_each("customer_settings"."health", \'$.excludedTemplates\') WHERE "value" = \'churned\')',
+			],
+		},
+		{
+			id: "0021_customer_channel_suggestions",
+			statements: [
+				"CREATE TABLE IF NOT EXISTS \"customer_channel_suggestions\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"organizationId\" text NOT NULL,\n\t\"channelId\" text NOT NULL,\n\t\"accountId\" text NOT NULL,\n\t\"score\" integer NOT NULL,\n\t\"reasons\" text NOT NULL DEFAULT '[]',\n\t\"status\" text NOT NULL DEFAULT 'open',\n\t\"decidedBy\" text,\n\t\"decidedAt\" text,\n\t\"computedAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"updatedAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))\n)",
+				"CREATE TABLE \"__new_customer_channel_links\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"organizationId\" text NOT NULL,\n\t\"accountId\" text NOT NULL,\n\t\"channelId\" text NOT NULL,\n\t\"linkedBy\" text,\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"updatedAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"deletedAt\" text\n)",
+				'INSERT INTO "__new_customer_channel_links"("id", "organizationId", "accountId", "channelId", "linkedBy", "createdAt", "updatedAt", "deletedAt") SELECT COALESCE("id", (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6))))), "organizationId", "accountId", "channelId", "linkedBy", COALESCE("createdAt", (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))), COALESCE("updatedAt", (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))), "deletedAt" FROM "customer_channel_links"',
+				'DROP TABLE "customer_channel_links"',
+				'ALTER TABLE "__new_customer_channel_links" RENAME TO "customer_channel_links"',
+				'CREATE INDEX IF NOT EXISTS "customer_channel_links_account_idx" ON "customer_channel_links" ("accountId")',
+				'CREATE INDEX IF NOT EXISTS "customer_channel_links_channel_idx" ON "customer_channel_links" ("channelId")',
+				'CREATE INDEX IF NOT EXISTS "customer_channel_suggestions_account_idx" ON "customer_channel_suggestions" ("accountId")',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_channel_suggestions_pair_unique" ON "customer_channel_suggestions" ("channelId", "accountId")',
+				'CREATE INDEX IF NOT EXISTS "customer_channel_suggestions_status_idx" ON "customer_channel_suggestions" ("status")',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_channel_links_channel_unique" ON "customer_channel_links" ("channelId") WHERE "deletedAt" IS NULL',
 			],
 		},
 	],

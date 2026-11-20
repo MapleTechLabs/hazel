@@ -27,10 +27,10 @@ all of them.
 
 ## Data
 
-| Where                           | Table                    | What                                                                                                                                                 |
-| ------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CustomersObject` (`customers`) | `customer_channel_links` | The link (authoritative). `accountId`, `channelId`, `linkedBy`, soft delete; partial unique index on `channelId` while live. Synced to members.      |
-| `OrgObject` (`org`), projection | `channel_customers`      | `channelId` → `accountId`, `accountName`, `accountLogoUrl`. Written only by `org.setChannelCustomers`. Synced with `byChannel` (members who see it). |
+| Where                           | Table                    | What                                                                                                                                                                         |
+| ------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CustomersObject` (`customers`) | `customer_channel_links` | The link (authoritative). `accountId`, `channelId`, `linkedBy` (null: linked automatically), soft delete; partial unique index on `channelId` while live. Synced to members. |
+| `OrgObject` (`org`), projection | `channel_customers`      | `channelId` → `accountId`, `accountName`, `accountLogoUrl`. Written only by `org.setChannelCustomers`. Synced with `byChannel` (members who see it).                         |
 
 ## Flow
 
@@ -69,9 +69,87 @@ account and sends a new snapshot.
 - Channel settings → Overview: a **Customer** section to link, change or unlink. The customers list
   loads (opening the Customers source) only while its picker is open.
 
+## Suggested links
+
+Hazel suggests which customer a channel belongs to and says why ("3 of 4 external members have
+@acme.com, Acme's domain"). Nothing is linked without a click, except a Connect channel whose
+guests are clearly one account's contacts.
+
+### Evidence (`org.channelEvidence`, a call to the `OrgObject`)
+
+For each live `public` / `private` channel:
+
+- **Origin**: `connect` (an active Connect mount), `slack` / `discord` (an active chat-sync link),
+  else `hazel`.
+- **Workspaces**: each chat-sync link's workspace (the Slack workspace the org installed from, the
+  Discord guild), plus every other Slack team its authors come from: a Slack Connect team, marked
+  `external`.
+- **External members** (at most 200, newest first): Connect guests with their email (the org's
+  `users` projection), and chat-sync authors from an external Slack team.
+  `chat_sync_channel_authors` (org store, never synced) records each chat-sync author per channel
+  as messages arrive: their Slack team or Discord guild, and their email when Slack shares it.
+  Slack only shares it with the `users:read.email` scope, so a workspace that installed before
+  this has no emails until it approves the new scope.
+
+### Scoring (`packages/domain/src/customers/channel-suggestions.ts`, pure)
+
+Matched against live accounts (name, `domains`), contact emails and the channels already linked.
+Each reason has a weight, and reasons compound (`1 - Π(1 - w)`):
+
+| Reason      | When                                                                                                                                 | Weight                               |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| `contacts`  | external members who are the account's contacts (exact email)                                                                        | 60 + 35 × share                      |
+| `domain`    | external members at one of the account's domains (free-mail domains never count)                                                     | 40 + 45 × share                      |
+| `workspace` | other channels of the same Slack Connect team (or of the same Discord guild, ≥ 2) are linked to this account and to no other         | Slack 75, Discord 35 + 10 each, ≤ 60 |
+| `name`      | the channel's name (or a Discord guild's / Slack Connect team's) contains the account's name or a domain's first label (≥ 4 letters) | channel 30, workspace 50             |
+
+The org's own Slack workspace is never evidence. Suggestions under 30 are dropped; 75 and up are
+`strong`; at most 3 per channel.
+
+**Auto-link**: a Connect channel whose best match has at least half its guests as that account's
+contacts, with no other account matching by contact or domain. It links like a click (`linkedBy`
+null, a `channel.linked` event that says why). A channel with any link history (linked or
+unlinked before) or a decided suggestion is never auto-linked: once someone unlinks it, it stays
+manual.
+
+### Storage and lifecycle (`customer_channel_suggestions`, `CustomersObject`)
+
+One row per (channel, account): `score`, `reasons`, `status` `open | dismissed | accepted`,
+`decidedBy`, `decidedAt`. Refreshed at the end of every compute, and for one channel when the
+suggestions RPC names it (a channel shared a moment ago). A refresh updates open rows, deletes open rows that no
+longer score, and leaves decided rows alone: a dismissed account is never suggested for that
+channel again. Linking a channel (by hand, by accepting, or automatically) accepts that pair and
+drops the channel's other open suggestions.
+
+### RPCs and visibility
+
+- `customers.channel.suggestions` `{ accountId?, channelId? }`: open suggestions, best first, only
+  for channels the caller sees (`org.visibleChannels`). Not synced, so a private channel's evidence
+  never reaches a member who cannot see it, and nothing reaches Connect guests.
+- `customers.channel.suggestion.accept` links through the same path as `customers.channel.link`
+  (same checks); `.dismiss` remembers the dismissal. Both answer `not_found` for a channel the
+  caller cannot see.
+
+### Client
+
+`src/customers/suggestions.ts` (fetch, accept, dismiss, the row) and `suggestion-prompt.ts` (the
+one-channel prompt). Reasons are worded only by `describeReason`. Accepting or dismissing hides the
+row at once, refetches, and restores it with a toast if the write fails. Nothing is requested for
+someone who is not an org member.
+
+- Customers → Overview: a **Suggested channel links** card (top 5, channel → account, the top
+  reason with the rest on hover, Link / dismiss), hidden when there are none.
+- Customer page → Channels: a **Suggested** group above "Link channel"; a link made automatically
+  reads "Linked automatically".
+- Channel settings → Overview → Customer: "Looks like Acme" with the top reason, Link / Dismiss,
+  while the channel has no customer.
+- Right after a chat-sync link is created (Settings → the connection), or a Connect invite is
+  accepted (the new channel found from its Connect mount once the write syncs): "#channel looks
+  like Acme".
+
 ## Later
 
-- Suggest links: Slack Connect / Discord guild ids and Connect guest org domains matched to
-  account domains.
 - Issues from messages, SLAs and first-response times per linked channel.
 - Account context in the channel (health, MRR, open signals) without opening Customers.
+- Discord members' identity: Discord shares no emails, so Discord channels match by guild and
+  name only.

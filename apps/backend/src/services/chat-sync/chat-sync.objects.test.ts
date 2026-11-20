@@ -188,7 +188,13 @@ const discordCreate = (
 	externalWorkspaceIds: [GUILD],
 	externalChannelId: DISCORD_CHANNEL,
 	dedupeKey: `discord:gateway:create:${messageId}`,
-	author: { externalUserId: authorId as ExternalUserId, displayName: "Dana Discord", avatarUrl: null },
+	author: {
+		externalUserId: authorId as ExternalUserId,
+		displayName: "Dana Discord",
+		avatarUrl: null,
+		email: null,
+		externalWorkspaceId: GUILD,
+	},
 	event: {
 		_tag: "MessageCreate",
 		externalMessageId: messageId as ExternalMessageId,
@@ -446,6 +452,8 @@ describe("chat sync on the objects", () => {
 					externalUserId: "555555555555555555" as ExternalUserId,
 					displayName: "Rae",
 					avatarUrl: null,
+					email: null,
+					externalWorkspaceId: GUILD,
 				}
 				const reaction = (tag: "ReactionAdd" | "ReactionRemove"): ChatSyncInbound => ({
 					provider: "discord",

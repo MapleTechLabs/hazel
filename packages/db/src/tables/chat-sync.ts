@@ -73,6 +73,29 @@ export const chatSyncConnectionsTable = SQLite.table("chat_sync_connections", {
 export type ChatSyncConnection = SQLite.SelectRowOf<typeof chatSyncConnectionsTable>
 export type NewChatSyncConnection = SQLite.InsertRowOf<typeof chatSyncConnectionsTable>
 
+/**
+ * External chat-sync authors seen in a Hazel channel (org store, not synced): who from outside the
+ * org posts in a mirrored channel, the evidence for suggested customer links
+ * (`docs/customers/channels.md`). Written by the org's chat-sync ingest on each authored
+ * `MessageCreate`. `externalWorkspaceId` is the author's Slack team (a Slack Connect author's is
+ * not the connection's) or the Discord guild; `email` is lower-cased, null when the provider does
+ * not share it.
+ */
+export const chatSyncChannelAuthorsTable = SQLite.table("chat_sync_channel_authors", {
+	columns: {
+		hazelChannelId: uuid(ChannelId),
+		provider: varchar(50),
+		externalUserId: varchar(255),
+		externalWorkspaceId: SQLite.nullable(varchar(255)),
+		email: SQLite.nullable(varchar(320)),
+		firstSeenAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		lastSeenAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+	},
+	primaryKey: ["hazelChannelId", "provider", "externalUserId"],
+	indexes: [SQLite.index("chat_sync_channel_authors_channel_idx", ["hazelChannelId"])],
+})
+export type ChatSyncChannelAuthor = SQLite.SelectRowOf<typeof chatSyncChannelAuthorsTable>
+
 export const chatSyncEventReceiptsTable = SQLite.table("chat_sync_event_receipts", {
 	columns: {
 		id: SQLite.column(uuid(SyncEventReceiptId), { defaultExpr: randomUuid }),

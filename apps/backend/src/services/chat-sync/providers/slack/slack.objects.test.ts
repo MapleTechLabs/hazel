@@ -56,9 +56,16 @@ const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 const rows = <T>(object: TestObject, sql: string, ...params: Array<string>) =>
 	object.storage.db.prepare(sql).all(...params) as Array<T>
 
+/** `U0GUEST…` users are Slack Connect guests from another company's team, with an email. */
 const lookupUser: SlackUserLookup = (userId) =>
 	Effect.succeed(
-		Option.some({ externalUserId: userId as never, displayName: `Slack ${userId}`, avatarUrl: null }),
+		Option.some({
+			externalUserId: userId as never,
+			displayName: `Slack ${userId}`,
+			avatarUrl: null,
+			email: userId.startsWith("U0GUEST") ? `${userId.toLowerCase()}@globex.example` : null,
+			externalWorkspaceId: userId.startsWith("U0GUEST") ? "T0GLOBEX01" : TEAM,
+		}),
 	)
 
 const envelope = (
@@ -228,6 +235,50 @@ describe("Slack chat sync on the objects", () => {
 					{ content: "still ours" },
 				])
 				expect(rows(other.channel, `SELECT id FROM messages`)).toEqual([])
+			}),
+		))
+
+	it("records each author of the channel with their Slack team and email", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				yield* world.inbound("Ev80", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000800", "hello", { user: "U0GUEST001" }),
+				})
+				yield* world.inbound("Ev81", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000810", "again", { user: "U0GUEST001" }),
+				})
+				yield* world.inbound("Ev82", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000820", "hi"),
+				})
+				expect(
+					rows(
+						world.org,
+						`SELECT hazelChannelId, provider, externalUserId, externalWorkspaceId, email
+						 FROM chat_sync_channel_authors ORDER BY externalUserId`,
+					),
+				).toEqual([
+					{
+						hazelChannelId: world.channelId,
+						provider: "slack",
+						externalUserId: "U0DANA0001",
+						externalWorkspaceId: TEAM,
+						email: null,
+					},
+					{
+						hazelChannelId: world.channelId,
+						provider: "slack",
+						externalUserId: "U0GUEST001",
+						externalWorkspaceId: "T0GLOBEX01",
+						email: "u0guest001@globex.example",
+					},
+				])
 			}),
 		))
 

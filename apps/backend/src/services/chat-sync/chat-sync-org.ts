@@ -53,6 +53,7 @@ import {
 	type OrgChatSyncIngestPayload,
 	type RepublishLinksPayload,
 } from "./chat-sync-effects"
+import { recordChannelAuthor } from "./chat-sync-authors"
 import type { ChatSyncProviderDefinition } from "./provider"
 import { definitionOf } from "./providers"
 
@@ -627,6 +628,24 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 	switch (event._tag) {
 		case "MessageCreate":
 			if (authorId === undefined) return yield* outcome("no_author")
+			if (payload.author !== null && payload.author.externalUserId !== null) {
+				yield* recordChannelAuthor({
+					provider,
+					hazelChannelId: link.hazelChannelId,
+					externalUserId: payload.author.externalUserId,
+					email: payload.author.email,
+					externalWorkspaceId: payload.author.externalWorkspaceId,
+				}).pipe(
+					// Evidence for suggested customer links only: the message is ingested regardless.
+					Effect.catchTags({
+						DatabaseError: (error) =>
+							Effect.logWarning("Chat sync author not recorded", {
+								provider,
+								reason: error.message,
+							}),
+					}),
+				)
+			}
 			forwarded = {
 				_tag: "MessageCreate",
 				externalMessageId: event.externalMessageId,
