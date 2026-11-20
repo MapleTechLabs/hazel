@@ -30,6 +30,9 @@ Notes:
   read the shadow's `externalId` (`slack-user-…`, `discord-user-…`) before membership.
 - The author's Slack workspace comes from `users.info` (`team_id`), compared at ingest with the
   workspace the org connected, and is kept on the author's row (`externalWorkspace`).
+- Limits: in Slack Enterprise Grid a teammate from a sibling workspace reads as another workspace
+  (mark them by hand). In a Connect guest org, the host's bots and Slack shadows may be missing
+  from the guest's `users` projection and read as `unknown`.
 - Shadows have no real email, so they are not matched to `customer_contacts`. Connect guests are:
   `customer_chat_participants.contactId` is the account's contact with the same email.
 - `isConversational(side)`: customer and team take part in a conversation; bots and unknowns

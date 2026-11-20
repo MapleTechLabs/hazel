@@ -1,6 +1,6 @@
-import { AuthorSide, AuthorSideReason } from "@hazel/domain/customers"
 import { AttachmentId, ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
+import { CustomerAuthorInfo } from "../../customers/chat-authors"
 
 /**
  * What the channel page looks up besides its message window: people, presence, custom emoji,
@@ -92,14 +92,6 @@ export type SyncedMessageInfo = typeof SyncedMessageInfo.Type
 /** A message an agent wrote for its author, and the agent's name. */
 export const AgentMarkInfo = Schema.Struct({ id: MessageId, agentName: Schema.String })
 export type AgentMarkInfo = typeof AgentMarkInfo.Type
-
-/** Who an author is in a channel linked to a customer (`customer_chat_authors`), and why. */
-export const CustomerAuthorInfo = Schema.Struct({
-	userId: UserId,
-	side: AuthorSide,
-	reason: AuthorSideReason,
-})
-export type CustomerAuthorInfo = typeof CustomerAuthorInfo.Type
 
 /** Everything the rows are derived from, besides messages and reactions. */
 export const Lookups = Schema.Struct({

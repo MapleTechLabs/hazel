@@ -199,13 +199,31 @@ describe("Author side in linked channels", () => {
 					uuid() as OrganizationId,
 				)
 				const stranger = uuid() as UserId
+				const unlinked = t.channel()
+				const slackOutsider = t.person({
+					externalId: "slack-user-UOUT",
+					userType: "machine",
+					member: "live",
+				})
+				// Left the org, now writes from the customer's org in the Connect channel.
+				const leftForCustomer = t.person({ member: "left" })
+				t.exec(
+					`INSERT INTO connect_participants (id, conversationId, channelId, userId, homeOrganizationId, isExternal) VALUES (?, ?, ?, ?, ?, 1)`,
+					uuid(),
+					uuid(),
+					general,
+					leftForCustomer,
+					uuid() as OrganizationId,
+				)
 				yield* t.org.run(
 					Effect.gen(function* () {
 						const { noteExternalWorkspace } = yield* Effect.promise(
 							() => import("../org/customer-chat"),
 						)
-						yield* noteExternalWorkspace(t.world.orgId, slackCustomer, "other")
-						yield* noteExternalWorkspace(t.world.orgId, slackTeammate, "home")
+						yield* noteExternalWorkspace(t.world.orgId, general, slackCustomer, "other")
+						yield* noteExternalWorkspace(t.world.orgId, general, slackTeammate, "home")
+						// Authors of channels not linked to a customer are not kept.
+						yield* noteExternalWorkspace(t.world.orgId, unlinked, slackOutsider, "other")
 					}),
 				)
 
@@ -217,6 +235,7 @@ describe("Author side in linked channels", () => {
 					discordUser,
 					integration,
 					guest,
+					leftForCustomer,
 					stranger,
 				]) {
 					yield* t.post(general, author)
@@ -230,10 +249,11 @@ describe("Author side in linked channels", () => {
 					[discordUser]: "customer:external",
 					[integration]: "bot:bot",
 					[guest]: "customer:connect_guest",
+					[leftForCustomer]: "customer:connect_guest",
 					[stranger]: "unknown:unknown",
 				})
 				const participants = t.participants()
-				expect(Object.keys(participants)).toHaveLength(8)
+				expect(Object.keys(participants)).toHaveLength(9)
 				expect(participants[slackCustomer]).toMatchObject({ side: "customer", accountId: t.acme })
 				expect(participants[t.world.member]).toMatchObject({ side: "team" })
 				// The Connect guest's email names the account's contact when there is one.
@@ -379,6 +399,20 @@ describe("Author side in linked channels", () => {
 				)
 
 				// Linking again (or a new snapshot) does not ask twice.
+				yield* t.link(general)
+				expect(Object.keys(t.participants())).toHaveLength(3)
+
+				// Unlinked, then linked again: asked again (a new request, past the inbox's dedupe).
+				t.world.object.storage.db.prepare(`DELETE FROM customer_chat_participants`).run()
+				expect(
+					tagOf(
+						yield* t.world.call(
+							"customers.channel.unlink",
+							{ channelId: general },
+							t.world.member,
+						),
+					),
+				).toBe("Success")
 				yield* t.link(general)
 				expect(Object.keys(t.participants())).toHaveLength(3)
 			}),

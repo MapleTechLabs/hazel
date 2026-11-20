@@ -71,6 +71,8 @@ export const ReportChatAuthorsPayload = Schema.Struct({
 	organizationId: OrganizationId,
 	/** The linked channel the report is for (this channel, or the parent of this thread). */
 	linkedChannelId: ChannelId,
+	/** One per link: outbox ids carry it, so a channel linked again is asked again. */
+	requestId: Schema.String,
 })
 export type ReportChatAuthorsPayload = typeof ReportChatAuthorsPayload.Type
 
@@ -83,6 +85,7 @@ export const ReportedChatAuthor = Schema.Struct({
 
 export const ChatAuthorsReportedPayload = Schema.Struct({
 	linkedChannelId: ChannelId,
+	requestId: Schema.String,
 	authors: Schema.Array(ReportedChatAuthor),
 	/** The channel's threads (none from a thread), each asked in turn. */
 	threadChannelIds: Schema.Array(ChannelId),

@@ -16,12 +16,12 @@ import {
 } from "../../chat/html-render"
 import { cachedLiveState, initialLiveState, liveEmbedOf, type LiveStates } from "../../chat/live-state"
 import { processMessageUrls } from "../../chat/message/content"
+import type { CustomerAuthorInfo } from "../../customers/chat-authors"
 import type { LikeRow } from "../../mount/message-list"
 import { linkPreviewKey, tweetKey, type Unfurls } from "../../chat/unfurl"
 import {
 	type AttachmentInfo,
 	byKey,
-	type CustomerAuthorInfo,
 	type Lookups,
 	type PresenceInfo,
 	shadowProviderOf,

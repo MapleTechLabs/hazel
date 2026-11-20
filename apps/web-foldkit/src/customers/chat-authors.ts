@@ -16,20 +16,19 @@ import {
 	customerChatParticipantCollection,
 } from "~/db/collections"
 import { liveQueryStream } from "../data/live-query"
-import type { CustomerAuthorInfo } from "../page/chat/lookups"
 import { HazelRpc } from "../rpc"
 import { msOf, withCustomersSource } from "./queries"
 
 // ROWS
 
 /** An author of the org's linked channels: their side, why, and a member's override. */
-export const ChatAuthorRow = Schema.Struct({
+export const CustomerAuthorInfo = Schema.Struct({
 	userId: UserId,
 	side: Customers.AuthorSide,
 	reason: Customers.AuthorSideReason,
 	override: Schema.NullOr(Customers.AuthorSideOverride),
 })
-export type ChatAuthorRow = typeof ChatAuthorRow.Type
+export type CustomerAuthorInfo = typeof CustomerAuthorInfo.Type
 
 /** Someone who wrote in an account's linked channels. */
 export const ChatParticipantRow = Schema.Struct({
@@ -50,7 +49,7 @@ export type ChatParticipantRow = typeof ChatParticipantRow.Type
 /** Every author of the org's linked channels (the org source, members only). */
 export const chatAuthorsStream = <Message>(
 	organizationId: OrganizationId,
-	toMessage: (authors: ReadonlyArray<ChatAuthorRow>) => Message,
+	toMessage: (authors: ReadonlyArray<CustomerAuthorInfo>) => Message,
 ): Stream.Stream<Message> =>
 	liveQueryStream<CustomerChatAuthor.Type, Message>(
 		(q) =>
@@ -116,17 +115,7 @@ export const linkedChannelAuthorsStream = <Message>(
 	).pipe(Stream.changes)
 	return isLinked.pipe(
 		Stream.switchMap((linked) =>
-			linked
-				? chatAuthorsStream(organizationId, (authors) =>
-						toMessage(
-							authors.map((author) => ({
-								userId: author.userId,
-								side: author.side,
-								reason: author.reason,
-							})),
-						),
-					)
-				: Stream.make(toMessage(null)),
+			linked ? chatAuthorsStream(organizationId, toMessage) : Stream.make(toMessage(null)),
 		),
 	)
 }
@@ -146,10 +135,13 @@ const requestSetSide = (props: SetSideProps) =>
 		return { data: result, transactionId: result.transactionId }
 	})
 
+/** The author row's key in the collection (the server's `organizationId, userId`). */
+const authorKeyOf = (props: SetSideProps) => `${props.organizationId}:${props.userId}` as const
+
 const setSideOptimistically = optimisticAction({
 	collections: [customerChatAuthorCollection],
 	onMutate: (props: SetSideProps & { readonly by: UserId; readonly at: Date }) => {
-		customerChatAuthorCollection.update(props.userId, (row) => {
+		customerChatAuthorCollection.update(authorKeyOf(props), (row) => {
 			row.override = props.side
 			row.overrideBy = props.side === null ? null : props.by
 			row.overrideAt = props.side === null ? null : props.at
@@ -170,7 +162,7 @@ const setSideOptimistically = optimisticAction({
  */
 export const setChatAuthorSideAction = (props: SetSideProps & { readonly by: UserId }) =>
 	Effect.gen(function* () {
-		if (customerChatAuthorCollection.has(props.userId)) {
+		if (customerChatAuthorCollection.has(authorKeyOf(props))) {
 			const at = new Date(yield* Clock.currentTimeMillis)
 			return yield* setSideOptimistically({ ...props, at })
 		}

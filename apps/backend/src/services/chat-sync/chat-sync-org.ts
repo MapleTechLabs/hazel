@@ -382,7 +382,7 @@ const resolveAuthor = Effect.fn("OrgObject.chatSyncResolveAuthor")(function* (
 	provider: string,
 	organizationId: OrganizationId,
 	author: NonNullable<OrgChatSyncIngestPayload["author"]>,
-	homeWorkspaceId: string,
+	link: { readonly hazelChannelId: ChannelId; readonly externalWorkspaceId: string },
 ) {
 	const db = yield* Database.Database
 	if (author.externalUserId !== null) {
@@ -406,8 +406,9 @@ const resolveAuthor = Effect.fn("OrgObject.chatSyncResolveAuthor")(function* (
 	if (author.externalUserId !== null && author.externalWorkspaceId) {
 		yield* noteExternalWorkspace(
 			organizationId,
+			link.hazelChannelId,
 			userId,
-			author.externalWorkspaceId === homeWorkspaceId ? "home" : "other",
+			author.externalWorkspaceId === link.externalWorkspaceId ? "home" : "other",
 		)
 	}
 	const member = yield* db.first(
@@ -632,7 +633,7 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 	const authorId =
 		payload.author === null
 			? undefined
-			: yield* resolveAuthor(provider, link.organizationId, payload.author, link.externalWorkspaceId)
+			: yield* resolveAuthor(provider, link.organizationId, payload.author, link)
 	let forwarded: ChannelIngestEvent
 	switch (event._tag) {
 		case "MessageCreate":

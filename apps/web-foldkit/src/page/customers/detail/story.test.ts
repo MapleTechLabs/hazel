@@ -13,7 +13,7 @@ import {
 } from "@hazel/schema"
 import { Effect, Fiber, Option, Schema, Stream } from "effect"
 import { describe, expect, test } from "vitest"
-import type { ChatAuthorRow, ChatParticipantRow } from "../../../customers/chat-authors"
+import type { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { snoozeUntil } from "../../../customers/ui/menus"
 import { AppRoute, type CustomerTab } from "../../../route"
@@ -711,7 +711,7 @@ describe("customer page: people in chat", () => {
 			lastChannelId: uuid(500),
 			...fields,
 		}) as ChatParticipantRow
-	const author = (userId: UserId, fields: Partial<ChatAuthorRow> = {}): ChatAuthorRow => ({
+	const author = (userId: UserId, fields: Partial<CustomerAuthorInfo> = {}): CustomerAuthorInfo => ({
 		userId,
 		side: "customer",
 		reason: "external_other_workspace",
@@ -744,6 +744,24 @@ describe("customer page: people in chat", () => {
 			entries.flatMap((entry) => (entry._tag === "Item" ? [entry.item.key] : []))
 		expect(keys(chatPersonEntries(people[0]!))).toEqual(["mark_team"])
 		expect(keys(chatPersonEntries(people[1]!))).toEqual(["mark_customer", "reset"])
+	})
+
+	test("rows filed under another account of the customer count, each person once, newest kept", () => {
+		const betaEu = { ...account(4, "Beta EU"), primaryAccountId: beta.id }
+		const grouped = run(withPeople, [
+			Message.UpdatedAccounts({ accounts: [acme, beta, gamma, betaEu] }),
+			Message.UpdatedChatParticipants({
+				participants: [
+					participant(mia, "Mia", { lastMessageAtMs: NOW }),
+					participant(mia, "Mia", { accountId: betaEu.id, lastMessageAtMs: NOW - 5_000 }),
+					participant(linus, "Linus", { accountId: betaEu.id, lastMessageAtMs: NOW - 60_000 }),
+				],
+			}),
+		])
+		expect(chatPeopleOfModel(grouped).map((person) => [person.name, person.lastMessageAtMs])).toEqual([
+			["Mia", NOW],
+			["Linus", NOW - 60_000],
+		])
 	})
 
 	test("a person's menu marks them or resets the mark", () => {

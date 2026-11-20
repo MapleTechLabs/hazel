@@ -6,10 +6,11 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import type { ChannelId } from "@hazel/schema"
-import { Effect } from "effect"
+import { Effect, Option } from "effect"
 import { CustomerChatOrgEffects, type ReportChatAuthorsPayload } from "../customer-chat-wire"
 import { enqueueEffect } from "../effects/registry"
 import { orgTarget } from "../kinds"
+import { channelOrganization } from "./message-events"
 
 /** `MIN`/`MAX` of the column may come back as stored text (SQLite's zoneless UTC form). */
 const iso = (value: Date | string) =>
@@ -42,8 +43,12 @@ export const reportChatAuthors = Effect.fn("ChannelObject.reportChatAuthors")(fu
 		"customer_chat.authors": authors.length,
 		"customer_chat.threads": threadChannelIds.length,
 	})
-	yield* enqueueEffect(CustomerChatOrgEffects.chatAuthorsReported, orgTarget(payload.organizationId), {
+	// The answer goes to the org that owns this channel, whatever the payload names.
+	const organizationId = yield* channelOrganization
+	if (Option.isNone(organizationId)) return
+	yield* enqueueEffect(CustomerChatOrgEffects.chatAuthorsReported, orgTarget(organizationId.value), {
 		linkedChannelId: payload.linkedChannelId,
+		requestId: payload.requestId,
 		authors: authors.flatMap((row) =>
 			row.firstMessageAt === null || row.lastMessageAt === null
 				? []

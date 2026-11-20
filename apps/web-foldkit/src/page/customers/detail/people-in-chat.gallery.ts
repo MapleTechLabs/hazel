@@ -2,7 +2,7 @@ import "@fontsource/inter/400.css"
 import "@fontsource/inter/500.css"
 import "@fontsource/inter/600.css"
 import "../../../styles.css"
-import { ChannelId, CustomerAccountId, UserId } from "@hazel/schema"
+import { ChannelId, CustomerAccountId, CustomerChannelLinkId, UserId } from "@hazel/schema"
 import { Context as EffectContext, Option, Schema } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { MountTracker } from "foldkit/mount"
@@ -11,7 +11,7 @@ import { Dispatch } from "foldkit-internal/runtime/dispatch.js"
 import { patch } from "foldkit-internal/vdom.js"
 import { afterEach, test } from "vitest"
 import { page } from "vitest/browser"
-import type { ChatAuthorRow, ChatParticipantRow } from "../../../customers/chat-authors"
+import type { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
 import { toAccountRow } from "../../../customers/queries"
 import { ACCOUNTS_BY_KEY } from "../../../lab/fixtures/customers"
 import { AppRoute } from "../../../route"
@@ -76,7 +76,7 @@ const PARTICIPANTS = [
 	participant(2, "Jonas Weber", 60 * 26),
 	participant(3, "Theo Martin", 60 * 24 * 9),
 ]
-const AUTHORS: ReadonlyArray<ChatAuthorRow> = [
+const AUTHORS: ReadonlyArray<CustomerAuthorInfo> = [
 	{ userId: userId(1), side: "customer", reason: "external_other_workspace", override: null },
 	{ userId: userId(2), side: "customer", reason: "connect_guest", override: null },
 	{ userId: userId(3), side: "team", reason: "override", override: "team" },
@@ -91,6 +91,9 @@ const opened = init(
 const modelWith = (participants: ReadonlyArray<ChatParticipantRow>): Model => ({
 	...opened,
 	accounts: [account],
+	channelLinks: [
+		{ id: Schema.decodeSync(CustomerChannelLinkId)(uuid(901)), accountId: ACCOUNT, channelId: CHANNEL },
+	],
 	chatParticipants: participants,
 	chatAuthors: AUTHORS,
 })
