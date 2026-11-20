@@ -259,22 +259,40 @@ const users = new Map<
 	{ readonly user: Option.Option<ChatSyncInboundAuthor>; readonly until: number }
 >()
 
+/** What one verified delivery means for Hazel. */
+export type SlackDelivery =
+	| { readonly _tag: "Ignored" }
+	| { readonly _tag: "EndsInstall" }
+	| { readonly _tag: "Inbound"; readonly inbound: ChatSyncInbound }
+
 /**
- * Apply one verified delivery: an uninstall drops the workspace's install; a message or reaction
- * goes to the orgs linked to its channel.
+ * Reads one delivery: its event decoded, and either the end of the workspace's install or the
+ * chat-sync event it is. Shared by the webhook (`dispatchSlackEvent`) and the tests' simulator.
  */
-export const dispatchSlackEvent = Effect.fn("SlackEvents.dispatch")(function* (envelope: EventCallback) {
+export const readSlackDelivery = Effect.fn("SlackEvents.read")(function* (
+	envelope: EventCallback,
+	lookupUser: SlackUserLookup,
+) {
 	const event = Slack.decodeSlackEvent(envelope.event)
 	yield* Effect.annotateCurrentSpan({
 		"slack.team_id": envelope.team_id,
 		"slack.event_type": Option.match(event, { onNone: () => "unsupported", onSome: (e) => e._tag }),
 	})
-	if (Option.isNone(event)) return
+	if (Option.isNone(event)) return { _tag: "Ignored" } as SlackDelivery
+	if (endsInstall(event.value)) return { _tag: "EndsInstall" } as SlackDelivery
+	const inbound = yield* slackInbound(envelope, event.value, lookupUser)
+	return Option.match(inbound, {
+		onNone: (): SlackDelivery => ({ _tag: "Ignored" }),
+		onSome: (value): SlackDelivery => ({ _tag: "Inbound", inbound: value }),
+	})
+})
+
+/**
+ * Apply one verified delivery: an uninstall drops the workspace's install; a message or reaction
+ * goes to the orgs linked to its channel.
+ */
+export const dispatchSlackEvent = Effect.fn("SlackEvents.dispatch")(function* (envelope: EventCallback) {
 	const installations = yield* ChatSyncInstallations
-	if (endsInstall(event.value)) {
-		yield* Effect.logInfo("Slack app uninstalled from a workspace", { teamId: envelope.team_id })
-		return yield* installations.remove("slack", envelope.team_id)
-	}
 	const api = yield* Slack.SlackApiClient
 	const lookupUser: SlackUserLookup = (userId) =>
 		Effect.gen(function* () {
@@ -305,6 +323,14 @@ export const dispatchSlackEvent = Effect.fn("SlackEvents.dispatch")(function* (e
 				KeyVersionNotFoundError: unnamed(userId),
 			}),
 		)
-	const inbound = yield* slackInbound(envelope, event.value, lookupUser)
-	if (Option.isSome(inbound)) yield* routeChatSyncInbound(inbound.value)
+	const delivery = yield* readSlackDelivery(envelope, lookupUser)
+	switch (delivery._tag) {
+		case "Ignored":
+			return
+		case "EndsInstall":
+			yield* Effect.logInfo("Slack app uninstalled from a workspace", { teamId: envelope.team_id })
+			return yield* installations.remove("slack", envelope.team_id)
+		case "Inbound":
+			return yield* routeChatSyncInbound(delivery.inbound)
+	}
 })
