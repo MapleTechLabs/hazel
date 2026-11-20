@@ -19,7 +19,6 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { Clock, Effect, Option } from "effect"
-import type { SqlError } from "effect/sql/SqlError"
 import { deleteObjectMeta, readObjectMeta, writeObjectMeta } from "../meta"
 
 export const COMPUTE_INTERVAL_MS = 60 * 60_000
@@ -31,9 +30,6 @@ export const LEASE_MS = 5 * 60_000
 const MAX_COMPUTE_BACKOFF_MS = 6 * 60 * 60_000
 
 /** Meta reads and writes fail as the store's `DatabaseError`. */
-const meta = <A, R>(effect: Effect.Effect<A, SqlError, R>) =>
-	effect.pipe(Effect.mapError(Database.toDatabaseError))
-
 const COMPUTE_DUE_KEY = "computeDueAt"
 const COMPUTE_FAILURES_KEY = "computeFailures"
 const COMPUTE_PROGRESS_KEY = "computeProgress"
@@ -42,27 +38,27 @@ const BASELINE_KEY = "baselineFor"
 const REBUILD_KEY = "rebuildHistory"
 const REBUILD_ATTEMPTS_KEY = "rebuildAttempts"
 
-export const computeDueAt = meta(Effect.map(readObjectMeta(COMPUTE_DUE_KEY), Option.map(Number)))
+export const computeDueAt = Effect.map(readObjectMeta(COMPUTE_DUE_KEY), Option.map(Number))
 
 /** Move the deadline to `at` when that is earlier. */
 const computeBy = (at: number) =>
 	Effect.gen(function* () {
 		const due = yield* computeDueAt
-		if (Option.isNone(due) || due.value > at) yield* meta(writeObjectMeta(COMPUTE_DUE_KEY, String(at)))
+		if (Option.isNone(due) || due.value > at) yield* writeObjectMeta(COMPUTE_DUE_KEY, String(at))
 	})
 
 /**
  * The state of a compute spread over several alarm turns (`./compute.ts`), as JSON; none between
  * computes.
  */
-export const computeProgress = meta(readObjectMeta(COMPUTE_PROGRESS_KEY))
-export const saveComputeProgress = (progress: string) => meta(writeObjectMeta(COMPUTE_PROGRESS_KEY, progress))
-export const clearComputeProgress = meta(deleteObjectMeta(COMPUTE_PROGRESS_KEY))
+export const computeProgress = readObjectMeta(COMPUTE_PROGRESS_KEY)
+export const saveComputeProgress = (progress: string) => writeObjectMeta(COMPUTE_PROGRESS_KEY, progress)
+export const clearComputeProgress = deleteObjectMeta(COMPUTE_PROGRESS_KEY)
 
 /** A person changed something during a compute spread over turns: true once, and it runs again soon. */
 export const takeComputeAgain = Effect.gen(function* () {
-	const again = Option.isSome(yield* meta(readObjectMeta(COMPUTE_AGAIN_KEY)))
-	if (again) yield* meta(deleteObjectMeta(COMPUTE_AGAIN_KEY))
+	const again = Option.isSome(yield* readObjectMeta(COMPUTE_AGAIN_KEY))
+	if (again) yield* deleteObjectMeta(COMPUTE_AGAIN_KEY)
 	return again
 })
 
@@ -72,14 +68,12 @@ export const takeComputeAgain = Effect.gen(function* () {
  * backoff does not hold this one back).
  */
 export const requestCompute = Effect.gen(function* () {
-	if (Option.isSome(yield* computeProgress)) yield* meta(writeObjectMeta(COMPUTE_AGAIN_KEY, "1"))
+	if (Option.isSome(yield* computeProgress)) yield* writeObjectMeta(COMPUTE_AGAIN_KEY, "1")
 	yield* computeBy((yield* Clock.currentTimeMillis) + COMPUTE_DEBOUNCE_MS)
 })
 
-const computeAttempts = meta(
-	Effect.map(readObjectMeta(COMPUTE_FAILURES_KEY), (value) =>
-		Option.getOrElse(Option.map(value, Number), () => 0),
-	),
+const computeAttempts = Effect.map(readObjectMeta(COMPUTE_FAILURES_KEY), (value) =>
+	Option.getOrElse(Option.map(value, Number), () => 0),
 )
 
 /**
@@ -105,23 +99,21 @@ export const requestComputeAfterIngest = Effect.gen(function* () {
 export const takeComputeLease = (now: number) =>
 	Effect.gen(function* () {
 		const attempts = yield* computeAttempts
-		yield* meta(writeObjectMeta(COMPUTE_FAILURES_KEY, String(attempts + 1)))
+		yield* writeObjectMeta(COMPUTE_FAILURES_KEY, String(attempts + 1))
 		yield* scheduleComputeAt(now + Math.min(MAX_COMPUTE_BACKOFF_MS, LEASE_MS * 2 ** attempts))
 	})
 
-export const resetComputeFailures = meta(deleteObjectMeta(COMPUTE_FAILURES_KEY))
+export const resetComputeFailures = deleteObjectMeta(COMPUTE_FAILURES_KEY)
 
 /** Compute at `at` (the end of a compute: the next hourly run). */
-export const scheduleComputeAt = (at: number) => meta(writeObjectMeta(COMPUTE_DUE_KEY, String(at)))
+export const scheduleComputeAt = (at: number) => writeObjectMeta(COMPUTE_DUE_KEY, String(at))
 
 /** Never compute again (the org was deleted). */
-export const stopComputing = Effect.andThen(meta(deleteObjectMeta(COMPUTE_DUE_KEY)), clearComputeProgress)
+export const stopComputing = Effect.andThen(deleteObjectMeta(COMPUTE_DUE_KEY), clearComputeProgress)
 
 /** The connections whose backfill finished since the last compute (comma-separated ids). */
-export const baselineConnections = meta(
-	Effect.map(readObjectMeta(BASELINE_KEY), (value) =>
-		Option.match(value, { onNone: (): ReadonlyArray<string> => [], onSome: (ids) => ids.split(",") }),
-	),
+export const baselineConnections = Effect.map(readObjectMeta(BASELINE_KEY), (value) =>
+	Option.match(value, { onNone: (): ReadonlyArray<string> => [], onSome: (ids) => ids.split(",") }),
 )
 
 /** The next compute evaluates this connection's templates in baseline mode (§4.7): its backfill finished. */
@@ -129,18 +121,16 @@ export const setBaselineFor = (connectionId: string) =>
 	Effect.gen(function* () {
 		const ids = yield* baselineConnections
 		if (!ids.includes(connectionId))
-			yield* meta(writeObjectMeta(BASELINE_KEY, [...ids, connectionId].join(",")))
+			yield* writeObjectMeta(BASELINE_KEY, [...ids, connectionId].join(","))
 	})
 
 /** These connections' baseline was applied (others armed meanwhile stay for the next compute). */
 export const clearBaselineFor = (connectionIds: ReadonlyArray<string>) =>
 	Effect.gen(function* () {
 		const left = (yield* baselineConnections).filter((id) => !connectionIds.includes(id))
-		yield* meta(
-			left.length === 0
-				? deleteObjectMeta(BASELINE_KEY)
-				: writeObjectMeta(BASELINE_KEY, left.join(",")),
-		)
+		yield* left.length === 0
+			? deleteObjectMeta(BASELINE_KEY)
+			: writeObjectMeta(BASELINE_KEY, left.join(","))
 	})
 
 /**
@@ -148,20 +138,20 @@ export const clearBaselineFor = (connectionIds: ReadonlyArray<string>) =>
  * its own before the next compute, once no billing backfill is importing (`./compute.ts`). A rebuild
  * that keeps failing is given up after a few attempts, so computes go on.
  */
-export const requestHistoryRebuild = meta(writeObjectMeta(REBUILD_KEY, "1"))
-export const historyRebuildPending = meta(Effect.map(readObjectMeta(REBUILD_KEY), Option.isSome))
+export const requestHistoryRebuild = writeObjectMeta(REBUILD_KEY, "1")
+export const historyRebuildPending = Effect.map(readObjectMeta(REBUILD_KEY), Option.isSome)
 export const clearHistoryRebuild = Effect.andThen(
-	meta(deleteObjectMeta(REBUILD_KEY)),
-	meta(deleteObjectMeta(REBUILD_ATTEMPTS_KEY)),
+	deleteObjectMeta(REBUILD_KEY),
+	deleteObjectMeta(REBUILD_ATTEMPTS_KEY),
 )
 
 /** Count a rebuild attempt before it runs (a killed one counts too); the attempts before this one. */
 export const takeRebuildAttempt = Effect.gen(function* () {
 	const attempts = Option.getOrElse(
-		Option.map(yield* meta(readObjectMeta(REBUILD_ATTEMPTS_KEY)), Number),
+		Option.map(yield* readObjectMeta(REBUILD_ATTEMPTS_KEY), Number),
 		() => 0,
 	)
-	yield* meta(writeObjectMeta(REBUILD_ATTEMPTS_KEY, String(attempts + 1)))
+	yield* writeObjectMeta(REBUILD_ATTEMPTS_KEY, String(attempts + 1))
 	return attempts
 })
 

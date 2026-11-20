@@ -8,6 +8,8 @@ import { SqlClient } from "effect/sql/SqlClient"
 import type { SqlError } from "effect/sql/SqlError"
 import { OutboxDeliveryError } from "./errors.ts"
 import type { SqlStorageLike } from "./sql-storage.ts"
+import { inboxTable, outboxTable, run, type StoreError } from "./store.ts"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
 
 const SCHEMA = [
 	`CREATE TABLE IF NOT EXISTS _outbox (
@@ -58,16 +60,17 @@ export interface OutboxRow {
 }
 
 /** Write an outbox row; joins the caller's transaction. Returns the row id. */
-export const enqueue = (message: OutboxMessage): Effect.Effect<string, SqlError, SqlClient> =>
+export const enqueue = (message: OutboxMessage): Effect.Effect<string, StoreError, SqlClient> =>
 	Effect.gen(function* () {
-		const sql = yield* SqlClient
 		const now = yield* Clock.currentTimeMillis
 		const id = message.id ?? crypto.randomUUID()
 		const payload = JSON.stringify(message.payload ?? null)
 		const nextAt = Math.max(now, message.notBefore ?? now)
-		yield* sql`INSERT INTO _outbox (id, target, kind, payload, attempts, next_at, created_at, status)
-			VALUES (${id}, ${message.target}, ${message.kind}, ${payload}, 0, ${nextAt}, ${now}, 'pending')
-			ON CONFLICT (id) DO NOTHING`
+		yield* run(
+			SQLite.insertInto(outboxTable)
+				.values({ id, target: message.target, kind: message.kind, payload, nextAt, createdAt: now })
+				.onConflictDoNothing({ target: ["id"] }),
+		)
 		return id
 	})
 
@@ -106,28 +109,24 @@ export interface DrainOptions {
 	readonly concurrency?: number
 }
 
-type RawOutboxRow = {
-	readonly id: string
-	readonly target: string
-	readonly kind: string
-	readonly payload: string
-	readonly attempts: number
-	readonly next_at: number
-	readonly created_at: number
-}
+/** The columns a delivery reads. */
+const rowColumns = ["id", "target", "kind", "payload", "attempts", "nextAt", "createdAt"] as const
+type RawOutboxRow = Pick<SQLite.SelectRowOf<typeof outboxTable>, (typeof rowColumns)[number]>
 
-const COLUMNS = `o.id, o.target, o.kind, o.payload, o.attempts, o.next_at, o.created_at`
 /** Each target's head: its oldest pending row. Rows behind a head wait for it (per-target FIFO). */
-const HEADS = `SELECT MIN(rowid) AS head FROM _outbox WHERE status = 'pending' GROUP BY target`
+const heads = SQLite.from(outboxTable)
+	.select(($) => ({ target: $.target, head: SQLite.min($.rowid) }))
+	.where(($) => [$.status.eq("pending")])
+	.groupBy("target")
+
+/** The pending rows that head their target's queue. */
+const headRows = () => SQLite.from(outboxTable, "o").innerJoinQuery(heads, "h", (o, h) => h.head.eq(o.rowid))
 
 /** When the earliest target head is due, or `undefined` when nothing is pending. */
-export const nextOutboxAlarm: Effect.Effect<number | undefined, SqlError, SqlClient> = Effect.gen(
+export const nextOutboxAlarm: Effect.Effect<number | undefined, StoreError, SqlClient> = Effect.gen(
 	function* () {
-		const sql = yield* SqlClient
-		const rows = yield* sql<{ next: number | null }>`SELECT MIN(o.next_at) AS next
-			FROM _outbox o JOIN (${sql.literal(HEADS)}) h ON o.rowid = h.head`
-		const next = rows[0]?.next
-		return next === null || next === undefined ? undefined : Number(next)
+		const rows = yield* run(headRows().select(($) => ({ next: SQLite.min($.nextAt) })))
+		return rows[0]?.next ?? undefined
 	},
 )
 
@@ -136,8 +135,8 @@ const decodeRow = (row: RawOutboxRow): OutboxRow => ({
 	target: row.target,
 	kind: row.kind,
 	payload: JSON.parse(row.payload),
-	attempts: Number(row.attempts),
-	createdAt: Number(row.created_at),
+	attempts: row.attempts,
+	createdAt: row.createdAt,
 })
 
 type AttemptOutcome = "delivered" | "retried" | "dead"
@@ -152,9 +151,8 @@ const attemptRow = <R>(
 	now: number,
 	policy: BackoffPolicy,
 	timeoutMs: number,
-): Effect.Effect<AttemptOutcome, SqlError, SqlClient | R> =>
+): Effect.Effect<AttemptOutcome, StoreError, SqlClient | R> =>
 	Effect.gen(function* () {
-		const sql = yield* SqlClient
 		const row = decodeRow(raw)
 		const exit = yield* deliver(row).pipe(
 			Effect.timeoutOrElse({
@@ -167,7 +165,7 @@ const attemptRow = <R>(
 			Effect.exit,
 		)
 		if (Exit.isSuccess(exit)) {
-			yield* sql`DELETE FROM _outbox WHERE id = ${row.id}`
+			yield* run(SQLite.deleteFrom(outboxTable).where(($) => [$.id.eq(row.id)]))
 			return "delivered" as const
 		}
 		if (Cause.hasInterruptsOnly(exit.cause)) return yield* Effect.interrupt
@@ -184,14 +182,20 @@ const attemptRow = <R>(
 		})
 		const fields = { id: row.id, target: row.target, kind: row.kind, attempts, message }
 		if (!retryable) {
-			yield* sql`UPDATE _outbox SET status = 'dead', attempts = ${attempts}, last_error = ${message}
-				WHERE id = ${row.id}`
+			yield* run(
+				SQLite.update(outboxTable)
+					.set({ status: "dead", attempts, lastError: message })
+					.where(($) => [$.id.eq(row.id)]),
+			)
 			yield* Effect.logError("Outbox row is dead (non-retryable)", fields)
 			return "dead" as const
 		}
 		const delay = backoffDelayMs(attempts, yield* Random.next, policy)
-		yield* sql`UPDATE _outbox SET attempts = ${attempts}, next_at = ${now + delay}, last_error = ${message}
-			WHERE id = ${row.id}`
+		yield* run(
+			SQLite.update(outboxTable)
+				.set({ attempts, nextAt: now + delay, lastError: message })
+				.where(($) => [$.id.eq(row.id)]),
+		)
 		yield* Effect.logWarning("Outbox delivery failed; retrying", { ...fields, delayMs: delay })
 		return "retried" as const
 	})
@@ -208,32 +212,40 @@ const DEFAULT_DRAIN_CONCURRENCY = 8
 export const drainOutbox = <R>(
 	deliver: (row: OutboxRow) => Effect.Effect<void, OutboxDeliveryError, R>,
 	options?: DrainOptions,
-): Effect.Effect<DrainResult, SqlError, SqlClient | R> =>
+): Effect.Effect<DrainResult, StoreError, SqlClient | R> =>
 	Effect.gen(function* () {
-		const sql = yield* SqlClient
 		const policy: BackoffPolicy = { ...DEFAULT_BACKOFF, ...options?.backoff }
 		const timeoutMs = options?.deliveryTimeoutMs ?? DEFAULT_DELIVERY_TIMEOUT_MS
 		let budget = options?.limit ?? 100
 		const now = yield* Clock.currentTimeMillis
-		const heads = yield* sql<RawOutboxRow>`SELECT ${sql.literal(COLUMNS)}
-			FROM _outbox o JOIN (${sql.literal(HEADS)}) h ON o.rowid = h.head
-			WHERE o.next_at <= ${now} ORDER BY o.rowid LIMIT ${budget}`
+		const dueHeads = yield* run(
+			headRows()
+				.select(...rowColumns)
+				.where(($) => [$.nextAt.lte(now)])
+				.orderBy(($) => [[$.rowid, "asc"]])
+				.limit(budget),
+		)
 		const nextOf = (target: string) =>
 			Effect.map(
-				sql<RawOutboxRow>`SELECT ${sql.literal(COLUMNS)} FROM _outbox o
-					WHERE o.status = 'pending' AND o.target = ${target} ORDER BY o.rowid LIMIT 1`,
-				(rows) => rows[0],
+				run(
+					SQLite.from(outboxTable)
+						.select(...rowColumns)
+						.where(($) => [$.status.eq("pending"), $.target.eq(target)])
+						.orderBy(($) => [[$.rowid, "asc"]])
+						.limit(1),
+				),
+				(rows): RawOutboxRow | undefined => rows[0],
 			)
 		const counts = { delivered: 0, retried: 0, dead: 0 }
 		// Targets are independent objects: walk their queues concurrently, so one slow (or cold)
 		// target no longer delays every target after it.
 		yield* Effect.forEach(
-			heads,
+			dueHeads,
 			(head) =>
 				Effect.gen(function* () {
 					let row: RawOutboxRow | undefined = head
 					// Walk this target's queue while rows are due and deliveries succeed (or go dead).
-					while (row !== undefined && Number(row.next_at) <= now && budget > 0) {
+					while (row !== undefined && row.nextAt <= now && budget > 0) {
 						budget--
 						const outcome: AttemptOutcome = yield* attemptRow(
 							deliver,
@@ -250,7 +262,7 @@ export const drainOutbox = <R>(
 		)
 		const nextAt = yield* nextOutboxAlarm
 		yield* Effect.annotateCurrentSpan({
-			"outbox.heads": heads.length,
+			"outbox.heads": dueHeads.length,
 			"outbox.delivered": counts.delivered,
 			"outbox.retried": counts.retried,
 			"outbox.dead": counts.dead,
@@ -268,19 +280,26 @@ export const deliverKindsNow = <R>(
 	deliver: (row: OutboxRow) => Effect.Effect<void, OutboxDeliveryError, R>,
 	kinds: ReadonlyArray<string>,
 	options?: DrainOptions,
-): Effect.Effect<DrainResult, SqlError, SqlClient | R> =>
+): Effect.Effect<DrainResult, StoreError, SqlClient | R> =>
 	Effect.gen(function* () {
-		const sql = yield* SqlClient
 		const policy: BackoffPolicy = { ...DEFAULT_BACKOFF, ...options?.backoff }
 		const timeoutMs = options?.deliveryTimeoutMs ?? DEFAULT_DELIVERY_TIMEOUT_MS
 		const now = yield* Clock.currentTimeMillis
 		const rows =
 			kinds.length === 0
 				? []
-				: yield* sql<RawOutboxRow>`SELECT ${sql.literal(COLUMNS)} FROM _outbox o
-					WHERE o.status = 'pending' AND o.attempts = 0 AND o.next_at <= ${now}
-						AND ${sql.in("o.kind", kinds)}
-					ORDER BY o.rowid LIMIT ${options?.limit ?? 100}`
+				: yield* run(
+						SQLite.from(outboxTable)
+							.select(...rowColumns)
+							.where(($) => [
+								$.status.eq("pending"),
+								$.attempts.eq(0),
+								$.nextAt.lte(now),
+								$.kind.in_(...kinds),
+							])
+							.orderBy(($) => [[$.rowid, "asc"]])
+							.limit(options?.limit ?? 100),
+					)
 		// Concurrently: each row is its own target object, and one slow one must not hold the rest.
 		const outcomes = yield* Effect.forEach(
 			rows,
@@ -305,7 +324,7 @@ export const makeOutbox = <R>(
 	const permit = Semaphore.makeUnsafe(1)
 	// Set by every `drainUntilQuiet`; the drain holding the permit goes round again while it is.
 	let wanted = false
-	const drainWhileWanted: Effect.Effect<void, SqlError, SqlClient | R> = Effect.suspend(() => {
+	const drainWhileWanted: Effect.Effect<void, StoreError, SqlClient | R> = Effect.suspend(() => {
 		if (!wanted) return Effect.void
 		wanted = false
 		return Effect.andThen(drainOutbox(deliver, options), drainWhileWanted)
@@ -313,7 +332,7 @@ export const makeOutbox = <R>(
 	// Whoever holds the permit goes round while a write asked for a drain. Checked again once the
 	// permit is released: a request that came between the last check and the release found the
 	// permit taken, so nobody else will.
-	const drainWhileWantedHeld: Effect.Effect<void, SqlError, SqlClient | R> = Effect.suspend(() =>
+	const drainWhileWantedHeld: Effect.Effect<void, StoreError, SqlClient | R> = Effect.suspend(() =>
 		Effect.flatMap(permit.withPermitsIfAvailable(1)(drainWhileWanted), (ran) =>
 			Option.isSome(ran) && wanted ? drainWhileWantedHeld : Effect.void,
 		),
@@ -358,36 +377,38 @@ export const INBOX_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 export const withInbox = <A, E, R>(
 	key: string,
 	effect: Effect.Effect<A, E, R>,
-): Effect.Effect<Option.Option<A>, E | SqlError, R | SqlClient> =>
+): Effect.Effect<Option.Option<A>, E | StoreError, R | SqlClient> =>
 	Effect.gen(function* () {
 		const sql = yield* SqlClient
 		return yield* sql.withTransaction(
 			Effect.gen(function* () {
-				const seen = yield* sql`SELECT 1 AS seen FROM _inbox WHERE key = ${key}`
+				const seen = yield* run(
+					SQLite.from(inboxTable)
+						.select("key")
+						.where(($) => [$.key.eq(key)]),
+				)
 				if (seen.length > 0) return Option.none<A>()
 				const value = yield* effect
 				const now = yield* Clock.currentTimeMillis
-				yield* sql`INSERT INTO _inbox (key, at) VALUES (${key}, ${now})`
+				yield* run(SQLite.insertInto(inboxTable).values({ key, at: now }))
 				return Option.some(value)
 			}),
 		)
 	})
 
 /** Forget inbox keys older than `maxAgeMs` (a sender retries far less long than that). */
-export const pruneInbox = (maxAgeMs = INBOX_RETENTION_MS): Effect.Effect<void, SqlError, SqlClient> =>
+export const pruneInbox = (maxAgeMs = INBOX_RETENTION_MS): Effect.Effect<void, StoreError, SqlClient> =>
 	Effect.gen(function* () {
-		const sql = yield* SqlClient
 		const now = yield* Clock.currentTimeMillis
-		yield* sql`DELETE FROM _inbox WHERE at <= ${now - maxAgeMs}`
+		yield* run(SQLite.deleteFrom(inboxTable).where(($) => [$.at.lte(now - maxAgeMs)]))
 	})
 
 /** When the oldest inbox key ages out, or `undefined` when the inbox is empty. */
 export const nextInboxPruneAt = (
 	maxAgeMs = INBOX_RETENTION_MS,
-): Effect.Effect<number | undefined, SqlError, SqlClient> =>
+): Effect.Effect<number | undefined, StoreError, SqlClient> =>
 	Effect.gen(function* () {
-		const sql = yield* SqlClient
-		const rows = yield* sql<{ at: number | null }>`SELECT MIN(at) AS at FROM _inbox`
+		const rows = yield* run(SQLite.from(inboxTable).select(($) => ({ at: SQLite.min($.at) })))
 		const at = rows[0]?.at
-		return at === null || at === undefined ? undefined : Number(at) + maxAgeMs
+		return at === null || at === undefined ? undefined : at + maxAgeMs
 	})

@@ -20,11 +20,18 @@ export const CLOSED_SIGNAL_WINDOW_DAYS = 30
 export const CLOSED_ISSUE_WINDOW_DAYS = 30
 
 const isMember = (userId: UserId) =>
-	SQLite.sql.cond`EXISTS (SELECT 1 FROM "customer_members" cm WHERE cm."userId" = ${userId})`
+	SQLite.exists(
+		SQLite.from(schema.customerMembersTable)
+			.select("userId")
+			.where(($) => [$.userId.eq(userId)]),
+	)
 
 const isAdmin = (userId: UserId) =>
-	SQLite.sql
-		.cond`EXISTS (SELECT 1 FROM "customer_members" cm WHERE cm."userId" = ${userId} AND cm."role" <> 'member')`
+	SQLite.exists(
+		SQLite.from(schema.customerMembersTable)
+			.select("userId")
+			.where(($) => [$.userId.eq(userId), $.role.neq("member")]),
+	)
 
 export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = [
 	{ table: schema.customerAccountsTable, visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)] },
@@ -77,7 +84,7 @@ export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = 
 		visible: (p, $) => [
 			$.deletedAt.isNull(),
 			isMember(p.userId),
-			SQLite.sql.cond`(${$.ownerUserId} IS NULL OR ${$.ownerUserId} = ${p.userId})`,
+			SQLite.or($.ownerUserId.isNull(), $.ownerUserId.eq(p.userId)),
 		],
 	},
 	{
@@ -94,14 +101,14 @@ export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = 
 		table: schema.customerImpersonationsTable,
 		visible: (p, $) => [
 			isAdmin(p.userId),
-			SQLite.sql.cond`${$.createdAt} > strftime('%Y-%m-%d %H:%M:%f', 'now', '-30 days')`,
+			$.createdAt.gt(SQLite.strftime("%Y-%m-%d %H:%M:%f", "now", "-30 days")),
 		],
 	},
 	{
 		table: schema.customerSyncRunsTable,
 		visible: (p, $) => [
 			isMember(p.userId),
-			SQLite.sql.cond`${$.startedAt} > strftime('%Y-%m-%d %H:%M:%f', 'now', '-7 days')`,
+			$.startedAt.gt(SQLite.strftime("%Y-%m-%d %H:%M:%f", "now", "-7 days")),
 		],
 	},
 ]

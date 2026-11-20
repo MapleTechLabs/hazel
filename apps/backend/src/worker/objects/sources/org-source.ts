@@ -7,43 +7,74 @@
  * mounts, participants) and the users it shares those channels with; the rest needs membership.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import type { Change, SqlStorageLike, SqlValue, SyncSource } from "@hazel/sync-do"
+import type { Change, SqlStorageLike, SyncSource } from "@hazel/sync-do"
+import {
+	ConnectConversationChannelId,
+	ConnectParticipantId,
+	OrganizationMemberId,
+	type UserId,
+} from "@hazel/schema"
 import { Effect } from "effect"
 import type { SyncPrincipal } from "../principal"
 import { type SyncTableSpec, syncTable } from "./rows"
 
+/** The channels in `userId`'s `channel_access`. */
+const accessibleChannels = (userId: UserId) =>
+	SQLite.from(schema.channelAccessTable)
+		.select("channelId")
+		.where(($) => [$.userId.eq(userId)])
+
 /** `col` is an organization `userId` is an active member of. */
-const memberOf = (userId: string, col: SQLite.Expr<any>) =>
-	SQLite.sql.cond`${col} IN (SELECT om."organizationId" FROM "organization_members" om
-		WHERE om."userId" = ${userId} AND om."deletedAt" IS NULL)`
+const memberOf = (userId: UserId, col: SQLite.Expr<any>) =>
+	SQLite.inSubquery(
+		col,
+		SQLite.from(schema.organizationMembersTable)
+			.select("organizationId")
+			.where(($) => [$.userId.eq(userId), $.deletedAt.isNull()]),
+	)
 
 /** `col` is a channel in `userId`'s `channel_access`. */
-const channelAccess = (userId: string, col: SQLite.Expr<any>) =>
-	SQLite.sql.cond`${col} IN (SELECT ca."channelId" FROM "channel_access" ca WHERE ca."userId" = ${userId})`
+const channelAccess = (userId: UserId, col: SQLite.Expr<any>) =>
+	SQLite.inSubquery(col, accessibleChannels(userId))
 
 /** `userId` is an active member of this org (not a Connect guest). */
-const isMember = (userId: string) =>
-	SQLite.sql.cond`EXISTS (SELECT 1 FROM "organization_members" om
-		WHERE om."userId" = ${userId} AND om."deletedAt" IS NULL)`
+const isMember = (userId: UserId) =>
+	SQLite.exists(
+		SQLite.from(schema.organizationMembersTable)
+			.select("id")
+			.where(($) => [$.userId.eq(userId), $.deletedAt.isNull()]),
+	)
 
 /** `col` is a user sharing one of `userId`'s channels (a guest's view of the host's users). */
-const sharesChannel = (userId: string, col: SQLite.Expr<any>) =>
-	SQLite.sql.cond`${col} IN (SELECT other."userId" FROM "channel_access" other WHERE other."channelId" IN
-		(SELECT ca."channelId" FROM "channel_access" ca WHERE ca."userId" = ${userId}))`
+const sharesChannel = (userId: UserId, col: SQLite.Expr<any>) =>
+	SQLite.inSubquery(
+		col,
+		SQLite.from(schema.channelAccessTable, "other")
+			.select("userId")
+			.where(($) => [SQLite.inSubquery($.channelId, accessibleChannels(userId))]),
+	)
 
 /** `col` is a Connect conversation mounted in one of `userId`'s channels. */
-const conversationAccess = (userId: string, col: SQLite.Expr<any>) =>
-	SQLite.sql.cond`${col} IN (SELECT ccc."conversationId" FROM "connect_conversation_channels" ccc
-		WHERE ccc."deletedAt" IS NULL AND ccc."channelId" IN
-			(SELECT ca."channelId" FROM "channel_access" ca WHERE ca."userId" = ${userId}))`
+const conversationAccess = (userId: UserId, col: SQLite.Expr<any>) =>
+	SQLite.inSubquery(
+		col,
+		SQLite.from(schema.connectConversationChannelsTable)
+			.select("conversationId")
+			.where(($) => [$.deletedAt.isNull(), SQLite.inSubquery($.channelId, accessibleChannels(userId))]),
+	)
 
-/** One column of the row with id `id`, read synchronously (`ctx.storage.sql`). */
-const columnOf = (sql: SqlStorageLike, table: string, column: string, id: string) => {
-	const row = sql
-		.exec<{ v: SqlValue }>(`SELECT "${column}" AS v FROM "${table}" WHERE "id" = ?`, id)
-		.toArray()[0]
-	return row === undefined || row.v === null ? undefined : String(row.v)
-}
+/** The `userId` of the membership or participant row `id`, read synchronously (`ctx.storage.sql`). */
+const userIdOf = (sql: SqlStorageLike, table: "organization_members" | "connect_participants", id: string) =>
+	SQLite.runSync(
+		sql,
+		table === "organization_members"
+			? SQLite.from(schema.organizationMembersTable)
+					.select("userId")
+					.where(($) => [$.id.eq(OrganizationMemberId.make(id))])
+			: SQLite.from(schema.connectParticipantsTable)
+					.select("userId")
+					.where(($) => [$.id.eq(ConnectParticipantId.make(id))]),
+	)[0]?.userId
 
 /**
  * Who a dependency change affects (principals are user ids): a `channel_access` row names its
@@ -61,23 +92,31 @@ const affectedWith =
 					break
 				case "organization_members":
 				case "connect_participants": {
-					const userId =
-						change.op === "delete" ? undefined : columnOf(sql, change.tbl, "userId", change.pk)
+					const userId = change.op === "delete" ? undefined : userIdOf(sql, change.tbl, change.pk)
 					if (userId === undefined) return "all"
 					users.add(userId)
 					break
 				}
 				case "connect_conversation_channels": {
-					const channelId =
-						change.op === "delete" ? undefined : columnOf(sql, change.tbl, "channelId", change.pk)
-					if (channelId === undefined) return "all"
-					const rows = sql
-						.exec<{ userId: string }>(
-							`SELECT "userId" FROM "channel_access" WHERE "channelId" = ?`,
-							channelId,
-						)
-						.toArray()
-					for (const row of rows) users.add(String(row.userId))
+					const mount =
+						change.op === "delete"
+							? undefined
+							: SQLite.runSync(
+									sql,
+									SQLite.from(schema.connectConversationChannelsTable)
+										.select("channelId")
+										.where(($) => [
+											$.id.eq(ConnectConversationChannelId.make(change.pk)),
+										]),
+								)[0]
+					if (mount === undefined) return "all"
+					const rows = SQLite.runSync(
+						sql,
+						SQLite.from(schema.channelAccessTable)
+							.select("userId")
+							.where(($) => [$.channelId.eq(mount.channelId)]),
+					)
+					for (const row of rows) users.add(row.userId)
 					break
 				}
 				default:

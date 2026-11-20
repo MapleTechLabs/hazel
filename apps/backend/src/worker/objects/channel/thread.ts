@@ -11,7 +11,7 @@ import { Database, SQLite, schema } from "@hazel/db"
 import { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { enqueueEffect, defineEffect } from "../effects/registry"
-import { writeObjectMeta } from "../meta"
+import { claimObjectMeta, readObjectMeta, writeObjectMeta } from "../meta"
 import { InboundChatSyncWrite } from "../../../services/chat-sync/chat-sync-effects"
 import { ChatSyncOutbound, enqueueChatSyncOutbound } from "../../../services/chat-sync/chat-sync-outbound"
 
@@ -42,13 +42,8 @@ const ThreadOriginJson = Schema.fromJsonString(ThreadOrigin)
 
 /** The thread's original message, when this object is a thread's. */
 export const readThreadOrigin = Effect.gen(function* () {
-	const db = yield* Database.Database
-	const rows = yield* db.query(
-		Database.sql`SELECT value FROM _object_meta WHERE key = ${THREAD_ORIGIN_KEY}`,
-	)
-	return Option.flatMap(Option.fromNullishOr(rows[0]?.value), (json) =>
-		Schema.decodeUnknownOption(ThreadOriginJson)(json),
-	)
+	const value = yield* readObjectMeta(THREAD_ORIGIN_KEY)
+	return Option.flatMap(value, (json) => Schema.decodeUnknownOption(ThreadOriginJson)(json))
 })
 
 /** First link wins: a message already pointing at a thread keeps it (two racing creates). */
@@ -95,9 +90,4 @@ export const threadReceivers = {
 }
 
 /** Mark that this thread asked to be named; false when it already had. */
-export const claimThreadNaming = Effect.gen(function* () {
-	const db = yield* Database.Database
-	const claimed = yield* db.query(Database.sql`INSERT INTO _object_meta (key, value)
-		VALUES (${THREAD_NAMING_KEY}, '1') ON CONFLICT (key) DO NOTHING RETURNING key`)
-	return claimed.length > 0
-})
+export const claimThreadNaming = claimObjectMeta(THREAD_NAMING_KEY, "1")

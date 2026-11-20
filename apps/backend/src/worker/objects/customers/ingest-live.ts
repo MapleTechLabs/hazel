@@ -372,16 +372,23 @@ const outcome = {
 	unchanged: (id: string): IngestOutcome => ({ _tag: "Unchanged", id }),
 }
 
+/** A contact's membership (JSON) not left yet and last seen before `at` (ISO text). */
+const lapsedBefore = <P>(membership: SQLite.Expr<unknown, P>, at: string) =>
+	SQLite.jsonExtract(membership, "$.leftAt", SQLite.nullable(SQLite.text))
+		.isNull()
+		.and(SQLite.jsonExtract(membership, "$.seenAt", SQLite.nullable(SQLite.text)).lt(at))
+
+/** `customer_external_refs.viaAccounts`. */
+const viaAccountsType = SQLite.nullable(schema.jsonb<Readonly<Record<string, schema.ContactMembership>>>())
+
 const reject = (index: number, op: IngestOp, message: string) =>
 	new CustomerIngestRejectedError({ index, op: op._tag, message })
 
 const make = Effect.gen(function* () {
 	const db = yield* Database.Database
-	// Compute scheduling lives in `_object_meta`, read and written through the raw client.
-	const sql = yield* SqlClient
-	const withSql = Effect.provideService(SqlClient, sql)
-	const withStore = <A, E>(effect: Effect.Effect<A, E, SqlClient | Database.Database>) =>
-		effect.pipe(Effect.provideService(SqlClient, sql), Effect.provideService(Database.Database, db))
+	// Compute scheduling lives in `_object_meta`.
+	const withStore = <A, E>(effect: Effect.Effect<A, E, Database.Database>) =>
+		effect.pipe(Effect.provideService(Database.Database, db))
 	// -----------------------------------------------------------------------
 	// Lookups
 	// -----------------------------------------------------------------------
@@ -767,11 +774,28 @@ const make = Effect.gen(function* () {
 			// `['[', ']')` holds only the records blocked by several accounts.
 			const waiting =
 				entityType === "account"
-					? ((yield* db.query(
-							Database.sql`SELECT "id" FROM "customer_unmatched_records" WHERE "status" = 'open'
-							AND ("blockedBy" = ${key} OR ("blockedBy" >= '[' AND "blockedBy" < ']'
-								AND EXISTS (SELECT 1 FROM json_each("blockedBy") WHERE "value" = ${key})))`,
-						)) as ReadonlyArray<{ id: CustomerUnmatchedRecordId }>)
+					? yield* db.run(
+							SQLite.from(schema.customerUnmatchedRecordsTable)
+								.select("id")
+								.where(($) => [
+									$.status.eq("open"),
+									$.blockedBy.eq(key).or(
+										$.blockedBy
+											.gte("[")
+											.and($.blockedBy.lt("]"))
+											.and(
+												SQLite.exists(
+													SQLite.from(
+														SQLite.jsonEach($.blockedBy, { value: SQLite.text }),
+														"b",
+													)
+														.select(() => ({ one: SQLite.lit(1) }))
+														.where((b) => [b.value.eq(key)]),
+												),
+											),
+									),
+								]),
+						)
 					: []
 			for (const id of new Set([...own, ...waiting].map((row) => row.id))) {
 				const found = yield* db.first(
@@ -850,11 +874,15 @@ const make = Effect.gen(function* () {
 				op.matchByDomain === true &&
 				!(session.config?._tag === "stripe" && !session.config.matchByDomain)
 			if (!byDomain || domains.length === 0) return { _tag: "None" } satisfies Match as Match
-			const rows = yield* db.query(
-				Database.sql`SELECT DISTINCT a."id" AS id FROM "customer_accounts" a, json_each(a."domains") d
-					WHERE a."deletedAt" IS NULL AND d.value IN (${Database.sql.join(domains)}) ORDER BY a."createdAt"`,
+			const rows = yield* db.run(
+				SQLite.from(schema.customerAccountsTable, "a")
+					.crossJoin(($) => SQLite.jsonEach($.domains, { value: SQLite.text }), "d")
+					.where(($) => [$.deletedAt.isNull(), $.d.value.in_(...domains)])
+					.select(($) => ({ id: $.id }))
+					.distinct()
+					.orderBy(($) => [[$.createdAt, "asc"]]),
 			)
-			const candidates = rows.map((row) => row.id as CustomerAccountId)
+			const candidates = rows.map((row) => row.id)
 			if (candidates.length === 1) {
 				return {
 					_tag: "Matched",
@@ -2162,10 +2190,10 @@ const make = Effect.gen(function* () {
 				.where(($) => [$.id.eq(current.id)]),
 		)
 		if (result._tag === "Succeeded" && run.trigger === "backfill") {
-			yield* withSql(setBaselineFor(current.id))
+			yield* withStore(setBaselineFor(current.id))
 			// The first import brings old data: chart history is rebuilt once, not on later imports.
-			if (current.backfilledAt === null) yield* withSql(requestHistoryRebuild)
-			return yield* withSql(requestCompute)
+			if (current.backfilledAt === null) yield* withStore(requestHistoryRebuild)
+			return yield* withStore(requestCompute)
 		}
 		// The source went in or out of error (its templates match nothing while it is): compute
 		// like after ingest. What the run brought already asked for one (`apply`).
@@ -2252,7 +2280,7 @@ const make = Effect.gen(function* () {
 				// Still open when an op of it could not land yet (parked again).
 				.where(($) => [$.id.eq(recordId), $.status.eq("linked")]),
 		)
-		yield* withSql(requestCompute)
+		yield* withStore(requestCompute)
 		return outcome.updated(accountId)
 	})
 
@@ -2274,8 +2302,8 @@ const make = Effect.gen(function* () {
 			})
 		})
 
-	const countOf = (rows: ReadonlyArray<unknown>) =>
-		Number((rows as ReadonlyArray<{ count: number }>)[0]?.count ?? 0)
+	const countOf = <E, R>(row: Effect.Effect<Option.Option<{ readonly count: number }>, E, R>) =>
+		Effect.map(row, Option.match({ onNone: () => 0, onSome: ({ count }) => count }))
 
 	const completeSweep = Effect.fn("CustomerIngest.completeSweep")(function* (
 		connectionId: CustomerConnectionId,
@@ -2284,6 +2312,7 @@ const make = Effect.gen(function* () {
 		options: { readonly runId?: CustomerSyncRunId; readonly manual?: boolean } = {},
 	) {
 		const manual = options.manual === true
+		const sinceText = since.toISOString()
 		yield* Effect.annotateCurrentSpan({
 			"ingest.connection_id": connectionId,
 			"ingest.entity_types": entityTypes.join(","),
@@ -2319,12 +2348,17 @@ const make = Effect.gen(function* () {
 					]),
 			)
 		const liveRefs = (entityType: RefEntityType) =>
-			db
-				.query(
-					Database.sql`SELECT count(*) AS "count" FROM "customer_external_refs"
-					WHERE "provider" = ${provider} AND "entityType" = ${entityType} AND "staleAt" IS NULL`,
-				)
-				.pipe(Effect.map(countOf))
+			countOf(
+				db.first(
+					SQLite.from(schema.customerExternalRefsTable)
+						.select(() => ({ count: SQLite.count() }))
+						.where(($) => [
+							$.provider.eq(provider),
+							$.entityType.eq(entityType),
+							$.staleAt.isNull(),
+						]),
+				),
+			)
 		// Subscriptions not read (`observedAt`) since the sweep started.
 		const unseenSubscriptions = db.run(
 			SQLite.from(schema.customerSubscriptionsTable)
@@ -2335,12 +2369,13 @@ const make = Effect.gen(function* () {
 					SQLite.or($.observedAt.isNull(), $.observedAt.lt(since)),
 				]),
 		)
-		const liveSubscriptions = db
-			.query(
-				Database.sql`SELECT count(*) AS "count" FROM "customer_subscriptions"
-				WHERE "provider" = ${provider} AND "status" <> 'canceled'`,
-			)
-			.pipe(Effect.map(countOf))
+		const liveSubscriptions = countOf(
+			db.first(
+				SQLite.from(schema.customerSubscriptionsTable)
+					.select(() => ({ count: SQLite.count() }))
+					.where(($) => [$.provider.eq(provider), $.status.neq("canceled")]),
+			),
+		)
 		const skipped: Array<SweepEntityType> = []
 		// Past the cap, a listing more likely ended early (a provider bug) than that many records went
 		// at once: that type's removals are skipped. Not for another provider account's sweep
@@ -2375,18 +2410,37 @@ const make = Effect.gen(function* () {
 					// A person still seen through one organization: the memberships it lists that this
 					// listing did not see are left as of the run's start (an update read before it is late).
 					if (entityType === "contact")
-						yield* db.query(
-							Database.sql`UPDATE "customer_external_refs" SET "viaAccounts" = (
-								SELECT json_group_object("key",
-									CASE WHEN json_extract("value", '$.leftAt') IS NULL
-										AND json_extract("value", '$.seenAt') < ${since.toISOString()}
-									THEN json_set("value", '$.leftAt', ${since.toISOString()}) ELSE json("value") END)
-								FROM json_each("viaAccounts"))
-							WHERE "connectionId" = ${connectionId} AND "entityType" = 'contact'
-								AND "staleAt" IS NULL AND "viaAccounts" IS NOT NULL
-								AND EXISTS (SELECT 1 FROM json_each("viaAccounts")
-									WHERE json_extract("value", '$.leftAt') IS NULL
-										AND json_extract("value", '$.seenAt') < ${since.toISOString()})`,
+						yield* db.run(
+							SQLite.update(schema.customerExternalRefsTable)
+								.set(($) => ({
+									viaAccounts: SQLite.scalar(
+										SQLite.from(
+											SQLite.jsonEach($.viaAccounts, { key: SQLite.text }),
+											"v",
+										).select((v) => ({
+											viaAccounts: SQLite.jsonGroupObject(
+												v.key,
+												SQLite.iif(
+													lapsedBefore(v.value, sinceText),
+													SQLite.jsonSet(v.value, "$.leftAt", sinceText),
+													SQLite.json_(v.value),
+												),
+												viaAccountsType,
+											),
+										})),
+									),
+								}))
+								.where(($) => [
+									$.connectionId.eq(connectionId),
+									$.entityType.eq("contact"),
+									$.staleAt.isNull(),
+									$.viaAccounts.isNotNull(),
+									SQLite.exists(
+										SQLite.from(SQLite.jsonEach($.viaAccounts), "v")
+											.select(() => ({ one: SQLite.lit(1) }))
+											.where((v) => [lapsedBefore(v.value, sinceText)]),
+									),
+								]),
 						)
 				}
 				if (entityTypes.includes("subscription")) {

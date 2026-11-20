@@ -79,9 +79,6 @@ export const typed =
 	): SQLite.SqliteType<string, A, SQLite.InferEncoded<T>> =>
 		type as unknown as SQLite.SqliteType<string, A, SQLite.InferEncoded<T>>
 
-/** The current time, typed as the `Date` the timestamp columns hold. */
-export const now = () => SQLite.sql(timestamptz)`strftime('%Y-%m-%d %H:%M:%f', 'now')`
-
 /**
  * A text id typed as a branded id. The brand is type-only: rows are not re-validated against the
  * id schema on read, so one stored id outside its schema's checks cannot fail a whole result set.

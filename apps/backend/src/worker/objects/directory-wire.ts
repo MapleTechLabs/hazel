@@ -139,11 +139,19 @@ export const createDirectoryBot = Effect.fn("Directory.createBot")(function* (bo
 export const refreshDirectoryInstallCount = Effect.fn("Directory.refreshBotInstallCount")(
 	function* (payload: { readonly botId: BotId }) {
 		const directory = yield* Directory
-		yield* directory.db.query(
-			Database.sql`UPDATE "bots" SET "installCount" = (
-			SELECT count(*) FROM "membership_index" mi
-			WHERE mi."userId" = "bots"."userId" AND mi."deletedAt" IS NULL
-		) WHERE "id" = ${payload.botId}`,
+		yield* directory.db.run(
+			SQLite.update(schema.botsTable)
+				.set(($) => ({
+					installCount: SQLite.coalesce(
+						SQLite.scalar(
+							SQLite.from(schema.membershipIndexTable, "mi")
+								.select(() => ({ count: SQLite.count() }))
+								.where((mi) => [mi.userId.eq($.userId), mi.deletedAt.isNull()]),
+						),
+						0,
+					),
+				}))
+				.where(($) => [$.id.eq(payload.botId)]),
 		)
 	},
 )

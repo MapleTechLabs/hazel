@@ -11,8 +11,8 @@
  * Both act only on pages the message's author published (`services/html-renders.ts`).
  */
 import { ChannelId, HtmlRenderId, UserId } from "@hazel/schema"
-import { Database } from "@hazel/db"
-import { Effect, Schema } from "effect"
+import { Database, SQLite, schema } from "@hazel/db"
+import { Effect, Option, Schema } from "effect"
 import { HtmlRenders } from "../../../services/html-renders"
 import { defineEffect, type EffectReceivers } from "./registry"
 
@@ -34,10 +34,17 @@ const stillShown = Effect.fn("StorageEffects.stillShown")(function* (
 	renderId: HtmlRenderId,
 ) {
 	const db = yield* Database.Database
-	const rows = yield* db.query(
-		Database.sql`SELECT 1 FROM messages WHERE authorId = ${authorId} AND deletedAt IS NULL AND embeds LIKE ${`%${renderId}%`} LIMIT 1`,
+	const row = yield* db.first(
+		SQLite.from(schema.messagesTable)
+			.select("id")
+			.where(($) => [
+				$.authorId.eq(authorId),
+				$.deletedAt.isNull(),
+				SQLite.cast($.embeds, SQLite.nullable(SQLite.text)).contains(renderId),
+			])
+			.limit(1),
 	)
-	return rows.length > 0
+	return Option.isSome(row)
 })
 
 const claimHtmlRenders = Effect.fn("StorageEffects.claimHtmlRenders")(function* (

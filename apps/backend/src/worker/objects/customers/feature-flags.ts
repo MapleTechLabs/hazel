@@ -190,7 +190,7 @@ export const accountsWithFlag = Effect.fn("Customers.accountsWithFlag")(function
 	const accounts = yield* db.run(
 		SQLite.from(schema.customerAccountsTable)
 			.select("id", "featureFlags")
-			.where(($) => [$.deletedAt.isNull(), SQLite.sql.cond`${$.featureFlags} <> '{}'`]),
+			.where(($) => [$.deletedAt.isNull(), $.featureFlags.neq({})]),
 	)
 	return accounts.filter((account) => Object.hasOwn(account.featureFlags, key)).map((account) => account.id)
 })

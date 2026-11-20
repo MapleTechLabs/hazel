@@ -144,7 +144,7 @@ const nextViewersVersion = Effect.gen(function* () {
 	const version = Math.max(last + 1, yield* Clock.currentTimeMillis)
 	yield* writeObjectMeta(VIEWERS_VERSION_KEY, String(version))
 	return version
-}).pipe(Effect.mapError(Database.toDatabaseError))
+})
 
 /**
  * Project the channel's current access: `setViewers` and its directory index row (outbox). The

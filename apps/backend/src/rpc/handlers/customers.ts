@@ -430,10 +430,15 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 							.limit(page.limit + 1)
 							.offset(page.offset),
 					)
-					const open = yield* db.query(
-						Database.sql`SELECT count(*) AS "count" FROM "customer_unmatched_records" WHERE "status" = 'open'`,
+					const open = yield* db.first(
+						SQLite.from(schema.customerUnmatchedRecordsTable)
+							.select(() => ({ count: SQLite.count() }))
+							.where(($) => [$.status.eq("open")]),
 					)
-					return { ...pageResult(rows, page), openCount: Number(open[0]?.count ?? 0) }
+					return {
+						...pageResult(rows, page),
+						openCount: Option.match(open, { onNone: () => 0, onSome: (row) => row.count }),
+					}
 				}).pipe(remap),
 
 			"customers.ignoreRules.list": () =>
@@ -487,11 +492,14 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 			"customers.plans.list": () =>
 				Effect.gen(function* () {
 					yield* requireMember
-					const rows = yield* db.query(
-						Database.sql`SELECT DISTINCT "planName" FROM "customer_subscriptions"
-							WHERE "planName" IS NOT NULL ORDER BY "planName"`,
+					const rows = yield* db.run(
+						SQLite.from(schema.customerSubscriptionsTable)
+							.where(($) => [$.planName.isNotNull()])
+							.select(($) => ({ planName: $.planName }))
+							.distinct()
+							.orderBy(["planName", "asc"]),
 					)
-					return { plans: rows.map((row) => String(row.planName)) }
+					return { plans: rows.map((row) => row.planName) }
 				}).pipe(remap),
 		}
 	}),

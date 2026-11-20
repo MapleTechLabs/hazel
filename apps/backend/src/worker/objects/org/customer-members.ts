@@ -94,26 +94,26 @@ export const customerMembers = Effect.fn("OrgObject.customerMembers")(function* 
 export const publishCustomerMembers = Effect.fn("OrgObject.publishCustomerMembers")(function* (
 	organizationId: OrganizationId,
 ) {
-	const enabled = yield* readObjectMeta(ENABLED_KEY).pipe(Effect.mapError(Database.toDatabaseError))
+	const enabled = yield* readObjectMeta(ENABLED_KEY)
 	if (Option.isNone(enabled) || !(yield* isLive(organizationId))) return
 	const members = yield* currentMembers(organizationId)
 	yield* enqueueEffect(CustomersEffects.setMembers, customersTarget(organizationId), {
 		organizationId,
 		members,
-		version: yield* nextVersion.pipe(Effect.mapError(Database.toDatabaseError)),
+		version: yield* nextVersion,
 	})
 })
 
 /** The org was deleted: its customers object (if it has one) shuts down. Inside the delete's transaction. */
 export const publishCustomersOrganizationDeleted = Effect.fn("OrgObject.publishCustomersOrganizationDeleted")(
 	function* (organizationId: OrganizationId) {
-		const enabled = yield* readObjectMeta(ENABLED_KEY).pipe(Effect.mapError(Database.toDatabaseError))
+		const enabled = yield* readObjectMeta(ENABLED_KEY)
 		if (Option.isNone(enabled)) return
 		yield* enqueueEffect(CustomersEffects.setMembers, customersTarget(organizationId), {
 			organizationId,
 			members: [],
 			organizationDeleted: true,
-			version: yield* nextVersion.pipe(Effect.mapError(Database.toDatabaseError)),
+			version: yield* nextVersion,
 		})
 	},
 )

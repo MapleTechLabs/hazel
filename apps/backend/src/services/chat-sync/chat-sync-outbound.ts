@@ -302,7 +302,10 @@ const deliver = (
 		const context: ChatSyncLinkContext = {
 			link,
 			saveSettings: (settings) =>
-				persistLinkSettings(link, settings).pipe(Effect.provideService(SqlClient, sql)),
+				persistLinkSettings(link, settings).pipe(
+					Effect.provideService(SqlClient, sql),
+					Effect.provideService(Database.Database, db),
+				),
 		}
 
 		switch (event._tag) {

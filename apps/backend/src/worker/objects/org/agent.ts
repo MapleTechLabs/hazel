@@ -27,12 +27,6 @@ export const AgentChannelsCall = defineCall("org.agentChannels", "org", {
 	error: UnauthorizedError,
 })
 
-const DmMemberRow = Schema.Struct({
-	channelId: Schema.String,
-	firstName: Schema.String,
-	lastName: Schema.String,
-})
-
 export const agentChannels = Effect.fn("OrgObject.agentChannels")(
 	function* (payload: typeof AgentChannelsCall.payload.Type) {
 		const organizationId = yield* requireOrganizationId
@@ -75,14 +69,17 @@ export const agentChannels = Effect.fn("OrgObject.agentChannels")(
 					$.c.type.in_("public", "private", "direct", "single"),
 				]),
 		)
-		const dmMembers = yield* db.query(
-			Database.sql`SELECT cm."channelId" AS "channelId", u."firstName" AS "firstName", u."lastName" AS "lastName"
-				FROM "channel_members" cm
-				JOIN "channels" c ON c."id" = cm."channelId" AND c."type" IN ('direct', 'single') AND c."deletedAt" IS NULL
-				JOIN "channel_access" ca ON ca."channelId" = cm."channelId" AND ca."userId" = ${payload.userId}
-				JOIN "users" u ON u."id" = cm."userId"
-				WHERE cm."userId" != ${payload.userId} AND cm."deletedAt" IS NULL`,
-			DmMemberRow,
+		const dmMembers = yield* db.run(
+			SQLite.from(schema.channelMembersTable, "cm")
+				.innerJoin(schema.channelsTable, "c", (cm, c) =>
+					SQLite.and(c.id.eq(cm.channelId), c.type.in_("direct", "single"), c.deletedAt.isNull()),
+				)
+				.innerJoin(schema.channelAccessTable, "ca", (cm, ca) =>
+					SQLite.and(ca.channelId.eq(cm.channelId), ca.userId.eq(payload.userId)),
+				)
+				.innerJoin(schema.usersTable, "u", (cm, u) => u.id.eq(cm.userId))
+				.select(($) => ({ channelId: $.channelId, firstName: $.u.firstName, lastName: $.u.lastName }))
+				.where(($) => [$.userId.neq(payload.userId), $.deletedAt.isNull()]),
 		)
 		const membersOf = new Map<string, Array<string>>()
 		for (const row of dmMembers) {

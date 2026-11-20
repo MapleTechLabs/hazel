@@ -30,10 +30,11 @@ import {
 	type OrgFacts,
 	pays,
 } from "./facts"
-import { inList } from "./sql"
+import { inList, isActive } from "./sql"
 import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
 
-export const ACTIVE = Database.sql`("eventCount" > 0 OR "sessionCount" > 0 OR "signedIn" = 1)`
+/** A JSON key or value holding an account id. */
+const accountIdText = schema.typed<CustomerAccountId>()(SQLite.text)
 
 /** The account fields compute owns, derived from its subscriptions, contacts and activity. */
 export interface Rollup {
@@ -514,7 +515,6 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	const db = yield* Database.Database
 	const { now, today, currency } = base.org
 	const { from, priorWindows } = base
-	const idList = JSON.stringify(ids)
 	const accounts = yield* db.run(
 		SQLite.from(schema.customerAccountsTable)
 			.select()
@@ -525,15 +525,11 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.select("id", "accountId", "name", "email", "role", "firstActiveAt", "lastActiveDay")
 			.where(($) => [inList($.accountId, ids), $.deletedAt.isNull()]),
 	)
-	const activity = (yield* db.query(
-		Database.sql`SELECT "accountId", "contactId", "day", "eventCount" FROM "customer_activity_daily"
-			WHERE "accountId" IN (SELECT value FROM json_each(${idList})) AND "day" >= ${from} AND ${ACTIVE}`,
-	)) as ReadonlyArray<{
-		accountId: CustomerAccountId
-		contactId: CustomerContactId
-		day: Day
-		eventCount: number
-	}>
+	const activity = yield* db.run(
+		SQLite.from(schema.customerActivityDailyTable)
+			.select("accountId", "contactId", "day", "eventCount")
+			.where(($) => [inList($.accountId, ids), $.day.gte(from), isActive($)]),
+	)
 
 	const contactsBy = groupBy(contacts, (contact) => contact.accountId)
 	const activityBy = groupBy(activity, (row) => row.accountId)
@@ -567,14 +563,17 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			counts.set(accountId, users.size)
 		}
 		if (Object.keys(older).length > 0) {
-			const rows = (yield* db.query(
-				Database.sql`SELECT a."accountId" AS "accountId", count(DISTINCT a."contactId") AS "count"
-				FROM json_each(${JSON.stringify(older)}) j
-				JOIN "customer_activity_daily" a ON a."accountId" = j.key AND a."day" > j.value
-				WHERE (a."eventCount" > 0 OR a."sessionCount" > 0 OR a."signedIn" = 1)
-				GROUP BY a."accountId"`,
-			)) as ReadonlyArray<{ accountId: CustomerAccountId; count: number }>
-			for (const row of rows) counts.set(row.accountId, Number(row.count))
+			// Per account, its activity after `older[account]`.
+			const rows = yield* db.run(
+				SQLite.from(SQLite.jsonEach(older, { key: accountIdText, value: SQLite.text }), "j")
+					.innerJoin(schema.customerActivityDailyTable, "a", (j, a) =>
+						a.accountId.eq(j.key).and(a.day.gt(j.value)),
+					)
+					.select(($) => ({ accountId: $.a.accountId, count: SQLite.countDistinct($.a.contactId) }))
+					.where(($) => [isActive($.a)])
+					.groupBy("accountId"),
+			)
+			for (const row of rows) counts.set(row.accountId, row.count)
 		}
 		priorActive.set(days, counts)
 	}
@@ -771,18 +770,42 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 				older[primaryId] = { after: addDays(last, -days), last, accounts }
 		}
 		if (Object.keys(older).length === 0) continue
-		const rows = (yield* db.query(
-			Database.sql`SELECT g.key AS "primaryId", count(DISTINCT CASE
-					WHEN c."deletedAt" IS NULL AND trim(coalesce(c."email", '')) <> '' THEN lower(trim(c."email"))
-					ELSE a."contactId" END) AS "count"
-				FROM json_each(${JSON.stringify(older)}) g
-				JOIN json_each(json_extract(g.value, '$.accounts')) m
-				JOIN "customer_activity_daily" a ON a."accountId" = m.value
-					AND a."day" > json_extract(g.value, '$.after') AND a."day" <= json_extract(g.value, '$.last')
-				LEFT JOIN "customer_contacts" c ON c."id" = a."contactId"
-				WHERE (a."eventCount" > 0 OR a."sessionCount" > 0 OR a."signedIn" = 1)
-				GROUP BY g.key`,
-		)) as ReadonlyArray<{ primaryId: CustomerAccountId; count: number }>
+		// Per group: its accounts' activity in `(after, last]`, counted as `groupFacts` counts people.
+		const rows = yield* db.run(
+			SQLite.from(SQLite.jsonEach(older, { key: accountIdText }), "g")
+				.crossJoin(
+					($) =>
+						SQLite.jsonEach(SQLite.jsonExtract($.value, "$.accounts", SQLite.text), {
+							value: accountIdText,
+						}),
+					"m",
+				)
+				.innerJoin(schema.customerActivityDailyTable, "a", (g, a) =>
+					a.accountId
+						.eq(g.m.value)
+						.and(a.day.gt(SQLite.jsonExtract(g.value, "$.after", SQLite.text)))
+						.and(a.day.lte(SQLite.jsonExtract(g.value, "$.last", SQLite.text))),
+				)
+				.leftJoin(schema.customerContactsTable, "c", (g, c) => c.id.eq(g.a.contactId))
+				.select(($) => ({
+					primaryId: $.key,
+					count: SQLite.countDistinct(
+						SQLite.caseWhen(
+							[
+								[
+									$.c.deletedAt
+										.isNull()
+										.and(SQLite.trim(SQLite.coalesce($.c.email, "")).neq("")),
+									SQLite.lower(SQLite.trim($.c.email)),
+								],
+							],
+							$.a.contactId,
+						),
+					),
+				}))
+				.where(($) => [isActive($.a)])
+				.groupBy("primaryId"),
+		)
 		for (const row of rows) {
 			const counts = olderGroupPrior.get(row.primaryId) ?? new Map<number, number>()
 			counts.set(days, Number(row.count))

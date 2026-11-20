@@ -11,6 +11,8 @@ import {
 	type SqlStorageLike,
 	writeMeta,
 } from "./sql-storage.ts"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { changesTable, sqliteMasterTable } from "./store.ts"
 
 export type ChangeOp = "insert" | "update" | "delete"
 
@@ -94,10 +96,12 @@ const signatureOf = (tables: ReadonlyArray<TrackedTable>) =>
 /** Every expected trigger is in `sqlite_master` (a table rebuild drops its triggers). */
 const triggersPresent = (sql: SqlStorageLike, tables: ReadonlyArray<TrackedTable>): boolean => {
 	const present = new Set(
-		sql
-			.exec<{ name: string }>(`SELECT name FROM sqlite_master WHERE type = 'trigger'`)
-			.toArray()
-			.map((row) => String(row.name)),
+		SQLite.runSync(
+			sql,
+			SQLite.from(sqliteMasterTable)
+				.select("name")
+				.where(($) => [$.type.eq("trigger")]),
+		).map((row) => row.name),
 	)
 	return tables.every((table) => triggerNames(table.name).every((name) => present.has(name)))
 }
@@ -136,9 +140,11 @@ export const oldestSeq = (sql: SqlStorageLike): number => readMetaNumber(sql, FL
 
 /** The newest change's seq (0 before the first change). */
 export const headSeq = (sql: SqlStorageLike): number => {
-	const row = sql.exec<{ head: number | null }>(`SELECT MAX(seq) AS head FROM _changes`).toArray()[0]
-	const head = row?.head
-	return Math.max(head === null || head === undefined ? 0 : Number(head), oldestSeq(sql))
+	const head = SQLite.runSync(
+		sql,
+		SQLite.from(changesTable).select(($) => ({ head: SQLite.max($.seq) })),
+	)[0]?.head
+	return Math.max(head ?? 0, oldestSeq(sql))
 }
 
 export interface ChangeBatch {
@@ -152,22 +158,23 @@ export interface ChangeBatch {
 
 /** Up to `limit` raw changes after `after`, coalesced. */
 export const readChanges = (sql: SqlStorageLike, after: number, limit: number): ChangeBatch => {
-	const rows = sql
-		.exec<{ seq: number; tbl: string; pk: string; op: string }>(
-			`SELECT seq, tbl, pk, op FROM _changes WHERE seq > ? ORDER BY seq LIMIT ?`,
-			after,
-			limit,
-		)
-		.toArray()
+	const rows = SQLite.runSync(
+		sql,
+		SQLite.from(changesTable)
+			.select("seq", "tbl", "pk", "op")
+			.where(($) => [$.seq.gt(after)])
+			.orderBy(["seq", "asc"])
+			.limit(limit),
+	)
 	const latest = new Map<string, Change>()
 	for (const row of rows) {
 		const id = `${row.tbl}\u0000${row.pk}`
 		latest.delete(id)
-		latest.set(id, { tbl: String(row.tbl), pk: String(row.pk), op: String(row.op) as ChangeOp })
+		latest.set(id, { tbl: row.tbl, pk: row.pk, op: row.op as ChangeOp })
 	}
 	const last = rows[rows.length - 1]
 	return {
-		through: last === undefined ? after : Number(last.seq),
+		through: last === undefined ? after : last.seq,
 		read: rows.length,
 		changes: [...latest.values()],
 	}
@@ -185,12 +192,12 @@ export const pruneChanges = (sql: SqlStorageLike, options: PruneOptions): number
 	const maxAgeMs = options.maxAgeMs ?? DEFAULT_RETENTION.maxAgeMs
 	const floor = oldestSeq(sql)
 	const head = headSeq(sql)
-	const aged = sql
-		.exec<{ seq: number | null }>(
-			`SELECT MAX(seq) AS seq FROM _changes WHERE at <= ?`,
-			options.now - maxAgeMs,
-		)
-		.toArray()[0]?.seq
+	const aged = SQLite.runSync(
+		sql,
+		SQLite.from(changesTable)
+			.select(($) => ({ seq: SQLite.max($.seq) }))
+			.where(($) => [$.at.lte(options.now - maxAgeMs)]),
+	)[0]?.seq
 	// `keepLatest` is a floor: only aged changes outside the newest `keepLatest` go.
 	const cut = Math.min(
 		aged === null || aged === undefined ? 0 : Number(aged),
@@ -198,7 +205,10 @@ export const pruneChanges = (sql: SqlStorageLike, options: PruneOptions): number
 		options.notAfter ?? head,
 	)
 	if (cut <= floor) return floor
-	sql.exec(`DELETE FROM _changes WHERE seq <= ?`, cut)
+	SQLite.runSync(
+		sql,
+		SQLite.deleteFrom(changesTable).where(($) => [$.seq.lte(cut)]),
+	)
 	writeMeta(sql, FLOOR_KEY, String(cut))
 	return cut
 }
@@ -213,12 +223,11 @@ export const nextChangePruneAt = (
 ): number | undefined => {
 	const keepLatest = retention.keepLatest ?? DEFAULT_RETENTION.keepLatest
 	const maxAgeMs = retention.maxAgeMs ?? DEFAULT_RETENTION.maxAgeMs
-	const row = sql
-		.exec<{ at: number | null }>(
-			`SELECT MIN(at) AS at FROM _changes WHERE seq <= ?`,
-			headSeq(sql) - keepLatest,
-		)
-		.toArray()[0]
-	const at = row?.at
-	return at === null || at === undefined ? undefined : Number(at) + maxAgeMs
+	const at = SQLite.runSync(
+		sql,
+		SQLite.from(changesTable)
+			.select(($) => ({ at: SQLite.min($.at) }))
+			.where(($) => [$.seq.lte(headSeq(sql) - keepLatest)]),
+	)[0]?.at
+	return at === null || at === undefined ? undefined : at + maxAgeMs
 }

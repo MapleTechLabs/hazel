@@ -24,6 +24,7 @@ import type { SqlClient } from "effect/sql/SqlClient"
 import { AI_EFFECT_DELAY_MS, AiEffects, DEFAULT_THREAD_NAME } from "../effects/ai-effects"
 import { BotGatewayEffects } from "../effects/bot-gateway-effects"
 import { enqueueEffect } from "../effects/registry"
+import { readObjectMeta } from "../meta"
 import { MessageNotificationOrgEffects } from "../org/message-notifications"
 import { chatSyncOutboundHook } from "../../../services/chat-sync/chat-sync-outbound"
 import { SearchOrgEffects } from "../search-wire"
@@ -52,11 +53,8 @@ export const THREAD_NAMING_THRESHOLD = 3
 
 /** The channel's organization, from the last `channel.setViewers`. */
 export const channelOrganization = Effect.gen(function* () {
-	const db = yield* Database.Database
-	const rows = yield* db.query(Database.sql`SELECT value FROM _object_meta WHERE key = 'organizationId'`)
-	return Option.map(Option.fromNullishOr(rows[0]?.value as string | undefined), (id) =>
-		OrganizationId.make(id),
-	)
+	const value = yield* readObjectMeta("organizationId")
+	return Option.map(value, (id) => OrganizationId.make(id))
 })
 
 const botGatewayHook: MessageEventHook = (event) =>

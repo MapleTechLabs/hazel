@@ -1,3 +1,6 @@
+import { SQLite, schema } from "@hazel/db"
+import { UserId } from "@hazel/schema"
+import * as Orm from "@maple-dev/effect-orm/database"
 import { Effect } from "effect"
 import * as Digest from "effect/crypto/Digest"
 import * as SecureRandom from "effect/crypto/SecureRandom"
@@ -5,7 +8,28 @@ import { Base64Url } from "effect/encoding"
 import { SqlClient } from "effect/sql"
 
 import { oauthNamespace } from "./auth.ts"
-import { runBatch } from "./batch.ts"
+import { isD1 } from "./batch.ts"
+
+/** What a query over the auth store can fail with, by tag. */
+export const QUERY_ERROR_TAGS = [
+	"@maple-dev/effect-orm/DatabaseError",
+	"@maple-dev/effect-orm/QueryBuilderError",
+	"@maple-dev/effect-orm/CompiledQueryDecodeError",
+] as const
+
+/** What a batch over the auth store can fail with, by tag (outside D1 it runs in a transaction). */
+export const STORE_ERROR_TAGS = [
+	...QUERY_ERROR_TAGS,
+	"@maple-dev/effect-orm/TransactionClosed",
+	"@maple-dev/effect-orm/TransactionCommitFailed",
+	"@maple-dev/effect-orm/TransactionOptionsRejected",
+	"@maple-dev/effect-orm/TransactionRollbackFailed",
+	"@maple-dev/effect-orm/TransactionUnsupported",
+] as const
+
+/** effect-orm over the auth store's client: D1 on the Worker, node SQLite in Bun and tests. */
+export const ormOf = (sql: SqlClient.SqlClient) =>
+	Orm.fromSqlClient(sql, { dialect: isD1(sql) ? SQLite.d1Dialect : SQLite.sqliteDialect })
 
 /**
  * Links a GitHub or Google account to an existing Hazel user, so that signing in with it
@@ -79,34 +103,66 @@ export const linkIdentity = Effect.fn("HazelAuth.linkIdentity")(function* (
 	const random = yield* SecureRandom.SecureRandom
 	const key = yield* identityKey(input)
 	const credentialId = yield* random.uuidV4()
+	const userId = UserId.make(input.userId)
 
-	const ownedWithoutLogin = sql`
-		exists (select 1 from auth_oauth_identities where "identityKey" = ${key} and "subjectId" = ${input.userId})
-		and not exists (select 1 from auth_oauth_logins where "identityKey" = ${key})`
+	const identityOwned = SQLite.exists(
+		SQLite.from(schema.authOAuthIdentitiesTable)
+			.select("identityKey")
+			.where(($) => [$.identityKey.eq(key), $.subjectId.eq(userId)]),
+	)
+	const hasLogin = SQLite.exists(
+		SQLite.from(schema.authOAuthLoginsTable)
+			.select("credentialId")
+			.where(($) => [$.identityKey.eq(key)]),
+	)
+	const subject = SQLite.param.of(schema.typed<UserId>()(SQLite.text), "userId")
 
-	const results = yield* runBatch(sql, [
-		sql`
-			insert into auth_oauth_identities ("identityKey", provider, issuer, "externalSubject", "subjectId")
-			values (${key}, ${input.provider}, ${providerIssuers[input.provider]}, ${input.subject}, ${input.userId})
-			on conflict ("identityKey") do nothing`,
-		sql`
-			insert into auth_credentials ("credentialId", "subjectId", revision, active)
-			select ${credentialId}, ${input.userId}, 'initial', 1 where ${ownedWithoutLogin}`,
-		sql`
-			insert into auth_oauth_logins ("moduleId", "credentialId", "subjectId", "identityKey", "credentialRevision", status)
-			select ${oauthNamespace}, ${credentialId}, ${input.userId}, ${key}, 'initial', 'active'
-			where exists (select 1 from auth_credentials where "credentialId" = ${credentialId})
-			and not exists (select 1 from auth_oauth_logins where "identityKey" = ${key})`,
-		sql`
-			select i."subjectId" as "ownerId", l."credentialId" as "loginId"
-			from auth_oauth_identities i
-			left join auth_oauth_logins l on l."identityKey" = i."identityKey"
-			where i."identityKey" = ${key}`,
-	])
+	const [, , , owners] = yield* ormOf(sql).batch(
+		[
+			SQLite.insertInto(schema.authOAuthIdentitiesTable)
+				.values({
+					identityKey: key,
+					provider: input.provider,
+					issuer: providerIssuers[input.provider],
+					externalSubject: input.subject,
+					subjectId: userId,
+				})
+				.onConflictDoNothing({ target: ["identityKey"] }),
+			SQLite.insertInto(schema.authCredentialsTable).select(
+				SQLite.selectNoFrom(() => ({
+					credentialId: SQLite.lit(credentialId),
+					subjectId: subject,
+					revision: SQLite.lit("initial"),
+					active: SQLite.param.of(SQLite.boolean, "active"),
+				})).where(() => [identityOwned, SQLite.not(hasLogin)]),
+			),
+			SQLite.insertInto(schema.authOAuthLoginsTable).select(
+				SQLite.selectNoFrom(() => ({
+					moduleId: SQLite.lit(oauthNamespace),
+					credentialId: SQLite.lit(credentialId),
+					subjectId: subject,
+					identityKey: SQLite.lit(key),
+					credentialRevision: SQLite.lit("initial"),
+					status: SQLite.lit("active"),
+				})).where(() => [
+					SQLite.exists(
+						SQLite.from(schema.authCredentialsTable)
+							.select("credentialId")
+							.where(($) => [$.credentialId.eq(credentialId)]),
+					),
+					SQLite.not(hasLogin),
+				]),
+			),
+			SQLite.from(schema.authOAuthIdentitiesTable, "i")
+				.leftJoin(schema.authOAuthLoginsTable, "l", (i, l) => l.identityKey.eq(i.identityKey))
+				.select(($) => ({ ownerId: $.subjectId, loginId: $.l.credentialId }))
+				.where(($) => [$.identityKey.eq(key)]),
+		] as const,
+		{ userId, active: true },
+	)
 
-	const [owner] = (results[3] ?? []) as ReadonlyArray<{ ownerId: string; loginId: string | null }>
-	if (owner?.ownerId !== input.userId)
-		return { _tag: "Conflict", ownerId: owner?.ownerId ?? "" } as LinkResult
+	const [owner] = owners
+	if (owner?.ownerId !== userId) return { _tag: "Conflict", ownerId: owner?.ownerId ?? "" } as LinkResult
 	return (owner.loginId === credentialId ? { _tag: "Linked" } : { _tag: "AlreadyLinked" }) as LinkResult
 })
 
@@ -117,10 +173,16 @@ export const linkIdentity = Effect.fn("HazelAuth.linkIdentity")(function* (
 export const findUserByEmail = (email: string) =>
 	Effect.gen(function* () {
 		const sql = yield* SqlClient.SqlClient
-		const rows = yield* sql<{ id: string }>`
-			select id from users
-			where lower(email) = lower(${email}) and "deletedAt" is null and "userType" = 'user'
-			limit 2`
+		const rows = yield* ormOf(sql).run(
+			SQLite.from(schema.usersTable)
+				.select("id")
+				.where(($) => [
+					SQLite.lower($.email).eq(SQLite.lower(SQLite.lit(email))),
+					$.deletedAt.isNull(),
+					$.userType.eq("user"),
+				])
+				.limit(2),
+		)
 		return rows.length === 1 ? rows[0]!.id : undefined
 	})
 

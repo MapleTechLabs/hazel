@@ -1,3 +1,5 @@
+import { SQLite, schema } from "@hazel/db"
+import { UserId } from "@hazel/schema"
 import { Auth, Http, OAuth, Operations, Passkey } from "@yielded/auth"
 import * as GitHub from "@yielded/auth/GitHub"
 import * as Google from "@yielded/auth/Google"
@@ -8,6 +10,7 @@ import { SqlClient } from "effect/sql"
 
 import { HazelAuth } from "./auth.ts"
 import { HazelAuthApi } from "./contract.ts"
+import { ormOf, QUERY_ERROR_TAGS } from "./identities.ts"
 import { ActionPoliciesLive } from "./policy.ts"
 import { OAuthStorageLive, Persistence, storage } from "./storage.ts"
 
@@ -51,14 +54,16 @@ export interface HazelAuthConfig {
 /** The provider of a registration intent whose identity now has an owner, if any. */
 const linkedProvider = (sql: SqlClient.SqlClient, reference: string) =>
 	Effect.gen(function* () {
-		const rows = yield* sql<{ provider: string }>`
-			select i.provider from auth_oauth_registrations r
-			join auth_oauth_identities i on i."identityKey" = r."identityKey"
-			where r.reference = ${reference}
-			limit 1`
+		const rows = yield* ormOf(sql).run(
+			SQLite.from(schema.authOAuthRegistrationsTable, "r")
+				.innerJoin(schema.authOAuthIdentitiesTable, "i", (r, i) => i.identityKey.eq(r.identityKey))
+				.select(($) => ({ provider: $.i.provider }))
+				.where(($) => [$.reference.eq(reference)])
+				.limit(1),
+		)
 		return rows[0]?.provider
 	}).pipe(
-		Effect.catchTag("SqlError", (error) =>
+		Effect.catchTag(QUERY_ERROR_TAGS, (error) =>
 			Effect.as(Effect.logWarning("[auth] could not check for a linked account", error), undefined),
 		),
 	)
@@ -156,8 +161,11 @@ export const makeHazelAuthHttp = (
 const claimsFor = (subjectId: string) =>
 	Effect.gen(function* () {
 		const sql = yield* SqlClient.SqlClient
-		const rows = yield* sql<{ firstName: string; lastName: string }>`
-			select "firstName", "lastName" from users where id = ${subjectId} and "deletedAt" is null`
+		const rows = yield* ormOf(sql).run(
+			SQLite.from(schema.usersTable)
+				.select("firstName", "lastName")
+				.where(($) => [$.id.eq(UserId.make(subjectId)), $.deletedAt.isNull()]),
+		)
 		const row = rows[0]
 		if (row === undefined) return Option.none()
 		return Option.some({ displayName: `${row.firstName} ${row.lastName}`.trim() })
@@ -177,7 +185,7 @@ const SocialClaimsLive = Layer.effect(
 							onSome: Effect.succeed,
 						}),
 					),
-					Effect.catchTag("SqlError", () => Effect.fail(OAuth.OAuthUnavailable.make({}))),
+					Effect.catchTag(QUERY_ERROR_TAGS, () => Effect.fail(OAuth.OAuthUnavailable.make({}))),
 				),
 		}
 	}),
@@ -197,7 +205,7 @@ const PasskeyClaimsLive = Layer.effect(
 							onSome: Effect.succeed,
 						}),
 					),
-					Effect.catchTag("SqlError", () => Effect.fail(Passkey.PasskeyUnavailable.make({}))),
+					Effect.catchTag(QUERY_ERROR_TAGS, () => Effect.fail(Passkey.PasskeyUnavailable.make({}))),
 				),
 		}
 	}),

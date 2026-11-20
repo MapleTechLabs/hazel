@@ -2,21 +2,25 @@ import type { D1ClientConfig } from "@effect/sql-d1/D1Client"
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Channel } from "@hazel/domain/models"
 import { Effect, ManagedRuntime, Option } from "effect"
+import { SqlClient } from "effect/sql/SqlClient"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { layerMemory } from "../node"
 import * as SQLite from "../sqlite"
 import * as schema from "../tables"
-import { Database, layerD1, sql } from "./database"
+import { Database, layerD1 } from "./database"
 import { makeRepository } from "./repository"
 
-let runtime: ManagedRuntime.ManagedRuntime<Database, never>
+/** A table of this test's own, created below (DDL). */
+const TestRollback = SQLite.table("_test_rollback", { external: true, columns: { id: SQLite.text } })
+
+let runtime: ManagedRuntime.ManagedRuntime<Database | SqlClient, never>
 
 beforeAll(async () => {
 	runtime = ManagedRuntime.make(layerMemory)
 	await runtime.runPromise(
 		Effect.gen(function* () {
-			const db = yield* Database
-			yield* db.execute(sql`CREATE TABLE _test_rollback (id TEXT PRIMARY KEY)`)
+			const sql = yield* SqlClient
+			yield* sql`CREATE TABLE _test_rollback (id TEXT PRIMARY KEY)`
 		}),
 	)
 })
@@ -25,19 +29,23 @@ afterAll(async () => {
 	await runtime?.dispose()
 })
 
-const run = <A, E>(effect: Effect.Effect<A, E, Database>) => runtime.runPromise(effect)
+const run = <A, E>(effect: Effect.Effect<A, E, Database | SqlClient>) => runtime.runPromise(effect)
 
 const countRows = (id: string) =>
 	Effect.gen(function* () {
 		const db = yield* Database
-		const rows = yield* db.query(sql`SELECT id FROM _test_rollback WHERE id = ${id}`)
+		const rows = yield* db.run(
+			SQLite.from(TestRollback)
+				.select("id")
+				.where(($) => [$.id.eq(id)]),
+		)
 		return rows.length
 	})
 
 const insertRow = (id: string) =>
 	Effect.gen(function* () {
 		const db = yield* Database
-		yield* db.execute(sql`INSERT INTO _test_rollback (id) VALUES (${id})`)
+		yield* db.run(SQLite.insertInto(TestRollback).values({ id }))
 	})
 
 describe("Database.transaction", () => {

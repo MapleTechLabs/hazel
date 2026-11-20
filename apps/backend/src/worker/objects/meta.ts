@@ -7,6 +7,7 @@
  * - `ChannelObject`: `organizationId`, `conversationId` and `mountChannelIds` (a Connect host
  *   channel's guest mounts) from the last `setViewers`.
  */
+import { Database, SQLite, schema } from "@hazel/db"
 import { Effect, Option } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import type { SqlError } from "effect/sql/SqlError"
@@ -17,25 +18,51 @@ export const installObjectMeta: Effect.Effect<void, SqlError, SqlClient> = Effec
 	sql.unsafe(TABLE),
 ).pipe(Effect.asVoid)
 
-export const readObjectMeta = (key: string): Effect.Effect<Option.Option<string>, SqlError, SqlClient> =>
+export const readObjectMeta = (
+	key: string,
+): Effect.Effect<Option.Option<string>, Database.DatabaseError, Database.Database> =>
 	Effect.gen(function* () {
-		const sql = yield* SqlClient
-		const rows = yield* sql<{ value: string }>`SELECT value FROM _object_meta WHERE key = ${key}`
-		return Option.fromNullishOr(rows[0]?.value)
+		const db = yield* Database.Database
+		const row = yield* db.first(
+			SQLite.from(schema.objectMetaTable)
+				.select("value")
+				.where(($) => [$.key.eq(key)]),
+		)
+		return Option.map(row, (r) => r.value)
 	})
 
-export const writeObjectMeta = (key: string, value: string): Effect.Effect<void, SqlError, SqlClient> =>
-	Effect.gen(function* () {
-		const sql = yield* SqlClient
-		yield* sql`INSERT INTO _object_meta (key, value) VALUES (${key}, ${value})
-			ON CONFLICT (key) DO UPDATE SET value = excluded.value`
-	})
+export const writeObjectMeta = (
+	key: string,
+	value: string,
+): Effect.Effect<void, Database.DatabaseError, Database.Database> =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.run(
+			SQLite.insertInto(schema.objectMetaTable)
+				.values({ key, value })
+				.onConflictDoUpdate({ target: ["key"], set: SQLite.excluded(["value"]) }),
+		),
+	).pipe(Effect.asVoid)
 
-export const deleteObjectMeta = (key: string): Effect.Effect<void, SqlError, SqlClient> =>
-	Effect.gen(function* () {
-		const sql = yield* SqlClient
-		yield* sql`DELETE FROM _object_meta WHERE key = ${key}`
-	})
+/** Writes `key` only when it is absent; true when this call wrote it. */
+export const claimObjectMeta = (
+	key: string,
+	value: string,
+): Effect.Effect<boolean, Database.DatabaseError, Database.Database> =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.run(
+			SQLite.insertInto(schema.objectMetaTable)
+				.values({ key, value })
+				.onConflictDoNothing()
+				.returning("key"),
+		),
+	).pipe(Effect.map((rows) => rows.length > 0))
+
+export const deleteObjectMeta = (
+	key: string,
+): Effect.Effect<void, Database.DatabaseError, Database.Database> =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.run(SQLite.deleteFrom(schema.objectMetaTable).where(($) => [$.key.eq(key)])),
+	).pipe(Effect.asVoid)
 
 /**
  * Remembers the object's id on first sight and checks it afterwards: one object, one id. A
@@ -43,7 +70,7 @@ export const deleteObjectMeta = (key: string): Effect.Effect<void, SqlError, Sql
  */
 export const makeObjectIdentity = Effect.gen(function* () {
 	let known = Option.getOrUndefined(yield* readObjectMeta("id"))
-	const remember = (id: string): Effect.Effect<string, SqlError, SqlClient> =>
+	const remember = (id: string): Effect.Effect<string, Database.DatabaseError, Database.Database> =>
 		Effect.gen(function* () {
 			if (known === id) return id
 			if (known !== undefined) {

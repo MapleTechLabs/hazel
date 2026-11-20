@@ -13,7 +13,6 @@
  */
 import * as D1Client from "@effect/sql-d1/D1Client"
 import * as Orm from "@maple-dev/effect-orm/database"
-import { sql } from "@maple-dev/effect-orm/database"
 import {
 	CompiledQueryDecodeError,
 	d1Dialect,
@@ -239,16 +238,6 @@ export interface DatabaseShape {
 		query: Q,
 		params?: Given,
 	) => Effect.Effect<Option.Option<Orm.RowOf<Q>>, DatabaseError>
-	/** Runs a `sql\`...\`` statement and returns its rows, decoded through `schema` when given. */
-	readonly query: {
-		(statement: Orm.StatementInput): Effect.Effect<ReadonlyArray<Record<string, unknown>>, DatabaseError>
-		<A>(
-			statement: Orm.StatementInput,
-			schema: Orm.RowSchema<A>,
-		): Effect.Effect<ReadonlyArray<A>, DatabaseError>
-	}
-	/** Runs a statement whose rows are not wanted. */
-	readonly execute: (statement: Orm.StatementInput) => Effect.Effect<void, DatabaseError>
 	/**
 	 * Runs `body` in a transaction; a nested call is a savepoint. Any failure, defect or
 	 * interruption rolls back, and the body's own errors come out unchanged.
@@ -268,11 +257,6 @@ const makeShape = (getOrm: Effect.Effect<Orm.DatabaseApi>): DatabaseShape => {
 			Effect.map(run(query, params), (rows) =>
 				Option.fromNullishOr(rows[0]),
 			)) as DatabaseShape["first"],
-		query: ((statement: Orm.StatementInput, schema?: Orm.RowSchema<unknown>) =>
-			Effect.flatMap(getOrm, (orm) =>
-				absorb(schema === undefined ? orm.query(statement) : orm.query(statement, schema)),
-			)) as DatabaseShape["query"],
-		execute: (statement) => Effect.flatMap(getOrm, (orm) => absorb(orm.execute(statement))),
 		transaction: (body, options) =>
 			Effect.flatMap(getOrm, (orm) => absorb(orm.transaction(body, options))).pipe(
 				Effect.withSpan("Database.transaction"),
@@ -316,5 +300,3 @@ export const requireTransaction = Orm.requireTransaction
 
 /** The open transaction; `transaction` provides it, `requireTransaction` requires it. */
 export const Transaction = Orm.Transaction
-
-export { sql }

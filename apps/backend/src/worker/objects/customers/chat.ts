@@ -43,7 +43,7 @@ const contactOf = (accountId: CustomerAccountId, email: string | null) =>
 				.where(($) => [
 					$.accountId.eq(accountId),
 					$.deletedAt.isNull(),
-					SQLite.sql.cond`lower(${$.email}) = ${email.toLowerCase()}`,
+					SQLite.lower($.email).eq(email.toLowerCase()),
 				])
 				.limit(1),
 		)

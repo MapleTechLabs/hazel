@@ -16,6 +16,8 @@
 	},
 	"dependencies": {
 		"@hazel/db": "workspace:*",
+		"@hazel/schema": "workspace:*",
+		"@maple-dev/effect-orm": "0.11.0",
 		"@simplewebauthn/server": "^14.0.1",
 		"@yielded/auth": "0.1.0-beta.47",
 		"@yielded/auth-persistence": "0.1.0-beta.47",

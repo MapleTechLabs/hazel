@@ -20,7 +20,6 @@ import { CurrentUser, InternalServerError, UnauthorizedError } from "@hazel/doma
 import { type MessageSearchHit, type MessageSearchPayload, MessageSearchResponse } from "@hazel/domain/rpc"
 import { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option } from "effect"
-import { SqlClient } from "effect/sql/SqlClient"
 import { currentObject } from "../../../lib/current-object"
 import { CurrentEffectSender, enqueueEffect, type EffectSender } from "../effects/registry"
 import { channelTarget, orgTarget } from "../kinds"
@@ -46,9 +45,15 @@ export const SEARCH_MIGRATION_ID = "0002_message_search"
  * next). Without it, index writes are dropped (the activation that creates it backfills).
  */
 export const searchAvailable = Effect.gen(function* () {
-	const sql = yield* SqlClient
-	const rows = yield* sql`SELECT 1 AS present FROM sqlite_master
-		WHERE type = 'table' AND name IN ('message_search', 'message_search_fts', 'message_search_backfill')`
+	const db = yield* Database.Database
+	const rows = yield* db.run(
+		SQLite.from(schema.sqliteMasterTable)
+			.select("name")
+			.where(($) => [
+				$.type.eq("table"),
+				$.name.in_("message_search", "message_search_fts", "message_search_backfill"),
+			]),
+	)
 	return rows.length === 3
 })
 
@@ -117,21 +122,32 @@ const applyIndex = Effect.fn("OrgObject.applySearchIndex")(function* (
 	},
 ) {
 	if (!(yield* searchAvailable)) return
-	const sql = yield* SqlClient
-	if (change.replace) yield* sql`DELETE FROM message_search WHERE "channelId" = ${channelId}`
+	const db = yield* Database.Database
+	if (change.replace) {
+		yield* db.run(SQLite.deleteFrom(schema.messageSearchTable).where(($) => [$.channelId.eq(channelId)]))
+	}
 	if (change.remove.length > 0) {
-		yield* sql`DELETE FROM message_search
-			WHERE "channelId" = ${channelId} AND ${sql.in("messageId", change.remove)}`
+		yield* db.run(
+			SQLite.deleteFrom(schema.messageSearchTable).where(($) => [
+				$.channelId.eq(channelId),
+				$.messageId.in_(...change.remove),
+			]),
+		)
 	}
 	const names = yield* namesFor(change.upsert)
 	for (const message of change.upsert) {
-		const content = toSearchText(message.content, (id) => names.get(id))
-		yield* sql`INSERT INTO message_search ("messageId", "channelId", "authorId", "conversationId", "createdAt", "content")
-			VALUES (${message.id}, ${channelId}, ${message.authorId}, ${message.conversationId}, ${message.createdAt}, ${content})
-			ON CONFLICT ("messageId") DO UPDATE SET
-				"channelId" = excluded."channelId", "authorId" = excluded."authorId",
-				"conversationId" = excluded."conversationId", "createdAt" = excluded."createdAt",
-				"content" = excluded."content"`
+		yield* db.run(
+			SQLite.insertInto(schema.messageSearchTable)
+				.values({
+					messageId: message.id,
+					channelId,
+					authorId: message.authorId,
+					conversationId: message.conversationId,
+					createdAt: message.createdAt,
+					content: toSearchText(message.content, (id) => names.get(id)),
+				})
+				.onConflictDoUpdate({ target: ["messageId"], set: SQLite.excludedAll() }),
+		)
 	}
 	yield* Effect.annotateCurrentSpan({
 		"search.upserted": change.upsert.length,
@@ -201,8 +217,10 @@ export const indexMessages = Effect.fn("OrgObject.indexMessages")(function* (pay
 	const channel = yield* localChannel(channelId)
 	if (Option.isNone(channel) || channel.value.deletedAt !== null) {
 		// Gone since the backfill asked: nothing left to wait for.
-		const sql = yield* SqlClient
-		yield* sql`DELETE FROM message_search_backfill WHERE "channelId" = ${channelId}`
+		const db = yield* Database.Database
+		yield* db.run(
+			SQLite.deleteFrom(schema.messageSearchBackfillTable).where(($) => [$.channelId.eq(channelId)]),
+		)
 		return
 	}
 	const change = {
@@ -225,13 +243,20 @@ export const indexMessages = Effect.fn("OrgObject.indexMessages")(function* (pay
 	yield* forwardToGuests(channelId, change)
 
 	if (page === undefined) return
-	const sql = yield* SqlClient
-	const rows = yield* sql<{ generation: number }>`SELECT generation FROM message_search_backfill
-		WHERE "channelId" = ${channelId}`
+	const db = yield* Database.Database
+	const backfill = yield* db.first(
+		SQLite.from(schema.messageSearchBackfillTable)
+			.select("generation")
+			.where(($) => [$.channelId.eq(channelId)]),
+	)
 	// A page of an earlier backfill: its rows still count, its chain does not continue.
-	if (rows[0] === undefined || Number(rows[0].generation) !== page.generation) return
+	if (Option.isNone(backfill) || backfill.value.generation !== page.generation) return
 	if (page.next === null) {
-		yield* sql`UPDATE message_search_backfill SET done = 1 WHERE "channelId" = ${channelId}`
+		yield* db.run(
+			SQLite.update(schema.messageSearchBackfillTable)
+				.set({ done: true })
+				.where(($) => [$.channelId.eq(channelId)]),
+		)
 		return
 	}
 	yield* enqueueEffect(
@@ -263,9 +288,9 @@ export const exportToGuest = Effect.fn("OrgObject.exportSearchToGuest")(function
 /** Guest: the mount ended; what it indexed from the host channel goes. */
 export const dropMountedSearch = Effect.fn("OrgObject.dropMountedSearch")(function* (channelId: ChannelId) {
 	if (!(yield* searchAvailable)) return
-	const sql = yield* SqlClient
-	yield* sql`DELETE FROM message_search WHERE "channelId" = ${channelId}`
-}, Effect.mapError(Database.toDatabaseError))
+	const db = yield* Database.Database
+	yield* db.run(SQLite.deleteFrom(schema.messageSearchTable).where(($) => [$.channelId.eq(channelId)]))
+})
 
 export const messageSearchOrgReceivers = {
 	"org.indexMessages": indexMessages,
@@ -327,7 +352,6 @@ export const searchSenderRefusal = Effect.fn("OrgObject.searchSenderRefusal")(fu
 export const reindexMessageSearch = Effect.fn("OrgObject.reindexMessageSearch")(function* () {
 	if (!(yield* searchAvailable)) return 0
 	const db = yield* Database.Database
-	const sql = yield* SqlClient
 	const generation = yield* Clock.currentTimeMillis
 	const channels = yield* db.run(
 		SQLite.from(schema.channelsTable)
@@ -341,10 +365,14 @@ export const reindexMessageSearch = Effect.fn("OrgObject.reindexMessageSearch")(
 	)
 	const guestMounts = new Set<string>(mounts.map((row) => row.channelId))
 	const owned = channels.filter((channel) => !guestMounts.has(channel.id))
-	yield* sql`DELETE FROM message_search_backfill`
+	yield* db.run(SQLite.deleteFrom(schema.messageSearchBackfillTable).allRows())
 	for (const channel of owned) {
-		yield* sql`INSERT INTO message_search_backfill ("channelId", generation, done)
-			VALUES (${channel.id}, ${generation}, 0)`
+		yield* db.run(
+			SQLite.insertInto(schema.messageSearchBackfillTable).values({
+				channelId: channel.id,
+				generation,
+			}),
+		)
 		yield* enqueueEffect(
 			SearchChannelEffects.exportSearchMessages,
 			channelTarget(channel.id) as { kind: "channel"; id: string },
@@ -383,12 +411,18 @@ export const BACKFILL_TIMEOUT_MS = 6 * 60 * 60 * 1000
 
 /** Whether some live channel still owes the current backfill pages. */
 const backfillPending = Effect.gen(function* () {
-	const sql = yield* SqlClient
+	const db = yield* Database.Database
 	const cutoff = (yield* Clock.currentTimeMillis) - BACKFILL_TIMEOUT_MS
-	const rows = yield* sql`SELECT 1 AS pending FROM message_search_backfill b
-		JOIN channels c ON c."id" = b."channelId" AND c."deletedAt" IS NULL
-		WHERE b.done = 0 AND b.generation > ${cutoff} LIMIT 1`
-	return rows.length > 0
+	const pending = yield* db.first(
+		SQLite.from(schema.messageSearchBackfillTable, "b")
+			.innerJoin(schema.channelsTable, "c", (b, c) =>
+				SQLite.and(c.id.eq(b.channelId), c.deletedAt.isNull()),
+			)
+			.select(($) => ({ channelId: $.channelId }))
+			.where(($) => [$.done.eq(false), $.generation.gt(cutoff)])
+			.limit(1),
+	)
+	return Option.isSome(pending)
 })
 
 // QUERY
@@ -422,14 +456,6 @@ const decodeCursor = (cursor: string | undefined) => {
 	return separator > 0 && Number.isFinite(createdAt) && id.length > 0 ? { createdAt, id } : undefined
 }
 
-interface HitRow {
-	readonly messageId: string
-	readonly channelId: string
-	readonly authorId: string
-	readonly createdAt: number
-	readonly snippet: string
-}
-
 /** `message.search`, run in the org's own object. */
 export const searchMessages = Effect.fn("OrgObject.searchMessages")(
 	function* (payload: MessageSearchPayload) {
@@ -454,7 +480,7 @@ export const searchMessages = Effect.fn("OrgObject.searchMessages")(
 				unavailable: true,
 			})
 		}
-		const sql = yield* SqlClient
+		const db = yield* Database.Database
 		const limit = payload.limit ?? DEFAULT_LIMIT
 		const fts = toFtsQuery(payload.query)
 		const cursor = decodeCursor(payload.cursor)
@@ -475,39 +501,80 @@ export const searchMessages = Effect.fn("OrgObject.searchMessages")(
 			return new MessageSearchResponse({ results: [], nextCursor: null, indexing })
 		}
 
-		const conditions = [
-			sql`s."channelId" IN (SELECT "channelId" FROM channel_access WHERE "userId" = ${user.id})`,
-			...(payload.channelId === undefined ? [] : [sql`s."channelId" = ${payload.channelId}`]),
-			...(payload.authorId === undefined ? [] : [sql`s."authorId" = ${payload.authorId}`]),
-			...(payload.before === undefined ? [] : [sql`s."createdAt" < ${payload.before.getTime()}`]),
-			...(payload.after === undefined ? [] : [sql`s."createdAt" > ${payload.after.getTime()}`]),
-			...(cursor === undefined
-				? []
-				: [
-						sql`(s."createdAt" < ${cursor.createdAt} OR (s."createdAt" = ${cursor.createdAt} AND s."messageId" < ${cursor.id}))`,
-					]),
+		// The caller's channels, the payload's filters, and the page after the cursor.
+		const visible = <P>(s: {
+			readonly channelId: SQLite.Expr<ChannelId, P>
+			readonly authorId: SQLite.Expr<UserId, P>
+			readonly createdAt: SQLite.Expr<number, P>
+			readonly messageId: SQLite.Expr<MessageId, P>
+		}) => [
+			SQLite.inSubquery(
+				s.channelId,
+				SQLite.from(schema.channelAccessTable)
+					.select("channelId")
+					.where(($) => [$.userId.eq(user.id)]),
+			),
+			SQLite.when(payload.channelId, (channelId) => s.channelId.eq(channelId)),
+			SQLite.when(payload.authorId, (authorId) => s.authorId.eq(authorId)),
+			SQLite.when(payload.before, (before) => s.createdAt.lt(before.getTime())),
+			SQLite.when(payload.after, (after) => s.createdAt.gt(after.getTime())),
+			SQLite.when(cursor, ({ createdAt, id }) =>
+				s.createdAt
+					.lt(createdAt)
+					.or(s.createdAt.eq(createdAt).and(s.messageId.lt(MessageId.make(id)))),
+			),
 		]
-		const where = sql.and(conditions)
 		const rows =
 			fts.length > 0
-				? yield* sql<HitRow>`SELECT s."messageId", s."channelId", s."authorId", s."createdAt",
-					snippet(message_search_fts, 0, char(2), char(3), '…', ${SNIPPET_TOKENS}) AS snippet
-				FROM message_search_fts JOIN message_search s ON s."id" = message_search_fts.rowid
-				WHERE message_search_fts MATCH ${fts} AND ${where}
-				ORDER BY s."createdAt" DESC, s."messageId" DESC LIMIT ${limit + 1}`
-				: yield* sql<HitRow>`SELECT s."messageId", s."channelId", s."authorId", s."createdAt",
-					substr(s."content", 1, ${PREVIEW_CHARS}) AS snippet
-				FROM message_search s WHERE ${where}
-				ORDER BY s."createdAt" DESC, s."messageId" DESC LIMIT ${limit + 1}`
+				? yield* db.run(
+						SQLite.from(schema.messageSearchFtsTable)
+							.innerJoin(schema.messageSearchTable, "s", (f, s) => s.id.eq(f.rowid))
+							.select(($) => ({
+								messageId: $.s.messageId,
+								channelId: $.s.channelId,
+								authorId: $.s.authorId,
+								createdAt: $.s.createdAt,
+								snippet: SQLite.fts5.snippet(
+									$,
+									"content",
+									MARK_START,
+									MARK_END,
+									"…",
+									SNIPPET_TOKENS,
+								),
+							}))
+							.where(($) => [SQLite.fts5.match($, fts), ...visible($.s)])
+							.orderBy(($) => [
+								[$.s.createdAt, "desc"],
+								[$.s.messageId, "desc"],
+							])
+							.limit(limit + 1),
+					)
+				: yield* db.run(
+						SQLite.from(schema.messageSearchTable, "s")
+							.select(($) => ({
+								messageId: $.messageId,
+								channelId: $.channelId,
+								authorId: $.authorId,
+								createdAt: $.createdAt,
+								snippet: SQLite.substr($.content, 1, PREVIEW_CHARS),
+							}))
+							.where(visible)
+							.orderBy(($) => [
+								[$.createdAt, "desc"],
+								[$.messageId, "desc"],
+							])
+							.limit(limit + 1),
+					)
 
 		const page = rows.slice(0, limit)
 		const results = page.map((row): MessageSearchHit => {
 			const { snippet, highlights } = parseSnippet(row.snippet)
 			return {
-				messageId: MessageId.make(row.messageId),
-				channelId: ChannelId.make(row.channelId),
-				authorId: UserId.make(row.authorId),
-				createdAt: new Date(Number(row.createdAt)),
+				messageId: row.messageId,
+				channelId: row.channelId,
+				authorId: row.authorId,
+				createdAt: new Date(row.createdAt),
 				snippet,
 				highlights,
 			}
@@ -518,12 +585,12 @@ export const searchMessages = Effect.fn("OrgObject.searchMessages")(
 			results,
 			nextCursor:
 				rows.length > limit && last !== undefined
-					? encodeCursor(Number(last.createdAt), last.messageId)
+					? encodeCursor(last.createdAt, last.messageId)
 					: null,
 			indexing,
 		})
 	},
-	Effect.catchTag("SqlError", (error) =>
+	Effect.catchTag("DatabaseError", (error) =>
 		Effect.fail(
 			new InternalServerError({
 				message: "Message search failed",
