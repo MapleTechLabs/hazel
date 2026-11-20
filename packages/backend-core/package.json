@@ -9,7 +9,7 @@
 		"./repositories": "./src/repositories/index.ts"
 	},
 	"scripts": {
-		"typecheck": "effect-tsgo tsc --noEmit"
+		"typecheck": "effect-tsgo tsrs --noEmit"
 	},
 	"dependencies": {
 		"@hazel/db": "workspace:*",

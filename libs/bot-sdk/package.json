@@ -52,7 +52,7 @@
 		}
 	},
 	"scripts": {
-		"typecheck": "effect-tsgo tsc --noEmit",
+		"typecheck": "effect-tsgo tsrs --noEmit",
 		"build": "tsdown",
 		"prepublishOnly": "GENERATE_DTS=1 bun run build"
 	},

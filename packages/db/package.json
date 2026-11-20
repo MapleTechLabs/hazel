@@ -14,7 +14,7 @@
 	"scripts": {
 		"db:generate-sqlite": "bun scripts/generate-sqlite.ts",
 		"test": "vitest run && vitest run --config vitest.workerd.config.ts",
-		"typecheck": "effect-tsgo tsc --noEmit && effect-tsgo tsc --noEmit -p test/workerd",
+		"typecheck": "effect-tsgo tsrs --noEmit && effect-tsgo tsrs --noEmit -p test/workerd",
 		"test:workerd": "vitest run --config vitest.workerd.config.ts"
 	},
 	"dependencies": {

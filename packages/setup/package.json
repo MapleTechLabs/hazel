@@ -8,7 +8,7 @@
 	"type": "module",
 	"scripts": {
 		"start": "bun run src/index.ts",
-		"typecheck": "effect-tsgo tsc --noEmit"
+		"typecheck": "effect-tsgo tsrs --noEmit"
 	},
 	"dependencies": {
 		"@effect/platform-bun": "catalog:effect",
