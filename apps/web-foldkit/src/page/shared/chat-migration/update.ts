@@ -56,11 +56,16 @@ const load = (model: Model, provider: ChatSyncProvider): Return =>
 				commands: [ListChatMigrationWorkspaces({ organizationId: model.organizationId, provider })],
 			}
 
-const prepare = (model: Model, provider: ChatSyncProvider, workspace: Workspace): Return =>
+const prepare = (
+	model: Model,
+	provider: ChatSyncProvider,
+	workspace: Workspace,
+	workspaces: ReadonlyArray<Workspace>,
+): Return =>
 	model.organizationId === null
 		? { model, outcome: toast(errorToast("No active organization")) }
 		: {
-				model: withPhase(model, Phase.Preparing({ provider, workspace })),
+				model: withPhase(model, Phase.Preparing({ provider, workspace, workspaces })),
 				commands: [
 					PrepareChatMigrationWorkspace({
 						organizationId: model.organizationId,
@@ -90,6 +95,19 @@ export const withOrganization = (
 		: { model: next }
 }
 
+/** The OAuth callback's `error_code`, as the person reads it. */
+const oauthErrorCopy = (name: string, errorCode: string | null): string => {
+	const copy = {
+		token_exchange_failed: `${name} did not authorize Hazel. Try again, and approve the request.`,
+		account_info_failed: `Could not read your ${name} account. Please try again.`,
+		invalid_state: "The request expired. Please try again.",
+		db_error: "Something went wrong saving the connection. Please try again.",
+		encryption_error: "Something went wrong saving the connection. Please try again.",
+	} satisfies Record<string, string>
+	const known = errorCode !== null && Object.hasOwn(copy, errorCode)
+	return known ? copy[errorCode as keyof typeof copy] : "Please try again."
+}
+
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`
 
 export const update = (model: Model, message: Message): Return =>
@@ -100,14 +118,38 @@ export const update = (model: Model, message: Message): Return =>
 				: model.organizationId === null
 					? { model: { ...model, resumeProvider: provider } }
 					: load(model, provider),
+		// Refused or failed at the provider: say why, on the step that retries it.
+		ProviderRefused: ({ provider, errorCode }) => {
+			const { name } = PROVIDERS[provider]
+			return {
+				model: withPhase(model, Phase.NeedsAuthorization({ provider, isRedirecting: false })),
+				outcome: toast(errorToast(`Couldn't connect ${name}`, oauthErrorCopy(name, errorCode))),
+			}
+		},
 		ClickedProvider: ({ provider }) => (isBusy(model) ? { model } : load(model, provider)),
 		ClickedBack: () => {
 			if (isBusy(model)) return { model }
 			const { phase } = model
-			// Channels go back to the server list when there was one to pick from, else to the start.
-			if (phase._tag === "PickingChannels" && PROVIDERS[phase.provider].picksWorkspace)
-				return load(model, phase.provider)
-			return { model: withPhase(model, Phase.ChoosingProvider()) }
+			if (phase._tag !== "PickingChannels") return { model: withPhase(model, Phase.ChoosingProvider()) }
+			// The picks are kept for this workspace; Back goes to the server list it came from when
+			// there was a choice (no reload, no re-prepare), else to the start.
+			const remembered = {
+				workspaceId: phase.workspace.id,
+				selected: phase.selected,
+				history: phase.history,
+			}
+			return {
+				model: withPhase(
+					{ ...model, remembered },
+					phase.workspaces.length > 1
+						? Phase.PickingWorkspace({
+								provider: phase.provider,
+								workspaces: phase.workspaces,
+								search: "",
+							})
+						: Phase.ChoosingProvider(),
+				),
+			}
 		},
 		ClickedSkip: () => (isBusy(model) ? { model } : { model, outcome: { _tag: "Skipped" } }),
 
@@ -125,7 +167,7 @@ export const update = (model: Model, message: Message): Return =>
 					model: withPhase(model, Phase.NeedsAuthorization({ provider, isRedirecting: false })),
 				}
 			if (workspaces.length === 1 || !PROVIDERS[provider].picksWorkspace)
-				return prepare(model, provider, only)
+				return prepare(model, provider, only, workspaces)
 			return { model: withPhase(model, Phase.PickingWorkspace({ provider, workspaces, search: "" })) }
 		},
 		FailedListWorkspaces: ({ organizationId, provider, reason }) => {
@@ -147,6 +189,7 @@ export const update = (model: Model, message: Message): Return =>
 					Phase.Failed({
 						provider,
 						workspace: null,
+						workspaces: [],
 						problem: {
 							title: failure.title,
 							description: failure.description ?? "",
@@ -195,7 +238,7 @@ export const update = (model: Model, message: Message): Return =>
 				: { model },
 		ClickedWorkspace: ({ workspace }) =>
 			model.phase._tag === "PickingWorkspace"
-				? prepare(model, model.phase.provider, workspace)
+				? prepare(model, model.phase.provider, workspace, model.phase.workspaces)
 				: { model },
 
 		SucceededPrepare: ({ organizationId, workspaceId, syncConnectionId, channels }) => {
@@ -206,18 +249,25 @@ export const update = (model: Model, message: Message): Return =>
 				phase.workspace.id !== workspaceId
 			)
 				return { model }
+			// The picks left on Back come back for the same workspace; otherwise everything, to start
+			// (a migration usually brings the whole workspace).
+			const remembered = model.remembered?.workspaceId === workspaceId ? model.remembered : null
+			const listed = new Set(channels.map((channel) => channel.id))
 			return {
 				model: withPhase(
-					model,
+					{ ...model, remembered: null },
 					Phase.PickingChannels({
 						provider: phase.provider,
 						workspace: phase.workspace,
+						workspaces: phase.workspaces,
 						syncConnectionId,
 						channels,
-						// Everything, to start: a migration usually brings the whole workspace.
-						selected: channels.map((channel) => channel.id),
+						selected:
+							remembered === null
+								? channels.map((channel) => channel.id)
+								: remembered.selected.filter((id) => listed.has(id)),
 						search: "",
-						history: DEFAULT_HISTORY,
+						history: remembered?.history ?? DEFAULT_HISTORY,
 						isSubmitting: false,
 					}),
 				),
@@ -234,7 +284,12 @@ export const update = (model: Model, message: Message): Return =>
 			return {
 				model: withPhase(
 					model,
-					Phase.Failed({ provider: phase.provider, workspace: phase.workspace, problem }),
+					Phase.Failed({
+						provider: phase.provider,
+						workspace: phase.workspace,
+						workspaces: phase.workspaces,
+						problem,
+					}),
 				),
 			}
 		},
@@ -243,7 +298,7 @@ export const update = (model: Model, message: Message): Return =>
 			if (phase._tag !== "Failed") return { model }
 			return phase.workspace === null
 				? load(model, phase.provider)
-				: prepare(model, phase.provider, phase.workspace)
+				: prepare(model, phase.provider, phase.workspace, phase.workspaces)
 		},
 
 		ChangedChannelSearch: ({ value }) =>

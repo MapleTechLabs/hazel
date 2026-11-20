@@ -153,7 +153,7 @@ const foldMigration = (model: Model, message: ChatMigration.Message, shared: Sha
 	// Only a return from OAuth opens the modal by itself; a request finishing after the person
 	// closed it leaves it closed.
 	const resumed =
-		message._tag === "ReturnedFromProvider" &&
+		(message._tag === "ReturnedFromProvider" || message._tag === "ProviderRefused") &&
 		result.model.phase._tag !== "ChoosingProvider" &&
 		!model.migrationModal.isOpen
 			? openMigrationModal(next)

@@ -29,18 +29,22 @@ export const commonProblem = (reason: CommonReason): Problem => {
  * pick up where the wizard left off. Anything else (an error, another provider) starts over.
  */
 export const ReadChatMigrationOAuthReturn = Command.define("ReadChatMigrationOAuthReturn", {
-	messages: [Message.ReturnedFromProvider],
+	messages: [Message.ReturnedFromProvider, Message.ProviderRefused],
 	execute: Effect.sync(() => {
-		const params = new URLSearchParams(globalThis.location?.search ?? "")
-		const provider = params.get("provider")
-		return Message.ReturnedFromProvider({
-			provider:
-				params.get("connection_status") === "success" &&
-				provider !== null &&
-				isChatSyncProvider(provider)
-					? provider
-					: null,
-		})
+		const location = globalThis.location
+		const url = new URL(location?.href ?? "http://localhost/")
+		const status = url.searchParams.get("connection_status")
+		const provider = url.searchParams.get("provider")
+		const errorCode = url.searchParams.get("error_code")
+		if (status === null || provider === null || !isChatSyncProvider(provider)) {
+			return Message.ReturnedFromProvider({ provider: null })
+		}
+		// Read once: a reload must not resume (or toast) the same return again.
+		for (const key of ["connection_status", "provider", "error_code"]) url.searchParams.delete(key)
+		globalThis.history?.replaceState(globalThis.history.state, "", url.pathname + url.search + url.hash)
+		return status === "success"
+			? Message.ReturnedFromProvider({ provider })
+			: Message.ProviderRefused({ provider, errorCode })
 	}),
 })
 

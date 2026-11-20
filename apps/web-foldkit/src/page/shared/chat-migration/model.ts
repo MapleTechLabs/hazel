@@ -44,11 +44,15 @@ export const Phase = defineTaggedUnion({
 		workspaces: Schema.Array(Workspace),
 		search: Schema.String,
 	},
-	/** Finding (or making) the workspace's sync connection, and listing its channels. */
-	Preparing: { provider: ChatSyncProvider, workspace: Workspace },
+	/**
+	 * Finding (or making) the workspace's sync connection, and listing its channels. `workspaces`:
+	 * the servers it was picked from (Back returns to them when there was a choice).
+	 */
+	Preparing: { provider: ChatSyncProvider, workspace: Workspace, workspaces: Schema.Array(Workspace) },
 	PickingChannels: {
 		provider: ChatSyncProvider,
 		workspace: Workspace,
+		workspaces: Schema.Array(Workspace),
 		syncConnectionId: SyncConnectionId,
 		channels: Schema.Array(ExternalChannel),
 		selected: Schema.Array(ExternalChannelId),
@@ -61,6 +65,7 @@ export const Phase = defineTaggedUnion({
 		problem: Problem,
 		/** What "Try again" reruns: the workspace list, or preparing `workspace`. */
 		workspace: Schema.NullOr(Workspace),
+		workspaces: Schema.Array(Workspace),
 	},
 	Done: {
 		provider: ChatSyncProvider,
@@ -81,12 +86,22 @@ export const Model = Schema.Struct({
 	phase: Phase,
 	/** Back from a provider's OAuth before the organization was known: resumed once it is. */
 	resumeProvider: Schema.NullOr(ChatSyncProvider),
+	/** The picks left on Back, restored when the same workspace is picked again. */
+	remembered: Schema.NullOr(
+		Schema.Struct({
+			workspaceId: Schema.String,
+			selected: Schema.Array(ExternalChannelId),
+			history: ChatSyncHistoryRange,
+		}),
+	),
 })
 export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
 	/** The page loaded back from a provider's OAuth (`?connection_status=success&provider=`). */
 	ReturnedFromProvider: { provider: Schema.NullOr(ChatSyncProvider) },
+	/** The provider's OAuth came back refused or failed (`?connection_status=error&error_code=`). */
+	ProviderRefused: { provider: ChatSyncProvider, errorCode: Schema.NullOr(Schema.String) },
 	ClickedProvider: { provider: ChatSyncProvider },
 	ClickedBack: {},
 	ClickedSkip: {},
@@ -165,6 +180,7 @@ export const init = (options: {
 	returnTo: options.returnTo,
 	phase: Phase.ChoosingProvider(),
 	resumeProvider: null,
+	remembered: null,
 })
 
 /** Case-insensitive name filter; a blank search keeps every channel. */

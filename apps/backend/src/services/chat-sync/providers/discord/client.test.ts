@@ -340,14 +340,26 @@ describe("Discord posts only into the link's own guild", () => {
 	const harness = (options: {
 		readonly guildChannels: ReadonlyArray<string>
 		readonly settings: Record<string, unknown>
+		/** `GET /channels/{id}` answers 403 (the bot may not view the channel). */
+		readonly forbidden?: boolean
 	}) => {
 		const calls: Array<string> = []
 		const saved: Array<Record<string, unknown>> = []
 		const api = {
 			getChannelGuildId: (channel: string) => {
 				calls.push(`getChannel:${channel}`)
+				if (options.forbidden)
+					return Effect.fail(
+						new Discord.DiscordApiError({ message: "Missing Access", status: 403 }),
+					)
 				return Effect.succeed(
 					options.guildChannels.includes(channel) ? guildId : "200000000000000999",
+				)
+			},
+			listGuildChannels: (guild: string) => {
+				calls.push(`listGuildChannels:${guild}`)
+				return Effect.succeed(
+					options.guildChannels.map((id) => ({ id, guildId: guild, name: id, type: 0 })),
 				)
 			},
 			createMessage: () => {
@@ -398,6 +410,18 @@ describe("Discord posts only into the link's own guild", () => {
 			const checked = harness({ guildChannels: [], settings: { ...botOnly, [GUILD_VERIFIED]: true } })
 			yield* checked.post
 			expect(checked.calls).toEqual(["createMessage"])
+		}),
+	)
+
+	it.effect("a channel the bot may not view is looked up in the guild's list", () =>
+		Effect.gen(function* () {
+			const h = harness({ guildChannels: [channelId], settings: botOnly, forbidden: true })
+			yield* h.post
+			expect(h.calls).toEqual([
+				`getChannel:${channelId}`,
+				`listGuildChannels:${guildId}`,
+				"createMessage",
+			])
 		}),
 	)
 })

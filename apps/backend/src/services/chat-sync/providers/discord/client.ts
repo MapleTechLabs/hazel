@@ -212,16 +212,23 @@ export const makeDiscordClient = Effect.gen(function* () {
 
 	/**
 	 * Whether a channel is in the guild: one `GET /channels/{id}` (the bot is shared by many guilds).
-	 * A channel the bot cannot see (403) or that does not exist (404) is not the guild's to sync.
+	 * One that does not exist (404) is not; one the bot may not view (403) is looked up in the guild's
+	 * channel list instead.
 	 */
 	const isGuildChannel = (guildId: string, channelId: string) =>
 		viaBot((token) => api.getChannelGuildId(channelId, token)).pipe(
 			Effect.map((channelGuildId) => channelGuildId === guildId),
 			Effect.catchIf(
-				(error) =>
-					error._tag === "ChatSyncProviderApiError" &&
-					(error.status === 403 || error.status === 404),
+				(error) => error._tag === "ChatSyncProviderApiError" && error.status === 404,
 				() => Effect.succeed(false),
+			),
+			// A channel the bot may not view (403) can still be the guild's: its list says.
+			Effect.catchIf(
+				(error) => error._tag === "ChatSyncProviderApiError" && error.status === 403,
+				() =>
+					viaBot((token) => api.listGuildChannels(guildId, token)).pipe(
+						Effect.map((channels) => channels.some((channel) => channel.id === channelId)),
+					),
 			),
 		)
 

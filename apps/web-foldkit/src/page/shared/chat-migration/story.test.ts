@@ -235,4 +235,61 @@ describe("chat migration wizard", () => {
 		expect(done.model.phase).toMatchObject({ _tag: "Done", linked: 0, skipped: 3 })
 		expect(done.outcome).toMatchObject({ _tag: "Toast", toast: { title: "Those channels already sync" } })
 	})
+
+	test("Back from a single workspace's channels returns to the start, and the picks come back", () => {
+		const picking = run(
+			pickingSlackChannels(),
+			Message.ToggledChannel({ channelId: ExternalChannelId.make("C1"), isSelected: false }),
+			Message.ClickedHistory({ history: "90d" }),
+		).model
+		const back = update(picking, Message.ClickedBack()).model
+		expect(back.phase._tag).toBe("ChoosingProvider")
+		const again = run(
+			back,
+			Message.ClickedProvider({ provider: "slack" }),
+			Message.SucceededListWorkspaces({
+				organizationId,
+				provider: "slack",
+				workspaces: [slackWorkspace],
+			}),
+			Message.SucceededPrepare({
+				organizationId,
+				workspaceId: "T1",
+				syncConnectionId,
+				channels: [design, devops, general],
+			}),
+		).model
+		expect(again.phase).toMatchObject({ _tag: "PickingChannels", selected: ["C2", "C3"], history: "90d" })
+	})
+
+	test("Back from a server picked from several returns to that list, without reloading it", () => {
+		const servers = [
+			{ id: "1", name: "One", owner: true },
+			{ id: "2", name: "Two", owner: false },
+		]
+		const picking = run(
+			fresh(),
+			Message.ClickedProvider({ provider: "discord" }),
+			Message.SucceededListWorkspaces({ organizationId, provider: "discord", workspaces: servers }),
+			Message.ClickedWorkspace({ workspace: servers[1]! }),
+			Message.SucceededPrepare({
+				organizationId,
+				workspaceId: "2",
+				syncConnectionId,
+				channels: [general],
+			}),
+		).model
+		const back = update(picking, Message.ClickedBack())
+		expect(back.model.phase).toMatchObject({ _tag: "PickingWorkspace", workspaces: servers })
+		expect(back.commands ?? []).toEqual([])
+	})
+
+	test("a refused OAuth says why, on the step that retries it", () => {
+		const refused = update(
+			fresh(),
+			Message.ProviderRefused({ provider: "slack", errorCode: "token_exchange_failed" }),
+		)
+		expect(refused.model.phase).toMatchObject({ _tag: "NeedsAuthorization", provider: "slack" })
+		expect(refused.outcome).toMatchObject({ _tag: "Toast", toast: { title: "Couldn't connect Slack" } })
+	})
 })
