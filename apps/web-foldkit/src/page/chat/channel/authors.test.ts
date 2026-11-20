@@ -106,7 +106,7 @@ describe("author side in a channel linked to a customer", () => {
 			loadedMessages(messages),
 			Message.UpdatedCustomerAuthors({
 				channelId,
-				authors: [{ userId: grace, side: "customer", reason: "connect_guest" }],
+				authors: [{ userId: grace, side: "customer", reason: "connect_guest", override: null }],
 			}),
 		)
 		expect(sides(model)).toEqual([
