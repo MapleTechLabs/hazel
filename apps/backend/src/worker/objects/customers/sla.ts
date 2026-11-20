@@ -15,6 +15,7 @@ import {
 	calendarOf,
 	DEFAULT_BUSINESS_HOURS,
 	dueAlerts,
+	isOverdue,
 	markAlerts,
 	nextAlertAt,
 	openSla,
@@ -192,6 +193,8 @@ export const slaIssueWritten = Effect.fn("Customers.slaIssueWritten")(function* 
 		now,
 	)
 	yield* writeRow(after.id, state, new Date(now))
+	// Answered or closed while overdue: its overdue signal closes with the next compute (≤ 2 minutes).
+	if (isOverdue(row.value.state, now) && !isOverdue(state, now)) yield* requestCompute
 })
 
 const formatLeft = (leftMs: number) => {

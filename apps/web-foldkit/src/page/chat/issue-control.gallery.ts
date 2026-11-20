@@ -14,7 +14,8 @@ import * as IssueControl from "./issue-control"
 /**
  * The thread panel's issue strip (`issue-control.ts`) in a panel-wide frame under a stand-in thread
  * header, in light and dark (`bun run gallery`): an overdue issue, one on time, a closed one (its
- * first reply met), and "Create issue".
+ * first reply met), and "Create issue"; the overdue one also in a narrow panel (272px), where the
+ * strip wraps instead of squeezing the chip.
  */
 
 const STATES = ["issue", "on-time", "closed", "create"] as const
@@ -41,7 +42,7 @@ const modelOf = (state: State): IssueControl.Model => {
 	}
 }
 
-const render = (state: State) => {
+const render = (state: State, width: "420" | "272" = "420") => {
 	const container = document.createElement("div")
 	container.id = "app"
 	document.body.append(container)
@@ -52,7 +53,12 @@ const render = (state: State) => {
 			update: (model: IssueControl.Model) => ({ model }),
 			view: (model: IssueControl.Model, h: HtmlBuilder<IssueControl.Message>) =>
 				h.div(
-					[h.Id("gallery"), h.Class("w-[420px] border border-border bg-bg text-fg")],
+					[
+						h.Id("gallery"),
+						h.Class(
+							`${width === "272" ? "w-[272px]" : "w-[420px]"} border border-border bg-bg text-fg`,
+						),
+					],
 					[
 						h.div(
 							[
@@ -96,3 +102,17 @@ for (const theme of ["light", "dark"] as const) {
 		})
 	}
 }
+
+test("narrow panel: the strip wraps and the chip keeps its words", async () => {
+	render("issue", "272")
+	await expect.poll(() => document.getElementById("gallery")).toBeTruthy()
+	await new Promise((resolve) => setTimeout(resolve, 200))
+	await document.fonts.ready
+	const gallery = document.getElementById("gallery")
+	if (gallery === null) throw new Error("The issue control did not render")
+	const strip = gallery.querySelector("[data-issue-control]")
+	if (strip === null) throw new Error("No issue strip")
+	expect(strip.scrollWidth).toBeLessThanOrEqual(strip.clientWidth)
+	expect(strip.textContent).toContain("overdue by")
+	await page.screenshot({ path: "thread-issue-narrow-light.png", element: gallery })
+})

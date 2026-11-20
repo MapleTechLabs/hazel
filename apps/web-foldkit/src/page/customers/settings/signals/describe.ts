@@ -179,13 +179,13 @@ export const conditionParts = (
 			return ["Churned in the last ", bold(counted(config.windowDays, "day"))]
 		case "response_overdue":
 			return [
-				"An open support issue's reply overdue by ",
+				"An open support issue's reply is overdue by ",
 				bold(counted(config.graceMinutes, "minute")),
 				" or more",
 			]
 		case "resolution_overdue":
 			return [
-				"An open support issue past its resolution target by ",
+				"An open support issue is past its resolution target by ",
 				bold(counted(config.graceMinutes, "minute")),
 				" or more",
 			]

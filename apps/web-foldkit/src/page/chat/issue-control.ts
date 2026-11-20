@@ -440,7 +440,10 @@ export const view = <M>(h: HtmlBuilder<M>, inputs: ViewInputs<M>): Html => {
 	const issue = model.issue
 	return h.div(
 		[
-			h.Class("flex h-9 shrink-0 items-center gap-1 border-border border-b bg-bg px-3"),
+			// Wraps on a narrow panel: the SLA chip takes a line of its own instead of collapsing.
+			h.Class(
+				"flex min-h-9 shrink-0 flex-wrap items-center gap-x-1 gap-y-0.5 border-border border-b bg-bg px-3 py-1",
+			),
 			h.Attribute("data-issue-control", ""),
 		],
 		issue === null
@@ -467,7 +470,7 @@ export const view = <M>(h: HtmlBuilder<M>, inputs: ViewInputs<M>): Html => {
 						sla: model.sla ?? undefined,
 						nowMs: inputs.nowMs,
 						status: issue.status,
-						className: "ml-1 min-w-0 shrink",
+						className: "ml-1 max-w-full shrink-0",
 					}),
 					inboxLink(h, inputs.inboxHref, hasSlaChip(model, issue, inputs.nowMs)),
 				],

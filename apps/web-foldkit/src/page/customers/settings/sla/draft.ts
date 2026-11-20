@@ -114,6 +114,16 @@ export const policyErrors = (form: PolicyForm): PolicyErrors => {
 			const error = durationError(form.targets[priority][clock])
 			if (error !== undefined) targets[`${priority}.${clock}`] = error
 		}
+	// A reply cannot be due after the issue should be resolved.
+	for (const priority of PRIORITIES) {
+		const { firstResponse, resolution } = form.targets[priority]
+		if (
+			targets[`${priority}.firstResponse`] === undefined &&
+			targets[`${priority}.resolution`] === undefined &&
+			minutesOf(firstResponse) > minutesOf(resolution)
+		)
+			targets[`${priority}.resolution`] = "At least the first response"
+	}
 	const name = form.name.trim()
 	return {
 		name: name === "" ? "Name the policy" : name.length > 120 ? "At most 120 characters" : undefined,

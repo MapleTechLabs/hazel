@@ -30,7 +30,13 @@ const Clock = Schema.String.check(Schema.isPattern(/^([01]\d|2[0-3]):([0-5]\d)$/
 export const SlaTarget = Schema.Struct({
 	firstResponseMinutes: Minutes,
 	resolutionMinutes: Minutes,
-})
+}).check(
+	Schema.makeFilter((target) =>
+		target.firstResponseMinutes <= target.resolutionMinutes
+			? undefined
+			: "The first response target must not exceed the resolution target",
+	),
+)
 export type SlaTarget = typeof SlaTarget.Type
 
 export const SlaTargets = Schema.Struct({
