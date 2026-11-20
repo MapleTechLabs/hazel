@@ -23,7 +23,10 @@ const destinationSection = (title: string, ids: ReadonlyArray<DestinationId>) =>
 	CommandMenu.section(
 		title,
 		availableDestinations(ids).map((page) =>
-			CommandMenu.item(goKey(page.id), [page.label, title, page.keywords ?? ""].join(" ").trim()),
+			CommandMenu.item(
+				goKey(page.id),
+				[page.label, page.sidebarLabel ?? "", title, page.keywords ?? ""].join(" ").trim(),
+			),
 		),
 	)
 

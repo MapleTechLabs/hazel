@@ -304,6 +304,7 @@ export const DESTINATION_GROUPS: ReadonlyArray<{
 	{
 		title: "Customer pages",
 		ids: [
+			"customersOverview",
 			"customersAttention",
 			"customersInbox",
 			"customersSupportReport",
@@ -319,6 +320,7 @@ export const DESTINATION_GROUPS: ReadonlyArray<{
 	{
 		title: "Organization settings",
 		ids: [
+			"settingsGeneral",
 			"settingsTeam",
 			"settingsInvitations",
 			"settingsIntegrations",
