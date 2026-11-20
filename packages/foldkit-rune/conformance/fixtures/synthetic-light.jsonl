@@ -130,7 +130,7 @@
 {"p":-1,"prev":126,"tag":"section","cls":["p-1"],"attrs":{},"cs":{"padding-bottom":"4px","padding-left":"4px","padding-right":"4px","padding-top":"4px"}}
 {"p":128,"prev":-1,"tag":"div","cls":["text-sm/6","font-light"],"attrs":{},"cs":{"font-size":"14px","font-weight":"300"},"text":1}
 {"p":-1,"prev":128,"tag":"section","cls":["p-1"],"attrs":{},"cs":{"padding-bottom":"4px","padding-left":"4px","padding-right":"4px","padding-top":"4px"}}
-{"p":130,"prev":-1,"tag":"div","cls":["font-mono","text-sm"],"attrs":{},"cs":{"font-size":"14px","line-height":"20px"},"text":1}
+{"p":130,"prev":-1,"tag":"div","cls":["font-mono","text-sm"],"attrs":{},"cs":{"font-size":"14px","line-height":"20px","font-family":"ui-monospace, \"SF Mono\", SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\""},"text":1}
 {"p":-1,"prev":130,"tag":"section","cls":["p-1"],"attrs":{},"cs":{"padding-bottom":"4px","padding-left":"4px","padding-right":"4px","padding-top":"4px"}}
 {"p":132,"prev":-1,"tag":"div","cls":["italic","uppercase","tracking-wide"],"attrs":{},"cs":{"font-style":"italic","letter-spacing":"0.4px","text-transform":"uppercase"},"text":1}
 {"p":-1,"prev":132,"tag":"section","cls":["p-1"],"attrs":{},"cs":{"padding-bottom":"4px","padding-left":"4px","padding-right":"4px","padding-top":"4px"}}
