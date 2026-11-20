@@ -35,7 +35,8 @@ export const groupStage = (stages: readonly [LifecycleStage, ...Array<LifecycleS
 export const groupPlanName = (
 	primary: { readonly planName: string | null },
 	accounts: ReadonlyArray<{ readonly planName: string | null }>,
-): string | null => primary.planName ?? accounts.find((account) => account.planName !== null)?.planName ?? null
+): string | null =>
+	primary.planName ?? accounts.find((account) => account.planName !== null)?.planName ?? null
 
 const earliest = <A extends Date | Day>(values: ReadonlyArray<A | null>): A | null =>
 	values.reduce<A | null>(
