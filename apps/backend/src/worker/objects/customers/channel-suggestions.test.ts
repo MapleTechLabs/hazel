@@ -9,7 +9,7 @@ import { Cause, Effect, Exit, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { orgTarget } from "../kinds"
 import { channelEvidence } from "../org/channel-evidence"
-import { applySuggestions, refreshSuggestions } from "./channel-suggestions"
+import { applySuggestions, logRefreshFailure, refreshSuggestions } from "./channel-suggestions"
 import { runCompute } from "./compute"
 import { makeCustomersWorld, ok, tagOf, uuid } from "./test-kit"
 
@@ -657,4 +657,14 @@ describe("Suggested channel links", () => {
 				])
 			}),
 		))
+})
+
+describe("logRefreshFailure", () => {
+	it("logs a plain failure, but re-raises any cause with an interruption", async () => {
+		const plain = await Effect.runPromiseExit(logRefreshFailure(Effect.die("boom")))
+		expect(Exit.isSuccess(plain)).toBe(true)
+		const mixed = Cause.combine(Cause.interrupt(), Cause.die("boom"))
+		const exit = await Effect.runPromiseExit(logRefreshFailure(Effect.failCause(mixed)))
+		expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(true)
+	})
 })
