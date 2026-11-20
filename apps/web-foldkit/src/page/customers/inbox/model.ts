@@ -179,7 +179,9 @@ export const isSelectionVisible = (model: Model, viewer: Viewer): boolean =>
 /** Whether a search or filter beyond the assignee scope is set, so an empty tab may be hiding issues. */
 export const isNarrowed = (model: Model): boolean =>
 	model.search.trim() !== "" ||
+	// Narrower than the default ("Mine or unassigned"): an empty tab may be hiding issues.
 	model.filters.assignee === "unassigned" ||
+	model.filters.assignee === "mine" ||
 	model.filters.waitingOnUs ||
 	model.filters.accountId !== null ||
 	model.filters.priority !== null ||
@@ -187,7 +189,7 @@ export const isNarrowed = (model: Model): boolean =>
 
 export const clearNarrowing = (filters: Filters): Filters => ({
 	...DEFAULT_FILTERS,
-	assignee: filters.assignee === "unassigned" ? "anyone" : filters.assignee,
+	assignee: filters.assignee === "mine_or_unassigned" ? filters.assignee : "anyone",
 })
 
 export type FilterField = keyof Filters

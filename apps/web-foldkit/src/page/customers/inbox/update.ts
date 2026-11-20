@@ -3,7 +3,7 @@ import type { CustomerIssueId, UserId } from "@hazel/schema"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
-import { type IssueRow, STATUS_LABEL } from "../../../customers/issues"
+import { type IssueRow, PRIORITY_LABEL, STATUS_LABEL } from "../../../customers/issues"
 import { errorToastOf, successToast } from "../../../data/actions"
 import { AppRoute, customerRoute } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -164,7 +164,7 @@ const setStatus = (model: Model, shared: Shared, issue: IssueRow, status: Custom
 	const actor = actorOf(shared)
 	if (actor === undefined || status === issue.status) return { model }
 	const closing = status === "closed"
-	const result = act(
+	return act(
 		model,
 		shared,
 		issue,
@@ -177,16 +177,11 @@ const setStatus = (model: Model, shared: Shared, issue: IssueRow, status: Custom
 			organizationId: actor.organizationId,
 			issueId: issue.id,
 			actor: actor.userId,
-			action: "status",
+			// Closing and reopening say so once the server agrees (`SucceededIssueAction`).
+			action: closing ? "close" : issue.status === "closed" ? "reopen" : "status",
 			status,
 		}),
 	)
-	return closing || issue.status === "closed"
-		? {
-				...result,
-				outMessage: toast(successToast(closing ? "Issue closed" : "Issue reopened", issue.title)),
-			}
-		: result
 }
 
 const setPriority = (
@@ -253,6 +248,8 @@ const ACTION_VERB = {
 	assign: "assign",
 	status: "change the status of",
 	priority: "change the priority of",
+	close: "close",
+	reopen: "reopen",
 } as const satisfies Record<IssueAction, string>
 
 // MENUS
@@ -326,8 +323,7 @@ const onKey = (model: Model, shared: Shared, key: InboxKey): Return => {
 }
 
 const isStatus = (key: string): key is Customers.IssueStatus => key in STATUS_LABEL
-const isPriority = (key: string): key is Customers.IssuePriority =>
-	["none", "low", "medium", "high", "urgent"].includes(key)
+const isPriority = (key: string): key is Customers.IssuePriority => key in PRIORITY_LABEL
 
 // UPDATE
 
@@ -382,7 +378,18 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				model: modifyFields(next, { filters: (filters) => toggleFilter(filters, key) }),
 			})),
 
-		SucceededIssueAction: () => ({ model }),
+		SucceededIssueAction: ({ issueId, action }) =>
+			action === "close" || action === "reopen"
+				? {
+						model,
+						outMessage: toast(
+							successToast(
+								action === "close" ? "Issue closed" : "Issue reopened",
+								issueById(model, issueId)?.title ?? null,
+							),
+						),
+					}
+				: { model },
 		FailedIssueAction: ({ action, reason }) => ({
 			model,
 			outMessage: toast(

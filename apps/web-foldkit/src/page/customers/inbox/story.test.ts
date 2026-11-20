@@ -7,13 +7,14 @@ import {
 	UserId,
 } from "@hazel/schema"
 import { Schema } from "effect"
-import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
+import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
 import type { IssueRow } from "../../../customers/issues"
 import type { AccountRow } from "../../../customers/queries"
 import { AppRoute } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import type { Shared } from "../../contract"
+import { successToast } from "../../../data/actions"
 import { PageOutMessage } from "../../out-message"
 import { sharedDefaults } from "../../test-shared"
 import { UpdateInboxIssue } from "./commands"
@@ -269,9 +270,14 @@ describe("support inbox: keyboard", () => {
 				expect(next.selectedId).toBe(billing.id)
 				expect(rowIds(next, viewer)).not.toContain(sso.id)
 			}),
+			expectNoOutMessage(),
 			Command.resolve(
 				UpdateInboxIssue,
-				Message.SucceededIssueAction({ issueId: sso.id, action: "status" }),
+				Message.SucceededIssueAction({ issueId: sso.id, action: "close" }),
+			),
+			// "Issue closed" only once the server agreed.
+			expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Issue closed", "SSO login fails") }),
 			),
 		)
 	})
@@ -294,6 +300,22 @@ describe("support inbox: keyboard", () => {
 				Message.SucceededIssueAction({ issueId: billing.id, action: "status" }),
 			),
 		)
+	})
+
+	test("a failed close says only that it failed", () => {
+		const failed = pageUpdate(
+			loaded(),
+			Message.FailedIssueAction({ issueId: sso.id, action: "close", reason: "NotFound" }),
+		)
+		expect(failed.outMessage?._tag).toBe("RequestedToast")
+		expect(JSON.stringify(failed.outMessage)).toContain("Couldn't close the issue")
+	})
+
+	test("an empty tab under the Mine filter offers to clear it, not inbox zero", () => {
+		const mine = { ...loaded(), filters: toggleFilter(loaded().filters, "assignee:mine") }
+		expect(isNarrowed(mine)).toBe(true)
+		expect(pageUpdate(mine, Message.PressedClearNarrowing()).model.filters.assignee).toBe("anyone")
+		expect(isNarrowed(loaded())).toBe(false)
 	})
 
 	test("a failed change toasts", () => {
