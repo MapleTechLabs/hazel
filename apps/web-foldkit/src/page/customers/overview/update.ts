@@ -144,7 +144,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		SucceededFetchSuggestions: ({ items }) => ({
 			model: modifyFields(model, { suggestions: (list) => receivedSuggestions(list, items) }),
 		}),
-		FailedFetchSuggestions: () => ({ model }),
+		// Asked again on the next change of the shared state (a failed fetch is not "none").
+		FailedFetchSuggestions: () => ({
+			model: modifyFields(model, { hasRequestedSuggestions: () => false }),
+		}),
 		PressedAcceptSuggestion: ({ suggestionId }) => {
 			const organizationId = shared.organization?.id
 			const userId = shared.currentUser?.id

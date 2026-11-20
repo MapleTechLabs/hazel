@@ -16,7 +16,7 @@ import { PageOutMessage } from "../../out-message"
 import { FetchSuggestedChannelLinks } from "./commands"
 import { Message } from "./message"
 import type { Model } from "./model"
-import { init, update } from "./update"
+import { init, sharedChanged, update } from "./update"
 import { view } from "./view"
 
 /** The overview's "Suggested channel links" card: asked when the page opens, quiet when empty. */
@@ -39,6 +39,13 @@ describe("customers overview: suggested channel links", () => {
 	test("the page asks for them once, with the overview", () => {
 		expect(opened.commands?.map((command) => command.name)).toContain("FetchSuggestedChannelLinks")
 		expect(step(loaded, Message.UpdatedAccounts({ accounts: [] })).commands ?? []).toEqual([])
+	})
+
+	test("a failed fetch is asked again on the next change, not taken for none", () => {
+		const failed = step(loaded, Message.FailedFetchSuggestions()).model
+		expect(failed.hasRequestedSuggestions).toBe(false)
+		const retried = sharedChanged(failed, shared)
+		expect(retried.commands?.map((command) => command.name)).toContain("FetchSuggestedChannelLinks")
 	})
 
 	test("Link hides the row, links, toasts what was linked, and asks again", () => {

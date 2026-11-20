@@ -975,7 +975,13 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 					? modifyFields(model, { suggestions: (list) => receivedSuggestions(list, items) })
 					: model,
 		}),
-		FailedFetchSuggestions: () => ({ model }),
+		// Asked again on the next change of the shared state (a failed fetch is not "none").
+		FailedFetchSuggestions: ({ accountId }) => ({
+			model:
+				accountId === model.suggestionsFor
+					? modifyFields(model, { suggestionsFor: () => null })
+					: model,
+		}),
 		PressedAcceptSuggestion: ({ suggestionId }) => {
 			const args = target(model, shared)
 			const userId = shared.currentUser?.id
