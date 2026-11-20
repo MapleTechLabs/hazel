@@ -307,6 +307,56 @@ describe("Slack chat sync on the objects", () => {
 			}),
 		))
 
+	it("a thread reply's author counts for the parent channel's mirror, never the thread's", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const parentLink = () =>
+					rows<{ id: string }>(
+						world.org,
+						`SELECT id FROM chat_sync_channel_links WHERE hazelChannelId = ?`,
+						world.channelId,
+					)[0]!.id
+				const reply = (event: string, ts: string, user: string) =>
+					world.inbound(event, {
+						_tag: "MessagePosted",
+						subtype: "message",
+						message: slackMessage(ts, "in the thread", { user, threadTs: "1700000000.000900" }),
+					})
+				yield* world.inbound("Ev90", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000900", "parent"),
+				})
+				// A thread-only author, and one already seen in the channel who then replies.
+				yield* world.inbound("Ev91", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000905", "hello", { user: "U0GUESTB02" }),
+				})
+				yield* reply("Ev92", "1700000000.000910", "U0GUEST001")
+				yield* reply("Ev93", "1700000000.000920", "U0GUESTB02")
+				expect(
+					rows(
+						world.org,
+						`SELECT hazelChannelId, syncChannelLinkId, externalUserId FROM chat_sync_channel_authors
+						 WHERE externalUserId LIKE 'U0GUEST%' ORDER BY externalUserId`,
+					),
+				).toEqual([
+					{
+						hazelChannelId: world.channelId,
+						syncChannelLinkId: parentLink(),
+						externalUserId: "U0GUEST001",
+					},
+					{
+						hazelChannelId: world.channelId,
+						syncChannelLinkId: parentLink(),
+						externalUserId: "U0GUESTB02",
+					},
+				])
+			}),
+		))
+
 	it("a new link is prepared: the bot joins the Slack channel", () =>
 		run(
 			Effect.gen(function* () {
