@@ -9,6 +9,7 @@ import { AppRoute, hrefOf, type RouteOf } from "../../route"
 import type { ThemeCustomization, ThemeMode } from "../../theme"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
+import * as ChatMigration from "../shared/chat-migration"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
 import {
@@ -303,6 +304,21 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				return step._tag === "UseCases"
 					? advance(model, running, shared, { useCases: () => [selected] })
 					: advance(model, running, shared, { role: () => selected })
+			}),
+
+		GotMigrationMessage: ({ message: migrationMessage }) =>
+			withStep(model, "Import", (form, running) => {
+				const result = ChatMigration.update(form.migration, migrationMessage)
+				const next = setStep(model, running, StepState.Import({ migration: result.model }))
+				const commands = Command.mapMessages(result.commands ?? [], (message) =>
+					Message.GotMigrationMessage({ message }),
+				)
+				const outcome = result.outcome
+				if (outcome === undefined) return { model: next, commands }
+				if (outcome._tag === "Toast")
+					return { model: next, commands, outMessage: toast(outcome.toast) }
+				const advanced = advance(next, running, shared)
+				return { ...advanced, commands: [...commands, ...(advanced.commands ?? [])] }
 			}),
 
 		ChangedEmail: ({ rowId, value }) =>

@@ -9,6 +9,7 @@ export const Step = Schema.Literals([
 	"themeSelection",
 	"useCases",
 	"role",
+	"import",
 	"teamInvitation",
 	"finalization",
 	"completed",
@@ -28,6 +29,7 @@ const CREATOR_FLOW: ReadonlyArray<Step> = [
 	"themeSelection",
 	"useCases",
 	"role",
+	"import",
 	"teamInvitation",
 	"finalization",
 ]
@@ -68,12 +70,13 @@ const STEP_NUMBERS: Readonly<Record<Step, { creator: number; invited: number | n
 	themeSelection: { creator: 4, invited: 4 },
 	useCases: { creator: 5, invited: null },
 	role: { creator: 6, invited: 5 },
-	teamInvitation: { creator: 7, invited: null },
-	finalization: { creator: 7, invited: 5 },
-	completed: { creator: 7, invited: 5 },
+	import: { creator: 7, invited: null },
+	teamInvitation: { creator: 8, invited: null },
+	finalization: { creator: 8, invited: 5 },
+	completed: { creator: 8, invited: 5 },
 }
 
 export const stepNumber = (step: Step, userType: UserType): number =>
 	(userType === "creator" ? STEP_NUMBERS[step].creator : STEP_NUMBERS[step].invited) ?? 1
 
-export const totalSteps = (userType: UserType): number => (userType === "creator" ? 7 : 5)
+export const totalSteps = (userType: UserType): number => (userType === "creator" ? 8 : 5)

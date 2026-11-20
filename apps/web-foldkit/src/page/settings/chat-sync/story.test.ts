@@ -41,7 +41,10 @@ const updateWithShared = (current: Parameters<typeof update>[0], next: Message) 
 describe("chat sync connections", () => {
 	test("waits for the organization before listing", () => {
 		const waiting = init(undefined, { ...shared, organization: null })
-		expect(waiting.commands ?? []).toHaveLength(0)
+		// Only the migration wizard's check for a provider OAuth that came back here.
+		expect((waiting.commands ?? []).map((command) => command.name)).toEqual([
+			"ReadChatMigrationOAuthReturn",
+		])
 		const ready = sharedChanged(waiting.model, shared)
 		expect(ready.commands?.map((command) => command.name)).toEqual(["ListConnections"])
 	})

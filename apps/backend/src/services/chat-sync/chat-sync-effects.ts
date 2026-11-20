@@ -310,6 +310,11 @@ export const ImportHistoryPayload = Schema.Struct({
 	remaining: Schema.Number,
 	/** Where this page starts (the provider's cursor); `null` on the first page. */
 	cursor: Schema.NullOr(Schema.String),
+	/**
+	 * Only messages sent at or after this (epoch ms); the import ends at the first older one. Null
+	 * or absent: no cutoff.
+	 */
+	since: Schema.optional(Schema.NullOr(Schema.Number)),
 })
 export type ImportHistoryPayload = typeof ImportHistoryPayload.Type
 

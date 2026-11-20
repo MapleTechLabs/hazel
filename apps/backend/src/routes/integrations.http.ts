@@ -271,6 +271,13 @@ const expireOAuthSessionCookie = (name: string, options: { cookieDomain: string;
 	})
 
 /**
+ * A path in the web app (`/a/b?c`): rooted, and no `//` or `\\` a browser would read as another
+ * host, so a caller-chosen `returnTo` never leaves the frontend's origin.
+ */
+export const isAppPath = (path: string): boolean =>
+	path.startsWith("/") && !path.startsWith("//") && !path.includes("\\") && !/[\u0000-\u001f]/.test(path)
+
+/**
  * Initiate OAuth flow for a provider.
  * Sets a session cookie with context and redirects to the provider's OAuth consent page.
  */
@@ -279,7 +286,7 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 		orgId: OrganizationId
 		provider: IntegrationConnection.IntegrationProvider
 	},
-	query: { level?: IntegrationConnection.ConnectionLevel },
+	query: { level?: IntegrationConnection.ConnectionLevel; returnTo?: string },
 ) {
 	const currentUser = yield* CurrentUser.Context
 	const { orgId, provider } = path
@@ -335,9 +342,11 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 		userId: currentUser.id,
 		level,
 		returnTo:
-			level === "user"
-				? `${frontendUrl}/${org.slug}/my-settings/linked-accounts`
-				: `${frontendUrl}/${org.slug}/settings/integrations/${provider}`,
+			query.returnTo !== undefined && isAppPath(query.returnTo)
+				? `${frontendUrl}${query.returnTo}`
+				: level === "user"
+					? `${frontendUrl}/${org.slug}/my-settings/linked-accounts`
+					: `${frontendUrl}/${org.slug}/settings/integrations/${provider}`,
 		environment,
 	}
 

@@ -3,6 +3,7 @@ import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
+import * as ChatMigration from "../shared/chat-migration"
 import { Membership, Theme, UpdateUserFailure } from "./model"
 
 export const Message = defineMessageUnion({
@@ -33,6 +34,8 @@ export const Message = defineMessageUnion({
 	// Use case and role
 	GotChoiceBoxMessage: { message: ChoiceBox.Message },
 	ClickedContinueChoice: {},
+	// Import from Slack or Discord
+	GotMigrationMessage: { message: ChatMigration.Message },
 	// Invite
 	ChangedEmail: { rowId: Schema.Number, value: Schema.String },
 	ClickedAddEmail: {},

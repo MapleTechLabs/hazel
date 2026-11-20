@@ -297,6 +297,105 @@ describe("chat sync on the objects", () => {
 		30_000,
 	)
 
+	it(
+		"a migration makes and links a channel per pick, skips synced ones, and imports only the range",
+		() =>
+			run(
+				Effect.gen(function* () {
+					const world = yield* makeWorld
+					const DESIGN = "777777777777777771" as ExternalChannelId
+					const RECENT = "777777777777777772" as ExternalChannelId
+					const now = Date.now()
+					const day = 24 * 60 * 60 * 1000
+					// 20 messages, half a day apart, the oldest ten days ago: 14 are within the last week.
+					const past = Array.from({ length: 20 }, (_, index) => {
+						const id = `80000000000000${String(index).padStart(4, "0")}`
+						const message = discordCreate(id, `recent ${index}`)
+						return {
+							...message,
+							externalChannelId: RECENT,
+							dedupeKey: `discord:history:${id}`,
+							event: { ...message.event, sentAt: now - 10 * day + index * (day / 2) },
+						} as ChatSyncInbound
+					})
+					world.objects.chatSyncHistory.set(RECENT, past)
+
+					const response = (yield* ok(
+						yield* call(
+							world.org,
+							world.orgId,
+							"chatSync.migrate",
+							{
+								organizationId: world.orgId,
+								syncConnectionId: world.syncConnectionId,
+								channels: [
+									{ externalChannelId: DISCORD_CHANNEL, externalChannelName: "linked" },
+									{ externalChannelId: DESIGN, externalChannelName: " design " },
+									{ externalChannelId: RECENT, externalChannelName: "recent" },
+								],
+								history: "7d",
+							},
+							world.owner,
+						),
+					)) as {
+						linked: ReadonlyArray<{
+							externalChannelId: string
+							hazelChannelId: ChannelId
+							hazelChannelName: string
+							createdChannel: boolean
+						}>
+						skipped: ReadonlyArray<string>
+					}
+					expect(response.skipped).toEqual([DISCORD_CHANNEL])
+					expect(
+						response.linked.map((link) => [link.hazelChannelName, link.createdChannel]),
+					).toEqual([
+						["design", true],
+						["recent", true],
+					])
+					const indexed = (yield* world.index()).map((row) => row.externalChannelId)
+					expect(indexed).toEqual(expect.arrayContaining([DESIGN, RECENT]))
+
+					const recent = response.linked.find((link) => link.externalChannelId === RECENT)!
+					const channel = yield* world.objects.get(channelTarget(recent.hazelChannelId))
+					for (let round = 0; round < 20; round++) {
+						world.org.storage.db.exec(`UPDATE _outbox SET next_at = 0 WHERE status = 'pending'`)
+						yield* Effect.sleep("2 millis")
+						yield* world.org.alarm
+					}
+					const imported = rows<{ content: string }>(
+						channel,
+						`SELECT content FROM messages ORDER BY createdAt, id`,
+					).map((message) => message.content)
+					expect(imported).toEqual(
+						past
+							.filter(
+								(message) => (message.event as { sentAt: number }).sentAt >= now - 7 * day,
+							)
+							.map((message) => (message.event as { content: string }).content),
+					)
+
+					// Migrating the same channels again links nothing new.
+					const again = (yield* ok(
+						yield* call(
+							world.org,
+							world.orgId,
+							"chatSync.migrate",
+							{
+								organizationId: world.orgId,
+								syncConnectionId: world.syncConnectionId,
+								channels: [{ externalChannelId: DESIGN, externalChannelName: "design" }],
+								history: "none",
+							},
+							world.owner,
+						),
+					)) as { linked: ReadonlyArray<unknown>; skipped: ReadonlyArray<string> }
+					expect(again).toMatchObject({ linked: [], skipped: [DESIGN] })
+				}),
+			),
+		30_000,
+	)
+
 	it("inbound update, reactions and delete follow the message link, each once", () =>
 		run(
 			Effect.gen(function* () {

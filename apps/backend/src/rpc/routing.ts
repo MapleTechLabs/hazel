@@ -302,6 +302,7 @@ export const routes: RouteTable = {
 	"chatSync.connection.create": byOrg,
 	"chatSync.connection.list": byOrg,
 	"chatSync.connection.delete": orgHint("chatSync.connection.delete"),
+	"chatSync.migrate": byOrg,
 	"chatSync.channelLink.create": orgHint("chatSync.channelLink.create"),
 	"chatSync.channelLink.list": orgHint("chatSync.channelLink.list"),
 	"chatSync.channelLink.update": orgHint("chatSync.channelLink.update"),

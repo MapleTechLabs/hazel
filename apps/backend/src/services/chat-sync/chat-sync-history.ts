@@ -76,6 +76,35 @@ const payloadsOf = (messages: ReadonlyArray<ChatSyncInbound>) =>
 		}))
 	})
 
+/**
+ * A page (oldest first) without what was sent before `since`: an older top-level message goes with
+ * the thread replies right after it (a reply never lands on a parent Hazel does not have).
+ * `reachedCutoff`: the page went past `since`, so no older page is wanted.
+ */
+export const withinCutoff = (
+	messages: ReadonlyArray<ChatSyncInbound>,
+	since: number | null | undefined,
+): { readonly messages: ReadonlyArray<ChatSyncInbound>; readonly reachedCutoff: boolean } => {
+	if (since === undefined || since === null) return { messages, reachedCutoff: false }
+	let reachedCutoff = false
+	let droppingThread = false
+	const kept: Array<ChatSyncInbound> = []
+	for (const inbound of messages) {
+		const event = inbound.event
+		const isReply = event._tag === "MessageCreate" && event.inExternalThreadId !== undefined
+		const sentAt = event._tag === "MessageCreate" ? event.sentAt : undefined
+		if (!isReply) droppingThread = false
+		if (sentAt !== undefined && sentAt < since) {
+			reachedCutoff = true
+			if (!isReply) droppingThread = true
+			continue
+		}
+		if (isReply && droppingThread) continue
+		kept.push(inbound)
+	}
+	return { messages: kept, reachedCutoff }
+}
+
 export const importChatSyncHistory = Effect.fn("ChatSync.importHistory")(function* (
 	payload: ImportHistoryPayload,
 ) {
@@ -118,15 +147,17 @@ export const importChatSyncHistory = Effect.fn("ChatSync.importHistory")(functio
 	)
 	if (Option.isNone(page)) return yield* Effect.annotateCurrentSpan({ "chat_sync.outcome": "failed" })
 
-	const payloads = yield* payloadsOf(page.value.messages)
+	const window = withinCutoff(page.value.messages, payload.since)
+	const payloads = yield* payloadsOf(window.messages)
 	yield* Effect.forEach(payloads, ingestChatSyncHere, { discard: true })
 
 	const remaining = payload.remaining - limit
 	yield* Effect.annotateCurrentSpan({
 		"chat_sync.history.imported": payloads.length,
+		"chat_sync.history.reached_cutoff": window.reachedCutoff,
 		"chat_sync.outcome": "imported",
 	})
-	if (page.value.cursor === null || remaining <= 0) return
+	if (page.value.cursor === null || remaining <= 0 || window.reachedCutoff) return
 	yield* enqueueEffect(
 		ChatSyncHistoryEffects.importHistory,
 		{ kind: "chat-sync" },
