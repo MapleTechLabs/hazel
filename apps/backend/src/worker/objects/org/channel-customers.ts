@@ -127,6 +127,10 @@ const applyChannelCustomers = Effect.fn("OrgObject.applyChannelCustomers")(funct
 		) {
 			continue
 		}
+		// Moved to another account: that account gets the channel's past authors too.
+		if (row !== undefined && row.accountId !== link.accountId) {
+			yield* forgetChatAuthorsBackfill(link.channelId)
+		}
 		const values = {
 			organizationId: payload.organizationId,
 			accountId: link.accountId,

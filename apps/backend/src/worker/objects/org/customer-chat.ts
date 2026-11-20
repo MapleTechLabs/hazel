@@ -33,6 +33,8 @@ import { deleteObjectMeta, readObjectMeta, writeObjectMeta } from "../meta"
 
 /** At most this many threads of a channel are asked for their authors. */
 const BACKFILL_THREADS_MAX = 500
+/** Authors per `customers.chatAuthorsBackfill`. */
+const BACKFILL_CHUNK = 200
 
 /** What the org knows about `userId`, before any override. */
 export const authorFactsOf = Effect.fn("OrgObject.authorFactsOf")(function* (
@@ -348,12 +350,13 @@ export const chatAuthorsReported = Effect.fn("OrgObject.chatAuthorsReported")(fu
 		"customer_chat.authors": authors.length,
 		"customer_chat.threads": payload.threadChannelIds.length,
 	})
-	if (authors.length > 0) {
+	// In chunks: a busy channel reports up to 1000 authors.
+	for (let start = 0; start < authors.length; start += BACKFILL_CHUNK) {
 		yield* enqueueEffect(CustomerChatEffects.chatAuthorsBackfill, customersTarget(organizationId), {
 			organizationId,
 			accountId: link.value.accountId,
 			channelId: payload.linkedChannelId,
-			authors,
+			authors: authors.slice(start, start + BACKFILL_CHUNK),
 		})
 	}
 	yield* Effect.forEach(

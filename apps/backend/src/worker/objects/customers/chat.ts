@@ -120,7 +120,7 @@ const applyAuthor = Effect.fn("CustomersChat.applyAuthor")(function* (author: Ch
 			.where(($) => [
 				$.userId.eq(author.userId),
 				SQLite.sql
-					.cond`(${$.side} <> ${author.side} OR ${$.reason} <> ${author.reason} OR ${$.name} <> ${author.name})`,
+					.cond`(${$.side} <> ${author.side} OR ${$.reason} <> ${author.reason} OR ${$.name} <> ${author.name} OR ${$.avatarUrl} IS NOT ${author.avatarUrl})`,
 			]),
 	)
 })

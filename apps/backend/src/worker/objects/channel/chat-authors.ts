@@ -16,6 +16,9 @@ import { channelOrganization } from "./message-events"
 const iso = (value: Date | string) =>
 	(value instanceof Date ? value : schema.parseTimestamp(value)).toISOString()
 
+/** The most recently active authors a channel reports; older ones come in as they write again. */
+const REPORTED_AUTHORS_MAX = 1000
+
 export const reportChatAuthors = Effect.fn("ChannelObject.reportChatAuthors")(function* (
 	payload: ReportChatAuthorsPayload,
 ) {
@@ -28,13 +31,16 @@ export const reportChatAuthors = Effect.fn("ChannelObject.reportChatAuthors")(fu
 				lastMessageAt: SQLite.max($.createdAt),
 			}))
 			.where(($) => [$.deletedAt.isNull()])
-			.groupBy("userId"),
+			.groupBy("userId")
+			.orderBy(["lastMessageAt", "desc"])
+			.limit(REPORTED_AUTHORS_MAX),
 	)
 	const threads = yield* db.run(
 		SQLite.from(schema.messagesTable)
 			.select("threadChannelId")
 			.distinct()
-			.where(($) => [$.threadChannelId.isNotNull(), $.deletedAt.isNull()]),
+			// A deleted root keeps its thread and the replies in it.
+			.where(($) => [$.threadChannelId.isNotNull()]),
 	)
 	const threadChannelIds = threads.flatMap((row) =>
 		row.threadChannelId === null ? [] : [row.threadChannelId as ChannelId],

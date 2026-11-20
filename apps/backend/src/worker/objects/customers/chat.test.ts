@@ -199,6 +199,13 @@ describe("Author side in linked channels", () => {
 					uuid() as OrganizationId,
 				)
 				const stranger = uuid() as UserId
+				// The account's contact with the guest's email (another case).
+				const contactId = uuid()
+				t.world.object.storage.db
+					.prepare(
+						`INSERT INTO customer_contacts (id, accountId, email, name) VALUES (?, ?, ?, 'Jane')`,
+					)
+					.run(contactId, t.acme, "JANE@acme.com")
 				const unlinked = t.channel()
 				const slackOutsider = t.person({
 					externalId: "slack-user-UOUT",
@@ -261,7 +268,15 @@ describe("Author side in linked channels", () => {
 					`SELECT contactId, name FROM customer_chat_participants WHERE userId = ?`,
 					guest,
 				)[0]!
-				expect(contact.name).toBe("Jane")
+				expect(contact).toEqual({ contactId, name: "Jane" })
+				// Shadows have no real email: never matched.
+				expect(participants[slackCustomer]).toMatchObject({ side: "customer" })
+				expect(
+					t.world.rows<{ contactId: string | null }>(
+						`SELECT contactId FROM customer_chat_participants WHERE userId = ?`,
+						slackCustomer,
+					)[0]?.contactId,
+				).toBeNull()
 			}),
 		))
 
@@ -415,6 +430,32 @@ describe("Author side in linked channels", () => {
 				).toBe("Success")
 				yield* t.link(general)
 				expect(Object.keys(t.participants())).toHaveLength(3)
+
+				// Moved to another account in place: that account gets the past authors too.
+				yield* t.world.ingest("clerk", [
+					{
+						_tag: "account",
+						externalId: "org_globex",
+						name: "Globex",
+						sameAs: [],
+						onNoMatch: "create",
+					},
+				])
+				const globex = t.world.rows<{ id: string }>(
+					`SELECT id FROM customer_accounts WHERE name = 'Globex'`,
+				)[0]!.id
+				const moved = yield* t.world.call(
+					"customers.channel.link",
+					{ accountId: globex, channelId: general },
+					t.world.member,
+				)
+				expect(tagOf(moved)).toBe("Success")
+				expect(
+					t.world.rows<{ userId: string }>(
+						`SELECT userId FROM customer_chat_participants WHERE accountId = ?`,
+						globex,
+					),
+				).toHaveLength(3)
 			}),
 		))
 })
