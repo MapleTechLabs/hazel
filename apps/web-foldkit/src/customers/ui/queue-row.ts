@@ -224,13 +224,21 @@ export type QueueColumn<M> = Readonly<{
  * The queue's header row. A sortable label is a button; the sorted column's chevron sits in the
  * gap beside it (before a right-aligned label), so sorting never shifts the columns.
  */
-export const queueColumnHeader = <M>(h: HtmlBuilder<M>, columns: ReadonlyArray<QueueColumn<M>>): Html =>
+export const queueColumnHeader = <M>(
+	h: HtmlBuilder<M>,
+	columns: ReadonlyArray<QueueColumn<M>>,
+	/** Extra classes, e.g. a container query hiding it where the list's rows wrap. */
+	className?: string,
+): Html =>
 	h.div(
 		[
 			h.Role("row"),
 			h.Class(
-				// A phone's rows wrap into lines that no longer sit under these columns.
-				"flex h-9 items-center gap-4 border-border border-b px-4 font-medium text-muted-fg text-xs max-md:hidden",
+				twMerge(
+					// A phone's rows wrap into lines that no longer sit under these columns.
+					"flex h-9 items-center gap-4 border-border border-b px-4 font-medium text-muted-fg text-xs max-md:hidden",
+					className,
+				),
 			),
 		],
 		columns.map(({ label, className, sort }) => {

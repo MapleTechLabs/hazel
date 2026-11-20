@@ -234,7 +234,9 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 			h.Class(
 				twMerge(
 					"group/queue relative flex min-h-16 cursor-pointer items-center gap-4 border-border border-t px-4 py-3 first:border-t-0",
-					"max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-1.5",
+					"@max-2xl:flex-wrap @max-2xl:gap-x-3 @max-2xl:gap-y-1.5",
+					// Its actions take a line of their own until they fit inline (`@5xl`).
+					hasActions && "@max-5xl:flex-wrap @max-5xl:gap-y-2",
 					"transition-colors hover:bg-wash data-focused:bg-wash",
 					"before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary before:opacity-0 data-focused:before:opacity-100",
 				),
@@ -247,7 +249,7 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 				[
 					h.Role("cell"),
 					h.Class(
-						"flex w-52 shrink-0 items-center gap-3 max-md:w-auto max-md:min-w-0 max-md:flex-1",
+						"flex w-52 shrink-0 items-center gap-3 @max-2xl:w-auto @max-2xl:min-w-0 @max-2xl:flex-1",
 					),
 				],
 				[
@@ -281,7 +283,7 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 				[
 					h.Role("cell"),
 					h.Class(
-						"flex min-w-0 flex-1 flex-col gap-0.5 max-md:order-last max-md:basis-full max-md:pl-11",
+						"flex min-w-0 flex-1 flex-col gap-0.5 @max-2xl:order-last @max-2xl:basis-full @max-2xl:pl-11",
 					),
 				],
 				[
@@ -323,11 +325,17 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 			// The selected row's actions take the chips' place on a wide screen; narrower, the chips stay
 			// and the actions wrap onto a line of their own, so touch has them too.
 			h.div(
-				[h.Role("cell"), h.Class(twMerge("w-40 shrink-0 max-md:w-auto", hasActions && "lg:hidden"))],
+				[
+					h.Role("cell"),
+					h.Class(twMerge("w-40 shrink-0 @max-2xl:w-auto", hasActions && "@5xl:hidden")),
+				],
 				[statusChip(h, issue.status)],
 			),
 			h.div(
-				[h.Role("cell"), h.Class(twMerge("w-24 shrink-0 max-md:hidden", hasActions && "lg:hidden"))],
+				[
+					h.Role("cell"),
+					h.Class(twMerge("w-24 shrink-0 @max-4xl:hidden", hasActions && "@5xl:hidden")),
+				],
 				[priorityLabel(h, issue.priority)],
 			),
 			...(hasActions
@@ -335,7 +343,7 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 						h.div(
 							[
 								h.Class(
-									"flex shrink-0 flex-wrap items-center gap-1.5 max-lg:order-last max-lg:basis-full max-lg:pl-11",
+									"flex shrink-0 flex-wrap items-center gap-1.5 @max-5xl:order-last @max-5xl:basis-full @max-5xl:pl-11",
 								),
 								h.OnClick(Message.ClickedRowActions(), { propagation: "Stop" }),
 							],
@@ -658,17 +666,23 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: st
 		selectedId: model.selectedId,
 		actions: selected === undefined ? [] : issueActions(h, model, viewer, selected),
 	}
-	// A container: the SLA column shows by the list's width, as the shell's sidebars take a share.
+	// Laid out by the list's own width (the dock and the Customers sidebar take a share of a laptop's
+	// screen): cards below 42rem, no priority column below 56rem, a selected row's actions inline from
+	// 64rem, the SLA column from 72rem (narrower, the chip sits under the title).
 	return queueList(h, { ariaLabel: "Support issues", className: "@container" }, [
-		queueColumnHeader(h, [
-			{ label: "Customer", className: "w-52" },
-			{ label: "Issue", className: "flex-1" },
-			{ label: "Status", className: "w-40" },
-			{ label: "Priority", className: "w-24 max-md:hidden" },
-			{ label: "SLA", className: "hidden w-52 @6xl:block" },
-			{ label: model.tab === "closed" ? "Closed" : "Waiting", className: "w-10 text-right" },
-			{ label: "", className: "w-7" },
-		]),
+		queueColumnHeader(
+			h,
+			[
+				{ label: "Customer", className: "w-52" },
+				{ label: "Issue", className: "flex-1" },
+				{ label: "Status", className: "w-40" },
+				{ label: "Priority", className: "w-24 @max-4xl:hidden" },
+				{ label: "SLA", className: "hidden w-52 @6xl:block" },
+				{ label: model.tab === "closed" ? "Closed" : "Waiting", className: "w-10 text-right" },
+				{ label: "", className: "w-7" },
+			],
+			"@max-2xl:hidden",
+		),
 		...issues.map((issue) => issueRow(h, issue, context)),
 	])
 }

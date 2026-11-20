@@ -92,6 +92,17 @@ for (const theme of ["light", "dark"] as const) {
 		render("open")
 		await shoot(`inbox-open-${theme}-mobile`)
 	})
+	// The page's width beside the dock and the Customers sidebar: a 1024px laptop window leaves ~640px.
+	for (const width of [640, 900] as const) {
+		for (const state of ["open", "selected"] as const) {
+			test(`${state} ${width}px ${theme}`, async () => {
+				if (theme === "dark") document.documentElement.classList.add("dark")
+				await page.viewport(width, 1100)
+				render(state)
+				await shoot(`inbox-${state}-${width}-${theme}`)
+			})
+		}
+	}
 	test(`mobile selected ${theme}`, async () => {
 		if (theme === "dark") document.documentElement.classList.add("dark")
 		await page.viewport(390, 1300)
