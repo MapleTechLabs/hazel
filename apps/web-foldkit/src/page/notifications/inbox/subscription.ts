@@ -21,6 +21,7 @@ interface NotificationRow {
 		readonly targetedResourceId: string | null
 		readonly targetedResourceType: string | null
 		readonly resourceType: string | null
+		readonly reason?: string | null
 		readonly createdAt: Date
 		readonly readAt: Date | null
 	}
@@ -38,6 +39,7 @@ const toItem = (row: NotificationRow): NotificationItem => ({
 	isUnread: row.notification.readAt === null,
 	createdAtMs: new Date(row.notification.createdAt).getTime(),
 	resourceType: row.notification.resourceType,
+	reason: row.notification.reason ?? null,
 	targetedResourceId: row.notification.targetedResourceId,
 	targetedResourceType: row.notification.targetedResourceType,
 	messageContent: row.message?.content ?? null,

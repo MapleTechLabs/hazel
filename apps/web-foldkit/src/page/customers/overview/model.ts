@@ -9,6 +9,9 @@ import { AccountRow, isAttentionMuted, SettingsSummary, SignalRow } from "../../
 export const Overview = AsyncData.Schema(Customers.OverviewResult, CommonReason)
 export type Overview = typeof Overview.schema.Type
 
+/** `customers.support.report` for the same range: the four support tiles. */
+export const Support = AsyncData.Schema(Customers.SupportReport, CommonReason)
+
 export const HealthMetric = Schema.Literals(["customers", "mrr"])
 export const Chart = Schema.Literals(["mrr", "activeUsers"])
 export type Chart = typeof Chart.Type
@@ -19,6 +22,7 @@ export const Model = Schema.Struct({
 	isComparing: Schema.Boolean,
 	/** `customers.overview` for `range`; kept while another range loads. */
 	overview: Overview.schema,
+	support: Support.schema,
 	healthMetric: HealthMetric,
 	hoveredMrr: Schema.NullOr(Schema.Int),
 	hoveredActiveUsers: Schema.NullOr(Schema.Int),

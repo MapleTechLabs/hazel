@@ -18,6 +18,7 @@ const notification = (n: number, isUnread: boolean): NotificationItem => ({
 	isUnread,
 	createdAtMs: 0,
 	resourceType: "message",
+	reason: null,
 	targetedResourceId: uuid(900),
 	targetedResourceType: "channel",
 	messageContent: `message ${n}`,

@@ -5,7 +5,7 @@ import type * as Picker from "../../emoji-picker/picker"
 import type * as TooltipHost from "../../chat/tooltip-host"
 import { controlledModal, type Message as ModalMessage } from "../../ui/modal"
 import { Mount } from "foldkit"
-import { IconDotsVertical, IconStar, IconThread } from "../../icons"
+import { IconDotsVertical, IconStar, IconSupport, IconThread } from "../../icons"
 import {
 	HoverEvent,
 	PlaceMessageToolbar,
@@ -94,10 +94,15 @@ export const messageToolbarOverlay = (h: H, model: Model): Html => {
 							IconThread(h, { attributes: { "data-slot": "icon" } }),
 							menuLabel(h, menu.id, key, "Reply in thread"),
 						]
-					: [
-							IconStar(h, { attributes: { "data-slot": "icon" } }),
-							menuLabel(h, menu.id, key, isPinned ? "Unpin message" : "Pin message"),
-						],
+					: key === "create-issue"
+						? [
+								IconSupport(h, { attributes: { "data-slot": "icon" } }),
+								menuLabel(h, menu.id, key, "Create issue"),
+							]
+						: [
+								IconStar(h, { attributes: { "data-slot": "icon" } }),
+								menuLabel(h, menu.id, key, isPinned ? "Unpin message" : "Pin message"),
+							],
 		},
 		toParentMessage: (message) => toOverlay(Overlays.Message.GotMoreMenuMessage({ messageId, message })),
 	})

@@ -60,6 +60,8 @@ export interface ThreadPanelInputs<M> {
 	 * context menu as a channel message.
 	 */
 	readonly trackHover: Attribute<M>
+	/** The support issue strip under the header (`issue-control.ts`); empty outside linked channels. */
+	readonly issueControl: Html
 }
 
 const iconAttributes = { "data-slot": "icon" }
@@ -361,6 +363,7 @@ export const threadPanelView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<
 				[h.Class("flex h-full min-h-0 flex-1 flex-col overflow-hidden")],
 				[
 					headerView(h, inputs),
+					inputs.issueControl,
 					scrollView(h, inputs),
 					h.div(
 						[h.Class("relative shrink-0 bg-bg px-4 pt-2.5 pb-4")],

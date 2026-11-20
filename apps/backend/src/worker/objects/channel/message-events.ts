@@ -6,7 +6,7 @@
  *
  * - bots: `botGateway.messageEvent` (message create, update, delete);
  * - notifications: `org.messageCreated` to the channel's `OrgObject` (`../org/message-notifications.ts`),
- *   with the content its push shows; `org.messageDeleted` once it is deleted, which drops them;
+ *   with the content its push shows (and support issues use, `../org/support-relay.ts`); `org.messageDeleted` once it is deleted, which drops them;
  * - thread naming: `ai.nameThread` once a thread still called "Thread" has more than 3 replies.
  * - search: `org.indexMessages` (message create, update, delete), `./search-index.ts`.
  *
@@ -133,6 +133,10 @@ const notificationsHook: MessageEventHook = (event) =>
 					onSome: (row) => Number(row.count),
 				}),
 				createdAt: DateTime.formatIso(DateTime.makeUnsafe(message.createdAt)),
+				// In a thread, its root message: support issues are keyed on it.
+				threadRootMessageId: Option.getOrNull(
+					Option.map(yield* readThreadOrigin, (origin) => origin.messageId),
+				),
 			},
 		)
 	})

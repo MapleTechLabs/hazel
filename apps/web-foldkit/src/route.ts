@@ -108,6 +108,10 @@ export const AppRoute = defineRouteUnion({
 	CustomersOverview: { orgSlug: Schema.String },
 	/** The ranked signal queue. */
 	CustomersAttention: { orgSlug: Schema.String },
+	/** Support issues across the linked channels (`docs/customers/issues.md`). */
+	CustomersInbox: { orgSlug: Schema.String },
+	/** Response times, % within SLA and breaches over a range (`docs/customers/sla.md`). */
+	CustomersSupportReport: { orgSlug: Schema.String },
 	/** `?view=`: a saved view's id, or a built-in view's key (`BuiltInViewKey`, e.g. `at_risk`). */
 	CustomersList: { orgSlug: Schema.String, view: Schema.Option(Schema.String) },
 	/** One customer; `?tab=` picks the tab (none: overview). */
@@ -122,6 +126,7 @@ export const AppRoute = defineRouteUnion({
 	CustomersSettingsSignalRule: { orgSlug: Schema.String, ruleId: CustomerSignalRuleId },
 	CustomersSettingsHealth: { orgSlug: Schema.String },
 	CustomersSettingsPlans: { orgSlug: Schema.String },
+	CustomersSettingsSla: { orgSlug: Schema.String },
 	CustomersSettingsFeatureFlags: { orgSlug: Schema.String },
 	CustomersSettingsSources: { orgSlug: Schema.String },
 	CustomersSourceDetail: { orgSlug: Schema.String, provider: CustomerProvider },
@@ -333,6 +338,11 @@ const routers = {
 	),
 	CustomersOverview: pipe(orgPath("customers"), Route.mapTo(AppRoute.CustomersOverview)),
 	CustomersAttention: pipe(orgPath("customers", "attention"), Route.mapTo(AppRoute.CustomersAttention)),
+	CustomersInbox: pipe(orgPath("customers", "inbox"), Route.mapTo(AppRoute.CustomersInbox)),
+	CustomersSupportReport: pipe(
+		orgPath("customers", "support"),
+		Route.mapTo(AppRoute.CustomersSupportReport),
+	),
 	CustomersList: pipe(
 		orgPath("customers", "list"),
 		query(ListViewQuery),
@@ -365,6 +375,10 @@ const routers = {
 	CustomersSettingsPlans: pipe(
 		orgPath("customers", "settings", "plans"),
 		Route.mapTo(AppRoute.CustomersSettingsPlans),
+	),
+	CustomersSettingsSla: pipe(
+		orgPath("customers", "settings", "sla"),
+		Route.mapTo(AppRoute.CustomersSettingsSla),
 	),
 	CustomersSettingsFeatureFlags: pipe(
 		orgPath("customers", "settings", "feature-flags"),
@@ -440,12 +454,15 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.CustomersOverview,
 		// Literal segments before `$accountId`, `$ruleId` and `$provider`.
 		routers.CustomersAttention,
+		routers.CustomersInbox,
+		routers.CustomersSupportReport,
 		routers.CustomersList,
 		routers.CustomersSettingsSignals,
 		routers.CustomersSettingsSignalNew,
 		routers.CustomersSettingsSignalRule,
 		routers.CustomersSettingsHealth,
 		routers.CustomersSettingsPlans,
+		routers.CustomersSettingsSla,
 		routers.CustomersSettingsFeatureFlags,
 		routers.CustomersSettingsSources,
 		routers.CustomersUnmatched,
@@ -531,6 +548,8 @@ export const isNotificationsRoute = AppRoute.isAnyOf([
 export const isCustomersRoute = AppRoute.isAnyOf([
 	"CustomersOverview",
 	"CustomersAttention",
+	"CustomersInbox",
+	"CustomersSupportReport",
 	"CustomersList",
 	"CustomerDetail",
 	"CustomersSettingsSignals",
@@ -538,6 +557,7 @@ export const isCustomersRoute = AppRoute.isAnyOf([
 	"CustomersSettingsSignalRule",
 	"CustomersSettingsHealth",
 	"CustomersSettingsPlans",
+	"CustomersSettingsSla",
 	"CustomersSettingsFeatureFlags",
 	"CustomersSettingsSources",
 	"CustomersSourceDetail",

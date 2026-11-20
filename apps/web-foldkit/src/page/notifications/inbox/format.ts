@@ -69,8 +69,27 @@ export const filterByCategory = (
 		: notifications.filter((item) => item.channel !== null && types[category].includes(item.channel.type))
 }
 
+/** A support SLA alert (`user.createCustomerNotification`): about an issue, not a message. */
+export const isSupportAlert = (item: NotificationItem): boolean => item.resourceType === "customer_issue"
+
+/** Which deadline (`sla_<reply|resolution>_<warning|breach>`) and whether it is still ahead. */
+export const supportAlertOf = (item: NotificationItem) => ({
+	isWarning: item.reason?.endsWith("_warning") ?? false,
+	clock: item.reason?.includes("resolution") === true ? ("resolution" as const) : ("reply" as const),
+})
+
+const supportAlertLabel = (item: NotificationItem): string => {
+	const { isWarning, clock } = supportAlertOf(item)
+	const what = clock === "reply" ? "Reply" : "Resolution"
+	return isWarning ? `${what} due soon` : `${what} overdue`
+}
+
 /** `getNotificationContext` (`components/notifications/notification-item.tsx`). */
 export const contextOf = (item: NotificationItem): string => {
+	if (isSupportAlert(item))
+		return item.channel === null || item.channel.name === ""
+			? supportAlertLabel(item)
+			: `${supportAlertLabel(item)} in #${item.channel.name}`
 	if (item.channel === null) return "New notification"
 	const isMessage = item.resourceType === "message"
 	// A direct message's channel has no name of its own.
@@ -81,6 +100,10 @@ export const contextOf = (item: NotificationItem): string => {
 
 /** `getMessagePreview`. */
 export const previewOf = (item: NotificationItem, maxLength = 80): string => {
+	if (isSupportAlert(item)) {
+		const { isWarning, clock } = supportAlertOf(item)
+		return `A support issue is ${isWarning ? "close to" : "past"} its ${clock} deadline`
+	}
 	if (!item.messageContent) return "View notification"
 	const plainText = item.messageContent.replace(/[*_`~#]/g, "").trim()
 	return plainText.length <= maxLength ? plainText : `${plainText.slice(0, maxLength)}...`

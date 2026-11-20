@@ -6,7 +6,9 @@ import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
 import { groupIdOf, groupOf } from "../../../customers/groups"
+import { IssueRow } from "../../../customers/issues"
 import { AccountRow, MemberRow, msOf, SignalRow } from "../../../customers/queries"
+import { IssueSlaRow } from "../../../customers/sla"
 import { muteLeaves, SNOOZE_KEYS } from "../../../customers/ui/menus"
 import { CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -48,6 +50,8 @@ export type DetailFailure = typeof DetailFailure.Type
 
 export const Detail = AsyncData.Schema(Customers.AccountDetail, DetailFailure)
 export const Series = AsyncData.Schema(Schema.Array(Customers.MetricSeries), CommonReason)
+/** This customer's row of the 30-day Support report; null when none of their issues opened in it. */
+export const SupportSummary = AsyncData.Schema(Schema.NullOr(Customers.SupportReportRow), CommonReason)
 
 export const PageStatus = Schema.Literals(["Idle", "Loading", "Loaded", "Failed"])
 export type PageStatus = typeof PageStatus.Type
@@ -134,6 +138,10 @@ export const Model = Schema.Struct({
 	hoveredUsage: Schema.NullOr(Schema.Int),
 	mrrHistory: Series.schema,
 	hoveredMrr: Schema.NullOr(Schema.Int),
+	/** The Support block: the customer's live issues and SLA clocks, and their 30-day report row. */
+	supportIssues: Schema.NullOr(Schema.Array(IssueRow)),
+	supportSlas: Schema.Array(IssueSlaRow),
+	support: SupportSummary.schema,
 	contacts: Contacts,
 	contactFilter: ContactFilter,
 	contactSearch: Schema.String,

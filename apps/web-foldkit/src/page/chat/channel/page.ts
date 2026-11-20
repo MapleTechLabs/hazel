@@ -28,6 +28,7 @@ import {
 import { typingNamesOf, typingUsersOf } from "../banners"
 import { emptyLookups, type Lookups } from "../lookups"
 import * as FilesPage from "../files/page"
+import * as IssueControl from "../issue-control"
 import { JoinChannel } from "../message-actions"
 import * as Overlays from "../overlays"
 import { PAGE_SIZE } from "../queries"
@@ -88,6 +89,7 @@ export const init = (
 	members: null,
 	pinned: [],
 	customer: null,
+	issueRootIds: [],
 	typing: [],
 	typingNowMs: 0,
 	typingNames: [],
@@ -545,6 +547,13 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		UpdatedCustomer: ({ channelId, customer }) => ({
 			model: channelId === model.channelId ? modifyFields(model, { customer: () => customer }) : model,
 		}),
+		UpdatedIssueRoots: ({ channelId, rootMessageIds }) => ({
+			model:
+				channelId === model.channelId
+					? modifyFields(model, { issueRootIds: (previous) => shareIds(previous, rootMessageIds) })
+					: model,
+		}),
+		GotIssueControlMessage: ({ message: issueMessage }) => liftIssueControl(model, issueMessage),
 		// A result for a thread the panel no longer shows is dropped.
 		UpdatedThreadPanelMessages: ({ threadChannelId, messages }) => {
 			const panel = model.threadPanel
@@ -683,21 +692,50 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				: { model },
 	})
 
+/** A step of the thread panel's issue control; an issue for a thread no longer shown is dropped. */
+const liftIssueControl = (model: Model, message: IssueControl.Message): PageReturn => {
+	const panel = model.threadPanel
+	if (panel === null) return { model }
+	if (message._tag === "UpdatedIssue" && message.rootMessageId !== panel.messageId) return { model }
+	const result = IssueControl.update(panel.issue, message, {
+		organizationId: model.channel?.organizationId ?? null,
+		currentUserId: model.currentUserId,
+	})
+	const next =
+		result.model === panel.issue
+			? model
+			: modifyFields(model, { threadPanel: () => modifyFields(panel, { issue: () => result.model }) })
+	const lifted: PageReturn = {
+		model: next,
+		commands: Command.mapMessages(result.commands ?? [], (inner) =>
+			Message.GotIssueControlMessage({ message: inner }),
+		),
+	}
+	const out = result.outMessage
+	if (out === undefined) return lifted
+	return Write.andThen(lifted, (current) =>
+		IssueControl.OutMessage.match<PageReturn>(out, {
+			RequestedCreateIssue: () => Write.createIssue(current, panel.messageId),
+			RequestedToast: ({ toast }) => Write.withToast(current, toast),
+		}),
+	)
+}
+
 /** Message facts the overlays read when a menu opens. */
 export const factsOf = (model: Model): Overlays.MessageFacts => {
 	// The channel's messages and the open thread panel's replies: both take the same actions.
 	const find = (messageId: MessageId) =>
 		model.messages.find((message) => message.id === messageId) ??
 		model.threadPanel?.messages.find((message) => message.id === messageId)
+	const canStartThread = (messageId: MessageId) =>
+		canStartThreadIn(model.channel?.type ?? null, model.channelId, find(messageId)?.channelId ?? null)
 	return {
 		isOwnMessage: (messageId) => find(messageId)?.authorId === model.currentUserId,
 		isPinned: (messageId) => find(messageId)?.isPinned ?? false,
-		canStartThread: (messageId) =>
-			canStartThreadIn(
-				model.channel?.type ?? null,
-				model.channelId,
-				find(messageId)?.channelId ?? null,
-			),
+		canStartThread,
+		// A top-level message of a linked channel that has no issue yet (as far as the client knows).
+		canCreateIssue: (messageId) =>
+			model.customer !== null && canStartThread(messageId) && !model.issueRootIds.includes(messageId),
 	}
 }
 
