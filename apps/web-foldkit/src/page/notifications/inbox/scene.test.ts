@@ -17,6 +17,7 @@ const unread = {
 	isUnread: true,
 	createdAtMs: 0,
 	resourceType: "message",
+	reason: null,
 	targetedResourceId: uuid(900),
 	targetedResourceType: "channel",
 	messageContent: "Ship it",

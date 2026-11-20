@@ -157,7 +157,7 @@ someone who is not an org member.
 
 ## Later
 
-- Issues from messages, SLAs and first-response times per linked channel.
+- Support issues: `issues.md`; SLAs and response times: `sla.md`.
 - Account context in the channel (health, MRR, open signals) without opening Customers.
 - Discord members' identity: Discord shares no emails, so Discord channels match by guild and
   name only.

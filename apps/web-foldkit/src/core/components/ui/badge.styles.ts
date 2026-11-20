@@ -23,6 +23,13 @@ export const badgeStyles = tv({
 				"[--badge-bg:var(--color-warning-subtle)] [--badge-fg:var(--color-warning-subtle-fg)] [--badge-overlay:var(--color-warning)]/20",
 			danger: "[--badge-bg:var(--color-danger-subtle)] [--badge-fg:var(--color-danger-subtle-fg)] [--badge-overlay:var(--color-danger)]/20",
 			outline: "[--badge-overlay:var(--color-secondary)]/20 [--badge-ring:var(--color-border)]",
+			/** Outlined, muted text: a state that needs nothing yet. */
+			quiet: "[--badge-fg:var(--color-muted-fg)] [--badge-overlay:var(--color-secondary)]/20 [--badge-ring:var(--color-border)]",
+			/** Filled grey, muted text: paused or done, quieter than `secondary`. */
+			muted: "[--badge-bg:var(--color-secondary)] [--badge-fg:var(--color-muted-fg)] [--badge-overlay:var(--color-muted-fg)]/25",
+			/** Outlined, success text: met, without a green fill. */
+			"success-outline":
+				"[--badge-fg:var(--color-success-subtle-fg)] [--badge-overlay:var(--color-secondary)]/20 [--badge-ring:var(--color-border)]",
 		},
 		size: {
 			sm: "gap-x-1 py-px text-3xs/4 *:data-[slot=icon]:size-2.5",

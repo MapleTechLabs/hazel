@@ -38,10 +38,10 @@ const currentMembers = Effect.fn("OrgObject.currentCustomerMembers")(function* (
 	const db = yield* Database.Database
 	const members = yield* db.run(
 		SQLite.from(schema.organizationMembersTable)
-			.select("userId", "role")
+			.select("id", "userId", "role")
 			.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
 	)
-	if (members.length === 0) return members
+	if (members.length === 0) return []
 	const machines = yield* db.run(
 		SQLite.from(schema.usersTable)
 			.select("id")
@@ -54,7 +54,9 @@ const currentMembers = Effect.fn("OrgObject.currentCustomerMembers")(function* (
 			]),
 	)
 	const bots = new Set(machines.map((machine) => machine.id))
-	return members.filter((member) => !bots.has(member.userId))
+	return members
+		.filter((member) => !bots.has(member.userId))
+		.map((member) => ({ userId: member.userId, role: member.role, memberId: member.id }))
 })
 
 /** Past the last version and at least the clock, so it increases across restarts. */

@@ -28,6 +28,7 @@ import {
 import { agentChannels, AgentChannelsCall } from "./org/agent"
 import { agentNotifications, AgentNotificationsCall } from "./user/agent"
 import { liveAccess, LiveAccessCall } from "./channel/live-access"
+import { supportMessage, SupportMessageCall } from "./channel/support-message"
 import {
 	bootstrap,
 	CustomersBootstrapCall,
@@ -159,6 +160,7 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(ListMessagesCall, listMessages),
 		receiver(MessageThreadCall, messageThread),
 		receiver(LiveAccessCall, liveAccess),
+		receiver(SupportMessageCall, supportMessage),
 		receiver(MessagesByIdsCall, messagesByIds),
 	]),
 	user: byName([receiver(AgentNotificationsCall, agentNotifications)]),

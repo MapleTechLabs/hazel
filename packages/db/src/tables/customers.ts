@@ -12,6 +12,10 @@
  */
 import type {
 	AttentionSettings,
+	BusinessHours,
+	SlaAppliesTo,
+	SlaState,
+	SlaTargets,
 	ConnectionConfig,
 	HealthBreakdown,
 	HealthSettings,
@@ -30,6 +34,8 @@ import type {
 } from "@hazel/domain/customers"
 import {
 	DEFAULT_ATTENTION_SETTINGS,
+	DEFAULT_BUSINESS_HOURS,
+	SlaHours,
 	EMPTY_SYNC_STATS,
 	BillingInterval,
 	BuiltInViewKey,
@@ -39,6 +45,8 @@ import {
 	HealthStatus,
 	IgnoreRuleField,
 	InvoiceStatus,
+	IssuePriority,
+	IssueStatus,
 	LifecycleStage,
 	MatchMethod,
 	MetricAggregation,
@@ -72,6 +80,7 @@ import {
 	CustomerImpersonationId,
 	CustomerImpersonatorId,
 	CustomerInvoiceId,
+	CustomerIssueId,
 	CustomerMetricDefinitionId,
 	CustomerMrrMovementId,
 	CustomerNoteId,
@@ -79,11 +88,14 @@ import {
 	CustomerSettingsId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
+	CustomerSlaPolicyId,
 	CustomerSubscriptionId,
 	CustomerSyncRunId,
 	CustomerUnmatchedRecordId,
 	CustomerViewLayoutId,
+	MessageId,
 	OrganizationId,
+	OrganizationMemberId,
 	UserId,
 } from "@hazel/schema"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
@@ -619,6 +631,8 @@ export const customerSettingsTable = SQLite.table("customer_settings", {
 		addOnPlans: SQLite.column(jsonb<ReadonlyArray<string>>(), { default: [] }),
 		/** MRR from each Stripe subscription's last paid invoice (usage overage, discounts) once one exists. */
 		overageInMrr: SQLite.column(SQLite.boolean, { default: false }),
+		/** The working week SLA policies on business hours count (`docs/customers/sla.md`). */
+		businessHours: SQLite.column(jsonb<BusinessHours>(), { default: DEFAULT_BUSINESS_HOURS }),
 		lastComputedAt: SQLite.nullable(timestamptz),
 		updatedBy: SQLite.nullable(uuid(UserId)),
 		createdAt: createdAt(),
@@ -627,6 +641,32 @@ export const customerSettingsTable = SQLite.table("customer_settings", {
 	primaryKey: ["id"],
 })
 export type CustomerSettings = SQLite.SelectRowOf<typeof customerSettingsTable>
+
+/**
+ * Support SLA policies (`docs/customers/sla.md`): targets per issue priority. An account gets the
+ * first enabled policy naming it by id, else by plan or tag (by `position`), else the first default
+ * one (nothing named).
+ */
+export const customerSlaPoliciesTable = SQLite.table("customer_sla_policies", {
+	columns: {
+		id: id(CustomerSlaPolicyId),
+		organizationId: uuid(OrganizationId),
+		name: SQLite.text,
+		position: SQLite.column(SQLite.integer, { default: 0 }),
+		enabled: SQLite.column(SQLite.boolean, { default: true }),
+		appliesTo: jsonb<SlaAppliesTo>(),
+		targets: jsonb<SlaTargets>(),
+		hours: SQLite.column(textEnum(SlaHours.literals), { default: "business" }),
+		warnBeforePct: SQLite.column(SQLite.integer, { default: 25 }),
+		createdBy: SQLite.nullable(uuid(UserId)),
+		updatedBy: SQLite.nullable(uuid(UserId)),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+		deletedAt: SQLite.nullable(timestamptz),
+	},
+	primaryKey: ["id"],
+})
+export type CustomerSlaPolicy = SQLite.SelectRowOf<typeof customerSlaPoliciesTable>
 
 export const customerHealthDailyTable = SQLite.table("customer_health_daily", {
 	columns: {
@@ -906,6 +946,112 @@ export const customerChannelSuggestionsTable = SQLite.table("customer_channel_su
 export type CustomerChannelSuggestion = SQLite.SelectRowOf<typeof customerChannelSuggestionsTable>
 
 /**
+ * A support issue (`docs/customers/issues.md`): a conversation a customer started in a linked
+ * channel, the root message and its thread. Opened by the `customers.supportMessage` relay from
+ * the `OrgObject` (a customer's top-level message) or by hand from any message. One live issue per
+ * `(sourceChannelId, rootMessageId)` (partial unique index). Timestamps are the SLA contract.
+ */
+export const customerIssuesTable = SQLite.table("customer_issues", {
+	columns: {
+		id: id(CustomerIssueId),
+		organizationId: uuid(OrganizationId),
+		accountId: uuid(CustomerAccountId),
+		/** The linked channel the root message was posted in. */
+		sourceChannelId: uuid(ChannelId),
+		rootMessageId: uuid(MessageId),
+		/** The root message's thread, once one exists. */
+		threadChannelId: SQLite.nullable(uuid(ChannelId)),
+		/** The customer's follow-ups that joined the issue (top-level messages of `sourceChannelId`). */
+		joinedMessageIds: SQLite.column(jsonb<ReadonlyArray<MessageId>>(), { default: [] }),
+		/** The root message's author. */
+		openedByUserId: uuid(UserId),
+		/** The member who created it by hand; null when a customer's message opened it. */
+		createdByUserId: SQLite.nullable(uuid(UserId)),
+		/** The root message's first line, shortened. */
+		title: SQLite.text,
+		status: SQLite.column(textEnum(IssueStatus.literals), { default: "new" }),
+		priority: SQLite.column(textEnum(IssuePriority.literals), { default: "none" }),
+		assigneeUserId: SQLite.nullable(uuid(UserId)),
+		tags: SQLite.column(jsonb<ReadonlyArray<string>>(), { default: [] }),
+		/** The root message's time. */
+		openedAt: timestamptz,
+		firstCustomerMessageAt: SQLite.nullable(timestamptz),
+		lastCustomerMessageAt: SQLite.nullable(timestamptz),
+		/** First response: the earliest team message in the issue (a late delivery of an earlier one moves it back). */
+		firstTeamReplyAt: SQLite.nullable(timestamptz),
+		lastTeamReplyAt: SQLite.nullable(timestamptz),
+		/** The last message of either side (the inbox's "updated"). */
+		lastMessageAt: timestamptz,
+		closedAt: SQLite.nullable(timestamptz),
+		closedByUserId: SQLite.nullable(uuid(UserId)),
+		/** Reopened by a customer's reply (or by hand) after it was closed. */
+		reopenCount: count(),
+		/** Last time it (re)opened: resolution time counts from here. */
+		reopenedAt: SQLite.nullable(timestamptz),
+		messageCount: count(),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+		deletedAt: SQLite.nullable(timestamptz),
+	},
+	primaryKey: ["id"],
+	indexes: [
+		SQLite.index("customer_issues_status_idx", ["status"]),
+		SQLite.index("customer_issues_account_idx", ["accountId"]),
+		SQLite.index("customer_issues_thread_idx", ["threadChannelId"]),
+		SQLite.index("customer_issues_closed_at_idx", ["closedAt"]),
+	],
+})
+export type CustomerIssue = SQLite.SelectRowOf<typeof customerIssuesTable>
+
+/**
+ * The top-level messages of each issue (its root and the follow-ups that joined it), so a reply in
+ * any of their threads finds the issue; and tombstones (`issueId` null, `deletedAt` set) for a
+ * message deleted before it reached the issues, so a late delivery opens nothing. Internal.
+ */
+export const customerIssueMessagesTable = SQLite.table("customer_issue_messages", {
+	columns: {
+		channelId: uuid(ChannelId),
+		messageId: uuid(MessageId),
+		issueId: SQLite.nullable(uuid(CustomerIssueId)),
+		deletedAt: SQLite.nullable(timestamptz),
+		createdAt: createdAt(),
+	},
+	primaryKey: ["channelId", "messageId"],
+	indexes: [SQLite.index("customer_issue_messages_issue_idx", ["issueId"])],
+})
+export type NewCustomerIssue = SQLite.InsertRowOf<typeof customerIssuesTable>
+
+/**
+ * An issue's SLA clocks (`docs/customers/sla.md` §4), one row per issue (`id` = the issue's id), written
+ * only by the hook on issue writes and the alarm. The policy's targets, hours and warning are kept as
+ * they were when the issue opened: a policy change applies to new issues.
+ */
+export const customerIssueSlasTable = SQLite.table("customer_issue_slas", {
+	columns: {
+		id: uuid(CustomerIssueId),
+		organizationId: uuid(OrganizationId),
+		accountId: uuid(CustomerAccountId),
+		/** Null once the policy was deleted (the snapshot below stays). */
+		policyId: SQLite.nullable(uuid(CustomerSlaPolicyId)),
+		policyName: SQLite.text,
+		targets: jsonb<SlaTargets>(),
+		hours: textEnum(SlaHours.literals),
+		warnBeforePct: SQLite.integer,
+		state: jsonb<SlaState>(),
+		/** The next warning or breach the alarm sends; null when none is pending. */
+		nextAlertAt: SQLite.nullable(timestamptz),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	primaryKey: ["id"],
+	indexes: [
+		SQLite.index("customer_issue_slas_next_alert_idx", ["nextAlertAt"]),
+		SQLite.index("customer_issue_slas_account_idx", ["accountId"]),
+	],
+})
+export type CustomerIssueSla = SQLite.SelectRowOf<typeof customerIssueSlasTable>
+
+/**
  * A feature flag created in Hazel. The flags the Feature flags page lists are these plus every key
  * in an account's `featureFlags` (what Clerk already holds), so a flag created here shows before any
  * customer has it. Deleting a flag removes it from every customer and deletes this row.
@@ -976,6 +1122,8 @@ export const customerMembersTable = SQLite.table("customer_members", {
 	columns: {
 		userId: uuid(UserId),
 		role: textEnum(["owner", "admin", "member"]),
+		/** Their `organization_members` id (notifications are keyed by it); null until the next snapshot. */
+		memberId: SQLite.nullable(uuid(OrganizationMemberId)),
 	},
 	primaryKey: ["userId"],
 })

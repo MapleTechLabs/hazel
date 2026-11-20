@@ -38,6 +38,7 @@ import {
 	FetchCustomerEvents,
 	FetchCustomerInvoices,
 	FetchCustomerMrrHistory,
+	FetchCustomerSupport,
 	FetchCustomerUsage,
 	FocusNoteComposer,
 	LoadNoteDrafts,
@@ -169,6 +170,10 @@ const load = (model: Model, shared: Shared): Return => {
 		next = modifyFields(next, { detail: () => AsyncData.Loading() })
 		commands.push(FetchCustomerDetail(args))
 	}
+	if (next.tab === "overview" && AsyncData.isIdle(next.support)) {
+		next = modifyFields(next, { support: () => AsyncData.Loading() })
+		commands.push(FetchCustomerSupport(args))
+	}
 	if (next.tab === "overview" && AsyncData.isIdle(next.usage)) {
 		const fetched = fetchUsage(next, shared)
 		next = fetched.model
@@ -250,6 +255,9 @@ const initialModel = (route: Route): Model => ({
 	hoveredUsage: null,
 	mrrHistory: AsyncData.Idle(),
 	hoveredMrr: null,
+	supportIssues: null,
+	supportSlas: [],
+	support: AsyncData.Idle(),
 	contacts: EMPTY_PAGE,
 	contactFilter: "all",
 	contactSearch: "",
@@ -790,6 +798,25 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			metricKey === model.usageMetric && range === model.usageRange
 				? { model: modifyFields(model, { usage: (current) => settle(current, Result.fail(reason)) }) }
 				: { model },
+		UpdatedSupportIssues: ({ issues }) => ({
+			model: modifyFields(model, { supportIssues: () => issues }),
+		}),
+		UpdatedSupportSlas: ({ slas }) => ({ model: modifyFields(model, { supportSlas: () => slas }) }),
+		SucceededFetchSupport: ({ row }) => ({
+			model: modifyFields(model, { support: (current) => settle(current, Result.succeed(row)) }),
+		}),
+		PressedRetrySupport: () => {
+			const args = target(model, shared)
+			return args === null || AsyncData.isLoading(model.support)
+				? { model }
+				: {
+						model: modifyFields(model, { support: () => AsyncData.Loading() }),
+						commands: [FetchCustomerSupport(args)],
+					}
+		},
+		FailedFetchSupport: ({ reason }) => ({
+			model: modifyFields(model, { support: (current) => settle(current, Result.fail(reason)) }),
+		}),
 		SucceededFetchMrrHistory: ({ series }) => ({
 			model: modifyFields(model, { mrrHistory: (current) => settle(current, Result.succeed(series)) }),
 		}),

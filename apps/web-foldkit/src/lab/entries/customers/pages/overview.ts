@@ -11,6 +11,7 @@ import { labShared } from "../../../../page/customers/lab-shared"
 import { defineLabWithFlags, queryParam } from "../../../define"
 import { labPage } from "../../../frame"
 import { ACCOUNTS, CONNECTIONS, overviewFixture, SETTINGS, SIGNALS } from "../../../fixtures/customers"
+import { SUPPORT_REPORT } from "../../../fixtures/issues"
 
 // `/lab/customers/pages/overview`: the real overview over the fixtures (`?state=`, `?range=`). Its
 // update runs; `customers.overview` answers from `overviewFixture` instead of the network.
@@ -20,10 +21,15 @@ const State = Schema.Literals(STATES)
 const Flags = Schema.Struct({ state: State, range: CustomersRange })
 
 /** Answers a pending fetch from the fixtures, as the RPC would for that range. */
-const answered = (model: Model, partial: boolean): Model =>
-	AsyncData.isLoading(model.overview) || AsyncData.isRefreshing(model.overview)
-		? { ...model, overview: AsyncData.Success({ data: overviewFixture(model.range, { partial }) }) }
-		: model
+const answered = (model: Model, partial: boolean): Model => {
+	const withOverview =
+		AsyncData.isLoading(model.overview) || AsyncData.isRefreshing(model.overview)
+			? { ...model, overview: AsyncData.Success({ data: overviewFixture(model.range, { partial }) }) }
+			: model
+	return AsyncData.isLoading(model.support) || AsyncData.isRefreshing(model.support)
+		? { ...withOverview, support: AsyncData.Success({ data: SUPPORT_REPORT }) }
+		: withOverview
+}
 
 const stateModel = (flags: typeof Flags.Type): Model => {
 	const base = { ...init(undefined, labShared).model, range: flags.range }

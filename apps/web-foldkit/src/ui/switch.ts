@@ -16,6 +16,8 @@ export interface SwitchOptions<Message> {
 	readonly isSelected: boolean
 	readonly isDisabled?: boolean
 	readonly onChange?: (isSelected: boolean) => Message
+	/** The input's name when the visible text is only its state ("On" / "Off"). */
+	readonly ariaLabel?: string
 	readonly className?: string
 }
 
@@ -56,6 +58,7 @@ export const switchControl = <Message>(
 						h.Id(options.id),
 						h.Type("checkbox"),
 						h.Role("switch"),
+						...(options.ariaLabel === undefined ? [] : [h.AriaLabel(options.ariaLabel)]),
 						...(isDisabled ? [h.Disabled(true)] : [h.Tabindex(0)]),
 						h.Checked(options.isSelected),
 						...(toggle === undefined ? [] : [h.OnChange(() => toggle)]),

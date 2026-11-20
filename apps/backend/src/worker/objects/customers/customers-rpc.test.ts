@@ -9,6 +9,7 @@ import {
 	type IngestOp,
 	type RuleDraft,
 	SignalTemplate,
+	SLA_TEMPLATES,
 	TEMPLATES,
 } from "@hazel/domain/customers"
 import type { OrganizationId, UserId } from "@hazel/schema"
@@ -318,10 +319,13 @@ describe("Customers RPCs", () => {
 							`SELECT template, count(*) AS n FROM customer_signals WHERE status = 'open' GROUP BY template ORDER BY template`,
 						)
 						.map((row) => row.template)
-					// health_drop needs history; every other template fires on day one.
+					// health_drop needs history, and the demo seeds no support issues (the SLA templates);
+					// every other template fires on day one.
 					expect(templates).toEqual(
 						expect.arrayContaining(
-							SignalTemplate.literals.filter((template) => template !== "health_drop"),
+							SignalTemplate.literals.filter(
+								(template) => template !== "health_drop" && !SLA_TEMPLATES.includes(template),
+							),
 						),
 					)
 					const stages = world.rows<{ lifecycleStage: string }>(

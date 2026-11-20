@@ -3,6 +3,7 @@ import { OrganizationId } from "@hazel/schema"
 import { Effect } from "effect"
 import { Command } from "foldkit"
 import { fetchSuggestions } from "../../../customers/suggestions"
+import { fetchSupportReport } from "../../../customers/support-report"
 import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
 import { Message } from "./message"
@@ -26,5 +27,16 @@ export const FetchSuggestedChannelLinks = Command.define("FetchSuggestedChannelL
 		fetchSuggestions(organizationId, {}).pipe(
 			Effect.map((items) => Message.SucceededFetchSuggestions({ items })),
 			catchCommon(() => Message.FailedFetchSuggestions()),
+		),
+})
+
+/** The support tiles' numbers for the same range. */
+export const FetchOverviewSupport = Command.define("FetchOverviewSupport", {
+	args: { organizationId: OrganizationId, range: Customers.CustomersRange },
+	messages: [Message.SucceededFetchSupport, Message.FailedFetchSupport],
+	execute: ({ organizationId, range }) =>
+		fetchSupportReport(organizationId, range).pipe(
+			Effect.map((report) => Message.SucceededFetchSupport({ range, report })),
+			catchCommon((reason) => Message.FailedFetchSupport({ range, reason })),
 		),
 })

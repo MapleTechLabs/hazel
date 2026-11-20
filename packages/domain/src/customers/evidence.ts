@@ -5,7 +5,7 @@
  * signal's severity is the rule's severity raised by `step` (capped at `high`), and "worse by a
  * full step" (wake a snoozed signal early, reopen a dismissed one) means `step` went up.
  */
-import { CustomerContactId, CustomerInvoiceId } from "@hazel/schema"
+import { CustomerContactId, CustomerInvoiceId, CustomerIssueId } from "@hazel/schema"
 import { Schema } from "effect"
 import { SubscriptionStatus } from "./enums"
 
@@ -120,6 +120,28 @@ export const RatioEvidence = Schema.TaggedStruct("ratio", {
 	ageDays: Schema.NullOr(Schema.Int),
 })
 
+/** `response_overdue`, `resolution_overdue`: the account's overdue support issues, the most overdue one. */
+export const OverdueEvidence = Schema.TaggedStruct("overdue", {
+	step: EvidenceStep,
+	clock: Schema.Literals(["reply", "resolution"]),
+	/** Open issues of the account past this clock's deadline (by the rule's grace). */
+	count: Schema.Int,
+	issueId: CustomerIssueId,
+	issueTitle: Schema.String,
+	dueAt: IsoTimestamp,
+	overdueMs: Schema.Number,
+})
+
+/** How late, short: "45m", "1h 20m", "2d 3h" (at least a minute). */
+export const overdueLabel = (ms: number): string => {
+	const minutes = Math.max(1, Math.floor(ms / 60_000))
+	if (minutes < 60) return `${minutes}m`
+	const hours = Math.floor(minutes / 60)
+	if (hours < 24) return minutes % 60 === 0 ? `${hours}h` : `${hours}h ${minutes % 60}m`
+	const days = Math.floor(hours / 24)
+	return hours % 24 === 0 ? `${days}d` : `${days}d ${hours % 24}h`
+}
+
 /** Discriminated by `_tag`, which is the `viz` (`EvidenceViz`). */
 export const SignalEvidence = Schema.Union([
 	AmountEvidence,
@@ -128,5 +150,6 @@ export const SignalEvidence = Schema.Union([
 	LimitEvidence,
 	DeltaEvidence,
 	RatioEvidence,
+	OverdueEvidence,
 ])
 export type SignalEvidence = typeof SignalEvidence.Type

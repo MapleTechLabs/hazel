@@ -2,6 +2,7 @@ import { OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test } from "vitest"
 import { overviewFixture } from "../../../lab/fixtures/customers"
+import { EMPTY_SUPPORT_REPORT, SUPPORT_REPORT } from "../../../lab/fixtures/issues"
 import type { Shared } from "../../contract"
 import { sharedDefaults } from "../../test-shared"
 import { Message } from "./message"
@@ -53,5 +54,32 @@ describe("customers overview: range", () => {
 		expect(
 			update(failed, Message.PressedRetry(), shared).commands?.map((command) => command.name),
 		).toEqual(["FetchCustomersOverview"])
+	})
+})
+
+describe("customers overview: support tiles", () => {
+	const names = (result: { readonly commands?: ReadonlyArray<{ readonly name: string }> }) =>
+		(result.commands ?? []).map((command) => command.name)
+
+	test("open and every range switch load the support report for the same range", () => {
+		expect(names(init(undefined, shared))).toContain("FetchOverviewSupport")
+		expect(names(update(loaded, Message.ClickedRange({ range: "7d" }), shared))).toContain(
+			"FetchOverviewSupport",
+		)
+	})
+
+	test("a late answer for another range is dropped; a failure retries the tiles alone", () => {
+		const withSupport = run(loaded, [
+			Message.SucceededFetchSupport({ range: "30d", report: SUPPORT_REPORT }),
+		])
+		expect(withSupport.support._tag).toBe("Success")
+		const switched = run(withSupport, [
+			Message.ClickedRange({ range: "90d" }),
+			Message.SucceededFetchSupport({ range: "30d", report: EMPTY_SUPPORT_REPORT }),
+		])
+		expect(switched.support._tag).toBe("Refreshing")
+		const failed = run(switched, [Message.FailedFetchSupport({ range: "90d", reason: "Offline" })])
+		expect(failed.support._tag).toBe("Failure")
+		expect(names(update(failed, Message.PressedRetrySupport(), shared))).toEqual(["FetchOverviewSupport"])
 	})
 })

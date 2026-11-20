@@ -28,6 +28,7 @@ import { linkChannelAction, unlinkChannelAction } from "../../../customers/chann
 import { setChatAuthorSideAction } from "../../../customers/chat-authors"
 import { fetchSuggestions } from "../../../customers/suggestions"
 import { settleFeatureFlags } from "../../../customers/feature-flags"
+import { fetchSupportReport } from "../../../customers/support-report"
 import { catchCommon, errorToastOf } from "../../../data/actions"
 import { showBackgroundToast } from "../../../overlay/background-toasts"
 import { HazelRpc } from "../../../rpc"
@@ -70,6 +71,22 @@ export const FetchCustomerUsage = Command.define("FetchCustomerUsage", {
 			catchCommon((reason) => Message.FailedFetchUsage({ ...asked, reason })),
 		)
 	},
+})
+
+/** The 30-day Support report, kept to this customer's row (the overview's Support block). */
+export const FetchCustomerSupport = Command.define("FetchCustomerSupport", {
+	args: target,
+	messages: [Message.SucceededFetchSupport, Message.FailedFetchSupport],
+	execute: ({ organizationId, accountId }) =>
+		fetchSupportReport(organizationId, "30d").pipe(
+			Effect.map((report) =>
+				Message.SucceededFetchSupport({
+					accountId,
+					row: report.byAccount.find((row) => row.key === accountId) ?? null,
+				}),
+			),
+			catchCommon((reason) => Message.FailedFetchSupport({ accountId, reason })),
+		),
 })
 
 export const FetchCustomerMrrHistory = Command.define("FetchCustomerMrrHistory", {

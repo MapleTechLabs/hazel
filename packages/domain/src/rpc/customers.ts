@@ -18,12 +18,15 @@ import {
 	CustomerFeatureFlagId,
 	CustomerContactId,
 	CustomerIgnoreRuleId,
+	CustomerIssueId,
 	CustomerImpersonatorId,
 	CustomerNoteId,
 	CustomerSavedViewId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
+	CustomerSlaPolicyId,
 	CustomerUnmatchedRecordId,
+	MessageId,
 	OrganizationId,
 	TransactionId,
 	UserId,
@@ -47,6 +50,8 @@ import {
 	CustomerProvider,
 	CustomerSource,
 	CustomersRange,
+	IssuePriority,
+	IssueStatus,
 	LifecycleStage,
 	SignalOutcome,
 	SignalStatus,
@@ -60,15 +65,18 @@ import {
 	FeatureFlag,
 	IgnoreRule,
 	Invoice,
+	Issue,
 	Note,
 	SavedView,
 	ViewLayout,
 	Signal,
 	SignalRule,
+	SlaPolicy,
 	UnmatchedRecord,
 } from "../customers/models"
 import { AuthorSideOverride } from "../customers/author-side"
 import { AttentionSettings, RuleDraft } from "../customers/rules"
+import { BusinessHours, SlaPolicyDraft, SupportReport } from "../customers/sla"
 import { ViewDraft, ViewLayoutDraft } from "../customers/views"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { RateLimitExceededError } from "../rate-limit-errors"
@@ -108,6 +116,7 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"account",
 			"signal",
 			"rule",
+			"sla_policy",
 			"note",
 			"view",
 			"connection",
@@ -121,6 +130,9 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"author",
 			/** No open suggestion with this id. */
 			"suggestion",
+			"issue",
+			/** No such message in the channel, or one the caller cannot see. */
+			"message",
 		]),
 		id: Schema.String,
 	},
@@ -425,6 +437,40 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 		Tx,
 		CustomersNotFoundError,
 		/** The owner is not a member of the organization. */
+		CustomersInvalidRequestError,
+	),
+
+	/**
+	 * Change a support issue (`docs/customers/issues.md`): any field given. Closing records who and
+	 * when; a closed issue set to any other status reopens. The assignee must be a member.
+	 */
+	write(
+		"customers.issue.update",
+		{
+			issueId: CustomerIssueId,
+			status: Schema.optionalKey(IssueStatus),
+			priority: Schema.optionalKey(IssuePriority),
+			assigneeUserId: Schema.optionalKey(Schema.NullOr(UserId)),
+			tags: Schema.optionalKey(Tags),
+		},
+		Tx,
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+	),
+
+	/**
+	 * Open an issue on a top-level message of a linked channel by hand (any author). The message's
+	 * existing live issue is answered as it is. A channel that is not linked, or a thread, is
+	 * refused (`CustomersInvalidRequestError`); a message the caller cannot see is `not_found`.
+	 */
+	write(
+		"customers.issue.createFromMessage",
+		{
+			channelId: ChannelId,
+			messageId: MessageId,
+		},
+		withTx(Issue.Schema),
+		CustomersNotFoundError,
 		CustomersInvalidRequestError,
 	),
 
@@ -781,7 +827,40 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	),
 ) {}
 
-export const CustomerRpcs = CustomerReadRpcs.merge(CustomerQueueRpcs, CustomerAdminRpcs)
+// ---------------------------------------------------------------------------
+// Support SLAs (`docs/customers/sla.md`): settings for admins and owners, the report for members
+// ---------------------------------------------------------------------------
+
+export class CustomerSlaRpcs extends RpcGroup.make(
+	/** A policy; it goes last in the order. */
+	write("customers.slaPolicy.create", { policy: SlaPolicyDraft }, withTx(SlaPolicy.Schema)),
+
+	write(
+		"customers.slaPolicy.update",
+		{ policyId: CustomerSlaPolicyId, policy: SlaPolicyDraft },
+		withTx(SlaPolicy.Schema),
+		CustomersNotFoundError,
+	),
+
+	/** Open issues under it keep the targets they started with. */
+	write("customers.slaPolicy.delete", { policyId: CustomerSlaPolicyId }, Tx, CustomersNotFoundError),
+
+	/** The whole order, first match first: every live policy exactly once. */
+	write(
+		"customers.slaPolicy.reorder",
+		{ policyIds: Schema.Array(CustomerSlaPolicyId).check(Schema.isMaxLength(100)) },
+		Tx,
+		CustomersInvalidRequestError,
+	),
+
+	/** The working week of policies on business hours; running clocks keep their deadlines. */
+	write("customers.businessHours.update", { businessHours: BusinessHours }, Tx),
+
+	/** First response and resolution times, % within SLA and breaches for issues opened in the range. Any member. */
+	read("customers.support.report", { range: CustomersRange }, SupportReport),
+) {}
+
+export const CustomerRpcs = CustomerReadRpcs.merge(CustomerQueueRpcs, CustomerAdminRpcs, CustomerSlaRpcs)
 
 // ---------------------------------------------------------------------------
 // The caller's organizations (the directory, not an org's object)

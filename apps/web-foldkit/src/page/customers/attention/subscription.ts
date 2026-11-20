@@ -7,6 +7,7 @@ import {
 	orgMembersStream,
 	signalsStream,
 } from "../../../customers/queries"
+import { queueKeyFilter } from "../../../customers/ui/queue-keys"
 import type { PageSubscriptionInput } from "../../contract"
 import { Message } from "./message"
 import type { Model, QueueKey } from "./model"
@@ -34,60 +35,12 @@ const KEYS = new Map<string, QueueKey>([
 	["/", "search"],
 ])
 
-/** The event's element; none for a key on the document itself (or outside a DOM). */
-const elementOf = (target: EventTarget | null): HTMLElement | null =>
-	typeof HTMLElement !== "undefined" && target instanceof HTMLElement ? target : null
-
-const isEditable = (target: EventTarget | null): boolean => {
-	const element = elementOf(target)
-	return (
-		element !== null &&
-		(element.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName))
-	)
-}
-
-/** A dialog or an open menu has the keyboard (its own focus and keys). */
-const isInOverlay = (target: EventTarget | null): boolean =>
-	elementOf(target)?.closest("dialog, [role=dialog], [role=menu]") != null
-
-/** Enter and Space keep activating a focused button or link. */
-const isPressable = (target: EventTarget | null): boolean =>
-	elementOf(target)?.closest("button, a, [role=menuitem]") != null
-
-/** The arrows walk the queue from a row or with nothing focused; anywhere else they scroll. */
-const isArrowForQueue = (target: EventTarget | null): boolean => {
-	const element = elementOf(target)
-	return element === null || element.tagName === "BODY" || element.closest("[role=table]") !== null
-}
+/** Holding j/k walks the queue; a held action key acts once. */
+const REPEATABLE: ReadonlySet<QueueKey> = new Set(["next", "previous"])
+const PRESSABLE: ReadonlySet<QueueKey> = new Set(["open", "preview"])
 
 /** The queue key a keydown means, or none (typing, a modifier, a pressable target for Enter/Space). */
-export const queueKeyOf = (event: {
-	readonly key: string
-	readonly target: EventTarget | null
-	readonly altKey: boolean
-	readonly ctrlKey: boolean
-	readonly metaKey: boolean
-	readonly shiftKey: boolean
-	readonly repeat: boolean
-}): QueueKey | null => {
-	if (
-		event.altKey ||
-		event.ctrlKey ||
-		event.metaKey ||
-		// Some layouts need Shift for "/".
-		(event.shiftKey && event.key !== "/") ||
-		isEditable(event.target) ||
-		isInOverlay(event.target)
-	)
-		return null
-	const key = KEYS.get(event.key.length === 1 ? event.key.toLowerCase() : event.key)
-	if (key === undefined) return null
-	if ((event.key === "ArrowUp" || event.key === "ArrowDown") && !isArrowForQueue(event.target)) return null
-	// Holding j/k walks the queue; a held action key acts once.
-	if (event.repeat && key !== "next" && key !== "previous") return null
-	if ((key === "open" || key === "preview") && isPressable(event.target)) return null
-	return key
-}
+export const queueKeyOf = queueKeyFilter(KEYS, REPEATABLE, PRESSABLE)
 
 const isMenuOpen = (model: Model) =>
 	[model.assignMenu, model.snoozeMenu, model.filterMenu, model.sortMenu].some(

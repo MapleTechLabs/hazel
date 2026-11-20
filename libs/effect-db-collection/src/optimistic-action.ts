@@ -228,6 +228,17 @@ export function optimisticAction<
 				mutateResult = onMutate(variables)
 			})
 
+			// TanStack completes an empty transaction without running `mutationFn`: the RPC would never
+			// run and the result would be undefined. An action with nothing to show first is a plain RPC
+			// plus `awaitSeqEffect`, not an optimistic action.
+			if (transaction.mutations.length === 0) {
+				return yield* Effect.die(
+					new Error(
+						"optimisticAction: onMutate changed no collection, so the mutation would never run",
+					),
+				)
+			}
+
 			const persisted = yield* Effect.exit(
 				Effect.tryPromise({
 					try: () => transaction.when("settled"),

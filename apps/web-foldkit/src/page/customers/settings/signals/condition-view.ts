@@ -90,6 +90,23 @@ const flag = (h: H, context: ConditionContext, key: string, label: string): Html
 		label,
 	)
 
+/** The SLA templates: one grace field; the deadlines come from the SLA policies. */
+const graceRows = (h: H, context: ConditionContext, sentence: string): ReadonlyArray<Html> => [
+	rows(h, [
+		row(
+			h,
+			context,
+			"Grace (minutes)",
+			[sentence, num(h, context, "graceMinutes", "Grace in minutes"), "minutes"],
+			["graceMinutes"],
+		),
+	]),
+	note(
+		h,
+		"Deadlines come from the SLA policies. Covers every customer, whatever Needs attention covers; the scope below still applies.",
+	),
+]
+
 const sentenceRows = (h: H, context: ConditionContext): ReadonlyArray<Html> => {
 	const { form } = context
 	switch (form.template) {
@@ -324,6 +341,10 @@ const sentenceRows = (h: H, context: ConditionContext): ReadonlyArray<Html> => {
 					),
 				]),
 			]
+		case "response_overdue":
+			return graceRows(h, context, "An open issue's reply is overdue by at least")
+		case "resolution_overdue":
+			return graceRows(h, context, "An open issue is past its resolution target by at least")
 	}
 }
 
