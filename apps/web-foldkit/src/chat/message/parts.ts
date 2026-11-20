@@ -1,6 +1,6 @@
 import { authorSideReasonLabel } from "@hazel/domain/customers"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
-import { formatDistanceToNowStrict } from "date-fns"
+import { formatDistanceStrict } from "~/lib/format-distance"
 import { cx } from "~/utils/cx"
 import { IconChevronRight, IconDiscord, IconPin, IconSlack, IconSparkles } from "../../icons"
 import { avatar } from "../../ui/avatar"
@@ -12,7 +12,7 @@ import type { MessageRow, ReplyPreview, ThreadPreview } from "../../page/chat/ro
 
 const pad = (value: number) => String(value).padStart(2, "0")
 
-/** date-fns `format(date, "HH:mm")` in the local time zone. */
+/** "HH:mm" in the local time zone. */
 export const formatTime = (ms: number) => {
 	const date = new Date(ms)
 	return `${pad(date.getHours())}:${pad(date.getMinutes())}`
@@ -261,7 +261,10 @@ export const threadPreviewView = <M>(h: HtmlBuilder<M>, thread: ThreadPreview, o
 					),
 					h.span(
 						[h.Class("ml-1 shrink-0 text-muted-fg text-xs")],
-						[formatDistanceToNowStrict(new Date(last.createdAtMs), { addSuffix: true })],
+						// The memoized list doesn't take the Model's clock (it would redraw on every tick), so
+						// the time is read when the list draws, as date-fns' `formatDistanceToNowStrict` did.
+						// oxlint-disable-next-line foldkit/no-impure-call-at-decision-time
+						[formatDistanceStrict(last.createdAtMs, Date.now())],
 					),
 				],
 			),

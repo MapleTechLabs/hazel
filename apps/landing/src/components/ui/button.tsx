@@ -1,5 +1,4 @@
 import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
@@ -31,6 +30,16 @@ const buttonVariants = cva(
 		},
 	},
 )
+
+/** Renders its one child element in its place, with this element's props and classes merged in. */
+function Slot({ children, className, ...props }: React.HTMLAttributes<HTMLElement>) {
+	if (!React.isValidElement<React.HTMLAttributes<HTMLElement>>(children)) return null
+	return React.cloneElement(children, {
+		...props,
+		...children.props,
+		className: cn(className, children.props.className),
+	})
+}
 
 function Button({
 	className,

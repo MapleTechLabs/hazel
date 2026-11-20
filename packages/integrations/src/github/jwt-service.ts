@@ -1,7 +1,6 @@
 import { createPrivateKey } from "node:crypto"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { Context, Config, Effect, Layer, Option, Redacted, Schema } from "effect"
-import { SignJWT } from "jose"
 
 // ============================================================================
 // Error Types
@@ -99,6 +98,27 @@ export const loadGitHubAppConfig = Effect.withSpan("GitHubAppJWTService.loadConf
 // JWT Generation
 // ============================================================================
 
+const RS256 = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" } as const
+
+const base64Url = (input: string | Uint8Array): string => {
+	const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input
+	let binary = ""
+	for (const byte of bytes) binary += String.fromCharCode(byte)
+	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+}
+
+/**
+ * The PEM as a WebCrypto signing key. Node's `createPrivateKey` reads both PKCS#1 ("RSA PRIVATE KEY",
+ * what GitHub generates) and PKCS#8; the KeyObject then converts directly where the runtime can, or
+ * through a JWK (workerd), the same two paths jose took.
+ */
+const importSigningKey = async (privateKeyPem: string): Promise<CryptoKey> => {
+	const keyObject = createPrivateKey(privateKeyPem)
+	if (typeof keyObject.toCryptoKey === "function")
+		return keyObject.toCryptoKey(RS256, false, ["sign"]) as CryptoKey
+	return crypto.subtle.importKey("jwk", keyObject.export({ format: "jwk" }), RS256, false, ["sign"])
+}
+
 /**
  * Generate a JWT for authenticating as the GitHub App.
  *
@@ -114,21 +134,22 @@ export const generateAppJWT = (
 	Effect.tryPromise({
 		try: async () => {
 			const now = Math.floor(Date.now() / 1000)
-
-			// Import the private key for signing
-			// Use Node's createPrivateKey which handles both PKCS#1 (RSA PRIVATE KEY)
-			// and PKCS#8 (PRIVATE KEY) formats - GitHub generates PKCS#1 keys
-			const privateKey = createPrivateKey(privateKeyPem)
-
-			// Create and sign the JWT
-			const jwt = await new SignJWT({})
-				.setProtectedHeader({ alg: "RS256" })
-				.setIssuedAt(now - 30) // 30 seconds in the past for clock drift (security hardened)
-				.setExpirationTime(now + 600) // 10 minutes from now (max allowed by GitHub)
-				.setIssuer(appId)
-				.sign(privateKey)
-
-			return jwt
+			const header = base64Url(JSON.stringify({ alg: "RS256" }))
+			const payload = base64Url(
+				JSON.stringify({
+					iat: now - 30, // 30 seconds in the past for clock drift
+					exp: now + 600, // 10 minutes from now (max allowed by GitHub)
+					iss: appId,
+				}),
+			)
+			const signingInput = `${header}.${payload}`
+			const key = await importSigningKey(privateKeyPem)
+			const signature = await crypto.subtle.sign(
+				RS256.name,
+				key,
+				new TextEncoder().encode(signingInput),
+			)
+			return `${signingInput}.${base64Url(new Uint8Array(signature))}`
 		},
 		catch: (error) =>
 			new GitHubAppJWTError({

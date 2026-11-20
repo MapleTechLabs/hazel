@@ -1,6 +1,6 @@
-import { formatDistanceStrict } from "date-fns"
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
+import { formatDistanceStrict } from "~/lib/format-distance"
 import { commonMessage } from "~/lib/error-messages"
 import { IconCopy } from "../../../icons"
 import { badge } from "../../../ui/badge"
@@ -12,7 +12,7 @@ import { divider, pageHeader, settingsRow } from "../shared"
 import { Message } from "./message"
 import { canCreateToken, type CreatedToken, type Grant, Grants, type Model, type TokenAccess } from "./model"
 
-const ago = (ms: number, nowMs: number) => formatDistanceStrict(ms, Math.max(ms, nowMs), { addSuffix: true })
+const ago = (ms: number, nowMs: number) => formatDistanceStrict(ms, Math.max(ms, nowMs))
 
 const copyButton = (h: HtmlBuilder<Message>, target: "McpUrl" | "Token", text: string, label: string): Html =>
 	button(h, { intent: "outline", size: "sm", onPress: Message.ClickedCopy({ target, text }) }, [

@@ -578,11 +578,17 @@ describe("htmlRenders rows", () => {
 })
 
 describe("streamingHtml", () => {
-	test("raw HTML in the stream renders as text, never as elements", () => {
+	test("raw HTML in the stream is dropped, never rendered as elements", () => {
 		const html = streamingHtml('Hi <script>alert(1)</script> <img src=x onerror="alert(1)"> done')
 		expect(html).not.toMatch(/<script/i)
 		expect(html).not.toMatch(/<img/i)
-		expect(html).toContain("&lt;script&gt;")
+		expect(html).toContain("Hi")
+		expect(html).toContain("done")
+	})
+
+	test("closes what the stream left open", () => {
+		expect(streamingHtml("still **typing")).toContain("<strong>typing</strong>")
+		expect(streamingHtml("```ts\nconst a = 1")).toMatch(/<pre[^>]*><code class="language-ts">const a = 1/)
 	})
 
 	test("text after an inline raw-text tag is escaped too", () => {

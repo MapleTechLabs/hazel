@@ -1,6 +1,6 @@
 import { AttachmentId, ChannelId, ConnectConversationId, MessageId, UserId } from "@hazel/schema"
 import { Schema as S } from "effect"
-import { v5 as uuidv5 } from "uuid"
+import { uuidv5 } from "../uuid"
 import { MessageEmbeds } from "./message-embed-schema"
 import * as M from "./utils"
 import { baseFields } from "./utils"

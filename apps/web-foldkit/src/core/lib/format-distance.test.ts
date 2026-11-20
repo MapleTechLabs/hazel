@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { formatDistanceToNow } from "./format-distance"
+import { formatDistanceStrict, formatDistanceToNow } from "./format-distance"
 
 const NOW = Date.UTC(2026, 2, 12, 12, 0)
 const MINUTE = 60_000
@@ -27,5 +27,24 @@ describe("formatDistanceToNow", () => {
 
 	test("words a future time with `in`", () => {
 		expect(formatDistanceToNow(NOW + 2 * DAY * MINUTE, NOW)).toBe("in 2 days")
+	})
+})
+
+describe("formatDistanceStrict", () => {
+	const ago = (minutes: number) => formatDistanceStrict(NOW - minutes * MINUTE, NOW)
+
+	test("words a past time in exact units", () => {
+		expect(formatDistanceStrict(NOW - 20_000, NOW)).toBe("20 seconds ago")
+		expect(ago(1)).toBe("1 minute ago")
+		expect(ago(59)).toBe("59 minutes ago")
+		expect(ago(90)).toBe("2 hours ago")
+		expect(ago(26 * 60)).toBe("1 day ago")
+		expect(ago(40 * DAY)).toBe("1 month ago")
+		expect(ago(363 * DAY)).toBe("1 year ago")
+		expect(ago(800 * DAY)).toBe("2 years ago")
+	})
+
+	test("words a future time with `in`", () => {
+		expect(formatDistanceStrict(NOW + 3 * 60 * MINUTE, NOW)).toBe("in 3 hours")
 	})
 })
