@@ -111,7 +111,11 @@ export const indexedLinkOwners = (
 			for (const row of rows) owners.set(row.id.slice(prefix.length), row.organizationId)
 		}
 		return owners
-	})
+	}).pipe(
+		Effect.withSpan("ChatSync.indexedLinkOwners", {
+			attributes: { "chat_sync.provider": provider, "chat_sync.channels": externalChannelIds.length },
+		}),
+	)
 
 /**
  * Upsert a machine user in the directory by its external id and return it as a projection: a
