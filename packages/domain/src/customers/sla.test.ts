@@ -226,6 +226,71 @@ describe("issue shapes", () => {
 	})
 })
 
+describe("late deliveries and resumes (review regressions)", () => {
+	it("a customer message delivered after the reply it preceded starts no clock, nor reopens a closed issue", () => {
+		const steps = replay(
+			ctx,
+			"Europe/Berlin",
+			[
+				["2026-11-23 10:00", "open", "medium"],
+				["2026-11-23 10:05", "reply"],
+				["2026-11-23 10:06", "status", "waiting_on_customer"],
+				["2026-11-23 10:07", "customer"],
+			],
+			"2026-11-23 10:07",
+		)
+		const answered = steps.at(-2)!.state
+		// The 10:07 line above is in order; a 10:03 one arriving now is not.
+		const late = stepSla(ctx, answered, { _tag: "CustomerMessage", at: at("2026-11-23 10:03") })
+		expect(late).toBe(answered)
+		const closed = stepSla(ctx, answered, {
+			_tag: "Status",
+			at: at("2026-11-23 11:00"),
+			status: "closed",
+		})
+		expect(stepSla(ctx, closed, { _tag: "CustomerMessage", at: at("2026-11-23 10:30") })).toBe(closed)
+		// An in-order message after the close reopens it.
+		const reopened = stepSla(ctx, closed, { _tag: "CustomerMessage", at: at("2026-11-23 12:00") })
+		expect(reopened.resolution.resolvedAt).toBeNull()
+		expect(reopened.reply).toMatchObject({ first: false, startedAt: at("2026-11-23 12:00") })
+	})
+
+	it("an older team reply delivered late does not answer the running clock, but moves the first response back", () => {
+		const steps = replay(
+			ctx,
+			"Europe/Berlin",
+			[
+				["2026-11-23 09:00", "open", "medium"],
+				["2026-11-23 09:20", "reply"],
+				["2026-11-23 10:00", "customer"],
+			],
+			"2026-11-23 10:00",
+		)
+		const waiting = steps.at(-1)!.state
+		const late = stepSla(ctx, waiting, { _tag: "TeamReply", at: at("2026-11-23 09:10") })
+		expect(late.reply).toMatchObject({ startedAt: at("2026-11-23 10:00"), metAt: null })
+		expect(late.firstResponse?.metAt).toBe(at("2026-11-23 09:10"))
+	})
+
+	it("a breach already sent stays sent when the clock resumes outside working hours", () => {
+		// Urgent: 8h resolution; breached Mon 17:00, paused, the customer writes at 22:00.
+		const steps = replay(
+			ctx,
+			"Europe/Berlin",
+			[
+				["2026-11-23 09:00", "open", "urgent"],
+				["2026-11-23 09:30", "reply"],
+				["2026-11-23 17:30", "status", "waiting_on_customer"],
+				["2026-11-23 22:00", "customer"],
+			],
+			"2026-11-24 12:00",
+		)
+		const alerts = steps.flatMap((step) => step.alerts.map((alert) => `${alert.clock}:${alert.kind}`))
+		expect(alerts.filter((alert) => alert === "resolution:breach")).toHaveLength(1)
+		expect(steps.at(-1)!.state.resolution.breachedAt).not.toBeNull()
+	})
+})
+
 describe("support report", () => {
 	const always: SlaContext = { ...ctx, calendar: { _tag: "always" } }
 	// Medium (24/7): 4h reply, 24h resolution.

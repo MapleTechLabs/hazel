@@ -231,4 +231,28 @@ describe("SLA clocks on issues", () => {
 				expect(signals()).toMatchObject([{ template: "response_overdue", status: "auto_resolved" }])
 			}),
 		))
+
+	it("notifies the owner when the assignee is no longer a member; a deleted policy leaves its issues' targets", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, now, open, sla, notifications } = yield* setup
+				const issue = yield* open(10)
+				yield* world.object.run(updateIssueRow(issue, { assigneeUserId: uuid() as UserId }))
+				expect(yield* world.object.run(runSlaAlerts(new Date(now + 36 * MIN)))).toEqual({
+					handled: 1,
+					notified: 1,
+				})
+				yield* world.object.afterCommit
+				expect((yield* notifications).map((row) => row.reason)).toEqual(["sla_reply_warning"])
+
+				const [policy] = world.rows<{ id: string }>(`SELECT id FROM customer_sla_policies`)
+				ok(yield* world.call("customers.slaPolicy.delete", { policyId: policy!.id }, world.owner))
+				const kept = sla(issue.id)!
+				expect(kept.policyName).toBe("Standard")
+				expect(world.rows(`SELECT policyId FROM customer_issue_slas`)).toEqual([{ policyId: null }])
+				// A new issue under no policy gets no clocks.
+				const unpoliced = yield* open(0)
+				expect(sla(unpoliced.id)).toBeUndefined()
+			}),
+		))
 })

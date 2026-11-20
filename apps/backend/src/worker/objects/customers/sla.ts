@@ -227,19 +227,22 @@ const notify = Effect.fn("Customers.notifySlaAlert")(function* (
 			.limit(1),
 	)
 	const accountName = Option.match(account, { onNone: () => "Customer", onSome: (row) => row.name })
-	const recipient: UserId | null =
-		issue.assigneeUserId ??
-		Option.getOrNull(Option.flatMap(account, (row) => Option.fromNullishOr(row.ownerUserId)))
-	if (recipient === null) return false
-	const member = yield* db.first(
-		SQLite.from(schema.customerMembersTable)
-			.select("memberId")
-			.where(($) => [$.userId.eq(recipient)])
-			.limit(1),
-	)
-	const memberId = Option.getOrNull(Option.flatMap(member, (row) => Option.fromNullishOr(row.memberId)))
-	if (memberId === null) {
-		yield* Effect.logWarning("SLA alert has no member to notify", { issueId: issue.id, recipient })
+	const owner = Option.getOrNull(Option.flatMap(account, (row) => Option.fromNullishOr(row.ownerUserId)))
+	// The first of the assignee and the owner who is still a member (with a known member id).
+	const candidates = [issue.assigneeUserId, owner].filter((id): id is UserId => id !== null)
+	const members =
+		candidates.length === 0
+			? []
+			: yield* db.run(
+					SQLite.from(schema.customerMembersTable)
+						.select("userId", "memberId")
+						.where(($) => [$.userId.in_(...candidates), $.memberId.isNotNull()]),
+				)
+	const recipient = candidates.find((id) => members.some((member) => member.userId === id))
+	const memberId = members.find((member) => member.userId === recipient)?.memberId ?? null
+	if (recipient === undefined || memberId === null) {
+		if (candidates.length > 0)
+			yield* Effect.logWarning("SLA alert has no member to notify", { issueId: issue.id, candidates })
 		return false
 	}
 	yield* enqueueEffect(CustomerNotificationEffects.createCustomerNotification, userTarget(recipient), {

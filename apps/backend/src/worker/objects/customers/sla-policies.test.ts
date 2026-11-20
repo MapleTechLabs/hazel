@@ -51,6 +51,16 @@ describe("SLA policies", () => {
 						),
 					),
 				).toBe("CustomersInvalidRequestError")
+				// …and each once.
+				expect(
+					tagOf(
+						yield* world.call(
+							"customers.slaPolicy.reorder",
+							{ policyIds: [created.data.id, created.data.id] },
+							world.owner,
+						),
+					),
+				).toBe("CustomersInvalidRequestError")
 				ok(
 					yield* world.call(
 						"customers.slaPolicy.reorder",

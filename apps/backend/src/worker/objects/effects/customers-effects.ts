@@ -119,6 +119,7 @@ const CUSTOMER_DATA: ReadonlyArray<Parameters<typeof SQLite.deleteFrom>[0]> = [
 	schema.customerChannelLinksTable,
 	schema.customerIssuesTable,
 	schema.customerIssueMessagesTable,
+	schema.customerIssueSlasTable,
 	schema.customerImpersonatorsTable,
 	schema.customerImpersonationsTable,
 	schema.customerChatParticipantsTable,

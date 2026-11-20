@@ -79,6 +79,12 @@ export const CustomerSlaRpcLive = CustomerSlaRpcs.toLayer(
 									.returning("id"),
 							)
 							if (row === undefined) return yield* notFound("sla_policy", policyId)
+							// Its issues keep the targets they started with, under no policy.
+							yield* db.run(
+								SQLite.update(schema.customerIssueSlasTable)
+									.set({ policyId: null, updatedAt: now })
+									.where(($) => [$.policyId.eq(policyId)]),
+							)
 						}),
 					)
 				}).pipe(Effect.withSpan("CustomerSla.policyDelete"), remap),
@@ -90,7 +96,11 @@ export const CustomerSlaRpcLive = CustomerSlaRpcs.toLayer(
 					return yield* txOnly(
 						Effect.gen(function* () {
 							const live = new Set((yield* livePolicies).map((row) => row.id))
-							if (policyIds.length !== live.size || !policyIds.every((id) => live.has(id)))
+							if (
+								policyIds.length !== live.size ||
+								new Set(policyIds).size !== policyIds.length ||
+								!policyIds.every((id) => live.has(id))
+							)
 								return yield* invalid("The order must name every policy exactly once")
 							yield* Effect.forEach(policyIds, (id, position) =>
 								db.run(

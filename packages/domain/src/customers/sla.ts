@@ -373,6 +373,31 @@ const resolutionDeadlines = (
 
 const running = (clock: ResolutionClock) => clock.runningSince !== null
 
+/**
+ * A running resolution clock's new deadlines, keeping a warning or breach already sent while the
+ * target is used up: with nothing left, the deadline is the next working minute, which may lie ahead.
+ */
+const rederived = (
+	ctx: SlaContext,
+	clock: ResolutionClock,
+	priority: SlaPriority,
+	at: number,
+	consumedMs: number,
+): ResolutionClock => {
+	const targetMs = ctx.targets[priority].resolutionMinutes * MINUTE
+	const deadlines = resolutionDeadlines(ctx, priority, at, consumedMs)
+	const warnPassed = consumedMs >= targetMs * (1 - ctx.warnBeforePct / 100) || deadlines.warnAt <= at
+	const duePassed = consumedMs >= targetMs || deadlines.dueAt <= at
+	return {
+		...clock,
+		runningSince: at,
+		consumedMs,
+		...deadlines,
+		warnedAt: warnPassed ? clock.warnedAt : null,
+		breachedAt: duePassed ? clock.breachedAt : null,
+	}
+}
+
 const pauseResolution = (ctx: SlaContext, clock: ResolutionClock, at: number): ResolutionClock =>
 	clock.runningSince === null
 		? clock
@@ -392,16 +417,7 @@ const resumeResolution = (
 	at: number,
 ): ResolutionClock => {
 	if (running(clock)) return clock
-	const deadlines = resolutionDeadlines(ctx, priority, at, clock.consumedMs)
-	return {
-		...clock,
-		runningSince: at,
-		pausedAt: null,
-		resolvedAt: null,
-		...deadlines,
-		warnedAt: deadlines.warnAt > at ? null : clock.warnedAt,
-		breachedAt: deadlines.dueAt > at ? null : clock.breachedAt,
-	}
+	return { ...rederived(ctx, clock, priority, at, clock.consumedMs), pausedAt: null, resolvedAt: null }
 }
 
 const isOpen = (clock: ReplyClock | null): clock is ReplyClock =>
@@ -437,7 +453,8 @@ export const stepSla = (ctx: SlaContext, state: SlaState, event: SlaEvent): SlaS
 		case "TeamReply": {
 			// `isOpen` narrows a met or stopped clock away; keep the stored one for the late-delivery case.
 			const current: ReplyClock | null = state.reply
-			if (!isOpen(state.reply)) {
+			// A reply sent before the running clock started (delivered late) does not answer it.
+			if (!isOpen(state.reply) || at < state.reply.startedAt) {
 				// A late delivery of an earlier reply moves the first response back.
 				const first = state.firstResponse
 				if (first === null || first.metAt === null || at >= first.metAt || at < first.startedAt)
@@ -461,6 +478,9 @@ export const stepSla = (ctx: SlaContext, state: SlaState, event: SlaEvent): SlaS
 			return { ...state, reply: met, firstResponse: met.first ? met : state.firstResponse }
 		}
 		case "CustomerMessage": {
+			// Delivered late: written before the last reply or the close, it was already answered.
+			if (at < (state.reply?.metAt ?? -Infinity) || at < (state.resolution.resolvedAt ?? -Infinity))
+				return state
 			// The customer is waiting again: a reply is due (unless one already is), and a paused or
 			// closed issue's resolution clock runs again.
 			// The first customer message of an issue a member opened is its first response's start.
@@ -495,19 +515,13 @@ export const stepSla = (ctx: SlaContext, state: SlaState, event: SlaEvent): SlaS
 			const resolution =
 				clock.runningSince === null
 					? clock
-					: (() => {
-							const consumedMs =
-								clock.consumedMs + workingTimeBetween(ctx.calendar, clock.runningSince, at)
-							const deadlines = resolutionDeadlines(ctx, event.priority, at, consumedMs)
-							return {
-								...clock,
-								runningSince: at,
-								consumedMs,
-								...deadlines,
-								warnedAt: deadlines.warnAt > at ? null : clock.warnedAt,
-								breachedAt: deadlines.dueAt > at ? null : clock.breachedAt,
-							}
-						})()
+					: rederived(
+							ctx,
+							clock,
+							event.priority,
+							at,
+							clock.consumedMs + workingTimeBetween(ctx.calendar, clock.runningSince, at),
+						)
 			return { ...state, priority: event.priority, reply, resolution }
 		}
 	}

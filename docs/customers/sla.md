@@ -14,9 +14,11 @@ the report and UI). Open items: §7.
   days, start and end; default Mon–Fri 09:00–17:00 UTC). Each policy counts either `business`
   hours or `always` (24/7). A customer writing Fri 16:50 with a 1 h target is due Mon 09:50 on
   business hours, Fri 17:50 on 24/7. No holidays yet.
-- **Two clocks.** _Reply due_ and _resolution_ (below). A reopen, or the customer writing again
-  after a team reply, starts a new reply-due clock with the first-response target: it shows live and
-  warns, but only the first one counts as first response time in reports.
+- **Two clocks.** _Reply due_ and _resolution_ (below). The customer writing again after a team
+  reply (which also reopens a closed issue) starts a new reply-due clock with the first-response
+  target: it shows live and warns, but only the first one counts as first response time in reports.
+  A member reopening by hand resumes resolution only. Messages delivered late (written before the
+  last reply or the close) change nothing but an earlier first response.
 - **Resolution pauses** while the issue waits on the customer or is on hold.
 - **SLA signals cover every customer.** `response_overdue` and `resolution_overdue` skip the org's
   Needs attention coverage (stages, required sources) but respect the rule's own scope: a Slack-only
