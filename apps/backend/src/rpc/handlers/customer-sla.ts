@@ -118,11 +118,15 @@ export const CustomerSlaRpcLive = CustomerSlaRpcs.toLayer(
 					yield* requireMember
 					const now = yield* Clock.currentTimeMillis
 					const from = now - RANGE_DAYS[range] * 86_400_000
-					// The issues opened in the range, and every open one (overdue now).
 					const rows = yield* db.run(
 						SQLite.from(schema.customerIssueSlasTable, "s")
 							.innerJoin(schema.customerIssuesTable, "i", (sla, issue) =>
-								SQLite.and(issue.id.eq(sla.id), issue.deletedAt.isNull()),
+								SQLite.and(
+									issue.id.eq(sla.id),
+									issue.deletedAt.isNull(),
+									// Opened in the range, or still open (overdue now counts every open one).
+									SQLite.or(issue.openedAt.gte(new Date(from)), issue.closedAt.isNull()),
+								),
 							)
 							.innerJoin(schema.customerAccountsTable, "a", (sla, account) =>
 								account.id.eq(sla.accountId),
@@ -135,13 +139,10 @@ export const CustomerSlaRpcLive = CustomerSlaRpcs.toLayer(
 								targets: $.targets,
 								state: $.state,
 								openedAt: $.i.openedAt,
-								closedAt: $.i.closedAt,
 							})),
 					)
 					return supportReport(
-						rows
-							.filter((row) => row.closedAt === null || row.openedAt.getTime() >= from)
-							.map((row) => ({ ...row, openedAt: row.openedAt.getTime() })),
+						rows.map((row) => ({ ...row, openedAt: row.openedAt.getTime() })),
 						from,
 						now,
 					)
