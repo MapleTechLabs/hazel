@@ -126,7 +126,7 @@ const menu = (
 		toParentMessage: options.toMessage,
 	})
 
-/** The selected issue's actions: Assign, Status, Priority, Open thread. */
+/** The selected issue's actions: Assign, Status, Priority, Open in chat. */
 const issueActions = (
 	h: HtmlBuilder<Message>,
 	model: Model,
@@ -186,7 +186,7 @@ const issueActions = (
 		toMessage: (message) => Message.GotPriorityMenuMessage({ message }),
 	}),
 	queueAction(h, {
-		label: "Open thread",
+		label: "Open in chat",
 		icon: IconExternalLink(h, icon),
 		shortcut: "↵",
 		onPress: Message.PressedInboxKey({ key: "open" }),
@@ -497,7 +497,7 @@ const SHORTCUTS: ReadonlyArray<Shortcut> = [
 	{ keys: ["S"], label: "Status" },
 	{ keys: ["P"], label: "Priority" },
 	{ keys: ["C"], label: "Close / reopen" },
-	{ keys: ["Enter"], label: "Open thread" },
+	{ keys: ["Enter"], label: "Open in chat" },
 	{ keys: ["O"], label: "Open customer" },
 ]
 

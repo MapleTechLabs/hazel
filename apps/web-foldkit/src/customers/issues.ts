@@ -256,22 +256,25 @@ export const updateIssueAction = (props: {
 	readonly actor: UserId
 }) => Effect.flatMap(Clock.currentTimeMillis, (ms) => updateIssue({ ...props, at: new Date(ms) }))
 
-/** Open an issue on a top-level message of a linked channel; answers the issue (an existing one as it is). */
-export const createIssueFromMessageAction = optimisticAction({
-	collections: [customerIssueCollection],
-	onMutate: (_props: {
-		readonly organizationId: OrganizationId
-		readonly channelId: ChannelId
-		readonly messageId: MessageId
-	}) => ({}),
-	mutate: (props) =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			const result = yield* client("customers.issue.createFromMessage", {
-				organizationId: props.organizationId,
-				channelId: props.channelId,
-				messageId: props.messageId,
-			})
-			return { data: result.data, transactionId: result.transactionId }
-		}),
-})
+/**
+ * Open an issue on a top-level message of a linked channel; answers the issue (an existing one as
+ * it is) once the customers source streamed it. Nothing to show before the server answers (its
+ * title and timestamps are the server's), so no optimistic row: an empty optimistic transaction
+ * would never run the RPC.
+ */
+export const createIssueFromMessageAction = (props: {
+	readonly organizationId: OrganizationId
+	readonly channelId: ChannelId
+	readonly messageId: MessageId
+}) =>
+	Effect.gen(function* () {
+		const client = yield* HazelRpc
+		const result = yield* client("customers.issue.createFromMessage", {
+			organizationId: props.organizationId,
+			channelId: props.channelId,
+			messageId: props.messageId,
+		})
+		// The row usually streams first; a slow stream only delays the chips, so a timeout is not an error.
+		yield* Effect.ignore(customerIssueCollection.utils.awaitSeqEffect(result.transactionId))
+		return result.data
+	})

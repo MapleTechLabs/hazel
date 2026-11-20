@@ -212,19 +212,32 @@ const setPriority = (
 	)
 }
 
-/** Where the conversation is: its thread, else the root message's channel. */
-const openThread = (model: Model, shared: Shared, issue: IssueRow | undefined): Return =>
-	issue === undefined
-		? { model }
-		: {
+/**
+ * The channel the issue's root message is in, where its thread opens from the message. A channel the
+ * person does not see (or a demo issue's stand-in) says so instead of opening a channel that never
+ * loads; until the channels list answers, the channel opens.
+ */
+const openThread = (model: Model, shared: Shared, issue: IssueRow | undefined): Return => {
+	if (issue === undefined) return { model }
+	const isKnown =
+		model.channels.length === 0 || model.channels.some((channel) => channel.id === issue.sourceChannelId)
+	return isKnown
+		? {
 				model,
 				outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
-					AppRoute.ChatChannel({
-						orgSlug,
-						channelId: issue.threadChannelId ?? issue.sourceChannelId,
+					AppRoute.ChatChannel({ orgSlug, channelId: issue.sourceChannelId }),
+				),
+			}
+		: {
+				model,
+				outMessage: toast(
+					errorToastOf({
+						title: "Can't open this conversation",
+						description: "Its channel isn't one you can see.",
 					}),
 				),
 			}
+}
 
 const openCustomer = (model: Model, shared: Shared, issue: IssueRow | undefined): Return =>
 	issue === undefined

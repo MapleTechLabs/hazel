@@ -30,6 +30,9 @@ Replies still happen in the channel or thread; the inbox links into chat.
     A member sets any status by hand; closing records `closedAt` / `closedByUserId`, and setting a
     closed issue to anything else reopens it.
 
+- **By hand on a team message** (a teammate relays what the customer said elsewhere), the issue
+  starts as waiting on us, with no customer timestamps. A thread that already has replies when the
+  issue is opened by hand counts from then on: earlier replies are not counted.
 - **A team top-level message** opens nothing, nor does a reply under a message that has no issue.
 - **Deleting the root** before anyone else wrote in the issue deletes the issue; one with a
   conversation stays.

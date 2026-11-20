@@ -222,21 +222,10 @@ describe("support inbox: keyboard", () => {
 		expect(pageUpdate(selected, key("priority")).model.priorityMenu.popup._tag).toBe("Open")
 	})
 
-	test("Enter opens the issue's thread, or its channel before a thread exists", () => {
+	test("Enter opens the issue's channel; one the person cannot see toasts instead", () => {
 		story(
 			pageUpdate,
 			given({ ...loaded(), selectedId: outage.id }),
-			message(key("open")),
-			expectOutMessage(
-				PageOutMessage.RequestedNavigation({
-					route: AppRoute.ChatChannel({ orgSlug: "hazel", channelId: threadId }),
-					replace: false,
-				}),
-			),
-		)
-		story(
-			pageUpdate,
-			given({ ...loaded(), selectedId: sso.id }),
 			message(key("open")),
 			expectOutMessage(
 				PageOutMessage.RequestedNavigation({
@@ -245,6 +234,13 @@ describe("support inbox: keyboard", () => {
 				}),
 			),
 		)
+		const withChannels = pageUpdate(
+			{ ...loaded(), selectedId: outage.id },
+			Message.UpdatedChannels({
+				channels: [{ id: threadId, name: "other", isPrivate: false, origin: "hazel" }],
+			}),
+		).model
+		expect(pageUpdate(withChannels, key("open")).outMessage?._tag).toBe("RequestedToast")
 	})
 
 	test("i assigns to me at once; the row stays (mine is in the default filter)", () => {
