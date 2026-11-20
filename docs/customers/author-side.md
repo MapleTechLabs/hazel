@@ -64,10 +64,11 @@ channel linked later, applies to past messages too.
    (any member, people only; routed to the `OrgObject`). The org updates the row and sends
    `customers.chatAuthorChanged`; the participants follow.
 5. Backfill: the first time the org sees a channel linked (a new link, or links from before this
-   feature on the next snapshot), it sends `channel.reportChatAuthors` to the channel's object,
-   which answers `org.chatAuthorsReported` with each author's first and last live message and its
-   threads (each asked in turn, up to 500); the org classifies them and sends
-   `customers.chatAuthorsBackfill`. A Connect guest org's mount is not backfilled (only the host org
+   feature on the next snapshot), it sends `channel.reportChatAuthors` to the channel's object and
+   to each of its threads (the org's own `channels` rows, up to 500, so a thread outlives its deleted
+   root message). Each answers `org.chatAuthorsReported` with its 1000 most recently active authors
+   (first and last live message); the org classifies them and sends
+   `customers.chatAuthorsBackfill` in chunks of 200. A Connect guest org's mount is not backfilled (only the host org
    may ask the host channel); its authors come in as they write.
 
 ## Building on it (support issues, SLAs)

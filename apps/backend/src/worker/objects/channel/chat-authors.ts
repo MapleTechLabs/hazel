@@ -1,8 +1,8 @@
 /**
  * `channel.reportChatAuthors` (`docs/customers/author-side.md`): the org linked this channel (or
  * its parent, for a thread) to a customer and asks who wrote here before. The channel answers
- * `org.chatAuthorsReported` with each author of its live messages (first and last message) and,
- * from a top-level channel, its threads, which the org asks in turn.
+ * `org.chatAuthorsReported` with each author of its live messages (first and last message).
+ * The org asks each thread itself (its `channels` rows outlive a deleted root message).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import type { ChannelId } from "@hazel/schema"
@@ -35,19 +35,8 @@ export const reportChatAuthors = Effect.fn("ChannelObject.reportChatAuthors")(fu
 			.orderBy(["lastMessageAt", "desc"])
 			.limit(REPORTED_AUTHORS_MAX),
 	)
-	const threads = yield* db.run(
-		SQLite.from(schema.messagesTable)
-			.select("threadChannelId")
-			.distinct()
-			// A deleted root keeps its thread and the replies in it.
-			.where(($) => [$.threadChannelId.isNotNull()]),
-	)
-	const threadChannelIds = threads.flatMap((row) =>
-		row.threadChannelId === null ? [] : [row.threadChannelId as ChannelId],
-	)
 	yield* Effect.annotateCurrentSpan({
 		"customer_chat.authors": authors.length,
-		"customer_chat.threads": threadChannelIds.length,
 	})
 	// The answer goes to the org that owns this channel, whatever the payload names.
 	const organizationId = yield* channelOrganization
@@ -66,6 +55,5 @@ export const reportChatAuthors = Effect.fn("ChannelObject.reportChatAuthors")(fu
 						},
 					],
 		),
-		threadChannelIds,
 	})
 })

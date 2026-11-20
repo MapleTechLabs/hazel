@@ -9,7 +9,7 @@
  * - Each message created in a linked channel or one of its threads (`org.messageCreated`) is passed
  *   on to the org's `CustomersObject` as `customers.chatMessage`, its author classified.
  * - A channel seen linked for the first time is asked for its past authors (`channel.reportChatAuthors`,
- *   then each of its threads); the answer goes on as `customers.chatAuthorsBackfill`.
+ *   and each of its threads); the answers go on as `customers.chatAuthorsBackfill`.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
@@ -201,11 +201,25 @@ export const requestChatAuthorsBackfill = Effect.fn("OrgObject.requestChatAuthor
 			.limit(1),
 	)
 	if (Option.isSome(mount) && mount.value.role === "guest") return
-	yield* enqueueEffect(
-		CustomerChatChannelEffects.reportChatAuthors,
-		channelTarget(channelId),
-		{ organizationId, linkedChannelId: channelId, requestId },
-		{ id: `customer-chat-backfill:${requestId}:${channelId}` },
+	// The channel and its threads, from the org's own rows: a thread outlives its deleted root message.
+	const threads = yield* db.run(
+		SQLite.from(schema.channelsTable)
+			.select("id", "createdAt")
+			.where(($) => [$.parentChannelId.eq(channelId), $.deletedAt.isNull()])
+			.orderBy(["createdAt", "desc"])
+			.limit(BACKFILL_THREADS_MAX),
+	)
+	yield* Effect.annotateCurrentSpan({ "customer_chat.threads": threads.length })
+	yield* Effect.forEach(
+		[channelId, ...threads.map((thread) => thread.id)],
+		(target) =>
+			enqueueEffect(
+				CustomerChatChannelEffects.reportChatAuthors,
+				channelTarget(target),
+				{ organizationId, linkedChannelId: channelId, requestId },
+				{ id: `customer-chat-backfill:${requestId}:${target}` },
+			),
+		{ discard: true },
 	)
 })
 
@@ -346,10 +360,7 @@ export const chatAuthorsReported = Effect.fn("OrgObject.chatAuthorsReported")(fu
 			lastMessageAt: reported.lastMessageAt,
 		})),
 	)
-	yield* Effect.annotateCurrentSpan({
-		"customer_chat.authors": authors.length,
-		"customer_chat.threads": payload.threadChannelIds.length,
-	})
+	yield* Effect.annotateCurrentSpan({ "customer_chat.authors": authors.length })
 	// In chunks: a busy channel reports up to 1000 authors.
 	for (let start = 0; start < authors.length; start += BACKFILL_CHUNK) {
 		yield* enqueueEffect(CustomerChatEffects.chatAuthorsBackfill, customersTarget(organizationId), {
@@ -359,17 +370,6 @@ export const chatAuthorsReported = Effect.fn("OrgObject.chatAuthorsReported")(fu
 			authors: authors.slice(start, start + BACKFILL_CHUNK),
 		})
 	}
-	yield* Effect.forEach(
-		payload.threadChannelIds.slice(0, BACKFILL_THREADS_MAX),
-		(threadId) =>
-			enqueueEffect(
-				CustomerChatChannelEffects.reportChatAuthors,
-				channelTarget(threadId),
-				{ organizationId, linkedChannelId: payload.linkedChannelId, requestId: payload.requestId },
-				{ id: `customer-chat-backfill:${payload.requestId}:${threadId}` },
-			),
-		{ discard: true },
-	)
 })
 
 /**

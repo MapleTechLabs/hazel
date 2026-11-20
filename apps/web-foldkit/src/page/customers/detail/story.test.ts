@@ -759,10 +759,18 @@ describe("customer page: people in chat", () => {
 				],
 			}),
 		])
-		expect(chatPeopleOfModel(grouped).map((person) => [person.name, person.lastMessageAtMs])).toEqual([
+		const expected = [
 			["Mia", NOW],
 			["Linus", NOW - 60_000],
-		])
+		]
+		expect(chatPeopleOfModel(grouped).map((person) => [person.name, person.lastMessageAtMs])).toEqual(
+			expected,
+		)
+		// The environment account's page shows the same people.
+		const fromEnvironment = { ...grouped, accountId: betaEu.id }
+		expect(
+			chatPeopleOfModel(fromEnvironment).map((person) => [person.name, person.lastMessageAtMs]),
+		).toEqual(expected)
 	})
 
 	test("listed only while the customer still has a linked channel", () => {

@@ -87,8 +87,6 @@ export const ChatAuthorsReportedPayload = Schema.Struct({
 	linkedChannelId: ChannelId,
 	requestId: Schema.String,
 	authors: Schema.Array(ReportedChatAuthor),
-	/** The channel's threads (none from a thread), each asked in turn. */
-	threadChannelIds: Schema.Array(ChannelId),
 })
 export type ChatAuthorsReportedPayload = typeof ChatAuthorsReportedPayload.Type
 

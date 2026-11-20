@@ -392,16 +392,26 @@ describe("Author side in linked channels", () => {
 						.run(uuid(), channelId, authorId, threadChannelId, createdAt)
 				const parent = yield* setViewers(general)
 				const threadObject = yield* setViewers(thread)
+				// A thread whose root message was deleted (hard delete: no row in the parent).
+				const orphanThread = t.channel("thread", general)
+				const orphanAuthor = t.person({
+					externalId: "discord-user-11",
+					userType: "machine",
+					member: "live",
+				})
+				const orphanObject = yield* setViewers(orphanThread)
 				insertMessage(parent, general, customer, "2026-01-01T10:00:00.000Z")
 				insertMessage(parent, general, customer, "2026-02-01T10:00:00.000Z", thread)
 				insertMessage(parent, general, t.world.member, "2026-01-02T10:00:00.000Z")
 				insertMessage(threadObject, thread, threadOnly, "2026-03-01T10:00:00.000Z")
+				insertMessage(orphanObject, orphanThread, orphanAuthor, "2026-03-02T10:00:00.000Z")
 
 				expect(tagOf(yield* t.link(general))).toBe("Success")
 				const participants = t.participants()
 				expect(participants[customer]).toMatchObject({ side: "customer" })
 				expect(participants[t.world.member]).toMatchObject({ side: "team" })
 				expect(participants[threadOnly]).toMatchObject({ side: "customer", lastChannelId: general })
+				expect(participants[orphanAuthor]).toMatchObject({ side: "customer", lastChannelId: general })
 				const window = t.world.rows<{ firstMessageAt: string; lastMessageAt: string }>(
 					`SELECT firstMessageAt, lastMessageAt FROM customer_chat_participants WHERE userId = ?`,
 					customer,
@@ -415,7 +425,7 @@ describe("Author side in linked channels", () => {
 
 				// Linking again (or a new snapshot) does not ask twice.
 				yield* t.link(general)
-				expect(Object.keys(t.participants())).toHaveLength(3)
+				expect(Object.keys(t.participants())).toHaveLength(4)
 
 				// Unlinked, then linked again: asked again (a new request, past the inbox's dedupe).
 				t.world.object.storage.db.prepare(`DELETE FROM customer_chat_participants`).run()
@@ -429,7 +439,7 @@ describe("Author side in linked channels", () => {
 					),
 				).toBe("Success")
 				yield* t.link(general)
-				expect(Object.keys(t.participants())).toHaveLength(3)
+				expect(Object.keys(t.participants())).toHaveLength(4)
 
 				// Moved to another account in place: that account gets the past authors too.
 				yield* t.world.ingest("clerk", [
@@ -455,7 +465,7 @@ describe("Author side in linked channels", () => {
 						`SELECT userId FROM customer_chat_participants WHERE accountId = ?`,
 						globex,
 					),
-				).toHaveLength(3)
+				).toHaveLength(4)
 			}),
 		))
 })
