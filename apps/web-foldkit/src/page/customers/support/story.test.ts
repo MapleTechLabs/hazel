@@ -65,5 +65,7 @@ describe("support report", () => {
 		).toBeNull()
 		expect(isEmptyReport(SUPPORT_REPORT)).toBe(false)
 		expect(isEmptyReport(EMPTY_SUPPORT_REPORT)).toBe(true)
+		// Overdue issues opened before the range still show the report.
+		expect(isEmptyReport({ ...EMPTY_SUPPORT_REPORT, overdueNow: 2 })).toBe(false)
 	})
 })

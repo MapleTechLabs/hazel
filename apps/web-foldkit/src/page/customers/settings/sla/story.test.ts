@@ -289,3 +289,60 @@ describe("SLA settings: members", () => {
 		expect(update(typed, Message.PressedSavePolicy(), member).commands ?? []).toHaveLength(0)
 	})
 })
+
+describe("SLA settings: a save in flight", () => {
+	const saving = (): Model => {
+		const opened = update(loaded(), Message.PressedEdit({ policyId: standard.id }), admin).model
+		return update(opened, Message.PressedSavePolicy(), admin).model
+	}
+
+	test("Cancel waits, and the editor's Selects are disabled", () => {
+		const model = saving()
+		expect(model.editor?.isSaving).toBe(true)
+		expect(update(model, Message.PressedCloseEditor(), admin).model.editor).not.toBeNull()
+		expect(model.selects["sla-warn-before"]?.isDisabled).toBe(true)
+		expect(model.selects["sla-unit-medium-firstResponse"]?.isDisabled).toBe(true)
+	})
+
+	test("a refused pick puts the Select back to the form's value", () => {
+		const model = saving()
+		const id = "sla-unit-medium-firstResponse"
+		const before = model.selects[id]?.selectedKey
+		const picked = update(
+			model,
+			Message.GotSelectMessage({
+				selectId: id,
+				message: Select.Message.ChoseFromNativeMenu({
+					key: "minutes",
+					items: [Select.item("minutes", "minutes")],
+				}),
+			}),
+			admin,
+		).model
+		expect(picked.selects[id]?.selectedKey).toEqual(before)
+		expect(picked.editor?.form.targets.medium.firstResponse.unit).toBe("hours")
+	})
+
+	test("an answer for an earlier editor leaves the open one alone", () => {
+		const model = saving()
+		const token = model.editor?.token ?? 0
+		// The save failed, then the editor was closed and another opened before a late answer arrives.
+		const failed = update(model, Message.FailedSavePolicy({ token, reason: "Offline" }), admin).model
+		const reopened = update(
+			update(failed, Message.PressedCloseEditor(), admin).model,
+			Message.PressedNewPolicy(),
+			admin,
+		).model
+		const late = update(reopened, Message.SucceededSavePolicy({ token, isNew: false }), admin).model
+		expect(late.editor).not.toBeNull()
+		expect(late.editor?.policyId).toBeNull()
+		expect(
+			update(reopened, Message.SucceededSavePolicy({ token, isNew: false }), admin).outMessage,
+		).toMatchObject({
+			toast: { title: "Policy saved" },
+		})
+		expect(
+			update(model, Message.SucceededSavePolicy({ token, isNew: false }), admin).model.editor,
+		).toBeNull()
+	})
+})

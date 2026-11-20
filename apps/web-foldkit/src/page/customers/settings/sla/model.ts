@@ -89,6 +89,8 @@ export type PolicyForm = typeof PolicyForm.Type
 export const Editor = Schema.Struct({
 	/** Null: a new policy. */
 	policyId: Schema.NullOr(CustomerSlaPolicyId),
+	/** Which opening of the editor this is: a save's answer for an earlier one is dropped. */
+	token: Schema.Int,
 	form: PolicyForm,
 	/** Save was pressed: the errors show from then on. */
 	showErrors: Schema.Boolean,
@@ -116,6 +118,8 @@ export const Model = Schema.Struct({
 	isWritingList: Schema.Boolean,
 	/** Null: the list. */
 	editor: Schema.NullOr(Editor),
+	/** Editors opened so far: the next one's token. */
+	editorsOpened: Schema.Int,
 	deleteModal: Modal.Model,
 	deletingPolicyId: Schema.NullOr(CustomerSlaPolicyId),
 	/** The page's Selects (time zone, warn before, each target's unit), by id. */

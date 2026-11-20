@@ -43,28 +43,28 @@ export const ToggleSlaPolicy = Command.define("ToggleSlaPolicy", {
 
 /** A new policy, last in the order; waits (best effort) until its row has synced. */
 export const CreateSlaPolicy = Command.define("CreateSlaPolicy", {
-	args: { organizationId: OrganizationId, policy: Customers.SlaPolicyDraft },
+	args: { organizationId: OrganizationId, policy: Customers.SlaPolicyDraft, token: Schema.Int },
 	messages: [Message.SucceededSavePolicy, Message.FailedSavePolicy],
-	execute: ({ organizationId, policy }) =>
+	execute: ({ organizationId, policy, token }) =>
 		HazelRpc.use((rpc) => rpc("customers.slaPolicy.create", { organizationId, policy })).pipe(
 			Effect.tap((result) =>
 				Effect.ignore(customerSlaPolicyCollection.utils.awaitSeqEffect(result.transactionId)),
 			),
-			Effect.as(Message.SucceededSavePolicy()),
-			catchCommon((reason) => Message.FailedSavePolicy({ reason })),
+			Effect.as(Message.SucceededSavePolicy({ token, isNew: true })),
+			catchCommon((reason) => Message.FailedSavePolicy({ token, reason })),
 		),
 })
 
 export const UpdateSlaPolicy = Command.define("UpdateSlaPolicy", {
-	args: { ...target, policy: Customers.SlaPolicyDraft },
+	args: { ...target, policy: Customers.SlaPolicyDraft, token: Schema.Int },
 	messages: [Message.SucceededSavePolicy, Message.FailedSavePolicy],
-	execute: (args) =>
+	execute: ({ token, ...args }) =>
 		updatePolicyAction(args).pipe(
-			Effect.as(Message.SucceededSavePolicy()),
+			Effect.as(Message.SucceededSavePolicy({ token, isNew: false })),
 			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(Message.FailedSavePolicy({ reason: "NotFound" })),
+				Effect.succeed(Message.FailedSavePolicy({ token, reason: "NotFound" })),
 			),
-			catchCommon((reason) => Message.FailedSavePolicy({ reason })),
+			catchCommon((reason) => Message.FailedSavePolicy({ token, reason })),
 		),
 })
 

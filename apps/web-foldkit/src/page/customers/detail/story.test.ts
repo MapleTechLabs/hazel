@@ -1064,6 +1064,16 @@ describe("customer page: support", () => {
 		).not.toContain("FetchCustomerSupport")
 	})
 
+	test("a failed support row retries on request", () => {
+		const failed = run(init(route(null), shared).model, [
+			Message.FailedFetchSupport({ accountId: beta.id, reason: "Offline" }),
+		])
+		expect(failed.support._tag).toBe("Failure")
+		const retried = update(failed, Message.PressedRetrySupport(), shared)
+		expect(commandNames(retried)).toContain("FetchCustomerSupport")
+		expect(retried.model.support._tag).toBe("Loading")
+	})
+
 	test("another customer's answer is dropped", () => {
 		const model = run(init(route(null), shared).model, [
 			Message.SucceededFetchSupport({ accountId: acme.id, row: null }),

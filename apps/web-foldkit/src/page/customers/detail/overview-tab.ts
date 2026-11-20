@@ -29,7 +29,14 @@ import { personLabel, sourceMark } from "../../../customers/ui/identity"
 import { snoozeMenuContent } from "../../../customers/ui/menus"
 import { queueAction } from "../../../customers/ui/queue-row"
 import { markdownView } from "../../../chat/markdown/markdown-view"
-import { IconCheck, IconChevronDown, IconChevronRight, IconClock, IconDots } from "../../../icons"
+import {
+	IconArrowPath,
+	IconCheck,
+	IconChevronDown,
+	IconChevronRight,
+	IconClock,
+	IconDots,
+} from "../../../icons"
 import { linkClass } from "../../../customers/ui/surface"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
@@ -575,6 +582,7 @@ export const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Cont
 	const slasById = new Map(model.supportSlas.map((sla) => [sla.id, sla]))
 	const overdue = open.filter((issue) => overdueByMs(slasById.get(issue.id), context.nowMs) !== null).length
 	const isLoading = AsyncData.isLoading(model.support) || AsyncData.isIdle(model.support)
+	const hasFailed = AsyncData.isFailure(model.support)
 	return card(
 		h,
 		{
@@ -588,14 +596,26 @@ export const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Cont
 		[
 			supportStat(h, "Open issues", formatCount(open.length)),
 			supportStat(h, "Overdue", formatCount(overdue), overdue > 0 ? { tone: "danger" } : {}),
-			supportStat(
-				h,
-				"First response · 30d",
-				isLoading ? "…" : formatResponse(row?.firstResponse.medianMs ?? null),
-				row?.firstResponse.withinPct == null
-					? { detail: "median" }
-					: { detail: `median · ${formatWithin(row.firstResponse.withinPct)} in SLA` },
-			),
+			hasFailed
+				? h.div(
+						[h.Class("flex min-w-0 flex-col items-start gap-0.5")],
+						[
+							h.span([h.Class("truncate text-muted-fg text-xs")], ["First response · 30d"]),
+							button(
+								h,
+								{ intent: "plain", size: "xs", onPress: Message.PressedRetrySupport() },
+								[IconArrowPath(h, icon), "Couldn't load · Retry"],
+							),
+						],
+					)
+				: supportStat(
+						h,
+						"First response · 30d",
+						isLoading ? "…" : formatResponse(row?.firstResponse.medianMs ?? null),
+						row?.firstResponse.withinPct == null
+							? { detail: "median" }
+							: { detail: `median · ${formatWithin(row.firstResponse.withinPct)} in SLA` },
+					),
 		],
 	)
 }

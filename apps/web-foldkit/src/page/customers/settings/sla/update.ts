@@ -86,8 +86,20 @@ const timeZoneSelect = (model: Model, shared: Shared): Select.Model =>
 	Select.init({
 		id: TIME_ZONE_SELECT_ID,
 		selectedKey: hoursFormOf(model).timeZone,
-		isDisabled: !isCustomersAdmin(shared),
+		isDisabled: !isCustomersAdmin(shared) || model.isSavingHours,
 	})
+
+/** The editor's Selects rebuilt from its form: disabled while it saves. */
+const withEditorSelects = (model: Model, shared: Shared): Model =>
+	model.editor === null
+		? model
+		: {
+				...model,
+				selects: {
+					...model.selects,
+					...editorSelects(model.editor.form, !isCustomersAdmin(shared) || model.editor.isSaving),
+				},
+			}
 
 const withTimeZoneSelect = (model: Model, shared: Shared): Model => ({
 	...model,
@@ -113,6 +125,7 @@ export const init = (_route: unknown, shared: Shared): Return => {
 		isSavingHours: false,
 		isWritingList: false,
 		editor: null,
+		editorsOpened: 0,
 		deleteModal: Modal.init(DELETE_MODAL_ID),
 		deletingPolicyId: null,
 		selects: {},
@@ -145,7 +158,7 @@ const savedHours = (model: Model, shared: Shared): Return => {
 	)
 		return { model }
 	return {
-		model: { ...model, isSavingHours: true },
+		model: withTimeZoneSelect({ ...model, isSavingHours: true }, shared),
 		commands: [
 			SaveBusinessHours({ organizationId, settingsId: model.settings.settingsId, businessHours }),
 		],
@@ -230,7 +243,8 @@ const opened = (
 ): Return => ({
 	model: {
 		...model,
-		editor: { policyId, form, showErrors: false, isSaving: false },
+		editor: { policyId, token: model.editorsOpened + 1, form, showErrors: false, isSaving: false },
+		editorsOpened: model.editorsOpened + 1,
 		selects: { ...model.selects, ...editorSelects(form, !isCustomersAdmin(shared)) },
 	},
 })
@@ -272,11 +286,14 @@ const savedPolicy = (model: Model, shared: Shared, editor: Editor): Return => {
 	const policy = draftOfForm(form)
 	if (policy === undefined) return { model: { ...model, editor: { ...editor, form, showErrors: true } } }
 	return {
-		model: { ...model, editor: { ...editor, form, showErrors: true, isSaving: true } },
+		model: withEditorSelects(
+			{ ...model, editor: { ...editor, form, showErrors: true, isSaving: true } },
+			shared,
+		),
 		commands: [
 			editor.policyId === null
-				? CreateSlaPolicy({ organizationId, policy })
-				: UpdateSlaPolicy({ organizationId, policyId: editor.policyId, policy }),
+				? CreateSlaPolicy({ organizationId, policy, token: editor.token })
+				: UpdateSlaPolicy({ organizationId, policyId: editor.policyId, policy, token: editor.token }),
 		],
 	}
 }
@@ -299,11 +316,16 @@ const selectChanged = (model: Model, shared: Shared, selectId: string, message: 
 	const result = Select.update(current, message)
 	const next = { ...model, selects: { ...model.selects, [selectId]: result.model } }
 	const commands = Command.mapMessages(result.commands ?? [], toSelect(selectId))
-	const changed =
-		result.outMessage === undefined
-			? { model: next }
-			: selected(next, shared, selectId, result.outMessage.key)
-	return { ...changed, commands: [...commands, ...(changed.commands ?? [])] }
+	if (result.outMessage === undefined) return { model: next, commands }
+	const changed = selected(next, shared, selectId, result.outMessage.key)
+	// A refused edit (saving, or read-only): the Select goes back to what the form holds.
+	const refused = changed.model === next
+	const reverted = !refused
+		? changed.model
+		: selectId === TIME_ZONE_SELECT_ID
+			? withTimeZoneSelect(next, shared)
+			: withEditorSelects(next, shared)
+	return { ...changed, model: reverted, commands: [...commands, ...(changed.commands ?? [])] }
 }
 
 // UPDATE
@@ -347,7 +369,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			),
 		}),
 		FailedSaveHours: ({ reason }) => ({
-			model: { ...model, isSavingHours: false },
+			model: withTimeZoneSelect({ ...model, isSavingHours: false }, shared),
 			outMessage: toast(reasonToast(reason)),
 		}),
 
@@ -401,7 +423,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const policy = policyById(model, policyId)
 			return policy === undefined ? { model } : opened(model, shared, policyId, formOfPolicy(policy))
 		},
-		PressedCloseEditor: () => ({ model: { ...model, editor: null } }),
+		// Waits for a save in flight: its answer closes the editor or shows why not.
+		PressedCloseEditor: () =>
+			model.editor?.isSaving === true ? { model } : { model: { ...model, editor: null } },
 		ChangedName: ({ value }) => edited(model, shared, (form) => ({ ...form, name: value })),
 		ToggledEnabled: ({ enabled }) => edited(model, shared, (form) => ({ ...form, enabled })),
 		ClickedHours: ({ hours }) => {
@@ -445,10 +469,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			edited(model, shared, (form) => withTarget(form, priority, clock, { amount: value })),
 		PressedSavePolicy: () =>
 			model.editor === null ? { model } : savedPolicy(model, shared, model.editor),
-		SucceededSavePolicy: () => {
-			const isNew = model.editor?.policyId === null
+		// The toast names what the save did, whichever editor is open now; only its own editor closes.
+		SucceededSavePolicy: ({ token, isNew }) => {
+			const isOpen = model.editor?.token === token
 			return {
-				model: { ...model, editor: null },
+				model: isOpen ? { ...model, editor: null } : model,
 				outMessage: toast(
 					successToast(
 						isNew ? "Policy created" : "Policy saved",
@@ -457,8 +482,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				),
 			}
 		},
-		FailedSavePolicy: ({ reason }) => ({
-			model: model.editor === null ? model : { ...model, editor: { ...model.editor, isSaving: false } },
+		FailedSavePolicy: ({ token, reason }) => ({
+			model:
+				model.editor === null || model.editor.token !== token
+					? model
+					: withEditorSelects({ ...model, editor: { ...model.editor, isSaving: false } }, shared),
 			outMessage: writeFailure("Couldn't save the policy", reason),
 		}),
 	})

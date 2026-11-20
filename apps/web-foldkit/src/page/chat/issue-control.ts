@@ -11,7 +11,7 @@ import { CommonReason, failureMessage } from "~/lib/error-messages"
 import { cn } from "~/lib/utils"
 import { ISSUE_STATUSES, IssueRow, STATUS_LABEL, updateIssueAction } from "../../customers/issues"
 import { MemberRow, withCustomersSource } from "../../customers/queries"
-import { IssueSlaRow } from "../../customers/sla"
+import { IssueSlaRow, slaChipCopy, slaDisplayOf } from "../../customers/sla"
 import { slaChip } from "../../customers/ui/sla-chip"
 import { catchCommon, errorToastOf } from "../../data/actions"
 import { liveQueryStream } from "../../data/live-query"
@@ -298,14 +298,15 @@ const chip = <M>(
 	leading: Html,
 	attributes: ReadonlyArray<Attribute<M> | ChildAttribute>,
 	overlay: Html,
+	/** Its share of a narrow strip: the status keeps its label, the assignee truncates. */
+	sizeClassName: string,
 ): Html =>
 	button(
 		h,
 		{
 			intent: "plain",
 			size: "xs",
-			// The SLA chip gives way first; these keep their label.
-			className: "shrink-0 gap-1.5 text-muted-fg hover:text-fg",
+			className: cn("gap-1.5 text-muted-fg hover:text-fg", sizeClassName),
 			attributes,
 		},
 		[
@@ -331,6 +332,7 @@ const statusMenuView = <M>(h: HtmlBuilder<M>, issue: IssueRow, inputs: ViewInput
 					statusDot(h, issue.status),
 					[...attributes, h.AriaLabel(`Status: ${STATUS_LABEL[issue.status]}`)],
 					overlay,
+					"shrink-0",
 				),
 			content: (key) =>
 				isStatus(key)
@@ -384,6 +386,7 @@ const assignMenuView = <M>(h: HtmlBuilder<M>, issue: IssueRow, inputs: ViewInput
 					IconUser(h, { className: "size-3.5 shrink-0", attributes: iconAttributes }),
 					[...attributes, h.AriaLabel(`Assignee: ${name}`)],
 					overlay,
+					"min-w-0 max-w-40",
 				),
 			content: (key) => [
 				menuLabel(
@@ -417,6 +420,15 @@ const inboxLink = <M>(h: HtmlBuilder<M>, href: string, isCompact: boolean): Html
 			h.span([h.Class(isCompact ? "sr-only" : "")], ["Open in inbox"]),
 		],
 	)
+
+/** Whether the SLA chip shows anything (a policy, and a state worth a chip). */
+const hasSlaChip = (model: Model, issue: IssueRow, nowMs: number): boolean =>
+	model.sla !== null &&
+	slaChipCopy(slaDisplayOf(model.sla, nowMs), {
+		policyName: model.sla.policyName,
+		nowMs,
+		status: issue.status,
+	}) !== null
 
 /**
  * The strip under the thread header. Nothing until the issue query answers; then the issue's chips,
@@ -457,7 +469,7 @@ export const view = <M>(h: HtmlBuilder<M>, inputs: ViewInputs<M>): Html => {
 						status: issue.status,
 						className: "ml-1 min-w-0 shrink",
 					}),
-					inboxLink(h, inputs.inboxHref, model.sla !== null),
+					inboxLink(h, inputs.inboxHref, hasSlaChip(model, issue, inputs.nowMs)),
 				],
 	)
 }

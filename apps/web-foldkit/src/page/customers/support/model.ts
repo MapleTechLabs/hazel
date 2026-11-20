@@ -24,5 +24,6 @@ export const Model = Schema.Struct({
 })
 export type Model = typeof Model.Type
 
-/** Nothing opened under an SLA in the range. */
-export const isEmptyReport = (report: Customers.SupportReport): boolean => report.issues === 0
+/** Nothing opened under an SLA in the range, and nothing overdue from before it. */
+export const isEmptyReport = (report: Customers.SupportReport): boolean =>
+	report.issues === 0 && report.overdueNow === 0

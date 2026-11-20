@@ -74,7 +74,7 @@ const policyCard = (h: H, model: Model, editor: Editor, errors: PolicyErrors, ca
 						value: form.name,
 						onInput: (value) => Message.ChangedName({ value }),
 						isInvalid: nameError !== undefined,
-						isDisabled: !canEdit,
+						isDisabled: !canEdit || editor.isSaving,
 					},
 					(parts) => [
 						parts.label(["Name"]),
@@ -91,8 +91,9 @@ const policyCard = (h: H, model: Model, editor: Editor, errors: PolicyErrors, ca
 								h,
 								{
 									id: "sla-policy-enabled",
+									ariaLabel: "Policy enabled",
 									isSelected: form.enabled,
-									isDisabled: !canEdit,
+									isDisabled: !canEdit || editor.isSaving,
 									onChange: (enabled) => Message.ToggledEnabled({ enabled }),
 								},
 								form.enabled ? "On" : "Off",
@@ -114,6 +115,7 @@ const policyCard = (h: H, model: Model, editor: Editor, errors: PolicyErrors, ca
 										],
 										selected: form.hours,
 										onSelect: (hours) => Message.ClickedHours({ hours }),
+										isDisabled: editor.isSaving,
 									})
 								: badge(h, { intent: "secondary" }, [HOURS_LABEL[form.hours]]),
 						],
@@ -179,7 +181,7 @@ const plansField = (h: H, model: Model, editor: Editor, canEdit: boolean): Html 
 							toggleChip(h, {
 								label: plan,
 								isPressed: editor.form.planNames.includes(plan),
-								isDisabled: !canEdit,
+								isDisabled: !canEdit || editor.isSaving,
 								onPress: Message.ToggledPlan({ plan }),
 							}),
 						),
@@ -200,7 +202,7 @@ const tagsField = (h: H, editor: Editor, canEdit: boolean): Html => {
 						form.tags.map((tag) =>
 							removableChip(h, {
 								label: tag,
-								onRemove: canEdit ? Message.RemovedTag({ tag }) : null,
+								onRemove: canEdit && !editor.isSaving ? Message.RemovedTag({ tag }) : null,
 							}),
 						),
 					),
@@ -213,6 +215,7 @@ const tagsField = (h: H, editor: Editor, canEdit: boolean): Html => {
 							input(h, {
 								className: "min-w-0 flex-1",
 								placeholder: "Any of these tags, e.g. vip",
+								isDisabled: editor.isSaving,
 								attributes: [
 									h.Id(TAG_ID),
 									h.Value(form.tagInput),
@@ -229,7 +232,7 @@ const tagsField = (h: H, editor: Editor, canEdit: boolean): Html => {
 								{
 									intent: "outline",
 									onPress: Message.PressedAddTag(),
-									isDisabled: form.tagInput.trim() === "",
+									isDisabled: form.tagInput.trim() === "" || editor.isSaving,
 								},
 								["Add"],
 							),
@@ -268,7 +271,10 @@ const accountsField = (h: H, model: Model, editor: Editor, canEdit: boolean): Ht
 						form.accountIds.map((accountId) =>
 							removableChip(h, {
 								label: nameOf(accountId),
-								onRemove: canEdit ? Message.RemovedAccount({ accountId }) : null,
+								onRemove:
+									canEdit && !editor.isSaving
+										? Message.RemovedAccount({ accountId })
+										: null,
 							}),
 						),
 					),
@@ -281,6 +287,7 @@ const accountsField = (h: H, model: Model, editor: Editor, canEdit: boolean): Ht
 							id: ACCOUNT_SEARCH_ID,
 							value: form.accountSearch,
 							ariaLabel: "Search customers",
+							isDisabled: editor.isSaving,
 							onInput: (value) => Message.ChangedAccountSearch({ value }),
 							onClear: Message.ClearedAccountSearch(),
 						},
@@ -306,6 +313,7 @@ const accountsField = (h: H, model: Model, editor: Editor, canEdit: boolean): Ht
 																intent: "plain",
 																size: "sm",
 																className: "w-full justify-start",
+																isDisabled: editor.isSaving,
 																onPress: Message.AddedAccount({
 																	accountId: account.id,
 																}),
@@ -386,7 +394,7 @@ const durationCell = (
 					input(h, {
 						className: "tabular-nums",
 						isInvalid: error !== undefined,
-						isDisabled: !canEdit,
+						isDisabled: !canEdit || editor.isSaving,
 						attributes: [
 							h.Id(id),
 							h.AriaLabel(`${label} amount`),
@@ -483,11 +491,14 @@ export const editorView = (h: H, model: Model, editor: Editor, shared: Shared, c
 	const errors = policyErrors(editor.form)
 	const isNew = editor.policyId === null
 	const crumbs: ReadonlyArray<Crumb<Message>> = [
-		{
-			label: "Support SLAs",
-			href: hrefOf(AppRoute.CustomersSettingsSla({ orgSlug: shared.orgSlug ?? "" })),
-			onClick: Message.PressedCloseEditor(),
-		},
+		// Plain text while a save is in flight: its answer closes the editor.
+		editor.isSaving
+			? { label: "Support SLAs" }
+			: {
+					label: "Support SLAs",
+					href: hrefOf(AppRoute.CustomersSettingsSla({ orgSlug: shared.orgSlug ?? "" })),
+					onClick: Message.PressedCloseEditor(),
+				},
 		{ label: isNew ? "New policy" : canEdit ? "Edit policy" : "Policy" },
 	]
 	return settingsPage(h, [
@@ -496,7 +507,15 @@ export const editorView = (h: H, model: Model, editor: Editor, shared: Shared, c
 			crumbs,
 			actions: canEdit
 				? [
-						button(h, { intent: "plain", onPress: Message.PressedCloseEditor() }, ["Cancel"]),
+						button(
+							h,
+							{
+								intent: "plain",
+								onPress: Message.PressedCloseEditor(),
+								isDisabled: editor.isSaving,
+							},
+							["Cancel"],
+						),
 						button(h, { onPress: Message.PressedSavePolicy(), isPending: editor.isSaving }, [
 							isNew ? "Create policy" : "Save policy",
 						]),

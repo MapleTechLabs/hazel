@@ -59,7 +59,8 @@ export const Message = defineMessageUnion({
 	RemovedAccount: { accountId: Schema.String },
 	ChangedTargetAmount: { priority: Customers.SlaPriority, clock: SlaClock, value: Schema.String },
 	PressedSavePolicy: {},
-	SucceededSavePolicy: {},
-	FailedSavePolicy: { reason: PolicyWriteFailure },
+	/** `token` names the editor the save was pressed in. */
+	SucceededSavePolicy: { token: Schema.Int, isNew: Schema.Boolean },
+	FailedSavePolicy: { token: Schema.Int, reason: PolicyWriteFailure },
 })
 export type Message = typeof Message.Type

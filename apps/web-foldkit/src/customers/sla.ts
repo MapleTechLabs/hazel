@@ -129,11 +129,14 @@ export const formatDueAt = (dueAt: number, nowMs: number): string => {
 	return `${day} ${time}`
 }
 
-export type SlaTone = "quiet" | "warning" | "danger" | "muted" | "met"
+export type SlaTone = "quiet" | "warning" | "danger" | "paused" | "met" | "late"
+export type SlaIcon = "clock" | "pause" | "check"
 
 export interface SlaChipCopy {
 	readonly text: string
 	readonly tone: SlaTone
+	/** By the state: a clock while one runs (or ran late), a pause, a check for a reply in time. */
+	readonly icon: SlaIcon
 	/** The tooltip: `Standard policy · due Mon 09:50`. */
 	readonly title: string
 }
@@ -152,6 +155,7 @@ export const slaChipCopy = (
 		return {
 			text: clock === "reply" ? `Reply due in ${left}` : `Resolve in ${left}`,
 			tone,
+			icon: "clock",
 			title: `${policy} · due ${formatDueAt(dueAt, options.nowMs)}`,
 		}
 	}
@@ -164,17 +168,20 @@ export const slaChipCopy = (
 			return {
 				text: clock === "reply" ? `Reply overdue by ${late}` : `Resolution overdue by ${late}`,
 				tone: "danger",
+				icon: "clock",
 				title: `${policy} · was due ${formatDueAt(dueAt, options.nowMs)}`,
 			}
 		},
 		Paused: ({ leftMs }): SlaChipCopy => ({
 			text: `Paused · ${options.status === "on_hold" ? "on hold" : "waiting on customer"}`,
-			tone: "muted",
+			tone: "paused",
+			icon: "pause",
 			title: `${policy} · ${formatSlaDuration(leftMs)} left to resolve`,
 		}),
 		Met: ({ elapsedMs, onTime }): SlaChipCopy => ({
 			text: `First reply in ${formatSlaDuration(elapsedMs)}${onTime ? "" : " · late"}`,
-			tone: onTime ? "met" : "muted",
+			tone: onTime ? "met" : "late",
+			icon: onTime ? "check" : "clock",
 			title: `${policy} · first reply ${onTime ? "within" : "past"} its target`,
 		}),
 	})

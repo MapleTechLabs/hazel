@@ -216,6 +216,7 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 	const waiting = needsReply(issue)
 	const sla = context.slasById.get(issue.id)
 	const hasChip = slaDisplayOf(sla, context.nowMs)._tag !== "None"
+	const chip = slaChip(h, { sla, nowMs: context.nowMs, status: issue.status })
 	const ageMs =
 		issue.status === "closed"
 			? (issue.closedAtMs ?? issue.lastMessageAtMs)
@@ -306,6 +307,16 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 							),
 						],
 					),
+					// The SLA chip under the title until the list is wide enough for its column, and on
+					// the selected row, whose actions take the columns' room.
+					...(hasChip
+						? [
+								h.div(
+									[h.Class(twMerge("mt-1 flex min-w-0", !isSelected && "@6xl:hidden"))],
+									[chip],
+								),
+							]
+						: []),
 				],
 			),
 			...(isSelected && context.actions.length > 0
@@ -328,19 +339,15 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 							[priorityLabel(h, issue.priority)],
 						),
 					]),
-			// The SLA chip; on a phone, its own line under the title.
-			h.div(
-				[
-					h.Role("cell"),
-					h.Class(
-						twMerge(
-							"flex w-56 shrink-0 max-md:order-last max-md:w-auto max-md:basis-full max-md:pl-11",
-							!hasChip && "max-md:hidden",
+			// The SLA column, on a wide list only.
+			...(isSelected
+				? []
+				: [
+						h.div(
+							[h.Role("cell"), h.Class("hidden w-52 shrink-0 @6xl:flex")],
+							hasChip ? [chip] : [],
 						),
-					),
-				],
-				[slaChip(h, { sla, nowMs: context.nowMs, status: issue.status })],
-			),
+					]),
 			h.div(
 				[
 					h.Role("cell"),
@@ -647,13 +654,14 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: st
 		selectedId: model.selectedId,
 		actions: selected === undefined ? [] : issueActions(h, model, viewer, selected),
 	}
-	return queueList(h, { ariaLabel: "Support issues" }, [
+	// A container: the SLA column shows by the list's width, as the shell's sidebars take a share.
+	return queueList(h, { ariaLabel: "Support issues", className: "@container" }, [
 		queueColumnHeader(h, [
 			{ label: "Customer", className: "w-52" },
 			{ label: "Issue", className: "flex-1" },
 			{ label: "Status", className: "w-40" },
 			{ label: "Priority", className: "w-24 max-md:hidden" },
-			{ label: "SLA", className: "w-56" },
+			{ label: "SLA", className: "hidden w-52 @6xl:block" },
 			{ label: model.tab === "closed" ? "Closed" : "Waiting", className: "w-10 text-right" },
 			{ label: "", className: "w-7" },
 		]),

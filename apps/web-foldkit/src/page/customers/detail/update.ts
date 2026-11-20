@@ -768,6 +768,15 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		SucceededFetchSupport: ({ row }) => ({
 			model: modifyFields(model, { support: (current) => settle(current, Result.succeed(row)) }),
 		}),
+		PressedRetrySupport: () => {
+			const args = target(model, shared)
+			return args === null || AsyncData.isLoading(model.support)
+				? { model }
+				: {
+						model: modifyFields(model, { support: () => AsyncData.Loading() }),
+						commands: [FetchCustomerSupport(args)],
+					}
+		},
 		FailedFetchSupport: ({ reason }) => ({
 			model: modifyFields(model, { support: (current) => settle(current, Result.fail(reason)) }),
 		}),

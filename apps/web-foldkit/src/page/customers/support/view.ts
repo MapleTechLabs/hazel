@@ -19,7 +19,7 @@ import { pageHeader, panel, panelClass, panelHeader, titleClass } from "../../..
 import { IconArrowPath, IconSupport } from "../../../icons"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { button, buttonClassName } from "../../../ui/button"
-import { heading } from "../../../ui/heading"
+import { emptyState } from "../../../ui/empty-state"
 import type { PageViewInputs } from "../../contract"
 import { Message } from "./message"
 import { type DailyChart, isEmptyReport, type Model } from "./model"
@@ -78,7 +78,7 @@ const tiles = (h: HtmlBuilder<Message>, report: Report | undefined): Html =>
 						id: "support-resolution",
 						label: "Median resolution",
 						definition:
-							"Half the issues resolved in the range closed within this much working time, pauses left out.",
+							"Half the resolved issues opened in the range closed within this much working time, pauses left out.",
 						value: formatResponse(report.resolution.medianMs),
 						detail:
 							report.resolution.count === 0
@@ -89,7 +89,7 @@ const tiles = (h: HtmlBuilder<Message>, report: Report | undefined): Html =>
 						id: "support-resolution-within",
 						label: "Resolved within SLA",
 						definition:
-							"Share of resolved issues closed before their policy's resolution target.",
+							"Share of the resolved issues opened in the range closed before their policy's resolution target.",
 						value: formatWithin(report.resolution.withinPct),
 					}),
 				]),
@@ -108,19 +108,23 @@ const axisHours = (hours: number): string =>
 
 const dailyCard = (h: HtmlBuilder<Message>, model: Model, report: Report): Html => {
 	const isMedian = model.chart === "median"
+	// A day with no first reply has no bar and no tooltip row (not a zero). A real 0% within SLA is
+	// drawn as a sliver that still reads "0%", as the chart leaves zero values out of its tooltip.
 	const bars = report.daily.map((day) => {
 		const value = isMedian
 			? day.firstResponseMedianMs === null
-				? 0
+				? null
 				: day.firstResponseMedianMs / 3_600_000
 			: day.withinPct === null
-				? 0
-				: day.withinPct * 100
+				? null
+				: Math.max(day.withinPct * 100, 0.4)
+		const opened = day.issues === 0 ? "no issues" : `${formatCount(day.issues)} opened`
+		const values: Record<string, number> = value === null ? {} : { value }
 		return {
 			tick: formatDay(day.day),
-			heading: `${formatDayLong(day.day)} · ${day.issues === 0 ? "no issues" : `${formatCount(day.issues)} opened`}`,
-			values: { value },
-			net: value,
+			heading: `${formatDayLong(day.day)} · ${value === null && day.issues > 0 ? `${opened}, no reply yet` : opened}`,
+			values,
+			net: value ?? 0,
 		}
 	})
 	return chartCard(
@@ -151,7 +155,7 @@ const dailyCard = (h: HtmlBuilder<Message>, model: Model, report: Report): Html 
 				],
 				bars,
 				formatValue: isMedian
-					? (hours) => (hours === 0 ? "—" : formatSlaDuration(hours * 3_600_000))
+					? (hours) => formatSlaDuration(hours * 3_600_000)
 					: (pct) => `${Math.round(pct)}%`,
 				formatAxis: isMedian ? axisHours : (pct) => `${Math.round(pct)}%`,
 				hoveredIndex: model.hoveredDay,
@@ -308,34 +312,19 @@ const failure = (h: HtmlBuilder<Message>, reason: Parameters<typeof commonMessag
 }
 
 const empty = (h: HtmlBuilder<Message>, model: Model, orgSlug: string): Html =>
-	h.div(
-		[h.Class("flex flex-col items-center gap-4 rounded-xl border border-border px-6 py-14 text-center")],
-		[
-			h.div(
-				[h.Class("flex size-11 items-center justify-center rounded-xl bg-secondary text-muted-fg")],
-				[IconSupport(h, { className: "size-5" })],
-			),
-			h.div(
-				[h.Class("flex flex-col gap-1")],
-				[
-					heading(h, { variant: "subsection", level: 2 }, ["No support issues in this range"]),
-					h.p(
-						[h.Class("max-w-sm text-muted-fg text-sm")],
-						[
-							`No issue under an SLA policy opened in ${RANGE_LABEL[model.range]}. Policies decide which customers' issues are timed.`,
-						],
-					),
-				],
-			),
-			h.a(
-				[
-					h.Href(hrefOf(AppRoute.CustomersSettingsSla({ orgSlug }))),
-					h.Class(buttonClassName({ intent: "outline", size: "sm" })),
-				],
-				["Open SLA settings"],
-			),
-		],
-	)
+	emptyState(h, {
+		title: "No support issues in this range",
+		icon: (className) => IconSupport(h, { className }),
+		description: `No issue under an SLA policy opened in ${RANGE_LABEL[model.range]}, and none overdue. Policies decide which customers' issues are timed.`,
+		action: h.a(
+			[
+				h.Href(hrefOf(AppRoute.CustomersSettingsSla({ orgSlug }))),
+				h.Class(buttonClassName({ intent: "outline", size: "sm" })),
+			],
+			["Open SLA settings"],
+		),
+		className: panelClass,
+	})
 
 const content = (h: HtmlBuilder<Message>, model: Model, orgSlug: string): ReadonlyArray<Html> => {
 	const report = Option.getOrUndefined(AsyncData.getData(model.report))

@@ -3,7 +3,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconCheck, IconCirclePause, IconClock } from "../../icons"
 import { badge } from "../../ui/badge"
-import { type IssueSlaRow, slaChipCopy, slaDisplayOf, type SlaTone } from "../sla"
+import { type IssueSlaRow, type SlaIcon, slaChipCopy, slaDisplayOf, type SlaTone } from "../sla"
 
 /**
  * An issue's SLA chip (`docs/customers/sla.md` §3): "Reply due in 3h 10m", "Reply overdue by 1h",
@@ -12,29 +12,19 @@ import { type IssueSlaRow, slaChipCopy, slaDisplayOf, type SlaTone } from "../sl
  */
 
 const INTENT = {
-	quiet: "outline",
+	quiet: "quiet",
 	warning: "warning",
 	danger: "danger",
-	muted: "secondary",
-	met: "outline",
+	paused: "muted",
+	met: "success-outline",
+	late: "secondary",
 } as const satisfies Record<SlaTone, string>
 
-const TONE_CLASS = {
-	quiet: "[--badge-fg:var(--color-muted-fg)]",
-	warning: "",
-	danger: "",
-	muted: "[--badge-fg:var(--color-muted-fg)]",
-	met: "[--badge-fg:var(--color-success-subtle-fg)]",
-} as const satisfies Record<SlaTone, string>
-
-const iconOf = <M>(h: HtmlBuilder<M>, tone: SlaTone): Html => {
-	const attributes = { "data-slot": "icon" }
-	return tone === "muted"
-		? IconCirclePause(h, { attributes })
-		: tone === "met"
-			? IconCheck(h, { attributes })
-			: IconClock(h, { attributes })
-}
+const ICON = {
+	clock: IconClock,
+	pause: IconCirclePause,
+	check: IconCheck,
+} as const satisfies Record<SlaIcon, unknown>
 
 /** The chip for an issue's SLA row at `nowMs`; empty when it shows nothing. */
 export const slaChip = <M>(
@@ -59,9 +49,12 @@ export const slaChip = <M>(
 		h,
 		{
 			intent: INTENT[copy.tone],
-			className: twMerge("max-w-full", TONE_CLASS[copy.tone], options.className),
+			className: twMerge("max-w-full", options.className),
 			attributes: [h.Title(copy.title), h.DataAttribute("sla", copy.tone)],
 		},
-		[iconOf(h, copy.tone), h.span([h.Class("truncate")], [copy.text])],
+		[
+			ICON[copy.icon](h, { attributes: { "data-slot": "icon" } }),
+			h.span([h.Class("truncate")], [copy.text]),
+		],
 	)
 }

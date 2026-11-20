@@ -92,6 +92,7 @@ export const Message = defineMessageUnion({
 	UpdatedSupportSlas: { slas: Schema.Array(IssueSlaRow) },
 	SucceededFetchSupport: { accountId: CustomerAccountId, row: Schema.NullOr(Customers.SupportReportRow) },
 	FailedFetchSupport: { accountId: CustomerAccountId, reason: CommonReason },
+	PressedRetrySupport: {},
 
 	ClickedContactFilter: { filter: ContactFilter },
 	ChangedContactSearch: { value: Schema.String },
