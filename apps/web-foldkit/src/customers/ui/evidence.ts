@@ -1,9 +1,4 @@
-import {
-	FORECAST_FALLBACK_DAYS,
-	type LimitForecast,
-	overdueLabel,
-	type SignalEvidence,
-} from "@hazel/domain/customers"
+import { type LimitForecast, overdueLabel, type SignalEvidence } from "@hazel/domain/customers"
 import { Match } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
@@ -173,9 +168,7 @@ const fact = <M>(h: HtmlBuilder<M>, label: string, value: Html | string): Html =
 const forecastFacts = <M>(h: HtmlBuilder<M>, forecast: LimitForecast): ReadonlyArray<Html> => [
 	fact(
 		h,
-		forecast.periodEnd
-			? `Projected by ${formatDay(forecast.day)}`
-			: `Projected in ${formatDays(FORECAST_FALLBACK_DAYS)}`,
+		`Projected by ${formatDay(forecast.day)}`,
 		`${formatMetricValue(forecast.value, null)} · ${formatPct(forecast.pct, { digits: 0 })}`,
 	),
 	fact(

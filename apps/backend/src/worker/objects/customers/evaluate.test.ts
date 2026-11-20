@@ -410,6 +410,19 @@ describe("signal evaluation", () => {
 		expect(found.reason).toBe(
 			"api_calls at 96% of the plan limit (960 of 1000); on pace for 106% by the period end",
 		)
+		// A period ending later today is the horizon; one already past is not.
+		const ending = (at: Date) =>
+			match("near_limit", { metrics: rising, subscriptions: [{ currentPeriodEnd: at }] }).evidence
+		expect(ending(new Date(NOW.getTime() + 3_600_000))).toMatchObject({
+			forecast: { day: TODAY, periodEnd: true },
+		})
+		expect(ending(new Date(NOW.getTime() - 3_600_000))).toMatchObject({
+			forecast: { periodEnd: false },
+		})
+		// A crossing far past the horizon is no date (and no out-of-range one).
+		expect(
+			match("near_limit", { metrics: series([9_499_999_999, 9_500_000_000], 10_000_000_000) }).evidence,
+		).toMatchObject({ forecast: { perDay: 1, limitDay: null } })
 		// Only the days since the latest reset count; one day is no trend.
 		expect(match("near_limit", { metrics: series([90, 99, 92, 94], 100) }).evidence).toMatchObject({
 			forecast: { perDay: 2, days: 2 },

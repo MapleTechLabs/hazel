@@ -496,13 +496,17 @@ const forecastOf = (
 			? 0
 			: span.reduce((sum, point) => sum + (point.x - meanX) * (point.y - meanY), 0) / spread
 	const periodEnd = facts.subscriptions
-		.flatMap((sub) => (sub.currentPeriodEnd === null ? [] : [dayOf(sub.currentPeriodEnd)]))
-		.filter((day) => day > org.today && daysBetween(org.today, day) <= MAX_PERIOD_DAYS)
+		.flatMap((sub) =>
+			sub.currentPeriodEnd === null || sub.currentPeriodEnd <= org.now
+				? []
+				: [dayOf(sub.currentPeriodEnd)],
+		)
+		.filter((day) => daysBetween(org.today, day) <= MAX_PERIOD_DAYS)
 		.sort()[0]
 	const day = periodEnd ?? addDays(org.today, FORECAST_FALLBACK_DAYS)
 	const value = Math.max(0, last.value + perDay * daysBetween(last.day, day))
-	const crossing =
-		last.value < limit && perDay > 0 ? addDays(last.day, Math.ceil((limit - last.value) / perDay)) : null
+	// Days until it crosses, kept only within the horizon (a far-off one is no date at all).
+	const crossingIn = last.value < limit && perDay > 0 ? Math.ceil((limit - last.value) / perDay) : null
 	return {
 		day,
 		periodEnd: periodEnd !== undefined,
@@ -510,7 +514,10 @@ const forecastOf = (
 		pct: round1((value / limit) * 100),
 		perDay: round1(perDay),
 		days: 1 - Math.min(...span.map((point) => point.x)),
-		limitDay: crossing !== null && crossing <= day ? crossing : null,
+		limitDay:
+			crossingIn !== null && crossingIn <= daysBetween(last.day, day)
+				? addDays(last.day, crossingIn)
+				: null,
 	}
 }
 
