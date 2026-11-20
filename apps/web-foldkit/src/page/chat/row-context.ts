@@ -124,7 +124,7 @@ const contextItem = (h: H, key: string, label: string, icon: Html): ReadonlyArra
 const contextMenuContent =
 	(h: H, isPinned: boolean) =>
 	(key: string): ReadonlyArray<Html> => {
-		const icon = (render: typeof IconCopy, className = "ml-auto size-4 text-muted-fg") =>
+		const icon = (render: typeof IconCopy, className = "ml-auto size-4") =>
 			render(h, { className, attributes: { "data-slot": "icon" } })
 		if (key === "add-reaction") return contextItem(h, key, "Add Reaction", icon(IconEmojiAdd))
 		if (key === "reply") return contextItem(h, key, "Reply", icon(IconReply))
@@ -141,7 +141,7 @@ const contextMenuContent =
 				isPinned ? "Unpin Message" : "Pin Message",
 				icon(isPinned ? IconUnpin : IconStar),
 			)
-		if (key === "delete") return contextItem(h, key, "Delete Message", icon(IconTrash, "ml-auto size-4"))
+		if (key === "delete") return contextItem(h, key, "Delete Message", icon(IconTrash))
 		return contextItem(h, key, "Copy Message ID", icon(IconHashtag))
 	}
 

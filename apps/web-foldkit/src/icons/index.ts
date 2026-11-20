@@ -1757,34 +1757,28 @@ export const IconImage = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		options,
 		[
 			h.g(
-				[
-					h.Attribute("fill", "none"),
-					h.Attribute("stroke", "currentColor"),
-					h.Attribute("stroke-linecap", "round"),
-					h.Attribute("stroke-linejoin", "round"),
-					h.Attribute("stroke-width", "1.5"),
-				],
+				[h.Attribute("fill", "currentColor")],
 				[
 					h.path([
 						h.Attribute(
 							"d",
-							"M3.75 2.75H14.25C15.355 2.75 16.25 3.645 16.25 4.75V13.25C16.25 14.355 15.355 15.25 14.25 15.25H3.75C2.645 15.25 1.75 14.355 1.75 13.25V4.75C1.75 3.645 2.645 2.75 3.75 2.75Z",
+							"M4 2.5H14C15.38 2.5 16.5 3.62 16.5 5V13C16.5 14.38 15.38 15.5 14 15.5H4C2.62 15.5 1.5 14.38 1.5 13V5C1.5 3.62 2.62 2.5 4 2.5Z",
 						),
 						h.Attribute("opacity", "0.4"),
 					]),
 					h.path([
-						h.Attribute(
-							"d",
-							"M4.25 15.25L10.54 8.96C11.13 8.37 12.07 8.37 12.66 8.96L16.25 12.55",
-						),
+						h.Attribute("d", "M4.25 13.25L8.97 8.53C9.56 7.94 10.5 7.94 11.09 8.53L13.75 11.19"),
+						h.Attribute("fill", "none"),
+						h.Attribute("stroke", "currentColor"),
+						h.Attribute("stroke-linecap", "round"),
+						h.Attribute("stroke-linejoin", "round"),
+						h.Attribute("stroke-width", "1.5"),
 					]),
 					h.path([
 						h.Attribute(
 							"d",
-							"M6.25 8.5C6.94 8.5 7.5 7.94 7.5 7.25C7.5 6.56 6.94 6 6.25 6C5.56 6 5 6.56 5 7.25C5 7.94 5.56 8.5 6.25 8.5Z",
+							"M6.25 7.75C6.94 7.75 7.5 7.19 7.5 6.5C7.5 5.81 6.94 5.25 6.25 5.25C5.56 5.25 5 5.81 5 6.5C5 7.19 5.56 7.75 6.25 7.75Z",
 						),
-						h.Attribute("fill", "currentColor"),
-						h.Attribute("stroke", "none"),
 					]),
 				],
 			),
