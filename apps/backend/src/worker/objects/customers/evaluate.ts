@@ -546,7 +546,7 @@ const nearLimit =
 		const pace =
 			forecast === undefined || forecast.value <= top.latest.value
 				? ""
-				: `; on pace for ${Math.round(forecast.pct)}% by ${forecast.periodEnd ? "the period end" : `${FORECAST_FALLBACK_DAYS} days out`}`
+				: `; on pace for ${Math.round(forecast.pct)}% ${forecast.periodEnd ? "by the period end" : `in ${FORECAST_FALLBACK_DAYS} days`}`
 		return {
 			step,
 			reason: `${name} at ${Math.round(top.pct)}% of the plan limit (${round1(top.latest.value)} of ${round1(top.limit)})${pace}`,
