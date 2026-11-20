@@ -361,6 +361,8 @@
       "version": "0.0.0",
       "dependencies": {
         "@hazel/db": "workspace:*",
+        "@hazel/schema": "workspace:*",
+        "@maple-dev/effect-orm": "0.11.0",
         "@simplewebauthn/server": "^14.0.1",
         "@yielded/auth": "0.1.0-beta.47",
         "@yielded/auth-persistence": "0.1.0-beta.47",
@@ -396,7 +398,7 @@
         "@effect/sql-sqlite-node": "catalog:effect",
         "@hazel/domain": "workspace:*",
         "@hazel/schema": "workspace:*",
-        "@maple-dev/effect-orm": "0.10.0",
+        "@maple-dev/effect-orm": "0.11.0",
         "effect": "catalog:effect",
       },
       "devDependencies": {
@@ -506,7 +508,7 @@
       "dependencies": {
         "@effect/sql-sqlite-do": "catalog:effect",
         "@hazel/domain": "workspace:*",
-        "@maple-dev/effect-orm": "0.10.0",
+        "@maple-dev/effect-orm": "0.11.0",
         "effect": "catalog:effect",
       },
       "devDependencies": {
@@ -999,7 +1001,7 @@
 
     "@maple-dev/alchemy": ["@maple-dev/alchemy@0.3.0", "", { "dependencies": { "@maple-dev/effect-sdk": "0.12.1" }, "peerDependencies": { "alchemy": ">=2.0.0-beta.80 <3", "effect": "^4.0.0" } }, "sha512-veRnkBELQhb/VsxHkzLju1yAXYLKF6JAG2YPL7TKFNEuRoA0uEM3d4UEOBlDzNhGGOSbAP4iu8irDfZcFGJ2yg=="],
 
-    "@maple-dev/effect-orm": ["@maple-dev/effect-orm@0.10.0", "", { "peerDependencies": { "effect": "^4.0.6" }, "bin": { "ch-bench": "dist/benchmark/bin.mjs", "effect-orm": "dist/kit/bin.mjs" } }, "sha512-TjXAA0FifQHwuwB8vB4LmeUsgAbnn5Mzi2gJi8C7WIEN2mhiNGKd8P0QrM98eyewfuI3AlEbWiPeNgvZG0IHcw=="],
+    "@maple-dev/effect-orm": ["@maple-dev/effect-orm@0.11.0", "", { "peerDependencies": { "effect": "^4.0.6" }, "bin": { "ch-bench": "dist/benchmark/bin.mjs", "effect-orm": "dist/kit/bin.mjs" } }, "sha512-CENO2S5A4hZ87Se3IzatGAJcrV6P5W6v42KSDEqlbhKucdBWcQHm1kTXPo5kt06CP+bwPZQ/tw8BPU1QDpe+tA=="],
 
     "@maple-dev/effect-sdk": ["@maple-dev/effect-sdk@0.12.1", "", { "dependencies": { "std-env": "^4.0.0" }, "peerDependencies": { "effect": "^4.0.0" } }, "sha512-c1rImIAWvJTPUPwEXDQ3xE3bf89ZvJ2VUaj7lS5KxB3yUUUQtYIFaTKlNSEVKnLUxL5lRUUgxmU8r6BbdILbUQ=="],
 
