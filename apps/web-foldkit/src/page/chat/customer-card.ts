@@ -393,8 +393,48 @@ const lastActiveText = (day: string, nowMs: number): string => {
 }
 
 /** The card's content, shared by the hover card, the sheet and the gallery. */
+/**
+ * A row projected before the glance existed (its org has not had a snapshot since): every glance
+ * sets the stage, so a missing one means "not synced yet", not an empty account.
+ */
+export const hasGlance = (customer: ChannelCustomer.Type): boolean => customer.lifecycleStage !== null
+
+/** The card before the glance arrives: who it is and the way to the page, no made-up blanks. */
+const pendingBody = <M>(h: HtmlBuilder<M>, context: CardContext): Html =>
+	h.div(
+		[h.Class("flex flex-col")],
+		[
+			h.div(
+				[h.Class("flex items-center gap-3 px-4 pt-4 pb-3")],
+				[
+					companyLogo(h, {
+						name: context.customer.accountName,
+						logoUrl: context.customer.accountLogoUrl ?? null,
+						size: "md",
+					}),
+					h.a(
+						[
+							h.Href(context.customerHref),
+							h.Class(twMerge(titleClass, "truncate hover:underline")),
+						],
+						[context.customer.accountName],
+					),
+				],
+			),
+			h.p(
+				[h.Class(twMerge(descriptionClass, "px-4 pb-3 text-xs"))],
+				["Health, revenue and signals show here after the next customer sync."],
+			),
+			h.div(
+				[h.Class("border-border border-t bg-secondary/40 px-4 py-2.5")],
+				[h.a([h.Href(context.customerHref), h.Class(linkClass)], ["Open customer"])],
+			),
+		],
+	)
+
 export const cardBody = <M>(h: HtmlBuilder<M>, context: CardContext): Html => {
 	const { customer } = context
+	if (!hasGlance(customer)) return pendingBody(h, context)
 	const revenue = revenueText(customer)
 	const seats = seatsText(customer)
 	const hiddenSignals = customer.openSignalCount - customer.topSignals.length

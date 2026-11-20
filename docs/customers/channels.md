@@ -76,6 +76,10 @@ next one, whose fingerprint differs, fills them).
 Writes reach only linked channels' rows (tens per org), at most once a compute, and only the rows
 that changed. Same visibility as the name: org members who see the channel, never Connect guests.
 
+A row projected before the glance (an org with no snapshot since the deploy: the next compute, within
+the hour, sends one) has no stage; the card then shows only the name and the way to the customer
+page, not blanks that read as an empty account.
+
 UI (`src/page/chat/customer-card.ts`): the header chip shows the health dot and the name. On
 desktop, hovering it shows the card after 350 ms; it stays while the pointer is on the chip or the
 card (200 ms grace), and a click pins it until Escape or a click outside. On a phone a tap opens

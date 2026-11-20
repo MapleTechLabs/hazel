@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { init, Message, type Model, update } from "./customer-card"
+import { hasGlance, init, Message, type Model, update } from "./customer-card"
 
 const step = (model: Model, ...messages: ReadonlyArray<Message>) =>
 	messages.reduce((current, message) => update(current, message).model, model)
@@ -48,5 +48,14 @@ describe("customer card", () => {
 		const phone = step(init(), Message.PressedChip({ isMobile: true }))
 		expect(phone.sheet.isOpen).toBe(true)
 		expect(phone.phase).toBe("closed")
+	})
+
+	it("tells a row projected before the glance from an account with nothing to show", () => {
+		const row = { lifecycleStage: null } as const
+		const synced = { lifecycleStage: "lead" } as const
+		// SAFETY: hasGlance reads only lifecycleStage.
+		expect(hasGlance(row as never)).toBe(false)
+		// SAFETY: as above.
+		expect(hasGlance(synced as never)).toBe(true)
 	})
 })
