@@ -43,7 +43,7 @@ export const recordChannelAuthor = Effect.fn("OrgObject.chatSyncRecordAuthor")(f
 			.limit(1),
 	)
 	if (Option.isNone(existing)) {
-		yield* db.run(
+		const inserted = yield* db.run(
 			SQLite.insertInto(schema.chatSyncChannelAuthorsTable)
 				.values({
 					hazelChannelId: channelId,
@@ -54,16 +54,18 @@ export const recordChannelAuthor = Effect.fn("OrgObject.chatSyncRecordAuthor")(f
 					firstSeenAt: now,
 					lastSeenAt: now,
 				})
-				// Two messages from a new author at once: the first insert stands.
-				.onConflictDoNothing(),
+				.onConflictDoNothing()
+				.returning(),
 		)
-		return
+		// Two first messages at once and the other insert won: still add what this one knows.
+		if (inserted.length > 0 || (email === null && workspace === null)) return
+	} else {
+		// Nothing new and seen within the hour: no write per message in a busy channel.
+		const learned =
+			(email !== null && email !== existing.value.email) ||
+			(workspace !== null && workspace !== existing.value.externalWorkspaceId)
+		if (!learned && now.getTime() - existing.value.lastSeenAt.getTime() < SEEN_REFRESH_MS) return
 	}
-	// Nothing new and seen within the hour: no write per message in a busy channel.
-	const learned =
-		(email !== null && email !== existing.value.email) ||
-		(workspace !== null && workspace !== existing.value.externalWorkspaceId)
-	if (!learned && now.getTime() - existing.value.lastSeenAt.getTime() < SEEN_REFRESH_MS) return
 	// What a lookup could not tell this time (a timeout, the scope not approved yet) is kept: an
 	// unknown value is left out of the SET (the row's own value stays, whatever was read above).
 	yield* db.run(

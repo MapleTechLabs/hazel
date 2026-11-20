@@ -358,7 +358,8 @@ export const scoreChannel = (
 		),
 	]
 	const total = emails.length
-	const members = evidence.externalMembers.length
+	// The same unit as `total` (distinct emails), plus the members whose email is unknown.
+	const members = total + evidence.externalMembers.filter((member) => member.email === null).length
 	if (total > 0) {
 		const contactHits = new Map<CustomerAccountId, Array<string>>()
 		const domainHits = new Map<CustomerAccountId, Map<string, number>>()
