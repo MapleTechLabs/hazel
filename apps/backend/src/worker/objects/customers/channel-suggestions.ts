@@ -5,9 +5,9 @@
  *
  * Suggestions are the customer's (a group's primary, like links): every account is scored under
  * its link owner, with its group's domains and contacts. `open` rows are rewritten by each
- * refresh; `dismissed` and `accepted` rows are decisions and stay. Only a Connect channel whose
- * guests are clearly one account's contacts is linked without a click (`autoLink`), and never a
- * channel with any link history or decided suggestion.
+ * refresh; `dismissed` and `accepted` rows are decisions and stay. A channel whose people clearly
+ * all belong to one account (all at its domain, or a Connect channel of its contacts) is linked
+ * without a click (`autoLink`), never one with any link history or decided suggestion.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
@@ -420,7 +420,7 @@ export const applySuggestions = Effect.fn("CustomersObject.applySuggestions")(fu
 })
 
 /**
- * A clear Connect match: linked by nobody, its suggestion accepted, why on the event (name-free).
+ * A clear match: linked by nobody, its suggestion accepted, why on the event (name-free).
  * Inside the refresh's transaction; nothing when the channel got a link meanwhile.
  */
 const autoLink = (organizationId: OrganizationId, suggestion: ScoredSuggestion, now: Date) =>

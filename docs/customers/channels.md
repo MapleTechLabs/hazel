@@ -109,8 +109,9 @@ card takes a `support` slot between the signals and the links for support issues
 ## Suggested links
 
 Hazel suggests which customer a channel belongs to and says why ("3 of 4 external members have
-@acme.com, Acme's domain"). Nothing is linked without a click, except a Connect channel whose
-guests are clearly one account's contacts.
+@acme.com, Acme's domain"), from the emails of the people from outside the org in it. A channel
+whose people clearly all belong to one customer (all at its domain, or a Connect channel of its
+contacts) is linked without a click; everything else waits for one.
 
 ### Evidence (`org.channelEvidence`, a call to the `OrgObject`)
 
@@ -136,23 +137,31 @@ For each live `public` / `private` channel:
 
 ### Scoring (`packages/domain/src/customers/channel-suggestions.ts`, pure)
 
-Matched against live accounts (name, `domains`), contact emails and the channels already linked.
-Each reason has a weight, and reasons compound (`1 - Π(1 - w)`):
+Matched against live accounts (`domains`), contact emails and the channels already linked: only
+the emails of the channel's external members make a suggestion. Names never do (a channel named
+`brandon-maple`, or the org's own Discord server, says nothing about a customer). Each reason has a
+weight, and reasons compound (`1 - Π(1 - w)`):
 
-| Reason      | When                                                                                                                                                      | Weight                               |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `contacts`  | external members who are the account's contacts (exact email)                                                                                             | 60 + 35 × share                      |
-| `domain`    | external members at one of the account's domains (free-mail domains never count)                                                                          | 40 + 45 × share                      |
-| `workspace` | other channels of the same Slack Connect team (or of the same Discord guild, ≥ 2) are linked to this account and to no other                              | Slack 75, Discord 35 + 10 each, ≤ 60 |
-| `name`      | the channel's name (or a Discord guild's / Slack Connect team's) contains the account's name or a domain's first label (punctuation dropped, ≥ 4 letters) | channel 30, workspace 50             |
+| Reason      | When                                                                                                                         | Weight                               |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `contacts`  | external members who are the account's contacts (exact email)                                                                | 60 + 35 × share                      |
+| `domain`    | external members at one of the account's domains (free-mail domains never count)                                             | 40 + 45 × share                      |
+| `workspace` | other channels of the same Slack Connect team (or of the same Discord guild, ≥ 2) are linked to this account and to no other | Slack 75, Discord 35 + 10 each, ≤ 60 |
 
-The org's own Slack workspace is never evidence. Suggestions under 30 are dropped; 75 and up are
-`strong`; at most 3 per channel.
+`workspace` only adds to an account that `contacts` or `domain` already found; on its own it
+suggests nothing. The org's own Slack workspace is never evidence. Suggestions under 30 are
+dropped; 75 and up are `strong`; at most 3 per channel. (`name` reasons were produced before; the
+type keeps them so decided rows stored with one still read.)
 
-**Auto-link**: a Connect channel whose best match has at least half its guests as that account's
-contacts, with no other account matching by contact or domain, counted over every guest: a channel
-whose evidence is a sample (more guests than were sent, or a host that could not be reached) is
-only suggested. It links like a click (`linkedBy` null, a `channel.linked` event that says why,
+**Auto-link**, when no other account has any match and every external member was seen (a channel
+whose evidence is a sample, with more members than were sent or a Connect host that could not be
+reached, is only suggested), on either:
+
+- **domain**: any channel (Slack Connect, Connect, ...) whose external members all have a known
+  email at the account's domain. One member whose email is unknown keeps it a suggestion.
+- **contacts**: a Connect channel where at least half the guests are the account's contacts.
+
+It links like a click (`linkedBy` null, a `channel.linked` event that says why,
 with reason kinds and counts but no names). A channel with any link history (linked or
 unlinked before) or a decided suggestion is never auto-linked: once someone unlinks it, it stays
 manual.

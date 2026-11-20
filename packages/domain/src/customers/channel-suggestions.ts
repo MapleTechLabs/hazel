@@ -2,6 +2,7 @@
  * Suggested channel links (`docs/customers/channels.md`): which customer a channel belongs to,
  * scored from what the `OrgObject` knows about the channel (its evidence) against what the
  * `CustomersObject` knows about its accounts (domains, contact emails, channels already linked).
+ * Only the emails of the channel's external members make a suggestion; names never do.
  *
  * Pure and explainable, like signals: every suggestion carries the reasons that produced it, and
  * `describeReason` renders each as one sentence ("3 of 4 external members have @acme.com").
@@ -101,7 +102,10 @@ export const SuggestionReason = Schema.Union([
 		workspaceName: Schema.NullOr(Schema.String),
 		linkedChannels: Schema.Number,
 	}),
-	/** The channel's or its workspace's name names the account. */
+	/**
+	 * The channel's or its workspace's name named the account. No longer produced (names matched
+	 * the org's own server and people's channels); kept so decided rows stored with it still read.
+	 */
 	Schema.Struct({
 		kind: Schema.Literal("name"),
 		where: Schema.Literals(["channel", "workspace"]),
@@ -127,7 +131,8 @@ export interface ScoredSuggestion {
 	readonly reasons: ReadonlyArray<SuggestionReason>
 	/**
 	 * Linked without a click: a Connect channel where at least half the guests are this
-	 * account's contacts and no other account has a contact or domain match.
+	 * account's contacts, or any channel whose external members all have an email at its domain;
+	 * either way every member was seen and no other account has a match.
 	 */
 	readonly autoLink: boolean
 }
@@ -163,8 +168,6 @@ export interface SuggestionIndex {
 	readonly domains: ReadonlyMap<string, ReadonlyArray<CustomerAccountId>>
 	/** `${provider}:${workspaceId}` → the account each already linked channel of it belongs to. */
 	readonly workspaceLinks: ReadonlyMap<string, ReadonlyArray<CustomerAccountId>>
-	/** Each account's name tokens (`accountTokens`), computed once per index. */
-	readonly nameTokens: ReadonlyMap<CustomerAccountId, ReadonlyArray<string>>
 }
 
 /** Free-mail domains never identify a company. */
@@ -244,66 +247,8 @@ export const buildSuggestionIndex = (input: {
 			else list.push(link.accountId)
 		}
 	}
-	const nameTokens = new Map(input.accounts.map((account) => [account.id, accountTokens(account)] as const))
-	return { accounts, contactEmails, domains, workspaceLinks, nameTokens }
+	return { accounts, contactEmails, domains, workspaceLinks }
 }
-
-// ---------------------------------------------------------------------------
-// Names
-// ---------------------------------------------------------------------------
-
-const COMPANY_SUFFIXES = new Set([
-	"inc",
-	"llc",
-	"ltd",
-	"limited",
-	"gmbh",
-	"corp",
-	"corporation",
-	"co",
-	"company",
-	"the",
-	"ag",
-	"sa",
-	"bv",
-	"plc",
-	"hq",
-])
-
-/** "Acme, Inc." → "acme"; "Big Bird Labs" → "bigbirdlabs". */
-export const normalizeName = (name: string) =>
-	name
-		.toLowerCase()
-		.split(/[^a-z0-9]+/)
-		.filter((word) => word.length > 0 && !COMPANY_SUFFIXES.has(word))
-		.join("")
-
-/** The names an account answers to: its name and its domains' first labels ("acme.io" → "acme"). */
-const accountTokens = (account: SuggestionAccount): ReadonlyArray<string> => {
-	const tokens = new Set<string>()
-	const name = normalizeName(account.name)
-	if (name.length >= 4) tokens.add(name)
-	for (const domain of account.domains) {
-		// "foo-bar.com" → "foobar", squashed like the names it is matched against.
-		// Normalized once, as `buildSuggestionIndex` does, for both the label and the free-mail test.
-		const normal = domain
-			.trim()
-			.toLowerCase()
-			.replace(/^www\./, "")
-		if (FREE_MAIL_DOMAINS.has(normal)) continue
-		// "foo-bar.com" → "foobar", squashed like the names it is matched against.
-		const label = squash(normal.split(".")[0] ?? "")
-		if (label.length >= 4) tokens.add(label)
-	}
-	return [...tokens]
-}
-
-/** A name lower-cased with everything but letters and digits removed. */
-const squash = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "")
-
-/** The token of the account the squashed name contains, if any. */
-const nameHit = (squashed: string, tokens: ReadonlyArray<string>): string | null =>
-	tokens.find((token) => squashed.includes(token)) ?? null
 
 // ---------------------------------------------------------------------------
 // Scoring
@@ -408,54 +353,35 @@ export const scoreChannel = (
 		})
 	}
 
-	// Names: the channel's, and a Discord guild's or Slack Connect team's.
-	const channelSquashed = squash(evidence.channelName)
-	const namedWorkspaces = evidence.workspaces.flatMap((workspace) =>
-		workspace.name === null || (workspace.provider === "slack" && !workspace.external)
-			? []
-			: [{ name: workspace.name, squashed: squash(workspace.name) }],
-	)
-	for (const account of index.accounts.values()) {
-		const tokens = index.nameTokens.get(account.id) ?? accountTokens(account)
-		const channelHit = nameHit(channelSquashed, tokens)
-		if (channelHit !== null) {
-			add(account.id, {
-				kind: "name",
-				where: "channel",
-				value: evidence.channelName,
-				matchedOn: channelHit,
-			})
-		}
-		for (const workspace of namedWorkspaces) {
-			const hit = nameHit(workspace.squashed, tokens)
-			if (hit !== null) {
-				add(account.id, { kind: "name", where: "workspace", value: workspace.name, matchedOn: hit })
-				break
-			}
-		}
-	}
+	// Only email evidence makes a suggestion: a workspace's linked siblings add to an account the
+	// channel's people already point at, never name one on their own.
+	const byEmail = (list: ReadonlyArray<SuggestionReason>) =>
+		list.some((reason) => reason.kind === "contacts" || reason.kind === "domain")
 
-	const scored = [...reasons].map(([accountId, list]) => {
-		const score = combine(list)
-		return {
-			channelId: evidence.channelId,
-			accountId,
-			score,
-			strength: score >= STRONG_SUGGESTION_SCORE ? ("strong" as const) : ("possible" as const),
-			reasons: list.sort((a, b) => weightOf(b) - weightOf(a)),
-			autoLink: false,
-		}
-	})
+	const scored = [...reasons]
+		.filter(([, list]) => byEmail(list))
+		.map(([accountId, list]) => {
+			const score = combine(list)
+			return {
+				channelId: evidence.channelId,
+				accountId,
+				score,
+				strength: score >= STRONG_SUGGESTION_SCORE ? ("strong" as const) : ("possible" as const),
+				reasons: list.sort((a, b) => weightOf(b) - weightOf(a)),
+				autoLink: false,
+			}
+		})
 	const ranked = scored
 		.filter((suggestion) => suggestion.score >= MIN_SUGGESTION_SCORE)
 		.sort((a, b) => b.score - a.score || (a.accountId < b.accountId ? -1 : 1))
 		.slice(0, MAX_SUGGESTIONS_PER_CHANNEL)
 
-	// Auto-link: a Connect channel, half its Connect guests or more are one account's contacts
-	// (members from a mirror of the same channel do not count), and no other account has a
-	// contact or domain match.
+	// Auto-link, when no other account has a match and every external member was seen, on either:
+	// - contacts: a Connect channel, half its Connect guests or more are the account's contacts
+	//   (members from a mirror of the same channel do not count);
+	// - domain: any channel whose external members all have a known email at the account's domain.
 	const best = ranked[0]
-	if (best === undefined || evidence.origin !== "connect") return ranked
+	if (best === undefined) return ranked
 	// A sample of the members: the ones not seen could be another account's (or no one's contacts),
 	// so neither the share nor the rival check can be trusted.
 	const seen = evidence.externalMembers.length
@@ -465,8 +391,19 @@ export const scoreChannel = (
 			? seen >= MAX_EVIDENCE_MEMBERS
 			: seen < evidence.externalMemberCount
 	if (sampled) return ranked
-	const byEmail = (suggestion: ScoredSuggestion) =>
-		suggestion.reasons.some((reason) => reason.kind === "contacts" || reason.kind === "domain")
+	const rivals = scored.some((other) => other.accountId !== best.accountId)
+	if (rivals) return ranked
+	const linked = [{ ...best, autoLink: true }, ...ranked.slice(1)]
+	// Domain: every member's email is known and at the account's domain.
+	const domainReason = best.reasons.find((reason) => reason.kind === "domain")
+	if (
+		domainReason !== undefined &&
+		domainReason.matched === domainReason.total &&
+		(domainReason.members ?? domainReason.total) === domainReason.total
+	) {
+		return linked
+	}
+	if (evidence.origin !== "connect") return ranked
 	// Every Connect guest counts, its email known or not (only the known ones can match).
 	const connectGuests = evidence.externalMembers.filter((member) => member.source === "connect")
 	const guests = [
@@ -480,9 +417,7 @@ export const scoreChannel = (
 	const guestContacts = guests.filter((email) =>
 		(index.contactEmails.get(email) ?? []).includes(best.accountId),
 	).length
-	const rivals = scored.some((other) => other.accountId !== best.accountId && byEmail(other))
-	const autoLink = guestContacts > 0 && guestContacts * 2 >= guestCount && !rivals
-	return autoLink ? [{ ...best, autoLink }, ...ranked.slice(1)] : ranked
+	return guestContacts > 0 && guestContacts * 2 >= guestCount ? linked : ranked
 }
 
 // ---------------------------------------------------------------------------
@@ -528,7 +463,6 @@ export const describeReason = (reason: SuggestionReason, accountName: string): s
 		case "name":
 			return reason.where === "channel"
 				? `The channel name contains "${reason.matchedOn}"`
-				: // A Discord server or a Slack Connect team: the reason does not say which.
-					`The ${reason.value} name contains "${reason.matchedOn}"`
+				: `The workspace name "${reason.value}" contains "${reason.matchedOn}"`
 	}
 }
