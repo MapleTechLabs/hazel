@@ -7,6 +7,9 @@
  * - body: the message as plain text (mentions as `@Name`), at most `PUSH_BODY_MAX` characters;
  *   `Sent an attachment` for a message with only attachments.
  * - path: `/<orgSlug>/chat/<channelId>` (a thread is a channel with its own route).
+ * - sender: the author's id, name and picture, and conversation: the channel's name when it is a
+ *   group (`pushConversation`). The iOS app's notification service shows the push as a message
+ *   from them, their picture in place of the app's icon (`apps/native/host/ios/notification-service`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
@@ -14,6 +17,15 @@ import { Effect, Option } from "effect"
 import type { PushContent } from "../user/push"
 
 export const PUSH_BODY_MAX = 180
+
+/**
+ * The longest avatar URL a push carries: APNs refuses a payload over 4 KB outright (the push is
+ * lost), and a URL's length is not otherwise bounded. A longer one leaves the push without a picture.
+ */
+export const PUSH_AVATAR_URL_MAX = 1024
+
+export const pushAvatarUrl = (url: string | null | undefined) =>
+	url && url.length <= PUSH_AVATAR_URL_MAX ? url : undefined
 
 /** Mentioned users whose names are looked up (Durable Object SQLite binds at most 100 parameters). */
 const MAX_NAMED_USERS = 50
@@ -70,6 +82,29 @@ const truncate = (text: string, max: number) => {
 				.trimEnd()}…`
 }
 
+/**
+ * The conversation a push's message is in, as the phone names a group: `#general`, `thread in
+ * #general`, a named group DM. A 1:1 DM (or an unnamed group) has none: it is from the sender.
+ */
+export const pushConversation = (
+	channel: ChannelInfo,
+	parent: ChannelInfo | undefined,
+): string | undefined => {
+	switch (channel.type) {
+		case "single":
+			return undefined
+		case "direct":
+			return channel.name.trim() === "" ? undefined : channel.name
+		case "thread":
+			return parent !== undefined && isConversation(parent.type)
+				? `thread in #${parent.name}`
+				: "thread"
+		case "public":
+		case "private":
+			return `#${channel.name}`
+	}
+}
+
 export const pushBody = (content: string, attachmentCount: number, names: ReadonlyMap<string, string>) => {
 	const text = plainTextOf(content, names)
 	if (text !== "") return truncate(text, PUSH_BODY_MAX)
@@ -115,18 +150,18 @@ export const loadPushContent = Effect.fn("OrgObject.pushContent")(function* (inp
 	const userIds = [...new Set([input.authorId, ...input.mentionedUserIds])].slice(0, MAX_NAMED_USERS)
 	const users = yield* db.run(
 		SQLite.from(schema.usersTable)
-			.select("id", "firstName", "lastName")
+			.select("id", "firstName", "lastName", "avatarUrl")
 			.where(($) => [$.id.in_(...userIds)]),
 	)
 	const byId = new Map(users.map((user) => [user.id as string, user]))
 	const names = new Map(users.map((user) => [user.id as string, displayNameOf(user)]))
+	const author = byId.get(input.authorId)
+	const authorName = displayNameOf(author)
 	return {
-		title: pushTitle(
-			displayNameOf(byId.get(input.authorId)),
-			channel.value,
-			Option.getOrUndefined(parent),
-		),
+		title: pushTitle(authorName, channel.value, Option.getOrUndefined(parent)),
 		body: pushBody(input.content, input.attachmentCount, names),
+		sender: { id: input.authorId, name: authorName, avatarUrl: pushAvatarUrl(author?.avatarUrl) },
+		conversation: pushConversation(channel.value, Option.getOrUndefined(parent)),
 		...Option.match(
 			Option.flatMap(organization, (row) => Option.fromNullishOr(pushPath(row.slug, input.channelId))),
 			{ onNone: () => ({}), onSome: (path) => ({ path }) },

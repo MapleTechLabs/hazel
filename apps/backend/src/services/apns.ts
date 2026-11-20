@@ -36,11 +36,17 @@ export interface ApnsPayload {
 		readonly sound: "default"
 		readonly badge: number
 		readonly "thread-id": string
+		/** Set when the app's notification service changes the push before it shows (the sender). */
+		readonly "mutable-content"?: 1
 	}
 	readonly hazel: {
 		readonly path?: string
 		readonly channelId: string
 		readonly notificationId: string
+		/** Who sent the message (`worker/objects/user/push.ts`). */
+		readonly sender?: { readonly id: string; readonly name: string; readonly avatarUrl?: string }
+		/** The group conversation's name; absent for a 1:1 DM. */
+		readonly conversation?: string
 	}
 }
 

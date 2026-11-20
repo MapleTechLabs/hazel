@@ -17,6 +17,12 @@
  * with it, and a notification from a person shows their picture in place of the app's icon
  * (`host/src/notify.rs`); otherwise the picture shows beside the text. The simulator always has it
  * (`host/ios/build.rs`).
+ *
+ * Pushes get the same through the app's Notification Service Extension
+ * (`host/ios/notification-service`, built with `swiftc` into `PlugIns/NotificationService.appex`).
+ * A release signs it with `HAZEL_IOS_EXTENSION_PROFILE`, an App Store profile for
+ * `<bundle ID>.NotificationService` (with Communication Notifications for the picture as the icon);
+ * without one the release ships without the extension, and pushes show no picture.
  */
 import { execFileSync } from "node:child_process"
 import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
@@ -44,13 +50,26 @@ const read = (command: string, args: Array<string>) =>
 const profile = release ? process.env.HAZEL_IOS_PROFILE : undefined
 if (release && !profile) throw new Error("--release needs HAZEL_IOS_PROFILE (an App Store .mobileprovision)")
 
+/** The Notification Service Extension: its bundle, its ID, and its profile for a release. */
+const extensionName = "NotificationService"
+const extensionId = `${bundleId}.${extensionName}`
+const extensionBundle = `${app}/PlugIns/${extensionName}.appex`
+const extensionProfile = release ? process.env.HAZEL_IOS_EXTENSION_PROFILE || undefined : undefined
+/** A release without the extension's profile ships without it (pushes show no picture). */
+const withExtension = !release || extensionProfile !== undefined
+if (!withExtension)
+	process.stderr.write(
+		`warning: HAZEL_IOS_EXTENSION_PROFILE is not set: building without the notification service ` +
+			`(an App Store profile for ${extensionId}), so pushes show no sender picture\n`,
+	)
+
 const communicationEntitlement = "com.apple.developer.usernotifications.communication"
-/** Whether this build carries the Communication Notifications entitlement. */
-const communication =
-	profile === undefined ||
+/** Whether `profilePath` grants Communication Notifications (a simulator build always has it). */
+const grantsCommunication = (profilePath: string | undefined) =>
+	profilePath === undefined ||
 	(() => {
 		try {
-			const decoded = execFileSync("security", ["cms", "-D", "-i", profile])
+			const decoded = execFileSync("security", ["cms", "-D", "-i", profilePath])
 			return (
 				execFileSync(
 					"plutil",
@@ -69,6 +88,9 @@ const communication =
 			return false
 		}
 	})()
+/** Whether this build carries the Communication Notifications entitlement. */
+const communication = grantsCommunication(profile)
+const extensionCommunication = grantsCommunication(extensionProfile)
 
 run("bun", ["scripts/build-ios.ts"])
 run("cargo", ["build", "--release", "-p", "hazel-ios", "--target", target], {
@@ -81,6 +103,66 @@ for (const path of [app, `${out}/build`, `${out}/Payload`, `${out}/Hazel.ipa`])
 	rmSync(path, { recursive: true, force: true })
 mkdirSync(app, { recursive: true })
 cpSync(`${root}host/target/${target}/release/hazel-ios`, `${app}/hazel-ios`)
+
+// The notification service: Swift, linked as an app extension (its entry point is Foundation's
+// `NSExtensionMain`). The simulator takes its entitlements from its executable, as the app does.
+if (withExtension) {
+	mkdirSync(extensionBundle, { recursive: true })
+	const sdkName = release ? "iphoneos" : "iphonesimulator"
+	const simulatorEntitlements = `${out}/build/extension-simulator.entitlements`
+	if (!release) {
+		mkdirSync(`${out}/build`, { recursive: true })
+		writeFileSync(
+			`${out}/build/extension-simulator.json`,
+			JSON.stringify({
+				"application-identifier": `HAZELSIM00.${extensionId}`,
+				[communicationEntitlement]: true,
+			}),
+		)
+		run("plutil", [
+			"-convert",
+			"xml1",
+			"-o",
+			simulatorEntitlements,
+			`${out}/build/extension-simulator.json`,
+		])
+	}
+	run("xcrun", [
+		"--sdk",
+		sdkName,
+		"swiftc",
+		"-target",
+		release ? `arm64-apple-ios${minimumOS}` : `arm64-apple-ios${minimumOS}-simulator`,
+		"-sdk",
+		read("xcrun", ["--sdk", sdkName, "--show-sdk-path"]),
+		"-O",
+		"-swift-version",
+		"5",
+		"-parse-as-library",
+		"-application-extension",
+		"-module-name",
+		extensionName,
+		"-Xlinker",
+		"-e",
+		"-Xlinker",
+		"_NSExtensionMain",
+		...(release
+			? []
+			: [
+					"-Xlinker",
+					"-sectcreate",
+					"-Xlinker",
+					"__TEXT",
+					"-Xlinker",
+					"__entitlements",
+					"-Xlinker",
+					simulatorEntitlements,
+				]),
+		"-o",
+		`${extensionBundle}/${extensionName}`,
+		`${root}host/ios/notification-service/NotificationService.swift`,
+	])
+}
 cpSync(`${out}/runtime.js`, `${app}/runtime.js`)
 // What the runtime reads from `process.env`. A simulator build is offline unless `HAZEL_DATA=live`
 // was set when building; a release build is live against production (`scripts/bundle.ts`'s origins).
@@ -211,7 +293,49 @@ mkdirSync(`${out}/build`, { recursive: true })
 writeFileSync(infoJson, JSON.stringify(info))
 run("plutil", ["-convert", "xml1", "-o", `${app}/Info.plist`, infoJson])
 
+if (withExtension) {
+	// The app's version, platform and SDK keys (`DT*`, a release's), and what makes it a
+	// notification service. The app's own keys (executable, icon, launch screen) are not the extension's.
+	const sharedKeys = new Set([
+		"CFBundleInfoDictionaryVersion",
+		"CFBundleVersion",
+		"CFBundleShortVersionString",
+		"CFBundleSupportedPlatforms",
+		"MinimumOSVersion",
+		"UIDeviceFamily",
+		// App Store validation refuses a 64-bit extension without `arm64` here.
+		"UIRequiredDeviceCapabilities",
+		"NSUserActivityTypes",
+		"BuildMachineOSBuild",
+	])
+	const extensionInfo = {
+		...Object.fromEntries(
+			Object.entries(info).filter(([key]) => sharedKeys.has(key) || key.startsWith("DT")),
+		),
+		CFBundleExecutable: extensionName,
+		CFBundleIdentifier: extensionId,
+		CFBundleName: extensionName,
+		CFBundleDisplayName: "Hazel Notifications",
+		CFBundlePackageType: "XPC!",
+		HazelCommunicationNotifications: extensionCommunication,
+		NSExtension: {
+			NSExtensionPointIdentifier: "com.apple.usernotifications.service",
+			NSExtensionPrincipalClass: "NotificationService",
+		},
+	}
+	writeFileSync(`${out}/build/extension-info.json`, JSON.stringify(extensionInfo))
+	run("plutil", [
+		"-convert",
+		"xml1",
+		"-o",
+		`${extensionBundle}/Info.plist`,
+		`${out}/build/extension-info.json`,
+	])
+}
+
 if (!release) {
+	// Inside out: the extension's signature first, then the app's, which seals it.
+	if (withExtension) run("codesign", ["--sign", "-", "--force", extensionBundle])
 	run("codesign", ["--sign", "-", "--force", app])
 	const install = process.argv.indexOf("--install")
 	if (install !== -1) run("xcrun", ["simctl", "install", process.argv[install + 1] ?? "booted", app])
@@ -260,6 +384,55 @@ writeFileSync(
 	),
 )
 run("plutil", ["-convert", "xml1", "-o", entitlements, `${out}/build/entitlements.json`])
+
+// The extension first: its own profile, for its own ID, from the same team.
+if (extensionProfile !== undefined) {
+	cpSync(extensionProfile, `${extensionBundle}/embedded.mobileprovision`)
+	const extensionDecoded = `${out}/build/extension-profile.plist`
+	writeFileSync(extensionDecoded, execFileSync("security", ["cms", "-D", "-i", extensionProfile]))
+	const extensionAppId = `${team}.${extensionId}`
+	const extensionGranted = read("plutil", [
+		"-extract",
+		"Entitlements.application-identifier",
+		"raw",
+		"-o",
+		"-",
+		extensionDecoded,
+	])
+	if (extensionGranted !== extensionAppId)
+		throw new Error(`HAZEL_IOS_EXTENSION_PROFILE is for ${extensionGranted}, not ${extensionAppId}`)
+	const extensionEntitlements = `${out}/build/extension-entitlements.plist`
+	const extensionEntitlementValues = {
+		"application-identifier": extensionAppId,
+		"com.apple.developer.team-identifier": team,
+		"get-task-allow": false,
+		"beta-reports-active": true,
+	}
+	writeFileSync(
+		`${out}/build/extension-entitlements.json`,
+		JSON.stringify(
+			extensionCommunication
+				? { ...extensionEntitlementValues, [communicationEntitlement]: true }
+				: extensionEntitlementValues,
+		),
+	)
+	run("plutil", [
+		"-convert",
+		"xml1",
+		"-o",
+		extensionEntitlements,
+		`${out}/build/extension-entitlements.json`,
+	])
+	run("codesign", [
+		"--sign",
+		process.env.HAZEL_IOS_IDENTITY || "Apple Distribution",
+		"--entitlements",
+		extensionEntitlements,
+		"--generate-entitlement-der",
+		"--force",
+		extensionBundle,
+	])
+}
 run("codesign", [
 	"--sign",
 	process.env.HAZEL_IOS_IDENTITY || "Apple Distribution",

@@ -14,7 +14,7 @@
  * another device or a later notification behind the outbox's per-target order.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { ChannelId, NotificationId } from "@hazel/schema"
+import { ChannelId, NotificationId, UserId } from "@hazel/schema"
 import { Clock, Effect, Match, Option, Schema } from "effect"
 import { ApnsClient, ApnsRetryableError, type ApnsResult } from "../../../services/apns"
 import { Directory } from "../../../services/directory"
@@ -35,6 +35,17 @@ export const PushContent = Schema.Struct({
 	body: Schema.String,
 	/** `/<orgSlug>/chat/<channelId>`; absent when the org has no slug. */
 	path: Schema.optional(Schema.String),
+	/** Who wrote the message, when a person did: the phone shows the push as from them. */
+	sender: Schema.optional(
+		Schema.Struct({
+			id: UserId,
+			name: Schema.String,
+			/** Their profile picture (a web URL). */
+			avatarUrl: Schema.optional(Schema.String),
+		}),
+	),
+	/** The channel's name when it is a group (`#general`); absent for a 1:1 DM. */
+	conversation: Schema.optional(Schema.String),
 })
 export type PushContent = typeof PushContent.Type
 
@@ -274,6 +285,12 @@ const sendPush = Effect.fn("UserObject.sendPush")(function* (payload: PushSendPa
 			.where(($) => [$.readAt.isNull(), $.silent.eq(false)]),
 	)
 	const sentAt = new Date(nowMs)
+	const aps = {
+		alert: { title: payload.title, body: payload.body },
+		sound: "default" as const,
+		badge: Option.match(unread, { onNone: () => 0, onSome: (row) => Number(row.count) }),
+		"thread-id": payload.channelId,
+	}
 	const result = yield* apns.send({
 		environment: device.value.environment,
 		token: payload.token,
@@ -282,16 +299,14 @@ const sendPush = Effect.fn("UserObject.sendPush")(function* (payload: PushSendPa
 		// A retry after a lost answer replaces the first copy on the phone.
 		collapseId: payload.notificationId,
 		payload: {
-			aps: {
-				alert: { title: payload.title, body: payload.body },
-				sound: "default",
-				badge: Option.match(unread, { onNone: () => 0, onSome: (row) => Number(row.count) }),
-				"thread-id": payload.channelId,
-			},
+			// A push from a person: the app's notification service draws them before it shows.
+			aps: payload.sender === undefined ? aps : { ...aps, "mutable-content": 1 },
 			hazel: {
 				path: payload.path,
 				channelId: payload.channelId,
 				notificationId: payload.notificationId,
+				sender: payload.sender,
+				conversation: payload.conversation,
 			},
 		},
 	})
