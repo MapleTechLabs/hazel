@@ -1,4 +1,4 @@
-import { overdueLabel, type SignalEvidence } from "@hazel/domain/customers"
+import { type LimitForecast, overdueLabel, type SignalEvidence } from "@hazel/domain/customers"
 import { Match } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
@@ -7,6 +7,7 @@ import {
 	formatCompact,
 	formatCount,
 	formatDate,
+	formatDay,
 	formatDays,
 	formatDaysLeft,
 	formatDeltaPct,
@@ -163,6 +164,21 @@ const fact = <M>(h: HtmlBuilder<M>, label: string, value: Html | string): Html =
 		],
 	)
 
+/** Where a metered feature lands at its current pace: `Projected by Dec 1`, its pace, when it hits the limit. */
+const forecastFacts = <M>(h: HtmlBuilder<M>, forecast: LimitForecast): ReadonlyArray<Html> => [
+	fact(
+		h,
+		`Projected by ${formatDay(forecast.day)}`,
+		`${formatMetricValue(forecast.value, null)} · ${formatPct(forecast.pct, { digits: 0 })}`,
+	),
+	fact(
+		h,
+		`Pace, last ${formatDays(forecast.days)}`,
+		`${forecast.perDay >= 0 ? "+" : "−"}${formatMetricValue(Math.abs(forecast.perDay), null)} / day`,
+	),
+	...(forecast.limitDay === null ? [] : [fact(h, "Reaches limit", formatDay(forecast.limitDay))]),
+]
+
 /** The side panel's evidence: the numbers as facts, with a chart where the evidence has a series. */
 export const evidenceDetail = <M>(
 	h: HtmlBuilder<M>,
@@ -231,6 +247,7 @@ export const evidenceDetail = <M>(
 						`${formatMetricValue(evidence.value, null)} / ${formatMetricValue(evidence.limit, null)}`,
 					),
 					fact(h, "Of limit", formatPct(evidence.pct, { digits: 0 })),
+					...(evidence.forecast == null ? [] : forecastFacts(h, evidence.forecast)),
 				],
 				meter(h, {
 					value: evidence.value,

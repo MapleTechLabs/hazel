@@ -79,6 +79,27 @@ export const SeriesEvidence = Schema.TaggedStruct("series", {
 	series: Schema.Array(SeriesPoint),
 })
 
+/**
+ * Where a metered feature lands at its current pace: a least-squares line through the current
+ * period's last days (the run rate), carried to the billing period's end.
+ */
+export const LimitForecast = Schema.Struct({
+	/** The day projected to: the billing period's end, else {@link FORECAST_FALLBACK_DAYS} out. */
+	day: Day,
+	periodEnd: Schema.Boolean,
+	value: Schema.Number,
+	pct: Schema.Number,
+	/** Units per day, over the last `days` days. */
+	perDay: Schema.Number,
+	days: Schema.Int,
+	/** The day it crosses the limit, when still under it and that comes before `day`. */
+	limitDay: Schema.NullOr(Day),
+})
+export type LimitForecast = typeof LimitForecast.Type
+
+/** How far a forecast looks without a billing period end to stop at. */
+export const FORECAST_FALLBACK_DAYS = 30
+
 /** `near_limit`: a metered feature against its plan limit. */
 export const LimitEvidence = Schema.TaggedStruct("limit", {
 	step: EvidenceStep,
@@ -87,6 +108,8 @@ export const LimitEvidence = Schema.TaggedStruct("limit", {
 	value: Schema.Number,
 	limit: Schema.Number,
 	pct: Schema.Number,
+	/** Null with under two days of the current period; absent on evidence from before forecasts. */
+	forecast: Schema.optionalKey(Schema.NullOr(LimitForecast)),
 })
 
 /** `cancel_scheduled`, `health_drop`, `seat_growth`: a value that moved from `from` to `to`. */
