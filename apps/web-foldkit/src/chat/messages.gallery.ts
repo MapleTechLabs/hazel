@@ -79,6 +79,8 @@ const row = (options: {
 	readonly embeds?: ReadonlyArray<EmbedType>
 	readonly urlEmbeds?: MessageRow["urlEmbeds"]
 	readonly attachments?: MessageRow["attachments"]
+	readonly authorSide?: MessageRow["authorSide"]
+	readonly syncedFrom?: MessageRow["syncedFrom"]
 }): MessageRow => {
 	const sequence = nextSequence()
 	const id = `00000000-0000-4000-8000-${String(sequence).padStart(12, "0")}` as MessageId
@@ -112,9 +114,10 @@ const row = (options: {
 		},
 		hasAuthor: true,
 		status: null,
-		syncedFrom: null,
+		syncedFrom: options.syncedFrom ?? null,
 		isEntering: false,
 		agentName: null,
+		authorSide: options.authorSide ?? null,
 		reply: null,
 		thread: null,
 		attachments: options.attachments ?? [],
@@ -411,6 +414,39 @@ const human = row({
 
 const emojiOnly = row({ name: "Ada Lovelace", content: "🔥🔥" })
 
+/** A channel linked to a customer: the customer's people get a quiet tag, our team and bots none. */
+const linkedChannel = [
+	row({
+		name: "Priya Raman",
+		content:
+			"Exports have been timing out for our EU workspace since this morning. Anything on your side?",
+		syncedFrom: "slack",
+		authorSide: { side: "customer", reason: "external_other_workspace" },
+	}),
+	row({
+		name: "Ada Lovelace",
+		content: "Looking now. It's the export worker in eu-west; a fix is rolling out within the hour.",
+		authorSide: { side: "team", reason: "org_member" },
+	}),
+	row({
+		name: "Jonas Weber",
+		content: "Thanks! Can you ping us here once it's out?",
+		authorSide: { side: "customer", reason: "connect_guest" },
+	}),
+	row({
+		name: "Maple",
+		isBot: true,
+		content: "Deploy `export-worker@4.2.1` finished in eu-west.",
+		authorSide: { side: "bot", reason: "bot" },
+	}),
+]
+
+const linkedOnly = (h: HtmlBuilder<M>) =>
+	h.div(
+		[h.Id("linked"), h.Class("w-[760px] bg-bg px-6 py-4 font-sans text-fg antialiased")],
+		linkedChannel.map((message) => messageRowView(h, message, context(h))),
+	)
+
 const gridsOnly = (h: HtmlBuilder<M>) =>
 	h.div(
 		[h.Id("grids"), h.Class("w-[700px] bg-bg px-6 py-4 font-sans text-fg antialiased")],
@@ -508,6 +544,17 @@ for (const theme of ["light", "dark"] as const) {
 		await page.viewport(1180, lab.scrollHeight)
 		await page.screenshot({ path: `messages-${theme}.png`, element: lab })
 		if (theme === "dark") await commands.writeFile("messages-lab.html", pageHtml(lab))
+	})
+}
+
+for (const theme of ["light", "dark"] as const) {
+	test(`linked ${theme}`, async () => {
+		if (theme === "dark") document.documentElement.classList.add("dark")
+		render(linkedOnly)
+		await document.fonts.ready
+		const linked = document.getElementById("linked")!
+		await page.viewport(800, linked.scrollHeight + 40)
+		await page.screenshot({ path: `messages-linked-${theme}.png`, element: linked })
 	})
 }
 

@@ -69,6 +69,8 @@ export const orgTables = [
 	schema.botCommandsTable,
 	// Projection from the `CustomersObject`: each linked channel's customer.
 	schema.channelCustomersTable,
+	// Who writes in the linked channels: customer, team, bot (`docs/customers/author-side.md`).
+	schema.customerChatAuthorsTable,
 ] as const
 
 /** `ChannelObject`, one per channel (threads too). */
@@ -128,6 +130,7 @@ export const customersTables = [
 	schema.customerFeatureFlagsTable,
 	schema.customerImpersonatorsTable,
 	schema.customerImpersonationsTable,
+	schema.customerChatParticipantsTable,
 	// Projection from the `OrgObject`.
 	schema.customerMembersTable,
 ] as const

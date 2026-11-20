@@ -1,5 +1,5 @@
 {
-	"migration": "0021_customer_sla_policies",
+	"migration": "0022_customer_sla_policies",
 	"entities": [
 		{
 			"kind": "table",
@@ -20,6 +20,13 @@
 			"name": "customer_channel_links",
 			"primaryKey": {
 				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_chat_participants",
+			"primaryKey": {
+				"columns": ["accountId", "userId"]
 			}
 		},
 		{
@@ -734,6 +741,114 @@
 			"type": "text",
 			"notNull": false,
 			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_chat_participants",
+			"name": "accountId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_chat_participants",
+			"name": "userId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_chat_participants",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_chat_participants",
+			"name": "side",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_chat_participants",
+			"name": "reason",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_chat_participants",
+			"name": "contactId",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_chat_participants",
+			"name": "name",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_chat_participants",
+			"name": "avatarUrl",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_chat_participants",
+			"name": "firstMessageAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_chat_participants",
+			"name": "lastMessageAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_chat_participants",
+			"name": "lastChannelId",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_chat_participants",
+			"name": "updatedAt",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
 		},
 		{
 			"kind": "column",
@@ -3803,6 +3918,13 @@
 			"name": "customer_channel_links_channel_idx",
 			"unique": false,
 			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_chat_participants",
+			"name": "customer_chat_participants_user_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
 		},
 		{
 			"kind": "index",

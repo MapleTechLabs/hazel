@@ -12,6 +12,7 @@ import {
 	signalsStream,
 } from "../../../customers/queries"
 import { channelLinksStream, channelOptionsStream } from "../../../customers/channels"
+import { chatAuthorsStream, chatParticipantsStream } from "../../../customers/chat-authors"
 import type { PageSubscriptionInput } from "../../contract"
 import { metricsStream, notesStream } from "./data"
 import { Message } from "./message"
@@ -118,6 +119,22 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 				: channelOptionsStream(organizationId, (channels) =>
 						Message.UpdatedChannelOptions({ channels }),
 					),
+	}),
+	chatParticipants: entry(organization, {
+		modelToDependencies: organizationOf,
+		dependenciesToStream: ({ organizationId }) =>
+			organizationId === null
+				? Stream.empty
+				: chatParticipantsStream(organizationId, (participants) =>
+						Message.UpdatedChatParticipants({ participants }),
+					),
+	}),
+	chatAuthors: entry(organization, {
+		modelToDependencies: organizationOf,
+		dependenciesToStream: ({ organizationId }) =>
+			organizationId === null
+				? Stream.empty
+				: chatAuthorsStream(organizationId, (authors) => Message.UpdatedChatAuthors({ authors })),
 	}),
 	createdFeatureFlags: entry(organization, {
 		modelToDependencies: organizationOf,

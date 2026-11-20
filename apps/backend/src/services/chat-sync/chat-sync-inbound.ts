@@ -22,6 +22,8 @@ export interface ChatSyncInboundAuthor {
 	readonly externalUserId: ExternalUserId
 	readonly displayName: string
 	readonly avatarUrl: string | null
+	/** The author's workspace when the provider says (Slack's `team_id`); tells our team apart. */
+	readonly externalWorkspaceId?: string | null
 }
 
 /** One validated provider event, ready to route. `author: null`: the event named nobody. */
@@ -51,6 +53,7 @@ export const orgIngestPayloadOf = Effect.fn("ChatSync.orgIngestPayload")(functio
 		inbound.author !== null
 			? {
 					externalUserId: inbound.author.externalUserId,
+					externalWorkspaceId: inbound.author.externalWorkspaceId ?? null,
 					user: yield* upsertShadowUser(
 						provider,
 						inbound.author.externalUserId,

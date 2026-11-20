@@ -350,6 +350,7 @@ describe("SlackApiClient", () => {
 				displayName: "Egon Spengler",
 				avatarUrl: "https://avatars.example/192.jpg",
 				isBot: false,
+				teamId: "T012AB3C4",
 			})
 			expect(new URLSearchParams(sent[1]?.query).get("user")).toBe("W012A3CDE")
 		}).pipe(Effect.provide(layer))

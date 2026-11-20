@@ -12,7 +12,7 @@ import { DateTime, Schema, SchemaGetter } from "effect"
 /** `YYYY-MM-DD HH:MM:SS[.SSS]` with no zone is SQLite's form, read as UTC. */
 const SQLITE_TEXT = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/
 
-const parseTimestamp = (value: string): Date =>
+export const parseTimestamp = (value: string): Date =>
 	new Date(SQLITE_TEXT.test(value) ? `${value.replace(" ", "T")}Z` : value)
 
 const timestampText = (date: Date): string => {

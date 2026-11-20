@@ -286,6 +286,7 @@ export const dispatchSlackEvent = Effect.fn("SlackEvents.dispatch")(function* (e
 				externalUserId: ExternalUserId.make(user.id),
 				displayName: user.displayName,
 				avatarUrl: user.avatarUrl,
+				externalWorkspaceId: user.teamId,
 			})
 			if (users.size >= MAX_CACHED_USERS) users.clear()
 			users.set(key, { user: found, until: Date.now() + USER_TTL_MS })

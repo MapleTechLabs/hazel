@@ -5,11 +5,13 @@ import {
 	CustomerContactId,
 	CustomerNoteId,
 	CustomerSignalId,
+	UserId,
 } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
+import { ChatAuthorRow, ChatParticipantRow } from "../../../customers/chat-authors"
 import { FeatureFlagFailure } from "../../../customers/feature-flags"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { CustomerTab } from "../../../route"
@@ -144,6 +146,13 @@ export const Message = defineMessageUnion({
 	PressedUnlinkChannel: { channelId: ChannelId },
 	SucceededChannelAction: { action: ChannelAction },
 	FailedChannelAction: { action: ChannelAction, reason: ActionFailure },
+
+	UpdatedChatParticipants: { participants: Schema.Array(ChatParticipantRow) },
+	UpdatedChatAuthors: { authors: Schema.Array(ChatAuthorRow) },
+	PressedChatPersonMenu: { userId: UserId },
+	GotChatPersonMenuMessage: { message: Menu.Message },
+	SucceededSetChatAuthorSide: {},
+	FailedSetChatAuthorSide: { reason: ActionFailure },
 
 	UpdatedCreatedFeatureFlags: { keys: Schema.Array(Schema.String) },
 	GotFlagPopoverMessage: { message: Popover.Message },

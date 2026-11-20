@@ -67,6 +67,7 @@ import {
 	SlaPolicy,
 	UnmatchedRecord,
 } from "../customers/models"
+import { AuthorSideOverride } from "../customers/author-side"
 import { AttentionSettings, RuleDraft } from "../customers/rules"
 import { BusinessHours, SlaPolicyDraft } from "../customers/sla"
 import { ViewDraft, ViewLayoutDraft } from "../customers/views"
@@ -118,6 +119,8 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"contact",
 			/** No such channel in the org, or one the caller cannot see. */
 			"channel",
+			/** Nobody the org has seen in its channels. */
+			"author",
 		]),
 		id: Schema.String,
 	},
@@ -799,5 +802,29 @@ export class CustomerDirectoryRpcs extends RpcGroup.make(
 		error: Schema.Union([UnauthorizedError, InternalServerError]),
 	})
 		.annotate(RequiredScopes, ["customers:read"])
+		.middleware(AuthMiddleware),
+) {}
+
+// ---------------------------------------------------------------------------
+// Who writes in linked channels (the org's object, not the customers object)
+// ---------------------------------------------------------------------------
+
+/**
+ * `customers.chatAuthor.setSide`: a member marks someone as our team or the customer in the
+ * org's linked channels, or clears the mark (`null`); `docs/customers/author-side.md`. The api
+ * Worker routes it to the org's `OrgObject`, which holds the authors (`customer_chat_authors`).
+ * Bots stay bots.
+ */
+export class CustomerChatRpcs extends RpcGroup.make(
+	Rpc.make("customers.chatAuthor.setSide", {
+		payload: Schema.Struct({
+			organizationId: OrganizationId,
+			userId: UserId,
+			side: Schema.NullOr(AuthorSideOverride),
+		}),
+		success: Tx,
+		error: Schema.Union([CustomersNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["customers:write"])
 		.middleware(AuthMiddleware),
 ) {}

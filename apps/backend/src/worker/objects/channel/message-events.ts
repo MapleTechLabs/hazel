@@ -19,7 +19,7 @@ import { Database, type DatabaseError, SQLite, schema } from "@hazel/db"
 import { parseMentions } from "@hazel/domain"
 import type { Message, MessageReaction } from "@hazel/domain/models"
 import { OrganizationId } from "@hazel/schema"
-import { Effect, Option, type Schema } from "effect"
+import { DateTime, Effect, Option, type Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import { AI_EFFECT_DELAY_MS, AiEffects, DEFAULT_THREAD_NAME } from "../effects/ai-effects"
 import { BotGatewayEffects } from "../effects/bot-gateway-effects"
@@ -132,6 +132,7 @@ const notificationsHook: MessageEventHook = (event) =>
 					onNone: () => 0,
 					onSome: (row) => Number(row.count),
 				}),
+				createdAt: DateTime.formatIso(DateTime.makeUnsafe(message.createdAt)),
 			},
 		)
 	})

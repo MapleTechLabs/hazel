@@ -1,5 +1,6 @@
 import * as Customers from "@hazel/domain/customers"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
+import { ChatAuthorRow, ChatParticipantRow } from "../../../customers/chat-authors"
 import { CustomerAccountId, CustomerContactId, CustomerNoteId, CustomerSignalId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
@@ -162,6 +163,12 @@ export const Model = Schema.Struct({
 	channelOptions: Schema.Array(ChannelOption),
 	channelPopover: Popover.Model,
 	channelSearch: Schema.String,
+	/** Every account's chat participants (Customers source) and the org's authors (org source). */
+	chatParticipants: Schema.Array(ChatParticipantRow),
+	chatAuthors: Schema.Array(ChatAuthorRow),
+	/** The person in "People in chat" whose menu shows (each row has its own button). */
+	activeChatPersonId: Schema.NullOr(UserId),
+	chatPersonMenu: Menu.Model,
 	/** The flags created in Hazel (`customer_feature_flags`); the others come from the accounts. */
 	createdFeatureFlags: Schema.Array(Schema.String),
 	flagPopover: Popover.Model,
@@ -202,6 +209,7 @@ export const DONE_MENU_ID = "customer-signal-done"
 export const SIGNAL_MORE_MENU_ID = "customer-signal-more"
 export const TAG_POPOVER_ID = "customer-tag"
 export const CHANNEL_POPOVER_ID = "customer-channel"
+export const CHAT_PERSON_MENU_ID = "customer-chat-person"
 export const FLAG_POPOVER_ID = "customer-feature-flags"
 export const RAW_MODAL_ID = "customer-raw"
 export const ENVIRONMENT_MENU_ID = "customer-environments"

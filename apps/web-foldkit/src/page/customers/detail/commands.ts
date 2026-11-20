@@ -25,6 +25,7 @@ import {
 	updateNoteAction,
 } from "../../../customers/actions"
 import { linkChannelAction, unlinkChannelAction } from "../../../customers/channels"
+import { setChatAuthorSideAction } from "../../../customers/chat-authors"
 import { settleFeatureFlags } from "../../../customers/feature-flags"
 import { catchCommon, errorToastOf } from "../../../data/actions"
 import { showBackgroundToast } from "../../../overlay/background-toasts"
@@ -278,6 +279,25 @@ export const UnlinkCustomerChannel = Command.define("UnlinkCustomerChannel", {
 				Effect.succeed(Message.FailedChannelAction({ action: "unlink", reason: "NotFound" })),
 			),
 			catchCommon((reason) => Message.FailedChannelAction({ action: "unlink", reason })),
+		),
+})
+
+/** Mark someone as our team or the customer in the org's linked channels, or clear the mark. */
+export const SetChatAuthorSide = Command.define("SetChatAuthorSide", {
+	args: {
+		organizationId: OrganizationId,
+		userId: UserId,
+		side: Schema.NullOr(Customers.AuthorSideOverride),
+		by: UserId,
+	},
+	messages: [Message.SucceededSetChatAuthorSide, Message.FailedSetChatAuthorSide],
+	execute: (args) =>
+		setChatAuthorSideAction(args).pipe(
+			Effect.as(Message.SucceededSetChatAuthorSide()),
+			Effect.catchTag("CustomersNotFoundError", () =>
+				Effect.succeed(Message.FailedSetChatAuthorSide({ reason: "NotFound" })),
+			),
+			catchCommon((reason) => Message.FailedSetChatAuthorSide({ reason })),
 		),
 })
 

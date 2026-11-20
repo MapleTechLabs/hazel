@@ -30,6 +30,7 @@ import {
 } from "../lookup-data"
 import type { PageSubscriptionInput } from "../../contract"
 import { channelCustomerStream } from "../../../customers/channels"
+import { linkedChannelAuthorsStream } from "../../../customers/chat-authors"
 import * as Composer from "../../../composer/composer"
 import {
 	botCommandsStream,
@@ -233,6 +234,29 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		dependenciesToStream: ({ channelId, channelIds }) =>
 			agentMarksStream(channelIds, (marks) => Message.UpdatedAgentMarks({ channelId, marks })),
 	}),
+	// A thread counts as linked when its parent channel is.
+	chatCustomerAuthors: entry(
+		{
+			channelId: ChannelId,
+			organizationId: Schema.NullOr(OrganizationId),
+			parentChannelId: Schema.NullOr(ChannelId),
+		},
+		{
+			modelToDependencies: ({ model }) => ({
+				channelId: model.channelId,
+				organizationId: model.channel?.organizationId ?? null,
+				parentChannelId: model.channel?.type === "thread" ? model.channel.parentChannelId : null,
+			}),
+			dependenciesToStream: ({ channelId, organizationId, parentChannelId }) =>
+				organizationId === null
+					? Stream.empty
+					: linkedChannelAuthorsStream(
+							organizationId,
+							parentChannelId === null ? [channelId] : [channelId, parentChannelId],
+							(authors) => Message.UpdatedCustomerAuthors({ channelId, authors }),
+						),
+		},
+	),
 	chatThreadChannels: entry(
 		{ threadIds: Schema.Array(ChannelId) },
 		{

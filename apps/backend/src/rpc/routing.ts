@@ -191,6 +191,7 @@ export const routes: RouteTable = {
 	// CustomersObject
 	...customersRoutes,
 	"customers.organizations": directory, // the caller's orgs, before it names one
+	"customers.chatAuthor.setSide": byOrg, // the authors live in the OrgObject
 
 	// ChannelObject
 	"message.create": byChannel,

@@ -19,6 +19,7 @@ import {
 	BotInfo,
 	ChannelMemberInfo,
 	CustomEmojiInfo,
+	CustomerAuthorInfo,
 	AgentMarkInfo,
 	SyncedMessageInfo,
 	SyncProvider,
@@ -218,6 +219,11 @@ export const Message = defineMessageUnion({
 	UpdatedSyncedMessages: { channelId: ChannelId, messages: Schema.Array(SyncedMessageInfo) },
 	UpdatedSyncProvider: { provider: Schema.NullOr(SyncProvider) },
 	UpdatedAgentMarks: { channelId: ChannelId, marks: Schema.Array(AgentMarkInfo) },
+	/** Tagged with the channel queried; `authors` is null while the channel is not linked. */
+	UpdatedCustomerAuthors: {
+		channelId: ChannelId,
+		authors: Schema.NullOr(Schema.Array(CustomerAuthorInfo)),
+	},
 	UpdatedThreadChannels: { channels: Schema.Array(ThreadChannelInfo) },
 	UpdatedThreadMessages: { messages: Schema.Array(ThreadMessageInfo) },
 	UpdatedReplyTargets: { targets: Schema.Array(ReplyTarget) },

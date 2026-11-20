@@ -1,3 +1,4 @@
+import { AuthorSide, AuthorSideReason } from "@hazel/domain/customers"
 import { AttachmentId, ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 
@@ -92,6 +93,14 @@ export type SyncedMessageInfo = typeof SyncedMessageInfo.Type
 export const AgentMarkInfo = Schema.Struct({ id: MessageId, agentName: Schema.String })
 export type AgentMarkInfo = typeof AgentMarkInfo.Type
 
+/** Who an author is in a channel linked to a customer (`customer_chat_authors`), and why. */
+export const CustomerAuthorInfo = Schema.Struct({
+	userId: UserId,
+	side: AuthorSide,
+	reason: AuthorSideReason,
+})
+export type CustomerAuthorInfo = typeof CustomerAuthorInfo.Type
+
 /** Everything the rows are derived from, besides messages and reactions. */
 export const Lookups = Schema.Struct({
 	users: Schema.Array(UserInfo),
@@ -103,6 +112,8 @@ export const Lookups = Schema.Struct({
 	/** The platform the channel is bridged to by an active chat sync link, marked on its header icon. */
 	syncProvider: Schema.NullOr(SyncProvider),
 	agentMarks: Schema.Array(AgentMarkInfo),
+	/** The org's customer-chat authors while the channel (or a thread's parent) is linked; else null. */
+	customerAuthors: Schema.NullOr(Schema.Array(CustomerAuthorInfo)),
 	threadChannels: Schema.Array(ThreadChannelInfo),
 	threadMessages: Schema.Array(ThreadMessageInfo),
 	replyTargets: Schema.Array(ReplyTarget),
@@ -118,6 +129,7 @@ export const emptyLookups: Lookups = {
 	syncedMessages: [],
 	syncProvider: null,
 	agentMarks: [],
+	customerAuthors: null,
 	threadChannels: [],
 	threadMessages: [],
 	replyTargets: [],
