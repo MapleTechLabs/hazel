@@ -19,7 +19,11 @@ const membership = {
 	name: "Acme",
 	slug: null,
 }
-const route = (step: string) => ({ _tag: "Onboarding" as const, orgId: Option.none(), step: Option.some(step) })
+const route = (step: string) => ({
+	_tag: "Onboarding" as const,
+	orgId: Option.none(),
+	step: Option.some(step),
+})
 const answers = { timezone: "Europe/Berlin", useCases: ["2-10"], role: "engineering" }
 
 describe("onboarding answers across the import step's OAuth", () => {
@@ -53,7 +57,10 @@ describe("onboarding answers across the import step's OAuth", () => {
 			Message.DetectedBrowserTimezone({ browserTimezone: "UTC" }),
 			Message.UpdatedMembership({ membership }),
 			Message.RestoredAnswers({ data: answers }),
-		].reduce((model, message) => update(model, message, shared).model, init(route("import"), shared).model)
+		].reduce(
+			(model, message) => update(model, message, shared).model,
+			init(route("import"), shared).model,
+		)
 		expect(running.phase._tag === "Running" ? running.phase.data : null).toEqual(answers)
 	})
 })

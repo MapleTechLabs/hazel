@@ -65,7 +65,12 @@ const settings = (...messages: ReadonlyArray<ChatSync.Message>) =>
 const slackPicking = [
 	Message.ClickedProvider({ provider: "slack" }),
 	Message.SucceededListWorkspaces({ organizationId, provider: "slack", workspaces: [slackWorkspace] }),
-	Message.SucceededPrepare({ organizationId, workspaceId: slackWorkspace.id, syncConnectionId, channels: slackChannels }),
+	Message.SucceededPrepare({
+		organizationId,
+		workspaceId: slackWorkspace.id,
+		syncConnectionId,
+		channels: slackChannels,
+	}),
 	Message.ToggledChannel({ channelId: random.id, isSelected: false }),
 ]
 
@@ -154,7 +159,13 @@ const screens: ReadonlyArray<readonly [string, () => void]> = [
 		settingsScreen(
 			settings(
 				wrap(Message.ClickedProvider({ provider: "slack" })),
-				wrap(Message.FailedListWorkspaces({ organizationId, provider: "slack", reason: "NotConnected" })),
+				wrap(
+					Message.FailedListWorkspaces({
+						organizationId,
+						provider: "slack",
+						reason: "NotConnected",
+					}),
+				),
 			),
 		),
 	],
@@ -164,7 +175,11 @@ const screens: ReadonlyArray<readonly [string, () => void]> = [
 			settings(
 				wrap(Message.ClickedProvider({ provider: "discord" })),
 				wrap(
-					Message.SucceededListWorkspaces({ organizationId, provider: "discord", workspaces: [guild, otherGuild] }),
+					Message.SucceededListWorkspaces({
+						organizationId,
+						provider: "discord",
+						workspaces: [guild, otherGuild],
+					}),
 				),
 			),
 		),

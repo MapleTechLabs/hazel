@@ -14,7 +14,16 @@ import {
 	PROVIDERS,
 	type Workspace,
 } from "../../settings/chat-sync/providers"
-import { CHAT_SYNC_MIGRATION_MAX_CHANNELS, historyOptions, isBusy, Message, type Model, Phase, type Problem, visibleChannels } from "./model"
+import {
+	CHAT_SYNC_MIGRATION_MAX_CHANNELS,
+	historyOptions,
+	isBusy,
+	Message,
+	type Model,
+	Phase,
+	type Problem,
+	visibleChannels,
+} from "./model"
 
 /**
  * The wizard as parts its page lays out: the step's title and description, its body, its Back (or
@@ -323,7 +332,7 @@ const pickingChannels = <P>(
 							? "Pick a channel"
 							: isOverLimit
 								? `Pick up to ${CHAT_SYNC_MIGRATION_MAX_CHANNELS}`
-							: `Migrate ${count} channel${count === 1 ? "" : "s"}`,
+								: `Migrate ${count} channel${count === 1 ? "" : "s"}`,
 				],
 			),
 		],

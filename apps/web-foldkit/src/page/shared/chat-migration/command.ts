@@ -121,7 +121,11 @@ export const PrepareChatMigrationWorkspace = Command.define("PrepareChatMigratio
 					}),
 			}),
 			catchCommon((reason) =>
-				Message.FailedPrepare({ organizationId, workspaceId: workspace.id, problem: commonProblem(reason) }),
+				Message.FailedPrepare({
+					organizationId,
+					workspaceId: workspace.id,
+					problem: commonProblem(reason),
+				}),
 			),
 		)
 	},
@@ -196,6 +200,11 @@ export const RunChatMigration = Command.define("RunChatMigration", {
 						}),
 					),
 			}),
-			catchCommon((reason) => Message.FailedMigrate({ organizationId: payload.organizationId, problem: commonProblem(reason) })),
+			catchCommon((reason) =>
+				Message.FailedMigrate({
+					organizationId: payload.organizationId,
+					problem: commonProblem(reason),
+				}),
+			),
 		),
 })

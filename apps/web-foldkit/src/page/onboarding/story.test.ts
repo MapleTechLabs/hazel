@@ -431,7 +431,11 @@ describe("invite step and finalization", () => {
 				[ReplaceOnboardingStepUrl, urlDone],
 				[CompleteOnboarding, Message.SucceededCompleteOnboarding()],
 			),
-			Command.expectExact(urlFor("completed"), LoadOnboardingHome({ href: "/" }), ClearOnboardingAnswers()),
+			Command.expectExact(
+				urlFor("completed"),
+				LoadOnboardingHome({ href: "/" }),
+				ClearOnboardingAnswers(),
+			),
 			Command.resolveAll(
 				[ReplaceOnboardingStepUrl, urlDone],
 				[LoadOnboardingHome, Message.CompletedLoadHome()],

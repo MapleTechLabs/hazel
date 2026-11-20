@@ -36,7 +36,9 @@ const pickingSlackChannels = (): Model =>
 		fresh(),
 		Message.ClickedProvider({ provider: "slack" }),
 		Message.SucceededListWorkspaces({ organizationId, provider: "slack", workspaces: [slackWorkspace] }),
-		Message.SucceededPrepare({ organizationId, 			workspaceId: "T1",
+		Message.SucceededPrepare({
+			organizationId,
+			workspaceId: "T1",
 			syncConnectionId,
 			channels: [design, devops, general],
 		}),
@@ -64,8 +66,10 @@ describe("chat migration wizard", () => {
 	test("a Discord bot in no server needs authorizing; several servers are picked from", () => {
 		const loading = update(fresh(), Message.ClickedProvider({ provider: "discord" })).model
 		expect(
-			update(loading, Message.SucceededListWorkspaces({ organizationId, provider: "discord", workspaces: [] })).model
-				.phase._tag,
+			update(
+				loading,
+				Message.SucceededListWorkspaces({ organizationId, provider: "discord", workspaces: [] }),
+			).model.phase._tag,
 		).toBe("NeedsAuthorization")
 		const servers = [
 			{ id: "1", name: "One", owner: true },
@@ -125,7 +129,10 @@ describe("chat migration wizard", () => {
 		// No double submit.
 		expect(update(going.model, Message.ClickedMigrate()).commands ?? []).toEqual([])
 
-		const done = update(going.model, Message.SucceededMigrate({ organizationId, linked: 2, created: 1, skipped: 0 }))
+		const done = update(
+			going.model,
+			Message.SucceededMigrate({ organizationId, linked: 2, created: 1, skipped: 0 }),
+		)
 		expect(done.model.phase).toMatchObject({ _tag: "Done", linked: 2, created: 1, history: "7d" })
 		expect(done.outcome?._tag).toBe("Toast")
 		expect(update(done.model, Message.ClickedFinish()).outcome).toEqual({ _tag: "Finished" })
@@ -135,7 +142,10 @@ describe("chat migration wizard", () => {
 		const going = run(pickingSlackChannels(), Message.ClickedMigrate())
 		const failed = update(
 			going.model,
-			Message.FailedMigrate({ organizationId, problem: { title: "Nope", description: "", canRetry: true } }),
+			Message.FailedMigrate({
+				organizationId,
+				problem: { title: "Nope", description: "", canRetry: true },
+			}),
 		)
 		expect(failed.model.phase).toMatchObject({ _tag: "PickingChannels", isSubmitting: false })
 		expect(failed.outcome?._tag).toBe("Toast")
@@ -162,14 +172,18 @@ describe("chat migration wizard", () => {
 		const picking = run(
 			fresh(),
 			Message.ClickedProvider({ provider: "slack" }),
-			Message.SucceededListWorkspaces({ organizationId, provider: "slack", workspaces: [slackWorkspace] }),
+			Message.SucceededListWorkspaces({
+				organizationId,
+				provider: "slack",
+				workspaces: [slackWorkspace],
+			}),
 			Message.SucceededPrepare({ organizationId, workspaceId: "T1", syncConnectionId, channels: many }),
 		).model
 		expect(update(picking, Message.ClickedMigrate()).commands ?? []).toEqual([])
 		const fewer = run(picking, Message.ToggledChannel({ channelId: many[0]!.id, isSelected: false }))
-		expect(update(fewer.model, Message.ClickedMigrate()).commands?.map((command) => command.name)).toEqual([
-			"RunChatMigration",
-		])
+		expect(
+			update(fewer.model, Message.ClickedMigrate()).commands?.map((command) => command.name),
+		).toEqual(["RunChatMigration"])
 	})
 
 	test("switching organization starts over and drops the earlier organization's replies", () => {
@@ -180,7 +194,11 @@ describe("chat migration wizard", () => {
 		// The first organization's late answer is not this one's.
 		const stale = update(
 			loading,
-			Message.SucceededListWorkspaces({ organizationId, provider: "slack", workspaces: [slackWorkspace] }),
+			Message.SucceededListWorkspaces({
+				organizationId,
+				provider: "slack",
+				workspaces: [slackWorkspace],
+			}),
 		)
 		expect(stale.model.phase._tag).toBe("Loading")
 	})

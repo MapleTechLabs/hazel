@@ -113,7 +113,11 @@ export const update = (model: Model, message: Message): Return =>
 
 		SucceededListWorkspaces: ({ organizationId, provider, workspaces }) => {
 			const { phase } = model
-			if (organizationId !== model.organizationId || phase._tag !== "Loading" || phase.provider !== provider)
+			if (
+				organizationId !== model.organizationId ||
+				phase._tag !== "Loading" ||
+				phase.provider !== provider
+			)
 				return { model }
 			const [only] = workspaces
 			if (only === undefined)
@@ -126,7 +130,11 @@ export const update = (model: Model, message: Message): Return =>
 		},
 		FailedListWorkspaces: ({ organizationId, provider, reason }) => {
 			const { phase } = model
-			if (organizationId !== model.organizationId || phase._tag !== "Loading" || phase.provider !== provider)
+			if (
+				organizationId !== model.organizationId ||
+				phase._tag !== "Loading" ||
+				phase.provider !== provider
+			)
 				return { model }
 			if (reason === "NotConnected")
 				return {
@@ -190,7 +198,11 @@ export const update = (model: Model, message: Message): Return =>
 
 		SucceededPrepare: ({ organizationId, workspaceId, syncConnectionId, channels }) => {
 			const { phase } = model
-			if (organizationId !== model.organizationId || phase._tag !== "Preparing" || phase.workspace.id !== workspaceId)
+			if (
+				organizationId !== model.organizationId ||
+				phase._tag !== "Preparing" ||
+				phase.workspace.id !== workspaceId
+			)
 				return { model }
 			return {
 				model: withPhase(
@@ -211,7 +223,11 @@ export const update = (model: Model, message: Message): Return =>
 		},
 		FailedPrepare: ({ organizationId, workspaceId, problem }) => {
 			const { phase } = model
-			if (organizationId !== model.organizationId || phase._tag !== "Preparing" || phase.workspace.id !== workspaceId)
+			if (
+				organizationId !== model.organizationId ||
+				phase._tag !== "Preparing" ||
+				phase.workspace.id !== workspaceId
+			)
 				return { model }
 			return {
 				model: withPhase(
@@ -289,7 +305,11 @@ export const update = (model: Model, message: Message): Return =>
 		},
 		SucceededMigrate: ({ organizationId, linked, created, skipped }) => {
 			const { phase } = model
-			if (organizationId !== model.organizationId || phase._tag !== "PickingChannels" || !phase.isSubmitting)
+			if (
+				organizationId !== model.organizationId ||
+				phase._tag !== "PickingChannels" ||
+				!phase.isSubmitting
+			)
 				return { model }
 			return {
 				model: withPhase(

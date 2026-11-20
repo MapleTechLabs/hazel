@@ -334,7 +334,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			return Phase.match(model.phase, {
 				Starting: () => ({ model: modifyFields(model, { restoredData: () => data }) }),
 				Leaving: () => ({ model }),
-				Running: (running) => ({ model: withPhase(model, modifyFields(running, { data: () => data })) }),
+				Running: (running) => ({
+					model: withPhase(model, modifyFields(running, { data: () => data })),
+				}),
 			})
 		},
 		CompletedStoreAnswers: () => ({ model }),

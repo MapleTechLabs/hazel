@@ -95,7 +95,11 @@ export const Message = defineMessageUnion({
 		provider: ChatSyncProvider,
 		workspaces: Schema.Array(Workspace),
 	},
-	FailedListWorkspaces: { organizationId: OrganizationId, provider: ChatSyncProvider, reason: ResourceFailure },
+	FailedListWorkspaces: {
+		organizationId: OrganizationId,
+		provider: ChatSyncProvider,
+		reason: ResourceFailure,
+	},
 	ClickedAuthorize: {},
 	SucceededGetOAuthUrl: { authorizationUrl: Schema.String },
 	FailedGetOAuthUrl: { problem: Problem },

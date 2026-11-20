@@ -465,7 +465,10 @@ describe("chat sync providers", () => {
 		const migrate = (message: ChatMigration.Message) => Message.GotMigrationMessage({ message })
 		const opened = updateWithShared(init(undefined, shared).model, Message.ClickedImport())
 		expect(opened.model.migrationModal.isOpen).toBe(true)
-		const loading = updateWithShared(opened.model, migrate(ChatMigration.Message.ClickedProvider({ provider: "slack" })))
+		const loading = updateWithShared(
+			opened.model,
+			migrate(ChatMigration.Message.ClickedProvider({ provider: "slack" })),
+		)
 		const closed = { ...loading.model, migrationModal: Modal.close(loading.model.migrationModal).model }
 
 		// Import again while it loads: the same wizard, still loading.
@@ -476,7 +479,11 @@ describe("chat sync providers", () => {
 		const answered = updateWithShared(
 			closed,
 			migrate(
-				ChatMigration.Message.FailedListWorkspaces({ organizationId, provider: "slack", reason: "NotConnected" }),
+				ChatMigration.Message.FailedListWorkspaces({
+					organizationId,
+					provider: "slack",
+					reason: "NotConnected",
+				}),
 			),
 		)
 		expect(answered.model.migration.phase._tag).toBe("NeedsAuthorization")
