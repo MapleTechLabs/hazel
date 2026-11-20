@@ -2,6 +2,7 @@ import * as Customers from "@hazel/domain/customers"
 import {
 	ChannelId,
 	CustomerAccountId,
+	CustomerChannelSuggestionId,
 	CustomerContactId,
 	CustomerNoteId,
 	CustomerSignalId,
@@ -10,6 +11,7 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
+import { SuggestionMessage, SuggestionRow } from "../../../customers/suggestions"
 import { FeatureFlagFailure } from "../../../customers/feature-flags"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { CustomerTab } from "../../../route"
@@ -144,6 +146,12 @@ export const Message = defineMessageUnion({
 	PressedUnlinkChannel: { channelId: ChannelId },
 	SucceededChannelAction: { action: ChannelAction },
 	FailedChannelAction: { action: ChannelAction, reason: ActionFailure },
+	SucceededFetchSuggestions: { accountId: CustomerAccountId, items: Schema.Array(SuggestionRow) },
+	FailedFetchSuggestions: { accountId: CustomerAccountId },
+	PressedAcceptSuggestion: { suggestionId: CustomerChannelSuggestionId },
+	PressedDismissSuggestion: { suggestionId: CustomerChannelSuggestionId },
+	/** The shared accept / dismiss Commands' answers (`customers/suggestions.ts`). */
+	CompletedSuggestionAction: { message: SuggestionMessage },
 
 	UpdatedCreatedFeatureFlags: { keys: Schema.Array(Schema.String) },
 	GotFlagPopoverMessage: { message: Popover.Message },

@@ -2,6 +2,7 @@ import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconClose, IconOffice } from "../../../icons"
 import { searchOptions } from "../../../customers/channels"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import { customerRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
 import { heading } from "../../../ui/heading"
@@ -19,6 +20,7 @@ import { interaction } from "./update"
 /** Port of `channels/$channelId/settings/overview.tsx`. */
 
 const toChangedName = (name: string) => Message.ChangedName({ name })
+const toSuggestionMessage = (message: SuggestionPrompt.Message) => Message.GotSuggestionMessage({ message })
 
 const iconField = (h: HtmlBuilder<Message>, form: Form): Html =>
 	h.div(
@@ -208,7 +210,16 @@ const customerSection = (h: HtmlBuilder<Message>, model: Model, orgSlug: string 
 				],
 			),
 			model.customer === null
-				? h.div([h.Class("flex items-center gap-3")], [customerPicker(h, model, "Link to customer")])
+				? h.div(
+						[h.Class("flex flex-col items-start gap-3")],
+						[
+							SuggestionPrompt.view(h, model.suggestion, {
+								toParentMessage: toSuggestionMessage,
+								className: "w-full max-w-xl",
+							}),
+							customerPicker(h, model, "Link to customer"),
+						],
+					)
 				: h.div(
 						[h.Class("flex flex-wrap items-center gap-3")],
 						[

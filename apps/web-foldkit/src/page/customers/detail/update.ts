@@ -9,6 +9,16 @@ import { failureMessage } from "~/lib/error-messages"
 import { accountLabelOf, linkedTo, madePrimary, unlinked } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { featureFlagKeysOf, featureFlagToast } from "../../../customers/feature-flags"
+import {
+	AcceptSuggestion,
+	DismissSuggestion,
+	EMPTY_SUGGESTIONS,
+	hideSuggestion,
+	receivedSuggestions,
+	SuggestionMessage,
+	suggestionFailureToast,
+	unhideSuggestion,
+} from "../../../customers/suggestions"
 import { isMuteKey, MUTE_LABEL, muteUntil, isSnoozeKey, snoozeUntil } from "../../../customers/ui/menus"
 import { errorToastOf, successToast } from "../../../data/actions"
 import { AppRoute, type CustomerTab, customerRoute, hrefOf, type RouteOf } from "../../../route"
@@ -40,6 +50,7 @@ import {
 	UnlinkCustomerAccount,
 	UnlinkCustomerChannel,
 	SetCustomerAttentionMute,
+	FetchCustomerSuggestions,
 	UpdateCustomerAccount,
 	UpdateCustomerNote,
 } from "./commands"
@@ -183,8 +194,29 @@ const load = (model: Model, shared: Shared): Return => {
 		next = fetched.model
 		commands.push(...(fetched.commands ?? []))
 	}
-	return { model: next, commands }
+	const suggested = requestSuggestions(next, shared)
+	return { model: suggested.model, commands: [...commands, ...(suggested.commands ?? [])] }
 }
+
+/**
+ * The customer's suggested channel links, asked once the accounts say which customer this is (an
+ * environment's are its primary's), and again for another customer.
+ */
+const requestSuggestions = (model: Model, shared: Shared, force = false): Return => {
+	const args = target(model, shared)
+	if (args === null || model.accounts === null) return { model }
+	const customer = customerOfAccount(model)(model.accountId)
+	if (!force && model.suggestionsFor === customer) return { model }
+	return {
+		model: modifyFields(model, {
+			suggestionsFor: () => customer,
+			suggestions: (list) => (model.suggestionsFor === customer ? list : EMPTY_SUGGESTIONS),
+		}),
+		commands: [FetchCustomerSuggestions({ organizationId: args.organizationId, accountId: customer })],
+	}
+}
+
+const toSuggestionMessage = (message: SuggestionMessage) => Message.CompletedSuggestionAction({ message })
 
 // INIT
 
@@ -239,6 +271,8 @@ const initialModel = (route: Route): Model => ({
 	channelOptions: [],
 	channelPopover: Popover.init(CHANNEL_POPOVER_ID),
 	channelSearch: "",
+	suggestions: EMPTY_SUGGESTIONS,
+	suggestionsFor: null,
 	createdFeatureFlags: [],
 	flagPopover: Popover.init(FLAG_POPOVER_ID),
 	flagSelection: [],
@@ -649,12 +683,15 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 
 const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		UpdatedAccounts: ({ accounts }) => ({
-			model: modifyFields(model, {
-				accounts: () => accounts,
-				hasSeenAccount: (seen) => seen || accounts.some((account) => account.id === model.accountId),
-			}),
-		}),
+		UpdatedAccounts: ({ accounts }) =>
+			requestSuggestions(
+				modifyFields(model, {
+					accounts: () => accounts,
+					hasSeenAccount: (seen) =>
+						seen || accounts.some((account) => account.id === model.accountId),
+				}),
+				shared,
+			),
 		UpdatedSignals: ({ signals }) => ({ model: modifyFields(model, { signals: () => signals }) }),
 		UpdatedNotes: ({ notes }) => ({ model: modifyFields(model, { notes: () => notes }) }),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
@@ -931,6 +968,70 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				),
 			),
 		}),
+		// An answer for a customer the page no longer shows is dropped.
+		SucceededFetchSuggestions: ({ accountId, items }) => ({
+			model:
+				accountId === model.suggestionsFor
+					? modifyFields(model, { suggestions: (list) => receivedSuggestions(list, items) })
+					: model,
+		}),
+		FailedFetchSuggestions: () => ({ model }),
+		PressedAcceptSuggestion: ({ suggestionId }) => {
+			const args = target(model, shared)
+			const userId = shared.currentUser?.id
+			const suggestion = model.suggestions.items?.find((item) => item.id === suggestionId)
+			// Pressed again while its write runs: already hidden, sent once.
+			if (
+				args === null ||
+				userId === undefined ||
+				suggestion === undefined ||
+				model.suggestions.hidden.includes(suggestionId)
+			)
+				return { model }
+			return {
+				// The row leaves at once; the channel shows among the linked ones.
+				model: modifyFields(model, { suggestions: (list) => hideSuggestion(list, suggestionId) }),
+				commands: [
+					Command.mapMessage(
+						AcceptSuggestion({
+							organizationId: args.organizationId,
+							suggestion,
+							linkedBy: userId,
+						}),
+						toSuggestionMessage,
+					),
+				],
+			}
+		},
+		PressedDismissSuggestion: ({ suggestionId }) => {
+			const args = target(model, shared)
+			const suggestion = model.suggestions.items?.find((item) => item.id === suggestionId)
+			if (args === null || suggestion === undefined || model.suggestions.hidden.includes(suggestionId))
+				return { model }
+			return {
+				model: modifyFields(model, { suggestions: (list) => hideSuggestion(list, suggestionId) }),
+				commands: [
+					Command.mapMessage(
+						DismissSuggestion({ organizationId: args.organizationId, suggestion }),
+						toSuggestionMessage,
+					),
+				],
+			}
+		},
+		// Ask again either way: accepting can settle the channel's other suggestions.
+		CompletedSuggestionAction: ({ message: action }) =>
+			SuggestionMessage.match<Return>(action, {
+				SucceededAccept: () => requestSuggestions(model, shared, true),
+				SucceededDismiss: () => requestSuggestions(model, shared, true),
+				FailedSuggestionAction: ({ suggestion, action: failed, reason }) => ({
+					...requestSuggestions(
+						modifyFields(model, { suggestions: (list) => unhideSuggestion(list, suggestion.id) }),
+						shared,
+						true,
+					),
+					outMessage: toast(suggestionFailureToast(failed, reason)),
+				}),
+			}),
 		UpdatedCreatedFeatureFlags: ({ keys }) => ({
 			model: modifyFields(model, { createdFeatureFlags: () => keys }),
 		}),

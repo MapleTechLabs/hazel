@@ -4,6 +4,7 @@ import * as AsyncData from "foldkit/asyncData"
 import { defineMessageUnion } from "foldkit/message"
 import { defineTaggedUnion } from "foldkit/schema"
 import { CommonReason, failureMessage, type UserErrorMessage } from "~/lib/error-messages"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
@@ -125,6 +126,9 @@ export const Model = Schema.Struct({
 	disconnectConfirm: ConfirmAction.Model(SyncConnectionId),
 	/** Hover, press and focus of the link modal's Link Channel button. */
 	interaction: Interaction.Model,
+	/** After a link: who the newly mirrored channel looks like (`customers.channel.suggestions`). */
+	suggestion: SuggestionPrompt.Model,
+	suggestionChannelName: Schema.NullOr(Schema.String),
 })
 export type Model = typeof Model.Type
 
@@ -173,9 +177,14 @@ export const Message = defineMessageUnion({
 	ClickedDirection: { direction: SyncDirection },
 	ClickedHistory: { history: HistoryImport },
 	ClickedCreateLink: {},
-	SucceededCreateLink: { successMessage: Schema.String },
+	SucceededCreateLink: {
+		successMessage: Schema.String,
+		hazelChannelId: ChannelId,
+		hazelChannelName: Schema.String,
+	},
 	FailedCreateLink: { reason: CreateLinkFailure },
 	GotInteractionMessage: { message: Interaction.Message },
+	GotSuggestionMessage: { message: SuggestionPrompt.Message },
 })
 export type Message = typeof Message.Type
 

@@ -2,6 +2,7 @@ import { ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import * as Interaction from "../../../ui/aria/interaction"
 
 export const Invite = Schema.Struct({
@@ -43,5 +44,7 @@ export const Model = Schema.Struct({
 	acceptingIds: Schema.Array(ConnectInviteId),
 	decliningIds: Schema.Array(ConnectInviteId),
 	interaction: Interaction.Model,
+	/** After an accept: who the newly shared channel looks like (`customers.channel.suggestions`). */
+	suggestion: SuggestionPrompt.Model,
 })
 export type Model = typeof Model.Type

@@ -6,6 +6,7 @@ import { NotValidated, validate } from "foldkit/fieldValidation"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import { catchCommon, errorToastOf, successToast } from "../../../data/actions"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import { HazelRpc } from "../../../rpc"
 import type { RouteOf } from "../../../route"
 import * as Interaction from "../../../ui/aria/interaction"
@@ -75,10 +76,12 @@ export const init = (route: RouteOf<"ChannelSettingsOverview">): Return => ({
 		form: null,
 		interaction: Interaction.init(),
 		customer: null,
+		hasLoadedCustomer: false,
 		customers: null,
 		customerPopover: Popover.init(CUSTOMER_POPOVER_ID),
 		customerSearch: "",
 		customerLinking: "Idle",
+		suggestion: SuggestionPrompt.init(),
 	},
 })
 
@@ -118,6 +121,32 @@ const closePicker = (model: Model): Return => {
 		),
 	}
 }
+
+/** The prompt's step, its Commands wrapped and its toast sent up. */
+const withSuggestion = SuggestionPrompt.embed<Model, Message>(
+	(model, prompt) => modifyFields(model, { suggestion: () => prompt }),
+	(message) => Message.GotSuggestionMessage({ message }),
+)
+
+/**
+ * Who an unlinked channel looks like, asked once per channel while the section shows it. Only an
+ * org member reaches Customers (the RPC refuses anyone else), so nobody else asks.
+ */
+const suggestFor = (model: Model, shared: Shared | undefined): Return => {
+	const organizationId = shared?.organization?.id
+	if (
+		!model.hasLoadedCustomer ||
+		model.customer !== null ||
+		organizationId === undefined ||
+		shared?.member == null ||
+		model.suggestion.channelId === model.channelId
+	)
+		return { model }
+	return withSuggestion(model, SuggestionPrompt.request(organizationId, model.channelId))
+}
+
+/** The organization or membership arrived after the customer row: ask now. */
+export const sharedChanged = (model: Model, shared: Shared): Return => suggestFor(model, shared)
 
 export const update = (model: Model, message: Message, shared?: Shared): Return =>
 	Message.match<Return>(message, {
@@ -175,9 +204,17 @@ export const update = (model: Model, message: Message, shared?: Shared): Return 
 			interaction.fold(model, interactionMessage),
 
 		// The projection landing ends the pending state: the change is what the server now holds.
-		UpdatedCustomer: ({ customer }) => ({
-			model: modifyFields(model, { customer: () => customer, customerLinking: () => "Idle" }),
-		}),
+		UpdatedCustomer: ({ customer }) =>
+			suggestFor(
+				modifyFields(model, {
+					customer: () => customer,
+					hasLoadedCustomer: () => true,
+					customerLinking: () => "Idle",
+					// Linked (here, by a suggestion, or automatically): the prompt is done with it.
+					suggestion: (prompt) => (customer === null ? prompt : SuggestionPrompt.reset()),
+				}),
+				shared,
+			),
 		UpdatedCustomers: ({ customers }) => ({ model: modifyFields(model, { customers: () => customers }) }),
 		GotCustomerPopoverMessage: ({ message: popoverMessage }) => {
 			const result = Popover.update(model.customerPopover, popoverMessage)
@@ -211,6 +248,11 @@ export const update = (model: Model, message: Message, shared?: Shared): Return 
 				commands: [UnlinkChannelCustomer({ organizationId, channelId: model.channelId })],
 			}
 		},
+		GotSuggestionMessage: ({ message: promptMessage }) =>
+			withSuggestion(
+				model,
+				SuggestionPrompt.update(model.suggestion, promptMessage, shared?.organization?.id ?? null),
+			),
 		SucceededCustomerLink: () => ({ model }),
 		FailedCustomerLink: ({ unlinking, reason }) => ({
 			model: modifyFields(model, { customerLinking: () => "Idle" }),

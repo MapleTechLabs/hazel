@@ -312,7 +312,11 @@ describe("chat sync connection", () => {
 			),
 			Command.resolve(
 				CreateChannelLink,
-				Message.SucceededCreateLink({ successMessage: "Linked #random to #announcements" }),
+				Message.SucceededCreateLink({
+					successMessage: "Linked #random to #announcements",
+					hazelChannelId: hazel.id,
+					hazelChannelName: "random",
+				}),
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({

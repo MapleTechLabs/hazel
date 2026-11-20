@@ -1,4 +1,4 @@
-import { ConnectInviteId, OrganizationId } from "@hazel/schema"
+import { ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Effect, Option, Result, Schema } from "effect"
 import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
@@ -6,6 +6,8 @@ import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import { toDate } from "~/lib/utils"
 import { catchCommon, errorToastOf, successToast } from "../../../data/actions"
+import { connectConversationChannelCollection } from "~/db/collections"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import { HazelRpc } from "../../../rpc"
 import * as Interaction from "../../../ui/aria/interaction"
 import type { PageReturn, PageSubscriptionInput, Shared } from "../../contract"
@@ -58,6 +60,37 @@ export const ListIncomingInvites = Command.define("ListIncomingInvites", {
 		),
 })
 
+/**
+ * The org's channel for the conversation it just joined: the mount lands in the org source with
+ * the accept's write, so wait for that first. Null when it does not show in time.
+ */
+export const FindJoinedChannel = Command.define("FindJoinedChannel", {
+	args: {
+		conversationId: ConnectConversationId,
+		organizationId: OrganizationId,
+		transactionId: Schema.String,
+	},
+	messages: [Message.FoundJoinedChannel],
+	execute: ({ conversationId, organizationId, transactionId }) =>
+		connectConversationChannelCollection.utils.awaitSeqEffect(transactionId, 10_000).pipe(
+			Effect.catchTags({
+				TxIdTimeoutError: () => Effect.succeed(false),
+				InvalidTxIdError: () => Effect.succeed(false),
+				AwaitTxIdError: () => Effect.succeed(false),
+			}),
+			Effect.map(() => {
+				const mount = connectConversationChannelCollection.toArray.find(
+					(row) =>
+						row.conversationId === conversationId &&
+						row.organizationId === organizationId &&
+						row.isActive &&
+						row.deletedAt === null,
+				)
+				return Message.FoundJoinedChannel({ channelId: mount?.channelId ?? null })
+			}),
+		),
+})
+
 export const AcceptInvite = Command.define("AcceptInvite", {
 	args: { inviteId: ConnectInviteId, guestOrganizationId: OrganizationId },
 	messages: [Message.SucceededAccept, Message.FailedAccept],
@@ -66,7 +99,13 @@ export const AcceptInvite = Command.define("AcceptInvite", {
 		return HazelRpc.use((client) =>
 			client("connectShare.invite.accept", { inviteId, guestOrganizationId }),
 		).pipe(
-			Effect.as(Message.SucceededAccept({ inviteId })),
+			Effect.map((response) =>
+				Message.SucceededAccept({
+					inviteId,
+					conversationId: response.data.id,
+					transactionId: response.transactionId,
+				}),
+			),
 			Effect.catchTags({
 				ConnectInviteNotFoundError: () => failed("NotFound"),
 				ConnectInviteInvalidStateError: () => failed("InvalidState"),
@@ -126,6 +165,7 @@ export const init = (_route: unknown, shared: Shared): Return =>
 			acceptingIds: [],
 			decliningIds: [],
 			interaction: Interaction.init(),
+			suggestion: SuggestionPrompt.init(),
 		},
 		shared,
 	)
@@ -164,6 +204,12 @@ const isBusy = (model: Model, inviteId: ConnectInviteId) =>
 const notFound = (description: string) => ({ title: "Invite not found", description })
 const workspaceNotFound = (description: string) => ({ title: "Workspace not found", description })
 
+/** The suggestion prompt's step, its Commands wrapped and its toast sent up. */
+const withSuggestion = SuggestionPrompt.embed<Model, Message>(
+	(model, prompt) => modifyFields(model, { suggestion: () => prompt }),
+	(message) => Message.GotSuggestionMessage({ message }),
+)
+
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		SucceededListInvites: ({ organizationId, version, invites }) =>
@@ -192,10 +238,32 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						}),
 						commands: [AcceptInvite({ inviteId, guestOrganizationId: shared.organization.id })],
 					},
-		SucceededAccept: ({ inviteId }) => ({
-			...refetch(modifyFields(model, { acceptingIds: (ids) => without(ids, inviteId) })),
-			outMessage: PageOutMessage.RequestedToast({ toast: successToast("Channel connected") }),
-		}),
+		SucceededAccept: ({ inviteId, conversationId, transactionId }) => {
+			const listed = refetch(modifyFields(model, { acceptingIds: (ids) => without(ids, inviteId) }))
+			const organizationId = shared.organization?.id
+			const toast = PageOutMessage.RequestedToast({ toast: successToast("Channel connected") })
+			// A channel shared with this org may be a customer's: find it, then ask (members only).
+			if (organizationId === undefined || shared.member === null)
+				return { ...listed, outMessage: toast }
+			return {
+				model: listed.model,
+				commands: [
+					...(listed.commands ?? []),
+					FindJoinedChannel({ conversationId, organizationId, transactionId }),
+				],
+				outMessage: toast,
+			}
+		},
+		FoundJoinedChannel: ({ channelId }) => {
+			const organizationId = shared.organization?.id
+			if (channelId === null || organizationId === undefined || shared.member === null) return { model }
+			return withSuggestion(model, SuggestionPrompt.request(organizationId, channelId))
+		},
+		GotSuggestionMessage: ({ message: promptMessage }) =>
+			withSuggestion(
+				model,
+				SuggestionPrompt.update(model.suggestion, promptMessage, shared.organization?.id ?? null),
+			),
 		FailedAccept: ({ inviteId, reason }) => ({
 			model: modifyFields(model, { acceptingIds: (ids) => without(ids, inviteId) }),
 			outMessage: PageOutMessage.RequestedToast({
