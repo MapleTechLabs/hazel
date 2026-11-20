@@ -57,16 +57,16 @@ const makeWorld = (objects: TestObjects) =>
 		const [ada, alice] = [uuid(), uuid()] as Array<UserId>
 		const db = org.storage.db
 		db.prepare(`INSERT INTO organizations (id, name, slug) VALUES (?, 'Acme', 'acme')`).run(orgId)
-		for (const [userId, first, last] of [
-			[ada!, "Ada", "Lovelace"],
-			[alice!, "Alice", "Liddell"],
+		for (const [userId, first, last, avatar] of [
+			[ada!, "Ada", "Lovelace", "https://cdn.example.com/ada.png"],
+			[alice!, "Alice", "Liddell", null],
 		] as const) {
 			db.prepare(
 				`INSERT INTO organization_members (id, organizationId, userId, role) VALUES (?, ?, ?, 'member')`,
 			).run(uuid(), orgId, userId)
 			db.prepare(
-				`INSERT INTO users (id, externalId, email, firstName, lastName) VALUES (?, ?, ?, ?, ?)`,
-			).run(userId, `ext-${userId}`, `${userId}@example.com`, first, last)
+				`INSERT INTO users (id, externalId, email, firstName, lastName, avatarUrl) VALUES (?, ?, ?, ?, ?, ?)`,
+			).run(userId, `ext-${userId}`, `${userId}@example.com`, first, last, avatar)
 		}
 		const channelId = uuid() as ChannelId
 		db.prepare(
@@ -203,7 +203,7 @@ describe("push devices", () => {
 })
 
 describe("push notifications", () => {
-	it("pushes a mention to an idle user's device: title, body, badge, path, topic", () =>
+	it("pushes a mention to an idle user's device: title, body, badge, path, topic, sender", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeWorld(yield* makeTestObjects)
@@ -224,11 +224,18 @@ describe("push notifications", () => {
 								sound: "default",
 								badge: 1,
 								"thread-id": world.channelId,
+								"mutable-content": 1,
 							},
 							hazel: {
 								path: `/acme/chat/${world.channelId}`,
 								channelId: world.channelId,
 								notificationId: notification!.id,
+								sender: {
+									id: world.ada,
+									name: "Ada Lovelace",
+									avatarUrl: "https://cdn.example.com/ada.png",
+								},
+								conversation: "#general",
 							},
 						},
 					},

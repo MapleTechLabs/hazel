@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { displayNameOf, PUSH_BODY_MAX, pushBody, pushPath, pushTitle } from "./push-content"
+import { displayNameOf, PUSH_BODY_MAX, pushBody, pushConversation, pushPath, pushTitle } from "./push-content"
 import type { ChannelId } from "@hazel/schema"
 
 const names = new Map([["u-1", "Grace Hopper"]])
@@ -18,6 +18,22 @@ describe("push content", () => {
 		).toBe("Ada · thread in #general")
 		expect(pushTitle("Ada", { type: "thread", name: "Thread" }, { type: "single", name: "x" })).toBe(
 			"Ada · thread",
+		)
+	})
+
+	it("names a group conversation, and none for a 1:1 DM", () => {
+		expect(pushConversation({ type: "public", name: "general" }, undefined)).toBe("#general")
+		expect(pushConversation({ type: "private", name: "core" }, undefined)).toBe("#core")
+		expect(pushConversation({ type: "single", name: "Ada, Grace" }, undefined)).toBeUndefined()
+		expect(pushConversation({ type: "direct", name: "Ada, Grace, Alan" }, undefined)).toBe(
+			"Ada, Grace, Alan",
+		)
+		expect(pushConversation({ type: "direct", name: " " }, undefined)).toBeUndefined()
+		expect(
+			pushConversation({ type: "thread", name: "Thread" }, { type: "public", name: "general" }),
+		).toBe("thread in #general")
+		expect(pushConversation({ type: "thread", name: "Thread" }, { type: "single", name: "x" })).toBe(
+			"thread",
 		)
 	})
 
