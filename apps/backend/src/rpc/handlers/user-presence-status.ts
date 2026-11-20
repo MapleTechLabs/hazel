@@ -10,11 +10,12 @@ import {
 	UserPresenceStatusResponse,
 	UserPresenceStatusRpcs,
 } from "@hazel/domain/rpc"
-import { DateTime, Effect } from "effect"
+import { DateTime, Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { UserPresenceStatusPolicy } from "../../policies/user-presence-status-policy"
 import {
 	applyLegacyUpdate,
+	findPreference,
 	legacyHeartbeat,
 	type PresencePatch,
 	reconcile,
@@ -41,12 +42,19 @@ export const UserPresenceStatusRpcLive = UserPresenceStatusRpcs.toLayer(
 					.transaction(
 						Effect.gen(function* () {
 							const user = yield* authorized
-							const statusExpiresAt = toDate(expiresAt)
-							yield* setPreferredStatus(user.id, status, statusExpiresAt)
+							yield* setPreferredStatus(user.id, status, toDate(expiresAt))
+							// What was saved: a pick that has already expired is back to online.
+							const saved = yield* findPreference(user.id)
 							const txid = yield* generateTransactionId()
 							return new UserPresenceSettingsResponse({
-								status,
-								statusExpiresAt,
+								status: Option.match(saved, {
+									onNone: () => status,
+									onSome: (row) => row.status,
+								}),
+								statusExpiresAt: Option.match(saved, {
+									onNone: () => null,
+									onSome: (row) => row.statusExpiresAt,
+								}),
 								transactionId: txid,
 							})
 						}),

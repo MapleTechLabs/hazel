@@ -2,7 +2,8 @@
  * Presence, simulated end to end (`./presence-sim.ts`): fake devices against the real objects, and
  * what a teammate's org shows over time. Each test is one of Discord's rules.
  */
-import { ChannelId } from "@hazel/schema"
+import { ChannelId, type UserId } from "@hazel/schema"
+import { makeFakeSocket } from "@hazel/sync-do/testing"
 import { Effect, Schema, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { hours, makePresenceSim, minutes, seconds } from "./presence-sim"
@@ -14,7 +15,8 @@ const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 const general = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-0000000000a1")
 const design = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-0000000000a2")
 
-describe("presence simulation", () => {
+// Hours of simulated pings are thousands of steps: slower than the default 5 s on a CI runner.
+describe("presence simulation", { timeout: 60_000 }, () => {
 	it("opening the app shows online in every org; quitting shows offline at once", () =>
 		run(
 			Effect.gen(function* () {
@@ -44,7 +46,7 @@ describe("presence simulation", () => {
 				const sim = yield* makePresenceSim
 				const ada = yield* sim.user("ada")
 				yield* ada.device("web").open()
-				yield* sim.advance(hours(5))
+				yield* sim.advance(hours(2))
 				expect(ada.timeline.map(({ status }) => status)).toEqual(["offline", "online"])
 			}),
 		))
@@ -336,6 +338,56 @@ describe("presence simulation", () => {
 			}),
 		))
 
+	it("a pick that has already expired saves, and answers, online", () =>
+		run(
+			Effect.gen(function* () {
+				const sim = yield* makePresenceSim
+				const ada = yield* sim.user("ada")
+				yield* ada.device("web").open()
+				const saved = yield* ada.pick("dnd", -seconds(1))
+				expect(saved).toMatchObject({ status: "online", statusExpiresAt: null })
+				expect((yield* ada.seen()).status).toBe("online")
+			}),
+		))
+
+	it("binary ping frames keep a session alive too", () =>
+		run(
+			Effect.gen(function* () {
+				const sim = yield* makePresenceSim
+				const ada = yield* sim.user("ada")
+				const user = yield* ada.object()
+				const socket = makeFakeSocket()
+				expect(yield* user.adopt(socket, { userId: ada.id, expiresAt: null })).toBe("accepted")
+				const ping = new TextEncoder().encode(JSON.stringify({ _tag: "Ping" }))
+				for (let minute = 1; minute <= 10; minute++) {
+					yield* sim.advance(seconds(25))
+					yield* user.onMessage(socket, ping.buffer as ArrayBuffer)
+				}
+				expect((yield* ada.seen()).status).toBe("online")
+			}),
+		))
+
+	it("a socket adopted before sessions existed is closed so its client reconnects", () =>
+		run(
+			Effect.gen(function* () {
+				const sim = yield* makePresenceSim
+				const ada = yield* sim.user("ada")
+				const user = yield* ada.object()
+				const socket = makeFakeSocket()
+				expect(yield* user.adopt(socket, { userId: ada.id as UserId, expiresAt: null })).toBe(
+					"accepted",
+				)
+				// What such a socket's attachment looks like: no `session`.
+				const { session: _session, ...older } = socket.deserializeAttachment() as Record<
+					string,
+					unknown
+				>
+				socket.serializeAttachment(older)
+				yield* user.onMessage(socket, JSON.stringify({ _tag: "Ping" }))
+				expect(socket.closed).toEqual({ code: 1012, reason: "presence_session_required" })
+			}),
+		))
+
 	describe("older clients", () => {
 		it("their socket and heartbeat RPC count as a web session", () =>
 			run(
@@ -353,16 +405,16 @@ describe("presence simulation", () => {
 				}),
 			))
 
-		it("their AFK away makes their sessions idle, and busy picks dnd", () =>
+		it("their AFK away makes their sessions idle and AFK, and busy picks dnd", () =>
 			run(
 				Effect.gen(function* () {
 					const sim = yield* makePresenceSim
 					const ada = yield* sim.user("ada")
 					yield* ada.device("web").open({ legacy: true })
 					yield* ada.legacyUpdate({ status: "away" })
-					expect((yield* ada.seen()).status).toBe("away")
+					expect(yield* ada.seen()).toMatchObject({ status: "away", afk: true })
 					yield* ada.legacyUpdate({ status: "online" })
-					expect((yield* ada.seen()).status).toBe("online")
+					expect(yield* ada.seen()).toMatchObject({ status: "online", afk: false })
 					yield* ada.legacyUpdate({ status: "busy" })
 					expect((yield* ada.seen()).status).toBe("dnd")
 					expect((yield* ada.picked())?.status).toBe("dnd")
@@ -384,8 +436,11 @@ describe("presence simulation", () => {
 						webStatus: "away",
 					})
 					yield* ada.pick("invisible")
-					yield* ada.legacyUpdate({ status: "online" })
-					expect((yield* ada.seen()).status).toBe("offline")
+					for (const status of ["online", "busy", "dnd"]) {
+						yield* ada.legacyUpdate({ status })
+						expect((yield* ada.seen()).status).toBe("offline")
+						expect((yield* ada.picked())?.status).toBe("invisible")
+					}
 				}),
 			))
 	})

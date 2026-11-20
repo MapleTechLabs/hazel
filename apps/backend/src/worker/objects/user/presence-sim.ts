@@ -105,12 +105,16 @@ export interface SimUser {
 	readonly object: () => Effect.Effect<TestObject>
 	readonly device: (type: ClientType) => SimDevice
 	/** Picks a status on every device, for `forMs` or until changed. */
-	readonly pick: (status: PreferredStatus, forMs?: number) => Effect.Effect<void>
+	/** Picks a status on every device, for `forMs` or until changed; returns what was saved. */
+	readonly pick: (
+		status: PreferredStatus,
+		forMs?: number,
+	) => Effect.Effect<{ readonly status: string; readonly statusExpiresAt: Date | null }>
 	/** Sets a custom status, cleared after `forMs` (or never). */
-	readonly customStatus: (emoji: string, message: string, forMs?: number) => Effect.Effect<void>
+	readonly customStatus: (emoji: string, message: string, forMs?: number) => Effect.Effect<unknown>
 	/** An older client's RPCs. */
-	readonly legacyHeartbeat: () => Effect.Effect<void>
-	readonly legacyUpdate: (payload: Record<string, unknown>) => Effect.Effect<void>
+	readonly legacyHeartbeat: () => Effect.Effect<unknown>
+	readonly legacyUpdate: (payload: Record<string, unknown>) => Effect.Effect<unknown>
 	/** What org `index` (0 or 1) shows of this user. */
 	readonly seen: (index?: number) => Effect.Effect<Seen>
 	/** The user's own row (what their clients sync). */
@@ -205,6 +209,7 @@ export const makePresenceSim = Effect.gen(function* () {
 				})
 				const exit = yield* decodeExit(rpc, structuredClone(response).exit)
 				if (Exit.isFailure(exit)) throw new Error(Cause.pretty(exit.cause))
+				return exit.value
 			}),
 		)
 
@@ -320,10 +325,13 @@ export const makePresenceSim = Effect.gen(function* () {
 				object: () => objects.get(userTarget(id)),
 				device: (type) => makeDevice(id, type),
 				pick: (status, forMs) =>
-					call(id, "userPresenceStatus.setStatus", {
-						status,
-						expiresAt: forMs === undefined ? null : new Date(now() + forMs),
-					}),
+					Effect.map(
+						call(id, "userPresenceStatus.setStatus", {
+							status,
+							expiresAt: forMs === undefined ? null : new Date(now() + forMs),
+						}),
+						(saved) => saved as { status: string; statusExpiresAt: Date | null },
+					),
 				customStatus: (emoji, message, forMs) =>
 					call(id, "userPresenceStatus.update", {
 						statusEmoji: emoji,

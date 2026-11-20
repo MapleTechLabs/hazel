@@ -62,7 +62,8 @@ export interface SyncAttachment<P> {
 	readonly paging?: boolean
 	/**
 	 * A random id for this connection, fixed when it is adopted: per-connection state an object
-	 * keeps (a presence session) is keyed by it. Absent on sockets adopted before it existed.
+	 * keeps (a presence session) is keyed by it. Absent on sockets adopted before it existed; an
+	 * object that needs it closes such a socket (1012) so its client reconnects with one.
 	 */
 	readonly session?: string
 }

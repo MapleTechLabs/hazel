@@ -315,8 +315,9 @@ export const legacyHeartbeat = (userId: UserId) =>
 
 /**
  * `userPresenceStatus.update`'s `status` and `activeChannelId` from an older client, mapped onto
- * the new inputs: its AFK `away` makes its sessions idle, `busy`/`dnd` picks Do Not Disturb, and
- * `online` picks Online (an older client cannot pick Invisible, so it never undoes that).
+ * the new inputs: its AFK `away` makes its sessions idle and AFK (so pushes go out at once),
+ * `online` makes them active again and picks Online, `busy`/`dnd` picks Do Not Disturb. An older
+ * client cannot pick Invisible, so none of its picks undo that.
  */
 export const applyLegacyUpdate = Effect.fn("UserObject.applyLegacyUpdate")(function* (
 	userId: UserId,
@@ -329,20 +330,23 @@ export const applyLegacyUpdate = Effect.fn("UserObject.applyLegacyUpdate")(funct
 	if (payload.activeChannelId !== undefined) {
 		yield* patchLegacySessions({ focusedChannelId: payload.activeChannelId })
 	}
+	const pickUnlessInvisible = (status: PreferredStatus) =>
+		Effect.gen(function* () {
+			const current = Option.getOrUndefined(yield* findPreference(userId))
+			if (current?.status !== "invisible") yield* writePreference(userId, status, null, now)
+		})
 	switch (payload.status) {
 		case "away":
-			yield* patchLegacySessions({ idle: true })
+			yield* patchLegacySessions({ idle: true, afk: true })
 			break
 		case "busy":
 		case "dnd":
-			yield* writePreference(userId, "dnd", null, now)
+			yield* pickUnlessInvisible("dnd")
 			break
-		case "online": {
-			yield* patchLegacySessions({ idle: false })
-			const current = Option.getOrUndefined(yield* findPreference(userId))
-			if (current?.status !== "invisible") yield* writePreference(userId, "online", null, now)
+		case "online":
+			yield* patchLegacySessions({ idle: false, afk: false })
+			yield* pickUnlessInvisible("online")
 			break
-		}
 		case "offline":
 		case undefined:
 			break
@@ -422,9 +426,11 @@ export const makePresenceHooks = (state: SyncObjectState, ownerId: () => string 
 		f: (userId: UserId, sessionId: string) => Effect.Effect<{ readonly projected: boolean }, E, R>,
 	) => {
 		const sessionId = socketSessionId(socket)
-		return sessionId === undefined
-			? Effect.succeed(false)
-			: forOwner(name, (userId) => f(userId, sessionId))
+		if (sessionId !== undefined) return forOwner(name, (userId) => f(userId, sessionId))
+		// Adopted before sockets carried a session (`SyncAttachment.session`): it can't count toward
+		// presence, so it is closed with "service restart" and the client reconnects into one.
+		if (name !== "closed") socket.close(1012, "presence_session_required")
+		return Effect.succeed(false)
 	}
 
 	return {
@@ -433,8 +439,9 @@ export const makePresenceHooks = (state: SyncObjectState, ownerId: () => string 
 			userId === ownerId() ? forSession("opened", socket, sessionOpened) : Effect.succeed(false),
 		/** A frame arrived on `socket`: a ping keeps its session alive, `Presence` updates it. */
 		message: (socket: SyncSocket, message: string | ArrayBuffer) => {
-			if (typeof message !== "string") return Effect.succeed(false)
-			const frame = decodePresenceOrPing(message)
+			// The sync runtime reads binary frames as UTF-8 text too.
+			const text = typeof message === "string" ? message : new TextDecoder().decode(message)
+			const frame = decodePresenceOrPing(text)
 			if (Option.isNone(frame)) return Effect.succeed(false)
 			const value = frame.value
 			return value._tag === "Ping"
