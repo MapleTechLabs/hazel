@@ -10,6 +10,8 @@ import {
 	type CustomerProvider,
 	escalate,
 	type EvidenceStep,
+	FORECAST_FALLBACK_DAYS,
+	type LimitForecast,
 	MAX_WINDOW_DAYS,
 	overdueLabel,
 	type RuleConfig,
@@ -28,6 +30,7 @@ import {
 	billed,
 	DERIVED_METRICS,
 	formatMoney,
+	type MetricPoint,
 	mrrSeries,
 	type OrgFacts,
 	pays,
@@ -456,6 +459,60 @@ const championInactive =
 		}
 	}
 
+/** Days of the current period the run rate is fitted over. */
+const FORECAST_WINDOW_DAYS = 7
+
+/** A billing period ending further out than this is not the feature's reset (an annual plan). */
+const MAX_PERIOD_DAYS = 35
+
+/**
+ * The run rate of `points` (oldest first, ending on `last`) carried to the billing period's end:
+ * a least-squares line through the last {@link FORECAST_WINDOW_DAYS} days, from the latest reset
+ * (a fall in the level) on. Undefined with under two such days.
+ */
+const forecastOf = (
+	points: ReadonlyArray<MetricPoint>,
+	last: MetricPoint,
+	limit: number,
+	facts: AccountFacts,
+	org: OrgFacts,
+): LimitForecast | undefined => {
+	const from = addDays(last.day, -(FORECAST_WINDOW_DAYS - 1))
+	const window = points.filter((point) => point.day >= from && point.day <= last.day)
+	const resetAt = window.findLastIndex(
+		(point, index) => point.value < (window[index - 1]?.value ?? Number.NEGATIVE_INFINITY),
+	)
+	const span = (resetAt === -1 ? window : window.slice(resetAt)).map((point) => ({
+		x: daysBetween(last.day, point.day),
+		y: point.value,
+	}))
+	if (span.length < 2) return undefined
+	const meanX = average(span.map((point) => point.x))
+	const meanY = average(span.map((point) => point.y))
+	const spread = span.reduce((sum, point) => sum + (point.x - meanX) ** 2, 0)
+	const perDay =
+		spread === 0
+			? 0
+			: span.reduce((sum, point) => sum + (point.x - meanX) * (point.y - meanY), 0) / spread
+	const periodEnd = facts.subscriptions
+		.flatMap((sub) => (sub.currentPeriodEnd === null ? [] : [dayOf(sub.currentPeriodEnd)]))
+		.filter((day) => day > org.today && daysBetween(org.today, day) <= MAX_PERIOD_DAYS)
+		.sort()[0]
+	const day = periodEnd ?? addDays(org.today, FORECAST_FALLBACK_DAYS)
+	const value = Math.max(0, last.value + perDay * daysBetween(last.day, day))
+	const crossing =
+		last.value < limit && perDay > 0 ? addDays(last.day, Math.ceil((limit - last.value) / perDay)) : null
+	return {
+		day,
+		periodEnd: periodEnd !== undefined,
+		value: Math.round(value),
+		pct: round1((value / limit) * 100),
+		perDay: round1(perDay),
+		days: 1 - Math.min(...span.map((point) => point.x)),
+		limitDay: crossing !== null && crossing <= day ? crossing : null,
+	}
+}
+
 const nearLimit =
 	(config: Extract<RuleConfig, { _tag: "near_limit" }>): Check =>
 	(facts, org) => {
@@ -469,7 +526,7 @@ const nearLimit =
 				const limit = latest?.limitValue ?? null
 				return latest === undefined || limit === null
 					? []
-					: [{ key, value: latest.value, limit, pct: (latest.value / limit) * 100 }]
+					: [{ key, points, latest, limit, pct: round1((latest.value / limit) * 100) }]
 			})
 			.sort((a, b) => b.pct - a.pct)
 		const top = candidates[0]
@@ -477,17 +534,23 @@ const nearLimit =
 		if (top.pct < config.thresholdPct) return "Below threshold"
 		const step = stepOf(top.pct >= 120, top.pct >= 100)
 		const name = org.metricNames.get(top.key) ?? top.key
+		const forecast = forecastOf(top.points, top.latest, top.limit, facts, org)
+		const pace =
+			forecast === undefined || forecast.value <= top.latest.value
+				? ""
+				: `; on pace for ${Math.round(forecast.pct)}% by ${forecast.periodEnd ? "the period end" : `${FORECAST_FALLBACK_DAYS} days out`}`
 		return {
 			step,
-			reason: `${name} at ${Math.round(top.pct)}% of the plan limit (${round1(top.value)} of ${round1(top.limit)})`,
+			reason: `${name} at ${Math.round(top.pct)}% of the plan limit (${round1(top.latest.value)} of ${round1(top.limit)})${pace}`,
 			evidence: {
 				_tag: "limit",
 				step,
 				metricKey: top.key,
 				metricName: name,
-				value: top.value,
+				value: top.latest.value,
 				limit: top.limit,
-				pct: round1(top.pct),
+				pct: top.pct,
+				forecast: forecast ?? null,
 			},
 		}
 	}

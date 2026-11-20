@@ -840,6 +840,15 @@ const SIGNAL_SEEDS: ReadonlyArray<SignalSeed> = [
 			value: 461_000,
 			limit: 500_000,
 			pct: 92.2,
+			forecast: {
+				day: dayOf(-11),
+				periodEnd: true,
+				value: 560_500,
+				pct: 112.1,
+				perDay: 9_100,
+				days: 7,
+				limitDay: dayOf(-5),
+			},
 		},
 	},
 	{

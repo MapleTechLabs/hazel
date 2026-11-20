@@ -375,6 +375,49 @@ describe("signal evaluation", () => {
 		})
 	})
 
+	it("near_limit: forecasts the current period's run rate to the billing period end", () => {
+		const series = (values: ReadonlyArray<number>, limit = 1000) =>
+			new Map([
+				[
+					"api_calls",
+					values.map((value, index) => ({
+						day: addDays(TODAY, index - values.length + 1),
+						value,
+						limitValue: limit,
+					})),
+				],
+			])
+		// 10 a day over the last 7 days (an older day is left out): 30 days out with no period end.
+		const rising = series([0, 900, 910, 920, 930, 940, 950, 960])
+		expect(match("near_limit", { metrics: rising }).evidence).toMatchObject({
+			forecast: {
+				day: addDays(TODAY, 30),
+				periodEnd: false,
+				value: 1260,
+				pct: 126,
+				perDay: 10,
+				days: 7,
+				limitDay: addDays(TODAY, 4),
+			},
+		})
+		const found = match("near_limit", {
+			metrics: rising,
+			subscriptions: [{ currentPeriodEnd: new Date(`${addDays(TODAY, 10)}T09:00:00.000Z`) }],
+		})
+		expect(found.evidence).toMatchObject({
+			forecast: { day: addDays(TODAY, 10), periodEnd: true, value: 1060, pct: 106 },
+		})
+		expect(found.reason).toBe(
+			"api_calls at 96% of the plan limit (960 of 1000); on pace for 106% by the period end",
+		)
+		// Only the days since the latest reset count; one day is no trend.
+		expect(match("near_limit", { metrics: series([90, 99, 92, 94], 100) }).evidence).toMatchObject({
+			forecast: { perDay: 2, days: 2 },
+		})
+		const fresh = match("near_limit", { metrics: series([90, 99, 95], 100) }).evidence
+		expect(fresh).toMatchObject({ forecast: null })
+	})
+
 	it("seat_growth: active users +50% over 30 days, from at least 3", () => {
 		const found = match("seat_growth", {
 			activity: { a: [-40, -3], b: [-45, -2], c: [-50, -1], d: [-1], e: [-5] },
