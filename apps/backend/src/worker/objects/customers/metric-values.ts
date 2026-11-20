@@ -249,12 +249,15 @@ export const metricSourceProblem = (
 	}
 }
 
-/** SQL with its whitespace collapsed outside string literals: `'a  b'` stays a different value. */
+/**
+ * SQL with its whitespace collapsed outside string literals and quoted identifiers: `'a  b'`,
+ * `"a  b"` and `` `a  b` `` stay different values.
+ */
 const collapsedSql = (sql: string): string =>
 	sql
 		.trim()
 		.replace(/;\s*$/, "")
-		.split(/('(?:[^'\\]|\\.)*')/)
+		.split(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)/)
 		.map((part, index) => (index % 2 === 1 ? part : part.replace(/\s+/g, " ")))
 		.join("")
 
