@@ -685,8 +685,6 @@ export const linkedAccountsRoute = (orgSlug: string): AppRoute =>
 		errorCode: Option.none(),
 	})
 
-export const linkedAccountsHref = (orgSlug: string): string => hrefOf(linkedAccountsRoute(orgSlug))
-
 /** An integration's settings page without an OAuth callback result. */
 export const integrationRoute = (orgSlug: string, integrationId: string): AppRoute =>
 	AppRoute.SettingsIntegration({

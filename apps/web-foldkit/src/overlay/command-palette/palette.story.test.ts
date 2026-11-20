@@ -295,6 +295,30 @@ describe("home actions", () => {
 		)
 	})
 
+	test("every page is a search away: only the areas show until the user types", () => {
+		const sectionsOf = (m: Model) =>
+			CommandMenu.visibleSections(m.menu).flatMap((section) =>
+				section.label._tag === "Some" ? [section.label.value] : [],
+			)
+		const keysOf = (m: Model) =>
+			CommandMenu.visibleSections(m.menu).flatMap((section) => section.items.map((entry) => entry.key))
+		story(
+			run,
+			given(opened),
+			model((m) => {
+				expect(sectionsOf(m)).toContain("Navigation")
+				expect(sectionsOf(m)).not.toContain("Customer pages")
+				expect(keysOf(m)).toContain("go:customers")
+			}),
+			message(searched("support inbox")),
+			model((m) => expect(keysOf(m)).toEqual(["go:customersInbox"])),
+			message(searched("shortcuts")),
+			model((m) => expect(keysOf(m)).toEqual(["go:myKeybinds"])),
+			message(item("go:myKeybinds")),
+			expectOutMessage(OutMessage.Completed({ href: "/hazel/my-settings/keybinds", toast: null })),
+		)
+	})
+
 	test("customers' users show below customers and open their customer's users tab", () => {
 		const accountId = Schema.decodeSync(CustomerAccountId)("00000000-0000-4000-8000-0000000000a1")
 		const contactId = Schema.decodeSync(CustomerContactId)("00000000-0000-4000-8000-0000000000b1")

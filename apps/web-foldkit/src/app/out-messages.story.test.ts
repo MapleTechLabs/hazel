@@ -122,7 +122,7 @@ describe("Completed (palette navigation)", () => {
 			given(signedIn("/hazel/chat")),
 			message(Message.PressedHotkey({ actionId: "commandPalette.open" })),
 			Command.resolve(FocusInput, focused),
-			message(paletteItem("settings:team")),
+			message(paletteItem("go:settingsTeam")),
 			Command.expectExact(NavigateInternal({ url: "/hazel/settings/team" })),
 			Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
 			model((m) => expect(m.commandPalette.isOpen).toBe(false)),

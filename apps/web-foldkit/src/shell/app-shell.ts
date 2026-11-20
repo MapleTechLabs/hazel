@@ -1,5 +1,5 @@
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
-import { IconBell, IconDashboard, IconGear, IconMsgs, IconOffice, Logo } from "../icons"
+import { IconBell, Logo } from "../icons"
 import {
 	AppRoute,
 	hrefOf,
@@ -24,6 +24,7 @@ import {
 } from "../ui/sidebar"
 import type * as Modal from "../ui/modal"
 import type { ShellContext } from "./context"
+import { type DestinationId, destination, destinationHref, isAvailable } from "./destinations"
 import { mobileChromeOf, mobileNav, mobileSidebarSheet, mobileTopBar } from "./mobile"
 import { hasDesktopTitlebar } from "../platform/desktop"
 
@@ -59,15 +60,15 @@ const bellIcon = <Message>(h: HtmlBuilder<Message>, unreadCount: number): Html =
 /** `NavSidebar` */
 const navRail = <Message>(h: HtmlBuilder<Message>, context: ShellContext, unreadCount: number): Html => {
 	const { orgSlug, route } = context
-	const home = hrefOf(AppRoute.OrgHome({ orgSlug }))
-	const chat = hrefOf(AppRoute.ChatIndex({ orgSlug }))
-	const customers = hrefOf(AppRoute.CustomersOverview({ orgSlug }))
-	const notifications = hrefOf(AppRoute.NotificationsAll({ orgSlug }))
-	const settings = hrefOf(AppRoute.SettingsGeneral({ orgSlug }))
-	const navItem = (label: string, to: string, isActive: boolean, icon: Html) =>
-		sidebarItem(h, { ariaLabel: label, className: "size-9 justify-items-center" }, [
-			sidebarLink(h, { href: to, isActive, activeClassName: NAV_ACTIVE }, [icon]),
+	const navItem = (id: DestinationId, isActive: boolean, icon?: Html) => {
+		if (!isAvailable(id)) return h.empty
+		const page = destination(id)
+		return sidebarItem(h, { ariaLabel: page.label, className: "size-9 justify-items-center" }, [
+			sidebarLink(h, { href: destinationHref(id, orgSlug), isActive, activeClassName: NAV_ACTIVE }, [
+				icon ?? page.icon(h, { className: "size-5" }),
+			]),
 		])
+	}
 	// Under the macOS window controls the dock draws its own borders, below the titlebar strip.
 	return sidebarStatic(
 		h,
@@ -105,31 +106,11 @@ const navRail = <Message>(h: HtmlBuilder<Message>, context: ShellContext, unread
 				[
 					sidebarSectionGroup(h, [
 						sidebarSection(h, { className: "p-2! *:data-[slot=sidebar-section-inner]:gap-y-2" }, [
-							navItem(
-								"Home",
-								home,
-								route._tag === "OrgHome",
-								IconDashboard(h, { className: "size-5" }),
-							),
-							navItem("Chat", chat, isChatRoute(route), IconMsgs(h, { className: "size-5" })),
-							navItem(
-								"Customers",
-								customers,
-								isCustomersRoute(route),
-								IconOffice(h, { className: "size-5" }),
-							),
-							navItem(
-								"Notifications",
-								notifications,
-								isNotificationsRoute(route),
-								bellIcon(h, unreadCount),
-							),
-							navItem(
-								"Settings",
-								settings,
-								isSettingsRoute(route),
-								IconGear(h, { className: "size-5" }),
-							),
+							navItem("home", route._tag === "OrgHome"),
+							navItem("chat", isChatRoute(route)),
+							navItem("customers", isCustomersRoute(route)),
+							navItem("notifications", isNotificationsRoute(route), bellIcon(h, unreadCount)),
+							navItem("settings", isSettingsRoute(route)),
 						]),
 					]),
 				],
