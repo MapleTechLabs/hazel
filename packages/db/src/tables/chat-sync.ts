@@ -1,5 +1,6 @@
 import {
 	ChannelId,
+	type ExternalUserId,
 	IntegrationConnectionId,
 	MessageId,
 	OrganizationId,
@@ -10,7 +11,7 @@ import {
 	UserId,
 } from "@hazel/schema"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
-import { jsonb, randomUuid, textEnum, timestamptz, uuid, varchar } from "./columns"
+import { jsonb, randomUuid, textEnum, timestamptz, typed, uuid, varchar } from "./columns"
 
 export const chatSyncConnectionStatusEnum = textEnum(["active", "paused", "error", "disabled"])
 export const chatSyncDirectionEnum = textEnum(["both", "hazel_to_external", "external_to_hazel"])
@@ -72,6 +73,31 @@ export const chatSyncConnectionsTable = SQLite.table("chat_sync_connections", {
 })
 export type ChatSyncConnection = SQLite.SelectRowOf<typeof chatSyncConnectionsTable>
 export type NewChatSyncConnection = SQLite.InsertRowOf<typeof chatSyncConnectionsTable>
+
+/**
+ * External chat-sync authors seen in a Hazel channel (org store, not synced): who from outside the
+ * org posts in a mirrored channel, the evidence for suggested customer links
+ * (`docs/customers/channels.md`). Written by the org's chat-sync ingest on each authored
+ * `MessageCreate`. `externalWorkspaceId` is the author's Slack team (a Slack Connect author's is
+ * not the connection's) or the Discord guild; `email` is lower-cased, null when the provider does
+ * not share it.
+ */
+export const chatSyncChannelAuthorsTable = SQLite.table("chat_sync_channel_authors", {
+	columns: {
+		hazelChannelId: uuid(ChannelId),
+		/** The mirror the author was last seen through: evidence reads only live links' authors. */
+		syncChannelLinkId: SQLite.nullable(uuid(SyncChannelLinkId)),
+		provider: varchar(50),
+		externalUserId: typed<ExternalUserId>()(varchar(255)),
+		externalWorkspaceId: SQLite.nullable(varchar(255)),
+		email: SQLite.nullable(varchar(320)),
+		firstSeenAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		lastSeenAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+	},
+	primaryKey: ["hazelChannelId", "provider", "externalUserId"],
+	indexes: [SQLite.index("chat_sync_channel_authors_channel_idx", ["hazelChannelId"])],
+})
+export type ChatSyncChannelAuthor = SQLite.SelectRowOf<typeof chatSyncChannelAuthorsTable>
 
 export const chatSyncEventReceiptsTable = SQLite.table("chat_sync_event_receipts", {
 	columns: {

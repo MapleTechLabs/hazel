@@ -56,9 +56,16 @@ const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 const rows = <T>(object: TestObject, sql: string, ...params: Array<string>) =>
 	object.storage.db.prepare(sql).all(...params) as Array<T>
 
+/** `U0GUEST…` users are Slack Connect guests from another company's team, with an email. */
 const lookupUser: SlackUserLookup = (userId) =>
 	Effect.succeed(
-		Option.some({ externalUserId: userId as never, displayName: `Slack ${userId}`, avatarUrl: null }),
+		Option.some({
+			externalUserId: userId as never,
+			displayName: `Slack ${userId}`,
+			avatarUrl: null,
+			email: userId.startsWith("U0GUEST") ? `${userId.toLowerCase()}@globex.example` : null,
+			externalWorkspaceId: userId.startsWith("U0GUEST") ? "T0GLOBEX01" : TEAM,
+		}),
 	)
 
 const envelope = (
@@ -228,6 +235,125 @@ describe("Slack chat sync on the objects", () => {
 					{ content: "still ours" },
 				])
 				expect(rows(other.channel, `SELECT id FROM messages`)).toEqual([])
+			}),
+		))
+
+	it("records each author of the channel with their Slack team and email", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				yield* world.inbound("Ev80", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000800", "hello", { user: "U0GUEST001" }),
+				})
+				yield* world.inbound("Ev81", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000810", "again", { user: "U0GUEST001" }),
+				})
+				yield* world.inbound("Ev82", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000820", "hi"),
+				})
+				expect(
+					rows(
+						world.org,
+						`SELECT hazelChannelId, provider, externalUserId, externalWorkspaceId, email
+						 FROM chat_sync_channel_authors ORDER BY externalUserId`,
+					),
+				).toEqual([
+					{
+						hazelChannelId: world.channelId,
+						provider: "slack",
+						externalUserId: "U0DANA0001",
+						externalWorkspaceId: TEAM,
+						email: null,
+					},
+					{
+						hazelChannelId: world.channelId,
+						provider: "slack",
+						externalUserId: "U0GUEST001",
+						externalWorkspaceId: "T0GLOBEX01",
+						email: "u0guest001@globex.example",
+					},
+				])
+			}),
+		))
+
+	it("an author seen through a replaced mirror moves to the live one on their next message", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const message = (ts: string) =>
+					world.inbound(`Ev9${ts.slice(-2)}`, {
+						_tag: "MessagePosted",
+						subtype: "message",
+						message: slackMessage(`1700000000.0009${ts.slice(-2)}`, "hello", {
+							user: "U0GUEST001",
+						}),
+					})
+				yield* message("10")
+				const [link] = rows<{ id: string }>(world.org, `SELECT id FROM chat_sync_channel_links`)
+				// As if recorded through an older mirror a moment ago (within the hour the write is skipped).
+				world.org.storage.db
+					.prepare(`UPDATE chat_sync_channel_authors SET syncChannelLinkId = 'old-mirror'`)
+					.run()
+				yield* message("20")
+				expect(rows(world.org, `SELECT syncChannelLinkId FROM chat_sync_channel_authors`)).toEqual([
+					{ syncChannelLinkId: link!.id },
+				])
+			}),
+		))
+
+	it("a thread reply's author counts for the parent channel's mirror, never the thread's", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const parentLink = () =>
+					rows<{ id: string }>(
+						world.org,
+						`SELECT id FROM chat_sync_channel_links WHERE hazelChannelId = ?`,
+						world.channelId,
+					)[0]!.id
+				const reply = (event: string, ts: string, user: string) =>
+					world.inbound(event, {
+						_tag: "MessagePosted",
+						subtype: "message",
+						message: slackMessage(ts, "in the thread", { user, threadTs: "1700000000.000900" }),
+					})
+				yield* world.inbound("Ev90", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000900", "parent"),
+				})
+				// A thread-only author, and one already seen in the channel who then replies.
+				yield* world.inbound("Ev91", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000905", "hello", { user: "U0GUESTB02" }),
+				})
+				yield* reply("Ev92", "1700000000.000910", "U0GUEST001")
+				yield* reply("Ev93", "1700000000.000920", "U0GUESTB02")
+				expect(
+					rows(
+						world.org,
+						`SELECT hazelChannelId, syncChannelLinkId, externalUserId FROM chat_sync_channel_authors
+						 WHERE externalUserId LIKE 'U0GUEST%' ORDER BY externalUserId`,
+					),
+				).toEqual([
+					{
+						hazelChannelId: world.channelId,
+						syncChannelLinkId: parentLink(),
+						externalUserId: "U0GUEST001",
+					},
+					{
+						hazelChannelId: world.channelId,
+						syncChannelLinkId: parentLink(),
+						externalUserId: "U0GUESTB02",
+					},
+				])
 			}),
 		))
 

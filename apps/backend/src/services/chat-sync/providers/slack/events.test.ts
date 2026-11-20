@@ -22,7 +22,13 @@ const lookupUser: SlackUserLookup = (userId) =>
 		lookups.push(userId)
 		return userId === "U0GHOST001"
 			? Option.none()
-			: Option.some({ externalUserId: userId as never, displayName: `Name ${userId}`, avatarUrl: null })
+			: Option.some({
+					externalUserId: userId as never,
+					displayName: `Name ${userId}`,
+					avatarUrl: null,
+					email: null,
+					externalWorkspaceId: null,
+				})
 	})
 
 const message = (extra: Partial<Slack.SlackMessage> = {}): Slack.SlackMessage => ({
@@ -57,7 +63,13 @@ describe("Slack events → chat-sync inbound", () => {
 				dedupeKey: "slack:event:Ev0001",
 				externalWorkspaceIds: ["T0HAZEL01"],
 				externalChannelId: "C0GENERAL1",
-				author: { externalUserId: "U0DANA0001", displayName: "Name U0DANA0001", avatarUrl: null },
+				author: {
+					externalUserId: "U0DANA0001",
+					displayName: "Name U0DANA0001",
+					avatarUrl: null,
+					email: null,
+					externalWorkspaceId: null,
+				},
 				event: {
 					_tag: "MessageCreate",
 					externalMessageId: "1700000000.000100",
@@ -127,6 +139,8 @@ describe("Slack events → chat-sync inbound", () => {
 				externalUserId: "U0GHOST001",
 				displayName: "Slack user",
 				avatarUrl: null,
+				email: null,
+				externalWorkspaceId: null,
 			})
 			expect(result.event).toMatchObject({
 				attachments: [

@@ -118,6 +118,7 @@ export const PROVIDER_CONFIGS: Record<
 			"reactions:read",
 			"reactions:write",
 			"users:read",
+			"users:read.email",
 		],
 		scopeDelimiter: ",",
 	},
