@@ -59,7 +59,10 @@ export const SuggestionReason = Schema.Union([
 	Schema.Struct({
 		kind: Schema.Literal("contacts"),
 		matched: Schema.Number,
+		/** External members whose email is known. */
 		total: Schema.Number,
+		/** Every external member seen; absent on reasons stored before it was counted. */
+		members: Schema.optionalKey(Schema.Number),
 		/** Up to three of the matched emails. */
 		sample: Schema.Array(Schema.String),
 	}),
@@ -68,7 +71,10 @@ export const SuggestionReason = Schema.Union([
 		kind: Schema.Literal("domain"),
 		domain: Schema.String,
 		matched: Schema.Number,
+		/** External members whose email is known. */
 		total: Schema.Number,
+		/** Every external member seen; absent on reasons stored before it was counted. */
+		members: Schema.optionalKey(Schema.Number),
 	}),
 	/** Other channels of the same workspace are linked to the account, and to no other. */
 	Schema.Struct({
@@ -332,6 +338,7 @@ export const scoreChannel = (
 		),
 	]
 	const total = emails.length
+	const members = evidence.externalMembers.length
 	if (total > 0) {
 		const contactHits = new Map<CustomerAccountId, Array<string>>()
 		const domainHits = new Map<CustomerAccountId, Map<string, number>>()
@@ -346,11 +353,18 @@ export const scoreChannel = (
 			}
 		}
 		for (const [accountId, hits] of contactHits) {
-			add(accountId, { kind: "contacts", matched: hits.length, total, sample: hits.slice(0, 3) })
+			add(accountId, {
+				kind: "contacts",
+				matched: hits.length,
+				total,
+				members,
+				sample: hits.slice(0, 3),
+			})
 		}
 		for (const [accountId, counts] of domainHits) {
 			const top = [...counts].sort((a, b) => b[1] - a[1])[0]
-			if (top !== undefined) add(accountId, { kind: "domain", domain: top[0], matched: top[1], total })
+			if (top !== undefined)
+				add(accountId, { kind: "domain", domain: top[0], matched: top[1], total, members })
 		}
 	}
 
@@ -442,19 +456,35 @@ export const scoreChannel = (
 // Words
 // ---------------------------------------------------------------------------
 
+/** "an Acme" / "a Globex": the article before an account name. */
+const a = (name: string) => (/^[aeiou]/i.test(name) ? `an ${name}` : `a ${name}`)
+
 const providerName = (provider: "slack" | "discord") => (provider === "slack" ? "Slack" : "Discord")
 
 /** One sentence per reason, for the UI and timeline events. */
 export const describeReason = (reason: SuggestionReason, accountName: string): string => {
 	switch (reason.kind) {
 		case "contacts":
-			return reason.matched === reason.total
-				? `${reason.total === 1 ? "The external member is" : `All ${reason.total} external members are`} ${accountName} contacts`
-				: `${reason.matched} of ${reason.total} external members are ${accountName} contacts`
-		case "domain":
-			return reason.matched === reason.total
-				? `${reason.total === 1 ? "The external member has" : `All ${reason.total} external members have`} @${reason.domain}, ${accountName}'s domain`
-				: `${reason.matched} of ${reason.total} external members have @${reason.domain}, ${accountName}'s domain`
+		case "domain": {
+			const what =
+				reason.kind === "contacts"
+					? { one: `is ${a(accountName)} contact`, many: `are ${accountName} contacts` }
+					: {
+							one: `has @${reason.domain}, ${accountName}'s domain`,
+							many: `have @${reason.domain}, ${accountName}'s domain`,
+						}
+			// Only members whose email is known are counted: say so when some are not.
+			const known =
+				reason.members !== undefined && reason.members > reason.total ? " with a known email" : ""
+			if (reason.matched === reason.total && known === "") {
+				return reason.total === 1
+					? `The external member ${what.one}`
+					: `All ${reason.total} external members ${what.many}`
+			}
+			return reason.matched === 1 && reason.total === 1
+				? `The one external member${known} ${what.one}`
+				: `${reason.matched} of ${reason.total} external members${known} ${reason.matched === 1 ? what.one : what.many}`
+		}
 		case "workspace": {
 			const where =
 				reason.workspaceName === null
