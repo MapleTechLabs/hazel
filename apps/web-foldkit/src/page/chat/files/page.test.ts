@@ -1,6 +1,7 @@
 import { AttachmentId, ChannelId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test, vi } from "vitest"
+import * as Menu from "../../../ui/menu"
 import * as Select from "../../../ui/select"
 import { documentsOf, filterAttachments, formatRelativeTime, mediaOf, visibleCountFor } from "./derive"
 import { filterItems, init, Message, OutMessage, setView, update, viewerImagesOf } from "./page"
@@ -34,6 +35,9 @@ const files = [
 	file(4, "data.csv"),
 	file(5, "archive.zip"),
 ]
+
+/** The viewer menu's items, as its view hands them to the menu's messages. */
+const entries = ["copyImage", "download", "copyUrl", "openInBrowser"].map((key) => Menu.item(key))
 
 const loaded = () =>
 	update(init(channelId, "hazel", "files"), Message.UpdatedAttachments({ attachments: files })).model
@@ -123,6 +127,28 @@ describe("update", () => {
 		const video = update(loaded(), Message.ClickedMedia({ attachmentId: files[1]!.id, isVideo: true }))
 		expect(video.model.viewerImageId).toBeNull()
 		expect(video.commands?.map((command) => command.name)).toEqual(["OpenMediaTab"])
+	})
+
+	test("the viewer's right-click menu runs its choice on the open image", () => {
+		const image = files[0]!
+		const opened = update(
+			loaded(),
+			Message.ClickedMedia({ attachmentId: image.id, isVideo: false }),
+		).model
+		const menu = (message: Menu.Message) => Message.GotViewerMenuMessage({ message })
+		const shown = update(
+			opened,
+			menu(Menu.Message.PressedContextMenu({ offset: -200, crossOffset: 300 })),
+		)
+		expect(shown.model.viewerMenu.popup._tag).toBe("Open")
+		const chosen = update(shown.model, menu(Menu.Message.ClickedItem({ key: "copyUrl", entries })))
+		expect(chosen.model.viewerMenu.popup._tag).toBe("Closed")
+		expect(chosen.outMessage).toEqual(
+			OutMessage.RequestedViewerAction({ action: "copyUrl", url: image.url, fileName: image.fileName }),
+		)
+		// Closing the viewer with its menu up leaves no menu open for the next image.
+		const closed = update(shown.model, Message.ClosedImageViewer()).model
+		expect(closed.viewerMenu.popup._tag).toBe("Closed")
 	})
 
 	test("the grid row size follows the breakpoint", () => {

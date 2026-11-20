@@ -4,7 +4,9 @@ import { Command, Update } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
+import { initViewerMenu, viewerMenuAction } from "../../../chat/image-viewer"
 import * as Interaction from "../../../ui/aria/interaction"
+import * as Menu from "../../../ui/menu"
 import { searchFieldIds } from "../../../ui/search-field"
 import * as Select from "../../../ui/select"
 import { FileFilterType, filterOptions, isViewerImage, mediaOf } from "./derive"
@@ -32,6 +34,8 @@ export const Model = Schema.Struct({
 	failedMediaIds: Schema.Array(AttachmentId),
 	/** The image `ImageViewerModal` shows, among the channel's images. */
 	viewerImageId: Schema.NullOr(AttachmentId),
+	/** The viewer's right-click menu on the open image. */
+	viewerMenu: Menu.Model,
 	interaction: Interaction.Model,
 })
 export type Model = typeof Model.Type
@@ -55,6 +59,7 @@ export const Message = defineMessageUnion({
 	ClosedImageViewer: {},
 	SelectedViewerImage: { index: Schema.Number },
 	ClickedViewerAction: { action: ViewerAction, url: Schema.String, fileName: Schema.String },
+	GotViewerMenuMessage: { message: Menu.Message },
 })
 export type Message = typeof Message.Type
 
@@ -83,6 +88,7 @@ export const init = (channelId: ChannelId, orgSlug: string, view: FilesView): Mo
 	breakpoint: "base",
 	failedMediaIds: [],
 	viewerImageId: null,
+	viewerMenu: initViewerMenu(),
 	interaction: Interaction.init(),
 })
 
@@ -202,7 +208,12 @@ export const update = (model: Model, message: Message): FilesReturn =>
 			withAttachment(model, attachmentId, (found) =>
 				isVideo
 					? { model, commands: [OpenMediaTab({ url: found.url })] }
-					: { model: modifyFields(model, { viewerImageId: () => attachmentId }) },
+					: {
+							model: modifyFields(model, {
+								viewerImageId: () => attachmentId,
+								viewerMenu: initViewerMenu,
+							}),
+						},
 			),
 		ClickedDownload: ({ attachmentId }) =>
 			withAttachment(model, attachmentId, (found) => ({
@@ -211,7 +222,9 @@ export const update = (model: Model, message: Message): FilesReturn =>
 			})),
 		CompletedDownloadAttachment: () => ({ model }),
 		CompletedOpenMediaTab: () => ({ model }),
-		ClosedImageViewer: () => ({ model: modifyFields(model, { viewerImageId: () => null }) }),
+		ClosedImageViewer: () => ({
+			model: modifyFields(model, { viewerImageId: () => null, viewerMenu: initViewerMenu }),
+		}),
 		SelectedViewerImage: ({ index }) => {
 			const image = viewerImagesOf(model)[index]
 			return image === undefined
@@ -222,6 +235,24 @@ export const update = (model: Model, message: Message): FilesReturn =>
 			model.viewerImageId === null
 				? { model }
 				: { model, outMessage: OutMessage.RequestedViewerAction({ action, url, fileName }) },
+		GotViewerMenuMessage: ({ message: menuMessage }) => {
+			const image = viewerImagesOf(model).find((candidate) => candidate.id === model.viewerImageId)
+			if (image === undefined) return { model }
+			const result = Menu.update(model.viewerMenu, menuMessage)
+			const next: FilesReturn = {
+				model: modifyFields(model, { viewerMenu: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (inner) =>
+					Message.GotViewerMenuMessage({ message: inner }),
+				),
+			}
+			const chosen = viewerMenuAction(result.outMessage)
+			if (chosen === null) return next
+			const { url, fileName } = image
+			return {
+				...next,
+				outMessage: OutMessage.RequestedViewerAction({ action: chosen, url, fileName }),
+			}
+		},
 	})
 
 /** The images the viewer pages through: every image of the channel, newest first. */

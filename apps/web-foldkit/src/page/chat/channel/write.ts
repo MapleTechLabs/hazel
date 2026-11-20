@@ -46,6 +46,7 @@ import {
 import { loadWidthCommands } from "./thread-width"
 import { ClearChannelNotifications } from "./clear-notifications"
 import { resetWindow } from "./window"
+import { openViewerOf } from "./viewer-images"
 
 /** The channel page's write path: `ChatProvider`'s actions and the two drafts (channel and thread). */
 
@@ -559,6 +560,11 @@ export const handleOverlaysOut = (model: Model, out: Overlays.OutMessage): PageR
 	Overlays.OutMessage.match<PageReturn>(out, {
 		RequestedReaction: ({ messageId, emoji }) => react(model, messageId, emoji),
 		RequestedViewerAction: ({ action, url, fileName }) => viewerAction(model, action, url, fileName),
+		RequestedOpenImageAction: ({ action }) => {
+			const open = openViewerOf(model)
+			const image = open?.images[open.index]
+			return image === undefined ? { model } : viewerAction(model, action, image.url, image.fileName)
+		},
 		RequestedMessageAction: ({ messageId, action }) => messageAction(model, messageId, action),
 	})
 
