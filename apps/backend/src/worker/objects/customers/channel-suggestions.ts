@@ -29,7 +29,7 @@ import type {
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
-import { Cause, Clock, Effect, Option } from "effect"
+import { Cause, Clock, Effect, Option, PartitionedSemaphore } from "effect"
 import { callObject } from "../calls"
 import { orgTarget } from "../kinds"
 import { readObjectMeta } from "../meta"
@@ -122,7 +122,17 @@ const siblingKeys = (evidence: ReadonlyArray<ChannelEvidence>) => [
  * first, outside the transaction: for a scope, its channels, then only the linked channels that
  * share a workspace with them.
  */
-export const refreshSuggestions = Effect.fn("CustomersObject.refreshSuggestions")(function* (
+/**
+ * One refresh at a time per organization: each fetches evidence then applies it, so two that
+ * overlapped could apply out of order (an older one restoring rows a newer one removed). Keyed by
+ * organization because Durable Objects of one class may share an isolate.
+ */
+const refreshPermits = PartitionedSemaphore.makeUnsafe<OrganizationId>({ permits: 1 })
+
+export const refreshSuggestions = (organizationId: OrganizationId, channelIds?: ReadonlyArray<ChannelId>) =>
+	refreshPermits.withPermits(organizationId, 1)(refreshSuggestionsNow(organizationId, channelIds))
+
+const refreshSuggestionsNow = Effect.fn("CustomersObject.refreshSuggestions")(function* (
 	organizationId: OrganizationId,
 	channelIds?: ReadonlyArray<ChannelId>,
 ) {
@@ -207,8 +217,9 @@ const withHostEvidence = Effect.fn("CustomersObject.hostEvidence")(function* (
 				// Unreachable or failing (a defect on the host too): that host's channels go without its
 				// people (so none of them links automatically) and the other hosts' still count.
 				Effect.catchCause((cause) =>
-					Cause.hasInterruptsOnly(cause)
-						? Effect.interrupt
+					// Any interruption in the cause (alone or with a failure) stops the refresh as it was.
+					Cause.hasInterrupts(cause)
+						? Effect.failCause(cause)
 						: Effect.logWarning("Connect host evidence unavailable", {
 								hostOrganizationId,
 								cause: Cause.pretty(cause),
@@ -309,7 +320,7 @@ export const applySuggestions = Effect.fn("CustomersObject.applySuggestions")(fu
 								.where(($) => [
 									$.deletedAt.isNull(),
 									SQLite.sql
-										.cond`lower(trim(${$.email})) IN (SELECT value FROM json_each(${JSON.stringify(emails)}))`,
+										.cond`lower(trim(${$.email}, char(9, 10, 13, 32))) IN (SELECT value FROM json_each(${JSON.stringify(emails)}))`,
 								]),
 						)
 			const index = buildSuggestionIndex({
