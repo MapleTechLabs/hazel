@@ -82,7 +82,7 @@ describe("scoreChannel", () => {
 		expect(rest).toEqual([])
 		expect(best).toMatchObject({ accountId: acme, strength: "strong", autoLink: true })
 		expect(best!.reasons.map((reason) => reason.kind)).toEqual(["domain", "contacts"])
-		expect(describeReason(best!.reasons[1]!, "Acme")).toBe("1 of 2 external members are Acme contacts")
+		expect(describeReason(best!.reasons[1]!, "Acme")).toBe("1 of 2 external members is an Acme contact")
 		expect(describeReason(best!.reasons[0]!, "Acme")).toBe(
 			"All 2 external members have @acme.com, Acme's domain",
 		)
@@ -123,7 +123,9 @@ describe("scoreChannel", () => {
 			index(),
 		)
 		const domain = best!.reasons.find((reason) => reason.kind === "domain")!
-		expect(describeReason(domain, "Acme")).toBe("3 of 4 external members have @acme.com, Acme's domain")
+		expect(describeReason(domain, "Acme")).toBe(
+			"3 of 4 external members with a known email have @acme.com, Acme's domain",
+		)
 	})
 
 	it("uses sibling links of a Slack Connect team, never of the org's own workspace", () => {
@@ -172,5 +174,26 @@ describe("normalizeName", () => {
 	it("drops punctuation and company suffixes", () => {
 		expect(normalizeName("Acme, Inc.")).toBe("acme")
 		expect(normalizeName("The Big Bird Labs GmbH")).toBe("bigbirdlabs")
+	})
+})
+
+describe("describeReason", () => {
+	it("says the count is of known emails when some members have none", () => {
+		const reason = { kind: "domain" as const, domain: "acme.com", matched: 2, total: 2, members: 5 }
+		expect(describeReason(reason, "Acme")).toBe(
+			"2 of 2 external members with a known email have @acme.com, Acme's domain",
+		)
+		expect(describeReason({ ...reason, members: 2 }, "Acme")).toBe(
+			"All 2 external members have @acme.com, Acme's domain",
+		)
+	})
+
+	it("words one contact in the singular, and reasons stored without a member count", () => {
+		expect(
+			describeReason({ kind: "contacts", matched: 1, total: 3, sample: ["a@acme.com"] }, "Acme"),
+		).toBe("1 of 3 external members is an Acme contact")
+		expect(
+			describeReason({ kind: "contacts", matched: 1, total: 1, members: 4, sample: [] }, "Globex"),
+		).toBe("The one external member with a known email is a Globex contact")
 	})
 })

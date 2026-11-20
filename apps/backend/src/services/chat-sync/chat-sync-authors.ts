@@ -44,15 +44,18 @@ export const recordChannelAuthor = Effect.fn("OrgObject.chatSyncRecordAuthor")(f
 	)
 	if (Option.isNone(existing)) {
 		yield* db.run(
-			SQLite.insertInto(schema.chatSyncChannelAuthorsTable).values({
-				hazelChannelId: channelId,
-				provider: input.provider,
-				externalUserId: input.externalUserId,
-				externalWorkspaceId: workspace,
-				email,
-				firstSeenAt: now,
-				lastSeenAt: now,
-			}),
+			SQLite.insertInto(schema.chatSyncChannelAuthorsTable)
+				.values({
+					hazelChannelId: channelId,
+					provider: input.provider,
+					externalUserId: input.externalUserId,
+					externalWorkspaceId: workspace,
+					email,
+					firstSeenAt: now,
+					lastSeenAt: now,
+				})
+				// Two messages from a new author at once: the first insert stands.
+				.onConflictDoNothing(),
 		)
 		return
 	}

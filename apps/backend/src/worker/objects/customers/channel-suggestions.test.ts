@@ -262,7 +262,7 @@ describe("Suggested channel links", () => {
 				expect(rows).toHaveLength(1)
 				expect(rows[0]).toMatchObject({ accountId: t.accountId("Globex"), status: "open" })
 				expect(JSON.parse(rows[0]!.reasons)).toEqual([
-					{ kind: "domain", domain: "globex.com", matched: 2, total: 2 },
+					{ kind: "domain", domain: "globex.com", matched: 2, total: 2, members: 2 },
 				])
 
 				const listed = ok(yield* t.list({}))
