@@ -2,7 +2,9 @@
  * The query builder for Hazel's databases (DO SQLite and D1): `@maple-dev/effect-orm/sqlite`,
  * plus the few functions it has no SQLite form of. Imported as `SQLite` from `@hazel/db`.
  */
+import type { Runnable, RowOf } from "@maple-dev/effect-orm/database"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { Effect } from "effect"
 
 export * from "@maple-dev/effect-orm/sqlite"
 
@@ -37,3 +39,18 @@ export const caseWhen = <A, P = never>(
 		branches.map(([when, then]) => SQLite.sql`WHEN ${when} THEN ${then}`),
 		" ",
 	)} ELSE ${otherwise} END` as SQLite.Expr<A, P>
+
+/** The part of workerd's synchronous `ctx.storage.sql` that `execSync` needs. */
+export interface SyncSqlStorage {
+	exec(query: string, ...bindings: Array<any>): { toArray(): Array<Record<string, unknown>> }
+}
+
+/**
+ * Compiles a built query or write and runs it on workerd's synchronous storage, decoding its rows.
+ * Throws as `exec` does: on a statement SQLite refuses, or a row that does not decode.
+ */
+export const execSync = <Q extends Runnable>(storage: SyncSqlStorage, query: Q): ReadonlyArray<RowOf<Q>> => {
+	const compiled = (SQLite.compileUnsafe as (query: unknown) => SQLite.CompiledQuery<RowOf<Q>>)(query)
+	const rows = storage.exec(compiled.sql, ...compiled.parameters).toArray()
+	return Effect.runSync(compiled.decodeRows(rows))
+}

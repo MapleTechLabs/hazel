@@ -10,6 +10,7 @@
  */
 import type { SyncPageCursor } from "@hazel/domain/sync"
 import { Database, SQLite, schema } from "@hazel/db"
+import type { UserId } from "@hazel/schema"
 import type { SyncPage, SyncPaging, SyncRow, SyncSource } from "@hazel/sync-do"
 import { Effect } from "effect"
 import type { SyncPrincipal } from "../principal"
@@ -32,8 +33,12 @@ export const MESSAGE_PAGE_MAX = 200
 /** Ids per `IN (…)`: DO SQLite binds at most 100 parameters per statement. */
 const ID_BATCH = 50
 
-const isViewer = (userId: string) =>
-	SQLite.sql.cond`EXISTS (SELECT 1 FROM "channel_viewers" v WHERE v."userId" = ${userId})`
+const isViewer = (userId: UserId) =>
+	SQLite.exists(
+		SQLite.from(schema.channelViewersTable)
+			.select("userId")
+			.where(($) => [$.userId.eq(userId)]),
+	)
 
 const toViewers = (table: SyncTableSpec<SyncPrincipal>["table"], softDelete: boolean) =>
 	({
@@ -89,7 +94,7 @@ const olderThan = ($: ColumnAccessors, cursor: SyncPageCursor) => {
 }
 
 const isPinned = ($: ColumnAccessors) =>
-	SQLite.sql.cond`${$.id} IN (SELECT p."messageId" FROM "pinned_messages" p)`
+	SQLite.inSubquery($.id!, SQLite.from(schema.pinnedMessagesTable).select("messageId"))
 
 const cursorOf = (row: SyncRow): SyncPageCursor => {
 	const wire = row.row as { readonly createdAt: string; readonly id: string }

@@ -3,6 +3,7 @@
  * synchronous subset of workerd's `SqlStorage` the object uses, so tests can back it with any
  * SQLite. Every function runs synchronously, so inside the object each call is atomic.
  */
+import { SQLite } from "@hazel/db"
 import type { LogBounds, RetentionPolicy, Seq, StoredEvent } from "./log.ts"
 
 type SqlValue = string | number | null | ArrayBuffer
@@ -54,38 +55,52 @@ const SCHEMA_V2 = [
 
 const REGION_HEAD_PREFIX = "region_head:"
 
+// Query schemas of the tables above (their DDL is `SCHEMA_V1` / `SCHEMA_V2`).
+const eventsTable = SQLite.table("bot_gateway_events", {
+	external: true,
+	columns: {
+		seq: SQLite.integer,
+		body: SQLite.text,
+		appendedAt: SQLite.column(SQLite.integer, { name: "appended_at" }),
+		region: SQLite.text,
+		rseq: SQLite.integer,
+	},
+})
+
+const metaTable = SQLite.table("bot_gateway_meta", {
+	external: true,
+	columns: {
+		key: SQLite.text,
+		value: SQLite.integer,
+	},
+})
+
 /**
  * Bring the object's storage to {@link SCHEMA_VERSION}. Every activation runs it; the statements
  * between two awaits commit together in a Durable Object, so a version is applied whole or not.
  */
 export const migrate = (sql: SqlStorageLike): void => {
 	for (const statement of SCHEMA_V1) sql.exec(statement)
-	const row = sql
-		.exec<{ value: number }>(`SELECT value FROM bot_gateway_meta WHERE key = 'schema'`)
-		.toArray()[0]
-	const version = row === undefined ? 1 : Number(row.value)
+	const version = SQLite.execSync(sql, metaValue("schema"))[0]?.value ?? 1
 	if (version >= SCHEMA_VERSION) return
 	for (const statement of SCHEMA_V2) sql.exec(statement)
-	sql.exec(
-		`INSERT INTO bot_gateway_meta (key, value) VALUES ('schema', ?)
-		ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
-		SCHEMA_VERSION,
-	)
+	writeMeta(sql, "schema", SCHEMA_VERSION)
 }
 
-const readMeta = (sql: SqlStorageLike, key: string): number => {
-	const row = sql
-		.exec<{ value: number }>(`SELECT value FROM bot_gateway_meta WHERE key = ?`, key)
-		.toArray()[0]
-	return row === undefined ? 0 : Number(row.value)
-}
+const metaValue = (key: string) =>
+	SQLite.from(metaTable)
+		.select("value")
+		.where(($) => [$.key.eq(key)])
+
+const readMeta = (sql: SqlStorageLike, key: string): number =>
+	SQLite.execSync(sql, metaValue(key))[0]?.value ?? 0
 
 const writeMeta = (sql: SqlStorageLike, key: string, value: number): void => {
-	sql.exec(
-		`INSERT INTO bot_gateway_meta (key, value) VALUES (?, ?)
-		ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
-		key,
-		value,
+	SQLite.execSync(
+		sql,
+		SQLite.insertInto(metaTable)
+			.values({ key, value })
+			.onConflictDoUpdate({ target: ["key"], set: SQLite.excluded(["value"]) }),
 	)
 }
 
@@ -93,17 +108,13 @@ const readHead = (sql: SqlStorageLike): Seq => readMeta(sql, "head")
 
 /** The log's extent as `region`'s session sees it: the global head, its own oldest event. */
 export const bounds = (sql: SqlStorageLike, region: string = DEFAULT_REGION): LogBounds => {
-	const row = sql
-		.exec<{ first: number | null }>(
-			`SELECT MIN(seq) AS first FROM bot_gateway_events WHERE region = ?`,
-			region,
-		)
-		.toArray()[0]
-	const first = row?.first
-	return {
-		head: readHead(sql),
-		firstRetained: first === null || first === undefined ? undefined : Number(first),
-	}
+	const first = SQLite.execSync(
+		sql,
+		SQLite.from(eventsTable)
+			.select(($) => ({ first: SQLite.min($.seq) }))
+			.where(($) => [$.region.eq(region)]),
+	)[0]?.first
+	return { head: readHead(sql), firstRetained: first ?? undefined }
 }
 
 /** Append one event for `region`'s session; returns its sequence number. */
@@ -116,14 +127,7 @@ export const append = (
 	const seq = readHead(sql) + 1
 	const regionKey = `${REGION_HEAD_PREFIX}${region}`
 	const rseq = readMeta(sql, regionKey) + 1
-	sql.exec(
-		`INSERT INTO bot_gateway_events (seq, body, appended_at, region, rseq) VALUES (?, ?, ?, ?, ?)`,
-		seq,
-		body,
-		appendedAt,
-		region,
-		rseq,
-	)
+	SQLite.execSync(sql, SQLite.insertInto(eventsTable).values({ seq, body, appendedAt, region, rseq }))
 	writeMeta(sql, "head", seq)
 	writeMeta(sql, regionKey, rseq)
 	return seq
@@ -136,19 +140,21 @@ export const readAfter = (
 	limit: number,
 	region: string = DEFAULT_REGION,
 ): ReadonlyArray<StoredEvent> =>
-	sql
-		.exec<{ seq: number; body: string }>(
-			`SELECT seq, body FROM bot_gateway_events WHERE region = ? AND seq > ? ORDER BY seq LIMIT ?`,
-			region,
-			cursor,
-			limit,
-		)
-		.toArray()
-		.map((row) => ({ seq: Number(row.seq), body: String(row.body) }))
+	SQLite.execSync(
+		sql,
+		SQLite.from(eventsTable)
+			.select("seq", "body")
+			.where(($) => [$.region.eq(region), $.seq.gt(cursor)])
+			.orderBy(["seq", "asc"])
+			.limit(limit),
+	)
 
 /** Drop every event of `region` at or before `seq` (its session acknowledged them). */
 export const trimThrough = (sql: SqlStorageLike, seq: Seq, region: string = DEFAULT_REGION): void => {
-	sql.exec(`DELETE FROM bot_gateway_events WHERE region = ? AND seq <= ?`, region, seq)
+	SQLite.execSync(
+		sql,
+		SQLite.deleteFrom(eventsTable).where(($) => [$.region.eq(region), $.seq.lte(seq)]),
+	)
 }
 
 /**
@@ -157,29 +163,33 @@ export const trimThrough = (sql: SqlStorageLike, seq: Seq, region: string = DEFA
  * limit is per event, whatever its region.
  */
 export const enforceRetention = (sql: SqlStorageLike, now: number, policy: RetentionPolicy): void => {
-	const heads = sql
-		.exec<{ key: string; value: number }>(
-			`SELECT key, value FROM bot_gateway_meta WHERE key LIKE 'region_head:%'`,
-		)
-		.toArray()
+	const heads = SQLite.execSync(
+		sql,
+		SQLite.from(metaTable)
+			.select("key", "value")
+			.where(($) => [$.key.startsWith(REGION_HEAD_PREFIX)]),
+	)
 	for (const { key, value } of heads) {
 		// A region's events numbered at or below its head minus `maxEvents` are past its limit.
-		const floor = Number(value) - policy.maxEvents
+		const floor = value - policy.maxEvents
 		if (floor > 0) {
-			sql.exec(
-				`DELETE FROM bot_gateway_events WHERE region = ? AND rseq <= ?`,
-				String(key).slice(REGION_HEAD_PREFIX.length),
-				floor,
+			const region = key.slice(REGION_HEAD_PREFIX.length)
+			SQLite.execSync(
+				sql,
+				SQLite.deleteFrom(eventsTable).where(($) => [$.region.eq(region), $.rseq.lte(floor)]),
 			)
 		}
 	}
-	sql.exec(`DELETE FROM bot_gateway_events WHERE appended_at <= ?`, now - policy.maxAgeMs)
+	SQLite.execSync(
+		sql,
+		SQLite.deleteFrom(eventsTable).where(($) => [$.appendedAt.lte(now - policy.maxAgeMs)]),
+	)
 }
 
 export const oldestAppendedAt = (sql: SqlStorageLike): number | undefined => {
-	const row = sql
-		.exec<{ oldest: number | null }>(`SELECT MIN(appended_at) AS oldest FROM bot_gateway_events`)
-		.toArray()[0]
-	const oldest = row?.oldest
-	return oldest === null || oldest === undefined ? undefined : Number(oldest)
+	const oldest = SQLite.execSync(
+		sql,
+		SQLite.from(eventsTable).select(($) => ({ oldest: SQLite.min($.appendedAt) })),
+	)[0]?.oldest
+	return oldest ?? undefined
 }

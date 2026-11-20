@@ -3,6 +3,8 @@
  * runs synchronously, so inside an object each one is atomic. Tests back it with `node:sqlite`
  * (`./testing.ts`).
  */
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { execSync, syncMetaTable } from "./store.ts"
 
 export type SqlValue = string | number | null | ArrayBuffer | Uint8Array
 
@@ -26,17 +28,20 @@ export const installMeta = (sql: SqlStorageLike): void => {
 	sql.exec(META_TABLE)
 }
 
-export const readMeta = (sql: SqlStorageLike, key: string): string | undefined => {
-	const row = sql.exec<{ value: string }>(`SELECT value FROM _sync_meta WHERE key = ?`, key).toArray()[0]
-	return row === undefined ? undefined : String(row.value)
-}
+export const readMeta = (sql: SqlStorageLike, key: string): string | undefined =>
+	execSync(
+		sql,
+		SQLite.from(syncMetaTable)
+			.select("value")
+			.where(($) => [$.key.eq(key)]),
+	)[0]?.value
 
 export const writeMeta = (sql: SqlStorageLike, key: string, value: string): void => {
-	sql.exec(
-		`INSERT INTO _sync_meta (key, value) VALUES (?, ?)
-		ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
-		key,
-		value,
+	execSync(
+		sql,
+		SQLite.insertInto(syncMetaTable)
+			.values({ key, value })
+			.onConflictDoUpdate({ target: ["key"], set: SQLite.excluded(["value"]) }),
 	)
 }
 
