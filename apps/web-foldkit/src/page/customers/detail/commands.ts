@@ -290,8 +290,8 @@ export const FetchCustomerSuggestions = Command.define("FetchCustomerSuggestions
 	messages: [Message.SucceededFetchSuggestions, Message.FailedFetchSuggestions],
 	execute: ({ organizationId, accountId }) =>
 		fetchSuggestions(organizationId, { accountId }).pipe(
-			Effect.map((items) => Message.SucceededFetchSuggestions({ accountId, items })),
-			catchCommon(() => Message.FailedFetchSuggestions({ accountId })),
+			Effect.map((items) => Message.SucceededFetchSuggestions({ customer: accountId, items })),
+			catchCommon(() => Message.FailedFetchSuggestions({ customer: accountId })),
 		),
 })
 

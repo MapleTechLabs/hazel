@@ -94,3 +94,16 @@ describe("connect invitations: switching organization", () => {
 		expect(sharedChanged(prompting, other).model.suggestion).toEqual(SuggestionPrompt.init())
 	})
 })
+
+describe("connect invitations: accepted before membership loads", () => {
+	test("the joined channel is found and asked about once membership arrives", () => {
+		const loading = makeShared({ member: null })
+		const accepting = update(listed, Message.ClickedAccept({ inviteId }), loading).model
+		const done = update(accepting, accepted, loading)
+		expect((done.commands ?? []).map((command) => command.name)).not.toContain("FindJoinedChannel")
+		expect(done.model.pendingJoin).toEqual({ conversationId, transactionId: "org:1:2" })
+		const ready = sharedChanged(done.model, shared)
+		expect(ready.commands?.map((command) => command.name)).toContain("FindJoinedChannel")
+		expect(ready.model.pendingJoin).toBeNull()
+	})
+})

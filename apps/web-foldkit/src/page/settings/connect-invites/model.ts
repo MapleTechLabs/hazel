@@ -1,4 +1,4 @@
-import { ConnectInviteId, OrganizationId } from "@hazel/schema"
+import { ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
@@ -46,5 +46,9 @@ export const Model = Schema.Struct({
 	interaction: Interaction.Model,
 	/** After an accept: who the newly shared channel looks like (`customers.channel.suggestions`). */
 	suggestion: SuggestionPrompt.Model,
+	/** A share accepted before the membership row loaded: its channel is asked about once it has. */
+	pendingJoin: Schema.NullOr(
+		Schema.Struct({ conversationId: ConnectConversationId, transactionId: Schema.String }),
+	),
 })
 export type Model = typeof Model.Type

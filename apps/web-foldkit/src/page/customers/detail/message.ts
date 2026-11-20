@@ -146,8 +146,9 @@ export const Message = defineMessageUnion({
 	PressedUnlinkChannel: { channelId: ChannelId },
 	SucceededChannelAction: { action: ChannelAction },
 	FailedChannelAction: { action: ChannelAction, reason: ActionFailure },
-	SucceededFetchSuggestions: { accountId: CustomerAccountId, items: Schema.Array(SuggestionRow) },
-	FailedFetchSuggestions: { accountId: CustomerAccountId },
+	/** `customer`, not `accountId`: on an environment's page it is the group's primary. */
+	SucceededFetchSuggestions: { customer: CustomerAccountId, items: Schema.Array(SuggestionRow) },
+	FailedFetchSuggestions: { customer: CustomerAccountId },
 	PressedAcceptSuggestion: { suggestionId: CustomerChannelSuggestionId },
 	PressedDismissSuggestion: { suggestionId: CustomerChannelSuggestionId },
 	/** The shared accept / dismiss Commands' answers (`customers/suggestions.ts`). */

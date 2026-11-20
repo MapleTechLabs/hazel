@@ -151,6 +151,7 @@ const requestFor = (model: Model, shared: Shared): Return => {
 			// Another organization's invites are not this one's stale data, nor is its prompt.
 			invites: () => Invites.Loading(),
 			suggestion: () => SuggestionPrompt.init(),
+			pendingJoin: () => null,
 		}),
 		commands: [ListIncomingInvites({ organizationId, version })],
 	}
@@ -167,11 +168,22 @@ export const init = (_route: unknown, shared: Shared): Return =>
 			decliningIds: [],
 			interaction: Interaction.init(),
 			suggestion: SuggestionPrompt.init(),
+			pendingJoin: null,
 		},
 		shared,
 	)
 
-export const sharedChanged = requestFor
+export const sharedChanged = (model: Model, shared: Shared): Return => {
+	const listed = requestFor(model, shared)
+	const pending = listed.model.pendingJoin
+	const organizationId = shared.organization?.id
+	if (pending === null || organizationId === undefined || shared.member === null) return listed
+	// Membership arrived after an accept: find the joined channel and ask about it now.
+	return {
+		model: modifyFields(listed.model, { pendingJoin: () => null }),
+		commands: [...(listed.commands ?? []), FindJoinedChannel({ ...pending, organizationId })],
+	}
+}
 
 // UPDATE
 
@@ -245,7 +257,14 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const toast = PageOutMessage.RequestedToast({ toast: successToast("Channel connected") })
 			// A channel shared with this org may be a customer's: find it, then ask (members only).
 			if (organizationId === undefined || shared.member === null)
-				return { ...listed, outMessage: toast }
+				return {
+					...listed,
+					// Asked once the membership row arrives (`sharedChanged`).
+					model: modifyFields(listed.model, {
+						pendingJoin: () => ({ conversationId, transactionId }),
+					}),
+					outMessage: toast,
+				}
 			return {
 				model: listed.model,
 				commands: [

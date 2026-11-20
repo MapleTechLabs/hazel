@@ -969,16 +969,16 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			),
 		}),
 		// An answer for a customer the page no longer shows is dropped.
-		SucceededFetchSuggestions: ({ accountId, items }) => ({
+		SucceededFetchSuggestions: ({ customer, items }) => ({
 			model:
-				accountId === model.suggestionsFor
+				customer === model.suggestionsFor
 					? modifyFields(model, { suggestions: (list) => receivedSuggestions(list, items) })
 					: model,
 		}),
 		// Asked again on the next change of the shared state (a failed fetch is not "none").
-		FailedFetchSuggestions: ({ accountId }) => ({
+		FailedFetchSuggestions: ({ customer }) => ({
 			model:
-				accountId === model.suggestionsFor
+				customer === model.suggestionsFor
 					? modifyFields(model, { suggestionsFor: () => null })
 					: model,
 		}),

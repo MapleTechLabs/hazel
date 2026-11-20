@@ -37,13 +37,21 @@ const accounts = Message.UpdatedAccounts({ accounts: ACCOUNTS.map(toAccountRow) 
 const channels = Message.UpdatedChannelOptions({ channels: SUGGESTION_CHANNEL_OPTIONS })
 /** Acme's suggestions as the server answers them. */
 const answer = Message.SucceededFetchSuggestions({
-	accountId: acme.id,
+	customer: acme.id,
 	items: [STRONG_SUGGESTION, { ...CONTACT_SUGGESTION, accountId: acme.id, accountName: acme.name }],
 })
 const shownIds = (current: Model) =>
 	shownSuggestions(current.suggestions, current.channelOptions).map(({ suggestion }) => suggestion.id)
 
 describe("customer page: suggested channel links", () => {
+	test("an environment's page shows its primary's answer (not dropped as another account's)", () => {
+		const loaded = step(step(opened("acmeEu"), accounts).model, channels).model
+		const answered = step(loaded, answer).model
+		expect(shownIds(answered)).toContain(STRONG_SUGGESTION.id)
+		const failed = step(loaded, Message.FailedFetchSuggestions({ customer: acme.id })).model
+		expect(failed.suggestionsFor).toBeNull()
+	})
+
 	test("asked once the accounts say who the customer is: an environment asks for its primary", () => {
 		const before = opened("acmeEu")
 		expect(before.suggestionsFor).toBeNull()
@@ -60,7 +68,7 @@ describe("customer page: suggested channel links", () => {
 		const other = step(
 			loaded,
 			Message.SucceededFetchSuggestions({
-				accountId: ACCOUNTS_BY_KEY.kestrel.id,
+				customer: ACCOUNTS_BY_KEY.kestrel.id,
 				items: [CONTACT_SUGGESTION],
 			}),
 		).model
@@ -93,7 +101,7 @@ describe("customer page: suggested channel links", () => {
 			),
 			Command.resolve(
 				FetchCustomerSuggestions,
-				Message.SucceededFetchSuggestions({ accountId: acme.id, items: [] }),
+				Message.SucceededFetchSuggestions({ customer: acme.id, items: [] }),
 			),
 			model((current) => expect(shownIds(current)).toEqual([])),
 		)
