@@ -245,3 +245,27 @@ describe("member counts", () => {
 		expect(describeReason(domain, "Acme")).toBe("The external member has @acme.com, Acme's domain")
 	})
 })
+
+describe("edge cases from review", () => {
+	it("auto-links a Connect channel of exactly the cap when the count proves it is complete", () => {
+		const members = Array.from({ length: 200 }, (_, i) =>
+			member(i < 120 ? `p${i}@acme.com` : `q${i}@other.dev`),
+		)
+		const contacts = Array.from({ length: 120 }, (_, i) => ({ accountId: acme, email: `p${i}@acme.com` }))
+		const full = buildSuggestionIndex({ accounts, contacts, links: [] })
+		const complete = { origin: "connect" as const, externalMembers: members, externalMemberCount: 200 }
+		expect(scoreChannel(evidence(complete), full)[0]).toMatchObject({ accountId: acme, autoLink: true })
+		expect(scoreChannel(evidence({ ...complete, externalMemberCount: 250 }), full)[0]).toMatchObject({
+			autoLink: false,
+		})
+	})
+
+	it("never takes a free-mail domain written as www. or padded as a name token", () => {
+		const padded = buildSuggestionIndex({
+			accounts: [{ id: globex, name: "Globex", domains: [" www.Gmail.com "] }],
+			contacts: [],
+			links: [],
+		})
+		expect(scoreChannel(evidence({ channelName: "gmail-users" }), padded)).toEqual([])
+	})
+})

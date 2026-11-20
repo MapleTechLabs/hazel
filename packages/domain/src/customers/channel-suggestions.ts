@@ -285,13 +285,15 @@ const accountTokens = (account: SuggestionAccount): ReadonlyArray<string> => {
 	if (name.length >= 4) tokens.add(name)
 	for (const domain of account.domains) {
 		// "foo-bar.com" → "foobar", squashed like the names it is matched against.
-		const label = squash(
-			domain
-				.toLowerCase()
-				.replace(/^www\./, "")
-				.split(".")[0] ?? "",
-		)
-		if (label.length >= 4 && !FREE_MAIL_DOMAINS.has(domain.toLowerCase())) tokens.add(label)
+		// Normalized once, as `buildSuggestionIndex` does, for both the label and the free-mail test.
+		const normal = domain
+			.trim()
+			.toLowerCase()
+			.replace(/^www\./, "")
+		if (FREE_MAIL_DOMAINS.has(normal)) continue
+		// "foo-bar.com" → "foobar", squashed like the names it is matched against.
+		const label = squash(normal.split(".")[0] ?? "")
+		if (label.length >= 4) tokens.add(label)
 	}
 	return [...tokens]
 }
@@ -457,7 +459,12 @@ export const scoreChannel = (
 	// A sample of the members: the ones not seen could be another account's (or no one's contacts),
 	// so neither the share nor the rival check can be trusted.
 	const seen = evidence.externalMembers.length
-	if (seen >= MAX_EVIDENCE_MEMBERS || seen < (evidence.externalMemberCount ?? seen)) return ranked
+	// The count decides when it is sent; without one, a full list may have been cut at the cap.
+	const sampled =
+		evidence.externalMemberCount === undefined
+			? seen >= MAX_EVIDENCE_MEMBERS
+			: seen < evidence.externalMemberCount
+	if (sampled) return ranked
 	const byEmail = (suggestion: ScoredSuggestion) =>
 		suggestion.reasons.some((reason) => reason.kind === "contacts" || reason.kind === "domain")
 	const guests = [
