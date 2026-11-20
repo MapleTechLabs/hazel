@@ -6,7 +6,7 @@
 import type { ExternalChannelId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
-import { makeDiscordChatSyncWorld } from "../../testing-world"
+import { makeChatSyncWorld } from "../../testing-world"
 import { DiscordMessageType, makeDiscordSimulator } from "./simulator"
 
 const GUILD = "111111111111111111"
@@ -17,7 +17,11 @@ const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 
 /** A guild with #general linked to a Hazel channel, and two people in it. */
 const setup = Effect.gen(function* () {
-	const world = yield* makeDiscordChatSyncWorld({ guildId: GUILD, externalChannelId: CHANNEL })
+	const world = yield* makeChatSyncWorld({
+		provider: "discord",
+		workspaceId: GUILD,
+		externalChannelId: CHANNEL,
+	})
 	const discord = makeDiscordSimulator({ guildId: GUILD, ingest: world.inbound })
 	yield* discord.textChannel("general", CHANNEL)
 	const fiws = discord.user("fiws")

@@ -1,6 +1,7 @@
 /**
- * For tests: an org on the in-memory objects with an owner, a public channel, a Discord connection
- * and a link for the channel, plus a readable transcript of what Hazel ended up holding.
+ * For chat-sync tests: an org on the in-memory objects with an owner, a public channel and a
+ * provider connection (`makeChatSyncOrg`), linked to an external channel (`makeChatSyncWorld`),
+ * plus a readable transcript of what Hazel ended up holding.
  */
 import { CurrentUser } from "@hazel/domain"
 import type {
@@ -11,13 +12,14 @@ import type {
 	SyncConnectionId,
 	UserId,
 } from "@hazel/schema"
-import { Cause, Effect, Exit, Layer } from "effect"
+import { Cause, Effect, Exit, Layer, type Scope } from "effect"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
 import { channelTarget, orgTarget } from "../../worker/objects/kinds"
 import { encodeInvokePrincipal } from "../../worker/objects/principal"
 import { ObjectStubs } from "../../worker/objects/protocol"
 import { makeTestObjects, type TestObject, type TestObjects } from "../../worker/objects/testing"
 import { type ChatSyncInbound, routeChatSyncInbound } from "./chat-sync-inbound"
+import type { ChatSyncProviderId } from "./provider"
 
 const userOf = (id: string) =>
 	new CurrentUser.Schema({
@@ -29,6 +31,7 @@ const userOf = (id: string) =>
 		settings: null,
 	})
 
+/** An RPC on an object as `user`, its exit decoded. */
 export const callRpc = (
 	object: TestObject,
 	objectId: string,
@@ -47,39 +50,30 @@ export const callRpc = (
 		return yield* decodeExit(rpc, structuredClone(response).exit)
 	})
 
-const ok = <A>(exit: Exit.Exit<A, unknown>) =>
+/** The exit's value; a failure fails the test with its cause. */
+export const ok = <A>(exit: Exit.Exit<A, unknown>) =>
 	Exit.isSuccess(exit) ? Effect.succeed(exit.value) : Effect.die(Cause.pretty(exit.cause))
+
+export const runScoped = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
+	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
 
 export const rows = <T>(object: TestObject, sql: string, ...params: Array<string>) =>
 	object.storage.db.prepare(sql).all(...params) as Array<T>
 
-export interface ChatSyncWorld {
-	readonly objects: TestObjects
-	readonly org: TestObject
-	readonly channel: TestObject
-	readonly orgId: OrganizationId
-	readonly owner: UserId
-	readonly channelId: ChannelId
-	readonly syncConnectionId: SyncConnectionId
-	readonly channelLinkId: SyncChannelLinkId
-	/** Route an inbound event the way the provider's gateway or webhook does. */
-	readonly inbound: (event: ChatSyncInbound) => Effect.Effect<void>
-	/** Runs the org's and the linked channel's pending outbox deliveries. */
-	readonly settle: Effect.Effect<void>
+export interface ChatSyncOrgOptions {
+	readonly provider: ChatSyncProviderId
+	/** The workspace (Discord guild, Slack team) the connection is for. */
+	readonly workspaceId: string
 	/**
-	 * The linked channel as a reader sees it, one line per live message, oldest first:
-	 * `Author: content`, then `[reactions]`, with each thread's messages indented under its parent.
+	 * The workspace the provider app is installed in (the integration's external account), for a
+	 * provider that only connects to that one (Slack).
 	 */
-	readonly transcript: Effect.Effect<ReadonlyArray<string>>
+	readonly installedIn?: string
 }
 
-/** An org with an owner, a public channel, a Discord connection for `guildId` and a link to `externalChannelId`. */
-export const makeDiscordChatSyncWorld = (params: {
-	readonly guildId: string
-	readonly externalChannelId: ExternalChannelId
-}) =>
+/** An org with an owner, a public channel and a connection to the provider's workspace. */
+export const makeChatSyncOrg = (objects: TestObjects, options: ChatSyncOrgOptions) =>
 	Effect.gen(function* () {
-		const objects = yield* makeTestObjects
 		const orgId = crypto.randomUUID() as OrganizationId
 		const owner = crypto.randomUUID() as UserId
 		const org = yield* objects.get(orgTarget(orgId))
@@ -92,9 +86,9 @@ export const makeDiscordChatSyncWorld = (params: {
 			`INSERT INTO organization_members (organizationId, userId, role) VALUES (?, ?, 'owner')`,
 		).run(orgId, owner)
 		db.prepare(
-			`INSERT INTO integration_connections (provider, organizationId, level, status, connectedBy)
-			 VALUES ('discord', ?, 'organization', 'active', ?)`,
-		).run(orgId, owner)
+			`INSERT INTO integration_connections (provider, organizationId, level, status, connectedBy, externalAccountId)
+			 VALUES (?, ?, 'organization', 'active', ?, ?)`,
+		).run(options.provider, orgId, owner, options.installedIn ?? null)
 
 		const created = (yield* ok(
 			yield* callRpc(
@@ -114,36 +108,39 @@ export const makeDiscordChatSyncWorld = (params: {
 		)) as { data: { id: ChannelId } }
 		const channelId = created.data.id
 
-		const connection = (yield* ok(
-			yield* callRpc(
+		/** Connects the org to a workspace; the exit, since a refusal is what some tests want. */
+		const connectTo = (externalWorkspaceId: string) =>
+			callRpc(
 				org,
 				orgId,
 				"chatSync.connection.create",
 				{
 					organizationId: orgId,
-					provider: "discord",
-					externalWorkspaceId: params.guildId,
-					externalWorkspaceName: "Guild",
+					provider: options.provider,
+					externalWorkspaceId,
+					externalWorkspaceName: "Workspace",
 				},
 				owner,
-			),
-		)) as { data: { id: SyncConnectionId } }
-		const link = (yield* ok(
-			yield* callRpc(
-				org,
-				orgId,
-				"chatSync.channelLink.create",
-				{
-					organizationId: orgId,
-					syncConnectionId: connection.data.id,
-					hazelChannelId: channelId,
-					externalChannelId: params.externalChannelId,
-				},
-				owner,
-			),
-		)) as { data: { id: SyncChannelLinkId } }
+			)
+		const connection = (yield* ok(yield* connectTo(options.workspaceId))) as {
+			data: { id: SyncConnectionId }
+		}
+
+		/** Links the org's channel to `externalChannelId`; the exit. */
+		const linkChannel = (externalChannelId: ExternalChannelId, historyLimit?: number) => {
+			const payload = {
+				organizationId: orgId,
+				syncConnectionId: connection.data.id,
+				hazelChannelId: channelId,
+				externalChannelId,
+			}
+			// Left out, the link takes the default history.
+			const withLimit = historyLimit === undefined ? payload : { ...payload, historyLimit }
+			return callRpc(org, orgId, "chatSync.channelLink.create", withLimit, owner)
+		}
 
 		const stubs = Layer.succeed(ObjectStubs, objects.stubs)
+		/** Routes an inbound event the way the provider's gateway or webhook does. */
 		const inbound = (event: ChatSyncInbound) =>
 			routeChatSyncInbound(event).pipe(
 				Effect.provide(stubs),
@@ -180,8 +177,14 @@ export const makeDiscordChatSyncWorld = (params: {
 						`SELECT emoji FROM message_reactions WHERE messageId = ? ORDER BY createdAt, rowid`,
 						message.id,
 					).map((reaction) => reaction.emoji)
+					const files = rows<{ fileName: string }>(
+						object,
+						`SELECT fileName FROM attachments WHERE messageId = ? ORDER BY rowid`,
+						message.id,
+					).map((file) => file.fileName)
 					lines.push(
 						`${indent}${nameOf(message.authorId)}: ${message.content}` +
+							(files.length > 0 ? ` {${files.join(", ")}}` : "") +
 							(reactions.length > 0 ? ` [${reactions.join(" ")}]` : ""),
 					)
 					if (message.threadChannelId !== null) {
@@ -203,17 +206,42 @@ export const makeDiscordChatSyncWorld = (params: {
 		return {
 			objects,
 			org,
-			channel,
 			orgId,
 			owner,
+			channel,
 			channelId,
 			syncConnectionId: connection.data.id,
-			channelLinkId: link.data.id,
+			connectTo,
+			linkChannel,
 			inbound,
+			/** Runs the org's and the channel's pending outbox deliveries. */
 			settle: Effect.gen(function* () {
 				yield* org.alarm
 				yield* channel.alarm
 			}),
+			/**
+			 * The channel as a reader sees it, one line per live message, oldest first:
+			 * `Author: content {files} [reactions]`, each thread's messages indented under its parent.
+			 */
 			transcript: Effect.suspend(() => linesOf(channel, "")),
-		} satisfies ChatSyncWorld
+		}
 	})
+
+export type ChatSyncOrg = Effect.Success<ReturnType<typeof makeChatSyncOrg>>
+
+/** An org (on fresh objects unless given) with its channel linked to `externalChannelId`. */
+export const makeChatSyncWorld = (
+	options: ChatSyncOrgOptions & {
+		readonly externalChannelId: ExternalChannelId
+		readonly objects?: TestObjects
+	},
+) =>
+	Effect.gen(function* () {
+		const org = yield* makeChatSyncOrg(options.objects ?? (yield* makeTestObjects), options)
+		const link = (yield* ok(yield* org.linkChannel(options.externalChannelId))) as {
+			data: { id: SyncChannelLinkId }
+		}
+		return { ...org, channelLinkId: link.data.id }
+	})
+
+export type ChatSyncWorld = Effect.Success<ReturnType<typeof makeChatSyncWorld>>

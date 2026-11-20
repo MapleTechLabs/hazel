@@ -4,57 +4,25 @@
  * events (own posts dropped, a first reply makes a Hazel thread on its parent); Hazel replies in
  * a thread posted to `<channel>/<thread ts>`.
  */
-import { CurrentUser } from "@hazel/domain"
 import { CreateThreadRequest } from "@hazel/domain/rpc"
 import type { Slack } from "@hazel/integrations"
-import type { ChannelId, MessageId, OrganizationId, SyncConnectionId, UserId } from "@hazel/schema"
-import { Cause, Effect, Exit, Layer, Option, type Scope } from "effect"
+import type { ChannelId, ExternalChannelId, MessageId } from "@hazel/schema"
+import { Cause, Effect, Exit, Option } from "effect"
 import { describe, expect, it } from "vitest"
-import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../../../rpc/dispatch"
-import { channelTarget, orgTarget } from "../../../../worker/objects/kinds"
-import { encodeInvokePrincipal } from "../../../../worker/objects/principal"
-import { ObjectStubs } from "../../../../worker/objects/protocol"
-import { makeTestObjects, type TestObject, type TestObjects } from "../../../../worker/objects/testing"
-import { routeChatSyncInbound } from "../../chat-sync-inbound"
+import { channelTarget } from "../../../../worker/objects/kinds"
+import { makeTestObjects, type TestObjects } from "../../../../worker/objects/testing"
+import { callRpc, makeChatSyncOrg, ok, rows, runScoped } from "../../testing-world"
 import { type SlackUserLookup, slackHistoryInbound, slackInbound } from "./events"
 
 const TEAM = "T0HAZEL01"
-const SLACK_CHANNEL = "C0GENERAL1"
+const SLACK_CHANNEL = "C0GENERAL1" as ExternalChannelId
 const APP = "A0HAZELAPP"
 const BOT_USER = "U0HAZELBOT"
 
 const uuid = () => crypto.randomUUID()
 
-const userOf = (id: string) =>
-	new CurrentUser.Schema({
-		id: id as UserId,
-		role: "member",
-		email: `${id}@example.com`,
-		isOnboarded: true,
-		timezone: null,
-		settings: null,
-	})
-
-const call = (object: TestObject, objectId: string, tag: HazelRpcTag, payload: unknown, user: string) =>
-	Effect.gen(function* () {
-		const rpc = yield* rpcFor(tag)
-		const response = yield* object.invoke({
-			objectId,
-			tag,
-			payload: yield* encodePayload(rpc, payload),
-			principal: yield* encodeInvokePrincipal({ user: userOf(user), botScopes: null }),
-		})
-		return yield* decodeExit(rpc, structuredClone(response).exit)
-	})
-
-const ok = <A>(exit: Exit.Exit<A, unknown>) =>
-	Exit.isSuccess(exit) ? Effect.succeed(exit.value) : Effect.die(Cause.pretty(exit.cause))
-
-const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
-	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
-
-const rows = <T>(object: TestObject, sql: string, ...params: Array<string>) =>
-	object.storage.db.prepare(sql).all(...params) as Array<T>
+const call = callRpc
+const run = runScoped
 
 /** `U0GUEST…` users are Slack Connect guests from another company's team, with an email. */
 const lookupUser: SlackUserLookup = (userId) =>
@@ -100,80 +68,23 @@ const slackMessage = (
 	...extra,
 })
 
-/** An org installed in `team`, a channel, and a Slack connection with a link for it. */
+/** An org installed in `team`, a channel, and a Slack connection; `linkChannel` links it to `SLACK_CHANNEL`. */
 const makeOrg = (objects: TestObjects, team = TEAM) =>
 	Effect.gen(function* () {
-		const orgId = uuid() as OrganizationId
-		const owner = uuid() as UserId
-		const org = yield* objects.get(orgTarget(orgId))
-		const db = org.storage.db
-		db.prepare(`INSERT INTO organizations (id, name, slug) VALUES (?, 'Acme', 'acme')`).run(orgId)
-		db.prepare(
-			`INSERT INTO users (id, externalId, email, firstName, lastName) VALUES (?, ?, ?, 'Olive', 'Owner')`,
-		).run(owner, `ext-${owner}`, `${owner}@example.com`)
-		db.prepare(
-			`INSERT INTO organization_members (organizationId, userId, role) VALUES (?, ?, 'owner')`,
-		).run(orgId, owner)
-		db.prepare(
-			`INSERT INTO integration_connections (provider, organizationId, level, status, connectedBy, externalAccountId)
-		 VALUES ('slack', ?, 'organization', 'active', ?, ?)`,
-		).run(orgId, owner, team)
-
-		const created = (yield* ok(
-			yield* call(
-				org,
-				orgId,
-				"channel.create",
-				{
-					name: "general",
-					icon: null,
-					type: "public",
-					organizationId: orgId,
-					parentChannelId: null,
-					sectionId: null,
-				},
-				owner,
-			),
-		)) as { data: { id: ChannelId } }
-		const connectTo = (externalWorkspaceId: string) =>
-			call(
-				org,
-				orgId,
-				"chatSync.connection.create",
-				{
-					organizationId: orgId,
-					provider: "slack",
-					externalWorkspaceId,
-					externalWorkspaceName: "Acme",
-				},
-				owner,
-			)
-		const connection = (yield* ok(yield* connectTo(team))) as { data: { id: SyncConnectionId } }
-		const linkChannel = (historyLimit?: number) => {
-			const payload = {
-				organizationId: orgId,
-				syncConnectionId: connection.data.id,
-				hazelChannelId: created.data.id,
-				externalChannelId: SLACK_CHANNEL,
-			}
-			const withLimit = historyLimit === undefined ? payload : { ...payload, historyLimit }
-			return call(org, orgId, "chatSync.channelLink.create", withLimit, owner)
-		}
-		const stubs = Layer.succeed(ObjectStubs, objects.stubs)
+		const org = yield* makeChatSyncOrg(objects, {
+			provider: "slack",
+			workspaceId: team,
+			installedIn: team,
+		})
+		/** A Slack event, read as the webhook reads it, delivered from `fromTeam`. */
 		const inbound = (eventId: string, event: Slack.SlackEvent, fromTeam = team) =>
 			Effect.gen(function* () {
 				const found = yield* slackInbound(envelope(eventId, fromTeam), event, lookupUser)
-				if (Option.isSome(found)) yield* routeChatSyncInbound(found.value)
-			}).pipe(Effect.provide(stubs), Effect.provideContext(objects.directory), Effect.orDie)
+				if (Option.isSome(found)) yield* org.inbound(found.value)
+			})
 		return {
-			objects,
-			org,
-			orgId,
-			owner,
-			channelId: created.data.id,
-			channel: yield* objects.get(channelTarget(created.data.id)),
-			connectTo,
-			linkChannel,
+			...org,
+			linkChannel: (historyLimit?: number) => org.linkChannel(SLACK_CHANNEL, historyLimit),
 			inbound,
 		}
 	})
