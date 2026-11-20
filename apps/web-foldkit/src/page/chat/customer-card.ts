@@ -191,6 +191,26 @@ export const update = (model: Model, message: Message): UpdateReturn =>
 		CompletedFocusCard: () => ({ model }),
 	})
 
+/**
+ * Closes the card and the sheet (the channel was unlinked or left), keeping `token` counting up:
+ * a timer queued before the reset never matches a hover after it.
+ */
+export const reset = (model: Model): Model =>
+	modifyFields(closed(model), { sheet: (sheet) => Modal.close(sheet).model })
+
+/**
+ * The layout changed: the surface the other layout opened is closed, so what holds the keyboard
+ * (`isPinnedOf`) is always what is on screen.
+ */
+export const reconcile = (model: Model, isMobile: boolean): Model =>
+	isMobile
+		? model.phase === "closed"
+			? model
+			: closed(model)
+		: model.sheet.isOpen
+			? modifyFields(model, { sheet: (sheet) => Modal.close(sheet).model })
+			: model
+
 const withSheet = (model: Model, result: ReturnType<typeof Modal.update>): UpdateReturn => ({
 	model: modifyFields(model, { sheet: () => result.model }),
 	commands: Command.mapMessages(result.commands ?? [], (inner: Modal.Message) =>

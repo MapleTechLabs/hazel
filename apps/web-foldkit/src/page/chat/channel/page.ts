@@ -149,6 +149,8 @@ export const switchChannel = (
 	// The theme, users, presence and bots streams are not keyed by channel, so they keep running
 	// across the switch without emitting again: the new page keeps what they last sent.
 	return modifyFields(next, {
+		// Closed for the new channel; its timers keep counting, so the old channel's never match.
+		customerCard: () => CustomerCard.reset(model.customerCard),
 		htmlRender: (htmlRender) => modifyFields(htmlRender, { theme: () => model.htmlRender.theme }),
 		lookups: (lookups) =>
 			modifyFields(lookups, {
@@ -549,7 +551,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 					: modifyFields(model, {
 							customer: () => customer,
 							// Unlinked: nothing left to show.
-							customerCard: (card) => (customer === null ? CustomerCard.init() : card),
+							customerCard: (card) => (customer === null ? CustomerCard.reset(card) : card),
 						}),
 		}),
 		GotCustomerCardMessage: ({ message }) => {

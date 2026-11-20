@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { hasGlance, init, Message, type Model, update } from "./customer-card"
+import { hasGlance, init, Message, type Model, reconcile, reset, update } from "./customer-card"
 
 const step = (model: Model, ...messages: ReadonlyArray<Message>) =>
 	messages.reduce((current, message) => update(current, message).model, model)
@@ -57,5 +57,20 @@ describe("customer card", () => {
 		expect(hasGlance(row as never)).toBe(false)
 		// SAFETY: as above.
 		expect(hasGlance(synced as never)).toBe(true)
+	})
+
+	it("never lets a timer from before a reset open the card after it", () => {
+		const waiting = step(init(), Message.HoveredChip())
+		const relinked = step(reset(waiting), Message.HoveredChip())
+		expect(step(relinked, Message.ElapsedOpenDelay({ token: waiting.token })).phase).toBe("waiting")
+	})
+
+	it("closes the other layout's surface when the layout changes", () => {
+		const pinned = step(init(), Message.PressedChip({ isMobile: false }))
+		expect(reconcile(pinned, true).phase).toBe("closed")
+		expect(reconcile(pinned, false)).toBe(pinned)
+		const sheet = step(init(), Message.PressedChip({ isMobile: true }))
+		expect(reconcile(sheet, false).sheet.isOpen).toBe(false)
+		expect(reconcile(sheet, true)).toBe(sheet)
 	})
 })
