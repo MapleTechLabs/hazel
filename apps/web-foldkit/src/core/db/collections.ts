@@ -193,6 +193,10 @@ export const customerSignalRuleCollection = customersCollection(
 	"customer_signal_rules",
 	Customers.SignalRule.Schema,
 )
+export const customerSlaPolicyCollection = customersCollection(
+	"customer_sla_policies",
+	Customers.SlaPolicy.Schema,
+)
 export const customerNoteCollection = customersCollection("customer_notes", Customers.Note.Schema)
 export const customerSavedViewCollection = customersCollection(
 	"customer_saved_views",
