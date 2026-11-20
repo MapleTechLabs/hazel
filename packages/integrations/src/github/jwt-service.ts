@@ -1,4 +1,4 @@
-import { createPrivateKey } from "node:crypto"
+import { createPrivateKey, type KeyObject } from "node:crypto"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { Context, Config, Effect, Layer, Option, Redacted, Schema } from "effect"
 
@@ -107,23 +107,33 @@ const base64Url = (input: string | Uint8Array): string => {
 	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 
+/** What `signingKeyOf` reads from a private KeyObject: Node's and workerd's both have it. */
+export interface PrivateKeySource {
+	readonly toCryptoKey?: KeyObject["toCryptoKey"]
+	readonly export: (options: { format: "jwk" }) => JsonWebKey
+}
+
 /**
- * The PEM as a WebCrypto signing key. Node's `createPrivateKey` reads both PKCS#1 ("RSA PRIVATE KEY",
- * what GitHub generates) and PKCS#8; the KeyObject then converts directly where the runtime can, or
- * through a JWK (workerd), the same two paths jose took.
+ * A private KeyObject as a WebCrypto signing key: directly where the runtime can, else through a JWK.
+ * workerd defines `toCryptoKey` but throws ERR_METHOD_NOT_IMPLEMENTED, so that error takes the JWK path.
  */
-const importSigningKey = async (privateKeyPem: string): Promise<CryptoKey> => {
-	const keyObject = createPrivateKey(privateKeyPem)
+export const signingKeyOf = async (keyObject: PrivateKeySource): Promise<CryptoKey> => {
 	if (typeof keyObject.toCryptoKey === "function") {
 		try {
 			return (await keyObject.toCryptoKey(RS256, false, ["sign"])) as CryptoKey
 		} catch (error) {
-			// workerd defines `toCryptoKey` but throws ERR_METHOD_NOT_IMPLEMENTED: take the JWK path.
 			if ((error as { code?: unknown } | null)?.code !== "ERR_METHOD_NOT_IMPLEMENTED") throw error
 		}
 	}
 	return crypto.subtle.importKey("jwk", keyObject.export({ format: "jwk" }), RS256, false, ["sign"])
 }
+
+/**
+ * The PEM as a WebCrypto signing key. Node's `createPrivateKey` reads both PKCS#1 ("RSA PRIVATE KEY",
+ * what GitHub generates) and PKCS#8.
+ */
+const importSigningKey = (privateKeyPem: string): Promise<CryptoKey> =>
+	signingKeyOf(createPrivateKey(privateKeyPem))
 
 /**
  * Generate a JWT for authenticating as the GitHub App.

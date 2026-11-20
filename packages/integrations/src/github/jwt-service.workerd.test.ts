@@ -1,42 +1,45 @@
 import { describe, expect, it } from "@effect/vitest"
-import * as nodeCrypto from "node:crypto"
-import { Effect } from "effect"
-import { vi } from "vitest"
-import { generateAppJWT } from "./jwt-service"
+import { createPrivateKey, generateKeyPairSync, verify } from "node:crypto"
+import { signingKeyOf, type PrivateKeySource } from "./jwt-service"
 
-// workerd's KeyObject has a `toCryptoKey` that throws ERR_METHOD_NOT_IMPLEMENTED.
-vi.mock("node:crypto", async (importOriginal) => {
-	const actual = await importOriginal<typeof nodeCrypto>()
-	return {
-		...actual,
-		createPrivateKey: (key: string) => {
-			const keyObject = actual.createPrivateKey(key)
-			Object.defineProperty(keyObject, "toCryptoKey", {
-				value: () => {
-					throw Object.assign(new Error("The toCryptoKey method is not implemented"), {
-						code: "ERR_METHOD_NOT_IMPLEMENTED",
-					})
-				},
-			})
-			return keyObject
-		},
+const RS256 = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" } as const
+
+const notImplemented = () => {
+	throw Object.assign(new Error("The toCryptoKey method is not implemented"), {
+		code: "ERR_METHOD_NOT_IMPLEMENTED",
+	})
+}
+
+describe("signingKeyOf", () => {
+	const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 })
+	const pem = privateKey.export({ type: "pkcs1", format: "pem" }).toString()
+	const signsVerifiably = async (key: CryptoKey) => {
+		const data = new TextEncoder().encode("header.payload")
+		const signature = new Uint8Array(await crypto.subtle.sign(RS256.name, key, data))
+		return verify("RSA-SHA256", data, publicKey, signature)
 	}
-})
 
-describe("generateAppJWT on workerd", () => {
-	it.effect("signs through the JWK when toCryptoKey is not implemented", () =>
-		Effect.gen(function* () {
-			const { privateKey, publicKey } = nodeCrypto.generateKeyPairSync("rsa", { modulusLength: 2048 })
-			const pem = privateKey.export({ type: "pkcs1", format: "pem" }).toString()
-			const [header, payload, signature] = (yield* generateAppJWT("7", pem)).split(".")
-			expect(
-				nodeCrypto.verify(
-					"RSA-SHA256",
-					Buffer.from(`${header}.${payload}`),
-					publicKey,
-					Buffer.from(signature ?? "", "base64url"),
-				),
-			).toBe(true)
-		}),
-	)
+	it("converts a Node KeyObject directly", async () => {
+		expect(await signsVerifiably(await signingKeyOf(createPrivateKey(pem)))).toBe(true)
+	})
+
+	it("takes the JWK path when toCryptoKey is not implemented (workerd)", async () => {
+		const keyObject = createPrivateKey(pem)
+		const workerdKey: PrivateKeySource = {
+			toCryptoKey: notImplemented,
+			export: (options) => keyObject.export(options),
+		}
+		expect(await signsVerifiably(await signingKeyOf(workerdKey))).toBe(true)
+	})
+
+	it("rethrows any other conversion failure", async () => {
+		const keyObject = createPrivateKey(pem)
+		const broken: PrivateKeySource = {
+			toCryptoKey: () => {
+				throw new TypeError("bad algorithm")
+			},
+			export: (options) => keyObject.export(options),
+		}
+		await expect(signingKeyOf(broken)).rejects.toThrow("bad algorithm")
+	})
 })
