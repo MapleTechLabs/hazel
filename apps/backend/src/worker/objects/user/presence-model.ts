@@ -119,3 +119,15 @@ export const aggregate = (
 		activeChannelId: activeChannelOf(liveSessions),
 	}
 }
+
+// THE USER'S OWN VIEW
+// What only the user's object may act on: an invisible user still reads channels and still sits
+// at a computer, which others must not see but notifications and push must respect.
+
+/** Is the user reading `channelId`: a session in use shows it in a focused window. */
+export const isReading = (liveSessions: ReadonlyArray<Session>, channelId: ChannelId) =>
+	liveSessions.some((session) => !session.idle && session.focusedChannelId === channelId)
+
+/** Is the user in active use of some client (not AFK there): pushes wait for them to read it. */
+export const isActiveAnywhere = (liveSessions: ReadonlyArray<Session>) =>
+	liveSessions.some((session) => !session.afk)

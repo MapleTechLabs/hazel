@@ -15,7 +15,7 @@ import { type FakeSocket, makeFakeSocket } from "@hazel/sync-do/testing"
 import { Cause, Effect, Exit, type Scope } from "effect"
 import { vi } from "vitest"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../../rpc/dispatch"
-import { orgTarget, userTarget } from "../kinds"
+import { channelTarget, orgTarget, userTarget } from "../kinds"
 import { encodeInvokePrincipal } from "../principal"
 import { makeTestObjects, type TestObject, type TestObjects } from "../testing"
 import type { ClientType, PreferredStatus } from "./presence-model"
@@ -102,6 +102,13 @@ export interface SimDevice {
 
 export interface SimUser {
 	readonly id: UserId
+	readonly name: string
+	/** Registers an iPhone for push (`pushDevice.register`). */
+	readonly registerPhone: () => Effect.Effect<void>
+	/** The notifications in the user's object, oldest first. */
+	readonly notifications: () => Effect.Effect<Array<{ readonly silent: boolean }>>
+	/** The bodies pushed to the user's phone, in order. */
+	readonly pushes: () => Array<string>
 	readonly object: () => Effect.Effect<TestObject>
 	readonly device: (type: ClientType) => SimDevice
 	/** Picks a status on every device, for `forMs` or until changed. */
@@ -144,12 +151,17 @@ export const makePresenceSim = Effect.gen(function* () {
 	const objects: TestObjects = yield* makeTestObjects
 	const orgIds = [crypto.randomUUID(), crypto.randomUUID()] as Array<OrganizationId>
 	const devices: Array<DeviceState> = []
+	const channels: Array<ChannelId> = []
 	const users: Array<SimUser> = []
 	const now = () => Date.now()
 
 	/** Every object a user's presence touches: their own, and the orgs that copy it. */
 	const touched = (): Effect.Effect<Array<TestObject>> =>
-		Effect.all([...users.map((user) => user.object()), ...orgIds.map((id) => objects.get(orgTarget(id)))])
+		Effect.all([
+			...users.map((user) => user.object()),
+			...orgIds.map((id) => objects.get(orgTarget(id))),
+			...channels.map((id) => objects.get(channelTarget(id))),
+		])
 
 	/** Wait for every delivery started after answering (the projections to the orgs). */
 	const settle = Effect.gen(function* () {
@@ -178,11 +190,7 @@ export const makePresenceSim = Effect.gen(function* () {
 				return at !== null && at <= now()
 			})
 			if (due.length === 0) return
-			for (const object of due) {
-				// Outbox retries are due with it.
-				object.storage.db.exec(`UPDATE _outbox SET next_at = 0 WHERE status = 'pending'`)
-				yield* object.alarm
-			}
+			for (const object of due) yield* object.alarm
 			yield* settle
 		}
 	})
@@ -306,7 +314,7 @@ export const makePresenceSim = Effect.gen(function* () {
 		}
 	}
 
-	const user = (_name: string) =>
+	const user = (name: string) =>
 		Effect.gen(function* () {
 			const id = crypto.randomUUID() as UserId
 			const object = yield* objects.get(userTarget(id))
@@ -320,8 +328,31 @@ export const makePresenceSim = Effect.gen(function* () {
 				})
 				if (joined._tag !== "Applied") throw new Error(`join refused: ${joined._tag}`)
 			}
+			// A 64-hex APNs token unique to the user.
+			const token = id.replaceAll("-", "").padEnd(64, "0")
 			const simUser: SimUser = {
 				id,
+				name,
+				registerPhone: () =>
+					call(id, "pushDevice.register", {
+						token,
+						environment: "production",
+						bundleId: "app.hazel.ios",
+					}),
+				notifications: () =>
+					Effect.map(objects.get(userTarget(id)), (own) =>
+						(
+							own.storage.db
+								.prepare(`SELECT silent FROM notifications ORDER BY rowid`)
+								.all() as Array<{
+								silent: number
+							}>
+						).map((row) => ({ silent: row.silent === 1 })),
+					),
+				pushes: () =>
+					objects.pushes
+						.filter((push) => push.token === token)
+						.map((push) => push.payload.aps.alert.body),
 				object: () => objects.get(userTarget(id)),
 				device: (type) => makeDevice(id, type),
 				pick: (status, forMs) =>
@@ -389,7 +420,111 @@ export const makePresenceSim = Effect.gen(function* () {
 	/** Seconds since the simulation started. */
 	const elapsed = () => (now() - SIM_START) / SECOND
 
-	return { user, advance, evict, elapsed, objects, orgIds }
+	/**
+	 * A channel in org 0 with `members` (each also an org member), as a teammate's message reaches
+	 * them: `post` sends a message through the real channel and org objects, which notify each
+	 * member's `UserObject` and push to their phones.
+	 */
+	const channel = (name: string, members: ReadonlyArray<SimUser>) =>
+		Effect.gen(function* () {
+			const organizationId = orgIdAt(0)
+			const org = yield* objects.get(orgTarget(organizationId))
+			const db = org.storage.db
+			db.prepare(`INSERT OR IGNORE INTO organizations (id, name, slug) VALUES (?, 'Acme', 'acme')`).run(
+				organizationId,
+			)
+			for (const member of members) {
+				const known = db.prepare(`SELECT 1 FROM users WHERE id = ?`).get(member.id)
+				if (known !== undefined) continue
+				db.prepare(
+					`INSERT INTO organization_members (id, organizationId, userId, role) VALUES (?, ?, ?, 'member')`,
+				).run(crypto.randomUUID(), organizationId, member.id)
+				db.prepare(
+					`INSERT INTO users (id, externalId, email, firstName, lastName) VALUES (?, ?, ?, ?, 'Sim')`,
+				).run(member.id, `ext-${member.id}`, `${member.id}@example.com`, member.name)
+			}
+			const id = crypto.randomUUID() as ChannelId
+			db.prepare(
+				`INSERT INTO channels (id, name, type, organizationId) VALUES (?, ?, 'public', ?)`,
+			).run(id, name, organizationId)
+			for (const member of members) {
+				db.prepare(`INSERT INTO channel_members (channelId, userId) VALUES (?, ?)`).run(id, member.id)
+			}
+			const host = yield* objects.get(channelTarget(id))
+			const applied = yield* host.applyEffect({
+				objectId: id,
+				kind: "channel.setViewers",
+				payload: {
+					organizationId,
+					conversationId: null,
+					viewers: members.map((member) => ({ userId: member.id, organizationId, role: "member" })),
+					bots: [],
+				},
+				key: `viewers:${id}`,
+				sender: { kind: "org", id: organizationId },
+			})
+			if (applied._tag !== "Applied") throw new Error(`viewers refused: ${applied._tag}`)
+			channels.push(id)
+			return {
+				id,
+				/** `author` posts `text`, mentioning `mention` when given. */
+				post: (author: SimUser, text: string, options: { readonly mention?: SimUser } = {}) =>
+					step(
+						Effect.gen(function* () {
+							const content =
+								options.mention === undefined
+									? text
+									: `@[userId:${options.mention.id}] ${text}`
+							const rpc = yield* rpcFor("message.create")
+							const response = yield* host.invoke({
+								objectId: id,
+								tag: "message.create",
+								payload: yield* encodePayload(rpc, {
+									channelId: id,
+									content,
+									embeds: null,
+									replyToMessageId: null,
+									threadChannelId: null,
+									authorId: author.id,
+									deletedAt: null,
+								}),
+								principal: yield* encodeInvokePrincipal({
+									user: userOf(author.id),
+									botScopes: null,
+								}),
+							})
+							const exit = yield* decodeExit(rpc, structuredClone(response).exit)
+							if (Exit.isFailure(exit)) throw new Error(Cause.pretty(exit.cause))
+						}),
+					),
+				/** `member` reads the channel on some client: its notifications there go. */
+				read: (member: SimUser) =>
+					step(
+						Effect.gen(function* () {
+							const own = yield* member.object()
+							const cleared = yield* own.applyEffect({
+								objectId: member.id,
+								kind: "user.clearChannelNotifications",
+								payload: { channelId: id },
+								key: crypto.randomUUID(),
+								sender: { kind: "org", id: organizationId },
+							})
+							if (cleared._tag !== "Applied") throw new Error(`read refused: ${cleared._tag}`)
+						}),
+					),
+				/** The channel's unread badge for `member` (the org's `notificationCount`). */
+				unread: (member: SimUser) =>
+					(
+						db
+							.prepare(
+								`SELECT notificationCount FROM channel_members WHERE channelId = ? AND userId = ?`,
+							)
+							.get(id, member.id) as { notificationCount: number }
+					).notificationCount,
+			}
+		})
+
+	return { user, channel, advance, evict, elapsed, objects, orgIds }
 }) satisfies Effect.Effect<unknown, never, Scope.Scope>
 
 export type PresenceSim = Effect.Success<typeof makePresenceSim>
