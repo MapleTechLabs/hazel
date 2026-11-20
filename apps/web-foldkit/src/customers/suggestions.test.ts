@@ -55,7 +55,7 @@ describe("suggested channel links: reasons", () => {
 	test("each reason is the domain's sentence, strongest first", () => {
 		expect(reasonLines(STRONG_SUGGESTION)).toEqual([
 			"3 of 4 external members have @acmerobotics.io, Acme Robotics's domain",
-			'The Acme Robotics workspace name contains "acme"',
+			'The Acme Robotics name contains "acme"',
 		])
 	})
 

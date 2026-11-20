@@ -124,7 +124,7 @@ describe("channel settings overview: suggested customer", () => {
 		)
 	})
 
-	test("a failed request shows nothing", () => {
+	test("a failed request shows nothing, and the next change asks again", () => {
 		story(
 			member,
 			given(loaded),
@@ -133,7 +133,11 @@ describe("channel settings overview: suggested customer", () => {
 				SuggestionPrompt.FetchChannelSuggestion,
 				SuggestionPrompt.Message.FailedFetch({ channelId }),
 			),
-			model((current) => expect(prompt(current)).toBeNull()),
+			model((current) => {
+				expect(prompt(current)).toBeNull()
+				const retried = sharedChanged(current, shared)
+				expect(retried.commands?.map((command) => command.name)).toContain("FetchChannelSuggestion")
+			}),
 		)
 	})
 })

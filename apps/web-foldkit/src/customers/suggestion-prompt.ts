@@ -126,8 +126,9 @@ export const update = (model: Model, message: Message, organizationId: Organizat
 		// An answer for a channel the prompt no longer asks about is dropped.
 		SucceededFetch: ({ channelId, items }) =>
 			channelId !== model.channelId ? done(model) : done({ ...model, items, status: "Ready" }),
-		FailedFetch: ({ channelId }) =>
-			channelId !== model.channelId ? done(model) : done({ ...model, items: [], status: "Ready" }),
+		// A failed fetch is not "no suggestion": forget the channel, so its page asks again on its
+		// next change (the prompt shows nothing meanwhile).
+		FailedFetch: ({ channelId }) => (channelId !== model.channelId ? done(model) : done(init())),
 		PressedLink: () => {
 			const suggestion = shownSuggestion(model)
 			if (suggestion === null || organizationId === null || model.status !== "Ready") return done(model)
