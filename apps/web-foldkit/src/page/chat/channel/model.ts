@@ -126,6 +126,8 @@ export const Model = Schema.Struct({
 	/** Newest first, as the query returns them. */
 	messages: Schema.Array(ChatMessage),
 	reactions: Schema.Array(ChatReaction),
+	/** The reactions query has answered once: later changes animate their pills. */
+	hasLoadedReactions: Schema.Boolean,
 	lookups: Lookups,
 	members: Schema.NullOr(Schema.Array(ChannelMemberInfo)),
 	/** `PinnedMessagesModal`'s pins, oldest pin first. */

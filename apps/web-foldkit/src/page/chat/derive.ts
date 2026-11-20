@@ -33,6 +33,7 @@ import {
 	type AuthorIdentity,
 	type ChatMessage,
 	type ChatReaction,
+	type ReactionMotion,
 	type DisplayRow,
 	type GroupPosition,
 	type HtmlRenderRow,
@@ -188,7 +189,51 @@ const aggregateReactions = (
 		imageUrl: emoji.startsWith("custom:")
 			? (context.emojiUrls.get(emoji.slice("custom:".length)) ?? null)
 			: null,
+		motion: "none" as const,
 	}))
+}
+
+/** More reactions than this changing at once are a sync catching up, not someone reacting. */
+const MAX_LIVE_REACTION_CHANGES = 3
+
+/** The reactions changed live (a few added or removed), so their pills animate the change. */
+export const isLiveReactionChange = (
+	previous: ReadonlyArray<ChatReaction>,
+	next: ReadonlyArray<ChatReaction>,
+): boolean => {
+	const previousIds = new Set(previous.map((reaction) => reaction.id))
+	const nextIds = new Set(next.map((reaction) => reaction.id))
+	let changes = 0
+	for (const id of nextIds) if (!previousIds.has(id) && ++changes > MAX_LIVE_REACTION_CHANGES) return false
+	for (const id of previousIds) if (!nextIds.has(id) && ++changes > MAX_LIVE_REACTION_CHANGES) return false
+	return true
+}
+
+/**
+ * Each pill's `motion` against the row's previous pills: a live change sets it, anything else keeps
+ * the previous one, and a row seen for the first time animates nothing.
+ */
+const withReactionMotion = (
+	old: DisplayRow | undefined,
+	reactions: ReadonlyArray<AggregatedReaction>,
+	isLive: boolean,
+): ReadonlyArray<AggregatedReaction> => {
+	if (old === undefined || old._tag !== "MessageRow" || reactions.length === 0) return reactions
+	const before = new Map(old.reactions.map((reaction) => [reaction.emoji, reaction]))
+	return reactions.map((reaction) => {
+		const previous = before.get(reaction.emoji)
+		const motion: ReactionMotion =
+			previous === undefined
+				? isLive
+					? "enter"
+					: "none"
+				: !isLive || reaction.count === previous.count
+					? previous.motion
+					: reaction.count > previous.count
+						? "up"
+						: "down"
+		return motion === reaction.motion ? reaction : { ...reaction, motion }
+	})
 }
 
 const statusOf = (context: DeriveContext, userId: string): StatusEmoji | null => {
@@ -446,6 +491,8 @@ export const toDisplayRows = (
 	reactions: ReadonlyArray<ChatReaction>,
 	context: DeriveContext,
 	previousRows: ReadonlyArray<DisplayRow>,
+	/** The reactions just changed live (`isLiveReactionChange`): their pills animate. */
+	isLiveReactions = false,
 ): ReadonlyArray<DisplayRow> => {
 	const previousByKey = new Map(previousRows.map((row) => [row.key, row]))
 	const entering = enteringIdsOf(messagesNewestFirst, previousRows, previousByKey)
@@ -488,7 +535,13 @@ export const toDisplayRows = (
 			reactionsByMessage.get(message.id) ?? NO_REACTIONS,
 			context,
 		)
-		rows.push(sharedRow(old, { ...data, isEntering: isEnteringRow(old, message.id, entering) }))
+		rows.push(
+			sharedRow(old, {
+				...data,
+				reactions: withReactionMotion(old, data.reactions, isLiveReactions),
+				isEntering: isEnteringRow(old, message.id, entering),
+			}),
+		)
 	}
 	return rows
 }
@@ -526,25 +579,30 @@ const threadGroupPositionAt = (
 }
 
 /**
- * The thread panel's rows (oldest first, no reactions or nested threads), sharing every unchanged
- * row with `previousRows`; the same array comes back when no row changed.
+ * The thread panel's rows (oldest first, no nested threads), sharing every unchanged row with
+ * `previousRows`; the same array comes back when no row changed.
  */
 export const toThreadRows = (
 	messagesOldestFirst: ReadonlyArray<ChatMessage>,
+	reactions: ReadonlyArray<ChatReaction>,
 	context: DeriveContext,
 	previousRows: ReadonlyArray<MessageRow>,
+	isLiveReactions = false,
 ): ReadonlyArray<MessageRow> => {
 	const previousByKey = new Map<string, DisplayRow>(previousRows.map((row) => [row.key, row]))
 	const entering = enteringIdsOf(messagesOldestFirst, previousRows, previousByKey)
+	const reactionsByMessage = groupBy(reactions, (reaction) => reaction.messageId)
 	const rows = messagesOldestFirst.map((message, index) => {
 		const old = previousByKey.get(message.id)
+		const data = messageRowData(
+			message,
+			threadGroupPositionAt(messagesOldestFirst, index, context),
+			reactionsByMessage.get(message.id) ?? NO_REACTIONS,
+			context,
+		)
 		return sharedRow(old, {
-			...messageRowData(
-				message,
-				threadGroupPositionAt(messagesOldestFirst, index, context),
-				NO_REACTIONS,
-				context,
-			),
+			...data,
+			reactions: withReactionMotion(old, data.reactions, isLiveReactions),
 			thread: null,
 			isEntering: isEnteringRow(old, message.id, entering),
 		})

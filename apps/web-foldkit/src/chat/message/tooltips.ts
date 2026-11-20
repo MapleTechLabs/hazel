@@ -61,6 +61,27 @@ const reactedBy = <M>(
 	]
 }
 
+/** The pill's count, rolling in from the side it moved toward. */
+const countView = <M>(h: HtmlBuilder<M>, reaction: AggregatedReaction): Html =>
+	h.span(
+		[h.Class("inline-flex overflow-hidden tabular-nums")],
+		[
+			h.keyed("span")(
+				`count-${reaction.count}`,
+				[
+					h.Class(
+						cn(
+							"inline-block",
+							reaction.motion === "up" && "animate-count-up",
+							reaction.motion === "down" && "animate-count-down",
+						),
+					),
+				],
+				[String(reaction.count)],
+			),
+		],
+	)
+
 export const reactionButton = <M>(
 	h: HtmlBuilder<M>,
 	messageId: MessageId,
@@ -85,25 +106,34 @@ export const reactionButton = <M>(
 					...attributes,
 					h.Class(
 						cn(
-							"inline-flex size-max cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 font-medium text-sm ring ring-inset transition-colors",
+							"inline-flex size-max cursor-pointer select-none items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 font-medium text-sm ring ring-inset",
+							"transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-95",
+							reaction.motion === "enter" && "animate-reaction-enter",
 							reaction.hasReacted
-								? "bg-primary/10 text-primary ring-primary/20 hover:bg-primary/20"
+								? "bg-primary/10 text-primary ring-primary/30 hover:bg-primary/20"
 								: "bg-secondary text-fg ring-border hover:bg-secondary/80",
 						),
 					),
+					h.Attribute("aria-pressed", String(reaction.hasReacted)),
 					...PRESSABLE(h),
 					...(onPress === undefined ? [] : [h.OnClick(onPress)]),
 				],
 				[
-					reaction.imageUrl
-						? h.img([
-								h.Attribute("src", reaction.imageUrl),
-								h.Attribute("alt", reaction.emoji),
-								h.Class("size-5 object-contain"),
-							])
-						: reaction.emoji,
-					" ",
-					String(reaction.count),
+					// Keyed by count: a new count remounts the emoji, so its pop plays once per change.
+					h.keyed("span")(
+						`emoji-${reaction.count}`,
+						[h.Class(cn("inline-flex", reaction.motion === "up" && "animate-reaction-pop"))],
+						[
+							reaction.imageUrl
+								? h.img([
+										h.Attribute("src", reaction.imageUrl),
+										h.Attribute("alt", reaction.emoji),
+										h.Class("size-5 object-contain"),
+									])
+								: reaction.emoji,
+						],
+					),
+					countView(h, reaction),
 					overlay,
 				],
 			),

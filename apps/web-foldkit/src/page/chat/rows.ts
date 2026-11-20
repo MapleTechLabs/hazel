@@ -45,6 +45,13 @@ export const ChatReaction = Schema.Struct({
 })
 export type ChatReaction = typeof ChatReaction.Type
 
+/**
+ * How a reaction pill last changed while on screen: it appeared, or its count went up or down. It
+ * stays until the next change, so a re-derive never restarts the animation (`withReactionMotion`).
+ */
+export const ReactionMotion = Schema.Literals(["none", "enter", "up", "down"])
+export type ReactionMotion = typeof ReactionMotion.Type
+
 export const AggregatedReaction = Schema.Struct({
 	emoji: Schema.String,
 	count: Schema.Number,
@@ -52,6 +59,7 @@ export const AggregatedReaction = Schema.Struct({
 	userIds: Schema.Array(UserId),
 	/** Resolved for `custom:<name>` reactions from the org's custom emoji. */
 	imageUrl: Schema.NullOr(Schema.String),
+	motion: ReactionMotion,
 })
 export type AggregatedReaction = typeof AggregatedReaction.Type
 

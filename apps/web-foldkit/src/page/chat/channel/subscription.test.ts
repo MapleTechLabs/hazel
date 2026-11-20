@@ -134,8 +134,6 @@ const CHANNEL_ONLY = [
 	"chatChannel",
 	"chatMessages",
 	"chatMessagesWindow",
-	// The thread panel's rows take no reactions (`toThreadRows`).
-	"chatReactions",
 	// The channel's header badge, not per message.
 	"chatSyncProvider",
 	// Reply targets are keyed by message id; the channel only names where to load them.

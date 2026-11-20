@@ -188,10 +188,10 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 					: Stream.empty,
 		},
 	),
-	chatReactions: entry(byChannel, {
-		modelToDependencies: channelOf,
-		dependenciesToStream: ({ channelId }) =>
-			reactionsStream(channelId, (reactions) => Message.UpdatedReactions({ channelId, reactions })),
+	chatReactions: entry(byShownChannels, {
+		modelToDependencies: shownChannelsOf,
+		dependenciesToStream: ({ channelId, channelIds }) =>
+			reactionsStream(channelIds, (reactions) => Message.UpdatedReactions({ channelId, reactions })),
 	}),
 	chatUsers: entry(
 		{},
