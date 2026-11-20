@@ -1,5 +1,5 @@
 import type { Shared } from "../../page/contract"
-import { AppRoute } from "../../route"
+import { availableDestinations, DESTINATION_GROUPS, type DestinationId } from "../../shell/destinations"
 import { hotkeyLabel } from "../../shell/channels-sidebar/hotkey-label"
 import * as CommandMenu from "../../ui/command-menu"
 import type { ChannelSummary, DmChannel, Model, Theme } from "./model"
@@ -16,52 +16,25 @@ export const HOTKEYS = {
 	invite: hotkeyLabel("Mod+Alt+I"),
 } as const
 
-export const NAVIGATION = [
-	{ key: "nav:dashboard", route: AppRoute.OrgHome, label: "Dashboard", textValue: "dashboard home" },
-	{ key: "nav:chat", route: AppRoute.ChatIndex, label: "Chat", textValue: "chat messages" },
-	{
-		key: "nav:customers",
-		route: AppRoute.CustomersOverview,
-		label: "Customers",
-		textValue: "customers accounts",
-	},
-	{
-		key: "nav:notifications",
-		route: AppRoute.NotificationsAll,
-		label: "Notifications",
-		textValue: "notifications",
-	},
-	{
-		key: "nav:my-settings",
-		route: AppRoute.MySettingsAppearance,
-		label: "My Settings",
-		textValue: "my settings preferences",
-	},
-	{ key: "nav:profile", route: AppRoute.MySettingsProfile, label: "My Profile", textValue: "my profile" },
-] as const
+/** A page's palette item: `go:<id>`, matched by its label, group and keywords. */
+const goKey = (id: DestinationId) => `go:${id}`
 
-export const SETTINGS = [
-	{
-		key: "settings:general",
-		route: AppRoute.SettingsGeneral,
-		label: "General Settings",
-		textValue: "general settings",
-	},
-	{ key: "settings:team", route: AppRoute.TeamSettings, label: "Team", textValue: "team members" },
-	{
-		key: "settings:integrations",
-		route: AppRoute.SettingsIntegrations,
-		label: "Integrations",
-		textValue: "integrations",
-	},
-	{
-		key: "settings:invitations",
-		route: AppRoute.SettingsInvitations,
-		label: "Invitations",
-		textValue: "invitations",
-	},
-	{ key: "settings:debug", route: AppRoute.SettingsDebug, label: "Debug", textValue: "debug" },
-] as const
+const destinationSection = (title: string, ids: ReadonlyArray<DestinationId>) =>
+	CommandMenu.section(
+		title,
+		availableDestinations(ids).map((page) =>
+			CommandMenu.item(
+				goKey(page.id),
+				[page.label, page.sidebarLabel ?? "", title, page.keywords ?? ""].join(" ").trim(),
+			),
+		),
+	)
+
+/** The page groups: the pinned ones always, every group once something is typed. */
+const destinationSections = (isSearching: boolean): ReadonlyArray<CommandMenu.Section> =>
+	DESTINATION_GROUPS.filter((group) => isSearching || group.isPinned).map((group) =>
+		destinationSection(group.title, group.ids),
+	)
 
 export const STATUS_OPTIONS = [
 	{ value: "online", label: "Online", color: "bg-success", description: "Available and active" },
@@ -104,7 +77,8 @@ export const accountNameOf = (model: Model, accountId: string): string | null =>
 const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 	const recent = recentChannelsOf(model)
 	// Only once the user types: an org can have thousands of customers.
-	const showCustomers = model.menu.inputValue.trim() !== "" && model.customers.length > 0
+	const isSearching = model.menu.inputValue.trim() !== ""
+	const showCustomers = isSearching && model.customers.length > 0
 	return [
 		...(recent.length > 0
 			? [
@@ -176,14 +150,7 @@ const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 					),
 				]
 			: []),
-		CommandMenu.section(
-			"Navigation",
-			NAVIGATION.map((entry) => CommandMenu.item(entry.key, entry.textValue)),
-		),
-		CommandMenu.section(
-			"Settings",
-			SETTINGS.map((entry) => CommandMenu.item(entry.key, entry.textValue)),
-		),
+		...destinationSections(isSearching),
 		CommandMenu.section("Preferences", [
 			CommandMenu.item("pref:status", "set status presence"),
 			CommandMenu.item("pref:appearance", "appearance theme dark light mode"),

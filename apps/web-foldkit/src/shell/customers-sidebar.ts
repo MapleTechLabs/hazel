@@ -29,22 +29,9 @@ import {
 	withSidebar,
 } from "../customers/view-layout"
 import { catchCommon, reasonToast } from "../data/actions"
-import {
-	IconChartBar,
-	IconClock,
-	IconCube,
-	IconEyeSlash,
-	IconHeart,
-	IconLightbulb,
-	IconOffice,
-	IconPresentationChart,
-	IconRocket,
-	IconServers,
-	IconSupport,
-	IconWarning,
-} from "../icons"
+import { IconEyeSlash } from "../icons"
 import { PageOutMessage } from "../page/out-message"
-import { AppRoute, customersListRoute, hrefOf, type RouteTag } from "../route"
+import { type AppRoute, customersListRoute, hrefOf, type RouteTag } from "../route"
 import { sidebarHeaderHeightClass } from "../platform/desktop"
 import { myWaitingIssueCountStream } from "../customers/issues"
 import type { HazelRpc } from "../rpc"
@@ -61,6 +48,7 @@ import {
 } from "../ui/sidebar"
 import type { SidebarChrome } from "./channels-sidebar"
 import type { ShellContext } from "./context"
+import { type DestinationId, destination, destinationHref, isAvailable } from "./destinations"
 import { userMenuFooter } from "./menus"
 
 /**
@@ -429,27 +417,27 @@ export const view = <ParentMessage>(
 	toParentMessage: (message: Message) => ParentMessage,
 ): Html => {
 	const { orgSlug, route } = context
-	const item = (
-		label: string,
-		href: string,
-		isCurrent: boolean,
-		icon: Html,
-		trailing: ReadonlyArray<Html> = [],
-	) =>
-		sidebarItem(h, { isCurrent }, [
-			sidebarLink(h, { href, isActive: isCurrent, activeClassName: SECTION_ACTIVE }, [
-				icon,
-				// The row's grid has no column after the label: a badge shares the label's cell, or it wraps.
-				trailing.length === 0
-					? sidebarLabel(h, [label])
-					: h.span(
-							[h.Class("col-start-2 flex min-w-0 items-center gap-2")],
-							[sidebarLabel(h, [label]), ...trailing],
-						),
-			]),
+	const item = (id: DestinationId, isCurrent: boolean, trailing: ReadonlyArray<Html> = []) => {
+		if (!isAvailable(id)) return h.empty
+		const { icon, label: name, sidebarLabel: label = name } = destination(id)
+		return sidebarItem(h, { isCurrent }, [
+			sidebarLink(
+				h,
+				{ href: destinationHref(id, orgSlug), isActive: isCurrent, activeClassName: SECTION_ACTIVE },
+				[
+					icon(h, { attributes: { "data-slot": "icon" } }),
+					// The row's grid has no column after the label: a badge shares the label's cell, or it wraps.
+					trailing.length === 0
+						? sidebarLabel(h, [label])
+						: h.span(
+								[h.Class("col-start-2 flex min-w-0 items-center gap-2")],
+								[sidebarLabel(h, [label]), ...trailing],
+							),
+				],
+			),
 		])
+	}
 	const on = (...tags: ReadonlyArray<RouteTag>) => tags.includes(route._tag)
-	const icon = (glyph: typeof IconOffice) => glyph(h, { attributes: { "data-slot": "icon" } })
 	const listView = listViewOf(route)
 	const views = sidebarViewsOf(model)
 	const count = model.attentionCount ?? 0
@@ -462,82 +450,38 @@ export const view = <ParentMessage>(
 		sidebarContent(h, { state: "expanded" }, [
 			sidebarSectionGroup(h, [
 				sidebarSection(h, {}, [
+					item("customersOverview", on("CustomersOverview")),
+					item("customersAttention", on("CustomersAttention"), count > 0 ? [badge(h, count)] : []),
 					item(
-						"Overview",
-						hrefOf(AppRoute.CustomersOverview({ orgSlug })),
-						on("CustomersOverview"),
-						icon(IconPresentationChart),
-					),
-					item(
-						"Needs attention",
-						hrefOf(AppRoute.CustomersAttention({ orgSlug })),
-						on("CustomersAttention"),
-						icon(IconWarning),
-						count > 0 ? [badge(h, count)] : [],
-					),
-					item(
-						"Support inbox",
-						hrefOf(AppRoute.CustomersInbox({ orgSlug })),
+						"customersInbox",
 						on("CustomersInbox"),
-						icon(IconSupport),
 						inboxCount > 0 ? [badge(h, inboxCount)] : [],
 					),
+					item("customersSupportReport", on("CustomersSupportReport")),
 					item(
-						"Support report",
-						hrefOf(AppRoute.CustomersSupportReport({ orgSlug })),
-						on("CustomersSupportReport"),
-						icon(IconChartBar),
-					),
-					item(
-						"Customers",
-						hrefOf(customersListRoute(orgSlug)),
+						"customersList",
 						// The list's view lights its own row; a hidden one lights this.
 						on("CustomerDetail") ||
 							(listView !== undefined && !views.some((view) => view.key === listView)),
-						icon(IconOffice),
 					),
 				]),
 				viewsSection(h, model, views, orgSlug, listView, toParentMessage),
 				sidebarSection(h, { label: "Settings" }, [
 					item(
-						"Signals",
-						hrefOf(AppRoute.CustomersSettingsSignals({ orgSlug })),
+						"customersSignals",
 						on(
 							"CustomersSettingsSignals",
 							"CustomersSettingsSignalNew",
 							"CustomersSettingsSignalRule",
 						),
-						icon(IconLightbulb),
 					),
+					item("customersHealth", on("CustomersSettingsHealth")),
+					item("customersSla", on("CustomersSettingsSla")),
+					item("customersPlans", on("CustomersSettingsPlans")),
+					item("customersFeatureFlags", on("CustomersSettingsFeatureFlags")),
 					item(
-						"Health score",
-						hrefOf(AppRoute.CustomersSettingsHealth({ orgSlug })),
-						on("CustomersSettingsHealth"),
-						icon(IconHeart),
-					),
-					item(
-						"Support SLAs",
-						hrefOf(AppRoute.CustomersSettingsSla({ orgSlug })),
-						on("CustomersSettingsSla"),
-						icon(IconClock),
-					),
-					item(
-						"Plans",
-						hrefOf(AppRoute.CustomersSettingsPlans({ orgSlug })),
-						on("CustomersSettingsPlans"),
-						icon(IconCube),
-					),
-					item(
-						"Feature flags",
-						hrefOf(AppRoute.CustomersSettingsFeatureFlags({ orgSlug })),
-						on("CustomersSettingsFeatureFlags"),
-						icon(IconRocket),
-					),
-					item(
-						"Data sources",
-						hrefOf(AppRoute.CustomersSettingsSources({ orgSlug })),
+						"customersSources",
 						on("CustomersSettingsSources", "CustomersSourceDetail", "CustomersUnmatched"),
-						icon(IconServers),
 					),
 				]),
 			]),

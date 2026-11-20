@@ -13,7 +13,8 @@ import { CreateChannel, FocusInput, JoinChannel, SetPresenceStatus, TrackRecentC
 import { Message, OutMessage } from "./message"
 import { initialPageState, isFormPage, type Model, type Page, type PageState } from "./model"
 import { emptySearchData } from "./search-data"
-import { menuSectionsOf, NAVIGATION, parseKey, SETTINGS, STATUS_OPTIONS, THEME_OPTIONS } from "./menu"
+import { menuSectionsOf, parseKey, STATUS_OPTIONS, THEME_OPTIONS } from "./menu"
+import { destination, isDestinationId } from "../../shell/destinations"
 import { FocusSearchEditor, LoadRecentSearches } from "./search-mount"
 import { updateSearch } from "./search-update"
 
@@ -191,13 +192,8 @@ const selectedItem = (model: Model, key: string, shared: Shared, current: PageSt
 					null,
 				)
 	}
-	const link = [...NAVIGATION, ...SETTINGS].find((entry) => entry.key === key)
-	if (link !== undefined)
-		return closedWith(
-			model,
-			orgHrefOf(shared.orgSlug, (orgSlug) => link.route({ orgSlug })),
-			null,
-		)
+	if (kind === "go" && isDestinationId(value))
+		return closedWith(model, orgHrefOf(shared.orgSlug, destination(value).to), null)
 	const status = STATUS_OPTIONS.find((option) => `status:${option.value}` === key)
 	if (status !== undefined)
 		return {
