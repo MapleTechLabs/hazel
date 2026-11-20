@@ -438,8 +438,13 @@ export const stepSla = (ctx: SlaContext, state: SlaState, event: SlaEvent): SlaS
 			if (!isOpen(state.reply)) {
 				// A late delivery of an earlier reply moves the first response back.
 				const first = state.firstResponse
-				if (first === null || first.metAt === null || at >= first.metAt || at < first.startedAt) return state
-				const earlier = { ...first, metAt: at, elapsedMs: workingTimeBetween(ctx.calendar, first.startedAt, at) }
+				if (first === null || first.metAt === null || at >= first.metAt || at < first.startedAt)
+					return state
+				const earlier = {
+					...first,
+					metAt: at,
+					elapsedMs: workingTimeBetween(ctx.calendar, first.startedAt, at),
+				}
 				return {
 					...state,
 					firstResponse: earlier,
