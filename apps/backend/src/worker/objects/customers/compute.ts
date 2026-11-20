@@ -63,12 +63,15 @@ import {
 	accountChunks,
 	billingByAccount,
 	billsNow,
+	groupBy,
 	groupChunks,
 	loadAccounts,
 	loadBase,
 	type Rollup,
 	type Snapshot,
 	type SnapshotBase,
+	USAGE_WINDOW_DAYS,
+	usageHistory,
 } from "./snapshot"
 import { inList, rowsPerInsert } from "./sql"
 import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
@@ -961,10 +964,28 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 			.select("id", "mrrMinor", "mrrSource")
 			.where(($) => [$.deletedAt.isNull()]),
 	)).filter((account) => live.has(account.id))
+	const subscriptions = yield* db.run(SQLite.from(schema.customerSubscriptionsTable).select())
 	const billingBy = billingByAccount(
 		base.autumnReady,
-		yield* db.run(SQLite.from(schema.customerSubscriptionsTable).select()),
+		subscriptions,
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
+	)
+	// Usage billing (`usageMrrOf`) as compute counts it: any provider's subscriptions, Stripe's invoices.
+	const subscriptionsBy = groupBy(subscriptions, (sub) => sub.accountId)
+	const paidInvoicesBy = groupBy(
+		yield* db.run(
+			SQLite.from(schema.customerInvoicesTable)
+				.select()
+				.where(($) => [
+					$.status.eq("paid"),
+					$.provider.eq("stripe"),
+					$.subscriptionId.isNotNull(),
+					$.paidAt.gte(
+						new Date(Date.parse(`${before}T00:00:00.000Z`) - USAGE_WINDOW_DAYS * DAY_MS),
+					),
+				]),
+		),
+		(invoice) => invoice.accountId,
 	)
 	// Today's movement alone is not history: one a compute wrote while billing was still importing
 	// (a partial MRR's jump) is replaced by the rebuilt series.
@@ -983,7 +1004,14 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 	const mrrNow: Array<{ id: CustomerAccountId; mrrMinor: number }> = []
 	for (const account of accounts) {
 		const subs = billingBy.get(account.id)?.subscriptions ?? []
-		const series = mrrHistory(subs, currency, [before, ...days])
+		const usage = usageHistory(
+			subscriptionsBy.get(account.id) ?? [],
+			paidInvoicesBy.get(account.id) ?? [],
+			currency,
+			[before, ...days],
+			base.org.now,
+		)
+		const series = mrrHistory(subs, currency, [before, ...days]).map((mrr, index) => mrr + usage[index])
 		const trial = new Uint8Array(days.length)
 		for (const sub of subs) {
 			if (sub.trialEndsAt === null || sub.startedAt === null) continue
@@ -1141,7 +1169,7 @@ export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now:
 		if (attempts < MAX_REBUILD_ATTEMPTS) {
 			yield* rebuildHistory(yield* loadBase(now))
 			yield* clearHistoryRebuild
-			// It reset MRR to the plans': a compute spread over turns starts over to add usage to all.
+			// It reset MRR to the rebuilt series': a compute spread over turns starts over from it.
 			yield* clearComputeProgress
 			yield* resetComputeFailures
 			return yield* scheduleComputeAt(now.getTime())

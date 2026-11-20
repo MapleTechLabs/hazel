@@ -1471,11 +1471,12 @@ describe("Customers compute and sync loop", () => {
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
 				expect(mrr()).toEqual([{ mrrMinor: 22_675 }])
 
-				// A history rebuild ends at the plans' MRR; the compute after it adds the usage back as
-				// today's movement.
+				// A history rebuild counts the usage on the days each invoice was paid, and ends where
+				// compute is: no expansion lands on the rebuild's day.
 				yield* world.object.run(requestHistoryRebuild).pipe(Effect.orDie)
 				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
 				expect(meta(world, "rebuildHistory")).toBeUndefined()
+				expect(mrr()).toEqual([{ mrrMinor: 22_675 }])
 				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
 				expect(mrr()).toEqual([{ mrrMinor: 22_675 }])
 				expect(
@@ -1484,7 +1485,8 @@ describe("Customers compute and sync loop", () => {
 					),
 				).toEqual([
 					{ day: day(-60), type: "new", fromMrrMinor: 0, toMrrMinor: 19_900 },
-					{ day: day(0), type: "expansion", fromMrrMinor: 19_900, toMrrMinor: 22_675 },
+					{ day: day(-35), type: "expansion", fromMrrMinor: 19_900, toMrrMinor: 21_000 },
+					{ day: day(-5), type: "expansion", fromMrrMinor: 21_000, toMrrMinor: 22_675 },
 				])
 			}),
 		))

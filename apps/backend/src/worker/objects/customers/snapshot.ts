@@ -130,12 +130,40 @@ export interface UsageMrr {
 	readonly currency: string
 }
 
+/** A monthly Stripe subscription: its invoices above the plan price are usage billing. */
+const usageBilled = (sub: schema.CustomerSubscription) =>
+	sub.provider === "stripe" && sub.interval === "month"
+
+/**
+ * One subscription's usage per month at `at`: the average of what its last (up to 3) paid invoices of
+ * the 3 months before (`USAGE_WINDOW_DAYS`) charged above its plan price. A discount adds nothing.
+ */
+const usageAt = (
+	sub: schema.CustomerSubscription,
+	paidInvoices: ReadonlyArray<schema.CustomerInvoice>,
+	at: Date,
+) => {
+	const recent = paidInvoices
+		.filter(
+			(invoice) =>
+				invoice.subscriptionId === sub.id &&
+				invoice.currency === sub.currency &&
+				invoice.paidAt !== null &&
+				invoice.paidAt <= at &&
+				at.getTime() - invoice.paidAt.getTime() <= USAGE_WINDOW_DAYS * DAY_MS,
+		)
+		.sort((a, b) => Number(b.paidAt) - Number(a.paidAt))
+		.slice(0, 3)
+	if (recent.length === 0) return 0
+	return Math.round(
+		sum(recent.map((invoice) => Math.max(0, invoice.amountPaidMinor - sub.mrrMinor))) / recent.length,
+	)
+}
+
 /**
  * Usage billing on top of the plans' MRR, best effort: for each billed (`billed`) monthly Stripe
- * subscription, the average of what its paid invoices of the last 3 months (`USAGE_WINDOW_DAYS`)
- * charged above its plan price (metered and tiered prices, which the plan's MRR leaves out), over the
- * invoices there are when fewer than 3. A discount (paid below the plan) adds nothing. Any provider's
- * account: Autumn bills through Stripe subscriptions.
+ * subscription, its usage (`usageAt`, metered and tiered prices, which the plan's MRR leaves out).
+ * Any provider's account: Autumn bills through Stripe subscriptions.
  */
 export const usageMrrOf = (
 	/** The account's, any provider. */
@@ -145,23 +173,39 @@ export const usageMrrOf = (
 	now: Date,
 ): ReadonlyArray<UsageMrr> =>
 	subscriptions.flatMap((sub) => {
-		if (sub.provider !== "stripe" || sub.interval !== "month" || !billed(sub)) return []
-		const recent = paidInvoices
-			.filter(
-				(invoice) =>
-					invoice.subscriptionId === sub.id &&
-					invoice.currency === sub.currency &&
-					invoice.paidAt !== null &&
-					invoice.paidAt <= now &&
-					now.getTime() - invoice.paidAt.getTime() <= USAGE_WINDOW_DAYS * DAY_MS,
-			)
-			.sort((a, b) => Number(b.paidAt) - Number(a.paidAt))
-			.slice(0, 3)
-		if (recent.length === 0) return []
-		const usage = sum(recent.map((invoice) => Math.max(0, invoice.amountPaidMinor - sub.mrrMinor)))
-		const mrrMinor = Math.round(usage / recent.length)
+		if (!usageBilled(sub) || !billed(sub)) return []
+		const mrrMinor = usageAt(sub, paidInvoices, now)
 		return mrrMinor === 0 ? [] : [{ subscriptionId: sub.id, mrrMinor, currency: sub.currency }]
 	})
+
+/**
+ * `usageMrrOf` per day (at its end, today's at `now`), in `currency`, for the history rebuild: a
+ * subscription counts from its start (its trial's end) until it was canceled, so the rebuilt series
+ * ends where compute's MRR is and a rebuild writes no movement of its own.
+ */
+export const usageHistory = (
+	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
+	paidInvoices: ReadonlyArray<schema.CustomerInvoice>,
+	currency: string,
+	days: ReadonlyArray<Day>,
+	now: Date,
+): Array<number> => {
+	const periods = subscriptions.flatMap((sub) => {
+		const start = sub.trialEndsAt ?? sub.startedAt
+		if (!usageBilled(sub) || sub.currency !== currency || start === null) return []
+		const ended = sub.status === "canceled" && sub.canceledAt !== null
+		if (!billed(sub) && !ended) return []
+		return [{ sub, from: dayOf(start), until: ended && sub.canceledAt ? dayOf(sub.canceledAt) : null }]
+	})
+	return days.map((day) => {
+		const end = new Date(Math.min(startOf(addDays(day, 1)).getTime() - 1, now.getTime()))
+		return sum(
+			periods
+				.filter(({ from, until }) => day >= from && (until === null || day < until))
+				.map(({ sub }) => usageAt(sub, paidInvoices, end)),
+		)
+	})
+}
 
 /** The fields compute derives for one account (pure). */
 export const rollupAccount = (input: {
@@ -288,7 +332,7 @@ export const rollupAccount = (input: {
 	}
 }
 
-const groupBy = <A, K>(items: ReadonlyArray<A>, key: (item: A) => K) => {
+export const groupBy = <A, K>(items: ReadonlyArray<A>, key: (item: A) => K) => {
 	const groups = new Map<K, Array<A>>()
 	for (const item of items) {
 		const group = groups.get(key(item))
