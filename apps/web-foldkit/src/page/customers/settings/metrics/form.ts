@@ -191,7 +191,11 @@ export const errorsOf = (
 		case "maple_query": {
 			if (form.isSqlMode) {
 				const sqlError =
-					form.sql.trim() === "" ? "Write the query" : Customers.checkMapleSql(form.sql)
+					form.sql.trim() === ""
+						? "Write the query"
+						: form.sql.trim().length > 8000
+							? "At most 8,000 characters"
+							: Customers.checkMapleSql(form.sql)
 				if (sqlError !== null) errors.sql = sqlError
 			} else {
 				const error = builderError(form.builder)
@@ -202,10 +206,15 @@ export const errorsOf = (
 		case "product_event": {
 			const events = form.events.map((event) => event.trim()).filter((event) => event !== "")
 			if (events.length === 0) errors.events = "Add at least one event name"
+			else if (events.some((event) => event.length > 120))
+				errors.events = "Event names are at most 120 characters"
 			break
 		}
 		case "formula": {
-			const error = checkFormula(form.expression, context.metrics, form.key).error
+			const error =
+				form.expression.trim().length > 500
+					? "At most 500 characters"
+					: checkFormula(form.expression, context.metrics, form.key).error
 			if (error !== null) errors.expression = error
 			break
 		}
@@ -227,6 +236,22 @@ const sourceOf = (form: MetricForm): Customers.MetricSource => {
 		case "formula":
 			return { _tag: "formula", expression: form.expression.trim() }
 	}
+}
+
+/**
+ * Whether saving starts a Maple backfill: a Maple source (query or product events) that is new, or
+ * whose data changed (another kind, SQL or events; a builder edit that writes the same SQL is none).
+ */
+export const backfillsOnSave = (
+	before: Customers.MetricSource | null,
+	after: Customers.MetricSource | null,
+	isNew: boolean,
+): boolean => {
+	if (after === null || after._tag === "formula") return false
+	if (isNew || before === null || before._tag !== after._tag) return true
+	return after._tag === "maple_query"
+		? before._tag === "maple_query" && before.sql !== after.sql
+		: before._tag === "product_event" && before.events.join("\n") !== after.events.join("\n")
 }
 
 /** The source alone, for the preview; none while it is invalid. */

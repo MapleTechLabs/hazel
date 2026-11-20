@@ -193,7 +193,7 @@ export const LAYOUTS: ReadonlyArray<LayoutRow> = [
 export const COVERAGE: ReadonlyArray<CoverageRow> = METRICS.flatMap((metric, index) =>
 	metric.source?._tag === "formula"
 		? []
-		: [{ metricKey: metric.key, accountsWithData: 380 - index * 37, lastDay: dayOf(1) }],
+		: [{ metricKey: metric.key, accountsWithData: 380 - index * 23, lastDay: dayOf(1) }],
 )
 
 /** What `customers.metric.preview` answers for `source` over the lab's accounts. */

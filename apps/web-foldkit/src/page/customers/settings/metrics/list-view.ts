@@ -25,19 +25,25 @@ type H = HtmlBuilder<Message>
 const COLUMNS =
 	"grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 @3xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_5.5rem_minmax(0,1fr)_8rem]"
 
+/** The table's six columns (`queue-row.ts` pattern: a grid with table roles). */
+const COLUMN_COUNT = 6
+
+const columnHeader = (h: H, label: string, className = ""): Html =>
+	h.span([h.Role("columnheader"), h.Class(className)], [label])
+
 const headerRow = (h: H): Html =>
 	h.div(
 		[
-			h.AriaHidden(true),
+			h.Role("row"),
 			h.Class(twMerge(COLUMNS, "h-9 border-border border-b font-medium text-muted-fg text-xs")),
 		],
 		[
-			h.span([], ["Metric"]),
-			h.span([h.Class("hidden @3xl:block")], ["Source"]),
-			h.span([h.Class("hidden @3xl:block")], ["Unit"]),
-			h.span([h.Class("hidden text-right @3xl:block")], ["Customers"]),
-			h.span([h.Class("hidden @3xl:block")], ["Used in"]),
-			h.span([h.Class("text-right")], ["Last run"]),
+			columnHeader(h, "Metric"),
+			columnHeader(h, "Source", "hidden @3xl:block"),
+			columnHeader(h, "Unit", "hidden @3xl:block"),
+			columnHeader(h, "Customers", "hidden text-right @3xl:block"),
+			columnHeader(h, "Used in", "hidden @3xl:block"),
+			columnHeader(h, "Last run", "text-right"),
 		],
 	)
 
@@ -51,7 +57,10 @@ const customersCell = (h: H, metric: MetricRow, coverage: Model["coverage"]): Ht
 					onFailure: () => "—",
 					onData: (rows) => formatCount(coverageOf(rows, metric.key)?.accountsWithData ?? 0),
 				})
-	return h.span([h.Class("hidden text-right text-fg text-sm tabular-nums @3xl:block")], [text])
+	return h.span(
+		[h.Role("cell"), h.Class("hidden text-right text-fg text-sm tabular-nums @3xl:block")],
+		[text],
+	)
 }
 
 const coverageOf = (rows: ReadonlyArray<CoverageRow>, key: string): CoverageRow | undefined =>
@@ -63,6 +72,7 @@ const lastRunCell = (h: H, metric: MetricRow, model: Model, nowMs: number): Html
 	if (metric.lastError !== null)
 		return h.span(
 			[
+				h.Role("cell"),
 				h.Class(
 					"inline-flex items-center justify-end gap-1 whitespace-nowrap text-danger-subtle-fg text-sm",
 				),
@@ -80,7 +90,7 @@ const lastRunCell = (h: H, metric: MetricRow, model: Model, nowMs: number): Html
 		onSome: (rows) => coverageOf(rows, metric.key)?.lastDay ?? null,
 	})
 	return h.span(
-		[h.Class("whitespace-nowrap text-right text-muted-fg text-sm tabular-nums")],
+		[h.Role("cell"), h.Class("whitespace-nowrap text-right text-muted-fg text-sm tabular-nums")],
 		[
 			metric.lastRunAtMs !== null
 				? formatRelative(new Date(metric.lastRunAtMs), now)
@@ -100,14 +110,15 @@ const usedInText = (count: ReadonlyArray<{ readonly name: string }>): string =>
 
 const metricRow = (h: H, model: Model, metric: MetricRow, shared: Shared): Html => {
 	const usedIn = layoutsUsing(model.layouts, model.metrics ?? [], metric.key)
-	return h.li(
+	return h.div(
 		[
 			h.Key(metric.key),
+			h.Role("row"),
 			h.Class(twMerge(COLUMNS, "relative min-h-14 py-2.5 transition-colors hover:bg-secondary/40")),
 		],
 		[
 			h.div(
-				[h.Class("flex min-w-0 flex-col")],
+				[h.Role("rowheader"), h.Class("flex min-w-0 flex-col")],
 				[
 					h.a(
 						[
@@ -136,11 +147,18 @@ const metricRow = (h: H, model: Model, metric: MetricRow, shared: Shared): Html 
 							]),
 				],
 			),
-			h.span([h.Class("hidden truncate text-fg-2 text-sm @3xl:block")], [sourceLabelOf(metric)]),
-			h.span([h.Class("hidden truncate text-fg-2 text-sm @3xl:block")], [formatLabelOf(metric)]),
+			h.span(
+				[h.Role("cell"), h.Class("hidden truncate text-fg-2 text-sm @3xl:block")],
+				[sourceLabelOf(metric)],
+			),
+			h.span(
+				[h.Role("cell"), h.Class("hidden truncate text-fg-2 text-sm @3xl:block")],
+				[formatLabelOf(metric)],
+			),
 			customersCell(h, metric, model.coverage),
 			h.span(
 				[
+					h.Role("cell"),
 					h.Class(
 						twMerge(
 							"hidden truncate text-sm @3xl:block",
@@ -162,20 +180,26 @@ const section = (
 	metrics: ReadonlyArray<MetricRow>,
 	shared: Shared,
 ): Html =>
-	h.section(
-		[h.AriaLabel(title)],
+	h.div(
+		[h.Role("rowgroup"), h.AriaLabel(title), h.Class("divide-y divide-border")],
 		[
 			h.div(
-				[h.Class("flex h-9 items-center gap-2 border-border border-b bg-secondary/30 px-4 text-sm")],
+				[h.Role("row"), h.Class("flex h-9 items-center bg-secondary/30 px-4 text-sm")],
 				[
-					h.span([h.Class("font-medium text-fg")], [title]),
-					h.span([h.Class("text-muted-fg tabular-nums")], [formatCount(metrics.length)]),
+					h.span(
+						[
+							h.Role("rowheader"),
+							h.Attribute("aria-colspan", String(COLUMN_COUNT)),
+							h.Class("flex items-center gap-2"),
+						],
+						[
+							h.span([h.Class("font-medium text-fg")], [title]),
+							h.span([h.Class("text-muted-fg tabular-nums")], [formatCount(metrics.length)]),
+						],
+					),
 				],
 			),
-			h.ul(
-				[h.Class("divide-y divide-border")],
-				metrics.map((metric) => metricRow(h, model, metric, shared)),
-			),
+			...metrics.map((metric) => metricRow(h, model, metric, shared)),
 		],
 	)
 
@@ -262,9 +286,13 @@ export const listView = (h: H, model: Model, shared: Shared): Html => {
 			: [
 					...(hasOwn ? [] : [suggestions(h, shared, isAdmin)]),
 					h.div(
-						[h.Class("@container overflow-hidden rounded-xl border border-border bg-bg")],
 						[
-							headerRow(h),
+							h.Role("table"),
+							h.AriaLabel("Metrics"),
+							h.Class("@container overflow-hidden rounded-xl border border-border bg-bg"),
+						],
+						[
+							h.div([h.Role("rowgroup")], [headerRow(h)]),
 							...sectionsOf(metrics).map(([title, rows]) =>
 								section(h, model, title, rows, shared),
 							),

@@ -56,13 +56,14 @@ export const Message = defineMessageUnion({
 
 	// Actions
 	PressedSave: {},
-	SucceededCreateMetric: { editorId: Schema.Int, metricKey: Schema.String },
+	/** `backfills`: a Maple source was created or changed, so the sync now fills its history. */
+	SucceededCreateMetric: { editorId: Schema.Int, metricKey: Schema.String, backfills: Schema.Boolean },
 	FailedCreateMetric: {
 		editorId: Schema.Int,
 		reason: MetricWriteFailure,
 		detail: Schema.NullOr(Schema.String),
 	},
-	SucceededUpdateMetric: { metricKey: Schema.String },
+	SucceededUpdateMetric: { metricKey: Schema.String, backfills: Schema.Boolean },
 	FailedUpdateMetric: {
 		metricKey: Schema.String,
 		reason: MetricWriteFailure,

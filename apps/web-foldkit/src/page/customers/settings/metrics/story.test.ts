@@ -150,7 +150,7 @@ describe("metric editor", () => {
 		}
 		const stray = update(
 			otherSaving,
-			Message.SucceededCreateMetric({ editorId, metricKey: "exports" }),
+			Message.SucceededCreateMetric({ editorId, metricKey: "exports", backfills: true }),
 			admin,
 		)
 		expect(stray.outMessage).toMatchObject({ _tag: "RequestedToast" })
@@ -164,7 +164,7 @@ describe("metric editor", () => {
 
 		const own = update(
 			asked.model,
-			Message.SucceededCreateMetric({ editorId, metricKey: "exports" }),
+			Message.SucceededCreateMetric({ editorId, metricKey: "exports", backfills: true }),
 			admin,
 		)
 		expect(own.outMessage).toMatchObject({
@@ -283,6 +283,7 @@ describe("metric editor", () => {
 						aggregation: "sum",
 						source: null,
 					},
+					backfills: false,
 				},
 			],
 		])
@@ -294,6 +295,102 @@ describe("metric editor", () => {
 		expect(formOf(run(early, [Message.UpdatedMetrics({ metrics: METRICS })]))?.name).toBe(
 			"Spans ingested",
 		)
+	})
+
+	test("any edit clears the preview, and an answer for the old source is dropped", () => {
+		const result = previewOf({ _tag: "formula", expression: "{a}" }, 7)
+		const asked = update(
+			open(metricRoute("logs_ingested_bytes")),
+			Message.PressedRunPreview(),
+			admin,
+		).model
+		const run = asked.editor?.previewRun ?? 0
+		const answered = update(asked, Message.SucceededPreviewMetric({ run, result }), admin).model
+		expect(answered.editor?.preview._tag).toBe("Success")
+		for (const edit of [
+			Message.ClickedTable({ table: "logs" }),
+			Message.ClickedAggregation({ aggregation: "max" }),
+			Message.ClickedFormat({ format: "number" }),
+		]) {
+			expect(update(answered, edit, admin).model.editor?.preview._tag).toBe("Idle")
+		}
+		// Edited while the run was in flight: its answer no longer applies.
+		const edited = update(
+			asked,
+			Message.ChangedFilter({
+				index: 1,
+				filter: { field: "Attributes.signal", op: "eq", value: "traces" },
+			}),
+			admin,
+		).model
+		const late = update(edited, Message.SucceededPreviewMetric({ run, result }), admin).model
+		expect(late.editor?.preview._tag).toBe("Idle")
+	})
+
+	test("over-long formula, SQL and event names are field errors that block Save", () => {
+		const formula = run(open(newRoute(null, "formula")), [
+			Message.ChangedName({ value: "Long" }),
+			Message.ChangedExpression({ value: `{spans_ingested}${" + 1".repeat(130)}` }),
+		])
+		expect(commandsOf(formula, Message.PressedSave())).toEqual([])
+		const sql = run(open(newRoute("metric_points_ingested")), [
+			Message.PressedEditSql(),
+			Message.ChangedSql({
+				value: mapleBuilderSql({
+					table: "logs",
+					filters: [],
+					value: "count",
+					customerField: "Attributes.org_id",
+				}).replace("GROUP BY", `AND Body != '${"x".repeat(8000)}'\nGROUP BY`),
+			}),
+		])
+		expect(commandsOf(sql, Message.PressedSave())).toEqual([])
+		const events = run(open(newRoute(null, "product_event")), [
+			Message.ChangedName({ value: "Events" }),
+			Message.ChangedEvent({ index: 0, value: "e".repeat(121) }),
+		])
+		expect(commandsOf(events, Message.PressedSave())).toEqual([])
+		expect(
+			commandsOf(
+				run(events, [Message.ChangedEvent({ index: 0, value: "e".repeat(120) })]),
+				Message.PressedSave(),
+			),
+		).toHaveLength(1)
+	})
+
+	test("the save toast promises a backfill only for a new or changed Maple source", () => {
+		const backfillsOf = (model: Model) =>
+			(
+				update(model, Message.PressedSave(), admin).commands?.[0]?.args as
+					| { backfills: boolean }
+					| undefined
+			)?.backfills
+		expect(backfillsOf(open(newRoute("metric_points_ingested")))).toBe(true)
+		const logs = open(metricRoute("logs_ingested_bytes"))
+		expect(backfillsOf(run(logs, [Message.ChangedName({ value: "Logs" })]))).toBe(false)
+		expect(backfillsOf(run(logs, [Message.ClickedTable({ table: "logs" })]))).toBe(true)
+		expect(
+			backfillsOf(
+				run(open(metricRoute("autumn.api_calls")), [Message.ChangedName({ value: "Calls" })]),
+			),
+		).toBe(false)
+		expect(
+			backfillsOf(
+				run(open(newRoute(null, "formula")), [
+					Message.ChangedName({ value: "Ratio" }),
+					Message.ChangedExpression({ value: "{spans_ingested} / 2" }),
+				]),
+			),
+		).toBe(false)
+
+		const saved = (backfills: boolean) =>
+			update(
+				logs,
+				Message.SucceededUpdateMetric({ metricKey: "logs_ingested_bytes", backfills }),
+				admin,
+			).outMessage
+		expect(saved(false)).toMatchObject({ toast: { title: "Metric saved", description: null } })
+		expect(saved(true)).toMatchObject({ toast: { description: expect.stringContaining("Maple") } })
 	})
 
 	test("runs the preview and keeps only the latest answer", () => {

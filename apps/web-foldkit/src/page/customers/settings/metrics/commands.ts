@@ -52,12 +52,15 @@ export const CreateMetric = Command.define("CreateMetric", {
 		editorId: Schema.Int,
 		key: Customers.UserMetricKey,
 		metric: Customers.MetricDraft,
+		backfills: Schema.Boolean,
 	},
 	messages: [Message.SucceededCreateMetric, Message.FailedCreateMetric],
-	execute: ({ organizationId, editorId, key, metric }) =>
+	execute: ({ organizationId, editorId, key, metric, backfills }) =>
 		HazelRpc.use((rpc) => rpc("customers.metric.create", { organizationId, key, metric })).pipe(
 			Effect.tap((result) => awaitSynced(customerMetricDefinitionCollection, result.transactionId)),
-			Effect.map((result) => Message.SucceededCreateMetric({ editorId, metricKey: result.data.key })),
+			Effect.map((result) =>
+				Message.SucceededCreateMetric({ editorId, metricKey: result.data.key, backfills }),
+			),
 			Effect.catchTag("CustomersInvalidRequestError", (error) =>
 				Effect.succeed(
 					Message.FailedCreateMetric({ editorId, reason: "Invalid", detail: error.message }),
@@ -68,12 +71,17 @@ export const CreateMetric = Command.define("CreateMetric", {
 })
 
 export const UpdateMetric = Command.define("UpdateMetric", {
-	args: { organizationId: OrganizationId, metricKey: Schema.String, metric: Customers.MetricDraft },
+	args: {
+		organizationId: OrganizationId,
+		metricKey: Schema.String,
+		metric: Customers.MetricDraft,
+		backfills: Schema.Boolean,
+	},
 	messages: [Message.SucceededUpdateMetric, Message.FailedUpdateMetric],
-	execute: ({ organizationId, metricKey, metric }) =>
+	execute: ({ organizationId, metricKey, metric, backfills }) =>
 		HazelRpc.use((rpc) => rpc("customers.metric.update", { organizationId, metricKey, metric })).pipe(
 			Effect.tap((result) => awaitSynced(customerMetricDefinitionCollection, result.transactionId)),
-			Effect.as(Message.SucceededUpdateMetric({ metricKey })),
+			Effect.as(Message.SucceededUpdateMetric({ metricKey, backfills })),
 			Effect.catchTags({
 				CustomersNotFoundError: () =>
 					Effect.succeed(

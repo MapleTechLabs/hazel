@@ -12,6 +12,7 @@ import { PageOutMessage, requestedOrgNavigation } from "../../../out-message"
 import { isCustomersAdmin } from "../shared"
 import { CreateMetric, DeleteMetric, FetchMetricCoverage, PreviewMetric, UpdateMetric } from "./commands"
 import {
+	backfillsOnSave,
 	blankForm,
 	draftOf,
 	editabilityOf,
@@ -157,9 +158,21 @@ const withEditor = (model: Model, change: (editor: Editor) => Editor): Model =>
 const withMetricEditor = (model: Model, metricKey: string, change: (editor: Editor) => Editor): Model =>
 	model.editor?.metricKey === metricKey ? withEditor(model, change) : model
 
+/**
+ * Applies an edit. Any edit clears the preview: it was run for the source, window and format as they
+ * were, and an answer still in flight (`previewRun` 0 matches no run) is dropped.
+ */
 const edit = (model: Model, change: (form: MetricForm) => MetricForm): Return => ({
 	model: withEditor(model, (editor) =>
-		editor.form === null ? editor : { ...editor, form: change(editor.form) },
+		editor.form === null
+			? editor
+			: {
+					...editor,
+					form: change(editor.form),
+					preview: AsyncData.Idle(),
+					previewRun: 0,
+					hoveredDay: null,
+				},
 	),
 })
 
@@ -186,7 +199,13 @@ const hydrateEditor = (model: Model): Model => {
 const runPreview = (model: Model, shared: Shared): Return => {
 	const editor = model.editor
 	const organizationId = shared.organization?.id
-	if (editor?.form == null || organizationId === undefined || !isCustomersAdmin(shared)) return { model }
+	if (
+		editor?.form == null ||
+		organizationId === undefined ||
+		!isCustomersAdmin(shared) ||
+		editabilityOf(metricByKey(model, editor.metricKey)) === "basics"
+	)
+		return { model }
 	const form = editor.form
 	return Option.match(previewSourceOf(form, model.metrics ?? []), {
 		onNone: () => ({ model }),
@@ -229,21 +248,24 @@ const save = (model: Model, shared: Shared): Return => {
 	})
 	if (Object.keys(errors).length > 0) return { model }
 	const draft = draftOf(form, editability)
+	const backfills = backfillsOnSave(metric?.source ?? null, draft.source, editor.metricKey === null)
 	return {
 		model: { ...model, editor: { ...editor, isSaving: true } },
 		commands: [
 			editor.metricKey === null
-				? CreateMetric({ organizationId, editorId: editor.editorId, key: form.key, metric: draft })
-				: UpdateMetric({ organizationId, metricKey: editor.metricKey, metric: draft }),
+				? CreateMetric({
+						organizationId,
+						editorId: editor.editorId,
+						key: form.key,
+						metric: draft,
+						backfills,
+					})
+				: UpdateMetric({ organizationId, metricKey: editor.metricKey, metric: draft, backfills }),
 		],
 	}
 }
 
-/** What a saved source does next. */
-const savedDescription = (form: MetricForm | null): string | null =>
-	form?.kind === "maple_query" || form?.kind === "product_event"
-		? "Maple fills its history on the next sync, which starts now."
-		: null
+const BACKFILL_NOTE = "Maple fills its history on the next sync, which starts now."
 
 const updateDeleteModal = (model: Model, message: Modal.Message): Return => {
 	const result = Modal.update(model.deleteModal, message)
@@ -356,12 +378,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 
 		PressedSave: () => save(model, shared),
-		SucceededCreateMetric: ({ editorId, metricKey }) => {
+		SucceededCreateMetric: ({ editorId, metricKey, backfills }) => {
 			const isAsker = model.editor?.editorId === editorId
-			const created = successToast(
-				"Metric created",
-				savedDescription(isAsker ? (model.editor?.form ?? null) : null),
-			)
+			const created = successToast("Metric created", backfills ? BACKFILL_NOTE : null)
 			// Only the editor that asked opens the new metric; one left meanwhile just says so.
 			return isAsker
 				? {
@@ -380,14 +399,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			),
 			outMessage: writeFailure("Couldn't create the metric", reason, detail),
 		}),
-		SucceededUpdateMetric: ({ metricKey }) => ({
+		SucceededUpdateMetric: ({ metricKey, backfills }) => ({
 			model: withMetricEditor(model, metricKey, (editor) => ({ ...editor, isSaving: false })),
-			outMessage: toast(
-				successToast(
-					"Metric saved",
-					savedDescription(model.editor?.metricKey === metricKey ? model.editor.form : null),
-				),
-			),
+			outMessage: toast(successToast("Metric saved", backfills ? BACKFILL_NOTE : null)),
 		}),
 		FailedUpdateMetric: ({ metricKey, reason, detail }) => ({
 			model: withMetricEditor(model, metricKey, (editor) => ({ ...editor, isSaving: false })),
