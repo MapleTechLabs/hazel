@@ -27,15 +27,15 @@ hook, alarm, notifications, signals, reports and UI land once the issue record d
 
 `customer_sla_policies` (store `customers`, synced to members, soft delete):
 
-| Column          | What                                                                                                   |
-| --------------- | ------------------------------------------------------------------------------------------------------ |
-| `name`          | e.g. Standard, Enterprise                                                                              |
-| `position`      | The order; first match wins                                                                            |
-| `enabled`       |                                                                                                        |
-| `appliesTo`     | `accountIds`, `planNames`, `tagsAny`; all empty = a default policy                                     |
+| Column          | What                                                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `name`          | e.g. Standard, Enterprise                                                                                                 |
+| `position`      | The order; first match wins                                                                                               |
+| `enabled`       |                                                                                                                           |
+| `appliesTo`     | `accountIds`, `planNames`, `tagsAny`; all empty = a default policy                                                        |
 | `targets`       | Per issue priority (`urgent`, `high`, `medium`, `low`; `none` uses `medium`): `firstResponseMinutes`, `resolutionMinutes` |
-| `hours`         | `business` or `always`                                                                                 |
-| `warnBeforePct` | Warn this share of the target before it is due (default 25%; 0 = only at breach)                       |
+| `hours`         | `business` or `always`                                                                                                    |
+| `warnBeforePct` | Warn this share of the target before it is due (default 25%; 0 = only at breach)                                          |
 
 An account's policy (`policyFor`): the first enabled policy naming it by id, else the first naming
 its plan or one of its tags, else the first default one; none = no SLA. Every org starts with
@@ -66,13 +66,13 @@ replay fixture folds a whole conversation; reports read the result.
 
 What a chip shows at `now` (`slaDisplay`), first that applies:
 
-| State      | When                                   | Chip                            |
-| ---------- | -------------------------------------- | ------------------------------- |
-| `OnTime`   | a reply (else resolution) is running   | "Reply due in 3h 10m"           |
-| `DueSoon`  | past its `warnAt`                      | "Reply due in 12m" (warning)    |
-| `Breached` | past its `dueAt`                       | "Reply overdue by 1h" (danger)  |
-| `Paused`   | resolution paused, nothing due         | "Paused · waiting on customer"  |
-| `Met`      | resolved: the first response           | "First reply in 8m" (muted)     |
+| State      | When                                 | Chip                           |
+| ---------- | ------------------------------------ | ------------------------------ |
+| `OnTime`   | a reply (else resolution) is running | "Reply due in 3h 10m"          |
+| `DueSoon`  | past its `warnAt`                    | "Reply due in 12m" (warning)   |
+| `Breached` | past its `dueAt`                     | "Reply overdue by 1h" (danger) |
+| `Paused`   | resolution paused, nothing due       | "Paused · waiting on customer" |
+| `Met`      | resolved: the first response         | "First reply in 8m" (muted)    |
 
 The chip counts down in wall time (the client ticks every 30 s); the deadline itself is in the
 policy's hours, so a business-hours reply due Monday morning reads "due in 2d" on Saturday.
