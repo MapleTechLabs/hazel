@@ -2,6 +2,7 @@ import { Submodel } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { type CommonReason, commonMessage, isRetryableReason } from "~/lib/error-messages"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import { IconPlus } from "../../../icons"
 import { button } from "../../../ui/button"
 import { emptyState } from "../../../ui/empty-state"
@@ -185,6 +186,8 @@ const linksCard = (h: HtmlBuilder<Message>, model: Model, connection: Connection
 const warningIcon = (h: HtmlBuilder<Message>) =>
 	outlineIcon(h, { className: "size-6 text-danger", d: WARNING_PATH, strokeWidth: "1.5" })
 
+const toSuggestionMessage = (message: SuggestionPrompt.Message) => Message.GotSuggestionMessage({ message })
+
 const detail = (h: HtmlBuilder<Message>, model: Model, connection: Connection): Html =>
 	h.div(
 		[h.Class("flex flex-col gap-6")],
@@ -196,7 +199,17 @@ const detail = (h: HtmlBuilder<Message>, model: Model, connection: Connection): 
 				[
 					h.div(
 						[h.Class("flex flex-col gap-8")],
-						[connectionCard(h, connection), linksCard(h, model, connection)],
+						[
+							connectionCard(h, connection),
+							SuggestionPrompt.view(h, model.suggestion, {
+								toParentMessage: toSuggestionMessage,
+								subject:
+									model.suggestionChannelName === null
+										? undefined
+										: `#${model.suggestionChannelName}`,
+							}),
+							linksCard(h, model, connection),
+						],
 					),
 					aboutCard(h, connection.provider),
 				],

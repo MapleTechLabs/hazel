@@ -1,8 +1,17 @@
 // @vitest-environment jsdom
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
+import { AcceptSuggestion, SuggestionMessage } from "../../../customers/suggestions"
 import { successToast } from "../../../data/actions"
-import { channelId, failureToastFixture, makeShared, pageScene } from "../../../test/pages-fixtures"
+import { CONTACT_SUGGESTION, suggestionFor } from "../../../lab/fixtures/customers-suggestions"
+import {
+	channelId,
+	failureToastFixture,
+	makeShared,
+	organizationId,
+	pageScene,
+} from "../../../test/pages-fixtures"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
 import { init, update, UpdateChannel } from "./update"
@@ -98,6 +107,53 @@ describe("channel overview scene", () => {
 			Scene.Subscription.emit(loadedChannel),
 			Scene.Subscription.emit(Message.UpdatedChannel({ channel: null })),
 			Scene.expect(nameInput).toBeAbsent(),
+		)
+	})
+
+	test("the hint: an unlinked channel that looks like a customer offers Link and Dismiss", () => {
+		const hinted = {
+			...update(initial, loadedChannel, shared).model,
+			suggestion: {
+				channelId,
+				items: [suggestionFor(channelId), suggestionFor(channelId, CONTACT_SUGGESTION)],
+				status: "Ready" as const,
+			},
+		}
+		Scene.scene(
+			pageScene(update, view, shared),
+			Scene.given(hinted),
+			Scene.expect(Scene.role("status")).toContainText("Looks like Acme Robotics"),
+			Scene.expect(Scene.text("Strong match")).toExist(),
+			Scene.expect(
+				Scene.text("3 of 4 external members have @acmerobotics.io, Acme Robotics's domain"),
+			).toExist(),
+			Scene.expect(Scene.role("button", { name: "Link to customer" })).toExist(),
+			Scene.click(Scene.role("button", { name: "Link to Acme Robotics" })),
+			Scene.Command.expectExact(
+				AcceptSuggestion({ organizationId, suggestion: suggestionFor(channelId), linkedBy: null }),
+			),
+			Scene.expect(Scene.role("button", { name: "Link to Acme Robotics" })).toBeDisabled(),
+			Scene.expect(Scene.text("Linking…")).toExist(),
+			Scene.Command.resolve(
+				AcceptSuggestion,
+				SuggestionMessage.SucceededAccept({ suggestion: suggestionFor(channelId) }),
+			),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Linked to Acme Robotics") }),
+			),
+			Scene.expect(Scene.role("status")).toBeAbsent(),
+		)
+	})
+
+	test("no suggestion: no hint, only the picker", () => {
+		Scene.scene(
+			pageScene(update, view, shared),
+			Scene.given({
+				...update(initial, loadedChannel, shared).model,
+				suggestion: { channelId, items: [], status: "Ready" as const },
+			}),
+			Scene.expect(Scene.role("status")).toBeAbsent(),
+			Scene.expect(Scene.role("button", { name: "Link to customer" })).toExist(),
 		)
 	})
 })

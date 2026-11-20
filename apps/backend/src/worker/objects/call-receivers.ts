@@ -62,6 +62,14 @@ import {
 	GitHubInstallationCall,
 } from "./org/github-webhooks"
 import { customerChannel, CustomerChannelCall } from "./org/channel-customers"
+import {
+	channelEvidence,
+	ChannelEvidenceCall,
+	connectGuestEvidence,
+	ConnectGuestEvidenceCall,
+	visibleChannels,
+	VisibleChannelsCall,
+} from "./org/channel-evidence"
 import { customerMembers, CustomerMembersCall } from "./org/customer-members"
 import { executeWebhook, ExecuteWebhookCall } from "./org/incoming-webhooks"
 import {
@@ -143,6 +151,9 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(OrganizationChannelsCall, organizationChannels),
 		receiver(CustomerMembersCall, customerMembers),
 		receiver(CustomerChannelCall, customerChannel),
+		receiver(ChannelEvidenceCall, channelEvidence),
+		receiver(ConnectGuestEvidenceCall, connectGuestEvidence),
+		receiver(VisibleChannelsCall, visibleChannels),
 	]),
 	channel: byName([
 		receiver(ListMessagesCall, listMessages),

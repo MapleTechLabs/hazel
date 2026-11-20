@@ -54,6 +54,22 @@ import { companyLogo, personLabel, sourceChip } from "./ui/identity"
 import { kpiTile } from "./ui/kpi-tile"
 import { queueAction, queueList, queueRow } from "./ui/queue-row"
 import { QUEUE_SHORTCUTS, shortcutBar } from "./ui/shortcuts"
+import {
+	LONG_SUGGESTION,
+	STRONG_SUGGESTION,
+	SUGGESTION_CHANNEL_OPTIONS,
+	SUGGESTIONS,
+	WORKSPACE_SUGGESTION,
+} from "../lab/fixtures/customers-suggestions"
+import * as SuggestionPrompt from "./suggestion-prompt"
+import {
+	EMPTY_SUGGESTIONS,
+	receivedSuggestions,
+	type ShownSuggestion,
+	shownSuggestions,
+	type SuggestionRow,
+	suggestionRow,
+} from "./suggestions"
 
 /**
  * The Customers kit gallery: the kit's real views over the lab fixtures, screenshotted in light and
@@ -388,16 +404,86 @@ const sources = (h: HtmlBuilder<M>) =>
 		],
 	)
 
+/** Suggested channel links: the overview's rows, the customer page's, and the one-channel prompt. */
+const shownOf = (rows: ReadonlyArray<SuggestionRow>): ReadonlyArray<ShownSuggestion> =>
+	shownSuggestions(receivedSuggestions(EMPTY_SUGGESTIONS, rows), SUGGESTION_CHANNEL_OPTIONS)
+
+const suggestionCase = (h: HtmlBuilder<M>, label: string, body: ReadonlyArray<Html>) =>
+	h.div(
+		[h.Class("flex flex-col gap-2")],
+		[
+			h.span([h.Class("text-muted-fg text-xs")], [label]),
+			h.div([h.Class("rounded-xl border border-border p-4")], body),
+		],
+	)
+
+const suggestionList = (
+	h: HtmlBuilder<M>,
+	rows: ReadonlyArray<SuggestionRow>,
+	options: { readonly showAccount: boolean },
+) =>
+	h.ul(
+		[h.Class("flex flex-col divide-y divide-border")],
+		shownOf(rows).map((shown) =>
+			suggestionRow(h, {
+				shown,
+				showAccount: options.showAccount,
+				accountHref: options.showAccount ? "#" : undefined,
+				onLink: ignored,
+				onDismiss: ignored,
+			}),
+		),
+	)
+
+const prompt = (h: HtmlBuilder<M>, row: SuggestionRow, status: SuggestionPrompt.Status, subject?: string) =>
+	SuggestionPrompt.view(
+		h,
+		{ channelId: row.channelId, items: [row], status },
+		{ toParentMessage: () => ignored, subject },
+	)
+
+const suggestions = (h: HtmlBuilder<M>) =>
+	h.div(
+		[h.Id("suggestions"), h.Class("grid grid-cols-3 gap-4")],
+		[
+			suggestionCase(h, "Overview: empty (the card is hidden)", [
+				suggestionList(h, [], { showAccount: true }),
+			]),
+			suggestionCase(h, "Overview: one strong suggestion", [
+				suggestionList(h, [STRONG_SUGGESTION], { showAccount: true }),
+			]),
+			suggestionCase(h, "Overview: several, partial reasons (an unseen channel is dropped)", [
+				suggestionList(h, SUGGESTIONS, { showAccount: true }),
+			]),
+			suggestionCase(h, "Long channel and account names", [
+				suggestionList(h, [LONG_SUGGESTION], { showAccount: true }),
+			]),
+			suggestionCase(h, "Customer page sidebar: Suggested", [
+				h.div(
+					[h.Class("w-80")],
+					[suggestionList(h, [STRONG_SUGGESTION, WORKSPACE_SUGGESTION], { showAccount: false })],
+				),
+			]),
+			suggestionCase(h, "Channel settings: the hint", [prompt(h, STRONG_SUGGESTION, "Ready")]),
+			suggestionCase(h, "After a share (chat sync / Connect)", [
+				prompt(h, WORKSPACE_SUGGESTION, "Ready", "#nw-integration"),
+			]),
+			suggestionCase(h, "Prompt with long names", [
+				prompt(h, LONG_SUGGESTION, "Ready", "The shared channel"),
+			]),
+		],
+	)
+
 const screen = (h: HtmlBuilder<M>) =>
 	h.div(
 		[h.Id("gallery"), h.Class("flex w-[1600px] flex-col gap-6 bg-bg p-8 font-sans text-fg antialiased")],
-		[badges(h), kpis(h), charts(h), controls(h), queue(h), table(h), sources(h)],
+		[badges(h), kpis(h), charts(h), controls(h), queue(h), table(h), sources(h), suggestions(h)],
 	)
 
 for (const theme of ["light", "dark"] as const) {
 	test(theme, async () => {
 		if (theme === "dark") document.documentElement.classList.add("dark")
-		await page.viewport(1600, 1800)
+		await page.viewport(1600, 2400)
 		render(screen)
 		await document.fonts.ready
 		const label = import.meta.env.VITE_GALLERY_LABEL ? `${import.meta.env.VITE_GALLERY_LABEL}-` : ""

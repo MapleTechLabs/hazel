@@ -1,8 +1,11 @@
 import * as Customers from "@hazel/domain/customers"
+import { CustomerChannelSuggestionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
+import { ChannelOption } from "../../../customers/channels"
 import { AccountRow, SettingsSummary, SignalRow } from "../../../customers/queries"
+import { SuggestionMessage, SuggestionRow } from "../../../customers/suggestions"
 import { Chart, HealthMetric } from "./model"
 
 export const Message = defineMessageUnion({
@@ -21,5 +24,13 @@ export const Message = defineMessageUnion({
 	UpdatedAccounts: { accounts: Schema.Array(AccountRow) },
 	UpdatedConnectedProviders: { providers: Schema.Array(Customers.CustomerProvider) },
 	UpdatedSettings: { settings: Schema.NullOr(SettingsSummary) },
+	UpdatedChannelOptions: { channels: Schema.Array(ChannelOption) },
+
+	SucceededFetchSuggestions: { items: Schema.Array(SuggestionRow) },
+	FailedFetchSuggestions: {},
+	PressedAcceptSuggestion: { suggestionId: CustomerChannelSuggestionId },
+	PressedDismissSuggestion: { suggestionId: CustomerChannelSuggestionId },
+	/** The shared accept / dismiss Commands' answers (`customers/suggestions.ts`). */
+	CompletedSuggestionAction: { message: SuggestionMessage },
 })
 export type Message = typeof Message.Type

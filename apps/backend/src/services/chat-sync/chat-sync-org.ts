@@ -53,6 +53,7 @@ import {
 	type OrgChatSyncIngestPayload,
 	type RepublishLinksPayload,
 } from "./chat-sync-effects"
+import { recordChannelAuthor } from "./chat-sync-authors"
 import type { ChatSyncProviderDefinition } from "./provider"
 import { definitionOf } from "./providers"
 
@@ -354,12 +355,12 @@ const ownerOf = Effect.fn("OrgObject.chatSyncOwnerLink")(function* (link: Inboun
 			.limit(1),
 	)
 	if (Option.isNone(channel) || channel.value.type !== "thread" || channel.value.parentChannelId === null) {
-		return Option.some(link)
+		return Option.some({ ...link, ownerLinkId: link.id })
 	}
 	const parentChannelId = channel.value.parentChannelId
 	const parent = yield* db.first(
 		SQLite.from(schema.chatSyncChannelLinksTable)
-			.select("isActive", "direction", "settings", "createdAt")
+			.select("id", "isActive", "direction", "settings", "createdAt")
 			.where(($) => [
 				$.syncConnectionId.eq(link.syncConnectionId),
 				$.hazelChannelId.eq(parentChannelId),
@@ -369,7 +370,14 @@ const ownerOf = Effect.fn("OrgObject.chatSyncOwnerLink")(function* (link: Inboun
 	)
 	return Option.map(
 		Option.filter(parent, (owner) => isParentOf(owner, link)),
-		({ isActive, direction, settings }) => ({ ...link, isActive, direction, settings }),
+		// `ownerLinkId`: the parent's mirror, which a thread's evidence belongs to.
+		({ id, isActive, direction, settings }) => ({
+			...link,
+			isActive,
+			direction,
+			settings,
+			ownerLinkId: id,
+		}),
 	)
 })
 
@@ -627,6 +635,26 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 	switch (event._tag) {
 		case "MessageCreate":
 			if (authorId === undefined) return yield* outcome("no_author")
+			if (payload.author !== null && payload.author.externalUserId !== null) {
+				yield* recordChannelAuthor({
+					provider,
+					hazelChannelId: link.hazelChannelId,
+					// A thread reply counts for its parent's mirror, as its row is the parent channel's.
+					syncChannelLinkId: owner.ownerLinkId,
+					externalUserId: payload.author.externalUserId,
+					email: payload.author.email,
+					externalWorkspaceId: payload.author.externalWorkspaceId,
+				}).pipe(
+					// Evidence for suggested customer links only: the message is ingested regardless.
+					Effect.catchTags({
+						DatabaseError: (error) =>
+							Effect.logWarning("Chat sync author not recorded", {
+								provider,
+								reason: error.message,
+							}),
+					}),
+				)
+			}
 			forwarded = {
 				_tag: "MessageCreate",
 				externalMessageId: event.externalMessageId,

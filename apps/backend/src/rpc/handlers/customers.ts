@@ -52,7 +52,14 @@ import {
 	switchProviderAccount,
 } from "../../worker/objects/customers/credentials"
 import { callObject } from "../../worker/objects/calls"
-import { linkOwnerOf, publishChannelCustomers } from "../../worker/objects/customers/channels"
+import {
+	decidedForCustomer,
+	eventReasons,
+	openSuggestion,
+	openSuggestions,
+	refreshSuggestions,
+} from "../../worker/objects/customers/channel-suggestions"
+import { linkChannelNow, publishChannelCustomers } from "../../worker/objects/customers/channels"
 import { seedDemo } from "../../worker/objects/customers/demo"
 import { healthDryRun, ruleDryRun } from "../../worker/objects/customers/dry-run"
 import {
@@ -422,6 +429,48 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 				Effect.gen(function* () {
 					yield* requireAdmin
 					return { items: yield* db.run(SQLite.from(schema.customerIgnoreRulesTable).select()) }
+				}).pipe(remap),
+
+			"customers.channel.suggestions": ({ accountId, channelId, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					const actor = yield* requireMember
+					if (channelId !== undefined) {
+						const check = yield* checkChannel(organizationId, channelId, actor.userId)
+						if (check === "not_found") return yield* notFound("channel", channelId)
+						// A channel shared a moment ago has no suggestion yet. A failed refresh still
+						// answers what is stored.
+						const refreshFailed = (error: { readonly _tag: string; readonly message: string }) =>
+							Effect.logWarning("Customers suggestion refresh failed", {
+								channelId,
+								error: error._tag,
+								reason: error.message,
+							})
+						yield* refreshSuggestions(organizationId, [channelId]).pipe(
+							Effect.catchTags({
+								ObjectCallError: refreshFailed,
+								DatabaseError: refreshFailed,
+								SchemaError: refreshFailed,
+							}),
+						)
+					}
+					const items = yield* openSuggestions({
+						organizationId,
+						userId: actor.userId,
+						accountId,
+						channelId,
+					}).pipe(
+						Effect.catchTag("ObjectCallError", (cause) =>
+							Effect.fail(
+								new InternalServerError({
+									message: "Could not check the channels",
+									detail: cause.message,
+									cause,
+								}),
+							),
+						),
+					)
+					return { items }
 				}).pipe(remap),
 
 			"customers.plans.list": () =>
@@ -825,57 +874,89 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						return yield* invalid("Only channels can be linked to a customer, not threads or DMs")
 					}
 					const now = yield* currentTime
+					// The link is the customer's: stored on its group's primary, whichever environment
+					// it was linked from (`linkChannel`, shared with accepted and automatic suggestions).
 					return yield* withTx(
 						Effect.gen(function* () {
-							// The link is the customer's: stored on its group's primary, whichever
-							// environment it was linked from.
-							const owner = yield* linkOwnerOf(yield* requireAccount(accountId))
-							const current = yield* db.first(
-								SQLite.from(schema.customerChannelLinksTable)
-									.select()
-									.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()])
-									.limit(1),
-							)
-							if (Option.isSome(current) && current.value.accountId === owner) {
-								return current.value
-							}
-							// A channel has one customer: linking it here moves it from the other.
-							if (Option.isSome(current)) {
-								yield* db.run(
-									SQLite.update(schema.customerChannelLinksTable)
-										.set({ deletedAt: now, updatedAt: now })
-										.where(($) => [$.id.eq(current.value.id)]),
-								)
-								yield* hazelEvent(
-									current.value.accountId,
-									actor.userId,
-									"channel.unlinked",
-									"Channel unlinked",
-									{ channelId, movedTo: owner },
-									now,
-								)
-							}
-							const [link] = yield* db.run(
-								SQLite.insertInto(schema.customerChannelLinksTable)
-									.values({
-										id, // `undefined`: the column's default
-										organizationId,
-										accountId: owner,
-										channelId,
-										linkedBy: actor.userId,
-									})
-									.returning(),
-							)
-							yield* hazelEvent(
-								owner,
-								actor.userId,
-								"channel.linked",
-								"Channel linked",
-								{ channelId },
+							return yield* linkChannelNow({
+								organizationId,
+								account: yield* requireAccount(accountId),
+								channelId,
+								actor: actor.userId,
 								now,
+								id,
+							})
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.channel.suggestion.accept": ({ suggestionId, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					const actor = yield* requireMember
+					const found = yield* openSuggestion(suggestionId)
+					if (Option.isNone(found)) return yield* notFound("suggestion", suggestionId)
+					const { channelId, accountId } = found.value
+					// Its customer decided the channel through another account of the group.
+					if (yield* decidedForCustomer(found.value))
+						return yield* notFound("suggestion", suggestionId)
+					const check = yield* checkChannel(organizationId, channelId, actor.userId)
+					if (check === "not_found") return yield* notFound("suggestion", suggestionId)
+					if (check === "not_linkable") {
+						return yield* invalid("Only channels can be linked to a customer, not threads or DMs")
+					}
+					const now = yield* currentTime
+					return yield* withTx(
+						Effect.gen(function* () {
+							// Decided while the channel was checked (another tab, a refresh).
+							const still = yield* openSuggestion(suggestionId)
+							if (Option.isNone(still) || (yield* decidedForCustomer(still.value))) {
+								return yield* notFound("suggestion", suggestionId)
+							}
+							// The account as it is now: its group may have changed during the check.
+							const account = yield* liveAccount(accountId)
+							if (Option.isNone(account)) return yield* notFound("account", accountId)
+							return yield* linkChannelNow({
+								organizationId,
+								account: account.value,
+								channelId,
+								actor: actor.userId,
+								now,
+								suggestionId,
+								// Name-free: events reach every member, channel names may be private.
+								event: {
+									title: "Channel linked",
+									data: { suggestionId, reasons: eventReasons(still.value.reasons) },
+								},
+							})
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.channel.suggestion.dismiss": ({ suggestionId, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					const actor = yield* requireMember
+					const found = yield* openSuggestion(suggestionId)
+					if (Option.isNone(found)) return yield* notFound("suggestion", suggestionId)
+					const check = yield* checkChannel(organizationId, found.value.channelId, actor.userId)
+					if (check === "not_found") return yield* notFound("suggestion", suggestionId)
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.gen(function* () {
+							const still = yield* openSuggestion(suggestionId)
+							if (Option.isNone(still)) return yield* notFound("suggestion", suggestionId)
+							// Remembered for good: that account is never suggested for that channel again.
+							yield* db.run(
+								SQLite.update(schema.customerChannelSuggestionsTable)
+									.set({
+										status: "dismissed",
+										decidedBy: actor.userId,
+										decidedAt: now,
+										updatedAt: now,
+									})
+									.where(($) => [$.id.eq(suggestionId)]),
 							)
-							yield* publishChannelCustomers(organizationId)
-							return link
 						}),
 					)
 				}).pipe(remap),

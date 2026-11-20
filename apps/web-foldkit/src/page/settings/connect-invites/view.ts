@@ -3,6 +3,7 @@ import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { getConnectInviteStatusBadge } from "~/lib/connect-shared-channels"
 import { type CommonReason, commonMessage, isRetryableReason } from "~/lib/error-messages"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import { IconConnect, IconWarning } from "../../../icons"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
@@ -16,6 +17,8 @@ import type { Invite, Model } from "./model"
 import { heading } from "../../../ui/heading"
 
 /** Port of `routes/_app/$orgSlug/settings/connect-invites.tsx`. */
+
+const toSuggestionMessage = (message: SuggestionPrompt.Message) => Message.GotSuggestionMessage({ message })
 
 /** A low-priority column a phone leaves out (its cells carry the same class). */
 const PHONE_HIDDEN = "max-md:hidden"
@@ -198,6 +201,11 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	return h.div(
 		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
 		[
+			SuggestionPrompt.view(h, model.suggestion, {
+				toParentMessage: toSuggestionMessage,
+				// The guest channel is named "shared-channel" until the host's snapshot arrives.
+				subject: "The shared channel",
+			}),
 			card(h, {}, [
 				cardHeader(h, [
 					h.div(

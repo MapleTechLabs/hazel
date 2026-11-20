@@ -4,6 +4,7 @@
  * and the read results. The RPCs are `../rpc/customers.ts`.
  */
 export * from "./analytics"
+export * from "./channel-suggestions"
 export * from "./connections"
 export * from "./enums"
 export * from "./evidence"

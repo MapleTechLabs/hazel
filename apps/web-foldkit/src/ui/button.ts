@@ -95,7 +95,12 @@ export const button = <Message>(
 			...options,
 			// Only the variants reach tv(), as in the legacy call; className is merged afterwards.
 			className: buttonClassName(
-				{ intent: options.intent, size: options.size, isCircle: options.isCircle },
+				{
+					intent: options.intent,
+					size: options.size,
+					isCircle: options.isCircle,
+					isTouchTarget: options.isTouchTarget,
+				},
 				options.className,
 			),
 		},

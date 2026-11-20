@@ -30,7 +30,14 @@ import {
 	IconPlus,
 	IconSidebarRight,
 } from "../../../icons"
-import { type ChannelOption, channelMark, ORIGIN_LABEL, searchOptions } from "../../../customers/channels"
+import {
+	type ChannelLinkRow,
+	type ChannelOption,
+	channelMark,
+	ORIGIN_LABEL,
+	searchOptions,
+} from "../../../customers/channels"
+import { shownSuggestions, suggestionRow } from "../../../customers/suggestions"
 import { featureFlagKeysOf, hasFlag } from "../../../customers/feature-flags"
 import { safeSourceUrl } from "../../../customers/providers"
 import { attentionMuteLabel, isAttentionMuted } from "../../../customers/queries"
@@ -677,10 +684,11 @@ const tags = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =>
 const linkedChannelRow = (
 	h: HtmlBuilder<Message>,
 	context: Context,
-	channelId: ChannelOption["id"],
+	entry: ChannelLinkRow,
 	channel: ChannelOption | undefined,
-): Html =>
-	h.div(
+): Html => {
+	const channelId = entry.channelId
+	return h.div(
 		[h.Key(channelId), h.Class("flex items-center gap-2 rounded-lg border border-border px-3 py-2")],
 		[
 			channel === undefined
@@ -704,7 +712,14 @@ const linkedChannelRow = (
 								},
 								[channel.name],
 							),
-							h.span([h.Class("text-muted-fg text-xs")], [ORIGIN_LABEL[channel.origin]]),
+							h.span(
+								[h.Class("text-muted-fg text-xs")],
+								[
+									entry.linkedBy === null
+										? `${ORIGIN_LABEL[channel.origin]} · Linked automatically`
+										: ORIGIN_LABEL[channel.origin],
+								],
+							),
 						],
 			),
 			button(
@@ -721,6 +736,43 @@ const linkedChannelRow = (
 			),
 		],
 	)
+}
+
+/** The customer's open suggestions (hidden when none): one click links, × dismisses. */
+const suggestedChannels = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	customer: string,
+	linkedHere: ReadonlySet<string>,
+): ReadonlyArray<Html> => {
+	const customerOf = customerOfAccount(model)
+	const shown = shownSuggestions(model.suggestions, model.channelOptions).filter(
+		({ suggestion }) =>
+			customerOf(suggestion.accountId) === customer && !linkedHere.has(suggestion.channelId),
+	)
+	if (shown.length === 0) return []
+	return [
+		h.div(
+			[h.Class("flex flex-col pt-2")],
+			[
+				heading(h, { variant: "label", level: 3 }, ["Suggested"]),
+				h.ul(
+					[h.Class("flex flex-col divide-y divide-border"), h.AriaLabel("Suggested channels")],
+					shown.map((entry) =>
+						suggestionRow(h, {
+							shown: entry,
+							showAccount: false,
+							onLink: Message.PressedAcceptSuggestion({ suggestionId: entry.suggestion.id }),
+							onDismiss: Message.PressedDismissSuggestion({
+								suggestionId: entry.suggestion.id,
+							}),
+						}),
+					),
+				),
+			],
+		),
+	]
+}
 
 /** The channel picker: search the org's channels; one linked elsewhere says where (it moves here). */
 const channelPicker = (h: HtmlBuilder<Message>, model: Model, linkedHere: ReadonlySet<string>): Html => {
@@ -820,9 +872,8 @@ const channelsSection = (h: HtmlBuilder<Message>, model: Model, context: Context
 						["Link the Slack, Discord, Connect or Hazel channels you talk to this customer in."],
 					),
 				]
-			: linked.map((entry) =>
-					linkedChannelRow(h, context, entry.channelId, options.get(entry.channelId)),
-				)),
+			: linked.map((entry) => linkedChannelRow(h, context, entry, options.get(entry.channelId)))),
+		...suggestedChannels(h, model, customer, linkedHere),
 		h.div([h.Class("pt-1")], [channelPicker(h, model, linkedHere)]),
 	])
 }

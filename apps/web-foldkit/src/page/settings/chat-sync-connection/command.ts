@@ -186,6 +186,8 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 				organizationId: orgOfChatSyncConnection(payload.syncConnectionId),
 			})
 			return Message.SucceededCreateLink({
+				hazelChannelId: payload.hazelChannelId,
+				hazelChannelName,
 				successMessage:
 					payload.historyLimit > 0
 						? `Linked #${hazelChannelName} to #${payload.externalChannelName}. Importing recent messages…`
