@@ -1,11 +1,14 @@
 /**
  * Terminal colors for the setup CLI, the subset of picocolors it used. Plain text when `NO_COLOR` is set,
- * or, unless `FORCE_COLOR` is set, when stdout is not a terminal or the terminal is `TERM=dumb`.
+ * or, unless `FORCE_COLOR` is set, when stdout is not a terminal or the terminal is `TERM=dumb`. An
+ * empty value counts as unset for both (no-color.org, force-color.org).
  */
 
+const isSet = (name: string) => (process.env[name] ?? "") !== ""
+
 const enabled =
-	!("NO_COLOR" in process.env) &&
-	("FORCE_COLOR" in process.env || (process.stdout.isTTY === true && process.env.TERM !== "dumb"))
+	!isSet("NO_COLOR") &&
+	(isSet("FORCE_COLOR") || (process.stdout.isTTY === true && process.env.TERM !== "dumb"))
 
 const style =
 	(open: number, close: number) =>
