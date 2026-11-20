@@ -5,7 +5,7 @@
  * channels the caller sees.
  */
 import type { OrganizationId } from "@hazel/schema"
-import { Effect, type Scope } from "effect"
+import { Cause, Effect, Exit, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { orgTarget } from "../kinds"
 import { channelEvidence } from "../org/channel-evidence"
@@ -347,6 +347,12 @@ describe("Suggested channel links", () => {
 				]) {
 					const exit = yield* t.world.call(tag as never, { suggestionId: row!.id }, t.world.member)
 					expect([tag, tagOf(exit)]).toEqual([tag, "CustomersNotFoundError"])
+					// Named by the suggestion, never by the private channel behind it.
+					const error = Exit.isFailure(exit) ? Cause.findErrorOption(exit.cause) : undefined
+					expect(error?._tag === "Some" ? error.value : undefined).toMatchObject({
+						entity: "suggestion",
+						id: row!.id,
+					})
 				}
 				expect(t.suggestions(secret)).toMatchObject([{ status: "open" }])
 				expect(ok(yield* t.list({}, t.world.owner)).items).toHaveLength(1)
