@@ -7,7 +7,7 @@
  * the channel's events); a connection row (`provider:workspace::org`) is per org.
  */
 import { SQLite, schema } from "@hazel/db"
-import type { ExternalChannelId, ExternalUserId } from "@hazel/schema"
+import type { ExternalChannelId, ExternalUserId, OrganizationId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import type { EffectReceivers } from "../../worker/objects/effects/registry"
 import { toUserProjection } from "../../worker/objects/org/projections"
@@ -84,6 +84,34 @@ export const indexedLinkOwner = (provider: string, externalWorkspaceId: string, 
 				.where(($) => [$.id.eq(`${provider}:${externalWorkspaceId}:${externalChannelId}`)]),
 		),
 	).pipe(Effect.map(Option.map((row) => row.organizationId)))
+
+/** D1 binds at most 100 parameters a statement. */
+const OWNER_LOOKUP_CHUNK = 90
+
+/**
+ * `indexedLinkOwner` for many channels of one workspace: a few directory reads (chunks of 90), not
+ * one per channel. Channels no org syncs are absent from the map.
+ */
+export const indexedLinkOwners = (
+	provider: string,
+	externalWorkspaceId: string,
+	externalChannelIds: ReadonlyArray<string>,
+) =>
+	Effect.gen(function* () {
+		const directory = yield* Directory
+		const owners = new Map<string, OrganizationId>()
+		const prefix = `${provider}:${externalWorkspaceId}:`
+		const ids = [...new Set(externalChannelIds)].map((id) => `${prefix}${id}`)
+		for (let start = 0; start < ids.length; start += OWNER_LOOKUP_CHUNK) {
+			const rows = yield* directory.db.run(
+				SQLite.from(schema.chatSyncIndexTable)
+					.select("id", "organizationId")
+					.where(($) => [$.id.in_(...ids.slice(start, start + OWNER_LOOKUP_CHUNK))]),
+			)
+			for (const row of rows) owners.set(row.id.slice(prefix.length), row.organizationId)
+		}
+		return owners
+	})
 
 /**
  * Upsert a machine user in the directory by its external id and return it as a projection: a

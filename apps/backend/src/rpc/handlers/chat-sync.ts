@@ -40,7 +40,7 @@ import {
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { IntegrationConnectionPolicy } from "../../policies/integration-connection-policy"
-import { indexedLinkOwner } from "../../services/chat-sync/chat-sync-index"
+import { indexedLinkOwner, indexedLinkOwners } from "../../services/chat-sync/chat-sync-index"
 import { indexChatSync, publishChatSyncLinks, threadLinksUnder } from "../../services/chat-sync/chat-sync-org"
 import {
 	type ChatSyncDirection,
@@ -360,8 +360,18 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 					.pipe(withRemapDbErrors("ChatSyncChannelLink", "create")),
 
 			"chatSync.migrate": (payload) =>
-				db
-					.transaction(
+				Effect.gen(function* () {
+					// Who syncs each channel already, read from the directory before the transaction:
+					// a D1 round trip per channel would hold the org's transaction open meanwhile.
+					const preview = yield* connectionRepo.findById(payload.syncConnectionId)
+					const owners = Option.isSome(preview)
+						? yield* indexedLinkOwners(
+								preview.value.provider,
+								preview.value.externalWorkspaceId,
+								payload.channels.map((channel) => channel.externalChannelId),
+							)
+						: new Map<string, OrganizationId>()
+					return yield* db.transaction(
 						Effect.gen(function* () {
 							const connectionOption = yield* connectionRepo.findById(payload.syncConnectionId)
 							if (
@@ -425,14 +435,10 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 									connection.id,
 									channel.externalChannelId,
 								)
-								const owner = yield* indexedLinkOwner(
-									connection.provider,
-									connection.externalWorkspaceId,
-									channel.externalChannelId,
-								)
+								const owner = owners.get(channel.externalChannelId)
 								if (
 									Option.isSome(existingExternal) ||
-									(Option.isSome(owner) && owner.value !== connection.organizationId)
+									(owner !== undefined && owner !== connection.organizationId)
 								) {
 									skipped.push(channel.externalChannelId)
 									continue
@@ -513,7 +519,7 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							return new ChatSyncMigrateResponse({ linked, skipped, transactionId: txid })
 						}),
 					)
-					.pipe(withRemapDbErrors("ChatSyncChannelLink", "create")),
+				}).pipe(withRemapDbErrors("ChatSyncChannelLink", "create")),
 
 			"chatSync.channelLink.list": ({ syncConnectionId }) =>
 				Effect.gen(function* () {
