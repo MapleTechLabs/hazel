@@ -56,7 +56,8 @@ export const chatPeopleOf = (
 			const author = authorsById.get(participant.userId)
 			const side = author?.side ?? participant.side
 			const override = author?.override ?? null
-			if (side !== "customer" && override !== "team") return []
+			// Bots stay bots whatever the override.
+			if (side === "bot" || (side !== "customer" && override !== "team")) return []
 			return [
 				{
 					userId: participant.userId,

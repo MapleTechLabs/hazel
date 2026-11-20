@@ -46,7 +46,7 @@ import {
 	restoreNoteDraft,
 	writeNoteDrafts,
 } from "./note-drafts"
-import type { ChannelLinkRow } from "../../../customers/channels"
+import { ChannelLinkRow } from "../../../customers/channels"
 import { chatPeopleOfModel, chatPersonEntries, shownChatPeople } from "./people-in-chat"
 import { init, routeChanged, update } from "./update"
 import { StartCustomerImpersonation } from "./commands"
@@ -773,12 +773,31 @@ describe("customer page: people in chat", () => {
 		).toEqual(expected)
 	})
 
+	test("a bot marked as team stays out", () => {
+		const bot = Schema.decodeSync(UserId)(uuid(403))
+		const withBot = run(withPeople, [
+			Message.UpdatedChatParticipants({
+				participants: [participant(bot, "Deploy bot", { side: "bot", reason: "bot" })],
+			}),
+			Message.UpdatedChatAuthors({
+				authors: [author(bot, { side: "bot", reason: "bot", override: "team" })],
+			}),
+		])
+		expect(chatPeopleOfModel(withBot)).toEqual([])
+	})
+
 	test("listed only while the customer still has a linked channel", () => {
 		const unlinked = run(withPeople, [Message.UpdatedChannelLinks({ links: [] })])
 		expect(shownChatPeople(unlinked)).toEqual([])
 		const linked = run(withPeople, [
 			Message.UpdatedChannelLinks({
-				links: [{ id: uuid(600), accountId: beta.id, channelId: uuid(500) } as ChannelLinkRow],
+				links: [
+					Schema.decodeSync(ChannelLinkRow)({
+						id: uuid(600),
+						accountId: beta.id,
+						channelId: uuid(500),
+					}),
+				],
 			}),
 		])
 		expect(shownChatPeople(linked).map((person) => person.name)).toEqual(["Mia", "Linus"])

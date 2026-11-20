@@ -10,17 +10,17 @@ after a customer message") build on this.
 `classifyAuthor(facts, override)` in `packages/domain/src/customers/author-side.ts` (pure, tested).
 First match wins:
 
-| Facts about the author (`AuthorFacts`)                      | Side     | Reason                     |
-| ----------------------------------------------------------- | -------- | -------------------------- |
-| A bot, an integration, a webhook (any machine user)         | bot      | `bot` (overrides ignored)  |
-| A member set an override                                    | as set   | `override`                 |
-| Member of the org                                           | team     | `org_member`               |
-| Was a member of the org                                     | team     | `former_member`            |
-| Member of another org in a Hazel Connect channel            | customer | `connect_guest`            |
-| Slack author from another workspace (Slack Connect)         | customer | `external_other_workspace` |
-| Slack author from our own workspace, Hazel account unlinked | team     | `external_home_workspace`  |
-| Slack or Discord author, workspace unknown (Discord always) | customer | `external`                 |
-| Nothing known                                               | unknown  | `unknown`                  |
+| Facts about the author (`AuthorFacts`)                                          | Side     | Reason                     |
+| ------------------------------------------------------------------------------- | -------- | -------------------------- |
+| A bot, an integration, a webhook (any machine user)                             | bot      | `bot` (overrides ignored)  |
+| A member set an override                                                        | as set   | `override`                 |
+| Member of the org                                                               | team     | `org_member`               |
+| Member of another org in a Hazel Connect channel (also a former member of ours) | customer | `connect_guest`            |
+| Was a member of the org                                                         | team     | `former_member`            |
+| Slack author from another workspace (Slack Connect)                             | customer | `external_other_workspace` |
+| Slack author from our own workspace, Hazel account unlinked                     | team     | `external_home_workspace`  |
+| Slack or Discord author, workspace unknown (Discord always)                     | customer | `external`                 |
+| Nothing known                                                                   | unknown  | `unknown`                  |
 
 Notes:
 

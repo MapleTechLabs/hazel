@@ -352,6 +352,12 @@ export const chatAuthorsReported = Effect.fn("OrgObject.chatAuthorsReported")(fu
 	)
 	const link = yield* linkOf(payload.linkedChannelId)
 	if (Option.isNone(channel) || Option.isNone(link)) return
+	// A report from an earlier link of the channel (delayed across an unlink) is dropped.
+	const current = yield* readObjectMeta(backfillKey(payload.linkedChannelId))
+	if (Option.getOrUndefined(current) !== payload.requestId) {
+		yield* Effect.annotateCurrentSpan({ "customer_chat.stale_report": true })
+		return
+	}
 	const organizationId = channel.value.organizationId
 	const authors = yield* Effect.forEach(payload.authors, (reported) =>
 		Effect.map(classifyChatAuthor(organizationId, reported.userId), (author) => ({

@@ -6,7 +6,7 @@
  */
 import { schema } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
-import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
+import type { ChannelId, CustomerAccountId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { decodeExit, encodePayload, rpcFor } from "../../../rpc/dispatch"
@@ -336,7 +336,17 @@ describe("Author side in linked channels", () => {
 				expect(t.authors()[bob]).toBe("customer:external")
 				expect(t.participants()[bob]?.side).toBe("customer")
 
-				// Not a member (a shadow cannot sign in, but is refused anyway), or nobody the org knows.
+				// Not a member of the org at all.
+				expect(
+					tagOf(
+						yield* t.callOrg(
+							"customers.chatAuthor.setSide",
+							{ userId: bob, side: "team" },
+							t.world.stranger,
+						),
+					),
+				).toBe("UnauthorizedError")
+				// A member who is not a person (a shadow cannot sign in, but is refused anyway), or nobody the org knows.
 				expect(
 					tagOf(
 						yield* t.callOrg("customers.chatAuthor.setSide", { userId: bob, side: "team" }, bob),
@@ -459,7 +469,7 @@ describe("Author side in linked channels", () => {
 						onNoMatch: "create",
 					},
 				])
-				const globex = t.world.rows<{ id: string }>(
+				const globex = t.world.rows<{ id: CustomerAccountId }>(
 					`SELECT id FROM customer_accounts WHERE name = 'Globex'`,
 				)[0]!.id
 				const moved = yield* t.world.call(
