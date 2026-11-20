@@ -2,7 +2,7 @@ import * as Customers from "@hazel/domain/customers"
 import { DragAndDrop } from "@foldkit/ui"
 import { CustomerAccountId, CustomerSavedViewId, CustomerViewLayoutId, UserId } from "@hazel/schema"
 import { Array, Order, Schema } from "effect"
-import { groupRows } from "../../../customers/groups"
+import { nestUnderPrimaries } from "../../../customers/groups"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { lookOf, type ViewLook } from "../../../customers/ui/view-look"
 import { ALL_KEY, arrange, CURRENT_KEY } from "../../../customers/view-layout"
@@ -417,7 +417,7 @@ const memoLast = <A>() => {
 
 const visibleMemo = memoLast<ReadonlyArray<AccountRow>>()
 
-/** The rows the table shows, in order: sorted, then each customer's environments kept together. */
+/** The rows the table shows, in order: sorted, each customer's environments nested under its primary. */
 export const visibleAccounts = (model: Model, viewer: Viewer): ReadonlyArray<AccountRow> =>
 	visibleMemo(
 		[
@@ -431,13 +431,12 @@ export const visibleAccounts = (model: Model, viewer: Viewer): ReadonlyArray<Acc
 		],
 		() => {
 			const accounts = model.accounts ?? []
-			return groupRows(
+			return nestUnderPrimaries(
 				sortAccounts(
 					accounts.filter((account) => matchesFilters(effectiveFilters(model), account, viewer)),
 					model.draft.sort,
 					model.members,
 				),
-				new Set(accounts.map((account) => account.id)),
 			)
 		},
 	)

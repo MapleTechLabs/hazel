@@ -38,6 +38,22 @@ export const groupRows = <A extends GroupMember>(
 	return [...groups.values()].flat()
 }
 
+/**
+ * `rows` (filtered and sorted) with each environment moved under its primary, when that primary is
+ * among `rows`; every other row keeps its sorted place, so the top-level rows stay in sort order.
+ */
+export const nestUnderPrimaries = <A extends GroupMember>(rows: ReadonlyArray<A>): ReadonlyArray<A> => {
+	const nestedIds = nestedIdsOf(rows)
+	const children = new Map<string, Array<A>>()
+	for (const row of rows) {
+		if (row.primaryAccountId === null || !nestedIds.has(row.id)) continue
+		const siblings = children.get(row.primaryAccountId)
+		if (siblings === undefined) children.set(row.primaryAccountId, [row])
+		else siblings.push(row)
+	}
+	return rows.flatMap((row) => (nestedIds.has(row.id) ? [] : [row, ...(children.get(row.id) ?? [])]))
+}
+
 /** The rows shown under their primary: environments whose primary is among `rows`. */
 export const nestedIdsOf = (rows: ReadonlyArray<GroupMember>): ReadonlySet<string> => {
 	const ids = idsOf(rows)

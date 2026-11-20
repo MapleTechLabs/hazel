@@ -277,8 +277,8 @@ describe("customers list: sort and columns", () => {
 		})
 	})
 
-	test("a customer's environments stay together, primary first, where its first one sorts", () => {
-		// Acme's EU environment is the smallest, Kestrel the largest; Acme sits where its first row sorts.
+	test("a customer's environments nest under its primary, which keeps its own sorted place", () => {
+		// Acme's EU environment is the smallest paying row; it still follows Acme, wherever Acme sorts.
 		const acmeEu = account(6, "Acme Robotics", {
 			primaryAccountId: acme.id,
 			environment: "EU",
@@ -294,12 +294,12 @@ describe("customers list: sort and columns", () => {
 			kestrel.id,
 			brightfield.id,
 		])
-		// Ascending: the EU environment sorts first, and its primary comes with it, ahead of it.
+		// Ascending: the environment does not pull Acme up; top-level rows stay in MRR order.
 		const ascending = run(model, [
 			Message.ClickedSortHeader({ column: "mrr" }),
 			Message.ClickedSortHeader({ column: "mrr" }),
 		])
-		expect(ids(ascending).slice(0, 3)).toEqual([brightfield.id, acme.id, acmeEu.id])
+		expect(ids(ascending)).toEqual([brightfield.id, kestrel.id, acme.id, acmeEu.id, northwind.id])
 		// A search that drops the primary keeps the environment, on its own.
 		expect(ids(run(model, [Message.ChangedSearch({ value: "eu" })]))).toEqual([acmeEu.id])
 		const atRiskOnly = run(init(route("at_risk")).model, [
