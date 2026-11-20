@@ -25,6 +25,7 @@ import {
 	updateNoteAction,
 } from "../../../customers/actions"
 import { linkChannelAction, unlinkChannelAction } from "../../../customers/channels"
+import { fetchSuggestions } from "../../../customers/suggestions"
 import { settleFeatureFlags } from "../../../customers/feature-flags"
 import { catchCommon, errorToastOf } from "../../../data/actions"
 import { showBackgroundToast } from "../../../overlay/background-toasts"
@@ -278,6 +279,19 @@ export const UnlinkCustomerChannel = Command.define("UnlinkCustomerChannel", {
 				Effect.succeed(Message.FailedChannelAction({ action: "unlink", reason: "NotFound" })),
 			),
 			catchCommon((reason) => Message.FailedChannelAction({ action: "unlink", reason })),
+		),
+})
+
+// SUGGESTED CHANNEL LINKS
+
+/** The customer's open suggestions (`accountId`: the customer, its group's primary). */
+export const FetchCustomerSuggestions = Command.define("FetchCustomerSuggestions", {
+	args: target,
+	messages: [Message.SucceededFetchSuggestions, Message.FailedFetchSuggestions],
+	execute: ({ organizationId, accountId }) =>
+		fetchSuggestions(organizationId, { accountId }).pipe(
+			Effect.map((items) => Message.SucceededFetchSuggestions({ customer: accountId, items })),
+			catchCommon(() => Message.FailedFetchSuggestions({ customer: accountId })),
 		),
 })
 

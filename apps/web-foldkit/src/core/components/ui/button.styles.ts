@@ -72,6 +72,10 @@ export const buttonStyles = tv({
 			true: "rounded-full",
 			false: "rounded-lg",
 		},
+		/** A 44×44 hit area on a coarse pointer, for a button drawn smaller than that (xs, sq-xs). */
+		isTouchTarget: {
+			true: "after:absolute after:top-1/2 after:left-1/2 after:size-full after:min-h-11 after:min-w-11 after:-translate-x-1/2 after:-translate-y-1/2 pointer-fine:after:hidden",
+		},
 	},
 	defaultVariants: {
 		intent: "primary",

@@ -1,10 +1,22 @@
 import { Option, Result } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
+import { Command } from "foldkit"
+import {
+	AcceptSuggestion,
+	DismissSuggestion,
+	EMPTY_SUGGESTIONS,
+	hideSuggestion,
+	receivedSuggestions,
+	SuggestionMessage,
+	suggestionFailureToast,
+	unhideSuggestion,
+} from "../../../customers/suggestions"
+import { successToast } from "../../../data/actions"
 import { AppRoute } from "../../../route"
 import type { PageReturn, Shared } from "../../contract"
-import { requestedOrgNavigation } from "../../out-message"
-import { FetchCustomersOverview } from "./commands"
+import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
+import { FetchCustomersOverview, FetchSuggestedChannelLinks } from "./commands"
 import { Message } from "./message"
 import type { Model } from "./model"
 
@@ -22,8 +34,29 @@ const fetch = (model: Model, shared: Shared): Return => {
 	}
 }
 
+/** The suggested channel links, asked once the organization is known (`force`: again). */
+const fetchSuggestions = (model: Model, shared: Shared, force = false): Return => {
+	const organizationId = shared.organization?.id
+	if (organizationId === undefined || (model.hasRequestedSuggestions && !force)) return { model }
+	return {
+		model: modifyFields(model, { hasRequestedSuggestions: () => true }),
+		commands: [FetchSuggestedChannelLinks({ organizationId })],
+	}
+}
+
+const both = (model: Model, shared: Shared): Return => {
+	const overview = AsyncData.isIdle(model.overview) ? fetch(model, shared) : { model }
+	const suggestions = fetchSuggestions(overview.model, shared)
+	return {
+		model: suggestions.model,
+		commands: [...(overview.commands ?? []), ...(suggestions.commands ?? [])],
+	}
+}
+
+const toSuggestionMessage = (message: SuggestionMessage) => Message.CompletedSuggestionAction({ message })
+
 export const init = (_route: unknown, shared: Shared): Return =>
-	fetch(
+	both(
 		{
 			range: "30d",
 			isComparing: true,
@@ -35,13 +68,15 @@ export const init = (_route: unknown, shared: Shared): Return =>
 			accounts: null,
 			connectedProviders: null,
 			settings: null,
+			suggestions: EMPTY_SUGGESTIONS,
+			hasRequestedSuggestions: false,
+			channelOptions: [],
 		},
 		shared,
 	)
 
 /** The organization arrived after the page opened. */
-export const sharedChanged = (model: Model, shared: Shared): Return =>
-	AsyncData.isIdle(model.overview) ? fetch(model, shared) : { model }
+export const sharedChanged = (model: Model, shared: Shared): Return => both(model, shared)
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
@@ -102,4 +137,82 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model: modifyFields(model, { connectedProviders: () => providers }),
 		}),
 		UpdatedSettings: ({ settings }) => ({ model: modifyFields(model, { settings: () => settings }) }),
+		UpdatedChannelOptions: ({ channels }) => ({
+			model: modifyFields(model, { channelOptions: () => channels }),
+		}),
+
+		SucceededFetchSuggestions: ({ items }) => ({
+			model: modifyFields(model, { suggestions: (list) => receivedSuggestions(list, items) }),
+		}),
+		// Asked again on the next change of the shared state (a failed fetch is not "none").
+		FailedFetchSuggestions: () => ({
+			model: modifyFields(model, { hasRequestedSuggestions: () => false }),
+		}),
+		PressedAcceptSuggestion: ({ suggestionId }) => {
+			const organizationId = shared.organization?.id
+			const userId = shared.currentUser?.id
+			const suggestion = model.suggestions.items?.find((item) => item.id === suggestionId)
+			// Pressed again while its write runs: already hidden, sent once.
+			if (
+				organizationId === undefined ||
+				userId === undefined ||
+				suggestion === undefined ||
+				model.suggestions.hidden.includes(suggestionId)
+			)
+				return { model }
+			return {
+				// The row leaves at once; the channel's customer shows wherever links show.
+				model: modifyFields(model, { suggestions: (list) => hideSuggestion(list, suggestionId) }),
+				commands: [
+					Command.mapMessage(
+						AcceptSuggestion({ organizationId, suggestion, linkedBy: userId }),
+						toSuggestionMessage,
+					),
+				],
+			}
+		},
+		PressedDismissSuggestion: ({ suggestionId }) => {
+			const organizationId = shared.organization?.id
+			const suggestion = model.suggestions.items?.find((item) => item.id === suggestionId)
+			if (
+				organizationId === undefined ||
+				suggestion === undefined ||
+				model.suggestions.hidden.includes(suggestionId)
+			)
+				return { model }
+			return {
+				model: modifyFields(model, { suggestions: (list) => hideSuggestion(list, suggestionId) }),
+				commands: [
+					Command.mapMessage(
+						DismissSuggestion({ organizationId, suggestion }),
+						toSuggestionMessage,
+					),
+				],
+			}
+		},
+		// Ask again after each: accepting settles the channel's other suggestions too.
+		CompletedSuggestionAction: ({ message: action }) =>
+			SuggestionMessage.match<Return>(action, {
+				SucceededAccept: ({ suggestion }) => {
+					const channel = model.channelOptions.find((option) => option.id === suggestion.channelId)
+					const what = channel === undefined ? "the channel" : `#${channel.name}`
+					return {
+						...fetchSuggestions(model, shared, true),
+						outMessage: PageOutMessage.RequestedToast({
+							toast: successToast(`Linked ${what} to ${suggestion.accountName}`),
+						}),
+					}
+				},
+				SucceededDismiss: () => fetchSuggestions(model, shared, true),
+				FailedSuggestionAction: ({ suggestion, action: failed, reason }) => ({
+					...fetchSuggestions(
+						modifyFields(model, { suggestions: (list) => unhideSuggestion(list, suggestion.id) }),
+						shared,
+						true,
+					),
+					outMessage: PageOutMessage.RequestedToast({
+						toast: suggestionFailureToast(failed, reason),
+					}),
+				}),
+			}),
 	})

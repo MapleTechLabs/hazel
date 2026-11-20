@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ConnectInviteId, OrganizationId } from "@hazel/schema"
+import { ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
@@ -55,7 +55,15 @@ describe("connect invitations", () => {
 			name: "AcceptInvite",
 			args: { inviteId, guestOrganizationId: hazel },
 		})
-		const accepted = update(accepting.model, Message.SucceededAccept({ inviteId }), shared(hazel))
+		const accepted = update(
+			accepting.model,
+			Message.SucceededAccept({
+				inviteId,
+				conversationId: Schema.decodeSync(ConnectConversationId)(uuid(3)),
+				transactionId: "org:1:2",
+			}),
+			shared(hazel),
+		)
 		expect(accepted.model.acceptingIds).toEqual([])
 		expect(accepted.commands?.map((command) => command.name)).toEqual(["ListIncomingInvites"])
 		expect(accepted.outMessage).toMatchObject({ toast: { title: "Channel connected" } })
