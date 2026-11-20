@@ -291,7 +291,7 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 		{
 			id: "0008_customer_channel_suggestions",
 			statements: [
-				'CREATE TABLE IF NOT EXISTS "chat_sync_channel_authors" (\n\t"hazelChannelId" text NOT NULL,\n\t"provider" text NOT NULL,\n\t"externalUserId" text NOT NULL,\n\t"externalWorkspaceId" text,\n\t"email" text,\n\t"firstSeenAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"lastSeenAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("hazelChannelId", "provider", "externalUserId")\n)',
+				'CREATE TABLE IF NOT EXISTS "chat_sync_channel_authors" (\n\t"hazelChannelId" text NOT NULL,\n\t"syncChannelLinkId" text,\n\t"provider" text NOT NULL,\n\t"externalUserId" text NOT NULL,\n\t"externalWorkspaceId" text,\n\t"email" text,\n\t"firstSeenAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"lastSeenAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("hazelChannelId", "provider", "externalUserId")\n)',
 				'CREATE INDEX IF NOT EXISTS "chat_sync_channel_authors_channel_idx" ON "chat_sync_channel_authors" ("hazelChannelId")',
 			],
 		},

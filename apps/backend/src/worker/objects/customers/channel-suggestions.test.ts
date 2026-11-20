@@ -104,23 +104,32 @@ const setup = Effect.gen(function* () {
 		world.owner,
 	)
 	/** A Slack-mirrored channel with authors: `[team, email]`. */
-	const slack = (channelId: string, authors: ReadonlyArray<readonly [string, string | null]>) => {
+	/** Mirrors the channel from Slack; `authors` were seen through this mirror unless `throughLink` names another. */
+	const slack = (
+		channelId: string,
+		authors: ReadonlyArray<readonly [string, string | null]>,
+		throughLink?: string,
+	) => {
+		const linkId = uuid()
 		exec(
-			`INSERT INTO chat_sync_channel_links (syncConnectionId, hazelChannelId, externalChannelId) VALUES (?, ?, ?)`,
+			`INSERT INTO chat_sync_channel_links (id, syncConnectionId, hazelChannelId, externalChannelId) VALUES (?, ?, ?, ?)`,
+			linkId,
 			connection,
 			channelId,
 			`C${channelId.slice(0, 8)}`,
 		)
 		authors.forEach(([team, email], index) =>
 			exec(
-				`INSERT INTO chat_sync_channel_authors (hazelChannelId, provider, externalUserId, externalWorkspaceId, email)
-				 VALUES (?, 'slack', ?, ?, ?)`,
+				`INSERT INTO chat_sync_channel_authors (hazelChannelId, syncChannelLinkId, provider, externalUserId, externalWorkspaceId, email)
+				 VALUES (?, ?, 'slack', ?, ?, ?)`,
 				channelId,
+				throughLink ?? linkId,
 				`U${index}${channelId.slice(0, 6)}`,
 				team,
 				email,
 			),
 		)
+		return linkId
 	}
 	const refresh = (channelIds?: ReadonlyArray<string>) =>
 		world.object.run(refreshSuggestions(orgId, channelIds as never)).pipe(Effect.orDie)
@@ -601,6 +610,19 @@ describe("Suggested channel links", () => {
 				yield* t.refresh()
 				expect(t.suggestions(mirrored).filter((r) => r.status === "open")).toEqual([])
 				expect(ok(yield* t.list({})).items).toEqual([])
+			}),
+		))
+
+	it("ignores authors seen through a replaced Slack mirror", () =>
+		run(
+			Effect.gen(function* () {
+				const t = yield* setup
+				const mirrored = t.channel("globex-ops", [t.world.member])
+				// The authors came through an earlier mirror of this channel, since replaced.
+				t.slack(mirrored, [[GLOBEX_TEAM, "gina@globex.com"]], uuid())
+				const [entry] = yield* t.evidence([mirrored])
+				expect(entry?.externalMembers).toEqual([])
+				expect(entry?.workspaces.some((workspace) => workspace.external)).toBe(false)
 			}),
 		))
 
