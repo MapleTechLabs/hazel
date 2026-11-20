@@ -147,8 +147,16 @@ export const registerDevice = Effect.fn("UserObject.registerDevice")(function* (
 				set: { environment: device.environment, bundleId: device.bundleId, updatedAt },
 			}),
 	)
-	yield* db.query(
-		Database.sql`DELETE FROM push_devices WHERE token NOT IN (SELECT token FROM push_devices ORDER BY updatedAt DESC LIMIT ${MAX_PUSH_DEVICES})`,
+	yield* db.run(
+		SQLite.deleteFrom(schema.pushDevicesTable).where(($) => [
+			SQLite.notInSubquery(
+				$.token,
+				SQLite.from(schema.pushDevicesTable)
+					.select("token")
+					.orderBy(($) => [[$.updatedAt, "desc"]])
+					.limit(MAX_PUSH_DEVICES),
+			),
+		]),
 	)
 	return updatedAt
 })

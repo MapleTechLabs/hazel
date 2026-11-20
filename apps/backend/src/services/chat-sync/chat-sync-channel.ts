@@ -46,17 +46,16 @@ const decodeLinks = Schema.decodeUnknownOption(SetChatSyncLinksPayload)
 const noLinks: SetChatSyncLinksPayload = { links: [], accounts: [] }
 
 /** The channel's active links and the org's linked accounts, as last projected. */
-export const readChatSyncLinks: Effect.Effect<SetChatSyncLinksPayload, never, SqlClient> = readObjectMeta(
-	LINKS_KEY,
-).pipe(
-	Effect.map((raw) =>
-		Option.getOrElse(
-			Option.flatMap(raw, (value) => decodeLinks(JSON.parse(value))),
-			() => noLinks,
+export const readChatSyncLinks: Effect.Effect<SetChatSyncLinksPayload, never, Database.Database> =
+	readObjectMeta(LINKS_KEY).pipe(
+		Effect.map((raw) =>
+			Option.getOrElse(
+				Option.flatMap(raw, (value) => decodeLinks(JSON.parse(value))),
+				() => noLinks,
+			),
 		),
-	),
-	Effect.orDie,
-)
+		Effect.orDie,
+	)
 
 export const writeChatSyncLinks = (payload: SetChatSyncLinksPayload) =>
 	writeObjectMeta(LINKS_KEY, JSON.stringify(Schema.encodeSync(SetChatSyncLinksPayload)(payload)))

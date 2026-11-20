@@ -481,7 +481,7 @@ export const logRefreshFailure = <A, E, R>(refresh: Effect.Effect<A, E, R>): Eff
  * compute (the org may be unreachable for a moment; the next compute retries).
  */
 export const refreshSuggestionsAfterCompute = Effect.gen(function* () {
-	const self = yield* readObjectMeta("id").pipe(Effect.mapError(Database.toDatabaseError))
+	const self = yield* readObjectMeta("id")
 	if (Option.isNone(self)) return
 	yield* refreshSuggestions(self.value as OrganizationId)
 }).pipe((refresh) => logRefreshFailure(refresh))

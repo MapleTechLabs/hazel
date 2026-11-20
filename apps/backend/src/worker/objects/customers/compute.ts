@@ -34,7 +34,6 @@ import {
 } from "@hazel/domain/customers"
 import { CustomerAccountId, type CustomerSignalId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
-import type { SqlError } from "effect/sql/SqlError"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 import { refreshSuggestionsAfterCompute } from "./channel-suggestions"
 import { publishChannelCustomersAfterCompute } from "./channels"
@@ -96,9 +95,6 @@ const SYNC_RUN_RETENTION_MS = 30 * DAY_MS
 const PRUNED_KEY = "prunedOn"
 /** Set once the recorded days' user counts were redone from activity (rows written before it was backfilled). */
 const USER_COUNTS_REDONE_KEY = "userCountsRedone"
-
-const meta = <A, R>(effect: Effect.Effect<A, SqlError, R>) =>
-	effect.pipe(Effect.mapError(Database.toDatabaseError))
 
 const same = (a: unknown, b: unknown) =>
 	a instanceof Date || b instanceof Date
@@ -700,10 +696,19 @@ const finishSignals = Effect.fn("Customers.finishSignals")(function* (
 	if (run.armed.length > 0) yield* clearBaselineFor(run.armed)
 
 	// Signals of deleted accounts: closed (an account no longer evaluated never resolves them).
-	const orphans = (yield* db.query(
-		Database.sql`SELECT "id", "status" FROM "customer_signals" WHERE "closedAt" IS NULL
-			AND "accountId" NOT IN (SELECT "id" FROM "customer_accounts" WHERE "deletedAt" IS NULL)`,
-	)) as ReadonlyArray<Pick<schema.CustomerSignal, "id" | "status">>
+	const orphans = yield* db.run(
+		SQLite.from(schema.customerSignalsTable)
+			.select("id", "status")
+			.where(($) => [
+				$.closedAt.isNull(),
+				SQLite.notInSubquery(
+					$.accountId,
+					SQLite.from(schema.customerAccountsTable)
+						.select("id")
+						.where((a) => [a.deletedAt.isNull()]),
+				),
+			]),
+	)
 	for (const chunk of accountChunks(orphans)) {
 		yield* db.transaction(
 			Effect.forEach(
@@ -875,9 +880,9 @@ const writeOrgDay = (base: SnapshotBase, totals: OrgTotals) =>
 				.onConflictDoUpdate({ target: ["day"], set: values }),
 		)
 		// Rows recorded before activity was backfilled kept their counts: redone once, from activity.
-		if (Option.isNone(yield* meta(readObjectMeta(USER_COUNTS_REDONE_KEY)))) {
+		if (Option.isNone(yield* readObjectMeta(USER_COUNTS_REDONE_KEY))) {
 			yield* redoUserCounts(addDays(today, -HISTORY_DAYS), addDays(yesterday, -1))
-			yield* meta(writeObjectMeta(USER_COUNTS_REDONE_KEY, "1"))
+			yield* writeObjectMeta(USER_COUNTS_REDONE_KEY, "1")
 		}
 		// Yesterday's activity keeps arriving after midnight: its row's user counts are redone.
 		const stored = yield* db.first(
@@ -898,9 +903,17 @@ const writeOrgDay = (base: SnapshotBase, totals: OrgTotals) =>
 
 /** Environments whose primary is gone (deleted by a sync) stand alone again. */
 const releaseOrphanedEnvironments = Effect.flatMap(Database.Database, (db) =>
-	db.query(
-		Database.sql`UPDATE "customer_accounts" SET "primaryAccountId" = NULL
-		WHERE "primaryAccountId" IN (SELECT "id" FROM "customer_accounts" WHERE "deletedAt" IS NOT NULL)`,
+	db.run(
+		SQLite.update(schema.customerAccountsTable)
+			.set({ primaryAccountId: null })
+			.where(($) => [
+				SQLite.inSubquery(
+					$.primaryAccountId,
+					SQLite.from(schema.customerAccountsTable)
+						.select("id")
+						.where((a) => [a.deletedAt.isNotNull()]),
+				),
+			]),
 	),
 )
 
@@ -969,12 +982,12 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 	// Today's movement alone is not history: one a compute wrote while billing was still importing
 	// (a partial MRR's jump) is replaced by the rebuilt series.
 	const withMovements = new Set(
-		(
-			(yield* db.query(
-				Database.sql`SELECT DISTINCT "accountId" FROM "customer_mrr_movements"
-				WHERE "day" >= ${first} AND "day" < ${today}`,
-			)) as ReadonlyArray<{ accountId: CustomerAccountId }>
-		).map((row) => row.accountId),
+		(yield* db.run(
+			SQLite.from(schema.customerMrrMovementsTable)
+				.select("accountId")
+				.where(($) => [$.day.gte(first), $.day.lt(today)])
+				.distinct(),
+		)).map((row) => row.accountId),
 	)
 	const mrr = Array.from({ length: days.length }, () => 0)
 	const paying = Array.from({ length: days.length }, () => 0)
@@ -1021,12 +1034,12 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 	}
 	const users = yield* activeCounts(first, today)
 	const health = new Map(
-		(
-			(yield* db.query(
-				Database.sql`SELECT "day", "status", count(*) AS "count" FROM "customer_health_daily"
-				WHERE "day" >= ${first} GROUP BY "day", "status"`,
-			)) as ReadonlyArray<{ day: Day; status: string; count: number }>
-		).map((row) => [`${row.day}:${row.status}`, Number(row.count)]),
+		(yield* db.run(
+			SQLite.from(schema.customerHealthDailyTable)
+				.select(($) => ({ day: $.day, status: $.status, count: SQLite.count() }))
+				.where(($) => [$.day.gte(first)])
+				.groupBy("day", "status"),
+		)).map((row) => [`${row.day}:${row.status}`, row.count]),
 	)
 	const healthOf = (day: Day, status: string) => health.get(`${day}:${status}`) ?? 0
 	// Today's row is written by the compute that follows, with its at-risk MRR.
@@ -1050,9 +1063,16 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 	const now = base.org.now
 	yield* db.transaction(
 		Effect.gen(function* () {
-			yield* db.query(
-				Database.sql`DELETE FROM "customer_mrr_movements" WHERE "day" = ${today} AND "accountId" NOT IN
-					(SELECT "accountId" FROM "customer_mrr_movements" WHERE "day" >= ${first} AND "day" < ${today})`,
+			yield* db.run(
+				SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [
+					$.day.eq(today),
+					SQLite.notInSubquery(
+						$.accountId,
+						SQLite.from(schema.customerMrrMovementsTable)
+							.select("accountId")
+							.where((m) => [m.day.gte(first), m.day.lt(today)]),
+					),
+				]),
 			)
 			for (const chunk of accountChunks(movements, rowsPerInsert(7))) {
 				yield* db.run(SQLite.insertInto(schema.customerMrrMovementsTable).values(chunk as never))
@@ -1101,7 +1121,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 const prune = Effect.fn("Customers.prune")(function* (now: Date) {
 	const db = yield* Database.Database
 	const today = dayOf(now)
-	if (Option.getOrUndefined(yield* meta(readObjectMeta(PRUNED_KEY))) === today) return
+	if (Option.getOrUndefined(yield* readObjectMeta(PRUNED_KEY)) === today) return
 	const oldest = addDays(today, -DAILY_RETENTION_DAYS)
 	const ago = (ms: number) => new Date(now.getTime() - ms)
 	yield* db.run(SQLite.deleteFrom(schema.customerHealthDailyTable).where(($) => [$.day.lt(oldest)]))
@@ -1123,7 +1143,7 @@ const prune = Effect.fn("Customers.prune")(function* (now: Date) {
 			$.startedAt.lt(ago(SYNC_RUN_RETENTION_MS)),
 		]),
 	)
-	yield* meta(writeObjectMeta(PRUNED_KEY, today))
+	yield* writeObjectMeta(PRUNED_KEY, today)
 })
 
 // ---------------------------------------------------------------------------

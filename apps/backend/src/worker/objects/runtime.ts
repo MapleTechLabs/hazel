@@ -173,7 +173,6 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 					objectId: identity.current(),
 				}).pipe(
 					Effect.catchTags({
-						SqlError: (error) => Effect.logError("Message search backfill not started", error),
 						DatabaseError: (error) =>
 							Effect.logError("Message search backfill not started", error),
 						SchemaError: (error) => Effect.logError("Message search backfill not started", error),

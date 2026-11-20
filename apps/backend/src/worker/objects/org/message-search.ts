@@ -46,9 +46,15 @@ export const SEARCH_MIGRATION_ID = "0002_message_search"
  * next). Without it, index writes are dropped (the activation that creates it backfills).
  */
 export const searchAvailable = Effect.gen(function* () {
-	const sql = yield* SqlClient
-	const rows = yield* sql`SELECT 1 AS present FROM sqlite_master
-		WHERE type = 'table' AND name IN ('message_search', 'message_search_fts', 'message_search_backfill')`
+	const db = yield* Database.Database
+	const rows = yield* db.run(
+		SQLite.from(schema.sqliteMasterTable)
+			.select("name")
+			.where(($) => [
+				$.type.eq("table"),
+				$.name.in_("message_search", "message_search_fts", "message_search_backfill"),
+			]),
+	)
 	return rows.length === 3
 })
 
@@ -117,21 +123,32 @@ const applyIndex = Effect.fn("OrgObject.applySearchIndex")(function* (
 	},
 ) {
 	if (!(yield* searchAvailable)) return
-	const sql = yield* SqlClient
-	if (change.replace) yield* sql`DELETE FROM message_search WHERE "channelId" = ${channelId}`
+	const db = yield* Database.Database
+	if (change.replace) {
+		yield* db.run(SQLite.deleteFrom(schema.messageSearchTable).where(($) => [$.channelId.eq(channelId)]))
+	}
 	if (change.remove.length > 0) {
-		yield* sql`DELETE FROM message_search
-			WHERE "channelId" = ${channelId} AND ${sql.in("messageId", change.remove)}`
+		yield* db.run(
+			SQLite.deleteFrom(schema.messageSearchTable).where(($) => [
+				$.channelId.eq(channelId),
+				$.messageId.in_(...change.remove),
+			]),
+		)
 	}
 	const names = yield* namesFor(change.upsert)
 	for (const message of change.upsert) {
-		const content = toSearchText(message.content, (id) => names.get(id))
-		yield* sql`INSERT INTO message_search ("messageId", "channelId", "authorId", "conversationId", "createdAt", "content")
-			VALUES (${message.id}, ${channelId}, ${message.authorId}, ${message.conversationId}, ${message.createdAt}, ${content})
-			ON CONFLICT ("messageId") DO UPDATE SET
-				"channelId" = excluded."channelId", "authorId" = excluded."authorId",
-				"conversationId" = excluded."conversationId", "createdAt" = excluded."createdAt",
-				"content" = excluded."content"`
+		yield* db.run(
+			SQLite.insertInto(schema.messageSearchTable)
+				.values({
+					messageId: message.id,
+					channelId,
+					authorId: message.authorId,
+					conversationId: message.conversationId,
+					createdAt: message.createdAt,
+					content: toSearchText(message.content, (id) => names.get(id)),
+				})
+				.onConflictDoUpdate({ target: ["messageId"], set: SQLite.excludedAll() }),
+		)
 	}
 	yield* Effect.annotateCurrentSpan({
 		"search.upserted": change.upsert.length,
@@ -201,8 +218,10 @@ export const indexMessages = Effect.fn("OrgObject.indexMessages")(function* (pay
 	const channel = yield* localChannel(channelId)
 	if (Option.isNone(channel) || channel.value.deletedAt !== null) {
 		// Gone since the backfill asked: nothing left to wait for.
-		const sql = yield* SqlClient
-		yield* sql`DELETE FROM message_search_backfill WHERE "channelId" = ${channelId}`
+		const db = yield* Database.Database
+		yield* db.run(
+			SQLite.deleteFrom(schema.messageSearchBackfillTable).where(($) => [$.channelId.eq(channelId)]),
+		)
 		return
 	}
 	const change = {
@@ -225,13 +244,20 @@ export const indexMessages = Effect.fn("OrgObject.indexMessages")(function* (pay
 	yield* forwardToGuests(channelId, change)
 
 	if (page === undefined) return
-	const sql = yield* SqlClient
-	const rows = yield* sql<{ generation: number }>`SELECT generation FROM message_search_backfill
-		WHERE "channelId" = ${channelId}`
+	const db = yield* Database.Database
+	const backfill = yield* db.first(
+		SQLite.from(schema.messageSearchBackfillTable)
+			.select("generation")
+			.where(($) => [$.channelId.eq(channelId)]),
+	)
 	// A page of an earlier backfill: its rows still count, its chain does not continue.
-	if (rows[0] === undefined || Number(rows[0].generation) !== page.generation) return
+	if (Option.isNone(backfill) || backfill.value.generation !== page.generation) return
 	if (page.next === null) {
-		yield* sql`UPDATE message_search_backfill SET done = 1 WHERE "channelId" = ${channelId}`
+		yield* db.run(
+			SQLite.update(schema.messageSearchBackfillTable)
+				.set({ done: true })
+				.where(($) => [$.channelId.eq(channelId)]),
+		)
 		return
 	}
 	yield* enqueueEffect(
@@ -263,9 +289,9 @@ export const exportToGuest = Effect.fn("OrgObject.exportSearchToGuest")(function
 /** Guest: the mount ended; what it indexed from the host channel goes. */
 export const dropMountedSearch = Effect.fn("OrgObject.dropMountedSearch")(function* (channelId: ChannelId) {
 	if (!(yield* searchAvailable)) return
-	const sql = yield* SqlClient
-	yield* sql`DELETE FROM message_search WHERE "channelId" = ${channelId}`
-}, Effect.mapError(Database.toDatabaseError))
+	const db = yield* Database.Database
+	yield* db.run(SQLite.deleteFrom(schema.messageSearchTable).where(($) => [$.channelId.eq(channelId)]))
+})
 
 export const messageSearchOrgReceivers = {
 	"org.indexMessages": indexMessages,
@@ -327,7 +353,6 @@ export const searchSenderRefusal = Effect.fn("OrgObject.searchSenderRefusal")(fu
 export const reindexMessageSearch = Effect.fn("OrgObject.reindexMessageSearch")(function* () {
 	if (!(yield* searchAvailable)) return 0
 	const db = yield* Database.Database
-	const sql = yield* SqlClient
 	const generation = yield* Clock.currentTimeMillis
 	const channels = yield* db.run(
 		SQLite.from(schema.channelsTable)
@@ -341,10 +366,14 @@ export const reindexMessageSearch = Effect.fn("OrgObject.reindexMessageSearch")(
 	)
 	const guestMounts = new Set<string>(mounts.map((row) => row.channelId))
 	const owned = channels.filter((channel) => !guestMounts.has(channel.id))
-	yield* sql`DELETE FROM message_search_backfill`
+	yield* db.run(SQLite.deleteFrom(schema.messageSearchBackfillTable).allRows())
 	for (const channel of owned) {
-		yield* sql`INSERT INTO message_search_backfill ("channelId", generation, done)
-			VALUES (${channel.id}, ${generation}, 0)`
+		yield* db.run(
+			SQLite.insertInto(schema.messageSearchBackfillTable).values({
+				channelId: channel.id,
+				generation,
+			}),
+		)
 		yield* enqueueEffect(
 			SearchChannelEffects.exportSearchMessages,
 			channelTarget(channel.id) as { kind: "channel"; id: string },
@@ -383,12 +412,18 @@ export const BACKFILL_TIMEOUT_MS = 6 * 60 * 60 * 1000
 
 /** Whether some live channel still owes the current backfill pages. */
 const backfillPending = Effect.gen(function* () {
-	const sql = yield* SqlClient
+	const db = yield* Database.Database
 	const cutoff = (yield* Clock.currentTimeMillis) - BACKFILL_TIMEOUT_MS
-	const rows = yield* sql`SELECT 1 AS pending FROM message_search_backfill b
-		JOIN channels c ON c."id" = b."channelId" AND c."deletedAt" IS NULL
-		WHERE b.done = 0 AND b.generation > ${cutoff} LIMIT 1`
-	return rows.length > 0
+	const pending = yield* db.first(
+		SQLite.from(schema.messageSearchBackfillTable, "b")
+			.innerJoin(schema.channelsTable, "c", (b, c) =>
+				SQLite.and(c.id.eq(b.channelId), c.deletedAt.isNull()),
+			)
+			.select(($) => ({ channelId: $.channelId }))
+			.where(($) => [$.done.eq(false), $.generation.gt(cutoff)])
+			.limit(1),
+	)
+	return Option.isSome(pending)
 })
 
 // QUERY
@@ -523,7 +558,7 @@ export const searchMessages = Effect.fn("OrgObject.searchMessages")(
 			indexing,
 		})
 	},
-	Effect.catchTag("SqlError", (error) =>
+	Effect.catchTag(["SqlError", "DatabaseError"], (error) =>
 		Effect.fail(
 			new InternalServerError({
 				message: "Message search failed",

@@ -278,15 +278,9 @@ export const publishChannelCustomers = Effect.fn("CustomersObject.publishChannel
 ) {
 	const links = yield* channelCustomerSnapshot
 	const print = yield* fingerprint(links)
-	const sent = yield* readObjectMeta(SENT_KEY).pipe(Effect.mapError(Database.toDatabaseError))
+	const sent = yield* readObjectMeta(SENT_KEY)
 	if (Option.getOrUndefined(sent) === print) return
-	const last = Option.getOrElse(
-		Option.map(
-			yield* readObjectMeta(VERSION_KEY).pipe(Effect.mapError(Database.toDatabaseError)),
-			Number,
-		),
-		() => 0,
-	)
+	const last = Option.getOrElse(Option.map(yield* readObjectMeta(VERSION_KEY), Number), () => 0)
 	// Past the last one and at least the clock, so it increases across restarts.
 	const version = Math.max(last + 1, yield* Clock.currentTimeMillis)
 	yield* enqueueEffect(ChannelCustomerOrgEffects.setChannelCustomers, orgTarget(organizationId), {
@@ -294,14 +288,14 @@ export const publishChannelCustomers = Effect.fn("CustomersObject.publishChannel
 		links,
 		version,
 	})
-	yield* writeObjectMeta(VERSION_KEY, String(version)).pipe(Effect.mapError(Database.toDatabaseError))
-	yield* writeObjectMeta(SENT_KEY, print).pipe(Effect.mapError(Database.toDatabaseError))
+	yield* writeObjectMeta(VERSION_KEY, String(version))
+	yield* writeObjectMeta(SENT_KEY, print)
 })
 
 /** After a compute: the object's own id is its organization's. In its own transaction. */
 export const publishChannelCustomersAfterCompute = Effect.gen(function* () {
 	const db = yield* Database.Database
-	const self = yield* readObjectMeta("id").pipe(Effect.mapError(Database.toDatabaseError))
+	const self = yield* readObjectMeta("id")
 	if (Option.isNone(self)) return
 	const organizationId = self.value as OrganizationId
 	yield* db.transaction(publishChannelCustomers(organizationId))

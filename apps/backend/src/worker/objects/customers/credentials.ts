@@ -154,25 +154,50 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 			$.status.eq("open"),
 		]),
 	)
-	yield* db.query(
-		Database.sql`DELETE FROM "customer_metric_daily" WHERE "metricKey" IN
-			(SELECT "key" FROM "customer_metric_definitions" WHERE "provider" = ${provider})`,
+	yield* db.run(
+		SQLite.deleteFrom(schema.customerMetricDailyTable).where(($) => [
+			SQLite.inSubquery(
+				$.metricKey,
+				SQLite.from(schema.customerMetricDefinitionsTable)
+					.select("key")
+					.where((d) => [d.provider.eq(provider)]),
+			),
+		]),
 	)
 	// Activity of the contacts only this provider placed (other sources' contacts keep theirs).
-	yield* db.query(
-		Database.sql`DELETE FROM "customer_activity_daily" WHERE "contactId" IN (
-			SELECT "entityId" FROM "customer_external_refs" AS "r"
-			WHERE "provider" = ${provider} AND "entityType" = 'contact' AND NOT EXISTS (
-				SELECT 1 FROM "customer_external_refs" AS "o" WHERE "o"."entityType" = 'contact'
-					AND "o"."entityId" = "r"."entityId" AND "o"."provider" <> ${provider} AND "o"."staleAt" IS NULL))`,
+	yield* db.run(
+		SQLite.deleteFrom(schema.customerActivityDailyTable).where(($) => [
+			SQLite.inSubquery(
+				$.contactId,
+				SQLite.from(schema.customerExternalRefsTable, "r")
+					.select("entityId")
+					.where((r) => [
+						r.provider.eq(provider),
+						r.entityType.eq("contact"),
+						SQLite.not(
+							SQLite.exists(
+								SQLite.from(schema.customerExternalRefsTable, "o")
+									.select(() => ({ one: SQLite.lit(1) }))
+									.where((o) => [
+										o.entityType.eq("contact"),
+										o.entityId.eq(r.entityId),
+										o.provider.neq(provider),
+										o.staleAt.isNull(),
+									]),
+							),
+						),
+					]),
+			),
+		]),
 	)
 	// Some account's MRR came from it, or none was computed yet: a rebuild's movements are its.
 	const sources = new Set(
-		(
-			(yield* db.query(
-				Database.sql`SELECT DISTINCT "mrrSource" FROM "customer_accounts" WHERE "mrrSource" IS NOT NULL`,
-			)) as ReadonlyArray<{ mrrSource: string }>
-		).map((row) => row.mrrSource),
+		(yield* db.run(
+			SQLite.from(schema.customerAccountsTable)
+				.where(($) => [$.mrrSource.isNotNull()])
+				.select(($) => ({ mrrSource: $.mrrSource }))
+				.distinct(),
+		)).map((row) => row.mrrSource),
 	)
 	if ((provider === "stripe" || provider === "autumn") && (sources.size === 0 || sources.has(provider))) {
 		const first = addDays(dayOf(now), -HISTORY_DAYS)

@@ -377,11 +377,9 @@ const reject = (index: number, op: IngestOp, message: string) =>
 
 const make = Effect.gen(function* () {
 	const db = yield* Database.Database
-	// Compute scheduling lives in `_object_meta`, read and written through the raw client.
-	const sql = yield* SqlClient
-	const withSql = Effect.provideService(SqlClient, sql)
-	const withStore = <A, E>(effect: Effect.Effect<A, E, SqlClient | Database.Database>) =>
-		effect.pipe(Effect.provideService(SqlClient, sql), Effect.provideService(Database.Database, db))
+	// Compute scheduling lives in `_object_meta`.
+	const withStore = <A, E>(effect: Effect.Effect<A, E, Database.Database>) =>
+		effect.pipe(Effect.provideService(Database.Database, db))
 	// -----------------------------------------------------------------------
 	// Lookups
 	// -----------------------------------------------------------------------
@@ -2162,10 +2160,10 @@ const make = Effect.gen(function* () {
 				.where(($) => [$.id.eq(current.id)]),
 		)
 		if (result._tag === "Succeeded" && run.trigger === "backfill") {
-			yield* withSql(setBaselineFor(current.id))
+			yield* withStore(setBaselineFor(current.id))
 			// The first import brings old data: chart history is rebuilt once, not on later imports.
-			if (current.backfilledAt === null) yield* withSql(requestHistoryRebuild)
-			return yield* withSql(requestCompute)
+			if (current.backfilledAt === null) yield* withStore(requestHistoryRebuild)
+			return yield* withStore(requestCompute)
 		}
 		// The source went in or out of error (its templates match nothing while it is): compute
 		// like after ingest. What the run brought already asked for one (`apply`).
@@ -2252,7 +2250,7 @@ const make = Effect.gen(function* () {
 				// Still open when an op of it could not land yet (parked again).
 				.where(($) => [$.id.eq(recordId), $.status.eq("linked")]),
 		)
-		yield* withSql(requestCompute)
+		yield* withStore(requestCompute)
 		return outcome.updated(accountId)
 	})
 
@@ -2274,8 +2272,8 @@ const make = Effect.gen(function* () {
 			})
 		})
 
-	const countOf = (rows: ReadonlyArray<unknown>) =>
-		Number((rows as ReadonlyArray<{ count: number }>)[0]?.count ?? 0)
+	const countOf = <E, R>(row: Effect.Effect<Option.Option<{ readonly count: number }>, E, R>) =>
+		Effect.map(row, Option.match({ onNone: () => 0, onSome: ({ count }) => count }))
 
 	const completeSweep = Effect.fn("CustomerIngest.completeSweep")(function* (
 		connectionId: CustomerConnectionId,
@@ -2319,12 +2317,17 @@ const make = Effect.gen(function* () {
 					]),
 			)
 		const liveRefs = (entityType: RefEntityType) =>
-			db
-				.query(
-					Database.sql`SELECT count(*) AS "count" FROM "customer_external_refs"
-					WHERE "provider" = ${provider} AND "entityType" = ${entityType} AND "staleAt" IS NULL`,
-				)
-				.pipe(Effect.map(countOf))
+			countOf(
+				db.first(
+					SQLite.from(schema.customerExternalRefsTable)
+						.select(() => ({ count: SQLite.count() }))
+						.where(($) => [
+							$.provider.eq(provider),
+							$.entityType.eq(entityType),
+							$.staleAt.isNull(),
+						]),
+				),
+			)
 		// Subscriptions not read (`observedAt`) since the sweep started.
 		const unseenSubscriptions = db.run(
 			SQLite.from(schema.customerSubscriptionsTable)
@@ -2335,12 +2338,13 @@ const make = Effect.gen(function* () {
 					SQLite.or($.observedAt.isNull(), $.observedAt.lt(since)),
 				]),
 		)
-		const liveSubscriptions = db
-			.query(
-				Database.sql`SELECT count(*) AS "count" FROM "customer_subscriptions"
-				WHERE "provider" = ${provider} AND "status" <> 'canceled'`,
-			)
-			.pipe(Effect.map(countOf))
+		const liveSubscriptions = countOf(
+			db.first(
+				SQLite.from(schema.customerSubscriptionsTable)
+					.select(() => ({ count: SQLite.count() }))
+					.where(($) => [$.provider.eq(provider), $.status.neq("canceled")]),
+			),
+		)
 		const skipped: Array<SweepEntityType> = []
 		// Past the cap, a listing more likely ended early (a provider bug) than that many records went
 		// at once: that type's removals are skipped. Not for another provider account's sweep

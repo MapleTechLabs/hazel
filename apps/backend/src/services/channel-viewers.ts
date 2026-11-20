@@ -36,8 +36,12 @@ export class ChannelViewers extends Context.Service<ChannelViewers>()("@hazel/ba
 
 		const meta = (key: string) =>
 			db
-				.query(Database.sql`SELECT value FROM _object_meta WHERE key = ${key}`)
-				.pipe(Effect.map((rows) => Option.fromNullishOr(rows[0]?.value as string | undefined)))
+				.first(
+					SQLite.from(schema.objectMetaTable)
+						.select("value")
+						.where(($) => [$.key.eq(key)]),
+				)
+				.pipe(Effect.map(Option.map((row) => row.value)))
 
 		/** The Connect guest mounts this host channel's object serves (routed here by `channel_index`). */
 		const mountChannelIds = meta(META_MOUNTS).pipe(

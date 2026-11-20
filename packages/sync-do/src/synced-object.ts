@@ -7,9 +7,9 @@
  * - `alarm` from the object's `alarm()`: expire sockets, retry the outbox, flush, prune, rearm.
  */
 import { Cause, Clock, Effect } from "effect"
-import type { SqlError } from "effect/sql/SqlError"
 import { type AlarmStorageLike, scheduleAlarm } from "./alarm.ts"
 import type { OutboxDeliveryError } from "./errors.ts"
+import { STORE_ERROR_TAGS, type StoreError } from "./store.ts"
 import {
 	deliverKindsNow,
 	type DrainOptions,
@@ -69,9 +69,11 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 
 	const logSqlError =
 		(message: string) =>
-		<A, R2>(self: Effect.Effect<A, SqlError, R2>) =>
+		<A, R2>(self: Effect.Effect<A, StoreError, R2>) =>
 			self.pipe(
-				Effect.catchTag("SqlError", (error) => Effect.logError(message, { error: error.message })),
+				Effect.catchTag(STORE_ERROR_TAGS, (error) =>
+					Effect.logError(message, { error: error.message }),
+				),
 			)
 
 	/**
@@ -121,12 +123,9 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 				...own,
 			])
 		}).pipe(
-			Effect.catchTags({
-				SqlError: (error) =>
-					Effect.logError("Sync alarm scheduling failed", { error: error.message }),
-				SyncAlarmError: (error) =>
-					Effect.logError("Sync alarm scheduling failed", { error: error.message }),
-			}),
+			Effect.catchTag([...STORE_ERROR_TAGS, "SyncAlarmError"], (error) =>
+				Effect.logError("Sync alarm scheduling failed", { error: error.message }),
+			),
 			total("alarm scheduling", () => undefined),
 		)
 	const schedule = scheduleWith()

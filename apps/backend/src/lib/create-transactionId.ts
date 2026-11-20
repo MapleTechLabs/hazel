@@ -1,10 +1,8 @@
-import { Database } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { formatWritePosition, type SyncSeq } from "@hazel/domain/sync"
 import { TransactionId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { currentObject } from "./current-object"
-
-const HeadRow = Schema.Struct({ head: Schema.Number })
 
 /**
  * The write position the client confirms its optimistic write against: `<kind>:<id>:<seq>`.
@@ -20,14 +18,21 @@ const HeadRow = Schema.Struct({ head: Schema.Number })
  */
 export const generateTransactionId = Effect.fn("generateTransactionId")(function* () {
 	const db = yield* Database.Database
-	const tables = yield* db.query(
-		Database.sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_changes'`,
+	const table = yield* db.first(
+		SQLite.from(schema.sqliteMasterTable)
+			.select("name")
+			.where(($) => [$.type.eq("table"), $.name.eq("_changes")]),
 	)
-	const head =
-		tables.length === 0
-			? 0
-			: ((yield* db.query(Database.sql`SELECT coalesce(max(seq), 0) AS head FROM _changes`, HeadRow))[0]
-					?.head ?? 0)
+	const head = Option.isNone(table)
+		? 0
+		: Option.match(
+				yield* db.first(
+					SQLite.from(schema.changesTable).select(($) => ({
+						head: SQLite.coalesce(SQLite.max($.seq), SQLite.lit(0)),
+					})),
+				),
+				{ onNone: () => 0, onSome: (row) => row.head },
+			)
 	const object = yield* currentObject
 	const position = Option.isSome(object)
 		? formatWritePosition({ kind: object.value.kind, id: object.value.id, seq: head as SyncSeq })
