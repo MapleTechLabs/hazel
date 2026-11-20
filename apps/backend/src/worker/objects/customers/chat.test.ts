@@ -317,6 +317,14 @@ describe("Author side in linked channels", () => {
 				)
 				expect(tagOf(marked)).toBe("Success")
 				expect(t.authors()[bob]).toBe("team:override")
+				// The change log keys the row as the stream does (`organizationId:userId`), so the
+				// override reaches members' clients as a delta.
+				const changed = t.org.storage.db
+					.prepare(
+						`SELECT pk FROM _changes WHERE tbl = 'customer_chat_authors' ORDER BY seq DESC LIMIT 1`,
+					)
+					.all() as Array<{ pk: string }>
+				expect(changed[0]?.pk).toBe(`${t.world.orgId}:${bob}`)
 				expect(t.participants()[bob]?.side).toBe("team")
 
 				const cleared = yield* t.callOrg(
