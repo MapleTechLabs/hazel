@@ -4,6 +4,10 @@ import { Context, Effect, Layer } from "effect"
 import { makePolicy, withAnnotatedScope } from "../lib/policy-utils"
 import { OrgResolver } from "../services/org-resolver"
 
+/**
+ * Its checks read the calling actor (`CurrentUser.Context`), which differs on every request, so
+ * each method requires it.
+ */
 export class OrganizationPolicy extends Context.Service<OrganizationPolicy>()("OrganizationPolicy/Policy", {
 	make: Effect.gen(function* () {
 		const policyEntity = "Organization" as const
@@ -11,7 +15,7 @@ export class OrganizationPolicy extends Context.Service<OrganizationPolicy>()("O
 
 		const orgResolver = yield* OrgResolver
 
-		const canCreate = () => authorize("create", (_actor) => Effect.succeed(true))
+		const canCreate = authorize("create", (_actor) => Effect.succeed(true))
 
 		const canUpdate = (id: OrganizationId) =>
 			ErrorUtils.refailUnauthorized(

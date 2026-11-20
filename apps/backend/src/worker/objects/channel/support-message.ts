@@ -14,7 +14,7 @@ export const SupportMessageCall = defineCall("channel.supportMessage", "channel"
 	success: Schema.Struct({
 		authorId: UserId,
 		/** Epoch ms. */
-		sentAt: Schema.Number,
+		sentAt: Schema.Finite,
 		content: Schema.String,
 		threadChannelId: Schema.NullOr(ChannelId),
 	}),

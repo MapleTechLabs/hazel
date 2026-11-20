@@ -11,8 +11,8 @@ export const CustomerDirectoryRpcLive = CustomerDirectoryRpcs.toLayer(
 	Effect.gen(function* () {
 		const directory = yield* Directory
 		return {
-			"customers.organizations": () =>
-				Effect.gen(function* () {
+			"customers.organizations": Effect.fn("Customers.organizations")(
+				function* () {
 					const user = yield* CurrentUser.Context
 					const ids = yield* directory.organizationsOf(user.id)
 					const rows = yield* Effect.forEach(ids, directory.org, { concurrency: "unbounded" })
@@ -22,14 +22,13 @@ export const CustomerDirectoryRpcLive = CustomerDirectoryRpcs.toLayer(
 						.map((row) => ({ id: row.id, name: row.name, slug: row.slug }))
 						.sort((a, b) => a.name.localeCompare(b.name))
 					return { organizations }
-				}).pipe(
-					Effect.catchTag("DatabaseError", (cause) =>
-						Effect.fail(
-							InternalServerError.withCause({ message: "Error listing organizations", cause }),
-						),
+				},
+				Effect.catchTag("DatabaseError", (cause) =>
+					Effect.fail(
+						InternalServerError.withCause({ message: "Error listing organizations", cause }),
 					),
-					Effect.withSpan("Customers.organizations"),
 				),
+			),
 		}
 	}),
 )

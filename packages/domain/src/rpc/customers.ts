@@ -109,77 +109,91 @@ const GlobPattern = NonEmptyText(200).check(
 // Errors
 // ---------------------------------------------------------------------------
 
-export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFoundError>()(
-	"CustomersNotFoundError",
-	{
-		entity: Schema.Literals([
-			"account",
-			"signal",
-			"rule",
-			"sla_policy",
-			"note",
-			"view",
-			"connection",
-			"unmatched_record",
-			"ignore_rule",
-			"metric",
-			"contact",
-			/** No such channel in the org, or one the caller cannot see. */
-			"channel",
-			/** Nobody the org has seen in its channels. */
-			"author",
-			/** No open suggestion with this id. */
-			"suggestion",
-			"issue",
-			/** No such message in the channel, or one the caller cannot see. */
-			"message",
-		]),
-		id: Schema.String,
-	},
-) {}
+export class CustomersNotFoundError extends Schema.TaggedError<
+	CustomersNotFoundError,
+	{ readonly brand: unique symbol }
+>()("CustomersNotFoundError", {
+	entity: Schema.Literals([
+		"account",
+		"signal",
+		"rule",
+		"sla_policy",
+		"note",
+		"view",
+		"connection",
+		"unmatched_record",
+		"ignore_rule",
+		"metric",
+		"contact",
+		/** No such channel in the org, or one the caller cannot see. */
+		"channel",
+		/** Nobody the org has seen in its channels. */
+		"author",
+		/** No open suggestion with this id. */
+		"suggestion",
+		"issue",
+		/** No such message in the channel, or one the caller cannot see. */
+		"message",
+	]),
+	id: Schema.String,
+}) {}
 
 /** The action does not apply to the signal's status (e.g. snoozing an auto-resolved one). */
-export class CustomerSignalTransitionError extends Schema.TaggedError<CustomerSignalTransitionError>()(
-	"CustomerSignalTransitionError",
-	{ signalId: CustomerSignalId, status: SignalStatus, action: Schema.String },
-) {}
+export class CustomerSignalTransitionError extends Schema.TaggedError<
+	CustomerSignalTransitionError,
+	{ readonly brand: unique symbol }
+>()("CustomerSignalTransitionError", {
+	signalId: CustomerSignalId,
+	status: SignalStatus,
+	action: Schema.String,
+}) {}
 
 /** A well-formed request the store refuses, e.g. deleting a built-in view, linking to a deleted account. */
-export class CustomersInvalidRequestError extends Schema.TaggedError<CustomersInvalidRequestError>()(
-	"CustomersInvalidRequestError",
-	{ message: Schema.String },
-) {}
+export class CustomersInvalidRequestError extends Schema.TaggedError<
+	CustomersInvalidRequestError,
+	{ readonly brand: unique symbol }
+>()("CustomersInvalidRequestError", { message: Schema.String }) {}
 
 /**
  * A grouping of accounts the store refuses: linking an account to itself (`same_account`), to an
  * environment of another primary (`primary_is_environment`: no chains), or unlinking a primary
  * that has environments (`primary_has_environments`).
  */
-export class CustomerGroupError extends Schema.TaggedError<CustomerGroupError>()("CustomerGroupError", {
+export class CustomerGroupError extends Schema.TaggedError<
+	CustomerGroupError,
+	{ readonly brand: unique symbol }
+>()("CustomerGroupError", {
 	reason: Schema.Literals(["same_account", "primary_is_environment", "primary_has_environments"]),
 	message: Schema.String,
 }) {}
 
 /** The provider has no integration yet (its adapter is not registered). */
-export class CustomerProviderUnavailableError extends Schema.TaggedError<CustomerProviderUnavailableError>()(
-	"CustomerProviderUnavailableError",
-	{ provider: CustomerProvider },
-) {}
+export class CustomerProviderUnavailableError extends Schema.TaggedError<
+	CustomerProviderUnavailableError,
+	{ readonly brand: unique symbol }
+>()("CustomerProviderUnavailableError", { provider: CustomerProvider }) {}
 
 /**
  * Clerk refused (or could not be reached for) some customers' feature flags: those listed are
  * unchanged, every other one was updated.
  */
-export class CustomerFeatureFlagsError extends Schema.TaggedError<CustomerFeatureFlagsError>()(
-	"CustomerFeatureFlagsError",
-	{ message: Schema.String, failedAccountIds: Schema.Array(CustomerAccountId) },
-) {}
+export class CustomerFeatureFlagsError extends Schema.TaggedError<
+	CustomerFeatureFlagsError,
+	{ readonly brand: unique symbol }
+>()("CustomerFeatureFlagsError", {
+	message: Schema.String,
+	failedAccountIds: Schema.Array(CustomerAccountId),
+}) {}
 
 /** The provider refused the credentials (or could not be reached to check them). */
-export class CustomerConnectionCredentialsError extends Schema.TaggedError<CustomerConnectionCredentialsError>()(
-	"CustomerConnectionCredentialsError",
-	{ provider: CustomerProvider, message: Schema.String, retryable: Schema.Boolean },
-) {}
+export class CustomerConnectionCredentialsError extends Schema.TaggedError<
+	CustomerConnectionCredentialsError,
+	{ readonly brand: unique symbol }
+>()("CustomerConnectionCredentialsError", {
+	provider: CustomerProvider,
+	message: Schema.String,
+	retryable: Schema.Boolean,
+}) {}
 
 /**
  * The provider would not start an impersonation: no live connection that can impersonate
@@ -187,13 +201,13 @@ export class CustomerConnectionCredentialsError extends Schema.TaggedError<Custo
  * provider's settings (`disabled`), or the provider refused or failed (`provider`, its own
  * explanation in `message`, e.g. the monthly allowance used up).
  */
-export class CustomerImpersonationError extends Schema.TaggedError<CustomerImpersonationError>()(
-	"CustomerImpersonationError",
-	{
-		reason: Schema.Literals(["unavailable", "no_user", "disabled", "provider"]),
-		message: Schema.String,
-	},
-) {}
+export class CustomerImpersonationError extends Schema.TaggedError<
+	CustomerImpersonationError,
+	{ readonly brand: unique symbol }
+>()("CustomerImpersonationError", {
+	reason: Schema.Literals(["unavailable", "no_user", "disabled", "provider"]),
+	message: Schema.String,
+}) {}
 
 const Tx = Schema.Struct({ transactionId: TransactionId })
 const withTx = <S extends Schema.Top>(data: S) => Schema.Struct({ data, transactionId: TransactionId })

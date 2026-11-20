@@ -30,8 +30,8 @@ export const ChatMessage = Schema.Struct({
 	hasEmbeds: Schema.Boolean,
 	replyToMessageId: Schema.NullOr(MessageId),
 	threadChannelId: Schema.NullOr(ChannelId),
-	createdAtMs: Schema.Number,
-	updatedAtMs: Schema.NullOr(Schema.Number),
+	createdAtMs: Schema.Finite,
+	updatedAtMs: Schema.NullOr(Schema.Finite),
 	isPinned: Schema.Boolean,
 	author: Schema.NullOr(ChatAuthor),
 })
@@ -54,7 +54,7 @@ export type ReactionMotion = typeof ReactionMotion.Type
 
 export const AggregatedReaction = Schema.Struct({
 	emoji: Schema.String,
-	count: Schema.Number,
+	count: Schema.Finite,
 	hasReacted: Schema.Boolean,
 	userIds: Schema.Array(UserId),
 	/** Resolved for `custom:<name>` reactions from the org's custom emoji. */
@@ -77,7 +77,7 @@ export type AuthorIdentity = typeof AuthorIdentity.Type
 export const StatusEmoji = Schema.Struct({
 	emoji: Schema.String,
 	message: Schema.NullOr(Schema.String),
-	expiresAtMs: Schema.NullOr(Schema.Number),
+	expiresAtMs: Schema.NullOr(Schema.Finite),
 })
 export type StatusEmoji = typeof StatusEmoji.Type
 
@@ -96,14 +96,14 @@ export const ThreadLastMessage = Schema.Struct({
 	/** Null while the author's user row has not synced. */
 	author: Schema.NullOr(AuthorIdentity),
 	text: Schema.String,
-	createdAtMs: Schema.Number,
+	createdAtMs: Schema.Finite,
 })
 export type ThreadLastMessage = typeof ThreadLastMessage.Type
 
 export const ThreadPreview = Schema.Struct({
 	threadChannelId: ChannelId,
 	name: Schema.String,
-	count: Schema.Number,
+	count: Schema.Finite,
 	lastMessage: ThreadLastMessage,
 })
 export type ThreadPreview = typeof ThreadPreview.Type
@@ -136,8 +136,8 @@ export const HtmlRenderRow = Schema.Struct({
 	renderId: HtmlRenderId,
 	status: Schema.Literals(["Loading", "Failed", "Ready"]),
 	src: Schema.NullOr(Schema.String),
-	fittedHeight: Schema.Number,
-	shownHeight: Schema.Number,
+	fittedHeight: Schema.Finite,
+	shownHeight: Schema.Finite,
 	isTall: Schema.Boolean,
 	isExpanded: Schema.Boolean,
 	isLoaded: Schema.Boolean,

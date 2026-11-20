@@ -11,7 +11,9 @@ import { RouteOrganizationId } from "./routing-fields"
  * Response schema for successful custom emoji operations.
  * Contains the custom emoji data and a transaction ID for optimistic updates.
  */
-export class CustomEmojiResponse extends Schema.Class<CustomEmojiResponse>("CustomEmojiResponse")({
+export class CustomEmojiResponse extends Schema.Class<CustomEmojiResponse, { readonly brand: unique symbol }>(
+	"CustomEmojiResponse",
+)({
 	data: CustomEmoji.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -19,37 +21,38 @@ export class CustomEmojiResponse extends Schema.Class<CustomEmojiResponse>("Cust
 /**
  * Error thrown when a custom emoji is not found.
  */
-export class CustomEmojiNotFoundError extends Schema.TaggedError<CustomEmojiNotFoundError>()(
-	"CustomEmojiNotFoundError",
-	{
-		customEmojiId: CustomEmojiId,
-	},
-) {}
+export class CustomEmojiNotFoundError extends Schema.TaggedError<
+	CustomEmojiNotFoundError,
+	{ readonly brand: unique symbol }
+>()("CustomEmojiNotFoundError", {
+	customEmojiId: CustomEmojiId,
+}) {}
 
 /**
  * Error thrown when a custom emoji name conflicts with an existing one in the same org.
  */
-export class CustomEmojiNameConflictError extends Schema.TaggedError<CustomEmojiNameConflictError>()(
-	"CustomEmojiNameConflictError",
-	{
-		name: Schema.String,
-		organizationId: OrganizationId,
-	},
-) {}
+export class CustomEmojiNameConflictError extends Schema.TaggedError<
+	CustomEmojiNameConflictError,
+	{ readonly brand: unique symbol }
+>()("CustomEmojiNameConflictError", {
+	/** The emoji name in conflict (not `name`, which would shadow the error's own). */
+	emojiName: Schema.String,
+	organizationId: OrganizationId,
+}) {}
 
 /**
  * Error thrown when a custom emoji with the same name exists but was soft-deleted.
  * Contains the deleted emoji's info so the frontend can offer to restore it.
  */
-export class CustomEmojiDeletedExistsError extends Schema.TaggedError<CustomEmojiDeletedExistsError>()(
-	"CustomEmojiDeletedExistsError",
-	{
-		customEmojiId: CustomEmojiId,
-		name: Schema.String,
-		imageUrl: Schema.String,
-		organizationId: OrganizationId,
-	},
-) {}
+export class CustomEmojiDeletedExistsError extends Schema.TaggedError<
+	CustomEmojiDeletedExistsError,
+	{ readonly brand: unique symbol }
+>()("CustomEmojiDeletedExistsError", {
+	customEmojiId: CustomEmojiId,
+	emojiName: Schema.String,
+	imageUrl: Schema.String,
+	organizationId: OrganizationId,
+}) {}
 
 export class CustomEmojiRpcs extends RpcGroup.make(
 	/**

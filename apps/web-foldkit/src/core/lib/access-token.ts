@@ -36,12 +36,15 @@ let pending: Promise<AccessTokenResult> | null = null
 export type AccessTokenResult = string | null | "unavailable"
 
 /** The API could not answer the exchange: unreachable, a 5xx, or a body that isn't a token. */
-export class TokenExchangeError extends Schema.TaggedError<TokenExchangeError>()("TokenExchangeError", {
+export class TokenExchangeError extends Schema.TaggedError<
+	TokenExchangeError,
+	{ readonly brand: unique symbol }
+>()("TokenExchangeError", {
 	reason: Schema.Literals(["Unreachable", "ServerError", "BadResponse"]),
 	cause: Schema.optional(Schema.Defect()),
 }) {}
 
-const TokenResponse = Schema.Struct({ token: Schema.String, expiresIn: Schema.Number })
+const TokenResponse = Schema.Struct({ token: Schema.String, expiresIn: Schema.Finite })
 const decodeTokenResponse = Schema.decodeUnknownEffect(TokenResponse)
 
 const backendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhost:3003"

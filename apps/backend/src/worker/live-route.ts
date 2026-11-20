@@ -28,10 +28,13 @@ interface Namespace {
 	getByName(name: string): { fetch(request: Request): Promise<Response> }
 }
 
-class LiveForwardError extends Schema.TaggedError<LiveForwardError>()("LiveForwardError", {
-	messageId: Schema.String,
-	cause: Schema.Unknown,
-}) {}
+class LiveForwardError extends Schema.TaggedError<LiveForwardError, { readonly brand: unique symbol }>()(
+	"LiveForwardError",
+	{
+		messageId: Schema.String,
+		cause: Schema.Unknown,
+	},
+) {}
 
 const LIVE_PATH = /^\/live\/([^/?]+)$/
 const decodeMessageId = Schema.decodeUnknownOption(MessageId)
@@ -72,7 +75,7 @@ export const makeLiveRoute = (env: Record<string, unknown>) =>
 
 					const hostChannelId = yield* syncObjectId("channel", channelId.value).pipe(
 						Effect.provideService(Directory, directory),
-						Effect.map(Option.some),
+						Effect.asSome,
 						Effect.catchTag("DatabaseError", (error) =>
 							Effect.logError("Live route could not resolve the channel", {
 								channelId: channelId.value,
@@ -88,7 +91,7 @@ export const makeLiveRoute = (env: Record<string, unknown>) =>
 						return acceptAndClose(UNAVAILABLE, "unavailable")
 					}
 					const web = yield* HttpServerRequest.toWeb(request).pipe(
-						Effect.map(Option.some),
+						Effect.asSome,
 						Effect.catch((error) =>
 							Effect.logWarning("Live upgrade request unreadable", { error: error._tag }).pipe(
 								Effect.as(Option.none<Request>()),

@@ -445,14 +445,12 @@ describe("MessageLiveObject", () => {
 				expect(failureTag(refused)).toBe("UnauthorizedError")
 				const unreachable = yield* Effect.exit(
 					readLive({ ...base, userId: world.alice }).pipe(
-						Effect.provide(
-							Layer.succeed(LiveObjectStubs, {
-								get: () => ({
-									write: () => Effect.fail("down"),
-									read: () => Effect.fail("down"),
-								}),
+						Effect.provideService(LiveObjectStubs, {
+							get: () => ({
+								write: () => Effect.fail("down"),
+								read: () => Effect.fail("down"),
 							}),
-						),
+						}),
 					),
 				)
 				expect(Exit.isFailure(unreachable) && Cause.findErrorOption(unreachable.cause)).toMatchObject(

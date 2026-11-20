@@ -13,7 +13,10 @@ export const setSessionBearerProvider = (next: () => Promise<string | null>) => 
 }
 
 /** The desktop provider could not read the stored session (keychain or store failure). */
-export class SessionBearerError extends Schema.TaggedError<SessionBearerError>()("SessionBearerError", {
+export class SessionBearerError extends Schema.TaggedError<
+	SessionBearerError,
+	{ readonly brand: unique symbol }
+>()("SessionBearerError", {
 	cause: Schema.Defect(),
 }) {}
 

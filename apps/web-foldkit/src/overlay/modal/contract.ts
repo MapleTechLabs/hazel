@@ -82,9 +82,9 @@ export const defineModal = <
 ) => {
 	type Model = ModelSchema["Type"]
 	type Message = MessageSchema["Type"]
-	const Slot = Schema.TaggedStruct(id, { instance: Schema.Number, model: schemas.Model })
+	const Slot = Schema.TaggedStruct(id, { instance: Schema.Finite, model: schemas.Model })
 	const Wrapped = Schema.TaggedStruct(id, {
-		instance: Schema.NullOr(Schema.Number),
+		instance: Schema.NullOr(Schema.Finite),
 		message: schemas.Message,
 	})
 	type SlotType = { readonly _tag: Id; readonly instance: number; readonly model: Model }

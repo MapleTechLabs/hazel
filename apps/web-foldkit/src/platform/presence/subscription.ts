@@ -63,7 +63,7 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 	),
 	// One timer for the latest activity's AFK deadline, instead of legacy's 5s polling.
 	afkTimeout: entry(
-		{ deadlineMs: Schema.NullOr(Schema.Number) },
+		{ deadlineMs: Schema.NullOr(Schema.Finite) },
 		{
 			modelToDependencies: (input) => ({
 				deadlineMs:
@@ -87,7 +87,7 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 	),
 	// The 300ms debounce before each `userPresenceStatus.update`; a new version restarts it.
 	syncDebounce: entry(
-		{ version: Schema.NullOr(Schema.Number) },
+		{ version: Schema.NullOr(Schema.Finite) },
 		{
 			modelToDependencies: (input) => ({
 				version: input.model.isSyncPending ? input.model.syncVersion : null,

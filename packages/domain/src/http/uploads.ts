@@ -44,7 +44,7 @@ export type UploadType = typeof UploadType.Type
 export const PresignUploadRequest = Schema.Struct({
 	type: UploadType,
 	contentType: Schema.String,
-	fileSize: Schema.Number.check(
+	fileSize: Schema.Finite.check(
 		Schema.isBetween(
 			{ minimum: 1, maximum: MAX_ATTACHMENT_SIZE },
 			{ message: "File size must be between 1 byte and 10MB" },
@@ -96,7 +96,10 @@ export const isActiveContentType = (contentType: string): boolean => {
  * - publicUrl: The public URL to access the file after upload
  * - resourceId: For attachments, the AttachmentId; undefined for avatars
  */
-export class PresignUploadResponse extends Schema.Class<PresignUploadResponse>("PresignUploadResponse")({
+export class PresignUploadResponse extends Schema.Class<
+	PresignUploadResponse,
+	{ readonly brand: unique symbol }
+>("PresignUploadResponse")({
 	uploadUrl: Schema.String,
 	key: Schema.String,
 	publicUrl: Schema.String,
@@ -106,7 +109,7 @@ export class PresignUploadResponse extends Schema.Class<PresignUploadResponse>("
 // ============ Error Schemas ============
 
 /** The upload could not be prepared. `cause` stays server-side, as on `InternalServerError`. */
-export class UploadError extends Schema.TaggedError<UploadError>("UploadError")(
+export class UploadError extends Schema.TaggedError<UploadError, { readonly brand: unique symbol }>()(
 	"UploadError",
 	{
 		message: Schema.String,
@@ -127,9 +130,10 @@ export class UploadError extends Schema.TaggedError<UploadError>("UploadError")(
 	}
 }
 
-export class BotNotFoundForUploadError extends Schema.TaggedError<BotNotFoundForUploadError>(
-	"BotNotFoundForUploadError",
-)(
+export class BotNotFoundForUploadError extends Schema.TaggedError<
+	BotNotFoundForUploadError,
+	{ readonly brand: unique symbol }
+>()(
 	"BotNotFoundForUploadError",
 	{
 		botId: BotId,
@@ -137,9 +141,10 @@ export class BotNotFoundForUploadError extends Schema.TaggedError<BotNotFoundFor
 	{ httpApiStatus: 404 },
 ) {}
 
-export class OrganizationNotFoundForUploadError extends Schema.TaggedError<OrganizationNotFoundForUploadError>(
-	"OrganizationNotFoundForUploadError",
-)(
+export class OrganizationNotFoundForUploadError extends Schema.TaggedError<
+	OrganizationNotFoundForUploadError,
+	{ readonly brand: unique symbol }
+>()(
 	"OrganizationNotFoundForUploadError",
 	{
 		organizationId: OrganizationId,

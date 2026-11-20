@@ -25,7 +25,7 @@ const drawsLists = shellDrawsLists()
 /** What the viewport holds on to when rows or heights change. */
 export const ViewportAnchor = defineTaggedUnion({
 	End: {},
-	Row: { key: Schema.String, viewportOffset: Schema.Number },
+	Row: { key: Schema.String, viewportOffset: Schema.Finite },
 })
 export type ViewportAnchor = typeof ViewportAnchor.Type
 
@@ -44,38 +44,38 @@ export const ScrollPhase = defineTaggedUnion({
 	 */
 	Settled: { keptFromKey: Schema.NullOr(Schema.String), keptToKey: Schema.NullOr(Schema.String) },
 	Scrolling: {
-		eventVersion: Schema.Number,
+		eventVersion: Schema.Finite,
 		renderedFromKey: Schema.NullOr(Schema.String),
 		renderedToKey: Schema.NullOr(Schema.String),
 	},
 })
 export type ScrollPhase = typeof ScrollPhase.Type
 
-export const LikeRow = Schema.Struct({ key: Schema.String, deltaPx: Schema.Number })
+export const LikeRow = Schema.Struct({ key: Schema.String, deltaPx: Schema.Finite })
 export type LikeRow = typeof LikeRow.Type
 
 export const Model = Schema.Struct({
 	id: Schema.String,
-	estimatedRowHeightPx: Schema.Number,
-	followThresholdPx: Schema.Number,
+	estimatedRowHeightPx: Schema.Finite,
+	followThresholdPx: Schema.Finite,
 	/** False while the loaded window stops short of the newest row: the end is then not "live". */
 	canFollowEnd: Schema.Boolean,
 	keys: Schema.Array(Schema.String),
 	/** Rows that never anchor the viewport (date dividers move with the first message of their day). */
 	stickyKeys: Schema.Array(Schema.String),
-	measuredHeights: Schema.Record(Schema.String, Schema.Number),
+	measuredHeights: Schema.Record(Schema.String, Schema.Finite),
 	/**
 	 * For a row not measured yet, a measured row the parent expects to be as tall give or take
 	 * `deltaPx` (the same kind of one-line message, in another place in its group): that height
 	 * stands in for the estimate, so a new message at the end lands where it will stay.
 	 */
 	likeRows: Schema.Record(Schema.String, LikeRow),
-	viewportHeight: Schema.Number,
-	scrollTop: Schema.Number,
+	viewportHeight: Schema.Finite,
+	scrollTop: Schema.Finite,
 	anchor: ViewportAnchor,
 	/** Last `ApplyScroll` issued and last one completed; a scroll is pending while they differ. */
-	scrollVersion: Schema.Number,
-	appliedScrollVersion: Schema.Number,
+	scrollVersion: Schema.Finite,
+	appliedScrollVersion: Schema.Finite,
 	/** LegendList's containers: which row each rendered `<div>` holds, in DOM order. */
 	pool: Pool,
 	scrollPhase: ScrollPhase,
@@ -93,16 +93,16 @@ export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
 	/** A list element was (re)created: its real position, which the Model may no longer match. */
-	MountedList: { scrollTop: Schema.Number, viewportHeight: Schema.Number },
-	ScrolledList: { scrollTop: Schema.Number },
-	ResizedViewport: { viewportHeight: Schema.Number },
+	MountedList: { scrollTop: Schema.Finite, viewportHeight: Schema.Finite },
+	ScrolledList: { scrollTop: Schema.Finite },
+	ResizedViewport: { viewportHeight: Schema.Finite },
 	MeasuredRows: {
-		measurements: Schema.Array(Schema.Struct({ key: Schema.String, height: Schema.Number })),
+		measurements: Schema.Array(Schema.Struct({ key: Schema.String, height: Schema.Finite })),
 	},
-	CompletedApplyScroll: { version: Schema.Number, scrollTop: Schema.Number },
+	CompletedApplyScroll: { version: Schema.Finite, scrollTop: Schema.Finite },
 	/** The list element was gone (another tab is shown): nothing was scrolled, nothing was observed. */
-	SkippedApplyScroll: { version: Schema.Number },
-	CompletedWaitForScrollSettle: { version: Schema.Number },
+	SkippedApplyScroll: { version: Schema.Finite },
+	CompletedWaitForScrollSettle: { version: Schema.Finite },
 })
 export type Message = typeof Message.Type
 
@@ -255,8 +255,8 @@ export const scrollTopForAnchor = (model: Model, layout: Layout, anchor: Viewpor
 
 /** `To` jumps to an offset (the end); `By` shifts by how far the anchor moved, keeping any scroll the reader did meanwhile. */
 export const ScrollAdjustment = defineTaggedUnion({
-	To: { scrollTop: Schema.Number },
-	By: { deltaPx: Schema.Number },
+	To: { scrollTop: Schema.Finite },
+	By: { deltaPx: Schema.Finite },
 })
 export type ScrollAdjustment = typeof ScrollAdjustment.Type
 
@@ -280,7 +280,7 @@ const afterLayout = (element: Element) =>
 
 /** Adjusts `scrollTop` once the pending patch has committed and laid out, before the browser paints. */
 export const ApplyScroll = Command.define("ApplyScroll", {
-	args: { id: Schema.String, adjustment: ScrollAdjustment, version: Schema.Number },
+	args: { id: Schema.String, adjustment: ScrollAdjustment, version: Schema.Finite },
 	messages: [Message.CompletedApplyScroll, Message.SkippedApplyScroll],
 	execute: ({ id, adjustment, version }) =>
 		Effect.gen(function* () {
@@ -300,7 +300,7 @@ export const ApplyScroll = Command.define("ApplyScroll", {
 const SCROLL_SETTLE_MS = 200
 
 export const WaitForScrollSettle = Command.define("WaitForScrollSettle", {
-	args: { version: Schema.Number },
+	args: { version: Schema.Finite },
 	messages: [Message.CompletedWaitForScrollSettle],
 	execute: ({ version }) =>
 		Effect.sleep(SCROLL_SETTLE_MS).pipe(Effect.as(Message.CompletedWaitForScrollSettle({ version }))),

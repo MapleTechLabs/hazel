@@ -17,7 +17,7 @@ export const Message = Schema.Struct({
 	key: Schema.String,
 	/** The message the trigger renders in (which row owns the open tooltip). */
 	messageId: MessageId,
-	delayMs: Schema.Number,
+	delayMs: Schema.Finite,
 	message: Tooltip.Message,
 })
 export type Message = typeof Message.Type

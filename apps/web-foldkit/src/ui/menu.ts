@@ -59,7 +59,7 @@ export const Popup = Schema.Union([
 		submenu: Schema.Option(Submenu),
 		search: Schema.String,
 		/** Set when a ContextMenu opened at the pointer (Popover `offset` / `crossOffset`). */
-		pointerOffset: Schema.Option(Schema.Struct({ offset: Schema.Number, crossOffset: Schema.Number })),
+		pointerOffset: Schema.Option(Schema.Struct({ offset: Schema.Finite, crossOffset: Schema.Finite })),
 	}),
 ])
 type Open = Extract<typeof Popup.Type, { _tag: "Open" }>
@@ -79,7 +79,7 @@ export type Model = typeof Model.Type
 export const Message = defineMessageUnion({
 	PressedTrigger: { pointerType: Schema.String },
 	PressedTriggerKey: { key: Schema.String, entries: Schema.Array(Entry) },
-	PressedContextMenu: { offset: Schema.Number, crossOffset: Schema.Number },
+	PressedContextMenu: { offset: Schema.Finite, crossOffset: Schema.Finite },
 	PressedMenuKey: { key: Schema.String, isModified: Schema.Boolean, entries: Schema.Array(Entry) },
 	HoveredItem: { key: Schema.String, entries: Schema.Array(Entry) },
 	UnhoveredItem: { key: Schema.String },

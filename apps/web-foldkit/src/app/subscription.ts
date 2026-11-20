@@ -196,7 +196,7 @@ const notificationSubscriptions = Subscription.make<Model, Message, Notification
 			userId: Schema.NullOr(UserId),
 			settings: SoundSettings,
 			currentChannelId: Schema.NullOr(ChannelId),
-			sessionStartMs: Schema.Number,
+			sessionStartMs: Schema.Finite,
 		},
 		{
 			modelToDependencies: (model) => ({

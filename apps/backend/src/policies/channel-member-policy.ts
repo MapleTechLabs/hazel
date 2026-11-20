@@ -4,6 +4,10 @@ import type { ChannelId, ChannelMemberId } from "@hazel/schema"
 import { Context, Effect, Layer, Option } from "effect"
 import { isAdminOrOwner } from "../lib/policy-utils"
 
+/**
+ * Its checks read the calling actor (`CurrentUser.Context`), which differs on every request, so
+ * each method requires it.
+ */
 export class ChannelMemberPolicy extends Context.Service<ChannelMemberPolicy>()(
 	"ChannelMemberPolicy/Policy",
 	{

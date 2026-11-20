@@ -63,8 +63,8 @@ const PortalMenu = Mount.defineStream("PortalMenu", {
 	args: {
 		id: Schema.String,
 		placement: Placement,
-		offset: Schema.Number,
-		crossOffset: Schema.Number,
+		offset: Schema.Finite,
+		crossOffset: Schema.Finite,
 		isTriggerWidthSet: Schema.Boolean,
 		initialFocusId: Schema.String,
 		/** A context menu: an action sheet on a phone, which its classes place instead. */

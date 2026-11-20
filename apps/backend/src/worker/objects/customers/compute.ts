@@ -1246,22 +1246,22 @@ export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now:
 /** Where a compute spread over several alarm turns stopped, and what it has gathered so far. */
 const ComputeProgress = Schema.Struct({
 	/** When its first turn ran, its day and Autumn's readiness: another one starts over. */
-	startedAt: Schema.Number,
+	startedAt: Schema.Finite,
 	day: Day,
 	autumnReady: Schema.Boolean,
 	/** The primary of the last group of accounts done (groups go in their primary's id order). */
 	after: CustomerAccountId,
 	armed: Schema.Array(Schema.String),
 	totals: Schema.Struct({
-		mrrMinor: Schema.Number,
-		payingAccounts: Schema.Number,
-		trialingAccounts: Schema.Number,
-		healthy: Schema.Number,
-		atRisk: Schema.Number,
-		critical: Schema.Number,
-		atRiskMrrMinor: Schema.Number,
+		mrrMinor: Schema.Finite,
+		payingAccounts: Schema.Finite,
+		trialingAccounts: Schema.Finite,
+		healthy: Schema.Finite,
+		atRisk: Schema.Finite,
+		critical: Schema.Finite,
+		atRiskMrrMinor: Schema.Finite,
 	}),
-	matches: Schema.Record(Schema.String, Schema.Number),
+	matches: Schema.Record(Schema.String, Schema.Finite),
 	triggered: Schema.Array(Schema.String),
 })
 const ComputeProgressJson = Schema.fromJsonString(ComputeProgress)

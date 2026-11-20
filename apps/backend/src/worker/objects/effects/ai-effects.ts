@@ -38,10 +38,10 @@ export const DEFAULT_THREAD_NAME = "Thread"
 
 const REPLIES_FOR_NAMING = 10
 
-class ThreadRenameRejectedError extends Schema.TaggedError<ThreadRenameRejectedError>()(
-	"ThreadRenameRejectedError",
-	{ message: Schema.String },
-) {}
+class ThreadRenameRejectedError extends Schema.TaggedError<
+	ThreadRenameRejectedError,
+	{ readonly brand: unique symbol }
+>()("ThreadRenameRejectedError", { message: Schema.String }) {}
 
 const nameThread = Effect.fn("AiEffects.nameThread")(function* (payload: NameThreadPayload) {
 	const db = yield* Database.Database

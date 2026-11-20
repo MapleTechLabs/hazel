@@ -2,12 +2,13 @@ import type * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import type { Message } from "./message"
+import type { HealthDraft } from "./model"
 import { heading } from "../../../../ui/heading"
 
 /** What every part of the health settings view reads: the saved and draft settings and who may edit. */
 export interface Context {
 	readonly saved: Customers.HealthSettings
-	readonly draft: Customers.HealthSettings
+	readonly draft: HealthDraft
 	/** `invalidFieldsOf(draft)`. */
 	readonly invalid: ReadonlySet<string>
 	readonly total: number
@@ -38,14 +39,21 @@ export const cardTitle = (h: H, title: string, subtitle: string): Html =>
 		],
 	)
 
-/** An input's text: an emptied field holds `NaN`. */
-export const textOf = (value: number): string => (Number.isNaN(value) ? "" : String(value))
-/** Plain decimals only (`12`, `-0.5`, `1.`): `1e2`, `0x10` or `Infinity` read as invalid, not as a number. */
+/** An input's text: an emptied field holds `null`. */
+export const textOf = (value: number | null): string => (value === null ? "" : String(value))
+/**
+ * Plain decimals only (`12`, `-0.5`, `1.`): `1e2`, `0x10` or `Infinity` read as invalid (`null`), not
+ * as a number, and so do digits too many to be a finite one.
+ */
 const DECIMAL = /^\s*-?(\d+\.?\d*|\.\d+)\s*$/
-export const parseNumber = (text: string): number => (DECIMAL.test(text) ? Number(text) : Number.NaN)
+export const parseNumber = (text: string): number | null => {
+	if (!DECIMAL.test(text)) return null
+	const value = Number(text)
+	return Number.isFinite(value) ? value : null
+}
 
 /** The field's text: what was typed in it while that still reads as `value` (`-`, `1.`), else the value. */
-export const numberText = (typing: Context["typing"], field: string, value: number): string =>
+export const numberText = (typing: Context["typing"], field: string, value: number | null): string =>
 	typing !== null && typing.field === field && Object.is(parseNumber(typing.text), value)
 		? typing.text
 		: textOf(value)
@@ -56,7 +64,7 @@ export const numberInput = (
 	context: Context,
 	options: Readonly<{
 		field: string
-		value: number
+		value: number | null
 		ariaLabel: string
 		onInput: (text: string) => Message
 		className?: string

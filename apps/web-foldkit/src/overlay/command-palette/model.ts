@@ -25,7 +25,7 @@ export const PageState = Schema.Union([
 		query: Schema.String,
 		rawInput: Schema.String,
 		filters: Schema.Array(SearchFilter),
-		selectedIndex: Schema.Number,
+		selectedIndex: Schema.Finite,
 	}),
 	Schema.TaggedStruct("Status", { inputValue: Schema.String }),
 	Schema.TaggedStruct("Appearance", { inputValue: Schema.String }),
@@ -131,7 +131,7 @@ export const Model = Schema.Struct({
 	/** `recentSearchesAtom` (platform storage), loaded when the search page opens. */
 	recentSearches: Schema.Array(RecentSearch),
 	searchAutocomplete: Schema.NullOr(SearchAutocomplete),
-	suggestionIndex: Schema.Number,
+	suggestionIndex: Schema.Finite,
 	suggestions: Schema.Array(Suggestion),
 })
 export type Model = typeof Model.Type

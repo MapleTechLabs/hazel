@@ -291,7 +291,7 @@ export const ConnectGuestEvidenceCall = defineCall("org.connectGuestEvidence", "
 			/** At most `MAX_EVIDENCE_MEMBERS`, most recently updated first. */
 			members: Schema.Array(EvidenceMember),
 			/** Every such participant, the sample or not. */
-			memberCount: Schema.Number,
+			memberCount: Schema.Finite,
 		}),
 	),
 	error: Schema.Never,

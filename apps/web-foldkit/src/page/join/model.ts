@@ -5,7 +5,7 @@ import { CommonReason } from "~/lib/error-messages"
 export const PublicOrganization = Schema.Struct({
 	name: Schema.String,
 	logoUrl: Schema.NullOr(Schema.String),
-	memberCount: Schema.Number,
+	memberCount: Schema.Finite,
 })
 export type PublicOrganization = typeof PublicOrganization.Type
 

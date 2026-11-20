@@ -6,9 +6,12 @@ import { Context, Effect, Layer, Schema } from "effect"
 const CACHE_TTL = 3600
 
 /** A KV read or write failed. Callers treat the cache as best-effort. */
-export class KVCacheError extends Schema.TaggedError<KVCacheError>("KVCacheError")("KVCacheError", {
-	message: Schema.String,
-}) {}
+export class KVCacheError extends Schema.TaggedError<KVCacheError, { readonly brand: unique symbol }>()(
+	"KVCacheError",
+	{
+		message: Schema.String,
+	},
+) {}
 
 const kvFailure = (operation: "get" | "set", key: string, error: unknown) =>
 	new KVCacheError({

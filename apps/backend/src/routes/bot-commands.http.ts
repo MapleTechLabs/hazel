@@ -92,12 +92,10 @@ export const validateBotToken = Effect.gen(function* () {
 	const authHeader = request.headers.authorization
 
 	if (!authHeader || !authHeader.startsWith("Bearer ")) {
-		return yield* Effect.fail(
-			new UnauthorizedError({
-				message: "Missing or invalid bot token",
-				detail: "Authorization header must be 'Bearer <token>'",
-			}),
-		)
+		return yield* new UnauthorizedError({
+			message: "Missing or invalid bot token",
+			detail: "Authorization header must be 'Bearer <token>'",
+		})
 	}
 
 	const token = authHeader.slice(7)
@@ -107,12 +105,10 @@ export const validateBotToken = Effect.gen(function* () {
 	const botOption = yield* botRepo.findByTokenHash(tokenHash)
 
 	if (Option.isNone(botOption)) {
-		return yield* Effect.fail(
-			new UnauthorizedError({
-				message: "Invalid bot token",
-				detail: "No bot found with this token",
-			}),
-		)
+		return yield* new UnauthorizedError({
+			message: "Invalid bot token",
+			detail: "No bot found with this token",
+		})
 	}
 
 	return botOption.value
@@ -230,27 +226,27 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 				// Verify bot exists
 				const botOption = yield* botRepo.findById(botId)
 				if (Option.isNone(botOption)) {
-					return yield* Effect.fail(new BotNotFoundError({ botId }))
+					return yield* new BotNotFoundError({ botId })
 				}
 
 				const bot = botOption.value
 
 				// Verify bot is installed in this org
 				if (!(yield* isInstalled(bot.userId, orgId))) {
-					return yield* Effect.fail(new BotNotInstalledError({ botId, orgId }))
+					return yield* new BotNotInstalledError({ botId, orgId })
 				}
 
 				// Find the command
 				const commandOption = yield* commandRepo.findByBotAndName(botId, commandName)
 				if (Option.isNone(commandOption)) {
-					return yield* Effect.fail(new BotCommandNotFoundError({ botId, commandName }))
+					return yield* new BotCommandNotFoundError({ botId, commandName })
 				}
 
 				const command = commandOption.value
 
 				// Verify command is enabled
 				if (!command.isEnabled) {
-					return yield* Effect.fail(new BotCommandNotFoundError({ botId, commandName }))
+					return yield* new BotCommandNotFoundError({ botId, commandName })
 				}
 
 				// Build arguments map
@@ -274,7 +270,7 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 				// row decides, since the directory's membership can still lag an uninstall.
 				const installation = yield* callObject(BotInstallRegionCall, orgTarget(orgId), { botId })
 				if (installation === null) {
-					return yield* Effect.fail(new BotNotInstalledError({ botId, orgId }))
+					return yield* new BotNotInstalledError({ botId, orgId })
 				}
 				yield* botGateway.publishCommand(
 					botId,
@@ -295,31 +291,30 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 					message: "Command sent to bot",
 				})
 			}).pipe(
-				Effect.catchTag("DatabaseError", (error) =>
-					Effect.fail(
-						InternalServerError.withCause({
-							message: "Database error while executing command",
-							cause: error,
-						}),
-					),
-				),
-				Effect.catchTag("ObjectCallError", (error) =>
-					Effect.fail(
-						InternalServerError.withCause({
-							message: "The organization is unavailable",
-							cause: error,
-						}),
-					),
-				),
-				Effect.catchTag("DurableStreamRequestError", (error) =>
-					Effect.fail(
-						new BotCommandExecutionError({
-							commandName: params.commandName,
-							message: "Failed to append command to bot gateway",
-							details: String(error.message),
-						}),
-					),
-				),
+				Effect.catchTags({
+					DatabaseError: (error) =>
+						Effect.fail(
+							InternalServerError.withCause({
+								message: "Database error while executing command",
+								cause: error,
+							}),
+						),
+					ObjectCallError: (error) =>
+						Effect.fail(
+							InternalServerError.withCause({
+								message: "The organization is unavailable",
+								cause: error,
+							}),
+						),
+					DurableStreamRequestError: (error) =>
+						Effect.fail(
+							new BotCommandExecutionError({
+								commandName: params.commandName,
+								message: "Failed to append command to bot gateway",
+								details: String(error.message),
+							}),
+						),
+				}),
 			),
 		)
 		// Get integration token (bot token auth)
@@ -331,18 +326,18 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 				// Check provider is in bot's allowedIntegrations
 				const allowed = bot.allowedIntegrations ?? []
 				if (!allowed.includes(provider)) {
-					return yield* Effect.fail(new IntegrationNotAllowedError({ botId: bot.id, provider }))
+					return yield* new IntegrationNotAllowedError({ botId: bot.id, provider })
 				}
 
 				// Verify bot is installed in this org
 				if (!(yield* isInstalled(bot.userId, orgId))) {
-					return yield* Effect.fail(new BotNotInstalledError({ botId: bot.id, orgId }))
+					return yield* new BotNotInstalledError({ botId: bot.id, orgId })
 				}
 
 				// The org's active connection and a valid (auto-refreshed) token, from its object.
 				const token = yield* callObject(IntegrationAccessTokenCall, orgTarget(orgId), { provider })
 				if (token === null) {
-					return yield* Effect.fail(new IntegrationNotConnectedError({ provider }))
+					return yield* new IntegrationNotConnectedError({ provider })
 				}
 				const { accessToken, connection } = token
 
@@ -388,7 +383,7 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 
 				// Verify bot is installed in this org
 				if (!(yield* isInstalled(bot.userId, orgId))) {
-					return yield* Effect.fail(new BotNotInstalledError({ botId: bot.id, orgId }))
+					return yield* new BotNotInstalledError({ botId: bot.id, orgId })
 				}
 
 				// Get bot's allowed integrations

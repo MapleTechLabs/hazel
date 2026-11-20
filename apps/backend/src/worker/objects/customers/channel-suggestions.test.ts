@@ -638,7 +638,7 @@ describe("Suggested channel links", () => {
 				t.slack(
 					mirrored,
 					[[GLOBEX_TEAM, "gina@globex.com"]],
-					Schema.decodeSync(SyncChannelLinkId)(uuid()),
+					yield* Schema.decodeEffect(SyncChannelLinkId)(uuid()),
 				)
 				const [entry] = yield* t.evidence([mirrored])
 				expect(entry?.externalMembers).toEqual([])

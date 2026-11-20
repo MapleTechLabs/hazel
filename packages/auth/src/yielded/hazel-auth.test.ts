@@ -103,7 +103,7 @@ const asD1 = (sql: SqlClient.SqlClient): SqlClient.SqlClient =>
 
 describe("Hazel auth on D1 (node SQLite)", () => {
 	// One database for the whole suite: the routes and the assertions share it.
-	const databaseScope = Effect.runSync(Scope.make())
+	const databaseScope = Scope.makeUnsafe()
 	const memory = Effect.runSync(Layer.buildWithScope(layerMemory, databaseScope))
 	const database = Context.add(memory, SqlClient.SqlClient, asD1(Context.get(memory, SqlClient.SqlClient)))
 	const TestSql = Layer.succeedContext(database)

@@ -21,10 +21,13 @@ const FETCH_TIMEOUT_MS = 10_000
 /** The shared RSS bot (`WebhookBotService.getOrCreateIntegrationBot("rss", …)`). */
 const RSS_BOT_EXTERNAL_ID = "integration-bot-rss"
 
-export class RssFetchError extends Schema.TaggedError<RssFetchError>()("RssFetchError", {
-	feedUrl: Schema.String,
-	message: Schema.String,
-}) {}
+export class RssFetchError extends Schema.TaggedError<RssFetchError, { readonly brand: unique symbol }>()(
+	"RssFetchError",
+	{
+		feedUrl: Schema.String,
+		message: Schema.String,
+	},
+) {}
 
 /** Fetch and parse a feed with `fetch` (the Worker has no node http). */
 export const fetchFeed = (feedUrl: string) =>

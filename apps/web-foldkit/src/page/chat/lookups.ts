@@ -23,8 +23,8 @@ export const PresenceInfo = Schema.Struct({
 	status: Schema.String,
 	statusEmoji: Schema.NullOr(Schema.String),
 	customMessage: Schema.NullOr(Schema.String),
-	statusExpiresAtMs: Schema.NullOr(Schema.Number),
-	lastSeenAtMs: Schema.NullOr(Schema.Number),
+	statusExpiresAtMs: Schema.NullOr(Schema.Finite),
+	lastSeenAtMs: Schema.NullOr(Schema.Finite),
 })
 export type PresenceInfo = typeof PresenceInfo.Type
 
@@ -32,9 +32,9 @@ export const ChannelMemberInfo = Schema.Struct({
 	id: ChannelMemberId,
 	userId: UserId,
 	isHidden: Schema.Boolean,
-	createdAtMs: Schema.Number,
+	createdAtMs: Schema.Finite,
 	/** The member's unread notifications in this channel (the sidebar's badge). */
-	notificationCount: Schema.Number,
+	notificationCount: Schema.Finite,
 })
 export type ChannelMemberInfo = typeof ChannelMemberInfo.Type
 
@@ -42,9 +42,9 @@ export const AttachmentInfo = Schema.Struct({
 	id: AttachmentId,
 	messageId: Schema.NullOr(MessageId),
 	fileName: Schema.String,
-	fileSize: Schema.Number,
+	fileSize: Schema.Finite,
 	url: Schema.String,
-	uploadedAtMs: Schema.Number,
+	uploadedAtMs: Schema.Finite,
 })
 export type AttachmentInfo = typeof AttachmentInfo.Type
 
@@ -54,7 +54,7 @@ export const ThreadMessageInfo = Schema.Struct({
 	channelId: ChannelId,
 	authorId: UserId,
 	content: Schema.String,
-	createdAtMs: Schema.Number,
+	createdAtMs: Schema.Finite,
 })
 export type ThreadMessageInfo = typeof ThreadMessageInfo.Type
 
@@ -64,7 +64,7 @@ export type ThreadChannelInfo = typeof ThreadChannelInfo.Type
 export const ReplyTarget = Schema.Struct({ id: MessageId, authorId: UserId, content: Schema.String })
 export type ReplyTarget = typeof ReplyTarget.Type
 
-export const TypingInfo = Schema.Struct({ memberId: ChannelMemberId, lastTyped: Schema.Number })
+export const TypingInfo = Schema.Struct({ memberId: ChannelMemberId, lastTyped: Schema.Finite })
 export type TypingInfo = typeof TypingInfo.Type
 
 export const CustomEmojiInfo = Schema.Struct({ name: Schema.String, imageUrl: Schema.String })
@@ -213,8 +213,8 @@ export const PinnedInfo = Schema.Struct({
 		}),
 	),
 	content: Schema.String,
-	createdAtMs: Schema.Number,
-	updatedAtMs: Schema.NullOr(Schema.Number),
-	pinnedAtMs: Schema.Number,
+	createdAtMs: Schema.Finite,
+	updatedAtMs: Schema.NullOr(Schema.Finite),
+	pinnedAtMs: Schema.Finite,
 })
 export type PinnedInfo = typeof PinnedInfo.Type

@@ -207,31 +207,34 @@ export const makeMessageLiveRuntime = (options: LiveRuntimeOptions) =>
 			})
 
 		/** Ask the channel about `userId`, binding this object to the message on first sight. */
-		const access = (messageId: MessageId, channelId: ChannelId, userId: UserId) =>
-			Effect.gen(function* () {
-				if (binding !== undefined && binding.channelId !== channelId) {
-					return yield* new MessageNotFoundError({ messageId })
-				}
-				const answer = yield* callObject(LiveAccessCall, channelTarget(channelId), {
-					messageId,
-					userId,
-				}).pipe(
-					Effect.provideService(ObjectStubs, stubs),
-					Effect.catchTag("ObjectCallError", (error) =>
-						Effect.fail(
-							InternalServerError.withCause({
-								message: "The message's channel is unavailable",
-								cause: error,
-							}),
-						),
+		const access = Effect.fn("MessageLive.access")(function* (
+			messageId: MessageId,
+			channelId: ChannelId,
+			userId: UserId,
+		) {
+			if (binding !== undefined && binding.channelId !== channelId) {
+				return yield* new MessageNotFoundError({ messageId })
+			}
+			const answer = yield* callObject(LiveAccessCall, channelTarget(channelId), {
+				messageId,
+				userId,
+			}).pipe(
+				Effect.provideService(ObjectStubs, stubs),
+				Effect.catchTag("ObjectCallError", (error) =>
+					Effect.fail(
+						InternalServerError.withCause({
+							message: "The message's channel is unavailable",
+							cause: error,
+						}),
 					),
-				)
-				if (binding === undefined) {
-					binding = { messageId, channelId, authorId: answer.authorId }
-					yield* persist(BINDING_KEY, binding)
-				}
-				return answer
-			}).pipe(Effect.withSpan("MessageLive.access"))
+				),
+			)
+			if (binding === undefined) {
+				binding = { messageId, channelId, authorId: answer.authorId }
+				yield* persist(BINDING_KEY, binding)
+			}
+			return answer
+		})
 
 		/** The message's author, from the binding once known. */
 		const authorOf = (messageId: MessageId, channelId: ChannelId, userId: UserId) =>
@@ -292,7 +295,7 @@ export const makeMessageLiveRuntime = (options: LiveRuntimeOptions) =>
 						MessageNotFoundError: () =>
 							Effect.succeed({ code: SyncCloseCode.NotFound, reason: "not_found" }),
 						// The channel is unreachable: keep streaming, ask again next time.
-						InternalServerError: () => Effect.succeed(undefined),
+						InternalServerError: () => Effect.undefined,
 					}),
 				)
 				if (refusal === undefined) continue

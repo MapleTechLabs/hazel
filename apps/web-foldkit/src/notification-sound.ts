@@ -8,9 +8,9 @@ export type SoundFile = typeof SoundFile.Type
 
 export const SoundSettings = Schema.Struct({
 	enabled: Schema.Boolean,
-	volume: Schema.Number,
+	volume: Schema.Finite,
 	soundFile: SoundFile,
-	cooldownMs: Schema.Number,
+	cooldownMs: Schema.Finite,
 })
 export type SoundSettings = typeof SoundSettings.Type
 

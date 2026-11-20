@@ -37,7 +37,7 @@ export type InviteRowError = typeof InviteRowError.Type
 
 /** One address field; `id` keys the row, so removing one keeps focus on the right input. */
 export const InviteRow = Schema.Struct({
-	id: Schema.Number,
+	id: Schema.Finite,
 	email: Schema.String,
 	error: Schema.Option(InviteRowError),
 })
@@ -60,14 +60,14 @@ export const StepState = defineTaggedUnion({
 		selected: Schema.NullOr(Schema.String),
 		query: Schema.String,
 		debouncedQuery: Schema.String,
-		hoveredOffset: Schema.NullOr(Schema.Number),
+		hoveredOffset: Schema.NullOr(Schema.Finite),
 		detectionAttempted: Schema.Boolean,
 		isSubmitting: Schema.Boolean,
 	},
 	Theme: {},
 	UseCases: { box: ChoiceBox.Model },
 	Role: { box: ChoiceBox.Model },
-	Invite: { rows: Schema.Array(InviteRow), nextRowId: Schema.Number, isSending: Schema.Boolean },
+	Invite: { rows: Schema.Array(InviteRow), nextRowId: Schema.Finite, isSending: Schema.Boolean },
 	/** `failure` once `user.finalizeOnboarding` failed; the user can retry from here. */
 	Finalizing: { failure: Schema.Option(CommonReason) },
 	Completed: {},

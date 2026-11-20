@@ -57,11 +57,14 @@ export interface CallResponse {
 }
 
 /** The object could not be reached, or answered something undecodable. */
-export class ObjectCallError extends Schema.TaggedError<ObjectCallError>()("ObjectCallError", {
-	call: Schema.String,
-	target: Schema.String,
-	message: Schema.String,
-}) {}
+export class ObjectCallError extends Schema.TaggedError<ObjectCallError, { readonly brand: unique symbol }>()(
+	"ObjectCallError",
+	{
+		call: Schema.String,
+		target: Schema.String,
+		message: Schema.String,
+	},
+) {}
 
 const json = <S extends Codec>(schema: S) => Schema.toCodecJson(schema) as unknown as Schema.Codec<any, any>
 

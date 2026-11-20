@@ -194,7 +194,7 @@ export const makeDiscordClient = Effect.gen(function* () {
 			const target = yield* webhookOf(context)
 			if (Option.isNone(target)) return yield* identity("bot").pipe(Effect.andThen(bot))
 			const sent = yield* webhook(target.value).pipe(
-				Effect.map(Option.some),
+				Effect.asSome,
 				Effect.catchTag("ChatSyncProviderApiError", (error) =>
 					Effect.logWarning(
 						"Discord webhook call failed; falling back to the bot",

@@ -102,7 +102,7 @@ export const validateCraftBaseUrl = (rawBaseUrl: string) =>
 			parsed.hash.length === 0
 
 		if (!isValid) {
-			return yield* Effect.fail(invalidCraftBaseUrlError())
+			return yield* invalidCraftBaseUrlError()
 		}
 
 		return `${parsed.origin}${normalizedPath}`
@@ -310,16 +310,14 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 			}),
 		),
 	)
-	const org = yield* Option.match(orgOption, {
-		onNone: () =>
-			Effect.fail(
-				new UnauthorizedError({
-					message: "Organization not found",
-					detail: `Could not find organization ${orgId}`,
-				}),
-			),
-		onSome: Effect.succeed,
-	})
+	const org = yield* Effect.fromOption(
+		orgOption,
+		() =>
+			new UnauthorizedError({
+				message: "Organization not found",
+				detail: `Could not find organization ${orgId}`,
+			}),
+	)
 
 	// Determine environment from NODE_ENV config
 	// Local dev uses "local" so production can redirect callbacks back to localhost
@@ -399,7 +397,7 @@ const OAuthSessionState = Schema.Struct({
 	),
 	returnTo: Schema.String,
 	environment: Schema.optionalKey(Schema.Literals(["local", "production"])),
-	createdAt: Schema.Number,
+	createdAt: Schema.Finite,
 })
 
 /**
@@ -475,7 +473,7 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 		})
 
 		const sessionResult = Option.flatMap(decodeUriComponent(sessionCookie), (json) =>
-			Schema.decodeUnknownOption(Schema.fromJsonString(OAuthSessionState))(json),
+			Schema.decodeOption(Schema.fromJsonString(OAuthSessionState))(json),
 		)
 
 		if (Option.isSome(sessionResult)) {
@@ -584,7 +582,7 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 			provider,
 			hasSessionCookie: !!sessionCookie,
 		})
-		return yield* Effect.fail(new InvalidOAuthStateError({ message: "Missing OAuth state" }))
+		return yield* new InvalidOAuthStateError({ message: "Missing OAuth state" })
 	}
 
 	yield* Effect.logDebug("OAuth callback state resolved", {
@@ -898,7 +896,7 @@ const handleConnectApiKey = Effect.fn("integrations.connectApiKey")(function* (
 		)
 		externalAccountName = spaceInfo.name ?? "Craft Space"
 	} else {
-		return yield* Effect.fail(new UnsupportedProviderError({ provider }))
+		return yield* new UnsupportedProviderError({ provider })
 	}
 
 	// Save the connection (settings carry the base URL) and the API key in the org's object.
@@ -947,7 +945,7 @@ const handleGetConnectionStatus = Effect.fn("integrations.getConnectionStatus")(
 	const currentUser = yield* CurrentUser.Context
 	const level = query.level ?? "organization"
 	// A T3 Code link is a member's own, with its own routes (`./t3code.http.ts`).
-	if (provider === "t3code") return yield* Effect.fail(new UnsupportedProviderError({ provider }))
+	if (provider === "t3code") return yield* new UnsupportedProviderError({ provider })
 
 	yield* requireMember(orgId)
 
@@ -994,7 +992,7 @@ const handleDisconnect = Effect.fn("integrations.disconnect")(function* (
 	const currentUser = yield* CurrentUser.Context
 	const level = query.level ?? "organization"
 	// A T3 Code link is a member's own, with its own routes (`./t3code.http.ts`).
-	if (provider === "t3code") return yield* Effect.fail(new UnsupportedProviderError({ provider }))
+	if (provider === "t3code") return yield* new UnsupportedProviderError({ provider })
 
 	yield* requireMember(orgId)
 

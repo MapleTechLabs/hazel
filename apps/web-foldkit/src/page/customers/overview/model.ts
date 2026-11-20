@@ -67,7 +67,7 @@ export const previousPeriodOf = (
 }
 
 /** Open signals as the queue shows them (not on muted customers), highest priority first. */
-export const openSignals = (model: Model): ReadonlyArray<typeof SignalRow.Type> => {
+export const openSignals = (model: Model): ReadonlyArray<SignalRow> => {
 	const muted = new Set(
 		(model.accounts ?? []).filter((account) => isAttentionMuted(account)).map((account) => account.id),
 	)
@@ -75,11 +75,7 @@ export const openSignals = (model: Model): ReadonlyArray<typeof SignalRow.Type> 
 }
 
 /** Accounts first seen in the range (partial state: no billing to say who started paying). */
-export const newAccounts = (
-	model: Model,
-	nowMs: number,
-	count: number,
-): ReadonlyArray<typeof AccountRow.Type> =>
+export const newAccounts = (model: Model, nowMs: number, count: number): ReadonlyArray<AccountRow> =>
 	(model.accounts ?? [])
 		.filter((account) => account.firstSeenAtMs >= nowMs - rangeDaysOf(model.range) * 86_400_000)
 		.sort((left, right) => right.firstSeenAtMs - left.firstSeenAtMs)
@@ -87,11 +83,7 @@ export const newAccounts = (
 
 /** Accounts that were active and have gone quiet for two weeks (partial state's churn proxy). */
 export const QUIET_AFTER_DAYS = 14
-export const quietAccounts = (
-	model: Model,
-	nowMs: number,
-	count: number,
-): ReadonlyArray<typeof AccountRow.Type> =>
+export const quietAccounts = (model: Model, nowMs: number, count: number): ReadonlyArray<AccountRow> =>
 	(model.accounts ?? [])
 		.filter(
 			(account) =>

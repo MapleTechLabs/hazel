@@ -8,10 +8,12 @@ import { HttpServerRequest } from "effect/http"
 import { CurrentUser, InternalServerError, UnauthorizedError } from "@hazel/domain"
 import {
 	ApiV1ChannelNotFoundError,
+	ApiV1ChannelSummary,
 	ApiV1ChannelsListResponse,
 	ApiV1ChannelWebhookCreatedResponse,
 	ApiV1OrganizationNotFoundError,
 	ApiV1OrganizationsListResponse,
+	ApiV1OrganizationSummary,
 } from "@hazel/domain/http"
 import type { ChannelWebhookCreatedResponse } from "@hazel/domain/rpc"
 import type { ChannelId } from "@hazel/schema"
@@ -62,7 +64,9 @@ export const HttpApiV1IntegrationsLive = HttpApiBuilder.group(HazelApi, "api-v1-
 						{ concurrency: 8 },
 					)
 					return new ApiV1OrganizationsListResponse({
-						data: cards.flatMap((card) => (card === null ? [] : [card])),
+						data: cards.flatMap((card) =>
+							card === null ? [] : [new ApiV1OrganizationSummary(card)],
+						),
 					})
 				}).pipe(
 					Effect.catchTags({
@@ -81,12 +85,14 @@ export const HttpApiV1IntegrationsLive = HttpApiBuilder.group(HazelApi, "api-v1-
 					})
 					const membership = yield* directory.membership(currentUser.id, params.organizationId)
 					if (Option.isNone(membership) || membership.value.deletedAt !== null) {
-						return yield* Effect.fail(notFound)
+						return yield* notFound
 					}
 					const channels = yield* callObject(ListChannelsCall, orgTarget(params.organizationId), {
 						userId: currentUser.id,
 					}).pipe(Effect.catchTag("UnauthorizedError", () => Effect.fail(notFound)))
-					return new ApiV1ChannelsListResponse({ data: channels })
+					return new ApiV1ChannelsListResponse({
+						data: channels.map((channel) => new ApiV1ChannelSummary(channel)),
+					})
 				}).pipe(
 					Effect.catchTags({
 						DatabaseError: internal("Failed to list channels"),
@@ -104,7 +110,7 @@ export const HttpApiV1IntegrationsLive = HttpApiBuilder.group(HazelApi, "api-v1-
 					})
 					const channel = yield* directory.channel(payload.channelId)
 					if (Option.isNone(channel) || channel.value.deletedAt !== null) {
-						return yield* Effect.fail(notFound)
+						return yield* notFound
 					}
 					const created = yield* forwardRpc<
 						ChannelWebhookCreatedResponse,

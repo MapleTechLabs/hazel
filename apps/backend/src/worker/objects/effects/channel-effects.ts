@@ -51,7 +51,7 @@ export const SetViewersPayload = Schema.Struct({
 	 * Increases with every `setViewers` the org sends (`publishChannelAccess`). The org delivers
 	 * them out of order (right after its commit, retries later), so an older one is dropped.
 	 */
-	version: Schema.optionalKey(Schema.Number),
+	version: Schema.optionalKey(Schema.Finite),
 })
 export type SetViewersPayload = typeof SetViewersPayload.Type
 

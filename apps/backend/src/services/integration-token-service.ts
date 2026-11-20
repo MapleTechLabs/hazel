@@ -8,21 +8,27 @@ import { IntegrationEncryption } from "./integration-encryption"
 import { OAuthHttpClient } from "./oauth/oauth-http-client"
 import { type OAuthIntegrationProvider, loadProviderConfig } from "./oauth/provider-config"
 
-export class TokenNotFoundError extends Schema.TaggedError<TokenNotFoundError>()("TokenNotFoundError", {
+export class TokenNotFoundError extends Schema.TaggedError<
+	TokenNotFoundError,
+	{ readonly brand: unique symbol }
+>()("TokenNotFoundError", {
 	connectionId: IntegrationConnectionIdSchema,
 }) {}
 
-export class TokenRefreshError extends Schema.TaggedError<TokenRefreshError>()("TokenRefreshError", {
+export class TokenRefreshError extends Schema.TaggedError<
+	TokenRefreshError,
+	{ readonly brand: unique symbol }
+>()("TokenRefreshError", {
 	provider: IntegrationConnection.IntegrationProvider,
 	cause: Schema.Unknown,
 }) {}
 
-export class ConnectionNotFoundError extends Schema.TaggedError<ConnectionNotFoundError>()(
-	"ConnectionNotFoundError",
-	{
-		connectionId: IntegrationConnectionIdSchema,
-	},
-) {}
+export class ConnectionNotFoundError extends Schema.TaggedError<
+	ConnectionNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ConnectionNotFoundError", {
+	connectionId: IntegrationConnectionIdSchema,
+}) {}
 
 /**
  * Providers that use app-based token regeneration (JWT) instead of OAuth refresh tokens.
@@ -82,10 +88,10 @@ export class IntegrationTokenService extends Context.Service<IntegrationTokenSer
 				connectionId: IntegrationConnectionId,
 			) {
 				const tokenOption = yield* tokenRepo.findByConnectionId(connectionId)
-				const token = yield* Option.match(tokenOption, {
-					onNone: () => Effect.fail(new TokenNotFoundError({ connectionId })),
-					onSome: Effect.succeed,
-				})
+				const token = yield* Effect.fromOption(
+					tokenOption,
+					() => new TokenNotFoundError({ connectionId }),
+				)
 
 				// Check if token is expired or about to expire (10 min buffer)
 				const now = Date.now()
@@ -96,10 +102,10 @@ export class IntegrationTokenService extends Context.Service<IntegrationTokenSer
 					// Get connection to determine provider
 					const connectionOption = yield* connectionRepo.findById(connectionId)
 
-					const connection = yield* Option.match(connectionOption, {
-						onNone: () => Effect.fail(new ConnectionNotFoundError({ connectionId })),
-						onSome: Effect.succeed,
-					})
+					const connection = yield* Effect.fromOption(
+						connectionOption,
+						() => new ConnectionNotFoundError({ connectionId }),
+					)
 
 					// Check if this is an app-based provider (uses JWT regeneration)
 					const isAppBased = (APP_BASED_PROVIDERS as readonly string[]).includes(
@@ -116,10 +122,10 @@ export class IntegrationTokenService extends Context.Service<IntegrationTokenSer
 								// Re-fetch token to check if it was already refreshed while waiting
 								const freshTokenOption = yield* tokenRepo.findByConnectionId(connectionId)
 
-								const freshToken = yield* Option.match(freshTokenOption, {
-									onNone: () => Effect.fail(new TokenNotFoundError({ connectionId })),
-									onSome: Effect.succeed,
-								})
+								const freshToken = yield* Effect.fromOption(
+									freshTokenOption,
+									() => new TokenNotFoundError({ connectionId }),
+								)
 
 								const freshNow = Date.now()
 								const stillNeedsRefresh =
@@ -153,10 +159,10 @@ export class IntegrationTokenService extends Context.Service<IntegrationTokenSer
 								// Re-fetch token to check if it was already refreshed while waiting
 								const freshTokenOption = yield* tokenRepo.findByConnectionId(connectionId)
 
-								const freshToken = yield* Option.match(freshTokenOption, {
-									onNone: () => Effect.fail(new TokenNotFoundError({ connectionId })),
-									onSome: Effect.succeed,
-								})
+								const freshToken = yield* Effect.fromOption(
+									freshTokenOption,
+									() => new TokenNotFoundError({ connectionId }),
+								)
 
 								const freshNow = Date.now()
 								const stillNeedsRefresh =
@@ -200,18 +206,16 @@ export class IntegrationTokenService extends Context.Service<IntegrationTokenSer
 			) {
 				// Get connection to determine provider
 				const connectionOption = yield* connectionRepo.findById(connectionId)
-				const connection = yield* Option.match(connectionOption, {
-					onNone: () => Effect.fail(new ConnectionNotFoundError({ connectionId })),
-					onSome: Effect.succeed,
-				})
+				const connection = yield* Effect.fromOption(
+					connectionOption,
+					() => new ConnectionNotFoundError({ connectionId }),
+				)
 
 				if (!token.encryptedRefreshToken || !token.refreshTokenIv) {
-					return yield* Effect.fail(
-						new TokenRefreshError({
-							provider: connection.provider,
-							cause: "No refresh token available",
-						}),
-					)
+					return yield* new TokenRefreshError({
+						provider: connection.provider,
+						cause: "No refresh token available",
+					})
 				}
 
 				// Decrypt refresh token using its dedicated IV
@@ -296,12 +300,10 @@ export class IntegrationTokenService extends Context.Service<IntegrationTokenSer
 							connectionId,
 							errorType: "MissingInstallationId",
 						})
-						return yield* Effect.fail(
-							new TokenRefreshError({
-								provider: connection.provider,
-								cause: "No installation ID found in connection metadata",
-							}),
-						)
+						return yield* new TokenRefreshError({
+							provider: connection.provider,
+							cause: "No installation ID found in connection metadata",
+						})
 					}
 
 					yield* Effect.logDebug("Regenerating GitHub App token", { installationId, connectionId })
@@ -363,12 +365,10 @@ export class IntegrationTokenService extends Context.Service<IntegrationTokenSer
 				}
 
 				// Fallback for other app-based providers (not implemented yet)
-				return yield* Effect.fail(
-					new TokenRefreshError({
-						provider: connection.provider,
-						cause: `App-based token regeneration not implemented for provider: ${connection.provider}`,
-					}),
-				)
+				return yield* new TokenRefreshError({
+					provider: connection.provider,
+					cause: `App-based token regeneration not implemented for provider: ${connection.provider}`,
+				})
 			})
 
 			/**

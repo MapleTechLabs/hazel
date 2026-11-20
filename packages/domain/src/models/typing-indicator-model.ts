@@ -6,7 +6,7 @@ class Model extends M.Class<Model>("TypingIndicator")({
 	id: M.Generated(TypingIndicatorId),
 	channelId: ChannelId,
 	memberId: ChannelMemberId,
-	lastTyped: S.Number.annotate({
+	lastTyped: S.Finite.annotate({
 		title: "LastTyped",
 		description: "Unix timestamp of last typing activity",
 	}),

@@ -17,14 +17,19 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 				},
 			)
 			const db = yield* Database.Database
-			const decodeChannelLink = Schema.decodeUnknownSync(ChatSyncChannelLink.Schema)
+			// A stored row that does not decode is a defect, not an error callers handle.
+			const decodeChannelLink = (row: unknown) =>
+				Effect.orDie(Schema.decodeUnknownEffect(ChatSyncChannelLink.Schema)(row))
 			const decodeChannelLinkRows = (rows: readonly unknown[]) =>
-				rows.map((row) => decodeChannelLink(row))
+				Effect.forEach(rows, decodeChannelLink)
 			const decodeChannelLinkOption = <T>(value: Option.Option<T>) =>
-				Option.map(value, decodeChannelLink)
+				Option.match(value, {
+					onNone: () => Effect.succeedNone,
+					onSome: (row) => Effect.asSome(decodeChannelLink(row)),
+				})
 
 			const insert = (...args: Parameters<typeof baseRepo.insert>) =>
-				baseRepo.insert(...args).pipe(Effect.map(decodeChannelLinkRows)) as ReturnType<
+				baseRepo.insert(...args).pipe(Effect.flatMap(decodeChannelLinkRows)) as ReturnType<
 					typeof baseRepo.insert
 				>
 
@@ -36,7 +41,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 							.where(($) => [$.id.eq(id), $.deletedAt.isNull()])
 							.limit(1),
 					)
-					.pipe(Effect.map(decodeChannelLinkOption))
+					.pipe(Effect.flatMap(decodeChannelLinkOption))
 
 			const findBySyncConnection = (syncConnectionId: SyncConnectionId) =>
 				db
@@ -45,7 +50,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 							.select()
 							.where(($) => [$.syncConnectionId.eq(syncConnectionId), $.deletedAt.isNull()]),
 					)
-					.pipe(Effect.map(decodeChannelLinkRows))
+					.pipe(Effect.flatMap(decodeChannelLinkRows))
 
 			const findByHazelChannel = (syncConnectionId: SyncConnectionId, hazelChannelId: ChannelId) =>
 				db
@@ -59,7 +64,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 							])
 							.limit(1),
 					)
-					.pipe(Effect.map(decodeChannelLinkOption))
+					.pipe(Effect.flatMap(decodeChannelLinkOption))
 
 			const findByExternalChannel = (
 				syncConnectionId: SyncConnectionId,
@@ -76,7 +81,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 							])
 							.limit(1),
 					)
-					.pipe(Effect.map(decodeChannelLinkOption))
+					.pipe(Effect.flatMap(decodeChannelLinkOption))
 
 			const setActive = (id: SyncChannelLinkId, isActive: boolean) =>
 				db.run(

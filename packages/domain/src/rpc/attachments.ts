@@ -12,12 +12,12 @@ import { RouteChannelId } from "./routing-fields"
  * Error thrown when an attachment is not found.
  * Used in delete operations.
  */
-export class AttachmentNotFoundError extends Schema.TaggedError<AttachmentNotFoundError>()(
-	"AttachmentNotFoundError",
-	{
-		attachmentId: AttachmentId,
-	},
-) {}
+export class AttachmentNotFoundError extends Schema.TaggedError<
+	AttachmentNotFoundError,
+	{ readonly brand: unique symbol }
+>()("AttachmentNotFoundError", {
+	attachmentId: AttachmentId,
+}) {}
 
 /**
  * Attachment RPC Group

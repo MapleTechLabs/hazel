@@ -63,7 +63,7 @@ const Pending = Schema.Struct({
 	organizationId: OrganizationIdSchema,
 	userId: UserId,
 	returnTo: Schema.String,
-	createdAt: Schema.Number,
+	createdAt: Schema.Finite,
 })
 const PendingJson = Schema.fromJsonString(Pending)
 
@@ -74,7 +74,9 @@ const PendingJson = Schema.fromJsonString(Pending)
 export const sealPending = (pending: typeof Pending.Type) =>
 	Effect.gen(function* () {
 		const encryption = yield* IntegrationEncryption
-		const sealed = yield* encryption.encrypt(Schema.encodeSync(PendingJson)(pending))
+		// `pending` is already a `Pending`: encoding it cannot fail, so a failure is a defect.
+		const json = yield* Schema.encodeEffect(PendingJson)(pending).pipe(Effect.orDie)
+		const sealed = yield* encryption.encrypt(json)
 		return encodeURIComponent(`${sealed.keyVersion}.${sealed.iv}.${sealed.ciphertext}`)
 	})
 
@@ -91,7 +93,7 @@ export const openPending = (raw: string) =>
 			return Option.none()
 		const encryption = yield* IntegrationEncryption
 		const json = yield* encryption.decrypt({ iv, ciphertext, keyVersion })
-		return Schema.decodeUnknownOption(PendingJson)(json)
+		return Schema.decodeOption(PendingJson)(json)
 	}).pipe(
 		Effect.catchTags({
 			IntegrationEncryptionError: () => Effect.succeedNone,

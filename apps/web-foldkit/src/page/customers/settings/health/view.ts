@@ -44,7 +44,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		canEdit,
 		typing: model.typing,
 	}
-	const isValid = validDraftOf(model) !== null
+	const valid = validDraftOf(model)
 	const gaps = model.accounts === null ? null : dataGapsOf(model.accounts)
 	return settingsPage(h, [
 		settingsHeader(h, {
@@ -70,10 +70,10 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			[h.Class("grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]")],
 			[
 				bandsCard(h, model, context),
-				distributionCard(h, model, context, isValid, model.settings.reportingCurrency),
+				distributionCard(h, model, context, valid, model.settings.reportingCurrency),
 			],
 		),
 		checkCard(h, model, context),
-		...(canEdit && context.isDirty ? [unsavedBar(h, model, context, isValid)] : []),
+		...(canEdit && context.isDirty ? [unsavedBar(h, model, context, valid)] : []),
 	])
 })

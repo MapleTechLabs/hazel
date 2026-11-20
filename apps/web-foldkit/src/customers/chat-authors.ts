@@ -39,7 +39,7 @@ export const ChatParticipantRow = Schema.Struct({
 	contactId: Schema.NullOr(CustomerContactId),
 	name: Schema.String,
 	avatarUrl: Schema.NullOr(Schema.String),
-	lastMessageAtMs: Schema.Number,
+	lastMessageAtMs: Schema.Finite,
 	lastChannelId: ChannelId,
 })
 export type ChatParticipantRow = typeof ChatParticipantRow.Type

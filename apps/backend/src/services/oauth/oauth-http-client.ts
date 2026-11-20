@@ -22,7 +22,7 @@ const DEFAULT_TIMEOUT = Duration.seconds(30)
 const OAuthTokenApiResponse = Schema.Struct({
 	access_token: Schema.String,
 	refresh_token: Schema.optionalKey(Schema.String),
-	expires_in: Schema.optionalKey(Schema.Number),
+	expires_in: Schema.optionalKey(Schema.Finite),
 	scope: Schema.optionalKey(Schema.String),
 	token_type: Schema.optional(Schema.String).pipe(
 		Schema.decodeTo(Schema.toType(Schema.String), {
@@ -36,11 +36,14 @@ const OAuthTokenApiResponse = Schema.Struct({
 // Error Types
 // ============================================================================
 
-export class OAuthHttpError extends Schema.TaggedError<OAuthHttpError>()("OAuthHttpError", {
-	message: Schema.String,
-	status: Schema.optional(Schema.Number),
-	cause: Schema.optional(Schema.Unknown),
-}) {}
+export class OAuthHttpError extends Schema.TaggedError<OAuthHttpError, { readonly brand: unique symbol }>()(
+	"OAuthHttpError",
+	{
+		message: Schema.String,
+		status: Schema.optional(Schema.Finite),
+		cause: Schema.optional(Schema.Unknown),
+	},
+) {}
 
 // ============================================================================
 // Result Types
@@ -122,23 +125,20 @@ export class OAuthHttpClient extends Context.Service<OAuthHttpClient>()("OAuthHt
 
 			if (response.status >= 400) {
 				const errorText = yield* response.text
-				return yield* Effect.fail(
-					new OAuthHttpError({
-						message: `Token exchange failed: ${response.status} ${errorText}`,
-						status: response.status,
-					}),
-				)
+				return yield* new OAuthHttpError({
+					message: `Token exchange failed: ${response.status} ${errorText}`,
+					status: response.status,
+				})
 			}
 
 			const data = yield* response.json.pipe(
 				Effect.flatMap(Schema.decodeUnknownEffect(OAuthTokenApiResponse)),
-				Effect.catch((error) =>
-					Effect.fail(
+				Effect.mapError(
+					(error) =>
 						new OAuthHttpError({
 							message: `Failed to parse token response: ${String(error)}`,
 							cause: error,
 						}),
-					),
 				),
 			)
 
@@ -183,23 +183,20 @@ export class OAuthHttpClient extends Context.Service<OAuthHttpClient>()("OAuthHt
 
 			if (response.status >= 400) {
 				const errorText = yield* response.text
-				return yield* Effect.fail(
-					new OAuthHttpError({
-						message: `Token refresh failed: ${response.status} ${errorText}`,
-						status: response.status,
-					}),
-				)
+				return yield* new OAuthHttpError({
+					message: `Token refresh failed: ${response.status} ${errorText}`,
+					status: response.status,
+				})
 			}
 
 			const data = yield* response.json.pipe(
 				Effect.flatMap(Schema.decodeUnknownEffect(OAuthTokenApiResponse)),
-				Effect.catch((error) =>
-					Effect.fail(
+				Effect.mapError(
+					(error) =>
 						new OAuthHttpError({
 							message: `Failed to parse token response: ${String(error)}`,
 							cause: error,
 						}),
-					),
 				),
 			)
 
@@ -218,17 +215,16 @@ export class OAuthHttpClient extends Context.Service<OAuthHttpClient>()("OAuthHt
 			params: { code: string; redirectUri: string; clientId: string; clientSecret: string },
 		) =>
 			exchangeCode(tokenUrl, params).pipe(
-				Effect.catchTag("TimeoutError", () =>
-					Effect.fail(new OAuthHttpError({ message: "Request timed out" })),
-				),
-				Effect.catchTag("HttpClientError", (error) =>
-					Effect.fail(
-						new OAuthHttpError({
-							message: `Network error: ${String(error)}`,
-							cause: error,
-						}),
-					),
-				),
+				Effect.catchTags({
+					TimeoutError: () => Effect.fail(new OAuthHttpError({ message: "Request timed out" })),
+					HttpClientError: (error) =>
+						Effect.fail(
+							new OAuthHttpError({
+								message: `Network error: ${String(error)}`,
+								cause: error,
+							}),
+						),
+				}),
 				Effect.withSpan("OAuthHttpClient.exchangeCode"),
 			)
 
@@ -237,17 +233,16 @@ export class OAuthHttpClient extends Context.Service<OAuthHttpClient>()("OAuthHt
 			params: { refreshToken: string; clientId: string; clientSecret: string },
 		) =>
 			refreshToken(provider, params).pipe(
-				Effect.catchTag("TimeoutError", () =>
-					Effect.fail(new OAuthHttpError({ message: "Request timed out" })),
-				),
-				Effect.catchTag("HttpClientError", (error) =>
-					Effect.fail(
-						new OAuthHttpError({
-							message: `Network error: ${String(error)}`,
-							cause: error,
-						}),
-					),
-				),
+				Effect.catchTags({
+					TimeoutError: () => Effect.fail(new OAuthHttpError({ message: "Request timed out" })),
+					HttpClientError: (error) =>
+						Effect.fail(
+							new OAuthHttpError({
+								message: `Network error: ${String(error)}`,
+								cause: error,
+							}),
+						),
+				}),
 				Effect.withSpan("OAuthHttpClient.refreshToken", { attributes: { provider } }),
 			)
 

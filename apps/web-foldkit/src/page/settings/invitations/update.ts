@@ -19,7 +19,7 @@ export const REVOKE_KEY = "revoke"
 // COMMAND
 
 export const FetchInvitations = Command.define("FetchInvitations", {
-	args: { organizationId: OrganizationId, version: Schema.Number },
+	args: { organizationId: OrganizationId, version: Schema.Finite },
 	messages: [Message.SucceededFetchInvitations, Message.FailedFetchInvitations],
 	execute: ({ organizationId, version }) =>
 		listInvitations(organizationId).pipe(

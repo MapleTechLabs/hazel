@@ -11,7 +11,10 @@ import { RequiredScopes } from "../scopes/required-scopes"
  * Response schema for successful organization operations.
  * Contains the organization data and a transaction ID for optimistic updates.
  */
-export class OrganizationResponse extends Schema.Class<OrganizationResponse>("OrganizationResponse")({
+export class OrganizationResponse extends Schema.Class<
+	OrganizationResponse,
+	{ readonly brand: unique symbol }
+>("OrganizationResponse")({
 	data: Organization.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -20,38 +23,41 @@ export class OrganizationResponse extends Schema.Class<OrganizationResponse>("Or
  * Error thrown when an organization is not found.
  * Used in update and delete operations.
  */
-export class OrganizationNotFoundError extends Schema.TaggedError<OrganizationNotFoundError>()(
-	"OrganizationNotFoundError",
-	{
-		organizationId: OrganizationId,
-	},
-) {}
+export class OrganizationNotFoundError extends Schema.TaggedError<
+	OrganizationNotFoundError,
+	{ readonly brand: unique symbol }
+>()("OrganizationNotFoundError", {
+	organizationId: OrganizationId,
+}) {}
 
 /**
  * Error thrown when trying to create or update an organization with a slug that already exists.
  */
-export class OrganizationSlugAlreadyExistsError extends Schema.TaggedError<OrganizationSlugAlreadyExistsError>()(
-	"OrganizationSlugAlreadyExistsError",
-	{
-		message: Schema.String,
-		slug: Schema.String,
-	},
-) {}
+export class OrganizationSlugAlreadyExistsError extends Schema.TaggedError<
+	OrganizationSlugAlreadyExistsError,
+	{ readonly brand: unique symbol }
+>()("OrganizationSlugAlreadyExistsError", {
+	message: Schema.String,
+	slug: Schema.String,
+}) {}
 
 /**
  * Error thrown when trying to join an organization via public invite but the org has public invites disabled.
  */
-export class PublicInviteDisabledError extends Schema.TaggedError<PublicInviteDisabledError>()(
-	"PublicInviteDisabledError",
-	{
-		organizationId: OrganizationId,
-	},
-) {}
+export class PublicInviteDisabledError extends Schema.TaggedError<
+	PublicInviteDisabledError,
+	{ readonly brand: unique symbol }
+>()("PublicInviteDisabledError", {
+	organizationId: OrganizationId,
+}) {}
 
 /**
  * Error thrown when a user is already a member of the organization they're trying to join.
  */
-export class AlreadyMemberError extends Schema.TaggedError<AlreadyMemberError>()("AlreadyMemberError", {
+export class AlreadyMemberError extends Schema.TaggedError<
+	AlreadyMemberError,
+	{ readonly brand: unique symbol }
+>()("AlreadyMemberError", {
 	organizationId: OrganizationId,
 	organizationSlug: Schema.NullOr(Schema.String),
 }) {}
@@ -60,12 +66,15 @@ export class AlreadyMemberError extends Schema.TaggedError<AlreadyMemberError>()
  * Public organization info response for unauthenticated users.
  * Contains only public information that's safe to expose.
  */
-export class PublicOrganizationInfo extends Schema.Class<PublicOrganizationInfo>("PublicOrganizationInfo")({
+export class PublicOrganizationInfo extends Schema.Class<
+	PublicOrganizationInfo,
+	{ readonly brand: unique symbol }
+>("PublicOrganizationInfo")({
 	id: OrganizationId,
 	name: Schema.String,
 	slug: Schema.NullOr(Schema.String),
 	logoUrl: Schema.NullOr(Schema.String),
-	memberCount: Schema.Number,
+	memberCount: Schema.Finite,
 }) {}
 
 export class OrganizationRpcs extends RpcGroup.make(

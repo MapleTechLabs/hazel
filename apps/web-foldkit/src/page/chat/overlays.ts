@@ -61,7 +61,7 @@ export const OpenOverlay = defineTaggedUnion({
 	/** `urlImages` are a GIF or tweet photos (`ViewerImage` of type "url"); otherwise the attachments. */
 	ImageViewer: {
 		messageId: MessageId,
-		index: Schema.Number,
+		index: Schema.Finite,
 		urlImages: Schema.NullOr(Schema.Array(ViewerUrlImage)),
 	},
 	/** The toolbar's "Add reaction" picker. */
@@ -80,14 +80,14 @@ export type OpenOverlay = typeof OpenOverlay.Type
 export const Hover = defineTaggedUnion({
 	None: {},
 	Shown: { messageId: MessageId, isToolbarHovered: Schema.Boolean },
-	HidePending: { messageId: MessageId, version: Schema.Number },
+	HidePending: { messageId: MessageId, version: Schema.Finite },
 })
 export type Hover = typeof Hover.Type
 
 export const Model = Schema.Struct({
 	hover: Hover,
 	/** Bumped for every hide delay started, so a stale one never acts. */
-	hideVersion: Schema.Number,
+	hideVersion: Schema.Finite,
 	toolbar: Toolbar.Model,
 	/** The tooltip host's one Tooltip, with the message its trigger renders in. */
 	tooltip: Schema.NullOr(Schema.Struct({ messageId: MessageId, tooltip: Tooltip.Model })),
@@ -169,7 +169,7 @@ export const activePopoverOf = (model: Model) =>
 export const Message = defineMessageUnion({
 	PointerEnteredMessage: { messageId: MessageId },
 	PointerLeftList: {},
-	CompletedWaitForHideToolbar: { version: Schema.Number },
+	CompletedWaitForHideToolbar: { version: Schema.Finite },
 	EnteredToolbar: {},
 	LeftToolbar: {},
 	GotToolbarMessage: { message: Toolbar.Message },
@@ -177,8 +177,8 @@ export const Message = defineMessageUnion({
 	GotMoreMenuMessage: { messageId: MessageId, message: Menu.Message },
 	RightClickedMessage: {
 		messageId: MessageId,
-		offset: Schema.Number,
-		crossOffset: Schema.Number,
+		offset: Schema.Finite,
+		crossOffset: Schema.Finite,
 		imageUrl: Schema.NullOr(Schema.String),
 	},
 	GotContextMenuMessage: { message: Menu.Message },
@@ -194,10 +194,10 @@ export const Message = defineMessageUnion({
 	ClickedCopy: { messageId: MessageId },
 	ClickedEdit: { messageId: MessageId },
 	ClickedReaction: { messageId: MessageId, emoji: Schema.String },
-	ClickedAttachmentImage: { messageId: MessageId, index: Schema.Number },
-	ClickedEmbedImage: { messageId: MessageId, images: Schema.Array(ViewerUrlImage), index: Schema.Number },
+	ClickedAttachmentImage: { messageId: MessageId, index: Schema.Finite },
+	ClickedEmbedImage: { messageId: MessageId, images: Schema.Array(ViewerUrlImage), index: Schema.Finite },
 	ClosedImageViewer: {},
-	SelectedViewerImage: { index: Schema.Number },
+	SelectedViewerImage: { index: Schema.Finite },
 	ClickedViewerAction: { action: ViewerAction, url: Schema.String, fileName: Schema.String },
 	/** The viewer's right-click menu on the open image. */
 	GotViewerMenuMessage: { message: Menu.Message },
@@ -245,7 +245,7 @@ export interface MessageFacts {
 const HIDE_DELAY = Duration.millis(200)
 
 export const WaitForHideToolbar = Command.define("WaitForHideToolbar", {
-	args: { version: Schema.Number },
+	args: { version: Schema.Finite },
 	messages: [Message.CompletedWaitForHideToolbar],
 	execute: ({ version }) =>
 		Effect.sleep(HIDE_DELAY).pipe(Effect.as(Message.CompletedWaitForHideToolbar({ version }))),

@@ -33,32 +33,40 @@ export type BotCommandSchema = typeof BotCommandSchema.Type
 
 // ============ REQUEST SCHEMAS ============
 
-export class SyncBotCommandsRequest extends Schema.Class<SyncBotCommandsRequest>("SyncBotCommandsRequest")({
+export class SyncBotCommandsRequest extends Schema.Class<
+	SyncBotCommandsRequest,
+	{ readonly brand: unique symbol }
+>("SyncBotCommandsRequest")({
 	commands: Schema.Array(BotCommandSchema),
 }) {}
 
-export class ExecuteBotCommandRequest extends Schema.Class<ExecuteBotCommandRequest>(
-	"ExecuteBotCommandRequest",
-)({
+export class ExecuteBotCommandRequest extends Schema.Class<
+	ExecuteBotCommandRequest,
+	{ readonly brand: unique symbol }
+>("ExecuteBotCommandRequest")({
 	channelId: ChannelId,
 	arguments: Schema.Array(CommandArgumentValue),
 }) {}
 
 // ============ RESPONSE SCHEMAS ============
 
-export class SyncBotCommandsResponse extends Schema.Class<SyncBotCommandsResponse>("SyncBotCommandsResponse")(
-	{
-		syncedCount: Schema.Number,
-	},
-) {}
+export class SyncBotCommandsResponse extends Schema.Class<
+	SyncBotCommandsResponse,
+	{ readonly brand: unique symbol }
+>("SyncBotCommandsResponse")({
+	syncedCount: Schema.Finite,
+}) {}
 
-export class BotCommandExecutionAccepted extends Schema.Class<BotCommandExecutionAccepted>(
-	"BotCommandExecutionAccepted",
-)({
+export class BotCommandExecutionAccepted extends Schema.Class<
+	BotCommandExecutionAccepted,
+	{ readonly brand: unique symbol }
+>("BotCommandExecutionAccepted")({
 	message: Schema.String,
 }) {}
 
-export class BotMeResponse extends Schema.Class<BotMeResponse>("BotMeResponse")({
+export class BotMeResponse extends Schema.Class<BotMeResponse, { readonly brand: unique symbol }>(
+	"BotMeResponse",
+)({
 	botId: BotId,
 	userId: UserId,
 	name: Schema.String,
@@ -68,64 +76,71 @@ export class BotMeResponse extends Schema.Class<BotMeResponse>("BotMeResponse")(
 
 export { BotNotFoundError }
 
-export class BotNotInstalledError extends Schema.TaggedError<BotNotInstalledError>()("BotNotInstalledError", {
+export class BotNotInstalledError extends Schema.TaggedError<
+	BotNotInstalledError,
+	{ readonly brand: unique symbol }
+>()("BotNotInstalledError", {
 	botId: BotId,
 	orgId: OrganizationId,
 }) {}
 
-export class BotCommandNotFoundError extends Schema.TaggedError<BotCommandNotFoundError>()(
-	"BotCommandNotFoundError",
-	{
-		botId: BotId,
-		commandName: Schema.String,
-	},
-) {}
+export class BotCommandNotFoundError extends Schema.TaggedError<
+	BotCommandNotFoundError,
+	{ readonly brand: unique symbol }
+>()("BotCommandNotFoundError", {
+	botId: BotId,
+	commandName: Schema.String,
+}) {}
 
-export class BotCommandExecutionError extends Schema.TaggedError<BotCommandExecutionError>()(
-	"BotCommandExecutionError",
-	{
-		commandName: Schema.String,
-		message: Schema.String,
-		details: Schema.NullishOr(Schema.String),
-	},
-) {}
+export class BotCommandExecutionError extends Schema.TaggedError<
+	BotCommandExecutionError,
+	{ readonly brand: unique symbol }
+>()("BotCommandExecutionError", {
+	commandName: Schema.String,
+	message: Schema.String,
+	details: Schema.NullishOr(Schema.String),
+}) {}
 
 // ============ INTEGRATION TOKEN SCHEMAS ============
 
-export class IntegrationTokenResponse extends Schema.Class<IntegrationTokenResponse>(
-	"IntegrationTokenResponse",
-)({
+export class IntegrationTokenResponse extends Schema.Class<
+	IntegrationTokenResponse,
+	{ readonly brand: unique symbol }
+>("IntegrationTokenResponse")({
 	accessToken: Schema.String,
 	provider: IntegrationProvider,
 	expiresAt: Schema.NullOr(Schema.String),
 	settings: Schema.optional(Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown))),
 }) {}
 
-export class EnabledIntegrationsResponse extends Schema.Class<EnabledIntegrationsResponse>(
-	"EnabledIntegrationsResponse",
-)({
+export class EnabledIntegrationsResponse extends Schema.Class<
+	EnabledIntegrationsResponse,
+	{ readonly brand: unique symbol }
+>("EnabledIntegrationsResponse")({
 	providers: Schema.Array(IntegrationProvider),
 }) {}
 
-export class UpdateBotSettingsRequest extends Schema.Class<UpdateBotSettingsRequest>(
-	"UpdateBotSettingsRequest",
-)({
+export class UpdateBotSettingsRequest extends Schema.Class<
+	UpdateBotSettingsRequest,
+	{ readonly brand: unique symbol }
+>("UpdateBotSettingsRequest")({
 	mentionable: Schema.optional(Schema.Boolean),
 }) {}
 
-export class UpdateBotSettingsResponse extends Schema.Class<UpdateBotSettingsResponse>(
-	"UpdateBotSettingsResponse",
-)({
+export class UpdateBotSettingsResponse extends Schema.Class<
+	UpdateBotSettingsResponse,
+	{ readonly brand: unique symbol }
+>("UpdateBotSettingsResponse")({
 	success: Schema.Boolean,
 }) {}
 
-export class IntegrationNotAllowedError extends Schema.TaggedError<IntegrationNotAllowedError>()(
-	"IntegrationNotAllowedError",
-	{
-		botId: BotId,
-		provider: IntegrationProvider,
-	},
-) {}
+export class IntegrationNotAllowedError extends Schema.TaggedError<
+	IntegrationNotAllowedError,
+	{ readonly brand: unique symbol }
+>()("IntegrationNotAllowedError", {
+	botId: BotId,
+	provider: IntegrationProvider,
+}) {}
 
 // ============ API GROUP ============
 

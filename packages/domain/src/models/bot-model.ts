@@ -15,7 +15,7 @@ class Model extends M.Class<Model>("Bot")({
 	scopes: S.NullOr(S.Array(S.String)),
 	metadata: S.NullOr(S.Record(S.String, S.Unknown)),
 	isPublic: S.Boolean,
-	installCount: M.GeneratedByApp(S.Number),
+	installCount: M.GeneratedByApp(S.Finite),
 	// List of integration providers this bot is allowed to use (e.g., ["linear", "github"])
 	allowedIntegrations: S.NullOr(S.Array(IntegrationProvider)),
 	// Whether this bot can be @mentioned in messages

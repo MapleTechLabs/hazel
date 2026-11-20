@@ -94,7 +94,7 @@ export const setupCommand = Command.make(
 			// Run doctor first (unless skipped)
 			if (!skipDoctor) {
 				const doctor = yield* Doctor
-				const { environment, services } = yield* doctor.runAllChecks()
+				const { environment, services } = yield* doctor.runAllChecks
 				const allResults = [...environment, ...services]
 
 				const formatResult = (result: { name: string; status: string; message: string }) => {
@@ -142,7 +142,7 @@ export const setupCommand = Command.make(
 			const secrets = yield* SecretGenerator
 
 			// Read existing .env files for smart prefilling
-			const envResult = yield* envWriter.readAllEnvFiles()
+			const envResult = yield* envWriter.readAllEnvFiles
 			const existingConfig = extractExistingConfig(envResult)
 			const hasExistingValues = Object.keys(envResult.values).length > 0
 
@@ -446,7 +446,7 @@ export const setupCommand = Command.make(
 				githubWebhookSecret,
 				openrouterApiKey,
 				klipyApiKey,
-				botTokens: yield* envWriter.readBotTokens(),
+				botTokens: yield* envWriter.readBotTokens,
 			}
 
 			yield* envWriter.writeEnvFile(".env.local", ENV_TEMPLATES.local(config), dryRun)

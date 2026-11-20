@@ -7,7 +7,7 @@ import { toAccountRow } from "../../../../customers/queries"
 import type { Shared } from "../../../../page/contract"
 import { labShared } from "../../../../page/customers/lab-shared"
 import { Message } from "../../../../page/customers/settings/health/message"
-import { Model } from "../../../../page/customers/settings/health/model"
+import { Model, validDraftOf } from "../../../../page/customers/settings/health/model"
 import { sliderSubscriptions } from "../../../../page/customers/settings/health/subscription"
 import { init, update } from "../../../../page/customers/settings/health/update"
 import { view } from "../../../../page/customers/settings/health/view"
@@ -66,8 +66,10 @@ const answered = (model: Model): Model => {
 
 const step = (model: Model, message: Message): Model => {
 	const next = answered(update(model, message, sharedOf()).model)
-	if (!next.isSaving || next.settings === null || next.draft === null) return next
-	const synced = { ...next, settings: { ...next.settings, health: next.draft } }
+	// A save only starts for a valid draft: that is what lands.
+	const saved = validDraftOf(next)
+	if (!next.isSaving || next.settings === null || saved === null) return next
+	const synced = { ...next, settings: { ...next.settings, health: saved } }
 	return answered(update(synced, Message.SucceededSaveHealthSettings(), sharedOf()).model)
 }
 

@@ -24,7 +24,7 @@ const InstallationAction = Schema.Literals(["created", "deleted", "suspend", "un
 const InstallationEvent = Schema.Struct({
 	action: InstallationAction,
 	installation: Schema.Struct({
-		id: Schema.Number,
+		id: Schema.Finite,
 		account: Schema.Struct({
 			login: Schema.String,
 			type: Schema.Literals(["User", "Organization"]),
@@ -35,8 +35,8 @@ const InstallationEvent = Schema.Struct({
 
 /** The fields every repository event the org handles carries. */
 const RepositoryEvent = Schema.Struct({
-	installation: Schema.Struct({ id: Schema.Number }),
-	repository: Schema.Struct({ id: Schema.Number, full_name: Schema.String }),
+	installation: Schema.Struct({ id: Schema.Finite }),
+	repository: Schema.Struct({ id: Schema.Finite, full_name: Schema.String }),
 })
 
 const LoggedFields = Schema.Struct({
@@ -192,11 +192,9 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 				const deliveryId = request.headers["x-github-delivery"]
 
 				if (!eventType || !deliveryId) {
-					return yield* Effect.fail(
-						new InvalidGitHubWebhookSignature({
-							message: "Missing required GitHub webhook headers",
-						}),
-					)
+					return yield* new InvalidGitHubWebhookSignature({
+						message: "Missing required GitHub webhook headers",
+					})
 				}
 
 				const rawBody = yield* pipe(
@@ -213,9 +211,7 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 					Config.withDefault(false),
 				)
 
-				const webhookSecret = yield* Effect.gen(function* () {
-					return yield* Config.Redacted("GITHUB_WEBHOOK_SECRET")
-				}).pipe(
+				const webhookSecret = yield* Config.Redacted("GITHUB_WEBHOOK_SECRET").pipe(
 					Effect.catchTag("ConfigError", () =>
 						skipSignatureVerification
 							? Effect.succeed(Redacted.make(""))
@@ -232,11 +228,9 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 				if (secretValue) {
 					if (!signature) {
 						yield* Effect.logWarning("Missing GitHub webhook signature header")
-						return yield* Effect.fail(
-							new InvalidGitHubWebhookSignature({
-								message: "Missing x-hub-signature-256 header",
-							}),
-						)
+						return yield* new InvalidGitHubWebhookSignature({
+							message: "Missing x-hub-signature-256 header",
+						})
 					}
 
 					const bodyHmac = createHmac("sha256", secretValue)
@@ -254,11 +248,9 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 							eventType,
 							deliveryId,
 						})
-						return yield* Effect.fail(
-							new InvalidGitHubWebhookSignature({
-								message: "Invalid webhook signature",
-							}),
-						)
+						return yield* new InvalidGitHubWebhookSignature({
+							message: "Invalid webhook signature",
+						})
 					}
 				}
 

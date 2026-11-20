@@ -313,27 +313,26 @@ const makeAccountsMapping = (
 })
 
 /** The unique keys each mapping declares exist on the physical tables (what the facade checks). */
-const validateMappings = (mappings: ReadonlyArray<unknown>) =>
-	Effect.gen(function* () {
-		const plans: Array<{ readonly table: object; readonly keys: ReadonlyArray<string> }> = []
-		for (const mapping of mappings) {
-			const planned = Adapter.storageKeyPlans(mapping, (table) =>
-				Result.succeed((table as Table).columns),
-			)
-			if (Result.isFailure(planned)) {
-				return yield* PersistenceConfigurationError.make({
-					reason: `Invalid OAuth mapping: ${planned.failure}`,
-				})
-			}
-			plans.push(...planned.success)
+const validateMappings = Effect.fn("HazelAuth.validateOAuthStorage")(function* (
+	mappings: ReadonlyArray<unknown>,
+) {
+	const plans: Array<{ readonly table: object; readonly keys: ReadonlyArray<string> }> = []
+	for (const mapping of mappings) {
+		const planned = Adapter.storageKeyPlans(mapping, (table) => Result.succeed((table as Table).columns))
+		if (Result.isFailure(planned)) {
+			return yield* PersistenceConfigurationError.make({
+				reason: `Invalid OAuth mapping: ${planned.failure}`,
+			})
 		}
-		yield* Adapter.validateStorageBatch("sqlite", [
-			...plans.map(({ table, keys }) => ({ table: describe(table as Table), required: [keys] })),
-			// No mapping keys on `users`, but the services built next read its metadata: fetch it
-			// in this query, not in one of its own.
-			{ table: describe(T.users), required: [] },
-		])
-	}).pipe(Effect.withSpan("HazelAuth.validateOAuthStorage"))
+		plans.push(...planned.success)
+	}
+	yield* Adapter.validateStorageBatch("sqlite", [
+		...plans.map(({ table, keys }) => ({ table: describe(table as Table), required: [keys] })),
+		// No mapping keys on `users`, but the services built next read its metadata: fetch it
+		// in this query, not in one of its own.
+		{ table: describe(T.users), required: [] },
+	])
+})
 
 export const OAuthStorageLive = Layer.effectContext(
 	Effect.gen(function* () {

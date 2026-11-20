@@ -20,8 +20,8 @@ export const Message = defineMessageUnion({
 	ChangedTimezoneQuery: { value: Schema.String },
 	ElapsedTimezoneDebounce: { query: Schema.String },
 	ClickedCity: { timezone: Schema.String },
-	ClickedOffset: { offset: Schema.Number },
-	HoveredOffset: { offset: Schema.NullOr(Schema.Number) },
+	ClickedOffset: { offset: Schema.Finite },
+	HoveredOffset: { offset: Schema.NullOr(Schema.Finite) },
 	ClickedDetectTimezone: {},
 	ClickedContinueTimezone: {},
 	SucceededUpdateTimezone: { timezone: Schema.String },
@@ -34,11 +34,11 @@ export const Message = defineMessageUnion({
 	GotChoiceBoxMessage: { message: ChoiceBox.Message },
 	ClickedContinueChoice: {},
 	// Invite
-	ChangedEmail: { rowId: Schema.Number, value: Schema.String },
+	ChangedEmail: { rowId: Schema.Finite, value: Schema.String },
 	ClickedAddEmail: {},
-	ClickedRemoveEmail: { rowId: Schema.Number },
+	ClickedRemoveEmail: { rowId: Schema.Finite },
 	ClickedContinueInvite: {},
-	SucceededSendInvites: { emails: Schema.Array(Schema.String), failedCount: Schema.Number },
+	SucceededSendInvites: { emails: Schema.Array(Schema.String), failedCount: Schema.Finite },
 	/** Every invitation failed (`sendInvitations` reports per-address failures as counts). */
 	FailedSendInvites: { reason: Schema.Literals(["AllFailed"]) },
 	// Finalization

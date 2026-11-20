@@ -20,7 +20,7 @@ export type FormValues = typeof FormValues.Type
 export const CropState = defineTaggedUnion({
 	Idle: {},
 	/** `loadId` tells this load's result apart from an earlier, cancelled pick's. */
-	Loading: { loadId: Schema.Number },
+	Loading: { loadId: Schema.Finite },
 	Ready: { image: CropImage },
 	Processing: { image: CropImage },
 })
@@ -58,7 +58,7 @@ export const Model = Schema.Struct({
 	dropZone: DropZone.Model,
 	crop: CropState,
 	/** The last crop image load started; each pick takes the next id. */
-	cropLoadId: Schema.Number,
+	cropLoadId: Schema.Finite,
 	cropModal: Modal.Model,
 	interaction: Interaction.Model,
 })

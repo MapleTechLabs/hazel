@@ -31,7 +31,7 @@ export const Model = Schema.Struct({
 	quietHoursEnd: Segments.Model,
 	notificationStatus: NotificationStatus,
 	/** Bumped per test notification result, so an older expiry timer leaves a newer status alone. */
-	notificationStatusVersion: Schema.Number,
+	notificationStatusVersion: Schema.Finite,
 	interaction: Interaction.Model,
 })
 export type Model = typeof Model.Type

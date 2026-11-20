@@ -17,9 +17,12 @@ export const interaction = Interaction.embed<Model, Message, PageSubscriptionInp
 )
 
 /** A Tauri plugin call (autostart, app version) rejected. */
-class TauriPluginError extends Schema.TaggedError<TauriPluginError>()("TauriPluginError", {
-	cause: Schema.Defect(),
-}) {}
+class TauriPluginError extends Schema.TaggedError<TauriPluginError, { readonly brand: unique symbol }>()(
+	"TauriPluginError",
+	{
+		cause: Schema.Defect(),
+	},
+) {}
 
 const tauri = <A>(run: () => Promise<A>) =>
 	Effect.tryPromise({ try: run, catch: (cause) => new TauriPluginError({ cause }) })

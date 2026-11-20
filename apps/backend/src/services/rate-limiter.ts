@@ -14,7 +14,10 @@ export interface RateLimitResult {
 	readonly limit: number
 }
 
-export class RateLimiterError extends Schema.TaggedError<RateLimiterError>()("RateLimiterError", {
+export class RateLimiterError extends Schema.TaggedError<
+	RateLimiterError,
+	{ readonly brand: unique symbol }
+>()("RateLimiterError", {
 	message: Schema.String,
 	cause: Schema.optional(Schema.Unknown),
 }) {}

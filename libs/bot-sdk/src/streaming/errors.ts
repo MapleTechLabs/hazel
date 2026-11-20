@@ -10,7 +10,10 @@ import { Schema } from "effect"
 /**
  * Error thrown when connecting to a message actor fails
  */
-export class ActorConnectionError extends Schema.TaggedError<ActorConnectionError>()("ActorConnectionError", {
+export class ActorConnectionError extends Schema.TaggedError<
+	ActorConnectionError,
+	{ readonly brand: unique symbol }
+>()("ActorConnectionError", {
 	messageId: Schema.String,
 	message: Schema.String,
 	cause: Schema.Unknown,
@@ -19,7 +22,10 @@ export class ActorConnectionError extends Schema.TaggedError<ActorConnectionErro
 /**
  * Error thrown when creating a message with live state fails
  */
-export class MessageCreateError extends Schema.TaggedError<MessageCreateError>()("MessageCreateError", {
+export class MessageCreateError extends Schema.TaggedError<
+	MessageCreateError,
+	{ readonly brand: unique symbol }
+>()("MessageCreateError", {
 	channelId: Schema.String,
 	message: Schema.String,
 	cause: Schema.Unknown,
@@ -28,7 +34,10 @@ export class MessageCreateError extends Schema.TaggedError<MessageCreateError>()
 /**
  * Error thrown when an actor operation (appendText, complete, etc.) fails
  */
-export class ActorOperationError extends Schema.TaggedError<ActorOperationError>()("ActorOperationError", {
+export class ActorOperationError extends Schema.TaggedError<
+	ActorOperationError,
+	{ readonly brand: unique symbol }
+>()("ActorOperationError", {
 	operation: Schema.String,
 	message: Schema.String,
 	cause: Schema.Unknown,
@@ -37,30 +46,33 @@ export class ActorOperationError extends Schema.TaggedError<ActorOperationError>
 /**
  * Error thrown when processing an async stream of chunks fails
  */
-export class StreamProcessingError extends Schema.TaggedError<StreamProcessingError>()(
-	"StreamProcessingError",
-	{
-		message: Schema.String,
-		cause: Schema.Unknown,
-	},
-) {}
+export class StreamProcessingError extends Schema.TaggedError<
+	StreamProcessingError,
+	{ readonly brand: unique symbol }
+>()("StreamProcessingError", {
+	message: Schema.String,
+	cause: Schema.Unknown,
+}) {}
 
 /**
  * Error thrown when bot runtime config is not available for streaming
  */
-export class BotNotConfiguredError extends Schema.TaggedError<BotNotConfiguredError>()(
-	"BotNotConfiguredError",
-	{
-		message: Schema.String,
-	},
-) {}
+export class BotNotConfiguredError extends Schema.TaggedError<
+	BotNotConfiguredError,
+	{ readonly brand: unique symbol }
+>()("BotNotConfiguredError", {
+	message: Schema.String,
+}) {}
 
 /**
  * Error thrown when persisting the final message state to the database fails.
  * This is a non-fatal error - the stream completed successfully, but the
  * final state wasn't saved to the database.
  */
-export class MessagePersistError extends Schema.TaggedError<MessagePersistError>()("MessagePersistError", {
+export class MessagePersistError extends Schema.TaggedError<
+	MessagePersistError,
+	{ readonly brand: unique symbol }
+>()("MessagePersistError", {
 	messageId: Schema.String,
 	message: Schema.String,
 	cause: Schema.Unknown,

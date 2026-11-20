@@ -4,6 +4,7 @@ import { Database, SQLite, schema } from "@hazel/db"
 import { Integrations } from "@hazel/domain"
 import { type ChannelWebhookId, type OrganizationId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer, Option } from "effect"
+import { SqlClient } from "effect/sql/SqlClient"
 import { DirectoryEffects } from "../worker/objects/effects/directory-effects"
 import { enqueueEffect } from "../worker/objects/effects/registry"
 import {
@@ -34,12 +35,19 @@ export class WebhookBotService extends Context.Service<WebhookBotService>()("Web
 		const db = yield* Database.Database
 		const directory = yield* Directory
 		const orgMemberRepo = yield* OrganizationMemberRepo
+		const sql = yield* SqlClient
+
+		/** The org's projection copy of `user`, over the object's database. */
+		const writeUserProjection = (user: UserProjection) =>
+			upsertUserProjection(user).pipe(Effect.provideService(Database.Database, db))
 
 		/** Write the bot's org copy now and its directory row after the commit. */
 		const saveBotUser = (user: UserProjection) =>
 			Effect.gen(function* () {
-				yield* upsertUserProjection(user)
-				yield* enqueueEffect(DirectoryEffects.upsertBotUser, { kind: "directory" }, user)
+				yield* writeUserProjection(user)
+				yield* enqueueEffect(DirectoryEffects.upsertBotUser, { kind: "directory" }, user).pipe(
+					Effect.provideService(SqlClient, sql),
+				)
 			})
 
 		const joinOrganization = (organizationId: OrganizationId, userId: UserId) =>
@@ -147,7 +155,7 @@ export class WebhookBotService extends Context.Service<WebhookBotService>()("Web
 						name: config.name,
 						avatarUrl: config.avatarUrl,
 					})
-			if (Option.isSome(known)) yield* upsertUserProjection(user)
+			if (Option.isSome(known)) yield* writeUserProjection(user)
 			else yield* saveBotUser(user)
 			yield* joinOrganization(organizationId, user.id)
 			yield* Effect.annotateCurrentSpan({

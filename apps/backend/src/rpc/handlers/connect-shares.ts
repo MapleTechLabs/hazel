@@ -72,20 +72,16 @@ export const resolveGuestOrganizationForInviteCreate = <E, R>({
 
 		const orgOption = yield* findBySlug(target.value)
 		if (Option.isNone(orgOption)) {
-			return yield* Effect.fail(
-				new ConnectWorkspaceNotFoundError({
-					message: `No workspace found for slug '${target.value}'`,
-				}),
-			)
+			return yield* new ConnectWorkspaceNotFoundError({
+				message: `No workspace found for slug '${target.value}'`,
+			})
 		}
 
 		const resolvedOrganizationId = orgOption.value.id
 		if (providedOrgId && providedOrgId !== resolvedOrganizationId) {
-			return yield* Effect.fail(
-				new ConnectWorkspaceNotFoundError({
-					message: "The selected workspace does not match the invite target",
-				}),
-			)
+			return yield* new ConnectWorkspaceNotFoundError({
+				message: "The selected workspace does not match the invite target",
+			})
 		}
 
 		return resolvedOrganizationId
@@ -106,31 +102,25 @@ export const validateInviteAcceptanceTarget = <E, R>({
 }) =>
 	Effect.gen(function* () {
 		if (invite.guestOrganizationId && invite.guestOrganizationId !== guestOrganizationId) {
-			return yield* Effect.fail(
-				new ConnectWorkspaceNotFoundError({
-					message: "This invite targets a different workspace",
-				}),
-			)
+			return yield* new ConnectWorkspaceNotFoundError({
+				message: "This invite targets a different workspace",
+			})
 		}
 
 		if (invite.targetKind === "email") {
 			if (!invite.guestOrganizationId) {
-				return yield* Effect.fail(
-					new ConnectWorkspaceNotFoundError({
-						message: "This invite is not bound to a workspace",
-					}),
-				)
+				return yield* new ConnectWorkspaceNotFoundError({
+					message: "This invite is not bound to a workspace",
+				})
 			}
 			return
 		}
 
 		const orgOption = yield* findBySlug(invite.targetValue)
 		if (Option.isNone(orgOption) || orgOption.value.id !== guestOrganizationId) {
-			return yield* Effect.fail(
-				new ConnectWorkspaceNotFoundError({
-					message: "This invite targets a different workspace",
-				}),
-			)
+			return yield* new ConnectWorkspaceNotFoundError({
+				message: "This invite targets a different workspace",
+			})
 		}
 	})
 
@@ -261,8 +251,8 @@ export const ConnectShareRpcLive = ConnectShareRpcs.toLayer(
 		})
 
 		return {
-			"connectShare.workspace.search": ({ query, organizationId }) =>
-				Effect.gen(function* () {
+			"connectShare.workspace.search": Effect.fn("ConnectShare.workspaceSearch")(
+				function* ({ query, organizationId }) {
 					yield* orgResolver.requireScope(
 						organizationId,
 						"organizations:read",
@@ -288,11 +278,10 @@ export const ConnectShareRpcLive = ConnectShareRpcs.toLayer(
 							(row) => new ConnectWorkspaceSearchResult({ ...row, logoUrl: null }),
 						),
 					})
-				}).pipe(
-					withRemapDbErrors("ConnectShare", "select"),
-					remapPermissionError,
-					Effect.withSpan("ConnectShare.workspaceSearch"),
-				),
+				},
+				withRemapDbErrors("ConnectShare", "select"),
+				remapPermissionError,
+			),
 
 			"connectShare.invite.create": ({
 				channelId,

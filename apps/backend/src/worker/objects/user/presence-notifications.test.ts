@@ -18,7 +18,7 @@ const world = Effect.gen(function* () {
 	const ada = yield* sim.user("Ada")
 	const grace = yield* sim.user("Grace")
 	const general = yield* sim.channel("general", [ada, grace])
-	yield* ada.registerPhone()
+	yield* ada.registerPhone
 	const mention = (text: string) => general.post(grace, text, { mention: ada })
 	return { sim, ada, grace, general, mention }
 })
@@ -29,7 +29,7 @@ describe("notifications and push by presence", { timeout: 60_000 }, () => {
 			Effect.gen(function* () {
 				const { ada, general, mention } = yield* world
 				yield* mention("lunch?")
-				expect(yield* ada.notifications()).toEqual([{ silent: false }])
+				expect(yield* ada.notifications).toEqual([{ silent: false }])
 				expect(ada.pushes()).toEqual([expect.stringContaining("lunch?")])
 				expect(general.unread(ada)).toBe(1)
 			}),
@@ -41,7 +41,7 @@ describe("notifications and push by presence", { timeout: 60_000 }, () => {
 				const { sim, ada, mention } = yield* world
 				yield* ada.device("desktop").open()
 				yield* mention("lunch?")
-				expect(yield* ada.notifications()).toEqual([{ silent: false }])
+				expect(yield* ada.notifications).toEqual([{ silent: false }])
 				expect(ada.pushes()).toEqual([])
 				yield* sim.advance(PUSH_IDLE_DELAY_MS + seconds(1))
 				expect(ada.pushes()).toHaveLength(1)
@@ -106,7 +106,7 @@ describe("notifications and push by presence", { timeout: 60_000 }, () => {
 				yield* laptop.report({ focus: general.id })
 				yield* mention("lunch?")
 				yield* sim.advance(minutes(5))
-				expect(yield* ada.notifications()).toEqual([])
+				expect(yield* ada.notifications).toEqual([])
 				expect(general.unread(ada)).toBe(0)
 				expect(ada.pushes()).toEqual([])
 			}),
@@ -120,7 +120,7 @@ describe("notifications and push by presence", { timeout: 60_000 }, () => {
 				yield* laptop.open()
 				yield* laptop.report({ focus: general.id, idle: true, afk: true })
 				yield* mention("lunch?")
-				expect(yield* ada.notifications()).toEqual([{ silent: false }])
+				expect(yield* ada.notifications).toEqual([{ silent: false }])
 				expect(ada.pushes()).toHaveLength(1)
 			}),
 		))
@@ -134,12 +134,12 @@ describe("notifications and push by presence", { timeout: 60_000 }, () => {
 				yield* ada.pick("invisible")
 				yield* laptop.report({ focus: general.id })
 				yield* mention("first")
-				expect(yield* ada.notifications()).toEqual([])
+				expect(yield* ada.notifications).toEqual([])
 				expect(general.unread(ada)).toBe(0)
 
 				yield* laptop.report({ focus: null })
 				yield* mention("second")
-				expect(yield* ada.notifications()).toEqual([{ silent: false }])
+				expect(yield* ada.notifications).toEqual([{ silent: false }])
 				expect(ada.pushes()).toEqual([])
 				yield* sim.advance(PUSH_IDLE_DELAY_MS + seconds(1))
 				expect(ada.pushes()).toEqual([expect.stringContaining("second")])
@@ -156,7 +156,7 @@ describe("notifications and push by presence", { timeout: 60_000 }, () => {
 				yield* laptop.open()
 				yield* mention("online")
 				yield* sim.advance(minutes(5))
-				expect(yield* ada.notifications()).toEqual([{ silent: true }, { silent: true }])
+				expect(yield* ada.notifications).toEqual([{ silent: true }, { silent: true }])
 				expect(general.unread(ada)).toBe(2)
 				expect(ada.pushes()).toEqual([])
 			}),
@@ -184,7 +184,7 @@ describe("notifications and push by presence", { timeout: 60_000 }, () => {
 				yield* sim.advance(minutes(16))
 				yield* mention("after")
 				expect(ada.pushes()).toEqual([expect.stringContaining("after")])
-				expect(yield* ada.notifications()).toEqual([{ silent: true }, { silent: false }])
+				expect(yield* ada.notifications).toEqual([{ silent: true }, { silent: false }])
 			}),
 		))
 
@@ -195,7 +195,7 @@ describe("notifications and push by presence", { timeout: 60_000 }, () => {
 				yield* ada.legacyUpdate({ suppressNotifications: true })
 				yield* sim.advance(seconds(1))
 				yield* mention("lunch?")
-				expect(yield* ada.notifications()).toEqual([{ silent: true }])
+				expect(yield* ada.notifications).toEqual([{ silent: true }])
 				expect(ada.pushes()).toEqual([])
 			}),
 		))

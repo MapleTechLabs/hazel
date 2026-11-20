@@ -2,6 +2,10 @@ import type { UserId } from "@hazel/schema"
 import { Context, Effect, Layer } from "effect"
 import { makePolicy } from "../lib/policy-utils"
 
+/**
+ * Its checks read the calling actor (`CurrentUser.Context`), which differs on every request, so
+ * each method requires it.
+ */
 export class UserPolicy extends Context.Service<UserPolicy>()("UserPolicy/Policy", {
 	make: Effect.gen(function* () {
 		const policyEntity = "User" as const

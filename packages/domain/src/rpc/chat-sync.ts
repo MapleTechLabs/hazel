@@ -16,71 +16,75 @@ import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
 import { RouteOrganizationId } from "./routing-fields"
 
-export class ChatSyncConnectionResponse extends Schema.Class<ChatSyncConnectionResponse>(
-	"ChatSyncConnectionResponse",
-)({
+export class ChatSyncConnectionResponse extends Schema.Class<
+	ChatSyncConnectionResponse,
+	{ readonly brand: unique symbol }
+>("ChatSyncConnectionResponse")({
 	data: ChatSyncConnection.Schema,
 	transactionId: TransactionId,
 }) {}
 
-export class ChatSyncConnectionListResponse extends Schema.Class<ChatSyncConnectionListResponse>(
-	"ChatSyncConnectionListResponse",
-)({
+export class ChatSyncConnectionListResponse extends Schema.Class<
+	ChatSyncConnectionListResponse,
+	{ readonly brand: unique symbol }
+>("ChatSyncConnectionListResponse")({
 	data: Schema.Array(ChatSyncConnection.Schema),
 }) {}
 
-export class ChatSyncChannelLinkResponse extends Schema.Class<ChatSyncChannelLinkResponse>(
-	"ChatSyncChannelLinkResponse",
-)({
+export class ChatSyncChannelLinkResponse extends Schema.Class<
+	ChatSyncChannelLinkResponse,
+	{ readonly brand: unique symbol }
+>("ChatSyncChannelLinkResponse")({
 	data: ChatSyncChannelLink.Schema,
 	transactionId: TransactionId,
 }) {}
 
-export class ChatSyncChannelLinkListResponse extends Schema.Class<ChatSyncChannelLinkListResponse>(
-	"ChatSyncChannelLinkListResponse",
-)({
+export class ChatSyncChannelLinkListResponse extends Schema.Class<
+	ChatSyncChannelLinkListResponse,
+	{ readonly brand: unique symbol }
+>("ChatSyncChannelLinkListResponse")({
 	data: Schema.Array(ChatSyncChannelLink.Schema),
 }) {}
 
-export class ChatSyncConnectionNotFoundError extends Schema.TaggedError<ChatSyncConnectionNotFoundError>()(
-	"ChatSyncConnectionNotFoundError",
-	{
-		syncConnectionId: SyncConnectionId,
-	},
-) {}
+export class ChatSyncConnectionNotFoundError extends Schema.TaggedError<
+	ChatSyncConnectionNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ChatSyncConnectionNotFoundError", {
+	syncConnectionId: SyncConnectionId,
+}) {}
 
-export class ChatSyncChannelLinkNotFoundError extends Schema.TaggedError<ChatSyncChannelLinkNotFoundError>()(
-	"ChatSyncChannelLinkNotFoundError",
-	{
-		syncChannelLinkId: SyncChannelLinkId,
-	},
-) {}
+export class ChatSyncChannelLinkNotFoundError extends Schema.TaggedError<
+	ChatSyncChannelLinkNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ChatSyncChannelLinkNotFoundError", {
+	syncChannelLinkId: SyncChannelLinkId,
+}) {}
 
-export class ChatSyncConnectionExistsError extends Schema.TaggedError<ChatSyncConnectionExistsError>()(
-	"ChatSyncConnectionExistsError",
-	{
-		organizationId: OrganizationId,
-		provider: Schema.String,
-		externalWorkspaceId: Schema.String,
-	},
-) {}
+export class ChatSyncConnectionExistsError extends Schema.TaggedError<
+	ChatSyncConnectionExistsError,
+	{ readonly brand: unique symbol }
+>()("ChatSyncConnectionExistsError", {
+	organizationId: OrganizationId,
+	provider: Schema.String,
+	externalWorkspaceId: Schema.String,
+}) {}
 
-export class ChatSyncIntegrationNotConnectedError extends Schema.TaggedError<ChatSyncIntegrationNotConnectedError>()(
-	"ChatSyncIntegrationNotConnectedError",
-	{
-		organizationId: OrganizationId,
-		provider: Schema.String,
-	},
-) {}
+export class ChatSyncIntegrationNotConnectedError extends Schema.TaggedError<
+	ChatSyncIntegrationNotConnectedError,
+	{ readonly brand: unique symbol }
+>()("ChatSyncIntegrationNotConnectedError", {
+	organizationId: OrganizationId,
+	provider: Schema.String,
+}) {}
 
-export class ChatSyncChannelLinkExistsError extends Schema.TaggedError<ChatSyncChannelLinkExistsError>()(
-	"ChatSyncChannelLinkExistsError",
-	{
-		syncConnectionId: SyncConnectionId,
-		hazelChannelId: ChannelId,
-		externalChannelId: ExternalChannelId,
-	},
-) {}
+export class ChatSyncChannelLinkExistsError extends Schema.TaggedError<
+	ChatSyncChannelLinkExistsError,
+	{ readonly brand: unique symbol }
+>()("ChatSyncChannelLinkExistsError", {
+	syncConnectionId: SyncConnectionId,
+	hazelChannelId: ChannelId,
+	externalChannelId: ExternalChannelId,
+}) {}
 
 export class ChatSyncRpcs extends RpcGroup.make(
 	Rpc.make("chatSync.connection.create", {

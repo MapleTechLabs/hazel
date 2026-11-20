@@ -144,7 +144,7 @@ const AutumnCursor = Schema.Struct({
 	 * A customer listing past a page without a cursor goes on from this creation time (epoch ms,
 	 * `created_at_range.start`): the millisecond after that page's last customer.
 	 */
-	from: Schema.optionalKey(Schema.Number),
+	from: Schema.optionalKey(Schema.Finite),
 	/**
 	 * The customer page before ended without a cursor and listed fewer customers than asked for: if
 	 * more follow it, Autumn dropped one it failed to serialize from it.

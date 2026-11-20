@@ -8,20 +8,20 @@ export interface EncryptedToken {
 
 const EncryptionOperation = Schema.Literals(["encrypt", "decrypt", "importKey"])
 
-export class IntegrationEncryptionError extends Schema.TaggedError<IntegrationEncryptionError>()(
-	"IntegrationEncryptionError",
-	{
-		cause: Schema.Unknown,
-		operation: EncryptionOperation,
-	},
-) {}
+export class IntegrationEncryptionError extends Schema.TaggedError<
+	IntegrationEncryptionError,
+	{ readonly brand: unique symbol }
+>()("IntegrationEncryptionError", {
+	cause: Schema.Unknown,
+	operation: EncryptionOperation,
+}) {}
 
-export class KeyVersionNotFoundError extends Schema.TaggedError<KeyVersionNotFoundError>()(
-	"KeyVersionNotFoundError",
-	{
-		keyVersion: Schema.Number,
-	},
-) {}
+export class KeyVersionNotFoundError extends Schema.TaggedError<
+	KeyVersionNotFoundError,
+	{ readonly brand: unique symbol }
+>()("KeyVersionNotFoundError", {
+	keyVersion: Schema.Finite,
+}) {}
 
 export class IntegrationEncryption extends Context.Service<IntegrationEncryption>()("IntegrationEncryption", {
 	make: Effect.gen(function* () {
@@ -55,12 +55,10 @@ export class IntegrationEncryption extends Context.Service<IntegrationEncryption
 
 				// Validate key length (256 bits = 32 bytes)
 				if (rawKey.length !== 32) {
-					return yield* Effect.fail(
-						new IntegrationEncryptionError({
-							cause: `Invalid key length: expected 32 bytes, got ${rawKey.length}`,
-							operation: "importKey",
-						}),
-					)
+					return yield* new IntegrationEncryptionError({
+						cause: `Invalid key length: expected 32 bytes, got ${rawKey.length}`,
+						operation: "importKey",
+					})
 				}
 
 				const cryptoKey = yield* Effect.tryPromise({
@@ -115,7 +113,7 @@ export class IntegrationEncryption extends Context.Service<IntegrationEncryption
 			}
 
 			if (!keyData) {
-				return yield* Effect.fail(new KeyVersionNotFoundError({ keyVersion: encrypted.keyVersion }))
+				return yield* new KeyVersionNotFoundError({ keyVersion: encrypted.keyVersion })
 			}
 
 			const key = yield* importKey(keyData, encrypted.keyVersion)

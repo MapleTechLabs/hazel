@@ -12,7 +12,7 @@ class Model extends M.Class<Model>("GitHubSubscription")({
 	channelId: ChannelId,
 	organizationId: OrganizationId,
 	// Repository identification - GitHub's numeric ID is stable across renames
-	repositoryId: S.Number,
+	repositoryId: S.Finite,
 	repositoryFullName: S.String, // "owner/repo" for display
 	repositoryOwner: S.String,
 	repositoryName: S.String,

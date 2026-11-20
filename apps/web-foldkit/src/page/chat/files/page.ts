@@ -57,7 +57,7 @@ export const Message = defineMessageUnion({
 	CompletedDownloadAttachment: {},
 	CompletedOpenMediaTab: {},
 	ClosedImageViewer: {},
-	SelectedViewerImage: { index: Schema.Number },
+	SelectedViewerImage: { index: Schema.Finite },
 	ClickedViewerAction: { action: ViewerAction, url: Schema.String, fileName: Schema.String },
 	GotViewerMenuMessage: { message: Menu.Message },
 })

@@ -48,22 +48,22 @@ export const AccountRow = Schema.Struct({
 	mrrMinor: Schema.Int,
 	currency: Schema.String,
 	trialListMrrMinor: Schema.NullOr(Schema.Int),
-	trialEndsAtMs: Schema.NullOr(Schema.Number),
+	trialEndsAtMs: Schema.NullOr(Schema.Finite),
 	healthScore: Schema.NullOr(Schema.Int),
 	healthStatus: Customers.HealthStatus,
 	seatsUsed: Schema.NullOr(Schema.Int),
 	seatsLimit: Schema.NullOr(Schema.Int),
 	contactCount: Schema.Int,
 	activeUsers30d: Schema.Int,
-	activeUsersTrendPct: Schema.NullOr(Schema.Number),
+	activeUsersTrendPct: Schema.NullOr(Schema.Finite),
 	openRiskHigh: Schema.Int,
 	openRiskMedium: Schema.Int,
 	openRiskLow: Schema.Int,
 	openOpportunities: Schema.Int,
-	firstSeenAtMs: Schema.Number,
-	lastActiveAtMs: Schema.NullOr(Schema.Number),
-	customerSinceMs: Schema.NullOr(Schema.Number),
-	churnedAtMs: Schema.NullOr(Schema.Number),
+	firstSeenAtMs: Schema.Finite,
+	lastActiveAtMs: Schema.NullOr(Schema.Finite),
+	customerSinceMs: Schema.NullOr(Schema.Finite),
+	churnedAtMs: Schema.NullOr(Schema.Finite),
 	tags: Schema.Array(Schema.String),
 	/** The Clerk organization's flags: on when `true`; a `false` key is off. */
 	featureFlags: Schema.Record(Schema.String, Schema.Boolean),
@@ -72,8 +72,8 @@ export const AccountRow = Schema.Struct({
 	/** What the team calls this environment (`US`, `EU`). */
 	environment: Schema.NullOr(Schema.String),
 	/** Set while Needs attention leaves it out (`isAttentionMuted`); `attentionMutedUntilMs` null: until unmuted. */
-	attentionMutedAtMs: Schema.NullOr(Schema.Number),
-	attentionMutedUntilMs: Schema.NullOr(Schema.Number),
+	attentionMutedAtMs: Schema.NullOr(Schema.Finite),
+	attentionMutedUntilMs: Schema.NullOr(Schema.Finite),
 	attentionMutedByUserId: Schema.NullOr(UserId),
 })
 export type AccountRow = typeof AccountRow.Type
@@ -105,19 +105,19 @@ export const SignalRow = Schema.Struct({
 	title: Schema.String,
 	reason: Schema.String,
 	evidence: Customers.SignalEvidence,
-	priorityScore: Schema.Number,
-	openedAtMs: Schema.Number,
+	priorityScore: Schema.Finite,
+	openedAtMs: Schema.Finite,
 	assigneeUserId: Schema.NullOr(UserId),
-	snoozedUntilMs: Schema.NullOr(Schema.Number),
+	snoozedUntilMs: Schema.NullOr(Schema.Finite),
 	snoozedByUserId: Schema.NullOr(UserId),
-	snoozedAtMs: Schema.NullOr(Schema.Number),
+	snoozedAtMs: Schema.NullOr(Schema.Finite),
 	snoozeNote: Schema.NullOr(Schema.String),
-	resolvedAtMs: Schema.NullOr(Schema.Number),
+	resolvedAtMs: Schema.NullOr(Schema.Finite),
 	resolvedByUserId: Schema.NullOr(UserId),
 	outcome: Schema.NullOr(Customers.SignalOutcome),
 	resolutionNote: Schema.NullOr(Schema.String),
 	dismissReason: Schema.NullOr(Schema.String),
-	closedAtMs: Schema.NullOr(Schema.Number),
+	closedAtMs: Schema.NullOr(Schema.Finite),
 })
 export type SignalRow = typeof SignalRow.Type
 
@@ -128,7 +128,7 @@ export const SavedViewRow = Schema.Struct({
 	builtInKey: Schema.NullOr(Customers.BuiltInViewKey),
 	/** Null: shared with the org. */
 	ownerUserId: Schema.NullOr(UserId),
-	position: Schema.Number,
+	position: Schema.Finite,
 	icon: Schema.NullOr(Customers.ViewIcon),
 	color: Schema.NullOr(Customers.ViewColor),
 })
@@ -377,7 +377,7 @@ export const connectedProvidersStream = <Message>(
 
 /** The org's customer settings the pages show: when compute last ran ("Evaluated 14 min ago"), the bands. */
 export const SettingsSummary = Schema.Struct({
-	lastComputedAtMs: Schema.NullOr(Schema.Number),
+	lastComputedAtMs: Schema.NullOr(Schema.Finite),
 	bands: Customers.HealthBands,
 	reportingCurrency: Schema.String,
 })
@@ -464,7 +464,7 @@ export const ImpersonatorRow = Schema.Struct({
 	id: CustomerImpersonatorId,
 	userId: UserId,
 	grantedBy: UserId,
-	grantedAtMs: Schema.Number,
+	grantedAtMs: Schema.Finite,
 })
 export type ImpersonatorRow = typeof ImpersonatorRow.Type
 

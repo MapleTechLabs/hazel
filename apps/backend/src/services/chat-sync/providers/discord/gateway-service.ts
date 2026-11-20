@@ -137,11 +137,8 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 
 				yield* Effect.all(
 					[
-						gateway.handleDispatch("READY", (event) =>
-							onReady(event as DiscordReadyEvent).pipe(
-								Effect.catch((error) => onDispatchError("READY", error)),
-							),
-						),
+						// `onReady` cannot fail: it logs a bad payload and returns.
+						gateway.handleDispatch("READY", (event) => onReady(event as DiscordReadyEvent)),
 						...DISCORD_ROUTED_EVENTS.map((name) =>
 							gateway.handleDispatch(name, (event) =>
 								router

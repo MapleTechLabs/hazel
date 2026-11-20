@@ -37,8 +37,9 @@ export const HttpIntegrationCommandLive = HttpApiBuilder.group(HazelApi, "integr
 				const botCommands = yield* botCommandRepo.findByBots(installedBotIds)
 
 				// Get bot info for each command
-				const commands = yield* Effect.all(
-					botCommands.map((cmd) =>
+				const commands = yield* Effect.forEach(
+					botCommands,
+					(cmd) =>
 						Effect.gen(function* () {
 							const botOption = yield* botRepo.findById(cmd.botId)
 							if (Option.isNone(botOption)) return null
@@ -63,7 +64,6 @@ export const HttpIntegrationCommandLive = HttpApiBuilder.group(HazelApi, "integr
 								},
 							}
 						}),
-					),
 					{ concurrency: "unbounded" },
 				).pipe(Effect.map((results) => results.filter((r) => r !== null)))
 

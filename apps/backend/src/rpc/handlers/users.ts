@@ -54,12 +54,10 @@ export const UserRpcLive = UserRpcs.toLayer(
 						payload.avatarUrl != null &&
 						!isAllowedAvatarUrl(payload.avatarUrl, Option.getOrUndefined(publicUrl), id)
 					) {
-						return yield* Effect.fail(
-							new UnauthorizedError({
-								message: "Invalid avatar URL",
-								detail: "Use an avatar uploaded for this user",
-							}),
-						)
+						return yield* new UnauthorizedError({
+							message: "Invalid avatar URL",
+							detail: "Use an avatar uploaded for this user",
+						})
 					}
 					const updatedUser = yield* userRepo.update({ id, ...payload, updatedAt: new Date() })
 					const transactionId = yield* projectUserToOrgs(id)

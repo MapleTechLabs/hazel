@@ -21,10 +21,10 @@ export type FileUploader = typeof FileUploader.Type
 export const FileAttachment = Schema.Struct({
 	id: AttachmentId,
 	fileName: Schema.String,
-	fileSize: Schema.Number,
+	fileSize: Schema.Finite,
 	/** `getAttachmentUrl(attachment)`, resolved once per query result. */
 	url: Schema.String,
-	uploadedAtMs: Schema.Number,
+	uploadedAtMs: Schema.Finite,
 	uploader: Schema.NullOr(FileUploader),
 })
 export type FileAttachment = typeof FileAttachment.Type

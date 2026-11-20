@@ -8,7 +8,10 @@ import { catchCommon, errorToast, failureToast, settle, successToast } from "./a
 
 /** The Command side of the error convention, and the legacy `exitToast`-style failure toasts. */
 
-class ChannelNotFoundError extends Schema.TaggedError<ChannelNotFoundError>()("ChannelNotFoundError", {
+class ChannelNotFoundError extends Schema.TaggedError<
+	ChannelNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ChannelNotFoundError", {
 	message: Schema.String,
 }) {}
 

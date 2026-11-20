@@ -79,10 +79,10 @@ const SWEEP_CAP_SHARE = 0.2
 const SWEEP_CAP_MIN = 10
 
 /** An op the store cannot take (a built-in metric key, a negative amount). Not retried. */
-export class CustomerIngestRejectedError extends Schema.TaggedError<CustomerIngestRejectedError>()(
-	"CustomerIngestRejectedError",
-	{ index: Schema.Int, op: Schema.String, message: Schema.String },
-) {}
+export class CustomerIngestRejectedError extends Schema.TaggedError<
+	CustomerIngestRejectedError,
+	{ readonly brand: unique symbol }
+>()("CustomerIngestRejectedError", { index: Schema.Int, op: Schema.String, message: Schema.String }) {}
 
 type Fields = Record<string, CustomerSource>
 

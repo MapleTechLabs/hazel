@@ -216,9 +216,7 @@ export const withLogContext = <A, E, R>(
  * Get the current log context from the FiberRef
  * Returns null if no context is set
  */
-export const getLogContext: Effect.Effect<LogContext | null> = Effect.gen(function* () {
-	return yield* currentLogContext
-})
+export const getLogContext: Effect.Effect<LogContext | null> = currentLogContext
 
 /**
  * Get the current correlation ID from context

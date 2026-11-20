@@ -18,8 +18,8 @@ export const ChannelSummary = Schema.Struct({
 	type: Schema.String,
 	isMuted: Schema.Boolean,
 	isFavorite: Schema.Boolean,
-	notificationCount: Schema.Number,
-	memberCount: Schema.Number,
+	notificationCount: Schema.Finite,
+	memberCount: Schema.Finite,
 	/** Every member, in query order (DM cards use them). */
 	members: Schema.Array(DmParticipant),
 })
@@ -34,7 +34,7 @@ export type ChannelGroups = typeof ChannelGroups.Type
 
 export const Presence = Schema.Struct({
 	status: Schema.NullOr(Schema.String),
-	lastSeenMs: Schema.NullOr(Schema.Number),
+	lastSeenMs: Schema.NullOr(Schema.Finite),
 })
 export type Presence = typeof Presence.Type
 

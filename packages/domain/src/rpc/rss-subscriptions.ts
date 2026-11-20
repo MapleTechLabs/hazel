@@ -9,48 +9,50 @@ import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
 import { RouteOrganizationId } from "./routing-fields"
 
-export class RssSubscriptionResponse extends Schema.Class<RssSubscriptionResponse>("RssSubscriptionResponse")(
-	{
-		data: RssSubscription.Schema,
-		transactionId: TransactionId,
-	},
-) {}
+export class RssSubscriptionResponse extends Schema.Class<
+	RssSubscriptionResponse,
+	{ readonly brand: unique symbol }
+>("RssSubscriptionResponse")({
+	data: RssSubscription.Schema,
+	transactionId: TransactionId,
+}) {}
 
-export class RssSubscriptionListResponse extends Schema.Class<RssSubscriptionListResponse>(
-	"RssSubscriptionListResponse",
-)({
+export class RssSubscriptionListResponse extends Schema.Class<
+	RssSubscriptionListResponse,
+	{ readonly brand: unique symbol }
+>("RssSubscriptionListResponse")({
 	data: Schema.Array(RssSubscription.Schema),
 }) {}
 
-export class RssSubscriptionNotFoundError extends Schema.TaggedError<RssSubscriptionNotFoundError>()(
-	"RssSubscriptionNotFoundError",
-	{
-		subscriptionId: RssSubscriptionId,
-	},
-) {}
+export class RssSubscriptionNotFoundError extends Schema.TaggedError<
+	RssSubscriptionNotFoundError,
+	{ readonly brand: unique symbol }
+>()("RssSubscriptionNotFoundError", {
+	subscriptionId: RssSubscriptionId,
+}) {}
 
-export class RssSubscriptionExistsError extends Schema.TaggedError<RssSubscriptionExistsError>()(
-	"RssSubscriptionExistsError",
-	{
-		channelId: ChannelId,
-		feedUrl: Schema.String,
-	},
-) {}
+export class RssSubscriptionExistsError extends Schema.TaggedError<
+	RssSubscriptionExistsError,
+	{ readonly brand: unique symbol }
+>()("RssSubscriptionExistsError", {
+	channelId: ChannelId,
+	feedUrl: Schema.String,
+}) {}
 
-export class RssFeedValidationError extends Schema.TaggedError<RssFeedValidationError>()(
-	"RssFeedValidationError",
-	{
-		feedUrl: Schema.String,
-		message: Schema.String,
-	},
-) {}
+export class RssFeedValidationError extends Schema.TaggedError<
+	RssFeedValidationError,
+	{ readonly brand: unique symbol }
+>()("RssFeedValidationError", {
+	feedUrl: Schema.String,
+	message: Schema.String,
+}) {}
 
 export class RssSubscriptionRpcs extends RpcGroup.make(
 	Rpc.make("rssSubscription.create", {
 		payload: Schema.Struct({
 			channelId: ChannelId,
 			feedUrl: Schema.String,
-			pollingIntervalMinutes: Schema.optional(Schema.Number),
+			pollingIntervalMinutes: Schema.optional(Schema.Finite),
 		}),
 		success: RssSubscriptionResponse,
 		error: Schema.Union([
@@ -85,7 +87,7 @@ export class RssSubscriptionRpcs extends RpcGroup.make(
 			organizationId: RouteOrganizationId,
 			id: RssSubscriptionId,
 			isEnabled: Schema.optional(Schema.Boolean),
-			pollingIntervalMinutes: Schema.optional(Schema.Number),
+			pollingIntervalMinutes: Schema.optional(Schema.Finite),
 		}),
 		success: RssSubscriptionResponse,
 		error: Schema.Union([RssSubscriptionNotFoundError, UnauthorizedError, InternalServerError]),

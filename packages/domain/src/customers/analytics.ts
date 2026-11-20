@@ -33,9 +33,9 @@ export const PageRequest = {
 
 /** A KPI over the range, and over the previous range of the same length. */
 export const Kpi = Schema.Struct({
-	value: Schema.Number,
-	previous: Schema.NullOr(Schema.Number),
-	deltaPct: Schema.NullOr(Schema.Number),
+	value: Schema.Finite,
+	previous: Schema.NullOr(Schema.Finite),
+	deltaPct: Schema.NullOr(Schema.Finite),
 })
 export type Kpi = typeof Kpi.Type
 
@@ -117,9 +117,9 @@ export const Mover = Schema.Struct({
 	name: Schema.String,
 	logoUrl: Schema.NullOr(Schema.String),
 	/** Average daily active users in the previous window, and in the range. */
-	previousAvg: Schema.Number,
-	currentAvg: Schema.Number,
-	changePct: Schema.Number,
+	previousAvg: Schema.Finite,
+	currentAvg: Schema.Finite,
+	changePct: Schema.Finite,
 	series: Schema.Array(SeriesPoint),
 })
 export type Mover = typeof Mover.Type
@@ -181,14 +181,14 @@ export const MetricSeries = Schema.Struct({
 	unit: Schema.NullOr(Schema.String),
 	points: Schema.Array(SeriesPoint),
 	/** The latest plan limit, for a metered metric. */
-	limit: Schema.NullOr(Schema.Number),
+	limit: Schema.NullOr(Schema.Finite),
 })
 export type MetricSeries = typeof MetricSeries.Type
 
 /** Daily values, oldest first, one per day of the window (0 for a day without data). */
 export const Sparkline = Schema.Struct({
 	accountId: CustomerAccountId,
-	values: Schema.Array(Schema.Number),
+	values: Schema.Array(Schema.Finite),
 })
 export type Sparkline = typeof Sparkline.Type
 

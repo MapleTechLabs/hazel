@@ -23,8 +23,8 @@ const SEARCH_DEBOUNCE = Duration.millis(300)
 export const Gif = Schema.Struct({
 	slug: Schema.String,
 	title: Schema.String,
-	width: Schema.Number,
-	height: Schema.Number,
+	width: Schema.Finite,
+	height: Schema.Finite,
 	jpgUrl: Schema.String,
 	webpUrl: Schema.String,
 	hdGifUrl: Schema.String,
@@ -38,7 +38,7 @@ export const GifFailure = Schema.Union([Schema.Literals(["ProviderFailed"]), Com
 export type GifFailure = typeof GifFailure.Type
 
 /** The GIFs loaded so far for one query, through `page`. */
-export const GifPage = Schema.Struct({ gifs: Schema.Array(Gif), page: Schema.Number })
+export const GifPage = Schema.Struct({ gifs: Schema.Array(Gif), page: Schema.Finite })
 export type GifPage = typeof GifPage.Type
 
 export const GifResults = AsyncData.Schema(GifPage, GifFailure)
@@ -65,7 +65,7 @@ export const Model = Schema.Struct({
 	currentQuery: Schema.String,
 	results: GifResults.schema,
 	more: More,
-	debounceVersion: Schema.Number,
+	debounceVersion: Schema.Finite,
 	hoveredSlug: Schema.NullOr(Schema.String),
 	/** The trending query's first page; going back to "" shows it without refetching. */
 	trending: Schema.NullOr(Schema.Struct({ page: GifPage, hasMore: Schema.Boolean })),
@@ -98,14 +98,14 @@ export const Message = defineMessageUnion({
 	ReceivedPopoverEvent: { event: PopoverEvent },
 	UpdatedQuery: { query: Schema.String },
 	ClickedCategory: { category: Schema.String },
-	CompletedWaitForGifSearch: { version: Schema.Number },
+	CompletedWaitForGifSearch: { version: Schema.Finite },
 	SucceededFetchGifs: {
 		query: Schema.String,
-		page: Schema.Number,
+		page: Schema.Finite,
 		gifs: Schema.Array(Gif),
 		hasMore: Schema.Boolean,
 	},
-	FailedFetchGifs: { query: Schema.String, page: Schema.Number, reason: GifFailure },
+	FailedFetchGifs: { query: Schema.String, page: Schema.Finite, reason: GifFailure },
 	ClickedRetryFetchGifs: {},
 	SucceededFetchCategories: { categories: Schema.Array(Category) },
 	FailedFetchCategories: { reason: GifFailure },
@@ -134,7 +134,7 @@ const toGif = (gif: KlipyGif): Gif => ({
 
 /** `fetchGifs`: `klipy.search` with a query, `klipy.trending` without. */
 export const FetchGifs = Command.define("FetchGifs", {
-	args: { query: Schema.String, page: Schema.Number },
+	args: { query: Schema.String, page: Schema.Finite },
 	messages: [Message.SucceededFetchGifs, Message.FailedFetchGifs],
 	execute: ({ query, page }) =>
 		(query
@@ -175,7 +175,7 @@ export const FetchCategories = Command.define("FetchCategories", {
 })
 
 export const WaitForGifSearch = Command.define("WaitForGifSearch", {
-	args: { version: Schema.Number },
+	args: { version: Schema.Finite },
 	messages: [Message.CompletedWaitForGifSearch],
 	interrupt: true,
 	execute: ({ version }) =>

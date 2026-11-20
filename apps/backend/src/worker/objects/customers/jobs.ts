@@ -91,7 +91,7 @@ export const bootstrap = Effect.fn("CustomersObject.bootstrap")(function* (paylo
 		const pulled = yield* callObject(CustomerMembersCall, orgTarget(payload.organizationId), {
 			organizationId: payload.organizationId,
 		}).pipe(
-			Effect.map(Option.some),
+			Effect.asSome,
 			Effect.catchTag("ObjectCallError", (error) =>
 				Effect.logWarning("Customers members pull failed", { error: error.message }).pipe(
 					Effect.as(Option.none()),
@@ -407,24 +407,23 @@ const pullAll = (due: ReadonlyArray<schema.CustomerConnection>, now: Date) =>
 						pullConnection(connection, adapter, now).pipe(
 							// Recording the failure itself failed (or a defect): back off all the same, so a
 							// broken connection cannot keep the alarm firing.
-							Effect.catchCause((cause) =>
-								Cause.hasInterruptsOnly(cause)
-									? Effect.failCause(cause)
-									: Effect.logError("Customers pull failed", {
-											connectionId: connection.id,
-											cause: Cause.pretty(cause),
-										}).pipe(
-											Effect.andThen(
-												setNextSync(
-													connection.id,
-													new Date(
-														now.getTime() +
-															backoffMs(connection.consecutiveFailures),
-													),
-													now,
+							Effect.catchCauseIf(
+								(cause) => !Cause.hasInterruptsOnly(cause),
+								(cause) =>
+									Effect.logError("Customers pull failed", {
+										connectionId: connection.id,
+										cause: Cause.pretty(cause),
+									}).pipe(
+										Effect.andThen(
+											setNextSync(
+												connection.id,
+												new Date(
+													now.getTime() + backoffMs(connection.consecutiveFailures),
 												),
+												now,
 											),
 										),
+									),
 							),
 						),
 				}),
@@ -459,12 +458,11 @@ export const tick = Effect.fn("CustomersObject.tick")(function* () {
 		// The lease counts the attempt: a failed or killed run retries after a growing backoff.
 		yield* takeComputeLease(now.getTime())
 		yield* runComputeStep(now).pipe(
-			Effect.catchCause((cause) =>
-				Cause.hasInterruptsOnly(cause)
-					? Effect.failCause(cause)
-					: // Progress is kept: the failing turn retries alone, after a growing backoff (a partial
-						// turn resets the count). Progress older than an hour is dropped (`computeProgress`).
-						Effect.logError("Customers compute failed", { cause: Cause.pretty(cause) }),
+			Effect.catchCauseIf(
+				(cause) => !Cause.hasInterruptsOnly(cause),
+				// Progress is kept: the failing turn retries alone, after a growing backoff (a partial
+				// turn resets the count). Progress older than an hour is dropped (`computeProgress`).
+				(cause) => Effect.logError("Customers compute failed", { cause: Cause.pretty(cause) }),
 			),
 		)
 		return { computed: true }
@@ -479,10 +477,10 @@ export const tick = Effect.fn("CustomersObject.tick")(function* () {
 // ---------------------------------------------------------------------------
 
 /** Why a delivery was not applied; the route answers `status`. */
-export class CustomerWebhookFailedError extends Schema.TaggedError<CustomerWebhookFailedError>()(
-	"CustomerWebhookFailedError",
-	{ status: Schema.Literals([400, 404, 500]), message: Schema.String },
-) {}
+export class CustomerWebhookFailedError extends Schema.TaggedError<
+	CustomerWebhookFailedError,
+	{ readonly brand: unique symbol }
+>()("CustomerWebhookFailedError", { status: Schema.Literals([400, 404, 500]), message: Schema.String }) {}
 
 export const CustomersWebhookCall = defineCall("customers.webhook", "customers", {
 	payload: Schema.Struct({

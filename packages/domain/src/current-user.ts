@@ -17,6 +17,12 @@ export class Schema extends S.Class<Schema, { readonly brand: unique symbol }>("
 	settings: S.NullOr(User.UserSettingsSchema),
 }) {}
 
+/**
+ * The calling actor, provided per request by the auth middleware. Services that act for the caller
+ * require it in their methods on purpose: it differs on every call, so no layer could capture it.
+ *
+ * @effect-leakable-service
+ */
 export class Context extends EffectContext.Service<Context, Schema>()("CurrentUser") {}
 
 const AuthFailure = S.Union([

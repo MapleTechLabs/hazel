@@ -436,10 +436,10 @@ const deliver = (
  * The channel's copy of its links predates `CHAT_SYNC_LINKS_VERSION` (a thread's could post through
  * its parent's webhook into the parent): retried once the org has projected a fresh copy.
  */
-export class ChatSyncLinksOutdatedError extends Schema.TaggedError<ChatSyncLinksOutdatedError>()(
-	"ChatSyncLinksOutdatedError",
-	{ channelLinkId: SyncChannelLinkId },
-) {}
+export class ChatSyncLinksOutdatedError extends Schema.TaggedError<
+	ChatSyncLinksOutdatedError,
+	{ readonly brand: unique symbol }
+>()("ChatSyncLinksOutdatedError", { channelLinkId: SyncChannelLinkId }) {}
 
 /** The `chatSync.outbound` receiver: runs in the sending `ChannelObject`'s outbox. */
 export const deliverChatSyncOutbound = Effect.fn("ChatSync.deliverOutbound")(function* (
@@ -513,14 +513,14 @@ export const prepareChatSyncLink = Effect.fn("ChatSync.prepareLink")(function* (
 	})
 	const { client } = yield* (yield* ChatSyncProviders).get(payload.provider)
 	yield* client.prepareLink(payload).pipe(
-		Effect.catch((error) =>
-			isRetryableSyncFailure(error)
-				? Effect.fail(error)
-				: Effect.logWarning("Chat sync link could not be prepared", {
-						provider: payload.provider,
-						externalChannelId: payload.externalChannelId,
-						error: error.message,
-					}),
+		Effect.catchIf(
+			(error) => !isRetryableSyncFailure(error),
+			(error) =>
+				Effect.logWarning("Chat sync link could not be prepared", {
+					provider: payload.provider,
+					externalChannelId: payload.externalChannelId,
+					error: error.message,
+				}),
 		),
 	)
 })

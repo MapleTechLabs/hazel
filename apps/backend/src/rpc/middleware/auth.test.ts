@@ -261,7 +261,7 @@ describe("AuthMiddlewareLive", () => {
 		const result = await runAuth(Headers.fromInput({ authorization: "Bearer a.b.c" }), {
 			hazelSession: makeHazelSessionLayer({
 				enabled: true,
-				fromCookie: () => Effect.succeed(Option.some(currentUser)),
+				fromCookie: () => Effect.succeedSome(currentUser),
 			}),
 		})
 
@@ -288,7 +288,7 @@ describe("AuthMiddlewareLive", () => {
 			enabled: true,
 			fromCookie: () =>
 				Effect.fail(new InvalidBearerTokenError({ message: "expired", detail: "expired" })),
-			verify: () => Effect.succeed(Option.some(makeCurrentUser())),
+			verify: () => Effect.succeedSome(makeCurrentUser()),
 		})
 		const valid = await runAuth(Headers.fromInput({ authorization: "Bearer session-credential" }), {
 			hazelSession,

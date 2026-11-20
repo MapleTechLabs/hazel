@@ -12,7 +12,7 @@ class Model extends M.Class<Model>("Attachment")({
 	channelId: S.NullOr(ChannelId),
 	messageId: S.NullOr(MessageId),
 	fileName: S.String,
-	fileSize: S.Number,
+	fileSize: S.Finite,
 	externalUrl: S.NullOr(S.String),
 	uploadedBy: M.Immutable(UserId),
 	status: AttachmentStatus,

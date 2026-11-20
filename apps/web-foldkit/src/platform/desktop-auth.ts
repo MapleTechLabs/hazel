@@ -2,7 +2,7 @@ import { type DesktopAuth, layerVault, makeDesktopAuth } from "@hazel/auth/deskt
 import { getTauriCore, getTauriDeepLink, getTauriOpener, isTauri } from "./tauri"
 import { BrowserLogin } from "@yielded/auth"
 import * as WebCrypto from "@yielded/auth/WebCrypto"
-import { Context, Effect, Exit, Layer, ManagedRuntime, Option, Schema, SynchronizedRef } from "effect"
+import { Context, Effect, Layer, ManagedRuntime, Option, Schema, SynchronizedRef } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { desktopClient } from "@hazel/auth/contract"
 import { desktopAuthClient } from "./desktop"
@@ -85,14 +85,14 @@ export const BrowserLive = Layer.effect(
 		return BrowserLogin.Browser.of({
 			open: ({ url }) =>
 				Effect.gen(function* () {
-					if (!isListening) return yield* Effect.fail(unavailable())
+					if (!isListening) return yield* unavailable()
 					const json = yield* KeychainStore.read
-					if (json === null) return yield* Effect.fail(unavailable("storage"))
+					if (json === null) return yield* unavailable("storage")
 					const record = yield* Schema.decodeEffect(
 						Schema.fromJsonString(BrowserLogin.VaultRecord),
 					)(json).pipe(Effect.mapError(() => unavailable("storage")))
 					const attempt = record.attempt
-					if (attempt === undefined) return yield* Effect.fail(unavailable("storage"))
+					if (attempt === undefined) return yield* unavailable("storage")
 					const matches = (callback: string) =>
 						new URL(callback).searchParams.get("state") === attempt.state
 					return yield* Effect.callback<string, BrowserLogin.PlatformError>((resume) => {
@@ -125,10 +125,10 @@ export const BrowserLive = Layer.effect(
 							receive = undefined
 						})
 					}).pipe(
-						Effect.timeout("10 minutes"),
-						Effect.catchTag("TimeoutError", () =>
-							Effect.fail(BrowserLogin.PlatformError.make({ reason: "expired" })),
-						),
+						Effect.timeoutOrElse({
+							duration: "10 minutes",
+							orElse: () => Effect.fail(BrowserLogin.PlatformError.make({ reason: "expired" })),
+						}),
 					)
 				}),
 		})
@@ -208,10 +208,10 @@ const DesktopAuthLive = Layer.effect(
 )
 
 /** The desktop auth runtime could not be built (keychain, crypto or deep link setup failed). */
-export class DesktopAuthUnavailableError extends Schema.TaggedError<DesktopAuthUnavailableError>()(
-	"DesktopAuthUnavailableError",
-	{ cause: Schema.Defect() },
-) {}
+export class DesktopAuthUnavailableError extends Schema.TaggedError<
+	DesktopAuthUnavailableError,
+	{ readonly brand: unique symbol }
+>()("DesktopAuthUnavailableError", { cause: Schema.Defect() }) {}
 
 type DesktopAuthRuntime = ManagedRuntime.ManagedRuntime<DesktopAuthService, unknown>
 
@@ -226,7 +226,7 @@ const buildRuntime: Effect.Effect<readonly [DesktopAuth, DesktopAuthRuntime], De
 		const runtime: DesktopAuthRuntime = ManagedRuntime.make(DesktopAuthLive)
 		return runtime.contextEffect.pipe(
 			Effect.map((context) => [Context.get(context, DesktopAuthService), runtime] as const),
-			Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : runtime.disposeEffect)),
+			Effect.onError(() => runtime.disposeEffect),
 			Effect.catchCause((cause) => Effect.fail(new DesktopAuthUnavailableError({ cause }))),
 		)
 	})

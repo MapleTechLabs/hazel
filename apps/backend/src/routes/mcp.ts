@@ -49,7 +49,10 @@ const MAX_CONTENT_LENGTH = 8000
 /** The largest JSON-RPC body read: a 10 MB file as base64 (4/3) and room for the envelope. */
 const MAX_REQUEST_BYTES = 14 * 1024 * 1024
 
-class BodyTooLarge extends Schema.TaggedError<BodyTooLarge>()("BodyTooLarge", {}) {}
+class BodyTooLarge extends Schema.TaggedError<BodyTooLarge, { readonly brand: unique symbol }>()(
+	"BodyTooLarge",
+	{},
+) {}
 
 /**
  * The body as text, read chunk by chunk and abandoned past `MAX_REQUEST_BYTES` actual bytes (a
@@ -108,7 +111,9 @@ const rpcError = (id: JsonRpcRequest["id"], code: number, message: string) => ({
 })
 
 /** A tool's failure the agent should see (MCP `isError`), not a protocol error. */
-class ToolError extends Schema.TaggedError<ToolError>()("ToolError", { message: Schema.String }) {}
+class ToolError extends Schema.TaggedError<ToolError, { readonly brand: unique symbol }>()("ToolError", {
+	message: Schema.String,
+}) {}
 
 const toolError = (message: string) => new ToolError({ message })
 
@@ -159,19 +164,15 @@ const decodeCallParams = Schema.decodeUnknownOption(
 		arguments: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
 	}),
 )
+/** A request body parsed as JSON, or none when it is not JSON. */
+const parseJson = Schema.decodeOption(Schema.fromJsonString(Schema.Unknown))
 /** How long a `create_upload_url` URL stays valid. */
 const UPLOAD_URL_TTL_SECONDS = 15 * 60
 
 const argChannel = (args: Record<string, unknown>, key = "channel_id") =>
-	Option.match(decodeChannelId(args[key]), {
-		onNone: () => Effect.fail(toolError(`${key} must be a channel id (UUID)`)),
-		onSome: Effect.succeed,
-	})
+	Effect.fromOption(decodeChannelId(args[key]), () => toolError(`${key} must be a channel id (UUID)`))
 const argMessage = (args: Record<string, unknown>, key = "message_id") =>
-	Option.match(decodeMessageId(args[key]), {
-		onNone: () => Effect.fail(toolError(`${key} must be a message id (UUID)`)),
-		onSome: Effect.succeed,
-	})
+	Effect.fromOption(decodeMessageId(args[key]), () => toolError(`${key} must be a message id (UUID)`))
 const optMessage = (args: Record<string, unknown>, key: string) =>
 	args[key] === undefined || args[key] === null ? Effect.succeed(null) : argMessage(args, key)
 const argContent = (args: Record<string, unknown>) => {
@@ -712,10 +713,9 @@ const tools: ReadonlyArray<Tool> = [
 				const fileName = yield* argFileName(args)
 				const bytes =
 					typeof args.content_base64 === "string"
-						? yield* Option.match(decodeBase64(args.content_base64), {
-								onNone: () => Effect.fail(toolError("content_base64 is not valid base64")),
-								onSome: Effect.succeed,
-							})
+						? yield* Effect.fromOption(decodeBase64(args.content_base64), () =>
+								toolError("content_base64 is not valid base64"),
+							)
 						: typeof args.text === "string"
 							? new TextEncoder().encode(args.text)
 							: yield* toolError("Give content_base64 or text")
@@ -1145,14 +1145,13 @@ export const McpRoute = HttpRouter.use((router) =>
 				if (declared > MAX_REQUEST_BYTES) return tooLarge
 				const body = yield* readCapped(request)
 				if (Option.isNone(body)) return tooLarge
-				let parsed: unknown
-				try {
-					parsed = JSON.parse(body.value)
-				} catch {
+				const json = parseJson(body.value)
+				if (Option.isNone(json)) {
 					return HttpServerResponse.jsonUnsafe(rpcError(null, -32700, "Parse error"), {
 						status: 400,
 					})
 				}
+				const parsed = json.value
 				const batch = Array.isArray(parsed)
 				const items = (batch ? parsed : [parsed]) as ReadonlyArray<unknown>
 				const ctx: ToolContext = { user: user.value, agent: agent.value, storage }

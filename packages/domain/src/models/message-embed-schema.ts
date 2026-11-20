@@ -68,8 +68,8 @@ export const CachedAgentStep = Schema.Struct({
 	toolInput: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
 	toolOutput: Schema.optional(Schema.Unknown),
 	toolError: Schema.optional(Schema.String),
-	startedAt: Schema.optional(Schema.Number),
-	completedAt: Schema.optional(Schema.Number),
+	startedAt: Schema.optional(Schema.Finite),
+	completedAt: Schema.optional(Schema.Finite),
 })
 export type CachedAgentStep = Schema.Schema.Type<typeof CachedAgentStep>
 
@@ -78,7 +78,7 @@ export const MessageEmbedLiveStateCached = Schema.Struct({
 	status: Schema.Literals(["idle", "active", "completed", "failed"]),
 	data: Schema.Record(Schema.String, Schema.Unknown),
 	text: Schema.optional(Schema.String),
-	progress: Schema.optional(Schema.Number),
+	progress: Schema.optional(Schema.Finite),
 	error: Schema.optional(Schema.String),
 	steps: Schema.optional(Schema.Array(CachedAgentStep)),
 })

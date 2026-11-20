@@ -19,18 +19,18 @@ export const SearchResult = Schema.Struct({
 	messageId: MessageId,
 	channelId: ChannelId,
 	content: Schema.String,
-	createdAtMs: Schema.Number,
+	createdAtMs: Schema.Finite,
 	authorName: Schema.String,
 	authorAvatarUrl: Schema.NullOr(Schema.String),
 	channelName: Schema.NullOr(Schema.String),
-	attachmentCount: Schema.Number,
+	attachmentCount: Schema.Finite,
 })
 export type SearchResult = typeof SearchResult.Type
 
 export const RecentSearch = Schema.Struct({
 	query: Schema.String,
 	filters: Schema.Array(SearchFilter),
-	timestamp: Schema.Number,
+	timestamp: Schema.Finite,
 })
 export type RecentSearch = typeof RecentSearch.Type
 
@@ -48,7 +48,7 @@ export const emptySearchData: SearchData = { results: [], isLoading: false, hasQ
 export const SearchAutocomplete = Schema.Struct({
 	filterType: Schema.Literals(["from", "in", "has"]),
 	search: Schema.String,
-	filterStartOffset: Schema.Number,
+	filterStartOffset: Schema.Finite,
 })
 export type SearchAutocomplete = typeof SearchAutocomplete.Type
 

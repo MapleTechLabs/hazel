@@ -110,7 +110,7 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		},
 	),
 	chatMessages: entry(
-		{ channelId: ChannelId, limit: Schema.Number, offset: Schema.Number },
+		{ channelId: ChannelId, limit: Schema.Finite, offset: Schema.Finite },
 		{
 			modelToDependencies: ({ model }) => ({
 				channelId: model.channelId,
@@ -128,7 +128,7 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 	// Restarts on every page and publishes the window, so the messages query moves only when paged;
 	// holds the history the window needs, so scrolling back pages older messages in.
 	chatMessagesWindow: entry(
-		{ channelId: ChannelId, limit: Schema.Number, offset: Schema.Number },
+		{ channelId: ChannelId, limit: Schema.Finite, offset: Schema.Finite },
 		{
 			modelToDependencies: ({ model }) => ({
 				channelId: model.channelId,

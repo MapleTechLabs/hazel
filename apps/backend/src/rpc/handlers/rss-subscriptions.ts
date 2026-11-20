@@ -117,9 +117,7 @@ export const RssSubscriptionRpcLive = RssSubscriptionRpcs.toLayer(
 						Effect.gen(function* () {
 							const subscriptionOption = yield* subscriptionRepo.findById(id)
 							if (Option.isNone(subscriptionOption)) {
-								return yield* Effect.fail(
-									new RssSubscriptionNotFoundError({ subscriptionId: id }),
-								)
+								return yield* new RssSubscriptionNotFoundError({ subscriptionId: id })
 							}
 
 							yield* rssSubscriptionPolicy.canUpdate(id)
@@ -145,9 +143,7 @@ export const RssSubscriptionRpcLive = RssSubscriptionRpcs.toLayer(
 						Effect.gen(function* () {
 							const subscriptionOption = yield* subscriptionRepo.findById(id)
 							if (Option.isNone(subscriptionOption)) {
-								return yield* Effect.fail(
-									new RssSubscriptionNotFoundError({ subscriptionId: id }),
-								)
+								return yield* new RssSubscriptionNotFoundError({ subscriptionId: id })
 							}
 
 							yield* rssSubscriptionPolicy.canDelete(id)

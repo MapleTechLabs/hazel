@@ -13,7 +13,10 @@ import { RouteOrganizationId } from "./routing-fields"
  * Response schema for successful channel member operations.
  * Contains the channel member data and a transaction ID for optimistic updates.
  */
-export class ChannelMemberResponse extends Schema.Class<ChannelMemberResponse>("ChannelMemberResponse")({
+export class ChannelMemberResponse extends Schema.Class<
+	ChannelMemberResponse,
+	{ readonly brand: unique symbol }
+>("ChannelMemberResponse")({
 	data: ChannelMember.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -22,12 +25,12 @@ export class ChannelMemberResponse extends Schema.Class<ChannelMemberResponse>("
  * Error thrown when a channel member is not found.
  * Used in update and delete operations.
  */
-export class ChannelMemberNotFoundError extends Schema.TaggedError<ChannelMemberNotFoundError>()(
-	"ChannelMemberNotFoundError",
-	{
-		channelMemberId: ChannelMemberId,
-	},
-) {}
+export class ChannelMemberNotFoundError extends Schema.TaggedError<
+	ChannelMemberNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ChannelMemberNotFoundError", {
+	channelMemberId: ChannelMemberId,
+}) {}
 
 /**
  * Channel Member RPC Group

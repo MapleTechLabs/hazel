@@ -45,8 +45,12 @@ const oauthError = (error: string, description: string, status = 400) =>
 	)
 
 const decodeClientId = Schema.decodeUnknownOption(AgentClientId)
-/** A JSON token request's string fields (other values are not OAuth parameters). */
-const decodeJsonParams = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.String))
+/** A JSON token request's string fields (other values are not OAuth parameters); none if not JSON. */
+const decodeJsonParams = Schema.decodeOption(
+	Schema.fromJsonString(Schema.Record(Schema.String, Schema.String)),
+)
+/** A body parsed as JSON, or none when it is not JSON. */
+const parseJson = Schema.decodeOption(Schema.fromJsonString(Schema.Unknown))
 
 const RegistrationRequest = Schema.Struct({
 	client_name: Schema.optional(Schema.String),
@@ -83,14 +87,12 @@ const readParams = Effect.gen(function* () {
 	const request = yield* HttpServerRequest.HttpServerRequest
 	const body = yield* readBody
 	if ((request.headers["content-type"] ?? "").includes("application/json")) {
-		try {
-			const parsed = decodeJsonParams(JSON.parse(body))
-			return new Map(
-				Option.match(parsed, { onNone: () => [], onSome: (params) => Object.entries(params) }),
-			)
-		} catch {
-			return new Map<string, string>()
-		}
+		return new Map(
+			Option.match(decodeJsonParams(body), {
+				onNone: () => [],
+				onSome: (params) => Object.entries(params),
+			}),
+		)
 	}
 	return new Map(new URLSearchParams(body))
 })
@@ -145,14 +147,9 @@ export const AgentOAuthRoutes = HttpRouter.use((router) =>
 			"POST",
 			"/oauth/register",
 			Effect.gen(function* () {
-				const body = yield* readBody
-				let json: unknown
-				try {
-					json = JSON.parse(body)
-				} catch {
-					return oauthError("invalid_client_metadata", "The body is not JSON")
-				}
-				const registration = decodeRegistration(json)
+				const json = parseJson(yield* readBody)
+				if (Option.isNone(json)) return oauthError("invalid_client_metadata", "The body is not JSON")
+				const registration = decodeRegistration(json.value)
 				if (Option.isNone(registration))
 					return oauthError("invalid_client_metadata", "redirect_uris is required")
 				const meta = registration.value
@@ -253,14 +250,13 @@ export const AgentOAuthRoutes = HttpRouter.use((router) =>
 					{ headers: { ...NO_STORE, ...OPEN_CORS } },
 				)
 			}).pipe(
-				Effect.catchTag("OAuthProtocolError", (error) =>
-					Effect.succeed(oauthError(error.error, error.description)),
-				),
-				Effect.catchTag("DatabaseError", (error) =>
-					Effect.logError("Agent token exchange failed", { error: error.message }).pipe(
-						Effect.as(oauthError("server_error", "The token endpoint is unavailable", 503)),
-					),
-				),
+				Effect.catchTags({
+					OAuthProtocolError: (error) => Effect.succeed(oauthError(error.error, error.description)),
+					DatabaseError: (error) =>
+						Effect.logError("Agent token exchange failed", { error: error.message }).pipe(
+							Effect.as(oauthError("server_error", "The token endpoint is unavailable", 503)),
+						),
+				}),
 				Effect.withSpan("AgentOAuth.token"),
 			),
 		)

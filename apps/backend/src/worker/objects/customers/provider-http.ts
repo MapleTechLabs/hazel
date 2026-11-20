@@ -280,7 +280,7 @@ const makeProviderCall = <Path extends string, Refusal>(
 	return <A>(call: ProviderCall<Path>, schema: Schema.Decoder<A>) =>
 		withRetry[call.method](call).pipe(
 			Effect.flatMap(({ status, body }) =>
-				Schema.decodeUnknownEffect(schema)(body).pipe(
+				Schema.decodeEffect(schema)(body).pipe(
 					Effect.catchTag("SchemaError", (error) =>
 						unreadable(call.method, api.routeOf(call.path), status, issueSummary(error)),
 					),

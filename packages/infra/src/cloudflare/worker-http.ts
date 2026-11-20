@@ -50,7 +50,7 @@ export const forIsolate =
 			const scope = yield* Scope.make()
 			return yield* build.pipe(
 				Scope.provide(scope),
-				Effect.onExit((exit) => (Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void)),
+				Effect.onError((cause) => Scope.close(scope, Exit.failCause(cause))),
 			)
 		}).pipe(Effect.updateContext((_: Context.Context<never>) => isolate))
 

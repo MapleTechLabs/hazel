@@ -76,7 +76,7 @@ export const Message = defineMessageUnion({
 	CompletedReload: {},
 	/** The user's row in `organizationId` (null when they have none). */
 	UpdatedMember: { organizationId: OrganizationId, member: Schema.NullOr(Member) },
-	TickedClock: { nowMs: Schema.Number },
+	TickedClock: { nowMs: Schema.Finite },
 	ClickedLayoutTab: { route: AppRoute },
 	GotPageMessage: { message: PageMessage },
 	GotShellMessage: { message: Shell.Message },

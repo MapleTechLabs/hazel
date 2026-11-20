@@ -41,9 +41,7 @@ export const GitHubSubscriptionRpcLive = GitHubSubscriptionRpcs.toLayer(
 							// Get channel to get organization ID
 							const channelOption = yield* channelRepo.findById(payload.channelId)
 							if (Option.isNone(channelOption)) {
-								return yield* Effect.fail(
-									new ChannelNotFoundError({ channelId: payload.channelId }),
-								)
+								return yield* new ChannelNotFoundError({ channelId: payload.channelId })
 							}
 							const channel = channelOption.value
 
@@ -53,7 +51,7 @@ export const GitHubSubscriptionRpcLive = GitHubSubscriptionRpcs.toLayer(
 								"github",
 							)
 							if (Option.isNone(githubConnection)) {
-								return yield* Effect.fail(new GitHubNotConnectedError())
+								return yield* new GitHubNotConnectedError()
 							}
 
 							// Check if already subscribed to this repo
@@ -62,12 +60,10 @@ export const GitHubSubscriptionRpcLive = GitHubSubscriptionRpcs.toLayer(
 								payload.repositoryId,
 							)
 							if (Option.isSome(existingOption)) {
-								return yield* Effect.fail(
-									new GitHubSubscriptionExistsError({
-										channelId: payload.channelId,
-										repositoryId: payload.repositoryId,
-									}),
-								)
+								return yield* new GitHubSubscriptionExistsError({
+									channelId: payload.channelId,
+									repositoryId: payload.repositoryId,
+								})
 							}
 
 							yield* gitHubSubscriptionPolicy.canCreate(payload.channelId)
@@ -126,9 +122,7 @@ export const GitHubSubscriptionRpcLive = GitHubSubscriptionRpcs.toLayer(
 							// Get current subscription
 							const subscriptionOption = yield* subscriptionRepo.findById(id)
 							if (Option.isNone(subscriptionOption)) {
-								return yield* Effect.fail(
-									new GitHubSubscriptionNotFoundError({ subscriptionId: id }),
-								)
+								return yield* new GitHubSubscriptionNotFoundError({ subscriptionId: id })
 							}
 
 							yield* gitHubSubscriptionPolicy.canUpdate(id)
@@ -159,9 +153,7 @@ export const GitHubSubscriptionRpcLive = GitHubSubscriptionRpcs.toLayer(
 							// Check subscription exists
 							const subscriptionOption = yield* subscriptionRepo.findById(id)
 							if (Option.isNone(subscriptionOption)) {
-								return yield* Effect.fail(
-									new GitHubSubscriptionNotFoundError({ subscriptionId: id }),
-								)
+								return yield* new GitHubSubscriptionNotFoundError({ subscriptionId: id })
 							}
 
 							// Soft delete subscription

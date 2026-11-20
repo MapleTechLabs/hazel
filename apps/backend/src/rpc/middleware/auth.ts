@@ -76,21 +76,17 @@ export const AuthMiddlewareLive = Layer.effect(
 							),
 						)
 						if (Option.isNone(agent)) {
-							return yield* Effect.fail(
-								new InvalidBearerTokenError({
-									message: "Invalid agent token",
-									detail: "The token is invalid, expired or revoked",
-								}),
-							)
+							return yield* new InvalidBearerTokenError({
+								message: "Invalid agent token",
+								detail: "The token is invalid, expired or revoked",
+							})
 						}
 						const required = Context.getOrElse(rpc.annotations, RequiredScopes, () => [])
 						if (!agentMayCallRpc(agent.value.scopes, required)) {
-							return yield* Effect.fail(
-								new UnauthorizedError({
-									message: "This token cannot call this method",
-									detail: `${rpc._tag} is outside the token's scopes`,
-								}),
-							)
+							return yield* new UnauthorizedError({
+								message: "This token cannot call this method",
+								detail: `${rpc._tag} is outside the token's scopes`,
+							})
 						}
 						const user = yield* hazelSession.agentUserOf(agent.value.userId)
 						return yield* effect.pipe(
@@ -133,12 +129,10 @@ export const AuthMiddlewareLive = Layer.effect(
 						),
 					)
 					if (Option.isNone(botOption)) {
-						return yield* Effect.fail(
-							new InvalidBearerTokenError({
-								message: "Invalid bot token",
-								detail: "No bot found with this token",
-							}),
-						)
+						return yield* new InvalidBearerTokenError({
+							message: "Invalid bot token",
+							detail: "No bot found with this token",
+						})
 					}
 
 					const bot = botOption.value
@@ -161,12 +155,10 @@ export const AuthMiddlewareLive = Layer.effect(
 						),
 					)
 					if (Option.isNone(userOption)) {
-						return yield* Effect.fail(
-							new InvalidBearerTokenError({
-								message: "Invalid bot token",
-								detail: "Bot user not found",
-							}),
-						)
+						return yield* new InvalidBearerTokenError({
+							message: "Invalid bot token",
+							detail: "Bot user not found",
+						})
 					}
 
 					const user = userOption.value
@@ -191,12 +183,10 @@ export const AuthMiddlewareLive = Layer.effect(
 				}
 
 				// No valid authentication provided
-				return yield* Effect.fail(
-					new SessionNotProvidedError({
-						message: "No authentication provided",
-						detail: "Bearer token required",
-					}),
-				)
+				return yield* new SessionNotProvidedError({
+					message: "No authentication provided",
+					detail: "Bearer token required",
+				})
 			}),
 		)
 	}),

@@ -38,12 +38,12 @@ beforeAll(() => {
 })
 
 const Message = defineMessageUnion({
-	ClickedPlate: { index: Schema.Number },
+	ClickedPlate: { index: Schema.Finite },
 	Closed: {},
-	Selected: { index: Schema.Number },
+	Selected: { index: Schema.Finite },
 })
 type Message = typeof Message.Type
-const Model = Schema.Struct({ openIndex: Schema.NullOr(Schema.Number) })
+const Model = Schema.Struct({ openIndex: Schema.NullOr(Schema.Finite) })
 type Model = typeof Model.Type
 
 const view = (model: Model, h: HtmlBuilder<Message>): Html =>

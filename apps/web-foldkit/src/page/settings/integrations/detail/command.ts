@@ -174,7 +174,7 @@ export const StartT3CodeConnect = Command.define("StartT3CodeConnect", {
 })
 
 export const UpdateT3CodeSharing = Command.define("UpdateT3CodeSharing", {
-	args: { orgId: OrganizationId, requestId: Schema.Number, sharing: T3CodeSharing },
+	args: { orgId: OrganizationId, requestId: Schema.Finite, sharing: T3CodeSharing },
 	messages: [Message.SucceededUpdateSharing, Message.FailedUpdateSharing],
 	execute: ({ orgId, requestId, sharing }) =>
 		HazelApiClient.use((client) =>

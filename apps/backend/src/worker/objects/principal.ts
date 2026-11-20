@@ -81,7 +81,7 @@ export const providePrincipal =
  */
 export const SyncPrincipal = Schema.Struct({
 	userId: UserId,
-	expiresAt: Schema.NullOr(Schema.Number),
+	expiresAt: Schema.NullOr(Schema.Finite),
 })
 export type SyncPrincipal = typeof SyncPrincipal.Type
 

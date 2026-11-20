@@ -1,7 +1,10 @@
 import { AwsClient } from "aws4fetch"
 import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 
-export class ObjectStorageError extends Schema.TaggedError<ObjectStorageError>()("ObjectStorageError", {
+export class ObjectStorageError extends Schema.TaggedError<
+	ObjectStorageError,
+	{ readonly brand: unique symbol }
+>()("ObjectStorageError", {
 	message: Schema.String,
 	cause: Schema.optional(Schema.Unknown),
 }) {}

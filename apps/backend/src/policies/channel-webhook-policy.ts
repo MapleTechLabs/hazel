@@ -5,7 +5,6 @@ import { Context, Effect, Layer } from "effect"
 import { withAnnotatedScope } from "../lib/policy-utils"
 import { OrgResolver } from "../services/org-resolver"
 
-/** @effect-leakable-service */
 export class ChannelWebhookPolicy extends Context.Service<ChannelWebhookPolicy>()(
 	"ChannelWebhookPolicy/Policy",
 	{

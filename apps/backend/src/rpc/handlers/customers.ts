@@ -1051,18 +1051,17 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						messageId,
 						userId: actor.userId,
 					}).pipe(
-						Effect.catchTag("MessageNotFoundError", () =>
-							Effect.fail(notFound("message", messageId)),
-						),
-						Effect.catchTag("ObjectCallError", (cause) =>
-							Effect.fail(
-								InternalServerError.withCause({
-									message: "Could not read the message",
-									detail: cause.message,
-									cause,
-								}),
-							),
-						),
+						Effect.catchTags({
+							MessageNotFoundError: () => Effect.fail(notFound("message", messageId)),
+							ObjectCallError: (cause) =>
+								Effect.fail(
+									InternalServerError.withCause({
+										message: "Could not read the message",
+										detail: cause.message,
+										cause,
+									}),
+								),
+						}),
 					)
 					const side = yield* recordedSideOf(message.authorId)
 					return yield* withTx(
@@ -1357,10 +1356,10 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 		const encryption = yield* IntegrationEncryption
 
 		const adapterOf = (provider: CustomerProvider) =>
-			Option.match(providers.get(provider), {
-				onNone: () => Effect.fail(new CustomerProviderUnavailableError({ provider })),
-				onSome: Effect.succeed,
-			})
+			Effect.fromOption(
+				providers.get(provider),
+				() => new CustomerProviderUnavailableError({ provider }),
+			)
 
 		const encrypt = (apiKey: string, webhookSecret: string | null) =>
 			encryptSecrets(apiKey, webhookSecret).pipe(

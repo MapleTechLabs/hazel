@@ -40,7 +40,7 @@ export const invitesOf = (model: Model): ReadonlyArray<Invite> =>
 // COMMAND
 
 export const ListIncomingInvites = Command.define("ListIncomingInvites", {
-	args: { organizationId: OrganizationId, version: Schema.Number },
+	args: { organizationId: OrganizationId, version: Schema.Finite },
 	messages: [Message.SucceededListInvites, Message.FailedListInvites],
 	execute: ({ organizationId, version }) =>
 		HazelRpc.use((client) => client("connectShare.invite.listIncoming", { organizationId })).pipe(

@@ -34,7 +34,7 @@ export const MessageCreatedPayload = Schema.Struct({
 	/** For the push (shortened). Optional: deliveries enqueued before push have none. */
 	content: Schema.optional(Schema.String),
 	/** The message's attachments, counted when it has no text. */
-	attachmentCount: Schema.optional(Schema.Number),
+	attachmentCount: Schema.optional(Schema.Finite),
 	/** ISO send time. Optional: deliveries enqueued before it have none. */
 	createdAt: Schema.optional(Schema.String),
 	/** A thread reply's root message (in the parent channel), for support issues. */
@@ -67,58 +67,56 @@ const localChannel = (channelId: ChannelId) =>
 /** Host: run `forward` for every guest org's mount of the conversation. */
 type Guest = { readonly organizationId: OrganizationId; readonly channelId: ChannelId }
 
-const forEachGuest = <E, R>(
+const forEachGuest = Effect.fn("OrgEffects.forEachGuest")(function* <E, R>(
 	conversationId: ConnectConversationId,
 	forward: (guest: Guest) => Effect.Effect<unknown, E, R>,
-) =>
-	Effect.gen(function* () {
-		const db = yield* Database.Database
-		const guests = yield* db.run(
-			SQLite.from(schema.connectConversationChannelsTable)
-				.select("organizationId", "channelId")
-				.where(($) => [
-					$.conversationId.eq(conversationId),
-					$.role.eq("guest"),
-					$.isActive.eq(true),
-					$.deletedAt.isNull(),
-				]),
-		)
-		yield* Effect.forEach(guests, forward, { discard: true })
-	}).pipe(Effect.withSpan("OrgEffects.forEachGuest"))
+) {
+	const db = yield* Database.Database
+	const guests = yield* db.run(
+		SQLite.from(schema.connectConversationChannelsTable)
+			.select("organizationId", "channelId")
+			.where(($) => [
+				$.conversationId.eq(conversationId),
+				$.role.eq("guest"),
+				$.isActive.eq(true),
+				$.deletedAt.isNull(),
+			]),
+	)
+	yield* Effect.forEach(guests, forward, { discard: true })
+})
 
 /**
  * The channel whose members a message in `channelId` concerns here. A Connect guest's message names
  * its own mount: on the host side (the host channel, or a guest's mount copy with no local channel
  * of that id) it is the host channel, and `forward` passes the event on to every guest org.
  */
-const notifiedChannel = <E, R>(
+const notifiedChannel = Effect.fn("OrgEffects.notifiedChannel")(function* <E, R>(
 	channelId: ChannelId,
 	forward: (guest: Guest) => Effect.Effect<unknown, E, R>,
-) =>
-	Effect.gen(function* () {
-		const db = yield* Database.Database
-		const mount = yield* db.first(
-			SQLite.from(schema.connectConversationChannelsTable)
-				.select("conversationId", "role")
-				.where(($) => [$.channelId.eq(channelId), $.isActive.eq(true), $.deletedAt.isNull()])
-				.limit(1),
-		)
-		const conversation = Option.isNone(mount)
-			? Option.none()
-			: yield* db.first(
-					SQLite.from(schema.connectConversationsTable)
-						.select("id", "hostChannelId")
-						.where(($) => [$.id.eq(mount.value.conversationId), $.deletedAt.isNull()])
-						.limit(1),
-				)
-		const hosted =
-			Option.isSome(mount) &&
-			Option.isSome(conversation) &&
-			(mount.value.role === "host" || Option.isNone(yield* localChannel(channelId)))
-		if (!hosted) return yield* localChannel(channelId)
-		yield* forEachGuest(conversation.value.id, forward)
-		return yield* localChannel(conversation.value.hostChannelId)
-	}).pipe(Effect.withSpan("OrgEffects.notifiedChannel"))
+) {
+	const db = yield* Database.Database
+	const mount = yield* db.first(
+		SQLite.from(schema.connectConversationChannelsTable)
+			.select("conversationId", "role")
+			.where(($) => [$.channelId.eq(channelId), $.isActive.eq(true), $.deletedAt.isNull()])
+			.limit(1),
+	)
+	const conversation = Option.isNone(mount)
+		? Option.none()
+		: yield* db.first(
+				SQLite.from(schema.connectConversationsTable)
+					.select("id", "hostChannelId")
+					.where(($) => [$.id.eq(mount.value.conversationId), $.deletedAt.isNull()])
+					.limit(1),
+			)
+	const hosted =
+		Option.isSome(mount) &&
+		Option.isSome(conversation) &&
+		(mount.value.role === "host" || Option.isNone(yield* localChannel(channelId)))
+	if (!hosted) return yield* localChannel(channelId)
+	yield* forEachGuest(conversation.value.id, forward)
+	return yield* localChannel(conversation.value.hostChannelId)
+})
 
 export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 	input: MessageCreatedPayload,

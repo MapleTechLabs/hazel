@@ -25,27 +25,27 @@ export type ChatSyncProviderId = typeof ChatSyncProviderId.Type
 
 export const isChatSyncProviderId = Schema.is(ChatSyncProviderId)
 
-export class ChatSyncProviderNotSupportedError extends Schema.TaggedError<ChatSyncProviderNotSupportedError>()(
-	"ChatSyncProviderNotSupportedError",
-	{ provider: Schema.String },
-) {}
+export class ChatSyncProviderNotSupportedError extends Schema.TaggedError<
+	ChatSyncProviderNotSupportedError,
+	{ readonly brand: unique symbol }
+>()("ChatSyncProviderNotSupportedError", { provider: Schema.String }) {}
 
 /** The provider is not set up here (a missing token or setting); retrying will not help. */
-export class ChatSyncProviderConfigurationError extends Schema.TaggedError<ChatSyncProviderConfigurationError>()(
-	"ChatSyncProviderConfigurationError",
-	{ provider: Schema.String, message: Schema.String },
-) {}
+export class ChatSyncProviderConfigurationError extends Schema.TaggedError<
+	ChatSyncProviderConfigurationError,
+	{ readonly brand: unique symbol }
+>()("ChatSyncProviderConfigurationError", { provider: Schema.String, message: Schema.String }) {}
 
 /** The provider answered with an error, or could not be reached (no `status`: retryable). */
-export class ChatSyncProviderApiError extends Schema.TaggedError<ChatSyncProviderApiError>()(
-	"ChatSyncProviderApiError",
-	{
-		provider: Schema.String,
-		message: Schema.String,
-		status: Schema.optional(Schema.Number),
-		detail: Schema.optional(Schema.String),
-	},
-) {}
+export class ChatSyncProviderApiError extends Schema.TaggedError<
+	ChatSyncProviderApiError,
+	{ readonly brand: unique symbol }
+>()("ChatSyncProviderApiError", {
+	provider: Schema.String,
+	message: Schema.String,
+	status: Schema.optional(Schema.Finite),
+	detail: Schema.optional(Schema.String),
+}) {}
 
 export type ChatSyncClientError = ChatSyncProviderConfigurationError | ChatSyncProviderApiError
 

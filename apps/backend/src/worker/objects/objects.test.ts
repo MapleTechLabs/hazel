@@ -304,12 +304,13 @@ describe("objects", () => {
 				expect(upserts(ownerOrg, "channel_members").length).toBe(1)
 
 				// The rows decode with the client models, as Electric's did.
-				for (const row of ownerChannels) Schema.decodeUnknownSync(Channel.Schema)(row)
+				for (const row of ownerChannels) yield* Schema.decodeUnknownEffect(Channel.Schema)(row)
 				for (const row of upserts(ownerOrg, "channel_members"))
-					Schema.decodeUnknownSync(ChannelMember.Schema)(row)
+					yield* Schema.decodeUnknownEffect(ChannelMember.Schema)(row)
 				for (const row of upserts(ownerOrg, "organizations"))
-					Schema.decodeUnknownSync(Organization.Schema)(row)
-				for (const row of upserts(ownerOrg, "users")) Schema.decodeUnknownSync(User.Schema)(row)
+					yield* Schema.decodeUnknownEffect(Organization.Schema)(row)
+				for (const row of upserts(ownerOrg, "users"))
+					yield* Schema.decodeUnknownEffect(User.Schema)(row)
 
 				// ChannelObject: the member and an outsider are refused, the owner streams messages.
 				const memberChannel = makeFakeSocket()
@@ -332,7 +333,7 @@ describe("objects", () => {
 				expect(Exit.isSuccess(sent)).toBe(true)
 				const messages = upserts(ownerChannel, "messages")
 				expect(messages.map((row) => row.content)).toEqual(["secret"])
-				for (const row of messages) Schema.decodeUnknownSync(Message.Schema)(row)
+				for (const row of messages) yield* Schema.decodeUnknownEffect(Message.Schema)(row)
 				const commit = ownerChannel.frames().find((frame) => frame._tag === "Commit")
 				const txid = Exit.isSuccess(sent)
 					? (sent.value as { transactionId: string }).transactionId

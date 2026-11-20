@@ -53,20 +53,16 @@ const program = Effect.gen(function* () {
 		// A new store starts empty, and its first migration is `0001_initial`.
 		const fresh = (migrations[store] ?? []).length === 0
 		if (!existsSync(path) && !fresh)
-			return yield* Effect.fail(
-				new GenerateError({ message: `No snapshot for the ${store} store at ${path}` }),
-			)
+			return yield* new GenerateError({ message: `No snapshot for the ${store} store at ${path}` })
 		migrations[store] = migrations[store] ?? []
 		const previous: StoreSnapshot = existsSync(path)
 			? (JSON.parse(readFileSync(path, "utf8")) as StoreSnapshot)
 			: { migration: "", entities: [], extraIndexes: [] }
 		const last = migrations[store].at(-1)?.id ?? ""
 		if (previous.migration !== last)
-			return yield* Effect.fail(
-				new GenerateError({
-					message: `snapshots/${store}.json is at ${previous.migration}, the last migration is ${last}`,
-				}),
-			)
+			return yield* new GenerateError({
+				message: `snapshots/${store}.json is at ${previous.migration}, the last migration is ${last}`,
+			})
 		const next = yield* storeSchemaOf(storeTables[store])
 		const plan = planMigration(previous, next, hints)
 		if (plan._tag === "Unchanged") continue
@@ -77,19 +73,17 @@ const program = Effect.gen(function* () {
 			continue
 		}
 		if (values.name === undefined || !isMigrationName(values.name))
-			return yield* Effect.fail(
-				new GenerateError({ message: "Pass --name <snake_case_name> for the new migration" }),
-			)
+			return yield* new GenerateError({
+				message: "Pass --name <snake_case_name> for the new migration",
+			})
 		const id = fresh ? "0001_initial" : nextMigrationId(migrations[store], values.name)
 		migrations[store] = [...migrations[store], { id, statements: plan.statements }]
 		snapshots[store] = { migration: id, ...next }
 	}
 	if (blocked.length > 0)
-		return yield* Effect.fail(
-			new GenerateError({
-				message: `Missing hints or unsupported changes (pass hints with --hints):\n${blocked.join("\n")}`,
-			}),
-		)
+		return yield* new GenerateError({
+			message: `Missing hints or unsupported changes (pass hints with --hints):\n${blocked.join("\n")}`,
+		})
 
 	const changed = storeNames.filter((store) => snapshots[store] !== undefined)
 	if (changed.length === 0) {

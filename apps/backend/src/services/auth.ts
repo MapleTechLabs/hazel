@@ -37,12 +37,10 @@ export const AuthorizationLive = Layer.effect(
 						)
 					}
 
-					return yield* Effect.fail(
-						new InvalidBearerTokenError({
-							message: "Invalid session",
-							detail: token === "" ? "No credential provided" : "Session expired or revoked",
-						}),
-					)
+					return yield* new InvalidBearerTokenError({
+						message: "Invalid session",
+						detail: token === "" ? "No credential provided" : "Session expired or revoked",
+					})
 				}),
 		})
 	}),

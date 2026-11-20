@@ -25,10 +25,10 @@ export const GitHubEventCall = defineCall("org.githubEvent", "org", {
 	payload: Schema.Struct({
 		deliveryId: Schema.String,
 		eventType: Schema.String,
-		repositoryId: Schema.Number,
+		repositoryId: Schema.Finite,
 		eventPayload: Schema.Unknown,
 	}),
-	success: Schema.Struct({ messagesCreated: Schema.Number }),
+	success: Schema.Struct({ messagesCreated: Schema.Finite }),
 	error: Schema.Never,
 })
 
@@ -37,7 +37,7 @@ export const GitHubInstallationCall = defineCall("org.githubInstallation", "org"
 		action: Schema.Literals(["created", "deleted", "suspend", "unsuspend"]),
 		installationId: Schema.String,
 	}),
-	success: Schema.Struct({ updated: Schema.Number }),
+	success: Schema.Struct({ updated: Schema.Finite }),
 	error: Schema.Never,
 })
 

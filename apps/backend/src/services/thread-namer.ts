@@ -9,7 +9,10 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 const MODEL = "anthropic/claude-3.5-haiku"
 const MAX_NAME_LENGTH = 50
 
-export class ThreadNamingError extends Schema.TaggedError<ThreadNamingError>()("ThreadNamingError", {
+export class ThreadNamingError extends Schema.TaggedError<
+	ThreadNamingError,
+	{ readonly brand: unique symbol }
+>()("ThreadNamingError", {
 	message: Schema.String,
 	cause: Schema.optional(Schema.Unknown),
 }) {}

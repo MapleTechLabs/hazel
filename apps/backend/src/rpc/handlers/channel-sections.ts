@@ -90,7 +90,7 @@ export const ChannelSectionRpcLive = ChannelSectionRpcs.toLayer(
 							const section = yield* channelSectionRepo.findById(id)
 
 							if (Option.isNone(section)) {
-								return yield* Effect.fail(new ChannelSectionNotFoundError({ sectionId: id }))
+								return yield* new ChannelSectionNotFoundError({ sectionId: id })
 							}
 
 							// Update all channels in this section to have null sectionId
@@ -145,17 +145,17 @@ export const ChannelSectionRpcLive = ChannelSectionRpcs.toLayer(
 							// Get channel first to know its organization
 							const channel = yield* channelRepo.findById(channelId)
 							if (Option.isNone(channel)) {
-								return yield* Effect.fail(new ChannelNotFoundError({ channelId }))
+								return yield* new ChannelNotFoundError({ channelId })
 							}
 
 							// Validate target section exists and belongs to same org
 							if (sectionId !== null) {
 								const section = yield* channelSectionRepo.findById(sectionId)
 								if (Option.isNone(section)) {
-									return yield* Effect.fail(new ChannelSectionNotFoundError({ sectionId }))
+									return yield* new ChannelSectionNotFoundError({ sectionId })
 								}
 								if (section.value.organizationId !== channel.value.organizationId) {
-									return yield* Effect.fail(new ChannelSectionNotFoundError({ sectionId }))
+									return yield* new ChannelSectionNotFoundError({ sectionId })
 								}
 							}
 

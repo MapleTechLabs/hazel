@@ -4,14 +4,18 @@ import { InternalServerError } from "../errors"
 import { RequiredScopes } from "../scopes/required-scopes"
 
 // GitHub Webhook Types
-export class GitHubWebhookResponse extends Schema.Class<GitHubWebhookResponse>("GitHubWebhookResponse")({
+export class GitHubWebhookResponse extends Schema.Class<
+	GitHubWebhookResponse,
+	{ readonly brand: unique symbol }
+>("GitHubWebhookResponse")({
 	processed: Schema.Boolean,
-	messagesCreated: Schema.optional(Schema.Number),
+	messagesCreated: Schema.optional(Schema.Finite),
 }) {}
 
-export class InvalidGitHubWebhookSignature extends Schema.TaggedError<InvalidGitHubWebhookSignature>(
-	"InvalidGitHubWebhookSignature",
-)(
+export class InvalidGitHubWebhookSignature extends Schema.TaggedError<
+	InvalidGitHubWebhookSignature,
+	{ readonly brand: unique symbol }
+>()(
 	"InvalidGitHubWebhookSignature",
 	{
 		message: Schema.String,
@@ -20,9 +24,10 @@ export class InvalidGitHubWebhookSignature extends Schema.TaggedError<InvalidGit
 ) {}
 
 /** The delivery is not JSON, or a supported event lacks the fields it must carry. */
-export class InvalidGitHubWebhookPayload extends Schema.TaggedError<InvalidGitHubWebhookPayload>(
-	"InvalidGitHubWebhookPayload",
-)(
+export class InvalidGitHubWebhookPayload extends Schema.TaggedError<
+	InvalidGitHubWebhookPayload,
+	{ readonly brand: unique symbol }
+>()(
 	"InvalidGitHubWebhookPayload",
 	{
 		message: Schema.String,
@@ -31,14 +36,18 @@ export class InvalidGitHubWebhookPayload extends Schema.TaggedError<InvalidGitHu
 ) {}
 
 /** Slack's Events API: the URL check's challenge, or an acknowledgement. */
-export class SlackWebhookResponse extends Schema.Class<SlackWebhookResponse>("SlackWebhookResponse")({
+export class SlackWebhookResponse extends Schema.Class<
+	SlackWebhookResponse,
+	{ readonly brand: unique symbol }
+>("SlackWebhookResponse")({
 	ok: Schema.Boolean,
 	challenge: Schema.optional(Schema.String),
 }) {}
 
-export class InvalidSlackWebhookSignature extends Schema.TaggedError<InvalidSlackWebhookSignature>(
-	"InvalidSlackWebhookSignature",
-)("InvalidSlackWebhookSignature", { message: Schema.String }, { httpApiStatus: 401 }) {}
+export class InvalidSlackWebhookSignature extends Schema.TaggedError<
+	InvalidSlackWebhookSignature,
+	{ readonly brand: unique symbol }
+>()("InvalidSlackWebhookSignature", { message: Schema.String }, { httpApiStatus: 401 }) {}
 
 export class WebhookGroup extends HttpApiGroup.make("webhooks")
 	.add(

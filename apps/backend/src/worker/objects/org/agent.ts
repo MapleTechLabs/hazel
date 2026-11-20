@@ -14,7 +14,7 @@ export const AgentChannel = Schema.Struct({
 	id: ChannelId,
 	name: Schema.String,
 	type: Schema.Literals(["public", "private", "direct", "single"]),
-	unreadCount: Schema.Number,
+	unreadCount: Schema.Finite,
 	isMuted: Schema.Boolean,
 	/** For direct messages: the other members' names. */
 	members: Schema.Array(Schema.String),

@@ -131,7 +131,7 @@ describe("runMuxSession", () => {
 
 	it("closes the socket of a stream closed while its object was still answering", async () => {
 		const upstream = new FakeSocket()
-		const answer = Effect.runSync(Deferred.make<MuxOpenResult>())
+		const answer = Deferred.makeUnsafe<MuxOpenResult>()
 		const { client, controls } = start(() => Deferred.await(answer))
 		client.receive(control({ _tag: "Open", id: 1, kind: "org", sourceId: "o1", token: "t" }))
 		await flush()

@@ -26,7 +26,7 @@ export const doctorCommand = Command.make("doctor", {}, () =>
 		yield* Console.log(`\n${pc.bold("Hazel Environment Check")}\n`)
 
 		const doctor = yield* Doctor
-		const { environment, services } = yield* doctor.runAllChecks()
+		const { environment, services } = yield* doctor.runAllChecks
 
 		// Environment section
 		yield* Console.log(pc.cyan("─── Environment ───"))

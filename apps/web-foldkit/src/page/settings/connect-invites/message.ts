@@ -9,10 +9,10 @@ import { AcceptFailure, DeclineFailure, HostOrganization, Invite } from "./model
 export const Message = defineMessageUnion({
 	SucceededListInvites: {
 		organizationId: OrganizationId,
-		version: Schema.Number,
+		version: Schema.Finite,
 		invites: Schema.Array(Invite),
 	},
-	FailedListInvites: { organizationId: OrganizationId, version: Schema.Number, reason: CommonReason },
+	FailedListInvites: { organizationId: OrganizationId, version: Schema.Finite, reason: CommonReason },
 	ClickedRetryListInvites: {},
 	UpdatedHostOrganizations: { organizations: Schema.Array(HostOrganization) },
 	ClickedAccept: { inviteId: ConnectInviteId },

@@ -19,7 +19,7 @@ export const Message = defineMessageUnion({
 	UpdatedSignals: { signals: Schema.Array(SignalRow) },
 	UpdatedAccounts: { accounts: Schema.Array(AccountRow) },
 	UpdatedMembers: { members: Schema.Array(MemberRow) },
-	UpdatedLastComputedAt: { lastComputedAtMs: Schema.NullOr(Schema.Number) },
+	UpdatedLastComputedAt: { lastComputedAtMs: Schema.NullOr(Schema.Finite) },
 
 	ClickedTab: { tab: Tab },
 	ClickedGrouping: { grouping: Grouping },

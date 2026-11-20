@@ -49,9 +49,10 @@ export const IntegrationCommandSchema = Schema.Struct({
 })
 export type IntegrationCommandSchema = typeof IntegrationCommandSchema.Type
 
-export class AvailableCommandsResponse extends Schema.Class<AvailableCommandsResponse>(
-	"AvailableCommandsResponse",
-)({
+export class AvailableCommandsResponse extends Schema.Class<
+	AvailableCommandsResponse,
+	{ readonly brand: unique symbol }
+>("AvailableCommandsResponse")({
 	commands: Schema.Array(IntegrationCommandSchema),
 }) {}
 

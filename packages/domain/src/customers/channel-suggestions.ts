@@ -56,7 +56,7 @@ export const ChannelEvidence = Schema.Struct({
 	 * How many external members there are in all (`externalMembers` may be a sample). A channel
 	 * whose members were not all seen is never linked automatically.
 	 */
-	externalMemberCount: Schema.optionalKey(Schema.Number),
+	externalMemberCount: Schema.optionalKey(Schema.Finite),
 	/**
 	 * A Connect channel this org mounted as a guest: its people are the host's participants, which
 	 * only the host org holds (`org.connectGuestEvidence`).
@@ -77,11 +77,11 @@ export const SuggestionReason = Schema.Union([
 	/** External members who are the account's contacts (exact email). */
 	Schema.Struct({
 		kind: Schema.Literal("contacts"),
-		matched: Schema.Number,
+		matched: Schema.Finite,
 		/** External members whose email is known. */
-		total: Schema.Number,
+		total: Schema.Finite,
 		/** Every external member seen; absent on reasons stored before it was counted. */
-		members: Schema.optionalKey(Schema.Number),
+		members: Schema.optionalKey(Schema.Finite),
 		/** Up to three of the matched emails. */
 		sample: Schema.Array(Schema.String),
 	}),
@@ -89,18 +89,18 @@ export const SuggestionReason = Schema.Union([
 	Schema.Struct({
 		kind: Schema.Literal("domain"),
 		domain: Schema.String,
-		matched: Schema.Number,
+		matched: Schema.Finite,
 		/** External members whose email is known. */
-		total: Schema.Number,
+		total: Schema.Finite,
 		/** Every external member seen; absent on reasons stored before it was counted. */
-		members: Schema.optionalKey(Schema.Number),
+		members: Schema.optionalKey(Schema.Finite),
 	}),
 	/** Other channels of the same workspace are linked to the account, and to no other. */
 	Schema.Struct({
 		kind: Schema.Literal("workspace"),
 		provider: Schema.Literals(["slack", "discord"]),
 		workspaceName: Schema.NullOr(Schema.String),
-		linkedChannels: Schema.Number,
+		linkedChannels: Schema.Finite,
 	}),
 	/**
 	 * The channel's or its workspace's name named the account. No longer produced (names matched
@@ -143,7 +143,7 @@ export const ChannelSuggestion = Schema.Struct({
 	channelId: ChannelId,
 	accountId: CustomerAccountId,
 	accountName: Schema.String,
-	score: Schema.Number,
+	score: Schema.Finite,
 	strength: SuggestionStrength,
 	reasons: Schema.Array(SuggestionReason),
 	computedAt: JsonDate,

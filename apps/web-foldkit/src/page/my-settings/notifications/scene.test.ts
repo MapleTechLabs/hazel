@@ -15,7 +15,7 @@ import { view } from "./view"
 
 const shared = makeShared()
 const dnd = Scene.label("Enable do not disturb")
-const row = Schema.decodeUnknownSync(UserRow)({
+const row = Schema.decodeSync(UserRow)({
 	firstName: "Ada",
 	lastName: "Lovelace",
 	email: "ada@hazel.test",
