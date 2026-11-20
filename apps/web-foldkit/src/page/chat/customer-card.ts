@@ -258,6 +258,7 @@ const escapeKey = <M>(h: HtmlBuilder<M>, toMessage: (message: Message) => M) =>
 /**
  * The header chip: the health dot and the customer's name; it opens the card. Above a pinned card's
  * backdrop (`z-50`), so a second press on it closes the card instead of landing on the backdrop.
+ * Its hit area reaches 12px past its edges, a ~46px touch target in a 56px header.
  */
 export const chip = <M>(
 	h: HtmlBuilder<M>,
@@ -273,7 +274,7 @@ export const chip = <M>(
 		h,
 		{
 			className: twMerge(
-				"relative z-50 inline-flex min-w-0 shrink items-center gap-1.5 rounded-md border border-border px-1.5 py-0.5 text-muted-fg text-xs outline-hidden transition-colors hover:bg-secondary hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
+				"relative z-50 inline-flex min-w-0 shrink items-center before:absolute before:-inset-3 before:content-[''] gap-1.5 rounded-md border border-border px-1.5 py-0.5 text-muted-fg text-xs outline-hidden transition-colors hover:bg-secondary hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
 				isOpen && "bg-secondary text-fg",
 			),
 			onPress: toMessage(Message.PressedChip({ isMobile: options.isMobile })),
