@@ -95,6 +95,8 @@ const account = (n: number, name: string, fields: Partial<AccountRow> = {}): Acc
 	attentionMutedAtMs: null,
 	attentionMutedUntilMs: null,
 	attentionMutedByUserId: null,
+	pinnedLayoutId: null,
+	layoutId: null,
 	...fields,
 })
 

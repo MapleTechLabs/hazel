@@ -2,7 +2,8 @@
  * The demo seed (`docs/customers/tech-design.md` §6.5): fake Clerk, Autumn, Stripe and Maple
  * connections (active, no credentials) and the generator's ops (`./seed.ts`) applied through
  * `CustomerIngest`, then a history rebuild and a compute. Not a backfill, so no baseline: the
- * queue fills. Dev and preview stages only (`customers.demo.seed`).
+ * queue fills. The org's own metrics and an "Observability" Overview layout come first, so the
+ * Maple batch's values for them land. Dev and preview stages only (`customers.demo.seed`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { type CustomerProvider, DEFAULT_CONNECTION_CONFIG } from "@hazel/domain/customers"
@@ -11,9 +12,10 @@ import { Effect, Option } from "effect"
 import { rebuildHistory, runCompute } from "./compute"
 import { seedDemoIssues } from "./issues"
 import { CustomerIngest } from "./ingest"
+import { firstPosition, liveLayouts } from "./layouts"
 import { loadBase } from "./snapshot"
 import { clearComputeProgress } from "./schedule"
-import { generateDemoSeed } from "./seed"
+import { DEMO_LAYOUT, DEMO_USER_METRICS, generateDemoSeed } from "./seed"
 
 const DEMO_ACCOUNT_ID = "demo"
 
@@ -61,6 +63,45 @@ const connectionFor = (provider: CustomerProvider, organizationId: OrganizationI
 		return Option.some(row.id)
 	})
 
+/** The demo's own metrics (those not defined yet) and its layout (unless one has its name). */
+const seedOverview = (organizationId: OrganizationId, by: UserId) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		for (const { key, draft } of DEMO_USER_METRICS) {
+			if (draft.source === null) continue
+			yield* db.run(
+				SQLite.insertInto(schema.customerMetricDefinitionsTable)
+					.values({
+						organizationId,
+						key,
+						name: draft.name,
+						description: draft.description,
+						group: draft.group,
+						unit: draft.unit,
+						format: draft.format,
+						aggregation: draft.aggregation,
+						provider: draft.source._tag === "formula" ? null : "maple",
+						source: draft.source,
+					})
+					.onConflictDoNothing(),
+			)
+		}
+		const layouts = yield* liveLayouts
+		if (!layouts.some((layout) => layout.name === DEMO_LAYOUT.name)) {
+			yield* db.run(
+				SQLite.insertInto(schema.customerOverviewLayoutsTable).values({
+					organizationId,
+					name: DEMO_LAYOUT.name,
+					position: firstPosition(layouts),
+					rule: DEMO_LAYOUT.rule,
+					widgets: DEMO_LAYOUT.widgets,
+					createdBy: by,
+					updatedBy: by,
+				}),
+			)
+		}
+	})
+
 export const seedDemo = Effect.fn("Customers.seedDemo")(function* (input: {
 	readonly organizationId: OrganizationId
 	readonly by: UserId
@@ -71,6 +112,7 @@ export const seedDemo = Effect.fn("Customers.seedDemo")(function* (input: {
 	const db = yield* Database.Database
 	const ingest = yield* CustomerIngest
 	const seed = generateDemoSeed({ now: input.now, accounts: input.accounts, seed: input.seed })
+	yield* db.transaction(seedOverview(input.organizationId, input.by))
 	for (const batch of seed.batches) {
 		const connection = yield* db.transaction(
 			connectionFor(batch.provider, input.organizationId, input.by, input.now),

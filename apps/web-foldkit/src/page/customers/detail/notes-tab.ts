@@ -8,7 +8,7 @@ import { checkbox } from "../../../ui/checkbox"
 import { textarea } from "../../../ui/textarea"
 import { Message } from "./message"
 import { COMPOSER_ID, type Model, type NoteRow, sortedNotes } from "./model"
-import { noteBody } from "./overview-tab"
+import { noteBody } from "../../../customers/overview/built-ins"
 import { type Context, memberOf } from "./parts"
 import { heading } from "../../../ui/heading"
 

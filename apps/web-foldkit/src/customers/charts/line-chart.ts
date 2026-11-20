@@ -28,6 +28,8 @@ export type LineSeries = Readonly<{
 	color: ChartColor
 	/** One value per x index; every series has the same length as `xLabels`. */
 	values: ReadonlyArray<number>
+	/** This series' values in the tooltip and end label, when they read unlike the others'. */
+	formatValue?: (value: number) => string
 }>
 
 export type LineChartOptions<M> = Readonly<{
@@ -125,7 +127,9 @@ export const lineChart = <M>(h: HtmlBuilder<M>, options: LineChartOptions<M>): H
 											heading: options.headings[hovered] ?? "",
 											rows: options.series.map((series) => ({
 												label: series.label,
-												value: options.formatValue(series.values[hovered] ?? 0),
+												value: (series.formatValue ?? options.formatValue)(
+													series.values[hovered] ?? 0,
+												),
 												color: series.color,
 												mark: "dot" as const,
 											})),
@@ -152,7 +156,7 @@ export const lineChart = <M>(h: HtmlBuilder<M>, options: LineChartOptions<M>): H
 												h.span(
 													[h.Class("text-fg")],
 													[
-														options.formatValue(
+														(series.formatValue ?? options.formatValue)(
 															series.values[series.values.length - 1] ?? 0,
 														),
 													],

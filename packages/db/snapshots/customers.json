@@ -1,5 +1,5 @@
 {
-	"migration": "0024_customer_slas",
+	"migration": "0025_customer_overview_layouts",
 	"entities": [
 		{
 			"kind": "table",
@@ -174,6 +174,13 @@
 			"name": "customer_org_daily",
 			"primaryKey": {
 				"columns": ["day"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_overview_layouts",
+			"primaryKey": {
+				"columns": ["id"]
 			}
 		},
 		{
@@ -620,8 +627,26 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "createdAt",
+			"name": "pinnedLayoutId",
 			"position": 42,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "layoutId",
+			"position": 43,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "createdAt",
+			"position": 44,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -630,7 +655,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "updatedAt",
-			"position": 43,
+			"position": 45,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -639,7 +664,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "deletedAt",
-			"position": 44,
+			"position": 46,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -2744,8 +2769,53 @@
 		{
 			"kind": "column",
 			"table": "customer_metric_definitions",
-			"name": "createdAt",
+			"name": "group",
 			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "format",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": "'number'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "source",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "lastRunAt",
+			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "lastError",
+			"position": 14,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_metric_definitions",
+			"name": "createdAt",
+			"position": 15,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2754,7 +2824,7 @@
 			"kind": "column",
 			"table": "customer_metric_definitions",
 			"name": "updatedAt",
-			"position": 11,
+			"position": 16,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -3046,6 +3116,123 @@
 			"type": "integer",
 			"notNull": true,
 			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "name",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "position",
+			"position": 3,
+			"type": "real",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "isDefault",
+			"position": 4,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "rule",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "'{\"match\":\"all\",\"conditions\":[]}'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "widgets",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "accountCount",
+			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "createdBy",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "updatedBy",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "createdAt",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "updatedAt",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_overview_layouts",
+			"name": "deletedAt",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
 		},
 		{
 			"kind": "column",

@@ -145,6 +145,7 @@ describe("Autumn validate", () => {
 					},
 					cursor: encodeCursor({ phase: "subscriptions", after: null }),
 					since: null,
+					metrics: [],
 				})
 			}).pipe(Effect.provide(fakeAutumnHttpClient(fake)))
 		const unvalidated = await Effect.runPromise(Effect.flip(pullAt(null)))

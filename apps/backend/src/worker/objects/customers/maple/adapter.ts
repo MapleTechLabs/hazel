@@ -132,6 +132,7 @@ export const makeMapleAdapter = Effect.gen(function* () {
 						config,
 						cursor: input.cursor,
 						since: input.since,
+						metrics: input.metrics,
 					})
 				},
 			}),

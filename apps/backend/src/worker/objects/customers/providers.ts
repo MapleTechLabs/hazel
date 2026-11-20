@@ -37,6 +37,7 @@ import type {
 	ConnectionConfig,
 	CustomerProvider,
 	IngestOp,
+	MetricSource,
 	SweepEntityType,
 	SyncProgress,
 } from "@hazel/domain/customers"
@@ -60,6 +61,12 @@ export interface ProviderCredentials {
 	readonly externalAccountId: string | null
 }
 
+/** A user-defined metric a pull reads (Maple): its key and how it is made. */
+export interface UserMetric {
+	readonly key: string
+	readonly source: MetricSource
+}
+
 export interface PullPage {
 	readonly ops: ReadonlyArray<IngestOp>
 	/** Null when the pull is complete. */
@@ -81,6 +88,11 @@ export interface PullPage {
 	 * ends early (a cursor dropped too soon) cannot wipe live records.
 	 */
 	readonly sweep?: ReadonlyArray<SweepEntityType>
+	/**
+	 * The user metrics (`UserMetric`) this page ran a query of, with why it failed (null: it ran):
+	 * core records it on the definition (`lastRunAt`, `lastError`). Maple only.
+	 */
+	readonly metricRuns?: ReadonlyArray<{ readonly key: string; readonly error: string | null }>
 }
 
 export interface CustomerProviderAdapter {
@@ -115,6 +127,8 @@ export interface CustomerProviderAdapter {
 		readonly credentials: ProviderCredentials
 		readonly cursor: string | null
 		readonly since: Date | null
+		/** The org's user-defined metrics (Maple reads their queries and events; the rest ignore them). */
+		readonly metrics: ReadonlyArray<UserMetric>
 	}) => Effect.Effect<PullPage, CustomerProviderError>
 	/** Scheduled pull period (webhooks cover the rest); e.g. Maple hourly, Stripe every 6 hours. */
 	readonly pullIntervalMs: number

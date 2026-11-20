@@ -103,6 +103,8 @@ const acme: AccountRow = {
 	attentionMutedAtMs: null,
 	attentionMutedUntilMs: null,
 	attentionMutedByUserId: null,
+	pinnedLayoutId: null,
+	layoutId: null,
 }
 
 const issue = (n: number, overrides: Partial<IssueRow>): IssueRow => ({

@@ -75,7 +75,7 @@ describe("generateDemoSeed", { timeout: 30_000 }, () => {
 		expect(seed.accounts).toHaveLength(200)
 		expect(opsOf("activity").length).toBeLessThanOrEqual(45_000)
 		expect(opsOf("invoice").length).toBeLessThanOrEqual(2_000)
-		expect(opsOf("metric").length).toBeLessThanOrEqual(20_000)
+		expect(opsOf("metric").length).toBeLessThanOrEqual(25_000)
 
 		const keys = ops.map(({ provider, op }) => {
 			switch (op._tag) {

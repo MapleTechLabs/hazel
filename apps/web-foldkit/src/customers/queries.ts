@@ -8,6 +8,7 @@ import * as Customers from "@hazel/domain/customers"
 import {
 	CustomerAccountId,
 	CustomerImpersonatorId,
+	CustomerOverviewLayoutId,
 	CustomerSavedViewId,
 	CustomerViewLayoutId,
 	CustomerSignalId,
@@ -75,6 +76,10 @@ export const AccountRow = Schema.Struct({
 	attentionMutedAtMs: Schema.NullOr(Schema.Number),
 	attentionMutedUntilMs: Schema.NullOr(Schema.Number),
 	attentionMutedByUserId: Schema.NullOr(UserId),
+	/** The Overview layout someone pinned it to; null: the layouts' rules decide. */
+	pinnedLayoutId: Schema.NullOr(CustomerOverviewLayoutId),
+	/** The Overview layout it gets, as Hazel assigned it (`docs/customers/overview-layouts.md`). */
+	layoutId: Schema.NullOr(CustomerOverviewLayoutId),
 })
 export type AccountRow = typeof AccountRow.Type
 
@@ -183,6 +188,8 @@ export const toAccountRow = (account: Customers.Account): AccountRow => ({
 	attentionMutedAtMs: msOrNull(account.attentionMutedAt),
 	attentionMutedUntilMs: msOrNull(account.attentionMutedUntil),
 	attentionMutedByUserId: account.attentionMutedByUserId,
+	pinnedLayoutId: account.pinnedLayoutId,
+	layoutId: account.layoutId,
 })
 
 export const toSignalRow = (signal: Customers.Signal): SignalRow => ({

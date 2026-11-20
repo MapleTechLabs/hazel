@@ -162,6 +162,18 @@ const DESTINATIONS = define({
 		to: (orgSlug) => AppRoute.CustomersSettingsPlans({ orgSlug }),
 		keywords: "pricing tiers",
 	},
+	customersMetrics: {
+		label: "Metrics",
+		icon: IconChartBar,
+		to: (orgSlug) => AppRoute.CustomersSettingsMetrics({ orgSlug }),
+		keywords: "maple query product events formula",
+	},
+	customersLayouts: {
+		label: "Overview layouts",
+		icon: IconDashboard,
+		to: (orgSlug) => AppRoute.CustomersSettingsLayouts({ orgSlug }),
+		keywords: "customer page widgets",
+	},
 	customersFeatureFlags: {
 		label: "Feature flags",
 		icon: IconRocket,
@@ -313,6 +325,8 @@ export const DESTINATION_GROUPS: ReadonlyArray<{
 			"customersHealth",
 			"customersSla",
 			"customersPlans",
+			"customersMetrics",
+			"customersLayouts",
 			"customersFeatureFlags",
 			"customersSources",
 		],

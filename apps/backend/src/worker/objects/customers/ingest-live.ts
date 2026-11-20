@@ -39,6 +39,7 @@ import {
 	FIELD_PRECEDENCE,
 	IngestOp,
 	type IngestOutcome,
+	isBuiltInMetric,
 	type ProviderRef,
 	type RecordActivity,
 	type RefEntityType,
@@ -63,7 +64,8 @@ import {
 } from "@hazel/schema"
 import { Clock, Context, Effect, Layer, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
-import { isBuiltInMetric } from "./defaults"
+import { METRIC_PREFIX } from "./maple/wire"
+import { sameMetricData } from "./metric-values"
 import type { CustomerIngestApi, IngestContext, RunResult } from "./ingest"
 import { requestCompute, requestComputeAfterIngest, requestHistoryRebuild, setBaselineFor } from "./schedule"
 
@@ -1748,7 +1750,7 @@ const make = Effect.gen(function* () {
 	const definitionOwner = (key: string) =>
 		db.first(
 			SQLite.from(schema.customerMetricDefinitionsTable)
-				.select("provider")
+				.select("provider", "source")
 				.where(($) => [$.key.eq(key)])
 				.limit(1),
 		)
@@ -1768,8 +1770,35 @@ const make = Effect.gen(function* () {
 			const definition = yield* definitionOwner(op.metricKey)
 			if (Option.isSome(definition) && definition.value.provider !== session.context.provider)
 				return yield* otherOwner(session, index, op, op.metricKey, definition.value.provider)
-			const accountId = yield* resolveAccount(session, op.account)
-			if (Option.isNone(accountId)) return yield* parkUnknownAccount(session, op.account)
+			// Maple's own keys are namespaced; any other is a person's metric, deleted while the pull
+			// was out: its days are dropped rather than defining it again.
+			if (
+				Option.isNone(definition) &&
+				session.context.provider === "maple" &&
+				!op.metricKey.startsWith(METRIC_PREFIX)
+			)
+				return yield* reject(index, op, `${op.metricKey} is no longer defined`)
+			const userSource = Option.isSome(definition) ? definition.value.source : null
+			// Read under a source the metric no longer has: its days are the new source's to fill.
+			const read = session.context.userMetricSources
+			if (
+				userSource !== null &&
+				read !== undefined &&
+				!sameMetricData(read.get(op.metricKey) ?? null, userSource)
+			)
+				return yield* reject(index, op, `${op.metricKey} changed since the page was read`)
+			// A person's query names a customer by its Clerk organization id: its Clerk ref, else the
+			// Maple ref of the same id (none is created). One Hazel does not know is skipped (counted),
+			// not parked for linking.
+			const direct = yield* resolveAccount(session, op.account)
+			const accountId =
+				Option.isNone(direct) && userSource !== null && op.account.provider === "clerk"
+					? yield* resolveAccount(session, { provider: "maple", externalId: op.account.externalId })
+					: direct
+			if (Option.isNone(accountId))
+				return userSource !== null
+					? yield* reject(index, op, "No customer has this id")
+					: yield* parkUnknownAccount(session, op.account)
 			if (Option.isNone(definition)) {
 				yield* applyDefinition(session, {
 					_tag: "metric_definition",
@@ -1838,6 +1867,9 @@ const make = Effect.gen(function* () {
 			// Two providers never share a key.
 			if (Option.isSome(existing) && existing.value.provider !== values.provider)
 				return yield* otherOwner(session, index, op, op.key, existing.value.provider)
+			// A person's metric (`source`) is theirs to define: the source only writes its days.
+			if (Option.isSome(existing) && existing.value.source !== null)
+				return outcome.unchanged(existing.value.id)
 			if (Option.isNone(existing)) {
 				const settings = yield* db.first(
 					SQLite.from(schema.customerSettingsTable).select("organizationId").limit(1),
@@ -1851,13 +1883,19 @@ const make = Effect.gen(function* () {
 				)
 				return outcome.created(row.id)
 			}
+			// A person may rename a source's metric (`customers.metric.update`): the source's name and
+			// description only replace the placeholders a metric gets when its days came first.
+			const named =
+				existing.value.name === existing.value.key
+					? values
+					: { ...values, name: existing.value.name, description: existing.value.description }
 			const row: Record<string, unknown> = existing.value
-			if (Object.entries(values).every(([field, value]) => row[field] === value)) {
+			if (Object.entries(named).every(([field, value]) => row[field] === value)) {
 				return outcome.unchanged(existing.value.id)
 			}
 			yield* db.run(
 				SQLite.update(schema.customerMetricDefinitionsTable)
-					.set({ ...values, updatedAt: session.now })
+					.set({ ...named, updatedAt: session.now })
 					.where(($) => [$.id.eq(existing.value.id)]),
 			)
 			return outcome.updated(existing.value.id)

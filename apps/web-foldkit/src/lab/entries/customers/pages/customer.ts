@@ -1,16 +1,17 @@
-import type * as Customers from "@hazel/domain/customers"
+import * as Customers from "@hazel/domain/customers"
 import {
 	CustomerAccountId,
 	CustomerContactId,
 	CustomerEventId,
 	CustomerInvoiceId,
 	CustomerNoteId,
-	CustomerSubscriptionId,
+	CustomerOverviewLayoutId,
 	OrganizationMemberId,
 } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { toAccountRow, toSignalRow } from "../../../../customers/queries"
+import * as OverviewData from "../../../../customers/overview/data"
+import { type AccountRow, toAccountRow, toSignalRow } from "../../../../customers/queries"
 import { labShared } from "../../../../page/customers/lab-shared"
 import { Message } from "../../../../page/customers/detail/message"
 import { Model, type NoteRow } from "../../../../page/customers/detail/model"
@@ -21,6 +22,14 @@ import { AppRoute, CustomerTab } from "../../../../route"
 import { defineLabWithFlags, queryParam } from "../../../define"
 import { labPage } from "../../../frame"
 import { ISSUE_SLAS, ISSUES, SUPPORT_REPORT } from "../../../fixtures/issues"
+import {
+	DEFAULT_LAYOUT,
+	LAYOUTS,
+	METRIC_DEFS,
+	metricWindowsFor,
+	OBSERVABILITY,
+	seriesFor,
+} from "../../../fixtures/customers-overview"
 import {
 	ACCOUNTS,
 	ACCOUNTS_BY_KEY,
@@ -38,14 +47,26 @@ import {
 // read answers from the fixtures below, the mutations apply to the rows at once and go nowhere.
 // `?tab=` picks the tab, `?state=` the Wonder artboard's data, `?as=admin` signs in as an admin
 // (feature flags, the grouping actions), `?account=eu` shows Acme's EU environment instead of its US
-// primary, `?dialog=` opens the link or environment dialog.
+// primary, `?dialog=` opens the link or environment dialog. `?layout=` picks the Overview layout Acme
+// gets (the default, or Observability: stats, a stacked chart, a table with used, unused and not set up
+// rows, a stat hidden for no data); `?state=widgets-loading|widgets-error` holds or fails its reads.
 
-const STATES = ["default", "payment-failed", "excluded-health", "loading", "not-found"] as const
+const STATES = [
+	"default",
+	"payment-failed",
+	"excluded-health",
+	"loading",
+	"not-found",
+	"widgets-loading",
+	"widgets-error",
+] as const
 const State = Schema.Literals(STATES)
 const ROLES = ["member", "admin"] as const
 const VIEWED = ["us", "eu"] as const
 const DIALOGS = ["none", "link", "environment"] as const
+const LAYOUT_KEYS = ["default", "observability"] as const
 const Flags = Schema.Struct({
+	layout: Schema.Literals(LAYOUT_KEYS),
 	tab: CustomerTab,
 	state: State,
 	as: Schema.Literals(ROLES),
@@ -277,15 +298,6 @@ const series = (
 	})),
 })
 
-const RANGE_DAYS = { "7d": 7, "30d": 30, "90d": 90, "12m": 365 } as const
-
-const usageOf = (metricKey: string, range: Customers.CustomersRange) =>
-	series(metricKey, metricKey === "mrr" ? "MRR" : "Active users", RANGE_DAYS[range], (day) => {
-		const total = RANGE_DAYS[range]
-		const late = day > total - 8
-		return Math.max(1, Math.round((late ? 3 : 5) + ((day * 7) % 5) - (day % 6 === 0 ? 3 : 0)))
-	})
-
 const MRR_HISTORY = series("mrr", "MRR", 365, (day) => (day < 245 ? 62_000 : 124_000))
 
 const detailFor = (state: typeof State.Type): Customers.AccountDetail => {
@@ -355,6 +367,16 @@ const detailFor = (state: typeof State.Type): Customers.AccountDetail => {
 
 // PROGRAM
 
+const factsOf = (account: AccountRow): Customers.LayoutFacts => ({
+	lifecycleStage: account.lifecycleStage,
+	planName: account.planName,
+	tags: account.tags,
+	healthStatus: account.healthStatus,
+	mrrMinor: account.mrrMinor,
+	attributes: {},
+	metricWindows: new Map(),
+})
+
 type Return = ReturnType<typeof update>
 type AnyCommand = NonNullable<Return["commands"]>[number]
 
@@ -401,14 +423,48 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 									? detailFor(current)
 									: { ...detailFor(current), account: viewed() },
 						})
-		case "FetchCustomerUsage": {
-			const range = args.range as Customers.CustomersRange
-			const metricKey = String(args.metricKey)
-			return Message.SucceededFetchUsage({
-				accountId: accountId(),
-				metricKey,
-				range,
-				series: [usageOf(metricKey, range)],
+		case "FetchOverviewMetricWindows": {
+			if (current === "widgets-loading") return null
+			const asked = String(args.asked)
+			const windows = args.windows as ReadonlyArray<{ metricKey: string; days: number }>
+			return Message.GotOverviewDataMessage({
+				message:
+					current === "widgets-error"
+						? OverviewData.Message.FailedFetchMetricWindows({
+								accountId: accountId(),
+								asked,
+								reason: "Offline",
+							})
+						: OverviewData.Message.SucceededFetchMetricWindows({
+								accountId: accountId(),
+								asked,
+								windows: metricWindowsFor(accountId(), windows),
+							}),
+			})
+		}
+		case "FetchOverviewChartSeries": {
+			if (current === "widgets-loading") return null
+			const asked = String(args.asked)
+			const widgetId = String(args.widgetId)
+			return Message.GotOverviewDataMessage({
+				message:
+					current === "widgets-error"
+						? OverviewData.Message.FailedFetchChartSeries({
+								accountId: accountId(),
+								widgetId,
+								asked,
+								reason: "Offline",
+							})
+						: OverviewData.Message.SucceededFetchChartSeries({
+								accountId: accountId(),
+								widgetId,
+								asked,
+								series: seriesFor(
+									accountId(),
+									args.metricKeys as ReadonlyArray<string>,
+									args.range as OverviewData.ChartRange,
+								),
+							}),
 			})
 		}
 		case "FetchCustomerSupport":
@@ -488,6 +544,29 @@ const settle = (
 	let current = model
 	const kept: Array<AnyCommand> = []
 	for (const command of commands) {
+		// A pin lands on the synced account (pinned: that layout; unpinned: what its rules give).
+		if (command.name === "SetCustomerLayout") {
+			const args = (command.args ?? {}) as { accountId?: unknown; layoutId?: unknown }
+			const accountId = Schema.decodeUnknownSync(CustomerAccountId)(args.accountId)
+			const layoutId = Schema.decodeUnknownSync(Schema.NullOr(CustomerOverviewLayoutId))(args.layoutId)
+			const accounts = (current.accounts ?? []).map((account) =>
+				account.id === accountId
+					? {
+							...account,
+							pinnedLayoutId: layoutId,
+							layoutId:
+								layoutId ??
+								Customers.resolveLayout(LAYOUTS, factsOf(account), null)?.id ??
+								null,
+						}
+					: account,
+			)
+			current = step(
+				step(current, Message.UpdatedAccounts({ accounts })).model,
+				Message.SucceededSetLayout({ accountId }),
+			).model
+			continue
+		}
 		if (command.name === "CreateCustomerNote") {
 			const args = (command.args ?? {}) as { body?: string; pinned?: boolean }
 			const note: NoteRow = {
@@ -529,22 +608,37 @@ const initial = (flags: typeof Flags.Type) => {
 			flags.state === "not-found"
 				? ACCOUNTS.filter((account) => account.id !== acme.id).map(toAccountRow)
 				: ACCOUNTS.map((account) =>
-						toAccountRow(account.id === acme.id ? detailFor(flags.state).account : account),
+						toAccountRow(
+							account.id === viewed().id
+								? {
+										...(account.id === acme.id
+											? detailFor(flags.state).account
+											: account),
+										layoutId:
+											flags.layout === "observability"
+												? OBSERVABILITY.id
+												: DEFAULT_LAYOUT.id,
+									}
+								: account,
+						),
 					),
 		signals: SIGNALS.map(toSignalRow),
 		supportIssues: ISSUES.filter((issue) => issue.accountId === viewed().id),
 		supportSlas: ISSUE_SLAS.filter((sla) => sla.accountId === viewed().id),
 		notes: NOTES,
 		members: TEAM,
-		metrics: [
-			{ key: "active_users", name: "Active users", unit: null, provider: null },
-			{ key: "mrr", name: "MRR", unit: "minor", provider: null },
-			{ key: "api_requests", name: "API requests", unit: null, provider: "autumn" },
-		],
+
 		connectedProviders: CONNECTIONS.map((connection) => connection.provider),
 		isImpersonator: true,
 	}
-	const settled = settle(live, started.commands ?? [])
+	const loaded = settle(live, started.commands ?? [])
+	// The definitions and layouts arrive as the app's streams deliver them.
+	const withMetrics = step(loaded.model, Message.UpdatedMetrics({ metrics: METRIC_DEFS }))
+	const withLayouts = step(withMetrics.model, Message.UpdatedLayouts({ layouts: LAYOUTS }))
+	const settled = {
+		model: withLayouts.model,
+		commands: [...loaded.commands, ...withMetrics.commands, ...withLayouts.commands],
+	}
 	return {
 		...settled,
 		model: {
@@ -572,6 +666,7 @@ const labView = (model: Model, h: HtmlBuilder<Message>): Html => {
 				{ name: "as", values: ROLES, current: params.get("as") ?? "member" },
 				{ name: "account", values: VIEWED, current: params.get("account") ?? "us" },
 				{ name: "dialog", values: DIALOGS, current: params.get("dialog") ?? "none" },
+				{ name: "layout", values: LAYOUT_KEYS, current: params.get("layout") ?? "default" },
 			],
 		},
 		[
@@ -600,6 +695,7 @@ export const lab = defineLabWithFlags("Customer", {
 		as: queryParam("as", ROLES, "member"),
 		account: queryParam("account", VIEWED, "us"),
 		dialog: queryParam("dialog", DIALOGS, "none"),
+		layout: queryParam("layout", LAYOUT_KEYS, "default"),
 	}),
 	init: initial,
 	// Tabs navigate in the app; here they switch in place. Prev/next stay on Acme.

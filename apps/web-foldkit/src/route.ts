@@ -2,6 +2,7 @@ import { CustomerProvider, SignalTemplate } from "@hazel/domain/customers"
 import {
 	ChannelId,
 	CustomerAccountId,
+	CustomerOverviewLayoutId,
 	CustomerSignalRuleId,
 	OrganizationId,
 	SyncConnectionId,
@@ -15,6 +16,10 @@ import { defineRouteUnion, literal, query, schemaSegment, slash, string } from "
 /** The customer page's tabs (`?tab=`). */
 export const CustomerTab = Schema.Literals(["overview", "users", "billing", "activity", "notes"])
 export type CustomerTab = typeof CustomerTab.Type
+
+/** The metric editor's source tabs (`?source=` on a new metric). */
+export const MetricSourceKind = Schema.Literals(["maple_query", "product_event", "formula"])
+export type MetricSourceKind = typeof MetricSourceKind.Type
 
 /** Flat route union mirroring the 39 legacy TanStack routes, plus NotFound. */
 export const AppRoute = defineRouteUnion({
@@ -128,6 +133,31 @@ export const AppRoute = defineRouteUnion({
 	CustomersSettingsPlans: { orgSlug: Schema.String },
 	CustomersSettingsSla: { orgSlug: Schema.String },
 	CustomersSettingsFeatureFlags: { orgSlug: Schema.String },
+	CustomersSettingsMetrics: { orgSlug: Schema.String },
+	/** The metric editor for a new metric; `?key=` prefills it (a suggested metric's draft), `?source=` picks its source tab. */
+	CustomersSettingsMetricNew: {
+		orgSlug: Schema.String,
+		key: Schema.Option(Schema.String),
+		source: Schema.Option(MetricSourceKind),
+	},
+	CustomersSettingsMetric: { orgSlug: Schema.String, metricKey: Schema.String },
+	CustomersSettingsLayouts: { orgSlug: Schema.String },
+	/**
+	 * The layout editor for a new layout: `?from=` a starter's key or a layout's id to start from,
+	 * `?name=` its name, `?preview=` the customer it draws.
+	 */
+	CustomersSettingsLayoutNew: {
+		orgSlug: Schema.String,
+		from: Schema.Option(Schema.String),
+		name: Schema.Option(Schema.String),
+		preview: Schema.Option(CustomerAccountId),
+	},
+	/** A layout's editor; `?preview=` the customer it draws. */
+	CustomersSettingsLayout: {
+		orgSlug: Schema.String,
+		layoutId: CustomerOverviewLayoutId,
+		preview: Schema.Option(CustomerAccountId),
+	},
 	CustomersSettingsSources: { orgSlug: Schema.String },
 	CustomersSourceDetail: { orgSlug: Schema.String, provider: CustomerProvider },
 	CustomersUnmatched: { orgSlug: Schema.String },
@@ -196,6 +226,16 @@ const IntegrationCallbackQuery = Schema.Struct({
 const ListViewQuery = Schema.Struct({ view: Schema.OptionFromOptional(Schema.String) })
 const CustomerTabQuery = Schema.Struct({ tab: Schema.OptionFromOptional(CustomerTab) })
 const SignalTemplateQuery = Schema.Struct({ template: Schema.OptionFromOptional(SignalTemplate) })
+const LayoutNewQuery = Schema.Struct({
+	from: Schema.OptionFromOptional(Schema.String),
+	name: Schema.OptionFromOptional(Schema.String),
+	preview: Schema.OptionFromOptional(CustomerAccountId),
+})
+const LayoutPreviewQuery = Schema.Struct({ preview: Schema.OptionFromOptional(CustomerAccountId) })
+const MetricNewQuery = Schema.Struct({
+	key: Schema.OptionFromOptional(Schema.String),
+	source: Schema.OptionFromOptional(MetricSourceKind),
+})
 
 const org = string("orgSlug")
 const orgPath = (...segments: ReadonlyArray<string>) =>
@@ -384,6 +424,35 @@ const routers = {
 		orgPath("customers", "settings", "feature-flags"),
 		Route.mapTo(AppRoute.CustomersSettingsFeatureFlags),
 	),
+	CustomersSettingsMetrics: pipe(
+		orgPath("customers", "settings", "metrics"),
+		Route.mapTo(AppRoute.CustomersSettingsMetrics),
+	),
+	CustomersSettingsMetricNew: pipe(
+		orgPath("customers", "settings", "metrics", "new"),
+		query(MetricNewQuery),
+		Route.mapTo(AppRoute.CustomersSettingsMetricNew),
+	),
+	CustomersSettingsMetric: pipe(
+		orgPath("customers", "settings", "metrics"),
+		slash(string("metricKey")),
+		Route.mapTo(AppRoute.CustomersSettingsMetric),
+	),
+	CustomersSettingsLayouts: pipe(
+		orgPath("customers", "settings", "layouts"),
+		Route.mapTo(AppRoute.CustomersSettingsLayouts),
+	),
+	CustomersSettingsLayoutNew: pipe(
+		orgPath("customers", "settings", "layouts", "new"),
+		query(LayoutNewQuery),
+		Route.mapTo(AppRoute.CustomersSettingsLayoutNew),
+	),
+	CustomersSettingsLayout: pipe(
+		orgPath("customers", "settings", "layouts"),
+		slash(schemaSegment("layoutId", CustomerOverviewLayoutId)),
+		query(LayoutPreviewQuery),
+		Route.mapTo(AppRoute.CustomersSettingsLayout),
+	),
 	CustomersSettingsSources: pipe(
 		orgPath("customers", "settings", "sources"),
 		Route.mapTo(AppRoute.CustomersSettingsSources),
@@ -464,6 +533,12 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.CustomersSettingsPlans,
 		routers.CustomersSettingsSla,
 		routers.CustomersSettingsFeatureFlags,
+		routers.CustomersSettingsMetrics,
+		routers.CustomersSettingsMetricNew,
+		routers.CustomersSettingsMetric,
+		routers.CustomersSettingsLayouts,
+		routers.CustomersSettingsLayoutNew,
+		routers.CustomersSettingsLayout,
 		routers.CustomersSettingsSources,
 		routers.CustomersUnmatched,
 		routers.CustomersSourceDetail,
@@ -559,6 +634,12 @@ export const isCustomersRoute = AppRoute.isAnyOf([
 	"CustomersSettingsPlans",
 	"CustomersSettingsSla",
 	"CustomersSettingsFeatureFlags",
+	"CustomersSettingsMetrics",
+	"CustomersSettingsMetricNew",
+	"CustomersSettingsMetric",
+	"CustomersSettingsLayouts",
+	"CustomersSettingsLayoutNew",
+	"CustomersSettingsLayout",
 	"CustomersSettingsSources",
 	"CustomersSourceDetail",
 	"CustomersUnmatched",

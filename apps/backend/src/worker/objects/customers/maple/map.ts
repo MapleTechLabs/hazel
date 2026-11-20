@@ -23,6 +23,8 @@
  *   itself, so a (day, account, key) is one row and never split across pages: ingest replaces a
  *   day's metric value, which makes a re-read idempotent but would let a later page's partial sum
  *   overwrite an earlier one's.
+ * - **A Maple query metric's row → that metric's day** for the account whose Clerk organization id
+ *   its `account` is, the value as Maple summed it; an unknown id is skipped, never parked.
  * - **No events, no sweeps.** Maple is authoritative for nothing: no account, contact or
  *   subscription is ever removed from what a Maple pull did or did not see.
  */
@@ -183,6 +185,60 @@ export const metricOps = (
 			metricKey: row.metric,
 			day: row.day,
 			value: events,
+		} satisfies RecordMetric)
+	}
+	return { ops, skipped }
+}
+
+/** A metric value: any finite number; `null` for one Hazel cannot read as a number. */
+export const metricValueOf = (value: WireCount): number | null => {
+	if (typeof value === "string" && value.trim() === "") return null
+	const number = typeof value === "number" ? value : Number(value)
+	return Number.isFinite(number) ? number : null
+}
+
+/** Recorded on a Maple query metric none of whose rows on a page Hazel could read. */
+export const UNREADABLE_QUERY_ROWS =
+	"Maple answered rows Hazel can't read: select `account` as text and `value` as a number"
+
+/**
+ * A query row's customer (its Clerk organization id, text or a number) and value (a number, or its
+ * digits); null for a row that does not hold them so (a Bool, an array, a missing column).
+ */
+export const queryRowOf = (row: unknown): { readonly account: string; readonly value: number } | null => {
+	if (typeof row !== "object" || row === null) return null
+	const { account, value } = row as Record<string, unknown>
+	const id =
+		typeof account === "string"
+			? account.trim()
+			: typeof account === "number" && Number.isFinite(account)
+				? String(account)
+				: ""
+	const number = typeof value === "number" || typeof value === "string" ? metricValueOf(value) : null
+	return id === "" || number === null ? null : { account: id, value: number }
+}
+
+/**
+ * A page of a Maple query metric's rows (one day): each value under `key` for the account its Clerk
+ * organization id names. No account reference is declared: an id Hazel does not know is counted
+ * and skipped by ingest (a user's query, not a parked record). A row Hazel cannot read is skipped
+ * here.
+ */
+export const queryOps = (rows: ReadonlyArray<unknown>, key: string, day: string): Mapped => {
+	const ops: Array<IngestOp> = []
+	let skipped = 0
+	for (const row of rows) {
+		const read = queryRowOf(row)
+		if (read === null) {
+			skipped += 1
+			continue
+		}
+		ops.push({
+			_tag: "metric",
+			account: clerkRef(read.account),
+			metricKey: key,
+			day,
+			value: read.value,
 		} satisfies RecordMetric)
 	}
 	return { ops, skipped }

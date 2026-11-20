@@ -116,6 +116,8 @@ const account = (
 	attentionMutedAtMs: null,
 	attentionMutedUntilMs: null,
 	attentionMutedByUserId: null,
+	pinnedLayoutId: null,
+	layoutId: null,
 })
 const acme = account(1, "Acme Robotics", ada, 215_000, "Growth")
 const kestrel = account(2, "Kestrel Systems", ada, 132_000, "Scale")

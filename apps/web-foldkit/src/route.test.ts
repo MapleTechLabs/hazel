@@ -1,6 +1,7 @@
 import {
 	ChannelId,
 	CustomerAccountId,
+	CustomerOverviewLayoutId,
 	CustomerSignalRuleId,
 	OrganizationId,
 	SyncConnectionId,
@@ -32,6 +33,7 @@ const connectionId = "5f0c2b8e-1d4a-5b6c-8e9f-2a3b4c5d6e7f"
 const orgId = "7c9e6679-7425-50de-944b-e07fc1f90ae7"
 const accountId = "3d6f0a8e-9b1c-4e2d-8f3a-1c2b3d4e5f60"
 const ruleId = "9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d"
+const layoutId = "4e5f6a7b-8c9d-4e0f-9a1b-2c3d4e5f6a7b"
 
 const parse = (path: string): AppRoute =>
 	Option.match(fromString(`http://localhost${path}`), {
@@ -173,6 +175,12 @@ describe("customers routes", () => {
 		["/hazel/customers/settings/plans", "CustomersSettingsPlans"],
 		["/hazel/customers/settings/sla", "CustomersSettingsSla"],
 		["/hazel/customers/settings/feature-flags", "CustomersSettingsFeatureFlags"],
+		["/hazel/customers/settings/metrics", "CustomersSettingsMetrics"],
+		["/hazel/customers/settings/metrics/new?key=spans_ingested", "CustomersSettingsMetricNew"],
+		["/hazel/customers/settings/metrics/maple.spans", "CustomersSettingsMetric"],
+		["/hazel/customers/settings/layouts", "CustomersSettingsLayouts"],
+		["/hazel/customers/settings/layouts/new?from=observability&name=Ops", "CustomersSettingsLayoutNew"],
+		[`/hazel/customers/settings/layouts/${layoutId}?preview=${accountId}`, "CustomersSettingsLayout"],
 		["/hazel/customers/settings/sources", "CustomersSettingsSources"],
 		["/hazel/customers/settings/sources/stripe", "CustomersSourceDetail"],
 		["/hazel/customers/settings/sources/unmatched", "CustomersUnmatched"],
@@ -281,6 +289,7 @@ describe("hrefOf", () => {
 	const organization = Schema.decodeUnknownSync(OrganizationId)(orgId)
 	const account = Schema.decodeUnknownSync(CustomerAccountId)(accountId)
 	const rule = Schema.decodeUnknownSync(CustomerSignalRuleId)(ruleId)
+	const layout = Schema.decodeUnknownSync(CustomerOverviewLayoutId)(layoutId)
 	const none = Option.none<string>()
 
 	/** One value per tag (the record keeps it exhaustive) and the exact URL it must print. */
@@ -525,6 +534,58 @@ describe("hrefOf", () => {
 		CustomersSettingsSla: [[AppRoute.CustomersSettingsSla({ orgSlug }), "/hazel/customers/settings/sla"]],
 		CustomersSettingsFeatureFlags: [
 			[AppRoute.CustomersSettingsFeatureFlags({ orgSlug }), "/hazel/customers/settings/feature-flags"],
+		],
+		CustomersSettingsMetrics: [
+			[AppRoute.CustomersSettingsMetrics({ orgSlug }), "/hazel/customers/settings/metrics"],
+		],
+		CustomersSettingsMetricNew: [
+			[
+				AppRoute.CustomersSettingsMetricNew({ orgSlug, key: none, source: Option.none() }),
+				"/hazel/customers/settings/metrics/new",
+			],
+			[
+				AppRoute.CustomersSettingsMetricNew({
+					orgSlug,
+					key: Option.some("spans_ingested"),
+					source: Option.some("formula"),
+				}),
+				"/hazel/customers/settings/metrics/new?key=spans_ingested&source=formula",
+			],
+		],
+		CustomersSettingsMetric: [
+			[
+				AppRoute.CustomersSettingsMetric({ orgSlug, metricKey: "maple.spans" }),
+				"/hazel/customers/settings/metrics/maple.spans",
+			],
+		],
+		CustomersSettingsLayouts: [
+			[AppRoute.CustomersSettingsLayouts({ orgSlug }), "/hazel/customers/settings/layouts"],
+		],
+		CustomersSettingsLayoutNew: [
+			[
+				AppRoute.CustomersSettingsLayoutNew({
+					orgSlug,
+					from: none,
+					name: none,
+					preview: Option.none(),
+				}),
+				"/hazel/customers/settings/layouts/new",
+			],
+			[
+				AppRoute.CustomersSettingsLayoutNew({
+					orgSlug,
+					from: Option.some("observability"),
+					name: Option.some("Enterprise expansion"),
+					preview: Option.some(account),
+				}),
+				`/hazel/customers/settings/layouts/new?from=observability&name=Enterprise+expansion&preview=${accountId}`,
+			],
+		],
+		CustomersSettingsLayout: [
+			[
+				AppRoute.CustomersSettingsLayout({ orgSlug, layoutId: layout, preview: Option.none() }),
+				`/hazel/customers/settings/layouts/${layoutId}`,
+			],
 		],
 		CustomersSettingsSources: [
 			[AppRoute.CustomersSettingsSources({ orgSlug }), "/hazel/customers/settings/sources"],

@@ -27,7 +27,7 @@
  */
 import type { DatabaseError, schema } from "@hazel/db"
 import type { IngestOp, IngestOutcome, IngestReport, SyncError, SyncProgress } from "@hazel/domain/customers"
-import type { CustomerProvider, SweepEntityType, SyncTrigger } from "@hazel/domain/customers"
+import type { CustomerProvider, MetricSource, SweepEntityType, SyncTrigger } from "@hazel/domain/customers"
 import type {
 	CustomerAccountId,
 	CustomerConnectionId,
@@ -49,6 +49,11 @@ export interface IngestContext {
 	/** Null for a webhook delivery applied outside a run. */
 	readonly runId: CustomerSyncRunId | null
 	readonly trigger: SyncTrigger
+	/**
+	 * The user metrics' sources (by key) a pull's page was read under: a value of one whose source now
+	 * makes other data (`sameMetricData`) is dropped, checked in the write's own transaction.
+	 */
+	readonly userMetricSources?: ReadonlyMap<string, MetricSource>
 }
 
 export type RunResult =

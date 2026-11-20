@@ -480,6 +480,22 @@ export const view = <ParentMessage>(
 					item("customersPlans", on("CustomersSettingsPlans")),
 					item("customersFeatureFlags", on("CustomersSettingsFeatureFlags")),
 					item(
+						"customersMetrics",
+						on(
+							"CustomersSettingsMetrics",
+							"CustomersSettingsMetricNew",
+							"CustomersSettingsMetric",
+						),
+					),
+					item(
+						"customersLayouts",
+						on(
+							"CustomersSettingsLayouts",
+							"CustomersSettingsLayoutNew",
+							"CustomersSettingsLayout",
+						),
+					),
+					item(
 						"customersSources",
 						on("CustomersSettingsSources", "CustomersSourceDetail", "CustomersUnmatched"),
 					),
