@@ -12,6 +12,7 @@ import {
 	type SlaContext,
 	slaDisplay,
 	stepSla,
+	supportReport,
 	workingTimeBetween,
 } from "./sla"
 import { replay, wallTime } from "./sla-replay"
@@ -222,6 +223,76 @@ describe("issue shapes", () => {
 		const earlier = stepSla(ctx, replied!.state, { _tag: "TeamReply", at: at("2026-11-23 09:30") })
 		expect(earlier.firstResponse?.elapsedMs).toBe(30 * MIN)
 		expect(earlier.reply?.metAt).toBe(at("2026-11-23 09:30"))
+	})
+})
+
+describe("support report", () => {
+	const always: SlaContext = { ...ctx, calendar: { _tag: "always" } }
+	// Medium (24/7): 4h reply, 24h resolution.
+	const issue = (id: string, account: string, script: Parameters<typeof replay>[2], until: string) => ({
+		issueId: id,
+		accountId: account,
+		accountName: account === "a" ? "Acme" : "Globex",
+		policyName: "Standard",
+		openedAt: at(script[0]![0]),
+		targets: always.targets,
+		state: replay(always, "Europe/Berlin", script, until).at(-1)!.state,
+	})
+	const rows = [
+		// Answered in 30m, resolved in 2h.
+		issue(
+			"1",
+			"a",
+			[
+				["2026-11-23 09:00", "open", "medium"],
+				["2026-11-23 09:30", "reply"],
+				["2026-11-23 11:00", "status", "closed"],
+			],
+			"2026-11-23 12:00",
+		),
+		// Answered late (5h).
+		issue(
+			"2",
+			"a",
+			[
+				["2026-11-23 10:00", "open", "medium"],
+				["2026-11-23 15:00", "reply"],
+			],
+			"2026-11-23 16:00",
+		),
+		// Never answered: overdue now.
+		issue("3", "b", [["2026-11-24 09:00", "open", "medium"]], "2026-11-24 09:00"),
+	]
+
+	it("medians, p90, share within target and breaches, by account", () => {
+		const report = supportReport(rows, at("2026-11-20 00:00"), at("2026-11-24 18:00"))
+		expect(report.issues).toBe(3)
+		expect(report.firstResponse).toEqual({
+			count: 2,
+			medianMs: 30 * MIN,
+			p90Ms: 300 * MIN,
+			withinPct: 0.5,
+		})
+		expect(report.resolution).toEqual({ count: 1, medianMs: 120 * MIN, p90Ms: 120 * MIN, withinPct: 1 })
+		expect(report.breaches).toBe(2)
+		// 2's resolution (24h) is past too, and 3 is unanswered.
+		expect(report.overdueNow).toBe(2)
+		expect(report.byAccount.map((row) => [row.label, row.issues, row.breaches])).toEqual([
+			["Acme", 2, 1],
+			["Globex", 1, 1],
+		])
+		expect(report.daily.find((day) => day.day === "2026-11-23")).toMatchObject({
+			issues: 2,
+			withinPct: 0.5,
+		})
+	})
+
+	it("leaves out issues opened before the range, but counts them overdue", () => {
+		const report = supportReport(rows, at("2026-11-24 00:00"), at("2026-11-24 18:00"))
+		expect(report.issues).toBe(1)
+		expect(report.firstResponse.count).toBe(0)
+		expect(report.firstResponse.medianMs).toBeNull()
+		expect(report.overdueNow).toBe(2)
 	})
 })
 

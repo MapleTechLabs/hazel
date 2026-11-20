@@ -74,7 +74,7 @@ import {
 } from "../customers/models"
 import { AuthorSideOverride } from "../customers/author-side"
 import { AttentionSettings, RuleDraft } from "../customers/rules"
-import { BusinessHours, SlaPolicyDraft } from "../customers/sla"
+import { BusinessHours, SlaPolicyDraft, SupportReport } from "../customers/sla"
 import { ViewDraft, ViewLayoutDraft } from "../customers/views"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { RateLimitExceededError } from "../rate-limit-errors"
@@ -790,7 +790,7 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 ) {}
 
 // ---------------------------------------------------------------------------
-// Support SLAs (admins and owners; `docs/customers/sla.md`)
+// Support SLAs (`docs/customers/sla.md`): settings for admins and owners, the report for members
 // ---------------------------------------------------------------------------
 
 export class CustomerSlaRpcs extends RpcGroup.make(
@@ -817,6 +817,9 @@ export class CustomerSlaRpcs extends RpcGroup.make(
 
 	/** The working week of policies on business hours; running clocks keep their deadlines. */
 	write("customers.businessHours.update", { businessHours: BusinessHours }, Tx),
+
+	/** First response and resolution times, % within SLA and breaches for issues opened in the range. Any member. */
+	read("customers.support.report", { range: CustomersRange }, SupportReport),
 ) {}
 
 export const CustomerRpcs = CustomerReadRpcs.merge(CustomerQueueRpcs, CustomerAdminRpcs, CustomerSlaRpcs)

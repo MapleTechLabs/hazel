@@ -163,4 +163,24 @@ describe("SLA clocks on issues", () => {
 				expect(sla(issue.id)).toBeUndefined()
 			}),
 		))
+
+	it("reports first response and overdue issues to members", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, now, open } = yield* setup
+				const answered = yield* open(60, "medium")
+				const repliedAt = new Date(now - 30 * MIN)
+				yield* world.object.run(
+					updateIssueRow(answered, { firstTeamReplyAt: repliedAt, lastTeamReplyAt: repliedAt }),
+				)
+				yield* open(5 * 60)
+				const report = ok(
+					yield* world.call("customers.support.report", { range: "7d" }, world.member),
+				)
+				expect(report.issues).toBe(2)
+				expect(report.firstResponse).toMatchObject({ count: 1, medianMs: 30 * MIN, withinPct: 1 })
+				expect(report.overdueNow).toBe(1)
+				expect(report.byAccount).toMatchObject([{ label: "Acme", issues: 2, breaches: 1 }])
+			}),
+		))
 })

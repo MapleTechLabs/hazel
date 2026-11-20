@@ -93,6 +93,7 @@ const PAYLOADS = {
 	"customers.slaPolicy.delete": { policyId: uuid() },
 	"customers.slaPolicy.reorder": { policyIds: [] },
 	"customers.businessHours.update": { businessHours: DEFAULT_BUSINESS_HOURS },
+	"customers.support.report": { range: "30d" },
 	"customers.connection.connect": {
 		provider: "clerk",
 		apiKey: "sk_test",

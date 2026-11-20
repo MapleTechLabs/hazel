@@ -1,12 +1,14 @@
 /**
- * Support SLA settings (`docs/customers/sla.md`): policies and the org's business hours. Admins and
- * owners only. A change applies to issues opened (or re-targeted) after it; running clocks keep
- * their deadlines.
+ * Support SLAs (`docs/customers/sla.md`): policies and the org's business hours (admins and owners;
+ * a change applies to issues opened, or re-targeted, after it: running clocks keep their deadlines),
+ * and the support report (any member).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { CustomerSlaRpcs } from "@hazel/domain/rpc"
-import { Effect } from "effect"
-import { requireAdmin, requireOwnOrganization } from "../../worker/objects/customers/access"
+import { supportReport } from "@hazel/domain/customers"
+import { Clock, Effect } from "effect"
+import { requireAdmin, requireMember, requireOwnOrganization } from "../../worker/objects/customers/access"
+import { RANGE_DAYS } from "../../worker/objects/customers/read"
 import { currentTime, invalid, notFound, remap, txOnly, withTx } from "./customers"
 
 export const CustomerSlaRpcLive = CustomerSlaRpcs.toLayer(
@@ -100,6 +102,40 @@ export const CustomerSlaRpcLive = CustomerSlaRpcs.toLayer(
 						}),
 					)
 				}).pipe(Effect.withSpan("CustomerSla.policyReorder"), remap),
+
+			"customers.support.report": ({ range }) =>
+				Effect.gen(function* () {
+					yield* requireMember
+					const now = yield* Clock.currentTimeMillis
+					const from = now - RANGE_DAYS[range] * 86_400_000
+					// The issues opened in the range, and every open one (overdue now).
+					const rows = yield* db.run(
+						SQLite.from(schema.customerIssueSlasTable, "s")
+							.innerJoin(schema.customerIssuesTable, "i", (sla, issue) =>
+								SQLite.and(issue.id.eq(sla.id), issue.deletedAt.isNull()),
+							)
+							.innerJoin(schema.customerAccountsTable, "a", (sla, account) =>
+								account.id.eq(sla.accountId),
+							)
+							.select(($) => ({
+								issueId: $.id,
+								accountId: $.accountId,
+								accountName: $.a.name,
+								policyName: $.policyName,
+								targets: $.targets,
+								state: $.state,
+								openedAt: $.i.openedAt,
+								closedAt: $.i.closedAt,
+							})),
+					)
+					return supportReport(
+						rows
+							.filter((row) => row.closedAt === null || row.openedAt.getTime() >= from)
+							.map((row) => ({ ...row, openedAt: row.openedAt.getTime() })),
+						from,
+						now,
+					)
+				}).pipe(Effect.withSpan("CustomerSla.supportReport"), remap),
 
 			"customers.businessHours.update": ({ businessHours }) =>
 				Effect.gen(function* () {

@@ -659,3 +659,155 @@ export const outcomeOf = (state: SlaState, targets: SlaTargets): SlaOutcome => {
 			: null,
 	}
 }
+
+// ---------------------------------------------------------------------------------------------
+// The support report (`customers.support.report`)
+
+const Ms = Schema.NullOr(Schema.Number)
+const Share = Schema.NullOr(Schema.Number)
+
+export const ClockStats = Schema.Struct({
+	/** Issues with this clock finished (answered / resolved). */
+	count: Schema.Int,
+	medianMs: Ms,
+	p90Ms: Ms,
+	/** Share of `count` within target, 0–1. */
+	withinPct: Share,
+})
+export type ClockStats = typeof ClockStats.Type
+
+export const SupportReportRow = Schema.Struct({
+	key: Schema.String,
+	label: Schema.String,
+	issues: Schema.Int,
+	firstResponse: ClockStats,
+	resolution: ClockStats,
+	breaches: Schema.Int,
+})
+export type SupportReportRow = typeof SupportReportRow.Type
+
+export const SupportReport = Schema.Struct({
+	/** Issues opened in the range under an SLA. */
+	issues: Schema.Int,
+	firstResponse: ClockStats,
+	resolution: ClockStats,
+	/** Issues that missed a target (answered or resolved late, or overdue now). */
+	breaches: Schema.Int,
+	/** Overdue right now, opened in the range or not. */
+	overdueNow: Schema.Int,
+	byAccount: Schema.Array(SupportReportRow),
+	byPolicy: Schema.Array(SupportReportRow),
+	/** Per day of the range (UTC, `YYYY-MM-DD`), oldest first. */
+	daily: Schema.Array(
+		Schema.Struct({
+			day: Schema.String,
+			issues: Schema.Int,
+			firstResponseMedianMs: Ms,
+			withinPct: Share,
+		}),
+	),
+})
+export type SupportReport = typeof SupportReport.Type
+
+export interface SupportReportInput {
+	readonly issueId: string
+	readonly accountId: string
+	readonly accountName: string
+	readonly policyName: string
+	readonly openedAt: number
+	readonly targets: SlaTargets
+	readonly state: SlaState
+}
+
+const DAY_MS = 24 * 60 * 60_000
+
+const statsOf = (outcomes: ReadonlyArray<{ readonly ms: number; readonly onTime: boolean }>): ClockStats => ({
+	count: outcomes.length,
+	medianMs: quantile(
+		outcomes.map((outcome) => outcome.ms),
+		0.5,
+	),
+	p90Ms: quantile(
+		outcomes.map((outcome) => outcome.ms),
+		0.9,
+	),
+	withinPct:
+		outcomes.length === 0 ? null : outcomes.filter((outcome) => outcome.onTime).length / outcomes.length,
+})
+
+/** Whether a clock is past its deadline at `now` (overdue, not yet answered or resolved). */
+export const isOverdue = (state: SlaState, now: number): boolean =>
+	(isOpen(state.reply) && now >= state.reply.dueAt) ||
+	(state.resolution.dueAt !== null && now >= state.resolution.dueAt)
+
+/** First response and resolution in working time, on time or not, for the issues opened in `[from, now]`. */
+export const supportReport = (
+	rows: ReadonlyArray<SupportReportInput>,
+	from: number,
+	now: number,
+): SupportReport => {
+	const inRange = rows.filter((row) => row.openedAt >= from && row.openedAt <= now)
+	const summarize = (group: ReadonlyArray<SupportReportInput>) => {
+		const outcomes = group.map((row) => ({ row, outcome: outcomeOf(row.state, row.targets) }))
+		const first = outcomes.flatMap(({ outcome }) =>
+			outcome.firstResponseMs === null || outcome.firstResponseOnTime === null
+				? []
+				: [{ ms: outcome.firstResponseMs, onTime: outcome.firstResponseOnTime }],
+		)
+		const resolution = outcomes.flatMap(({ outcome }) =>
+			outcome.resolutionMs === null || outcome.resolutionOnTime === null
+				? []
+				: [{ ms: outcome.resolutionMs, onTime: outcome.resolutionOnTime }],
+		)
+		const breaches = outcomes.filter(
+			({ row, outcome }) =>
+				outcome.firstResponseOnTime === false ||
+				outcome.resolutionOnTime === false ||
+				isOverdue(row.state, now),
+		).length
+		return {
+			issues: group.length,
+			firstResponse: statsOf(first),
+			resolution: statsOf(resolution),
+			breaches,
+		}
+	}
+	const groupBy = (
+		key: (row: SupportReportInput) => string,
+		label: (row: SupportReportInput) => string,
+	) => {
+		const groups = new Map<string, Array<SupportReportInput>>()
+		for (const row of inRange) groups.set(key(row), [...(groups.get(key(row)) ?? []), row])
+		return [...groups.entries()]
+			.map(([groupKey, group]) => ({
+				key: groupKey,
+				label: group[0] === undefined ? groupKey : label(group[0]),
+				...summarize(group),
+			}))
+			.sort((a, b) => b.breaches - a.breaches || b.issues - a.issues || a.label.localeCompare(b.label))
+	}
+	const days: Array<SupportReport["daily"][number]> = []
+	for (let start = Math.floor(from / DAY_MS) * DAY_MS; start <= now; start += DAY_MS) {
+		const day = inRange.filter((row) => row.openedAt >= start && row.openedAt < start + DAY_MS)
+		const stats = summarize(day)
+		days.push({
+			day: new Date(start).toISOString().slice(0, 10),
+			issues: day.length,
+			firstResponseMedianMs: stats.firstResponse.medianMs,
+			withinPct: stats.firstResponse.withinPct,
+		})
+	}
+	return {
+		...summarize(inRange),
+		overdueNow: rows.filter((row) => isOverdue(row.state, now)).length,
+		byAccount: groupBy(
+			(row) => row.accountId,
+			(row) => row.accountName,
+		),
+		byPolicy: groupBy(
+			(row) => row.policyName,
+			(row) => row.policyName,
+		),
+		daily: days,
+	}
+}
