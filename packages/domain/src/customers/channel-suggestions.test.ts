@@ -234,3 +234,14 @@ describe("describeReason", () => {
 		).toBe("The one external member with a known email is a Globex contact")
 	})
 })
+
+describe("member counts", () => {
+	it("two members sharing an email are not reported as unknown emails", () => {
+		const [best] = scoreChannel(
+			evidence({ externalMembers: [member("x@acme.com", "slack"), member("x@acme.com", "slack")] }),
+			index(),
+		)
+		const domain = best!.reasons.find((reason) => reason.kind === "domain")!
+		expect(describeReason(domain, "Acme")).toBe("The external member has @acme.com, Acme's domain")
+	})
+})
