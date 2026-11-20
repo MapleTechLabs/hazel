@@ -10,13 +10,19 @@
  */
 import { Effect, Schema } from "effect"
 
-class DevSignInArgsError extends Schema.TaggedError<DevSignInArgsError>()("DevSignInArgsError", {
-	message: Schema.String,
-}) {}
+class DevSignInArgsError extends Schema.TaggedError<DevSignInArgsError, { readonly brand: unique symbol }>()(
+	"DevSignInArgsError",
+	{
+		message: Schema.String,
+	},
+) {}
 
-class DevSignInHttpError extends Schema.TaggedError<DevSignInHttpError>()("DevSignInHttpError", {
-	message: Schema.String,
-}) {}
+class DevSignInHttpError extends Schema.TaggedError<DevSignInHttpError, { readonly brand: unique symbol }>()(
+	"DevSignInHttpError",
+	{
+		message: Schema.String,
+	},
+) {}
 
 const DevSignInResponse = Schema.Struct({ userId: Schema.String, sessionToken: Schema.String })
 

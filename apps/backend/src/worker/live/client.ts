@@ -12,7 +12,7 @@ import {
 } from "./runtime"
 
 const unavailable = (cause: unknown) =>
-	new InternalServerError({ message: "The message's live state is unavailable", cause })
+	InternalServerError.withCause({ message: "The message's live state is unavailable", cause })
 
 export const writeLive = (request: LiveWriteRequest) =>
 	Effect.gen(function* () {

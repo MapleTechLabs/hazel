@@ -8,6 +8,9 @@ import { signInHref } from "../../route"
 import { HazelApiClient } from "../../rpc"
 import { Message } from "./message"
 
+/** What `AuthorizeAgentRequest` is constructed from (its instance type also carries the brand). */
+type AuthorizeAgentFields = ConstructorParameters<typeof AuthorizeAgentRequest>[0]
+
 export const FetchAgentClient = Command.define("FetchAgentClient", {
 	args: { clientId: AgentClientId, redirectUri: Schema.String },
 	messages: [Message.SucceededFetchClient, Message.FoundInvalidRequest, Message.FailedFetchClient],
@@ -46,13 +49,12 @@ export const AuthorizeAgent = Command.define("AuthorizeAgent", {
 	},
 	messages: [Message.LeftPage, Message.FailedAuthorize],
 	execute: ({ scope, state, ...request }) => {
-		const fields: { -readonly [K in keyof AuthorizeAgentRequest]: AuthorizeAgentRequest[K] } = request
+		const fields: { -readonly [K in keyof AuthorizeAgentFields]: AuthorizeAgentFields[K] } = request
 		if (scope !== null) fields.scope = scope
 		if (state !== null) fields.state = state
-		return HazelApiClient.use((client) =>
-			// The payload is a `Schema.Class`: a plain object fails to encode before the request is sent.
-			client.agentAccess.authorizeAgent({ payload: new AuthorizeAgentRequest(fields) }),
-		).pipe(
+		// The payload is a `Schema.Class`: a plain object fails to encode before the request is sent.
+		const payload = new AuthorizeAgentRequest(fields)
+		return HazelApiClient.use((client) => client.agentAccess.authorizeAgent({ payload })).pipe(
 			Effect.flatMap(({ redirectTo }) => load(redirectTo)),
 			Effect.as(Message.LeftPage()),
 			Effect.catchTags({

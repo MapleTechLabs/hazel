@@ -11,13 +11,16 @@ const IntegrationProvider = IntegrationConnection.IntegrationProvider
 const ConnectionLevel = IntegrationConnection.ConnectionLevel
 
 // OAuth URL response - returned from getOAuthUrl endpoint for SPA OAuth flow
-export class OAuthUrlResponse extends Schema.Class<OAuthUrlResponse>("OAuthUrlResponse")({
+export class OAuthUrlResponse extends Schema.Class<OAuthUrlResponse, { readonly brand: unique symbol }>(
+	"OAuthUrlResponse",
+)({
 	authorizationUrl: Schema.String,
 }) {}
 
-export class ConnectionStatusResponse extends Schema.Class<ConnectionStatusResponse>(
-	"ConnectionStatusResponse",
-)({
+export class ConnectionStatusResponse extends Schema.Class<
+	ConnectionStatusResponse,
+	{ readonly brand: unique symbol }
+>("ConnectionStatusResponse")({
 	connected: Schema.Boolean,
 	provider: IntegrationProvider,
 	externalAccountName: Schema.NullOr(Schema.String),
@@ -27,33 +30,39 @@ export class ConnectionStatusResponse extends Schema.Class<ConnectionStatusRespo
 }) {}
 
 // Error types
-export class IntegrationNotConnectedError extends Schema.TaggedError<IntegrationNotConnectedError>()(
-	"IntegrationNotConnectedError",
-	{
-		provider: IntegrationProvider,
-	},
-) {}
+export class IntegrationNotConnectedError extends Schema.TaggedError<
+	IntegrationNotConnectedError,
+	{ readonly brand: unique symbol }
+>()("IntegrationNotConnectedError", {
+	provider: IntegrationProvider,
+}) {}
 
-export class InvalidOAuthStateError extends Schema.TaggedError<InvalidOAuthStateError>()(
-	"InvalidOAuthStateError",
-	{
-		message: Schema.String,
-	},
-) {}
+export class InvalidOAuthStateError extends Schema.TaggedError<
+	InvalidOAuthStateError,
+	{ readonly brand: unique symbol }
+>()("InvalidOAuthStateError", {
+	message: Schema.String,
+}) {}
 
-export class UnsupportedProviderError extends Schema.TaggedError<UnsupportedProviderError>()(
-	"UnsupportedProviderError",
-	{
-		provider: Schema.String,
-	},
-) {}
+export class UnsupportedProviderError extends Schema.TaggedError<
+	UnsupportedProviderError,
+	{ readonly brand: unique symbol }
+>()("UnsupportedProviderError", {
+	provider: Schema.String,
+}) {}
 
-export class InvalidApiKeyError extends Schema.TaggedError<InvalidApiKeyError>()("InvalidApiKeyError", {
+export class InvalidApiKeyError extends Schema.TaggedError<
+	InvalidApiKeyError,
+	{ readonly brand: unique symbol }
+>()("InvalidApiKeyError", {
 	message: Schema.String,
 }) {}
 
 /** The provider is rate limiting or failing right now; the same request may succeed later. */
-export class IntegrationUnavailableError extends Schema.TaggedError<IntegrationUnavailableError>()(
+export class IntegrationUnavailableError extends Schema.TaggedError<
+	IntegrationUnavailableError,
+	{ readonly brand: unique symbol }
+>()(
 	"IntegrationUnavailableError",
 	{
 		message: Schema.String,
@@ -61,12 +70,18 @@ export class IntegrationUnavailableError extends Schema.TaggedError<IntegrationU
 	{ httpApiStatus: 503 },
 ) {}
 
-export class ConnectApiKeyRequest extends Schema.Class<ConnectApiKeyRequest>("ConnectApiKeyRequest")({
+export class ConnectApiKeyRequest extends Schema.Class<
+	ConnectApiKeyRequest,
+	{ readonly brand: unique symbol }
+>("ConnectApiKeyRequest")({
 	token: Schema.String,
 	baseUrl: Schema.String,
 }) {}
 
-export class ConnectApiKeyResponse extends Schema.Class<ConnectApiKeyResponse>("ConnectApiKeyResponse")({
+export class ConnectApiKeyResponse extends Schema.Class<
+	ConnectApiKeyResponse,
+	{ readonly brand: unique symbol }
+>("ConnectApiKeyResponse")({
 	connected: Schema.Boolean,
 	provider: IntegrationProvider,
 	externalAccountName: Schema.NullOr(Schema.String),

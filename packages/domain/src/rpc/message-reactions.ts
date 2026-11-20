@@ -13,23 +13,24 @@ import { RouteChannelId } from "./routing-fields"
  * Response schema for successful message reaction operations.
  * Contains the message reaction data and a transaction ID for optimistic updates.
  */
-export class MessageReactionResponse extends Schema.Class<MessageReactionResponse>("MessageReactionResponse")(
-	{
-		data: MessageReaction.Schema,
-		transactionId: TransactionId,
-	},
-) {}
+export class MessageReactionResponse extends Schema.Class<
+	MessageReactionResponse,
+	{ readonly brand: unique symbol }
+>("MessageReactionResponse")({
+	data: MessageReaction.Schema,
+	transactionId: TransactionId,
+}) {}
 
 /**
  * Error thrown when a message reaction is not found.
  * Used in update and delete operations.
  */
-export class MessageReactionNotFoundError extends Schema.TaggedError<MessageReactionNotFoundError>()(
-	"MessageReactionNotFoundError",
-	{
-		messageReactionId: MessageReactionId,
-	},
-) {}
+export class MessageReactionNotFoundError extends Schema.TaggedError<
+	MessageReactionNotFoundError,
+	{ readonly brand: unique symbol }
+>()("MessageReactionNotFoundError", {
+	messageReactionId: MessageReactionId,
+}) {}
 
 export class MessageReactionRpcs extends RpcGroup.make(
 	/**

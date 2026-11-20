@@ -22,10 +22,10 @@ export const LiveActorState = Schema.Struct({
 	status: LiveStatus,
 	text: Schema.String,
 	isStreaming: Schema.Boolean,
-	progress: Schema.NullOr(Schema.Number),
+	progress: Schema.NullOr(Schema.Finite),
 	error: Schema.NullOr(Schema.String),
 	/** Agent steps are counted (they end the loading state) but not rendered yet. */
-	stepCount: Schema.Number,
+	stepCount: Schema.Finite,
 })
 export type LiveActorState = typeof LiveActorState.Type
 
@@ -111,7 +111,7 @@ export const shareReplies = (previous: ReadonlyArray<LiveReply>, next: ReadonlyA
 export const LiveEvent = defineTaggedUnion({
 	Snapshot: { state: LiveActorState },
 	Started: {},
-	Progress: { progress: Schema.Number },
+	Progress: { progress: Schema.Finite },
 	TextChunk: { fullText: Schema.String },
 	TextUpdate: { text: Schema.String },
 	StreamEnd: { text: Schema.String },
@@ -190,7 +190,10 @@ const eventOf = (frame: LiveServerFrame, text: { current: string }): Option.Opti
 	})
 
 /** Opening the socket threw (a malformed URL, a blocked scheme). */
-export class LiveConnectionError extends Schema.TaggedError<LiveConnectionError>()("LiveConnectionError", {
+export class LiveConnectionError extends Schema.TaggedError<
+	LiveConnectionError,
+	{ readonly brand: unique symbol }
+>()("LiveConnectionError", {
 	messageId: MessageId,
 	cause: Schema.Defect(),
 }) {}

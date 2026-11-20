@@ -11,41 +11,40 @@ import { CurrentAgent } from "../principal"
 import { channelOrganization, type MessageRow } from "./message-events"
 
 /** Mark `message` as written by the current agent; nothing for the user's own calls. */
-export const markAgentWrite = (message: MessageRow) =>
-	Effect.gen(function* () {
-		const agent = yield* Effect.serviceOption(CurrentAgent)
-		if (Option.isNone(agent)) return
-		const db = yield* Database.Database
-		const viewer = yield* db.first(
-			SQLite.from(schema.channelViewersTable)
-				.select()
-				.where(($) => [$.userId.eq(message.authorId)]),
-		)
-		const organizationId = Option.isSome(viewer)
-			? Option.some(viewer.value.organizationId)
-			: yield* channelOrganization
-		if (Option.isNone(organizationId)) {
-			return yield* Effect.logWarning("Agent write in a channel with no organization", {
-				messageId: message.id,
-			})
-		}
-		const row = {
-			id: message.id,
-			channelId: message.channelId,
-			organizationId: organizationId.value,
-			authorId: message.authorId,
-			grantId: agent.value.grantId,
-			agentName: agent.value.name,
-		}
-		yield* db.run(
-			SQLite.insertInto(schema.messageAgentMarksTable)
-				.values(row)
-				.onConflictDoUpdate({
-					target: ["id"],
-					set: { grantId: row.grantId, agentName: row.agentName, updatedAt: new Date() },
-				}),
-		)
-	}).pipe(Effect.withSpan("AgentMarks.markWrite"))
+export const markAgentWrite = Effect.fn("AgentMarks.markWrite")(function* (message: MessageRow) {
+	const agent = yield* Effect.serviceOption(CurrentAgent)
+	if (Option.isNone(agent)) return
+	const db = yield* Database.Database
+	const viewer = yield* db.first(
+		SQLite.from(schema.channelViewersTable)
+			.select()
+			.where(($) => [$.userId.eq(message.authorId)]),
+	)
+	const organizationId = Option.isSome(viewer)
+		? Option.some(viewer.value.organizationId)
+		: yield* channelOrganization
+	if (Option.isNone(organizationId)) {
+		return yield* Effect.logWarning("Agent write in a channel with no organization", {
+			messageId: message.id,
+		})
+	}
+	const row = {
+		id: message.id,
+		channelId: message.channelId,
+		organizationId: organizationId.value,
+		authorId: message.authorId,
+		grantId: agent.value.grantId,
+		agentName: agent.value.name,
+	}
+	yield* db.run(
+		SQLite.insertInto(schema.messageAgentMarksTable)
+			.values(row)
+			.onConflictDoUpdate({
+				target: ["id"],
+				set: { grantId: row.grantId, agentName: row.agentName, updatedAt: new Date() },
+			}),
+	)
+})
 
 /** Drop a deleted message's mark. */
 export const deleteAgentMark = (messageId: MessageId) =>

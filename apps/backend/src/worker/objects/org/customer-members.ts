@@ -28,7 +28,7 @@ const VERSION_KEY = "customersMembersVersion"
 
 export const CustomerMembersCall = defineCall("org.customerMembers", "org", {
 	payload: Schema.Struct({ organizationId: OrganizationId }),
-	success: Schema.NullOr(Schema.Struct({ members: Schema.Array(CustomerMember), version: Schema.Number })),
+	success: Schema.NullOr(Schema.Struct({ members: Schema.Array(CustomerMember), version: Schema.Finite })),
 	error: Schema.Never,
 })
 

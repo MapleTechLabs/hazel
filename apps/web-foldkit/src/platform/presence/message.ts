@@ -9,17 +9,17 @@ export const Message = defineMessageUnion({
 	ChangedContext: {
 		userId: Schema.NullOr(UserId),
 		activeChannelId: Schema.NullOr(ChannelId),
-		nowMs: Schema.Number,
+		nowMs: Schema.Finite,
 	},
 	/** The window gained or lost focus, or the document was shown or hidden. */
 	ChangedWindowFocus: { isFocused: Schema.Boolean },
 	/** Input in this tab (throttled). */
-	DetectedActivity: { atMs: Schema.Number },
+	DetectedActivity: { atMs: Schema.Finite },
 	/** Another tab saw input. */
-	ReceivedRemoteActivity: { atMs: Schema.Number },
+	ReceivedRemoteActivity: { atMs: Schema.Finite },
 	/** The AFK deadline of the latest activity passed. */
-	ReachedAfkTimeout: { nowMs: Schema.Number },
-	ElapsedSyncDebounce: { version: Schema.Number },
+	ReachedAfkTimeout: { nowMs: Schema.Finite },
+	ElapsedSyncDebounce: { version: Schema.Finite },
 	/** The server confirmed the write for `userId`; it now holds `sent`. */
 	SucceededSendPresenceUpdate: { userId: UserId, sent: Sent },
 	FailedSendPresenceUpdate: { userId: UserId, reason: CommonReason },

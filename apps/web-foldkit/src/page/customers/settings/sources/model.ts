@@ -191,7 +191,7 @@ export const withConfigField = (
 	value: string | boolean,
 ): Customers.ConnectionConfig =>
 	Option.getOrElse(
-		Schema.decodeUnknownOption(Customers.ConnectionConfig)({ ...config, [key]: value }),
+		Schema.decodeOption(Customers.ConnectionConfig)({ ...config, [key]: value }),
 		() => config,
 	)
 

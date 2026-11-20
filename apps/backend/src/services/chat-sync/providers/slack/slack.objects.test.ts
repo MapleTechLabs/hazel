@@ -26,15 +26,13 @@ const run = runScoped
 
 /** `U0GUEST…` users are Slack Connect guests from another company's team, with an email. */
 const lookupUser: SlackUserLookup = (userId) =>
-	Effect.succeed(
-		Option.some({
-			externalUserId: userId as never,
-			displayName: `Slack ${userId}`,
-			avatarUrl: null,
-			email: userId.startsWith("U0GUEST") ? `${userId.toLowerCase()}@globex.example` : null,
-			externalWorkspaceId: userId.startsWith("U0GUEST") ? "T0GLOBEX01" : TEAM,
-		}),
-	)
+	Effect.succeedSome({
+		externalUserId: userId as never,
+		displayName: `Slack ${userId}`,
+		avatarUrl: null,
+		email: userId.startsWith("U0GUEST") ? `${userId.toLowerCase()}@globex.example` : null,
+		externalWorkspaceId: userId.startsWith("U0GUEST") ? "T0GLOBEX01" : TEAM,
+	})
 
 const envelope = (
 	eventId: string,

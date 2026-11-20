@@ -36,8 +36,11 @@ type Row = Customers.HealthDistributionRow
 
 const STATUSES: ReadonlyArray<Status> = ["healthy", "at_risk", "critical", "unknown"]
 
+/** The last score below a band's start; none while the band is emptied. */
+const below = (min: number | null) => (min === null ? null : min - 1)
+
 /** A position on the 0–100 scale; an emptied field sits at 0. */
-const onScale = (value: number) => (Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 0)
+const onScale = (value: number | null) => (value === null ? 0 : Math.min(100, Math.max(0, value)))
 
 // BANDS
 
@@ -167,9 +170,13 @@ export const bandsCard = (h: H, model: Model, context: Context): Html => {
 				bandRow(
 					"at_risk",
 					[atLeast(h), bandInput(h, "atRiskMin", context)],
-					`${textOf(atRiskMin)}–${textOf(healthyMin - 1)}`,
+					`${textOf(atRiskMin)}–${textOf(below(healthyMin))}`,
 				),
-				bandRow("critical", [`Everything below ${textOf(atRiskMin)}`], `0–${textOf(atRiskMin - 1)}`),
+				bandRow(
+					"critical",
+					[`Everything below ${textOf(atRiskMin)}`],
+					`0–${textOf(below(atRiskMin))}`,
+				),
 				bandRow("unknown", ["Leads, churned, or no part has data yet"], ""),
 			],
 		),
@@ -352,7 +359,7 @@ export const distributionCard = (
 	h: H,
 	model: Model,
 	context: Context,
-	isValid: boolean,
+	valid: Customers.HealthSettings | null,
 	currency: string,
 ): Html => {
 	const accounts = model.accounts
@@ -378,7 +385,7 @@ export const distributionCard = (
 			scrolling(h, distributionTable(h, saved, null, context.saved.bands, currency)),
 		])
 	}
-	if (!isValid) {
+	if (valid === null) {
 		const customers = accounts === null ? "customers" : `${formatCount(accounts.length)} customers`
 		const first = context.total === 100 ? "Fix the highlighted fields" : "Weights must add up to 100%"
 		return card(h, "", [
@@ -407,17 +414,16 @@ export const distributionCard = (
 					],
 				),
 			]),
-		onSuccess: (result) => previewResult(h, model, context, result, currency, frame, totals, false),
-		onRefreshing: (result) => previewResult(h, model, context, result, currency, frame, totals, true),
-		onStale: ({ data: result }) =>
-			previewResult(h, model, context, result, currency, frame, totals, false),
+		onSuccess: (result) => previewResult(h, model, valid, result, currency, frame, totals, false),
+		onRefreshing: (result) => previewResult(h, model, valid, result, currency, frame, totals, true),
+		onStale: ({ data: result }) => previewResult(h, model, valid, result, currency, frame, totals, false),
 	})
 }
 
 const previewResult = (
 	h: H,
 	model: Model,
-	context: Context,
+	valid: Customers.HealthSettings,
 	result: Customers.HealthDryRunResult,
 	currency: string,
 	frame: (subtitle: string, children: ReadonlyArray<Html>) => Html,
@@ -444,7 +450,7 @@ const previewResult = (
 					),
 					scrolling(
 						h,
-						distributionTable(h, result.current, result.proposed, context.draft.bands, currency),
+						distributionTable(h, result.current, result.proposed, valid.bands, currency),
 					),
 					h.p(
 						[h.Class("rounded-lg bg-warning-subtle/60 px-3 py-2 text-fg text-xs")],
@@ -610,7 +616,13 @@ const breakdownOrNone = (
 
 // UNSAVED CHANGES
 
-export const unsavedBar = (h: H, model: Model, context: Context, isValid: boolean): Html => {
+export const unsavedBar = (
+	h: H,
+	model: Model,
+	context: Context,
+	valid: Customers.HealthSettings | null,
+): Html => {
+	const isValid = valid !== null
 	const result = Option.getOrNull(AsyncData.getData(model.preview.result))
 	const moved = result === null ? [] : [`${formatCount(movedCount(result))} customers change band`]
 	const isWeightProblem = context.total !== 100
@@ -634,8 +646,8 @@ export const unsavedBar = (h: H, model: Model, context: Context, isValid: boolea
 			h.span(
 				[h.Class("min-w-0 flex-1 truncate text-muted-fg text-sm")],
 				[
-					isValid
-						? [...changesOf(context.saved, context.draft), ...moved].join(" · ")
+					valid !== null
+						? [...changesOf(context.saved, valid), ...moved].join(" · ")
 						: isWeightProblem
 							? `Weights add up to ${context.total}%, not 100%`
 							: "Fix the highlighted fields",

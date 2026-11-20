@@ -44,120 +44,105 @@ export const makeOAuthBearerAuth = (loadClerk: LoadClerk) =>
 
 		const decodeClerkUserId = Schema.decodeUnknownEffect(ClerkUserId)
 
-		const authenticate = (accessToken: string) =>
-			Effect.gen(function* () {
-				if (Option.isNone(clerk)) {
-					return yield* Effect.fail(
+		const authenticate = Effect.fn("OAuthBearerAuth.authenticate")(function* (accessToken: string) {
+			if (Option.isNone(clerk)) {
+				return yield* new SessionLoadError({
+					message: "OAuth token verification is not configured",
+					detail: "CLERK_SECRET_KEY is not set",
+				})
+			}
+			// The SDK failing to load is ours, not the token's: a 500, never "invalid token".
+			const client = yield* Effect.tryPromise(clerk.value).pipe(
+				Effect.tapError((error) => Effect.logError("Clerk SDK failed to load", Cause.fail(error))),
+				Effect.mapError(
+					() =>
 						new SessionLoadError({
-							message: "OAuth token verification is not configured",
-							detail: "CLERK_SECRET_KEY is not set",
+							message: "OAuth token verification is unavailable",
+							detail: "The Clerk SDK failed to load",
 						}),
-					)
-				}
-				// The SDK failing to load is ours, not the token's: a 500, never "invalid token".
-				const client = yield* Effect.tryPromise({
-					try: clerk.value,
-					catch: (error) => error,
-				}).pipe(
-					Effect.tapError((error) =>
-						Effect.logError("Clerk SDK failed to load", Cause.fail(error)),
-					),
-					Effect.mapError(
-						() =>
-							new SessionLoadError({
-								message: "OAuth token verification is unavailable",
-								detail: "The Clerk SDK failed to load",
-							}),
-					),
-				)
+				),
+			)
 
-				const introspected = yield* Effect.tryPromise({
-					try: () => client.idPOAuthAccessToken.verify(accessToken),
-					catch: (error) => error,
-				}).pipe(
-					Effect.tapError((error) =>
-						Effect.logWarning("OAuth access token verification failed", Cause.fail(error)),
-					),
-					Effect.mapError(
-						() =>
-							new UnauthorizedError({
-								message: "Invalid OAuth access token",
-								detail: "The token could not be verified",
-							}),
-					),
-				)
-
-				if (introspected.revoked) {
-					return yield* Effect.fail(
+			const introspected = yield* Effect.tryPromise(() =>
+				client.idPOAuthAccessToken.verify(accessToken),
+			).pipe(
+				Effect.tapError((error) =>
+					Effect.logWarning("OAuth access token verification failed", Cause.fail(error)),
+				),
+				Effect.mapError(
+					() =>
 						new UnauthorizedError({
-							message: "OAuth access token has been revoked",
-							detail: introspected.revocationReason ?? "revoked",
+							message: "Invalid OAuth access token",
+							detail: "The token could not be verified",
 						}),
-					)
-				}
+				),
+			)
 
-				if (introspected.expired) {
-					return yield* Effect.fail(
+			if (introspected.revoked) {
+				return yield* new UnauthorizedError({
+					message: "OAuth access token has been revoked",
+					detail: introspected.revocationReason ?? "revoked",
+				})
+			}
+
+			if (introspected.expired) {
+				return yield* new UnauthorizedError({
+					message: "OAuth access token has expired",
+					detail: "expired",
+				})
+			}
+
+			const clerkUserId = yield* decodeClerkUserId(introspected.subject).pipe(
+				Effect.mapError(
+					() =>
 						new UnauthorizedError({
-							message: "OAuth access token has expired",
-							detail: "expired",
+							message: "OAuth access token has an invalid subject",
+							detail: introspected.subject,
 						}),
-					)
-				}
+				),
+			)
 
-				const clerkUserId = yield* decodeClerkUserId(introspected.subject).pipe(
-					Effect.mapError(
-						() =>
-							new UnauthorizedError({
-								message: "OAuth access token has an invalid subject",
-								detail: introspected.subject,
-							}),
-					),
-				)
-
-				const userOption = yield* userRepo.findByExternalId(clerkUserId).pipe(
-					Effect.catchTag("DatabaseError", (error) =>
-						Effect.logError("Failed to resolve OAuth user", Cause.fail(error)).pipe(
-							Effect.andThen(
-								Effect.fail(
-									new SessionLoadError({
-										message: "Failed to resolve OAuth user",
-										detail: "The user store is unavailable",
-									}),
-								),
+			const userOption = yield* userRepo.findByExternalId(clerkUserId).pipe(
+				Effect.catchTag("DatabaseError", (error) =>
+					Effect.logError("Failed to resolve OAuth user", Cause.fail(error)).pipe(
+						Effect.andThen(
+							Effect.fail(
+								new SessionLoadError({
+									message: "Failed to resolve OAuth user",
+									detail: "The user store is unavailable",
+								}),
 							),
 						),
 					),
-				)
+				),
+			)
 
-				const user = yield* Option.match(userOption, {
-					onSome: (u) => Effect.succeed(u),
-					onNone: () =>
-						Effect.fail(
-							new UnauthorizedError({
-								message:
-									"OAuth user has no Hazel account. Sign in to Hazel at least once to provision an account, then retry.",
-								detail: clerkUserId,
-							}),
-						),
-				})
-
-				return {
-					currentUser: new CurrentUser.Schema({
-						id: user.id,
-						role: "member",
-						avatarUrl: user.avatarUrl ?? undefined,
-						firstName: user.firstName,
-						lastName: user.lastName,
-						email: user.email,
-						isOnboarded: user.isOnboarded,
-						timezone: user.timezone,
-						settings: user.settings,
+			const user = yield* Effect.fromOption(
+				userOption,
+				() =>
+					new UnauthorizedError({
+						message:
+							"OAuth user has no Hazel account. Sign in to Hazel at least once to provision an account, then retry.",
+						detail: clerkUserId,
 					}),
-					scopes: introspected.scopes,
-					clientId: introspected.clientId,
-				}
-			}).pipe(Effect.withSpan("OAuthBearerAuth.authenticate"))
+			)
+
+			return {
+				currentUser: new CurrentUser.Schema({
+					id: user.id,
+					role: "member",
+					avatarUrl: user.avatarUrl ?? undefined,
+					firstName: user.firstName,
+					lastName: user.lastName,
+					email: user.email,
+					isOnboarded: user.isOnboarded,
+					timezone: user.timezone,
+					settings: user.settings,
+				}),
+				scopes: introspected.scopes,
+				clientId: introspected.clientId,
+			}
+		})
 
 		return {
 			authenticate,

@@ -68,10 +68,6 @@ export const layerRpcHttpPerRequest = (path: HttpRouter.PathInput) =>
 			const serve = RpcServer.toHttpEffect(AllRpcs).pipe(
 				Effect.provideContext(services as Context.Context<never>),
 			) as unknown as Effect.Effect<RpcHttpEffect, never, Scope.Scope>
-			yield* router.add(
-				"POST",
-				path,
-				Effect.flatMap(serve, (handle) => handle),
-			)
+			yield* router.add("POST", path, Effect.flatten(serve))
 		}),
 	)

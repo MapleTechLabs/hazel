@@ -68,12 +68,12 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 				const member = yield* memberOf(organizationId, scope)
 
 				if (Option.isNone(member)) {
-					return yield* Effect.fail(PermissionError.insufficientScope(scope))
+					return yield* PermissionError.insufficientScope(scope)
 				}
 
 				const granted = yield* resolveGrantedScopes(member.value.role as "owner" | "admin" | "member")
 				if (!granted.has(scope)) {
-					return yield* Effect.fail(PermissionError.insufficientScope(scope))
+					return yield* PermissionError.insufficientScope(scope)
 				}
 			})
 
@@ -91,11 +91,11 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 				const member = yield* memberOf(organizationId, scope)
 
 				if (Option.isNone(member)) {
-					return yield* Effect.fail(PermissionError.insufficientScope(scope))
+					return yield* PermissionError.insufficientScope(scope)
 				}
 
 				if (!isAdminOrOwner(member.value.role as OrganizationRole)) {
-					return yield* Effect.fail(PermissionError.insufficientScope(scope))
+					return yield* PermissionError.insufficientScope(scope)
 				}
 			})
 
@@ -112,7 +112,7 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 				const member = yield* memberOf(organizationId, scope)
 
 				if (Option.isNone(member) || member.value.role !== "owner") {
-					return yield* Effect.fail(PermissionError.insufficientScope(scope))
+					return yield* PermissionError.insufficientScope(scope)
 				}
 			})
 
@@ -123,9 +123,7 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 			Effect.gen(function* () {
 				const channel = yield* channelRepo.findById(channelId)
 				if (Option.isNone(channel)) {
-					return yield* Effect.fail(
-						new PermissionError({ message: `Channel not found: ${channelId}` }),
-					)
+					return yield* new PermissionError({ message: `Channel not found: ${channelId}` })
 				}
 				return yield* requireScope(channel.value.organizationId, scope, entity, action)
 			})

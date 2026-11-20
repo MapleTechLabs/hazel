@@ -30,9 +30,11 @@ export const invokeObject = (
 			.get(target)
 			.invoke({ objectId: target.id, tag, payload: encoded, principal: encodedPrincipal })
 			.pipe(
-				Effect.mapError(
-					(cause) =>
-						new InternalServerError({ message: `${formatTarget(target)} is unavailable`, cause }),
+				Effect.mapError((cause) =>
+					InternalServerError.withCause({
+						message: `${formatTarget(target)} is unavailable`,
+						cause,
+					}),
 				),
 			)
 		return yield* decodeExit(rpc, response.exit).pipe(Effect.orDie)

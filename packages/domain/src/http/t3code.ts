@@ -32,7 +32,9 @@ export const canDriveT3Code = (sharing: T3CodeSharing, ownerId: UserId, actorId:
 	sharing.mode === "organization" ||
 	(sharing.mode === "members" && sharing.userIds.includes(actorId))
 
-export class T3CodeConnection extends Schema.Class<T3CodeConnection>("T3CodeConnection")({
+export class T3CodeConnection extends Schema.Class<T3CodeConnection, { readonly brand: unique symbol }>(
+	"T3CodeConnection",
+)({
 	/** The environment's label (its machine name), from `/.well-known/t3/environment`. */
 	environmentLabel: Schema.String,
 	/** The environment's origin, e.g. its T3 Connect address. */
@@ -44,45 +46,47 @@ export class T3CodeConnection extends Schema.Class<T3CodeConnection>("T3CodeConn
 	sharing: T3CodeSharing,
 }) {}
 
-export class T3CodeConnectionResponse extends Schema.Class<T3CodeConnectionResponse>(
-	"T3CodeConnectionResponse",
-)({
+export class T3CodeConnectionResponse extends Schema.Class<
+	T3CodeConnectionResponse,
+	{ readonly brand: unique symbol }
+>("T3CodeConnectionResponse")({
 	connection: Schema.NullOr(T3CodeConnection),
 }) {}
 
-export class T3CodeConnectRequest extends Schema.Class<T3CodeConnectRequest>("T3CodeConnectRequest")({
+export class T3CodeConnectRequest extends Schema.Class<
+	T3CodeConnectRequest,
+	{ readonly brand: unique symbol }
+>("T3CodeConnectRequest")({
 	/** The environment address or its MCP URL (`https://<environment-address>/mcp`). */
 	environmentUrl: Schema.String,
 }) {}
 
 /** The address is not a reachable T3 Code environment (bad URL, not https, no MCP OAuth). */
-export class T3CodeEnvironmentError extends Schema.TaggedError<T3CodeEnvironmentError>()(
-	"T3CodeEnvironmentError",
-	{ message: Schema.String },
-	{ httpApiStatus: 400 },
-) {}
+export class T3CodeEnvironmentError extends Schema.TaggedError<
+	T3CodeEnvironmentError,
+	{ readonly brand: unique symbol }
+>()("T3CodeEnvironmentError", { message: Schema.String }, { httpApiStatus: 400 }) {}
 
-export class T3CodeNotConnectedError extends Schema.TaggedError<T3CodeNotConnectedError>()(
-	"T3CodeNotConnectedError",
-	{ ownerId: UserId },
-	{ httpApiStatus: 404 },
-) {}
+export class T3CodeNotConnectedError extends Schema.TaggedError<
+	T3CodeNotConnectedError,
+	{ readonly brand: unique symbol }
+>()("T3CodeNotConnectedError", { ownerId: UserId }, { httpApiStatus: 404 }) {}
 
 /** The owner's credential lapsed or was revoked; they reconnect in settings. */
-export class T3CodeExpiredError extends Schema.TaggedError<T3CodeExpiredError>()(
-	"T3CodeExpiredError",
-	{ ownerId: UserId },
-	{ httpApiStatus: 409 },
-) {}
+export class T3CodeExpiredError extends Schema.TaggedError<
+	T3CodeExpiredError,
+	{ readonly brand: unique symbol }
+>()("T3CodeExpiredError", { ownerId: UserId }, { httpApiStatus: 409 }) {}
 
 /** The owner does not share their environment with the actor. */
-export class T3CodeAccessDeniedError extends Schema.TaggedError<T3CodeAccessDeniedError>()(
-	"T3CodeAccessDeniedError",
-	{ ownerId: UserId, actorId: UserId },
-	{ httpApiStatus: 403 },
-) {}
+export class T3CodeAccessDeniedError extends Schema.TaggedError<
+	T3CodeAccessDeniedError,
+	{ readonly brand: unique symbol }
+>()("T3CodeAccessDeniedError", { ownerId: UserId, actorId: UserId }, { httpApiStatus: 403 }) {}
 
-export class T3CodeAccessRequest extends Schema.Class<T3CodeAccessRequest>("T3CodeAccessRequest")({
+export class T3CodeAccessRequest extends Schema.Class<T3CodeAccessRequest, { readonly brand: unique symbol }>(
+	"T3CodeAccessRequest",
+)({
 	organizationId: OrganizationId,
 	/** Whose environment. */
 	ownerId: UserId,
@@ -91,7 +95,10 @@ export class T3CodeAccessRequest extends Schema.Class<T3CodeAccessRequest>("T3Co
 }) {}
 
 /** What the T3 Code bot needs to call an owner's environment for an allowed actor. */
-export class T3CodeAccessResponse extends Schema.Class<T3CodeAccessResponse>("T3CodeAccessResponse")({
+export class T3CodeAccessResponse extends Schema.Class<
+	T3CodeAccessResponse,
+	{ readonly brand: unique symbol }
+>("T3CodeAccessResponse")({
 	mcpUrl: Schema.String,
 	environmentUrl: Schema.String,
 	environmentLabel: Schema.String,

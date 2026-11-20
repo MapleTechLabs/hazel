@@ -42,7 +42,7 @@ export const ClearChannelNotifications = Command.define("ClearChannelNotificatio
 })
 
 export const WaitClearNotificationsRetry = Command.define("WaitClearNotificationsRetry", {
-	args: { channelId: ChannelId, delayMs: Schema.Number },
+	args: { channelId: ChannelId, delayMs: Schema.Finite },
 	messages: [Message.ElapsedClearNotificationsRetry],
 	execute: ({ channelId, delayMs }) =>
 		Effect.sleep(Duration.millis(delayMs)).pipe(

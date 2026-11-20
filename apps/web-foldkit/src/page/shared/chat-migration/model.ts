@@ -70,11 +70,11 @@ export const Phase = defineTaggedUnion({
 	Done: {
 		provider: ChatSyncProvider,
 		workspaceName: Schema.String,
-		linked: Schema.Number,
-		created: Schema.Number,
-		skipped: Schema.Number,
+		linked: Schema.Finite,
+		created: Schema.Finite,
+		skipped: Schema.Finite,
 		/** Picks another Hazel workspace syncs already: left out. */
-		takenElsewhere: Schema.Number,
+		takenElsewhere: Schema.Finite,
 		history: ChatSyncHistoryRange,
 	},
 })
@@ -139,10 +139,10 @@ export const Message = defineMessageUnion({
 	ClickedMigrate: {},
 	SucceededMigrate: {
 		organizationId: OrganizationId,
-		linked: Schema.Number,
-		created: Schema.Number,
-		skipped: Schema.Number,
-		takenElsewhere: Schema.Number,
+		linked: Schema.Finite,
+		created: Schema.Finite,
+		skipped: Schema.Finite,
+		takenElsewhere: Schema.Finite,
 	},
 	FailedMigrate: { organizationId: OrganizationId, problem: Problem },
 	ClickedFinish: {},

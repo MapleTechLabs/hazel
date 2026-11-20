@@ -9,7 +9,7 @@ import type { StoreMigration } from "@hazel/db"
 import { layerMemory } from "@hazel/db/node"
 import type { BotId } from "@hazel/schema"
 import { type FakeStorage, makeFakeState, makeFakeStorage, sqliteClientLayer } from "@hazel/sync-do/testing"
-import { ConfigProvider, Context, Deferred, Effect, type Exit, Layer, Option, Scope } from "effect"
+import { ConfigProvider, Context, Data, Deferred, Effect, type Exit, Layer, Option, Scope } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import { Persistence } from "effect/persistence"
 import { ApnsClient, type ApnsNotification, type ApnsResult } from "../../services/apns"
@@ -26,6 +26,11 @@ import type { InvokePrincipal } from "./principal"
 import { formatTarget, type ObjectTarget } from "./kinds"
 import { ObjectStubs } from "./protocol"
 import { makeObjectRuntime, type ObjectRuntime } from "./runtime"
+
+/** A test object made unreachable: what its stub's transport fails with. */
+export class ObjectUnreachableError extends Data.TaggedError("ObjectUnreachableError")<{
+	readonly target: string
+}> {}
 
 /** Config the app services read while they build; values are inert placeholders. */
 const TEST_CONFIG = {
@@ -175,7 +180,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 				applyEffect: (request) =>
 					Effect.suspend(() => {
 						if (unreachable.has(formatTarget(target))) {
-							return Effect.fail(new Error(`${formatTarget(target)} is unreachable`))
+							return Effect.fail(new ObjectUnreachableError({ target: formatTarget(target) }))
 						}
 						const hold = held.get(formatTarget(target))
 						const wait =

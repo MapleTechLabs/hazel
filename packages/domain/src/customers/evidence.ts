@@ -31,7 +31,7 @@ export const IsoTimestamp = Schema.String.check(
 ).annotate({ title: "IsoTimestamp", description: "ISO-8601 instant" })
 export type IsoTimestamp = typeof IsoTimestamp.Type
 
-export const SeriesPoint = Schema.Struct({ day: Day, value: Schema.Number })
+export const SeriesPoint = Schema.Struct({ day: Day, value: Schema.Finite })
 export type SeriesPoint = typeof SeriesPoint.Type
 
 export const EvidenceStep = Schema.Literals([0, 1, 2])
@@ -69,10 +69,10 @@ export const LastActiveEvidence = Schema.TaggedStruct("last_active", {
 export const SeriesEvidence = Schema.TaggedStruct("series", {
 	step: EvidenceStep,
 	metricKey: Schema.String,
-	recentAvg: Schema.Number,
-	baselineAvg: Schema.Number,
+	recentAvg: Schema.Finite,
+	baselineAvg: Schema.Finite,
 	/** Negative for a drop, e.g. -42.5. */
-	changePct: Schema.Number,
+	changePct: Schema.Finite,
 	recentDays: Schema.Int,
 	baselineDays: Schema.Int,
 	/** The last `recentDays + baselineDays` days, oldest first. */
@@ -87,10 +87,10 @@ export const LimitForecast = Schema.Struct({
 	/** The day projected to: the billing period's end, else {@link FORECAST_FALLBACK_DAYS} out. */
 	day: Day,
 	periodEnd: Schema.Boolean,
-	value: Schema.Number,
-	pct: Schema.Number,
+	value: Schema.Finite,
+	pct: Schema.Finite,
 	/** Units per day, over the last `days` days. */
-	perDay: Schema.Number,
+	perDay: Schema.Finite,
 	days: Schema.Int,
 	/** The day it crosses the limit, when still under it and that comes before `day`. */
 	limitDay: Schema.NullOr(Day),
@@ -105,9 +105,9 @@ export const LimitEvidence = Schema.TaggedStruct("limit", {
 	step: EvidenceStep,
 	metricKey: Schema.String,
 	metricName: Schema.String,
-	value: Schema.Number,
-	limit: Schema.Number,
-	pct: Schema.Number,
+	value: Schema.Finite,
+	limit: Schema.Finite,
+	pct: Schema.Finite,
 	/** Null with under two days of the current period; absent on evidence from before forecasts. */
 	forecast: Schema.optionalKey(Schema.NullOr(LimitForecast)),
 	/** The account at the limit: on a customer with several environments, the one (limits are per environment). */
@@ -118,9 +118,9 @@ export const LimitEvidence = Schema.TaggedStruct("limit", {
 export const DeltaEvidence = Schema.TaggedStruct("delta", {
 	step: EvidenceStep,
 	unit: Schema.Literals(["minor", "points", "users"]),
-	from: Schema.Number,
-	to: Schema.Number,
-	changePct: Schema.NullOr(Schema.Number),
+	from: Schema.Finite,
+	to: Schema.Finite,
+	changePct: Schema.NullOr(Schema.Finite),
 	/** For `unit: "minor"`. */
 	currency: Schema.NullOr(Schema.String),
 	/** When it takes effect (a scheduled cancellation's period end). */
@@ -154,7 +154,7 @@ export const OverdueEvidence = Schema.TaggedStruct("overdue", {
 	issueId: CustomerIssueId,
 	issueTitle: Schema.String,
 	dueAt: IsoTimestamp,
-	overdueMs: Schema.Number,
+	overdueMs: Schema.Finite,
 })
 
 /** How late, short: "45m", "1h 20m", "2d 3h" (at least a minute). */

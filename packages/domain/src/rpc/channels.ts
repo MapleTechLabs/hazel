@@ -28,7 +28,9 @@ import { RouteChannelId } from "./routing-fields"
  * Response schema for successful channel operations.
  * Contains the channel data and a transaction ID for optimistic updates.
  */
-export class ChannelResponse extends Schema.Class<ChannelResponse>("ChannelResponse")({
+export class ChannelResponse extends Schema.Class<ChannelResponse, { readonly brand: unique symbol }>(
+	"ChannelResponse",
+)({
 	data: Channel.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -37,7 +39,10 @@ export class ChannelResponse extends Schema.Class<ChannelResponse>("ChannelRespo
  * Error thrown when a channel is not found.
  * Used in update and delete operations.
  */
-export class ChannelNotFoundError extends Schema.TaggedError<ChannelNotFoundError>()("ChannelNotFoundError", {
+export class ChannelNotFoundError extends Schema.TaggedError<
+	ChannelNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ChannelNotFoundError", {
 	channelId: ChannelId,
 }) {}
 
@@ -45,7 +50,10 @@ export class ChannelNotFoundError extends Schema.TaggedError<ChannelNotFoundErro
  * Request schema for creating DM or group channels.
  * Specifies participants and channel type.
  */
-export class CreateDmChannelRequest extends Schema.Class<CreateDmChannelRequest>("CreateDmChannelRequest")({
+export class CreateDmChannelRequest extends Schema.Class<
+	CreateDmChannelRequest,
+	{ readonly brand: unique symbol }
+>("CreateDmChannelRequest")({
 	participantIds: Schema.Array(UserId),
 	type: Schema.Literals(["direct", "single"]),
 	name: Schema.optional(Schema.String),
@@ -58,7 +66,9 @@ export class CreateDmChannelRequest extends Schema.Class<CreateDmChannelRequest>
  * If no thread exists, it is created, the creator is added as a member,
  * and the message is linked to the thread.
  */
-export class CreateThreadRequest extends Schema.Class<CreateThreadRequest>("CreateThreadRequest")({
+export class CreateThreadRequest extends Schema.Class<CreateThreadRequest, { readonly brand: unique symbol }>(
+	"CreateThreadRequest",
+)({
 	id: Schema.optional(ChannelId),
 	messageId: MessageId,
 	organizationId: Schema.optional(OrganizationId),

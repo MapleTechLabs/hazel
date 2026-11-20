@@ -12,34 +12,36 @@ import { RouteChannelId } from "./routing-fields"
  * Response schema for successful typing indicator operations.
  * Contains the typing indicator data and a transaction ID for optimistic updates.
  */
-export class TypingIndicatorResponse extends Schema.Class<TypingIndicatorResponse>("TypingIndicatorResponse")(
-	{
-		data: TypingIndicator.Schema,
-		transactionId: TransactionId,
-	},
-) {}
+export class TypingIndicatorResponse extends Schema.Class<
+	TypingIndicatorResponse,
+	{ readonly brand: unique symbol }
+>("TypingIndicatorResponse")({
+	data: TypingIndicator.Schema,
+	transactionId: TransactionId,
+}) {}
 
 /**
  * Error thrown when a typing indicator is not found.
  * Used in update and delete operations.
  */
-export class TypingIndicatorNotFoundError extends Schema.TaggedError<TypingIndicatorNotFoundError>()(
-	"TypingIndicatorNotFoundError",
-	{
-		typingIndicatorId: TypingIndicatorId,
-	},
-) {}
+export class TypingIndicatorNotFoundError extends Schema.TaggedError<
+	TypingIndicatorNotFoundError,
+	{ readonly brand: unique symbol }
+>()("TypingIndicatorNotFoundError", {
+	typingIndicatorId: TypingIndicatorId,
+}) {}
 
 /**
  * Payload for creating/upserting typing indicator.
  * Upserts based on channelId and memberId combination.
  */
-export class CreateTypingIndicatorPayload extends Schema.Class<CreateTypingIndicatorPayload>(
-	"CreateTypingIndicatorPayload",
-)({
+export class CreateTypingIndicatorPayload extends Schema.Class<
+	CreateTypingIndicatorPayload,
+	{ readonly brand: unique symbol }
+>("CreateTypingIndicatorPayload")({
 	channelId: Schema.String.check(Schema.isUUID()).pipe(Schema.brand("@HazelChat/ChannelId")),
 	memberId: Schema.String.check(Schema.isUUID()).pipe(Schema.brand("@HazelChat/ChannelMemberId")),
-	lastTyped: Schema.optional(Schema.Number),
+	lastTyped: Schema.optional(Schema.Finite),
 }) {}
 
 /**
@@ -110,7 +112,7 @@ export class TypingIndicatorRpcs extends RpcGroup.make(
 		payload: Schema.Struct({
 			channelId: RouteChannelId,
 			id: TypingIndicatorId,
-			lastTyped: Schema.optional(Schema.Number),
+			lastTyped: Schema.optional(Schema.Finite),
 		}),
 		success: TypingIndicatorResponse,
 		error: Schema.Union([TypingIndicatorNotFoundError, UnauthorizedError, InternalServerError]),

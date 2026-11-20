@@ -11,13 +11,13 @@ import { Context, Effect, Layer, Schema } from "effect"
  * A gateway append failed. The name predates the Durable Object transport; handlers catch it by
  * this tag.
  */
-export class DurableStreamRequestError extends Schema.TaggedError<DurableStreamRequestError>()(
-	"DurableStreamRequestError",
-	{
-		message: Schema.String,
-		cause: Schema.Unknown,
-	},
-) {}
+export class DurableStreamRequestError extends Schema.TaggedError<
+	DurableStreamRequestError,
+	{ readonly brand: unique symbol }
+>()("DurableStreamRequestError", {
+	message: Schema.String,
+	cause: Schema.Unknown,
+}) {}
 
 export interface BotGatewayTransportShape {
 	/**

@@ -32,8 +32,8 @@ export const NoteRow = Schema.Struct({
 	body: Schema.String,
 	pinned: Schema.Boolean,
 	signalId: Schema.NullOr(CustomerSignalId),
-	editedAtMs: Schema.NullOr(Schema.Number),
-	createdAtMs: Schema.Number,
+	editedAtMs: Schema.NullOr(Schema.Finite),
+	createdAtMs: Schema.Finite,
 })
 export type NoteRow = typeof NoteRow.Type
 
@@ -110,7 +110,7 @@ export type ImpersonationFailure = typeof ImpersonationFailure.Type
 /** The "Sign in as" dialog: asking (no url, no failure), then the one-time link or why not. */
 export const Impersonation = Schema.Struct({
 	/** Which press this dialog is for: an answer to an earlier one (closed since) is dropped. */
-	attempt: Schema.Number,
+	attempt: Schema.Finite,
 	contactId: CustomerContactId,
 	name: Schema.String,
 	url: Schema.NullOr(Schema.String),
@@ -206,7 +206,7 @@ export const Model = Schema.Struct({
 	/** The user may sign in as this customer's users (an admin granted it, `customer_impersonators`). */
 	isImpersonator: Schema.Boolean,
 	/** Presses of Impersonate so far: each dialog is one attempt. */
-	impersonationAttempts: Schema.Number,
+	impersonationAttempts: Schema.Finite,
 	impersonateModal: Modal.Model,
 	/** Dropped when the dialog closes: the link is good once, for a minute. */
 	impersonation: Schema.NullOr(Impersonation),

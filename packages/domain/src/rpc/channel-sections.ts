@@ -13,7 +13,10 @@ import { RouteOrganizationId } from "./routing-fields"
  * Response schema for successful channel section operations.
  * Contains the section data and a transaction ID for optimistic updates.
  */
-export class ChannelSectionResponse extends Schema.Class<ChannelSectionResponse>("ChannelSectionResponse")({
+export class ChannelSectionResponse extends Schema.Class<
+	ChannelSectionResponse,
+	{ readonly brand: unique symbol }
+>("ChannelSectionResponse")({
 	data: ChannelSection.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -22,12 +25,12 @@ export class ChannelSectionResponse extends Schema.Class<ChannelSectionResponse>
  * Error thrown when a channel section is not found.
  * Used in update and delete operations.
  */
-export class ChannelSectionNotFoundError extends Schema.TaggedError<ChannelSectionNotFoundError>()(
-	"ChannelSectionNotFoundError",
-	{
-		sectionId: ChannelSectionId,
-	},
-) {}
+export class ChannelSectionNotFoundError extends Schema.TaggedError<
+	ChannelSectionNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ChannelSectionNotFoundError", {
+	sectionId: ChannelSectionId,
+}) {}
 
 /**
  * Request schema for creating channel sections.

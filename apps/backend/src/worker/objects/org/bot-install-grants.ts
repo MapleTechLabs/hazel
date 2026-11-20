@@ -34,7 +34,7 @@ const sha256 = (value: string) =>
 export const organizationOfInstallCode = (code: string): Option.Option<OrganizationId> => {
 	const index = code.indexOf(CODE_SEPARATOR)
 	if (index <= 0) return Option.none()
-	return Schema.decodeUnknownOption(OrganizationId)(code.slice(0, index))
+	return Schema.decodeOption(OrganizationId)(code.slice(0, index))
 }
 
 export const hashInstallCode = sha256

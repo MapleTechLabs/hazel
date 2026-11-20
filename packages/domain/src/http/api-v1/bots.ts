@@ -14,18 +14,20 @@ import { ChannelNotFoundError } from "./messages"
 
 // ============ MODELS ============
 
-export class RedeemBotInstallRequest extends Schema.Class<RedeemBotInstallRequest>("RedeemBotInstallRequest")(
-	{
-		/** The `code` the consent page added to the redirect URI. */
-		code: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256)),
-		/** The redirect URI the install was approved for; it must match exactly. */
-		redirectUri: Schema.String.check(Schema.isMaxLength(2048)),
-	},
-) {}
+export class RedeemBotInstallRequest extends Schema.Class<
+	RedeemBotInstallRequest,
+	{ readonly brand: unique symbol }
+>("RedeemBotInstallRequest")({
+	/** The `code` the consent page added to the redirect URI. */
+	code: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256)),
+	/** The redirect URI the install was approved for; it must match exactly. */
+	redirectUri: Schema.String.check(Schema.isMaxLength(2048)),
+}) {}
 
-export class BotInstallRedeemedResponse extends Schema.Class<BotInstallRedeemedResponse>(
-	"BotInstallRedeemedResponse",
-)({
+export class BotInstallRedeemedResponse extends Schema.Class<
+	BotInstallRedeemedResponse,
+	{ readonly brand: unique symbol }
+>("BotInstallRedeemedResponse")({
 	organizationId: OrganizationId,
 	organizationName: Schema.String,
 	/** Who approved the install. */
@@ -33,7 +35,10 @@ export class BotInstallRedeemedResponse extends Schema.Class<BotInstallRedeemedR
 }) {}
 
 /** The code is unknown, already redeemed, expired, or was issued to another bot or redirect URI. */
-export class BotInstallGrantInvalidError extends Schema.TaggedError<BotInstallGrantInvalidError>()(
+export class BotInstallGrantInvalidError extends Schema.TaggedError<
+	BotInstallGrantInvalidError,
+	{ readonly brand: unique symbol }
+>()(
 	"BotInstallGrantInvalidError",
 	{
 		message: Schema.String,
@@ -41,14 +46,17 @@ export class BotInstallGrantInvalidError extends Schema.TaggedError<BotInstallGr
 	{ httpApiStatus: 400 },
 ) {}
 
-export class ApiV1CreateThreadRequest extends Schema.Class<ApiV1CreateThreadRequest>(
-	"ApiV1CreateThreadRequest",
-)({
+export class ApiV1CreateThreadRequest extends Schema.Class<
+	ApiV1CreateThreadRequest,
+	{ readonly brand: unique symbol }
+>("ApiV1CreateThreadRequest")({
 	/** The message the thread hangs off; it must be in the path's channel. */
 	messageId: MessageId,
 }) {}
 
-export class ThreadResponse extends Schema.Class<ThreadResponse>("ThreadResponse")({
+export class ThreadResponse extends Schema.Class<ThreadResponse, { readonly brand: unique symbol }>(
+	"ThreadResponse",
+)({
 	data: Schema.Struct({
 		/** The thread's own channel id: post to it to reply in the thread. */
 		id: ChannelId,
@@ -57,7 +65,9 @@ export class ThreadResponse extends Schema.Class<ThreadResponse>("ThreadResponse
 	}),
 }) {}
 
-export class ApiV1UsersQuery extends Schema.Class<ApiV1UsersQuery>("ApiV1UsersQuery")({
+export class ApiV1UsersQuery extends Schema.Class<ApiV1UsersQuery, { readonly brand: unique symbol }>(
+	"ApiV1UsersQuery",
+)({
 	/** Comma-separated user ids, at most 100. */
 	ids: Schema.String,
 }) {}
@@ -70,7 +80,9 @@ export const ApiV1User = Schema.Struct({
 })
 export type ApiV1User = typeof ApiV1User.Type
 
-export class ApiV1UsersResponse extends Schema.Class<ApiV1UsersResponse>("ApiV1UsersResponse")({
+export class ApiV1UsersResponse extends Schema.Class<ApiV1UsersResponse, { readonly brand: unique symbol }>(
+	"ApiV1UsersResponse",
+)({
 	/** The ids that are people (or bots) in the organization; unknown ids are left out. */
 	data: Schema.Array(ApiV1User),
 }) {}
@@ -83,7 +95,10 @@ export const ApiV1Channel = Schema.Struct({
 })
 export type ApiV1Channel = typeof ApiV1Channel.Type
 
-export class ApiV1ChannelsResponse extends Schema.Class<ApiV1ChannelsResponse>("ApiV1ChannelsResponse")({
+export class ApiV1ChannelsResponse extends Schema.Class<
+	ApiV1ChannelsResponse,
+	{ readonly brand: unique symbol }
+>("ApiV1ChannelsResponse")({
 	/** The channels the bot can post in, by name. Threads and direct messages are left out. */
 	data: Schema.Array(ApiV1Channel),
 }) {}

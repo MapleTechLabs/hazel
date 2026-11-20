@@ -5,6 +5,10 @@ import { Context, Effect, Layer } from "effect"
 import { withAnnotatedScope } from "../lib/policy-utils"
 import { OrgResolver } from "../services/org-resolver"
 
+/**
+ * Its checks read the calling actor (`CurrentUser.Context`) and the RPC's declared scopes
+ * (`CurrentRpcScopes`): both differ on every request, so each method requires them.
+ */
 export class CustomEmojiPolicy extends Context.Service<CustomEmojiPolicy>()("CustomEmojiPolicy/Policy", {
 	make: Effect.gen(function* () {
 		const policyEntity = "CustomEmoji" as const

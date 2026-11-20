@@ -37,20 +37,23 @@ const DatabaseErrorType = Schema.Literals([
  * A statement or transaction failed. `type` classifies it for callers that branch on it;
  * `constraint` names the violated constraint or unique index, when there is one.
  */
-export class DatabaseError extends Schema.TaggedError<DatabaseError>()("DatabaseError", {
-	type: DatabaseErrorType,
-	message: Schema.String,
-	/** SQLite's extended result code name, e.g. `SQLITE_CONSTRAINT_UNIQUE`, when known. */
-	sqlState: Schema.optional(Schema.String),
-	/**
-	 * The violated unique index (`organizations_slug_unique`) when its columns name one, else the
-	 * columns SQLite reported (`organizations.slug`).
-	 */
-	constraint: Schema.optional(Schema.String),
-	/** The columns SQLite reported, e.g. `organizations.slug`. */
-	detail: Schema.optional(Schema.String),
-	cause: Schema.Defect(),
-}) {
+export class DatabaseError extends Schema.TaggedError<DatabaseError, { readonly brand: unique symbol }>()(
+	"DatabaseError",
+	{
+		type: DatabaseErrorType,
+		message: Schema.String,
+		/** SQLite's extended result code name, e.g. `SQLITE_CONSTRAINT_UNIQUE`, when known. */
+		sqlState: Schema.optional(Schema.String),
+		/**
+		 * The violated unique index (`organizations_slug_unique`) when its columns name one, else the
+		 * columns SQLite reported (`organizations.slug`).
+		 */
+		constraint: Schema.optional(Schema.String),
+		/** The columns SQLite reported, e.g. `organizations.slug`. */
+		detail: Schema.optional(Schema.String),
+		cause: Schema.Defect(),
+	},
+) {
 	public override toString() {
 		return `DatabaseError: ${this.message}`
 	}

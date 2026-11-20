@@ -7,11 +7,11 @@ const TWEET_ID_REGEX = /^[0-9]+$/
 /** The body the syndication API answers a failed request with. */
 const SyndicationErrorBody = Schema.Struct({ error: Schema.String })
 
-export class TwitterApiError extends Schema.TaggedError<TwitterApiError>("TwitterApiError")(
+export class TwitterApiError extends Schema.TaggedError<TwitterApiError, { readonly brand: unique symbol }>()(
 	"TwitterApiError",
 	{
 		message: Schema.String,
-		status: Schema.Number,
+		status: Schema.Finite,
 		data: Schema.optional(Schema.Unknown),
 	},
 ) {}
@@ -111,30 +111,26 @@ export class TwitterApi extends Context.Service<TwitterApi>()("TwitterApi", {
 						)
 
 					// Parse JSON response
-					const data: any = yield* response.json.pipe(Effect.catch(() => Effect.succeed(undefined)))
+					const data: any = yield* response.json.pipe(Effect.orElseSucceed(() => undefined))
 
 					// Handle successful response
 					if (response.status >= 200 && response.status < 300) {
 						// Check for tombstone (deleted tweet)
 						if (data?.__typename === "TweetTombstone") {
-							return yield* Effect.fail(
-								new TwitterApiError({
-									message: "Tweet has been deleted",
-									status: 404,
-									data,
-								}),
-							)
+							return yield* new TwitterApiError({
+								message: "Tweet has been deleted",
+								status: 404,
+								data,
+							})
 						}
 
 						// Check for empty response (not found)
 						if (data && Object.keys(data).length === 0) {
-							return yield* Effect.fail(
-								new TwitterApiError({
-									message: "Tweet not found",
-									status: 404,
-									data,
-								}),
-							)
+							return yield* new TwitterApiError({
+								message: "Tweet not found",
+								status: 404,
+								data,
+							})
 						}
 
 						// Return tweet data
@@ -143,13 +139,11 @@ export class TwitterApi extends Context.Service<TwitterApi>()("TwitterApi", {
 
 					// Handle 404
 					if (response.status === 404) {
-						return yield* Effect.fail(
-							new TwitterApiError({
-								message: "Tweet not found",
-								status: 404,
-								data,
-							}),
-						)
+						return yield* new TwitterApiError({
+							message: "Tweet not found",
+							status: 404,
+							data,
+						})
 					}
 
 					// Handle other errors
@@ -161,13 +155,11 @@ export class TwitterApi extends Context.Service<TwitterApi>()("TwitterApi", {
 						}),
 					)
 
-					return yield* Effect.fail(
-						new TwitterApiError({
-							message: errorMessage,
-							status: response.status,
-							data,
-						}),
-					)
+					return yield* new TwitterApiError({
+						message: errorMessage,
+						status: response.status,
+						data,
+					})
 				}),
 		}
 	}),

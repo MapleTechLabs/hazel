@@ -1,13 +1,13 @@
 import { HttpClient } from "effect/http"
 import { Duration, Effect, Option, Schema, SchemaGetter } from "effect"
 
-export class InvalidAvatarUrlError extends Schema.TaggedError<InvalidAvatarUrlError>()(
-	"InvalidAvatarUrlError",
-	{
-		message: Schema.String,
-		url: Schema.String,
-	},
-) {}
+export class InvalidAvatarUrlError extends Schema.TaggedError<
+	InvalidAvatarUrlError,
+	{ readonly brand: unique symbol }
+>()("InvalidAvatarUrlError", {
+	message: Schema.String,
+	url: Schema.String,
+}) {}
 
 /**
  * Validates that a URL points to an accessible image via HTTP HEAD request.
@@ -15,35 +15,33 @@ export class InvalidAvatarUrlError extends Schema.TaggedError<InvalidAvatarUrlEr
 
 export const validateImageUrl = Effect.fn("validateImageUrl")(function* (url: string) {
 	const httpClient = yield* HttpClient.HttpClient
-	const response = yield* httpClient
-		.head(url)
-		.pipe(Effect.scoped, Effect.timeout(Duration.seconds(5)))
-		.pipe(
-			Effect.catchTag("TimeoutError", () =>
+	const response = yield* httpClient.head(url).pipe(
+		Effect.scoped,
+		Effect.timeoutOrElse({
+			duration: Duration.seconds(5),
+			orElse: () =>
 				Effect.fail(
 					new InvalidAvatarUrlError({
 						message: "Avatar URL took too long to respond",
 						url,
 					}),
 				),
+		}),
+		Effect.catchTag("HttpClientError", (e) =>
+			Effect.fail(
+				new InvalidAvatarUrlError({
+					message: `Avatar URL request failed: ${e.message}`,
+					url,
+				}),
 			),
-			Effect.catchTag("HttpClientError", (e) =>
-				Effect.fail(
-					new InvalidAvatarUrlError({
-						message: `Avatar URL request failed: ${e.message}`,
-						url,
-					}),
-				),
-			),
-		)
+		),
+	)
 
 	if (response.status >= 400) {
-		return yield* Effect.fail(
-			new InvalidAvatarUrlError({
-				message: `Avatar URL returned ${response.status} error`,
-				url,
-			}),
-		)
+		return yield* new InvalidAvatarUrlError({
+			message: `Avatar URL returned ${response.status} error`,
+			url,
+		})
 	}
 
 	const contentType = Option.fromNullishOr(response.headers["content-type"])
@@ -53,12 +51,10 @@ export const validateImageUrl = Effect.fn("validateImageUrl")(function* (url: st
 	})
 
 	if (!isImage) {
-		return yield* Effect.fail(
-			new InvalidAvatarUrlError({
-				message: "Avatar URL must point to an image",
-				url,
-			}),
-		)
+		return yield* new InvalidAvatarUrlError({
+			message: "Avatar URL must point to an image",
+			url,
+		})
 	}
 })
 

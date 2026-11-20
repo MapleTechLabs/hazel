@@ -22,7 +22,7 @@ const makePolicyLayer = (members: Record<string, Role>) =>
 describe("OrganizationPolicy", () => {
 	it("canCreate allows any authenticated actor", async () => {
 		const result = await runWithActorEither(
-			OrganizationPolicy.use((policy) => policy.canCreate()),
+			OrganizationPolicy.use((policy) => policy.canCreate),
 			makePolicyLayer({}),
 		)
 		expect(Result.isSuccess(result)).toBe(true)

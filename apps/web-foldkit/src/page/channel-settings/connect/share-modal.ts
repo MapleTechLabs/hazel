@@ -37,7 +37,7 @@ export const Model = Schema.Struct({
 	searchQuery: Schema.String,
 	searchResults: SearchResults.schema,
 	/** Bumped on every keystroke and retry; only the latest search counts (`clearTimeout`). */
-	searchVersion: Schema.Number,
+	searchVersion: Schema.Finite,
 	selectedWorkspace: Schema.NullOr(Workspace),
 	allowGuestMemberAdds: Schema.Boolean,
 	isSubmitting: Schema.Boolean,
@@ -58,9 +58,9 @@ export const init = (): Model => ({
 
 export const Message = defineMessageUnion({
 	ChangedWorkspaceQuery: { value: Schema.String },
-	ElapsedSearchDelay: { version: Schema.Number, query: Schema.String },
-	SucceededSearchWorkspaces: { version: Schema.Number, results: Schema.Array(Workspace) },
-	FailedSearchWorkspaces: { version: Schema.Number, reason: CommonReason },
+	ElapsedSearchDelay: { version: Schema.Finite, query: Schema.String },
+	SucceededSearchWorkspaces: { version: Schema.Finite, results: Schema.Array(Workspace) },
+	FailedSearchWorkspaces: { version: Schema.Finite, reason: CommonReason },
 	ClickedRetrySearch: {},
 	ClickedWorkspace: { workspace: Workspace },
 	ClickedClearWorkspace: {},
@@ -76,14 +76,14 @@ export type Message = typeof Message.Type
 // COMMAND
 
 export const WaitForSearchDelay = Command.define("WaitForSearchDelay", {
-	args: { version: Schema.Number, query: Schema.String },
+	args: { version: Schema.Finite, query: Schema.String },
 	messages: [Message.ElapsedSearchDelay],
 	execute: ({ version, query }) =>
 		Effect.sleep(Duration.millis(300)).pipe(Effect.as(Message.ElapsedSearchDelay({ version, query }))),
 })
 
 export const SearchWorkspaces = Command.define("SearchWorkspaces", {
-	args: { version: Schema.Number, query: Schema.String, organizationId: OrganizationId },
+	args: { version: Schema.Finite, query: Schema.String, organizationId: OrganizationId },
 	messages: [Message.SucceededSearchWorkspaces, Message.FailedSearchWorkspaces],
 	execute: ({ version, query, organizationId }) =>
 		HazelRpc.use((rpc) => rpc("connectShare.workspace.search", { query, organizationId })).pipe(

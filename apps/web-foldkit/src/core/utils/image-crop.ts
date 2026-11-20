@@ -11,9 +11,12 @@ export interface CropRect {
 }
 
 /** The image would not load, or the canvas could not crop it (no 2D context, or it would not encode). */
-export class CropError extends Schema.TaggedError<CropError>()("CropError", {
-	reason: Schema.Literals(["LoadFailed", "NoCanvasContext", "EncodeFailed"]),
-}) {}
+export class CropError extends Schema.TaggedError<CropError, { readonly brand: unique symbol }>()(
+	"CropError",
+	{
+		reason: Schema.Literals(["LoadFailed", "NoCanvasContext", "EncodeFailed"]),
+	},
+) {}
 
 /** Loads an image element from a (blob) URL. */
 export const loadImage = (src: string): Effect.Effect<HTMLImageElement, CropError> =>

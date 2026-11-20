@@ -14,12 +14,15 @@ import { formatTarget, type ObjectTarget } from "./kinds"
 import { ObjectStubs } from "./protocol"
 
 /** The target could not apply the effect (unreachable, or its receiver refused). */
-export class ApplyNowError extends Schema.TaggedError<ApplyNowError>()("ApplyNowError", {
-	target: Schema.String,
-	kind: Schema.String,
-	message: Schema.String,
-	retryable: Schema.Boolean,
-}) {}
+export class ApplyNowError extends Schema.TaggedError<ApplyNowError, { readonly brand: unique symbol }>()(
+	"ApplyNowError",
+	{
+		target: Schema.String,
+		kind: Schema.String,
+		message: Schema.String,
+		retryable: Schema.Boolean,
+	},
+) {}
 
 /** Where an applied effect landed: the target and its seq (when it reported one). */
 export interface Applied {

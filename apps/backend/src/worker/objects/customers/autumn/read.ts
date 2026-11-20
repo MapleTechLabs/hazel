@@ -84,7 +84,7 @@ export const cachedPricing = (
 /** A read's result; `None` when Autumn does not know the object under this key (404). */
 const current = <A>(read: Effect.Effect<A, CustomerProviderError>) =>
 	read.pipe(
-		Effect.map(Option.some),
+		Effect.asSome,
 		Effect.catchTag("CustomerProviderError", (error) =>
 			error.httpStatus === 404 ? Effect.succeed(Option.none<A>()) : Effect.fail(error),
 		),

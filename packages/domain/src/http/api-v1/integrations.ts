@@ -20,39 +20,45 @@ import { ChannelType } from "../../models/channel-model"
 
 // ============ MODELS ============
 
-export class ApiV1OrganizationSummary extends Schema.Class<ApiV1OrganizationSummary>(
-	"ApiV1OrganizationSummary",
-)({
+export class ApiV1OrganizationSummary extends Schema.Class<
+	ApiV1OrganizationSummary,
+	{ readonly brand: unique symbol }
+>("ApiV1OrganizationSummary")({
 	id: OrganizationId,
 	name: Schema.String,
 	slug: Schema.NullOr(Schema.String),
 	logoUrl: Schema.NullOr(Schema.String),
 }) {}
 
-export class ApiV1OrganizationsListResponse extends Schema.Class<ApiV1OrganizationsListResponse>(
-	"ApiV1OrganizationsListResponse",
-)({
+export class ApiV1OrganizationsListResponse extends Schema.Class<
+	ApiV1OrganizationsListResponse,
+	{ readonly brand: unique symbol }
+>("ApiV1OrganizationsListResponse")({
 	data: Schema.Array(ApiV1OrganizationSummary),
 }) {}
 
-export class ApiV1ChannelSummary extends Schema.Class<ApiV1ChannelSummary>("ApiV1ChannelSummary")({
+export class ApiV1ChannelSummary extends Schema.Class<ApiV1ChannelSummary, { readonly brand: unique symbol }>(
+	"ApiV1ChannelSummary",
+)({
 	id: ChannelId,
 	name: Schema.String,
 	type: ChannelType,
 	organizationId: OrganizationId,
 }) {}
 
-export class ApiV1ChannelsListResponse extends Schema.Class<ApiV1ChannelsListResponse>(
-	"ApiV1ChannelsListResponse",
-)({
+export class ApiV1ChannelsListResponse extends Schema.Class<
+	ApiV1ChannelsListResponse,
+	{ readonly brand: unique symbol }
+>("ApiV1ChannelsListResponse")({
 	data: Schema.Array(ApiV1ChannelSummary),
 }) {}
 
 // ============ REQUEST / RESPONSE ============
 
-export class ApiV1CreateChannelWebhookRequest extends Schema.Class<ApiV1CreateChannelWebhookRequest>(
-	"ApiV1CreateChannelWebhookRequest",
-)({
+export class ApiV1CreateChannelWebhookRequest extends Schema.Class<
+	ApiV1CreateChannelWebhookRequest,
+	{ readonly brand: unique symbol }
+>("ApiV1CreateChannelWebhookRequest")({
 	channelId: ChannelId,
 	name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100)),
 	description: Schema.optional(Schema.String.check(Schema.isMaxLength(500))),
@@ -61,9 +67,10 @@ export class ApiV1CreateChannelWebhookRequest extends Schema.Class<ApiV1CreateCh
 	integrationProvider: Schema.optional(Schema.Literals(["openstatus", "railway", "maple"])),
 }) {}
 
-export class ApiV1ChannelWebhookCreatedResponse extends Schema.Class<ApiV1ChannelWebhookCreatedResponse>(
-	"ApiV1ChannelWebhookCreatedResponse",
-)({
+export class ApiV1ChannelWebhookCreatedResponse extends Schema.Class<
+	ApiV1ChannelWebhookCreatedResponse,
+	{ readonly brand: unique symbol }
+>("ApiV1ChannelWebhookCreatedResponse")({
 	id: ChannelWebhookId,
 	channelId: ChannelId,
 	organizationId: OrganizationId,
@@ -75,7 +82,10 @@ export class ApiV1ChannelWebhookCreatedResponse extends Schema.Class<ApiV1Channe
 
 // ============ ERRORS ============
 
-export class ApiV1ChannelNotFoundError extends Schema.TaggedError<ApiV1ChannelNotFoundError>()(
+export class ApiV1ChannelNotFoundError extends Schema.TaggedError<
+	ApiV1ChannelNotFoundError,
+	{ readonly brand: unique symbol }
+>()(
 	"ApiV1ChannelNotFoundError",
 	{
 		channelId: ChannelId,
@@ -84,7 +94,10 @@ export class ApiV1ChannelNotFoundError extends Schema.TaggedError<ApiV1ChannelNo
 	{ httpApiStatus: 404 },
 ) {}
 
-export class ApiV1OrganizationNotFoundError extends Schema.TaggedError<ApiV1OrganizationNotFoundError>()(
+export class ApiV1OrganizationNotFoundError extends Schema.TaggedError<
+	ApiV1OrganizationNotFoundError,
+	{ readonly brand: unique symbol }
+>()(
 	"ApiV1OrganizationNotFoundError",
 	{
 		organizationId: OrganizationId,

@@ -43,7 +43,7 @@ import { authenticateBotFromToken, botPrincipal, requireBotScope } from "./bot-a
 
 const internal = (message: string) => (cause: unknown) =>
 	Effect.logError(message, { cause }).pipe(
-		Effect.andThen(Effect.fail(new InternalServerError({ message, cause }))),
+		Effect.andThen(Effect.fail(InternalServerError.withCause({ message, cause }))),
 	)
 
 /** Each id on its own: a malformed one is left out like an unknown one, not the whole lookup. */

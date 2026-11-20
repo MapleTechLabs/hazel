@@ -92,13 +92,15 @@ const toHttpErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 		Effect.catchTags({
 			DatabaseError: (error: unknown) =>
 				Effect.fail(
-					new InternalServerError({
+					InternalServerError.withCause({
 						message: "Database error while creating message",
 						cause: error,
 					}),
 				),
 			ObjectCallError: (error: unknown) =>
-				Effect.fail(new InternalServerError({ message: "The channel is unavailable", cause: error })),
+				Effect.fail(
+					InternalServerError.withCause({ message: "The channel is unavailable", cause: error }),
+				),
 		}),
 	)
 

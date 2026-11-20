@@ -69,9 +69,12 @@ interface DmRow {
 }
 
 /** The DM channels query could not be read (a failed sync). */
-export class DmLookupError extends Schema.TaggedError<DmLookupError>()("DmLookupError", {
-	message: Schema.String,
-}) {}
+export class DmLookupError extends Schema.TaggedError<DmLookupError, { readonly brand: unique symbol }>()(
+	"DmLookupError",
+	{
+		message: Schema.String,
+	},
+) {}
 
 /** `dmChannelsCollection` read once, then the legacy exact-participants match. */
 export const findExistingDmChannel = (

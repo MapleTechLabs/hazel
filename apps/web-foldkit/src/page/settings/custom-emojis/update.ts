@@ -106,7 +106,7 @@ export const CreateCustomEmoji = Command.define("CreateCustomEmoji", {
 								Message.FoundDeletedEmoji({
 									target: {
 										id: error.customEmojiId,
-										name: error.name,
+										name: error.emojiName,
 										imageUrl: error.imageUrl,
 										newImageUrl: imageUrl,
 									},

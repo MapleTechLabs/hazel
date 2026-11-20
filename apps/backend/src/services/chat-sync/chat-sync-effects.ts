@@ -69,7 +69,7 @@ export const CHAT_SYNC_LINKS_VERSION = 2
 /** The channel's links and the org's linked accounts (mentions), replacing the previous ones. */
 export const SetChatSyncLinksPayload = Schema.Struct({
 	/** `CHAT_SYNC_LINKS_VERSION` when projected; absent on copies from before it. */
-	version: Schema.optional(Schema.Number),
+	version: Schema.optional(Schema.Finite),
 	links: Schema.Array(ChatSyncChannelTarget),
 	accounts: Schema.Array(ChatSyncLinkedAccount),
 })
@@ -78,7 +78,7 @@ export type SetChatSyncLinksPayload = typeof SetChatSyncLinksPayload.Type
 export const ChatSyncAttachment = Schema.Struct({
 	externalAttachmentId: Schema.NullOr(Schema.String),
 	fileName: Schema.String,
-	fileSize: Schema.Number,
+	fileSize: Schema.Finite,
 	publicUrl: Schema.String,
 })
 export type ChatSyncAttachment = typeof ChatSyncAttachment.Type
@@ -111,7 +111,7 @@ export const ChatSyncInboundEvent = Schema.TaggedUnion({
 		 * When the provider says it was sent (epoch ms); set only on imported history, which is
 		 * written at that time and notifies nobody.
 		 */
-		sentAt: Schema.optional(Schema.Number),
+		sentAt: Schema.optional(Schema.Finite),
 	},
 	MessageUpdate: {
 		externalMessageId: ExternalMessageId,
@@ -177,7 +177,7 @@ export const ChannelIngestEvent = Schema.TaggedUnion({
 		externalReplyToMessageId: Schema.NullOr(ExternalMessageId),
 		attachments: Schema.Array(ChatSyncAttachment),
 		/** Imported history: its provider send time (epoch ms). */
-		sentAt: Schema.optional(Schema.Number),
+		sentAt: Schema.optional(Schema.Finite),
 	},
 	MessageUpdate: { externalMessageId: ExternalMessageId, content: Schema.String },
 	MessageDelete: { externalMessageId: ExternalMessageId },
@@ -307,20 +307,20 @@ export const ImportHistoryPayload = Schema.Struct({
 	externalWorkspaceId: Schema.String,
 	externalChannelId: ExternalChannelId,
 	/** Messages still to import, this page included. */
-	remaining: Schema.Number,
+	remaining: Schema.Finite,
 	/** Where this page starts (the provider's cursor); `null` on the first page. */
 	cursor: Schema.NullOr(Schema.String),
 	/**
 	 * Only messages sent at or after this (epoch ms); the import ends at the first older one. Null
 	 * or absent: no cutoff.
 	 */
-	since: Schema.optional(Schema.NullOr(Schema.Number)),
+	since: Schema.optional(Schema.NullOr(Schema.Finite)),
 	/**
 	 * A migration's channels still to import once this one is done, in order: one import at a time,
 	 * so a large migration stays within the provider's rate limit. Each starts with `budget` messages.
 	 */
 	then: Schema.optional(Schema.Array(ExternalChannelId)),
-	budget: Schema.optional(Schema.Number),
+	budget: Schema.optional(Schema.Finite),
 })
 export type ImportHistoryPayload = typeof ImportHistoryPayload.Type
 

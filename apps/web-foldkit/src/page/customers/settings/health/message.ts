@@ -13,20 +13,20 @@ export const Message = defineMessageUnion({
 	UpdatedAccounts: { accounts: Schema.Array(AccountRow) },
 
 	/** A weight's stepper; its slider reports through `GotSliderMessage`. */
-	ChangedWeight: { key: Customers.HealthComponentKey, value: Schema.Number },
+	ChangedWeight: { key: Customers.HealthComponentKey, value: Schema.Finite },
 	/**
-	 * A band's number input (the handles report through `GotSliderMessage`). `NaN`: emptied or not a
+	 * A band's number input (the handles report through `GotSliderMessage`). `null`: emptied or not a
 	 * number yet; `text` is what was typed (`-`, `1.`), kept while it still reads as `value`.
 	 */
-	ChangedBand: { band: BandKey, value: Schema.Number, text: Schema.String },
+	ChangedBand: { band: BandKey, value: Schema.NullOr(Schema.Finite), text: Schema.String },
 	ChangedStep: {
 		list: StepList,
 		index: Schema.Int,
 		field: StepField,
-		value: Schema.Number,
+		value: Schema.NullOr(Schema.Finite),
 		text: Schema.String,
 	},
-	ChangedScore: { field: ScoreField, value: Schema.Number, text: Schema.String },
+	ChangedScore: { field: ScoreField, value: Schema.NullOr(Schema.Finite), text: Schema.String },
 	GotSliderMessage: { id: SliderId, message: Slider.Message },
 	PressedScaleWeights: {},
 	PressedResetDefaults: {},

@@ -17,31 +17,37 @@ export { MessageNotFoundError } from "../errors"
  * Response schema for successful message operations.
  * Contains the message data and a transaction ID for optimistic updates.
  */
-export class MessageResponse extends Schema.Class<MessageResponse>("MessageResponse")({
+export class MessageResponse extends Schema.Class<MessageResponse, { readonly brand: unique symbol }>(
+	"MessageResponse",
+)({
 	data: Message.Schema,
 	transactionId: TransactionId,
 }) {}
 
-export class MessageInteractionResponse extends Schema.Class<MessageInteractionResponse>(
-	"MessageInteractionResponse",
-)({
+export class MessageInteractionResponse extends Schema.Class<
+	MessageInteractionResponse,
+	{ readonly brand: unique symbol }
+>("MessageInteractionResponse")({
 	/** The id the bot's `interaction.create` event carries. */
 	interactionId: Schema.String,
 }) {}
 
 /** The message has no enabled action with that id, or was not posted by a bot. */
-export class MessageActionUnavailableError extends Schema.TaggedError<MessageActionUnavailableError>()(
-	"MessageActionUnavailableError",
-	{
-		messageId: MessageId,
-		actionId: Schema.String,
-	},
-) {}
+export class MessageActionUnavailableError extends Schema.TaggedError<
+	MessageActionUnavailableError,
+	{ readonly brand: unique symbol }
+>()("MessageActionUnavailableError", {
+	messageId: MessageId,
+	actionId: Schema.String,
+}) {}
 
-export class HtmlRenderUrlResponse extends Schema.Class<HtmlRenderUrlResponse>("HtmlRenderUrlResponse")({
+export class HtmlRenderUrlResponse extends Schema.Class<
+	HtmlRenderUrlResponse,
+	{ readonly brand: unique symbol }
+>("HtmlRenderUrlResponse")({
 	url: Schema.String,
 	/** Epoch milliseconds. */
-	expiresAt: Schema.Number,
+	expiresAt: Schema.Finite,
 }) {}
 
 /** `message.search`: the org's messages the caller can read, newest first. */
@@ -61,7 +67,7 @@ export const MessageSearchPayload = Schema.Struct({
 export type MessageSearchPayload = typeof MessageSearchPayload.Type
 
 /** A matched range in `snippet`, `[start, end)` in UTF-16 code units. */
-export const MessageSearchHighlight = Schema.Struct({ start: Schema.Number, end: Schema.Number })
+export const MessageSearchHighlight = Schema.Struct({ start: Schema.Finite, end: Schema.Finite })
 
 export const MessageSearchHit = Schema.Struct({
 	messageId: MessageId,
@@ -74,7 +80,10 @@ export const MessageSearchHit = Schema.Struct({
 })
 export type MessageSearchHit = typeof MessageSearchHit.Type
 
-export class MessageSearchResponse extends Schema.Class<MessageSearchResponse>("MessageSearchResponse")({
+export class MessageSearchResponse extends Schema.Class<
+	MessageSearchResponse,
+	{ readonly brand: unique symbol }
+>("MessageSearchResponse")({
 	results: Schema.Array(MessageSearchHit),
 	nextCursor: Schema.NullOr(Schema.String),
 	/** The org's index is still being built from existing messages: results may be incomplete. */

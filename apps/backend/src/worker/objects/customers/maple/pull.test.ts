@@ -340,7 +340,7 @@ describe("Maple pull", () => {
 	})
 
 	it("reads a real `run_sql` answer off the wire", () => {
-		const decoded = Schema.decodeUnknownSync(RunSqlAnswer(MapleActivityRow))(RUN_SQL_ANSWER)
+		const decoded = Schema.decodeSync(RunSqlAnswer(MapleActivityRow))(RUN_SQL_ANSWER)
 		expect(decoded.result?.structuredContent?.rows.map((row) => row.events)).toEqual([26, 21])
 		expect(decoded.result?.structuredContent?.expandedSql).toContain("OrgId = 'org_")
 	})

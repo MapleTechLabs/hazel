@@ -48,7 +48,7 @@ describe("notification preferences", () => {
 		story(
 			pageUpdate,
 			given(init().model),
-			message(Message.UpdatedUserRow({ row: Schema.decodeUnknownSync(UserRow)(row) })),
+			message(Message.UpdatedUserRow({ row: Schema.decodeSync(UserRow)(row) })),
 			model((current) => {
 				expect(current.quietHoursStart.committed).toBe("21:30:00")
 				expect(current.quietHoursEnd.committed).toBe("08:00:00")
@@ -60,7 +60,7 @@ describe("notification preferences", () => {
 		story(
 			pageUpdate,
 			given(init().model),
-			message(Message.UpdatedUserRow({ row: Schema.decodeUnknownSync(UserRow)(row) })),
+			message(Message.UpdatedUserRow({ row: Schema.decodeSync(UserRow)(row) })),
 			message(Message.ToggledDoNotDisturb({ isSelected: true })),
 			model((current) =>
 				expect(settingsOf(current)).toEqual({
@@ -125,14 +125,14 @@ describe("user settings writes", () => {
 		story(
 			pageUpdate,
 			given(init().model),
-			message(Message.UpdatedUserRow({ row: Schema.decodeUnknownSync(UserRow)(row) })),
+			message(Message.UpdatedUserRow({ row: Schema.decodeSync(UserRow)(row) })),
 			message(Message.ToggledShowQuietHours({ isSelected: true })),
 			Command.resolve(UpdateUserSettings, Message.SucceededUpdateUserSettings()),
 			expectNoOutMessage(),
 			model((current) => expect(settingsOf(current)?.showQuietHoursInStatus).toBe(true)),
 			message(
 				Message.UpdatedUserRow({
-					row: Schema.decodeUnknownSync(UserRow)({
+					row: Schema.decodeSync(UserRow)({
 						...row,
 						settings: { ...row.settings, showQuietHoursInStatus: true },
 					}),
@@ -146,10 +146,9 @@ describe("user settings writes", () => {
 	})
 
 	const synced = () =>
-		pageUpdate(init().model, Message.UpdatedUserRow({ row: Schema.decodeUnknownSync(UserRow)(row) }))
-			.model
+		pageUpdate(init().model, Message.UpdatedUserRow({ row: Schema.decodeSync(UserRow)(row) })).model
 	const settingsWith = (patch: object) =>
-		Schema.decodeUnknownSync(User.UserSettingsSchema)({ ...row.settings, ...patch })
+		Schema.decodeSync(User.UserSettingsSchema)({ ...row.settings, ...patch })
 	const writeOf = (result: ReturnType<typeof pageUpdate>) =>
 		result.commands?.map((command) => ({ name: command.name, args: command.args }))
 
@@ -169,7 +168,7 @@ describe("user settings writes", () => {
 		const echoed = pageUpdate(
 			queued.model,
 			Message.UpdatedUserRow({
-				row: Schema.decodeUnknownSync(UserRow)({
+				row: Schema.decodeSync(UserRow)({
 					...row,
 					settings: settingsWith({ doNotDisturb: true }),
 				}),

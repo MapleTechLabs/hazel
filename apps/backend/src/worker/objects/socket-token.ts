@@ -82,8 +82,8 @@ export const makeSocketTokenVerifier = Effect.gen(function* () {
  * (`HazelSession`): its directory row exists and is not deleted. `"unavailable"` when the
  * directory cannot answer.
  */
-export const directoryUserActive = (userId: UserId) =>
-	Effect.gen(function* () {
+export const directoryUserActive = Effect.fn("SyncDO.reauthUser")(
+	function* (userId: UserId) {
 		const directory = yield* Directory
 		const user = yield* directory.db.first(
 			SQLite.from(schema.usersTable)
@@ -92,14 +92,13 @@ export const directoryUserActive = (userId: UserId) =>
 				.limit(1),
 		)
 		return Option.isSome(user) && user.value.deletedAt === null
-	}).pipe(
-		Effect.catchTag("DatabaseError", (error) =>
-			Effect.logWarning("Sync reauth could not load the user", { error: error.message }).pipe(
-				Effect.as("unavailable" as const),
-			),
+	},
+	Effect.catchTag("DatabaseError", (error) =>
+		Effect.logWarning("Sync reauth could not load the user", { error: error.message }).pipe(
+			Effect.as("unavailable" as const),
 		),
-		Effect.withSpan("SyncDO.reauthUser"),
-	)
+	),
+)
 
 /**
  * The `SyncSource.reauthenticate` of every object kind: a valid token for the same user, who is

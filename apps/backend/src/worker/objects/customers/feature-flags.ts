@@ -23,7 +23,7 @@ const invalid = (message: string) => new CustomersInvalidRequestError({ message 
 
 const credentialsUnreadable = (cause: { readonly _tag: string }) =>
 	Effect.fail(
-		new InternalServerError({
+		InternalServerError.withCause({
 			message: "Could not read the Clerk credentials",
 			detail: cause._tag,
 			cause,

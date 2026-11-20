@@ -24,20 +24,19 @@ type BotRecord = OptionValue<EffectSuccess<ReturnType<BotRepoShape["findByTokenH
 type UserRecord = OptionValue<EffectSuccess<ReturnType<UserRepoShape["findById"]>>>
 const successValue = { _: Symbol("success") } as SuccessValue
 
-const makeCurrentUser = (
-	overrides: Partial<CurrentUserNamespace.Schema> = {},
-): CurrentUserNamespace.Schema => ({
-	id: USER_ID,
-	email: "test@example.com",
-	firstName: "Test",
-	lastName: "User",
-	avatarUrl: "https://example.com/avatar.png",
-	role: "member",
-	isOnboarded: true,
-	timezone: "UTC",
-	settings: null,
-	...overrides,
-})
+const makeCurrentUser = (overrides: Partial<CurrentUserNamespace.Schema> = {}): CurrentUserNamespace.Schema =>
+	new CurrentUser.Schema({
+		id: USER_ID,
+		email: "test@example.com",
+		firstName: "Test",
+		lastName: "User",
+		avatarUrl: "https://example.com/avatar.png",
+		role: "member",
+		isOnboarded: true,
+		timezone: "UTC",
+		settings: null,
+		...overrides,
+	})
 
 const hashToken = async (token: string) => {
 	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token))
@@ -157,14 +156,19 @@ const runAuth = (
 	Effect.runPromise(
 		Effect.scoped(
 			invokeMiddleware(headers, overrides.rpc).pipe(
-				Effect.provide(AuthMiddlewareLive),
-				Effect.provide(overrides.hazelSession ?? makeHazelSessionLayer()),
-				Effect.provide(overrides.agentAccess ?? makeAgentAccessLayer()),
 				Effect.provide(
-					overrides.botRepo ?? makeBotRepoLayer(() => Effect.succeed(Option.none<BotRecord>())),
-				),
-				Effect.provide(
-					overrides.userRepo ?? makeUserRepoLayer(() => Effect.succeed(Option.none<UserRecord>())),
+					AuthMiddlewareLive.pipe(
+						Layer.provideMerge(overrides.hazelSession ?? makeHazelSessionLayer()),
+						Layer.provideMerge(overrides.agentAccess ?? makeAgentAccessLayer()),
+						Layer.provideMerge(
+							overrides.botRepo ??
+								makeBotRepoLayer(() => Effect.succeed(Option.none<BotRecord>())),
+						),
+						Layer.provideMerge(
+							overrides.userRepo ??
+								makeUserRepoLayer(() => Effect.succeed(Option.none<UserRecord>())),
+						),
+					),
 				),
 				Effect.result,
 			),
@@ -257,7 +261,7 @@ describe("AuthMiddlewareLive", () => {
 		const result = await runAuth(Headers.fromInput({ authorization: "Bearer a.b.c" }), {
 			hazelSession: makeHazelSessionLayer({
 				enabled: true,
-				fromCookie: () => Effect.succeed(Option.some(currentUser)),
+				fromCookie: () => Effect.succeedSome(currentUser),
 			}),
 		})
 
@@ -284,7 +288,7 @@ describe("AuthMiddlewareLive", () => {
 			enabled: true,
 			fromCookie: () =>
 				Effect.fail(new InvalidBearerTokenError({ message: "expired", detail: "expired" })),
-			verify: () => Effect.succeed(Option.some(makeCurrentUser())),
+			verify: () => Effect.succeedSome(makeCurrentUser()),
 		})
 		const valid = await runAuth(Headers.fromInput({ authorization: "Bearer session-credential" }), {
 			hazelSession,
@@ -371,16 +375,25 @@ describe("AuthMiddlewareLive", () => {
 						)
 						return yield* Ref.get(ref)
 					}).pipe(
-						Effect.provide(AuthMiddlewareLive),
 						Effect.provide(
-							makeHazelSessionLayer({
-								enabled: true,
-								agentUserOf: () => Effect.succeed(makeCurrentUser()),
-							}),
+							AuthMiddlewareLive.pipe(
+								Layer.provideMerge(
+									makeHazelSessionLayer({
+										enabled: true,
+										agentUserOf: () => Effect.succeed(makeCurrentUser()),
+									}),
+								),
+								Layer.provideMerge(
+									makeAgentAccessLayer(() => Option.some(agent(["customers:read"]))),
+								),
+								Layer.provideMerge(
+									makeBotRepoLayer(() => Effect.succeed(Option.none<BotRecord>())),
+								),
+								Layer.provideMerge(
+									makeUserRepoLayer(() => Effect.succeed(Option.none<UserRecord>())),
+								),
+							),
 						),
-						Effect.provide(makeAgentAccessLayer(() => Option.some(agent(["customers:read"])))),
-						Effect.provide(makeBotRepoLayer(() => Effect.succeed(Option.none<BotRecord>()))),
-						Effect.provide(makeUserRepoLayer(() => Effect.succeed(Option.none<UserRecord>()))),
 					),
 				),
 			)

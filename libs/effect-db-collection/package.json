@@ -11,7 +11,7 @@
 	},
 	"scripts": {
 		"test": "npx vitest --run",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "effect-tsgo tsc --noEmit"
 	},
 	"dependencies": {
 		"@hazel/domain": "workspace:*",

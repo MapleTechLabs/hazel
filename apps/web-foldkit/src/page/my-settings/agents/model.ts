@@ -10,8 +10,8 @@ export const Grant = Schema.Struct({
 	kind: Schema.Literals(["oauth", "token"]),
 	name: Schema.String,
 	scopes: Schema.Array(AgentScope),
-	createdAtMs: Schema.Number,
-	lastUsedAtMs: Schema.NullOr(Schema.Number),
+	createdAtMs: Schema.Finite,
+	lastUsedAtMs: Schema.NullOr(Schema.Finite),
 })
 export type Grant = typeof Grant.Type
 

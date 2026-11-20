@@ -76,10 +76,13 @@ const TOKEN_REUSE_MS = AccessToken.lifetimeSeconds * 1000
 const AGENT_SOCKET_MS = 5 * 60 * 1000
 
 /** The object's `fetch` failed (overloaded, reset, unreachable). */
-class SyncForwardError extends Schema.TaggedError<SyncForwardError>()("SyncForwardError", {
-	objectId: Schema.String,
-	cause: Schema.Unknown,
-}) {}
+class SyncForwardError extends Schema.TaggedError<SyncForwardError, { readonly brand: unique symbol }>()(
+	"SyncForwardError",
+	{
+		objectId: Schema.String,
+		cause: Schema.Unknown,
+	},
+) {}
 
 const SYNC_PATH = /^\/sync\/(org|channel|user|customers)\/([^/?]+)/
 
@@ -408,7 +411,7 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 
 					const objectId = yield* syncObjectId(kind, id).pipe(
 						Effect.provideService(Directory, directory),
-						Effect.map(Option.some),
+						Effect.asSome,
 						Effect.catchTag("DatabaseError", (error) =>
 							Effect.logError("Sync route could not resolve the object", {
 								kind,
@@ -571,7 +574,7 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 					if (target._tag === "Refused") return acceptAndClose(target.code, target.reason)
 
 					const web = yield* HttpServerRequest.toWeb(request).pipe(
-						Effect.map(Option.some),
+						Effect.asSome,
 						// `RequestError`: the upgrade request itself could not be converted.
 						Effect.catch((error) =>
 							Effect.logWarning("Sync upgrade request unreadable", { error: error._tag }).pipe(

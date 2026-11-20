@@ -464,7 +464,7 @@ export const makeSyncRuntime = <P, E, R>(options: {
 	/** Run `effect` for one principal; a failure closes its sockets with 1011 instead of failing. */
 	const guarded = <A>(group: PrincipalGroup<P>, effect: Effect.Effect<A, E, R>, label: string) =>
 		effect.pipe(
-			Effect.map(Option.some),
+			Effect.asSome,
 			Effect.catchCause((cause) =>
 				// An interrupt is not the principal's failure: let it through.
 				Cause.hasInterruptsOnly(cause)
@@ -515,13 +515,12 @@ export const makeSyncRuntime = <P, E, R>(options: {
 					resnapshot
 						? Effect.flatMap(reauthorize(group), (allowed) =>
 								allowed
-									? Effect.map(
+									? Effect.asSome(
 											Effect.forEach(modes, (paging) =>
 												snapshotFrames(group.principal, paging),
 											),
-											Option.some,
 										)
-									: Effect.succeed(Option.none()),
+									: Effect.succeedNone,
 							)
 						: Effect.map(deltaFrames(group.principal, changes), (delta) => Option.some([delta])),
 					resnapshot ? "resnapshot" : "flush",
@@ -816,39 +815,38 @@ export const makeSyncRuntime = <P, E, R>(options: {
 
 	const onClose = (socket: SyncSocket) => Effect.sync(() => close(socket, 1000, "closed"))
 
-	const adoptSocket = (socket: SyncSocket, principal: P) =>
-		Effect.gen(function* () {
-			const now = yield* Clock.currentTimeMillis
-			const pid = source.principalId(principal)
-			const attachment: SyncAttachment<P> = {
-				v: 1,
-				principal,
-				pid,
-				cursor: null,
-				ready: false,
-				expiresAt: source.expiresAt?.(principal) ?? null,
-				session: crypto.randomUUID(),
-			}
-			const bytes = new TextEncoder().encode(JSON.stringify(attachment)).length
-			if (bytes > MAX_ATTACHMENT_BYTES) return yield* new SyncAttachmentTooLargeError({ bytes })
+	const adoptSocket = Effect.fn("SyncDO.adoptSocket")(function* (socket: SyncSocket, principal: P) {
+		const now = yield* Clock.currentTimeMillis
+		const pid = source.principalId(principal)
+		const attachment: SyncAttachment<P> = {
+			v: 1,
+			principal,
+			pid,
+			cursor: null,
+			ready: false,
+			expiresAt: source.expiresAt?.(principal) ?? null,
+			session: crypto.randomUUID(),
+		}
+		const bytes = new TextEncoder().encode(JSON.stringify(attachment)).length
+		if (bytes > MAX_ATTACHMENT_BYTES) return yield* new SyncAttachmentTooLargeError({ bytes })
 
-			state.acceptWebSocket(socket, [pid])
-			socket.serializeAttachment(attachment)
-			const group: PrincipalGroup<P> = { pid, principal, sockets: [{ socket, attachment }] }
-			if (isExpired(attachment, now)) {
-				close(socket, SyncCloseCode.Reauth, "token_expired")
-				return "expired" as const
-			}
-			const decision = yield* guarded(group, source.authorize(principal), "authorize")
-			if (Option.isNone(decision)) return "error" as const
-			if (decision.value === true) return "accepted" as const
-			if (decision.value === "not_found") {
-				close(socket, SyncCloseCode.NotFound, "not_found")
-				return "not_found" as const
-			}
-			close(socket, SyncCloseCode.Forbidden, "forbidden")
-			return "forbidden" as const
-		}).pipe(Effect.withSpan("SyncDO.adoptSocket"))
+		state.acceptWebSocket(socket, [pid])
+		socket.serializeAttachment(attachment)
+		const group: PrincipalGroup<P> = { pid, principal, sockets: [{ socket, attachment }] }
+		if (isExpired(attachment, now)) {
+			close(socket, SyncCloseCode.Reauth, "token_expired")
+			return "expired" as const
+		}
+		const decision = yield* guarded(group, source.authorize(principal), "authorize")
+		if (Option.isNone(decision)) return "error" as const
+		if (decision.value === true) return "accepted" as const
+		if (decision.value === "not_found") {
+			close(socket, SyncCloseCode.NotFound, "not_found")
+			return "not_found" as const
+		}
+		close(socket, SyncCloseCode.Forbidden, "forbidden")
+		return "forbidden" as const
+	})
 
 	const upgradeSocket = (request: Request, principal: P) =>
 		Effect.gen(function* () {

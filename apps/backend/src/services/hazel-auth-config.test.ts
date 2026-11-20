@@ -1,4 +1,4 @@
-import { ConfigProvider, Effect, Exit } from "effect"
+import { ConfigProvider, Effect, Exit, Layer } from "effect"
 import { expect, it } from "vitest"
 import { HazelAuthInstance } from "./hazel-auth"
 
@@ -16,8 +16,7 @@ it("reports a malformed signing key without retaining its input", async () => {
 	)
 	const exit = await Effect.runPromiseExit(
 		Effect.service(HazelAuthInstance).pipe(
-			Effect.provide(HazelAuthInstance.layer),
-			Effect.provide(config),
+			Effect.provide(HazelAuthInstance.layer.pipe(Layer.provideMerge(config))),
 		),
 	)
 	expect(Exit.isFailure(exit)).toBe(true)

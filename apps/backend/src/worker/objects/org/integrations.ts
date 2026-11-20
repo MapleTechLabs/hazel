@@ -33,16 +33,19 @@ type Provider = IntegrationConnection.IntegrationProvider
 type Connection = IntegrationConnection.Type
 
 /** The token exists but could not be produced (refresh, decryption or storage failed). */
-export class IntegrationTokenUnavailableError extends Schema.TaggedError<IntegrationTokenUnavailableError>()(
-	"IntegrationTokenUnavailableError",
-	{ provider: Provider, message: Schema.String },
-) {}
+export class IntegrationTokenUnavailableError extends Schema.TaggedError<
+	IntegrationTokenUnavailableError,
+	{ readonly brand: unique symbol }
+>()("IntegrationTokenUnavailableError", { provider: Provider, message: Schema.String }) {}
 
 /** Saving a connection failed; `stage` names the step (the OAuth callback's error code). */
-export class IntegrationConnectFailedError extends Schema.TaggedError<IntegrationConnectFailedError>()(
-	"IntegrationConnectFailedError",
-	{ stage: Schema.Literals(["db_error", "encryption_error"]), message: Schema.String },
-) {}
+export class IntegrationConnectFailedError extends Schema.TaggedError<
+	IntegrationConnectFailedError,
+	{ readonly brand: unique symbol }
+>()("IntegrationConnectFailedError", {
+	stage: Schema.Literals(["db_error", "encryption_error"]),
+	message: Schema.String,
+}) {}
 
 const Level = Schema.Struct({
 	provider: Provider,

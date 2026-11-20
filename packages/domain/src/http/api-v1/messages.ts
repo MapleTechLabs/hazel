@@ -23,7 +23,9 @@ import { TransactionId } from "@hazel/schema"
 
 // ============ PAGINATION SCHEMAS (Stripe-style) ============
 
-export class ListMessagesQuery extends Schema.Class<ListMessagesQuery>("ListMessagesQuery")({
+export class ListMessagesQuery extends Schema.Class<ListMessagesQuery, { readonly brand: unique symbol }>(
+	"ListMessagesQuery",
+)({
 	channel_id: ChannelId,
 	/** Cursor for older messages (fetch messages created before this message) */
 	starting_after: Schema.optional(MessageId),
@@ -39,14 +41,20 @@ export class ListMessagesQuery extends Schema.Class<ListMessagesQuery>("ListMess
 	),
 }) {}
 
-export class ListMessagesResponse extends Schema.Class<ListMessagesResponse>("ListMessagesResponse")({
+export class ListMessagesResponse extends Schema.Class<
+	ListMessagesResponse,
+	{ readonly brand: unique symbol }
+>("ListMessagesResponse")({
 	data: Schema.Array(Message.Schema as any),
 	has_more: Schema.Boolean,
 }) {}
 
 // ============ REQUEST SCHEMAS ============
 
-export class CreateMessageRequest extends Schema.Class<CreateMessageRequest>("CreateMessageRequest")({
+export class CreateMessageRequest extends Schema.Class<
+	CreateMessageRequest,
+	{ readonly brand: unique symbol }
+>("CreateMessageRequest")({
 	channelId: ChannelId,
 	content: Schema.String,
 	replyToMessageId: Schema.NullishOr(MessageId),
@@ -55,14 +63,19 @@ export class CreateMessageRequest extends Schema.Class<CreateMessageRequest>("Cr
 	embeds: Schema.NullishOr(MessageEmbeds),
 }) {}
 
-export class UpdateMessageRequest extends Schema.Class<UpdateMessageRequest>("UpdateMessageRequest")({
+export class UpdateMessageRequest extends Schema.Class<
+	UpdateMessageRequest,
+	{ readonly brand: unique symbol }
+>("UpdateMessageRequest")({
 	/** The message's channel: routes the write to the channel's object. Required in practice. */
 	channelId: Schema.optional(ChannelId),
 	content: Schema.optional(Schema.String),
 	embeds: Schema.optional(Schema.NullOr(MessageEmbeds)),
 }) {}
 
-export class DeleteMessageQuery extends Schema.Class<DeleteMessageQuery>("DeleteMessageQuery")({
+export class DeleteMessageQuery extends Schema.Class<DeleteMessageQuery, { readonly brand: unique symbol }>(
+	"DeleteMessageQuery",
+)({
 	channel_id: Schema.optional(ChannelId),
 }) {}
 
@@ -72,24 +85,33 @@ export const DeleteHtmlRenderQuery = Schema.Struct({
 	channel_id: ChannelId,
 })
 
-export class ToggleReactionRequest extends Schema.Class<ToggleReactionRequest>("ToggleReactionRequest")({
+export class ToggleReactionRequest extends Schema.Class<
+	ToggleReactionRequest,
+	{ readonly brand: unique symbol }
+>("ToggleReactionRequest")({
 	emoji: Schema.String,
 	channelId: ChannelId,
 }) {}
 
-export class WriteLiveStateRequest extends Schema.Class<WriteLiveStateRequest>("WriteLiveStateRequest")({
+export class WriteLiveStateRequest extends Schema.Class<
+	WriteLiveStateRequest,
+	{ readonly brand: unique symbol }
+>("WriteLiveStateRequest")({
 	/** The message's channel: the live object checks the message against it. */
 	channelId: ChannelId,
 	action: LiveAction,
 }) {}
 
-export class GetLiveStateQuery extends Schema.Class<GetLiveStateQuery>("GetLiveStateQuery")({
+export class GetLiveStateQuery extends Schema.Class<GetLiveStateQuery, { readonly brand: unique symbol }>(
+	"GetLiveStateQuery",
+)({
 	channel_id: ChannelId,
 }) {}
 
-export class PublishHtmlRenderRequest extends Schema.Class<PublishHtmlRenderRequest>(
-	"PublishHtmlRenderRequest",
-)({
+export class PublishHtmlRenderRequest extends Schema.Class<
+	PublishHtmlRenderRequest,
+	{ readonly brand: unique symbol }
+>("PublishHtmlRenderRequest")({
 	/** The channel whose messages will show the page: only its viewers can load it. */
 	channelId: ChannelId,
 	title: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(HTML_RENDER_MAX_TITLE_LENGTH)),
@@ -104,39 +126,56 @@ export class PublishHtmlRenderRequest extends Schema.Class<PublishHtmlRenderRequ
 
 // ============ RESPONSE SCHEMAS ============
 
-export class PublishHtmlRenderResponse extends Schema.Class<PublishHtmlRenderResponse>(
-	"PublishHtmlRenderResponse",
-)({
+export class PublishHtmlRenderResponse extends Schema.Class<
+	PublishHtmlRenderResponse,
+	{ readonly brand: unique symbol }
+>("PublishHtmlRenderResponse")({
 	/** Put it in a message embed's `html`. */
 	data: MessageEmbedHtml,
 }) {}
 
-export class MessageResponse extends Schema.Class<MessageResponse>("MessageResponse")({
+export class MessageResponse extends Schema.Class<MessageResponse, { readonly brand: unique symbol }>(
+	"MessageResponse",
+)({
 	data: Message.Schema as any,
 	transactionId: TransactionId,
 }) {}
 
-export class DeleteMessageResponse extends Schema.Class<DeleteMessageResponse>("DeleteMessageResponse")({
+export class DeleteMessageResponse extends Schema.Class<
+	DeleteMessageResponse,
+	{ readonly brand: unique symbol }
+>("DeleteMessageResponse")({
 	transactionId: TransactionId,
 }) {}
 
-export class ToggleReactionResponse extends Schema.Class<ToggleReactionResponse>("ToggleReactionResponse")({
+export class ToggleReactionResponse extends Schema.Class<
+	ToggleReactionResponse,
+	{ readonly brand: unique symbol }
+>("ToggleReactionResponse")({
 	wasCreated: Schema.Boolean,
 	data: Schema.optional(MessageReaction.Schema as any),
 	transactionId: TransactionId,
 }) {}
 
-export class WriteLiveStateResponse extends Schema.Class<WriteLiveStateResponse>("WriteLiveStateResponse")({
+export class WriteLiveStateResponse extends Schema.Class<
+	WriteLiveStateResponse,
+	{ readonly brand: unique symbol }
+>("WriteLiveStateResponse")({
 	data: LiveWriteResult,
 }) {}
 
-export class LiveStateResponse extends Schema.Class<LiveStateResponse>("LiveStateResponse")({
+export class LiveStateResponse extends Schema.Class<LiveStateResponse, { readonly brand: unique symbol }>(
+	"LiveStateResponse",
+)({
 	data: LiveState,
 }) {}
 
 // ============ ERROR TYPES ============
 
-export class ChannelNotFoundError extends Schema.TaggedError<ChannelNotFoundError>()(
+export class ChannelNotFoundError extends Schema.TaggedError<
+	ChannelNotFoundError,
+	{ readonly brand: unique symbol }
+>()(
 	"ChannelNotFoundError",
 	{
 		channelId: ChannelId,
@@ -144,7 +183,10 @@ export class ChannelNotFoundError extends Schema.TaggedError<ChannelNotFoundErro
 	{ httpApiStatus: 404 },
 ) {}
 
-export class InvalidPaginationError extends Schema.TaggedError<InvalidPaginationError>()(
+export class InvalidPaginationError extends Schema.TaggedError<
+	InvalidPaginationError,
+	{ readonly brand: unique symbol }
+>()(
 	"InvalidPaginationError",
 	{
 		message: Schema.String,
@@ -153,7 +195,10 @@ export class InvalidPaginationError extends Schema.TaggedError<InvalidPagination
 ) {}
 
 /** The page breaks a publishing rule (size, viewport height units). */
-export class HtmlRenderRejectedError extends Schema.TaggedError<HtmlRenderRejectedError>()(
+export class HtmlRenderRejectedError extends Schema.TaggedError<
+	HtmlRenderRejectedError,
+	{ readonly brand: unique symbol }
+>()(
 	"HtmlRenderRejectedError",
 	{
 		message: Schema.String,

@@ -107,15 +107,15 @@ const build = (options: {
 	const session = Layer.succeed(HazelSession, {
 		verifyAccessTokenWithExpiry: options.verify,
 		verifyWithExpiry: options.verify,
-		fromCookie: options.cookie ?? (() => Effect.succeed(Option.none())),
+		fromCookie: options.cookie ?? (() => Effect.succeedNone),
 		agentUserOf: () => Effect.succeed(user),
 	} as never)
 	const agents = Layer.succeed(AgentAccess, {
 		authenticate: (token: string) => Effect.succeed(options.agent?.(token) ?? Option.none()),
 	} as never)
 	const directory = Layer.succeed(Directory, {
-		channel: options.channel ?? (() => Effect.succeed(Option.none())),
-		membership: options.membership ?? (() => Effect.succeed(Option.none())),
+		channel: options.channel ?? (() => Effect.succeedNone),
+		membership: options.membership ?? (() => Effect.succeedNone),
 		organizationsOf: options.organizationsOf ?? (() => Effect.succeed([])),
 	} as never)
 	const { spans } = options
@@ -235,7 +235,7 @@ const traceparentOf = (span: Tracer.Span) => `00-${span.traceId.padStart(32, "0"
 
 describe("multiplexed sync socket", () => {
 	it("closes a bad or missing token with 4001, echoing the mux subprotocol", async () => {
-		const send = build({ verify: () => Effect.succeed(Option.none()), env: {} })
+		const send = build({ verify: () => Effect.succeedNone, env: {} })
 		const response = await send.mux(`${SYNC_MUX_SUBPROTOCOL}, ${jwt}`)
 		expect(response.headers.get("sec-websocket-protocol")).toBe(SYNC_MUX_SUBPROTOCOL)
 		await send.mux(`${SYNC_SUBPROTOCOL}, ${jwt}`)
@@ -260,7 +260,7 @@ describe("multiplexed sync socket", () => {
 		const send = build({
 			verify: (token) => {
 				verified.push(token)
-				return Effect.succeed(Option.some({ user, expiresAt: Date.now() + 300_000 }))
+				return Effect.succeedSome({ user, expiresAt: Date.now() + 300_000 })
 			},
 			env: { OrgObject: namespace, UserObject: namespace },
 		})
@@ -342,9 +342,7 @@ describe("multiplexed sync socket", () => {
 		const { forwarded, namespace } = recordingNamespace()
 		const send = build({
 			verify: (token) =>
-				Effect.succeed(
-					Option.some({ user: token === jwt ? user : other, expiresAt: Date.now() + 300_000 }),
-				),
+				Effect.succeedSome({ user: token === jwt ? user : other, expiresAt: Date.now() + 300_000 }),
 			env: { OrgObject: namespace },
 		})
 		const mux = await send.openMux()
@@ -363,7 +361,7 @@ describe("multiplexed sync socket", () => {
 		const spans: Array<Tracer.Span> = []
 		const { forwarded, namespace } = recordingNamespace()
 		const send = build({
-			verify: () => Effect.succeed(Option.some({ user, expiresAt: Date.now() + 300_000 })),
+			verify: () => Effect.succeedSome({ user, expiresAt: Date.now() + 300_000 }),
 			env: { OrgObject: namespace },
 			spans,
 		})
@@ -380,7 +378,7 @@ describe("sync route", () => {
 		const expiresAt = Date.now() + 300_000
 		const { forwarded, namespace } = recordingNamespace()
 		const send = build({
-			verify: () => Effect.succeed(Option.some({ user, expiresAt })),
+			verify: () => Effect.succeedSome({ user, expiresAt }),
 			env: { OrgObject: namespace },
 		})
 		const response = await send("/sync/org/org-1")
@@ -395,7 +393,7 @@ describe("sync route", () => {
 		const spans: Array<Tracer.Span> = []
 		const { forwarded, namespace } = recordingNamespace()
 		const send = build({
-			verify: () => Effect.succeed(Option.some({ user, expiresAt: Date.now() + 300_000 })),
+			verify: () => Effect.succeedSome({ user, expiresAt: Date.now() + 300_000 }),
 			env: { OrgObject: namespace },
 			spans,
 		})
@@ -407,7 +405,7 @@ describe("sync route", () => {
 	})
 
 	it("closes a bad token with 4001, so the client fetches a fresh one", async () => {
-		const send = build({ verify: () => Effect.succeed(Option.none()), env: {} })
+		const send = build({ verify: () => Effect.succeedNone, env: {} })
 		await send("/sync/org/org-1")
 		expect(closed).toEqual([{ code: SyncCloseCode.Reauth, reason: "invalid_token" }])
 	})
@@ -422,7 +420,7 @@ describe("sync route", () => {
 	})
 
 	it("closes with 1011 when the directory, the binding or the object fails", async () => {
-		const verify: Verify = () => Effect.succeed(Option.some({ user, expiresAt: Date.now() + 60_000 }))
+		const verify: Verify = () => Effect.succeedSome({ user, expiresAt: Date.now() + 60_000 })
 		const { namespace } = recordingNamespace()
 
 		const directoryDown = build({
@@ -457,14 +455,14 @@ describe("sync route", () => {
 })
 
 describe("customers sync", () => {
-	const verify: Verify = () => Effect.succeed(Option.some({ user, expiresAt: Date.now() + 60_000 }))
+	const verify: Verify = () => Effect.succeedSome({ user, expiresAt: Date.now() + 60_000 })
 	const orgId = crypto.randomUUID()
 
 	it("opens a member's socket, and refuses a stranger, a former member or an invalid id unwoken", async () => {
 		const member = recordingNamespace()
 		await build({
 			verify,
-			membership: () => Effect.succeed(Option.some({ deletedAt: null } as never)),
+			membership: () => Effect.succeedSome({ deletedAt: null } as never),
 			env: { CustomersObject: member.namespace },
 		})(`/sync/customers/${orgId}`)
 		expect(member.forwarded).toHaveLength(1)
@@ -473,12 +471,12 @@ describe("customers sync", () => {
 		await build({ verify, env: { CustomersObject: namespace } })(`/sync/customers/${orgId}`)
 		await build({
 			verify,
-			membership: () => Effect.succeed(Option.some({ deletedAt: new Date() } as never)),
+			membership: () => Effect.succeedSome({ deletedAt: new Date() } as never),
 			env: { CustomersObject: namespace },
 		})(`/sync/customers/${orgId}`)
 		await build({
 			verify,
-			membership: () => Effect.succeed(Option.some({ deletedAt: null } as never)),
+			membership: () => Effect.succeedSome({ deletedAt: null } as never),
 			env: { CustomersObject: namespace },
 		})("/sync/customers/not-an-org")
 		expect(forwarded).toEqual([])
@@ -518,7 +516,7 @@ describe("agent token sync", () => {
 						expiresAt,
 					})
 				: Option.none()
-	const member = () => Effect.succeed(Option.some({ deletedAt: null } as never))
+	const member = () => Effect.succeedSome({ deletedAt: null } as never)
 
 	it("opens a member's customers socket for a customers:read grant, until the token expires", async () => {
 		const expiresAt = Date.now() + 60_000
@@ -577,7 +575,7 @@ describe("agent token sync", () => {
 })
 
 describe("sync warm-up", () => {
-	const verify: Verify = () => Effect.succeed(Option.some({ user, expiresAt: Date.now() + 60_000 }))
+	const verify: Verify = () => Effect.succeedSome({ user, expiresAt: Date.now() + 60_000 })
 	const channelId = crypto.randomUUID()
 	const hostChannelId = crypto.randomUUID()
 	const channelRow = (id: string, host: string | null = null, deletedAt: Date | null = null) =>
@@ -699,10 +697,10 @@ describe("sync warm-up", () => {
 		const users = warmNamespace()
 		const seen: Array<string> = []
 		const send = build({
-			verify: () => Effect.succeed(Option.none()),
+			verify: () => Effect.succeedNone,
 			cookie: (headers, method) => {
 				seen.push(`${method} ${headers.origin}`)
-				return Effect.succeed(Option.some(user))
+				return Effect.succeedSome(user)
 			},
 			env: { UserObject: users.namespace },
 		})
@@ -742,7 +740,7 @@ describe("sync warm-up", () => {
 	it("refuses a missing or invalid token, and wakes nothing", async () => {
 		const users = warmNamespace()
 		const refused = build({
-			verify: () => Effect.succeed(Option.none()),
+			verify: () => Effect.succeedNone,
 			env: { UserObject: users.namespace },
 		})
 		expect((await refused.warm("")).status).toBe(401)

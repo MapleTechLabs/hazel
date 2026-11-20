@@ -25,7 +25,7 @@ export const ViewRow = Schema.Struct({
 	builtInKey: Schema.NullOr(Customers.BuiltInViewKey),
 	/** Null: shared with the org. */
 	ownerUserId: Schema.NullOr(UserId),
-	position: Schema.Number,
+	position: Schema.Finite,
 	filters: Customers.ViewFilters,
 	sort: Customers.ViewSort,
 	columns: Schema.Array(Customers.ListColumn),
@@ -87,11 +87,11 @@ export const Model = Schema.Struct({
 	tabDrag: DragAndDrop.Model,
 	members: Schema.Array(MemberRow),
 	connectedProviders: Schema.NullOr(Schema.Array(Customers.CustomerProvider)),
-	lastComputedAtMs: Schema.NullOr(Schema.Number),
+	lastComputedAtMs: Schema.NullOr(Schema.Finite),
 	/** What totals and MRR filters are shown in (the org's settings). */
 	reportingCurrency: Schema.String,
 	/** 30 days of daily active users per account (`customers.sparklines`). */
-	sparklines: Schema.Record(Schema.String, Schema.Array(Schema.Number)),
+	sparklines: Schema.Record(Schema.String, Schema.Array(Schema.Finite)),
 	/** Accounts whose sparkline was asked for (answered or not), so none is asked twice. */
 	requestedSparklines: Schema.Array(Schema.String),
 	/** Always among the visible rows: a search or filter change drops what it hides. */

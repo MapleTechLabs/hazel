@@ -18,7 +18,7 @@ export const AgentNotification = Schema.Struct({
 export type AgentNotification = typeof AgentNotification.Type
 
 export const AgentNotificationsCall = defineCall("user.agentNotifications", "user", {
-	payload: Schema.Struct({ unreadOnly: Schema.Boolean, limit: Schema.Number }),
+	payload: Schema.Struct({ unreadOnly: Schema.Boolean, limit: Schema.Finite }),
 	success: Schema.Array(AgentNotification),
 	error: Schema.Never,
 })

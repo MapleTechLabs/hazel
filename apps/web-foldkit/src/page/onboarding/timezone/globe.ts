@@ -37,7 +37,7 @@ const STARS = [
 
 /** `pathLength` 0 → 1 over a second, after `delay` seconds. */
 export const DrawGlobePath = Mount.define("DrawGlobePath", {
-	args: { delay: Schema.Number },
+	args: { delay: Schema.Finite },
 	messages: [Message.StartedGlobeAnimation],
 	execute: ({ element, delay }) =>
 		Effect.sync(() => {
@@ -55,7 +55,7 @@ export const DrawGlobePath = Mount.define("DrawGlobePath", {
  * from motion's first keyframe (the inline style), where the first render at hour 0 starts them.
  */
 export const TwinkleStar = Mount.define("TwinkleStar", {
-	args: { delay: Schema.Number, isVisible: Schema.Boolean },
+	args: { delay: Schema.Finite, isVisible: Schema.Boolean },
 	messages: [Message.StartedGlobeAnimation],
 	execute: ({ element, delay, isVisible }) =>
 		Effect.acquireRelease(

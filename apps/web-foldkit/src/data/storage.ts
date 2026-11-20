@@ -11,11 +11,14 @@ import { layer as platformStorageLayer } from "~/lib/platform-storage/platform-k
 export const readStored = <S extends Schema.Constraint>(key: string, schema: S) =>
 	KeyValueStore.KeyValueStore.use((store) => KeyValueStore.toSchemaStore(store, schema).get(key)).pipe(
 		Effect.provide(platformStorageLayer),
-		Effect.catch(() => Effect.succeed(Option.none<S["Type"]>())),
+		Effect.orElseSucceed(() => Option.none<S["Type"]>()),
 	)
 
 /** A setting could not be saved: storage is full or blocked (private mode), or the value did not encode. */
-export class StorageWriteError extends Schema.TaggedError<StorageWriteError>()("StorageWriteError", {
+export class StorageWriteError extends Schema.TaggedError<
+	StorageWriteError,
+	{ readonly brand: unique symbol }
+>()("StorageWriteError", {
 	key: Schema.String,
 	cause: Schema.Defect(),
 }) {}

@@ -10,7 +10,7 @@ export const TeamMember = Schema.Struct({
 	email: Schema.String,
 	avatarUrl: Schema.NullOr(Schema.String),
 	presenceStatus: Schema.NullOr(Schema.String),
-	presenceLastSeenMs: Schema.NullOr(Schema.Number),
+	presenceLastSeenMs: Schema.NullOr(Schema.Finite),
 })
 export type TeamMember = typeof TeamMember.Type
 

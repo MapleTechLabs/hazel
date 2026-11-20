@@ -1700,7 +1700,7 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 									ctx,
 									getUserFacingCommandErrorMessage(error.cause),
 								)
-								return yield* Effect.fail(error)
+								return yield* error
 							}),
 						),
 					),
@@ -1864,7 +1864,7 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 										),
 									)
 									// Do NOT create a new message - the ErrorCard will show the error
-									return yield* Effect.fail(error)
+									return yield* error
 								}),
 							),
 						),

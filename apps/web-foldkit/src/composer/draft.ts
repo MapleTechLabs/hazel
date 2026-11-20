@@ -7,6 +7,7 @@ import {
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
+import { ExecuteBotCommandRequest } from "@hazel/domain/http"
 import { Effect, Schema } from "effect"
 import { Command, File } from "foldkit"
 import * as Dom from "foldkit/dom"
@@ -45,7 +46,7 @@ export type ComposeMode = typeof ComposeMode.Type
 export const CurrentUpload = Schema.Struct({ fileId: Schema.String, file: File.File })
 export type CurrentUpload = typeof CurrentUpload.Type
 
-export const ActiveUpload = Schema.Struct({ fileId: Schema.String, file: File.File, progress: Schema.Number })
+export const ActiveUpload = Schema.Struct({ fileId: Schema.String, file: File.File, progress: Schema.Finite })
 export type ActiveUpload = typeof ActiveUpload.Type
 
 export const Model = Schema.Struct({
@@ -270,7 +271,7 @@ export const ExecuteBotCommand = Command.define("ExecuteBotCommand", {
 		return HazelApiClient.use((client) =>
 			client["bot-commands"].executeBotCommand({
 				params: { orgId, botId, commandName },
-				payload: { channelId, arguments: [...args] },
+				payload: new ExecuteBotCommandRequest({ channelId, arguments: [...args] }),
 			}),
 		).pipe(
 			Effect.as(Message.SucceededExecuteBotCommand({ commandName })),

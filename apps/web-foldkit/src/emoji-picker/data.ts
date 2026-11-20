@@ -22,9 +22,9 @@ type SkinTones = typeof SkinTones.Type
 
 export const EmojiDataEmoji = Schema.Struct({
 	emoji: Schema.String,
-	category: Schema.Number,
+	category: Schema.Finite,
 	label: Schema.String,
-	version: Schema.Number,
+	version: Schema.Finite,
 	tags: Schema.Array(Schema.String),
 	countryFlag: Schema.optionalKey(Schema.Boolean),
 	skins: Schema.optionalKey(SkinTones),
@@ -34,7 +34,7 @@ export type EmojiDataEmoji = typeof EmojiDataEmoji.Type
 export const EmojiData = Schema.Struct({
 	locale: Schema.String,
 	emojis: Schema.Array(EmojiDataEmoji),
-	categories: Schema.Array(Schema.Struct({ index: Schema.Number, label: Schema.String })),
+	categories: Schema.Array(Schema.Struct({ index: Schema.Finite, label: Schema.String })),
 	skinTones: SkinTones,
 })
 export type EmojiData = typeof EmojiData.Type
@@ -47,7 +47,7 @@ const LocalData = Schema.Struct({
 	}),
 })
 
-const SessionMetadata = Schema.Struct({ emojiVersion: Schema.Number, countryFlags: Schema.Boolean })
+const SessionMetadata = Schema.Struct({ emojiVersion: Schema.Finite, countryFlags: Schema.Boolean })
 type SessionMetadata = typeof SessionMetadata.Type
 
 const LOCAL_DATA_KEY = (locale: string) => `frimousse/data/${locale}`
@@ -70,15 +70,15 @@ const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1
 const EmojibaseEmoji = Schema.Struct({
 	emoji: Schema.String,
 	label: Schema.String,
-	version: Schema.Number,
-	group: Schema.optionalKey(Schema.Number),
-	subgroup: Schema.optionalKey(Schema.Number),
+	version: Schema.Finite,
+	group: Schema.optionalKey(Schema.Finite),
+	subgroup: Schema.optionalKey(Schema.Finite),
 	tags: Schema.optionalKey(Schema.Array(Schema.String)),
 	skins: Schema.optionalKey(
 		Schema.Array(
 			Schema.Struct({
 				emoji: Schema.String,
-				tone: Schema.optionalKey(Schema.Union([Schema.Number, Schema.Array(Schema.Number)])),
+				tone: Schema.optionalKey(Schema.Union([Schema.Finite, Schema.Array(Schema.Finite)])),
 			}),
 		),
 	),
@@ -87,8 +87,8 @@ type EmojibaseEmoji = typeof EmojibaseEmoji.Type
 
 /** emojibase's `messages.json`, as far as the picker reads it. */
 const EmojibaseMessages = Schema.Struct({
-	groups: Schema.Array(Schema.Struct({ key: Schema.String, message: Schema.String, order: Schema.Number })),
-	subgroups: Schema.Array(Schema.Struct({ key: Schema.String, order: Schema.Number })),
+	groups: Schema.Array(Schema.Struct({ key: Schema.String, message: Schema.String, order: Schema.Finite })),
+	subgroups: Schema.Array(Schema.Struct({ key: Schema.String, order: Schema.Finite })),
 	skinTones: Schema.Array(Schema.Struct({ key: Schema.String, message: Schema.String })),
 })
 type EmojibaseMessages = typeof EmojibaseMessages.Type

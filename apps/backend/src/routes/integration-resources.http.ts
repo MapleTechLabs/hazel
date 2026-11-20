@@ -13,7 +13,7 @@ import {
 	ResourceNotFoundError,
 } from "@hazel/domain/http"
 import { Discord, GitHub, Slack } from "@hazel/integrations"
-import { Config, Effect, Option, Redacted } from "effect"
+import { Config, Effect, Option, Predicate, Redacted } from "effect"
 import { HazelApi } from "../api"
 import { Directory } from "../services/directory"
 import { callObject } from "../worker/objects/calls"
@@ -38,7 +38,7 @@ export const requireMember = Effect.fn("IntegrationResources.requireMember")(fun
 		directory.membership(user.id, orgId),
 	).pipe(
 		Effect.catchTag("DatabaseError", (error) =>
-			Effect.fail(new InternalServerError({ message: "Membership lookup failed", cause: error })),
+			Effect.fail(InternalServerError.withCause({ message: "Membership lookup failed", cause: error })),
 		),
 	)
 	if (Option.isNone(membership) || membership.value.deletedAt !== null) {
@@ -61,14 +61,13 @@ const tokenOf = (orgId: OrganizationId, provider: Provider) =>
 /** As `tokenOf`, failing when the org has no usable connection. */
 const requireToken = (orgId: OrganizationId, provider: Provider) =>
 	tokenOf(orgId, provider).pipe(
-		Effect.flatMap((token) =>
-			token === null
-				? Effect.fail(new IntegrationNotConnectedForPreviewError({ provider }))
-				: Effect.succeed(token),
+		Effect.filterOrFail(
+			Predicate.isNotNull,
+			() => new IntegrationNotConnectedForPreviewError({ provider }),
 		),
 		Effect.catchTag("ObjectCallError", (error) =>
 			Effect.fail(
-				new InternalServerError({ message: "The organization is unavailable", cause: error }),
+				InternalServerError.withCause({ message: "The organization is unavailable", cause: error }),
 			),
 		),
 	)
@@ -104,12 +103,10 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 					// Parse the Linear issue URL
 					const parsed = parseLinearIssueUrl(url)
 					if (!parsed) {
-						return yield* Effect.fail(
-							new ResourceNotFoundError({
-								url,
-								message: "Invalid Linear issue URL format",
-							}),
-						)
+						return yield* new ResourceNotFoundError({
+							url,
+							message: "Invalid Linear issue URL format",
+						})
 					}
 
 					// The org's Linear token (active connection, refreshed)
@@ -175,12 +172,10 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 					// Parse the GitHub PR URL
 					const parsed = GitHub.parseGitHubPRUrl(url)
 					if (!parsed) {
-						return yield* Effect.fail(
-							new ResourceNotFoundError({
-								url,
-								message: "Invalid GitHub PR URL format",
-							}),
-						)
+						return yield* new ResourceNotFoundError({
+							url,
+							message: "Invalid GitHub PR URL format",
+						})
 					}
 
 					const gitHubApiClient = yield* GitHub.GitHubApiClient
@@ -202,36 +197,35 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 
 						return Option.some(pr)
 					}).pipe(
-						// Auth worked but PR genuinely not found — propagate immediately
-						Effect.catchTag("GitHubPRNotFoundError", (error) =>
-							Effect.fail(
-								new ResourceNotFoundError({
-									url: query.url,
-									message: `PR not found: ${error.owner}/${error.repo}#${error.number}`,
-								}),
-							),
-						),
-						// Auth worked but API error — propagate immediately
-						Effect.catchTag("GitHubApiError", (error) =>
-							Effect.fail(
-								new IntegrationResourceError({
-									url: query.url,
-									message: error.message,
-									provider: "github",
-								}),
-							),
-						),
-						Effect.catchTag("GitHubRateLimitError", (error) =>
-							Effect.fail(
-								new IntegrationResourceError({
-									url: query.url,
-									message: error.retryAfter
-										? `Rate limit exceeded. Try again in ${error.retryAfter} seconds.`
-										: error.message,
-									provider: "github",
-								}),
-							),
-						),
+						Effect.catchTags({
+							// Auth worked but PR genuinely not found — propagate immediately
+							GitHubPRNotFoundError: (error) =>
+								Effect.fail(
+									new ResourceNotFoundError({
+										url: query.url,
+										message: `PR not found: ${error.owner}/${error.repo}#${error.number}`,
+									}),
+								),
+							// Auth worked but API error — propagate immediately
+							GitHubApiError: (error) =>
+								Effect.fail(
+									new IntegrationResourceError({
+										url: query.url,
+										message: error.message,
+										provider: "github",
+									}),
+								),
+							GitHubRateLimitError: (error) =>
+								Effect.fail(
+									new IntegrationResourceError({
+										url: query.url,
+										message: error.retryAfter
+											? `Rate limit exceeded. Try again in ${error.retryAfter} seconds.`
+											: error.message,
+										provider: "github",
+									}),
+								),
+						}),
 					)
 
 					if (Option.isSome(authenticatedResult)) {
@@ -242,30 +236,29 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 					const pr = yield* gitHubApiClient
 						.fetchPRPublic(parsed.owner, parsed.repo, parsed.number)
 						.pipe(
-							// 404 on public API = private repo or not found; show "Connect GitHub"
-							Effect.catchTag("GitHubPRNotFoundError", () =>
-								Effect.fail(
-									new IntegrationNotConnectedForPreviewError({ provider: "github" }),
-								),
-							),
-							Effect.catchTag("GitHubRateLimitError", (error) =>
-								Effect.fail(
-									new IntegrationResourceError({
-										url: query.url,
-										message: error.message,
-										provider: "github",
-									}),
-								),
-							),
-							Effect.catchTag("GitHubApiError", (error) =>
-								Effect.fail(
-									new IntegrationResourceError({
-										url: query.url,
-										message: error.message,
-										provider: "github",
-									}),
-								),
-							),
+							Effect.catchTags({
+								// 404 on public API = private repo or not found; show "Connect GitHub"
+								GitHubPRNotFoundError: () =>
+									Effect.fail(
+										new IntegrationNotConnectedForPreviewError({ provider: "github" }),
+									),
+								GitHubRateLimitError: (error) =>
+									Effect.fail(
+										new IntegrationResourceError({
+											url: query.url,
+											message: error.message,
+											provider: "github",
+										}),
+									),
+								GitHubApiError: (error) =>
+									Effect.fail(
+										new IntegrationResourceError({
+											url: query.url,
+											message: error.message,
+											provider: "github",
+										}),
+									),
+							}),
 						)
 
 					return prToResponse(pr)
@@ -291,7 +284,7 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 					Effect.catchTags({
 						ConfigError: (error) =>
 							Effect.fail(
-								new InternalServerError({
+								InternalServerError.withCause({
 									message: "Discord bot token not configured",
 									cause: error,
 								}),
@@ -318,12 +311,11 @@ const handleGetGitHubRepositories = Effect.fn("integration-resources.getGitHubRe
 	// Fetch repositories from GitHub API using GitHubApiClient
 	const gitHubApiClient = yield* GitHub.GitHubApiClient
 	const result = yield* gitHubApiClient.fetchRepositories(accessToken, page, perPage).pipe(
-		Effect.mapError(
-			(error) =>
-				new InternalServerError({
-					message: "Failed to fetch GitHub repositories",
-					cause: error,
-				}),
+		Effect.mapError((error) =>
+			InternalServerError.withCause({
+				message: "Failed to fetch GitHub repositories",
+				cause: error,
+			}),
 		),
 	)
 
@@ -410,12 +402,16 @@ const handleGetSlackChannels = Effect.fn("integration-resources.getSlackChannels
 	const access = yield* callObject(IntegrationAccessTokenCall, orgTarget(orgId), {
 		provider: "slack",
 	}).pipe(
-		Effect.catchTag("IntegrationTokenUnavailableError", () => Effect.succeed(null)),
-		Effect.catchTag("ObjectCallError", (error) =>
-			Effect.fail(
-				new InternalServerError({ message: "The organization is unavailable", cause: error }),
-			),
-		),
+		Effect.catchTags({
+			IntegrationTokenUnavailableError: () => Effect.succeed(null),
+			ObjectCallError: (error) =>
+				Effect.fail(
+					InternalServerError.withCause({
+						message: "The organization is unavailable",
+						cause: error,
+					}),
+				),
+		}),
 	)
 	if (access === null || access.connection.externalAccountId === null) {
 		return yield* new IntegrationNotConnectedForPreviewError({ provider: "slack" })

@@ -250,7 +250,7 @@ export const SetCustomerAttentionMute = Command.define("SetCustomerAttentionMute
 	args: {
 		...target,
 		userId: UserId,
-		mute: Schema.NullOr(Schema.Struct({ untilMs: Schema.NullOr(Schema.Number) })),
+		mute: Schema.NullOr(Schema.Struct({ untilMs: Schema.NullOr(Schema.Finite) })),
 	},
 	messages: [Message.SucceededAccountUpdate, Message.FailedAccountUpdate],
 	execute: ({ mute, ...args }) =>
@@ -438,7 +438,7 @@ export const LoadNoteDrafts = Command.define("LoadNoteDrafts", {
  * is caught before `catchCommon`: here it means no grant, not a lost session.
  */
 export const StartCustomerImpersonation = Command.define("StartCustomerImpersonation", {
-	args: { organizationId: OrganizationId, contactId: CustomerContactId, attempt: Schema.Number },
+	args: { organizationId: OrganizationId, contactId: CustomerContactId, attempt: Schema.Finite },
 	messages: [Message.SucceededStartImpersonation, Message.FailedStartImpersonation],
 	execute: ({ organizationId, contactId, attempt }) =>
 		HazelRpc.use((rpc) => rpc("customers.impersonation.start", { organizationId, contactId })).pipe(

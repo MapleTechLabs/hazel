@@ -17,7 +17,7 @@ const driverText = 'relation "users" does not exist'
 const ProbeLive = HttpApiBuilder.group(api, "probe", (handlers) =>
 	handlers.handle("boom", () =>
 		Effect.fail(
-			new InternalServerError({ message: "Error selecting user", cause: new Error(driverText) }),
+			InternalServerError.withCause({ message: "Error selecting user", cause: new Error(driverText) }),
 		),
 	),
 )

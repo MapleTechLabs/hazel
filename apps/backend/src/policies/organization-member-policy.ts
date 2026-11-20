@@ -4,6 +4,10 @@ import type { OrganizationMember } from "@hazel/domain/models"
 import type { OrganizationId, OrganizationMemberId } from "@hazel/schema"
 import { Context, Effect, Layer, Option } from "effect"
 
+/**
+ * Its checks read the calling actor (`CurrentUser.Context`), which differs on every request, so
+ * each method requires it.
+ */
 export class OrganizationMemberPolicy extends Context.Service<OrganizationMemberPolicy>()(
 	"OrganizationMemberPolicy/Policy",
 	{

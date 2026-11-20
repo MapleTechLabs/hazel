@@ -1,0 +1,45 @@
+{
+	// Shared by every package tsconfig. `typecheck` runs `effect-tsgo tsc`, the Effect-patched TypeScript-Go,
+	// which reads this plugin entry and reports Effect diagnostics as ordinary tsc errors (see @effect/tsgo).
+	// Effect diagnostics at error or warning severity fail `typecheck`; suggestions only print.
+	"compilerOptions": {
+		"plugins": [
+			{
+				"name": "@effect/language-service",
+				// The unstable Effect 4 modules the app is built on, by choice. Any other unstable API is
+				// still a warning: add it here deliberately.
+				"allowedUnstableApis": [
+					"effect/ByteSize",
+					"effect/ErrorReporter",
+					"effect/FileSystem",
+					"effect/PartitionedSemaphore",
+					"effect/Path",
+					"effect/ai",
+					"effect/cli",
+					"effect/crypto",
+					"effect/devtools",
+					"effect/encoding/Sse",
+					"effect/http",
+					"effect/http-api",
+					"effect/observability",
+					"effect/persistence",
+					"effect/rpc",
+					"effect/schema/VariantSchema",
+					"effect/socket",
+					"effect/sql",
+					"@effect/ai-openrouter",
+					"@effect/platform-browser",
+					"@effect/platform-bun",
+					"@effect/platform-node",
+					"@effect/sql-d1",
+					"@effect/sql-sqlite-do",
+					"@effect/sql-sqlite-node",
+					"@effect/vitest"
+				],
+				// alchemy 2.0.0-beta.85 pins @distilled.cloud rc.18, while the backend signs uploads with
+				// aws4signer rc.20 (its signed-query fix). Upgrading alchemy to beta.87 (rc.20) removes this.
+				"allowedDuplicatedPackages": ["@distilled.cloud/aws4signer", "@distilled.cloud/core"]
+			}
+		]
+	}
+}

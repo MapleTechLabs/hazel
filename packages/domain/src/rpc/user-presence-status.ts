@@ -13,17 +13,19 @@ import { RequiredScopes } from "../scopes/required-scopes"
  * Response schema for successful user presence status operations.
  * Contains the status data and a transaction ID for optimistic updates.
  */
-export class UserPresenceStatusResponse extends Schema.Class<UserPresenceStatusResponse>(
-	"UserPresenceStatusResponse",
-)({
+export class UserPresenceStatusResponse extends Schema.Class<
+	UserPresenceStatusResponse,
+	{ readonly brand: unique symbol }
+>("UserPresenceStatusResponse")({
 	data: UserPresenceStatus.Schema,
 	transactionId: TransactionId,
 }) {}
 
 /** The status the user picked, and when a timed pick goes back to online (null: until changed). */
-export class UserPresenceSettingsResponse extends Schema.Class<UserPresenceSettingsResponse>(
-	"UserPresenceSettingsResponse",
-)({
+export class UserPresenceSettingsResponse extends Schema.Class<
+	UserPresenceSettingsResponse,
+	{ readonly brand: unique symbol }
+>("UserPresenceSettingsResponse")({
 	status: PreferredPresenceStatus,
 	statusExpiresAt: Schema.NullOr(JsonDate),
 	transactionId: TransactionId,
@@ -33,12 +35,12 @@ export class UserPresenceSettingsResponse extends Schema.Class<UserPresenceSetti
  * Error thrown when a user presence status is not found.
  * Used in update operations.
  */
-export class UserPresenceStatusNotFoundError extends Schema.TaggedError<UserPresenceStatusNotFoundError>()(
-	"UserPresenceStatusNotFoundError",
-	{
-		statusId: UserPresenceStatusId,
-	},
-) {}
+export class UserPresenceStatusNotFoundError extends Schema.TaggedError<
+	UserPresenceStatusNotFoundError,
+	{ readonly brand: unique symbol }
+>()("UserPresenceStatusNotFoundError", {
+	statusId: UserPresenceStatusId,
+}) {}
 
 /**
  * UserPresenceStatus RPC Group

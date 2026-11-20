@@ -13,7 +13,7 @@ export const Webhook = Schema.Struct({
 	avatarUrl: Schema.NullOr(Schema.String),
 	tokenSuffix: Schema.String,
 	isEnabled: Schema.Boolean,
-	lastUsedAtMs: Schema.NullOr(Schema.Number),
+	lastUsedAtMs: Schema.NullOr(Schema.Finite),
 })
 export type Webhook = typeof Webhook.Type
 
@@ -22,9 +22,9 @@ export const RssFeed = Schema.Struct({
 	feedUrl: Schema.String,
 	feedTitle: Schema.NullOr(Schema.String),
 	feedIconUrl: Schema.NullOr(Schema.String),
-	consecutiveErrors: Schema.Number,
+	consecutiveErrors: Schema.Finite,
 	isEnabled: Schema.Boolean,
-	pollingIntervalMinutes: Schema.Number,
+	pollingIntervalMinutes: Schema.Finite,
 })
 export type RssFeed = typeof RssFeed.Type
 
@@ -56,7 +56,7 @@ export const RssFeeds = AsyncData.Schema(Schema.Array(RssFeed), ChannelRequestFa
 export const GitHubRepos = AsyncData.Schema(Schema.Array(GitHubRepo), ChannelRequestFailure)
 
 /** A fetched list; `version` names the latest request, so older results drop. */
-const listOf = <A, I>(data: Schema.Codec<A, I>) => Schema.Struct({ version: Schema.Number, data })
+const listOf = <A, I>(data: Schema.Codec<A, I>) => Schema.Struct({ version: Schema.Finite, data })
 
 export const Provider = Schema.Literals(["openstatus", "railway"])
 export type Provider = typeof Provider.Type
@@ -78,7 +78,7 @@ export type CardAction = typeof CardAction.Type
 export const ProviderCard = Schema.Struct({
 	action: CardAction,
 	/** Bumped per "Confirm?", so only the latest 3 s timeout disarms it. */
-	confirmVersion: Schema.Number,
+	confirmVersion: Schema.Finite,
 	createdToken: Schema.NullOr(Schema.String),
 })
 export type ProviderCard = typeof ProviderCard.Type

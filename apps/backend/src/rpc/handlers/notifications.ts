@@ -27,7 +27,7 @@ export const NotificationRpcLive = NotificationRpcs.toLayer(
 				db
 					.transaction(
 						Effect.gen(function* () {
-							yield* notificationPolicy.canCreate()
+							yield* notificationPolicy.canCreate
 							const [created] = yield* notificationRepo.insert({ ...payload })
 							const txid = yield* generateTransactionId()
 							return new NotificationResponse({ data: created!, transactionId: txid })
@@ -71,7 +71,7 @@ export const NotificationRpcLive = NotificationRpcs.toLayer(
 				db
 					.transaction(
 						Effect.gen(function* () {
-							yield* notificationPolicy.canMarkAllAsRead()
+							yield* notificationPolicy.canMarkAllAsRead
 							const deleted =
 								messageIds.length === 0
 									? []

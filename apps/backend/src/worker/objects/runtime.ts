@@ -378,27 +378,28 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		 * A forwarded sync upgrade (workerd): the api Worker verified the token and set the
 		 * principal and object id headers.
 		 */
-		const connect = (request: Request) =>
-			Effect.gen(function* () {
-				yield* markEntry
-				const objectId = request.headers.get(OBJECT_ID_HEADER)
-				const principal = decodeSyncPrincipal(request.headers.get(PRINCIPAL_HEADER) ?? "")
-				if (objectId === null || Option.isNone(principal)) {
-					return new Response("Missing sync principal", { status: 400 })
-				}
-				yield* remember(objectId)
-				yield* prepare
-				return yield* run(synced.sync.upgradeSocket(request, principal.value)).pipe(
-					// A refused socket (closed with 4003/4004) must not mark the user online.
-					Effect.tap(({ result, socket }) =>
-						result === "accepted" ? presenceOpened(principal.value, socket) : Effect.void,
-					),
-					Effect.map(({ response }) => response),
-					Effect.catchTag("SyncAttachmentTooLargeError", () =>
-						Effect.succeed(new Response("Principal too large", { status: 400 })),
-					),
-				)
-			}).pipe(Effect.withSpan("SyncDO.connect", { attributes: { "object.kind": kind } }))
+		const connect = Effect.fn("SyncDO.connect", { attributes: { "object.kind": kind } })(function* (
+			request: Request,
+		) {
+			yield* markEntry
+			const objectId = request.headers.get(OBJECT_ID_HEADER)
+			const principal = decodeSyncPrincipal(request.headers.get(PRINCIPAL_HEADER) ?? "")
+			if (objectId === null || Option.isNone(principal)) {
+				return new Response("Missing sync principal", { status: 400 })
+			}
+			yield* remember(objectId)
+			yield* prepare
+			return yield* run(synced.sync.upgradeSocket(request, principal.value)).pipe(
+				// A refused socket (closed with 4003/4004) must not mark the user online.
+				Effect.tap(({ result, socket }) =>
+					result === "accepted" ? presenceOpened(principal.value, socket) : Effect.void,
+				),
+				Effect.map(({ response }) => response),
+				Effect.catchTag("SyncAttachmentTooLargeError", () =>
+					Effect.succeed(new Response("Principal too large", { status: 400 })),
+				),
+			)
+		})
 
 		/** A wake-up (`POST /sync/warm`): the instance being built is all it asks for. */
 		const warm = markEntry.pipe(Effect.withSpan("SyncDO.warm", { attributes: { "object.kind": kind } }))

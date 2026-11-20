@@ -5,9 +5,9 @@ import { UnauthorizedError } from "../errors"
 export const policy = <Entity extends string, Action extends string, E, R>(
 	entity: Entity,
 	action: Action,
-	f: (actor: typeof CurrentUser.Schema.Type) => Effect.Effect<boolean, E, R>,
+	f: (actor: CurrentUser.Schema) => Effect.Effect<boolean, E, R>,
 ): Effect.Effect<void, E | UnauthorizedError, R | CurrentUser.Context> =>
-	CurrentUser.Context.use((actor: typeof CurrentUser.Schema.Type) =>
+	CurrentUser.Context.use((actor: CurrentUser.Schema) =>
 		Effect.flatMap(f(actor), (can) =>
 			can
 				? Effect.void

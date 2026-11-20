@@ -72,9 +72,9 @@ const setup = Effect.gen(function* () {
 	}
 	/** What a compute does last, then the alarm delivers it. */
 	const publish = Effect.gen(function* () {
-		yield* world.object.run(publishChannelCustomersAfterCompute).pipe(Effect.orDie)
-		yield* world.object.alarm.pipe(Effect.orDie)
-	})
+		yield* world.object.run(publishChannelCustomersAfterCompute)
+		yield* world.object.alarm
+	}).pipe(Effect.orDie)
 	const signal = (account: string, title: string, priorityScore: number, status = "open") => {
 		const id = uuid()
 		world.rows(

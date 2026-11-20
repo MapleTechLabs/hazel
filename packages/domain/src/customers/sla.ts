@@ -274,31 +274,31 @@ export const workingTimeBetween = (calendar: SlaCalendar, from: number, to: numb
 export const ReplyClock = Schema.Struct({
 	/** The issue's first response (reported), or a later reply after the customer wrote again. */
 	first: Schema.Boolean,
-	startedAt: Schema.Number,
-	dueAt: Schema.Number,
-	warnAt: Schema.Number,
+	startedAt: Schema.Finite,
+	dueAt: Schema.Finite,
+	warnAt: Schema.Finite,
 	/** Met by a team reply; `stoppedAt` instead when the issue closed first. */
-	metAt: Schema.NullOr(Schema.Number),
-	stoppedAt: Schema.NullOr(Schema.Number),
+	metAt: Schema.NullOr(Schema.Finite),
+	stoppedAt: Schema.NullOr(Schema.Finite),
 	/** Working time from start to the reply. */
-	elapsedMs: Schema.NullOr(Schema.Number),
-	warnedAt: Schema.NullOr(Schema.Number),
-	breachedAt: Schema.NullOr(Schema.Number),
+	elapsedMs: Schema.NullOr(Schema.Finite),
+	warnedAt: Schema.NullOr(Schema.Finite),
+	breachedAt: Schema.NullOr(Schema.Finite),
 })
 export type ReplyClock = typeof ReplyClock.Type
 
 export const ResolutionClock = Schema.Struct({
 	/** Running since (null while paused or resolved). */
-	runningSince: Schema.NullOr(Schema.Number),
+	runningSince: Schema.NullOr(Schema.Finite),
 	/** Working time counted before `runningSince`. */
-	consumedMs: Schema.Number,
+	consumedMs: Schema.Finite,
 	/** While running; null while paused or resolved. */
-	dueAt: Schema.NullOr(Schema.Number),
-	warnAt: Schema.NullOr(Schema.Number),
-	pausedAt: Schema.NullOr(Schema.Number),
-	resolvedAt: Schema.NullOr(Schema.Number),
-	warnedAt: Schema.NullOr(Schema.Number),
-	breachedAt: Schema.NullOr(Schema.Number),
+	dueAt: Schema.NullOr(Schema.Finite),
+	warnAt: Schema.NullOr(Schema.Finite),
+	pausedAt: Schema.NullOr(Schema.Finite),
+	resolvedAt: Schema.NullOr(Schema.Finite),
+	warnedAt: Schema.NullOr(Schema.Finite),
+	breachedAt: Schema.NullOr(Schema.Finite),
 })
 export type ResolutionClock = typeof ResolutionClock.Type
 
@@ -683,8 +683,8 @@ export const outcomeOf = (state: SlaState, targets: SlaTargets): SlaOutcome => {
 // ---------------------------------------------------------------------------------------------
 // The support report (`customers.support.report`)
 
-const Ms = Schema.NullOr(Schema.Number)
-const Share = Schema.NullOr(Schema.Number)
+const Ms = Schema.NullOr(Schema.Finite)
+const Share = Schema.NullOr(Schema.Finite)
 
 export const ClockStats = Schema.Struct({
 	/** Issues with this clock finished (answered / resolved). */

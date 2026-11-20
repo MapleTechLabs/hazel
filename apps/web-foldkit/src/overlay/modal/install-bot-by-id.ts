@@ -69,7 +69,7 @@ export const InstallBotById = Command.define("InstallBotById", {
 	execute: ({ botId, organizationId }) =>
 		Effect.gen(function* () {
 			// Legacy casts the trimmed text to a BotId; the RPC client then rejects a non-UUID.
-			const id = yield* Schema.decodeUnknownEffect(BotId)(botId)
+			const id = yield* Schema.decodeEffect(BotId)(botId)
 			const client = yield* HazelRpc
 			yield* client("bot.installById", { botId: id, organizationId: organizationId ?? undefined })
 			return Message.SucceededInstallBot()

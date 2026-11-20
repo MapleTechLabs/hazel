@@ -18,7 +18,7 @@ class Model extends M.Class<Model>("ChannelMember")({
 	notificationLevel: M.Defaulted(S.NullOr(NotificationLevel)),
 	isFavorite: S.Boolean,
 	lastSeenMessageId: S.NullOr(MessageId),
-	notificationCount: M.GeneratedByApp(S.Number),
+	notificationCount: M.GeneratedByApp(S.Finite),
 	joinedAt: M.Immutable(JsonDate),
 	createdAt: M.Generated(JsonDate),
 	deletedAt: M.GeneratedByApp(S.NullOr(JsonDate)),

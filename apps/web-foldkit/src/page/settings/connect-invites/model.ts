@@ -9,7 +9,7 @@ export const Invite = Schema.Struct({
 	id: ConnectInviteId,
 	hostOrganizationId: OrganizationId,
 	status: Schema.String,
-	createdAtMs: Schema.Number,
+	createdAtMs: Schema.Finite,
 })
 export type Invite = typeof Invite.Type
 
@@ -38,7 +38,7 @@ export const Model = Schema.Struct({
 	/** The organization the list was last requested for (the legacy query atom's key). */
 	requestedFor: Schema.NullOr(OrganizationId),
 	/** Bumped per list request; an older response is dropped. */
-	listVersion: Schema.Number,
+	listVersion: Schema.Finite,
 	invites: Invites.schema,
 	hostOrganizations: Schema.Array(HostOrganization),
 	acceptingIds: Schema.Array(ConnectInviteId),

@@ -184,8 +184,8 @@ export const HoverEvent = defineMessageUnion({
 	/** `imageUrl`: the attachment image right-clicked, if any. */
 	RightClickedMessage: {
 		messageId: MessageId,
-		offset: Schema.Number,
-		crossOffset: Schema.Number,
+		offset: Schema.Finite,
+		crossOffset: Schema.Finite,
 		imageUrl: Schema.NullOr(Schema.String),
 	},
 })

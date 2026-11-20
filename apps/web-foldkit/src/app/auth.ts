@@ -18,7 +18,10 @@ import { clearRememberedSession, forgetRememberedSession } from "./remembered-us
  * The API (or the desktop keychain) could not answer. The auth client's errors are not part of the
  * app's `CommonError` union, so the reason is classified once here: offline, or unavailable.
  */
-export class SessionCheckError extends Schema.TaggedError<SessionCheckError>()("SessionCheckError", {
+export class SessionCheckError extends Schema.TaggedError<
+	SessionCheckError,
+	{ readonly brand: unique symbol }
+>()("SessionCheckError", {
 	reason: CommonReason,
 }) {}
 
@@ -54,9 +57,12 @@ export const readSession: Effect.Effect<SessionAnswer, SessionCheckError, HazelA
 )
 
 /** The API rejected sign-out or could not be reached; the user stays signed in. */
-export class SignOutError extends Schema.TaggedError<SignOutError>()("SignOutError", {
-	reason: CommonReason,
-}) {}
+export class SignOutError extends Schema.TaggedError<SignOutError, { readonly brand: unique symbol }>()(
+	"SignOutError",
+	{
+		reason: CommonReason,
+	},
+) {}
 
 /**
  * Forgets this device's push token, ends the session on the API, closes every sync connection,

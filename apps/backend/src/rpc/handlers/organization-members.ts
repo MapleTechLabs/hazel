@@ -101,17 +101,9 @@ export const OrganizationMemberRpcLive = OrganizationMemberRpcs.toLayer(
 							const updatedOrganizationMemberOption =
 								yield* organizationMemberRepo.updateMetadata(id, metadata)
 
-							const updatedOrganizationMember = yield* Option.match(
+							const updatedOrganizationMember = yield* Effect.fromOption(
 								updatedOrganizationMemberOption,
-								{
-									onNone: () =>
-										Effect.fail(
-											new OrganizationMemberNotFoundError({
-												organizationMemberId: id,
-											}),
-										),
-									onSome: (member) => Effect.succeed(member),
-								},
+								() => new OrganizationMemberNotFoundError({ organizationMemberId: id }),
 							)
 
 							const txid = yield* generateTransactionId()

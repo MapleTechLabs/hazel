@@ -4,7 +4,7 @@ import { createBotGatewayPartitionKey } from "@hazel/domain"
 import { Message } from "@hazel/domain/models"
 import type { BotId, ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { BotGatewayEventRejectedError } from "@hazel/domain"
-import { Effect, Layer, Option, Result, Schema } from "effect"
+import { Effect, Layer, Result, Schema } from "effect"
 import { serviceShape } from "../test/effect-helpers"
 import { BotGatewayService } from "./bot-gateway-service"
 import { BotGatewayTransport, type BotGatewayNamespace } from "./bot-gateway-transport"
@@ -29,12 +29,10 @@ const makeChannelRepoLayer = (organizationId: OrganizationId) =>
 		ChannelRepo,
 		serviceShape<typeof ChannelRepo>({
 			findById: (id: ChannelId) =>
-				Effect.succeed(
-					Option.some({
-						id,
-						organizationId,
-					}),
-				),
+				Effect.succeedSome({
+					id,
+					organizationId,
+				}),
 		}),
 	)
 

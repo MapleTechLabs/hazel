@@ -5,7 +5,7 @@ import { clampCropRect } from "~/utils/image-crop"
 
 /** The crop area of `AvatarCropModal` (`crop-area.tsx` + `use-crop-interaction.ts`). */
 
-export const CropRect = Schema.Struct({ x: Schema.Number, y: Schema.Number, size: Schema.Number })
+export const CropRect = Schema.Struct({ x: Schema.Finite, y: Schema.Finite, size: Schema.Finite })
 export type CropRect = typeof CropRect.Type
 
 /** `CropError`'s reasons: the image would not load, or the canvas could not crop or encode it. */
@@ -17,8 +17,8 @@ export type DragMode = typeof DragMode.Type
 
 export const Drag = Schema.Struct({
 	mode: DragMode,
-	startX: Schema.Number,
-	startY: Schema.Number,
+	startX: Schema.Finite,
+	startY: Schema.Finite,
 	startCrop: CropRect,
 })
 export type Drag = typeof Drag.Type
@@ -26,8 +26,8 @@ export type Drag = typeof Drag.Type
 /** A loaded image: its object URL, natural size and the current crop (image pixels). */
 export const CropImage = Schema.Struct({
 	src: Schema.String,
-	width: Schema.Number,
-	height: Schema.Number,
+	width: Schema.Finite,
+	height: Schema.Finite,
 	crop: CropRect,
 	drag: Schema.NullOr(Drag),
 })

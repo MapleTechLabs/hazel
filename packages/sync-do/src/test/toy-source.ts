@@ -3,7 +3,7 @@
  * dependency-only `access` table granting private projects. Loads go through the object's effect
  * `SqlClient`, as a real object's do.
  */
-import { Effect } from "effect"
+import { Data, Effect } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import type { SyncSource } from "../source.ts"
 
@@ -40,14 +40,17 @@ export const makeToyControls = (): ToyControls => ({
 	loads: [],
 })
 
+/** A load or a reauthentication the controls made fail. */
+export class ToySourceError extends Data.TaggedError("ToySourceError")<{ readonly message: string }> {}
+
 const placeholders = (keys: ReadonlyArray<string>) => keys.map(() => "?").join(", ")
 
-export const makeToySource = (controls: ToyControls): SyncSource<ToyPrincipal, Error, SqlClient> => {
+export const makeToySource = (controls: ToyControls): SyncSource<ToyPrincipal, ToySourceError, SqlClient> => {
 	const guard = (table: string, principal: ToyPrincipal, keys: ReadonlyArray<string> | "all") =>
 		Effect.suspend(() => {
 			controls.loads.push(`${table}:${principal.userId}:${keys === "all" ? "all" : keys.join(",")}`)
 			return controls.failing.has(principal.userId)
-				? Effect.fail(new Error(`load failed for ${principal.userId}`))
+				? Effect.fail(new ToySourceError({ message: `load failed for ${principal.userId}` }))
 				: Effect.void
 		})
 	const accessToUsers = (changes: ReadonlyArray<{ readonly pk: string }>) =>
@@ -102,7 +105,7 @@ export const makeToySource = (controls: ToyControls): SyncSource<ToyPrincipal, E
 		expiresAt: (principal) => principal.expiresAt,
 		// `<userId>:<expiresAt>` is valid; `down` cannot be checked; `broken` fails; others are invalid.
 		reauthenticate: (_principal, token) => {
-			if (token === "broken") return Effect.fail(new Error("verifier failed"))
+			if (token === "broken") return Effect.fail(new ToySourceError({ message: "verifier failed" }))
 			if (token === "down") return Effect.succeed("unavailable" as const)
 			const [userId, expiresAt] = token.split(":")
 			return Effect.succeed(

@@ -251,7 +251,7 @@ export const userIdOfAssignKey = (key: string): string | null =>
 	key.startsWith(ASSIGN_USER) ? key.slice(ASSIGN_USER.length) : null
 
 export const assignEntries = (
-	members: ReadonlyArray<typeof MemberRow.Type>,
+	members: ReadonlyArray<MemberRow>,
 	viewer: Viewer,
 ): ReadonlyArray<Menu.Entry> => [
 	Menu.item(ASSIGN_ME),

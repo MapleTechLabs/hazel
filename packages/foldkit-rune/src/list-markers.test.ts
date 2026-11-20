@@ -12,7 +12,7 @@ import type { CommitStats, RuntimeToHost, WireNode } from "./wire"
 const Message = defineMessageUnion({ Added: {} })
 type Message = typeof Message.Type
 
-const Model = Schema.Struct({ count: Schema.Number })
+const Model = Schema.Struct({ count: Schema.Finite })
 type Model = typeof Model.Type
 
 type View = (model: Model, h: HtmlBuilder<Message>) => Html

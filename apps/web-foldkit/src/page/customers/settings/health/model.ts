@@ -19,36 +19,40 @@ type ComponentKey = Customers.HealthComponentKey
 
 const Steps = <F extends Schema.Struct.Fields>(fields: F) => Schema.Array(Schema.Struct(fields))
 
+/** A number input's value: null while it is emptied or does not read as a number. */
+const Entry = Schema.NullOr(Schema.Finite)
+
 /**
  * `HealthSettings` without its checks: the draft holds whatever the inputs hold (an emptied field
- * is `NaN`) until it decodes as `HealthSettings` again.
+ * is `null`) until it decodes as `HealthSettings` again. The weights only move by stepper and slider.
  */
 export const HealthDraft = Schema.Struct({
 	weights: Schema.Struct({
-		usage: Schema.Number,
-		engagement: Schema.Number,
-		billing: Schema.Number,
-		signals: Schema.Number,
+		usage: Schema.Finite,
+		engagement: Schema.Finite,
+		billing: Schema.Finite,
+		signals: Schema.Finite,
 	}),
-	bands: Schema.Struct({ healthyMin: Schema.Number, atRiskMin: Schema.Number }),
+	bands: Schema.Struct({ healthyMin: Entry, atRiskMin: Entry }),
 	steps: Schema.Struct({
 		usage: Schema.Struct({
-			activeRatioWeight: Schema.Number,
-			activeRatio: Steps({ min: Schema.Number, score: Schema.Number }),
-			trend: Steps({ min: Schema.Number, score: Schema.Number }),
+			activeRatioWeight: Entry,
+			activeRatio: Steps({ min: Entry, score: Entry }),
+			trend: Steps({ min: Entry, score: Entry }),
 		}),
-		engagement: Schema.Struct({ daysSinceActive: Steps({ max: Schema.Number, score: Schema.Number }) }),
+		engagement: Schema.Struct({ daysSinceActive: Steps({ max: Entry, score: Entry }) }),
 		billing: Schema.Struct({
-			pastDue: Schema.Number,
-			overdueOverWeek: Schema.Number,
-			overdue: Schema.Number,
-			cancelScheduled: Schema.Number,
-			ok: Schema.Number,
+			pastDue: Entry,
+			overdueOverWeek: Entry,
+			overdue: Entry,
+			cancelScheduled: Entry,
+			ok: Entry,
 		}),
-		signals: Schema.Struct({ high: Schema.Number, medium: Schema.Number, low: Schema.Number }),
+		signals: Schema.Struct({ high: Entry, medium: Entry, low: Entry }),
 	}),
 	excludedTemplates: Schema.Array(Customers.SignalTemplate),
 })
+export type HealthDraft = typeof HealthDraft.Type
 
 export const COMPONENTS: ReadonlyArray<ComponentKey> = Customers.HealthComponentKey.literals
 
@@ -124,39 +128,43 @@ export type Model = typeof Model.Type
 export const CHECK_ACCOUNT_ID = "health-check-account"
 
 /** What the page edits and previews: the draft, or the saved settings when there is none. */
-export const draftOf = (model: Model): HealthSettings | null => model.draft ?? model.settings?.health ?? null
+export const draftOf = (model: Model): HealthDraft | null => model.draft ?? model.settings?.health ?? null
 
 export const isDirty = (model: Model): boolean =>
 	model.draft !== null && model.settings !== null && !Equal.equals(model.draft, model.settings.health)
 
 // VALIDATION
 
-export const weightTotal = (draft: HealthSettings): number =>
+export const weightTotal = (draft: HealthDraft): number =>
 	COMPONENTS.reduce((sum, key) => sum + draft.weights[key], 0)
 
-const isScore = (value: number) => Number.isInteger(value) && value >= 0 && value <= 100
+const isScore = (value: number | null) =>
+	value !== null && Number.isInteger(value) && value >= 0 && value <= 100
 
-/** Keys of the fields that do not hold: `healthyMin`, `trend.2.threshold`, `pastDue`, … */
-export const invalidFieldsOf = (draft: HealthSettings): ReadonlySet<string> => {
+/** Keys of the fields that do not hold: `healthyMin`, `trend.2.threshold`, `pastDue`, … An emptied one never does. */
+export const invalidFieldsOf = (draft: HealthDraft): ReadonlySet<string> => {
 	const invalid = new Set<string>()
 	const { bands, steps } = draft
 	for (const band of BandKey.literals) if (!isScore(bands[band])) invalid.add(band)
-	if (!(bands.atRiskMin < bands.healthyMin)) {
+	if (bands.atRiskMin === null || bands.healthyMin === null || !(bands.atRiskMin < bands.healthyMin)) {
 		invalid.add("healthyMin")
 		invalid.add("atRiskMin")
 	}
 	const checkList = (
 		list: StepList,
-		rows: ReadonlyArray<{ readonly threshold: number; readonly score: number }>,
+		rows: ReadonlyArray<{ readonly threshold: number | null; readonly score: number | null }>,
 		isThreshold: (value: number) => boolean,
 		isOrdered: (previous: number, next: number) => boolean,
 	) =>
 		rows.forEach((row, index) => {
 			if (!isScore(row.score)) invalid.add(`${list}.${index}.score`)
 			const previous = rows[index - 1]
+			// A step after an emptied one cannot be ordered against it either.
 			if (
+				row.threshold === null ||
 				!isThreshold(row.threshold) ||
-				(previous !== undefined && !isOrdered(previous.threshold, row.threshold))
+				(previous !== undefined &&
+					(previous.threshold === null || !isOrdered(previous.threshold, row.threshold)))
 			)
 				invalid.add(`${list}.${index}.threshold`)
 		})
@@ -188,46 +196,57 @@ export const invalidFieldsOf = (draft: HealthSettings): ReadonlySet<string> => {
 const isHealthSettings = Schema.is(Customers.HealthSettings)
 
 /** The draft, when it is one the server takes: fields in range and ordered, weights summing to 100. */
-export const validDraftOf = (model: Model): HealthSettings | null =>
-	model.draft !== null &&
-	invalidFieldsOf(model.draft).size === 0 &&
-	weightTotal(model.draft) === 100 &&
-	isHealthSettings(model.draft)
-		? model.draft
+export const validDraftOf = (model: Model): HealthSettings | null => {
+	const { draft } = model
+	return draft !== null &&
+		invalidFieldsOf(draft).size === 0 &&
+		weightTotal(draft) === 100 &&
+		isHealthSettings(draft)
+		? draft
 		: null
+}
 
 // EDITS
 
 const replaceAt = <A>(items: ReadonlyArray<A>, index: number, f: (item: A) => A): ReadonlyArray<A> =>
 	items.map((item, at) => (at === index ? f(item) : item))
 
-export const withWeight = (draft: HealthSettings, key: ComponentKey, value: number): HealthSettings => ({
+export const withWeight = (draft: HealthDraft, key: ComponentKey, value: number): HealthDraft => ({
 	...draft,
 	weights: { ...draft.weights, [key]: Math.min(100, Math.max(0, Math.round(value))) },
 })
 
-export const withBand = (draft: HealthSettings, band: BandKey, value: number): HealthSettings => ({
+export const withBand = (draft: HealthDraft, band: BandKey, value: number | null): HealthDraft => ({
 	...draft,
 	bands: { ...draft.bands, [band]: value },
 })
 
-/** A handle moves within its side of the other one, so the bands stay ordered. */
-export const withBandHandle = (draft: HealthSettings, band: BandKey, value: number): HealthSettings =>
-	withBand(
+/**
+ * A handle moves within its side of the other one, so the bands stay ordered. While the other one is
+ * emptied there is no side to stay on, and the band stays unset too.
+ */
+export const withBandHandle = (draft: HealthDraft, band: BandKey, value: number): HealthDraft => {
+	const { atRiskMin, healthyMin } = draft.bands
+	return withBand(
 		draft,
 		band,
 		band === "healthyMin"
-			? Math.max(value, draft.bands.atRiskMin + 1)
-			: Math.min(value, draft.bands.healthyMin - 1),
+			? atRiskMin === null
+				? null
+				: Math.max(value, atRiskMin + 1)
+			: healthyMin === null
+				? null
+				: Math.min(value, healthyMin - 1),
 	)
+}
 
 export const withStep = (
-	draft: HealthSettings,
+	draft: HealthDraft,
 	list: StepList,
 	index: number,
 	field: StepField,
-	value: number,
-): HealthSettings => {
+	value: number | null,
+): HealthDraft => {
 	if (list === "daysSinceActive")
 		return {
 			...draft,
@@ -254,7 +273,7 @@ export const withStep = (
 	}
 }
 
-export const withScore = (draft: HealthSettings, field: ScoreField, value: number): HealthSettings => {
+export const withScore = (draft: HealthDraft, field: ScoreField, value: number | null): HealthDraft => {
 	const { steps } = draft
 	if (field === "activeRatioWeight")
 		return { ...draft, steps: { ...steps, usage: { ...steps.usage, activeRatioWeight: value } } }

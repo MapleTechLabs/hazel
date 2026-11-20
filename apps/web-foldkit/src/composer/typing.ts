@@ -23,10 +23,10 @@ export type Indicator = typeof Indicator.Type
 export const Model = Schema.Struct({
 	isTyping: Schema.Boolean,
 	/** Bumped on every start and stop; a heartbeat answering an older session is deleted. */
-	sessionId: Schema.Number,
+	sessionId: Schema.Finite,
 	canHeartbeat: Schema.Boolean,
-	heartbeatVersion: Schema.Number,
-	timeoutVersion: Schema.Number,
+	heartbeatVersion: Schema.Finite,
+	timeoutVersion: Schema.Finite,
 	indicator: Schema.NullOr(Indicator),
 	lastContent: Schema.String,
 })
@@ -45,10 +45,10 @@ export const init = (): Model => ({
 // MESSAGE
 
 export const Message = defineMessageUnion({
-	SucceededSendTypingHeartbeat: { sessionId: Schema.Number, indicator: Indicator },
+	SucceededSendTypingHeartbeat: { sessionId: Schema.Finite, indicator: Indicator },
 	FailedSendTypingHeartbeat: {},
-	CompletedWaitForHeartbeatInterval: { version: Schema.Number },
-	CompletedWaitForTypingTimeout: { version: Schema.Number },
+	CompletedWaitForHeartbeatInterval: { version: Schema.Finite },
+	CompletedWaitForTypingTimeout: { version: Schema.Finite },
 	CompletedDeleteTypingIndicator: {},
 })
 export type Message = typeof Message.Type
@@ -62,7 +62,7 @@ export interface Context {
 // COMMAND
 
 export const SendTypingHeartbeat = Command.define("SendTypingHeartbeat", {
-	args: { channelId: ChannelId, memberId: ChannelMemberId, sessionId: Schema.Number },
+	args: { channelId: ChannelId, memberId: ChannelMemberId, sessionId: Schema.Finite },
 	messages: [Message.SucceededSendTypingHeartbeat, Message.FailedSendTypingHeartbeat],
 	execute: ({ channelId, memberId, sessionId }) =>
 		Effect.gen(function* () {
@@ -76,7 +76,7 @@ export const SendTypingHeartbeat = Command.define("SendTypingHeartbeat", {
 				sessionId,
 				indicator: { id: response.data.id, channelId },
 			})
-		}).pipe(Effect.catch(() => Effect.succeed(Message.FailedSendTypingHeartbeat()))),
+		}).pipe(Effect.orElseSucceed(() => Message.FailedSendTypingHeartbeat())),
 })
 
 /** `typingIndicator.delete`; a failure is ignored (the server expires the indicator anyway). */
@@ -94,7 +94,7 @@ export const DeleteTypingIndicator = Command.define("DeleteTypingIndicator", {
 })
 
 export const WaitForHeartbeatInterval = Command.define("WaitForHeartbeatInterval", {
-	args: { version: Schema.Number },
+	args: { version: Schema.Finite },
 	messages: [Message.CompletedWaitForHeartbeatInterval],
 	// Timers stay pending while typing goes on; a newer version supersedes them.
 	interrupt: true,
@@ -105,7 +105,7 @@ export const WaitForHeartbeatInterval = Command.define("WaitForHeartbeatInterval
 })
 
 export const WaitForTypingTimeout = Command.define("WaitForTypingTimeout", {
-	args: { version: Schema.Number },
+	args: { version: Schema.Finite },
 	messages: [Message.CompletedWaitForTypingTimeout],
 	interrupt: true,
 	execute: ({ version }) =>

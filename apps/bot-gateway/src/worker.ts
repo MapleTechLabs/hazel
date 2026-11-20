@@ -91,13 +91,15 @@ export default BotGatewayWorker.make(
 			}
 			const namespace = env[BOT_GATEWAY_NAMESPACE] as WorkerdNamespace
 
+			// The relay authenticates after this handler returns, with this request's services.
+			const runPromise = Effect.runPromiseWith(yield* Effect.context())
 			const [client, server] = newWebSocketPair()
 			server.accept()
 			startRelay({
 				client: relaySocket(server),
 				heartbeatIntervalMs: settings.heartbeatIntervalMs,
 				leaseTtlMs: settings.leaseTtlMs,
-				authenticate: (botToken) => Effect.runPromise(authenticateBotToken(botToken, directory)),
+				authenticate: (botToken) => runPromise(authenticateBotToken(botToken, directory)),
 				connect: (handshake) => connectToObject(namespace, handshake),
 				log: (message, fields) => console.warn(message, fields ?? {}),
 			})

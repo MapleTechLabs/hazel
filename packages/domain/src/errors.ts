@@ -1,7 +1,10 @@
 import { Effect, Predicate, Schema } from "effect"
 import { ChannelId, MessageId } from "@hazel/schema"
 
-export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>("UnauthorizedError")(
+export class UnauthorizedError extends Schema.TaggedError<
+	UnauthorizedError,
+	{ readonly brand: unique symbol }
+>()(
 	"UnauthorizedError",
 	{
 		message: Schema.String,
@@ -34,7 +37,10 @@ export const attachCause = (error: Error, cause: unknown) => {
  * be client-safe: never `String(error)` or driver text). Pass the underlying failure as `cause`:
  * it stays on the server, where the error reporter logs it with the full `Cause`.
  */
-export class InternalServerError extends Schema.TaggedError<InternalServerError>("InternalServerError")(
+export class InternalServerError extends Schema.TaggedError<
+	InternalServerError,
+	{ readonly brand: unique symbol }
+>()(
 	"InternalServerError",
 	{
 		message: Schema.String,
@@ -46,20 +52,26 @@ export class InternalServerError extends Schema.TaggedError<InternalServerError>
 		return Predicate.isTagged(u, "InternalServerError")
 	}
 
-	constructor(
-		props: { readonly message: string; readonly detail?: string | undefined; readonly cause?: unknown },
-		options?: Schema.MakeOptions,
-	) {
-		const { cause, ...fields } = props
-		super(fields, options)
-		attachCause(this, cause)
+	/** The error with the underlying failure attached as its server-side `cause`. */
+	static withCause({
+		cause,
+		...fields
+	}: {
+		readonly message: string
+		readonly detail?: string | undefined
+		readonly cause: unknown
+	}): InternalServerError {
+		const error = new InternalServerError(fields)
+		attachCause(error, cause)
+		return error
 	}
 }
 
 /** The request does not fit the channel or is malformed (e.g. naming a channel that is not a thread). */
-export class InvalidChannelRequestError extends Schema.TaggedError<InvalidChannelRequestError>(
-	"InvalidChannelRequestError",
-)(
+export class InvalidChannelRequestError extends Schema.TaggedError<
+	InvalidChannelRequestError,
+	{ readonly brand: unique symbol }
+>()(
 	"InvalidChannelRequestError",
 	{
 		message: Schema.String,
@@ -71,9 +83,10 @@ export class InvalidChannelRequestError extends Schema.TaggedError<InvalidChanne
  * The operation acts on the caller's active organization, and the session has none
  * (`CurrentUser.organizationId` is unset).
  */
-export class ActiveOrganizationRequiredError extends Schema.TaggedError<ActiveOrganizationRequiredError>(
-	"ActiveOrganizationRequiredError",
-)(
+export class ActiveOrganizationRequiredError extends Schema.TaggedError<
+	ActiveOrganizationRequiredError,
+	{ readonly brand: unique symbol }
+>()(
 	"ActiveOrganizationRequiredError",
 	{
 		message: Schema.String,
@@ -81,9 +94,10 @@ export class ActiveOrganizationRequiredError extends Schema.TaggedError<ActiveOr
 	{ httpApiStatus: 400 },
 ) {}
 
-export class DmChannelAlreadyExistsError extends Schema.TaggedError<DmChannelAlreadyExistsError>(
-	"DmChannelAlreadyExistsError",
-)(
+export class DmChannelAlreadyExistsError extends Schema.TaggedError<
+	DmChannelAlreadyExistsError,
+	{ readonly brand: unique symbol }
+>()(
 	"DmChannelAlreadyExistsError",
 	{
 		message: Schema.String,
@@ -96,7 +110,10 @@ export class DmChannelAlreadyExistsError extends Schema.TaggedError<DmChannelAlr
  * Error thrown when a message is not found.
  * Used in update, delete, and thread creation operations.
  */
-export class MessageNotFoundError extends Schema.TaggedError<MessageNotFoundError>("MessageNotFoundError")(
+export class MessageNotFoundError extends Schema.TaggedError<
+	MessageNotFoundError,
+	{ readonly brand: unique symbol }
+>()(
 	"MessageNotFoundError",
 	{
 		messageId: MessageId,
@@ -108,13 +125,14 @@ export class MessageNotFoundError extends Schema.TaggedError<MessageNotFoundErro
  * A live-state write would grow the message's live state past what one reply may hold. Nothing was
  * applied; finish the reply (or replace its text) instead of appending more.
  */
-export class LiveStateTooLargeError extends Schema.TaggedError<LiveStateTooLargeError>(
-	"LiveStateTooLargeError",
-)(
+export class LiveStateTooLargeError extends Schema.TaggedError<
+	LiveStateTooLargeError,
+	{ readonly brand: unique symbol }
+>()(
 	"LiveStateTooLargeError",
 	{
 		messageId: MessageId,
-		limitBytes: Schema.Number,
+		limitBytes: Schema.Finite,
 	},
 	{ httpApiStatus: 413 },
 ) {}
@@ -123,7 +141,10 @@ export class LiveStateTooLargeError extends Schema.TaggedError<LiveStateTooLarge
  * Error thrown when attempting to create a thread within a thread.
  * Nested threads are not supported.
  */
-export class NestedThreadError extends Schema.TaggedError<NestedThreadError>("NestedThreadError")(
+export class NestedThreadError extends Schema.TaggedError<
+	NestedThreadError,
+	{ readonly brand: unique symbol }
+>()(
 	"NestedThreadError",
 	{
 		channelId: ChannelId,
@@ -145,7 +166,7 @@ export function withRemapDbErrors(
 	): Effect.Effect<A, Exclude<E, { _tag: "DatabaseError" | "SchemaError" }> | InternalServerError, R> => {
 		const toInternalError = (cause: unknown, detailPrefix: string) =>
 			Effect.fail(
-				new InternalServerError({
+				InternalServerError.withCause({
 					message: `Error ${action}ing ${entityType}`,
 					detail: constructDetailMessage(detailPrefix, entityType, entityId),
 					cause,

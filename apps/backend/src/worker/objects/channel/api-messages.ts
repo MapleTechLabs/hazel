@@ -19,7 +19,7 @@ export const ListMessagesCall = defineCall("channel.listMessages", "channel", {
 		channelId: ChannelId,
 		startingAfter: Schema.NullOr(MessageId),
 		endingBefore: Schema.NullOr(MessageId),
-		limit: Schema.Number,
+		limit: Schema.Finite,
 	}),
 	success: Schema.Struct({ messages: Schema.Array(Message.Schema), hasMore: Schema.Boolean }),
 	error: Schema.Union([UnauthorizedError, InvalidPaginationError]),

@@ -13,7 +13,7 @@ const msOf = (date: Parameters<typeof toDate>[0] | null) => (date ? toDate(date)
 // LISTS (`listChannelWebhooksMutation`, `listRssSubscriptionsMutation`, `listGitHubSubscriptionsMutation`)
 
 export const ListWebhooks = Command.define("ListWebhooks", {
-	args: { channelId: ChannelId, version: Schema.Number },
+	args: { channelId: ChannelId, version: Schema.Finite },
 	messages: [Message.SucceededListWebhooks, Message.FailedList],
 	execute: ({ channelId, version }) =>
 		HazelRpc.use((rpc) => rpc("channelWebhook.list", { channelId })).pipe(
@@ -41,7 +41,7 @@ export const ListWebhooks = Command.define("ListWebhooks", {
 })
 
 export const ListRss = Command.define("ListRss", {
-	args: { channelId: ChannelId, version: Schema.Number },
+	args: { channelId: ChannelId, version: Schema.Finite },
 	messages: [Message.SucceededListRss, Message.FailedList],
 	execute: ({ channelId, version }) =>
 		HazelRpc.use((rpc) => rpc("rssSubscription.list", { channelId })).pipe(
@@ -68,7 +68,7 @@ export const ListRss = Command.define("ListRss", {
 })
 
 export const ListGitHub = Command.define("ListGitHub", {
-	args: { channelId: ChannelId, version: Schema.Number },
+	args: { channelId: ChannelId, version: Schema.Finite },
 	messages: [Message.SucceededListGitHub, Message.FailedList],
 	execute: ({ channelId, version }) =>
 		HazelRpc.use((rpc) => rpc("githubSubscription.list", { channelId })).pipe(
@@ -235,7 +235,7 @@ export const RunProviderAction = Command.define("RunProviderAction", {
 })
 
 export const WaitForConfirmReset = Command.define("WaitForConfirmReset", {
-	args: { provider: Provider, version: Schema.Number },
+	args: { provider: Provider, version: Schema.Finite },
 	messages: [Message.ElapsedConfirmDelay],
 	execute: ({ provider, version }) =>
 		Effect.sleep(Duration.seconds(3)).pipe(Effect.as(Message.ElapsedConfirmDelay({ provider, version }))),
@@ -269,7 +269,10 @@ export const CreateWebhook = Command.define("CreateWebhook", {
 // CLIPBOARD
 
 /** `navigator.clipboard.writeText` rejected (permission, insecure context). */
-class ClipboardWriteError extends Schema.TaggedError<ClipboardWriteError>()("ClipboardWriteError", {}) {}
+class ClipboardWriteError extends Schema.TaggedError<
+	ClipboardWriteError,
+	{ readonly brand: unique symbol }
+>()("ClipboardWriteError", {}) {}
 
 export const CopyText = Command.define("CopyText", {
 	args: {

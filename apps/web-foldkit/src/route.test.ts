@@ -137,7 +137,7 @@ describe("urlToAppRoute", () => {
 	})
 
 	it("prints the onboarding step URL in legacy search order", () => {
-		const id = Schema.decodeUnknownSync(OrganizationId)(orgId)
+		const id = Schema.decodeSync(OrganizationId)(orgId)
 		expect(onboardingHref(id, "role")).toBe(`/onboarding?orgId=${orgId}&step=role`)
 		expect(onboardingHref(null, "welcome")).toBe("/onboarding?step=welcome")
 	})
@@ -205,7 +205,7 @@ describe("customers routes", () => {
 	})
 
 	it("builds the helper routes", () => {
-		const account = Schema.decodeUnknownSync(CustomerAccountId)(accountId)
+		const account = Schema.decodeSync(CustomerAccountId)(accountId)
 		expect(hrefOf(customersListRoute("hazel"))).toBe("/hazel/customers/list")
 		expect(hrefOf(customersListRoute("hazel", "churned"))).toBe("/hazel/customers/list?view=churned")
 		expect(hrefOf(customerRoute("hazel", account))).toBe(`/hazel/customers/${accountId}`)
@@ -241,7 +241,7 @@ describe("redirects", () => {
 	})
 
 	const user = (isOnboarded: boolean): CurrentUser => ({
-		id: Schema.decodeUnknownSync(UserId)(userId),
+		id: Schema.decodeSync(UserId)(userId),
 		firstName: "Ada",
 		lastName: "Lovelace",
 		email: "ada@hazel.test",
@@ -250,7 +250,7 @@ describe("redirects", () => {
 	})
 
 	it("resolves the root redirect like `_app/index.tsx`", () => {
-		const organizationId = Schema.decodeUnknownSync(OrganizationId)(orgId)
+		const organizationId = Schema.decodeSync(OrganizationId)(orgId)
 		const member = Option.some({ organizationId, slug: "hazel" })
 		expect(hrefOf(rootRedirect(user(true), member))).toBe("/hazel")
 		expect(hrefOf(rootRedirect(user(true), Option.none()))).toBe("/select-organization")
@@ -263,7 +263,7 @@ describe("redirects", () => {
 
 	// The phone's tab bar has no Home; opening the app lands on the Chats tab, not the members page.
 	it("lands a phone on the channel list", () => {
-		const organizationId = Schema.decodeUnknownSync(OrganizationId)(orgId)
+		const organizationId = Schema.decodeSync(OrganizationId)(orgId)
 		const member = Option.some({ organizationId, slug: "hazel" })
 		const mobile = { isMobile: true }
 		expect(hrefOf(rootRedirect(user(true), member, mobile))).toBe("/hazel/chat")
@@ -275,12 +275,12 @@ describe("redirects", () => {
 
 describe("hrefOf", () => {
 	const orgSlug = "hazel"
-	const channel = Schema.decodeUnknownSync(ChannelId)(channelId)
-	const user = Schema.decodeUnknownSync(UserId)(userId)
-	const connection = Schema.decodeUnknownSync(SyncConnectionId)(connectionId)
-	const organization = Schema.decodeUnknownSync(OrganizationId)(orgId)
-	const account = Schema.decodeUnknownSync(CustomerAccountId)(accountId)
-	const rule = Schema.decodeUnknownSync(CustomerSignalRuleId)(ruleId)
+	const channel = Schema.decodeSync(ChannelId)(channelId)
+	const user = Schema.decodeSync(UserId)(userId)
+	const connection = Schema.decodeSync(SyncConnectionId)(connectionId)
+	const organization = Schema.decodeSync(OrganizationId)(orgId)
+	const account = Schema.decodeSync(CustomerAccountId)(accountId)
+	const rule = Schema.decodeSync(CustomerSignalRuleId)(ruleId)
 	const none = Option.none<string>()
 
 	/** One value per tag (the record keeps it exhaustive) and the exact URL it must print. */

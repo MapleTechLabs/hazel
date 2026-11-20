@@ -11,7 +11,7 @@ export const Model = Schema.Struct({
 	interaction: Interaction.Model,
 	isSelected: Schema.Boolean,
 	choice: Schema.NullOr(Schema.String),
-	pressCount: Schema.Number,
+	pressCount: Schema.Finite,
 })
 export type Model = typeof Model.Type
 

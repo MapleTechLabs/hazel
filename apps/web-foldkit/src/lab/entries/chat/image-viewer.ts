@@ -15,13 +15,13 @@ const IMAGES: ReadonlyArray<ImageViewerImage> = [
 	{ id: "window", fileName: "squirrel-window.webp", fileSize: 98_000, url: "/images/squirrle_window.webp" },
 ]
 
-const Model = Schema.Struct({ isOpen: Schema.Boolean, index: Schema.Number, lastAction: Schema.String })
+const Model = Schema.Struct({ isOpen: Schema.Boolean, index: Schema.Finite, lastAction: Schema.String })
 type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
 	ClickedOpen: {},
 	ClosedViewer: {},
-	SelectedImage: { index: Schema.Number },
+	SelectedImage: { index: Schema.Finite },
 	ClickedAction: { action: Schema.String },
 })
 type Message = typeof Message.Type

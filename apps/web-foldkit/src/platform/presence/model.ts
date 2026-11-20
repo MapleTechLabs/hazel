@@ -30,16 +30,16 @@ export const Model = Schema.Struct({
 	/** Window focused and document visible; while not, the server is told no channel is open. */
 	isWindowFocused: Schema.Boolean,
 	/** `lastActivityAtom`; 0 until the first context or activity arrives. */
-	lastActivityMs: Schema.Number,
+	lastActivityMs: Schema.Finite,
 	isAfk: Schema.Boolean,
 	/** `manualStatusAtom`: a status picked in the palette, ahead of the AFK-derived one. */
 	manualStatus: Schema.NullOr(PresenceStatus),
 	/** The last write the server confirmed; null until this mount's first write lands. */
 	sent: Schema.NullOr(Sent),
 	/** Writes that failed in a row; each failure re-syncs after a growing backoff. */
-	failedSyncs: Schema.Number,
+	failedSyncs: Schema.Finite,
 	/** Bumped on every change; the debounce Subscription restarts on each bump. */
-	syncVersion: Schema.Number,
+	syncVersion: Schema.Finite,
 	isSyncPending: Schema.Boolean,
 	isHeartbeatInFlight: Schema.Boolean,
 })

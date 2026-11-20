@@ -55,8 +55,8 @@ export const T3CodeLink = Schema.Struct({
 	environmentLabel: Schema.String,
 	environmentUrl: Schema.String,
 	status: IntegrationConnection.ConnectionStatus,
-	expiresAtMs: Schema.NullOr(Schema.Number),
-	connectedAtMs: Schema.Number,
+	expiresAtMs: Schema.NullOr(Schema.Finite),
+	connectedAtMs: Schema.Finite,
 	sharing: T3CodeSharing,
 })
 export type T3CodeLink = typeof T3CodeLink.Type
@@ -99,7 +99,7 @@ export const Model = Schema.Struct({
 	memberSearch: Schema.String,
 	sharingSave: SharingSave,
 	/** The latest sharing PUT; an older one's result is ignored. */
-	sharingRequestId: Schema.Number,
+	sharingRequestId: Schema.Finite,
 	/** Maple's bot's install in this workspace, `null` when it is not installed (`view-maple.ts`). */
 	mapleInstall: Schema.NullOr(MapleInstall),
 	mapleUninstalling: Schema.Boolean,

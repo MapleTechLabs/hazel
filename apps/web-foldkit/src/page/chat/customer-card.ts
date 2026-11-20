@@ -37,7 +37,7 @@ export const Model = Schema.Struct({
 	/** The pointer left the chip and card: the card closes unless it comes back within the grace. */
 	isLeaving: Schema.Boolean,
 	/** Tells the latest hover or leave timer from stale ones. */
-	token: Schema.Number,
+	token: Schema.Finite,
 	/** A phone's bottom sheet. */
 	sheet: Modal.Model,
 })
@@ -60,8 +60,8 @@ export const Message = defineMessageUnion({
 	HoveredChip: {},
 	EnteredCard: {},
 	LeftHover: {},
-	ElapsedOpenDelay: { token: Schema.Number },
-	ElapsedLeaveDelay: { token: Schema.Number },
+	ElapsedOpenDelay: { token: Schema.Finite },
+	ElapsedLeaveDelay: { token: Schema.Finite },
 	PressedChip: { isMobile: Schema.Boolean },
 	PressedEscape: {},
 	PressedOutside: {},
@@ -80,13 +80,13 @@ const OPEN_DELAY = Duration.millis(350)
 const LEAVE_GRACE = Duration.millis(200)
 
 const WaitBeforeCustomerCard = Command.define("WaitBeforeCustomerCard", {
-	args: { token: Schema.Number },
+	args: { token: Schema.Finite },
 	messages: [Message.ElapsedOpenDelay],
 	execute: ({ token }) => Effect.sleep(OPEN_DELAY).pipe(Effect.as(Message.ElapsedOpenDelay({ token }))),
 })
 
 const WaitBeforeCustomerCardClose = Command.define("WaitBeforeCustomerCardClose", {
-	args: { token: Schema.Number },
+	args: { token: Schema.Finite },
 	messages: [Message.ElapsedLeaveDelay],
 	execute: ({ token }) => Effect.sleep(LEAVE_GRACE).pipe(Effect.as(Message.ElapsedLeaveDelay({ token }))),
 })

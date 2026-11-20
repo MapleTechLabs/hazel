@@ -34,10 +34,10 @@ export type CurrentUserData = typeof CurrentUserData.schema.Type
 export const Session = defineTaggedUnion({
 	/** `isFetchingUser`: the boot `user.me` runs beside the session check, so a confirmed session need not ask again. */
 	Loading: { isFetchingUser: Schema.Boolean },
-	Unreachable: { reason: CommonReason, retries: Schema.Number },
+	Unreachable: { reason: CommonReason, retries: Schema.Finite },
 	SignedOut: {},
 	/** `retries`: automatic `user.me` retries so far; past the limit the error screen offers one by hand. */
-	SignedIn: { user: CurrentUserData.schema, retries: Schema.Number },
+	SignedIn: { user: CurrentUserData.schema, retries: Schema.Finite },
 })
 export type Session = typeof Session.Type
 
@@ -83,7 +83,7 @@ export const Model = Schema.Struct({
 	/** `useSidebar().isMobile`: the `(max-width: 767px)` viewport. */
 	isMobile: Schema.Boolean,
 	/** Wall clock for presence and status expiry, ticking while the signed-in shell shows. */
-	nowMs: Schema.Number,
+	nowMs: Schema.Finite,
 	/** The stored theme preference (`themeAtom`, `themeCustomizationAtom`), and the system's theme. */
 	themePreference: ThemePreference,
 	systemTheme: ResolvedTheme,
@@ -94,7 +94,7 @@ export const Model = Schema.Struct({
 	/** The keyboard's platform: what `Mod` means, and how keys are labeled. */
 	keyboardPlatform: KeyboardPlatform,
 	/** When this app load started (from Flags), for the notification sinks. */
-	sessionStartMs: Schema.Number,
+	sessionStartMs: Schema.Finite,
 	page: Schema.NullOr(PageSlot),
 	/** Page instances built so far: numbers the next one (`page/contract.ts`). */
 	pageInstances: Schema.Int,

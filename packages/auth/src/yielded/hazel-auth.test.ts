@@ -103,7 +103,7 @@ const asD1 = (sql: SqlClient.SqlClient): SqlClient.SqlClient =>
 
 describe("Hazel auth on D1 (node SQLite)", () => {
 	// One database for the whole suite: the routes and the assertions share it.
-	const databaseScope = Effect.runSync(Scope.make())
+	const databaseScope = Scope.makeUnsafe()
 	const memory = Effect.runSync(Layer.buildWithScope(layerMemory, databaseScope))
 	const database = Context.add(memory, SqlClient.SqlClient, asD1(Context.get(memory, SqlClient.SqlClient)))
 	const TestSql = Layer.succeedContext(database)
@@ -382,8 +382,9 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 		)
 		const verified = await Effect.runPromise(
 			AccessToken.verifyAccessToken(origin, Redacted.value(token)).pipe(
-				Effect.provide(AccessToken.Jwks.layerLocal({ keys: [published] })),
-				Effect.provide(CryptoLive),
+				Effect.provide(
+					AccessToken.Jwks.layerLocal({ keys: [published] }).pipe(Layer.provideMerge(CryptoLive)),
+				),
 			),
 		)
 		expect(verified.claims.sub).toBe("00000000-0000-4000-8000-000000000001")
@@ -391,8 +392,9 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 		// Another stage's issuer does not verify.
 		const foreign = await Effect.runPromise(
 			AccessToken.verifyAccessToken("https://api.hazel.sh", Redacted.value(token)).pipe(
-				Effect.provide(AccessToken.Jwks.layerLocal({ keys: [published] })),
-				Effect.provide(CryptoLive),
+				Effect.provide(
+					AccessToken.Jwks.layerLocal({ keys: [published] }).pipe(Layer.provideMerge(CryptoLive)),
+				),
 				Effect.result,
 			),
 		)

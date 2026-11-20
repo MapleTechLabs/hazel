@@ -32,7 +32,7 @@ export const UploadFailure = Schema.Union([
 export type UploadFailure = typeof UploadFailure.Type
 
 export const UploadEvent = defineMessageUnion({
-	ProgressedUpload: { fileId: Schema.String, progress: Schema.Number },
+	ProgressedUpload: { fileId: Schema.String, progress: Schema.Finite },
 	SucceededUpload: { fileId: Schema.String, attachmentId: AttachmentId },
 	FailedUpload: { fileId: Schema.String, reason: UploadFailure },
 })
@@ -47,9 +47,12 @@ export interface UploadArgs {
 
 const STORAGE_TIMEOUT_MS = 120_000
 
-class StorageUploadError extends Schema.TaggedError<StorageUploadError>()("StorageUploadError", {
-	reason: Schema.Literals(["StorageNetwork", "StorageTimeout", "StorageServer"]),
-}) {}
+class StorageUploadError extends Schema.TaggedError<StorageUploadError, { readonly brand: unique symbol }>()(
+	"StorageUploadError",
+	{
+		reason: Schema.Literals(["StorageNetwork", "StorageTimeout", "StorageServer"]),
+	},
+) {}
 
 /** The type the file is stored with: one a browser would run as a document is stored as plain bytes. */
 const uploadContentType = (file: File) =>

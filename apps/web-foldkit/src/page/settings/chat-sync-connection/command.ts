@@ -60,7 +60,7 @@ const webhookPermissionOf = (settings: unknown): WebhookPermission => {
 }
 
 export const ListChannelLinks = Command.define("ListChannelLinks", {
-	args: { syncConnectionId: SyncConnectionId, version: Schema.Number },
+	args: { syncConnectionId: SyncConnectionId, version: Schema.Finite },
 	messages: [Message.SucceededListChannelLinks, Message.FailedListChannelLinks],
 	execute: ({ syncConnectionId, version }) =>
 		Effect.gen(function* () {
@@ -173,7 +173,7 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 		externalChannelName: Schema.String,
 		direction: SyncDirection,
 		/** The latest messages to import (0: none). */
-		historyLimit: Schema.Number,
+		historyLimit: Schema.Finite,
 	},
 	messages: [Message.SucceededCreateLink, Message.FailedCreateLink],
 	execute: ({ hazelChannelName, ...payload }) =>

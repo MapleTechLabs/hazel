@@ -90,11 +90,8 @@ export const runMuxSession = Effect.fnUntraced(function* (
 			// The client's first frame came with the open: the source starts on it right away.
 			const hello = stream.hello
 			if (hello !== undefined) {
-				try {
-					opened.socket.send(hello)
-				} catch {
-					// The object socket is closing; the pull below reports the close.
-				}
+				// A throw: the object socket is closing; the pull below reports the close.
+				yield* Effect.ignore(Effect.try(() => opened.socket.send(hello)))
 			}
 			yield* sendControl(
 				hello === undefined ? { _tag: "Opened", id } : { _tag: "Opened", id, hello: true },
@@ -126,12 +123,8 @@ export const runMuxSession = Effect.fnUntraced(function* (
 			if (routed !== undefined) {
 				const upstream = upstreams.get(routed.id)
 				if (upstream === undefined) return
-				try {
-					upstream.send(routed.frame)
-				} catch {
-					// The object socket is closing; its relay reports the close.
-				}
-				return
+				// A throw: the object socket is closing; its relay reports the close.
+				return yield* Effect.ignore(Effect.try(() => upstream.send(routed.frame)))
 			}
 			const control = decodeControl(data)
 			if (Option.isNone(control)) {

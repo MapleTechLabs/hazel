@@ -17,11 +17,11 @@ const RowMenuId = Schema.Struct({ kind: RowKind, id: Schema.String })
 
 export const Message = defineMessageUnion({
 	UpdatedGitHubConnection: { isConnected: Schema.Boolean },
-	SucceededListWebhooks: { version: Schema.Number, webhooks: Schema.Array(Webhook) },
-	SucceededListRss: { version: Schema.Number, feeds: Schema.Array(RssFeed) },
-	SucceededListGitHub: { version: Schema.Number, repos: Schema.Array(GitHubRepo) },
+	SucceededListWebhooks: { version: Schema.Finite, webhooks: Schema.Array(Webhook) },
+	SucceededListRss: { version: Schema.Finite, feeds: Schema.Array(RssFeed) },
+	SucceededListGitHub: { version: Schema.Finite, repos: Schema.Array(GitHubRepo) },
 	/** A list failed: it keeps the rows it had (`Stale`), or shows the failure with a retry. */
-	FailedList: { kind: RowKind, version: Schema.Number, reason: ChannelRequestFailure },
+	FailedList: { kind: RowKind, version: Schema.Finite, reason: ChannelRequestFailure },
 	ClickedRetryList: { kind: RowKind },
 	ClickedConnectGitHub: {},
 	ClickedAddRepo: {},
@@ -47,7 +47,7 @@ export const Message = defineMessageUnion({
 	FailedConnectProvider: { provider: Provider, reason: ChannelRequestFailure },
 	ClickedToggleProvider: { provider: Provider },
 	ClickedDeleteProvider: { provider: Provider },
-	ElapsedConfirmDelay: { provider: Provider, version: Schema.Number },
+	ElapsedConfirmDelay: { provider: Provider, version: Schema.Finite },
 	SucceededProviderAction: { provider: Provider, successMessage: Schema.String },
 	FailedProviderAction: { provider: Provider, reason: RowActionFailure },
 	ClickedProviderUrlInfo: {},

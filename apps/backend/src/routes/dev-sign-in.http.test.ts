@@ -46,7 +46,7 @@ describe("POST /internal/dev/sign-in", () => {
 				),
 			),
 		)
-		const scope = Effect.runSync(Scope.make())
+		const scope = Scope.makeUnsafe()
 		scopes.push(scope)
 		const context = await Effect.runPromise(Layer.buildWithScope(Auth, scope))
 		const web = HttpRouter.toWebHandler(

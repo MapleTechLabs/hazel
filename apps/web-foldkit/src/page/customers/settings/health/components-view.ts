@@ -291,7 +291,13 @@ const weightSlider = (h: H, model: Model, key: ComponentKey, context: Context): 
 	})
 }
 
-const scoreInput = (h: H, field: ScoreField, value: number, ariaLabel: string, context: Context): Html =>
+const scoreInput = (
+	h: H,
+	field: ScoreField,
+	value: number | null,
+	ariaLabel: string,
+	context: Context,
+): Html =>
 	numberInput(h, context, {
 		field,
 		value,
@@ -305,8 +311,8 @@ const stepRows = (
 	context: Context,
 	options: Readonly<{
 		list: StepList
-		steps: ReadonlyArray<{ readonly threshold: number; readonly score: number }>
-		/** The threshold as the input shows it, and back. */
+		steps: ReadonlyArray<{ readonly threshold: number | null; readonly score: number | null }>
+		/** The threshold as the input shows it, and back (an emptied one stays emptied). */
 		show: (threshold: number) => number
 		read: (shown: number) => number
 		condition: (input: Html) => ReadonlyArray<Html | string>
@@ -318,16 +324,18 @@ const stepRows = (
 		const isLast = index === options.steps.length - 1
 		const threshold = numberInput(h, context, {
 			field: `${options.list}.${index}.threshold`,
-			value: options.show(step.threshold),
+			value: step.threshold === null ? null : options.show(step.threshold),
 			ariaLabel: `Step ${index + 1} threshold, ${options.unit}`,
-			onInput: (text) =>
-				Message.ChangedStep({
+			onInput: (text) => {
+				const shown = parseNumber(text)
+				return Message.ChangedStep({
 					list: options.list,
 					index,
 					field: "threshold",
-					value: options.read(parseNumber(text)),
+					value: shown === null ? null : options.read(shown),
 					text,
-				}),
+				})
+			},
 		})
 		return ruleRow(h, isLast ? [options.otherwise] : options.condition(threshold), [
 			"→",
@@ -349,6 +357,8 @@ const stepRows = (
 
 const rules = (h: H, key: ComponentKey, context: Context): ReadonlyArray<Html> => {
 	const { steps } = context.draft
+	const { activeRatioWeight } = steps.usage
+	const trendShare = activeRatioWeight === null ? null : 100 - activeRatioWeight
 	const identity = (value: number) => value
 	const section = (children: ReadonlyArray<Html>) =>
 		h.div([h.Class("flex flex-col gap-1.5")], [...children])
@@ -400,10 +410,7 @@ const rules = (h: H, key: ComponentKey, context: Context): ReadonlyArray<Html> =
 								"% active ratio",
 							],
 						),
-						h.span(
-							[h.Class("whitespace-nowrap")],
-							[`+ ${textOf(100 - steps.usage.activeRatioWeight)}% trend.`],
-						),
+						h.span([h.Class("whitespace-nowrap")], [`+ ${textOf(trendShare)}% trend.`]),
 						h.span([], ["No trend yet: the ratio alone."]),
 					],
 				),

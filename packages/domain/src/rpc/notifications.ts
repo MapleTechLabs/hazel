@@ -11,7 +11,10 @@ import { RequiredScopes } from "../scopes/required-scopes"
  * Response schema for successful notification operations.
  * Contains the notification data and a transaction ID for optimistic updates.
  */
-export class NotificationResponse extends Schema.Class<NotificationResponse>("NotificationResponse")({
+export class NotificationResponse extends Schema.Class<
+	NotificationResponse,
+	{ readonly brand: unique symbol }
+>("NotificationResponse")({
 	data: Notification.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -20,12 +23,12 @@ export class NotificationResponse extends Schema.Class<NotificationResponse>("No
  * Error thrown when a notification is not found.
  * Used in update and delete operations.
  */
-export class NotificationNotFoundError extends Schema.TaggedError<NotificationNotFoundError>()(
-	"NotificationNotFoundError",
-	{
-		notificationId: NotificationId,
-	},
-) {}
+export class NotificationNotFoundError extends Schema.TaggedError<
+	NotificationNotFoundError,
+	{ readonly brand: unique symbol }
+>()("NotificationNotFoundError", {
+	notificationId: NotificationId,
+}) {}
 
 export class NotificationRpcs extends RpcGroup.make(
 	/**
@@ -106,7 +109,7 @@ export class NotificationRpcs extends RpcGroup.make(
 			channelId: ChannelId,
 		}),
 		success: Schema.Struct({
-			deletedCount: Schema.Number,
+			deletedCount: Schema.Finite,
 			transactionId: TransactionId,
 		}),
 		error: Schema.Union([UnauthorizedError, InternalServerError]),

@@ -87,7 +87,7 @@ export const SetSearchText = Command.define("SetSearchText", {
 })
 
 export const DeleteFilterText = Command.define("DeleteFilterText", {
-	args: { filterStartOffset: Schema.Number },
+	args: { filterStartOffset: Schema.Finite },
 	messages: [Message.SucceededDeleteFilterText, Message.FailedDeleteFilterText],
 	execute: ({ filterStartOffset }) =>
 		withEditor(SEARCH_EDITOR_ID, (view) => deleteFilterText(view, filterStartOffset)).pipe(
@@ -97,7 +97,7 @@ export const DeleteFilterText = Command.define("DeleteFilterText", {
 })
 
 export const SyncSuggestionCount = Command.define("SyncSuggestionCount", {
-	args: { count: Schema.Number },
+	args: { count: Schema.Finite },
 	messages: [Message.SucceededSyncSuggestionCount, Message.FailedSyncSuggestionCount],
 	execute: ({ count }) =>
 		withEditor(SEARCH_EDITOR_ID, (view) => syncOptionCount(view, count)).pipe(

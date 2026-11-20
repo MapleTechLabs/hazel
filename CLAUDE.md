@@ -61,7 +61,7 @@ Local dev is `bun run alchemy:dev` (alias `bun run dev`): it runs every Worker i
 - `bun run alchemy:typecheck` - Typecheck the alchemy stack (`alchemy.run.ts`, `apps/*/alchemy.run.ts`)
 - `bun run setup` - Interactive setup: writes `.env.local`
 - `bun run build` - Build all apps and run typecheck
-- `bun run typecheck` - Run TypeScript typechecking across all packages
+- `bun run typecheck` - Run TypeScript typechecking across all packages. Every `typecheck` script runs `effect-tsgo tsc` (`@effect/tsgo`, the Effect-patched TypeScript-Go), so Effect diagnostics at error or warning severity fail it, in CI too; they are configured in the root `tsconfig.base.json`, which every package tsconfig extends. Silence a false positive with `// @effect-diagnostics-next-line <rule>:off` and a comment saying why
 - `bun run format` - Format code using Oxc (includes linting and auto-fixes)
 - `bun run test` - Run tests in watch mode using Vitest
 - `bun run test:once` - Run all tests once

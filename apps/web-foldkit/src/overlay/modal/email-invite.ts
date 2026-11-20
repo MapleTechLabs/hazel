@@ -30,7 +30,7 @@ import { InvitationRole } from "@hazel/domain/rpc"
 
 /** `components/modals/email-invite-modal.tsx` (legacy `useModal("email-invite")`). */
 
-const Row = Schema.Struct({ rowId: Schema.Number, email: Schema.String, role: Select.Model })
+const Row = Schema.Struct({ rowId: Schema.Finite, email: Schema.String, role: Select.Model })
 type Row = typeof Row.Type
 
 const Model = Schema.Struct({
@@ -38,20 +38,20 @@ const Model = Schema.Struct({
 	/** The organization on screen when the modal opened; `null` outside one. */
 	organizationId: Schema.NullOr(OrganizationId),
 	invites: Schema.Array(Row),
-	nextRowId: Schema.Number,
+	nextRowId: Schema.Finite,
 	isSubmitting: Schema.Boolean,
 })
 type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
 	GotFrameMessage: { message: FrameMessage },
-	GotRoleMessage: { rowId: Schema.Number, message: Select.Message },
-	ChangedEmail: { rowId: Schema.Number, value: Schema.String },
-	ClickedRemoveInvite: { rowId: Schema.Number },
+	GotRoleMessage: { rowId: Schema.Finite, message: Select.Message },
+	ChangedEmail: { rowId: Schema.Finite, value: Schema.String },
+	ClickedRemoveInvite: { rowId: Schema.Finite },
 	ClickedAddInvite: {},
 	ClickedCancel: {},
 	SubmittedForm: {},
-	CompletedSendInvites: { successCount: Schema.Number, errorCount: Schema.Number },
+	CompletedSendInvites: { successCount: Schema.Finite, errorCount: Schema.Finite },
 	FailedSendInvites: { toast: ToastRequest },
 })
 type Message = typeof Message.Type

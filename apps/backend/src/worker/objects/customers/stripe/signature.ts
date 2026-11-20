@@ -20,7 +20,10 @@ import { constantTimeEqual, headerOf, hmacSha256 } from "../webhook-crypto"
 
 export const STRIPE_TOLERANCE_SECONDS = 5 * 60
 
-export class StripeSignatureError extends Schema.TaggedError<StripeSignatureError>()("StripeSignatureError", {
+export class StripeSignatureError extends Schema.TaggedError<
+	StripeSignatureError,
+	{ readonly brand: unique symbol }
+>()("StripeSignatureError", {
 	message: Schema.String,
 	reason: Schema.Literals([
 		"missing_header",

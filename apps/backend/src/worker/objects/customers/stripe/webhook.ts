@@ -129,7 +129,7 @@ const decodePreviousCustomer = Schema.decodeUnknownOption(
 /** A read's result; `None` when Stripe does not know the object under this key (another account's, or gone). */
 const current = <A>(read: Effect.Effect<A, CustomerProviderError>) =>
 	read.pipe(
-		Effect.map(Option.some),
+		Effect.asSome,
 		Effect.catchTag("CustomerProviderError", (error) =>
 			error.httpStatus === 404 ? Effect.succeed(Option.none<A>()) : Effect.fail(error),
 		),

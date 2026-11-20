@@ -120,22 +120,12 @@ const senderGuards: Partial<Record<ObjectKind, SenderGuard>> = {
 	// Each check refuses only the kinds it owns; the first refusal wins.
 	org: (kind, payload, sender) =>
 		connectSenderRefusal(kind, payload, sender).pipe(
-			Effect.flatMap((refusal) =>
-				Option.isSome(refusal) ? Effect.succeed(refusal) : searchSenderRefusal(kind, payload, sender),
-			),
+			Effect.filterOrElse(Option.isSome, () => searchSenderRefusal(kind, payload, sender)),
 			Effect.map((refusal) =>
 				Option.isSome(refusal) ? refusal : notificationCountSenderRefusal(kind, payload, sender),
 			),
-			Effect.flatMap((refusal) =>
-				Option.isSome(refusal)
-					? Effect.succeed(refusal)
-					: channelCustomersSenderRefusal(kind, payload, sender),
-			),
-			Effect.flatMap((refusal) =>
-				Option.isSome(refusal)
-					? Effect.succeed(refusal)
-					: chatAuthorsSenderRefusal(kind, payload, sender),
-			),
+			Effect.filterOrElse(Option.isSome, () => channelCustomersSenderRefusal(kind, payload, sender)),
+			Effect.filterOrElse(Option.isSome, () => chatAuthorsSenderRefusal(kind, payload, sender)),
 		),
 }
 

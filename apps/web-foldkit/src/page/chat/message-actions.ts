@@ -214,9 +214,12 @@ export const CreateThread = Command.define("CreateThread", {
 	},
 })
 
-class ClipboardError extends Schema.TaggedError<ClipboardError>()("ClipboardError", {
-	cause: Schema.Defect(),
-}) {}
+class ClipboardError extends Schema.TaggedError<ClipboardError, { readonly brand: unique symbol }>()(
+	"ClipboardError",
+	{
+		cause: Schema.Defect(),
+	},
+) {}
 
 /** `navigator.clipboard.writeText`; the toast waits for the browser's answer. */
 export const CopyText = Command.define("CopyText", {

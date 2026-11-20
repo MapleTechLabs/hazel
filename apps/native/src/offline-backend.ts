@@ -40,7 +40,7 @@ export const makeOfflineFetch = (options: {
 	readonly unfurls?: typeof fetch
 }): typeof fetch => {
 	const now = Date.now()
-	const session: typeof HazelAuthApi.sessions.Session.Type = Schema.decodeUnknownSync(
+	const session: typeof HazelAuthApi.sessions.Session.Type = Schema.decodeSync(
 		HazelAuthApi.sessions.Session,
 	)({
 		sessionId: "offline-session",

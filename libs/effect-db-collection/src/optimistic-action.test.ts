@@ -7,7 +7,10 @@ import { fakeSockets } from "./testing/fake-websocket"
 
 const Channel = Schema.Struct({ id: Schema.String, name: Schema.String })
 
-class CreateFailed extends Schema.TaggedError<CreateFailed>()("CreateFailed", {}) {}
+class CreateFailed extends Schema.TaggedError<CreateFailed, { readonly brand: unique symbol }>()(
+	"CreateFailed",
+	{},
+) {}
 
 const hubs: Array<SyncHub> = []
 let count = 0

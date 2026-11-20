@@ -52,8 +52,8 @@ const Expandable = <S extends Schema.Top>(schema: S) =>
 const StripeCard = Schema.Struct({
 	brand: Nullable(Schema.String),
 	last4: Nullable(Schema.String),
-	exp_month: Nullable(Schema.Number),
-	exp_year: Nullable(Schema.Number),
+	exp_month: Nullable(Schema.Finite),
+	exp_year: Nullable(Schema.Finite),
 })
 
 export const StripePaymentMethod = Schema.Struct({
@@ -87,7 +87,7 @@ export const StripeCustomer = Schema.Struct({
 	currency: Nullable(Schema.String),
 	delinquent: Nullable(Schema.Boolean),
 	/** Unix seconds. */
-	created: Nullable(Schema.Number),
+	created: Nullable(Schema.Finite),
 	metadata: Metadata,
 	/** The card a subscription without its own `default_payment_method` is charged on. */
 	invoice_settings: Nullable(Schema.Struct({ default_payment_method: Expandable(StripePaymentMethod) })),
@@ -116,11 +116,11 @@ export const StripePrice = Schema.Struct({
 	lookup_key: Nullable(Schema.String),
 	currency: Nullable(Schema.String),
 	/** Minor units of the currency (and already the unit for zero-decimal ones like JPY). */
-	unit_amount: Nullable(Schema.Number),
+	unit_amount: Nullable(Schema.Finite),
 	/** Set instead of `unit_amount` for sub-cent prices; a decimal string of minor units. */
 	unit_amount_decimal: Nullable(Schema.String),
 	/** `amount` on a legacy `plan`. */
-	amount: Nullable(Schema.Number),
+	amount: Nullable(Schema.Finite),
 	amount_decimal: Nullable(Schema.String),
 	/** `per_unit` or `tiered`; a tiered price's amount is not on the price. */
 	billing_scheme: Nullable(Schema.String),
@@ -129,23 +129,23 @@ export const StripePrice = Schema.Struct({
 	recurring: Nullable(
 		Schema.Struct({
 			interval: Nullable(Schema.String),
-			interval_count: Nullable(Schema.Number),
+			interval_count: Nullable(Schema.Finite),
 			/** `metered` prices bill by usage: their monthly amount is not knowable here. */
 			usage_type: Nullable(Schema.String),
 		}),
 	),
 	/** A legacy `plan` carries the interval flat, not under `recurring`. */
 	interval: Nullable(Schema.String),
-	interval_count: Nullable(Schema.Number),
+	interval_count: Nullable(Schema.Finite),
 	usage_type: Nullable(Schema.String),
 })
 export type StripePrice = typeof StripePrice.Type
 
 export const StripeSubscriptionItem = Schema.Struct({
 	id: Nullable(Schema.String),
-	quantity: Nullable(Schema.Number),
+	quantity: Nullable(Schema.Finite),
 	/** Where the period moved in `2025-03-31.basil`. */
-	current_period_end: Nullable(Schema.Number),
+	current_period_end: Nullable(Schema.Finite),
 	price: Schema.optionalKey(StripePrice),
 	plan: Schema.optionalKey(StripePrice),
 })
@@ -154,9 +154,9 @@ export type StripeSubscriptionItem = typeof StripeSubscriptionItem.Type
 export const StripeCoupon = Schema.Struct({
 	id: Nullable(Schema.String),
 	name: Nullable(Schema.String),
-	percent_off: Nullable(Schema.Number),
+	percent_off: Nullable(Schema.Finite),
 	/** Minor units, in `currency`. */
-	amount_off: Nullable(Schema.Number),
+	amount_off: Nullable(Schema.Finite),
 	currency: Nullable(Schema.String),
 	/** `forever`, `once` or `repeating`. */
 	duration: Nullable(Schema.String),
@@ -178,14 +178,14 @@ export const StripeSubscription = Schema.Struct({
 	currency: Nullable(Schema.String),
 	items: Nullable(Schema.Struct({ data: Schema.optionalKey(Schema.Array(StripeSubscriptionItem)) })),
 	/** Up to `2025-03-31.basil`; after it the period is per item. */
-	current_period_end: Nullable(Schema.Number),
-	trial_end: Nullable(Schema.Number),
-	start_date: Nullable(Schema.Number),
-	created: Nullable(Schema.Number),
-	canceled_at: Nullable(Schema.Number),
+	current_period_end: Nullable(Schema.Finite),
+	trial_end: Nullable(Schema.Finite),
+	start_date: Nullable(Schema.Finite),
+	created: Nullable(Schema.Finite),
+	canceled_at: Nullable(Schema.Finite),
 	cancel_at_period_end: Nullable(Schema.Boolean),
 	/** A cancellation scheduled for a set time rather than the period's end. */
-	cancel_at: Nullable(Schema.Number),
+	cancel_at: Nullable(Schema.Finite),
 	cancellation_details: Nullable(
 		Schema.Struct({
 			reason: Nullable(Schema.String),
@@ -214,20 +214,20 @@ export const StripeInvoice = Schema.Struct({
 			subscription_details: Nullable(Schema.Struct({ subscription: Expandable(StripeSubscription) })),
 		}),
 	),
-	amount_due: Nullable(Schema.Number),
-	amount_paid: Nullable(Schema.Number),
+	amount_due: Nullable(Schema.Finite),
+	amount_paid: Nullable(Schema.Finite),
 	currency: Nullable(Schema.String),
-	created: Nullable(Schema.Number),
-	due_date: Nullable(Schema.Number),
-	attempt_count: Nullable(Schema.Number),
-	next_payment_attempt: Nullable(Schema.Number),
+	created: Nullable(Schema.Finite),
+	due_date: Nullable(Schema.Finite),
+	attempt_count: Nullable(Schema.Finite),
+	next_payment_attempt: Nullable(Schema.Finite),
 	hosted_invoice_url: Nullable(Schema.String),
 	status_transitions: Nullable(
 		Schema.Struct({
-			finalized_at: Nullable(Schema.Number),
-			paid_at: Nullable(Schema.Number),
-			voided_at: Nullable(Schema.Number),
-			marked_uncollectible_at: Nullable(Schema.Number),
+			finalized_at: Nullable(Schema.Finite),
+			paid_at: Nullable(Schema.Finite),
+			voided_at: Nullable(Schema.Finite),
+			marked_uncollectible_at: Nullable(Schema.Finite),
 		}),
 	),
 	livemode: Nullable(Schema.Boolean),
@@ -267,7 +267,7 @@ export const StripeEvent = Schema.Struct({
 	id: Schema.String,
 	type: Schema.String,
 	/** Unix seconds: orders the event's ops against a deletion. */
-	created: Schema.Number,
+	created: Schema.Finite,
 	livemode: Nullable(Schema.Boolean),
 	/** The connected account the event belongs to (Connect platforms only). */
 	account: Nullable(Schema.String),

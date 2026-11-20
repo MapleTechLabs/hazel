@@ -6,7 +6,10 @@ import { MessageEmbed } from "../models/message-embed-schema"
 import { RequiredScopes } from "../scopes/required-scopes"
 
 // Incoming webhook payload (Discord-style)
-export class IncomingWebhookPayload extends Schema.Class<IncomingWebhookPayload>("IncomingWebhookPayload")({
+export class IncomingWebhookPayload extends Schema.Class<
+	IncomingWebhookPayload,
+	{ readonly brand: unique symbol }
+>("IncomingWebhookPayload")({
 	content: Schema.optional(Schema.String), // Plain text content
 	embeds: Schema.optional(Schema.Array(MessageEmbed)), // Rich embeds
 }) {}
@@ -24,12 +27,14 @@ export const OpenStatusStatus = Schema.Literals(["degraded", "error", "recovered
 export type OpenStatusStatus = Schema.Schema.Type<typeof OpenStatusStatus>
 
 // OpenStatus webhook payload
-export class OpenStatusPayload extends Schema.Class<OpenStatusPayload>("OpenStatusPayload")({
+export class OpenStatusPayload extends Schema.Class<OpenStatusPayload, { readonly brand: unique symbol }>(
+	"OpenStatusPayload",
+)({
 	monitor: OpenStatusMonitor,
-	cronTimestamp: Schema.Number,
+	cronTimestamp: Schema.Finite,
 	status: OpenStatusStatus,
-	statusCode: Schema.optional(Schema.Number),
-	latency: Schema.optional(Schema.Number),
+	statusCode: Schema.optional(Schema.Finite),
+	latency: Schema.optional(Schema.Finite),
 	errorMessage: Schema.optional(Schema.String),
 }) {}
 
@@ -85,7 +90,9 @@ export const RailwayDetails = Schema.Struct({
 export type RailwayDetails = Schema.Schema.Type<typeof RailwayDetails>
 
 // Railway webhook payload
-export class RailwayPayload extends Schema.Class<RailwayPayload>("RailwayPayload")({
+export class RailwayPayload extends Schema.Class<RailwayPayload, { readonly brand: unique symbol }>(
+	"RailwayPayload",
+)({
 	type: Schema.String, // e.g., "Deployment.failed", "Alert.triggered"
 	details: RailwayDetails,
 	resource: RailwayResource,
@@ -118,16 +125,16 @@ export const MapleAlertRule = Schema.Struct({
 	severity: MapleSeverity,
 	groupKey: Schema.NullOr(Schema.String),
 	comparator: MapleComparator,
-	threshold: Schema.Number,
+	threshold: Schema.Finite,
 	/** The upper bound of a `between` / `not_between` rule. */
-	thresholdUpper: Schema.optional(Schema.NullOr(Schema.Number)),
-	windowMinutes: Schema.Number,
+	thresholdUpper: Schema.optional(Schema.NullOr(Schema.Finite)),
+	windowMinutes: Schema.Finite,
 })
 export type MapleAlertRule = Schema.Schema.Type<typeof MapleAlertRule>
 
 export const MapleObserved = Schema.Struct({
-	value: Schema.NullOr(Schema.Number),
-	sampleCount: Schema.NullOr(Schema.Number),
+	value: Schema.NullOr(Schema.Finite),
+	sampleCount: Schema.NullOr(Schema.Finite),
 	/** Uptime rules: the failing check's error, e.g. `Status 503, expected 2xx`. */
 	detail: Schema.optional(Schema.NullOr(Schema.String)),
 })
@@ -142,7 +149,9 @@ export const MapleChart = Schema.Struct({
 })
 export type MapleChart = Schema.Schema.Type<typeof MapleChart>
 
-export class MaplePayload extends Schema.Class<MaplePayload>("MaplePayload")({
+export class MaplePayload extends Schema.Class<MaplePayload, { readonly brand: unique symbol }>(
+	"MaplePayload",
+)({
 	eventType: MapleEventType,
 	incidentId: Schema.NullOr(Schema.String),
 	incidentStatus: MapleIncidentStatus,
@@ -158,13 +167,19 @@ export class MaplePayload extends Schema.Class<MaplePayload>("MaplePayload")({
 }) {}
 
 // Response after successful webhook execution
-export class WebhookMessageResponse extends Schema.Class<WebhookMessageResponse>("WebhookMessageResponse")({
+export class WebhookMessageResponse extends Schema.Class<
+	WebhookMessageResponse,
+	{ readonly brand: unique symbol }
+>("WebhookMessageResponse")({
 	messageId: Schema.String,
 	channelId: Schema.String,
 }) {}
 
 // Error: Webhook not found
-export class WebhookNotFoundError extends Schema.TaggedError<WebhookNotFoundError>()(
+export class WebhookNotFoundError extends Schema.TaggedError<
+	WebhookNotFoundError,
+	{ readonly brand: unique symbol }
+>()(
 	"WebhookNotFoundError",
 	{
 		message: Schema.String,
@@ -173,7 +188,10 @@ export class WebhookNotFoundError extends Schema.TaggedError<WebhookNotFoundErro
 ) {}
 
 // Error: Webhook is disabled
-export class WebhookDisabledError extends Schema.TaggedError<WebhookDisabledError>()(
+export class WebhookDisabledError extends Schema.TaggedError<
+	WebhookDisabledError,
+	{ readonly brand: unique symbol }
+>()(
 	"WebhookDisabledError",
 	{
 		message: Schema.String,
@@ -182,7 +200,10 @@ export class WebhookDisabledError extends Schema.TaggedError<WebhookDisabledErro
 ) {}
 
 // Error: Invalid webhook token
-export class InvalidWebhookTokenError extends Schema.TaggedError<InvalidWebhookTokenError>()(
+export class InvalidWebhookTokenError extends Schema.TaggedError<
+	InvalidWebhookTokenError,
+	{ readonly brand: unique symbol }
+>()(
 	"InvalidWebhookTokenError",
 	{
 		message: Schema.String,
@@ -191,7 +212,10 @@ export class InvalidWebhookTokenError extends Schema.TaggedError<InvalidWebhookT
 ) {}
 
 // Error: the payload is valid JSON for the endpoint but cannot become a message
-export class InvalidWebhookPayloadError extends Schema.TaggedError<InvalidWebhookPayloadError>()(
+export class InvalidWebhookPayloadError extends Schema.TaggedError<
+	InvalidWebhookPayloadError,
+	{ readonly brand: unique symbol }
+>()(
 	"InvalidWebhookPayloadError",
 	{
 		message: Schema.String,

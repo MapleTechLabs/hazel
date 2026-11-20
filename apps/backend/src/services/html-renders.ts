@@ -73,7 +73,10 @@ const fromBase64Url = (value: string): Uint8Array<ArrayBuffer> | undefined => {
 const signedContent = (location: HtmlRenderLocation, expiresAt: number) =>
 	encoder.encode(`${locationPath(location)}/${expiresAt}`)
 
-export class HtmlRenderStoreError extends Schema.TaggedError<HtmlRenderStoreError>()("HtmlRenderStoreError", {
+export class HtmlRenderStoreError extends Schema.TaggedError<
+	HtmlRenderStoreError,
+	{ readonly brand: unique symbol }
+>()("HtmlRenderStoreError", {
 	message: Schema.String,
 	cause: Schema.optional(Schema.Unknown),
 }) {}

@@ -54,8 +54,8 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 			userId: UserId,
 		) {
 			const isAdmin = yield* callObject(IsOrgAdminCall, orgTarget(organizationId), { userId }).pipe(
-				Effect.mapError(
-					(error) => new UploadError({ message: "The organization is unavailable", cause: error }),
+				Effect.mapError((error) =>
+					UploadError.withCause({ message: "The organization is unavailable", cause: error }),
 				),
 			)
 			if (!isAdmin) {
@@ -81,16 +81,14 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 									req.contentType as (typeof ALLOWED_AVATAR_TYPES)[number],
 								)
 							) {
-								return yield* Effect.fail(
-									new UploadError({
-										message: "Content type must be image/jpeg, image/png, or image/webp",
-									}),
-								)
+								return yield* new UploadError({
+									message: "Content type must be image/jpeg, image/png, or image/webp",
+								})
 							}
 							if (req.fileSize > MAX_AVATAR_SIZE) {
-								return yield* Effect.fail(
-									new UploadError({ message: "File size must be between 1 byte and 5MB" }),
-								)
+								return yield* new UploadError({
+									message: "File size must be between 1 byte and 5MB",
+								})
 							}
 
 							// Check rate limit (5 per hour)
@@ -105,12 +103,11 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							const uploadUrl = yield* storage
 								.presignPut(key, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
-									Effect.mapError(
-										(error) =>
-											new UploadError({
-												message: "Failed to generate presigned URL",
-												cause: error,
-											}),
+									Effect.mapError((error) =>
+										UploadError.withCause({
+											message: "Failed to generate presigned URL",
+											cause: error,
+										}),
 									),
 								)
 
@@ -128,25 +125,23 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 					Match.when({ type: "bot-avatar" }, (req) =>
 						Effect.gen(function* () {
 							if (!req.botId) {
-								return yield* Effect.fail(
-									new UploadError({ message: "botId is required for bot-avatar uploads" }),
-								)
+								return yield* new UploadError({
+									message: "botId is required for bot-avatar uploads",
+								})
 							}
 							if (
 								!ALLOWED_AVATAR_TYPES.includes(
 									req.contentType as (typeof ALLOWED_AVATAR_TYPES)[number],
 								)
 							) {
-								return yield* Effect.fail(
-									new UploadError({
-										message: "Content type must be image/jpeg, image/png, or image/webp",
-									}),
-								)
+								return yield* new UploadError({
+									message: "Content type must be image/jpeg, image/png, or image/webp",
+								})
 							}
 							if (req.fileSize > MAX_AVATAR_SIZE) {
-								return yield* Effect.fail(
-									new UploadError({ message: "File size must be between 1 byte and 5MB" }),
-								)
+								return yield* new UploadError({
+									message: "File size must be between 1 byte and 5MB",
+								})
 							}
 
 							const botRepo = yield* BotRepo
@@ -154,19 +149,17 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							// Check if bot exists
 							const botOption = yield* botRepo.findById(req.botId).pipe(Effect.orDie)
 							if (Option.isNone(botOption)) {
-								return yield* Effect.fail(new BotNotFoundForUploadError({ botId: req.botId }))
+								return yield* new BotNotFoundForUploadError({ botId: req.botId })
 							}
 
 							const bot = botOption.value
 
 							// Check if user is the bot creator (only bot creator can update avatar)
 							if (bot.createdBy !== user.id) {
-								return yield* Effect.fail(
-									new UnauthorizedError({
-										message: "Unauthorized",
-										detail: "Only the bot creator can update the avatar",
-									}),
-								)
+								return yield* new UnauthorizedError({
+									message: "Unauthorized",
+									detail: "Only the bot creator can update the avatar",
+								})
 							}
 
 							// Check rate limit (5 per hour)
@@ -181,12 +174,11 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							const uploadUrl = yield* storage
 								.presignPut(key, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
-									Effect.mapError(
-										(error) =>
-											new UploadError({
-												message: "Failed to generate presigned URL",
-												cause: error,
-											}),
+									Effect.mapError((error) =>
+										UploadError.withCause({
+											message: "Failed to generate presigned URL",
+											cause: error,
+										}),
 									),
 								)
 
@@ -204,37 +196,31 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 					Match.when({ type: "organization-avatar" }, (req) =>
 						Effect.gen(function* () {
 							if (!req.organizationId) {
-								return yield* Effect.fail(
-									new UploadError({
-										message: "organizationId is required for organization-avatar uploads",
-									}),
-								)
+								return yield* new UploadError({
+									message: "organizationId is required for organization-avatar uploads",
+								})
 							}
 							if (
 								!ALLOWED_AVATAR_TYPES.includes(
 									req.contentType as (typeof ALLOWED_AVATAR_TYPES)[number],
 								)
 							) {
-								return yield* Effect.fail(
-									new UploadError({
-										message: "Content type must be image/jpeg, image/png, or image/webp",
-									}),
-								)
+								return yield* new UploadError({
+									message: "Content type must be image/jpeg, image/png, or image/webp",
+								})
 							}
 							if (req.fileSize > MAX_AVATAR_SIZE) {
-								return yield* Effect.fail(
-									new UploadError({ message: "File size must be between 1 byte and 5MB" }),
-								)
+								return yield* new UploadError({
+									message: "File size must be between 1 byte and 5MB",
+								})
 							}
 
 							// Check if organization exists (the directory's `org_index`)
 							const orgOption = yield* directory.org(req.organizationId).pipe(Effect.orDie)
 							if (Option.isNone(orgOption) || orgOption.value.deletedAt !== null) {
-								return yield* Effect.fail(
-									new OrganizationNotFoundForUploadError({
-										organizationId: req.organizationId,
-									}),
-								)
+								return yield* new OrganizationNotFoundForUploadError({
+									organizationId: req.organizationId,
+								})
 							}
 
 							// Check if user is an admin or owner of the organization
@@ -252,12 +238,11 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							const uploadUrl = yield* storage
 								.presignPut(key, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
-									Effect.mapError(
-										(error) =>
-											new UploadError({
-												message: "Failed to generate presigned URL",
-												cause: error,
-											}),
+									Effect.mapError((error) =>
+										UploadError.withCause({
+											message: "Failed to generate presigned URL",
+											cause: error,
+										}),
 									),
 								)
 
@@ -275,29 +260,23 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 					Match.when({ type: "custom-emoji" }, (req) =>
 						Effect.gen(function* () {
 							if (!req.organizationId) {
-								return yield* Effect.fail(
-									new UploadError({
-										message: "organizationId is required for custom-emoji uploads",
-									}),
-								)
+								return yield* new UploadError({
+									message: "organizationId is required for custom-emoji uploads",
+								})
 							}
 							if (
 								!ALLOWED_EMOJI_TYPES.includes(
 									req.contentType as (typeof ALLOWED_EMOJI_TYPES)[number],
 								)
 							) {
-								return yield* Effect.fail(
-									new UploadError({
-										message: "Content type must be image/png, image/gif, or image/webp",
-									}),
-								)
+								return yield* new UploadError({
+									message: "Content type must be image/png, image/gif, or image/webp",
+								})
 							}
 							if (req.fileSize > MAX_EMOJI_SIZE) {
-								return yield* Effect.fail(
-									new UploadError({
-										message: "File size must be between 1 byte and 256KB",
-									}),
-								)
+								return yield* new UploadError({
+									message: "File size must be between 1 byte and 256KB",
+								})
 							}
 
 							// Check if user is admin/owner of the org
@@ -315,12 +294,11 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							const uploadUrl = yield* storage
 								.presignPut(key, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
-									Effect.mapError(
-										(error) =>
-											new UploadError({
-												message: "Failed to generate presigned URL",
-												cause: error,
-											}),
+									Effect.mapError((error) =>
+										UploadError.withCause({
+											message: "Failed to generate presigned URL",
+											cause: error,
+										}),
 									),
 								)
 
@@ -339,20 +317,16 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 						Effect.gen(function* () {
 							const { organizationId, channelId, fileName } = req
 							if (!organizationId || !channelId || !fileName) {
-								return yield* Effect.fail(
-									new UploadError({
-										message:
-											"organizationId, channelId, and fileName are required for attachment uploads",
-									}),
-								)
+								return yield* new UploadError({
+									message:
+										"organizationId, channelId, and fileName are required for attachment uploads",
+								})
 							}
 
 							if (isActiveContentType(req.contentType)) {
-								return yield* Effect.fail(
-									new UploadError({
-										message: `Attachments of type ${req.contentType} must be uploaded as application/octet-stream`,
-									}),
-								)
+								return yield* new UploadError({
+									message: `Attachments of type ${req.contentType} must be uploaded as application/octet-stream`,
+								})
 							}
 
 							const attachmentId = AttachmentId.make(randomUUIDv7())
@@ -362,7 +336,7 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							)
 
 							// The row lives in the channel's object, which refuses a non-viewer.
-							yield* attachmentPolicy.canCreate()
+							yield* attachmentPolicy.canCreate
 							yield* createAttachmentInChannel({
 								id: attachmentId,
 								organizationId,
@@ -379,12 +353,11 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							const uploadUrl = yield* storage
 								.presignPut(attachmentId, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
-									Effect.mapError(
-										(error) =>
-											new UploadError({
-												message: "Failed to generate presigned URL",
-												cause: error,
-											}),
+									Effect.mapError((error) =>
+										UploadError.withCause({
+											message: "Failed to generate presigned URL",
+											cause: error,
+										}),
 									),
 								)
 

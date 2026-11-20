@@ -9,7 +9,7 @@ export const Invitation = Schema.Struct({
 	id: InvitationId,
 	emailAddress: Schema.String,
 	role: InvitationRole,
-	createdAtMs: Schema.Number,
+	createdAtMs: Schema.Finite,
 })
 export type Invitation = typeof Invitation.Type
 
@@ -29,7 +29,7 @@ export const Model = Schema.Struct({
 	organizationId: Schema.NullOr(OrganizationId),
 	invitations: Invitations.schema,
 	/** Bumped per fetch; an older result (initial fetch racing a post-revoke refetch) is dropped. */
-	fetchVersion: Schema.Number,
+	fetchVersion: Schema.Finite,
 	menus: Schema.Array(RowMenu),
 	revokingId: Schema.NullOr(InvitationId),
 })

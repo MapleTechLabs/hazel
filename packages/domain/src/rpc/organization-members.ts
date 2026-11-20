@@ -13,9 +13,10 @@ import { RouteOrganizationId } from "./routing-fields"
  * Response schema for successful organization member operations.
  * Contains the organization member data and a transaction ID for optimistic updates.
  */
-export class OrganizationMemberResponse extends Schema.Class<OrganizationMemberResponse>(
-	"OrganizationMemberResponse",
-)({
+export class OrganizationMemberResponse extends Schema.Class<
+	OrganizationMemberResponse,
+	{ readonly brand: unique symbol }
+>("OrganizationMemberResponse")({
 	data: OrganizationMember.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -24,12 +25,12 @@ export class OrganizationMemberResponse extends Schema.Class<OrganizationMemberR
  * Error thrown when an organization member is not found.
  * Used in update and delete operations.
  */
-export class OrganizationMemberNotFoundError extends Schema.TaggedError<OrganizationMemberNotFoundError>()(
-	"OrganizationMemberNotFoundError",
-	{
-		organizationMemberId: OrganizationMemberId,
-	},
-) {}
+export class OrganizationMemberNotFoundError extends Schema.TaggedError<
+	OrganizationMemberNotFoundError,
+	{ readonly brand: unique symbol }
+>()("OrganizationMemberNotFoundError", {
+	organizationMemberId: OrganizationMemberId,
+}) {}
 
 /**
  * Organization Member RPC Group

@@ -166,36 +166,38 @@ export const activateBotGateway = Effect.gen(function* () {
 			if (current === null || current > target) await raw.storage.setAlarm(target)
 		})
 
-		const publish = (eventJson: string, installRegion?: string | null) =>
-			Effect.gen(function* () {
-				const region = installRegion ?? Store.DEFAULT_REGION
-				if (region !== Store.DEFAULT_REGION && !BOT_GATEWAY_REGION_PATTERN.test(region)) {
-					return yield* new BotGatewayEventRejectedError({ message: `Invalid region: ${region}` })
-				}
-				const parsed = parseJson(eventJson)
-				if (parsed === undefined) {
-					return yield* new BotGatewayEventRejectedError({ message: "Event is not valid JSON" })
-				}
-				const envelope = yield* decodeEnvelope(parsed).pipe(
-					Effect.mapError(
-						(issue) =>
-							new BotGatewayEventRejectedError({ message: `Invalid event envelope: ${issue}` }),
-					),
-				)
-				const now = Date.now()
-				const seq = Store.append(sql, eventJson, now, region)
-				Store.enforceRetention(sql, now, DEFAULT_RETENTION)
-				for (const { socket, session } of liveSessions()) {
-					if (regionOfSession(session) === region) deliver(socket, session, now)
-				}
-				yield* scheduleAlarm
-				yield* Effect.annotateCurrentSpan({
-					"bot_gateway.offset": seq,
-					"bot_gateway.event_type": envelope.eventType,
-					"bot_gateway.region": region,
-				})
-				return { offset: formatOffset(seq) } satisfies BotGatewayPublishResult
-			}).pipe(Effect.withSpan("BotGateway.publish"))
+		const publish = Effect.fn("BotGateway.publish")(function* (
+			eventJson: string,
+			installRegion?: string | null,
+		) {
+			const region = installRegion ?? Store.DEFAULT_REGION
+			if (region !== Store.DEFAULT_REGION && !BOT_GATEWAY_REGION_PATTERN.test(region)) {
+				return yield* new BotGatewayEventRejectedError({ message: `Invalid region: ${region}` })
+			}
+			const parsed = parseJson(eventJson)
+			if (parsed === undefined) {
+				return yield* new BotGatewayEventRejectedError({ message: "Event is not valid JSON" })
+			}
+			const envelope = yield* decodeEnvelope(parsed).pipe(
+				Effect.mapError(
+					(issue) =>
+						new BotGatewayEventRejectedError({ message: `Invalid event envelope: ${issue}` }),
+				),
+			)
+			const now = Date.now()
+			const seq = Store.append(sql, eventJson, now, region)
+			Store.enforceRetention(sql, now, DEFAULT_RETENTION)
+			for (const { socket, session } of liveSessions()) {
+				if (regionOfSession(session) === region) deliver(socket, session, now)
+			}
+			yield* scheduleAlarm
+			yield* Effect.annotateCurrentSpan({
+				"bot_gateway.offset": seq,
+				"bot_gateway.event_type": envelope.eventType,
+				"bot_gateway.region": region,
+			})
+			return { offset: formatOffset(seq) } satisfies BotGatewayPublishResult
+		})
 
 		const fetch = Effect.gen(function* () {
 			const request = yield* HttpServerRequest.HttpServerRequest

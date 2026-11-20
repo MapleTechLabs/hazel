@@ -27,7 +27,7 @@ export const Message = defineMessageUnion({
 	UpdatedViewLayout: { layout: Schema.NullOr(ViewLayoutRow) },
 	UpdatedMembers: { members: Schema.Array(MemberRow) },
 	UpdatedConnectedProviders: { providers: Schema.Array(Customers.CustomerProvider) },
-	UpdatedSettings: { lastComputedAtMs: Schema.NullOr(Schema.Number), reportingCurrency: Schema.String },
+	UpdatedSettings: { lastComputedAtMs: Schema.NullOr(Schema.Finite), reportingCurrency: Schema.String },
 
 	ClickedViewTab: { key: Schema.NullOr(Schema.String) },
 	GotTabDragMessage: { message: DragAndDrop.Message },

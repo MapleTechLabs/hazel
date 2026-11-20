@@ -14,7 +14,7 @@ export const MIN_CHANNEL_WIDTH = 400
 const MAX_KEYBOARD_WIDTH = 1200
 
 const STORAGE_KEY = "hazel-thread-panel-width"
-const StoredWidth = Schema.toCodecJson(Schema.Number)
+const StoredWidth = Schema.toCodecJson(Schema.Finite)
 
 export const LoadThreadPanelWidth = Command.define("LoadThreadPanelWidth", {
 	messages: [Message.LoadedThreadPanelWidth],
@@ -25,7 +25,7 @@ export const LoadThreadPanelWidth = Command.define("LoadThreadPanelWidth", {
 
 // Best effort: a full or blocked store only forgets the width.
 export const SaveThreadPanelWidth = Command.define("SaveThreadPanelWidth", {
-	args: { width: Schema.Number },
+	args: { width: Schema.Finite },
 	messages: [Message.CompletedSaveThreadPanelWidth],
 	execute: ({ width }) =>
 		writeStored(STORAGE_KEY, StoredWidth, width).pipe(

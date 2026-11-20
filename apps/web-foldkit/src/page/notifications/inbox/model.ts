@@ -11,7 +11,7 @@ export type Category = typeof Category.Type
 export const NotificationItem = Schema.Struct({
 	id: NotificationId,
 	isUnread: Schema.Boolean,
-	createdAtMs: Schema.Number,
+	createdAtMs: Schema.Finite,
 	resourceType: Schema.NullOr(Schema.String),
 	/** Why it notifies (`sla_reply_breach`, `sla_resolution_warning`, …); null on older rows. */
 	reason: Schema.NullOr(Schema.String),

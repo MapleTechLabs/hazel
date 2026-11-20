@@ -361,7 +361,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 			"bot.listInstalled": ({ organizationId }) =>
 				Effect.gen(function* () {
 					const resolved = yield* activeOrganization(organizationId).pipe(
-						Effect.map(Option.some),
+						Effect.asSome,
 						Effect.catchTag("ActiveOrganizationRequiredError", () => Effect.succeedNone),
 					)
 					if (Option.isNone(resolved)) return new BotListResponse({ data: [] })

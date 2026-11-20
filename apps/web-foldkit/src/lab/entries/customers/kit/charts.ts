@@ -21,15 +21,15 @@ const State = Schema.Literals(STATES)
 const Model = Schema.Struct({
 	state: State,
 	range: CustomersRange,
-	usersHover: Schema.NullOr(Schema.Number),
-	mrrHover: Schema.NullOr(Schema.Number),
+	usersHover: Schema.NullOr(Schema.Finite),
+	mrrHover: Schema.NullOr(Schema.Finite),
 	healthMetric: Schema.Literals(["customers", "mrr"]),
 })
 type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
-	HoveredUsers: { index: Schema.NullOr(Schema.Number) },
-	HoveredMrr: { index: Schema.NullOr(Schema.Number) },
+	HoveredUsers: { index: Schema.NullOr(Schema.Finite) },
+	HoveredMrr: { index: Schema.NullOr(Schema.Finite) },
 	ChoseRange: { range: CustomersRange },
 	ChoseHealthMetric: { metric: Schema.Literals(["customers", "mrr"]) },
 })

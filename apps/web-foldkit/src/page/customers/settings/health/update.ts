@@ -13,6 +13,7 @@ import { Message } from "./message"
 import {
 	CHECK_ACCOUNT_ID,
 	draftOf,
+	type HealthDraft,
 	type Model,
 	scaledWeights,
 	type SliderId,
@@ -25,7 +26,6 @@ import {
 } from "./model"
 
 type Return = PageReturn<Model, Message>
-type HealthSettings = Customers.HealthSettings
 
 /** Module scope, one per Slider: `toParentMessage` must keep its identity across renders. */
 export const SLIDER_MESSAGE = {
@@ -91,7 +91,7 @@ const previewed = (model: Model): Return => {
 	}
 }
 
-const edited = (model: Model, f: (draft: HealthSettings) => HealthSettings): Return => {
+const edited = (model: Model, f: (draft: HealthDraft) => HealthDraft): Return => {
 	const draft = draftOf(model)
 	return draft === null ? { model } : previewed(settled({ ...model, draft: f(draft) }))
 }

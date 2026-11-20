@@ -99,60 +99,58 @@ export class EnvWriter extends Context.Service<EnvWriter>()("EnvWriter", {
 		 * The bots' tokens from an earlier setup: `.env.local`, else the `BOT_TOKEN` of the
 		 * bots' own `.env` files, from when they ran as Bun processes.
 		 */
-		readBotTokens: () =>
-			Effect.gen(function* () {
-				const read = (filePath: string) =>
-					Effect.promise(async () => {
-						const file = Bun.file(filePath)
-						return (await file.exists()) ? parseEnvContent(await file.text()) : {}
-					})
-				const local = yield* read(".env.local")
-				const hazelBot = local.HAZEL_BOT_TOKEN || (yield* read("bots/hazel-bot/.env")).BOT_TOKEN
-				const linearBot = local.LINEAR_BOT_TOKEN || (yield* read("bots/linear-bot/.env")).BOT_TOKEN
-				return {
-					...(hazelBot ? { hazelBot } : {}),
-					...(linearBot ? { linearBot } : {}),
-				}
-			}),
+		readBotTokens: Effect.gen(function* () {
+			const read = (filePath: string) =>
+				Effect.promise(async () => {
+					const file = Bun.file(filePath)
+					return (await file.exists()) ? parseEnvContent(await file.text()) : {}
+				})
+			const local = yield* read(".env.local")
+			const hazelBot = local.HAZEL_BOT_TOKEN || (yield* read("bots/hazel-bot/.env")).BOT_TOKEN
+			const linearBot = local.LINEAR_BOT_TOKEN || (yield* read("bots/linear-bot/.env")).BOT_TOKEN
+			return {
+				...(hazelBot ? { hazelBot } : {}),
+				...(linearBot ? { linearBot } : {}),
+			}
+		}),
 
 		/** Read all known .env files and aggregate values with their sources */
-		readAllEnvFiles: () =>
-			Effect.gen(function* () {
-				const result: EnvReadResult = { values: {}, sources: {}, valueSources: {} }
+		readAllEnvFiles: Effect.gen(function* () {
+			const result: EnvReadResult = { values: {}, sources: {}, valueSources: {} }
 
-				for (const filePath of ENV_FILE_PATHS) {
-					const file = Bun.file(filePath)
-					const exists = yield* Effect.promise(() => file.exists())
-					if (!exists) continue
+			for (const filePath of ENV_FILE_PATHS) {
+				const file = Bun.file(filePath)
+				const exists = yield* Effect.promise(() => file.exists())
+				if (!exists) continue
 
-					const content = yield* Effect.promise(() => file.text())
-					const parsed = parseEnvContent(content)
+				const content = yield* Effect.promise(() => file.text())
+				const parsed = parseEnvContent(content)
 
-					for (const [key, value] of Object.entries(parsed)) {
-						// Skip empty values
-						if (!value) continue
+				for (const [key, value] of Object.entries(parsed)) {
+					// Skip empty values
+					if (!value) continue
 
-						// Initialize arrays if needed
-						if (!result.values[key]) {
-							result.values[key] = []
-							result.sources[key] = []
-						}
+					// Initialize arrays if needed
+					if (!result.values[key]) {
+						result.values[key] = []
+						result.sources[key] = []
+					}
 
-						// Only add unique values
-						if (!result.values[key].includes(value)) {
-							result.values[key].push(value)
-							result.valueSources[`${key}:${value}`] = filePath
-						}
+					// Only add unique values
+					if (!result.values[key].includes(value)) {
+						result.values[key].push(value)
+						result.valueSources[`${key}:${value}`] = filePath
+					}
 
-						// Track all sources for this key
-						if (!result.sources[key].includes(filePath)) {
-							result.sources[key].push(filePath)
-						}
+					// Track all sources for this key
+					if (!result.sources[key].includes(filePath)) {
+						result.sources[key].push(filePath)
 					}
 				}
+			}
 
-				return result
-			}),
+			return result
+		}),
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make)

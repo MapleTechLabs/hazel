@@ -131,7 +131,7 @@ export type OutMessage = typeof OutMessage.Type
 export const AnnounceCalendar = Command.define("AnnounceCalendar", {
 	args: {
 		message: Schema.String,
-		timeout: Schema.Number,
+		timeout: Schema.Finite,
 		assertiveness: Schema.Literals(["assertive", "polite"]),
 	},
 	messages: [Message.CompletedAnnounce],

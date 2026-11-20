@@ -95,7 +95,7 @@ export const Model = Schema.Struct({
 	/** The draft text. The editor reports every change; a remounted editor starts from it. */
 	markdown: Schema.String,
 	autocomplete: Schema.NullOr(AutocompleteQuery),
-	activeIndex: Schema.Number,
+	activeIndex: Schema.Finite,
 	members: Schema.Array(MentionMember),
 	presence: Schema.Array(Presence),
 	mentionableBots: Schema.Array(MentionableBot),
@@ -145,15 +145,15 @@ export const Message = defineMessageUnion({
 	/** Shift+Tab in the editor: the page moves the focus to its messages. */
 	PressedShiftTab: {},
 	PastedFiles: { files: Schema.Array(File.File) },
-	HoveredAutocompleteOption: { index: Schema.Number },
-	ClickedAutocompleteOption: { index: Schema.Number },
+	HoveredAutocompleteOption: { index: Schema.Finite },
+	ClickedAutocompleteOption: { index: Schema.Finite },
 	UpdatedMentionMembers: { members: Schema.Array(MentionMember) },
 	UpdatedPresence: { presence: Schema.Array(Presence) },
 	UpdatedMentionableBots: { bots: Schema.Array(MentionableBot) },
 	UpdatedBotCommands: { commands: Schema.Array(BotCommand) },
 	UpdatedCustomEmojis: { emojis: Schema.Array(ComposerEmoji) },
 	UpdatedCommandValue: { argName: Schema.String, value: Schema.String },
-	PressedCommandFieldKey: { index: Schema.Number, key: Schema.String, shiftKey: Schema.Boolean },
+	PressedCommandFieldKey: { index: Schema.Finite, key: Schema.String, shiftKey: Schema.Boolean },
 	ClickedExecuteCommand: {},
 	ClickedCancelCommand: {},
 	CompletedPreventEditorBlur: {},
@@ -347,7 +347,7 @@ export const InsertMention = Command.define("InsertMention", {
 export const SyncAutocompleteOptions = Command.define("SyncAutocompleteOptions", {
 	args: {
 		editorId: Schema.String,
-		optionCount: Schema.Number,
+		optionCount: Schema.Finite,
 		activeOptionId: Schema.NullOr(Schema.String),
 	},
 	messages: [Message.CompletedSyncAutocompleteOptions, Message.FailedSyncAutocompleteOptions],

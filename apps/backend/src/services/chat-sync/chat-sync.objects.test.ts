@@ -884,7 +884,7 @@ describe("chat sync on the objects", () => {
 				const handlers = createDiscordGatewayDispatchHandlers({
 					ingest: (inbound) => Effect.sync(() => void ingested.push(inbound)),
 					isCurrentBotAuthor: (id) => Effect.succeed(id === "777777777777777777"),
-					threadOf: () => Effect.succeed(Option.none()),
+					threadOf: () => Effect.succeedNone,
 				})
 				yield* handlers.ingestThreadCreateEvent({
 					id: externalThreadId,
@@ -901,7 +901,7 @@ describe("chat sync on the objects", () => {
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeWorld
-				yield* Effect.provide(
+				yield* Effect.provideService(
 					callObject(ConnectIntegrationCall, orgTarget(world.orgId), {
 						provider: "discord",
 						userId: world.owner,
@@ -912,7 +912,8 @@ describe("chat sync on the objects", () => {
 						metadata: null,
 						tokens: { accessToken: "token", refreshToken: null, expiresAt: null, scope: null },
 					}),
-					Layer.succeed(ObjectStubs, world.objects.stubs),
+					ObjectStubs,
+					world.objects.stubs,
 				).pipe(Effect.orDie)
 				// Dana writes once, so the org knows her shadow.
 				yield* world.inbound(discordCreate("444444444444444450", "hello", "333333333333333333"))
@@ -1304,7 +1305,7 @@ describe("chat sync on the objects", () => {
 			Effect.gen(function* () {
 				const world = yield* makeWorld
 				const worker = <A, E>(effect: Effect.Effect<A, E, ObjectStubs>) =>
-					effect.pipe(Effect.provide(Layer.succeed(ObjectStubs, world.objects.stubs)), Effect.orDie)
+					effect.pipe(Effect.provideService(ObjectStubs, world.objects.stubs), Effect.orDie)
 				expect((yield* world.channel.run(readChatSyncLinks)).accounts).toEqual([])
 
 				yield* worker(

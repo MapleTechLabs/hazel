@@ -90,11 +90,9 @@ export class OAuthProviderRegistry extends Context.Service<OAuthProviderRegistry
 
 				// Check if provider is supported (cast needed since provider may include non-OAuth providers like "craft")
 				if (!(SUPPORTED_PROVIDERS as readonly string[]).includes(provider)) {
-					return yield* Effect.fail(
-						new UnsupportedProviderError({
-							provider,
-						}),
-					)
+					return yield* new UnsupportedProviderError({
+						provider,
+					})
 				}
 
 				// After the check above, we know the provider is a valid OAuth provider
@@ -123,11 +121,9 @@ export class OAuthProviderRegistry extends Context.Service<OAuthProviderRegistry
 				// Get factory function for standard OAuth providers
 				const factory = PROVIDER_FACTORIES[oauthProvider_]
 				if (!factory) {
-					return yield* Effect.fail(
-						new UnsupportedProviderError({
-							provider,
-						}),
-					)
+					return yield* new UnsupportedProviderError({
+						provider,
+					})
 				}
 
 				// Load configuration from environment for standard OAuth providers

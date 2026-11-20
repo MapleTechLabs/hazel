@@ -17,7 +17,7 @@ import {
 export const MAX_WINDOW_DAYS = 90
 const Days = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_WINDOW_DAYS }))
 const AgeDays = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 }))
-const Pct = Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1000 }))
+const Pct = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1000 }))
 const Count = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100_000 }))
 const GraceMinutes = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1440 }))
 

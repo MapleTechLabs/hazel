@@ -143,7 +143,7 @@ export const SetChannelCustomersPayload = Schema.Struct({
 	organizationId: OrganizationId,
 	links: Schema.Array(ChannelCustomerEntry),
 	/** Increases with every snapshot (out-of-order deliveries drop the older one). */
-	version: Schema.Number,
+	version: Schema.Finite,
 })
 export type SetChannelCustomersPayload = typeof SetChannelCustomersPayload.Type
 

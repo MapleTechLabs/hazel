@@ -6,8 +6,8 @@ import * as Menu from "../../../ui/menu"
 import { Invitation, RevokeFailure } from "./model"
 
 export const Message = defineMessageUnion({
-	SucceededFetchInvitations: { version: Schema.Number, invitations: Schema.Array(Invitation) },
-	FailedFetchInvitations: { version: Schema.Number, reason: CommonReason },
+	SucceededFetchInvitations: { version: Schema.Finite, invitations: Schema.Array(Invitation) },
+	FailedFetchInvitations: { version: Schema.Finite, reason: CommonReason },
 	ClickedRetryFetchInvitations: {},
 	ClickedInviteUser: {},
 	GotRowMenuMessage: { invitationId: InvitationId, message: Menu.Message },
