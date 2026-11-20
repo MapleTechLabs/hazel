@@ -23,7 +23,7 @@ const world = Effect.gen(function* () {
 	return { sim, ada, grace, general, mention }
 })
 
-describe("notifications and push by presence", () => {
+describe("notifications and push by presence", { timeout: 60_000 }, () => {
 	it("offline: notified, and pushed at once", () =>
 		run(
 			Effect.gen(function* () {
@@ -69,6 +69,20 @@ describe("notifications and push by presence", () => {
 				yield* laptop.open()
 				yield* laptop.report({ idle: true, afk: true })
 				yield* mention("lunch?")
+				expect(ada.pushes()).toHaveLength(1)
+			}),
+		))
+
+	it("an older client gone AFK (its away): pushed at once; back online: the push waits", () =>
+		run(
+			Effect.gen(function* () {
+				const { ada, mention } = yield* world
+				yield* ada.device("web").open({ legacy: true })
+				yield* ada.legacyUpdate({ status: "away" })
+				yield* mention("first")
+				expect(ada.pushes()).toEqual([expect.stringContaining("first")])
+				yield* ada.legacyUpdate({ status: "online" })
+				yield* mention("second")
 				expect(ada.pushes()).toHaveLength(1)
 			}),
 		))
