@@ -617,6 +617,33 @@ describe("streamingHtml", () => {
 		expect(html).toContain("click")
 	})
 
+	// The link and image filters rewrite Words' own markup, so these pin the shape they rely on: a
+	// Words upgrade that changes it fails here instead of letting an unsafe URL through.
+	test("encoded, reference and autolink schemes are dropped too", () => {
+		for (const payload of [
+			"[x](&#106;avascript:alert(1)) [y](java&#x73;cript:alert(1))",
+			"[r]: javascript:alert(1)\n\n[ref][r]",
+			"<javascript:alert(1)> ![b](vbscript:x)",
+			"[![img](javascript:alert(1))](https://ok.example)",
+		]) {
+			// The text may remain as words; no link or image may carry the scheme.
+			const html = streamingHtml(payload)
+			expect(html).not.toMatch(/(href|src)="[^"]*(script:|&#)/i)
+			expect(html).not.toMatch(/<a [^>]*href="(?!https:\/\/ok\.example)/i)
+			expect(html).not.toMatch(/<img/i)
+		}
+	})
+
+	test("Words' links and images keep the attributes the filters expect", () => {
+		expect(streamingHtml('<https://hazel.sh> [a](https://x.example "t\\"i<tle")')).toBe(
+			'<p><a href="https://hazel.sh" rel="noopener noreferrer" target="_blank">https://hazel.sh</a>' +
+				'<a href="https://x.example" title="t&quot;i&lt;tle" rel="noopener noreferrer" target="_blank">a</a></p>',
+		)
+		expect(streamingHtml('![a](https://ok.example/i.png "t")')).toBe(
+			'<p><img src="https://ok.example/i.png" alt="a" title="t"></p>',
+		)
+	})
+
 	test("markdown still renders, with safe links", () => {
 		const html = streamingHtml("**bold** [docs](https://hazel.sh/docs)")
 		expect(html).toContain("<strong>bold</strong>")
