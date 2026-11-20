@@ -461,6 +461,22 @@ const autoLink = (organizationId: OrganizationId, suggestion: ScoredSuggestion, 
 	})
 
 /**
+ * A refresh's plain failure is logged and left for the next compute. Any interruption (alone or
+ * with a failure) stops the compute: the rest of the cause is logged, then the fiber interrupts.
+ */
+export const logRefreshFailure = <A, E, R>(refresh: Effect.Effect<A, E, R>): Effect.Effect<void, never, R> =>
+	refresh.pipe(
+		Effect.asVoid,
+		Effect.catchCause((cause) =>
+			Cause.hasInterruptsOnly(cause)
+				? Effect.interrupt
+				: Effect.logError("Customers suggestion refresh failed", { cause: Cause.pretty(cause) }).pipe(
+						Effect.andThen(Cause.hasInterrupts(cause) ? Effect.interrupt : Effect.void),
+					),
+		),
+	)
+
+/**
  * At the end of every compute: all channels. Its own failure is logged and never fails the
  * compute (the org may be unreachable for a moment; the next compute retries).
  */
@@ -468,13 +484,7 @@ export const refreshSuggestionsAfterCompute = Effect.gen(function* () {
 	const self = yield* readObjectMeta("id").pipe(Effect.mapError(Database.toDatabaseError))
 	if (Option.isNone(self)) return
 	yield* refreshSuggestions(self.value as OrganizationId)
-}).pipe(
-	Effect.catchCause((cause) =>
-		Cause.hasInterruptsOnly(cause)
-			? Effect.interrupt
-			: Effect.logError("Customers suggestion refresh failed", { cause: Cause.pretty(cause) }),
-	),
-)
+}).pipe((refresh) => logRefreshFailure(refresh))
 
 // ---------------------------------------------------------------------------
 // Read
