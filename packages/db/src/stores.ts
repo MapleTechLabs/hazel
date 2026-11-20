@@ -95,8 +95,10 @@ export const userTables = [
 	schema.notificationsTable,
 	schema.userPresenceStatusTable,
 	schema.userOrganizationsTable,
-	// Not synced: the push devices.
+	schema.userPresenceSettingsTable,
+	// Not synced: the push devices, the live presence sessions.
 	schema.pushDevicesTable,
+	schema.presenceSessionsTable,
 ] as const
 
 /**

@@ -222,6 +222,7 @@ export const routes: RouteTable = {
 	"userPresenceStatus.update": user,
 	"userPresenceStatus.heartbeat": user,
 	"userPresenceStatus.clearStatus": user,
+	"userPresenceStatus.setStatus": user,
 	"pushDevice.register": user,
 	"pushDevice.unregister": user,
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { apnsOutcome, decidePush, PUSH_IDLE_DELAY_MS, type PushInput } from "./push"
-import { HEARTBEAT_TIMEOUT_MS } from "./presence-timing"
+import { SESSION_TIMEOUT_MS } from "./presence-timing"
 
 const NOW = 1_800_000_000_000
 
@@ -33,7 +33,7 @@ describe("decidePush", () => {
 	})
 
 	it("pushes at once when the online status is stale (no heartbeat for the timeout)", () => {
-		expect(decidePush(input({ presence: seen("online", HEARTBEAT_TIMEOUT_MS) }))).toEqual({ _tag: "Now" })
+		expect(decidePush(input({ presence: seen("online", SESSION_TIMEOUT_MS) }))).toEqual({ _tag: "Now" })
 	})
 
 	it("never pushes on dnd, silent, without devices, content or config", () => {

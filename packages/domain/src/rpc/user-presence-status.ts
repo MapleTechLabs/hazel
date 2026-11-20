@@ -3,6 +3,7 @@ import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { UserPresenceStatusId } from "@hazel/schema"
 import { UserPresenceStatus } from "../models"
+import { PreferredPresenceStatus } from "../models/user-presence-status-model"
 import { JsonDate } from "../models/utils"
 import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
@@ -16,6 +17,15 @@ export class UserPresenceStatusResponse extends Schema.Class<UserPresenceStatusR
 	"UserPresenceStatusResponse",
 )({
 	data: UserPresenceStatus.Schema,
+	transactionId: TransactionId,
+}) {}
+
+/** The status the user picked, and when a timed pick goes back to online (null: until changed). */
+export class UserPresenceSettingsResponse extends Schema.Class<UserPresenceSettingsResponse>(
+	"UserPresenceSettingsResponse",
+)({
+	status: PreferredPresenceStatus,
+	statusExpiresAt: Schema.NullOr(JsonDate),
 	transactionId: TransactionId,
 }) {}
 
@@ -71,6 +81,23 @@ export class UserPresenceStatusRpcs extends RpcGroup.make(
 			suppressNotifications: Schema.optional(Schema.Boolean),
 		}),
 		success: UserPresenceStatusResponse,
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["user-presence-status:write"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * UserPresenceStatusSetStatus
+	 *
+	 * Picks Online, Idle, Do Not Disturb or Invisible, on every device. `expiresAt` makes it last
+	 * until then (Discord's 15 minutes ... 3 days), after which it goes back to online; null keeps it.
+	 */
+	Rpc.make("userPresenceStatus.setStatus", {
+		payload: Schema.Struct({
+			status: PreferredPresenceStatus,
+			expiresAt: Schema.NullOr(JsonDate),
+		}),
+		success: UserPresenceSettingsResponse,
 		error: Schema.Union([UnauthorizedError, InternalServerError]),
 	})
 		.annotate(RequiredScopes, ["user-presence-status:write"])

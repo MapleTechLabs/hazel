@@ -855,7 +855,8 @@ describe("UserObject", () => {
 					),
 				)
 				expect(updated.transactionId).toMatch(new RegExp(`^user:${s.member}:\\d+$`))
-				expect(orgStatus()).toEqual({ status: "busy", statusEmoji: "🎧" })
+				// No session is open: offline, with the custom status; an older client's busy picks dnd.
+				expect(orgStatus()).toEqual({ status: "offline", statusEmoji: "🎧" })
 				expect(user.storage.alarm()).not.toBeNull()
 				yield* user.alarm
 				expect(orgStatus()?.statusEmoji).toBeNull()

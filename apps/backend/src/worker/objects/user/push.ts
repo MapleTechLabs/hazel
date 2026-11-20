@@ -20,7 +20,7 @@ import { ApnsClient, ApnsRetryableError, type ApnsResult } from "../../../servic
 import { Directory } from "../../../services/directory"
 import { CurrentEffectSender, defineEffect, enqueueEffect, type EffectReceivers } from "../effects/registry"
 import { tokenOwner } from "./push-ownership"
-import { HEARTBEAT_TIMEOUT_MS } from "./presence-timing"
+import { SESSION_TIMEOUT_MS } from "./presence-timing"
 
 /** How long a notification waits while the user is active elsewhere. */
 export const PUSH_IDLE_DELAY_MS = 60_000
@@ -85,7 +85,7 @@ export const decidePush = (input: PushInput): PushDecision => {
 		case "online":
 		case "busy":
 			// No heartbeat for the timeout: gone, even if the alarm has not marked it offline yet.
-			return presence.lastSeenAt.getTime() + HEARTBEAT_TIMEOUT_MS <= input.nowMs
+			return presence.lastSeenAt.getTime() + SESSION_TIMEOUT_MS <= input.nowMs
 				? { _tag: "Now" }
 				: { _tag: "Defer", delayMs: PUSH_IDLE_DELAY_MS }
 	}

@@ -2,7 +2,14 @@ import { ChannelId, UserId, UserPresenceStatusId } from "@hazel/schema"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
 import { randomUuid, textEnum, timestamptz, uuid, varchar } from "./columns"
 
+/**
+ * The status other people see, computed by the user's `UserObject` from their saved choice and their
+ * live sessions. `away` is shown as Idle. `busy` is no longer written (old rows read as `dnd`).
+ */
 export const userPresenceStatusEnum = textEnum(["online", "away", "busy", "dnd", "offline"])
+
+/** One kind of device's status (Discord's `client_status`); null when no session of that kind is live. */
+export const clientPresenceStatusEnum = textEnum(["online", "away", "dnd"])
 
 export const userPresenceStatusTable = SQLite.table("user_presence_status", {
 	columns: {
@@ -16,6 +23,11 @@ export const userPresenceStatusTable = SQLite.table("user_presence_status", {
 		suppressNotifications: SQLite.column(SQLite.boolean, { default: false }),
 		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 		lastSeenAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		desktopStatus: SQLite.nullable(clientPresenceStatusEnum),
+		webStatus: SQLite.nullable(clientPresenceStatusEnum),
+		mobileStatus: SQLite.nullable(clientPresenceStatusEnum),
+		/** No desktop or web session is in active use: mobile push goes out. */
+		afk: SQLite.column(SQLite.boolean, { default: true }),
 	},
 	primaryKey: ["id"],
 	indexes: [

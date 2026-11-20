@@ -1,29 +1,33 @@
 /**
- * Presence inside the `UserObject`, which owns the user's `user_presence_status` row, as one state
- * machine (`transition`): events in, the next row out, and whether the orgs must hear of it.
+ * Presence inside the `UserObject`, which owns the inputs (the status the user picked in
+ * `user_presence_settings`, one `presence_sessions` row per connected client) and the result (the
+ * `user_presence_status` row other people see, `./presence-model.ts`).
  *
- * - `Active` (a heartbeat, a sync socket opening): online if they were offline; otherwise only
- *   `lastSeenAt` moves, except once per `PRESENCE_RENEW_MS` the row is re-projected so each org's
- *   copy keeps a fresh lease.
- * - `Disconnected` (the last socket closing, the sendBeacon): offline at once.
- * - `Tick` (the object's alarm): a custom status past its `statusExpiresAt` is cleared, and a user
- *   with no heartbeat for `HEARTBEAT_TIMEOUT_MS` goes offline, open socket or not (a socket whose
- *   client vanished can stay "open" here long after).
+ * Every event changes an input, then `reconcile` recomputes the row:
  *
- * Every projected change goes to each of the user's orgs (`user_organizations`) through the outbox
- * (`org.upsertPresenceProjection`), in the same transaction. Each org also expires its own copy
- * once its lease runs out (`../org/projections.ts`), so the copy is right even when this object
- * never runs again.
+ * - A sync socket opens: a session starts. Its pings (every 25 s) keep it alive; its `Presence`
+ *   frames say what client it is, whether it is idle, and which channel it shows.
+ * - The socket closes: its session ends at once. A socket whose client vanished stops pinging and
+ *   its session ends on the alarm after `SESSION_TIMEOUT_MS`.
+ * - The user picks a status (`setPreferredStatus`), maybe for a while; the alarm ends it.
+ * - The alarm also clears a custom status past its `statusExpiresAt`.
+ *
+ * A change others can see goes to each of the user's orgs (`user_organizations`) through the outbox
+ * (`org.upsertPresenceProjection`), in the same transaction. While a session is live the row is
+ * re-projected every `PRESENCE_RENEW_MS`, and each org expires a copy nobody renewed
+ * (`../org/projections.ts`), so a copy is right even when this object never runs again.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { type OrganizationId, UserId } from "@hazel/schema"
-import type { SyncObjectState, SyncSocket } from "@hazel/sync-do"
+import type { SyncPresence } from "@hazel/domain/sync"
+import { ChannelId, type OrganizationId, UserId } from "@hazel/schema"
+import { type SyncObjectState, type SyncSocket, socketSessionId } from "@hazel/sync-do"
 import { Clock, Effect, Option, Schema } from "effect"
 import { OrgEffects } from "../effects/org-effects"
 import { enqueueEffect } from "../effects/registry"
 import { orgTarget } from "../kinds"
 import type { PresenceProjection } from "../org/projections"
-import { HEARTBEAT_TIMEOUT_MS, PRESENCE_RENEW_MS } from "./presence-timing"
+import { aggregate, isLive, type PreferredStatus, sessionDeadline } from "./presence-model"
+import { HEARTBEAT_SESSION_ID, PRESENCE_RENEW_MS } from "./presence-timing"
 
 export type PresenceRow = schema.UserPresenceStatus
 export type PresenceFields = Omit<PresenceRow, "id" | "userId">
@@ -39,6 +43,10 @@ const toProjection = (row: PresenceRow): PresenceProjection => ({
 	suppressNotifications: row.suppressNotifications,
 	updatedAt: row.updatedAt.toISOString(),
 	lastSeenAt: row.lastSeenAt.toISOString(),
+	desktopStatus: row.desktopStatus,
+	webStatus: row.webStatus,
+	mobileStatus: row.mobileStatus,
+	afk: row.afk,
 })
 
 export const findPresence = (userId: UserId) =>
@@ -51,9 +59,19 @@ export const findPresence = (userId: UserId) =>
 		),
 	)
 
-/** The fields of a user nobody has seen yet. */
+export const findPreference = (userId: UserId) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.first(
+			SQLite.from(schema.userPresenceSettingsTable)
+				.select()
+				.where(($) => [$.userId.eq(userId)])
+				.limit(1),
+		),
+	)
+
+/** The fields of a user nobody has seen yet: offline, no custom status. */
 export const defaultPresence = (now: Date): PresenceFields => ({
-	status: "online",
+	status: "offline",
 	customMessage: null,
 	statusEmoji: null,
 	statusExpiresAt: null,
@@ -61,78 +79,26 @@ export const defaultPresence = (now: Date): PresenceFields => ({
 	suppressNotifications: false,
 	updatedAt: now,
 	lastSeenAt: now,
+	desktopStatus: null,
+	webStatus: null,
+	mobileStatus: null,
+	afk: true,
 })
 
-// STATE MACHINE
+const sameTime = (a: Date | null, b: Date | null) => (a === null ? b === null : a.getTime() === b?.getTime())
 
-export type PresenceEvent = "Active" | "Disconnected" | "Tick"
-
-/** A transition's outcome: the next fields, and whether the orgs must get them. */
-export interface PresenceStep {
-	readonly fields: PresenceFields
-	readonly project: boolean
-}
-
-const isStale = (fields: PresenceFields, nowMs: number) =>
-	fields.lastSeenAt.getTime() + HEARTBEAT_TIMEOUT_MS <= nowMs
-
-/**
- * The presence state machine. `current` is the stored row (undefined: never seen); returns the
- * next row, or undefined when the event changes nothing. Pure, so every path is tested directly.
- *
- * `updatedAt` moves only when the orgs are told, so it is also when the orgs' lease was renewed.
- */
-export const transition = (
-	current: PresenceFields | undefined,
-	event: PresenceEvent,
-	nowMs: number,
-): PresenceStep | undefined => {
-	const now = new Date(nowMs)
-	switch (event) {
-		case "Active": {
-			if (current === undefined) return { fields: defaultPresence(now), project: true }
-			if (current.status === "offline") {
-				return {
-					fields: { ...current, status: "online", updatedAt: now, lastSeenAt: now },
-					project: true,
-				}
-			}
-			const renew = current.updatedAt.getTime() + PRESENCE_RENEW_MS <= nowMs
-			return {
-				fields: { ...current, lastSeenAt: now, updatedAt: renew ? now : current.updatedAt },
-				project: renew,
-			}
-		}
-		case "Disconnected": {
-			if (current === undefined || current.status === "offline") return undefined
-			return { fields: { ...current, status: "offline", updatedAt: now }, project: true }
-		}
-		case "Tick": {
-			if (current === undefined) return undefined
-			const isStatusExpired =
-				current.statusExpiresAt !== null && current.statusExpiresAt.getTime() <= nowMs
-			const goesOffline = current.status !== "offline" && isStale(current, nowMs)
-			if (!isStatusExpired && !goesOffline) return undefined
-			return {
-				fields: {
-					...current,
-					statusEmoji: isStatusExpired ? null : current.statusEmoji,
-					customMessage: isStatusExpired ? null : current.customMessage,
-					statusExpiresAt: isStatusExpired ? null : current.statusExpiresAt,
-					status: goesOffline ? "offline" : current.status,
-					updatedAt: now,
-				},
-				project: true,
-			}
-		}
-	}
-}
-
-/** When the alarm must next run: status expiry, and heartbeat staleness while not offline. */
-export const presenceDeadlinesOf = (fields: PresenceFields): ReadonlyArray<number | undefined> => [
-	fields.statusExpiresAt?.getTime(),
-	fields.status !== "offline" ? fields.lastSeenAt.getTime() + HEARTBEAT_TIMEOUT_MS : undefined,
-]
+/** Whether the orgs must hear of `next`: anything they show differs from `previous`. */
+const differsForOthers = (previous: PresenceFields, next: PresenceFields) =>
+	previous.status !== next.status ||
+	previous.desktopStatus !== next.desktopStatus ||
+	previous.webStatus !== next.webStatus ||
+	previous.mobileStatus !== next.mobileStatus ||
+	previous.afk !== next.afk ||
+	previous.activeChannelId !== next.activeChannelId ||
+	previous.customMessage !== next.customMessage ||
+	previous.statusEmoji !== next.statusEmoji ||
+	!sameTime(previous.statusExpiresAt, next.statusExpiresAt) ||
+	previous.suppressNotifications !== next.suppressNotifications
 
 // STORAGE
 
@@ -174,97 +140,312 @@ const writePresence = (userId: UserId, fields: PresenceFields) =>
 		),
 	).pipe(Effect.map((rows) => rows[0]!))
 
-/** Write the user's presence and project it. Inside a transaction (the outbox joins it). */
-export const savePresence = Effect.fn("UserObject.savePresence")(function* (
-	userId: UserId,
-	fields: PresenceFields,
-) {
-	const row = yield* writePresence(userId, fields)
-	yield* projectPresence(row)
-	return row
-})
+const writePreference = (userId: UserId, status: PreferredStatus, statusExpiresAt: Date | null, now: Date) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.run(
+			SQLite.insertInto(schema.userPresenceSettingsTable)
+				.values({ userId, status, statusExpiresAt, updatedAt: now })
+				.onConflictDoUpdate({ target: ["userId"], set: { status, statusExpiresAt, updatedAt: now } }),
+		),
+	)
+
+type SessionPatch = Partial<
+	Pick<schema.PresenceSession, "clientType" | "idle" | "afk" | "focusedChannelId" | "legacy">
+>
+
+/** Start or touch session `id`: `lastBeatAt` moves to now, with `patch` applied. */
+const touchSession = (id: string, patch: SessionPatch = {}) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const now = new Date(yield* Clock.currentTimeMillis)
+		yield* db.run(
+			SQLite.insertInto(schema.presenceSessionsTable)
+				.values({ id, ...patch, connectedAt: now, lastBeatAt: now })
+				.onConflictDoUpdate({ target: ["id"], set: { ...patch, lastBeatAt: now } }),
+		)
+	})
+
+const deleteSessions = (ids: ReadonlyArray<string>) =>
+	ids.length === 0
+		? Effect.void
+		: Effect.flatMap(Database.Database, (db) =>
+				db.run(SQLite.deleteFrom(schema.presenceSessionsTable).where(($) => [$.id.in_(...ids)])),
+			)
+
+// RECONCILE
+
+/** How far `lastSeenAt` must move before a ping writes it (well inside `SESSION_TIMEOUT_MS`). */
+const LAST_SEEN_STEP_MS = 30_000
+
+export interface ReconcileOptions {
+	/** The sessions whose sockets are open (the alarm knows); others end. Unknown: trust the pings. */
+	readonly openSessionIds?: ReadonlySet<string>
+	/** Fields the caller sets on the row itself (custom status, "pause notifications"). */
+	readonly patch?: PresencePatch
+}
+
+/** The row's own fields an RPC sets: the custom status and "pause notifications". */
+export interface PresencePatch {
+	customMessage?: string | null
+	statusEmoji?: string | null
+	statusExpiresAt?: Date | null
+	suppressNotifications?: boolean
+}
 
 /**
- * Run `event` through the state machine for `userId` and store the outcome (projecting it when
- * the step says so). Inside a transaction. Returns the row and whether the orgs were told.
+ * Recompute the user's row from the pick and the live sessions, ending what expired (a timed pick,
+ * a custom status, sessions past their timeout). Writes the row when it moved, and projects it when
+ * others would see a change or the orgs' lease is due. Inside a transaction.
  */
-export const applyPresenceEvent = Effect.fn("UserObject.applyPresenceEvent")(function* (
+export const reconcile = Effect.fn("UserObject.reconcilePresence")(function* (
 	userId: UserId,
-	event: PresenceEvent,
+	options: ReconcileOptions = {},
 ) {
+	const db = yield* Database.Database
 	const nowMs = yield* Clock.currentTimeMillis
+	const now = new Date(nowMs)
+
+	let preference = Option.getOrUndefined(yield* findPreference(userId))
+	if (
+		preference !== undefined &&
+		preference.statusExpiresAt !== null &&
+		preference.statusExpiresAt.getTime() <= nowMs
+	) {
+		yield* writePreference(userId, "online", null, now)
+		preference = { ...preference, status: "online", statusExpiresAt: null, updatedAt: now }
+	}
+
+	const sessions = yield* db.run(SQLite.from(schema.presenceSessionsTable).select())
+	const live = sessions.filter((session) => isLive(session, nowMs, options.openSessionIds))
+	yield* deleteSessions(sessions.filter((session) => !live.includes(session)).map((session) => session.id))
+
 	const existing = Option.getOrUndefined(yield* findPresence(userId))
-	const current =
-		existing === undefined ? undefined : (({ id: _id, userId: _u, ...fields }) => fields)(existing)
-	const step = transition(current, event, nowMs)
+	const previous: PresenceFields =
+		existing === undefined
+			? defaultPresence(now)
+			: (({ id: _id, userId: _userId, ...fields }) => fields)(existing)
+	const withPatch = { ...previous, ...options.patch }
+	const isCustomExpired = withPatch.statusExpiresAt !== null && withPatch.statusExpiresAt.getTime() <= nowMs
+	const lastBeatMs = Math.max(...live.map((session) => session.lastBeatAt.getTime()))
+	const next: PresenceFields = {
+		...withPatch,
+		...aggregate(preference, live, nowMs),
+		customMessage: isCustomExpired ? null : withPatch.customMessage,
+		statusEmoji: isCustomExpired ? null : withPatch.statusEmoji,
+		statusExpiresAt: isCustomExpired ? null : withPatch.statusExpiresAt,
+		lastSeenAt: live.length > 0 ? new Date(lastBeatMs) : previous.lastSeenAt,
+	}
+
+	const isChanged = existing === undefined || differsForOthers(previous, next)
+	const isRenewDue = live.length > 0 && previous.updatedAt.getTime() + PRESENCE_RENEW_MS <= nowMs
 	yield* Effect.annotateCurrentSpan({
-		"presence.event": event,
 		"presence.from": existing?.status ?? "none",
-		"presence.to": step?.fields.status ?? existing?.status ?? "none",
-		"presence.projected": step?.project ?? false,
+		"presence.to": next.status,
+		"presence.sessions": live.length,
+		"presence.ended": sessions.length - live.length,
+		"presence.preferred": preference?.status ?? "none",
+		"presence.projected": isChanged || isRenewDue,
 	})
-	if (step === undefined) return { row: existing, projected: false }
-	const row = step.project
-		? yield* savePresence(userId, step.fields)
-		: yield* writePresence(userId, step.fields)
-	return { row, projected: step.project }
+	if (isChanged || isRenewDue) {
+		const row = yield* writePresence(userId, { ...next, updatedAt: now })
+		yield* projectPresence(row)
+		return { row, projected: true }
+	}
+	// The row is synced to the user's own clients: a ping moves `lastSeenAt` only every so often.
+	const lastSeenMovedMs = next.lastSeenAt.getTime() - previous.lastSeenAt.getTime()
+	if (existing !== undefined && lastSeenMovedMs < LAST_SEEN_STEP_MS) {
+		return { row: existing, projected: false }
+	}
+	return { row: yield* writePresence(userId, next), projected: false }
 })
 
-/** The user is active (a heartbeat, a socket opening). Returns the row. */
-export const markActive = (userId: UserId) =>
-	applyPresenceEvent(userId, "Active").pipe(Effect.map(({ row }) => row!))
+// EVENTS (each inside the caller's transaction)
 
-/** Offline, unless they already are; returns whether that changed anything. */
+const toChannelId = Schema.decodeUnknownOption(ChannelId)
+
+/** A sync socket opened: its session starts. */
+export const sessionOpened = (userId: UserId, sessionId: string) =>
+	Effect.andThen(touchSession(sessionId), reconcile(userId))
+
+/** A ping on the session's socket: it is still there. */
+export const sessionBeat = (userId: UserId, sessionId: string) =>
+	Effect.andThen(touchSession(sessionId), reconcile(userId))
+
+/** The session's client said what it is, whether it is idle, and what it shows. */
+export const sessionPresence = (userId: UserId, sessionId: string, frame: SyncPresence) =>
+	Effect.andThen(
+		touchSession(sessionId, {
+			clientType: frame.clientType,
+			idle: frame.idle,
+			afk: frame.afk,
+			focusedChannelId: Option.getOrNull(toChannelId(frame.focusedChannelId)),
+			legacy: false,
+		}),
+		reconcile(userId),
+	)
+
+/** The session's socket closed: it ends now. */
+export const sessionClosed = (userId: UserId, sessionId: string) =>
+	Effect.andThen(deleteSessions([sessionId]), reconcile(userId))
+
+/** The user picked a status, on every device; `expiresAt` ends it (null: until changed). */
+export const setPreferredStatus = Effect.fn("UserObject.setPreferredStatus")(function* (
+	userId: UserId,
+	status: PreferredStatus,
+	expiresAt: Date | null,
+) {
+	const now = new Date(yield* Clock.currentTimeMillis)
+	yield* writePreference(userId, status, expiresAt, now)
+	return yield* reconcile(userId)
+})
+
+/** Patch every session an older client opened (they send no frames; their RPCs speak for them). */
+const patchLegacySessions = (patch: SessionPatch) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.run(
+			SQLite.update(schema.presenceSessionsTable)
+				.set(patch)
+				.where(($) => [$.legacy.eq(true)]),
+		),
+	)
+
+/** `userPresenceStatus.heartbeat` from an older client: keeps its own session alive. */
+export const legacyHeartbeat = (userId: UserId) =>
+	Effect.andThen(touchSession(HEARTBEAT_SESSION_ID), reconcile(userId))
+
+/**
+ * `userPresenceStatus.update`'s `status` and `activeChannelId` from an older client, mapped onto
+ * the new inputs: its AFK `away` makes its sessions idle, `busy`/`dnd` picks Do Not Disturb, and
+ * `online` picks Online (an older client cannot pick Invisible, so it never undoes that).
+ */
+export const applyLegacyUpdate = Effect.fn("UserObject.applyLegacyUpdate")(function* (
+	userId: UserId,
+	payload: {
+		readonly status?: schema.UserPresenceStatus["status"] | undefined
+		readonly activeChannelId?: ChannelId | null | undefined
+	},
+) {
+	const now = new Date(yield* Clock.currentTimeMillis)
+	if (payload.activeChannelId !== undefined) {
+		yield* patchLegacySessions({ focusedChannelId: payload.activeChannelId })
+	}
+	switch (payload.status) {
+		case "away":
+			yield* patchLegacySessions({ idle: true })
+			break
+		case "busy":
+		case "dnd":
+			yield* writePreference(userId, "dnd", null, now)
+			break
+		case "online": {
+			yield* patchLegacySessions({ idle: false })
+			const current = Option.getOrUndefined(yield* findPreference(userId))
+			if (current?.status !== "invisible") yield* writePreference(userId, "online", null, now)
+			break
+		}
+		case "offline":
+		case undefined:
+			break
+	}
+})
+
+/** The sendBeacon from an older client's unload: its sessions end now. */
 export const markOffline = (userId: UserId) =>
-	applyPresenceEvent(userId, "Disconnected").pipe(Effect.map(({ projected }) => projected))
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		yield* db.run(SQLite.deleteFrom(schema.presenceSessionsTable).where(($) => [$.legacy.eq(true)]))
+		return (yield* reconcile(userId)).projected
+	})
 
-/** The alarm's work (custom status expiry, heartbeat staleness); returns whether anything changed. */
-export const expirePresence = (userId: UserId) =>
-	applyPresenceEvent(userId, "Tick").pipe(Effect.map(({ projected }) => projected))
-
-/** When the alarm must next run for presence. */
+/** When the alarm must next run: a timed pick or custom status ending, a session timing out. */
 export const presenceDeadlines = (userId: UserId) =>
-	findPresence(userId).pipe(Effect.map(Option.match({ onNone: () => [], onSome: presenceDeadlinesOf })))
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const preference = Option.getOrUndefined(yield* findPreference(userId))
+		const row = Option.getOrUndefined(yield* findPresence(userId))
+		const sessions = yield* db.run(SQLite.from(schema.presenceSessionsTable).select("lastBeatAt"))
+		return [
+			preference?.statusExpiresAt?.getTime(),
+			row?.statusExpiresAt?.getTime(),
+			...sessions.map(sessionDeadline),
+		]
+	})
 
-/** Hooks the `UserObject`'s runtime calls (`../runtime.ts`): sockets, deadlines and the alarm. */
+// HOOKS
+
+const PresenceOrPing = Schema.Union([
+	Schema.TaggedStruct("Ping", {}),
+	Schema.Struct({
+		_tag: Schema.Literal("Presence"),
+		clientType: Schema.Literals(["desktop", "web", "mobile"]),
+		idle: Schema.Boolean,
+		afk: Schema.Boolean,
+		focusedChannelId: Schema.NullOr(Schema.String),
+	}),
+])
+const decodePresenceOrPing = Schema.decodeUnknownOption(Schema.fromJsonString(PresenceOrPing))
+
+/** Hooks the `UserObject`'s runtime calls (`../runtime.ts`): sockets, frames, deadlines, the alarm. */
 export const makePresenceHooks = (state: SyncObjectState, ownerId: () => string | undefined) => {
-	/** Open sync sockets, not counting `closing`. */
-	const openSockets = (closing?: SyncSocket) =>
-		state
-			.getWebSockets()
-			.filter(
-				(socket) =>
-					socket !== closing && (socket.readyState === undefined || socket.readyState === 1),
-			).length
-
 	const owner = () => Option.flatMap(Option.fromNullishOr(ownerId()), Schema.decodeUnknownOption(UserId))
 
-	/** Run `f` for the owner in one transaction; failures are logged (presence is best effort). */
-	const forOwner = <A, E, R>(name: string, f: (userId: UserId) => Effect.Effect<A, E, R>) =>
+	/** The sessions whose sockets are open, plus the RPC heartbeat's (it has no socket). */
+	const openSessionIds = () =>
+		new Set([
+			HEARTBEAT_SESSION_ID,
+			...state
+				.getWebSockets()
+				.filter((socket) => socket.readyState === undefined || socket.readyState === 1)
+				.flatMap((socket) => Option.toArray(Option.fromNullishOr(socketSessionId(socket)))),
+		])
+
+	/** Run `f` for the owner in one transaction; returns whether the orgs were told. Best effort. */
+	const forOwner = <E, R>(
+		name: string,
+		f: (userId: UserId) => Effect.Effect<{ readonly projected: boolean }, E, R>,
+	) =>
 		Effect.gen(function* () {
 			const userId = owner()
-			if (Option.isNone(userId)) return Option.none<A>()
+			if (Option.isNone(userId)) return false
 			const db = yield* Database.Database
-			return Option.some(yield* db.transaction(f(userId.value)))
+			return (yield* db.transaction(f(userId.value))).projected
 		}).pipe(
 			Effect.catchCause((cause) =>
-				Effect.logWarning(`Presence ${name} failed`, cause).pipe(Effect.as(Option.none<A>())),
+				Effect.logWarning(`Presence ${name} failed`, cause).pipe(Effect.as(false)),
 			),
 			Effect.withSpan(`UserObject.presence.${name}`),
 		)
 
+	const forSession = <E, R>(
+		name: string,
+		socket: SyncSocket,
+		f: (userId: UserId, sessionId: string) => Effect.Effect<{ readonly projected: boolean }, E, R>,
+	) => {
+		const sessionId = socketSessionId(socket)
+		return sessionId === undefined
+			? Effect.succeed(false)
+			: forOwner(name, (userId) => f(userId, sessionId))
+	}
+
 	return {
 		/** A sync socket was accepted for `userId`; returns whether the object should flush. */
-		opened: (userId: string) =>
-			userId === ownerId()
-				? forOwner("opened", markActive).pipe(Effect.map(Option.isSome))
-				: Effect.succeed(false),
-		/** `socket` closed: offline once it was the last one. */
-		closed: (socket: SyncSocket) =>
-			openSockets(socket) > 0
-				? Effect.succeed(false)
-				: forOwner("closed", markOffline).pipe(Effect.map(Option.getOrElse(() => false))),
-		alarm: forOwner("alarm", expirePresence).pipe(Effect.map(Option.getOrElse(() => false))),
+		opened: (userId: string, socket: SyncSocket) =>
+			userId === ownerId() ? forSession("opened", socket, sessionOpened) : Effect.succeed(false),
+		/** A frame arrived on `socket`: a ping keeps its session alive, `Presence` updates it. */
+		message: (socket: SyncSocket, message: string | ArrayBuffer) => {
+			if (typeof message !== "string") return Effect.succeed(false)
+			const frame = decodePresenceOrPing(message)
+			if (Option.isNone(frame)) return Effect.succeed(false)
+			const value = frame.value
+			return value._tag === "Ping"
+				? forSession("beat", socket, sessionBeat)
+				: forSession("frame", socket, (userId, sessionId) =>
+						sessionPresence(userId, sessionId, value),
+					)
+		},
+		/** `socket` closed: its session ends. */
+		closed: (socket: SyncSocket) => forSession("closed", socket, sessionClosed),
+		alarm: forOwner("alarm", (userId) => reconcile(userId, { openSessionIds: openSessionIds() })),
 		deadlines: Effect.suspend(() =>
 			Option.match(owner(), {
 				onNone: () => Effect.succeed([]),

@@ -199,6 +199,10 @@ export const presenceRows: ReadonlyArray<Wire<typeof UserPresenceStatus.Schema>>
 	suppressNotifications: false,
 	updatedAt: iso(-10 * MINUTE),
 	lastSeenAt: iso(-(p.n - 1) * 37 * MINUTE),
+	desktopStatus: p.status === "offline" || p.status === "busy" ? null : p.status,
+	webStatus: null,
+	mobileStatus: null,
+	afk: p.status !== "online",
 }))
 
 export const channelSectionRows: ReadonlyArray<Wire<typeof ChannelSection.Schema>> = SECTIONS.map((s) => ({

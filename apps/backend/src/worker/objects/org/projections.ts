@@ -32,6 +32,8 @@ export const UserProjection = Schema.Struct({
 })
 export type UserProjection = typeof UserProjection.Type
 
+const ClientStatus = Schema.Literals(["online", "away", "dnd"])
+
 /** A `user_presence_status` row as it crosses the outbox. */
 export const PresenceProjection = Schema.Struct({
 	/** The UserObject row's id, so the client sees one presence row per user from every source. */
@@ -45,6 +47,14 @@ export const PresenceProjection = Schema.Struct({
 	suppressNotifications: Schema.Boolean,
 	updatedAt: Timestamp,
 	lastSeenAt: Timestamp,
+	/**
+	 * Per-device status and AFK (Discord's `client_status`). Optional: deliveries enqueued before
+	 * they existed lack them, and the row keeps its column defaults.
+	 */
+	desktopStatus: Schema.optionalKey(Schema.NullOr(ClientStatus)),
+	webStatus: Schema.optionalKey(Schema.NullOr(ClientStatus)),
+	mobileStatus: Schema.optionalKey(Schema.NullOr(ClientStatus)),
+	afk: Schema.optionalKey(Schema.Boolean),
 })
 export type PresenceProjection = typeof PresenceProjection.Type
 
@@ -139,7 +149,15 @@ export const expirePresenceLeases = Effect.gen(function* () {
 	const nowMs = yield* Clock.currentTimeMillis
 	const expired = yield* db.run(
 		SQLite.update(schema.userPresenceStatusTable)
-			.set({ status: "offline", updatedAt: new Date(nowMs) })
+			.set({
+				status: "offline",
+				desktopStatus: null,
+				webStatus: null,
+				mobileStatus: null,
+				afk: true,
+				activeChannelId: null,
+				updatedAt: new Date(nowMs),
+			})
 			.where(($) => [$.status.neq("offline"), $.lastSeenAt.lte(new Date(nowMs - PRESENCE_LEASE_MS))])
 			.returning("id"),
 	)

@@ -88,7 +88,29 @@ export const SyncLoadByIds = Schema.TaggedStruct("LoadByIds", {
 })
 export type SyncLoadByIds = typeof SyncLoadByIds.Type
 
-export const SyncClientFrame = Schema.Union([SyncHello, SyncPing, SyncReauth, SyncLoadOlder, SyncLoadByIds])
+/**
+ * This connection's presence, sent to the user's own `UserObject` (`user` source) whenever it
+ * changes: what kind of client it is, whether its user is idle (no input for 10 minutes) or AFK
+ * (idle long enough that mobile push should go out), and the channel it shows while its window is
+ * focused. Each socket is one session; the object combines them (Discord's gateway sessions).
+ * Other sources ignore it.
+ */
+export const SyncPresence = Schema.TaggedStruct("Presence", {
+	clientType: Schema.Literals(["desktop", "web", "mobile"]),
+	idle: Schema.Boolean,
+	afk: Schema.Boolean,
+	focusedChannelId: Schema.NullOr(Schema.String),
+})
+export type SyncPresence = typeof SyncPresence.Type
+
+export const SyncClientFrame = Schema.Union([
+	SyncHello,
+	SyncPing,
+	SyncReauth,
+	SyncLoadOlder,
+	SyncLoadByIds,
+	SyncPresence,
+])
 export type SyncClientFrame = typeof SyncClientFrame.Type
 
 // ---------------------------------------------------------------------------
