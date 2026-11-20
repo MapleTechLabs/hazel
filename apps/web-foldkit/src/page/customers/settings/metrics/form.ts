@@ -165,6 +165,8 @@ const builderError = (builder: BuilderForm): string | undefined => {
 	if (builder.filters.some((filter) => filter.field.trim() === ""))
 		return "Every filter needs a column, e.g. MetricName or Attributes.signal"
 	if (builder.filters.some((filter) => filter.value.trim() === "")) return "Every filter needs a value"
+	if (builder.filters.some((filter) => filter.value.length > 500))
+		return "A filter value is at most 500 characters"
 	return Customers.builderProblem(builderOf(builder)) ?? undefined
 }
 

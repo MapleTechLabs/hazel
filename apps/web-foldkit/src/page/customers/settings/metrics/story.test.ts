@@ -205,6 +205,15 @@ describe("metric editor", () => {
 		expect(commandsOf(ordered, Message.PressedSave())).toEqual([])
 		const [[, sqlArgs]] = commandsOf(sql, Message.PressedSave()) as [[string, unknown]]
 		expect(sqlArgs).toMatchObject({ metric: { source: { _tag: "maple_query", builder: null } } })
+
+		// A filter value over the contract's cap is refused here, not by the server.
+		const longFilter = run(filled, [
+			Message.ChangedFilter({
+				index: 0,
+				filter: { field: "ServiceName", op: "in", value: "x".repeat(501) },
+			}),
+		])
+		expect(commandsOf(longFilter, Message.PressedSave())).toEqual([])
 	})
 
 	test("SQL typed by hand survives a visit to the builder; a long description is refused", () => {

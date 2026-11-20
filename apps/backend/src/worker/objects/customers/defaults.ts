@@ -112,7 +112,6 @@ const BUILT_IN_FORMATS_KEY = "builtInFormats"
  */
 export const ensureBuiltInFormats = Effect.fn("Customers.ensureBuiltInFormats")(function* () {
 	if (Option.isSome(yield* readObjectMeta(BUILT_IN_FORMATS_KEY))) return
-	yield* writeObjectMeta(BUILT_IN_FORMATS_KEY, "1")
 	const db = yield* Database.Database
 	for (const metric of BUILT_IN_METRICS) {
 		yield* db.run(
@@ -121,4 +120,6 @@ export const ensureBuiltInFormats = Effect.fn("Customers.ensureBuiltInFormats")(
 				.where(($) => [$.key.eq(metric.key), $.builtIn.eq(true), $.format.neq(metric.format)]),
 		)
 	}
+	// Marked done only once every built-in has its format.
+	yield* writeObjectMeta(BUILT_IN_FORMATS_KEY, "1")
 })
