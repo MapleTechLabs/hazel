@@ -5,16 +5,19 @@ import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import { errorToast, errorToastOf, successToast, warningToast } from "../../data/actions"
 import type { ToastRequest } from "../../overlay/toasts"
-import { AppRoute, hrefOf, type RouteOf } from "../../route"
+import { AppRoute, hrefOf, onboardingHref, type RouteOf } from "../../route"
 import type { ThemeCustomization, ThemeMode } from "../../theme"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
+import * as ChatMigration from "../shared/chat-migration"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
 import {
+	ClearOnboardingAnswers,
 	DebounceTimezoneQuery,
 	LoadOnboardingHome,
 	ReadBrowserTimezone,
+	ReadOnboardingAnswers,
 	SendInvites,
 	UpdateProfile,
 	UpdateUserTimezone,
@@ -59,10 +62,16 @@ export const init = (route: RouteOf<"Onboarding">, shared: Shared): Return => {
 		urlStep: Option.getOrNull(route.step),
 		orgId: Option.getOrNull(route.orgId),
 		phase: Phase.Starting({ membership: Option.none(), browserTimezone: Option.none() }),
+		restoredData: null,
 		interaction: Interaction.init(),
 	}
 	const redirected = redirectIfOnboarded(model, shared)
-	return { ...redirected, commands: [ReadBrowserTimezone()] }
+	// Back on the import step from a provider's OAuth: the answers given before it come back.
+	const isImport = Option.getOrNull(route.step) === "import"
+	return {
+		...redirected,
+		commands: [ReadBrowserTimezone(), ...(isImport ? [ReadOnboardingAnswers()] : [])],
+	}
 }
 
 const isStep = <Tag extends StepState["_tag"]>(step: StepState, tag: Tag): step is StepOf<Tag> =>
@@ -136,14 +145,35 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				Starting: (starting) =>
 					startWhenReady(model, { ...starting, membership: Option.some(membership) }, shared),
 				Leaving: () => ({ model }),
-				Running: (running) => ({
-					model: withPhase(
-						model,
-						modifyFields(running, {
-							flow: (flow) => modifyFields(flow, { membership: () => membership }),
-						}),
-					),
-				}),
+				Running: (running) => {
+					const next = modifyFields(running, {
+						flow: (flow) => modifyFields(flow, { membership: () => membership }),
+					})
+					// The import step's wizard learns an organization that arrived after it opened.
+					const { step } = next
+					if (
+						step._tag !== "Import" ||
+						membership === null ||
+						step.migration.organizationId !== null
+					)
+						return { model: withPhase(model, next) }
+					const migration = ChatMigration.withOrganization(
+						step.migration,
+						membership.organizationId,
+						onboardingHref(membership.organizationId, "import"),
+					)
+					return {
+						model: withPhase(
+							model,
+							modifyFields(next, {
+								step: () => StepState.Import({ migration: migration.model }),
+							}),
+						),
+						commands: Command.mapMessages(migration.commands ?? [], (message) =>
+							Message.GotMigrationMessage({ message }),
+						),
+					}
+				},
 			}),
 		ClickedBack: () => withRunning(model, (running) => goBack(model, running, shared)),
 		ClickedGetStarted: () => withStep(model, "Welcome", (_, running) => advance(model, running, shared)),
@@ -305,6 +335,33 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					: advance(model, running, shared, { role: () => selected })
 			}),
 
+		GotMigrationMessage: ({ message: migrationMessage }) =>
+			withStep(model, "Import", (form, running) => {
+				const result = ChatMigration.update(form.migration, migrationMessage)
+				const next = setStep(model, running, StepState.Import({ migration: result.model }))
+				const commands = Command.mapMessages(result.commands ?? [], (message) =>
+					Message.GotMigrationMessage({ message }),
+				)
+				const outcome = result.outcome
+				if (outcome === undefined) return { model: next, commands }
+				if (outcome._tag === "Toast")
+					return { model: next, commands, outMessage: toast(outcome.toast) }
+				const advanced = advance(next, running, shared)
+				return { ...advanced, commands: [...commands, ...(advanced.commands ?? [])] }
+			}),
+
+		RestoredAnswers: ({ data }) => {
+			if (data === null) return { model }
+			return Phase.match(model.phase, {
+				Starting: () => ({ model: modifyFields(model, { restoredData: () => data }) }),
+				Leaving: () => ({ model }),
+				Running: (running) => ({
+					model: withPhase(model, modifyFields(running, { data: () => data })),
+				}),
+			})
+		},
+		CompletedStoreAnswers: () => ({ model }),
+
 		ChangedEmail: ({ rowId, value }) =>
 			withStep(model, "Invite", (form, running) => ({
 				model: setStep(
@@ -407,6 +464,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						LoadOnboardingHome({
 							href: hrefOf(slug ? AppRoute.OrgHome({ orgSlug: slug }) : AppRoute.Root()),
 						}),
+						ClearOnboardingAnswers(),
 					],
 				}
 			}),

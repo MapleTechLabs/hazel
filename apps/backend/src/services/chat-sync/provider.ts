@@ -49,6 +49,20 @@ export class ChatSyncProviderApiError extends Schema.TaggedError<ChatSyncProvide
 
 export type ChatSyncClientError = ChatSyncProviderConfigurationError | ChatSyncProviderApiError
 
+/**
+ * `ChatSyncProviderApiError.detail` when a linked channel is not in the connection's workspace
+ * (`prepareLink`): the link is paused and nothing is read from or posted to that channel.
+ */
+export const NOT_IN_WORKSPACE = "not_in_workspace"
+
+export const notInWorkspaceError = (provider: string) =>
+	new ChatSyncProviderApiError({
+		provider,
+		message: "The channel is not in the connected workspace",
+		status: 404,
+		detail: NOT_IN_WORKSPACE,
+	})
+
 /** Whether another attempt at a provider call may succeed: transport failures, 408, 429, 5xx. */
 export const isRetryableStatus = (status: number | undefined) =>
 	status === undefined || status === 408 || status === 429 || status >= 500
@@ -124,7 +138,9 @@ export interface ChatSyncLinkContext {
 export interface ChatSyncClient {
 	/**
 	 * Make a newly linked external channel ready to sync (Slack: the bot joins it, or it gets no
-	 * events). Idempotent; run by the org's outbox after the link is saved.
+	 * events), after checking it is the connection's workspace's own channel (else
+	 * `notInWorkspaceError`). Idempotent; run by the org's outbox after the link is saved, and before
+	 * a history import reads it.
 	 */
 	readonly prepareLink: (link: {
 		readonly externalWorkspaceId: string

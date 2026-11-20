@@ -54,6 +54,11 @@ const DiscordGuildChannelApiResponse = Schema.Struct({
 	parent_id: Schema.optional(Schema.NullOr(Schema.String)),
 })
 
+/** `GET /channels/{id}`: only what says which guild the channel is in (a DM has none). */
+const DiscordChannelGuildApiResponse = Schema.Struct({
+	guild_id: Schema.optional(Schema.NullOr(Schema.String)),
+})
+
 const DiscordMessageCreateResponse = Schema.Struct({
 	id: Schema.String,
 })
@@ -275,6 +280,32 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 					type: channel.type,
 					parentId: channel.parent_id ?? null,
 				}))
+		})
+
+		/** The guild a channel is in (`null` for a DM): one channel, not the guild's whole list. */
+		const getChannelGuildId = Effect.fn("DiscordApiClient.getChannelGuildId")(function* (
+			channelId: string,
+			botToken: string,
+		) {
+			const response = yield* makeBotClient(botToken)
+				.get(`${DISCORD_API_BASE_URL}/channels/${channelId}`)
+				.pipe(Effect.scoped, Effect.timeout(DEFAULT_TIMEOUT))
+
+			if (response.status >= 400) {
+				return yield* handleApiError(response)
+			}
+
+			const body = yield* response.json.pipe(
+				Effect.flatMap(Schema.decodeUnknownEffect(DiscordChannelGuildApiResponse)),
+				Effect.mapError(
+					(cause) =>
+						new DiscordApiError({
+							message: "Failed to parse Discord channel response",
+							cause,
+						}),
+				),
+			)
+			return body.guild_id ?? null
 		})
 
 		/** A channel's messages, newest first: at most `limit` (1-100), all older than `before`. */
@@ -630,6 +661,7 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 			getAccountInfo,
 			listGuilds,
 			listGuildChannels,
+			getChannelGuildId,
 			listMessages,
 			createMessage,
 			updateMessage,

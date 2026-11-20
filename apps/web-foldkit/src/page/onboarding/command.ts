@@ -1,5 +1,5 @@
 import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
-import { Duration, Effect, Schema } from "effect"
+import { Duration, Effect, Option, Schema } from "effect"
 import { Command } from "foldkit"
 import { load, replaceUrl } from "foldkit/navigation"
 import { orgOfMember } from "~/db/routing-hints"
@@ -7,6 +7,54 @@ import { catchCommon } from "../../data/actions"
 import { sendInvitations } from "../../data/invitations"
 import { HazelRpc } from "../../rpc"
 import { Message } from "./message"
+import { Data } from "./model"
+
+/**
+ * The import step leaves for a provider's OAuth and comes back on a full page load, which would lose
+ * the answers only the page holds (role, use cases, sent when onboarding finishes). They are kept in
+ * sessionStorage meanwhile; storage being unavailable just means answering again.
+ */
+const ANSWERS_KEY = "hazel:onboarding:answers"
+const decodeAnswers = Schema.decodeUnknownOption(Schema.fromJsonString(Data))
+
+export const StoreOnboardingAnswers = Command.define("StoreOnboardingAnswers", {
+	args: { data: Data },
+	messages: [Message.CompletedStoreAnswers],
+	execute: ({ data }) =>
+		Effect.sync(() => {
+			try {
+				sessionStorage.setItem(ANSWERS_KEY, JSON.stringify(data))
+			} catch {
+				// Private mode or blocked storage: nothing kept.
+			}
+			return Message.CompletedStoreAnswers()
+		}),
+})
+
+export const ReadOnboardingAnswers = Command.define("ReadOnboardingAnswers", {
+	messages: [Message.RestoredAnswers],
+	execute: Effect.sync(() => {
+		let raw: string | null = null
+		try {
+			raw = sessionStorage.getItem(ANSWERS_KEY)
+		} catch {
+			raw = null
+		}
+		return Message.RestoredAnswers({ data: raw === null ? null : Option.getOrNull(decodeAnswers(raw)) })
+	}),
+})
+
+export const ClearOnboardingAnswers = Command.define("ClearOnboardingAnswers", {
+	messages: [Message.CompletedStoreAnswers],
+	execute: Effect.sync(() => {
+		try {
+			sessionStorage.removeItem(ANSWERS_KEY)
+		} catch {
+			// Nothing to clear.
+		}
+		return Message.CompletedStoreAnswers()
+	}),
+})
 
 export const ReadBrowserTimezone = Command.define("ReadBrowserTimezone", {
 	messages: [Message.DetectedBrowserTimezone],

@@ -3,6 +3,7 @@ import { eq } from "@tanstack/db"
 import { Option, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import { organizationCollection, organizationMemberCollection } from "~/db/collections"
+import { appOrgSourcesSettled } from "~/db/sync-manager"
 import { liveQueryStream } from "../../data/live-query"
 import * as Interaction from "../../ui/aria/interaction"
 import type { PageSubscriptionInput } from "../contract"
@@ -50,6 +51,9 @@ const own = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) =
 										: null,
 								})
 							},
+							// The org sources start as last load's set: a just-made org's membership is
+							// missing until its source answers, not "no membership".
+							{ holdEmptyUntil: appOrgSourcesSettled },
 						),
 		},
 	),

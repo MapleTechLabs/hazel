@@ -5,7 +5,7 @@ import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
 import { orgOfChatSyncConnection } from "~/db/routing-hints"
 import { failureMessage } from "~/lib/error-messages"
-import { AppRoute } from "../../../route"
+import { AppRoute, hrefOf } from "../../../route"
 import { HazelRpc, type Resources } from "../../../rpc"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
@@ -13,6 +13,7 @@ import * as Modal from "../../../ui/modal"
 import { catchCommon, errorToastOf, reasonToast, successToast } from "../../../data/actions"
 import type { PageReturn, PageSubscriptionInput, Shared } from "../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
+import * as ChatMigration from "../../shared/chat-migration"
 import * as ConfirmAction from "../../shared/confirm-action"
 import { chosenWorkspace, Connections, type DeleteTarget, Message, type Model, Submission } from "./model"
 import { type ChatSyncProvider, isChatSyncProvider, PROVIDERS, Workspaces } from "./providers"
@@ -82,8 +83,25 @@ const requestList = (model: Model, shared: Shared): Return => {
 	}
 }
 
-export const init = (_route: unknown, shared: Shared): Return =>
-	requestList(
+export const MIGRATION_MODAL_ID = "chat-sync-migrate"
+
+const toMigrationMessage = (message: ChatMigration.Message) => Message.GotMigrationMessage({ message })
+
+/** A fresh wizard for the current org; the provider's OAuth comes back to this page. */
+const migrationReturnTo = (shared: Shared): string =>
+	shared.orgSlug === null
+		? hrefOf(AppRoute.Root())
+		: hrefOf(AppRoute.SettingsChatSync({ orgSlug: shared.orgSlug }))
+
+const freshMigration = (shared: Shared): ChatMigration.Model =>
+	ChatMigration.init({
+		id: MIGRATION_MODAL_ID,
+		organizationId: shared.organization?.id ?? null,
+		returnTo: migrationReturnTo(shared),
+	})
+
+export const init = (_route: unknown, shared: Shared): Return => {
+	const listed = requestList(
 		{
 			requestedOrganizationId: null,
 			connections: Connections.Loading(),
@@ -99,11 +117,90 @@ export const init = (_route: unknown, shared: Shared): Return =>
 			submission: Submission.NotSubmitted(),
 			deleteConfirm: ConfirmAction.init("chat-sync-delete"),
 			interaction: Interaction.init(),
+			migrationModal: Modal.init(MIGRATION_MODAL_ID),
+			migration: freshMigration(shared),
 		},
 		shared,
 	)
+	// Back from a provider's OAuth that the wizard started: it opens again where it left off.
+	const migration = ChatMigration.start(listed.model.migration)
+	return {
+		...listed,
+		commands: [
+			...(listed.commands ?? []),
+			...Command.mapMessages(migration.commands ?? [], toMigrationMessage),
+		],
+	}
+}
 
-export const sharedChanged = (model: Model, shared: Shared): Return => requestList(model, shared)
+const migrationModal = {
+	read: (model: Model) => Option.some(model.migrationModal),
+	write: (model: Model, modal: Modal.Model): Model => modifyFields(model, { migrationModal: () => modal }),
+	toParentMessage: (message: Modal.Message) => Message.GotMigrationModalMessage({ message }),
+	foldOutMessage: Modal.ignoreOutMessage,
+}
+const foldMigrationModal = Update.foldChild({ update: Modal.update, ...migrationModal })
+const openMigrationModal = Update.foldChildStep({ update: Modal.open, ...migrationModal })
+const closeMigrationModal = Update.foldChildStep({ update: Modal.close, ...migrationModal })
+
+/** Folds a wizard step: its toast goes up, and finishing closes the modal and lists the new connection. */
+const foldMigration = (model: Model, message: ChatMigration.Message, shared: Shared): Return => {
+	const result = ChatMigration.update(model.migration, message)
+	const commands = Command.mapMessages(result.commands ?? [], toMigrationMessage)
+	const next = modifyFields(model, { migration: () => result.model })
+	const outcome = result.outcome
+	// Back from OAuth: open the modal on the step the wizard resumed at.
+	// Only a return from OAuth opens the modal by itself; a request finishing after the person
+	// closed it leaves it closed.
+	const resumed =
+		(message._tag === "ReturnedFromProvider" || message._tag === "ProviderRefused") &&
+		result.model.phase._tag !== "ChoosingProvider" &&
+		!model.migrationModal.isOpen
+			? openMigrationModal(next)
+			: { model: next }
+	if (outcome === undefined)
+		return { model: resumed.model, commands: [...commands, ...(resumed.commands ?? [])] }
+	if (outcome._tag === "Toast")
+		return {
+			model: resumed.model,
+			commands: [...commands, ...(resumed.commands ?? [])],
+			outMessage: PageOutMessage.RequestedToast({ toast: outcome.toast }),
+		}
+	const closed = Update.combine(modifyFields(resumed.model, { migration: () => freshMigration(shared) }), [
+		closeMigrationModal,
+		reloadConnections,
+	])
+	return { ...closed, commands: [...commands, ...(closed.commands ?? [])] }
+}
+
+export const sharedChanged = (model: Model, shared: Shared): Return => {
+	const listed = requestList(model, shared)
+	const organizationId = shared.organization?.id ?? null
+	if (organizationId === listed.model.migration.organizationId) return listed
+	const migration = ChatMigration.withOrganization(
+		listed.model.migration,
+		organizationId,
+		migrationReturnTo(shared),
+	)
+	const next = modifyFields(listed.model, { migration: () => migration.model })
+	// A pending OAuth return resumes (and opens the modal); a switch to another org closes it.
+	const isResume = listed.model.migration.resumeProvider !== null
+	const isSwitch = listed.model.migration.organizationId !== null
+	const opened =
+		isResume && migration.model.phase._tag !== "ChoosingProvider" && !next.migrationModal.isOpen
+			? openMigrationModal(next)
+			: isSwitch && next.migrationModal.isOpen
+				? closeMigrationModal(next)
+				: { model: next }
+	return {
+		model: opened.model,
+		commands: [
+			...(listed.commands ?? []),
+			...Command.mapMessages(migration.commands ?? [], toMigrationMessage),
+			...(opened.commands ?? []),
+		],
+	}
+}
 
 // UPDATE
 
@@ -354,6 +451,25 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			),
 		}),
 		ClickedConnect: () => submitConnection(model),
+		// A migration still running reopens as it is (its result must land); otherwise a fresh wizard.
+		ClickedImport: () =>
+			openMigrationModal(
+				ChatMigration.isBusy(model.migration)
+					? model
+					: modifyFields(model, { migration: () => freshMigration(shared) }),
+			),
+		// Closing it mid-way drops the wizard's progress (unless a request is running, which settles first).
+		GotMigrationModalMessage: ({ message: modalMessage }) => {
+			const result = foldMigrationModal(model, modalMessage)
+			return result.model.migrationModal.isOpen || ChatMigration.isBusy(model.migration)
+				? result
+				: {
+						...result,
+						model: modifyFields(result.model, { migration: () => freshMigration(shared) }),
+					}
+		},
+		GotMigrationMessage: ({ message: migrationMessage }) =>
+			foldMigration(model, migrationMessage, shared),
 		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 		// `onSuccess()` reloads the list (a new query key), then `handleClose()`.
 		SucceededCreateConnection: () => ({

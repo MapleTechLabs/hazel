@@ -19,6 +19,7 @@ import { PageOutMessage } from "../out-message"
 import {
 	CompleteOnboarding,
 	DebounceTimezoneQuery,
+	ClearOnboardingAnswers,
 	LoadOnboardingHome,
 	ReadBrowserTimezone,
 	ReplaceOnboardingStepUrl,
@@ -430,10 +431,15 @@ describe("invite step and finalization", () => {
 				[ReplaceOnboardingStepUrl, urlDone],
 				[CompleteOnboarding, Message.SucceededCompleteOnboarding()],
 			),
-			Command.expectExact(urlFor("completed"), LoadOnboardingHome({ href: "/" })),
+			Command.expectExact(
+				urlFor("completed"),
+				LoadOnboardingHome({ href: "/" }),
+				ClearOnboardingAnswers(),
+			),
 			Command.resolveAll(
 				[ReplaceOnboardingStepUrl, urlDone],
 				[LoadOnboardingHome, Message.CompletedLoadHome()],
+				[ClearOnboardingAnswers, Message.CompletedStoreAnswers()],
 			),
 			model((current) => expect(stepNameOf(current)).toBe("completed")),
 		)
@@ -457,6 +463,7 @@ describe("invite step and finalization", () => {
 			Command.resolveAll(
 				[ReplaceOnboardingStepUrl, urlDone],
 				[LoadOnboardingHome, Message.CompletedLoadHome()],
+				[ClearOnboardingAnswers, Message.CompletedStoreAnswers()],
 			),
 		)
 	})
@@ -488,6 +495,7 @@ describe("invite step and finalization", () => {
 			Command.resolveAll(
 				[ReplaceOnboardingStepUrl, urlDone],
 				[LoadOnboardingHome, Message.CompletedLoadHome()],
+				[ClearOnboardingAnswers, Message.CompletedStoreAnswers()],
 			),
 			model((current) => expect(stepNameOf(current)).toBe("completed")),
 		)
@@ -580,6 +588,7 @@ describe("invite step and finalization", () => {
 			Command.resolveAll(
 				[ReplaceOnboardingStepUrl, urlDone],
 				[LoadOnboardingHome, Message.CompletedLoadHome()],
+				[ClearOnboardingAnswers, Message.CompletedStoreAnswers()],
 			),
 		)
 	})
