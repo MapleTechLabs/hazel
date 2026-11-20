@@ -5,7 +5,7 @@ import "@fontsource/inter/600.css"
 import "@fontsource/inter/700.css"
 import "../styles.css"
 import type { ChannelId, MessageId, UserId } from "@hazel/schema"
-import { Context } from "effect"
+import { Context, Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { MountTracker } from "foldkit/mount"
 import { __clearRuntime, __htmlBuilder, __setRuntime } from "foldkit-internal/html/index.js"
@@ -15,7 +15,8 @@ import { afterEach, test } from "vitest"
 import { commands, page } from "vitest/browser"
 import type { EmbedType } from "./embeds"
 import type { MessageRow } from "../page/chat/rows"
-import { imageViewerView } from "./image-viewer"
+import type * as Menu from "../ui/menu"
+import { imageViewerView, initViewerMenu } from "./image-viewer"
 import { avatarButton, messageRowView, type RowContext } from "./message/row"
 
 /**
@@ -584,6 +585,43 @@ test("viewer", async () => {
 	await page.viewport(1180, 860)
 	await Promise.all([...document.images].map((image) => image.decode().catch(() => undefined)))
 	await page.screenshot({ path: "messages-viewer.png" })
+})
+
+// The right-click menu on the open image. The gallery runs no Mounts, so the menu is placed by hand
+// where a right click on the image would open it.
+test("viewer menu", async () => {
+	document.documentElement.classList.add("dark")
+	const menu: Menu.Model = {
+		...initViewerMenu(),
+		popup: {
+			_tag: "Open",
+			focusedKey: Option.none(),
+			hoveredKey: Option.some("download"),
+			modality: "Pointer",
+			submenu: Option.none(),
+			search: "",
+			pointerOffset: Option.some({ offset: -500, crossOffset: 520 }),
+		},
+	}
+	render((h) =>
+		imageViewerView(h, {
+			images: [{ id: "chart", fileName: "Service error rate (last 6h)", fileSize: 0, url: tallChart }],
+			index: 0,
+			author: { name: "Maple", avatarUrl: null, seed: "Maple" },
+			createdAtMs: BASE_TIME,
+			toClose: never,
+			toSelect: never,
+			menu: { model: menu, toMessage: never },
+		}),
+	)
+	await page.viewport(1180, 860)
+	await document.fonts.ready
+	await Promise.all([...document.images].map((image) => image.decode().catch(() => undefined)))
+	const popover = document.querySelector<HTMLElement>("[data-menu-popover] , [data-popover]")
+	popover?.style.setProperty("position", "fixed")
+	popover?.style.setProperty("left", "520px")
+	popover?.style.setProperty("top", "360px")
+	await page.screenshot({ path: "messages-viewer-menu.png" })
 })
 
 for (const theme of ["light", "dark"] as const) {

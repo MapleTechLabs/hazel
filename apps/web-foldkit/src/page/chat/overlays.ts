@@ -4,6 +4,7 @@ import { Command, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { defineTaggedUnion } from "foldkit/schema"
 import { modifyFields } from "foldkit/struct"
+import { initViewerMenu, viewerMenuAction } from "../../chat/image-viewer"
 import * as TooltipHost from "../../chat/tooltip-host"
 import * as EmojiDialog from "../../emoji-picker/dialog"
 import * as Picker from "../../emoji-picker/picker"
@@ -95,6 +96,8 @@ export const Model = Schema.Struct({
 	/** The toolbar button with focus (React Aria useFocus, so `data-focused` at any modality). */
 	focusedTrigger: Schema.NullOr(Trigger),
 	open: OpenOverlay,
+	/** The image viewer's right-click menu; reset whenever a viewer opens or closes. */
+	viewerMenu: Menu.Model,
 	/** The header's pinned messages popover. */
 	pinned: Popover.Model,
 })
@@ -108,6 +111,7 @@ export const init = (): Model => ({
 	hoveredTrigger: null,
 	focusedTrigger: null,
 	open: OpenOverlay.None(),
+	viewerMenu: initViewerMenu(),
 	pinned: Popover.init("pinned-messages"),
 })
 
@@ -195,6 +199,8 @@ export const Message = defineMessageUnion({
 	ClosedImageViewer: {},
 	SelectedViewerImage: { index: Schema.Number },
 	ClickedViewerAction: { action: ViewerAction, url: Schema.String, fileName: Schema.String },
+	/** The viewer's right-click menu on the open image. */
+	GotViewerMenuMessage: { message: Menu.Message },
 	GotReactionPickerMessage: { messageId: MessageId, message: EmojiDialog.Message },
 	GotReactionModalMessage: { message: Modal.Message },
 	GotReactionModalPickerMessage: { message: Picker.Message },
@@ -219,6 +225,8 @@ export const OutMessage = defineMessageUnion({
 	RequestedMessageAction: { messageId: MessageId, action: MessageAction },
 	RequestedReaction: { messageId: MessageId, emoji: Schema.String },
 	RequestedViewerAction: { action: ViewerAction, url: Schema.String, fileName: Schema.String },
+	/** The viewer's menu chose an action for the open image, which the page knows. */
+	RequestedOpenImageAction: { action: ViewerAction },
 })
 export type OutMessage = typeof OutMessage.Type
 
@@ -586,16 +594,23 @@ const updateOverlays = (model: Model, message: Message): OverlaysReturn =>
 		ClickedAttachmentImage: ({ messageId, index }) => ({
 			model: modifyFields(model, {
 				open: () => OpenOverlay.ImageViewer({ messageId, index, urlImages: null }),
+				viewerMenu: initViewerMenu,
 			}),
 		}),
 		ClickedEmbedImage: ({ messageId, images, index }) => ({
 			model: modifyFields(model, {
 				open: () => OpenOverlay.ImageViewer({ messageId, index, urlImages: images }),
+				viewerMenu: initViewerMenu,
 			}),
 		}),
 		ClosedImageViewer: () =>
 			model.open._tag === "ImageViewer"
-				? { model: modifyFields(model, { open: () => OpenOverlay.None() }) }
+				? {
+						model: modifyFields(model, {
+							open: () => OpenOverlay.None(),
+							viewerMenu: initViewerMenu,
+						}),
+					}
 				: { model },
 		SelectedViewerImage: ({ index }) => {
 			const viewer = imageViewerOf(model)
@@ -616,6 +631,19 @@ const updateOverlays = (model: Model, message: Message): OverlaysReturn =>
 			model.open._tag === "ImageViewer"
 				? { model, outMessage: OutMessage.RequestedViewerAction({ action, url, fileName }) }
 				: { model },
+		GotViewerMenuMessage: ({ message: menuMessage }) => {
+			if (model.open._tag !== "ImageViewer") return { model }
+			const result = Menu.update(model.viewerMenu, menuMessage)
+			const next: OverlaysReturn = {
+				model: modifyFields(model, { viewerMenu: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (inner) =>
+					Message.GotViewerMenuMessage({ message: inner }),
+				),
+			}
+			const chosen = viewerMenuAction(result.outMessage)
+			if (chosen === null) return next
+			return { ...next, outMessage: OutMessage.RequestedOpenImageAction({ action: chosen }) }
+		},
 		GotReactionPickerMessage: ({ messageId, message: dialogMessage }) => {
 			const isCurrent = model.open._tag === "ReactionPicker" && model.open.messageId === messageId
 			const result = EmojiDialog.update(reactionPickerFor(model, messageId), dialogMessage)

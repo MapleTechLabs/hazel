@@ -453,6 +453,8 @@ describe("image viewer", () => {
 		Scene.Mount.resolveAll(
 			[{ name: "ImageViewerPortal" }, overlays(Overlays.Message.SelectedViewerImage({ index }))],
 			[{ name: "ImageViewerThumbCarousel" }, overlays(Overlays.Message.SelectedViewerImage({ index }))],
+			// The image's right-click menu listens on the viewer's content.
+			[{ name: "CaptureContextMenu" }, Menu.Message.CompletedCaptureContextMenu()],
 		)
 
 	test("clicking an image opens the viewer on it; Previous moves to the image before", () => {

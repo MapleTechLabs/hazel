@@ -258,5 +258,9 @@ export const imageViewerOverlay = <M>(
 			toParentMessage(
 				Message.ClickedViewerAction({ action, url: selected.url, fileName: selected.fileName }),
 			),
+		menu: {
+			model: model.viewerMenu,
+			toMessage: (message) => toParentMessage(Message.GotViewerMenuMessage({ message })),
+		},
 	})
 }

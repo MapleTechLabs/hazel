@@ -3,7 +3,6 @@ import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { cn } from "~/lib/utils"
 import { getEffectivePresenceStatus } from "~/utils/presence"
-import { isImageAttachment } from "../../../chat/attachments"
 import { htmlRenderFullscreenView } from "../../../chat/embeds/html-render"
 import type * as HtmlRender from "../../../chat/html-render"
 import { imageViewerView } from "../../../chat/image-viewer"
@@ -30,6 +29,7 @@ import * as IssueControl from "../issue-control"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
 import { threadPanelWidthOf } from "./thread-width"
+import { openViewerOf } from "./viewer-images"
 
 /** The channel route's content: header, tab bar, message list and composer (desktop). */
 
@@ -210,31 +210,14 @@ const listView = (model: Model, nowMs: number, h: H): Html => {
 	)
 }
 
-/** The row an image viewer opened from: a channel row, or a reply in the open thread. */
-const viewerRowOf = (model: Model, messageId: string): MessageRow | undefined => {
-	const row = model.rows.find((candidate) => candidate.key === messageId)
-	if (row !== undefined) return row._tag === "MessageRow" ? row : undefined
-	return model.threadPanel?.rows.find((candidate) => candidate.key === messageId)
-}
-
 /** `ImageViewerModal` for the message whose attachment was clicked. */
 const imageViewerOverlay = (h: H, model: Model): Html => {
-	const viewer = Overlays.imageViewerOf(model.overlays)
-	if (viewer === null) return h.empty
-	const row = viewerRowOf(model, viewer.messageId)
-	if (row === undefined) return h.empty
+	const open = openViewerOf(model)
+	if (open === null) return h.empty
+	const { row, images, index } = open
 	return imageViewerView(h, {
-		images:
-			viewer.urlImages === null
-				? row.attachments.filter(isImageAttachment)
-				: viewer.urlImages.map((image, index) => ({
-						id: `${image.url}-${index}`,
-						fileName: image.alt,
-						fileSize: 0,
-						url: image.url,
-						caption: { title: image.title, description: image.description },
-					})),
-		index: viewer.index,
+		images,
+		index,
 		author: !row.hasAuthor
 			? null
 			: {
@@ -249,6 +232,10 @@ const imageViewerOverlay = (h: H, model: Model): Html => {
 			toOverlay(
 				Overlays.Message.ClickedViewerAction({ action, url: image.url, fileName: image.fileName }),
 			),
+		menu: {
+			model: model.overlays.viewerMenu,
+			toMessage: (message) => toOverlay(Overlays.Message.GotViewerMenuMessage({ message })),
+		},
 	})
 }
 

@@ -18,7 +18,7 @@ export default defineConfig({
 		},
 	},
 	// One copy of foldkit's modules, so the gallery's runtime frame is the one the views read.
-	optimizeDeps: { exclude: ["foldkit"] },
+	optimizeDeps: { exclude: ["foldkit", "foldkit-internal"] },
 	define: { __APP_VERSION__: JSON.stringify("gallery") },
 	test: {
 		include: ["src/**/*.gallery.ts"],

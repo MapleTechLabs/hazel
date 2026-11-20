@@ -1,6 +1,6 @@
 import { Effect, Option, Queue, Schema, Stream } from "effect"
 import { Mount } from "foldkit"
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import {
 	IconChevronLeft,
@@ -14,6 +14,8 @@ import {
 	IconPlus,
 } from "../icons"
 import { avatar } from "../ui/avatar"
+import * as Menu from "../ui/menu"
+import { contextMenuView, menuLabel } from "../ui/menu-view"
 import { ariaButton, button } from "../ui/button"
 import { containFocus, isolateOverlay, portalOverlay, watchInteractOutside } from "../ui/aria/overlay"
 import { isNativeRenderer } from "../platform/renderer"
@@ -33,6 +35,32 @@ import { followSlide, originPlate, releaseOrigin, VIEWER_ATTRIBUTE } from "./vie
 
 export type ImageViewerAction = "download" | "copyImage" | "copyUrl" | "openInBrowser"
 
+/** The menu a right click on the open image opens: what the toolbar does, under the pointer. */
+export const VIEWER_MENU_ID = "image-viewer-menu"
+
+export const initViewerMenu = (): Menu.Model => Menu.init({ id: VIEWER_MENU_ID, anchor: "Pointer" })
+
+const VIEWER_MENU_ITEMS: ReadonlyArray<readonly [ImageViewerAction, string]> = [
+	["copyImage", "Copy Image"],
+	["download", "Save Image"],
+	["copyUrl", "Copy Media Link"],
+	["openInBrowser", "Open Media Link"],
+]
+
+const viewerMenuEntries: ReadonlyArray<Menu.Entry> = [
+	Menu.item("copyImage", { textValue: "Copy Image" }),
+	Menu.item("download", { textValue: "Save Image" }),
+	Menu.separator,
+	Menu.item("copyUrl", { textValue: "Copy Media Link" }),
+	Menu.item("openInBrowser", { textValue: "Open Media Link" }),
+]
+
+/** The viewer action a choice from the image's menu names, if the menu reported one. */
+export const viewerMenuAction = (out: Menu.OutMessage | undefined): ImageViewerAction | null =>
+	out?._tag === "SelectedItem"
+		? (VIEWER_MENU_ITEMS.find(([action]) => action === out.key)?.[0] ?? null)
+		: null
+
 /** A viewer image; an embed's has a caption (its title and description) under it. */
 export interface ImageViewerImage extends ChatAttachmentView {
 	readonly caption?: { readonly title?: string | undefined; readonly description?: string | undefined }
@@ -51,6 +79,11 @@ export interface ImageViewerInputs<M> {
 	readonly toSelect: (index: number) => M
 	/** Toolbar side effects (downloads, copies the image or its URL with a toast, or opens a tab). */
 	readonly toAction?: (action: ImageViewerAction, image: ChatAttachmentView) => M
+	/**
+	 * The open image's right-click menu (`initViewerMenu`), held by the parent, which reads the
+	 * chosen action for the open image with `viewerMenuAction`.
+	 */
+	readonly menu?: { readonly model: Menu.Model; readonly toMessage: (message: Menu.Message) => M }
 }
 
 const Intent = defineMessageUnion({
@@ -130,6 +163,8 @@ const showZoom = (root: Element, content: Element, isZoomed: boolean, canZoomIn:
 const onViewerKey = (viewer: Viewer, count: number, close: () => void) => (event: KeyboardEvent) => {
 	// A modified key is the browser's or the app's: ctrl and + still zooms the page.
 	if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
+	// The image's menu takes its own keys: Escape closes it, not the viewer.
+	if (event.target instanceof Element && event.target.closest("[data-menu-popover]")) return
 	const arrow = (dx: number, dy: number) =>
 		viewer.isZoomed()
 			? viewer.panBy(dx * KEY_PAN_PX, dy * KEY_PAN_PX)
@@ -198,6 +233,16 @@ const ImageViewerMount = Mount.defineStream("ImageViewerPortal", {
 					const onKeyDown = onViewerKey(viewer, track.children.length, close)
 					document.addEventListener("keydown", onKeyDown, true)
 					return () => document.removeEventListener("keydown", onKeyDown, true)
+				})
+				// The image's menu opens on the image itself; beside it the browser's own menu shows.
+				yield* acquire(() => {
+					const onContextMenu = (event: Event) => {
+						const isOnImage =
+							event.target instanceof Element && event.target.matches(`img[${PART.media}]`)
+						if (!isOnImage) event.stopPropagation()
+					}
+					element.addEventListener("contextmenu", onContextMenu, true)
+					return () => element.removeEventListener("contextmenu", onContextMenu, true)
 				})
 				yield* acquire(() => {
 					const onClick = (event: Event) => {
@@ -378,6 +423,25 @@ interface NativePresses<M> {
 	readonly onImage: M
 }
 
+type TriggerRender = (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html
+
+/** An item of the open image's menu: its icon and its label. */
+const viewerMenuContent =
+	<M>(h: HtmlBuilder<M>) =>
+	(key: string): ReadonlyArray<Html> => {
+		const label = VIEWER_MENU_ITEMS.find(([action]) => action === key)?.[1] ?? key
+		const slot = { attributes: { "data-slot": "icon" } }
+		const icon =
+			key === "copyImage"
+				? IconImage(h, slot)
+				: key === "download"
+					? IconDownload(h, slot)
+					: key === "copyUrl"
+						? IconLink(h, slot)
+						: IconExternalLink(h, slot)
+		return [icon, menuLabel(h, VIEWER_MENU_ID, key, label)]
+	}
+
 /**
  * A slide fills the viewer; the image rests in its padded box, and the box around it is backdrop
  * (a tap there closes). Only slides near the open one mount their image.
@@ -470,6 +534,29 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 		[act("openInBrowser"), "Open in browser", IconExternalLink(h, { className: "size-4" })],
 		[inputs.toClose(), "Close", IconClose(h, { className: "size-4" })],
 	]
+	const menuInputs = inputs.menu
+	const menu =
+		menuInputs === undefined || current === undefined
+			? undefined
+			: (toTrigger: TriggerRender) =>
+					h.submodel({
+						slotId: VIEWER_MENU_ID,
+						model: menuInputs.model,
+						view: contextMenuView,
+						viewInputs: {
+							entries: viewerMenuEntries,
+							toTrigger,
+							content: viewerMenuContent(h),
+							className: "min-w-52",
+							// Above the viewer, which sits over everything else.
+							popoverClassName: "z-10000",
+						},
+						toParentMessage: menuInputs.toMessage,
+					})
+	// The trigger is the viewer's content, which stays put while slides come and go; a right click
+	// beside the image never reaches it (`ImageViewerMount`). Rune runs no DOM Mounts.
+	const withMenu = (render: TriggerRender) =>
+		menu === undefined || isNative ? render([], h.empty) : menu(render)
 	const toMessage = (intent: Intent) =>
 		Intent.match(intent, {
 			PressedClose: () => inputs.toClose(),
@@ -493,207 +580,227 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 				...(isNative ? [] : [h.DataAttribute("viewer-backdrop", "")]),
 				h.AriaHidden(true),
 			]),
-			h.div(
-				[
-					h.Class("absolute inset-0 overflow-hidden outline-none"),
-					h.DataAttribute("viewer-content", ""),
-					h.Role("dialog"),
-					h.AriaModal(true),
-					h.AriaLabel(hasMany ? "Image gallery" : "Image viewer"),
-					h.Tabindex(-1),
-					...(isNative
-						? [
-								h.OnKeyDownPreventDefault((key) =>
-									key === "ArrowLeft" || key === "ArrowUp"
-										? Option.some(select(selectedIndex - 1))
-										: key === "ArrowRight" || key === "ArrowDown"
-											? Option.some(select(selectedIndex + 1))
-											: key === "Home"
-												? Option.some(select(0))
-												: key === "End"
-													? Option.some(select(images.length - 1))
-													: Option.none(),
-								),
-							]
-						: []),
-				],
-				[
-					h.div(
-						[
-							h.Class("relative flex h-full w-full"),
-							// The scroll-snap track is the browser's; in Rune it would be a bare
-							// scroller the Model cannot move, so there only the open slide is drawn.
-							...(isNative ? [] : [h.DataAttribute("viewer-slides", "")]),
-							h.Attribute(SELECTED_ATTRIBUTE, String(selectedIndex)),
-							h.Role("group"),
-							h.AriaRoleDescription("carousel"),
-							h.AriaLabel("Images"),
-						],
-						isNative
-							? current === undefined
-								? []
-								: [
-										slideView(h, current, selectedIndex, selectedIndex, images.length, {
-											beside: inputs.toClose(),
-											onImage: select(selectedIndex),
-										}),
-									]
-							: images.map((image, index) =>
-									slideView(h, image, index, selectedIndex, images.length),
-								),
-					),
-					...(isNative && hasMany && systemUi()?.setSwipePager !== undefined
-						? [
-								// Remounted on every slide, so a swipe steps from the slide on view.
-								h.keyed("span")(`swipe:${selectedIndex}`, [
-									h.Class("hidden"),
-									h.OnMount(Mount.mapMessage(NativeSwipePager(), toMessage)),
-								]),
-							]
-						: []),
-					h.div(
-						[h.Class("sr-only"), h.AriaLive("polite"), h.AriaAtomic(true)],
-						[announcement(current, selectedIndex, images.length)],
-					),
-					...(author
-						? [
-								h.div(
-									[
-										h.Class(
-											"absolute top-5 left-5 flex items-center gap-2 max-md:top-[calc(env(safe-area-inset-top)+4rem)] max-md:left-3",
-										),
-										h.DataAttribute("viewer-chrome", ""),
-										// Has no backing of its own, so a zoomed image would run under its text.
-										h.DataAttribute("viewer-author", ""),
-									],
-									[
-										avatar(h, {
-											src: author.avatarUrl,
-											alt: author.name,
-											...(author.seed === undefined ? {} : { seed: author.seed }),
-											size: "md",
-										}),
-										h.div(
-											[h.Class("flex flex-col")],
-											[
-												h.span([h.Class("text-sm text-white")], [author.name]),
-												h.span(
-													[h.Class("text-muted-fg text-xs")],
-													[new Date(inputs.createdAtMs).toLocaleString()],
-												),
-											],
-										),
-									],
-								),
-							]
-						: []),
-					...(hasMany
-						? [
-								isNative
-									? // Rune keeps `left-1/2 -translate-x-1/2` centred at every width, so
-										// on a phone the counter would sit on the author: a row places it.
-										h.div(
-											[
-												h.Class(
-													"pointer-events-none absolute inset-x-0 top-5 flex justify-center max-md:top-[calc(env(safe-area-inset-top)+4rem)] max-md:justify-end max-md:px-3",
-												),
-												h.DataAttribute("viewer-chrome", ""),
-												h.AriaHidden(true),
-											],
-											[
-												h.div(
-													[
-														h.Class(
-															"rounded-md bg-black/50 px-3 py-1.5 text-sm text-white tabular-nums",
-														),
-													],
-													[
-														String(selectedIndex + 1),
-														" of ",
-														String(images.length),
-													],
-												),
-											],
-										)
-									: h.div(
-											[
-												h.Class(
-													"absolute top-5 left-1/2 -translate-x-1/2 rounded-md bg-black/50 px-3 py-1.5 text-sm text-white tabular-nums max-md:top-[calc(env(safe-area-inset-top)+4rem)] max-md:right-3 max-md:left-auto max-md:translate-x-0",
-												),
-												h.DataAttribute("viewer-chrome", ""),
-												h.AriaHidden(true),
-											],
-											[String(selectedIndex + 1), " of ", String(images.length)],
-										),
-								navButton(h, "left", select(selectedIndex - 1), selectedIndex === 0),
-								navButton(
-									h,
-									"right",
-									select(selectedIndex + 1),
-									selectedIndex === images.length - 1,
-								),
-							]
-						: []),
-					h.div(
-						[
-							h.Class(
-								"absolute top-5 right-5 flex gap-1 rounded-md border border-white/10 bg-black/50 p-1 max-md:top-[calc(env(safe-area-inset-top)+0.75rem)] max-md:right-3",
-							),
-							h.DataAttribute("viewer-chrome", ""),
-						],
-						actions.map(([onPress, label, icon, zoomStep]) =>
-							toolbarButton(h, onPress, label, icon, zoomStep),
+			withMenu((attributes, overlay) =>
+				h.div(
+					[
+						...attributes,
+						h.Class("absolute inset-0 overflow-hidden outline-none"),
+						h.DataAttribute("viewer-content", ""),
+						h.Role("dialog"),
+						h.AriaModal(true),
+						h.AriaLabel(hasMany ? "Image gallery" : "Image viewer"),
+						h.Tabindex(-1),
+						...(isNative
+							? [
+									h.OnKeyDownPreventDefault((key) =>
+										key === "ArrowLeft" || key === "ArrowUp"
+											? Option.some(select(selectedIndex - 1))
+											: key === "ArrowRight" || key === "ArrowDown"
+												? Option.some(select(selectedIndex + 1))
+												: key === "Home"
+													? Option.some(select(0))
+													: key === "End"
+														? Option.some(select(images.length - 1))
+														: Option.none(),
+									),
+								]
+							: []),
+					],
+					[
+						h.div(
+							[
+								h.Class("relative flex h-full w-full"),
+								// The scroll-snap track is the browser's; in Rune it would be a bare
+								// scroller the Model cannot move, so there only the open slide is drawn.
+								...(isNative ? [] : [h.DataAttribute("viewer-slides", "")]),
+								h.Attribute(SELECTED_ATTRIBUTE, String(selectedIndex)),
+								h.Role("group"),
+								h.AriaRoleDescription("carousel"),
+								h.AriaLabel("Images"),
+							],
+							isNative
+								? current === undefined
+									? []
+									: [
+											slideView(
+												h,
+												current,
+												selectedIndex,
+												selectedIndex,
+												images.length,
+												{
+													beside: inputs.toClose(),
+													onImage: select(selectedIndex),
+												},
+											),
+										]
+								: images.map((image, index) =>
+										slideView(h, image, index, selectedIndex, images.length),
+									),
 						),
-					),
-					...(hasMany
-						? [
-								h.div(
-									[
-										h.Class(
-											"pointer-events-none absolute inset-x-0 bottom-5 flex justify-center px-8 max-md:bottom-[calc(env(safe-area-inset-bottom)+1rem)] max-md:px-3",
-										),
-										h.DataAttribute("viewer-thumbs", ""),
-										h.DataAttribute("viewer-chrome", ""),
-									],
-									[
-										h.div(
-											[
-												// Embla drags the strip in a browser; Rune scrolls a
-												// plain row sideways itself.
-												h.Class(
-													isNative
-														? "pointer-events-auto flex max-w-2xl overflow-x-auto rounded-md"
-														: "pointer-events-auto max-w-2xl overflow-hidden rounded-md",
-												),
-												h.Attribute(SELECTED_ATTRIBUTE, String(selectedIndex)),
-												...(isNative
-													? []
-													: [
-															h.OnMount(
-																Mount.mapMessage(ThumbCarousel(), toMessage),
+						...(isNative && hasMany && systemUi()?.setSwipePager !== undefined
+							? [
+									// Remounted on every slide, so a swipe steps from the slide on view.
+									h.keyed("span")(`swipe:${selectedIndex}`, [
+										h.Class("hidden"),
+										h.OnMount(Mount.mapMessage(NativeSwipePager(), toMessage)),
+									]),
+								]
+							: []),
+						h.div(
+							[h.Class("sr-only"), h.AriaLive("polite"), h.AriaAtomic(true)],
+							[announcement(current, selectedIndex, images.length)],
+						),
+						...(author
+							? [
+									h.div(
+										[
+											h.Class(
+												"absolute top-5 left-5 flex items-center gap-2 max-md:top-[calc(env(safe-area-inset-top)+4rem)] max-md:left-3",
+											),
+											h.DataAttribute("viewer-chrome", ""),
+											// Has no backing of its own, so a zoomed image would run under its text.
+											h.DataAttribute("viewer-author", ""),
+										],
+										[
+											avatar(h, {
+												src: author.avatarUrl,
+												alt: author.name,
+												...(author.seed === undefined ? {} : { seed: author.seed }),
+												size: "md",
+											}),
+											h.div(
+												[h.Class("flex flex-col")],
+												[
+													h.span([h.Class("text-sm text-white")], [author.name]),
+													h.span(
+														[h.Class("text-muted-fg text-xs")],
+														[new Date(inputs.createdAtMs).toLocaleString()],
+													),
+												],
+											),
+										],
+									),
+								]
+							: []),
+						...(hasMany
+							? [
+									isNative
+										? // Rune keeps `left-1/2 -translate-x-1/2` centred at every width, so
+											// on a phone the counter would sit on the author: a row places it.
+											h.div(
+												[
+													h.Class(
+														"pointer-events-none absolute inset-x-0 top-5 flex justify-center max-md:top-[calc(env(safe-area-inset-top)+4rem)] max-md:justify-end max-md:px-3",
+													),
+													h.DataAttribute("viewer-chrome", ""),
+													h.AriaHidden(true),
+												],
+												[
+													h.div(
+														[
+															h.Class(
+																"rounded-md bg-black/50 px-3 py-1.5 text-sm text-white tabular-nums",
 															),
-														]),
-											],
-											[
-												h.div(
-													// Centred in Rune's scroller, which is as wide as it may be.
-													[h.Class(isNative ? "mx-auto flex gap-2" : "flex gap-2")],
-													images.map((image, index) =>
-														thumbView(
-															h,
-															image,
-															index === selectedIndex,
-															inputs.toSelect(index),
+														],
+														[
+															String(selectedIndex + 1),
+															" of ",
+															String(images.length),
+														],
+													),
+												],
+											)
+										: h.div(
+												[
+													h.Class(
+														"absolute top-5 left-1/2 -translate-x-1/2 rounded-md bg-black/50 px-3 py-1.5 text-sm text-white tabular-nums max-md:top-[calc(env(safe-area-inset-top)+4rem)] max-md:right-3 max-md:left-auto max-md:translate-x-0",
+													),
+													h.DataAttribute("viewer-chrome", ""),
+													h.AriaHidden(true),
+												],
+												[String(selectedIndex + 1), " of ", String(images.length)],
+											),
+									navButton(h, "left", select(selectedIndex - 1), selectedIndex === 0),
+									navButton(
+										h,
+										"right",
+										select(selectedIndex + 1),
+										selectedIndex === images.length - 1,
+									),
+								]
+							: []),
+						h.div(
+							[
+								h.Class(
+									"absolute top-5 right-5 flex gap-1 rounded-md border border-white/10 bg-black/50 p-1 max-md:top-[calc(env(safe-area-inset-top)+0.75rem)] max-md:right-3",
+								),
+								h.DataAttribute("viewer-chrome", ""),
+							],
+							actions.map(([onPress, label, icon, zoomStep]) =>
+								toolbarButton(h, onPress, label, icon, zoomStep),
+							),
+						),
+						...(hasMany
+							? [
+									h.div(
+										[
+											h.Class(
+												"pointer-events-none absolute inset-x-0 bottom-5 flex justify-center px-8 max-md:bottom-[calc(env(safe-area-inset-bottom)+1rem)] max-md:px-3",
+											),
+											h.DataAttribute("viewer-thumbs", ""),
+											h.DataAttribute("viewer-chrome", ""),
+										],
+										[
+											h.div(
+												[
+													// Embla drags the strip in a browser; Rune scrolls a
+													// plain row sideways itself.
+													h.Class(
+														isNative
+															? "pointer-events-auto flex max-w-2xl overflow-x-auto rounded-md"
+															: "pointer-events-auto max-w-2xl overflow-hidden rounded-md",
+													),
+													h.Attribute(SELECTED_ATTRIBUTE, String(selectedIndex)),
+													...(isNative
+														? []
+														: [
+																h.OnMount(
+																	Mount.mapMessage(
+																		ThumbCarousel(),
+																		toMessage,
+																	),
+																),
+															]),
+												],
+												[
+													h.div(
+														// Centred in Rune's scroller, which is as wide as it may be.
+														[
+															h.Class(
+																isNative
+																	? "mx-auto flex gap-2"
+																	: "flex gap-2",
+															),
+														],
+														images.map((image, index) =>
+															thumbView(
+																h,
+																image,
+																index === selectedIndex,
+																inputs.toSelect(index),
+															),
 														),
 													),
-												),
-											],
-										),
-									],
-								),
-							]
-						: []),
-				],
+												],
+											),
+										],
+									),
+								]
+							: []),
+						overlay,
+					],
+				),
 			),
 		],
 	)
