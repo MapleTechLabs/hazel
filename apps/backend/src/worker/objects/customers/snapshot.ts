@@ -134,25 +134,34 @@ export interface UsageMrr {
 const usageBilled = (sub: schema.CustomerSubscription) =>
 	sub.provider === "stripe" && sub.interval === "month"
 
+/** A subscription's paid invoices in its own currency, newest first (`usageAt`'s input). */
+const paidNewestFirst = (
+	sub: schema.CustomerSubscription,
+	paidInvoices: ReadonlyArray<schema.CustomerInvoice>,
+) =>
+	paidInvoices
+		.filter(
+			(invoice): invoice is schema.CustomerInvoice & { paidAt: Date } =>
+				invoice.subscriptionId === sub.id &&
+				invoice.currency === sub.currency &&
+				invoice.paidAt !== null,
+		)
+		.sort((a, b) => Number(b.paidAt) - Number(a.paidAt))
+
 /**
  * One subscription's usage per month at `at`: the average of what its last (up to 3) paid invoices of
  * the 3 months before (`USAGE_WINDOW_DAYS`) charged above its plan price. A discount adds nothing.
  */
 const usageAt = (
 	sub: schema.CustomerSubscription,
-	paidInvoices: ReadonlyArray<schema.CustomerInvoice>,
+	newestFirst: ReadonlyArray<schema.CustomerInvoice & { paidAt: Date }>,
 	at: Date,
 ) => {
-	const recent = paidInvoices
+	const recent = newestFirst
 		.filter(
 			(invoice) =>
-				invoice.subscriptionId === sub.id &&
-				invoice.currency === sub.currency &&
-				invoice.paidAt !== null &&
-				invoice.paidAt <= at &&
-				at.getTime() - invoice.paidAt.getTime() <= USAGE_WINDOW_DAYS * DAY_MS,
+				invoice.paidAt <= at && at.getTime() - invoice.paidAt.getTime() <= USAGE_WINDOW_DAYS * DAY_MS,
 		)
-		.sort((a, b) => Number(b.paidAt) - Number(a.paidAt))
 		.slice(0, 3)
 	if (recent.length === 0) return 0
 	return Math.round(
@@ -174,7 +183,7 @@ export const usageMrrOf = (
 ): ReadonlyArray<UsageMrr> =>
 	subscriptions.flatMap((sub) => {
 		if (!usageBilled(sub) || !billed(sub)) return []
-		const mrrMinor = usageAt(sub, paidInvoices, now)
+		const mrrMinor = usageAt(sub, paidNewestFirst(sub, paidInvoices), now)
 		return mrrMinor === 0 ? [] : [{ subscriptionId: sub.id, mrrMinor, currency: sub.currency }]
 	})
 
@@ -195,14 +204,21 @@ export const usageHistory = (
 		if (!usageBilled(sub) || sub.currency !== currency || start === null) return []
 		const ended = sub.status === "canceled" && sub.canceledAt !== null
 		if (!billed(sub) && !ended) return []
-		return [{ sub, from: dayOf(start), until: ended && sub.canceledAt ? dayOf(sub.canceledAt) : null }]
+		return [
+			{
+				sub,
+				invoices: paidNewestFirst(sub, paidInvoices),
+				from: dayOf(start),
+				until: ended && sub.canceledAt ? dayOf(sub.canceledAt) : null,
+			},
+		]
 	})
 	return days.map((day) => {
 		const end = new Date(Math.min(startOf(addDays(day, 1)).getTime() - 1, now.getTime()))
 		return sum(
 			periods
 				.filter(({ from, until }) => day >= from && (until === null || day < until))
-				.map(({ sub }) => usageAt(sub, paidInvoices, end)),
+				.map(({ sub, invoices }) => usageAt(sub, invoices, end)),
 		)
 	})
 }

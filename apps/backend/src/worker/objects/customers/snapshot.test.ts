@@ -6,8 +6,9 @@ import type { schema } from "@hazel/db"
 import type { CustomerProvider } from "@hazel/domain/customers"
 import type { CustomerSubscriptionId } from "@hazel/schema"
 import { describe, expect, it } from "vitest"
-import { rollupAccount, usageMrrOf } from "./snapshot"
+import { rollupAccount, usageHistory, usageMrrOf } from "./snapshot"
 import { factsOf, NOW, TODAY } from "./test-kit"
+import { addDays } from "./time"
 
 const rollupOf = (
 	subscriptions: ReadonlyArray<Partial<schema.CustomerSubscription>>,
@@ -219,6 +220,42 @@ describe("MRR: the plans plus usage billing", () => {
 			"autumn",
 		)
 		expect(rollup).toMatchObject({ mrrMinor: 6_200, mrrSource: "autumn", planName: "Pro" })
+	})
+})
+
+describe("usage history (the rebuild's)", () => {
+	const days = [-50, -40, -20, 0].map((offset) => addDays(TODAY, offset))
+	// 2_000 above the 19_900 plan, paid 40 days ago.
+	const historyOf = (sub: Partial<schema.CustomerSubscription>) => {
+		const facts = factsOf({
+			subscriptions: [{ id: subId("team"), mrrMinor: 19_900, ...sub }],
+			openInvoices: [
+				{
+					subscriptionId: subId("team"),
+					status: "paid",
+					currency: sub.currency ?? "usd",
+					amountPaidMinor: 21_900,
+					paidAt: paidDaysAgo(40),
+				},
+			],
+		})
+		return usageHistory(facts.subscriptions, facts.openInvoices, "usd", days, NOW)
+	}
+
+	it("counts usage from the day its invoice was paid", () => {
+		expect(historyOf({})).toEqual([0, 2_000, 2_000, 2_000])
+	})
+
+	it("stops on the day a subscription was canceled", () => {
+		expect(historyOf({ status: "canceled", canceledAt: paidDaysAgo(20) })).toEqual([0, 2_000, 0, 0])
+	})
+
+	it("starts at a trial's end", () => {
+		expect(historyOf({ trialEndsAt: paidDaysAgo(30) })).toEqual([0, 0, 2_000, 2_000])
+	})
+
+	it("counts only the reporting currency", () => {
+		expect(historyOf({ currency: "eur" })).toEqual([0, 0, 0, 0])
 	})
 })
 
