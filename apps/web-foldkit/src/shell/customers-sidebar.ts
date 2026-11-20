@@ -38,11 +38,13 @@ import {
 	IconPresentationChart,
 	IconRocket,
 	IconServers,
+	IconSupport,
 	IconWarning,
 } from "../icons"
 import { PageOutMessage } from "../page/out-message"
 import { AppRoute, customersListRoute, hrefOf, type RouteTag } from "../route"
 import { sidebarHeaderHeightClass } from "../platform/desktop"
+import { myWaitingIssueCountStream } from "../customers/issues"
 import type { HazelRpc } from "../rpc"
 import { button } from "../ui/button"
 import {
@@ -61,7 +63,8 @@ import { userMenuFooter } from "./menus"
 
 /**
  * The Customers area's sidebar next to the nav rail (`docs/customers/spec.md` "UI surfaces"):
- * Overview, Needs attention with the count of open signals on my accounts, Customers and the views
+ * Overview, Needs attention with the count of open signals on my accounts, the Support inbox with
+ * the issues waiting on a reply that are mine or nobody's, Customers and the views
  * (in the person's own order, without the ones they hid: `customers/view-layout.ts`; dragging one
  * reorders the list's tabs too), and the settings pages. Shell state: it survives navigation
  * inside the area.
@@ -76,6 +79,8 @@ export const Model = Schema.Struct({
 	organizationId: Schema.NullOr(OrganizationId),
 	/** Open signals on accounts I own; null until the query answers. */
 	attentionCount: Schema.NullOr(Schema.Int),
+	/** Support issues waiting on a reply, mine or unassigned; null until the query answers. */
+	inboxCount: Schema.NullOr(Schema.Int),
 	/** Shared and my own views by position; null until the query answers (the built-ins show). */
 	views: Schema.NullOr(Schema.Array(SavedViewRow)),
 	/** My saved layout; null before I arrange anything (or until it syncs). */
@@ -89,6 +94,7 @@ export type Model = typeof Model.Type
 export const init = (): Model => ({
 	organizationId: null,
 	attentionCount: null,
+	inboxCount: null,
 	views: null,
 	layout: null,
 	layoutId: null,
@@ -104,6 +110,7 @@ export const setOrganization = (model: Model, organizationId: OrganizationId | n
 /** The rows name their organization: one still in flight from the previous one is dropped. */
 export const Message = defineMessageUnion({
 	UpdatedAttentionCount: { organizationId: OrganizationId, count: Schema.Int },
+	UpdatedInboxCount: { organizationId: OrganizationId, count: Schema.Int },
 	UpdatedSavedViews: { organizationId: OrganizationId, views: Schema.Array(SavedViewRow) },
 	UpdatedViewLayout: { organizationId: OrganizationId, layout: Schema.NullOr(ViewLayoutRow) },
 	GotDragMessage: { message: DragAndDrop.Message },
@@ -229,6 +236,10 @@ export const update = (model: Model, message: Message, userId: UserId | null): R
 					? modifyFields(model, { attentionCount: () => count })
 					: model,
 		}),
+		UpdatedInboxCount: ({ organizationId, count }) => ({
+			model:
+				organizationId === model.organizationId ? modifyFields(model, { inboxCount: () => count }) : model,
+		}),
 		UpdatedSavedViews: ({ organizationId, views }) => ({
 			model:
 				organizationId === model.organizationId ? modifyFields(model, { views: () => views }) : model,
@@ -282,6 +293,15 @@ const rows = Subscription.make<Input, Message>()((entry) => ({
 				? Stream.empty
 				: myOpenSignalCountStream(organizationId, userId, (count) =>
 						Message.UpdatedAttentionCount({ organizationId, count }),
+					),
+	}),
+	customersInboxCount: entry(dependencies, {
+		modelToDependencies: toDependencies,
+		dependenciesToStream: ({ organizationId, userId }) =>
+			organizationId === null || userId === null
+				? Stream.empty
+				: myWaitingIssueCountStream(organizationId, userId, (count) =>
+						Message.UpdatedInboxCount({ organizationId, count }),
 					),
 	}),
 	customersSavedViews: entry(dependencies, {
@@ -424,6 +444,7 @@ export const view = <ParentMessage>(
 	const listView = listViewOf(route)
 	const views = sidebarViewsOf(model)
 	const count = model.attentionCount ?? 0
+	const inboxCount = model.inboxCount ?? 0
 
 	return sidebarStatic(h, "flex flex-1", [
 		sidebarHeader(h, { state: "expanded", className: `border-b py-4 ${sidebarHeaderHeightClass()}` }, [
@@ -444,6 +465,13 @@ export const view = <ParentMessage>(
 						on("CustomersAttention"),
 						icon(IconWarning),
 						count > 0 ? [badge(h, count)] : [],
+					),
+					item(
+						"Support inbox",
+						hrefOf(AppRoute.CustomersInbox({ orgSlug })),
+						on("CustomersInbox"),
+						icon(IconSupport),
+						inboxCount > 0 ? [badge(h, inboxCount)] : [],
 					),
 					item(
 						"Customers",

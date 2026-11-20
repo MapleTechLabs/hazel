@@ -1,6 +1,6 @@
 # Customers v1: data model and UI surfaces
 
-Scope: analytics, action queue and per-customer pages. Channels linked to a customer: `channels.md`. No issues or SLAs yet.
+Scope: analytics, action queue and per-customer pages. Channels linked to a customer: `channels.md`. Support issues and the inbox: `issues.md`. No SLAs yet.
 
 ## Principles
 

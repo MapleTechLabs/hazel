@@ -21,6 +21,7 @@ import {
 	CustomerChatEffects,
 } from "../customer-chat-wire"
 import type { EffectReceivers } from "../effects/registry"
+import { supportIssueHook } from "./issues"
 
 /**
  * Something that follows each message of a linked channel. `payload.author.side` is the author's
@@ -140,7 +141,7 @@ const participantsHook: CustomerChatMessageHook = (payload) =>
 	})
 
 /** Every hook a message of a linked channel runs, in order. Support issues and SLAs go after. */
-export const customerChatMessageHooks: ReadonlyArray<CustomerChatMessageHook> = [participantsHook]
+export const customerChatMessageHooks: ReadonlyArray<CustomerChatMessageHook> = [participantsHook, supportIssueHook]
 
 const chatMessage = Effect.fn("CustomersChat.chatMessage")(function* (payload: ChatMessagePayload) {
 	yield* Effect.annotateCurrentSpan({

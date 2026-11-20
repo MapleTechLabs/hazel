@@ -38,6 +38,10 @@ export const ChatMessagePayload = Schema.Struct({
 	messageId: MessageId,
 	createdAt: Timestamp,
 	author: ChatAuthorWire,
+	/** A thread reply's root message (in `channelId`): support issues are keyed on it. */
+	threadRootMessageId: Schema.optionalKey(Schema.NullOr(MessageId)),
+	/** The text, shortened: a support issue's title when the message opens one. */
+	content: Schema.optionalKey(Schema.String),
 })
 export type ChatMessagePayload = typeof ChatMessagePayload.Type
 

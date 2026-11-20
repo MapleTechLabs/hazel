@@ -17,12 +17,14 @@ import {
 	CustomerFeatureFlagId,
 	CustomerContactId,
 	CustomerIgnoreRuleId,
+	CustomerIssueId,
 	CustomerImpersonatorId,
 	CustomerNoteId,
 	CustomerSavedViewId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
 	CustomerUnmatchedRecordId,
+	MessageId,
 	OrganizationId,
 	TransactionId,
 	UserId,
@@ -45,6 +47,8 @@ import {
 	CustomerProvider,
 	CustomerSource,
 	CustomersRange,
+	IssuePriority,
+	IssueStatus,
 	LifecycleStage,
 	SignalOutcome,
 	SignalStatus,
@@ -58,6 +62,7 @@ import {
 	FeatureFlag,
 	IgnoreRule,
 	Invoice,
+	Issue,
 	Note,
 	SavedView,
 	ViewLayout,
@@ -117,6 +122,9 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"channel",
 			/** Nobody the org has seen in its channels. */
 			"author",
+			"issue",
+			/** No such message in the channel, or one the caller cannot see. */
+			"message",
 		]),
 		id: Schema.String,
 	},
@@ -407,6 +415,42 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 		Tx,
 		CustomersNotFoundError,
 		/** The owner is not a member of the organization. */
+		CustomersInvalidRequestError,
+	),
+
+	/**
+	 * Change a support issue (`docs/customers/issues.md`): any field given. Closing records who and
+	 * when; a closed issue set to any other status reopens. The assignee must be a member.
+	 */
+	write(
+		"customers.issue.update",
+		{
+			issueId: CustomerIssueId,
+			status: Schema.optionalKey(IssueStatus),
+			priority: Schema.optionalKey(IssuePriority),
+			assigneeUserId: Schema.optionalKey(Schema.NullOr(UserId)),
+			tags: Schema.optionalKey(Tags),
+		},
+		Tx,
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+	),
+
+	/**
+	 * Open an issue on a top-level message of a linked channel by hand (any author). The message's
+	 * existing live issue is answered as it is. A channel that is not linked, or a thread, is
+	 * refused (`CustomersInvalidRequestError`); a message the caller cannot see is `not_found`.
+	 */
+	write(
+		"customers.issue.createFromMessage",
+		{
+			/** Client-generated, for the optimistic row. */
+			id: Schema.optionalKey(CustomerIssueId),
+			channelId: ChannelId,
+			messageId: MessageId,
+		},
+		withTx(Issue.Schema),
+		CustomersNotFoundError,
 		CustomersInvalidRequestError,
 	),
 

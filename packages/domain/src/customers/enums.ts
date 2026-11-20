@@ -46,6 +46,12 @@ export type SignalSeverity = typeof SignalSeverity.Type
 export const SignalStatus = Schema.Literals(["open", "snoozed", "done", "dismissed", "auto_resolved"])
 export type SignalStatus = typeof SignalStatus.Type
 
+/** A support issue's state (`docs/customers/issues.md`). Only `closed` ends it; a customer reply reopens it. */
+export const IssueStatus = Schema.Literals(["new", "waiting_on_us", "waiting_on_customer", "on_hold", "closed"])
+export type IssueStatus = typeof IssueStatus.Type
+export const IssuePriority = Schema.Literals(["none", "low", "medium", "high", "urgent"])
+export type IssuePriority = typeof IssuePriority.Type
+
 export const SignalOutcome = Schema.Literals(["contacted", "fixed", "not_an_issue", "other"])
 export type SignalOutcome = typeof SignalOutcome.Type
 

@@ -450,6 +450,14 @@ export const CustomerChannelLinkId = Schema.String.check(Schema.isUUID())
 	})
 export type CustomerChannelLinkId = Schema.Schema.Type<typeof CustomerChannelLinkId>
 
+export const CustomerIssueId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerIssueId"))
+	.annotate({
+		description: "The ID of a customer support issue (a conversation in a customer-linked channel)",
+		title: "Customer Issue ID",
+	})
+export type CustomerIssueId = Schema.Schema.Type<typeof CustomerIssueId>
+
 export const CustomerFeatureFlagId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/CustomerFeatureFlagId"))
 	.annotate({

@@ -38,6 +38,8 @@ import {
 	HealthStatus,
 	IgnoreRuleField,
 	InvoiceStatus,
+	IssuePriority,
+	IssueStatus,
 	LifecycleStage,
 	MatchMethod,
 	MetricAggregation,
@@ -69,6 +71,7 @@ import {
 	CustomerImpersonationId,
 	CustomerImpersonatorId,
 	CustomerInvoiceId,
+	CustomerIssueId,
 	CustomerMetricDefinitionId,
 	CustomerMrrMovementId,
 	CustomerNoteId,
@@ -80,6 +83,7 @@ import {
 	CustomerSyncRunId,
 	CustomerUnmatchedRecordId,
 	CustomerViewLayoutId,
+	MessageId,
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
@@ -868,6 +872,63 @@ export const customerChannelLinksTable = SQLite.table("customer_channel_links", 
 	],
 })
 export type CustomerChannelLink = SQLite.SelectRowOf<typeof customerChannelLinksTable>
+
+/**
+ * A support issue (`docs/customers/issues.md`): a conversation a customer started in a linked
+ * channel, the root message and its thread. Opened by the `customers.supportMessage` relay from
+ * the `OrgObject` (a customer's top-level message) or by hand from any message. One live issue per
+ * `(sourceChannelId, rootMessageId)` (partial unique index). Timestamps are the SLA contract.
+ */
+export const customerIssuesTable = SQLite.table("customer_issues", {
+	columns: {
+		id: id(CustomerIssueId),
+		organizationId: uuid(OrganizationId),
+		accountId: uuid(CustomerAccountId),
+		/** The linked channel the root message was posted in. */
+		sourceChannelId: uuid(ChannelId),
+		rootMessageId: uuid(MessageId),
+		/** The root message's thread, once one exists. */
+		threadChannelId: SQLite.nullable(uuid(ChannelId)),
+		/** The root message's author. */
+		openedByUserId: uuid(UserId),
+		/** The member who created it by hand; null when a customer's message opened it. */
+		createdByUserId: SQLite.nullable(uuid(UserId)),
+		/** The root message's first line, shortened. */
+		title: SQLite.text,
+		status: SQLite.column(textEnum(IssueStatus.literals), { default: "new" }),
+		priority: SQLite.column(textEnum(IssuePriority.literals), { default: "none" }),
+		assigneeUserId: SQLite.nullable(uuid(UserId)),
+		tags: SQLite.column(jsonb<ReadonlyArray<string>>(), { default: [] }),
+		/** The root message's time. */
+		openedAt: timestamptz,
+		firstCustomerMessageAt: SQLite.nullable(timestamptz),
+		lastCustomerMessageAt: SQLite.nullable(timestamptz),
+		/** First response: the first team message after the issue opened. */
+		firstTeamReplyAt: SQLite.nullable(timestamptz),
+		lastTeamReplyAt: SQLite.nullable(timestamptz),
+		/** The last message of either side (the inbox's "updated"). */
+		lastMessageAt: timestamptz,
+		closedAt: SQLite.nullable(timestamptz),
+		closedByUserId: SQLite.nullable(uuid(UserId)),
+		/** Reopened by a customer's reply (or by hand) after it was closed. */
+		reopenCount: count(),
+		/** Last time it (re)opened: resolution time counts from here. */
+		reopenedAt: SQLite.nullable(timestamptz),
+		messageCount: count(),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+		deletedAt: SQLite.nullable(timestamptz),
+	},
+	primaryKey: ["id"],
+	indexes: [
+		SQLite.index("customer_issues_status_idx", ["status"]),
+		SQLite.index("customer_issues_account_idx", ["accountId"]),
+		SQLite.index("customer_issues_thread_idx", ["threadChannelId"]),
+		SQLite.index("customer_issues_closed_at_idx", ["closedAt"]),
+	],
+})
+export type CustomerIssue = SQLite.SelectRowOf<typeof customerIssuesTable>
+export type NewCustomerIssue = SQLite.InsertRowOf<typeof customerIssuesTable>
 
 /**
  * A feature flag created in Hazel. The flags the Feature flags page lists are these plus every key

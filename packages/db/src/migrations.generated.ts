@@ -599,5 +599,16 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "customer_chat_participants_user_idx" ON "customer_chat_participants" ("userId")',
 			],
 		},
+		{
+			id: "0022_customer_issues",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "customer_issues" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"organizationId" text NOT NULL,\n\t"accountId" text NOT NULL,\n\t"sourceChannelId" text NOT NULL,\n\t"rootMessageId" text NOT NULL,\n\t"threadChannelId" text,\n\t"openedByUserId" text NOT NULL,\n\t"createdByUserId" text,\n\t"title" text NOT NULL,\n\t"status" text NOT NULL DEFAULT \'new\',\n\t"priority" text NOT NULL DEFAULT \'none\',\n\t"assigneeUserId" text,\n\t"tags" text NOT NULL DEFAULT \'[]\',\n\t"openedAt" text NOT NULL,\n\t"firstCustomerMessageAt" text,\n\t"lastCustomerMessageAt" text,\n\t"firstTeamReplyAt" text,\n\t"lastTeamReplyAt" text,\n\t"lastMessageAt" text NOT NULL,\n\t"closedAt" text,\n\t"closedByUserId" text,\n\t"reopenCount" integer NOT NULL DEFAULT 0,\n\t"reopenedAt" text,\n\t"messageCount" integer NOT NULL DEFAULT 0,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"deletedAt" text\n)',
+				'CREATE INDEX IF NOT EXISTS "customer_issues_account_idx" ON "customer_issues" ("accountId")',
+				'CREATE INDEX IF NOT EXISTS "customer_issues_closed_at_idx" ON "customer_issues" ("closedAt")',
+				'CREATE INDEX IF NOT EXISTS "customer_issues_status_idx" ON "customer_issues" ("status")',
+				'CREATE INDEX IF NOT EXISTS "customer_issues_thread_idx" ON "customer_issues" ("threadChannelId")',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_issues_root_unique" ON "customer_issues" ("sourceChannelId", "rootMessageId") WHERE "deletedAt" IS NULL',
+			],
+		},
 	],
 }

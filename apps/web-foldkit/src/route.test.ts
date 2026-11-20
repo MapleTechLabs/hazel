@@ -160,6 +160,7 @@ describe("customers routes", () => {
 	const customerPaths: ReadonlyArray<readonly [string, RouteTag]> = [
 		["/hazel/customers", "CustomersOverview"],
 		["/hazel/customers/attention", "CustomersAttention"],
+		["/hazel/customers/inbox", "CustomersInbox"],
 		["/hazel/customers/list", "CustomersList"],
 		["/hazel/customers/list?view=at_risk", "CustomersList"],
 		[`/hazel/customers/${accountId}`, "CustomerDetail"],
@@ -475,6 +476,7 @@ describe("hrefOf", () => {
 		],
 		CustomersOverview: [[AppRoute.CustomersOverview({ orgSlug }), "/hazel/customers"]],
 		CustomersAttention: [[AppRoute.CustomersAttention({ orgSlug }), "/hazel/customers/attention"]],
+		CustomersInbox: [[AppRoute.CustomersInbox({ orgSlug }), "/hazel/customers/inbox"]],
 		CustomersList: [
 			[AppRoute.CustomersList({ orgSlug, view: none }), "/hazel/customers/list"],
 			[

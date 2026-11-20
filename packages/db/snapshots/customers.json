@@ -1,5 +1,5 @@
 {
-	"migration": "0021_customer_chat",
+	"migration": "0022_customer_issues",
 	"entities": [
 		{
 			"kind": "table",
@@ -102,6 +102,13 @@
 		{
 			"kind": "table",
 			"name": "customer_invoices",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_issues",
 			"primaryKey": {
 				"columns": ["id"]
 			}
@@ -2033,6 +2040,249 @@
 		},
 		{
 			"kind": "column",
+			"table": "customer_issues",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "accountId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "sourceChannelId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "rootMessageId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "threadChannelId",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "openedByUserId",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "createdByUserId",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "title",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "status",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "'new'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "priority",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "'none'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "assigneeUserId",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "tags",
+			"position": 12,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "openedAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "firstCustomerMessageAt",
+			"position": 14,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "lastCustomerMessageAt",
+			"position": 15,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "firstTeamReplyAt",
+			"position": 16,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "lastTeamReplyAt",
+			"position": 17,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "lastMessageAt",
+			"position": 18,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "closedAt",
+			"position": 19,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "closedByUserId",
+			"position": 20,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "reopenCount",
+			"position": 21,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "reopenedAt",
+			"position": 22,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "messageCount",
+			"position": 23,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "createdAt",
+			"position": 24,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "updatedAt",
+			"position": 25,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "deletedAt",
+			"position": 26,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
 			"table": "customer_members",
 			"name": "userId",
 			"position": 0,
@@ -3891,6 +4141,34 @@
 		},
 		{
 			"kind": "index",
+			"table": "customer_issues",
+			"name": "customer_issues_account_idx",
+			"unique": false,
+			"columns": ["\"accountId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_issues",
+			"name": "customer_issues_closed_at_idx",
+			"unique": false,
+			"columns": ["\"closedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_issues",
+			"name": "customer_issues_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_issues",
+			"name": "customer_issues_thread_idx",
+			"unique": false,
+			"columns": ["\"threadChannelId\""]
+		},
+		{
+			"kind": "index",
 			"table": "customer_metric_daily",
 			"name": "customer_metric_daily_key_day_idx",
 			"unique": false,
@@ -4037,6 +4315,13 @@
 			"unique": true,
 			"on": ["provider", "externalId"],
 			"where": "\"externalId\" IS NOT NULL"
+		},
+		{
+			"name": "customer_issues_root_unique",
+			"table": "customer_issues",
+			"unique": true,
+			"on": ["sourceChannelId", "rootMessageId"],
+			"where": "\"deletedAt\" IS NULL"
 		},
 		{
 			"name": "customer_refs_account_external_unique",

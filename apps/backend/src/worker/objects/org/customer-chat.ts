@@ -188,6 +188,9 @@ export const requestChatAuthorsBackfill = Effect.fn("OrgObject.requestChatAuthor
 /** A link gone: a later link of the channel asks again. */
 export const forgetChatAuthorsBackfill = (channelId: ChannelId) => deleteObjectMeta(backfillKey(channelId))
 
+/** What a message carries of its text: a support issue's title comes from it. */
+const SUPPORT_CONTENT_MAX = 500
+
 /** From `org.messageCreated`: a message in a linked channel (or a thread of one) goes on to Customers. */
 export const recordCustomerChatMessage = Effect.fn("OrgObject.recordCustomerChatMessage")(function* (
 	channel: {
@@ -195,7 +198,13 @@ export const recordCustomerChatMessage = Effect.fn("OrgObject.recordCustomerChat
 		readonly organizationId: OrganizationId
 		readonly parentChannelId: ChannelId | null
 	},
-	message: { readonly messageId: MessageId; readonly authorId: UserId; readonly createdAt?: string },
+	message: {
+		readonly messageId: MessageId
+		readonly authorId: UserId
+		readonly createdAt?: string
+		readonly threadRootMessageId?: MessageId | null
+		readonly content?: string
+	},
 ) {
 	const linkedChannelId = channel.parentChannelId ?? channel.id
 	const link = yield* linkOf(linkedChannelId)
@@ -213,6 +222,10 @@ export const recordCustomerChatMessage = Effect.fn("OrgObject.recordCustomerChat
 			messageId: message.messageId,
 			createdAt,
 			author,
+			threadRootMessageId: message.threadRootMessageId ?? null,
+			content: Array.from(message.content ?? "")
+				.slice(0, SUPPORT_CONTENT_MAX)
+				.join(""),
 		},
 		{ id: `customer-chat:${message.messageId}` },
 	)
