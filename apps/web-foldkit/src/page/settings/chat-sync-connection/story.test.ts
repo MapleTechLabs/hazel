@@ -25,7 +25,8 @@ import {
 	UpdateChannelLink,
 } from "./command"
 import { ChannelLinks, ConnectionLookup, directionLabel, historyLimitOf, Message, Submission } from "./model"
-import { init, update } from "./update"
+import { init, sharedChanged, update } from "./update"
+import { memberWithRole } from "../../../test/pages-fixtures"
 import { sharedDefaults } from "../../test-shared"
 import { linkMenuEntries } from "./model"
 
@@ -511,5 +512,25 @@ describe("a Slack connection", () => {
 		)
 		expect(directionLabel("hazel_to_external", "slack")).toBe("Hazel to Slack")
 		expect(directionLabel("external_to_hazel", "discord")).toBe("Discord to Hazel")
+	})
+})
+
+describe("chat sync connection: suggestion after a link", () => {
+	test("a link made before membership loads is asked about once it has", () => {
+		const hazelChannelId = Schema.decodeSync(ChannelId)(uuid(9))
+		const linked = run(
+			loaded,
+			Message.SucceededCreateLink({
+				successMessage: "Linked",
+				hazelChannelId,
+				hazelChannelName: "acme",
+			}),
+		)
+		expect(linked.model.pendingSuggestion).toEqual({ channelId: hazelChannelId, channelName: "acme" })
+		expect((linked.commands ?? []).map((command) => command.name)).not.toContain("FetchChannelSuggestion")
+		const ready = sharedChanged(linked.model, { ...shared, member: memberWithRole("member") })
+		expect(ready.commands?.map((command) => command.name)).toContain("FetchChannelSuggestion")
+		expect(ready.model.pendingSuggestion).toBeNull()
+		expect(ready.model.suggestionChannelName).toBe("acme")
 	})
 })

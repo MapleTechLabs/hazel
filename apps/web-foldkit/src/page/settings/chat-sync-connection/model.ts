@@ -129,6 +129,8 @@ export const Model = Schema.Struct({
 	/** After a link: who the newly mirrored channel looks like (`customers.channel.suggestions`). */
 	suggestion: SuggestionPrompt.Model,
 	suggestionChannelName: Schema.NullOr(Schema.String),
+	/** A channel linked before the membership row loaded: asked about once it has. */
+	pendingSuggestion: Schema.NullOr(Schema.Struct({ channelId: ChannelId, channelName: Schema.String })),
 })
 export type Model = typeof Model.Type
 

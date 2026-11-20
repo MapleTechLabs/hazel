@@ -232,7 +232,7 @@ export const reasonLine = <M>(
 	const summary = reasonSummary(suggestion)
 	if (summary === null) return h.empty
 	if (summary.others.length === 0)
-		return h.span([h.Class("min-w-0 truncate text-muted-fg text-xs")], [summary.top])
+		return h.span([h.Class("line-clamp-2 min-w-0 text-muted-fg text-xs")], [summary.top])
 	const more = summary.others.length
 	return h.details(
 		[h.Class("group min-w-0 text-muted-fg text-xs")],
@@ -244,7 +244,7 @@ export const reasonLine = <M>(
 					),
 				],
 				[
-					h.span([h.Class("min-w-0 truncate group-open:whitespace-normal")], [summary.top]),
+					h.span([h.Class("line-clamp-2 min-w-0 group-open:line-clamp-none")], [summary.top]),
 					h.span(
 						[h.Class("shrink-0 tabular-nums underline decoration-dotted underline-offset-2")],
 						[

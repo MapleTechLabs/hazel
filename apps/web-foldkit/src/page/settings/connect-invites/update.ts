@@ -148,8 +148,9 @@ const requestFor = (model: Model, shared: Shared): Return => {
 		model: modifyFields(model, {
 			requestedFor: () => organizationId,
 			listVersion: () => version,
-			// Another organization's invites are not this one's stale data.
+			// Another organization's invites are not this one's stale data, nor is its prompt.
 			invites: () => Invites.Loading(),
+			suggestion: () => SuggestionPrompt.init(),
 		}),
 		commands: [ListIncomingInvites({ organizationId, version })],
 	}

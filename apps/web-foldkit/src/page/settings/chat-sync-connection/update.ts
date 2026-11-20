@@ -105,6 +105,7 @@ export const init = (route: RouteOf<"SettingsChatSyncConnection">, shared: Share
 			interaction: Interaction.init(),
 			suggestion: SuggestionPrompt.init(),
 			suggestionChannelName: null,
+			pendingSuggestion: null,
 		},
 		shared,
 	)
@@ -117,7 +118,16 @@ export const init = (route: RouteOf<"SettingsChatSyncConnection">, shared: Share
 	}
 }
 
-export const sharedChanged = (model: Model, shared: Shared): Return => requestConnections(model, shared)
+export const sharedChanged = (model: Model, shared: Shared): Return => {
+	const connections = requestConnections(model, shared)
+	const pending = connections.model.pendingSuggestion
+	if (pending === null) return connections
+	const suggestion = suggestFor(connections.model, shared, pending.channelId, pending.channelName)
+	return {
+		...suggestion,
+		commands: [...(connections.commands ?? []), ...(suggestion.commands ?? [])],
+	}
+}
 
 /** `setRefreshKey(k => k + 1)`: a new query key, so the links load again (the shown ones stay meanwhile). */
 const reloadLinks = (model: Model): Pick<Return, "model" | "commands"> => {
@@ -335,9 +345,15 @@ const withSuggestion = SuggestionPrompt.embed<Model, Message>(
  */
 const suggestFor = (model: Model, shared: Shared, channelId: ChannelId, channelName: string): Return => {
 	const organizationId = shared.organization?.id
-	if (organizationId === undefined || shared.member === null) return { model }
+	// Membership still loading: keep the channel and ask once it arrives (`sharedChanged`).
+	if (organizationId === undefined || shared.member === null) {
+		return { model: modifyFields(model, { pendingSuggestion: () => ({ channelId, channelName }) }) }
+	}
 	return withSuggestion(
-		modifyFields(model, { suggestionChannelName: () => channelName }),
+		modifyFields(model, {
+			suggestionChannelName: () => channelName,
+			pendingSuggestion: () => null,
+		}),
 		SuggestionPrompt.request(organizationId, channelId),
 	)
 }

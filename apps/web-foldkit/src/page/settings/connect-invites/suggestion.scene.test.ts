@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ConnectConversationId, ConnectInviteId } from "@hazel/schema"
+import { ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as Scene from "foldkit/scene"
 import { describe, expect, test } from "vitest"
@@ -10,7 +10,7 @@ import { CONTACT_SUGGESTION, suggestionFor } from "../../../lab/fixtures/custome
 import { channelId, makeShared, organizationId, pageScene, uuid } from "../../../test/pages-fixtures"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
-import { AcceptInvite, FindJoinedChannel, init, ListIncomingInvites, update } from "./update"
+import { AcceptInvite, FindJoinedChannel, init, ListIncomingInvites, sharedChanged, update } from "./update"
 import { view } from "./view"
 
 /** A channel another organization shared: once accepted, who it looks like (members only). */
@@ -82,5 +82,15 @@ describe("connect invitations: suggested customer", () => {
 		expect(
 			names(update(listed, Message.FoundJoinedChannel({ channelId }), makeShared({ member: null }))),
 		).toEqual([])
+	})
+})
+
+describe("connect invitations: switching organization", () => {
+	test("the previous organization's prompt does not survive the switch", () => {
+		const prompting = { ...listed, suggestion: { channelId, items: [kestrel], status: "Ready" as const } }
+		const other = makeShared({
+			organization: { ...shared.organization!, id: Schema.decodeSync(OrganizationId)(uuid(72)) },
+		})
+		expect(sharedChanged(prompting, other).model.suggestion).toEqual(SuggestionPrompt.init())
 	})
 })

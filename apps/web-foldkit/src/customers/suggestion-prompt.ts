@@ -217,7 +217,7 @@ export const view = <ParentMessage>(
 						[h.Class("flex min-w-0 items-baseline gap-2 text-fg text-sm")],
 						[
 							h.span(
-								[h.Class("min-w-0 truncate")],
+								[h.Class("min-w-0 break-words")],
 								[
 									options.subject === undefined
 										? "Looks like "
