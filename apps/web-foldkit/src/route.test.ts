@@ -161,6 +161,7 @@ describe("customers routes", () => {
 		["/hazel/customers", "CustomersOverview"],
 		["/hazel/customers/attention", "CustomersAttention"],
 		["/hazel/customers/inbox", "CustomersInbox"],
+		["/hazel/customers/support", "CustomersSupportReport"],
 		["/hazel/customers/list", "CustomersList"],
 		["/hazel/customers/list?view=at_risk", "CustomersList"],
 		[`/hazel/customers/${accountId}`, "CustomerDetail"],
@@ -478,6 +479,7 @@ describe("hrefOf", () => {
 		CustomersOverview: [[AppRoute.CustomersOverview({ orgSlug }), "/hazel/customers"]],
 		CustomersAttention: [[AppRoute.CustomersAttention({ orgSlug }), "/hazel/customers/attention"]],
 		CustomersInbox: [[AppRoute.CustomersInbox({ orgSlug }), "/hazel/customers/inbox"]],
+		CustomersSupportReport: [[AppRoute.CustomersSupportReport({ orgSlug }), "/hazel/customers/support"]],
 		CustomersList: [
 			[AppRoute.CustomersList({ orgSlug, view: none }), "/hazel/customers/list"],
 			[

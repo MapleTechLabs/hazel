@@ -26,6 +26,7 @@ import { environmentCounts } from "../../../customers/groups"
 import { connectCard } from "../../../customers/ui/connect-card"
 import { companyLogo } from "../../../customers/ui/identity"
 import { deltaPill, type Delta, kpiTile } from "../../../customers/ui/kpi-tile"
+import { supportTiles } from "../../../customers/support-report"
 import { rangePicker } from "../../../customers/ui/filter-bar"
 import {
 	moreLink,
@@ -262,6 +263,41 @@ const kpiRow = (
 		}),
 		...usage,
 	])
+}
+
+// SUPPORT
+
+/** Response times and breaches for the range, each tile a way into the Support report. */
+const supportRow = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+	const href = hrefOf(AppRoute.CustomersSupportReport({ orgSlug: context.orgSlug }))
+	const report = Option.getOrUndefined(AsyncData.getData(model.support))
+	const failed = report === undefined && AsyncData.getError(model.support)._tag === "Some"
+	return h.section(
+		[h.AriaLabel("Support"), h.Class("flex flex-col gap-2.5")],
+		[
+			h.div(
+				[h.Class("flex items-center justify-between gap-4")],
+				[heading(h, { variant: "label", level: 2 }, ["Support"]), link(h, href, "Support report")],
+			),
+			h.div(
+				[h.Class("grid grid-cols-2 gap-3 xl:grid-cols-4")],
+				[
+					...supportTiles(h, {
+						report,
+						idPrefix: "kpi-support",
+						href,
+						failure: failed
+							? button(
+									h,
+									{ intent: "plain", size: "xs", onPress: Message.PressedRetrySupport() },
+									[IconArrowPath(h, { attributes: { "data-slot": "icon" } }), "Retry"],
+								)
+							: undefined,
+					}),
+				],
+			),
+		],
+	)
 }
 
 // CHARTS
@@ -854,6 +890,7 @@ const dashboard = (
 	const bands = model.settings?.bands ?? Customers.DEFAULT_HEALTH_SETTINGS.bands
 	return [
 		kpiRow(h, model, result, context),
+		supportRow(h, model, context),
 		...(result === undefined
 			? [h.div([h.Class("h-96 animate-pulse rounded-xl border border-border bg-secondary/30")])]
 			: [

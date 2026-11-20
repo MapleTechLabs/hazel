@@ -2,11 +2,11 @@
 
 Targets for how fast the team answers and resolves a customer's support issue, live "due in 12m /
 breached 1h ago" state on each issue, warnings before and at a breach, overdue signals in Needs
-attention, and response-time reports. Builds on support issues (`support.md`, the issue record and
+attention, and response-time reports. Builds on support issues (`issues.md`, the issue record and
 its statuses) and the author classifier (customer vs team messages).
 
-Status: the clocks, business hours, policies and their settings RPCs are implemented. The issue
-hook, alarm, notifications, signals, reports and UI land once the issue record does (§7).
+Status: implemented (clocks, policies and settings, the issue hook, alarm, notifications, signals,
+the report and UI). Open items: §7.
 
 ## 1. Decisions
 
@@ -80,26 +80,54 @@ policy's hours, so a business-hours reply due Monday morning reads "due in 2d" o
 Business hours (`addWorkingTime`, `workingTimeBetween`) walk the zone's working windows day by day
 with `Intl` offsets, so a DST change moves the window, not the target.
 
-## 4. In the `CustomersObject` (lands with the issue record)
+## 4. In the `CustomersObject` (`apps/backend/src/worker/objects/customers/sla.ts`)
 
-- **`customer_issue_slas`** (synced): `issueId` (PK), `accountId`, `policyId`, the policy's
-  `targets` / `hours` / `warnBeforePct` as of the issue's start, `state` (`SlaState` JSON), and
-  `nextAlertAt` (indexed). Its own table, so the issue table stays session 4's.
-- **Hook:** every issue write goes through one function (`writeIssue(before, after)`), which maps
-  the change to SLA events and folds them in the same transaction.
-- **Alarm:** `customersDeadlines` adds the earliest `nextAlertAt`. Its turn takes the due rows,
-  `dueAlerts` → `markAlerts`, sends the notifications, and re-evaluates the two SLA templates for
-  those accounts only (not a full compute). No polling.
+- **`customer_issue_slas`** (synced to members: unresolved, or resolved within 30 days): `id` (the
+  issue's id), `accountId`, `policyId`, the policy's `name` / `targets` / `hours` / `warnBeforePct`
+  as of the issue's start, `state` (`SlaState` JSON), and `nextAlertAt` (indexed). Its own table,
+  so the issue table stays the issue record's.
+- **Hook:** every issue write ends in `issueWritten(before, after)` (`issues.ts`), which calls
+  `slaIssueWritten`: a new issue takes its account's policy (none: no row; issues opened before SLAs
+  get none) and is folded from what it already holds; a later write maps its change to SLA events
+  (`eventsOf`: customer message, first / last team reply, status, priority) in the same transaction.
+  A deleted issue drops its row. An alert more than an hour past when first computed (a late
+  delivery, the demo seed) is recorded without notifying.
+- **Alarm:** `customersDeadlines` adds the earliest `nextAlertAt`. Every alarm turn first runs
+  `runSlaAlerts` (≤ 100 rows, one transaction): `dueAlerts` → `markAlerts`, notifications for open
+  issues, and on a breach `requestCompute`, so the overdue signals open within about 2 minutes. No
+  polling.
 - **Notifications:** to the issue's assignee, else the account owner. `customer_members` gains a
   nullable `memberId` (carried by `customers.setMembers`; the notification row is keyed by org
-  member). A new user effect `user.createCustomerNotification` (`reason` `sla_warning` /
-  `sla_breach`; sender guard: the org's own customers object) writes the inbox row on the issue's
+  member; an object projected before that pulls the members once more). A new user effect
+  `user.createCustomerNotification` (`reason` `sla_<reply|resolution>_<warning|breach>`; sender
+  guard: the org's own customers object) writes the inbox row on the issue's
   thread channel (`targetedResourceType` `channel`, `resourceType` `customer_issue`) and pushes.
-- **Signals:** templates `response_overdue` (an open issue past its reply-due deadline; +1 / +2
-  step at 2× / 4× the target) and `resolution_overdue`, no required source, seeded for new orgs and
-  by migration for existing ones. Evidence: overdue count, the oldest issue and how late.
-- **Reports** (`customers.support.report`, range): median and p90 first response, median
-  resolution, % within SLA per clock, breaches, by account and by policy.
+- **Signals:** templates `response_overdue` ("Customer waiting on a reply", high: an open issue's
+  running reply-due clock past its deadline) and `resolution_overdue` ("Issue past its resolution
+  target", medium: the running resolution clock past due; a paused one is not). Config
+  `graceMinutes` (0–1440, default 0): overdue by at least that. +1 / +2 step when the most overdue
+  issue is late by ≥ 2× / ≥ 4× its target for that priority. No required source, no backfill
+  baseline; they skip Needs attention's coverage but not churn or the rule's scope. Compute reads
+  `customer_issue_slas` joined to the open issues (`AccountFacts.openIssueSlas`, one query per
+  chunk); the alarm's breach requests a compute, and an answered or closed issue auto-resolves the
+  signal on the next one. Evidence `overdue`: clock, overdue count, the most overdue issue (id,
+  title, due instant) and how late ("2 issues waiting on a reply; the most overdue by 1h 20m").
+  Seeded for new orgs and by migration `0023_customer_slas` for existing ones.
+- **Reports** (`customers.support.report`, range, any member; `supportReport` in the domain): for
+  issues opened in the range, median and p90 first response and resolution (working time), % within
+  SLA per clock, breaches (late or overdue), overdue now, by account, by policy and by day.
+
+### Client
+
+- `src/customers/sla.ts` + `ui/sla-chip.ts`: the chip (`slaDisplay`), ticking on `shared.nowMs`.
+- Support inbox: an SLA column, "· N overdue" in the header, an Overdue filter; overdue issues sort
+  first among waiting on us. Thread control: the chip beside status and assignee.
+- Customer page: a Support card (open, overdue, median first response and % within over 30 days).
+- Overview: a Support row of four tiles (median / p90 first response, within SLA, breaches) linking
+  to the **Support report** (`/customers/support`): tiles, first response by day, by account, by
+  policy.
+- Settings → **Support SLAs**: business hours and the ordered policies.
+- Notifications inbox: "Reply overdue in #thread" / "Resolution due soon in #channel".
 
 ## 5. The issue record it reads (`issues.md`, session 4)
 
@@ -118,10 +146,17 @@ with `Intl` offsets, so a DST change moves the window, not the target.
   `["2026-11-23 09:20", "reply"]`, ...) with the alarm firing at each deadline the state asks for;
   the backend's object tests and the demo seed reuse it.
 - `sla-policies.test.ts`: the default policy, admin-only CRUD and reorder, business hours, and that
-  the migration seeds the same policy as new orgs get.
+  the migration seeds the same policy and rules as new orgs get.
+- `sla-issues.test.ts`: the hook (policy, priorities, deletion), warnings and breaches notifying the
+  owner's `UserObject` once each, stale alerts silent, the report RPC, and an overdue issue opening
+  `response_overdue` that auto-resolves once answered.
+- `evaluate.test.ts`: the two templates (grace, steps, coverage bypass, churn, scope).
+- Web: chip states, inbox, thread control, report and overview stories, galleries (light, dark,
+  mobile).
 
-## 7. Remaining (stacked on the issue record)
+## 7. Open items
 
-Issue hook and `customer_issue_slas`, alarm turn, notifications, the two signal templates, the
-report RPC, and UI: SLA settings page, chips on inbox rows and the thread control, the customer
-page summary, overview tiles and the Support report.
+- Holidays in business hours.
+- The report keeps its own range; the overview tiles do not carry theirs across.
+- The customer page's inbox link opens the whole inbox (it has no account filter in the URL).
+- An overdue signal's "how late" is as of the last compute (the chips are live).

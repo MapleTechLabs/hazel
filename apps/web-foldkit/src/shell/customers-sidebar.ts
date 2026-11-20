@@ -30,6 +30,7 @@ import {
 } from "../customers/view-layout"
 import { catchCommon, reasonToast } from "../data/actions"
 import {
+	IconChartBar,
 	IconClock,
 	IconCube,
 	IconEyeSlash,
@@ -475,6 +476,12 @@ export const view = <ParentMessage>(
 						on("CustomersInbox"),
 						icon(IconSupport),
 						inboxCount > 0 ? [badge(h, inboxCount)] : [],
+					),
+					item(
+						"Support report",
+						hrefOf(AppRoute.CustomersSupportReport({ orgSlug })),
+						on("CustomersSupportReport"),
+						icon(IconChartBar),
 					),
 					item(
 						"Customers",

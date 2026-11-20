@@ -20,6 +20,8 @@ import {
 } from "../../../customers/format"
 import { accountLabelOf } from "../../../customers/groups"
 import { msOf, type SignalRow } from "../../../customers/queries"
+import { overdueByMs } from "../../../customers/sla"
+import { formatResponse, formatWithin } from "../../../customers/support-report"
 import { severityChip } from "../../../customers/ui/badges"
 import { evidenceViz } from "../../../customers/ui/evidence"
 import { healthBreakdown } from "../../../customers/ui/health-breakdown"
@@ -527,6 +529,77 @@ const signalsCard = (h: HtmlBuilder<Message>, model: Model, context: Context): H
 	)
 }
 
+// SUPPORT
+
+const supportStat = (
+	h: HtmlBuilder<Message>,
+	label: string,
+	value: string,
+	options: Readonly<{ detail?: string; tone?: "danger" }> = {},
+): Html =>
+	h.div(
+		[h.Class("flex min-w-0 flex-col gap-0.5")],
+		[
+			h.span([h.Class("truncate text-muted-fg text-xs")], [label]),
+			h.span(
+				[h.Class("flex min-w-0 items-baseline gap-1.5")],
+				[
+					h.span(
+						[
+							h.Class(
+								twMerge(
+									"font-semibold text-fg text-lg tabular-nums",
+									options.tone === "danger" && "text-danger-subtle-fg",
+								),
+							),
+						],
+						[value],
+					),
+					...(options.detail === undefined
+						? []
+						: [h.span([h.Class("truncate text-muted-fg text-xs")], [options.detail])]),
+				],
+			),
+		],
+	)
+
+/**
+ * Open issues, how many are overdue (live), and the median first response over 30 days (the
+ * Support report's row). Hidden for a customer with no support history.
+ */
+export const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+	const issues = model.supportIssues ?? []
+	const row = Option.getOrNull(Option.flatMap(AsyncData.getData(model.support), Option.fromNullishOr))
+	if (issues.length === 0 && row === null) return h.empty
+	const open = issues.filter((issue) => issue.status !== "closed")
+	const slasById = new Map(model.supportSlas.map((sla) => [sla.id, sla]))
+	const overdue = open.filter((issue) => overdueByMs(slasById.get(issue.id), context.nowMs) !== null).length
+	const isLoading = AsyncData.isLoading(model.support) || AsyncData.isIdle(model.support)
+	return card(
+		h,
+		{
+			title: "Support",
+			aside: h.a(
+				[h.Href(hrefOf(AppRoute.CustomersInbox({ orgSlug: context.orgSlug }))), h.Class(linkClass)],
+				["Support inbox"],
+			),
+			bodyClassName: "grid grid-cols-3 gap-4",
+		},
+		[
+			supportStat(h, "Open issues", formatCount(open.length)),
+			supportStat(h, "Overdue", formatCount(overdue), overdue > 0 ? { tone: "danger" } : {}),
+			supportStat(
+				h,
+				"First response · 30d",
+				isLoading ? "…" : formatResponse(row?.firstResponse.medianMs ?? null),
+				row?.firstResponse.withinPct == null
+					? { detail: "median" }
+					: { detail: `median · ${formatWithin(row.firstResponse.withinPct)} in SLA` },
+			),
+		],
+	)
+}
+
 // SUBSCRIPTION, NOTES, ACTIVITY
 
 const factRow = (h: HtmlBuilder<Message>, label: string, value: string) =>
@@ -716,6 +789,7 @@ export const overviewTab = (
 	usageCard(h, model, context),
 	healthCard(h, model, context, bands),
 	signalsCard(h, model, context),
+	supportCard(h, model, context),
 	h.div(
 		[h.Class("grid gap-4 lg:grid-cols-2")],
 		[subscriptionCard(h, context), pinnedNotesCard(h, model, context)],

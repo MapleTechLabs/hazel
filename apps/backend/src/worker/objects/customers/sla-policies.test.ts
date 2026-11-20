@@ -3,7 +3,7 @@
  * update / reorder / delete for admins only, and the org's business hours.
  */
 import { storeMigrations } from "@hazel/db"
-import { DEFAULT_SLA_POLICY } from "@hazel/domain/customers"
+import { DEFAULT_SLA_POLICY, TEMPLATES } from "@hazel/domain/customers"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { makeCustomersWorld, ok, tagOf, uuid } from "./test-kit"
@@ -132,5 +132,19 @@ describe("SLA policies", () => {
 		expect(seed).toContain(`'${JSON.stringify(DEFAULT_SLA_POLICY.targets)}'`)
 		expect(seed).toContain(`'${DEFAULT_SLA_POLICY.name}', 0, 1`)
 		expect(seed).toContain(`'${DEFAULT_SLA_POLICY.hours}', ${DEFAULT_SLA_POLICY.warnBeforePct}`)
+	})
+
+	it("seeds existing orgs (the migration) with the two SLA signal rules, at their defaults", () => {
+		const statements = storeMigrations.customers.flatMap((migration) => migration.statements)
+		for (const template of ["response_overdue", "resolution_overdue"] as const) {
+			const meta = TEMPLATES[template]
+			const seed = statements.find(
+				(statement) =>
+					statement.startsWith(`INSERT INTO "customer_signal_rules"`) &&
+					statement.includes(`"template" = '${template}'`),
+			)
+			expect(seed).toContain(`'${JSON.stringify(meta.defaultConfig)}'`)
+			expect(seed).toContain(`'${meta.name}', '${template}', '${meta.kind}', '${meta.defaultSeverity}'`)
+		}
 	})
 })

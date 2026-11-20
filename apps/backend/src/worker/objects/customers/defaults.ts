@@ -38,6 +38,8 @@ export const BUILT_IN_VIEWS: ReadonlyArray<{
 	{ key: "churned", name: "Churned", filters: { lifecycleStages: ["churned"] } },
 ]
 
+const RULES_PER_INSERT = 10
+
 export const installDefaults = Effect.fn("Customers.installDefaults")(function* (
 	organizationId: OrganizationId,
 ) {
@@ -49,23 +51,27 @@ export const installDefaults = Effect.fn("Customers.installDefaults")(function* 
 			reportingCurrency: "usd",
 		}),
 	)
-	yield* db.run(
-		SQLite.insertInto(schema.customerSignalRulesTable).values(
-			SignalTemplate.literals.map((template) => {
-				const meta = TEMPLATES[template]
-				return {
-					organizationId,
-					name: meta.name,
-					template,
-					kind: meta.kind,
-					severity: meta.defaultSeverity,
-					config: meta.defaultConfig,
-					scope: {},
-					enabled: true,
-				}
-			}),
-		),
-	)
+	const rules = SignalTemplate.literals.map((template) => {
+		const meta = TEMPLATES[template]
+		return {
+			organizationId,
+			name: meta.name,
+			template,
+			kind: meta.kind,
+			severity: meta.defaultSeverity,
+			config: meta.defaultConfig,
+			scope: {},
+			enabled: true,
+		}
+	})
+	// Durable Object SQLite binds at most 100 variables a statement (8 per rule).
+	for (let start = 0; start < rules.length; start += RULES_PER_INSERT) {
+		yield* db.run(
+			SQLite.insertInto(schema.customerSignalRulesTable).values(
+				rules.slice(start, start + RULES_PER_INSERT),
+			),
+		)
+	}
 	yield* db.run(
 		SQLite.insertInto(schema.customerSlaPoliciesTable).values({
 			organizationId,

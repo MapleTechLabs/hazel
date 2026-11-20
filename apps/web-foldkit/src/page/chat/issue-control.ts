@@ -11,6 +11,8 @@ import { CommonReason, failureMessage } from "~/lib/error-messages"
 import { cn } from "~/lib/utils"
 import { ISSUE_STATUSES, IssueRow, STATUS_LABEL, updateIssueAction } from "../../customers/issues"
 import { MemberRow, withCustomersSource } from "../../customers/queries"
+import { IssueSlaRow } from "../../customers/sla"
+import { slaChip } from "../../customers/ui/sla-chip"
 import { catchCommon, errorToastOf } from "../../data/actions"
 import { liveQueryStream } from "../../data/live-query"
 import { IconChevronDown, IconCirclePlus, IconSupport, IconUser } from "../../icons"
@@ -24,8 +26,8 @@ import { menuLabel, view as menuView } from "../../ui/menu-view"
 /**
  * The support issue of an open thread (`docs/customers/issues.md`): in a channel linked to a
  * customer, a customer's top-level message and its thread are an issue. The thread panel's header
- * shows its status and assignee as two quiet chips with menus, and "Open in inbox"; a thread with
- * no issue yet offers "Create issue" (`CreateIssueFromMessage`, run by the page).
+ * shows its status and assignee as two quiet chips with menus, its SLA chip, and "Open in inbox"; a
+ * thread with no issue yet offers "Create issue" (`CreateIssueFromMessage`, run by the page).
  *
  * The channel header (`header.ts`) can host the same chips later, from this Submodel.
  */
@@ -35,6 +37,8 @@ import { menuLabel, view as menuView } from "../../ui/menu-view"
 export const Model = Schema.Struct({
 	/** The issue rooted at the thread's starter message; null when there is none. */
 	issue: Schema.NullOr(IssueRow),
+	/** The issue's SLA clocks; null without a policy (or before they arrive). */
+	sla: Schema.NullOr(IssueSlaRow),
 	/** The issue query has answered: until then neither the chips nor "Create issue" show. */
 	hasLoaded: Schema.Boolean,
 	/** "Create issue" is running; cleared when it settles or the issue arrives. */
@@ -48,6 +52,7 @@ export type Model = typeof Model.Type
 
 export const init = (rootMessageId: MessageId): Model => ({
 	issue: null,
+	sla: null,
 	hasLoaded: false,
 	isCreating: false,
 	members: [],
@@ -67,6 +72,8 @@ export type UpdateIssueFailure = typeof UpdateIssueFailure.Type
 export const Message = defineMessageUnion({
 	/** The issue at `rootMessageId`; the page drops one for a thread it no longer shows. */
 	UpdatedIssue: { rootMessageId: MessageId, issue: Schema.NullOr(IssueRow) },
+	/** The SLA row of `issueId`; one for an issue the strip no longer shows is dropped. */
+	UpdatedSla: { issueId: CustomerIssueId, sla: Schema.NullOr(IssueSlaRow) },
 	UpdatedMembers: { members: Schema.Array(MemberRow) },
 	GotStatusMenuMessage: { message: Menu.Message },
 	GotAssignMenuMessage: { message: Menu.Message },
@@ -196,11 +203,14 @@ export const update = (model: Model, message: Message, context: Context): Return
 		UpdatedIssue: ({ issue }) => ({
 			model: modifyFields(model, {
 				issue: () => issue,
+				sla: (sla) => (sla !== null && sla.id === issue?.id ? sla : null),
 				hasLoaded: () => true,
 				isCreating: (isCreating) => isCreating && issue === null,
 			}),
 		}),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
+		UpdatedSla: ({ issueId, sla }) =>
+			model.issue?.id === issueId ? { model: modifyFields(model, { sla: () => sla }) } : { model },
 		GotStatusMenuMessage: ({ message: menuMessage }) =>
 			updateMenu(model, "statusMenu", menuMessage, (next, key) =>
 				isStatus(key) && next.issue !== null && next.issue.status !== key
@@ -262,6 +272,8 @@ export interface ViewInputs<M> {
 	readonly model: Model
 	readonly inboxHref: string
 	readonly currentUserId: UserId | null
+	/** The shared 30 s clock the SLA chip counts down with. */
+	readonly nowMs: number
 	readonly toMessage: (message: Message) => M
 }
 
@@ -292,7 +304,8 @@ const chip = <M>(
 		{
 			intent: "plain",
 			size: "xs",
-			className: "min-w-0 gap-1.5 text-muted-fg hover:text-fg",
+			// The SLA chip gives way first; these keep their label.
+			className: "shrink-0 gap-1.5 text-muted-fg hover:text-fg",
 			attributes,
 		},
 		[
@@ -390,12 +403,19 @@ const assignMenuView = <M>(h: HtmlBuilder<M>, issue: IssueRow, inputs: ViewInput
 	})
 }
 
-/** "Open in inbox": the support inbox, where every issue is triaged. */
-const inboxLink = <M>(h: HtmlBuilder<M>, href: string): Html =>
+/** "Open in inbox": the support inbox, where every issue is triaged; just its icon beside an SLA chip. */
+const inboxLink = <M>(h: HtmlBuilder<M>, href: string, isCompact: boolean): Html =>
 	link(
 		h,
-		{ href, className: "ml-auto flex shrink-0 items-center gap-1 text-muted-fg text-xs hover:text-fg" },
-		[IconSupport(h, { className: "size-3.5", attributes: iconAttributes }), "Open in inbox"],
+		{
+			href,
+			className: "ml-auto flex shrink-0 items-center gap-1 text-muted-fg text-xs hover:text-fg",
+			attributes: isCompact ? [h.AriaLabel("Open in inbox"), h.Title("Open in inbox")] : [],
+		},
+		[
+			IconSupport(h, { className: "size-3.5", attributes: iconAttributes }),
+			h.span([h.Class(isCompact ? "sr-only" : "")], ["Open in inbox"]),
+		],
 	)
 
 /**
@@ -431,7 +451,13 @@ export const view = <M>(h: HtmlBuilder<M>, inputs: ViewInputs<M>): Html => {
 			: [
 					statusMenuView(h, issue, inputs),
 					assignMenuView(h, issue, inputs),
-					inboxLink(h, inputs.inboxHref),
+					slaChip(h, {
+						sla: model.sla ?? undefined,
+						nowMs: inputs.nowMs,
+						status: issue.status,
+						className: "ml-1 min-w-0 shrink",
+					}),
+					inboxLink(h, inputs.inboxHref, model.sla !== null),
 				],
 	)
 }

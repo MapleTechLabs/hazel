@@ -53,7 +53,7 @@ const shoot = async (name: string) => {
 	await page.screenshot({ path: `${label}${name}.png`, element: gallery })
 }
 
-const SHOWN = ["open", "selected", "filtered", "closed", "inbox-zero", "empty"] as const
+const SHOWN = ["open", "selected", "filtered", "overdue", "on-hold", "closed", "inbox-zero", "empty"] as const
 
 for (const theme of ["light", "dark"] as const) {
 	for (const state of SHOWN) {

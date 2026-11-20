@@ -73,6 +73,8 @@ export const SignalTemplate = Schema.Literals([
 	"near_limit",
 	"seat_growth",
 	"churned",
+	"response_overdue",
+	"resolution_overdue",
 ])
 export type SignalTemplate = typeof SignalTemplate.Type
 
@@ -111,7 +113,15 @@ export const HealthComponentKey = Schema.Literals(["usage", "engagement", "billi
 export type HealthComponentKey = typeof HealthComponentKey.Type
 
 /** How a signal's evidence is drawn (queue mini-viz, side panel chart). */
-export const EvidenceViz = Schema.Literals(["amount", "last_active", "series", "limit", "delta", "ratio"])
+export const EvidenceViz = Schema.Literals([
+	"amount",
+	"last_active",
+	"series",
+	"limit",
+	"delta",
+	"ratio",
+	"overdue",
+])
 export type EvidenceViz = typeof EvidenceViz.Type
 
 /** Derived per contact: active in the last 30 days, seen before but not since, never seen. */

@@ -468,6 +468,7 @@ const accountFacts = (account: schema.CustomerAccount, days: number, now: Date) 
 			metrics: metricMap,
 			movements,
 			health: health as ReadonlyArray<HealthPoint>,
+			openIssueSlas: [],
 		} satisfies AccountFacts
 	})
 

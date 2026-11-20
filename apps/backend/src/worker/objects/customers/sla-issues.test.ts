@@ -12,6 +12,7 @@ import type { ChannelId, CustomerAccountId, MessageId, OrganizationMemberId, Use
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { userTarget } from "../kinds"
+import { runCompute } from "./compute"
 import { insertIssueRow, updateIssueRow } from "./issues"
 import { runSlaAlerts } from "./sla"
 import { makeCustomersWorld, ok, uuid } from "./test-kit"
@@ -74,6 +75,7 @@ const setup = Effect.gen(function* () {
 	}
 	const sla = (id: string) => {
 		const row = world.rows<SlaRowOut>(`SELECT * FROM customer_issue_slas WHERE id = ?`, id)[0]
+		// SAFETY: the SLA hook writes `state` as an encoded `SlaState`.
 		return row === undefined ? undefined : { ...row, state: JSON.parse(row.state) as SlaState }
 	}
 	const notifications = Effect.gen(function* () {
@@ -113,8 +115,18 @@ describe("SLA clocks on issues", () => {
 					notified: 0,
 				})
 				expect(yield* notifications).toEqual([
-					{ memberId, resourceId: issue.id, resourceType: "customer_issue", reason: "sla_warning" },
-					{ memberId, resourceId: issue.id, resourceType: "customer_issue", reason: "sla_breach" },
+					{
+						memberId,
+						resourceId: issue.id,
+						resourceType: "customer_issue",
+						reason: "sla_reply_warning",
+					},
+					{
+						memberId,
+						resourceId: issue.id,
+						resourceType: "customer_issue",
+						reason: "sla_reply_breach",
+					},
 				])
 
 				const repliedAt = new Date(now + 55 * MIN)
@@ -181,6 +193,42 @@ describe("SLA clocks on issues", () => {
 				expect(report.firstResponse).toMatchObject({ count: 1, medianMs: 30 * MIN, withinPct: 1 })
 				expect(report.overdueNow).toBe(1)
 				expect(report.byAccount).toMatchObject([{ label: "Acme", issues: 2, breaches: 1 }])
+			}),
+		))
+
+	it("opens a response_overdue signal for an overdue reply, and resolves it once answered", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, now, open } = yield* setup
+				// A Clerk-only lead: outside Needs attention's default coverage, still covered here.
+				const issue = yield* open(100)
+				const signals = () =>
+					world.rows<{ template: string; status: string; severity: string; reason: string }>(
+						`SELECT template, status, severity, reason FROM customer_signals
+						WHERE template IN ('response_overdue', 'resolution_overdue')`,
+					)
+				yield* world.object.run(runCompute(new Date(now))).pipe(Effect.orDie)
+				// Urgent: the 1h reply is 40m late; the 8h resolution is not.
+				expect(signals()).toEqual([
+					{
+						template: "response_overdue",
+						status: "open",
+						severity: "high",
+						reason: '"Dashboard is broken" waiting on a reply, 40m overdue',
+					},
+				])
+
+				const repliedAt = new Date(now + MIN)
+				yield* world.object.run(
+					updateIssueRow(issue, {
+						firstTeamReplyAt: repliedAt,
+						lastTeamReplyAt: repliedAt,
+						lastMessageAt: repliedAt,
+						status: "waiting_on_customer",
+					}),
+				)
+				yield* world.object.run(runCompute(new Date(now + 2 * MIN))).pipe(Effect.orDie)
+				expect(signals()).toMatchObject([{ template: "response_overdue", status: "auto_resolved" }])
 			}),
 		))
 })

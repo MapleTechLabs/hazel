@@ -52,6 +52,7 @@ export const init = (): Return => ({
 		search: "",
 		issues: null,
 		accounts: null,
+		slas: [],
 		channels: [],
 		members: [],
 		selectedId: null,
@@ -322,6 +323,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 	Message.match<Return>(message, {
 		UpdatedIssues: ({ issues }) => ({ model: modifyFields(model, { issues: () => issues }) }),
 		UpdatedAccounts: ({ accounts }) => ({ model: modifyFields(model, { accounts: () => accounts }) }),
+		UpdatedSlas: ({ slas }) => ({ model: modifyFields(model, { slas: () => slas }) }),
 		UpdatedChannels: ({ channels }) => ({ model: modifyFields(model, { channels: () => channels }) }),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
 

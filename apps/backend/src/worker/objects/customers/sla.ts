@@ -247,7 +247,7 @@ const notify = Effect.fn("Customers.notifySlaAlert")(function* (
 		memberId,
 		issueId: issue.id,
 		channelId: issue.threadChannelId ?? issue.sourceChannelId,
-		reason: alert.kind === "breach" ? "sla_breach" : "sla_warning",
+		reason: `sla_${alert.clock}_${alert.kind}`,
 		push: { title: alertTitle(alert, state, accountName, now), body: issue.title },
 	})
 	return true

@@ -13,7 +13,9 @@ import { CommonReason } from "~/lib/error-messages"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
 import { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
 import { FeatureFlagFailure } from "../../../customers/feature-flags"
+import { IssueRow } from "../../../customers/issues"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
+import { IssueSlaRow } from "../../../customers/sla"
 import { CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
@@ -85,6 +87,11 @@ export const Message = defineMessageUnion({
 	SucceededFetchMrrHistory: { accountId: CustomerAccountId, series: Schema.Array(Customers.MetricSeries) },
 	FailedFetchMrrHistory: { accountId: CustomerAccountId, reason: CommonReason },
 	HoveredMrr: { index: Schema.NullOr(Schema.Int) },
+
+	UpdatedSupportIssues: { issues: Schema.Array(IssueRow) },
+	UpdatedSupportSlas: { slas: Schema.Array(IssueSlaRow) },
+	SucceededFetchSupport: { accountId: CustomerAccountId, row: Schema.NullOr(Customers.SupportReportRow) },
+	FailedFetchSupport: { accountId: CustomerAccountId, reason: CommonReason },
 
 	ClickedContactFilter: { filter: ContactFilter },
 	ChangedContactSearch: { value: Schema.String },

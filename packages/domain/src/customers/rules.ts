@@ -19,6 +19,7 @@ const Days = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_WINDOW
 const AgeDays = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 }))
 const Pct = Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1000 }))
 const Count = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100_000 }))
+const GraceMinutes = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1440 }))
 
 /** No contact activity for `inactiveDays`, after ≥ `minPriorActiveUsers` active in the `priorWindowDays` before. */
 export const InactiveConfig = Schema.TaggedStruct("inactive", {
@@ -95,6 +96,16 @@ export const ChurnedConfig = Schema.TaggedStruct("churned", {
 	windowDays: Days,
 })
 
+/** An open support issue's reply is past due by at least `graceMinutes` (`docs/customers/sla.md` §4). */
+export const ResponseOverdueConfig = Schema.TaggedStruct("response_overdue", {
+	graceMinutes: GraceMinutes,
+})
+
+/** An open support issue is past its resolution target by at least `graceMinutes`. */
+export const ResolutionOverdueConfig = Schema.TaggedStruct("resolution_overdue", {
+	graceMinutes: GraceMinutes,
+})
+
 /** A rule's thresholds; the `_tag` is its template. */
 export const RuleConfig = Schema.Union([
 	InactiveConfig,
@@ -108,6 +119,8 @@ export const RuleConfig = Schema.Union([
 	NearLimitConfig,
 	SeatGrowthConfig,
 	ChurnedConfig,
+	ResponseOverdueConfig,
+	ResolutionOverdueConfig,
 ])
 export type RuleConfig = typeof RuleConfig.Type
 
@@ -330,7 +343,34 @@ export const TEMPLATES: TemplateTable = {
 		baselineOnBackfill: false,
 		excludedFromHealth: true,
 	},
+	response_overdue: {
+		template: "response_overdue",
+		kind: "risk",
+		name: "Customer waiting on a reply",
+		description: "A support reply overdue by {graceMinutes}+ minutes",
+		defaultSeverity: "high",
+		defaultConfig: { _tag: "response_overdue", graceMinutes: 0 },
+		requiredSources: [],
+		viz: "overdue",
+		baselineOnBackfill: false,
+		excludedFromHealth: false,
+	},
+	resolution_overdue: {
+		template: "resolution_overdue",
+		kind: "risk",
+		name: "Issue past its resolution target",
+		description: "A support issue past its resolution target by {graceMinutes}+ minutes",
+		defaultSeverity: "medium",
+		defaultConfig: { _tag: "resolution_overdue", graceMinutes: 0 },
+		requiredSources: [],
+		viz: "overdue",
+		baselineOnBackfill: false,
+		excludedFromHealth: false,
+	},
 }
+
+/** The SLA templates: they cover every customer, outside Needs attention's stages and sources. */
+export const SLA_TEMPLATES: ReadonlyArray<SignalTemplate> = ["response_overdue", "resolution_overdue"]
 
 /** `severity` raised by `step` levels, capped at `high`. */
 export const escalate = (floor: SignalSeverity, step: 0 | 1 | 2): SignalSeverity => {

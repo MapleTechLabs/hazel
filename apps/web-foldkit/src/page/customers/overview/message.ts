@@ -16,6 +16,9 @@ export const Message = defineMessageUnion({
 
 	SucceededFetchOverview: { range: Customers.CustomersRange, overview: Customers.OverviewResult },
 	FailedFetchOverview: { range: Customers.CustomersRange, reason: CommonReason },
+	PressedRetrySupport: {},
+	SucceededFetchSupport: { range: Customers.CustomersRange, report: Customers.SupportReport },
+	FailedFetchSupport: { range: Customers.CustomersRange, reason: CommonReason },
 
 	UpdatedSignals: { signals: Schema.Array(SignalRow) },
 	UpdatedAccounts: { accounts: Schema.Array(AccountRow) },

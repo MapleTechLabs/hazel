@@ -622,6 +622,8 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "customer_issue_slas_account_idx" ON "customer_issue_slas" ("accountId")',
 				'CREATE INDEX IF NOT EXISTS "customer_issue_slas_next_alert_idx" ON "customer_issue_slas" ("nextAlertAt")',
 				'INSERT INTO "customer_sla_policies" ("organizationId", "name", "position", "enabled", "appliesTo", "targets", "hours", "warnBeforePct") SELECT "organizationId", \'Standard\', 0, 1, \'{"accountIds":[],"planNames":[],"tagsAny":[]}\', \'{"urgent":{"firstResponseMinutes":60,"resolutionMinutes":480},"high":{"firstResponseMinutes":120,"resolutionMinutes":960},"medium":{"firstResponseMinutes":240,"resolutionMinutes":1440},"low":{"firstResponseMinutes":480,"resolutionMinutes":2400}}\', \'business\', 25 FROM "customer_settings" WHERE NOT EXISTS (SELECT 1 FROM "customer_sla_policies")',
+				'INSERT INTO "customer_signal_rules" ("organizationId", "name", "template", "kind", "severity", "config", "scope", "enabled") SELECT "organizationId", \'Customer waiting on a reply\', \'response_overdue\', \'risk\', \'high\', \'{"_tag":"response_overdue","graceMinutes":0}\', \'{}\', 1 FROM "customer_settings" WHERE NOT EXISTS (SELECT 1 FROM "customer_signal_rules" WHERE "template" = \'response_overdue\')',
+				'INSERT INTO "customer_signal_rules" ("organizationId", "name", "template", "kind", "severity", "config", "scope", "enabled") SELECT "organizationId", \'Issue past its resolution target\', \'resolution_overdue\', \'risk\', \'medium\', \'{"_tag":"resolution_overdue","graceMinutes":0}\', \'{}\', 1 FROM "customer_settings" WHERE NOT EXISTS (SELECT 1 FROM "customer_signal_rules" WHERE "template" = \'resolution_overdue\')',
 			],
 		},
 	],

@@ -10,7 +10,12 @@ import { Effect, Option, Schema } from "effect"
 import { defineEffect, type EffectSender } from "../effects/registry"
 import { PushContent, schedulePush } from "./push"
 
-export const CustomerNotificationReason = Schema.Literals(["sla_warning", "sla_breach"])
+export const CustomerNotificationReason = Schema.Literals([
+	"sla_reply_warning",
+	"sla_reply_breach",
+	"sla_resolution_warning",
+	"sla_resolution_breach",
+])
 export type CustomerNotificationReason = typeof CustomerNotificationReason.Type
 
 export const CreateCustomerNotificationPayload = Schema.Struct({

@@ -5,6 +5,7 @@ import { CommonReason } from "~/lib/error-messages"
 import { ChannelOption } from "../../../customers/channels"
 import { IssueRow } from "../../../customers/issues"
 import { AccountRow, MemberRow } from "../../../customers/queries"
+import { IssueSlaRow } from "../../../customers/sla"
 import * as Menu from "../../../ui/menu"
 import { InboxKey, Tab } from "./model"
 
@@ -18,6 +19,7 @@ export type IssueAction = typeof IssueAction.Type
 export const Message = defineMessageUnion({
 	UpdatedIssues: { issues: Schema.Array(IssueRow) },
 	UpdatedAccounts: { accounts: Schema.Array(AccountRow) },
+	UpdatedSlas: { slas: Schema.Array(IssueSlaRow) },
 	UpdatedChannels: { channels: Schema.Array(ChannelOption) },
 	UpdatedMembers: { members: Schema.Array(MemberRow) },
 
@@ -25,7 +27,7 @@ export const Message = defineMessageUnion({
 	ChangedSearch: { value: Schema.String },
 	ClearedSearch: {},
 	ClearedFilter: {
-		field: Schema.Literals(["assignee", "waitingOnUs", "accountId", "priority", "status"]),
+		field: Schema.Literals(["assignee", "waitingOnUs", "overdue", "accountId", "priority", "status"]),
 	},
 	PressedClearNarrowing: {},
 	PressedShowAllAssignees: {},

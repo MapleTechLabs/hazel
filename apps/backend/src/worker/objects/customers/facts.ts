@@ -12,8 +12,10 @@ import type {
 	LifecycleStage,
 	MetricAggregation,
 	SeriesPoint,
+	SlaState,
+	SlaTargets,
 } from "@hazel/domain/customers"
-import type { CustomerContactId } from "@hazel/schema"
+import type { CustomerContactId, CustomerIssueId } from "@hazel/schema"
 import { addDays, dayRange } from "./time"
 
 export interface ContactFacts {
@@ -36,6 +38,14 @@ export interface HealthPoint {
 	readonly day: Day
 	readonly score: number | null
 	readonly status: HealthStatus
+}
+
+/** An open support issue's SLA clocks (`customer_issue_slas`), for the overdue templates. */
+export interface IssueSlaFacts {
+	readonly issueId: CustomerIssueId
+	readonly title: string
+	readonly state: SlaState
+	readonly targets: SlaTargets
 }
 
 export interface AccountFacts {
@@ -63,6 +73,8 @@ export interface AccountFacts {
 	readonly movements: ReadonlyArray<schema.CustomerMrrMovement>
 	/** Daily health over the loaded window, oldest first (today's once scored). */
 	readonly health: ReadonlyArray<HealthPoint>
+	/** Open (not closed, not deleted) support issues with SLA clocks. */
+	readonly openIssueSlas: ReadonlyArray<IssueSlaFacts>
 }
 
 export interface OrgFacts {

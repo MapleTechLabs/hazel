@@ -9,7 +9,9 @@ import {
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
+import * as Customers from "@hazel/domain/customers"
 import type { IssueRow } from "../../../customers/issues"
+import type { IssueSlaRow } from "../../../customers/sla"
 import type { AccountRow } from "../../../customers/queries"
 import { AppRoute } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -323,5 +325,60 @@ describe("support inbox: keyboard", () => {
 		expect(inboxKeyOf(event("Enter"))).toBe("open")
 		expect(inboxKeyOf({ ...event("a"), metaKey: true })).toBeNull()
 		expect(inboxKeyOf({ ...event("c"), repeat: true })).toBeNull()
+	})
+})
+
+describe("support inbox: SLAs", () => {
+	const ctx: Customers.SlaContext = {
+		targets: Customers.DEFAULT_SLA_POLICY.targets,
+		calendar: { _tag: "always" },
+		warnBeforePct: 25,
+	}
+	/** An SLA row whose reply clock started `hoursAgo` on a medium (4 h) target. */
+	const slaOf = (row: IssueRow, hoursAgo: number): IssueSlaRow => ({
+		id: row.id,
+		accountId: row.accountId,
+		policyName: "Standard",
+		targets: ctx.targets,
+		state: Customers.openSla(ctx, "medium", NOW - hoursAgo * HOUR),
+	})
+	// SSO 6 h in (2 h late), the urgent outage 5 h in (1 h late), Grace's 1 h in (on time).
+	const withSlas = (current: Model) =>
+		pageUpdate(
+			{ ...current, filters: toggleFilter(current.filters, "assignee:mine_or_unassigned") },
+			Message.UpdatedSlas({ slas: [slaOf(sso, 6), slaOf(outage, 5), slaOf(graces, 1)] }),
+		).model
+
+	test("waiting on us sorts overdue first, the latest at the top, before priority", () => {
+		expect(titles(withSlas(loaded()))).toEqual([
+			"SSO login fails",
+			"Dashboard down",
+			"Export is slow",
+			"Invoice question",
+		])
+	})
+
+	test("the Overdue filter keeps issues past a deadline, and clears like the others", () => {
+		const overdue = {
+			...withSlas(loaded()),
+			filters: toggleFilter(withSlas(loaded()).filters, "overdue:true"),
+		}
+		expect(titles(overdue)).toEqual(["SSO login fails", "Dashboard down"])
+		expect(isNarrowed(overdue)).toBe(true)
+		const cleared = pageUpdate(overdue, Message.ClearedFilter({ field: "overdue" })).model
+		expect(cleared.filters.overdue).toBe(false)
+		expect(titles(cleared)).toHaveLength(4)
+	})
+
+	test("an issue answered in time leaves the overdue group as the clock moves on", () => {
+		const answered = Customers.stepSla(ctx, slaOf(sso, 6).state, {
+			_tag: "TeamReply",
+			at: NOW - 3 * HOUR,
+		})
+		const model = pageUpdate(
+			withSlas(loaded()),
+			Message.UpdatedSlas({ slas: [{ ...slaOf(sso, 6), state: answered }] }),
+		).model
+		expect(titles({ ...model, filters: toggleFilter(model.filters, "overdue:true") })).toEqual([])
 	})
 })

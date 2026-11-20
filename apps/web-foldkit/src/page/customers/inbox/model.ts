@@ -12,6 +12,7 @@ import {
 	STATUS_LABEL,
 } from "../../../customers/issues"
 import { AccountRow, type AccountRow as AccountRowType, MemberRow } from "../../../customers/queries"
+import { IssueSlaRow, overdueByMs } from "../../../customers/sla"
 import * as Menu from "../../../ui/menu"
 
 /**
@@ -33,6 +34,8 @@ export const Filters = Schema.Struct({
 	assignee: AssigneeFilter,
 	/** Only issues new or waiting on us. */
 	waitingOnUs: Schema.Boolean,
+	/** Only issues past an SLA deadline (a breached chip). */
+	overdue: Schema.Boolean,
 	accountId: Schema.NullOr(CustomerAccountId),
 	priority: Schema.NullOr(Customers.IssuePriority),
 	status: Schema.NullOr(Customers.IssueStatus),
@@ -42,6 +45,7 @@ export type Filters = typeof Filters.Type
 export const DEFAULT_FILTERS: Filters = {
 	assignee: "mine_or_unassigned",
 	waitingOnUs: false,
+	overdue: false,
 	accountId: null,
 	priority: null,
 	status: null,
@@ -54,6 +58,8 @@ export const Model = Schema.Struct({
 	/** Live rows; null until each query answers. */
 	issues: Schema.NullOr(Schema.Array(IssueRow)),
 	accounts: Schema.NullOr(Schema.Array(AccountRow)),
+	/** The issues' SLA clocks, by issue id; an issue without one has no policy. */
+	slas: Schema.Array(IssueSlaRow),
 	channels: Schema.Array(ChannelOption),
 	members: Schema.Array(MemberRow),
 	selectedId: Schema.NullOr(CustomerIssueId),
@@ -83,6 +89,9 @@ export const tabOf = (issue: IssueRowType): Tab =>
 export const accountsByIdOfModel = (model: Model): ReadonlyMap<string, AccountRowType> =>
 	new Map((model.accounts ?? []).map((account) => [account.id, account]))
 
+export const slasByIdOfModel = (model: Model): ReadonlyMap<string, IssueSlaRow> =>
+	new Map(model.slas.map((sla) => [sla.id, sla]))
+
 const matchesAssignee = (filter: AssigneeFilter, viewer: Viewer, assignee: UserId | null): boolean => {
 	const mine = viewer.userId !== null && assignee === viewer.userId
 	switch (filter) {
@@ -102,6 +111,7 @@ const matchesFilters = (
 	model: Model,
 	viewer: Viewer,
 	accountsById: ReadonlyMap<string, AccountRowType>,
+	slasById: ReadonlyMap<string, IssueSlaRow>,
 	issue: IssueRowType,
 ): boolean => {
 	const { filters } = model
@@ -110,6 +120,7 @@ const matchesFilters = (
 	return (
 		matchesAssignee(filters.assignee, viewer, issue.assigneeUserId) &&
 		(!filters.waitingOnUs || needsReply(issue)) &&
+		(!filters.overdue || overdueByMs(slasById.get(issue.id), viewer.nowMs) !== null) &&
 		(filters.accountId === null || issue.accountId === filters.accountId) &&
 		(filters.priority === null || issue.priority === filters.priority) &&
 		(filters.status === null || issue.status === filters.status) &&
@@ -120,14 +131,30 @@ const matchesFilters = (
 	)
 }
 
-/** Waiting on us first; then the highest priority; then whoever has waited longest. */
-const byOpenOrder = Order.combine(
-	Order.mapInput(Order.flip(Order.Boolean), (issue: IssueRowType) => needsReply(issue)),
-	Order.combine(
-		Order.mapInput(Order.flip(Order.Number), (issue: IssueRowType) => PRIORITY_RANK[issue.priority]),
-		Order.mapInput(Order.Number, (issue: IssueRowType) => waitingSinceMs(issue)),
-	),
-)
+/**
+ * Waiting on us first, overdue ones at its top by how late; then the highest priority; then
+ * whoever has waited longest.
+ */
+const byOpenOrder = (
+	slasById: ReadonlyMap<string, IssueSlaRow>,
+	nowMs: number,
+): Order.Order<IssueRowType> => {
+	const lateness = (issue: IssueRowType) =>
+		needsReply(issue) ? (overdueByMs(slasById.get(issue.id), nowMs) ?? -1) : -1
+	return Order.combine(
+		Order.mapInput(Order.flip(Order.Boolean), (issue: IssueRowType) => needsReply(issue)),
+		Order.combine(
+			Order.mapInput(Order.flip(Order.Number), lateness),
+			Order.combine(
+				Order.mapInput(
+					Order.flip(Order.Number),
+					(issue: IssueRowType) => PRIORITY_RANK[issue.priority],
+				),
+				Order.mapInput(Order.Number, (issue: IssueRowType) => waitingSinceMs(issue)),
+			),
+		),
+	)
+}
 const byClosed = Order.mapInput(Order.flip(Order.Number), (issue: IssueRowType) => issue.closedAtMs ?? 0)
 const byActivity = Order.mapInput(Order.flip(Order.Number), (issue: IssueRowType) => issue.lastMessageAtMs)
 
@@ -143,23 +170,29 @@ const isShown = (issue: IssueRowType, viewer: Viewer): boolean =>
 
 export const visibleIssues = (model: Model, viewer: Viewer): ReadonlyArray<IssueRowType> => {
 	const accountsById = accountsByIdOfModel(model)
+	const slasById = slasByIdOfModel(model)
 	const rows = (model.issues ?? []).filter(
 		(issue) =>
 			tabOf(issue) === model.tab &&
 			isShown(issue, viewer) &&
-			matchesFilters(model, viewer, accountsById, issue),
+			matchesFilters(model, viewer, accountsById, slasById, issue),
 	)
 	return Array.sort(
 		rows,
-		model.tab === "open" ? byOpenOrder : model.tab === "closed" ? byClosed : byActivity,
+		model.tab === "open"
+			? byOpenOrder(slasById, viewer.nowMs)
+			: model.tab === "closed"
+				? byClosed
+				: byActivity,
 	)
 }
 
 export const tabCounts = (model: Model, viewer: Viewer): Readonly<Record<Tab, number>> => {
 	const accountsById = accountsByIdOfModel(model)
+	const slasById = slasByIdOfModel(model)
 	const counts = { open: 0, on_hold: 0, closed: 0 }
 	for (const issue of model.issues ?? []) {
-		if (isShown(issue, viewer) && matchesFilters(model, viewer, accountsById, issue))
+		if (isShown(issue, viewer) && matchesFilters(model, viewer, accountsById, slasById, issue))
 			counts[tabOf(issue)] += 1
 	}
 	return counts
@@ -181,6 +214,7 @@ export const isNarrowed = (model: Model): boolean =>
 	model.search.trim() !== "" ||
 	model.filters.assignee === "unassigned" ||
 	model.filters.waitingOnUs ||
+	model.filters.overdue ||
 	model.filters.accountId !== null ||
 	model.filters.priority !== null ||
 	model.filters.status !== null
@@ -198,6 +232,8 @@ export const clearFilter = (filters: Filters, field: FilterField): Filters => {
 			return { ...filters, assignee: "anyone" }
 		case "waitingOnUs":
 			return { ...filters, waitingOnUs: false }
+		case "overdue":
+			return { ...filters, overdue: false }
 		default:
 			return { ...filters, [field]: null }
 	}
@@ -257,7 +293,10 @@ export const filterEntries = (model: Model): ReadonlyArray<Menu.Entry> => [
 			Menu.item(`assignee:${assignee}`, { textValue: ASSIGNEE_LABEL[assignee] }),
 		),
 	),
-	Menu.section("Waiting", [Menu.item("waitingOnUs:true", { textValue: "Waiting on us" })]),
+	Menu.section("Waiting", [
+		Menu.item("waitingOnUs:true", { textValue: "Waiting on us" }),
+		Menu.item("overdue:true", { textValue: "Overdue" }),
+	]),
 	Menu.section(
 		"Status",
 		Customers.IssueStatus.literals.map((status) =>
@@ -298,6 +337,8 @@ export const toggleFilter = (filters: Filters, key: string): Filters => {
 			}))
 		case "waitingOnUs":
 			return { ...filters, waitingOnUs: !filters.waitingOnUs }
+		case "overdue":
+			return { ...filters, overdue: !filters.overdue }
 		case "status":
 			return apply(Customers.IssueStatus, (status) => ({
 				...filters,

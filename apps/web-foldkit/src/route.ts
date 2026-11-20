@@ -110,6 +110,8 @@ export const AppRoute = defineRouteUnion({
 	CustomersAttention: { orgSlug: Schema.String },
 	/** Support issues across the linked channels (`docs/customers/issues.md`). */
 	CustomersInbox: { orgSlug: Schema.String },
+	/** Response times, % within SLA and breaches over a range (`docs/customers/sla.md`). */
+	CustomersSupportReport: { orgSlug: Schema.String },
 	/** `?view=`: a saved view's id, or a built-in view's key (`BuiltInViewKey`, e.g. `at_risk`). */
 	CustomersList: { orgSlug: Schema.String, view: Schema.Option(Schema.String) },
 	/** One customer; `?tab=` picks the tab (none: overview). */
@@ -337,6 +339,10 @@ const routers = {
 	CustomersOverview: pipe(orgPath("customers"), Route.mapTo(AppRoute.CustomersOverview)),
 	CustomersAttention: pipe(orgPath("customers", "attention"), Route.mapTo(AppRoute.CustomersAttention)),
 	CustomersInbox: pipe(orgPath("customers", "inbox"), Route.mapTo(AppRoute.CustomersInbox)),
+	CustomersSupportReport: pipe(
+		orgPath("customers", "support"),
+		Route.mapTo(AppRoute.CustomersSupportReport),
+	),
 	CustomersList: pipe(
 		orgPath("customers", "list"),
 		query(ListViewQuery),
@@ -449,6 +455,7 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		// Literal segments before `$accountId`, `$ruleId` and `$provider`.
 		routers.CustomersAttention,
 		routers.CustomersInbox,
+		routers.CustomersSupportReport,
 		routers.CustomersList,
 		routers.CustomersSettingsSignals,
 		routers.CustomersSettingsSignalNew,
@@ -542,6 +549,7 @@ export const isCustomersRoute = AppRoute.isAnyOf([
 	"CustomersOverview",
 	"CustomersAttention",
 	"CustomersInbox",
+	"CustomersSupportReport",
 	"CustomersList",
 	"CustomerDetail",
 	"CustomersSettingsSignals",

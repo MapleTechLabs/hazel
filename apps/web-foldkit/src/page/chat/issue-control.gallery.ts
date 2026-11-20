@@ -7,19 +7,22 @@ import type { HtmlBuilder } from "foldkit/html"
 import { afterEach, expect, test } from "vitest"
 import { page } from "vitest/browser"
 import { MAYA, TEAM } from "../../lab/fixtures/customers"
-import { ISSUES } from "../../lab/fixtures/issues"
+import { ISSUE_SLAS, ISSUES } from "../../lab/fixtures/issues"
+import { NOW } from "../../lab/fixtures/customers"
 import * as IssueControl from "./issue-control"
 
 /**
  * The thread panel's issue strip (`issue-control.ts`) in a panel-wide frame under a stand-in thread
- * header, in light and dark (`bun run gallery`): an open issue, a closed one, and "Create issue".
+ * header, in light and dark (`bun run gallery`): an overdue issue, one on time, a closed one (its
+ * first reply met), and "Create issue".
  */
 
-const STATES = ["issue", "closed", "create"] as const
+const STATES = ["issue", "on-time", "closed", "create"] as const
 type State = (typeof STATES)[number]
 
 const modelOf = (state: State): IssueControl.Model => {
-	const sample = ISSUES[1]
+	const index = state === "on-time" ? 2 : state === "closed" ? 6 : 1
+	const sample = ISSUES[index]
 	if (sample === undefined) throw new Error("The issue fixtures are empty")
 	const base = IssueControl.init(sample.rootMessageId)
 	const issue =
@@ -27,10 +30,15 @@ const modelOf = (state: State): IssueControl.Model => {
 			? null
 			: {
 					...sample,
-					status: state === "closed" ? ("closed" as const) : sample.status,
 					assigneeUserId: MAYA.id,
 				}
-	return { ...base, issue, hasLoaded: true, members: TEAM }
+	return {
+		...base,
+		issue,
+		sla: issue === null ? null : (ISSUE_SLAS[index] ?? null),
+		hasLoaded: true,
+		members: TEAM,
+	}
 }
 
 const render = (state: State) => {
@@ -52,12 +60,13 @@ const render = (state: State) => {
 									"flex h-12 items-center border-border border-b px-3 font-medium text-sm",
 								),
 							],
-							["Thread · SSO login loops back to the sign-in page"],
+							[`Thread · ${model.issue?.title ?? "Webhook retries flooded our endpoint"}`],
 						),
 						IssueControl.view(h, {
 							model,
 							inboxHref: "/lab/customers/inbox",
 							currentUserId: MAYA.id,
+							nowMs: NOW.getTime(),
 							toMessage: (message) => message,
 						}),
 						h.div([h.Class("h-24 px-3 py-2 text-muted-fg text-sm")], ["Replies"]),

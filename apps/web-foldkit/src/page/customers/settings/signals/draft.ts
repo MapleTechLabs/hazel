@@ -33,6 +33,8 @@ const CONFIG_FIELDS = {
 	near_limit: Customers.NearLimitConfig.fields,
 	seat_growth: Customers.SeatGrowthConfig.fields,
 	churned: Customers.ChurnedConfig.fields,
+	response_overdue: Customers.ResponseOverdueConfig.fields,
+	resolution_overdue: Customers.ResolutionOverdueConfig.fields,
 } satisfies Record<Customers.SignalTemplate, Schema.Struct.Fields>
 
 /** How a numeric config field reads in its error (the bounds of `rules.ts`'s `Days`, `AgeDays`, `Pct`, `Count`). */
@@ -41,6 +43,7 @@ const FIELD_ERROR = {
 	ageDays: "Whole days, 1 to 365",
 	pct: "A percentage, 0 to 1,000",
 	count: "A whole number, 0 to 100,000",
+	graceMinutes: "Whole minutes, 0 to 1,440",
 } as const
 
 const FIELD_KIND = new Map<string, keyof typeof FIELD_ERROR>([
@@ -62,6 +65,7 @@ const FIELD_KIND = new Map<string, keyof typeof FIELD_ERROR>([
 	["windowDays", "days"],
 	["thresholdPct", "pct"],
 	["growthPct", "pct"],
+	["graceMinutes", "graceMinutes"],
 ])
 
 const numberOf = (text: string): number => (text.trim() === "" ? Number.NaN : Number(text))
