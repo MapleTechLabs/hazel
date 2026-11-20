@@ -25,6 +25,7 @@ import { idleRowContext, rowContextFor, threadRowContextFor } from "../row-conte
 import type { DisplayRow, MessageRow } from "../rows"
 import { chatTabBarView } from "../tab-bar"
 import { threadPanelView } from "../thread-panel"
+import * as IssueControl from "../issue-control"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
 import { threadPanelWidthOf } from "./thread-width"
@@ -45,6 +46,7 @@ const toHtmlRenderMessage = (message: HtmlRender.Message) => Message.GotHtmlRend
 const toPressEdge = (clientX: number, startWidth: number, maxWidth: number) =>
 	Message.PressedThreadPanelEdge({ clientX, startWidth, maxWidth })
 const toNudgeEdge = (delta: number) => Message.PressedThreadPanelEdgeKey({ delta })
+const toIssueControlMessage = (message: IssueControl.Message) => Message.GotIssueControlMessage({ message })
 const toPinnedMessage = (message: Parameters<typeof Overlays.Message.GotPinnedMessage>[0]["message"]) =>
 	toOverlay(Overlays.Message.GotPinnedMessage({ message }))
 
@@ -435,6 +437,7 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						starterRowOf(model, model.threadPanel.messageId),
 						model.currentUserId,
 						model.orgSlug,
+						model.customer !== null,
 						threadPanelWidthOf(model),
 						model.threadPanelDrag !== null,
 						// Only what the panel's frames read: not the fullscreen dialog or the theme's variables.
@@ -464,6 +467,7 @@ const threadPanelOverlay = (
 	originalRow: MessageRow | null,
 	currentUserId: Model["currentUserId"],
 	orgSlug: Model["orgSlug"],
+	isLinked: boolean,
 	width: number,
 	isResizing: boolean,
 	urls: HtmlRender.Model["urls"],
@@ -502,6 +506,14 @@ const threadPanelOverlay = (
 		isGeneratingName: panel.isNaming,
 		isCreating: panel.creation === "Creating",
 		trackHover: trackHoverAttribute(h),
+		issueControl: isLinked
+			? IssueControl.view(h, {
+					model: panel.issue,
+					inboxHref: hrefOf(AppRoute.CustomersInbox({ orgSlug })),
+					currentUserId,
+					toMessage: toIssueControlMessage,
+				})
+			: h.empty,
 		composer: draftView(h, panel.draft, {
 			toMessage: toThreadDraftMessage,
 			replyPreview: replyPreviewOf(

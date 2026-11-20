@@ -11,6 +11,7 @@ import {
 	unpinMessageAction,
 } from "~/db/actions"
 import { CommonReason } from "~/lib/error-messages"
+import { createIssueFromMessageAction } from "../../customers/issues"
 import { HazelRpc } from "../../rpc"
 import { catchCommon } from "../../data/actions"
 
@@ -72,6 +73,13 @@ export type PressEmbedActionFailure = typeof PressEmbedActionFailure.Type
 export const UnpinMessageFailure = Schema.Union([Schema.Literals(["PinNotFound"]), CommonReason])
 export type UnpinMessageFailure = typeof UnpinMessageFailure.Type
 
+/** What can go wrong opening a support issue on a message, beyond the shared reasons. */
+export const CreateIssueFailure = Schema.Union([
+	Schema.Literals(["NotFound", "InvalidRequest"]),
+	CommonReason,
+])
+export type CreateIssueFailure = typeof CreateIssueFailure.Type
+
 // MESSAGE
 
 export const ActionMessage = defineMessageUnion({
@@ -96,6 +104,8 @@ export const ActionMessage = defineMessageUnion({
 	FailedJoinChannel: { reason: JoinChannelFailure },
 	SucceededPressEmbedAction: {},
 	FailedPressEmbedAction: { reason: PressEmbedActionFailure },
+	SucceededCreateIssue: { messageId: MessageId },
+	FailedCreateIssue: { messageId: MessageId, reason: CreateIssueFailure },
 })
 export type ActionMessage = typeof ActionMessage.Type
 /** `ActionMessage` under the Submodel name, so a parent's Got wrapper imports it as `Message`. */
@@ -329,4 +339,25 @@ export const JoinChannel = Command.define("JoinChannel", {
 			}),
 			catchCommon((reason) => ActionMessage.FailedJoinChannel({ reason })),
 		),
+})
+
+/**
+ * "Create issue" on a top-level message of a channel linked to a customer (the message action and
+ * the thread panel's button). The server answers a message's existing issue as it is.
+ */
+export const CreateIssueFromMessage = Command.define("CreateIssueFromMessage", {
+	args: { organizationId: OrganizationId, channelId: ChannelId, messageId: MessageId },
+	messages: [ActionMessage.SucceededCreateIssue, ActionMessage.FailedCreateIssue],
+	execute: (args) => {
+		const failed = (reason: CreateIssueFailure) =>
+			ActionMessage.FailedCreateIssue({ messageId: args.messageId, reason })
+		return createIssueFromMessageAction(args).pipe(
+			Effect.as(ActionMessage.SucceededCreateIssue({ messageId: args.messageId })),
+			Effect.catchTags({
+				CustomersNotFoundError: () => Effect.succeed(failed("NotFound")),
+				CustomersInvalidRequestError: () => Effect.succeed(failed("InvalidRequest")),
+			}),
+			catchCommon(failed),
+		)
+	},
 })

@@ -11,6 +11,7 @@ import {
 	IconLink,
 	IconReply,
 	IconStar,
+	IconSupport,
 	IconThread,
 	IconTrash,
 	IconUnpin,
@@ -128,6 +129,7 @@ const contextMenuContent =
 		if (key === "reply") return contextItem(h, key, "Reply", icon(IconReply))
 		if (key === "edit") return contextItem(h, key, "Edit Message", icon(IconEdit))
 		if (key === "thread") return contextItem(h, key, "Reply in Thread", icon(IconThread))
+		if (key === "create-issue") return contextItem(h, key, "Create Issue", icon(IconSupport))
 		if (key === "copy") return contextItem(h, key, "Copy Text", icon(IconCopy))
 		if (key === Overlays.COPY_IMAGE) return contextItem(h, key, "Copy Image", icon(IconCopy))
 		if (key === Overlays.COPY_IMAGE_URL) return contextItem(h, key, "Copy Image Address", icon(IconLink))
@@ -148,6 +150,7 @@ const nativeSymbols = (isPinned: boolean): Readonly<Record<string, string>> => (
 	reply: "arrowshape.turn.up.left",
 	edit: "pencil",
 	thread: "bubble.left.and.bubble.right",
+	"create-issue": "lifepreserver",
 	copy: "doc.on.doc",
 	pin: isPinned ? "pin.slash" : "pin",
 	delete: "trash",
@@ -172,6 +175,10 @@ const rowLongPress = (
 		isOwnMessage: () => row.message.authorId === currentUserId,
 		isPinned: () => isPinned,
 		canStartThread: () => canStartThreadIn(channel.type, channel.id, row.message.channelId),
+		// The long-press menu is shared by every row: it offers "Create issue" on every top-level
+		// message of a linked channel (the server answers an existing issue as it is).
+		canCreateIssue: () =>
+			channel.isLinked && canStartThreadIn(channel.type, channel.id, row.message.channelId),
 	}
 	const items = Menu.nativeMenuItems(
 		UNSELECTED_MENU,
@@ -196,11 +203,14 @@ const rowLongPress = (
 interface ChannelFacts {
 	readonly id: Model["channelId"]
 	readonly type: string | null
+	/** Linked to a customer: its top-level messages can open a support issue. */
+	readonly isLinked: boolean
 }
 
 const channelFactsOf = (model: Model): ChannelFacts => ({
 	id: model.channelId,
 	type: model.channel?.type ?? null,
+	isLinked: model.customer !== null,
 })
 
 const userNamesOf = (users: Model["lookups"]["users"]) =>
@@ -340,7 +350,7 @@ export const idleRowContext = (h: H, model: Model): RowContext<Message> => {
 	const byUser = idleContexts.get(model.lookups.users) ?? new Map<string, RowContext<Message>>()
 	const channel = channelFactsOf(model)
 	// What the context reads besides the user list: whose rows these are, and in what channel.
-	const key = `${model.currentUserId ?? ""}:${channel.id}:${channel.type ?? ""}`
+	const key = `${model.currentUserId ?? ""}:${channel.id}:${channel.type ?? ""}:${channel.isLinked}`
 	const cached = byUser.get(key)
 	if (cached !== undefined) return cached
 	const context = buildIdleContext(h, model.lookups.users, model.currentUserId, channel)

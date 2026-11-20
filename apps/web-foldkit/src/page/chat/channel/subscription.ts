@@ -31,6 +31,9 @@ import {
 import type { PageSubscriptionInput } from "../../contract"
 import { channelCustomerStream } from "../../../customers/channels"
 import { linkedChannelAuthorsStream } from "../../../customers/chat-authors"
+import { issueAtMessageStream } from "../../../customers/issues"
+import { orgMembersStream } from "../../../customers/queries"
+import * as IssueControl from "../issue-control"
 import * as Composer from "../../../composer/composer"
 import {
 	botCommandsStream,
@@ -72,6 +75,17 @@ const shownChannelsOf = ({ model }: Input) => ({
 	channelId: model.channelId,
 	channelIds: shownChannelIdsOf(model),
 })
+
+/**
+ * The org whose customers source the page's support issues read: only while the channel is linked
+ * to a customer, so an unlinked channel never opens it.
+ */
+export const issueOrganizationIdOf = (model: Model): OrganizationId | null =>
+	model.customer !== null && model.channel !== null && model.channel.type !== "thread"
+		? model.channel.organizationId
+		: null
+
+const toIssueControl = (message: IssueControl.Message) => Message.GotIssueControlMessage({ message })
 
 const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 	chatChannel: entry(byChannel, {
@@ -346,6 +360,63 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		dependenciesToStream: ({ channelId }) =>
 			channelCustomerStream(channelId, (customer) => Message.UpdatedCustomer({ channelId, customer })),
 	}),
+	// Which top-level messages already have an issue, so "Create issue" hides on them.
+	chatIssueRoots: entry(
+		{ channelId: ChannelId, organizationId: Schema.NullOr(OrganizationId) },
+		{
+			modelToDependencies: ({ model }) => ({
+				channelId: model.channelId,
+				organizationId: issueOrganizationIdOf(model),
+			}),
+			dependenciesToStream: ({ channelId, organizationId }) =>
+				organizationId === null
+					? Stream.make(Message.UpdatedIssueRoots({ channelId, rootMessageIds: [] }))
+					: IssueControl.issueRootIdsStream(organizationId, channelId, (rootMessageIds) =>
+							Message.UpdatedIssueRoots({ channelId, rootMessageIds }),
+						),
+		},
+	),
+	// The open thread's issue (its starter message is the issue's root), in a linked channel.
+	chatThreadIssue: entry(
+		{
+			organizationId: Schema.NullOr(OrganizationId),
+			channelId: ChannelId,
+			rootMessageId: Schema.NullOr(MessageId),
+		},
+		{
+			modelToDependencies: ({ model }) => {
+				const organizationId = issueOrganizationIdOf(model)
+				return {
+					organizationId,
+					channelId: model.channelId,
+					rootMessageId: organizationId === null ? null : (model.threadPanel?.messageId ?? null),
+				}
+			},
+			dependenciesToStream: ({ organizationId, channelId, rootMessageId }) =>
+				organizationId === null || rootMessageId === null
+					? Stream.empty
+					: issueAtMessageStream(organizationId, channelId, rootMessageId, (issue) =>
+							toIssueControl(IssueControl.Message.UpdatedIssue({ rootMessageId, issue })),
+						),
+		},
+	),
+	// The assignee menu's people, while a linked channel's thread is open.
+	// Keyed by the thread too: a new panel starts with no members and needs them sent again.
+	chatIssueMembers: entry(
+		{ organizationId: Schema.NullOr(OrganizationId), rootMessageId: Schema.NullOr(MessageId) },
+		{
+			modelToDependencies: ({ model }) => ({
+				organizationId: model.threadPanel === null ? null : issueOrganizationIdOf(model),
+				rootMessageId: model.threadPanel?.messageId ?? null,
+			}),
+			dependenciesToStream: ({ organizationId }) =>
+				organizationId === null
+					? Stream.empty
+					: orgMembersStream(organizationId, (members) =>
+							toIssueControl(IssueControl.Message.UpdatedMembers({ members })),
+						),
+		},
+	),
 	chatMembers: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>

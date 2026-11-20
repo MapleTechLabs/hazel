@@ -33,6 +33,7 @@ import {
 	UserInfo,
 } from "../lookups"
 import * as FilesPage from "../files/page"
+import * as IssueControl from "../issue-control"
 import { Message as ActionMessage } from "../message-actions"
 import * as Overlays from "../overlays"
 import { ChannelInfo, ParentChannelInfo } from "../queries"
@@ -93,6 +94,8 @@ export const ThreadPanel = Schema.Struct({
 	rows: Schema.Array(DisplayRow.MessageRow),
 	/** The thread's pins: a reply is unpinned by its pin's id, like a channel message. */
 	pins: Schema.Array(PinnedInfo),
+	/** The support issue at the starter message, when the channel is linked to a customer. */
+	issue: IssueControl.Model,
 })
 export type ThreadPanel = typeof ThreadPanel.Type
 
@@ -128,6 +131,8 @@ export const Model = Schema.Struct({
 	pinned: Schema.Array(PinnedInfo),
 	/** The customer the channel is linked to (`channel_customers`); null when none. */
 	customer: Schema.NullOr(ChannelCustomerRow),
+	/** Top-level messages of the (linked) channel that already have a support issue. */
+	issueRootIds: Schema.Array(MessageId),
 	typing: Schema.Array(TypingInfo),
 	typingNowMs: Schema.Number,
 	/** First names of the other members typing now (`useTypingIndicators`), derived in `update`. */
@@ -231,6 +236,10 @@ export const Message = defineMessageUnion({
 	UpdatedPinned: { pins: Schema.Array(PinnedInfo) },
 	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
 	UpdatedCustomer: { channelId: ChannelId, customer: Schema.NullOr(ChannelCustomerRow) },
+	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
+	UpdatedIssueRoots: { channelId: ChannelId, rootMessageIds: Schema.Array(MessageId) },
+	/** The thread panel's support issue control. */
+	GotIssueControlMessage: { message: IssueControl.Message },
 	/** The open thread's messages, oldest first; tagged with the thread they were queried for. */
 	UpdatedThreadPanelMessages: { threadChannelId: ChannelId, messages: Schema.Array(ChatMessage) },
 	/** The open thread's pins; tagged with the thread they were queried for. */
