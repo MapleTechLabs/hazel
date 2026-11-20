@@ -269,3 +269,21 @@ describe("edge cases from review", () => {
 		expect(scoreChannel(evidence({ channelName: "gmail-users" }), padded)).toEqual([])
 	})
 })
+
+describe("auto-link denominator", () => {
+	it("counts Connect guests whose email is unknown", () => {
+		const result = scoreChannel(
+			evidence({
+				origin: "connect",
+				externalMembers: [member("ana@acme.com"), member(null), member(null)],
+			}),
+			index(),
+		)
+		expect(result[0]).toMatchObject({ accountId: acme, autoLink: false })
+		const half = scoreChannel(
+			evidence({ origin: "connect", externalMembers: [member("ana@acme.com"), member(null)] }),
+			index(),
+		)
+		expect(half[0]).toMatchObject({ accountId: acme, autoLink: true })
+	})
+})

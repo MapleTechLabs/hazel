@@ -467,20 +467,21 @@ export const scoreChannel = (
 	if (sampled) return ranked
 	const byEmail = (suggestion: ScoredSuggestion) =>
 		suggestion.reasons.some((reason) => reason.kind === "contacts" || reason.kind === "domain")
+	// Every Connect guest counts, its email known or not (only the known ones can match).
+	const connectGuests = evidence.externalMembers.filter((member) => member.source === "connect")
 	const guests = [
 		...new Set(
-			evidence.externalMembers.flatMap((member) =>
-				member.source !== "connect" || member.email === null
-					? []
-					: [member.email.trim().toLowerCase()],
+			connectGuests.flatMap((member) =>
+				member.email === null ? [] : [member.email.trim().toLowerCase()],
 			),
 		),
 	]
+	const guestCount = guests.length + connectGuests.filter((member) => member.email === null).length
 	const guestContacts = guests.filter((email) =>
 		(index.contactEmails.get(email) ?? []).includes(best.accountId),
 	).length
 	const rivals = scored.some((other) => other.accountId !== best.accountId && byEmail(other))
-	const autoLink = guestContacts > 0 && guestContacts * 2 >= guests.length && !rivals
+	const autoLink = guestContacts > 0 && guestContacts * 2 >= guestCount && !rivals
 	return autoLink ? [{ ...best, autoLink }, ...ranked.slice(1)] : ranked
 }
 
