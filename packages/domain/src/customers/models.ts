@@ -4,7 +4,7 @@
  *
  * Synced (client collections): `Account`, `Signal`, `SignalRule`, `SlaPolicy`, `Note`, `SavedView`, `ViewLayout`, `Settings`,
  * `MetricDefinition`, `Connection`, `SyncRun`, `ChannelLink`, `FeatureFlag`, `Impersonator`,
- * `Impersonation` (admins only). The rest travel in RPC results.
+ * `Impersonation` (admins only), `Issue`. The rest travel in RPC results.
  */
 import {
 	ChannelId,
@@ -19,6 +19,7 @@ import {
 	CustomerImpersonationId,
 	CustomerImpersonatorId,
 	CustomerInvoiceId,
+	CustomerIssueId,
 	CustomerMetricDefinitionId,
 	CustomerNoteId,
 	CustomerSavedViewId,
@@ -30,6 +31,7 @@ import {
 	CustomerSyncRunId,
 	CustomerUnmatchedRecordId,
 	CustomerViewLayoutId,
+	MessageId,
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
@@ -47,6 +49,8 @@ import {
 	HealthStatus,
 	IgnoreRuleField,
 	InvoiceStatus,
+	IssuePriority,
+	IssueStatus,
 	LifecycleStage,
 	MatchMethod,
 	MetricAggregation,
@@ -235,6 +239,42 @@ class ChannelLinkModel extends M.Class<ChannelLinkModel>("CustomerChannelLink")(
 }) {}
 export const ChannelLink = M.expose(ChannelLinkModel)
 export type ChannelLink = typeof ChannelLink.Schema.Type
+
+/**
+ * A support issue: a conversation a customer started in a linked channel (`docs/customers/issues.md`).
+ * Its timestamps are the SLA contract.
+ */
+class IssueModel extends M.Class<IssueModel>("CustomerIssue")({
+	id: M.GeneratedOptional(CustomerIssueId),
+	organizationId: OrganizationId,
+	accountId: CustomerAccountId,
+	sourceChannelId: ChannelId,
+	rootMessageId: MessageId,
+	threadChannelId: S.NullOr(ChannelId),
+	joinedMessageIds: S.Array(MessageId),
+	openedByUserId: UserId,
+	createdByUserId: S.NullOr(UserId),
+	title: S.String,
+	status: IssueStatus,
+	priority: IssuePriority,
+	assigneeUserId: S.NullOr(UserId),
+	tags: S.Array(S.String),
+	openedAt: JsonDate,
+	firstCustomerMessageAt: NullDate,
+	lastCustomerMessageAt: NullDate,
+	firstTeamReplyAt: NullDate,
+	lastTeamReplyAt: NullDate,
+	lastMessageAt: JsonDate,
+	closedAt: NullDate,
+	closedByUserId: S.NullOr(UserId),
+	reopenCount: S.Int,
+	reopenedAt: NullDate,
+	messageCount: S.Int,
+	...timestamps,
+	deletedAt: M.GeneratedByApp(NullDate),
+}) {}
+export const Issue = M.expose(IssueModel)
+export type Issue = typeof Issue.Schema.Type
 
 /** A feature flag created in Hazel (one no customer may hold yet); see `customer_feature_flags`. */
 class FeatureFlagModel extends M.Class<FeatureFlagModel>("CustomerFeatureFlag")({

@@ -2,18 +2,20 @@
  * Effects a `CustomersObject` receives (`docs/customers/tech-design.md` §1): its org's members,
  * projected by the `OrgObject` whenever a membership or role changes, and pulled once by the
  * customers object itself when it has none (`org.customerMembers`); and the org's deletion (an empty
- * snapshot with `organizationDeleted`), which shuts the customers object down.
+ * snapshot with `organizationDeleted`), which shuts the customers object down; and the messages
+ * of linked channels, relayed by the `OrgObject` for support issues (`../customers/issues.ts`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { DEFAULT_CONNECTION_CONFIG } from "@hazel/domain/customers"
 import { OrganizationMember } from "@hazel/domain/models"
-import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import { publishChannelCustomers } from "../customers/channels"
 import { CUSTOMER_CHAT_KINDS, customerChatReceivers } from "../customers/chat"
 import { CustomerChatEffects } from "../customer-chat-wire"
 import { disconnectConnections } from "../customers/credentials"
+import { receiveSupportMessageDeleted } from "../customers/issues"
 import { inList } from "../customers/sql"
 import { stopComputing } from "../customers/schedule"
 import { readObjectMeta, writeObjectMeta } from "../meta"
@@ -40,11 +42,24 @@ export type SetMembersPayload = typeof SetMembersPayload.Type
 export const ChannelDeletedPayload = Schema.Struct({ organizationId: OrganizationId, channelId: ChannelId })
 export type ChannelDeletedPayload = typeof ChannelDeletedPayload.Type
 
+/** A support issue's root message was deleted in a linked channel (`../customers/issues.ts`). */
+export const SupportMessageDeletedPayload = Schema.Struct({
+	organizationId: OrganizationId,
+	channelId: ChannelId,
+	messageId: MessageId,
+})
+export type SupportMessageDeletedPayload = typeof SupportMessageDeletedPayload.Type
+
 export const CustomersEffects = {
 	setMembers: defineEffect("customers.setMembers", "customers", SetMembersPayload),
 	channelDeleted: defineEffect("customers.channelDeleted", "customers", ChannelDeletedPayload),
 	/** Who writes in the linked channels (`../customers/chat.ts`). */
 	...CustomerChatEffects,
+	supportMessageDeleted: defineEffect(
+		"customers.supportMessageDeleted",
+		"customers",
+		SupportMessageDeletedPayload,
+	),
 }
 
 /** The `version` of the last applied `setMembers`. */
@@ -98,6 +113,8 @@ const CUSTOMER_DATA: ReadonlyArray<Parameters<typeof SQLite.deleteFrom>[0]> = [
 	schema.customerUnmatchedRecordsTable,
 	schema.customerIgnoreRulesTable,
 	schema.customerChannelLinksTable,
+	schema.customerIssuesTable,
+	schema.customerIssueMessagesTable,
 	schema.customerImpersonatorsTable,
 	schema.customerImpersonationsTable,
 	schema.customerChatParticipantsTable,
@@ -181,10 +198,11 @@ export const customersReceivers = {
 		}),
 	"customers.channelDeleted": (payload) => dropDeletedChannel(payload),
 	...customerChatReceivers,
+	"customers.supportMessageDeleted": (payload) => receiveSupportMessageDeleted(payload),
 } satisfies EffectReceivers<typeof CustomersEffects, Database.Database | SqlClient>
 
 /**
- * Only this org's `OrgObject` sends members, deleted channels and chat authors, and only to its own
+ * Only this org's `OrgObject` sends members, deleted channels, chat authors and deleted support messages, and only to its own
  * customers object.
  */
 export const customersSenderRefusal = (kind: string, payload: unknown, sender: EffectSender) =>
@@ -192,6 +210,7 @@ export const customersSenderRefusal = (kind: string, payload: unknown, sender: E
 		if (
 			kind !== CustomersEffects.setMembers.name &&
 			kind !== CustomersEffects.channelDeleted.name &&
+			kind !== CustomersEffects.supportMessageDeleted.name &&
 			!CUSTOMER_CHAT_KINDS.has(kind)
 		) {
 			return Option.none<string>()

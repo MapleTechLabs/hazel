@@ -127,6 +127,8 @@ export const customersTables = [
 	schema.customerUnmatchedRecordsTable,
 	schema.customerIgnoreRulesTable,
 	schema.customerChannelLinksTable,
+	schema.customerIssuesTable,
+	schema.customerIssueMessagesTable,
 	schema.customerFeatureFlagsTable,
 	schema.customerImpersonatorsTable,
 	schema.customerImpersonationsTable,

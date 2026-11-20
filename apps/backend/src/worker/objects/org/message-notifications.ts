@@ -19,6 +19,7 @@ import { enqueueEffect, defineEffect } from "../effects/registry"
 import { MessageNotificationEffects } from "../user/message-notifications"
 import { recordCustomerChatMessage } from "./customer-chat"
 import { loadPushContent } from "./push-content"
+import { relaySupportMessageDeleted } from "./support-relay"
 
 export const MessageCreatedPayload = Schema.Struct({
 	channelId: ChannelId,
@@ -36,6 +37,8 @@ export const MessageCreatedPayload = Schema.Struct({
 	attachmentCount: Schema.optional(Schema.Number),
 	/** ISO send time. Optional: deliveries enqueued before it have none. */
 	createdAt: Schema.optional(Schema.String),
+	/** A thread reply's root message (in the parent channel), for support issues. */
+	threadRootMessageId: Schema.optional(Schema.NullOr(MessageId)),
 })
 export type MessageCreatedPayload = typeof MessageCreatedPayload.Type
 
@@ -176,6 +179,11 @@ export const messageDeleted = Effect.fn("OrgEffects.messageDeleted")(function* (
 		),
 	)
 	if (channel._tag === "None") return
+	yield* relaySupportMessageDeleted({
+		organizationId: channel.value.organizationId,
+		channel: channel.value,
+		messageId: input.messageId,
+	})
 	const db = yield* Database.Database
 	const members = yield* db.run(
 		SQLite.from(schema.channelMembersTable)

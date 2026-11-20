@@ -73,5 +73,5 @@ account and sends a new snapshot.
 
 - Suggest links: Slack Connect / Discord guild ids and Connect guest org domains matched to
   account domains.
-- Issues from messages. SLAs and response times: `sla.md`.
+- Support issues: `issues.md`; SLAs and response times: `sla.md`.
 - Account context in the channel (health, MRR, open signals) without opening Customers.

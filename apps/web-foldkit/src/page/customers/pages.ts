@@ -1,5 +1,6 @@
 import * as CustomersAttention from "./attention"
 import * as CustomerDetail from "./detail"
+import * as CustomersInbox from "./inbox"
 import * as CustomersList from "./list"
 import * as CustomersOverview from "./overview"
 import * as CustomersSettingsHealth from "./settings/health"
@@ -14,6 +15,7 @@ import * as CustomersUnmatched from "./settings/unmatched"
 export const pages = [
 	CustomersOverview.page,
 	CustomersAttention.page,
+	CustomersInbox.page,
 	CustomersList.page,
 	CustomerDetail.page,
 	CustomersSettingsSignals.page,

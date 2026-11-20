@@ -78,6 +78,8 @@ const PAYLOADS = {
 	"customers.account.bulkUpdate": { accountIds: [] },
 	"customers.channel.link": { accountId: uuid(), channelId: uuid() },
 	"customers.channel.unlink": { channelId: uuid() },
+	"customers.issue.update": { issueId: uuid(), status: "closed" },
+	"customers.issue.createFromMessage": { channelId: uuid(), messageId: uuid() },
 	"customers.view.create": { view: viewDraft, shared: true },
 	"customers.view.update": { viewId: uuid(), view: viewDraft },
 	"customers.view.delete": { viewId: uuid() },
