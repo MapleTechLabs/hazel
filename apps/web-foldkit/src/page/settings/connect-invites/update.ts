@@ -265,7 +265,13 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						commands: [AcceptInvite({ inviteId, guestOrganizationId: shared.organization.id })],
 					},
 		SucceededAccept: ({ inviteId, conversationId, transactionId }) => {
-			const listed = refetch(modifyFields(model, { acceptingIds: (ids) => without(ids, inviteId) }))
+			// A newer share supersedes an older channel's pending retry.
+			const listed = refetch(
+				modifyFields(model, {
+					acceptingIds: (ids) => without(ids, inviteId),
+					retryChannelId: () => null,
+				}),
+			)
 			const organizationId = shared.organization?.id
 			const toast = PageOutMessage.RequestedToast({ toast: successToast("Channel connected") })
 			// A channel shared with this org may be a customer's: find it, then ask (members only).
@@ -290,7 +296,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		FoundJoinedChannel: ({ channelId }) => {
 			const organizationId = shared.organization?.id
 			if (channelId === null || organizationId === undefined || shared.member === null) return { model }
-			return withSuggestion(model, SuggestionPrompt.request(organizationId, channelId))
+			return withSuggestion(
+				modifyFields(model, { retryChannelId: () => null }),
+				SuggestionPrompt.request(organizationId, channelId),
+			)
 		},
 		GotSuggestionMessage: ({ message: promptMessage }) => {
 			// A failed fetch for the asked channel: kept, so the next shared change asks again.

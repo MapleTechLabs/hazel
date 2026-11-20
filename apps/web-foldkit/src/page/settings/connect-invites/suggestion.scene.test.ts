@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
+import { ChannelId, ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as Scene from "foldkit/scene"
 import { describe, expect, test } from "vitest"
@@ -120,5 +120,21 @@ describe("connect invitations: a failed suggestion fetch", () => {
 		const retried = sharedChanged(failed, shared)
 		expect(retried.commands?.map((command) => command.name)).toContain("FetchChannelSuggestion")
 		expect(retried.model.retryChannelId).toBeNull()
+	})
+})
+
+describe("connect invitations: a newer share", () => {
+	test("supersedes an older channel's pending retry", () => {
+		const other = Schema.decodeSync(ChannelId)(uuid(73))
+		const asked = update(listed, Message.FoundJoinedChannel({ channelId }), shared).model
+		const failed = update(
+			asked,
+			Message.GotSuggestionMessage({ message: SuggestionPrompt.Message.FailedFetch({ channelId }) }),
+			shared,
+		).model
+		const newer = update(failed, Message.FoundJoinedChannel({ channelId: other }), shared).model
+		expect(newer.retryChannelId).toBeNull()
+		expect(newer.suggestion.channelId).toBe(other)
+		expect(sharedChanged(newer, shared).model.suggestion.channelId).toBe(other)
 	})
 })
