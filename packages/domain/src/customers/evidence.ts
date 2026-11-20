@@ -5,7 +5,7 @@
  * signal's severity is the rule's severity raised by `step` (capped at `high`), and "worse by a
  * full step" (wake a snoozed signal early, reopen a dismissed one) means `step` went up.
  */
-import { CustomerContactId, CustomerInvoiceId, CustomerIssueId } from "@hazel/schema"
+import { CustomerAccountId, CustomerContactId, CustomerInvoiceId, CustomerIssueId } from "@hazel/schema"
 import { Schema } from "effect"
 import { SubscriptionStatus } from "./enums"
 
@@ -110,6 +110,8 @@ export const LimitEvidence = Schema.TaggedStruct("limit", {
 	pct: Schema.Number,
 	/** Null with under two days of the current period; absent on evidence from before forecasts. */
 	forecast: Schema.optionalKey(Schema.NullOr(LimitForecast)),
+	/** The account at the limit: on a customer with several environments, the one (limits are per environment). */
+	accountId: Schema.optionalKey(CustomerAccountId),
 })
 
 /** `cancel_scheduled`, `health_drop`, `seat_growth`: a value that moved from `from` to `to`. */

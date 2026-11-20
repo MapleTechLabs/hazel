@@ -207,4 +207,24 @@ describe("groupFacts", () => {
 		expect(evaluate(rule, quiet, orgFacts())._tag).toBe("Match")
 		expect(evaluate(rule, groupFacts(quiet, [busy], FROM), orgFacts())._tag).toBe("NoMatch")
 	})
+
+	it("measures plan limits per environment and names the one at its limit", () => {
+		const rule = {
+			name: "Near plan limit",
+			template: "near_limit" as const,
+			severity: "medium" as const,
+			config: { _tag: "near_limit" as const, thresholdPct: 90, metricKeys: [] },
+			scope: {},
+		}
+		const usage = (value: number) => new Map([["sessions", [{ day: TODAY, value, limitValue: 10_000 }]]])
+		const prod = factsOf({ account: { name: "sakura-prod", environment: "prod" }, metrics: usage(2_000) })
+		const dev = factsOf({ account: { name: "sakura-dev", environment: "dev" }, metrics: usage(11_749) })
+		// Summed, 13,749 of 20,000 is under the threshold; dev alone is over its own limit.
+		const result = evaluate(rule, groupFacts(prod, [dev], FROM), orgFacts())
+		expect(result).toMatchObject({
+			_tag: "Match",
+			reason: "sessions at 118% of the plan limit in sakura-dev (dev) (11749 of 10000)",
+			evidence: { _tag: "limit", accountId: dev.account.id, pct: 117.5 },
+		})
+	})
 })
