@@ -235,14 +235,14 @@ export class Invitations extends Context.Service<Invitations>()("Invitations", {
 						Effect.catchTags({
 							ApplyNowError: (error) =>
 								Effect.fail(
-									new InternalServerError({
+									InternalServerError.withCause({
 										message: "Could not join the organization",
 										cause: error,
 									}),
 								),
 							SchemaError: (error) =>
 								Effect.fail(
-									new InternalServerError({
+									InternalServerError.withCause({
 										message: "Could not join the organization",
 										cause: error,
 									}),

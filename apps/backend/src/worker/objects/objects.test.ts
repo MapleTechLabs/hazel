@@ -401,19 +401,19 @@ describe("objects", () => {
 			}),
 		))
 
-	it("a bot's principal (a plain CurrentUser and its scopes) crosses encoded", () =>
+	it("a bot's principal (its CurrentUser and scopes) crosses encoded", () =>
 		run(
 			Effect.gen(function* () {
-				const plain = { ...userOf(uuid()) } as CurrentUser.Schema
+				const user = userOf(uuid())
 				const principal = yield* currentInvokePrincipal.pipe(
-					Effect.provideService(CurrentUser.Context, plain),
+					Effect.provideService(CurrentUser.Context, user),
 					Effect.provideService(
 						CurrentBotScopes,
 						Option.some(new Set(["messages:write"] as const)),
 					),
 				)
 				const encoded = structuredClone(yield* encodeInvokePrincipal(principal))
-				expect(encoded).toMatchObject({ user: { id: plain.id }, botScopes: ["messages:write"] })
+				expect(encoded).toMatchObject({ user: { id: user.id }, botScopes: ["messages:write"] })
 			}),
 		))
 })

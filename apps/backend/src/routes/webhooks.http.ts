@@ -123,9 +123,9 @@ export const dispatchGitHubEvent = Effect.fn("GitHubWebhook.dispatch")(
 	},
 	Effect.catchTags({
 		DatabaseError: (cause) =>
-			Effect.fail(new InternalServerError({ message: "Directory lookup failed", cause })),
+			Effect.fail(InternalServerError.withCause({ message: "Directory lookup failed", cause })),
 		ObjectCallError: (cause) =>
-			Effect.fail(new InternalServerError({ message: "The organization is unavailable", cause })),
+			Effect.fail(InternalServerError.withCause({ message: "The organization is unavailable", cause })),
 	}),
 )
 
@@ -140,8 +140,8 @@ export const handleSlackDelivery = Effect.gen(function* () {
 	const rawBody = yield* request.text.pipe(Effect.mapError(() => invalid("Invalid request body")))
 	const signingSecret = yield* Config.Redacted("SLACK_SIGNING_SECRET").pipe(
 		Effect.tapError(() => Effect.logError("SLACK_SIGNING_SECRET is not configured")),
-		Effect.mapError(
-			(cause) => new InternalServerError({ message: "Slack events are not configured", cause }),
+		Effect.mapError((cause) =>
+			InternalServerError.withCause({ message: "Slack events are not configured", cause }),
 		),
 	)
 	const verified = Slack.verifySlackSignature({
@@ -279,7 +279,7 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 				return yield* dispatchGitHubEvent({ eventType, deliveryId, payload })
 			}).pipe(
 				Effect.catchTag("ConfigError", (cause) =>
-					Effect.fail(new InternalServerError({ message: "Missing configuration", cause })),
+					Effect.fail(InternalServerError.withCause({ message: "Missing configuration", cause })),
 				),
 			),
 		),

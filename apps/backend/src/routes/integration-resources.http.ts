@@ -38,7 +38,7 @@ export const requireMember = Effect.fn("IntegrationResources.requireMember")(fun
 		directory.membership(user.id, orgId),
 	).pipe(
 		Effect.catchTag("DatabaseError", (error) =>
-			Effect.fail(new InternalServerError({ message: "Membership lookup failed", cause: error })),
+			Effect.fail(InternalServerError.withCause({ message: "Membership lookup failed", cause: error })),
 		),
 	)
 	if (Option.isNone(membership) || membership.value.deletedAt !== null) {
@@ -68,7 +68,7 @@ const requireToken = (orgId: OrganizationId, provider: Provider) =>
 		),
 		Effect.catchTag("ObjectCallError", (error) =>
 			Effect.fail(
-				new InternalServerError({ message: "The organization is unavailable", cause: error }),
+				InternalServerError.withCause({ message: "The organization is unavailable", cause: error }),
 			),
 		),
 	)
@@ -291,7 +291,7 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 					Effect.catchTags({
 						ConfigError: (error) =>
 							Effect.fail(
-								new InternalServerError({
+								InternalServerError.withCause({
 									message: "Discord bot token not configured",
 									cause: error,
 								}),
@@ -318,12 +318,11 @@ const handleGetGitHubRepositories = Effect.fn("integration-resources.getGitHubRe
 	// Fetch repositories from GitHub API using GitHubApiClient
 	const gitHubApiClient = yield* GitHub.GitHubApiClient
 	const result = yield* gitHubApiClient.fetchRepositories(accessToken, page, perPage).pipe(
-		Effect.mapError(
-			(error) =>
-				new InternalServerError({
-					message: "Failed to fetch GitHub repositories",
-					cause: error,
-				}),
+		Effect.mapError((error) =>
+			InternalServerError.withCause({
+				message: "Failed to fetch GitHub repositories",
+				cause: error,
+			}),
 		),
 	)
 
@@ -413,7 +412,7 @@ const handleGetSlackChannels = Effect.fn("integration-resources.getSlackChannels
 		Effect.catchTag("IntegrationTokenUnavailableError", () => Effect.succeed(null)),
 		Effect.catchTag("ObjectCallError", (error) =>
 			Effect.fail(
-				new InternalServerError({ message: "The organization is unavailable", cause: error }),
+				InternalServerError.withCause({ message: "The organization is unavailable", cause: error }),
 			),
 		),
 	)

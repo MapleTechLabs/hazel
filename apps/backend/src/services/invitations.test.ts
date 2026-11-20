@@ -60,10 +60,15 @@ const run = <A, E, R>(
 		}).pipe(
 			Effect.provideService(CurrentUser.Context, actor(userId)),
 			Effect.provideService(CurrentRpcScopes, [scope]),
-			Effect.provide(Invitations.layer),
-			Effect.provide(CaptureMailer),
 			Effect.provide(
-				ConfigProvider.layer(ConfigProvider.fromUnknown({ FRONTEND_URL: "https://app.hazel.test" })),
+				Invitations.layer.pipe(
+					Layer.provideMerge(CaptureMailer),
+					Layer.provideMerge(
+						ConfigProvider.layer(
+							ConfigProvider.fromUnknown({ FRONTEND_URL: "https://app.hazel.test" }),
+						),
+					),
+				),
 			),
 		),
 	)

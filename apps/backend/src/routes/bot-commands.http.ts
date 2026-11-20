@@ -208,7 +208,7 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 			}).pipe(
 				Effect.catchTag("DatabaseError", (error) =>
 					Effect.fail(
-						new InternalServerError({
+						InternalServerError.withCause({
 							message: "Database error while syncing commands",
 							cause: error,
 						}),
@@ -297,7 +297,7 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 			}).pipe(
 				Effect.catchTag("DatabaseError", (error) =>
 					Effect.fail(
-						new InternalServerError({
+						InternalServerError.withCause({
 							message: "Database error while executing command",
 							cause: error,
 						}),
@@ -305,7 +305,10 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 				),
 				Effect.catchTag("ObjectCallError", (error) =>
 					Effect.fail(
-						new InternalServerError({ message: "The organization is unavailable", cause: error }),
+						InternalServerError.withCause({
+							message: "The organization is unavailable",
+							cause: error,
+						}),
 					),
 				),
 				Effect.catchTag("DurableStreamRequestError", (error) =>
@@ -366,10 +369,10 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 							}),
 						),
 					IntegrationTokenUnavailableError: (error) =>
-						Effect.fail(new InternalServerError({ message: error.message, cause: error })),
+						Effect.fail(InternalServerError.withCause({ message: error.message, cause: error })),
 					ObjectCallError: (error) =>
 						Effect.fail(
-							new InternalServerError({
+							InternalServerError.withCause({
 								message: "The organization is unavailable",
 								cause: error,
 							}),
@@ -414,7 +417,7 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 						),
 					ObjectCallError: (error) =>
 						Effect.fail(
-							new InternalServerError({
+							InternalServerError.withCause({
 								message: "The organization is unavailable",
 								cause: error,
 							}),

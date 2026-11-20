@@ -113,10 +113,17 @@ export class UploadError extends Schema.TaggedError<UploadError>("UploadError")(
 	},
 	{ httpApiStatus: 500 },
 ) {
-	constructor(props: { readonly message: string; readonly cause?: unknown }, options?: Schema.MakeOptions) {
-		const { cause, ...fields } = props
-		super(fields, options)
-		attachCause(this, cause)
+	/** The error with the underlying failure attached as its server-side `cause`. */
+	static withCause({
+		cause,
+		...fields
+	}: {
+		readonly message: string
+		readonly cause: unknown
+	}): UploadError {
+		const error = new UploadError(fields)
+		attachCause(error, cause)
+		return error
 	}
 }
 

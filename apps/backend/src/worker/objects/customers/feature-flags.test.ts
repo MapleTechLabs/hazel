@@ -52,15 +52,17 @@ vi.mock("./providers", async (importOriginal) => {
 				)
 			}),
 	}
-	Object.assign(actual.CustomerProviders, {
-		layer: Layer.succeed(
+	// A subclass keeps the service's key, so `yield* CustomerProviders` anywhere still finds it; only
+	// the layer `CustomersServicesLive` reads is the test's.
+	class CustomerProviders extends actual.CustomerProviders {
+		static override readonly layer = Layer.succeed(
 			actual.CustomerProviders,
 			actual.CustomerProviders.of({
 				get: (provider) => (provider === "clerk" ? Option.some(adapter) : Option.none()),
 			}),
-		),
-	})
-	return actual
+		)
+	}
+	return { ...actual, CustomerProviders }
 })
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>

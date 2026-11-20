@@ -171,8 +171,7 @@ export const AuthMiddlewareLive = Layer.effect(
 
 					const user = userOption.value
 
-					// Construct CurrentUser.Schema for the bot
-					const botUser: CurrentUser.Schema = {
+					const botUser = new CurrentUser.Schema({
 						id: user.id,
 						email: user.email,
 						firstName: user.firstName,
@@ -182,7 +181,7 @@ export const AuthMiddlewareLive = Layer.effect(
 						isOnboarded: true,
 						timezone: user.timezone,
 						settings: user.settings,
-					}
+					})
 
 					return yield* Effect.provideService(
 						Effect.provideService(effect, CurrentUser.Context, botUser),

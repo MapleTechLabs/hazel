@@ -8,21 +8,22 @@ import { OrgResolver } from "../services/org-resolver"
 import { serviceShape } from "../test/effect-helpers"
 export { serviceShape } from "../test/effect-helpers"
 
-export const TEST_ORG_ID = "00000000-0000-0000-0000-000000000001" as OrganizationId
-export const TEST_ALT_ORG_ID = "00000000-0000-0000-0000-000000000002" as OrganizationId
-export const TEST_USER_ID = "00000000-0000-0000-0000-000000000101" as UserId
+export const TEST_ORG_ID = "00000000-0000-4000-8000-000000000001" as OrganizationId
+export const TEST_ALT_ORG_ID = "00000000-0000-4000-8000-000000000002" as OrganizationId
+export const TEST_USER_ID = "00000000-0000-4000-8000-000000000101" as UserId
 
-export const makeActor = (overrides?: Partial<CurrentUser.Schema>): CurrentUser.Schema => ({
-	id: TEST_USER_ID,
-	email: "policy-test@example.com",
-	firstName: "Policy",
-	lastName: "Tester",
-	role: "member",
-	isOnboarded: true,
-	timezone: "UTC",
-	settings: null,
-	...overrides,
-})
+export const makeActor = (overrides?: Partial<CurrentUser.Schema>): CurrentUser.Schema =>
+	new CurrentUser.Schema({
+		id: TEST_USER_ID,
+		email: "policy-test@example.com",
+		firstName: "Policy",
+		lastName: "Tester",
+		role: "member",
+		isOnboarded: true,
+		timezone: "UTC",
+		settings: null,
+		...overrides,
+	})
 
 export const runWithActorEither = <A, E, R>(
 	make: Effect.Effect<A, E, R>,

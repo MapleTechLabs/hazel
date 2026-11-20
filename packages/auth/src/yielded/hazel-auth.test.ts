@@ -382,8 +382,9 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 		)
 		const verified = await Effect.runPromise(
 			AccessToken.verifyAccessToken(origin, Redacted.value(token)).pipe(
-				Effect.provide(AccessToken.Jwks.layerLocal({ keys: [published] })),
-				Effect.provide(CryptoLive),
+				Effect.provide(
+					AccessToken.Jwks.layerLocal({ keys: [published] }).pipe(Layer.provideMerge(CryptoLive)),
+				),
 			),
 		)
 		expect(verified.claims.sub).toBe("00000000-0000-4000-8000-000000000001")
@@ -391,8 +392,9 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 		// Another stage's issuer does not verify.
 		const foreign = await Effect.runPromise(
 			AccessToken.verifyAccessToken("https://api.hazel.sh", Redacted.value(token)).pipe(
-				Effect.provide(AccessToken.Jwks.layerLocal({ keys: [published] })),
-				Effect.provide(CryptoLive),
+				Effect.provide(
+					AccessToken.Jwks.layerLocal({ keys: [published] }).pipe(Layer.provideMerge(CryptoLive)),
+				),
 				Effect.result,
 			),
 		)

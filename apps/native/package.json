@@ -10,7 +10,7 @@
 		"serve-fixture-html": "bun scripts/serve-fixture-html.ts",
 		"host:build": "cd host && cargo build --release",
 		"start": "bun run host:build && host/target/release/hazel-native",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "effect-tsgo tsc --noEmit",
 		"test": "vitest run",
 		"bench": "bun bench/run.ts",
 		"conformance": "bun bench/conformance/run.ts"

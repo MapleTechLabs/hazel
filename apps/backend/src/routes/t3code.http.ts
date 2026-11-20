@@ -133,7 +133,7 @@ const connectionOf = (link: typeof T3CodeLinkCall.success.Type) =>
 			})
 
 const unavailable = (error: unknown) =>
-	Effect.fail(new InternalServerError({ message: "The organization is unavailable", cause: error }))
+	Effect.fail(InternalServerError.withCause({ message: "The organization is unavailable", cause: error }))
 
 const handleStartConnect = Effect.fn("t3code.startConnect")(function* (
 	orgId: OrganizationId,
@@ -159,8 +159,8 @@ const handleStartConnect = Effect.fn("t3code.startConnect")(function* (
 	const org = yield* (yield* Directory)
 		.org(orgId)
 		.pipe(
-			Effect.mapError(
-				(cause) => new InternalServerError({ message: "Failed to fetch organization", cause }),
+			Effect.mapError((cause) =>
+				InternalServerError.withCause({ message: "Failed to fetch organization", cause }),
 			),
 		)
 	const slug = Option.match(org, { onNone: () => null, onSome: (row) => row.slug })
@@ -188,7 +188,9 @@ const handleStartConnect = Effect.fn("t3code.startConnect")(function* (
 	})
 
 	const sealed = yield* sealPending(pending).pipe(
-		Effect.mapError((cause) => new InternalServerError({ message: "Failed to seal the sign-in", cause })),
+		Effect.mapError((cause) =>
+			InternalServerError.withCause({ message: "Failed to seal the sign-in", cause }),
+		),
 	)
 	const cookie = yield* Effect.try({
 		try: () =>
@@ -200,7 +202,8 @@ const handleStartConnect = Effect.fn("t3code.startConnect")(function* (
 				sameSite: "lax",
 				maxAge: PENDING_MAX_AGE,
 			}),
-		catch: (cause) => new InternalServerError({ message: "Failed to create the sign-in cookie", cause }),
+		catch: (cause) =>
+			InternalServerError.withCause({ message: "Failed to create the sign-in cookie", cause }),
 	})
 	yield* Effect.logInfo("T3 Code sign-in started", {
 		event: "t3code_connect_started",
@@ -213,7 +216,7 @@ const handleStartConnect = Effect.fn("t3code.startConnect")(function* (
 		{ cookies: Cookies.fromIterable([cookie]) },
 	).pipe(
 		Effect.catchTag("HttpBodyError", (cause) =>
-			Effect.fail(new InternalServerError({ message: "Failed to serialize response", cause })),
+			Effect.fail(InternalServerError.withCause({ message: "Failed to serialize response", cause })),
 		),
 	)
 })
@@ -369,7 +372,7 @@ const handleCallback = Effect.fn("t3code.callback")(function* (query: {
 export const requireT3CodeBot = Effect.gen(function* () {
 	const bot = yield* validateBotToken.pipe(
 		Effect.catchTag("DatabaseError", (cause) =>
-			Effect.fail(new InternalServerError({ message: "Failed to check the bot token", cause })),
+			Effect.fail(InternalServerError.withCause({ message: "Failed to check the bot token", cause })),
 		),
 	)
 	const directory = yield* Directory
@@ -381,7 +384,9 @@ export const requireT3CodeBot = Effect.gen(function* () {
 				.limit(1),
 		)
 		.pipe(
-			Effect.mapError((cause) => new InternalServerError({ message: "Failed to load the bot", cause })),
+			Effect.mapError((cause) =>
+				InternalServerError.withCause({ message: "Failed to load the bot", cause }),
+			),
 		)
 	if (Option.isNone(user) || user.value.externalId !== T3CODE_BOT_EXTERNAL_ID) {
 		return yield* new UnauthorizedError({
@@ -406,7 +411,7 @@ export const HttpT3CodeLive = HttpApiBuilder.group(HazelApi, "t3code", (handlers
 		.handle("startT3CodeConnect", ({ params, payload }) =>
 			handleStartConnect(params.orgId, payload.environmentUrl).pipe(
 				Effect.catchTag("ConfigError", (cause) =>
-					Effect.fail(new InternalServerError({ message: "Missing configuration", cause })),
+					Effect.fail(InternalServerError.withCause({ message: "Missing configuration", cause })),
 				),
 			),
 		)
@@ -414,7 +419,9 @@ export const HttpT3CodeLive = HttpApiBuilder.group(HazelApi, "t3code", (handlers
 			handleCallback(query).pipe(
 				Effect.catchTags({
 					ConfigError: (cause) =>
-						Effect.fail(new InternalServerError({ message: "Missing configuration", cause })),
+						Effect.fail(
+							InternalServerError.withCause({ message: "Missing configuration", cause }),
+						),
 					ObjectCallError: unavailable,
 				}),
 			),

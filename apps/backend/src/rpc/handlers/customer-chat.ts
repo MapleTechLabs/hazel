@@ -61,11 +61,17 @@ export const CustomerChatRpcLive = CustomerChatRpcs.toLayer(
 						Effect.catchTags({
 							DatabaseError: (cause) =>
 								Effect.fail(
-									new InternalServerError({ message: "Error setting the side", cause }),
+									InternalServerError.withCause({
+										message: "Error setting the side",
+										cause,
+									}),
 								),
 							SchemaError: (cause) =>
 								Effect.fail(
-									new InternalServerError({ message: "Error setting the side", cause }),
+									InternalServerError.withCause({
+										message: "Error setting the side",
+										cause,
+									}),
 								),
 						}),
 						Effect.withSpan("Customers.chatAuthor.setSide", {

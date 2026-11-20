@@ -5,7 +5,7 @@ import { UserId } from "@hazel/schema"
 import { User } from "./models"
 import { InvalidBearerTokenError, SessionLoadError, SessionNotProvidedError } from "./session-errors"
 
-export class Schema extends S.Class<Schema>("CurrentUserSchema")({
+export class Schema extends S.Class<Schema, { readonly brand: unique symbol }>("CurrentUserSchema")({
 	id: UserId,
 	role: S.Literals(["admin", "member", "owner"]),
 	avatarUrl: S.optional(S.String),

@@ -215,7 +215,7 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 				}).pipe(
 					Effect.catchTag("DatabaseError", (cause) =>
 						Effect.fail(
-							new InternalServerError({ message: "Error fetching organization", cause }),
+							InternalServerError.withCause({ message: "Error fetching organization", cause }),
 						),
 					),
 					Effect.withSpan("Organization.getBySlugPublic"),

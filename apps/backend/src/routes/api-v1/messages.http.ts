@@ -46,7 +46,7 @@ const hostOf = (channelId: ChannelId) =>
 
 const internal = (message: string) => (cause: unknown) =>
 	Effect.logError(message, { cause }).pipe(
-		Effect.andThen(Effect.fail(new InternalServerError({ message, cause }))),
+		Effect.andThen(Effect.fail(InternalServerError.withCause({ message, cause }))),
 	)
 
 const missingChannel = (messageId: MessageId) =>

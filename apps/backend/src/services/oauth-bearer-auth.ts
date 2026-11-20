@@ -55,10 +55,7 @@ export const makeOAuthBearerAuth = (loadClerk: LoadClerk) =>
 					)
 				}
 				// The SDK failing to load is ours, not the token's: a 500, never "invalid token".
-				const client = yield* Effect.tryPromise({
-					try: clerk.value,
-					catch: (error) => error,
-				}).pipe(
+				const client = yield* Effect.tryPromise(clerk.value).pipe(
 					Effect.tapError((error) =>
 						Effect.logError("Clerk SDK failed to load", Cause.fail(error)),
 					),
@@ -71,10 +68,9 @@ export const makeOAuthBearerAuth = (loadClerk: LoadClerk) =>
 					),
 				)
 
-				const introspected = yield* Effect.tryPromise({
-					try: () => client.idPOAuthAccessToken.verify(accessToken),
-					catch: (error) => error,
-				}).pipe(
+				const introspected = yield* Effect.tryPromise(() =>
+					client.idPOAuthAccessToken.verify(accessToken),
+				).pipe(
 					Effect.tapError((error) =>
 						Effect.logWarning("OAuth access token verification failed", Cause.fail(error)),
 					),

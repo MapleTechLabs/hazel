@@ -6,7 +6,7 @@
 	"type": "module",
 	"module": "src/worker.ts",
 	"scripts": {
-		"typecheck": "tsc --noEmit",
+		"typecheck": "effect-tsgo tsc --noEmit",
 		"test": "vitest run"
 	},
 	"dependencies": {

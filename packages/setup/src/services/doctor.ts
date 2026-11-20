@@ -8,26 +8,23 @@ export interface CheckResult {
 
 // Helper to check if a docker container is running
 const checkContainer = (containerName: string, displayName: string): Effect.Effect<CheckResult> =>
-	Effect.tryPromise({
-		try: async () => {
-			const proc = Bun.spawn(["docker", "inspect", "--format", "{{.State.Status}}", containerName], {
-				stdout: "pipe",
-				stderr: "ignore",
-			})
-			const output = await new Response(proc.stdout).text()
-			const code = await proc.exited
+	Effect.tryPromise(async () => {
+		const proc = Bun.spawn(["docker", "inspect", "--format", "{{.State.Status}}", containerName], {
+			stdout: "pipe",
+			stderr: "ignore",
+		})
+		const output = await new Response(proc.stdout).text()
+		const code = await proc.exited
 
-			if (code !== 0) {
-				return { name: displayName, status: "fail" as const, message: "Not running" }
-			}
+		if (code !== 0) {
+			return { name: displayName, status: "fail" as const, message: "Not running" }
+		}
 
-			const status = output.trim()
-			if (status !== "running") {
-				return { name: displayName, status: "fail" as const, message: `Status: ${status}` }
-			}
-			return { name: displayName, status: "ok" as const, message: "Running" }
-		},
-		catch: () => new Error("Check failed"),
+		const status = output.trim()
+		if (status !== "running") {
+			return { name: displayName, status: "fail" as const, message: `Status: ${status}` }
+		}
+		return { name: displayName, status: "ok" as const, message: "Running" }
 	}).pipe(
 		Effect.catch(() =>
 			Effect.succeed({ name: displayName, status: "fail" as const, message: "Not running" }),
@@ -37,14 +34,11 @@ const checkContainer = (containerName: string, displayName: string): Effect.Effe
 export class Doctor extends Context.Service<Doctor>()("Doctor", {
 	make: Effect.succeed({
 		checkBun: (): Effect.Effect<CheckResult> =>
-			Effect.tryPromise({
-				try: async () => {
-					const proc = Bun.spawn(["bun", "--version"])
-					const text = await new Response(proc.stdout).text()
-					await proc.exited
-					return { name: "Bun", status: "ok" as const, message: `v${text.trim()}` }
-				},
-				catch: () => new Error("Bun not found"),
+			Effect.tryPromise(async () => {
+				const proc = Bun.spawn(["bun", "--version"])
+				const text = await new Response(proc.stdout).text()
+				await proc.exited
+				return { name: "Bun", status: "ok" as const, message: `v${text.trim()}` }
 			}).pipe(
 				Effect.catch(() =>
 					Effect.succeed({
@@ -56,14 +50,16 @@ export class Doctor extends Context.Service<Doctor>()("Doctor", {
 			),
 
 		checkDocker: (): Effect.Effect<CheckResult> =>
-			Effect.tryPromise({
-				try: async () => {
-					const proc = Bun.spawn(["docker", "info"], { stdout: "ignore", stderr: "ignore" })
-					const code = await proc.exited
-					if (code !== 0) throw new Error("Docker not running")
-					return { name: "Docker", status: "ok" as const, message: "Running" }
-				},
-				catch: () => new Error("Docker not running"),
+			Effect.tryPromise(async () => {
+				const proc = Bun.spawn(["docker", "info"], { stdout: "ignore", stderr: "ignore" })
+				const code = await proc.exited
+				return code === 0
+					? { name: "Docker", status: "ok" as const, message: "Running" }
+					: {
+							name: "Docker",
+							status: "fail" as const,
+							message: "Not running. Start Docker Desktop",
+						}
 			}).pipe(
 				Effect.catch(() =>
 					Effect.succeed({
@@ -75,26 +71,23 @@ export class Doctor extends Context.Service<Doctor>()("Doctor", {
 			),
 
 		checkDockerCompose: (): Effect.Effect<CheckResult> =>
-			Effect.tryPromise({
-				try: async () => {
-					const proc = Bun.spawn(["docker", "compose", "ps", "--format", "json"])
-					const text = await new Response(proc.stdout).text()
-					await proc.exited
-					const containers = text.trim().split("\n").filter(Boolean)
-					if (containers.length === 0) {
-						return {
-							name: "Docker Compose",
-							status: "warn" as const,
-							message: "No containers running. Run `docker compose up -d`",
-						}
-					}
+			Effect.tryPromise(async () => {
+				const proc = Bun.spawn(["docker", "compose", "ps", "--format", "json"])
+				const text = await new Response(proc.stdout).text()
+				await proc.exited
+				const containers = text.trim().split("\n").filter(Boolean)
+				if (containers.length === 0) {
 					return {
 						name: "Docker Compose",
-						status: "ok" as const,
-						message: `${containers.length} container(s) running`,
+						status: "warn" as const,
+						message: "No containers running. Run `docker compose up -d`",
 					}
-				},
-				catch: () => new Error("Could not check containers"),
+				}
+				return {
+					name: "Docker Compose",
+					status: "ok" as const,
+					message: `${containers.length} container(s) running`,
+				}
 			}).pipe(
 				Effect.catch(() =>
 					Effect.succeed({

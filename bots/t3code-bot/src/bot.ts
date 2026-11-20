@@ -6,7 +6,7 @@
  * (`getT3CodeAccess`), which applies the owner's sharing; the bot keeps no credentials.
  */
 import { defineBot, type MessageType, type TypedCommandContext } from "@hazel-chat/bot-sdk"
-import { HazelApi } from "@hazel/domain/http"
+import { HazelApi, T3CodeAccessRequest } from "@hazel/domain/http"
 import { makeT3CodeMcpSession, pickModelSelection, type T3Project } from "@hazel/integrations/t3code"
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Cause, Config, Effect, FiberMap, Layer, Option, Redacted, Schema, Semaphore } from "effect"
@@ -118,7 +118,7 @@ export const bot = defineBot({
 			const environmentFor = (organizationId: OrganizationId, ownerId: UserId, actorId: UserId) =>
 				Effect.gen(function* () {
 					const access = yield* hazel.t3code.getT3CodeAccess({
-						payload: { organizationId, ownerId, actorId },
+						payload: new T3CodeAccessRequest({ organizationId, ownerId, actorId }),
 					})
 					const mcp = yield* makeT3CodeMcpSession({
 						mcpUrl: access.mcpUrl,

@@ -35,8 +35,7 @@ export class LocalRpcDispatcher extends Context.Service<LocalRpcDispatcher, RpcD
 	static readonly layer = Layer.effect(this, makeRpcDispatcher).pipe(Layer.provide(objectHandlersLive))
 }
 
-const internal = (message: string, cause?: unknown) =>
-	new InternalServerError({ message, ...(cause === undefined ? {} : { cause }) })
+const internal = (message: string, cause?: unknown) => InternalServerError.withCause({ message, cause })
 
 const makeRoutedHandlers = Effect.gen(function* () {
 	const local = yield* LocalRpcDispatcher

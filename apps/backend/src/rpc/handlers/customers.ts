@@ -124,7 +124,7 @@ export const remap = <A, E, R>(
 	effect.pipe(
 		Effect.catchIf(isInfra, (cause) =>
 			Effect.fail(
-				new InternalServerError({
+				InternalServerError.withCause({
 					message: "Customers storage failed",
 					detail: (cause as Infra)._tag,
 					cause,
@@ -219,7 +219,7 @@ const checkChannel = (organizationId: OrganizationId, channelId: ChannelId, user
 	callObject(CustomerChannelCall, orgTarget(organizationId), { organizationId, channelId, userId }).pipe(
 		Effect.catchTag("ObjectCallError", (cause) =>
 			Effect.fail(
-				new InternalServerError({
+				InternalServerError.withCause({
 					message: "Could not check the channel",
 					detail: cause.message,
 					cause,
@@ -478,7 +478,7 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 					}).pipe(
 						Effect.catchTag("ObjectCallError", (cause) =>
 							Effect.fail(
-								new InternalServerError({
+								InternalServerError.withCause({
 									message: "Could not check the channels",
 									detail: cause.message,
 									cause,
@@ -1056,7 +1056,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						),
 						Effect.catchTag("ObjectCallError", (cause) =>
 							Effect.fail(
-								new InternalServerError({
+								InternalServerError.withCause({
 									message: "Could not read the message",
 									detail: cause.message,
 									cause,
@@ -1329,7 +1329,7 @@ const closeRuleSignals = (ruleId: CustomerSignalRuleId, now: Date) =>
 
 /** Reading or writing the encrypted credentials failed: client-safe, the cause stays server-side. */
 const storeFailed = (cause: { readonly _tag: string }) =>
-	new InternalServerError({ message: "Could not store the credentials", detail: cause._tag, cause })
+	InternalServerError.withCause({ message: "Could not store the credentials", detail: cause._tag, cause })
 
 /**
  * What the config schema cannot say: Maple needs names it can ask for in a query that fits

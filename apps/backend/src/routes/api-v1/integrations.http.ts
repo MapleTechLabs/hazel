@@ -38,7 +38,7 @@ const extractBearerToken = Effect.gen(function* () {
 })
 
 const internal = (message: string) => (cause: unknown) =>
-	Effect.fail(new InternalServerError({ message, cause }))
+	Effect.fail(InternalServerError.withCause({ message, cause }))
 
 export const HttpApiV1IntegrationsLive = HttpApiBuilder.group(HazelApi, "api-v1-integrations", (handlers) =>
 	Effect.gen(function* () {

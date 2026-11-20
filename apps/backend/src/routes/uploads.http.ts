@@ -54,8 +54,8 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 			userId: UserId,
 		) {
 			const isAdmin = yield* callObject(IsOrgAdminCall, orgTarget(organizationId), { userId }).pipe(
-				Effect.mapError(
-					(error) => new UploadError({ message: "The organization is unavailable", cause: error }),
+				Effect.mapError((error) =>
+					UploadError.withCause({ message: "The organization is unavailable", cause: error }),
 				),
 			)
 			if (!isAdmin) {
@@ -105,12 +105,11 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							const uploadUrl = yield* storage
 								.presignPut(key, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
-									Effect.mapError(
-										(error) =>
-											new UploadError({
-												message: "Failed to generate presigned URL",
-												cause: error,
-											}),
+									Effect.mapError((error) =>
+										UploadError.withCause({
+											message: "Failed to generate presigned URL",
+											cause: error,
+										}),
 									),
 								)
 
@@ -181,12 +180,11 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							const uploadUrl = yield* storage
 								.presignPut(key, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
-									Effect.mapError(
-										(error) =>
-											new UploadError({
-												message: "Failed to generate presigned URL",
-												cause: error,
-											}),
+									Effect.mapError((error) =>
+										UploadError.withCause({
+											message: "Failed to generate presigned URL",
+											cause: error,
+										}),
 									),
 								)
 
@@ -252,12 +250,11 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							const uploadUrl = yield* storage
 								.presignPut(key, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
-									Effect.mapError(
-										(error) =>
-											new UploadError({
-												message: "Failed to generate presigned URL",
-												cause: error,
-											}),
+									Effect.mapError((error) =>
+										UploadError.withCause({
+											message: "Failed to generate presigned URL",
+											cause: error,
+										}),
 									),
 								)
 
@@ -315,12 +312,11 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							const uploadUrl = yield* storage
 								.presignPut(key, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
-									Effect.mapError(
-										(error) =>
-											new UploadError({
-												message: "Failed to generate presigned URL",
-												cause: error,
-											}),
+									Effect.mapError((error) =>
+										UploadError.withCause({
+											message: "Failed to generate presigned URL",
+											cause: error,
+										}),
 									),
 								)
 
@@ -379,12 +375,11 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							const uploadUrl = yield* storage
 								.presignPut(attachmentId, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
-									Effect.mapError(
-										(error) =>
-											new UploadError({
-												message: "Failed to generate presigned URL",
-												cause: error,
-											}),
+									Effect.mapError((error) =>
+										UploadError.withCause({
+											message: "Failed to generate presigned URL",
+											cause: error,
+										}),
 									),
 								)
 

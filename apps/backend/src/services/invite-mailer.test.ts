@@ -1,4 +1,4 @@
-import { ConfigProvider, Effect, Result } from "effect"
+import { ConfigProvider, Effect, Layer, Result } from "effect"
 import { describe, expect, it } from "vitest"
 import { InviteMailer, renderInviteEmail } from "./invite-mailer"
 
@@ -31,8 +31,11 @@ it("fails closed when the email binding is absent outside development", async ()
 				}),
 			)
 		}).pipe(
-			Effect.provide(InviteMailer.layerLog),
-			Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ IS_DEV: false }))),
+			Effect.provide(
+				InviteMailer.layerLog.pipe(
+					Layer.provideMerge(ConfigProvider.layer(ConfigProvider.fromUnknown({ IS_DEV: false }))),
+				),
+			),
 		),
 	)
 	expect(Result.isFailure(result) && result.failure._tag).toBe("InviteEmailError")

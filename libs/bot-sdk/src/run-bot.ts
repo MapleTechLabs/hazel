@@ -133,8 +133,7 @@ export const launchBot = <Commands extends CommandGroup<any> = EmptyCommands>(
 		const botConfig = yield* resolveBotConfig(options)
 		return yield* runSetup(options).pipe(
 			Effect.scoped,
-			Effect.provide(additionalLayers(options)),
-			Effect.provide(makeHazelBotLayer(botConfig)),
+			Effect.provide(additionalLayers(options).pipe(Layer.provideMerge(makeHazelBotLayer(botConfig)))),
 		)
 		// `setup` and `layers` are typed loosely (`unknown` requirements), as in `runHazelBot`.
 	}) as Effect.Effect<never, unknown>

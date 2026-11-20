@@ -255,7 +255,7 @@ const makeOAuthSessionCookie = (
 				maxAge: Duration.seconds(options.maxAgeSeconds),
 			}),
 		catch: (error) =>
-			new InternalServerError({
+			InternalServerError.withCause({
 				message: "Failed to create OAuth session cookie",
 				cause: error,
 			}),
@@ -290,12 +290,11 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 	// Get the OAuth provider from registry
 	const registry = yield* OAuthProviderRegistry
 	const oauthProvider = yield* registry.getProvider(provider).pipe(
-		Effect.mapError(
-			(error) =>
-				new InternalServerError({
-					message: `Provider not available: ${error._tag}`,
-					cause: error,
-				}),
+		Effect.mapError((error) =>
+			InternalServerError.withCause({
+				message: `Provider not available: ${error._tag}`,
+				cause: error,
+			}),
 		),
 	)
 
@@ -304,12 +303,11 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 
 	// Get org slug for redirect URL (the directory's `org_index`)
 	const orgOption = yield* (yield* Directory).org(orgId).pipe(
-		Effect.mapError(
-			(error) =>
-				new InternalServerError({
-					message: "Failed to fetch organization",
-					cause: error,
-				}),
+		Effect.mapError((error) =>
+			InternalServerError.withCause({
+				message: "Failed to fetch organization",
+				cause: error,
+			}),
 		),
 	)
 	const org = yield* Option.match(orgOption, {
@@ -381,7 +379,7 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 		},
 	).pipe(
 		Effect.catchTag("HttpBodyError", (e) =>
-			Effect.fail(new InternalServerError({ message: "Failed to serialize response", cause: e })),
+			Effect.fail(InternalServerError.withCause({ message: "Failed to serialize response", cause: e })),
 		),
 	)
 })
@@ -1023,7 +1021,10 @@ const objectErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 		Effect.catchTags({
 			ObjectCallError: (error: unknown) =>
 				Effect.fail(
-					new InternalServerError({ message: "The organization is unavailable", cause: error }),
+					InternalServerError.withCause({
+						message: "The organization is unavailable",
+						cause: error,
+					}),
 				),
 		}),
 	)
@@ -1033,14 +1034,18 @@ export const HttpIntegrationLive = HttpApiBuilder.group(HazelApi, "integrations"
 		.handle("getOAuthUrl", ({ params, query }) =>
 			handleGetOAuthUrl(params, query).pipe(
 				Effect.catchTag("ConfigError", (err) =>
-					Effect.fail(new InternalServerError({ message: "Missing configuration", cause: err })),
+					Effect.fail(
+						InternalServerError.withCause({ message: "Missing configuration", cause: err }),
+					),
 				),
 			),
 		)
 		.handle("oauthCallback", ({ params, query }) =>
 			handleOAuthCallback(params, query).pipe(
 				Effect.catchTag("ConfigError", (err) =>
-					Effect.fail(new InternalServerError({ message: "Missing configuration", cause: err })),
+					Effect.fail(
+						InternalServerError.withCause({ message: "Missing configuration", cause: err }),
+					),
 				),
 			),
 		)
@@ -1049,7 +1054,10 @@ export const HttpIntegrationLive = HttpApiBuilder.group(HazelApi, "integrations"
 				objectErrors,
 				Effect.catchTag("IntegrationConnectFailedError", (error) =>
 					Effect.fail(
-						new InternalServerError({ message: "Failed to save the connection", cause: error }),
+						InternalServerError.withCause({
+							message: "Failed to save the connection",
+							cause: error,
+						}),
 					),
 				),
 			),

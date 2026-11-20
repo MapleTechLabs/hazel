@@ -254,8 +254,7 @@ describe("Hazel sign-in in the backend", () => {
 
 		const verified = await Effect.runPromise(
 			AccessToken.verifyAccessToken(api, token).pipe(
-				Effect.provide(AccessToken.Jwks.layerLocal(jwks)),
-				Effect.provide(CryptoLive),
+				Effect.provide(AccessToken.Jwks.layerLocal(jwks).pipe(Layer.provideMerge(CryptoLive))),
 			),
 		)
 		const me = await (await send("/probe/api")).json()

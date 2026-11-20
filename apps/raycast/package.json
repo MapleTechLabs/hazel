@@ -12,7 +12,7 @@
 	"scripts": {
 		"dev": "ray develop",
 		"build:raycast": "ray build -e dist",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "effect-tsgo tsc --noEmit",
 		"test": "vitest run"
 	},
 	"dependencies": {

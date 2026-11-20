@@ -72,7 +72,7 @@ export const HttpIntegrationCommandLive = HttpApiBuilder.group(HazelApi, "integr
 				Effect.withSpan("IntegrationCommands.getAvailableCommands"),
 				Effect.catchTag("DatabaseError", (error) =>
 					Effect.fail(
-						new InternalServerError({
+						InternalServerError.withCause({
 							message: "Database error while fetching commands",
 							cause: error,
 						}),

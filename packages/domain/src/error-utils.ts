@@ -34,7 +34,7 @@ export const refailUnauthorized = (entity: string, action: string) => {
 		effect.pipe(
 			Effect.catchIf(isInfrastructureError, (cause) =>
 				Effect.fail(
-					new InternalServerError({
+					InternalServerError.withCause({
 						message: `Could not check permission to ${action} ${entity}`,
 						cause,
 					}),

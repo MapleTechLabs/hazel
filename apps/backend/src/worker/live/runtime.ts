@@ -219,7 +219,7 @@ export const makeMessageLiveRuntime = (options: LiveRuntimeOptions) =>
 					Effect.provideService(ObjectStubs, stubs),
 					Effect.catchTag("ObjectCallError", (error) =>
 						Effect.fail(
-							new InternalServerError({
+							InternalServerError.withCause({
 								message: "The message's channel is unavailable",
 								cause: error,
 							}),

@@ -1,4 +1,9 @@
-import { type T3CodeConnection, T3CodeSharing } from "@hazel/domain/http"
+import {
+	ConnectApiKeyRequest,
+	T3CodeConnectRequest,
+	type T3CodeConnection,
+	T3CodeSharing,
+} from "@hazel/domain/http"
 import { IntegrationConnection } from "@hazel/domain/models"
 import { BotId, OrganizationId } from "@hazel/schema"
 import { DateTime, Effect, Schema } from "effect"
@@ -95,7 +100,7 @@ export const ConnectApiKey = Command.define("ConnectApiKey", {
 		HazelApiClient.use((client) =>
 			client.integrations.connectApiKey({
 				params: { orgId, provider },
-				payload: { token, baseUrl },
+				payload: new ConnectApiKeyRequest({ token, baseUrl }),
 			}),
 		).pipe(
 			Effect.map((response) =>
@@ -152,7 +157,10 @@ export const StartT3CodeConnect = Command.define("StartT3CodeConnect", {
 	],
 	execute: ({ orgId, environmentUrl }) =>
 		HazelApiClient.use((client) =>
-			client.t3code.startT3CodeConnect({ params: { orgId }, payload: { environmentUrl } }),
+			client.t3code.startT3CodeConnect({
+				params: { orgId },
+				payload: new T3CodeConnectRequest({ environmentUrl }),
+			}),
 		).pipe(
 			Effect.map((response) =>
 				Message.SucceededGetOAuthUrl({ authorizationUrl: response.authorizationUrl }),

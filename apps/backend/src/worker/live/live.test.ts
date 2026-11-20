@@ -13,7 +13,8 @@ import { describe, expect, it } from "vitest"
 import { channelTarget } from "../objects/kinds"
 import type { InvokePrincipal } from "../objects/principal"
 import { ObjectStubs } from "../objects/protocol"
-import { makeTestObjects, type TestObject } from "../objects/testing"
+import { formatTarget } from "../objects/kinds"
+import { makeTestObjects, ObjectUnreachableError, type TestObject } from "../objects/testing"
 import { readLive, writeLive } from "./client"
 import {
 	LIVE_STATE_LIMIT_BYTES,
@@ -87,7 +88,9 @@ const makeWorld = Effect.gen(function* () {
 			return {
 				...stub,
 				invoke: (request) =>
-					unreachable ? Effect.fail(new Error("channel unreachable")) : stub.invoke(request),
+					unreachable
+						? Effect.fail(new ObjectUnreachableError({ target: formatTarget(target) }))
+						: stub.invoke(request),
 			}
 		},
 	}

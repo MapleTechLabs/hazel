@@ -25,7 +25,7 @@ export const CustomerDirectoryRpcLive = CustomerDirectoryRpcs.toLayer(
 				}).pipe(
 					Effect.catchTag("DatabaseError", (cause) =>
 						Effect.fail(
-							new InternalServerError({ message: "Error listing organizations", cause }),
+							InternalServerError.withCause({ message: "Error listing organizations", cause }),
 						),
 					),
 					Effect.withSpan("Customers.organizations"),

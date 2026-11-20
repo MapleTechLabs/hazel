@@ -56,14 +56,14 @@ import {
 	upsertParticipant,
 } from "../../worker/objects/org/connect"
 
-export const resolveGuestOrganizationForInviteCreate = ({
+export const resolveGuestOrganizationForInviteCreate = <E, R>({
 	providedOrgId,
 	target,
 	findBySlug,
 }: {
 	providedOrgId: OrganizationId | undefined
 	target: { kind: "slug"; value: string }
-	findBySlug: (slug: string) => Effect.Effect<Option.Option<{ id: OrganizationId }>, any, any>
+	findBySlug: (slug: string) => Effect.Effect<Option.Option<{ id: OrganizationId }>, E, R>
 }) =>
 	Effect.gen(function* () {
 		if (target.kind !== "slug") {
@@ -91,7 +91,7 @@ export const resolveGuestOrganizationForInviteCreate = ({
 		return resolvedOrganizationId
 	})
 
-export const validateInviteAcceptanceTarget = ({
+export const validateInviteAcceptanceTarget = <E, R>({
 	invite,
 	guestOrganizationId,
 	findBySlug,
@@ -102,7 +102,7 @@ export const validateInviteAcceptanceTarget = ({
 		guestOrganizationId: OrganizationId | null
 	}
 	guestOrganizationId: OrganizationId
-	findBySlug: (slug: string) => Effect.Effect<Option.Option<{ id: OrganizationId }>, any, any>
+	findBySlug: (slug: string) => Effect.Effect<Option.Option<{ id: OrganizationId }>, E, R>
 }) =>
 	Effect.gen(function* () {
 		if (invite.guestOrganizationId && invite.guestOrganizationId !== guestOrganizationId) {

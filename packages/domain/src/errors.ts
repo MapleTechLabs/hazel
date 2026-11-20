@@ -46,13 +46,18 @@ export class InternalServerError extends Schema.TaggedError<InternalServerError>
 		return Predicate.isTagged(u, "InternalServerError")
 	}
 
-	constructor(
-		props: { readonly message: string; readonly detail?: string | undefined; readonly cause?: unknown },
-		options?: Schema.MakeOptions,
-	) {
-		const { cause, ...fields } = props
-		super(fields, options)
-		attachCause(this, cause)
+	/** The error with the underlying failure attached as its server-side `cause`. */
+	static withCause({
+		cause,
+		...fields
+	}: {
+		readonly message: string
+		readonly detail?: string | undefined
+		readonly cause: unknown
+	}): InternalServerError {
+		const error = new InternalServerError(fields)
+		attachCause(error, cause)
+		return error
 	}
 }
 
@@ -145,7 +150,7 @@ export function withRemapDbErrors(
 	): Effect.Effect<A, Exclude<E, { _tag: "DatabaseError" | "SchemaError" }> | InternalServerError, R> => {
 		const toInternalError = (cause: unknown, detailPrefix: string) =>
 			Effect.fail(
-				new InternalServerError({
+				InternalServerError.withCause({
 					message: `Error ${action}ing ${entityType}`,
 					detail: constructDetailMessage(detailPrefix, entityType, entityId),
 					cause,

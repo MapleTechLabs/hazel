@@ -34,13 +34,13 @@ describe.skipIf(!process.env.BENCH)("api route graph", () => {
 				const build = buildApp(Context.empty(), env, {} as never, {} as never, {} as never)
 
 				const startedAt = performance.now()
-				yield* build
+				yield* Effect.asVoid(build)
 				const first = performance.now() - startedAt
 				const firstBuildCalls = [...calls]
 				const builds: Array<number> = []
 				for (let i = 0; i < RUNS; i++) {
 					const buildStartedAt = performance.now()
-					yield* build
+					yield* Effect.asVoid(build)
 					builds.push(performance.now() - buildStartedAt)
 				}
 				console.table([
