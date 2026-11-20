@@ -303,6 +303,8 @@ if (withExtension) {
 		"CFBundleSupportedPlatforms",
 		"MinimumOSVersion",
 		"UIDeviceFamily",
+		// App Store validation refuses a 64-bit extension without `arm64` here.
+		"UIRequiredDeviceCapabilities",
 		"NSUserActivityTypes",
 		"BuildMachineOSBuild",
 	])
