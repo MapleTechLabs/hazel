@@ -4,6 +4,7 @@ import {
 	buildSuggestionIndex,
 	type ChannelEvidence,
 	describeReason,
+	MAX_EVIDENCE_MEMBERS,
 	normalizeName,
 	scoreChannel,
 	type SuggestionAccount,
@@ -68,6 +69,42 @@ describe("scoreChannel", () => {
 			index(),
 		)
 		expect(notLinked).toMatchObject({ accountId: acme, autoLink: false })
+	})
+
+	it("never auto-links on a sample of the members", () => {
+		const guests = [member("ana@acme.com"), member("cy@acme.com")]
+		const whole = evidence({ origin: "connect", externalMembers: guests, externalMemberCount: 2 })
+		expect(scoreChannel(whole, index())[0]).toMatchObject({ accountId: acme, autoLink: true })
+		// More members than were seen: the unseen ones could be anyone's.
+		const sampled = evidence({ origin: "connect", externalMembers: guests, externalMemberCount: 500 })
+		expect(scoreChannel(sampled, index())[0]).toMatchObject({ accountId: acme, autoLink: false })
+		// A full sample without a count is a sample too.
+		const full = evidence({
+			origin: "connect",
+			externalMembers: Array.from({ length: MAX_EVIDENCE_MEMBERS }, (_, n) =>
+				member(n === 0 ? "ana@acme.com" : `x${n}@acme.com`),
+			),
+		})
+		expect(scoreChannel(full, index())[0]).toMatchObject({ accountId: acme, autoLink: false })
+	})
+
+	it("squashes punctuation in domain labels for name matches", () => {
+		const hyphen = buildSuggestionIndex({
+			accounts: [{ id: acme, name: "Zq", domains: ["big-bird.io"] }],
+			contacts: [],
+			links: [],
+		})
+		const [best] = scoreChannel(evidence({ channelName: "bigbird-support" }), hyphen)
+		expect(best?.reasons).toEqual([
+			{ kind: "name", where: "channel", value: "bigbird-support", matchedOn: "bigbird" },
+		])
+		// Still at least four letters once squashed.
+		const short = buildSuggestionIndex({
+			accounts: [{ id: acme, name: "Zq", domains: ["a-b.io"] }],
+			contacts: [],
+			links: [],
+		})
+		expect(scoreChannel(evidence({ channelName: "ab-team" }), short)).toEqual([])
 	})
 
 	it("suggests nothing without evidence", () => {

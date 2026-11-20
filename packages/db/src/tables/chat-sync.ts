@@ -1,5 +1,6 @@
 import {
 	ChannelId,
+	type ExternalUserId,
 	IntegrationConnectionId,
 	MessageId,
 	OrganizationId,
@@ -10,7 +11,7 @@ import {
 	UserId,
 } from "@hazel/schema"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
-import { jsonb, randomUuid, textEnum, timestamptz, uuid, varchar } from "./columns"
+import { jsonb, randomUuid, textEnum, timestamptz, typed, uuid, varchar } from "./columns"
 
 export const chatSyncConnectionStatusEnum = textEnum(["active", "paused", "error", "disabled"])
 export const chatSyncDirectionEnum = textEnum(["both", "hazel_to_external", "external_to_hazel"])
@@ -85,7 +86,7 @@ export const chatSyncChannelAuthorsTable = SQLite.table("chat_sync_channel_autho
 	columns: {
 		hazelChannelId: uuid(ChannelId),
 		provider: varchar(50),
-		externalUserId: varchar(255),
+		externalUserId: typed<ExternalUserId>()(varchar(255)),
 		externalWorkspaceId: SQLite.nullable(varchar(255)),
 		email: SQLite.nullable(varchar(320)),
 		firstSeenAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),

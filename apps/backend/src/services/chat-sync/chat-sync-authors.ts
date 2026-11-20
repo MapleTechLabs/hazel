@@ -64,13 +64,14 @@ export const recordChannelAuthor = Effect.fn("OrgObject.chatSyncRecordAuthor")(f
 		(email !== null && email !== existing.value.email) ||
 		(workspace !== null && workspace !== existing.value.externalWorkspaceId)
 	if (!learned && now.getTime() - existing.value.lastSeenAt.getTime() < SEEN_REFRESH_MS) return
-	// What a lookup could not tell this time (a timeout, the scope not approved yet) is kept.
+	// What a lookup could not tell this time (a timeout, the scope not approved yet) is kept: an
+	// unknown value is left out of the SET (the row's own value stays, whatever was read above).
 	yield* db.run(
 		SQLite.update(schema.chatSyncChannelAuthorsTable)
 			.set({
 				lastSeenAt: now,
-				email: email ?? existing.value.email,
-				externalWorkspaceId: workspace ?? existing.value.externalWorkspaceId,
+				email: email ?? undefined,
+				externalWorkspaceId: workspace ?? undefined,
 			})
 			.where(($) => [
 				$.hazelChannelId.eq(channelId),
