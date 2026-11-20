@@ -528,6 +528,7 @@ export const describeReason = (reason: SuggestionReason, accountName: string): s
 		case "name":
 			return reason.where === "channel"
 				? `The channel name contains "${reason.matchedOn}"`
-				: `The ${reason.value} workspace name contains "${reason.matchedOn}"`
+				: // A Discord server or a Slack Connect team: the reason does not say which.
+					`The ${reason.value} name contains "${reason.matchedOn}"`
 	}
 }

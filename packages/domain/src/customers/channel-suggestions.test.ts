@@ -287,3 +287,11 @@ describe("auto-link denominator", () => {
 		expect(half[0]).toMatchObject({ accountId: acme, autoLink: true })
 	})
 })
+
+describe("name reasons", () => {
+	it("names a Discord server or Slack Connect team without calling it a workspace", () => {
+		const guild = { provider: "discord" as const, id: "G9", name: "Globex HQ", external: false }
+		const [best] = scoreChannel(evidence({ workspaces: [guild] }), index())
+		expect(describeReason(best!.reasons[0]!, "Globex")).toBe('The Globex HQ name contains "globex"')
+	})
+})
