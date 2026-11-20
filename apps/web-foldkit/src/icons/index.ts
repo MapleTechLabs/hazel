@@ -1744,6 +1744,47 @@ export const IconHeart = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		],
 	)
 
+export const IconImage = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
+	icon(
+		h,
+		{
+			height: "18",
+			width: "18",
+			"data-slot": "icon",
+			viewBox: "0 0 18 18",
+			xmlns: "http://www.w3.org/2000/svg",
+		},
+		options,
+		[
+			h.g(
+				[h.Attribute("fill", "currentColor")],
+				[
+					h.path([
+						h.Attribute(
+							"d",
+							"M4 2.5H14C15.38 2.5 16.5 3.62 16.5 5V13C16.5 14.38 15.38 15.5 14 15.5H4C2.62 15.5 1.5 14.38 1.5 13V5C1.5 3.62 2.62 2.5 4 2.5Z",
+						),
+						h.Attribute("opacity", "0.4"),
+					]),
+					h.path([
+						h.Attribute("d", "M4.25 13.25L8.97 8.53C9.56 7.94 10.5 7.94 11.09 8.53L13.75 11.19"),
+						h.Attribute("fill", "none"),
+						h.Attribute("stroke", "currentColor"),
+						h.Attribute("stroke-linecap", "round"),
+						h.Attribute("stroke-linejoin", "round"),
+						h.Attribute("stroke-width", "1.5"),
+					]),
+					h.path([
+						h.Attribute(
+							"d",
+							"M6.25 7.75C6.94 7.75 7.5 7.19 7.5 6.5C7.5 5.81 6.94 5.25 6.25 5.25C5.56 5.25 5 5.81 5 6.5C5 7.19 5.56 7.75 6.25 7.75Z",
+						),
+					]),
+				],
+			),
+		],
+	)
+
 export const IconIntegratio = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
 	icon(
 		h,

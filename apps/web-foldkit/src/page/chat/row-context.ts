@@ -8,6 +8,7 @@ import {
 	IconEdit,
 	IconEmojiAdd,
 	IconHashtag,
+	IconImage,
 	IconLink,
 	IconReply,
 	IconStar,
@@ -123,7 +124,7 @@ const contextItem = (h: H, key: string, label: string, icon: Html): ReadonlyArra
 const contextMenuContent =
 	(h: H, isPinned: boolean) =>
 	(key: string): ReadonlyArray<Html> => {
-		const icon = (render: typeof IconCopy, className = "ml-auto size-4 text-muted-fg") =>
+		const icon = (render: typeof IconCopy, className = "ml-auto size-4") =>
 			render(h, { className, attributes: { "data-slot": "icon" } })
 		if (key === "add-reaction") return contextItem(h, key, "Add Reaction", icon(IconEmojiAdd))
 		if (key === "reply") return contextItem(h, key, "Reply", icon(IconReply))
@@ -131,7 +132,7 @@ const contextMenuContent =
 		if (key === "thread") return contextItem(h, key, "Reply in Thread", icon(IconThread))
 		if (key === "create-issue") return contextItem(h, key, "Create Issue", icon(IconSupport))
 		if (key === "copy") return contextItem(h, key, "Copy Text", icon(IconCopy))
-		if (key === Overlays.COPY_IMAGE) return contextItem(h, key, "Copy Image", icon(IconCopy))
+		if (key === Overlays.COPY_IMAGE) return contextItem(h, key, "Copy Image", icon(IconImage))
 		if (key === Overlays.COPY_IMAGE_URL) return contextItem(h, key, "Copy Image Address", icon(IconLink))
 		if (key === "pin")
 			return contextItem(
@@ -140,7 +141,7 @@ const contextMenuContent =
 				isPinned ? "Unpin Message" : "Pin Message",
 				icon(isPinned ? IconUnpin : IconStar),
 			)
-		if (key === "delete") return contextItem(h, key, "Delete Message", icon(IconTrash, "ml-auto size-4"))
+		if (key === "delete") return contextItem(h, key, "Delete Message", icon(IconTrash))
 		return contextItem(h, key, "Copy Message ID", icon(IconHashtag))
 	}
 
