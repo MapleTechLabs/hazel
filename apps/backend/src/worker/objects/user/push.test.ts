@@ -1,43 +1,30 @@
 import { describe, expect, it } from "vitest"
 import { apnsOutcome, decidePush, PUSH_IDLE_DELAY_MS, type PushInput } from "./push"
-import { SESSION_TIMEOUT_MS } from "./presence-timing"
-
-const NOW = 1_800_000_000_000
 
 const input = (overrides: Partial<PushInput> = {}): PushInput => ({
 	enabled: true,
 	hasContent: true,
 	silent: false,
 	devices: 1,
-	presence: undefined,
-	nowMs: NOW,
+	preferred: "online",
+	isActive: false,
 	...overrides,
 })
 
-const seen = (status: NonNullable<PushInput["presence"]>["status"], agoMs = 0) => ({
-	status,
-	lastSeenAt: new Date(NOW - agoMs),
-})
-
 describe("decidePush", () => {
-	it("pushes at once to a user never seen, offline or away", () => {
+	it("pushes at once while no client is in active use (offline, or AFK everywhere)", () => {
 		expect(decidePush(input())).toEqual({ _tag: "Now" })
-		expect(decidePush(input({ presence: seen("offline") }))).toEqual({ _tag: "Now" })
-		expect(decidePush(input({ presence: seen("away") }))).toEqual({ _tag: "Now" })
+		expect(decidePush(input({ preferred: "idle" }))).toEqual({ _tag: "Now" })
 	})
 
-	it("defers while the user is online or busy on another client", () => {
+	it("waits while some client is in active use, invisible included", () => {
 		const deferred = { _tag: "Defer", delayMs: PUSH_IDLE_DELAY_MS }
-		expect(decidePush(input({ presence: seen("online", 1_000) }))).toEqual(deferred)
-		expect(decidePush(input({ presence: seen("busy", 1_000) }))).toEqual(deferred)
-	})
-
-	it("pushes at once when the online status is stale (no heartbeat for the timeout)", () => {
-		expect(decidePush(input({ presence: seen("online", SESSION_TIMEOUT_MS) }))).toEqual({ _tag: "Now" })
+		expect(decidePush(input({ isActive: true }))).toEqual(deferred)
+		expect(decidePush(input({ isActive: true, preferred: "invisible" }))).toEqual(deferred)
 	})
 
 	it("never pushes on dnd, silent, without devices, content or config", () => {
-		expect(decidePush(input({ presence: seen("dnd") }))).toEqual({ _tag: "Skip", reason: "dnd" })
+		expect(decidePush(input({ preferred: "dnd" }))).toEqual({ _tag: "Skip", reason: "dnd" })
 		expect(decidePush(input({ silent: true }))).toEqual({ _tag: "Skip", reason: "silent" })
 		expect(decidePush(input({ devices: 0 }))).toEqual({ _tag: "Skip", reason: "no-devices" })
 		expect(decidePush(input({ hasContent: false }))).toEqual({ _tag: "Skip", reason: "no-content" })

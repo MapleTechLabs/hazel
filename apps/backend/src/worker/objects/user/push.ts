@@ -3,12 +3,12 @@
  * notification is pushed (`decidePush`), and the `push.send` outbox effect that sends it to APNs
  * (`services/apns.ts`), one row per device.
  *
- * A push goes out only while the user is idle elsewhere: offline or away (or never seen) is
- * pushed at once; online or busy on some client is deferred `PUSH_IDLE_DELAY_MS`, an outbox row
- * the alarm delivers. Every send first checks that the notification still exists and is unread
- * (reading the channel deletes it, `user.clearChannelNotifications`), so a deferred push the
- * user already saw on another client is dropped. Silent notifications (do not disturb, quiet
- * hours) and `dnd` are never pushed.
+ * As in Discord, a push goes out at once while the user is not in active use of any client (no
+ * session, or every session AFK); while they are, it waits `PUSH_IDLE_DELAY_MS` (an outbox row the
+ * alarm delivers). Every send first checks that the notification still exists and is unread
+ * (reading the channel deletes it, `user.clearChannelNotifications`), so a push the user already
+ * saw on another client is dropped. Do Not Disturb (now, or set while a push waited) and silent
+ * notifications (paused, quiet hours) are never pushed. Invisible counts as online here.
  *
  * Each row has its own target (`push:<notificationId>.<n>`): a retrying device never holds back
  * another device or a later notification behind the outbox's per-target order.
@@ -19,8 +19,9 @@ import { Clock, Effect, Option, Schema } from "effect"
 import { ApnsClient, ApnsRetryableError, type ApnsResult } from "../../../services/apns"
 import { Directory } from "../../../services/directory"
 import { CurrentEffectSender, defineEffect, enqueueEffect, type EffectReceivers } from "../effects/registry"
+import { type OwnPresence, ownPresence } from "./presence-own"
+import { effectiveStatus, isActiveAnywhere, type PreferredStatus } from "./presence-model"
 import { tokenOwner } from "./push-ownership"
-import { SESSION_TIMEOUT_MS } from "./presence-timing"
 
 /** How long a notification waits while the user is active elsewhere. */
 export const PUSH_IDLE_DELAY_MS = 60_000
@@ -61,11 +62,10 @@ export interface PushInput {
 	readonly hasContent: boolean
 	readonly silent: boolean
 	readonly devices: number
-	/** The owner's presence row; undefined: never seen. */
-	readonly presence:
-		| { readonly status: schema.UserPresenceStatus["status"]; readonly lastSeenAt: Date }
-		| undefined
-	readonly nowMs: number
+	/** The status the owner picked (expired picks are online). */
+	readonly preferred: PreferredStatus
+	/** Whether some session of theirs is in active use (not AFK). */
+	readonly isActive: boolean
 }
 
 /** Whether a new notification is pushed, now or after `PUSH_IDLE_DELAY_MS`. Pure. */
@@ -74,21 +74,8 @@ export const decidePush = (input: PushInput): PushDecision => {
 	if (!input.hasContent) return { _tag: "Skip", reason: "no-content" }
 	if (input.silent) return { _tag: "Skip", reason: "silent" }
 	if (input.devices === 0) return { _tag: "Skip", reason: "no-devices" }
-	const { presence } = input
-	if (presence === undefined) return { _tag: "Now" }
-	switch (presence.status) {
-		case "dnd":
-			return { _tag: "Skip", reason: "dnd" }
-		case "offline":
-		case "away":
-			return { _tag: "Now" }
-		case "online":
-		case "busy":
-			// No heartbeat for the timeout: gone, even if the alarm has not marked it offline yet.
-			return presence.lastSeenAt.getTime() + SESSION_TIMEOUT_MS <= input.nowMs
-				? { _tag: "Now" }
-				: { _tag: "Defer", delayMs: PUSH_IDLE_DELAY_MS }
-	}
+	if (input.preferred === "dnd") return { _tag: "Skip", reason: "dnd" }
+	return input.isActive ? { _tag: "Defer", delayMs: PUSH_IDLE_DELAY_MS } : { _tag: "Now" }
 }
 
 /** What to do with APNs's answer. Pure. */
@@ -165,27 +152,27 @@ export const schedulePush = Effect.fn("UserObject.pushDecision")(function* (inpu
 	readonly channelId: ChannelId
 	readonly silent: boolean
 	readonly content: PushContent | undefined
+	/** The owner's state, when the caller already read it (`ownPresence`). */
+	readonly presence?: OwnPresence
 }) {
 	const apns = yield* ApnsClient
 	const db = yield* Database.Database
 	const devices = yield* db.run(SQLite.from(schema.pushDevicesTable).select("token"))
-	// The store holds only its owner's presence row.
-	const presence = yield* db.first(
-		SQLite.from(schema.userPresenceStatusTable).select("status", "lastSeenAt").limit(1),
-	)
+	const own = input.presence ?? (yield* ownPresence)
 	const decision = decidePush({
 		enabled: apns.enabled,
 		hasContent: input.content !== undefined,
 		silent: input.silent,
 		devices: devices.length,
-		presence: Option.getOrUndefined(presence),
-		nowMs: yield* Clock.currentTimeMillis,
+		preferred: own.preferred,
+		isActive: isActiveAnywhere(own.sessions),
 	})
 	yield* Effect.annotateCurrentSpan({
 		"push.decision": decision._tag,
 		"push.skip_reason": decision._tag === "Skip" ? decision.reason : "",
 		"push.devices": devices.length,
-		"push.presence": Option.match(presence, { onNone: () => "none", onSome: (row) => row.status }),
+		"push.preferred": own.preferred,
+		"push.sessions": own.sessions.length,
 	})
 	if (decision._tag === "Skip" || input.content === undefined) return decision
 	const content = input.content
@@ -234,9 +221,9 @@ const sendPush = Effect.fn("UserObject.sendPush")(function* (payload: PushSendPa
 		yield* Effect.annotateCurrentSpan({ "push.skipped": "expired" })
 		return
 	}
-	// Deferred while they were online: do not disturb set since then holds it back.
-	const presence = yield* db.first(SQLite.from(schema.userPresenceStatusTable).select("status").limit(1))
-	if (Option.isSome(presence) && presence.value.status === "dnd") {
+	// Deferred while they were active: Do Not Disturb picked since then holds it back.
+	const preference = yield* db.first(SQLite.from(schema.userPresenceSettingsTable).select().limit(1))
+	if (effectiveStatus(Option.getOrUndefined(preference), nowMs) === "dnd") {
 		yield* Effect.annotateCurrentSpan({ "push.skipped": "dnd" })
 		return
 	}

@@ -214,6 +214,8 @@ export class NotificationService extends Context.Service<NotificationService>()(
 								silent: recipient.silent,
 								// A silent notification shows no system notification.
 								push: recipient.silent ? undefined : push,
+								organizationId,
+								userId: recipient.userId,
 							},
 							{ id: `notify:${activity.messageId}:${recipient.userId}` },
 						),

@@ -10,6 +10,8 @@ import { Effect, Schema } from "effect"
 import { NotificationReasons } from "../../../services/notifications/notification-rules"
 import { defineEffect, enqueueEffect } from "../effects/registry"
 import { NotificationCountOrgEffects } from "../org/notification-count"
+import { isReading } from "./presence-model"
+import { ownPresence } from "./presence-own"
 import { PushContent, schedulePush } from "./push"
 
 export const CreateNotificationPayload = Schema.Struct({
@@ -21,6 +23,12 @@ export const CreateNotificationPayload = Schema.Struct({
 	silent: Schema.optional(Schema.Boolean),
 	/** Optional: deliveries enqueued before push have none, and are not pushed. */
 	push: Schema.optional(PushContent),
+	/**
+	 * The channel's org and this object's owner, so a notification dropped here (the owner is
+	 * reading the channel) comes off the org's unread count. Optional: older deliveries lack them.
+	 */
+	organizationId: Schema.optional(OrganizationId),
+	userId: Schema.optional(UserId),
 })
 export type CreateNotificationPayload = typeof CreateNotificationPayload.Type
 
@@ -47,6 +55,21 @@ export const createNotification = Effect.fn("UserEffects.createNotification")(fu
 	payload: CreateNotificationPayload,
 ) {
 	const db = yield* Database.Database
+	const own = yield* ownPresence
+	// Reading the channel right now (a focused window in use, even while invisible): nothing to tell.
+	if (isReading(own.sessions, payload.channelId)) {
+		yield* Effect.annotateCurrentSpan({ "notification.skipped": "reading" })
+		if (payload.organizationId !== undefined && payload.userId !== undefined) {
+			yield* enqueueEffect(
+				NotificationCountOrgEffects.notificationsRemoved,
+				{ kind: "org", id: payload.organizationId },
+				{ channelId: payload.channelId, userId: payload.userId, count: 1 },
+			)
+		}
+		return
+	}
+	// Do Not Disturb: no sound, no system notification, no push; the unread badge still counts.
+	const silent = (payload.silent ?? false) || own.preferred === "dnd"
 	const [created] = yield* db.run(
 		SQLite.insertInto(schema.notificationsTable)
 			.values({
@@ -56,7 +79,7 @@ export const createNotification = Effect.fn("UserEffects.createNotification")(fu
 				resourceId: payload.messageId,
 				resourceType: "message",
 				reason: payload.reason ?? null,
-				silent: payload.silent ?? false,
+				silent,
 			})
 			.returning("id"),
 	)
@@ -64,8 +87,9 @@ export const createNotification = Effect.fn("UserEffects.createNotification")(fu
 	yield* schedulePush({
 		notificationId: created.id,
 		channelId: payload.channelId,
-		silent: payload.silent ?? false,
+		silent,
 		content: payload.push,
+		presence: own,
 	})
 })
 
