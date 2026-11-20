@@ -370,7 +370,7 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 								preview.value.externalWorkspaceId,
 								payload.channels.map((channel) => channel.externalChannelId),
 							)
-						: new Map<string, OrganizationId>()
+						: new Map<ExternalChannelId, OrganizationId>()
 					return yield* db.transaction(
 						Effect.gen(function* () {
 							const connectionOption = yield* connectionRepo.findById(payload.syncConnectionId)

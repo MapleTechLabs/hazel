@@ -95,11 +95,11 @@ const OWNER_LOOKUP_CHUNK = 90
 export const indexedLinkOwners = (
 	provider: string,
 	externalWorkspaceId: string,
-	externalChannelIds: ReadonlyArray<string>,
+	externalChannelIds: ReadonlyArray<ExternalChannelId>,
 ) =>
 	Effect.gen(function* () {
 		const directory = yield* Directory
-		const owners = new Map<string, OrganizationId>()
+		const owners = new Map<ExternalChannelId, OrganizationId>()
 		const prefix = `${provider}:${externalWorkspaceId}:`
 		const ids = [...new Set(externalChannelIds)].map((id) => `${prefix}${id}`)
 		for (let start = 0; start < ids.length; start += OWNER_LOOKUP_CHUNK) {
@@ -108,7 +108,9 @@ export const indexedLinkOwners = (
 					.select("id", "organizationId")
 					.where(($) => [$.id.in_(...ids.slice(start, start + OWNER_LOOKUP_CHUNK))]),
 			)
-			for (const row of rows) owners.set(row.id.slice(prefix.length), row.organizationId)
+			for (const row of rows) {
+				owners.set(row.id.slice(prefix.length) as ExternalChannelId, row.organizationId)
+			}
 		}
 		return owners
 	}).pipe(
