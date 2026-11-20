@@ -78,5 +78,4 @@ export const dropdownCheckIndicatorClassName = twJoin(
 export const dropdownLabelBase = "col-start-2"
 export const dropdownDescriptionBase = "col-start-2 font-normal text-muted-fg text-sm"
 export const dropdownSeparatorBase = "col-span-full -mx-1 my-1 h-px bg-border"
-export const dropdownKeyboardBase =
-	"absolute right-2 pl-2 group-hover:text-primary-fg group-data-focused:text-primary-fg"
+export const dropdownKeyboardBase = "absolute right-2 pl-2"

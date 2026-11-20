@@ -3,7 +3,8 @@ import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
-import { Membership, Theme, UpdateUserFailure } from "./model"
+import * as ChatMigration from "../shared/chat-migration"
+import { Data, Membership, Theme, UpdateUserFailure } from "./model"
 
 export const Message = defineMessageUnion({
 	DetectedBrowserTimezone: { browserTimezone: Schema.String },
@@ -33,6 +34,11 @@ export const Message = defineMessageUnion({
 	// Use case and role
 	GotChoiceBoxMessage: { message: ChoiceBox.Message },
 	ClickedContinueChoice: {},
+	// Import from Slack or Discord
+	GotMigrationMessage: { message: ChatMigration.Message },
+	/** The answers kept across the import step's OAuth redirect (`null`: none kept). */
+	RestoredAnswers: { data: Schema.NullOr(Data) },
+	CompletedStoreAnswers: {},
 	// Invite
 	ChangedEmail: { rowId: Schema.Number, value: Schema.String },
 	ClickedAddEmail: {},

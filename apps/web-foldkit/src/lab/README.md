@@ -5,6 +5,13 @@ On in dev (`bun run dev` → `http://localhost:3100/lab`) and wherever `VITE_HAZ
 every page. `?theme=dark|light` overrides the system theme; each page's switches (`?state=` …) are
 links in its header.
 
+`/lab/kit` is the design system on one page: every `src/ui` component, live, grouped as Foundations,
+Actions, Fields, Selection, Navigation, Feedback, Overlays and Display (`src/lab/kit/`, one file per
+group). A component added to the kit gets a specimen there. `bun run gallery src/lab/kit.gallery.ts`
+boots the same page in a headless browser and writes each section, and each overlay opened by a real
+press, to `src/lab/__screenshots__/kit/` in light and dark (`VITE_GALLERY_LABEL=before` prefixes the
+files, for a before/after pair).
+
 ## Adding a page (c/d: customers pages)
 
 1. Add `src/lab/entries/customers/pages/<name>.ts` exporting `lab`. That's the registration: it is

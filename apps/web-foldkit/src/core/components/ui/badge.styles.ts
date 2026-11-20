@@ -6,7 +6,7 @@ export const badgeStyles = tv({
 		"inset-ring inset-ring-(--badge-ring) bg-(--badge-bg) text-(--badge-fg) [--badge-ring:transparent]",
 		"group-hover:bg-(--badge-overlay) group-focus:bg-(--badge-overlay)",
 		"*:data-[slot=icon]:shrink-0",
-		"duration-200",
+		"transition-colors duration-200 ease-out",
 		// Tabular numbers for consistent width when displaying counts
 		"tabular-nums",
 	],

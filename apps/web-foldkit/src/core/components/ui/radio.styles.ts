@@ -1,11 +1,13 @@
 import type { ClassNameValue } from "tailwind-merge"
 
-export const radioGroupStyles = [
-	"space-y-3 **:data-[slot=label]:font-normal",
-	"has-[slot=description]:space-y-6 has-[slot=description]:**:data-[slot=label]:font-medium",
-]
+/** Options sit closer than groups of them; ones with a description get a little more air. */
+export const radioGroupStyles = ["space-y-3 has-[[slot=description]]:space-y-4"]
 
-export const radioStyles = "group block data-disabled:opacity-50"
+/** The group's own label names the question, so it is the stronger one. */
+export const radioGroupLabelStyles = "font-medium"
+
+/** An option's label is body weight, medium once it carries a description (`radioLayoutStyles`). */
+export const radioStyles = "group block data-disabled:opacity-50 **:data-[slot=label]:font-normal"
 
 /** The grid inside the radio label: `twMerge(...radioLayoutStyles)`. */
 export const radioLayoutStyles = [
@@ -23,7 +25,7 @@ export interface RadioIndicatorState {
 
 /** The dot: `twMerge(radioIndicatorStyles(state))`. The focus ring follows the label (`group`). */
 export const radioIndicatorStyles = ({ isSelected, isInvalid }: RadioIndicatorState): ClassNameValue[] => [
-	"relative inset-ring inset-ring-input isolate flex size-4.5 shrink-0 items-center justify-center rounded-full text-bg transition before:absolute before:inset-auto before:size-2 before:shrink-0 before:rounded-full before:content-[''] hover:before:bg-muted-fg/20 sm:size-4 sm:before:size-1.7",
+	"relative inset-ring inset-ring-input isolate flex size-4.5 shrink-0 items-center justify-center rounded-full text-bg transition before:absolute before:inset-auto before:size-2 before:shrink-0 before:rounded-full before:content-[''] hover:before:bg-muted-fg/20 sm:size-4",
 	isSelected && [
 		"inset-ring-primary bg-primary text-primary-fg before:bg-bg hover:before:bg-muted/90",
 		"group-data-invalid:inset-ring-danger-subtle-fg/70 group-data-invalid:bg-danger group-data-invalid:text-danger-fg",

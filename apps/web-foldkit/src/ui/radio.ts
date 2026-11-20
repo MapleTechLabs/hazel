@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import {
+	radioGroupLabelStyles,
 	radioGroupStyles,
 	radioIndicatorStyles,
 	radioLayoutStyles,
@@ -130,7 +131,16 @@ export const radioGroup = <Message>(
 	const partsFor = (hasDescription: boolean): RadioGroupParts<Message> => ({
 		label: (children, part = {}) => {
 			used.add("label")
-			return Field.label(h, { ...part, id: ids.label, elementType: "span" }, children)
+			return Field.label(
+				h,
+				{
+					...part,
+					className: twMerge(radioGroupLabelStyles, part.className),
+					id: ids.label,
+					elementType: "span",
+				},
+				children,
+			)
 		},
 		description: (children, part = {}) => {
 			used.add("description")

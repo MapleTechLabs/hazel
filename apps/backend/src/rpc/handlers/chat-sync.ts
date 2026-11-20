@@ -5,12 +5,21 @@
  * links to their `ChannelObject`s (`services/chat-sync/chat-sync-org.ts`).
  */
 import {
+	ChannelMemberRepo,
+	ChannelRepo,
 	ChatSyncChannelLinkRepo,
 	ChatSyncConnectionRepo,
 	IntegrationConnectionRepo,
+	OrganizationMemberRepo,
 } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
-import { ExternalChannelId } from "@hazel/schema"
+import {
+	type ChannelId,
+	ExternalChannelId,
+	type OrganizationId,
+	type SyncConnectionId,
+	type UserId,
+} from "@hazel/schema"
 import { CurrentUser, InternalServerError, withRemapDbErrors } from "@hazel/domain"
 import {
 	ChatSyncChannelLinkExistsError,
@@ -22,19 +31,44 @@ import {
 	ChatSyncConnectionListResponse,
 	ChatSyncConnectionNotFoundError,
 	ChatSyncConnectionResponse,
+	ChatSyncMigrateResponse,
 	ChatSyncRpcs,
 	ChannelNotFoundError,
+	CHAT_SYNC_MIGRATION_MAX_MESSAGES,
+	chatSyncHistorySince,
 } from "@hazel/domain/rpc"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { IntegrationConnectionPolicy } from "../../policies/integration-connection-policy"
-import { indexedLinkOwner } from "../../services/chat-sync/chat-sync-index"
+import { indexedLinkOwner, indexedLinkOwners } from "../../services/chat-sync/chat-sync-index"
 import { indexChatSync, publishChatSyncLinks, threadLinksUnder } from "../../services/chat-sync/chat-sync-org"
-import { ChatSyncDeliveryEffects, ChatSyncHistoryEffects } from "../../services/chat-sync/chat-sync-effects"
+import {
+	type ChatSyncDirection,
+	ChatSyncDeliveryEffects,
+	ChatSyncHistoryEffects,
+} from "../../services/chat-sync/chat-sync-effects"
 import { normalizeChannelLinkSettings } from "../../services/chat-sync/chat-sync-settings"
 import { isChatSyncProviderId } from "../../services/chat-sync/provider"
 import { chatSyncProviders } from "../../services/chat-sync/providers"
+import { BotGatewayEffects } from "../../worker/objects/effects/bot-gateway-effects"
 import { enqueueEffect } from "../../worker/objects/effects/registry"
+import { syncChannelAccess } from "../../worker/objects/org/channel-access"
+
+/** A provider channel's name as a Hazel channel's: trimmed, at most 80 characters, never empty. */
+export const migratedChannelName = (name: string): string => name.trim().slice(0, 80) || "imported"
+
+/**
+ * `wanted`, or the first `wanted-2`, `wanted-3`, ... that `isTaken` lets through, kept within a
+ * channel name's 80 characters.
+ */
+export const freeChannelName = (wanted: string, isTaken: (name: string) => boolean): string => {
+	if (!isTaken(wanted)) return wanted
+	for (let suffix = 2; ; suffix++) {
+		const tail = `-${suffix}`
+		const candidate = `${wanted.slice(0, 80 - tail.length)}${tail}`
+		if (!isTaken(candidate)) return candidate
+	}
+}
 
 export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 	Effect.gen(function* () {
@@ -43,6 +77,82 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 		const channelLinkRepo = yield* ChatSyncChannelLinkRepo
 		const integrationConnectionRepo = yield* IntegrationConnectionRepo
 		const integrationConnectionPolicy = yield* IntegrationConnectionPolicy
+		const channelRepo = yield* ChannelRepo
+		const channelMemberRepo = yield* ChannelMemberRepo
+		const organizationMemberRepo = yield* OrganizationMemberRepo
+
+		const addMember = (channelId: ChannelId, userId: UserId) =>
+			channelMemberRepo.insert({
+				channelId,
+				userId,
+				isHidden: false,
+				isMuted: false,
+				isFavorite: false,
+				lastSeenMessageId: null,
+				notificationCount: 0,
+				joinedAt: new Date(),
+				deletedAt: null,
+			})
+
+		/**
+		 * Saves a link and starts it: the directory index, the channel's projection, the provider's
+		 * preparation (Slack joins), and the history import when messages flow into Hazel.
+		 */
+		const insertLink = Effect.fn("ChatSyncRpc.insertLink")(function* (
+			connection: {
+				readonly id: SyncConnectionId
+				readonly provider: string
+				readonly externalWorkspaceId: string
+				readonly organizationId: OrganizationId
+			},
+			input: {
+				readonly hazelChannelId: ChannelId
+				readonly externalChannelId: ExternalChannelId
+				readonly externalChannelName: string | null
+				readonly direction: ChatSyncDirection
+				readonly settings: Record<string, unknown> | undefined
+				readonly history: { readonly remaining: number; readonly since: number | null }
+				/** A migration starts its imports itself, as one chain (`importHistory`'s `then`). */
+				readonly startsImport?: boolean
+			},
+		) {
+			const [link] = yield* channelLinkRepo.insert({
+				syncConnectionId: connection.id,
+				hazelChannelId: input.hazelChannelId,
+				externalChannelId: input.externalChannelId,
+				externalChannelName: input.externalChannelName,
+				direction: input.direction,
+				isActive: true,
+				settings: normalizeChannelLinkSettings(input.settings),
+				lastSyncedAt: null,
+				deletedAt: null,
+			})
+			yield* indexChatSync(connection, { link: link!, deleted: false })
+			yield* publishChatSyncLinks(link!.hazelChannelId)
+			const target = {
+				provider: connection.provider,
+				externalWorkspaceId: connection.externalWorkspaceId,
+				externalChannelId: link!.externalChannelId as ExternalChannelId,
+			}
+			yield* enqueueEffect(ChatSyncDeliveryEffects.prepareLink, { kind: "chat-sync" }, target)
+			if (
+				input.startsImport !== false &&
+				input.history.remaining > 0 &&
+				link!.direction !== "hazel_to_external"
+			) {
+				yield* enqueueEffect(
+					ChatSyncHistoryEffects.importHistory,
+					{ kind: "chat-sync" },
+					{
+						...target,
+						remaining: input.history.remaining,
+						cursor: null,
+						since: input.history.since,
+					},
+				)
+			}
+			return link!
+		})
 
 		return {
 			"chatSync.connection.create": (payload) =>
@@ -232,48 +342,22 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 								)
 							}
 
-							const [link] = yield* channelLinkRepo.insert({
-								syncConnectionId: payload.syncConnectionId,
+							const link = yield* insertLink(connection, {
 								hazelChannelId: payload.hazelChannelId,
 								externalChannelId: payload.externalChannelId,
 								externalChannelName: payload.externalChannelName ?? null,
 								direction: payload.direction ?? "both",
-								isActive: true,
-								settings: normalizeChannelLinkSettings(payload.settings),
-								lastSyncedAt: null,
-								deletedAt: null,
-							})
-							yield* indexChatSync(connection, { link: link!, deleted: false })
-							yield* publishChatSyncLinks(link!.hazelChannelId)
-							yield* enqueueEffect(
-								ChatSyncDeliveryEffects.prepareLink,
-								{ kind: "chat-sync" },
-								{
-									provider: connection.provider,
-									externalWorkspaceId: connection.externalWorkspaceId,
-									externalChannelId: link!.externalChannelId as ExternalChannelId,
+								settings: payload.settings,
+								history: {
+									remaining: Math.min(
+										payload.historyLimit ?? 0,
+										isChatSyncProviderId(connection.provider)
+											? chatSyncProviders[connection.provider].history.maxMessages
+											: 0,
+									),
+									since: null,
 								},
-							)
-							// Past messages come in only where the provider's messages flow into Hazel.
-							const historyLimit = Math.min(
-								payload.historyLimit ?? 0,
-								isChatSyncProviderId(connection.provider)
-									? chatSyncProviders[connection.provider].history.maxMessages
-									: 0,
-							)
-							if (historyLimit > 0 && link!.direction !== "hazel_to_external") {
-								yield* enqueueEffect(
-									ChatSyncHistoryEffects.importHistory,
-									{ kind: "chat-sync" },
-									{
-										provider: connection.provider,
-										externalWorkspaceId: connection.externalWorkspaceId,
-										externalChannelId: link!.externalChannelId as ExternalChannelId,
-										remaining: historyLimit,
-										cursor: null,
-									},
-								)
-							}
+							})
 
 							const brandedLink = {
 								...link,
@@ -287,6 +371,186 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 						}),
 					)
 					.pipe(withRemapDbErrors("ChatSyncChannelLink", "create")),
+
+			"chatSync.migrate": (payload) =>
+				Effect.gen(function* () {
+					// Who syncs each channel already, read from the directory before the transaction:
+					// a D1 round trip per channel would hold the org's transaction open meanwhile.
+					const preview = yield* connectionRepo.findById(payload.syncConnectionId)
+					const owners = Option.isSome(preview)
+						? yield* indexedLinkOwners(
+								preview.value.provider,
+								preview.value.externalWorkspaceId,
+								payload.channels.map((channel) => channel.externalChannelId),
+							)
+						: new Map<ExternalChannelId, OrganizationId>()
+					return yield* db.transaction(
+						Effect.gen(function* () {
+							const connectionOption = yield* connectionRepo.findById(payload.syncConnectionId)
+							if (
+								Option.isNone(connectionOption) ||
+								connectionOption.value.organizationId !== payload.organizationId
+							) {
+								return yield* new ChatSyncConnectionNotFoundError({
+									syncConnectionId: payload.syncConnectionId,
+								})
+							}
+							const connection = connectionOption.value
+							yield* integrationConnectionPolicy.canInsert(connection.organizationId)
+							const currentUser = yield* CurrentUser.Context
+							yield* Effect.annotateCurrentSpan({
+								"chat_sync.provider": connection.provider,
+								"chat_sync.migration.channels": payload.channels.length,
+								"chat_sync.migration.history": payload.history,
+							})
+
+							const budget =
+								payload.history === "none" || !isChatSyncProviderId(connection.provider)
+									? 0
+									: CHAT_SYNC_MIGRATION_MAX_MESSAGES[connection.provider]
+							const history = {
+								remaining: budget,
+								since: chatSyncHistorySince(payload.history, Date.now()),
+							}
+							const members = yield* organizationMemberRepo.findAllByOrganization(
+								connection.organizationId,
+							)
+							const memberIds = new Set([currentUser.id, ...members.map((m) => m.userId)])
+
+							// The org's live top-level public channels by name: a migrated channel
+							// reuses one of its name (e.g. #general) instead of making a twin.
+							const existingChannels = yield* db.run(
+								SQLite.from(schema.channelsTable)
+									.select("id", "name")
+									.where(($) => [
+										$.organizationId.eq(connection.organizationId),
+										$.type.eq("public"),
+										$.parentChannelId.isNull(),
+										$.deletedAt.isNull(),
+									]),
+							)
+							const channelByName = new Map(
+								existingChannels.map((channel) => [channel.name.toLowerCase(), channel]),
+							)
+							const linkedHazelIds = new Set(
+								(yield* channelLinkRepo.findBySyncConnection(connection.id)).map(
+									(link) => link.hazelChannelId,
+								),
+							)
+
+							const linked: Array<ChatSyncMigrateResponse["linked"][number]> = []
+							const skipped: Array<ExternalChannelId> = []
+							const takenElsewhere: Array<ExternalChannelId> = []
+							const seen = new Set<string>()
+							for (const channel of payload.channels) {
+								if (seen.has(channel.externalChannelId)) continue
+								seen.add(channel.externalChannelId)
+								const existingExternal = yield* channelLinkRepo.findByExternalChannel(
+									connection.id,
+									channel.externalChannelId,
+								)
+								if (Option.isSome(existingExternal)) {
+									skipped.push(channel.externalChannelId)
+									continue
+								}
+								const owner = owners.get(channel.externalChannelId)
+								if (owner !== undefined && owner !== connection.organizationId) {
+									takenElsewhere.push(channel.externalChannelId)
+									continue
+								}
+
+								const wanted = migratedChannelName(channel.externalChannelName)
+								const reusable = channelByName.get(wanted.toLowerCase())
+								// A new channel never doubles a name (Discord allows twins, and this
+								// migration may have just made one): `general-2`, `general-3`, ...
+								const name = freeChannelName(wanted, (candidate) =>
+									channelByName.has(candidate.toLowerCase()),
+								)
+								const hazelChannel =
+									reusable !== undefined && !linkedHazelIds.has(reusable.id)
+										? { id: reusable.id, name: reusable.name, created: false }
+										: yield* Effect.gen(function* () {
+												const [created] = yield* channelRepo.insert({
+													name,
+													icon: null,
+													type: "public",
+													organizationId: connection.organizationId,
+													parentChannelId: null,
+													sectionId: null,
+													deletedAt: null,
+												})
+												yield* Effect.forEach(
+													memberIds,
+													(userId) => addMember(created!.id, userId),
+													{ discard: true },
+												)
+												yield* syncChannelAccess(created!.id)
+												yield* enqueueEffect(
+													BotGatewayEffects.channelEvent,
+													{ kind: "bot-gateway" },
+													{ eventType: "channel.create", channel: created! },
+												)
+												return { id: created!.id, name, created: true }
+											})
+								linkedHazelIds.add(hazelChannel.id)
+								// Later picks see this channel (and its name) as taken.
+								channelByName.set(hazelChannel.name.toLowerCase(), {
+									id: hazelChannel.id,
+									name: hazelChannel.name,
+								})
+
+								yield* insertLink(connection, {
+									hazelChannelId: hazelChannel.id,
+									externalChannelId: channel.externalChannelId,
+									externalChannelName: channel.externalChannelName,
+									direction: "both",
+									settings: undefined,
+									history,
+									startsImport: false,
+								})
+								linked.push({
+									externalChannelId: channel.externalChannelId,
+									hazelChannelId: hazelChannel.id,
+									hazelChannelName: hazelChannel.name,
+									createdChannel: hazelChannel.created,
+								})
+							}
+
+							// One import chain for the whole migration: each channel starts when the
+							// previous one is done, within the provider's rate limit.
+							const [first, ...rest] = linked.map((link) => link.externalChannelId)
+							if (budget > 0 && first !== undefined) {
+								yield* enqueueEffect(
+									ChatSyncHistoryEffects.importHistory,
+									{ kind: "chat-sync" },
+									{
+										provider: connection.provider,
+										externalWorkspaceId: connection.externalWorkspaceId,
+										externalChannelId: first,
+										remaining: budget,
+										cursor: null,
+										since: history.since,
+										then: rest,
+										budget,
+									},
+								)
+							}
+
+							yield* Effect.annotateCurrentSpan({
+								"chat_sync.migration.linked": linked.length,
+								"chat_sync.migration.skipped": skipped.length,
+								"chat_sync.migration.taken_elsewhere": takenElsewhere.length,
+							})
+							const txid = yield* generateTransactionId()
+							return new ChatSyncMigrateResponse({
+								linked,
+								skipped,
+								takenElsewhere,
+								transactionId: txid,
+							})
+						}),
+					)
+				}).pipe(withRemapDbErrors("ChatSyncChannelLink", "create")),
 
 			"chatSync.channelLink.list": ({ syncConnectionId }) =>
 				Effect.gen(function* () {

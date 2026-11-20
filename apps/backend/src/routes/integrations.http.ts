@@ -271,6 +271,23 @@ const expireOAuthSessionCookie = (name: string, options: { cookieDomain: string;
 	})
 
 /**
+ * A path in the web app (`/a/b?c`): rooted, and no `//` or `\\` a browser would read as another
+ * host, so a caller-chosen `returnTo` never leaves the frontend's origin.
+ */
+export const isAppPath = (path: string): boolean =>
+	path.startsWith("/") && !path.startsWith("//") && !path.includes("\\") && !/[\u0000-\u001f]/.test(path)
+
+/**
+ * Whether a callback may redirect to `url`: a page of the frontend itself. The callback's `state`
+ * is not signed, so its `returnTo` is checked here, where it is followed, and not only where the
+ * state is written.
+ */
+export const isFrontendUrl = (url: string, frontendUrl: string): boolean => {
+	if (!URL.canParse(url) || !URL.canParse(frontendUrl)) return false
+	return new URL(url).origin === new URL(frontendUrl).origin
+}
+
+/**
  * Initiate OAuth flow for a provider.
  * Sets a session cookie with context and redirects to the provider's OAuth consent page.
  */
@@ -279,7 +296,7 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 		orgId: OrganizationId
 		provider: IntegrationConnection.IntegrationProvider
 	},
-	query: { level?: IntegrationConnection.ConnectionLevel },
+	query: { level?: IntegrationConnection.ConnectionLevel; returnTo?: string },
 ) {
 	const currentUser = yield* CurrentUser.Context
 	const { orgId, provider } = path
@@ -335,9 +352,11 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 		userId: currentUser.id,
 		level,
 		returnTo:
-			level === "user"
-				? `${frontendUrl}/${org.slug}/my-settings/linked-accounts`
-				: `${frontendUrl}/${org.slug}/settings/integrations/${provider}`,
+			query.returnTo !== undefined && isAppPath(query.returnTo)
+				? `${frontendUrl}${query.returnTo}`
+				: level === "user"
+					? `${frontendUrl}/${org.slug}/my-settings/linked-accounts`
+					: `${frontendUrl}/${org.slug}/settings/integrations/${provider}`,
 		environment,
 	}
 
@@ -437,6 +456,7 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 	const cookieDomain = yield* Config.String("COOKIE_DOMAIN")
 	const nodeEnv = yield* Config.String("NODE_ENV").pipe(Config.withDefault("production"))
 	const cookieSecure = nodeEnv !== "development"
+	const appUrl = yield* Config.String("FRONTEND_URL")
 
 	yield* Effect.logInfo("OAuth callback received", {
 		event: "integration_callback_start",
@@ -604,9 +624,12 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 		environment: parsedState.environment,
 	})
 
+	// Anywhere but the frontend falls back to its root (a forged `state` must not redirect off-site).
+	const returnTo = isFrontendUrl(parsedState.returnTo, appUrl) ? parsedState.returnTo : appUrl
+
 	// Helper to redirect with error (clears session cookie)
 	const redirectWithError = (errorCode: OAuthErrorCode) =>
-		buildRedirectWithCookieClear(buildRedirectUrl(parsedState.returnTo, provider, "error", errorCode))
+		buildRedirectWithCookieClear(buildRedirectUrl(returnTo, provider, "error", errorCode))
 
 	// Check if we need to redirect to local environment
 	// This happens when production receives a callback for a local dev flow
@@ -832,7 +855,7 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 	})
 
 	// Redirect back to the settings page with success status (clears session cookie)
-	const successUrl = buildRedirectUrl(parsedState.returnTo, provider, "success")
+	const successUrl = buildRedirectUrl(returnTo, provider, "success")
 	yield* Effect.logDebug("OAuth callback redirecting with success", {
 		event: "integration_callback_redirect",
 		provider,

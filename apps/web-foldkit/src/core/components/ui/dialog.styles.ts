@@ -19,4 +19,4 @@ export const dialogFooterBase =
 	"isolate mt-auto flex flex-col-reverse justify-end gap-3 p-(--gutter) pt-[calc(var(--gutter)---spacing(2))] group-not-has-data-[slot=dialog-body]/dialog:pt-0 group-not-has-data-[slot=dialog-body]/popover:pt-0 sm:flex-row"
 
 export const dialogCloseIconBase =
-	"close absolute top-1 right-1 z-50 grid size-8 place-content-center rounded-xl hover:bg-secondary focus:bg-secondary focus:outline-hidden focus-visible:ring-1 focus-visible:ring-primary sm:top-2 sm:right-2 sm:size-7 sm:rounded-md"
+	"close absolute top-1 right-1 z-50 grid size-8 place-content-center rounded-lg text-fg-2 outline-hidden transition-colors duration-150 ease-out hover:bg-wash-strong hover:text-fg focus-visible:bg-wash-strong focus-visible:text-fg focus-visible:ring-2 focus-visible:ring-ring/70 sm:top-2 sm:right-2 sm:size-7 sm:rounded-md"

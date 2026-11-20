@@ -41,7 +41,7 @@ export const commandMenuInputClassName =
 export const commandMenuEscapeClassName =
 	"hidden cursor-default rounded border text-current/90 hover:bg-muted lg:inline lg:px-1.5 lg:py-0.5 lg:text-xs"
 export const commandMenuListBase =
-	"grid max-h-full flex-1 grid-cols-[auto_1fr] content-start overflow-y-auto border-t p-2 sm:max-h-110 *:[[role=group]]:mb-6 *:[[role=group]]:last:mb-0"
+	"grid max-h-full flex-1 grid-cols-[auto_1fr] content-start overflow-y-auto border-t p-2 sm:max-h-110 *:[[role=group]]:mb-3 *:[[role=group]]:last:mb-0"
 export const commandMenuSectionBase =
 	"col-span-full grid grid-cols-[auto_1fr] content-start gap-y-[calc(var(--spacing)*0.25)]"
 export const commandMenuSectionHeaderClassName =
@@ -49,5 +49,5 @@ export const commandMenuSectionHeaderClassName =
 export const commandMenuItemBase = "items-center gap-y-0.5"
 export const commandMenuDescriptionBase = "col-start-3 row-start-1 ml-auto"
 export const commandMenuEmptyClassName = "col-span-full p-4 text-center text-muted-fg text-sm"
-export const commandMenuShortcutBase =
-	"gap-0.5 font-sans text-[10.5px] uppercase *:inset-ring *:inset-ring-muted-fg/20 *:grid *:size-5.5 *:place-content-center *:rounded-xs *:bg-bg"
+/** The shortcut is one string (`⌘⇧F`, `Ctrl+Shift+F`): quiet text at the row's end, as in a menu. */
+export const commandMenuShortcutBase = "font-sans text-2xs tracking-wide"
