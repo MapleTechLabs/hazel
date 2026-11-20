@@ -1,4 +1,4 @@
-import { ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
+import { ChannelId, ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
@@ -50,5 +50,7 @@ export const Model = Schema.Struct({
 	pendingJoin: Schema.NullOr(
 		Schema.Struct({ conversationId: ConnectConversationId, transactionId: Schema.String }),
 	),
+	/** A joined channel whose suggestion fetch failed: asked again on the next shared change. */
+	retryChannelId: Schema.NullOr(ChannelId),
 })
 export type Model = typeof Model.Type

@@ -569,11 +569,23 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				outMessage: PageOutMessage.RequestedToast({ toast: successToast(successMessage) }),
 			}
 		},
-		GotSuggestionMessage: ({ message: promptMessage }) =>
-			withSuggestion(
-				model,
+		GotSuggestionMessage: ({ message: promptMessage }) => {
+			// A failed fetch for the asked channel: keep it pending, so the next shared change asks again.
+			const asked = model.suggestion.channelId
+			const retry =
+				promptMessage._tag === "FailedFetch" && asked !== null && promptMessage.channelId === asked
+					? modifyFields(model, {
+							pendingSuggestion: () => ({
+								channelId: asked,
+								channelName: model.suggestionChannelName ?? "",
+							}),
+						})
+					: model
+			return withSuggestion(
+				retry,
 				SuggestionPrompt.update(model.suggestion, promptMessage, shared.organization?.id ?? null),
-			),
+			)
+		},
 		FailedCreateLink: ({ reason }) => ({
 			model: modifyFields(model, { submission: () => Submission.Failed({ reason }) }),
 			outMessage: PageOutMessage.RequestedToast({

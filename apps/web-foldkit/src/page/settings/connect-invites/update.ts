@@ -152,6 +152,7 @@ const requestFor = (model: Model, shared: Shared): Return => {
 			invites: () => Invites.Loading(),
 			suggestion: () => SuggestionPrompt.init(),
 			pendingJoin: () => null,
+			retryChannelId: () => null,
 		}),
 		commands: [ListIncomingInvites({ organizationId, version })],
 	}
@@ -169,20 +170,32 @@ export const init = (_route: unknown, shared: Shared): Return =>
 			interaction: Interaction.init(),
 			suggestion: SuggestionPrompt.init(),
 			pendingJoin: null,
+			retryChannelId: null,
 		},
 		shared,
 	)
 
 export const sharedChanged = (model: Model, shared: Shared): Return => {
 	const listed = requestFor(model, shared)
-	const pending = listed.model.pendingJoin
 	const organizationId = shared.organization?.id
-	if (pending === null || organizationId === undefined || shared.member === null) return listed
+	if (organizationId === undefined || shared.member === null) return listed
+	const { pendingJoin, retryChannelId } = listed.model
 	// Membership arrived after an accept: find the joined channel and ask about it now.
-	return {
-		model: modifyFields(listed.model, { pendingJoin: () => null }),
-		commands: [...(listed.commands ?? []), FindJoinedChannel({ ...pending, organizationId })],
+	if (pendingJoin !== null) {
+		return {
+			model: modifyFields(listed.model, { pendingJoin: () => null }),
+			commands: [...(listed.commands ?? []), FindJoinedChannel({ ...pendingJoin, organizationId })],
+		}
 	}
+	// The joined channel's fetch failed: ask again.
+	if (retryChannelId !== null) {
+		const asked = withSuggestion(
+			modifyFields(listed.model, { retryChannelId: () => null }),
+			SuggestionPrompt.request(organizationId, retryChannelId),
+		)
+		return { ...asked, commands: [...(listed.commands ?? []), ...(asked.commands ?? [])] }
+	}
+	return listed
 }
 
 // UPDATE
@@ -279,11 +292,18 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			if (channelId === null || organizationId === undefined || shared.member === null) return { model }
 			return withSuggestion(model, SuggestionPrompt.request(organizationId, channelId))
 		},
-		GotSuggestionMessage: ({ message: promptMessage }) =>
-			withSuggestion(
-				model,
+		GotSuggestionMessage: ({ message: promptMessage }) => {
+			// A failed fetch for the asked channel: kept, so the next shared change asks again.
+			const asked = model.suggestion.channelId
+			const retry =
+				promptMessage._tag === "FailedFetch" && asked !== null && promptMessage.channelId === asked
+					? modifyFields(model, { retryChannelId: () => asked })
+					: model
+			return withSuggestion(
+				retry,
 				SuggestionPrompt.update(model.suggestion, promptMessage, shared.organization?.id ?? null),
-			),
+			)
+		},
 		FailedAccept: ({ inviteId, reason }) => ({
 			model: modifyFields(model, { acceptingIds: (ids) => without(ids, inviteId) }),
 			outMessage: PageOutMessage.RequestedToast({

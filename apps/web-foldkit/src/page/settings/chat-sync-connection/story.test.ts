@@ -27,6 +27,7 @@ import {
 import { ChannelLinks, ConnectionLookup, directionLabel, historyLimitOf, Message, Submission } from "./model"
 import { init, sharedChanged, update } from "./update"
 import { memberWithRole } from "../../../test/pages-fixtures"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import { sharedDefaults } from "../../test-shared"
 import { linkMenuEntries } from "./model"
 
@@ -532,5 +533,32 @@ describe("chat sync connection: suggestion after a link", () => {
 		expect(ready.commands?.map((command) => command.name)).toContain("FetchChannelSuggestion")
 		expect(ready.model.pendingSuggestion).toBeNull()
 		expect(ready.model.suggestionChannelName).toBe("acme")
+	})
+})
+
+describe("chat sync connection: a failed suggestion fetch", () => {
+	test("keeps the channel pending and asks again on the next shared change", () => {
+		const member = { ...shared, member: memberWithRole("member") }
+		const hazelChannelId = Schema.decodeSync(ChannelId)(uuid(10))
+		const linked = update(
+			loaded,
+			Message.SucceededCreateLink({
+				successMessage: "Linked",
+				hazelChannelId,
+				hazelChannelName: "acme",
+			}),
+			member,
+		)
+		const failed = update(
+			linked.model,
+			Message.GotSuggestionMessage({
+				message: SuggestionPrompt.Message.FailedFetch({ channelId: hazelChannelId }),
+			}),
+			member,
+		).model
+		expect(failed.pendingSuggestion).toEqual({ channelId: hazelChannelId, channelName: "acme" })
+		expect(sharedChanged(failed, member).commands?.map((command) => command.name)).toContain(
+			"FetchChannelSuggestion",
+		)
 	})
 })

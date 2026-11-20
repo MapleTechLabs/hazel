@@ -107,3 +107,18 @@ describe("connect invitations: accepted before membership loads", () => {
 		expect(ready.model.pendingJoin).toBeNull()
 	})
 })
+
+describe("connect invitations: a failed suggestion fetch", () => {
+	test("is asked again on the next shared change", () => {
+		const asked = update(listed, Message.FoundJoinedChannel({ channelId }), shared).model
+		const failed = update(
+			asked,
+			Message.GotSuggestionMessage({ message: SuggestionPrompt.Message.FailedFetch({ channelId }) }),
+			shared,
+		).model
+		expect(failed.retryChannelId).toBe(channelId)
+		const retried = sharedChanged(failed, shared)
+		expect(retried.commands?.map((command) => command.name)).toContain("FetchChannelSuggestion")
+		expect(retried.model.retryChannelId).toBeNull()
+	})
+})
