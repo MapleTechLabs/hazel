@@ -11,6 +11,7 @@ import { canOn, openRowMenu } from "./menu-update"
 import { closedRowMenu, dmLongPress, dmMenuView, rowLongPress, rowMenuView } from "./menus"
 import { Message, type Model } from "./model"
 import { createChannelHint } from "./create-channel-hint"
+import { type CustomerChannel, splitCustomerChannels } from "./customer-channels"
 import { hotkeyLabel } from "./hotkey-label"
 import {
 	CHANNEL_ACTIVE,
@@ -29,13 +30,14 @@ import {
 	type PartnerOrg,
 	partnerOrgsByChannel,
 	type Presence,
+	type RowCustomer,
 	type SidebarThread,
 	type SyncProvider,
 	syncProviderByChannel,
 } from "./rows"
 import { sectionGroupHeader, strong, treeRow, treeSection } from "./tree"
 
-/** `ChannelsSidebar`'s content: goto links, favorites, channel sections, discover, DMs. */
+/** `ChannelsSidebar`'s content: goto links, favorites, channel sections, discover, customers, DMs. */
 
 const MAX_DISCOVERABLE = 5
 
@@ -74,6 +76,8 @@ const rowSlots = createKeyedLazy()
 
 const NO_PARTNERS: ReadonlyArray<PartnerOrg> = []
 const NO_THREADS: ReadonlyArray<SidebarThread> = []
+/** A Customers row has no "Move to section": the customer link, not the section, places it. */
+const NO_SECTIONS: Model["sections"] = []
 
 /** Joined threads stay listed this long after they start; an unread or open one always shows. */
 const RECENT_THREAD_MS = 7 * 24 * 60 * 60 * 1000
@@ -116,6 +120,7 @@ const channelRowView = <M>(
 	notificationCount: number,
 	partners: ReadonlyArray<PartnerOrg>,
 	syncProvider: SyncProvider | null,
+	customer: RowCustomer | null,
 	isLinkActive: boolean,
 	orgSlug: string,
 	treeId: string,
@@ -151,7 +156,7 @@ const channelRowView = <M>(
 			entry,
 			notificationCount,
 			partners,
-			{ orgSlug, isActive: isLinkActive, syncProvider },
+			{ orgSlug, isActive: isLinkActive, syncProvider, customer },
 			rowMenuView(h, menu),
 			rowLongPress(h, menu),
 		),
@@ -166,6 +171,7 @@ const channelRow = <M>(
 	context: SectionsContext<M>,
 	place: RowPlace,
 	showsPartners: boolean,
+	customer: RowCustomer | null = null,
 ): Html => {
 	const id = entry.channel.id
 	const threads = context.threadsByParent.get(id) ?? NO_THREADS
@@ -179,6 +185,7 @@ const channelRow = <M>(
 			context.unreadByChannel.get(id) ?? entry.member.notificationCount,
 			showsPartners ? (context.partnersByChannel.get(id) ?? NO_PARTNERS) : NO_PARTNERS,
 			context.syncProviderByChannel.get(id) ?? null,
+			customer,
 			id === context.activeChannelId,
 			context.orgSlug,
 			place.treeId,
@@ -188,7 +195,7 @@ const channelRow = <M>(
 			// An open thread scrolls its channel's row into view.
 			id === context.activeChannelId || activeThreadId !== null ? context.onActiveMount : null,
 			openRowMenu(context.openMenu, id),
-			context.sections,
+			customer === null ? context.sections : NO_SECTIONS,
 			context.canDeleteChannels,
 			context.toParentMessage,
 			threads,
@@ -426,6 +433,34 @@ const channelSection = <M>(
 	})
 }
 
+/** Channels linked to a customer, out of their sections; hidden when there are none. Not draggable. */
+const customersSection = <M>(
+	h: HtmlBuilder<M>,
+	entries: ReadonlyArray<CustomerChannel>,
+	context: SectionsContext<M>,
+): Html[] => {
+	if (entries.length === 0) return []
+	const treeId = "sidebar-tree-customers"
+	return [
+		treeSection(h, {
+			id: treeId,
+			title: "Customers",
+			ariaLabel: "Customer channels",
+			header: sectionGroupHeader(h, { name: "Customers", isCollapsed: false, action: h.empty }),
+			allowsDragging: false,
+			rows: rowsOf(
+				treeId,
+				false,
+				entries.map(
+					({ entry, customer }): RowOf =>
+						(place) =>
+							channelRow(h, entry, context, place, true, customer),
+				),
+			),
+		}),
+	]
+}
+
 /** `DiscoverableChannels`: shown while the user is in fewer than three channels. */
 const discoverSection = <M>(h: HtmlBuilder<M>, model: Model, context: ItemContext): Html[] => {
 	const memberCount = model.memberChannelIds?.length ?? 0
@@ -524,7 +559,8 @@ export const sectionGroupContent = <M>(
 	}
 	const role = model.membership?.role
 	const canCreateChannel = role !== undefined && canPerform(RPC_SCOPE_MAP, role, "channel.create")
-	const defaultEntries = model.sectionChannels["default"] ?? []
+	const { sectionChannels, customerChannels } = splitCustomerChannels(model)
+	const defaultEntries = sectionChannels["default"] ?? []
 	// Before the list arrives, empty is not "no channels": the hint would flash in and out.
 	const hasNoChannels = model.sectionChannels["default"]?.length === 0
 	return [
@@ -558,11 +594,12 @@ export const sectionGroupContent = <M>(
 							{
 								key: section.id,
 								name: section.name,
-								entries: model.sectionChannels[section.id] ?? [],
+								entries: sectionChannels[section.id] ?? [],
 							},
 							context,
 						),
 					),
+					...customersSection(h, customerChannels, context),
 					treeSection(h, {
 						id: "sidebar-tree-dms",
 						title: "Direct Messages",

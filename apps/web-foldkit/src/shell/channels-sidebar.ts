@@ -89,6 +89,12 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 				loaded: () => modifyFields(model.loaded, { favorites: () => true }),
 			}),
 		}),
+		UpdatedChannelCustomers: ({ customers }) => ({
+			model: modifyFields(model, {
+				channelCustomers: () => customers,
+				loaded: () => modifyFields(model.loaded, { channelCustomers: () => true }),
+			}),
+		}),
 		UpdatedThreads: ({ threads }) => ({ model: modifyFields(model, { threads: () => threads }) }),
 		UpdatedDmChannelIds: ({ channelIds }) => ({
 			model: modifyFields(model, {

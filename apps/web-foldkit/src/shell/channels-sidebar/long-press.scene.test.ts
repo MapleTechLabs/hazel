@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ChannelId, ChannelMemberId, OrganizationId } from "@hazel/schema"
+import { ChannelId, ChannelMemberId, ChannelSectionId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import type { HtmlBuilder } from "foldkit/html"
 import * as Scene from "foldkit/scene"
@@ -37,6 +37,7 @@ const sidebar: Model = {
 	sections: [],
 	sectionChannels: { default: [generalEntry] },
 	favorites: [],
+	channelCustomers: [],
 	threads: [],
 	dmChannelIds: [dmGrace],
 	dmChannels: { [dmGrace]: { id: dmGrace, type: "single", members: [], currentUser: member(2) } },
@@ -47,7 +48,7 @@ const sidebar: Model = {
 	syncedChannels: [],
 	memberChannelIds: [general, dmGrace],
 	discoverableChannels: [],
-	loaded: { sections: true, favorites: true, dmChannelIds: true },
+	loaded: { sections: true, favorites: true, channelCustomers: true, dmChannelIds: true },
 	isCreateChannelHintDismissed: true,
 	openMenu: null,
 }
@@ -126,6 +127,44 @@ describe("sidebar long-press menus", () => {
 			// One menu, two triggers: the dots carry exactly the same items.
 			Scene.expectAll(dotsWith(channelMenu)).toHaveCount(1),
 			Scene.expectAll(dotsWith(dmMenu)).toHaveCount(1),
+		)
+	})
+
+	test("a customer channel is listed under Customers with its logo and lock, and cannot be moved", () => {
+		const acme = Schema.decodeSync(ChannelId)(uuid(3))
+		const logo = "https://img.clerk.com/acme.png"
+		const acmeEntry: ChannelEntry = {
+			channel: { id: acme, name: "acme", type: "private", icon: null, sectionId: null },
+			member: member(3),
+		}
+		const withCustomer: Model = {
+			...sidebar,
+			// A custom section, so a row's menu has "Move to section" to leave out.
+			sections: [{ id: Schema.decodeSync(ChannelSectionId)(uuid(10)), name: "Design" }],
+			sectionChannels: { default: [generalEntry, acmeEntry] },
+			channelCustomers: [{ channelId: acme, accountName: "Acme", accountLogoUrl: logo }],
+		}
+		const customerRow = `#sidebar-tree-customers [data-key="${acme}"]`
+		Scene.scene(
+			{ update, view },
+			Scene.given(withCustomer),
+			triggerMounted,
+			triggerMounted,
+			triggerMounted,
+			Scene.expectAll(Scene.all.selector("#sidebar-tree-customers [data-key]")).toHaveCount(1),
+			Scene.expect(Scene.selector(customerRow)).toExist(),
+			// Out of the Channels section.
+			Scene.expectAll(Scene.all.selector(`#sidebar-tree-default [data-key="${acme}"]`)).toHaveCount(0),
+			Scene.expect(Scene.selector(`${customerRow} img[src="${logo}"]`)).toExist(),
+			Scene.expect(Scene.selector(`${customerRow} [title="Private channel"]`)).toExist(),
+			// #general's menu offers "Move to section"; #acme's is the plain channel menu (the customer
+			// link places it), and it is the only one.
+			Scene.expectAll(Scene.all.selector('[data-native="context-menu"]')).toHaveCount(3),
+			Scene.expectAll(rowsWith(channelMenu)).toHaveCount(1),
+			Scene.expect(Scene.selector(`${customerRow} [data-native="context-menu"]`)).toHaveAttr(
+				"data-native-props",
+				channelMenu,
+			),
 		)
 	})
 })

@@ -43,6 +43,20 @@ export const SidebarThread = Schema.Struct({
 })
 export type SidebarThread = typeof SidebarThread.Type
 
+/** A channel linked to a customer (`channel_customers`): the sidebar lists it under Customers. */
+export const ChannelCustomer = Schema.Struct({
+	channelId: ChannelId,
+	accountName: Schema.String,
+	accountLogoUrl: Schema.NullOr(Schema.String),
+})
+export type ChannelCustomer = typeof ChannelCustomer.Type
+
+/** The customer a row shows in place of its `#`: its logo, else its initial. */
+export interface RowCustomer {
+	readonly name: string
+	readonly logoUrl: string | null
+}
+
 export const Section = Schema.Struct({ id: ChannelSectionId, name: Schema.String })
 export type Section = typeof Section.Type
 

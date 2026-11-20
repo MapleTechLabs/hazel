@@ -13,7 +13,7 @@ const loaded: Model = {
 	isCreateChannelHintDismissed: false,
 	memberChannelIds: [general],
 	sectionChannels: { default: [] },
-	loaded: { sections: true, favorites: true, dmChannelIds: true },
+	loaded: { sections: true, favorites: true, channelCustomers: true, dmChannelIds: true },
 }
 
 describe("isLoading", () => {
@@ -33,6 +33,7 @@ describe("isLoading", () => {
 
 	it("waits for favorites, sections and DMs, even when they turn out empty", () => {
 		expect(isLoading({ ...loaded, loaded: { ...loaded.loaded, favorites: false } })).toBe(true)
+		expect(isLoading({ ...loaded, loaded: { ...loaded.loaded, channelCustomers: false } })).toBe(true)
 		expect(isLoading({ ...loaded, loaded: { ...loaded.loaded, sections: false } })).toBe(true)
 		expect(isLoading({ ...loaded, loaded: { ...loaded.loaded, dmChannelIds: false } })).toBe(true)
 	})

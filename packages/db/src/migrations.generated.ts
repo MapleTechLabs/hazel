@@ -285,7 +285,11 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			],
 		},
 		{
-			id: "0007_customer_chat",
+			id: "0007_channel_customers_logo",
+			statements: ['ALTER TABLE "channel_customers" ADD COLUMN "accountLogoUrl" text'],
+		},
+		{
+			id: "0008_customer_chat",
 			statements: [
 				'CREATE TABLE IF NOT EXISTS "customer_chat_authors" (\n\t"userId" text PRIMARY KEY NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"side" text NOT NULL,\n\t"reason" text NOT NULL,\n\t"override" text,\n\t"overrideBy" text,\n\t"overrideAt" text,\n\t"externalWorkspace" text,\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
 			],

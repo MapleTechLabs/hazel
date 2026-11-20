@@ -1,5 +1,5 @@
 {
-	"migration": "0007_customer_chat",
+	"migration": "0008_customer_chat",
 	"entities": [
 		{
 			"kind": "table",
@@ -634,8 +634,17 @@
 		{
 			"kind": "column",
 			"table": "channel_customers",
-			"name": "updatedAt",
+			"name": "accountLogoUrl",
 			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "updatedAt",
+			"position": 5,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

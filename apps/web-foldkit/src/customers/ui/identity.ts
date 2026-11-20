@@ -144,10 +144,11 @@ export const initialsOf = (name: string): string => {
 
 // COMPANY LOGOS
 
-export type LogoSize = "xs" | "sm" | "md" | "lg"
+export type LogoSize = "2xs" | "xs" | "sm" | "md" | "lg"
 
-/** 20 · 28 · 40 · 48px. */
+/** 16 · 20 · 28 · 40 · 48px. */
 const LOGO_SIZE = {
+	"2xs": "size-4 rounded-sm text-3xs",
 	xs: "size-5 rounded-[5px] text-[9px]",
 	sm: "size-7 rounded-md text-2xs",
 	md: "size-10 rounded-lg text-sm",
@@ -191,7 +192,8 @@ export const companyLogo = <M>(
 						),
 					),
 				],
-				[initialsOf(options.name)],
+				// At 16px two letters do not fit: the first one only.
+				[options.size === "2xs" ? initialsOf(options.name).slice(0, 1) : initialsOf(options.name)],
 			)
 }
 

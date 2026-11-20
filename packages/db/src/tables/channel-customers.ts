@@ -13,6 +13,8 @@ export const channelCustomersTable = SQLite.table("channel_customers", {
 		organizationId: uuid(OrganizationId),
 		accountId: uuid(CustomerAccountId),
 		accountName: SQLite.text,
+		/** The customer's logo (its account's `logoUrl`); null when it has none. */
+		accountLogoUrl: SQLite.nullable(SQLite.text),
 		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 	},
 	primaryKey: ["channelId"],

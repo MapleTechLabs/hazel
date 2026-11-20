@@ -1,8 +1,14 @@
 import type { ChannelId, ChannelMemberId, ChannelSectionId, OrganizationId, UserId } from "@hazel/schema"
 import { and, eq, inArray, isNull, not, or } from "@tanstack/db"
-import { channelCollection, channelMemberCollection, channelSectionCollection } from "~/db/collections"
+import {
+	channelCollection,
+	channelCustomerCollection,
+	channelMemberCollection,
+	channelSectionCollection,
+} from "~/db/collections"
 import { liveQueryStream } from "../../data/live-query"
 import type {
+	ChannelCustomer,
 	ChannelEntry,
 	DiscoverableChannel,
 	Section,
@@ -250,4 +256,29 @@ export const discoverableChannelsStream = <M>(
 				.select(({ channel }) => ({ ...channel }))
 		},
 		(rows) => toMessage(rows.map((row) => ({ id: row.id, name: row.name, icon: row.icon ?? null }))),
+	)
+
+/** The org's channels linked to a customer (`channel_customers`), with the customer's name. */
+export const channelCustomersStream = <M>(
+	organizationId: OrganizationId,
+	toMessage: (customers: Array<ChannelCustomer>) => M,
+) =>
+	liveQueryStream<ChannelCustomer, M>(
+		(q) =>
+			q
+				.from({ customer: channelCustomerCollection })
+				.where(({ customer }) => eq(customer.organizationId, organizationId))
+				.select(({ customer }) => ({
+					channelId: customer.channelId,
+					accountName: customer.accountName,
+					accountLogoUrl: customer.accountLogoUrl,
+				})),
+		(rows) =>
+			toMessage(
+				rows.map((row) => ({
+					channelId: row.channelId,
+					accountName: row.accountName,
+					accountLogoUrl: row.accountLogoUrl ?? null,
+				})),
+			),
 	)
