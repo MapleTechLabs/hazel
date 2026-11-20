@@ -479,10 +479,11 @@ const forecastOf = (
 ): LimitForecast | undefined => {
 	const from = addDays(last.day, -(FORECAST_WINDOW_DAYS - 1))
 	const window = points.filter((point) => point.day >= from && point.day <= last.day)
-	const resetAt = window.findLastIndex(
-		(point, index) => point.value < (window[index - 1]?.value ?? Number.NEGATIVE_INFINITY),
-	)
-	const span = (resetAt === -1 ? window : window.slice(resetAt)).map((point) => ({
+	let resetAt = 0
+	for (let index = 1; index < window.length; index++) {
+		if ((window[index]?.value ?? 0) < (window[index - 1]?.value ?? 0)) resetAt = index
+	}
+	const span = window.slice(resetAt).map((point) => ({
 		x: daysBetween(last.day, point.day),
 		y: point.value,
 	}))
