@@ -796,6 +796,7 @@ describe("customer page: people in chat", () => {
 						id: uuid(600),
 						accountId: beta.id,
 						channelId: uuid(500),
+						linkedBy: null,
 					}),
 				],
 			}),

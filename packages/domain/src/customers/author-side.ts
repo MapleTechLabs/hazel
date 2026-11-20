@@ -83,6 +83,8 @@ export const classifyAuthor = (
 		case "ConnectGuest":
 			return decided("customer", "connect_guest")
 		case "External":
+			// Only a Slack workspace tells teams apart: a Discord server holds both sides.
+			if (facts.provider !== "slack") return decided("customer", "external")
 			return facts.workspace === "home"
 				? decided("team", "external_home_workspace")
 				: facts.workspace === "other"

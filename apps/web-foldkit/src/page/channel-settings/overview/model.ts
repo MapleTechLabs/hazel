@@ -4,6 +4,7 @@ import { Field, isInvalid } from "foldkit/fieldValidation"
 import { defineTaggedUnion } from "foldkit/schema"
 import { CommonReason } from "~/lib/error-messages"
 import { ChannelCustomerRow } from "../../../customers/channels"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Popover from "../../../ui/popover"
 
@@ -45,11 +46,15 @@ export const Model = Schema.Struct({
 	interaction: Interaction.Model,
 	/** The customer the channel is linked to (`channel_customers`); null when none. */
 	customer: Schema.NullOr(ChannelCustomerRow),
+	/** The customer row has answered once (until then `customer: null` means unknown, not none). */
+	hasLoadedCustomer: Schema.Boolean,
 	/** Loaded only while the picker is open (it opens the Customers source). */
 	customers: Schema.NullOr(Schema.Array(CustomerOption)),
 	customerPopover: Popover.Model,
 	customerSearch: Schema.String,
 	customerLinking: CustomerLinking,
+	/** While the channel has no customer: who it looks like (`customers.channel.suggestions`). */
+	suggestion: SuggestionPrompt.Model,
 })
 export type Model = typeof Model.Type
 

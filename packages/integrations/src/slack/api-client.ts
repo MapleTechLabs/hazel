@@ -73,7 +73,12 @@ export interface SlackUser {
 	readonly displayName: string
 	readonly avatarUrl: string | null
 	readonly isBot: boolean
-	/** The user's workspace (a Slack Connect guest's is not the install's). */
+	/**
+	 * `profile.email`, lower-cased: needs the `users:read.email` scope, so null until the
+	 * workspace approves it (and for bots and users who hide it).
+	 */
+	readonly email: string | null
+	/** The user's own team: another company's for a Slack Connect user. */
 	readonly teamId: string | null
 }
 
@@ -152,12 +157,13 @@ const PostMessageResponse = Schema.Struct({
 const UsersInfoResponse = Schema.Struct({
 	user: Schema.Struct({
 		id: Schema.String,
-		team_id: OptionalString,
 		name: Schema.optional(Schema.String),
 		real_name: OptionalString,
 		is_bot: Schema.optional(Schema.Boolean),
+		team_id: OptionalString,
 		profile: Schema.optional(
 			Schema.Struct({
+				email: OptionalString,
 				display_name: OptionalString,
 				real_name: OptionalString,
 				image_512: OptionalString,
@@ -485,6 +491,7 @@ export class SlackApiClient extends Context.Service<SlackApiClient>()("SlackApiC
 					nonEmpty(profile?.image_72) ??
 					nonEmpty(profile?.image_48),
 				isBot: user.is_bot ?? false,
+				email: nonEmpty(profile?.email)?.trim().toLowerCase() ?? null,
 				teamId: nonEmpty(user.team_id),
 			} satisfies SlackUser
 		})

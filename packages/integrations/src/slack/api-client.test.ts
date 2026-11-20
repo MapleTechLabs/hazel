@@ -330,6 +330,7 @@ describe("SlackApiClient", () => {
 					profile: {
 						real_name: "Egon Spengler",
 						display_name: "",
+						email: " Egon@Ghostbusters.example ",
 						image_72: "https://avatars.example/72.jpg",
 						image_192: "https://avatars.example/192.jpg",
 					},
@@ -350,6 +351,7 @@ describe("SlackApiClient", () => {
 				displayName: "Egon Spengler",
 				avatarUrl: "https://avatars.example/192.jpg",
 				isBot: false,
+				email: "egon@ghostbusters.example",
 				teamId: "T012AB3C4",
 			})
 			expect(new URLSearchParams(sent[1]?.query).get("user")).toBe("W012A3CDE")

@@ -25,6 +25,8 @@ oauth_config:
             - reactions:read
             - reactions:write
             - users:read
+            # Authors' emails: evidence for suggested customer links.
+            - users:read.email
         # Linking a user's own Slack account (mentions and authorship).
         user:
             - users:read

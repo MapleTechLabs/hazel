@@ -158,9 +158,10 @@ export const OrgChatSyncIngestPayload = Schema.Struct({
 	author: Schema.NullOr(
 		Schema.Struct({
 			externalUserId: Schema.NullOr(ExternalUserId),
-			/** The author's provider workspace, when known (Slack). Optional: older deliveries lack it. */
-			externalWorkspaceId: Schema.optional(Schema.NullOr(Schema.String)),
 			user: UserProjection,
+			/** The author's email and workspace (evidence for suggested customer links); absent in older payloads. */
+			email: Schema.optionalKey(Schema.NullOr(Schema.String)),
+			externalWorkspaceId: Schema.optionalKey(Schema.NullOr(Schema.String)),
 		}),
 	),
 	event: ChatSyncInboundEvent,

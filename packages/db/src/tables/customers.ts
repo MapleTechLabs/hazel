@@ -26,6 +26,7 @@ import type {
 	ListColumn,
 	CustomerSource,
 	ViewLayoutKey,
+	SuggestionReason,
 } from "@hazel/domain/customers"
 import {
 	DEFAULT_ATTENTION_SETTINGS,
@@ -49,6 +50,7 @@ import {
 	SignalStatus,
 	SignalTemplate,
 	SubscriptionStatus,
+	SuggestionStatus,
 	SyncRunStatus,
 	SyncTrigger,
 	UnmatchedEntityType,
@@ -60,6 +62,7 @@ import {
 	ChannelId,
 	CustomerAccountId,
 	CustomerChannelLinkId,
+	CustomerChannelSuggestionId,
 	CustomerConnectionId,
 	CustomerContactId,
 	CustomerEventId,
@@ -856,7 +859,8 @@ export const customerChannelLinksTable = SQLite.table("customer_channel_links", 
 		organizationId: uuid(OrganizationId),
 		accountId: uuid(CustomerAccountId),
 		channelId: uuid(ChannelId),
-		linkedBy: uuid(UserId),
+		/** Null: linked automatically from a suggestion. */
+		linkedBy: SQLite.nullable(uuid(UserId)),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 		deletedAt: SQLite.nullable(timestamptz),
@@ -868,6 +872,38 @@ export const customerChannelLinksTable = SQLite.table("customer_channel_links", 
 	],
 })
 export type CustomerChannelLink = SQLite.SelectRowOf<typeof customerChannelLinksTable>
+
+/**
+ * A suggested link of a channel to an account (`docs/customers/channels.md`), scored from the
+ * channel's evidence (`org.channelEvidence`). `open` rows are rewritten by every refresh;
+ * `dismissed` and `accepted` ones are decisions, kept forever, so a pair is never suggested again
+ * and a channel with any decision is never linked automatically. Not synced: read through
+ * `customers.channel.suggestions`, filtered to the channels the caller sees.
+ */
+export const customerChannelSuggestionsTable = SQLite.table("customer_channel_suggestions", {
+	columns: {
+		id: id(CustomerChannelSuggestionId),
+		organizationId: uuid(OrganizationId),
+		channelId: uuid(ChannelId),
+		accountId: uuid(CustomerAccountId),
+		score: SQLite.integer,
+		reasons: SQLite.column(jsonb<ReadonlyArray<SuggestionReason>>(), { default: [] }),
+		status: SQLite.column(textEnum(SuggestionStatus.literals), { default: "open" }),
+		/** Null for an automatic decision (auto-link). */
+		decidedBy: SQLite.nullable(uuid(UserId)),
+		decidedAt: SQLite.nullable(timestamptz),
+		computedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	primaryKey: ["id"],
+	indexes: [
+		SQLite.uniqueIndex("customer_channel_suggestions_pair_unique", ["channelId", "accountId"]),
+		SQLite.index("customer_channel_suggestions_account_idx", ["accountId"]),
+		SQLite.index("customer_channel_suggestions_status_idx", ["status"]),
+	],
+})
+export type CustomerChannelSuggestion = SQLite.SelectRowOf<typeof customerChannelSuggestionsTable>
 
 /**
  * A feature flag created in Hazel. The flags the Feature flags page lists are these plus every key

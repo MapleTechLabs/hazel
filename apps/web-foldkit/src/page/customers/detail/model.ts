@@ -1,6 +1,7 @@
 import * as Customers from "@hazel/domain/customers"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
 import { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
+import { SuggestionList } from "../../../customers/suggestions"
 import { CustomerAccountId, CustomerContactId, CustomerNoteId, CustomerSignalId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
@@ -169,6 +170,10 @@ export const Model = Schema.Struct({
 	/** The person in "People in chat" whose menu shows (each row has its own button). */
 	activeChatPersonId: Schema.NullOr(UserId),
 	chatPersonMenu: Menu.Model,
+	/** The customer's open suggested channel links (`customers.channel.suggestions`, not synced). */
+	suggestions: SuggestionList,
+	/** The customer they were asked for; asked again when it changes. */
+	suggestionsFor: Schema.NullOr(CustomerAccountId),
 	/** The flags created in Hazel (`customer_feature_flags`); the others come from the accounts. */
 	createdFeatureFlags: Schema.Array(Schema.String),
 	flagPopover: Popover.Model,

@@ -55,6 +55,8 @@ export const orgTables = [
 	schema.integrationRequestsTable,
 	schema.chatSyncConnectionsTable,
 	schema.chatSyncChannelLinksTable,
+	// Not synced: external authors per channel, evidence for suggested customer links.
+	schema.chatSyncChannelAuthorsTable,
 	schema.channelWebhooksTable,
 	schema.githubSubscriptionsTable,
 	schema.rssSubscriptionsTable,
@@ -126,6 +128,7 @@ export const customersTables = [
 	schema.customerUnmatchedRecordsTable,
 	schema.customerIgnoreRulesTable,
 	schema.customerChannelLinksTable,
+	schema.customerChannelSuggestionsTable,
 	schema.customerFeatureFlagsTable,
 	schema.customerImpersonatorsTable,
 	schema.customerImpersonationsTable,

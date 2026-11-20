@@ -1,5 +1,5 @@
 {
-	"migration": "0021_customer_chat",
+	"migration": "0022_customer_chat",
 	"entities": [
 		{
 			"kind": "table",
@@ -18,6 +18,13 @@
 		{
 			"kind": "table",
 			"name": "customer_channel_links",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_channel_suggestions",
 			"primaryKey": {
 				"columns": ["id"]
 			}
@@ -705,7 +712,7 @@
 			"name": "linkedBy",
 			"position": 4,
 			"type": "text",
-			"notNull": true,
+			"notNull": false,
 			"default": null
 		},
 		{
@@ -734,6 +741,114 @@
 			"type": "text",
 			"notNull": false,
 			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_suggestions",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_suggestions",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_suggestions",
+			"name": "channelId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_suggestions",
+			"name": "accountId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_suggestions",
+			"name": "score",
+			"position": 4,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_suggestions",
+			"name": "reasons",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_suggestions",
+			"name": "status",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "'open'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_suggestions",
+			"name": "decidedBy",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_suggestions",
+			"name": "decidedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_suggestions",
+			"name": "computedAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_suggestions",
+			"name": "createdAt",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_channel_suggestions",
+			"name": "updatedAt",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
 		},
 		{
 			"kind": "column",
@@ -3776,6 +3891,27 @@
 			"name": "customer_channel_links_channel_idx",
 			"unique": false,
 			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_channel_suggestions",
+			"name": "customer_channel_suggestions_account_idx",
+			"unique": false,
+			"columns": ["\"accountId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_channel_suggestions",
+			"name": "customer_channel_suggestions_pair_unique",
+			"unique": true,
+			"columns": ["\"channelId\"", "\"accountId\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_channel_suggestions",
+			"name": "customer_channel_suggestions_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
 		},
 		{
 			"kind": "index",

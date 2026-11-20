@@ -282,6 +282,8 @@ export const discordHistoryInbound = (
 			externalUserId: authorId.value,
 			displayName: formatDiscordDisplayName(message.author),
 			avatarUrl: buildAuthorAvatarUrl(message.author),
+			email: null,
+			externalWorkspaceId: guildId,
 		},
 		event: {
 			_tag: "MessageCreate",
@@ -375,6 +377,8 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 							externalUserId: authorId,
 							displayName: formatDiscordDisplayName(event.author),
 							avatarUrl: buildAuthorAvatarUrl(event.author),
+							email: null,
+							externalWorkspaceId: guildOf(event)[0] ?? null,
 						},
 			event: {
 				_tag: "MessageCreate",
@@ -503,6 +507,8 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 					externalUserId: userId.value,
 					displayName: externalAuthorDisplayName ?? "Discord User",
 					avatarUrl: externalAuthorAvatarUrl ?? null,
+					email: null,
+					externalWorkspaceId: guildOf(event)[0] ?? null,
 				},
 				event: {
 					_tag: add ? "ReactionAdd" : "ReactionRemove",

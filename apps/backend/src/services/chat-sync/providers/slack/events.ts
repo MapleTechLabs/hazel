@@ -95,6 +95,8 @@ const authorOf = (userId: string, lookupUser: SlackUserLookup) =>
 				externalUserId: ExternalUserId.make(userId),
 				displayName: "Slack user",
 				avatarUrl: null,
+				email: null,
+				externalWorkspaceId: null,
 			})),
 		),
 	)
@@ -286,6 +288,7 @@ export const dispatchSlackEvent = Effect.fn("SlackEvents.dispatch")(function* (e
 				externalUserId: ExternalUserId.make(user.id),
 				displayName: user.displayName,
 				avatarUrl: user.avatarUrl,
+				email: user.email,
 				externalWorkspaceId: user.teamId,
 			})
 			if (users.size >= MAX_CACHED_USERS) users.clear()

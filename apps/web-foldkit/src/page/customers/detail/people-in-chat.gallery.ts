@@ -92,7 +92,12 @@ const modelWith = (participants: ReadonlyArray<ChatParticipantRow>): Model => ({
 	...opened,
 	accounts: [account],
 	channelLinks: [
-		{ id: Schema.decodeSync(CustomerChannelLinkId)(uuid(901)), accountId: ACCOUNT, channelId: CHANNEL },
+		{
+			id: Schema.decodeSync(CustomerChannelLinkId)(uuid(901)),
+			accountId: ACCOUNT,
+			channelId: CHANNEL,
+			linkedBy: null,
+		},
 	],
 	chatParticipants: participants,
 	chatAuthors: AUTHORS,

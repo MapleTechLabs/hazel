@@ -7,7 +7,10 @@ import { describe, expect, test } from "vitest"
 import * as Menu from "../../../ui/menu"
 import { FocusTriggerOnPress } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
+import { FetchChannelSuggestion } from "../../../customers/suggestion-prompt"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import { successToast } from "../../../data/actions"
+import { suggestionFor } from "../../../lab/fixtures/customers-suggestions"
 import {
 	makeShared,
 	organizationId,
@@ -302,7 +305,11 @@ describe("link a channel", () => {
 			Scene.expect(inDialog("Linking...")).toBeDisabled(),
 			Scene.Command.resolve(
 				CreateChannelLink,
-				Message.SucceededCreateLink({ successMessage: "Channel linked" }),
+				Message.SucceededCreateLink({
+					successMessage: "Channel linked",
+					hazelChannelId: hazelChannel.id,
+					hazelChannelName: "engineering",
+				}),
 			),
 			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Channel linked") })),
 			Scene.expect(dialog).toBeAbsent(),
@@ -313,6 +320,19 @@ describe("link a channel", () => {
 			),
 			linkMenuMounted,
 			Scene.expect(Scene.text("general")).toExist(),
+			// The new link's channel is asked about; a suggestion shows as a prompt to link it.
+			Scene.Command.resolve(
+				FetchChannelSuggestion,
+				// The prompt's own Message: the page wraps it.
+				SuggestionPrompt.Message.SucceededFetch({
+					channelId: hazelChannel.id,
+					items: [suggestionFor(hazelChannel.id)],
+				}),
+			),
+			Scene.expect(Scene.role("button", { name: "Link to Acme Robotics" })).toExist(),
+			Scene.expect(
+				Scene.text("3 of 4 external members have @acmerobotics.io, Acme Robotics's domain"),
+			).toExist(),
 		)
 	})
 

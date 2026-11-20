@@ -21,6 +21,7 @@ import {
 	formatRelative,
 } from "../../../customers/format"
 import { type AccountRow, msOf, type SignalRow } from "../../../customers/queries"
+import { shownSuggestions, suggestionRow } from "../../../customers/suggestions"
 import { environmentsHint, healthDot, severityGlyph } from "../../../customers/ui/badges"
 import { environmentCounts } from "../../../customers/groups"
 import { connectCard } from "../../../customers/ui/connect-card"
@@ -49,6 +50,7 @@ import {
 	QUIET_AFTER_DAYS,
 	quietAccounts,
 	openSignals,
+	SUGGESTIONS_SHOWN,
 } from "./model"
 import { heading } from "../../../ui/heading"
 
@@ -490,6 +492,39 @@ const attentionCard = (
 	])
 }
 
+// SUGGESTED CHANNEL LINKS
+
+/** Channels that look like a customer's, best first; hidden while there are none. */
+const suggestionsCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+	const shown = shownSuggestions(model.suggestions, model.channelOptions)
+	if (shown.length === 0) return h.empty
+	const more = shown.length - SUGGESTIONS_SHOWN
+	return card(h, "", [
+		cardHeader(
+			h,
+			heading(h, { variant: "section", className: "flex items-baseline gap-2 whitespace-nowrap" }, [
+				"Suggested channel links",
+				h.span([h.Class("font-normal text-muted-fg text-sm tabular-nums")], [String(shown.length)]),
+			]),
+			more > 0
+				? `Channels that look like a customer's. ${formatCount(more)} more after these.`
+				: "Channels that look like a customer's. Linking shows the customer in the channel.",
+		),
+		h.ul(
+			[h.Class("flex flex-col divide-y divide-border"), h.AriaLabel("Suggested channel links")],
+			shown.slice(0, SUGGESTIONS_SHOWN).map((entry) =>
+				suggestionRow(h, {
+					shown: entry,
+					showAccount: true,
+					accountHref: hrefOf(customerRoute(context.orgSlug, entry.suggestion.accountId)),
+					onLink: Message.PressedAcceptSuggestion({ suggestionId: entry.suggestion.id }),
+					onDismiss: Message.PressedDismissSuggestion({ suggestionId: entry.suggestion.id }),
+				}),
+			),
+		),
+	])
+}
+
 // MOVERS AND LISTS
 
 const accountsLabel = (count: number): string => `${formatCount(count)} account${count === 1 ? "" : "s"}`
@@ -861,6 +896,7 @@ const dashboard = (
 						[h.Class("grid gap-4 lg:grid-cols-3")],
 						[mrrCard(h, model, result), attentionCard(h, model, context, userId)],
 					),
+					suggestionsCard(h, model, context),
 					h.div(
 						[h.Class("grid gap-4 lg:grid-cols-2")],
 						[

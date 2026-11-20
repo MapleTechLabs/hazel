@@ -1,6 +1,7 @@
 import { OrganizationId } from "@hazel/schema"
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
+import { channelOptionsStream } from "../../../customers/channels"
 import {
 	accountsStream,
 	connectedProvidersStream,
@@ -39,6 +40,15 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 				? Stream.empty
 				: connectedProvidersStream(organizationId, (providers) =>
 						Message.UpdatedConnectedProviders({ providers }),
+					),
+	}),
+	channelOptions: entry(organization, {
+		modelToDependencies: organizationOf,
+		dependenciesToStream: ({ organizationId }) =>
+			organizationId === null
+				? Stream.empty
+				: channelOptionsStream(organizationId, (channels) =>
+						Message.UpdatedChannelOptions({ channels }),
 					),
 	}),
 	settings: entry(organization, {

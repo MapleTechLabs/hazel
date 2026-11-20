@@ -209,7 +209,8 @@ class ChannelLinkModel extends M.Class<ChannelLinkModel>("CustomerChannelLink")(
 	organizationId: OrganizationId,
 	accountId: CustomerAccountId,
 	channelId: ChannelId,
-	linkedBy: UserId,
+	/** Null: linked automatically from a suggestion (`docs/customers/channels.md`). */
+	linkedBy: S.NullOr(UserId),
 	...timestamps,
 	deletedAt: M.GeneratedByApp(NullDate),
 }) {}

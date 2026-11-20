@@ -38,6 +38,16 @@ describe("classifyAuthor", () => {
 		})
 	})
 
+	it("a Discord server says nothing about sides", () => {
+		const discord = (workspace: "home" | "other"): AuthorFacts => ({
+			_tag: "External",
+			provider: "discord",
+			workspace,
+		})
+		expect(classifyAuthor(discord("home"), null)).toEqual({ side: "customer", reason: "external" })
+		expect(classifyAuthor(discord("other"), null)).toEqual({ side: "customer", reason: "external" })
+	})
+
 	it("a bot stays a bot", () => {
 		expect(classifyAuthor({ _tag: "Bot" }, "customer")).toEqual({ side: "bot", reason: "bot" })
 	})
