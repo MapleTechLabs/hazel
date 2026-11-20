@@ -322,6 +322,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		FailedFetchPlans: ({ reason }) => ({
 			model: { ...model, plans: AsyncData.Failure({ error: reason }) },
 		}),
+		PressedRetryPlans: () => (AsyncData.isLoading(model.plans) ? { model } : fetched(model, shared)),
 		GotSelectMessage: ({ selectId, message: selectMessage }) =>
 			selectChanged(model, shared, selectId, selectMessage),
 
@@ -335,7 +336,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ChangedStart: ({ value }) => editedHours(model, shared, (form) => ({ ...form, start: value })),
 		ChangedEnd: ({ value }) => editedHours(model, shared, (form) => ({ ...form, end: value })),
 		PressedSaveHours: () => savedHours(model, shared),
-		PressedResetHours: () => ({ model: withTimeZoneSelect({ ...model, hoursForm: null }, shared) }),
+		PressedResetHours: () =>
+			model.isSavingHours
+				? { model }
+				: { model: withTimeZoneSelect({ ...model, hoursForm: null }, shared) },
 		SucceededSaveHours: () => ({
 			model: withTimeZoneSelect({ ...model, hoursForm: null, isSavingHours: false }, shared),
 			outMessage: toast(

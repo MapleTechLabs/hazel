@@ -17,6 +17,7 @@ export const Message = defineMessageUnion({
 	UpdatedAccounts: { accounts: Schema.Array(AccountOption) },
 	SucceededFetchPlans: { plans: Schema.Array(Schema.String) },
 	FailedFetchPlans: { reason: CommonReason },
+	PressedRetryPlans: {},
 	GotSelectMessage: { selectId: Schema.String, message: Select.Message },
 
 	// Business hours

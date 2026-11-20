@@ -126,7 +126,12 @@ export const hoursCard = (h: H, model: Model, canEdit: boolean): Html => {
 								...(isDirty ? [] : [help(h, "No changes")]),
 								button(
 									h,
-									{ intent: "plain", size: "sm", onPress: Message.PressedResetHours() },
+									{
+										intent: "plain",
+										size: "sm",
+										isDisabled: model.isSavingHours,
+										onPress: Message.PressedResetHours(),
+									},
 									["Reset"],
 								),
 								button(

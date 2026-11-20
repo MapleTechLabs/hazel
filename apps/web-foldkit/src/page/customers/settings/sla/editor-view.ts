@@ -145,27 +145,47 @@ const policyCard = (h: H, model: Model, editor: Editor, errors: PolicyErrors, ca
 const plansField = (h: H, model: Model, editor: Editor, canEdit: boolean): Html => {
 	const plans = planNamesOf(model, editor.form.planNames)
 	const isLoading = AsyncData.isLoading(model.plans) || AsyncData.isIdle(model.plans)
-	return field(h, [
-		fieldLabel(h, "Plans"),
-		plans.length === 0
-			? help(
-					h,
-					isLoading
-						? "Loading plans…"
-						: "No plans yet: they show once a billing source has synced.",
-				)
-			: h.div(
-					[h.Role("group"), h.AriaLabel("Plans"), h.Class("flex flex-wrap gap-1.5")],
-					plans.map((plan) =>
-						toggleChip(h, {
-							label: plan,
-							isPressed: editor.form.planNames.includes(plan),
-							isDisabled: !canEdit,
-							onPress: Message.ToggledPlan({ plan }),
-						}),
-					),
+	const failed = AsyncData.isFailure(model.plans)
+	// A failed fetch says so (with a retry); the plans the policy already names stay pickable.
+	const status = failed
+		? [
+				h.div(
+					[h.Class("flex flex-wrap items-center gap-2")],
+					[
+						...errorText(h, "sla-plans-error", "The plans could not be loaded."),
+						button(h, { intent: "plain", size: "sm", onPress: Message.PressedRetryPlans() }, [
+							"Retry",
+						]),
+					],
 				),
-	])
+			]
+		: plans.length === 0
+			? [
+					help(
+						h,
+						isLoading
+							? "Loading plans…"
+							: "No plans yet: they show once a billing source has synced.",
+					),
+				]
+			: []
+	const chips =
+		plans.length === 0
+			? []
+			: [
+					h.div(
+						[h.Role("group"), h.AriaLabel("Plans"), h.Class("flex flex-wrap gap-1.5")],
+						plans.map((plan) =>
+							toggleChip(h, {
+								label: plan,
+								isPressed: editor.form.planNames.includes(plan),
+								isDisabled: !canEdit,
+								onPress: Message.ToggledPlan({ plan }),
+							}),
+						),
+					),
+				]
+	return field(h, [fieldLabel(h, "Plans"), ...status, ...chips])
 }
 
 const tagsField = (h: H, editor: Editor, canEdit: boolean): Html => {

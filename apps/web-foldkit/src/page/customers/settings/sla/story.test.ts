@@ -122,6 +122,15 @@ describe("SLA settings: the policies", () => {
 		})
 	})
 
+	test("a failed plans fetch is kept as a failure and can be retried", () => {
+		const failed = step(admin)(loaded(), Message.FailedFetchPlans({ reason: "Offline" }))
+		expect(failed.plans._tag).toBe("Failure")
+		const retried = update(failed, Message.PressedRetryPlans(), admin)
+		expect(retried.model.plans._tag).toBe("Loading")
+		expect(retried.commands?.[0]).toMatchObject({ name: FetchSlaPlans.name })
+		expect(update(retried.model, Message.PressedRetryPlans(), admin).commands ?? []).toHaveLength(0)
+	})
+
 	test("each row says whom it covers and its medium targets", () => {
 		expect(POLICIES.map((row) => appliesToSummary(row.appliesTo, ACCOUNTS))).toEqual([
 			"Plans: Enterprise",
@@ -244,6 +253,15 @@ describe("SLA settings: business hours", () => {
 				businessHours: { timeZone: "UTC", days: [2, 3, 4, 5, 6], start: "09:00", end: "18:30" },
 			},
 		})
+	})
+})
+
+describe("SLA settings: saving hours", () => {
+	test("reset does nothing while a save is in flight", () => {
+		const edited = step(admin)(loaded(), Message.ChangedEnd({ value: "18:30" }))
+		const saving = update(edited, Message.PressedSaveHours(), admin).model
+		expect(saving.isSavingHours).toBe(true)
+		expect(update(saving, Message.PressedResetHours(), admin).model.hoursForm).toEqual(saving.hoursForm)
 	})
 })
 

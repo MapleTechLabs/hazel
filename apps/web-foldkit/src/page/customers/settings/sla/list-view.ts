@@ -58,7 +58,7 @@ const policyRow = (
 							onChange: (enabled) => Message.ToggledPolicy({ policyId: policy.id, enabled }),
 							className: "shrink-0 gap-x-0",
 						},
-						[h.span([h.Class("sr-only")], [`${policy.name} on`])],
+						[h.span([h.Class("sr-only")], [policy.name])],
 					),
 					h.span(
 						[
