@@ -1,5 +1,5 @@
 {
-	"migration": "0008_customer_channel_suggestions",
+	"migration": "0009_channel_customer_glance",
 	"entities": [
 		{
 			"kind": "table",
@@ -648,6 +648,132 @@
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "healthStatus",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "'unknown'"
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "healthScore",
+			"position": 7,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "healthWhy",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "lifecycleStage",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "planName",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "mrrMinor",
+			"position": 11,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "currency",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "ownerUserId",
+			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "seatsUsed",
+			"position": 14,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "seatsLimit",
+			"position": 15,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "lastActiveDay",
+			"position": 16,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "openSignalCount",
+			"position": 17,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "topSignals",
+			"position": 18,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "channel_customers",
+			"name": "sourceLinks",
+			"position": 19,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
 		},
 		{
 			"kind": "column",

@@ -6,6 +6,14 @@ import { syncReady, syncUnread } from "./clear-notifications"
 import { subscriptions } from "./subscription"
 import { view as channelView } from "./view"
 import { andThen } from "./write"
+import { modifyFields } from "foldkit/struct"
+import * as CustomerCard from "../customer-card"
+
+/** A layout change closes the customer card's surface the other layout opened. */
+const reconcileCustomerCard = (model: Model, isMobile: boolean): Model => {
+	const card = CustomerCard.reconcile(model.customerCard, isMobile)
+	return card === model.customerCard ? model : modifyFields(model, { customerCard: () => card })
+}
 
 /** `/$orgSlug/chat/$id` with its Messages, Files and All Media tabs (one layout, one page). */
 
@@ -37,8 +45,12 @@ export const page = definePage(
 		),
 		subscriptions,
 		sharedChanged: (model, shared) =>
-			andThen(setCurrentUserId(model, shared.currentUser?.id ?? null), (next) =>
-				andThen(syncUnread(next), (synced) => syncReady(synced, shared)),
+			andThen(
+				setCurrentUserId(
+					reconcileCustomerCard(model, shared.isMobile),
+					shared.currentUser?.id ?? null,
+				),
+				(next) => andThen(syncUnread(next), (synced) => syncReady(synced, shared)),
 			),
 	},
 )

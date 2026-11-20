@@ -3,7 +3,7 @@ import { eq } from "@tanstack/db"
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import { channelCollection } from "~/db/collections"
-import { channelCustomerStream } from "../../../customers/channels"
+import { channelCustomerStream, linkOf } from "../../../customers/channels"
 import { groupIdOf } from "../../../customers/groups"
 import { accountsStream } from "../../../customers/queries"
 import { liveQueryStream } from "../../../data/live-query"
@@ -50,7 +50,9 @@ const own = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) =
 		{
 			modelToDependencies: ({ model }) => ({ channelId: model.channelId }),
 			dependenciesToStream: ({ channelId }) =>
-				channelCustomerStream(channelId, (customer) => Message.UpdatedCustomer({ customer })),
+				channelCustomerStream(channelId, (customer) =>
+					Message.UpdatedCustomer({ customer: customer === null ? null : linkOf(customer) }),
+				),
 		},
 	),
 	// The Customers source opens only while the picker is open.

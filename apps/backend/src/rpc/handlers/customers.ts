@@ -568,8 +568,10 @@ const actOnSignal = (
 					now,
 				)
 				yield* refreshCounters(signal.accountId, now)
-				// Health counts open and snoozed risk signals: rescore only when that set changed.
 				const next = typeof changes.status === "string" ? changes.status : signal.status
+				// A linked channel shows the customer's open signals: only a status change moves them.
+				if (next !== signal.status) yield* publishChannelCustomers(signal.organizationId)
+				// Health counts open and snoozed risk signals: rescore only when that set changed.
 				if (countsTowardHealth(next) !== countsTowardHealth(signal.status)) yield* requestCompute
 			}),
 		)
@@ -852,8 +854,10 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 								)
 							}
 							if (lifecycleStageOverride !== undefined) yield* requestCompute
-							// Chat shows linked channels' customer by name.
-							if (name !== undefined) yield* publishChannelCustomers(account.organizationId)
+							// Chat shows linked channels' customer: its name and owner.
+							if (name !== undefined || ownerUserId !== undefined) {
+								yield* publishChannelCustomers(account.organizationId)
+							}
 						}),
 					)
 				}).pipe(remap),
@@ -1004,7 +1008,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						Effect.gen(function* () {
 							const accounts = yield* db.run(
 								SQLite.from(schema.customerAccountsTable)
-									.select("id", "tags", "ownerUserId")
+									.select("id", "organizationId", "tags", "ownerUserId")
 									.where(($) => [inList($.id, accountIds), $.deletedAt.isNull()]),
 							)
 							const add = cleanTags(addTags ?? [])
@@ -1031,6 +1035,10 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 										now,
 									)
 								}
+							}
+							const first = accounts[0]
+							if (ownerUserId !== undefined && first !== undefined) {
+								yield* publishChannelCustomers(first.organizationId)
 							}
 							return accounts.length
 						}),

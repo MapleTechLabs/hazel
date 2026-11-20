@@ -33,6 +33,7 @@ import {
 } from "../lookups"
 import * as FilesPage from "../files/page"
 import { Message as ActionMessage } from "../message-actions"
+import * as CustomerCard from "../customer-card"
 import * as Overlays from "../overlays"
 import { ChannelInfo, ParentChannelInfo } from "../queries"
 import { ChatMessage, ChatReaction, DisplayRow } from "../rows"
@@ -127,6 +128,8 @@ export const Model = Schema.Struct({
 	pinned: Schema.Array(PinnedInfo),
 	/** The customer the channel is linked to (`channel_customers`); null when none. */
 	customer: Schema.NullOr(ChannelCustomerRow),
+	/** The customer chip's card (desktop) and sheet (phone). */
+	customerCard: CustomerCard.Model,
 	typing: Schema.Array(TypingInfo),
 	typingNowMs: Schema.Number,
 	/** First names of the other members typing now (`useTypingIndicators`), derived in `update`. */
@@ -236,6 +239,7 @@ export const Message = defineMessageUnion({
 	GotLiveMessage: { message: Live.Message },
 	GotHtmlRenderMessage: { message: HtmlRender.Message },
 	GotOverlaysMessage: { message: Overlays.Message },
+	GotCustomerCardMessage: { message: CustomerCard.Message },
 	GotFilesMessage: { message: FilesPage.Message },
 	GotDraftMessage: { message: Draft.Message },
 	GotThreadDraftMessage: { message: Draft.Message },

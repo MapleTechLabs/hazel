@@ -30,7 +30,7 @@ all of them.
 | Where                           | Table                    | What                                                                                                                                                                         |
 | ------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CustomersObject` (`customers`) | `customer_channel_links` | The link (authoritative). `accountId`, `channelId`, `linkedBy` (null: linked automatically), soft delete; partial unique index on `channelId` while live. Synced to members. |
-| `OrgObject` (`org`), projection | `channel_customers`      | `channelId` → `accountId`, `accountName`, `accountLogoUrl`. Written only by `org.setChannelCustomers`. Synced with `byChannel` (members who see it).                         |
+| `OrgObject` (`org`), projection | `channel_customers`      | `channelId` → `accountId`, `accountName`, `accountLogoUrl` and the glance (below). Written only by `org.setChannelCustomers`. Synced with `byChannel` (members who see it).  |
 
 ## Flow
 
@@ -40,17 +40,54 @@ all of them.
 2. In one transaction: the old live link of the channel (if any) is soft-deleted, the new one
    inserted, events written, and `publishChannelCustomers` enqueues `org.setChannelCustomers`.
 3. `org.setChannelCustomers` is a full snapshot of every live link of a live account (named by
-   its group's live primary), versioned like `customers.setMembers` (an older version is
+   its group's live primary, with its glance), versioned like `customers.setMembers` (an older version is
    dropped); the receiver writes only what changed. Its sender guard accepts only the org's own customers object.
-4. The snapshot is sent only when its SHA-256 fingerprint changed: after link / unlink, after an
-   account renamed by hand, and at the end of every compute (names set by a source, accounts a
-   source deleted).
+4. The snapshot is sent only when its SHA-256 fingerprint (over every field) changed: after link /
+   unlink, after a person changes an account's name or owner (one or in bulk) or a signal's status
+   (assign, snooze, done, dismiss, reopen), and at the end of every compute (names, numbers,
+   health and signals set by sources and rules; accounts a source deleted).
 5. Org deletion purges `customer_channel_links` with the rest of the customer data.
 
 Deleting a channel that has a customer: the `OrgObject` sends `customers.channelDeleted` (from
 `channel.delete`, only when `channel_customers` has the channel; sender guard: the org's own
 object). The customers object drops the live link, writes a `channel.deleted` event on the
 account and sends a new snapshot.
+
+## In the channel: the account at a glance
+
+Each `channel_customers` row also carries the customer's glance, so chat shows the account without
+opening the Customers source (which would snapshot every account and signal, and ignore channel
+visibility). The columns came after the table: all nullable or defaulted (objects migrate lazily),
+and the payload's glance fields are optional (a snapshot queued before them still applies; the
+next one, whose fingerprint differs, fills them).
+
+| Field                           | From                                                                                                      |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `healthStatus`, `healthScore`   | The customer (the group's primary).                                                                       |
+| `healthWhy`                     | The scored component with the lowest score in its latest `customer_health_daily` (7 d).                   |
+| `ownerUserId`                   | The customer.                                                                                             |
+| `lifecycleStage`, `planName`    | The group's rules (`group-facts.ts`): the most advanced stage; the primary's plan, else an environment's. |
+| `mrrMinor`, `currency`          | Σ over the group (compute keeps MRR in the reporting currency).                                           |
+| `seatsUsed`, `seatsLimit`       | Σ over the group (null when none is known).                                                               |
+| `lastActiveDay`                 | The group's latest `lastActiveAt`, as a day, so activity does not resend it hourly.                       |
+| `openSignalCount`, `topSignals` | The group's `open` signals; the top 3 by priority (id, title, reason, kind, severity).                    |
+| `sourceLinks`                   | One `externalUrl` per provider from live account refs, the customer's own first.                          |
+
+Writes reach only linked channels' rows (tens per org), at most once a compute, and only the rows
+that changed. Same visibility as the name: org members who see the channel, never Connect guests.
+
+A row projected before the glance (an org with no snapshot since the deploy: the next compute, within
+the hour, sends one) has no stage; the card then shows only the name and the way to the customer
+page, not blanks that read as an empty account.
+
+UI (`src/page/chat/customer-card.ts`): the header chip shows the health dot and the name. On
+desktop, hovering it shows the card after 350 ms; it stays while the pointer is on the chip or the
+card (200 ms grace), and a click pins it until Escape or a click outside. On a phone a tap opens
+the same card in a bottom sheet. The card: logo, name (to the customer page), health badge and
+stage, the health reason (or "No health score yet"), revenue and plan, owner, seats, last active,
+open signals (count, top 3, "N more", the queue), then the customer page and provider links. The
+card takes a `support` slot between the signals and the links for support issues and SLAs
+(later sessions). Gallery: `customer-card.gallery.ts`.
 
 ## Client
 
@@ -65,7 +102,7 @@ account and sends a new snapshot.
   and a favorite stays only in Favorites. Each row shows the customer's logo in place of its `#`
   (its initial on a tint when it has none; a lock badge on private channels). It reads `channel_customers`, so it needs no Customers
   source (`shell/channels-sidebar/customer-channels.ts`). Keyboard channel navigation follows the same order.
-- Chat header: a quiet customer chip beside the channel name, opening the customer page.
+- Chat header: a quiet customer chip beside the channel name, opening the customer card (above).
 - Channel settings → Overview: a **Customer** section to link, change or unlink. The customers list
   loads (opening the Customers source) only while its picker is open.
 
@@ -158,6 +195,6 @@ someone who is not an org member.
 ## Later
 
 - Issues from messages, SLAs and first-response times per linked channel.
-- Account context in the channel (health, MRR, open signals) without opening Customers.
+- Open support issues and SLA state in the card's `support` slot.
 - Discord members' identity: Discord shares no emails, so Discord channels match by guild and
   name only.

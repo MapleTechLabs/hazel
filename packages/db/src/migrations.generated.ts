@@ -295,6 +295,25 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "chat_sync_channel_authors_channel_idx" ON "chat_sync_channel_authors" ("hazelChannelId")',
 			],
 		},
+		{
+			id: "0009_channel_customer_glance",
+			statements: [
+				'ALTER TABLE "channel_customers" ADD COLUMN "healthStatus" text NOT NULL DEFAULT \'unknown\'',
+				'ALTER TABLE "channel_customers" ADD COLUMN "healthScore" integer',
+				'ALTER TABLE "channel_customers" ADD COLUMN "healthWhy" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "lifecycleStage" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "planName" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "mrrMinor" integer',
+				'ALTER TABLE "channel_customers" ADD COLUMN "currency" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "ownerUserId" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "seatsUsed" integer',
+				'ALTER TABLE "channel_customers" ADD COLUMN "seatsLimit" integer',
+				'ALTER TABLE "channel_customers" ADD COLUMN "lastActiveDay" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "openSignalCount" integer NOT NULL DEFAULT 0',
+				'ALTER TABLE "channel_customers" ADD COLUMN "topSignals" text NOT NULL DEFAULT \'[]\'',
+				'ALTER TABLE "channel_customers" ADD COLUMN "sourceLinks" text NOT NULL DEFAULT \'[]\'',
+			],
+		},
 	],
 	channel: [
 		{
