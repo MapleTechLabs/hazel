@@ -5,7 +5,7 @@ import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import { errorToast, errorToastOf, successToast, warningToast } from "../../data/actions"
 import type { ToastRequest } from "../../overlay/toasts"
-import { AppRoute, hrefOf, type RouteOf } from "../../route"
+import { AppRoute, hrefOf, onboardingHref, type RouteOf } from "../../route"
 import type { ThemeCustomization, ThemeMode } from "../../theme"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
@@ -145,14 +145,35 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				Starting: (starting) =>
 					startWhenReady(model, { ...starting, membership: Option.some(membership) }, shared),
 				Leaving: () => ({ model }),
-				Running: (running) => ({
-					model: withPhase(
-						model,
-						modifyFields(running, {
-							flow: (flow) => modifyFields(flow, { membership: () => membership }),
-						}),
-					),
-				}),
+				Running: (running) => {
+					const next = modifyFields(running, {
+						flow: (flow) => modifyFields(flow, { membership: () => membership }),
+					})
+					// The import step's wizard learns an organization that arrived after it opened.
+					const { step } = next
+					if (
+						step._tag !== "Import" ||
+						membership === null ||
+						step.migration.organizationId !== null
+					)
+						return { model: withPhase(model, next) }
+					const migration = ChatMigration.withOrganization(
+						step.migration,
+						membership.organizationId,
+						onboardingHref(membership.organizationId, "import"),
+					)
+					return {
+						model: withPhase(
+							model,
+							modifyFields(next, {
+								step: () => StepState.Import({ migration: migration.model }),
+							}),
+						),
+						commands: Command.mapMessages(migration.commands ?? [], (message) =>
+							Message.GotMigrationMessage({ message }),
+						),
+					}
+				},
 			}),
 		ClickedBack: () => withRunning(model, (running) => goBack(model, running, shared)),
 		ClickedGetStarted: () => withStep(model, "Welcome", (_, running) => advance(model, running, shared)),

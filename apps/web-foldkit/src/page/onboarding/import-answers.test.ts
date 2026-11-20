@@ -80,4 +80,21 @@ describe("onboarding answers across the import step's OAuth", () => {
 		)
 		expect(running.phase._tag === "Running" ? running.phase.data : null).toEqual(answers)
 	})
+
+	test("a membership that arrives after the import step opened reaches its wizard", () => {
+		const opened = [
+			Message.DetectedBrowserTimezone({ browserTimezone: "UTC" }),
+			Message.UpdatedMembership({ membership: null }),
+		].reduce(
+			(model, message) => update(model, message, shared).model,
+			init(route("import"), shared).model,
+		)
+		const migrationOf = (model: typeof opened) =>
+			model.phase._tag === "Running" && model.phase.step._tag === "Import"
+				? model.phase.step.migration
+				: null
+		expect(migrationOf(opened)?.organizationId).toBeNull()
+		const known = update(opened, Message.UpdatedMembership({ membership }), shared).model
+		expect(migrationOf(known)?.organizationId).toBe(organizationId)
+	})
 })

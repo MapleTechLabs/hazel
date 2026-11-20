@@ -9,6 +9,7 @@ import type { ChatSyncChannelLink } from "@hazel/domain/models"
 import { Cause, Config, Effect, Option, Redacted, Schedule } from "effect"
 import { formatMessageContentWithAttachments } from "../../chat-sync-attachment-content"
 import {
+	GUILD_VERIFIED,
 	outboundIdentityOf,
 	postsAsEachAuthor,
 	webhookPermission,
@@ -98,8 +99,7 @@ export const withAuthorHeader = (author: ChatSyncAuthor, content: string) => {
 	return header + body
 }
 
-/** Link settings key: the link's channel was found in its guild (`verifiedInGuild`). */
-export const GUILD_VERIFIED = "discordGuildVerified"
+export { GUILD_VERIFIED }
 
 export const makeDiscordClient = Effect.gen(function* () {
 	const api = yield* Discord.DiscordApiClient
