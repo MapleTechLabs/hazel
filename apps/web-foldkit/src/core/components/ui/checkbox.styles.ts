@@ -27,7 +27,8 @@ export const checkboxIndicatorStyles = ({
 	"relative inset-ring inset-ring-input isolate flex shrink-0 items-center justify-center rounded text-bg transition group-hover:inset-ring-muted-fg/30",
 	"sm:size-4 sm:*:data-[slot=check-indicator]:size-3.5",
 	"size-4.5 *:data-[slot=check-indicator]:size-4",
-	"in-data-disabled:bg-muted",
+	// Disabled and empty is a muted well; disabled and checked keeps its fill (the label dims it).
+	!(isSelected || isIndeterminate) && "in-data-disabled:bg-muted",
 	(isSelected || isIndeterminate) && [
 		"inset-ring-(--checkbox-ring,var(--color-ring)) bg-(--checkbox-bg,var(--color-primary)) text-(--checkbox-fg,var(--color-primary-fg))",
 		"group-data-invalid:inset-ring/70 group-data-invalid:bg-danger group-data-invalid:text-danger-fg dark:group-data-invalid:inset-ring-danger-subtle-fg/70",

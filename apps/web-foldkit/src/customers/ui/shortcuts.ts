@@ -1,20 +1,11 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
+import { kbd as keyCap } from "../../ui/kbd"
 
 /** Keyboard hints: one key cap, and the queue's hint bar (`j k Navigate · a Assign · …`). */
 
 export const kbd = <M>(h: HtmlBuilder<M>, key: string, className?: string): Html =>
-	h.kbd(
-		[
-			h.Class(
-				twMerge(
-					"inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-secondary/60 px-1 font-mono text-2xs text-muted-fg max-md:hidden",
-					className,
-				),
-			),
-		],
-		[key],
-	)
+	keyCap(h, { size: "sm", className: twMerge("max-md:hidden", className) }, key)
 
 export type Shortcut = Readonly<{ keys: ReadonlyArray<string>; label: string }>
 
