@@ -433,7 +433,7 @@ const viewerMenuContent =
 		const slot = { attributes: { "data-slot": "icon" } }
 		const icon =
 			key === "copyImage"
-				? IconCopy(h, slot)
+				? IconImage(h, slot)
 				: key === "download"
 					? IconDownload(h, slot)
 					: key === "copyUrl"
