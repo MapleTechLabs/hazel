@@ -451,6 +451,46 @@ describe("chat sync on the objects", () => {
 		30_000,
 	)
 
+	it("same-named picks get distinct Hazel channels instead of twins", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const response = (yield* ok(
+					yield* call(
+						world.org,
+						world.orgId,
+						"chatSync.migrate",
+						{
+							organizationId: world.orgId,
+							syncConnectionId: world.syncConnectionId,
+							channels: [
+								{
+									externalChannelId: "777777777777777801" as ExternalChannelId,
+									externalChannelName: "chat",
+								},
+								{
+									externalChannelId: "777777777777777802" as ExternalChannelId,
+									externalChannelName: "chat",
+								},
+								{
+									externalChannelId: "777777777777777803" as ExternalChannelId,
+									externalChannelName: "Chat",
+								},
+							],
+							history: "none",
+						},
+						world.owner,
+					),
+				)) as ChatSyncMigrateResponse
+				expect(response.linked.map((link) => link.hazelChannelName)).toEqual([
+					"chat",
+					"chat-2",
+					"Chat-3",
+				])
+				expect(new Set(response.linked.map((link) => link.hazelChannelId)).size).toBe(3)
+			}),
+		))
+
 	it("a linked channel outside the connection's server is paused and never read", () =>
 		run(
 			Effect.gen(function* () {

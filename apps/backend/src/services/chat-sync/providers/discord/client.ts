@@ -210,10 +210,19 @@ export const makeDiscordClient = Effect.gen(function* () {
 			return yield* identity("webhook_failed_bot").pipe(Effect.andThen(bot))
 		})
 
-	/** The guild's channel ids, through the bot (one shared bot, in many guilds). */
+	/**
+	 * Whether a channel is in the guild: one `GET /channels/{id}` (the bot is shared by many guilds).
+	 * A channel the bot cannot see (403) or that does not exist (404) is not the guild's to sync.
+	 */
 	const isGuildChannel = (guildId: string, channelId: string) =>
-		viaBot((token) => api.listGuildChannels(guildId, token)).pipe(
-			Effect.map((channels) => channels.some((channel) => channel.id === channelId)),
+		viaBot((token) => api.getChannelGuildId(channelId, token)).pipe(
+			Effect.map((channelGuildId) => channelGuildId === guildId),
+			Effect.catchIf(
+				(error) =>
+					error._tag === "ChatSyncProviderApiError" &&
+					(error.status === 403 || error.status === 404),
+				() => Effect.succeed(false),
+			),
 		)
 
 	/**

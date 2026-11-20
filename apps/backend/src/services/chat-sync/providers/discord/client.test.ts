@@ -344,10 +344,10 @@ describe("Discord posts only into the link's own guild", () => {
 		const calls: Array<string> = []
 		const saved: Array<Record<string, unknown>> = []
 		const api = {
-			listGuildChannels: (guild: string) => {
-				calls.push(`listGuildChannels:${guild}`)
+			getChannelGuildId: (channel: string) => {
+				calls.push(`getChannel:${channel}`)
 				return Effect.succeed(
-					options.guildChannels.map((id) => ({ id, guildId: guild, name: id, type: 0 })),
+					options.guildChannels.includes(channel) ? guildId : "200000000000000999",
 				)
 			},
 			createMessage: () => {
@@ -383,7 +383,7 @@ describe("Discord posts only into the link's own guild", () => {
 			const h = harness({ guildChannels: ["100000000000000077"], settings: botOnly })
 			const error = yield* Effect.flip(h.post)
 			expect(error).toMatchObject({ _tag: "ChatSyncProviderApiError", detail: NOT_IN_WORKSPACE })
-			expect(h.calls).toEqual([`listGuildChannels:${guildId}`])
+			expect(h.calls).toEqual([`getChannel:${channelId}`])
 			expect(h.saved).toEqual([])
 		}),
 	)
@@ -392,7 +392,7 @@ describe("Discord posts only into the link's own guild", () => {
 		Effect.gen(function* () {
 			const first = harness({ guildChannels: [channelId], settings: botOnly })
 			yield* first.post
-			expect(first.calls).toEqual([`listGuildChannels:${guildId}`, "createMessage"])
+			expect(first.calls).toEqual([`getChannel:${channelId}`, "createMessage"])
 			expect(first.saved).toEqual([{ ...botOnly, [GUILD_VERIFIED]: true }])
 
 			const checked = harness({ guildChannels: [], settings: { ...botOnly, [GUILD_VERIFIED]: true } })

@@ -57,6 +57,19 @@ import { syncChannelAccess } from "../../worker/objects/org/channel-access"
 /** A provider channel's name as a Hazel channel's: trimmed, at most 80 characters, never empty. */
 export const migratedChannelName = (name: string): string => name.trim().slice(0, 80) || "imported"
 
+/**
+ * `wanted`, or the first `wanted-2`, `wanted-3`, ... that `isTaken` lets through, kept within a
+ * channel name's 80 characters.
+ */
+export const freeChannelName = (wanted: string, isTaken: (name: string) => boolean): string => {
+	if (!isTaken(wanted)) return wanted
+	for (let suffix = 2; ; suffix++) {
+		const tail = `-${suffix}`
+		const candidate = `${wanted.slice(0, 80 - tail.length)}${tail}`
+		if (!isTaken(candidate)) return candidate
+	}
+}
+
 export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
@@ -444,8 +457,13 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 									continue
 								}
 
-								const name = migratedChannelName(channel.externalChannelName)
-								const reusable = channelByName.get(name.toLowerCase())
+								const wanted = migratedChannelName(channel.externalChannelName)
+								const reusable = channelByName.get(wanted.toLowerCase())
+								// A new channel never doubles a name (Discord allows twins, and this
+								// migration may have just made one): `general-2`, `general-3`, ...
+								const name = freeChannelName(wanted, (candidate) =>
+									channelByName.has(candidate.toLowerCase()),
+								)
 								const hazelChannel =
 									reusable !== undefined && !linkedHazelIds.has(reusable.id)
 										? { id: reusable.id, name: reusable.name, created: false }
@@ -473,6 +491,11 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 												return { id: created!.id, name, created: true }
 											})
 								linkedHazelIds.add(hazelChannel.id)
+								// Later picks see this channel (and its name) as taken.
+								channelByName.set(hazelChannel.name.toLowerCase(), {
+									id: hazelChannel.id,
+									name: hazelChannel.name,
+								})
 
 								yield* insertLink(connection, {
 									hazelChannelId: hazelChannel.id,
