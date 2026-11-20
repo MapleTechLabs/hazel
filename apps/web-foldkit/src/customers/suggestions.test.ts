@@ -61,7 +61,7 @@ describe("suggested channel links: reasons", () => {
 
 	test("the summary is the top reason and the rest for hover", () => {
 		expect(reasonSummary(CONTACT_SUGGESTION)).toEqual({
-			top: "1 of 5 external members are Kestrel Systems contacts",
+			top: "1 of 5 external members is a Kestrel Systems contact",
 			others: [],
 		})
 		expect(reasonSummary(LONG_SUGGESTION)?.others).toHaveLength(2)

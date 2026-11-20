@@ -56,7 +56,7 @@ describe("connect invitations: suggested customer", () => {
 			),
 			// The guest channel is "shared-channel" until the host's snapshot names it.
 			Scene.expect(Scene.role("status")).toContainText("The shared channel looks like Kestrel Systems"),
-			Scene.expect(Scene.text("1 of 5 external members are Kestrel Systems contacts")).toExist(),
+			Scene.expect(Scene.text("1 of 5 external members is a Kestrel Systems contact")).toExist(),
 			Scene.click(Scene.role("button", { name: "Dismiss" })),
 			Scene.expect(Scene.role("status")).toBeAbsent(),
 			Scene.Command.resolve(
