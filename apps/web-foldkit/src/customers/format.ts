@@ -146,10 +146,11 @@ export const formatBytes = (value: number): string => {
 /** `850 ms`, `1.4 s`, `3.2 min`. */
 const formatDurationMs = (value: number): string => {
 	const abs = Math.abs(value)
+	// Units are picked on the rounded value, so 999.6 ms reads 1 s rather than 1,000 ms.
 	const text =
-		abs < 1000
+		roundTo(abs, 0) < 1000
 			? `${numberFormat({ maximumFractionDigits: 0 }).format(abs)} ms`
-			: abs < 60_000
+			: roundTo(abs / 1000, 1) < 60
 				? `${numberFormat({ maximumFractionDigits: 1 }).format(abs / 1000)} s`
 				: `${numberFormat({ maximumFractionDigits: 1 }).format(abs / 60_000)} min`
 	return withSign(value, text, false)

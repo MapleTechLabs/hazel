@@ -748,10 +748,10 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		GotLayoutMenuMessage: ({ message: menuMessage }) =>
 			updateMenu(model, "layoutMenu", menuMessage, (next, key) => {
 				const args = target(next, shared)
-				const layoutId =
-					key === AUTOMATIC_LAYOUT
-						? null
-						: (next.layouts?.find((layout) => layout.id === key)?.id ?? null)
+				const picked = next.layouts?.find((layout) => layout.id === key)
+				// A layout deleted while the menu was open: pick nothing rather than unpin.
+				if (key !== AUTOMATIC_LAYOUT && picked === undefined) return { model: next }
+				const layoutId = picked?.id ?? null
 				return args === null || layoutId === (accountOf(next)?.pinnedLayoutId ?? null)
 					? { model: next }
 					: { model: next, commands: [SetCustomerLayout({ ...args, layoutId })] }

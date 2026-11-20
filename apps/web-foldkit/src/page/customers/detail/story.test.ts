@@ -366,6 +366,13 @@ describe("customer page: tabs", () => {
 		expect(pinned.commands?.[0]?.args).toMatchObject({ layoutId: layouts[0]!.id })
 		const automatic = pick(withLayouts, wrap, AUTOMATIC_LAYOUT, layoutEntries(layouts))
 		expect(commandNames(automatic)).toEqual([])
+		// The picked layout was deleted while the menu was open: nothing changes, the pin stays.
+		const pinnedBeta = run(withLayouts, [
+			Message.UpdatedAccounts({ accounts: [acme, { ...beta, pinnedLayoutId: layouts[0]!.id }, gamma] }),
+		])
+		const deleted = run(pinnedBeta, [Message.UpdatedLayouts({ layouts: [layouts[1]!] })])
+		const stalePick = pick(deleted, wrap, layouts[0]!.id, layoutEntries(layouts))
+		expect(commandNames(stalePick)).toEqual([])
 	})
 
 	test("an activity filter restarts the timeline and drops answers for the old one", () => {

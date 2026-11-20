@@ -155,6 +155,12 @@ describe("formatBytes and formatMetric", () => {
 		expect(formatBytes(999_950)).toBe("1 MB")
 	})
 
+	it("durations promote on the rounded value", () => {
+		expect(formatMetric(850, { format: "duration_ms", unit: null })).toBe("850 ms")
+		expect(formatMetric(999.6, { format: "duration_ms", unit: null })).toBe("1 s")
+		expect(formatMetric(59_990, { format: "duration_ms", unit: null })).toBe("1 min")
+	})
+
 	it("a built-in MRR in minor units reads as money", () => {
 		expect(formatMetric(120_000, { format: "number", unit: "minor" })).toBe("$1,200")
 		expect(formatMetric(12_400, { format: "number", unit: "spans" })).toBe("12.4K spans")
