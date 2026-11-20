@@ -204,11 +204,15 @@ const withHostEvidence = Effect.fn("CustomersObject.hostEvidence")(function* (
 				guestOrganizationId: organizationId,
 				conversationIds,
 			}).pipe(
-				Effect.catchTag("ObjectCallError", (error) =>
-					Effect.logWarning("Connect host evidence unavailable", {
-						hostOrganizationId,
-						reason: error.message,
-					}).pipe(Effect.as([])),
+				// Unreachable or failing (a defect on the host too): that host's channels go without its
+				// people (so none of them links automatically) and the other hosts' still count.
+				Effect.catchCause((cause) =>
+					Cause.hasInterruptsOnly(cause)
+						? Effect.interrupt
+						: Effect.logWarning("Connect host evidence unavailable", {
+								hostOrganizationId,
+								cause: Cause.pretty(cause),
+							}).pipe(Effect.as([])),
 				),
 			),
 		{ concurrency: 4 },
@@ -354,7 +358,9 @@ export const applySuggestions = Effect.fn("CustomersObject.applySuggestions")(fu
 				const values = {
 					score: suggestion.score,
 					reasons: suggestion.reasons,
-					computedAt: now,
+					// When the evidence was asked for, not written: a refresh that asked later wins
+					// even if it commits first (the superseded check above compares the same clock).
+					computedAt: fetchedAt ?? now,
 					updatedAt: now,
 				}
 				// Another refresh may have written the pair: update it while it is still open.
