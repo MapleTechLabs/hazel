@@ -21,7 +21,7 @@ import {
 	Workspace,
 } from "../../settings/chat-sync/providers"
 
-export { CHAT_SYNC_MIGRATION_MAX_CHANNELS, ChatSyncHistoryRange }
+export { CHAT_SYNC_MIGRATION_MAX_CHANNELS, CHAT_SYNC_MIGRATION_MAX_MESSAGES, ChatSyncHistoryRange }
 
 /** Why a step failed, as the wizard says it. */
 export const Problem = Schema.Struct({
@@ -101,8 +101,8 @@ export const Message = defineMessageUnion({
 		reason: ResourceFailure,
 	},
 	ClickedAuthorize: {},
-	SucceededGetOAuthUrl: { authorizationUrl: Schema.String },
-	FailedGetOAuthUrl: { problem: Problem },
+	SucceededGetOAuthUrl: { organizationId: OrganizationId, authorizationUrl: Schema.String },
+	FailedGetOAuthUrl: { organizationId: OrganizationId, problem: Problem },
 	CompletedRedirect: {},
 	ChangedWorkspaceSearch: { value: Schema.String },
 	ClickedWorkspace: { workspace: Workspace },

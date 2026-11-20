@@ -52,6 +52,23 @@ describe("onboarding answers across the import step's OAuth", () => {
 		expect(restored.phase._tag === "Running" ? restored.phase.step._tag : null).toBe("Import")
 	})
 
+	test("coming back to the import step does not save over the answers it is reading back", () => {
+		const started = [
+			Message.DetectedBrowserTimezone({ browserTimezone: "UTC" }),
+			Message.UpdatedMembership({ membership }),
+		].reduce<{ model: ReturnType<typeof init>["model"]; names: Array<string> }>(
+			(step, message) => {
+				const next = update(step.model, message, shared)
+				return {
+					model: next.model,
+					names: [...step.names, ...(next.commands ?? []).map((c) => c.name)],
+				}
+			},
+			{ model: init(route("import"), shared).model, names: [] },
+		)
+		expect(started.names).not.toContain("StoreOnboardingAnswers")
+	})
+
 	test("answers read after the flow started still land", () => {
 		const running = [
 			Message.DetectedBrowserTimezone({ browserTimezone: "UTC" }),

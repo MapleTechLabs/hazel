@@ -16,6 +16,7 @@ import {
 } from "../../settings/chat-sync/providers"
 import {
 	CHAT_SYNC_MIGRATION_MAX_CHANNELS,
+	CHAT_SYNC_MIGRATION_MAX_MESSAGES,
 	historyOptions,
 	isBusy,
 	Message,
@@ -339,14 +340,25 @@ const pickingChannels = <P>(
 	}
 }
 
-const HISTORY_PHRASE = {
-	none: "New messages sync from now on.",
-	"7d": "The last 7 days of messages are importing in the background.",
-	"30d": "The last 30 days of messages are importing in the background.",
-	"90d": "The last 90 days of messages are importing in the background.",
-	"1y": "The last year of messages is importing in the background; busy channels take a while.",
-	all: "Their full history is importing in the background; busy channels take a while.",
-} satisfies Record<Extract<Phase, { readonly _tag: "Done" }>["history"], string>
+const HISTORY_WINDOW = {
+	none: null,
+	"7d": "the last 7 days",
+	"30d": "the last 30 days",
+	"90d": "the last 90 days",
+	"1y": "the last year",
+	all: "their history",
+} satisfies Record<Extract<Phase, { readonly _tag: "Done" }>["history"], string | null>
+
+/** What the Done screen says is importing: the range, bounded by the provider's per-channel cap. */
+const historyPhrase = (
+	provider: ChatSyncProvider,
+	history: Extract<Phase, { readonly _tag: "Done" }>["history"],
+): string => {
+	const window = HISTORY_WINDOW[history]
+	if (window === null) return "New messages sync from now on."
+	const cap = CHAT_SYNC_MIGRATION_MAX_MESSAGES[provider].toLocaleString("en-US")
+	return `Up to ${cap} messages a channel from ${window} are importing in the background.`
+}
 
 export const parts = <P>(h: Builder<P>, model: Model, options: ViewOptions<P>): Parts => {
 	const wrap = options.toParentMessage
@@ -467,7 +479,7 @@ export const parts = <P>(h: Builder<P>, model: Model, options: ViewOptions<P>): 
 						skipped > 0 ? ` ${skipped} already synced, left as they were.` : "",
 					],
 				),
-				h.p([h.Class("max-w-sm text-muted-fg text-sm")], [HISTORY_PHRASE[history]]),
+				h.p([h.Class("max-w-sm text-muted-fg text-sm")], [historyPhrase(provider, history)]),
 			]),
 			leading: [],
 			actions: [

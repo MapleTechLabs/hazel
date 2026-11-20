@@ -8,8 +8,8 @@ import {
 	SyncConnectionId,
 } from "@hazel/schema"
 import { ConfigProvider, Effect, Layer } from "effect"
-import type { ChatSyncLinkContext } from "../../provider"
-import { makeDiscordClient, withAuthorHeader } from "./client"
+import { type ChatSyncLinkContext, NOT_IN_WORKSPACE } from "../../provider"
+import { GUILD_VERIFIED, makeDiscordClient, withAuthorHeader } from "./client"
 
 const channelId = ExternalChannelId.make("100000000000000001")
 const messageId = ExternalMessageId.make("100000000000000002")
@@ -323,6 +323,81 @@ describe("Discord edits", () => {
 			expect(sent).toHaveLength(1)
 			expect(sent[0]!.startsWith("**Olive Owner**\nedited")).toBe(true)
 			expect(sent[0]).toContain("https://files.test/plan.pdf")
+		}),
+	)
+})
+
+describe("Discord posts only into the link's own guild", () => {
+	const guildId = "200000000000000001"
+	const message = {
+		content: "hi",
+		attachments: [],
+		replyToExternalMessageId: undefined,
+		author: { name: "Olive Owner", avatarUrl: null },
+	}
+	const botOnly = { outboundIdentity: { strategy: "fallback_bot", providers: {} } }
+
+	const harness = (options: {
+		readonly guildChannels: ReadonlyArray<string>
+		readonly settings: Record<string, unknown>
+	}) => {
+		const calls: Array<string> = []
+		const saved: Array<Record<string, unknown>> = []
+		const api = {
+			listGuildChannels: (guild: string) => {
+				calls.push(`listGuildChannels:${guild}`)
+				return Effect.succeed(
+					options.guildChannels.map((id) => ({ id, guildId: guild, name: id, type: 0 })),
+				)
+			},
+			createMessage: () => {
+				calls.push("createMessage")
+				return Effect.succeed("100000000000000030")
+			},
+		}
+		const post = Effect.gen(function* () {
+			const client = yield* makeDiscordClient
+			return yield* client.postMessage(
+				{
+					link: { ...context.link, externalWorkspaceId: guildId, settings: options.settings },
+					saveSettings: (settings) => Effect.sync(() => void saved.push(settings)),
+				},
+				message,
+			)
+		}).pipe(
+			Effect.provide(
+				Layer.mergeAll(
+					Layer.succeed(
+						Discord.DiscordApiClient,
+						api as unknown as Discord.DiscordApiClient["Service"],
+					),
+					ConfigProvider.layer(ConfigProvider.fromUnknown({ DISCORD_BOT_TOKEN: "bot-token" })),
+				),
+			),
+		)
+		return { post, calls, saved }
+	}
+
+	it.effect("a channel of another guild is refused before anything is posted", () =>
+		Effect.gen(function* () {
+			const h = harness({ guildChannels: ["100000000000000077"], settings: botOnly })
+			const error = yield* Effect.flip(h.post)
+			expect(error).toMatchObject({ _tag: "ChatSyncProviderApiError", detail: NOT_IN_WORKSPACE })
+			expect(h.calls).toEqual([`listGuildChannels:${guildId}`])
+			expect(h.saved).toEqual([])
+		}),
+	)
+
+	it.effect("the first post checks once and remembers it; a checked link posts straight away", () =>
+		Effect.gen(function* () {
+			const first = harness({ guildChannels: [channelId], settings: botOnly })
+			yield* first.post
+			expect(first.calls).toEqual([`listGuildChannels:${guildId}`, "createMessage"])
+			expect(first.saved).toEqual([{ ...botOnly, [GUILD_VERIFIED]: true }])
+
+			const checked = harness({ guildChannels: [], settings: { ...botOnly, [GUILD_VERIFIED]: true } })
+			yield* checked.post
+			expect(checked.calls).toEqual(["createMessage"])
 		}),
 	)
 })

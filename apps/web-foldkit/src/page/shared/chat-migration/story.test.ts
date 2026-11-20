@@ -202,4 +202,28 @@ describe("chat migration wizard", () => {
 		)
 		expect(stale.model.phase._tag).toBe("Loading")
 	})
+
+	test("an earlier organization's consent URL is never followed", () => {
+		const other = Schema.decodeSync(OrganizationId)("00000000-0000-4000-8000-000000000009")
+		const needs = run(
+			withOrganization(fresh(), other, returnTo).model,
+			Message.ClickedProvider({ provider: "slack" }),
+			Message.FailedListWorkspaces({
+				organizationId: other,
+				provider: "slack",
+				reason: "NotConnected",
+			}),
+			Message.ClickedAuthorize(),
+		).model
+		const stale = update(
+			needs,
+			Message.SucceededGetOAuthUrl({ organizationId, authorizationUrl: "https://slack.com/a" }),
+		)
+		expect(stale.commands ?? []).toEqual([])
+		const own = update(
+			needs,
+			Message.SucceededGetOAuthUrl({ organizationId: other, authorizationUrl: "https://slack.com/b" }),
+		)
+		expect(own.commands?.map((command) => command.name)).toEqual(["RedirectChatMigrationToProvider"])
+	})
 })

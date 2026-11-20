@@ -98,6 +98,9 @@ export const withAuthorHeader = (author: ChatSyncAuthor, content: string) => {
 	return header + body
 }
 
+/** Link settings key: the link's channel was found in its guild (`verifiedInGuild`). */
+export const GUILD_VERIFIED = "discordGuildVerified"
+
 export const makeDiscordClient = Effect.gen(function* () {
 	const api = yield* Discord.DiscordApiClient
 	const botTokenOption = yield* Config.Redacted("DISCORD_BOT_TOKEN").pipe(Config.option)
@@ -207,13 +210,43 @@ export const makeDiscordClient = Effect.gen(function* () {
 			return yield* identity("webhook_failed_bot").pipe(Effect.andThen(bot))
 		})
 
+	/** The guild's channel ids, through the bot (one shared bot, in many guilds). */
+	const isGuildChannel = (guildId: string, channelId: string) =>
+		viaBot((token) => api.listGuildChannels(guildId, token)).pipe(
+			Effect.map((channels) => channels.some((channel) => channel.id === channelId)),
+		)
+
+	/**
+	 * A link posts only once its channel is known to be its guild's own: checked on its first post
+	 * and remembered in its settings, so a message written before `chatSync.prepareLink` paused a
+	 * forged link never reaches that channel. A thread posts under its parent's check, and a link
+	 * projected before it named its guild cannot be checked (those were all picked from the guild's
+	 * own channel list). Answers the context with the remembered check, for the saves after it.
+	 */
+	const verifiedInGuild = (context: ChatSyncLinkContext) =>
+		Effect.gen(function* () {
+			const { link } = context
+			const guildId = link.externalWorkspaceId
+			if (
+				link.parent !== undefined ||
+				guildId === undefined ||
+				link.settings?.[GUILD_VERIFIED] === true
+			)
+				return context
+			if (!(yield* isGuildChannel(guildId, link.externalChannelId))) {
+				return yield* notInWorkspaceError("discord")
+			}
+			const settings = { ...link.settings, [GUILD_VERIFIED]: true }
+			yield* context.saveSettings(settings)
+			return { ...context, link: { ...link, settings } }
+		})
+
 	const client: ChatSyncClient = {
 		// The bot is in every channel of a guild it was added to; the one shared bot is in other
 		// guilds too, so the channel must be this guild's own (a link names any channel id).
 		prepareLink: Effect.fn("DiscordChatSyncClient.prepareLink")(function* (link) {
 			yield* requireIds({ channelId: link.externalChannelId })
-			const channels = yield* viaBot((token) => api.listGuildChannels(link.externalWorkspaceId, token))
-			if (!channels.some((channel) => channel.id === link.externalChannelId)) {
+			if (!(yield* isGuildChannel(link.externalWorkspaceId, link.externalChannelId))) {
 				return yield* notInWorkspaceError("discord")
 			}
 		}),
@@ -239,9 +272,11 @@ export const makeDiscordClient = Effect.gen(function* () {
 				cursor: page.length < params.limit || oldest === undefined ? null : oldest.id,
 			}
 		}),
-		postMessage: Effect.fn("DiscordChatSyncClient.postMessage")(function* (context, message) {
-			const channelId = context.link.externalChannelId
+		postMessage: Effect.fn("DiscordChatSyncClient.postMessage")(function* (linkContext, message) {
+			const channelId = linkContext.link.externalChannelId
 			yield* requireIds({ channelId, replyToMessageId: message.replyToExternalMessageId })
+			// Every later call on a link needs a message this one made, so this is the one gate.
+			const context = yield* verifiedInGuild(linkContext)
 			const content = formatMessageContentWithAttachments({
 				content: message.content,
 				attachments: message.attachments,

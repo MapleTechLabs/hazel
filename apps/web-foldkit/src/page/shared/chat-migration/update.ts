@@ -172,13 +172,15 @@ export const update = (model: Model, message: Message): Return =>
 				],
 			}
 		},
-		SucceededGetOAuthUrl: ({ authorizationUrl }) =>
-			model.phase._tag === "NeedsAuthorization"
+		// Another organization's consent URL must never be followed (it would connect it there).
+		SucceededGetOAuthUrl: ({ organizationId, authorizationUrl }) =>
+			model.phase._tag === "NeedsAuthorization" && organizationId === model.organizationId
 				? { model, commands: [RedirectChatMigrationToProvider({ authorizationUrl })] }
 				: { model },
-		FailedGetOAuthUrl: ({ problem }) => {
+		FailedGetOAuthUrl: ({ organizationId, problem }) => {
 			const { phase } = model
-			if (phase._tag !== "NeedsAuthorization") return { model }
+			if (organizationId !== model.organizationId || phase._tag !== "NeedsAuthorization")
+				return { model }
 			return {
 				model: withPhase(model, Phase.NeedsAuthorization({ ...phase, isRedirecting: false })),
 				outcome: toast(errorToast(problem.title, problem.description || null)),

@@ -114,9 +114,12 @@ export const enterStep = (
 				? [ReplaceOnboardingStepUrl({ href: onboardingHref(model.orgId, step) })]
 				: []),
 			...(step === "finalization" ? [completeOnboarding(next)] : []),
-			...(next.step._tag === "Import"
-				? [StoreOnboardingAnswers({ data: next.data }), ...migrationStart(next.step.migration)]
+			// Saved only when the step is reached by navigation: the URL's first step may be the OAuth
+			// return, whose saved answers are still being read back and must not be overwritten.
+			...(next.step._tag === "Import" && options.syncUrl
+				? [StoreOnboardingAnswers({ data: next.data })]
 				: []),
+			...(next.step._tag === "Import" ? migrationStart(next.step.migration) : []),
 		],
 	}
 }

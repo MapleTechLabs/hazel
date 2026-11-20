@@ -143,12 +143,13 @@ export const GetChatMigrationOAuthUrl = Command.define("GetChatMigrationOAuthUrl
 			}),
 		).pipe(
 			Effect.map((response) =>
-				Message.SucceededGetOAuthUrl({ authorizationUrl: response.authorizationUrl }),
+				Message.SucceededGetOAuthUrl({ organizationId, authorizationUrl: response.authorizationUrl }),
 			),
 			Effect.catchTags({
 				UnsupportedProviderError: () =>
 					Effect.succeed(
 						Message.FailedGetOAuthUrl({
+							organizationId,
 							problem: {
 								title: `${PROVIDERS[provider].name} is not available`,
 								description: "This Hazel deployment has no app set up for it.",
@@ -157,7 +158,9 @@ export const GetChatMigrationOAuthUrl = Command.define("GetChatMigrationOAuthUrl
 						}),
 					),
 			}),
-			catchCommon((reason) => Message.FailedGetOAuthUrl({ problem: commonProblem(reason) })),
+			catchCommon((reason) =>
+				Message.FailedGetOAuthUrl({ organizationId, problem: commonProblem(reason) }),
+			),
 		),
 })
 
