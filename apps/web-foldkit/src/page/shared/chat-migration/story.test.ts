@@ -226,4 +226,13 @@ describe("chat migration wizard", () => {
 		)
 		expect(own.commands?.map((command) => command.name)).toEqual(["RedirectChatMigrationToProvider"])
 	})
+
+	test("a migration that linked nothing says so instead of promising an import", () => {
+		const done = update(
+			run(pickingSlackChannels(), Message.ClickedMigrate()).model,
+			Message.SucceededMigrate({ organizationId, linked: 0, created: 0, skipped: 3 }),
+		)
+		expect(done.model.phase).toMatchObject({ _tag: "Done", linked: 0, skipped: 3 })
+		expect(done.outcome).toMatchObject({ _tag: "Toast", toast: { title: "Those channels already sync" } })
+	})
 })

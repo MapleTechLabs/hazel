@@ -326,10 +326,12 @@ export const update = (model: Model, message: Message): Return =>
 					}),
 				),
 				outcome: toast(
-					successToast(
-						`Migrating ${plural(linked, "channel")} from ${PROVIDERS[phase.provider].name}`,
-						phase.history === "none" ? null : "Past messages import in the background.",
-					),
+					linked === 0
+						? successToast("Those channels already sync")
+						: successToast(
+								`Migrating ${plural(linked, "channel")} from ${PROVIDERS[phase.provider].name}`,
+								phase.history === "none" ? null : "Past messages import in the background.",
+							),
 				),
 			}
 		},

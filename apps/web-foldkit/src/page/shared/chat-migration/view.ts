@@ -461,7 +461,10 @@ export const parts = <P>(h: Builder<P>, model: Model, options: ViewOptions<P>): 
 		}),
 		Done: ({ provider, workspaceName, linked, created, skipped, history }) => ({
 			title: "You're all set",
-			description: `${workspaceName} is on its way to Hazel.`,
+			description:
+				linked === 0
+					? `${workspaceName} already syncs with Hazel.`
+					: `${workspaceName} is on its way to Hazel.`,
 			body: centered(h, [
 				h.div(
 					[
@@ -473,13 +476,20 @@ export const parts = <P>(h: Builder<P>, model: Model, options: ViewOptions<P>): 
 				),
 				h.p(
 					[h.Class("max-w-sm text-fg text-sm")],
-					[
-						`Linked ${linked} ${PROVIDERS[provider].name} channel${linked === 1 ? "" : "s"}`,
-						created === linked ? "." : ` (${created} new in Hazel).`,
-						skipped > 0 ? ` ${skipped} already synced, left as they were.` : "",
-					],
+					linked === 0
+						? [
+								`All ${skipped} channel${skipped === 1 ? "" : "s"} you picked already sync, so nothing changed.`,
+							]
+						: [
+								`Linked ${linked} ${PROVIDERS[provider].name} channel${linked === 1 ? "" : "s"}`,
+								created === linked ? "." : ` (${created} new in Hazel).`,
+								skipped > 0 ? ` ${skipped} already synced, left as they were.` : "",
+							],
 				),
-				h.p([h.Class("max-w-sm text-muted-fg text-sm")], [historyPhrase(provider, history)]),
+				// Nothing linked means nothing was queued: no import to promise.
+				...(linked === 0
+					? []
+					: [h.p([h.Class("max-w-sm text-muted-fg text-sm")], [historyPhrase(provider, history)])]),
 			]),
 			leading: [],
 			actions: [
