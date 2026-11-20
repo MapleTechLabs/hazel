@@ -134,14 +134,17 @@ const CHANNEL_ONLY = [
 	"chatChannel",
 	"chatMessages",
 	"chatMessagesWindow",
-	// The thread panel's rows take no reactions (`toThreadRows`).
-	"chatReactions",
 	// The channel's header badge, not per message.
 	"chatSyncProvider",
 	// Reply targets are keyed by message id; the channel only names where to load them.
 	"chatReplyTargets",
 	"chatPinned",
 	"chatCustomer",
+	// Keyed by author, not message; the open thread is linked when its channel is.
+	"chatCustomerAuthors",
+	// Support issues hang off the channel's own top-level messages, never a thread's replies.
+	"chatIssueRoots",
+	"chatThreadIssue",
 	"chatMembers",
 	"chatTyping",
 	"composerMembers",
@@ -225,6 +228,8 @@ const KEYED_BY_CHANNEL_DATA = [
 	"chatThreadPanel",
 	"chatThreadPanelPins",
 	"threadMembership",
+	"chatIssueMembers",
+	"chatThreadIssueSla",
 	"filesAttachments",
 ]
 

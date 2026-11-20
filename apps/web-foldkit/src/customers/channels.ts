@@ -5,13 +5,13 @@
  * source), and the optimistic link / unlink actions.
  */
 import type * as Customers from "@hazel/domain/customers"
-import type { Channel } from "@hazel/domain/models"
+import { type Channel, ChannelCustomer } from "@hazel/domain/models"
 import {
 	ChannelId,
 	CustomerAccountId,
 	CustomerChannelLinkId,
 	type OrganizationId,
-	type UserId,
+	UserId,
 } from "@hazel/schema"
 import { optimisticAction } from "@hazel/effect-db-collection"
 import { and, eq, inArray, isNull } from "@tanstack/db"
@@ -57,16 +57,29 @@ export const ChannelLinkRow = Schema.Struct({
 	id: CustomerChannelLinkId,
 	accountId: CustomerAccountId,
 	channelId: ChannelId,
+	/** Who linked it; null when it was linked automatically (a Connect channel of the account's contacts). */
+	linkedBy: Schema.NullOr(UserId),
 })
 export type ChannelLinkRow = typeof ChannelLinkRow.Type
 
-/** A channel's customer, as chat shows it. */
-export const ChannelCustomerRow = Schema.Struct({
+/** A channel's customer, as chat shows it: the name and the account at a glance. */
+export const ChannelCustomerRow = ChannelCustomer.Schema
+export type ChannelCustomerRow = typeof ChannelCustomerRow.Type
+
+/** Which customer a channel is linked to, without the glance: what channel settings needs. */
+export const ChannelCustomerLink = Schema.Struct({
 	channelId: ChannelId,
 	accountId: CustomerAccountId,
 	accountName: Schema.String,
 })
-export type ChannelCustomerRow = typeof ChannelCustomerRow.Type
+export type ChannelCustomerLink = typeof ChannelCustomerLink.Type
+
+/** The link part of a channel's customer row. */
+export const linkOf = (row: ChannelCustomerRow): ChannelCustomerLink => ({
+	channelId: row.channelId,
+	accountId: row.accountId,
+	accountName: row.accountName,
+})
 
 // QUERIES
 
@@ -75,12 +88,16 @@ interface ProviderRow {
 	readonly provider: string
 }
 
-/** A channel mirrored from Slack or Discord is that platform's; one shared over Connect is Connect's. */
+/**
+ * A channel shared over Connect is Connect's, even when chat sync mirrors it too (as the backend's
+ * channel evidence counts it, so the mark matches a suggestion's reasons); else one mirrored from
+ * Slack or Discord is that platform's.
+ */
 export const originOf = (
 	channelId: ChannelId,
 	synced: ReadonlyMap<ChannelId, ChannelOrigin>,
 	connected: ReadonlySet<ChannelId>,
-): ChannelOrigin => synced.get(channelId) ?? (connected.has(channelId) ? "connect" : "hazel")
+): ChannelOrigin => (connected.has(channelId) ? "connect" : (synced.get(channelId) ?? "hazel"))
 
 /**
  * The org's linkable channels the user sees, by name, each with its origin. Combines the channels,
@@ -173,7 +190,12 @@ export const channelLinksStream = <Message>(
 					),
 			(rows) =>
 				toMessage(
-					rows.map((row) => ({ id: row.id, accountId: row.accountId, channelId: row.channelId })),
+					rows.map((row) => ({
+						id: row.id,
+						accountId: row.accountId,
+						channelId: row.channelId,
+						linkedBy: row.linkedBy,
+					})),
 				),
 		),
 	)
@@ -187,12 +209,7 @@ export const channelCustomerStream = <Message>(
 		(q) =>
 			q
 				.from({ customer: channelCustomerCollection })
-				.where(({ customer }) => eq(customer.channelId, channelId))
-				.select(({ customer }) => ({
-					channelId: customer.channelId,
-					accountId: customer.accountId,
-					accountName: customer.accountName,
-				})),
+				.where(({ customer }) => eq(customer.channelId, channelId)),
 		(rows) => toMessage(rows[0] ?? null),
 	)
 
@@ -219,56 +236,74 @@ export const searchOptions = <A extends { readonly name: string }>(
 
 // ACTIONS
 
-interface LinkProps {
+export interface LinkProps {
 	readonly organizationId: OrganizationId
 	readonly accountId: CustomerAccountId
 	readonly channelId: ChannelId
 	readonly userId: UserId
 }
 
-const linkChannel = optimisticAction({
-	collections: [customerChannelLinkCollection],
-	onMutate: (props: LinkProps & { readonly id: CustomerChannelLinkId; readonly at: Date }) => {
-		// The channel's link to another account moves here.
-		for (const row of customerChannelLinkCollection.toArray) {
-			if (row.channelId === props.channelId && row.deletedAt === null) {
-				customerChannelLinkCollection.update(row.id, (link) => {
-					link.deletedAt = props.at
-				})
-			}
-		}
-		customerChannelLinkCollection.insert({
-			id: props.id,
-			organizationId: props.organizationId,
-			accountId: props.accountId,
-			channelId: props.channelId,
-			linkedBy: props.userId,
-			createdAt: props.at,
-			updatedAt: props.at,
-			deletedAt: null,
-		} as Customers.ChannelLink)
-		return { id: props.id }
-	},
-	mutate: (props) =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			const result = yield* client("customers.channel.link", {
-				organizationId: props.organizationId,
-				id: props.id,
-				accountId: props.accountId,
-				channelId: props.channelId,
+interface Stamp {
+	readonly id: CustomerChannelLinkId
+	readonly at: Date
+}
+
+/** Shows the link at once: the channel's link to another account moves here. */
+const showLink = (props: LinkProps & Stamp) => {
+	for (const row of customerChannelLinkCollection.toArray) {
+		if (row.channelId === props.channelId && row.deletedAt === null) {
+			customerChannelLinkCollection.update(row.id, (link) => {
+				link.deletedAt = props.at
 			})
-			return { data: result.data, transactionId: result.transactionId }
-		}),
-})
+		}
+	}
+	customerChannelLinkCollection.insert({
+		id: props.id,
+		organizationId: props.organizationId,
+		accountId: props.accountId,
+		channelId: props.channelId,
+		linkedBy: props.userId,
+		createdAt: props.at,
+		updatedAt: props.at,
+		deletedAt: null,
+	} as Customers.ChannelLink)
+	return { id: props.id }
+}
+
+/**
+ * A link that shows at once and settles once the synced links hold the server's (whose row
+ * replaces the optimistic one). `write` is the RPC that links: a plain link, or an accepted
+ * suggestion.
+ */
+export const optimisticLinkAction = <Props extends LinkProps, E, R>(
+	write: (
+		props: Props & Stamp,
+	) => Effect.Effect<{ readonly data: Customers.ChannelLink; readonly transactionId: string }, E, R>,
+) => {
+	const action = optimisticAction({
+		collections: [customerChannelLinkCollection],
+		onMutate: (props: Props & Stamp) => showLink(props),
+		mutate: (props) => Effect.map(write(props), ({ data, transactionId }) => ({ data, transactionId })),
+	})
+	return (props: Props) =>
+		Effect.gen(function* () {
+			const id = CustomerChannelLinkId.make(crypto.randomUUID())
+			const at = new Date(yield* Clock.currentTimeMillis)
+			return yield* action({ ...props, id, at })
+		})
+}
 
 /** Link the channel to the account (a link to another account moves). */
-export const linkChannelAction = (props: LinkProps) =>
-	Effect.gen(function* () {
-		const id = CustomerChannelLinkId.make(crypto.randomUUID())
-		const at = new Date(yield* Clock.currentTimeMillis)
-		return yield* linkChannel({ ...props, id, at })
-	})
+export const linkChannelAction = optimisticLinkAction((props: LinkProps & Stamp) =>
+	HazelRpc.use((client) =>
+		client("customers.channel.link", {
+			organizationId: props.organizationId,
+			id: props.id,
+			accountId: props.accountId,
+			channelId: props.channelId,
+		}),
+	),
+)
 
 const unlinkChannel = optimisticAction({
 	collections: [customerChannelLinkCollection],

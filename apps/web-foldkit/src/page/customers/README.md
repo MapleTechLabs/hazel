@@ -17,6 +17,7 @@ here is an ordinary page (`definePage`), registered in `pages.ts`, the Customers
 | `CustomersSettingsSignalRule`   | `/settings/signals/$ruleId`                  | `ruleId`                                                             | `settings/signals/`       |
 | `CustomersSettingsHealth`       | `/settings/health`                           |                                                                      | `settings/health/`        |
 | `CustomersSettingsPlans`        | `/settings/plans`                            |                                                                      | `settings/plans/`         |
+| `CustomersSettingsSla`          | `/settings/sla`                              |                                                                      | `settings/sla/`           |
 | `CustomersSettingsFeatureFlags` | `/settings/feature-flags`                    |                                                                      | `settings/feature-flags/` |
 | `CustomersSettingsMetrics`      | `/settings/metrics`                          |                                                                      | `settings/metrics/`       |
 | `CustomersSettingsMetricNew`    | `/settings/metrics/new?key=&source=`         | `key: Option<string>`, `source: Option<MetricSourceKind>`            | `settings/metrics/`       |

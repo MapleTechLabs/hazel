@@ -23,8 +23,10 @@ import * as Overlays from "../overlays"
 import { pinnedPopoverView } from "../pinned"
 import { idleRowContext, rowContextFor, threadRowContextFor } from "../row-context"
 import type { DisplayRow, MessageRow } from "../rows"
+import * as CustomerCard from "../customer-card"
 import { chatTabBarView } from "../tab-bar"
 import { threadPanelView } from "../thread-panel"
+import * as IssueControl from "../issue-control"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
 import { threadPanelWidthOf } from "./thread-width"
@@ -45,6 +47,8 @@ const toHtmlRenderMessage = (message: HtmlRender.Message) => Message.GotHtmlRend
 const toPressEdge = (clientX: number, startWidth: number, maxWidth: number) =>
 	Message.PressedThreadPanelEdge({ clientX, startWidth, maxWidth })
 const toNudgeEdge = (delta: number) => Message.PressedThreadPanelEdgeKey({ delta })
+const toIssueControlMessage = (message: IssueControl.Message) => Message.GotIssueControlMessage({ message })
+const toCustomerCard = (message: CustomerCard.Message) => Message.GotCustomerCardMessage({ message })
 const toPinnedMessage = (message: Parameters<typeof Overlays.Message.GotPinnedMessage>[0]["message"]) =>
 	toOverlay(Overlays.Message.GotPinnedMessage({ message }))
 
@@ -302,6 +306,7 @@ const headerView = (
 	pinnedPopover: Model["overlays"]["pinned"],
 	pins: Model["pinned"],
 	customer: Model["customer"],
+	isCustomerCardOpen: boolean,
 	isMobile: boolean,
 	h: H,
 ): Html => {
@@ -344,13 +349,15 @@ const headerView = (
 						: mobileBackLink(h, hrefOf(AppRoute.ChatIndex({ orgSlug })), "Chats", "-ml-3 -mr-1")
 				: h.empty,
 		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, toPinnedMessage),
-		customer:
-			customer === null || orgSlug === null
+		customerChip:
+			customer === null
 				? null
-				: {
-						name: customer.accountName,
-						href: hrefOf(customerRoute(orgSlug, customer.accountId)),
-					},
+				: CustomerCard.chip(h, {
+						customer,
+						isOpen: isCustomerCardOpen,
+						isMobile,
+						toMessage: toCustomerCard,
+					}),
 	})
 }
 
@@ -413,9 +420,11 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						model.overlays.pinned,
 						model.pinned,
 						model.customer,
+						CustomerCard.isOpenOf(model.customerCard, options.isMobile ?? false),
 						options.isMobile ?? false,
 						h,
 					]) ?? h.empty,
+					customerCardView(h, model, options.isMobile ?? false, nowMs),
 					lazyTabBar(chatTabBarView, [routeTabOf(model.tab), toSelf, h]) ?? h.empty,
 					...(model.tab._tag === "Files"
 						? [
@@ -435,6 +444,7 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						starterRowOf(model, model.threadPanel.messageId),
 						model.currentUserId,
 						model.orgSlug,
+						model.customer !== null,
 						threadPanelWidthOf(model),
 						model.threadPanelDrag !== null,
 						// Only what the panel's frames read: not the fullscreen dialog or the theme's variables.
@@ -442,12 +452,33 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						model.htmlRender.frames,
 						model.htmlRender.theme?.appearance ?? "dark",
 						threadRowContextFor(h, model, model.threadPanel.rows, nowMs),
+						// The SLA chip's clock: only an issue with one re-renders the panel every tick.
+						model.threadPanel.issue.sla === null ? 0 : nowMs,
 						h,
 					]) ?? h.empty),
 			// Outside the tabs: the list's frames and the thread panel's both open it.
 			htmlRenderFullscreenView(h, model.htmlRender, toHtmlRenderMessage),
 		],
 	)
+}
+
+/** The customer chip's card (desktop) or sheet (phone); nothing while the channel has no customer. */
+const customerCardView = (h: H, model: Model, isMobile: boolean, nowMs: number): Html => {
+	const customer = model.customer
+	if (customer === null) return h.empty
+	const owner =
+		customer.ownerUserId === null
+			? undefined
+			: model.lookups.users.find((user) => user.id === customer.ownerUserId)
+	const context: CustomerCard.CardContext = {
+		customer,
+		ownerName: owner === undefined ? null : `${owner.firstName} ${owner.lastName}`.trim() || owner.email,
+		customerHref: hrefOf(customerRoute(model.orgSlug, customer.accountId)),
+		queueHref: hrefOf(AppRoute.CustomersAttention({ orgSlug: model.orgSlug })),
+		nowMs,
+	}
+	const inputs = { context, model: model.customerCard, toMessage: toCustomerCard }
+	return isMobile ? CustomerCard.sheet(h, inputs) : CustomerCard.card(h, inputs)
 }
 
 /** The thread's starter message as the channel list shows it; null outside the loaded window. */
@@ -464,12 +495,14 @@ const threadPanelOverlay = (
 	originalRow: MessageRow | null,
 	currentUserId: Model["currentUserId"],
 	orgSlug: Model["orgSlug"],
+	isLinked: boolean,
 	width: number,
 	isResizing: boolean,
 	urls: HtmlRender.Model["urls"],
 	frames: HtmlRender.Model["frames"],
 	appearance: "light" | "dark",
 	rowContext: RowContext<Message>,
+	slaNowMs: number,
 	h: H,
 ): Html => {
 	// The original message's HTML renders show here too, so the panel re-renders with their state.
@@ -502,6 +535,15 @@ const threadPanelOverlay = (
 		isGeneratingName: panel.isNaming,
 		isCreating: panel.creation === "Creating",
 		trackHover: trackHoverAttribute(h),
+		issueControl: isLinked
+			? IssueControl.view(h, {
+					model: panel.issue,
+					inboxHref: hrefOf(AppRoute.CustomersInbox({ orgSlug })),
+					currentUserId,
+					nowMs: slaNowMs,
+					toMessage: toIssueControlMessage,
+				})
+			: h.empty,
 		composer: draftView(h, panel.draft, {
 			toMessage: toThreadDraftMessage,
 			replyPreview: replyPreviewOf(

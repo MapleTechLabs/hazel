@@ -1,13 +1,17 @@
 import * as Customers from "@hazel/domain/customers"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
+import { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
+import { SuggestionList } from "../../../customers/suggestions"
 import { CustomerAccountId, CustomerContactId, CustomerNoteId, CustomerSignalId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
 import { groupIdOf, groupOf } from "../../../customers/groups"
+import { IssueRow } from "../../../customers/issues"
 import { AccountRow, MemberRow, msOf, SignalRow } from "../../../customers/queries"
 import * as OverviewData from "../../../customers/overview/data"
 import { LayoutRow, MetricDef, orderedLayouts } from "../../../customers/overview/rows"
+import { IssueSlaRow } from "../../../customers/sla"
 import { muteLeaves, SNOOZE_KEYS } from "../../../customers/ui/menus"
 import { CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -40,6 +44,8 @@ export type DetailFailure = typeof DetailFailure.Type
 
 export const Detail = AsyncData.Schema(Customers.AccountDetail, DetailFailure)
 export const Series = AsyncData.Schema(Schema.Array(Customers.MetricSeries), CommonReason)
+/** This customer's row of the 30-day Support report; null when none of their issues opened in it. */
+export const SupportSummary = AsyncData.Schema(Schema.NullOr(Customers.SupportReportRow), CommonReason)
 
 export const PageStatus = Schema.Literals(["Idle", "Loading", "Loaded", "Failed"])
 export type PageStatus = typeof PageStatus.Type
@@ -128,6 +134,10 @@ export const Model = Schema.Struct({
 	layoutMenu: Menu.Model,
 	mrrHistory: Series.schema,
 	hoveredMrr: Schema.NullOr(Schema.Int),
+	/** The Support block: the customer's live issues and SLA clocks, and their 30-day report row. */
+	supportIssues: Schema.NullOr(Schema.Array(IssueRow)),
+	supportSlas: Schema.Array(IssueSlaRow),
+	support: SupportSummary.schema,
 	contacts: Contacts,
 	contactFilter: ContactFilter,
 	contactSearch: Schema.String,
@@ -156,6 +166,16 @@ export const Model = Schema.Struct({
 	channelOptions: Schema.Array(ChannelOption),
 	channelPopover: Popover.Model,
 	channelSearch: Schema.String,
+	/** Every account's chat participants (Customers source) and the org's authors (org source). */
+	chatParticipants: Schema.Array(ChatParticipantRow),
+	chatAuthors: Schema.Array(CustomerAuthorInfo),
+	/** The person in "People in chat" whose menu shows (each row has its own button). */
+	activeChatPersonId: Schema.NullOr(UserId),
+	chatPersonMenu: Menu.Model,
+	/** The customer's open suggested channel links (`customers.channel.suggestions`, not synced). */
+	suggestions: SuggestionList,
+	/** The customer they were asked for; asked again when it changes. */
+	suggestionsFor: Schema.NullOr(CustomerAccountId),
 	/** The flags created in Hazel (`customer_feature_flags`); the others come from the accounts. */
 	createdFeatureFlags: Schema.Array(Schema.String),
 	flagPopover: Popover.Model,
@@ -196,6 +216,7 @@ export const DONE_MENU_ID = "customer-signal-done"
 export const SIGNAL_MORE_MENU_ID = "customer-signal-more"
 export const TAG_POPOVER_ID = "customer-tag"
 export const CHANNEL_POPOVER_ID = "customer-channel"
+export const CHAT_PERSON_MENU_ID = "customer-chat-person"
 export const FLAG_POPOVER_ID = "customer-feature-flags"
 export const RAW_MODAL_ID = "customer-raw"
 export const ENVIRONMENT_MENU_ID = "customer-environments"

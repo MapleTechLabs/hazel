@@ -22,6 +22,10 @@ export interface ChatSyncInboundAuthor {
 	readonly externalUserId: ExternalUserId
 	readonly displayName: string
 	readonly avatarUrl: string | null
+	/** Lower-cased; null when the provider does not share it (Discord, Slack without `users:read.email`). */
+	readonly email: string | null
+	/** The author's own workspace: a Slack user's team (another company's for Slack Connect), the Discord guild. */
+	readonly externalWorkspaceId: string | null
 }
 
 /** One validated provider event, ready to route. `author: null`: the event named nobody. */
@@ -57,6 +61,8 @@ export const orgIngestPayloadOf = Effect.fn("ChatSync.orgIngestPayload")(functio
 						inbound.author.displayName,
 						inbound.author.avatarUrl,
 					),
+					email: inbound.author.email,
+					externalWorkspaceId: inbound.author.externalWorkspaceId,
 				}
 			: inbound.event._tag === "MessageCreate"
 				? { externalUserId: null, user: yield* upsertIntegrationBot(provider) }

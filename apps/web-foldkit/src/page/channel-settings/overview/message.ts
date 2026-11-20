@@ -3,7 +3,8 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import * as Interaction from "../../../ui/aria/interaction"
 import { CommonReason } from "~/lib/error-messages"
-import { ChannelCustomerRow } from "../../../customers/channels"
+import { ChannelCustomerLink } from "../../../customers/channels"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import * as Popover from "../../../ui/popover"
 import { CustomerOption, UpdateChannelFailure } from "./model"
 
@@ -26,7 +27,7 @@ export const Message = defineMessageUnion({
 	FailedUpdateChannel: { reason: UpdateChannelFailure },
 	GotInteractionMessage: { message: Interaction.Message },
 
-	UpdatedCustomer: { customer: Schema.NullOr(ChannelCustomerRow) },
+	UpdatedCustomer: { customer: Schema.NullOr(ChannelCustomerLink) },
 	UpdatedCustomers: { customers: Schema.Array(CustomerOption) },
 	GotCustomerPopoverMessage: { message: Popover.Message },
 	ChangedCustomerSearch: { value: Schema.String },
@@ -34,5 +35,6 @@ export const Message = defineMessageUnion({
 	PressedUnlinkCustomer: {},
 	SucceededCustomerLink: {},
 	FailedCustomerLink: { unlinking: Schema.Boolean, reason: CustomerLinkFailure },
+	GotSuggestionMessage: { message: SuggestionPrompt.Message },
 })
 export type Message = typeof Message.Type

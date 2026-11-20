@@ -71,6 +71,7 @@ describe("the last screen's paint", () => {
 		membershipsArrived,
 		toSidebar(ChannelsSidebar.Message.UpdatedSections({ sections: [] })),
 		toSidebar(ChannelsSidebar.Message.UpdatedFavorites({ channels: [] })),
+		toSidebar(ChannelsSidebar.Message.UpdatedChannelCustomers({ customers: [] })),
 		toSidebar(ChannelsSidebar.Message.UpdatedDmChannelIds({ channelIds: [] })),
 		toSidebar(ChannelsSidebar.Message.UpdatedSectionChannels({ sectionKey: "default", channels: [] })),
 	]

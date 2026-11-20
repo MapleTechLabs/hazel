@@ -16,6 +16,7 @@ export * from "./channels"
 export * from "./chat-sync"
 export * from "./connect"
 export * from "./custom-emojis"
+export * from "./customer-chat"
 export * from "./customers"
 export * from "./directory-index"
 export * from "./github-subscriptions"
@@ -33,5 +34,15 @@ export * from "./typing-indicators"
 export * from "./user-presence-status"
 export * from "./user-organizations"
 export * from "./users"
-export { jsonb, now, randomUuid, textEnum, timestamptz, typed, uuid, varchar } from "./columns"
+export {
+	jsonb,
+	now,
+	parseTimestamp,
+	randomUuid,
+	textEnum,
+	timestamptz,
+	typed,
+	uuid,
+	varchar,
+} from "./columns"
 export { extraIndexes, type ExtraIndex } from "./extra-indexes"

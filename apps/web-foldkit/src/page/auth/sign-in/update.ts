@@ -1,4 +1,4 @@
-import { Option } from "effect"
+import { Option, Schema } from "effect"
 import type { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { safeReturnTo } from "../../../auth/return-to"
@@ -7,15 +7,24 @@ import type { Resources } from "../../../rpc"
 import type { PageReturn } from "../../contract"
 import { RetireBrowserSignIn, StartBrowserSignIn, StartOAuthSignIn, StartPasskeySignIn } from "./command"
 import { Message } from "./message"
-import { type Attempt, type Model, pendingAttempt, Submission } from "./model"
+import { type Attempt, type Model, pendingAttempt, SignInFailure, Submission } from "./model"
 
 type Return = PageReturn<Model, Message>
+
+const isSignInFailure = Schema.is(SignInFailure)
+
+/** A failed OAuth callback lands here with `?error=`: show it, so the next press starts afresh. */
+const callbackFailure = (route: RouteOf<"SignIn" | "SignUp">): Submission => {
+	const error = route._tag === "SignIn" ? Option.getOrNull(route.error) : null
+	if (error === null) return Submission.Idle()
+	return Submission.Failed({ reason: isSignInFailure(error) ? error : "Unexpected" })
+}
 
 export const init = (route: RouteOf<"SignIn" | "SignUp">): Return => ({
 	model: {
 		mode: route._tag,
 		redirectUrl: safeReturnTo(Option.getOrNull(route.redirectUrl)),
-		submission: Submission.Idle(),
+		submission: callbackFailure(route),
 	},
 })
 

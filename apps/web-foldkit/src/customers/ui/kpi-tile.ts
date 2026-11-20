@@ -98,6 +98,9 @@ export type KpiTileOptions = Readonly<{
 	state?: "ready" | "loading" | "empty"
 	/** Empty: the reason and the way out (`Connect Stripe to track revenue`, a link or button). */
 	emptyAction?: Html
+	/** The whole tile links here (the page behind the number); `linkLabel` names it for assistive tech. */
+	href?: string
+	linkLabel?: string
 	className?: string
 }>
 
@@ -119,7 +122,10 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 			: state === "empty"
 				? [
 						h.span([h.Class("font-semibold text-2xl/8 text-muted-fg")], ["—"]),
-						...(options.emptyAction ? [h.div([h.Class("text-sm")], [options.emptyAction])] : []),
+						// Above a tile's stretched link.
+						...(options.emptyAction
+							? [h.div([h.Class("relative z-10 text-sm")], [options.emptyAction])]
+							: []),
 					]
 				: [
 						h.div(
@@ -185,6 +191,7 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 								]
 							: []),
 					]
+	const href = options.href
 	return h.div(
 		[
 			...(state === "loading" ? [h.AriaBusy(true)] : []),
@@ -192,15 +199,29 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 				twMerge(
 					"flex min-w-0 flex-col gap-1.5 rounded-xl border bg-bg p-4 max-md:p-3",
 					state === "empty" ? "border-border border-dashed" : "border-border",
+					href !== undefined && "relative transition-colors hover:bg-wash",
 					options.className,
 				),
 			),
 		],
 		[
+			// A stretched link under the label, so the definition card still opens on its own.
+			...(href === undefined
+				? []
+				: [
+						h.a([
+							h.Href(href),
+							h.AriaLabel(`${options.label}: ${options.linkLabel ?? "details"}`),
+							h.Class(
+								"absolute inset-0 rounded-xl outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70",
+							),
+						]),
+					]),
 			definedLabel(h, {
 				id: options.id,
 				label: options.label,
 				definition: options.definition,
+				className: href === undefined ? undefined : "relative z-10 self-start",
 			}),
 			...body,
 		],

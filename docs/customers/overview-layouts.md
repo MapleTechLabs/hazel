@@ -79,7 +79,9 @@ A metric is a daily value per account in `customer_metric_daily`, with a definit
   `usedAtLeast`; unused rows shown dimmed last, or hidden; order by value, name or last used;
   `exclude` drops some of a group. Reads `customers.account.metricWindows`.
 - **Built-in**: the page's own sections: `health` (score and breakdown), `signals` (open signals),
-  `subscription`, `notes` (pinned notes), `activity` (recent events), `last_active`.
+  `support` (open and overdue issues, median first response; its 30-day report is fetched only when
+  the layout shows it), `subscription`, `notes` (pinned notes), `activity` (recent events),
+  `last_active`.
 
 A widget naming a metric the org does not have renders a "Metric not set up" state with a link to
 create it (`/settings/metrics/new?key=<key>`).

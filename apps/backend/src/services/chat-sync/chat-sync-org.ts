@@ -37,6 +37,7 @@ import { channelTarget } from "../../worker/objects/kinds"
 import { syncChannelAccess, syncMemberAccess } from "../../worker/objects/org/channel-access"
 import { renameChannel } from "../../worker/objects/org/channel-rename"
 import { upsertUserProjection } from "../../worker/objects/org/projections"
+import { noteExternalWorkspace } from "../../worker/objects/org/customer-chat"
 import { ChannelAccessSyncService } from "../channel-access-sync"
 import {
 	type ChannelIngestEvent,
@@ -53,6 +54,7 @@ import {
 	type OrgChatSyncIngestPayload,
 	type RepublishLinksPayload,
 } from "./chat-sync-effects"
+import { recordChannelAuthor } from "./chat-sync-authors"
 import type { ChatSyncProviderDefinition } from "./provider"
 import { definitionOf } from "./providers"
 
@@ -354,12 +356,12 @@ const ownerOf = Effect.fn("OrgObject.chatSyncOwnerLink")(function* (link: Inboun
 			.limit(1),
 	)
 	if (Option.isNone(channel) || channel.value.type !== "thread" || channel.value.parentChannelId === null) {
-		return Option.some(link)
+		return Option.some({ ...link, ownerLinkId: link.id })
 	}
 	const parentChannelId = channel.value.parentChannelId
 	const parent = yield* db.first(
 		SQLite.from(schema.chatSyncChannelLinksTable)
-			.select("isActive", "direction", "settings", "createdAt")
+			.select("id", "isActive", "direction", "settings", "createdAt")
 			.where(($) => [
 				$.syncConnectionId.eq(link.syncConnectionId),
 				$.hazelChannelId.eq(parentChannelId),
@@ -369,7 +371,14 @@ const ownerOf = Effect.fn("OrgObject.chatSyncOwnerLink")(function* (link: Inboun
 	)
 	return Option.map(
 		Option.filter(parent, (owner) => isParentOf(owner, link)),
-		({ isActive, direction, settings }) => ({ ...link, isActive, direction, settings }),
+		// `ownerLinkId`: the parent's mirror, which a thread's evidence belongs to.
+		({ id, isActive, direction, settings }) => ({
+			...link,
+			isActive,
+			direction,
+			settings,
+			ownerLinkId: id,
+		}),
 	)
 })
 
@@ -381,6 +390,7 @@ const resolveAuthor = Effect.fn("OrgObject.chatSyncResolveAuthor")(function* (
 	provider: string,
 	organizationId: OrganizationId,
 	author: NonNullable<OrgChatSyncIngestPayload["author"]>,
+	link: { readonly hazelChannelId: ChannelId; readonly externalWorkspaceId: string },
 ) {
 	const db = yield* Database.Database
 	if (author.externalUserId !== null) {
@@ -400,6 +410,16 @@ const resolveAuthor = Effect.fn("OrgObject.chatSyncResolveAuthor")(function* (
 	}
 	const userId: UserId = author.user.id
 	yield* upsertUserProjection(author.user)
+	// Our own Slack workspace's people are our team in channels linked to customers
+	// (`customer-chat.ts`). Discord sends its server here, which both sides share.
+	if (provider === "slack" && author.externalUserId !== null && author.externalWorkspaceId) {
+		yield* noteExternalWorkspace(
+			organizationId,
+			link.hazelChannelId,
+			userId,
+			author.externalWorkspaceId === link.externalWorkspaceId ? "home" : "other",
+		)
+	}
 	const member = yield* db.first(
 		SQLite.from(schema.organizationMembersTable)
 			.select("id")
@@ -622,11 +642,31 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 	const authorId =
 		payload.author === null
 			? undefined
-			: yield* resolveAuthor(provider, link.organizationId, payload.author)
+			: yield* resolveAuthor(provider, link.organizationId, payload.author, link)
 	let forwarded: ChannelIngestEvent
 	switch (event._tag) {
 		case "MessageCreate":
 			if (authorId === undefined) return yield* outcome("no_author")
+			if (payload.author !== null && payload.author.externalUserId !== null) {
+				yield* recordChannelAuthor({
+					provider,
+					hazelChannelId: link.hazelChannelId,
+					// A thread reply counts for its parent's mirror, as its row is the parent channel's.
+					syncChannelLinkId: owner.ownerLinkId,
+					externalUserId: payload.author.externalUserId,
+					email: payload.author.email,
+					externalWorkspaceId: payload.author.externalWorkspaceId,
+				}).pipe(
+					// Evidence for suggested customer links only: the message is ingested regardless.
+					Effect.catchTags({
+						DatabaseError: (error) =>
+							Effect.logWarning("Chat sync author not recorded", {
+								provider,
+								reason: error.message,
+							}),
+					}),
+				)
+			}
 			forwarded = {
 				_tag: "MessageCreate",
 				externalMessageId: event.externalMessageId,

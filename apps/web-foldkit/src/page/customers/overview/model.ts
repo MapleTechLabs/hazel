@@ -2,12 +2,17 @@ import * as Customers from "@hazel/domain/customers"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
+import { ChannelOption } from "../../../customers/channels"
 import { AccountRow, isAttentionMuted, SettingsSummary, SignalRow } from "../../../customers/queries"
+import { SuggestionList } from "../../../customers/suggestions"
 
 /** The Customers overview (`docs/customers/spec.md` §1): KPIs, charts and lists over a range. */
 
 export const Overview = AsyncData.Schema(Customers.OverviewResult, CommonReason)
 export type Overview = typeof Overview.schema.Type
+
+/** `customers.support.report` for the same range: the four support tiles. */
+export const Support = AsyncData.Schema(Customers.SupportReport, CommonReason)
 
 export const HealthMetric = Schema.Literals(["customers", "mrr"])
 export const Chart = Schema.Literals(["mrr", "activeUsers"])
@@ -19,6 +24,7 @@ export const Model = Schema.Struct({
 	isComparing: Schema.Boolean,
 	/** `customers.overview` for `range`; kept while another range loads. */
 	overview: Overview.schema,
+	support: Support.schema,
 	healthMetric: HealthMetric,
 	hoveredMrr: Schema.NullOr(Schema.Int),
 	hoveredActiveUsers: Schema.NullOr(Schema.Int),
@@ -27,8 +33,17 @@ export const Model = Schema.Struct({
 	accounts: Schema.NullOr(Schema.Array(AccountRow)),
 	connectedProviders: Schema.NullOr(Schema.Array(Customers.CustomerProvider)),
 	settings: Schema.NullOr(SettingsSummary),
+	/** Open suggested channel links (`customers.channel.suggestions`, not synced). */
+	suggestions: SuggestionList,
+	/** Asked for this organization (once per page instance, and after each accept or dismiss). */
+	hasRequestedSuggestions: Schema.Boolean,
+	/** The org's channels the user sees: a suggestion's name and mark come from here. */
+	channelOptions: Schema.Array(ChannelOption),
 })
 export type Model = typeof Model.Type
+
+/** How many suggestions the card lists; accepting or dismissing one brings up the next. */
+export const SUGGESTIONS_SHOWN = 5
 
 /** No source connected yet: the setup cards instead of the dashboard. */
 export const isUnconnected = (model: Model): boolean =>

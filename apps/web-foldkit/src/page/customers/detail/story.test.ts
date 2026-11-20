@@ -16,6 +16,7 @@ import { Effect, Fiber, Option, Schema, Stream } from "effect"
 import { describe, expect, test } from "vitest"
 import * as OverviewData from "../../../customers/overview/data"
 import type { LayoutRow } from "../../../customers/overview/rows"
+import type { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { snoozeUntil } from "../../../customers/ui/menus"
 import { AppRoute, type CustomerTab } from "../../../route"
@@ -51,6 +52,8 @@ import {
 	restoreNoteDraft,
 	writeNoteDrafts,
 } from "./note-drafts"
+import { ChannelLinkRow } from "../../../customers/channels"
+import { chatPeopleOfModel, chatPersonEntries, shownChatPeople } from "./people-in-chat"
 import { init, routeChanged, update } from "./update"
 import { StartCustomerImpersonation } from "./commands"
 
@@ -792,6 +795,151 @@ describe("customer page: signals", () => {
 	})
 })
 
+describe("customer page: people in chat", () => {
+	const linus = Schema.decodeSync(UserId)(uuid(400))
+	const mia = Schema.decodeSync(UserId)(uuid(401))
+	const sam = Schema.decodeSync(UserId)(uuid(402))
+	const participant = (userId: UserId, name: string, fields: Partial<ChatParticipantRow> = {}) =>
+		({
+			accountId: beta.id,
+			userId,
+			side: "customer",
+			reason: "external_other_workspace",
+			contactId: null,
+			name,
+			avatarUrl: null,
+			lastMessageAtMs: NOW,
+			lastChannelId: uuid(500),
+			...fields,
+		}) as ChatParticipantRow
+	const author = (userId: UserId, fields: Partial<CustomerAuthorInfo> = {}): CustomerAuthorInfo => ({
+		userId,
+		side: "customer",
+		reason: "external_other_workspace",
+		override: null,
+		...fields,
+	})
+	const withPeople = run(loaded(), [
+		Message.UpdatedChatParticipants({
+			participants: [
+				participant(linus, "Linus", { lastMessageAtMs: NOW - 60_000 }),
+				participant(mia, "Mia", { lastMessageAtMs: NOW }),
+				participant(sam, "Sam", { side: "team", reason: "org_member" }),
+				participant(grace, "Grace", { accountId: acme.id }),
+			],
+		}),
+		Message.UpdatedChatAuthors({
+			authors: [
+				author(linus, { side: "team", reason: "override", override: "team" }),
+				author(mia),
+				author(sam, { side: "team", reason: "org_member" }),
+			],
+		}),
+	])
+
+	test("the customer's people newest first, a member marked as team kept; the author row wins", () => {
+		const people = chatPeopleOfModel(withPeople)
+		expect(people.map((person) => person.name)).toEqual(["Mia", "Linus"])
+		expect(people[1]).toMatchObject({ side: "team", override: "team" })
+		const keys = (entries: ReadonlyArray<Menu.Entry>) =>
+			entries.flatMap((entry) => (entry._tag === "Item" ? [entry.item.key] : []))
+		expect(keys(chatPersonEntries(people[0]!))).toEqual(["mark_team"])
+		expect(keys(chatPersonEntries(people[1]!))).toEqual(["mark_customer", "reset"])
+	})
+
+	test("rows filed under another account of the customer count, each person once, newest kept", () => {
+		const betaEu = { ...account(4, "Beta EU"), primaryAccountId: beta.id }
+		const grouped = run(withPeople, [
+			Message.UpdatedAccounts({ accounts: [acme, beta, gamma, betaEu] }),
+			Message.UpdatedChatParticipants({
+				participants: [
+					participant(mia, "Mia", { lastMessageAtMs: NOW }),
+					participant(mia, "Mia", { accountId: betaEu.id, lastMessageAtMs: NOW - 5_000 }),
+					participant(linus, "Linus", { accountId: betaEu.id, lastMessageAtMs: NOW - 60_000 }),
+				],
+			}),
+		])
+		const expected = [
+			["Mia", NOW],
+			["Linus", NOW - 60_000],
+		]
+		expect(chatPeopleOfModel(grouped).map((person) => [person.name, person.lastMessageAtMs])).toEqual(
+			expected,
+		)
+		// The environment account's page shows the same people.
+		const fromEnvironment = { ...grouped, accountId: betaEu.id }
+		expect(
+			chatPeopleOfModel(fromEnvironment).map((person) => [person.name, person.lastMessageAtMs]),
+		).toEqual(expected)
+	})
+
+	test("a bot marked as team stays out", () => {
+		const bot = Schema.decodeSync(UserId)(uuid(403))
+		const withBot = run(withPeople, [
+			Message.UpdatedChatParticipants({
+				participants: [participant(bot, "Deploy bot", { side: "bot", reason: "bot" })],
+			}),
+			Message.UpdatedChatAuthors({
+				authors: [author(bot, { side: "bot", reason: "bot", override: "team" })],
+			}),
+		])
+		expect(chatPeopleOfModel(withBot)).toEqual([])
+	})
+
+	test("listed only while the customer still has a linked channel", () => {
+		const unlinked = run(withPeople, [Message.UpdatedChannelLinks({ links: [] })])
+		expect(shownChatPeople(unlinked)).toEqual([])
+		const linked = run(withPeople, [
+			Message.UpdatedChannelLinks({
+				links: [
+					Schema.decodeSync(ChannelLinkRow)({
+						id: uuid(600),
+						accountId: beta.id,
+						channelId: uuid(500),
+						linkedBy: null,
+					}),
+				],
+			}),
+		])
+		expect(shownChatPeople(linked).map((person) => person.name)).toEqual(["Mia", "Linus"])
+	})
+
+	test("a person's menu marks them or resets the mark", () => {
+		const opened = update(withPeople, Message.PressedChatPersonMenu({ userId: mia }), shared)
+		expect(opened.model.activeChatPersonId).toBe(mia)
+		expect(opened.model.chatPersonMenu.popup._tag).toBe("Open")
+		const marked = update(
+			opened.model,
+			Message.GotChatPersonMenuMessage({
+				message: Menu.Message.ClickedItem({ key: "mark_team", entries: [Menu.item("mark_team")] }),
+			}),
+			shared,
+		)
+		expect(marked.commands?.[0]?.name).toBe("SetChatAuthorSide")
+		expect(marked.commands?.[0]?.args).toMatchObject({
+			organizationId,
+			userId: mia,
+			side: "team",
+			by: ada,
+		})
+
+		const reopened = update(withPeople, Message.PressedChatPersonMenu({ userId: linus }), shared)
+		const reset = update(
+			reopened.model,
+			Message.GotChatPersonMenuMessage({
+				message: Menu.Message.ClickedItem({ key: "reset", entries: [Menu.item("reset")] }),
+			}),
+			shared,
+		)
+		expect(reset.commands?.[0]?.args).toMatchObject({ userId: linus, side: null })
+	})
+
+	test("a failed change says so", () => {
+		const failed = update(withPeople, Message.FailedSetChatAuthorSide({ reason: "Unexpected" }), shared)
+		expect(failed.outMessage?._tag).toBe("RequestedToast")
+	})
+})
+
 describe("customer page: impersonation", () => {
 	const contactId = Schema.decodeSync(CustomerContactId)
 	const contactRow = (n: number, name: string): Customers.ContactRow => ({
@@ -1038,5 +1186,38 @@ describe("customer page: environments", () => {
 			shared,
 		)
 		expect(cleared.commands?.[0]?.args).toMatchObject({ environment: null })
+	})
+})
+
+describe("customer page: support", () => {
+	test("the overview asks for the 30-day support row once; other tabs do not", () => {
+		expect(commandNames(init(route(null), shared))).toContain("FetchCustomerSupport")
+		expect(commandNames(init(route("users"), shared))).not.toContain("FetchCustomerSupport")
+		const settled = run(init(route(null), shared).model, [
+			Message.SucceededFetchSupport({ accountId: beta.id, row: null }),
+		])
+		expect(settled.support._tag).toBe("Success")
+		expect(
+			commandNames(
+				routeChanged(routeChanged(settled, route("users"), shared).model, route(null), shared),
+			),
+		).not.toContain("FetchCustomerSupport")
+	})
+
+	test("a failed support row retries on request", () => {
+		const failed = run(init(route(null), shared).model, [
+			Message.FailedFetchSupport({ accountId: beta.id, reason: "Offline" }),
+		])
+		expect(failed.support._tag).toBe("Failure")
+		const retried = update(failed, Message.PressedRetrySupport(), shared)
+		expect(commandNames(retried)).toContain("FetchCustomerSupport")
+		expect(retried.model.support._tag).toBe("Loading")
+	})
+
+	test("another customer's answer is dropped", () => {
+		const model = run(init(route(null), shared).model, [
+			Message.SucceededFetchSupport({ accountId: acme.id, row: null }),
+		])
+		expect(model.support._tag).toBe("Loading")
 	})
 })

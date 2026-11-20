@@ -284,6 +284,42 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "channel_customers_account_idx" ON "channel_customers" ("accountId")',
 			],
 		},
+		{
+			id: "0007_channel_customers_logo",
+			statements: ['ALTER TABLE "channel_customers" ADD COLUMN "accountLogoUrl" text'],
+		},
+		{
+			id: "0008_customer_channel_suggestions",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "chat_sync_channel_authors" (\n\t"hazelChannelId" text NOT NULL,\n\t"syncChannelLinkId" text,\n\t"provider" text NOT NULL,\n\t"externalUserId" text NOT NULL,\n\t"externalWorkspaceId" text,\n\t"email" text,\n\t"firstSeenAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"lastSeenAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("hazelChannelId", "provider", "externalUserId")\n)',
+				'CREATE INDEX IF NOT EXISTS "chat_sync_channel_authors_channel_idx" ON "chat_sync_channel_authors" ("hazelChannelId")',
+			],
+		},
+		{
+			id: "0009_channel_customer_glance",
+			statements: [
+				'ALTER TABLE "channel_customers" ADD COLUMN "healthStatus" text NOT NULL DEFAULT \'unknown\'',
+				'ALTER TABLE "channel_customers" ADD COLUMN "healthScore" integer',
+				'ALTER TABLE "channel_customers" ADD COLUMN "healthWhy" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "lifecycleStage" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "planName" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "mrrMinor" integer',
+				'ALTER TABLE "channel_customers" ADD COLUMN "currency" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "ownerUserId" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "seatsUsed" integer',
+				'ALTER TABLE "channel_customers" ADD COLUMN "seatsLimit" integer',
+				'ALTER TABLE "channel_customers" ADD COLUMN "lastActiveDay" text',
+				'ALTER TABLE "channel_customers" ADD COLUMN "openSignalCount" integer NOT NULL DEFAULT 0',
+				'ALTER TABLE "channel_customers" ADD COLUMN "topSignals" text NOT NULL DEFAULT \'[]\'',
+				'ALTER TABLE "channel_customers" ADD COLUMN "sourceLinks" text NOT NULL DEFAULT \'[]\'',
+			],
+		},
+		{
+			id: "0010_customer_chat",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "customer_chat_authors" (\n\t"userId" text PRIMARY KEY NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"side" text NOT NULL,\n\t"reason" text NOT NULL,\n\t"override" text,\n\t"overrideBy" text,\n\t"overrideAt" text,\n\t"externalWorkspace" text,\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+			],
+		},
 	],
 	channel: [
 		{
@@ -583,7 +619,57 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			],
 		},
 		{
-			id: "0021_customer_overview_layouts",
+			id: "0021_customer_channel_suggestions",
+			statements: [
+				"CREATE TABLE IF NOT EXISTS \"customer_channel_suggestions\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"organizationId\" text NOT NULL,\n\t\"channelId\" text NOT NULL,\n\t\"accountId\" text NOT NULL,\n\t\"score\" integer NOT NULL,\n\t\"reasons\" text NOT NULL DEFAULT '[]',\n\t\"status\" text NOT NULL DEFAULT 'open',\n\t\"decidedBy\" text,\n\t\"decidedAt\" text,\n\t\"computedAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"updatedAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))\n)",
+				"CREATE TABLE \"__new_customer_channel_links\" (\n\t\"id\" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))),\n\t\"organizationId\" text NOT NULL,\n\t\"accountId\" text NOT NULL,\n\t\"channelId\" text NOT NULL,\n\t\"linkedBy\" text,\n\t\"createdAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"updatedAt\" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n\t\"deletedAt\" text\n)",
+				'INSERT INTO "__new_customer_channel_links"("id", "organizationId", "accountId", "channelId", "linkedBy", "createdAt", "updatedAt", "deletedAt") SELECT COALESCE("id", (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6))))), "organizationId", "accountId", "channelId", "linkedBy", COALESCE("createdAt", (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))), COALESCE("updatedAt", (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))), "deletedAt" FROM "customer_channel_links"',
+				'DROP TABLE "customer_channel_links"',
+				'ALTER TABLE "__new_customer_channel_links" RENAME TO "customer_channel_links"',
+				'CREATE INDEX IF NOT EXISTS "customer_channel_links_account_idx" ON "customer_channel_links" ("accountId")',
+				'CREATE INDEX IF NOT EXISTS "customer_channel_links_channel_idx" ON "customer_channel_links" ("channelId")',
+				'CREATE INDEX IF NOT EXISTS "customer_channel_suggestions_account_idx" ON "customer_channel_suggestions" ("accountId")',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_channel_suggestions_pair_unique" ON "customer_channel_suggestions" ("channelId", "accountId")',
+				'CREATE INDEX IF NOT EXISTS "customer_channel_suggestions_status_idx" ON "customer_channel_suggestions" ("status")',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_channel_links_channel_unique" ON "customer_channel_links" ("channelId") WHERE "deletedAt" IS NULL',
+			],
+		},
+		{
+			id: "0022_customer_chat",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "customer_chat_participants" (\n\t"accountId" text NOT NULL,\n\t"userId" text NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"side" text NOT NULL,\n\t"reason" text NOT NULL,\n\t"contactId" text,\n\t"name" text NOT NULL,\n\t"avatarUrl" text,\n\t"firstMessageAt" text NOT NULL,\n\t"lastMessageAt" text NOT NULL,\n\t"lastChannelId" text NOT NULL,\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("accountId", "userId")\n)',
+				'CREATE INDEX IF NOT EXISTS "customer_chat_participants_user_idx" ON "customer_chat_participants" ("userId")',
+			],
+		},
+		{
+			id: "0023_customer_issues",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "customer_issue_messages" (\n\t"channelId" text NOT NULL,\n\t"messageId" text NOT NULL,\n\t"issueId" text,\n\t"deletedAt" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("channelId", "messageId")\n)',
+				'CREATE TABLE IF NOT EXISTS "customer_issues" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"organizationId" text NOT NULL,\n\t"accountId" text NOT NULL,\n\t"sourceChannelId" text NOT NULL,\n\t"rootMessageId" text NOT NULL,\n\t"threadChannelId" text,\n\t"joinedMessageIds" text NOT NULL DEFAULT \'[]\',\n\t"openedByUserId" text NOT NULL,\n\t"createdByUserId" text,\n\t"title" text NOT NULL,\n\t"status" text NOT NULL DEFAULT \'new\',\n\t"priority" text NOT NULL DEFAULT \'none\',\n\t"assigneeUserId" text,\n\t"tags" text NOT NULL DEFAULT \'[]\',\n\t"openedAt" text NOT NULL,\n\t"firstCustomerMessageAt" text,\n\t"lastCustomerMessageAt" text,\n\t"firstTeamReplyAt" text,\n\t"lastTeamReplyAt" text,\n\t"lastMessageAt" text NOT NULL,\n\t"closedAt" text,\n\t"closedByUserId" text,\n\t"reopenCount" integer NOT NULL DEFAULT 0,\n\t"reopenedAt" text,\n\t"messageCount" integer NOT NULL DEFAULT 0,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"deletedAt" text\n)',
+				'CREATE INDEX IF NOT EXISTS "customer_issue_messages_issue_idx" ON "customer_issue_messages" ("issueId")',
+				'CREATE INDEX IF NOT EXISTS "customer_issues_account_idx" ON "customer_issues" ("accountId")',
+				'CREATE INDEX IF NOT EXISTS "customer_issues_closed_at_idx" ON "customer_issues" ("closedAt")',
+				'CREATE INDEX IF NOT EXISTS "customer_issues_status_idx" ON "customer_issues" ("status")',
+				'CREATE INDEX IF NOT EXISTS "customer_issues_thread_idx" ON "customer_issues" ("threadChannelId")',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_issues_root_unique" ON "customer_issues" ("sourceChannelId", "rootMessageId") WHERE "deletedAt" IS NULL',
+			],
+		},
+		{
+			id: "0024_customer_slas",
+			statements: [
+				'ALTER TABLE "customer_members" ADD COLUMN "memberId" text',
+				'ALTER TABLE "customer_settings" ADD COLUMN "businessHours" text NOT NULL DEFAULT \'{"timeZone":"UTC","days":[1,2,3,4,5],"start":"09:00","end":"17:00"}\'',
+				'CREATE TABLE IF NOT EXISTS "customer_issue_slas" (\n\t"id" text PRIMARY KEY NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"accountId" text NOT NULL,\n\t"policyId" text,\n\t"policyName" text NOT NULL,\n\t"targets" text NOT NULL,\n\t"hours" text NOT NULL,\n\t"warnBeforePct" integer NOT NULL,\n\t"state" text NOT NULL,\n\t"nextAlertAt" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				'CREATE TABLE IF NOT EXISTS "customer_sla_policies" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"organizationId" text NOT NULL,\n\t"name" text NOT NULL,\n\t"position" integer NOT NULL DEFAULT 0,\n\t"enabled" integer NOT NULL DEFAULT true,\n\t"appliesTo" text NOT NULL,\n\t"targets" text NOT NULL,\n\t"hours" text NOT NULL DEFAULT \'business\',\n\t"warnBeforePct" integer NOT NULL DEFAULT 25,\n\t"createdBy" text,\n\t"updatedBy" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"deletedAt" text\n)',
+				'CREATE INDEX IF NOT EXISTS "customer_issue_slas_account_idx" ON "customer_issue_slas" ("accountId")',
+				'CREATE INDEX IF NOT EXISTS "customer_issue_slas_next_alert_idx" ON "customer_issue_slas" ("nextAlertAt")',
+				'INSERT INTO "customer_sla_policies" ("organizationId", "name", "position", "enabled", "appliesTo", "targets", "hours", "warnBeforePct") SELECT "organizationId", \'Standard\', 0, 1, \'{"accountIds":[],"planNames":[],"tagsAny":[]}\', \'{"urgent":{"firstResponseMinutes":60,"resolutionMinutes":480},"high":{"firstResponseMinutes":120,"resolutionMinutes":960},"medium":{"firstResponseMinutes":240,"resolutionMinutes":1440},"low":{"firstResponseMinutes":480,"resolutionMinutes":2400}}\', \'business\', 25 FROM "customer_settings" WHERE NOT EXISTS (SELECT 1 FROM "customer_sla_policies")',
+				'INSERT INTO "customer_signal_rules" ("organizationId", "name", "template", "kind", "severity", "config", "scope", "enabled") SELECT "organizationId", \'Customer waiting on a reply\', \'response_overdue\', \'risk\', \'high\', \'{"_tag":"response_overdue","graceMinutes":0}\', \'{}\', 1 FROM "customer_settings" WHERE NOT EXISTS (SELECT 1 FROM "customer_signal_rules" WHERE "template" = \'response_overdue\')',
+				'INSERT INTO "customer_signal_rules" ("organizationId", "name", "template", "kind", "severity", "config", "scope", "enabled") SELECT "organizationId", \'Issue past its resolution target\', \'resolution_overdue\', \'risk\', \'medium\', \'{"_tag":"resolution_overdue","graceMinutes":0}\', \'{}\', 1 FROM "customer_settings" WHERE NOT EXISTS (SELECT 1 FROM "customer_signal_rules" WHERE "template" = \'resolution_overdue\')',
+			],
+		},
+		{
+			id: "0025_customer_overview_layouts",
 			statements: [
 				'ALTER TABLE "customer_accounts" ADD COLUMN "pinnedLayoutId" text',
 				'ALTER TABLE "customer_accounts" ADD COLUMN "layoutId" text',

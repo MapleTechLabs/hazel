@@ -21,11 +21,13 @@ import {
 	formatRelative,
 } from "../../../customers/format"
 import { type AccountRow, msOf, type SignalRow } from "../../../customers/queries"
+import { shownSuggestions, suggestionRow } from "../../../customers/suggestions"
 import { environmentsHint, healthDot, severityGlyph } from "../../../customers/ui/badges"
 import { environmentCounts } from "../../../customers/groups"
 import { connectCard } from "../../../customers/ui/connect-card"
 import { companyLogo } from "../../../customers/ui/identity"
 import { deltaPill, type Delta, kpiTile } from "../../../customers/ui/kpi-tile"
+import { supportTiles } from "../../../customers/support-report"
 import { rangePicker } from "../../../customers/ui/filter-bar"
 import {
 	moreLink,
@@ -49,6 +51,7 @@ import {
 	QUIET_AFTER_DAYS,
 	quietAccounts,
 	openSignals,
+	SUGGESTIONS_SHOWN,
 } from "./model"
 import { heading } from "../../../ui/heading"
 
@@ -262,6 +265,41 @@ const kpiRow = (
 		}),
 		...usage,
 	])
+}
+
+// SUPPORT
+
+/** Response times and breaches for the range, each tile a way into the Support report. */
+const supportRow = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+	const href = hrefOf(AppRoute.CustomersSupportReport({ orgSlug: context.orgSlug }))
+	const report = Option.getOrUndefined(AsyncData.getData(model.support))
+	const failed = report === undefined && AsyncData.getError(model.support)._tag === "Some"
+	return h.section(
+		[h.AriaLabel("Support"), h.Class("flex flex-col gap-2.5")],
+		[
+			h.div(
+				[h.Class("flex items-center justify-between gap-4")],
+				[heading(h, { variant: "label", level: 2 }, ["Support"]), link(h, href, "Support report")],
+			),
+			h.div(
+				[h.Class("grid grid-cols-2 gap-3 xl:grid-cols-4")],
+				[
+					...supportTiles(h, {
+						report,
+						idPrefix: "kpi-support",
+						href,
+						failure: failed
+							? button(
+									h,
+									{ intent: "plain", size: "xs", onPress: Message.PressedRetrySupport() },
+									[IconArrowPath(h, { attributes: { "data-slot": "icon" } }), "Retry"],
+								)
+							: undefined,
+					}),
+				],
+			),
+		],
+	)
 }
 
 // CHARTS
@@ -486,6 +524,39 @@ const attentionCard = (
 				),
 				h.span([], [`${mine} on your accounts`]),
 			],
+		),
+	])
+}
+
+// SUGGESTED CHANNEL LINKS
+
+/** Channels that look like a customer's, best first; hidden while there are none. */
+const suggestionsCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+	const shown = shownSuggestions(model.suggestions, model.channelOptions)
+	if (shown.length === 0) return h.empty
+	const more = shown.length - SUGGESTIONS_SHOWN
+	return card(h, "", [
+		cardHeader(
+			h,
+			heading(h, { variant: "section", className: "flex items-baseline gap-2 whitespace-nowrap" }, [
+				"Suggested channel links",
+				h.span([h.Class("font-normal text-muted-fg text-sm tabular-nums")], [String(shown.length)]),
+			]),
+			more > 0
+				? `Channels that look like a customer's. ${formatCount(more)} more after these.`
+				: "Channels that look like a customer's. Linking shows the customer in the channel.",
+		),
+		h.ul(
+			[h.Class("flex flex-col divide-y divide-border"), h.AriaLabel("Suggested channel links")],
+			shown.slice(0, SUGGESTIONS_SHOWN).map((entry) =>
+				suggestionRow(h, {
+					shown: entry,
+					showAccount: true,
+					accountHref: hrefOf(customerRoute(context.orgSlug, entry.suggestion.accountId)),
+					onLink: Message.PressedAcceptSuggestion({ suggestionId: entry.suggestion.id }),
+					onDismiss: Message.PressedDismissSuggestion({ suggestionId: entry.suggestion.id }),
+				}),
+			),
 		),
 	])
 }
@@ -854,6 +925,7 @@ const dashboard = (
 	const bands = model.settings?.bands ?? Customers.DEFAULT_HEALTH_SETTINGS.bands
 	return [
 		kpiRow(h, model, result, context),
+		supportRow(h, model, context),
 		...(result === undefined
 			? [h.div([h.Class("h-96 animate-pulse rounded-xl border border-border bg-secondary/30")])]
 			: [
@@ -861,6 +933,7 @@ const dashboard = (
 						[h.Class("grid gap-4 lg:grid-cols-3")],
 						[mrrCard(h, model, result), attentionCard(h, model, context, userId)],
 					),
+					suggestionsCard(h, model, context),
 					h.div(
 						[h.Class("grid gap-4 lg:grid-cols-2")],
 						[

@@ -410,6 +410,7 @@ export type MetricTableWidget = typeof MetricTableWidget.Type
 export const BuiltInWidgetKind = Schema.Literals([
 	"health",
 	"signals",
+	"support",
 	"subscription",
 	"notes",
 	"activity",
@@ -534,6 +535,7 @@ export const DEFAULT_LAYOUT_WIDGETS: ReadonlyArray<OverviewWidget> = [
 	},
 	{ _tag: "built_in", id: "health-breakdown", span: 2, kind: "health" },
 	{ _tag: "built_in", id: "signals", span: 2, kind: "signals" },
+	{ _tag: "built_in", id: "support", span: 4, kind: "support" },
 	{ _tag: "built_in", id: "subscription", span: 2, kind: "subscription" },
 	{ _tag: "built_in", id: "notes", span: 2, kind: "notes" },
 	{ _tag: "built_in", id: "activity", span: 4, kind: "activity" },

@@ -42,6 +42,8 @@ jobs:
                   VITE_R2_PUBLIC_URL: ${{ vars.VITE_R2_PUBLIC_URL }}
     typecheck:
         runs-on: ubuntu-latest
+        # A runner that runs out of memory can hang for 45+ minutes before it is lost; fail fast instead.
+        timeout-minutes: 25
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
@@ -65,8 +67,10 @@ jobs:
             - name: Install dependencies
               run: bun install --frozen-lockfile
 
+            # Two tasks at a time: backend, native and web-foldkit's tsc running together exhaust the
+            # runner's memory and it is shut down mid-step (which blocks Deploy PRD, gated on this run).
             - name: Type check
-              run: bun run typecheck
+              run: bunx turbo build typecheck --concurrency=2
 
             - name: Type check the alchemy stack
               run: bun run alchemy:typecheck

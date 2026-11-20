@@ -35,6 +35,8 @@ export interface DiscordMessageCreateEvent {
 	guild_id?: string
 	id?: string
 	channel_id?: string
+	/** Discord message type: 0 default, 19 reply; the rest are system notices (18 = thread created). */
+	type?: number
 	content?: string
 	webhook_id?: string
 	attachments?: ReadonlyArray<DiscordMessageAttachment>
@@ -282,6 +284,8 @@ export const discordHistoryInbound = (
 			externalUserId: authorId.value,
 			displayName: formatDiscordDisplayName(message.author),
 			avatarUrl: buildAuthorAvatarUrl(message.author),
+			email: null,
+			externalWorkspaceId: guildId,
 		},
 		event: {
 			_tag: "MessageCreate",
@@ -333,6 +337,8 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 		event: DiscordMessageCreateEvent,
 	) {
 		if (!event.id || !event.channel_id || typeof event.content !== "string") return
+		// A system notice ("X started a thread: <name>") is not a message anyone wrote.
+		if (event.type !== undefined && !PERSON_MESSAGE_TYPES.has(event.type)) return
 		if (event.author?.bot) return
 		if (yield* deps.isCurrentBotAuthor(event.author?.id)) return
 		const channelId = yield* required(
@@ -375,6 +381,8 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 							externalUserId: authorId,
 							displayName: formatDiscordDisplayName(event.author),
 							avatarUrl: buildAuthorAvatarUrl(event.author),
+							email: null,
+							externalWorkspaceId: guildOf(event)[0] ?? null,
 						},
 			event: {
 				_tag: "MessageCreate",
@@ -503,6 +511,8 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 					externalUserId: userId.value,
 					displayName: externalAuthorDisplayName ?? "Discord User",
 					avatarUrl: externalAuthorAvatarUrl ?? null,
+					email: null,
+					externalWorkspaceId: guildOf(event)[0] ?? null,
 				},
 				event: {
 					_tag: add ? "ReactionAdd" : "ReactionRemove",

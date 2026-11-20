@@ -211,7 +211,7 @@ export const newWidget = (kind: "stat" | "chart" | "metric_table", id: string): 
 			: table(id, "", { _tag: "group", group: "Feature usage" })
 
 export const newBuiltIn = (kind: Customers.BuiltInWidgetKind, id: string): Widget =>
-	builtIn(id, kind, kind === "last_active" ? 1 : kind === "activity" ? 4 : 2)
+	builtIn(id, kind, kind === "last_active" ? 1 : kind === "activity" || kind === "support" ? 4 : 2)
 
 /** `stat-3`: the first id of that prefix the layout does not use. */
 export const freshId = (taken: ReadonlySet<string>, prefix: string): string => {

@@ -13,6 +13,8 @@ export const NotificationItem = Schema.Struct({
 	isUnread: Schema.Boolean,
 	createdAtMs: Schema.Number,
 	resourceType: Schema.NullOr(Schema.String),
+	/** Why it notifies (`sla_reply_breach`, `sla_resolution_warning`, …); null on older rows. */
+	reason: Schema.NullOr(Schema.String),
 	targetedResourceId: Schema.NullOr(Schema.String),
 	targetedResourceType: Schema.NullOr(Schema.String),
 	messageContent: Schema.NullOr(Schema.String),

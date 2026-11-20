@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ConnectInviteId, OrganizationId } from "@hazel/schema"
+import { ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
@@ -8,7 +8,7 @@ import { makeShared, organizationId, pageScene, uuid } from "../../../test/pages
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
 import { type Invite, Invites } from "./model"
-import { AcceptInvite, DeclineInvite, init, ListIncomingInvites, update } from "./update"
+import { AcceptInvite, DeclineInvite, FindJoinedChannel, init, ListIncomingInvites, update } from "./update"
 import { view } from "./view"
 
 /** Connect invitations through the view: the list, host names, and the accept/decline buttons. */
@@ -20,6 +20,7 @@ const inviteId = Schema.decodeSync(ConnectInviteId)(uuid(21))
 const acceptedId = Schema.decodeSync(ConnectInviteId)(uuid(22))
 const pending: Invite = { id: inviteId, hostOrganizationId: hostId, status: "pending", createdAtMs: 0 }
 const accepted: Invite = { id: acceptedId, hostOrganizationId: hostId, status: "accepted", createdAtMs: 0 }
+const conversationId = Schema.decodeSync(ConnectConversationId)(uuid(23))
 const start = init(undefined, shared).model
 const listed = (invites: ReadonlyArray<Invite>) => ({ ...start, invites: Invites.Success({ data: invites }) })
 const listInvites = (version: number, invites: ReadonlyArray<Invite>) =>
@@ -84,10 +85,15 @@ describe("accept and decline", () => {
 			Scene.Command.expectExact(AcceptInvite({ inviteId, guestOrganizationId: organizationId })),
 			Scene.expect(Scene.role("button", { name: "Accepting..." })).toBeDisabled(),
 			Scene.expect(decline).toBeDisabled(),
-			Scene.Command.resolve(AcceptInvite, Message.SucceededAccept({ inviteId })),
+			Scene.Command.resolve(
+				AcceptInvite,
+				Message.SucceededAccept({ inviteId, conversationId, transactionId: "org:1:2" }),
+			),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({ toast: successToast("Channel connected") }),
 			),
+			// The joined channel is looked for (a suggestion prompt may follow); not synced in time here.
+			Scene.Command.resolve(FindJoinedChannel, Message.FoundJoinedChannel({ channelId: null })),
 			Scene.Command.expectExact(ListIncomingInvites({ organizationId, version: 2 })),
 			listInvites(2, [{ ...pending, status: "accepted" }]),
 			Scene.expect(accept).toBeAbsent(),

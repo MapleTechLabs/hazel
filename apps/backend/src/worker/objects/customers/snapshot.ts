@@ -25,6 +25,7 @@ import {
 	billed,
 	type ContactFacts,
 	type HealthPoint,
+	type IssueSlaFacts,
 	type MetricPoint,
 	type OrgFacts,
 	pays,
@@ -627,6 +628,21 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.select()
 			.where(($) => [inList($.accountId, ids), $.closedAt.isNull()]),
 	)
+	// The overdue templates' clocks: open issues only (a closed one has no clock running).
+	const issueSlas = yield* db.run(
+		SQLite.from(schema.customerIssueSlasTable, "s")
+			.innerJoin(schema.customerIssuesTable, "i", (s, i) =>
+				SQLite.and(i.id.eq(s.id), i.deletedAt.isNull(), i.closedAt.isNull(), i.status.neq("closed")),
+			)
+			.select(($) => ({
+				accountId: $.accountId,
+				issueId: $.id,
+				title: $.i.title,
+				state: $.state,
+				targets: $.targets,
+			}))
+			.where(($) => [inList($.accountId, ids)]),
+	)
 	const refs = yield* db.run(
 		SQLite.from(schema.customerExternalRefsTable)
 			.select("accountId", "provider")
@@ -652,6 +668,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	const metricsBy = groupBy(metrics, (row) => row.accountId)
 	const movementsBy = groupBy(movements, (row) => row.accountId)
 	const healthBy = groupBy(health, (row) => row.accountId)
+	const issueSlasBy = groupBy(issueSlas, (row) => row.accountId)
 
 	const snapshots = accounts.map((stored): Omit<AccountSnapshot, "evaluated"> => {
 		const own = contactsBy.get(stored.id) ?? []
@@ -719,6 +736,9 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 					score: row.score,
 					status: row.status,
 				})),
+				openIssueSlas: (issueSlasBy.get(stored.id) ?? []).map(
+					({ accountId: _accountId, ...issue }): IssueSlaFacts => issue,
+				),
 			},
 		}
 	})

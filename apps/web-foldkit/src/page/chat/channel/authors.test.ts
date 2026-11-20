@@ -85,6 +85,37 @@ describe("message authors", () => {
 	})
 })
 
+describe("author side in a channel linked to a customer", () => {
+	const sides = (model: Model) =>
+		model.rows
+			.filter((row): row is MessageRow => row._tag === "MessageRow")
+			.map((row) => [row.message.authorId, row.authorSide])
+	const channelId = messages[0]!.channelId
+
+	test("none while the channel is not linked", () => {
+		const model = apply(start(), loadedMessages(messages), Message.UpdatedUsers({ users }))
+		expect(sides(model)).toEqual([
+			[grace, null],
+			[ada, null],
+		])
+	})
+
+	test("each author's side once linked; one the org has not classified is unknown", () => {
+		const model = apply(
+			start(),
+			loadedMessages(messages),
+			Message.UpdatedCustomerAuthors({
+				channelId,
+				authors: [{ userId: grace, side: "customer", reason: "connect_guest", override: null }],
+			}),
+		)
+		expect(sides(model)).toEqual([
+			[grace, { side: "customer", reason: "connect_guest" }],
+			[ada, { side: "unknown", reason: "unknown" }],
+		])
+	})
+})
+
 describe("thread starter", () => {
 	const original = messages[1]!
 	const contextWith = (known: ReadonlyArray<UserInfo>) =>

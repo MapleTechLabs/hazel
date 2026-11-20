@@ -6,9 +6,10 @@ import {
 	IconChevronLeft,
 	IconChevronRight,
 	IconClose,
-	IconCopy,
 	IconDownload,
 	IconExternalLink,
+	IconImage,
+	IconLink,
 	IconMinus,
 	IconPlus,
 } from "../icons"
@@ -30,7 +31,7 @@ import { followSlide, originPlate, releaseOrigin, VIEWER_ATTRIBUTE } from "./vie
  * viewer (`viewer/morph.ts`). The Model holds what is open and which image; zoom is the view's own.
  */
 
-export type ImageViewerAction = "download" | "copyUrl" | "openInBrowser"
+export type ImageViewerAction = "download" | "copyImage" | "copyUrl" | "openInBrowser"
 
 /** A viewer image; an embed's has a caption (its title and description) under it. */
 export interface ImageViewerImage extends ChatAttachmentView {
@@ -48,7 +49,7 @@ export interface ImageViewerInputs<M> {
 	readonly createdAtMs: number
 	readonly toClose: () => M
 	readonly toSelect: (index: number) => M
-	/** Toolbar side effects (legacy downloads, copies the URL with a toast, or opens a tab). */
+	/** Toolbar side effects (downloads, copies the image or its URL with a toast, or opens a tab). */
 	readonly toAction?: (action: ImageViewerAction, image: ChatAttachmentView) => M
 }
 
@@ -369,6 +370,15 @@ const captionView = <M>(h: HtmlBuilder<M>, caption: ImageViewerImage["caption"])
 		: h.empty
 
 /**
+ * In Rune, which runs none of the gestures: a press beside the image closes, one on it does
+ * nothing (Rune presses the innermost element with a handler).
+ */
+interface NativePresses<M> {
+	readonly beside: M
+	readonly onImage: M
+}
+
+/**
  * A slide fills the viewer; the image rests in its padded box, and the box around it is backdrop
  * (a tap there closes). Only slides near the open one mount their image.
  */
@@ -378,8 +388,9 @@ const slideView = <M>(
 	index: number,
 	selectedIndex: number,
 	count: number,
-	isNative = false,
+	native?: NativePresses<M>,
 ): Html => {
+	const isNative = native !== undefined
 	const isActive = index === selectedIndex
 	return h.keyed("div")(
 		image.id,
@@ -401,12 +412,9 @@ const slideView = <M>(
 			: [
 					h.div(
 						[
-							h.Class(
-								isNative
-									? "relative min-h-0 w-full flex-1"
-									: "flex min-h-0 w-full flex-1 items-center justify-center",
-							),
+							h.Class("flex min-h-0 w-full flex-1 items-center justify-center"),
 							h.DataAttribute("viewer-zoom", ""),
+							...(native ? [h.OnClick(native.beside)] : []),
 						],
 						[
 							h.img([
@@ -417,12 +425,11 @@ const slideView = <M>(
 								h.Attribute("decoding", "sync"),
 								h.DataAttribute("viewer-media", ""),
 								...(isActive ? [h.DataAttribute("active", "")] : []),
+								...(native ? [h.OnClick(native.onImage)] : []),
+								// Rune sizes it to the picture fitted in its box (`natural_box`), so the
+								// box around it is left to close the viewer.
 								h.Class(
-									// Rune does not shrink an auto-sized picture to its box: there it
-									// fills its box and fits inside it.
-									isNative
-										? "block size-full select-none object-contain"
-										: "block h-auto max-h-full w-auto min-w-0 max-w-full select-none rounded-md object-contain",
+									"block h-auto max-h-full w-auto min-w-0 max-w-full select-none rounded-md object-contain",
 								),
 							]),
 						],
@@ -458,7 +465,8 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 					[undefined, "Zoom in", IconPlus(h, { className: "size-4" }), "in"],
 				] as const)),
 		[act("download"), "Download", IconDownload(h, { className: "size-4" })],
-		[act("copyUrl"), "Copy image URL", IconCopy(h, { className: "size-4" })],
+		[act("copyImage"), "Copy image", IconImage(h, { className: "size-4" })],
+		[act("copyUrl"), "Copy image URL", IconLink(h, { className: "size-4" })],
 		[act("openInBrowser"), "Open in browser", IconExternalLink(h, { className: "size-4" })],
 		[inputs.toClose(), "Close", IconClose(h, { className: "size-4" })],
 	]
@@ -524,7 +532,12 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 						isNative
 							? current === undefined
 								? []
-								: [slideView(h, current, selectedIndex, selectedIndex, images.length, true)]
+								: [
+										slideView(h, current, selectedIndex, selectedIndex, images.length, {
+											beside: inputs.toClose(),
+											onImage: select(selectedIndex),
+										}),
+									]
 							: images.map((image, index) =>
 									slideView(h, image, index, selectedIndex, images.length),
 								),

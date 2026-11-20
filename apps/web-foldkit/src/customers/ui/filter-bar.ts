@@ -135,6 +135,8 @@ export const segmented = <M, K extends string>(
 		segments: ReadonlyArray<Segment<K>>
 		selected: K
 		onSelect: (key: K) => M
+		/** Shown but not pressable (a form saving). */
+		isDisabled?: boolean
 		className?: string
 	}>,
 ): Html =>
@@ -152,7 +154,9 @@ export const segmented = <M, K extends string>(
 					h.Role("radio"),
 					h.AriaChecked(isSelected),
 					h.Class(segmentClass(isSelected)),
-					h.OnClick(options.onSelect(segment.key)),
+					...(options.isDisabled === true
+						? [h.Disabled(true)]
+						: [h.OnClick(options.onSelect(segment.key))]),
 				],
 				[segment.label],
 			)

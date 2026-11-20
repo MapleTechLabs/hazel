@@ -2,6 +2,7 @@ import { ChannelId, ChannelMemberId, ChannelSectionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test } from "vitest"
 import type { Model } from "./model"
+import { splitCustomerChannels } from "./customer-channels"
 import { adjacentChannel, navigationOrder } from "./navigation"
 import type { ChannelEntry } from "./rows"
 
@@ -43,6 +44,7 @@ const sidebar = (overrides: Partial<Model> = {}): Model => ({
 		[designSection]: [entry(design, "design", designSection), entry(launch, "launch", designSection)],
 	},
 	favorites: [entry(favorite, "favorite")],
+	channelCustomers: [],
 	threads: [],
 	dmChannelIds: [dmGrace],
 	dmChannels: {
@@ -60,7 +62,7 @@ const sidebar = (overrides: Partial<Model> = {}): Model => ({
 	syncedChannels: [],
 	memberChannelIds: null,
 	discoverableChannels: [],
-	loaded: { sections: true, favorites: true, dmChannelIds: true },
+	loaded: { sections: true, favorites: true, channelCustomers: true, dmChannelIds: true },
 	isCreateChannelHintDismissed: false,
 	openMenu: null,
 	...overrides,
@@ -69,6 +71,31 @@ const sidebar = (overrides: Partial<Model> = {}): Model => ({
 describe("navigationOrder", () => {
 	test("favorites, the default section, custom sections, then DMs; a favorite only once", () => {
 		expect(navigationOrder(sidebar())).toEqual([favorite, general, random, design, launch, dmGrace])
+	})
+
+	test("customer channels leave their sections and come after them, by customer name", () => {
+		const model = sidebar({
+			channelCustomers: [
+				{ channelId: random, accountName: "Zeta", accountLogoUrl: null },
+				{ channelId: design, accountName: "Acme", accountLogoUrl: null },
+			],
+		})
+		expect(navigationOrder(model)).toEqual([favorite, general, launch, design, random, dmGrace])
+	})
+
+	test("a deleted section's stale list does not list its customer channels twice", () => {
+		const gone = Schema.decodeSync(ChannelSectionId)(uuid(101))
+		const model = sidebar({
+			// `design` moved to the default list when its section was deleted; the old list lingers.
+			sectionChannels: {
+				default: [entry(general, "general"), entry(design, "design")],
+				[gone]: [entry(design, "design", gone)],
+			},
+			sections: [],
+			channelCustomers: [{ channelId: design, accountName: "Acme", accountLogoUrl: null }],
+		})
+		expect(navigationOrder(model)).toEqual([favorite, general, design, dmGrace])
+		expect(splitCustomerChannels(model).customerChannels).toHaveLength(1)
 	})
 
 	test("a DM whose channel has not loaded is skipped (the sidebar does not show it yet)", () => {

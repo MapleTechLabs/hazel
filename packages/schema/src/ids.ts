@@ -362,6 +362,14 @@ export const CustomerSignalRuleId = Schema.String.check(Schema.isUUID())
 	})
 export type CustomerSignalRuleId = Schema.Schema.Type<typeof CustomerSignalRuleId>
 
+export const CustomerSlaPolicyId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSlaPolicyId"))
+	.annotate({
+		description: "The ID of a customer support SLA policy",
+		title: "Customer SLA Policy ID",
+	})
+export type CustomerSlaPolicyId = Schema.Schema.Type<typeof CustomerSlaPolicyId>
+
 export const CustomerSignalId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/CustomerSignalId"))
 	.annotate({
@@ -457,6 +465,21 @@ export const CustomerChannelLinkId = Schema.String.check(Schema.isUUID())
 		title: "Customer Channel Link ID",
 	})
 export type CustomerChannelLinkId = Schema.Schema.Type<typeof CustomerChannelLinkId>
+
+export const CustomerChannelSuggestionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerChannelSuggestionId"))
+	.annotate({
+		description: "The ID of a suggested link between a channel and a customer account",
+		title: "Customer Channel Suggestion ID",
+	})
+export type CustomerChannelSuggestionId = Schema.Schema.Type<typeof CustomerChannelSuggestionId>
+export const CustomerIssueId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerIssueId"))
+	.annotate({
+		description: "The ID of a customer support issue (a conversation in a customer-linked channel)",
+		title: "Customer Issue ID",
+	})
+export type CustomerIssueId = Schema.Schema.Type<typeof CustomerIssueId>
 
 export const CustomerFeatureFlagId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/CustomerFeatureFlagId"))

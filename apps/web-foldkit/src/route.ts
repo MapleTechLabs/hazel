@@ -24,7 +24,8 @@ export type MetricSourceKind = typeof MetricSourceKind.Type
 /** Flat route union mirroring the 39 legacy TanStack routes, plus NotFound. */
 export const AppRoute = defineRouteUnion({
 	Root: {},
-	SignIn: { redirectUrl: Schema.Option(Schema.String) },
+	/** `?error=`: why the OAuth callback sent the visitor back (the API's redirect on a failed callback). */
+	SignIn: { redirectUrl: Schema.Option(Schema.String), error: Schema.Option(Schema.String) },
 	SignUp: { redirectUrl: Schema.Option(Schema.String) },
 	/** Where the OAuth callback sends a first-time user to pick their name (`?flowId=&reference=`). */
 	AuthRegister: { flowId: Schema.Option(Schema.String), reference: Schema.Option(Schema.String) },
@@ -112,6 +113,10 @@ export const AppRoute = defineRouteUnion({
 	CustomersOverview: { orgSlug: Schema.String },
 	/** The ranked signal queue. */
 	CustomersAttention: { orgSlug: Schema.String },
+	/** Support issues across the linked channels (`docs/customers/issues.md`). */
+	CustomersInbox: { orgSlug: Schema.String },
+	/** Response times, % within SLA and breaches over a range (`docs/customers/sla.md`). */
+	CustomersSupportReport: { orgSlug: Schema.String },
 	/** `?view=`: a saved view's id, or a built-in view's key (`BuiltInViewKey`, e.g. `at_risk`). */
 	CustomersList: { orgSlug: Schema.String, view: Schema.Option(Schema.String) },
 	/** One customer; `?tab=` picks the tab (none: overview). */
@@ -126,6 +131,7 @@ export const AppRoute = defineRouteUnion({
 	CustomersSettingsSignalRule: { orgSlug: Schema.String, ruleId: CustomerSignalRuleId },
 	CustomersSettingsHealth: { orgSlug: Schema.String },
 	CustomersSettingsPlans: { orgSlug: Schema.String },
+	CustomersSettingsSla: { orgSlug: Schema.String },
 	CustomersSettingsFeatureFlags: { orgSlug: Schema.String },
 	CustomersSettingsMetrics: { orgSlug: Schema.String },
 	/** The metric editor for a new metric; `?key=` prefills it (a suggested metric's draft), `?source=` picks its source tab. */
@@ -166,6 +172,10 @@ export type RouteOf<Tag extends RouteTag> = Extract<AppRoute, { readonly _tag: T
 const RedirectQuery = Schema.Struct({ redirectUrl: Schema.OptionFromOptional(Schema.String) }).pipe(
 	Schema.encodeKeys({ redirectUrl: "redirect_url" }),
 )
+const SignInQuery = Schema.Struct({
+	redirectUrl: Schema.OptionFromOptional(Schema.String),
+	error: Schema.OptionFromOptional(Schema.String),
+}).pipe(Schema.encodeKeys({ redirectUrl: "redirect_url" }))
 const RegisterQuery = Schema.Struct({
 	flowId: Schema.OptionFromOptional(Schema.String),
 	reference: Schema.OptionFromOptional(Schema.String),
@@ -241,7 +251,7 @@ const channelSettings = (...segments: ReadonlyArray<string>) =>
 /** One router per route tag, used to parse URLs and to build them back (`hrefOf`). */
 const routers = {
 	Root: pipe(Route.root, Route.mapTo(AppRoute.Root)),
-	SignIn: pipe(literal("sign-in"), query(RedirectQuery), Route.mapTo(AppRoute.SignIn)),
+	SignIn: pipe(literal("sign-in"), query(SignInQuery), Route.mapTo(AppRoute.SignIn)),
 	SignUp: pipe(literal("sign-up"), query(RedirectQuery), Route.mapTo(AppRoute.SignUp)),
 	AuthRegister: pipe(
 		literal("auth"),
@@ -368,6 +378,11 @@ const routers = {
 	),
 	CustomersOverview: pipe(orgPath("customers"), Route.mapTo(AppRoute.CustomersOverview)),
 	CustomersAttention: pipe(orgPath("customers", "attention"), Route.mapTo(AppRoute.CustomersAttention)),
+	CustomersInbox: pipe(orgPath("customers", "inbox"), Route.mapTo(AppRoute.CustomersInbox)),
+	CustomersSupportReport: pipe(
+		orgPath("customers", "support"),
+		Route.mapTo(AppRoute.CustomersSupportReport),
+	),
 	CustomersList: pipe(
 		orgPath("customers", "list"),
 		query(ListViewQuery),
@@ -400,6 +415,10 @@ const routers = {
 	CustomersSettingsPlans: pipe(
 		orgPath("customers", "settings", "plans"),
 		Route.mapTo(AppRoute.CustomersSettingsPlans),
+	),
+	CustomersSettingsSla: pipe(
+		orgPath("customers", "settings", "sla"),
+		Route.mapTo(AppRoute.CustomersSettingsSla),
 	),
 	CustomersSettingsFeatureFlags: pipe(
 		orgPath("customers", "settings", "feature-flags"),
@@ -504,12 +523,15 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.CustomersOverview,
 		// Literal segments before `$accountId`, `$ruleId` and `$provider`.
 		routers.CustomersAttention,
+		routers.CustomersInbox,
+		routers.CustomersSupportReport,
 		routers.CustomersList,
 		routers.CustomersSettingsSignals,
 		routers.CustomersSettingsSignalNew,
 		routers.CustomersSettingsSignalRule,
 		routers.CustomersSettingsHealth,
 		routers.CustomersSettingsPlans,
+		routers.CustomersSettingsSla,
 		routers.CustomersSettingsFeatureFlags,
 		routers.CustomersSettingsMetrics,
 		routers.CustomersSettingsMetricNew,
@@ -601,6 +623,8 @@ export const isNotificationsRoute = AppRoute.isAnyOf([
 export const isCustomersRoute = AppRoute.isAnyOf([
 	"CustomersOverview",
 	"CustomersAttention",
+	"CustomersInbox",
+	"CustomersSupportReport",
 	"CustomersList",
 	"CustomerDetail",
 	"CustomersSettingsSignals",
@@ -608,6 +632,7 @@ export const isCustomersRoute = AppRoute.isAnyOf([
 	"CustomersSettingsSignalRule",
 	"CustomersSettingsHealth",
 	"CustomersSettingsPlans",
+	"CustomersSettingsSla",
 	"CustomersSettingsFeatureFlags",
 	"CustomersSettingsMetrics",
 	"CustomersSettingsMetricNew",
@@ -707,7 +732,7 @@ export const onboardingHref = (orgId: OrganizationId | null, step: string): stri
 
 /** `/sign-in?redirect_url=`: where a signed-out visitor goes, coming back to `returnTo` afterwards. */
 export const signInHref = (returnTo: string): string =>
-	hrefOf(AppRoute.SignIn({ redirectUrl: Option.some(returnTo) }))
+	hrefOf(AppRoute.SignIn({ redirectUrl: Option.some(returnTo), error: Option.none() }))
 
 /**
  * Where entering an organization lands, or its slug setup step while it has no slug yet. On a phone
@@ -740,8 +765,6 @@ export const linkedAccountsRoute = (orgSlug: string): AppRoute =>
 		provider: Option.none(),
 		errorCode: Option.none(),
 	})
-
-export const linkedAccountsHref = (orgSlug: string): string => hrefOf(linkedAccountsRoute(orgSlug))
 
 /** An integration's settings page without an OAuth callback result. */
 export const integrationRoute = (orgSlug: string, integrationId: string): AppRoute =>

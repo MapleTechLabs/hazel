@@ -17,7 +17,7 @@ import { linkClass } from "../ui/surface"
 
 /**
  * The customer page's own sections, placed in a layout like any widget (`BuiltInWidget`): the health
- * breakdown, open signals, subscription, pinned notes, recent activity and last active. The Overview
+ * breakdown, open signals, support, subscription, pinned notes, recent activity and last active. The Overview
  * tab and the layout editor's canvas both draw them from a `BuiltInContext`.
  */
 
@@ -49,6 +49,8 @@ export interface BuiltInContext {
 	readonly tabLink: (tab: CustomerTab, label: string) => Html
 	/** A signal's actions (snooze, done, more); none in the editor's preview. */
 	readonly signalActions?: (signal: SignalRow) => ReadonlyArray<Html>
+	/** The Support block (open issues, overdue, first response), drawn by the customer page. */
+	readonly support?: () => Html
 }
 
 const memberOf = (context: BuiltInContext, id: UserId | null): MemberRow | null =>
@@ -482,11 +484,23 @@ const lastActiveTile = <M>(h: HtmlBuilder<M>, context: BuiltInContext, id: strin
 	})
 }
 
+// SUPPORT
+
+/** The editor's stand-in: the block needs the customer page's live issues. */
+const supportPlaceholder = <M>(h: HtmlBuilder<M>): Html =>
+	sectionCard(h, { title: "Support" }, [
+		h.p(
+			[h.Class("px-4 pt-2 pb-4 text-muted-fg text-sm sm:px-5")],
+			["Open issues, overdue issues and median first response. Shown on the customer page."],
+		),
+	])
+
 // DISPATCH
 
 export const BUILT_IN_LABEL = {
 	health: "Health breakdown",
 	signals: "Open signals",
+	support: "Support",
 	subscription: "Subscription",
 	notes: "Pinned notes",
 	activity: "Recent activity",
@@ -503,6 +517,8 @@ export const builtInView = <M>(
 			return healthCard(h, context)
 		case "signals":
 			return signalsCard(h, context)
+		case "support":
+			return context.support?.() ?? supportPlaceholder(h)
 		case "subscription":
 			return subscriptionCard(h, context)
 		case "notes":

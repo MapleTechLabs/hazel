@@ -2,9 +2,9 @@
  * Row models of the `customers` store (`@hazel/db` `tables/customers.ts`), in the shape the sync
  * stream and the RPCs carry them: timestamps as `JsonDate`, JSON columns parsed.
  *
- * Synced (client collections): `Account`, `Signal`, `SignalRule`, `Note`, `SavedView`, `ViewLayout`, `Settings`,
+ * Synced (client collections): `Account`, `Signal`, `SignalRule`, `SlaPolicy`, `IssueSla`, `Note`, `SavedView`, `ViewLayout`, `Settings`,
  * `MetricDefinition`, `OverviewLayout`, `Connection`, `SyncRun`, `ChannelLink`, `FeatureFlag`, `Impersonator`,
- * `Impersonation` (admins only). The rest travel in RPC results.
+ * `Impersonation` (admins only), `Issue`. The rest travel in RPC results.
  */
 import {
 	ChannelId,
@@ -19,6 +19,7 @@ import {
 	CustomerImpersonationId,
 	CustomerImpersonatorId,
 	CustomerInvoiceId,
+	CustomerIssueId,
 	CustomerMetricDefinitionId,
 	CustomerNoteId,
 	CustomerOverviewLayoutId,
@@ -26,16 +27,19 @@ import {
 	CustomerSettingsId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
+	CustomerSlaPolicyId,
 	CustomerSubscriptionId,
 	CustomerSyncRunId,
 	CustomerUnmatchedRecordId,
 	CustomerViewLayoutId,
+	MessageId,
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
 import { Schema as S } from "effect"
 import * as M from "../models/utils"
 import { JsonDate } from "../models/utils"
+import { AuthorSide, AuthorSideReason } from "./author-side"
 import { ConnectionConfig, SyncError, SyncProgress, SyncStats } from "./connections"
 import {
 	BillingInterval,
@@ -46,6 +50,8 @@ import {
 	HealthStatus,
 	IgnoreRuleField,
 	InvoiceStatus,
+	IssuePriority,
+	IssueStatus,
 	LifecycleStage,
 	MatchMethod,
 	MetricAggregation,
@@ -65,6 +71,7 @@ import { SignalEvidence } from "./evidence"
 import { HealthSettings } from "./health"
 import { LayoutRule, MetricFormat, MetricSource, OverviewWidget } from "./overview"
 import { AttentionSettings, RuleConfig, RuleScope } from "./rules"
+import { BusinessHours, SlaAppliesTo, SlaHours, SlaState, SlaTargets } from "./sla"
 import { ListColumn, ViewColor, ViewFilters, ViewIcon, ViewLayoutKey, ViewSort } from "./views"
 
 const NullDate = S.NullOr(JsonDate)
@@ -193,6 +200,24 @@ class SignalRuleModel extends M.Class<SignalRuleModel>("CustomerSignalRule")({
 export const SignalRule = M.expose(SignalRuleModel)
 export type SignalRule = typeof SignalRule.Schema.Type
 
+class SlaPolicyModel extends M.Class<SlaPolicyModel>("CustomerSlaPolicy")({
+	id: M.Generated(CustomerSlaPolicyId),
+	organizationId: OrganizationId,
+	name: S.String,
+	position: S.Int,
+	enabled: S.Boolean,
+	appliesTo: SlaAppliesTo,
+	targets: SlaTargets,
+	hours: SlaHours,
+	warnBeforePct: S.Int,
+	createdBy: S.NullOr(UserId),
+	updatedBy: S.NullOr(UserId),
+	...timestamps,
+	deletedAt: M.GeneratedByApp(NullDate),
+}) {}
+export const SlaPolicy = M.expose(SlaPolicyModel)
+export type SlaPolicy = typeof SlaPolicy.Schema.Type
+
 class NoteModel extends M.Class<NoteModel>("CustomerNote")({
 	id: M.GeneratedOptional(CustomerNoteId),
 	organizationId: OrganizationId,
@@ -214,12 +239,66 @@ class ChannelLinkModel extends M.Class<ChannelLinkModel>("CustomerChannelLink")(
 	organizationId: OrganizationId,
 	accountId: CustomerAccountId,
 	channelId: ChannelId,
-	linkedBy: UserId,
+	/** Null: linked automatically from a suggestion (`docs/customers/channels.md`). */
+	linkedBy: S.NullOr(UserId),
 	...timestamps,
 	deletedAt: M.GeneratedByApp(NullDate),
 }) {}
 export const ChannelLink = M.expose(ChannelLinkModel)
 export type ChannelLink = typeof ChannelLink.Schema.Type
+
+/**
+ * A support issue: a conversation a customer started in a linked channel (`docs/customers/issues.md`).
+ * Its timestamps are the SLA contract.
+ */
+class IssueModel extends M.Class<IssueModel>("CustomerIssue")({
+	id: M.GeneratedOptional(CustomerIssueId),
+	organizationId: OrganizationId,
+	accountId: CustomerAccountId,
+	sourceChannelId: ChannelId,
+	rootMessageId: MessageId,
+	threadChannelId: S.NullOr(ChannelId),
+	joinedMessageIds: S.Array(MessageId),
+	openedByUserId: UserId,
+	createdByUserId: S.NullOr(UserId),
+	title: S.String,
+	status: IssueStatus,
+	priority: IssuePriority,
+	assigneeUserId: S.NullOr(UserId),
+	tags: S.Array(S.String),
+	openedAt: JsonDate,
+	firstCustomerMessageAt: NullDate,
+	lastCustomerMessageAt: NullDate,
+	firstTeamReplyAt: NullDate,
+	lastTeamReplyAt: NullDate,
+	lastMessageAt: JsonDate,
+	closedAt: NullDate,
+	closedByUserId: S.NullOr(UserId),
+	reopenCount: S.Int,
+	reopenedAt: NullDate,
+	messageCount: S.Int,
+	...timestamps,
+	deletedAt: M.GeneratedByApp(NullDate),
+}) {}
+export const Issue = M.expose(IssueModel)
+export type Issue = typeof Issue.Schema.Type
+
+/** An issue's SLA clocks (`docs/customers/sla.md` §4); `id` is the issue's id. */
+class IssueSlaModel extends M.Class<IssueSlaModel>("CustomerIssueSla")({
+	id: CustomerIssueId,
+	organizationId: OrganizationId,
+	accountId: CustomerAccountId,
+	policyId: S.NullOr(CustomerSlaPolicyId),
+	policyName: S.String,
+	targets: SlaTargets,
+	hours: SlaHours,
+	warnBeforePct: S.Int,
+	state: SlaState,
+	nextAlertAt: NullDate,
+	...timestamps,
+}) {}
+export const IssueSla = M.expose(IssueSlaModel)
+export type IssueSla = typeof IssueSla.Schema.Type
 
 /** A feature flag created in Hazel (one no customer may hold yet); see `customer_feature_flags`. */
 class FeatureFlagModel extends M.Class<FeatureFlagModel>("CustomerFeatureFlag")({
@@ -300,6 +379,8 @@ class SettingsModel extends M.Class<SettingsModel>("CustomerSettings")({
 	addOnPlans: S.Array(S.String),
 	/** Unused: MRR always adds usage billing now (the backend's `usageMrrOf`); the column stays. */
 	overageInMrr: S.Boolean,
+	/** The working week of SLA policies on business hours. */
+	businessHours: BusinessHours,
 	lastComputedAt: NullDate,
 	updatedBy: S.NullOr(UserId),
 	...timestamps,
@@ -546,3 +627,24 @@ class IgnoreRuleModel extends M.Class<IgnoreRuleModel>("CustomerIgnoreRule")({
 }) {}
 export const IgnoreRule = M.expose(IgnoreRuleModel)
 export type IgnoreRule = typeof IgnoreRule.Schema.Type
+
+/**
+ * Someone who wrote in the account's linked channels (`customer_chat_participants`,
+ * `docs/customers/author-side.md`), with their side as the org classified them. Synced to members;
+ * keyed by `accountId` + `userId`.
+ */
+export const ChatParticipant = S.Struct({
+	accountId: CustomerAccountId,
+	userId: UserId,
+	organizationId: OrganizationId,
+	side: AuthorSide,
+	reason: AuthorSideReason,
+	contactId: S.NullOr(CustomerContactId),
+	name: S.String,
+	avatarUrl: S.NullOr(S.String),
+	firstMessageAt: JsonDate,
+	lastMessageAt: JsonDate,
+	lastChannelId: ChannelId,
+	updatedAt: JsonDate,
+})
+export type ChatParticipant = typeof ChatParticipant.Type

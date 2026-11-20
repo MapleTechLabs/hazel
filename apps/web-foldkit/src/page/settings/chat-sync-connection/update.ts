@@ -1,9 +1,10 @@
-import type { OrganizationId, SyncConnectionId } from "@hazel/schema"
+import type { ChannelId, OrganizationId, SyncConnectionId } from "@hazel/schema"
 import { Array, Option } from "effect"
 import { Command, Update } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
+import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import type { ToastRequest } from "../../../overlay/toasts"
 import { AppRoute, type RouteOf } from "../../../route"
 import * as Interaction from "../../../ui/aria/interaction"
@@ -102,6 +103,9 @@ export const init = (route: RouteOf<"SettingsChatSyncConnection">, shared: Share
 			removeLinkConfirm: ConfirmAction.init("chat-sync-remove-link"),
 			disconnectConfirm: ConfirmAction.init("chat-sync-disconnect"),
 			interaction: Interaction.init(),
+			suggestion: SuggestionPrompt.init(),
+			suggestionChannelName: null,
+			pendingSuggestion: null,
 		},
 		shared,
 	)
@@ -114,7 +118,16 @@ export const init = (route: RouteOf<"SettingsChatSyncConnection">, shared: Share
 	}
 }
 
-export const sharedChanged = (model: Model, shared: Shared): Return => requestConnections(model, shared)
+export const sharedChanged = (model: Model, shared: Shared): Return => {
+	const connections = requestConnections(model, shared)
+	const pending = connections.model.pendingSuggestion
+	if (pending === null) return connections
+	const suggestion = suggestFor(connections.model, shared, pending.channelId, pending.channelName)
+	return {
+		...suggestion,
+		commands: [...(connections.commands ?? []), ...(suggestion.commands ?? [])],
+	}
+}
 
 /** `setRefreshKey(k => k + 1)`: a new query key, so the links load again (the shown ones stay meanwhile). */
 const reloadLinks = (model: Model): Pick<Return, "model" | "commands"> => {
@@ -320,6 +333,31 @@ const linkFailureToast = (reason: LinkFailure) =>
 		),
 	})
 
+/** The suggestion prompt's step, its Commands wrapped and its toast sent up. */
+const withSuggestion = SuggestionPrompt.embed<Model, Message>(
+	(model, prompt) => modifyFields(model, { suggestion: () => prompt }),
+	(message) => Message.GotSuggestionMessage({ message }),
+)
+
+/**
+ * A channel just became shared: ask who it looks like (the server scores it first). Only an org
+ * member reaches Customers.
+ */
+const suggestFor = (model: Model, shared: Shared, channelId: ChannelId, channelName: string): Return => {
+	const organizationId = shared.organization?.id
+	// Membership still loading: keep the channel and ask once it arrives (`sharedChanged`).
+	if (organizationId === undefined || shared.member === null) {
+		return { model: modifyFields(model, { pendingSuggestion: () => ({ channelId, channelName }) }) }
+	}
+	return withSuggestion(
+		modifyFields(model, {
+			suggestionChannelName: () => channelName,
+			pendingSuggestion: () => null,
+		}),
+		SuggestionPrompt.request(organizationId, channelId),
+	)
+}
+
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		SucceededListConnections: ({ organizationId, connections }) => {
@@ -519,13 +557,35 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ClickedHistory: ({ history }) => ({ model: modifyFields(model, { history: () => history }) }),
 		ClickedCreateLink: () => submitLink(model, shared),
 		// `onSuccess()` reloads the links (a new query key), then `handleClose()`.
-		SucceededCreateLink: ({ successMessage }) => ({
-			...Update.combine(modifyFields(model, { submission: () => Submission.NotSubmitted() }), [
-				closeAddLinkModal,
-				reloadLinks,
-			]),
-			outMessage: PageOutMessage.RequestedToast({ toast: successToast(successMessage) }),
-		}),
+		SucceededCreateLink: ({ successMessage, hazelChannelId, hazelChannelName }) => {
+			const linked = Update.combine(
+				modifyFields(model, { submission: () => Submission.NotSubmitted() }),
+				[closeAddLinkModal, reloadLinks],
+			)
+			const suggested = suggestFor(linked.model, shared, hazelChannelId, hazelChannelName)
+			return {
+				model: suggested.model,
+				commands: [...(linked.commands ?? []), ...(suggested.commands ?? [])],
+				outMessage: PageOutMessage.RequestedToast({ toast: successToast(successMessage) }),
+			}
+		},
+		GotSuggestionMessage: ({ message: promptMessage }) => {
+			// A failed fetch for the asked channel: keep it pending, so the next shared change asks again.
+			const asked = model.suggestion.channelId
+			const retry =
+				promptMessage._tag === "FailedFetch" && asked !== null && promptMessage.channelId === asked
+					? modifyFields(model, {
+							pendingSuggestion: () => ({
+								channelId: asked,
+								channelName: model.suggestionChannelName ?? "",
+							}),
+						})
+					: model
+			return withSuggestion(
+				retry,
+				SuggestionPrompt.update(model.suggestion, promptMessage, shared.organization?.id ?? null),
+			)
+		},
 		FailedCreateLink: ({ reason }) => ({
 			model: modifyFields(model, { submission: () => Submission.Failed({ reason }) }),
 			outMessage: PageOutMessage.RequestedToast({

@@ -11,24 +11,9 @@ import { Cause, Context, Config, Effect, Layer, Option, Redacted, Ref } from "ef
 import { ObjectStubs } from "../../../../worker/objects/protocol"
 import { Directory } from "../../../directory"
 import { routeChatSyncInbound } from "../../chat-sync-inbound"
-import {
-	createDiscordGatewayDispatchHandlers,
-	decodeRequiredExternalId,
-	type DiscordMessageCreateEvent,
-	type DiscordMessageDeleteEvent,
-	type DiscordMessageReactionAddEvent,
-	type DiscordMessageReactionRemoveEvent,
-	type DiscordMessageUpdateEvent,
-	type DiscordReadyEvent,
-	type DiscordThreadCreateEvent,
-} from "./gateway-dispatch"
-import { type DiscordChannelInfo, makeDiscordThreadParents } from "./thread-parents"
-
-/** The gateway events that list a guild's channels and threads. */
-interface DiscordGuildChannelsEvent {
-	readonly channels?: ReadonlyArray<DiscordChannelInfo>
-	readonly threads?: ReadonlyArray<DiscordChannelInfo>
-}
+import { decodeRequiredExternalId, type DiscordReadyEvent } from "./gateway-dispatch"
+import { DISCORD_ROUTED_EVENTS, makeDiscordGatewayRouter } from "./gateway-router"
+import { makeDiscordThreadParents } from "./thread-parents"
 
 const DISCORD_REQUIRED_GATEWAY_INTENTS = 34305
 
@@ -148,75 +133,20 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 						})),
 					),
 				)
-				const dispatchHandlers = createDiscordGatewayDispatchHandlers({
-					ingest,
-					isCurrentBotAuthor,
-					threadOf: threadParents.threadOf,
-				})
-				const rememberGuild = (event: DiscordGuildChannelsEvent) =>
-					Effect.sync(() => {
-						threadParents.rememberAll(event.channels)
-						threadParents.rememberAll(event.threads)
-					})
+				const router = makeDiscordGatewayRouter({ ingest, isCurrentBotAuthor, threadParents })
 
 				yield* Effect.all(
 					[
-						gateway.handleDispatch("GUILD_CREATE", (event) =>
-							rememberGuild(event as DiscordGuildChannelsEvent),
-						),
-						gateway.handleDispatch("THREAD_LIST_SYNC", (event) =>
-							rememberGuild(event as DiscordGuildChannelsEvent),
-						),
-						gateway.handleDispatch("CHANNEL_CREATE", (event) =>
-							Effect.sync(() => threadParents.remember(event as DiscordChannelInfo)),
-						),
-						gateway.handleDispatch("THREAD_UPDATE", (event) =>
-							Effect.sync(() => threadParents.remember(event as DiscordChannelInfo)),
-						),
 						gateway.handleDispatch("READY", (event) =>
 							onReady(event as DiscordReadyEvent).pipe(
 								Effect.catch((error) => onDispatchError("READY", error)),
 							),
 						),
-						gateway.handleDispatch("MESSAGE_CREATE", (event) =>
-							dispatchHandlers
-								.ingestMessageCreateEvent(event as DiscordMessageCreateEvent)
-								.pipe(Effect.catch((error) => onDispatchError("MESSAGE_CREATE", error))),
-						),
-						gateway.handleDispatch("MESSAGE_UPDATE", (event) =>
-							dispatchHandlers
-								.ingestMessageUpdateEvent(event as DiscordMessageUpdateEvent)
-								.pipe(Effect.catch((error) => onDispatchError("MESSAGE_UPDATE", error))),
-						),
-						gateway.handleDispatch("MESSAGE_DELETE", (event) =>
-							dispatchHandlers
-								.ingestMessageDeleteEvent(event as DiscordMessageDeleteEvent)
-								.pipe(Effect.catch((error) => onDispatchError("MESSAGE_DELETE", error))),
-						),
-						gateway.handleDispatch("MESSAGE_REACTION_ADD", (event) =>
-							dispatchHandlers
-								.ingestMessageReactionAddEvent(event as DiscordMessageReactionAddEvent)
-								.pipe(
-									Effect.catch((error) => onDispatchError("MESSAGE_REACTION_ADD", error)),
-								),
-						),
-						gateway.handleDispatch("MESSAGE_REACTION_REMOVE", (event) =>
-							dispatchHandlers
-								.ingestMessageReactionRemoveEvent(event as DiscordMessageReactionRemoveEvent)
-								.pipe(
-									Effect.catch((error) =>
-										onDispatchError("MESSAGE_REACTION_REMOVE", error),
-									),
-								),
-						),
-						gateway.handleDispatch("THREAD_CREATE", (event) =>
-							Effect.sync(() => threadParents.remember(event as DiscordChannelInfo)).pipe(
-								Effect.andThen(
-									dispatchHandlers.ingestThreadCreateEvent(
-										event as DiscordThreadCreateEvent,
-									),
-								),
-								Effect.catch((error) => onDispatchError("THREAD_CREATE", error)),
+						...DISCORD_ROUTED_EVENTS.map((name) =>
+							gateway.handleDispatch(name, (event) =>
+								router
+									.dispatch(name, event)
+									.pipe(Effect.catch((error) => onDispatchError(name, error))),
 							),
 						),
 					],

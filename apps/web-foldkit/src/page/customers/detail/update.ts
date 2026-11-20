@@ -11,6 +11,16 @@ import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { featureFlagKeysOf, featureFlagToast } from "../../../customers/feature-flags"
 import * as OverviewData from "../../../customers/overview/data"
 import { groupKeysOf } from "../../../customers/overview/rows"
+import {
+	AcceptSuggestion,
+	DismissSuggestion,
+	EMPTY_SUGGESTIONS,
+	hideSuggestion,
+	receivedSuggestions,
+	SuggestionMessage,
+	suggestionFailureToast,
+	unhideSuggestion,
+} from "../../../customers/suggestions"
 import { isMuteKey, MUTE_LABEL, muteUntil, isSnoozeKey, snoozeUntil } from "../../../customers/ui/menus"
 import { errorToastOf, successToast } from "../../../data/actions"
 import { AppRoute, type CustomerTab, customerRoute, hrefOf, type RouteOf } from "../../../route"
@@ -30,10 +40,12 @@ import {
 	FetchCustomerEvents,
 	FetchCustomerInvoices,
 	FetchCustomerMrrHistory,
+	FetchCustomerSupport,
 	FocusNoteComposer,
 	LoadNoteDrafts,
 	LinkCustomerAccount,
 	LinkCustomerChannel,
+	SetChatAuthorSide,
 	SetCustomerEnvironment,
 	SetCustomerFeatureFlags,
 	SetCustomerLayout,
@@ -42,6 +54,7 @@ import {
 	UnlinkCustomerAccount,
 	UnlinkCustomerChannel,
 	SetCustomerAttentionMute,
+	FetchCustomerSuggestions,
 	UpdateCustomerAccount,
 	UpdateCustomerNote,
 } from "./commands"
@@ -86,11 +99,13 @@ import {
 	snoozeEntries,
 	TAG_POPOVER_ID,
 	CHANNEL_POPOVER_ID,
+	CHAT_PERSON_MENU_ID,
 	FLAG_POPOVER_ID,
 	UNASSIGN,
 	userIdOfOwnerKey,
 } from "./model"
 import { draftToRestore } from "./note-drafts"
+import { CHAT_PERSON_SIDE, ChatPersonKey, chatPeopleOfModel, chatPersonEntries } from "./people-in-chat"
 
 type Return = PageReturn<Model, Message>
 type Commands = NonNullable<Return["commands"]>
@@ -146,14 +161,27 @@ const overviewInputs = (model: Model, shared: Shared): OverviewData.Inputs | nul
 		: { ...args, widgets: overviewLayoutOf(model).widgets, groupKeys: groupKeysOf(model.metrics) }
 }
 
-/** The Overview's widgets ask for what they read and was not asked for yet (on the Overview only). */
+/**
+ * The Overview's widgets ask for what they read and was not asked for yet (on the Overview only); the
+ * Support block's 30-day report only when the layout shows it.
+ */
 const loadOverview = (model: Model, shared: Shared): Return => {
+	const args = target(model, shared)
 	const inputs = overviewInputs(model, shared)
-	if (inputs === null || model.tab !== "overview") return { model }
+	if (args === null || inputs === null || model.tab !== "overview") return { model }
 	const loaded = OverviewData.load(model.overview, inputs)
+	const wantsSupport =
+		AsyncData.isIdle(model.support) &&
+		inputs.widgets.some((widget) => widget._tag === "built_in" && widget.kind === "support")
 	return {
-		model: modifyFields(model, { overview: () => loaded.model }),
-		commands: Command.mapMessages(loaded.commands ?? [], toOverviewData),
+		model: modifyFields(model, {
+			overview: () => loaded.model,
+			support: (support) => (wantsSupport ? AsyncData.Loading() : support),
+		}),
+		commands: [
+			...Command.mapMessages(loaded.commands ?? [], toOverviewData),
+			...(wantsSupport ? [FetchCustomerSupport(args)] : []),
+		],
 	}
 }
 
@@ -195,7 +223,8 @@ const load = (model: Model, shared: Shared): Return => {
 		next = fetched.model
 		commands.push(...(fetched.commands ?? []))
 	}
-	return { model: next, commands }
+	const suggested = requestSuggestions(next, shared)
+	return { model: suggested.model, commands: [...commands, ...(suggested.commands ?? [])] }
 }
 
 /**
@@ -223,6 +252,26 @@ const layoutChanged = (previous: Model, next: Model, shared: Shared): Return => 
 		shared,
 	)
 }
+
+/**
+ * The customer's suggested channel links, asked once the accounts say which customer this is (an
+ * environment's are its primary's), and again for another customer.
+ */
+const requestSuggestions = (model: Model, shared: Shared, force = false): Return => {
+	const args = target(model, shared)
+	if (args === null || model.accounts === null) return { model }
+	const customer = customerOfAccount(model)(model.accountId)
+	if (!force && model.suggestionsFor === customer) return { model }
+	return {
+		model: modifyFields(model, {
+			suggestionsFor: () => customer,
+			suggestions: (list) => (model.suggestionsFor === customer ? list : EMPTY_SUGGESTIONS),
+		}),
+		commands: [FetchCustomerSuggestions({ organizationId: args.organizationId, accountId: customer })],
+	}
+}
+
+const toSuggestionMessage = (message: SuggestionMessage) => Message.CompletedSuggestionAction({ message })
 
 // INIT
 
@@ -252,6 +301,9 @@ const initialModel = (route: Route): Model => ({
 	layoutMenu: Menu.init({ id: LAYOUT_MENU_ID, placement: "bottom end", selectionMode: "Single" }),
 	mrrHistory: AsyncData.Idle(),
 	hoveredMrr: null,
+	supportIssues: null,
+	supportSlas: [],
+	support: AsyncData.Idle(),
 	contacts: EMPTY_PAGE,
 	contactFilter: "all",
 	contactSearch: "",
@@ -275,6 +327,12 @@ const initialModel = (route: Route): Model => ({
 	channelOptions: [],
 	channelPopover: Popover.init(CHANNEL_POPOVER_ID),
 	channelSearch: "",
+	chatParticipants: [],
+	chatAuthors: [],
+	activeChatPersonId: null,
+	chatPersonMenu: Menu.init({ id: CHAT_PERSON_MENU_ID, placement: "bottom end" }),
+	suggestions: EMPTY_SUGGESTIONS,
+	suggestionsFor: null,
 	createdFeatureFlags: [],
 	flagPopover: Popover.init(FLAG_POPOVER_ID),
 	flagSelection: [],
@@ -321,6 +379,7 @@ type MenuField =
 	| "doneMenu"
 	| "signalMoreMenu"
 	| "environmentMenu"
+	| "chatPersonMenu"
 type MenuCommands = NonNullable<ReturnType<typeof Menu.update>["commands"]>
 
 const MENU_MESSAGE = {
@@ -332,6 +391,7 @@ const MENU_MESSAGE = {
 	doneMenu: (message: Menu.Message) => Message.GotDoneMenuMessage({ message }),
 	signalMoreMenu: (message: Menu.Message) => Message.GotSignalMoreMenuMessage({ message }),
 	environmentMenu: (message: Menu.Message) => Message.GotEnvironmentMenuMessage({ message }),
+	chatPersonMenu: (message: Menu.Message) => Message.GotChatPersonMenuMessage({ message }),
 } as const satisfies Record<MenuField, (message: Menu.Message) => Message>
 
 const mapMenuCommands = (field: MenuField, commands: MenuCommands): Commands => {
@@ -360,6 +420,28 @@ const openMenu = (model: Model, field: MenuField, entries: ReadonlyArray<Menu.En
 	updateMenu(model, field, Menu.Message.PressedTriggerKey({ key: "ArrowDown", entries }), (next) => ({
 		model: next,
 	}))
+
+// PEOPLE IN CHAT
+
+/** A pick in a person's menu: set or clear their override. */
+const onChatPersonMenu = (model: Model, shared: Shared, key: string): Return => {
+	const pick = ChatPersonKey.literals.find((literal) => literal === key)
+	const userId = model.activeChatPersonId
+	const by = shared.currentUser?.id
+	if (pick === undefined || userId === null || shared.organization === null || by === undefined)
+		return { model }
+	return {
+		model,
+		commands: [
+			SetChatAuthorSide({
+				organizationId: shared.organization.id,
+				userId,
+				side: CHAT_PERSON_SIDE[pick],
+				by,
+			}),
+		],
+	}
+}
 
 // ACCOUNT
 
@@ -685,9 +767,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 
 const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		// The account's assigned layout may have changed with it.
-		UpdatedAccounts: ({ accounts }) =>
-			layoutChanged(
+		// The account's assigned layout may have changed with it, and which customer it belongs to.
+		UpdatedAccounts: ({ accounts }) => {
+			const changed = layoutChanged(
 				model,
 				modifyFields(model, {
 					accounts: () => accounts,
@@ -695,7 +777,13 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 						seen || accounts.some((account) => account.id === model.accountId),
 				}),
 				shared,
-			),
+			)
+			const suggested = requestSuggestions(changed.model, shared)
+			return {
+				model: suggested.model,
+				commands: [...(changed.commands ?? []), ...(suggested.commands ?? [])],
+			}
+		},
 		UpdatedSignals: ({ signals }) => ({ model: modifyFields(model, { signals: () => signals }) }),
 		UpdatedNotes: ({ notes }) => ({ model: modifyFields(model, { notes: () => notes }) }),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
@@ -767,6 +855,25 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 					}),
 				),
 			),
+		}),
+		UpdatedSupportIssues: ({ issues }) => ({
+			model: modifyFields(model, { supportIssues: () => issues }),
+		}),
+		UpdatedSupportSlas: ({ slas }) => ({ model: modifyFields(model, { supportSlas: () => slas }) }),
+		SucceededFetchSupport: ({ row }) => ({
+			model: modifyFields(model, { support: (current) => settle(current, Result.succeed(row)) }),
+		}),
+		PressedRetrySupport: () => {
+			const args = target(model, shared)
+			return args === null || AsyncData.isLoading(model.support)
+				? { model }
+				: {
+						model: modifyFields(model, { support: () => AsyncData.Loading() }),
+						commands: [FetchCustomerSupport(args)],
+					}
+		},
+		FailedFetchSupport: ({ reason }) => ({
+			model: modifyFields(model, { support: (current) => settle(current, Result.fail(reason)) }),
 		}),
 		SucceededFetchMrrHistory: ({ series }) => ({
 			model: modifyFields(model, { mrrHistory: (current) => settle(current, Result.succeed(series)) }),
@@ -977,6 +1084,109 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				),
 			),
 		}),
+		UpdatedChatParticipants: ({ participants }) => ({
+			model: modifyFields(model, { chatParticipants: () => participants }),
+		}),
+		UpdatedChatAuthors: ({ authors }) => ({ model: modifyFields(model, { chatAuthors: () => authors }) }),
+		PressedChatPersonMenu: ({ userId }) => {
+			const person = chatPeopleOfModel(model).find((entry) => entry.userId === userId)
+			return person === undefined
+				? { model }
+				: openMenu(
+						modifyFields(model, { activeChatPersonId: () => userId }),
+						"chatPersonMenu",
+						chatPersonEntries(person),
+					)
+		},
+		GotChatPersonMenuMessage: ({ message: menuMessage }) =>
+			updateMenu(model, "chatPersonMenu", menuMessage, (next, key) =>
+				onChatPersonMenu(next, shared, key),
+			),
+		SucceededSetChatAuthorSide: () => ({ model }),
+		FailedSetChatAuthorSide: ({ reason }) => ({
+			model,
+			outMessage: toast(
+				errorToastOf(
+					failureMessage(reason, {
+						NotFound: {
+							title: "Couldn't change their side",
+							description: "The customer is no longer available.",
+						},
+						Stale: { title: "Couldn't change their side" },
+					}),
+				),
+			),
+		}),
+		// An answer for a customer the page no longer shows is dropped.
+		SucceededFetchSuggestions: ({ customer, items }) => ({
+			model:
+				customer === model.suggestionsFor
+					? modifyFields(model, { suggestions: (list) => receivedSuggestions(list, items) })
+					: model,
+		}),
+		// Asked again on the next change of the shared state (a failed fetch is not "none").
+		FailedFetchSuggestions: ({ customer }) => ({
+			model:
+				customer === model.suggestionsFor
+					? modifyFields(model, { suggestionsFor: () => null })
+					: model,
+		}),
+		PressedAcceptSuggestion: ({ suggestionId }) => {
+			const args = target(model, shared)
+			const userId = shared.currentUser?.id
+			const suggestion = model.suggestions.items?.find((item) => item.id === suggestionId)
+			// Pressed again while its write runs: already hidden, sent once.
+			if (
+				args === null ||
+				userId === undefined ||
+				suggestion === undefined ||
+				model.suggestions.hidden.includes(suggestionId)
+			)
+				return { model }
+			return {
+				// The row leaves at once; the channel shows among the linked ones.
+				model: modifyFields(model, { suggestions: (list) => hideSuggestion(list, suggestionId) }),
+				commands: [
+					Command.mapMessage(
+						AcceptSuggestion({
+							organizationId: args.organizationId,
+							suggestion,
+							linkedBy: userId,
+						}),
+						toSuggestionMessage,
+					),
+				],
+			}
+		},
+		PressedDismissSuggestion: ({ suggestionId }) => {
+			const args = target(model, shared)
+			const suggestion = model.suggestions.items?.find((item) => item.id === suggestionId)
+			if (args === null || suggestion === undefined || model.suggestions.hidden.includes(suggestionId))
+				return { model }
+			return {
+				model: modifyFields(model, { suggestions: (list) => hideSuggestion(list, suggestionId) }),
+				commands: [
+					Command.mapMessage(
+						DismissSuggestion({ organizationId: args.organizationId, suggestion }),
+						toSuggestionMessage,
+					),
+				],
+			}
+		},
+		// Ask again either way: accepting can settle the channel's other suggestions.
+		CompletedSuggestionAction: ({ message: action }) =>
+			SuggestionMessage.match<Return>(action, {
+				SucceededAccept: () => requestSuggestions(model, shared, true),
+				SucceededDismiss: () => requestSuggestions(model, shared, true),
+				FailedSuggestionAction: ({ suggestion, action: failed, reason }) => ({
+					...requestSuggestions(
+						modifyFields(model, { suggestions: (list) => unhideSuggestion(list, suggestion.id) }),
+						shared,
+						true,
+					),
+					outMessage: toast(suggestionFailureToast(failed, reason)),
+				}),
+			}),
 		UpdatedCreatedFeatureFlags: ({ keys }) => ({
 			model: modifyFields(model, { createdFeatureFlags: () => keys }),
 		}),

@@ -38,6 +38,8 @@ import { chatSyncOrgReceivers } from "../../../services/chat-sync/chat-sync-org"
 import { messageSearchOrgReceivers } from "../org/message-search"
 import { SearchOrgEffects } from "../search-wire"
 import { channelCustomerOrgReceivers, ChannelCustomerOrgEffects } from "../org/channel-customers"
+import { CustomerChatOrgEffects } from "../customer-chat-wire"
+import { chatAuthorsReported } from "../org/customer-chat"
 import { defineEffect, type EffectReceivers } from "./registry"
 
 export const OrgEffects = {
@@ -59,6 +61,8 @@ export const OrgEffects = {
 	...SearchOrgEffects,
 	/** Customers' channel links (`../org/channel-customers.ts`). */
 	...ChannelCustomerOrgEffects,
+	/** A linked channel's past authors (`../org/customer-chat.ts`). */
+	...CustomerChatOrgEffects,
 }
 
 export const orgReceivers = {
@@ -69,6 +73,7 @@ export const orgReceivers = {
 	...notificationCountOrgReceivers,
 	...channelRenameReceivers,
 	...channelCustomerOrgReceivers,
+	"org.chatAuthorsReported": chatAuthorsReported,
 	// Called lazily: these modules import the effect registries back.
 	"org.upsertBotProjection": (payload) => upsertBotProjection(payload),
 	"org.acceptInvitation": (payload) =>

@@ -103,6 +103,7 @@ export interface FactsInput {
 	readonly movements?: ReadonlyArray<Partial<schema.CustomerMrrMovement>>
 	readonly health?: AccountFacts["health"]
 	readonly priorActive?: ReadonlyArray<readonly [number, number]>
+	readonly openIssueSlas?: AccountFacts["openIssueSlas"]
 	/** Default: a Clerk organization with a Stripe customer. */
 	readonly providers?: ReadonlyArray<CustomerProvider>
 }
@@ -223,6 +224,7 @@ export const factsOf = (input: FactsInput = {}): AccountFacts => {
 			...movement,
 		})),
 		health: input.health ?? [],
+		openIssueSlas: input.openIssueSlas ?? [],
 	}
 }
 

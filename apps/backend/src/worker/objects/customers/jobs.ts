@@ -42,6 +42,7 @@ import { CustomerMembersCall } from "../org/customer-members"
 import { runComputeStep, unmuteExpired, wakeSnoozed } from "./compute"
 import { loadCredentials } from "./credentials"
 import { ensureBuiltInFormats, installDefaults } from "./defaults"
+import { runSlaAlerts } from "./sla"
 import { CustomerIngest } from "./ingest"
 import { ensureDefaultLayout } from "./layouts"
 import { backfillCursor, metricBackfillKey } from "./maple/pull"
@@ -53,6 +54,8 @@ import { inList } from "./sql"
 import { dayOf } from "./time"
 
 const DEFAULTS_KEY = "defaultsInstalled"
+/** Set once a members snapshot with org member ids was applied (SLA notifications need them). */
+const MEMBER_IDS_KEY = "memberIdsPulled"
 /** Pages per connection per alarm; the rest resumes on the next one. */
 const PAGES_PER_TICK = 20
 const MAX_BACKOFF_MS = 6 * 60 * 60_000
@@ -75,7 +78,20 @@ export const bootstrap = Effect.fn("CustomersObject.bootstrap")(function* (paylo
 	readonly organizationId: OrganizationId
 }) {
 	const db = yield* Database.Database
-	if (Option.isNone(yield* readObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY))) {
+	const unversioned = Option.isNone(yield* readObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY))
+	// Members projected before snapshots carried their org member id get it with one more pull.
+	const missingMemberIds =
+		!unversioned &&
+		Option.isNone(yield* readObjectMeta(MEMBER_IDS_KEY)) &&
+		Option.isSome(
+			yield* db.first(
+				SQLite.from(schema.customerMembersTable)
+					.select("userId")
+					.where(($) => [$.memberId.isNull()])
+					.limit(1),
+			),
+		)
+	if (unversioned || missingMemberIds) {
 		const pulled = yield* callObject(CustomerMembersCall, orgTarget(payload.organizationId), {
 			organizationId: payload.organizationId,
 		}).pipe(
@@ -86,19 +102,21 @@ export const bootstrap = Effect.fn("CustomersObject.bootstrap")(function* (paylo
 				),
 			),
 		)
-		if (Option.isNone(pulled)) return { ready: false }
+		if (Option.isNone(pulled) && unversioned) return { ready: false }
 		// No such organization: nothing to set up, and every request is refused (no members).
-		if (pulled.value === null) return { ready: true }
-		const snapshot = pulled.value
-		yield* db.transaction(
-			Effect.gen(function* () {
-				// A push may have landed while the pull was out: keep the newer one.
-				const applied = Option.map(yield* readObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY), Number)
-				if (Option.isSome(applied) && applied.value >= snapshot.version) return
-				yield* writeObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY, String(snapshot.version))
-				yield* applyMembers(snapshot.members)
-			}),
-		)
+		if (Option.isSome(pulled) && pulled.value === null && unversioned) return { ready: true }
+		const snapshot = Option.getOrNull(pulled)
+		if (snapshot !== null)
+			yield* db.transaction(
+				Effect.gen(function* () {
+					// A push may have landed while the pull was out: keep the newer one.
+					const applied = Option.map(yield* readObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY), Number)
+					yield* writeObjectMeta(MEMBER_IDS_KEY, "1")
+					if (Option.isSome(applied) && applied.value >= snapshot.version) return
+					yield* writeObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY, String(snapshot.version))
+					yield* applyMembers(snapshot.members)
+				}),
+			)
 	}
 	// Defaults and the compute schedule only for an org with members (not an unknown or deleted one).
 	if (Option.isNone(yield* readObjectMeta(DEFAULTS_KEY))) {
@@ -561,6 +579,12 @@ export const tick = Effect.fn("CustomersObject.tick")(function* () {
 	const db = yield* Database.Database
 	const now = new Date(yield* Clock.currentTimeMillis)
 	if (Option.isNone(yield* readObjectMeta(DEFAULTS_KEY))) return { computed: false }
+	// SLA warnings and breaches first, every turn: they are due to the minute and each batch is small.
+	yield* runSlaAlerts(now).pipe(
+		Effect.catchTag("DatabaseError", (error) =>
+			Effect.logError("SLA alerts failed", { error: error.message }),
+		),
+	)
 	// One kind of work per alarm turn, each bounded on its own (a compute or a history rebuild, else
 	// the due pulls, ≤ `PAGES_PER_TICK` pages each): work still due re-arms the alarm right away.
 	const due = yield* computeDueAt

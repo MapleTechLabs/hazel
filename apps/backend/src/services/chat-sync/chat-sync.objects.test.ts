@@ -4,7 +4,6 @@
  * through the `OrgObject` into the `ChannelObject` (dedupe, a new provider user, edits, deletes,
  * reactions); outbound `chatSync.outbound` for Hazel writes and none for inbound ones.
  */
-import { CurrentUser } from "@hazel/domain"
 import { CreateThreadRequest } from "@hazel/domain/rpc"
 import { SQLite, schema } from "@hazel/db"
 import type {
@@ -15,168 +14,45 @@ import type {
 	ExternalUserId,
 	ExternalWebhookId,
 	MessageId,
-	OrganizationId,
 	SyncChannelLinkId,
-	SyncConnectionId,
-	UserId,
 } from "@hazel/schema"
-import { Cause, Effect, Exit, Layer, Option, type Scope } from "effect"
+import { Cause, Effect, Exit, Layer, Option } from "effect"
 import { describe, expect, it } from "vitest"
-import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
 import { callObject } from "../../worker/objects/calls"
 import { channelTarget, orgTarget } from "../../worker/objects/kinds"
 import { ConnectIntegrationCall, DisconnectIntegrationCall } from "../../worker/objects/org/integrations"
-import { encodeInvokePrincipal } from "../../worker/objects/principal"
 import { ObjectStubs } from "../../worker/objects/protocol"
-import { makeTestObjects, type TestObject, type TestObjects } from "../../worker/objects/testing"
+import type { TestObject } from "../../worker/objects/testing"
 import { Directory } from "../directory"
 import { readChatSyncLinks, writeChatSyncLinks } from "./chat-sync-channel"
-import { type ChatSyncInbound, routeChatSyncInbound } from "./chat-sync-inbound"
+import type { ChatSyncInbound } from "./chat-sync-inbound"
 import { createDiscordGatewayDispatchHandlers } from "./providers/discord/gateway-dispatch"
+import { callRpc, makeChatSyncWorld, ok, rows, runScoped } from "./testing-world"
 
 const uuid = () => crypto.randomUUID()
 const GUILD = "111111111111111111"
 const DISCORD_CHANNEL = "222222222222222222" as ExternalChannelId
 
-const userOf = (id: string) =>
-	new CurrentUser.Schema({
-		id: id as UserId,
-		role: "member",
-		email: `${id}@example.com`,
-		isOnboarded: true,
-		timezone: null,
-		settings: null,
-	})
-
-const call = (object: TestObject, objectId: string, tag: HazelRpcTag, payload: unknown, user: string) =>
-	Effect.gen(function* () {
-		const rpc = yield* rpcFor(tag)
-		const response = yield* object.invoke({
-			objectId,
-			tag,
-			payload: yield* encodePayload(rpc, payload),
-			principal: yield* encodeInvokePrincipal({ user: userOf(user), botScopes: null }),
-		})
-		return yield* decodeExit(rpc, structuredClone(response).exit)
-	})
-
-const ok = <A>(exit: Exit.Exit<A, unknown>) =>
-	Exit.isSuccess(exit) ? Effect.succeed(exit.value) : Effect.die(Cause.pretty(exit.cause))
-
-const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
-	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
-
-interface World {
-	readonly objects: TestObjects
-	readonly org: TestObject
-	readonly channel: TestObject
-	readonly orgId: OrganizationId
-	readonly owner: UserId
-	readonly channelId: ChannelId
-	readonly syncConnectionId: SyncConnectionId
-	readonly channelLinkId: SyncChannelLinkId
-	/** Route a Discord event the way the gateway object does. */
-	readonly inbound: (event: ChatSyncInbound) => Effect.Effect<void>
-	readonly index: () => Effect.Effect<
-		ReadonlyArray<{ externalChannelId: string | null; channelId: string | null }>
-	>
-}
+const call = callRpc
+const run = runScoped
 
 /** An org with an owner, a public channel, a Discord connection and a link for the channel. */
 const makeWorld = Effect.gen(function* () {
-	const objects = yield* makeTestObjects
-	const orgId = uuid() as OrganizationId
-	const owner = uuid() as UserId
-	const org = yield* objects.get(orgTarget(orgId))
-	const db = org.storage.db
-	db.prepare(`INSERT INTO organizations (id, name, slug) VALUES (?, 'Acme', 'acme')`).run(orgId)
-	db.prepare(
-		`INSERT INTO users (id, externalId, email, firstName, lastName) VALUES (?, ?, ?, 'Olive', 'Owner')`,
-	).run(owner, `ext-${owner}`, `${owner}@example.com`)
-	db.prepare(`INSERT INTO organization_members (organizationId, userId, role) VALUES (?, ?, 'owner')`).run(
-		orgId,
-		owner,
-	)
-	db.prepare(
-		`INSERT INTO integration_connections (provider, organizationId, level, status, connectedBy)
-		 VALUES ('discord', ?, 'organization', 'active', ?)`,
-	).run(orgId, owner)
-
-	const created = (yield* ok(
-		yield* call(
-			org,
-			orgId,
-			"channel.create",
-			{
-				name: "general",
-				icon: null,
-				type: "public",
-				organizationId: orgId,
-				parentChannelId: null,
-				sectionId: null,
-			},
-			owner,
-		),
-	)) as { data: { id: ChannelId } }
-	const channelId = created.data.id
-
-	const connection = (yield* ok(
-		yield* call(
-			org,
-			orgId,
-			"chatSync.connection.create",
-			{
-				organizationId: orgId,
-				provider: "discord",
-				externalWorkspaceId: GUILD,
-				externalWorkspaceName: "Guild",
-			},
-			owner,
-		),
-	)) as { data: { id: SyncConnectionId } }
-	const link = (yield* ok(
-		yield* call(
-			org,
-			orgId,
-			"chatSync.channelLink.create",
-			{
-				organizationId: orgId,
-				syncConnectionId: connection.data.id,
-				hazelChannelId: channelId,
-				externalChannelId: DISCORD_CHANNEL,
-			},
-			owner,
-		),
-	)) as { data: { id: SyncChannelLinkId } }
-
-	const stubs = Layer.succeed(ObjectStubs, objects.stubs)
-	const inbound = (event: ChatSyncInbound) =>
-		routeChatSyncInbound(event).pipe(
-			Effect.provide(stubs),
-			Effect.provideContext(objects.directory),
-			Effect.orDie,
-		)
+	const world = yield* makeChatSyncWorld({
+		provider: "discord",
+		workspaceId: GUILD,
+		externalChannelId: DISCORD_CHANNEL,
+	})
+	/** The org's rows in the directory's `chat_sync_index`. */
 	const index = () =>
 		Effect.flatMap(Directory, (directory) =>
 			directory.db.run(
 				SQLite.from(schema.chatSyncIndexTable)
 					.select("externalChannelId", "channelId")
-					.where(($) => [$.organizationId.eq(orgId)]),
+					.where(($) => [$.organizationId.eq(world.orgId)]),
 			),
-		).pipe(Effect.provideContext(objects.directory), Effect.orDie)
-
-	return {
-		objects,
-		org,
-		channel: yield* objects.get(channelTarget(channelId)),
-		orgId,
-		owner,
-		channelId,
-		syncConnectionId: connection.data.id,
-		channelLinkId: link.data.id,
-		inbound,
-		index,
-	} satisfies World
+		).pipe(Effect.provideContext(world.objects.directory), Effect.orDie)
+	return { ...world, index }
 })
 
 const discordCreate = (
@@ -188,7 +64,13 @@ const discordCreate = (
 	externalWorkspaceIds: [GUILD],
 	externalChannelId: DISCORD_CHANNEL,
 	dedupeKey: `discord:gateway:create:${messageId}`,
-	author: { externalUserId: authorId as ExternalUserId, displayName: "Dana Discord", avatarUrl: null },
+	author: {
+		externalUserId: authorId as ExternalUserId,
+		displayName: "Dana Discord",
+		avatarUrl: null,
+		email: null,
+		externalWorkspaceId: GUILD,
+	},
 	event: {
 		_tag: "MessageCreate",
 		externalMessageId: messageId as ExternalMessageId,
@@ -198,9 +80,6 @@ const discordCreate = (
 		attachments: [],
 	},
 })
-
-const rows = <T>(object: TestObject, sql: string, ...params: Array<string>) =>
-	object.storage.db.prepare(sql).all(...params) as Array<T>
 
 const chatSyncOutbox = (object: TestObject) =>
 	rows<{ n: number }>(object, `SELECT count(*) AS n FROM _outbox WHERE target = 'chat-sync'`)[0]!.n
@@ -446,6 +325,8 @@ describe("chat sync on the objects", () => {
 					externalUserId: "555555555555555555" as ExternalUserId,
 					displayName: "Rae",
 					avatarUrl: null,
+					email: null,
+					externalWorkspaceId: GUILD,
 				}
 				const reaction = (tag: "ReactionAdd" | "ReactionRemove"): ChatSyncInbound => ({
 					provider: "discord",

@@ -4,19 +4,15 @@ import { twMerge } from "tailwind-merge"
 import { dropdownLabelBase } from "~/components/ui/dropdown.styles"
 import { cn } from "~/lib/utils"
 import {
-	IconBell,
 	IconCircleDottedUser,
-	IconDashboard,
-	IconGear,
 	IconHashtag,
-	IconIntegratio,
 	IconMagnifier3,
 	IconMsgs,
-	IconOffice,
+	IconPaintbrush,
 	IconPlus,
-	IconServers,
 	IconUsersPlus,
 } from "../../icons"
+import { destination, isDestinationId } from "../../shell/destinations"
 import { environmentBadge } from "../../customers/ui/badges"
 import { companyLogo } from "../../customers/ui/identity"
 import type { Shared } from "../../page/contract"
@@ -25,16 +21,7 @@ import type * as CommandMenu from "../../ui/command-menu"
 import { commandMenuShortcut, view as commandMenuView } from "../../ui/command-menu-view"
 import { labelId } from "../../ui/menu"
 import { createChannelPage, joinChannelPage } from "./form-pages"
-import {
-	accountNameOf,
-	dmDisplayName,
-	HOTKEYS,
-	NAVIGATION,
-	parseKey,
-	recentChannelsOf,
-	SETTINGS,
-	STATUS_OPTIONS,
-} from "./menu"
+import { accountNameOf, dmDisplayName, HOTKEYS, parseKey, recentChannelsOf, STATUS_OPTIONS } from "./menu"
 import { Message } from "./message"
 import { type ChannelSummary, type DmChannel, isFormPage, type Model } from "./model"
 import { searchPage } from "./search-view"
@@ -112,21 +99,7 @@ const QUICK_ACTIONS: Readonly<
 	"action:join-channel": { icon: (h) => IconPlus(h), text: "Join channel" },
 	"action:invite": { icon: (h) => IconUsersPlus(h), text: "Invite members", shortcut: HOTKEYS.invite },
 	"pref:status": { icon: (h) => IconCircleDottedUser(h), text: "Set status..." },
-	"pref:appearance": { icon: (h) => IconGear(h), text: "Change appearance..." },
-}
-
-const LINK_ICONS: Readonly<Record<string, (h: HtmlBuilder<Message>) => Html>> = {
-	"nav:dashboard": (h) => IconDashboard(h),
-	"nav:chat": (h) => IconMsgs(h),
-	"nav:customers": (h) => IconOffice(h),
-	"nav:notifications": (h) => IconBell(h),
-	"nav:my-settings": (h) => IconGear(h),
-	"nav:profile": (h) => IconCircleDottedUser(h),
-	"settings:general": (h) => IconGear(h),
-	"settings:team": (h) => IconDashboard(h),
-	"settings:integrations": (h) => IconIntegratio(h),
-	"settings:invitations": (h) => IconUsersPlus(h),
-	"settings:debug": (h) => IconServers(h),
+	"pref:appearance": { icon: (h) => IconPaintbrush(h), text: "Change appearance..." },
 }
 
 const THEME_ICONS: Readonly<Record<string, (h: HtmlBuilder<Message>) => Html>> = {
@@ -166,9 +139,11 @@ const itemContent = (
 			label(h, key, [action.text]),
 			...(action.shortcut ? [commandMenuShortcut(h, MENU_ID, key, action.shortcut)] : []),
 		]
-	const link = [...NAVIGATION, ...SETTINGS].find((entry) => entry.key === key)
-	if (link) return [LINK_ICONS[key]?.(h) ?? h.empty, label(h, key, [link.label])]
 	const { kind, value } = parseKey(key)
+	if (kind === "go" && isDestinationId(value)) {
+		const page = destination(value)
+		return [page.icon(h, { attributes: { "data-slot": "icon" } }), label(h, key, [page.label])]
+	}
 	if (kind === "channel")
 		return channelContent(
 			h,

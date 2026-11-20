@@ -24,11 +24,14 @@ import {
 	toDisplayRows,
 	toThreadRows,
 	unfurlRequestsOf,
+	isLiveReactionChange,
 } from "../derive"
 import { typingNamesOf, typingUsersOf } from "../banners"
 import { emptyLookups, type Lookups } from "../lookups"
 import * as FilesPage from "../files/page"
+import * as IssueControl from "../issue-control"
 import { JoinChannel } from "../message-actions"
+import * as CustomerCard from "../customer-card"
 import * as Overlays from "../overlays"
 import { PAGE_SIZE } from "../queries"
 import {
@@ -84,10 +87,13 @@ export const init = (
 	hasLoadedMessages: false,
 	messages: [],
 	reactions: [],
+	hasLoadedReactions: false,
 	lookups: emptyLookups,
 	members: null,
 	pinned: [],
 	customer: null,
+	issueRootIds: [],
+	customerCard: CustomerCard.init(),
 	typing: [],
 	typingNowMs: 0,
 	typingNames: [],
@@ -147,6 +153,8 @@ export const switchChannel = (
 	// The theme, users, presence and bots streams are not keyed by channel, so they keep running
 	// across the switch without emitting again: the new page keeps what they last sent.
 	return modifyFields(next, {
+		// Closed for the new channel; its timers keep counting, so the old channel's never match.
+		customerCard: () => CustomerCard.reset(model.customerCard),
 		htmlRender: (htmlRender) => modifyFields(htmlRender, { theme: () => model.htmlRender.theme }),
 		lookups: (lookups) =>
 			modifyFields(lookups, {
@@ -249,20 +257,35 @@ const requestUnfurls = (model: Model, messages: ReadonlyArray<ChatMessage>): Pag
 }
 
 /** The thread panel's rows, re-derived from its messages and the page's lookups. */
-const withThreadRows = (model: Model): Model => {
+const withThreadRows = (model: Model, isLiveReactions: boolean): Model => {
 	const panel = model.threadPanel
 	if (panel === null) return model
-	const rows = toThreadRows(panel.messages, deriveContextOf(model), panel.rows)
+	const rows = toThreadRows(
+		panel.messages,
+		model.reactions,
+		deriveContextOf(model),
+		panel.rows,
+		isLiveReactions,
+	)
 	return rows === panel.rows
 		? model
 		: modifyFields(model, { threadPanel: () => modifyFields(panel, { rows: () => rows }) })
 }
 
-/** Re-derives the rows, then tells the list about the new keys so it can keep its anchor. */
-const deriveRows = (current: Model): PageReturn => {
+/**
+ * Re-derives the rows, then tells the list about the new keys so it can keep its anchor.
+ * `isLiveReactions`: the reactions just changed live, so their pills animate the change.
+ */
+const deriveRows = (current: Model, isLiveReactions = false): PageReturn => {
 	const requested = requestUnfurls(current, [...current.messages, ...threadMessagesOf(current)])
-	const model = withThreadRows(requested.model)
-	const rows = toDisplayRows(model.messages, model.reactions, deriveContextOf(model), model.rows)
+	const model = withThreadRows(requested.model, isLiveReactions)
+	const rows = toDisplayRows(
+		model.messages,
+		model.reactions,
+		deriveContextOf(model),
+		model.rows,
+		isLiveReactions,
+	)
 	const threadRows = model.threadPanel?.rows ?? []
 	const isShown = (messageId: MessageId) =>
 		rows.some((row) => row.key === messageId) || threadRows.some((row) => row.key === messageId)
@@ -503,7 +526,14 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 					),
 		UpdatedReactions: ({ channelId, reactions }) =>
 			channelId === model.channelId
-				? deriveRows(modifyFields(model, { reactions: () => reactions }))
+				? deriveRows(
+						modifyFields(model, {
+							reactions: () => reactions,
+							hasLoadedReactions: () => true,
+						}),
+						// The first result (and a re-subscribe's burst) is a load, not someone reacting.
+						model.hasLoadedReactions && isLiveReactionChange(model.reactions, reactions),
+					)
 				: { model },
 		UpdatedUsers: ({ users }) => {
 			const result = withLookup(model, "users", users)
@@ -531,6 +561,8 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			channelId === model.channelId ? withLookup(model, "syncedMessages", messages) : { model },
 		UpdatedAgentMarks: ({ channelId, marks }) =>
 			channelId === model.channelId ? withLookup(model, "agentMarks", marks) : { model },
+		UpdatedCustomerAuthors: ({ channelId, authors }) =>
+			channelId === model.channelId ? withLookup(model, "customerAuthors", authors) : { model },
 		UpdatedSyncProvider: ({ provider }) =>
 			provider === model.lookups.syncProvider ? { model } : withLookup(model, "syncProvider", provider),
 		UpdatedThreadChannels: ({ channels }) => withLookup(model, "threadChannels", channels),
@@ -541,8 +573,31 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		ChangedWindowFocus: ({ isFocused }) => stepNotifications(model, { _tag: "ChangedFocus", isFocused }),
 		UpdatedPinned: ({ pins }) => ({ model: modifyFields(model, { pinned: () => pins }) }),
 		UpdatedCustomer: ({ channelId, customer }) => ({
-			model: channelId === model.channelId ? modifyFields(model, { customer: () => customer }) : model,
+			model:
+				channelId !== model.channelId
+					? model
+					: modifyFields(model, {
+							customer: () => customer,
+							// Unlinked: nothing left to show.
+							customerCard: (card) => (customer === null ? CustomerCard.reset(card) : card),
+						}),
 		}),
+		UpdatedIssueRoots: ({ channelId, rootMessageIds }) => ({
+			model:
+				channelId === model.channelId
+					? modifyFields(model, { issueRootIds: (previous) => shareIds(previous, rootMessageIds) })
+					: model,
+		}),
+		GotIssueControlMessage: ({ message: issueMessage }) => liftIssueControl(model, issueMessage),
+		GotCustomerCardMessage: ({ message }) => {
+			const result = CustomerCard.update(model.customerCard, message)
+			return {
+				model: modifyFields(model, { customerCard: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (inner) =>
+					Message.GotCustomerCardMessage({ message: inner }),
+				),
+			}
+		},
 		// A result for a thread the panel no longer shows is dropped.
 		UpdatedThreadPanelMessages: ({ threadChannelId, messages }) => {
 			const panel = model.threadPanel
@@ -554,7 +609,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				}),
 			)
 			const requested = requestUnfurls(withMessages, messages)
-			return { ...requested, model: withThreadRows(requested.model) }
+			return { ...requested, model: withThreadRows(requested.model, false) }
 		},
 		UpdatedThreadPanelPins: ({ threadChannelId, pins }) =>
 			model.threadPanel?.threadChannelId === threadChannelId
@@ -681,21 +736,50 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				: { model },
 	})
 
+/** A step of the thread panel's issue control; an issue for a thread no longer shown is dropped. */
+const liftIssueControl = (model: Model, message: IssueControl.Message): PageReturn => {
+	const panel = model.threadPanel
+	if (panel === null) return { model }
+	if (message._tag === "UpdatedIssue" && message.rootMessageId !== panel.messageId) return { model }
+	const result = IssueControl.update(panel.issue, message, {
+		organizationId: model.channel?.organizationId ?? null,
+		currentUserId: model.currentUserId,
+	})
+	const next =
+		result.model === panel.issue
+			? model
+			: modifyFields(model, { threadPanel: () => modifyFields(panel, { issue: () => result.model }) })
+	const lifted: PageReturn = {
+		model: next,
+		commands: Command.mapMessages(result.commands ?? [], (inner) =>
+			Message.GotIssueControlMessage({ message: inner }),
+		),
+	}
+	const out = result.outMessage
+	if (out === undefined) return lifted
+	return Write.andThen(lifted, (current) =>
+		IssueControl.OutMessage.match<PageReturn>(out, {
+			RequestedCreateIssue: () => Write.createIssue(current, panel.messageId),
+			RequestedToast: ({ toast }) => Write.withToast(current, toast),
+		}),
+	)
+}
+
 /** Message facts the overlays read when a menu opens. */
 export const factsOf = (model: Model): Overlays.MessageFacts => {
 	// The channel's messages and the open thread panel's replies: both take the same actions.
 	const find = (messageId: MessageId) =>
 		model.messages.find((message) => message.id === messageId) ??
 		model.threadPanel?.messages.find((message) => message.id === messageId)
+	const canStartThread = (messageId: MessageId) =>
+		canStartThreadIn(model.channel?.type ?? null, model.channelId, find(messageId)?.channelId ?? null)
 	return {
 		isOwnMessage: (messageId) => find(messageId)?.authorId === model.currentUserId,
 		isPinned: (messageId) => find(messageId)?.isPinned ?? false,
-		canStartThread: (messageId) =>
-			canStartThreadIn(
-				model.channel?.type ?? null,
-				model.channelId,
-				find(messageId)?.channelId ?? null,
-			),
+		canStartThread,
+		// A top-level message of a linked channel that has no issue yet (as far as the client knows).
+		canCreateIssue: (messageId) =>
+			model.customer !== null && canStartThread(messageId) && !model.issueRootIds.includes(messageId),
 	}
 }
 

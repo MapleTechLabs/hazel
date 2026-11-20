@@ -35,6 +35,7 @@ const row = (key: string, groupPosition: GroupPosition, content = "short line"):
 	status: null,
 	syncedFrom: null,
 	agentName: null,
+	authorSide: null,
 	reply: null,
 	thread: null,
 	attachments: [],

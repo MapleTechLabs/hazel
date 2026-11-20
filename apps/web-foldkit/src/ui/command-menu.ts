@@ -92,17 +92,25 @@ const normalized = (text: string) =>
 		.replace(/\p{Diacritic}/gu, "")
 		.toLowerCase()
 
-/** The Autocomplete filter: useFilter({ sensitivity: "base" }).contains on each item's textValue. */
-export const visibleSections = (model: Model): ReadonlyArray<Section> =>
-	Array.filter(
+/**
+ * The filter: an item shows when its textValue contains every word typed, in any order, ignoring
+ * case and accents ("team members" finds a page labelled Team with the keyword members).
+ */
+export const visibleSections = (model: Model): ReadonlyArray<Section> => {
+	const words = normalized(model.inputValue)
+		.split(/\s+/)
+		.filter((word) => word !== "")
+	return Array.filter(
 		Array.map(model.sections, (entry) => ({
 			...entry,
-			items: Array.filter(entry.items, (candidate) =>
-				normalized(candidate.textValue).includes(normalized(model.inputValue)),
-			),
+			items: Array.filter(entry.items, (candidate) => {
+				const text = normalized(candidate.textValue)
+				return words.every((word) => text.includes(word))
+			}),
 		})),
 		(entry) => Array.isReadonlyArrayNonEmpty(entry.items),
 	)
+}
 
 const visibleKeys = (model: Model): ReadonlyArray<string> =>
 	Array.flatMap(visibleSections(model), (entry) => Array.map(entry.items, (candidate) => candidate.key))

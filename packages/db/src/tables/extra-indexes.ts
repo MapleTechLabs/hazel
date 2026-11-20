@@ -122,6 +122,13 @@ export const extraIndexes: ReadonlyArray<ExtraIndex> = [
 		where: notDeleted,
 	},
 	{
+		name: "customer_issues_root_unique",
+		table: "customer_issues",
+		unique: true,
+		on: ["sourceChannelId", "rootMessageId"],
+		where: notDeleted,
+	},
+	{
 		name: "custom_emojis_org_name_unique_idx",
 		table: "custom_emojis",
 		unique: true,

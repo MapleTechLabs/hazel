@@ -13,10 +13,12 @@ import {
 	ChannelId,
 	CustomerAccountId,
 	CustomerChannelLinkId,
+	CustomerChannelSuggestionId,
 	CustomerConnectionId,
 	CustomerFeatureFlagId,
 	CustomerContactId,
 	CustomerIgnoreRuleId,
+	CustomerIssueId,
 	CustomerImpersonatorId,
 	CustomerMetricDefinitionId,
 	CustomerNoteId,
@@ -24,7 +26,9 @@ import {
 	CustomerSavedViewId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
+	CustomerSlaPolicyId,
 	CustomerUnmatchedRecordId,
+	MessageId,
 	OrganizationId,
 	TransactionId,
 	UserId,
@@ -42,11 +46,14 @@ import {
 	RuleDryRunResult,
 	Sparkline,
 } from "../customers/analytics"
+import { ChannelSuggestion } from "../customers/channel-suggestions"
 import { ConnectionConfig } from "../customers/connections"
 import {
 	CustomerProvider,
 	CustomerSource,
 	CustomersRange,
+	IssuePriority,
+	IssueStatus,
 	LifecycleStage,
 	SignalOutcome,
 	SignalStatus,
@@ -70,6 +77,7 @@ import {
 	FeatureFlag,
 	IgnoreRule,
 	Invoice,
+	Issue,
 	MetricDefinition,
 	Note,
 	OverviewLayout,
@@ -77,9 +85,12 @@ import {
 	ViewLayout,
 	Signal,
 	SignalRule,
+	SlaPolicy,
 	UnmatchedRecord,
 } from "../customers/models"
+import { AuthorSideOverride } from "../customers/author-side"
 import { AttentionSettings, RuleDraft } from "../customers/rules"
+import { BusinessHours, SlaPolicyDraft, SupportReport } from "../customers/sla"
 import { ViewDraft, ViewLayoutDraft } from "../customers/views"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { RateLimitExceededError } from "../rate-limit-errors"
@@ -119,6 +130,7 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"account",
 			"signal",
 			"rule",
+			"sla_policy",
 			"note",
 			"view",
 			"connection",
@@ -129,6 +141,13 @@ export class CustomersNotFoundError extends Schema.TaggedError<CustomersNotFound
 			"contact",
 			/** No such channel in the org, or one the caller cannot see. */
 			"channel",
+			/** Nobody the org has seen in its channels. */
+			"author",
+			/** No open suggestion with this id. */
+			"suggestion",
+			"issue",
+			/** No such message in the channel, or one the caller cannot see. */
+			"message",
 		]),
 		id: Schema.String,
 	},
@@ -367,6 +386,20 @@ export class CustomerReadRpcs extends RpcGroup.make(
 
 	/** Every plan name the org's subscriptions carry, any status, by name. */
 	read("customers.plans.list", {}, Schema.Struct({ plans: Schema.Array(Schema.String) })),
+
+	/**
+	 * Open suggested channel links (`docs/customers/channels.md`), best first, only for channels
+	 * the caller sees: all of them, one account's, or one channel's. With `channelId` the channel
+	 * is scored again first (a channel shared a moment ago has no suggestion yet), which can also
+	 * auto-link it.
+	 */
+	read(
+		"customers.channel.suggestions",
+		{ accountId: Schema.optionalKey(CustomerAccountId), channelId: Schema.optionalKey(ChannelId) },
+		Schema.Struct({ items: Schema.Array(ChannelSuggestion) }),
+		/** `channelId` names a channel that does not exist or the caller cannot see. */
+		CustomersNotFoundError,
+	),
 ) {}
 
 // ---------------------------------------------------------------------------
@@ -469,6 +502,40 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 	),
 
 	/**
+	 * Change a support issue (`docs/customers/issues.md`): any field given. Closing records who and
+	 * when; a closed issue set to any other status reopens. The assignee must be a member.
+	 */
+	write(
+		"customers.issue.update",
+		{
+			issueId: CustomerIssueId,
+			status: Schema.optionalKey(IssueStatus),
+			priority: Schema.optionalKey(IssuePriority),
+			assigneeUserId: Schema.optionalKey(Schema.NullOr(UserId)),
+			tags: Schema.optionalKey(Tags),
+		},
+		Tx,
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+	),
+
+	/**
+	 * Open an issue on a top-level message of a linked channel by hand (any author). The message's
+	 * existing live issue is answered as it is. A channel that is not linked, or a thread, is
+	 * refused (`CustomersInvalidRequestError`); a message the caller cannot see is `not_found`.
+	 */
+	write(
+		"customers.issue.createFromMessage",
+		{
+			channelId: ChannelId,
+			messageId: MessageId,
+		},
+		withTx(Issue.Schema),
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+	),
+
+	/**
 	 * Link a channel of the org (Hazel, Slack, Discord or Connect) to the account; a channel
 	 * linked to another account moves here. The caller must see the channel; threads and direct
 	 * messages are refused (`CustomersInvalidRequestError`).
@@ -491,6 +558,26 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 	 * see the channel, as for linking.
 	 */
 	write("customers.channel.unlink", { channelId: ChannelId }, Tx, CustomersNotFoundError),
+
+	/**
+	 * Accept a suggested link: links the channel as `customers.channel.link` does (same checks;
+	 * a suggestion no longer open, or for a channel the caller cannot see, is `not_found`).
+	 */
+	write(
+		"customers.channel.suggestion.accept",
+		{ suggestionId: CustomerChannelSuggestionId },
+		withTx(ChannelLink.Schema),
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+	),
+
+	/** Dismiss a suggestion: that account is never suggested for that channel again. */
+	write(
+		"customers.channel.suggestion.dismiss",
+		{ suggestionId: CustomerChannelSuggestionId },
+		Tx,
+		CustomersNotFoundError,
+	),
 
 	/** The list's bulk actions. */
 	write(
@@ -894,7 +981,40 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	),
 ) {}
 
-export const CustomerRpcs = CustomerReadRpcs.merge(CustomerQueueRpcs, CustomerAdminRpcs)
+// ---------------------------------------------------------------------------
+// Support SLAs (`docs/customers/sla.md`): settings for admins and owners, the report for members
+// ---------------------------------------------------------------------------
+
+export class CustomerSlaRpcs extends RpcGroup.make(
+	/** A policy; it goes last in the order. */
+	write("customers.slaPolicy.create", { policy: SlaPolicyDraft }, withTx(SlaPolicy.Schema)),
+
+	write(
+		"customers.slaPolicy.update",
+		{ policyId: CustomerSlaPolicyId, policy: SlaPolicyDraft },
+		withTx(SlaPolicy.Schema),
+		CustomersNotFoundError,
+	),
+
+	/** Open issues under it keep the targets they started with. */
+	write("customers.slaPolicy.delete", { policyId: CustomerSlaPolicyId }, Tx, CustomersNotFoundError),
+
+	/** The whole order, first match first: every live policy exactly once. */
+	write(
+		"customers.slaPolicy.reorder",
+		{ policyIds: Schema.Array(CustomerSlaPolicyId).check(Schema.isMaxLength(100)) },
+		Tx,
+		CustomersInvalidRequestError,
+	),
+
+	/** The working week of policies on business hours; running clocks keep their deadlines. */
+	write("customers.businessHours.update", { businessHours: BusinessHours }, Tx),
+
+	/** First response and resolution times, % within SLA and breaches for issues opened in the range. Any member. */
+	read("customers.support.report", { range: CustomersRange }, SupportReport),
+) {}
+
+export const CustomerRpcs = CustomerReadRpcs.merge(CustomerQueueRpcs, CustomerAdminRpcs, CustomerSlaRpcs)
 
 // ---------------------------------------------------------------------------
 // The caller's organizations (the directory, not an org's object)
@@ -919,5 +1039,29 @@ export class CustomerDirectoryRpcs extends RpcGroup.make(
 		error: Schema.Union([UnauthorizedError, InternalServerError]),
 	})
 		.annotate(RequiredScopes, ["customers:read"])
+		.middleware(AuthMiddleware),
+) {}
+
+// ---------------------------------------------------------------------------
+// Who writes in linked channels (the org's object, not the customers object)
+// ---------------------------------------------------------------------------
+
+/**
+ * `customers.chatAuthor.setSide`: a member marks someone as our team or the customer in the
+ * org's linked channels, or clears the mark (`null`); `docs/customers/author-side.md`. The api
+ * Worker routes it to the org's `OrgObject`, which holds the authors (`customer_chat_authors`).
+ * Bots stay bots.
+ */
+export class CustomerChatRpcs extends RpcGroup.make(
+	Rpc.make("customers.chatAuthor.setSide", {
+		payload: Schema.Struct({
+			organizationId: OrganizationId,
+			userId: UserId,
+			side: Schema.NullOr(AuthorSideOverride),
+		}),
+		success: Tx,
+		error: Schema.Union([CustomersNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["customers:write"])
 		.middleware(AuthMiddleware),
 ) {}

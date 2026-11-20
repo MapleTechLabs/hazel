@@ -183,6 +183,12 @@ const orgSyncTables: ReadonlyArray<(affected: Affected) => Spec> = [
 	byChannel(schema.chatSyncChannelLinksTable, "hazelChannelId"),
 	// A linked channel's customer: the org's members who see the channel, never a Connect guest.
 	byChannel(schema.channelCustomersTable, "channelId", false, ["channelId"]),
+	// Who writes in linked channels (customer, team): the org's members, never a Connect guest.
+	// Keyed with the org too: one client collection holds every org's rows.
+	(affected) => ({
+		...toMembers(schema.customerChatAuthorsTable, false)(affected),
+		key: ["organizationId", "userId"],
+	}),
 	byConversation(schema.connectConversationsTable, "id"),
 	// Every mount of the conversation (the host's copies of the guests', a guest's of the host's).
 	byConversation(schema.connectConversationChannelsTable, "conversationId"),

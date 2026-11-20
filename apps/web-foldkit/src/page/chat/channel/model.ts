@@ -1,5 +1,6 @@
 import { ChannelHotkey } from "./hotkeys"
 import { ChannelCustomerRow } from "../../../customers/channels"
+import { CustomerAuthorInfo } from "../../../customers/chat-authors"
 import { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { File, type Update } from "foldkit"
@@ -32,7 +33,9 @@ import {
 	UserInfo,
 } from "../lookups"
 import * as FilesPage from "../files/page"
+import * as IssueControl from "../issue-control"
 import { Message as ActionMessage } from "../message-actions"
+import * as CustomerCard from "../customer-card"
 import * as Overlays from "../overlays"
 import { ChannelInfo, ParentChannelInfo } from "../queries"
 import { ChatMessage, ChatReaction, DisplayRow } from "../rows"
@@ -92,6 +95,8 @@ export const ThreadPanel = Schema.Struct({
 	rows: Schema.Array(DisplayRow.MessageRow),
 	/** The thread's pins: a reply is unpinned by its pin's id, like a channel message. */
 	pins: Schema.Array(PinnedInfo),
+	/** The support issue at the starter message, when the channel is linked to a customer. */
+	issue: IssueControl.Model,
 })
 export type ThreadPanel = typeof ThreadPanel.Type
 
@@ -121,12 +126,18 @@ export const Model = Schema.Struct({
 	/** Newest first, as the query returns them. */
 	messages: Schema.Array(ChatMessage),
 	reactions: Schema.Array(ChatReaction),
+	/** The reactions query has answered once: later changes animate their pills. */
+	hasLoadedReactions: Schema.Boolean,
 	lookups: Lookups,
 	members: Schema.NullOr(Schema.Array(ChannelMemberInfo)),
 	/** `PinnedMessagesModal`'s pins, oldest pin first. */
 	pinned: Schema.Array(PinnedInfo),
 	/** The customer the channel is linked to (`channel_customers`); null when none. */
 	customer: Schema.NullOr(ChannelCustomerRow),
+	/** Top-level messages of the (linked) channel that already have a support issue. */
+	issueRootIds: Schema.Array(MessageId),
+	/** The customer chip's card (desktop) and sheet (phone). */
+	customerCard: CustomerCard.Model,
 	typing: Schema.Array(TypingInfo),
 	typingNowMs: Schema.Number,
 	/** First names of the other members typing now (`useTypingIndicators`), derived in `update`. */
@@ -218,6 +229,11 @@ export const Message = defineMessageUnion({
 	UpdatedSyncedMessages: { channelId: ChannelId, messages: Schema.Array(SyncedMessageInfo) },
 	UpdatedSyncProvider: { provider: Schema.NullOr(SyncProvider) },
 	UpdatedAgentMarks: { channelId: ChannelId, marks: Schema.Array(AgentMarkInfo) },
+	/** Tagged with the channel queried; `authors` is null while the channel is not linked. */
+	UpdatedCustomerAuthors: {
+		channelId: ChannelId,
+		authors: Schema.NullOr(Schema.Array(CustomerAuthorInfo)),
+	},
 	UpdatedThreadChannels: { channels: Schema.Array(ThreadChannelInfo) },
 	UpdatedThreadMessages: { messages: Schema.Array(ThreadMessageInfo) },
 	UpdatedReplyTargets: { targets: Schema.Array(ReplyTarget) },
@@ -225,6 +241,10 @@ export const Message = defineMessageUnion({
 	UpdatedPinned: { pins: Schema.Array(PinnedInfo) },
 	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
 	UpdatedCustomer: { channelId: ChannelId, customer: Schema.NullOr(ChannelCustomerRow) },
+	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
+	UpdatedIssueRoots: { channelId: ChannelId, rootMessageIds: Schema.Array(MessageId) },
+	/** The thread panel's support issue control. */
+	GotIssueControlMessage: { message: IssueControl.Message },
 	/** The open thread's messages, oldest first; tagged with the thread they were queried for. */
 	UpdatedThreadPanelMessages: { threadChannelId: ChannelId, messages: Schema.Array(ChatMessage) },
 	/** The open thread's pins; tagged with the thread they were queried for. */
@@ -236,6 +256,7 @@ export const Message = defineMessageUnion({
 	GotLiveMessage: { message: Live.Message },
 	GotHtmlRenderMessage: { message: HtmlRender.Message },
 	GotOverlaysMessage: { message: Overlays.Message },
+	GotCustomerCardMessage: { message: CustomerCard.Message },
 	GotFilesMessage: { message: FilesPage.Message },
 	GotDraftMessage: { message: Draft.Message },
 	GotThreadDraftMessage: { message: Draft.Message },

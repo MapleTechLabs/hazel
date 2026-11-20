@@ -19,7 +19,9 @@ import {
 	ActionMessage,
 	type CopiedContent,
 	type MessageActionFailure,
+	CopyImage,
 	CopyText,
+	CreateIssueFromMessage,
 	CreateThread,
 	DownloadImage,
 	GenerateThreadChannelId,
@@ -30,6 +32,7 @@ import {
 	ToggleReaction,
 	UnpinMessage,
 } from "../message-actions"
+import * as IssueControl from "../issue-control"
 import * as Overlays from "../overlays"
 import type { ChatMessage } from "../rows"
 import {
@@ -358,6 +361,7 @@ export const openThread = (
 						messages: [],
 						rows: [],
 						pins: [],
+						issue: IssueControl.init(messageId),
 					}),
 				}),
 				commands: [
@@ -469,6 +473,7 @@ export const viewerAction = (
 			commands: actionCommands([DownloadImage({ url, fileName })]),
 			outMessage: toast(successToast("Image downloaded", "Your image has been downloaded.")),
 		})),
+		Match.when("copyImage", () => ({ model, commands: actionCommands([CopyImage({ url })]) })),
 		Match.when("copyUrl", () => copy(model, url, "ImageUrl")),
 		Match.when("openInBrowser", () => ({ model, commands: actionCommands([OpenUrl({ url })]) })),
 		Match.exhaustive,
@@ -518,8 +523,35 @@ const messageAction = (model: Model, messageId: MessageId, action: Overlays.Mess
 			outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "DeleteMessage", messageId } }),
 		})),
 		Match.when("add-reaction", () => openReactionModal(model, messageId)),
+		Match.when("create-issue", () => createIssue(model, messageId)),
 		Match.exhaustive,
 	)
+}
+
+/** The thread panel's issue control, when the panel hangs off `messageId`. */
+const withPanelIssue = (
+	model: Model,
+	messageId: MessageId,
+	change: (issue: IssueControl.Model) => IssueControl.Model,
+): Model =>
+	model.threadPanel?.messageId === messageId
+		? withPanel(model, (panel) => modifyFields(panel, { issue: change }))
+		: model
+
+/**
+ * "Create issue" on a top-level message of a channel linked to a customer (the message action, or
+ * the thread panel's button): `customers.issue.createFromMessage`, which answers an existing issue.
+ */
+export const createIssue = (model: Model, messageId: MessageId): PageReturn => {
+	const organizationId = model.channel?.organizationId
+	if (organizationId === undefined || model.customer === null)
+		return { model: withPanelIssue(model, messageId, IssueControl.settledCreate) }
+	return {
+		model,
+		commands: actionCommands([
+			CreateIssueFromMessage({ organizationId, channelId: model.channelId, messageId }),
+		]),
+	}
 }
 
 /** The toolbar, menus and context menu's actions (`useMessageActions`). */
@@ -552,6 +584,28 @@ export const pressEmbedAction = (
 
 export const handleActionMessage = (model: Model, message: ActionMessage): PageReturn =>
 	ActionMessage.match<PageReturn>(message, {
+		SucceededCreateIssue: ({ messageId }) =>
+			withToast(
+				withPanelIssue(model, messageId, IssueControl.settledCreate),
+				successToast("Issue created", "Find it in the support inbox."),
+			),
+		FailedCreateIssue: ({ messageId, reason }) =>
+			withToast(
+				withPanelIssue(model, messageId, IssueControl.settledCreate),
+				errorToastOf(
+					failureMessage(reason, {
+						NotFound: {
+							title: "Message not found",
+							description: "This message may have been deleted.",
+						},
+						InvalidRequest: {
+							title: "Couldn't create an issue",
+							description:
+								"Issues open on top-level messages of channels linked to a customer.",
+						},
+					}),
+				),
+			),
 		SucceededToggleReaction: () => ({ model }),
 		// The bot answers by editing its message; nothing to show until it does.
 		SucceededPressEmbedAction: () => ({ model }),
@@ -639,6 +693,10 @@ export const handleActionMessage = (model: Model, message: ActionMessage): PageR
 		SucceededCopyText: ({ content }) => withToast(model, copiedToast(content)),
 		FailedCopyText: () =>
 			withToast(model, errorToast("Couldn't copy", "Your browser blocked access to the clipboard.")),
+		SucceededCopyImage: () =>
+			withToast(model, successToast("Image copied", "The image has been copied to your clipboard.")),
+		FailedCopyImage: () =>
+			withToast(model, errorToast("Couldn't copy image", "Try downloading it instead.")),
 		CompletedDownloadImage: () => ({ model }),
 		CompletedOpenUrl: () => ({ model }),
 		SucceededGenerateThreadName: ({ threadChannelId }) => ({

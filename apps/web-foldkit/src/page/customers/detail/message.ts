@@ -2,18 +2,24 @@ import * as Customers from "@hazel/domain/customers"
 import {
 	ChannelId,
 	CustomerAccountId,
+	CustomerChannelSuggestionId,
 	CustomerContactId,
 	CustomerNoteId,
 	CustomerSignalId,
+	UserId,
 } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
+import { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
+import { SuggestionMessage, SuggestionRow } from "../../../customers/suggestions"
 import { FeatureFlagFailure } from "../../../customers/feature-flags"
 import * as OverviewData from "../../../customers/overview/data"
 import { LayoutRow, MetricDef } from "../../../customers/overview/rows"
+import { IssueRow } from "../../../customers/issues"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
+import { IssueSlaRow } from "../../../customers/sla"
 import { CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
@@ -68,6 +74,12 @@ export const Message = defineMessageUnion({
 	SucceededFetchMrrHistory: { accountId: CustomerAccountId, series: Schema.Array(Customers.MetricSeries) },
 	FailedFetchMrrHistory: { accountId: CustomerAccountId, reason: CommonReason },
 	HoveredMrr: { index: Schema.NullOr(Schema.Int) },
+
+	UpdatedSupportIssues: { issues: Schema.Array(IssueRow) },
+	UpdatedSupportSlas: { slas: Schema.Array(IssueSlaRow) },
+	SucceededFetchSupport: { accountId: CustomerAccountId, row: Schema.NullOr(Customers.SupportReportRow) },
+	FailedFetchSupport: { accountId: CustomerAccountId, reason: CommonReason },
+	PressedRetrySupport: {},
 
 	ClickedContactFilter: { filter: ContactFilter },
 	ChangedContactSearch: { value: Schema.String },
@@ -129,6 +141,20 @@ export const Message = defineMessageUnion({
 	PressedUnlinkChannel: { channelId: ChannelId },
 	SucceededChannelAction: { action: ChannelAction },
 	FailedChannelAction: { action: ChannelAction, reason: ActionFailure },
+	/** `customer`, not `accountId`: on an environment's page it is the group's primary. */
+	SucceededFetchSuggestions: { customer: CustomerAccountId, items: Schema.Array(SuggestionRow) },
+	FailedFetchSuggestions: { customer: CustomerAccountId },
+	PressedAcceptSuggestion: { suggestionId: CustomerChannelSuggestionId },
+	PressedDismissSuggestion: { suggestionId: CustomerChannelSuggestionId },
+	/** The shared accept / dismiss Commands' answers (`customers/suggestions.ts`). */
+	CompletedSuggestionAction: { message: SuggestionMessage },
+
+	UpdatedChatParticipants: { participants: Schema.Array(ChatParticipantRow) },
+	UpdatedChatAuthors: { authors: Schema.Array(CustomerAuthorInfo) },
+	PressedChatPersonMenu: { userId: UserId },
+	GotChatPersonMenuMessage: { message: Menu.Message },
+	SucceededSetChatAuthorSide: {},
+	FailedSetChatAuthorSide: { reason: ActionFailure },
 
 	UpdatedCreatedFeatureFlags: { keys: Schema.Array(Schema.String) },
 	GotFlagPopoverMessage: { message: Popover.Message },

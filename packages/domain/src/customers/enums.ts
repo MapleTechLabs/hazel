@@ -46,6 +46,18 @@ export type SignalSeverity = typeof SignalSeverity.Type
 export const SignalStatus = Schema.Literals(["open", "snoozed", "done", "dismissed", "auto_resolved"])
 export type SignalStatus = typeof SignalStatus.Type
 
+/** A support issue's state (`docs/customers/issues.md`). Only `closed` ends it; a customer reply reopens it. */
+export const IssueStatus = Schema.Literals([
+	"new",
+	"waiting_on_us",
+	"waiting_on_customer",
+	"on_hold",
+	"closed",
+])
+export type IssueStatus = typeof IssueStatus.Type
+export const IssuePriority = Schema.Literals(["none", "low", "medium", "high", "urgent"])
+export type IssuePriority = typeof IssuePriority.Type
+
 export const SignalOutcome = Schema.Literals(["contacted", "fixed", "not_an_issue", "other"])
 export type SignalOutcome = typeof SignalOutcome.Type
 
@@ -61,6 +73,8 @@ export const SignalTemplate = Schema.Literals([
 	"near_limit",
 	"seat_growth",
 	"churned",
+	"response_overdue",
+	"resolution_overdue",
 ])
 export type SignalTemplate = typeof SignalTemplate.Type
 
@@ -99,7 +113,15 @@ export const HealthComponentKey = Schema.Literals(["usage", "engagement", "billi
 export type HealthComponentKey = typeof HealthComponentKey.Type
 
 /** How a signal's evidence is drawn (queue mini-viz, side panel chart). */
-export const EvidenceViz = Schema.Literals(["amount", "last_active", "series", "limit", "delta", "ratio"])
+export const EvidenceViz = Schema.Literals([
+	"amount",
+	"last_active",
+	"series",
+	"limit",
+	"delta",
+	"ratio",
+	"overdue",
+])
 export type EvidenceViz = typeof EvidenceViz.Type
 
 /** Derived per contact: active in the last 30 days, seen before but not since, never seen. */

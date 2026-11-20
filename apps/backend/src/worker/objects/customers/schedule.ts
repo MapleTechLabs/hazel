@@ -14,7 +14,8 @@
  *   does not bring a failing compute closer;
  * - the earliest `snoozedUntil` (wake);
  * - the earliest `attentionMutedUntil` (unmute);
- * - each active connection's `nextSyncAt` (scheduled pulls).
+ * - each active connection's `nextSyncAt` (scheduled pulls);
+ * - the earliest SLA warning or breach (`./sla.ts`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { Clock, Effect, Option } from "effect"
@@ -182,6 +183,13 @@ export const customersDeadlines = Effect.gen(function* () {
 			.orderBy(($) => [[$.attentionMutedUntil, "asc"]])
 			.limit(1),
 	)
+	const slaAlert = yield* db.first(
+		SQLite.from(schema.customerIssueSlasTable)
+			.select("nextAlertAt")
+			.where(($) => [$.nextAlertAt.isNotNull()])
+			.orderBy(($) => [[$.nextAlertAt, "asc"]])
+			.limit(1),
+	)
 	const pull = yield* db.first(
 		SQLite.from(schema.customerConnectionsTable)
 			.select("nextSyncAt")
@@ -198,6 +206,9 @@ export const customersDeadlines = Effect.gen(function* () {
 			Option.flatMap(muted, (row) => Option.fromNullishOr(row.attentionMutedUntil?.getTime())),
 		),
 		Option.getOrUndefined(Option.flatMap(pull, (row) => Option.fromNullishOr(row.nextSyncAt?.getTime()))),
+		Option.getOrUndefined(
+			Option.flatMap(slaAlert, (row) => Option.fromNullishOr(row.nextAlertAt?.getTime())),
+		),
 	]
 }).pipe(
 	Effect.catchTags({

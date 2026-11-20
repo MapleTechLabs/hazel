@@ -11,6 +11,7 @@ import {
 	unpinMessageAction,
 } from "~/db/actions"
 import { CommonReason } from "~/lib/error-messages"
+import { createIssueFromMessageAction } from "../../customers/issues"
 import { HazelRpc } from "../../rpc"
 import { catchCommon } from "../../data/actions"
 
@@ -72,6 +73,13 @@ export type PressEmbedActionFailure = typeof PressEmbedActionFailure.Type
 export const UnpinMessageFailure = Schema.Union([Schema.Literals(["PinNotFound"]), CommonReason])
 export type UnpinMessageFailure = typeof UnpinMessageFailure.Type
 
+/** What can go wrong opening a support issue on a message, beyond the shared reasons. */
+export const CreateIssueFailure = Schema.Union([
+	Schema.Literals(["NotFound", "InvalidRequest"]),
+	CommonReason,
+])
+export type CreateIssueFailure = typeof CreateIssueFailure.Type
+
 // MESSAGE
 
 export const ActionMessage = defineMessageUnion({
@@ -86,6 +94,8 @@ export const ActionMessage = defineMessageUnion({
 	FailedCreateThread: { threadChannelId: ChannelId, reason: CreateThreadFailure },
 	SucceededCopyText: { content: CopiedContent },
 	FailedCopyText: { reason: CopyTextFailure },
+	SucceededCopyImage: {},
+	FailedCopyImage: {},
 	CompletedDownloadImage: {},
 	CompletedOpenUrl: {},
 	SucceededGenerateThreadName: { threadChannelId: ChannelId },
@@ -94,6 +104,8 @@ export const ActionMessage = defineMessageUnion({
 	FailedJoinChannel: { reason: JoinChannelFailure },
 	SucceededPressEmbedAction: {},
 	FailedPressEmbedAction: { reason: PressEmbedActionFailure },
+	SucceededCreateIssue: { messageId: MessageId },
+	FailedCreateIssue: { messageId: MessageId, reason: CreateIssueFailure },
 })
 export type ActionMessage = typeof ActionMessage.Type
 /** `ActionMessage` under the Submodel name, so a parent's Got wrapper imports it as `Message`. */
@@ -223,6 +235,43 @@ export const CopyText = Command.define("CopyText", {
 		),
 })
 
+/** The image as PNG, the one image type every clipboard takes. */
+const toPng = async (blob: Blob): Promise<Blob> => {
+	if (blob.type === "image/png") return blob
+	const bitmap = await createImageBitmap(blob)
+	const canvas = document.createElement("canvas")
+	canvas.width = bitmap.width
+	canvas.height = bitmap.height
+	canvas.getContext("2d")?.drawImage(bitmap, 0, 0)
+	bitmap.close()
+	return new Promise((resolve, reject) =>
+		canvas.toBlob((png) => (png ? resolve(png) : reject(new Error("toBlob"))), "image/png"),
+	)
+}
+
+const fetchPng = async (url: string): Promise<Blob> => {
+	const response = await fetch(url)
+	if (!response.ok) throw new Error(`HTTP ${response.status}`)
+	return toPng(await response.blob())
+}
+
+/**
+ * The image itself onto the clipboard. The item takes the pending blob, not the fetched one:
+ * Safari only writes inside the press, and the fetch outlasts it.
+ */
+export const CopyImage = Command.define("CopyImage", {
+	args: { url: Schema.String },
+	messages: [ActionMessage.SucceededCopyImage, ActionMessage.FailedCopyImage],
+	execute: ({ url }) =>
+		Effect.tryPromise({
+			try: () => navigator.clipboard.write([new ClipboardItem({ "image/png": fetchPng(url) })]),
+			catch: (cause) => new ClipboardError({ cause }),
+		}).pipe(
+			Effect.as(ActionMessage.SucceededCopyImage()),
+			Effect.catchTags({ ClipboardError: () => Effect.succeed(ActionMessage.FailedCopyImage()) }),
+		),
+})
+
 /** The image viewer's `handleDownload`: a temporary `<a download target="_blank">` clicked and removed. */
 export const DownloadImage = Command.define("DownloadImage", {
 	args: { url: Schema.String, fileName: Schema.String },
@@ -290,4 +339,25 @@ export const JoinChannel = Command.define("JoinChannel", {
 			}),
 			catchCommon((reason) => ActionMessage.FailedJoinChannel({ reason })),
 		),
+})
+
+/**
+ * "Create issue" on a top-level message of a channel linked to a customer (the message action and
+ * the thread panel's button). The server answers a message's existing issue as it is.
+ */
+export const CreateIssueFromMessage = Command.define("CreateIssueFromMessage", {
+	args: { organizationId: OrganizationId, channelId: ChannelId, messageId: MessageId },
+	messages: [ActionMessage.SucceededCreateIssue, ActionMessage.FailedCreateIssue],
+	execute: (args) => {
+		const failed = (reason: CreateIssueFailure) =>
+			ActionMessage.FailedCreateIssue({ messageId: args.messageId, reason })
+		return createIssueFromMessageAction(args).pipe(
+			Effect.as(ActionMessage.SucceededCreateIssue({ messageId: args.messageId })),
+			Effect.catchTags({
+				CustomersNotFoundError: () => Effect.succeed(failed("NotFound")),
+				CustomersInvalidRequestError: () => Effect.succeed(failed("InvalidRequest")),
+			}),
+			catchCommon(failed),
+		)
+	},
 })

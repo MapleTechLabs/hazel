@@ -27,20 +27,31 @@ const STAGE_RANK = { churned: 0, lead: 1, trialing: 2, past_due: 3, active: 4 } 
 	number
 >
 
+/** A customer's stage: the most advanced of its environments' (one paying makes it active). */
+export const groupStage = (stages: readonly [LifecycleStage, ...Array<LifecycleStage>]): LifecycleStage =>
+	stages.reduce((best, stage) => (STAGE_RANK[stage] > STAGE_RANK[best] ? stage : best))
+
+/** A customer's plan: its primary's, else the first environment's that has one. */
+export const groupPlanName = (
+	primary: { readonly planName: string | null },
+	accounts: ReadonlyArray<{ readonly planName: string | null }>,
+): string | null =>
+	primary.planName ?? accounts.find((account) => account.planName !== null)?.planName ?? null
+
 const earliest = <A extends Date | Day>(values: ReadonlyArray<A | null>): A | null =>
 	values.reduce<A | null>(
 		(min, value) => (value !== null && (min === null || value < min) ? value : min),
 		null,
 	)
 
-const latest = <A extends Date | Day>(values: ReadonlyArray<A | null>): A | null =>
+export const latest = <A extends Date | Day>(values: ReadonlyArray<A | null>): A | null =>
 	values.reduce<A | null>(
 		(max, value) => (value !== null && (max === null || value > max) ? value : max),
 		null,
 	)
 
 /** Null when every value is. */
-const sumOrNull = (values: ReadonlyArray<number | null>) =>
+export const sumOrNull = (values: ReadonlyArray<number | null>) =>
 	values.every((value) => value === null)
 		? null
 		: values.reduce<number>((sum, value) => sum + (value ?? 0), 0)
@@ -172,9 +183,7 @@ export const groupFacts = (
 		metrics.set(key, days)
 	}
 
-	const stage = group
-		.map((facts) => facts.stage)
-		.reduce((best, stage) => (STAGE_RANK[stage] > STAGE_RANK[best] ? stage : best))
+	const stage = groupStage([primary.stage, ...environments.map((facts) => facts.stage)])
 	const accounts = group.map((facts) => facts.account)
 	return {
 		account: {
@@ -183,10 +192,7 @@ export const groupFacts = (
 			mrrMinor: accounts.reduce((sum, account) => sum + account.mrrMinor, 0),
 			trialListMrrMinor: sumOrNull(accounts.map((account) => account.trialListMrrMinor)),
 			trialEndsAt: earliest(accounts.map((account) => account.trialEndsAt)),
-			planName:
-				primary.account.planName ??
-				accounts.find((account) => account.planName !== null)?.planName ??
-				null,
+			planName: groupPlanName(primary.account, accounts),
 			seatsUsed: sumOrNull(accounts.map((account) => account.seatsUsed)),
 			seatsLimit: sumOrNull(accounts.map((account) => account.seatsLimit)),
 			contactCount: contacts.length,
@@ -214,5 +220,6 @@ export const groupFacts = (
 		),
 		movements: groupMovements(group),
 		health: primary.health,
+		openIssueSlas: group.flatMap((facts) => facts.openIssueSlas),
 	}
 }

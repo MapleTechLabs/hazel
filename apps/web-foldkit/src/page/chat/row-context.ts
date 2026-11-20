@@ -8,8 +8,11 @@ import {
 	IconEdit,
 	IconEmojiAdd,
 	IconHashtag,
+	IconImage,
+	IconLink,
 	IconReply,
 	IconStar,
+	IconSupport,
 	IconThread,
 	IconTrash,
 	IconUnpin,
@@ -121,13 +124,16 @@ const contextItem = (h: H, key: string, label: string, icon: Html): ReadonlyArra
 const contextMenuContent =
 	(h: H, isPinned: boolean) =>
 	(key: string): ReadonlyArray<Html> => {
-		const icon = (render: typeof IconCopy, className = "ml-auto size-4 text-muted-fg") =>
+		const icon = (render: typeof IconCopy, className = "ml-auto size-4") =>
 			render(h, { className, attributes: { "data-slot": "icon" } })
 		if (key === "add-reaction") return contextItem(h, key, "Add Reaction", icon(IconEmojiAdd))
 		if (key === "reply") return contextItem(h, key, "Reply", icon(IconReply))
 		if (key === "edit") return contextItem(h, key, "Edit Message", icon(IconEdit))
 		if (key === "thread") return contextItem(h, key, "Reply in Thread", icon(IconThread))
+		if (key === "create-issue") return contextItem(h, key, "Create Issue", icon(IconSupport))
 		if (key === "copy") return contextItem(h, key, "Copy Text", icon(IconCopy))
+		if (key === Overlays.COPY_IMAGE) return contextItem(h, key, "Copy Image", icon(IconImage))
+		if (key === Overlays.COPY_IMAGE_URL) return contextItem(h, key, "Copy Image Address", icon(IconLink))
 		if (key === "pin")
 			return contextItem(
 				h,
@@ -135,7 +141,7 @@ const contextMenuContent =
 				isPinned ? "Unpin Message" : "Pin Message",
 				icon(isPinned ? IconUnpin : IconStar),
 			)
-		if (key === "delete") return contextItem(h, key, "Delete Message", icon(IconTrash, "ml-auto size-4"))
+		if (key === "delete") return contextItem(h, key, "Delete Message", icon(IconTrash))
 		return contextItem(h, key, "Copy Message ID", icon(IconHashtag))
 	}
 
@@ -145,6 +151,7 @@ const nativeSymbols = (isPinned: boolean): Readonly<Record<string, string>> => (
 	reply: "arrowshape.turn.up.left",
 	edit: "pencil",
 	thread: "bubble.left.and.bubble.right",
+	"create-issue": "lifepreserver",
 	copy: "doc.on.doc",
 	pin: isPinned ? "pin.slash" : "pin",
 	delete: "trash",
@@ -169,10 +176,14 @@ const rowLongPress = (
 		isOwnMessage: () => row.message.authorId === currentUserId,
 		isPinned: () => isPinned,
 		canStartThread: () => canStartThreadIn(channel.type, channel.id, row.message.channelId),
+		// The long-press menu is shared by every row: it offers "Create issue" on every top-level
+		// message of a linked channel (the server answers an existing issue as it is).
+		canCreateIssue: () =>
+			channel.isLinked && canStartThreadIn(channel.type, channel.id, row.message.channelId),
 	}
 	const items = Menu.nativeMenuItems(
 		UNSELECTED_MENU,
-		Overlays.contextMenuEntries(facts, id),
+		Overlays.contextMenuEntries(facts, id, null),
 		{ symbols: nativeSymbols(isPinned) },
 		contextMenuContent(h, isPinned),
 	)
@@ -193,11 +204,14 @@ const rowLongPress = (
 interface ChannelFacts {
 	readonly id: Model["channelId"]
 	readonly type: string | null
+	/** Linked to a customer: its top-level messages can open a support issue. */
+	readonly isLinked: boolean
 }
 
 const channelFactsOf = (model: Model): ChannelFacts => ({
 	id: model.channelId,
 	type: model.channel?.type ?? null,
+	isLinked: model.customer !== null,
 })
 
 const userNamesOf = (users: Model["lookups"]["users"]) =>
@@ -294,7 +308,11 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 						model: contextMenu.menu,
 						view: contextMenuView,
 						viewInputs: {
-							entries: Overlays.contextMenuEntries(factsOf(model), row.message.id),
+							entries: Overlays.contextMenuEntries(
+								factsOf(model),
+								row.message.id,
+								contextMenu.imageUrl,
+							),
 							toTrigger: render,
 							content: contextMenuContent(h, factsOf(model).isPinned(row.message.id)),
 							className: "min-w-56",
@@ -333,7 +351,7 @@ export const idleRowContext = (h: H, model: Model): RowContext<Message> => {
 	const byUser = idleContexts.get(model.lookups.users) ?? new Map<string, RowContext<Message>>()
 	const channel = channelFactsOf(model)
 	// What the context reads besides the user list: whose rows these are, and in what channel.
-	const key = `${model.currentUserId ?? ""}:${channel.id}:${channel.type ?? ""}`
+	const key = `${model.currentUserId ?? ""}:${channel.id}:${channel.type ?? ""}:${channel.isLinked}`
 	const cached = byUser.get(key)
 	if (cached !== undefined) return cached
 	const context = buildIdleContext(h, model.lookups.users, model.currentUserId, channel)

@@ -68,6 +68,16 @@ describe("optimisticAction", () => {
 		expect(channels.get("c1")).toMatchObject({ name: "general", $hasPendingWrites: false })
 	})
 
+	it("dies at once when onMutate changes nothing (TanStack would never run the mutation)", async () => {
+		const { channels } = await setup()
+		const mutate = vi.fn(() => Effect.succeed({ data: "ok", transactionId: "org:a:2" }))
+		const noop = optimisticAction({ collections: [channels], onMutate: () => ({}), mutate })
+		const exit = await Effect.runPromiseExit(noop(undefined))
+		expect(exit._tag).toBe("Failure")
+		expect(String(exit)).toContain("onMutate changed no collection")
+		expect(mutate).not.toHaveBeenCalled()
+	})
+
 	it("rolls back and keeps the typed failure when mutate fails", async () => {
 		const { channels } = await setup()
 		const create = optimisticAction({

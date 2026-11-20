@@ -4,61 +4,36 @@
  * events (own posts dropped, a first reply makes a Hazel thread on its parent); Hazel replies in
  * a thread posted to `<channel>/<thread ts>`.
  */
-import { CurrentUser } from "@hazel/domain"
 import { CreateThreadRequest } from "@hazel/domain/rpc"
 import type { Slack } from "@hazel/integrations"
-import type { ChannelId, MessageId, OrganizationId, SyncConnectionId, UserId } from "@hazel/schema"
-import { Cause, Effect, Exit, Layer, Option, type Scope } from "effect"
+import type { ChannelId, ExternalChannelId, MessageId } from "@hazel/schema"
+import { Cause, Effect, Exit, Option } from "effect"
 import { describe, expect, it } from "vitest"
-import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../../../rpc/dispatch"
-import { channelTarget, orgTarget } from "../../../../worker/objects/kinds"
-import { encodeInvokePrincipal } from "../../../../worker/objects/principal"
-import { ObjectStubs } from "../../../../worker/objects/protocol"
-import { makeTestObjects, type TestObject, type TestObjects } from "../../../../worker/objects/testing"
-import { routeChatSyncInbound } from "../../chat-sync-inbound"
+import { channelTarget } from "../../../../worker/objects/kinds"
+import { makeTestObjects, type TestObjects } from "../../../../worker/objects/testing"
+import { callRpc, makeChatSyncOrg, ok, rows, runScoped } from "../../testing-world"
 import { type SlackUserLookup, slackHistoryInbound, slackInbound } from "./events"
 
 const TEAM = "T0HAZEL01"
-const SLACK_CHANNEL = "C0GENERAL1"
+const SLACK_CHANNEL = "C0GENERAL1" as ExternalChannelId
 const APP = "A0HAZELAPP"
 const BOT_USER = "U0HAZELBOT"
 
 const uuid = () => crypto.randomUUID()
 
-const userOf = (id: string) =>
-	new CurrentUser.Schema({
-		id: id as UserId,
-		role: "member",
-		email: `${id}@example.com`,
-		isOnboarded: true,
-		timezone: null,
-		settings: null,
-	})
+const call = callRpc
+const run = runScoped
 
-const call = (object: TestObject, objectId: string, tag: HazelRpcTag, payload: unknown, user: string) =>
-	Effect.gen(function* () {
-		const rpc = yield* rpcFor(tag)
-		const response = yield* object.invoke({
-			objectId,
-			tag,
-			payload: yield* encodePayload(rpc, payload),
-			principal: yield* encodeInvokePrincipal({ user: userOf(user), botScopes: null }),
-		})
-		return yield* decodeExit(rpc, structuredClone(response).exit)
-	})
-
-const ok = <A>(exit: Exit.Exit<A, unknown>) =>
-	Exit.isSuccess(exit) ? Effect.succeed(exit.value) : Effect.die(Cause.pretty(exit.cause))
-
-const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
-	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
-
-const rows = <T>(object: TestObject, sql: string, ...params: Array<string>) =>
-	object.storage.db.prepare(sql).all(...params) as Array<T>
-
+/** `U0GUEST…` users are Slack Connect guests from another company's team, with an email. */
 const lookupUser: SlackUserLookup = (userId) =>
 	Effect.succeed(
-		Option.some({ externalUserId: userId as never, displayName: `Slack ${userId}`, avatarUrl: null }),
+		Option.some({
+			externalUserId: userId as never,
+			displayName: `Slack ${userId}`,
+			avatarUrl: null,
+			email: userId.startsWith("U0GUEST") ? `${userId.toLowerCase()}@globex.example` : null,
+			externalWorkspaceId: userId.startsWith("U0GUEST") ? "T0GLOBEX01" : TEAM,
+		}),
 	)
 
 const envelope = (
@@ -93,80 +68,23 @@ const slackMessage = (
 	...extra,
 })
 
-/** An org installed in `team`, a channel, and a Slack connection with a link for it. */
+/** An org installed in `team`, a channel, and a Slack connection; `linkChannel` links it to `SLACK_CHANNEL`. */
 const makeOrg = (objects: TestObjects, team = TEAM) =>
 	Effect.gen(function* () {
-		const orgId = uuid() as OrganizationId
-		const owner = uuid() as UserId
-		const org = yield* objects.get(orgTarget(orgId))
-		const db = org.storage.db
-		db.prepare(`INSERT INTO organizations (id, name, slug) VALUES (?, 'Acme', 'acme')`).run(orgId)
-		db.prepare(
-			`INSERT INTO users (id, externalId, email, firstName, lastName) VALUES (?, ?, ?, 'Olive', 'Owner')`,
-		).run(owner, `ext-${owner}`, `${owner}@example.com`)
-		db.prepare(
-			`INSERT INTO organization_members (organizationId, userId, role) VALUES (?, ?, 'owner')`,
-		).run(orgId, owner)
-		db.prepare(
-			`INSERT INTO integration_connections (provider, organizationId, level, status, connectedBy, externalAccountId)
-		 VALUES ('slack', ?, 'organization', 'active', ?, ?)`,
-		).run(orgId, owner, team)
-
-		const created = (yield* ok(
-			yield* call(
-				org,
-				orgId,
-				"channel.create",
-				{
-					name: "general",
-					icon: null,
-					type: "public",
-					organizationId: orgId,
-					parentChannelId: null,
-					sectionId: null,
-				},
-				owner,
-			),
-		)) as { data: { id: ChannelId } }
-		const connectTo = (externalWorkspaceId: string) =>
-			call(
-				org,
-				orgId,
-				"chatSync.connection.create",
-				{
-					organizationId: orgId,
-					provider: "slack",
-					externalWorkspaceId,
-					externalWorkspaceName: "Acme",
-				},
-				owner,
-			)
-		const connection = (yield* ok(yield* connectTo(team))) as { data: { id: SyncConnectionId } }
-		const linkChannel = (historyLimit?: number) => {
-			const payload = {
-				organizationId: orgId,
-				syncConnectionId: connection.data.id,
-				hazelChannelId: created.data.id,
-				externalChannelId: SLACK_CHANNEL,
-			}
-			const withLimit = historyLimit === undefined ? payload : { ...payload, historyLimit }
-			return call(org, orgId, "chatSync.channelLink.create", withLimit, owner)
-		}
-		const stubs = Layer.succeed(ObjectStubs, objects.stubs)
+		const org = yield* makeChatSyncOrg(objects, {
+			provider: "slack",
+			workspaceId: team,
+			installedIn: team,
+		})
+		/** A Slack event, read as the webhook reads it, delivered from `fromTeam`. */
 		const inbound = (eventId: string, event: Slack.SlackEvent, fromTeam = team) =>
 			Effect.gen(function* () {
 				const found = yield* slackInbound(envelope(eventId, fromTeam), event, lookupUser)
-				if (Option.isSome(found)) yield* routeChatSyncInbound(found.value)
-			}).pipe(Effect.provide(stubs), Effect.provideContext(objects.directory), Effect.orDie)
+				if (Option.isSome(found)) yield* org.inbound(found.value)
+			})
 		return {
-			objects,
-			org,
-			orgId,
-			owner,
-			channelId: created.data.id,
-			channel: yield* objects.get(channelTarget(created.data.id)),
-			connectTo,
-			linkChannel,
+			...org,
+			linkChannel: (historyLimit?: number) => org.linkChannel(SLACK_CHANNEL, historyLimit),
 			inbound,
 		}
 	})
@@ -228,6 +146,125 @@ describe("Slack chat sync on the objects", () => {
 					{ content: "still ours" },
 				])
 				expect(rows(other.channel, `SELECT id FROM messages`)).toEqual([])
+			}),
+		))
+
+	it("records each author of the channel with their Slack team and email", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				yield* world.inbound("Ev80", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000800", "hello", { user: "U0GUEST001" }),
+				})
+				yield* world.inbound("Ev81", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000810", "again", { user: "U0GUEST001" }),
+				})
+				yield* world.inbound("Ev82", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000820", "hi"),
+				})
+				expect(
+					rows(
+						world.org,
+						`SELECT hazelChannelId, provider, externalUserId, externalWorkspaceId, email
+						 FROM chat_sync_channel_authors ORDER BY externalUserId`,
+					),
+				).toEqual([
+					{
+						hazelChannelId: world.channelId,
+						provider: "slack",
+						externalUserId: "U0DANA0001",
+						externalWorkspaceId: TEAM,
+						email: null,
+					},
+					{
+						hazelChannelId: world.channelId,
+						provider: "slack",
+						externalUserId: "U0GUEST001",
+						externalWorkspaceId: "T0GLOBEX01",
+						email: "u0guest001@globex.example",
+					},
+				])
+			}),
+		))
+
+	it("an author seen through a replaced mirror moves to the live one on their next message", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const message = (ts: string) =>
+					world.inbound(`Ev9${ts.slice(-2)}`, {
+						_tag: "MessagePosted",
+						subtype: "message",
+						message: slackMessage(`1700000000.0009${ts.slice(-2)}`, "hello", {
+							user: "U0GUEST001",
+						}),
+					})
+				yield* message("10")
+				const [link] = rows<{ id: string }>(world.org, `SELECT id FROM chat_sync_channel_links`)
+				// As if recorded through an older mirror a moment ago (within the hour the write is skipped).
+				world.org.storage.db
+					.prepare(`UPDATE chat_sync_channel_authors SET syncChannelLinkId = 'old-mirror'`)
+					.run()
+				yield* message("20")
+				expect(rows(world.org, `SELECT syncChannelLinkId FROM chat_sync_channel_authors`)).toEqual([
+					{ syncChannelLinkId: link!.id },
+				])
+			}),
+		))
+
+	it("a thread reply's author counts for the parent channel's mirror, never the thread's", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const parentLink = () =>
+					rows<{ id: string }>(
+						world.org,
+						`SELECT id FROM chat_sync_channel_links WHERE hazelChannelId = ?`,
+						world.channelId,
+					)[0]!.id
+				const reply = (event: string, ts: string, user: string) =>
+					world.inbound(event, {
+						_tag: "MessagePosted",
+						subtype: "message",
+						message: slackMessage(ts, "in the thread", { user, threadTs: "1700000000.000900" }),
+					})
+				yield* world.inbound("Ev90", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000900", "parent"),
+				})
+				// A thread-only author, and one already seen in the channel who then replies.
+				yield* world.inbound("Ev91", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000905", "hello", { user: "U0GUESTB02" }),
+				})
+				yield* reply("Ev92", "1700000000.000910", "U0GUEST001")
+				yield* reply("Ev93", "1700000000.000920", "U0GUESTB02")
+				expect(
+					rows(
+						world.org,
+						`SELECT hazelChannelId, syncChannelLinkId, externalUserId FROM chat_sync_channel_authors
+						 WHERE externalUserId LIKE 'U0GUEST%' ORDER BY externalUserId`,
+					),
+				).toEqual([
+					{
+						hazelChannelId: world.channelId,
+						syncChannelLinkId: parentLink(),
+						externalUserId: "U0GUEST001",
+					},
+					{
+						hazelChannelId: world.channelId,
+						syncChannelLinkId: parentLink(),
+						externalUserId: "U0GUESTB02",
+					},
+				])
 			}),
 		))
 

@@ -47,6 +47,7 @@ import { Clock, DateTime, Effect, Layer, Option, Predicate, Redacted } from "eff
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { NonProductionStage } from "../../lib/stage"
+import { Directory } from "../../services/directory"
 import { IntegrationEncryption } from "../../services/integration-encryption"
 import {
 	type CustomersActor,
@@ -64,7 +65,14 @@ import {
 	switchProviderAccount,
 } from "../../worker/objects/customers/credentials"
 import { callObject } from "../../worker/objects/calls"
-import { linkOwnerOf, publishChannelCustomers } from "../../worker/objects/customers/channels"
+import {
+	decidedForCustomer,
+	eventReasons,
+	openSuggestion,
+	openSuggestions,
+	refreshSuggestions,
+} from "../../worker/objects/customers/channel-suggestions"
+import { linkChannelNow, publishChannelCustomers } from "../../worker/objects/customers/channels"
 import { seedDemo } from "../../worker/objects/customers/demo"
 import { healthDryRun, ruleDryRun } from "../../worker/objects/customers/dry-run"
 import {
@@ -113,8 +121,18 @@ import {
 import { requestCompute } from "../../worker/objects/customers/schedule"
 import { inList } from "../../worker/objects/customers/sql"
 import { CLOSED_SIGNAL_WINDOW_DAYS } from "../../worker/objects/sources/customers-source"
-import { orgTarget } from "../../worker/objects/kinds"
+import { channelTarget, orgTarget } from "../../worker/objects/kinds"
+import { SupportMessageCall } from "../../worker/objects/channel/support-message"
 import { CustomerChannelCall } from "../../worker/objects/org/channel-customers"
+import {
+	insertIssue,
+	issueAt,
+	issuePatch,
+	ISSUE_STATUS_VERB,
+	linkedAccountOf,
+	recordedSideOf,
+	updateIssueRow,
+} from "../../worker/objects/customers/issues"
 
 // ---------------------------------------------------------------------------
 // Shared
@@ -128,7 +146,7 @@ const isInfra = (error: unknown): error is Infra =>
 	Predicate.isTagged(error, "SqlError")
 
 /** Storage failures become a client-safe `InternalServerError` (the cause stays server-side). */
-const remap = <A, E, R>(
+export const remap = <A, E, R>(
 	effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, Exclude<E, Infra> | InternalServerError, R> =>
 	effect.pipe(
@@ -143,18 +161,18 @@ const remap = <A, E, R>(
 		),
 	) as never
 
-const currentTime = Effect.map(Clock.currentTimeMillis, (ms) => new Date(ms))
+export const currentTime = Effect.map(Clock.currentTimeMillis, (ms) => new Date(ms))
 
 /** A `JsonDate` as a `Date`. */
 const instant = (value: Date | DateTime.Utc) => (value instanceof Date ? value : DateTime.toDate(value))
 
-const notFound = (entity: CustomersNotFoundError["entity"], id: string) =>
+export const notFound = (entity: CustomersNotFoundError["entity"], id: string) =>
 	new CustomersNotFoundError({ entity, id })
 
-const invalid = (message: string) => new CustomersInvalidRequestError({ message })
+export const invalid = (message: string) => new CustomersInvalidRequestError({ message })
 
 /** Run `body` in a transaction and answer with its write position. */
-const withTx = <A, E, R>(body: Effect.Effect<A, E, R>) =>
+export const withTx = <A, E, R>(body: Effect.Effect<A, E, R>) =>
 	Effect.flatMap(Database.Database, (db) =>
 		db.transaction(
 			Effect.gen(function* () {
@@ -164,7 +182,7 @@ const withTx = <A, E, R>(body: Effect.Effect<A, E, R>) =>
 		),
 	)
 
-const txOnly = <E, R>(body: Effect.Effect<unknown, E, R>) =>
+export const txOnly = <E, R>(body: Effect.Effect<unknown, E, R>) =>
 	Effect.map(withTx(body), ({ transactionId }) => ({ transactionId }))
 
 const hazelEvent = (
@@ -472,6 +490,48 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 					return { items: yield* db.run(SQLite.from(schema.customerIgnoreRulesTable).select()) }
 				}).pipe(remap),
 
+			"customers.channel.suggestions": ({ accountId, channelId, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					const actor = yield* requireMember
+					if (channelId !== undefined) {
+						const check = yield* checkChannel(organizationId, channelId, actor.userId)
+						if (check === "not_found") return yield* notFound("channel", channelId)
+						// A channel shared a moment ago has no suggestion yet. A failed refresh still
+						// answers what is stored.
+						const refreshFailed = (error: { readonly _tag: string; readonly message: string }) =>
+							Effect.logWarning("Customers suggestion refresh failed", {
+								channelId,
+								error: error._tag,
+								reason: error.message,
+							})
+						yield* refreshSuggestions(organizationId, [channelId]).pipe(
+							Effect.catchTags({
+								ObjectCallError: refreshFailed,
+								DatabaseError: refreshFailed,
+								SchemaError: refreshFailed,
+							}),
+						)
+					}
+					const items = yield* openSuggestions({
+						organizationId,
+						userId: actor.userId,
+						accountId,
+						channelId,
+					}).pipe(
+						Effect.catchTag("ObjectCallError", (cause) =>
+							Effect.fail(
+								new InternalServerError({
+									message: "Could not check the channels",
+									detail: cause.message,
+									cause,
+								}),
+							),
+						),
+					)
+					return { items }
+				}).pipe(remap),
+
 			"customers.plans.list": () =>
 				Effect.gen(function* () {
 					yield* requireMember
@@ -567,8 +627,10 @@ const actOnSignal = (
 					now,
 				)
 				yield* refreshCounters(signal.accountId, now)
-				// Health counts open and snoozed risk signals: rescore only when that set changed.
 				const next = typeof changes.status === "string" ? changes.status : signal.status
+				// A linked channel shows the customer's open signals: only a status change moves them.
+				if (next !== signal.status) yield* publishChannelCustomers(signal.organizationId)
+				// Health counts open and snoozed risk signals: rescore only when that set changed.
 				if (countsTowardHealth(next) !== countsTowardHealth(signal.status)) yield* requestCompute
 			}),
 		)
@@ -607,6 +669,7 @@ const cleanTags = (tags: ReadonlyArray<string>) => [
 export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
+		const directory = yield* Directory
 
 		return {
 			"customers.signal.assign": ({ signalId, assigneeUserId }) =>
@@ -853,8 +916,10 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 							// The stage and tags feed health and Overview layout rules: compute (and assign) soon.
 							if (lifecycleStageOverride !== undefined || tags !== undefined)
 								yield* requestCompute
-							// Chat shows linked channels' customer by name.
-							if (name !== undefined) yield* publishChannelCustomers(account.organizationId)
+							// Chat shows linked channels' customer: its name and owner.
+							if (name !== undefined || ownerUserId !== undefined) {
+								yield* publishChannelCustomers(account.organizationId)
+							}
 						}),
 					)
 				}).pipe(remap),
@@ -871,57 +936,196 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						return yield* invalid("Only channels can be linked to a customer, not threads or DMs")
 					}
 					const now = yield* currentTime
+					// The link is the customer's: stored on its group's primary, whichever environment
+					// it was linked from (`linkChannel`, shared with accepted and automatic suggestions).
 					return yield* withTx(
 						Effect.gen(function* () {
-							// The link is the customer's: stored on its group's primary, whichever
-							// environment it was linked from.
-							const owner = yield* linkOwnerOf(yield* requireAccount(accountId))
-							const current = yield* db.first(
-								SQLite.from(schema.customerChannelLinksTable)
+							return yield* linkChannelNow({
+								organizationId,
+								account: yield* requireAccount(accountId),
+								channelId,
+								actor: actor.userId,
+								now,
+								id,
+							})
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.channel.suggestion.accept": ({ suggestionId, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					const actor = yield* requireMember
+					const found = yield* openSuggestion(suggestionId)
+					if (Option.isNone(found)) return yield* notFound("suggestion", suggestionId)
+					const { channelId, accountId } = found.value
+					// Its customer decided the channel through another account of the group.
+					if (yield* decidedForCustomer(found.value))
+						return yield* notFound("suggestion", suggestionId)
+					const check = yield* checkChannel(organizationId, channelId, actor.userId)
+					if (check === "not_found") return yield* notFound("suggestion", suggestionId)
+					if (check === "not_linkable") {
+						return yield* invalid("Only channels can be linked to a customer, not threads or DMs")
+					}
+					const now = yield* currentTime
+					return yield* withTx(
+						Effect.gen(function* () {
+							// Decided while the channel was checked (another tab, a refresh).
+							const still = yield* openSuggestion(suggestionId)
+							if (Option.isNone(still) || (yield* decidedForCustomer(still.value))) {
+								return yield* notFound("suggestion", suggestionId)
+							}
+							// The account as it is now: its group may have changed during the check.
+							const account = yield* liveAccount(accountId)
+							if (Option.isNone(account)) return yield* notFound("account", accountId)
+							return yield* linkChannelNow({
+								organizationId,
+								account: account.value,
+								channelId,
+								actor: actor.userId,
+								now,
+								suggestionId,
+								// Name-free: events reach every member, channel names may be private.
+								event: {
+									title: "Channel linked",
+									data: { suggestionId, reasons: eventReasons(still.value.reasons) },
+								},
+							})
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.channel.suggestion.dismiss": ({ suggestionId, organizationId: payloadOrg }) =>
+				Effect.gen(function* () {
+					const organizationId = yield* requireOwnOrganization(payloadOrg)
+					const actor = yield* requireMember
+					const found = yield* openSuggestion(suggestionId)
+					if (Option.isNone(found)) return yield* notFound("suggestion", suggestionId)
+					const check = yield* checkChannel(organizationId, found.value.channelId, actor.userId)
+					if (check === "not_found") return yield* notFound("suggestion", suggestionId)
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.gen(function* () {
+							const still = yield* openSuggestion(suggestionId)
+							if (Option.isNone(still)) return yield* notFound("suggestion", suggestionId)
+							// Remembered for good: that account is never suggested for that channel again.
+							yield* db.run(
+								SQLite.update(schema.customerChannelSuggestionsTable)
+									.set({
+										status: "dismissed",
+										decidedBy: actor.userId,
+										decidedAt: now,
+										updatedAt: now,
+									})
+									.where(($) => [$.id.eq(suggestionId)]),
+							)
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.issue.update": ({ issueId, status, priority, assigneeUserId, tags }) =>
+				Effect.gen(function* () {
+					const actor = yield* requireMember
+					yield* requirePerson(assigneeUserId)
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.gen(function* () {
+							const found = yield* db.first(
+								SQLite.from(schema.customerIssuesTable)
 									.select()
-									.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()])
+									.where(($) => [$.id.eq(issueId), $.deletedAt.isNull()])
 									.limit(1),
 							)
-							if (Option.isSome(current) && current.value.accountId === owner) {
-								return current.value
-							}
-							// A channel has one customer: linking it here moves it from the other.
-							if (Option.isSome(current)) {
-								yield* db.run(
-									SQLite.update(schema.customerChannelLinksTable)
-										.set({ deletedAt: now, updatedAt: now })
-										.where(($) => [$.id.eq(current.value.id)]),
-								)
+							if (Option.isNone(found)) return yield* notFound("issue", issueId)
+							const issue = found.value
+							const patch = issuePatch(
+								issue,
+								{ status, priority, assigneeUserId, tags },
+								actor.userId,
+								now,
+							)
+							if (Object.keys(patch).length === 0) return
+							yield* updateIssueRow(issue, patch)
+							if (patch.status !== undefined) {
 								yield* hazelEvent(
-									current.value.accountId,
+									issue.accountId,
 									actor.userId,
-									"channel.unlinked",
-									"Channel unlinked",
-									{ channelId, movedTo: owner },
+									patch.status === "closed"
+										? "issue.closed"
+										: issue.status === "closed"
+											? "issue.reopened"
+											: "issue.status_changed",
+									`${ISSUE_STATUS_VERB[patch.status]}: ${issue.title}`,
+									{ issueId, from: issue.status, to: patch.status },
 									now,
 								)
 							}
-							const [link] = yield* db.run(
-								SQLite.insertInto(schema.customerChannelLinksTable)
-									.values({
-										id, // `undefined`: the column's default
-										organizationId,
-										accountId: owner,
-										channelId,
-										linkedBy: actor.userId,
-									})
-									.returning(),
-							)
-							yield* hazelEvent(
-								owner,
-								actor.userId,
-								"channel.linked",
-								"Channel linked",
-								{ channelId },
-								now,
-							)
-							yield* publishChannelCustomers(organizationId)
-							return link
+							if (patch.assigneeUserId !== undefined) {
+								yield* hazelEvent(
+									issue.accountId,
+									actor.userId,
+									"issue.assigned",
+									`${patch.assigneeUserId === null ? "Unassigned" : "Assigned"}: ${issue.title}`,
+									{ issueId, assigneeUserId: patch.assigneeUserId },
+									now,
+								)
+							}
+						}),
+					)
+				}).pipe(remap),
+
+			"customers.issue.createFromMessage": ({ channelId, messageId }) =>
+				Effect.gen(function* () {
+					const actor = yield* requireMember
+					const link = yield* linkedAccountOf(channelId)
+					if (Option.isNone(link)) {
+						return yield* invalid("Issues open on messages in channels linked to a customer")
+					}
+					const existing = yield* issueAt(channelId, messageId)
+					if (Option.isSome(existing)) return yield* withTx(Effect.succeed(existing.value))
+					// The message, if the caller reads the channel, asked of the `ChannelObject` holding it:
+					// the host channel's for a Connect guest org's mount.
+					const holder = Option.match(yield* directory.channel(channelId), {
+						onNone: () => channelId,
+						onSome: (row) => row.hostChannelId ?? channelId,
+					})
+					const message = yield* callObject(SupportMessageCall, channelTarget(holder), {
+						messageId,
+						userId: actor.userId,
+					}).pipe(
+						Effect.catchTag("MessageNotFoundError", () =>
+							Effect.fail(notFound("message", messageId)),
+						),
+						Effect.catchTag("ObjectCallError", (cause) =>
+							Effect.fail(
+								new InternalServerError({
+									message: "Could not read the message",
+									detail: cause.message,
+									cause,
+								}),
+							),
+						),
+					)
+					const side = yield* recordedSideOf(message.authorId)
+					return yield* withTx(
+						Effect.gen(function* () {
+							// A relay may have opened it meanwhile.
+							const raced = yield* issueAt(channelId, messageId)
+							if (Option.isSome(raced)) return raced.value
+							return yield* insertIssue({
+								organizationId: link.value.organizationId,
+								accountId: link.value.accountId,
+								channelId,
+								threadChannelId: message.threadChannelId,
+								message: {
+									messageId,
+									authorId: message.authorId,
+									side,
+									sentAt: new Date(message.sentAt),
+									content: message.content,
+								},
+								createdByUserId: actor.userId,
+							})
 						}),
 					)
 				}).pipe(remap),
@@ -973,7 +1177,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						Effect.gen(function* () {
 							const accounts = yield* db.run(
 								SQLite.from(schema.customerAccountsTable)
-									.select("id", "tags", "ownerUserId")
+									.select("id", "organizationId", "tags", "ownerUserId")
 									.where(($) => [inList($.id, accountIds), $.deletedAt.isNull()]),
 							)
 							const add = cleanTags(addTags ?? [])
@@ -1003,6 +1207,10 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 							}
 							// Tags feed Overview layout rules: compute (and assign) soon.
 							if (add.length > 0 || remove.size > 0) yield* requestCompute
+							const first = accounts[0]
+							if (ownerUserId !== undefined && first !== undefined) {
+								yield* publishChannelCustomers(first.organizationId)
+							}
 							return accounts.length
 						}),
 					)

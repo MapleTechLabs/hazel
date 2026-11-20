@@ -205,6 +205,8 @@ export const makeSlackClient = Effect.gen(function* () {
 								externalUserId: ExternalUserId.make(user.id),
 								displayName: user.displayName,
 								avatarUrl: user.avatarUrl,
+								email: user.email,
+								externalWorkspaceId: user.teamId,
 							}),
 						),
 						Effect.catch((error) =>

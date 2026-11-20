@@ -28,6 +28,7 @@ import {
 import { agentChannels, AgentChannelsCall } from "./org/agent"
 import { agentNotifications, AgentNotificationsCall } from "./user/agent"
 import { liveAccess, LiveAccessCall } from "./channel/live-access"
+import { supportMessage, SupportMessageCall } from "./channel/support-message"
 import {
 	bootstrap,
 	CustomersBootstrapCall,
@@ -62,6 +63,14 @@ import {
 	GitHubInstallationCall,
 } from "./org/github-webhooks"
 import { customerChannel, CustomerChannelCall } from "./org/channel-customers"
+import {
+	channelEvidence,
+	ChannelEvidenceCall,
+	connectGuestEvidence,
+	ConnectGuestEvidenceCall,
+	visibleChannels,
+	VisibleChannelsCall,
+} from "./org/channel-evidence"
 import { customerMembers, CustomerMembersCall } from "./org/customer-members"
 import { executeWebhook, ExecuteWebhookCall } from "./org/incoming-webhooks"
 import {
@@ -143,11 +152,15 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(OrganizationChannelsCall, organizationChannels),
 		receiver(CustomerMembersCall, customerMembers),
 		receiver(CustomerChannelCall, customerChannel),
+		receiver(ChannelEvidenceCall, channelEvidence),
+		receiver(ConnectGuestEvidenceCall, connectGuestEvidence),
+		receiver(VisibleChannelsCall, visibleChannels),
 	]),
 	channel: byName([
 		receiver(ListMessagesCall, listMessages),
 		receiver(MessageThreadCall, messageThread),
 		receiver(LiveAccessCall, liveAccess),
+		receiver(SupportMessageCall, supportMessage),
 		receiver(MessagesByIdsCall, messagesByIds),
 	]),
 	user: byName([receiver(AgentNotificationsCall, agentNotifications)]),

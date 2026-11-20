@@ -29,22 +29,11 @@ import {
 	withSidebar,
 } from "../customers/view-layout"
 import { catchCommon, reasonToast } from "../data/actions"
-import {
-	IconChartBar,
-	IconCube,
-	IconDashboard,
-	IconEyeSlash,
-	IconHeart,
-	IconLightbulb,
-	IconOffice,
-	IconPresentationChart,
-	IconRocket,
-	IconServers,
-	IconWarning,
-} from "../icons"
+import { IconEyeSlash } from "../icons"
 import { PageOutMessage } from "../page/out-message"
-import { AppRoute, customersListRoute, hrefOf, type RouteTag } from "../route"
+import { type AppRoute, customersListRoute, hrefOf, type RouteTag } from "../route"
 import { sidebarHeaderHeightClass } from "../platform/desktop"
+import { myWaitingIssueCountStream } from "../customers/issues"
 import type { HazelRpc } from "../rpc"
 import { button } from "../ui/button"
 import {
@@ -59,11 +48,13 @@ import {
 } from "../ui/sidebar"
 import type { SidebarChrome } from "./channels-sidebar"
 import type { ShellContext } from "./context"
+import { type DestinationId, destination, destinationHref, isAvailable } from "./destinations"
 import { userMenuFooter } from "./menus"
 
 /**
  * The Customers area's sidebar next to the nav rail (`docs/customers/spec.md` "UI surfaces"):
- * Overview, Needs attention with the count of open signals on my accounts, Customers and the views
+ * Overview, Needs attention with the count of open signals on my accounts, the Support inbox with
+ * the issues waiting on a reply that are mine or nobody's, Customers and the views
  * (in the person's own order, without the ones they hid: `customers/view-layout.ts`; dragging one
  * reorders the list's tabs too), and the settings pages. Shell state: it survives navigation
  * inside the area.
@@ -78,6 +69,8 @@ export const Model = Schema.Struct({
 	organizationId: Schema.NullOr(OrganizationId),
 	/** Open signals on accounts I own; null until the query answers. */
 	attentionCount: Schema.NullOr(Schema.Int),
+	/** Support issues waiting on a reply, mine or unassigned; null until the query answers. */
+	inboxCount: Schema.NullOr(Schema.Int),
 	/** Shared and my own views by position; null until the query answers (the built-ins show). */
 	views: Schema.NullOr(Schema.Array(SavedViewRow)),
 	/** My saved layout; null before I arrange anything (or until it syncs). */
@@ -91,6 +84,7 @@ export type Model = typeof Model.Type
 export const init = (): Model => ({
 	organizationId: null,
 	attentionCount: null,
+	inboxCount: null,
 	views: null,
 	layout: null,
 	layoutId: null,
@@ -106,6 +100,7 @@ export const setOrganization = (model: Model, organizationId: OrganizationId | n
 /** The rows name their organization: one still in flight from the previous one is dropped. */
 export const Message = defineMessageUnion({
 	UpdatedAttentionCount: { organizationId: OrganizationId, count: Schema.Int },
+	UpdatedInboxCount: { organizationId: OrganizationId, count: Schema.Int },
 	UpdatedSavedViews: { organizationId: OrganizationId, views: Schema.Array(SavedViewRow) },
 	UpdatedViewLayout: { organizationId: OrganizationId, layout: Schema.NullOr(ViewLayoutRow) },
 	GotDragMessage: { message: DragAndDrop.Message },
@@ -231,6 +226,12 @@ export const update = (model: Model, message: Message, userId: UserId | null): R
 					? modifyFields(model, { attentionCount: () => count })
 					: model,
 		}),
+		UpdatedInboxCount: ({ organizationId, count }) => ({
+			model:
+				organizationId === model.organizationId
+					? modifyFields(model, { inboxCount: () => count })
+					: model,
+		}),
 		UpdatedSavedViews: ({ organizationId, views }) => ({
 			model:
 				organizationId === model.organizationId ? modifyFields(model, { views: () => views }) : model,
@@ -284,6 +285,15 @@ const rows = Subscription.make<Input, Message>()((entry) => ({
 				? Stream.empty
 				: myOpenSignalCountStream(organizationId, userId, (count) =>
 						Message.UpdatedAttentionCount({ organizationId, count }),
+					),
+	}),
+	customersInboxCount: entry(dependencies, {
+		modelToDependencies: toDependencies,
+		dependenciesToStream: ({ organizationId, userId }) =>
+			organizationId === null || userId === null
+				? Stream.empty
+				: myWaitingIssueCountStream(organizationId, userId, (count) =>
+						Message.UpdatedInboxCount({ organizationId, count }),
 					),
 	}),
 	customersSavedViews: entry(dependencies, {
@@ -407,25 +417,31 @@ export const view = <ParentMessage>(
 	toParentMessage: (message: Message) => ParentMessage,
 ): Html => {
 	const { orgSlug, route } = context
-	const item = (
-		label: string,
-		href: string,
-		isCurrent: boolean,
-		icon: Html,
-		trailing: ReadonlyArray<Html> = [],
-	) =>
-		sidebarItem(h, { isCurrent }, [
-			sidebarLink(h, { href, isActive: isCurrent, activeClassName: SECTION_ACTIVE }, [
-				icon,
-				sidebarLabel(h, [label]),
-				...trailing,
-			]),
+	const item = (id: DestinationId, isCurrent: boolean, trailing: ReadonlyArray<Html> = []) => {
+		if (!isAvailable(id)) return h.empty
+		const { icon, label: name, sidebarLabel: label = name } = destination(id)
+		return sidebarItem(h, { isCurrent }, [
+			sidebarLink(
+				h,
+				{ href: destinationHref(id, orgSlug), isActive: isCurrent, activeClassName: SECTION_ACTIVE },
+				[
+					icon(h, { attributes: { "data-slot": "icon" } }),
+					// The row's grid has no column after the label: a badge shares the label's cell, or it wraps.
+					trailing.length === 0
+						? sidebarLabel(h, [label])
+						: h.span(
+								[h.Class("col-start-2 flex min-w-0 items-center gap-2")],
+								[sidebarLabel(h, [label]), ...trailing],
+							),
+				],
+			),
 		])
+	}
 	const on = (...tags: ReadonlyArray<RouteTag>) => tags.includes(route._tag)
-	const icon = (glyph: typeof IconOffice) => glyph(h, { attributes: { "data-slot": "icon" } })
 	const listView = listViewOf(route)
 	const views = sidebarViewsOf(model)
 	const count = model.attentionCount ?? 0
+	const inboxCount = model.inboxCount ?? 0
 
 	return sidebarStatic(h, "flex flex-1", [
 		sidebarHeader(h, { state: "expanded", className: `border-b py-4 ${sidebarHeaderHeightClass()}` }, [
@@ -434,83 +450,54 @@ export const view = <ParentMessage>(
 		sidebarContent(h, { state: "expanded" }, [
 			sidebarSectionGroup(h, [
 				sidebarSection(h, {}, [
+					item("customersOverview", on("CustomersOverview")),
+					item("customersAttention", on("CustomersAttention"), count > 0 ? [badge(h, count)] : []),
 					item(
-						"Overview",
-						hrefOf(AppRoute.CustomersOverview({ orgSlug })),
-						on("CustomersOverview"),
-						icon(IconPresentationChart),
+						"customersInbox",
+						on("CustomersInbox"),
+						inboxCount > 0 ? [badge(h, inboxCount)] : [],
 					),
+					item("customersSupportReport", on("CustomersSupportReport")),
 					item(
-						"Needs attention",
-						hrefOf(AppRoute.CustomersAttention({ orgSlug })),
-						on("CustomersAttention"),
-						icon(IconWarning),
-						count > 0 ? [badge(h, count)] : [],
-					),
-					item(
-						"Customers",
-						hrefOf(customersListRoute(orgSlug)),
+						"customersList",
 						// The list's view lights its own row; a hidden one lights this.
 						on("CustomerDetail") ||
 							(listView !== undefined && !views.some((view) => view.key === listView)),
-						icon(IconOffice),
 					),
 				]),
 				viewsSection(h, model, views, orgSlug, listView, toParentMessage),
 				sidebarSection(h, { label: "Settings" }, [
 					item(
-						"Signals",
-						hrefOf(AppRoute.CustomersSettingsSignals({ orgSlug })),
+						"customersSignals",
 						on(
 							"CustomersSettingsSignals",
 							"CustomersSettingsSignalNew",
 							"CustomersSettingsSignalRule",
 						),
-						icon(IconLightbulb),
 					),
+					item("customersHealth", on("CustomersSettingsHealth")),
+					item("customersSla", on("CustomersSettingsSla")),
+					item("customersPlans", on("CustomersSettingsPlans")),
+					item("customersFeatureFlags", on("CustomersSettingsFeatureFlags")),
 					item(
-						"Health score",
-						hrefOf(AppRoute.CustomersSettingsHealth({ orgSlug })),
-						on("CustomersSettingsHealth"),
-						icon(IconHeart),
-					),
-					item(
-						"Plans",
-						hrefOf(AppRoute.CustomersSettingsPlans({ orgSlug })),
-						on("CustomersSettingsPlans"),
-						icon(IconCube),
-					),
-					item(
-						"Metrics",
-						hrefOf(AppRoute.CustomersSettingsMetrics({ orgSlug })),
+						"customersMetrics",
 						on(
 							"CustomersSettingsMetrics",
 							"CustomersSettingsMetricNew",
 							"CustomersSettingsMetric",
 						),
-						icon(IconChartBar),
 					),
 					item(
-						"Overview layouts",
-						hrefOf(AppRoute.CustomersSettingsLayouts({ orgSlug })),
+						"customersLayouts",
 						on(
 							"CustomersSettingsLayouts",
 							"CustomersSettingsLayoutNew",
 							"CustomersSettingsLayout",
 						),
-						icon(IconDashboard),
 					),
 					item(
-						"Feature flags",
-						hrefOf(AppRoute.CustomersSettingsFeatureFlags({ orgSlug })),
-						on("CustomersSettingsFeatureFlags"),
-						icon(IconRocket),
-					),
-					item(
-						"Data sources",
-						hrefOf(AppRoute.CustomersSettingsSources({ orgSlug })),
+						"customersSources",
 						on("CustomersSettingsSources", "CustomersSourceDetail", "CustomersUnmatched"),
-						icon(IconServers),
 					),
 				]),
 			]),

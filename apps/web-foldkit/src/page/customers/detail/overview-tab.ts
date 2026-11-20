@@ -1,13 +1,19 @@
 import type * as Customers from "@hazel/domain/customers"
 import { Option } from "effect"
+import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
+import { twMerge } from "tailwind-merge"
+import { formatCount } from "../../../customers/format"
 import type { BuiltInContext } from "../../../customers/overview/built-ins"
 import type * as OverviewData from "../../../customers/overview/data"
 import { type WidgetContext, widgetGrid } from "../../../customers/overview/widgets"
 import type { SignalRow } from "../../../customers/queries"
+import { overdueByMs } from "../../../customers/sla"
+import { formatResponse, formatWithin } from "../../../customers/support-report"
 import { snoozeMenuContent } from "../../../customers/ui/menus"
 import { queueAction } from "../../../customers/ui/queue-row"
-import { IconCheck, IconChevronDown, IconClock, IconDashboard, IconDots } from "../../../icons"
+import { linkClass } from "../../../customers/ui/surface"
+import { IconArrowPath, IconCheck, IconChevronDown, IconClock, IconDashboard, IconDots } from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
 import { button, buttonClassName } from "../../../ui/button"
 import { menuLabel } from "../../../ui/menu-view"
@@ -28,7 +34,7 @@ import {
 	sortedNotes,
 	UNASSIGN,
 } from "./model"
-import { type Context, headerLink, icon, menu } from "./parts"
+import { type Context, card, headerLink, icon, menu } from "./parts"
 
 /**
  * The overview tab: the customer's Overview layout (`docs/customers/overview-layouts.md`), drawn by
@@ -184,6 +190,89 @@ const layoutHeader = (h: HtmlBuilder<Message>, model: Model, context: Context): 
 	)
 }
 
+// SUPPORT
+
+const supportStat = (
+	h: HtmlBuilder<Message>,
+	label: string,
+	value: string,
+	options: Readonly<{ detail?: string; tone?: "danger" }> = {},
+): Html =>
+	h.div(
+		[h.Class("flex min-w-0 flex-col gap-0.5")],
+		[
+			h.span([h.Class("truncate text-muted-fg text-xs")], [label]),
+			h.span(
+				[h.Class("flex min-w-0 items-baseline gap-1.5")],
+				[
+					h.span(
+						[
+							h.Class(
+								twMerge(
+									"font-semibold text-fg text-lg tabular-nums",
+									options.tone === "danger" && "text-danger-subtle-fg",
+								),
+							),
+						],
+						[value],
+					),
+					...(options.detail === undefined
+						? []
+						: [h.span([h.Class("truncate text-muted-fg text-xs")], [options.detail])]),
+				],
+			),
+		],
+	)
+
+/**
+ * Open issues, how many are overdue (live), and the median first response over 30 days (the
+ * Support report's row). Hidden for a customer with no support history.
+ */
+export const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+	const issues = model.supportIssues ?? []
+	const row = Option.getOrNull(Option.flatMap(AsyncData.getData(model.support), Option.fromNullishOr))
+	if (issues.length === 0 && row === null) return h.empty
+	const open = issues.filter((issue) => issue.status !== "closed")
+	const slasById = new Map(model.supportSlas.map((sla) => [sla.id, sla]))
+	const overdue = open.filter((issue) => overdueByMs(slasById.get(issue.id), context.nowMs) !== null).length
+	const isLoading = AsyncData.isLoading(model.support) || AsyncData.isIdle(model.support)
+	const hasFailed = AsyncData.isFailure(model.support)
+	return card(
+		h,
+		{
+			title: "Support",
+			aside: h.a(
+				[h.Href(hrefOf(AppRoute.CustomersInbox({ orgSlug: context.orgSlug }))), h.Class(linkClass)],
+				["Support inbox"],
+			),
+			bodyClassName: "grid grid-cols-3 gap-4",
+		},
+		[
+			supportStat(h, "Open issues", formatCount(open.length)),
+			supportStat(h, "Overdue", formatCount(overdue), overdue > 0 ? { tone: "danger" } : {}),
+			hasFailed
+				? h.div(
+						[h.Class("flex min-w-0 flex-col items-start gap-0.5")],
+						[
+							h.span([h.Class("truncate text-muted-fg text-xs")], ["First response · 30d"]),
+							button(
+								h,
+								{ intent: "plain", size: "xs", onPress: Message.PressedRetrySupport() },
+								[IconArrowPath(h, icon), "Couldn't load · Retry"],
+							),
+						],
+					)
+				: supportStat(
+						h,
+						"First response · 30d",
+						isLoading ? "…" : formatResponse(row?.firstResponse.medianMs ?? null),
+						row?.firstResponse.withinPct == null
+							? { detail: "median" }
+							: { detail: `median · ${formatWithin(row.firstResponse.withinPct)} in SLA` },
+					),
+		],
+	)
+}
 // TAB
 
 const toOverviewData = (message: OverviewData.Message) => Message.GotOverviewDataMessage({ message })
@@ -206,6 +295,7 @@ export const overviewTab = (
 		membersById: context.membersById,
 		tabLink: (tab, label) => headerLink(h, label, Message.ClickedTab({ tab })),
 		signalActions: (signal) => signalButtons(h, model, signal, context.nowMs),
+		support: () => supportCard(h, model, context),
 	}
 	const widgets: WidgetContext<Message> = {
 		data: model.overview,

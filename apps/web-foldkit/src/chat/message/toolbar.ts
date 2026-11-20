@@ -5,6 +5,7 @@ import { defineMessageUnion } from "foldkit/message"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconCopy, IconEdit, IconEmojiAdd, IconReply, IconTrash } from "../../icons"
 import { LIST_PORTAL_ATTRIBUTE } from "../image-viewer"
+import { MESSAGE_IMAGE_ATTRIBUTE } from "../image-mosaic"
 import { button } from "../../ui/button"
 import { separator } from "../../ui/separator"
 import * as TooltipHost from "../tooltip-host"
@@ -180,7 +181,13 @@ const decodeMessageId = Schema.decodeUnknownOption(MessageId)
 export const HoverEvent = defineMessageUnion({
 	PointerEnteredMessage: { messageId: MessageId },
 	PointerLeftList: {},
-	RightClickedMessage: { messageId: MessageId, offset: Schema.Number, crossOffset: Schema.Number },
+	/** `imageUrl`: the attachment image right-clicked, if any. */
+	RightClickedMessage: {
+		messageId: MessageId,
+		offset: Schema.Number,
+		crossOffset: Schema.Number,
+		imageUrl: Schema.NullOr(Schema.String),
+	},
 })
 export type HoverEvent = typeof HoverEvent.Type
 
@@ -272,12 +279,17 @@ export const TrackMessageHover = Mount.defineStream("TrackMessageHover", {
 						if (!trigger || Option.isNone(messageId)) return
 						event.preventDefault()
 						const rect = trigger.getBoundingClientRect()
+						const image =
+							event.target instanceof Element
+								? event.target.closest(`img[data-${MESSAGE_IMAGE_ATTRIBUTE}]`)
+								: null
 						Queue.offerUnsafe(
 							queue,
 							HoverEvent.RightClickedMessage({
 								messageId: messageId.value,
 								offset: event.clientY - rect.bottom,
 								crossOffset: event.clientX - rect.left,
+								imageUrl: image?.getAttribute("src") ?? null,
 							}),
 						)
 					}

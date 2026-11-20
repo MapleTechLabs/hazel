@@ -6,7 +6,7 @@
  *
  * - bots: `botGateway.messageEvent` (message create, update, delete);
  * - notifications: `org.messageCreated` to the channel's `OrgObject` (`../org/message-notifications.ts`),
- *   with the content its push shows; `org.messageDeleted` once it is deleted, which drops them;
+ *   with the content its push shows (and support issues use, `../org/support-relay.ts`); `org.messageDeleted` once it is deleted, which drops them;
  * - thread naming: `ai.nameThread` once a thread still called "Thread" has more than 3 replies.
  * - search: `org.indexMessages` (message create, update, delete), `./search-index.ts`.
  *
@@ -19,7 +19,7 @@ import { Database, type DatabaseError, SQLite, schema } from "@hazel/db"
 import { parseMentions } from "@hazel/domain"
 import type { Message, MessageReaction } from "@hazel/domain/models"
 import { OrganizationId } from "@hazel/schema"
-import { Effect, Option, type Schema } from "effect"
+import { DateTime, Effect, Option, type Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import { AI_EFFECT_DELAY_MS, AiEffects, DEFAULT_THREAD_NAME } from "../effects/ai-effects"
 import { BotGatewayEffects } from "../effects/bot-gateway-effects"
@@ -132,6 +132,11 @@ const notificationsHook: MessageEventHook = (event) =>
 					onNone: () => 0,
 					onSome: (row) => Number(row.count),
 				}),
+				createdAt: DateTime.formatIso(DateTime.makeUnsafe(message.createdAt)),
+				// In a thread, its root message: support issues are keyed on it.
+				threadRootMessageId: Option.getOrNull(
+					Option.map(yield* readThreadOrigin, (origin) => origin.messageId),
+				),
 			},
 		)
 	})

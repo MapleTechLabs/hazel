@@ -21,6 +21,7 @@ import * as Modal from "../../../../ui/modal"
 import { AppRoute, CustomerTab } from "../../../../route"
 import { defineLabWithFlags, queryParam } from "../../../define"
 import { labPage } from "../../../frame"
+import { ISSUE_SLAS, ISSUES, SUPPORT_REPORT } from "../../../fixtures/issues"
 import {
 	DEFAULT_LAYOUT,
 	LAYOUTS,
@@ -466,6 +467,11 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 							}),
 			})
 		}
+		case "FetchCustomerSupport":
+			return Message.SucceededFetchSupport({
+				accountId: accountId(),
+				row: SUPPORT_REPORT.byAccount.find((row) => row.key === accountId()) ?? null,
+			})
 		case "FetchCustomerMrrHistory":
 			return Message.SucceededFetchMrrHistory({
 				accountId: accountId(),
@@ -617,6 +623,8 @@ const initial = (flags: typeof Flags.Type) => {
 						),
 					),
 		signals: SIGNALS.map(toSignalRow),
+		supportIssues: ISSUES.filter((issue) => issue.accountId === viewed().id),
+		supportSlas: ISSUE_SLAS.filter((sla) => sla.accountId === viewed().id),
 		notes: NOTES,
 		members: TEAM,
 

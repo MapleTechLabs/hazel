@@ -10,8 +10,10 @@ import {
 	IconLeave,
 	IconLoader,
 	IconPresentationChart,
+	IconReply,
 	IconRocket,
 	IconStar,
+	IconSupport,
 	IconUsers,
 	IconWarning,
 	type IconOptions,
@@ -38,6 +40,8 @@ export const TEMPLATE_ICON = {
 	near_limit: IconChartBar,
 	seat_growth: IconUsers,
 	churned: IconLeave,
+	response_overdue: IconReply,
+	resolution_overdue: IconSupport,
 } as const satisfies Record<Customers.SignalTemplate, Icon>
 
 /** The picker card's one-liner. */
@@ -53,6 +57,8 @@ export const TEMPLATE_BLURB = {
 	near_limit: "A metered feature is close to the plan's limit",
 	seat_growth: "Active users growing fast: a good moment to talk expansion",
 	churned: "A customer stopped paying: its last entry, for a win-back or an exit call",
+	response_overdue: "A customer's support issue is past its reply-due SLA target",
+	resolution_overdue: "A support issue is open past its resolution SLA target",
 } as const satisfies Record<Customers.SignalTemplate, string>
 
 /** A sentence in pieces: `Bold` pieces are the values a reader scans for. */
@@ -171,6 +177,18 @@ export const conditionParts = (
 			]
 		case "churned":
 			return ["Churned in the last ", bold(counted(config.windowDays, "day"))]
+		case "response_overdue":
+			return [
+				"An open support issue's reply is overdue by ",
+				bold(counted(config.graceMinutes, "minute")),
+				" or more",
+			]
+		case "resolution_overdue":
+			return [
+				"An open support issue is past its resolution target by ",
+				bold(counted(config.graceMinutes, "minute")),
+				" or more",
+			]
 	}
 }
 
