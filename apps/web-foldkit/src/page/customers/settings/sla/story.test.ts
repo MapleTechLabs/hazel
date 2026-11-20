@@ -19,7 +19,7 @@ import {
 	SaveBusinessHours,
 	ToggleSlaPolicy,
 } from "./commands"
-import { appliesToSummary, exampleLine, hoursErrors, normalTargetHint } from "./draft"
+import { appliesToSummary, exampleLine, hoursErrors, mediumTargetHint } from "./draft"
 import { Message } from "./message"
 import { hoursFormOf, type Model, type PolicyForm, type PolicyRow } from "./model"
 import { init, update } from "./update"
@@ -64,7 +64,7 @@ const target = (firstResponseMinutes: number, resolutionMinutes: number) => ({
 const fast: Customers.SlaTargets = {
 	urgent: target(15, 4 * 60),
 	high: target(30, 8 * 60),
-	normal: target(60, 24 * 60),
+	medium: target(60, 24 * 60),
 	low: target(4 * 60, 48 * 60),
 }
 
@@ -122,7 +122,7 @@ describe("SLA settings: the policies", () => {
 		})
 	})
 
-	test("each row says whom it covers and its normal targets", () => {
+	test("each row says whom it covers and its medium targets", () => {
 		expect(POLICIES.map((row) => appliesToSummary(row.appliesTo, ACCOUNTS))).toEqual([
 			"Plans: Enterprise",
 			"Tags: vip · Acme",
@@ -132,8 +132,8 @@ describe("SLA settings: the policies", () => {
 		expect(
 			appliesToSummary({ ...none, accountIds: [accountId(1), accountId(2), accountId(3)] }, ACCOUNTS),
 		).toBe("3 customers")
-		expect(normalTargetHint(standard.targets)).toBe("Normal: 4h reply · 24h resolve")
-		expect(normalTargetHint(enterprise.targets)).toBe("Normal: 1h reply · 24h resolve")
+		expect(mediumTargetHint(standard.targets)).toBe("Medium: 4h reply · 24h resolve")
+		expect(mediumTargetHint(enterprise.targets)).toBe("Medium: 1h reply · 24h resolve")
 	})
 
 	test("moving a policy sends the whole order; one list write at a time", () => {
@@ -167,20 +167,20 @@ describe("SLA settings: the policies", () => {
 })
 
 describe("SLA settings: the editor", () => {
-	test("an example line shows when a normal message is due, in the policy's hours", () => {
+	test("an example line shows when a medium-priority message is due, in the policy's hours", () => {
 		const editing = update(loaded(), Message.PressedEdit({ policyId: standard.id }), admin).model
 		const hours = Customers.DEFAULT_BUSINESS_HOURS
-		expect(editing.editor?.form.targets.normal.firstResponse).toEqual({ amount: "4", unit: "hours" })
+		expect(editing.editor?.form.targets.medium.firstResponse).toEqual({ amount: "4", unit: "hours" })
 		expect(exampleLine(formOf(editing), hours)).toBe(
-			"A normal message on Friday 16:50 is due Monday 12:50.",
+			"A medium-priority message on Friday 16:50 is due Monday 12:50.",
 		)
 		const always = update(editing, Message.ClickedHours({ hours: "always" }), admin).model
 		expect(exampleLine(formOf(always), hours)).toBe(
-			"A normal message on Friday 16:50 is due Friday 20:50.",
+			"A medium-priority message on Friday 16:50 is due Friday 20:50.",
 		)
 		const enterpriseForm = update(loaded(), Message.PressedEdit({ policyId: enterprise.id }), admin).model
 		expect(exampleLine(formOf(enterpriseForm), hours)).toBe(
-			"A normal message on Friday 16:50 is due Friday 17:50.",
+			"A medium-priority message on Friday 16:50 is due Friday 17:50.",
 		)
 	})
 
@@ -196,9 +196,9 @@ describe("SLA settings: the editor", () => {
 			Message.PressedAddTag(),
 			Message.ChangedAccountSearch({ value: "glob" }),
 			Message.AddedAccount({ accountId: accountId(2) }),
-			Message.ChangedTargetAmount({ priority: "normal", clock: "firstResponse", value: "90" }),
+			Message.ChangedTargetAmount({ priority: "medium", clock: "firstResponse", value: "90" }),
 			Message.GotSelectMessage({
-				selectId: "sla-unit-normal-firstResponse",
+				selectId: "sla-unit-medium-firstResponse",
 				message: Select.Message.ChoseFromNativeMenu({
 					key: "minutes",
 					items: [Select.item("minutes", "minutes")],
@@ -213,7 +213,7 @@ describe("SLA settings: the editor", () => {
 				policy: {
 					name: "Pro",
 					appliesTo: { planNames: ["Pro"], tagsAny: ["priority"], accountIds: [accountId(2)] },
-					targets: { normal: { firstResponseMinutes: 90 } },
+					targets: { medium: { firstResponseMinutes: 90 } },
 				},
 			},
 		})

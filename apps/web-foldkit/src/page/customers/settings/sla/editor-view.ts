@@ -43,7 +43,7 @@ const MAX_ACCOUNT_RESULTS = 6
 const PRIORITY_LABEL = {
 	urgent: "Urgent",
 	high: "High",
-	normal: "Normal",
+	medium: "Medium",
 	low: "Low",
 } as const satisfies Record<Customers.SlaPriority, string>
 

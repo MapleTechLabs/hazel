@@ -33,13 +33,13 @@ hook, alarm, notifications, signals, reports and UI land once the issue record d
 | `position`      | The order; first match wins                                                                            |
 | `enabled`       |                                                                                                        |
 | `appliesTo`     | `accountIds`, `planNames`, `tagsAny`; all empty = a default policy                                     |
-| `targets`       | Per issue priority (`urgent`, `high`, `normal`, `low`): `firstResponseMinutes`, `resolutionMinutes` |
+| `targets`       | Per issue priority (`urgent`, `high`, `medium`, `low`; `none` uses `medium`): `firstResponseMinutes`, `resolutionMinutes` |
 | `hours`         | `business` or `always`                                                                                 |
 | `warnBeforePct` | Warn this share of the target before it is due (default 25%; 0 = only at breach)                       |
 
 An account's policy (`policyFor`): the first enabled policy naming it by id, else the first naming
 its plan or one of its tags, else the first default one; none = no SLA. Every org starts with
-**Standard** (business hours, any account): urgent 1 h / 8 h, high 2 h / 16 h, normal 4 h / 24 h,
+**Standard** (business hours, any account): urgent 1 h / 8 h, high 2 h / 16 h, medium 4 h / 24 h,
 low 8 h / 40 h (first response / resolution, working time). Existing orgs get it from migration
 `0021_customer_sla_policies`.
 
@@ -101,19 +101,20 @@ with `Intl` offsets, so a DST change moves the window, not the target.
 - **Reports** (`customers.support.report`, range): median and p90 first response, median
   resolution, % within SLA per clock, breaches, by account and by policy.
 
-## 5. Needed from the issue record (session 4)
+## 5. The issue record it reads (`issues.md`, session 4)
 
-1. `firstTeamReplyAt` (the first team reply after open): `lastTeamReplyAt` alone loses it.
-2. One write path for every issue change (status, priority, assignee, reopen, close, messages).
-3. The priority enum (assumed `urgent | high | normal | low`) and a default for auto-created issues.
-4. Reopen recorded (back to waiting on us with a timestamp or count).
-5. Demo seed issues to extend with SLA states.
+- `customer_issues`: `status` (`new | waiting_on_us | waiting_on_customer | on_hold | closed`),
+  `priority` (`none | low | medium | high | urgent`; `none` gets medium's targets, `slaPriorityOf`),
+  `assigneeUserId`, `accountId`, `threadChannelId`, `openedAt`, `firstTeamReplyAt`,
+  `lastCustomerMessageAt`, `lastTeamReplyAt`, `closedAt`, `reopenCount`, `reopenedAt`.
+- Asked of it: every write stays in `issues.ts`, ideally through one function the SLA hook wraps
+  with `(before, after)` in the same transaction; demo seed issues to extend with SLA states.
 
 ## 6. Verification
 
 - `sla.test.ts`: business hours (weekend carry-over, night start, end of summer time, multi-day,
   24/7, invalid hours), policy matching, the replay fixture, quantiles.
-- `sla-replay.ts`: replays a script of wall times (`["2026-11-20 16:50", "open", "normal"]`,
+- `sla-replay.ts`: replays a script of wall times (`["2026-11-20 16:50", "open", "medium"]`,
   `["2026-11-23 09:20", "reply"]`, ...) with the alarm firing at each deadline the state asks for;
   the backend's object tests and the demo seed reuse it.
 - `sla-policies.test.ts`: the default policy, admin-only CRUD and reorder, business hours, and that

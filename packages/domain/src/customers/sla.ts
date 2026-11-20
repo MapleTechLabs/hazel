@@ -17,8 +17,12 @@ import { Schema } from "effect"
 // ---------------------------------------------------------------------------------------------
 // Policies and hours
 
-export const SlaPriority = Schema.Literals(["urgent", "high", "normal", "low"])
+export const SlaPriority = Schema.Literals(["urgent", "high", "medium", "low"])
 export type SlaPriority = typeof SlaPriority.Type
+
+/** An issue's priority (`IssuePriority`): one without a priority gets medium's targets. */
+export const slaPriorityOf = (priority: "none" | SlaPriority): SlaPriority =>
+	priority === "none" ? "medium" : priority
 
 const Minutes = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 60 * 24 * 90 }))
 const Clock = Schema.String.check(Schema.isPattern(/^([01]\d|2[0-3]):([0-5]\d)$/))
@@ -32,7 +36,7 @@ export type SlaTarget = typeof SlaTarget.Type
 export const SlaTargets = Schema.Struct({
 	urgent: SlaTarget,
 	high: SlaTarget,
-	normal: SlaTarget,
+	medium: SlaTarget,
 	low: SlaTarget,
 })
 export type SlaTargets = typeof SlaTargets.Type
@@ -108,7 +112,7 @@ export const DEFAULT_SLA_POLICY: SlaPolicyDraft = {
 	targets: {
 		urgent: target(60, 8 * 60),
 		high: target(2 * 60, 16 * 60),
-		normal: target(4 * 60, 3 * 8 * 60),
+		medium: target(4 * 60, 3 * 8 * 60),
 		low: target(8 * 60, 5 * 8 * 60),
 	},
 	hours: "business",

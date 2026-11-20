@@ -66,7 +66,7 @@ const TargetForm = Schema.Struct({ firstResponse: DurationForm, resolution: Dura
 export const TargetsForm = Schema.Struct({
 	urgent: TargetForm,
 	high: TargetForm,
-	normal: TargetForm,
+	medium: TargetForm,
 	low: TargetForm,
 })
 export type TargetsForm = typeof TargetsForm.Type

@@ -245,7 +245,7 @@ const withTarget = (
 	form: PolicyForm,
 	priority: Customers.SlaPriority,
 	clock: SlaClock,
-	change: Partial<PolicyForm["targets"]["normal"]["firstResponse"]>,
+	change: Partial<PolicyForm["targets"]["medium"]["firstResponse"]>,
 ): PolicyForm => ({
 	...form,
 	targets: {

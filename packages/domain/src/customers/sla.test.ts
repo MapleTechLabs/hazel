@@ -92,12 +92,12 @@ const ctx: SlaContext = { targets: DEFAULT_SLA_POLICY.targets, calendar: berlin,
 
 describe("replay", () => {
 	it("Friday evening question, Monday answer: first response met, resolution paused while waiting", () => {
-		// normal: 4h first response, 24h resolution (business).
+		// medium: 4h first response, 24h resolution (business).
 		const steps = replay(
 			ctx,
 			"Europe/Berlin",
 			[
-				["2026-11-20 16:50", "open", "normal"],
+				["2026-11-20 16:50", "open", "medium"],
 				["2026-11-23 09:20", "reply"],
 				["2026-11-23 09:21", "status", "waiting_on_customer"],
 				["2026-11-25 11:00", "customer"],

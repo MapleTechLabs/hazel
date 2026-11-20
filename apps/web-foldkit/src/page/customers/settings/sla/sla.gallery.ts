@@ -51,7 +51,7 @@ const POLICIES: ReadonlyArray<PolicyRow> = [
 		targets: {
 			urgent: target(15, 4 * 60),
 			high: target(30, 8 * 60),
-			normal: target(60, 24 * 60),
+			medium: target(60, 24 * 60),
 			low: target(4 * 60, 48 * 60),
 		},
 		hours: "always",

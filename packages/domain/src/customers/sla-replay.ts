@@ -4,7 +4,7 @@
  * the demo seed share it).
  *
  * A script is lines of wall times in the business hours' zone, e.g.
- * `["2026-11-20 16:50", "open", "normal"]`, `["2026-11-23 09:20", "reply"]`.
+ * `["2026-11-20 16:50", "open", "medium"]`, `["2026-11-23 09:20", "reply"]`.
  */
 import {
 	dueAlerts,

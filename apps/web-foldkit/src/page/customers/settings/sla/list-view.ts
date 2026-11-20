@@ -7,7 +7,7 @@ import { dialogClose, dialogFooter, dialogHeader } from "../../../../ui/dialog"
 import { emptyState } from "../../../../ui/empty-state"
 import * as Modal from "../../../../ui/modal"
 import { switchControl } from "../../../../ui/switch"
-import { appliesToSummary, HOURS_LABEL, normalTargetHint } from "./draft"
+import { appliesToSummary, HOURS_LABEL, mediumTargetHint } from "./draft"
 import { Message } from "./message"
 import { type Model, type PolicyRow, policyById } from "./model"
 import { card } from "./parts"
@@ -96,7 +96,7 @@ const policyRow = (
 								],
 								[
 									IconClock(h, { className: "size-3 shrink-0" }),
-									normalTargetHint(policy.targets),
+									mediumTargetHint(policy.targets),
 								],
 							),
 						],

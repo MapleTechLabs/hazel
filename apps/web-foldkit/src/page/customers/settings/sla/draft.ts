@@ -62,7 +62,7 @@ export const withoutDays = (targets: TargetsForm): TargetsForm => {
 		firstResponse: of(targets[priority].firstResponse),
 		resolution: of(targets[priority].resolution),
 	})
-	return { urgent: row("urgent"), high: row("high"), normal: row("normal"), low: row("low") }
+	return { urgent: row("urgent"), high: row("high"), medium: row("medium"), low: row("low") }
 }
 
 // FORMS
@@ -72,7 +72,7 @@ export const targetsFormOf = (targets: Customers.SlaTargets, hours: Customers.Sl
 		firstResponse: durationFormOf(targets[priority].firstResponseMinutes, hours),
 		resolution: durationFormOf(targets[priority].resolutionMinutes, hours),
 	})
-	return { urgent: of("urgent"), high: of("high"), normal: of("normal"), low: of("low") }
+	return { urgent: of("urgent"), high: of("high"), medium: of("medium"), low: of("low") }
 }
 
 export const formOfPolicy = (policy: PolicyRow | Customers.SlaPolicyDraft): PolicyForm => ({
@@ -138,7 +138,7 @@ export const draftOfForm = (form: PolicyForm): Customers.SlaPolicyDraft | undefi
 		targets: {
 			urgent: target("urgent"),
 			high: target("high"),
-			normal: target("normal"),
+			medium: target("medium"),
 			low: target("low"),
 		},
 		hours: form.hours,
@@ -207,9 +207,9 @@ export const appliesToSummary = (
 	].join(" · ")
 }
 
-/** "Normal: 4h reply · 24h resolve". */
-export const normalTargetHint = (targets: Customers.SlaTargets): string =>
-	`Normal: ${formatMinutes(targets.normal.firstResponseMinutes)} reply · ${formatMinutes(targets.normal.resolutionMinutes)} resolve`
+/** "Medium: 4h reply · 24h resolve". */
+export const mediumTargetHint = (targets: Customers.SlaTargets): string =>
+	`Medium: ${formatMinutes(targets.medium.firstResponseMinutes)} reply · ${formatMinutes(targets.medium.resolutionMinutes)} resolve`
 
 export const HOURS_LABEL = {
 	business: "Business hours",
@@ -246,9 +246,9 @@ const wallTime = (at: number, timeZone: string, withDate: boolean): string => {
 	return `${of("weekday")}${day} ${of("hour")}:${of("minute")}`
 }
 
-/** "A normal message on Friday 16:50 is due Monday 12:50."; undefined while the target is invalid. */
+/** "A medium-priority message on Friday 16:50 is due Monday 12:50."; undefined while the target is invalid. */
 export const exampleLine = (form: PolicyForm, businessHours: Customers.BusinessHours): string | undefined => {
-	const target = form.targets.normal.firstResponse
+	const target = form.targets.medium.firstResponse
 	if (durationError(target) !== undefined) return undefined
 	const minutes = minutesOf(target)
 	const { timeZone } = businessHours
@@ -259,5 +259,5 @@ export const exampleLine = (form: PolicyForm, businessHours: Customers.BusinessH
 		minutes * MINUTE_MS,
 	)
 	const withDate = due - from >= 6 * 24 * 60 * MINUTE_MS
-	return `A normal message on ${wallTime(from, timeZone, false)} is due ${wallTime(due, timeZone, withDate)}.`
+	return `A medium-priority message on ${wallTime(from, timeZone, false)} is due ${wallTime(due, timeZone, withDate)}.`
 }
