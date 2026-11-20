@@ -12,12 +12,12 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import {
 	ChannelEvidence,
-	type EvidenceMember,
+	EvidenceMember,
 	type EvidenceWorkspace,
 	MAX_EVIDENCE_MEMBERS,
 	workspaceKey,
 } from "@hazel/domain/customers"
-import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, ConnectConversationId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { defineCall } from "../calls"
 import { inList } from "../customers/sql"
@@ -85,6 +85,7 @@ export const channelEvidence = Effect.fn("OrgObject.channelEvidence")(function* 
 				provider: $.connection.provider,
 				workspaceId: $.connection.externalWorkspaceId,
 				workspaceName: $.connection.externalWorkspaceName,
+				createdAt: $.createdAt,
 			}))
 			.where(($) => [
 				$.isActive.eq(true),
@@ -108,10 +109,17 @@ export const channelEvidence = Effect.fn("OrgObject.channelEvidence")(function* 
 	const slackLinked = [...linksOf].flatMap(([channelId, list]) =>
 		list.some((link) => link.provider === "slack") ? [channelId] : [],
 	)
+	// Authors seen before the current mirror was made belong to a replaced one.
+	const slackSince = new Map<ChannelId, number>()
+	for (const link of links) {
+		if (link.provider !== "slack" || slackSince.has(link.channelId)) continue
+		// Ordered by `createdAt`: the first is the oldest live Slack link of the channel.
+		slackSince.set(link.channelId, link.createdAt.getTime())
+	}
 	const ownTeams = [
 		...new Set(links.flatMap((link) => (link.provider === "slack" ? [link.workspaceId] : []))),
 	]
-	const authors =
+	const authorRows =
 		slackLinked.length === 0
 			? []
 			: yield* db.run(
@@ -126,6 +134,9 @@ export const channelEvidence = Effect.fn("OrgObject.channelEvidence")(function* 
 						])
 						.orderBy(($) => [[$.lastSeenAt, "desc"]]),
 				)
+	const authors = authorRows.filter(
+		(author) => author.lastSeenAt.getTime() >= (slackSince.get(author.hazelChannelId) ?? Infinity),
+	)
 	const externalTeamsOf = new Map<ChannelId, Set<string>>()
 	for (const author of authors) {
 		if (author.externalWorkspaceId === null) continue
@@ -166,7 +177,7 @@ export const channelEvidence = Effect.fn("OrgObject.channelEvidence")(function* 
 	// Connect mounts (host or guest) of these channels.
 	const mounts = yield* db.run(
 		SQLite.from(schema.connectConversationChannelsTable)
-			.select("channelId", "conversationId")
+			.select("channelId", "conversationId", "role")
 			.where(($) => [
 				$.organizationId.eq(organizationId),
 				$.isActive.eq(true),
@@ -175,6 +186,31 @@ export const channelEvidence = Effect.fn("OrgObject.channelEvidence")(function* 
 			]),
 	)
 	const conversationChannel = new Map(mounts.map((mount) => [mount.conversationId, mount.channelId]))
+	// A guest mount's people are the host's participants: the conversation snapshot names its host.
+	const guestMounts = mounts.filter((mount) => mount.role === "guest")
+	const hosts =
+		guestMounts.length === 0
+			? []
+			: yield* db.run(
+					SQLite.from(schema.connectConversationsTable)
+						.select("id", "hostOrganizationId")
+						.where(($) => [
+							inList(
+								$.id,
+								guestMounts.map((mount) => mount.conversationId),
+							),
+							$.deletedAt.isNull(),
+						]),
+				)
+	const hostOf = new Map(hosts.map((row) => [row.id, row.hostOrganizationId] as const))
+	const guestOf = new Map(
+		guestMounts.flatMap((mount) => {
+			const hostOrganizationId = hostOf.get(mount.conversationId)
+			return hostOrganizationId === undefined || hostOrganizationId === organizationId
+				? []
+				: [[mount.channelId, { hostOrganizationId, conversationId: mount.conversationId }] as const]
+		}),
+	)
 
 	// Connect participants from another org. `isExternal` is relative to the host (true: a guest
 	// org's reader), so "not from this org" is `homeOrganizationId`, right on either side.
@@ -227,15 +263,110 @@ export const channelEvidence = Effect.fn("OrgObject.channelEvidence")(function* 
 
 	const connected = new Set(mounts.map((mount) => mount.channelId))
 	return channels.map((channel): ChannelEvidence => {
-		const seen = (seenOf.get(channel.id) ?? []).sort((a, b) => b.at - a.at).slice(0, MAX_EVIDENCE_MEMBERS)
-		return {
+		const all = (seenOf.get(channel.id) ?? []).sort((a, b) => b.at - a.at)
+		const seen = all.slice(0, MAX_EVIDENCE_MEMBERS)
+		const entry: ChannelEvidence = {
+			externalMemberCount: all.length,
 			channelId: channel.id,
 			channelName: channel.name,
 			origin: connected.has(channel.id)
 				? "connect"
 				: (linksOf.get(channel.id)?.[0]?.provider ?? "hazel"),
 			workspaces: channel.workspaces,
-			externalMembers: seen.map((entry) => entry.member),
+			externalMembers: seen.map((member) => member.member),
+		}
+		const guest = guestOf.get(channel.id)
+		return guest === undefined ? entry : { ...entry, connect: guest }
+	})
+}, Effect.orDie)
+
+// ---------------------------------------------------------------------------
+// A guest org's Connect channel, answered by the host
+// ---------------------------------------------------------------------------
+
+export const ConnectGuestEvidenceCall = defineCall("org.connectGuestEvidence", "org", {
+	payload: Schema.Struct({
+		/** This org: the conversations' host. */
+		organizationId: OrganizationId,
+		guestOrganizationId: OrganizationId,
+		conversationIds: Schema.Array(ConnectConversationId),
+	}),
+	success: Schema.Array(
+		Schema.Struct({
+			conversationId: ConnectConversationId,
+			/** At most `MAX_EVIDENCE_MEMBERS`, most recently updated first. */
+			members: Schema.Array(EvidenceMember),
+			/** Every such participant, the sample or not. */
+			memberCount: Schema.Number,
+		}),
+	),
+	error: Schema.Never,
+})
+
+/**
+ * The people of conversations this org hosts, as seen from a guest org: participants from any org
+ * but the guest. Only for conversations the guest has an active mount on (anything else is
+ * answered with nothing), so an org learns only about shares it is part of.
+ */
+export const connectGuestEvidence = Effect.fn("OrgObject.connectGuestEvidence")(function* (payload: {
+	readonly organizationId: OrganizationId
+	readonly guestOrganizationId: OrganizationId
+	readonly conversationIds: ReadonlyArray<ConnectConversationId>
+}) {
+	if (payload.conversationIds.length === 0) return []
+	const db = yield* Database.Database
+	const hosted = yield* db.run(
+		SQLite.from(schema.connectConversationsTable)
+			.select("id")
+			.where(($) => [
+				$.hostOrganizationId.eq(payload.organizationId),
+				$.deletedAt.isNull(),
+				inList($.id, payload.conversationIds),
+			]),
+	)
+	const mounted = yield* db.run(
+		SQLite.from(schema.connectConversationChannelsTable)
+			.select("conversationId")
+			.where(($) => [
+				$.organizationId.eq(payload.guestOrganizationId),
+				$.role.eq("guest"),
+				$.isActive.eq(true),
+				$.deletedAt.isNull(),
+				inList(
+					$.conversationId,
+					hosted.map((row) => row.id),
+				),
+			]),
+	)
+	const conversationIds = [...new Set(mounted.map((row) => row.conversationId))]
+	yield* Effect.annotateCurrentSpan({ "evidence.conversations": conversationIds.length })
+	if (conversationIds.length === 0) return []
+	const participants = yield* db.run(
+		SQLite.from(schema.connectParticipantsTable, "p")
+			.innerJoin(schema.usersTable, "u", (p, u) => u.id.eq(p.userId))
+			.select(($) => ({ conversationId: $.conversationId, userId: $.userId, email: $.u.email }))
+			.where(($) => [
+				inList($.conversationId, conversationIds),
+				$.deletedAt.isNull(),
+				$.homeOrganizationId.neq(payload.guestOrganizationId),
+				$.u.userType.eq("user"),
+				$.u.deletedAt.isNull(),
+			])
+			.orderBy(($) => [[$.updatedAt, "desc"]]),
+	)
+	return conversationIds.map((conversationId) => {
+		const users = new Set<string>()
+		const members: Array<EvidenceMember> = []
+		for (const row of participants) {
+			if (row.conversationId !== conversationId || users.has(row.userId)) continue
+			users.add(row.userId)
+			const email = row.email.trim().toLowerCase()
+			members.push({ source: "connect", email: email.length > 0 ? email : null })
+		}
+		return {
+			conversationId,
+			members: members.slice(0, MAX_EVIDENCE_MEMBERS),
+			memberCount: members.length,
 		}
 	})
 }, Effect.orDie)

@@ -6,7 +6,13 @@
  * Pure and explainable, like signals: every suggestion carries the reasons that produced it, and
  * `describeReason` renders each as one sentence ("3 of 4 external members have @acme.com").
  */
-import { ChannelId, CustomerAccountId, CustomerChannelSuggestionId } from "@hazel/schema"
+import {
+	ChannelId,
+	ConnectConversationId,
+	CustomerAccountId,
+	CustomerChannelSuggestionId,
+	OrganizationId,
+} from "@hazel/schema"
 import { Schema } from "effect"
 import { JsonDate } from "../models/utils"
 
@@ -45,6 +51,18 @@ export const ChannelEvidence = Schema.Struct({
 	workspaces: Schema.Array(EvidenceWorkspace),
 	/** At most `MAX_EVIDENCE_MEMBERS`, most recently seen first. */
 	externalMembers: Schema.Array(EvidenceMember),
+	/**
+	 * How many external members there are in all (`externalMembers` may be a sample). A channel
+	 * whose members were not all seen is never linked automatically.
+	 */
+	externalMemberCount: Schema.optionalKey(Schema.Number),
+	/**
+	 * A Connect channel this org mounted as a guest: its people are the host's participants, which
+	 * only the host org holds (`org.connectGuestEvidence`).
+	 */
+	connect: Schema.optionalKey(
+		Schema.Struct({ hostOrganizationId: OrganizationId, conversationId: ConnectConversationId }),
+	),
 })
 export type ChannelEvidence = typeof ChannelEvidence.Type
 
@@ -266,11 +284,13 @@ const accountTokens = (account: SuggestionAccount): ReadonlyArray<string> => {
 	const name = normalizeName(account.name)
 	if (name.length >= 4) tokens.add(name)
 	for (const domain of account.domains) {
-		const label =
+		// "foo-bar.com" → "foobar", squashed like the names it is matched against.
+		const label = squash(
 			domain
 				.toLowerCase()
 				.replace(/^www\./, "")
-				.split(".")[0] ?? ""
+				.split(".")[0] ?? "",
+		)
 		if (label.length >= 4 && !FREE_MAIL_DOMAINS.has(domain.toLowerCase())) tokens.add(label)
 	}
 	return [...tokens]
@@ -433,6 +453,10 @@ export const scoreChannel = (
 	// contact or domain match.
 	const best = ranked[0]
 	if (best === undefined || evidence.origin !== "connect") return ranked
+	// A sample of the members: the ones not seen could be another account's (or no one's contacts),
+	// so neither the share nor the rival check can be trusted.
+	const seen = evidence.externalMembers.length
+	if (seen >= MAX_EVIDENCE_MEMBERS || seen < (evidence.externalMemberCount ?? seen)) return ranked
 	const byEmail = (suggestion: ScoredSuggestion) =>
 		suggestion.reasons.some((reason) => reason.kind === "contacts" || reason.kind === "domain")
 	const guests = [

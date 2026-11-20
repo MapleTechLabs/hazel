@@ -53,6 +53,7 @@ import {
 } from "../../worker/objects/customers/credentials"
 import { callObject } from "../../worker/objects/calls"
 import {
+	decidedForCustomer,
 	eventReasons,
 	openSuggestion,
 	openSuggestions,
@@ -892,8 +893,9 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					const found = yield* openSuggestion(suggestionId)
 					if (Option.isNone(found)) return yield* notFound("suggestion", suggestionId)
 					const { channelId, accountId } = found.value
-					const account = yield* liveAccount(accountId)
-					if (Option.isNone(account)) return yield* notFound("suggestion", suggestionId)
+					// Its customer decided the channel through another account of the group.
+					if (yield* decidedForCustomer(found.value))
+						return yield* notFound("suggestion", suggestionId)
 					const check = yield* checkChannel(organizationId, channelId, actor.userId)
 					if (check === "not_found") return yield* notFound("channel", channelId)
 					if (check === "not_linkable") {
@@ -904,7 +906,12 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						Effect.gen(function* () {
 							// Decided while the channel was checked (another tab, a refresh).
 							const still = yield* openSuggestion(suggestionId)
-							if (Option.isNone(still)) return yield* notFound("suggestion", suggestionId)
+							if (Option.isNone(still) || (yield* decidedForCustomer(still.value))) {
+								return yield* notFound("suggestion", suggestionId)
+							}
+							// The account as it is now: its group may have changed during the check.
+							const account = yield* liveAccount(accountId)
+							if (Option.isNone(account)) return yield* notFound("account", accountId)
 							return yield* linkChannelNow({
 								organizationId,
 								account: account.value,

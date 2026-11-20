@@ -65,6 +65,8 @@ import { customerChannel, CustomerChannelCall } from "./org/channel-customers"
 import {
 	channelEvidence,
 	ChannelEvidenceCall,
+	connectGuestEvidence,
+	ConnectGuestEvidenceCall,
 	visibleChannels,
 	VisibleChannelsCall,
 } from "./org/channel-evidence"
@@ -150,6 +152,7 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(CustomerMembersCall, customerMembers),
 		receiver(CustomerChannelCall, customerChannel),
 		receiver(ChannelEvidenceCall, channelEvidence),
+		receiver(ConnectGuestEvidenceCall, connectGuestEvidence),
 		receiver(VisibleChannelsCall, visibleChannels),
 	]),
 	channel: byName([

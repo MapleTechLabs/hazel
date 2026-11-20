@@ -1283,11 +1283,12 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 			.where(($) => [$.id.eq(base.settings.id)]),
 	)
 	yield* clearComputeProgress
-	yield* resetComputeFailures
 	// Names a source changed, accounts a source deleted: chat's view of linked channels follows.
 	yield* publishChannelCustomersAfterCompute
 	// Suggested channel links follow the accounts, contacts and links (logged, never fails it).
+	// Before the failure count is reset: a refresh that stalls the turn keeps the backoff.
 	yield* refreshSuggestionsAfterCompute
+	yield* resetComputeFailures
 	// Hourly; sooner after a person's change during a compute spread over turns.
 	const again = yield* takeComputeAgain
 	yield* scheduleComputeAt(now.getTime() + (again ? COMPUTE_DEBOUNCE_MS : COMPUTE_INTERVAL_MS))

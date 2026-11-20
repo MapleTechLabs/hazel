@@ -14,6 +14,7 @@ import {
 	buildSuggestionIndex,
 	type ChannelEvidence,
 	type ChannelSuggestion,
+	MAX_EVIDENCE_MEMBERS,
 	type ScoredSuggestion,
 	scoreChannel,
 	STRONG_SUGGESTION_SCORE,
@@ -21,12 +22,18 @@ import {
 	type SuggestionReason,
 	workspaceKey,
 } from "@hazel/domain/customers"
-import type { ChannelId, CustomerAccountId, OrganizationId, UserId } from "@hazel/schema"
+import type {
+	ChannelId,
+	ConnectConversationId,
+	CustomerAccountId,
+	OrganizationId,
+	UserId,
+} from "@hazel/schema"
 import { Cause, Clock, Effect, Option } from "effect"
 import { callObject } from "../calls"
 import { orgTarget } from "../kinds"
 import { readObjectMeta } from "../meta"
-import { ChannelEvidenceCall, VisibleChannelsCall } from "../org/channel-evidence"
+import { ChannelEvidenceCall, ConnectGuestEvidenceCall, VisibleChannelsCall } from "../org/channel-evidence"
 import { linkChannel, publishChannelCustomers } from "./channels"
 import { inList } from "./sql"
 
@@ -132,16 +139,23 @@ export const refreshSuggestions = Effect.fn("CustomersObject.refreshSuggestions"
 			.where(($) => [$.deletedAt.isNull()])
 			.limit(1),
 	)
-	if (Option.isNone(anyAccount)) return yield* applySuggestions(organizationId, [], scope)
+	// When the evidence was asked for: a refresh that applied since is newer than this one.
+	const fetchedAt = new Date(yield* Clock.currentTimeMillis)
+	if (Option.isNone(anyAccount)) return yield* applySuggestions(organizationId, [], scope, fetchedAt)
 	const target = orgTarget(organizationId)
 	if (scope === undefined) {
+		const evidence = yield* callObject(ChannelEvidenceCall, target, { organizationId })
 		return yield* applySuggestions(
 			organizationId,
-			yield* callObject(ChannelEvidenceCall, target, { organizationId }),
+			yield* withHostEvidence(organizationId, evidence),
 			scope,
+			fetchedAt,
 		)
 	}
-	const scoped = yield* callObject(ChannelEvidenceCall, target, { organizationId, channelIds: scope })
+	const scoped = yield* withHostEvidence(
+		organizationId,
+		yield* callObject(ChannelEvidenceCall, target, { organizationId, channelIds: scope }),
+	)
 	const keys = siblingKeys(scoped)
 	const linkedIds =
 		keys.length === 0
@@ -161,7 +175,56 @@ export const refreshSuggestions = Effect.fn("CustomersObject.refreshSuggestions"
 					channelIds: linkedIds,
 					workspaceKeys: keys,
 				})
-	return yield* applySuggestions(organizationId, [...scoped, ...siblings], scope)
+	return yield* applySuggestions(organizationId, [...scoped, ...siblings], scope, fetchedAt)
+})
+
+/**
+ * Channels this org mounted from another org's Connect share hold none of its people: their
+ * host answers (`org.connectGuestEvidence`), one call per host for all its conversations, and its
+ * participants join the channel's external members. Outside any transaction. A host that cannot
+ * be reached is logged and its channels keep what this org saw (no Connect guests: no auto-link).
+ */
+const withHostEvidence = Effect.fn("CustomersObject.hostEvidence")(function* (
+	organizationId: OrganizationId,
+	evidence: ReadonlyArray<ChannelEvidence>,
+) {
+	const byHost = new Map<OrganizationId, Array<ConnectConversationId>>()
+	for (const entry of evidence) {
+		if (entry.connect === undefined) continue
+		const list = byHost.get(entry.connect.hostOrganizationId) ?? []
+		list.push(entry.connect.conversationId)
+		byHost.set(entry.connect.hostOrganizationId, list)
+	}
+	if (byHost.size === 0) return evidence
+	const answers = yield* Effect.forEach(
+		[...byHost],
+		([hostOrganizationId, conversationIds]) =>
+			callObject(ConnectGuestEvidenceCall, orgTarget(hostOrganizationId), {
+				organizationId: hostOrganizationId,
+				guestOrganizationId: organizationId,
+				conversationIds,
+			}).pipe(
+				Effect.catchTag("ObjectCallError", (error) =>
+					Effect.logWarning("Connect host evidence unavailable", {
+						hostOrganizationId,
+						reason: error.message,
+					}).pipe(Effect.as([])),
+				),
+			),
+		{ concurrency: 4 },
+	)
+	const hostPeople = new Map(answers.flat().map((answer) => [answer.conversationId, answer] as const))
+	yield* Effect.annotateCurrentSpan({ "suggestions.connect_hosts": byHost.size })
+	return evidence.map((entry): ChannelEvidence => {
+		const people = entry.connect === undefined ? undefined : hostPeople.get(entry.connect.conversationId)
+		if (people === undefined) return entry
+		return {
+			...entry,
+			externalMembers: [...people.members, ...entry.externalMembers].slice(0, MAX_EVIDENCE_MEMBERS),
+			externalMemberCount:
+				people.memberCount + (entry.externalMemberCount ?? entry.externalMembers.length),
+		}
+	})
 })
 
 /**
@@ -177,6 +240,8 @@ export const applySuggestions = Effect.fn("CustomersObject.applySuggestions")(fu
 	organizationId: OrganizationId,
 	evidence: ReadonlyArray<ChannelEvidence>,
 	scope: ReadonlyArray<ChannelId> | undefined,
+	/** When the evidence was asked for; a channel a later refresh already wrote is left to it. */
+	fetchedAt?: Date,
 ) {
 	const db = yield* Database.Database
 	const now = new Date(yield* Clock.currentTimeMillis)
@@ -193,14 +258,32 @@ export const applySuggestions = Effect.fn("CustomersObject.applySuggestions")(fu
 							: SQLite.or($.deletedAt.isNull(), inList($.channelId, scope)),
 					]),
 			)
-			const liveLinks = links.filter((link) => link.deletedAt === null)
+			// Live: a link of a live account, as the snapshot projects them. Any row (a deleted
+			// account's too) is history that keeps a channel from linking automatically.
+			const liveLinks = links.filter(
+				(link) => link.deletedAt === null && customers.ownerOf.has(link.accountId),
+			)
 			const linked = new Set(liveLinks.map((link) => link.channelId))
 			const everLinked = new Set(links.map((link) => link.channelId))
+
+			const existing = yield* db.run(
+				SQLite.from(schema.customerChannelSuggestionsTable)
+					.select("id", "channelId", "accountId", "status", "computedAt")
+					.where(($) => [scope === undefined ? undefined : inList($.channelId, scope)]),
+			)
+			// Channels a refresh that asked the org after this one already wrote: its scores stand.
+			const newer = new Set(
+				fetchedAt === undefined
+					? []
+					: existing
+							.filter((row) => row.computedAt.getTime() > fetchedAt.getTime())
+							.map((row) => row.channelId),
+			)
 
 			const evidenceOf = new Map(evidence.map((entry) => [entry.channelId, entry] as const))
 			const targets = (scope ?? evidence.map((entry) => entry.channelId)).flatMap((channelId) => {
 				const entry = evidenceOf.get(channelId)
-				return entry === undefined || linked.has(channelId) ? [] : [entry]
+				return entry === undefined || linked.has(channelId) || newer.has(channelId) ? [] : [entry]
 			})
 
 			// Contacts, only those an external member could be.
@@ -208,7 +291,7 @@ export const applySuggestions = Effect.fn("CustomersObject.applySuggestions")(fu
 				...new Set(
 					targets.flatMap((entry) =>
 						entry.externalMembers.flatMap((member) =>
-							member.email === null ? [] : [member.email],
+							member.email === null ? [] : [member.email.trim().toLowerCase()],
 						),
 					),
 				),
@@ -222,7 +305,7 @@ export const applySuggestions = Effect.fn("CustomersObject.applySuggestions")(fu
 								.where(($) => [
 									$.deletedAt.isNull(),
 									SQLite.sql
-										.cond`lower(${$.email}) IN (SELECT value FROM json_each(${JSON.stringify(emails)}))`,
+										.cond`lower(trim(${$.email})) IN (SELECT value FROM json_each(${JSON.stringify(emails)}))`,
 								]),
 						)
 			const index = buildSuggestionIndex({
@@ -240,11 +323,6 @@ export const applySuggestions = Effect.fn("CustomersObject.applySuggestions")(fu
 				}),
 			})
 
-			const existing = yield* db.run(
-				SQLite.from(schema.customerChannelSuggestionsTable)
-					.select("id", "channelId", "accountId", "status")
-					.where(($) => [scope === undefined ? undefined : inList($.channelId, scope)]),
-			)
 			// A decision for any account of a group is one for its customer (regrouping keeps it).
 			const decidedOf = new Map<ChannelId, Set<CustomerAccountId>>()
 			const open: Array<(typeof existing)[number]> = []
@@ -262,7 +340,9 @@ export const applySuggestions = Effect.fn("CustomersObject.applySuggestions")(fu
 				scoreChannel(entry, index, decidedOf.get(entry.channelId) ?? new Set()),
 			)
 			const produced = new Set(scored.map((s) => `${s.channelId}:${s.accountId}`))
-			const stale = open.filter((row) => !produced.has(`${row.channelId}:${row.accountId}`))
+			const stale = open.filter(
+				(row) => !newer.has(row.channelId) && !produced.has(`${row.channelId}:${row.accountId}`),
+			)
 			const autoLinks = scored.filter(
 				(suggestion) =>
 					suggestion.autoLink &&
@@ -410,6 +490,7 @@ export const openSuggestions = Effect.fn("CustomersObject.openSuggestions")(func
 				[$.id, "asc"],
 			]),
 	)
+	const decided = yield* decidedPairs(customers, input.channelId)
 	const names = new Map(customers.accounts.map((account) => [account.id, account.name] as const))
 	// Rows come best first: after a regrouping two rows can name one customer for a channel, and the
 	// better one is kept.
@@ -420,7 +501,8 @@ export const openSuggestions = Effect.fn("CustomersObject.openSuggestions")(func
 		if (customer === undefined || name === undefined || (owner !== undefined && customer !== owner))
 			return []
 		const key = `${row.channelId}:${customer}`
-		if (seen.has(key)) return []
+		// Its customer already decided this channel (through another account of the group).
+		if (seen.has(key) || decided.has(key)) return []
 		seen.add(key)
 		return [{ row, customer, name }]
 	})
@@ -445,6 +527,34 @@ export const openSuggestions = Effect.fn("CustomersObject.openSuggestions")(func
 			computedAt: row.computedAt,
 		}))
 })
+
+/**
+ * `channel:customer` for every decided suggestion (dismissed or accepted), under the account's
+ * customer as `applySuggestions` counts them: a decision for any account of a group is the group's.
+ */
+const decidedPairs = (customers: Customers, channelId?: ChannelId) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const rows = yield* db.run(
+			SQLite.from(schema.customerChannelSuggestionsTable)
+				.select("channelId", "accountId")
+				.where(($) => [
+					$.status.neq("open"),
+					channelId === undefined ? undefined : $.channelId.eq(channelId),
+				]),
+		)
+		return new Set(
+			rows.map((row) => `${row.channelId}:${customers.ownerOf.get(row.accountId) ?? row.accountId}`),
+		)
+	})
+
+/** Whether an open suggestion's customer already has a decision for its channel. */
+export const decidedForCustomer = (row: Pick<schema.CustomerChannelSuggestion, "channelId" | "accountId">) =>
+	Effect.gen(function* () {
+		const customers = yield* loadCustomers
+		const decided = yield* decidedPairs(customers, row.channelId)
+		return decided.has(`${row.channelId}:${customers.ownerOf.get(row.accountId) ?? row.accountId}`)
+	})
 
 /** An open suggestion by id. */
 export const openSuggestion = (suggestionId: schema.CustomerChannelSuggestion["id"]) =>

@@ -540,6 +540,34 @@ describe("Suggested channel links", () => {
 			}),
 		))
 
+	it("leaves a channel to a refresh that asked the org later", () =>
+		run(
+			Effect.gen(function* () {
+				const t = yield* setup
+				t.contact("Acme", "ana@acme.com")
+				const shared = t.channel("shared", [t.world.member])
+				const stale = yield* t.evidence()
+				const asked = new Date(Date.now() - 60_000)
+				// A later refresh wrote the channel before this one applies; no contact matched then.
+				t.world.rows(
+					`INSERT INTO customer_channel_suggestions (id, organizationId, channelId, accountId, score) VALUES (?, ?, ?, ?, 40)`,
+					uuid(),
+					t.orgId,
+					shared,
+					t.accountId("Globex"),
+				)
+				t.connect(shared, ["ana@acme.com"])
+				const late = yield* t.evidence()
+				expect(stale.find((entry) => entry.channelId === shared)?.externalMembers).toEqual([])
+				const result = yield* t.world.object
+					.run(applySuggestions(t.orgId, late, undefined, asked))
+					.pipe(Effect.orDie)
+				expect(result.autoLinked).toBe(0)
+				expect(t.links()).toEqual([])
+				expect(t.suggestions(shared)).toMatchObject([{ accountId: t.accountId("Globex"), score: 40 }])
+			}),
+		))
+
 	it("keeps a dismissal after the account joins another's group", () =>
 		run(
 			Effect.gen(function* () {
