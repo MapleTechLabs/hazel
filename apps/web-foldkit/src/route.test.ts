@@ -169,6 +169,7 @@ describe("customers routes", () => {
 		[`/hazel/customers/settings/signals/${ruleId}`, "CustomersSettingsSignalRule"],
 		["/hazel/customers/settings/health", "CustomersSettingsHealth"],
 		["/hazel/customers/settings/plans", "CustomersSettingsPlans"],
+		["/hazel/customers/settings/sla", "CustomersSettingsSla"],
 		["/hazel/customers/settings/feature-flags", "CustomersSettingsFeatureFlags"],
 		["/hazel/customers/settings/sources", "CustomersSettingsSources"],
 		["/hazel/customers/settings/sources/stripe", "CustomersSourceDetail"],
@@ -517,6 +518,7 @@ describe("hrefOf", () => {
 		CustomersSettingsPlans: [
 			[AppRoute.CustomersSettingsPlans({ orgSlug }), "/hazel/customers/settings/plans"],
 		],
+		CustomersSettingsSla: [[AppRoute.CustomersSettingsSla({ orgSlug }), "/hazel/customers/settings/sla"]],
 		CustomersSettingsFeatureFlags: [
 			[AppRoute.CustomersSettingsFeatureFlags({ orgSlug }), "/hazel/customers/settings/feature-flags"],
 		],

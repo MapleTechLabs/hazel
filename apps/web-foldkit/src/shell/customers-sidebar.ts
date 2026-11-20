@@ -30,6 +30,7 @@ import {
 } from "../customers/view-layout"
 import { catchCommon, reasonToast } from "../data/actions"
 import {
+	IconClock,
 	IconCube,
 	IconEyeSlash,
 	IconHeart,
@@ -471,6 +472,12 @@ export const view = <ParentMessage>(
 						hrefOf(AppRoute.CustomersSettingsHealth({ orgSlug })),
 						on("CustomersSettingsHealth"),
 						icon(IconHeart),
+					),
+					item(
+						"Support SLAs",
+						hrefOf(AppRoute.CustomersSettingsSla({ orgSlug })),
+						on("CustomersSettingsSla"),
+						icon(IconClock),
 					),
 					item(
 						"Plans",
