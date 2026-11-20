@@ -321,8 +321,9 @@ describe("home actions", () => {
 			model((m) => expect(keysOf(m)).toContain("go:notificationsThreads")),
 			message(searched("general settings")),
 			model((m) => expect(keysOf(m)).toContain("go:settingsGeneral")),
+			// The Overview first; its layouts' settings page matches too.
 			message(searched("customer overview")),
-			model((m) => expect(keysOf(m)).toEqual(["go:customersOverview"])),
+			model((m) => expect(keysOf(m)).toEqual(["go:customersOverview", "go:customersLayouts"])),
 			message(searched("shortcuts")),
 			model((m) => expect(keysOf(m)).toEqual(["go:myKeybinds"])),
 			message(item("go:myKeybinds")),
