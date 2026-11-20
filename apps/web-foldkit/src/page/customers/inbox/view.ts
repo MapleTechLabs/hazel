@@ -209,6 +209,7 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 	const channel = context.channelsById.get(issue.sourceChannelId)
 	const assignee = issue.assigneeUserId === null ? undefined : context.membersById.get(issue.assigneeUserId)
 	const isSelected = issue.id === context.selectedId
+	const hasActions = isSelected && context.actions.length > 0
 	const waiting = needsReply(issue)
 	const ageMs =
 		issue.status === "closed"
@@ -302,26 +303,29 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 					),
 				],
 			),
-			...(isSelected && context.actions.length > 0
+			// The selected row's actions take the chips' place on a wide screen; narrower, the chips stay
+			// and the actions wrap onto a line of their own, so touch has them too.
+			h.div(
+				[h.Role("cell"), h.Class(twMerge("w-40 shrink-0 max-md:w-auto", hasActions && "lg:hidden"))],
+				[statusChip(h, issue.status)],
+			),
+			h.div(
+				[h.Role("cell"), h.Class(twMerge("w-24 shrink-0 max-md:hidden", hasActions && "lg:hidden"))],
+				[priorityLabel(h, issue.priority)],
+			),
+			...(hasActions
 				? [
 						h.div(
 							[
-								h.Class("flex shrink-0 items-center gap-1.5 max-lg:hidden"),
+								h.Class(
+									"flex shrink-0 flex-wrap items-center gap-1.5 max-lg:order-last max-lg:basis-full max-lg:pl-11",
+								),
 								h.OnClick(Message.ClickedRowActions(), { propagation: "Stop" }),
 							],
 							[...context.actions],
 						),
 					]
-				: [
-						h.div(
-							[h.Role("cell"), h.Class("w-40 shrink-0 max-md:w-auto")],
-							[statusChip(h, issue.status)],
-						),
-						h.div(
-							[h.Role("cell"), h.Class("w-24 shrink-0 max-md:hidden")],
-							[priorityLabel(h, issue.priority)],
-						),
-					]),
+				: []),
 			h.div(
 				[
 					h.Role("cell"),

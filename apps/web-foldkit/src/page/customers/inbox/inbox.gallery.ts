@@ -70,4 +70,10 @@ for (const theme of ["light", "dark"] as const) {
 		render("open")
 		await shoot(`inbox-open-${theme}-mobile`)
 	})
+	test(`mobile selected ${theme}`, async () => {
+		if (theme === "dark") document.documentElement.classList.add("dark")
+		await page.viewport(390, 1300)
+		render("selected")
+		await shoot(`inbox-selected-${theme}-mobile`)
+	})
 }
