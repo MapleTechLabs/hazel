@@ -4,8 +4,8 @@
  * clear Connect matches by itself (once: never after an unlink), and answers suggestions only for
  * channels the caller sees.
  */
-import type { OrganizationId } from "@hazel/schema"
-import { Cause, Effect, Exit, type Scope } from "effect"
+import { ChannelId, type OrganizationId, SyncChannelLinkId } from "@hazel/schema"
+import { Cause, Effect, Exit, Schema, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { orgTarget } from "../kinds"
 import { channelEvidence } from "../org/channel-evidence"
@@ -49,7 +49,7 @@ const setup = Effect.gen(function* () {
 	const exec = (query: string, ...params: Array<string | number | null>) =>
 		org.storage.db.prepare(query).run(...params)
 	const channel = (name: string, seenBy: ReadonlyArray<string>, type = "public") => {
-		const id = uuid()
+		const id = Schema.decodeSync(ChannelId)(uuid())
 		exec(
 			`INSERT INTO channels (id, name, type, organizationId) VALUES (?, ?, ?, ?)`,
 			id,
@@ -106,11 +106,11 @@ const setup = Effect.gen(function* () {
 	/** A Slack-mirrored channel with authors: `[team, email]`. */
 	/** Mirrors the channel from Slack; `authors` were seen through this mirror unless `throughLink` names another. */
 	const slack = (
-		channelId: string,
+		channelId: ChannelId,
 		authors: ReadonlyArray<readonly [string, string | null]>,
-		throughLink?: string,
+		throughLink?: SyncChannelLinkId,
 	) => {
-		const linkId = uuid()
+		const linkId = Schema.decodeSync(SyncChannelLinkId)(uuid())
 		exec(
 			`INSERT INTO chat_sync_channel_links (id, syncConnectionId, hazelChannelId, externalChannelId) VALUES (?, ?, ?, ?)`,
 			linkId,
@@ -619,7 +619,11 @@ describe("Suggested channel links", () => {
 				const t = yield* setup
 				const mirrored = t.channel("globex-ops", [t.world.member])
 				// The authors came through an earlier mirror of this channel, since replaced.
-				t.slack(mirrored, [[GLOBEX_TEAM, "gina@globex.com"]], uuid())
+				t.slack(
+					mirrored,
+					[[GLOBEX_TEAM, "gina@globex.com"]],
+					Schema.decodeSync(SyncChannelLinkId)(uuid()),
+				)
 				const [entry] = yield* t.evidence([mirrored])
 				expect(entry?.externalMembers).toEqual([])
 				expect(entry?.workspaces.some((workspace) => workspace.external)).toBe(false)
