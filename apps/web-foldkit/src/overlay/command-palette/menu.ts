@@ -94,7 +94,7 @@ const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 			CommandMenu.item("action:start-dm", "start conversation new dm", true),
 			CommandMenu.item("action:join-channel", "join channel"),
 			CommandMenu.item("action:invite", "invite members", true),
-			CommandMenu.item("action:ai-panel", "ask ai assistant chat t3 code", true),
+			CommandMenu.item("action:ai-panel", "ask the ai assistant chat t3 code", true),
 		]),
 		...(model.channels.length > 0
 			? [

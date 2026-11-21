@@ -40,6 +40,7 @@ import {
 	type Model,
 	NEW_CHAT_KEY,
 	PANEL_ID,
+	SETUP_ID,
 	type QuestionData,
 	type ThreadRow,
 } from "./model"
@@ -828,8 +829,11 @@ const connectState = (h: H, model: Model, shared: Shared): Html => {
 						? undefined
 						: h.a(
 								[
+									h.Id(SETUP_ID),
 									h.Href(hrefOf(integrationRoute(shared.orgSlug, "t3code"))),
 									h.Class(buttonClassName({ size: "sm" })),
+									// On a phone the sheet covers the page it opens: close it on the way.
+									...(shared.isMobile ? [h.OnClick(Message.ClickedClose())] : []),
 								],
 								[isExpired ? "Link T3 Code again" : "Open T3 Code settings"],
 							),
@@ -839,6 +843,12 @@ const connectState = (h: H, model: Model, shared: Shared): Html => {
 }
 
 // PANEL
+
+const checkingState = (h: H): Html =>
+	h.div(
+		[h.Class("flex flex-1 items-center justify-center")],
+		[loader(h, { className: "size-4", ariaLabel: "Checking T3 Code" })],
+	)
 
 const content = (h: H, model: Model, inputs: ViewInputs): ReadonlyArray<Html> => {
 	const thread = threadOf(model)
@@ -854,14 +864,17 @@ const content = (h: H, model: Model, inputs: ViewInputs): ReadonlyArray<Html> =>
 					key === "Escape" ? Option.some(Message.ClickedClose()) : Option.none(),
 				),
 			],
-			!isConnected && model.threadId === null
-				? [connectState(h, model, inputs.shared)]
-				: [
-						timeline(h, model, inputs),
-						thread !== null && isReadOnly(model, inputs.shared)
-							? sharedFooter(h, thread)
-							: composer(h, model, inputs),
-					],
+			// Until it is known whether T3 Code is linked, a new chat offers nothing to send.
+			model.connection === "Checking" && model.threadId === null
+				? [checkingState(h)]
+				: !isConnected && model.threadId === null
+					? [connectState(h, model, inputs.shared)]
+					: [
+							timeline(h, model, inputs),
+							thread !== null && isReadOnly(model, inputs.shared)
+								? sharedFooter(h, thread)
+								: composer(h, model, inputs),
+						],
 		),
 	]
 }
@@ -907,7 +920,7 @@ const desktopPanel = (h: H, model: Model, inputs: ViewInputs): Html => {
 				position: "right",
 				width,
 				minWidth: MIN_WIDTH,
-				maxWidth: MAX_KEYBOARD_WIDTH,
+				maxWidth: model.edgeMaxWidth ?? MAX_KEYBOARD_WIDTH,
 				isDragging: model.drag !== null,
 				onPress: (clientX, target) => {
 					const { startWidth, maxWidth } = measureEdge(target, width)

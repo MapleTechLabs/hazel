@@ -11,6 +11,7 @@ import {
 	AnswerAssistantQuestion,
 	FetchAssistantStatus,
 	FocusAssistantComposer,
+	MeasureAssistantEdge,
 	FocusAssistantToggle,
 	MakeAssistantMessageId,
 	SaveAssistantPanel,
@@ -62,6 +63,7 @@ export const init = (stored: Stored): Model => ({
 	isOpen: stored.isOpen,
 	width: stored.width === null ? null : clamp(stored.width, MAX_KEYBOARD_WIDTH),
 	drag: null,
+	edgeMaxWidth: null,
 	organizationId: null,
 	threads: [],
 	threadId: null,
@@ -208,15 +210,23 @@ const updatedThreads = (
 			commands: model.isOpen ? [FetchAssistantStatus({ organizationId })] : [],
 		}
 	const next = modifyFields(model, { organizationId: () => organizationId, threads: () => threads })
+	// A panel that loaded open has not asked yet whether T3 Code is linked: ask once its org is known.
+	const status =
+		model.organizationId === null && model.isOpen && model.connection === "Checking"
+			? [FetchAssistantStatus({ organizationId })]
+			: []
 	// The open thread was here and is gone (unshared, or deleted). A start whose row has not synced
 	// yet was never here.
 	const isGone =
 		model.threadId !== null &&
 		model.threads.some((thread) => thread.id === model.threadId) &&
 		!threads.some((thread) => thread.id === model.threadId)
-	if (!isGone) return { model: next }
+	if (!isGone) return { model: next, commands: status }
 	const shown = showThread(next, null)
-	return { ...shown, model: modifyFields(shown.model, { error: () => GONE_THREAD }) }
+	return {
+		model: modifyFields(shown.model, { error: () => GONE_THREAD }),
+		commands: [...(shown.commands ?? []), ...status],
+	}
 }
 
 const pickedHistory = (model: Model, key: string): Return => {
@@ -512,10 +522,11 @@ const releasedEdge = (model: Model): Return => {
 	return { model: next, commands: [SaveAssistantPanel({ stored: persisted(next) })] }
 }
 
-const nudgedEdge = (model: Model, delta: number): Return => {
-	const width = clamp(widthOf(model) + delta, MAX_KEYBOARD_WIDTH)
-	if (width === model.width) return { model }
-	const next = modifyFields(model, { width: () => width })
+const nudgedEdge = (model: Model, delta: number, maxWidth: number): Return => {
+	const edgeMaxWidth = Math.max(MIN_WIDTH, Math.min(maxWidth, MAX_KEYBOARD_WIDTH))
+	const width = clamp(widthOf(model) + delta, edgeMaxWidth)
+	if (width === model.width) return { model: modifyFields(model, { edgeMaxWidth: () => edgeMaxWidth }) }
+	const next = modifyFields(model, { width: () => width, edgeMaxWidth: () => edgeMaxWidth })
 	return { model: next, commands: [SaveAssistantPanel({ stored: persisted(next) })] }
 }
 
@@ -617,7 +628,17 @@ export const update = (model: Model, message: Message, inputs: Inputs): Return =
 		PressedEdge: ({ clientX, startWidth, maxWidth }) => pressedEdge(model, clientX, startWidth, maxWidth),
 		MovedEdge: ({ clientX }) => movedEdge(model, clientX),
 		ReleasedEdge: () => releasedEdge(model),
-		NudgedEdge: ({ delta }) => nudgedEdge(model, delta),
+		NudgedEdge: ({ delta }) => ({
+			model,
+			commands: [
+				MeasureAssistantEdge({
+					delta,
+					minPageWidth: MIN_PAGE_WIDTH,
+					fallbackMaxWidth: MAX_KEYBOARD_WIDTH,
+				}),
+			],
+		}),
+		MeasuredNudge: ({ delta, maxWidth }) => nudgedEdge(model, delta, maxWidth),
 		CompletedSaveStored: () => ({ model }),
 		CompletedFocusComposer: () => ({ model }),
 		CompletedFocusToggle: () => ({ model }),

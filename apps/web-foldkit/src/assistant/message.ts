@@ -62,6 +62,8 @@ export const Message = defineMessageUnion({
 	ReleasedEdge: {},
 	/** An arrow key on the focused edge, by the px it moves (left widens). */
 	NudgedEdge: { delta: Schema.Finite },
+	/** An arrow key's nudge, with the widest the page leaves room for now. */
+	MeasuredNudge: { delta: Schema.Finite, maxWidth: Schema.Finite },
 	CompletedSaveStored: {},
 	CompletedFocusComposer: {},
 	CompletedFocusToggle: {},

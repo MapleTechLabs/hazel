@@ -108,6 +108,8 @@ export const Model = Schema.Struct({
 	/** Null: the default width. */
 	width: Schema.NullOr(Schema.Finite),
 	drag: Schema.NullOr(Drag),
+	/** The widest the page left room for when the edge was last measured; null before that. */
+	edgeMaxWidth: Schema.NullOr(Schema.Finite),
 	/** The organization the threads below belong to; another one's arriving starts over. */
 	organizationId: Schema.NullOr(OrganizationId),
 	threads: Schema.Array(ThreadRow),
@@ -140,6 +142,8 @@ export type Model = typeof Model.Type
 
 export const PANEL_ID = "ai-panel"
 export const COMPOSER_ID = "ai-panel-composer"
+/** The setup screen's link: what focus moves to when there is no composer. */
+export const SETUP_ID = "ai-panel-setup"
 export const TOGGLE_ID = "ai-panel-toggle"
 export const HISTORY_MENU_ID = "ai-panel-history"
 /** The history menu's first item. */

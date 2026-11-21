@@ -157,7 +157,7 @@ export const orgShell = <Message>(
 		overlays: ReadonlyArray<Html>
 		mobile: MobileShell<Message>
 		/** The AI panel (a right column on desktop, a sheet on phones) and the nav rail's toggle. */
-		assistant: Readonly<{ panel: Html; toggle: Html }>
+		assistant: Readonly<{ panel: Html; toggle: Html; isResizing: boolean }>
 	}>,
 ): Html => {
 	const sidebarChildren = [
@@ -171,19 +171,29 @@ export const orgShell = <Message>(
 		[h.Id("app"), h.Attribute("data-paint", "shell"), ...paintUser(h, context)],
 		[
 			parts.toaster,
-			sidebarProvider(h, { width: "350px" }, [
-				sidebarDock(
-					h,
-					{
-						state: mobile.isSidebarCollapsed ? "collapsed" : "expanded",
-						className: "overflow-hidden *:data-[sidebar=default]:flex-row",
-					},
-					sidebarChildren,
-				),
-				// NOTE: legacy also renders the command palette inside the inset; it lives in `overlays`.
-				sidebarInset(h, "", [parts.page]),
-				parts.assistant.panel,
-			]),
+			sidebarProvider(
+				h,
+				{
+					width: "350px",
+					// While the AI panel's edge is dragged: no text selection, and frames never take the pointer.
+					className: parts.assistant.isResizing
+						? "cursor-col-resize select-none [&_iframe]:pointer-events-none"
+						: "",
+				},
+				[
+					sidebarDock(
+						h,
+						{
+							state: mobile.isSidebarCollapsed ? "collapsed" : "expanded",
+							className: "overflow-hidden *:data-[sidebar=default]:flex-row",
+						},
+						sidebarChildren,
+					),
+					// NOTE: legacy also renders the command palette inside the inset; it lives in `overlays`.
+					sidebarInset(h, "", [parts.page]),
+					parts.assistant.panel,
+				],
+			),
 			...parts.overlays,
 		],
 	)

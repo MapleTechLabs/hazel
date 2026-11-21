@@ -8,7 +8,7 @@ import { catchCommon } from "../data/actions"
 import { readStored, writeStored } from "../data/storage"
 import { HazelRpc } from "../rpc"
 import { Message } from "./message"
-import { COMPOSER_ID, type Connection, PANEL_ID, Stored, TOGGLE_ID } from "./model"
+import { COMPOSER_ID, type Connection, PANEL_ID, SETUP_ID, Stored, TOGGLE_ID } from "./model"
 
 /** The panel's RPCs, its stored open state and width, and the composer's focus. */
 
@@ -162,7 +162,9 @@ export const FetchAssistantStatus = Command.define("FetchAssistantStatus", {
 
 export const FocusAssistantComposer = Command.define("FocusAssistantComposer", {
 	messages: [Message.CompletedFocusComposer],
+	// The setup screen has no composer: its link takes focus instead.
 	execute: Dom.focus(`#${COMPOSER_ID}`).pipe(
+		Effect.catchCause(() => Dom.focus(`#${SETUP_ID}`)),
 		Effect.ignoreCause,
 		Effect.as(Message.CompletedFocusComposer()),
 	),
@@ -179,6 +181,25 @@ export const FocusAssistantToggle = Command.define("FocusAssistantToggle", {
 		const isLost = active === null || active === document.body || active.closest(`#${PANEL_ID}`) !== null
 		return isLost ? Dom.focus(`#${TOGGLE_ID}`) : Effect.void
 	}).pipe(Effect.ignoreCause, Effect.as(Message.CompletedFocusToggle())),
+})
+
+/**
+ * An arrow key on the resize edge: measure what the page beside the panel leaves room for (its
+ * inset keeps `minPageWidth`), so the width never grows past what is shown.
+ */
+export const MeasureAssistantEdge = Command.define("MeasureAssistantEdge", {
+	args: { delta: Schema.Finite, minPageWidth: Schema.Finite, fallbackMaxWidth: Schema.Finite },
+	messages: [Message.MeasuredNudge],
+	execute: ({ delta, minPageWidth, fallbackMaxWidth }) =>
+		Effect.sync(() => {
+			const panel = document.getElementById(PANEL_ID)
+			const page = panel?.parentElement?.querySelector('[data-slot="sidebar-inset"]') ?? null
+			const maxWidth =
+				panel === null || page === null
+					? fallbackMaxWidth
+					: page.getBoundingClientRect().width + panel.getBoundingClientRect().width - minPageWidth
+			return Message.MeasuredNudge({ delta, maxWidth })
+		}),
 })
 
 // STORAGE

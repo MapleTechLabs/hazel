@@ -434,13 +434,17 @@ describe("questions", () => {
 })
 
 describe("organizations", () => {
-	test("the first threads after a load only name the organization: nothing resets", () => {
+	test("the first threads after a load name the organization: nothing resets, and T3 Code's status is asked once", () => {
 		const loaded = init({ isOpen: true, width: null })
 		const typed = runAll(loaded, [Message.ChangedDraft({ value: "Draft" }), Message.SubmittedComposer()])
 		const result = run(typed, Message.UpdatedThreads({ organizationId, threads: [] }))
 		expect(result.model.organizationId).toBe(organizationId)
 		expect(result.model.pending).toMatchObject({ text: "Draft" })
-		expect(commandNames(result)).not.toContain("FetchAssistantStatus")
+		expect(commandNames(result).filter((name) => name === "FetchAssistantStatus")).toHaveLength(1)
+		// Until the status answers, a new chat offers nothing to send.
+		expect(result.model.connection).toBe("Checking")
+		const again = run(result.model, Message.UpdatedThreads({ organizationId, threads: [] }))
+		expect(commandNames(again)).not.toContain("FetchAssistantStatus")
 	})
 
 	test("opening the panel in another organization starts a new chat there", () => {
@@ -499,7 +503,16 @@ describe("width", () => {
 		expect(commandNames(released)).toEqual(["SaveAssistantPanel"])
 	})
 
-	test("arrow keys stop at the minimum", () => {
-		expect(run(opened, Message.NudgedEdge({ delta: -500 })).model.width).toBe(320)
+	test("an arrow key measures the room first, then stops at the minimum", () => {
+		expect(commandNames(run(opened, Message.NudgedEdge({ delta: -24 })))).toEqual([
+			"MeasureAssistantEdge",
+		])
+		expect(run(opened, Message.MeasuredNudge({ delta: -500, maxWidth: 700 })).model.width).toBe(320)
+	})
+
+	test("arrow keys stop at what the page leaves room for, and say so", () => {
+		const model = run(opened, Message.MeasuredNudge({ delta: 900, maxWidth: 610 })).model
+		expect(model.width).toBe(610)
+		expect(model.edgeMaxWidth).toBe(610)
 	})
 })

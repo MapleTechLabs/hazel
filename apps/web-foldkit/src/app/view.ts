@@ -216,6 +216,7 @@ const orgShellView = (model: Model, h: HtmlBuilder<Message>, data: ShellData): H
 				},
 				toParentMessage: toAiPanelMessage,
 			}),
+			isResizing: model.aiPanel.drag !== null,
 			toggle: AiPanel.toggleButton(h, {
 				isOpen: model.aiPanel.isOpen,
 				onPress: pressedAiPanelToggle,
