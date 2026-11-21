@@ -28,7 +28,7 @@ const safeHref = (url: string): string | null => {
 }
 
 /** A social profile as its platform's mark (a link icon for a platform without one). */
-const socialLink = <M>(h: HtmlBuilder<M>, link: CompanyLink): ReadonlyArray<Html> => {
+const socialLink = <M>(h: HtmlBuilder<M>, link: CompanyLink, isCompact = false): ReadonlyArray<Html> => {
 	const href = safeHref(link.url)
 	if (href === null) return []
 	const platform = platformOf(link.type, href)
@@ -43,13 +43,17 @@ const socialLink = <M>(h: HtmlBuilder<M>, link: CompanyLink): ReadonlyArray<Html
 				h.AriaLabel(label),
 				h.Title(label),
 				h.Class(
-					"inline-flex size-7 items-center justify-center rounded-md outline-hidden transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70",
+					isCompact
+						? "inline-flex size-6 items-center justify-center rounded-md outline-hidden transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70"
+						: "inline-flex size-7 items-center justify-center rounded-md outline-hidden transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70",
 				),
 			],
 			[
 				platform === null
-					? IconLink(h, { className: "size-4 text-muted-fg" })
-					: platformLogo(h, platform, "size-4"),
+					? IconLink(h, {
+							className: isCompact ? "size-3.5 text-muted-fg" : "size-4 text-muted-fg",
+						})
+					: platformLogo(h, platform, isCompact ? "size-3.5" : "size-4"),
 			],
 		),
 	]
@@ -77,9 +81,12 @@ const pageLink = <M>(h: HtmlBuilder<M>, link: CompanyLink): ReadonlyArray<Html> 
 			]
 }
 
-/** The company's socials as their platforms' marks. */
-export const companySocials = <M>(h: HtmlBuilder<M>, company: CompanyProfile): ReadonlyArray<Html> =>
-	rankedSocials(company).flatMap((link) => socialLink(h, link))
+/** The company's socials as their platforms' marks; `isCompact` to sit in a line of small text. */
+export const companySocials = <M>(
+	h: HtmlBuilder<M>,
+	company: CompanyProfile,
+	isCompact = false,
+): ReadonlyArray<Html> => rankedSocials(company).flatMap((link) => socialLink(h, link, isCompact))
 
 /** The company's own pages (pricing, blog, careers), by name. */
 export const companyPageLinks = <M>(h: HtmlBuilder<M>, company: CompanyProfile): ReadonlyArray<Html> =>

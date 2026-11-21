@@ -327,7 +327,6 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 			h.div(
 				[h.Class("flex shrink-0 items-center gap-1")],
 				[
-					...companySocialsGroup(h, context?.account.company ?? null),
 					...(position === null
 						? []
 						: [
@@ -373,22 +372,21 @@ const companyRow = (h: HtmlBuilder<Message>, company: Context["account"]["compan
 }
 
 /**
- * The company's socials as their platforms' marks, in the top bar beside the paging: always in the
- * same place as you move between customers. A divider parts them from the paging.
+ * The company's socials as their platforms' marks, on the domain line: beside the website they
+ * belong to. A divider parts them from the plan and MRR.
  */
 const companySocialsGroup = (
 	h: HtmlBuilder<Message>,
 	company: Context["account"]["company"],
 ): ReadonlyArray<Html> => {
-	const socials = company === null ? [] : companySocials(h, company)
+	const socials = company === null ? [] : companySocials(h, company, true)
 	return socials.length === 0
 		? []
 		: [
 				h.div(
 					[h.AriaLabel("Company profiles"), h.Role("group"), h.Class("flex items-center")],
-					socials,
+					[h.span([h.AriaHidden(true), h.Class("mr-1.5 h-3.5 w-px bg-border")]), ...socials],
 				),
-				h.span([h.AriaHidden(true), h.Class("mx-2 h-4 w-px bg-border max-md:hidden")]),
 			]
 }
 
@@ -435,26 +433,32 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 									// with a part, not a dot: the dot of a line's first part is clipped.
 									// `pr-4` keeps a part's `max-w-full` inside: a long domain truncates.
 									h.div(
-										[h.Class("overflow-hidden text-muted-fg text-sm")],
+										[h.Class("flex min-w-0 flex-wrap items-center gap-x-2.5")],
 										[
-											h.p(
-												[h.Class("-ml-4 flex flex-wrap items-center pr-4")],
+											h.div(
+												[h.Class("min-w-0 overflow-hidden text-muted-fg text-sm")],
 												[
-													...(account.domain === null
-														? []
-														: [domainLink(h, account.domain)]),
-													...meta.map((part) => h.span([], [part])),
-												].map((part) =>
-													h.span(
+													h.p(
+														[h.Class("-ml-4 flex flex-wrap items-center pr-4")],
 														[
-															h.Class(
-																"relative ml-4 max-w-full whitespace-nowrap before:absolute before:-left-2.5 before:content-['·']",
+															...(account.domain === null
+																? []
+																: [domainLink(h, account.domain)]),
+															...meta.map((part) => h.span([], [part])),
+														].map((part) =>
+															h.span(
+																[
+																	h.Class(
+																		"relative ml-4 max-w-full whitespace-nowrap before:absolute before:-left-2.5 before:content-['·']",
+																	),
+																],
+																[part],
 															),
-														],
-														[part],
+														),
 													),
-												),
+												],
 											),
+											...companySocialsGroup(h, account.company),
 										],
 									),
 								],
