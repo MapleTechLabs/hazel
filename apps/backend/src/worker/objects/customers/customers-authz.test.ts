@@ -53,6 +53,7 @@ const viewDraft = {
 /** A well-formed payload per method (ids of rows that need not exist: refusals come first). */
 const PAYLOADS = {
 	"customers.overview": { range: "30d" },
+	"customers.accounts.list": {},
 	"customers.account.detail": { accountId: uuid() },
 	"customers.account.series": { accountId: uuid(), metricKeys: ["mrr"], range: "30d" },
 	"customers.sparklines": { accountIds: [], metricKey: "mrr", days: 7 },
@@ -60,6 +61,7 @@ const PAYLOADS = {
 	"customers.contacts.search": { query: "a" },
 	"customers.invoices.list": { accountId: uuid() },
 	"customers.events.list": {},
+	"customers.signals.open": {},
 	"customers.signals.history": {},
 	"customers.rule.dryRun": { draft: ruleDraft },
 	"customers.health.dryRun": { draft: DEFAULT_HEALTH_SETTINGS },

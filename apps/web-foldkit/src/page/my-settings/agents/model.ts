@@ -22,8 +22,8 @@ export const Grants = defineTaggedUnion({
 })
 export type Grants = typeof Grants.Type
 
-/** A new token's access: read only, or read and write. */
-export const TokenAccess = Schema.Literals(["read", "write"])
+/** A new token's access: read only, read and write, or read only with the Customers area. */
+export const TokenAccess = Schema.Literals(["read", "write", "read_customers"])
 export type TokenAccess = typeof TokenAccess.Type
 
 /** A token just created: shown once, then gone (only its hash is kept). */

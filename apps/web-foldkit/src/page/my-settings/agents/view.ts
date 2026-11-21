@@ -90,6 +90,11 @@ const ACCESS_OPTIONS: ReadonlyArray<{
 }> = [
 	{ access: "write", label: "Read & write", hint: "Read, send, share files, react, edit, set status" },
 	{ access: "read", label: "Read only", hint: "Read channels and messages" },
+	{
+		access: "read_customers",
+		label: "Read + customers",
+		hint: "Read only, plus your organizations' customers",
+	},
 ]
 
 const accessOption = (
@@ -140,7 +145,7 @@ const createSection = (h: HtmlBuilder<Message>, model: Model): Html =>
 					],
 				),
 				h.div(
-					[h.Class("flex gap-2"), h.Role("radiogroup"), h.AriaLabel("Access")],
+					[h.Class("flex flex-col gap-2 sm:flex-row"), h.Role("radiogroup"), h.AriaLabel("Access")],
 					ACCESS_OPTIONS.map((option) => accessOption(h, model, option)),
 				),
 				h.div(

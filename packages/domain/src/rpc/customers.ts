@@ -50,6 +50,7 @@ import {
 	CustomerProvider,
 	CustomerSource,
 	CustomersRange,
+	HealthStatus,
 	IssuePriority,
 	IssueStatus,
 	LifecycleStage,
@@ -58,6 +59,7 @@ import {
 } from "../customers/enums"
 import { HealthSettings } from "../customers/health"
 import {
+	Account,
 	ChannelLink,
 	Connection,
 	Contact,
@@ -247,6 +249,21 @@ export class CustomerReadRpcs extends RpcGroup.make(
 	/** KPIs, MRR movements, active users, health distribution, movers, recent churn and new. */
 	read("customers.overview", { range: CustomersRange }, OverviewResult),
 
+	/**
+	 * Live accounts, highest MRR first, for a client without the synced store (an agent): `query`
+	 * matches the name or a domain; `healthStatuses` and `lifecycleStages` keep only those.
+	 */
+	read(
+		"customers.accounts.list",
+		{
+			query: Schema.optionalKey(Text(200)),
+			healthStatuses: Schema.optionalKey(Schema.Array(HealthStatus).check(Schema.isMaxLength(4))),
+			lifecycleStages: Schema.optionalKey(Schema.Array(LifecycleStage).check(Schema.isMaxLength(5))),
+			...PageRequest,
+		},
+		Page(Account.Schema),
+	),
+
 	/** Everything the customer page shows beyond the synced account row. */
 	read("customers.account.detail", { accountId: CustomerAccountId }, AccountDetail, CustomersNotFoundError),
 
@@ -302,6 +319,13 @@ export class CustomerReadRpcs extends RpcGroup.make(
 			...PageRequest,
 		},
 		Page(Event.Schema),
+	),
+
+	/** Unclosed signals (open or snoozed), highest priority first; one account's, or the org's. */
+	read(
+		"customers.signals.open",
+		{ accountId: Schema.optionalKey(CustomerAccountId), ...PageRequest },
+		Page(Signal.Schema),
 	),
 
 	/** Closed signals older than the synced window (30 days), newest first. */

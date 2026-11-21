@@ -273,6 +273,43 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 					return yield* overview(range, yield* currentTime)
 				}).pipe(remap),
 
+			"customers.accounts.list": ({ query, healthStatuses, lifecycleStages, ...request }) =>
+				Effect.gen(function* () {
+					yield* requireMember
+					const page = pageOf(request)
+					const text = query?.trim() ?? ""
+					// effect-orm adds `ESCAPE '\'` on SQLite: typed `%` and `_` match themselves.
+					const pattern = `%${text.replace(/[\\%_]/g, "\\$&")}%`
+					const rows = yield* db.run(
+						SQLite.from(schema.customerAccountsTable)
+							.select()
+							.where(($) => [
+								$.deletedAt.isNull(),
+								text === ""
+									? undefined
+									: SQLite.or(
+											$.name.like(pattern),
+											SQLite.sql
+												.cond`EXISTS (SELECT 1 FROM json_each(${$.domains}) WHERE json_each.value LIKE ${pattern} ESCAPE '\\')`,
+										),
+								healthStatuses === undefined || healthStatuses.length === 0
+									? undefined
+									: $.healthStatus.in_(...healthStatuses),
+								lifecycleStages === undefined || lifecycleStages.length === 0
+									? undefined
+									: $.lifecycleStage.in_(...lifecycleStages),
+							])
+							.orderBy(($) => [
+								[$.mrrMinor, "desc"],
+								[$.name, "asc"],
+								[$.id, "asc"],
+							])
+							.limit(page.limit + 1)
+							.offset(page.offset),
+					)
+					return pageResult(rows, page)
+				}).pipe(remap),
+
 			"customers.account.detail": ({ accountId }) =>
 				Effect.gen(function* () {
 					yield* requireMember
@@ -368,6 +405,29 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 							.orderBy(($) => [
 								[$.occurredAt, "desc"],
 								[$.createdAt, "desc"],
+								[$.id, "asc"],
+							])
+							.limit(page.limit + 1)
+							.offset(page.offset),
+					)
+					return pageResult(rows, page)
+				}).pipe(remap),
+
+			"customers.signals.open": ({ accountId, ...request }) =>
+				Effect.gen(function* () {
+					yield* requireMember
+					const page = pageOf(request)
+					const rows = yield* db.run(
+						SQLite.from(schema.customerSignalsTable)
+							.select()
+							.where(($) => [
+								$.closedAt.isNull(),
+								$.status.in_("open", "snoozed"),
+								accountId === undefined ? undefined : $.accountId.eq(accountId),
+							])
+							.orderBy(($) => [
+								[$.priorityScore, "desc"],
+								[$.openedAt, "desc"],
 								[$.id, "asc"],
 							])
 							.limit(page.limit + 1)

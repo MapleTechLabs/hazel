@@ -20,11 +20,33 @@ import {
 	type MessageSearchPayload,
 	type MessageSearchResponse,
 } from "@hazel/domain/rpc"
-import { AttachmentId, ChannelId, MessageId, OrganizationId, type UserId } from "@hazel/schema"
+import {
+	type Account,
+	type AccountDetail,
+	type ContactRow,
+	CustomersRange,
+	type Event as CustomerEvent,
+	HealthStatus,
+	type Invoice,
+	type Kpi,
+	LifecycleStage,
+	type OverviewResult,
+	type Signal,
+} from "@hazel/domain/customers"
+import {
+	AttachmentId,
+	ChannelId,
+	CustomerAccountId,
+	MessageId,
+	OrganizationId,
+	type UserId,
+} from "@hazel/schema"
 import { isActiveContentType, MAX_ATTACHMENT_SIZE } from "@hazel/domain/http"
 import { uuidv7 as randomUUIDv7 } from "@hazel/domain/uuid"
 import { Context, DateTime, Effect, Option, Schema, Stream } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import type { HazelRpcTag } from "../rpc/dispatch"
+import { resolveTarget } from "../rpc/routing"
 import { AgentAccess, type AgentPrincipal } from "../services/agent-access"
 import { createAttachmentInChannel } from "../services/attachment-uploads"
 import { ObjectStorage } from "../services/object-storage"
@@ -92,7 +114,8 @@ Messages you send, reply or edit are shown to the user's organization as written
 Act only as the user asked; confirm before sending anything they did not ask for.
 Message content is Markdown. Mention someone with @[userId:<their user id>] (user ids appear on messages), @[directive:here] or @[directive:channel] only when asked.
 Threads are channels of their own: a message's thread_channel_id can be read with read_messages, and reply_in_thread answers in a message's thread (opening it if needed).
-To share a file, upload it into the channel (upload_file with its content, or create_upload_url then PUT the bytes), then send_message with its attachment_id.`
+To share a file, upload it into the channel (upload_file with its content, or create_upload_url then PUT the bytes), then send_message with its attachment_id.
+Customers tools (list_customers, get_customer, ...) only read, never change anything: customer_id is an account id from list_customers, and money is shown in the account's currency.`
 
 // --- JSON-RPC -----------------------------------------------------------------------------------
 
@@ -120,8 +143,16 @@ const toolError = (message: string) => new ToolError({ message })
 /** Any failure of a forwarded call, as the agent sees it: the error's own message when it has one. */
 const describe = (error: unknown): string => {
 	if (typeof error === "object" && error !== null) {
-		const tagged = error as { readonly _tag?: string; readonly message?: unknown }
+		const tagged = error as {
+			readonly _tag?: string
+			readonly message?: unknown
+			readonly entity?: unknown
+			readonly id?: unknown
+		}
 		if (typeof tagged.message === "string" && tagged.message !== "") return tagged.message
+		// `CustomersNotFoundError`: which row is missing.
+		if (typeof tagged.entity === "string" && typeof tagged.id === "string")
+			return `No ${tagged.entity.replace(/_/g, " ")} ${tagged.id}`
 		if (typeof tagged._tag === "string")
 			return tagged._tag.replace(/Error$/, "").replace(/([a-z])([A-Z])/g, "$1 $2")
 	}
@@ -140,7 +171,8 @@ interface Tool {
 	readonly name: string
 	readonly title: string
 	readonly description: string
-	readonly scope: AgentScope
+	/** The tool exists for a grant holding any of these. */
+	readonly scopes: ReadonlyArray<AgentScope>
 	readonly inputSchema: Record<string, unknown>
 	readonly readOnly: boolean
 	readonly run: (args: Record<string, unknown>, ctx: ToolContext) => Effect.Effect<unknown, ToolError, any>
@@ -455,12 +487,594 @@ const PRESENCE_ALIASES = [
 	["busy", "dnd"],
 ] as const satisfies ReadonlyArray<readonly [string, (typeof PRESENCE)[number]]>
 
+// --- Customers (read only) ----------------------------------------------------------------------
+
+const decodeAccountId = Schema.decodeUnknownOption(CustomerAccountId)
+
+const argOrg = (args: Record<string, unknown>) =>
+	Effect.fromOption(decodeOrgId(args.organization_id), () =>
+		toolError("organization_id must be an organization id (UUID) from list_organizations"),
+	)
+const argAccount = (args: Record<string, unknown>) =>
+	Effect.fromOption(decodeAccountId(args.customer_id), () =>
+		toolError("customer_id must be a customer id (UUID) from list_customers"),
+	)
+const optAccount = (args: Record<string, unknown>) =>
+	args.customer_id === undefined || args.customer_id === null
+		? Effect.succeed<CustomerAccountId | undefined>(undefined)
+		: argAccount(args)
+/** A page request: `limit` clamped, `cursor` as the previous answer's `next_cursor`. */
+const pageArgs = (args: Record<string, unknown>, fallback: number): PageRequestPayload => {
+	const page: PageRequestPayload = { limit: argLimit(args, fallback, 100) }
+	if (typeof args.cursor === "string" && args.cursor !== "") page.cursor = args.cursor
+	return page
+}
+/** A Customers page request (`PageRequest` in `@hazel/domain/customers`). */
+interface PageRequestPayload {
+	limit: number
+	cursor?: string
+}
+
+/** `customers.accounts.list`'s payload, as far as `list_customers` fills it. */
+interface AccountsListPayload extends PageRequestPayload {
+	query?: string
+	healthStatuses?: ReadonlyArray<HealthStatus>
+	lifecycleStages?: ReadonlyArray<LifecycleStage>
+}
+
+/** `customers.signals.open` and `customers.events.list`: one account's, or the org's. */
+interface TimelinePayload extends PageRequestPayload {
+	accountId?: CustomerAccountId
+	types?: ReadonlyArray<string>
+}
+
+/** `customers.account.detail`, `customers.contacts.list`, `customers.invoices.list`: one account's. */
+interface AccountPayload {
+	accountId: CustomerAccountId
+	limit?: number
+	cursor?: string
+}
+
+/** What a customers tool sends, besides the `organizationId` every Customers RPC takes. */
+type CustomersReadPayload =
+	| { readonly range: CustomersRange }
+	| AccountsListPayload
+	| TimelinePayload
+	| AccountPayload
+
+/** One literal or a list of them, each one of `allowed`; none given is undefined. */
+const optLiterals = <L extends string>(
+	args: Record<string, unknown>,
+	key: string,
+	allowed: ReadonlyArray<L>,
+) => {
+	const raw = args[key]
+	if (raw === undefined || raw === null) return Effect.succeed<ReadonlyArray<L> | undefined>(undefined)
+	const values: ReadonlyArray<unknown> = Array.isArray(raw) ? raw : [raw]
+	const known = values.filter((value): value is L => allowed.includes(value as L))
+	if (known.length !== values.length)
+		return Effect.fail(toolError(`${key} must be one or more of ${allowed.join(", ")}`))
+	return Effect.succeed<ReadonlyArray<L> | undefined>(known)
+}
+
+const isoOf = (at: Date | DateTime.Utc | null | undefined) =>
+	at === null || at === undefined ? null : at instanceof Date ? at.toISOString() : DateTime.formatIso(at)
+
+/** Minor units as the currency writes them, e.g. `$1,234.50`. */
+const money = (minor: number, currency: string) => {
+	const code = currency.toUpperCase()
+	try {
+		const format = new Intl.NumberFormat("en-US", { style: "currency", currency: code })
+		return format.format(minor / 10 ** (format.resolvedOptions().maximumFractionDigits ?? 2))
+	} catch {
+		return `${(minor / 100).toFixed(2)} ${code}`
+	}
+}
+
+/** The object without its null, undefined and empty-list fields: less for the agent to read. */
+const compact = (value: Record<string, unknown>) =>
+	Object.fromEntries(
+		Object.entries(value).filter(
+			([, field]) =>
+				field !== null && field !== undefined && !(Array.isArray(field) && field.length === 0),
+		),
+	)
+
+/**
+ * A Customers read RPC as the user, the way the app calls it: routed like the RPC (members of the
+ * organization only, `rpc/routing.ts`), then run in the org's `CustomersObject`, whose handler
+ * authorizes the user again (`customer_members`).
+ */
+const customersRead = <A>(
+	ctx: ToolContext,
+	tag: HazelRpcTag,
+	organizationId: OrganizationId,
+	payload: CustomersReadPayload,
+) =>
+	Effect.gen(function* () {
+		const full = { ...payload, organizationId }
+		const target = yield* resolveTarget(tag, full, ctx.user).pipe(
+			Effect.catchTags({
+				RouteRefusedError: () =>
+					Effect.fail(toolError("The user is not a member of this organization")),
+				RoutingError: (error) => Effect.fail(toolError(error.message)),
+				DatabaseError: (error) => Effect.die(error),
+			}),
+		)
+		if (target.kind !== "customers") return yield* toolError(`${tag} is not a Customers read`)
+		return yield* forward<A>(target, tag, full)
+	})
+
+const customerRow = (account: Account) =>
+	compact({
+		id: account.id,
+		name: account.name,
+		domains: account.domains,
+		plan: account.planName,
+		mrr: money(account.mrrMinor, account.currency),
+		lifecycle_stage: account.lifecycleStage,
+		health: account.healthStatus,
+		health_score: account.healthScore,
+		last_active_at: isoOf(account.lastActiveAt),
+		active_users_30d: account.activeUsers30d,
+		open_risks: account.openRiskHigh + account.openRiskMedium + account.openRiskLow,
+		open_opportunities: account.openOpportunities || null,
+		environment: account.environment,
+		primary_customer_id: account.primaryAccountId,
+	})
+
+const signalRow = (signal: Signal) =>
+	compact({
+		id: signal.id,
+		customer_id: signal.accountId,
+		kind: signal.kind,
+		severity: signal.severity,
+		status: signal.status,
+		title: signal.title,
+		reason: signal.reason === "" ? null : signal.reason,
+		opened_at: isoOf(signal.openedAt),
+		snoozed_until: isoOf(signal.snoozedUntil),
+		assignee_user_id: signal.assigneeUserId,
+	})
+
+const invoiceRow = (invoice: Invoice) =>
+	compact({
+		id: invoice.id,
+		number: invoice.number,
+		status: invoice.status,
+		provider: invoice.provider,
+		amount_due: money(invoice.amountDueMinor, invoice.currency),
+		amount_paid: money(invoice.amountPaidMinor, invoice.currency),
+		issued_at: isoOf(invoice.issuedAt),
+		due_at: isoOf(invoice.dueAt),
+		paid_at: isoOf(invoice.paidAt),
+		attempt_count: invoice.attemptCount || null,
+		next_retry_at: isoOf(invoice.nextRetryAt),
+		decline_reason: invoice.declineReason,
+		url: invoice.hostedUrl,
+	})
+
+const contactRow = (row: ContactRow) =>
+	compact({
+		id: row.contact.id,
+		name: row.contact.name,
+		email: row.contact.email,
+		title: row.contact.title,
+		role: row.contact.role,
+		billing_contact: row.contact.isBillingContact || null,
+		status: row.status,
+		active_days_30d: row.activity.filter((point) => point.value > 0).length,
+		sign_ins_30d: row.contact.signInCount30d,
+		events_30d: row.contact.eventCount30d,
+		last_seen_at: isoOf(row.contact.lastSeenAt),
+	})
+
+const eventRow = (event: CustomerEvent) =>
+	compact({
+		occurred_at: isoOf(event.occurredAt),
+		customer_id: event.accountId,
+		provider: event.provider,
+		type: event.type,
+		title: event.title,
+		contact_id: event.contactId,
+	})
+
+/** A Customers history page (`Page` in `@hazel/domain/customers`). */
+interface PageOf<A> {
+	readonly items: ReadonlyArray<A>
+	readonly nextCursor: string | null
+}
+
+const pageOut = <A, R>(key: string, page: PageOf<A>, row: (a: A) => R) =>
+	compact({ [key]: page.items.map(row), next_cursor: page.nextCursor })
+
+const customerDetail = (detail: AccountDetail, signals: ReadonlyArray<Signal>) => {
+	const { account } = detail
+	const healthAt = (daysAgo: number) =>
+		detail.healthSeries[detail.healthSeries.length - 1 - daysAgo]?.value ?? null
+	return {
+		customer: compact({
+			...customerRow(account),
+			lifecycle_stage_set_by_hand: account.lifecycleStageOverride === null ? null : true,
+			owner_user_id: account.ownerUserId,
+			tags: account.tags,
+			seats_used: account.seatsUsed,
+			seats_limit: account.seatsLimit,
+			contact_count: account.contactCount,
+			active_users_trend_pct: account.activeUsersTrendPct,
+			first_seen_at: isoOf(account.firstSeenAt),
+			customer_since: isoOf(account.customerSince),
+			trial_ends_at: isoOf(account.trialEndsAt),
+			churned_at: isoOf(account.churnedAt),
+			champion_inactive_since: isoOf(account.championInactiveSince),
+			left_out_of_needs_attention: account.attentionMutedAt === null ? null : true,
+		}),
+		health: compact({
+			status: account.healthStatus,
+			score: account.healthScore,
+			updated_at: isoOf(account.healthUpdatedAt),
+			score_7d_ago: detail.healthSeries.length > 7 ? healthAt(7) : null,
+			score_30d_ago: detail.healthSeries.length > 30 ? healthAt(30) : null,
+			score_90d_ago: detail.healthSeries.length > 0 ? (detail.healthSeries[0]?.value ?? null) : null,
+			components: detail.health?.components.map((component) =>
+				compact({
+					key: component.key,
+					score: component.score,
+					weight_pct: Math.round(component.effectiveWeight),
+					excluded: component.excluded || null,
+					why: component.why,
+				}),
+			),
+		}),
+		/** Daily active users, oldest first, the last 30 days. */
+		active_users_30d_daily: detail.activeUsersSeries.map((point) => point.value),
+		open_signals: signals.map(signalRow),
+		subscriptions: detail.subscriptions.map((sub) =>
+			compact({
+				plan: sub.planName,
+				status: sub.status,
+				provider: sub.provider,
+				mrr: money(sub.mrrMinor, sub.currency),
+				interval: sub.interval,
+				quantity: sub.quantity,
+				started_at: isoOf(sub.startedAt),
+				trial_ends_at: isoOf(sub.trialEndsAt),
+				current_period_end: isoOf(sub.currentPeriodEnd),
+				cancels_at_period_end: sub.cancelAtPeriodEnd || null,
+				canceled_at: isoOf(sub.canceledAt),
+				cancellation_reason: sub.cancellationReason,
+			}),
+		),
+		upcoming_invoice: detail.upcomingInvoice === null ? null : invoiceRow(detail.upcomingInvoice),
+		open_invoices: detail.openInvoices.map(invoiceRow),
+		company: account.companyProfile === null ? null : compact({ ...account.companyProfile, colors: [] }),
+		contacts_to_reach: detail.contactsToReach.map(contactRow),
+		recent_events: detail.recentEvents.map(eventRow),
+		links: detail.refs.flatMap((ref) =>
+			ref.externalUrl === null ? [] : [{ provider: ref.provider, url: ref.externalUrl }],
+		),
+	}
+}
+
+const kpiOut = (kpi: Kpi | null, currency?: string) =>
+	kpi === null
+		? null
+		: compact({
+				value: currency === undefined ? kpi.value : money(kpi.value, currency),
+				previous:
+					kpi.previous === null || currency === undefined
+						? kpi.previous
+						: money(kpi.previous, currency),
+				change_pct: kpi.deltaPct,
+			})
+
+const overviewOut = (overview: OverviewResult) => {
+	const { currency, kpis } = overview
+	const movement = (key: "new" | "expansion" | "reactivation" | "contraction" | "churn" | "net") =>
+		money(
+			overview.mrrMovements.reduce((sum, bucket) => sum + bucket[key], 0),
+			currency,
+		)
+	const brief = (row: OverviewResult["recentNew"][number]) =>
+		compact({
+			customer_id: row.accountId,
+			name: row.name,
+			plan: row.planName,
+			mrr: money(row.mrrMinor, currency),
+			at: isoOf(row.at),
+		})
+	const mover = (row: OverviewResult["topMovers"]["gainers"][number]) => ({
+		customer_id: row.accountId,
+		name: row.name,
+		avg_daily_active_users: row.currentAvg,
+		previous_avg: row.previousAvg,
+		change_pct: row.changePct,
+	})
+	return {
+		range: overview.range,
+		currency,
+		kpis: compact({
+			mrr: kpiOut(kpis.mrrMinor, currency),
+			paying_customers: kpiOut(kpis.payingCustomers),
+			active_customers: kpiOut(kpis.activeCustomers),
+			weekly_active_users: kpiOut(kpis.wau),
+			monthly_active_users: kpiOut(kpis.mau),
+			revenue_collected: kpiOut(kpis.revenueMinor, currency),
+			churned_customers: kpiOut(kpis.logoChurn),
+			mrr_at_high_risk: kpiOut(kpis.atRiskMrrMinor, currency),
+			net_revenue_retention_pct: kpiOut(kpis.nrrPct),
+		}),
+		mrr_movements: {
+			new: movement("new"),
+			expansion: movement("expansion"),
+			reactivation: movement("reactivation"),
+			contraction: movement("contraction"),
+			churn: movement("churn"),
+			net: movement("net"),
+		},
+		health: overview.healthDistribution.map((row) => ({
+			status: row.status,
+			customers: row.count,
+			mrr: money(row.mrrMinor, currency),
+		})),
+		usage_gainers: overview.topMovers.gainers.map(mover),
+		usage_decliners: overview.topMovers.decliners.map(mover),
+		recent_churn: overview.recentChurn.map(brief),
+		recent_new: overview.recentNew.map(brief),
+		new_trials: overview.newTrials.map((trial) => ({ ...brief(trial), status: trial.status })),
+	}
+}
+
+const orgArg = str("The organization, from list_organizations")
+const pageSchema = (fallback: number) => ({
+	limit: { type: "integer", minimum: 1, maximum: 100, description: `How many (default ${fallback})` },
+	cursor: str("next_cursor from the previous page"),
+})
+
+const customerTools: ReadonlyArray<Tool> = [
+	{
+		name: "customers_overview",
+		title: "Customers overview",
+		description:
+			"An organization's customer KPIs over a range: MRR, paying and active customers, churn, revenue, net retention, MRR movements, health distribution, biggest usage gainers and decliners, recent churn, new customers and trials.",
+		scopes: ["customers:read"],
+		readOnly: true,
+		inputSchema: obj(
+			{
+				organization_id: orgArg,
+				range: { type: "string", enum: [...CustomersRange.literals], description: "Default 30d" },
+			},
+			["organization_id"],
+		),
+		run: (args, ctx) =>
+			Effect.gen(function* () {
+				const organizationId = yield* argOrg(args)
+				const range = (yield* optLiterals(args, "range", CustomersRange.literals))?.[0] ?? "30d"
+				return overviewOut(
+					yield* customersRead<OverviewResult>(ctx, "customers.overview", organizationId, {
+						range,
+					}),
+				)
+			}),
+	},
+	{
+		name: "list_customers",
+		title: "List customers",
+		description:
+			"An organization's customer accounts, highest MRR first: plan, MRR, lifecycle stage, health, last activity and open risk count. Filter by name or domain, health or lifecycle stage.",
+		scopes: ["customers:read"],
+		readOnly: true,
+		inputSchema: obj(
+			{
+				organization_id: orgArg,
+				query: str("Name or domain contains this"),
+				health: {
+					type: "array",
+					items: { type: "string", enum: [...HealthStatus.literals] },
+					description: "Only these health statuses",
+				},
+				lifecycle_stage: {
+					type: "array",
+					items: { type: "string", enum: [...LifecycleStage.literals] },
+					description: "Only these lifecycle stages",
+				},
+				...pageSchema(25),
+			},
+			["organization_id"],
+		),
+		run: (args, ctx) =>
+			Effect.gen(function* () {
+				const organizationId = yield* argOrg(args)
+				const healthStatuses = yield* optLiterals(args, "health", HealthStatus.literals)
+				const lifecycleStages = yield* optLiterals(args, "lifecycle_stage", LifecycleStage.literals)
+				const query = typeof args.query === "string" ? args.query.trim().slice(0, 200) : ""
+				const payload: AccountsListPayload = pageArgs(args, 25)
+				if (query !== "") payload.query = query
+				if (healthStatuses !== undefined) payload.healthStatuses = healthStatuses
+				if (lifecycleStages !== undefined) payload.lifecycleStages = lifecycleStages
+				const page = yield* customersRead<PageOf<Account>>(
+					ctx,
+					"customers.accounts.list",
+					organizationId,
+					payload,
+				)
+				return pageOut("customers", page, customerRow)
+			}),
+	},
+	{
+		name: "get_customer",
+		title: "Get customer",
+		description:
+			"One customer in full: health score and why, usage trend, open risks and opportunities, subscriptions, upcoming and unpaid invoices, company profile, who to reach, recent activity and links to the billing and auth providers.",
+		scopes: ["customers:read"],
+		readOnly: true,
+		inputSchema: obj({ organization_id: orgArg, customer_id: str("The customer, from list_customers") }, [
+			"organization_id",
+			"customer_id",
+		]),
+		run: (args, ctx) =>
+			Effect.gen(function* () {
+				const organizationId = yield* argOrg(args)
+				const accountId = yield* argAccount(args)
+				const detail = yield* customersRead<AccountDetail>(
+					ctx,
+					"customers.account.detail",
+					organizationId,
+					{
+						accountId,
+					},
+				)
+				const signals = yield* customersRead<PageOf<Signal>>(
+					ctx,
+					"customers.signals.open",
+					organizationId,
+					{
+						accountId,
+						limit: 20,
+					},
+				)
+				return customerDetail(detail, signals.items)
+			}),
+	},
+	{
+		name: "list_customer_signals",
+		title: "List customer signals",
+		description:
+			"Open risks and opportunities (the Needs attention queue), highest priority first: one customer's, or the whole organization's when customer_id is omitted.",
+		scopes: ["customers:read"],
+		readOnly: true,
+		inputSchema: obj(
+			{ organization_id: orgArg, customer_id: str("Only this customer's"), ...pageSchema(25) },
+			["organization_id"],
+		),
+		run: (args, ctx) =>
+			Effect.gen(function* () {
+				const organizationId = yield* argOrg(args)
+				const accountId = yield* optAccount(args)
+				const payload: TimelinePayload = pageArgs(args, 25)
+				if (accountId !== undefined) payload.accountId = accountId
+				const page = yield* customersRead<PageOf<Signal>>(
+					ctx,
+					"customers.signals.open",
+					organizationId,
+					payload,
+				)
+				return pageOut("signals", page, signalRow)
+			}),
+	},
+	{
+		name: "list_customer_contacts",
+		title: "List customer contacts",
+		description:
+			"A customer's people, most recently active first: title, role, billing contact, active / dormant / never active, and their activity over 30 days.",
+		scopes: ["customers:read"],
+		readOnly: true,
+		inputSchema: obj(
+			{
+				organization_id: orgArg,
+				customer_id: str("The customer, from list_customers"),
+				...pageSchema(25),
+			},
+			["organization_id", "customer_id"],
+		),
+		run: (args, ctx) =>
+			Effect.gen(function* () {
+				const organizationId = yield* argOrg(args)
+				const accountId = yield* argAccount(args)
+				const page = yield* customersRead<PageOf<ContactRow>>(
+					ctx,
+					"customers.contacts.list",
+					organizationId,
+					{
+						accountId,
+						...pageArgs(args, 25),
+					},
+				)
+				return pageOut("contacts", page, contactRow)
+			}),
+	},
+	{
+		name: "list_customer_events",
+		title: "List customer events",
+		description:
+			"The activity timeline, newest first (billing, sign-ups, signals, notes...): one customer's, or the whole organization's when customer_id is omitted. types filters by type prefix, e.g. invoice. or signal.opened.",
+		scopes: ["customers:read"],
+		readOnly: true,
+		inputSchema: obj(
+			{
+				organization_id: orgArg,
+				customer_id: str("Only this customer's"),
+				types: {
+					type: "array",
+					items: { type: "string" },
+					maxItems: 20,
+					description: "Type prefixes to keep",
+				},
+				...pageSchema(25),
+			},
+			["organization_id"],
+		),
+		run: (args, ctx) =>
+			Effect.gen(function* () {
+				const organizationId = yield* argOrg(args)
+				const accountId = yield* optAccount(args)
+				const types = (Array.isArray(args.types) ? args.types : [])
+					.filter(
+						(type): type is string =>
+							typeof type === "string" && type !== "" && type.length <= 100,
+					)
+					.slice(0, 20)
+				const payload: TimelinePayload = pageArgs(args, 25)
+				if (accountId !== undefined) payload.accountId = accountId
+				if (types.length > 0) payload.types = types
+				const page = yield* customersRead<PageOf<CustomerEvent>>(
+					ctx,
+					"customers.events.list",
+					organizationId,
+					payload,
+				)
+				return pageOut("events", page, eventRow)
+			}),
+	},
+	{
+		name: "list_customer_invoices",
+		title: "List customer invoices",
+		description:
+			"A customer's invoices, newest first: amounts due and paid, status, due and paid dates, failed payment attempts and decline reasons.",
+		scopes: ["customers:read"],
+		readOnly: true,
+		inputSchema: obj(
+			{
+				organization_id: orgArg,
+				customer_id: str("The customer, from list_customers"),
+				...pageSchema(20),
+			},
+			["organization_id", "customer_id"],
+		),
+		run: (args, ctx) =>
+			Effect.gen(function* () {
+				const organizationId = yield* argOrg(args)
+				const accountId = yield* argAccount(args)
+				const page = yield* customersRead<PageOf<Invoice>>(
+					ctx,
+					"customers.invoices.list",
+					organizationId,
+					{
+						accountId,
+						...pageArgs(args, 20),
+					},
+				)
+				return pageOut("invoices", page, invoiceRow)
+			}),
+	},
+]
+
 const tools: ReadonlyArray<Tool> = [
 	{
 		name: "list_organizations",
 		title: "List organizations",
 		description: "The organizations (workspaces) the user belongs to.",
-		scope: "messages:read",
+		scopes: ["messages:read", "customers:read"],
 		readOnly: true,
 		inputSchema: obj({}),
 		run: (_args, ctx) =>
@@ -482,7 +1096,7 @@ const tools: ReadonlyArray<Tool> = [
 		title: "List channels",
 		description:
 			"Channels and direct messages the user can read, with unread counts. Omit organization_id to list every organization's.",
-		scope: "messages:read",
+		scopes: ["messages:read"],
 		readOnly: true,
 		inputSchema: obj({ organization_id: str("Only this organization's channels") }),
 		run: (args, ctx) =>
@@ -525,7 +1139,7 @@ const tools: ReadonlyArray<Tool> = [
 		title: "Read messages",
 		description:
 			"A channel's (or thread's) messages, oldest first, newest at the end. Page back with before_message_id (the oldest id you have).",
-		scope: "messages:read",
+		scopes: ["messages:read"],
 		readOnly: true,
 		inputSchema: obj(
 			{
@@ -558,7 +1172,7 @@ const tools: ReadonlyArray<Tool> = [
 		title: "Search messages",
 		description:
 			"Full-text search over messages the user can read, newest first. Omit organization_id to search every organization.",
-		scope: "messages:read",
+		scopes: ["messages:read"],
 		readOnly: true,
 		inputSchema: obj(
 			{
@@ -612,7 +1226,7 @@ const tools: ReadonlyArray<Tool> = [
 		title: "List notifications",
 		description:
 			"The user's notifications (mentions, replies, direct messages), newest first, with each message's content.",
-		scope: "messages:read",
+		scopes: ["messages:read"],
 		readOnly: true,
 		inputSchema: obj({
 			unread_only: { type: "boolean", description: "Only unread ones (default true)" },
@@ -661,7 +1275,7 @@ const tools: ReadonlyArray<Tool> = [
 		title: "Send message",
 		description:
 			"Post a message as the user in a channel, direct message or thread channel. Use reply_to_message_id to quote-reply a message inline.",
-		scope: "messages:write",
+		scopes: ["messages:write"],
 		readOnly: false,
 		inputSchema: obj(
 			{
@@ -695,7 +1309,7 @@ const tools: ReadonlyArray<Tool> = [
 		title: "Upload file",
 		description:
 			"Upload a file (up to 10 MB) into a channel from its content: base64 for any file, or text for a text file. Returns an attachment_id; post it with send_message's attachment_ids. For large files or files on disk, use create_upload_url instead.",
-		scope: "messages:write",
+		scopes: ["messages:write"],
 		readOnly: false,
 		inputSchema: obj(
 			{
@@ -752,7 +1366,7 @@ const tools: ReadonlyArray<Tool> = [
 		title: "Create upload URL",
 		description:
 			"For a file on disk or too big to inline (up to 10 MB): returns an upload_url valid for 15 minutes. PUT the raw bytes there with the given headers (e.g. curl -X PUT -H 'Content-Type: …' -H 'If-None-Match: *' --data-binary @file '<upload_url>'); the URL stores one file and cannot replace it, then post attachment_id with send_message's attachment_ids.",
-		scope: "messages:write",
+		scopes: ["messages:write"],
 		readOnly: false,
 		inputSchema: obj(
 			{
@@ -786,7 +1400,7 @@ const tools: ReadonlyArray<Tool> = [
 		name: "reply_in_thread",
 		title: "Reply in thread",
 		description: "Answer a message in its thread, opening the thread if it has none yet.",
-		scope: "messages:write",
+		scopes: ["messages:write"],
 		readOnly: false,
 		inputSchema: obj(
 			{
@@ -825,7 +1439,7 @@ const tools: ReadonlyArray<Tool> = [
 		name: "edit_message",
 		title: "Edit message",
 		description: "Change the text of one of the user's own messages.",
-		scope: "messages:write",
+		scopes: ["messages:write"],
 		readOnly: false,
 		inputSchema: obj(
 			{
@@ -855,7 +1469,7 @@ const tools: ReadonlyArray<Tool> = [
 		name: "delete_message",
 		title: "Delete message",
 		description: "Delete one of the user's own messages. Ask the user first.",
-		scope: "messages:write",
+		scopes: ["messages:write"],
 		readOnly: false,
 		inputSchema: obj({ channel_id: str("The message's channel"), message_id: str("The message") }, [
 			"channel_id",
@@ -877,7 +1491,7 @@ const tools: ReadonlyArray<Tool> = [
 		title: "Set status",
 		description:
 			'Set the user\'s status: an emoji and message (e.g. 🌴 "Out until Monday"), optionally clearing itself after some minutes, and/or their presence (online, idle, dnd = do not disturb, invisible = appear offline). clear: true removes the emoji and message.',
-		scope: "messages:write",
+		scopes: ["messages:write"],
 		readOnly: false,
 		inputSchema: obj({
 			emoji: str("One emoji, e.g. 🌴"),
@@ -961,7 +1575,7 @@ const tools: ReadonlyArray<Tool> = [
 		name: "toggle_reaction",
 		title: "Toggle reaction",
 		description: "Add an emoji reaction as the user, or remove it if the user already reacted with it.",
-		scope: "messages:write",
+		scopes: ["messages:write"],
 		readOnly: false,
 		inputSchema: obj(
 			{
@@ -990,9 +1604,13 @@ const tools: ReadonlyArray<Tool> = [
 				return { reacted: response.wasCreated }
 			}),
 	},
+	...customerTools,
 ]
 
-const toolsFor = (scopes: ReadonlyArray<AgentScope>) => tools.filter((tool) => scopes.includes(tool.scope))
+const allowed = (tool: Tool, scopes: ReadonlyArray<AgentScope>) =>
+	tool.scopes.some((scope) => scopes.includes(scope))
+
+const toolsFor = (scopes: ReadonlyArray<AgentScope>) => tools.filter((tool) => allowed(tool, scopes))
 
 const toolListing = (scopes: ReadonlyArray<AgentScope>) =>
 	toolsFor(scopes).map((tool) => ({
@@ -1016,8 +1634,12 @@ const callTool = (params: Record<string, unknown> | undefined, ctx: ToolContext)
 		const args = call.value.arguments ?? {}
 		const tool = tools.find((candidate) => candidate.name === name)
 		if (tool === undefined) return yield* toolError(`Unknown tool ${name}`)
-		if (!ctx.agent.scopes.includes(tool.scope))
-			return yield* toolError(`This connection is read-only; ${name} needs write access`)
+		if (!allowed(tool, ctx.agent.scopes))
+			return yield* toolError(
+				tool.scopes.includes("messages:write")
+					? `This connection is read-only; ${name} needs write access`
+					: `This connection was not granted ${tool.scopes.join(" or ")}; ${name} needs it`,
+			)
 		return yield* tool.run(args, ctx).pipe(
 			Effect.withSpan("Mcp.tool", {
 				attributes: { "mcp.tool": name, "agent.grant_id": ctx.agent.grantId },

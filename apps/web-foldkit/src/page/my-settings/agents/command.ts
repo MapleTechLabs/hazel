@@ -40,8 +40,13 @@ export const RevokeAgentGrant = Command.define("RevokeAgentGrant", {
 		),
 })
 
-const scopesOf = (access: TokenAccess): Array<AgentScope> =>
-	access === "write" ? ["messages:read", "messages:write"] : ["messages:read"]
+const SCOPES_OF = {
+	read: ["messages:read"],
+	write: ["messages:read", "messages:write"],
+	read_customers: ["messages:read", "customers:read"],
+} as const satisfies Record<TokenAccess, ReadonlyArray<AgentScope>>
+
+const scopesOf = (access: TokenAccess): Array<AgentScope> => [...SCOPES_OF[access]]
 
 export const CreateAgentToken = Command.define("CreateAgentToken", {
 	args: { name: Schema.String, access: TokenAccess },
