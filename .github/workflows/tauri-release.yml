@@ -5,6 +5,11 @@ on:
         tags:
             - "v*"
     workflow_dispatch:
+        inputs:
+            build_only:
+                description: "Build every platform without creating a release (to check a branch)"
+                type: boolean
+                default: false
 
 jobs:
     build:
@@ -46,7 +51,20 @@ jobs:
               if: matrix.platform == 'ubuntu-22.04'
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+                  sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-4-dev libappindicator3-dev librsvg2-dev patchelf
+
+            # The Mac app runs on Chromium (CEF): building its bindings needs cmake and ninja, and the
+            # CLI ships the CEF distribution (about 1 GB unpacked), cached between runs.
+            - name: Install CEF build tools (macOS)
+              if: matrix.platform == 'macos-latest'
+              run: brew install cmake ninja
+
+            - name: CEF distribution cache (macOS)
+              if: matrix.platform == 'macos-latest'
+              uses: actions/cache@v4
+              with:
+                  path: ~/Library/Caches/tauri-cef
+                  key: tauri-cef-${{ matrix.args }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
 
             - name: Install frontend dependencies
               run: bun install --frozen-lockfile
@@ -67,7 +85,13 @@ jobs:
                   VITE_R2_PUBLIC_URL: ${{ vars.VITE_R2_PUBLIC_URL }}
               with:
                   projectPath: apps/desktop
-                  tagName: v__VERSION__
+                  # The repo's own CLI (`@tauri-apps/cli-cef`, Tauri 3): without this tauri-action
+                  # installs `@tauri-apps/cli@v2`, which neither builds Tauri 3 nor ships CEF.
+                  tauriScript: bun run tauri
+                  # No tag in a build-only run: tauri-action then builds without touching a release.
+                  # (`!build_only && tag || ''`, not `build_only && '' || tag`: an empty string is
+                  # falsy in an expression, so the latter always gives the tag.)
+                  tagName: ${{ !inputs.build_only && 'v__VERSION__' || '' }}
                   releaseName: "Hazel v__VERSION__"
                   releaseBody: "See the assets to download this version and install."
                   releaseDraft: true
