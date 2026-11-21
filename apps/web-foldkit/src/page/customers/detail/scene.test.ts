@@ -4,7 +4,7 @@ import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import { toAccountRow } from "../../../customers/queries"
 import { receivedSuggestions, EMPTY_SUGGESTIONS } from "../../../customers/suggestions"
-import { ACCOUNTS, ACCOUNTS_BY_KEY, ACME_DETAIL, type NamedAccount } from "../../../lab/fixtures/customers"
+import { ACCOUNTS, ACCOUNTS_BY_KEY, type NamedAccount } from "../../../lab/fixtures/customers"
 import {
 	LONG_SUGGESTION,
 	STRONG_SUGGESTION,
@@ -16,7 +16,6 @@ import { AppRoute } from "../../../route"
 import { makeShared, memberWithRole, pageScene } from "../../../test/pages-fixtures"
 import * as Menu from "../../../ui/menu"
 import { FocusTriggerOnPress } from "../../../ui/menu-view"
-import { Message } from "./message"
 import { init, update } from "./update"
 import { view } from "./view"
 
@@ -113,31 +112,19 @@ describe("customer page: suggested channel links", () => {
 describe("customer page: adding a company domain", () => {
 	const acme = ACCOUNTS_BY_KEY.acme
 	const noDomain = { ...acme, domains: [], companyProfile: null, companyCheckedAt: null }
-	const openedAs = (role: "owner" | "member", detailLoaded: boolean) => {
+	const openedAs = (role: "owner" | "member") => {
 		const as = makeShared({ member: memberWithRole(role) })
 		const model = {
 			...init(AppRoute.CustomerDetail({ orgSlug: "hazel", accountId: acme.id, tab: Option.none() }), as)
 				.model,
 			accounts: ACCOUNTS.map((account) => toAccountRow(account.id === acme.id ? noDomain : account)),
 		}
-		return {
-			as,
-			model: detailLoaded
-				? update(
-						model,
-						Message.SucceededFetchDetail({
-							accountId: acme.id,
-							detail: { ...ACME_DETAIL, account: noDomain },
-						}),
-						as,
-					).model
-				: model,
-		}
+		return { as, model }
 	}
 	const field = Scene.role("textbox", { name: "Company domain" })
 
-	test("an admin with no company domain gets the form once the detail loads", () => {
-		const { as, model } = openedAs("owner", true)
+	test("an admin with no company domain gets the form", () => {
+		const { as, model } = openedAs("owner")
 		Scene.scene(
 			pageScene(update, view, as),
 			Scene.given(model),
@@ -150,19 +137,8 @@ describe("customer page: adding a company domain", () => {
 		)
 	})
 
-	test("before the detail loads an admin is not offered a form it cannot show", () => {
-		const { as, model } = openedAs("owner", false)
-		Scene.scene(
-			pageScene(update, view, as),
-			Scene.given(model),
-			menusMounted(4),
-			Scene.expect(Scene.text("No company domain to look up.")).toExist(),
-			Scene.expect(field).toBeAbsent(),
-		)
-	})
-
 	test("a member is told an admin can add one", () => {
-		const { as, model } = openedAs("member", true)
+		const { as, model } = openedAs("member")
 		Scene.scene(
 			pageScene(update, view, as),
 			Scene.given(model),

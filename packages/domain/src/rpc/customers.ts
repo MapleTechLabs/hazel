@@ -434,7 +434,7 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 
 	/**
 	 * Owner, tags, stage override (null clears it), name (a manual name beats every source),
-	 * domains (the whole list; the company is looked up from the first usable one), and the Needs
+	 * a domain to add (put first, so the company is looked up by it; the others stay), and the Needs
 	 * attention mute: `{ until }` mutes (`until` null: until unmuted), null unmutes.
 	 */
 	write(
@@ -445,14 +445,14 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 			tags: Schema.optionalKey(Tags),
 			lifecycleStageOverride: Schema.optionalKey(Schema.NullOr(LifecycleStage)),
 			name: Schema.optionalKey(NonEmptyText(200)),
-			domains: Schema.optionalKey(Schema.Array(Text(253)).check(Schema.isMaxLength(20))),
+			addDomain: Schema.optionalKey(NonEmptyText(253)),
 			attentionMute: Schema.optionalKey(
 				Schema.NullOr(Schema.Struct({ until: Schema.NullOr(JsonDate) })),
 			),
 		},
 		Tx,
 		CustomersNotFoundError,
-		/** The owner is not a member of the organization, or a domain is not a company's. */
+		/** The owner is not a member of the organization, or the domain is not a company's. */
 		CustomersInvalidRequestError,
 	),
 

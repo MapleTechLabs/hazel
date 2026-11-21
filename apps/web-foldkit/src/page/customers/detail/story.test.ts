@@ -16,7 +16,6 @@ import { describe, expect, test } from "vitest"
 import type { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { snoozeUntil } from "../../../customers/ui/menus"
-import { ACME_DETAIL } from "../../../lab/fixtures/customers"
 import { AppRoute, type CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
@@ -395,42 +394,22 @@ describe("customer page: owner and tags", () => {
 })
 
 describe("customer page: company domain", () => {
-	const fetched = (domains: ReadonlyArray<string>) =>
-		Message.SucceededFetchDetail({
-			accountId: beta.id,
-			detail: {
-				...ACME_DETAIL,
-				account: { ...ACME_DETAIL.account, id: beta.id, domains: [...domains] },
-			},
-		})
 	const submit = (model: Model) => update(model, Message.SubmittedDomain(), shared)
 
-	test("a submit puts the new domain first and keeps the ones the customer has", () => {
-		const result = submit(
-			run(loaded(), [fetched(["gmail.com"]), Message.ChangedDomainDraft({ value: " acme.com " })]),
-		)
+	test("a submit adds the domain (the store puts it first, keeping the others)", () => {
+		const result = submit(run(loaded(), [Message.ChangedDomainDraft({ value: " acme.com " })]))
 		expect(result.model.isSavingDomain).toBe(true)
 		expect(result.commands?.[0]).toMatchObject({
 			name: "AddCustomerDomain",
-			args: { accountId: beta.id, domains: ["acme.com", "gmail.com"] },
+			args: { accountId: beta.id, addDomain: "acme.com" },
 		})
-		// A second press while it saves sends nothing.
+		// A second press while it saves sends nothing; nor does an empty draft.
 		expect(commandNames(submit(result.model))).toEqual([])
-	})
-
-	test("nothing is sent before the detail (the current domains) loads, or for an empty draft", () => {
-		expect(
-			commandNames(submit(run(loaded(), [Message.ChangedDomainDraft({ value: "acme.com" })]))),
-		).toEqual([])
-		expect(
-			commandNames(submit(run(loaded(), [fetched([]), Message.ChangedDomainDraft({ value: "  " })]))),
-		).toEqual([])
+		expect(commandNames(submit(run(loaded(), [Message.ChangedDomainDraft({ value: "  " })])))).toEqual([])
 	})
 
 	test("success clears the draft; a refusal keeps it and says why", () => {
-		const saving = submit(
-			run(loaded(), [fetched([]), Message.ChangedDomainDraft({ value: "acme.com" })]),
-		).model
+		const saving = submit(run(loaded(), [Message.ChangedDomainDraft({ value: "acme.com" })])).model
 		const done = update(saving, Message.SucceededAddDomain({ accountId: beta.id }), shared)
 		expect(done.model).toMatchObject({ domainDraft: "", isSavingDomain: false })
 		const refused = update(

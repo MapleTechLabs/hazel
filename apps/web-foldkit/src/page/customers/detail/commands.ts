@@ -191,7 +191,7 @@ export const UpdateCustomerAccount = Command.define("UpdateCustomerAccount", {
 
 /** Give the customer a company domain, first, so its company is looked up by it. */
 export const AddCustomerDomain = Command.define("AddCustomerDomain", {
-	args: { ...target, domains: Schema.Array(Schema.String) },
+	args: { ...target, addDomain: Schema.String },
 	messages: [Message.SucceededAddDomain, Message.FailedAddDomain],
 	execute: (args) =>
 		updateAccountAction(args).pipe(

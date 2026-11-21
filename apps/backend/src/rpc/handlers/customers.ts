@@ -811,28 +811,23 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 				tags,
 				lifecycleStageOverride,
 				name,
-				domains,
+				addDomain,
 				attentionMute,
 			}) =>
 				Effect.gen(function* () {
-					// Owner, tags and the mute are queue work; the name, the stage and the domains (which
+					// Owner, tags and the mute are queue work; the name, the stage and a domain (domains
 					// match chat and contacts to the customer) change what everyone sees.
 					const actor = yield* name !== undefined ||
 					lifecycleStageOverride !== undefined ||
-					domains !== undefined
+					addDomain !== undefined
 						? requireAdmin
 						: requireMember
 					yield* requirePerson(ownerUserId)
-					// Hostnames only (`https://www.acme.com/` is `acme.com`); a mail provider's is not a company's.
-					const cleanDomains =
-						domains === undefined
-							? undefined
-							: yield* Effect.forEach(domains, (value) => {
-									const domain = normalizeDomain(value)
-									return domain === null
-										? Effect.fail(invalid(`"${value.trim()}" is not a company domain`))
-										: Effect.succeed(domain)
-								}).pipe(Effect.map((list) => [...new Set(list)]))
+					// A hostname only (`https://www.acme.com/` is `acme.com`); a mail provider's is not a company's.
+					const newDomain = addDomain === undefined ? null : normalizeDomain(addDomain)
+					if (addDomain !== undefined && newDomain === null) {
+						return yield* invalid(`"${addDomain.trim()}" is not a company domain`)
+					}
 					const now = yield* currentTime
 					// The mute's columns: absent leaves them, null unmutes.
 					const mute =
@@ -851,6 +846,17 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					return yield* txOnly(
 						Effect.gen(function* () {
 							const account = yield* requireAccount(accountId)
+							// Added to the list as it is now, never replacing it: first, so the company is
+							// looked up by it; one already there moves first.
+							const domains =
+								newDomain === null
+									? undefined
+									: [
+											newDomain,
+											...account.domains.filter((domain) => domain !== newDomain),
+										].slice(0, 20)
+							const domainsChanged =
+								domains !== undefined && domains.join(" ") !== account.domains.join(" ")
 							yield* db.run(
 								SQLite.update(schema.customerAccountsTable)
 									// `undefined` leaves a column as it is.
@@ -861,7 +867,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 										lifecycleStage: lifecycleStageOverride ?? undefined,
 										// A manual name beats every source (`FIELD_PRECEDENCE`).
 										name,
-										domains: cleanDomains,
+										domains: domainsChanged ? domains : undefined,
 										fieldSources:
 											name === undefined
 												? undefined
@@ -906,16 +912,13 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 									now,
 								)
 							}
-							const domainsChanged =
-								cleanDomains !== undefined &&
-								cleanDomains.join(" ") !== account.domains.join(" ")
 							if (domainsChanged) {
 								yield* hazelEvent(
 									accountId,
 									actor.userId,
 									"account.domains_changed",
 									"Domains changed",
-									{ from: account.domains, to: cleanDomains },
+									{ from: account.domains, to: domains },
 									now,
 								)
 							}

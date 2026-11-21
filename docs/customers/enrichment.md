@@ -22,7 +22,7 @@ industry, size, country and funding stage.
 An account's domain is its first one that is not a mail provider's (`enrichmentDomainOf`,
 `FREE_MAIL_DOMAINS`, the list account matching and channel suggestions use too). An account without
 one is never looked up; an admin can give it one from the customer page's Company section
-(`customers.account.update` `domains`, put first), which asks for a compute turn, so the new domain
+(`customers.account.update` `addDomain`, put first, the others kept), which asks for a compute turn, so the new domain
 is seeded and looked up on the next alarms.
 
 ## Lookups

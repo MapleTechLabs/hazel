@@ -983,14 +983,10 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		SubmittedDomain: () => {
 			const args = target(model, shared)
 			const domain = model.domainDraft.trim()
-			// The update replaces the list: without the detail's domains it would drop the ones it has.
-			const detail = Option.getOrNull(AsyncData.getData(model.detail))
-			if (args === null || detail === null || domain === "" || model.isSavingDomain) return { model }
-			// First: the company is looked up by the first usable domain (the others may be a mail provider's).
-			const current = detail.account.domains
+			if (args === null || domain === "" || model.isSavingDomain) return { model }
 			return {
 				model: modifyFields(model, { isSavingDomain: () => true }),
-				commands: [AddCustomerDomain({ ...args, domains: [domain, ...current] })],
+				commands: [AddCustomerDomain({ ...args, addDomain: domain })],
 			}
 		},
 		SucceededAddDomain: () => ({
