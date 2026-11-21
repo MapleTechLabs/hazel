@@ -297,12 +297,38 @@ const noticeView = (h: H, text: string, title: string | null): Html =>
 	h.p([h.Class("text-center text-muted-fg text-xs")], [text || title || ""])
 
 /** A message, reply or notice: what it shows is its kind, text and title. */
-const messageView = (kind: ItemRow["kind"], text: string, title: string | null, h: H): Html =>
+/** The agent's thinking, where it happened: muted, under a "Thinking" label while it runs. */
+const reasoningView = (h: H, text: string, status: string | null): Html =>
+	h.div(
+		[h.Class("flex flex-col gap-1 border-border border-l-2 pl-3 text-muted-fg")],
+		[
+			h.div(
+				[h.Class("flex items-center gap-1.5 font-medium text-xs")],
+				[
+					status === "running"
+						? loader(h, { className: "size-3", ariaLabel: "Thinking" })
+						: IconBrainSparkle(h, { className: "size-3" }),
+					status === "running" ? "Thinking…" : "Thought",
+				],
+			),
+			h.div([h.Class("text-muted-fg text-sm [&_*]:text-muted-fg")], [markdownView(h, text)]),
+		],
+	)
+
+const messageView = (
+	kind: ItemRow["kind"],
+	text: string,
+	title: string | null,
+	status: string | null,
+	h: H,
+): Html =>
 	kind === "user"
 		? userBubble(h, text)
 		: kind === "assistant"
 			? assistantReply(h, text, title)
-			: noticeView(h, text, title)
+			: kind === "reasoning"
+				? reasoningView(h, text, status)
+				: noticeView(h, text, title)
 
 const stepIcon = (h: H, kind: ItemRow["kind"], status: string | null): Html =>
 	status === "running"
@@ -359,7 +385,7 @@ const lazyMessages = createKeyedLazy()
 const lazySteps = createKeyedLazy()
 
 const memoMessage = (h: H, item: ItemRow): Html =>
-	lazyMessages(item.id, messageView, [item.kind, item.text, item.title, h]) ?? h.empty
+	lazyMessages(item.id, messageView, [item.kind, item.text, item.title, item.status, h]) ?? h.empty
 
 const memoStep = (h: H, item: ItemRow): Html =>
 	lazySteps(item.id, stepRow, [item.id, item.kind, item.title, item.input, item.text, item.status, h]) ??
@@ -625,7 +651,7 @@ const threadEntries = (
 						Match.value(entry.item.kind).pipe(
 							Match.when("question", () => questionCard(h, entry.item, questions)),
 							Match.when("approval", () => approvalNotice(h, entry.item, externalLink)),
-							// Reasoning and tool items are folded into work logs before they get here.
+							// Tool items are folded into work logs before they get here.
 							Match.whenOr("user", "assistant", "notice", "reasoning", "tool", () =>
 								memoMessage(h, entry.item),
 							),

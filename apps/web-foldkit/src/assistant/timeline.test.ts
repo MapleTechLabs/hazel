@@ -30,23 +30,24 @@ const entryKinds = (items: ReadonlyArray<ItemRow>) =>
 	)
 
 describe("timelineOf", () => {
-	test("folds consecutive reasoning and tool items into one work log between replies", () => {
+	test("folds consecutive tool calls into one work log; thinking stays where it happened", () => {
 		expect(
 			entryKinds([
 				item(1, "user"),
 				item(2, "reasoning"),
 				item(3, "tool"),
 				item(4, "tool"),
-				item(5, "assistant"),
+				item(5, "reasoning"),
 				item(6, "tool"),
-				item(7, "question"),
+				item(7, "assistant"),
+				item(8, "question"),
 			]),
-		).toEqual(["user", "work(3)", "assistant", "work(1)", "question"])
+		).toEqual(["user", "reasoning", "work(2)", "reasoning", "work(1)", "assistant", "question"])
 	})
 
 	test("a work log is keyed by its first item", () => {
-		const [entry] = timelineOf([item(2, "reasoning"), item(3, "tool")])
-		expect(entry?._tag === "Work" ? entry.key : null).toBe(uuid(2))
+		const [entry] = timelineOf([item(3, "tool"), item(4, "tool")])
+		expect(entry?._tag === "Work" ? entry.key : null).toBe(uuid(3))
 	})
 })
 

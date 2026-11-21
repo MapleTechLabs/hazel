@@ -1,7 +1,10 @@
 import type { UserId } from "@hazel/schema"
 import type { ItemRow, ThreadRow } from "./model"
 
-/** How the thread reads: items in order, the agent's steps between replies folded into a work log. */
+/**
+ * How the thread reads: items in order, the agent's tool calls between replies folded into a work
+ * log. Its thinking stays in place, where it happened.
+ */
 
 /** By `createdAt`, then id: rows written in the same millisecond keep one order everywhere. */
 export const sortItems = (items: ReadonlyArray<ItemRow>): Array<ItemRow> =>
@@ -17,10 +20,10 @@ export const sortItems = (items: ReadonlyArray<ItemRow>): Array<ItemRow> =>
 
 export type Entry =
 	| Readonly<{ _tag: "Item"; item: ItemRow }>
-	/** Consecutive `reasoning` and `tool` items; `key` is the first one's id. */
+	/** Consecutive `tool` items; `key` is the first one's id. */
 	| Readonly<{ _tag: "Work"; key: string; items: ReadonlyArray<ItemRow> }>
 
-const isWork = (item: ItemRow) => item.kind === "reasoning" || item.kind === "tool"
+const isWork = (item: ItemRow) => item.kind === "tool"
 
 export const timelineOf = (items: ReadonlyArray<ItemRow>): Array<Entry> => {
 	const entries: Array<Entry> = []
