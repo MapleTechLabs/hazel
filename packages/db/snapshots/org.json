@@ -1,5 +1,5 @@
 {
-	"migration": "0012_assistant_panel",
+	"migration": "0013_assistant_hosted_engines",
 	"entities": [
 		{
 			"kind": "table",
@@ -13,6 +13,13 @@
 			"name": "assistant_items",
 			"primaryKey": {
 				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "assistant_preferences",
+			"primaryKey": {
+				"columns": ["userId"]
 			}
 		},
 		{
@@ -266,8 +273,17 @@
 		{
 			"kind": "column",
 			"table": "assistant_followers",
-			"name": "updatedAt",
+			"name": "turnStartedAt",
 			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_followers",
+			"name": "updatedAt",
+			"position": 6,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -415,6 +431,33 @@
 			"type": "text",
 			"notNull": false,
 			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_preferences",
+			"name": "userId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_preferences",
+			"name": "engine",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_preferences",
+			"name": "updatedAt",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
 		},
 		{
 			"kind": "column",

@@ -79,6 +79,7 @@ export const orgTables = [
 	schema.assistantThreadsTable,
 	schema.assistantItemsTable,
 	schema.assistantFollowersTable,
+	schema.assistantPreferencesTable,
 ] as const
 
 /** `ChannelObject`, one per channel (threads too). */

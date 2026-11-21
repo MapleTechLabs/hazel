@@ -9,7 +9,16 @@ export const integrationConnectionsTable = SQLite.table("integration_connections
 	columns: {
 		id: SQLite.column(uuid(IntegrationConnectionId), { defaultExpr: randomUuid }),
 		provider: typed<
-			"linear" | "github" | "figma" | "notion" | "discord" | "slack" | "craft" | "t3code"
+			| "linear"
+			| "github"
+			| "figma"
+			| "notion"
+			| "discord"
+			| "slack"
+			| "craft"
+			| "t3code"
+			| "anthropic"
+			| "openai"
 		>()(varchar(50)),
 		organizationId: uuid(OrganizationId),
 		userId: SQLite.nullable(uuid(UserId)),

@@ -17,8 +17,9 @@ export class AssistantThreadNotFoundError extends Schema.TaggedError<
 >()("AssistantThreadNotFoundError", { threadId: AssistantThreadId }) {}
 
 /**
- * The engine could not take the message. `not_connected`/`expired`: link T3 Code again in
- * settings; `unreachable`: the machine is asleep or T3 Code is closed; `refused`: T3 Code said no.
+ * The engine could not take the message. `not_connected`/`expired`: link T3 Code (or add an API
+ * key) again; `unreachable`: the machine is asleep, T3 Code is closed, or the provider is down;
+ * `refused`: the engine said no.
  */
 export class AssistantEngineError extends Schema.TaggedError<
 	AssistantEngineError,
@@ -36,14 +37,37 @@ export class AssistantQuestionClosedError extends Schema.TaggedError<
 
 const Message = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(20_000))
 
-/** Whether the member can talk to the agent, and where it runs. */
+/** The provider refused the API key (checked with a cheap call before it is saved). */
+export class AssistantKeyRejectedError extends Schema.TaggedError<
+	AssistantKeyRejectedError,
+	{ readonly brand: unique symbol }
+>()("AssistantKeyRejectedError", { provider: Assistant.HostedProvider, message: Schema.String }) {}
+
+/** A hosted engine: whether the member saved a key for it, and the model it runs. */
+export const HostedEngineStatus = Schema.Struct({
+	state: Schema.Literals(["connected", "not_connected"]),
+	model: Schema.String,
+})
+export type HostedEngineStatus = typeof HostedEngineStatus.Type
+
+/**
+ * Whether the member can talk to the agent, and where it runs: T3 Code, and the hosted engines
+ * with their own key. `preferredEngine` starts new chats: their choice, else the first connected
+ * one; null when none is.
+ */
 export const AssistantStatus = Schema.Struct({
 	t3code: Schema.Struct({
 		state: Schema.Literals(["connected", "not_connected", "expired"]),
 		environmentLabel: Schema.NullOr(Schema.String),
 	}),
+	anthropic: HostedEngineStatus,
+	openai: HostedEngineStatus,
+	preferredEngine: Schema.NullOr(Assistant.Engine),
 })
 export type AssistantStatus = typeof AssistantStatus.Type
+
+/** An API key as typed: never stored in clear, never returned, never synced. */
+const ApiKey = Schema.String.check(Schema.isMinLength(8), Schema.isMaxLength(500))
 
 export const AssistantWriteResponse = Schema.Struct({
 	threadId: AssistantThreadId,
@@ -66,7 +90,46 @@ export class AssistantRpcs extends RpcGroup.make(
 		.annotate(RequiredScopes, ["assistant:read"])
 		.middleware(AuthMiddleware),
 
-	/** A new thread (its id made by the client) with its first message. */
+	/**
+	 * Save the member's own API key for a hosted engine (checked with the provider first, stored
+	 * encrypted), and make that engine the one new chats use.
+	 */
+	Rpc.make("assistant.saveKey", {
+		payload: Schema.Struct({
+			organizationId: OrganizationId,
+			provider: Assistant.HostedProvider,
+			apiKey: ApiKey,
+		}),
+		success: AssistantStatus,
+		error: Schema.Union([
+			AssistantKeyRejectedError,
+			AssistantEngineError,
+			UnauthorizedError,
+			InternalServerError,
+		]),
+	})
+		.annotate(RequiredScopes, ["assistant:write"])
+		.middleware(AuthMiddleware),
+
+	/** Forget the member's key for a hosted engine. Its chats stay; continuing them needs a key again. */
+	Rpc.make("assistant.removeKey", {
+		payload: Schema.Struct({ organizationId: OrganizationId, provider: Assistant.HostedProvider }),
+		success: AssistantStatus,
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["assistant:write"])
+		.middleware(AuthMiddleware),
+
+	/** The engine new chats start on. It must be connected. */
+	Rpc.make("assistant.setEngine", {
+		payload: Schema.Struct({ organizationId: OrganizationId, engine: Assistant.Engine }),
+		success: AssistantStatus,
+		error: Schema.Union([AssistantEngineError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["assistant:write"])
+		.middleware(AuthMiddleware),
+
+	/** A new thread (its id made by the client) with its first message, on the preferred engine. */
 	Rpc.make("assistant.start", {
 		payload: Schema.Struct({
 			organizationId: OrganizationId,
@@ -80,7 +143,10 @@ export class AssistantRpcs extends RpcGroup.make(
 		.annotate(RequiredScopes, ["assistant:write"])
 		.middleware(AuthMiddleware),
 
-	/** A follow-up: queued behind the current run if one is going. `messageId` (client-made) makes a retry send once. */
+	/**
+	 * A follow-up on the thread's own engine: queued behind the current run if one is going.
+	 * `messageId` (client-made) makes a retry send once.
+	 */
 	Rpc.make("assistant.send", {
 		payload: Schema.Struct({
 			organizationId: OrganizationId,

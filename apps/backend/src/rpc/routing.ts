@@ -266,6 +266,9 @@ export const routes: RouteTable = {
 	"channelMember.clearNotifications": byOrgOfChannel("channelMember.clearNotifications"),
 	// The AI panel: threads live in the OrgObject.
 	"assistant.status": byOrg,
+	"assistant.saveKey": byOrg,
+	"assistant.removeKey": byOrg,
+	"assistant.setEngine": byOrg,
 	"assistant.start": byOrg,
 	"assistant.send": byOrg,
 	"assistant.answer": byOrg,

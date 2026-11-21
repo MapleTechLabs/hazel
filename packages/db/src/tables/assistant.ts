@@ -9,8 +9,11 @@ import * as SQLite from "@maple-dev/effect-orm/sqlite"
 import { jsonb, randomUuid, textEnum, timestamptz, uuid } from "./columns"
 
 export const assistantVisibilityEnum = textEnum(["private", "organization"])
-/** What runs the agent: the owner's linked T3 Code environment. */
-export const assistantEngineEnum = textEnum(["t3code"])
+/**
+ * What runs the agent: the owner's linked T3 Code environment (`t3code`), or Hazel itself with the
+ * owner's own API key (`anthropic`, `openai`: the hosted engines).
+ */
+export const assistantEngineEnum = textEnum(["t3code", "anthropic", "openai"])
 export const assistantThreadStatusEnum = textEnum(["idle", "running", "waiting", "error"])
 export const assistantItemKindEnum = textEnum([
 	"user",
@@ -108,9 +111,25 @@ export const assistantFollowersTable = SQLite.table("assistant_followers", {
 		nextStepAt: SQLite.nullable(timestamptz),
 		/** Steps in a row that could not reach the engine. */
 		failures: SQLite.column(SQLite.integer, { default: 0 }),
+		/**
+		 * A hosted engine's turn in progress: when it started. Set while the alarm runs the turn; an
+		 * instance that finds it set with no turn of its own running was evicted mid-turn.
+		 */
+		turnStartedAt: SQLite.nullable(timestamptz),
 		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 	},
 	primaryKey: ["threadId"],
 	indexes: [SQLite.index("assistant_followers_next_step_idx", ["nextStepAt"])],
 })
 export type AssistantFollower = SQLite.SelectRowOf<typeof assistantFollowersTable>
+
+/** A member's chosen engine for new chats. Not synced: `assistant.status` reports it. */
+export const assistantPreferencesTable = SQLite.table("assistant_preferences", {
+	columns: {
+		userId: uuid(UserId),
+		engine: assistantEngineEnum,
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+	},
+	primaryKey: ["userId"],
+})
+export type AssistantPreference = SQLite.SelectRowOf<typeof assistantPreferencesTable>

@@ -4,7 +4,10 @@ import { Config, type Redacted } from "effect"
 export type IntegrationProvider = IntegrationConnection.IntegrationProvider
 
 /** Providers with a static OAuth app: Craft connects with an API key, T3 Code with per-environment MCP OAuth (`services/t3code`). */
-export type OAuthIntegrationProvider = Exclude<IntegrationProvider, "craft" | "t3code">
+export type OAuthIntegrationProvider = Exclude<
+	IntegrationProvider,
+	"craft" | "t3code" | "anthropic" | "openai"
+>
 
 /**
  * Configuration for an OAuth provider.

@@ -12,6 +12,9 @@ export const IntegrationProvider = S.Literals([
 	"slack",
 	"craft",
 	"t3code",
+	// A member's own API key for the AI panel's hosted engines (`docs/assistant.md`).
+	"anthropic",
+	"openai",
 ])
 export type IntegrationProvider = S.Schema.Type<typeof IntegrationProvider>
 

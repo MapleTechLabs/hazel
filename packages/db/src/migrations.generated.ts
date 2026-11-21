@@ -349,6 +349,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "assistant_threads_owner_idx" ON "assistant_threads" ("ownerId", "lastActivityAt")',
 			],
 		},
+		{
+			id: "0013_assistant_hosted_engines",
+			statements: [
+				'ALTER TABLE "assistant_followers" ADD COLUMN "turnStartedAt" text',
+				'CREATE TABLE IF NOT EXISTS "assistant_preferences" (\n\t"userId" text PRIMARY KEY NOT NULL,\n\t"engine" text NOT NULL,\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+			],
+		},
 	],
 	channel: [
 		{

@@ -9,9 +9,16 @@ import { JsonDate } from "./utils"
 export const Visibility = S.Literals(["private", "organization"])
 export type Visibility = typeof Visibility.Type
 
-/** What runs the agent. Only the member's linked T3 Code for now. */
-export const Engine = S.Literals(["t3code"])
+/**
+ * What runs the agent: the member's linked T3 Code (`t3code`, an external agent), or Hazel's own
+ * loop with the member's API key (`anthropic`, `openai`: hosted, read-only tools in process).
+ */
+export const Engine = S.Literals(["t3code", "anthropic", "openai"])
 export type Engine = typeof Engine.Type
+
+/** The hosted engines: Hazel runs the model with the member's own key. */
+export const HostedProvider = S.Literals(["anthropic", "openai"])
+export type HostedProvider = typeof HostedProvider.Type
 
 /** `waiting`: the agent asked something, or needs an approval. */
 export const ThreadStatus = S.Literals(["idle", "running", "waiting", "error"])
