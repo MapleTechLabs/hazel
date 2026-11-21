@@ -480,8 +480,11 @@ export const signalMoreEntries: ReadonlyArray<Menu.Entry> = [
 	Menu.item(OPEN_QUEUE),
 ]
 
-/** A lookup asked for this long ago and still unanswered stops showing as pending. */
-export const COMPANY_REFRESH_PENDING_MS = 2 * 60_000
+/**
+ * How long a requested lookup may still be running: Brand plus Company Search, each up to 75 s
+ * (`enrichment/client.ts`), after the next alarm picks it up. Past it, an unchecked account means it failed.
+ */
+export const COMPANY_REFRESH_PENDING_MS = 5 * 60_000
 
 /** Whether this page's company lookup is still on its way: asked, and the account not checked since. */
 export const isCompanyRefreshPending = (model: Model, nowMs: number, checkedAtMs: number | null): boolean =>
