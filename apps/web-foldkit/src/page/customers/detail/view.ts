@@ -259,7 +259,7 @@ const ownerMenu = (h: HtmlBuilder<Message>, model: Model, context: Context): Htm
 					intent: "outline",
 					size: "sm",
 					// A long owner name truncates in the button, not past the page's edge.
-					className: "max-w-48",
+					className: "min-w-0 max-w-48",
 					attributes: [...attributes, h.AriaLabel("Owner")],
 				},
 				[
