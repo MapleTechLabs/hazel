@@ -68,6 +68,8 @@ export const INTEGRATION_PROVIDERS: Record<IntegrationProvider, { label: string;
 	slack: { label: "Slack", domain: "slack.com" },
 	craft: { label: "Craft", domain: "craft.do" },
 	t3code: { label: "T3 Code", domain: "t3.chat" },
+	anthropic: { label: "Anthropic", domain: "anthropic.com" },
+	openai: { label: "OpenAI", domain: "openai.com" },
 }
 
 /**

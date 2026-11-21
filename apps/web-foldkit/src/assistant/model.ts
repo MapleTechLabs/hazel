@@ -4,8 +4,9 @@ import { Schema } from "effect"
 import * as Menu from "../ui/menu"
 
 /**
- * The AI panel: a right column (a sheet on phones) where a member talks to an agent, running on
- * their own T3 Code, about the page they are on. Threads and items sync from the `OrgObject`.
+ * The AI panel: a right column (a sheet on phones) where a member talks to an agent about the page
+ * they are on. The agent runs on their own T3 Code, or in Hazel with their own Anthropic or OpenAI
+ * key. Threads and items sync from the `OrgObject`.
  */
 
 // ROWS
@@ -18,6 +19,7 @@ export const ThreadRow = Schema.Struct({
 	ownerName: Schema.NullOr(Schema.String),
 	title: Schema.String,
 	visibility: Assistant.Visibility,
+	engine: Assistant.Engine,
 	status: Assistant.ThreadStatus,
 	errorMessage: Schema.NullOr(Schema.String),
 	externalLink: Schema.NullOr(Schema.String),
@@ -51,9 +53,42 @@ export type ItemRow = typeof ItemRow.Type
 
 // STATE
 
-/** `assistant.status` for T3 Code; `Unknown` when the check failed (sending still tries). */
+/**
+ * Whether a new chat has an engine to run on (`assistant.status`): `Expired` when none is connected
+ * and the T3 Code sign-in lapsed; `Unknown` when the check failed (sending still tries).
+ */
 export const Connection = Schema.Literals(["Checking", "Connected", "NotConnected", "Expired", "Unknown"])
 export type Connection = typeof Connection.Type
+
+/** Which engines the member can use, and the one new chats start on. */
+export const Engines = Schema.Struct({
+	preferred: Schema.NullOr(Assistant.Engine),
+	t3code: Schema.Boolean,
+	anthropic: Schema.Boolean,
+	openai: Schema.Boolean,
+	/** The model each hosted engine runs. */
+	anthropicModel: Schema.String,
+	openaiModel: Schema.String,
+})
+export type Engines = typeof Engines.Type
+
+export const NO_ENGINES: Engines = {
+	preferred: null,
+	t3code: false,
+	anthropic: false,
+	openai: false,
+	anthropicModel: "",
+	openaiModel: "",
+}
+
+/** The member typing their own API key (the setup screen, or "Add an API key" in the engine menu). */
+export const KeyForm = Schema.Struct({
+	provider: Assistant.HostedProvider,
+	value: Schema.String,
+	isSaving: Schema.Boolean,
+	error: Schema.NullOr(Schema.String),
+})
+export type KeyForm = typeof KeyForm.Type
 
 /**
  * The member's message, shown at once and until its item syncs: its id is made first
@@ -119,6 +154,12 @@ export const Model = Schema.Struct({
 	items: Schema.Array(ItemRow),
 	connection: Connection,
 	environmentLabel: Schema.NullOr(Schema.String),
+	engines: Engines,
+	/** Open while the member adds a key; null otherwise. */
+	keyForm: Schema.NullOr(KeyForm),
+	/** `assistant.setEngine` is on its way. */
+	isSettingEngine: Schema.Boolean,
+	engineMenu: Menu.Model,
 	draft: Schema.String,
 	/** The page's context goes with the next message; turned off, only that message goes without. */
 	isContextIncluded: Schema.Boolean,
@@ -146,5 +187,9 @@ export const COMPOSER_ID = "ai-panel-composer"
 export const SETUP_ID = "ai-panel-setup"
 export const TOGGLE_ID = "ai-panel-toggle"
 export const HISTORY_MENU_ID = "ai-panel-history"
+export const ENGINE_MENU_ID = "ai-panel-engine"
+export const KEY_FIELD_ID = "ai-panel-key"
+/** The engine menu's entry that opens the key form. */
+export const ADD_KEY_KEY = "add-key"
 /** The history menu's first item. */
 export const NEW_CHAT_KEY = "new-chat"

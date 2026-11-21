@@ -5,8 +5,9 @@ import { modifyFields } from "foldkit/struct"
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../page/contract"
 import { sharedDefaults } from "../page/test-shared"
+import * as Menu from "../ui/menu"
 import { Message } from "./message"
-import type { ItemRow, Model, ThreadRow } from "./model"
+import { ADD_KEY_KEY, type ItemRow, type Model, NO_ENGINES, type ThreadRow } from "./model"
 import { GONE_THREAD, init, type Inputs, open, pendingOf, update } from "./update"
 
 /** The panel's sending (optimistic, then reconciled by id), failures, sharing and questions. */
@@ -53,6 +54,7 @@ const thread = (overrides: Partial<ThreadRow> = {}): ThreadRow => ({
 	ownerName: "Ada Lovelace",
 	title: "Acme's health",
 	visibility: "private",
+	engine: "t3code",
 	status: "idle",
 	errorMessage: null,
 	externalLink: "https://t3.example/threads/1",
@@ -308,6 +310,7 @@ describe("late answers", () => {
 				organizationId: other,
 				connection: "Connected",
 				environmentLabel: "Old",
+				engines: { ...NO_ENGINES, preferred: "t3code", t3code: true },
 			}),
 		).model
 		expect(model.connection).toBe(opened.connection)
@@ -514,5 +517,119 @@ describe("width", () => {
 		const model = run(opened, Message.MeasuredNudge({ delta: 900, maxWidth: 610 })).model
 		expect(model.width).toBe(610)
 		expect(model.edgeMaxWidth).toBe(610)
+	})
+})
+
+describe("engines and the member's own key", () => {
+	const withAnthropic = {
+		...NO_ENGINES,
+		preferred: "anthropic" as const,
+		anthropic: true,
+		anthropicModel: "claude-sonnet-5-5",
+		openaiModel: "gpt-5.5",
+	}
+
+	test("the key form saves the key for the chosen provider, and shows the provider's refusal", () => {
+		const form = runAll(opened, [
+			Message.ClickedAddKey({ provider: "anthropic" }),
+			Message.PickedKeyProvider({ provider: "openai" }),
+			Message.ChangedKey({ value: "  sk-openai-key-1234  " }),
+		])
+		expect(form.keyForm).toMatchObject({ provider: "openai", isSaving: false, error: null })
+		const submitted = run(form, Message.SubmittedKey())
+		expect(submitted.model.keyForm?.isSaving).toBe(true)
+		expect(submitted.commands?.[0]?.name).toBe("SaveAssistantKey")
+		expect(submitted.commands?.[0]?.args).toEqual({
+			organizationId,
+			provider: "openai",
+			apiKey: "sk-openai-key-1234",
+		})
+		// A second submit while saving sends nothing.
+		expect(run(submitted.model, Message.SubmittedKey()).commands ?? []).toHaveLength(0)
+
+		const refused = run(
+			submitted.model,
+			Message.FailedSaveKey({ message: "OpenAI did not accept this key." }),
+		)
+		expect(refused.model.keyForm).toMatchObject({
+			isSaving: false,
+			error: "OpenAI did not accept this key.",
+		})
+		// Typing again clears the error.
+		expect(run(refused.model, Message.ChangedKey({ value: "sk-2" })).model.keyForm?.error).toBeNull()
+	})
+
+	test("a key too short is not sent", () => {
+		const model = runAll(opened, [
+			Message.ClickedAddKey({ provider: "anthropic" }),
+			Message.ChangedKey({ value: "abc" }),
+		])
+		const result = run(model, Message.SubmittedKey())
+		expect(result.commands ?? []).toHaveLength(0)
+		expect(result.model.keyForm?.error).toBe("Paste the whole key.")
+	})
+
+	test("a saved key closes the form and makes the panel ready on that engine", () => {
+		const saving = runAll(opened, [
+			Message.ClickedAddKey({ provider: "anthropic" }),
+			Message.ChangedKey({ value: "sk-ant-key-1234" }),
+			Message.SubmittedKey(),
+		])
+		const saved = run(
+			saving,
+			Message.SucceededSaveKey({
+				organizationId,
+				connection: "Connected",
+				environmentLabel: null,
+				engines: withAnthropic,
+			}),
+		)
+		expect(saved.model.keyForm).toBeNull()
+		expect(saved.model.connection).toBe("Connected")
+		expect(saved.model.engines.preferred).toBe("anthropic")
+		// The key itself is kept nowhere in the panel.
+		expect(JSON.stringify(saved.model)).not.toContain("sk-ant-key-1234")
+	})
+
+	test("picking another engine in the menu sets it; Add an API key opens the form", () => {
+		const ready = run(
+			opened,
+			Message.SucceededFetchStatus({
+				organizationId,
+				connection: "Connected",
+				environmentLabel: "MacBook",
+				engines: { ...withAnthropic, t3code: true },
+			}),
+		).model
+		const pick = (key: string) =>
+			Message.GotEngineMenuMessage({
+				message: Menu.Message.ChoseFromNativeMenu({ key, entries: [Menu.item(key)] }),
+			})
+		const picked = run(ready, pick("t3code"))
+		const command = picked.commands?.find((candidate) => candidate.name === "SetAssistantEngine")
+		expect(command?.args).toEqual({ organizationId, engine: "t3code" })
+		expect(picked.model.isSettingEngine).toBe(true)
+		// The engine already chosen sends nothing.
+		expect(run(ready, pick("anthropic")).commands?.some((c) => c.name === "SetAssistantEngine")).toBe(
+			false,
+		)
+		// "Add an API key" opens the form, on the provider without a key.
+		expect(run(ready, pick(ADD_KEY_KEY)).model.keyForm?.provider).toBe("openai")
+		const set = run(
+			{ ...picked.model, isSettingEngine: true },
+			Message.SucceededSetEngine({
+				organizationId,
+				connection: "Connected",
+				environmentLabel: "MacBook",
+				engines: { ...withAnthropic, t3code: true, preferred: "t3code" },
+			}),
+		).model
+		expect(set.isSettingEngine).toBe(false)
+		expect(set.engines.preferred).toBe("t3code")
+		const failed = run(
+			{ ...set, isSettingEngine: true },
+			Message.FailedSetEngine({ message: "Link T3 Code first." }),
+		)
+		expect(failed.model).toMatchObject({ isSettingEngine: false, error: "Link T3 Code first." })
 	})
 })

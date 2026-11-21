@@ -1,4 +1,5 @@
 import { Assistant } from "@hazel/domain/models"
+import type { AssistantStatus } from "@hazel/domain/rpc"
 import { AssistantItemId, AssistantThreadId, OrganizationId } from "@hazel/schema"
 import { Effect, Match, Option, Schema } from "effect"
 import { Command } from "foldkit"
@@ -8,7 +9,7 @@ import { catchCommon } from "../data/actions"
 import { readStored, writeStored } from "../data/storage"
 import { HazelRpc } from "../rpc"
 import { Message } from "./message"
-import { COMPOSER_ID, type Connection, PANEL_ID, SETUP_ID, Stored, TOGGLE_ID } from "./model"
+import { COMPOSER_ID, type Connection, type Engines, PANEL_ID, SETUP_ID, Stored, TOGGLE_ID } from "./model"
 
 /** The panel's RPCs, its stored open state and width, and the composer's focus. */
 
@@ -135,28 +136,70 @@ export const UpdateAssistantVisibility = Command.define("UpdateAssistantVisibili
 		),
 })
 
-const connectionOf = (state: "connected" | "not_connected" | "expired"): Connection =>
-	Match.value(state).pipe(
-		Match.when("connected", (): Connection => "Connected"),
-		Match.when("not_connected", (): Connection => "NotConnected"),
-		Match.when("expired", (): Connection => "Expired"),
-		Match.exhaustive,
-	)
+/** A new chat can start once any engine is connected; else T3 Code's own state says what to fix. */
+const connectionOf = (status: AssistantStatus): Connection =>
+	status.preferredEngine !== null
+		? "Connected"
+		: Match.value(status.t3code.state).pipe(
+				Match.when("expired", (): Connection => "Expired"),
+				Match.orElse((): Connection => "NotConnected"),
+			)
 
-/** Whether the member's T3 Code is linked; asked each time the panel opens. */
+const enginesOf = (status: AssistantStatus): Engines => ({
+	preferred: status.preferredEngine,
+	t3code: status.t3code.state === "connected",
+	anthropic: status.anthropic.state === "connected",
+	openai: status.openai.state === "connected",
+	anthropicModel: status.anthropic.model,
+	openaiModel: status.openai.model,
+})
+
+/** What a status answer becomes in the panel. */
+const statusFields = (organizationId: OrganizationId, status: AssistantStatus) => ({
+	organizationId,
+	connection: connectionOf(status),
+	environmentLabel: status.t3code.environmentLabel,
+	engines: enginesOf(status),
+})
+
+/** Which engines the member can use (T3 Code, their own keys); asked each time the panel opens. */
 export const FetchAssistantStatus = Command.define("FetchAssistantStatus", {
 	args: { organizationId: OrganizationId },
 	messages: [Message.SucceededFetchStatus, Message.FailedFetchStatus],
 	execute: (args) =>
 		HazelRpc.use((rpc) => rpc("assistant.status", args)).pipe(
-			Effect.map(({ t3code }) =>
-				Message.SucceededFetchStatus({
-					organizationId: args.organizationId,
-					connection: connectionOf(t3code.state),
-					environmentLabel: t3code.environmentLabel,
-				}),
-			),
+			Effect.map((status) => Message.SucceededFetchStatus(statusFields(args.organizationId, status))),
 			catchCommon(() => Message.FailedFetchStatus({ organizationId: args.organizationId })),
+		),
+})
+
+/** Save the member's own API key (the server checks it with the provider first). */
+export const SaveAssistantKey = Command.define("SaveAssistantKey", {
+	args: { organizationId: OrganizationId, provider: Assistant.HostedProvider, apiKey: Schema.String },
+	messages: [Message.SucceededSaveKey, Message.FailedSaveKey],
+	execute: (args) =>
+		HazelRpc.use((rpc) => rpc("assistant.saveKey", args)).pipe(
+			Effect.map((status) => Message.SucceededSaveKey(statusFields(args.organizationId, status))),
+			Effect.catchTags({
+				AssistantKeyRejectedError: ({ message }) =>
+					Effect.succeed(Message.FailedSaveKey({ message })),
+				AssistantEngineError: ({ message }) => Effect.succeed(Message.FailedSaveKey({ message })),
+			}),
+			catchCommon((reason) => Message.FailedSaveKey({ message: reasonText(reason) })),
+		),
+})
+
+/** The engine new chats start on. */
+export const SetAssistantEngine = Command.define("SetAssistantEngine", {
+	args: { organizationId: OrganizationId, engine: Assistant.Engine },
+	messages: [Message.SucceededSetEngine, Message.FailedSetEngine],
+	execute: (args) =>
+		HazelRpc.use((rpc) => rpc("assistant.setEngine", args)).pipe(
+			Effect.map((status) => Message.SucceededSetEngine(statusFields(args.organizationId, status))),
+			Effect.catchTag("AssistantEngineError", ({ message }) =>
+				Effect.succeed(Message.FailedSetEngine({ message })),
+			),
+			catchCommon((reason) => Message.FailedSetEngine({ message: reasonText(reason) })),
 		),
 })
 

@@ -3,7 +3,8 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import * as Menu from "../ui/menu"
 import * as Modal from "../ui/modal"
-import { Connection, ItemRow, ThreadRow } from "./model"
+import { Assistant } from "@hazel/domain/models"
+import { Connection, Engines, ItemRow, ThreadRow } from "./model"
 
 export const Message = defineMessageUnion({
 	/** The toggle button, the `aiPanel.toggle` hotkey or the command palette. */
@@ -17,8 +18,31 @@ export const Message = defineMessageUnion({
 		organizationId: OrganizationId,
 		connection: Connection,
 		environmentLabel: Schema.NullOr(Schema.String),
+		engines: Engines,
 	},
 	FailedFetchStatus: { organizationId: OrganizationId },
+	/** "Use your own API key" (the setup screen, or the engine menu). */
+	ClickedAddKey: { provider: Assistant.HostedProvider },
+	PickedKeyProvider: { provider: Assistant.HostedProvider },
+	ChangedKey: { value: Schema.String },
+	SubmittedKey: {},
+	CancelledKey: {},
+	/** The key was accepted and saved: the status it answered with. */
+	SucceededSaveKey: {
+		organizationId: OrganizationId,
+		connection: Connection,
+		environmentLabel: Schema.NullOr(Schema.String),
+		engines: Engines,
+	},
+	FailedSaveKey: { message: Schema.String },
+	GotEngineMenuMessage: { message: Menu.Message },
+	SucceededSetEngine: {
+		organizationId: OrganizationId,
+		connection: Connection,
+		environmentLabel: Schema.NullOr(Schema.String),
+		engines: Engines,
+	},
+	FailedSetEngine: { message: Schema.String },
 	ChangedDraft: { value: Schema.String },
 	SubmittedComposer: {},
 	ClickedSuggestion: { text: Schema.String },

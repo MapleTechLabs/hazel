@@ -8,6 +8,7 @@ import {
 	IconArrowUp,
 	IconBrainSparkle,
 	IconCheck,
+	IconChevronDown,
 	IconChevronRight,
 	IconClock,
 	IconClose,
@@ -29,12 +30,17 @@ import * as Menu from "../ui/menu"
 import { menuDescription, menuLabel, view as menuView } from "../ui/menu-view"
 import * as Sheet from "../ui/sheet"
 import { resizeEdge, splitPanelClassName } from "../ui/split-panel"
+import { textField } from "../ui/text-field"
 import { textarea } from "../ui/textarea"
 import { toggleChip } from "../ui/toggle-chip"
 import { suggestionsFor } from "./context"
 import { Message } from "./message"
 import {
+	ADD_KEY_KEY,
 	COMPOSER_ID,
+	type Engines,
+	KEY_FIELD_ID,
+	type KeyForm,
 	TOGGLE_ID,
 	type ItemRow,
 	type Model,
@@ -749,7 +755,6 @@ const composer = (h: H, model: Model, inputs: ViewInputs): Html => {
 	const canStop = isStoppable(thread)
 	const isSending = model.pending?.isSending === true
 	const context = inputs.context
-	const engineLabel = thread?.engineLabel ?? model.environmentLabel
 	return h.div(
 		[h.Class("flex shrink-0 flex-col gap-2 px-3 pt-1 pb-3")],
 		[
@@ -794,10 +799,13 @@ const composer = (h: H, model: Model, inputs: ViewInputs): Html => {
 					h.div(
 						[h.Class("flex items-center justify-between gap-2 px-2 pb-2")],
 						[
-							h.span(
-								[h.Class("min-w-0 truncate pl-1 text-muted-fg text-xs")],
-								[engineLabel === null ? "T3 Code" : `T3 Code · ${engineLabel}`],
-							),
+							// A thread stays on its engine; a new chat starts on the chosen one.
+							thread === null
+								? engineMenu(h, model)
+								: h.span(
+										[h.Class("min-w-0 truncate pl-1 text-muted-fg text-xs")],
+										[engineText(thread.engine, thread.engineLabel)],
+									),
 							canStop
 								? button(
 										h,
@@ -838,8 +846,98 @@ const sharedFooter = (h: H, thread: ThreadRow): Html =>
 		[IconUsers(h, { className: "size-4" }), `Shared by ${thread.ownerName ?? "a teammate"}`],
 	)
 
+// ENGINES
+
+const PROVIDER_NAMES = { anthropic: "Anthropic", openai: "OpenAI" } satisfies Record<
+	Assistant.HostedProvider,
+	string
+>
+
+/** "T3 Code · MacBook", "Anthropic · claude-sonnet-5-5". */
+export const engineText = (engine: Assistant.Engine, detail: string | null): string => {
+	const name = engine === "t3code" ? "T3 Code" : PROVIDER_NAMES[engine]
+	return detail === null || detail === "" ? name : `${name} · ${detail}`
+}
+
+/** What the engine runs on: T3 Code's environment, or the hosted engine's model. */
+const engineDetail = (model: Model, engine: Assistant.Engine): string | null =>
+	Match.value(engine).pipe(
+		Match.when("t3code", () => model.environmentLabel),
+		Match.when("anthropic", () => model.engines.anthropicModel),
+		Match.when("openai", () => model.engines.openaiModel),
+		Match.exhaustive,
+	)
+
+const connectedEngines = (engines: Engines): ReadonlyArray<Assistant.Engine> =>
+	(["t3code", "anthropic", "openai"] as const).filter((engine) => engines[engine])
+
+/** A new chat's engine, and the menu to choose another or add a key. */
+const engineMenu = (h: H, model: Model): Html => {
+	const id = model.engineMenu.id
+	const preferred = model.engines.preferred
+	const engines = connectedEngines(model.engines)
+	const label =
+		preferred === null ? "Choose an engine" : engineText(preferred, engineDetail(model, preferred))
+	return h.submodel({
+		slotId: id,
+		model: model.engineMenu,
+		view: menuView,
+		viewInputs: {
+			entries: [
+				Menu.section(
+					"Run new chats on",
+					engines.map((engine) =>
+						Menu.item(engine, { textValue: engineText(engine, null), hasDescription: true }),
+					),
+				),
+				Menu.section(undefined, [Menu.item(ADD_KEY_KEY, { textValue: "Add an API key" })]),
+			],
+			toTrigger: (attributes, overlay) =>
+				button(
+					h,
+					{
+						intent: "plain",
+						size: "xs",
+						isPending: model.isSettingEngine,
+						attributes: [
+							...attributes,
+							h.AriaLabel(`Engine: ${label}. Change`),
+							h.Attribute("title", label),
+						],
+						className: "min-w-0 text-muted-fg",
+					},
+					[
+						h.span([h.Class("truncate")], [label]),
+						IconChevronDown(h, { className: "size-3 shrink-0" }),
+						overlay,
+					],
+				),
+			content: (key) => {
+				if (key === ADD_KEY_KEY) return [menuLabel(h, id, key, "Add an API key")]
+				const engine = engines.find((candidate) => candidate === key)
+				if (engine === undefined) return []
+				const detail = engineDetail(model, engine)
+				return [
+					menuLabel(
+						h,
+						id,
+						key,
+						engine === preferred
+							? `${engineText(engine, null)} (current)`
+							: engineText(engine, null),
+					),
+					...(detail === null ? [] : [menuDescription(h, id, key, detail, "text-xs")]),
+				]
+			},
+			className: "w-64 max-w-[calc(100vw-2rem)]",
+		},
+		toParentMessage: (message) => Message.GotEngineMenuMessage({ message }),
+	})
+}
+
 // NOT CONNECTED
 
+/** No engine yet: T3 Code (linked in Settings) or the member's own API key. */
 const connectState = (h: H, model: Model, shared: Shared): Html => {
 	const isExpired = model.connection === "Expired"
 	return h.div(
@@ -847,33 +945,126 @@ const connectState = (h: H, model: Model, shared: Shared): Html => {
 		[
 			emptyState(h, {
 				icon: (className) => IconSparkles(h, { className }),
-				title: isExpired ? "Your T3 Code sign-in expired" : "Connect T3 Code",
+				title: isExpired ? "Your T3 Code sign-in expired" : "Choose how the assistant runs",
 				description:
-					"The assistant runs on your own T3 Code environment, so it sees what you can see. Link it in Settings to start a chat.",
-				action:
-					shared.orgSlug === null
-						? undefined
-						: h.a(
-								[
-									h.Id(SETUP_ID),
-									h.Href(hrefOf(integrationRoute(shared.orgSlug, "t3code"))),
-									h.Class(buttonClassName({ size: "sm" })),
-									// On a phone the sheet covers the page it opens: close it on the way.
-									...(shared.isMobile ? [h.OnClick(Message.ClickedClose())] : []),
-								],
-								[isExpired ? "Link T3 Code again" : "Open T3 Code settings"],
-							),
+					"Run it on your own T3 Code environment, or in Hazel with your own Anthropic or OpenAI key. Either way it sees only what you can see, and only reads.",
+				action: h.div(
+					[h.Class("flex flex-wrap items-center justify-center gap-2")],
+					[
+						shared.orgSlug === null
+							? h.empty
+							: h.a(
+									[
+										h.Id(SETUP_ID),
+										h.Href(hrefOf(integrationRoute(shared.orgSlug, "t3code"))),
+										h.Class(buttonClassName({ size: "sm" })),
+										// On a phone the sheet covers the page it opens: close it on the way.
+										...(shared.isMobile ? [h.OnClick(Message.ClickedClose())] : []),
+									],
+									[isExpired ? "Link T3 Code again" : "Use T3 Code"],
+								),
+						button(
+							h,
+							{
+								intent: "outline",
+								size: "sm",
+								onPress: Message.ClickedAddKey({ provider: "anthropic" }),
+							},
+							["Use your own API key"],
+						),
+					],
+				),
 			}),
 		],
 	)
 }
+
+/** The member's own key: which provider, the key, saved once the provider accepts it. */
+const keyFormView = (h: H, form: KeyForm): Html =>
+	h.form(
+		[
+			h.Class("flex flex-1 flex-col gap-4 p-6"),
+			h.OnSubmit(Message.SubmittedKey()),
+			h.OnKeyDownPreventDefault((key) =>
+				key === "Escape" ? Option.some(Message.CancelledKey()) : Option.none(),
+			),
+		],
+		[
+			heading(h, { variant: "subsection", level: 3 }, ["Use your own API key"]),
+			h.p(
+				[h.Class("text-muted-fg text-sm")],
+				[
+					"Hazel runs the assistant with your key, with read-only access to what you can see. The key is checked, stored encrypted, and never shown again.",
+				],
+			),
+			h.div(
+				[h.Class("flex gap-2"), h.Role("group"), h.AriaLabel("Provider")],
+				(["anthropic", "openai"] as const).map((provider) =>
+					toggleChip(h, {
+						label: PROVIDER_NAMES[provider],
+						isPressed: form.provider === provider,
+						isDisabled: form.isSaving,
+						onPress: Message.PickedKeyProvider({ provider }),
+					}),
+				),
+			),
+			textField(
+				h,
+				{
+					id: KEY_FIELD_ID,
+					value: form.value,
+					onInput: (value) => Message.ChangedKey({ value }),
+					isInvalid: form.error !== null,
+					isDisabled: form.isSaving,
+				},
+				(parts) => [
+					parts.label([`${PROVIDER_NAMES[form.provider]} API key`]),
+					parts.input({
+						placeholder: form.provider === "anthropic" ? "sk-ant-…" : "sk-…",
+						className: "font-mono text-sm",
+						attributes: [
+							h.Type("password"),
+							h.Attribute("autocomplete", "off"),
+							h.Attribute("spellcheck", "false"),
+						],
+					}),
+					parts.fieldError([form.error ?? ""]),
+				],
+			),
+			h.div(
+				[h.Class("flex justify-end gap-2")],
+				[
+					button(
+						h,
+						{
+							intent: "plain",
+							size: "sm",
+							onPress: Message.CancelledKey(),
+							isDisabled: form.isSaving,
+						},
+						["Cancel"],
+					),
+					button(
+						h,
+						{
+							size: "sm",
+							isPending: form.isSaving,
+							isDisabled: form.value.trim() === "",
+							attributes: [h.Type("submit")],
+						},
+						["Save key"],
+					),
+				],
+			),
+		],
+	)
 
 // PANEL
 
 const checkingState = (h: H): Html =>
 	h.div(
 		[h.Class("flex flex-1 items-center justify-center")],
-		[loader(h, { className: "size-4", ariaLabel: "Checking T3 Code" })],
+		[loader(h, { className: "size-4", ariaLabel: "Checking the assistant" })],
 	)
 
 const content = (h: H, model: Model, inputs: ViewInputs): ReadonlyArray<Html> => {
@@ -890,17 +1081,19 @@ const content = (h: H, model: Model, inputs: ViewInputs): ReadonlyArray<Html> =>
 					key === "Escape" ? Option.some(Message.ClickedClose()) : Option.none(),
 				),
 			],
-			// Until it is known whether T3 Code is linked, a new chat offers nothing to send.
-			model.connection === "Checking" && model.threadId === null
-				? [checkingState(h)]
-				: !isConnected && model.threadId === null
-					? [connectState(h, model, inputs.shared)]
-					: [
-							timeline(h, model, inputs),
-							thread !== null && isReadOnly(model, inputs.shared)
-								? sharedFooter(h, thread)
-								: composer(h, model, inputs),
-						],
+			// Until it is known which engines are connected, a new chat offers nothing to send.
+			model.keyForm !== null && model.threadId === null
+				? [keyFormView(h, model.keyForm)]
+				: model.connection === "Checking" && model.threadId === null
+					? [checkingState(h)]
+					: !isConnected && model.threadId === null
+						? [connectState(h, model, inputs.shared)]
+						: [
+								timeline(h, model, inputs),
+								thread !== null && isReadOnly(model, inputs.shared)
+									? sharedFooter(h, thread)
+									: composer(h, model, inputs),
+							],
 		),
 	]
 }

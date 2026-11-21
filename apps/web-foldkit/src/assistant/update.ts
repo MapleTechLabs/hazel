@@ -1,4 +1,4 @@
-import type { Assistant } from "@hazel/domain/models"
+import { Assistant } from "@hazel/domain/models"
 import { type AssistantItemId, AssistantThreadId, type OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, type Update } from "foldkit"
@@ -14,16 +14,23 @@ import {
 	MeasureAssistantEdge,
 	FocusAssistantToggle,
 	MakeAssistantMessageId,
+	SaveAssistantKey,
 	SaveAssistantPanel,
 	SendAssistantMessage,
+	SetAssistantEngine,
 	StartAssistantThread,
 	StopAssistantThread,
 	UpdateAssistantVisibility,
 } from "./commands"
 import { Message } from "./message"
 import {
+	ADD_KEY_KEY,
+	type Connection,
+	ENGINE_MENU_ID,
+	type Engines,
 	HISTORY_MENU_ID,
 	type ItemRow,
+	NO_ENGINES,
 	type Model,
 	NEW_CHAT_KEY,
 	PANEL_ID,
@@ -70,6 +77,10 @@ export const init = (stored: Stored): Model => ({
 	items: [],
 	connection: "Checking",
 	environmentLabel: null,
+	engines: NO_ENGINES,
+	keyForm: null,
+	isSettingEngine: false,
+	engineMenu: Menu.init({ id: ENGINE_MENU_ID, placement: "top start" }),
 	draft: "",
 	isContextIncluded: true,
 	pending: null,
@@ -149,6 +160,7 @@ export const close = (model: Model, inputs: Inputs): Return => {
 		isOpen: () => false,
 		drag: () => null,
 		historyMenu: (menu) => modifyFields(menu, { popup: () => ({ _tag: "Closed" as const }) }),
+		engineMenu: (menu) => modifyFields(menu, { popup: () => ({ _tag: "Closed" as const }) }),
 	})
 	return {
 		model: next,
@@ -194,6 +206,8 @@ const forOrganization = (model: Model, organizationId: OrganizationId): Model =>
 		threads: () => [],
 		draft: () => "",
 		connection: () => "Checking",
+		engines: () => NO_ENGINES,
+		keyForm: () => null,
 	})
 
 export const GONE_THREAD = "This chat is no longer available."
@@ -530,6 +544,82 @@ const nudgedEdge = (model: Model, delta: number, maxWidth: number): Return => {
 	return { model: next, commands: [SaveAssistantPanel({ stored: persisted(next) })] }
 }
 
+// ENGINES
+
+interface StatusFields {
+	readonly organizationId: OrganizationId
+	readonly connection: Connection
+	readonly environmentLabel: string | null
+	readonly engines: Engines
+}
+
+/** A status answer for the organization on screen (one for another is stale). */
+const appliedStatus = (model: Model, status: StatusFields, extra: Partial<Model> = {}): Model =>
+	status.organizationId !== model.organizationId
+		? model
+		: {
+				...model,
+				connection: status.connection,
+				environmentLabel: status.environmentLabel,
+				engines: status.engines,
+				...extra,
+			}
+
+/** The hosted engines with a saved key: what "Use your own API key" offers first is the other one. */
+const firstMissingKey = (engines: Engines): Assistant.HostedProvider =>
+	engines.anthropic && !engines.openai ? "openai" : "anthropic"
+
+const isEngine = Schema.is(Assistant.Engine)
+
+const submittedKey = (model: Model, inputs: Inputs): Return => {
+	const form = model.keyForm
+	const organizationId = inputs.shared.organization?.id
+	const apiKey = form?.value.trim() ?? ""
+	if (form === null || form.isSaving || organizationId === undefined) return { model }
+	if (apiKey.length < 8)
+		return {
+			model: modifyFields(model, {
+				keyForm: () => modifyFields(form, { error: () => "Paste the whole key." }),
+			}),
+		}
+	return {
+		model: modifyFields(model, {
+			keyForm: () => modifyFields(form, { isSaving: () => true, error: () => null }),
+		}),
+		commands: [SaveAssistantKey({ organizationId, provider: form.provider, apiKey })],
+	}
+}
+
+const pickedEngine = (model: Model, key: string, inputs: Inputs): Return => {
+	if (key === ADD_KEY_KEY) return clickedAddKey(model, firstMissingKey(model.engines))
+	const organizationId = inputs.shared.organization?.id
+	if (!isEngine(key) || key === model.engines.preferred || organizationId === undefined) return { model }
+	return {
+		model: modifyFields(model, { isSettingEngine: () => true, error: () => null }),
+		commands: [SetAssistantEngine({ organizationId, engine: key })],
+	}
+}
+
+const clickedAddKey = (model: Model, provider: Assistant.HostedProvider): Return => ({
+	model: modifyFields(model, {
+		keyForm: () => ({ provider, value: "", isSaving: false, error: null }),
+		error: () => null,
+	}),
+})
+
+const gotEngineMenuMessage = (model: Model, message: Menu.Message, inputs: Inputs): Return => {
+	const result = Menu.update(model.engineMenu, message)
+	const next = modifyFields(model, { engineMenu: () => result.model })
+	const commands = Command.mapMessages(result.commands ?? [], (child) =>
+		Message.GotEngineMenuMessage({ message: child }),
+	)
+	const picked =
+		result.outMessage?._tag === "SelectedItem"
+			? pickedEngine(next, result.outMessage.key, inputs)
+			: { model: next }
+	return { ...picked, commands: [...commands, ...(picked.commands ?? [])] }
+}
+
 // UPDATE
 
 const gotHistoryMenuMessage = (model: Model, message: Menu.Message): Return => {
@@ -563,19 +653,44 @@ export const update = (model: Model, message: Message, inputs: Inputs): Return =
 		UpdatedItems: ({ threadId, items }) =>
 			threadId === model.threadId ? { model: updatedItems(model, items) } : { model },
 		// An answer for an org the panel has left is stale.
-		SucceededFetchStatus: ({ organizationId, connection, environmentLabel }) =>
-			organizationId !== model.organizationId
-				? { model }
-				: {
-						model: modifyFields(model, {
-							connection: () => connection,
-							environmentLabel: () => environmentLabel,
-						}),
-					},
+		SucceededFetchStatus: (status) => ({ model: appliedStatus(model, status) }),
 		FailedFetchStatus: ({ organizationId }) =>
 			organizationId !== model.organizationId
 				? { model }
 				: { model: modifyFields(model, { connection: () => "Unknown" }) },
+		ClickedAddKey: ({ provider }) => clickedAddKey(model, provider),
+		PickedKeyProvider: ({ provider }) => ({
+			model: modifyFields(model, {
+				keyForm: (form) =>
+					form === null || form.isSaving ? form : { ...form, provider, error: null },
+			}),
+		}),
+		ChangedKey: ({ value }) => ({
+			model: modifyFields(model, {
+				keyForm: (form) =>
+					form === null ? form : modifyFields(form, { value: () => value, error: () => null }),
+			}),
+		}),
+		SubmittedKey: () => submittedKey(model, inputs),
+		CancelledKey: () => ({ model: modifyFields(model, { keyForm: () => null }) }),
+		// The key is saved and is the engine new chats use now; the form (and the key) is gone.
+		SucceededSaveKey: (status) => ({
+			model: appliedStatus(model, status, { keyForm: null }),
+			commands: [FocusAssistantComposer()],
+		}),
+		FailedSaveKey: ({ message }) => ({
+			model: modifyFields(model, {
+				keyForm: (form) =>
+					form === null
+						? form
+						: modifyFields(form, { isSaving: () => false, error: () => message }),
+			}),
+		}),
+		GotEngineMenuMessage: ({ message }) => gotEngineMenuMessage(model, message, inputs),
+		SucceededSetEngine: (status) => ({ model: appliedStatus(model, status, { isSettingEngine: false }) }),
+		FailedSetEngine: ({ message }) => ({
+			model: modifyFields(model, { isSettingEngine: () => false, error: () => message }),
+		}),
 		ChangedDraft: ({ value }) => ({ model: changedDraft(model, value) }),
 		SubmittedComposer: () => send(model, model.draft, inputs, true),
 		ClickedSuggestion: ({ text }) => send(model, text, inputs, false),

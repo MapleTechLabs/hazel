@@ -27,6 +27,7 @@ const toThreadRow = ({ thread, owner }: ThreadQueryRow): ThreadRow => ({
 	ownerName: owner === undefined ? null : `${owner.firstName} ${owner.lastName}`.trim() || null,
 	title: thread.title,
 	visibility: thread.visibility,
+	engine: thread.engine,
 	status: thread.status,
 	errorMessage: thread.errorMessage,
 	externalLink: thread.externalLink,

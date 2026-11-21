@@ -15,6 +15,7 @@ import {
 	FetchAssistantStatus,
 	FocusAssistantComposer,
 	MakeAssistantMessageId,
+	SaveAssistantKey,
 	SaveAssistantPanel,
 	StartAssistantThread,
 } from "./commands"
@@ -90,8 +91,18 @@ describe("the panel", () => {
 					organizationId: hazelOrg.id,
 					connection: "Connected",
 					environmentLabel: "MacBook",
+					engines: {
+						preferred: "t3code",
+						t3code: true,
+						anthropic: false,
+						openai: false,
+						anthropicModel: "claude-sonnet-5-5",
+						openaiModel: "gpt-5.5",
+					},
 				}),
 			),
+			// The composer's engine menu.
+			menuMounted,
 			sceneExpect(role("complementary", { name: "AI assistant" })).toExist(),
 			sceneExpect(role("button", { name: 'Send "Settings" as context' })).toHaveAttr(
 				"aria-pressed",
@@ -106,7 +117,7 @@ describe("the panel", () => {
 		)
 	})
 
-	test("without T3 Code linked it explains, and links to the settings", () => {
+	test("without an engine it offers T3 Code and the member's own API key", () => {
 		scene(
 			rootScene,
 			given(signedIn("/hazel/settings/team")),
@@ -119,13 +130,74 @@ describe("the panel", () => {
 					organizationId: hazelOrg.id,
 					connection: "NotConnected",
 					environmentLabel: null,
+					engines: {
+						preferred: null,
+						t3code: false,
+						anthropic: false,
+						openai: false,
+						anthropicModel: "claude-sonnet-5-5",
+						openaiModel: "gpt-5.5",
+					},
 				}),
 			),
-			sceneExpect(role("link", { name: "Open T3 Code settings" })).toHaveAttr(
+			sceneExpect(role("button", { name: "Use your own API key" })).toExist(),
+			sceneExpect(role("link", { name: "Use T3 Code" })).toHaveAttr(
 				"href",
 				"/hazel/settings/integrations/t3code",
 			),
 			sceneExpect(role("textbox", { name: "Message the assistant" })).toBeAbsent(),
+		)
+	})
+
+	test("the member's own key: typed, checked, and the provider's refusal shown on the field", () => {
+		const noEngines = {
+			preferred: null,
+			t3code: false,
+			anthropic: false,
+			openai: false,
+			anthropicModel: "claude-sonnet-5-5",
+			openaiModel: "gpt-5.5",
+		}
+		scene(
+			rootScene,
+			given(signedIn("/hazel/settings/team")),
+			...shellMenusMounted,
+			...openedPanel,
+			menuMounted,
+			Command.resolve(
+				FetchAssistantStatus,
+				Message.SucceededFetchStatus({
+					organizationId: hazelOrg.id,
+					connection: "NotConnected",
+					environmentLabel: null,
+					engines: noEngines,
+				}),
+			),
+			click(role("button", { name: "Use your own API key" })),
+			sceneExpect(role("button", { name: "Anthropic" })).toHaveAttr("aria-pressed", "true"),
+			click(role("button", { name: "OpenAI" })),
+			type(role("textbox", { name: "OpenAI API key" }), "sk-wrong-key-1234"),
+			click(role("button", { name: "Save key" })),
+			Command.resolve(
+				SaveAssistantKey,
+				Message.FailedSaveKey({ message: "OpenAI did not accept this key." }),
+			),
+			sceneExpect(text("OpenAI did not accept this key.")).toExist(),
+			type(role("textbox", { name: "OpenAI API key" }), "sk-right-key-1234"),
+			click(role("button", { name: "Save key" })),
+			Command.resolve(
+				SaveAssistantKey,
+				Message.SucceededSaveKey({
+					organizationId: hazelOrg.id,
+					connection: "Connected",
+					environmentLabel: null,
+					engines: { ...noEngines, preferred: "openai", openai: true },
+				}),
+			),
+			Command.resolve(FocusAssistantComposer, Message.CompletedFocusComposer()),
+			menuMounted,
+			sceneExpect(role("textbox", { name: "Message the assistant" })).toExist(),
+			sceneExpect(role("button", { name: "Engine: OpenAI · gpt-5.5. Change" })).toExist(),
 		)
 	})
 })

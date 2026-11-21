@@ -78,6 +78,7 @@ describe("historyOf", () => {
 		ownerName: null,
 		title: `Thread ${n}`,
 		visibility: "organization",
+		engine: "t3code",
 		status: "idle",
 		errorMessage: null,
 		externalLink: null,
