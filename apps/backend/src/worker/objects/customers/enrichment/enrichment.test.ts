@@ -475,4 +475,27 @@ describe("company enrichment", () => {
 				expect(accountOf(world, "Northwind").profile).toMatchObject({ foundedYear: 2019 })
 			}),
 		))
+
+	it("a retry deadline counts from when the answer came, not the turn's start", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const fake = makeFakeContextDev()
+				fake.state.brands.set("busy.io", new FakeStatus(429, "RATE_LIMITED", { "retry-after": "30" }))
+				yield* world.ingest("clerk", [clerkOrg("org_a", "Busy", ["busy.io"])])
+				yield* within(world, seedEnrichments(NOW), fake.contextDev)
+				// The turn started at NOW; its pulls took 5 s before the lookups ran.
+				yield* world.object
+					.run(
+						Effect.andThen(TestClock.setTime(NOW.getTime() + 5_000), runDueEnrichments(NOW)).pipe(
+							Effect.provideService(ContextDev, ContextDev.of(fake.contextDev)),
+							Effect.provide(TestClock.layer()),
+						),
+					)
+					.pipe(Effect.orDie)
+				expect(msOf(enrichmentOf(world, "busy.io")!.nextAttemptAt)).toBe(
+					NOW.getTime() + 5_000 + 30_000,
+				)
+			}),
+		))
 })
