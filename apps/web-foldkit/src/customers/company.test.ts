@@ -22,12 +22,28 @@ describe("company profile labels", () => {
 		expect(fundingLabel(RICH_COMPANY)).toBe("Series B · $58M")
 		expect(revenueLabel(RICH_COMPANY)).toBe("$20M–$50M")
 		expect(companyTypeLabel(RICH_COMPANY)).toBe("Private")
-		expect(
-			rankedSocials(RICH_COMPANY)
-				.map((link) => link.type)
-				.slice(0, 3),
-		).toEqual(["linkedin", "x", "github"])
+		expect(rankedSocials(RICH_COMPANY).map((link) => link.type)).toEqual([
+			"linkedin",
+			"x",
+			"github",
+			"crunchbase",
+		])
 		expect(companyPages(RICH_COMPANY).map((link) => link.type)).toEqual(["careers", "pricing", "blog"])
+	})
+
+	it("ranks every social, most useful first, unknown ones last in their order", () => {
+		const socials = ["mastodon", "github", "youtube", "linkedin", "x", "discord"].map((type) => ({
+			type,
+			url: `https://${type}.example/acme`,
+		}))
+		expect(rankedSocials({ ...RICH_COMPANY, socials }).map((link) => link.type)).toEqual([
+			"linkedin",
+			"x",
+			"github",
+			"youtube",
+			"mastodon",
+			"discord",
+		])
 	})
 
 	it("says nothing for what a sparse profile lacks, and names a country from its code", () => {
