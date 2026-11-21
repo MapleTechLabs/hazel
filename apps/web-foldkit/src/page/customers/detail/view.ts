@@ -959,7 +959,7 @@ const linkedRecords = (h: HtmlBuilder<Message>, model: Model, context: Context):
 				[
 					sourceLogo(h, ref.provider),
 					h.span([h.Class("shrink-0 text-fg")], [LINK_LABEL[ref.provider]]),
-					h.span([h.Class("min-w-0 flex-1 truncate text-muted-fg")], [ref.name ?? ""]),
+					h.span([h.Class("min-w-0 flex-1 truncate text-muted-fg")], [ref.name ?? ref.externalId]),
 					...recordLink(h, ref),
 				],
 			),
