@@ -880,6 +880,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 				lifecycleStageOverride,
 				name,
 				addDomain,
+				removeDomain,
 				attentionMute,
 			}) =>
 				Effect.gen(function* () {
@@ -887,7 +888,8 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					// match chat and contacts to the customer) change what everyone sees.
 					const actor = yield* name !== undefined ||
 					lifecycleStageOverride !== undefined ||
-					addDomain !== undefined
+					addDomain !== undefined ||
+					removeDomain !== undefined
 						? requireAdmin
 						: requireMember
 					yield* requirePerson(ownerUserId)
@@ -896,6 +898,11 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					if (addDomain !== undefined && newDomain === null) {
 						return yield* invalid(`"${addDomain.trim()}" is not a company domain`)
 					}
+					// Removed as stored (any casing or URL form of it); one the account lacks changes nothing.
+					const oldDomain =
+						removeDomain === undefined
+							? null
+							: (normalizeDomain(removeDomain) ?? removeDomain.trim().toLowerCase())
 					const now = yield* currentTime
 					// The mute's columns: absent leaves them, null unmutes.
 					const mute =
@@ -914,23 +921,45 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					return yield* txOnly(
 						Effect.gen(function* () {
 							const account = yield* requireAccount(accountId)
-							// Added to the list as it is now, never replacing it: first, so the company is
-							// looked up by it; one already there moves first. A full list is refused, not trimmed.
+							// Changed on the list as it is now, never replaced wholesale (a domain another admin
+							// or a sync added meanwhile stays): the removed one goes, the added one goes first, so
+							// the company is looked up by it (one already there moves first). Swapping is both at
+							// once. A full list is refused, not trimmed.
+							const kept = account.domains.filter(
+								(domain) => domain !== oldDomain || domain === newDomain,
+							)
 							if (
 								newDomain !== null &&
-								!account.domains.includes(newDomain) &&
-								account.domains.length >= MAX_ACCOUNT_DOMAINS
+								!kept.includes(newDomain) &&
+								kept.length >= MAX_ACCOUNT_DOMAINS
 							) {
 								return yield* invalid(
 									`This customer already has ${MAX_ACCOUNT_DOMAINS} domains, the most it can have`,
 								)
 							}
 							const domains =
-								newDomain === null
+								newDomain === null && oldDomain === null
 									? undefined
-									: [newDomain, ...account.domains.filter((domain) => domain !== newDomain)]
+									: newDomain === null
+										? kept
+										: [newDomain, ...kept.filter((domain) => domain !== newDomain)]
 							const domainsChanged =
 								domains !== undefined && domains.join(" ") !== account.domains.join(" ")
+							// A manual name or domains beat every source; the domains' mark also keeps them
+							// from being guessed from member emails again (`inferAccountDomains`).
+							const manualFields = [
+								...(name === undefined ? [] : ["name"]),
+								...(domainsChanged ? ["domains"] : []),
+							]
+							const manualSources =
+								manualFields.length === 0
+									? undefined
+									: {
+											...account.fieldSources,
+											...Object.fromEntries(
+												manualFields.map((field) => [field, "hazel" as const]),
+											),
+										}
 							yield* db.run(
 								SQLite.update(schema.customerAccountsTable)
 									// `undefined` leaves a column as it is.
@@ -942,10 +971,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 										// A manual name beats every source (`FIELD_PRECEDENCE`).
 										name,
 										domains: domainsChanged ? domains : undefined,
-										fieldSources:
-											name === undefined
-												? undefined
-												: { ...account.fieldSources, name: "hazel" as const },
+										fieldSources: manualSources,
 										attentionMutedAt: mute?.at,
 										attentionMutedUntil: mute?.until,
 										attentionMutedByUserId: mute?.by,

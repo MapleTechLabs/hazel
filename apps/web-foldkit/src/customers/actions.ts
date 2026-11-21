@@ -80,6 +80,7 @@ interface AccountUpdatePayload {
 	lifecycleStageOverride?: Customers.LifecycleStage | null
 	name?: string
 	addDomain?: string
+	removeDomain?: string
 }
 interface BulkUpdatePayload {
 	organizationId: OrganizationId
@@ -320,6 +321,8 @@ interface AccountUpdate {
 	readonly name?: string
 	/** Put first in the account's domains; the store cleans it (`https://www.acme.com/` is `acme.com`). */
 	readonly addDomain?: string
+	/** Taken off the account's domains; with `addDomain`, swapped for it. */
+	readonly removeDomain?: string
 }
 
 /** `customers.account.update`'s payload: only the fields given. */
@@ -331,16 +334,24 @@ export const accountUpdatePayload = (props: AccountUpdate): AccountUpdatePayload
 		payload.lifecycleStageOverride = props.lifecycleStageOverride
 	if (props.name !== undefined) payload.name = props.name
 	if (props.addDomain !== undefined) payload.addDomain = props.addDomain
+	if (props.removeDomain !== undefined) payload.removeDomain = props.removeDomain
 	return payload
 }
 
 /**
- * The domains an account shows once `raw` is added, before the store answers: cleaned as the store
- * cleans it and put first (one it has moves first); one the store will refuse changes nothing.
+ * The domains an account shows once `raw` is added (in place of `replacing`, when given), before the
+ * store answers: cleaned as the store cleans it and put first (one it has moves first); one the
+ * store will refuse changes nothing, the swap included (the store refuses the whole update).
  */
-export const withAddedDomain = (domains: ReadonlyArray<string>, raw: string): Array<string> => {
+export const withAddedDomain = (
+	domains: ReadonlyArray<string>,
+	raw: string,
+	replacing?: string,
+): Array<string> => {
 	const added = normalizeDomain(raw)
-	return added === null ? [...domains] : [added, ...domains.filter((domain) => domain !== added)]
+	if (added === null) return [...domains]
+	const kept = domains.filter((domain) => domain !== added && domain !== replacing)
+	return [added, ...kept]
 }
 
 export const updateAccountAction = optimisticAction({
@@ -351,7 +362,7 @@ export const updateAccountAction = optimisticAction({
 			if (props.tags !== undefined) account.tags = [...props.tags]
 			if (props.name !== undefined) account.name = props.name
 			if (props.addDomain !== undefined)
-				account.domains = withAddedDomain(account.domains, props.addDomain)
+				account.domains = withAddedDomain(account.domains, props.addDomain, props.removeDomain)
 			if (props.lifecycleStageOverride !== undefined) {
 				account.lifecycleStageOverride = props.lifecycleStageOverride
 				// The derived stage shows once compute runs again; until then keep the current one.
@@ -370,19 +381,27 @@ export const updateAccountAction = optimisticAction({
 })
 
 /** Adding `raw` shows a different list: an optimistic write to make (else there is none to make). */
-export const addingDomainChanges = (domains: ReadonlyArray<string>, raw: string): boolean =>
-	withAddedDomain(domains, raw).join(" ") !== domains.join(" ")
+export const addingDomainChanges = (
+	domains: ReadonlyArray<string>,
+	raw: string,
+	replacing?: string,
+): boolean => withAddedDomain(domains, raw, replacing).join(" ") !== domains.join(" ")
 
 /**
- * Add a domain to the account (`addDomain`). One the list would not show differently (the store will
- * refuse it, or it is already first) is a plain RPC: an optimistic action with no write never runs
- * its RPC, and the store's refusal is the answer to show.
+ * Add a domain to the account (`addDomain`), swapping it for `removeDomain` when given. One the list
+ * would not show differently (the store will refuse it, or it is already first) is a plain RPC: an
+ * optimistic action with no write never runs its RPC, and the store's refusal is the answer to show.
  */
 export const addDomainAction = (
-	props: Readonly<{ organizationId: OrganizationId; accountId: CustomerAccountId; addDomain: string }>,
+	props: Readonly<{
+		organizationId: OrganizationId
+		accountId: CustomerAccountId
+		addDomain: string
+		removeDomain?: string
+	}>,
 ) => {
 	const current = customerAccountCollection.get(props.accountId)
-	return current !== undefined && addingDomainChanges(current.domains, props.addDomain)
+	return current !== undefined && addingDomainChanges(current.domains, props.addDomain, props.removeDomain)
 		? Effect.asVoid(updateAccountAction(props))
 		: Effect.gen(function* () {
 				const client = yield* HazelRpc
