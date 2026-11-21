@@ -415,7 +415,10 @@ export const sendMessage = Effect.fn("Assistant.send")(function* (input: {
 	const now = new Date(yield* Clock.currentTimeMillis)
 	yield* db.transaction(
 		Effect.gen(function* () {
-			yield* insertUserItem(thread, itemId, input.message, now)
+			// As the thread is now: the owner may have unshared or deleted it during T3 Code's round trip.
+			const current = Option.getOrNull(yield* findThread(thread.id))
+			if (current === null) return
+			yield* insertUserItem(current, itemId, input.message, now)
 			yield* db.run(
 				SQLite.update(schema.assistantThreadsTable)
 					.set({

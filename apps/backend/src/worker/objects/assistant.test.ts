@@ -57,6 +57,8 @@ const makeFakeT3 = () => {
 		calls: [] as Array<{ tool: string; args: Record<string, unknown> }>,
 		/** Runs while a step waits: the member acting meanwhile. */
 		onWait: null as (() => void) | null,
+		/** Runs while a follow-up is being sent. */
+		onSend: null as (() => void) | null,
 	}
 	const reply = (id: unknown, result: unknown, headers: Record<string, string> = {}) =>
 		new Response(JSON.stringify({ jsonrpc: "2.0", id, result }), {
@@ -74,6 +76,8 @@ const makeFakeT3 = () => {
 					status: "running",
 				}
 			case "t3_thread_send":
+				state.onSend?.()
+				state.onSend = null
 				state.activeRunId = "run-2"
 				state.waitStatus = "running"
 				return { threadId: "t3-thread-1", runId: "run-2", status: "running" }
@@ -678,6 +682,45 @@ describe("AI panel", () => {
 						threadId,
 					),
 				).toHaveLength(2)
+			}),
+		))
+
+	it("a follow-up lands as the thread is after T3 Code answered: unshared meanwhile, it stays private", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				yield* world.link
+				const { threadId } = yield* start(world)
+				ok(
+					yield* world.call(
+						"assistant.update",
+						{ organizationId: world.orgId, threadId, visibility: "organization" },
+						world.alice,
+					),
+				)
+				t3.state.onSend = () =>
+					world.org.storage.db
+						.prepare(`UPDATE assistant_threads SET visibility = 'private' WHERE id = ?`)
+						.run(threadId)
+				ok(
+					yield* world.call(
+						"assistant.send",
+						{
+							organizationId: world.orgId,
+							threadId,
+							messageId: uuid(),
+							message: "Still there?",
+							context: null,
+						},
+						world.alice,
+					),
+				)
+				expect(
+					world.rows(
+						`SELECT visibility FROM assistant_items WHERE threadId = ? AND text = 'Still there?'`,
+						threadId,
+					),
+				).toEqual([{ visibility: "private" }])
 			}),
 		))
 })
