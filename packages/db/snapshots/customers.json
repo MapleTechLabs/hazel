@@ -1,5 +1,5 @@
 {
-	"migration": "0024_customer_slas",
+	"migration": "0025_company_enrichment",
 	"entities": [
 		{
 			"kind": "table",
@@ -55,6 +55,13 @@
 			"name": "customer_contacts",
 			"primaryKey": {
 				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "customer_enrichments",
+			"primaryKey": {
+				"columns": ["domain"]
 			}
 		},
 		{
@@ -620,8 +627,26 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "createdAt",
+			"name": "companyProfile",
 			"position": 42,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "companyCheckedAt",
+			"position": 43,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_accounts",
+			"name": "createdAt",
+			"position": 44,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -630,7 +655,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "updatedAt",
-			"position": 43,
+			"position": 45,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -639,7 +664,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "deletedAt",
-			"position": 44,
+			"position": 46,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -1426,6 +1451,105 @@
 			"type": "text",
 			"notNull": false,
 			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_enrichments",
+			"name": "domain",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_enrichments",
+			"name": "status",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": "'pending'"
+		},
+		{
+			"kind": "column",
+			"table": "customer_enrichments",
+			"name": "profile",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_enrichments",
+			"name": "fetchedAt",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_enrichments",
+			"name": "nextAttemptAt",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_enrichments",
+			"name": "forceRefresh",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "customer_enrichments",
+			"name": "failures",
+			"position": 6,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_enrichments",
+			"name": "error",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_enrichments",
+			"name": "creditsUsed",
+			"position": 8,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_enrichments",
+			"name": "createdAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_enrichments",
+			"name": "updatedAt",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
 		},
 		{
 			"kind": "column",
@@ -4517,6 +4641,13 @@
 			"name": "customer_contacts_email_idx",
 			"unique": false,
 			"columns": ["\"email\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_enrichments",
+			"name": "customer_enrichments_next_attempt_idx",
+			"unique": false,
+			"columns": ["\"nextAttemptAt\""]
 		},
 		{
 			"kind": "index",

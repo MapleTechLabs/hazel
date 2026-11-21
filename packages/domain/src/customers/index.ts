@@ -6,6 +6,7 @@
 export * from "./analytics"
 export * from "./author-side"
 export * from "./channel-suggestions"
+export * from "./company"
 export * from "./connections"
 export * from "./enums"
 export * from "./evidence"

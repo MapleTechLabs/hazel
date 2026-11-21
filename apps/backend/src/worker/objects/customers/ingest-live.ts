@@ -37,6 +37,7 @@ import {
 	type CustomerSource,
 	EMPTY_SYNC_STATS,
 	FIELD_PRECEDENCE,
+	FREE_MAIL_DOMAINS,
 	IngestOp,
 	type IngestOutcome,
 	type ProviderRef,
@@ -86,28 +87,6 @@ export class CustomerIngestRejectedError extends Schema.TaggedError<
 
 type Fields = Record<string, CustomerSource>
 
-/** Free-mail domains never match a company. */
-const FREE_MAIL = new Set([
-	"gmail.com",
-	"googlemail.com",
-	"yahoo.com",
-	"hotmail.com",
-	"outlook.com",
-	"live.com",
-	"icloud.com",
-	"me.com",
-	"aol.com",
-	"proton.me",
-	"protonmail.com",
-	"gmx.com",
-	"gmx.de",
-	"web.de",
-	"yandex.com",
-	"mail.com",
-	"hey.com",
-	"fastmail.com",
-])
-
 /** What an ignore rule is checked against: a provider record's identifying fields. */
 export interface IgnoreCandidate {
 	readonly email?: string | null
@@ -146,7 +125,7 @@ export const normalizeDomain = (value: string): string | null => {
 		.replace(/^[a-z]+:\/\//, "")
 		.replace(/^www\./, "")
 		.split(/[/?#]/)[0]
-	return HOSTNAME.test(domain) && !FREE_MAIL.has(domain) ? domain : null
+	return HOSTNAME.test(domain) && !FREE_MAIL_DOMAINS.has(domain) ? domain : null
 }
 
 /** The hosts a provider's links (dashboard pages, hosted invoices) live on, subdomains included. */

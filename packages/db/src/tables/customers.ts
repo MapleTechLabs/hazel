@@ -12,6 +12,7 @@
  */
 import type {
 	AttentionSettings,
+	CompanyProfile,
 	BusinessHours,
 	SlaAppliesTo,
 	SlaState,
@@ -187,6 +188,13 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		primaryAccountId: SQLite.nullable(uuid(CustomerAccountId)),
 		/** What the team calls this environment of its customer (`US`, `EU`): set in Hazel, never by a sync. */
 		environment: SQLite.nullable(SQLite.text),
+		/**
+		 * The company behind the account's domain (`customer_enrichments`), copied here when a lookup
+		 * finds it; null before, or when none found anything. Never overwrites synced fields.
+		 */
+		companyProfile: SQLite.nullable(jsonb<CompanyProfile>()),
+		/** When a lookup of its domain last answered, found or not; null: never looked up. */
+		companyCheckedAt: SQLite.nullable(timestamptz),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 		deletedAt: SQLite.nullable(timestamptz),
@@ -202,6 +210,40 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 })
 export type CustomerAccount = SQLite.SelectRowOf<typeof customerAccountsTable>
 export type NewCustomerAccount = SQLite.InsertRowOf<typeof customerAccountsTable>
+
+/**
+ * One company lookup per domain (`docs/customers/enrichment.md`), shared by every account with that
+ * domain; internal. A row is due at `nextAttemptAt`: first right after an account brings the domain,
+ * then again every refresh interval, sooner after a person asks (`forceRefresh`).
+ */
+export const customerEnrichmentsTable = SQLite.table("customer_enrichments", {
+	columns: {
+		/** Lower-cased hostname, never a mail provider's. */
+		domain: SQLite.text,
+		status: SQLite.column(textEnum(["pending", "enriched", "not_found", "skipped", "failed"]), {
+			default: "pending",
+		}),
+		profile: SQLite.nullable(jsonb<CompanyProfile>()),
+		/** When the last lookup answered (found or not). */
+		fetchedAt: SQLite.nullable(timestamptz),
+		/** Null: no lookup planned (the domain no longer belongs to any account). */
+		nextAttemptAt: SQLite.nullable(timestamptz),
+		/** Ask the source for fresh data rather than its cache (a person pressed Refresh). */
+		forceRefresh: SQLite.column(SQLite.boolean, { default: false }),
+		/** Failed lookups in a row; resets on an answer. */
+		failures: count(),
+		/** Why the last lookup failed or was skipped, for logs and support. */
+		error: SQLite.nullable(SQLite.text),
+		/** Every lookup's credits, summed (enrichment is billed later). */
+		creditsUsed: count(),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	primaryKey: ["domain"],
+	indexes: [SQLite.index("customer_enrichments_next_attempt_idx", ["nextAttemptAt"])],
+})
+export type CustomerEnrichment = SQLite.SelectRowOf<typeof customerEnrichmentsTable>
+export type NewCustomerEnrichment = SQLite.InsertRowOf<typeof customerEnrichmentsTable>
 
 /** An end user of an account (a Clerk user in that organization). RPC-only (per account, paged). */
 export const customerContactsTable = SQLite.table("customer_contacts", {

@@ -78,6 +78,8 @@ interface ProviderApi<Path extends string, Refusal> {
 	/** What a 401/403 says before the provider's explanation. */
 	readonly refusedMessage: (route: string, status: number, method: ProviderMethod) => string
 	readonly rateLimitedMessage: string
+	/** The provider's error code in a refusal, kept on a 4xx's error (`providerCode`) for the caller. */
+	readonly codeOf?: (refusal: Refusal) => string | undefined
 }
 
 const issuePaths = (issue: SchemaIssue.Issue, path: ReadonlyArray<PropertyKey>): Array<string> => {
@@ -155,21 +157,35 @@ const makeProviderCall = <Path extends string, Refusal>(
 				}),
 			)
 		}
-		return Effect.fail(
-			response.status >= 500
-				? new CustomerProviderError({
-						code: "provider",
-						message: `${api.name} failed on ${method} ${route} (${response.status})`,
-						httpStatus: response.status,
-						retryAfterMs: null,
-					})
-				: new CustomerProviderError({
+		if (response.status >= 500)
+			return Effect.fail(
+				new CustomerProviderError({
+					code: "provider",
+					message: `${api.name} failed on ${method} ${route} (${response.status})`,
+					httpStatus: response.status,
+					retryAfterMs: null,
+				}),
+			)
+		const codeOf = api.codeOf
+		return Effect.flatMap(
+			codeOf === undefined
+				? Effect.succeed(undefined)
+				: response.json.pipe(
+						Effect.flatMap(Schema.decodeUnknownEffect(api.refusal)),
+						Effect.map(codeOf),
+						Effect.orElseSucceed(() => undefined),
+					),
+			(providerCode) =>
+				Effect.fail(
+					new CustomerProviderError({
 						code: "provider",
 						message: `${api.name} refused ${method} ${route} (${response.status})`,
 						httpStatus: response.status,
 						retryAfterMs: null,
 						retryable: false,
+						providerCode,
 					}),
+				),
 		)
 	}
 

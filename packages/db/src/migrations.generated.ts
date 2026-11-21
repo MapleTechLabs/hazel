@@ -696,5 +696,14 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'INSERT INTO "customer_signal_rules" ("organizationId", "name", "template", "kind", "severity", "config", "scope", "enabled") SELECT "organizationId", \'Issue past its resolution target\', \'resolution_overdue\', \'risk\', \'medium\', \'{"_tag":"resolution_overdue","graceMinutes":0}\', \'{}\', 1 FROM "customer_settings" WHERE NOT EXISTS (SELECT 1 FROM "customer_signal_rules" WHERE "template" = \'resolution_overdue\')',
 			],
 		},
+		{
+			id: "0025_company_enrichment",
+			statements: [
+				'ALTER TABLE "customer_accounts" ADD COLUMN "companyProfile" text',
+				'ALTER TABLE "customer_accounts" ADD COLUMN "companyCheckedAt" text',
+				'CREATE TABLE IF NOT EXISTS "customer_enrichments" (\n\t"domain" text PRIMARY KEY NOT NULL,\n\t"status" text NOT NULL DEFAULT \'pending\',\n\t"profile" text,\n\t"fetchedAt" text,\n\t"nextAttemptAt" text,\n\t"forceRefresh" integer NOT NULL DEFAULT false,\n\t"failures" integer NOT NULL DEFAULT 0,\n\t"error" text,\n\t"creditsUsed" integer NOT NULL DEFAULT 0,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				'CREATE INDEX IF NOT EXISTS "customer_enrichments_next_attempt_idx" ON "customer_enrichments" ("nextAttemptAt")',
+			],
+		},
 	],
 }

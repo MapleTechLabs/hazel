@@ -19,7 +19,7 @@ import type {
 	NewTrial,
 	OverviewResult,
 } from "@hazel/domain/customers"
-import { HealthStatus } from "@hazel/domain/customers"
+import { HealthStatus, logoOf } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { type AccountFacts, type HealthPoint, type MetricPoint, mrrSeries, seriesOf } from "./facts"
@@ -269,7 +269,7 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 	// Health now, from the accounts.
 	const accounts = yield* db.run(
 		SQLite.from(schema.customerAccountsTable)
-			.select("id", "name", "logoUrl", "planName", "mrrMinor", "healthStatus")
+			.select("id", "name", "logoUrl", "companyProfile", "planName", "mrrMinor", "healthStatus")
 			.where(($) => [$.deletedAt.isNull()]),
 	)
 	const healthDistribution: Array<HealthDistributionRow> = HealthStatus.literals.map((status) => {
@@ -321,7 +321,7 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		return {
 			...row,
 			name: account?.name ?? "",
-			logoUrl: account?.logoUrl ?? null,
+			logoUrl: account === undefined ? null : logoOf(account),
 			series: dayRange(today, moverDays).map((day) => ({
 				day,
 				value: usersOn.get(`${row.accountId}:${day}`) ?? 0,
@@ -338,7 +338,7 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 			: {
 					accountId: account.id,
 					name: account.name,
-					logoUrl: account.logoUrl,
+					logoUrl: logoOf(account),
 					planName: account.planName,
 					mrrMinor,
 					at: new Date(`${movement.day}T00:00:00.000Z`),
@@ -371,7 +371,7 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		newTrials.push({
 			accountId: account.id,
 			name: account.name,
-			logoUrl: account.logoUrl,
+			logoUrl: logoOf(account),
 			planName: account.planName,
 			mrrMinor: trial.listMrrMinor ?? 0,
 			at: trial.startedAt,

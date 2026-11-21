@@ -43,6 +43,8 @@ import { runComputeStep, unmuteExpired, wakeSnoozed } from "./compute"
 import { loadCredentials } from "./credentials"
 import { installDefaults } from "./defaults"
 import { runSlaAlerts } from "./sla"
+import { ContextDev } from "./enrichment/client"
+import { postponeDueEnrichments, runDueEnrichments, seedEnrichments } from "./enrichment/job"
 import { CustomerIngest } from "./ingest"
 import type { CustomerProviderAdapter, CustomerProviderError } from "./providers"
 import { CustomerProviders } from "./providers"
@@ -465,10 +467,31 @@ export const tick = Effect.fn("CustomersObject.tick")(function* () {
 				(cause) => Effect.logError("Customers compute failed", { cause: Cause.pretty(cause) }),
 			),
 		)
+		// New accounts (or domains) get their company looked up on a later turn.
+		yield* seedEnrichments(now).pipe(
+			Effect.catchTag("DatabaseError", (error) =>
+				Effect.logError("Company enrichment seeding failed", { error: error.message }),
+			),
+		)
 		return { computed: true }
 	}
 	yield* runDuePulls(now)
 	yield* db.transaction(Effect.andThen(wakeSnoozed(now), unmuteExpired(now)))
+	// Last: its lookups take seconds, and nothing above should wait on them.
+	yield* runDueEnrichments(now).pipe(
+		Effect.provide(ContextDev.layer),
+		Effect.catchCauseIf(
+			(cause) => !Cause.hasInterruptsOnly(cause),
+			(cause) =>
+				Effect.logError("Company enrichment failed", { cause: Cause.pretty(cause) }).pipe(
+					// Failed before its rows moved on: move them, or the alarm fires again at once.
+					Effect.andThen(postponeDueEnrichments(now)),
+					Effect.catchTag("DatabaseError", (error) =>
+						Effect.logError("Postponing company lookups failed", { error: error.message }),
+					),
+				),
+		),
+	)
 	return { computed: false }
 }, Effect.orDie)
 

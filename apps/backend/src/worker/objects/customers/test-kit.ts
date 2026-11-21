@@ -83,6 +83,8 @@ export const accountRow = (overrides: Partial<schema.CustomerAccount> = {}): sch
 	fieldSources: {},
 	primaryAccountId: null,
 	environment: null,
+	companyProfile: null,
+	companyCheckedAt: null,
 	createdAt: NOW,
 	updatedAt: NOW,
 	deletedAt: null,

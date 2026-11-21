@@ -141,6 +141,7 @@ export const customersTables = [
 	schema.customerImpersonatorsTable,
 	schema.customerImpersonationsTable,
 	schema.customerChatParticipantsTable,
+	schema.customerEnrichmentsTable,
 	// Projection from the `OrgObject`.
 	schema.customerMembersTable,
 ] as const

@@ -25,6 +25,8 @@ export class CustomerProviderError extends Schema.TaggedError<
 	 * instead of resuming at the same page. Absent: every code but `auth` is retried.
 	 */
 	retryable: Schema.optionalKey(Schema.Boolean),
+	/** The provider's own error code on a refused request, when its API names one (`ProviderApi.codeOf`). */
+	providerCode: Schema.optional(Schema.String),
 }) {}
 
 /**

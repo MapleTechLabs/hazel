@@ -2,6 +2,8 @@ import {
 	type Account,
 	type AccountDetail,
 	type ActiveUsersPoint,
+	type CompanyProfile,
+	type EmployeeRange,
 	type Connection,
 	type ContactRow,
 	type CustomersRange,
@@ -133,13 +135,172 @@ type AccountSeed = Readonly<{
 	opportunities?: number
 	tags?: ReadonlyArray<string>
 	logoUrl?: string | null
+	/** The enriched company; absent: a generated one (or none, for every fifth); null: looked up, not found. */
+	company?: CompanyProfile | null
 }>
+
+// ---------------------------------------------------------------------------
+// Company profiles (enrichment)
+// ---------------------------------------------------------------------------
+
+const company = (fields: Partial<CompanyProfile> & Pick<CompanyProfile, "domain">): CompanyProfile => ({
+	name: null,
+	description: null,
+	industry: null,
+	subindustry: null,
+	employeeRange: null,
+	employeeCount: null,
+	headquarters: null,
+	foundedYear: null,
+	companyType: null,
+	operatingStatus: null,
+	stock: null,
+	funding: null,
+	revenue: null,
+	socials: [],
+	pages: [],
+	colors: [],
+	logoUrl: null,
+	...fields,
+})
+
+const hq = (
+	city: string | null,
+	country: string | null,
+	countryCode: string | null,
+	street: string | null = null,
+) => ({
+	street,
+	city,
+	region: null,
+	postalCode: street === null ? null : "10119",
+	country,
+	countryCode,
+})
+
+/** Everything context.dev can know. */
+export const RICH_COMPANY = company({
+	domain: "northwind.dev",
+	name: "Northwind Labs",
+	description: "Developer platform for building and running data pipelines on the edge.",
+	industry: "Technology",
+	subindustry: "Software (B2B)",
+	employeeRange: "201-500",
+	employeeCount: 312,
+	headquarters: hq("Berlin", "Germany", "DE", "Torstraße 140"),
+	foundedYear: 2019,
+	companyType: "privately_held",
+	operatingStatus: "active",
+	funding: {
+		stage: "series_b",
+		totalUsd: 58_000_000,
+		rounds: [
+			{ type: "series_b", date: "2026-03-10", amountUsd: 40_000_000 },
+			{ type: "series_a", date: "2023-06-01", amountUsd: 14_000_000 },
+			{ type: "seed", date: "2020-02-01", amountUsd: 4_000_000 },
+		],
+	},
+	revenue: { minUsd: 20_000_000, maxUsd: 50_000_000 },
+	socials: [
+		{ type: "linkedin", url: "https://www.linkedin.com/company/northwind" },
+		{ type: "x", url: "https://x.com/northwind" },
+		{ type: "github", url: "https://github.com/northwind" },
+		{ type: "crunchbase", url: "https://www.crunchbase.com/organization/northwind" },
+	],
+	pages: [
+		{ type: "careers", url: "https://northwind.dev/careers" },
+		{ type: "pricing", url: "https://northwind.dev/pricing" },
+		{ type: "blog", url: "https://northwind.dev/blog" },
+	],
+	colors: ["#4f46e5", "#06b6d4"],
+})
+
+/** A small startup: an industry, a size and a city, little else. */
+export const SPARSE_COMPANY = company({
+	domain: "acmerobotics.io",
+	name: "Acme Robotics",
+	description: "Warehouse picking robots.",
+	industry: "Manufacturing",
+	employeeRange: "1-10",
+	headquarters: hq("Lisbon", null, "PT"),
+	companyType: "privately_held",
+	socials: [{ type: "linkedin", url: "https://www.linkedin.com/company/acme-robotics" }],
+})
+
+const INDUSTRIES = [
+	["Technology", "Software (B2B)"],
+	["Technology", "Developer Tools & APIs"],
+	["Finance", "Fintech"],
+	["Healthcare", "Healthcare IT"],
+	["Professional Services & Agencies", "Consulting"],
+	["Retail & E-commerce", "Online Marketplaces"],
+	["Media & Entertainment", "Digital Media"],
+] as const
+const RANGES: readonly [EmployeeRange, ...ReadonlyArray<EmployeeRange>] = [
+	"1-10",
+	"11-50",
+	"11-50",
+	"51-200",
+	"51-200",
+	"201-500",
+	"501-1000",
+	"1001-5000",
+]
+const PLACES = [
+	["San Francisco", "United States", "US"],
+	["New York", "United States", "US"],
+	["London", "United Kingdom", "GB"],
+	["Berlin", "Germany", "DE"],
+	["Paris", "France", "FR"],
+	["Toronto", "Canada", "CA"],
+	["Amsterdam", "Netherlands", "NL"],
+	["Sydney", "Australia", "AU"],
+] as const
+const STAGES = ["seed", "series_a", "series_a", "series_b", "series_c", null] as const
+
+/** The `i`th entry, round and round. */
+const cycle = <const L extends readonly [unknown, ...ReadonlyArray<unknown>]>(
+	list: L,
+	i: number,
+): L[number] => list[i % list.length] ?? list[0]
+
+/** A deterministic profile for a generated account. */
+const generatedCompany = (name: string, domain: string, n: number): CompanyProfile => {
+	const [industry, subindustry] = cycle(INDUSTRIES, n)
+	const [city, country, countryCode] = cycle(PLACES, n * 3)
+	const stage = cycle(STAGES, n * 5)
+	return company({
+		domain,
+		name,
+		industry,
+		subindustry,
+		employeeRange: cycle(RANGES, n * 7),
+		headquarters: hq(city, country, countryCode),
+		foundedYear: 2008 + (n % 16),
+		companyType: "privately_held",
+		funding:
+			stage === null
+				? null
+				: {
+						stage,
+						totalUsd: (n % 9) * 6_000_000 + 2_000_000,
+						rounds: [{ type: stage, date: "2025-09-01", amountUsd: null }],
+					},
+		socials: [{ type: "linkedin", url: `https://www.linkedin.com/company/${domain.split(".")[0]}` }],
+	})
+}
 
 /** `n` is the account's number (1-based): its id, default owner and age come from it. */
 const makeAccount = (seed: AccountSeed, n: number): Account => {
 	const stage = seed.stage ?? (seed.mrr > 0 ? "active" : "lead")
 	const [high, medium, low] = seed.risk ?? [0, 0, 0]
 	const firstSeen = daysAgo(seed.firstSeenDays ?? 200 + ((n * 37) % 500))
+	const profile =
+		seed.company !== undefined
+			? seed.company
+			: seed.domain === null || n % 5 === 4
+				? null
+				: generatedCompany(seed.name, seed.domain, n)
 	return {
 		id: Schema.decodeSync(CustomerAccountId)(uuid(10, n)),
 		organizationId: ORGANIZATION_ID,
@@ -191,6 +352,9 @@ const makeAccount = (seed: AccountSeed, n: number): Account => {
 		fieldSources: { name: "clerk", mrrMinor: "stripe", lastActiveAt: "maple" },
 		primaryAccountId: null,
 		environment: null,
+		companyProfile: profile,
+		// Looked up 3 days ago, unless it never was (no domain, or every fifth generated one).
+		companyCheckedAt: profile !== null || seed.company === null ? daysAgo(3) : null,
 		createdAt: firstSeen,
 		updatedAt: ago(HOUR),
 		deletedAt: null,
@@ -214,6 +378,7 @@ const NAMED_SEEDS = {
 		seats: [42, 50],
 		opportunities: 1,
 		sinceDays: 610,
+		company: RICH_COMPANY,
 	},
 	acme: {
 		name: "Acme Robotics",
@@ -231,6 +396,7 @@ const NAMED_SEEDS = {
 		risk: [1, 0, 0],
 		tags: ["enterprise-pilot"],
 		sinceDays: 410,
+		company: SPARSE_COMPANY,
 	},
 	kestrel: {
 		name: "Kestrel Systems",
@@ -246,6 +412,8 @@ const NAMED_SEEDS = {
 		lastActiveHours: 18 * 24,
 		risk: [1, 1, 0],
 		sinceDays: 380,
+		// Looked up; context.dev knows no company there.
+		company: null,
 	},
 	brightfield: {
 		name: "Brightfield Analytics",
