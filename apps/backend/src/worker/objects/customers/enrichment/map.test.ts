@@ -81,13 +81,17 @@ describe("company profile mapping", () => {
 					rounds: dates.map((date) => ({ type: "seed", date })),
 				},
 			})!.funding!.rounds.map((round) => round.date)
-		expect(rounds(["2021-03-04", "2021", "2021-03", "2021-03-04T10:00:00Z", "2021-13-45"])).toEqual([
-			"2021-03-04",
-			null,
-			null,
-			null,
-			null,
-		])
+		expect(
+			rounds([
+				"2021-03-04",
+				"2021",
+				"2021-03",
+				"2021-03-04T10:00:00Z",
+				"2021-13-45",
+				"2025-02-29",
+				"2024-02-29",
+			]),
+		).toEqual(["2021-03-04", null, null, null, null, null, "2024-02-29"])
 	})
 
 	it("takes the bucket from a known headcount over a lagging range", () => {

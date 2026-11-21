@@ -39,7 +39,10 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/
 /** A `YYYY-MM-DD` that is a real day; anything else (a year, a month, a timestamp) is dropped. */
 const dayOf = (value: string | null | undefined): string | null => {
 	const day = text(value)
-	return day !== null && DAY.test(day) && !Number.isNaN(Date.parse(`${day}T00:00:00Z`)) ? day : null
+	if (day === null || !DAY.test(day)) return null
+	// A day that does not exist (`2025-02-29`) parses as another one: it must come back the same.
+	const ms = Date.parse(`${day}T00:00:00Z`)
+	return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 10) === day ? day : null
 }
 
 const BRAND_RANGES: ReadonlyArray<readonly [string, EmployeeRange]> = [
