@@ -85,6 +85,9 @@ jobs:
                   VITE_R2_PUBLIC_URL: ${{ vars.VITE_R2_PUBLIC_URL }}
               with:
                   projectPath: apps/desktop
+                  # The repo's own CLI (`@tauri-apps/cli-cef`, Tauri 3): without this tauri-action
+                  # installs `@tauri-apps/cli@v2`, which neither builds Tauri 3 nor ships CEF.
+                  tauriScript: bun run tauri
                   # No tag in a build-only run: tauri-action then builds without touching a release.
                   # (`!build_only && tag || ''`, not `build_only && '' || tag`: an empty string is
                   # falsy in an expression, so the latter always gives the tag.)
