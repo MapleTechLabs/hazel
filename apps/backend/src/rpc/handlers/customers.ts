@@ -149,6 +149,12 @@ export const notFound = (entity: CustomersNotFoundError["entity"], id: string) =
 
 export const invalid = (message: string) => new CustomersInvalidRequestError({ message })
 
+/**
+ * Text matched as itself inside a `LIKE` pattern: effect-orm adds `ESCAPE '\'` on SQLite, so an
+ * escaped `%`, `_` or `\` is literal (a raw `LIKE` must say `ESCAPE '\'` itself).
+ */
+const likeLiteral = (text: string) => text.replace(/[\\%_]/g, "\\$&")
+
 /** Run `body` in a transaction and answer with its write position. */
 export const withTx = <A, E, R>(body: Effect.Effect<A, E, R>) =>
 	Effect.flatMap(Database.Database, (db) =>
@@ -277,6 +283,42 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 					return yield* overview(range, yield* currentTime)
 				}).pipe(remap),
 
+			"customers.accounts.list": ({ query, healthStatuses, lifecycleStages, ...request }) =>
+				Effect.gen(function* () {
+					yield* requireMember
+					const page = pageOf(request)
+					const text = query?.trim() ?? ""
+					const pattern = `%${likeLiteral(text)}%`
+					const rows = yield* db.run(
+						SQLite.from(schema.customerAccountsTable)
+							.select()
+							.where(($) => [
+								$.deletedAt.isNull(),
+								text === ""
+									? undefined
+									: SQLite.or(
+											$.name.like(pattern),
+											SQLite.sql
+												.cond`EXISTS (SELECT 1 FROM json_each(${$.domains}) WHERE json_each.value LIKE ${pattern} ESCAPE '\\')`,
+										),
+								healthStatuses === undefined || healthStatuses.length === 0
+									? undefined
+									: $.healthStatus.in_(...healthStatuses),
+								lifecycleStages === undefined || lifecycleStages.length === 0
+									? undefined
+									: $.lifecycleStage.in_(...lifecycleStages),
+							])
+							.orderBy(($) => [
+								[$.mrrMinor, "desc"],
+								[$.name, "asc"],
+								[$.id, "asc"],
+							])
+							.limit(page.limit + 1)
+							.offset(page.offset),
+					)
+					return pageResult(rows, page)
+				}).pipe(remap),
+
 			"customers.account.detail": ({ accountId }) =>
 				Effect.gen(function* () {
 					yield* requireMember
@@ -316,8 +358,7 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 					yield* requireMember
 					const text = query.trim()
 					if (text === "") return { contacts: [] }
-					// effect-orm adds `ESCAPE '\'` on SQLite: typed `%` and `_` match themselves.
-					const pattern = `%${text.replace(/[\\%_]/g, "\\$&")}%`
+					const pattern = `%${likeLiteral(text)}%`
 					const contacts = yield* db.run(
 						SQLite.from(schema.customerContactsTable)
 							.select()
@@ -367,11 +408,34 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 									: $.provider.in_(...providers),
 								types === undefined || types.length === 0
 									? undefined
-									: SQLite.or(...types.map((type) => $.type.like(`${type}%`))),
+									: SQLite.or(...types.map((type) => $.type.like(`${likeLiteral(type)}%`))),
 							])
 							.orderBy(($) => [
 								[$.occurredAt, "desc"],
 								[$.createdAt, "desc"],
+								[$.id, "asc"],
+							])
+							.limit(page.limit + 1)
+							.offset(page.offset),
+					)
+					return pageResult(rows, page)
+				}).pipe(remap),
+
+			"customers.signals.open": ({ accountId, ...request }) =>
+				Effect.gen(function* () {
+					yield* requireMember
+					const page = pageOf(request)
+					const rows = yield* db.run(
+						SQLite.from(schema.customerSignalsTable)
+							.select()
+							.where(($) => [
+								$.closedAt.isNull(),
+								$.status.in_("open", "snoozed"),
+								accountId === undefined ? undefined : $.accountId.eq(accountId),
+							])
+							.orderBy(($) => [
+								[$.priorityScore, "desc"],
+								[$.openedAt, "desc"],
 								[$.id, "asc"],
 							])
 							.limit(page.limit + 1)

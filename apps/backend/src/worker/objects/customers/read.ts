@@ -633,6 +633,9 @@ export const accountDetail = Effect.fn("Customers.accountDetail")(function* (
 		openInvoices: invoices.filter((invoice) => invoice.status === "open"),
 		health: Option.match(health, { onNone: () => null, onSome: (row) => row.breakdown }),
 		healthSeries: seriesOf(facts, "health_score", today, 90),
+		healthScores: facts.health
+			.filter((point) => point.day > addDays(today, -90))
+			.map((point) => ({ day: point.day, score: point.score })),
 		activeUsersSeries: seriesOf(facts, "active_users", today, 30),
 		contactsToReach: yield* contactRows(reach, now),
 		recentEvents: events,
