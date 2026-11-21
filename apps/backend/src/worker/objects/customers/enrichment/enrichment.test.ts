@@ -1,5 +1,6 @@
 import { CompanyProfile, type UpsertAccount } from "@hazel/domain/customers"
 import { Effect, Schema, type Scope } from "effect"
+import { TestClock } from "effect/testing"
 import { describe, expect, it } from "vitest"
 import { type CustomersWorld, makeCustomersWorld, NOW, tagOf } from "../test-kit"
 import { ContextDev, type ContextDevApi } from "./client"
@@ -68,7 +69,13 @@ const within = (
 	contextDev: ContextDevApi,
 ) =>
 	world.object
-		.run(effect.pipe(Effect.provideService(ContextDev, ContextDev.of(contextDev))))
+		.run(
+			// A still clock: the lookups take no time, so deadlines are exact.
+			Effect.andThen(TestClock.setTime(NOW.getTime()), effect).pipe(
+				Effect.provideService(ContextDev, ContextDev.of(contextDev)),
+				Effect.provide(TestClock.layer()),
+			),
+		)
 		.pipe(Effect.orDie)
 
 describe("company enrichment", () => {
@@ -419,6 +426,53 @@ describe("company enrichment", () => {
 				expect(yield* within(world, enrichmentDeadline, fake.contextDev)).toBe(
 					NOW.getTime() + LEASE_MS,
 				)
+			}),
+		))
+
+	it("a refresh that failed keeps the profile found before", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const fake = makeFakeContextDev()
+				fake.state.brands.set("northwind.dev", northwindBrand)
+				yield* world.ingest("clerk", [clerkOrg("org_a", "Northwind", ["northwind.dev"])])
+				yield* within(world, seedEnrichments(NOW), fake.contextDev)
+				yield* within(world, runDueEnrichments(NOW), fake.contextDev)
+				fake.state.brands.set("northwind.dev", new FakeStatus(503, "UNAVAILABLE"))
+				const later = at(REFRESH_MS)
+				yield* within(world, runDueEnrichments(later), fake.contextDev)
+				expect(enrichmentOf(world, "northwind.dev")).toMatchObject({ status: "failed" })
+				yield* within(world, seedEnrichments(later), fake.contextDev)
+				expect(accountOf(world, "Northwind").profile?.name).toBe("Northwind Labs")
+			}),
+		))
+
+	it("a 422 without a known mail-provider code is retried, not skipped", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const fake = makeFakeContextDev()
+				fake.state.brands.set("odd.io", new FakeStatus(422, "SOMETHING_NEW"))
+				yield* world.ingest("clerk", [clerkOrg("org_a", "Odd", ["odd.io"])])
+				yield* within(world, seedEnrichments(NOW), fake.contextDev)
+				yield* within(world, runDueEnrichments(NOW), fake.contextDev)
+				expect(enrichmentOf(world, "odd.io")).toMatchObject({ status: "failed", failures: 1 })
+			}),
+		))
+
+	it("searches by the domain Brand resolved to", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const fake = makeFakeContextDev()
+				// old-northwind.com redirects: Brand answers with northwind.dev's profile.
+				fake.state.brands.set("old-northwind.com", northwindBrand)
+				fake.state.searches.set("northwind.dev", northwindSearch)
+				yield* world.ingest("clerk", [clerkOrg("org_a", "Northwind", ["old-northwind.com"])])
+				yield* within(world, seedEnrichments(NOW), fake.contextDev)
+				yield* within(world, runDueEnrichments(NOW), fake.contextDev)
+				expect(fake.state.requests[1]!.body["query"]).toContain("northwind.dev")
+				expect(accountOf(world, "Northwind").profile).toMatchObject({ foundedYear: 2019 })
 			}),
 		))
 })
