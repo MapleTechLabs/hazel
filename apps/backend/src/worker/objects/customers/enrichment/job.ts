@@ -311,7 +311,6 @@ export const runDueEnrichments = Effect.fn("CustomersObject.runDueEnrichments")(
 	for (const row of due) {
 		if (!byDomain.has(row.domain)) yield* setRow(row.domain, { nextAttemptAt: null, updatedAt: now })
 	}
-	const startedMs = yield* Clock.currentTimeMillis
 	const answers = yield* Effect.forEach(
 		used,
 		(row) =>
@@ -321,8 +320,8 @@ export const runDueEnrichments = Effect.fn("CustomersObject.runDueEnrichments")(
 			})),
 		{ concurrency: CONCURRENCY },
 	)
-	// Retry delays count from when the answers came, not from the turn's start before the lookups.
-	const answeredAt = new Date(now.getTime() + Math.max(0, (yield* Clock.currentTimeMillis) - startedMs))
+	// Retry delays count from when the answers came: the turn's `now` predates its pulls and lookups.
+	const answeredAt = new Date(Math.max(now.getTime(), yield* Clock.currentTimeMillis))
 	let found = 0
 	let credits = 0
 	for (const { row, exit } of answers) {
