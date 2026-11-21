@@ -48,6 +48,19 @@ const nativeSignIn: Array<PluginOption> = [
 ]
 const base = webConfig as UserConfig
 
+/**
+ * Inter's `.woff` fallbacks left out: WebKit always takes the `.woff2` before them, and inlined
+ * (`inlinePage`) they would only make the page the shell loads at launch bigger (~0.7 MB).
+ */
+const woff2Only: PluginOption = {
+	name: "hazel-hybrid:woff2-only",
+	enforce: "pre",
+	transform(code, id) {
+		if (!/@fontsource[\\/][^?]*\.css(\?|$)/.test(id)) return null
+		return code.replace(/,\s*url\([^)]*\.woff\)\s*format\(['"]woff['"]\)/g, "")
+	},
+}
+
 /** The built page's script and stylesheet, written into it (`build` above says why). */
 const inlinePage: PluginOption = {
 	name: "hazel-hybrid:inline-page",
@@ -84,7 +97,7 @@ const inlinePage: PluginOption = {
 // Spread by hand: this folder has no `vite` of its own to import `mergeConfig` from.
 export default {
 	...base,
-	plugins: [...nativeSignIn, ...(base.plugins ?? []).filter(keep), inlinePage],
+	plugins: [...nativeSignIn, woff2Only, ...(base.plugins ?? []).filter(keep), inlinePage],
 	root: __dirname,
 	// The web app's own static files (`/images/...`, `/sounds/...`): the root above has none.
 	publicDir: resolve(__dirname, "../../web-foldkit/public"),

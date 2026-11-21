@@ -31,7 +31,8 @@ type ShellMessage =
 	| { type: "thread"; open: boolean }
 	| { type: "location"; text: string }
 	| { type: "ready" }
-	| { type: "screen"; screen: TreeNode | null }
+	/** `loading`: shown before the app had drawn anything but its loader (`MAX_LOADING_MS`). */
+	| { type: "screen"; screen: TreeNode | null; loading?: boolean }
 	| { type: "icons"; icons: Record<string, string> }
 	| { type: "composer"; composer: ComposerLook | null }
 	/** The message list, as a JSON string: the shell decodes it off its main thread. */
@@ -64,8 +65,24 @@ const TAB_BAR = '[data-native="tab-bar"]'
 
 /** How long the page's semantic tree must stay unchanged before its first native frame. */
 const SETTLE_MS = 250
-/** How long a page with no native screen (an unconverted one, or still loading) waits before it shows as itself. */
-const UNCONVERTED_SETTLE_MS = 1500
+/** How long a page with no native screen (an unconverted one: sign-in, say) waits before it shows as itself. */
+const UNCONVERTED_SETTLE_MS = 400
+/**
+ * The longest the page's first frame waits on the app's loader, after which the loader shows (with
+ * its reload button once loading has stalled). Until then the shell keeps showing the screen the app
+ * last started on (`KeptScreen.swift`) or its launch colour.
+ */
+const MAX_LOADING_MS = 6000
+
+/**
+ * The app has drawn nothing yet, or only its loaders: the full-page one while the session and user
+ * load, a list still loading, or a page whose code has not arrived (`web-foldkit/src/app/paint.ts`).
+ */
+const STILL_LOADING = '[data-paint="loader"],[data-paint="loading"],[data-page-placeholder]'
+const isStillLoading = () => {
+	const app = document.getElementById("app")
+	return app === null || app.firstElementChild === null || app.querySelector(STILL_LOADING) !== null
+}
 
 const readTabs = (): Array<Tab> => {
 	const bar = document.querySelector(TAB_BAR)
@@ -221,8 +238,18 @@ export const installBridge = () => {
 	let wasThreadOpen = false
 	let lastLocation = ""
 	let hasShown = false
+	let hasWaitedLongEnough = false
 	let settle: ReturnType<typeof setTimeout> | undefined
 	let scheduled = false
+	const schedule = () => {
+		if (scheduled) return
+		scheduled = true
+		requestAnimationFrame(sync)
+	}
+	setTimeout(() => {
+		hasWaitedLongEnough = true
+		schedule()
+	}, MAX_LOADING_MS)
 	const sync = () => {
 		scheduled = false
 		const tabs = JSON.stringify(readTabs())
@@ -273,20 +300,32 @@ export const installBridge = () => {
 			}
 		}
 		const json = JSON.stringify(screen)
-		if (json === lastScreen) return
-		lastScreen = json
+		// Before the first frame, the app's loader is no screen to show: it waits for what comes
+		// after it (the shell shows its kept screen meanwhile), up to `MAX_LOADING_MS`.
+		const isLoading = !hasShown && isStillLoading()
+		const state = isLoading && !hasWaitedLongEnough ? "loading" : json
+		if (state === lastScreen) return
+		lastScreen = state
 		if (hasShown) {
 			post({ type: "screen", screen })
 			return
 		}
+		clearTimeout(settle)
+		if (state === "loading") return
 		// The first native frame waits for the page to settle: its fonts loaded (the looks are
 		// measured in them) and no change for a moment (the lists arrive in a few steps), so the
 		// screen does not draw half-filled and then jump.
-		clearTimeout(settle)
 		settle = setTimeout(
 			() => {
 				void Promise.all([document.fonts.ready, iconsRendering()]).then(() => {
 					hasShown = true
+					if (isLoading) {
+						// Shown as it is, marked: the shell keeps its kept screen for the next launch.
+						const shown = readScreen()
+						lastScreen = JSON.stringify(shown)
+						post({ type: "screen", screen: shown, loading: true })
+						return
+					}
 					lastScreen = ""
 					sync()
 				})
@@ -295,16 +334,10 @@ export const installBridge = () => {
 		)
 	}
 	// A rasterized icon changes the tree that names it.
-	whenIconsRasterize(() => {
-		if (scheduled) return
-		scheduled = true
-		requestAnimationFrame(sync)
-	})
+	whenIconsRasterize(schedule)
 	new MutationObserver((records) => {
 		noteMutations(records)
-		if (scheduled) return
-		scheduled = true
-		requestAnimationFrame(sync)
+		schedule()
 	}).observe(document.documentElement, {
 		subtree: true,
 		childList: true,

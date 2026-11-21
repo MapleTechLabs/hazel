@@ -1,6 +1,12 @@
 {
 	"extends": "../../tsconfig.base.json",
-	"include": ["fixture/**/*.ts", "web/big-channel.ts", "scripts/**/*.ts", "vitest.config.ts", "../web-foldkit/src/vite-env.d.ts"],
+	"include": [
+		"fixture/**/*.ts",
+		"web/big-channel.ts",
+		"scripts/**/*.ts",
+		"vitest.config.ts",
+		"../web-foldkit/src/vite-env.d.ts"
+	],
 	"compilerOptions": {
 		"target": "ES2022",
 		"module": "ESNext",

@@ -34,7 +34,10 @@ targets:
                 # A page on this Mac in the simulator (the fixture's HTML render); the internet stays HTTPS.
                 NSAppTransportSecurity:
                     NSAllowsLocalNetworking: true
-                UILaunchScreen: {}
+                # The page's own background (`--bg`, light and dark): the launch screen fades into the
+                # kept screen (`KeptScreen`) with no black or white between.
+                UILaunchScreen:
+                    UIColorName: LaunchBackground
                 # 120 Hz on ProMotion iPhones (otherwise capped at 60).
                 CADisableMinimumFrameDurationOnPhone: true
                 UIApplicationSceneManifest:

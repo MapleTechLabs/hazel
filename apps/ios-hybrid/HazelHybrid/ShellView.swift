@@ -7,13 +7,14 @@ import SwiftUI
 /// - An unconverted page without it (a conversation) is pushed over the last native screen: the
 ///   system's back button and interactive swipe pop it, and the page follows (its own back link).
 struct ShellView: View {
-    @State private var bridge = WebBridge()
+    let bridge: WebBridge
     @State private var path: [String] = []
     /// The native screen under a pushed page, kept while the page no longer shows it.
     @State private var root: SemanticNode?
     /// The native composer's height: the list ends above it.
     @State private var isKeyboardUp = false
     @State private var composerHeight: CGFloat = 80
+    @Environment(\.colorScheme) private var colorScheme
 
     private static let brand = Color(red: 0x69 / 255, green: 0x38 / 255, blue: 0xEF / 255)
 
@@ -113,9 +114,14 @@ struct ShellView: View {
                 NativeScreen(screen: screen, bridge: bridge)
                     .opacity(bridge.isOverlayOpen ? 0 : 1)
                     .allowsHitTesting(!bridge.isOverlayOpen)
+            } else if let kept = shownKept {
+                // The screen the app last started on, until the page has settled on its own. It
+                // scrolls, and a press on it is carried out on the page's screen once that has
+                // settled (`WebBridge.press`).
+                NativeScreen(screen: kept.screen, bridge: bridge)
             } else if !bridge.hasSettled {
                 // As the launch screen: until the page has settled.
-                Color(uiColor: .systemBackground).ignoresSafeArea()
+                Color(uiColor: .pageBackground).ignoresSafeArea()
             }
         }
         .toolbar(bridge.screen == nil && path.isEmpty ? .hidden : .automatic, for: .navigationBar)
@@ -124,8 +130,21 @@ struct ShellView: View {
                 GlassTabBar(tabs: bridge.tabs, icons: bridge.icons, onSelect: bridge.selectTab)
                     .padding(.horizontal, 20)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let kept = shownKept, !kept.tabs.isEmpty {
+                // The kept screen's bar: a tab pressed on it is selected once the page settles.
+                GlassTabBar(tabs: kept.tabs, icons: bridge.icons, onSelect: bridge.selectTab)
+                    .padding(.horizontal, 20)
             }
         }
+    }
+
+    /// The kept launch screen (`KeptScreen`), while the page has not settled and the appearance is
+    /// the one it was taken in.
+    private var shownKept: WebBridge.Kept? {
+        guard !bridge.hasSettled, let kept = bridge.kept,
+              kept.appearance == (colorScheme == .dark ? "dark" : "light")
+        else { return nil }
+        return kept
     }
 
     /// The page opened or closed a thread: it is pushed over its channel, or popped.
