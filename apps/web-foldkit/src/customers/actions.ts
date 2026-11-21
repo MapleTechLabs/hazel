@@ -334,6 +334,15 @@ export const accountUpdatePayload = (props: AccountUpdate): AccountUpdatePayload
 	return payload
 }
 
+/**
+ * The domains an account shows once `raw` is added, before the store answers: cleaned as the store
+ * cleans it and put first (one it has moves first); one the store will refuse changes nothing.
+ */
+export const withAddedDomain = (domains: ReadonlyArray<string>, raw: string): Array<string> => {
+	const added = normalizeDomain(raw)
+	return added === null ? [...domains] : [added, ...domains.filter((domain) => domain !== added)]
+}
+
 export const updateAccountAction = optimisticAction({
 	collections: [customerAccountCollection],
 	onMutate: (props: AccountUpdate) => {
@@ -341,11 +350,8 @@ export const updateAccountAction = optimisticAction({
 			if (props.ownerUserId !== undefined) account.ownerUserId = props.ownerUserId
 			if (props.tags !== undefined) account.tags = [...props.tags]
 			if (props.name !== undefined) account.name = props.name
-			// Cleaned as the store cleans it; one it will refuse shows nothing.
-			const added = props.addDomain === undefined ? null : normalizeDomain(props.addDomain)
-			if (added !== null) {
-				account.domains = [added, ...account.domains.filter((domain) => domain !== added)]
-			}
+			if (props.addDomain !== undefined)
+				account.domains = withAddedDomain(account.domains, props.addDomain)
 			if (props.lifecycleStageOverride !== undefined) {
 				account.lifecycleStageOverride = props.lifecycleStageOverride
 				// The derived stage shows once compute runs again; until then keep the current one.
