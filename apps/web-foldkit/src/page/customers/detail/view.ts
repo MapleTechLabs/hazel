@@ -82,6 +82,7 @@ import {
 import { notesTab } from "./notes-tab"
 import { peopleInChat } from "./people-in-chat"
 import { overviewTab } from "./overview-tab"
+import { companyFacts, companySocials } from "../../../customers/ui/company"
 import { companySection } from "./company-section"
 import { type Context, icon, memberOf, menu, property, sidebarSection } from "./parts"
 import { usersTab } from "./users-tab"
@@ -326,6 +327,7 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 			h.div(
 				[h.Class("flex shrink-0 items-center gap-1")],
 				[
+					...companySocialsGroup(h, context?.account.company ?? null),
 					...(position === null
 						? []
 						: [
@@ -360,6 +362,34 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 			),
 		],
 	)
+}
+
+/** The enriched company's key facts under the name; nothing until a lookup finds the company. */
+const companyRow = (h: HtmlBuilder<Message>, company: Context["account"]["company"]): ReadonlyArray<Html> => {
+	const facts = company === null ? [] : companyFacts(h, company)
+	return facts.length === 0
+		? []
+		: [h.div([h.Class("flex flex-wrap items-center gap-1.5 pt-3 md:pl-13")], facts)]
+}
+
+/**
+ * The company's socials as their platforms' marks, in the top bar beside the paging: always in the
+ * same place as you move between customers. A divider parts them from the paging.
+ */
+const companySocialsGroup = (
+	h: HtmlBuilder<Message>,
+	company: Context["account"]["company"],
+): ReadonlyArray<Html> => {
+	const socials = company === null ? [] : companySocials(h, company)
+	return socials.length === 0
+		? []
+		: [
+				h.div(
+					[h.AriaLabel("Company profiles"), h.Role("group"), h.Class("flex items-center")],
+					socials,
+				),
+				h.span([h.AriaHidden(true), h.Class("mx-2 h-4 w-px bg-border max-md:hidden")]),
+			]
 }
 
 const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
@@ -487,6 +517,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 					),
 				],
 			),
+			...companyRow(h, account.company),
 		],
 	)
 }

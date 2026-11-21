@@ -101,7 +101,8 @@ describe("company enrichment", () => {
 				])
 				expect(yield* within(world, enrichmentDeadline, fake.contextDev)).toBe(NOW.getTime())
 
-				yield* within(world, runDueEnrichments(NOW), fake.contextDev)
+				// Both Northwind accounts got a profile (the caller then resends the channel projection).
+				expect(yield* within(world, runDueEnrichments(NOW), fake.contextDev)).toBe(2)
 				expect(fake.state.requests.map((request) => request.path)).toEqual([
 					"/brand/retrieve",
 					"/company/search",
@@ -136,7 +137,7 @@ describe("company enrichment", () => {
 				expect(accountOf(world, "Solo").companyCheckedAt).toBeNull()
 
 				// Nothing due: no request, and a new account at a known domain gets the answer at the next seed.
-				yield* within(world, runDueEnrichments(at(60_000)), fake.contextDev)
+				expect(yield* within(world, runDueEnrichments(at(60_000)), fake.contextDev)).toBe(0)
 				expect(fake.state.requests).toHaveLength(2)
 				yield* world.ingest("clerk", [clerkOrg("org_apac", "Northwind APAC", ["northwind.dev"])])
 				yield* within(world, seedEnrichments(at(60_000)), fake.contextDev)

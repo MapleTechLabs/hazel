@@ -349,6 +349,10 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "assistant_threads_owner_idx" ON "assistant_threads" ("ownerId", "lastActivityAt")',
 			],
 		},
+		{
+			id: "0013_channel_customers_company",
+			statements: ['ALTER TABLE "channel_customers" ADD COLUMN "company" text'],
+		},
 	],
 	channel: [
 		{

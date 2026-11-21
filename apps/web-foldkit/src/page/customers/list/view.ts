@@ -45,6 +45,7 @@ import { menuLabel, view as menuView } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import type { PageViewInputs } from "../../contract"
+import { companyFacts } from "../../../customers/ui/company"
 import { LetModifierClicksThrough, PositionHoverCard, ScrollListRowIntoView } from "./commands"
 import { chipOf, columnPicker, filterBuilder } from "./controls"
 import { Message } from "./message"
@@ -345,6 +346,31 @@ const controls = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, count: 
 
 // HOVER CARD
 
+/** The enriched company: two lines of its description and its key facts; nothing without one. */
+const companyBlock = (h: HtmlBuilder<Message>, account: AccountRow): ReadonlyArray<Html> => {
+	const company = account.company
+	if (company === null) return []
+	const facts = companyFacts(h, company)
+	return facts.length === 0 && company.description === null
+		? []
+		: [
+				h.div(
+					[h.Class("flex flex-col gap-2.5 px-4 pb-3.5")],
+					[
+						...(company.description === null
+							? []
+							: [
+									h.p(
+										[h.Class("line-clamp-2 text-muted-fg text-xs leading-relaxed")],
+										[company.description],
+									),
+								]),
+						...(facts.length === 0 ? [] : [h.div([h.Class("flex flex-wrap gap-1.5")], facts)]),
+					],
+				),
+			]
+}
+
 const hoverCard = (h: HtmlBuilder<Message>, model: Model, account: AccountRow, viewer: Viewer): Html => {
 	const signals = (model.signals ?? []).filter(
 		(signal: SignalRow) => signal.accountId === account.id && signal.status === "open",
@@ -409,6 +435,7 @@ const hoverCard = (h: HtmlBuilder<Message>, model: Model, account: AccountRow, v
 					healthBadge(h, { status: account.healthStatus, score: account.healthScore }),
 				],
 			),
+			...companyBlock(h, account),
 			h.div(
 				[h.Class("grid grid-cols-3 divide-x divide-border border-border border-y")],
 				[

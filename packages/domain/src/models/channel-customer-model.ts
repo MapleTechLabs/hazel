@@ -15,6 +15,7 @@ import {
 	SignalKind,
 	SignalSeverity,
 } from "../customers/enums"
+import { CompanyProfile } from "../customers/company"
 import { JsonDate } from "./utils"
 
 /** One of the customer's top open signals. */
@@ -58,6 +59,8 @@ export const Schema = S.Struct({
 	openSignalCount: S.Int,
 	topSignals: S.Array(Signal),
 	sourceLinks: S.Array(SourceLink),
+	/** The customer's enriched company. Optional: rows synced or cached before it was projected have none. */
+	company: S.optional(S.NullOr(CompanyProfile)),
 	updatedAt: JsonDate,
 })
 export type Type = typeof Schema.Type

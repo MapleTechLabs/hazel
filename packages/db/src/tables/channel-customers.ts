@@ -8,7 +8,7 @@
  * The glance columns came after the table (objects migrate lazily, old snapshots lack them): all
  * nullable or defaulted.
  */
-import { HealthStatus, LifecycleStage } from "@hazel/domain/customers"
+import { type CompanyProfile, HealthStatus, LifecycleStage } from "@hazel/domain/customers"
 import type { ChannelCustomer as ChannelCustomerModel } from "@hazel/domain/models"
 import { ChannelId, CustomerAccountId, OrganizationId, UserId } from "@hazel/schema"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
@@ -40,6 +40,8 @@ export const channelCustomersTable = SQLite.table("channel_customers", {
 		sourceLinks: SQLite.column(jsonb<ReadonlyArray<ChannelCustomerModel.SourceLink>>(), {
 			default: [],
 		}),
+		/** The customer's enriched company (its account's `companyProfile`); null when it has none. */
+		company: SQLite.nullable(jsonb<CompanyProfile>()),
 	},
 	primaryKey: ["channelId"],
 	indexes: [SQLite.index("channel_customers_account_idx", ["accountId"])],

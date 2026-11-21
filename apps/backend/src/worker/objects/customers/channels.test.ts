@@ -3,6 +3,7 @@
  * channel with its `OrgObject`, keeps one live link per channel, and projects the links to the
  * org (`channel_customers`), which follows renames, moves, unlinks and deleted accounts.
  */
+import type { CompanyProfile } from "@hazel/domain/customers"
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
@@ -14,6 +15,34 @@ import { makeCustomersWorld, tagOf, uuid } from "./test-kit"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
+
+const acmeCompany: CompanyProfile = {
+	domain: "acme.com",
+	name: "Acme Inc.",
+	description: "Anvils and rockets for the discerning coyote.",
+	industry: "Manufacturing",
+	subindustry: null,
+	employeeRange: "51-200",
+	employeeCount: null,
+	headquarters: {
+		street: null,
+		city: "Phoenix",
+		region: "AZ",
+		postalCode: null,
+		country: "United States",
+		countryCode: "US",
+	},
+	foundedYear: 1949,
+	companyType: "privately_held",
+	operatingStatus: "active",
+	stock: null,
+	funding: { stage: "series_b", totalUsd: 42_000_000, rounds: [] },
+	revenue: null,
+	socials: [{ type: "linkedin", url: "https://www.linkedin.com/company/acme" }],
+	pages: [{ type: "careers", url: "https://acme.com/careers" }],
+	colors: ["#d4351c"],
+	logoUrl: "https://acme.com/icon.png",
+}
 
 type ChannelType = "public" | "private" | "thread" | "direct" | "single"
 
@@ -300,6 +329,51 @@ describe("Customer channel links", () => {
 			}),
 		))
 
+	it("projects the customer's company profile, resends it when it changes, and clears it", () =>
+		run(
+			Effect.gen(function* () {
+				const t = yield* setup
+				const general = t.channel("public", [t.world.member])
+				yield* t.link("Acme", general)
+				const acme = t.accountId("Acme")
+				const company = () => {
+					const row = t.org.storage.db
+						.prepare(`SELECT company FROM channel_customers WHERE channelId = ?`)
+						.get(general) as { company: string | null }
+					// SAFETY: the receiver writes the column from the decoded `CompanyProfile`.
+					return row.company === null ? null : (JSON.parse(row.company) as CompanyProfile)
+				}
+				yield* t.publish
+				// No profile: SQL NULL, not the text `null`.
+				expect(company()).toBeNull()
+
+				const setProfile = (profile: CompanyProfile | null) =>
+					t.world.rows(
+						`UPDATE customer_accounts SET companyProfile = ? WHERE id = ?`,
+						profile === null ? null : JSON.stringify(profile),
+						acme,
+					)
+				setProfile(acmeCompany)
+				yield* t.publish
+				expect(company()).toEqual(acmeCompany)
+
+				// Unchanged: nothing is sent.
+				const before = t.world.objects.deliveries.length
+				yield* t.publish
+				expect(t.world.objects.deliveries.length).toBe(before)
+
+				// A refreshed profile is part of the fingerprint: resent.
+				const refreshed = { ...acmeCompany, employeeRange: "201-500" as const }
+				setProfile(refreshed)
+				yield* t.publish
+				expect(company()).toEqual(refreshed)
+
+				setProfile(null)
+				yield* t.publish
+				expect(company()).toBeNull()
+			}),
+		))
+
 	it("drops a deleted account's channels from the projection on the next compute", () =>
 		run(
 			Effect.gen(function* () {
@@ -545,6 +619,7 @@ describe("Customer channel links", () => {
 				expect(result._tag).not.toBe("Rejected")
 				expect(t.glance(general)).toMatchObject({
 					accountName: "Acme",
+					company: null,
 					healthStatus: "unknown",
 					mrrMinor: null,
 					openSignalCount: 0,
