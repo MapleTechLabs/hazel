@@ -3,9 +3,7 @@ import { Option } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { RANGE_COMPARISON, rangePicker } from "../../../customers/ui/filter-bar"
-import { meter } from "../../../customers/charts/sparkline"
-import { chartCard } from "../../../customers/charts/frame"
+import { markdownView } from "../../../chat/markdown/markdown-view"
 import { stackedBarChart } from "../../../customers/charts/stacked-bar-chart"
 import {
 	formatCompact,
@@ -15,20 +13,19 @@ import {
 	formatDayLong,
 	formatDeltaPct,
 	formatMetricValue,
-	formatMoney,
 	formatRelative,
 } from "../../../customers/format"
 import { accountLabelOf } from "../../../customers/groups"
 import { msOf, type SignalRow } from "../../../customers/queries"
 import { overdueByMs } from "../../../customers/sla"
 import { formatResponse, formatWithin } from "../../../customers/support-report"
-import { severityChip } from "../../../customers/ui/badges"
-import { evidenceViz } from "../../../customers/ui/evidence"
+import { HEALTH_LABEL, severityGlyph } from "../../../customers/ui/badges"
+import { rangePicker } from "../../../customers/ui/filter-bar"
 import { healthBreakdown } from "../../../customers/ui/health-breakdown"
 import { personLabel, sourceMark } from "../../../customers/ui/identity"
 import { snoozeMenuContent } from "../../../customers/ui/menus"
 import { queueAction } from "../../../customers/ui/queue-row"
-import { markdownView } from "../../../chat/markdown/markdown-view"
+import { linkClass } from "../../../customers/ui/surface"
 import {
 	IconArrowPath,
 	IconCheck,
@@ -36,10 +33,11 @@ import {
 	IconChevronRight,
 	IconClock,
 	IconDots,
+	IconPin,
 } from "../../../icons"
-import { linkClass } from "../../../customers/ui/surface"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
+import { heading } from "../../../ui/heading"
 import { menuLabel } from "../../../ui/menu-view"
 import { Message } from "./message"
 import {
@@ -56,111 +54,64 @@ import {
 	sortedNotes,
 	UNASSIGN,
 } from "./model"
-import { card, type Context, headerLink, icon, memberOf, menu } from "./parts"
+import { type Context, disclosure, headerLink, icon, memberOf, menu } from "./parts"
 
-/** The overview tab: KPIs, usage, why the health score, open signals, subscription, pinned notes, activity. */
+/**
+ * The overview tab, read top to bottom as "what needs me, how are they doing, what happened": the
+ * open signals with their actions, one strip of numbers, usage, the health score's reasons (folded),
+ * support in a line, then pinned notes and recent activity. Billing facts live in the Billing tab and
+ * the side panel, so nothing here repeats them.
+ */
 
 const DAY_MS = 86_400_000
 
-// KPIS
-
-const kpis = (h: HtmlBuilder<Message>, context: Context): Html => {
-	const { account } = context
-	const trend = account.activeUsersTrendPct
-	const lastActiveName =
-		context.detail?.contactsToReach.find(
-			(row) => row.contact.id === context.detail?.account.lastActiveContactId,
-		)?.contact.name ?? null
-	return h.div(
-		[h.Class("grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5")],
-		[
-			kpiTile(
-				{ h, id: "active-users", label: "Active users" },
-				{
-					value: formatCount(account.activeUsers30d),
-					suffix: `of ${formatCount(account.contactCount)}`,
-					detail: "Last 30 days",
-				},
-			),
-			kpiTile(
-				{ h, id: "usage-trend", label: "Usage trend" },
-				{
-					value: trend === null ? "—" : formatDeltaPct(Math.round(trend)),
-					detail: "7d vs prior 28d",
-					valueClass:
-						trend === null || Math.abs(trend) < 5
-							? undefined
-							: trend < 0
-								? "text-danger-subtle-fg"
-								: "text-success-subtle-fg",
-				},
-			),
-			kpiTile(
-				{ h, id: "mrr", label: "MRR" },
-				{
-					value: formatMoney(account.mrrMinor, account.currency),
-					detail: account.planName ?? undefined,
-				},
-			),
-			kpiTile(
-				{ h, id: "seats", label: "Seats used" },
-				{
-					value: account.seatsUsed === null ? "—" : formatCount(account.seatsUsed),
-					suffix: account.seatsLimit === null ? undefined : `/ ${formatCount(account.seatsLimit)}`,
-					footer:
-						account.seatsUsed === null || account.seatsLimit === null
-							? undefined
-							: meter(h, {
-									value: account.seatsUsed,
-									limit: account.seatsLimit,
-									ariaLabel: "Seats used of the plan's seats",
-								}),
-				},
-			),
-			kpiTile(
-				{ h, id: "last-active", label: "Last active" },
-				{
-					value:
-						account.lastActiveAtMs === null
-							? "Never"
-							: formatRelative(new Date(account.lastActiveAtMs), new Date(context.nowMs)),
-					detail: lastActiveName ?? undefined,
-				},
-			),
-		],
+const sectionTitle = (h: HtmlBuilder<Message>, title: string, aside?: Html): Html =>
+	h.div(
+		[h.Class("flex min-h-7 flex-wrap items-center justify-between gap-x-4 gap-y-2")],
+		[heading(h, { variant: "subsection", level: 2 }, [title]), ...(aside === undefined ? [] : [aside])],
 	)
-}
 
-/** A compact tile (the kit's `kpiTile` is sized for the overview's KPI row). */
-const kpiTile = (
-	base: Readonly<{ h: HtmlBuilder<Message>; id: string; label: string }>,
+// PULSE
+
+const HEALTH_TEXT = {
+	healthy: "text-success-subtle-fg",
+	at_risk: "text-warning-subtle-fg",
+	critical: "text-danger-subtle-fg",
+	unknown: "text-muted-fg",
+} as const satisfies Record<Customers.HealthStatus, string>
+
+/** One cell of the pulse strip: a label, a number, and what it is measured against. */
+const pulseStat = (
+	h: HtmlBuilder<Message>,
 	options: Readonly<{
+		id: string
+		label: string
 		value: string
-		/** Beside the value: `of 24`, `/ 25`. */
+		/** Beside the value: `/ 24`. */
 		suffix?: string | undefined
-		/** Under the value: what the number is measured against or who it is. */
 		detail?: string | undefined
 		valueClass?: string | undefined
-		footer?: Html | undefined
+		detailClass?: string | undefined
 	}>,
 ): Html =>
-	base.h.div(
+	h.div(
 		[
-			base.h.Id(`customer-kpi-${base.id}`),
-			base.h.Class(
-				"flex min-w-0 flex-col gap-1.5 rounded-xl border border-border bg-bg p-4 max-md:p-3",
+			h.Id(`customer-kpi-${options.id}`),
+			h.Class(
+				// Two by two on a phone: the second row gets a top rule, the second column a left one.
+				"flex min-w-0 flex-col gap-0.5 border-border px-4 py-3 md:border-l md:first:border-l-0 max-md:even:border-l max-md:[&:nth-child(n+3)]:border-t",
 			),
 		],
 		[
-			base.h.span([base.h.Class("truncate font-medium text-muted-fg text-xs/5")], [base.label]),
-			base.h.div(
-				[base.h.Class("flex min-w-0 items-baseline gap-x-1.5")],
+			h.span([h.Class("truncate text-muted-fg text-xs")], [options.label]),
+			h.span(
+				[h.Class("flex min-w-0 items-baseline gap-1")],
 				[
-					base.h.span(
+					h.span(
 						[
-							base.h.Class(
+							h.Class(
 								twMerge(
-									"shrink-0 whitespace-nowrap font-semibold text-2xl/8 text-fg tabular-nums tracking-tight max-md:text-xl/7",
+									"whitespace-nowrap font-semibold text-fg text-lg tabular-nums tracking-tight",
 									options.valueClass,
 								),
 							),
@@ -170,8 +121,8 @@ const kpiTile = (
 					...(options.suffix === undefined
 						? []
 						: [
-								base.h.span(
-									[base.h.Class("whitespace-nowrap text-muted-fg text-sm tabular-nums")],
+								h.span(
+									[h.Class("whitespace-nowrap text-muted-fg text-sm tabular-nums")],
 									[options.suffix],
 								),
 							]),
@@ -180,18 +131,90 @@ const kpiTile = (
 			...(options.detail === undefined
 				? []
 				: [
-						base.h.span(
-							[base.h.Class("truncate text-muted-fg text-xs/5"), base.h.Title(options.detail)],
+						h.span(
+							[
+								h.Class(twMerge("truncate text-muted-fg text-xs", options.detailClass)),
+								h.Title(options.detail),
+							],
 							[options.detail],
 						),
 					]),
-			...(options.footer === undefined ? [] : [options.footer]),
 		],
 	)
 
+/** The health score a week ago, from the daily series. */
+const healthWeekAgo = (context: Context): number | undefined => context.detail?.healthSeries.at(-8)?.value
+
+const pulse = (h: HtmlBuilder<Message>, context: Context): Html => {
+	const { account } = context
+	const now = new Date(context.nowMs)
+	const trend = account.activeUsersTrendPct
+	const lastActiveName =
+		context.detail?.contactsToReach.find(
+			(row) => row.contact.id === context.detail?.account.lastActiveContactId,
+		)?.contact.name ?? null
+	const weekAgo = healthWeekAgo(context)
+	const healthChange =
+		weekAgo === undefined || account.healthScore === null ? null : account.healthScore - weekAgo
+	const trendTone =
+		trend === null || Math.abs(trend) < 5
+			? undefined
+			: trend < 0
+				? "text-danger-subtle-fg"
+				: "text-success-subtle-fg"
+	return h.div(
+		[
+			h.AriaLabel("At a glance"),
+			h.Role("group"),
+			h.Class("grid grid-cols-2 rounded-xl border border-border bg-bg md:grid-cols-4"),
+		],
+		[
+			pulseStat(h, {
+				id: "active-users",
+				label: "Active users",
+				value: formatCount(account.activeUsers30d),
+				suffix: `/ ${formatCount(account.contactCount)}`,
+				detail: "Last 30 days",
+			}),
+			pulseStat(h, {
+				id: "usage-trend",
+				label: "Usage",
+				value: trend === null ? "—" : formatDeltaPct(Math.round(trend)),
+				valueClass: trendTone,
+				detail: "7d vs prior 28d",
+			}),
+			pulseStat(h, {
+				id: "health",
+				label: "Health",
+				value: account.healthScore === null ? "—" : String(account.healthScore),
+				valueClass: HEALTH_TEXT[account.healthStatus],
+				detail:
+					healthChange === null || healthChange === 0
+						? HEALTH_LABEL[account.healthStatus]
+						: `${healthChange < 0 ? "−" : "+"}${Math.abs(healthChange)} in 7 days`,
+				detailClass:
+					healthChange === null || healthChange === 0
+						? undefined
+						: healthChange < 0
+							? "text-danger-subtle-fg"
+							: "text-success-subtle-fg",
+			}),
+			pulseStat(h, {
+				id: "last-active",
+				label: "Last active",
+				value:
+					account.lastActiveAtMs === null
+						? "Never"
+						: formatRelative(new Date(account.lastActiveAtMs), now),
+				detail: lastActiveName ?? undefined,
+			}),
+		],
+	)
+}
+
 // USAGE
 
-const usageCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+const usageSection = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
 	const series = Option.getOrUndefined(AsyncData.getData(model.usage))?.[0]
 	const failed = AsyncData.getError(model.usage)
 	const metric = model.metrics.find((row) => row.key === model.usageMetric)
@@ -201,79 +224,68 @@ const usageCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Htm
 	const isUnitMissing = metric?.provider === "autumn" && unit === null
 	const points = series?.points ?? []
 	const values = points.map((point) => point.value)
-	const recent = values.slice(-7)
-	const prior = values.slice(-35, -7)
-	const average = (list: ReadonlyArray<number>) =>
-		list.length === 0 ? 0 : list.reduce((sum, value) => sum + value, 0) / list.length
-	const change = average(prior) === 0 ? null : ((average(recent) - average(prior)) / average(prior)) * 100
-	const description =
-		points.length === 0
-			? `Daily ${metricName.toLowerCase()}.`
-			: change === null
-				? `Daily ${metricName.toLowerCase()}, ${RANGE_COMPARISON[model.usageRange].replace("vs ", "")}.`
-				: `7-day average ${change < 0 ? "down" : "up"} ${formatDeltaPct(Math.abs(Math.round(change))).replace("+", "")} vs the prior 28 days.`
-	return chartCard(
-		h,
-		{
-			title: "Usage",
-			description,
-			aside: h.div(
-				[h.Class("flex flex-wrap items-center gap-2")],
-				[
-					menu(h, model.metricMenu, {
-						entries: metricEntries(model.metrics),
-						trigger: (attributes, overlay) =>
-							button(h, { intent: "outline", size: "sm", attributes }, [
-								h.span([h.Class("text-muted-fg")], ["Metric"]),
-								metricName,
-								...(unit === null ? [] : [h.span([h.Class("text-muted-fg")], [unit])]),
-								IconChevronDown(h, { className: "size-3" }),
-								overlay,
-							]),
-						content: (key) => [
-							menuLabel(
-								h,
-								model.metricMenu.id,
-								key,
-								model.metrics.find((metric) => metric.key === key)?.name ?? "Active users",
-							),
-						],
-						toMessage: (message) => Message.GotMetricMenuMessage({ message }),
-					}),
-					...(isUnitMissing
-						? [
-								h.a(
-									[
-										h.Href(
-											hrefOf(
-												AppRoute.CustomersSourceDetail({
-													orgSlug: context.orgSlug,
-													provider: "autumn",
-												}),
-											),
-										),
-										h.Class("text-primary text-sm hover:underline"),
-									],
-									["Set unit"],
-								),
-							]
-						: []),
-					rangePicker(h, {
-						selected: model.usageRange,
-						onSelect: (range) => Message.ClickedUsageRange({ range }),
-						caption: null,
-					}),
-				],
-			),
-		},
+	return h.section(
+		[h.AriaLabel("Usage"), h.Class("flex min-w-0 flex-col gap-3")],
 		[
+			sectionTitle(
+				h,
+				"Usage",
+				h.div(
+					[h.Class("flex flex-wrap items-center gap-2")],
+					[
+						menu(h, model.metricMenu, {
+							entries: metricEntries(model.metrics),
+							trigger: (attributes, overlay) =>
+								button(h, { intent: "outline", size: "xs", attributes }, [
+									metricName,
+									...(unit === null ? [] : [h.span([h.Class("text-muted-fg")], [unit])]),
+									IconChevronDown(h, { className: "size-3" }),
+									overlay,
+								]),
+							content: (key) => [
+								menuLabel(
+									h,
+									model.metricMenu.id,
+									key,
+									model.metrics.find((metric) => metric.key === key)?.name ??
+										"Active users",
+								),
+							],
+							toMessage: (message) => Message.GotMetricMenuMessage({ message }),
+						}),
+						...(isUnitMissing
+							? [
+									h.a(
+										[
+											h.Href(
+												hrefOf(
+													AppRoute.CustomersSourceDetail({
+														orgSlug: context.orgSlug,
+														provider: "autumn",
+													}),
+												),
+											),
+											h.Class(twMerge(linkClass, "text-xs")),
+										],
+										["Set unit"],
+									),
+								]
+							: []),
+						rangePicker(h, {
+							selected: model.usageRange,
+							onSelect: (range) => Message.ClickedUsageRange({ range }),
+							caption: null,
+						}),
+					],
+				),
+			),
 			failed._tag === "Some" && series === undefined
-				? h.p([h.Class("py-12 text-center text-muted-fg text-sm")], ["Couldn't load usage."])
+				? h.p([h.Class("py-10 text-center text-muted-fg text-sm")], ["Couldn't load usage."])
 				: series === undefined
-					? h.div([h.Class("h-52 animate-pulse rounded-lg bg-secondary/40")])
+					? h.div([h.Class("h-32 animate-pulse rounded-lg bg-secondary/40")])
 					: values.every((value) => value === 0)
 						? h.p(
-								[h.Class("py-12 text-center text-muted-fg text-sm")],
+								[h.Class("py-10 text-center text-muted-fg text-sm")],
 								["No usage recorded in this range."],
 							)
 						: stackedBarChart(h, {
@@ -294,7 +306,7 @@ const usageCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Htm
 								hoveredIndex: model.hoveredUsage,
 								onHover: (index) => Message.HoveredUsage({ index }),
 								maxXTicks: 6,
-								heightClass: "h-48",
+								heightClass: "h-32",
 							}),
 		],
 	)
@@ -302,56 +314,94 @@ const usageCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Htm
 
 // HEALTH
 
-const healthCard = (
+/**
+ * Why the score is what it is, folded: the pulse strip already shows the number, so the per-component
+ * table opens on request.
+ */
+const healthSection = (
 	h: HtmlBuilder<Message>,
-	model: Model,
 	context: Context,
 	bands: Customers.HealthBands,
-): Html => {
+): ReadonlyArray<Html> => {
 	const breakdown = context.detail?.health ?? null
-	if (breakdown === null)
-		return card(h, { title: "Health" }, [
-			h.p(
-				[h.Class("text-muted-fg text-sm")],
-				[
-					context.detail === null
-						? "Loading…"
-						: "Not scored yet: the score appears after the next compute.",
-				],
-			),
-		])
-	const history = context.detail?.healthSeries ?? []
-	const weekAgo = history.at(-8)?.value
-	const subtitle = [
-		weekAgo === undefined || breakdown.score === null || weekAgo === breakdown.score
+	if (breakdown === null || breakdown.score === null) return []
+	const weekAgo = healthWeekAgo(context)
+	const computedAt = context.detail?.account.healthUpdatedAt ?? null
+	const note = [
+		weekAgo === undefined || weekAgo === breakdown.score
 			? null
-			: `${breakdown.score < weekAgo ? "Down" : "Up"} ${Math.abs(breakdown.score - weekAgo)} points in 7 days.`,
-		`At risk is ${bands.atRiskMin}–${bands.healthyMin - 1}.`,
+			: `${breakdown.score < weekAgo ? "Down" : "Up"} ${Math.abs(breakdown.score - weekAgo)} points in 7 days`,
+		`at risk is ${bands.atRiskMin}–${bands.healthyMin - 1}`,
+		computedAt === null ? null : `computed ${formatRelative(computedAt, new Date(context.nowMs))}`,
 	]
 		.filter((part) => part !== null)
-		.join(" ")
-	return healthBreakdown(h, {
-		breakdown,
-		bands,
-		subtitle,
-		action: h.a(
+		.join(" · ")
+	return [
+		h.div(
+			[h.Class("rounded-xl border border-border bg-bg")],
 			[
-				h.Href(hrefOf(AppRoute.CustomersSettingsHealth({ orgSlug: context.orgSlug }))),
-				h.Class("shrink-0 text-primary text-sm hover:underline"),
-			],
-			["Edit weights"],
-		),
-		excludedAction: (key) =>
-			key === "billing"
-				? h.a(
-						[
-							h.Href(hrefOf(AppRoute.CustomersSettingsSources({ orgSlug: context.orgSlug }))),
-							h.Class("text-primary text-sm hover:underline"),
+				disclosure(
+					h,
+					{
+						summaryClassName: "px-4 py-3 text-sm",
+						summary: [
+							h.span(
+								[h.Class("shrink-0 font-medium text-fg")],
+								[`Why health is ${breakdown.score}`],
+							),
+							h.span([h.Class("min-w-0 truncate text-muted-fg text-xs max-sm:hidden")], [note]),
 						],
-						["Connect a billing source"],
-					)
-				: null,
-	})
+					},
+					[
+						h.div(
+							[h.Class("border-border border-t")],
+							[
+								healthBreakdown(h, {
+									breakdown,
+									bands,
+									isBare: true,
+									excludedAction: (key) =>
+										key === "billing"
+											? h.a(
+													[
+														h.Href(
+															hrefOf(
+																AppRoute.CustomersSettingsSources({
+																	orgSlug: context.orgSlug,
+																}),
+															),
+														),
+														h.Class(linkClass),
+													],
+													["Connect a billing source"],
+												)
+											: null,
+								}),
+								h.div(
+									[h.Class("flex justify-end border-border border-t px-4 py-2.5 sm:px-5")],
+									[
+										h.a(
+											[
+												h.Href(
+													hrefOf(
+														AppRoute.CustomersSettingsHealth({
+															orgSlug: context.orgSlug,
+														}),
+													),
+												),
+												h.Class(twMerge(linkClass, "text-xs")),
+											],
+											["Edit weights"],
+										),
+									],
+								),
+							],
+						),
+					],
+				),
+			],
+		),
+	]
 }
 
 // SIGNALS
@@ -484,120 +534,116 @@ const environmentLink = (
 			]
 }
 
-const signalsCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
-	const signals = openSignals(model)
-	return card(
-		h,
-		{
-			title: "Open signals",
-			count: signals.length,
-			aside: h.a(
-				[
-					h.Href(hrefOf(AppRoute.CustomersAttention({ orgSlug: context.orgSlug }))),
-					h.Class(
-						"inline-flex items-center gap-1 whitespace-nowrap text-primary text-sm hover:underline",
-					),
-				],
-				["Open in Needs attention", IconChevronRight(h, { className: "size-3" })],
-			),
-			bodyClassName: "p-0 sm:px-0",
-		},
-		[
-			...primaryNote(h, model, context),
-			...(signals.length === 0
-				? [
-						h.p(
-							[h.Class("px-4 pb-4 text-muted-fg text-sm sm:px-5")],
-							["Nothing needs attention on this account."],
-						),
-					]
-				: signals.map((signal) =>
-						h.div(
+const SEVERITY_RANK = { high: 0, medium: 1, low: 2 } as const satisfies Record<
+	Customers.SignalSeverity,
+	number
+>
+
+/** Open first, then the most severe, then the newest. */
+const byUrgency = (left: SignalRow, right: SignalRow): number =>
+	(left.status === "snoozed" ? 1 : 0) - (right.status === "snoozed" ? 1 : 0) ||
+	SEVERITY_RANK[left.severity] - SEVERITY_RANK[right.severity] ||
+	right.openedAtMs - left.openedAtMs
+
+/**
+ * What needs someone, first on the page: each open signal says what happened and why, with its
+ * actions under it. With nothing open the block is left out; the pulse strip says how they are doing.
+ */
+const attentionSection = (h: HtmlBuilder<Message>, model: Model, context: Context): ReadonlyArray<Html> => {
+	const signals = [...openSignals(model)].sort(byUrgency)
+	if (signals.length === 0) return []
+	const now = new Date(context.nowMs)
+	return [
+		h.section(
+			[
+				h.AriaLabel("Needs attention"),
+				h.Class("flex min-w-0 flex-col rounded-xl border border-border bg-bg"),
+			],
+			[
+				h.div(
+					[h.Class("flex items-center justify-between gap-4 px-4 pt-3")],
+					[
+						h.span(
+							[h.Class("text-muted-fg text-xs")],
 							[
-								h.Key(signal.id),
-								h.Class(
-									"flex gap-4 border-border border-t px-4 py-4 first:border-t-0 sm:px-5",
-								),
+								signals.length === 1
+									? "Needs attention"
+									: `Needs attention · ${formatCount(signals.length)}`,
 							],
+						),
+						h.a(
 							[
-								h.div(
-									[h.Class("flex min-w-0 flex-1 flex-col gap-2")],
-									[
-										h.div(
-											[h.Class("flex flex-wrap items-center gap-2")],
-											[
-												severityChip(h, signal.severity),
-												h.span([h.Class("font-medium text-fg")], [signal.title]),
+								h.Href(hrefOf(AppRoute.CustomersAttention({ orgSlug: context.orgSlug }))),
+								h.Class(twMerge(linkClass, "inline-flex items-center gap-0.5 text-xs")),
+							],
+							["Queue", IconChevronRight(h, { className: "size-3" })],
+						),
+					],
+				),
+				...primaryNote(h, model, context),
+				...signals.map((signal, index) =>
+					h.div(
+						[
+							h.Key(signal.id),
+							h.Class(
+								twMerge(
+									"flex flex-col gap-1.5 px-4 pt-2 pb-3.5",
+									index > 0 && "border-border border-t pt-3.5",
+								),
+							),
+						],
+						[
+							h.div(
+								[h.Class("flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1")],
+								[
+									severityGlyph(h, signal.severity),
+									h.span([h.Class("font-medium text-fg")], [signal.title]),
+									h.span(
+										[h.Class("text-muted-fg text-xs")],
+										[
+											signal.status === "snoozed" && signal.snoozedUntilMs !== null
+												? `snoozed until ${formatDate(new Date(signal.snoozedUntilMs), { now })}`
+												: formatDate(new Date(signal.openedAtMs), { now }),
+										],
+									),
+									...environmentLink(h, model, context, signal),
+								],
+							),
+							h.p([h.Class("text-fg-2 text-sm")], [signal.reason]),
+							h.div(
+								[h.Class("flex flex-wrap items-center gap-1.5 pt-1")],
+								[
+									...signalButtons(h, model, signal, context.nowMs),
+									// The owner is in the header; an assignee is worth naming only when it is someone else.
+									...(signal.assigneeUserId === null ||
+									signal.assigneeUserId === context.account.ownerUserId
+										? []
+										: [
 												h.span(
-													[h.Class("text-muted-fg text-xs")],
+													[h.Class("ml-auto")],
 													[
-														signal.status === "snoozed" &&
-														signal.snoozedUntilMs !== null
-															? `snoozed until ${formatDate(new Date(signal.snoozedUntilMs), { now: new Date(context.nowMs) })}`
-															: `· opened ${formatDate(new Date(signal.openedAtMs), { now: new Date(context.nowMs) })}`,
+														personLabel(
+															h,
+															memberOf(context, signal.assigneeUserId),
+														),
 													],
 												),
-												...environmentLink(h, model, context, signal),
-											],
-										),
-										h.p([h.Class("text-fg-2 text-sm")], [signal.reason]),
-										h.div(
-											[h.Class("flex flex-wrap items-center gap-1.5")],
-											signalButtons(h, model, signal, context.nowMs),
-										),
-									],
-								),
-								h.div(
-									[h.Class("flex shrink-0 flex-col items-end gap-2 max-sm:hidden")],
-									[
-										evidenceViz(h, signal.evidence),
-										personLabel(h, memberOf(context, signal.assigneeUserId)),
-									],
-								),
-							],
-						),
-					)),
-		],
-	)
+											]),
+								],
+							),
+						],
+					),
+				),
+			],
+		),
+	]
 }
 
 // SUPPORT
 
-const supportStat = (
-	h: HtmlBuilder<Message>,
-	label: string,
-	value: string,
-	options: Readonly<{ detail?: string; tone?: "danger" }> = {},
-): Html =>
-	h.div(
-		[h.Class("flex min-w-0 flex-col gap-0.5")],
-		[
-			h.span([h.Class("truncate text-muted-fg text-xs")], [label]),
-			h.span(
-				[h.Class("flex min-w-0 items-baseline gap-1.5")],
-				[
-					h.span(
-						[
-							h.Class(
-								twMerge(
-									"font-semibold text-fg text-lg tabular-nums",
-									options.tone === "danger" && "text-danger-subtle-fg",
-								),
-							),
-						],
-						[value],
-					),
-					...(options.detail === undefined
-						? []
-						: [h.span([h.Class("truncate text-muted-fg text-xs")], [options.detail])]),
-				],
-			),
-		],
-	)
-
 /**
  * Open issues, how many are overdue (live), and the median first response over 30 days (the
- * Support report's row). Hidden for a customer with no support history.
+ * Support report's row), in one line. Left out for a customer with no support history.
  */
 export const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
 	const issues = model.supportIssues ?? []
@@ -608,169 +654,61 @@ export const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Cont
 	const overdue = open.filter((issue) => overdueByMs(slasById.get(issue.id), context.nowMs) !== null).length
 	const isLoading = AsyncData.isLoading(model.support) || AsyncData.isIdle(model.support)
 	const hasFailed = AsyncData.isFailure(model.support)
-	return card(
-		h,
-		{
-			title: "Support",
-			aside: h.a(
-				[h.Href(hrefOf(AppRoute.CustomersInbox({ orgSlug: context.orgSlug }))), h.Class(linkClass)],
+	const part = (label: string, value: string, tone?: "danger") =>
+		h.span(
+			[h.Class("inline-flex items-baseline gap-1.5 whitespace-nowrap")],
+			[
+				h.span(
+					[
+						h.Class(
+							twMerge(
+								"font-medium text-fg tabular-nums",
+								tone === "danger" && "text-danger-subtle-fg",
+							),
+						),
+					],
+					[value],
+				),
+				h.span([h.Class("text-muted-fg")], [label]),
+			],
+		)
+	return h.section(
+		[
+			h.AriaLabel("Support"),
+			h.Class(
+				"flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border bg-bg px-4 py-3 text-sm",
+			),
+		],
+		[
+			h.span([h.Class("font-medium text-fg")], ["Support"]),
+			part(open.length === 1 ? "open issue" : "open issues", formatCount(open.length)),
+			part("overdue", formatCount(overdue), overdue > 0 ? "danger" : undefined),
+			hasFailed
+				? button(h, { intent: "plain", size: "xs", onPress: Message.PressedRetrySupport() }, [
+						IconArrowPath(h, icon),
+						"First response couldn't load · Retry",
+					])
+				: part(
+						row?.firstResponse.withinPct == null
+							? "median first response · 30d"
+							: `median first response · ${formatWithin(row.firstResponse.withinPct)} in SLA`,
+						isLoading ? "…" : formatResponse(row?.firstResponse.medianMs ?? null),
+					),
+			h.a(
+				[
+					h.Href(hrefOf(AppRoute.CustomersInbox({ orgSlug: context.orgSlug }))),
+					h.Class(twMerge(linkClass, "ml-auto text-xs")),
+				],
 				["Support inbox"],
 			),
-			bodyClassName: "grid grid-cols-3 gap-4",
-		},
-		[
-			supportStat(h, "Open issues", formatCount(open.length)),
-			supportStat(h, "Overdue", formatCount(overdue), overdue > 0 ? { tone: "danger" } : {}),
-			hasFailed
-				? h.div(
-						[h.Class("flex min-w-0 flex-col items-start gap-0.5")],
-						[
-							h.span([h.Class("truncate text-muted-fg text-xs")], ["First response · 30d"]),
-							button(
-								h,
-								{ intent: "plain", size: "xs", onPress: Message.PressedRetrySupport() },
-								[IconArrowPath(h, icon), "Couldn't load · Retry"],
-							),
-						],
-					)
-				: supportStat(
-						h,
-						"First response · 30d",
-						isLoading ? "…" : formatResponse(row?.firstResponse.medianMs ?? null),
-						row?.firstResponse.withinPct == null
-							? { detail: "median" }
-							: { detail: `median · ${formatWithin(row.firstResponse.withinPct)} in SLA` },
-					),
 		],
 	)
 }
 
-// SUBSCRIPTION, NOTES, ACTIVITY
-
-const factRow = (h: HtmlBuilder<Message>, label: string, value: string) =>
-	h.div(
-		[h.Class("flex items-baseline justify-between gap-4 py-1 text-sm")],
-		[
-			h.span([h.Class("text-muted-fg")], [label]),
-			h.span([h.Class("text-right text-fg tabular-nums")], [value]),
-		],
-	)
-
-const INTERVAL_LABEL = { month: "Monthly", year: "Yearly", other: "Custom" } as const
-
-const subscriptionCard = (h: HtmlBuilder<Message>, context: Context): Html => {
-	const subscriptions = context.detail?.subscriptions ?? []
-	const subscription = subscriptions.find((entry) => entry.status !== "canceled") ?? subscriptions[0]
-	const now = new Date(context.nowMs)
-	return card(
-		h,
-		{
-			title: "Subscription",
-			aside: headerLink(h, "View billing", Message.ClickedTab({ tab: "billing" })),
-		},
-		subscription === undefined
-			? [
-					h.p(
-						[h.Class("text-muted-fg text-sm")],
-						[context.detail === null ? "Loading…" : "No subscription from a billing source."],
-					),
-				]
-			: [
-					h.div(
-						[h.Class("flex items-end justify-between gap-4 pb-3")],
-						[
-							h.div(
-								[h.Class("flex flex-col gap-0.5")],
-								[
-									h.span(
-										[h.Class("font-semibold text-fg text-lg")],
-										[subscription.planName ?? "Unnamed plan"],
-									),
-									h.span(
-										[h.Class("text-muted-fg text-xs")],
-										[
-											`${INTERVAL_LABEL[subscription.interval]} · ${subscription.quantity} seat${subscription.quantity === 1 ? "" : "s"} · ${subscription.status.replace("_", " ")}`,
-										],
-									),
-								],
-							),
-							h.span(
-								[h.Class("font-semibold text-fg text-xl tabular-nums")],
-								[
-									formatMoney(subscription.mrrMinor, subscription.currency),
-									h.span([h.Class("font-normal text-muted-fg text-sm")], [" / mo"]),
-								],
-							),
-						],
-					),
-					...(subscription.currentPeriodEnd === null
-						? []
-						: [
-								factRow(
-									h,
-									subscription.cancelAtPeriodEnd ? "Cancels" : "Next renewal",
-									formatDate(subscription.currentPeriodEnd, { now, withYear: true }),
-								),
-							]),
-					...(subscription.startedAt === null
-						? []
-						: [
-								factRow(
-									h,
-									"Started",
-									formatDate(subscription.startedAt, { now, withYear: true }),
-								),
-							]),
-					...(subscription.paymentMethod?.last4
-						? [
-								factRow(
-									h,
-									"Payment method",
-									`${subscription.paymentMethod.brand ?? "Card"} •••• ${subscription.paymentMethod.last4}`,
-								),
-							]
-						: []),
-				],
-	)
-}
+// NOTES AND ACTIVITY
 
 export const noteBody = (h: HtmlBuilder<Message>, body: string, className?: string): Html =>
 	h.div([h.Class(twMerge("text-fg text-sm [&_*]:text-sm", className))], [markdownView(h, body)])
-
-const pinnedNotesCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
-	const pinned = sortedNotes(model).filter((note) => note.pinned)
-	return card(
-		h,
-		{
-			title: "Pinned notes",
-			count: pinned.length,
-			aside: headerLink(h, "All notes", Message.ClickedTab({ tab: "notes" })),
-		},
-		pinned.length === 0
-			? [h.p([h.Class("text-muted-fg text-sm")], ["Pin a note to keep it here."])]
-			: pinned
-					.slice(0, 3)
-					.map((note) =>
-						h.div(
-							[
-								h.Key(note.id),
-								h.Class(
-									"mb-2 flex flex-col gap-1 rounded-lg border border-border p-3 last:mb-0",
-								),
-							],
-							[
-								noteBody(h, note.body, "line-clamp-4"),
-								h.span(
-									[h.Class("text-muted-fg text-xs")],
-									[
-										`${memberOf(context, note.authorUserId)?.name ?? "Someone"} · ${formatDate(new Date(note.createdAtMs), { now: new Date(context.nowMs) })}`,
-									],
-								),
-							],
-						),
-					),
-	)
-}
 
 export const eventTime = (event: Customers.Event, nowMs: number): string => {
 	const at = msOf(event.occurredAt)
@@ -779,48 +717,76 @@ export const eventTime = (event: Customers.Event, nowMs: number): string => {
 		: formatDate(new Date(at), { now: new Date(nowMs) })
 }
 
-const activityCard = (h: HtmlBuilder<Message>, context: Context): Html => {
+const actorOf = (context: Context, event: Customers.Event): string =>
+	memberOf(context, event.actorUserId)?.name ??
+	(event.provider === "hazel" ? "Hazel" : event.provider[0].toUpperCase() + event.provider.slice(1))
+
+/** Pinned notes, then the latest events: one feed, the way the Activity tab reads in full. */
+const activitySection = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+	const pinned = sortedNotes(model)
+		.filter((note) => note.pinned)
+		.slice(0, 3)
 	const events = context.detail?.recentEvents ?? []
-	return card(
-		h,
-		{
-			title: "Recent activity",
-			aside: headerLink(h, "Full timeline", Message.ClickedTab({ tab: "activity" })),
-			bodyClassName: "p-0 sm:px-0",
-		},
-		events.length === 0
-			? [
-					h.p(
-						[h.Class("px-4 pb-4 text-muted-fg text-sm sm:px-5")],
-						[context.detail === null ? "Loading…" : "No activity yet."],
-					),
-				]
-			: events.map((event) =>
-					h.div(
-						[
-							h.Key(event.id),
-							h.Class(
-								"flex items-start gap-3 border-border border-t px-4 py-3 first:border-t-0 sm:px-5",
-							),
-						],
-						[
-							sourceMark(h, event.provider, { className: "size-7" }),
-							h.div(
-								[h.Class("flex min-w-0 flex-1 flex-col")],
-								[
-									h.span([h.Class("truncate font-medium text-fg text-sm")], [event.title]),
-									h.span([h.Class("text-muted-fg text-xs")], [event.type]),
-								],
-							),
-							h.span(
-								[h.Class("shrink-0 text-muted-fg text-xs")],
-								[
-									`${memberOf(context, event.actorUserId)?.name ?? (event.provider === "hazel" ? "Hazel" : event.provider[0].toUpperCase() + event.provider.slice(1))} · ${eventTime(event, context.nowMs)}`,
-								],
-							),
-						],
-					),
+	const now = new Date(context.nowMs)
+	return h.section(
+		[h.AriaLabel("Activity"), h.Class("flex min-w-0 flex-col gap-2")],
+		[
+			sectionTitle(
+				h,
+				"Activity",
+				headerLink(h, "Full timeline", Message.ClickedTab({ tab: "activity" })),
+			),
+			...pinned.map((note) =>
+				h.div(
+					[
+						h.Key(note.id),
+						h.Class("flex gap-3 rounded-lg border border-border bg-secondary/40 px-3 py-2.5"),
+					],
+					[
+						IconPin(h, { className: "mt-0.5 size-3.5 shrink-0 text-muted-fg" }),
+						h.div(
+							[h.Class("flex min-w-0 flex-1 flex-col gap-1")],
+							[
+								noteBody(h, note.body, "line-clamp-3"),
+								h.span(
+									[h.Class("text-muted-fg text-xs")],
+									[
+										`${memberOf(context, note.authorUserId)?.name ?? "Someone"} · ${formatDate(new Date(note.createdAtMs), { now })}`,
+									],
+								),
+							],
+						),
+					],
 				),
+			),
+			events.length === 0
+				? h.p(
+						[h.Class("py-2 text-muted-fg text-sm")],
+						[context.detail === null ? "Loading…" : "No activity yet."],
+					)
+				: h.ul(
+						[h.Class("flex flex-col")],
+						events.map((event) =>
+							h.li(
+								[h.Key(event.id), h.Class("flex items-center gap-3 py-2")],
+								[
+									sourceMark(h, event.provider, { size: "xs" }),
+									h.span(
+										[
+											h.Class("min-w-0 flex-1 truncate text-fg text-sm"),
+											h.Title(event.title),
+										],
+										[event.title],
+									),
+									h.span(
+										[h.Class("shrink-0 whitespace-nowrap text-muted-fg text-xs")],
+										[`${actorOf(context, event)} · ${eventTime(event, context.nowMs)}`],
+									),
+								],
+							),
+						),
+					),
+		],
 	)
 }
 
@@ -830,14 +796,16 @@ export const overviewTab = (
 	context: Context,
 	bands: Customers.HealthBands,
 ): ReadonlyArray<Html> => [
-	kpis(h, context),
-	usageCard(h, model, context),
-	healthCard(h, model, context, bands),
-	signalsCard(h, model, context),
-	supportCard(h, model, context),
 	h.div(
-		[h.Class("grid gap-4 lg:grid-cols-2")],
-		[subscriptionCard(h, context), pinnedNotesCard(h, model, context)],
+		[h.Class("flex min-w-0 flex-col gap-6")],
+		[
+			...attentionSection(h, model, context),
+			h.div(
+				[h.Class("flex min-w-0 flex-col gap-3")],
+				[pulse(h, context), ...healthSection(h, context, bands), supportCard(h, model, context)],
+			),
+			usageSection(h, model, context),
+			activitySection(h, model, context),
+		],
 	),
-	activityCard(h, context),
 ]

@@ -186,10 +186,10 @@ const LINK_LABEL = new Map([
 export const linkLabel = (link: CompanyLink): string =>
 	LINK_LABEL.get(link.type) ?? fundingStageLabel(link.type)
 
-/** The socials worth a chip, most useful first, at most `limit`. */
+/** The company's socials, most useful first. */
 const SOCIAL_ORDER = ["linkedin", "x", "twitter", "github", "crunchbase", "producthunt", "youtube"]
-export const headerSocials = (profile: CompanyProfile, limit = 3): ReadonlyArray<CompanyLink> =>
-	[...profile.socials].sort((a, b) => rankOf(a.type) - rankOf(b.type)).slice(0, limit)
+export const rankedSocials = (profile: CompanyProfile): ReadonlyArray<CompanyLink> =>
+	[...profile.socials].sort((a, b) => rankOf(a.type) - rankOf(b.type))
 
 const rankOf = (type: string) => {
 	const index = SOCIAL_ORDER.indexOf(type)

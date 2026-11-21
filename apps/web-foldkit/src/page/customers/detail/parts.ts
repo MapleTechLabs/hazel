@@ -3,6 +3,7 @@ import type { UserId } from "@hazel/schema"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
+import { IconChevronRight } from "../../../icons"
 import { heading } from "../../../ui/heading"
 import type * as Menu from "../../../ui/menu"
 import { view as menuView } from "../../../ui/menu-view"
@@ -172,6 +173,43 @@ export const sidebarSection = (
 				[
 					heading(h, { variant: "subsection", level: 2 }, [title]),
 					...(aside === null ? [] : [h.span([h.Class("text-muted-fg text-xs")], [aside])]),
+				],
+			),
+			...children,
+		],
+	)
+
+/**
+ * A native `<details>`: the summary toggles the rest open, with no Model state (the keyboard, touch
+ * and screen readers reach it as they would any disclosure). The chevron turns when open.
+ */
+export const disclosure = (
+	h: HtmlBuilder<Message>,
+	options: Readonly<{
+		summary: ReadonlyArray<Html | string>
+		className?: string
+		summaryClassName?: string
+	}>,
+	children: ReadonlyArray<Html>,
+): Html =>
+	h.details(
+		[h.Class(twMerge("group/disclosure min-w-0", options.className))],
+		[
+			h.summary(
+				[
+					h.Class(
+						twMerge(
+							"flex min-w-0 cursor-pointer list-none items-center gap-1.5 rounded-sm text-muted-fg text-xs outline-hidden transition-colors hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70 [&::-webkit-details-marker]:hidden",
+							options.summaryClassName,
+						),
+					),
+				],
+				[
+					IconChevronRight(h, {
+						className:
+							"size-3 shrink-0 transition-transform duration-150 group-open/disclosure:rotate-90",
+					}),
+					...options.summary,
 				],
 			),
 			...children,

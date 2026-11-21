@@ -54,6 +54,8 @@ export const healthBreakdown = <M>(
 		action?: Html
 		/** Under an excluded component's why: `Link a billing record`. */
 		excludedAction?: (key: HealthComponentKey) => Html | null
+		/** Inside a disclosure that already names the score: no title row, border or radius. */
+		isBare?: boolean
 		className?: string
 	}>,
 ): Html => {
@@ -67,6 +69,7 @@ export const healthBreakdown = <M>(
 			h.Class(
 				twMerge(
 					"flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-bg",
+					options.isBare === true && "rounded-none border-0 bg-transparent",
 					options.className,
 				),
 			),
@@ -75,31 +78,43 @@ export const healthBreakdown = <M>(
 			h.header(
 				[h.Class("flex flex-col gap-3 p-4 sm:p-5")],
 				[
-					h.div(
-						[h.Class("flex flex-wrap items-start justify-between gap-x-4 gap-y-1")],
-						[
-							h.div(
-								[h.Class("flex min-w-0 flex-1 basis-48 flex-col gap-1")],
-								[
-									heading(
-										h,
-										{
-											variant: "section",
-											className: "flex flex-wrap items-center gap-x-2 gap-y-1",
-										},
-										[
-											score === null ? "No health score yet" : `Why health is ${score}`,
-											healthBadge(h, { status: breakdown.status }),
-										],
-									),
-									...(options.subtitle
-										? [h.p([h.Class("text-muted-fg text-sm")], [options.subtitle])]
-										: []),
-								],
-							),
-							...(options.action ? [options.action] : []),
-						],
-					),
+					...(options.isBare === true
+						? []
+						: [
+								h.div(
+									[h.Class("flex flex-wrap items-start justify-between gap-x-4 gap-y-1")],
+									[
+										h.div(
+											[h.Class("flex min-w-0 flex-1 basis-48 flex-col gap-1")],
+											[
+												heading(
+													h,
+													{
+														variant: "section",
+														className:
+															"flex flex-wrap items-center gap-x-2 gap-y-1",
+													},
+													[
+														score === null
+															? "No health score yet"
+															: `Why health is ${score}`,
+														healthBadge(h, { status: breakdown.status }),
+													],
+												),
+												...(options.subtitle
+													? [
+															h.p(
+																[h.Class("text-muted-fg text-sm")],
+																[options.subtitle],
+															),
+														]
+													: []),
+											],
+										),
+										...(options.action ? [options.action] : []),
+									],
+								),
+							]),
 					h.div(
 						[
 							h.Role("img"),

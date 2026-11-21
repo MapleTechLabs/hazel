@@ -7,9 +7,9 @@ import {
 	countryFlag,
 	employeesLabel,
 	fundingLabel,
-	headerSocials,
 	headquartersLabel,
 	linkLabel,
+	rankedSocials,
 	revenueLabel,
 	usdLabel,
 } from "../../../customers/company"
@@ -18,11 +18,11 @@ import { IconArrowPath, IconLink } from "../../../icons"
 import { button } from "../../../ui/button"
 import { Message } from "./message"
 import { isCompanyRefreshPending, isCompanyRefreshUnanswered, type Model } from "./model"
-import { type Context, icon, property, sidebarSection } from "./parts"
+import { type Context, disclosure, icon, property, sidebarSection } from "./parts"
 
 /**
  * The customer's company, enriched from its domain (`docs/customers/enrichment.md`): the sidebar's
- * Company section, and the description and social links in the header. Every field may be missing.
+ * Company section: the description and key facts, the rest behind More. Every field may be missing.
  */
 
 /** Only `https:` links leave the page (the profile is third-party data). */
@@ -53,24 +53,6 @@ const linkChip = (h: HtmlBuilder<Message>, link: CompanyLink): ReadonlyArray<Htm
 					[IconLink(h, { className: "size-3.5 text-muted-fg" }), linkLabel(link)],
 				),
 			]
-}
-
-/** The company's one-line description, for under the header's meta line. */
-export const companyDescription = (h: HtmlBuilder<Message>, context: Context): ReadonlyArray<Html> => {
-	const description = context.account.company?.description ?? null
-	return description === null
-		? []
-		: [h.p([h.Class("line-clamp-2 max-w-2xl text-fg-2 text-sm")], [description])]
-}
-
-/** The company's main social links, as chips beside the source chips. */
-export const companySocialChips = (h: HtmlBuilder<Message>, context: Context): ReadonlyArray<Html> => {
-	const company = context.account.company
-	if (company === null) return []
-	const chips = headerSocials(company).flatMap((link) => linkChip(h, link))
-	return chips.length === 0
-		? []
-		: [h.span([h.AriaHidden(true), h.Class("mx-1 h-4 w-px bg-border max-md:hidden")]), ...chips]
 }
 
 const muted = (h: HtmlBuilder<Message>, text: string) => h.span([h.Class("text-muted-fg")], [text])
@@ -145,12 +127,15 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 	const headquarters = headquartersLabel(company)
 	const address = addressLabel(company)
 	const type = companyTypeLabel(company)
-	// The socials the header has no room for, then the pages.
-	const shown = new Set(headerSocials(company).map((link) => link.type))
-	const links = [
-		...company.socials.filter((link) => !shown.has(link.type)),
-		...companyPages(company),
-	].flatMap((link) => linkChip(h, link))
+	const links = [...rankedSocials(company), ...companyPages(company)].flatMap((link) => linkChip(h, link))
+	const description = company.description
+	const more = [
+		property(h, "Founded", company.foundedYear === null ? muted(h, "—") : String(company.foundedYear)),
+		...(type === null ? [] : [property(h, "Type", type)]),
+		...(latestLabel === null ? [] : [property(h, "Last round", latestLabel)]),
+		property(h, "Est. revenue", withDetail(h, revenueLabel(company), null)),
+		...(links.length === 0 ? [] : [h.div([h.Class("flex flex-wrap gap-1.5 pt-2")], links)]),
+	]
 
 	return sidebarSection(h, "Company", null, [
 		h.div(
@@ -165,6 +150,9 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 				refreshButton(h, { label: "Refresh company profile", isPending, iconOnly: true }),
 			],
 		),
+		...(description === null
+			? []
+			: [h.p([h.Class("line-clamp-3 pb-1.5 text-fg-2 text-sm"), h.Title(description)], [description])]),
 		property(
 			h,
 			"Industry",
@@ -207,11 +195,9 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 						[flag === "" ? headquarters : `${flag} ${headquarters}`],
 					),
 		),
-		property(h, "Founded", company.foundedYear === null ? muted(h, "—") : String(company.foundedYear)),
-		...(type === null ? [] : [property(h, "Type", type)]),
 		property(h, "Funding", withDetail(h, fundingLabel(company), null)),
-		...(latestLabel === null ? [] : [property(h, "Last round", latestLabel)]),
-		property(h, "Est. revenue", withDetail(h, revenueLabel(company), null)),
-		...(links.length === 0 ? [] : [h.div([h.Class("flex flex-wrap gap-1.5 pt-2")], links)]),
+		disclosure(h, { summary: ["More"], className: "pt-1.5", summaryClassName: "py-1" }, [
+			h.div([h.Class("pt-1")], more),
+		]),
 	])
 }
