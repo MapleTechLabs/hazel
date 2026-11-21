@@ -5,3 +5,4 @@ src/chat/messages-*.png
 src/chat/grids/
 src/overlay/command-palette/palette-*.png
 src/page/customers/detail/company-*.png
+src/page/customers/list/company-*.png

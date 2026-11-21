@@ -8,6 +8,7 @@ import {
 	employeesLabel,
 	fundingLabel,
 	fundingStageLabel,
+	fundingStageRank,
 	headerSocials,
 	headquartersLabel,
 	revenueLabel,
@@ -32,6 +33,20 @@ describe("company profile labels", () => {
 		expect(addressLabel(SPARSE_COMPANY)).toBeNull()
 		expect(employeesLabel({ ...SPARSE_COMPANY, employeeRange: null })).toBeNull()
 		expect(employeesLabel({ ...SPARSE_COMPANY, employeeRange: null, employeeCount: 1204 })).toBe("1,204")
+	})
+
+	it("ranks funding stages by a company's life", () => {
+		const stages = ["ipo", "series_b", "grant", "seed", "series_a_2", "pre_seed", "series_a", "series_c"]
+		expect([...stages].sort((a, b) => fundingStageRank(a) - fundingStageRank(b))).toEqual([
+			"pre_seed",
+			"seed",
+			"series_a",
+			"series_a_2",
+			"series_b",
+			"series_c",
+			"ipo",
+			"grant",
+		])
 	})
 
 	it("formats stages, open revenue ranges, tickers and flags", () => {

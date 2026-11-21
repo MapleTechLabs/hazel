@@ -28,17 +28,25 @@ const regionNames = (() => {
 	}
 })()
 
+/** `DE` → `Germany`; the code itself when the browser knows no name for it. */
+export const countryNameOf = (code: string): string => {
+	try {
+		return regionNames?.of(code.toUpperCase()) ?? code
+	} catch {
+		return code
+	}
+}
+
+/** The headquarters' country code, upper case (`DE`). */
+export const countryCodeOf = (profile: CompanyProfile): string | null =>
+	profile.headquarters?.countryCode?.toUpperCase() ?? null
+
 /** `Germany`, from the profile or its country code. */
 export const countryName = (profile: CompanyProfile): string | null => {
 	const hq = profile.headquarters
 	if (hq === null) return null
 	if (hq.country !== null) return hq.country
-	if (hq.countryCode === null) return null
-	try {
-		return regionNames?.of(hq.countryCode.toUpperCase()) ?? hq.countryCode
-	} catch {
-		return hq.countryCode
-	}
+	return hq.countryCode === null ? null : countryNameOf(hq.countryCode)
 }
 
 /** `Berlin, Germany`; the city or the country alone when only one is known. */
@@ -84,11 +92,32 @@ export const fundingStageLabel = (stage: string): string => {
 	return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
+const EARLY_STAGES = ["pre_seed", "angel", "seed"]
+const LATE_STAGES = ["ipo", "post_ipo_equity", "post_ipo_debt", "private_equity"]
+
+/**
+ * Where a stage falls in a company's life, for sorting: pre-seed, angel, seed, series A…Z (and their
+ * extensions), then IPO and later; anything else (grants, debt, undisclosed) after those.
+ */
+export const fundingStageRank = (stage: string): number => {
+	const early = EARLY_STAGES.indexOf(stage)
+	if (early !== -1) return early
+	const series = /^series_([a-z])(?:_?(\d+))?$/i.exec(stage)
+	if (series !== null)
+		return 10 + ((series[1] ?? "a").toLowerCase().charCodeAt(0) - 97) * 10 + Number(series[2] ?? 0)
+	const late = LATE_STAGES.indexOf(stage)
+	return late !== -1 ? 1_000 + late : 2_000
+}
+
+/** The stage as the source names it (`series_b`): the profile's, else its latest round's. */
+export const fundingStageOf = (profile: CompanyProfile): string | null =>
+	profile.funding === null ? null : (profile.funding.stage ?? profile.funding.rounds[0]?.type ?? null)
+
 /** `Series B`, with what was raised in total: `Series B · $58M`. */
 export const fundingLabel = (profile: CompanyProfile): string | null => {
 	const funding = profile.funding
 	if (funding === null) return null
-	const stage = funding.stage ?? funding.rounds[0]?.type ?? null
+	const stage = fundingStageOf(profile)
 	const parts = [
 		stage === null ? null : fundingStageLabel(stage),
 		funding.totalUsd === null ? null : usdLabel(funding.totalUsd),

@@ -34,6 +34,7 @@ const STATES = [
 	"at-risk",
 	"filter",
 	"columns",
+	"company",
 	"bulk",
 	"hover",
 	"no-results",
@@ -200,6 +201,14 @@ const stateOf = (state: typeof State.Type) => {
 		case "columns":
 			return run(loadedList(null).model, [
 				Message.GotColumnsPopoverMessage({ message: Popover.Message.RequestedOpen() }),
+			])
+		case "company":
+			// The enriched company columns, and a filter by one of them.
+			return run(loadedList(null).model, [
+				...(["industry", "company_size", "headquarters", "funding"] as const).map((column) =>
+					Message.ToggledColumn({ column, isShown: true }),
+				),
+				Message.PressedEditFilter({ field: "industry" }),
 			])
 		case "bulk": {
 			const base = loadedList(null)

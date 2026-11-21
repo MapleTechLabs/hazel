@@ -4,6 +4,7 @@ import { twMerge } from "tailwind-merge"
 import { distributionBar } from "../../../customers/charts/distribution"
 import { currencySymbol, formatCount, formatMoney, toMajor, toMinor } from "../../../customers/format"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
+import { countryFlag, countryNameOf, fundingStageLabel } from "../../../customers/company"
 import { HEALTH_FILL, HEALTH_LABEL, STAGE_LABEL } from "../../../customers/ui/badges"
 import { IconChevronDown, IconChevronRight } from "../../../icons"
 import { button } from "../../../ui/button"
@@ -14,8 +15,11 @@ import { Message } from "./message"
 import {
 	type Builder,
 	COLUMN_NAME,
+	countriesOf,
 	type FilterField,
+	fundingStagesOf,
 	hiddenColumns,
+	industriesOf,
 	matchesFilters,
 	plansOf,
 	shownColumns,
@@ -36,6 +40,10 @@ const FIELD_LABEL = {
 	mrr: "MRR",
 	last_active: "Last active",
 	signals: "Open risk signals",
+	industry: "Industry",
+	company_size: "Company size",
+	country: "HQ country",
+	funding: "Funding stage",
 } as const satisfies Record<FilterField, string>
 
 const FIELD_KIND = {
@@ -47,6 +55,10 @@ const FIELD_KIND = {
 	mrr: "Amount",
 	last_active: "Date",
 	signals: "Yes / no",
+	industry: "Select",
+	company_size: "Select",
+	country: "Select",
+	funding: "Select",
 } as const satisfies Record<FilterField, string>
 
 const FIELD_GROUPS: ReadonlyArray<readonly [string, ReadonlyArray<FilterField>]> = [
@@ -54,6 +66,7 @@ const FIELD_GROUPS: ReadonlyArray<readonly [string, ReadonlyArray<FilterField>]>
 	["Health and usage", ["health", "last_active"]],
 	["Revenue", ["mrr"]],
 	["Signals", ["signals"]],
+	["Company", ["industry", "company_size", "country", "funding"]],
 ]
 
 const FIELD_DESCRIPTION = {
@@ -65,6 +78,10 @@ const FIELD_DESCRIPTION = {
 	mrr: "Monthly recurring revenue, in your reporting currency.",
 	last_active: "Most recent activity from any contact, from Maple events and Clerk sign-ins.",
 	signals: "Whether the account has an open risk signal now.",
+	industry: "The company's industry, from its enriched profile.",
+	company_size: "The company's headcount, from its enriched profile.",
+	country: "Where the company has its headquarters, from its enriched profile.",
+	funding: "The company's latest funding stage, from its enriched profile.",
 } as const satisfies Record<FilterField, string>
 
 // CHIPS
@@ -95,6 +112,14 @@ export const chipOf = (
 			return anyOf(filters.planNames)
 		case "tag":
 			return anyOf(filters.tagsAny)
+		case "industry":
+			return anyOf(filters.industries)
+		case "company_size":
+			return anyOf(filters.employeeRanges?.map((range) => Customers.EMPLOYEE_RANGE_LABEL[range]))
+		case "country":
+			return anyOf(filters.countryCodes?.map(countryNameOf))
+		case "funding":
+			return anyOf(filters.fundingStages?.map(fundingStageLabel))
 		case "owner": {
 			const names = [
 				...(filters.ownedByMe ? ["Me"] : []),
@@ -232,6 +257,11 @@ const numberField = (
 
 const DAY_PRESETS = [7, 14, 30, 60, 90] as const
 
+/** A company filter with nothing to offer: no account's profile has the value yet. */
+const noneYet = (h: HtmlBuilder<Message>, text: string): ReadonlyArray<Html> => [
+	h.p([h.Class("px-2 text-muted-fg text-sm")], [text]),
+]
+
 const editor = (
 	h: HtmlBuilder<Message>,
 	builder: Builder,
@@ -290,6 +320,61 @@ const editor = (
 							tag,
 							pending.tagsAny?.includes(tag) ?? false,
 							withFilter(pending, "tagsAny", toggleIn(pending.tagsAny, tag)),
+						),
+					)
+		}
+		case "industry": {
+			const industries = industriesOf(accounts, pending.industries)
+			return industries.length === 0
+				? noneYet(h, "No company has an industry on record yet.")
+				: industries.map((industry) =>
+						option(
+							h,
+							optionId(industry),
+							industry,
+							pending.industries?.includes(industry) ?? false,
+							withFilter(pending, "industries", toggleIn(pending.industries, industry)),
+						),
+					)
+		}
+		case "company_size":
+			return Customers.EmployeeRange.literals.map((range) =>
+				option(
+					h,
+					optionId(range),
+					Customers.EMPLOYEE_RANGE_LABEL[range],
+					pending.employeeRanges?.includes(range) ?? false,
+					withFilter(pending, "employeeRanges", toggleIn(pending.employeeRanges, range)),
+				),
+			)
+		case "country": {
+			const countries = countriesOf(accounts, pending.countryCodes)
+			return countries.length === 0
+				? noneYet(h, "No company has a headquarters on record yet.")
+				: countries.map(({ code, name }) =>
+						option(
+							h,
+							optionId(code),
+							h.span(
+								[h.Class("inline-flex items-center gap-2")],
+								[h.span([h.AriaHidden(true)], [countryFlag(code)]), name],
+							),
+							pending.countryCodes?.includes(code) ?? false,
+							withFilter(pending, "countryCodes", toggleIn(pending.countryCodes, code)),
+						),
+					)
+		}
+		case "funding": {
+			const stages = fundingStagesOf(accounts, pending.fundingStages)
+			return stages.length === 0
+				? noneYet(h, "No company has funding on record yet.")
+				: stages.map((stage) =>
+						option(
+							h,
+							optionId(stage),
+							fundingStageLabel(stage),
+							pending.fundingStages?.includes(stage) ?? false,
+							withFilter(pending, "fundingStages", toggleIn(pending.fundingStages, stage)),
 						),
 					)
 		}

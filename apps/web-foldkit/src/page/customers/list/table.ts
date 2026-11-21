@@ -1,7 +1,8 @@
-import type * as Customers from "@hazel/domain/customers"
+import * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { sparkline } from "../../../customers/charts/sparkline"
+import { countryFlag, countryName, fundingStageLabel, headquartersLabel } from "../../../customers/company"
 import {
 	deltaTone,
 	formatCount,
@@ -25,7 +26,7 @@ import type { Column } from "../../../customers/ui/data-table"
 import { primaryCell } from "../../../customers/ui/data-table"
 import { companyLogo, personAvatar } from "../../../customers/ui/identity"
 import { customerRoute, hrefOf } from "../../../route"
-import { COLUMN_LABEL } from "./model"
+import { COLUMN_LABEL, countryOf, employeeRangeOf, fundingOf, industryOf } from "./model"
 
 /** The table's columns: each one's cell, footer and CSV value. */
 
@@ -104,7 +105,40 @@ export const csvValue = (
 			return new Date(account.firstSeenAtMs).toISOString().slice(0, 10)
 		case "tags":
 			return account.tags.join("; ")
+		case "industry":
+			return industryOf(account) ?? ""
+		case "company_size": {
+			const range = employeeRangeOf(account)
+			return range === null ? "" : Customers.EMPLOYEE_RANGE_LABEL[range]
+		}
+		case "headquarters":
+			return account.company === null ? "" : (headquartersLabel(account.company) ?? "")
+		case "funding": {
+			const stage = fundingOf(account)
+			return stage === null ? "" : fundingStageLabel(stage)
+		}
 	}
+}
+
+/** A text cell that truncates, its full text (or more detail) in the tooltip. */
+const textCell = <M>(h: HtmlBuilder<M>, text: string | null, title: string | null = text): Html =>
+	text === null
+		? muted(h, "—")
+		: h.span([h.Class("block max-w-40 truncate"), h.Title(title ?? text)], [text])
+
+/** The flag and the city (else the country): `🇩🇪 Berlin`, `Berlin, Germany` in the tooltip. */
+const headquartersCell = <M>(h: HtmlBuilder<M>, account: AccountRow): Html => {
+	const company = account.company
+	const place = company === null ? null : (company.headquarters?.city ?? countryName(company))
+	if (company === null || place === null) return muted(h, "—")
+	const flag = countryFlag(countryOf(account))
+	return h.span(
+		[h.Class("flex min-w-0 max-w-40 items-center gap-1.5"), h.Title(headquartersLabel(company) ?? place)],
+		[
+			...(flag === "" ? [] : [h.span([h.AriaHidden(true)], [flag])]),
+			h.span([h.Class("truncate")], [place]),
+		],
+	)
 }
 
 /** A spreadsheet runs a cell starting with one of these as a formula; plain numbers stay numbers. */
@@ -300,6 +334,20 @@ const cellOf = <M>(
 							),
 						),
 					)
+		case "industry":
+			return textCell(h, industryOf(account), account.company?.subindustry ?? industryOf(account))
+		case "company_size": {
+			const range = employeeRangeOf(account)
+			return range === null
+				? muted(h, "—")
+				: h.span([h.Class("whitespace-nowrap")], [Customers.EMPLOYEE_RANGE_LABEL[range]])
+		}
+		case "headquarters":
+			return headquartersCell(h, account)
+		case "funding": {
+			const stage = fundingOf(account)
+			return textCell(h, stage === null ? null : fundingStageLabel(stage))
+		}
 	}
 }
 
@@ -323,6 +371,10 @@ const COLUMN_LAYOUT = {
 	open_signals: { widthClass: "w-22", hideClass: "@max-6xl:hidden" },
 	customer_since: { align: "right", widthClass: "w-22", hideClass: "@max-[86rem]:hidden" },
 	tags: { widthClass: "w-40", hideClass: "@max-[96rem]:hidden" },
+	industry: { widthClass: "w-36", hideClass: "@max-6xl:hidden" },
+	company_size: { align: "right", widthClass: "w-24", hideClass: "@max-5xl:hidden" },
+	headquarters: { widthClass: "w-32", hideClass: "@max-6xl:hidden" },
+	funding: { widthClass: "w-28", hideClass: "@max-6xl:hidden" },
 } satisfies Record<
 	Customers.ListColumn,
 	Readonly<{ align?: "right"; widthClass?: string; hideClass?: string }>
