@@ -488,3 +488,16 @@ export const isCompanyRefreshPending = (model: Model, nowMs: number, checkedAtMs
 	model.companyRefreshAtMs !== null &&
 	nowMs - model.companyRefreshAtMs < COMPANY_REFRESH_PENDING_MS &&
 	(checkedAtMs === null || checkedAtMs < model.companyRefreshAtMs)
+
+/**
+ * This page asked for a lookup, the pending window passed, and the account was not checked since:
+ * the lookup failed (context.dev timed out, say). The object retries it after a backoff.
+ */
+export const isCompanyRefreshUnanswered = (
+	model: Model,
+	nowMs: number,
+	checkedAtMs: number | null,
+): boolean =>
+	model.companyRefreshAtMs !== null &&
+	!isCompanyRefreshPending(model, nowMs, checkedAtMs) &&
+	(checkedAtMs === null || checkedAtMs < model.companyRefreshAtMs)

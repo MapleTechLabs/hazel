@@ -39,11 +39,14 @@ const NOT_A_COMPANY: ReadonlySet<string> = new Set(["FREE_EMAIL_DETECTED", "DISP
 /** Nominal credits, for when an answer does not say what it cost. */
 const BRAND_CREDITS = 10
 const SEARCH_CREDITS = 2
-/** context.dev needs ≥ 10 s for a domain it has not seen; Brand's own deadline, under ours. */
-const BRAND_TIMEOUT_MS = 30_000
+/**
+ * Brand's own deadline, under ours. A domain context.dev has not seen takes ≥ 10 s and often over
+ * 30 s (it answers 408 past the deadline); lookups run in the background, so give it a minute.
+ */
+const BRAND_TIMEOUT_MS = 60_000
 /** A cached Brand profile up to this old will do (context.dev's own default: 3 months). */
 const MAX_CACHE_AGE_MS = 90 * 86_400_000
-const REQUESTS = { inlineRetries: 1, timeoutMs: 40_000 }
+const REQUESTS = { inlineRetries: 1, timeoutMs: 75_000 }
 
 type ContextDevPath = "/brand/retrieve" | "/company/search"
 

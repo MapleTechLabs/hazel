@@ -319,7 +319,7 @@ const controls = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, count: 
 		end: [
 			h.span(
 				[h.Class("text-muted-fg text-sm tabular-nums max-lg:hidden")],
-				[`${formatCount(count)} customers`],
+				[`${formatCount(count)} ${count === 1 ? "customer" : "customers"}`],
 			),
 			menu(h, model.sortMenu, {
 				entries: sortEntries,
