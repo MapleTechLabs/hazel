@@ -69,7 +69,9 @@ describe("customers.account.update domains", () => {
 				).toHaveLength(1)
 
 				yield* world.object.run(seedEnrichments(NOW))
-				expect(world.rows(`SELECT domain FROM customer_enrichments`)).toEqual([{ domain: "acme.com" }])
+				expect(world.rows(`SELECT domain FROM customer_enrichments`)).toEqual([
+					{ domain: "acme.com" },
+				])
 			}),
 		))
 })
