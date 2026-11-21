@@ -309,9 +309,7 @@ export const buildToolkit = (options: {
 			...buildLinearHandlers(options),
 			...buildCraftHandlers(options),
 		}
-		return Effect.gen(function* () {
-			return yield* LinearAndCraftToolkit
-		}).pipe(Effect.provide(LinearAndCraftToolkit.toLayer(handlers as any)))
+		return LinearAndCraftToolkit.pipe(Effect.provide(LinearAndCraftToolkit.toLayer(handlers as any)))
 	}
 
 	if (hasLinear) {
@@ -319,9 +317,7 @@ export const buildToolkit = (options: {
 			...baseHandlers,
 			...buildLinearHandlers(options),
 		}
-		return Effect.gen(function* () {
-			return yield* LinearToolkit
-		}).pipe(Effect.provide(LinearToolkit.toLayer(handlers as any)))
+		return LinearToolkit.pipe(Effect.provide(LinearToolkit.toLayer(handlers as any)))
 	}
 
 	if (hasCraft) {
@@ -329,12 +325,8 @@ export const buildToolkit = (options: {
 			...baseHandlers,
 			...buildCraftHandlers(options),
 		}
-		return Effect.gen(function* () {
-			return yield* CraftToolkit
-		}).pipe(Effect.provide(CraftToolkit.toLayer(handlers as any)))
+		return CraftToolkit.pipe(Effect.provide(CraftToolkit.toLayer(handlers as any)))
 	}
 
-	return Effect.gen(function* () {
-		return yield* BaseToolkit
-	}).pipe(Effect.provide(BaseToolkit.toLayer(baseHandlers)))
+	return BaseToolkit.pipe(Effect.provide(BaseToolkit.toLayer(baseHandlers)))
 }

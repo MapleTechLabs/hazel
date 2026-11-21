@@ -19,7 +19,7 @@ export const Message = defineMessageUnion({
 	ClickedTestNotification: {},
 	SucceededSendTestNotification: {},
 	FailedSendTestNotification: { reason: TestNotificationFailure },
-	ExpiredNotificationStatus: { version: Schema.Number },
+	ExpiredNotificationStatus: { version: Schema.Finite },
 	UpdatedUserRow: { row: Schema.NullOr(UserRow) },
 	ToggledDoNotDisturb: { isSelected: Schema.Boolean },
 	ToggledShowQuietHours: { isSelected: Schema.Boolean },

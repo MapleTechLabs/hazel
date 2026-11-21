@@ -13,6 +13,7 @@ import { ConfigProvider, Effect, Exit, Layer, Option, Schema } from "effect"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { createChatSyncDbHarness, type ChatSyncDbHarness } from "../test/chat-sync-db-harness"
 import { type InviteEmail, InviteMailer } from "./invite-mailer"
+import { Directory } from "./directory"
 import { Invitations } from "./invitations"
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
@@ -60,10 +61,17 @@ const run = <A, E, R>(
 		}).pipe(
 			Effect.provideService(CurrentUser.Context, actor(userId)),
 			Effect.provideService(CurrentRpcScopes, [scope]),
-			Effect.provide(Invitations.layer),
-			Effect.provide(CaptureMailer),
 			Effect.provide(
-				ConfigProvider.layer(ConfigProvider.fromUnknown({ FRONTEND_URL: "https://app.hazel.test" })),
+				Invitations.layer.pipe(
+					// The host's directory, over the same in-memory database.
+					Layer.provideMerge(Directory.layerDatabase),
+					Layer.provideMerge(CaptureMailer),
+					Layer.provideMerge(
+						ConfigProvider.layer(
+							ConfigProvider.fromUnknown({ FRONTEND_URL: "https://app.hazel.test" }),
+						),
+					),
+				),
 			),
 		),
 	)

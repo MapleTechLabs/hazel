@@ -8,8 +8,6 @@ import { OrgResolver } from "../services/org-resolver"
 /**
  * `canCreate` / `canInstall` / `canUninstall` run in the `OrgObject` (local org members);
  * `canRead` / `canUpdate` / `canDelete` on the directory path, against D1 `bots`.
- *
- * @effect-leakable-service
  */
 export class BotPolicy extends Context.Service<BotPolicy>()("BotPolicy/Policy", {
 	make: Effect.gen(function* () {

@@ -62,7 +62,7 @@ export const SetPresenceStatus = Command.define("SetPresenceStatus", {
 const RECENT_CHANNELS_KEY = "recentChannels"
 const MAX_RECENT_CHANNELS = 8
 
-const RecentChannels = Schema.Array(Schema.Struct({ channelId: Schema.String, visitedAt: Schema.Number }))
+const RecentChannels = Schema.Array(Schema.Struct({ channelId: Schema.String, visitedAt: Schema.Finite }))
 const decodeRecentJson = Schema.decodeUnknownOption(Schema.fromJsonString(RecentChannels))
 
 /** The stored `recentChannels`, empty when missing or unreadable. */

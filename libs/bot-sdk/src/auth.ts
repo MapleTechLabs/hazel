@@ -45,12 +45,10 @@ export class BotAuth extends Context.Service<BotAuth>()("BotAuth", {
 			validateToken: (token: string) =>
 				Effect.gen(function* () {
 					if (token !== context.token) {
-						return yield* Effect.fail(
-							new AuthenticationError({
-								message: "Invalid bot token",
-								cause: "Token does not match",
-							}),
-						)
+						return yield* new AuthenticationError({
+							message: "Invalid bot token",
+							cause: "Token does not match",
+						})
 					}
 					return true
 				}),

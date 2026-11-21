@@ -25,9 +25,9 @@ export const RuleRow = Schema.Struct({
 	config: Customers.RuleConfig,
 	scope: Customers.RuleScope,
 	enabled: Schema.Boolean,
-	lastTriggeredAtMs: Schema.NullOr(Schema.Number),
+	lastTriggeredAtMs: Schema.NullOr(Schema.Finite),
 	matchingCount: Schema.Int,
-	updatedAtMs: Schema.Number,
+	updatedAtMs: Schema.Finite,
 })
 export type RuleRow = typeof RuleRow.Type
 

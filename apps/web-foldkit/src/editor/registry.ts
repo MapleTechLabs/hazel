@@ -13,7 +13,10 @@ import type { EditorView } from "prosemirror-view"
  * a focus right after the view that renders the editor): `get` waits a moment for it to register.
  */
 
-export class EditorNotMounted extends Schema.TaggedError<EditorNotMounted>()("EditorNotMounted", {
+export class EditorNotMounted extends Schema.TaggedError<
+	EditorNotMounted,
+	{ readonly brand: unique symbol }
+>()("EditorNotMounted", {
 	editorId: Schema.String,
 }) {}
 

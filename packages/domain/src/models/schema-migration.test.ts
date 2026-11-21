@@ -26,7 +26,7 @@ describe("model-derived entity schemas", () => {
 			deletedAt: null,
 		}
 
-		const decoded = Schema.decodeUnknownSync(Organization.Schema)(raw)
+		const decoded = Schema.decodeSync(Organization.Schema)(raw)
 		const encoded = Schema.encodeUnknownSync(Organization.Schema)(decoded)
 
 		expect(encoded).toEqual(raw)
@@ -43,8 +43,8 @@ describe("model-derived entity schemas", () => {
 			sectionId: CHANNEL_SECTION_ID,
 		}
 
-		const decodedCreate = Schema.decodeUnknownSync(Channel.Create)(createPayload)
-		const decodedInsert = Schema.decodeUnknownSync(Channel.Insert)({
+		const decodedCreate = Schema.decodeSync(Channel.Create)(createPayload)
+		const decodedInsert = Schema.decodeSync(Channel.Insert)({
 			...createPayload,
 			deletedAt: null,
 		})
@@ -81,10 +81,10 @@ describe("model-derived entity schemas", () => {
 
 		expect("tokenHash" in ChannelWebhook.Row.fields).toBe(true)
 		expect("tokenHash" in ChannelWebhook.Schema.fields).toBe(false)
-		expect(Schema.decodeUnknownSync(ChannelWebhook.Row)(row).tokenHash).toBe("hashed-token")
+		expect(Schema.decodeSync(ChannelWebhook.Row)(row).tokenHash).toBe("hashed-token")
 		expect(
 			Schema.encodeUnknownSync(ChannelWebhook.Schema)(
-				Schema.decodeUnknownSync(ChannelWebhook.Schema)(publicRaw),
+				Schema.decodeSync(ChannelWebhook.Schema)(publicRaw),
 			),
 		).toEqual(publicRaw)
 	})
@@ -114,10 +114,10 @@ describe("model-derived entity schemas", () => {
 			deletedAt: null,
 		}
 
-		expect(Schema.decodeUnknownSync(Message.Create)(createPayload).attachmentIds).toEqual([ATTACHMENT_ID])
+		expect(Schema.decodeSync(Message.Create)(createPayload).attachmentIds).toEqual([ATTACHMENT_ID])
 		expect(Object.keys(Message.Patch.fields).sort()).toEqual(["content", "embeds"])
 		expect(
-			Schema.encodeUnknownSync(Message.Schema)(Schema.decodeUnknownSync(Message.Schema)(messageRaw)),
+			Schema.encodeUnknownSync(Message.Schema)(Schema.decodeSync(Message.Schema)(messageRaw)),
 		).toEqual(messageRaw)
 	})
 })

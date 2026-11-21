@@ -41,7 +41,10 @@ export const UploadProblem = Schema.Literals([
 ])
 export type UploadProblem = typeof UploadProblem.Type
 
-export class UploadFailedError extends Schema.TaggedError<UploadFailedError>()("UploadFailedError", {
+export class UploadFailedError extends Schema.TaggedError<
+	UploadFailedError,
+	{ readonly brand: unique symbol }
+>()("UploadFailedError", {
 	problem: UploadProblem,
 }) {}
 

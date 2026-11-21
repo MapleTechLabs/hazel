@@ -62,7 +62,7 @@ export const AssignSignal = Command.define("AssignSignal", {
 })
 
 export const SnoozeSignal = Command.define("SnoozeSignal", {
-	args: { ...target, userId: UserId, untilMs: Schema.Number },
+	args: { ...target, userId: UserId, untilMs: Schema.Finite },
 	messages: signalMessages,
 	execute: ({ untilMs, ...args }) =>
 		snoozeSignalAction({ ...args, until: new Date(untilMs) }).pipe(settle(args.signalId, "snooze")),
@@ -74,7 +74,7 @@ export const MuteAccountAttention = Command.define("MuteAccountAttention", {
 		organizationId: OrganizationId,
 		accountId: CustomerAccountId,
 		userId: UserId,
-		untilMs: Schema.NullOr(Schema.Number),
+		untilMs: Schema.NullOr(Schema.Finite),
 	},
 	messages: [Message.SucceededMuteAccount, Message.FailedMuteAccount],
 	execute: ({ untilMs, ...args }) =>

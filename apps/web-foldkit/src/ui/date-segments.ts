@@ -19,20 +19,20 @@ export type SegmentType = typeof SegmentType.Type
 const isSegmentType = Schema.is(SegmentType)
 
 const Values = Schema.Struct({
-	year: Schema.NullOr(Schema.Number),
-	month: Schema.NullOr(Schema.Number),
-	day: Schema.NullOr(Schema.Number),
-	hour: Schema.NullOr(Schema.Number),
-	minute: Schema.NullOr(Schema.Number),
-	dayPeriod: Schema.NullOr(Schema.Number),
+	year: Schema.NullOr(Schema.Finite),
+	month: Schema.NullOr(Schema.Finite),
+	day: Schema.NullOr(Schema.Finite),
+	hour: Schema.NullOr(Schema.Finite),
+	minute: Schema.NullOr(Schema.Finite),
+	dayPeriod: Schema.NullOr(Schema.Finite),
 })
 type Values = typeof Values.Type
 
 const Placeholder = Schema.Struct({
-	year: Schema.Number,
-	month: Schema.Number,
-	day: Schema.Number,
-	hour: Schema.Number,
+	year: Schema.Finite,
+	month: Schema.Finite,
+	day: Schema.Finite,
+	hour: Schema.Finite,
 })
 
 export const Model = Schema.Struct({
@@ -51,7 +51,7 @@ export const Model = Schema.Struct({
 	enteredSegment: Schema.NullOr(Schema.String),
 	/** The segment keystrokes apply to, and how many commanded focus moves have not run yet. */
 	activeSegment: Schema.NullOr(Schema.String),
-	pendingFocusMoves: Schema.Number,
+	pendingFocusMoves: Schema.Finite,
 })
 export type Model = typeof Model.Type
 

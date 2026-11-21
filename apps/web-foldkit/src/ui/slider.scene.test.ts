@@ -10,7 +10,7 @@ import * as Slider from "./slider"
 
 /** The styled `@foldkit/ui` Slider in a parent that owns the value. */
 
-const Model = Schema.Struct({ slider: Slider.Model, value: Schema.Number, isDisabled: Schema.Boolean })
+const Model = Schema.Struct({ slider: Slider.Model, value: Schema.Finite, isDisabled: Schema.Boolean })
 type Model = typeof Model.Type
 
 const Message = defineMessageUnion({ GotSliderMessage: { message: Slider.Message } })

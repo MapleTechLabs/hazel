@@ -30,7 +30,7 @@ export const OpenFilePicker = Command.define("OpenFilePicker", {
 
 /** `AvatarCropModal`'s effect: an object URL for the file, then the largest centered square. */
 export const LoadCropImage = Command.define("LoadCropImage", {
-	args: { file: File, loadId: Schema.Number },
+	args: { file: File, loadId: Schema.Finite },
 	messages: [Message.LoadedCropImage, Message.FailedLoadCropImage],
 	execute: ({ file, loadId }) => {
 		const src = URL.createObjectURL(file)

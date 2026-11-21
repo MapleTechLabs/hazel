@@ -90,15 +90,13 @@ const makeRateLimitCheck = ({ name, label, keyPrefix, config, message }: RateLim
 			)
 
 		if (!result.allowed) {
-			return yield* Effect.fail(
-				new RateLimitExceededError({
-					message,
-					// At most this: the message binding does not say when the window ends.
-					retryAfterMs: result.resetAfterMs,
-					limit: result.limit,
-					remaining: 0,
-				}),
-			)
+			return yield* new RateLimitExceededError({
+				message,
+				// At most this: the message binding does not say when the window ends.
+				retryAfterMs: result.resetAfterMs,
+				limit: result.limit,
+				remaining: 0,
+			})
 		}
 
 		yield* Effect.logDebug(

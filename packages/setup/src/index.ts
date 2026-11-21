@@ -16,8 +16,7 @@ const cli = setupCommand.pipe(
 	Command.run({
 		version: "0.0.1",
 	}),
-	Effect.provide(ServicesLive),
-	Effect.provide(BunServices.layer),
+	Effect.provide(ServicesLive.pipe(Layer.provideMerge(BunServices.layer))),
 )
 
 BunRuntime.runMain(cli as Effect.Effect<void>)

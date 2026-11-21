@@ -9,10 +9,15 @@
  * The payload shapes follow Discord's gateway docs (https://discord.com/developers/docs/events/gateway-events).
  * `replay` takes recorded `{ t, d }` frames as they are, for sessions captured from a real guild.
  */
-import { Effect } from "effect"
+import { Data, Effect } from "effect"
 import { DISCORD_ROUTED_EVENTS, type DiscordRoutedEvent, makeDiscordGatewayRouter } from "./gateway-router"
 import { makeDiscordThreadParents } from "./thread-parents"
 import type { ChatSyncInbound } from "../../chat-sync-inbound"
+
+/** `GET /channels/:id` for a channel the simulator does not have. */
+class UnknownSimChannelError extends Data.TaggedError("UnknownSimChannelError")<{
+	readonly channelId: string
+}> {}
 
 /** Discord message types (https://discord.com/developers/docs/resources/message#message-object-message-types). */
 export const DiscordMessageType = {
@@ -113,7 +118,7 @@ export const makeDiscordSimulator = <E, R>(params: {
 		// As `GET /channels/:id` answers: the session asks for a channel it has not seen.
 		const channel = channels.get(channelId)
 		return channel === undefined
-			? Effect.fail(new Error(`unknown channel ${channelId}`))
+			? Effect.fail(new UnknownSimChannelError({ channelId }))
 			: Effect.succeed({ ...channel })
 	})
 	const router = makeDiscordGatewayRouter({

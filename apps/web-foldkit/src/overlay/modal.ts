@@ -71,7 +71,7 @@ export const Model = Schema.Struct({
 	/** Newest first, at most `RETIRED_LIMIT`; an instance leaves once it has reported an OutMessage. */
 	retired: Schema.Array(Slot),
 	/** The number the next opening gets. */
-	nextInstance: Schema.Number,
+	nextInstance: Schema.Finite,
 })
 export type Model = typeof Model.Type
 

@@ -29,7 +29,7 @@ describe("presence simulation", { timeout: 60_000 }, () => {
 				expect(yield* ada.seen()).toMatchObject({ desktopStatus: "online", webStatus: null })
 
 				yield* sim.advance(minutes(3))
-				yield* desktop.close()
+				yield* desktop.close
 				expect((yield* ada.seen(0)).status).toBe("offline")
 				expect((yield* ada.seen(1)).status).toBe("offline")
 				expect(ada.timeline).toEqual([
@@ -115,7 +115,7 @@ describe("presence simulation", { timeout: 60_000 }, () => {
 				const laptop = ada.device("desktop")
 				yield* laptop.open()
 				yield* sim.advance(seconds(10))
-				yield* laptop.vanish()
+				yield* laptop.vanish
 				yield* sim.advance(minutes(5))
 				// The last ping was at 0s (the open); the session ends at its timeout.
 				expect(ada.timeline.at(-1)).toEqual({ at: SESSION_TIMEOUT_MS / 1_000, status: "offline" })
@@ -131,7 +131,7 @@ describe("presence simulation", { timeout: 60_000 }, () => {
 				const phone = ada.device("mobile")
 				yield* laptop.open()
 				yield* phone.open()
-				yield* laptop.crash()
+				yield* laptop.crash
 				yield* sim.advance(minutes(2))
 				// The phone keeps pinging; the lost laptop session ended on the first alarm.
 				expect(yield* ada.seen()).toMatchObject({
@@ -149,10 +149,10 @@ describe("presence simulation", { timeout: 60_000 }, () => {
 				const ada = yield* sim.user("ada")
 				const laptop = ada.device("desktop")
 				yield* laptop.open()
-				yield* laptop.vanish()
+				yield* laptop.vanish
 				yield* sim.advance(minutes(30))
 				expect((yield* ada.seen()).status).toBe("offline")
-				yield* laptop.wake()
+				yield* laptop.wake
 				expect((yield* ada.seen()).status).toBe("online")
 				// Its next frame says what it is again.
 				yield* laptop.report({ idle: false })
@@ -179,7 +179,7 @@ describe("presence simulation", { timeout: 60_000 }, () => {
 						activeChannelId: null,
 					})
 				}
-				expect((yield* ada.picked())?.status).toBe("invisible")
+				expect((yield* ada.picked)?.status).toBe("invisible")
 				// Still invisible after hours of pings and a new device.
 				yield* sim.advance(hours(3))
 				yield* ada.device("mobile").open()
@@ -205,7 +205,7 @@ describe("presence simulation", { timeout: 60_000 }, () => {
 					{ at: 300, status: "dnd" },
 					{ at: 3900, status: "online" },
 				])
-				expect((yield* ada.picked())?.status).toBe("online")
+				expect((yield* ada.picked)?.status).toBe("online")
 			}),
 		))
 
@@ -248,7 +248,7 @@ describe("presence simulation", { timeout: 60_000 }, () => {
 				const laptop = ada.device("desktop")
 				yield* laptop.open()
 				expect(yield* ada.seen()).toMatchObject({ desktopStatus: "online", afk: false })
-				yield* laptop.close()
+				yield* laptop.close
 				expect(yield* ada.seen()).toMatchObject({ desktopStatus: null, mobileStatus: "online" })
 			}),
 		))
@@ -355,7 +355,7 @@ describe("presence simulation", { timeout: 60_000 }, () => {
 			Effect.gen(function* () {
 				const sim = yield* makePresenceSim
 				const ada = yield* sim.user("ada")
-				const user = yield* ada.object()
+				const user = yield* ada.object
 				const socket = makeFakeSocket()
 				expect(yield* user.adopt(socket, { userId: ada.id, expiresAt: null })).toBe("accepted")
 				const ping = new TextEncoder().encode(JSON.stringify({ _tag: "Ping" }))
@@ -372,7 +372,7 @@ describe("presence simulation", { timeout: 60_000 }, () => {
 			Effect.gen(function* () {
 				const sim = yield* makePresenceSim
 				const ada = yield* sim.user("ada")
-				const user = yield* ada.object()
+				const user = yield* ada.object
 				const socket = makeFakeSocket()
 				expect(yield* user.adopt(socket, { userId: ada.id as UserId, expiresAt: null })).toBe(
 					"accepted",
@@ -396,9 +396,9 @@ describe("presence simulation", { timeout: 60_000 }, () => {
 					const ada = yield* sim.user("ada")
 					const old = ada.device("web")
 					yield* old.open({ legacy: true })
-					yield* ada.legacyHeartbeat()
+					yield* ada.legacyHeartbeat
 					expect(yield* ada.seen()).toMatchObject({ status: "online", webStatus: "online" })
-					yield* old.close()
+					yield* old.close
 					// The heartbeat's own session outlives the socket until its timeout.
 					yield* sim.advance(SESSION_TIMEOUT_MS + seconds(1))
 					expect((yield* ada.seen()).status).toBe("offline")
@@ -417,7 +417,7 @@ describe("presence simulation", { timeout: 60_000 }, () => {
 					expect(yield* ada.seen()).toMatchObject({ status: "online", afk: false })
 					yield* ada.legacyUpdate({ status: "busy" })
 					expect((yield* ada.seen()).status).toBe("dnd")
-					expect((yield* ada.picked())?.status).toBe("dnd")
+					expect((yield* ada.picked)?.status).toBe("dnd")
 				}),
 			))
 
@@ -439,7 +439,7 @@ describe("presence simulation", { timeout: 60_000 }, () => {
 					for (const status of ["online", "busy", "dnd"]) {
 						yield* ada.legacyUpdate({ status })
 						expect((yield* ada.seen()).status).toBe("offline")
-						expect((yield* ada.picked())?.status).toBe("invisible")
+						expect((yield* ada.picked)?.status).toBe("invisible")
 					}
 				}),
 			))

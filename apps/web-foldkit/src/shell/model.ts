@@ -31,7 +31,7 @@ export type ChannelSummary = typeof ChannelSummary.Type
 export const UserStatus = Schema.Struct({
 	emoji: Schema.NullOr(Schema.String),
 	message: Schema.NullOr(Schema.String),
-	expiresAtMs: Schema.NullOr(Schema.Number),
+	expiresAtMs: Schema.NullOr(Schema.Finite),
 })
 export type UserStatus = typeof UserStatus.Type
 

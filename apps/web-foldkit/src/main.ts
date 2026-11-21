@@ -98,7 +98,7 @@ export const Flags = Schema.Struct({
 	keybindingOverrides: Overrides,
 	keyboardPlatform: KeyboardPlatform,
 	/** `sessionStartTimeAtom`: notifications from before this load never play; also the clock's first value. */
-	sessionStartMs: Schema.Number,
+	sessionStartMs: Schema.Finite,
 	/** `useSidebar().isMobile` at load: the mobile layout renders from the first frame. */
 	isMobile: Schema.Boolean,
 	/** `useFeatureHint("create-channel")`. */

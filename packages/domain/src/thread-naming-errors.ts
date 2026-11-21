@@ -7,30 +7,30 @@ import { Schema } from "effect"
 // ============================================================================
 
 /** Thread channel does not exist */
-export class ThreadChannelNotFoundError extends Schema.TaggedError<ThreadChannelNotFoundError>()(
-	"ThreadChannelNotFoundError",
-	{ threadChannelId: ChannelId },
-) {
+export class ThreadChannelNotFoundError extends Schema.TaggedError<
+	ThreadChannelNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ThreadChannelNotFoundError", { threadChannelId: ChannelId }) {
 	readonly retryable = false // Resource not found won't change on retry
 }
 
 /** Original message that started the thread was not found */
-export class OriginalMessageNotFoundError extends Schema.TaggedError<OriginalMessageNotFoundError>()(
-	"OriginalMessageNotFoundError",
-	{ threadChannelId: ChannelId, messageId: MessageId },
-) {
+export class OriginalMessageNotFoundError extends Schema.TaggedError<
+	OriginalMessageNotFoundError,
+	{ readonly brand: unique symbol }
+>()("OriginalMessageNotFoundError", { threadChannelId: ChannelId, messageId: MessageId }) {
 	readonly retryable = false // Resource not found won't change on retry
 }
 
 /** Database query failed during context gathering */
-export class ThreadContextQueryError extends Schema.TaggedError<ThreadContextQueryError>()(
-	"ThreadContextQueryError",
-	{
-		threadChannelId: ChannelId,
-		operation: Schema.Literals(["thread", "originalMessage", "threadMessages"]),
-		cause: Schema.Unknown.pipe(Schema.optional),
-	},
-) {
+export class ThreadContextQueryError extends Schema.TaggedError<
+	ThreadContextQueryError,
+	{ readonly brand: unique symbol }
+>()("ThreadContextQueryError", {
+	threadChannelId: ChannelId,
+	operation: Schema.Literals(["thread", "originalMessage", "threadMessages"]),
+	cause: Schema.Unknown.pipe(Schema.optional),
+}) {
 	readonly retryable = true // Database errors are transient
 }
 
@@ -39,23 +39,29 @@ export class ThreadContextQueryError extends Schema.TaggedError<ThreadContextQue
 // ============================================================================
 
 /** AI provider is unreachable or returned an error */
-export class AIProviderUnavailableError extends Schema.TaggedError<AIProviderUnavailableError>()(
-	"AIProviderUnavailableError",
-	{ provider: Schema.String, cause: Schema.Unknown.pipe(Schema.optional) },
-) {
+export class AIProviderUnavailableError extends Schema.TaggedError<
+	AIProviderUnavailableError,
+	{ readonly brand: unique symbol }
+>()("AIProviderUnavailableError", { provider: Schema.String, cause: Schema.Unknown.pipe(Schema.optional) }) {
 	readonly retryable = true // External service may recover
 }
 
 /** AI provider rate limited the request */
-export class AIRateLimitError extends Schema.TaggedError<AIRateLimitError>()("AIRateLimitError", {
+export class AIRateLimitError extends Schema.TaggedError<
+	AIRateLimitError,
+	{ readonly brand: unique symbol }
+>()("AIRateLimitError", {
 	provider: Schema.String,
-	retryAfter: Schema.Number.pipe(Schema.optional),
+	retryAfter: Schema.Finite.pipe(Schema.optional),
 }) {
 	readonly retryable = true // Will succeed after delay
 }
 
 /** AI response could not be parsed or was empty */
-export class AIResponseParseError extends Schema.TaggedError<AIResponseParseError>()("AIResponseParseError", {
+export class AIResponseParseError extends Schema.TaggedError<
+	AIResponseParseError,
+	{ readonly brand: unique symbol }
+>()("AIResponseParseError", {
 	threadChannelId: ChannelId,
 	rawResponse: Schema.String.pipe(Schema.optional),
 }) {
@@ -67,10 +73,14 @@ export class AIResponseParseError extends Schema.TaggedError<AIResponseParseErro
 // ============================================================================
 
 /** Database update for thread name failed */
-export class ThreadNameUpdateError extends Schema.TaggedError<ThreadNameUpdateError>()(
-	"ThreadNameUpdateError",
-	{ threadChannelId: ChannelId, newName: Schema.String, cause: Schema.Unknown.pipe(Schema.optional) },
-) {
+export class ThreadNameUpdateError extends Schema.TaggedError<
+	ThreadNameUpdateError,
+	{ readonly brand: unique symbol }
+>()("ThreadNameUpdateError", {
+	threadChannelId: ChannelId,
+	newName: Schema.String,
+	cause: Schema.Unknown.pipe(Schema.optional),
+}) {
 	readonly retryable = true // Database errors are transient
 }
 

@@ -57,7 +57,7 @@ const Nullable = <S extends Schema.Top>(schema: S) => optional(Schema.NullOr(sch
  * A ClickHouse count: a number, or its digits as a string when it passed 2^53 (`run_sql` renders a
  * bigint as text rather than losing its last digits).
  */
-export const WireCount = Schema.Union([Schema.Number, Schema.String])
+export const WireCount = Schema.Union([Schema.Finite, Schema.String])
 export type WireCount = typeof WireCount.Type
 
 /** `YYYY-MM-DD`, as `toDate(Timestamp)` comes back. */

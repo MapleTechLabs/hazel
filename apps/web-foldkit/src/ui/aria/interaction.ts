@@ -59,7 +59,7 @@ export const init = (): Model => ({
 export const Message = defineMessageUnion({
 	EnteredTarget: { target: Schema.String },
 	LeftTarget: { target: Schema.String },
-	PressedPointer: { target: Schema.String, pointerType: Schema.String, button: Schema.Number },
+	PressedPointer: { target: Schema.String, pointerType: Schema.String, button: Schema.Finite },
 	ReleasedPointer: {},
 	PressedKey: { target: Schema.String, key: Schema.String },
 	ReleasedKey: { target: Schema.String, key: Schema.String },

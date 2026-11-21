@@ -10,9 +10,10 @@ import { RequiredScopes } from "../scopes/required-scopes"
 /**
  * Response schema for successful integration request creation.
  */
-export class IntegrationRequestResponse extends Schema.Class<IntegrationRequestResponse>(
-	"IntegrationRequestResponse",
-)({
+export class IntegrationRequestResponse extends Schema.Class<
+	IntegrationRequestResponse,
+	{ readonly brand: unique symbol }
+>("IntegrationRequestResponse")({
 	data: IntegrationRequest.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -20,9 +21,10 @@ export class IntegrationRequestResponse extends Schema.Class<IntegrationRequestR
 /**
  * Payload for creating an integration request.
  */
-export class CreateIntegrationRequestPayload extends Schema.Class<CreateIntegrationRequestPayload>(
-	"CreateIntegrationRequestPayload",
-)({
+export class CreateIntegrationRequestPayload extends Schema.Class<
+	CreateIntegrationRequestPayload,
+	{ readonly brand: unique symbol }
+>("CreateIntegrationRequestPayload")({
 	organizationId: OrganizationId,
 	integrationName: Schema.NonEmptyString,
 	integrationUrl: Schema.optional(Schema.String),

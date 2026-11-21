@@ -43,12 +43,12 @@ export const TweetView = Schema.Struct({
 	}),
 	entities: Schema.Array(TweetEntity),
 	photos: Schema.NullOr(
-		Schema.Array(Schema.Struct({ url: Schema.String, width: Schema.Number, height: Schema.Number })),
+		Schema.Array(Schema.Struct({ url: Schema.String, width: Schema.Finite, height: Schema.Finite })),
 	),
 	video: Schema.NullOr(Schema.Struct({ poster: Schema.String, src: Schema.NullOr(Schema.String) })),
-	favoriteCount: Schema.NullOr(Schema.Number),
-	replyCount: Schema.NullOr(Schema.Number),
-	retweetCount: Schema.NullOr(Schema.Number),
+	favoriteCount: Schema.NullOr(Schema.Finite),
+	replyCount: Schema.NullOr(Schema.Finite),
+	retweetCount: Schema.NullOr(Schema.Finite),
 })
 export type TweetView = typeof TweetView.Type
 
@@ -90,7 +90,7 @@ export const tweetKey = (tweetId: string) => `tweet:${tweetId}`
 
 // TWEET ENRICHMENT (react-tweet's `enrichTweet`, the parts `TweetEmbed` renders)
 
-const Indices = Schema.Tuple([Schema.Number, Schema.Number])
+const Indices = Schema.Tuple([Schema.Finite, Schema.Finite])
 
 const RawTweet = Schema.Struct({
 	id_str: Schema.String,
@@ -122,7 +122,7 @@ const RawTweet = Schema.Struct({
 		is_blue_verified: Schema.optionalKey(Schema.Boolean),
 	}),
 	photos: Schema.optionalKey(
-		Schema.Array(Schema.Struct({ url: Schema.String, width: Schema.Number, height: Schema.Number })),
+		Schema.Array(Schema.Struct({ url: Schema.String, width: Schema.Finite, height: Schema.Finite })),
 	),
 	video: Schema.optionalKey(
 		Schema.Struct({
@@ -132,9 +132,9 @@ const RawTweet = Schema.Struct({
 			),
 		}),
 	),
-	favorite_count: Schema.optionalKey(Schema.Number),
-	reply_count: Schema.optionalKey(Schema.Number),
-	retweet_count: Schema.optionalKey(Schema.Number),
+	favorite_count: Schema.optionalKey(Schema.Finite),
+	reply_count: Schema.optionalKey(Schema.Finite),
+	retweet_count: Schema.optionalKey(Schema.Finite),
 })
 type RawTweet = typeof RawTweet.Type
 

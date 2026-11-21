@@ -34,9 +34,12 @@ export const HandoffFailure = Schema.Union([
 ])
 export type HandoffFailure = typeof HandoffFailure.Type
 
-export class HandoffError extends Schema.TaggedError<HandoffError>()("HandoffError", {
-	reason: HandoffFailure,
-}) {}
+export class HandoffError extends Schema.TaggedError<HandoffError, { readonly brand: unique symbol }>()(
+	"HandoffError",
+	{
+		reason: HandoffFailure,
+	},
+) {}
 
 type Transport = Context.Service.Shape<typeof OperationHttpClient.Client>
 type AuthApi = Context.Service.Shape<typeof HazelAuthClient>["auth"]

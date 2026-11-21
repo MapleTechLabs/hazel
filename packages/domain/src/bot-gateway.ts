@@ -10,7 +10,7 @@ export const BotGatewayCommandInvokePayload = Schema.Struct({
 	userId: UserId,
 	orgId: OrganizationId,
 	arguments: Schema.Record(Schema.String, Schema.String),
-	timestamp: Schema.Number,
+	timestamp: Schema.Finite,
 })
 export type BotGatewayCommandInvokePayload = Schema.Schema.Type<typeof BotGatewayCommandInvokePayload>
 
@@ -28,7 +28,7 @@ export const BotGatewayInteractionCreatePayload = Schema.Struct({
 	userId: UserId,
 	/** Who pressed it, as Hazel shows them. */
 	userName: Schema.String,
-	timestamp: Schema.Number,
+	timestamp: Schema.Finite,
 })
 export type BotGatewayInteractionCreatePayload = Schema.Schema.Type<typeof BotGatewayInteractionCreatePayload>
 
@@ -47,7 +47,7 @@ const BaseGatewayEnvelope = {
 	schemaVersion: Schema.Literal(1),
 	deliveryId: BotGatewayDeliveryId,
 	partitionKey: Schema.String,
-	occurredAt: Schema.Number,
+	occurredAt: Schema.Finite,
 	idempotencyKey: Schema.String,
 }
 
@@ -198,7 +198,7 @@ export type BotGatewayClientFrame = Schema.Schema.Type<typeof BotGatewayClientFr
 
 export const BotGatewayHelloFrame = Schema.Struct({
 	op: Schema.Literal("HELLO"),
-	heartbeatIntervalMs: Schema.Number,
+	heartbeatIntervalMs: Schema.Finite,
 })
 
 export const BotGatewayReadyFrame = Schema.Struct({
@@ -249,12 +249,12 @@ export type BotGatewayServerFrame = Schema.Schema.Type<typeof BotGatewayServerFr
  * Shared by the gateway Worker that hosts the object and by the backend that publishes into it,
  * so neither side imports the other's runtime.
  */
-export class BotGatewayEventRejectedError extends Schema.TaggedError<BotGatewayEventRejectedError>()(
-	"BotGatewayEventRejectedError",
-	{
-		message: Schema.String,
-	},
-) {}
+export class BotGatewayEventRejectedError extends Schema.TaggedError<
+	BotGatewayEventRejectedError,
+	{ readonly brand: unique symbol }
+>()("BotGatewayEventRejectedError", {
+	message: Schema.String,
+}) {}
 
 /** Where an appended event landed in the bot's log, in the protocol's offset format. */
 export interface BotGatewayPublishResult {

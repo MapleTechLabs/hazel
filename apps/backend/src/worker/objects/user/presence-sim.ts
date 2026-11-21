@@ -91,25 +91,25 @@ export interface SimDevice {
 	/** Sends a `Presence` frame with the device's state (merged into what it reported before). */
 	readonly report: (report: DeviceReport) => Effect.Effect<void>
 	/** Closes the socket cleanly (quit, last tab closed). */
-	readonly close: () => Effect.Effect<void>
+	readonly close: Effect.Effect<void>
 	/** The client is gone but the socket looks open (laptop lid closed, network dropped). */
-	readonly vanish: () => Effect.Effect<void>
+	readonly vanish: Effect.Effect<void>
 	/** The client comes back on the same socket (laptop lid opened). */
-	readonly wake: () => Effect.Effect<void>
+	readonly wake: Effect.Effect<void>
 	/** The socket is gone without a close event reaching the object (object restart, crash). */
-	readonly crash: () => Effect.Effect<void>
+	readonly crash: Effect.Effect<void>
 }
 
 export interface SimUser {
 	readonly id: UserId
 	readonly name: string
 	/** Registers an iPhone for push (`pushDevice.register`). */
-	readonly registerPhone: () => Effect.Effect<void>
+	readonly registerPhone: Effect.Effect<void>
 	/** The notifications in the user's object, oldest first. */
-	readonly notifications: () => Effect.Effect<Array<{ readonly silent: boolean }>>
+	readonly notifications: Effect.Effect<Array<{ readonly silent: boolean }>>
 	/** The bodies pushed to the user's phone, in order. */
 	readonly pushes: () => Array<string>
-	readonly object: () => Effect.Effect<TestObject>
+	readonly object: Effect.Effect<TestObject>
 	readonly device: (type: ClientType) => SimDevice
 	/** Picks a status on every device, for `forMs` or until changed. */
 	/** Picks a status on every device, for `forMs` or until changed; returns what was saved. */
@@ -120,14 +120,14 @@ export interface SimUser {
 	/** Sets a custom status, cleared after `forMs` (or never). */
 	readonly customStatus: (emoji: string, message: string, forMs?: number) => Effect.Effect<unknown>
 	/** An older client's RPCs. */
-	readonly legacyHeartbeat: () => Effect.Effect<unknown>
+	readonly legacyHeartbeat: Effect.Effect<unknown>
 	readonly legacyUpdate: (payload: Record<string, unknown>) => Effect.Effect<unknown>
 	/** What org `index` (0 or 1) shows of this user. */
 	readonly seen: (index?: number) => Effect.Effect<Seen>
 	/** The user's own row (what their clients sync). */
-	readonly own: () => Effect.Effect<Seen>
+	readonly own: Effect.Effect<Seen>
 	/** The status they picked, as their own clients see it. */
-	readonly picked: () => Effect.Effect<{ status: string; statusExpiresAt: string | null } | undefined>
+	readonly picked: Effect.Effect<{ status: string; statusExpiresAt: string | null } | undefined>
 	/** Every status org 0 showed for this user, with the second it changed at, from creation. */
 	readonly timeline: Array<{ readonly at: number; readonly status: string }>
 }
@@ -158,7 +158,7 @@ export const makePresenceSim = Effect.gen(function* () {
 	/** Every object a user's presence touches: their own, and the orgs that copy it. */
 	const touched = (): Effect.Effect<Array<TestObject>> =>
 		Effect.all([
-			...users.map((user) => user.object()),
+			...users.map((user) => user.object),
 			...orgIds.map((id) => objects.get(orgTarget(id))),
 			...channels.map((id) => objects.get(channelTarget(id))),
 		])
@@ -293,24 +293,22 @@ export const makePresenceSim = Effect.gen(function* () {
 						return sendReport(device)
 					}),
 				),
-			close: () =>
-				step(
-					Effect.gen(function* () {
-						const object = yield* objects.get(userTarget(user))
-						socketOf(device).close(1000, "bye")
-						yield* object.onClose(socketOf(device))
-					}),
-				),
-			vanish: () => step(Effect.sync(() => void (device.vanished = true))),
-			wake: () =>
-				step(
-					Effect.suspend(() => {
-						device.vanished = false
-						device.nextPingAt = now() + pingEvery()
-						return ping(device)
-					}),
-				),
-			crash: () => step(Effect.sync(() => socketOf(device).close(1006, "gone"))),
+			close: step(
+				Effect.gen(function* () {
+					const object = yield* objects.get(userTarget(user))
+					socketOf(device).close(1000, "bye")
+					yield* object.onClose(socketOf(device))
+				}),
+			),
+			vanish: step(Effect.sync(() => void (device.vanished = true))),
+			wake: step(
+				Effect.suspend(() => {
+					device.vanished = false
+					device.nextPingAt = now() + pingEvery()
+					return ping(device)
+				}),
+			),
+			crash: step(Effect.sync(() => socketOf(device).close(1006, "gone"))),
 		}
 	}
 
@@ -333,27 +331,25 @@ export const makePresenceSim = Effect.gen(function* () {
 			const simUser: SimUser = {
 				id,
 				name,
-				registerPhone: () =>
-					call(id, "pushDevice.register", {
-						token,
-						environment: "production",
-						bundleId: "app.hazel.ios",
-					}),
-				notifications: () =>
-					Effect.map(objects.get(userTarget(id)), (own) =>
-						(
-							own.storage.db
-								.prepare(`SELECT silent FROM notifications ORDER BY rowid`)
-								.all() as Array<{
-								silent: number
-							}>
-						).map((row) => ({ silent: row.silent === 1 })),
-					),
+				registerPhone: call(id, "pushDevice.register", {
+					token,
+					environment: "production",
+					bundleId: "app.hazel.ios",
+				}),
+				notifications: Effect.map(objects.get(userTarget(id)), (own) =>
+					(
+						own.storage.db
+							.prepare(`SELECT silent FROM notifications ORDER BY rowid`)
+							.all() as Array<{
+							silent: number
+						}>
+					).map((row) => ({ silent: row.silent === 1 })),
+				),
 				pushes: () =>
 					objects.pushes
 						.filter((push) => push.token === token)
 						.map((push) => push.payload.aps.alert.body),
-				object: () => objects.get(userTarget(id)),
+				object: objects.get(userTarget(id)),
 				device: (type) => makeDevice(id, type),
 				pick: (status, forMs) =>
 					Effect.map(
@@ -369,19 +365,18 @@ export const makePresenceSim = Effect.gen(function* () {
 						customMessage: message,
 						statusExpiresAt: forMs === undefined ? null : new Date(now() + forMs),
 					}),
-				legacyHeartbeat: () => call(id, "userPresenceStatus.heartbeat", {}),
+				legacyHeartbeat: call(id, "userPresenceStatus.heartbeat", {}),
 				legacyUpdate: (payload) => call(id, "userPresenceStatus.update", payload),
 				seen: (index = 0) =>
 					Effect.map(objects.get(orgTarget(orgIdAt(index))), (org) => readSeen(org, id)),
-				own: () => Effect.map(objects.get(userTarget(id)), (own) => readSeen(own, id)),
-				picked: () =>
-					Effect.map(
-						objects.get(userTarget(id)),
-						(own) =>
-							own.storage.db
-								.prepare(`SELECT status, statusExpiresAt FROM user_presence_settings`)
-								.get() as { status: string; statusExpiresAt: string | null } | undefined,
-					),
+				own: Effect.map(objects.get(userTarget(id)), (own) => readSeen(own, id)),
+				picked: Effect.map(
+					objects.get(userTarget(id)),
+					(own) =>
+						own.storage.db
+							.prepare(`SELECT status, statusExpiresAt FROM user_presence_settings`)
+							.get() as { status: string; statusExpiresAt: string | null } | undefined,
+				),
 				timeline: [],
 			}
 			users.push(simUser)
@@ -501,7 +496,7 @@ export const makePresenceSim = Effect.gen(function* () {
 				read: (member: SimUser) =>
 					step(
 						Effect.gen(function* () {
-							const own = yield* member.object()
+							const own = yield* member.object
 							const cleared = yield* own.applyEffect({
 								objectId: member.id,
 								kind: "user.clearChannelNotifications",

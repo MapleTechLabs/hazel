@@ -95,7 +95,7 @@ export const Model = Schema.Struct({
 	signals: Schema.NullOr(Schema.Array(SignalRow)),
 	accounts: Schema.NullOr(Schema.Array(AccountRow)),
 	members: Schema.Array(MemberRow),
-	lastComputedAtMs: Schema.NullOr(Schema.Number),
+	lastComputedAtMs: Schema.NullOr(Schema.Finite),
 	/** The selected signal (in account grouping, the account's top signal). */
 	selectedId: Schema.NullOr(CustomerSignalId),
 	isPreviewOpen: Schema.Boolean,
@@ -346,7 +346,7 @@ export const userIdOfAssignKey = (key: string): string | null =>
 	key.startsWith(ASSIGN_USER) ? key.slice(ASSIGN_USER.length) : null
 
 export const assignEntries = (
-	members: ReadonlyArray<typeof MemberRow.Type>,
+	members: ReadonlyArray<MemberRow>,
 	viewer: Viewer,
 ): ReadonlyArray<Menu.Entry> => [
 	Menu.item(ASSIGN_ME),

@@ -170,7 +170,7 @@ export const SyncCommit = Schema.TaggedStruct("Commit", {
  * Milliseconds until the object closes the socket with 4001 unless a `Reauth` moves it. Absent or
  * `null` when the credential does not expire (or the object predates `Reauth`).
  */
-const ExpiresInMs = Schema.optionalKey(Schema.NullOr(Schema.Number))
+const ExpiresInMs = Schema.optionalKey(Schema.NullOr(Schema.Finite))
 
 /**
  * Sent once, after the first `Commit` on a socket: the initial snapshot is complete. `paging: true`
@@ -183,7 +183,7 @@ export const SyncReady = Schema.TaggedStruct("Ready", {
 
 /** A `Reauth` was accepted: the socket's new expiry. */
 export const SyncReauthed = Schema.TaggedStruct("Reauthed", {
-	expiresInMs: Schema.NullOr(Schema.Number),
+	expiresInMs: Schema.NullOr(Schema.Finite),
 })
 
 /** Ephemeral, unstored broadcasts (reserved; typing and presence currently sync as rows). */
@@ -211,7 +211,7 @@ export const SyncError = Schema.TaggedStruct("Error", {
 	code: SyncErrorCode,
 	message: Schema.String,
 	request: Schema.optionalKey(Schema.Int),
-	retryInMs: Schema.optionalKey(Schema.Number),
+	retryInMs: Schema.optionalKey(Schema.Finite),
 })
 
 export const SyncServerFrame = Schema.Union([

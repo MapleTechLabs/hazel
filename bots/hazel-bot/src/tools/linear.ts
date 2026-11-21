@@ -54,12 +54,12 @@ export const LinearListIssues = Tool.make("linear_list_issues", {
 		),
 		assigneeId: Schema.optional(Schema.String.annotate({ description: "Filter by assignee ID" })),
 		priority: Schema.optional(
-			Schema.Number.annotate({
+			Schema.Finite.annotate({
 				description: "Filter by priority (0=None, 1=Urgent, 2=High, 3=Medium, 4=Low)",
 			}),
 		),
 		first: Schema.optional(
-			Schema.Number.annotate({
+			Schema.Finite.annotate({
 				description: "Number of issues to return (default 25, max 50)",
 			}),
 		),
@@ -73,7 +73,7 @@ export const LinearSearchIssues = Tool.make("linear_search_issues", {
 	parameters: Schema.Struct({
 		query: Schema.String.annotate({ description: "Search text to find issues" }),
 		first: Schema.optional(
-			Schema.Number.annotate({
+			Schema.Finite.annotate({
 				description: "Number of issues to return (default 25, max 50)",
 			}),
 		),
@@ -121,7 +121,7 @@ export const LinearUpdateIssue = Tool.make("linear_update_issue", {
 			}),
 		),
 		priority: Schema.optional(
-			Schema.Number.annotate({
+			Schema.Finite.annotate({
 				description: "New priority (0=None, 1=Urgent, 2=High, 3=Medium, 4=Low)",
 			}),
 		),

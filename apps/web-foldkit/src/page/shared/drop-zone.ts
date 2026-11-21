@@ -15,7 +15,7 @@ import { defineMessageUnion } from "foldkit/message"
 export const Model = Schema.Struct({
 	isOver: Schema.Boolean,
 	/** Nested `dragenter`/`dragleave` depth of file drags anywhere on the page. */
-	pageDragDepth: Schema.Number,
+	pageDragDepth: Schema.Finite,
 })
 export type Model = typeof Model.Type
 

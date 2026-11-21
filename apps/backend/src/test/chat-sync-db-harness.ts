@@ -15,7 +15,7 @@ export interface ChatSyncDbHarness {
 }
 
 export const createChatSyncDbHarness = async (): Promise<ChatSyncDbHarness> => {
-	const scope = Effect.runSync(Scope.make())
+	const scope = Scope.makeUnsafe()
 	const context = await Effect.runPromise(Layer.buildWithScope(layerMemory, scope))
 	const dbLayer = Layer.succeedContext(context)
 

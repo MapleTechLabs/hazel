@@ -14,19 +14,19 @@ import { constantTimeEqual, headerOf, hmacSha256 } from "./webhook-crypto"
 
 export const SVIX_TOLERANCE_SECONDS = 5 * 60
 
-export class SvixVerificationError extends Schema.TaggedError<SvixVerificationError>()(
-	"SvixVerificationError",
-	{
-		message: Schema.String,
-		reason: Schema.Literals([
-			"missing_headers",
-			"bad_timestamp",
-			"stale_timestamp",
-			"bad_secret",
-			"signature_mismatch",
-		]),
-	},
-) {}
+export class SvixVerificationError extends Schema.TaggedError<
+	SvixVerificationError,
+	{ readonly brand: unique symbol }
+>()("SvixVerificationError", {
+	message: Schema.String,
+	reason: Schema.Literals([
+		"missing_headers",
+		"bad_timestamp",
+		"stale_timestamp",
+		"bad_secret",
+		"signature_mismatch",
+	]),
+}) {}
 
 const decodeBase64 = (value: string): Uint8Array<ArrayBuffer> | undefined => {
 	try {

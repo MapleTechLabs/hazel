@@ -20,7 +20,7 @@ export const T3Run = Schema.Struct({
 	projectTitle: Schema.String,
 	environmentLabel: Schema.String,
 	/** Activity read so far: `t3_thread_read`'s `afterPosition`. */
-	cursor: Schema.NullOr(Schema.Number),
+	cursor: Schema.NullOr(Schema.Finite),
 	/** A question waiting for the next thread reply. */
 	pendingQuestion: Schema.NullOr(
 		Schema.Struct({ requestId: Schema.String, questionIds: Schema.Array(Schema.String) }),

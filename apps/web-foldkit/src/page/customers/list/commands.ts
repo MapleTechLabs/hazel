@@ -71,7 +71,7 @@ export const CreateSavedView = Command.define("CreateSavedView", {
 		userId: UserId,
 		view: Customers.ViewDraft,
 		isShared: Schema.Boolean,
-		position: Schema.Number,
+		position: Schema.Finite,
 	},
 	messages: viewMessages,
 	execute: (args) =>

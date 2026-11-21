@@ -16,9 +16,12 @@ import { type HazelAuthConfig, makeHazelAuthLive } from "./server.ts"
  * user with that email is linked (as a real GitHub sign-in would) rather than duplicated.
  */
 
-export class DevSignInError extends Schema.TaggedError<DevSignInError>()("DevSignInError", {
-	reason: Schema.String,
-}) {}
+export class DevSignInError extends Schema.TaggedError<DevSignInError, { readonly brand: unique symbol }>()(
+	"DevSignInError",
+	{
+		reason: Schema.String,
+	},
+) {}
 
 export interface DevSignInInput {
 	readonly email: string
@@ -54,7 +57,7 @@ export const devGitHubId = (email: string) =>
 		}),
 	)
 
-const DevAccount = Schema.Struct({ id: Schema.Number, email: Schema.String, name: Schema.String })
+const DevAccount = Schema.Struct({ id: Schema.Finite, email: Schema.String, name: Schema.String })
 const DevAccountJson = Schema.fromJsonString(DevAccount)
 type DevAccount = typeof DevAccount.Type
 
@@ -64,7 +67,7 @@ const encodeAccount = (account: DevAccount) =>
 const decodeAccount = (value: string) => {
 	const bytes = Base64Url.decode(value)
 	if (bytes._tag === "Failure") return undefined
-	return Schema.decodeUnknownOption(DevAccountJson)(decoder.decode(bytes.success)).pipe((option) =>
+	return Schema.decodeOption(DevAccountJson)(decoder.decode(bytes.success)).pipe((option) =>
 		option._tag === "Some" ? option.value : undefined,
 	)
 }

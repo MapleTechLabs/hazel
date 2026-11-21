@@ -29,9 +29,9 @@ export const RecordRow = Schema.Struct({
 	currency: Schema.NullOr(Schema.String),
 	eventCount30d: Schema.NullOr(Schema.Int),
 	suggestedAccountId: Schema.NullOr(CustomerAccountId),
-	confidence: Schema.NullOr(Schema.Number),
+	confidence: Schema.NullOr(Schema.Finite),
 	reason: Schema.String,
-	updatedAtMs: Schema.Number,
+	updatedAtMs: Schema.Finite,
 })
 export type RecordRow = typeof RecordRow.Type
 
@@ -58,7 +58,7 @@ export const IgnoreRuleRow = Schema.Struct({
 	entityType: Customers.UnmatchedEntityType,
 	field: Customers.IgnoreRuleField,
 	pattern: Schema.String,
-	createdAtMs: Schema.Number,
+	createdAtMs: Schema.Finite,
 })
 export type IgnoreRuleRow = typeof IgnoreRuleRow.Type
 

@@ -14,10 +14,13 @@ const events: ReadonlyArray<readonly [string, DesktopMenuItem]> = [
 ]
 
 /** The Tauri host refused a menu event listener. */
-class MenuListenError extends Schema.TaggedError<MenuListenError>()("MenuListenError", {
-	event: Schema.String,
-	cause: Schema.Defect(),
-}) {}
+class MenuListenError extends Schema.TaggedError<MenuListenError, { readonly brand: unique symbol }>()(
+	"MenuListenError",
+	{
+		event: Schema.String,
+		cause: Schema.Defect(),
+	},
+) {}
 
 /** Every menu item the user picks; empty outside the desktop app. A listener that fails is skipped. */
 export const desktopMenuItems: Stream.Stream<DesktopMenuItem> = Stream.callback<DesktopMenuItem>((queue) =>

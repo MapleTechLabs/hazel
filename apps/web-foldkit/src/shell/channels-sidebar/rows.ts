@@ -26,7 +26,7 @@ export const SidebarMember = Schema.Struct({
 	id: ChannelMemberId,
 	isMuted: Schema.Boolean,
 	isFavorite: Schema.Boolean,
-	notificationCount: Schema.Number,
+	notificationCount: Schema.Finite,
 })
 export type SidebarMember = typeof SidebarMember.Type
 
@@ -38,8 +38,8 @@ export const SidebarThread = Schema.Struct({
 	id: ChannelId,
 	name: Schema.String,
 	parentChannelId: ChannelId,
-	createdAtMs: Schema.Number,
-	notificationCount: Schema.Number,
+	createdAtMs: Schema.Finite,
+	notificationCount: Schema.Finite,
 })
 export type SidebarThread = typeof SidebarThread.Type
 
@@ -86,7 +86,7 @@ export type DmChannel = typeof DmChannel.Type
 export const Presence = Schema.Struct({
 	userId: UserId,
 	status: Schema.NullOr(Schema.String),
-	lastSeenMs: Schema.NullOr(Schema.Number),
+	lastSeenMs: Schema.NullOr(Schema.Finite),
 	statusEmoji: Schema.NullOr(Schema.String),
 })
 export type Presence = typeof Presence.Type
@@ -131,7 +131,7 @@ export const DiscoverableChannel = Schema.Struct({
 })
 export type DiscoverableChannel = typeof DiscoverableChannel.Type
 
-export const UnreadCount = Schema.Struct({ channelId: ChannelId, count: Schema.Number })
+export const UnreadCount = Schema.Struct({ channelId: ChannelId, count: Schema.Finite })
 export type UnreadCount = typeof UnreadCount.Type
 
 /** `useSharedChannels`: partner orgs per channel that is mounted in an active Connect conversation. */

@@ -29,9 +29,12 @@ export const AuthFailure = Schema.Union([
 ])
 export type AuthFailure = typeof AuthFailure.Type
 
-export class AuthFlowError extends Schema.TaggedError<AuthFlowError>()("AuthFlowError", {
-	reason: AuthFailure,
-}) {}
+export class AuthFlowError extends Schema.TaggedError<AuthFlowError, { readonly brand: unique symbol }>()(
+	"AuthFlowError",
+	{
+		reason: AuthFailure,
+	},
+) {}
 
 type AuthApi = Context.Service.Shape<typeof HazelAuthClient>["auth"]
 

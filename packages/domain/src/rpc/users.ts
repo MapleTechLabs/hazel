@@ -12,7 +12,9 @@ import { RequiredScopes } from "../scopes/required-scopes"
  * Response schema for successful user operations.
  * Contains the user data and a transaction ID for optimistic updates.
  */
-export class UserResponse extends Schema.Class<UserResponse>("UserResponse")({
+export class UserResponse extends Schema.Class<UserResponse, { readonly brand: unique symbol }>(
+	"UserResponse",
+)({
 	data: User.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -21,7 +23,10 @@ export class UserResponse extends Schema.Class<UserResponse>("UserResponse")({
  * Error thrown when a user is not found.
  * Used in update operations.
  */
-export class UserNotFoundError extends Schema.TaggedError<UserNotFoundError>()("UserNotFoundError", {
+export class UserNotFoundError extends Schema.TaggedError<
+	UserNotFoundError,
+	{ readonly brand: unique symbol }
+>()("UserNotFoundError", {
 	userId: UserId,
 }) {}
 

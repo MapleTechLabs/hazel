@@ -43,11 +43,10 @@ export const currentInvokePrincipal = Effect.gen(function* () {
 	const current = yield* Effect.serviceOption(CurrentUser.Context)
 	const botScopes = yield* Effect.serviceOption(CurrentBotScopes)
 	const scopes = Option.flatten(botScopes)
-	const user = Option.getOrNull(current)
 	const agent = yield* Effect.serviceOption(CurrentAgent)
 	return {
-		// The bot-token path provides a plain object; the schema encodes only the class.
-		user: user === null || user instanceof CurrentUser.Schema ? user : new CurrentUser.Schema(user),
+		// `CurrentUser.Schema` is branded, so every provider hands over the class the schema encodes.
+		user: Option.getOrNull(current),
 		botScopes: Option.isSome(scopes) ? [...scopes.value] : null,
 		agent: Option.getOrNull(agent),
 	} satisfies InvokePrincipal
@@ -82,7 +81,7 @@ export const providePrincipal =
  */
 export const SyncPrincipal = Schema.Struct({
 	userId: UserId,
-	expiresAt: Schema.NullOr(Schema.Number),
+	expiresAt: Schema.NullOr(Schema.Finite),
 })
 export type SyncPrincipal = typeof SyncPrincipal.Type
 

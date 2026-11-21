@@ -15,7 +15,7 @@ import { InstallRedirectUris } from "../bot-install"
  * Response schema for bot operations.
  * Contains the bot data and a transaction ID for optimistic updates.
  */
-export class BotResponse extends Schema.Class<BotResponse>("BotResponse")({
+export class BotResponse extends Schema.Class<BotResponse, { readonly brand: unique symbol }>("BotResponse")({
 	data: Bot.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -23,7 +23,9 @@ export class BotResponse extends Schema.Class<BotResponse>("BotResponse")({
 /**
  * Response for bot creation - includes the plain token (only shown once).
  */
-export class BotCreatedResponse extends Schema.Class<BotCreatedResponse>("BotCreatedResponse")({
+export class BotCreatedResponse extends Schema.Class<BotCreatedResponse, { readonly brand: unique symbol }>(
+	"BotCreatedResponse",
+)({
 	data: Bot.Schema,
 	token: Schema.String, // Plain token, only returned once on creation
 	transactionId: TransactionId,
@@ -32,14 +34,19 @@ export class BotCreatedResponse extends Schema.Class<BotCreatedResponse>("BotCre
 /**
  * Response for listing bots.
  */
-export class BotListResponse extends Schema.Class<BotListResponse>("BotListResponse")({
+export class BotListResponse extends Schema.Class<BotListResponse, { readonly brand: unique symbol }>(
+	"BotListResponse",
+)({
 	data: Schema.Array(Bot.Schema),
 }) {}
 
 /**
  * Response for listing bot commands.
  */
-export class BotCommandListResponse extends Schema.Class<BotCommandListResponse>("BotCommandListResponse")({
+export class BotCommandListResponse extends Schema.Class<
+	BotCommandListResponse,
+	{ readonly brand: unique symbol }
+>("BotCommandListResponse")({
 	data: Schema.Array(BotCommand.Schema),
 }) {}
 
@@ -56,52 +63,59 @@ export type PublicBotInfo = typeof PublicBotInfo.Type
 /**
  * Response for listing public bots in the marketplace.
  */
-export class PublicBotListResponse extends Schema.Class<PublicBotListResponse>("PublicBotListResponse")({
+export class PublicBotListResponse extends Schema.Class<
+	PublicBotListResponse,
+	{ readonly brand: unique symbol }
+>("PublicBotListResponse")({
 	data: Schema.Array(PublicBotInfo),
 }) {}
 
 /**
  * Error thrown when a bot is not found.
  */
-export class BotNotFoundError extends Schema.TaggedError<BotNotFoundError>()("BotNotFoundError", {
+export class BotNotFoundError extends Schema.TaggedError<
+	BotNotFoundError,
+	{ readonly brand: unique symbol }
+>()("BotNotFoundError", {
 	botId: BotId,
 }) {}
 
 /**
  * Error thrown when a bot is already installed in the organization.
  */
-export class BotAlreadyInstalledError extends Schema.TaggedError<BotAlreadyInstalledError>()(
-	"BotAlreadyInstalledError",
-	{
-		botId: BotId,
-	},
-) {}
+export class BotAlreadyInstalledError extends Schema.TaggedError<
+	BotAlreadyInstalledError,
+	{ readonly brand: unique symbol }
+>()("BotAlreadyInstalledError", {
+	botId: BotId,
+}) {}
 
 /** The redirect URI is not one the bot's owner registered (`installRedirectUris`). */
-export class BotInstallRedirectMismatchError extends Schema.TaggedError<BotInstallRedirectMismatchError>()(
-	"BotInstallRedirectMismatchError",
-	{
-		botId: BotId,
-	},
-) {}
+export class BotInstallRedirectMismatchError extends Schema.TaggedError<
+	BotInstallRedirectMismatchError,
+	{ readonly brand: unique symbol }
+>()("BotInstallRedirectMismatchError", {
+	botId: BotId,
+}) {}
 
 /**
  * The bot is already installed in this organization for another region of its service: the
  * install has to be removed first, or the earlier region's link would silently stop receiving.
  */
-export class BotInstallRegionConflictError extends Schema.TaggedError<BotInstallRegionConflictError>()(
-	"BotInstallRegionConflictError",
-	{
-		botId: BotId,
-		/** The region the existing install belongs to; `null` for the default one. */
-		installedRegion: Schema.NullOr(Schema.String),
-	},
-) {}
+export class BotInstallRegionConflictError extends Schema.TaggedError<
+	BotInstallRegionConflictError,
+	{ readonly brand: unique symbol }
+>()("BotInstallRegionConflictError", {
+	botId: BotId,
+	/** The region the existing install belongs to; `null` for the default one. */
+	installedRegion: Schema.NullOr(Schema.String),
+}) {}
 
 /** What the bot-install consent page shows about the bot asking to be installed. */
-export class BotInstallRequestResponse extends Schema.Class<BotInstallRequestResponse>(
-	"BotInstallRequestResponse",
-)({
+export class BotInstallRequestResponse extends Schema.Class<
+	BotInstallRequestResponse,
+	{ readonly brand: unique symbol }
+>("BotInstallRequestResponse")({
 	id: BotId,
 	name: Schema.String,
 	description: Schema.NullOr(Schema.String),
@@ -110,9 +124,10 @@ export class BotInstallRequestResponse extends Schema.Class<BotInstallRequestRes
 }) {}
 
 /** An approved install: the one-time `code` the consent page hands the bot's redirect URI. */
-export class BotInstallAuthorizedResponse extends Schema.Class<BotInstallAuthorizedResponse>(
-	"BotInstallAuthorizedResponse",
-)({
+export class BotInstallAuthorizedResponse extends Schema.Class<
+	BotInstallAuthorizedResponse,
+	{ readonly brand: unique symbol }
+>("BotInstallAuthorizedResponse")({
 	code: Schema.String,
 	transactionId: TransactionId,
 }) {}

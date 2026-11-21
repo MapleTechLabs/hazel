@@ -372,8 +372,7 @@ export const presenceDeadlines = (userId: UserId) =>
 
 const PresenceOrPing = Schema.Union([
 	Schema.TaggedStruct("Ping", {}),
-	Schema.Struct({
-		_tag: Schema.Literal("Presence"),
+	Schema.TaggedStruct("Presence", {
 		clientType: Schema.Literals(["desktop", "web", "mobile"]),
 		idle: Schema.Boolean,
 		afk: Schema.Boolean,

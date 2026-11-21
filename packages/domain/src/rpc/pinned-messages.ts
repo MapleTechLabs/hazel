@@ -13,7 +13,10 @@ import { RouteChannelId } from "./routing-fields"
  * Response schema for successful pinned message operations.
  * Contains the pinned message data and a transaction ID for optimistic updates.
  */
-export class PinnedMessageResponse extends Schema.Class<PinnedMessageResponse>("PinnedMessageResponse")({
+export class PinnedMessageResponse extends Schema.Class<
+	PinnedMessageResponse,
+	{ readonly brand: unique symbol }
+>("PinnedMessageResponse")({
 	data: PinnedMessage.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -22,12 +25,12 @@ export class PinnedMessageResponse extends Schema.Class<PinnedMessageResponse>("
  * Error thrown when a pinned message is not found.
  * Used in update and delete operations.
  */
-export class PinnedMessageNotFoundError extends Schema.TaggedError<PinnedMessageNotFoundError>()(
-	"PinnedMessageNotFoundError",
-	{
-		pinnedMessageId: PinnedMessageId,
-	},
-) {}
+export class PinnedMessageNotFoundError extends Schema.TaggedError<
+	PinnedMessageNotFoundError,
+	{ readonly brand: unique symbol }
+>()("PinnedMessageNotFoundError", {
+	pinnedMessageId: PinnedMessageId,
+}) {}
 
 /**
  * Pinned Message RPC Group

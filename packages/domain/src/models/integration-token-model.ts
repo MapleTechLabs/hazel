@@ -10,7 +10,7 @@ class Model extends M.Class<Model>("IntegrationToken")({
 	encryptedRefreshToken: M.Sensitive(S.NullOr(S.String)),
 	iv: M.Sensitive(S.String),
 	refreshTokenIv: M.Sensitive(S.NullOr(S.String)),
-	encryptionKeyVersion: M.GeneratedByApp(S.Number),
+	encryptionKeyVersion: M.GeneratedByApp(S.Finite),
 	tokenType: M.GeneratedByApp(S.NullOr(S.String)),
 	scope: M.GeneratedByApp(S.NullOr(S.String)),
 	expiresAt: M.GeneratedByApp(S.NullOr(JsonDate)),

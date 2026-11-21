@@ -179,7 +179,7 @@ describe("health settings: bands and steps", () => {
 		expect(invalidFieldsOf(tooHigh.draft ?? DEFAULTS).has("trend.0.score")).toBe(true)
 		const emptied = pageUpdate(
 			loaded(),
-			Message.ChangedScore({ field: "pastDue", value: Number.NaN, text: "" }),
+			Message.ChangedScore({ field: "pastDue", value: null, text: "" }),
 		).model
 		expect(invalidFieldsOf(emptied.draft ?? DEFAULTS).has("pastDue")).toBe(true)
 		expect(validDraftOf(emptied)).toBeNull()
@@ -205,11 +205,11 @@ describe("health settings: typing numbers", () => {
 				list: "trend",
 				index: 0,
 				field: "threshold",
-				value: Number.NaN,
+				value: null,
 				text: "-",
 			}),
 		).model
-		expect(numberText(minus.typing, "trend.0.threshold", Number.NaN)).toBe("-")
+		expect(numberText(minus.typing, "trend.0.threshold", null)).toBe("-")
 		const point = pageUpdate(
 			loaded(),
 			Message.ChangedScore({ field: "pastDue", value: 1, text: "1." }),
@@ -222,7 +222,8 @@ describe("health settings: typing numbers", () => {
 
 	test("only plain decimals read as numbers", () => {
 		expect([" 12 ", "-0.5", "1.", ".5"].map(parseNumber)).toEqual([12, -0.5, 1, 0.5])
-		for (const text of ["", "-", "1e2", "0x10", "Infinity", "1,5"]) expect(parseNumber(text)).toBeNaN()
+		for (const text of ["", "-", "1e2", "0x10", "Infinity", "1,5", "9".repeat(400)])
+			expect(parseNumber(text)).toBeNull()
 	})
 })
 

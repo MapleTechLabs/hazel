@@ -22,7 +22,10 @@ export interface InviteEmail {
 	readonly acceptUrl: string
 }
 
-export class InviteEmailError extends Schema.TaggedError<InviteEmailError>()("InviteEmailError", {
+export class InviteEmailError extends Schema.TaggedError<
+	InviteEmailError,
+	{ readonly brand: unique symbol }
+>()("InviteEmailError", {
 	message: Schema.String,
 }) {}
 

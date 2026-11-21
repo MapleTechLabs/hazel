@@ -5,14 +5,18 @@ import { RequiredScopes } from "../scopes/required-scopes"
 
 // ============ Response Schemas ============
 
-export class KlipyFileVariant extends Schema.Class<KlipyFileVariant>("KlipyFileVariant")({
+export class KlipyFileVariant extends Schema.Class<KlipyFileVariant, { readonly brand: unique symbol }>(
+	"KlipyFileVariant",
+)({
 	url: Schema.String,
-	width: Schema.Number,
-	height: Schema.Number,
-	size: Schema.Number,
+	width: Schema.Finite,
+	height: Schema.Finite,
+	size: Schema.Finite,
 }) {}
 
-export class KlipyFileResolution extends Schema.Class<KlipyFileResolution>("KlipyFileResolution")({
+export class KlipyFileResolution extends Schema.Class<KlipyFileResolution, { readonly brand: unique symbol }>(
+	"KlipyFileResolution",
+)({
 	gif: KlipyFileVariant,
 	webp: KlipyFileVariant,
 	jpg: KlipyFileVariant,
@@ -20,15 +24,15 @@ export class KlipyFileResolution extends Schema.Class<KlipyFileResolution>("Klip
 	webm: KlipyFileVariant,
 }) {}
 
-export class KlipyFile extends Schema.Class<KlipyFile>("KlipyFile")({
+export class KlipyFile extends Schema.Class<KlipyFile, { readonly brand: unique symbol }>("KlipyFile")({
 	hd: KlipyFileResolution,
 	md: KlipyFileResolution,
 	sm: KlipyFileResolution,
 	xs: KlipyFileResolution,
 }) {}
 
-export class KlipyGif extends Schema.Class<KlipyGif>("KlipyGif")({
-	id: Schema.Number,
+export class KlipyGif extends Schema.Class<KlipyGif, { readonly brand: unique symbol }>("KlipyGif")({
+	id: Schema.Finite,
 	slug: Schema.String,
 	title: Schema.String,
 	file: KlipyFile,
@@ -36,28 +40,33 @@ export class KlipyGif extends Schema.Class<KlipyGif>("KlipyGif")({
 	blur_preview: Schema.String,
 }) {}
 
-export class KlipySearchResponse extends Schema.Class<KlipySearchResponse>("KlipySearchResponse")({
+export class KlipySearchResponse extends Schema.Class<KlipySearchResponse, { readonly brand: unique symbol }>(
+	"KlipySearchResponse",
+)({
 	data: Schema.Array(KlipyGif),
-	current_page: Schema.Number,
-	per_page: Schema.Number,
+	current_page: Schema.Finite,
+	per_page: Schema.Finite,
 	has_next: Schema.Boolean,
 }) {}
 
-export class KlipyCategory extends Schema.Class<KlipyCategory>("KlipyCategory")({
+export class KlipyCategory extends Schema.Class<KlipyCategory, { readonly brand: unique symbol }>(
+	"KlipyCategory",
+)({
 	category: Schema.String,
 	query: Schema.String,
 	preview_url: Schema.String,
 }) {}
 
-export class KlipyCategoriesResponse extends Schema.Class<KlipyCategoriesResponse>("KlipyCategoriesResponse")(
-	{
-		categories: Schema.Array(KlipyCategory),
-	},
-) {}
+export class KlipyCategoriesResponse extends Schema.Class<
+	KlipyCategoriesResponse,
+	{ readonly brand: unique symbol }
+>("KlipyCategoriesResponse")({
+	categories: Schema.Array(KlipyCategory),
+}) {}
 
 // ============ Error Schemas ============
 
-export class KlipyApiError extends Schema.TaggedError<KlipyApiError>("KlipyApiError")(
+export class KlipyApiError extends Schema.TaggedError<KlipyApiError, { readonly brand: unique symbol }>()(
 	"KlipyApiError",
 	{
 		message: Schema.String,
@@ -71,10 +80,10 @@ export class KlipyGroup extends HttpApiGroup.make("klipy")
 	.add(
 		HttpApiEndpoint.get("trending", "/trending", {
 			query: {
-				page: Schema.optional(Schema.NumberFromString).pipe(
+				page: Schema.optional(Schema.FiniteFromString).pipe(
 					Schema.withDecodingDefault(Effect.succeed("1")),
 				),
-				per_page: Schema.optional(Schema.NumberFromString).pipe(
+				per_page: Schema.optional(Schema.FiniteFromString).pipe(
 					Schema.withDecodingDefault(Effect.succeed("25")),
 				),
 			},
@@ -86,10 +95,10 @@ export class KlipyGroup extends HttpApiGroup.make("klipy")
 		HttpApiEndpoint.get("search", "/search", {
 			query: {
 				q: Schema.String,
-				page: Schema.optional(Schema.NumberFromString).pipe(
+				page: Schema.optional(Schema.FiniteFromString).pipe(
 					Schema.withDecodingDefault(Effect.succeed("1")),
 				),
-				per_page: Schema.optional(Schema.NumberFromString).pipe(
+				per_page: Schema.optional(Schema.FiniteFromString).pipe(
 					Schema.withDecodingDefault(Effect.succeed("25")),
 				),
 			},

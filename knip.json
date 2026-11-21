@@ -5,7 +5,10 @@
 	"workspaces": {
 		".": {
 			"entry": ["alchemy.run.ts", "scripts/**/*.ts", "scripts/oxlint-plugins/*.mjs"],
-			"ignoreBinaries": ["infisical"]
+			"ignoreBinaries": ["infisical"],
+			// The Effect language service's plugin id in `tsconfig.base.json`: `effect-tsgo` (`@effect/tsgo`)
+			// implements it, there is no such package to install.
+			"ignoreDependencies": ["@effect/language-service"]
 		},
 		"apps/backend": {
 			// The folder's map (`objects/` and what lives where); nothing imports the barrel.
@@ -72,10 +75,14 @@
 		},
 		// The workerd suites' Worker, named by path in their vitest config.
 		"packages/db": {
-			"entry": ["test/workerd/worker.ts"]
+			"entry": ["test/workerd/worker.ts"],
+			// `typecheck` runs `effect-tsgo tsc -p test/workerd`, which knip does not read the config from.
+			"typescript": { "config": ["tsconfig.json", "test/workerd/tsconfig.json"] }
 		},
 		"packages/sync-do": {
-			"entry": ["test/workerd/worker.ts"]
+			"entry": ["test/workerd/worker.ts"],
+			// `typecheck` runs `effect-tsgo tsc -p test/workerd`, which knip does not read the config from.
+			"typescript": { "config": ["tsconfig.json", "test/workerd/tsconfig.json"] }
 		},
 		"packages/integrations": {
 			"entry": ["scripts/**/*.ts"]

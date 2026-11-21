@@ -125,8 +125,9 @@ function syncAllCollections(
 	txid: string,
 	timeout: number,
 ): Effect.Effect<void, SyncError> {
-	return Effect.all(
-		collections.map(({ name, collection }) =>
+	return Effect.forEach(
+		collections,
+		({ name, collection }) =>
 			collection.utils.awaitSeqEffect(txid, timeout).pipe(
 				Effect.mapError(
 					(error) =>
@@ -139,7 +140,6 @@ function syncAllCollections(
 						}),
 				),
 			),
-		),
 		{ concurrency: "unbounded", discard: true },
 	)
 }
@@ -203,7 +203,7 @@ export function optimisticAction<
 			const transaction = createTransaction({
 				autoCommit: true,
 				mutationFn: async (params) => {
-					const exit = await Effect.runPromiseExit(
+					const exit = await Effect.runPromiseExitWith(context)(
 						Effect.gen(function* () {
 							mutationResult = yield* mutate(variables, {
 								mutateResult,
@@ -215,7 +215,7 @@ export function optimisticAction<
 								syncTimeout,
 							)
 							return mutationResult.data
-						}).pipe(Effect.provideContext(context)),
+						}),
 					)
 					if (Exit.isSuccess(exit)) return exit.value
 					failure = exit.cause

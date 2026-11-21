@@ -35,10 +35,10 @@ export class NotificationPolicy extends Context.Service<NotificationPolicy>()("N
 			)(notificationRepo.with(id, () => policy(policyEntity, action, (actor) => isOwner(actor.id))))
 
 		return {
-			canCreate: () => ownObject("create"),
+			canCreate: ownObject("create"),
 			canUpdate: ownNotification("update"),
 			canDelete: ownNotification("delete"),
-			canMarkAllAsRead: () => ownObject("markAllAsRead"),
+			canMarkAllAsRead: ownObject("markAllAsRead"),
 		} as const
 	}),
 }) {

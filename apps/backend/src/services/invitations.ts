@@ -75,43 +75,43 @@ export class Invitations extends Context.Service<Invitations>()("Invitations", {
 		const organizationRepo = yield* OrganizationRepo
 		const mailer = yield* InviteMailer
 		const frontendUrl = yield* Config.String("FRONTEND_URL")
+		const directory = yield* Directory
 
 		/** The invitation rows, over D1. */
-		const invitationRepo = Effect.flatMap(Directory, (directory) =>
-			InvitationRepo.make.pipe(Effect.provideService(Database.Database, directory.db)),
+		const invitationRepo = InvitationRepo.make.pipe(
+			Effect.provideService(Database.Database, directory.db),
 		)
 
 		const findByToken = (token: string) =>
 			Effect.gen(function* () {
 				const repo = yield* invitationRepo
 				const row = yield* repo.findByTokenHash(yield* hashToken(token))
-				return yield* Option.match(row, {
-					onNone: () => Effect.fail(new InvitationNotFoundError()),
-					onSome: Effect.succeed,
-				})
+				return yield* Effect.fromOption(row, () => new InvitationNotFoundError())
 			})
 
 		/** The org's directory index row (name, slug), if it is live. */
 		const findIndexedOrganization = (organizationId: OrganizationId) =>
-			Effect.flatMap(Directory, (directory) => directory.org(organizationId)).pipe(
-				Effect.flatMap((organization) =>
-					Option.isSome(organization) && organization.value.deletedAt === null
-						? Effect.succeed(organization.value)
-						: Effect.fail(new OrganizationNotFoundError({ organizationId })),
-				),
-			)
+			directory
+				.org(organizationId)
+				.pipe(
+					Effect.flatMap((organization) =>
+						Option.isSome(organization) && organization.value.deletedAt === null
+							? Effect.succeed(organization.value)
+							: Effect.fail(new OrganizationNotFoundError({ organizationId })),
+					),
+				)
 
 		return {
-			create: ({
-				organizationId,
-				emails,
-				role,
-			}: {
-				readonly organizationId: OrganizationId
-				readonly emails: ReadonlyArray<string>
-				readonly role: InvitationRole
-			}) =>
-				Effect.gen(function* () {
+			create: Effect.fn("Invitations.create")(
+				function* ({
+					organizationId,
+					emails,
+					role,
+				}: {
+					readonly organizationId: OrganizationId
+					readonly emails: ReadonlyArray<string>
+					readonly role: InvitationRole
+				}) {
 					yield* policy.canManage(organizationId, "create")
 					const currentUser = yield* CurrentUser.Context
 					const organization = yield* organizationRepo
@@ -164,7 +164,9 @@ export class Invitations extends Context.Service<Invitations>()("Invitations", {
 					}
 
 					return new InvitationCreateResult({ invited, skipped })
-				}).pipe(withRemapDbErrors("Invitation", "create"), Effect.withSpan("Invitations.create")),
+				},
+				withRemapDbErrors("Invitation", "create"),
+			),
 
 			list: ({ organizationId }: { readonly organizationId: OrganizationId }) =>
 				Effect.gen(function* () {
@@ -200,10 +202,9 @@ export class Invitations extends Context.Service<Invitations>()("Invitations", {
 					})
 				}).pipe(withRemapDbErrors("Invitation", "select")),
 
-			accept: ({ token }: { readonly token: string }) =>
-				Effect.gen(function* () {
+			accept: Effect.fn("Invitations.accept")(
+				function* ({ token }: { readonly token: string }) {
 					const currentUser = yield* CurrentUser.Context
-					const directory = yield* Directory
 					const invitation = yield* findByToken(token)
 					const status = statusOf(invitation, new Date())
 					if (status !== "Pending") return yield* new InvitationUnavailableError({ status })
@@ -235,14 +236,14 @@ export class Invitations extends Context.Service<Invitations>()("Invitations", {
 						Effect.catchTags({
 							ApplyNowError: (error) =>
 								Effect.fail(
-									new InternalServerError({
+									InternalServerError.withCause({
 										message: "Could not join the organization",
 										cause: error,
 									}),
 								),
 							SchemaError: (error) =>
 								Effect.fail(
-									new InternalServerError({
+									InternalServerError.withCause({
 										message: "Could not join the organization",
 										cause: error,
 									}),
@@ -263,7 +264,9 @@ export class Invitations extends Context.Service<Invitations>()("Invitations", {
 						organizationId: organization.id,
 						slug: organization.slug ?? null,
 					})
-				}).pipe(withRemapDbErrors("Invitation", "update"), Effect.withSpan("Invitations.accept")),
+				},
+				withRemapDbErrors("Invitation", "update"),
+			),
 		}
 	}),
 }) {

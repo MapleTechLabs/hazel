@@ -22,11 +22,10 @@ export class AttachmentPolicy extends Context.Service<AttachmentPolicy>()("Attac
 			policy(policyEntity, action, (actor) => Effect.succeed(actor.id === uploadedBy))
 
 		/** Uploads are admitted where they are created (the channel's object checks the viewer). */
-		const canCreate = () =>
-			ErrorUtils.refailUnauthorized(
-				policyEntity,
-				"create",
-			)(policy(policyEntity, "create", () => Effect.succeed(true)))
+		const canCreate = ErrorUtils.refailUnauthorized(
+			policyEntity,
+			"create",
+		)(policy(policyEntity, "create", () => Effect.succeed(true)))
 
 		const canUpdate = (id: AttachmentId) =>
 			ErrorUtils.refailUnauthorized(

@@ -35,7 +35,7 @@ export const BotWire = Schema.Struct({
 	scopes: Schema.NullOr(Schema.Array(Schema.String)),
 	metadata: Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
 	isPublic: Schema.Boolean,
-	installCount: Schema.Number,
+	installCount: Schema.Finite,
 	mentionable: Schema.Boolean,
 	allowedIntegrations: Schema.NullOr(Schema.Array(IntegrationConnection.IntegrationProvider)),
 	/** Optional: deliveries enqueued before the column existed omit it. */

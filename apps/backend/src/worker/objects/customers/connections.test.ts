@@ -31,16 +31,17 @@ vi.mock("./providers", async (importOriginal) => {
 		pull: () => Effect.die("not pulled here"),
 		pullIntervalMs: 60 * 60_000,
 	}
-	// The class itself (its key) stays: only the layer `CustomersServicesLive` reads is replaced.
-	Object.assign(actual.CustomerProviders, {
-		layer: Layer.succeed(
+	// A subclass keeps the service's key, so `yield* CustomerProviders` anywhere still finds it; only
+	// the layer `CustomersServicesLive` reads is the test's.
+	class CustomerProviders extends actual.CustomerProviders {
+		static override readonly layer = Layer.succeed(
 			actual.CustomerProviders,
 			actual.CustomerProviders.of({
 				get: (provider) => (provider === "stripe" ? Option.some(stripe) : Option.none()),
 			}),
-		),
-	})
-	return actual
+		)
+	}
+	return { ...actual, CustomerProviders }
 })
 
 const messageOf = (exit: Exit.Exit<unknown, unknown>) =>

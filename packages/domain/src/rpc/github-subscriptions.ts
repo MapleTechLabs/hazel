@@ -13,9 +13,10 @@ import { RouteOrganizationId } from "./routing-fields"
  * Response schema for GitHub subscription operations.
  * Contains the subscription data and a transaction ID for optimistic updates.
  */
-export class GitHubSubscriptionResponse extends Schema.Class<GitHubSubscriptionResponse>(
-	"GitHubSubscriptionResponse",
-)({
+export class GitHubSubscriptionResponse extends Schema.Class<
+	GitHubSubscriptionResponse,
+	{ readonly brand: unique symbol }
+>("GitHubSubscriptionResponse")({
 	data: GitHubSubscription.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -23,40 +24,41 @@ export class GitHubSubscriptionResponse extends Schema.Class<GitHubSubscriptionR
 /**
  * Response for listing GitHub subscriptions.
  */
-export class GitHubSubscriptionListResponse extends Schema.Class<GitHubSubscriptionListResponse>(
-	"GitHubSubscriptionListResponse",
-)({
+export class GitHubSubscriptionListResponse extends Schema.Class<
+	GitHubSubscriptionListResponse,
+	{ readonly brand: unique symbol }
+>("GitHubSubscriptionListResponse")({
 	data: Schema.Array(GitHubSubscription.Schema),
 }) {}
 
 /**
  * Error thrown when a GitHub subscription is not found.
  */
-export class GitHubSubscriptionNotFoundError extends Schema.TaggedError<GitHubSubscriptionNotFoundError>()(
-	"GitHubSubscriptionNotFoundError",
-	{
-		subscriptionId: GitHubSubscriptionId,
-	},
-) {}
+export class GitHubSubscriptionNotFoundError extends Schema.TaggedError<
+	GitHubSubscriptionNotFoundError,
+	{ readonly brand: unique symbol }
+>()("GitHubSubscriptionNotFoundError", {
+	subscriptionId: GitHubSubscriptionId,
+}) {}
 
 /**
  * Error thrown when trying to subscribe to a repo that's already subscribed.
  */
-export class GitHubSubscriptionExistsError extends Schema.TaggedError<GitHubSubscriptionExistsError>()(
-	"GitHubSubscriptionExistsError",
-	{
-		channelId: ChannelId,
-		repositoryId: Schema.Number,
-	},
-) {}
+export class GitHubSubscriptionExistsError extends Schema.TaggedError<
+	GitHubSubscriptionExistsError,
+	{ readonly brand: unique symbol }
+>()("GitHubSubscriptionExistsError", {
+	channelId: ChannelId,
+	repositoryId: Schema.Finite,
+}) {}
 
 /**
  * Error thrown when the organization doesn't have GitHub connected.
  */
-export class GitHubNotConnectedError extends Schema.TaggedError<GitHubNotConnectedError>()(
-	"GitHubNotConnectedError",
-	{},
-) {}
+export class GitHubNotConnectedError extends Schema.TaggedError<
+	GitHubNotConnectedError,
+	{ readonly brand: unique symbol }
+>()("GitHubNotConnectedError", {}) {}
 
 /**
  * GitHub Subscription RPC Group
@@ -86,7 +88,7 @@ export class GitHubSubscriptionRpcs extends RpcGroup.make(
 	Rpc.make("githubSubscription.create", {
 		payload: Schema.Struct({
 			channelId: ChannelId,
-			repositoryId: Schema.Number,
+			repositoryId: Schema.Finite,
 			repositoryFullName: Schema.String,
 			repositoryOwner: Schema.String,
 			repositoryName: Schema.String,

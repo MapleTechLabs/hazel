@@ -34,7 +34,7 @@ export const SetMembersPayload = Schema.Struct({
 	organizationId: OrganizationId,
 	members: Schema.Array(CustomerMember),
 	/** Increases with every snapshot the org sends (out-of-order deliveries drop the older one). */
-	version: Schema.Number,
+	version: Schema.Finite,
 	/** The org was deleted (`members` is empty): disconnect every data source, stop computing. */
 	organizationDeleted: Schema.optionalKey(Schema.Boolean),
 })

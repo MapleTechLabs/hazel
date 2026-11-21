@@ -28,13 +28,13 @@ export const ClerkOrganization = Schema.Struct({
 	slug: Nullable(Schema.String),
 	image_url: Nullable(Schema.String),
 	has_image: Nullable(Schema.Boolean),
-	members_count: Nullable(Schema.Number),
+	members_count: Nullable(Schema.Finite),
 	/** Clerk's seat cap; `0` means unlimited. */
-	max_allowed_memberships: Nullable(Schema.Number),
+	max_allowed_memberships: Nullable(Schema.Finite),
 	/** Its boolean keys are the organization's feature flags (`./map.ts` `featureFlagsOf`). */
 	public_metadata: Nullable(Schema.Record(Schema.String, Schema.Unknown)),
-	created_at: Nullable(Schema.Number),
-	updated_at: Nullable(Schema.Number),
+	created_at: Nullable(Schema.Finite),
+	updated_at: Nullable(Schema.Finite),
 })
 export type ClerkOrganization = typeof ClerkOrganization.Type
 
@@ -58,8 +58,8 @@ export const ClerkMembership = Schema.Struct({
 	role_name: Nullable(Schema.String),
 	organization: Schema.optionalKey(ClerkOrganization),
 	public_user_data: Schema.optionalKey(ClerkPublicUserData),
-	created_at: Nullable(Schema.Number),
-	updated_at: Nullable(Schema.Number),
+	created_at: Nullable(Schema.Finite),
+	updated_at: Nullable(Schema.Finite),
 })
 export type ClerkMembership = typeof ClerkMembership.Type
 
@@ -78,11 +78,11 @@ export const ClerkUser = Schema.Struct({
 	primary_email_address_id: Nullable(Schema.String),
 	email_addresses: Schema.optionalKey(Schema.Array(ClerkEmailAddress)),
 	/** Unix ms of the last sign-in. */
-	last_sign_in_at: Nullable(Schema.Number),
+	last_sign_in_at: Nullable(Schema.Finite),
 	/** Unix ms of the latest session activity, with **day** precision (Clerk keeps only the latest). */
-	last_active_at: Nullable(Schema.Number),
-	created_at: Nullable(Schema.Number),
-	updated_at: Nullable(Schema.Number),
+	last_active_at: Nullable(Schema.Finite),
+	created_at: Nullable(Schema.Finite),
+	updated_at: Nullable(Schema.Finite),
 })
 export type ClerkUser = typeof ClerkUser.Type
 
@@ -90,7 +90,7 @@ export const ClerkOrganizationDomain = Schema.Struct({
 	id: Schema.String,
 	organization_id: Schema.String,
 	name: Schema.String,
-	created_at: Nullable(Schema.Number),
+	created_at: Nullable(Schema.Finite),
 })
 export type ClerkOrganizationDomain = typeof ClerkOrganizationDomain.Type
 
@@ -101,8 +101,8 @@ export const ClerkSession = Schema.Struct({
 	last_active_organization_id: Nullable(Schema.String),
 	/** Set on an impersonation (or agent) session: the user did not sign in themselves. */
 	actor: Nullable(Schema.Unknown),
-	created_at: Nullable(Schema.Number),
-	last_active_at: Nullable(Schema.Number),
+	created_at: Nullable(Schema.Finite),
+	last_active_at: Nullable(Schema.Finite),
 })
 export type ClerkSession = typeof ClerkSession.Type
 
@@ -116,7 +116,7 @@ export type ClerkDeletedObject = typeof ClerkDeletedObject.Type
 
 /** `{ data, total_count }`, the shape of every list endpoint Hazel pages through. */
 const ClerkPage = <S extends Schema.Top>(item: S) =>
-	Schema.Struct({ data: Schema.Array(item), total_count: Schema.optionalKey(Schema.Number) })
+	Schema.Struct({ data: Schema.Array(item), total_count: Schema.optionalKey(Schema.Finite) })
 
 export const ClerkOrganizationsPage = ClerkPage(ClerkOrganization)
 export const ClerkMembershipsPage = ClerkPage(ClerkMembership)
@@ -129,7 +129,7 @@ export const ClerkWebhookEnvelope = Schema.Struct({
 	type: Schema.String,
 	data: Schema.Unknown,
 	/** Unix ms Clerk stamped on the event. */
-	timestamp: Nullable(Schema.Number),
+	timestamp: Nullable(Schema.Finite),
 	/** The Clerk instance the event happened in (`GET /instance`'s `id`). */
 	instance_id: Nullable(Schema.String),
 })

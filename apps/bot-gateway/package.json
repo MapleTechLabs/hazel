@@ -9,7 +9,7 @@
 	},
 	"scripts": {
 		"test": "vitest run",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "effect-tsgo tsc --noEmit"
 	},
 	"dependencies": {
 		"@alchemy.run/cloudflare": "catalog:alchemy",

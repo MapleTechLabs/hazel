@@ -40,7 +40,7 @@ export const SendPresenceUpdate = Command.define("SendPresenceUpdate", {
 
 /** Waits out the backoff after a failed write. */
 export const WaitSyncRetry = Command.define("WaitSyncRetry", {
-	args: { userId: UserId, delayMs: Schema.Number },
+	args: { userId: UserId, delayMs: Schema.Finite },
 	messages: [Message.ElapsedSyncRetry],
 	execute: ({ userId, delayMs }) =>
 		Effect.sleep(Duration.millis(delayMs)).pipe(Effect.as(Message.ElapsedSyncRetry({ userId }))),
@@ -56,7 +56,7 @@ export const SendHeartbeat = Command.define("SendHeartbeat", {
 })
 
 export const BroadcastActivity = Command.define("BroadcastActivity", {
-	args: { atMs: Schema.Number },
+	args: { atMs: Schema.Finite },
 	messages: [Message.CompletedBroadcastActivity],
 	execute: ({ atMs }) => broadcastActivity(atMs).pipe(Effect.as(Message.CompletedBroadcastActivity())),
 })

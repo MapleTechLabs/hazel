@@ -73,7 +73,7 @@ export const UrlState = defineTaggedUnion({
 	Failed: {},
 	Ready: {
 		url: Schema.String,
-		expiresAt: Schema.Number,
+		expiresAt: Schema.Finite,
 		isMinting: Schema.Boolean,
 	},
 })
@@ -83,9 +83,9 @@ export type UrlState = typeof UrlState.Type
 export const FrameState = Schema.Struct({
 	/** What the frame loaded and keeps; null until a URL is at hand. */
 	src: Schema.NullOr(Schema.String),
-	srcExpiresAt: Schema.Number,
+	srcExpiresAt: Schema.Finite,
 	/** The page's own height (`size-changed`), once it reported one. */
-	contentHeight: Schema.NullOr(Schema.Number),
+	contentHeight: Schema.NullOr(Schema.Finite),
 	isExpanded: Schema.Boolean,
 	/** The page reported a height (it is parsed and themed) or the frame fired `load`: it shows. */
 	isLoaded: Schema.Boolean,
@@ -124,15 +124,15 @@ export const MintPurpose = Schema.Literals(["Inline", "Fullscreen"])
 export type MintPurpose = typeof MintPurpose.Type
 
 export const Message = defineMessageUnion({
-	MountedFrame: { ref: RenderRef, surface: FrameSurface, nowMs: Schema.Number },
+	MountedFrame: { ref: RenderRef, surface: FrameSurface, nowMs: Schema.Finite },
 	LoadedFrame: { ref: RenderRef, mode: FrameMode },
-	SucceededMintUrl: { ref: RenderRef, purpose: MintPurpose, url: Schema.String, expiresAt: Schema.Number },
+	SucceededMintUrl: { ref: RenderRef, purpose: MintPurpose, url: Schema.String, expiresAt: Schema.Finite },
 	FailedMintUrl: { ref: RenderRef, purpose: MintPurpose },
 	ReportedContentHeight: {
 		messageId: MessageId,
 		renderId: HtmlRenderId,
 		surface: FrameSurface,
-		height: Schema.Number,
+		height: Schema.Finite,
 	},
 	RequestedOpenLink: { url: Schema.String },
 	/** Escape pressed inside the fullscreen page, which holds the keyboard while it has focus. */

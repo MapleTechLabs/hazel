@@ -11,7 +11,7 @@ export const Emoji = Schema.Struct({
 	id: CustomEmojiId,
 	name: Schema.String,
 	imageUrl: Schema.String,
-	createdAtMs: Schema.NullOr(Schema.Number),
+	createdAtMs: Schema.NullOr(Schema.Finite),
 	creatorFirstName: Schema.String,
 	creatorLastName: Schema.String,
 })

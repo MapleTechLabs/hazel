@@ -46,7 +46,7 @@ export const CreateConnection = Command.define("CreateConnection", {
 
 /** The modal's workspace query for its provider; the modal mounts with the loaded list. */
 export const ListWorkspaces = Command.define("ListWorkspaces", {
-	args: { organizationId: OrganizationId, provider: ChatSyncProvider, version: Schema.Number },
+	args: { organizationId: OrganizationId, provider: ChatSyncProvider, version: Schema.Finite },
 	messages: [Message.SucceededListWorkspaces, Message.FailedListWorkspaces],
 	execute: ({ organizationId, provider, version }) =>
 		listResource(

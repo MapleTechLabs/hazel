@@ -51,7 +51,7 @@ export const init = (options: {
 // MESSAGE
 
 /** Enabled item keys in order plus the column count, so keyboard navigation stays pure. */
-const Navigation = { keys: Schema.Array(Schema.String), columns: Schema.Number }
+const Navigation = { keys: Schema.Array(Schema.String), columns: Schema.Finite }
 
 export const Message = defineMessageUnion({
 	ClickedItem: { key: Schema.String },

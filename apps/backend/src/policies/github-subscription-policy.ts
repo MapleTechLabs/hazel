@@ -5,7 +5,6 @@ import { Context, Effect, Layer } from "effect"
 import { withAnnotatedScope } from "../lib/policy-utils"
 import { OrgResolver } from "../services/org-resolver"
 
-/** @effect-leakable-service */
 export class GitHubSubscriptionPolicy extends Context.Service<GitHubSubscriptionPolicy>()(
 	"GitHubSubscriptionPolicy/Policy",
 	{

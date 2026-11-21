@@ -21,7 +21,7 @@ const Clicked = defineMessageUnion({ Clicked: {} })
 type Clicked = typeof Clicked.Type
 type Focused = Readonly<{ _tag: "Completed"; outcome: string }>
 
-const Model = Schema.Struct({ count: Schema.Number, name: Schema.String })
+const Model = Schema.Struct({ count: Schema.Finite, name: Schema.String })
 type Model = typeof Model.Type
 
 const update = (model: Model, message: Message) =>
@@ -143,7 +143,7 @@ describe("makeRuneTarget", () => {
 		const seen: Array<string> = []
 		const handle = Runtime.embed(
 			Runtime.makeElement({
-				Model: Schema.Struct({ n: Schema.Number }),
+				Model: Schema.Struct({ n: Schema.Finite }),
 				init: () => ({ model: { n: 0 } }),
 				update: (model, message: typeof Keys.Type) => {
 					seen.push(`${message._tag} ${message.key}`)
@@ -203,7 +203,7 @@ describe("makeRuneTarget", () => {
 		const seen: Array<string> = []
 		const handle = Runtime.embed(
 			Runtime.makeElement({
-				Model: Schema.Struct({ n: Schema.Number }),
+				Model: Schema.Struct({ n: Schema.Finite }),
 				init: () => ({ model: { n: 0 } }),
 				update: (model, message: typeof Picked.Type) => {
 					seen.push(...message.names)
@@ -255,7 +255,7 @@ describe("makeRuneTarget", () => {
 		})
 		const handle = Runtime.embed(
 			Runtime.makeElement({
-				Model: Schema.Struct({ n: Schema.Number }),
+				Model: Schema.Struct({ n: Schema.Finite }),
 				init: () => ({ model: { n: 0 }, commands: [OpenPicker()] }),
 				update: (model) => ({ model }),
 				view: (_model, h) =>
@@ -300,7 +300,7 @@ describe("makeRuneTarget", () => {
 			])
 		const handle = Runtime.embed(
 			Runtime.makeElement({
-				Model: Schema.Struct({ n: Schema.Number }),
+				Model: Schema.Struct({ n: Schema.Finite }),
 				init: () => ({ model: { n: 0 } }),
 				update: (model, message: typeof Chose.Type) => {
 					chosen.push(message.value)
@@ -359,7 +359,7 @@ describe("makeRuneTarget", () => {
 		let toggles = 0
 		const handle = Runtime.embed(
 			Runtime.makeElement({
-				Model: Schema.Struct({ n: Schema.Number }),
+				Model: Schema.Struct({ n: Schema.Finite }),
 				init: () => ({ model: { n: 0 } }),
 				update: (model, _message: typeof Toggled.Type) => {
 					toggles++
@@ -403,7 +403,7 @@ describe("makeRuneTarget", () => {
 		})
 		const handle = Runtime.embed(
 			Runtime.makeElement({
-				Model: Schema.Struct({ clicks: Schema.Number }),
+				Model: Schema.Struct({ clicks: Schema.Finite }),
 				init: () => ({ model: { clicks: 0 } }),
 				update: (model) => ({ model: { clicks: model.clicks + 1 } }),
 				view: (_model, h) =>
@@ -460,7 +460,7 @@ describe("makeRuneTarget", () => {
 		})
 		const handle = Runtime.embed(
 			Runtime.makeElement({
-				Model: Schema.Struct({ outcome: Schema.String, clicks: Schema.Number }),
+				Model: Schema.Struct({ outcome: Schema.String, clicks: Schema.Finite }),
 				init: () => ({ model: { outcome: "", clicks: 0 }, commands: [FocusName()] }),
 				update: (model, message: Focused | Clicked) =>
 					message._tag === "Completed"

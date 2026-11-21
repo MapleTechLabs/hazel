@@ -25,7 +25,10 @@ export const LinkPreviewData = Schema.Struct({
 	publisher: Schema.optional(Schema.String),
 })
 
-export class LinkPreviewError extends Schema.TaggedError<LinkPreviewError>()(
+export class LinkPreviewError extends Schema.TaggedError<
+	LinkPreviewError,
+	{ readonly brand: unique symbol }
+>()(
 	"LinkPreviewError",
 	{
 		message: Schema.String,
@@ -51,7 +54,7 @@ export class LinkPreviewGroup extends HttpApiGroup.make("linkPreview")
 	.prefix("/link-preview") {}
 
 // Tweet Schemas
-export class TweetError extends Schema.TaggedError<TweetError>()(
+export class TweetError extends Schema.TaggedError<TweetError, { readonly brand: unique symbol }>()(
 	"TweetError",
 	{
 		message: Schema.String,

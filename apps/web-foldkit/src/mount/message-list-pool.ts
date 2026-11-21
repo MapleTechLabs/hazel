@@ -16,9 +16,9 @@ export const Pool = Schema.Struct({
 	/** `containerItemKey${i}`: the row each container holds; `null` for an empty container. */
 	slots: Schema.Array(Schema.NullOr(Schema.String)),
 	/** `stickyContainerPool`, in insertion order (a JS Set). */
-	stickySlots: Schema.Array(Schema.Number),
+	stickySlots: Schema.Array(Schema.Finite),
 	/** `numContainersPooled`: containers rendered, empty ones included. */
-	pooledCount: Schema.Number,
+	pooledCount: Schema.Finite,
 })
 export type Pool = typeof Pool.Type
 

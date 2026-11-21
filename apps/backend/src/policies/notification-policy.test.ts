@@ -33,8 +33,8 @@ describe("NotificationPolicy", () => {
 		for (const check of [
 			(policy: typeof NotificationPolicy.Service) => policy.canUpdate(NOTIFICATION_ID),
 			(policy: typeof NotificationPolicy.Service) => policy.canDelete(NOTIFICATION_ID),
-			(policy: typeof NotificationPolicy.Service) => policy.canMarkAllAsRead(),
-			(policy: typeof NotificationPolicy.Service) => policy.canCreate(),
+			(policy: typeof NotificationPolicy.Service) => policy.canMarkAllAsRead,
+			(policy: typeof NotificationPolicy.Service) => policy.canCreate,
 		]) {
 			const result = await runWithActorEither(
 				inObjectOf(actor.id, NotificationPolicy.use(check)),

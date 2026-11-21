@@ -86,7 +86,7 @@ export const Model = Schema.Struct({
 	checked: Schema.Array(Schema.String),
 	switches: Schema.Array(Schema.String),
 	notify: Schema.String,
-	volume: Schema.Number,
+	volume: Schema.Finite,
 	volumeSlider: Slider.Model,
 	plan: ChoiceBox.Model,
 	addons: ChoiceBox.Model,

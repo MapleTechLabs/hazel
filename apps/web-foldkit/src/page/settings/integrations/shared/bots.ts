@@ -16,7 +16,7 @@ export const Bot = Schema.Struct({
 	/** Where its install link may send a grant (`@hazel/domain/bot-install`). */
 	installRedirectUris: Schema.Array(Schema.String),
 	avatarUrl: Schema.NullOr(Schema.String),
-	installCount: Schema.Number,
+	installCount: Schema.Finite,
 })
 export type Bot = typeof Bot.Type
 

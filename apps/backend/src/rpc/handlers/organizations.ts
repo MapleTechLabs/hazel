@@ -130,7 +130,7 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 					if (Option.isNone(self)) {
 						// Directory path: claim an id, then let the new OrgObject create itself.
 						yield* requireFreeSlug(payload.slug)
-						yield* organizationPolicy.canCreate()
+						yield* organizationPolicy.canCreate
 						const id = OrganizationId.make(crypto.randomUUID())
 						return yield* forwardRpc<
 							OrganizationResponse,
@@ -147,7 +147,7 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 									message: `Organization ${id} already exists`,
 								})
 							}
-							yield* organizationPolicy.canCreate()
+							yield* organizationPolicy.canCreate
 							const [created] = yield* db.run(
 								SQLite.insertInto(schema.organizationsTable)
 									.values({
@@ -199,8 +199,8 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 			"organization.setPublicMode": ({ id, isPublic }) =>
 				update(id, { id, isPublic }, Effect.void).pipe(withRemapDbErrors("Organization", "update")),
 
-			"organization.getBySlugPublic": ({ slug }) =>
-				Effect.gen(function* () {
+			"organization.getBySlugPublic": Effect.fn("Organization.getBySlugPublic")(
+				function* ({ slug }) {
 					const org = yield* directory.orgBySlug(slug)
 					if (Option.isNone(org) || !org.value.isPublic) return null
 					const memberCount = yield* directory.memberCount(org.value.id)
@@ -212,14 +212,13 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 						logoUrl: null,
 						memberCount,
 					})
-				}).pipe(
-					Effect.catchTag("DatabaseError", (cause) =>
-						Effect.fail(
-							new InternalServerError({ message: "Error fetching organization", cause }),
-						),
+				},
+				Effect.catchTag("DatabaseError", (cause) =>
+					Effect.fail(
+						InternalServerError.withCause({ message: "Error fetching organization", cause }),
 					),
-					Effect.withSpan("Organization.getBySlugPublic"),
 				),
+			),
 
 			"organization.joinViaPublicInvite": ({ slug }) =>
 				Effect.gen(function* () {

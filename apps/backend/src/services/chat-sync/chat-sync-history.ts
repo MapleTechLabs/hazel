@@ -158,15 +158,15 @@ export const importChatSyncHistory = Effect.fn("ChatSync.importHistory")(functio
 			limit,
 		})
 	}).pipe(
-		Effect.map(Option.some),
-		Effect.catch((error) =>
-			isRetryable(error)
-				? Effect.fail(error)
-				: Effect.logWarning("Chat sync history could not be imported", {
-						provider: payload.provider,
-						externalChannelId: payload.externalChannelId,
-						error: error.message,
-					}).pipe(Effect.as(Option.none())),
+		Effect.asSome,
+		Effect.catchIf(
+			(error) => !isRetryable(error),
+			(error) =>
+				Effect.logWarning("Chat sync history could not be imported", {
+					provider: payload.provider,
+					externalChannelId: payload.externalChannelId,
+					error: error.message,
+				}).pipe(Effect.as(Option.none())),
 		),
 	)
 	if (Option.isNone(page)) {

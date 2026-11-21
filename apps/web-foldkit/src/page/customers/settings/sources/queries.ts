@@ -31,16 +31,16 @@ export const ConnectionRow = Schema.Struct({
 	externalAccountName: Schema.NullOr(Schema.String),
 	config: Customers.ConnectionConfig,
 	connectedBy: UserId,
-	connectedAtMs: Schema.Number,
+	connectedAtMs: Schema.Finite,
 	hasWebhookSecret: Schema.Boolean,
-	lastSyncAtMs: Schema.NullOr(Schema.Number),
-	lastSuccessAtMs: Schema.NullOr(Schema.Number),
-	lastErrorAtMs: Schema.NullOr(Schema.Number),
+	lastSyncAtMs: Schema.NullOr(Schema.Finite),
+	lastSuccessAtMs: Schema.NullOr(Schema.Finite),
+	lastErrorAtMs: Schema.NullOr(Schema.Finite),
 	lastError: Schema.NullOr(Customers.SyncError),
 	consecutiveFailures: Schema.Int,
-	nextSyncAtMs: Schema.NullOr(Schema.Number),
+	nextSyncAtMs: Schema.NullOr(Schema.Finite),
 	stats: Customers.SyncStats,
-	disconnectedAtMs: Schema.NullOr(Schema.Number),
+	disconnectedAtMs: Schema.NullOr(Schema.Finite),
 })
 export type ConnectionRow = typeof ConnectionRow.Type
 
@@ -49,8 +49,8 @@ export const SyncRunRow = Schema.Struct({
 	connectionId: CustomerConnectionId,
 	trigger: Customers.SyncTrigger,
 	status: Customers.SyncRunStatus,
-	startedAtMs: Schema.Number,
-	finishedAtMs: Schema.NullOr(Schema.Number),
+	startedAtMs: Schema.Finite,
+	finishedAtMs: Schema.NullOr(Schema.Finite),
 	progress: Schema.NullOr(Customers.SyncProgress),
 	stats: Customers.SyncStats,
 	error: Schema.NullOr(Customers.SyncError),
@@ -76,7 +76,7 @@ export const ImpersonationRow = Schema.Struct({
 	contactLabel: Schema.NullOr(Schema.String),
 	/** Null: the customer is gone (merged or deleted). */
 	accountName: Schema.NullOr(Schema.String),
-	createdAtMs: Schema.Number,
+	createdAtMs: Schema.Finite,
 })
 export type ImpersonationRow = typeof ImpersonationRow.Type
 

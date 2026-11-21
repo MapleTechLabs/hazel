@@ -11,28 +11,28 @@ import { Schema } from "effect"
  * be client-safe (what went wrong, in words a person can act on), never a raw response body,
  * request URL, header, token or stack.
  */
-export class CustomerProviderError extends Schema.TaggedError<CustomerProviderError>()(
-	"CustomerProviderError",
-	{
-		code: Schema.Literals(["auth", "rate_limited", "provider", "network"]),
-		message: Schema.String,
-		httpStatus: Schema.NullOr(Schema.Int),
-		/** For `rate_limited`. */
-		retryAfterMs: Schema.NullOr(Schema.Number),
-		/**
-		 * `false` for a failure no retry can fix (a response the adapter cannot read): the run fails
-		 * instead of resuming at the same page. Absent: every code but `auth` is retried.
-		 */
-		retryable: Schema.optionalKey(Schema.Boolean),
-	},
-) {}
+export class CustomerProviderError extends Schema.TaggedError<
+	CustomerProviderError,
+	{ readonly brand: unique symbol }
+>()("CustomerProviderError", {
+	code: Schema.Literals(["auth", "rate_limited", "provider", "network"]),
+	message: Schema.String,
+	httpStatus: Schema.NullOr(Schema.Int),
+	/** For `rate_limited`. */
+	retryAfterMs: Schema.NullOr(Schema.Finite),
+	/**
+	 * `false` for a failure no retry can fix (a response the adapter cannot read): the run fails
+	 * instead of resuming at the same page. Absent: every code but `auth` is retried.
+	 */
+	retryable: Schema.optionalKey(Schema.Boolean),
+}) {}
 
 /**
  * A webhook delivery whose signature or payload does not check out: answered 400. Svix (Clerk,
  * Autumn) retries every non-2xx on its schedule until it gives up, so refuse only what a retry
  * cannot fix and acknowledge the rest.
  */
-export class CustomerWebhookRejectedError extends Schema.TaggedError<CustomerWebhookRejectedError>()(
-	"CustomerWebhookRejectedError",
-	{ message: Schema.String },
-) {}
+export class CustomerWebhookRejectedError extends Schema.TaggedError<
+	CustomerWebhookRejectedError,
+	{ readonly brand: unique symbol }
+>()("CustomerWebhookRejectedError", { message: Schema.String }) {}

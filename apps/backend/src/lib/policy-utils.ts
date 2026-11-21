@@ -5,7 +5,7 @@ import { Effect } from "effect"
 
 export type OrganizationRole = "admin" | "member" | "owner"
 
-type PolicyActor = typeof CurrentUser.Schema.Type
+type PolicyActor = CurrentUser.Schema
 
 /**
  * Check if an organization member role has admin privileges

@@ -1,4 +1,5 @@
 {
+	"extends": "../../../../tsconfig.base.json",
 	"include": ["./*.ts", "../../src/**/*.ts"],
 	"exclude": ["../../src/**/*.test.ts", "../../src/testing.ts"],
 	"compilerOptions": {

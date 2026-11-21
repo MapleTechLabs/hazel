@@ -12,8 +12,8 @@ export const Calculate = Tool.make("calculate", {
 		operation: Schema.Literals(["add", "subtract", "multiply", "divide"]).annotate({
 			description: "The arithmetic operation to perform",
 		}),
-		a: Schema.Number.annotate({ description: "First operand" }),
-		b: Schema.Number.annotate({ description: "Second operand" }),
+		a: Schema.Finite.annotate({ description: "First operand" }),
+		b: Schema.Finite.annotate({ description: "Second operand" }),
 	}),
-	success: Schema.Number,
+	success: Schema.Finite,
 })

@@ -27,12 +27,12 @@ export const LiveState = Schema.Struct({
 	text: Schema.String,
 	isStreaming: Schema.Boolean,
 	/** 0-100, or `null` for a reply without progress. */
-	progress: Schema.NullOr(Schema.Number),
+	progress: Schema.NullOr(Schema.Finite),
 	error: Schema.NullOr(Schema.String),
-	startedAt: Schema.NullOr(Schema.Number),
-	completedAt: Schema.NullOr(Schema.Number),
+	startedAt: Schema.NullOr(Schema.Finite),
+	completedAt: Schema.NullOr(Schema.Finite),
 	steps: Schema.Array(LiveStep),
-	currentStepIndex: Schema.NullOr(Schema.Number),
+	currentStepIndex: Schema.NullOr(Schema.Finite),
 })
 export type LiveState = typeof LiveState.Type
 
@@ -71,8 +71,8 @@ export const LiveNewStep = Schema.Struct({
 	toolInput: Schema.optional(Data),
 	toolOutput: Schema.optional(Schema.Unknown),
 	toolError: Schema.optional(Schema.String),
-	startedAt: Schema.optional(Schema.Number),
-	completedAt: Schema.optional(Schema.Number),
+	startedAt: Schema.optional(Schema.Finite),
+	completedAt: Schema.optional(Schema.Finite),
 })
 export type LiveNewStep = typeof LiveNewStep.Type
 
@@ -82,7 +82,7 @@ const persist = Schema.optional(Schema.Boolean)
 export const LiveAction = Schema.Union([
 	Schema.TaggedStruct("Start", { data: Schema.optional(Data) }),
 	Schema.TaggedStruct("SetData", { data: Data }),
-	Schema.TaggedStruct("SetProgress", { progress: Schema.Number }),
+	Schema.TaggedStruct("SetProgress", { progress: Schema.Finite }),
 	Schema.TaggedStruct("AppendText", { text: Schema.String }),
 	Schema.TaggedStruct("SetText", { text: Schema.String }),
 	Schema.TaggedStruct("StopStreaming", {}),
@@ -121,15 +121,15 @@ export const LiveServerFrame = Schema.Union([
 	Schema.TaggedStruct("Snapshot", { state: LiveState }),
 	Schema.TaggedStruct("Started", { data: Data }),
 	Schema.TaggedStruct("DataUpdated", { data: Data }),
-	Schema.TaggedStruct("Progress", { progress: Schema.Number }),
+	Schema.TaggedStruct("Progress", { progress: Schema.Finite }),
 	/** Append `chunk` to the text (streaming). */
 	Schema.TaggedStruct("TextAppended", { chunk: Schema.String }),
 	Schema.TaggedStruct("TextReplaced", { text: Schema.String }),
 	Schema.TaggedStruct("StreamEnded", {}),
 	Schema.TaggedStruct("Completed", { data: Data }),
 	Schema.TaggedStruct("Failed", { error: Schema.String }),
-	Schema.TaggedStruct("StepAdded", { step: LiveStep, index: Schema.Number }),
-	Schema.TaggedStruct("StepStarted", { stepId: Schema.String, index: Schema.Number }),
+	Schema.TaggedStruct("StepAdded", { step: LiveStep, index: Schema.Finite }),
+	Schema.TaggedStruct("StepStarted", { stepId: Schema.String, index: Schema.Finite }),
 	/** `append`: `content` is a chunk to add; otherwise the step's whole content. */
 	Schema.TaggedStruct("StepContent", {
 		stepId: Schema.String,

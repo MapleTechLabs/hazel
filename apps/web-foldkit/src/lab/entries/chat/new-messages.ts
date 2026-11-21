@@ -69,7 +69,7 @@ const Model = Schema.Struct({
 	/** Newest first, as the messages query returns them. */
 	messages: Schema.Array(ChatMessageSchema),
 	rows: Schema.Array(DisplayRow),
-	next: Schema.Number,
+	next: Schema.Finite,
 })
 type Model = typeof Model.Type
 

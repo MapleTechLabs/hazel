@@ -132,7 +132,7 @@ export const commandFieldId = (editorId: string, index: number) => `${editorId}-
 
 /** `CommandInputPanel` focuses a field when the panel opens and on Tab. */
 export const FocusCommandField = Command.define("FocusCommandField", {
-	args: { editorId: Schema.String, index: Schema.Number },
+	args: { editorId: Schema.String, index: Schema.Finite },
 	messages: [Message.CompletedFocusCommandField],
 	execute: ({ editorId, index }) =>
 		Dom.focus(`#${CSS.escape(commandFieldId(editorId, index))}`).pipe(

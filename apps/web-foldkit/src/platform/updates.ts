@@ -27,9 +27,9 @@ export const Model = defineTaggedUnion({
 	Idle: {},
 	Checking: {},
 	Available: { version: Schema.String, body: Schema.NullOr(Schema.String) },
-	UpToDate: { checkedAtMs: Schema.Number },
+	UpToDate: { checkedAtMs: Schema.Finite },
 	CheckFailed: {},
-	Downloading: { downloadedBytes: Schema.Number, totalBytes: Schema.NullOr(Schema.Number) },
+	Downloading: { downloadedBytes: Schema.Finite, totalBytes: Schema.NullOr(Schema.Finite) },
 	Installing: {},
 	Restarting: {},
 	InstallFailed: { reason: InstallFailure },
@@ -41,9 +41,9 @@ export const init = (): Model => Model.Idle()
 export const Message = defineMessageUnion({
 	TickedUpdateCheck: {},
 	FoundUpdate: { version: Schema.String, body: Schema.NullOr(Schema.String) },
-	FoundNoUpdate: { checkedAtMs: Schema.Number },
+	FoundNoUpdate: { checkedAtMs: Schema.Finite },
 	FailedUpdateCheck: {},
-	ProgressedDownload: { downloadedBytes: Schema.Number, totalBytes: Schema.NullOr(Schema.Number) },
+	ProgressedDownload: { downloadedBytes: Schema.Finite, totalBytes: Schema.NullOr(Schema.Finite) },
 	StartedInstall: {},
 	StartedRelaunch: {},
 	FailedInstall: { reason: InstallFailure },
@@ -75,7 +75,10 @@ export const installFailureText = (reason: InstallFailure): string => INSTALL_FA
 // COMMANDS
 
 /** The Tauri updater rejected a call. */
-class UpdaterError extends Schema.TaggedError<UpdaterError>()("UpdaterError", { cause: Schema.Defect() }) {}
+class UpdaterError extends Schema.TaggedError<UpdaterError, { readonly brand: unique symbol }>()(
+	"UpdaterError",
+	{ cause: Schema.Defect() },
+) {}
 
 const updaterCall = <A>(call: () => Promise<A>) =>
 	Effect.tryPromise({ try: call, catch: (cause) => new UpdaterError({ cause }) })

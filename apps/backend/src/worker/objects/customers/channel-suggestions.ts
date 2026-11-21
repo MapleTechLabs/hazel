@@ -216,14 +216,14 @@ const withHostEvidence = Effect.fn("CustomersObject.hostEvidence")(function* (
 			}).pipe(
 				// Unreachable or failing (a defect on the host too): that host's channels go without its
 				// people (so none of them links automatically) and the other hosts' still count.
-				Effect.catchCause((cause) =>
+				Effect.catchCauseIf(
 					// Any interruption in the cause (alone or with a failure) stops the refresh as it was.
-					Cause.hasInterrupts(cause)
-						? Effect.failCause(cause)
-						: Effect.logWarning("Connect host evidence unavailable", {
-								hostOrganizationId,
-								cause: Cause.pretty(cause),
-							}).pipe(Effect.as([])),
+					(cause) => !Cause.hasInterrupts(cause),
+					(cause) =>
+						Effect.logWarning("Connect host evidence unavailable", {
+							hostOrganizationId,
+							cause: Cause.pretty(cause),
+						}).pipe(Effect.as([])),
 				),
 			),
 		{ concurrency: 4 },

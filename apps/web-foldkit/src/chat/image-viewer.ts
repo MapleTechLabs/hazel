@@ -88,8 +88,8 @@ export interface ImageViewerInputs<M> {
 
 const Intent = defineMessageUnion({
 	PressedClose: {},
-	PressedSelect: { index: Schema.Number },
-	Swiped: { step: Schema.Number },
+	PressedSelect: { index: Schema.Finite },
+	Swiped: { step: Schema.Finite },
 })
 type Intent = typeof Intent.Type
 

@@ -109,9 +109,9 @@ export type PendingJump = typeof PendingJump.Type
 
 /** A drag of the thread panel's edge: where it started, and the widest the channel leaves room for. */
 export const ThreadPanelDrag = Schema.Struct({
-	startX: Schema.Number,
-	startWidth: Schema.Number,
-	maxWidth: Schema.Number,
+	startX: Schema.Finite,
+	startWidth: Schema.Finite,
+	maxWidth: Schema.Finite,
 })
 export type ThreadPanelDrag = typeof ThreadPanelDrag.Type
 
@@ -139,7 +139,7 @@ export const Model = Schema.Struct({
 	/** The customer chip's card (desktop) and sheet (phone). */
 	customerCard: CustomerCard.Model,
 	typing: Schema.Array(TypingInfo),
-	typingNowMs: Schema.Number,
+	typingNowMs: Schema.Finite,
 	/** First names of the other members typing now (`useTypingIndicators`), derived in `update`. */
 	typingNames: Schema.Array(Schema.String),
 	/** Ids the reply and thread lookups select, kept stable while the window does not change them. */
@@ -155,9 +155,9 @@ export const Model = Schema.Struct({
 	htmlRender: HtmlRender.Model,
 	/** Oldest first, with date headers; what the list renders. */
 	rows: Schema.Array(DisplayRow),
-	limit: Schema.Number,
+	limit: Schema.Finite,
 	/** Newest messages skipped: the window slides older once it holds `MAX_WINDOW` messages. */
-	offset: Schema.Number,
+	offset: Schema.Finite,
 	list: MessageList.Model,
 	/** The message the keyboard is on (Discord's message navigation); Shift+Tab returns to it. */
 	focusedMessageId: Schema.NullOr(MessageId),
@@ -167,7 +167,7 @@ export const Model = Schema.Struct({
 	draft: Draft.Model,
 	threadPanel: Schema.NullOr(ThreadPanel),
 	/** The thread panel's width in px, the same for every thread; null until read from storage. */
-	threadPanelWidth: Schema.NullOr(Schema.Number),
+	threadPanelWidth: Schema.NullOr(Schema.Finite),
 	threadPanelDrag: Schema.NullOr(ThreadPanelDrag),
 	/** When the channel's notifications are cleared (`notification-clear.ts`). */
 	notifications: NotificationClear.Model,
@@ -177,7 +177,7 @@ export const Model = Schema.Struct({
 	 * Row heights measured in channels visited earlier, by channel, least recent first. A revisit
 	 * lays its rows out at their real heights on the switch frame; rows re-measure as they render.
 	 */
-	heightsByChannel: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Number)),
+	heightsByChannel: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Finite)),
 })
 export type Model = typeof Model.Type
 
@@ -250,7 +250,7 @@ export const Message = defineMessageUnion({
 	/** The open thread's pins; tagged with the thread they were queried for. */
 	UpdatedThreadPanelPins: { threadChannelId: ChannelId, pins: Schema.Array(PinnedInfo) },
 	UpdatedTyping: { typing: Schema.Array(TypingInfo) },
-	TickedTypingClock: { nowMs: Schema.Number },
+	TickedTypingClock: { nowMs: Schema.Finite },
 	GotListMessage: { message: MessageList.Message },
 	GotUnfurlMessage: { message: Unfurl.Message },
 	GotLiveMessage: { message: Live.Message },
@@ -266,7 +266,7 @@ export const Message = defineMessageUnion({
 	/** The quoted text of a reply (on message `fromMessageId`): jump to the message it quotes. */
 	ClickedReplyPreview: { fromMessageId: MessageId, messageId: MessageId },
 	/** The history reaches back to the jump's target, which has `newerCount` newer messages. */
-	LocatedJumpTarget: { messageId: MessageId, newerCount: Schema.Number },
+	LocatedJumpTarget: { messageId: MessageId, newerCount: Schema.Finite },
 	FailedLocateJumpTarget: { messageId: MessageId },
 	/** The list scrolled to the jump's target and has (most likely) rendered and measured its row. */
 	RenderedJumpTarget: { messageId: MessageId },
@@ -277,12 +277,12 @@ export const Message = defineMessageUnion({
 	ClickedGenerateThreadName: {},
 	ClickedRenameThread: {},
 	/** The panel's edge was grabbed: its rendered width and the widest it may grow. */
-	PressedThreadPanelEdge: { clientX: Schema.Number, startWidth: Schema.Number, maxWidth: Schema.Number },
-	MovedThreadPanelEdge: { clientX: Schema.Number },
+	PressedThreadPanelEdge: { clientX: Schema.Finite, startWidth: Schema.Finite, maxWidth: Schema.Finite },
+	MovedThreadPanelEdge: { clientX: Schema.Finite },
 	ReleasedThreadPanelEdge: {},
 	/** An arrow key on the focused edge, by the px it moves the edge (left grows the panel). */
-	PressedThreadPanelEdgeKey: { delta: Schema.Number },
-	LoadedThreadPanelWidth: { width: Schema.NullOr(Schema.Number) },
+	PressedThreadPanelEdgeKey: { delta: Schema.Finite },
+	LoadedThreadPanelWidth: { width: Schema.NullOr(Schema.Finite) },
 	CompletedSaveThreadPanelWidth: {},
 	ClickedJoinChannel: {},
 	/** A printable key typed outside any input (`useGlobalKeyboardFocus`). */

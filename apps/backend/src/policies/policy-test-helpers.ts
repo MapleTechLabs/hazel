@@ -8,21 +8,22 @@ import { OrgResolver } from "../services/org-resolver"
 import { serviceShape } from "../test/effect-helpers"
 export { serviceShape } from "../test/effect-helpers"
 
-export const TEST_ORG_ID = "00000000-0000-0000-0000-000000000001" as OrganizationId
-export const TEST_ALT_ORG_ID = "00000000-0000-0000-0000-000000000002" as OrganizationId
-export const TEST_USER_ID = "00000000-0000-0000-0000-000000000101" as UserId
+export const TEST_ORG_ID = "00000000-0000-4000-8000-000000000001" as OrganizationId
+export const TEST_ALT_ORG_ID = "00000000-0000-4000-8000-000000000002" as OrganizationId
+export const TEST_USER_ID = "00000000-0000-4000-8000-000000000101" as UserId
 
-export const makeActor = (overrides?: Partial<CurrentUser.Schema>): CurrentUser.Schema => ({
-	id: TEST_USER_ID,
-	email: "policy-test@example.com",
-	firstName: "Policy",
-	lastName: "Tester",
-	role: "member",
-	isOnboarded: true,
-	timezone: "UTC",
-	settings: null,
-	...overrides,
-})
+export const makeActor = (overrides?: Partial<CurrentUser.Schema>): CurrentUser.Schema =>
+	new CurrentUser.Schema({
+		id: TEST_USER_ID,
+		email: "policy-test@example.com",
+		firstName: "Policy",
+		lastName: "Tester",
+		role: "member",
+		isOnboarded: true,
+		timezone: "UTC",
+		settings: null,
+		...overrides,
+	})
 
 export const runWithActorEither = <A, E, R>(
 	make: Effect.Effect<A, E, R>,
@@ -68,7 +69,7 @@ export const makeOrganizationMemberRepoLayer = (members: Record<string, Role>) =
 const emptyChannelRepoLayer = Layer.succeed(
 	ChannelRepo,
 	serviceShape<typeof ChannelRepo>({
-		findById: (_id: ChannelId) => Effect.succeed(Option.none()),
+		findById: (_id: ChannelId) => Effect.succeedNone,
 		with: <A, E, R>(_id: ChannelId, _f: (c: any) => Effect.Effect<A, E, R>) =>
 			Effect.fail(makeEntityNotFound("Channel")),
 	}),
@@ -77,7 +78,7 @@ const emptyChannelRepoLayer = Layer.succeed(
 const emptyChannelMemberRepoLayer = Layer.succeed(
 	ChannelMemberRepo,
 	serviceShape<typeof ChannelMemberRepo>({
-		findByChannelAndUser: (_channelId: ChannelId, _userId: UserId) => Effect.succeed(Option.none()),
+		findByChannelAndUser: (_channelId: ChannelId, _userId: UserId) => Effect.succeedNone,
 		with: <A, E, R>(_id: ChannelMemberId, _f: (c: any) => Effect.Effect<A, E, R>) =>
 			Effect.fail(makeEntityNotFound("ChannelMember")),
 	}),
@@ -86,7 +87,7 @@ const emptyChannelMemberRepoLayer = Layer.succeed(
 const emptyMessageRepoLayer = Layer.succeed(
 	MessageRepo,
 	serviceShape<typeof MessageRepo>({
-		findById: (_id: MessageId) => Effect.succeed(Option.none()),
+		findById: (_id: MessageId) => Effect.succeedNone,
 		with: <A, E, R>(_id: MessageId, _f: (c: any) => Effect.Effect<A, E, R>) =>
 			Effect.fail(makeEntityNotFound("Message")),
 	}),

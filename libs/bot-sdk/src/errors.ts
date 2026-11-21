@@ -3,7 +3,10 @@ import { Schema } from "effect"
 /**
  * Error thrown when bot authentication fails.
  */
-export class AuthenticationError extends Schema.TaggedError<AuthenticationError>()("AuthenticationError", {
+export class AuthenticationError extends Schema.TaggedError<
+	AuthenticationError,
+	{ readonly brand: unique symbol }
+>()("AuthenticationError", {
 	message: Schema.String,
 	cause: Schema.Unknown,
 }) {}
@@ -11,19 +14,22 @@ export class AuthenticationError extends Schema.TaggedError<AuthenticationError>
 /**
  * Error thrown when a command payload cannot be decoded.
  */
-export class CommandArgsDecodeError extends Schema.TaggedError<CommandArgsDecodeError>()(
-	"CommandArgsDecodeError",
-	{
-		message: Schema.String,
-		commandName: Schema.String,
-		cause: Schema.Unknown,
-	},
-) {}
+export class CommandArgsDecodeError extends Schema.TaggedError<
+	CommandArgsDecodeError,
+	{ readonly brand: unique symbol }
+>()("CommandArgsDecodeError", {
+	message: Schema.String,
+	commandName: Schema.String,
+	cause: Schema.Unknown,
+}) {}
 
 /**
  * Error thrown when a command handler fails.
  */
-export class CommandHandlerError extends Schema.TaggedError<CommandHandlerError>()("CommandHandlerError", {
+export class CommandHandlerError extends Schema.TaggedError<
+	CommandHandlerError,
+	{ readonly brand: unique symbol }
+>()("CommandHandlerError", {
 	message: Schema.String,
 	commandName: Schema.String,
 	cause: Schema.Unknown,
@@ -32,7 +38,10 @@ export class CommandHandlerError extends Schema.TaggedError<CommandHandlerError>
 /**
  * Error thrown when syncing slash commands with the backend fails.
  */
-export class CommandSyncError extends Schema.TaggedError<CommandSyncError>()("CommandSyncError", {
+export class CommandSyncError extends Schema.TaggedError<
+	CommandSyncError,
+	{ readonly brand: unique symbol }
+>()("CommandSyncError", {
 	message: Schema.String,
 	cause: Schema.Unknown,
 }) {}
@@ -40,34 +49,46 @@ export class CommandSyncError extends Schema.TaggedError<CommandSyncError>()("Co
 /**
  * Error thrown when syncing mentionable settings fails.
  */
-export class MentionableSyncError extends Schema.TaggedError<MentionableSyncError>()("MentionableSyncError", {
+export class MentionableSyncError extends Schema.TaggedError<
+	MentionableSyncError,
+	{ readonly brand: unique symbol }
+>()("MentionableSyncError", {
 	message: Schema.String,
 	cause: Schema.Unknown,
 }) {}
 
-export class GatewayReadError extends Schema.TaggedError<GatewayReadError>()("GatewayReadError", {
+export class GatewayReadError extends Schema.TaggedError<
+	GatewayReadError,
+	{ readonly brand: unique symbol }
+>()("GatewayReadError", {
 	message: Schema.String,
 	cause: Schema.Unknown,
 }) {}
 
-export class GatewayDecodeError extends Schema.TaggedError<GatewayDecodeError>()("GatewayDecodeError", {
+export class GatewayDecodeError extends Schema.TaggedError<
+	GatewayDecodeError,
+	{ readonly brand: unique symbol }
+>()("GatewayDecodeError", {
 	message: Schema.String,
 	payload: Schema.String,
 	cause: Schema.Unknown,
 }) {}
 
-export class GatewaySessionStoreError extends Schema.TaggedError<GatewaySessionStoreError>()(
-	"GatewaySessionStoreError",
-	{
-		message: Schema.String,
-		cause: Schema.Unknown,
-	},
-) {}
+export class GatewaySessionStoreError extends Schema.TaggedError<
+	GatewaySessionStoreError,
+	{ readonly brand: unique symbol }
+>()("GatewaySessionStoreError", {
+	message: Schema.String,
+	cause: Schema.Unknown,
+}) {}
 
 /**
  * Error thrown when sending a message fails.
  */
-export class MessageSendError extends Schema.TaggedError<MessageSendError>()("MessageSendError", {
+export class MessageSendError extends Schema.TaggedError<
+	MessageSendError,
+	{ readonly brand: unique symbol }
+>()("MessageSendError", {
 	message: Schema.String,
 	channelId: Schema.String,
 	cause: Schema.Unknown,
@@ -76,7 +97,10 @@ export class MessageSendError extends Schema.TaggedError<MessageSendError>()("Me
 /**
  * Error thrown when replying to a message fails.
  */
-export class MessageReplyError extends Schema.TaggedError<MessageReplyError>()("MessageReplyError", {
+export class MessageReplyError extends Schema.TaggedError<
+	MessageReplyError,
+	{ readonly brand: unique symbol }
+>()("MessageReplyError", {
 	message: Schema.String,
 	channelId: Schema.String,
 	replyToMessageId: Schema.String,
@@ -86,7 +110,10 @@ export class MessageReplyError extends Schema.TaggedError<MessageReplyError>()("
 /**
  * Error thrown when updating a message fails.
  */
-export class MessageUpdateError extends Schema.TaggedError<MessageUpdateError>()("MessageUpdateError", {
+export class MessageUpdateError extends Schema.TaggedError<
+	MessageUpdateError,
+	{ readonly brand: unique symbol }
+>()("MessageUpdateError", {
 	message: Schema.String,
 	messageId: Schema.String,
 	cause: Schema.Unknown,
@@ -95,19 +122,22 @@ export class MessageUpdateError extends Schema.TaggedError<MessageUpdateError>()
 /**
  * Error thrown when publishing an HTML render fails (rejected page, storage, network).
  */
-export class HtmlRenderPublishError extends Schema.TaggedError<HtmlRenderPublishError>()(
-	"HtmlRenderPublishError",
-	{
-		message: Schema.String,
-		channelId: Schema.String,
-		cause: Schema.Unknown,
-	},
-) {}
+export class HtmlRenderPublishError extends Schema.TaggedError<
+	HtmlRenderPublishError,
+	{ readonly brand: unique symbol }
+>()("HtmlRenderPublishError", {
+	message: Schema.String,
+	channelId: Schema.String,
+	cause: Schema.Unknown,
+}) {}
 
 /**
  * Error thrown when deleting a message fails.
  */
-export class MessageDeleteError extends Schema.TaggedError<MessageDeleteError>()("MessageDeleteError", {
+export class MessageDeleteError extends Schema.TaggedError<
+	MessageDeleteError,
+	{ readonly brand: unique symbol }
+>()("MessageDeleteError", {
 	message: Schema.String,
 	messageId: Schema.String,
 	cause: Schema.Unknown,
@@ -116,7 +146,10 @@ export class MessageDeleteError extends Schema.TaggedError<MessageDeleteError>()
 /**
  * Error thrown when toggling a reaction fails.
  */
-export class MessageReactError extends Schema.TaggedError<MessageReactError>()("MessageReactError", {
+export class MessageReactError extends Schema.TaggedError<
+	MessageReactError,
+	{ readonly brand: unique symbol }
+>()("MessageReactError", {
 	message: Schema.String,
 	messageId: Schema.String,
 	emoji: Schema.String,
@@ -126,7 +159,10 @@ export class MessageReactError extends Schema.TaggedError<MessageReactError>()("
 /**
  * Error thrown when listing messages fails.
  */
-export class MessageListError extends Schema.TaggedError<MessageListError>()("MessageListError", {
+export class MessageListError extends Schema.TaggedError<
+	MessageListError,
+	{ readonly brand: unique symbol }
+>()("MessageListError", {
 	message: Schema.String,
 	channelId: Schema.String,
 	cause: Schema.Unknown,
@@ -135,7 +171,10 @@ export class MessageListError extends Schema.TaggedError<MessageListError>()("Me
 /**
  * Error thrown when an event handler execution fails.
  */
-export class EventHandlerError extends Schema.TaggedError<EventHandlerError>()("EventHandlerError", {
+export class EventHandlerError extends Schema.TaggedError<
+	EventHandlerError,
+	{ readonly brand: unique symbol }
+>()("EventHandlerError", {
 	message: Schema.String,
 	eventType: Schema.String,
 	cause: Schema.Unknown,

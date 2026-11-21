@@ -201,8 +201,8 @@ const accessTokenRoutes = (issuerOrigin: string, key: AccessToken.SigningKey) =>
 						).pipe(
 							// The session store did not answer: that says nothing about the session, so
 							// the client must retry rather than treat it as signed out.
-							Effect.map(Option.some),
-							Effect.catchTag("SessionUnavailable", () => Effect.succeed(Option.none())),
+							Effect.asSome,
+							Effect.catchTag("SessionUnavailable", () => Effect.succeedNone),
 						)
 						if (Option.isNone(session))
 							return HttpServerResponse.empty({ status: 503, headers: { "retry-after": "1" } })
@@ -230,8 +230,8 @@ const CALLBACK_PATH = /^\/auth\/[^/]+\/callback$/
 /** The two bodies a failed callback carries: the operation's failure, or the transport's refusal. */
 const CallbackFailure = Schema.fromJsonString(
 	Schema.Union([
-		Schema.Struct({ _tag: Schema.Literal("Failure"), error: Schema.Struct({ _tag: Schema.String }) }),
-		Schema.Struct({ _tag: Schema.Literal("TransportFailure"), reason: Schema.String }),
+		Schema.TaggedStruct("Failure", { error: Schema.Struct({ _tag: Schema.String }) }),
+		Schema.TaggedStruct("TransportFailure", { reason: Schema.String }),
 	]),
 )
 type CallbackFailure = typeof CallbackFailure.Type
@@ -275,7 +275,7 @@ const callbackFailureRedirect = (appOrigin: string) =>
 			)
 				return response
 			const failure = yield* Stream.mkString(Stream.decodeText(response.body.stream)).pipe(
-				Effect.flatMap((body) => Schema.decodeUnknownEffect(CallbackFailure)(body)),
+				Effect.flatMap((body) => Schema.decodeEffect(CallbackFailure)(body)),
 				Effect.option,
 			)
 			const reason = Option.match(failure, { onNone: () => "Unexpected", onSome: signInReason })

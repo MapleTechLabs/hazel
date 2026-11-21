@@ -3,10 +3,13 @@ import * as Result from "effect/Result"
 import * as Schema from "effect/Schema"
 
 /** An alchemy stage string that names no deployable Hazel stage. */
-export class HazelStageError extends Schema.TaggedError<HazelStageError>()("@hazel/infra/HazelStageError", {
-	message: Schema.String,
-	rawStage: Schema.String,
-}) {}
+export class HazelStageError extends Schema.TaggedError<HazelStageError, { readonly brand: unique symbol }>()(
+	"@hazel/infra/HazelStageError",
+	{
+		message: Schema.String,
+		rawStage: Schema.String,
+	},
+) {}
 
 export type HazelStage = { kind: "prd" } | { kind: "pr"; prNumber: number } | { kind: "dev"; name: string }
 

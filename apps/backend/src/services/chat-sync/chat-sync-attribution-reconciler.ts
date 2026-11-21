@@ -20,10 +20,10 @@ interface ReconcileAttributionParams {
 }
 
 /** Re-attribution needs the org's object (its outbox); called elsewhere, it is refused. */
-export class ChatSyncAttributionUnavailableError extends Schema.TaggedError<ChatSyncAttributionUnavailableError>()(
-	"ChatSyncAttributionUnavailableError",
-	{ message: Schema.String },
-) {}
+export class ChatSyncAttributionUnavailableError extends Schema.TaggedError<
+	ChatSyncAttributionUnavailableError,
+	{ readonly brand: unique symbol }
+>()("ChatSyncAttributionUnavailableError", { message: Schema.String }) {}
 
 export class ChatSyncAttributionReconciler extends Context.Service<ChatSyncAttributionReconciler>()(
 	"ChatSyncAttributionReconciler",
@@ -61,7 +61,10 @@ export class ChatSyncAttributionReconciler extends Context.Service<ChatSyncAttri
 					const channels = yield* reattributeProviderMessages({
 						provider: params.provider,
 						...direction(shadow.value),
-					}).pipe(Effect.provideService(SqlClient, sql.value))
+					}).pipe(
+						Effect.provideService(SqlClient, sql.value),
+						Effect.provideService(Database.Database, db),
+					)
 					yield* Effect.logInfo("External messages re-attribution sent to linked channels", {
 						event,
 						provider: params.provider,

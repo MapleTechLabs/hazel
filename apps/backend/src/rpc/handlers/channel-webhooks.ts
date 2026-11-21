@@ -82,9 +82,7 @@ export const ChannelWebhookRpcLive = ChannelWebhookRpcs.toLayer(
 							// Get channel to get organization ID
 							const channelOption = yield* channelRepo.findById(payload.channelId)
 							if (Option.isNone(channelOption)) {
-								return yield* Effect.fail(
-									new ChannelNotFoundError({ channelId: payload.channelId }),
-								)
+								return yield* new ChannelNotFoundError({ channelId: payload.channelId })
 							}
 							const channel = channelOption.value
 
@@ -164,7 +162,7 @@ export const ChannelWebhookRpcLive = ChannelWebhookRpcs.toLayer(
 							// Get current webhook
 							const webhookOption = yield* webhookRepo.findById(id)
 							if (Option.isNone(webhookOption)) {
-								return yield* Effect.fail(new ChannelWebhookNotFoundError({ webhookId: id }))
+								return yield* new ChannelWebhookNotFoundError({ webhookId: id })
 							}
 							const currentWebhook = webhookOption.value
 
@@ -209,7 +207,7 @@ export const ChannelWebhookRpcLive = ChannelWebhookRpcs.toLayer(
 							// Get current webhook
 							const webhookOption = yield* webhookRepo.findById(id)
 							if (Option.isNone(webhookOption)) {
-								return yield* Effect.fail(new ChannelWebhookNotFoundError({ webhookId: id }))
+								return yield* new ChannelWebhookNotFoundError({ webhookId: id })
 							}
 
 							// Generate new token

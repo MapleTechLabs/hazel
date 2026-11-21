@@ -83,7 +83,7 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 			Effect.gen(function* () {
 				if (Option.isNone(auth)) return Option.none()
 				const session = yield* auth.value.verifySession(Redacted.make(credential)).pipe(
-					Effect.map(Option.some),
+					Effect.asSome,
 					Effect.catchTag("SessionInvalid", () => Effect.succeedNone),
 					// Every other outcome is the session store failing, not a bad credential.
 					Effect.mapError(
@@ -126,7 +126,7 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 			Effect.gen(function* () {
 				if (Option.isNone(accessVerifier)) return Option.none()
 				const access = yield* accessVerifier.value.verify(token).pipe(
-					Effect.map(Option.some),
+					Effect.asSome,
 					Effect.catchTags({
 						AccessTokenInvalid: () => Effect.succeedNone,
 						AccessTokenUnavailable: (error) =>
@@ -168,11 +168,11 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 				const origin = Headers.get(headers, "origin")
 				const safe = method === "GET" || method === "HEAD"
 				if (!safe && (Option.isNone(origin) || !allowedOrigins.has(origin.value))) {
-					return yield* Effect.fail(invalid("Untrusted origin for a cookie session"))
+					return yield* invalid("Untrusted origin for a cookie session")
 				}
 
 				const user = yield* verify(cookie.value)
-				if (Option.isNone(user)) return yield* Effect.fail(invalid("Session expired or revoked"))
+				if (Option.isNone(user)) return yield* invalid("Session expired or revoked")
 				return user
 			})
 

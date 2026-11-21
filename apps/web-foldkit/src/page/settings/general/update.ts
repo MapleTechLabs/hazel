@@ -32,7 +32,10 @@ type Return = PageReturn<Model, Message>
 export const LOGO_INPUT_ID = "organization-logo-input"
 
 /** The Clipboard API refused the write (no permission, or the document isn't focused). */
-class ClipboardWriteError extends Schema.TaggedError<ClipboardWriteError>()("ClipboardWriteError", {
+class ClipboardWriteError extends Schema.TaggedError<
+	ClipboardWriteError,
+	{ readonly brand: unique symbol }
+>()("ClipboardWriteError", {
 	cause: Schema.Defect(),
 }) {}
 

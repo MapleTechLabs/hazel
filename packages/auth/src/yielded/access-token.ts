@@ -92,24 +92,27 @@ export const verifyAccessToken = (issuer: string, token: string) =>
 export const generateSigningKey = (kid: string) => Jwk.generateKeyPair({ algorithm: "ES256", kid })
 
 /** The token is missing, malformed, expired, for another stage, or not signed by the API. */
-export class AccessTokenInvalid extends Schema.TaggedError<AccessTokenInvalid>()("AccessTokenInvalid", {
+export class AccessTokenInvalid extends Schema.TaggedError<
+	AccessTokenInvalid,
+	{ readonly brand: unique symbol }
+>()("AccessTokenInvalid", {
 	reason: Schema.String,
 }) {}
 
 /** The API's key set could not be fetched, so no token can be checked right now. */
-export class AccessTokenUnavailable extends Schema.TaggedError<AccessTokenUnavailable>()(
-	"AccessTokenUnavailable",
-	{ reason: Schema.String },
-) {}
+export class AccessTokenUnavailable extends Schema.TaggedError<
+	AccessTokenUnavailable,
+	{ readonly brand: unique symbol }
+>()("AccessTokenUnavailable", { reason: Schema.String }) {}
 
 /** Configuration errors never include key material or the input value. */
-export class AccessTokenConfigurationError extends Schema.TaggedError<AccessTokenConfigurationError>()(
-	"AccessTokenConfigurationError",
-	{
-		key: Schema.String,
-		message: Schema.String,
-	},
-) {}
+export class AccessTokenConfigurationError extends Schema.TaggedError<
+	AccessTokenConfigurationError,
+	{ readonly brand: unique symbol }
+>()("AccessTokenConfigurationError", {
+	key: Schema.String,
+	message: Schema.String,
+}) {}
 
 export interface VerifiedAccess {
 	/** Hazel's `users.id`. */

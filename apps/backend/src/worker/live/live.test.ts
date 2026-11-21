@@ -13,7 +13,8 @@ import { describe, expect, it } from "vitest"
 import { channelTarget } from "../objects/kinds"
 import type { InvokePrincipal } from "../objects/principal"
 import { ObjectStubs } from "../objects/protocol"
-import { makeTestObjects, type TestObject } from "../objects/testing"
+import { formatTarget } from "../objects/kinds"
+import { makeTestObjects, ObjectUnreachableError, type TestObject } from "../objects/testing"
 import { readLive, writeLive } from "./client"
 import {
 	LIVE_STATE_LIMIT_BYTES,
@@ -87,7 +88,9 @@ const makeWorld = Effect.gen(function* () {
 			return {
 				...stub,
 				invoke: (request) =>
-					unreachable ? Effect.fail(new Error("channel unreachable")) : stub.invoke(request),
+					unreachable
+						? Effect.fail(new ObjectUnreachableError({ target: formatTarget(target) }))
+						: stub.invoke(request),
 			}
 		},
 	}
@@ -442,14 +445,12 @@ describe("MessageLiveObject", () => {
 				expect(failureTag(refused)).toBe("UnauthorizedError")
 				const unreachable = yield* Effect.exit(
 					readLive({ ...base, userId: world.alice }).pipe(
-						Effect.provide(
-							Layer.succeed(LiveObjectStubs, {
-								get: () => ({
-									write: () => Effect.fail("down"),
-									read: () => Effect.fail("down"),
-								}),
+						Effect.provideService(LiveObjectStubs, {
+							get: () => ({
+								write: () => Effect.fail("down"),
+								read: () => Effect.fail("down"),
 							}),
-						),
+						}),
 					),
 				)
 				expect(Exit.isFailure(unreachable) && Cause.findErrorOption(unreachable.cause)).toMatchObject(

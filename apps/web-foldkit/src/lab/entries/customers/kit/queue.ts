@@ -14,11 +14,11 @@ import { NOW, OPEN_ENTRIES, memberOf } from "../../../fixtures/customers"
 // `/lab/customers/kit/queue`: Foundations › Queue Row Signal States. Hover a row for its actions,
 // click to select it, move the keyboard cursor with the buttons.
 
-const Model = Schema.Struct({ focused: Schema.Number, selected: Schema.NullOr(Schema.String) })
+const Model = Schema.Struct({ focused: Schema.Finite, selected: Schema.NullOr(Schema.String) })
 type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
-	MovedFocus: { by: Schema.Number },
+	MovedFocus: { by: Schema.Finite },
 	PressedRow: { id: Schema.String },
 	Ignored: {},
 })

@@ -43,7 +43,7 @@ const ThreadOriginJson = Schema.fromJsonString(ThreadOrigin)
 /** The thread's original message, when this object is a thread's. */
 export const readThreadOrigin = Effect.gen(function* () {
 	const value = yield* readObjectMeta(THREAD_ORIGIN_KEY)
-	return Option.flatMap(value, (json) => Schema.decodeUnknownOption(ThreadOriginJson)(json))
+	return Option.flatMap(value, (json) => Schema.decodeOption(ThreadOriginJson)(json))
 })
 
 /** First link wins: a message already pointing at a thread keeps it (two racing creates). */

@@ -13,7 +13,10 @@ import { RouteOrganizationId } from "./routing-fields"
  * Response schema for webhook operations.
  * Contains the webhook data and a transaction ID for optimistic updates.
  */
-export class ChannelWebhookResponse extends Schema.Class<ChannelWebhookResponse>("ChannelWebhookResponse")({
+export class ChannelWebhookResponse extends Schema.Class<
+	ChannelWebhookResponse,
+	{ readonly brand: unique symbol }
+>("ChannelWebhookResponse")({
 	data: ChannelWebhook.Schema,
 	transactionId: TransactionId,
 }) {}
@@ -21,9 +24,10 @@ export class ChannelWebhookResponse extends Schema.Class<ChannelWebhookResponse>
 /**
  * Response for webhook creation - includes the plain token (only shown once).
  */
-export class ChannelWebhookCreatedResponse extends Schema.Class<ChannelWebhookCreatedResponse>(
-	"ChannelWebhookCreatedResponse",
-)({
+export class ChannelWebhookCreatedResponse extends Schema.Class<
+	ChannelWebhookCreatedResponse,
+	{ readonly brand: unique symbol }
+>("ChannelWebhookCreatedResponse")({
 	data: ChannelWebhook.Schema,
 	token: Schema.String, // Plain token, only returned once on creation
 	webhookUrl: Schema.String, // Full URL for the webhook
@@ -33,21 +37,22 @@ export class ChannelWebhookCreatedResponse extends Schema.Class<ChannelWebhookCr
 /**
  * Response for listing webhooks for a channel.
  */
-export class ChannelWebhookListResponse extends Schema.Class<ChannelWebhookListResponse>(
-	"ChannelWebhookListResponse",
-)({
+export class ChannelWebhookListResponse extends Schema.Class<
+	ChannelWebhookListResponse,
+	{ readonly brand: unique symbol }
+>("ChannelWebhookListResponse")({
 	data: Schema.Array(ChannelWebhook.Schema),
 }) {}
 
 /**
  * Error thrown when a webhook is not found.
  */
-export class ChannelWebhookNotFoundError extends Schema.TaggedError<ChannelWebhookNotFoundError>()(
-	"ChannelWebhookNotFoundError",
-	{
-		webhookId: ChannelWebhookId,
-	},
-) {}
+export class ChannelWebhookNotFoundError extends Schema.TaggedError<
+	ChannelWebhookNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ChannelWebhookNotFoundError", {
+	webhookId: ChannelWebhookId,
+}) {}
 
 /**
  * Channel Webhook RPC Group

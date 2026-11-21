@@ -25,7 +25,7 @@ export const Invite = Schema.Struct({
 	id: ConnectInviteId,
 	targetValue: Schema.String,
 	status: Schema.String,
-	createdAtMs: Schema.Number,
+	createdAtMs: Schema.Finite,
 })
 export type Invite = typeof Invite.Type
 

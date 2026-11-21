@@ -592,7 +592,7 @@ export const searchMessages = Effect.fn("OrgObject.searchMessages")(
 	},
 	Effect.catchTag("DatabaseError", (error) =>
 		Effect.fail(
-			new InternalServerError({
+			InternalServerError.withCause({
 				message: "Message search failed",
 				detail: error.message,
 				cause: error,

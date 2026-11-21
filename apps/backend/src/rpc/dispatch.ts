@@ -25,9 +25,12 @@ export type HazelRpcTag = HazelRpc["_tag"]
 /** Every handler of the group, as `RpcServer` needs them in context. */
 export type HazelRpcHandlers = Rpc.ToHandler<HazelRpc>
 
-export class UnknownRpcError extends Schema.TaggedError<UnknownRpcError>()("UnknownRpcError", {
-	tag: Schema.String,
-}) {}
+export class UnknownRpcError extends Schema.TaggedError<UnknownRpcError, { readonly brand: unique symbol }>()(
+	"UnknownRpcError",
+	{
+		tag: Schema.String,
+	},
+) {}
 
 /** The RPC definition for `tag`, with its schemas. */
 export const rpcFor = (tag: string): Effect.Effect<Rpc.AnyWithProps, UnknownRpcError> => {

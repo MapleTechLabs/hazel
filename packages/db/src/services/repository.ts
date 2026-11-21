@@ -12,10 +12,13 @@ export interface RepositoryOptions<Col extends string, Name extends string> {
 
 export type PartialExcept<T, K extends keyof T> = Partial<Omit<T, K>> & Pick<T, K>
 
-export class EntityNotFound extends Schema.TaggedError<EntityNotFound>()("EntityNotFound", {
-	type: Schema.String,
-	id: Schema.Any,
-}) {}
+export class EntityNotFound extends Schema.TaggedError<EntityNotFound, { readonly brand: unique symbol }>()(
+	"EntityNotFound",
+	{
+		type: Schema.String,
+		id: Schema.Any,
+	},
+) {}
 
 export interface RepositorySchemas<InsertSchema extends Schema.Top, UpdateSchema extends Schema.Struct<any>> {
 	readonly insert: InsertSchema

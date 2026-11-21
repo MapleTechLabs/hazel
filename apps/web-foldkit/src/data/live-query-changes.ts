@@ -104,14 +104,19 @@ export const liveQueryChangeSetStream = <Row, Message, Id extends string = strin
 				const { offset, limit } = yield* Ref.get(desired)
 				const previous = yield* Ref.get(applied)
 				if (!collection.isReady() || (offset === previous.offset && limit === previous.limit)) return
-				const settlement = yield* Effect.try(() => collection.utils.setWindow({ offset, limit }))
+				// `setWindow` answers `true`, or the Promise of the load it started; `settle` awaits that load.
+				const settle = yield* Effect.try(() => {
+					const settlement = collection.utils.setWindow({ offset, limit })
+					return settlement === true
+						? Effect.void
+						: Effect.tryPromise(() => settlement).pipe(
+								// A page made while this load ran is applied once it settles.
+								Effect.tap(() => Effect.sync(signal)),
+								Effect.tapError(() => Ref.set(applied, previous)),
+							)
+				})
 				yield* Ref.set(applied, { offset, limit })
-				if (settlement !== true)
-					yield* Effect.tryPromise(() => settlement).pipe(
-						// A page made while this load ran is applied once it settles.
-						Effect.tap(() => Effect.sync(signal)),
-						Effect.tapError(() => Ref.set(applied, previous)),
-					)
+				yield* settle
 			}).pipe(Effect.ignore)
 			signal()
 			return yield* Effect.forever(Effect.andThen(Queue.take(wake), follow))

@@ -22,7 +22,7 @@ export const Connection = Schema.Struct({
 	status: ConnectionStatus,
 	externalWorkspaceId: Schema.String,
 	errorMessage: Schema.NullOr(Schema.String),
-	lastSyncedAtMs: Schema.NullOr(Schema.Number),
+	lastSyncedAtMs: Schema.NullOr(Schema.Finite),
 })
 export type Connection = typeof Connection.Type
 
@@ -63,7 +63,7 @@ export const Model = Schema.Struct({
 	addProvider: ChatSyncProvider,
 	workspaces: Workspaces.schema,
 	/** Bumped per workspace request; a list for an older request or another organization is dropped. */
-	workspacesVersion: Schema.Number,
+	workspacesVersion: Schema.Finite,
 	/** The picked Discord server (Slack has its one installed workspace). */
 	selectedWorkspace: Schema.NullOr(Workspace),
 	workspaceSearch: Schema.String,
@@ -84,12 +84,12 @@ export const Message = defineMessageUnion({
 	ClickedRetryListConnections: {},
 	SucceededListWorkspaces: {
 		organizationId: OrganizationId,
-		version: Schema.Number,
+		version: Schema.Finite,
 		workspaces: Schema.Array(Workspace),
 	},
 	FailedListWorkspaces: {
 		organizationId: OrganizationId,
-		version: Schema.Number,
+		version: Schema.Finite,
 		reason: ResourceFailure,
 	},
 	ClickedRetryListWorkspaces: {},

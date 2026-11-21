@@ -46,7 +46,7 @@ export const makeRememberedSession = (cache: RememberedCache) => {
 		clear,
 		/** The session has ended. A page showing the cached rows loads again, signed out. */
 		forget: Effect.gen(function* () {
-			if (yield* clear) yield* startOver
+			if (yield* clear) return yield* startOver
 		}),
 		/**
 		 * `user.me` answered with `user`. A store that is full or blocked only costs the next load
@@ -61,7 +61,7 @@ export const makeRememberedSession = (cache: RememberedCache) => {
 				if (isOther) yield* forgetUser
 				yield* writeStored(REMEMBERED_USER_KEY, CurrentUser, user).pipe(Effect.ignore)
 				if (!isOther) return
-				if (yield* Effect.promise(() => cache.forget(remembered.value.id))) yield* startOver
+				if (yield* Effect.promise(() => cache.forget(remembered.value.id))) return yield* startOver
 			}),
 	}
 }

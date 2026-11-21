@@ -1,64 +1,16 @@
 import { HttpApiBuilder } from "effect/http-api"
 import { HttpClient } from "effect/http"
-import { KlipyApiError } from "@hazel/domain/http"
+import { KlipyApiError, KlipyCategoriesResponse, KlipySearchResponse } from "@hazel/domain/http"
 import { Config, Effect, Option, Redacted, Schema } from "effect"
 import { HazelApi } from "../api"
 
 const KLIPY_BASE_URL = "https://api.klipy.com/api/v1"
 
-const KlipyRawFileVariant = Schema.Struct({
-	url: Schema.String,
-	width: Schema.Number,
-	height: Schema.Number,
-	size: Schema.Number,
-})
+// Klipy wraps each answer in `{ result, data }`; `data` decodes straight into the response classes,
+// which the endpoints encode (a plain object would not encode as a class).
+const KlipyRawSearchResponse = Schema.Struct({ result: Schema.Boolean, data: KlipySearchResponse })
 
-const KlipyRawFileResolution = Schema.Struct({
-	gif: KlipyRawFileVariant,
-	webp: KlipyRawFileVariant,
-	jpg: KlipyRawFileVariant,
-	mp4: KlipyRawFileVariant,
-	webm: KlipyRawFileVariant,
-})
-
-const KlipyRawFile = Schema.Struct({
-	hd: KlipyRawFileResolution,
-	md: KlipyRawFileResolution,
-	sm: KlipyRawFileResolution,
-	xs: KlipyRawFileResolution,
-})
-
-const KlipyRawGif = Schema.Struct({
-	id: Schema.Number,
-	slug: Schema.String,
-	title: Schema.String,
-	file: KlipyRawFile,
-	type: Schema.String,
-	blur_preview: Schema.String,
-})
-
-const KlipyRawSearchResponse = Schema.Struct({
-	result: Schema.Boolean,
-	data: Schema.Struct({
-		data: Schema.Array(KlipyRawGif),
-		current_page: Schema.Number,
-		per_page: Schema.Number,
-		has_next: Schema.Boolean,
-	}),
-})
-
-const KlipyRawCategory = Schema.Struct({
-	category: Schema.String,
-	query: Schema.String,
-	preview_url: Schema.String,
-})
-
-const KlipyRawCategoriesResponse = Schema.Struct({
-	result: Schema.Boolean,
-	data: Schema.Struct({
-		categories: Schema.Array(KlipyRawCategory),
-	}),
-})
+const KlipyRawCategoriesResponse = Schema.Struct({ result: Schema.Boolean, data: KlipyCategoriesResponse })
 
 const fetchKlipy = (
 	httpClient: HttpClient.HttpClient,

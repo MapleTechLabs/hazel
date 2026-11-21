@@ -12,7 +12,7 @@ import { Schema } from "effect"
 import { defineEffect } from "./effects/registry"
 
 /** Where a backfill page ends: the last message sent, by `(createdAt, id)`. */
-export const SearchCursor = Schema.Struct({ createdAt: Schema.Number, id: MessageId })
+export const SearchCursor = Schema.Struct({ createdAt: Schema.Finite, id: MessageId })
 export type SearchCursor = typeof SearchCursor.Type
 
 /** A message as the index takes it: raw content (the org makes it plain text), epoch ms. */
@@ -20,7 +20,7 @@ export const IndexedMessage = Schema.Struct({
 	id: MessageId,
 	authorId: UserId,
 	conversationId: Schema.NullOr(ConnectConversationId),
-	createdAt: Schema.Number,
+	createdAt: Schema.Finite,
 	content: Schema.String,
 })
 export type IndexedMessage = typeof IndexedMessage.Type
@@ -35,7 +35,7 @@ export const IndexMessagesPayload = Schema.Struct({
 	/** Set on a backfill answer. */
 	page: Schema.optionalKey(
 		Schema.Struct({
-			generation: Schema.Number,
+			generation: Schema.Finite,
 			/** The first page: drop what the index holds for the channel first. */
 			replace: Schema.Boolean,
 			/** Where the next page starts; `null` when this was the last. */
@@ -58,7 +58,7 @@ export const IndexConnectMessagesPayload = Schema.Struct({
 export type IndexConnectMessagesPayload = typeof IndexConnectMessagesPayload.Type
 
 export const ExportSearchMessagesPayload = Schema.Struct({
-	generation: Schema.Number,
+	generation: Schema.Finite,
 	after: Schema.NullOr(SearchCursor),
 	/** A Connect host filling a new guest's index; the pages are echoed back with it. */
 	guest: Schema.optionalKey(SearchGuest),

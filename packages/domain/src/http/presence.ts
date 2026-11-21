@@ -6,12 +6,16 @@ import { UserId } from "@hazel/schema"
 import { RequiredScopes } from "../scopes/required-scopes"
 
 // Payload for marking user offline
-export class MarkOfflinePayload extends Schema.Class<MarkOfflinePayload>("MarkOfflinePayload")({
+export class MarkOfflinePayload extends Schema.Class<MarkOfflinePayload, { readonly brand: unique symbol }>(
+	"MarkOfflinePayload",
+)({
 	userId: UserId,
 }) {}
 
 // Response for marking user offline
-export class MarkOfflineResponse extends Schema.Class<MarkOfflineResponse>("MarkOfflineResponse")({
+export class MarkOfflineResponse extends Schema.Class<MarkOfflineResponse, { readonly brand: unique symbol }>(
+	"MarkOfflineResponse",
+)({
 	success: Schema.Boolean,
 }) {}
 

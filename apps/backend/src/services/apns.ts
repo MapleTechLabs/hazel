@@ -72,13 +72,19 @@ export interface ApnsResult {
  * APNs was not reached (network, no HTTP/2, a timeout). No cause: the HTTP client's errors carry
  * the URL, which names the device token, and this ends up in logs and the outbox's `last_error`.
  */
-export class ApnsRequestError extends Schema.TaggedError<ApnsRequestError>()("ApnsRequestError", {
+export class ApnsRequestError extends Schema.TaggedError<
+	ApnsRequestError,
+	{ readonly brand: unique symbol }
+>()("ApnsRequestError", {
 	message: Schema.String,
 }) {}
 
 /** APNs answered with a failure worth retrying (429, 5xx, a stale provider token). */
-export class ApnsRetryableError extends Schema.TaggedError<ApnsRetryableError>()("ApnsRetryableError", {
-	status: Schema.Number,
+export class ApnsRetryableError extends Schema.TaggedError<
+	ApnsRetryableError,
+	{ readonly brand: unique symbol }
+>()("ApnsRetryableError", {
+	status: Schema.Finite,
 	reason: Schema.NullOr(Schema.String),
 }) {}
 

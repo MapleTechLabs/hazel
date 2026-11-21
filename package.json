@@ -50,7 +50,7 @@
 		"alchemy:deploy:pr": "bun scripts/alchemy-deploy.ts --yes --adopt --stage pr-${PR_NUMBER}",
 		"alchemy:destroy:pr": "alchemy destroy --yes --stage pr-${PR_NUMBER}",
 		"alchemy:dev": "ALCHEMY_LOCAL_STATE=1 alchemy dev --stage dev_${USER} --env-file .env.local",
-		"alchemy:typecheck": "tsc -p tsconfig.alchemy.json",
+		"alchemy:typecheck": "effect-tsgo tsc -p tsconfig.alchemy.json",
 		"knip": "knip",
 		"knip:fix": "knip --fix --allow-remove-files",
 		"format:check": "oxfmt --check"
@@ -58,6 +58,7 @@
 	"devDependencies": {
 		"@alchemy.run/cloudflare": "catalog:alchemy",
 		"@cloudflare/workers-types": "catalog:alchemy",
+		"@effect/tsgo": "0.73.2",
 		"@effect/vitest": "catalog:effect",
 		"@hazel/infra": "workspace:*",
 		"@maple-dev/alchemy": "catalog:alchemy",

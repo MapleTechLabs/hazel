@@ -2,7 +2,10 @@ import * as AwsClient from "@distilled.cloud/aws4signer/AwsClient"
 import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient, HttpClientRequest } from "effect/http"
 
-export class ObjectStorageError extends Schema.TaggedError<ObjectStorageError>()("ObjectStorageError", {
+export class ObjectStorageError extends Schema.TaggedError<
+	ObjectStorageError,
+	{ readonly brand: unique symbol }
+>()("ObjectStorageError", {
 	message: Schema.String,
 	cause: Schema.optional(Schema.Unknown),
 }) {}

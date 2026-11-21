@@ -183,8 +183,6 @@ export const RpcHandlersLive = Layer.empty
 		Layer.provideMerge(BotRpcLive),
 		Layer.provideMerge(CustomEmojiRpcLive),
 		Layer.provideMerge(InvitationRpcLive),
-	)
-	.pipe(
 		Layer.provideMerge(CustomerReadRpcLive),
 		Layer.provideMerge(CustomerQueueRpcLive),
 		Layer.provideMerge(CustomerAdminRpcLive),

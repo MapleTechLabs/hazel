@@ -123,41 +123,40 @@ export const indexedLinkOwners = (
  * Upsert a machine user in the directory by its external id and return it as a projection: a
  * provider user's shadow (`discord-user-<id>`) or the provider's integration bot.
  */
-export const upsertExternalUser = (params: {
+export const upsertExternalUser = Effect.fn("ChatSync.upsertExternalUser")(function* (params: {
 	readonly externalId: string
 	readonly email: string
 	readonly displayName: string
 	readonly avatarUrl: string | null
-}) =>
-	Effect.gen(function* () {
-		const directory = yield* Directory
-		const now = new Date()
-		const rows = yield* directory.db.run(
-			SQLite.insertInto(schema.usersTable)
-				.values({
-					externalId: params.externalId,
-					email: params.email,
+}) {
+	const directory = yield* Directory
+	const now = new Date()
+	const rows = yield* directory.db.run(
+		SQLite.insertInto(schema.usersTable)
+			.values({
+				externalId: params.externalId,
+				email: params.email,
+				firstName: params.displayName,
+				lastName: "",
+				avatarUrl: params.avatarUrl ?? "",
+				userType: "machine",
+				settings: null,
+				isOnboarded: true,
+				timezone: null,
+				deletedAt: null,
+			})
+			.onConflictDoUpdate({
+				target: ["externalId"],
+				set: {
 					firstName: params.displayName,
-					lastName: "",
-					avatarUrl: params.avatarUrl ?? "",
-					userType: "machine",
-					settings: null,
-					isOnboarded: true,
-					timezone: null,
-					deletedAt: null,
-				})
-				.onConflictDoUpdate({
-					target: ["externalId"],
-					set: {
-						firstName: params.displayName,
-						...(params.avatarUrl ? { avatarUrl: params.avatarUrl } : {}),
-						updatedAt: now,
-					},
-				})
-				.returning(),
-		)
-		return toUserProjection(rows[0]!)
-	}).pipe(Effect.withSpan("ChatSync.upsertExternalUser"))
+					...(params.avatarUrl ? { avatarUrl: params.avatarUrl } : {}),
+					updatedAt: now,
+				},
+			})
+			.returning(),
+	)
+	return toUserProjection(rows[0]!)
+})
 
 /** A provider user's shadow identity. */
 export const upsertShadowUser = (

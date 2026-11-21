@@ -14,7 +14,7 @@ export const CreateAttachmentPayload = Schema.Struct({
 	channelId: ChannelId,
 	uploadedBy: UserId,
 	fileName: Schema.String,
-	fileSize: Schema.Number,
+	fileSize: Schema.Finite,
 })
 export type CreateAttachmentPayload = typeof CreateAttachmentPayload.Type
 
@@ -22,10 +22,10 @@ export const AttachmentEffects = {
 	createAttachment: defineEffect("channel.createAttachment", "channel", CreateAttachmentPayload),
 }
 
-export class AttachmentUploadForbiddenError extends Schema.TaggedError<AttachmentUploadForbiddenError>()(
-	"AttachmentUploadForbiddenError",
-	{ channelId: ChannelId, userId: UserId },
-) {}
+export class AttachmentUploadForbiddenError extends Schema.TaggedError<
+	AttachmentUploadForbiddenError,
+	{ readonly brand: unique symbol }
+>()("AttachmentUploadForbiddenError", { channelId: ChannelId, userId: UserId }) {}
 
 export const createAttachment = Effect.fn("ChannelEffects.createAttachment")(function* (
 	payload: CreateAttachmentPayload,

@@ -31,9 +31,10 @@ const LinearIssueLabelResponse = Schema.Struct({
 })
 
 // Full Linear issue response
-export class LinearIssueResourceResponse extends Schema.Class<LinearIssueResourceResponse>(
-	"LinearIssueResourceResponse",
-)({
+export class LinearIssueResourceResponse extends Schema.Class<
+	LinearIssueResourceResponse,
+	{ readonly brand: unique symbol }
+>("LinearIssueResourceResponse")({
 	id: Schema.String,
 	identifier: Schema.String,
 	title: Schema.String,
@@ -42,7 +43,7 @@ export class LinearIssueResourceResponse extends Schema.Class<LinearIssueResourc
 	teamName: Schema.String,
 	state: Schema.NullOr(LinearIssueStateResponse),
 	assignee: Schema.NullOr(LinearIssueAssigneeResponse),
-	priority: Schema.Number,
+	priority: Schema.Finite,
 	priorityLabel: Schema.String,
 	labels: Schema.Array(LinearIssueLabelResponse),
 }) {}
@@ -60,20 +61,21 @@ const GitHubPRLabelResponse = Schema.Struct({
 })
 
 // Full GitHub PR response
-export class GitHubPRResourceResponse extends Schema.Class<GitHubPRResourceResponse>(
-	"GitHubPRResourceResponse",
-)({
+export class GitHubPRResourceResponse extends Schema.Class<
+	GitHubPRResourceResponse,
+	{ readonly brand: unique symbol }
+>("GitHubPRResourceResponse")({
 	owner: Schema.String,
 	repo: Schema.String,
-	number: Schema.Number,
+	number: Schema.Finite,
 	title: Schema.String,
 	body: Schema.NullOr(Schema.String),
 	state: Schema.Literals(["open", "closed"]),
 	draft: Schema.Boolean,
 	merged: Schema.Boolean,
 	author: Schema.NullOr(GitHubPRAuthorResponse),
-	additions: Schema.Number,
-	deletions: Schema.Number,
+	additions: Schema.Finite,
+	deletions: Schema.Finite,
 	headRefName: Schema.String,
 	updatedAt: Schema.String,
 	labels: Schema.Array(GitHubPRLabelResponse),
@@ -86,7 +88,7 @@ const GitHubRepositoryOwner = Schema.Struct({
 })
 
 const GitHubRepository = Schema.Struct({
-	id: Schema.Number,
+	id: Schema.Finite,
 	name: Schema.String,
 	fullName: Schema.String,
 	private: Schema.Boolean,
@@ -95,14 +97,15 @@ const GitHubRepository = Schema.Struct({
 	owner: GitHubRepositoryOwner,
 })
 
-export class GitHubRepositoriesResponse extends Schema.Class<GitHubRepositoriesResponse>(
-	"GitHubRepositoriesResponse",
-)({
-	totalCount: Schema.Number,
+export class GitHubRepositoriesResponse extends Schema.Class<
+	GitHubRepositoriesResponse,
+	{ readonly brand: unique symbol }
+>("GitHubRepositoriesResponse")({
+	totalCount: Schema.Finite,
 	repositories: Schema.Array(GitHubRepository),
 	hasNextPage: Schema.Boolean,
-	page: Schema.Number,
-	perPage: Schema.Number,
+	page: Schema.Finite,
+	perPage: Schema.Finite,
 }) {}
 
 const DiscordGuild = Schema.Struct({
@@ -116,17 +119,21 @@ const DiscordGuildChannel = Schema.Struct({
 	id: ExternalChannelId,
 	guildId: Schema.String,
 	name: Schema.String,
-	type: Schema.Number,
+	type: Schema.Finite,
 	parentId: Schema.NullOr(Schema.String),
 })
 
-export class DiscordGuildsResponse extends Schema.Class<DiscordGuildsResponse>("DiscordGuildsResponse")({
+export class DiscordGuildsResponse extends Schema.Class<
+	DiscordGuildsResponse,
+	{ readonly brand: unique symbol }
+>("DiscordGuildsResponse")({
 	guilds: Schema.Array(DiscordGuild),
 }) {}
 
-export class DiscordGuildChannelsResponse extends Schema.Class<DiscordGuildChannelsResponse>(
-	"DiscordGuildChannelsResponse",
-)({
+export class DiscordGuildChannelsResponse extends Schema.Class<
+	DiscordGuildChannelsResponse,
+	{ readonly brand: unique symbol }
+>("DiscordGuildChannelsResponse")({
 	channels: Schema.Array(DiscordGuildChannel),
 }) {}
 
@@ -139,13 +146,19 @@ const SlackChannel = Schema.Struct({
 })
 
 /** The Slack workspace the org installed Hazel in, and its channels the bot can see. */
-export class SlackChannelsResponse extends Schema.Class<SlackChannelsResponse>("SlackChannelsResponse")({
+export class SlackChannelsResponse extends Schema.Class<
+	SlackChannelsResponse,
+	{ readonly brand: unique symbol }
+>("SlackChannelsResponse")({
 	workspace: Schema.Struct({ id: Schema.String, name: Schema.NullOr(Schema.String) }),
 	channels: Schema.Array(SlackChannel),
 }) {}
 
 // Error when organization doesn't have the integration connected
-export class IntegrationNotConnectedForPreviewError extends Schema.TaggedError<IntegrationNotConnectedForPreviewError>()(
+export class IntegrationNotConnectedForPreviewError extends Schema.TaggedError<
+	IntegrationNotConnectedForPreviewError,
+	{ readonly brand: unique symbol }
+>()(
 	"IntegrationNotConnectedForPreviewError",
 	{
 		provider: IntegrationProvider,
@@ -155,23 +168,23 @@ export class IntegrationNotConnectedForPreviewError extends Schema.TaggedError<I
 ) {}
 
 // Error when resource cannot be found
-export class ResourceNotFoundError extends Schema.TaggedError<ResourceNotFoundError>()(
-	"ResourceNotFoundError",
-	{
-		url: Schema.String,
-		message: Schema.optional(Schema.String),
-	},
-) {}
+export class ResourceNotFoundError extends Schema.TaggedError<
+	ResourceNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ResourceNotFoundError", {
+	url: Schema.String,
+	message: Schema.optional(Schema.String),
+}) {}
 
 // Error when integration API returns an error (authorization, rate limit, etc.)
-export class IntegrationResourceError extends Schema.TaggedError<IntegrationResourceError>()(
-	"IntegrationResourceError",
-	{
-		url: Schema.String,
-		message: Schema.String,
-		provider: IntegrationProvider,
-	},
-) {}
+export class IntegrationResourceError extends Schema.TaggedError<
+	IntegrationResourceError,
+	{ readonly brand: unique symbol }
+>()("IntegrationResourceError", {
+	url: Schema.String,
+	message: Schema.String,
+	provider: IntegrationProvider,
+}) {}
 
 // API Group for integration resources
 export class IntegrationResourceGroup extends HttpApiGroup.make("integration-resources")
@@ -223,10 +236,10 @@ export class IntegrationResourceGroup extends HttpApiGroup.make("integration-res
 		HttpApiEndpoint.get("getGitHubRepositories", `/:orgId/github/repositories`, {
 			params: { orgId: OrganizationId },
 			query: {
-				page: Schema.optional(Schema.NumberFromString).pipe(
+				page: Schema.optional(Schema.FiniteFromString).pipe(
 					Schema.withDecodingDefault(Effect.succeed("1")),
 				),
-				perPage: Schema.optional(Schema.NumberFromString).pipe(
+				perPage: Schema.optional(Schema.FiniteFromString).pipe(
 					Schema.withDecodingDefault(Effect.succeed("30")),
 				),
 			},

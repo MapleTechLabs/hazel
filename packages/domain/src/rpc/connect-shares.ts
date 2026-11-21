@@ -14,87 +14,95 @@ import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
 
-export class ConnectInviteResponse extends Schema.Class<ConnectInviteResponse>("ConnectInviteResponse")({
+export class ConnectInviteResponse extends Schema.Class<
+	ConnectInviteResponse,
+	{ readonly brand: unique symbol }
+>("ConnectInviteResponse")({
 	data: ConnectInvite.Schema,
 	transactionId: TransactionId,
 }) {}
 
-export class ConnectConversationResponse extends Schema.Class<ConnectConversationResponse>(
-	"ConnectConversationResponse",
-)({
+export class ConnectConversationResponse extends Schema.Class<
+	ConnectConversationResponse,
+	{ readonly brand: unique symbol }
+>("ConnectConversationResponse")({
 	data: ConnectConversation.Schema,
 	transactionId: TransactionId,
 }) {}
 
-export class ConnectParticipantResponse extends Schema.Class<ConnectParticipantResponse>(
-	"ConnectParticipantResponse",
-)({
+export class ConnectParticipantResponse extends Schema.Class<
+	ConnectParticipantResponse,
+	{ readonly brand: unique symbol }
+>("ConnectParticipantResponse")({
 	data: ConnectParticipant.Schema,
 	transactionId: TransactionId,
 }) {}
 
-export class ConnectInviteListResponse extends Schema.Class<ConnectInviteListResponse>(
-	"ConnectInviteListResponse",
-)({
+export class ConnectInviteListResponse extends Schema.Class<
+	ConnectInviteListResponse,
+	{ readonly brand: unique symbol }
+>("ConnectInviteListResponse")({
 	data: Schema.Array(ConnectInvite.Schema),
 }) {}
 
-export class ConnectWorkspaceSearchResult extends Schema.Class<ConnectWorkspaceSearchResult>(
-	"ConnectWorkspaceSearchResult",
-)({
+export class ConnectWorkspaceSearchResult extends Schema.Class<
+	ConnectWorkspaceSearchResult,
+	{ readonly brand: unique symbol }
+>("ConnectWorkspaceSearchResult")({
 	id: OrganizationId,
 	name: Schema.String,
 	slug: Schema.NullOr(Schema.String),
 	logoUrl: Schema.NullOr(Schema.String),
 }) {}
 
-export class ConnectWorkspaceSearchResponse extends Schema.Class<ConnectWorkspaceSearchResponse>(
-	"ConnectWorkspaceSearchResponse",
-)({
+export class ConnectWorkspaceSearchResponse extends Schema.Class<
+	ConnectWorkspaceSearchResponse,
+	{ readonly brand: unique symbol }
+>("ConnectWorkspaceSearchResponse")({
 	data: Schema.Array(ConnectWorkspaceSearchResult),
 }) {}
 
-export class ConnectInviteNotFoundError extends Schema.TaggedError<ConnectInviteNotFoundError>()(
-	"ConnectInviteNotFoundError",
-	{
-		inviteId: ConnectInviteId,
-		message: Schema.String,
-	},
-) {}
+export class ConnectInviteNotFoundError extends Schema.TaggedError<
+	ConnectInviteNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ConnectInviteNotFoundError", {
+	inviteId: ConnectInviteId,
+	message: Schema.String,
+}) {}
 
-export class ConnectInviteInvalidStateError extends Schema.TaggedError<ConnectInviteInvalidStateError>()(
-	"ConnectInviteInvalidStateError",
-	{
-		inviteId: ConnectInviteId,
-		status: ConnectInvite.ConnectInviteStatus,
-		message: Schema.String,
-	},
-) {}
+export class ConnectInviteInvalidStateError extends Schema.TaggedError<
+	ConnectInviteInvalidStateError,
+	{ readonly brand: unique symbol }
+>()("ConnectInviteInvalidStateError", {
+	inviteId: ConnectInviteId,
+	status: ConnectInvite.ConnectInviteStatus,
+	message: Schema.String,
+}) {}
 
-export class ConnectWorkspaceNotFoundError extends Schema.TaggedError<ConnectWorkspaceNotFoundError>()(
-	"ConnectWorkspaceNotFoundError",
-	{
-		message: Schema.String,
-	},
-) {}
+export class ConnectWorkspaceNotFoundError extends Schema.TaggedError<
+	ConnectWorkspaceNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ConnectWorkspaceNotFoundError", {
+	message: Schema.String,
+}) {}
 
 /** The conversation does not exist, or the channel is not shared through one. */
-export class ConnectConversationNotFoundError extends Schema.TaggedError<ConnectConversationNotFoundError>()(
-	"ConnectConversationNotFoundError",
-	{
-		conversationId: Schema.optional(ConnectConversationId),
-		message: Schema.String,
-	},
-) {}
+export class ConnectConversationNotFoundError extends Schema.TaggedError<
+	ConnectConversationNotFoundError,
+	{ readonly brand: unique symbol }
+>()("ConnectConversationNotFoundError", {
+	conversationId: Schema.optional(ConnectConversationId),
+	message: Schema.String,
+}) {}
 
-export class ConnectChannelAlreadySharedError extends Schema.TaggedError<ConnectChannelAlreadySharedError>()(
-	"ConnectChannelAlreadySharedError",
-	{
-		channelId: ChannelId,
-		organizationId: OrganizationId,
-		message: Schema.String,
-	},
-) {}
+export class ConnectChannelAlreadySharedError extends Schema.TaggedError<
+	ConnectChannelAlreadySharedError,
+	{ readonly brand: unique symbol }
+>()("ConnectChannelAlreadySharedError", {
+	channelId: ChannelId,
+	organizationId: OrganizationId,
+	message: Schema.String,
+}) {}
 
 export class ConnectShareRpcs extends RpcGroup.make(
 	Rpc.make("connectShare.workspace.search", {

@@ -40,13 +40,13 @@ export type Phase = typeof Phase.Type
 export const Model = Schema.Struct({
 	phase: Phase,
 	/** Failed clears in a row; reset by a success. */
-	failures: Schema.Number,
+	failures: Schema.Finite,
 	/** Signed in with the org loaded: the RPC can be sent. */
 	isReady: Schema.Boolean,
 	/** The window is focused and the document visible. */
 	isFocused: Schema.Boolean,
 	/** The signed-in user's unread notifications in this channel, as the sidebar shows them. */
-	unread: Schema.Number,
+	unread: Schema.Finite,
 })
 export type Model = typeof Model.Type
 

@@ -16,7 +16,7 @@ export const InvitationEmail = Schema.Trim.check(
 )
 
 /** A pending invitation as admins see it. */
-export class Invitation extends Schema.Class<Invitation>("Invitation")({
+export class Invitation extends Schema.Class<Invitation, { readonly brand: unique symbol }>("Invitation")({
 	id: InvitationId,
 	organizationId: OrganizationId,
 	email: Schema.String,
@@ -33,40 +33,47 @@ export const InvitationSkip = Schema.Struct({
 })
 export type InvitationSkip = typeof InvitationSkip.Type
 
-export class InvitationCreateResult extends Schema.Class<InvitationCreateResult>("InvitationCreateResult")({
+export class InvitationCreateResult extends Schema.Class<
+	InvitationCreateResult,
+	{ readonly brand: unique symbol }
+>("InvitationCreateResult")({
 	invited: Schema.Array(Invitation),
 	skipped: Schema.Array(InvitationSkip),
 }) {}
 
 /** What the invite link shows before it is accepted. Public: the token is the secret. */
-export class InvitationPreview extends Schema.Class<InvitationPreview>("InvitationPreview")({
+export class InvitationPreview extends Schema.Class<InvitationPreview, { readonly brand: unique symbol }>(
+	"InvitationPreview",
+)({
 	organizationName: Schema.String,
 	organizationLogoUrl: Schema.NullOr(Schema.String),
 	email: Schema.String,
 	status: Schema.Literals(["Pending", "Accepted", "Revoked", "Expired"]),
 }) {}
 
-export class InvitationAccepted extends Schema.Class<InvitationAccepted>("InvitationAccepted")({
+export class InvitationAccepted extends Schema.Class<InvitationAccepted, { readonly brand: unique symbol }>(
+	"InvitationAccepted",
+)({
 	organizationId: OrganizationId,
 	slug: Schema.NullOr(Schema.String),
 }) {}
 
-export class InvitationNotFoundError extends Schema.TaggedError<InvitationNotFoundError>()(
-	"InvitationNotFoundError",
-	{},
-) {}
+export class InvitationNotFoundError extends Schema.TaggedError<
+	InvitationNotFoundError,
+	{ readonly brand: unique symbol }
+>()("InvitationNotFoundError", {}) {}
 
 /** The invitation was revoked, has expired, or was already used. */
-export class InvitationUnavailableError extends Schema.TaggedError<InvitationUnavailableError>()(
-	"InvitationUnavailableError",
-	{ status: Schema.Literals(["Accepted", "Revoked", "Expired"]) },
-) {}
+export class InvitationUnavailableError extends Schema.TaggedError<
+	InvitationUnavailableError,
+	{ readonly brand: unique symbol }
+>()("InvitationUnavailableError", { status: Schema.Literals(["Accepted", "Revoked", "Expired"]) }) {}
 
 /** The signed-in account's email is not the invited one. */
-export class InvitationEmailMismatchError extends Schema.TaggedError<InvitationEmailMismatchError>()(
-	"InvitationEmailMismatchError",
-	{ invitedEmail: Schema.String },
-) {}
+export class InvitationEmailMismatchError extends Schema.TaggedError<
+	InvitationEmailMismatchError,
+	{ readonly brand: unique symbol }
+>()("InvitationEmailMismatchError", { invitedEmail: Schema.String }) {}
 
 const Token = Schema.String.check(Schema.isMinLength(16), Schema.isMaxLength(128))
 

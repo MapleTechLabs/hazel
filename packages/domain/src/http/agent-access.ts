@@ -39,7 +39,9 @@ export const parseAgentScopes = (scope: string | null | undefined): ReadonlyArra
 	return requested.length === 0 ? DEFAULT_AGENT_SCOPES : [...new Set(requested)]
 }
 
-export class AgentClientInfo extends Schema.Class<AgentClientInfo>("AgentClientInfo")({
+export class AgentClientInfo extends Schema.Class<AgentClientInfo, { readonly brand: unique symbol }>(
+	"AgentClientInfo",
+)({
 	id: AgentClientId,
 	name: Schema.String,
 	clientUri: Schema.NullOr(Schema.String),
@@ -48,7 +50,9 @@ export class AgentClientInfo extends Schema.Class<AgentClientInfo>("AgentClientI
 	redirectHost: Schema.String,
 }) {}
 
-export class AgentGrantInfo extends Schema.Class<AgentGrantInfo>("AgentGrantInfo")({
+export class AgentGrantInfo extends Schema.Class<AgentGrantInfo, { readonly brand: unique symbol }>(
+	"AgentGrantInfo",
+)({
 	id: AgentGrantId,
 	kind: Schema.Literals(["oauth", "token"]),
 	name: Schema.String,
@@ -57,13 +61,18 @@ export class AgentGrantInfo extends Schema.Class<AgentGrantInfo>("AgentGrantInfo
 	lastUsedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
 }) {}
 
-export class AgentGrantsResponse extends Schema.Class<AgentGrantsResponse>("AgentGrantsResponse")({
+export class AgentGrantsResponse extends Schema.Class<AgentGrantsResponse, { readonly brand: unique symbol }>(
+	"AgentGrantsResponse",
+)({
 	grants: Schema.Array(AgentGrantInfo),
 	/** The MCP server's URL, to paste into an agent's config. */
 	mcpUrl: Schema.String,
 }) {}
 
-export class AuthorizeAgentRequest extends Schema.Class<AuthorizeAgentRequest>("AuthorizeAgentRequest")({
+export class AuthorizeAgentRequest extends Schema.Class<
+	AuthorizeAgentRequest,
+	{ readonly brand: unique symbol }
+>("AuthorizeAgentRequest")({
 	clientId: AgentClientId,
 	redirectUri: Schema.String,
 	codeChallenge: Schema.String,
@@ -74,38 +83,41 @@ export class AuthorizeAgentRequest extends Schema.Class<AuthorizeAgentRequest>("
 	approve: Schema.Boolean,
 }) {}
 
-export class AuthorizeAgentResponse extends Schema.Class<AuthorizeAgentResponse>("AuthorizeAgentResponse")({
+export class AuthorizeAgentResponse extends Schema.Class<
+	AuthorizeAgentResponse,
+	{ readonly brand: unique symbol }
+>("AuthorizeAgentResponse")({
 	/** Where the consent page sends the browser next: the client's redirect URI with the result. */
 	redirectTo: Schema.String,
 }) {}
 
-export class CreateAgentTokenRequest extends Schema.Class<CreateAgentTokenRequest>("CreateAgentTokenRequest")(
-	{
-		name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80)),
-		scopes: Schema.Array(AgentScope).check(Schema.isMinLength(1)),
-	},
-) {}
+export class CreateAgentTokenRequest extends Schema.Class<
+	CreateAgentTokenRequest,
+	{ readonly brand: unique symbol }
+>("CreateAgentTokenRequest")({
+	name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80)),
+	scopes: Schema.Array(AgentScope).check(Schema.isMinLength(1)),
+}) {}
 
-export class CreateAgentTokenResponse extends Schema.Class<CreateAgentTokenResponse>(
-	"CreateAgentTokenResponse",
-)({
+export class CreateAgentTokenResponse extends Schema.Class<
+	CreateAgentTokenResponse,
+	{ readonly brand: unique symbol }
+>("CreateAgentTokenResponse")({
 	grant: AgentGrantInfo,
 	/** Shown once; only its hash is kept. */
 	token: Schema.String,
 }) {}
 
 /** The client is unknown, or the redirect URI is not one it registered; never redirected to. */
-export class AgentClientInvalidError extends Schema.TaggedError<AgentClientInvalidError>()(
-	"AgentClientInvalidError",
-	{ message: Schema.String },
-	{ httpApiStatus: 400 },
-) {}
+export class AgentClientInvalidError extends Schema.TaggedError<
+	AgentClientInvalidError,
+	{ readonly brand: unique symbol }
+>()("AgentClientInvalidError", { message: Schema.String }, { httpApiStatus: 400 }) {}
 
-export class AgentGrantNotFoundError extends Schema.TaggedError<AgentGrantNotFoundError>()(
-	"AgentGrantNotFoundError",
-	{ grantId: AgentGrantId },
-	{ httpApiStatus: 404 },
-) {}
+export class AgentGrantNotFoundError extends Schema.TaggedError<
+	AgentGrantNotFoundError,
+	{ readonly brand: unique symbol }
+>()("AgentGrantNotFoundError", { grantId: AgentGrantId }, { httpApiStatus: 404 }) {}
 
 export class AgentAccessGroup extends HttpApiGroup.make("agentAccess")
 	.add(

@@ -45,13 +45,19 @@ import {
 import type { HazelRpc, HazelRpcTag } from "./dispatch"
 
 /** The api Worker could not tell where a call goes. */
-export class RoutingError extends Schema.TaggedError<RoutingError>()("RoutingError", {
-	method: Schema.String,
-	message: Schema.String,
-}) {}
+export class RoutingError extends Schema.TaggedError<RoutingError, { readonly brand: unique symbol }>()(
+	"RoutingError",
+	{
+		method: Schema.String,
+		message: Schema.String,
+	},
+) {}
 
 /** The caller may not reach the object the call is for (answered as `UnauthorizedError`). */
-export class RouteRefusedError extends Schema.TaggedError<RouteRefusedError>()("RouteRefusedError", {
+export class RouteRefusedError extends Schema.TaggedError<
+	RouteRefusedError,
+	{ readonly brand: unique symbol }
+>()("RouteRefusedError", {
 	method: Schema.String,
 	message: Schema.String,
 }) {}

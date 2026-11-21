@@ -204,20 +204,21 @@ const eventsPage = Effect.fnUntraced(function* (
 		distinct.reverse(),
 		(event) =>
 			readEvent(get, event, config, at).pipe(
-				// A payload with no usable id: logged, and the rest of the page goes on.
-				Effect.catchTag("CustomerWebhookRejectedError", () => Effect.succeed(NOTHING_READ)),
-				// One object Stripe will never answer for (a 4xx, a body that does not decode): skipped,
-				// as a delivery of it is acknowledged. A refused key or a transient failure fails the page.
-				Effect.catchTag("CustomerProviderError", (error) =>
-					error.code === "auth" || isTransient(error)
-						? Effect.fail(error)
-						: Effect.logWarning("Stripe event skipped: its object cannot be read", {
-								type: event.type,
-								code: error.code,
-								status: error.httpStatus,
-								message: error.message,
-							}).pipe(Effect.as(NOTHING_READ)),
-				),
+				Effect.catchTags({
+					// A payload with no usable id: logged, and the rest of the page goes on.
+					CustomerWebhookRejectedError: () => Effect.succeed(NOTHING_READ),
+					// One object Stripe will never answer for (a 4xx, a body that does not decode): skipped,
+					// as a delivery of it is acknowledged. A refused key or a transient failure fails the page.
+					CustomerProviderError: (error) =>
+						error.code === "auth" || isTransient(error)
+							? Effect.fail(error)
+							: Effect.logWarning("Stripe event skipped: its object cannot be read", {
+									type: event.type,
+									code: error.code,
+									status: error.httpStatus,
+									message: error.message,
+								}).pipe(Effect.as(NOTHING_READ)),
+				}),
 			),
 		{ concurrency: EVENT_READ_CONCURRENCY },
 	)

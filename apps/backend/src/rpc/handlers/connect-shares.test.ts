@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { PermissionError } from "@hazel/domain"
 import { ConnectWorkspaceNotFoundError } from "@hazel/domain/rpc"
 import type { OrganizationId } from "@hazel/schema"
-import { Effect, Option } from "effect"
+import { Effect } from "effect"
 import {
 	assertGuestMemberAddsAllowed,
 	resolveGuestOrganizationForInviteCreate,
@@ -18,7 +18,7 @@ describe("connect-shares helpers", () => {
 			resolveGuestOrganizationForInviteCreate({
 				providedOrgId: GUEST_ORG_ID,
 				target: { kind: "slug", value: "other-workspace" },
-				findBySlug: () => Effect.succeed(Option.some({ id: OTHER_GUEST_ORG_ID })),
+				findBySlug: () => Effect.succeedSome({ id: OTHER_GUEST_ORG_ID }),
 			}).pipe(Effect.result) as Effect.Effect<any, never, never>,
 		)
 
@@ -37,7 +37,7 @@ describe("connect-shares helpers", () => {
 					guestOrganizationId: GUEST_ORG_ID,
 				},
 				guestOrganizationId: OTHER_GUEST_ORG_ID,
-				findBySlug: () => Effect.succeed(Option.some({ id: GUEST_ORG_ID })),
+				findBySlug: () => Effect.succeedSome({ id: GUEST_ORG_ID }),
 			}).pipe(Effect.result) as Effect.Effect<any, never, never>,
 		)
 
@@ -56,7 +56,7 @@ describe("connect-shares helpers", () => {
 					guestOrganizationId: null,
 				},
 				guestOrganizationId: GUEST_ORG_ID,
-				findBySlug: () => Effect.succeed(Option.none()),
+				findBySlug: () => Effect.succeedNone,
 			}).pipe(Effect.result) as Effect.Effect<any, never, never>,
 		)
 

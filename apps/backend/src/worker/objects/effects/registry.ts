@@ -132,10 +132,10 @@ export class CurrentEffectSender extends Context.Service<CurrentEffectSender, Ef
 ) {}
 
 /** A receiver refused the effect's sender: never retried (the outbox marks the row dead). */
-export class EffectSenderRefusedError extends Schema.TaggedError<EffectSenderRefusedError>()(
-	"EffectSenderRefusedError",
-	{ kind: Schema.String, message: Schema.String },
-) {}
+export class EffectSenderRefusedError extends Schema.TaggedError<
+	EffectSenderRefusedError,
+	{ readonly brand: unique symbol }
+>()("EffectSenderRefusedError", { kind: Schema.String, message: Schema.String }) {}
 
 /** Fail unless the current sender is the `OrgObject` of `organizationId`. */
 export const requireOrgSender = (kind: string, organizationId: string) =>

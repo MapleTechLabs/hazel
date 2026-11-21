@@ -8,9 +8,12 @@ import { settleUpdateUser, updateUser } from "../user"
 import { Message } from "./message"
 
 /** A sound or notification preview threw (audio playback, the notification plugin). */
-class TestPreviewError extends Schema.TaggedError<TestPreviewError>()("TestPreviewError", {
-	cause: Schema.Defect(),
-}) {}
+class TestPreviewError extends Schema.TaggedError<TestPreviewError, { readonly brand: unique symbol }>()(
+	"TestPreviewError",
+	{
+		cause: Schema.Defect(),
+	},
+) {}
 
 const preview = <A>(run: () => Promise<A>) =>
 	Effect.tryPromise({ try: run, catch: (cause) => new TestPreviewError({ cause }) })
@@ -41,7 +44,7 @@ export const SendTestNotification = Command.define("SendTestNotification", {
 
 /** The legacy `setTimeout(() => setNotificationStatus("idle"), 3000)`. */
 export const ExpireNotificationStatus = Command.define("ExpireNotificationStatus", {
-	args: { version: Schema.Number },
+	args: { version: Schema.Finite },
 	messages: [Message.ExpiredNotificationStatus],
 	execute: ({ version }) =>
 		Effect.sleep("3 seconds").pipe(Effect.as(Message.ExpiredNotificationStatus({ version }))),

@@ -127,7 +127,7 @@ export const HealthComponentResult = Schema.Struct({
 	/** The configured weight, percent. */
 	weight: Score,
 	/** After redistributing the excluded components' weight, percent (0 when excluded). */
-	effectiveWeight: Schema.Number,
+	effectiveWeight: Schema.Finite,
 	excluded: Schema.Boolean,
 	/** Plain-language inputs, e.g. "4 of 12 contacts active in 30 days; trend −18%". */
 	why: Schema.String,

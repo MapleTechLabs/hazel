@@ -99,7 +99,7 @@ export const Model = Schema.Struct({
 	connection: ConnectionLookup.schema,
 	links: ChannelLinks.schema,
 	/** Bumped per links request (every create / remove / update reloads); an older list is dropped. */
-	linksVersion: Schema.Number,
+	linksVersion: Schema.Finite,
 	/** Links with a pause / resume / direction update in flight; a repeat is ignored. */
 	updatingLinkIds: Schema.Array(SyncChannelLinkId),
 	/** Hazel channel names for the linked channels (the per-row `channelCollection` lookup). */
@@ -141,8 +141,8 @@ export const Message = defineMessageUnion({
 	SucceededListExternalChannels: { workspaceId: Schema.String, channels: Schema.Array(ExternalChannel) },
 	FailedListExternalChannels: { workspaceId: Schema.String, reason: ResourceFailure },
 	ClickedRetryListExternalChannels: {},
-	SucceededListChannelLinks: { version: Schema.Number, links: Schema.Array(ChannelLink) },
-	FailedListChannelLinks: { version: Schema.Number, reason: ListLinksFailure },
+	SucceededListChannelLinks: { version: Schema.Finite, links: Schema.Array(ChannelLink) },
+	FailedListChannelLinks: { version: Schema.Finite, reason: ListLinksFailure },
 	ClickedRetryListChannelLinks: {},
 	UpdatedChannelNames: { names: Schema.Record(Schema.String, Schema.String) },
 	ClickedBack: {},
