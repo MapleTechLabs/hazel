@@ -7,6 +7,7 @@ import { card, cardBody, cardDescription, cardHeader, cardTitle } from "../../ui
 import { presenceDot } from "../../ui/presence-dot"
 import { sectionLabelRoot } from "../../ui/section-label"
 import { separator } from "../../ui/separator"
+import { resizeEdge, splitPanelClassName } from "../../ui/split-panel"
 import { group, kitSection, pair, specimen } from "./chrome"
 import { Message, type Model } from "./model"
 
@@ -192,5 +193,43 @@ const separators = (h: H): Html =>
 		],
 	)
 
+const splitPanels = (h: H): Html =>
+	specimen(
+		h,
+		{
+			name: "Split panel",
+			file: "ui/split-panel.ts",
+			note: "A side panel beside the page (a thread, the AI assistant), resized by dragging its edge or with the arrow keys once the edge is focused.",
+			className: "items-stretch",
+		},
+		[
+			h.div(
+				[h.Class("flex h-40 w-full overflow-hidden rounded-lg border border-border")],
+				[
+					h.div([h.Class("flex-1 p-3 text-fg-3 text-sm")], ["Page"]),
+					h.div(
+						[h.Class(splitPanelClassName("right", "w-48")), h.Style({ height: "100%" })],
+						[
+							resizeEdge(h, {
+								label: "Resize panel",
+								position: "right",
+								width: 192,
+								minWidth: 160,
+								isDragging: false,
+								onPress: () => Message.PressedAction({ label: "Resize panel" }),
+								onNudge: () => Message.PressedAction({ label: "Resize panel" }),
+							}),
+							h.div([h.Class("p-3 text-fg-3 text-sm")], ["Panel"]),
+						],
+					),
+				],
+			),
+		],
+	)
+
 export const display = (h: H, _model: Model): Html =>
-	kitSection(h, "display", [pair(h, [avatars(h), cards(h)]), pair(h, [labels(h), separators(h)])])
+	kitSection(h, "display", [
+		pair(h, [avatars(h), cards(h)]),
+		pair(h, [labels(h), separators(h)]),
+		splitPanels(h),
+	])

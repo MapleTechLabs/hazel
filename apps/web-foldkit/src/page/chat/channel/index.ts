@@ -1,4 +1,5 @@
 import { Submodel } from "foldkit"
+import { channelContext } from "../../../assistant/context"
 import type { RouteOf } from "../../../route"
 import { definePage, type PageViewInputs } from "../../contract"
 import { type ChatTab, init, Message, Model, setCurrentUserId, setTab, switchChannel, update } from "./page"
@@ -44,6 +45,10 @@ export const page = definePage(
 			channelView(h, model, { isMobile: inputs.shared.isMobile, nowMs: inputs.shared.nowMs }),
 		),
 		subscriptions,
+		assistantContext: (model, shared) =>
+			shared.orgSlug === null
+				? null
+				: channelContext(shared.orgSlug, { id: model.channelId, name: model.channel?.name ?? null }),
 		sharedChanged: (model, shared) =>
 			andThen(
 				setCurrentUserId(

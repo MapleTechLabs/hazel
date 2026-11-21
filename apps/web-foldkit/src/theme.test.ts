@@ -63,6 +63,7 @@ const boot = (themePreference = defaultThemePreference()) =>
 					isMobile: false,
 					isCreateChannelHintDismissed: false,
 					rememberedUser: null,
+					aiPanel: { isOpen: false, width: null },
 					keybindingOverrides: {},
 					keyboardPlatform: "linux",
 				},

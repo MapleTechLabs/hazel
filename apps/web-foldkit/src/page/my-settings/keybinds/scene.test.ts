@@ -36,9 +36,9 @@ describe("recording a key", () => {
 			Scene.expect(Scene.text("Press a shortcut")).toExist(),
 			Scene.Subscription.emit(Message.ChangedHeldModifiers({ modifiers: ["Mod"] })),
 			Scene.expect(Scene.text("Now a key")).toExist(),
-			Scene.Subscription.emit(Message.PressedCombo({ combo: combo("Mod+J") })),
+			Scene.Subscription.emit(Message.PressedCombo({ combo: combo("Mod+Shift+J") })),
 			Scene.expectOutMessage(
-				PageOutMessage.RequestedKeybindings({ overrides: { "inbox.open": combo("Mod+J") } }),
+				PageOutMessage.RequestedKeybindings({ overrides: { "inbox.open": combo("Mod+Shift+J") } }),
 			),
 			Scene.expect(Scene.text("Press a shortcut")).toBeAbsent(),
 		)
@@ -88,9 +88,9 @@ describe("recording a key", () => {
 			Scene.expectNoOutMessage(),
 			Scene.expect(Scene.text(REFUSED)).toExist(),
 			Scene.expect(Scene.text("Press a shortcut")).toExist(),
-			Scene.Subscription.emit(Message.PressedCombo({ combo: combo("Mod+J") })),
+			Scene.Subscription.emit(Message.PressedCombo({ combo: combo("Mod+Shift+J") })),
 			Scene.expectOutMessage(
-				PageOutMessage.RequestedKeybindings({ overrides: { "search.open": combo("Mod+J") } }),
+				PageOutMessage.RequestedKeybindings({ overrides: { "search.open": combo("Mod+Shift+J") } }),
 			),
 		)
 	})
@@ -147,7 +147,7 @@ describe("recording a key", () => {
 })
 
 describe("reset and remove", () => {
-	const custom = sharedWith({ "inbox.open": combo("Mod+J") })
+	const custom = sharedWith({ "inbox.open": combo("Mod+Shift+J") })
 
 	test("a changed row shows Custom and resets to its default", () => {
 		Scene.scene(

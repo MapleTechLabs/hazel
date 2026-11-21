@@ -1,6 +1,8 @@
 import { AsyncData } from "foldkit"
 import type { Document, Html, HtmlBuilder } from "foldkit/html"
 import { commonMessage } from "~/lib/error-messages"
+import { comboLabel } from "~/lib/keybindings/key-combo"
+import * as AiPanel from "../assistant"
 import * as CommandPalette from "../overlay/command-palette"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
@@ -34,7 +36,7 @@ import { mySettingsSidebar, notificationsSidebar, settingsSidebar } from "../she
 import type * as Menu from "../ui/menu"
 import type * as ModalKit from "../ui/modal"
 import { Message } from "./message"
-import { type Model, OrgState, Session, sharedOf } from "./model"
+import { aiPanelInputsOf, type Model, OrgState, Session, sharedOf } from "./model"
 
 // Module-level and built as literals: memoized shell views compare them by reference, and
 // wrapper constructors would re-validate large payloads (sidebar rows, message pages) per dispatch.
@@ -62,6 +64,8 @@ const toCommandPaletteMessage = (message: CommandPalette.Message): Message => ({
 	_tag: "GotCommandPaletteMessage",
 	message,
 })
+const toAiPanelMessage = (message: AiPanel.Message): Message => ({ _tag: "GotAiPanelMessage", message })
+const pressedAiPanelToggle = toAiPanelMessage(AiPanel.Message.PressedToggle())
 
 /** What the org shell shows: the loaded user and organization of `orgSlug`. */
 interface ShellData {
@@ -201,6 +205,20 @@ const orgShellView = (model: Model, h: HtmlBuilder<Message>, data: ShellData): H
 				toParentMessage: toCommandPaletteMessage,
 			}),
 		],
+		assistant: {
+			panel: h.submodel({
+				slotId: "ai-panel",
+				model: model.aiPanel,
+				view: AiPanel.view,
+				viewInputs: aiPanelInputsOf(model),
+				toParentMessage: toAiPanelMessage,
+			}),
+			toggle: AiPanel.toggleButton(h, {
+				isOpen: model.aiPanel.isOpen,
+				onPress: pressedAiPanelToggle,
+				shortcut: aiPanelShortcutOf(model),
+			}),
+		},
 		mobile: {
 			isMobile: model.isMobile,
 			isSidebarCollapsed: model.shell.isSidebarCollapsed,
@@ -209,6 +227,12 @@ const orgShellView = (model: Model, h: HtmlBuilder<Message>, data: ShellData): H
 			toSheetMessage: toMobileSidebarMessage,
 		},
 	})
+}
+
+/** The toggle's key, as the user's keyboard labels it ("⌘J"); null when unbound. */
+const aiPanelShortcutOf = (model: Model): string | null => {
+	const key = sharedOf(model).keys["aiPanel.toggle"]
+	return key === null ? null : comboLabel(key, model.keyboardPlatform)
 }
 
 /** `$orgSlug/layout.tsx`: a loader while `useOrganization()` loads the route's organization. */

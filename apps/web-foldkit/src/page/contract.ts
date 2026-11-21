@@ -1,3 +1,4 @@
+import type { Assistant } from "@hazel/domain/models"
 import type { RpcActionName } from "@hazel/domain/scopes"
 import { canPerform, RPC_SCOPE_MAP } from "@hazel/domain/scopes"
 import { Array, Option, Schema, Stream } from "effect"
@@ -83,6 +84,8 @@ export interface PageSpec<Tags extends RouteTag, Model, Message> {
 	readonly routeChanged?: (model: Model, route: RouteOf<Tags>, shared: Shared) => PageReturn<Model, Message>
 	/** The signed-in user, organization or membership changed. */
 	readonly sharedChanged?: (model: Model, shared: Shared) => PageReturn<Model, Message>
+	/** What the page shows, for the AI panel; without it (or `null`) the route describes the page. */
+	readonly assistantContext?: (model: Model, shared: Shared) => Assistant.Context | null
 }
 
 // ERASED PAGE (what the registry and root consume)
@@ -237,6 +240,8 @@ export const definePage = <
 			isOwnSlot(slot) && spec.sharedChanged
 				? Option.some(step(slot, spec.sharedChanged(slot.model, shared)))
 				: Option.none<PageStep<SlotType, WrappedType>>(),
+		assistantContext: (slot: PageSlotBase, shared: Shared): Assistant.Context | null =>
+			isOwnSlot(slot) && spec.assistantContext ? spec.assistantContext(slot.model, shared) : null,
 		/** The root embeds this; it renders the page's own view under its own boundary. */
 		hostView: Submodel.defineView<PageSlotBase, WrappedType, PageViewInputs>((slot, inputs, h) =>
 			isOwnSlot(slot)

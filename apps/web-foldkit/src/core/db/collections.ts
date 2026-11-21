@@ -1,4 +1,5 @@
 import {
+	Assistant,
 	Attachment,
 	Bot,
 	BotCommand,
@@ -199,6 +200,9 @@ export const botCollection = orgCollection("bots", Bot.Schema)
 export const botCommandCollection = orgCollection("bot_commands", BotCommand.Schema)
 export const botInstallationCollection = orgCollection("bot_installations", BotInstallation.Schema)
 export const customEmojiCollection = orgCollection("custom_emojis", CustomEmoji.Schema)
+/** The AI panel's threads and their items: the member's own, and those shared with the org. */
+export const assistantThreadCollection = orgCollection("assistant_threads", Assistant.Thread)
+export const assistantItemCollection = orgCollection("assistant_items", Assistant.Item)
 
 // Customers (`docs/customers/tech-design.md` §6): the org's `CustomersObject`, opened when the
 // Customers area is first entered (`openCustomersSource`). Filter by `organizationId`.

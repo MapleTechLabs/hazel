@@ -54,6 +54,7 @@ describe("root toaster", () => {
 						isMobile: false,
 						isCreateChannelHintDismissed: false,
 						rememberedUser: null,
+						aiPanel: { isOpen: false, width: null },
 						keybindingOverrides: {},
 						keyboardPlatform: "linux",
 					},

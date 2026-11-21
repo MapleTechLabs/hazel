@@ -14,6 +14,7 @@ export const HOTKEYS = {
 	createChannel: hotkeyLabel("Mod+Alt+N"),
 	createDm: hotkeyLabel("Mod+Alt+D"),
 	invite: hotkeyLabel("Mod+Alt+I"),
+	aiPanel: hotkeyLabel("Mod+J"),
 } as const
 
 /** A page's palette item: `go:<id>`, matched by its label, group and keywords. */
@@ -94,6 +95,7 @@ const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 			CommandMenu.item("action:start-dm", "start conversation new dm", true),
 			CommandMenu.item("action:join-channel", "join channel"),
 			CommandMenu.item("action:invite", "invite members", true),
+			CommandMenu.item("action:ai-panel", "ask ai assistant chat t3 code", true),
 		]),
 		...(model.channels.length > 0
 			? [

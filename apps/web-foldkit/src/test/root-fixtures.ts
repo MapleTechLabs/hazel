@@ -70,6 +70,7 @@ export const bootReturn = (path: string, options: BootOptions = {}) =>
 			isMobile: options.isMobile ?? false,
 			isCreateChannelHintDismissed: false,
 			rememberedUser: options.rememberedUser ?? null,
+			aiPanel: { isOpen: false, width: null },
 		},
 		urlOf(path),
 	)

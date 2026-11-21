@@ -47,6 +47,7 @@ const boot = (path: string): Model =>
 					isMobile: false,
 					isCreateChannelHintDismissed: false,
 					rememberedUser: null,
+					aiPanel: { isOpen: false, width: null },
 					keybindingOverrides: {},
 					keyboardPlatform: "linux",
 				},

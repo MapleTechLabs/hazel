@@ -1,3 +1,4 @@
+import type { Assistant } from "@hazel/domain/models"
 import { Option, Schema } from "effect"
 import { Subscription } from "foldkit"
 import type { Command } from "foldkit"
@@ -192,6 +193,13 @@ export const informShared = (current: PageSlot | null, shared: Shared): PageTran
 	return page === undefined
 		? unchanged(current)
 		: toTransition(page.sharedChanged(current, shared), current)
+}
+
+/** What the active page says it shows (`PageSpec.assistantContext`); null when it says nothing. */
+export const assistantContextOf = (current: PageSlot | null, shared: Shared): Assistant.Context | null => {
+	if (current === null) return null
+	const page = pageById(current._tag)
+	return page === undefined ? null : page.assistantContext(current, shared)
 }
 
 const noEntries: ReadonlyArray<never> = []
