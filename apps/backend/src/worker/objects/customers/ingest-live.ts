@@ -37,7 +37,7 @@ import {
 	type CustomerSource,
 	EMPTY_SYNC_STATS,
 	FIELD_PRECEDENCE,
-	FREE_MAIL_DOMAINS,
+	normalizeDomain,
 	IngestOp,
 	type IngestOutcome,
 	type ProviderRef,
@@ -116,18 +116,8 @@ export const ignoreRuleMatches = (
 	return candidates.some((value) => value != null && globMatches(rule.pattern, value))
 }
 
-/** A hostname (no user, port or path), with at least two labels. */
-const HOSTNAME = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/
-
-export const normalizeDomain = (value: string): string | null => {
-	const domain = value
-		.trim()
-		.toLowerCase()
-		.replace(/^[a-z]+:\/\//, "")
-		.replace(/^www\./, "")
-		.split(/[/?#]/)[0]
-	return HOSTNAME.test(domain) && !FREE_MAIL_DOMAINS.has(domain) ? domain : null
-}
+/** Shared with the web app, which cleans a domain the same way before the store answers. */
+export { normalizeDomain }
 
 /** The hosts a provider's links (dashboard pages, hosted invoices) live on, subdomains included. */
 const LINK_HOSTS = {

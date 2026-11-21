@@ -8,6 +8,7 @@
  * optional key as absent, never as `undefined`.
  */
 import type * as Customers from "@hazel/domain/customers"
+import { normalizeDomain } from "@hazel/domain/customers"
 import {
 	type CustomerAccountId,
 	CustomerFeatureFlagId,
@@ -340,9 +341,9 @@ export const updateAccountAction = optimisticAction({
 			if (props.ownerUserId !== undefined) account.ownerUserId = props.ownerUserId
 			if (props.tags !== undefined) account.tags = [...props.tags]
 			if (props.name !== undefined) account.name = props.name
-			if (props.addDomain !== undefined) {
-				// The store's cleaned form syncs in after.
-				const added = props.addDomain.trim().toLowerCase()
+			// Cleaned as the store cleans it; one it will refuse shows nothing.
+			const added = props.addDomain === undefined ? null : normalizeDomain(props.addDomain)
+			if (added !== null) {
 				account.domains = [added, ...account.domains.filter((domain) => domain !== added)]
 			}
 			if (props.lifecycleStageOverride !== undefined) {

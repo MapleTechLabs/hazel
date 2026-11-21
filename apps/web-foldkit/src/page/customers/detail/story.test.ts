@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type * as Customers from "@hazel/domain/customers"
-import type { SignalEvidence } from "@hazel/domain/customers"
+import { normalizeDomain, type SignalEvidence } from "@hazel/domain/customers"
 import {
 	CustomerAccountId,
 	CustomerContactId,
@@ -406,6 +406,15 @@ describe("customer page: company domain", () => {
 		// A second press while it saves sends nothing; nor does an empty draft.
 		expect(commandNames(submit(result.model))).toEqual([])
 		expect(commandNames(submit(run(loaded(), [Message.ChangedDomainDraft({ value: "  " })])))).toEqual([])
+	})
+
+	test("the account shows the cleaned domain at once", () => {
+		const result = submit(
+			run(loaded(), [Message.ChangedDomainDraft({ value: "https://www.Acme.com/pricing" })]),
+		)
+		expect(result.commands?.[0]?.args).toMatchObject({ addDomain: "https://www.Acme.com/pricing" })
+		expect(normalizeDomain("https://www.Acme.com/pricing")).toBe("acme.com")
+		expect(normalizeDomain("gmail.com")).toBeNull()
 	})
 
 	test("success clears the draft; a refusal keeps it and says why", () => {
