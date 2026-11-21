@@ -72,7 +72,7 @@ export const providerName = (provider: Assistant.HostedProvider) =>
 // Services: the models, and the object's hooks
 // ============================================================================
 
-export interface HostedModelsShape {
+export interface HostedModelsApi {
 	/** The provider's `LanguageModel` with the member's key. */
 	readonly languageModel: (
 		provider: Assistant.HostedProvider,
@@ -86,13 +86,19 @@ export interface HostedModelsShape {
 	) => Effect.Effect<void, AssistantKeyRejectedError | AssistantEngineError>
 }
 
-const KEY_CHECKS: Record<
+const KEY_CHECKS = {
+	anthropic: {
+		url: "https://api.anthropic.com/v1/models?limit=1",
+		header: (key: string) => ["x-api-key", key],
+	},
+	openai: {
+		url: "https://api.openai.com/v1/models",
+		header: (key: string) => ["authorization", `Bearer ${key}`],
+	},
+} satisfies Record<
 	Assistant.HostedProvider,
-	{ url: string; header: (key: string) => [string, string] }
-> = {
-	anthropic: { url: "https://api.anthropic.com/v1/models?limit=1", header: (key) => ["x-api-key", key] },
-	openai: { url: "https://api.openai.com/v1/models", header: (key) => ["authorization", `Bearer ${key}`] },
-}
+	{ readonly url: string; readonly header: (key: string) => readonly [string, string] }
+>
 
 // The provider packages mark their layers unstable (pinned at 4.1.4 in the catalog): Hazel accepts
 // that for the hosted engines, and these four lines are the only place it touches them.
@@ -121,7 +127,7 @@ const openAiModel = (apiKey: Redacted.Redacted<string>, model: string) => {
 }
 
 /** The real providers, over `fetch`. */
-const liveHostedModels: HostedModelsShape = {
+const liveHostedModels: HostedModelsApi = {
 	languageModel: (provider, apiKey, model) =>
 		provider === "anthropic" ? anthropicModel(apiKey, model) : openAiModel(apiKey, model),
 	checkKey: (provider, apiKey) =>
@@ -164,7 +170,7 @@ const liveHostedModels: HostedModelsShape = {
 }
 
 /** The models the hosted engines call; tests provide a fake one. */
-export const HostedModels = Context.Reference<HostedModelsShape>("@hazel/backend/HostedModels", {
+export const HostedModels = Context.Reference<HostedModelsApi>("@hazel/backend/HostedModels", {
 	defaultValue: () => liveHostedModels,
 })
 
@@ -178,7 +184,7 @@ export interface RunningTurn {
  * the turns it runs, the mid-run flush to the sync sockets, and its own calls run in process.
  * Outside an object it is inert.
  */
-export interface AssistantHostShape {
+export interface AssistantHostState {
 	readonly turns: Map<string, RunningTurn>
 	/** Broadcast what was committed so far (`sync.flush`), mid-alarm. */
 	flush: Effect.Effect<void>
@@ -186,13 +192,13 @@ export interface AssistantHostShape {
 	self: ObjectSelf | null
 }
 
-export const makeAssistantHost = (): AssistantHostShape => ({
+export const makeAssistantHost = (): AssistantHostState => ({
 	turns: new Map(),
 	flush: Effect.void,
 	self: null,
 })
 
-export const AssistantHost = Context.Reference<AssistantHostShape>("@hazel/backend/AssistantHost", {
+export const AssistantHost = Context.Reference<AssistantHostState>("@hazel/backend/AssistantHost", {
 	defaultValue: makeAssistantHost,
 })
 
@@ -389,6 +395,12 @@ interface OpenItem {
 	written: string
 }
 
+/** The text and thinking blocks being streamed now, one of each at most. */
+interface OpenBlocks {
+	assistant: OpenItem | null
+	reasoning: OpenItem | null
+}
+
 /**
  * Writes a turn's parts as items: an `assistant` item per text block, a `reasoning` item per
  * thinking block, a `tool` item per call. Text is written at most every {@link FLUSH_MS};
@@ -404,10 +416,7 @@ const makeWriter = (input: {
 		const host = yield* AssistantHost
 		let lastCreatedAt = 0
 		let lastFlushAt = 0
-		const open: { assistant: OpenItem | null; reasoning: OpenItem | null } = {
-			assistant: null,
-			reasoning: null,
-		}
+		const open: OpenBlocks = { assistant: null, reasoning: null }
 		const tools = new Map<string, AssistantItemId>()
 
 		const now = Effect.map(Clock.currentTimeMillis, (ms) => new Date(ms))

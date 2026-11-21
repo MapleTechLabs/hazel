@@ -8,6 +8,8 @@
  *   `OrgObject`): the object's own calls and RPCs run in process, everything else through stubs.
  *   An object never calls itself through its stub: it would queue behind its own alarm.
  */
+// BOUNDARY: payloads cross to the objects as the RPC or call takes them; each one's own schema
+// encodes them on the way in and decodes the answer, as `callObject` and `invokeObject` do.
 import { Context, Effect, type Exit, type Schema } from "effect"
 import type { HazelRpcTag } from "../rpc/dispatch"
 import {
@@ -23,7 +25,7 @@ import { ObjectStubs } from "../worker/objects/protocol"
 
 type Codec = Schema.Codec<any, any, never, never>
 
-export interface MemberAccessShape {
+export interface MemberAccessApi {
 	/** An object call (`worker/objects/calls.ts`); its own errors arrive typed. */
 	readonly call: <
 		Name extends string,
@@ -44,7 +46,7 @@ export interface MemberAccessShape {
 	) => Effect.Effect<unknown, unknown>
 }
 
-export class MemberAccess extends Context.Service<MemberAccess, MemberAccessShape>()(
+export class MemberAccess extends Context.Service<MemberAccess, MemberAccessApi>()(
 	"@hazel/backend/MemberAccess",
 ) {}
 
@@ -57,7 +59,7 @@ export const memberAccessViaStubs = (principal: InvokePrincipal) =>
 				callObject(call, target, payload).pipe(Effect.provideService(ObjectStubs, stubs)),
 			rpc: (target, tag, payload) =>
 				Effect.flatMap(invokeObject(stubs, target, tag, payload, principal), (exit) => exit),
-		} satisfies MemberAccessShape as MemberAccessShape
+		} satisfies MemberAccessApi as MemberAccessApi
 	})
 
 /** What an object runs for itself in process (`worker/objects/runtime.ts`). */
@@ -73,7 +75,7 @@ export interface ObjectSelf {
 
 /** The member's access from inside `self`: its own target in process, the rest through stubs. */
 export const memberAccessInObject = (self: ObjectSelf, principal: InvokePrincipal) =>
-	Effect.map(memberAccessViaStubs(principal), (viaStubs): MemberAccessShape => {
+	Effect.map(memberAccessViaStubs(principal), (viaStubs): MemberAccessApi => {
 		const isSelf = (target: ObjectTarget) => formatTarget(target) === formatTarget(self.target)
 		return {
 			call: (call, target, payload) =>

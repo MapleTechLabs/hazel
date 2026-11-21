@@ -26,7 +26,7 @@ import { describe, expect, it } from "vitest"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
 import { Directory } from "../../services/directory"
 import { channelTarget, orgTarget } from "./kinds"
-import type { HostedModelsShape } from "./org/assistant-hosted"
+import type { HostedModelsApi } from "./org/assistant-hosted"
 import { encodeInvokePrincipal } from "./principal"
 import { makeOrgSource } from "./sources/org-source"
 import { makeTestObjectsWith, type TestObject } from "./testing"
@@ -82,7 +82,7 @@ const makeFakeModels = () => {
 		calls: [] as Array<ModelCall>,
 		checked: [] as Array<string>,
 	}
-	const models: HostedModelsShape = {
+	const models: HostedModelsApi = {
 		languageModel: (provider, apiKey, model) =>
 			Layer.effect(
 				LanguageModel.LanguageModel,

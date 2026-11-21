@@ -16,11 +16,11 @@ import { requireOrganizationId } from "./integrations"
 import { t3CodeLink } from "./t3code"
 
 /** The model each hosted engine runs (`docs/assistant.md`). */
-export const HOSTED_MODELS: Record<Assistant.HostedProvider, string> = {
+export const HOSTED_MODELS = {
 	anthropic: "claude-sonnet-5-5",
 	// `@effect/ai-openai` 4.1.4's current general model with a dated snapshot (`gpt-5.5-2026-04-23`).
 	openai: "gpt-5.5",
-}
+} as const satisfies Record<Assistant.HostedProvider, string>
 
 /** The member's saved key connection for `provider`, if any. */
 const findKeyConnection = (userId: UserId, provider: Assistant.HostedProvider) =>
@@ -144,11 +144,11 @@ export const assistantStatusOf = Effect.fn("Assistant.status")(function* (userId
 					state: link.status === "active" ? "connected" : "expired",
 					environmentLabel: link.metadata.environmentLabel,
 				}
-	const connected: Record<Assistant.Engine, boolean> = {
+	const connected = {
 		t3code: t3code.state === "connected",
 		anthropic,
 		openai,
-	}
+	} satisfies Record<Assistant.Engine, boolean>
 	const chosen = yield* db
 		.first(
 			SQLite.from(schema.assistantPreferencesTable)
