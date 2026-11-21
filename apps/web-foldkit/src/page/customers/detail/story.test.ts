@@ -83,6 +83,8 @@ const account = (n: number, name: string): AccountRow => ({
 	name,
 	domain: null,
 	logoUrl: null,
+	company: null,
+	companyCheckedAtMs: null,
 	ownerUserId: ada,
 	lifecycleStage: "active",
 	planName: "Growth",

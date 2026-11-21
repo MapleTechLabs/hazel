@@ -45,6 +45,8 @@ const account = (n: number, featureFlags: Record<string, boolean>): AccountRow =
 	name: `Customer ${n}`,
 	domain: null,
 	logoUrl: null,
+	company: null,
+	companyCheckedAtMs: null,
 	ownerUserId: null,
 	lifecycleStage: "active",
 	planName: null,
